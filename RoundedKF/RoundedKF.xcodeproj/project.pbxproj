@@ -67,8 +67,8 @@
 				Plugin/Info.plist,
 				Plugin/main.m,
 				Plugin/MetalDeviceCache.m,
+				Plugin/Rounded.metal,
 				Plugin/RoundedKFPlugIn.m,
-				Plugin/TileableRemoteBrightness.metal,
 				"Wrapper Application/Info.plist",
 			);
 			target = F2E2ED742F4CA530008620D9 /* Wrapper Application */;
