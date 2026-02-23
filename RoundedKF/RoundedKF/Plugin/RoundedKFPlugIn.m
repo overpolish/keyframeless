@@ -7,7 +7,7 @@
 
 #import "RoundedKFPlugIn.h"
 #import <IOSurface/IOSurfaceObjC.h>
-#import "TileableRemoteBrightnessShaderTypes.h"
+#import "RoundedShaderTypes.h"
 #import "MetalDeviceCache.h"
 
 @implementation RoundedKFPlugIn
@@ -72,18 +72,18 @@
         return NO;
     }
     
-    if (![paramAPI addFloatSliderWithName:@"Brightness"
+    if (![paramAPI addFloatSliderWithName:@"Radius"
                               parameterID:1
-                             defaultValue:1.0
+                             defaultValue:20.0
                              parameterMin:0.0
                              parameterMax:100.0
                                 sliderMin:0.0
-                                sliderMax:10.0
-                                    delta:0.1
+                                sliderMax:100.0
+                                    delta:1.0
                            parameterFlags:kFxParameterFlag_DEFAULT])
     {
         NSDictionary*   userInfo    = @{
-                                        NSLocalizedDescriptionKey : @"Unable to add brightness slider"
+                                        NSLocalizedDescriptionKey : @"Unable to add radius slider"
                                         };
         if (error != NULL)
             *error = [NSError errorWithDomain:FxPlugErrorDomain
@@ -119,13 +119,13 @@
     id<FxParameterRetrievalAPI_v6>  paramGetAPI = [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
     if (paramGetAPI != nil)
     {
-        double  brightness  = 1.0;
-        [paramGetAPI getFloatValue:&brightness
+        double  radius  = 20.0;
+        [paramGetAPI getFloatValue:&radius
                      fromParameter:1
                             atTime:renderTime];
         
-        *pluginState = [NSData dataWithBytes:&brightness
-                                      length:sizeof(brightness)];
+        *pluginState = [NSData dataWithBytes:&radius
+                                      length:sizeof(radius)];
         
         if (*pluginState != nil)
         {
@@ -231,9 +231,9 @@
     
     // This is where you would access parameter values and other info about the source tile
     // from the pluginState.
-    double  brightness = 0.0;
-    [pluginState getBytes:&brightness
-                   length:sizeof(brightness)];
+    double  radius = 0.0;
+    [pluginState getBytes:&radius
+                   length:sizeof(radius)];
     
     // Set up the renderer, in this case we are using Metal.
     
@@ -255,7 +255,7 @@
     
     MTLRenderPassColorAttachmentDescriptor* colorAttachmentDescriptor   = [[MTLRenderPassColorAttachmentDescriptor alloc] init];
     colorAttachmentDescriptor.texture = outputTexture;
-    colorAttachmentDescriptor.clearColor = MTLClearColorMake(1.0, 0.5, 0.0, 1.0);
+    colorAttachmentDescriptor.clearColor = MTLClearColorMake(0.0, 0.0, 0.0, 0.0);
     colorAttachmentDescriptor.loadAction = MTLLoadActionClear;
     MTLRenderPassDescriptor*    renderPassDescriptor    = [MTLRenderPassDescriptor renderPassDescriptor];
     renderPassDescriptor.colorAttachments [ 0 ] = colorAttachmentDescriptor;
@@ -282,7 +282,7 @@
     
     [commandEncoder setVertexBytes:vertices
                             length:sizeof(vertices)
-                           atIndex:BVI_Vertices];
+                           atIndex:RVI_Vertices];
     
     simd_uint2  viewportSize = {
         (unsigned int)(outputWidth),
@@ -290,15 +290,27 @@
     };
     [commandEncoder setVertexBytes:&viewportSize
                             length:sizeof(viewportSize)
-                           atIndex:BVI_ViewportSize];
+                           atIndex:RVI_ViewportSize];
     
     [commandEncoder setFragmentTexture:inputTexture
-                               atIndex:BTI_InputImage];
+                               atIndex:RTI_InputImage];
     
-    float   fragmentBrightness = (float)brightness;
-    [commandEncoder setFragmentBytes:&fragmentBrightness
-                              length:sizeof(fragmentBrightness)
-                             atIndex:BFI_Brightness];
+    float   fragmentRadius = (float)radius;
+    [commandEncoder setFragmentBytes:&fragmentRadius
+                              length:sizeof(fragmentRadius)
+                             atIndex:RFI_Radius];
+    
+    simd_float2 imageSize = {
+        (float)(sourceImages[0].imagePixelBounds.right - sourceImages[0].imagePixelBounds.left),
+        (float)(sourceImages[0].imagePixelBounds.top - sourceImages[0].imagePixelBounds.bottom)
+    };
+    [commandEncoder setFragmentBytes:&imageSize length:(sizeof(imageSize)) atIndex:RFI_ImageSize];
+    
+    simd_float2 tileOffset = {
+        (float)(destinationImage.tilePixelBounds.left - sourceImages[0].imagePixelBounds.left),
+        (float)(destinationImage.tilePixelBounds.bottom - sourceImages[0].imagePixelBounds.bottom)
+    };
+    [commandEncoder setFragmentBytes:&tileOffset length:sizeof(tileOffset) atIndex:RFI_TileOffset];
     
     [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                        vertexStart:0
