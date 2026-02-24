@@ -10,7 +10,8 @@
 
 using namespace metal;
 
-#include "KeyframelessKit/ShaderTypes.h"
+
+#include <KeyframelessKit/ShaderTypes.h>
 #include "RoundedShaderTypes.h"
 
 typedef struct {
@@ -61,7 +62,7 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
     float2 pos = pixelInFullImage - center;
     
     // Distance to rounded rectangle edge
-    float2 halfSize = (*imageSize) *0.5;
+    float2 halfSize = (*imageSize) * 0.5;
     float scaledRadius = (*radius / 100.0) * min(halfSize.x, halfSize.y);
     float distance = roundedBoxSDF(pos, halfSize, scaledRadius);
     

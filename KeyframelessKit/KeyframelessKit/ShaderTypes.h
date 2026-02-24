@@ -13,7 +13,7 @@
 typedef enum KeyframelessKitVertexInputIndex {
     KKVertexInputIndex_Vertices        = 0,
     KKVertexInputIndex_ViewportSize    = 1
-} SharedVertexInputIndex;
+} KeyframelessKitVertexInputIndex;
 
 typedef enum KeyframelessKitTextureIndex {
     KKTextureIndex_InputImage = 0

@@ -14,6 +14,6 @@ typedef enum RoundedFragmentIndex {
     RFragmentIndex_Radius      = 0,
     RFragmentIndex_ImageSize   = 1,
     RFragmentIndex_TileOffset  = 2
-} KeyframelessKitFragmentIndex;
+} RoundedFragmentIndex;
 
 #endif /* RoundedShaderTypes_h */

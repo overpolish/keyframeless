@@ -8,7 +8,7 @@
 #import "RoundedOSC.h"
 #import "RoundedPlugIn.h"
 #import "MetalDeviceCache.h"
-#import "KeyframelessKit/ShaderTypes.h"
+#import "KeyframelessKit/KeyframelessKit.h"
 
 @implementation RoundedOSC
 
@@ -27,27 +27,6 @@
     return kFxDrawingCoordinates_CANVAS;
 }
 
-static void GenerateQuadVertices(KeyframelessKitVertex2D *vertices, CGPoint center, float size)
-{
-    vertices[0].position = (simd_float2){ center.x - size, center.y - size };
-    vertices[0].textureCoordinate = (simd_float2){ -1.0, -1.0 };
-    
-    vertices[1].position = (simd_float2){ center.x + size, center.y - size };
-    vertices[1].textureCoordinate = (simd_float2){ 1.0, -1.0 };
-    
-    vertices[2].position = (simd_float2){ center.x + size, center.y + size };
-    vertices[2].textureCoordinate = (simd_float2){ 1.0, 1.0 };
-    
-    vertices[3].position = (simd_float2){ center.x - size, center.y - size };
-    vertices[3].textureCoordinate = (simd_float2){ -1.0, -1.0 };
-    
-    vertices[4].position = (simd_float2){ center.x + size, center.y + size };
-    vertices[4].textureCoordinate = (simd_float2){ 1.0, 1.0 };
-    
-    vertices[5].position = (simd_float2){ center.x - size, center.y + size };
-    vertices[5].textureCoordinate = (simd_float2){ -1.0, 1.0 };
-}
-
 - (void)drawOSCWithWidth:(NSInteger)width
                   height:(NSInteger)height
               activePart:(NSInteger)activePart
@@ -61,15 +40,8 @@ static void GenerateQuadVertices(KeyframelessKitVertex2D *vertices, CGPoint cent
     commandBuffer.label = @"Rounded OSC Command Buffer";
     [commandBuffer enqueue];
     
-    // Color attachment
     id<MTLTexture> outputTexture = [destinationImage metalTextureForDevice:gpuDevice];
-    MTLRenderPassColorAttachmentDescriptor *colorAttachment = [[MTLRenderPassColorAttachmentDescriptor alloc] init];
-    colorAttachment.texture = outputTexture;
-    colorAttachment.clearColor = MTLClearColorMake(0.0, 0.0, 0.0, 0.0);
-    colorAttachment.loadAction = MTLLoadActionClear;
-    
-    MTLRenderPassDescriptor *renderPassDescriptor = [MTLRenderPassDescriptor renderPassDescriptor];
-    renderPassDescriptor.colorAttachments[0] = colorAttachment;
+    MTLRenderPassDescriptor *renderPassDescriptor = [KeyframelessKitRenderHelpers createClearRenderPassWithTexture:outputTexture clearColor:MTLClearColorMake(0.0, 0.0, 0.0, 0.0)];
     
     id<MTLRenderCommandEncoder> commandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
     
@@ -112,11 +84,7 @@ static void GenerateQuadVertices(KeyframelessKitVertex2D *vertices, CGPoint cent
     
     // Make quad bigger to accommodate the outline
     KeyframelessKitVertex2D quadVertices[6];
-    GenerateQuadVertices(quadVertices, center, outerRadius);
-    
-    [commandEncoder setVertexBytes:quadVertices
-                            length:sizeof(quadVertices)
-                           atIndex:KKVertexInputIndex_Vertices];
+    [KeyframelessKitRenderHelpers generateQuadVertices:quadVertices center:center size:outerRadius];
     
     [commandEncoder setVertexBytes:quadVertices
                             length:sizeof(quadVertices)
@@ -136,11 +104,15 @@ static void GenerateQuadVertices(KeyframelessKitVertex2D *vertices, CGPoint cent
         1.0,                                        // outerRadius (normalized)
         gapAngle,                                   // gapAngle
         outlineWidth / outerRadius,                 // outlineWidth (normalized)
-        1.0, 1.0, 1.0, 1.0                         // fillColor (white)
+        1.0, 1.0, 1.0, 1.0                          // fillColor (white)
     };
 
-    [commandEncoder setFragmentBytes:params length:sizeof(params) atIndex:KKOSCFragmentIndex_DrawColor];
-    [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
+    [commandEncoder setFragmentBytes:params
+                              length:sizeof(params)
+                             atIndex:KKOSCFragmentIndex_DrawColor];
+    [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangle
+                       vertexStart:0
+                       vertexCount:6];
     
     // Clean up
     [commandEncoder endEncoding];
@@ -148,7 +120,6 @@ static void GenerateQuadVertices(KeyframelessKitVertex2D *vertices, CGPoint cent
     [commandBuffer waitUntilScheduled];
     
     [deviceCache returnCommandQueueToCache:commandQueue];
-    [colorAttachment release];
 }
 
 - (void)hitTestOSCAtMousePositionX:(double)mousePositionX
