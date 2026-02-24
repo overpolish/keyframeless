@@ -1,16 +1,16 @@
 //
-//  RoundedKFPlugIn.m
-//  RoundedKF
+//  RoundedPlugIn.m
+//  Rounded
 //
 //  Created by Dom on 23/02/2026.
 //
 
-#import "RoundedKFPlugIn.h"
+#import "RoundedPlugIn.h"
 #import <IOSurface/IOSurfaceObjC.h>
 #import "RoundedShaderTypes.h"
 #import "MetalDeviceCache.h"
 
-@implementation RoundedKFPlugIn
+@implementation RoundedPlugIn
 
 //---------------------------------------------------------
 // initWithAPIManager:
@@ -301,14 +301,14 @@
                              atIndex:RFI_Radius];
     
     simd_float2 imageSize = {
-        (float)(sourceImages[0].imagePixelBounds.right - sourceImages[0].imagePixelBounds.left),
-        (float)(sourceImages[0].imagePixelBounds.top - sourceImages[0].imagePixelBounds.bottom)
+        (float)(destinationImage.imagePixelBounds.right - destinationImage.imagePixelBounds.left),
+        (float)(destinationImage.imagePixelBounds.top - destinationImage.imagePixelBounds.bottom)
     };
     [commandEncoder setFragmentBytes:&imageSize length:(sizeof(imageSize)) atIndex:RFI_ImageSize];
     
     simd_float2 tileOffset = {
-        (float)(destinationImage.tilePixelBounds.left - sourceImages[0].imagePixelBounds.left),
-        (float)(destinationImage.tilePixelBounds.bottom - sourceImages[0].imagePixelBounds.bottom)
+        (float)(destinationImage.tilePixelBounds.left - destinationImage.imagePixelBounds.left),
+        (float)(destinationImage.tilePixelBounds.bottom - destinationImage.imagePixelBounds.bottom)
     };
     [commandEncoder setFragmentBytes:&tileOffset length:sizeof(tileOffset) atIndex:RFI_TileOffset];
     

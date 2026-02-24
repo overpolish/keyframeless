@@ -8,7 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		F2E2ED792F4CA530008620D9 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F2E2ED782F4CA530008620D9 /* Cocoa.framework */; };
-		F2E2ED812F4CA530008620D9 /* RoundedKF XPC Service.pluginkit in Embed PlugIns */ = {isa = PBXBuildFile; fileRef = F2E2ED802F4CA530008620D9 /* RoundedKF XPC Service.pluginkit */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		F2E2ED812F4CA530008620D9 /* Rounded XPC Service.pluginkit in Embed PlugIns */ = {isa = PBXBuildFile; fileRef = F2E2ED802F4CA530008620D9 /* Rounded XPC Service.pluginkit */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F2E2ED852F4CA530008620D9 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F2E2ED842F4CA530008620D9 /* Foundation.framework */; };
 		F2E2ED872F4CA530008620D9 /* AppKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F2E2ED862F4CA530008620D9 /* AppKit.framework */; };
 		F2E2ED892F4CA530008620D9 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F2E2ED882F4CA530008620D9 /* Accelerate.framework */; };
@@ -40,7 +40,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				F2E2ED812F4CA530008620D9 /* RoundedKF XPC Service.pluginkit in Embed PlugIns */,
+				F2E2ED812F4CA530008620D9 /* Rounded XPC Service.pluginkit in Embed PlugIns */,
 			);
 			name = "Embed PlugIns";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -48,9 +48,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		F2E2ED752F4CA530008620D9 /* RoundedKF.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RoundedKF.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F2E2ED752F4CA530008620D9 /* Rounded.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Rounded.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2E2ED782F4CA530008620D9 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = System/Library/Frameworks/Cocoa.framework; sourceTree = SDKROOT; };
-		F2E2ED802F4CA530008620D9 /* RoundedKF XPC Service.pluginkit */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "RoundedKF XPC Service.pluginkit"; sourceTree = BUILT_PRODUCTS_DIR; };
+		F2E2ED802F4CA530008620D9 /* Rounded XPC Service.pluginkit */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Rounded XPC Service.pluginkit"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2E2ED842F4CA530008620D9 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		F2E2ED862F4CA530008620D9 /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = System/Library/Frameworks/AppKit.framework; sourceTree = SDKROOT; };
 		F2E2ED882F4CA530008620D9 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
@@ -59,7 +59,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		F2E2EDB52F4CA530008620D9 /* Exceptions for "RoundedKF" folder in "Wrapper Application" target */ = {
+		F2E2EDB52F4CA530008620D9 /* Exceptions for "Rounded" folder in "Wrapper Application" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				"/Localized: Plugin/InfoPlist.strings",
@@ -68,12 +68,14 @@
 				Plugin/main.m,
 				Plugin/MetalDeviceCache.m,
 				Plugin/Rounded.metal,
-				Plugin/RoundedKFPlugIn.m,
+				Plugin/RoundedOSC.m,
+				Plugin/RoundedOSC.metal,
+				Plugin/RoundedPlugin.m,
 				"Wrapper Application/Info.plist",
 			);
 			target = F2E2ED742F4CA530008620D9 /* Wrapper Application */;
 		};
-		F2E2EDBD2F4CA530008620D9 /* Exceptions for "RoundedKF" folder in "XPC Service" target */ = {
+		F2E2EDBD2F4CA530008620D9 /* Exceptions for "Rounded" folder in "XPC Service" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				"/Localized: Wrapper Application/Credits.rtf",
@@ -89,13 +91,13 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		F2E2ED902F4CA530008620D9 /* RoundedKF */ = {
+		F2E2ED902F4CA530008620D9 /* Rounded */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				F2E2EDB52F4CA530008620D9 /* Exceptions for "RoundedKF" folder in "Wrapper Application" target */,
-				F2E2EDBD2F4CA530008620D9 /* Exceptions for "RoundedKF" folder in "XPC Service" target */,
+				F2E2EDB52F4CA530008620D9 /* Exceptions for "Rounded" folder in "Wrapper Application" target */,
+				F2E2EDBD2F4CA530008620D9 /* Exceptions for "Rounded" folder in "XPC Service" target */,
 			);
-			path = RoundedKF;
+			path = Rounded;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -127,7 +129,7 @@
 		F2E2ED6C2F4CA530008620D9 = {
 			isa = PBXGroup;
 			children = (
-				F2E2ED902F4CA530008620D9 /* RoundedKF */,
+				F2E2ED902F4CA530008620D9 /* Rounded */,
 				F2E2ED772F4CA530008620D9 /* Frameworks */,
 				F2E2ED762F4CA530008620D9 /* Products */,
 			);
@@ -136,8 +138,8 @@
 		F2E2ED762F4CA530008620D9 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				F2E2ED752F4CA530008620D9 /* RoundedKF.app */,
-				F2E2ED802F4CA530008620D9 /* RoundedKF XPC Service.pluginkit */,
+				F2E2ED752F4CA530008620D9 /* Rounded.app */,
+				F2E2ED802F4CA530008620D9 /* Rounded XPC Service.pluginkit */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -174,13 +176,13 @@
 				F2E2ED8F2F4CA530008620D9 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				F2E2ED902F4CA530008620D9 /* RoundedKF */,
+				F2E2ED902F4CA530008620D9 /* Rounded */,
 			);
 			name = "Wrapper Application";
 			packageProductDependencies = (
 			);
 			productName = "Wrapper Application";
-			productReference = F2E2ED752F4CA530008620D9 /* RoundedKF.app */;
+			productReference = F2E2ED752F4CA530008620D9 /* Rounded.app */;
 			productType = "com.apple.product-type.application";
 		};
 		F2E2ED7F2F4CA530008620D9 /* XPC Service */ = {
@@ -198,13 +200,13 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				F2E2ED902F4CA530008620D9 /* RoundedKF */,
+				F2E2ED902F4CA530008620D9 /* Rounded */,
 			);
 			name = "XPC Service";
 			packageProductDependencies = (
 			);
 			productName = "XPC Service";
-			productReference = F2E2ED802F4CA530008620D9 /* RoundedKF XPC Service.pluginkit */;
+			productReference = F2E2ED802F4CA530008620D9 /* Rounded XPC Service.pluginkit */;
 			productType = "com.apple.product-type.bundle";
 		};
 /* End PBXNativeTarget section */
@@ -224,7 +226,7 @@
 					};
 				};
 			};
-			buildConfigurationList = F2E2ED702F4CA530008620D9 /* Build configuration list for PBXProject "RoundedKF" */;
+			buildConfigurationList = F2E2ED702F4CA530008620D9 /* Build configuration list for PBXProject "Rounded" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -339,15 +341,15 @@
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
-				INFOPLIST_FILE = RoundedKF/Plugin/Info.plist;
+				INFOPLIST_FILE = Rounded/Plugin/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@loader_path/../Frameworks",
 				);
 				MACH_O_TYPE = mh_execute;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
-				PRODUCT_NAME = "RoundedKF $(TARGET_NAME)";
-				SWIFT_OBJC_BRIDGING_HEADER = "RoundedKF/Plugin/XPC Service-Bridging-Header.h";
+				PRODUCT_NAME = "Rounded $(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = "Rounded/Plugin/XPC Service-Bridging-Header.h";
 				WRAPPER_EXTENSION = pluginkit;
 			};
 			name = Debug;
@@ -358,15 +360,15 @@
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
-				INFOPLIST_FILE = RoundedKF/Plugin/Info.plist;
+				INFOPLIST_FILE = Rounded/Plugin/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@loader_path/../Frameworks",
 				);
 				MACH_O_TYPE = mh_execute;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
-				PRODUCT_NAME = "RoundedKF $(TARGET_NAME)";
-				SWIFT_OBJC_BRIDGING_HEADER = "RoundedKF/Plugin/XPC Service-Bridging-Header.h";
+				PRODUCT_NAME = "Rounded $(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = "Rounded/Plugin/XPC Service-Bridging-Header.h";
 				WRAPPER_EXTENSION = pluginkit;
 			};
 			name = Release;
@@ -374,28 +376,28 @@
 		F2E2EDBB2F4CA530008620D9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = "RoundedKF/Wrapper Application/SandboxEntitlements.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "Rounded/Wrapper Application/SandboxEntitlements.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
-				INFOPLIST_FILE = "RoundedKF/Wrapper Application/Info.plist";
+				INFOPLIST_FILE = "Rounded/Wrapper Application/Info.plist";
 				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
-				PRODUCT_NAME = RoundedKF;
-				SWIFT_OBJC_BRIDGING_HEADER = "RoundedKF/Wrapper Application/Wrapper Application-Bridging-Header.h";
+				PRODUCT_NAME = Rounded;
+				SWIFT_OBJC_BRIDGING_HEADER = "Rounded/Wrapper Application/Wrapper Application-Bridging-Header.h";
 			};
 			name = Debug;
 		};
 		F2E2EDBC2F4CA530008620D9 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = "RoundedKF/Wrapper Application/SandboxEntitlements.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "Rounded/Wrapper Application/SandboxEntitlements.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
-				INFOPLIST_FILE = "RoundedKF/Wrapper Application/Info.plist";
+				INFOPLIST_FILE = "Rounded/Wrapper Application/Info.plist";
 				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
-				PRODUCT_NAME = RoundedKF;
-				SWIFT_OBJC_BRIDGING_HEADER = "RoundedKF/Wrapper Application/Wrapper Application-Bridging-Header.h";
+				PRODUCT_NAME = Rounded;
+				SWIFT_OBJC_BRIDGING_HEADER = "Rounded/Wrapper Application/Wrapper Application-Bridging-Header.h";
 			};
 			name = Release;
 		};
@@ -531,7 +533,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		F2E2ED702F4CA530008620D9 /* Build configuration list for PBXProject "RoundedKF" */ = {
+		F2E2ED702F4CA530008620D9 /* Build configuration list for PBXProject "Rounded" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				F2E2EDBE2F4CA530008620D9 /* Debug */,

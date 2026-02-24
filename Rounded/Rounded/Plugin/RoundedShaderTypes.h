@@ -1,6 +1,6 @@
 //
 //  RoundedShaderTypes.h
-//  RoundedKF
+//  Rounded
 //
 //  Created by Dom on 23/02/2026.
 //
@@ -24,6 +24,10 @@ typedef enum RoundedFragmentIndex {
     RFI_ImageSize   = 1,
     RFI_TileOffset  = 2
 } RoundedFragmentIndex;
+
+typedef enum RoundedOSCFragmentIndex {
+    ROFI_DrawColor      = 0
+} RoundedOSCFragmentIndex;
 
 typedef struct Vertex2D {
     vector_float2   position;
