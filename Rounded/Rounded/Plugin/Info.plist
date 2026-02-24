@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>RoundedKFXPCService</string>
+	<string>RoundedXPCService</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -48,7 +48,7 @@
 	<array>
 		<dict>
 			<key>groupName</key>
-			<string>RoundedKF Group</string>
+			<string>Rounded Group</string>
 			<key>uuid</key>
 			<string>0A3BF7B0-01C2-4425-811E-A741C4C483DE</string>
 		</dict>
@@ -57,19 +57,41 @@
 	<array>
 		<dict>
 			<key>className</key>
-			<string>RoundedKFPlugIn</string>
+			<string>RoundedPlugIn</string>
 			<key>displayName</key>
-			<string>RoundedKF::FxPlug Name</string>
+			<string>Rounded::FxPlug Name</string>
 			<key>group</key>
 			<string>0A3BF7B0-01C2-4425-811E-A741C4C483DE</string>
 			<key>infoString</key>
-			<string>RoundedKF::FxPlug Description</string>
+			<string>Rounded::FxPlug Description</string>
 			<key>protocolNames</key>
 			<array>
 				<string>FxFilter</string>
 			</array>
 			<key>uuid</key>
 			<string>A5D350B8-198F-499E-A35A-A6CE420473E4</string>
+			<key>version</key>
+			<string>1.0</string>
+		</dict>
+		<dict>
+			<key>className</key>
+			<string>RoundedOSC</string>
+			<key>displayName</key>
+			<string>Rounded OSC</string>
+			<key>group</key>
+			<string>0A3BF7B0-01C2-4425-811E-A741C4C483DE</string>
+			<key>infoString</key>
+			<string>Rounded Radius Control</string>
+			<key>protocolNames</key>
+			<array>
+				<string>FxOnScreenControl</string>
+			</array>
+			<key>supportedPlugins</key>
+			<array>
+				<string>A5D350B8-198F-499E-A35A-A6CE420473E4</string>
+			</array>
+			<key>uuid</key>
+			<string>C1E3B919-E259-42BA-B362-169AF0CD2390</string>
 			<key>version</key>
 			<string>1.0</string>
 		</dict>

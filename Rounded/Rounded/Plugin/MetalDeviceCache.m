@@ -1,6 +1,6 @@
 //
 //  MetalDeviceCache.m
-//  RoundedKF
+//  Rounded
 //
 //  Created by Dom on 23/02/2026.
 //
@@ -17,6 +17,7 @@ static MetalDeviceCache*   gDeviceCache    = nil;
 
 @property (readonly)    id<MTLDevice>                           gpuDevice;
 @property (readonly)    id<MTLRenderPipelineState>              pipelineState;
+@property (readonly)    id<MTLRenderPipelineState>              oscPipelineState;
 @property (retain)      NSMutableArray<NSMutableDictionary*>*   commandQueueCache;
 @property (readonly)    NSLock*                                 commandQueueCacheLock;
 @property (readonly)    MTLPixelFormat                          pixelFormat;
@@ -63,6 +64,9 @@ static MetalDeviceCache*   gDeviceCache    = nil;
         // Load the fragment function from the library
         id<MTLFunction> fragmentFunction = [[defaultLibrary newFunctionWithName:@"fragmentShader"] autorelease];
         
+        id<MTLFunction> oscVertexFunction = [[defaultLibrary newFunctionWithName:@"OSCVertexShader"] autorelease];
+        id<MTLFunction> oscFragmentFunction = [[defaultLibrary newFunctionWithName:@"OSCFragmentShader"] autorelease];
+        
         // Configure a pipeline descriptor that is used to create a pipeline state
         MTLRenderPipelineDescriptor *pipelineStateDescriptor = [[[MTLRenderPipelineDescriptor alloc] init] autorelease];
         pipelineStateDescriptor.label = @"Simple Pipeline";
@@ -76,7 +80,21 @@ static MetalDeviceCache*   gDeviceCache    = nil;
                                                                               error:&error];
         if (error != nil)
         {
-            NSLog (@"Error generating brightness pipeline state: %@", error);
+            NSLog (@"Error generating radius pipeline state: %@", error);
+        }
+        
+        MTLRenderPipelineDescriptor *oscStateDescriptor = [[[MTLRenderPipelineDescriptor alloc] init] autorelease];
+        oscStateDescriptor.label = @"Rounded OSC Pipeline State";
+        oscStateDescriptor.vertexFunction = oscVertexFunction;
+        oscStateDescriptor.fragmentFunction = oscFragmentFunction;
+        oscStateDescriptor.colorAttachments[0].pixelFormat = MTLPixelFormatRGBA8Unorm;
+        
+        _oscPipelineState = [_gpuDevice newRenderPipelineStateWithDescriptor:oscStateDescriptor
+                                                                       error:&error];
+        
+        if (_commandQueueCache != nil)
+        {
+            _commandQueueCacheLock = [[NSLock alloc] init];
         }
         
         if (_commandQueueCache != nil)
@@ -85,7 +103,7 @@ static MetalDeviceCache*   gDeviceCache    = nil;
         }
         
         if ((_gpuDevice == nil) || (_commandQueueCache == nil) || (_commandQueueCacheLock == nil) ||
-            (_pipelineState == nil))
+            (_pipelineState == nil) || (_oscPipelineState == nil))
         {
             [self release];
             self = nil;
@@ -101,6 +119,7 @@ static MetalDeviceCache*   gDeviceCache    = nil;
     [_commandQueueCache release];
     [_commandQueueCacheLock release];
     [_pipelineState release];
+    [_oscPipelineState release];
     
     [super dealloc];
 }
@@ -283,6 +302,19 @@ static MetalDeviceCache*   gDeviceCache    = nil;
     }
     [devices release];
     return result;
+}
+
+- (id<MTLRenderPipelineState>)oscPipelineStateWithRegistryID:(uint64_t)registryID
+{
+    for (MetalDeviceCacheItem* nextCacheItem in deviceCaches)
+    {
+        if (nextCacheItem.gpuDevice.registryID == registryID)
+        {
+            return nextCacheItem.oscPipelineState;
+        }
+    }
+    
+    return nil;
 }
 
 - (id<MTLCommandQueue>)commandQueueWithRegistryID:(uint64_t)registryID
