@@ -54,20 +54,38 @@
     
     // Get the center of the image and convert to shader coordinates
     id<FxOnScreenControlAPI_v4> oscAPI = [_apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-    CGPoint center = { 0.0, 0.0 };
+    CGPoint position = { 0.0, 0.0 };
+    CGPoint topRight = { 0.0, 0.0 };
+    CGPoint bottomLeft = { 0.0, 0.0 };
     
     if (oscAPI) {
-        // Convert image center (0.5, 0.5 in normalized object coordinates) to canvas coordinates
+        // Get the top-right position (where we want to place the control)
         [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
-                                fromX:0.5
-                                fromY:0.5
+                                fromX:1.0
+                                fromY:1.0
                               toSpace:kFxDrawingCoordinates_CANVAS
-                                  toX:&center.x
-                                  toY:&center.y];
+                                  toX:&position.x
+                                  toY:&position.y];
+        
+        // Get the top-right corner (1.0, 1.0)
+        [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                                fromX:1.0
+                                fromY:1.0
+                              toSpace:kFxDrawingCoordinates_CANVAS
+                                  toX:&topRight.x
+                                  toY:&topRight.y];
+        
+        // Get the bottom-left corner (0.0, 0.0)
+        [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                                fromX:0.0
+                                fromY:0.0
+                              toSpace:kFxDrawingCoordinates_CANVAS
+                                  toX:&bottomLeft.x
+                                  toY:&bottomLeft.y];
         
         // Convert canvas coordinates to shader coordinates (viewport-centered with Y-flip)
-        center.x -= ioSurfaceWidth / 2.0;
-        center.y = ioSurfaceHeight / 2.0 - center.y;
+        position.x -= ioSurfaceWidth / 2.0;
+        position.y = ioSurfaceHeight / 2.0 - position.y;
         
     }
     
@@ -76,15 +94,52 @@
     };
     [commandEncoder setViewport:viewport];
     
-    float radius = 25.0;
+    float oscRadius = 25.0;
     float strokeWidth = 12.0;
     float outlineWidth = 2.0;
     float gapAngle = 0.0;
-    float outerRadius = radius;
+    float outerRadius = oscRadius;
+    float oscSize = (oscRadius + strokeWidth + outlineWidth) / 2.0;
+    
+    // Calculate image dimensions in canvas space
+    float canvasImageWidth = topRight.x - bottomLeft.x;
+    float canvasImageHeight = topRight.y - bottomLeft.y;
+    
+    // Detect if scale is flipped
+    BOOL isFlippedX = canvasImageWidth < 0;
+    BOOL isFlippedY = canvasImageHeight < 0;
+    
+    float absCanvasWidth = fabsf(canvasImageWidth);
+    float absCanvasHeight = fabsf(canvasImageHeight);
+    float minCanvasDimension = fminf(absCanvasWidth, absCanvasHeight);
+    
+    float basePaddingPercent = 0.05; // 5% consistent gap from edge
+    float padding = minCanvasDimension * basePaddingPercent;
+    
+    id<FxParameterRetrievalAPI_v6> paramGetAPI = [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    
+    if (paramGetAPI != nil)
+    {
+        double paramRadius = 0.0;
+        [paramGetAPI getFloatValue:&paramRadius fromParameter:1 atTime:time];
+        
+        float cornerRadiusPixels = minCanvasDimension * (paramRadius / 100.0);
+        
+        // Half of the geometric inset formula
+        float cornerInset = cornerRadiusPixels * (1.0 - 1.0 / sqrtf(2.0)) * 0.5;
+        
+        padding += cornerInset;
+    }
+    
+    float offsetX = isFlippedX ? -(oscSize + padding) : (oscSize + padding);
+    float offsetY = isFlippedY ? -(oscSize + padding) : (oscSize + padding);
+    
+    position.x -= offsetX;
+    position.y += offsetY;
     
     // Make quad bigger to accommodate the outline
     KeyframelessKitVertex2D quadVertices[6];
-    [KeyframelessKitRenderHelpers generateQuadVertices:quadVertices center:center size:outerRadius];
+    [KeyframelessKitRenderHelpers generateQuadVertices:quadVertices center:position size:outerRadius];
     
     [commandEncoder setVertexBytes:quadVertices
                             length:sizeof(quadVertices)
@@ -100,13 +155,13 @@
     
     // Single pass with outline
     float params[8] = {
-        (radius - strokeWidth) / outerRadius,       // innerRadius (normalized)
+        (oscRadius - strokeWidth) / outerRadius,       // innerRadius (normalized)
         1.0,                                        // outerRadius (normalized)
         gapAngle,                                   // gapAngle
         outlineWidth / outerRadius,                 // outlineWidth (normalized)
         1.0, 1.0, 1.0, 1.0                          // fillColor (white)
     };
-
+    
     [commandEncoder setFragmentBytes:params
                               length:sizeof(params)
                              atIndex:KKOSCFragmentIndex_DrawColor];
