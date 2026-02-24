@@ -8,7 +8,7 @@
 #import "RoundedOSC.h"
 #import "RoundedPlugIn.h"
 #import "MetalDeviceCache.h"
-#import "RoundedShaderTypes.h"
+#import "KeyframelessKit/ShaderTypes.h"
 
 @implementation RoundedOSC
 
@@ -27,7 +27,7 @@
     return kFxDrawingCoordinates_CANVAS;
 }
 
-static void GenerateQuadVertices(Vertex2D *vertices, CGPoint center, float size)
+static void GenerateQuadVertices(KeyframelessKitVertex2D *vertices, CGPoint center, float size)
 {
     vertices[0].position = (simd_float2){ center.x - size, center.y - size };
     vertices[0].textureCoordinate = (simd_float2){ -1.0, -1.0 };
@@ -111,16 +111,16 @@ static void GenerateQuadVertices(Vertex2D *vertices, CGPoint center, float size)
     float outerRadius = radius;
     
     // Make quad bigger to accommodate the outline
-    Vertex2D quadVertices[6];
+    KeyframelessKitVertex2D quadVertices[6];
     GenerateQuadVertices(quadVertices, center, outerRadius);
     
     [commandEncoder setVertexBytes:quadVertices
                             length:sizeof(quadVertices)
-                           atIndex:RVI_Vertices];
+                           atIndex:KKVertexInputIndex_Vertices];
     
     [commandEncoder setVertexBytes:quadVertices
                             length:sizeof(quadVertices)
-                           atIndex:RVI_Vertices];
+                           atIndex:KKVertexInputIndex_Vertices];
     
     simd_uint2 viewportSize = {
         (unsigned int)(ioSurfaceWidth),
@@ -128,7 +128,7 @@ static void GenerateQuadVertices(Vertex2D *vertices, CGPoint center, float size)
     };
     [commandEncoder setVertexBytes:&viewportSize
                             length:sizeof(viewportSize)
-                           atIndex:RVI_ViewportSize];
+                           atIndex:KKVertexInputIndex_ViewportSize];
     
     // Single pass with outline
     float params[8] = {
@@ -139,7 +139,7 @@ static void GenerateQuadVertices(Vertex2D *vertices, CGPoint center, float size)
         1.0, 1.0, 1.0, 1.0                         // fillColor (white)
     };
 
-    [commandEncoder setFragmentBytes:params length:sizeof(params) atIndex:ROFI_DrawColor];
+    [commandEncoder setFragmentBytes:params length:sizeof(params) atIndex:KKOSCFragmentIndex_DrawColor];
     [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
     
     // Clean up

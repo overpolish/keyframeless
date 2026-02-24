@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F26E024F2F4DE56D009D949A /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; };
+		F26E02502F4DE56D009D949A /* KeyframelessKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F2E2ED792F4CA530008620D9 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F2E2ED782F4CA530008620D9 /* Cocoa.framework */; };
 		F2E2ED812F4CA530008620D9 /* Rounded XPC Service.pluginkit in Embed PlugIns */ = {isa = PBXBuildFile; fileRef = F2E2ED802F4CA530008620D9 /* Rounded XPC Service.pluginkit */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F2E2ED852F4CA530008620D9 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F2E2ED842F4CA530008620D9 /* Foundation.framework */; };
@@ -34,6 +36,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		F26E02512F4DE56D009D949A /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				F26E02502F4DE56D009D949A /* KeyframelessKit.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F2E2EDB92F4CA530008620D9 /* Embed PlugIns */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -48,6 +61,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = KeyframelessKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2E2ED752F4CA530008620D9 /* Rounded.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Rounded.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2E2ED782F4CA530008620D9 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = System/Library/Frameworks/Cocoa.framework; sourceTree = SDKROOT; };
 		F2E2ED802F4CA530008620D9 /* Rounded XPC Service.pluginkit */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Rounded XPC Service.pluginkit"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -107,6 +121,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F26E024F2F4DE56D009D949A /* KeyframelessKit.framework in Frameworks */,
 				F2E2ED792F4CA530008620D9 /* Cocoa.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -147,6 +162,7 @@
 		F2E2ED772F4CA530008620D9 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */,
 				F2E2ED782F4CA530008620D9 /* Cocoa.framework */,
 				F2E2ED842F4CA530008620D9 /* Foundation.framework */,
 				F2E2ED862F4CA530008620D9 /* AppKit.framework */,
@@ -168,6 +184,7 @@
 				F2E2ED722F4CA530008620D9 /* Frameworks */,
 				F2E2ED732F4CA530008620D9 /* Resources */,
 				F2E2EDB92F4CA530008620D9 /* Embed PlugIns */,
+				F26E02512F4DE56D009D949A /* Embed Frameworks */,
 			);
 			buildRules = (
 			);

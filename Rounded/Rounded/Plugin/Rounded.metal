@@ -10,6 +10,7 @@
 
 using namespace metal;
 
+#include "KeyframelessKit/ShaderTypes.h"
 #include "RoundedShaderTypes.h"
 
 typedef struct {
@@ -20,8 +21,8 @@ typedef struct {
 
 vertex RasterizerData vertexShader(
                                    uint vertexID [[vertex_id]],
-                                   constant Vertex2D *vertexArray [[buffer(RVI_Vertices)]],
-                                   constant vector_uint2 *viewportSizePointer [[buffer(RVI_ViewportSize)]])
+                                   constant KeyframelessKitVertex2D *vertexArray [[buffer(KKVertexInputIndex_Vertices)]],
+                                   constant vector_uint2 *viewportSizePointer [[buffer(KKVertexInputIndex_ViewportSize)]])
 {
     RasterizerData out;
     
@@ -42,10 +43,10 @@ float roundedBoxSDF(float2 centerPosition, float2 size, float radius) {
 }
 
 fragment float4 fragmentShader(RasterizerData in [[stage_in]],
-                               texture2d<half> colorTexture [[texture(RTI_InputImage)]],
-                               constant float* radius [[buffer(RFI_Radius)]],
-                               constant float2* imageSize [[buffer(RFI_ImageSize)]],
-                               constant float2* tileOffset [[buffer(RFI_TileOffset)]])
+                               texture2d<half> colorTexture [[texture(KKTextureIndex_InputImage)]],
+                               constant float* radius [[buffer(RFragmentIndex_Radius)]],
+                               constant float2* imageSize [[buffer(RFragmentIndex_ImageSize)]],
+                               constant float2* tileOffset [[buffer(RFragmentIndex_TileOffset)]])
 {
     constexpr sampler textureSampler(mag_filter::linear, min_filter::linear);
     
