@@ -27,6 +27,27 @@
     return kFxDrawingCoordinates_CANVAS;
 }
 
+static void GenerateQuadVertices(Vertex2D *vertices, CGPoint center, float size)
+{
+    vertices[0].position = (simd_float2){ center.x - size, center.y - size };
+    vertices[0].textureCoordinate = (simd_float2){ -1.0, -1.0 };
+    
+    vertices[1].position = (simd_float2){ center.x + size, center.y - size };
+    vertices[1].textureCoordinate = (simd_float2){ 1.0, -1.0 };
+    
+    vertices[2].position = (simd_float2){ center.x + size, center.y + size };
+    vertices[2].textureCoordinate = (simd_float2){ 1.0, 1.0 };
+    
+    vertices[3].position = (simd_float2){ center.x - size, center.y - size };
+    vertices[3].textureCoordinate = (simd_float2){ -1.0, -1.0 };
+    
+    vertices[4].position = (simd_float2){ center.x + size, center.y + size };
+    vertices[4].textureCoordinate = (simd_float2){ 1.0, 1.0 };
+    
+    vertices[5].position = (simd_float2){ center.x - size, center.y + size };
+    vertices[5].textureCoordinate = (simd_float2){ -1.0, 1.0 };
+}
+
 - (void)drawOSCWithWidth:(NSInteger)width
                   height:(NSInteger)height
               activePart:(NSInteger)activePart
@@ -58,7 +79,7 @@
     // Viewport
     float ioSurfaceWidth = [destinationImage.ioSurface width];
     float ioSurfaceHeight = [destinationImage.ioSurface height];
-
+    
     // Get the center of the image and convert to shader coordinates
     id<FxOnScreenControlAPI_v4> oscAPI = [_apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
     CGPoint center = { 0.0, 0.0 };
@@ -77,43 +98,28 @@
         center.y = ioSurfaceHeight / 2.0 - center.y;
         
     }
-
+    
     MTLViewport viewport = {
         0, 0, ioSurfaceWidth, ioSurfaceHeight, -1.0, 1.0
     };
     [commandEncoder setViewport:viewport];
     
-    float radius = 100.0;
+    float radius = 25.0;
+    float strokeWidth = 12.0;
+    float outlineWidth = 2.0;
+    float gapAngle = 0.0;
+    float outerRadius = radius;
     
-#define kNumAngles 128
-#define kNumCircleVertices (3 * kNumAngles)
+    // Make quad bigger to accommodate the outline
+    Vertex2D quadVertices[6];
+    GenerateQuadVertices(quadVertices, center, outerRadius);
     
-    Vertex2D circleVertices[kNumCircleVertices];
-    simd_float2 zeroZero = { 0.0, 0.0 };
+    [commandEncoder setVertexBytes:quadVertices
+                            length:sizeof(quadVertices)
+                           atIndex:RVI_Vertices];
     
-    for (int i = 0; i < kNumAngles; ++i)
-    {
-        // Center
-        circleVertices[i * 3 + 0].position.x = center.x;
-        circleVertices[i * 3 + 0].position.y = center.y;
-        circleVertices[i * 3 + 0].textureCoordinate = zeroZero;
-        
-        float angle0 = ((float)i / kNumAngles) * 2.0f * M_PI;
-        float angle1 = ((float)(i + 1) / kNumAngles) * 2.0f * M_PI;
-        
-        // Point at i degrees on outer edge
-        circleVertices[i * 3 + 1].position.x = center.x + cos(angle0) * radius;
-        circleVertices[i * 3 + 1].position.y = center.y + sin(angle0) * radius;
-        circleVertices[i * 3 + 1].textureCoordinate = zeroZero;
-        
-        // Point at (i + 1) degrees on outer edge
-        circleVertices[i * 3 + 2].position.x = center.x + cos(angle1) * radius;
-        circleVertices[i * 3 + 2].position.y = center.y + sin(angle1) * radius;
-        circleVertices[i * 3 + 2].textureCoordinate = zeroZero;
-    }
-    
-    [commandEncoder setVertexBytes:circleVertices
-                            length:sizeof(circleVertices)
+    [commandEncoder setVertexBytes:quadVertices
+                            length:sizeof(quadVertices)
                            atIndex:RVI_Vertices];
     
     simd_uint2 viewportSize = {
@@ -124,17 +130,17 @@
                             length:sizeof(viewportSize)
                            atIndex:RVI_ViewportSize];
     
-    simd_float4 whiteColor = { 1.0, 1.0, 1.0, 1.0 };
-    [commandEncoder setFragmentBytes:&whiteColor
-                              length:sizeof(whiteColor)
-                             atIndex:ROFI_DrawColor];
-    
-    [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangle
-                        vertexStart:0
-                       vertexCount:kNumCircleVertices];
-    
-#undef kNumAngles
-#undef kNumCircleVertices
+    // Single pass with outline
+    float params[8] = {
+        (radius - strokeWidth) / outerRadius,       // innerRadius (normalized)
+        1.0,                                        // outerRadius (normalized)
+        gapAngle,                                   // gapAngle
+        outlineWidth / outerRadius,                 // outlineWidth (normalized)
+        1.0, 1.0, 1.0, 1.0                         // fillColor (white)
+    };
+
+    [commandEncoder setFragmentBytes:params length:sizeof(params) atIndex:ROFI_DrawColor];
+    [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
     
     // Clean up
     [commandEncoder endEncoding];
@@ -170,7 +176,7 @@
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time
 {
-
+    
 }
 
 - (void)mouseUpAtPositionX:(double)mousePositionX
