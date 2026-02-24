@@ -7,6 +7,7 @@
 
 #import "RoundedPlugIn.h"
 #import <IOSurface/IOSurfaceObjC.h>
+#import "KeyframelessKit/ShaderTypes.h"
 #import "RoundedShaderTypes.h"
 #import "MetalDeviceCache.h"
 
@@ -264,7 +265,7 @@
     // Rendering
     float   outputWidth     = (float)(destinationImage.tilePixelBounds.right - destinationImage.tilePixelBounds.left);
     float   outputHeight    = (float)(destinationImage.tilePixelBounds.top - destinationImage.tilePixelBounds.bottom);
-    Vertex2D    vertices[]  = {
+    KeyframelessKitVertex2D    vertices[]  = {
         { {  outputWidth / 2.0, -outputHeight / 2.0 }, { 1.0, 1.0 } },
         { { -outputWidth / 2.0, -outputHeight / 2.0 }, { 0.0, 1.0 } },
         { {  outputWidth / 2.0,  outputHeight / 2.0 }, { 1.0, 0.0 } },
@@ -282,7 +283,7 @@
     
     [commandEncoder setVertexBytes:vertices
                             length:sizeof(vertices)
-                           atIndex:RVI_Vertices];
+                           atIndex:KKVertexInputIndex_Vertices];
     
     simd_uint2  viewportSize = {
         (unsigned int)(outputWidth),
@@ -290,27 +291,27 @@
     };
     [commandEncoder setVertexBytes:&viewportSize
                             length:sizeof(viewportSize)
-                           atIndex:RVI_ViewportSize];
+                           atIndex:KKVertexInputIndex_ViewportSize];
     
     [commandEncoder setFragmentTexture:inputTexture
-                               atIndex:RTI_InputImage];
+                               atIndex:KKTextureIndex_InputImage];
     
     float   fragmentRadius = (float)radius;
     [commandEncoder setFragmentBytes:&fragmentRadius
                               length:sizeof(fragmentRadius)
-                             atIndex:RFI_Radius];
+                             atIndex:RFragmentIndex_Radius];
     
     simd_float2 imageSize = {
         (float)(destinationImage.imagePixelBounds.right - destinationImage.imagePixelBounds.left),
         (float)(destinationImage.imagePixelBounds.top - destinationImage.imagePixelBounds.bottom)
     };
-    [commandEncoder setFragmentBytes:&imageSize length:(sizeof(imageSize)) atIndex:RFI_ImageSize];
+    [commandEncoder setFragmentBytes:&imageSize length:(sizeof(imageSize)) atIndex:RFragmentIndex_ImageSize];
     
     simd_float2 tileOffset = {
         (float)(destinationImage.tilePixelBounds.left - destinationImage.imagePixelBounds.left),
         (float)(destinationImage.tilePixelBounds.bottom - destinationImage.imagePixelBounds.bottom)
     };
-    [commandEncoder setFragmentBytes:&tileOffset length:sizeof(tileOffset) atIndex:RFI_TileOffset];
+    [commandEncoder setFragmentBytes:&tileOffset length:sizeof(tileOffset) atIndex:RFragmentIndex_TileOffset];
     
     [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                        vertexStart:0

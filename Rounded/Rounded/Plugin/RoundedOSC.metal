@@ -9,7 +9,7 @@
 #include <simd/simd.h>
 using namespace metal;
 
-#include "RoundedShaderTypes.h"
+#include "KeyframelessKit/ShaderTypes.h"
 
 typedef struct
 {
@@ -19,8 +19,8 @@ typedef struct
 
 vertex RasterizerData
 OSCVertexShader(uint vertexID [[vertex_id]],
-                constant Vertex2D *vertexArray [[buffer(RVI_Vertices)]],
-                constant vector_uint2 *viewportSizePointer [[buffer(RVI_ViewportSize)]])
+                constant KeyframelessKitVertex2D *vertexArray [[buffer(KKVertexInputIndex_Vertices)]],
+                constant vector_uint2 *viewportSizePointer [[buffer(KKVertexInputIndex_ViewportSize)]])
 {
     RasterizerData out;
     
@@ -39,7 +39,7 @@ OSCVertexShader(uint vertexID [[vertex_id]],
 }
 
 fragment float4 OSCFragmentShader(RasterizerData in [[stage_in]],
-                                  constant float *params [[buffer(ROFI_DrawColor)]])
+                                  constant float *params [[buffer(KKOSCFragmentIndex_DrawColor)]])
 {
     float innerRadius = params[0];
     float outerRadius = params[1];
