@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F220BFE32F4E07EB0034AF77 /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; };
+		F220BFE42F4E07EB0034AF77 /* KeyframelessKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F26E024F2F4DE56D009D949A /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; };
 		F26E02502F4DE56D009D949A /* KeyframelessKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F2E2ED792F4CA530008620D9 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F2E2ED782F4CA530008620D9 /* Cocoa.framework */; };
@@ -36,6 +38,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		F220BFE52F4E07EC0034AF77 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				F220BFE42F4E07EB0034AF77 /* KeyframelessKit.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F26E02512F4DE56D009D949A /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -83,7 +96,6 @@
 				Plugin/MetalDeviceCache.m,
 				Plugin/Rounded.metal,
 				Plugin/RoundedOSC.m,
-				Plugin/RoundedOSC.metal,
 				Plugin/RoundedPlugin.m,
 				"Wrapper Application/Info.plist",
 			);
@@ -132,6 +144,7 @@
 			files = (
 				F2E2ED892F4CA530008620D9 /* Accelerate.framework in Frameworks */,
 				F2E2ED8B2F4CA530008620D9 /* PluginManager.framework in Frameworks */,
+				F220BFE32F4E07EB0034AF77 /* KeyframelessKit.framework in Frameworks */,
 				F2E2ED852F4CA530008620D9 /* Foundation.framework in Frameworks */,
 				F2E2ED872F4CA530008620D9 /* AppKit.framework in Frameworks */,
 				F2E2ED8D2F4CA530008620D9 /* FxPlug.framework in Frameworks */,
@@ -211,6 +224,7 @@
 				F2E2ED7C2F4CA530008620D9 /* Resources */,
 				F2E2ED7D2F4CA530008620D9 /* Copy and Code Sign FxPlug.framework */,
 				F2E2ED7E2F4CA530008620D9 /* Copy and Code Sign PluginManager.framework */,
+				F220BFE52F4E07EC0034AF77 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -477,7 +491,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.7;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -539,7 +553,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.7;
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;

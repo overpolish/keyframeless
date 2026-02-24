@@ -24,10 +24,12 @@
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager;
 {
+    NSLog(@"RoundedPlugIn: initWithAPIManager called - plugin is loading");
     self = [super init];
     if (self != nil)
     {
         _apiManager = newApiManager;
+        NSLog(@"RoundedPlugIn: Successfully initialized");
     }
     return self;
 }
@@ -321,8 +323,6 @@
     [commandBuffer commit];
     
     [commandBuffer waitUntilCompleted];
-    
-    [colorAttachmentDescriptor release];
     
     [deviceCache returnCommandQueueToCache:commandQueue];
     

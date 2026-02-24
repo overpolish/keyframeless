@@ -6,6 +6,7 @@
 //
 
 #import "MetalDeviceCache.h"
+#import <KeyframelessKit/KeyframelessKit.h>
 
 const NSUInteger    kMaxCommandQueues   = 5;
 static NSString*    kKey_InUse          = @"InUse";
@@ -55,56 +56,74 @@ static MetalDeviceCache*   gDeviceCache    = nil;
             [_commandQueueCache addObject:commandDict];
         }
         
-        // Load all the shader files with a .metal file extension in the project
-        id<MTLLibrary> defaultLibrary = [[_gpuDevice newDefaultLibrary] autorelease];
+        NSError* error = nil;
         
-        // Load the vertex function from the library
-        id<MTLFunction> vertexFunction = [[defaultLibrary newFunctionWithName:@"vertexShader"] autorelease];
+        NSBundle *kkBundle = [NSBundle bundleWithIdentifier:@"co.overpolish.keyframeless.KeyframelessKit"];
+        id<MTLLibrary> kkLibrary = nil;
         
-        // Load the fragment function from the library
-        id<MTLFunction> fragmentFunction = [[defaultLibrary newFunctionWithName:@"fragmentShader"] autorelease];
+        if (!kkBundle) {
+            NSLog(@"FATAL: KeyframelessKit bundle not found. Plugin cannot load without shared framework.");
+            [self release];
+            return nil;
+        }
         
-        id<MTLFunction> oscVertexFunction = [[defaultLibrary newFunctionWithName:@"OSCVertexShader"] autorelease];
-        id<MTLFunction> oscFragmentFunction = [[defaultLibrary newFunctionWithName:@"OSCFragmentShader"] autorelease];
+        kkLibrary = [_gpuDevice newDefaultLibraryWithBundle:kkBundle error:&error];
+        if (error != nil) {
+            NSLog(@"FATAL: Error loading KeyframelessKit Metal library: %@", error);
+            NSLog(@"KeyframelessKit bundle path: %@", kkBundle.bundlePath);
+            [self release];
+            return nil;
+        }
         
-        // Configure a pipeline descriptor that is used to create a pipeline state
+        if (!kkLibrary) {
+            NSLog(@"FATAL: KeyframelessKit Metal library could not be created");
+            [self release];
+            return nil;
+        }
+        
+        id<MTLLibrary> pluginLibrary = [[_gpuDevice newDefaultLibrary] autorelease];
+        
+        id<MTLFunction> vertexFunction = [[pluginLibrary newFunctionWithName:@"vertexShader"] autorelease];
+        id<MTLFunction> fragmentFunction = [[pluginLibrary newFunctionWithName:@"fragmentShader"] autorelease];
+        
         MTLRenderPipelineDescriptor *pipelineStateDescriptor = [[[MTLRenderPipelineDescriptor alloc] init] autorelease];
-        pipelineStateDescriptor.label = @"Simple Pipeline";
+        pipelineStateDescriptor.label = @"Radius Pipeline";
         pipelineStateDescriptor.vertexFunction = vertexFunction;
         pipelineStateDescriptor.fragmentFunction = fragmentFunction;
         pipelineStateDescriptor.colorAttachments[0].pixelFormat = pixFormat;
         _pixelFormat = pixFormat;
         
-        NSError*    error = nil;
         _pipelineState = [_gpuDevice newRenderPipelineStateWithDescriptor:pipelineStateDescriptor
                                                                     error:&error];
         if (error != nil)
         {
             NSLog (@"Error generating radius pipeline state: %@", error);
+            error = nil;
         }
         
-        MTLRenderPipelineDescriptor *oscStateDescriptor = [[[MTLRenderPipelineDescriptor alloc] init] autorelease];
-        oscStateDescriptor.label = @"Rounded OSC Pipeline State";
-        oscStateDescriptor.vertexFunction = oscVertexFunction;
-        oscStateDescriptor.fragmentFunction = oscFragmentFunction;
-        oscStateDescriptor.colorAttachments[0].pixelFormat = MTLPixelFormatRGBA8Unorm;
+        id<MTLFunction> oscVertexFunction = [[kkLibrary newFunctionWithName:@"KKVertexShader"] autorelease];
+        id<MTLFunction> oscFragmentFunction = [[kkLibrary newFunctionWithName:@"KKOSCRingFragment"] autorelease];
         
-        // Enable blending for anti-aliasing
-        oscStateDescriptor.colorAttachments[0].blendingEnabled = YES;
-        oscStateDescriptor.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
-        oscStateDescriptor.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
-        oscStateDescriptor.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
-        oscStateDescriptor.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
-        oscStateDescriptor.colorAttachments[0].rgbBlendOperation = MTLBlendOperationAdd;
-        oscStateDescriptor.colorAttachments[0].alphaBlendOperation = MTLBlendOperationAdd;
+        if (!oscVertexFunction || !oscFragmentFunction) {
+            NSLog(@"FATAL: Required KeyframelessKit shaders not found in library");
+            [kkLibrary release];
+            [self release];
+            return nil;
+        }
+        
+        MTLRenderPipelineDescriptor *oscStateDescriptor = [KeyframelessKitRenderHelpers createOSCPipelineDescriptorWithVertexFunction:oscVertexFunction fragmentFunction:oscFragmentFunction pixelFormat:MTLPixelFormatRGBA8Unorm blendingEnabled:YES];
         
         _oscPipelineState = [_gpuDevice newRenderPipelineStateWithDescriptor:oscStateDescriptor
                                                                        error:&error];
         
-        if (_commandQueueCache != nil)
-        {
-            _commandQueueCacheLock = [[NSLock alloc] init];
+        if (error != nil) {
+            NSLog(@"FATAL: Error creating OSC pipeline state: %@", error);
+            [kkLibrary release];
+            [self release];
+            return nil;
         }
+        
+        [kkLibrary release];
         
         if (_commandQueueCache != nil)
         {
