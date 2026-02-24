@@ -97,25 +97,31 @@
     return renderPassDescriptor;
 }
 
-+ (nonnull MTLRenderPipelineDescriptor *)createOSCPipelineDescriptorWithVertexFunction:(nonnull id<MTLFunction>)vertexFunction
-                                                                      fragmentFunction:(nonnull id<MTLFunction>)fragmentFunction pixelFormat:(MTLPixelFormat)pixelFormat blendingEnabled:(BOOL)enableBlending {
-    MTLRenderPipelineDescriptor *pipelineDescriptor = [[MTLRenderPipelineDescriptor alloc] init];
-    pipelineDescriptor.label = @"OSC Pipeline";
-    pipelineDescriptor.vertexFunction = vertexFunction;
-    pipelineDescriptor.fragmentFunction = fragmentFunction;
-    pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat;
-    
-    if (enableBlending) {
-        pipelineDescriptor.colorAttachments[0].blendingEnabled = YES;
-        pipelineDescriptor.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
-        pipelineDescriptor.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
-        pipelineDescriptor.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
-        pipelineDescriptor.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
-        pipelineDescriptor.colorAttachments[0].rgbBlendOperation = MTLBlendOperationAdd;
-        pipelineDescriptor.colorAttachments[0].alphaBlendOperation = MTLBlendOperationAdd;
++ (nonnull MTLRenderPipelineDescriptor *)createPipelineDescriptorWithVertexFunction:(nonnull id<MTLFunction>)vertexFunction
+                                                                      fragmentFunction:(nonnull id<MTLFunction>)fragmentFunction
+                                                                           pixelFormat:(MTLPixelFormat)pixelFormat
+                                                                             blendMode:(KKBlendMode)blendMode {
+    MTLRenderPipelineDescriptor *d = [[MTLRenderPipelineDescriptor alloc] init];
+    d.vertexFunction = vertexFunction;
+    d.fragmentFunction = fragmentFunction;
+    d.colorAttachments[0].pixelFormat = pixelFormat;
+
+    if (blendMode != KKBlendModeNone) {
+        d.colorAttachments[0].blendingEnabled = YES;
+        d.colorAttachments[0].rgbBlendOperation = MTLBlendOperationAdd;
+        d.colorAttachments[0].alphaBlendOperation = MTLBlendOperationAdd;
+        d.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+        d.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+        d.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
+
+        if (blendMode == KKBlendModePremultipliedAlpha) {
+            d.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorOne;
+        } else {
+            d.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
+        }
     }
-    
-    return pipelineDescriptor;
+
+    return d;
 }
 
 @end

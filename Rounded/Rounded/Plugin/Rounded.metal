@@ -38,11 +38,6 @@ vertex RasterizerData vertexShader(
     return out;
 }
 
-/// Return rounded corner distance using signed distance function.
-float roundedBoxSDF(float2 centerPosition, float2 size, float radius) {
-    return length(max(abs(centerPosition) - size + radius, 0.0)) - radius;
-}
-
 fragment float4 fragmentShader(RasterizerData in [[stage_in]],
                                texture2d<half> colorTexture [[texture(KKTextureIndex_InputImage)]],
                                constant float* radius [[buffer(RFragmentIndex_Radius)]],
@@ -57,16 +52,26 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
     float2 pixelInTile = in.textureCoordinate * tileSize;
     float2 pixelInFullImage = pixelInTile + (*tileOffset);
     
-    // Position from center of full image
     float2 center = (*imageSize) * 0.5;
     float2 pos = pixelInFullImage - center;
     
-    // Distance to rounded rectangle edge
     float2 halfSize = (*imageSize) * 0.5;
     float scaledRadius = (*radius / 100.0) * min(halfSize.x, halfSize.y);
-    float distance = roundedBoxSDF(pos, halfSize, scaledRadius);
     
-    float alpha = 1.0 - smoothstep(0.0, 1.0, distance);
+    float alpha;
+    
+    if (scaledRadius < 0.5) {
+        float2 d = abs(pos) - halfSize;
+        float distance = length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
+        alpha = 1.0 - smoothstep(0.0, fwidth(distance) * 2.0, distance);
+    } else {
+        float2 insetSize = max(halfSize - scaledRadius, 0.0);
+        float2 q = max(abs(pos) - insetSize, 0.0) / scaledRadius;
+        float t = *radius / 100.0;
+        float power = mix(5.0, 2.0, t);
+        float distance = pow(pow(q.x, power) + pow(q.y, power), 1.0 / power) - 1.0;
+        alpha = 1.0 - smoothstep(0.0, fwidth(distance) * 2.0, distance);
+    }
     
     return float4(float3(colorSample.rgb) * alpha, alpha);
 }

@@ -310,8 +310,8 @@
     [commandEncoder setFragmentBytes:&imageSize length:(sizeof(imageSize)) atIndex:RFragmentIndex_ImageSize];
     
     simd_float2 tileOffset = {
-        (float)(destinationImage.tilePixelBounds.left - destinationImage.imagePixelBounds.left),
-        (float)(destinationImage.tilePixelBounds.bottom - destinationImage.imagePixelBounds.bottom)
+        roundf((float)(destinationImage.tilePixelBounds.left - destinationImage.imagePixelBounds.left)),
+        roundf((float)(destinationImage.tilePixelBounds.bottom - destinationImage.imagePixelBounds.bottom))
     };
     [commandEncoder setFragmentBytes:&tileOffset length:sizeof(tileOffset) atIndex:RFragmentIndex_TileOffset];
     

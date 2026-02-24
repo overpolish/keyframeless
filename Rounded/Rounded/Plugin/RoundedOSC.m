@@ -123,11 +123,20 @@
         double paramRadius = 0.0;
         [paramGetAPI getFloatValue:&paramRadius fromParameter:1 atTime:time];
         
-        float cornerRadiusPixels = minCanvasDimension * (paramRadius / 100.0);
-        
-        // Half of the geometric inset formula
-        float cornerInset = cornerRadiusPixels * (1.0 - 1.0 / sqrtf(2.0)) * 0.5;
-        
+        float t = paramRadius / 100.0f;
+        float power = 5.0f * (1.0f - t) + 2.0f * t;
+
+        float cornerRadiusPixels = minCanvasDimension * 0.5f * t;
+
+        float circleInsetFactor = 1.0f - 1.0f / sqrtf(2.0f);
+        float squircleInsetFactor = 1.0f - 1.0f / powf(2.0f, 1.0f / power);
+        float insetFactor = squircleInsetFactor * (1.0f - t) + circleInsetFactor * t;
+
+        // Squircle corners are tighter than circle, reduce inset slightly in the middle
+        float squircleCorrection = 1.0f - 0.22f * sinf(t * M_PI);
+
+        float cornerInset = cornerRadiusPixels * insetFactor * squircleCorrection;
+
         padding += cornerInset;
     }
     

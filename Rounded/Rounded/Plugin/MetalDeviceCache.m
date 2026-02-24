@@ -86,11 +86,8 @@ static MetalDeviceCache*   gDeviceCache    = nil;
         id<MTLFunction> vertexFunction = [[pluginLibrary newFunctionWithName:@"vertexShader"] autorelease];
         id<MTLFunction> fragmentFunction = [[pluginLibrary newFunctionWithName:@"fragmentShader"] autorelease];
         
-        MTLRenderPipelineDescriptor *pipelineStateDescriptor = [[[MTLRenderPipelineDescriptor alloc] init] autorelease];
-        pipelineStateDescriptor.label = @"Radius Pipeline";
-        pipelineStateDescriptor.vertexFunction = vertexFunction;
-        pipelineStateDescriptor.fragmentFunction = fragmentFunction;
-        pipelineStateDescriptor.colorAttachments[0].pixelFormat = pixFormat;
+        MTLRenderPipelineDescriptor *pipelineStateDescriptor = [KeyframelessKitRenderHelpers createPipelineDescriptorWithVertexFunction:vertexFunction fragmentFunction:fragmentFunction pixelFormat:pixFormat blendMode:KKBlendModePremultipliedAlpha];
+        
         _pixelFormat = pixFormat;
         
         _pipelineState = [_gpuDevice newRenderPipelineStateWithDescriptor:pipelineStateDescriptor
@@ -111,7 +108,7 @@ static MetalDeviceCache*   gDeviceCache    = nil;
             return nil;
         }
         
-        MTLRenderPipelineDescriptor *oscStateDescriptor = [KeyframelessKitRenderHelpers createOSCPipelineDescriptorWithVertexFunction:oscVertexFunction fragmentFunction:oscFragmentFunction pixelFormat:MTLPixelFormatRGBA8Unorm blendingEnabled:YES];
+        MTLRenderPipelineDescriptor *oscStateDescriptor = [KeyframelessKitRenderHelpers createPipelineDescriptorWithVertexFunction:oscVertexFunction fragmentFunction:oscFragmentFunction pixelFormat:MTLPixelFormatRGBA8Unorm blendMode:KKBlendModeStraightAlpha];
         
         _oscPipelineState = [_gpuDevice newRenderPipelineStateWithDescriptor:oscStateDescriptor
                                                                        error:&error];
