@@ -56,20 +56,36 @@
     [commandEncoder setRenderPipelineState:pipelineState];
     
     // Viewport
-    float destImageWidth = destinationImage.imagePixelBounds.right - destinationImage.imagePixelBounds.left;
-    float destImageHeight = destinationImage.imagePixelBounds.top - destinationImage.imagePixelBounds.bottom;
+    float ioSurfaceWidth = [destinationImage.ioSurface width];
     float ioSurfaceHeight = [destinationImage.ioSurface height];
+
+    // Get the center of the image and convert to shader coordinates
+    id<FxOnScreenControlAPI_v4> oscAPI = [_apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    CGPoint center = { 0.0, 0.0 };
+    
+    if (oscAPI) {
+        // Convert image center (0.5, 0.5 in normalized object coordinates) to canvas coordinates
+        [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                                fromX:0.5
+                                fromY:0.5
+                              toSpace:kFxDrawingCoordinates_CANVAS
+                                  toX:&center.x
+                                  toY:&center.y];
+        
+        // Convert canvas coordinates to shader coordinates (viewport-centered with Y-flip)
+        center.x -= ioSurfaceWidth / 2.0;
+        center.y = ioSurfaceHeight / 2.0 - center.y;
+        
+    }
+
     MTLViewport viewport = {
-        0, ioSurfaceHeight - destImageHeight, destImageWidth, destImageHeight, -1.0, 1.0
+        0, 0, ioSurfaceWidth, ioSurfaceHeight, -1.0, 1.0
     };
     [commandEncoder setViewport:viewport];
     
-    // Circle in the center
-    CGPoint center = { 0.0, 0.0 }; // canvas coords
-    float radius = 50.0;
+    float radius = 100.0;
     
-#define kNumAngles 24
-#define kDegreesPerIteration (360 / kNumAngles)
+#define kNumAngles 128
 #define kNumCircleVertices (3 * kNumAngles)
     
     Vertex2D circleVertices[kNumCircleVertices];
@@ -82,16 +98,17 @@
         circleVertices[i * 3 + 0].position.y = center.y;
         circleVertices[i * 3 + 0].textureCoordinate = zeroZero;
         
+        float angle0 = ((float)i / kNumAngles) * 2.0f * M_PI;
+        float angle1 = ((float)(i + 1) / kNumAngles) * 2.0f * M_PI;
+        
         // Point at i degrees on outer edge
-        double radians = (double)(i * kDegreesPerIteration) * M_PI / 180.0;
-        circleVertices[i * 3 + 1].position.x = center.x + cos(radians) * radius;
-        circleVertices[i * 3 + 1].position.y = center.y + sin(radians) * radius;
+        circleVertices[i * 3 + 1].position.x = center.x + cos(angle0) * radius;
+        circleVertices[i * 3 + 1].position.y = center.y + sin(angle0) * radius;
         circleVertices[i * 3 + 1].textureCoordinate = zeroZero;
         
         // Point at (i + 1) degrees on outer edge
-        radians = (double)((i + 1) * kDegreesPerIteration) * M_PI / 180.0;
-        circleVertices[i * 3 + 2].position.x = center.x + cos(radians) * radius;
-        circleVertices[i * 3 + 2].position.y = center.y + sin(radians) * radius;
+        circleVertices[i * 3 + 2].position.x = center.x + cos(angle1) * radius;
+        circleVertices[i * 3 + 2].position.y = center.y + sin(angle1) * radius;
         circleVertices[i * 3 + 2].textureCoordinate = zeroZero;
     }
     
@@ -100,8 +117,8 @@
                            atIndex:RVI_Vertices];
     
     simd_uint2 viewportSize = {
-        (unsigned int)(destImageWidth),
-        (unsigned int)(destImageHeight)
+        (unsigned int)(ioSurfaceWidth),
+        (unsigned int)(ioSurfaceHeight)
     };
     [commandEncoder setVertexBytes:&viewportSize
                             length:sizeof(viewportSize)
@@ -117,7 +134,6 @@
                        vertexCount:kNumCircleVertices];
     
 #undef kNumAngles
-#undef kDegreesPerIteration
 #undef kNumCircleVertices
     
     // Clean up
