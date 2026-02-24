@@ -77,7 +77,7 @@ static MetalDeviceCache*   gDeviceCache    = nil;
         
         NSError*    error = nil;
         _pipelineState = [_gpuDevice newRenderPipelineStateWithDescriptor:pipelineStateDescriptor
-                                                                              error:&error];
+                                                                    error:&error];
         if (error != nil)
         {
             NSLog (@"Error generating radius pipeline state: %@", error);
@@ -88,6 +88,15 @@ static MetalDeviceCache*   gDeviceCache    = nil;
         oscStateDescriptor.vertexFunction = oscVertexFunction;
         oscStateDescriptor.fragmentFunction = oscFragmentFunction;
         oscStateDescriptor.colorAttachments[0].pixelFormat = MTLPixelFormatRGBA8Unorm;
+        
+        // Enable blending for anti-aliasing
+        oscStateDescriptor.colorAttachments[0].blendingEnabled = YES;
+        oscStateDescriptor.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
+        oscStateDescriptor.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+        oscStateDescriptor.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
+        oscStateDescriptor.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+        oscStateDescriptor.colorAttachments[0].rgbBlendOperation = MTLBlendOperationAdd;
+        oscStateDescriptor.colorAttachments[0].alphaBlendOperation = MTLBlendOperationAdd;
         
         _oscPipelineState = [_gpuDevice newRenderPipelineStateWithDescriptor:oscStateDescriptor
                                                                        error:&error];
@@ -293,7 +302,7 @@ static MetalDeviceCache*   gDeviceCache    = nil;
     {
         MetalDeviceCacheItem*   newCacheItem    = [[[MetalDeviceCacheItem alloc] initWithDevice:device
                                                                                     pixelFormat:pixFormat]
-                                                    autorelease];
+                                                   autorelease];
         if (newCacheItem != nil)
         {
             [deviceCaches addObject:newCacheItem];
