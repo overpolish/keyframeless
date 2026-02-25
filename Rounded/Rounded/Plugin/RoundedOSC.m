@@ -10,7 +10,16 @@
 #import "MetalDeviceCache.h"
 #import "KeyframelessKit/KeyframelessKit.h"
 
-@implementation RoundedOSC
+static const float kOSCRadius     = 25.0f;
+static const float kOSCStroke     = 12.0f;
+static const float kOSCOutline    = 2.0f;
+static const NSInteger kOSCNoPart = 0;
+static const NSInteger kOSCHandle = 1;
+
+@implementation RoundedOSC {
+    NSInteger _hoveredPart;
+    BOOL _isDragging;
+}
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager
 {
@@ -18,6 +27,8 @@
     if (self != nil)
     {
         _apiManager = newApiManager;
+        _hoveredPart = kOSCNoPart;
+        _isDragging = NO;
     }
     return self;
 }
@@ -42,7 +53,6 @@
     
     id<MTLTexture> outputTexture = [destinationImage metalTextureForDevice:gpuDevice];
     MTLRenderPassDescriptor *renderPassDescriptor = [KeyframelessKitRenderHelpers createClearRenderPassWithTexture:outputTexture clearColor:MTLClearColorMake(0.0, 0.0, 0.0, 0.0)];
-    
     id<MTLRenderCommandEncoder> commandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
     
     id<MTLRenderPipelineState> pipelineState = [deviceCache oscPipelineStateWithRegistryID:destinationImage.deviceRegistryID];
@@ -52,99 +62,18 @@
     float ioSurfaceWidth = [destinationImage.ioSurface width];
     float ioSurfaceHeight = [destinationImage.ioSurface height];
     
-    // Get the center of the image and convert to shader coordinates
-    id<FxOnScreenControlAPI_v4> oscAPI = [_apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-    CGPoint position = { 0.0, 0.0 };
-    CGPoint topRight = { 0.0, 0.0 };
-    CGPoint bottomLeft = { 0.0, 0.0 };
-    
-    if (oscAPI) {
-        // Get the top-right position (where we want to place the control)
-        [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
-                                fromX:1.0
-                                fromY:1.0
-                              toSpace:kFxDrawingCoordinates_CANVAS
-                                  toX:&position.x
-                                  toY:&position.y];
-        
-        // Get the top-right corner (1.0, 1.0)
-        [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
-                                fromX:1.0
-                                fromY:1.0
-                              toSpace:kFxDrawingCoordinates_CANVAS
-                                  toX:&topRight.x
-                                  toY:&topRight.y];
-        
-        // Get the bottom-left corner (0.0, 0.0)
-        [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
-                                fromX:0.0
-                                fromY:0.0
-                              toSpace:kFxDrawingCoordinates_CANVAS
-                                  toX:&bottomLeft.x
-                                  toY:&bottomLeft.y];
-        
-        // Convert canvas coordinates to shader coordinates (viewport-centered with Y-flip)
-        position.x -= ioSurfaceWidth / 2.0;
-        position.y = ioSurfaceHeight / 2.0 - position.y;
-        
-    }
-    
     MTLViewport viewport = {
         0, 0, ioSurfaceWidth, ioSurfaceHeight, -1.0, 1.0
     };
     [commandEncoder setViewport:viewport];
     
-    float oscRadius = 25.0;
-    float strokeWidth = 12.0;
-    float outlineWidth = 2.0;
-    float gapAngle = 0.0;
-    float outerRadius = oscRadius;
-    float oscSize = (oscRadius + strokeWidth + outlineWidth) / 2.0;
+    CGPoint canvasPosition = [self oscPositionAtTime:time];
+    CGPoint position = {
+        canvasPosition.x - ioSurfaceWidth / 2.0f,
+        ioSurfaceHeight / 2.0 - canvasPosition.y // Y flip for Metal
+    };
     
-    // Calculate image dimensions in canvas space
-    float canvasImageWidth = topRight.x - bottomLeft.x;
-    float canvasImageHeight = topRight.y - bottomLeft.y;
-    
-    // Detect if scale is flipped
-    BOOL isFlippedX = canvasImageWidth < 0;
-    BOOL isFlippedY = canvasImageHeight < 0;
-    
-    float absCanvasWidth = fabsf(canvasImageWidth);
-    float absCanvasHeight = fabsf(canvasImageHeight);
-    float minCanvasDimension = fminf(absCanvasWidth, absCanvasHeight);
-    
-    float basePaddingPercent = 0.05; // 5% consistent gap from edge
-    float padding = minCanvasDimension * basePaddingPercent;
-    
-    id<FxParameterRetrievalAPI_v6> paramGetAPI = [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    
-    if (paramGetAPI != nil)
-    {
-        double paramRadius = 0.0;
-        [paramGetAPI getFloatValue:&paramRadius fromParameter:1 atTime:time];
-        
-        float t = paramRadius / 100.0f;
-        float power = 5.0f * (1.0f - t) + 2.0f * t;
-
-        float cornerRadiusPixels = minCanvasDimension * 0.5f * t;
-
-        float circleInsetFactor = 1.0f - 1.0f / sqrtf(2.0f);
-        float squircleInsetFactor = 1.0f - 1.0f / powf(2.0f, 1.0f / power);
-        float insetFactor = squircleInsetFactor * (1.0f - t) + circleInsetFactor * t;
-
-        // Squircle corners are tighter than circle, reduce inset slightly in the middle
-        float squircleCorrection = 1.0f - 0.22f * sinf(t * M_PI);
-
-        float cornerInset = cornerRadiusPixels * insetFactor * squircleCorrection;
-
-        padding += cornerInset;
-    }
-    
-    float offsetX = isFlippedX ? -(oscSize + padding) : (oscSize + padding);
-    float offsetY = isFlippedY ? -(oscSize + padding) : (oscSize + padding);
-    
-    position.x -= offsetX;
-    position.y += offsetY;
+    float outerRadius = kOSCRadius;
     
     // Make quad bigger to accommodate the outline
     KeyframelessKitVertex2D quadVertices[6];
@@ -162,13 +91,23 @@
                             length:sizeof(viewportSize)
                            atIndex:KKVertexInputIndex_ViewportSize];
     
+    BOOL isHovered = (_hoveredPart == kOSCHandle) && !_isDragging;
+    BOOL isActive  = _isDragging;
+    
+    float r = 1.0f, g = 1.0f, b = 1.0f;
+    if (isActive) {
+        r = 0.2f; g = 0.9f; b = 0.2f; // brighter green while pressing
+    } else if (isHovered) {
+        r = 0.4f; g = 0.8f; b = 0.4f; // softer green on hover
+    }
+    
     // Single pass with outline
     float params[8] = {
-        (oscRadius - strokeWidth) / outerRadius,       // innerRadius (normalized)
-        1.0,                                        // outerRadius (normalized)
-        gapAngle,                                   // gapAngle
-        outlineWidth / outerRadius,                 // outlineWidth (normalized)
-        1.0, 1.0, 1.0, 1.0                          // fillColor (white)
+        (kOSCRadius - kOSCStroke) / outerRadius,        // innerRadius (normalized)
+        1.0f,                                           // outerRadius (normalized)
+        0.0f,                                           // gapAngle
+        kOSCOutline / outerRadius,                      // outlineWidth (normalized)
+        r, g, b, 1.0f                                   // fillColor (white)
     };
     
     [commandEncoder setFragmentBytes:params
@@ -186,12 +125,75 @@
     [deviceCache returnCommandQueueToCache:commandQueue];
 }
 
+- (CGPoint)oscPositionAtTime:(CMTime)time
+{
+    id<FxOnScreenControlAPI_v4> oscAPI = [_apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    if (!oscAPI) return CGPointZero;
+    
+    CGPoint topRight = {0, 0}, bottomLeft = {0, 0};
+    [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT fromX:1.0 fromY:1.0
+                          toSpace:kFxDrawingCoordinates_CANVAS toX:&topRight.x toY:&topRight.y];
+    [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT fromX:0.0 fromY:0.0
+                          toSpace:kFxDrawingCoordinates_CANVAS toX:&bottomLeft.x toY:&bottomLeft.y];
+    
+    float canvasImageWidth  = topRight.x - bottomLeft.x;
+    float canvasImageHeight = topRight.y - bottomLeft.y;
+    BOOL isFlippedX = canvasImageWidth  < 0;
+    BOOL isFlippedY = canvasImageHeight < 0;
+    
+    float minDim = fminf(fabsf(canvasImageWidth), fabsf(canvasImageHeight));
+    float padding = minDim * 0.05f;
+    
+    id<FxParameterRetrievalAPI_v6> paramGetAPI = [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    if (paramGetAPI) {
+        double paramRadius = 0.0;
+        [paramGetAPI getFloatValue:&paramRadius fromParameter:1 atTime:time];
+        float t = paramRadius / 100.0f;
+        float power = 5.0f * (1.0f - t) + 2.0f * t;
+        float cornerRadiusPixels  = minDim * 0.5f * t;
+        float circleInsetFactor   = 1.0f - 1.0f / sqrtf(2.0f);
+        float squircleInsetFactor = 1.0f - 1.0f / powf(2.0f, 1.0f / power);
+        float insetFactor         = squircleInsetFactor * (1.0f - t) + circleInsetFactor * t;
+        float squircleCorrection  = 1.0f - 0.22f * sinf(t * M_PI);
+        padding += cornerRadiusPixels * insetFactor * squircleCorrection;
+    }
+    
+    float oscSize      = (kOSCRadius + kOSCStroke + kOSCOutline) / 2.0f;
+    float offsetX = isFlippedX ? -(oscSize + padding) : (oscSize + padding);
+    float offsetY = isFlippedY ? -(oscSize + padding) : (oscSize + padding);
+    
+    return CGPointMake(topRight.x - offsetX, topRight.y - offsetY);
+}
+
 - (void)hitTestOSCAtMousePositionX:(double)mousePositionX
                     mousePositionY:(double)mousePositionY
                         activePart:(NSInteger *)activePart
                             atTime:(CMTime)time
 {
-    *activePart = 0;
+    _hoveredPart = kOSCNoPart;
+    *activePart = kOSCNoPart;
+    
+    CGPoint oscPos = [self oscPositionAtTime:time];
+    float hitRadius = kOSCRadius + kOSCOutline;
+    
+    double dx = mousePositionX - oscPos.x;
+    double dy = mousePositionY - oscPos.y;
+    
+    if (sqrt(dx*dx + dy*dy) <= hitRadius) {
+        _hoveredPart = kOSCHandle;
+        *activePart = kOSCHandle;
+    }
+}
+
+- (void)mouseEnteredAtPositionX:(double)mousePositionX positionY:(double)mousePositionY modifiers:(FxModifierKeys)modifiers forceUpdate:(BOOL *)forceUpdate atTime:(CMTime)time
+{
+    
+}
+
+- (void)mouseExitedAtPositionX:(double)mousePositionX positionY:(double)mousePositionY modifiers:(FxModifierKeys)modifiers forceUpdate:(BOOL *)forceUpdate atTime:(CMTime)time
+{
+    _hoveredPart = kOSCNoPart;
+    *forceUpdate = YES;
 }
 
 - (void)mouseDownAtPositionX:(double)mousePositionX
@@ -201,7 +203,8 @@
                  forceUpdate:(BOOL *)forceUpdate
                       atTime:(CMTime)time
 {
-    *forceUpdate = NO;
+    _isDragging = (activePart == kOSCHandle);
+    *forceUpdate = YES;
 }
 
 - (void)mouseDraggedAtPositionX:(double)mousePositionX
@@ -221,7 +224,8 @@
                forceUpdate:(BOOL *)forceUpdate
                     atTime:(CMTime)time
 {
-    *forceUpdate = NO;
+    _isDragging = NO;
+    *forceUpdate = YES;
 }
 
 - (void)keyDownAtPositionX:(double)mousePositionX
