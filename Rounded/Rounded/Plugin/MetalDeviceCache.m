@@ -37,7 +37,7 @@ static MetalDeviceCache   *gDeviceCache    = nil;
     id<MTLFunction> vertFn = [library newFunctionWithName:@"vertexShader"];
     id<MTLFunction> fragFn = [library newFunctionWithName:@"fragmentShader"];
     
-    MTLRenderPipelineDescriptor *desc = [KeyframelessKitRenderHelpers createPipelineDescriptorWithVertexFunction:vertFn
+    MTLRenderPipelineDescriptor *desc = [KKRenderHelpers createPipelineDescriptorWithVertexFunction:vertFn
                                                                                                 fragmentFunction:fragFn
                                                                                                      pixelFormat:pixelFormat
                                                                                                        blendMode:KKBlendModePremultipliedAlpha];

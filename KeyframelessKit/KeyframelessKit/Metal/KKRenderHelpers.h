@@ -1,5 +1,5 @@
 //
-//  RenderHelpers.h
+//  KKRenderHelpers.h
 //  KeyframelessKit
 //
 //  Created by Dom on 24/02/2026.
@@ -9,25 +9,25 @@
 #import <CoreGraphics/CoreGraphics.h>
 #import <Metal/Metal.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
-#import <KeyframelessKit/ShaderTypes.h>
+#import <KeyframelessKit/KKShaderTypes.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface KeyframelessKitRenderHelpers : NSObject
+@interface KKRenderHelpers : NSObject
 
 /// Generate vertices for a quad centered at a point with normalized texture coordinates (-1 to 1).
-+ (void)generateQuadVertices:(KeyframelessKitVertex2D *)vertices
++ (void)generateQuadVertices:(KKVertex2D *)vertices
                       center:(CGPoint)center
                         size:(float)size;
 
 /// Generate vertices for a quad with custom texture coordinates.
-+ (void)generateQuadVertices:(KeyframelessKitVertex2D *)vertices
++ (void)generateQuadVertices:(KKVertex2D *)vertices
                       center:(CGPoint)center
                         size:(float)size
           textureCoordMinMax:(CGRect)texCoords;
 
 /// Generate vertices for a full-screen quad.
-+ (void)generateFullScreenQuadVertices:(KeyframelessKitVertex2D *)vertices;
++ (void)generateFullScreenQuadVertices:(KKVertex2D *)vertices;
 
 /// Create a Metal render pass descriptor that clears the target texture with a specified color.
 /// @return A configured MTLRenderPassDescriptor ready for rendering.

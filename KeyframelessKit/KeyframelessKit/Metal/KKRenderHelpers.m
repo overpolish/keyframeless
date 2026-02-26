@@ -1,15 +1,15 @@
 //
-//  RenderHelpers.m
+//  KKRenderHelpers.m
 //  KeyframelessKit
 //
 //  Created by Dom on 24/02/2026.
 //
 
-#import "RenderHelpers.h"
+#import "KKRenderHelpers.h"
 
-@implementation KeyframelessKitRenderHelpers
+@implementation KKRenderHelpers
 
-+ (void)generateQuadVertices:(KeyframelessKitVertex2D *)vertices
++ (void)generateQuadVertices:(KKVertex2D *)vertices
                       center:(CGPoint)center
                         size:(float)size
 {
@@ -32,7 +32,7 @@
     vertices[5].textureCoordinate = (simd_float2){ -1.0, 1.0 };
 }
 
-+ (void)generateQuadVertices:(KeyframelessKitVertex2D *)vertices
++ (void)generateQuadVertices:(KKVertex2D *)vertices
                       center:(CGPoint)center
                         size:(float)size
           textureCoordMinMax:(CGRect)texCoords
@@ -61,7 +61,7 @@
     vertices[5].textureCoordinate = (simd_float2){ minX, maxY };
 }
 
-+ (void)generateFullScreenQuadVertices:(KeyframelessKitVertex2D *)vertices
++ (void)generateFullScreenQuadVertices:(KKVertex2D *)vertices
 {
     // Fullscreen quad in clip space (-1 to 1)
     vertices[0].position = (simd_float2){ -1.0, -1.0 };

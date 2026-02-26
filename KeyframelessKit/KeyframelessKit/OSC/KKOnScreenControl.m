@@ -8,7 +8,7 @@
 #import <FxPlug/FxPlugSDK.h>
 #import "KKOnScreenControl.h"
 #import "KKMetalDeviceCache.h"
-#import "RenderHelpers.h"
+#import "KKRenderHelpers.h"
 
 @implementation KKOnScreenControl {
     BOOL _isHovered;
@@ -74,7 +74,7 @@
     [commandBuffer enqueue];
     
     id<MTLTexture> outputTexture = [destinationImage metalTextureForDevice:gpuDevice];
-    MTLRenderPassDescriptor *rpd = [KeyframelessKitRenderHelpers createClearRenderPassWithTexture:outputTexture
+    MTLRenderPassDescriptor *rpd = [KKRenderHelpers createClearRenderPassWithTexture:outputTexture
                                                                                        clearColor:MTLClearColorMake(0, 0, 0, 0)];
     id<MTLRenderCommandEncoder> encoder = [commandBuffer renderCommandEncoderWithDescriptor:rpd];
     

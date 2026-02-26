@@ -6,7 +6,7 @@
 //
 
 #import "KKMetalDeviceCache.h"
-#import "RenderHelpers.h"
+#import "KKRenderHelpers.h"
 #import <FxPlug/FxPlugSDK.h>
 
 const NSUInteger kMaxCommandQueues = 5;
@@ -230,7 +230,7 @@ static NSString *kKey_CommandQueue = @"CommandQueue";
         return nil;
     }
     
-    MTLRenderPipelineDescriptor *desc = [KeyframelessKitRenderHelpers createPipelineDescriptorWithVertexFunction:vertFn
+    MTLRenderPipelineDescriptor *desc = [KKRenderHelpers createPipelineDescriptorWithVertexFunction:vertFn
                                                                                                 fragmentFunction:fragFn
                                                                                                      pixelFormat:pixelFormat
                                                                                                        blendMode:blendMode];

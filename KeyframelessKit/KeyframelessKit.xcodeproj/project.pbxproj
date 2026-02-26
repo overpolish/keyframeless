@@ -17,12 +17,12 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			publicHeaders = (
 				KeyframelessKit.h,
-				KKArcOSC.h,
-				KKMetalDeviceCache.h,
-				KKOnScreenControl.h,
-				KKPlugin.h,
-				RenderHelpers.h,
-				ShaderTypes.h,
+				Metal/KKMetalDeviceCache.h,
+				Metal/KKRenderHelpers.h,
+				Metal/KKShaderTypes.h,
+				OSC/KKArcOSC.h,
+				OSC/KKOnScreenControl.h,
+				Plugin/KKPlugin.h,
 			);
 			target = F26E01B52F4DE280009D949A /* KeyframelessKit */;
 		};
