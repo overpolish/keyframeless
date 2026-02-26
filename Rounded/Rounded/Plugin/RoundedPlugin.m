@@ -1,25 +1,25 @@
 //
-//  RoundedPlugIn.m
+//  RoundedPlugin.m
 //  Rounded
 //
 //  Created by Dom on 23/02/2026.
 //
 
-#import "RoundedPlugIn.h"
+#import "RoundedPlugin.h"
 #import <IOSurface/IOSurfaceObjC.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 #import "RoundedShaderTypes.h"
+#import "RoundedConstants.h"
 
-@implementation RoundedPlugIn
+@implementation RoundedPlugin
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager;
 {
-    NSLog(@"RoundedPlugIn: initWithAPIManager called - plugin is loading");
-    self = [super init];
+    NSLog(@"RoundedPlugin: initWithAPIManager called - plugin is loading");
+    self = [super initWithAPIManager:newApiManager];
     if (self != nil)
     {
-        _apiManager = newApiManager;
-        NSLog(@"RoundedPlugIn: Successfully initialized");
+        NSLog(@"RoundedPlugin: Successfully initialized");
     }
     return self;
 }
@@ -38,7 +38,7 @@
 
 - (BOOL)addParametersWithError:(NSError**)error
 {
-    id<FxParameterCreationAPI_v5>   paramAPI    = [_apiManager apiForProtocol:@protocol(FxParameterCreationAPI_v5)];
+    id<FxParameterCreationAPI_v5>   paramAPI    = [self.apiManager apiForProtocol:@protocol(FxParameterCreationAPI_v5)];
     if (paramAPI == nil)
     {
         if (error != NULL)
@@ -79,8 +79,8 @@
             quality:(FxQuality)qualityLevel
               error:(NSError**)error
 {
-    id<FxParameterRetrievalAPI_v6>  paramGetAPI = [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    if (paramGetAPI != nil)
+    id<FxParameterRetrievalAPI_v6>  paramGetAPI = [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    if (paramGetAPI == nil)
     {
         if (error != NULL)
         {
@@ -88,6 +88,7 @@
                                          code:kFxError_ThirdPartyDeveloperStart + 20
                                      userInfo:@{ NSLocalizedDescriptionKey: @"Unable to retrieve FxParameterRetrievalAPI_v6" }];
         }
+        return NO;
     }
     double  radius  = 20.0;
     [paramGetAPI getFloatValue:&radius fromParameter:1 atTime:renderTime];
@@ -135,7 +136,7 @@
                         atTime:(CMTime)renderTime
                          error:(NSError * _Nullable *)outError
 {
-    if (!pluginState || !sourceImages [ 0 ].ioSurface || !destinationImage.ioSurface)
+    if (!pluginState || !sourceImages [0].ioSurface || !destinationImage.ioSurface)
     {
         if (outError != NULL)
         {
@@ -149,115 +150,36 @@
     
     double  radius = 0.0;
     [pluginState getBytes:&radius length:sizeof(radius)];
+
+    id<MTLRenderPipelineState>  pipelineState  = [self pipelineStateForPluginID:kRoundedPluginID
+                                                               destinationImage:destinationImage
+                                                                   vertexShader:@"vertexShader"
+                                                                 fragmentShader:@"fragmentShader"
+                                                                      blendMode:KKBlendModePremultipliedAlpha];
     
-    KKMetalDeviceCache  *cache     = [KKMetalDeviceCache sharedCache];
-    MTLPixelFormat     pixelFormat     = [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
-    uint64_t registryID = sourceImages[0].deviceRegistryID;
-    
-    id<MTLCommandQueue> commandQueue   = [cache commandQueueWithRegistryID:registryID
-                                                                     pixelFormat:pixelFormat];
-    if (commandQueue == nil)
-    {
-        return NO;
-    }
-    
-    id<MTLCommandBuffer>    commandBuffer   = [commandQueue commandBuffer];
-    commandBuffer.label = @"Rounded Command Buffer";
-    [commandBuffer enqueue];
-    
-    id<MTLDevice> device = [cache deviceWithRegistryID:registryID];
-    id<MTLTexture>  inputTexture    = [sourceImages[0] metalTextureForDevice:device];
-    id<MTLTexture>  outputTexture   = [destinationImage metalTextureForDevice:device];
-    
-    MTLRenderPassColorAttachmentDescriptor* colorAttachment   = [[MTLRenderPassColorAttachmentDescriptor alloc] init];
-    colorAttachment.texture = outputTexture;
-    colorAttachment.clearColor = MTLClearColorMake(0.0, 0.0, 0.0, 0.0);
-    colorAttachment.loadAction = MTLLoadActionClear;
-    
-    MTLRenderPassDescriptor *rpd    = [MTLRenderPassDescriptor renderPassDescriptor];
-    rpd.colorAttachments [0] = colorAttachment;
-    
-    id<MTLRenderCommandEncoder>   commandEncoder  = [commandBuffer renderCommandEncoderWithDescriptor:rpd];
-    
-    float   outputWidth     = (float)(destinationImage.tilePixelBounds.right - destinationImage.tilePixelBounds.left);
-    float   outputHeight    = (float)(destinationImage.tilePixelBounds.top - destinationImage.tilePixelBounds.bottom);
-    KeyframelessKitVertex2D    vertices[]  = {
-        { {  outputWidth / 2.0, -outputHeight / 2.0 }, { 1.0, 1.0 } },
-        { { -outputWidth / 2.0, -outputHeight / 2.0 }, { 0.0, 1.0 } },
-        { {  outputWidth / 2.0,  outputHeight / 2.0 }, { 1.0, 0.0 } },
-        { { -outputWidth / 2.0,  outputHeight / 2.0 }, { 0.0, 0.0 } }
-    };
-    
-    MTLViewport viewport    = {
-        0, 0, outputWidth, outputHeight, -1.0, 1.0
-    };
-    [commandEncoder setViewport:viewport];
-    
-    id<MTLRenderPipelineState>  pipelineState  = [cache pipelineStateForPluginID:@"co.overpolish.rounded"
-                                                                      registryID:registryID pixelFormat:pixelFormat];
-    
-    if (!pipelineState)
-    {
-        // Build and register on first render
-        id<MTLLibrary> library = [device newDefaultLibrary];
-        id<MTLFunction> vertFn = [library newFunctionWithName:@"vertexShader"];
-        id<MTLFunction> fragFn = [library newFunctionWithName:@"fragmentShader"];
-        MTLRenderPipelineDescriptor *desc = [KeyframelessKitRenderHelpers createPipelineDescriptorWithVertexFunction:vertFn
-                                                                                                    fragmentFunction:fragFn pixelFormat:pixelFormat
-                                                                                                           blendMode:KKBlendModePremultipliedAlpha];
-        
-        NSError *pipelineError = nil;
-        pipelineState = [device newRenderPipelineStateWithDescriptor:desc error:&pipelineError];
-        if (pipelineState) NSLog(@"RoundedPlugin: pipeline error: %@", pipelineError);
-        [cache registerPipelineState:pipelineState
-                         forPluginID:@"co.overpolish.rounded"
-                          registryID:registryID
-                         pixelFormat:pixelFormat];
-    }
-    
-    [commandEncoder setRenderPipelineState:pipelineState];
-    [commandEncoder setVertexBytes:vertices
-                            length:sizeof(vertices)
-                           atIndex:KKVertexInputIndex_Vertices];
-    
-    simd_uint2  viewportSize = {
-        (unsigned int)(outputWidth),
-        (unsigned int)(outputHeight)
-    };
-    [commandEncoder setVertexBytes:&viewportSize
-                            length:sizeof(viewportSize)
-                           atIndex:KKVertexInputIndex_ViewportSize];
-    
-    [commandEncoder setFragmentTexture:inputTexture
-                               atIndex:KKTextureIndex_InputImage];
+    if (!pipelineState) return NO;
     
     float   fragmentRadius = (float)radius;
-    [commandEncoder setFragmentBytes:&fragmentRadius
-                              length:sizeof(fragmentRadius)
-                             atIndex:RFragmentIndex_Radius];
-    
     simd_float2 imageSize = {
         (float)(destinationImage.imagePixelBounds.right - destinationImage.imagePixelBounds.left),
         (float)(destinationImage.imagePixelBounds.top - destinationImage.imagePixelBounds.bottom)
     };
-    [commandEncoder setFragmentBytes:&imageSize length:(sizeof(imageSize)) atIndex:RFragmentIndex_ImageSize];
-    
     simd_float2 tileOffset = {
         roundf((float)(destinationImage.tilePixelBounds.left - destinationImage.imagePixelBounds.left)),
         roundf((float)(destinationImage.tilePixelBounds.bottom - destinationImage.imagePixelBounds.bottom))
     };
-    [commandEncoder setFragmentBytes:&tileOffset length:sizeof(tileOffset) atIndex:RFragmentIndex_TileOffset];
     
-    [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                       vertexStart:0
-                       vertexCount:4];
-    [commandEncoder endEncoding];
-    [commandBuffer commit];
-    [commandBuffer waitUntilCompleted];
-    
-    [cache returnCommandQueueToCache:commandQueue];
-    
-    return YES;
+    return [self encodeRenderCommandsForDestinationImage:destinationImage
+                                            sourceImages:sourceImages
+                                                commands:^(id<MTLRenderCommandEncoder> encoder,
+                                                           NSArray<id<MTLTexture>> *inputTextures) {
+        [encoder setRenderPipelineState:pipelineState];
+        [encoder setFragmentTexture:inputTextures[0] atIndex:KKTextureIndex_InputImage];
+        [encoder setFragmentBytes:&fragmentRadius length:sizeof(fragmentRadius) atIndex:RFragmentIndex_Radius];
+        [encoder setFragmentBytes:&imageSize length:sizeof(imageSize) atIndex:RFragmentIndex_ImageSize];
+        [encoder setFragmentBytes:&tileOffset length:sizeof(tileOffset) atIndex:RFragmentIndex_TileOffset];
+        [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
+    }];
     
 }
 

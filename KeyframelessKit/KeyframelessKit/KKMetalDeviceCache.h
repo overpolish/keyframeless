@@ -8,6 +8,13 @@
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
 
+typedef NS_ENUM(NSUInteger, KKBlendMode)
+{
+    KKBlendModeNone,
+    KKBlendModeStraightAlpha,
+    KKBlendModePremultipliedAlpha
+};
+
 @class FxImageTile;
 
 NS_ASSUME_NONNULL_BEGIN
@@ -16,8 +23,17 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (instancetype) sharedCache;
 
-/// Register a pipeline state for a given plugin ID, registry ID, and pixel format.
-/// Call this on first render, passing a pipeline built from your local shader library.
+/// Build and register a pipeline state in one call. Returns an existing pipeline if already registered.
+/// Pass nil for bundleID to use the calling plugin's default Metal library.
+- (nullable id<MTLRenderPipelineState>)buildAndRegisterPipelineStateForPluginID:(NSString *)pluginID
+                                                                     registryID:(uint64_t)registryID
+                                                                    pixelFormat:(MTLPixelFormat)pixelFormat
+                                                                       bundleID:(nullable NSString *)bundleID
+                                                                   vertexShader:(NSString *)vertexShader
+                                                                 fragmentShader:(NSString *)fragmentShader
+                                                                      blendMode:(KKBlendMode)blendMode;
+
+/// Register a pipeline state that was built externally.
 - (void)registerPipelineState:(id<MTLRenderPipelineState>)pipelineState
                   forPluginID:(NSString *)pluginID
                    registryID:(uint64_t)registryID
@@ -31,7 +47,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable id<MTLDevice>)deviceWithRegistryID:(uint64_t)registryID;
 
 - (nullable id<MTLCommandQueue>)commandQueueWithRegistryID:(uint64_t)registryID
-                                              pixelFormat:(MTLPixelFormat)pixelFormat;
+                                               pixelFormat:(MTLPixelFormat)pixelFormat;
 
 - (void) returnCommandQueueToCache:(id<MTLCommandQueue>)commandQueue;
 

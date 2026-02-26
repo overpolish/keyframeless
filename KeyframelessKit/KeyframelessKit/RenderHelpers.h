@@ -8,6 +8,7 @@
 #import <Foundation/Foundation.h>
 #import <CoreGraphics/CoreGraphics.h>
 #import <Metal/Metal.h>
+#import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/ShaderTypes.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -33,12 +34,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (MTLRenderPassDescriptor *)createClearRenderPassWithTexture:(id<MTLTexture>)texture
                                                    clearColor:(MTLClearColor)clearColor;
 
-typedef enum KKBlendMode
-{
-  KKBlendModeNone,
-  KKBlendModeStraightAlpha,
-  KKBlendModePremultipliedAlpha
-} KKBlendMode;
+
 
 /// Create a Metal render pipeline descriptor.
 /// @param blendMode Whether to enable alpha blending in the pipeline.

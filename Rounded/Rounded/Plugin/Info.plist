@@ -57,7 +57,7 @@
 	<array>
 		<dict>
 			<key>className</key>
-			<string>RoundedPlugIn</string>
+			<string>RoundedPlugin</string>
 			<key>displayName</key>
 			<string>Rounded::FxPlug Name</string>
 			<key>group</key>

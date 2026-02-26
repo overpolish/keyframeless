@@ -6,6 +6,7 @@
 //
 
 #import "MetalDeviceCache.h"
+#import "RoundedConstants.h"
 #import <KeyframelessKit/KeyframelessKit.h>
 
 static MetalDeviceCache   *gDeviceCache    = nil;
@@ -25,7 +26,7 @@ static MetalDeviceCache   *gDeviceCache    = nil;
 {
     KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
     
-    id<MTLRenderPipelineState> ps = [cache pipelineStateForPluginID:@"co.overpolish.Rounded"
+    id<MTLRenderPipelineState> ps = [cache pipelineStateForPluginID:kRoundedPluginID
                                                          registryID:registryID
                                                         pixelFormat:pixelFormat];
     if (ps) return ps;
@@ -45,7 +46,7 @@ static MetalDeviceCache   *gDeviceCache    = nil;
     if (error) NSLog(@"MetalDeviceCache: pipeline error: %@", error);
     
     [cache registerPipelineState:ps
-                     forPluginID:@"co.overpolish.Rounded"
+                     forPluginID:kRoundedPluginID
                       registryID:registryID
                      pixelFormat:pixelFormat];
     
