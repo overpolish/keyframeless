@@ -12,11 +12,10 @@
 
 @class FxImageTile;
 @protocol PROAPIAccessing;
-@protocol FxOnScreenControl_v4;
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface KKOnScreenControl : NSObject <FxOnScreenControl_v4>
+@interface KKOnScreenControl : NSObject
 
 @property (nonatomic, weak) id<PROAPIAccessing> apiManager;
 @property (nonatomic, readonly) BOOL isHovered;

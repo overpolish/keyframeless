@@ -19,13 +19,17 @@ typedef enum KKTextureIndex {
     KKTextureIndex_InputImage = 0
 } KKTextureIndex;
 
-typedef enum KKOSCFragmentIndex {
-    KKOSCFragmentIndex_DrawColor      = 0
-} KKOSCFragmentIndex;
-
 typedef struct KKVertex2D {
     vector_float2   position;
     vector_float2   textureCoordinate;
 } KKVertex2D;
+
+#ifdef __METAL_VERSION__
+typedef struct {
+    float4 clipSpacePosition [[position]];
+    float2 textureCoordinate;
+} KKRasterizerData;
+#endif
+
 
 #endif /* KKShaderTypes_h */

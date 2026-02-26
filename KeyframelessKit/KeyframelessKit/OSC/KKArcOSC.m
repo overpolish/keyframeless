@@ -9,7 +9,8 @@
 #import "KKArcOSC.h"
 #import "KKMetalDeviceCache.h"
 #import "KKRenderHelpers.h"
-#import "KKShaderTypes.h"
+#import "KKOSCShaderTypes.h"
+#import "KKColors.h"
 
 static NSString *kArcOSCPluginID = @"co.overpolish.keyframelesskit.arcosc";
 
@@ -20,13 +21,14 @@ static NSString *kArcOSCPluginID = @"co.overpolish.keyframelesskit.arcosc";
     self = [super initWithAPIManager:apiManager];
     if (self)
     {
-        _oscRadius      = 25.0f;
-        _strokeWidth    = 12.0f;
+        _oscRadius      = 23.0f;
+        _strokeWidth    = 10.0f;
         _outlineWidth   = 2.0f;
         
-        _defaultColor   = (simd_float4){ 1.0f, 1.0f, 1.0f, 1.0f };
-        _hoverColor     = (simd_float4){ 0.4f, 0.8f, 0.4f, 1.0f };
-        _activeColor    = (simd_float4){ 0.2f, 0.9f, 0.2f, 1.0f };
+        _primaryColor   = KKColor_Primary;
+        _outlineColor   = KKColor_Outline;
+        _hoverColor     = KKColor_Hover;
+        _activeColor    = KKColor_Active;
     }
     return self;
 }
@@ -82,9 +84,9 @@ static NSString *kArcOSCPluginID = @"co.overpolish.keyframelesskit.arcosc";
     }
     
     MTLRenderPipelineDescriptor *desc = [KKRenderHelpers createPipelineDescriptorWithVertexFunction:vertFn
-                                                                                                fragmentFunction:fragFn
-                                                                                                     pixelFormat:MTLPixelFormatRGBA8Unorm
-                                                                                                       blendMode:KKBlendModeStraightAlpha];
+                                                                                   fragmentFunction:fragFn
+                                                                                        pixelFormat:MTLPixelFormatRGBA8Unorm
+                                                                                          blendMode:KKBlendModeStraightAlpha];
     
     ps = [device newRenderPipelineStateWithDescriptor:desc error:&error];
     if (!ps || error)
@@ -106,55 +108,33 @@ static NSString *kArcOSCPluginID = @"co.overpolish.keyframelesskit.arcosc";
     id<MTLRenderPipelineState> ps = [self arcPipelineStateForRegistryID:destinationImage.deviceRegistryID];
     if (!ps) return;
     
-    simd_float4 color = isActive ? _activeColor : (isHovered ? _hoverColor : _defaultColor);
+    simd_float4 color = isActive ? _activeColor : (isHovered ? _hoverColor : _primaryColor);
+    float outerRadiusPixels = self.oscRadius + self.outlineWidth;
+    
+    KKOSCRingParams params = {
+        .innerRadius = (_oscRadius - _strokeWidth) / outerRadiusPixels,
+        .outlineWidth = _outlineWidth / outerRadiusPixels,
+        .fillColor = color,
+        .outlineColor = _outlineColor
+    };
     
     [self encodeRenderCommandsForDestinationImage:destinationImage
                                    canvasPosition:canvasPosition
                                          commands:^(id<MTLRenderCommandEncoder> encoder,
                                                     CGPoint metalPosition,
                                                     simd_uint2 viewportSize){
-       [KKArcOSC drawWithEncoder:encoder
-                        position:metalPosition
-                    viewportSize:viewportSize
-                   pipelineState:ps
-                       oscRadius:self->_oscRadius
-                     strokeWidth:self->_strokeWidth
-                    outlineWidth:self->_outlineWidth
-                           color:color];
+        KKVertex2D quadVertices[6];
+        [KKRenderHelpers generateQuadVertices:quadVertices
+                                       center:metalPosition
+                                         size:outerRadiusPixels];
+        
+        [encoder setRenderPipelineState:ps];
+        [encoder setVertexBytes:quadVertices length:sizeof(quadVertices) atIndex:KKVertexInputIndex_Vertices];
+        [encoder setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:KKVertexInputIndex_ViewportSize];
+        [encoder setFragmentBytes:&params length:sizeof(params) atIndex:KKOSCFragmentIndex_DrawColor];
+        [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
     }];
 }
 
-+ (void)drawWithEncoder:(id<MTLRenderCommandEncoder>)encoder
-               position:(CGPoint)position
-           viewportSize:(simd_uint2)viewportSize
-          pipelineState:(id<MTLRenderPipelineState>)pipelineState
-              oscRadius:(float)oscRadius
-            strokeWidth:(float)strokeWidth
-           outlineWidth:(float)outlineWidth
-                  color:(simd_float4)color
-{
-    [encoder setRenderPipelineState:pipelineState];
-    
-    float outerRadius = oscRadius + outlineWidth;
-    
-    KKVertex2D quadVertices[6];
-    [KKRenderHelpers generateQuadVertices:quadVertices
-                                                center:position
-                                                  size:outerRadius];
-    
-    [encoder setVertexBytes:quadVertices length:sizeof(quadVertices) atIndex:KKVertexInputIndex_Vertices];
-    [encoder setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:KKVertexInputIndex_ViewportSize];
-    
-    float params[8] = {
-        (oscRadius - strokeWidth) / outerRadius,
-        1.0f,
-        0.0f,
-        outlineWidth / outerRadius,
-        color.x, color.y, color.z, color.w
-    };
-    
-    [encoder setFragmentBytes:params length:sizeof(params) atIndex:KKOSCFragmentIndex_DrawColor];
-    [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
-}
 
 @end
