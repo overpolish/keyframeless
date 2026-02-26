@@ -21,12 +21,36 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) BOOL isHovered;
 @property (nonatomic, readonly) BOOL isDragging;
 
+@property (nonatomic) simd_float4 primaryColor;
+@property (nonatomic) simd_float4 outlineColor;
+@property (nonatomic) simd_float4 hoverColor;
+@property (nonatomic) simd_float4 activeColor;
+
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager;
+
+/// Override to provide plugin ID for pipeline state caching.
+- (NSString *)pipelinePluginID;
+
+/// Override to provide the fragment shader function name.
+- (NSString *)fragmentFunctionName;
+
+/// Selects the appropriate color based on hover/active state.
+- (simd_float4)colorForHovered:(BOOL)isHovered active:(BOOL)isActive;
+
+/// Loads or retrieves cached pipeline state for the given registry ID.
+- (nullable id<MTLRenderPipelineState>)pipelineStateForRegistryID:(uint64_t)registryID;
+
+/// The radius used for hit testing. Override in subclass.
+- (float)hitRadius;
+
+/// Half the full extent of the control. Override in subclass.
+- (float)oscSize;
 
 /// Override to return the canvas-space position of the OSC center.
 - (CGPoint)oscPositionAtTime:(CMTime)time;
 
-/// Override to determine if the mouse position hits this OSC. Required;
+/// Standard distance-based hit test using hitRadius.
+/// Override for non-circular hit testing.
 - (BOOL)hitTestAtMousePositionX:(double)positionX
                       positionY:(double)positionY
                          atTime:(CMTime)time;

@@ -9,6 +9,7 @@
 #import "KKOnScreenControl.h"
 #import "KKMetalDeviceCache.h"
 #import "KKRenderHelpers.h"
+#import "KKColors.h"
 
 @interface KKOnScreenControl () <FxOnScreenControl_v4>
 @end
@@ -26,6 +27,10 @@
         _apiManager = apiManager;
         _isHovered = NO;
         _isDragging = NO;
+        _primaryColor = KKColor_Primary;
+        _outlineColor = KKColor_Outline;
+        _hoverColor = KKColor_Hover;
+        _activeColor = KKColor_Active;
     }
     return self;
 }
@@ -33,6 +38,30 @@
 - (FxDrawingCoordinates)drawingCoordinates
 {
     return kFxDrawingCoordinates_CANVAS;
+}
+
+- (NSString *)pipelinePluginID
+{
+    NSAssert(NO, @"%@ must override pipelinePluginID", NSStringFromClass([self class]));
+    return nil;
+}
+
+- (NSString *)fragmentFunctionName
+{
+    NSAssert(NO, @"%@ must override fragmentFunctionName", NSStringFromClass([self class]));
+    return nil;
+}
+
+- (float)hitRadius
+{
+    NSAssert(NO, @"%@ must override hitRadius", NSStringFromClass([self class]));
+    return 0.0f;
+}
+
+- (float)oscSize
+{
+    NSAssert(NO, @"%@ must override oscSize", NSStringFromClass([self class]));
+    return 0.0f;
 }
 
 - (CGPoint)oscPositionAtTime:(CMTime)time
@@ -45,8 +74,10 @@
                       positionY:(double)positionY
                          atTime:(CMTime)time
 {
-    NSAssert(NO, @"KKOnScreenControl subclass must override hitTestAtMousePositionX:positionY:atTime:");
-    return NO;
+    CGPoint pos = [self oscPositionAtTime:time];
+    double dx = positionX - pos.x;
+    double dy = positionY - pos.y;
+    return sqrt(dx*dx + dy*dy) < self.hitRadius;
 }
 
 - (void)drawAtCanvasPosition:(CGPoint)position
@@ -56,6 +87,59 @@
                       atTime:(CMTime)time
 {
     NSAssert(NO, @"KKOnScreenControl subclass must override drawAtCanvasPosition:isHovered:isActive:destinationImage:atTime:");
+}
+
+- (simd_float4)colorForHovered:(BOOL)isHovered active:(BOOL)isActive
+{
+    return isActive ? _activeColor : (isHovered ? _hoverColor : _primaryColor);
+}
+
+- (nullable id<MTLRenderPipelineState>)pipelineStateForRegistryID:(uint64_t)registryID
+{
+    KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
+    
+    id<MTLRenderPipelineState> ps = [cache pipelineStateForPluginID:[self pipelinePluginID]
+                                                         registryID:registryID
+                                                        pixelFormat:MTLPixelFormatRGBA8Unorm];
+    if (ps) return ps;
+    
+    id<MTLDevice> device = [cache deviceWithRegistryID:registryID];
+    NSBundle *bundle = [NSBundle bundleWithIdentifier:@"co.overpolish.keyframeless.KeyframelessKit"];
+    NSError *error = nil;
+    
+    id<MTLLibrary> lib = [device newDefaultLibraryWithBundle:bundle error:&error];
+    if (!lib || error)
+    {
+        NSLog(@"%@: Failed to load Metal library: %@", NSStringFromClass([self class]), error);
+        return nil;
+    }
+    
+    id<MTLFunction> vertFn = [lib newFunctionWithName:@"KKVertexShader"];
+    id<MTLFunction> fragFn = [lib newFunctionWithName:[self fragmentFunctionName]];
+    
+    if (!vertFn || !fragFn)
+    {
+        NSLog(@"%@: Required shaders not found.", NSStringFromClass([self class]));
+        return nil;
+    }
+    
+    MTLRenderPipelineDescriptor *desc = [KKRenderHelpers createPipelineDescriptorWithVertexFunction:vertFn
+                                                                                   fragmentFunction:fragFn
+                                                                                        pixelFormat:MTLPixelFormatRGBA8Unorm
+                                                                                          blendMode:KKBlendModeStraightAlpha];
+    
+    ps = [device newRenderPipelineStateWithDescriptor:desc error:&error];
+    if (!ps || error)
+    {
+        NSLog(@"%@: Failed to create pipeline state: %@", NSStringFromClass([self class]), error);
+        return nil;
+    }
+    
+    [cache registerPipelineState:ps
+                     forPluginID:[self pipelinePluginID]
+                      registryID:registryID
+                     pixelFormat:MTLPixelFormatRGBA8Unorm];
+    return ps;
 }
 
 - (void)encodeRenderCommandsForDestinationImage:(FxImageTile *)destinationImage

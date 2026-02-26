@@ -17,8 +17,8 @@ constant float kDividerWidth = 0.04f;
 
 /// Fragment shader for rendering arc-based OSC control with outline support.
 fragment float4
-KKOSCRingFragment(KKRasterizerData in [[stage_in]],
-                  constant KKOSCRingParams *params [[buffer(KKOSCFragmentIndex_DrawColor)]])
+KKArcOSCFragment(KKRasterizerData in [[stage_in]],
+                  constant KKArcOSCParams *params [[buffer(KKOSCFragmentIndex_DrawColor)]])
 {
     float outerRadius = 1.0;
     float innerRadius = params->innerRadius;
@@ -48,8 +48,8 @@ KKOSCRingFragment(KKRasterizerData in [[stage_in]],
 
 /// Fragment shader for rendering a point/dot OSC control with outline and depth shadow.
 fragment float4
-KKPointFragment(KKRasterizerData in [[stage_in]],
-                constant KKOSCRingParams *params [[buffer(KKOSCFragmentIndex_DrawColor)]])
+KKPointOSCFragment(KKRasterizerData in [[stage_in]],
+                constant KKPointOSCParams *params [[buffer(KKOSCFragmentIndex_DrawColor)]])
 {
     float outerRadius = 1.0;
     float outlineWidth = params->outlineWidth;

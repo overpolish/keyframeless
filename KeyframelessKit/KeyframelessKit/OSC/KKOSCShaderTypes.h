@@ -15,12 +15,18 @@ typedef enum KKOSCFragmentIndex {
 } KKOSCFragmentIndex;
 
 
-typedef struct KKOSCRingParams {
+typedef struct KKArcOSCParams {
     float         innerRadius;
     float         outlineWidth;
     vector_float4 fillColor;
     vector_float4 outlineColor;
-} KKOSCRingParams;
+} KKArcOSCParams;
+
+typedef struct KKPointOSCParams {
+    float outlineWidth;
+    vector_float4 fillColor;
+    vector_float4 outlineColor;
+} KKPointOSCParams;
 
 #ifdef __METAL_VERSION__
 
