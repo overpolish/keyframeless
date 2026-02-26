@@ -12,7 +12,7 @@ using namespace metal;
 
 
 #include <KeyframelessKit/KKShaderTypes.h>
-#include "RoundedShaderTypes.h"
+#include "ShaderTypes.h"
 
 typedef struct {
     float4 clipSpacePosition [[position]];
@@ -40,9 +40,9 @@ vertex RasterizerData vertexShader(
 
 fragment float4 fragmentShader(RasterizerData in [[stage_in]],
                                texture2d<half> colorTexture [[texture(KKTextureIndex_InputImage)]],
-                               constant float* radius [[buffer(RFragmentIndex_Radius)]],
-                               constant float2* imageSize [[buffer(RFragmentIndex_ImageSize)]],
-                               constant float2* tileOffset [[buffer(RFragmentIndex_TileOffset)]])
+                               constant float* radius [[buffer(FragmentIndex_Radius)]],
+                               constant float2* imageSize [[buffer(FragmentIndex_ImageSize)]],
+                               constant float2* tileOffset [[buffer(FragmentIndex_TileOffset)]])
 {
     constexpr sampler textureSampler(mag_filter::linear, min_filter::linear);
     

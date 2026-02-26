@@ -1,15 +1,15 @@
 //
-//  RoundedOSC.m
+//  OSC.m
 //  Rounded
 //
 //  Created by Dom on 23/02/2026.
 //
 
-#import "RoundedOSC.h"
+#import "OSC.h"
 #import <FxPlug/FxPlugSDK.h>
 #import "KeyframelessKit/KeyframelessKit.h"
 
-@implementation RoundedOSC
+@implementation OSC
 
 - (CGPoint)oscPositionAtTime:(CMTime)time
 {

@@ -94,9 +94,9 @@
 				Plugin/Info.plist,
 				Plugin/main.m,
 				Plugin/MetalDeviceCache.m,
+				Plugin/OSC.m,
+				Plugin/Plugin.m,
 				Plugin/Rounded.metal,
-				Plugin/RoundedOSC.m,
-				Plugin/RoundedPlugin.m,
 				"Wrapper Application/Info.plist",
 			);
 			target = F2E2ED742F4CA530008620D9 /* Wrapper Application */;
