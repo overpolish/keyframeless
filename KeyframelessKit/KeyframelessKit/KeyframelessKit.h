@@ -17,4 +17,5 @@ FOUNDATION_EXPORT const unsigned char KeyframelessKitVersionString[]; //! Versio
 #import <KeyframelessKit/KKOSCShaderTypes.h>
 #import <KeyframelessKit/KKOnScreenControl.h>
 #import <KeyframelessKit/KKArcOSC.h>
+#import <KeyframelessKit/KKPointOSC.h>
 #import <KeyframelessKit/KKPlugin.h>

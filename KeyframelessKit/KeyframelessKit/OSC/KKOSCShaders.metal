@@ -12,12 +12,10 @@ using namespace metal;
 #include "../Metal/KKShaderTypes.h"
 #include "KKOSCShaderTypes.h"
 
-constant float kGapAngle = 0.0f;
 constant float kDividerWidth = 0.04f;
 
 
-/// Fragment shader for rendering arc-based OSC controls (like progress rings)
-/// with anti-aliasing (AA) and outline support.
+/// Fragment shader for rendering arc-based OSC control with outline support.
 fragment float4
 KKOSCRingFragment(KKRasterizerData in [[stage_in]],
                   constant KKOSCRingParams *params [[buffer(KKOSCFragmentIndex_DrawColor)]])
@@ -46,4 +44,35 @@ KKOSCRingFragment(KKRasterizerData in [[stage_in]],
                               kkLineAlpha(abs(outerRadius - dist), outlineWidth));
     
     return kkOSCColor(fillColor, outlineColor, outlineFactor, gapAlpha, ringAlpha);
+}
+
+/// Fragment shader for rendering a point/dot OSC control with outline and depth shadow.
+fragment float4
+KKPointFragment(KKRasterizerData in [[stage_in]],
+                constant KKOSCRingParams *params [[buffer(KKOSCFragmentIndex_DrawColor)]])
+{
+    float outerRadius = 1.0;
+    float outlineWidth = params->outlineWidth;
+    float4 fillColor = float4(params->fillColor);
+    float4 outlineColor = float4(params->outlineColor);
+    
+    float2 pos = in.textureCoordinate;
+    float dist = length(pos);
+    
+    float circleAlpha = kkEdgeAlpha(outerRadius - dist);
+    if (circleAlpha < 0.001) discard_fragment();
+    
+    // Outline
+    float outlineFactor = kkLineAlpha(abs(outerRadius - dist), outlineWidth);
+    
+    // Subtle shadow on lower half
+    float shadowFactor = smoothstep(0.1, -0.3, -pos.y) * 0.15 * (1.0 - outlineFactor);
+    float edgePadding = smoothstep(0.0, outlineWidth * 4.0, outerRadius - dist);
+    shadowFactor *= edgePadding;
+    
+    float4 shadowColor = float4(0.0, 0.0, 0.0, outlineColor.a);
+    float4 color = kkOSCColor(fillColor, outlineColor, outlineFactor, circleAlpha);
+    color = mix(color, shadowColor, shadowFactor);
+    
+    return color;
 }

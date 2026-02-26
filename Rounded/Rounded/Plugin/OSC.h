@@ -7,5 +7,5 @@
 
 #import <KeyframelessKit/KeyframelessKit.h>
 
-@interface OSC : KKArcOSC
+@interface OSC : KKPointOSC
 @end
