@@ -43,13 +43,13 @@ static NSString *kArcOSCPluginID = @"co.overpolish.keyframelesskit.arcosc";
     return (_oscRadius + _strokeWidth + _outlineWidth) / 2.0f;
 }
 
-- (BOOL)hitTestAtMousePositionX:(double)mousePositionX
-                 mousePositionY:(double)mousePositionY
+- (BOOL)hitTestAtMousePositionX:(double)positionX
+                 positionY:(double)positionY
                          atTime:(CMTime)time
 {
     CGPoint pos = [self oscPositionAtTime:time];
-    double dx = mousePositionX - pos.x;
-    double dy = mousePositionY - pos.y;
+    double dx = positionX - pos.x;
+    double dy = positionY - pos.y;
     return sqrt(dx*dx + dy*dy) <= self.hitRadius;
 }
 

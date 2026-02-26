@@ -27,8 +27,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (CGPoint)oscPositionAtTime:(CMTime)time;
 
 /// Override to determine if the mouse position hits this OSC. Required;
-- (BOOL)hitTestAtMousePositionX:(double)mousePositionX
-                      mousePositionY:(double)mousePositionY
+- (BOOL)hitTestAtMousePositionX:(double)positionX
+                      positionY:(double)positionY
                          atTime:(CMTime)time;
 
 /// Override to perform actual Metal draw.
@@ -37,6 +37,39 @@ NS_ASSUME_NONNULL_BEGIN
                     isActive:(BOOL)isActive
             destinationImage:(FxImageTile *)destinationImage
                       atTime:(CMTime)time;
+
+/// Override to handle mouse drag. Call super to maintain isDragging state.
+- (void)mouseDraggedAtPositionX:(double)positionX
+                      positionY:(double)positionY
+                     activePart:(NSInteger)activePart
+                      modifiers:(NSUInteger)modifiers
+                    forceUpdate:(BOOL *)forceUpdate
+                         atTime:(CMTime)time;
+
+/// Override to handle mouse down. Call super to maintain isDragging state.
+- (void)mouseDownAtPositionX:(double)positionX
+                   positionY:(double)positionY
+                  activePart:(NSInteger)activePart
+                   modifiers:(NSUInteger)modifiers
+                 forceUpdate:(BOOL *)forceUpdate
+                      atTime:(CMTime)time;
+
+/// Override to handle mouse up. Call super to maintain isDragging state.
+- (void)mouseUpAtPositionX:(double)positionX
+                 positionY:(double)positionY
+                activePart:(NSInteger)activePart
+                 modifiers:(NSUInteger)modifiers
+               forceUpdate:(BOOL *)forceUpdate
+                    atTime:(CMTime)time;
+
+/// Override to handle key down.
+- (void)keyDownAtPositionX:(double)positionX
+                 positionY:(double)positionY
+                keyPressed:(unsigned short)asciiKey
+                 modifiers:(NSUInteger)modifiers
+               forceUpdate:(BOOL *)forceUpdate
+                 didHandle:(BOOL *)didHandle
+                    atTime:(CMTime)time;
 
 /// Shared Metal setup/teardown. Call from drawAtCanvasPosition: with a block
 /// containing your encoder commands. Handles device, queue, command buffer,
