@@ -5,9 +5,7 @@
 //  Created by Dom on 23/02/2026.
 //
 
-#import <Foundation/Foundation.h>
-#import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KeyframelessKit.h>
 
-@interface RoundedOSC : NSObject <FxOnScreenControl_v4>
-@property (assign) id<PROAPIAccessing> apiManager;
+@interface RoundedOSC : KKArcOSC
 @end

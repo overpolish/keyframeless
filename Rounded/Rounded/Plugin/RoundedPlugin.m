@@ -7,20 +7,10 @@
 
 #import "RoundedPlugIn.h"
 #import <IOSurface/IOSurfaceObjC.h>
-#import "KeyframelessKit/ShaderTypes.h"
+#import <KeyframelessKit/KeyframelessKit.h>
 #import "RoundedShaderTypes.h"
-#import "MetalDeviceCache.h"
 
 @implementation RoundedPlugIn
-
-//---------------------------------------------------------
-// initWithAPIManager:
-//
-// This method is called when a plug-in is first loaded, and
-// is a good point to conduct any checks for anti-piracy or
-// system compatibility. Returning NULL means that a plug-in
-// chooses not to be accessible for some reason.
-//---------------------------------------------------------
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager;
 {
@@ -34,43 +24,29 @@
     return self;
 }
 
-//---------------------------------------------------------
-// properties
-//
-// This method should return an NSDictionary defining the
-// properties of the effect.
-//---------------------------------------------------------
-
 - (BOOL)properties:(NSDictionary * _Nonnull *)properties
              error:(NSError * _Nullable *)error
 {
     *properties = @{
-                    kFxPropertyKey_MayRemapTime : [NSNumber numberWithBool:NO],
-                    kFxPropertyKey_PixelTransformSupport : [NSNumber numberWithInt:kFxPixelTransform_ScaleTranslate],
-                    kFxPropertyKey_VariesWhenParamsAreStatic : [NSNumber numberWithBool:NO]
-                    };
+        kFxPropertyKey_MayRemapTime : @NO,
+        kFxPropertyKey_PixelTransformSupport : @(kFxPixelTransform_ScaleTranslate),
+        kFxPropertyKey_VariesWhenParamsAreStatic : @NO
+    };
     
     return YES;
 }
-
-//---------------------------------------------------------
-// addParametersWithError
-//
-// This method is where a plug-in defines its list of parameters.
-//---------------------------------------------------------
 
 - (BOOL)addParametersWithError:(NSError**)error
 {
     id<FxParameterCreationAPI_v5>   paramAPI    = [_apiManager apiForProtocol:@protocol(FxParameterCreationAPI_v5)];
     if (paramAPI == nil)
     {
-        NSDictionary*   userInfo    = @{
-                                        NSLocalizedDescriptionKey : @"Unable to obtain an FxPlug API Object"
-                                        };
         if (error != NULL)
+        {
             *error = [NSError errorWithDomain:FxPlugErrorDomain
                                          code:kFxError_APIUnavailable
-                                     userInfo:userInfo];
+                                     userInfo:@{ NSLocalizedDescriptionKey : @"Unable to obtain an FxPlug API Object" }];
+        }
         
         return NO;
     }
@@ -85,13 +61,12 @@
                                     delta:1.0
                            parameterFlags:kFxParameterFlag_DEFAULT])
     {
-        NSDictionary*   userInfo    = @{
-                                        NSLocalizedDescriptionKey : @"Unable to add radius slider"
-                                        };
         if (error != NULL)
+        {
             *error = [NSError errorWithDomain:FxPlugErrorDomain
                                          code:kFxError_InvalidParameter
-                                     userInfo:userInfo];
+                                     userInfo:@{ NSLocalizedDescriptionKey : @"Unable to add radius slider" }];
+        }
         
         return NO;
     }
@@ -99,66 +74,26 @@
     return YES;
 }
 
-//---------------------------------------------------------
-// pluginState:atTime:quality:error
-//
-// Your plug-in should get its parameter values, do any calculations it needs to
-// from those values, and package up the result to be used later with rendering.
-// The host application will call this method before rendering. The
-// FxParameterRetrievalAPI* is valid during this call. Use it to get the values of
-// your plug-in's parameters, then put those values or the results of any calculations
-// you need to do with those parameters to render into an NSData that you return
-// to the host application. The host will pass it back to you during subsequent calls.
-// Do not re-use the NSData; always create a new one as this method may be called
-// on multiple threads at the same time.
-//---------------------------------------------------------
-
 - (BOOL)pluginState:(NSData**)pluginState
              atTime:(CMTime)renderTime
             quality:(FxQuality)qualityLevel
               error:(NSError**)error
 {
-    BOOL    succeeded = NO;
     id<FxParameterRetrievalAPI_v6>  paramGetAPI = [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
     if (paramGetAPI != nil)
     {
-        double  radius  = 20.0;
-        [paramGetAPI getFloatValue:&radius
-                     fromParameter:1
-                            atTime:renderTime];
-        
-        *pluginState = [NSData dataWithBytes:&radius
-                                      length:sizeof(radius)];
-        
-        if (*pluginState != nil)
-        {
-            succeeded = YES;
-        }
-    }
-    else
-    {
         if (error != NULL)
+        {
             *error = [NSError errorWithDomain:FxPlugErrorDomain
                                          code:kFxError_ThirdPartyDeveloperStart + 20
-                                     userInfo:@{
-                                                NSLocalizedDescriptionKey :
-                                                    @"Unable to retrieve FxParameterRetrievalAPI_v6 in \
-                                                    [-pluginStateAtTime:]" }];
+                                     userInfo:@{ NSLocalizedDescriptionKey: @"Unable to retrieve FxParameterRetrievalAPI_v6" }];
+        }
     }
-    
-    return succeeded;
+    double  radius  = 20.0;
+    [paramGetAPI getFloatValue:&radius fromParameter:1 atTime:renderTime];
+    *pluginState = [NSData dataWithBytes:&radius length:sizeof(radius)];
+    return (*pluginState != nil);
 }
-
-//---------------------------------------------------------
-// destinationImageRect:sourceImages:destinationImage:pluginState:atTime:error
-//
-// This method will calculate the rectangular bounds of the output
-// image given the various inputs and plug-in state
-// at the given render time.
-// It will pass in an array of images, the plug-in state
-// returned from your plug-in's -pluginStateAtTime:error: method,
-// and the render time.
-//---------------------------------------------------------
 
 - (BOOL)destinationImageRect:(FxRect *)destinationImageRect
                 sourceImages:(NSArray<FxImageTile *> *)sourceImages
@@ -181,13 +116,6 @@
     
 }
 
-//---------------------------------------------------------
-// sourceTileRect:sourceImageIndex:sourceImages:destinationTileRect:destinationImage:pluginState:atTime:error
-//
-// Calculate tile of the source image we need
-// to render the given output tile.
-//---------------------------------------------------------
-
 - (BOOL)sourceTileRect:(FxRect *)sourceTileRect
       sourceImageIndex:(NSUInteger)sourceImageIndex
           sourceImages:(NSArray<FxImageTile *> *)sourceImages
@@ -197,22 +125,9 @@
                 atTime:(CMTime)renderTime
                  error:(NSError * _Nullable *)outError
 {
-    // Since this is a color-only filter, the input tile will be the same size as the output tile
     *sourceTileRect = destinationTileRect;
-    
     return YES;
 }
-
-//---------------------------------------------------------
-// renderDestinationImage:sourceImages:pluginState:atTime:error:
-//
-// The host will call this method when it wants your plug-in to render an image
-// tile of the output image. It will pass in each of the input tiles needed as well
-// as the plug-in state needed for the calculations. Your plug-in should do all its
-// rendering in this method. It should not attempt to use the FxParameterRetrievalAPI*
-// object as it is invalid at this time. Note that this method will be called on
-// multiple threads at the same time.
-//---------------------------------------------------------
 
 - (BOOL)renderDestinationImage:(FxImageTile *)destinationImage
                   sourceImages:(NSArray<FxImageTile *> *)sourceImages
@@ -220,29 +135,26 @@
                         atTime:(CMTime)renderTime
                          error:(NSError * _Nullable *)outError
 {
-    if ((pluginState == nil) || (sourceImages [ 0 ].ioSurface == nil) || (destinationImage.ioSurface == nil))
+    if (!pluginState || !sourceImages [ 0 ].ioSurface || !destinationImage.ioSurface)
     {
-        NSDictionary*   userInfo    = @{
-                                        NSLocalizedDescriptionKey : @"Invalid plugin state received from host"
-                                        };
         if (outError != NULL)
+        {
             *outError = [NSError errorWithDomain:FxPlugErrorDomain
                                             code:kFxError_InvalidParameter
-                                        userInfo:userInfo];
+                                        userInfo:@{ NSLocalizedDescriptionKey: @"Invalid plugin state received from host"}];
+        }
+        
         return NO;
     }
     
-    // This is where you would access parameter values and other info about the source tile
-    // from the pluginState.
     double  radius = 0.0;
-    [pluginState getBytes:&radius
-                   length:sizeof(radius)];
+    [pluginState getBytes:&radius length:sizeof(radius)];
     
-    // Set up the renderer, in this case we are using Metal.
+    KKMetalDeviceCache  *cache     = [KKMetalDeviceCache sharedCache];
+    MTLPixelFormat     pixelFormat     = [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
+    uint64_t registryID = sourceImages[0].deviceRegistryID;
     
-    MetalDeviceCache*  deviceCache     = [MetalDeviceCache deviceCache];
-    MTLPixelFormat     pixelFormat     = [MetalDeviceCache MTLPixelFormatForImageTile:destinationImage];
-    id<MTLCommandQueue> commandQueue   = [deviceCache commandQueueWithRegistryID:sourceImages[0].deviceRegistryID
+    id<MTLCommandQueue> commandQueue   = [cache commandQueueWithRegistryID:registryID
                                                                      pixelFormat:pixelFormat];
     if (commandQueue == nil)
     {
@@ -250,21 +162,23 @@
     }
     
     id<MTLCommandBuffer>    commandBuffer   = [commandQueue commandBuffer];
-    commandBuffer.label = @"DynamicRegXPC Command Buffer";
+    commandBuffer.label = @"Rounded Command Buffer";
     [commandBuffer enqueue];
     
-    id<MTLTexture>  inputTexture    = [sourceImages[0] metalTextureForDevice:[deviceCache deviceWithRegistryID:sourceImages[0].deviceRegistryID]];
-    id<MTLTexture>  outputTexture   = [destinationImage metalTextureForDevice:[deviceCache deviceWithRegistryID:destinationImage.deviceRegistryID]];
+    id<MTLDevice> device = [cache deviceWithRegistryID:registryID];
+    id<MTLTexture>  inputTexture    = [sourceImages[0] metalTextureForDevice:device];
+    id<MTLTexture>  outputTexture   = [destinationImage metalTextureForDevice:device];
     
-    MTLRenderPassColorAttachmentDescriptor* colorAttachmentDescriptor   = [[MTLRenderPassColorAttachmentDescriptor alloc] init];
-    colorAttachmentDescriptor.texture = outputTexture;
-    colorAttachmentDescriptor.clearColor = MTLClearColorMake(0.0, 0.0, 0.0, 0.0);
-    colorAttachmentDescriptor.loadAction = MTLLoadActionClear;
-    MTLRenderPassDescriptor*    renderPassDescriptor    = [MTLRenderPassDescriptor renderPassDescriptor];
-    renderPassDescriptor.colorAttachments [ 0 ] = colorAttachmentDescriptor;
-    id<MTLRenderCommandEncoder>   commandEncoder  = [commandBuffer renderCommandEncoderWithDescriptor:renderPassDescriptor];
+    MTLRenderPassColorAttachmentDescriptor* colorAttachment   = [[MTLRenderPassColorAttachmentDescriptor alloc] init];
+    colorAttachment.texture = outputTexture;
+    colorAttachment.clearColor = MTLClearColorMake(0.0, 0.0, 0.0, 0.0);
+    colorAttachment.loadAction = MTLLoadActionClear;
     
-    // Rendering
+    MTLRenderPassDescriptor *rpd    = [MTLRenderPassDescriptor renderPassDescriptor];
+    rpd.colorAttachments [0] = colorAttachment;
+    
+    id<MTLRenderCommandEncoder>   commandEncoder  = [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+    
     float   outputWidth     = (float)(destinationImage.tilePixelBounds.right - destinationImage.tilePixelBounds.left);
     float   outputHeight    = (float)(destinationImage.tilePixelBounds.top - destinationImage.tilePixelBounds.bottom);
     KeyframelessKitVertex2D    vertices[]  = {
@@ -279,10 +193,29 @@
     };
     [commandEncoder setViewport:viewport];
     
-    id<MTLRenderPipelineState>  pipelineState  = [deviceCache pipelineStateWithRegistryID:sourceImages[0].deviceRegistryID
-                                                                              pixelFormat:pixelFormat];
-    [commandEncoder setRenderPipelineState:pipelineState];
+    id<MTLRenderPipelineState>  pipelineState  = [cache pipelineStateForPluginID:@"co.overpolish.rounded"
+                                                                      registryID:registryID pixelFormat:pixelFormat];
     
+    if (!pipelineState)
+    {
+        // Build and register on first render
+        id<MTLLibrary> library = [device newDefaultLibrary];
+        id<MTLFunction> vertFn = [library newFunctionWithName:@"vertexShader"];
+        id<MTLFunction> fragFn = [library newFunctionWithName:@"fragmentShader"];
+        MTLRenderPipelineDescriptor *desc = [KeyframelessKitRenderHelpers createPipelineDescriptorWithVertexFunction:vertFn
+                                                                                                    fragmentFunction:fragFn pixelFormat:pixelFormat
+                                                                                                           blendMode:KKBlendModePremultipliedAlpha];
+        
+        NSError *pipelineError = nil;
+        pipelineState = [device newRenderPipelineStateWithDescriptor:desc error:&pipelineError];
+        if (pipelineState) NSLog(@"RoundedPlugin: pipeline error: %@", pipelineError);
+        [cache registerPipelineState:pipelineState
+                         forPluginID:@"co.overpolish.rounded"
+                          registryID:registryID
+                         pixelFormat:pixelFormat];
+    }
+    
+    [commandEncoder setRenderPipelineState:pipelineState];
     [commandEncoder setVertexBytes:vertices
                             length:sizeof(vertices)
                            atIndex:KKVertexInputIndex_Vertices];
@@ -318,13 +251,11 @@
     [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                        vertexStart:0
                        vertexCount:4];
-    
     [commandEncoder endEncoding];
     [commandBuffer commit];
-    
     [commandBuffer waitUntilCompleted];
     
-    [deviceCache returnCommandQueueToCache:commandQueue];
+    [cache returnCommandQueueToCache:commandQueue];
     
     return YES;
     

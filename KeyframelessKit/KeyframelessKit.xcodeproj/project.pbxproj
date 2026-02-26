@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
+		F21E97D52F4EE9CC00DF8CF3 /* FxPlug.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FxPlug.framework; path = ../../../../../Library/Developer/Frameworks/FxPlug.framework; sourceTree = "<group>"; };
 		F26E01B62F4DE280009D949A /* KeyframelessKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = KeyframelessKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F26E02092F4DE539009D949A /* Rounded.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Rounded.xcodeproj; path = ../Rounded/Rounded.xcodeproj; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
@@ -16,6 +17,9 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			publicHeaders = (
 				KeyframelessKit.h,
+				KKArcOSC.h,
+				KKMetalDeviceCache.h,
+				KKOnScreenControl.h,
 				RenderHelpers.h,
 				ShaderTypes.h,
 			);
@@ -45,11 +49,20 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		F21E97D42F4EE9CC00DF8CF3 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				F21E97D52F4EE9CC00DF8CF3 /* FxPlug.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		F26E01AC2F4DE280009D949A = {
 			isa = PBXGroup;
 			children = (
 				F26E02092F4DE539009D949A /* Rounded.xcodeproj */,
 				F26E01B82F4DE280009D949A /* KeyframelessKit */,
+				F21E97D42F4EE9CC00DF8CF3 /* Frameworks */,
 				F26E01B72F4DE280009D949A /* Products */,
 			);
 			sourceTree = "<group>";
@@ -168,6 +181,7 @@
 		F26E01BD2F4DE280009D949A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ADDITIONAL_SDKS = /Library/Developer/SDKs/FxPlug.sdk;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -176,6 +190,10 @@
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				ENABLE_MODULE_VERIFIER = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					/Library/Frameworks,
+					"$(inherited)",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INSTALL_PATH = "@rpath";
@@ -198,6 +216,7 @@
 		F26E01BE2F4DE280009D949A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ADDITIONAL_SDKS = /Library/Developer/SDKs/FxPlug.sdk;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -206,6 +225,10 @@
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				ENABLE_MODULE_VERIFIER = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					/Library/Frameworks,
+					"$(inherited)",
+				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INSTALL_PATH = "@rpath";
