@@ -1,17 +1,17 @@
 //
-//  RoundedPlugin.m
+//  Plugin.m
 //  Rounded
 //
 //  Created by Dom on 23/02/2026.
 //
 
-#import "RoundedPlugin.h"
+#import "Plugin.h"
 #import <IOSurface/IOSurfaceObjC.h>
 #import <KeyframelessKit/KeyframelessKit.h>
-#import "RoundedShaderTypes.h"
-#import "RoundedConstants.h"
+#import "ShaderTypes.h"
+#import "Constants.h"
 
-@implementation RoundedPlugin
+@implementation Plugin
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager;
 {
@@ -151,7 +151,7 @@
     double  radius = 0.0;
     [pluginState getBytes:&radius length:sizeof(radius)];
 
-    id<MTLRenderPipelineState>  pipelineState  = [self pipelineStateForPluginID:kRoundedPluginID
+    id<MTLRenderPipelineState>  pipelineState  = [self pipelineStateForPluginID:kPluginID
                                                                destinationImage:destinationImage
                                                                    vertexShader:@"vertexShader"
                                                                  fragmentShader:@"fragmentShader"
@@ -175,9 +175,9 @@
                                                            NSArray<id<MTLTexture>> *inputTextures) {
         [encoder setRenderPipelineState:pipelineState];
         [encoder setFragmentTexture:inputTextures[0] atIndex:KKTextureIndex_InputImage];
-        [encoder setFragmentBytes:&fragmentRadius length:sizeof(fragmentRadius) atIndex:RFragmentIndex_Radius];
-        [encoder setFragmentBytes:&imageSize length:sizeof(imageSize) atIndex:RFragmentIndex_ImageSize];
-        [encoder setFragmentBytes:&tileOffset length:sizeof(tileOffset) atIndex:RFragmentIndex_TileOffset];
+        [encoder setFragmentBytes:&fragmentRadius length:sizeof(fragmentRadius) atIndex:FragmentIndex_Radius];
+        [encoder setFragmentBytes:&imageSize length:sizeof(imageSize) atIndex:FragmentIndex_ImageSize];
+        [encoder setFragmentBytes:&tileOffset length:sizeof(tileOffset) atIndex:FragmentIndex_TileOffset];
         [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
     }];
     

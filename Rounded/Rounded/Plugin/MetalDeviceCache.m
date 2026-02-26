@@ -6,7 +6,7 @@
 //
 
 #import "MetalDeviceCache.h"
-#import "RoundedConstants.h"
+#import "Constants.h"
 #import <KeyframelessKit/KeyframelessKit.h>
 
 static MetalDeviceCache   *gDeviceCache    = nil;
@@ -26,7 +26,7 @@ static MetalDeviceCache   *gDeviceCache    = nil;
 {
     KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
     
-    id<MTLRenderPipelineState> ps = [cache pipelineStateForPluginID:kRoundedPluginID
+    id<MTLRenderPipelineState> ps = [cache pipelineStateForPluginID:kPluginID
                                                          registryID:registryID
                                                         pixelFormat:pixelFormat];
     if (ps) return ps;
@@ -46,7 +46,7 @@ static MetalDeviceCache   *gDeviceCache    = nil;
     if (error) NSLog(@"MetalDeviceCache: pipeline error: %@", error);
     
     [cache registerPipelineState:ps
-                     forPluginID:kRoundedPluginID
+                     forPluginID:kPluginID
                       registryID:registryID
                      pixelFormat:pixelFormat];
     
