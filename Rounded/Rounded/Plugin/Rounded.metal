@@ -11,7 +11,7 @@
 using namespace metal;
 
 
-#include <KeyframelessKit/ShaderTypes.h>
+#include <KeyframelessKit/KKShaderTypes.h>
 #include "RoundedShaderTypes.h"
 
 typedef struct {
@@ -22,7 +22,7 @@ typedef struct {
 
 vertex RasterizerData vertexShader(
                                    uint vertexID [[vertex_id]],
-                                   constant KeyframelessKitVertex2D *vertexArray [[buffer(KKVertexInputIndex_Vertices)]],
+                                   constant KKVertex2D *vertexArray [[buffer(KKVertexInputIndex_Vertices)]],
                                    constant vector_uint2 *viewportSizePointer [[buffer(KKVertexInputIndex_ViewportSize)]])
 {
     RasterizerData out;

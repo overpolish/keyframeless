@@ -7,7 +7,7 @@
 
 #import "KKPlugin.h"
 #import "KKMetalDeviceCache.h"
-#import "RenderHelpers.h"
+#import "KKRenderHelpers.h"
 #import <FxPlug/FxPlugSDK.h>
 
 @implementation KKPlugin
@@ -82,7 +82,7 @@
     MTLViewport viewport = { 0, 0, outputWidth, outputHeight, -1.0, 1.0 };
     [encoder setViewport:viewport];
     
-    KeyframelessKitVertex2D vertices[] = {
+    KKVertex2D vertices[] = {
         { { outputWidth / 2.0f, -outputHeight / 2.0f }, { 1.0, 1.0 } },
         { { -outputWidth / 2.0f, -outputHeight / 2.0f }, { 0.0, 1.0 } },
         { { outputWidth / 2.0f, outputHeight / 2.0f }, { 1.0, 0.0 } },

@@ -8,8 +8,8 @@
 #import <FxPlug/FxPlugSDK.h>
 #import "KKArcOSC.h"
 #import "KKMetalDeviceCache.h"
-#import "RenderHelpers.h"
-#import "ShaderTypes.h"
+#import "KKRenderHelpers.h"
+#import "KKShaderTypes.h"
 
 static NSString *kArcOSCPluginID = @"co.overpolish.keyframelesskit.arcosc";
 
@@ -81,7 +81,7 @@ static NSString *kArcOSCPluginID = @"co.overpolish.keyframelesskit.arcosc";
         return nil;
     }
     
-    MTLRenderPipelineDescriptor *desc = [KeyframelessKitRenderHelpers createPipelineDescriptorWithVertexFunction:vertFn
+    MTLRenderPipelineDescriptor *desc = [KKRenderHelpers createPipelineDescriptorWithVertexFunction:vertFn
                                                                                                 fragmentFunction:fragFn
                                                                                                      pixelFormat:MTLPixelFormatRGBA8Unorm
                                                                                                        blendMode:KKBlendModeStraightAlpha];
@@ -137,8 +137,8 @@ static NSString *kArcOSCPluginID = @"co.overpolish.keyframelesskit.arcosc";
     
     float outerRadius = oscRadius + outlineWidth;
     
-    KeyframelessKitVertex2D quadVertices[6];
-    [KeyframelessKitRenderHelpers generateQuadVertices:quadVertices
+    KKVertex2D quadVertices[6];
+    [KKRenderHelpers generateQuadVertices:quadVertices
                                                 center:position
                                                   size:outerRadius];
     

@@ -10,8 +10,8 @@
 FOUNDATION_EXPORT double KeyframelessKitVersionNumber; //! Version number
 FOUNDATION_EXPORT const unsigned char KeyframelessKitVersionString[]; //! Version string
 
-#import <KeyframelessKit/ShaderTypes.h>
-#import <KeyframelessKit/RenderHelpers.h>
+#import <KeyframelessKit/KKShaderTypes.h>
+#import <KeyframelessKit/KKRenderHelpers.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKOnScreenControl.h>
 #import <KeyframelessKit/KKArcOSC.h>

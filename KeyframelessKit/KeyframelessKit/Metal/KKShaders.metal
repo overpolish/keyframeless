@@ -1,5 +1,5 @@
 //
-//  Shaders.metal
+//  KKShaders.metal
 //  KeyframelessKit
 //
 //  Created by Dom on 24/02/2026.
@@ -9,7 +9,7 @@
 #include <simd/simd.h>
 using namespace metal;
 
-#import "ShaderTypes.h"
+#import "KKShaderTypes.h"
 
 typedef struct {
     float4 clipSpacePosition [[position]];
@@ -19,7 +19,7 @@ typedef struct {
 /// Standard vertex shader for OSC controls and quads.
 vertex KKRasterizerData
 KKVertexShader(uint vertexID [[vertex_id]],
-               constant KeyframelessKitVertex2D *vertexArray [[buffer(KKVertexInputIndex_Vertices)]],
+               constant KKVertex2D *vertexArray [[buffer(KKVertexInputIndex_Vertices)]],
                constant vector_uint2 *viewportSizePointer [[buffer(KKVertexInputIndex_ViewportSize)]])
 {
     KKRasterizerData out;
