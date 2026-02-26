@@ -41,8 +41,8 @@
     return CGPointZero;
 }
 
-- (BOOL)hitTestAtMousePositionX:(double)mousePositionX
-                      mousePositionY:(double)mousePositionY
+- (BOOL)hitTestAtMousePositionX:(double)positionX
+                      positionY:(double)positionY
                          atTime:(CMTime)time
 {
     NSAssert(NO, @"KKOnScreenControl subclass must override hitTestAtMousePositionX:positionY:atTime:");
@@ -78,7 +78,7 @@
     
     id<MTLTexture> outputTexture = [destinationImage metalTextureForDevice:gpuDevice];
     MTLRenderPassDescriptor *rpd = [KKRenderHelpers createClearRenderPassWithTexture:outputTexture
-                                                                                       clearColor:MTLClearColorMake(0, 0, 0, 0)];
+                                                                          clearColor:MTLClearColorMake(0, 0, 0, 0)];
     id<MTLRenderCommandEncoder> encoder = [commandBuffer renderCommandEncoderWithDescriptor:rpd];
     
     float ioSurfaceWidth = [destinationImage.ioSurface width];
@@ -120,30 +120,30 @@
                         atTime:time];
 }
 
-- (void)hitTestOSCAtMousePositionX:(double)mousePositionX
-                    mousePositionY:(double)mousePositionY
+- (void)hitTestOSCAtMousePositionX:(double)positionX
+                    mousePositionY:(double)positionY
                         activePart:(NSInteger *)activePart
                             atTime:(CMTime)time
 {
     _isHovered = NO;
     *activePart = 0;
     
-    if ([self hitTestAtMousePositionX:mousePositionX
-                       mousePositionY:mousePositionY
+    if ([self hitTestAtMousePositionX:positionX
+                            positionY:positionY
                                atTime:time]) {
         _isHovered = YES;
         *activePart = 1;
     }
 }
 
-- (void)mouseEnteredAtPositionX:(double)mousePositionX
-                      positionY:(double)mousePositionY
+- (void)mouseEnteredAtPositionX:(double)positionX
+                      positionY:(double)positionY
                       modifiers:(FxModifierKeys)modifiers
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {}
 
-- (void)mouseExitedAtPositionX:(double)mousePositionX
-                     positionY:(double)mousePositionY
+- (void)mouseExitedAtPositionX:(double)positionX
+                     positionY:(double)positionY
                      modifiers:(FxModifierKeys)modifiers
                    forceUpdate:(BOOL *)forceUpdate
                         atTime:(CMTime)time
@@ -152,8 +152,8 @@
     *forceUpdate = YES;
 }
 
-- (void)mouseDownAtPositionX:(double)mousePositionX
-                   positionY:(double)mousePositionY
+- (void)mouseDownAtPositionX:(double)positionX
+                   positionY:(double)positionY
                   activePart:(NSInteger)activePart
                    modifiers:(FxModifierKeys)modifiers
                  forceUpdate:(BOOL *)forceUpdate
@@ -163,15 +163,15 @@
     *forceUpdate = YES;
 }
 
-- (void)mouseDraggedAtPositionX:(double)mousePositionX
-                   positionY:(double)mousePositionY
-                  activePart:(NSInteger)activePart
-                   modifiers:(FxModifierKeys)modifiers
-                 forceUpdate:(BOOL *)forceUpdate
-                      atTime:(CMTime)time {}
+- (void)mouseDraggedAtPositionX:(double)positionX
+                      positionY:(double)positionY
+                     activePart:(NSInteger)activePart
+                      modifiers:(FxModifierKeys)modifiers
+                    forceUpdate:(BOOL *)forceUpdate
+                         atTime:(CMTime)time {}
 
-- (void)mouseUpAtPositionX:(double)mousePositionX
-                 positionY:(double)mousePositionY
+- (void)mouseUpAtPositionX:(double)positionX
+                 positionY:(double)positionY
                 activePart:(NSInteger)activePart
                  modifiers:(FxModifierKeys)modifiers
                forceUpdate:(BOOL *)forceUpdate
@@ -181,8 +181,8 @@
     *forceUpdate = YES;
 }
 
-- (void)keyDownAtPositionX:(double)mousePositionX
-                 positionY:(double)mousePositionY
+- (void)keyDownAtPositionX:(double)positionX
+                 positionY:(double)positionY
                 keyPressed:(unsigned short)asciiKey
                  modifiers:(FxModifierKeys)modifiers
                forceUpdate:(BOOL *)forceUpdate
@@ -193,8 +193,8 @@
     *didHandle = NO;
 }
 
-- (void)keyUpAtPositionX:(double)mousePositionX
-               positionY:(double)mousePositionY
+- (void)keyUpAtPositionX:(double)positionX
+               positionY:(double)positionY
               keyPressed:(unsigned short)asciiKey
                modifiers:(FxModifierKeys)modifiers
              forceUpdate:(BOOL *)forceUpdate
@@ -204,5 +204,8 @@
     *forceUpdate = NO;
     *didHandle = NO;
 }
+
+
+
 
 @end
