@@ -15,3 +15,4 @@ FOUNDATION_EXPORT const unsigned char KeyframelessKitVersionString[]; //! Versio
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKOnScreenControl.h>
 #import <KeyframelessKit/KKArcOSC.h>
+#import <KeyframelessKit/KKPlugin.h>

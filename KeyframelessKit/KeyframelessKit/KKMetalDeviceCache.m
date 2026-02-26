@@ -5,10 +5,9 @@
 //  Created by Dom on 25/02/2026.
 //
 
-#import <FxPlug/FxPlugSDK.h>
 #import "KKMetalDeviceCache.h"
 #import "RenderHelpers.h"
-#import "ShaderTypes.h"
+#import <FxPlug/FxPlugSDK.h>
 
 const NSUInteger kMaxCommandQueues = 5;
 
@@ -180,6 +179,71 @@ static NSString *kKey_CommandQueue = @"CommandQueue";
 - (nullable id<MTLDevice>)deviceWithRegistryID:(uint64_t)registryID
 {
     return [self cacheItemForRegistryID:registryID].gpuDevice;
+}
+
+- (nullable id<MTLRenderPipelineState>)buildAndRegisterPipelineStateForPluginID:(NSString *)pluginID
+                                                                     registryID:(uint64_t)registryID
+                                                                    pixelFormat:(MTLPixelFormat)pixelFormat
+                                                                       bundleID:(NSString *)bundleID
+                                                                   vertexShader:(NSString *)vertexShader
+                                                                 fragmentShader:(NSString *)fragmentShader
+                                                                      blendMode:(KKBlendMode)blendMode
+{
+    // Return if existing
+    id<MTLRenderPipelineState> existing = [self pipelineStateForPluginID:pluginID
+                                                              registryID:registryID
+                                                             pixelFormat:pixelFormat];
+    
+    if (existing) return existing;
+    
+    id<MTLDevice> device = [self deviceWithRegistryID:registryID];
+    if (!device) return nil;
+    
+    NSError *error = nil;
+    id<MTLLibrary> library = nil;
+    
+    if (bundleID)
+    {
+        NSBundle *bundle = [NSBundle bundleWithIdentifier:bundleID];
+        if (!bundle)
+        {
+            NSLog(@"KKMetalDeviceCache: bundle not found for ID: %@", bundleID);
+            return nil;
+        }
+        library = [device newDefaultLibraryWithBundle:bundle error:&error];
+    } else
+    {
+        library = [device newDefaultLibrary];
+    }
+    
+    if (!library || error) {
+        NSLog(@"KKMetalDeviceCache: failed to load Metal library (bundleID: %@): %@", bundleID, error);
+        return nil;
+    }
+    
+    id<MTLFunction> vertFn = [library newFunctionWithName:vertexShader];
+    id<MTLFunction> fragFn = [library newFunctionWithName:fragmentShader];
+    
+    if (!vertFn || !fragFn)
+    {
+        NSLog(@"KKMetalDeviceCache: shader functions not found (%@, %@)", vertexShader, fragmentShader);
+        return nil;
+    }
+    
+    MTLRenderPipelineDescriptor *desc = [KeyframelessKitRenderHelpers createPipelineDescriptorWithVertexFunction:vertFn
+                                                                                                fragmentFunction:fragFn
+                                                                                                     pixelFormat:pixelFormat
+                                                                                                       blendMode:blendMode];
+    
+    id<MTLRenderPipelineState> ps = [device newRenderPipelineStateWithDescriptor:desc error:&error];
+    if (!ps || error)
+    {
+        NSLog(@"KKMetalDeviceCache: failed to create pipeline state for %@: %@", pluginID, error);
+        return nil;
+    }
+    
+    [self registerPipelineState:ps forPluginID:pluginID registryID:registryID pixelFormat:pixelFormat];
+    return ps;
 }
 
 - (void)registerPipelineState:(id<MTLRenderPipelineState>)pipelineState

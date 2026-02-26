@@ -20,6 +20,7 @@
 				KKArcOSC.h,
 				KKMetalDeviceCache.h,
 				KKOnScreenControl.h,
+				KKPlugin.h,
 				RenderHelpers.h,
 				ShaderTypes.h,
 			);
