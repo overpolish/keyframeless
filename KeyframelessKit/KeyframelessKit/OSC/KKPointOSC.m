@@ -1,34 +1,33 @@
 //
-//  KKArcOSC.m
+//  KKPointOSC.m
 //  KeyframelessKit
 //
-//  Created by Dom on 25/02/2026.
+//  Created by Dom on 26/02/2026.
 //
 
 #import <FxPlug/FxPlugSDK.h>
-#import "KKArcOSC.h"
+#import "KKPointOSC.h"
 #import "KKMetalDeviceCache.h"
 #import "KKRenderHelpers.h"
 #import "KKOSCShaderTypes.h"
 #import "KKColors.h"
 
-static NSString *kArcOSCPluginID = @"co.overpolish.keyframelesskit.ArcOSC";
+static NSString *kPointOSCPluginID = @"co.overpolish.keyframelesskit.PointOSC";
 
-@implementation KKArcOSC
+@implementation KKPointOSC
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager
 {
     self = [super initWithAPIManager:apiManager];
     if (self)
     {
-        _oscRadius      = 23.0f;
-        _strokeWidth    = 10.0f;
-        _outlineWidth   = 2.0f;
+        _oscRadius = 7.0f;
+        _outlineWidth = 2.0f;
         
-        _primaryColor   = KKColor_Primary;
-        _outlineColor   = KKColor_Outline;
-        _hoverColor     = KKColor_Hover;
-        _activeColor    = KKColor_Active;
+        _primaryColor = KKColor_Primary;
+        _outlineColor = KKColor_Outline;
+        _hoverColor = KKColor_Hover;
+        _activeColor = KKColor_Active;
     }
     return self;
 }
@@ -40,11 +39,11 @@ static NSString *kArcOSCPluginID = @"co.overpolish.keyframelesskit.ArcOSC";
 
 - (float)oscSize
 {
-    return (_oscRadius + _strokeWidth + _outlineWidth) / 2.0f;
+    return _oscRadius + _outlineWidth;
 }
 
 - (BOOL)hitTestAtMousePositionX:(double)positionX
-                 positionY:(double)positionY
+                      positionY:(double)positionY
                          atTime:(CMTime)time
 {
     CGPoint pos = [self oscPositionAtTime:time];
@@ -53,14 +52,13 @@ static NSString *kArcOSCPluginID = @"co.overpolish.keyframelesskit.ArcOSC";
     return sqrt(dx*dx + dy*dy) <= self.hitRadius;
 }
 
-- (id<MTLRenderPipelineState>)arcPipelineStateForRegistryID:(uint64_t)registryID
+- (id<MTLRenderPipelineState>)pointPipelineStateForRegistryID:(uint64_t)registryID
 {
     KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
     
-    id<MTLRenderPipelineState> ps = [cache pipelineStateForPluginID:kArcOSCPluginID
+    id<MTLRenderPipelineState> ps = [cache pipelineStateForPluginID:kPointOSCPluginID
                                                          registryID:registryID
                                                         pixelFormat:MTLPixelFormatRGBA8Unorm];
-    
     if (ps) return ps;
     
     id<MTLDevice> device = [cache deviceWithRegistryID:registryID];
@@ -70,16 +68,16 @@ static NSString *kArcOSCPluginID = @"co.overpolish.keyframelesskit.ArcOSC";
     id<MTLLibrary> lib = [device newDefaultLibraryWithBundle:bundle error:&error];
     if (!lib || error)
     {
-        NSLog(@"KKArcOSC: Failed to load KeyframelessKit Metal library: %@", error);
+        NSLog(@"KKPointOSC: Failed to load KeyframelessKit Metal library: %@", error);
         return nil;
     }
     
     id<MTLFunction> vertFn = [lib newFunctionWithName:@"KKVertexShader"];
-    id<MTLFunction> fragFn = [lib newFunctionWithName:@"KKOSCRingFragment"];
+    id<MTLFunction> fragFn = [lib newFunctionWithName:@"KKPointFragment"];
     
     if (!vertFn || !fragFn)
     {
-        NSLog(@"KKArcOSC: Required shaders not found in library.");
+        NSLog(@"KKPointOSC: Required shaders not found in library.");
         return nil;
     }
     
@@ -87,15 +85,14 @@ static NSString *kArcOSCPluginID = @"co.overpolish.keyframelesskit.ArcOSC";
                                                                                    fragmentFunction:fragFn
                                                                                         pixelFormat:MTLPixelFormatRGBA8Unorm
                                                                                           blendMode:KKBlendModeStraightAlpha];
-    
     ps = [device newRenderPipelineStateWithDescriptor:desc error:&error];
     if (!ps || error)
     {
-        NSLog(@"KKArcOSC: Failed to create pipeline state: %@", error);
+        NSLog(@"KKPointOSC: Failed to create pipeline state: %@", error);
         return nil;
     }
     
-    [cache registerPipelineState:ps forPluginID:kArcOSCPluginID registryID:registryID pixelFormat:MTLPixelFormatRGBA8Unorm];
+    [cache registerPipelineState:ps forPluginID:kPointOSCPluginID registryID:registryID pixelFormat:MTLPixelFormatRGBA8Unorm];
     return ps;
 }
 
@@ -105,14 +102,14 @@ static NSString *kArcOSCPluginID = @"co.overpolish.keyframelesskit.ArcOSC";
             destinationImage:(FxImageTile *)destinationImage
                       atTime:(CMTime)time
 {
-    id<MTLRenderPipelineState> ps = [self arcPipelineStateForRegistryID:destinationImage.deviceRegistryID];
+    id<MTLRenderPipelineState> ps = [self pointPipelineStateForRegistryID:destinationImage.deviceRegistryID];
     if (!ps) return;
     
     simd_float4 color = isActive ? _activeColor : (isHovered ? _hoverColor : _primaryColor);
     float outerRadiusPixels = self.oscRadius + self.outlineWidth;
     
     KKOSCRingParams params = {
-        .innerRadius = (_oscRadius - _strokeWidth) / outerRadiusPixels,
+        .innerRadius = 0.0f,
         .outlineWidth = _outlineWidth / outerRadiusPixels,
         .fillColor = color,
         .outlineColor = _outlineColor
@@ -122,7 +119,7 @@ static NSString *kArcOSCPluginID = @"co.overpolish.keyframelesskit.ArcOSC";
                                    canvasPosition:canvasPosition
                                          commands:^(id<MTLRenderCommandEncoder> encoder,
                                                     CGPoint metalPosition,
-                                                    simd_uint2 viewportSize){
+                                                    simd_uint2 viewportSize) {
         KKVertex2D quadVertices[6];
         [KKRenderHelpers generateQuadVertices:quadVertices
                                        center:metalPosition
@@ -135,6 +132,5 @@ static NSString *kArcOSCPluginID = @"co.overpolish.keyframelesskit.ArcOSC";
         [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
     }];
 }
-
 
 @end
