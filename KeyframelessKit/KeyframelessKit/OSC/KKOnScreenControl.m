@@ -10,6 +10,9 @@
 #import "KKMetalDeviceCache.h"
 #import "KKRenderHelpers.h"
 
+@interface KKOnScreenControl () <FxOnScreenControl_v4>
+@end
+
 @implementation KKOnScreenControl {
     BOOL _isHovered;
     BOOL _isDragging;
@@ -39,7 +42,7 @@
 }
 
 - (BOOL)hitTestAtMousePositionX:(double)mousePositionX
-                      positionY:(double)mousePositionY
+                      mousePositionY:(double)mousePositionY
                          atTime:(CMTime)time
 {
     NSAssert(NO, @"KKOnScreenControl subclass must override hitTestAtMousePositionX:positionY:atTime:");
