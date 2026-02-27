@@ -18,9 +18,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL isExpanded;
 @property (nonatomic, assign) CGFloat currentRotation;
 @property (nonatomic, strong) id<PROAPIAccessing> apiManager;
+@property (nonatomic, strong) NSView *customView;
 
 - (instancetype)initWithFrame:(NSRect)frame apiManager:(id<PROAPIAccessing>)apiManager
-                        label:(NSString *)label;
+                        label:(NSString *)label
+                   customView:(NSView *)customView;
 
 @end
 

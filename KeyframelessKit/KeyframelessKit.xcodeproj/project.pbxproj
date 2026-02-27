@@ -26,6 +26,7 @@
 				OSC/KKOSCShaderTypes.h,
 				OSC/KKPointOSC.h,
 				Parameters/KKCustomGroupHeaderView.h,
+				Parameters/KKSliderView.h,
 				Plugin/KKPlugin.h,
 			);
 			target = F26E01B52F4DE280009D949A /* KeyframelessKit */;
