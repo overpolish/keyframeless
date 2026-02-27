@@ -12,6 +12,7 @@
 - (instancetype)initWithFrame:(NSRect)frame
                    apiManager:(id<PROAPIAccessing>)apiManager
                         label:(NSString *)label
+                   customView:(NSView *)customView
 {
     self = [super initWithFrame:frame];
     if (self) {
@@ -32,6 +33,12 @@
         
         self.labelField = [self createLabelField:label];
         [self addSubview:self.labelField];
+        
+        self.customView = customView;
+        if (self.customView)
+        {
+            [self addSubview:self.customView];
+        }
     }
     return self;
 }
@@ -174,8 +181,12 @@
     [[NSColor clearColor] setFill];
     NSRectFill(leftRect);
     
-    [[NSColor redColor] setFill];
-    NSRectFill(rightRect);
+    if (self.customView) {
+        self.customView.frame = rightRect;
+    } else {
+        [[NSColor clearColor] setFill];
+        NSRectFill(rightRect);
+    }
     
     CGFloat chevronSize = 7.0;
     CGFloat chevronPadding = 4.0;

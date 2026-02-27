@@ -78,6 +78,8 @@
                             defaultValue:nil
                           parameterFlags:kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_USE_FULL_VIEW_WIDTH];
     
+    // TODO add per corner radius parameters
+    
     return YES;
 }
 
@@ -87,9 +89,11 @@
     {
         CGFloat height = 23.0;
         
+        KKSliderView *slider = [[KKSliderView alloc] initWithFrame:NSMakeRect(0, 0, 150, 20)];
         KKCustomGroupHeaderView *view = [[KKCustomGroupHeaderView alloc] initWithFrame:NSMakeRect(0, 0, 300, height)
                                                                             apiManager:self.apiManager
-                                                                                 label:@"Custom Label"];
+                                                                                 label:@"Custom Label"
+                                                                            customView:slider];
         // Let the host resize us horizontally
         view.autoresizingMask = NSViewWidthSizable;
         
