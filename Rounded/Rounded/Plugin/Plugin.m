@@ -8,6 +8,7 @@
 #import "Plugin.h"
 #import <IOSurface/IOSurfaceObjC.h>
 #import <KeyframelessKit/KeyframelessKit.h>
+#import <QuartzCore/QuartzCore.h>
 #import "ShaderTypes.h"
 #import "Constants.h"
 
@@ -71,7 +72,30 @@
         return NO;
     }
     
+    // Adding a label with text pushes custom control down
+    [paramAPI addCustomParameterWithName:@""
+                             parameterID:13
+                            defaultValue:nil
+                          parameterFlags:kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_USE_FULL_VIEW_WIDTH];
+    
     return YES;
+}
+
+- (NSView*)createViewForParameterID:(UInt32)parameterID
+{
+    if (parameterID == 13)
+    {
+        CGFloat height = 23.0;
+        
+        KKCustomGroupHeaderView *view = [[KKCustomGroupHeaderView alloc] initWithFrame:NSMakeRect(0, 0, 300, height)
+                                                                            apiManager:self.apiManager
+                                                                                 label:@"Custom Label"];
+        // Let the host resize us horizontally
+        view.autoresizingMask = NSViewWidthSizable;
+        
+        return view;
+    }
+    return nil;
 }
 
 - (BOOL)pluginState:(NSData**)pluginState
@@ -150,7 +174,7 @@
     
     double  radius = 0.0;
     [pluginState getBytes:&radius length:sizeof(radius)];
-
+    
     id<MTLRenderPipelineState>  pipelineState  = [self pipelineStateForPluginID:kPluginID
                                                                destinationImage:destinationImage
                                                                    vertexShader:@"vertexShader"
