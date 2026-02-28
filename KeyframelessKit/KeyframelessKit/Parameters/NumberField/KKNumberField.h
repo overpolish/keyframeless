@@ -30,8 +30,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) BOOL isEditing;
 
 /// Designated initializer.
-- (instancetype)initWithFrame:(NSRect)frame
-                   apiManager:(id<PROAPIAccessing>)apiManager;
+- (instancetype)initWithFrame:(NSRect)frame apiManager:(id<PROAPIAccessing>)apiManager;
 
 @end
 
