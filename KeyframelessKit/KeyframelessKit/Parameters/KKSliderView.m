@@ -21,10 +21,10 @@ static const CGFloat kKnobPointHeightRatio = 0.5; // Percentage of knob height f
 static const CGFloat kKnobOutlineWidth = 0.5;
 
 // Colors (hex values for clarity)
-static const CGFloat kTrackBackgroundColor[] = {0x17/255.0, 0x17/255.0, 0x17/255.0}; // #171717
-static const CGFloat kTrackFillColor[] = {0x61/255.0, 0x68/255.0, 0xF5/255.0};        // #6168F5 (blue)
-static const CGFloat kKnobFillColor[] = {0x80/255.0, 0x80/255.0, 0x80/255.0};         // #808080 (gray)
-static const CGFloat kKnobOutlineColor[] = {0x17/255.0, 0x17/255.0, 0x17/255.0};      // #171717
+static const CGFloat kTrackBackgroundColor[] = {0x17 / 255.0, 0x17 / 255.0, 0x17 / 255.0}; // #171717
+static const CGFloat kTrackFillColor[] = {0x61 / 255.0, 0x68 / 255.0, 0xF5 / 255.0};       // #6168F5 (blue)
+static const CGFloat kKnobFillColor[] = {0x80 / 255.0, 0x80 / 255.0, 0x80 / 255.0};        // #808080 (gray)
+static const CGFloat kKnobOutlineColor[] = {0x17 / 255.0, 0x17 / 255.0, 0x17 / 255.0};     // #171717
 
 // Curve control points for knob shape
 static const CGFloat kKnobPointCurveOffset = 0.5;
@@ -35,9 +35,7 @@ static inline NSColor *ColorFromRGB(const CGFloat rgb[3]) {
     return [NSColor colorWithRed:rgb[0] green:rgb[1] blue:rgb[2] alpha:1.0];
 }
 
-static inline CGFloat ClampValue(CGFloat value, CGFloat min, CGFloat max) {
-    return fmax(min, fmin(max, value));
-}
+static inline CGFloat ClampValue(CGFloat value, CGFloat min, CGFloat max) { return fmax(min, fmin(max, value)); }
 
 static inline CGFloat NormalizeValue(double value, double min, double max) {
     return ClampValue((value - min) / (max - min), 0.0, 1.0);
@@ -58,7 +56,7 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
 
 - (void)drawBarInside:(NSRect)rect flipped:(BOOL)flipped {
     NSRect trackRect = [self trackRectForBarRect:rect];
-    
+
     [self drawTrackBackground:trackRect];
     [self drawTrackFill:trackRect];
 }
@@ -80,7 +78,7 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
 - (void)drawTrackFill:(NSRect)trackRect {
     CGFloat normalizedValue = [self normalizedValue];
     CGFloat filledWidth = trackRect.size.width * normalizedValue;
-    
+
     NSRect filledRect = NSMakeRect(trackRect.origin.x, trackRect.origin.y, filledWidth, kTrackHeight);
     NSBezierPath *filledPath = [NSBezierPath bezierPathWithRoundedRect:filledRect
                                                                xRadius:kTrackCornerRadius
@@ -92,7 +90,7 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
 - (void)drawKnob:(NSRect)knobRect {
     NSRect actualKnobRect = [self centeredKnobRect:knobRect];
     NSBezierPath *knobPath = [self createKnobPath:actualKnobRect];
-    
+
     [self fillKnob:knobPath];
     [self strokeKnob:knobPath];
 }
@@ -105,7 +103,7 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
 
 - (NSBezierPath *)createKnobPath:(NSRect)rect {
     NSBezierPath *path = [NSBezierPath bezierPath];
-    
+
     // Calculate key positions
     CGFloat left = rect.origin.x;
     CGFloat right = NSMaxX(rect);
@@ -114,39 +112,39 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
     CGFloat midX = NSMidX(rect);
     CGFloat pointHeight = kKnobHeight * kKnobPointHeightRatio;
     CGFloat pointBaseY = bottom + (kKnobHeight - pointHeight);
-    
+
     // Build shield/chevron shape pointing upward (clockwise from bottom-left)
     [path moveToPoint:NSMakePoint(left + kKnobCornerRadius, bottom)];
-    
+
     // Bottom edge to bottom-right
     [path lineToPoint:NSMakePoint(right - kKnobCornerRadius, bottom)];
-    
+
     // Bottom-right corner (rounded)
     [path appendBezierPathWithArcFromPoint:NSMakePoint(right, bottom)
                                    toPoint:NSMakePoint(right, bottom + kKnobCornerRadius)
                                     radius:kKnobCornerRadius];
-    
+
     // Right edge up to point base
     [path lineToPoint:NSMakePoint(right, pointBaseY)];
-    
+
     // Right side of top point (curved to tip)
     [path curveToPoint:NSMakePoint(midX, top)
          controlPoint1:NSMakePoint(right - kKnobPointCurveOffset, pointBaseY + pointHeight * kKnobSideCurveRatio)
          controlPoint2:NSMakePoint(midX + kKnobPointCurveControl, top - kKnobPointCurveOffset)];
-    
+
     // Left side of top point (curved from tip)
     [path curveToPoint:NSMakePoint(left, pointBaseY)
          controlPoint1:NSMakePoint(midX - kKnobPointCurveControl, top - kKnobPointCurveOffset)
          controlPoint2:NSMakePoint(left + kKnobPointCurveOffset, pointBaseY + pointHeight * kKnobSideCurveRatio)];
-    
+
     // Left edge down to corner
     [path lineToPoint:NSMakePoint(left, bottom + kKnobCornerRadius)];
-    
+
     // Bottom-left corner (rounded)
     [path appendBezierPathWithArcFromPoint:NSMakePoint(left, bottom)
                                    toPoint:NSMakePoint(left + kKnobCornerRadius, bottom)
                                     radius:kKnobCornerRadius];
-    
+
     [path closePath];
     return path;
 }
@@ -166,11 +164,8 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
     NSRect barRect = [self barRectFlipped:flipped];
     CGFloat normalizedValue = [self normalizedValue];
     CGFloat knobPosition = [self knobPositionForBarRect:barRect normalizedValue:normalizedValue];
-    
-    return NSMakeRect(knobPosition - kKnobWidth / 2.0,
-                      NSMidY(barRect) - kKnobHeight / 2.0,
-                      kKnobWidth,
-                      kKnobHeight);
+
+    return NSMakeRect(knobPosition - kKnobWidth / 2.0, NSMidY(barRect) - kKnobHeight / 2.0, kKnobWidth, kKnobHeight);
 }
 
 - (CGFloat)knobPositionForBarRect:(NSRect)barRect normalizedValue:(CGFloat)normalizedValue {
@@ -180,12 +175,12 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
 
 - (BOOL)startTrackingAt:(NSPoint)startPoint inView:(NSView *)controlView {
     NSRect knobRect = [self knobRectFlipped:NO];
-    
+
     // If clicking on knob, use default tracking
     if (NSPointInRect(startPoint, knobRect)) {
         return [super startTrackingAt:startPoint inView:controlView];
     }
-    
+
     // If clicking on track, jump to that position
     [self jumpToPosition:startPoint];
     return [super startTrackingAt:startPoint inView:controlView];
@@ -196,7 +191,7 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
     CGFloat usableWidth = barRect.size.width - kKnobWidth;
     CGFloat relativeX = point.x - barRect.origin.x - (kKnobWidth / 2.0);
     CGFloat normalizedValue = ClampValue(relativeX / usableWidth, 0.0, 1.0);
-    
+
     double newValue = self.minValue + (normalizedValue * (self.maxValue - self.minValue));
     self.doubleValue = newValue;
 }
@@ -222,31 +217,22 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
 }
 
 - (void)setupSlider {
-    CGFloat numberFieldWidth = 60.0;
+    CGFloat numberFieldWidth = [KKNumberField preferredWidth];
     CGFloat numberFieldHeight = 17.0;
     CGFloat spacing = 8.0;
-    
+
     // Number field on the right with fixed width
     CGFloat numberFieldY = (NSHeight(self.bounds) - numberFieldHeight) / 2.0;
-    CGRect numberFieldFrame = NSMakeRect(
-                                         NSWidth(self.bounds) - numberFieldWidth,
-                                         numberFieldY,
-                                         numberFieldWidth,
-                                         numberFieldHeight
-                                         );
-    self.numberField = [[KKNumberField alloc] initWithFrame:numberFieldFrame
-                                                 apiManager:_apiManager];
+    CGRect numberFieldFrame =
+        NSMakeRect(NSWidth(self.bounds) - numberFieldWidth, numberFieldY, numberFieldWidth, numberFieldHeight);
+    self.numberField = [[KKNumberField alloc] initWithFrame:numberFieldFrame apiManager:_apiManager];
+    self.numberField.suffix = @"%";
     self.numberField.autoresizingMask = NSViewMinXMargin | NSViewMinYMargin | NSViewHeightSizable;
-    
+
     [self addSubview:self.numberField];
-    
+
     // Slider grows to fill remaining space
-    CGRect sliderFrame = NSMakeRect(
-                                    0,
-                                    0,
-                                    NSWidth(self.bounds) - numberFieldWidth - spacing,
-                                    NSHeight(self.bounds)
-                                    );
+    CGRect sliderFrame = NSMakeRect(0, 0, NSWidth(self.bounds) - numberFieldWidth - spacing, NSHeight(self.bounds));
     self.slider = [[NSSlider alloc] initWithFrame:sliderFrame];
     self.slider.cell = [[KKSliderCell alloc] init];
     self.slider.minValue = 0.0;
@@ -255,7 +241,7 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
     self.slider.continuous = YES;
     self.slider.sliderType = NSSliderTypeLinear;
     self.slider.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-    
+
     [self addSubview:self.slider];
 }
 

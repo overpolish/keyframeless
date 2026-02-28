@@ -1,2 +1,6 @@
 CompileFlags:
-  Add: [-fobjc-arc, -fmodules, -fmodules-cache-path=/tmp/clangd-modules-cache]
+  Add:
+    - -fobjc-arc
+    - -fmodules
+    - -fmodules-cache-path=/tmp/clangd-modules-cache
+    - -F/Users/dom/Library/Developer/Xcode/DerivedData/Keyframeless-exnmblycgsyloegcjtfqkzhczrpe/Build/Products/Debug
