@@ -1,0 +1,33 @@
+{
+  "C_Cpp.files.exclude": {
+    "**/*.metal": true
+  },
+  "files.associations": {
+    "*.h": "objective-c",
+    "*.m": "objective-c"
+  },
+  "cSpell.words": [
+    "nonatomic",
+    "nonnull",
+    "nullable",
+    "noescape",
+    "instancetype",
+    "autoreleasepool",
+    "synthesize",
+    "dealloc",
+    "objc",
+    "uint",
+    "ushort",
+    "simd",
+    "rasterizer",
+    "blendmode",
+    "texcoord",
+    "viewport",
+    "clipspace",
+    "premultiplied",
+    "pbxproj",
+    "xcodeproj",
+    "xcworkspace",
+    "plist"
+  ]
+}
