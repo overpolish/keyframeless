@@ -13,6 +13,10 @@ static const CGFloat KKNumberFieldHInset = 3.0;
 static const CGFloat KKNumberFieldTextInset = 3.5;
 static const CGFloat KKNumberFieldVerticalInsetBias = 1.0; // nudge to optically centre text
 static const CGFloat KKNumberFieldDefaultValue = 20.0;
+static const CGFloat KKNumberFieldInputWidth = 57.0;  // width of the editable field area
+static const CGFloat KKNumberFieldPrefixWidth = 12.0; // reserved for 1-char prefix (e.g. "X")
+static const CGFloat KKNumberFieldSuffixWidth = 18.0; // reserved for 1-2 char suffix (e.g. "px")
+static const CGFloat KKNumberFieldLabelGap = 1.0;     // gap between label and field edge
 
 // Focus ring
 static const CGFloat KKNumberFieldFocusInset = 1.0;
@@ -81,9 +85,11 @@ static const unichar KKKeyEscape = 27;
 @property (nonatomic, strong) NSTextView *textView;
 @property (nonatomic, strong) NSScrollView *scrollView;
 @property (nonatomic, readwrite) BOOL isEditing;
+- (NSRect)fieldRect;
 - (BOOL)isPartialInput:(NSString *)string;
 - (NSColor *)focusRingColor;
 - (NSColor *)selectionColor;
+- (void)drawPrefixAndSuffix;
 @end
 
 @implementation KKNumberField
@@ -119,11 +125,18 @@ static const unichar KKKeyEscape = 27;
     [self updateTextAlignment];
 }
 
+/// The rect occupied by the input field itself, excluding prefix and suffix label zones.
+- (NSRect)fieldRect {
+    return NSMakeRect(KKNumberFieldPrefixWidth, 0,
+                      NSWidth(self.bounds) - KKNumberFieldPrefixWidth - KKNumberFieldSuffixWidth,
+                      NSHeight(self.bounds));
+}
+
 - (void)configureScrollView {
-    // Only inset on the left; right edge extends to the field boundary so right padding
-    // is controlled solely by KKNumberFieldTextInset inside the text container.
-    NSRect frame =
-        NSMakeRect(KKNumberFieldHInset, 0, NSWidth(self.bounds) - KKNumberFieldHInset, NSHeight(self.bounds));
+    // Only inset on the left of the field rect; right edge extends to the field boundary so
+    // right padding is controlled solely by KKNumberFieldTextInset inside the text container.
+    NSRect fr = [self fieldRect];
+    NSRect frame = NSMakeRect(NSMinX(fr) + KKNumberFieldHInset, 0, NSWidth(fr) - KKNumberFieldHInset, NSHeight(fr));
     self.scrollView = [[NSScrollView alloc] initWithFrame:frame];
     self.scrollView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     self.scrollView.hasVerticalScroller = NO;
@@ -158,6 +171,15 @@ static const unichar KKKeyEscape = 27;
     textView.textContainerInset = NSMakeSize(KKNumberFieldTextInset, [self verticalTextInset]);
 }
 
++ (CGFloat)preferredWidth {
+    return KKNumberFieldPrefixWidth + KKNumberFieldInputWidth + KKNumberFieldSuffixWidth;
+}
+
+- (NSSize)intrinsicContentSize {
+    return NSMakeSize(KKNumberFieldPrefixWidth + KKNumberFieldInputWidth + KKNumberFieldSuffixWidth,
+                      NSViewNoIntrinsicMetric);
+}
+
 - (NSFont *)fieldFont {
     return [NSFont systemFontOfSize:KKNumberFieldFontSize];
 }
@@ -166,11 +188,12 @@ static const unichar KKKeyEscape = 27;
     NSDictionary *attrs = @{NSFontAttributeName : [self fieldFont]};
     NSSize textSize = [self.textView.string sizeWithAttributes:attrs];
 
-    CGFloat availableWidth = NSWidth(self.scrollView.bounds) - (KKNumberFieldTextInset * 2);
+    NSRect fr = [self fieldRect];
+    CGFloat availableWidth = NSWidth(fr) - KKNumberFieldHInset - (KKNumberFieldTextInset * 2);
     CGFloat offset = MAX(0, availableWidth - textSize.width);
 
     NSRect scrollFrame = self.scrollView.frame;
-    scrollFrame.origin.x = KKNumberFieldHInset + offset;
+    scrollFrame.origin.x = NSMinX(fr) + KKNumberFieldHInset + offset;
     self.scrollView.frame = scrollFrame;
 }
 
@@ -306,17 +329,44 @@ static const unichar KKKeyEscape = 27;
     [self drawBackground];
     if (self.isFocused)
         [self drawFocusRing];
+    [self drawPrefixAndSuffix];
+}
+
+- (void)drawPrefixAndSuffix {
+    NSDictionary *attrs = @{
+        NSFontAttributeName : [self fieldFont],
+        NSForegroundColorAttributeName : [NSColor colorWithRed:0xB3 / 255.0
+                                                         green:0xB3 / 255.0
+                                                          blue:0xB3 / 255.0
+                                                         alpha:1.0]
+    };
+
+    if (self.prefix.length > 0) {
+        NSString *text = [self.prefix substringToIndex:1];
+        NSSize sz = [text sizeWithAttributes:attrs];
+        CGFloat x = KKNumberFieldPrefixWidth - sz.width - KKNumberFieldLabelGap;
+        CGFloat y = (NSHeight(self.bounds) - sz.height) / 2.0;
+        [text drawAtPoint:NSMakePoint(x, y) withAttributes:attrs];
+    }
+
+    if (self.suffix.length > 0) {
+        NSString *text = self.suffix.length > 2 ? [self.suffix substringToIndex:2] : self.suffix;
+        NSSize sz = [text sizeWithAttributes:attrs];
+        CGFloat x = NSMaxX([self fieldRect]) + KKNumberFieldLabelGap;
+        CGFloat y = (NSHeight(self.bounds) - sz.height) / 2.0;
+        [text drawAtPoint:NSMakePoint(x, y) withAttributes:attrs];
+    }
 }
 
 - (void)drawBackground {
     [self.backgroundColor setFill];
-    NSRectFill(self.bounds);
+    NSRectFill([self fieldRect]);
 }
 
 /// Draws the focus ring — a rounded stroke with a soft inner glow.
 - (void)drawFocusRing {
     NSColor *color = [self focusRingColor];
-    NSRect focusRect = NSInsetRect(self.bounds, KKNumberFieldFocusInset, KKNumberFieldFocusInset);
+    NSRect focusRect = NSInsetRect([self fieldRect], KKNumberFieldFocusInset, KKNumberFieldFocusInset);
 
     // Main ring
     NSBezierPath *ring = [NSBezierPath bezierPathWithRoundedRect:focusRect
@@ -336,6 +386,16 @@ static const unichar KKKeyEscape = 27;
 
 - (void)setBackgroundColor:(NSColor *)backgroundColor {
     _backgroundColor = backgroundColor;
+    [self setNeedsDisplay:YES];
+}
+
+- (void)setPrefix:(NSString *)prefix {
+    _prefix = [prefix copy];
+    [self setNeedsDisplay:YES];
+}
+
+- (void)setSuffix:(NSString *)suffix {
+    _suffix = [suffix copy];
     [self setNeedsDisplay:YES];
 }
 

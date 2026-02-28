@@ -28,6 +28,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) BOOL isFocused;
 /// Whether an edit session is in progress.
 @property (nonatomic, readonly) BOOL isEditing;
+/// Optional single-character prefix drawn outside the field (e.g. @"X", @"Y"). Space is always reserved.
+@property (nonatomic, copy, nullable) NSString *prefix;
+/// Optional 1–2 character suffix drawn outside the field (e.g. @"%", @"px"). Space is always reserved.
+@property (nonatomic, copy, nullable) NSString *suffix;
+
+/// Total view width including reserved prefix and suffix zones.
++ (CGFloat)preferredWidth;
 
 /// Designated initializer.
 - (instancetype)initWithFrame:(NSRect)frame apiManager:(id<PROAPIAccessing>)apiManager;
