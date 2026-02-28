@@ -1,4 +1,9 @@
 {
+  "editor.rulers": [120],
+  "[objective-c]": {
+    "editor.defaultFormatter": "xaver.clang-format",
+    "editor.formatOnSave": true
+  },
   "C_Cpp.files.exclude": {
     "**/*.metal": true
   },
@@ -7,27 +12,35 @@
     "*.m": "objective-c"
   },
   "cSpell.words": [
+    "autoreleasepool",
+    "autoresizing",
+    "blendmode",
+    "CGFLOAT",
+    "clipspace",
+    "dealloc",
+    "instancetype",
+    "Keyframeless",
+    "noescape",
     "nonatomic",
     "nonnull",
     "nullable",
-    "noescape",
-    "instancetype",
-    "autoreleasepool",
-    "synthesize",
-    "dealloc",
     "objc",
-    "uint",
-    "ushort",
-    "simd",
-    "rasterizer",
-    "blendmode",
-    "texcoord",
-    "viewport",
-    "clipspace",
-    "premultiplied",
     "pbxproj",
+    "plist",
+    "premultiplied",
+    "PROAPI",
+    "rasterizer",
+    "readwrite",
+    "Scroller",
+    "simd",
+    "Subview",
+    "synthesize",
+    "texcoord",
+    "uint",
+    "unichar",
+    "ushort",
+    "viewport",
     "xcodeproj",
-    "xcworkspace",
-    "plist"
+    "xcworkspace"
   ]
 }

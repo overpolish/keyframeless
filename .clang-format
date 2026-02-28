@@ -1,0 +1,14 @@
+BasedOnStyle: LLVM
+Language: ObjC
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 120
+ObjCBlockIndentWidth: 4
+ObjCSpaceAfterProperty: true
+ObjCSpaceBeforeProtocolList: true
+AlignConsecutiveAssignments: false
+AlignTrailingComments: true
+BreakBeforeBraces: Attach
+PointerAlignment: Right
+SpaceBeforeParens: ControlStatements
