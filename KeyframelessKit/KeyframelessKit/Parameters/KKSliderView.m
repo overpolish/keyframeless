@@ -31,8 +31,6 @@ static const CGFloat kKnobPointCurveOffset = 0.5;
 static const CGFloat kKnobPointCurveControl = 1.0;
 static const CGFloat kKnobSideCurveRatio = 0.3;
 
-#pragma mark - Helper Functions
-
 static inline NSColor *ColorFromRGB(const CGFloat rgb[3]) {
     return [NSColor colorWithRed:rgb[0] green:rgb[1] blue:rgb[2] alpha:1.0];
 }
@@ -45,16 +43,10 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
     return ClampValue((value - min) / (max - min), 0.0, 1.0);
 }
 
-#pragma mark - KKSliderCell Interface
-
 @interface KKSliderCell : NSSliderCell
 @end
 
-#pragma mark - KKSliderCell Implementation
-
 @implementation KKSliderCell
-
-#pragma mark Initialization
 
 - (instancetype)init {
     self = [super init];
@@ -63,8 +55,6 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
     }
     return self;
 }
-
-#pragma mark Drawing
 
 - (void)drawBarInside:(NSRect)rect flipped:(BOOL)flipped {
     NSRect trackRect = [self trackRectForBarRect:rect];
@@ -75,7 +65,8 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
 
 - (NSRect)trackRectForBarRect:(NSRect)barRect {
     CGFloat trackY = NSMidY(barRect) - kTrackHeight / 2.0;
-    return NSMakeRect(barRect.origin.x, trackY, barRect.size.width, kTrackHeight);
+    CGFloat inset = kKnobWidth / 2.0;
+    return NSMakeRect(barRect.origin.x + inset, trackY, barRect.size.width - (inset * 2.0), kTrackHeight);
 }
 
 - (void)drawTrackBackground:(NSRect)trackRect {
@@ -171,8 +162,6 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
     [path stroke];
 }
 
-#pragma mark Knob Positioning
-
 - (NSRect)knobRectFlipped:(BOOL)flipped {
     NSRect barRect = [self barRectFlipped:flipped];
     CGFloat normalizedValue = [self normalizedValue];
@@ -188,8 +177,6 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
     CGFloat usableWidth = barRect.size.width - kKnobWidth;
     return barRect.origin.x + (kKnobWidth / 2.0) + (usableWidth * normalizedValue);
 }
-
-#pragma mark Interaction
 
 - (BOOL)startTrackingAt:(NSPoint)startPoint inView:(NSView *)controlView {
     NSRect knobRect = [self knobRectFlipped:NO];
@@ -214,31 +201,17 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
     self.doubleValue = newValue;
 }
 
-#pragma mark Helpers
-
 - (CGFloat)normalizedValue {
     return NormalizeValue(self.doubleValue, self.minValue, self.maxValue);
 }
 
 @end
 
-#pragma mark - KKSliderView Interface
-
-@interface KKSliderView ()
-@property (nonatomic, strong) NSSlider *slider;
-@end
-
-#pragma mark - KKSliderView Implementation
-
 @implementation KKSliderView
-
-#pragma mark Factory Method
 
 + (instancetype)styledSlider {
     return [[KKSliderView alloc] initWithFrame:NSZeroRect];
 }
-
-#pragma mark Initialization
 
 - (instancetype)initWithFrame:(NSRect)frame {
     self = [super initWithFrame:frame];
@@ -249,7 +222,32 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
 }
 
 - (void)setupSlider {
-    self.slider = [[NSSlider alloc] initWithFrame:self.bounds];
+    CGFloat numberFieldWidth = 60.0;
+    CGFloat numberFieldHeight = 17.0;
+    CGFloat spacing = 8.0;
+    
+    // Number field on the right with fixed width
+    CGFloat numberFieldY = (NSHeight(self.bounds) - numberFieldHeight) / 2.0;
+    CGRect numberFieldFrame = NSMakeRect(
+                                         NSWidth(self.bounds) - numberFieldWidth,
+                                         numberFieldY,
+                                         numberFieldWidth,
+                                         numberFieldHeight
+                                         );
+    self.numberField = [[KKNumberField alloc] initWithFrame:numberFieldFrame
+                                                 apiManager:_apiManager];
+    self.numberField.autoresizingMask = NSViewMinXMargin | NSViewMinYMargin | NSViewHeightSizable;
+    
+    [self addSubview:self.numberField];
+    
+    // Slider grows to fill remaining space
+    CGRect sliderFrame = NSMakeRect(
+                                    0,
+                                    0,
+                                    NSWidth(self.bounds) - numberFieldWidth - spacing,
+                                    NSHeight(self.bounds)
+                                    );
+    self.slider = [[NSSlider alloc] initWithFrame:sliderFrame];
     self.slider.cell = [[KKSliderCell alloc] init];
     self.slider.minValue = 0.0;
     self.slider.maxValue = 100.0;
@@ -260,8 +258,6 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
     
     [self addSubview:self.slider];
 }
-
-#pragma mark Property Forwarding
 
 - (void)setMinValue:(double)minValue {
     self.slider.minValue = minValue;
