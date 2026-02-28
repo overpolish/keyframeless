@@ -11,21 +11,27 @@ NS_ASSUME_NONNULL_BEGIN
 
 @protocol PROAPIAccessing;
 
+/// A single-line numeric input field with inline editing and optional min/max clamping.
 @interface KKNumberField : NSView <NSTextViewDelegate>
-@property (nonatomic, strong) id<PROAPIAccessing> apiManager;
-@property (nonatomic, strong) NSColor *backgroundColor;
-@property (nonatomic) double doubleValue;
-@property (nonatomic, strong, readwrite) NSTextView *textView;
-@property (nonatomic, strong) NSScrollView *scrollView;
-@property (nonatomic) BOOL isEditing;
-@property (nonatomic) BOOL isFocused;
-@property (nonatomic) double minValue;
-@property (nonatomic) double maxValue;
 
+/// Provides access to shared application services.
+@property (nonatomic, strong) id<PROAPIAccessing> apiManager;
+/// Background fill color. Defaults to clear.
+@property (nonatomic, strong) NSColor *backgroundColor;
+/// The field's current numeric value.
+@property (nonatomic) double doubleValue;
+/// Lower bound enforced on commit. Defaults to -INFINITY.
+@property (nonatomic) double minValue;
+/// Upper bound enforced on commit. Defaults to +INFINITY.
+@property (nonatomic) double maxValue;
+/// Whether the field currently has keyboard focus.
+@property (nonatomic, readonly) BOOL isFocused;
+/// Whether an edit session is in progress.
+@property (nonatomic, readonly) BOOL isEditing;
+
+/// Designated initializer.
 - (instancetype)initWithFrame:(NSRect)frame
                    apiManager:(id<PROAPIAccessing>)apiManager;
-
-- (void)updateTextAlignment;
 
 @end
 
