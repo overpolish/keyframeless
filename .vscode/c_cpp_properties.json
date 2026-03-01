@@ -12,6 +12,7 @@
         "/System/Library/Frameworks"
       ],
       "compilerPath": "/usr/bin/clang",
+      "compilerArgs": ["-fmodules"],
       "cStandard": "c17",
       "cppStandard": "c++17",
       "intelliSenseMode": "macos-clang-arm64"

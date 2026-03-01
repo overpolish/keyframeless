@@ -1,5 +1,7 @@
 {
+  "C_Cpp.intelliSenseEngine": "disabled",
   "editor.rulers": [120],
+  "clangd.path": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clangd",
   "[objective-c]": {
     "editor.defaultFormatter": "xaver.clang-format",
     "editor.formatOnSave": true
@@ -25,6 +27,7 @@
     "nonnull",
     "nullable",
     "objc",
+    "overpolish",
     "pbxproj",
     "plist",
     "premultiplied",
