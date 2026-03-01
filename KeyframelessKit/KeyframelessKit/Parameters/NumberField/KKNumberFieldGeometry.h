@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <CoreFoundation/CFCGTypes.h>
 #import <CoreGraphics/CoreGraphics.h>
 
 /// Width reserved for the 1-character prefix label zone (e.g. "X", "Y").
@@ -18,3 +19,5 @@ static const CGFloat KKNumberFieldSuffixWidth = 18.0;
 /// Extra padding added to all sides of the focus ring panel so the ring stroke
 /// is never clipped by the window server at the panel boundary.
 static const CGFloat KKFocusRingPanelPadding = 18.0;
+/// Additional offset to match prefix/suffix height in Motion/FCP
+static const CGFloat KKDecorationVerticalOffset = 1.0;

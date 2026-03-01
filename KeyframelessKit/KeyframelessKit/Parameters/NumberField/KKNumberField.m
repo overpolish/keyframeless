@@ -338,7 +338,7 @@ static const CGFloat KKFocusRingPostAnimPadding = 3.0;
         NSString *text = [self.prefix substringToIndex:1];
         NSSize sz = [text sizeWithAttributes:attrs];
         CGFloat x = KKNumberFieldPrefixWidth - sz.width - KKNumberFieldLabelGap;
-        CGFloat y = (NSHeight(self.bounds) - sz.height) / 2.0;
+        CGFloat y = (NSHeight(self.bounds) - sz.height) / 2.0 + KKDecorationVerticalOffset;
         [text drawAtPoint:NSMakePoint(x, y) withAttributes:attrs];
     }
 
@@ -346,7 +346,7 @@ static const CGFloat KKFocusRingPostAnimPadding = 3.0;
         NSString *text = self.suffix.length > 2 ? [self.suffix substringToIndex:2] : self.suffix;
         NSSize sz = [text sizeWithAttributes:attrs];
         CGFloat x = NSMaxX([self fieldRect]) + KKNumberFieldLabelGap;
-        CGFloat y = (NSHeight(self.bounds) - sz.height) / 2.0;
+        CGFloat y = (NSHeight(self.bounds) - sz.height) / 2.0 + KKDecorationVerticalOffset;
         [text drawAtPoint:NSMakePoint(x, y) withAttributes:attrs];
     }
 }
