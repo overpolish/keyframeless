@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		F2E5CD342F54E1A100D40ABD /* CocoaLumberjack in Frameworks */ = {isa = PBXBuildFile; productRef = F2E5CD332F54E1A100D40ABD /* CocoaLumberjack */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		F21E97D52F4EE9CC00DF8CF3 /* FxPlug.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FxPlug.framework; path = ../../../../../Library/Developer/Frameworks/FxPlug.framework; sourceTree = "<group>"; };
 		F26E01B62F4DE280009D949A /* KeyframelessKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = KeyframelessKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -50,6 +54,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F2E5CD342F54E1A100D40ABD /* CocoaLumberjack in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -120,6 +125,7 @@
 			);
 			name = KeyframelessKit;
 			packageProductDependencies = (
+				F2E5CD332F54E1A100D40ABD /* CocoaLumberjack */,
 			);
 			productName = KeyframelessKit;
 			productReference = F26E01B62F4DE280009D949A /* KeyframelessKit.framework */;
@@ -148,6 +154,9 @@
 			);
 			mainGroup = F26E01AC2F4DE280009D949A;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				F2E5CD322F54E1A100D40ABD /* XCRemoteSwiftPackageReference "CocoaLumberjack" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F26E01B72F4DE280009D949A /* Products */;
 			projectDirPath = "";
@@ -398,6 +407,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		F2E5CD322F54E1A100D40ABD /* XCRemoteSwiftPackageReference "CocoaLumberjack" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/CocoaLumberjack/CocoaLumberjack";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.9.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F2E5CD332F54E1A100D40ABD /* CocoaLumberjack */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F2E5CD322F54E1A100D40ABD /* XCRemoteSwiftPackageReference "CocoaLumberjack" */;
+			productName = CocoaLumberjack;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = F26E01AD2F4DE280009D949A /* Project object */;
 }
