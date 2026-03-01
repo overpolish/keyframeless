@@ -194,6 +194,8 @@ static const unichar KKKeyEscape = 27;
 
     NSRect scrollFrame = self.scrollView.frame;
     scrollFrame.origin.x = NSMinX(fr) + KKNumberFieldHInset + offset;
+    // Pin right edge to NSMaxX(fr) so the scroll view never overlaps the suffix zone.
+    scrollFrame.size.width = NSMaxX(fr) - scrollFrame.origin.x;
     self.scrollView.frame = scrollFrame;
 }
 
