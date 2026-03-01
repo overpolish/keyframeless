@@ -257,6 +257,10 @@ static const unichar KKKeyEscape = 27;
 - (void)mouseDown:(NSEvent *)event {
     self.textView.editable = YES;
     self.textView.selectable = YES;
+    self.isFocused = YES;
+    [self setNeedsDisplay:YES];
+    self.textView.string = [self displayStringForEditing];
+    [self updateTextAlignment];
     [self.window makeFirstResponder:self.textView];
 }
 
