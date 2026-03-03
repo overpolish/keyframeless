@@ -32,6 +32,7 @@
 				Parameters/KKCustomGroupHeaderView.h,
 				Parameters/KKSliderView.h,
 				Parameters/NumberField/KKNumberField.h,
+				Plugin/KKHostInfo.h,
 				Plugin/KKPlugin.h,
 			);
 			target = F26E01B52F4DE280009D949A /* KeyframelessKit */;

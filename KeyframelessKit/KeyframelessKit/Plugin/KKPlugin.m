@@ -6,11 +6,36 @@
 //
 
 #import "KKPlugin.h"
+#import "KKHostInfo.h"
 #import "KKMetalDeviceCache.h"
 #import "KKRenderHelpers.h"
 #import <FxPlug/FxPlugSDK.h>
 
+@interface KKPrincipalDelegate : NSObject <FxPrincipalDelegate>
++ (instancetype)shared;
+@end
+
+@implementation KKPrincipalDelegate
+
++ (instancetype)shared {
+    static KKPrincipalDelegate *instance = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{ instance = [[KKPrincipalDelegate alloc] init]; });
+    return instance;
+}
+
+- (void)didEstablishConnectionWithHost:(NSString *)hostBundleIdentifier
+                               version:(NSString *)hostVersionString {
+    [KKHostInfo shared].hostID = hostBundleIdentifier;
+}
+
+@end
+
 @implementation KKPlugin
+
++ (id)servicePrincipalDelegate {
+    return [KKPrincipalDelegate shared];
+}
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager
 {

@@ -37,6 +37,10 @@ NS_ASSUME_NONNULL_BEGIN
                                         commands:(void (^)(id<MTLRenderCommandEncoder> encoder,
                                                            NSArray<id<MTLTexture>> *inputTextures))commands;
 
+/// Returns the shared FxPrincipalDelegate that captures the host ID into KKHostInfo.
+/// Pass to +[FxPrincipal startServicePrincipalWithDelegate:] in main().
++ (id)servicePrincipalDelegate;
+
 @end
 
 NS_ASSUME_NONNULL_END
