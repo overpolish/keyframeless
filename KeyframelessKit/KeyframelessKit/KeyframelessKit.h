@@ -20,6 +20,7 @@ FOUNDATION_EXPORT const unsigned char KeyframelessKitVersionString[]; //! Versio
 #import <KeyframelessKit/KKPointOSC.h>
 #import <KeyframelessKit/KKPlugin.h>
 #import <KeyframelessKit/KKHostInfo.h>
+#import <KeyframelessKit/KKNativeStyleView.h>
 #import <KeyframelessKit/KKCustomGroupHeaderView.h>
 #import <KeyframelessKit/KKSliderView.h>
 #import <KeyframelessKit/KKNumberField.h>
