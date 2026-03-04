@@ -1,0 +1,26 @@
+//
+//  KeyframelessKit.h
+//  KeyframelessKit
+//
+//  Created by Dom on 24/02/2026.
+//
+
+#import <Foundation/Foundation.h>
+
+FOUNDATION_EXPORT double KeyframelessKitVersionNumber; //! Version number
+FOUNDATION_EXPORT const unsigned char KeyframelessKitVersionString[]; //! Version string
+
+#import <KeyframelessKit/KKColors.h>
+#import <KeyframelessKit/KKShaderTypes.h>
+#import <KeyframelessKit/KKRenderHelpers.h>
+#import <KeyframelessKit/KKMetalDeviceCache.h>
+#import <KeyframelessKit/KKOSCShaderTypes.h>
+#import <KeyframelessKit/KKOnScreenControl.h>
+#import <KeyframelessKit/KKArcOSC.h>
+#import <KeyframelessKit/KKPointOSC.h>
+#import <KeyframelessKit/KKPlugin.h>
+#import <KeyframelessKit/KKHostInfo.h>
+#import <KeyframelessKit/KKNativeStyleView.h>
+#import <KeyframelessKit/KKCustomGroupHeaderView.h>
+#import <KeyframelessKit/KKSliderView.h>
+#import <KeyframelessKit/KKNumberField.h>

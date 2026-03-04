@@ -1,0 +1,58 @@
+{
+  "C_Cpp.intelliSenseEngine": "disabled",
+  "editor.rulers": [120],
+  "clangd.path": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clangd",
+  "[objective-c]": {
+    "editor.defaultFormatter": "xaver.clang-format",
+    "editor.formatOnSave": true
+  },
+  "C_Cpp.files.exclude": {
+    "**/*.metal": true
+  },
+  "files.associations": {
+    "*.h": "objective-c",
+    "*.m": "objective-c"
+  },
+  "cSpell.words": [
+    "autoreleasepool",
+    "autoreleasing",
+    "autoresizing",
+    "blendmode",
+    "CGFLOAT",
+    "clipspace",
+    "dealloc",
+    "fabs",
+    "fmax",
+    "fmin",
+    "instancetype",
+    "Keyframeless",
+    "noescape",
+    "nonatomic",
+    "nonnull",
+    "NSEC",
+    "nullable",
+    "objc",
+    "overpolish",
+    "pbxproj",
+    "plist",
+    "premultiplied",
+    "PROAPI",
+    "rasterizer",
+    "readwrite",
+    "Rects",
+    "Scroller",
+    "simd",
+    "Sublayer",
+    "Subview",
+    "Superview",
+    "synthesize",
+    "texcoord",
+    "uint",
+    "unhide",
+    "unichar",
+    "ushort",
+    "viewport",
+    "xcodeproj",
+    "xcworkspace"
+  ]
+}
