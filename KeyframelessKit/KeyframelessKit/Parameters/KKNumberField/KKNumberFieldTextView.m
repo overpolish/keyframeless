@@ -7,20 +7,23 @@
 
 #import "KKNumberFieldTextView.h"
 #import "KKNumberField+Private.h"
+#include <AppKit/AppKit.h>
+#include <objc/objc.h>
 
 static const unichar KKKeyEscape = 27;
 
 @implementation KKNumberFieldTextView
 
-- (void)mouseDown:(NSEvent *)event {
-    if (!self.isEditable) {
-        [self.parentField beginEditing];
-        [self.window makeFirstResponder:self];
-        [super mouseDown:event];
-    } else {
-        [super mouseDown:event];
-    }
-}
+// TODO - remove or keep
+// - (void)mouseDown:(NSEvent *)event {
+// if (!self.isEditable) {
+//     [self.parentField beginEditing];
+//     [self.window makeFirstResponder:self];
+//     [super mouseDown:event];
+// } else {
+//     [super mouseDown:event];
+// }
+// }
 
 - (BOOL)performKeyEquivalent:(NSEvent *)event {
     // Capture arrow keys when editing — without this, arrows control the timeline scrubber.
