@@ -29,9 +29,10 @@
 				OSC/KKOnScreenControl.h,
 				OSC/KKOSCShaderTypes.h,
 				OSC/KKPointOSC.h,
-				Parameters/KKCustomGroupHeaderView.h,
-				Parameters/KKSliderView.h,
-				Parameters/NumberField/KKNumberField.h,
+				Parameters/KKCustomGroupHeaderView/KKCustomGroupHeaderView.h,
+				Parameters/KKNativeStyleView.h,
+				Parameters/KKNumberField/KKNumberField.h,
+				Parameters/KKSliderView/KKSliderView.h,
 				Plugin/KKHostInfo.h,
 				Plugin/KKPlugin.h,
 			);

@@ -14,7 +14,8 @@
 @property (nonatomic, readwrite) BOOL isFocused;
 
 /// Shared focus entry point — called by both the field and its embedded text view.
-- (void)beginEditing;
+// TODO remove or keep?
+// - (void)beginEditing;
 /// Returns the current value formatted for editing — full precision for non-integers.
 - (NSString *)displayStringForEditing;
 
