@@ -3,3 +3,5 @@ DerivedData/
 xcuserdata/
 .DS_Store
 *.xcuserstate
+.clangd
+buildServer.json
