@@ -1,11 +1,22 @@
-//
-//  KKNativeStyleView.m
-//  KeyframelessKit
-//
-//  Created by Dom on 03/03/2026.
-//
+/* KeyframelessKit - Shared framework for the Keyframeless FxPlug library
+ * Copyright (C) 2026 overpolish
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 #import "KKNativeStyleView.h"
+#include "KKLog.h"
 #import "NSColor+KKColors.h"
 #include <AppKit/AppKit.h>
 #include <AppKit/NSColor.h>
@@ -19,11 +30,16 @@
 #include <CoreFoundation/CFCGTypes.h>
 
 @interface PassthroughView : NSView
+@property(nonatomic, copy) void (^onMouseDown)(NSEvent *event);
 @end
 
 @implementation PassthroughView
 
 - (void)mouseDown:(NSEvent *)event {
+  if (self.onMouseDown) {
+    self.onMouseDown(event);
+  }
+
   [self passThroughMouseEvent:event type:kCGEventLeftMouseDown];
 }
 
@@ -44,92 +60,135 @@
 }
 
 - (void)passThroughMouseEvent:(NSEvent *)event type:(CGEventType)eventType {
-  // Hide immediately (no visual flicker at normal speed)
   self.hidden = YES;
 
-  // Convert to screen coordinates
-  NSPoint windowPoint = [event locationInWindow];
-  NSPoint screenPoint = [[self window] convertPointToScreen:windowPoint];
-  CGFloat screenHeight = NSScreen.mainScreen.frame.size.height;
-  CGPoint cgPoint = CGPointMake(screenPoint.x, screenHeight - screenPoint.y);
-
-  // Determine mouse button
+  CGPoint mouseCursorPosition = [self cgPointFromEvent:event];
   CGMouseButton button = kCGMouseButtonLeft;
   if (eventType == kCGEventRightMouseDown ||
       eventType == kCGEventRightMouseUp) {
     button = kCGMouseButtonRight;
   }
 
-  // Create and post the event
   CGEventRef cgEvent =
-      CGEventCreateMouseEvent(NULL, eventType, cgPoint, button);
+      CGEventCreateMouseEvent(NULL, eventType, mouseCursorPosition, button);
   CGEventPost(kCGHIDEventTap, cgEvent);
   CFRelease(cgEvent);
 
-  // Show again immediately (imperceptible delay)
   dispatch_async(dispatch_get_main_queue(), ^{
     self.hidden = NO;
   });
 }
 
+- (CGPoint)cgPointFromEvent:(NSEvent *)event {
+  NSPoint windowPoint = [event locationInWindow];
+  NSPoint screenPoint = [[self window] convertPointToScreen:windowPoint];
+  CGFloat screenHeight = NSScreen.mainScreen.frame.size.height;
+  return CGPointMake(screenPoint.x, screenHeight - screenPoint.y);
+}
+
 @end
+
+static const NSTimeInterval kMenuDismissalDetectionDelay = 0.2;
+static const double kKeyframeControlWidth = 80.0;
+static const double kMenuButtonWidth = 20.0;
 
 @implementation KKNativeStyleView {
   BOOL _isHovered;
-  PassthroughView *_squareView;
+  // No way for us to know if the host (Motion/FCP) has a context menu open
+  // we are in ViewBridge Jail - we can only guess
+  BOOL _isContextMenuOpen;
+  NSView *_backgroundView;
+  PassthroughView *_keyframeControlsRegion;
+  NSView *_menuButton;
+  KKLog *_log;
+  // Event monitors to detect menu dismissal
+  id _globalDismissalMonitor;
+  id _localDismissalMonitor;
+  NSTimeInterval _menuOpenedTime;
 }
-
-// TODO - left section/right section correctly switching, both nullable
 
 - (instancetype)initWithFrame:(NSRect)frameRect {
   self = [super initWithFrame:frameRect];
   if (self) {
-    // Background view (red, takes up most of the space)
-    NSView *backgroundView = [[NSView alloc] initWithFrame:NSZeroRect];
-    backgroundView.translatesAutoresizingMaskIntoConstraints = NO;
-    backgroundView.wantsLayer = YES;
-    backgroundView.layer.backgroundColor = [[NSColor redColor] CGColor];
-    [self addSubview:backgroundView];
+    _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
 
-    // Square view in the right margin
-    PassthroughView *squareView =
-        [[PassthroughView alloc] initWithFrame:NSZeroRect];
-    squareView.translatesAutoresizingMaskIntoConstraints = NO;
-    squareView.wantsLayer = YES;
-    squareView.layer.backgroundColor =
-        [[[NSColor blueColor] colorWithAlphaComponent:0.5] CGColor];
-    [self addSubview:squareView];
-    _squareView = squareView;
-
-    // Layout
-    [NSLayoutConstraint activateConstraints:@[
-      // Background view constraints
-      [backgroundView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
-      [backgroundView.topAnchor constraintEqualToAnchor:self.topAnchor],
-      [backgroundView.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
-      [backgroundView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
-                                                    constant:-80],
-
-      // Square view constraints - fills the 80pt margin
-      [squareView.leadingAnchor
-          constraintEqualToAnchor:backgroundView.trailingAnchor],
-      [squareView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-      [squareView.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-      [squareView.heightAnchor constraintEqualToConstant:80]
-    ]];
+    [self setupViews];
+    [self setupConstraints];
+    [self setupEventHandlers];
   }
   return self;
+}
+
+- (void)setupViews {
+  _backgroundView = [[NSView alloc] initWithFrame:NSZeroRect];
+  _backgroundView.translatesAutoresizingMaskIntoConstraints = NO;
+  _backgroundView.wantsLayer = YES;
+  _backgroundView.layer.backgroundColor = [[NSColor redColor] CGColor];
+  [self addSubview:_backgroundView];
+
+  _keyframeControlsRegion = [[PassthroughView alloc] initWithFrame:NSZeroRect];
+  _keyframeControlsRegion.translatesAutoresizingMaskIntoConstraints = NO;
+  _keyframeControlsRegion.wantsLayer = YES;
+  _keyframeControlsRegion.layer.backgroundColor =
+      [[[NSColor blueColor] colorWithAlphaComponent:0.5] CGColor];
+  [self addSubview:_keyframeControlsRegion];
+
+  _menuButton = [[NSView alloc] initWithFrame:NSZeroRect];
+  _menuButton.translatesAutoresizingMaskIntoConstraints = NO;
+  _menuButton.wantsLayer = YES;
+  _menuButton.layer.backgroundColor =
+      [[[NSColor systemPinkColor] colorWithAlphaComponent:0.5] CGColor];
+  [_keyframeControlsRegion addSubview:_menuButton];
+
+  // TODO add caret, keyframe shape, etc.
+}
+
+- (void)setupConstraints {
+  // Layout lag when resizing inspector is most likely down to ViewBridge XPC
+  // round-trip it takes time for our view to get the new size from the host app
+  [NSLayoutConstraint activateConstraints:@[
+    [_backgroundView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+    [_backgroundView.topAnchor constraintEqualToAnchor:self.topAnchor],
+    [_backgroundView.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
+    [_backgroundView.trailingAnchor
+        constraintEqualToAnchor:self.trailingAnchor
+                       constant:-kKeyframeControlWidth],
+
+    [_keyframeControlsRegion.leadingAnchor
+        constraintEqualToAnchor:_backgroundView.trailingAnchor],
+    [_keyframeControlsRegion.trailingAnchor
+        constraintEqualToAnchor:self.trailingAnchor],
+    [_keyframeControlsRegion.centerYAnchor
+        constraintEqualToAnchor:self.centerYAnchor],
+    [_keyframeControlsRegion.heightAnchor
+        constraintEqualToAnchor:self.heightAnchor],
+
+    [_menuButton.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+    [_menuButton.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    [_menuButton.widthAnchor constraintEqualToConstant:kMenuButtonWidth],
+    [_menuButton.heightAnchor constraintEqualToAnchor:self.heightAnchor]
+
+    // TODO add caret, keyframe shape, etc.
+  ]];
+}
+
+- (void)setupEventHandlers {
+  __weak typeof(self) weakSelf = self;
+  _keyframeControlsRegion.onMouseDown = ^(NSEvent *event) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (strongSelf) {
+      [strongSelf handleMenuButtonClick:event];
+    }
+  };
 }
 
 - (void)updateTrackingAreas {
   [super updateTrackingAreas];
 
-  // Remove existing tracking areas
   for (NSTrackingArea *area in self.trackingAreas) {
     [self removeTrackingArea:area];
   }
 
-  // Add tracking area over entire view
   NSTrackingArea *trackingArea = [[NSTrackingArea alloc]
       initWithRect:self.bounds
            options:NSTrackingMouseEnteredAndExited | NSTrackingActiveAlways |
@@ -140,15 +199,117 @@
 }
 
 - (void)mouseEntered:(NSEvent *)event {
-  // Turn right side purple
-  _squareView.layer.backgroundColor =
-      [[[NSColor purpleColor] colorWithAlphaComponent:0.5] CGColor];
+  if ([NSApp isActive] && !_isContextMenuOpen) {
+    _isHovered = YES;
+    [self updateKeyframeControlsRegionColor];
+  }
 }
 
 - (void)mouseExited:(NSEvent *)event {
-  // Turn right side back to blue
-  _squareView.layer.backgroundColor =
-      [[[NSColor blueColor] colorWithAlphaComponent:0.5] CGColor];
+  if (!_isContextMenuOpen) {
+    _isHovered = NO;
+    [self updateKeyframeControlsRegionColor];
+  }
+}
+
+- (void)handleMenuButtonClick:(NSEvent *)event {
+  if (_localDismissalMonitor != nil || _globalDismissalMonitor != nil) {
+    return;
+  }
+
+  if (_isContextMenuOpen) {
+    [self closeMenu];
+    return;
+  }
+
+  _isContextMenuOpen = YES;
+  _menuOpenedTime = [NSDate timeIntervalSinceReferenceDate];
+  [self installMenuDismissalMonitors];
+  _isHovered = YES;
+  [self updateKeyframeControlsRegionColor];
+}
+
+- (void)installMenuDismissalMonitors {
+  [self removeMenuDismissalMonitors];
+
+  NSEventMask significantEvents =
+      NSEventMaskLeftMouseDown | NSEventTypeRightMouseDown |
+      NSEventTypeOtherMouseDown | NSEventMaskKeyDown;
+
+  __weak typeof(self) weakSelf = self;
+  _globalDismissalMonitor = [NSEvent
+      addGlobalMonitorForEventsMatchingMask:significantEvents
+                                    handler:^(NSEvent *event) {
+                                      __strong typeof(weakSelf) strongSelf =
+                                          weakSelf;
+                                      if (strongSelf) {
+                                        [strongSelf
+                                            checkIfMenuDismissedSince:
+                                                strongSelf->_menuOpenedTime];
+                                      }
+                                    }];
+
+  _localDismissalMonitor = [NSEvent
+      addLocalMonitorForEventsMatchingMask:significantEvents
+                                   handler:^NSEvent *(NSEvent *event) {
+                                     __strong typeof(weakSelf) strongSelf =
+                                         weakSelf;
+                                     if (strongSelf) {
+                                       [strongSelf
+                                           checkIfMenuDismissedSince:
+                                               strongSelf->_menuOpenedTime];
+                                     }
+                                     return event;
+                                   }];
+}
+
+- (void)checkIfMenuDismissedSince:(NSTimeInterval)timestamp {
+  NSTimeInterval timeSinceMenuOpened =
+      [NSDate timeIntervalSinceReferenceDate] - timestamp;
+  if (timeSinceMenuOpened > kMenuDismissalDetectionDelay) {
+    [self closeMenu];
+  }
+}
+
+/// Mark menu as closed, update state and relevant UI.
+- (void)closeMenu {
+  _isContextMenuOpen = NO;
+  _isHovered = [self isMouseOverView];
+  [self updateKeyframeControlsRegionColor];
+  [self removeMenuDismissalMonitors];
+}
+
+- (BOOL)isMouseOverView {
+  NSPoint mouseLocation = [NSEvent mouseLocation];
+  NSPoint windowPoint = [self.window convertPointFromScreen:mouseLocation];
+  NSPoint viewPoint = [self convertPoint:windowPoint fromView:nil];
+  return [self mouse:viewPoint inRect:self.bounds];
+}
+
+- (void)removeMenuDismissalMonitors {
+  if (_globalDismissalMonitor) {
+    [NSEvent removeMonitor:_globalDismissalMonitor];
+    _globalDismissalMonitor = nil;
+  }
+  if (_localDismissalMonitor) {
+    [NSEvent removeMonitor:_localDismissalMonitor];
+    _localDismissalMonitor = nil;
+  }
+}
+
+// TODO this will show the hover state
+- (void)updateKeyframeControlsRegionColor {
+  if (_isContextMenuOpen || _isHovered) {
+    _keyframeControlsRegion.layer.backgroundColor =
+        [[[NSColor purpleColor] colorWithAlphaComponent:0.5] CGColor];
+  } else {
+    _keyframeControlsRegion.layer.backgroundColor =
+        [[[NSColor blueColor] colorWithAlphaComponent:0.5] CGColor];
+  }
+}
+
+- (void)dealloc {
+  [self removeMenuDismissalMonitors];
 }
 
 // - (instancetype)initWithFrame:(NSRect)frameRect {
