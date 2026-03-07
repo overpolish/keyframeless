@@ -129,7 +129,7 @@ static const double kMenuButtonWidth = 20.0;
   // Event monitors to detect menu dismissal
   id _globalDismissalMonitor;
   id _localDismissalMonitor;
-  NSInteger _lastDismissalEventNumber;
+  NSInteger _monitorInstallerEventNumber;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect {
@@ -246,7 +246,7 @@ static const double kMenuButtonWidth = 20.0;
     return;
   }
 
-  if (event.eventNumber == _lastDismissalEventNumber) {
+  if (event.eventNumber == _monitorInstallerEventNumber) {
     return;
   }
 
@@ -256,6 +256,7 @@ static const double kMenuButtonWidth = 20.0;
     return;
   }
 
+  _monitorInstallerEventNumber = event.eventNumber;
   _isContextMenuOpen = YES;
   _isHovered = YES;
   [self updateKeyframeControlsVisibility];
@@ -272,6 +273,8 @@ static const double kMenuButtonWidth = 20.0;
 - (void)installMenuDismissalMonitors {
   [self removeMenuDismissalMonitors];
 
+  NSTimeInterval monitorInstallTime = [NSDate timeIntervalSinceReferenceDate];
+
   NSEventMask significantEvents =
       NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown |
       NSEventMaskOtherMouseDown | NSEventMaskLeftMouseUp |
@@ -284,10 +287,10 @@ static const double kMenuButtonWidth = 20.0;
                                       __strong typeof(weakSelf) strongSelf =
                                           weakSelf;
                                       if (strongSelf &&
-                                          ![strongSelf
-                                              wasSimulatedEvent:event]) {
-                                        strongSelf->_lastDismissalEventNumber =
-                                            event.eventNumber;
+                                          [strongSelf
+                                              shouldDismissMenuForEvent:event
+                                                            installTime:
+                                                                monitorInstallTime]) {
                                         [strongSelf closeMenu];
                                       }
                                     }];
@@ -298,14 +301,30 @@ static const double kMenuButtonWidth = 20.0;
                                      __strong typeof(weakSelf) strongSelf =
                                          weakSelf;
                                      if (strongSelf &&
-                                         ![strongSelf
-                                             wasSimulatedEvent:event]) {
-                                       strongSelf->_lastDismissalEventNumber =
-                                           event.eventNumber;
+                                         [strongSelf
+                                             shouldDismissMenuForEvent:event
+                                                           installTime:
+                                                               monitorInstallTime]) {
                                        [strongSelf closeMenu];
                                      }
                                      return event;
                                    }];
+}
+
+- (BOOL)shouldDismissMenuForEvent:(NSEvent *)event
+                      installTime:(NSTimeInterval)monitorInstallTime {
+  if ([self wasSimulatedEvent:event]) {
+    return NO;
+  }
+
+  NSTimeInterval timeSinceInstall =
+      [NSDate timeIntervalSinceReferenceDate] - monitorInstallTime;
+  static const NSTimeInterval kMonitorIgnoreInterval = 0.5;
+  if (timeSinceInstall < kMonitorIgnoreInterval && [self isMouseOverView]) {
+    return NO;
+  }
+
+  return YES;
 }
 
 - (BOOL)wasSimulatedEvent:(NSEvent *)event {
