@@ -21,13 +21,18 @@
 #include <AppKit/AppKit.h>
 #include <AppKit/NSColor.h>
 #include <CoreFoundation/CFCGTypes.h>
+#include <CoreGraphics/CGEvent.h>
+#include <CoreGraphics/CGEventTypes.h>
 #include <Foundation/Foundation.h>
 #import <QuartzCore/QuartzCore.h>
+#include <objc/NSObjCRuntime.h>
 #include <objc/objc.h>
 #include <objc/runtime.h>
 
 #import <Cocoa/Cocoa.h>
 #include <CoreFoundation/CFCGTypes.h>
+
+static const int64_t kSimulatedEventMarker = 0x53494D; // "SIM"
 
 @interface PassthroughView : NSView
 @property(nonatomic, copy) void (^onMouseDown)(NSEvent *event);
@@ -71,6 +76,8 @@
 
   CGEventRef cgEvent =
       CGEventCreateMouseEvent(NULL, eventType, mouseCursorPosition, button);
+  CGEventSetIntegerValueField(cgEvent, kCGEventSourceUserData,
+                              kSimulatedEventMarker);
   CGEventPost(kCGHIDEventTap, cgEvent);
   CFRelease(cgEvent);
 
@@ -104,7 +111,7 @@ static const double kMenuButtonWidth = 20.0;
   // Event monitors to detect menu dismissal
   id _globalDismissalMonitor;
   id _localDismissalMonitor;
-  NSTimeInterval _menuOpenedTime;
+  NSInteger _lastDismissalEventNumber;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect {
@@ -130,7 +137,7 @@ static const double kMenuButtonWidth = 20.0;
   _keyframeControlsRegion.translatesAutoresizingMaskIntoConstraints = NO;
   _keyframeControlsRegion.wantsLayer = YES;
   _keyframeControlsRegion.layer.backgroundColor =
-      [[[NSColor blueColor] colorWithAlphaComponent:0.5] CGColor];
+      [[NSColor clearColor] CGColor];
   [self addSubview:_keyframeControlsRegion];
 
   _menuButton = [[NSView alloc] initWithFrame:NSZeroRect];
@@ -140,7 +147,7 @@ static const double kMenuButtonWidth = 20.0;
       [[[NSColor systemPinkColor] colorWithAlphaComponent:0.5] CGColor];
   [_keyframeControlsRegion addSubview:_menuButton];
 
-  // TODO add caret, keyframe shape, etc.
+  // TODO add keyframe shape, etc.
 }
 
 - (void)setupConstraints {
@@ -168,7 +175,7 @@ static const double kMenuButtonWidth = 20.0;
     [_menuButton.widthAnchor constraintEqualToConstant:kMenuButtonWidth],
     [_menuButton.heightAnchor constraintEqualToAnchor:self.heightAnchor]
 
-    // TODO add caret, keyframe shape, etc.
+    // TODO add keyframe shape, etc.
   ]];
 }
 
@@ -201,32 +208,43 @@ static const double kMenuButtonWidth = 20.0;
 - (void)mouseEntered:(NSEvent *)event {
   if ([NSApp isActive] && !_isContextMenuOpen) {
     _isHovered = YES;
-    [self updateKeyframeControlsRegionColor];
+    [self updateKeyframeControlsVisibility];
   }
 }
 
 - (void)mouseExited:(NSEvent *)event {
   if (!_isContextMenuOpen) {
     _isHovered = NO;
-    [self updateKeyframeControlsRegionColor];
+    [self updateKeyframeControlsVisibility];
   }
 }
 
 - (void)handleMenuButtonClick:(NSEvent *)event {
-  if (_localDismissalMonitor != nil || _globalDismissalMonitor != nil) {
+  if ([self wasSimulatedEvent:event]) {
+    return;
+  }
+
+  if (event.eventNumber == _lastDismissalEventNumber) {
     return;
   }
 
   if (_isContextMenuOpen) {
+    // Keyframe region clicked whilst menu is already open
     [self closeMenu];
     return;
   }
 
   _isContextMenuOpen = YES;
-  _menuOpenedTime = [NSDate timeIntervalSinceReferenceDate];
-  [self installMenuDismissalMonitors];
   _isHovered = YES;
-  [self updateKeyframeControlsRegionColor];
+  [self updateKeyframeControlsVisibility];
+
+  // Wait for current mouse click to complete - avoids monitors reacting to the
+  // initial click
+  dispatch_after(
+      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
+      dispatch_get_main_queue(), ^{
+        [self installMenuDismissalMonitors];
+      });
 }
 
 - (void)installMenuDismissalMonitors {
@@ -234,7 +252,8 @@ static const double kMenuButtonWidth = 20.0;
 
   NSEventMask significantEvents =
       NSEventMaskLeftMouseDown | NSEventTypeRightMouseDown |
-      NSEventTypeOtherMouseDown | NSEventMaskKeyDown;
+      NSEventTypeOtherMouseDown | NSEventMaskLeftMouseUp |
+      NSEventMaskRightMouseUp | NSEventTypeOtherMouseUp | NSEventMaskKeyDown;
 
   __weak typeof(self) weakSelf = self;
   _globalDismissalMonitor = [NSEvent
@@ -242,10 +261,12 @@ static const double kMenuButtonWidth = 20.0;
                                     handler:^(NSEvent *event) {
                                       __strong typeof(weakSelf) strongSelf =
                                           weakSelf;
-                                      if (strongSelf) {
-                                        [strongSelf
-                                            checkIfMenuDismissedSince:
-                                                strongSelf->_menuOpenedTime];
+                                      if (strongSelf &&
+                                          ![strongSelf
+                                              wasSimulatedEvent:event]) {
+                                        strongSelf->_lastDismissalEventNumber =
+                                            event.eventNumber;
+                                        [strongSelf closeMenu];
                                       }
                                     }];
 
@@ -254,28 +275,34 @@ static const double kMenuButtonWidth = 20.0;
                                    handler:^NSEvent *(NSEvent *event) {
                                      __strong typeof(weakSelf) strongSelf =
                                          weakSelf;
-                                     if (strongSelf) {
-                                       [strongSelf
-                                           checkIfMenuDismissedSince:
-                                               strongSelf->_menuOpenedTime];
+                                     if (strongSelf &&
+                                         ![strongSelf
+                                             wasSimulatedEvent:event]) {
+                                       strongSelf->_lastDismissalEventNumber =
+                                           event.eventNumber;
+                                       [strongSelf closeMenu];
                                      }
                                      return event;
                                    }];
 }
 
-- (void)checkIfMenuDismissedSince:(NSTimeInterval)timestamp {
-  NSTimeInterval timeSinceMenuOpened =
-      [NSDate timeIntervalSinceReferenceDate] - timestamp;
-  if (timeSinceMenuOpened > kMenuDismissalDetectionDelay) {
-    [self closeMenu];
+- (BOOL)wasSimulatedEvent:(NSEvent *)event {
+  CGEventRef cgEvent = [event CGEvent];
+  if (cgEvent) {
+    int64_t userData =
+        CGEventGetIntegerValueField(cgEvent, kCGEventSourceUserData);
+    if (userData == kSimulatedEventMarker) {
+      return YES;
+    }
   }
+  return NO;
 }
 
 /// Mark menu as closed, update state and relevant UI.
 - (void)closeMenu {
   _isContextMenuOpen = NO;
   _isHovered = [self isMouseOverView];
-  [self updateKeyframeControlsRegionColor];
+  [self updateKeyframeControlsVisibility];
   [self removeMenuDismissalMonitors];
 }
 
@@ -297,13 +324,12 @@ static const double kMenuButtonWidth = 20.0;
   }
 }
 
-// TODO this will show the hover state
-- (void)updateKeyframeControlsRegionColor {
+- (void)updateKeyframeControlsVisibility {
   if (_isContextMenuOpen || _isHovered) {
-    _keyframeControlsRegion.layer.backgroundColor =
+    _menuButton.layer.backgroundColor =
         [[[NSColor purpleColor] colorWithAlphaComponent:0.5] CGColor];
   } else {
-    _keyframeControlsRegion.layer.backgroundColor =
+    _menuButton.layer.backgroundColor =
         [[[NSColor blueColor] colorWithAlphaComponent:0.5] CGColor];
   }
 }
