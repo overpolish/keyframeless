@@ -95,7 +95,40 @@ static const int64_t kSimulatedEventMarker = 0x53494D; // "SIM"
 
 @end
 
-static const NSTimeInterval kMenuDismissalDetectionDelay = 0.2;
+@interface MenuButtonView : NSView
+@end
+
+@implementation MenuButtonView
+
+- (void)drawRect:(NSRect)dirtyRect {
+  [super drawRect:dirtyRect];
+
+  CGFloat chevronWidth = 6.5;
+  CGFloat chevronHeight = 3.5;
+  CGFloat rightMargin = 5.5;
+  CGFloat bottomOffset = 0.5;
+
+  CGFloat x = self.bounds.size.width - rightMargin - chevronWidth;
+  CGFloat y = (self.bounds.size.height - chevronHeight) / 2;
+
+  NSBezierPath *chevron = [NSBezierPath bezierPath];
+
+  // Chevron pointing down
+  [chevron moveToPoint:NSMakePoint(0, chevronHeight)]; // Top left
+  [chevron lineToPoint:NSMakePoint(chevronWidth / 2, 0)];
+  [chevron lineToPoint:NSMakePoint(chevronWidth, chevronHeight)]; // Top right
+
+  NSAffineTransform *transform = [NSAffineTransform transform];
+  [transform translateXBy:x yBy:y + bottomOffset];
+  [chevron transformUsingAffineTransform:transform];
+
+  [[NSColor inspectorLabelColor] setStroke];
+  [chevron setLineWidth:1.5];
+  [chevron stroke];
+}
+
+@end
+
 static const double kKeyframeControlWidth = 80.0;
 static const double kMenuButtonWidth = 20.0;
 
@@ -106,7 +139,7 @@ static const double kMenuButtonWidth = 20.0;
   BOOL _isContextMenuOpen;
   NSView *_backgroundView;
   PassthroughView *_keyframeControlsRegion;
-  NSView *_menuButton;
+  MenuButtonView *_menuButton;
   KKLog *_log;
   // Event monitors to detect menu dismissal
   id _globalDismissalMonitor;
@@ -122,6 +155,8 @@ static const double kMenuButtonWidth = 20.0;
     [self setupViews];
     [self setupConstraints];
     [self setupEventHandlers];
+
+    [self updateKeyframeControlsVisibility];
   }
   return self;
 }
@@ -136,15 +171,16 @@ static const double kMenuButtonWidth = 20.0;
   _keyframeControlsRegion = [[PassthroughView alloc] initWithFrame:NSZeroRect];
   _keyframeControlsRegion.translatesAutoresizingMaskIntoConstraints = NO;
   _keyframeControlsRegion.wantsLayer = YES;
+  // Effectively clearColor - using clearColor directly causes this NSView to no
+  // longer participate in tracking events as all internal content is hidden
+  // initially. Adding a pseudo-clear color keeps the view 'alive'
   _keyframeControlsRegion.layer.backgroundColor =
-      [[NSColor clearColor] CGColor];
+      [[[NSColor whiteColor] colorWithAlphaComponent:0.001] CGColor];
   [self addSubview:_keyframeControlsRegion];
 
-  _menuButton = [[NSView alloc] initWithFrame:NSZeroRect];
+  _menuButton = [[MenuButtonView alloc] initWithFrame:NSZeroRect];
   _menuButton.translatesAutoresizingMaskIntoConstraints = NO;
   _menuButton.wantsLayer = YES;
-  _menuButton.layer.backgroundColor =
-      [[[NSColor systemPinkColor] colorWithAlphaComponent:0.5] CGColor];
   [_keyframeControlsRegion addSubview:_menuButton];
 
   // TODO add keyframe shape, etc.
@@ -152,7 +188,8 @@ static const double kMenuButtonWidth = 20.0;
 
 - (void)setupConstraints {
   // Layout lag when resizing inspector is most likely down to ViewBridge XPC
-  // round-trip it takes time for our view to get the new size from the host app
+  // round-trip, it takes time for our view to get the new size from the host
+  // app
   [NSLayoutConstraint activateConstraints:@[
     [_backgroundView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
     [_backgroundView.topAnchor constraintEqualToAnchor:self.topAnchor],
@@ -326,11 +363,9 @@ static const double kMenuButtonWidth = 20.0;
 
 - (void)updateKeyframeControlsVisibility {
   if (_isContextMenuOpen || _isHovered) {
-    _menuButton.layer.backgroundColor =
-        [[[NSColor purpleColor] colorWithAlphaComponent:0.5] CGColor];
+    _menuButton.hidden = NO;
   } else {
-    _menuButton.layer.backgroundColor =
-        [[[NSColor blueColor] colorWithAlphaComponent:0.5] CGColor];
+    _menuButton.hidden = YES;
   }
 }
 
