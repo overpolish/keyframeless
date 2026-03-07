@@ -20,6 +20,7 @@
 #import "NSColor+KKColors.h"
 #include <AppKit/AppKit.h>
 #include <AppKit/NSColor.h>
+#include <AppKit/NSEvent.h>
 #include <CoreFoundation/CFCGTypes.h>
 #include <CoreGraphics/CGEvent.h>
 #include <CoreGraphics/CGEventTypes.h>
@@ -46,22 +47,6 @@ static const int64_t kSimulatedEventMarker = 0x53494D; // "SIM"
   }
 
   [self passThroughMouseEvent:event type:kCGEventLeftMouseDown];
-}
-
-- (void)mouseUp:(NSEvent *)event {
-  [self passThroughMouseEvent:event type:kCGEventLeftMouseUp];
-}
-
-- (void)mouseDragged:(NSEvent *)event {
-  [self passThroughMouseEvent:event type:kCGEventLeftMouseDragged];
-}
-
-- (void)rightMouseDown:(NSEvent *)event {
-  [self passThroughMouseEvent:event type:kCGEventRightMouseDown];
-}
-
-- (void)rightMouseUp:(NSEvent *)event {
-  [self passThroughMouseEvent:event type:kCGEventRightMouseUp];
 }
 
 - (void)passThroughMouseEvent:(NSEvent *)event type:(CGEventType)eventType {
@@ -288,9 +273,9 @@ static const double kMenuButtonWidth = 20.0;
   [self removeMenuDismissalMonitors];
 
   NSEventMask significantEvents =
-      NSEventMaskLeftMouseDown | NSEventTypeRightMouseDown |
-      NSEventTypeOtherMouseDown | NSEventMaskLeftMouseUp |
-      NSEventMaskRightMouseUp | NSEventTypeOtherMouseUp | NSEventMaskKeyDown;
+      NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown |
+      NSEventMaskOtherMouseDown | NSEventMaskLeftMouseUp |
+      NSEventMaskRightMouseUp | NSEventMaskOtherMouseUp | NSEventMaskKeyDown;
 
   __weak typeof(self) weakSelf = self;
   _globalDismissalMonitor = [NSEvent
