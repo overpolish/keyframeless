@@ -16,7 +16,6 @@
  */
 
 #import "KKNativeStyleView.h"
-#include "KKLog.h"
 #import "NSColor+KKColors.h"
 #include <AppKit/AppKit.h>
 #include <AppKit/NSColor.h>
@@ -79,7 +78,8 @@ static const int64_t kSimulatedEventMarker = 0x53494D; // "SIM"
 - (CGPoint)cgPointFromEvent:(NSEvent *)event {
   NSPoint windowPoint = [event locationInWindow];
   NSPoint screenPoint = [[self window] convertPointToScreen:windowPoint];
-  CGFloat screenHeight = NSScreen.mainScreen.frame.size.height;
+  NSScreen *screen = [[self window] screen] ?: [NSScreen mainScreen];
+  CGFloat screenHeight = screen.frame.size.height;
   return CGPointMake(screenPoint.x, screenHeight - screenPoint.y);
 }
 
@@ -127,14 +127,7 @@ static const int64_t kSimulatedEventMarker = 0x53494D; // "SIM"
 @property(nonatomic) BOOL keyframeExists;
 @end
 
-@implementation KKKeyframeDiamondView {
-  KKLog *_log;
-}
-
-- (instancetype)init {
-  _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
-  return self;
-}
+@implementation KKKeyframeDiamondView
 
 - (void)drawRect:(NSRect)dirtyRect {
   [super drawRect:dirtyRect];
@@ -231,7 +224,6 @@ static const double kKeyframeDiamondWidth = 18.0;
   KKEventForwardingView *_controlsRegion;
   KKMenuChevronView *_menuChevron;
   KKKeyframeDiamondView *_keyframeDiamond;
-  KKLog *_log;
 
   id _globalMonitor;
   id _localMonitor;
@@ -247,7 +239,6 @@ static const double kKeyframeDiamondWidth = 18.0;
   if (self) {
     _apiManager = apiManager;
     _parameterId = parameterId;
-    _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
 
     [self setupViews];
     [self setupConstraints];
