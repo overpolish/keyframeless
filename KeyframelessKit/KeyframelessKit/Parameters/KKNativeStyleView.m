@@ -114,8 +114,105 @@ static const int64_t kSimulatedEventMarker = 0x53494D; // "SIM"
 
 @end
 
+@interface UpdateKeyframeButton : NSView
+@property(nonatomic) BOOL keyframeExists;
+@end
+
+@implementation UpdateKeyframeButton
+
+- (void)drawRect:(NSRect)dirtyRect {
+  [super drawRect:dirtyRect];
+
+  CGFloat diamondSize = 10;
+  CGFloat rightMargin = 2.0;
+  CGFloat bottomOffset = 0.5;
+  CGFloat x = self.bounds.size.width - rightMargin - diamondSize;
+  CGFloat y = (self.bounds.size.height - diamondSize) / 2;
+  CGFloat halfSize = diamondSize / 2;
+
+  NSBezierPath *diamond = [self diamondPathWithSize:diamondSize];
+  NSBezierPath *symbol = [self symbolPathWithSize:diamondSize];
+
+  NSAffineTransform *transform = [NSAffineTransform transform];
+  [transform translateXBy:x yBy:y + halfSize + bottomOffset];
+  [diamond transformUsingAffineTransform:transform];
+  [symbol transformUsingAffineTransform:transform];
+
+  if (self.keyframeExists) {
+    [self drawFilledDiamond:diamond withSymbolCutout:symbol];
+  } else {
+    [self drawStrokedDiamond:diamond withSymbol:symbol];
+  }
+}
+
+- (NSBezierPath *)diamondPathWithSize:(CGFloat)size {
+  NSBezierPath *diamond = [NSBezierPath bezierPath];
+  CGFloat halfSize = size / 2;
+
+  // Origin at (0, 0), drawing from left to right for positioning
+  [diamond moveToPoint:NSMakePoint(0, 0)];
+  [diamond lineToPoint:NSMakePoint(halfSize, halfSize)];
+  [diamond lineToPoint:NSMakePoint(size, 0)];
+  [diamond lineToPoint:NSMakePoint(halfSize, -halfSize)];
+  [diamond closePath];
+
+  return diamond;
+}
+
+- (NSBezierPath *)symbolPathWithSize:(CGFloat)diamondSize {
+  NSBezierPath *symbol = [NSBezierPath bezierPath];
+  CGFloat halfSize = diamondSize / 2;
+  CGFloat symbolSize = 2.5;
+
+  if (self.keyframeExists) {
+    [symbol moveToPoint:NSMakePoint(halfSize - symbolSize, 0)];
+    [symbol lineToPoint:NSMakePoint(halfSize + symbolSize, 0)];
+  } else {
+    [symbol moveToPoint:NSMakePoint(halfSize, -symbolSize)];
+    [symbol lineToPoint:NSMakePoint(halfSize, symbolSize)];
+    [symbol moveToPoint:NSMakePoint(halfSize - symbolSize, 0)];
+    [symbol lineToPoint:NSMakePoint(halfSize + symbolSize, 0)];
+  }
+
+  return symbol;
+}
+
+- (void)drawStrokedDiamond:(NSBezierPath *)diamond
+                withSymbol:(NSBezierPath *)symbol {
+  [[NSColor inspectorLabelColor] set];
+  [diamond setLineWidth:1.0];
+  [diamond stroke];
+  [symbol setLineWidth:1.0];
+  [symbol stroke];
+}
+
+- (void)drawFilledDiamond:(NSBezierPath *)diamond
+         withSymbolCutout:(NSBezierPath *)symbol {
+  [[NSColor inspectorLabelColor] set];
+  [diamond fill];
+
+  NSColor *bgColor = self.window.backgroundColor ? self.window.backgroundColor
+                                                 : NSColor.clearColor;
+  [bgColor set];
+  [symbol setLineWidth:1.5];
+  [symbol setLineWidth:1.5];
+  [symbol stroke];
+}
+
+// TODO if no keyframe to start
+// default - stroke only
+
+// TODO if keyframe exists
+// default - filled, minus symbol cutout
+
+@end
+
 static const double kKeyframeControlWidth = 80.0;
 static const double kMenuButtonWidth = 20.0;
+static const double kUpdateKeyframeButtonWidth = 18.0;
+
+// TODO pass in parameter id and fetch if keyframe at time any time press
+// happens in keyframe control region
 
 @implementation KKNativeStyleView {
   BOOL _isHovered;
@@ -125,11 +222,14 @@ static const double kMenuButtonWidth = 20.0;
   NSView *_backgroundView;
   PassthroughView *_keyframeControlsRegion;
   MenuButtonView *_menuButton;
+  UpdateKeyframeButton *_updateKeyframeButton;
   KKLog *_log;
-  // Event monitors to detect menu dismissal
-  id _globalDismissalMonitor;
-  id _localDismissalMonitor;
+
+  id _globalMonitor;
+  id _localMonitor;
   NSInteger _monitorInstallerEventNumber;
+
+  BOOL _isUpdateKeyFramePressed;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect {
@@ -168,7 +268,11 @@ static const double kMenuButtonWidth = 20.0;
   _menuButton.wantsLayer = YES;
   [_keyframeControlsRegion addSubview:_menuButton];
 
-  // TODO add keyframe shape, etc.
+  _updateKeyframeButton =
+      [[UpdateKeyframeButton alloc] initWithFrame:NSZeroRect];
+  _updateKeyframeButton.translatesAutoresizingMaskIntoConstraints = NO;
+  _updateKeyframeButton.wantsLayer = YES;
+  [_keyframeControlsRegion addSubview:_updateKeyframeButton];
 }
 
 - (void)setupConstraints {
@@ -195,9 +299,16 @@ static const double kMenuButtonWidth = 20.0;
     [_menuButton.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
     [_menuButton.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
     [_menuButton.widthAnchor constraintEqualToConstant:kMenuButtonWidth],
-    [_menuButton.heightAnchor constraintEqualToAnchor:self.heightAnchor]
+    [_menuButton.heightAnchor constraintEqualToAnchor:self.heightAnchor],
 
-    // TODO add keyframe shape, etc.
+    [_updateKeyframeButton.trailingAnchor
+        constraintEqualToAnchor:_menuButton.leadingAnchor],
+    [_updateKeyframeButton.centerYAnchor
+        constraintEqualToAnchor:self.centerYAnchor],
+    [_updateKeyframeButton.widthAnchor
+        constraintEqualToConstant:kUpdateKeyframeButtonWidth],
+    [_updateKeyframeButton.heightAnchor
+        constraintEqualToAnchor:self.heightAnchor]
   ]];
 }
 
@@ -205,8 +316,21 @@ static const double kMenuButtonWidth = 20.0;
   __weak typeof(self) weakSelf = self;
   _keyframeControlsRegion.onMouseDown = ^(NSEvent *event) {
     __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (strongSelf) {
+    if (!strongSelf) {
+      return;
+    }
+
+    NSPoint locationInWindow = [event locationInWindow];
+    NSPoint locationInRegion =
+        [strongSelf->_keyframeControlsRegion convertPoint:locationInWindow
+                                                 fromView:nil];
+
+    if ([strongSelf->_menuButton hitTest:locationInRegion]) {
       [strongSelf handleMenuButtonClick:event];
+    } else if ([strongSelf->_updateKeyframeButton hitTest:locationInRegion]) {
+      // Hide keyframe button and let underlying Motion/FCP button handle the
+      // state
+      [strongSelf handleUpdateKeyframeClick:event];
     }
   };
 }
@@ -227,10 +351,36 @@ static const double kMenuButtonWidth = 20.0;
   [self addTrackingArea:trackingArea];
 }
 
+/// Handles hover states when update keyframe button pressed
+- (void)updateSubviewHoverStates:(NSEvent *)event {
+  if (!_isUpdateKeyFramePressed) {
+    return;
+  }
+
+  NSPoint locationInWindow = [event locationInWindow];
+  NSPoint locationInRegion =
+      [_keyframeControlsRegion convertPoint:locationInWindow fromView:nil];
+
+  BOOL updateKeyframeButtonHovered =
+      [_updateKeyframeButton hitTest:locationInRegion];
+
+  if (_isUpdateKeyFramePressed) {
+    // When pressed and hovered Motion/FCP shows own state,
+    // when pressed and not hovered the row hover effect takes over
+    if (updateKeyframeButtonHovered) {
+      _updateKeyframeButton.hidden = YES;
+    } else {
+      _updateKeyframeButton.hidden = NO;
+      _menuButton.hidden = NO;
+    }
+  }
+}
+
 - (void)mouseEntered:(NSEvent *)event {
   if ([NSApp isActive] && !_isContextMenuOpen) {
     _isHovered = YES;
     [self updateKeyframeControlsVisibility];
+    [self updateSubviewHoverStates:event];
   }
 }
 
@@ -238,6 +388,7 @@ static const double kMenuButtonWidth = 20.0;
   if (!_isContextMenuOpen) {
     _isHovered = NO;
     [self updateKeyframeControlsVisibility];
+    [self updateSubviewHoverStates:event];
   }
 }
 
@@ -263,65 +414,103 @@ static const double kMenuButtonWidth = 20.0;
 
   // Wait for current mouse click to complete - avoids monitors reacting to the
   // initial click
+  static const NSTimeInterval kMonitorIgnoreInterval = 0.5;
   dispatch_after(
       dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
       dispatch_get_main_queue(), ^{
-        [self installMenuDismissalMonitors];
+        [self installMonitors:NSEventMaskLeftMouseDown |
+                              NSEventMaskRightMouseDown |
+                              NSEventMaskOtherMouseDown |
+                              NSEventMaskLeftMouseUp | NSEventMaskRightMouseUp |
+                              NSEventMaskOtherMouseUp | NSEventMaskKeyDown
+                 eventHandler:^(NSEvent *event) {
+                   [self closeMenu];
+                 }
+                        delay:kMonitorIgnoreInterval];
       });
 }
 
-- (void)installMenuDismissalMonitors {
-  [self removeMenuDismissalMonitors];
+- (void)handleUpdateKeyframeClick:(NSEvent *)event {
+  if ([self wasSimulatedEvent:event]) {
+    return;
+  }
+
+  if (event.eventNumber == _monitorInstallerEventNumber) {
+    return;
+  }
+
+  _monitorInstallerEventNumber = event.eventNumber;
+  _isHovered = YES;
+  _isUpdateKeyFramePressed = YES;
+  [self updateKeyframeControlsVisibility];
+  [self updateSubviewHoverStates:event];
+
+  dispatch_after(
+      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
+      dispatch_get_main_queue(), ^{
+        [self installMonitors:NSEventMaskLeftMouseUp
+                 eventHandler:^(NSEvent *event) {
+                   _isUpdateKeyFramePressed = NO;
+                   [self updateKeyframeControlsVisibility];
+                 }
+                        delay:0.0];
+      });
+}
+
+- (void)installMonitors:(NSEventMask)eventMasks
+           eventHandler:(void (^)(NSEvent *event))eventHandler
+                  delay:(NSTimeInterval)delay {
+  [self removeMonitors];
 
   NSTimeInterval monitorInstallTime = [NSDate timeIntervalSinceReferenceDate];
-
-  NSEventMask significantEvents =
-      NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown |
-      NSEventMaskOtherMouseDown | NSEventMaskLeftMouseUp |
-      NSEventMaskRightMouseUp | NSEventMaskOtherMouseUp | NSEventMaskKeyDown;
-
   __weak typeof(self) weakSelf = self;
-  _globalDismissalMonitor = [NSEvent
-      addGlobalMonitorForEventsMatchingMask:significantEvents
+
+  _globalMonitor = [NSEvent
+      addGlobalMonitorForEventsMatchingMask:eventMasks
                                     handler:^(NSEvent *event) {
                                       __strong typeof(weakSelf) strongSelf =
                                           weakSelf;
                                       if (strongSelf &&
                                           [strongSelf
-                                              shouldDismissMenuForEvent:event
-                                                            installTime:
-                                                                monitorInstallTime]) {
-                                        [strongSelf closeMenu];
+                                              shouldHandleEvent:event
+                                                    installTime:
+                                                        monitorInstallTime
+                                                          delay:delay]) {
+                                        eventHandler(event);
                                       }
                                     }];
 
-  _localDismissalMonitor = [NSEvent
-      addLocalMonitorForEventsMatchingMask:significantEvents
+  _localMonitor = [NSEvent
+      addLocalMonitorForEventsMatchingMask:eventMasks
                                    handler:^NSEvent *(NSEvent *event) {
                                      __strong typeof(weakSelf) strongSelf =
                                          weakSelf;
                                      if (strongSelf &&
                                          [strongSelf
-                                             shouldDismissMenuForEvent:event
-                                                           installTime:
-                                                               monitorInstallTime]) {
-                                       [strongSelf closeMenu];
+                                             shouldHandleEvent:event
+                                                   installTime:
+                                                       monitorInstallTime
+                                                         delay:delay]) {
+                                       eventHandler(event);
                                      }
                                      return event;
                                    }];
 }
 
-- (BOOL)shouldDismissMenuForEvent:(NSEvent *)event
-                      installTime:(NSTimeInterval)monitorInstallTime {
+- (BOOL)shouldHandleEvent:(NSEvent *)event
+              installTime:(NSTimeInterval)monitorInstallTime
+                    delay:(NSTimeInterval)delay {
   if ([self wasSimulatedEvent:event]) {
     return NO;
   }
 
-  NSTimeInterval timeSinceInstall =
-      [NSDate timeIntervalSinceReferenceDate] - monitorInstallTime;
-  static const NSTimeInterval kMonitorIgnoreInterval = 0.5;
-  if (timeSinceInstall < kMonitorIgnoreInterval && [self isMouseOverView]) {
-    return NO;
+  // If need to wait before handling
+  if (delay > 0.0) {
+    NSTimeInterval timeSinceInstall =
+        [NSDate timeIntervalSinceReferenceDate] - monitorInstallTime;
+    if (timeSinceInstall < delay && [self isMouseOverView]) {
+      return NO;
+    }
   }
 
   return YES;
@@ -344,7 +533,7 @@ static const double kMenuButtonWidth = 20.0;
   _isContextMenuOpen = NO;
   _isHovered = [self isMouseOverView];
   [self updateKeyframeControlsVisibility];
-  [self removeMenuDismissalMonitors];
+  [self removeMonitors];
 }
 
 - (BOOL)isMouseOverView {
@@ -354,275 +543,29 @@ static const double kMenuButtonWidth = 20.0;
   return [self mouse:viewPoint inRect:self.bounds];
 }
 
-- (void)removeMenuDismissalMonitors {
-  if (_globalDismissalMonitor) {
-    [NSEvent removeMonitor:_globalDismissalMonitor];
-    _globalDismissalMonitor = nil;
+- (void)removeMonitors {
+  if (_globalMonitor) {
+    [NSEvent removeMonitor:_globalMonitor];
+    _globalMonitor = nil;
   }
-  if (_localDismissalMonitor) {
-    [NSEvent removeMonitor:_localDismissalMonitor];
-    _localDismissalMonitor = nil;
+  if (_localMonitor) {
+    [NSEvent removeMonitor:_localMonitor];
+    _localMonitor = nil;
   }
 }
 
 - (void)updateKeyframeControlsVisibility {
   if (_isContextMenuOpen || _isHovered) {
     _menuButton.hidden = NO;
+    _updateKeyframeButton.hidden = NO;
   } else {
     _menuButton.hidden = YES;
+    _updateKeyframeButton.hidden = YES;
   }
 }
 
 - (void)dealloc {
-  [self removeMenuDismissalMonitors];
+  [self removeMonitors];
 }
-
-// - (instancetype)initWithFrame:(NSRect)frameRect {
-//   self = [super initWithFrame:frameRect];
-//   if (self) {
-//     // Don't use wantsLayer - use setLayer directly for more control
-//     // CALayer *layer = [CALayer layer];
-//     // layer.frame = self.bounds;
-//     // layer.backgroundColor = [[NSColor clearColor] CGColor];
-//     // layer.opaque = NO;
-//     // layer.masksToBounds = NO;
-
-//     // Key: set the layer BEFORE enabling layer backing
-//     [self setWantsLayer:YES];
-//     self.layer.backgroundColor = [[NSColor clearColor] CGColor];
-//     self.layer.opaque = NO;
-
-//     // This view should not be part of responder chain
-//     self.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-
-//     // [self updateShapes];
-//     // [self setWantsLayer:YES];
-//     // self.layer.backgroundColor = [[NSColor clearColor] CGColor];
-
-//     [self.layer setNeedsDisplay];
-//     // [self updateShapes];
-//     // _isHovered = NO;
-
-//     // [self setWantsLayer:YES];
-//     // _diamondLayer = [CAShapeLayer layer];
-//     // _chevronLayer = [CAShapeLayer layer];
-
-//     // _diamondLayer.actions =
-//     //     @{@"position" : [NSNull null], @"bounds" : [NSNull null]};
-//     // _chevronLayer.actions =
-//     //     @{@"position" : [NSNull null], @"bounds" : [NSNull null]};
-
-//     // if ([_diamondLayer
-//     respondsToSelector:@selector(setHitTestsContents:)]) {
-//     //   [_diamondLayer performSelector:@selector(setHitTestsContents:)
-//     //                       withObject:@NO];
-//     // }
-//     // if ([_chevronLayer
-//     respondsToSelector:@selector(setHitTestsContents:)]) {
-//     //   [_chevronLayer performSelector:@selector(setHitTestsContents:)
-//     //                       withObject:@NO];
-//     // }
-
-//     // [self.layer addSublayer:_diamondLayer];
-//     // [self.layer addSublayer:_chevronLayer];
-
-//     // [self updateShapes];
-
-//     // Adding bg color makes hover work, but then clicks don't go through to
-//     the
-//     // keyframe buttons
-//     // [self setWantsLayer:YES]; self.layer.backgroundColor =
-//     //     [[[NSColor whiteColor] colorWithAlphaComponent:0.001] CGColor];
-//   }
-//   return self;
-// }
-
-// - (BOOL)wantsUpdateLayer {
-//   return YES;
-// }
-
-// - (void)updateLayer {
-//   // Draw into an image and set as layer contents
-//   CGSize size = self.bounds.size;
-//   if (size.width <= 0 || size.height <= 0)
-//     return;
-
-//   CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
-//   CGContextRef ctx = CGBitmapContextCreate(
-//       NULL, (size_t)size.width, (size_t)size.height, 8, (size_t)size.width *
-//       4, colorSpace, kCGImageAlphaPremultipliedFirst);
-//   CGColorSpaceRelease(colorSpace);
-
-//   if (!ctx)
-//     return;
-
-//   CGContextClearRect(ctx, CGRectMake(0, 0, size.width, size.height));
-//   CGContextSetRGBStrokeColor(ctx, 0.5, 0.5, 0.5, 1.0);
-
-//   // Draw diamond
-//   CGFloat diamondSize = 10;
-//   CGFloat rightMargin = 22.0;
-//   CGFloat bottomOffset = 0.5;
-//   CGFloat x = size.width - rightMargin - diamondSize;
-//   CGFloat y = (size.height - diamondSize) / 2;
-//   CGFloat halfSize = diamondSize / 2;
-
-//   CGContextSetLineWidth(ctx, 1.0);
-//   CGContextBeginPath(ctx);
-//   CGContextMoveToPoint(ctx, x, y + bottomOffset);
-//   CGContextAddLineToPoint(ctx, x + halfSize, y + halfSize + bottomOffset);
-//   CGContextAddLineToPoint(ctx, x + diamondSize, y + bottomOffset);
-//   CGContextAddLineToPoint(ctx, x + halfSize, y - halfSize + bottomOffset);
-//   CGContextClosePath(ctx);
-//   CGContextStrokePath(ctx);
-
-//   // Draw chevron
-//   CGFloat chevronWidth = 6.5;
-//   CGFloat chevronHeight = 3.5;
-//   CGFloat chevronRightMargin = 5.5;
-//   CGFloat chevronX = size.width - chevronRightMargin - chevronWidth;
-//   CGFloat chevronY = (size.height - chevronHeight) / 2;
-
-//   CGContextSetLineWidth(ctx, 1.5);
-//   CGContextBeginPath(ctx);
-//   CGContextMoveToPoint(ctx, chevronX, chevronY + chevronHeight +
-//   bottomOffset); CGContextAddLineToPoint(ctx, chevronX + chevronWidth / 2,
-//                           chevronY + bottomOffset);
-//   CGContextAddLineToPoint(ctx, chevronX + chevronWidth,
-//                           chevronY + chevronHeight + bottomOffset);
-//   CGContextStrokePath(ctx);
-
-//   CGImageRef image = CGBitmapContextCreateImage(ctx);
-
-//   // Create a new layer that's NOT the view's layer
-//   CALayer *overlayLayer = [CALayer layer];
-//   overlayLayer.frame = self.bounds;
-//   overlayLayer.contents = (__bridge id)image;
-
-//   // Remove old overlay if exists
-//   [[self.layer.sublayers firstObject] removeFromSuperlayer];
-
-//   [self.layer addSublayer:overlayLayer];
-
-//   CGImageRelease(image);
-//   CGContextRelease(ctx);
-// }
-
-// - (void)layout {
-//   [super layout];
-//   [self.layer setNeedsDisplay];
-// }
-
-// - (BOOL)isOpaque {
-//   return NO;
-// }
-
-// - (NSView *)hitTest:(NSPoint)point {
-//   return nil;
-// }
-
-// mine
-
-// - (void)drawKeyframeDiamond {
-//   CGFloat diamondSize = 10;
-//   CGFloat rightMargin = 22.0;
-//   CGFloat bottomOffset = 0.5;
-//   CGFloat x = self.bounds.size.width - rightMargin - diamondSize;
-//   CGFloat y = (self.bounds.size.height - diamondSize) / 2;
-
-//   NSBezierPath *diamond = [NSBezierPath bezierPath];
-//   CGFloat halfSize = diamondSize / 2;
-
-//   // TODO add a plus in middle and make the the norm - the keyframe outline
-//   // already appears
-//   // Origin at (0, 0), drawing from left to right for positioning
-//   [diamond moveToPoint:NSMakePoint(0, 0)];                // Left
-//   [diamond lineToPoint:NSMakePoint(halfSize, halfSize)];  // Top
-//   [diamond lineToPoint:NSMakePoint(diamondSize, 0)];      // Right
-//   [diamond lineToPoint:NSMakePoint(halfSize, -halfSize)]; // Bottom
-//   [diamond closePath];
-
-//   NSAffineTransform *transform = [NSAffineTransform transform];
-//   [transform translateXBy:x yBy:y + halfSize + bottomOffset];
-//   [diamond transformUsingAffineTransform:transform];
-
-//   // TODO pull into color var
-//   // TODO fill version
-//   [[NSColor inspectorLabelColor] setStroke];
-//   [diamond setLineWidth:1.0];
-//   [diamond stroke];
-// }
-
-// - (void)drawControlChevron {
-//   CGFloat chevronWidth = 6.5;
-//   CGFloat chevronHeight = 3.5;
-//   CGFloat rightMargin = 5.5;
-//   CGFloat bottomOffset = 0.5;
-
-//   CGFloat x = self.bounds.size.width - rightMargin - chevronWidth;
-//   CGFloat y = (self.bounds.size.height - chevronHeight) / 2;
-
-//   NSBezierPath *chevron = [NSBezierPath bezierPath];
-
-//   // Chevron pointing down
-//   [chevron moveToPoint:NSMakePoint(0, chevronHeight)]; // Top left
-//   [chevron lineToPoint:NSMakePoint(chevronWidth / 2, 0)];
-//   [chevron lineToPoint:NSMakePoint(chevronWidth, chevronHeight)]; // Top
-//   right
-
-//   NSAffineTransform *transform = [NSAffineTransform transform];
-//   [transform translateXBy:x yBy:y + bottomOffset];
-//   [chevron transformUsingAffineTransform:transform];
-
-//   // TODO pull into color var
-//   // TODO fill version
-//   [[NSColor inspectorLabelColor] setStroke];
-//   [chevron setLineWidth:1.5];
-//   [chevron stroke];
-// }
-
-// - (void)updateTrackingAreas {
-//   [super updateTrackingAreas];
-
-//   for (NSTrackingArea *area in self.trackingAreas) {
-//     [self removeTrackingArea:area];
-//   }
-
-//   NSTrackingArea *area = [[NSTrackingArea alloc]
-//       initWithRect:self.bounds
-//            options:NSTrackingMouseEnteredAndExited |
-//                    NSTrackingActiveInKeyWindow | NSTrackingInVisibleRect
-//              owner:self
-//           userInfo:nil];
-//   [self addTrackingArea:area];
-// }
-
-// - (void)mouseDown:(NSEvent *)event {
-//   NSPoint windowPoint = [event locationInWindow];
-//   [self.nextResponder mouseDown:event];
-//   [[self window] sendEvent:event];
-// }
-
-// - (void)mouseUp:(NSEvent *)event {
-//   [self.nextResponder mouseUp:event];
-// }
-
-// - (void)mouseDragged:(NSEvent *)event {
-//   [self.nextResponder mouseDragged:event];
-// }
-
-// - (void)mouseEntered:(NSEvent *)event {
-//   _isHovered = YES;
-//   [self setNeedsDisplay:YES];
-// }
-
-// - (void)mouseExited:(NSEvent *)event {
-//   _isHovered = NO;
-//   [self setNeedsDisplay:YES];
-// }
-
-// - (NSView *)hitTest:(NSPoint)point {
-//   return nil;
-// }
 
 @end
