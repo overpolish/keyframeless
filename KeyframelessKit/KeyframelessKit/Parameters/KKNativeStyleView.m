@@ -24,7 +24,10 @@
 #include <CoreFoundation/CFCGTypes.h>
 #include <CoreGraphics/CGEvent.h>
 #include <CoreGraphics/CGEventTypes.h>
+#include <CoreMedia/CMTime.h>
 #include <Foundation/Foundation.h>
+#import <FxPlug/FxPlugSDK.h>
+#include <MacTypes.h>
 #import <QuartzCore/QuartzCore.h>
 #include <objc/NSObjCRuntime.h>
 #include <objc/objc.h>
@@ -118,7 +121,14 @@ static const int64_t kSimulatedEventMarker = 0x53494D; // "SIM"
 @property(nonatomic) BOOL keyframeExists;
 @end
 
-@implementation UpdateKeyframeButton
+@implementation UpdateKeyframeButton {
+  KKLog *_log;
+}
+
+- (instancetype)init {
+  _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
+  return self;
+}
 
 - (void)drawRect:(NSRect)dirtyRect {
   [super drawRect:dirtyRect];
@@ -138,7 +148,7 @@ static const int64_t kSimulatedEventMarker = 0x53494D; // "SIM"
   [diamond transformUsingAffineTransform:transform];
   [symbol transformUsingAffineTransform:transform];
 
-  if (self.keyframeExists) {
+  if (_keyframeExists) {
     [self drawFilledDiamond:diamond withSymbolCutout:symbol];
   } else {
     [self drawStrokedDiamond:diamond withSymbol:symbol];
@@ -190,29 +200,19 @@ static const int64_t kSimulatedEventMarker = 0x53494D; // "SIM"
          withSymbolCutout:(NSBezierPath *)symbol {
   [[NSColor inspectorLabelColor] set];
   [diamond fill];
+  [diamond setLineWidth:1.0];
+  [diamond stroke];
 
-  NSColor *bgColor = self.window.backgroundColor ? self.window.backgroundColor
-                                                 : NSColor.clearColor;
-  [bgColor set];
-  [symbol setLineWidth:1.5];
+  [[NSColor inspectorBackground] set];
   [symbol setLineWidth:1.5];
   [symbol stroke];
 }
-
-// TODO if no keyframe to start
-// default - stroke only
-
-// TODO if keyframe exists
-// default - filled, minus symbol cutout
 
 @end
 
 static const double kKeyframeControlWidth = 80.0;
 static const double kMenuButtonWidth = 20.0;
 static const double kUpdateKeyframeButtonWidth = 18.0;
-
-// TODO pass in parameter id and fetch if keyframe at time any time press
-// happens in keyframe control region
 
 @implementation KKNativeStyleView {
   BOOL _isHovered;
@@ -232,9 +232,13 @@ static const double kUpdateKeyframeButtonWidth = 18.0;
   BOOL _isUpdateKeyFramePressed;
 }
 
-- (instancetype)initWithFrame:(NSRect)frameRect {
+- (instancetype)initWithFrame:(NSRect)frameRect
+                   apiManager:(id<PROAPIAccessing>)apiManager
+                  parameterId:(UInt32)parameterId {
   self = [super initWithFrame:frameRect];
   if (self) {
+    _apiManager = apiManager;
+    _parameterId = parameterId;
     _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
 
     [self setupViews];
@@ -244,6 +248,31 @@ static const double kUpdateKeyframeButtonWidth = 18.0;
     [self updateKeyframeControlsVisibility];
   }
   return self;
+}
+
+- (void)drawRect:(NSRect)dirtyRect {
+  // drawRect runs anytime play head moves, keyframe is added/removed, etc
+  [super drawRect:dirtyRect];
+
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+
+  CMTime currentTime = [actionAPI currentTime];
+  id<FxKeyframeAPI_v3> keyframeAPI =
+      [_apiManager apiForProtocol:@protocol(FxKeyframeAPI_v3)];
+
+  BOOL hasKeyframe = NO;
+  [keyframeAPI parameter:_parameterId
+                 channel:0
+             hasKeyframe:&hasKeyframe
+                  atTime:currentTime];
+
+  _updateKeyframeButton.keyframeExists = hasKeyframe;
+
+  [actionAPI endAction:self];
+
+  [_updateKeyframeButton setNeedsDisplay:YES];
 }
 
 - (void)setupViews {
