@@ -95,7 +95,7 @@
     KKCustomGroupHeaderView *view = [[KKCustomGroupHeaderView alloc]
         initWithFrame:NSMakeRect(0, 0, 100.0, height)
            apiManager:self.apiManager
-                label:@"Radius"];
+          parameterId:13];
 
     view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     return view;

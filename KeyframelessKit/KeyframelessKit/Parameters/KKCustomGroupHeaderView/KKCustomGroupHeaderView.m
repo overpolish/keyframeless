@@ -31,7 +31,6 @@
 // static const CGFloat kFCPMaxDivider = 184.0;
 
 @interface KKCustomGroupHeaderView ()
-@property(nonatomic, strong) id<PROAPIAccessing> apiManager;
 @property(nonatomic, strong) KKNumberField *numberField;
 @property(nonatomic, assign) CGFloat currentChevronRotation;
 @end
@@ -40,41 +39,43 @@
   KKLog *log;
 }
 
-- (instancetype)initWithFrame:(NSRect)frame
-                   apiManager:(id<PROAPIAccessing>)apiManager
-                        label:(NSString *)label {
-  self = [super initWithFrame:frame];
-  if (self) {
-    self.apiManager = apiManager;
-    // self.currentChevronRotation = 90.0;
-    log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
+// - (instancetype)initWithFrame:(NSRect)frame
+//                    apiManager:(id<PROAPIAccessing>)apiManager
+//                   parameterId:(UInt32)parameterId
+//                         label:(NSString *)label {
+//   self = [super initWithFrame:frame];
+//   if (self) {
+//     self.apiManager = apiManager;
+//     // self.currentChevronRotation = 90.0;
+//     log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
 
-    // [self addSubview:self.chevronButton];
+//     // [self addSubview:self.chevronButton];
 
-    //  [self createLabelField:label];
-    // self.labelField.translatesAutoresizingMaskIntoConstraints = NO;
-    // [self addSubview:self.labelField];
+//     //  [self createLabelField:label];
+//     // self.labelField.translatesAutoresizingMaskIntoConstraints = NO;
+//     // [self addSubview:self.labelField];
 
-    // self.customView = customView;
-    // if (customView) {
-    //   customView.translatesAutoresizingMaskIntoConstraints = NO;
-    //   [self addSubview:customView];
+//     // self.customView = customView;
+//     // if (customView) {
+//     //   customView.translatesAutoresizingMaskIntoConstraints = NO;
+//     //   [self addSubview:customView];
 
-    //   CGFloat nfWidth = [KKNumberField preferredWidth];
-    //   CGFloat nfHeight = [KKNumberField preferredHeight];
-    //   self.numberField = [[KKNumberField alloc]
-    //       initWithFrame:NSMakeRect(0, 0, nfWidth, nfHeight)
-    //          apiManager:apiManager];
-    //   self.numberField.translatesAutoresizingMaskIntoConstraints = NO;
-    //   [self addSubview:self.numberField];
-    //   // Set the initial frame now; setFrameSize: keeps it updated from here
-    //   on. [self positionNumberFieldForSize:frame.size];
-    // }
+//     //   CGFloat nfWidth = [KKNumberField preferredWidth];
+//     //   CGFloat nfHeight = [KKNumberField preferredHeight];
+//     //   self.numberField = [[KKNumberField alloc]
+//     //       initWithFrame:NSMakeRect(0, 0, nfWidth, nfHeight)
+//     //          apiManager:apiManager];
+//     //   self.numberField.translatesAutoresizingMaskIntoConstraints = NO;
+//     //   [self addSubview:self.numberField];
+//     //   // Set the initial frame now; setFrameSize: keeps it updated from
+//     here
+//     //   on. [self positionNumberFieldForSize:frame.size];
+//     // }
 
-    // [self setupConstraints];
-  }
-  return self;
-}
+//     // [self setupConstraints];
+//   }
+//   return self;
+// }
 
 - (void)drawContent:(NSRect)dirtyRect {
   // TODO draw triangle, label, etc

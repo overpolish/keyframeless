@@ -21,6 +21,6 @@ CompileFlags:
 # 1. Copy this file to .clangd
 # 2. Replace <PATH_TO_REPO> with the absolute path to your local clone, e.g. /Users/you/coding/keyframeless
 # 3. Replace <DERIVED_DATA> with the DerivedData path for this project, e.g.:
-#    ~/Library/Developer/Xcode/DerivedData/Keyframeless-<hash>/
+#    /Users/you/Library/Developer/Xcode/DerivedData/Keyframeless-<hash>/
 #    Find it in Xcode: File > Project Settings > Derived Data, or run:
-#    ls ~/Library/Developer/Xcode/DerivedData/ | grep Keyframeless
+#    ls /Users/you/Library/Developer/Xcode/DerivedData/ | grep Keyframeless
