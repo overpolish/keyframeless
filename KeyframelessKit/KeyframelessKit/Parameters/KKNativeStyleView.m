@@ -38,21 +38,23 @@
 
 static const int64_t kSimulatedEventMarker = 0x53494D; // "SIM"
 
-@interface PassthroughView : NSView
+/// Intercepts mouse clicks and re-posts them as CGEvents so the underlying
+/// host app view (hidden beneath this overlay) can receive them.
+@interface KKEventForwardingView : NSView
 @property(nonatomic, copy) void (^onMouseDown)(NSEvent *event);
 @end
 
-@implementation PassthroughView
+@implementation KKEventForwardingView
 
 - (void)mouseDown:(NSEvent *)event {
   if (self.onMouseDown) {
     self.onMouseDown(event);
   }
 
-  [self passThroughMouseEvent:event type:kCGEventLeftMouseDown];
+  [self forwardMouseEvent:event type:kCGEventLeftMouseDown];
 }
 
-- (void)passThroughMouseEvent:(NSEvent *)event type:(CGEventType)eventType {
+- (void)forwardMouseEvent:(NSEvent *)event type:(CGEventType)eventType {
   self.hidden = YES;
 
   CGPoint mouseCursorPosition = [self cgPointFromEvent:event];
@@ -83,10 +85,11 @@ static const int64_t kSimulatedEventMarker = 0x53494D; // "SIM"
 
 @end
 
-@interface MenuButtonView : NSView
+/// Draws a downward-pointing chevron to indicate a menu is available.
+@interface KKMenuChevronView : NSView
 @end
 
-@implementation MenuButtonView
+@implementation KKMenuChevronView
 
 - (void)drawRect:(NSRect)dirtyRect {
   [super drawRect:dirtyRect];
@@ -117,11 +120,14 @@ static const int64_t kSimulatedEventMarker = 0x53494D; // "SIM"
 
 @end
 
-@interface UpdateKeyframeButton : NSView
+/// Draws a diamond-shaped keyframe indicator.
+/// Shows an outlined diamond with a + when no keyframe exists at the current
+/// time, and a filled diamond with a − when one does.
+@interface KKKeyframeDiamondView : NSView
 @property(nonatomic) BOOL keyframeExists;
 @end
 
-@implementation UpdateKeyframeButton {
+@implementation KKKeyframeDiamondView {
   KKLog *_log;
 }
 
@@ -175,9 +181,11 @@ static const int64_t kSimulatedEventMarker = 0x53494D; // "SIM"
   CGFloat symbolSize = 2.5;
 
   if (self.keyframeExists) {
+    // Dash: remove/update keyframe
     [symbol moveToPoint:NSMakePoint(halfSize - symbolSize, 0)];
     [symbol lineToPoint:NSMakePoint(halfSize + symbolSize, 0)];
   } else {
+    // Plus: add keyframe
     [symbol moveToPoint:NSMakePoint(halfSize, -symbolSize)];
     [symbol lineToPoint:NSMakePoint(halfSize, symbolSize)];
     [symbol moveToPoint:NSMakePoint(halfSize - symbolSize, 0)];
@@ -211,8 +219,8 @@ static const int64_t kSimulatedEventMarker = 0x53494D; // "SIM"
 @end
 
 static const double kKeyframeControlWidth = 80.0;
-static const double kMenuButtonWidth = 20.0;
-static const double kUpdateKeyframeButtonWidth = 18.0;
+static const double kMenuChevronWidth = 20.0;
+static const double kKeyframeDiamondWidth = 18.0;
 
 @implementation KKNativeStyleView {
   BOOL _isHovered;
@@ -220,16 +228,16 @@ static const double kUpdateKeyframeButtonWidth = 18.0;
   // we are in ViewBridge Jail - we can only guess
   BOOL _isContextMenuOpen;
   NSView *_backgroundView;
-  PassthroughView *_keyframeControlsRegion;
-  MenuButtonView *_menuButton;
-  UpdateKeyframeButton *_updateKeyframeButton;
+  KKEventForwardingView *_controlsRegion;
+  KKMenuChevronView *_menuChevron;
+  KKKeyframeDiamondView *_keyframeDiamond;
   KKLog *_log;
 
   id _globalMonitor;
   id _localMonitor;
   NSInteger _monitorInstallerEventNumber;
 
-  BOOL _isUpdateKeyFramePressed;
+  BOOL _isKeyframeDiamondPressed;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect
@@ -245,7 +253,7 @@ static const double kUpdateKeyframeButtonWidth = 18.0;
     [self setupConstraints];
     [self setupEventHandlers];
 
-    [self updateKeyframeControlsVisibility];
+    [self updateControlsVisibility];
   }
   return self;
 }
@@ -253,7 +261,10 @@ static const double kUpdateKeyframeButtonWidth = 18.0;
 - (void)drawRect:(NSRect)dirtyRect {
   // drawRect runs anytime play head moves, keyframe is added/removed, etc
   [super drawRect:dirtyRect];
+  [self refreshKeyframeState];
+}
 
+- (void)refreshKeyframeState {
   id<FxCustomParameterActionAPI_v4> actionAPI =
       [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actionAPI startAction:self];
@@ -268,11 +279,11 @@ static const double kUpdateKeyframeButtonWidth = 18.0;
              hasKeyframe:&hasKeyframe
                   atTime:currentTime];
 
-  _updateKeyframeButton.keyframeExists = hasKeyframe;
+  _keyframeDiamond.keyframeExists = hasKeyframe;
 
   [actionAPI endAction:self];
 
-  [_updateKeyframeButton setNeedsDisplay:YES];
+  [_keyframeDiamond setNeedsDisplay:YES];
 }
 
 - (void)setupViews {
@@ -282,26 +293,25 @@ static const double kUpdateKeyframeButtonWidth = 18.0;
   _backgroundView.layer.backgroundColor = [[NSColor redColor] CGColor];
   [self addSubview:_backgroundView];
 
-  _keyframeControlsRegion = [[PassthroughView alloc] initWithFrame:NSZeroRect];
-  _keyframeControlsRegion.translatesAutoresizingMaskIntoConstraints = NO;
-  _keyframeControlsRegion.wantsLayer = YES;
+  _controlsRegion = [[KKEventForwardingView alloc] initWithFrame:NSZeroRect];
+  _controlsRegion.translatesAutoresizingMaskIntoConstraints = NO;
+  _controlsRegion.wantsLayer = YES;
   // Effectively clearColor - using clearColor directly causes this NSView to no
   // longer participate in tracking events as all internal content is hidden
   // initially. Adding a pseudo-clear color keeps the view 'alive'
-  _keyframeControlsRegion.layer.backgroundColor =
+  _controlsRegion.layer.backgroundColor =
       [[[NSColor whiteColor] colorWithAlphaComponent:0.001] CGColor];
-  [self addSubview:_keyframeControlsRegion];
+  [self addSubview:_controlsRegion];
 
-  _menuButton = [[MenuButtonView alloc] initWithFrame:NSZeroRect];
-  _menuButton.translatesAutoresizingMaskIntoConstraints = NO;
-  _menuButton.wantsLayer = YES;
-  [_keyframeControlsRegion addSubview:_menuButton];
+  _menuChevron = [[KKMenuChevronView alloc] initWithFrame:NSZeroRect];
+  _menuChevron.translatesAutoresizingMaskIntoConstraints = NO;
+  _menuChevron.wantsLayer = YES;
+  [_controlsRegion addSubview:_menuChevron];
 
-  _updateKeyframeButton =
-      [[UpdateKeyframeButton alloc] initWithFrame:NSZeroRect];
-  _updateKeyframeButton.translatesAutoresizingMaskIntoConstraints = NO;
-  _updateKeyframeButton.wantsLayer = YES;
-  [_keyframeControlsRegion addSubview:_updateKeyframeButton];
+  _keyframeDiamond = [[KKKeyframeDiamondView alloc] initWithFrame:NSZeroRect];
+  _keyframeDiamond.translatesAutoresizingMaskIntoConstraints = NO;
+  _keyframeDiamond.wantsLayer = YES;
+  [_controlsRegion addSubview:_keyframeDiamond];
 }
 
 - (void)setupConstraints {
@@ -316,34 +326,30 @@ static const double kUpdateKeyframeButtonWidth = 18.0;
         constraintEqualToAnchor:self.trailingAnchor
                        constant:-kKeyframeControlWidth],
 
-    [_keyframeControlsRegion.leadingAnchor
+    [_controlsRegion.leadingAnchor
         constraintEqualToAnchor:_backgroundView.trailingAnchor],
-    [_keyframeControlsRegion.trailingAnchor
+    [_controlsRegion.trailingAnchor
         constraintEqualToAnchor:self.trailingAnchor],
-    [_keyframeControlsRegion.centerYAnchor
-        constraintEqualToAnchor:self.centerYAnchor],
-    [_keyframeControlsRegion.heightAnchor
-        constraintEqualToAnchor:self.heightAnchor],
+    [_controlsRegion.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    [_controlsRegion.heightAnchor constraintEqualToAnchor:self.heightAnchor],
 
-    [_menuButton.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-    [_menuButton.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-    [_menuButton.widthAnchor constraintEqualToConstant:kMenuButtonWidth],
-    [_menuButton.heightAnchor constraintEqualToAnchor:self.heightAnchor],
+    [_menuChevron.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+    [_menuChevron.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    [_menuChevron.widthAnchor constraintEqualToConstant:kMenuChevronWidth],
+    [_menuChevron.heightAnchor constraintEqualToAnchor:self.heightAnchor],
 
-    [_updateKeyframeButton.trailingAnchor
-        constraintEqualToAnchor:_menuButton.leadingAnchor],
-    [_updateKeyframeButton.centerYAnchor
-        constraintEqualToAnchor:self.centerYAnchor],
-    [_updateKeyframeButton.widthAnchor
-        constraintEqualToConstant:kUpdateKeyframeButtonWidth],
-    [_updateKeyframeButton.heightAnchor
-        constraintEqualToAnchor:self.heightAnchor]
+    [_keyframeDiamond.trailingAnchor
+        constraintEqualToAnchor:_menuChevron.leadingAnchor],
+    [_keyframeDiamond.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    [_keyframeDiamond.widthAnchor
+        constraintEqualToConstant:kKeyframeDiamondWidth],
+    [_keyframeDiamond.heightAnchor constraintEqualToAnchor:self.heightAnchor]
   ]];
 }
 
 - (void)setupEventHandlers {
   __weak typeof(self) weakSelf = self;
-  _keyframeControlsRegion.onMouseDown = ^(NSEvent *event) {
+  _controlsRegion.onMouseDown = ^(NSEvent *event) {
     __strong typeof(weakSelf) strongSelf = weakSelf;
     if (!strongSelf) {
       return;
@@ -351,15 +357,14 @@ static const double kUpdateKeyframeButtonWidth = 18.0;
 
     NSPoint locationInWindow = [event locationInWindow];
     NSPoint locationInRegion =
-        [strongSelf->_keyframeControlsRegion convertPoint:locationInWindow
-                                                 fromView:nil];
+        [strongSelf->_controlsRegion convertPoint:locationInWindow
+                                         fromView:nil];
 
-    if ([strongSelf->_menuButton hitTest:locationInRegion]) {
-      [strongSelf handleMenuButtonClick:event];
-    } else if ([strongSelf->_updateKeyframeButton hitTest:locationInRegion]) {
-      // Hide keyframe button and let underlying Motion/FCP button handle the
-      // state
-      [strongSelf handleUpdateKeyframeClick:event];
+    if ([strongSelf->_menuChevron hitTest:locationInRegion]) {
+      [strongSelf handleMenuChevronClick:event];
+    } else if ([strongSelf->_keyframeDiamond hitTest:locationInRegion]) {
+      // Hide diamond and let the underlying Motion/FCP button handle state
+      [strongSelf handleKeyframeDiamondClick:event];
     }
   };
 }
@@ -380,48 +385,46 @@ static const double kUpdateKeyframeButtonWidth = 18.0;
   [self addTrackingArea:trackingArea];
 }
 
-/// Handles hover states when update keyframe button pressed
-- (void)updateSubviewHoverStates:(NSEvent *)event {
-  if (!_isUpdateKeyFramePressed) {
+/// Updates the diamond's visibility while it is held pressed.
+/// When pressed and hovering over the diamond, the host app shows its own
+/// state so we hide ours. When pressed but cursor moves away, the row hover
+/// effect takes over and we show both controls again.
+- (void)updateKeyframeDiamondHoverState:(NSEvent *)event {
+  if (!_isKeyframeDiamondPressed) {
     return;
   }
 
   NSPoint locationInWindow = [event locationInWindow];
-  NSPoint locationInRegion =
-      [_keyframeControlsRegion convertPoint:locationInWindow fromView:nil];
+  NSPoint locationInRegion = [_controlsRegion convertPoint:locationInWindow
+                                                  fromView:nil];
 
-  BOOL updateKeyframeButtonHovered =
-      [_updateKeyframeButton hitTest:locationInRegion];
+  BOOL diamondHovered = [_keyframeDiamond hitTest:locationInRegion];
 
-  if (_isUpdateKeyFramePressed) {
-    // When pressed and hovered Motion/FCP shows own state,
-    // when pressed and not hovered the row hover effect takes over
-    if (updateKeyframeButtonHovered) {
-      _updateKeyframeButton.hidden = YES;
-    } else {
-      _updateKeyframeButton.hidden = NO;
-      _menuButton.hidden = NO;
-    }
+  if (diamondHovered) {
+    _keyframeDiamond.hidden = YES;
+  } else {
+    _keyframeDiamond.hidden = NO;
+    _menuChevron.hidden = NO;
   }
 }
 
 - (void)mouseEntered:(NSEvent *)event {
   if ([NSApp isActive] && !_isContextMenuOpen) {
     _isHovered = YES;
-    [self updateKeyframeControlsVisibility];
-    [self updateSubviewHoverStates:event];
+    [self updateControlsVisibility];
+    [self updateKeyframeDiamondHoverState:event];
   }
 }
 
 - (void)mouseExited:(NSEvent *)event {
   if (!_isContextMenuOpen) {
     _isHovered = NO;
-    [self updateKeyframeControlsVisibility];
-    [self updateSubviewHoverStates:event];
+    [self updateControlsVisibility];
+    [self updateKeyframeDiamondHoverState:event];
   }
 }
 
-- (void)handleMenuButtonClick:(NSEvent *)event {
+- (void)handleMenuChevronClick:(NSEvent *)event {
   if ([self wasSimulatedEvent:event]) {
     return;
   }
@@ -439,11 +442,10 @@ static const double kUpdateKeyframeButtonWidth = 18.0;
   _monitorInstallerEventNumber = event.eventNumber;
   _isContextMenuOpen = YES;
   _isHovered = YES;
-  [self updateKeyframeControlsVisibility];
+  [self updateControlsVisibility];
 
   // Wait for current mouse click to complete - avoids monitors reacting to the
   // initial click
-  static const NSTimeInterval kMonitorIgnoreInterval = 0.5;
   dispatch_after(
       dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
       dispatch_get_main_queue(), ^{
@@ -455,11 +457,11 @@ static const double kUpdateKeyframeButtonWidth = 18.0;
                  eventHandler:^(NSEvent *event) {
                    [self closeMenu];
                  }
-                        delay:kMonitorIgnoreInterval];
+                        delay:0.5];
       });
 }
 
-- (void)handleUpdateKeyframeClick:(NSEvent *)event {
+- (void)handleKeyframeDiamondClick:(NSEvent *)event {
   if ([self wasSimulatedEvent:event]) {
     return;
   }
@@ -470,17 +472,17 @@ static const double kUpdateKeyframeButtonWidth = 18.0;
 
   _monitorInstallerEventNumber = event.eventNumber;
   _isHovered = YES;
-  _isUpdateKeyFramePressed = YES;
-  [self updateKeyframeControlsVisibility];
-  [self updateSubviewHoverStates:event];
+  _isKeyframeDiamondPressed = YES;
+  [self updateControlsVisibility];
+  [self updateKeyframeDiamondHoverState:event];
 
   dispatch_after(
       dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
       dispatch_get_main_queue(), ^{
         [self installMonitors:NSEventMaskLeftMouseUp
                  eventHandler:^(NSEvent *event) {
-                   _isUpdateKeyFramePressed = NO;
-                   [self updateKeyframeControlsVisibility];
+                   _isKeyframeDiamondPressed = NO;
+                   [self updateControlsVisibility];
                  }
                         delay:0.0];
       });
@@ -557,11 +559,11 @@ static const double kUpdateKeyframeButtonWidth = 18.0;
   return NO;
 }
 
-/// Mark menu as closed, update state and relevant UI.
+/// Marks the menu as closed, updates state and relevant UI.
 - (void)closeMenu {
   _isContextMenuOpen = NO;
   _isHovered = [self isMouseOverView];
-  [self updateKeyframeControlsVisibility];
+  [self updateControlsVisibility];
   [self removeMonitors];
 }
 
@@ -583,14 +585,10 @@ static const double kUpdateKeyframeButtonWidth = 18.0;
   }
 }
 
-- (void)updateKeyframeControlsVisibility {
-  if (_isContextMenuOpen || _isHovered) {
-    _menuButton.hidden = NO;
-    _updateKeyframeButton.hidden = NO;
-  } else {
-    _menuButton.hidden = YES;
-    _updateKeyframeButton.hidden = YES;
-  }
+- (void)updateControlsVisibility {
+  BOOL visible = _isContextMenuOpen || _isHovered;
+  _menuChevron.hidden = !visible;
+  _keyframeDiamond.hidden = !visible;
 }
 
 - (void)dealloc {
