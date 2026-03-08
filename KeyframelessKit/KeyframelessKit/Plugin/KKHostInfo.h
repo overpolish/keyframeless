@@ -4,6 +4,7 @@
 //
 // Created by Dom on 02/03/2026.
 //
+#pragma once
 
 #import <Foundation/Foundation.h>
 
