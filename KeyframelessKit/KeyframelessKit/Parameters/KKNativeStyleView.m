@@ -440,13 +440,15 @@ static const double kKeyframeDiamondWidth = 18.0;
   dispatch_after(
       dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
       dispatch_get_main_queue(), ^{
+        __weak typeof(self) weakSelf = self;
         [self installMonitors:NSEventMaskLeftMouseDown |
                               NSEventMaskRightMouseDown |
                               NSEventMaskOtherMouseDown |
                               NSEventMaskLeftMouseUp | NSEventMaskRightMouseUp |
                               NSEventMaskOtherMouseUp | NSEventMaskKeyDown
                  eventHandler:^(NSEvent *event) {
-                   [self closeMenu];
+                   __strong typeof(weakSelf) strongSelf = weakSelf;
+                   [strongSelf closeMenu];
                  }
                         delay:0.5];
       });
@@ -470,10 +472,13 @@ static const double kKeyframeDiamondWidth = 18.0;
   dispatch_after(
       dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
       dispatch_get_main_queue(), ^{
+        __weak typeof(self) weakSelf = self;
         [self installMonitors:NSEventMaskLeftMouseUp
                  eventHandler:^(NSEvent *event) {
+                   __strong typeof(weakSelf) strongSelf = weakSelf;
+
                    _isKeyframeDiamondPressed = NO;
-                   [self updateControlsVisibility];
+                   [strongSelf updateControlsVisibility];
                  }
                         delay:0.0];
       });
