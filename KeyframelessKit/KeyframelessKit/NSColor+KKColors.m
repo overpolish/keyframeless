@@ -7,7 +7,6 @@
 
 #import "KKHostInfo.h"
 #import "NSColor+KKColors.h"
-#import <AppKit/NSColor.h>
 
 @implementation NSColor (KKColors)
 

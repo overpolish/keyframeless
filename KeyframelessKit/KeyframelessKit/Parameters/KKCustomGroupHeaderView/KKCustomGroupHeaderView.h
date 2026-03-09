@@ -5,9 +5,8 @@
 //  Created by Dom on 27/02/2026.
 //
 #pragma once
-#import <KeyframelessKit/KKNativeStyleView.h>
 #import <Cocoa/Cocoa.h>
-#import <MacTypes.h>
+#import <KeyframelessKit/KKNativeStyleView.h>
 
 NS_ASSUME_NONNULL_BEGIN
 

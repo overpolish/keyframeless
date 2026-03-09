@@ -6,7 +6,6 @@
 //
 
 #import "KKArcOSC.h"
-#import "KKOSCShaderTypes.h"
 #import "KKRenderHelpers.h"
 #import <FxPlug/FxPlugSDK.h>
 

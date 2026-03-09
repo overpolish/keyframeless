@@ -7,7 +7,6 @@
 //  width, suffix zone width, and the focus ring panel padding.
 //
 #pragma once
-#import <CoreFoundation/CFCGTypes.h>
 #import <CoreGraphics/CoreGraphics.h>
 
 // Height of the editable field area
