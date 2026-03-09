@@ -18,8 +18,8 @@ CompileFlags:
     - -I<PATH_TO_REPO>/KeyframelessKit/KeyframelessKit/Plugin
   
 ---
-# Treat Metal shader files as C++ to prevent obj-c trying to compile them.
-# We want Metal to be associated to obj-c for formatting with clangd
+# Treat Metal shader files as C++ (closest grammar approximation for clangd formatting).
+# Note: actual compilation is handled by Xcode via xcrun metal, not clangd.
 If:
   PathMatch: .*\.metal
 CompileFlags:
