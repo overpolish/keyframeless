@@ -1,15 +1,13 @@
-//
-//  KKOnScreenControl.m
-//  KeyframelessKit
-//
-//  Created by Dom on 25/02/2026.
-//
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
 
 #import "KKOnScreenControl.h"
-#import "KKColors.h"
-#import "KKMetalDeviceCache.h"
-#import "KKRenderHelpers.h"
 #import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KKColors.h>
+#import <KeyframelessKit/KKMetalDeviceCache.h>
+#import <KeyframelessKit/KKRenderHelpers.h>
 
 @interface KKOnScreenControl () <FxOnScreenControl_v4>
 @end

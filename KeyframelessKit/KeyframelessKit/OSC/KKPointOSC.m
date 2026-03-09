@@ -1,16 +1,14 @@
-//
-//  KKPointOSC.m
-//  KeyframelessKit
-//
-//  Created by Dom on 26/02/2026.
-//
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
 
 #import "KKPointOSC.h"
-#import "KKColors.h"
-#import "KKMetalDeviceCache.h"
-#import "KKOSCShaderTypes.h"
-#import "KKRenderHelpers.h"
 #import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KKColors.h>
+#import <KeyframelessKit/KKMetalDeviceCache.h>
+#import <KeyframelessKit/KKOSCShaderTypes.h>
+#import <KeyframelessKit/KKRenderHelpers.h>
 
 static NSString *kPointOSCPluginID = @"co.overpolish.keyframelesskit.PointOSC";
 

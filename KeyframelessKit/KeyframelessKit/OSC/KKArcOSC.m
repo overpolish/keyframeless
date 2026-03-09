@@ -1,13 +1,11 @@
-//
-//  KKArcOSC.m
-//  KeyframelessKit
-//
-//  Created by Dom on 25/02/2026.
-//
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
 
 #import "KKArcOSC.h"
-#import "KKRenderHelpers.h"
 #import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KKRenderHelpers.h>
 
 @implementation KKArcOSC
 

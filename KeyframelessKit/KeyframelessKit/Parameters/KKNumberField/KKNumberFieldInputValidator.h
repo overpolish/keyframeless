@@ -1,10 +1,10 @@
-//
-//  KKNumberFieldInputValidator.h
-//  KeyframelessKit
-//
-//  Stateless validator for live numeric text input in KKNumberField.
-//
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 #pragma once
+
 #import <Foundation/Foundation.h>
 
 NS_ASSUME_NONNULL_BEGIN

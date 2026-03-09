@@ -1,10 +1,10 @@
-//
-//  NSColor+KKColors.h
-//  KeyframelessKit
-//
-//  Created by Dom on 04/03/2026.
-//
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 #pragma once
+
 #import <AppKit/AppKit.h>
 
 @interface NSColor (KKColors)
