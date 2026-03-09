@@ -6,11 +6,11 @@
 //
 
 #import "KKPointOSC.h"
-#import "KKColors.h"
-#import "KKMetalDeviceCache.h"
-#import "KKOSCShaderTypes.h"
-#import "KKRenderHelpers.h"
 #import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KKColors.h>
+#import <KeyframelessKit/KKMetalDeviceCache.h>
+#import <KeyframelessKit/KKOSCShaderTypes.h>
+#import <KeyframelessKit/KKRenderHelpers.h>
 
 static NSString *kPointOSCPluginID = @"co.overpolish.keyframelesskit.PointOSC";
 

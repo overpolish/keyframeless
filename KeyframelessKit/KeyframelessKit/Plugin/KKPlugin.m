@@ -6,10 +6,10 @@
 //
 
 #import "KKPlugin.h"
-#import "KKHostInfo.h"
-#import "KKMetalDeviceCache.h"
-#import "KKRenderHelpers.h"
 #import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KKHostInfo.h>
+#import <KeyframelessKit/KKMetalDeviceCache.h>
+#import <KeyframelessKit/KKRenderHelpers.h>
 
 @interface KKPrincipalDelegate : NSObject <FxPrincipalDelegate>
 + (instancetype)shared;
