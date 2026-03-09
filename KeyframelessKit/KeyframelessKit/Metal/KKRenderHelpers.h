@@ -4,7 +4,7 @@
 //
 //  Created by Dom on 24/02/2026.
 //
-
+#pragma once
 #import <CoreGraphics/CoreGraphics.h>
 #import <Foundation/Foundation.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>

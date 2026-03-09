@@ -6,7 +6,6 @@
 //
 
 #import "OSC.h"
-#import "KeyframelessKit/KeyframelessKit.h"
 #import <FxPlug/FxPlugSDK.h>
 
 #define CLAMP(x, lo, hi) MAX((lo), MIN((hi), (x)))

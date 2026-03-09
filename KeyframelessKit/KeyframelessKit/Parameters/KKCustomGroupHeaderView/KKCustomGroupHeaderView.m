@@ -7,11 +7,8 @@
 
 #import "KKCustomGroupHeaderView.h"
 #import "KKHostInfo.h"
-#include "KKLog.h"
+#import "KKLog.h"
 #import "KKNumberField.h"
-#import <AppKit/AppKit.h>
-#import <CoreFoundation/CFCGTypes.h>
-#include <Foundation/Foundation.h>
 #import <FxPlug/FxPlugSDK.h>
 
 #pragma mark - Layout Constants

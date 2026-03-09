@@ -6,7 +6,6 @@
 //
 
 #import "KKSliderView.h"
-#include <Foundation/Foundation.h>
 
 #pragma mark - Constants
 
