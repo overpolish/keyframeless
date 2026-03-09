@@ -1,10 +1,10 @@
-//
-//  KKRenderHelpers.h
-//  KeyframelessKit
-//
-//  Created by Dom on 24/02/2026.
-//
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 #pragma once
+
 #import <CoreGraphics/CoreGraphics.h>
 #import <Foundation/Foundation.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>

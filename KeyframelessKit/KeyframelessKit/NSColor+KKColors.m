@@ -1,9 +1,7 @@
-//
-//  NSColor+KKColors.m
-//  KeyframelessKit
-//
-//  Created by Dom on 04/03/2026.
-//
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
 
 #import "NSColor+KKColors.h"
 #import <KeyframelessKit/KKHostInfo.h>
