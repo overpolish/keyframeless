@@ -4,10 +4,7 @@
 //
 //  Created by Dom on 26/02/2026.
 //
-
-#ifndef KKOSCShaderTypes_h
-#define KKOSCShaderTypes_h
-
+#pragma once
 #import <simd/simd.h>
 
 typedef enum KKOSCFragmentIndex { KKOSCFragmentIndex_DrawColor = 0 } KKOSCFragmentIndex;
@@ -26,6 +23,9 @@ typedef struct KKPointOSCParams {
 } KKPointOSCParams;
 
 #ifdef __METAL_VERSION__
+
+#include <metal_stdlib>
+using namespace metal;
 
 /// Returns a smooth 0-1 alpha for a signed distance field edge.
 /// signedDist > 0 = inside, signedDist < 0 = outside.
@@ -57,5 +57,3 @@ inline float4 kkOSCColor(float4 fillColor, float4 outlineColor, float outlineFac
 }
 
 #endif
-
-#endif /* KKOSCShaderTypes_h */

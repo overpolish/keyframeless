@@ -17,23 +17,9 @@
 
 #import "KKNativeStyleView.h"
 #import "NSColor+KKColors.h"
-#include <AppKit/AppKit.h>
-#include <AppKit/NSColor.h>
-#include <AppKit/NSEvent.h>
-#include <CoreFoundation/CFCGTypes.h>
-#include <CoreGraphics/CGEvent.h>
-#include <CoreGraphics/CGEventTypes.h>
-#include <CoreMedia/CMTime.h>
-#include <Foundation/Foundation.h>
-#import <FxPlug/FxPlugSDK.h>
-#include <MacTypes.h>
-#import <QuartzCore/QuartzCore.h>
-#include <objc/NSObjCRuntime.h>
-#include <objc/objc.h>
-#include <objc/runtime.h>
-
 #import <Cocoa/Cocoa.h>
-#include <CoreFoundation/CFCGTypes.h>
+#import <CoreMedia/CMTime.h>
+#import <FxPlug/FxPlugSDK.h>
 
 static const int64_t kSimulatedEventMarker = 0x53494D; // "SIM"
 
@@ -441,16 +427,21 @@ static const double kKeyframeDiamondWidth = 18.0;
       dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
       dispatch_get_main_queue(), ^{
         __weak typeof(self) weakSelf = self;
-        [self installMonitors:NSEventMaskLeftMouseDown |
-                              NSEventMaskRightMouseDown |
-                              NSEventMaskOtherMouseDown |
-                              NSEventMaskLeftMouseUp | NSEventMaskRightMouseUp |
-                              NSEventMaskOtherMouseUp | NSEventMaskKeyDown
-                 eventHandler:^(NSEvent *event) {
-                   __strong typeof(weakSelf) strongSelf = weakSelf;
-                   [strongSelf closeMenu];
+        [weakSelf
+            installMonitors:NSEventMaskLeftMouseDown |
+                            NSEventMaskRightMouseDown |
+                            NSEventMaskOtherMouseDown | NSEventMaskLeftMouseUp |
+                            NSEventMaskRightMouseUp | NSEventMaskOtherMouseUp |
+                            NSEventMaskKeyDown
+               eventHandler:^(NSEvent *event) {
+                 __strong typeof(weakSelf) strongSelf = weakSelf;
+                 if (!strongSelf) {
+                   return;
                  }
-                        delay:0.5];
+
+                 [strongSelf closeMenu];
+               }
+                      delay:0.5];
       });
 }
 
@@ -473,14 +464,17 @@ static const double kKeyframeDiamondWidth = 18.0;
       dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
       dispatch_get_main_queue(), ^{
         __weak typeof(self) weakSelf = self;
-        [self installMonitors:NSEventMaskLeftMouseUp
-                 eventHandler:^(NSEvent *event) {
-                   __strong typeof(weakSelf) strongSelf = weakSelf;
+        [weakSelf installMonitors:NSEventMaskLeftMouseUp
+                     eventHandler:^(NSEvent *event) {
+                       __strong typeof(weakSelf) strongSelf = weakSelf;
+                       if (!strongSelf) {
+                         return;
+                       }
 
-                   _isKeyframeDiamondPressed = NO;
-                   [strongSelf updateControlsVisibility];
-                 }
-                        delay:0.0];
+                       strongSelf->_isKeyframeDiamondPressed = NO;
+                       [strongSelf updateControlsVisibility];
+                     }
+                            delay:0.0];
       });
 }
 

@@ -4,12 +4,11 @@
 //
 //  Created by Dom on 24/02/2026.
 //
-
+#import "KKShaderTypes.h"
 #include <metal_stdlib>
 #include <simd/simd.h>
-using namespace metal;
 
-#import "KKShaderTypes.h"
+using namespace metal;
 
 /// Standard vertex shader for OSC controls and quads.
 vertex KKRasterizerData KKVertexShader(uint vertexID [[vertex_id]],

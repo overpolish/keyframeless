@@ -8,16 +8,8 @@
 #import "KKNumberField.h"
 #import "KKLog.h"
 #import "KKNumberFieldGeometry.h"
-#include "KKNumberFieldInputValidator.h"
-#include <AppKit/AppKit.h>
-#include <CoreFoundation/CFCGTypes.h>
-#include <CoreGraphics/CGDirectDisplay.h>
-#include <CoreGraphics/CGGeometry.h>
-#include <CoreGraphics/CGRemoteOperation.h>
-#include <Foundation/Foundation.h>
-#include <math.h>
-#include <objc/NSObjCRuntime.h>
-#include <objc/objc.h>
+#import "KKNumberFieldInputValidator.h"
+#import <math.h>
 
 // TODO move to file
 @interface KKNumberFieldCell : NSTextFieldCell

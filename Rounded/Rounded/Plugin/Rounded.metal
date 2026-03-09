@@ -4,14 +4,12 @@
 //
 //  Created by Dom on 23/02/2026.
 //
-
+#include "ShaderTypes.h"
+#include <KeyframelessKit/KKShaderTypes.h>
 #include <metal_stdlib>
 #include <simd/simd.h>
 
 using namespace metal;
-
-#include "ShaderTypes.h"
-#include <KeyframelessKit/KKShaderTypes.h>
 
 typedef struct {
     float4 clipSpacePosition [[position]];

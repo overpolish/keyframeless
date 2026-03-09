@@ -4,10 +4,9 @@
 //
 //  Created by Dom on 25/02/2026.
 //
-
+#pragma once
 #import <KeyframelessKit/KKOSCShaderTypes.h>
 #import <KeyframelessKit/KKOnScreenControl.h>
-#import <simd/simd.h>
 
 NS_ASSUME_NONNULL_BEGIN
 

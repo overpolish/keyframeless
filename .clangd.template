@@ -16,6 +16,19 @@ CompileFlags:
     - -I<PATH_TO_REPO>/KeyframelessKit/KeyframelessKit/Parameters
     - -I<PATH_TO_REPO>/KeyframelessKit/KeyframelessKit/Parameters/NumberField
     - -I<PATH_TO_REPO>/KeyframelessKit/KeyframelessKit/Plugin
+  
+---
+# Treat Metal shader files as C++ (closest grammar approximation for clangd formatting).
+# Note: actual compilation is handled by Xcode via xcrun metal, not clangd.
+If:
+  PathMatch: .*\.metal
+CompileFlags:
+  Add:
+    - -x
+    - c++
+    - -std=c++17
+Diagnostics:
+  Suppress: "*"
 
 # Setup:
 # 1. Copy this file to .clangd
