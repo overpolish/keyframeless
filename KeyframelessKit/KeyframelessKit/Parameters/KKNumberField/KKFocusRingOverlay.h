@@ -9,7 +9,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// Transparent, click-through view that hosts the animated focus ring as CA layers.
+/// Transparent, click-through view that hosts the animated focus ring as CA
+/// layers.
 @interface KKFocusRingOverlay : NSView
 
 - (instancetype)initWithColor:(NSColor *)color;

@@ -11,7 +11,8 @@
   },
   "files.associations": {
     "*.h": "objective-c",
-    "*.m": "objective-c"
+    "*.m": "objective-c",
+    "*.metal": "objective-c"
   },
   "cSpell.words": [
     "autoreleasepool",
