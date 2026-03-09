@@ -1,12 +1,10 @@
-//
-//  KKNumberFieldGeometry.h
-//  KeyframelessKit
-//
-//  Shared layout constants used by both KKNumberField and KKFocusRingOverlay.
-//  These define structural geometry that both files must agree on — prefix zone
-//  width, suffix zone width, and the focus ring panel padding.
-//
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 #pragma once
+
 #import <CoreGraphics/CoreGraphics.h>
 
 // Height of the editable field area

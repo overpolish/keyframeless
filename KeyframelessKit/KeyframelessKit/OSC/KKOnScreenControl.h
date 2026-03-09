@@ -1,10 +1,10 @@
-//
-//  KKOnScreenControl.h
-//  KeyframelessKit
-//
-//  Created by Dom on 25/02/2026.
-//
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 #pragma once
+
 #import <CoreMedia/CoreMedia.h>
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>

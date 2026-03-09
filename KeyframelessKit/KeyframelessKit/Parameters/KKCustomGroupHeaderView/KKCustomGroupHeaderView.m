@@ -1,15 +1,13 @@
-//
-//  KKCustomGroupHeaderView.m
-//  KeyframelessKit
-//
-//  Created by Dom on 27/02/2026.
-//
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
 
 #import "KKCustomGroupHeaderView.h"
-#import "KKHostInfo.h"
 #import "KKLog.h"
 #import "KKNumberField.h"
 #import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KKHostInfo.h>
 
 #pragma mark - Layout Constants
 
