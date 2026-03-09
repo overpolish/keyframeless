@@ -13,8 +13,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// All state is passed per-call; instances can be shared and reused freely.
 @interface KKNumberFieldInputValidator : NSObject
 
-/// Returns YES if applying replacementString at affectedRange within currentString
-/// produces a valid or in-progress numeric value within [minValue, maxValue].
+/// Returns YES if applying replacementString at affectedRange within
+/// currentString produces a valid or in-progress numeric value within
+/// [minValue, maxValue].
 - (BOOL)isValidReplacementString:(NSString *)replacementString
                          inRange:(NSRange)affectedRange
                         ofString:(NSString *)currentString
