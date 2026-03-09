@@ -8,7 +8,6 @@
 #import "KKHostInfo.h"
 #import "NSColor+KKColors.h"
 #import <AppKit/NSColor.h>
-#import <KeyframelessKit/KeyframelessKit.h>
 
 @implementation NSColor (KKColors)
 
