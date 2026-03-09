@@ -16,6 +16,19 @@ CompileFlags:
     - -I<PATH_TO_REPO>/KeyframelessKit/KeyframelessKit/Parameters
     - -I<PATH_TO_REPO>/KeyframelessKit/KeyframelessKit/Parameters/NumberField
     - -I<PATH_TO_REPO>/KeyframelessKit/KeyframelessKit/Plugin
+  
+---
+# Treat Metal shader files as C++ to prevent obj-c trying to compile them.
+# We want Metal to be associated to obj-c for formatting with clangd
+If:
+  PathMatch: .*\.metal
+CompileFlags:
+  Add:
+    - -x
+    - c++
+    - -std=c++17
+Diagnostics:
+  Suppress: "*"
 
 # Setup:
 # 1. Copy this file to .clangd

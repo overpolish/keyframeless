@@ -5,10 +5,7 @@
 //  Created by Dom on 28/02/2026.
 //
 #pragma once
-#import <AppKit/AppKit.h>
 #import <Cocoa/Cocoa.h>
-#import <CoreFoundation/CFCGTypes.h>
-#import <Foundation/Foundation.h>
 
 NS_ASSUME_NONNULL_BEGIN
 

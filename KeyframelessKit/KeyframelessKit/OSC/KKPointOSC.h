@@ -6,7 +6,6 @@
 //
 #pragma once
 #import <KeyframelessKit/KKOnScreenControl.h>
-#import <simd/simd.h>
 
 NS_ASSUME_NONNULL_BEGIN
 

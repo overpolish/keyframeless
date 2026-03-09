@@ -7,8 +7,6 @@
 
 #import "KKNumberFieldTextView.h"
 #import "KKNumberField+Private.h"
-#import <AppKit/AppKit.h>
-#import <objc/objc.h>
 
 static const unichar KKKeyEscape = 27;
 

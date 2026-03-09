@@ -9,9 +9,6 @@
 #import "KKHostInfo.h"
 #import "KKLog.h"
 #import "KKNumberField.h"
-#import <AppKit/AppKit.h>
-#import <CoreFoundation/CFCGTypes.h>
-#import <Foundation/Foundation.h>
 #import <FxPlug/FxPlugSDK.h>
 
 #pragma mark - Layout Constants

@@ -16,7 +16,6 @@
  */
 #pragma once
 #import <Cocoa/Cocoa.h>
-#import <MacTypes.h>
 
 @protocol PROAPIAccessing;
 
