@@ -4,7 +4,7 @@
 //
 //  Created by Dom on 23/02/2026.
 //
-
+#pragma once
 #import <FxPlug/FxPlugSDK.h>
 #import <Metal/Metal.h>
 

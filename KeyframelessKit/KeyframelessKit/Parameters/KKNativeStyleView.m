@@ -17,23 +17,21 @@
 
 #import "KKNativeStyleView.h"
 #import "NSColor+KKColors.h"
-#include <AppKit/AppKit.h>
-#include <AppKit/NSColor.h>
-#include <AppKit/NSEvent.h>
-#include <CoreFoundation/CFCGTypes.h>
-#include <CoreGraphics/CGEvent.h>
-#include <CoreGraphics/CGEventTypes.h>
-#include <CoreMedia/CMTime.h>
-#include <Foundation/Foundation.h>
-#import <FxPlug/FxPlugSDK.h>
-#include <MacTypes.h>
-#import <QuartzCore/QuartzCore.h>
-#include <objc/NSObjCRuntime.h>
-#include <objc/objc.h>
-#include <objc/runtime.h>
-
+#import <AppKit/AppKit.h>
+#import <AppKit/NSColor.h>
+#import <AppKit/NSEvent.h>
 #import <Cocoa/Cocoa.h>
-#include <CoreFoundation/CFCGTypes.h>
+#import <CoreFoundation/CFCGTypes.h>
+#import <CoreGraphics/CGEvent.h>
+#import <CoreGraphics/CGEventTypes.h>
+#import <CoreMedia/CMTime.h>
+#import <Foundation/Foundation.h>
+#import <FxPlug/FxPlugSDK.h>
+#import <MacTypes.h>
+#import <QuartzCore/QuartzCore.h>
+#import <objc/NSObjCRuntime.h>
+#import <objc/objc.h>
+#import <objc/runtime.h>
 
 static const int64_t kSimulatedEventMarker = 0x53494D; // "SIM"
 
@@ -477,7 +475,7 @@ static const double kKeyframeDiamondWidth = 18.0;
                  eventHandler:^(NSEvent *event) {
                    __strong typeof(weakSelf) strongSelf = weakSelf;
 
-                   _isKeyframeDiamondPressed = NO;
+                   strongSelf->_isKeyframeDiamondPressed = NO;
                    [strongSelf updateControlsVisibility];
                  }
                         delay:0.0];

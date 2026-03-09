@@ -4,7 +4,7 @@
 //
 //  Created by Dom on 26/02/2026.
 //
-
-#include <Foundation/Foundation.h>
+#pragma once
+#import <Foundation/Foundation.h>
 
 static NSString *const kPluginID = @"co.overpolish.keyframeless.Rounded";

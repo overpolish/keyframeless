@@ -4,13 +4,12 @@
 //
 //  Created by Dom on 26/02/2026.
 //
-
-#include <metal_stdlib>
-#include <simd/simd.h>
-using namespace metal;
-
 #include "../Metal/KKShaderTypes.h"
 #include "KKOSCShaderTypes.h"
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
 
 constant float kDividerWidth = 0.04f;
 

@@ -4,7 +4,6 @@
 //
 //  Created by Dom on 25/02/2026.
 //
-
 #pragma once
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
