@@ -13,7 +13,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface KKNumberFieldTextView : NSTextView
 
-@property (nonatomic, weak, nullable) KKNumberField *parentField;
+@property(nonatomic, weak, nullable) KKNumberField *parentField;
 
 @end
 
