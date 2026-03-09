@@ -1,9 +1,7 @@
-//
-//  MetalDeviceCache.m
-//  Rounded
-//
-//  Created by Dom on 23/02/2026.
-//
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
 
 #import "MetalDeviceCache.h"
 #import "Constants.h"

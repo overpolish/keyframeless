@@ -1,9 +1,7 @@
-//
-//  KKPointOSC.m
-//  KeyframelessKit
-//
-//  Created by Dom on 26/02/2026.
-//
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
 
 #import "KKPointOSC.h"
 #import <FxPlug/FxPlugSDK.h>

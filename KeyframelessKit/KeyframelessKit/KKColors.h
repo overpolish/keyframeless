@@ -1,10 +1,10 @@
-//
-//  KKColors.h
-//  KeyframelessKit
-//
-//  Created by Dom on 26/02/2026.
-//
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 #pragma once
+
 #import <simd/simd.h>
 
 static const simd_float4 KKColor_Primary = (simd_float4){0.7f, 0.7f, 0.7f, 0.65f};

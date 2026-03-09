@@ -1,12 +1,10 @@
-//
-//  KKNumberField+Private.h
-//  KeyframelessKit
-//
-//  Internal interface for KKNumberField, exposed to tightly-coupled
-//  subcomponents (e.g. KKNumberFieldTextView) that need to call back into the
-//  field without making these methods part of the public API.
-//
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 #pragma once
+
 #import <KeyframelessKit/KKNumberField.h>
 
 @interface KKNumberField ()
