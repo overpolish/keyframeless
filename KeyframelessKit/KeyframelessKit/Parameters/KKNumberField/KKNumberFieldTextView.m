@@ -26,23 +26,24 @@ static const unichar KKKeyEscape = 27;
 // }
 
 - (BOOL)performKeyEquivalent:(NSEvent *)event {
-    // Capture arrow keys when editing — without this, arrows control the timeline scrubber.
-    if (self.isEditable && event.type == NSEventTypeKeyDown) {
-        NSString *chars = event.charactersIgnoringModifiers;
-        if (chars.length == 1) {
-            unichar c = [chars characterAtIndex:0];
-            if (c == NSLeftArrowFunctionKey || c == NSRightArrowFunctionKey || c == NSUpArrowFunctionKey ||
-                c == NSDownArrowFunctionKey) {
-                [self interpretKeyEvents:@[ event ]];
-                return YES;
-            } else if (c == KKKeyEscape) {
-                self.string = [self.parentField displayStringForEditing];
-                [self.window makeFirstResponder:nil];
-                return YES;
-            }
-        }
+  // Capture arrow keys when editing — without this, arrows control the timeline
+  // scrubber.
+  if (self.isEditable && event.type == NSEventTypeKeyDown) {
+    NSString *chars = event.charactersIgnoringModifiers;
+    if (chars.length == 1) {
+      unichar c = [chars characterAtIndex:0];
+      if (c == NSLeftArrowFunctionKey || c == NSRightArrowFunctionKey ||
+          c == NSUpArrowFunctionKey || c == NSDownArrowFunctionKey) {
+        [self interpretKeyEvents:@[ event ]];
+        return YES;
+      } else if (c == KKKeyEscape) {
+        self.string = [self.parentField displayStringForEditing];
+        [self.window makeFirstResponder:nil];
+        return YES;
+      }
     }
-    return [super performKeyEquivalent:event];
+  }
+  return [super performKeyEquivalent:event];
 }
 
 @end

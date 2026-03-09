@@ -5,8 +5,8 @@
 //  Created by Dom on 25/02/2026.
 //
 
-#import <Foundation/Foundation.h>
 #import <CoreMedia/CoreMedia.h>
+#import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
 #import <simd/simd.h>
 
@@ -17,14 +17,14 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface KKOnScreenControl : NSObject
 
-@property (nonatomic, weak) id<PROAPIAccessing> apiManager;
-@property (nonatomic, readonly) BOOL isHovered;
-@property (nonatomic, readonly) BOOL isDragging;
+@property(nonatomic, weak) id<PROAPIAccessing> apiManager;
+@property(nonatomic, readonly) BOOL isHovered;
+@property(nonatomic, readonly) BOOL isDragging;
 
-@property (nonatomic) simd_float4 primaryColor;
-@property (nonatomic) simd_float4 outlineColor;
-@property (nonatomic) simd_float4 hoverColor;
-@property (nonatomic) simd_float4 activeColor;
+@property(nonatomic) simd_float4 primaryColor;
+@property(nonatomic) simd_float4 outlineColor;
+@property(nonatomic) simd_float4 hoverColor;
+@property(nonatomic) simd_float4 activeColor;
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager;
 
@@ -38,7 +38,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (simd_float4)colorForHovered:(BOOL)isHovered active:(BOOL)isActive;
 
 /// Loads or retrieves cached pipeline state for the given registry ID.
-- (nullable id<MTLRenderPipelineState>)pipelineStateForRegistryID:(uint64_t)registryID;
+- (nullable id<MTLRenderPipelineState>)pipelineStateForRegistryID:
+    (uint64_t)registryID;
 
 /// The radius used for hit testing. Override in subclass.
 - (float)hitRadius;
@@ -98,11 +99,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// Shared Metal setup/teardown. Call from drawAtCanvasPosition: with a block
 /// containing your encoder commands. Handles device, queue, command buffer,
 /// render pass, viewport, and cleanup automatically.
-- (void)encodeRenderCommandsForDestinationImage:(FxImageTile *)destinationImage
-                                 canvasPosition:(CGPoint)canvasPosition
-                                       commands:(void (^)(id<MTLRenderCommandEncoder> encoder,
-                                                          CGPoint metalPosition,
-                                                          simd_uint2 viewportSize))commands;
+- (void)
+    encodeRenderCommandsForDestinationImage:(FxImageTile *)destinationImage
+                             canvasPosition:(CGPoint)canvasPosition
+                                   commands:
+                                       (void (^)(
+                                           id<MTLRenderCommandEncoder> encoder,
+                                           CGPoint metalPosition,
+                                           simd_uint2 viewportSize))commands;
 
 @end
 

@@ -205,7 +205,7 @@ static const int64_t kSimulatedEventMarker = 0x53494D; // "SIM"
   [diamond stroke];
 
   [[NSColor inspectorBackground] set];
-  [symbol setLineWidth:1.5];
+  [symbol setLineWidth:1.0];
   [symbol stroke];
 }
 
