@@ -7,7 +7,7 @@
 //  field without making these methods part of the public API.
 //
 #pragma once
-#import "KKNumberField.h"
+#import <KeyframelessKit/KKNumberField.h>
 
 @interface KKNumberField ()
 

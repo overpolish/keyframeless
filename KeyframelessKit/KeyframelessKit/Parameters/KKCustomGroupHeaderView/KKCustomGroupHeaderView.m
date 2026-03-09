@@ -6,10 +6,10 @@
 //
 
 #import "KKCustomGroupHeaderView.h"
-#import "KKHostInfo.h"
 #import "KKLog.h"
 #import "KKNumberField.h"
 #import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KKHostInfo.h>
 
 #pragma mark - Layout Constants
 

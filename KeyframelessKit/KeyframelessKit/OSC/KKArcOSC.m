@@ -6,8 +6,8 @@
 //
 
 #import "KKArcOSC.h"
-#import "KKRenderHelpers.h"
 #import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KKRenderHelpers.h>
 
 @implementation KKArcOSC
 

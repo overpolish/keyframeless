@@ -5,8 +5,8 @@
 //  Created by Dom on 04/03/2026.
 //
 
-#import "KKHostInfo.h"
 #import "NSColor+KKColors.h"
+#import <KeyframelessKit/KKHostInfo.h>
 
 @implementation NSColor (KKColors)
 
