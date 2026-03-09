@@ -4,11 +4,11 @@
 //
 //  Created by Dom on 28/02/2026.
 //
-
-#include <AppKit/AppKit.h>
+#pragma once
+#import <AppKit/AppKit.h>
 #import <Cocoa/Cocoa.h>
-#include <CoreFoundation/CFCGTypes.h>
-#include <Foundation/Foundation.h>
+#import <CoreFoundation/CFCGTypes.h>
+#import <Foundation/Foundation.h>
 
 NS_ASSUME_NONNULL_BEGIN
 

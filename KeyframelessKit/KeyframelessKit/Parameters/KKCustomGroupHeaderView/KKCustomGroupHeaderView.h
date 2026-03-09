@@ -4,10 +4,10 @@
 //
 //  Created by Dom on 27/02/2026.
 //
-
+#pragma once
 #import <Cocoa/Cocoa.h>
 #import <KeyframelessKit/KKNativeStyleView.h>
-#include <MacTypes.h>
+#import <MacTypes.h>
 
 NS_ASSUME_NONNULL_BEGIN
 

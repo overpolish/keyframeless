@@ -6,7 +6,7 @@
 //  subcomponents (e.g. KKNumberFieldTextView) that need to call back into the
 //  field without making these methods part of the public API.
 //
-
+#pragma once
 #import "KKNumberField.h"
 
 @interface KKNumberField ()

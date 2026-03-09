@@ -4,7 +4,7 @@
 //
 //  Created by Dom on 26/02/2026.
 //
-
+#pragma once
 #import <KeyframelessKit/KKOnScreenControl.h>
 #import <simd/simd.h>
 

@@ -4,7 +4,7 @@
 //
 //  Created by Dom on 24/02/2026.
 //
-
+#pragma once
 #import <Foundation/Foundation.h>
 
 FOUNDATION_EXPORT double KeyframelessKitVersionNumber; //! Version number

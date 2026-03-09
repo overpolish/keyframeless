@@ -4,7 +4,7 @@
 //
 //  Created by Dom on 01/03/2026.
 //
-
+#pragma once
 #import <Cocoa/Cocoa.h>
 
 NS_ASSUME_NONNULL_BEGIN

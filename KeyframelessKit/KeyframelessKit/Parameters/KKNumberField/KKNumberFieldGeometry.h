@@ -6,10 +6,8 @@
 //  These define structural geometry that both files must agree on — prefix zone
 //  width, suffix zone width, and the focus ring panel padding.
 //
-
 #pragma once
-
-#include <CoreFoundation/CFCGTypes.h>
+#import <CoreFoundation/CFCGTypes.h>
 #import <CoreGraphics/CoreGraphics.h>
 
 // Height of the editable field area

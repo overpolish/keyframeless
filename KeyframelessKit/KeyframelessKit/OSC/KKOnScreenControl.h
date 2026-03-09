@@ -4,7 +4,7 @@
 //
 //  Created by Dom on 25/02/2026.
 //
-
+#pragma once
 #import <CoreMedia/CoreMedia.h>
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>

@@ -4,7 +4,7 @@
 //
 //  Stateless validator for live numeric text input in KKNumberField.
 //
-
+#pragma once
 #import <Foundation/Foundation.h>
 
 NS_ASSUME_NONNULL_BEGIN

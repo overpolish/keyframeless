@@ -4,10 +4,7 @@
 //
 //  Created by Dom on 24/02/2026.
 //
-
-#ifndef KKShaderTypes_h
-#define KKShaderTypes_h
-
+#pragma once
 #import <simd/simd.h>
 
 typedef enum KKVertexInputIndex {
@@ -28,5 +25,3 @@ typedef struct {
     float2 textureCoordinate;
 } KKRasterizerData;
 #endif
-
-#endif /* KKShaderTypes_h */
