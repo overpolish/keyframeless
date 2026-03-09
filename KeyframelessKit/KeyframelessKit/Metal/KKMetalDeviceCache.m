@@ -4,8 +4,8 @@
 //
 //  Created by Dom on 25/02/2026.
 //
-#import "KKMetalDeviceCache.h"
-#import "KKRenderHelpers.h"
+#import <KeyframelessKit/KKMetalDeviceCache.h>
+#import <KeyframelessKit/KKRenderHelpers.h>
 #import <FxPlug/FxPlugSDK.h>
 
 const NSUInteger kMaxCommandQueues = 5;

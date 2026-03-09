@@ -11,7 +11,6 @@
 #import <AppKit/NSView.h>
 #import <Foundation/Foundation.h>
 #import <IOSurface/IOSurfaceObjC.h>
-#import <KeyframelessKit/KeyframelessKit.h>
 #import <QuartzCore/QuartzCore.h>
 
 @implementation Plugin
