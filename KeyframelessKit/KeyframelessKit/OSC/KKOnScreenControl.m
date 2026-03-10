@@ -4,8 +4,9 @@
  */
 
 #import "KKOnScreenControl.h"
+#import "NSColor+KKColors.h"
+#include <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
-#import <KeyframelessKit/KKColors.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKRenderHelpers.h>
 
@@ -23,10 +24,10 @@
     _apiManager = apiManager;
     _isHovered = NO;
     _isDragging = NO;
-    _primaryColor = KKColor_Primary;
-    _outlineColor = KKColor_Outline;
-    _hoverColor = KKColor_Hover;
-    _activeColor = KKColor_Active;
+    _primaryColor = [[NSColor primaryColor] simdFloat4];
+    _outlineColor = [[NSColor outlineColor] simdFloat4];
+    _hoverColor = [[NSColor hoverColor] simdFloat4];
+    _activeColor = [[NSColor activeColor] simdFloat4];
   }
   return self;
 }

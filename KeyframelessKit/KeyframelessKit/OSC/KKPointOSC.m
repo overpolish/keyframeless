@@ -5,8 +5,6 @@
 
 #import "KKPointOSC.h"
 #import <FxPlug/FxPlugSDK.h>
-#import <KeyframelessKit/KKColors.h>
-#import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKOSCShaderTypes.h>
 #import <KeyframelessKit/KKRenderHelpers.h>
 
