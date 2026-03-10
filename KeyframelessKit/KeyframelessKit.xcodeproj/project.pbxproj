@@ -21,7 +21,6 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			publicHeaders = (
 				KeyframelessKit.h,
-				KKColors.h,
 				Metal/KKMetalDeviceCache.h,
 				Metal/KKRenderHelpers.h,
 				Metal/KKShaderTypes.h,
