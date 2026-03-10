@@ -7,7 +7,7 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKHostInfo.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
-#import <KeyframelessKit/KKRenderHelpers.h>
+#import <KeyframelessKit/KKRenderPrimitives.h>
 
 @interface KKPrincipalDelegate : NSObject <FxPrincipalDelegate>
 + (instancetype)shared;

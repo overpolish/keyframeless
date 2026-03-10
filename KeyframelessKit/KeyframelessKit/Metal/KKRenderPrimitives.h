@@ -13,7 +13,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface KKRenderHelpers : NSObject
+@interface KKRenderPrimitives : NSObject
 
 /// Generate vertices for a quad centered at a point with normalized texture
 /// coordinates (-1 to 1).
