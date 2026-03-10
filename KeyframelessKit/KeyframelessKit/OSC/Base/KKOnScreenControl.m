@@ -8,7 +8,7 @@
 #include <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
-#import <KeyframelessKit/KKRenderHelpers.h>
+#import <KeyframelessKit/KKRenderPrimitives.h>
 
 @interface KKOnScreenControl () <FxOnScreenControl_v4>
 @end
@@ -118,7 +118,7 @@
     return nil;
   }
 
-  MTLRenderPipelineDescriptor *desc = [KKRenderHelpers
+  MTLRenderPipelineDescriptor *desc = [KKRenderPrimitives
       createPipelineDescriptorWithVertexFunction:vertFn
                                 fragmentFunction:fragFn
                                      pixelFormat:MTLPixelFormatRGBA8Unorm
@@ -163,7 +163,7 @@
 
   id<MTLTexture> outputTexture =
       [destinationImage metalTextureForDevice:gpuDevice];
-  MTLRenderPassDescriptor *rpd = [KKRenderHelpers
+  MTLRenderPassDescriptor *rpd = [KKRenderPrimitives
       createClearRenderPassWithTexture:outputTexture
                             clearColor:MTLClearColorMake(0, 0, 0, 0)];
   id<MTLRenderCommandEncoder> encoder =

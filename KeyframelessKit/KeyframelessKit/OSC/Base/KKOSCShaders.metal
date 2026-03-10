@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-#include "../Metal/KKShaderTypes.h"
+#include "../../Metal/KKShaderTypes.h"
 #include "KKOSCShaderTypes.h"
 #include <metal_stdlib>
 #include <simd/simd.h>

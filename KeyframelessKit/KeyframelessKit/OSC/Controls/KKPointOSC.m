@@ -5,8 +5,8 @@
 
 #import "KKPointOSC.h"
 #import <FxPlug/FxPlugSDK.h>
-#import <KeyframelessKit/KKOSCShaderTypes.h>
-#import <KeyframelessKit/KKRenderHelpers.h>
+#import "../Base/KKOSCShaderTypes.h"
+#import <KeyframelessKit/KKRenderPrimitives.h>
 
 static NSString *kPointOSCPluginID = @"co.overpolish.keyframelesskit.PointOSC";
 
@@ -60,7 +60,7 @@ static NSString *kPointOSCPluginID = @"co.overpolish.keyframelesskit.PointOSC";
                                          CGPoint metalPosition,
                                          simd_uint2 viewportSize) {
                                        KKVertex2D quadVertices[6];
-                                       [KKRenderHelpers
+                                       [KKRenderPrimitives
                                            generateQuadVertices:quadVertices
                                                          center:metalPosition
                                                            size:
