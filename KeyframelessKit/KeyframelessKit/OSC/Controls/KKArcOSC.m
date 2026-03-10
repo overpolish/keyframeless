@@ -4,8 +4,9 @@
  */
 
 #import "KKArcOSC.h"
+#import "../Base/KKOSCShaderTypes.h"
 #import <FxPlug/FxPlugSDK.h>
-#import <KeyframelessKit/KKRenderHelpers.h>
+#import <KeyframelessKit/KKRenderPrimitives.h>
 
 @implementation KKArcOSC
 
@@ -59,7 +60,7 @@
                                          CGPoint metalPosition,
                                          simd_uint2 viewportSize) {
                                        KKVertex2D quadVertices[6];
-                                       [KKRenderHelpers
+                                       [KKRenderPrimitives
                                            generateQuadVertices:quadVertices
                                                          center:metalPosition
                                                            size:

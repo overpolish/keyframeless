@@ -22,17 +22,15 @@
 			publicHeaders = (
 				KeyframelessKit.h,
 				Metal/KKMetalDeviceCache.h,
-				Metal/KKRenderHelpers.h,
+				Metal/KKRenderPrimitives.h,
 				Metal/KKShaderTypes.h,
-				OSC/KKArcOSC.h,
-				OSC/KKOnScreenControl.h,
-				OSC/KKOSCShaderTypes.h,
-				OSC/KKPointOSC.h,
+				OSC/Base/KKOnScreenControl.h,
+				OSC/Controls/KKArcOSC.h,
+				OSC/Controls/KKPointOSC.h,
 				Parameters/KKCustomGroupHeaderView/KKCustomGroupHeaderView.h,
-				Parameters/KKNativeStyleView.h,
 				Parameters/KKNumberField/KKNumberField.h,
+				Parameters/KKParameterRowView/KKParameterRowView.h,
 				Parameters/KKSliderView/KKSliderView.h,
-				Plugin/KKHostInfo.h,
 				Plugin/KKPlugin.h,
 			);
 			target = F26E01B52F4DE280009D949A /* KeyframelessKit */;

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-#import "KKNativeStyleView.h"
+#import "KKParameterRowView.h"
 #import "NSColor+KKColors.h"
 #import <Cocoa/Cocoa.h>
 #import <CoreMedia/CMTime.h>
@@ -189,7 +189,7 @@ static const double kKeyframeControlWidth = 80.0;
 static const double kMenuChevronWidth = 20.0;
 static const double kKeyframeDiamondWidth = 18.0;
 
-@implementation KKNativeStyleView {
+@implementation KKParameterRowView {
   BOOL _isHovered;
   // No way for us to know if the host (Motion/FCP) has a context menu open
   // we are in ViewBridge Jail - we can only guess
