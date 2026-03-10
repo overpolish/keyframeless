@@ -39,6 +39,31 @@
   return [NSColor colorWithRed:0.0f green:0.0f blue:0.0f alpha:0.0f];
 }
 
++ (NSColor *)sliderTrackBackground {
+  return [NSColor colorWithRed:0x17 / 255.0
+                         green:0x17 / 255.0
+                          blue:0x17 / 255.0
+                         alpha:1.0];
+}
+
++ (NSColor *)sliderTrackFill {
+  return [NSColor colorWithRed:0x61 / 255.0
+                         green:0x68 / 255.0
+                          blue:0xF5 / 255.0
+                         alpha:1.0];
+}
+
++ (NSColor *)sliderKnobFill {
+  return [NSColor colorWithWhite:0x80 / 255.0 alpha:1.0];
+}
+
++ (NSColor *)sliderKnobOutline {
+  return [NSColor colorWithRed:0x17 / 255.0
+                         green:0x17 / 255.0
+                          blue:0x17 / 255.0
+                         alpha:1.0];
+}
+
 - (simd_float4)simdFloat4 {
   NSColor *rgb = [self colorUsingColorSpace:NSColorSpace.genericRGBColorSpace];
   return (simd_float4){

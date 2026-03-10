@@ -34,7 +34,7 @@ inline float kkEdgeAlpha(float signedDist) {
     return smoothstep(-delta * 0.5, delta * 0.5, signedDist);
 }
 
-/// Returns a 0-1 factor for a line of a given half-width at a perpendular distance.
+/// Returns a 0-1 factor for a line of a given half-width at a perpendicular distance.
 inline float kkLineAlpha(float distToLine, float halfWidth) {
     float aa = fwidth(distToLine);
     return smoothstep(halfWidth + aa, halfWidth - aa, distToLine);
