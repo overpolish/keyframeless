@@ -4,6 +4,7 @@
  */
 
 #import "KKSliderView.h"
+#import "NSColor+KKColors.h"
 
 #pragma mark - Constants
 
@@ -19,24 +20,10 @@ static const CGFloat kKnobPointHeightRatio =
     0.5; // Percentage of knob height for the top point
 static const CGFloat kKnobOutlineWidth = 0.5;
 
-// Colors (hex values for clarity)
-static const CGFloat kTrackBackgroundColor[] = {0x17 / 255.0, 0x17 / 255.0,
-                                                0x17 / 255.0}; // #171717
-static const CGFloat kTrackFillColor[] = {0x61 / 255.0, 0x68 / 255.0,
-                                          0xF5 / 255.0}; // #6168F5 (blue)
-static const CGFloat kKnobFillColor[] = {0x80 / 255.0, 0x80 / 255.0,
-                                         0x80 / 255.0}; // #808080 (gray)
-static const CGFloat kKnobOutlineColor[] = {0x17 / 255.0, 0x17 / 255.0,
-                                            0x17 / 255.0}; // #171717
-
 // Curve control points for knob shape
 static const CGFloat kKnobPointCurveOffset = 0.5;
 static const CGFloat kKnobPointCurveControl = 1.0;
 static const CGFloat kKnobSideCurveRatio = 0.3;
-
-static inline NSColor *ColorFromRGB(const CGFloat rgb[3]) {
-  return [NSColor colorWithRed:rgb[0] green:rgb[1] blue:rgb[2] alpha:1.0];
-}
 
 static inline CGFloat ClampValue(CGFloat value, CGFloat min, CGFloat max) {
   return fmax(min, fmin(max, value));
@@ -78,7 +65,7 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
       [NSBezierPath bezierPathWithRoundedRect:trackRect
                                       xRadius:kTrackCornerRadius
                                       yRadius:kTrackCornerRadius];
-  [ColorFromRGB(kTrackBackgroundColor) setFill];
+  [[NSColor sliderTrackBackground] setFill];
   [trackPath fill];
 }
 
@@ -92,7 +79,7 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
       [NSBezierPath bezierPathWithRoundedRect:filledRect
                                       xRadius:kTrackCornerRadius
                                       yRadius:kTrackCornerRadius];
-  [ColorFromRGB(kTrackFillColor) setFill];
+  [[NSColor sliderTrackFill] setFill];
   [filledPath fill];
 }
 
@@ -166,12 +153,12 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
 }
 
 - (void)fillKnob:(NSBezierPath *)path {
-  [ColorFromRGB(kKnobFillColor) setFill];
+  [[NSColor sliderKnobFill] setFill];
   [path fill];
 }
 
 - (void)strokeKnob:(NSBezierPath *)path {
-  [ColorFromRGB(kKnobOutlineColor) setStroke];
+  [[NSColor sliderKnobOutline] setStroke];
   [path setLineWidth:kKnobOutlineWidth];
   [path stroke];
 }
