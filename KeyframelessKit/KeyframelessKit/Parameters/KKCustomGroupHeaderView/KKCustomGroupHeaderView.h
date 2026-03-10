@@ -6,13 +6,13 @@
 #pragma once
 
 #import <Cocoa/Cocoa.h>
-#import <KeyframelessKit/KKNativeStyleView.h>
+#import <KeyframelessKit/KKParameterRowView.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
 @protocol PROAPIAccessing;
 
-@interface KKCustomGroupHeaderView : KKNativeStyleView
+@interface KKCustomGroupHeaderView : KKParameterRowView
 @end
 
 NS_ASSUME_NONNULL_END

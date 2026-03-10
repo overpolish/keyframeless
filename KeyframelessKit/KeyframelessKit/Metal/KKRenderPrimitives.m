@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-#import "KKRenderHelpers.h"
+#import "KKRenderPrimitives.h"
 
-@implementation KKRenderHelpers
+@implementation KKRenderPrimitives
 
 + (void)generateQuadVertices:(KKVertex2D *)vertices
                       center:(CGPoint)center

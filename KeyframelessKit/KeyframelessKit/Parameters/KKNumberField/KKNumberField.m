@@ -5,9 +5,17 @@
 
 #import "KKNumberField.h"
 #import "KKLog.h"
-#import "KKNumberFieldGeometry.h"
 #import "KKNumberFieldInputValidator.h"
 #import <math.h>
+
+static const CGFloat KKNumberFieldInputHeight = 17.0;
+static const CGFloat KKNumberFieldInputWidth = 54.0;
+/// Width reserved for the 1-character prefix label zone (e.g. "X", "Y").
+static const CGFloat KKNumberFieldPrefixWidth = 6.0;
+/// Width reserved for the 1–2 character suffix label zone (e.g. "px", "%").
+static const CGFloat KKNumberFieldSuffixWidth = 13.0;
+/// Additional offset to match prefix/suffix height in Motion/FCP
+static const CGFloat KKDecorationVerticalOffset = 0.25;
 
 // TODO move to file
 @interface KKNumberFieldCell : NSTextFieldCell

@@ -9,7 +9,7 @@
 
 @protocol PROAPIAccessing;
 
-@interface KKNativeStyleView : NSView
+@interface KKParameterRowView : NSView
 
 @property(nonatomic, strong) id<PROAPIAccessing> apiManager;
 @property(nonatomic, assign) UInt32 parameterId;

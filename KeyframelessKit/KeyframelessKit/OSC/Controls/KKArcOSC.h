@@ -5,7 +5,6 @@
 
 #pragma once
 
-#import <KeyframelessKit/KKOSCShaderTypes.h>
 #import <KeyframelessKit/KKOnScreenControl.h>
 
 NS_ASSUME_NONNULL_BEGIN
