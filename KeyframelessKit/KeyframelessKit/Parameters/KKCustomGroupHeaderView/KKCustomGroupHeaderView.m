@@ -7,7 +7,8 @@
 #import "KKLog.h"
 #import "KKNumberField.h"
 #import <FxPlug/FxPlugSDK.h>
-#import <KeyframelessKit/KKHostInfo.h>
+#import <KeyframelessKit/KKParameterRowView.h>
+// #import <KeyframelessKit/KKHostInfo.h>
 
 #pragma mark - Layout Constants
 
@@ -32,6 +33,26 @@
 
 @implementation KKCustomGroupHeaderView {
   KKLog *log;
+}
+
+- (instancetype)initWithFrame:(NSRect)frameRect
+                   apiManager:(id<PROAPIAccessing>)apiManager
+                  parameterId:(UInt32)parameterId {
+  self = [super initWithFrame:frameRect
+                   apiManager:apiManager
+                  parameterId:parameterId];
+  if (self) {
+    NSView *left = [[NSView alloc] initWithFrame:NSZeroRect];
+    left.wantsLayer = YES;
+    left.layer.backgroundColor = [[NSColor redColor] CGColor];
+    self.leftView = left;
+
+    NSView *right = [[NSView alloc] initWithFrame:NSZeroRect];
+    right.wantsLayer = YES;
+    right.layer.backgroundColor = [[NSColor greenColor] CGColor];
+    self.rightView = right;
+  }
+  return self;
 }
 
 // - (instancetype)initWithFrame:(NSRect)frame

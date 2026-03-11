@@ -4,188 +4,18 @@
  */
 
 #import "KKParameterRowView.h"
-#import "NSColor+KKColors.h"
+#import "KKEventForwardingView.h"
+#import "KKHostInfo.h"
+#import "KKKeyframeDiamondView.h"
+#import "KKMenuChevronView.h"
+#include <AppKit/AppKit.h>
 #import <Cocoa/Cocoa.h>
 #import <CoreMedia/CMTime.h>
 #import <FxPlug/FxPlugSDK.h>
+#include <FxPlug/FxTypes.h>
+#include <MacTypes.h>
 
-static const int64_t kSimulatedEventMarker = 0x53494D; // "SIM"
-
-/// Intercepts mouse clicks and re-posts them as CGEvents so the underlying
-/// host app view (hidden beneath this overlay) can receive them.
-@interface KKEventForwardingView : NSView
-@property(nonatomic, copy) void (^onMouseDown)(NSEvent *event);
-@end
-
-@implementation KKEventForwardingView
-
-- (void)mouseDown:(NSEvent *)event {
-  if (self.onMouseDown) {
-    self.onMouseDown(event);
-  }
-
-  [self forwardMouseEvent:event type:kCGEventLeftMouseDown];
-}
-
-- (void)forwardMouseEvent:(NSEvent *)event type:(CGEventType)eventType {
-  self.hidden = YES;
-
-  CGPoint mouseCursorPosition = [self cgPointFromEvent:event];
-  CGMouseButton button = kCGMouseButtonLeft;
-  if (eventType == kCGEventRightMouseDown ||
-      eventType == kCGEventRightMouseUp) {
-    button = kCGMouseButtonRight;
-  }
-
-  CGEventRef cgEvent =
-      CGEventCreateMouseEvent(NULL, eventType, mouseCursorPosition, button);
-  CGEventSetIntegerValueField(cgEvent, kCGEventSourceUserData,
-                              kSimulatedEventMarker);
-  CGEventPost(kCGHIDEventTap, cgEvent);
-  CFRelease(cgEvent);
-
-  dispatch_async(dispatch_get_main_queue(), ^{
-    self.hidden = NO;
-  });
-}
-
-- (CGPoint)cgPointFromEvent:(NSEvent *)event {
-  NSPoint windowPoint = [event locationInWindow];
-  NSPoint screenPoint = [[self window] convertPointToScreen:windowPoint];
-  NSScreen *screen = [[self window] screen] ?: [NSScreen mainScreen];
-  CGFloat screenHeight = screen.frame.size.height;
-  return CGPointMake(screenPoint.x, screenHeight - screenPoint.y);
-}
-
-@end
-
-/// Draws a downward-pointing chevron to indicate a menu is available.
-@interface KKMenuChevronView : NSView
-@end
-
-@implementation KKMenuChevronView
-
-- (void)drawRect:(NSRect)dirtyRect {
-  [super drawRect:dirtyRect];
-
-  CGFloat chevronWidth = 6.5;
-  CGFloat chevronHeight = 3.5;
-  CGFloat rightMargin = 5.5;
-  CGFloat bottomOffset = 0.5;
-
-  CGFloat x = self.bounds.size.width - rightMargin - chevronWidth;
-  CGFloat y = (self.bounds.size.height - chevronHeight) / 2;
-
-  NSBezierPath *chevron = [NSBezierPath bezierPath];
-
-  // Chevron pointing down
-  [chevron moveToPoint:NSMakePoint(0, chevronHeight)]; // Top left
-  [chevron lineToPoint:NSMakePoint(chevronWidth / 2, 0)];
-  [chevron lineToPoint:NSMakePoint(chevronWidth, chevronHeight)]; // Top right
-
-  NSAffineTransform *transform = [NSAffineTransform transform];
-  [transform translateXBy:x yBy:y + bottomOffset];
-  [chevron transformUsingAffineTransform:transform];
-
-  [[NSColor inspectorLabelColor] setStroke];
-  [chevron setLineWidth:1.5];
-  [chevron stroke];
-}
-
-@end
-
-/// Draws a diamond-shaped keyframe indicator.
-/// Shows an outlined diamond with a + when no keyframe exists at the current
-/// time, and a filled diamond with a − when one does.
-@interface KKKeyframeDiamondView : NSView
-@property(nonatomic) BOOL keyframeExists;
-@end
-
-@implementation KKKeyframeDiamondView
-
-- (void)drawRect:(NSRect)dirtyRect {
-  [super drawRect:dirtyRect];
-
-  CGFloat diamondSize = 10;
-  CGFloat rightMargin = 2.0;
-  CGFloat bottomOffset = 0.5;
-  CGFloat x = self.bounds.size.width - rightMargin - diamondSize;
-  CGFloat y = (self.bounds.size.height - diamondSize) / 2;
-  CGFloat halfSize = diamondSize / 2;
-
-  NSBezierPath *diamond = [self diamondPathWithSize:diamondSize];
-  NSBezierPath *symbol = [self symbolPathWithSize:diamondSize];
-
-  NSAffineTransform *transform = [NSAffineTransform transform];
-  [transform translateXBy:x yBy:y + halfSize + bottomOffset];
-  [diamond transformUsingAffineTransform:transform];
-  [symbol transformUsingAffineTransform:transform];
-
-  if (_keyframeExists) {
-    [self drawFilledDiamond:diamond withSymbolCutout:symbol];
-  } else {
-    [self drawStrokedDiamond:diamond withSymbol:symbol];
-  }
-}
-
-- (NSBezierPath *)diamondPathWithSize:(CGFloat)size {
-  NSBezierPath *diamond = [NSBezierPath bezierPath];
-  CGFloat halfSize = size / 2;
-
-  // Origin at (0, 0), drawing from left to right for positioning
-  [diamond moveToPoint:NSMakePoint(0, 0)];
-  [diamond lineToPoint:NSMakePoint(halfSize, halfSize)];
-  [diamond lineToPoint:NSMakePoint(size, 0)];
-  [diamond lineToPoint:NSMakePoint(halfSize, -halfSize)];
-  [diamond closePath];
-
-  return diamond;
-}
-
-- (NSBezierPath *)symbolPathWithSize:(CGFloat)diamondSize {
-  NSBezierPath *symbol = [NSBezierPath bezierPath];
-  CGFloat halfSize = diamondSize / 2;
-  CGFloat symbolSize = 2.5;
-
-  if (self.keyframeExists) {
-    // Dash: remove/update keyframe
-    [symbol moveToPoint:NSMakePoint(halfSize - symbolSize, 0)];
-    [symbol lineToPoint:NSMakePoint(halfSize + symbolSize, 0)];
-  } else {
-    // Plus: add keyframe
-    [symbol moveToPoint:NSMakePoint(halfSize, -symbolSize)];
-    [symbol lineToPoint:NSMakePoint(halfSize, symbolSize)];
-    [symbol moveToPoint:NSMakePoint(halfSize - symbolSize, 0)];
-    [symbol lineToPoint:NSMakePoint(halfSize + symbolSize, 0)];
-  }
-
-  return symbol;
-}
-
-- (void)drawStrokedDiamond:(NSBezierPath *)diamond
-                withSymbol:(NSBezierPath *)symbol {
-  [[NSColor inspectorLabelColor] set];
-  [diamond setLineWidth:1.0];
-  [diamond stroke];
-  [symbol setLineWidth:1.0];
-  [symbol stroke];
-}
-
-- (void)drawFilledDiamond:(NSBezierPath *)diamond
-         withSymbolCutout:(NSBezierPath *)symbol {
-  [[NSColor inspectorLabelColor] set];
-  [diamond fill];
-  [diamond setLineWidth:1.0];
-  [diamond stroke];
-
-  [[NSColor inspectorBackground] set];
-  [symbol setLineWidth:1.0];
-  [symbol stroke];
-}
-
-@end
-
-static const double kKeyframeControlWidth = 80.0;
+static const double kKeyframeControlWidth = 74.0;
 static const double kMenuChevronWidth = 20.0;
 static const double kKeyframeDiamondWidth = 18.0;
 
@@ -204,6 +34,10 @@ static const double kKeyframeDiamondWidth = 18.0;
   NSInteger _monitorInstallerEventNumber;
 
   BOOL _isKeyframeDiamondPressed;
+  BOOL _isAnimatable;
+
+  NSLayoutConstraint *_leftViewWidthConstraint;
+  NSMutableArray<NSLayoutConstraint *> *_sectionConstraints;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect
@@ -213,6 +47,9 @@ static const double kKeyframeDiamondWidth = 18.0;
   if (self) {
     _apiManager = apiManager;
     _parameterId = parameterId;
+    _sectionConstraints = [NSMutableArray array];
+
+    [self fetchIsAnimatable];
 
     [self setupViews];
     [self setupConstraints];
@@ -226,7 +63,9 @@ static const double kKeyframeDiamondWidth = 18.0;
 - (void)drawRect:(NSRect)dirtyRect {
   // drawRect runs anytime play head moves, keyframe is added/removed, etc
   [super drawRect:dirtyRect];
-  [self refreshKeyframeState];
+  if (_isAnimatable) {
+    [self refreshKeyframeState];
+  }
 }
 
 - (void)refreshKeyframeState {
@@ -251,11 +90,32 @@ static const double kKeyframeDiamondWidth = 18.0;
   [_keyframeDiamond setNeedsDisplay:YES];
 }
 
+- (void)fetchIsAnimatable {
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+  if (!actionAPI) {
+    _isAnimatable = YES;
+    return;
+  }
+
+  id<FxParameterRetrievalAPI_v6> retrievalAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+
+  UInt32 flags;
+  if ([retrievalAPI getParameterFlags:&flags fromParameter:_parameterId]) {
+    _isAnimatable = (flags & kFxParameterFlag_NOT_ANIMATABLE) == 0;
+  } else {
+    _isAnimatable = YES;
+  }
+
+  [actionAPI endAction:self];
+}
+
 - (void)setupViews {
   _backgroundView = [[NSView alloc] initWithFrame:NSZeroRect];
   _backgroundView.translatesAutoresizingMaskIntoConstraints = NO;
   _backgroundView.wantsLayer = YES;
-  _backgroundView.layer.backgroundColor = [[NSColor redColor] CGColor];
   [self addSubview:_backgroundView];
 
   _controlsRegion = [[KKEventForwardingView alloc] initWithFrame:NSZeroRect];
@@ -273,16 +133,39 @@ static const double kKeyframeDiamondWidth = 18.0;
   _menuChevron.wantsLayer = YES;
   [_controlsRegion addSubview:_menuChevron];
 
-  _keyframeDiamond = [[KKKeyframeDiamondView alloc] initWithFrame:NSZeroRect];
-  _keyframeDiamond.translatesAutoresizingMaskIntoConstraints = NO;
-  _keyframeDiamond.wantsLayer = YES;
-  [_controlsRegion addSubview:_keyframeDiamond];
+  if (_isAnimatable) {
+    _keyframeDiamond = [[KKKeyframeDiamondView alloc] initWithFrame:NSZeroRect];
+    _keyframeDiamond.translatesAutoresizingMaskIntoConstraints = NO;
+    _keyframeDiamond.wantsLayer = YES;
+    [_controlsRegion addSubview:_keyframeDiamond];
+  }
 }
 
 - (void)setupConstraints {
   // Layout lag when resizing inspector is most likely down to ViewBridge XPC
   // round-trip, it takes time for our view to get the new size from the host
   // app
+  NSMutableArray *constraints = [NSMutableArray arrayWithArray:@[
+    [_backgroundView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+    [_backgroundView.topAnchor constraintEqualToAnchor:self.topAnchor],
+    [_backgroundView.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
+    [_backgroundView.trailingAnchor
+        constraintEqualToAnchor:self.trailingAnchor
+                       constant:-kKeyframeControlWidth],
+
+    [_controlsRegion.leadingAnchor
+        constraintEqualToAnchor:_backgroundView.trailingAnchor],
+    [_controlsRegion.trailingAnchor
+        constraintEqualToAnchor:self.trailingAnchor],
+    [_controlsRegion.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    [_controlsRegion.heightAnchor constraintEqualToAnchor:self.heightAnchor],
+
+    [_menuChevron.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+    [_menuChevron.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    [_menuChevron.widthAnchor constraintEqualToConstant:kMenuChevronWidth],
+    [_menuChevron.heightAnchor constraintEqualToAnchor:self.heightAnchor],
+  ]];
+
   [NSLayoutConstraint activateConstraints:@[
     [_backgroundView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
     [_backgroundView.topAnchor constraintEqualToAnchor:self.topAnchor],
@@ -302,14 +185,150 @@ static const double kKeyframeDiamondWidth = 18.0;
     [_menuChevron.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
     [_menuChevron.widthAnchor constraintEqualToConstant:kMenuChevronWidth],
     [_menuChevron.heightAnchor constraintEqualToAnchor:self.heightAnchor],
-
-    [_keyframeDiamond.trailingAnchor
-        constraintEqualToAnchor:_menuChevron.leadingAnchor],
-    [_keyframeDiamond.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-    [_keyframeDiamond.widthAnchor
-        constraintEqualToConstant:kKeyframeDiamondWidth],
-    [_keyframeDiamond.heightAnchor constraintEqualToAnchor:self.heightAnchor]
   ]];
+
+  if (_isAnimatable) {
+    [constraints addObjectsFromArray:@[
+      [_keyframeDiamond.trailingAnchor
+          constraintEqualToAnchor:_menuChevron.leadingAnchor],
+      [_keyframeDiamond.centerYAnchor
+          constraintEqualToAnchor:self.centerYAnchor],
+      [_keyframeDiamond.widthAnchor
+          constraintEqualToConstant:kKeyframeDiamondWidth],
+      [_keyframeDiamond.heightAnchor constraintEqualToAnchor:self.heightAnchor]
+    ]];
+  }
+
+  [NSLayoutConstraint activateConstraints:constraints];
+}
+
+- (void)updateSectionConstraints {
+  [NSLayoutConstraint deactivateConstraints:_sectionConstraints];
+  [_sectionConstraints removeAllObjects];
+  _leftViewWidthConstraint = nil;
+
+  if (_leftView && _rightView) {
+    NSMutableArray *constraints = [NSMutableArray arrayWithArray:@[
+      [_leftView.leadingAnchor
+          constraintEqualToAnchor:_backgroundView.leadingAnchor],
+      [_leftView.topAnchor constraintEqualToAnchor:_backgroundView.topAnchor],
+      [_leftView.bottomAnchor
+          constraintEqualToAnchor:_backgroundView.bottomAnchor],
+
+      [_rightView.leadingAnchor
+          constraintEqualToAnchor:_leftView.trailingAnchor],
+      [_rightView.topAnchor constraintEqualToAnchor:_backgroundView.topAnchor],
+      [_rightView.bottomAnchor
+          constraintEqualToAnchor:_backgroundView.bottomAnchor],
+      [_rightView.trailingAnchor
+          constraintEqualToAnchor:_backgroundView.trailingAnchor],
+    ]];
+
+    if ([KKHostInfo isRunningInFinalCut]) {
+      NSLayoutConstraint *leftMaxWidth =
+          [_leftView.widthAnchor constraintLessThanOrEqualToConstant:179.0];
+      leftMaxWidth.priority = NSLayoutPriorityRequired;
+
+      NSLayoutConstraint *rightMinWidth =
+          [_rightView.widthAnchor constraintGreaterThanOrEqualToConstant:179.0];
+      rightMinWidth.priority = NSLayoutPriorityRequired;
+
+      [constraints addObjectsFromArray:@[ leftMaxWidth, rightMinWidth ]];
+
+      [_leftView
+          setContentCompressionResistancePriority:NSLayoutPriorityDefaultHigh
+                                   forOrientation:
+                                       NSLayoutConstraintOrientationHorizontal];
+      [_rightView
+          setContentCompressionResistancePriority:NSLayoutPriorityDefaultLow
+                                   forOrientation:
+                                       NSLayoutConstraintOrientationHorizontal];
+      [_leftView
+          setContentHuggingPriority:NSLayoutPriorityDefaultHigh
+                     forOrientation:NSLayoutConstraintOrientationHorizontal];
+      [_rightView
+          setContentHuggingPriority:NSLayoutPriorityDefaultLow
+                     forOrientation:NSLayoutConstraintOrientationHorizontal];
+    } else {
+      // 'layout' handles actual sizing
+      _leftViewWidthConstraint =
+          [_leftView.widthAnchor constraintEqualToConstant:100];
+      _leftViewWidthConstraint.priority = NSLayoutPriorityDefaultHigh;
+      [constraints addObject:_leftViewWidthConstraint];
+    }
+
+    [_sectionConstraints addObjectsFromArray:constraints];
+    [NSLayoutConstraint activateConstraints:constraints];
+  } else if (_leftView) {
+    NSArray *constraints = @[
+      [_leftView.leadingAnchor
+          constraintEqualToAnchor:_backgroundView.leadingAnchor],
+      [_leftView.topAnchor constraintEqualToAnchor:_backgroundView.topAnchor],
+      [_leftView.bottomAnchor
+          constraintEqualToAnchor:_backgroundView.bottomAnchor],
+      [_leftView.trailingAnchor
+          constraintEqualToAnchor:_backgroundView.trailingAnchor],
+    ];
+
+    [_sectionConstraints addObjectsFromArray:constraints];
+    [NSLayoutConstraint activateConstraints:constraints];
+  } else if (_rightView) {
+    NSArray *constraints = @[
+      [_rightView.leadingAnchor
+          constraintEqualToAnchor:_backgroundView.leadingAnchor],
+      [_rightView.topAnchor constraintEqualToAnchor:_backgroundView.topAnchor],
+      [_rightView.bottomAnchor
+          constraintEqualToAnchor:_backgroundView.bottomAnchor],
+      [_rightView.trailingAnchor
+          constraintEqualToAnchor:_backgroundView.trailingAnchor],
+    ];
+    [_sectionConstraints addObjectsFromArray:constraints];
+    [NSLayoutConstraint activateConstraints:constraints];
+  }
+}
+
+- (void)setLeftView:(NSView *)leftView {
+  [_leftView removeFromSuperview];
+  _leftView = leftView;
+  if (_leftView) {
+    _leftView.translatesAutoresizingMaskIntoConstraints = NO;
+    [_backgroundView addSubview:_leftView];
+  }
+  [self updateSectionConstraints];
+}
+
+- (void)setRightView:(NSView *)rightView {
+  [_rightView removeFromSuperview];
+  _rightView = rightView;
+  if (_rightView) {
+    _rightView.translatesAutoresizingMaskIntoConstraints = NO;
+    [_backgroundView addSubview:_rightView];
+  }
+  [self updateSectionConstraints];
+}
+
+- (void)layout {
+  [super layout];
+
+  if (![KKHostInfo isRunningInFinalCut] && _leftViewWidthConstraint) {
+    // Piecewise linear formula for pixel-perfect label/value split
+    // Max error: 0.16pt
+    CGFloat totalWidth = NSWidth(self.bounds);
+    CGFloat leftWidth;
+
+    if (totalWidth < 475) {
+      // Steeper slope
+      leftWidth = totalWidth * 0.3670886076 - 11.860759;
+    } else {
+      // Gentler slope
+      leftWidth = totalWidth * 0.3176696611 + 10.848616;
+    }
+
+    // Round to nearest 0.5pt
+    leftWidth = round(leftWidth * 2.0) / 2.0;
+
+    _leftViewWidthConstraint.constant = leftWidth;
+  }
 }
 
 - (void)setupEventHandlers {
@@ -327,7 +346,8 @@ static const double kKeyframeDiamondWidth = 18.0;
 
     if ([strongSelf->_menuChevron hitTest:locationInRegion]) {
       [strongSelf handleMenuChevronClick:event];
-    } else if ([strongSelf->_keyframeDiamond hitTest:locationInRegion]) {
+    } else if (strongSelf->_isAnimatable &&
+               [strongSelf->_keyframeDiamond hitTest:locationInRegion]) {
       // Hide diamond and let the underlying Motion/FCP button handle state
       [strongSelf handleKeyframeDiamondClick:event];
     }
@@ -377,7 +397,9 @@ static const double kKeyframeDiamondWidth = 18.0;
   if ([NSApp isActive] && !_isContextMenuOpen) {
     _isHovered = YES;
     [self updateControlsVisibility];
-    [self updateKeyframeDiamondHoverState:event];
+    if (_isAnimatable) {
+      [self updateKeyframeDiamondHoverState:event];
+    }
   }
 }
 
@@ -385,7 +407,9 @@ static const double kKeyframeDiamondWidth = 18.0;
   if (!_isContextMenuOpen) {
     _isHovered = NO;
     [self updateControlsVisibility];
-    [self updateKeyframeDiamondHoverState:event];
+    if (_isAnimatable) {
+      [self updateKeyframeDiamondHoverState:event];
+    }
   }
 }
 
@@ -566,7 +590,9 @@ static const double kKeyframeDiamondWidth = 18.0;
 - (void)updateControlsVisibility {
   BOOL visible = _isContextMenuOpen || _isHovered;
   _menuChevron.hidden = !visible;
-  _keyframeDiamond.hidden = !visible;
+  if (_isAnimatable) {
+    _keyframeDiamond.hidden = !visible;
+  }
 }
 
 - (void)dealloc {
