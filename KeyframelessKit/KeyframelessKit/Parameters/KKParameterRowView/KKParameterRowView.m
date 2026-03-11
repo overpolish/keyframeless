@@ -94,6 +94,10 @@ static const double kKeyframeDiamondWidth = 18.0;
   id<FxCustomParameterActionAPI_v4> actionAPI =
       [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actionAPI startAction:self];
+  if (!actionAPI) {
+    _isAnimatable = YES;
+    return;
+  }
 
   id<FxParameterRetrievalAPI_v6> retrievalAPI =
       [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];

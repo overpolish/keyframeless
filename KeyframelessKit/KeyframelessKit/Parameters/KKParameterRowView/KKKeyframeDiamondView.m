@@ -52,7 +52,7 @@
   CGFloat halfSize = diamondSize / 2;
   CGFloat symbolSize = 2.5;
 
-  if (self.keyframeExists) {
+  if (_keyframeExists) {
     // Dash: remove/update keyframe
     [symbol moveToPoint:NSMakePoint(halfSize - symbolSize, 0)];
     [symbol lineToPoint:NSMakePoint(halfSize + symbolSize, 0)];
