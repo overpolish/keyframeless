@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#import "KKHostInfo.h"
 #import "NSColor+KKColors.h"
-#import <KeyframelessKit/KKHostInfo.h>
 
 @implementation NSColor (KKColors)
 

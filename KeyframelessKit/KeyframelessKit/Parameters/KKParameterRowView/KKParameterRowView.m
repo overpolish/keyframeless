@@ -225,6 +225,10 @@ static const double kKeyframeDiamondWidth = 18.0;
     ]];
 
     if ([KKHostInfo isRunningInFinalCut]) {
+      NSLayoutConstraint *leftMinWidth =
+          [_leftView.widthAnchor constraintGreaterThanOrEqualToConstant:131.0];
+      leftMinWidth.priority = NSLayoutPriorityRequired;
+
       NSLayoutConstraint *leftMaxWidth =
           [_leftView.widthAnchor constraintLessThanOrEqualToConstant:179.0];
       leftMaxWidth.priority = NSLayoutPriorityRequired;
@@ -233,7 +237,8 @@ static const double kKeyframeDiamondWidth = 18.0;
           [_rightView.widthAnchor constraintGreaterThanOrEqualToConstant:179.0];
       rightMinWidth.priority = NSLayoutPriorityRequired;
 
-      [constraints addObjectsFromArray:@[ leftMaxWidth, rightMinWidth ]];
+      [constraints
+          addObjectsFromArray:@[ leftMinWidth, leftMaxWidth, rightMinWidth ]];
 
       [_leftView
           setContentCompressionResistancePriority:NSLayoutPriorityDefaultHigh
@@ -244,7 +249,7 @@ static const double kKeyframeDiamondWidth = 18.0;
                                    forOrientation:
                                        NSLayoutConstraintOrientationHorizontal];
       [_leftView
-          setContentHuggingPriority:NSLayoutPriorityDefaultHigh
+          setContentHuggingPriority:NSLayoutPriorityDefaultLow
                      forOrientation:NSLayoutConstraintOrientationHorizontal];
       [_rightView
           setContentHuggingPriority:NSLayoutPriorityDefaultLow
