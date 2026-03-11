@@ -7,6 +7,8 @@
 
 #import <Cocoa/Cocoa.h>
 
+NS_ASSUME_NONNULL_BEGIN
+
 @protocol PROAPIAccessing;
 
 @interface KKParameterRowView : NSView
@@ -25,3 +27,5 @@
                   parameterId:(UInt32)parameterId;
 
 @end
+
+NS_ASSUME_NONNULL_END
