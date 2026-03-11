@@ -4,12 +4,13 @@
  */
 
 #import "KKLabelView.h"
+#import "KKHostInfo.h"
 #import "NSColor+KKColors.h"
-#import <AppKit/AppKit.h>
-#include <CoreFoundation/CFCGTypes.h>
-#import <Foundation/Foundation.h>
+#include <AppKit/AppKit.h>
 
 static const CGFloat kLeadingMargin = 21.0;
+static const CGFloat kMotionFontSize = 11.0;
+static const CGFloat kFCPFontSize = 12.0;
 
 @implementation KKLabelView {
   NSString *_text;
@@ -47,14 +48,17 @@ static const CGFloat kLeadingMargin = 21.0;
 
 - (NSSize)intrinsicContentSize {
   NSSize textFieldSize = [_textField intrinsicContentSize];
-  return NSMakeSize(textFieldSize.width + kLeadingMargin, textFieldSize.height);
+  return NSMakeSize(NSViewNoIntrinsicMetric, textFieldSize.height);
 }
 
 + (NSFont *)labelFont {
   static NSFont *font = nil;
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
-    font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightLight];
+    font = [NSFont
+        systemFontOfSize:[KKHostInfo isRunningInFinalCut] ? kFCPFontSize
+                                                          : kMotionFontSize
+                  weight:NSFontWeightLight];
   });
   return font;
 }
