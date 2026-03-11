@@ -8,12 +8,17 @@
 #import <AppKit/AppKit.h>
 #import <CoreFoundation/CFCGTypes.h>
 #import <CoreGraphics/CGGeometry.h>
+#include <objc/NSObjCRuntime.h>
+
+const CGFloat kChevronWidth = 7.5;
+const CGFloat kChevronHeight = 9.0;
 
 @implementation KKChevronView {
   NSButton *_chevronButton;
   CGFloat _currentChevronRotation;
   NSLayoutConstraint *_centerXConstraint;
   NSLayoutConstraint *_centerYConstraint;
+  NSUInteger _chevronAnimationToken;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect {
@@ -35,6 +40,7 @@
 - (void)commonInit {
   _isExpanded = NO;
   _currentChevronRotation = 0.0;
+  _chevronAnimationToken = 0;
 
   _chevronButton = [self createChevronButton];
   [self addSubview:_chevronButton];
@@ -77,7 +83,7 @@
   if (animated) {
     [self animateChevronToExpanded:expanded];
   } else {
-    _currentChevronRotation = expanded ? 0.0 : 90.0;
+    _currentChevronRotation = expanded ? 90.0 : 0.0;
     [self updateChevronImage];
   }
 }
@@ -93,7 +99,12 @@
     imageCache = [[NSCache alloc] init];
   });
 
-  NSString *cacheKey = [NSString stringWithFormat:@"%.0f_%@", angle, color];
+  CGFloat r, g, b, a;
+  NSColor *calibratedColor =
+      [color colorUsingColorSpace:[NSColorSpace sRGBColorSpace]];
+  [calibratedColor getRed:&r green:&g blue:&b alpha:&a];
+  NSString *cacheKey = [NSString
+      stringWithFormat:@"%.0f_%.3f_%.3f_%.3f_%.3f", angle, r, g, b, a];
   NSImage *cached = [imageCache objectForKey:cacheKey];
   if (cached) {
     return cached;
@@ -179,33 +190,37 @@
 }
 
 - (void)animateChevronToExpanded:(BOOL)expanded {
-  if (expanded) {
-    dispatch_after(
-        dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.0 * NSEC_PER_SEC)),
-        dispatch_get_main_queue(), ^{
-          self->_currentChevronRotation = 40.0;
-          [self updateChevronImage];
-        });
+  _chevronAnimationToken++;
+  NSUInteger currentToken = _chevronAnimationToken;
 
+  __weak typeof(self) weakSelf = self;
+  if (expanded) {
+    _currentChevronRotation = 40.0;
+    [self updateChevronImage];
+
+    // Schedule second frame
     dispatch_after(
         dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.08 * NSEC_PER_SEC)),
         dispatch_get_main_queue(), ^{
-          self->_currentChevronRotation = 90.0;
-          [self updateChevronImage];
+          __strong typeof(weakSelf) strongSelf = weakSelf;
+          if (strongSelf->_chevronAnimationToken == currentToken) {
+            strongSelf->_currentChevronRotation = 90.0;
+            [strongSelf updateChevronImage];
+          }
         });
   } else {
-    dispatch_after(
-        dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.0 * NSEC_PER_SEC)),
-        dispatch_get_main_queue(), ^{
-          self->_currentChevronRotation = 40.0;
-          [self updateChevronImage];
-        });
+    _currentChevronRotation = 40.0;
+    [self updateChevronImage];
 
+    // Schedule second frame
     dispatch_after(
         dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.08 * NSEC_PER_SEC)),
         dispatch_get_main_queue(), ^{
-          self->_currentChevronRotation = 0.0;
-          [self updateChevronImage];
+          __strong typeof(weakSelf) strongSelf = weakSelf;
+          if (strongSelf->_chevronAnimationToken == currentToken) {
+            strongSelf->_currentChevronRotation = 0.0;
+            [strongSelf updateChevronImage];
+          }
         });
   }
 }
