@@ -15,6 +15,7 @@
     "*.metal": "objective-c"
   },
   "cSpell.words": [
+    "ANIMATABLE",
     "autoreleasepool",
     "autoreleasing",
     "autoresizing",

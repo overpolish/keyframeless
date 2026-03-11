@@ -12,6 +12,8 @@
 #import <Cocoa/Cocoa.h>
 #import <CoreMedia/CMTime.h>
 #import <FxPlug/FxPlugSDK.h>
+#include <FxPlug/FxTypes.h>
+#include <MacTypes.h>
 
 static const double kKeyframeControlWidth = 74.0;
 static const double kMenuChevronWidth = 20.0;
@@ -32,6 +34,7 @@ static const double kKeyframeDiamondWidth = 18.0;
   NSInteger _monitorInstallerEventNumber;
 
   BOOL _isKeyframeDiamondPressed;
+  BOOL _isAnimatable;
 
   NSLayoutConstraint *_leftViewWidthConstraint;
   NSMutableArray<NSLayoutConstraint *> *_sectionConstraints;
@@ -46,6 +49,8 @@ static const double kKeyframeDiamondWidth = 18.0;
     _parameterId = parameterId;
     _sectionConstraints = [NSMutableArray array];
 
+    [self fetchIsAnimatable];
+
     [self setupViews];
     [self setupConstraints];
     [self setupEventHandlers];
@@ -58,7 +63,9 @@ static const double kKeyframeDiamondWidth = 18.0;
 - (void)drawRect:(NSRect)dirtyRect {
   // drawRect runs anytime play head moves, keyframe is added/removed, etc
   [super drawRect:dirtyRect];
-  [self refreshKeyframeState];
+  if (_isAnimatable) {
+    [self refreshKeyframeState];
+  }
 }
 
 - (void)refreshKeyframeState {
@@ -76,14 +83,29 @@ static const double kKeyframeDiamondWidth = 18.0;
              hasKeyframe:&hasKeyframe
                   atTime:currentTime];
 
-  // TODO check if is animatable flag, if not animatable dont show keyframe,
-  // only chevron
-
   _keyframeDiamond.keyframeExists = hasKeyframe;
 
   [actionAPI endAction:self];
 
   [_keyframeDiamond setNeedsDisplay:YES];
+}
+
+- (void)fetchIsAnimatable {
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+
+  id<FxParameterRetrievalAPI_v6> retrievalAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+
+  UInt32 flags;
+  if ([retrievalAPI getParameterFlags:&flags fromParameter:_parameterId]) {
+    _isAnimatable = (flags & kFxParameterFlag_NOT_ANIMATABLE) == 0;
+  } else {
+    _isAnimatable = YES;
+  }
+
+  [actionAPI endAction:self];
 }
 
 - (void)setupViews {
@@ -107,16 +129,39 @@ static const double kKeyframeDiamondWidth = 18.0;
   _menuChevron.wantsLayer = YES;
   [_controlsRegion addSubview:_menuChevron];
 
-  _keyframeDiamond = [[KKKeyframeDiamondView alloc] initWithFrame:NSZeroRect];
-  _keyframeDiamond.translatesAutoresizingMaskIntoConstraints = NO;
-  _keyframeDiamond.wantsLayer = YES;
-  [_controlsRegion addSubview:_keyframeDiamond];
+  if (_isAnimatable) {
+    _keyframeDiamond = [[KKKeyframeDiamondView alloc] initWithFrame:NSZeroRect];
+    _keyframeDiamond.translatesAutoresizingMaskIntoConstraints = NO;
+    _keyframeDiamond.wantsLayer = YES;
+    [_controlsRegion addSubview:_keyframeDiamond];
+  }
 }
 
 - (void)setupConstraints {
   // Layout lag when resizing inspector is most likely down to ViewBridge XPC
   // round-trip, it takes time for our view to get the new size from the host
   // app
+  NSMutableArray *constraints = [NSMutableArray arrayWithArray:@[
+    [_backgroundView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+    [_backgroundView.topAnchor constraintEqualToAnchor:self.topAnchor],
+    [_backgroundView.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
+    [_backgroundView.trailingAnchor
+        constraintEqualToAnchor:self.trailingAnchor
+                       constant:-kKeyframeControlWidth],
+
+    [_controlsRegion.leadingAnchor
+        constraintEqualToAnchor:_backgroundView.trailingAnchor],
+    [_controlsRegion.trailingAnchor
+        constraintEqualToAnchor:self.trailingAnchor],
+    [_controlsRegion.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    [_controlsRegion.heightAnchor constraintEqualToAnchor:self.heightAnchor],
+
+    [_menuChevron.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+    [_menuChevron.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    [_menuChevron.widthAnchor constraintEqualToConstant:kMenuChevronWidth],
+    [_menuChevron.heightAnchor constraintEqualToAnchor:self.heightAnchor],
+  ]];
+
   [NSLayoutConstraint activateConstraints:@[
     [_backgroundView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
     [_backgroundView.topAnchor constraintEqualToAnchor:self.topAnchor],
@@ -136,14 +181,21 @@ static const double kKeyframeDiamondWidth = 18.0;
     [_menuChevron.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
     [_menuChevron.widthAnchor constraintEqualToConstant:kMenuChevronWidth],
     [_menuChevron.heightAnchor constraintEqualToAnchor:self.heightAnchor],
-
-    [_keyframeDiamond.trailingAnchor
-        constraintEqualToAnchor:_menuChevron.leadingAnchor],
-    [_keyframeDiamond.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-    [_keyframeDiamond.widthAnchor
-        constraintEqualToConstant:kKeyframeDiamondWidth],
-    [_keyframeDiamond.heightAnchor constraintEqualToAnchor:self.heightAnchor]
   ]];
+
+  if (_isAnimatable) {
+    [constraints addObjectsFromArray:@[
+      [_keyframeDiamond.trailingAnchor
+          constraintEqualToAnchor:_menuChevron.leadingAnchor],
+      [_keyframeDiamond.centerYAnchor
+          constraintEqualToAnchor:self.centerYAnchor],
+      [_keyframeDiamond.widthAnchor
+          constraintEqualToConstant:kKeyframeDiamondWidth],
+      [_keyframeDiamond.heightAnchor constraintEqualToAnchor:self.heightAnchor]
+    ]];
+  }
+
+  [NSLayoutConstraint activateConstraints:constraints];
 }
 
 - (void)updateSectionConstraints {
@@ -290,7 +342,8 @@ static const double kKeyframeDiamondWidth = 18.0;
 
     if ([strongSelf->_menuChevron hitTest:locationInRegion]) {
       [strongSelf handleMenuChevronClick:event];
-    } else if ([strongSelf->_keyframeDiamond hitTest:locationInRegion]) {
+    } else if (strongSelf->_isAnimatable &&
+               [strongSelf->_keyframeDiamond hitTest:locationInRegion]) {
       // Hide diamond and let the underlying Motion/FCP button handle state
       [strongSelf handleKeyframeDiamondClick:event];
     }
@@ -340,7 +393,9 @@ static const double kKeyframeDiamondWidth = 18.0;
   if ([NSApp isActive] && !_isContextMenuOpen) {
     _isHovered = YES;
     [self updateControlsVisibility];
-    [self updateKeyframeDiamondHoverState:event];
+    if (_isAnimatable) {
+      [self updateKeyframeDiamondHoverState:event];
+    }
   }
 }
 
@@ -348,7 +403,9 @@ static const double kKeyframeDiamondWidth = 18.0;
   if (!_isContextMenuOpen) {
     _isHovered = NO;
     [self updateControlsVisibility];
-    [self updateKeyframeDiamondHoverState:event];
+    if (_isAnimatable) {
+      [self updateKeyframeDiamondHoverState:event];
+    }
   }
 }
 
@@ -529,7 +586,9 @@ static const double kKeyframeDiamondWidth = 18.0;
 - (void)updateControlsVisibility {
   BOOL visible = _isContextMenuOpen || _isHovered;
   _menuChevron.hidden = !visible;
-  _keyframeDiamond.hidden = !visible;
+  if (_isAnimatable) {
+    _keyframeDiamond.hidden = !visible;
+  }
 }
 
 - (void)dealloc {
