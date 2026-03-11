@@ -5,13 +5,15 @@
 
 #import "KKParameterRowView.h"
 #import "KKEventForwardingView.h"
+#import "KKHostInfo.h"
 #import "KKKeyframeDiamondView.h"
 #import "KKMenuChevronView.h"
+#include <AppKit/AppKit.h>
 #import <Cocoa/Cocoa.h>
 #import <CoreMedia/CMTime.h>
 #import <FxPlug/FxPlugSDK.h>
 
-static const double kKeyframeControlWidth = 80.0;
+static const double kKeyframeControlWidth = 74.0;
 static const double kMenuChevronWidth = 20.0;
 static const double kKeyframeDiamondWidth = 18.0;
 
@@ -21,6 +23,8 @@ static const double kKeyframeDiamondWidth = 18.0;
   // we are in ViewBridge Jail - we can only guess
   BOOL _isContextMenuOpen;
   NSView *_backgroundView;
+  NSView *_leftView;
+  NSView *_rightView;
   KKEventForwardingView *_controlsRegion;
   KKMenuChevronView *_menuChevron;
   KKKeyframeDiamondView *_keyframeDiamond;
@@ -30,6 +34,8 @@ static const double kKeyframeDiamondWidth = 18.0;
   NSInteger _monitorInstallerEventNumber;
 
   BOOL _isKeyframeDiamondPressed;
+
+  NSLayoutConstraint *_leftViewWidthConstraint;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect
@@ -70,6 +76,9 @@ static const double kKeyframeDiamondWidth = 18.0;
              hasKeyframe:&hasKeyframe
                   atTime:currentTime];
 
+  // TODO check if is animatable flag, if not animatable dont show keyframe,
+  // only chevron
+
   _keyframeDiamond.keyframeExists = hasKeyframe;
 
   [actionAPI endAction:self];
@@ -81,8 +90,19 @@ static const double kKeyframeDiamondWidth = 18.0;
   _backgroundView = [[NSView alloc] initWithFrame:NSZeroRect];
   _backgroundView.translatesAutoresizingMaskIntoConstraints = NO;
   _backgroundView.wantsLayer = YES;
-  _backgroundView.layer.backgroundColor = [[NSColor redColor] CGColor];
   [self addSubview:_backgroundView];
+
+  _leftView = [[NSView alloc] initWithFrame:NSZeroRect];
+  _leftView.translatesAutoresizingMaskIntoConstraints = NO;
+  _leftView.wantsLayer = YES;
+  _leftView.layer.backgroundColor = [[NSColor redColor] CGColor];
+  [_backgroundView addSubview:_leftView];
+
+  _rightView = [[NSView alloc] initWithFrame:NSZeroRect];
+  _rightView.translatesAutoresizingMaskIntoConstraints = NO;
+  _rightView.wantsLayer = YES;
+  _rightView.layer.backgroundColor = [[NSColor greenColor] CGColor];
+  [_backgroundView addSubview:_rightView];
 
   _controlsRegion = [[KKEventForwardingView alloc] initWithFrame:NSZeroRect];
   _controlsRegion.translatesAutoresizingMaskIntoConstraints = NO;
@@ -117,6 +137,19 @@ static const double kKeyframeDiamondWidth = 18.0;
         constraintEqualToAnchor:self.trailingAnchor
                        constant:-kKeyframeControlWidth],
 
+    [_leftView.leadingAnchor
+        constraintEqualToAnchor:_backgroundView.leadingAnchor],
+    [_leftView.topAnchor constraintEqualToAnchor:_backgroundView.topAnchor],
+    [_leftView.bottomAnchor
+        constraintEqualToAnchor:_backgroundView.bottomAnchor],
+
+    [_rightView.leadingAnchor constraintEqualToAnchor:_leftView.trailingAnchor],
+    [_rightView.topAnchor constraintEqualToAnchor:_backgroundView.topAnchor],
+    [_rightView.bottomAnchor
+        constraintEqualToAnchor:_backgroundView.bottomAnchor],
+    [_rightView.trailingAnchor
+        constraintEqualToAnchor:_backgroundView.trailingAnchor],
+
     [_controlsRegion.leadingAnchor
         constraintEqualToAnchor:_backgroundView.trailingAnchor],
     [_controlsRegion.trailingAnchor
@@ -136,6 +169,66 @@ static const double kKeyframeDiamondWidth = 18.0;
         constraintEqualToConstant:kKeyframeDiamondWidth],
     [_keyframeDiamond.heightAnchor constraintEqualToAnchor:self.heightAnchor]
   ]];
+
+  if ([KKHostInfo isRunningInFinalCut]) {
+    NSLayoutConstraint *leftMaxWidth =
+        [_leftView.widthAnchor constraintLessThanOrEqualToConstant:179.0];
+    leftMaxWidth.priority = NSLayoutPriorityRequired;
+    leftMaxWidth.active = YES;
+
+    NSLayoutConstraint *rightMinWidth =
+        [_rightView.widthAnchor constraintGreaterThanOrEqualToConstant:179.0];
+    rightMinWidth.priority = NSLayoutPriorityRequired;
+    rightMinWidth.active = YES;
+
+    [_leftView
+        setContentCompressionResistancePriority:NSLayoutPriorityDefaultHigh
+                                 forOrientation:
+                                     NSLayoutConstraintOrientationHorizontal];
+
+    [_rightView
+        setContentCompressionResistancePriority:NSLayoutPriorityDefaultLow
+                                 forOrientation:
+                                     NSLayoutConstraintOrientationHorizontal];
+
+    [_leftView
+        setContentHuggingPriority:NSLayoutPriorityDefaultHigh
+                   forOrientation:NSLayoutConstraintOrientationHorizontal];
+
+    [_rightView
+        setContentHuggingPriority:NSLayoutPriorityDefaultLow
+                   forOrientation:NSLayoutConstraintOrientationHorizontal];
+  } else {
+    // 'layout' handles actual sizing
+    _leftViewWidthConstraint =
+        [_leftView.widthAnchor constraintEqualToConstant:100];
+    _leftViewWidthConstraint.priority = NSLayoutPriorityDefaultHigh;
+    _leftViewWidthConstraint.active = YES;
+  }
+}
+
+- (void)layout {
+  [super layout];
+
+  if (![KKHostInfo isRunningInFinalCut]) {
+    // Piecewise linear formula for pixel-perfect label/value split
+    // Max error: 0.16pt
+    CGFloat totalWidth = NSWidth(self.bounds);
+    CGFloat leftWidth;
+
+    if (totalWidth < 475) {
+      // Steeper slope
+      leftWidth = totalWidth * 0.3670886076 - 11.860759;
+    } else {
+      // Gentler slope
+      leftWidth = totalWidth * 0.3176696611 + 10.848616;
+    }
+
+    // Round to nearest 0.5pt
+    leftWidth = round(leftWidth * 2.0) / 2.0;
+
+    _leftViewWidthConstraint.constant = leftWidth;
+  }
 }
 
 - (void)setupEventHandlers {
