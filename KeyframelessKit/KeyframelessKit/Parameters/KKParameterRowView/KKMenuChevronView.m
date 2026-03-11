@@ -30,7 +30,7 @@
   [transform translateXBy:x yBy:y + bottomOffset];
   [chevron transformUsingAffineTransform:transform];
 
-  [[NSColor inspectorLabelColor] setStroke];
+  [[NSColor inspectorLabel] setStroke];
   [chevron setLineWidth:1.5];
   [chevron stroke];
 }

@@ -8,12 +8,12 @@
 #import "KKHostInfo.h"
 #import "KKKeyframeDiamondView.h"
 #import "KKMenuChevronView.h"
-#include <AppKit/AppKit.h>
+#import <AppKit/AppKit.h>
 #import <Cocoa/Cocoa.h>
 #import <CoreMedia/CMTime.h>
 #import <FxPlug/FxPlugSDK.h>
-#include <FxPlug/FxTypes.h>
-#include <MacTypes.h>
+#import <FxPlug/FxTypes.h>
+#import <MacTypes.h>
 
 static const double kKeyframeControlWidth = 74.0;
 static const double kMenuChevronWidth = 20.0;

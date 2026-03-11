@@ -10,20 +10,23 @@
 
 @interface NSColor (KKColors)
 
-+ (NSColor *)inspectorLabelColor;
++ (NSColor *)inspectorLabel;
 + (NSColor *)inspectorBackground;
 
 // Mainly for OSC
-+ (NSColor *)primaryColor;
-+ (NSColor *)outlineColor;
-+ (NSColor *)hoverColor;
-+ (NSColor *)activeColor;
-+ (NSColor *)transparentColor;
++ (NSColor *)primary;
++ (NSColor *)outline;
++ (NSColor *)hover;
++ (NSColor *)active;
++ (NSColor *)transparent;
 
 + (NSColor *)sliderTrackBackground;
 + (NSColor *)sliderTrackFill;
 + (NSColor *)sliderKnobFill;
 + (NSColor *)sliderKnobOutline;
+
++ (NSColor *)expandChevron;
++ (NSColor *)activeExpandChevron;
 
 - (simd_float4)simdFloat4;
 
