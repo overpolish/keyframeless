@@ -69,7 +69,7 @@
 
 - (void)drawStrokedDiamond:(NSBezierPath *)diamond
                 withSymbol:(NSBezierPath *)symbol {
-  [[NSColor inspectorLabelColor] set];
+  [[NSColor inspectorLabel] set];
   [diamond setLineWidth:1.0];
   [diamond stroke];
   [symbol setLineWidth:1.0];
@@ -78,7 +78,7 @@
 
 - (void)drawFilledDiamond:(NSBezierPath *)diamond
          withSymbolCutout:(NSBezierPath *)symbol {
-  [[NSColor inspectorLabelColor] set];
+  [[NSColor inspectorLabel] set];
   [diamond fill];
   [diamond setLineWidth:1.0];
   [diamond stroke];

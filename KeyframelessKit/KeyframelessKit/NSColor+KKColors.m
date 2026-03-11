@@ -8,7 +8,7 @@
 
 @implementation NSColor (KKColors)
 
-+ (NSColor *)inspectorLabelColor {
++ (NSColor *)inspectorLabel {
   return [NSColor colorWithWhite:179.0 / 255.0 alpha:1.0];
 }
 
@@ -19,23 +19,23 @@
   return [NSColor colorWithWhite:45.0 / 255.0 alpha:1.0];
 }
 
-+ (NSColor *)primaryColor {
++ (NSColor *)primary {
   return [NSColor colorWithRed:0.7f green:0.7f blue:0.7f alpha:0.65f];
 }
 
-+ (NSColor *)outlineColor {
++ (NSColor *)outline {
   return [NSColor colorWithRed:0.0f green:0.0f blue:0.0f alpha:0.8f];
 }
 
-+ (NSColor *)hoverColor {
++ (NSColor *)hover {
   return [NSColor colorWithRed:0.7f green:0.7f blue:0.7f alpha:0.8f];
 }
 
-+ (NSColor *)activeColor {
++ (NSColor *)active {
   return [NSColor colorWithRed:0.7f green:0.7f blue:0.7f alpha:0.95f];
 }
 
-+ (NSColor *)transparentColor {
++ (NSColor *)transparent {
   return [NSColor colorWithRed:0.0f green:0.0f blue:0.0f alpha:0.0f];
 }
 
@@ -62,6 +62,14 @@
                          green:0x17 / 255.0
                           blue:0x17 / 255.0
                          alpha:1.0];
+}
+
++ (NSColor *)expandChevron {
+  return [NSColor colorWithWhite:0x91 / 255.0 alpha:1.0];
+}
+
++ (NSColor *)activeExpandChevron {
+  return [NSColor colorWithWhite:0x6e / 255.0 alpha:1.0];
 }
 
 - (simd_float4)simdFloat4 {
