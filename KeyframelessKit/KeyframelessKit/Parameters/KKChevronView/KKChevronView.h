@@ -10,8 +10,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-static const CGFloat kChevronWidth = 7.5;
-static const CGFloat kChevronHeight = 9.0;
+extern const CGFloat kChevronWidth;
+extern const CGFloat kChevronHeight;
 
 @interface KKChevronView : NSView
 
