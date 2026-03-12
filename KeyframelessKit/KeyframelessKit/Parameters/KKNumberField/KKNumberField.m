@@ -10,6 +10,7 @@
 #import "KKNumberFormatter.h"
 #import "NSColor+KKColors.h"
 #import <AppKit/AppKit.h>
+#include <CoreGraphics/CGDirectDisplay.h>
 #import <FxPlug/FxTypes.h>
 #import <math.h>
 
@@ -26,6 +27,8 @@ const CGFloat kNumberFieldWidth =
 const CGFloat kNumberFieldHeight = 15.0;
 
 @implementation KKNumberField {
+  KKLog *_log;
+
   NSTextField *_textField;
   id<PROAPIAccessing> _apiManager;
   KKNumberFieldInputValidator *_inputValidator;
@@ -39,6 +42,8 @@ const CGFloat kNumberFieldHeight = 15.0;
   CGFloat _totalDragDelta;
   CGFloat _preDragDeltaX;
   CGFloat _preDragDeltaY;
+
+  NSCursor *_transparentCursor;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect
@@ -141,12 +146,14 @@ const CGFloat kNumberFieldHeight = 15.0;
             _dragAxisIsVertical ? -_preDragDeltaY : _preDragDeltaX;
         _didDrag = YES;
         _lastModifierFlags = event.modifierFlags;
-        CGAssociateMouseAndMouseCursorPosition(false);
-        [NSCursor hide];
       }
     }
 
     if (_didDrag) {
+      [[self transparentCursor] set];
+      // Pin to top-left; transparent cursor avoids option-key reveal in FxPlug
+      CGWarpMouseCursorPosition(CGPointMake(0, 0));
+
       // When modifiers change, reset drag from current value
       NSEventModifierFlags relevantFlags =
           event.modifierFlags &
@@ -174,11 +181,23 @@ const CGFloat kNumberFieldHeight = 15.0;
   }
 }
 
+- (NSCursor *)transparentCursor {
+  if (!_transparentCursor) {
+    NSImage *image = [[NSImage alloc] initWithSize:NSMakeSize(1, 1)];
+    [image lockFocus];
+    [[NSColor clearColor] set];
+    NSRectFill(NSMakeRect(0, 0, 1, 1));
+    [image unlockFocus];
+    _transparentCursor = [[NSCursor alloc] initWithImage:image
+                                                 hotSpot:NSZeroPoint];
+  }
+  return _transparentCursor;
+}
+
 - (void)mouseUp:(NSEvent *)event {
   if (_didDrag) {
+    [[NSCursor arrowCursor] set];
     CGWarpMouseCursorPosition(_dragStartScreenPoint);
-    CGAssociateMouseAndMouseCursorPosition(true);
-    [NSCursor unhide];
   }
 
   if (event.clickCount == 1 && _isStepperMode && !_didDrag) {
