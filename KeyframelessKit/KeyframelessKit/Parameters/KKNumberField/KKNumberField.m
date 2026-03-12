@@ -21,6 +21,8 @@ static const CGFloat kNumberFieldSuffixWidth = 18.5;
 static const CGFloat kNumberFieldInputFontSize = 11.0;
 static const CGFloat kNumberFieldLabelFontSize = 12.0;
 static const CGFloat kDragThreshold = 4.0;
+static const CGFloat kMaxDeltaPerEvent = 30.0;
+static const CGFloat kScrollStepThreshold = 20.0;
 
 const CGFloat kNumberFieldWidth =
     kNumberFieldPrefixWidth + kNumberFieldInputWidth + kNumberFieldSuffixWidth;
@@ -44,6 +46,7 @@ const CGFloat kNumberFieldHeight = 15.0;
   CGFloat _preDragDeltaY;
 
   NSCursor *_transparentCursor;
+  CGFloat _scrollAccumulator;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect
@@ -60,7 +63,6 @@ const CGFloat kNumberFieldHeight = 15.0;
     _shiftStepMultiplier = 10.0;
     _optionStepMultiplier = 0.1;
     _isStepperMode = YES;
-    _isSelected = NO;
 
     // TODO clean
     _prefix = @"Y";
@@ -113,6 +115,29 @@ const CGFloat kNumberFieldHeight = 15.0;
   return NSMakeSize(kNumberFieldWidth, kNumberFieldHeight);
 }
 
+- (void)scrollWheel:(NSEvent *)event {
+  if (!_isStepperMode || self.window.firstResponder != self) {
+    [super scrollWheel:event];
+    return;
+  }
+
+  CGFloat step = [self effectiveStepWithModifiers:event.modifierFlags];
+
+  if (event.hasPreciseScrollingDeltas) {
+    _scrollAccumulator += event.scrollingDeltaY;
+    CGFloat steps = trunc(_scrollAccumulator / kScrollStepThreshold);
+    if (steps != 0) {
+      _scrollAccumulator -= steps * kScrollStepThreshold;
+      self.numberValue -= steps * step;
+    }
+  } else {
+    CGFloat delta = event.scrollingDeltaY;
+    if (fabs(delta) >= 1.0) {
+      self.numberValue -= (delta > 0 ? 1 : -1) * step;
+    }
+  }
+}
+
 - (void)mouseDown:(NSEvent *)event {
   if (event.clickCount == 2) {
     [self enterEditMode];
@@ -136,16 +161,21 @@ const CGFloat kNumberFieldHeight = 15.0;
 - (void)mouseDragged:(NSEvent *)event {
   if (_isStepperMode) {
     if (!_didDrag) {
+      if (fabs(event.deltaX) > kMaxDeltaPerEvent ||
+          fabs(event.deltaY) > kMaxDeltaPerEvent) {
+        return;
+      }
       _preDragDeltaX += event.deltaX;
       _preDragDeltaY += event.deltaY;
 
       if (fabs(_preDragDeltaX) >= kDragThreshold ||
           fabs(_preDragDeltaY) >= kDragThreshold) {
         _dragAxisIsVertical = fabs(_preDragDeltaY) > fabs(_preDragDeltaX);
-        _totalDragDelta =
-            _dragAxisIsVertical ? -_preDragDeltaY : _preDragDeltaX;
+        _totalDragDelta = 0;
         _didDrag = YES;
         _lastModifierFlags = event.modifierFlags;
+        CGWarpMouseCursorPosition(CGPointMake(0, 0));
+        return;
       }
     }
 
@@ -170,6 +200,9 @@ const CGFloat kNumberFieldHeight = 15.0;
       }
 
       CGFloat axisDelta = _dragAxisIsVertical ? -event.deltaY : event.deltaX;
+      if (fabs(axisDelta) > kMaxDeltaPerEvent) {
+        return;
+      }
       _totalDragDelta += axisDelta;
 
       CGFloat effectiveStep =
@@ -196,12 +229,12 @@ const CGFloat kNumberFieldHeight = 15.0;
 
 - (void)mouseUp:(NSEvent *)event {
   if (_didDrag) {
+    _didDrag = NO;
     [[NSCursor arrowCursor] set];
     CGWarpMouseCursorPosition(_dragStartScreenPoint);
   }
 
   if (event.clickCount == 1 && _isStepperMode && !_didDrag) {
-    _isSelected = YES;
     [self.window makeFirstResponder:self];
     [self updateBackgroundColor];
   }
@@ -209,7 +242,6 @@ const CGFloat kNumberFieldHeight = 15.0;
 
 - (void)enterEditMode {
   _isStepperMode = NO;
-  _isSelected = YES;
   _textField.editable = YES;
   [self updateBackgroundColor];
   [self.window makeFirstResponder:_textField];
@@ -217,7 +249,6 @@ const CGFloat kNumberFieldHeight = 15.0;
 
 - (void)exitEditMode {
   _isStepperMode = YES;
-  _isSelected = NO;
   _textField.editable = NO;
   self.numberValue = _textField.doubleValue;
 
@@ -229,10 +260,7 @@ const CGFloat kNumberFieldHeight = 15.0;
 }
 
 - (BOOL)resignFirstResponder {
-  // TODO show cursor
-
   if (_isStepperMode) {
-    _isSelected = NO;
     [self updateBackgroundColor];
   }
   return [super resignFirstResponder];
@@ -244,7 +272,7 @@ const CGFloat kNumberFieldHeight = 15.0;
       return YES;
     }
 
-    if (_isSelected && _isStepperMode) {
+    if (_isStepperMode && self.window.firstResponder == self) {
       if ([self handleNumericKeyInStepperMode:event]) {
         return YES;
       }
@@ -376,11 +404,9 @@ const CGFloat kNumberFieldHeight = 15.0;
 
 // TODO this is to become focus drawing
 - (void)updateBackgroundColor {
-  if (_isSelected) {
-    _textField.backgroundColor = [NSColor greenColor];
-  } else {
-    _textField.backgroundColor = [NSColor redColor];
-  }
+  BOOL active = !_isStepperMode || self.window.firstResponder == self;
+  _textField.backgroundColor =
+      active ? [NSColor greenColor] : [NSColor redColor];
 }
 
 - (void)setPrefix:(NSString *)prefix {

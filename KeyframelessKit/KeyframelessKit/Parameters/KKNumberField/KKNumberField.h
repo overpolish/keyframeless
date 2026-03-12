@@ -19,7 +19,6 @@ extern const CGFloat kNumberFieldHeight;
 @property(nonatomic) double minValue;
 @property(nonatomic) double maxValue;
 @property(nonatomic) BOOL isStepperMode;
-@property(nonatomic) BOOL isSelected;
 @property(nonatomic) CGFloat stepValue;
 @property(nonatomic) CGFloat dragScale;
 @property(nonatomic) CGFloat shiftStepMultiplier;
