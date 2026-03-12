@@ -6,7 +6,7 @@
 #import "KKLabelView.h"
 #import "KKHostInfo.h"
 #import "NSColor+KKColors.h"
-#include <AppKit/AppKit.h>
+#import <AppKit/AppKit.h>
 
 static const CGFloat kLeadingMargin = 21.0;
 static const CGFloat kMotionFontSize = 11.0;
@@ -30,7 +30,7 @@ static const CGFloat kFCPFontSize = 12.0;
   _textField = [[NSTextField alloc] initWithFrame:self.bounds];
   _textField.stringValue = _text;
   _textField.backgroundColor = [NSColor clearColor];
-  _textField.textColor = [NSColor inspectorLabelColor];
+  _textField.textColor = [NSColor inspectorLabel];
   _textField.font = [KKLabelView labelFont];
   _textField.editable = NO;
   _textField.selectable = NO;
