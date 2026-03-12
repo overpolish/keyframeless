@@ -146,7 +146,11 @@ const CGFloat kNumberFieldHeight = 15.0;
 }
 
 - (void)mouseDown:(NSEvent *)event {
-  NSPoint localPoint = [self convertPoint:event.locationInWindow fromView:nil];
+  // If global event convert into our coordinate space
+  NSPoint screenLocation = [NSEvent mouseLocation];
+  NSPoint windowPoint = [self.window convertPointFromScreen:screenLocation];
+  NSPoint localPoint = [self convertPoint:windowPoint fromView:nil];
+
   _mouseDownInInputRect = NSPointInRect(localPoint, [self inputRect]);
   if (!_mouseDownInInputRect) {
     return;

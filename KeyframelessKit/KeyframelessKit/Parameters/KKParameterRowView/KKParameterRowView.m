@@ -7,6 +7,7 @@
 #import "KKEventForwardingView.h"
 #import "KKHostInfo.h"
 #import "KKKeyframeDiamondView.h"
+#include "KKLog.h"
 #import "KKMenuChevronView.h"
 #import <AppKit/AppKit.h>
 #import <Cocoa/Cocoa.h>
@@ -33,6 +34,19 @@ static const double kKeyframeDiamondWidth = 18.0;
   id _localMonitor;
   NSInteger _monitorInstallerEventNumber;
 
+  // Motion/FCP places a hidden overlay view over the right portion of the right
+  // container when a native number field is in stepper mode. This overlay
+  // intercepts all mouse clicks and hover events, so our subviews (e.g.
+  // KKNumberField) never receive them through the normal responder chain. This
+  // global monitor bypasses that overlay by re-dispatching the relevant events
+  // directly to the hit-tested subview. It only fires for events landing inside
+  // this row view. Note: this overlay does not happen when the number field is
+  // in another effect block, or when KKNumberField is placed in the left
+  // container.
+  // Video showcase: https://github.com/overpolish/keyframeless/issues/20
+  id _hostOverlayBypassMonitor;
+  NSView *_lastHoveredView;
+
   BOOL _isKeyframeDiamondPressed;
   BOOL _isAnimatable;
 
@@ -56,6 +70,7 @@ static const double kKeyframeDiamondWidth = 18.0;
     [self setupViews];
     [self setupConstraints];
     [self setupEventHandlers];
+    [self setupHostOverlayBypassMonitor];
 
     [self updateControlsVisibility];
   }
@@ -238,15 +253,15 @@ static const double kKeyframeDiamondWidth = 18.0;
 
     if ([KKHostInfo isRunningInFinalCut]) {
       NSLayoutConstraint *leftMinWidth = [_leftContainer.widthAnchor
-              constraintGreaterThanOrEqualToConstant:131.0];
+          constraintGreaterThanOrEqualToConstant:131.0];
       leftMinWidth.priority = NSLayoutPriorityRequired;
 
       NSLayoutConstraint *leftMaxWidth = [_leftContainer.widthAnchor
-              constraintLessThanOrEqualToConstant:179.0];
+          constraintLessThanOrEqualToConstant:179.0];
       leftMaxWidth.priority = NSLayoutPriorityRequired;
 
       NSLayoutConstraint *rightMinWidth = [_rightContainer.widthAnchor
-              constraintGreaterThanOrEqualToConstant:179.0];
+          constraintGreaterThanOrEqualToConstant:179.0];
       rightMinWidth.priority = NSLayoutPriorityRequired;
 
       [constraints
@@ -386,6 +401,115 @@ static const double kKeyframeDiamondWidth = 18.0;
       [strongSelf handleKeyframeDiamondClick:event];
     }
   };
+}
+
+- (void)setupHostOverlayBypassMonitor {
+  __weak typeof(self) weakSelf = self;
+
+  _hostOverlayBypassMonitor = [NSEvent
+      addGlobalMonitorForEventsMatchingMask:(NSEventMaskLeftMouseDown |
+                                             NSEventMaskMouseMoved)
+                                    handler:^(NSEvent *event) {
+                                      __strong typeof(weakSelf) strongSelf =
+                                          weakSelf;
+                                      if (!strongSelf) {
+                                        return;
+                                      }
+
+                                      NSView *targetView =
+                                          [strongSelf targetViewForGlobalMouse];
+
+                                      if (event.type ==
+                                          NSEventTypeLeftMouseDown) {
+                                        [strongSelf
+                                            forwardMouseDown:event
+                                                   toSubview:targetView];
+                                        return;
+                                      }
+
+                                      if (event.type == NSEventTypeMouseMoved) {
+                                        [strongSelf updateHoveredView:targetView
+                                                             forEvent:event];
+                                      }
+                                    }];
+}
+
+/// Converts the current global mouse location to view coordinates and returns
+/// the hit-tested subview, or nil if the cursor is outside this view.
+- (NSView *)targetViewForGlobalMouse {
+  NSPoint mouseLocation = [NSEvent mouseLocation];
+  NSPoint windowPoint = [self.window convertPointFromScreen:mouseLocation];
+  NSPoint locationInView = [self convertPoint:windowPoint fromView:nil];
+
+  if (![self mouse:locationInView inRect:self.bounds]) {
+    return nil;
+  }
+
+  // The overlay blocks hitTest, so manually check which container the click is
+  // in
+  NSPoint leftPoint = [_leftContainer convertPoint:locationInView
+                                          fromView:self];
+  if ([_leftContainer mouse:leftPoint inRect:_leftContainer.bounds] &&
+      _leftView) {
+    return [_leftView hitTest:[_leftView convertPoint:locationInView
+                                             fromView:self]]
+               ?: _leftView;
+  }
+
+  NSPoint rightPoint = [_rightContainer convertPoint:locationInView
+                                            fromView:self];
+  if ([_rightContainer mouse:rightPoint inRect:_rightContainer.bounds] &&
+      _rightView) {
+    return [_rightView hitTest:[_rightView convertPoint:locationInView
+                                               fromView:self]]
+               ?: _rightView;
+  }
+
+  return nil;
+}
+
+/// Walks up from targetView to the nearest custom-class ancestor (skipping
+/// plain NSView / NSTextField layout wrappers) and sends mouseDown:.
+- (void)forwardMouseDown:(NSEvent *)event toSubview:(NSView *)targetView {
+  if (!targetView) {
+    return;
+  }
+
+  // _controlsRegion (chevron, keyframe diamond) has its own onMouseDown
+  // handler - don't double-dispatch into it.
+  if ([targetView isDescendantOf:_controlsRegion] ||
+      targetView == _controlsRegion) {
+    return;
+  }
+
+  NSView *receiver = targetView;
+  while (receiver != nil && receiver != self) {
+    if (receiver.class != [NSView class] &&
+        receiver.class != [NSTextField class]) {
+      break;
+    }
+    receiver = receiver.superview;
+  }
+
+  if (receiver && receiver != self) {
+    [receiver mouseDown:event];
+  }
+}
+
+/// Sends mouseExited:/mouseEntered: when the hovered subview changes.
+- (void)updateHoveredView:(NSView *)newView forEvent:(NSEvent *)event {
+  NSView *previousView = _lastHoveredView;
+  if (newView == previousView) {
+    return;
+  }
+
+  if (previousView) {
+    [previousView mouseExited:event];
+  }
+  if (newView) {
+    [newView mouseEntered:event];
+  }
+  _lastHoveredView = newView;
 }
 
 - (void)updateTrackingAreas {
@@ -631,6 +755,11 @@ static const double kKeyframeDiamondWidth = 18.0;
 
 - (void)dealloc {
   [self removeMonitors];
+
+  if (_hostOverlayBypassMonitor) {
+    [NSEvent removeMonitor:_hostOverlayBypassMonitor];
+    _hostOverlayBypassMonitor = nil;
+  }
 }
 
 @end
