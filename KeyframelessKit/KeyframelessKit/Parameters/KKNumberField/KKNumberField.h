@@ -12,6 +12,9 @@ NS_ASSUME_NONNULL_BEGIN
 @class KKLog;
 @protocol PROAPIAccessing;
 
+extern const CGFloat kNumberFieldWidth;
+extern const CGFloat kNumberFieldHeight;
+
 @interface KKNumberField : NSView <NSTextFieldDelegate>
 @property(nonatomic) double minValue;
 @property(nonatomic) double maxValue;
@@ -23,9 +26,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property(nonatomic, copy, nullable) NSString *prefix;
 @property(nonatomic, copy, nullable) NSString *suffix;
-
-+ (CGFloat)preferredWidth;
-+ (CGFloat)preferredHeight;
 
 - (instancetype)initWithFrame:(NSRect)frameRect
                    apiManager:(id<PROAPIAccessing>)apiManager;

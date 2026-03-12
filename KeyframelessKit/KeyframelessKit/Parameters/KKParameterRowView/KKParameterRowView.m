@@ -36,6 +36,8 @@ static const double kKeyframeDiamondWidth = 18.0;
   BOOL _isKeyframeDiamondPressed;
   BOOL _isAnimatable;
 
+  NSView *_leftContainer;
+  NSView *_rightContainer;
   NSLayoutConstraint *_leftViewWidthConstraint;
   NSMutableArray<NSLayoutConstraint *> *_sectionConstraints;
 }
@@ -117,6 +119,14 @@ static const double kKeyframeDiamondWidth = 18.0;
   _backgroundView.translatesAutoresizingMaskIntoConstraints = NO;
   _backgroundView.wantsLayer = YES;
   [self addSubview:_backgroundView];
+
+  _leftContainer = [[NSView alloc] initWithFrame:NSZeroRect];
+  _leftContainer.translatesAutoresizingMaskIntoConstraints = NO;
+  [_backgroundView addSubview:_leftContainer];
+
+  _rightContainer = [[NSView alloc] initWithFrame:NSZeroRect];
+  _rightContainer.translatesAutoresizingMaskIntoConstraints = NO;
+  [_backgroundView addSubview:_rightContainer];
 
   _controlsRegion = [[KKEventForwardingView alloc] initWithFrame:NSZeroRect];
   _controlsRegion.translatesAutoresizingMaskIntoConstraints = NO;
@@ -209,55 +219,60 @@ static const double kKeyframeDiamondWidth = 18.0;
 
   if (_leftView && _rightView) {
     NSMutableArray *constraints = [NSMutableArray arrayWithArray:@[
-      [_leftView.leadingAnchor
+      [_leftContainer.leadingAnchor
           constraintEqualToAnchor:_backgroundView.leadingAnchor],
-      [_leftView.topAnchor constraintEqualToAnchor:_backgroundView.topAnchor],
-      [_leftView.bottomAnchor
+      [_leftContainer.topAnchor
+          constraintEqualToAnchor:_backgroundView.topAnchor],
+      [_leftContainer.bottomAnchor
           constraintEqualToAnchor:_backgroundView.bottomAnchor],
 
-      [_rightView.leadingAnchor
-          constraintEqualToAnchor:_leftView.trailingAnchor],
-      [_rightView.topAnchor constraintEqualToAnchor:_backgroundView.topAnchor],
-      [_rightView.bottomAnchor
+      [_rightContainer.leadingAnchor
+          constraintEqualToAnchor:_leftContainer.trailingAnchor],
+      [_rightContainer.topAnchor
+          constraintEqualToAnchor:_backgroundView.topAnchor],
+      [_rightContainer.bottomAnchor
           constraintEqualToAnchor:_backgroundView.bottomAnchor],
-      [_rightView.trailingAnchor
+      [_rightContainer.trailingAnchor
           constraintEqualToAnchor:_backgroundView.trailingAnchor],
     ]];
 
     if ([KKHostInfo isRunningInFinalCut]) {
       NSLayoutConstraint *leftMinWidth =
-          [_leftView.widthAnchor constraintGreaterThanOrEqualToConstant:131.0];
+          [_leftContainer.widthAnchor
+              constraintGreaterThanOrEqualToConstant:131.0];
       leftMinWidth.priority = NSLayoutPriorityRequired;
 
       NSLayoutConstraint *leftMaxWidth =
-          [_leftView.widthAnchor constraintLessThanOrEqualToConstant:179.0];
+          [_leftContainer.widthAnchor
+              constraintLessThanOrEqualToConstant:179.0];
       leftMaxWidth.priority = NSLayoutPriorityRequired;
 
       NSLayoutConstraint *rightMinWidth =
-          [_rightView.widthAnchor constraintGreaterThanOrEqualToConstant:179.0];
+          [_rightContainer.widthAnchor
+              constraintGreaterThanOrEqualToConstant:179.0];
       rightMinWidth.priority = NSLayoutPriorityRequired;
 
       [constraints
           addObjectsFromArray:@[ leftMinWidth, leftMaxWidth, rightMinWidth ]];
 
-      [_leftView
+      [_leftContainer
           setContentCompressionResistancePriority:NSLayoutPriorityDefaultHigh
                                    forOrientation:
                                        NSLayoutConstraintOrientationHorizontal];
-      [_rightView
+      [_rightContainer
           setContentCompressionResistancePriority:NSLayoutPriorityDefaultLow
                                    forOrientation:
                                        NSLayoutConstraintOrientationHorizontal];
-      [_leftView
+      [_leftContainer
           setContentHuggingPriority:NSLayoutPriorityDefaultLow
                      forOrientation:NSLayoutConstraintOrientationHorizontal];
-      [_rightView
+      [_rightContainer
           setContentHuggingPriority:NSLayoutPriorityDefaultLow
                      forOrientation:NSLayoutConstraintOrientationHorizontal];
     } else {
       // 'layout' handles actual sizing
       _leftViewWidthConstraint =
-          [_leftView.widthAnchor constraintEqualToConstant:100];
+          [_leftContainer.widthAnchor constraintEqualToConstant:100];
       _leftViewWidthConstraint.priority = NSLayoutPriorityDefaultHigh;
       [constraints addObject:_leftViewWidthConstraint];
     }
@@ -266,12 +281,13 @@ static const double kKeyframeDiamondWidth = 18.0;
     [NSLayoutConstraint activateConstraints:constraints];
   } else if (_leftView) {
     NSArray *constraints = @[
-      [_leftView.leadingAnchor
+      [_leftContainer.leadingAnchor
           constraintEqualToAnchor:_backgroundView.leadingAnchor],
-      [_leftView.topAnchor constraintEqualToAnchor:_backgroundView.topAnchor],
-      [_leftView.bottomAnchor
+      [_leftContainer.topAnchor
+          constraintEqualToAnchor:_backgroundView.topAnchor],
+      [_leftContainer.bottomAnchor
           constraintEqualToAnchor:_backgroundView.bottomAnchor],
-      [_leftView.trailingAnchor
+      [_leftContainer.trailingAnchor
           constraintEqualToAnchor:_backgroundView.trailingAnchor],
     ];
 
@@ -279,12 +295,13 @@ static const double kKeyframeDiamondWidth = 18.0;
     [NSLayoutConstraint activateConstraints:constraints];
   } else if (_rightView) {
     NSArray *constraints = @[
-      [_rightView.leadingAnchor
+      [_rightContainer.leadingAnchor
           constraintEqualToAnchor:_backgroundView.leadingAnchor],
-      [_rightView.topAnchor constraintEqualToAnchor:_backgroundView.topAnchor],
-      [_rightView.bottomAnchor
+      [_rightContainer.topAnchor
+          constraintEqualToAnchor:_backgroundView.topAnchor],
+      [_rightContainer.bottomAnchor
           constraintEqualToAnchor:_backgroundView.bottomAnchor],
-      [_rightView.trailingAnchor
+      [_rightContainer.trailingAnchor
           constraintEqualToAnchor:_backgroundView.trailingAnchor],
     ];
     [_sectionConstraints addObjectsFromArray:constraints];
@@ -297,7 +314,16 @@ static const double kKeyframeDiamondWidth = 18.0;
   _leftView = leftView;
   if (_leftView) {
     _leftView.translatesAutoresizingMaskIntoConstraints = NO;
-    [_backgroundView addSubview:_leftView];
+    [_leftContainer addSubview:_leftView];
+    [NSLayoutConstraint activateConstraints:@[
+      [_leftView.leadingAnchor
+          constraintEqualToAnchor:_leftContainer.leadingAnchor],
+      [_leftView.trailingAnchor
+          constraintEqualToAnchor:_leftContainer.trailingAnchor],
+      [_leftView.topAnchor constraintEqualToAnchor:_leftContainer.topAnchor],
+      [_leftView.bottomAnchor
+          constraintEqualToAnchor:_leftContainer.bottomAnchor],
+    ]];
   }
   [self updateSectionConstraints];
 }
@@ -307,7 +333,13 @@ static const double kKeyframeDiamondWidth = 18.0;
   _rightView = rightView;
   if (_rightView) {
     _rightView.translatesAutoresizingMaskIntoConstraints = NO;
-    [_backgroundView addSubview:_rightView];
+    [_rightContainer addSubview:_rightView];
+    [NSLayoutConstraint activateConstraints:@[
+      [_rightView.trailingAnchor
+          constraintEqualToAnchor:_rightContainer.trailingAnchor],
+      [_rightView.centerYAnchor
+          constraintEqualToAnchor:_rightContainer.centerYAnchor],
+    ]];
   }
   [self updateSectionConstraints];
 }

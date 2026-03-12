@@ -6,16 +6,22 @@
 #import "KKNumberField.h"
 #import "KKLog.h"
 #import "KKNumberFieldInputValidator.h"
+#import "NSColor+KKColors.h"
+#import <AppKit/AppKit.h>
+#import <FxPlug/FxTypes.h>
 #import <math.h>
 
-static const CGFloat KKNumberFieldInputHeight = 17.0;
-static const CGFloat KKNumberFieldInputWidth = 54.0;
+static const CGFloat kNumberFieldInputWidth = 51.0;
 /// Width reserved for the 1-character prefix label zone (e.g. "X", "Y").
-static const CGFloat KKNumberFieldPrefixWidth = 6.0;
+static const CGFloat kNumberFieldPrefixWidth = 5.5;
 /// Width reserved for the 1–2 character suffix label zone (e.g. "px", "%").
-static const CGFloat KKNumberFieldSuffixWidth = 13.0;
+static const CGFloat kNumberFieldSuffixWidth = 18.5;
 /// Additional offset to match prefix/suffix height in Motion/FCP
-static const CGFloat KKDecorationVerticalOffset = 0.25;
+static const CGFloat kDecorationVerticalOffset = 0.25;
+
+const CGFloat kNumberFieldWidth =
+    kNumberFieldPrefixWidth + kNumberFieldInputWidth + kNumberFieldSuffixWidth;
+const CGFloat kNumberFieldHeight = 14.0;
 
 // TODO move to file
 @interface KKNumberFieldCell : NSTextFieldCell
@@ -189,13 +195,13 @@ static const CGFloat KKDecorationVerticalOffset = 0.25;
     _isSelected = NO;
 
     // TODO clean
-    _prefix = @"X";
+    _prefix = @"Y";
     _suffix = @"px";
 
     // TODO move into helper
     NSRect inputFrame =
-        NSMakeRect(KKNumberFieldPrefixWidth, -1, // Offset to match Motion
-                   KKNumberFieldInputWidth, frameRect.size.height);
+        NSMakeRect(kNumberFieldPrefixWidth, -1, // Offset to match Motion
+                   kNumberFieldInputWidth, frameRect.size.height);
     _textField = [[NSTextField alloc] initWithFrame:inputFrame];
     // TODO clean
     KKNumberFieldCell *customCell = [[KKNumberFieldCell alloc] init];
@@ -222,6 +228,10 @@ static const CGFloat KKDecorationVerticalOffset = 0.25;
     [self addSubview:_textField];
   }
   return self;
+}
+
+- (NSSize)intrinsicContentSize {
+  return NSMakeSize(kNumberFieldWidth, kNumberFieldHeight);
 }
 
 - (void)mouseDown:(NSEvent *)event {
@@ -432,19 +442,16 @@ static const CGFloat KKDecorationVerticalOffset = 0.25;
   [super drawRect:dirtyRect];
   NSDictionary *attrs = @{
     // TODO pull out into const vars
-    NSFontAttributeName : [NSFont systemFontOfSize:11.0
-                                            weight:NSFontWeightRegular],
-    NSForegroundColorAttributeName : [NSColor colorWithRed:0xB3 / 255.0
-                                                     green:0xB3 / 255.0
-                                                      blue:0xB3 / 255.0
-                                                     alpha:1.0]
+    NSFontAttributeName : [NSFont systemFontOfSize:12.0
+                                            weight:NSFontWeightLight],
+    NSForegroundColorAttributeName : [NSColor inspectorLabel]
   };
 
   // TODO pull into helper
   if (self.prefix) {
     NSRect prefixRect =
         // TODO pull out -3.5px into const? its for focus ring overlap
-        NSMakeRect(-3.5, KKDecorationVerticalOffset, KKNumberFieldPrefixWidth,
+        NSMakeRect(-3.5, kDecorationVerticalOffset, kNumberFieldPrefixWidth,
                    self.bounds.size.height);
     [self.prefix drawInRect:prefixRect withAttributes:attrs];
   }
@@ -453,8 +460,8 @@ static const CGFloat KKDecorationVerticalOffset = 0.25;
     NSRect suffixRect =
         // TODO +2 pull into const - its extra spacing so it does not overlap
         // focus ring
-        NSMakeRect(KKNumberFieldPrefixWidth + KKNumberFieldInputWidth + 2.5,
-                   KKDecorationVerticalOffset, KKNumberFieldSuffixWidth,
+        NSMakeRect(kNumberFieldPrefixWidth + kNumberFieldInputWidth + 2.5,
+                   kDecorationVerticalOffset, kNumberFieldSuffixWidth,
                    self.bounds.size.height);
     [self.suffix drawInRect:suffixRect withAttributes:attrs];
   }
@@ -468,15 +475,6 @@ static const CGFloat KKDecorationVerticalOffset = 0.25;
   } else {
     _textField.backgroundColor = [NSColor redColor];
   }
-}
-
-+ (CGFloat)preferredWidth {
-  return KKNumberFieldPrefixWidth + KKNumberFieldInputWidth +
-         KKNumberFieldSuffixWidth;
-}
-
-+ (CGFloat)preferredHeight {
-  return KKNumberFieldInputHeight;
 }
 
 - (void)setPrefix:(NSString *)prefix {

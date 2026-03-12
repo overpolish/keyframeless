@@ -45,10 +45,9 @@ static const CGFloat kChevronMarginLeft = 10.0;
     KKLabelView *label = [[KKLabelView alloc] initWithText:@"Radius"];
     self.leftView = label;
 
-    NSView *right = [[NSView alloc] initWithFrame:NSZeroRect];
-    right.wantsLayer = YES;
-    right.layer.backgroundColor = [[NSColor greenColor] CGColor];
-    self.rightView = right;
+    KKNumberField *numberField =
+        [[KKNumberField alloc] initWithFrame:NSZeroRect apiManager:apiManager];
+    self.rightView = numberField;
   }
   return self;
 }

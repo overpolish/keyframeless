@@ -39,6 +39,7 @@
   return [NSColor colorWithRed:0.0f green:0.0f blue:0.0f alpha:0.0f];
 }
 
+// TODO standardize to floats or hex
 + (NSColor *)sliderTrackBackground {
   return [NSColor colorWithRed:0x17 / 255.0
                          green:0x17 / 255.0
