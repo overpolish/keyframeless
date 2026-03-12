@@ -203,7 +203,8 @@ const CGFloat kChevronHeight = 9.0;
         dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.08 * NSEC_PER_SEC)),
         dispatch_get_main_queue(), ^{
           __strong typeof(weakSelf) strongSelf = weakSelf;
-          if (strongSelf->_chevronAnimationToken == currentToken) {
+          if (strongSelf &&
+              strongSelf->_chevronAnimationToken == currentToken) {
             strongSelf->_currentChevronRotation = 90.0;
             [strongSelf updateChevronImage];
           }
@@ -217,7 +218,8 @@ const CGFloat kChevronHeight = 9.0;
         dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.08 * NSEC_PER_SEC)),
         dispatch_get_main_queue(), ^{
           __strong typeof(weakSelf) strongSelf = weakSelf;
-          if (strongSelf->_chevronAnimationToken == currentToken) {
+          if (strongSelf &&
+              strongSelf->_chevronAnimationToken == currentToken) {
             strongSelf->_currentChevronRotation = 0.0;
             [strongSelf updateChevronImage];
           }
