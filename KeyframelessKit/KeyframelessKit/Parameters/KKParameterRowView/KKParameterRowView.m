@@ -428,6 +428,17 @@ static const double kKeyframeDiamondWidth = 18.0;
                                       }
 
                                       if (event.type == NSEventTypeMouseMoved) {
+                                        // The host overlay can block the row's
+                                        // own tracking area when entering from
+                                        // the right side, so mirror what
+                                        // mouseEntered:/mouseExited: would do.
+                                        BOOL inRow = (targetView != nil);
+                                        if (inRow != strongSelf->_isHovered &&
+                                            [NSApp isActive] &&
+                                            !strongSelf->_isContextMenuOpen) {
+                                          strongSelf->_isHovered = inRow;
+                                          [strongSelf updateControlsVisibility];
+                                        }
                                         [strongSelf updateHoveredView:targetView
                                                              forEvent:event];
                                       }
@@ -496,36 +507,72 @@ static const double kKeyframeDiamondWidth = 18.0;
   }
 }
 
-/// Sends mouseExited:/mouseEntered: when the hovered subview changes.
-- (void)updateHoveredView:(NSView *)newView forEvent:(NSEvent *)event {
-  NSView *previousView = _lastHoveredView;
-  if (newView == previousView) {
-    return;
+/// Walks up from view to the nearest custom-class ancestor (skipping plain
+/// NSView / NSTextField layout wrappers), or nil if none found within this
+/// row view. Mirrors the logic in forwardMouseDown:toSubview:.
+- (NSView *)customClassAncestorOf:(NSView *)view {
+  if (!view) {
+    return nil;
   }
-
-  if (previousView) {
-    [previousView mouseExited:event];
+  NSView *current = view;
+  while (current != nil && current != self) {
+    if (current.class != [NSView class] &&
+        current.class != [NSTextField class]) {
+      return current;
+    }
+    current = current.superview;
   }
-  if (newView) {
-    [newView mouseEntered:event];
-  }
-  _lastHoveredView = newView;
+  return nil;
 }
 
-- (void)updateTrackingAreas {
-  [super updateTrackingAreas];
+/// Sends mouseExited:/mouseEntered: when the hovered custom subview changes,
+/// and mouseMoved: to the current custom subview for sub-region tracking.
+- (void)updateHoveredView:(NSView *)newView forEvent:(NSEvent *)event {
+  // Walk up to the nearest custom class so that e.g. an NSTextField subview
+  // inside KKNumberField doesn't absorb the event — KKNumberField should
+  // receive it and decide based on its own textBounds.
+  NSView *walkedNew = [self customClassAncestorOf:newView];
+  NSView *previousView = _lastHoveredView;
 
-  for (NSTrackingArea *area in self.trackingAreas) {
-    [self removeTrackingArea:area];
+  if (walkedNew != previousView) {
+    // Create synthetic enter/exit events to trigger the subview's tracking
+    if (previousView) {
+      NSEvent *exitEvent =
+          [NSEvent enterExitEventWithType:NSEventTypeMouseExited
+                                 location:event.locationInWindow
+                            modifierFlags:event.modifierFlags
+                                timestamp:event.timestamp
+                             windowNumber:event.windowNumber
+                                  context:nil
+                              eventNumber:event.eventNumber
+                           trackingNumber:0
+                                 userData:NULL];
+      [previousView mouseExited:exitEvent];
+    }
+
+    if (walkedNew) {
+      NSEvent *enterEvent =
+          [NSEvent enterExitEventWithType:NSEventTypeMouseEntered
+                                 location:event.locationInWindow
+                            modifierFlags:event.modifierFlags
+                                timestamp:event.timestamp
+                             windowNumber:event.windowNumber
+                                  context:nil
+                              eventNumber:event.eventNumber
+                           trackingNumber:0
+                                 userData:NULL];
+      [walkedNew mouseEntered:enterEvent];
+    }
+
+    _lastHoveredView = walkedNew;
   }
 
-  NSTrackingArea *trackingArea = [[NSTrackingArea alloc]
-      initWithRect:self.bounds
-           options:NSTrackingMouseEnteredAndExited | NSTrackingActiveAlways |
-                   NSTrackingInVisibleRect
-             owner:self
-          userInfo:nil];
-  [self addTrackingArea:trackingArea];
+  // Always forward mouseMoved: so the subview can update sub-region hover
+  // state (e.g. KKNumberField tracking only its textBounds) even when the
+  // custom-class ancestor hasn't changed.
+  if (walkedNew) {
+    [walkedNew mouseMoved:event];
+  }
 }
 
 /// Updates the diamond's visibility while it is held pressed.

@@ -10,7 +10,8 @@
 #import "KKNumberFormatter.h"
 #import "NSColor+KKColors.h"
 #import <AppKit/AppKit.h>
-#include <CoreGraphics/CGDirectDisplay.h>
+#import <CoreGraphics/CGDirectDisplay.h>
+#import <Foundation/Foundation.h>
 #import <FxPlug/FxTypes.h>
 #import <math.h>
 
@@ -49,6 +50,9 @@ const CGFloat kNumberFieldHeight = 15.0;
   CGFloat _scrollAccumulator;
 
   BOOL _mouseDownInInputRect;
+
+  NSTrackingArea *_trackingArea;
+  BOOL _isHovered;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect
@@ -111,6 +115,56 @@ const CGFloat kNumberFieldHeight = 15.0;
         constraintEqualToAnchor:self.centerYAnchor
                        constant:1.0], // Offset to match Motion
   ]];
+
+  [self addTrackingArea:_trackingArea];
+}
+
+- (void)updateTrackingArea {
+  if (_trackingArea) {
+    [self removeTrackingArea:_trackingArea];
+  }
+
+  NSRect trackingRect = [self textBounds];
+  _trackingArea = [[NSTrackingArea alloc]
+      initWithRect:trackingRect
+           options:NSTrackingMouseEnteredAndExited | NSTrackingActiveAlways
+             owner:self
+          userInfo:nil];
+  [self addTrackingArea:_trackingArea];
+}
+
+- (NSRect)textBounds {
+  NSString *displayString = _textField.stringValue;
+  NSDictionary *attrs = @{NSFontAttributeName : _textField.font};
+  CGFloat textWidth = [displayString sizeWithAttributes:attrs].width;
+
+  CGFloat textStartX =
+      kNumberFieldPrefixWidth + kNumberFieldInputWidth - textWidth;
+
+  return NSMakeRect(textStartX, 0, textWidth, self.bounds.size.height);
+}
+
+- (BOOL)_isMouseInTextBoundsForEvent:(NSEvent *)event {
+  NSPoint localPoint = [self convertPoint:event.locationInWindow fromView:nil];
+  return NSPointInRect(localPoint, [self textBounds]);
+}
+
+- (void)mouseEntered:(NSEvent *)event {
+  _isHovered = [self _isMouseInTextBoundsForEvent:event];
+  [self updateBackgroundColor];
+}
+
+- (void)mouseMoved:(NSEvent *)event {
+  BOOL inTextBounds = [self _isMouseInTextBoundsForEvent:event];
+  if (inTextBounds != _isHovered) {
+    _isHovered = inTextBounds;
+    [self updateBackgroundColor];
+  }
+}
+
+- (void)mouseExited:(NSEvent *)event {
+  _isHovered = NO;
+  [self updateBackgroundColor];
 }
 
 - (NSSize)intrinsicContentSize {
@@ -390,6 +444,8 @@ const CGFloat kNumberFieldHeight = 15.0;
 
   _numberValue = clampedValue;
   _textField.doubleValue = clampedValue;
+
+  [self updateTrackingArea];
 }
 
 - (NSDictionary *)labelTextAttributes {
@@ -422,8 +478,14 @@ const CGFloat kNumberFieldHeight = 15.0;
 // TODO this is to become focus drawing
 - (void)updateBackgroundColor {
   BOOL active = !_isStepperMode || self.window.firstResponder == self;
-  _textField.backgroundColor =
-      active ? [NSColor greenColor] : [NSColor redColor];
+
+  if (active) {
+    _textField.backgroundColor = [NSColor greenColor];
+  } else if (_isHovered) {
+    _textField.backgroundColor = [NSColor blueColor];
+  } else {
+    _textField.backgroundColor = [NSColor redColor];
+  }
 }
 
 - (void)setPrefix:(NSString *)prefix {
