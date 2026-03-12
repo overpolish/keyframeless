@@ -5,174 +5,31 @@
 
 #import "KKNumberField.h"
 #import "KKLog.h"
+#import "KKNumberFieldCell.h"
 #import "KKNumberFieldInputValidator.h"
+#import "KKNumberFormatter.h"
 #import "NSColor+KKColors.h"
 #import <AppKit/AppKit.h>
 #import <FxPlug/FxTypes.h>
 #import <math.h>
 
 static const CGFloat kNumberFieldInputWidth = 51.0;
-/// Width reserved for the 1-character prefix label zone (e.g. "X", "Y").
 static const CGFloat kNumberFieldPrefixWidth = 5.5;
-/// Width reserved for the 1–2 character suffix label zone (e.g. "px", "%").
 static const CGFloat kNumberFieldSuffixWidth = 18.5;
-/// Additional offset to match prefix/suffix height in Motion/FCP
-static const CGFloat kDecorationVerticalOffset = 0.25;
+
+static const CGFloat kNumberFieldInputFontSize = 11.0;
+static const CGFloat kNumberFieldLabelFontSize = 12.0;
+static const CGFloat kDragThreshold = 4.0;
 
 const CGFloat kNumberFieldWidth =
     kNumberFieldPrefixWidth + kNumberFieldInputWidth + kNumberFieldSuffixWidth;
-const CGFloat kNumberFieldHeight = 14.0;
-
-// TODO move to file
-@interface KKNumberFieldCell : NSTextFieldCell
-@end
-
-@implementation KKNumberFieldCell
-
-- (NSRect)drawingRectForBounds:(NSRect)rect {
-  NSRect titleRect = [super titleRectForBounds:rect];
-
-  NSSize textSize = [self.attributedStringValue size];
-  if (textSize.width > titleRect.size.width) {
-    titleRect.origin.x =
-        titleRect.size.width - textSize.width - 2; // 2px buffer
-    titleRect.size.width = textSize.width + 2.5; // Match position of edit view
-  }
-
-  // TODO pull into const
-  titleRect.origin.y += 1.0; // Push down to match Motion
-  return titleRect;
-}
-
-- (void)selectWithFrame:(NSRect)rect
-                 inView:(NSView *)controlView
-                 editor:(NSText *)textObj
-               delegate:(id)delegate
-                  start:(NSInteger)selStart
-                 length:(NSInteger)selLength {
-  NSRect adjustedRect = rect;
-
-  // TODO pull into const
-  adjustedRect.origin.y += 1.0; // Push down to match Motion
-  [super selectWithFrame:adjustedRect
-                  inView:controlView
-                  editor:textObj
-                delegate:delegate
-                   start:selStart
-                  length:selLength];
-}
-
-- (void)drawInteriorWithFrame:(NSRect)cellFrame inView:(NSView *)controlView {
-  [NSGraphicsContext saveGraphicsState];
-  [[NSBezierPath bezierPathWithRect:cellFrame] addClip];
-  [super drawInteriorWithFrame:cellFrame inView:controlView];
-  [NSGraphicsContext restoreGraphicsState];
-}
-
-- (NSText *)setUpFieldEditorAttributes:(NSText *)textObj {
-  NSText *result = [super setUpFieldEditorAttributes:textObj];
-
-  if ([result isKindOfClass:[NSTextView class]]) {
-    NSTextView *textView = (NSTextView *)result;
-    [textView setSelectedTextAttributes:@{
-      // TODO pull out into const
-      NSBackgroundColorAttributeName : [NSColor colorWithRed:0x59 / 255.0
-                                                       green:0x59 / 255.0
-                                                        blue:0xE1 / 255.0
-                                                       alpha:1.0]
-    }];
-  }
-  return result;
-}
-
-@end
-
-// TODO move kknumberformatter
-@interface KKNumberFormatter : NSFormatter
-@property(nonatomic, assign) double minValue;
-@property(nonatomic, assign) double maxValue;
-@end
-
-@implementation KKNumberFormatter
-
-- (instancetype)init {
-  self = [super init];
-  if (self) {
-    _minValue = -DBL_MIN;
-    _maxValue = DBL_MAX;
-  }
-  return self;
-}
-
-- (NSString *)stringForObjectValue:(id)obj {
-  if (![obj isKindOfClass:[NSNumber class]]) {
-    return nil;
-  }
-
-  double value = [obj doubleValue];
-  return [NSString stringWithFormat:@"%.4f", value];
-}
-
-- (BOOL)getObjectValue:(out id _Nullable __autoreleasing *)obj
-             forString:(NSString *)string
-      errorDescription:(out NSString *_Nullable __autoreleasing *)error {
-  if (obj) {
-    *obj = @([string doubleValue]);
-  }
-  return YES;
-}
-
-- (BOOL)isPartialStringValid:(NSString *)partialString
-            newEditingString:(NSString *_Nullable __autoreleasing *)newString
-            errorDescription:(NSString *_Nullable __autoreleasing *)error {
-
-  // Allow clearing
-  if (partialString.length == 0)
-    return YES;
-
-  // Character set validation
-  NSCharacterSet *allowed =
-      [NSCharacterSet characterSetWithCharactersInString:@"0123456789.-"];
-  if ([[partialString stringByTrimmingCharactersInSet:allowed] length] > 0) {
-    return NO;
-  }
-
-  // Structural validation
-  if ([[partialString componentsSeparatedByString:@"."] count] > 2) {
-    return NO;
-  }
-
-  NSUInteger minusCount =
-      [[partialString componentsSeparatedByString:@"-"] count] - 1;
-  if (minusCount > 1 || (minusCount == 1 && ![partialString hasPrefix:@"-"])) {
-    return NO;
-  }
-
-  // Intermediate states
-  if ([partialString isEqualToString:@"-"] ||
-      [partialString isEqualToString:@"."] ||
-      [partialString isEqualToString:@"-."]) {
-    return YES;
-  }
-
-  // Numeric and bounds validation
-  NSScanner *scanner = [NSScanner scannerWithString:partialString];
-  double value;
-  if ([scanner scanDouble:&value] && [scanner isAtEnd]) {
-    return (value >= self.minValue && value <= self.maxValue);
-  }
-
-  return NO;
-}
-@end
-
-@interface KKNumberField ()
-@property(nonatomic, strong) NSTextField *textField;
-@property(nonatomic, strong) id<PROAPIAccessing> apiManager;
-@property(nonatomic, strong) KKNumberFieldInputValidator *inputValidator;
-@end
+const CGFloat kNumberFieldHeight = 15.0;
 
 @implementation KKNumberField {
+  NSTextField *_textField;
+  id<PROAPIAccessing> _apiManager;
+  KKNumberFieldInputValidator *_inputValidator;
+
   NSPoint _dragStartPoint;
   CGFloat _dragStartValue;
   BOOL _didDrag;
@@ -185,12 +42,15 @@ const CGFloat kNumberFieldHeight = 14.0;
                    apiManager:(nonnull id<PROAPIAccessing>)apiManager {
   self = [super initWithFrame:frameRect];
   if (self) {
-    self.apiManager = apiManager;
+    _apiManager = apiManager;
     _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
 
     _minValue = -INFINITY;
     _maxValue = INFINITY;
     _stepValue = 1.0;
+    _dragScale = 1.0;
+    _shiftStepMultiplier = 10.0;
+    _optionStepMultiplier = 0.1;
     _isStepperMode = YES;
     _isSelected = NO;
 
@@ -198,36 +58,47 @@ const CGFloat kNumberFieldHeight = 14.0;
     _prefix = @"Y";
     _suffix = @"px";
 
-    // TODO move into helper
-    NSRect inputFrame =
-        NSMakeRect(kNumberFieldPrefixWidth, -1, // Offset to match Motion
-                   kNumberFieldInputWidth, frameRect.size.height);
-    _textField = [[NSTextField alloc] initWithFrame:inputFrame];
-    // TODO clean
-    KKNumberFieldCell *customCell = [[KKNumberFieldCell alloc] init];
-    _textField.cell = customCell;
-
-    _textField.autoresizingMask = NSViewMinYMargin;
-    _textField.delegate = self;
-    _textField.bordered = NO;
-    _textField.backgroundColor = [NSColor redColor];
-    _textField.editable = NO; // Start in stepper mode
-    _textField.alignment = NSTextAlignmentRight;
-    _textField.cell.usesSingleLineMode = YES;
-    _textField.cell.scrollable = YES;
-    _textField.cell.wraps = NO;
-    _textField.font =
-        [NSFont monospacedDigitSystemFontOfSize:11.0 // TODO pull out to const
-                                         weight:NSFontWeightRegular];
-
-    KKNumberFormatter *formatter = [[KKNumberFormatter alloc] init];
-    formatter.minValue = _minValue;
-    formatter.maxValue = _maxValue;
-    _textField.formatter = formatter;
-
-    [self addSubview:_textField];
+    [self setupTextField];
   }
   return self;
+}
+
+- (void)setupTextField {
+  _textField = [[NSTextField alloc] initWithFrame:NSZeroRect];
+  KKNumberFieldCell *customCell = [[KKNumberFieldCell alloc] init];
+  _textField.cell = customCell;
+
+  _textField.translatesAutoresizingMaskIntoConstraints = NO;
+  _textField.delegate = self;
+  _textField.bordered = NO;
+  _textField.drawsBackground = YES;
+  _textField.backgroundColor = [NSColor redColor];
+  _textField.textColor = [NSColor labelColor];
+  _textField.editable = NO; // Start in stepper mode
+  _textField.alignment = NSTextAlignmentRight;
+  _textField.cell.usesSingleLineMode = YES;
+  _textField.cell.scrollable = YES;
+  _textField.cell.wraps = NO;
+  _textField.font =
+      [NSFont monospacedDigitSystemFontOfSize:kNumberFieldInputFontSize
+                                       weight:NSFontWeightRegular];
+
+  KKNumberFormatter *formatter = [[KKNumberFormatter alloc] init];
+  formatter.minValue = _minValue;
+  formatter.maxValue = _maxValue;
+  _textField.formatter = formatter;
+  _textField.doubleValue = _numberValue;
+
+  [self addSubview:_textField];
+
+  [NSLayoutConstraint activateConstraints:@[
+    [_textField.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                             constant:kNumberFieldPrefixWidth],
+    [_textField.widthAnchor constraintEqualToConstant:kNumberFieldInputWidth],
+    [_textField.centerYAnchor
+        constraintEqualToAnchor:self.centerYAnchor
+                       constant:1.0], // Offset to match Motion
+  ]];
 }
 
 - (NSSize)intrinsicContentSize {
@@ -259,9 +130,8 @@ const CGFloat kNumberFieldHeight = 14.0;
     CGFloat deltaX = currentPoint.x - _dragStartPoint.x;
     CGFloat deltaY = currentPoint.y - _dragStartPoint.y;
 
-    // Require at least 4 pixels of movement for drag to count
-    // TODO pull into constant/var
-    if (!_didDrag && (fabs(deltaY) >= 4.0 || fabs(deltaX) >= 4.0)) {
+    if (!_didDrag &&
+        (fabs(deltaY) >= kDragThreshold || fabs(deltaX) >= kDragThreshold)) {
       _dragAxisIsVertical = fabs(deltaY) > fabs(deltaX);
       _didDrag = YES;
       // TODO hide cursor
@@ -289,10 +159,8 @@ const CGFloat kNumberFieldHeight = 14.0;
       CGFloat effectiveStep =
           [self effectiveStepWithModifiers:event.modifierFlags];
 
-      // TODO pull into constant/var
-      // Scale delta: every 1 pixels = 1 step
       CGFloat delta = _dragAxisIsVertical ? deltaY : deltaX;
-      CGFloat steps = round(delta / 1.0);
+      CGFloat steps = round(delta / _dragScale);
       self.numberValue = _dragStartValue + (steps * effectiveStep);
       _textField.doubleValue = self.numberValue;
     }
@@ -350,55 +218,74 @@ const CGFloat kNumberFieldHeight = 14.0;
 
 - (BOOL)performKeyEquivalent:(NSEvent *)event {
   if (event.type == NSEventTypeKeyDown) {
-    NSString *chars = event.characters;
-
-    // TODO move to helper - stops arrows controlling timeline scrubber
-    if (!_isStepperMode && _textField.currentEditor) {
-      NSString *charsIgnoringMods = event.charactersIgnoringModifiers;
-      if (charsIgnoringMods.length == 1) {
-        unichar c = [charsIgnoringMods characterAtIndex:0];
-        if (c == NSUpArrowFunctionKey || c == NSDownArrowFunctionKey ||
-            c == NSLeftArrowFunctionKey || c == NSRightArrowFunctionKey) {
-          [_textField.currentEditor interpretKeyEvents:@[ event ]];
-          return YES;
-        }
-      }
+    if ([self handleArrowKeysInEditMode:event]) {
+      return YES;
     }
 
-    // TODO move to helper - enter edit mode with this input
     if (_isSelected && _isStepperMode) {
-      if (chars.length > 0) {
-        unichar ch = [chars characterAtIndex:0];
-        if ((ch >= '0' && ch <= '9') || ch == '-' || ch == '.') {
-          [self enterEditMode];
-          NSText *fieldEditor = [self.window fieldEditor:YES
-                                               forObject:_textField];
-          _textField.stringValue = @""; // Clear field
-          [fieldEditor insertText:event.charactersIgnoringModifiers];
-
-          return YES; // Consume event
-        }
+      if ([self handleNumericKeyInStepperMode:event]) {
+        return YES;
       }
-
-      // TODO move to helper - up/down value adjustment in stepper mode
-      // TODO up arrow, really no constants?
-      if (event.keyCode == 126 || event.keyCode == 125) {
-        CGFloat step = [self effectiveStepWithModifiers:event.modifierFlags];
-        if (event.keyCode == 126) {
-          self.numberValue += step;
-        } else {
-          self.numberValue -= step;
-        }
-        _textField.doubleValue = self.numberValue;
-        return YES; // Consume event
-      } else if (event.keyCode == 123 || event.keyCode == 124) {
-        // Left/right arrows - consume do nothing
+      if ([self handleArrowKeyInStepperMode:event]) {
         return YES;
       }
     }
   }
 
   return [super performKeyEquivalent:event];
+}
+
+- (BOOL)handleArrowKeysInEditMode:(NSEvent *)event {
+  if (_isStepperMode || !_textField.currentEditor) {
+    return NO;
+  }
+  NSString *charsIgnoringMods = event.charactersIgnoringModifiers;
+  if (charsIgnoringMods.length == 1) {
+    unichar c = [charsIgnoringMods characterAtIndex:0];
+    // Stops arrow keys from controlling the timeline scrubber while editing
+    if (c == NSUpArrowFunctionKey || c == NSDownArrowFunctionKey ||
+        c == NSLeftArrowFunctionKey || c == NSRightArrowFunctionKey) {
+      [_textField.currentEditor interpretKeyEvents:@[ event ]];
+      return YES;
+    }
+  }
+  return NO;
+}
+
+// Enters edit mode and inserts the typed character
+- (BOOL)handleNumericKeyInStepperMode:(NSEvent *)event {
+  NSString *chars = event.characters;
+  if (chars.length == 0) {
+    return NO;
+  }
+  unichar ch = [chars characterAtIndex:0];
+  if ((ch >= '0' && ch <= '9') || ch == '-' || ch == '.') {
+    [self enterEditMode];
+    NSText *fieldEditor = [self.window fieldEditor:YES forObject:_textField];
+    _textField.stringValue = @"";
+    [fieldEditor insertText:event.charactersIgnoringModifiers];
+    return YES;
+  }
+  return NO;
+}
+
+// Handles up/down/left/right arrows in stepper mode
+- (BOOL)handleArrowKeyInStepperMode:(NSEvent *)event {
+  unichar key = [event.charactersIgnoringModifiers characterAtIndex:0];
+  if (key == NSUpArrowFunctionKey || key == NSDownArrowFunctionKey) {
+    CGFloat step = [self effectiveStepWithModifiers:event.modifierFlags];
+    if (key == NSUpArrowFunctionKey) {
+      self.numberValue += step;
+    } else {
+      self.numberValue -= step;
+    }
+    _textField.doubleValue = self.numberValue;
+    return YES;
+  } else if (key == NSLeftArrowFunctionKey || key == NSRightArrowFunctionKey) {
+    // Left/right arrows - consume, do nothing
+    return YES;
+  }
+  return NO;
 }
 
 - (void)controlTextDidEndEditing:(NSNotification *)notification {
@@ -420,10 +307,10 @@ const CGFloat kNumberFieldHeight = 14.0;
 - (CGFloat)effectiveStepWithModifiers:(NSEventModifierFlags)modifierFlags {
   CGFloat effectiveStep = _stepValue;
   if (modifierFlags & NSEventModifierFlagShift) {
-    effectiveStep *= 10.0; // TODO pull to property
+    effectiveStep *= _shiftStepMultiplier;
   }
   if (modifierFlags & NSEventModifierFlagOption) {
-    effectiveStep *= 0.1; // TODO pull to property
+    effectiveStep *= _optionStepMultiplier;
   }
   return effectiveStep;
 }
@@ -435,34 +322,31 @@ const CGFloat kNumberFieldHeight = 14.0;
   clampedValue = round(clampedValue * 10000.0) / 10000.0;
 
   _numberValue = clampedValue;
-  self.textField.doubleValue = clampedValue;
+  _textField.doubleValue = clampedValue;
+}
+
+- (NSDictionary *)labelTextAttributes {
+  return @{
+    NSFontAttributeName : [NSFont systemFontOfSize:kNumberFieldLabelFontSize
+                                            weight:NSFontWeightLight],
+    NSForegroundColorAttributeName : [NSColor inspectorLabel],
+  };
 }
 
 - (void)drawRect:(NSRect)dirtyRect {
   [super drawRect:dirtyRect];
-  NSDictionary *attrs = @{
-    // TODO pull out into const vars
-    NSFontAttributeName : [NSFont systemFontOfSize:12.0
-                                            weight:NSFontWeightLight],
-    NSForegroundColorAttributeName : [NSColor inspectorLabel]
-  };
+  NSDictionary *attrs = [self labelTextAttributes];
 
-  // TODO pull into helper
   if (self.prefix) {
     NSRect prefixRect =
-        // TODO pull out -3.5px into const? its for focus ring overlap
-        NSMakeRect(-3.5, kDecorationVerticalOffset, kNumberFieldPrefixWidth,
-                   self.bounds.size.height);
+        NSMakeRect(0, 0, kNumberFieldPrefixWidth, self.bounds.size.height);
     [self.prefix drawInRect:prefixRect withAttributes:attrs];
   }
 
   if (self.suffix) {
     NSRect suffixRect =
-        // TODO +2 pull into const - its extra spacing so it does not overlap
-        // focus ring
-        NSMakeRect(kNumberFieldPrefixWidth + kNumberFieldInputWidth + 2.5,
-                   kDecorationVerticalOffset, kNumberFieldSuffixWidth,
-                   self.bounds.size.height);
+        NSMakeRect(kNumberFieldPrefixWidth + kNumberFieldInputWidth, 0,
+                   kNumberFieldSuffixWidth, self.bounds.size.height);
     [self.suffix drawInRect:suffixRect withAttributes:attrs];
   }
 }

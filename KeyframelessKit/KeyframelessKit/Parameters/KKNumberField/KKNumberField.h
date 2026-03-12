@@ -21,6 +21,9 @@ extern const CGFloat kNumberFieldHeight;
 @property(nonatomic) BOOL isStepperMode;
 @property(nonatomic) BOOL isSelected;
 @property(nonatomic) CGFloat stepValue;
+@property(nonatomic) CGFloat dragScale;
+@property(nonatomic) CGFloat shiftStepMultiplier;
+@property(nonatomic) CGFloat optionStepMultiplier;
 @property(nonatomic) CGFloat numberValue;
 @property(nonatomic, strong) KKLog *log;
 
