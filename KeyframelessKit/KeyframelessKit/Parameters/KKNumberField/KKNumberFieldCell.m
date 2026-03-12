@@ -4,6 +4,11 @@
  */
 
 #import "KKNumberFieldCell.h"
+#include <Foundation/Foundation.h>
+
+static CGFloat const kOffsetY =
+    -1.0; // Apple Motion/FCP render their text off-center
+static CGFloat const kOffsetX = 1.0; // Apple Motion/FCP pull towards the right
 
 @implementation KKNumberFieldCell
 
@@ -14,6 +19,8 @@
                   start:(NSInteger)selStart
                  length:(NSInteger)selLength {
   NSRect adjustedRect = rect;
+  adjustedRect.origin.y += kOffsetY;
+  adjustedRect.origin.x += kOffsetX;
 
   [super selectWithFrame:adjustedRect
                   inView:controlView
@@ -26,6 +33,11 @@
 - (void)drawInteriorWithFrame:(NSRect)cellFrame inView:(NSView *)controlView {
   [NSGraphicsContext saveGraphicsState];
   [[NSBezierPath bezierPathWithRect:cellFrame] addClip];
+
+  NSRect adjustedFrame = cellFrame;
+  adjustedFrame.origin.y += kOffsetY;
+  adjustedFrame.origin.x += kOffsetX;
+
   [super drawInteriorWithFrame:cellFrame inView:controlView];
   [NSGraphicsContext restoreGraphicsState];
 }

@@ -10,20 +10,22 @@
 #import "KKNumberFormatter.h"
 #import "NSColor+KKColors.h"
 #import <AppKit/AppKit.h>
+#import <CoreFoundation/CFCGTypes.h>
 #import <CoreGraphics/CGDirectDisplay.h>
 #import <Foundation/Foundation.h>
 #import <FxPlug/FxTypes.h>
 #import <math.h>
 
-static const CGFloat kNumberFieldInputWidth = 51.0;
-static const CGFloat kNumberFieldPrefixWidth = 5.5;
-static const CGFloat kNumberFieldSuffixWidth = 18.5;
-
 static const CGFloat kNumberFieldInputFontSize = 11.0;
-static const CGFloat kNumberFieldLabelFontSize = 12.0;
+static const CGFloat kNumberFieldLabelFontSize = 11.0;
 static const CGFloat kDragThreshold = 4.0;
 static const CGFloat kMaxDeltaPerEvent = 30.0;
 static const CGFloat kScrollStepThreshold = 20.0;
+
+static const CGFloat kNumberFieldInputWidth = 51.0;
+static const CGFloat kNumberFieldPrefixWidth = 10.0;
+static const CGFloat kNumberFieldSuffixWidth = 20.0;
+static CGFloat const kInputBottomMargin = 1.5;
 
 const CGFloat kNumberFieldWidth =
     kNumberFieldPrefixWidth + kNumberFieldInputWidth + kNumberFieldSuffixWidth;
@@ -70,6 +72,9 @@ const CGFloat kNumberFieldHeight = 15.0;
     _optionStepMultiplier = 0.1;
     _isStepperMode = YES;
 
+    self.wantsLayer = YES;
+    self.layer.backgroundColor = [[NSColor orangeColor] CGColor];
+
     // TODO clean
     _prefix = @"Y";
     _suffix = @"px";
@@ -111,9 +116,8 @@ const CGFloat kNumberFieldHeight = 15.0;
     [_textField.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
                                              constant:kNumberFieldPrefixWidth],
     [_textField.widthAnchor constraintEqualToConstant:kNumberFieldInputWidth],
-    [_textField.centerYAnchor
-        constraintEqualToAnchor:self.centerYAnchor
-                       constant:1.0], // Offset to match Motion
+    [_textField.centerYAnchor constraintEqualToAnchor:self.centerYAnchor
+                                             constant:kInputBottomMargin],
   ]];
 
   [self addTrackingArea:_trackingArea];
@@ -460,16 +464,20 @@ const CGFloat kNumberFieldHeight = 15.0;
   [super drawRect:dirtyRect];
   NSDictionary *attrs = [self labelTextAttributes];
 
+  static CGFloat const kBottomMargin =
+      1.0; // Apple Motion/FCP decorations off-center
+
   if (self.prefix) {
-    NSRect prefixRect =
-        NSMakeRect(0, 0, kNumberFieldPrefixWidth, self.bounds.size.height);
+    NSRect prefixRect = NSMakeRect(0, kBottomMargin, kNumberFieldPrefixWidth,
+                                   self.bounds.size.height);
     [self.prefix drawInRect:prefixRect withAttributes:attrs];
   }
 
   if (self.suffix) {
-    NSRect suffixRect =
-        NSMakeRect(kNumberFieldPrefixWidth + kNumberFieldInputWidth, 0,
-                   kNumberFieldSuffixWidth, self.bounds.size.height);
+    static CGFloat const kSuffixLeftMargin = 4.0;
+    NSRect suffixRect = NSMakeRect(
+        kNumberFieldPrefixWidth + kNumberFieldInputWidth + kSuffixLeftMargin,
+        kBottomMargin, kNumberFieldSuffixWidth, self.bounds.size.height);
     [self.suffix drawInRect:suffixRect withAttributes:attrs];
   }
 }
