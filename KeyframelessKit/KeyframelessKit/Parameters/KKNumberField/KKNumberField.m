@@ -36,6 +36,9 @@ const CGFloat kNumberFieldHeight = 15.0;
   CGPoint _dragStartScreenPoint;
   BOOL _dragAxisIsVertical;
   NSEventModifierFlags _lastModifierFlags;
+  CGFloat _totalDragDelta;
+  CGFloat _preDragDeltaX;
+  CGFloat _preDragDeltaY;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect
@@ -110,13 +113,15 @@ const CGFloat kNumberFieldHeight = 15.0;
     [self enterEditMode];
   } else if (event.clickCount == 1) {
     // Prepare for potential drag
-    _dragStartPoint = [self convertPoint:event.locationInWindow fromView:nil];
     _dragStartValue = self.numberValue;
     _didDrag = NO;
+    _preDragDeltaX = 0;
+    _preDragDeltaY = 0;
+    _totalDragDelta = 0;
 
-    // Store screen position for restore later
-    NSPoint windowPoint = [self convertPoint:_dragStartPoint toView:nil];
-    NSPoint screenPoint = [self.window convertPointToScreen:windowPoint];
+    // Store screen position to restore cursor on mouseUp
+    NSPoint screenPoint =
+        [self.window convertPointToScreen:event.locationInWindow];
     _dragStartScreenPoint = CGPointMake(
         screenPoint.x,
         CGDisplayBounds(CGMainDisplayID()).size.height - screenPoint.y);
@@ -125,21 +130,24 @@ const CGFloat kNumberFieldHeight = 15.0;
 
 - (void)mouseDragged:(NSEvent *)event {
   if (_isStepperMode) {
-    NSPoint currentPoint = [self convertPoint:event.locationInWindow
-                                     fromView:nil];
-    CGFloat deltaX = currentPoint.x - _dragStartPoint.x;
-    CGFloat deltaY = currentPoint.y - _dragStartPoint.y;
+    if (!_didDrag) {
+      _preDragDeltaX += event.deltaX;
+      _preDragDeltaY += event.deltaY;
 
-    if (!_didDrag &&
-        (fabs(deltaY) >= kDragThreshold || fabs(deltaX) >= kDragThreshold)) {
-      _dragAxisIsVertical = fabs(deltaY) > fabs(deltaX);
-      _didDrag = YES;
-      // TODO hide cursor
-      _lastModifierFlags = event.modifierFlags;
+      if (fabs(_preDragDeltaX) >= kDragThreshold ||
+          fabs(_preDragDeltaY) >= kDragThreshold) {
+        _dragAxisIsVertical = fabs(_preDragDeltaY) > fabs(_preDragDeltaX);
+        _totalDragDelta =
+            _dragAxisIsVertical ? -_preDragDeltaY : _preDragDeltaX;
+        _didDrag = YES;
+        _lastModifierFlags = event.modifierFlags;
+        CGAssociateMouseAndMouseCursorPosition(false);
+        [NSCursor hide];
+      }
     }
 
     if (_didDrag) {
-      // When modifiers change reset drag from current position
+      // When modifiers change, reset drag from current value
       NSEventModifierFlags relevantFlags =
           event.modifierFlags &
           (NSEventModifierFlagShift | NSEventModifierFlagOption);
@@ -148,19 +156,18 @@ const CGFloat kNumberFieldHeight = 15.0;
           (NSEventModifierFlagShift | NSEventModifierFlagOption);
 
       if (relevantFlags != lastRelevantFlags) {
-        _dragStartPoint = currentPoint;
         _dragStartValue = self.numberValue;
+        _totalDragDelta = 0;
         _lastModifierFlags = event.modifierFlags;
-
-        // Skip this frame to avoid value jump
         return;
       }
 
+      CGFloat axisDelta = _dragAxisIsVertical ? -event.deltaY : event.deltaX;
+      _totalDragDelta += axisDelta;
+
       CGFloat effectiveStep =
           [self effectiveStepWithModifiers:event.modifierFlags];
-
-      CGFloat delta = _dragAxisIsVertical ? deltaY : deltaX;
-      CGFloat steps = round(delta / _dragScale);
+      CGFloat steps = round(_totalDragDelta / _dragScale);
       self.numberValue = _dragStartValue + (steps * effectiveStep);
       _textField.doubleValue = self.numberValue;
     }
@@ -169,13 +176,9 @@ const CGFloat kNumberFieldHeight = 15.0;
 
 - (void)mouseUp:(NSEvent *)event {
   if (_didDrag) {
-    // TODO show cursor
-
-    // Warp cursor back to drag start point
-    // TODO move to helper
-    CGAssociateMouseAndMouseCursorPosition(false);
     CGWarpMouseCursorPosition(_dragStartScreenPoint);
     CGAssociateMouseAndMouseCursorPosition(true);
+    [NSCursor unhide];
   }
 
   if (event.clickCount == 1 && _isStepperMode && !_didDrag) {
