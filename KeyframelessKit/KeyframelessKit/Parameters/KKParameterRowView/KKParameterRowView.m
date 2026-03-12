@@ -237,18 +237,15 @@ static const double kKeyframeDiamondWidth = 18.0;
     ]];
 
     if ([KKHostInfo isRunningInFinalCut]) {
-      NSLayoutConstraint *leftMinWidth =
-          [_leftContainer.widthAnchor
+      NSLayoutConstraint *leftMinWidth = [_leftContainer.widthAnchor
               constraintGreaterThanOrEqualToConstant:131.0];
       leftMinWidth.priority = NSLayoutPriorityRequired;
 
-      NSLayoutConstraint *leftMaxWidth =
-          [_leftContainer.widthAnchor
+      NSLayoutConstraint *leftMaxWidth = [_leftContainer.widthAnchor
               constraintLessThanOrEqualToConstant:179.0];
       leftMaxWidth.priority = NSLayoutPriorityRequired;
 
-      NSLayoutConstraint *rightMinWidth =
-          [_rightContainer.widthAnchor
+      NSLayoutConstraint *rightMinWidth = [_rightContainer.widthAnchor
               constraintGreaterThanOrEqualToConstant:179.0];
       rightMinWidth.priority = NSLayoutPriorityRequired;
 

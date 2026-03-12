@@ -47,6 +47,8 @@ const CGFloat kNumberFieldHeight = 15.0;
 
   NSCursor *_transparentCursor;
   CGFloat _scrollAccumulator;
+
+  BOOL _mouseDownInInputRect;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect
@@ -138,10 +140,22 @@ const CGFloat kNumberFieldHeight = 15.0;
   }
 }
 
+- (NSRect)inputRect {
+  return NSMakeRect(kNumberFieldPrefixWidth, 0, kNumberFieldInputWidth,
+                    self.bounds.size.height);
+}
+
 - (void)mouseDown:(NSEvent *)event {
+  NSPoint localPoint = [self convertPoint:event.locationInWindow fromView:nil];
+  _mouseDownInInputRect = NSPointInRect(localPoint, [self inputRect]);
+  if (!_mouseDownInInputRect) {
+    return;
+  }
   if (event.clickCount == 2) {
     [self enterEditMode];
   } else if (event.clickCount == 1) {
+    [self.window makeFirstResponder:self];
+    [self updateBackgroundColor];
     // Prepare for potential drag
     _dragStartValue = self.numberValue;
     _didDrag = NO;
@@ -159,6 +173,9 @@ const CGFloat kNumberFieldHeight = 15.0;
 }
 
 - (void)mouseDragged:(NSEvent *)event {
+  if (!_mouseDownInInputRect) {
+    return;
+  }
   if (_isStepperMode) {
     if (!_didDrag) {
       if (fabs(event.deltaX) > kMaxDeltaPerEvent ||
@@ -228,16 +245,12 @@ const CGFloat kNumberFieldHeight = 15.0;
 }
 
 - (void)mouseUp:(NSEvent *)event {
-  if (_didDrag) {
-    _didDrag = NO;
-    [[NSCursor arrowCursor] set];
-    CGWarpMouseCursorPosition(_dragStartScreenPoint);
+  if (!_mouseDownInInputRect || !_didDrag) {
+    return;
   }
-
-  if (event.clickCount == 1 && _isStepperMode && !_didDrag) {
-    [self.window makeFirstResponder:self];
-    [self updateBackgroundColor];
-  }
+  _didDrag = NO;
+  [[NSCursor arrowCursor] set];
+  CGWarpMouseCursorPosition(_dragStartScreenPoint);
 }
 
 - (void)enterEditMode {
@@ -261,7 +274,7 @@ const CGFloat kNumberFieldHeight = 15.0;
 
 - (BOOL)resignFirstResponder {
   if (_isStepperMode) {
-    [self updateBackgroundColor];
+    _textField.backgroundColor = [NSColor redColor];
   }
   return [super resignFirstResponder];
 }

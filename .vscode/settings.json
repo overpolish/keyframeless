@@ -61,6 +61,7 @@
     "synthesize",
     "texcoord",
     "Tileable",
+    "trunc",
     "uint",
     "unhide",
     "unichar",
