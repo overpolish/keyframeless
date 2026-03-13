@@ -13,10 +13,6 @@ CompileFlags:
     - -I<PATH_TO_REPO>/KeyframelessKit/KeyframelessKit
     - -I<PATH_TO_REPO>/KeyframelessKit/KeyframelessKit/Metal
     - -I<PATH_TO_REPO>/KeyframelessKit/KeyframelessKit/OSC
-    - -I<PATH_TO_REPO>/KeyframelessKit/KeyframelessKit/Parameters
-    - -I<PATH_TO_REPO>/KeyframelessKit/KeyframelessKit/Parameters/NumberField
-    - -I<PATH_TO_REPO>/KeyframelessKit/KeyframelessKit/Parameters/KKLabelView
-    - -I<PATH_TO_REPO>/KeyframelessKit/KeyframelessKit/Parameters/KKChevronView
     - -I<PATH_TO_REPO>/KeyframelessKit/KeyframelessKit/Plugin
   
 ---
