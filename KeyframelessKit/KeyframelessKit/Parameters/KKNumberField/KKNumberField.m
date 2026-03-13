@@ -5,6 +5,7 @@
 
 #import "KKNumberField.h"
 #import "KKFocusRingOverlay.h"
+#include "KKHostInfo.h"
 #import "KKLog.h"
 #import "KKNumberFieldCell.h"
 #import "KKNumberFieldInputValidator.h"
@@ -13,7 +14,9 @@
 #import <AppKit/AppKit.h>
 #import <CoreFoundation/CFCGTypes.h>
 #import <CoreGraphics/CGDirectDisplay.h>
+#import <CoreMedia/CMTime.h>
 #import <Foundation/Foundation.h>
+#import <FxPlug/FxPlugSDK.h>
 #import <FxPlug/FxTypes.h>
 #import <math.h>
 
@@ -63,6 +66,8 @@ const CGFloat kNumberFieldHeight = 15.0;
 
   NSTrackingArea *_trackingArea;
   BOOL _isHovered;
+
+  BOOL _hasKeyframes;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect
@@ -543,8 +548,58 @@ const CGFloat kNumberFieldHeight = 15.0;
   };
 }
 
+- (void)refreshKeyframeState {
+  // Only Motion has the red text if keyframes exist
+  if (_parameterId == 0 || [KKHostInfo isRunningInFinalCut]) {
+    return;
+  }
+
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!actionAPI) {
+    return;
+  }
+  [actionAPI startAction:self];
+
+  id<FxKeyframeAPI_v3> keyframeAPI =
+      [_apiManager apiForProtocol:@protocol(FxKeyframeAPI_v3)];
+
+  BOOL hasKeyframes = NO;
+
+  if (_channel != nil) {
+    NSUInteger count = 0;
+    [keyframeAPI keyframeCount:&count
+                  forParameter:_parameterId
+                    andChannel:_channel.unsignedIntegerValue];
+    hasKeyframes = (count > 0);
+  } else {
+    // Check all channels if non provided (would be the case for group)
+    NSUInteger channelCount = 0;
+    [keyframeAPI channelCount:&channelCount forParameter:_parameterId];
+    for (NSUInteger i = 0; i < channelCount; i++) {
+      NSUInteger count = 0;
+      [keyframeAPI keyframeCount:&count forParameter:_parameterId andChannel:i];
+      if (count > 0) {
+        hasKeyframes = YES;
+        break;
+      }
+    }
+  }
+
+  [actionAPI endAction:self];
+
+  if (hasKeyframes != _hasKeyframes) {
+    _hasKeyframes = hasKeyframes;
+    _textField.textColor =
+        _hasKeyframes ? [NSColor error] : [NSColor labelColor];
+  }
+}
+
 - (void)drawRect:(NSRect)dirtyRect {
   [super drawRect:dirtyRect];
+  if (_parameterId != 0) {
+    [self refreshKeyframeState];
+  }
   NSDictionary *attrs = [self labelTextAttributes];
 
   static CGFloat const kBottomMargin =
@@ -565,7 +620,6 @@ const CGFloat kNumberFieldHeight = 15.0;
   }
 }
 
-// TODO this is to become focus drawing
 - (void)updateActiveState {
   BOOL active = _textField.isEditable ||
                 (_isStepperMode && self.window.firstResponder == self);

@@ -5,6 +5,7 @@
 
 #import "KKNumberFieldCell.h"
 #import "NSColor+KKColors.h"
+#include <AppKit/AppKit.h>
 #import <CoreFoundation/CFCGTypes.h>
 #import <Foundation/Foundation.h>
 
@@ -51,7 +52,8 @@ static const CGFloat kInputHorizontalShift =
   if ([result isKindOfClass:[NSTextView class]]) {
     NSTextView *textView = (NSTextView *)result;
     [textView setSelectedTextAttributes:@{
-      NSBackgroundColorAttributeName : [NSColor selection]
+      NSBackgroundColorAttributeName : [NSColor selection],
+      NSForegroundColorAttributeName : [NSColor selectionForeground]
     }];
   }
   return result;

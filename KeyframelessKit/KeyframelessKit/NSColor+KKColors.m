@@ -5,6 +5,7 @@
 
 #import "KKHostInfo.h"
 #import "NSColor+KKColors.h"
+#include <AppKit/AppKit.h>
 
 @implementation NSColor (KKColors)
 
@@ -37,6 +38,13 @@
 
 + (NSColor *)transparent {
   return [NSColor colorWithRed:0.0f green:0.0f blue:0.0f alpha:0.0f];
+}
+
++ (NSColor *)error {
+  return [NSColor colorWithRed:0xFE / 255.0
+                         green:0x4C / 255.0
+                          blue:0x4C / 255.0
+                         alpha:1.0];
 }
 
 // TODO standardize to floats or hex
@@ -99,6 +107,13 @@
                             blue:0xE1 / 255.0
                            alpha:1.0];
   }
+}
+
++ (NSColor *)selectionForeground {
+  return [NSColor colorWithRed:0xF7 / 255.0
+                         green:0xF7 / 255.0
+                          blue:0xFE / 255.0
+                         alpha:1.0];
 }
 
 - (simd_float4)simdFloat4 {

@@ -47,57 +47,10 @@ static const CGFloat kChevronMarginLeft = 10.0;
 
     KKNumberField *numberField =
         [[KKNumberField alloc] initWithFrame:NSZeroRect apiManager:apiManager];
+    numberField.parameterId = parameterId;
     self.rightView = numberField;
   }
   return self;
 }
-
-// - (instancetype)initWithFrame:(NSRect)frame
-//                    apiManager:(id<PROAPIAccessing>)apiManager
-//                   parameterId:(UInt32)parameterId
-//                         {
-//   self = [super initWithFrame:frame];
-//   if (self) {
-//     self.apiManager = apiManager;
-//     // self.currentChevronRotation = 90.0;
-//     log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
-
-//     // [self addSubview:self.chevronButton];
-
-//     // self.customView = customView;
-//     // if (customView) {
-//     //   customView.translatesAutoresizingMaskIntoConstraints = NO;
-//     //   [self addSubview:customView];
-
-//     //   CGFloat nfWidth = [KKNumberField preferredWidth];
-//     //   CGFloat nfHeight = [KKNumberField preferredHeight];
-//     //   self.numberField = [[KKNumberField alloc]
-//     //       initWithFrame:NSMakeRect(0, 0, nfWidth, nfHeight)
-//     //          apiManager:apiManager];
-//     //   self.numberField.translatesAutoresizingMaskIntoConstraints = NO;
-//     //   [self addSubview:self.numberField];
-//     //   // Set the initial frame now; setFrameSize: keeps it updated from
-//     here
-//     //   on. [self positionNumberFieldForSize:frame.size];
-//     // }
-
-//     // [self setupConstraints];
-//   }
-//   return self;
-// }
-
-// TODO clean?
-// - (void)positionNumberFieldForSize:(NSSize)size {
-//   if (!self.numberField)
-//     return;
-//   [NSAnimationContext beginGrouping];
-//   [NSAnimationContext currentContext].duration = 0;
-//   CGFloat nfWidth = [KKNumberField preferredWidth];
-//   CGFloat nfHeight = [KKNumberField preferredHeight];
-//   self.numberField.frame =
-//       NSMakeRect(size.width - kRightMargin,
-//                  round((size.height - nfHeight) / 2.0), nfWidth, nfHeight);
-//   [NSAnimationContext endGrouping];
-// }
 
 @end

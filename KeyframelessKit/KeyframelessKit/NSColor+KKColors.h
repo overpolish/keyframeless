@@ -20,6 +20,8 @@
 + (NSColor *)active;
 + (NSColor *)transparent;
 
++ (NSColor *)error;
+
 + (NSColor *)sliderTrackBackground;
 + (NSColor *)sliderTrackFill;
 + (NSColor *)sliderKnobFill;
@@ -31,6 +33,7 @@
 + (NSColor *)keyboardFocusIndicator;
 
 + (NSColor *)selection;
++ (NSColor *)selectionForeground;
 
 - (simd_float4)simdFloat4;
 

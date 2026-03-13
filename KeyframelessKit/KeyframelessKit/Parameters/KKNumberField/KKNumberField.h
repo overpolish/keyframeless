@@ -6,6 +6,7 @@
 #pragma once
 
 #import <Cocoa/Cocoa.h>
+#import <MacTypes.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -18,6 +19,8 @@ extern const CGFloat kNumberFieldHeight;
 @interface KKNumberField : NSView <NSTextFieldDelegate>
 @property(nonatomic) double minValue;
 @property(nonatomic) double maxValue;
+@property(nonatomic) UInt32 parameterId;
+@property(nonatomic, strong, nullable) NSNumber *channel;
 @property(nonatomic) BOOL isStepperMode;
 @property(nonatomic) CGFloat stepValue;
 @property(nonatomic) CGFloat dragScale;

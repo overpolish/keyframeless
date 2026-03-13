@@ -83,6 +83,13 @@ static const double kKeyframeDiamondWidth = 18.0;
   if (_isAnimatable) {
     [self refreshKeyframeState];
   }
+  if (_leftView) {
+    [_leftView setNeedsDisplay:YES];
+  }
+
+  if (_rightView) {
+    [_rightView setNeedsDisplay:YES];
+  }
 }
 
 - (void)refreshKeyframeState {
