@@ -72,8 +72,8 @@ const CGFloat kNumberFieldHeight = 15.0;
     _apiManager = apiManager;
     _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
 
-    _minValue = -INFINITY;
-    _maxValue = INFINITY;
+    _minValue = -10.0;
+    _maxValue = 100.0;
     _stepValue = 1.0;
     _dragScale = 1.0;
     _shiftStepMultiplier = 10.0;
@@ -377,6 +377,8 @@ const CGFloat kNumberFieldHeight = 15.0;
 - (void)enterEditMode {
   _isStepperMode = NO;
   _textField.editable = YES;
+  ((KKNumberFormatter *)_textField.formatter).editing = YES;
+  _textField.doubleValue = _numberValue;
 
   [self updateFocusRingPanelFrameWithPadding:kFocusRingPanelPadding];
   if (self.window && !_focusRingPanel.parentWindow) {
@@ -401,6 +403,7 @@ const CGFloat kNumberFieldHeight = 15.0;
 - (void)exitEditMode {
   _isStepperMode = YES;
   _textField.editable = NO;
+  ((KKNumberFormatter *)_textField.formatter).editing = NO;
   self.numberValue = _textField.doubleValue;
   [self updateActiveState];
 }

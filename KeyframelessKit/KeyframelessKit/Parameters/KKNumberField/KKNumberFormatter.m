@@ -17,7 +17,20 @@
   }
 
   double value = [obj doubleValue];
-  return [NSString stringWithFormat:@"%.4f", value];
+  if (_editing) {
+    // Full precision: up to 4dp, trailing zeros stripped
+    NSString *s = [NSString stringWithFormat:@"%.4f", value];
+    NSRange dot = [s rangeOfString:@"."];
+    if (dot.location != NSNotFound) {
+      NSUInteger end = s.length;
+      while (end > dot.location + 2 && [s characterAtIndex:end - 1] == '0') {
+        end--;
+      }
+      s = [s substringToIndex:end];
+    }
+    return s;
+  }
+  return [NSString stringWithFormat:@"%.1f", value];
 }
 
 - (BOOL)getObjectValue:(out id _Nullable __autoreleasing *)obj
