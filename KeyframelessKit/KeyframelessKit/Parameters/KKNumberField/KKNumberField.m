@@ -63,11 +63,13 @@ const CGFloat kNumberFieldHeight = 15.0;
   CGFloat _scrollAccumulator;
 
   BOOL _mouseDownInInputRect;
+  BOOL _mouseDownInTextBounds;
 
   NSTrackingArea *_trackingArea;
   BOOL _isHovered;
 
   BOOL _hasKeyframes;
+  BOOL _updatingValue;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect
@@ -235,18 +237,26 @@ const CGFloat kNumberFieldHeight = 15.0;
 }
 
 - (void)mouseDown:(NSEvent *)event {
+  // Reset state from any previous interaction
+  _mouseDownInInputRect = NO;
+  _mouseDownInTextBounds = NO;
+
   // If global event convert into our coordinate space
   NSPoint screenLocation = [NSEvent mouseLocation];
   NSPoint windowPoint = [self.window convertPointFromScreen:screenLocation];
   NSPoint localPoint = [self convertPoint:windowPoint fromView:nil];
 
+  if (event.clickCount == 2 && NSPointInRect(localPoint, [self inputRect])) {
+    [self enterEditMode];
+    return;
+  }
+
   _mouseDownInInputRect = NSPointInRect(localPoint, [self inputRect]);
+  _mouseDownInTextBounds = NSPointInRect(localPoint, [self textBounds]);
   if (!_mouseDownInInputRect) {
     return;
   }
-  if (event.clickCount == 2) {
-    [self enterEditMode];
-  } else if (event.clickCount == 1) {
+  if (event.clickCount == 1) {
     // Prepare for potential drag — don't enter stepper mode until mouseUp
     _dragStartValue = self.numberValue;
     _didDrag = NO;
@@ -282,13 +292,22 @@ const CGFloat kNumberFieldHeight = 15.0;
 
     if (fabs(_preDragDeltaX) >= kDragThreshold ||
         fabs(_preDragDeltaY) >= kDragThreshold) {
+      _didDrag = YES;
+      if (!_mouseDownInTextBounds) {
+        return; // movement detected but drag not eligible — just suppress
+                // stepper
+      }
       _dragAxisIsVertical = fabs(_preDragDeltaY) > fabs(_preDragDeltaX);
       _totalDragDelta = 0;
-      _didDrag = YES;
       _lastModifierFlags = event.modifierFlags;
       CGWarpMouseCursorPosition(CGPointMake(0, 0));
       return;
     }
+    return; // still below threshold
+  }
+
+  if (!_mouseDownInTextBounds) {
+    return;
   }
 
   if (_didDrag) {
@@ -543,8 +562,12 @@ const CGFloat kNumberFieldHeight = 15.0;
   clampedValue = round(clampedValue * 10000.0) / 10000.0;
 
   _numberValue = clampedValue;
+  NSString *oldString = _textField.stringValue;
   _textField.doubleValue = clampedValue;
-
+  if (_isStepperMode && ![_textField.stringValue isEqualToString:oldString]) {
+    _updatingValue = YES;
+    [self setNeedsDisplay:YES];
+  }
   [self updateTrackingArea];
 }
 
@@ -605,7 +628,9 @@ const CGFloat kNumberFieldHeight = 15.0;
 
 - (void)drawRect:(NSRect)dirtyRect {
   [super drawRect:dirtyRect];
-  if (_parameterId != 0) {
+  if (_updatingValue) {
+    _updatingValue = NO;
+  } else if (_parameterId != 0) {
     [self refreshKeyframeState];
   }
 
