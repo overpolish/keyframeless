@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F21396022F649EF900E1EC03 /* keyframeless.icon in Resources */ = {isa = PBXBuildFile; fileRef = F21396012F649EF900E1EC03 /* keyframeless.icon */; };
+		F21396032F649EF900E1EC03 /* keyframeless.icon in Resources */ = {isa = PBXBuildFile; fileRef = F21396012F649EF900E1EC03 /* keyframeless.icon */; };
 		F220BFE32F4E07EB0034AF77 /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; };
 		F220BFE42F4E07EB0034AF77 /* KeyframelessKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F26E024F2F4DE56D009D949A /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; };
@@ -74,6 +76,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F21396012F649EF900E1EC03 /* keyframeless.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = keyframeless.icon; path = ../Assets/keyframeless.icon; sourceTree = SOURCE_ROOT; };
 		F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = KeyframelessKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2E2ED752F4CA530008620D9 /* Rounded.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Rounded.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2E2ED782F4CA530008620D9 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = System/Library/Frameworks/Cocoa.framework; sourceTree = SDKROOT; };
@@ -157,6 +160,7 @@
 		F2E2ED6C2F4CA530008620D9 = {
 			isa = PBXGroup;
 			children = (
+				F21396012F649EF900E1EC03 /* keyframeless.icon */,
 				F2E2ED902F4CA530008620D9 /* Rounded */,
 				F2E2ED772F4CA530008620D9 /* Frameworks */,
 				F2E2ED762F4CA530008620D9 /* Products */,
@@ -282,6 +286,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F21396032F649EF900E1EC03 /* keyframeless.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -289,6 +294,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F21396022F649EF900E1EC03 /* keyframeless.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -407,6 +413,8 @@
 		F2E2EDBB2F4CA530008620D9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = keyframeless;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = "Rounded/Wrapper Application/SandboxEntitlements.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_HARDENED_RUNTIME = NO;
@@ -421,6 +429,8 @@
 		F2E2EDBC2F4CA530008620D9 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = keyframeless;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = "Rounded/Wrapper Application/SandboxEntitlements.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_HARDENED_RUNTIME = NO;
