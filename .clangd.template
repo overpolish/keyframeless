@@ -5,15 +5,16 @@ CompileFlags:
     - -fcxx-modules
     - -fmodule-name=KeyframelessKit
     - -fmodules-cache-path=/tmp/clangd-modules-cache
-    - -F<DERIVED_DATA>/Build/Products/Debug
+    - -F<PATH_TO_REPO>/DerivedData/Keyframeless/Build/Products/Debug
     - -F/Library/Developer/SDKs/FxPlug.sdk/Library/Frameworks
-    - -fmodule-map-file=<DERIVED_DATA>/Build/Intermediates.noindex/KeyframelessKit.build/Debug/KeyframelessKit.build/module.modulemap
-    - -fmodule-map-file=<DERIVED_DATA>/Build/Intermediates.noindex/GeneratedModuleMaps/CocoaLumberjack.modulemap
-    - -I<DERIVED_DATA>/SourcePackages/checkouts/CocoaLumberjack/Sources/CocoaLumberjack/include
+    - -fmodule-map-file=<PATH_TO_REPO>/DerivedData/Keyframeless/Build/Intermediates.noindex/KeyframelessKit.build/Debug/KeyframelessKit.build/module.modulemap
+    - -fmodule-map-file=<PATH_TO_REPO>/DerivedData/Keyframeless/Build/Intermediates.noindex/GeneratedModuleMaps/CocoaLumberjack.modulemap
+    - -I<PATH_TO_REPO>/DerivedData/Keyframeless/SourcePackages/checkouts/CocoaLumberjack/Sources/CocoaLumberjack/include
     - -I<PATH_TO_REPO>/KeyframelessKit/KeyframelessKit
     - -I<PATH_TO_REPO>/KeyframelessKit/KeyframelessKit/Metal
     - -I<PATH_TO_REPO>/KeyframelessKit/KeyframelessKit/OSC
     - -I<PATH_TO_REPO>/KeyframelessKit/KeyframelessKit/Plugin
+    - -ferror-limit=0
   
 ---
 # Treat Metal shader files as C++ (closest grammar approximation for clangd formatting).
@@ -31,7 +32,3 @@ Diagnostics:
 # Setup:
 # 1. Copy this file to .clangd
 # 2. Replace <PATH_TO_REPO> with the absolute path to your local clone, e.g. /Users/you/coding/keyframeless
-# 3. Replace <DERIVED_DATA> with the DerivedData path for this project, e.g.:
-#    /Users/you/Library/Developer/Xcode/DerivedData/Keyframeless-<hash>/
-#    Find it in Xcode: File > Project Settings > Derived Data, or run:
-#    ls /Users/you/Library/Developer/Xcode/DerivedData/ | grep Keyframeless

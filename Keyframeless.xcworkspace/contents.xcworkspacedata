@@ -4,4 +4,7 @@
    <FileRef
       location = "group:KeyframelessKit/KeyframelessKit.xcodeproj">
    </FileRef>
+   <FileRef
+      location = "group:MotionBlur/MotionBlur.xcodeproj">
+   </FileRef>
 </Workspace>
