@@ -30,6 +30,9 @@
     }
     return s;
   }
+  if (value == 0.0) {
+    return @"0";
+  }
   return [NSString stringWithFormat:@"%.1f", value];
 }
 

@@ -349,6 +349,7 @@ const CGFloat kNumberFieldHeight = 15.0;
   } else if (self.window.firstResponder != _textField) {
     // Single click without drag → enter stepper mode
     _isStepperMode = YES;
+    [self setNeedsDisplay:YES];
     [self.window makeFirstResponder:self];
     [self updateFocusRingPanelFrameWithPadding:kFocusRingPanelPadding];
     if (self.window && !_focusRingPanel.parentWindow) {
@@ -381,6 +382,7 @@ const CGFloat kNumberFieldHeight = 15.0;
 
 - (void)enterEditMode {
   _isStepperMode = NO;
+  [self setNeedsDisplay:YES];
   _textField.editable = YES;
   ((KKNumberFormatter *)_textField.formatter).editing = YES;
   _textField.doubleValue = _numberValue;
@@ -406,11 +408,16 @@ const CGFloat kNumberFieldHeight = 15.0;
 }
 
 - (void)exitEditMode {
-  _isStepperMode = YES;
+  _isStepperMode = NO;
   _textField.editable = NO;
   ((KKNumberFormatter *)_textField.formatter).editing = NO;
   self.numberValue = _textField.doubleValue;
-  [self updateActiveState];
+  [self setNeedsDisplay:YES];
+  [_focusRingOverlay hide];
+  if (_focusRingPanel.parentWindow) {
+    [_focusRingPanel.parentWindow removeChildWindow:_focusRingPanel];
+  }
+  [_focusRingPanel orderOut:nil];
 }
 
 - (BOOL)acceptsFirstResponder {
@@ -420,6 +427,7 @@ const CGFloat kNumberFieldHeight = 15.0;
 - (BOOL)resignFirstResponder {
   if (_isStepperMode) {
     _isStepperMode = NO;
+    [self setNeedsDisplay:YES];
     [_focusRingOverlay hide];
     if (_focusRingPanel.parentWindow) {
       [_focusRingPanel.parentWindow removeChildWindow:_focusRingPanel];
@@ -600,6 +608,27 @@ const CGFloat kNumberFieldHeight = 15.0;
   if (_parameterId != 0) {
     [self refreshKeyframeState];
   }
+
+  if (_isStepperMode) {
+    NSString *displayString = _textField.stringValue;
+    NSDictionary *textAttrs = @{NSFontAttributeName : _textField.font};
+    NSSize textSize = [displayString sizeWithAttributes:textAttrs];
+    CGFloat textStartX =
+        kNumberFieldPrefixWidth + kNumberFieldInputWidth - textSize.width;
+    static CGFloat const kBgHeight = 9.0;
+    CGFloat midY = self.bounds.size.height / 2.0;
+    NSRect bgRect = NSMakeRect(textStartX - 2.5, midY - kBgHeight / 2.0 - 1.0,
+                               textSize.width + 1.5, kBgHeight);
+    NSBezierPath *bg = [NSBezierPath bezierPathWithRoundedRect:bgRect
+                                                       xRadius:1.0
+                                                       yRadius:1.0];
+    [[NSColor colorWithRed:0x23 / 255.0
+                     green:0x3e / 255.0
+                      blue:0x66 / 255.0
+                     alpha:1.0] setFill];
+    [bg fill];
+  }
+
   NSDictionary *attrs = [self labelTextAttributes];
 
   static CGFloat const kBottomMargin =
