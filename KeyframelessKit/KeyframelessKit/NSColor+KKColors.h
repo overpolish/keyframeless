@@ -20,14 +20,6 @@
 + (NSColor *)active;
 + (NSColor *)transparent;
 
-+ (NSColor *)sliderTrackBackground;
-+ (NSColor *)sliderTrackFill;
-+ (NSColor *)sliderKnobFill;
-+ (NSColor *)sliderKnobOutline;
-
-+ (NSColor *)expandChevron;
-+ (NSColor *)activeExpandChevron;
-
 - (simd_float4)simdFloat4;
 
 @end
