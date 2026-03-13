@@ -1,0 +1,24 @@
+#!/bin/bash
+
+CURRENT_USER=$(stat -f "%Su" /dev/console)
+USER_HOME=$(eval echo ~$CURRENT_USER)
+MOTION_TEMPLATES_BASE="$USER_HOME/Movies/Motion Templates.localized"
+FOUND_TEMPLATES=0
+
+# Works with any plugin by copying across correct motion template tree
+for TEMPLATE_TYPE_DIR in Effects.localized Generators.localized Titles.localized Transitions.localized; do
+    if [ -d "./$TEMPLATE_TYPE_DIR" ]; then
+        DEST_DIR="$MOTION_TEMPLATES_BASE/$TEMPLATE_TYPE_DIR"
+        mkdir -p "$DEST_DIR"
+        chown "$CURRENT_USER:staff" "$DEST_DIR"
+        cp -R "./$TEMPLATE_TYPE_DIR/"* "$DEST_DIR/"
+        chown -R "$CURRENT_USER:staff" "$DEST_DIR"
+        FOUND_TEMPLATES=1
+    fi
+done
+
+if [ $FOUND_TEMPLATES -eq 0 ]; then
+    exit 1
+fi
+
+exit 0
