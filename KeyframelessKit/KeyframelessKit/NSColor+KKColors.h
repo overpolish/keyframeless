@@ -30,6 +30,8 @@
 
 + (NSColor *)keyboardFocusIndicator;
 
++ (NSColor *)selection;
+
 - (simd_float4)simdFloat4;
 
 @end

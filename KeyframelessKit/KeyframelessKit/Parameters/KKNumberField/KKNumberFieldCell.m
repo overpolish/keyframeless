@@ -4,8 +4,12 @@
  */
 
 #import "KKNumberFieldCell.h"
-#include <CoreFoundation/CFCGTypes.h>
-#include <Foundation/Foundation.h>
+#import "NSColor+KKColors.h"
+#import <CoreFoundation/CFCGTypes.h>
+#import <Foundation/Foundation.h>
+
+static const CGFloat kInputHorizontalShift =
+    1.0; // shift text right within the field
 
 @implementation KKNumberFieldCell
 
@@ -15,7 +19,9 @@
                delegate:(id)delegate
                   start:(NSInteger)selStart
                  length:(NSInteger)selLength {
+
   NSRect adjustedRect = rect;
+  adjustedRect.origin.x += kInputHorizontalShift;
 
   [super selectWithFrame:adjustedRect
                   inView:controlView
@@ -29,16 +35,26 @@
   // Remove cell's default vertical insets so focus ring matches the background
   // rect
   NSRect adjustedRect = [super drawingRectForBounds:rect];
-  rect.origin.y = rect.origin.y;
-  rect.size.height = rect.size.height;
+  adjustedRect.origin.x += kInputHorizontalShift;
   return adjustedRect;
 }
 
-- (void)drawInteriorWithFrame:(NSRect)cellFrame inView:(NSView *)controlView {
-  [NSGraphicsContext saveGraphicsState];
-  [[NSBezierPath bezierPathWithRect:cellFrame] addClip];
-  [super drawInteriorWithFrame:cellFrame inView:controlView];
-  [NSGraphicsContext restoreGraphicsState];
+- (NSRect)titleRectForBounds:(NSRect)rect {
+  NSRect titleRect = [super titleRectForBounds:rect];
+  titleRect.origin.x += kInputHorizontalShift;
+  return titleRect;
+}
+
+- (NSText *)setUpFieldEditorAttributes:(NSText *)textObj {
+  NSText *result = [super setUpFieldEditorAttributes:textObj];
+
+  if ([result isKindOfClass:[NSTextView class]]) {
+    NSTextView *textView = (NSTextView *)result;
+    [textView setSelectedTextAttributes:@{
+      NSBackgroundColorAttributeName : [NSColor selection]
+    }];
+  }
+  return result;
 }
 
 @end

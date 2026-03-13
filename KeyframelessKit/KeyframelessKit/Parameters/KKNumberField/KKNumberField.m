@@ -27,6 +27,8 @@ static const CGFloat kNumberFieldInputWidth = 51.0;
 static const CGFloat kNumberFieldPrefixWidth = 10.0;
 static const CGFloat kNumberFieldSuffixWidth = 20.0;
 static const CGFloat kInputBottomMargin = 1.0;
+static const CGFloat kInputVerticalShift =
+    0.5; // shift text field up within row
 static const CGFloat kFocusRingPanelPadding =
     20.0; // room for animate-in expansion
 static const CGFloat kFocusRingPostAnimPadding = 5.0; // shrunk after animation
@@ -78,9 +80,6 @@ const CGFloat kNumberFieldHeight = 15.0;
     _optionStepMultiplier = 0.1;
     _isStepperMode = NO;
 
-    self.wantsLayer = YES;
-    self.layer.backgroundColor = [[NSColor orangeColor] CGColor];
-
     // TODO clean
     _prefix = @"Y";
     _suffix = @"px";
@@ -125,8 +124,9 @@ const CGFloat kNumberFieldHeight = 15.0;
     [_textField.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
                                              constant:kNumberFieldPrefixWidth],
     [_textField.widthAnchor constraintEqualToConstant:kNumberFieldInputWidth],
-    [_textField.centerYAnchor constraintEqualToAnchor:self.centerYAnchor
-                                             constant:kInputBottomMargin],
+    [_textField.centerYAnchor
+        constraintEqualToAnchor:self.centerYAnchor
+                       constant:kInputBottomMargin - kInputVerticalShift],
   ]];
 
   _focusRingOverlay = [[KKFocusRingOverlay alloc]
@@ -345,11 +345,21 @@ const CGFloat kNumberFieldHeight = 15.0;
     // Single click without drag → enter stepper mode
     _isStepperMode = YES;
     [self.window makeFirstResponder:self];
-    [self updateFocusRingPanelFrameWithPadding:kFocusRingPostAnimPadding];
+    [self updateFocusRingPanelFrameWithPadding:kFocusRingPanelPadding];
     if (self.window && !_focusRingPanel.parentWindow) {
       [self.window addChildWindow:_focusRingPanel ordered:NSWindowAbove];
     }
     [self updateActiveState];
+    __weak typeof(self) weak = self;
+    dispatch_after(
+        dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.30 * NSEC_PER_SEC)),
+        dispatch_get_main_queue(), ^{
+          __strong typeof(self) strong = weak;
+          if (!strong || !strong->_isStepperMode)
+            return;
+          [strong
+              updateFocusRingPanelFrameWithPadding:kFocusRingPostAnimPadding];
+        });
   }
 }
 
@@ -358,6 +368,7 @@ const CGFloat kNumberFieldHeight = 15.0;
     return;
   NSRect frameInWindow = [_textField convertRect:_textField.bounds toView:nil];
   NSRect frameOnScreen = [self.window convertRectToScreen:frameInWindow];
+  frameOnScreen.origin.y -= kInputVerticalShift;
   frameOnScreen = NSInsetRect(frameOnScreen, -padding, -padding);
   [_focusRingOverlay setPanelPadding:padding];
   [_focusRingPanel setFrame:frameOnScreen display:NO];

@@ -74,10 +74,31 @@
 }
 
 + (NSColor *)keyboardFocusIndicator {
-  return [NSColor colorWithRed:0x28 / 255.0
-                         green:0x47 / 255.0
-                          blue:0x77 / 255.0
-                         alpha:1.0];
+  if ([KKHostInfo isRunningInFinalCut]) {
+    return [NSColor colorWithRed:0x1B / 255.0
+                           green:0x3B / 255.0
+                            blue:0x6A / 255.0
+                           alpha:1.0];
+  } else {
+    return [NSColor colorWithRed:0x28 / 255.0
+                           green:0x47 / 255.0
+                            blue:0x77 / 255.0
+                           alpha:1.0];
+  }
+}
+
++ (NSColor *)selection {
+  if ([KKHostInfo isRunningInFinalCut]) {
+    return [NSColor colorWithRed:0x57 / 255.0
+                           green:0x57 / 255.0
+                            blue:0xDF / 255.0
+                           alpha:1.0];
+  } else {
+    return [NSColor colorWithRed:0x59 / 255.0
+                           green:0x59 / 255.0
+                            blue:0xE1 / 255.0
+                           alpha:1.0];
+  }
 }
 
 - (simd_float4)simdFloat4 {
