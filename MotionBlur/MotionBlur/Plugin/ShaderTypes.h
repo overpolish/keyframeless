@@ -7,8 +7,5 @@
 
 #import <simd/simd.h>
 
-typedef enum FragmentIndex {
-    FragmentIndex_Radius = 0,
-    FragmentIndex_ImageSize = 1,
-    FragmentIndex_TileOffset = 2
-} FragmentIndex;
+// Placeholder — no blur samples needed for passthrough.
+#define MOTION_BLUR_SAMPLE_COUNT 1
