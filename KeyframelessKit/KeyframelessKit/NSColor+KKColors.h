@@ -28,6 +28,8 @@
 + (NSColor *)expandChevron;
 + (NSColor *)activeExpandChevron;
 
++ (NSColor *)keyboardFocusIndicator;
+
 - (simd_float4)simdFloat4;
 
 @end

@@ -73,6 +73,13 @@
   return [NSColor colorWithWhite:0x6e / 255.0 alpha:1.0];
 }
 
++ (NSColor *)keyboardFocusIndicator {
+  return [NSColor colorWithRed:0x28 / 255.0
+                         green:0x47 / 255.0
+                          blue:0x77 / 255.0
+                         alpha:1.0];
+}
+
 - (simd_float4)simdFloat4 {
   NSColor *rgb = [self colorUsingColorSpace:NSColorSpace.genericRGBColorSpace];
   return (simd_float4){

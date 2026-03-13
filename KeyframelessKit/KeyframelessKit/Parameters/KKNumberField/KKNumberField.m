@@ -4,6 +4,7 @@
  */
 
 #import "KKNumberField.h"
+#import "KKFocusRingOverlay.h"
 #import "KKLog.h"
 #import "KKNumberFieldCell.h"
 #import "KKNumberFieldInputValidator.h"
@@ -25,7 +26,10 @@ static const CGFloat kScrollStepThreshold = 20.0;
 static const CGFloat kNumberFieldInputWidth = 51.0;
 static const CGFloat kNumberFieldPrefixWidth = 10.0;
 static const CGFloat kNumberFieldSuffixWidth = 20.0;
-static CGFloat const kInputBottomMargin = 1.5;
+static const CGFloat kInputBottomMargin = 1.0;
+static const CGFloat kFocusRingPanelPadding =
+    20.0; // room for animate-in expansion
+static const CGFloat kFocusRingPostAnimPadding = 5.0; // shrunk after animation
 
 const CGFloat kNumberFieldWidth =
     kNumberFieldPrefixWidth + kNumberFieldInputWidth + kNumberFieldSuffixWidth;
@@ -35,6 +39,8 @@ const CGFloat kNumberFieldHeight = 15.0;
   KKLog *_log;
 
   NSTextField *_textField;
+  KKFocusRingOverlay *_focusRingOverlay;
+  NSPanel *_focusRingPanel;
   id<PROAPIAccessing> _apiManager;
   KKNumberFieldInputValidator *_inputValidator;
 
@@ -70,7 +76,7 @@ const CGFloat kNumberFieldHeight = 15.0;
     _dragScale = 1.0;
     _shiftStepMultiplier = 10.0;
     _optionStepMultiplier = 0.1;
-    _isStepperMode = YES;
+    _isStepperMode = NO;
 
     self.wantsLayer = YES;
     self.layer.backgroundColor = [[NSColor orangeColor] CGColor];
@@ -92,12 +98,15 @@ const CGFloat kNumberFieldHeight = 15.0;
   _textField.translatesAutoresizingMaskIntoConstraints = NO;
   _textField.delegate = self;
   _textField.bordered = NO;
-  _textField.drawsBackground = YES;
-  _textField.backgroundColor = [NSColor redColor];
+  _textField.focusRingType = NSFocusRingTypeNone;
   _textField.textColor = [NSColor labelColor];
   _textField.editable = NO; // Start in stepper mode
   _textField.alignment = NSTextAlignmentRight;
   _textField.cell.usesSingleLineMode = YES;
+  // Has to draw background as otherwise without background the field is
+  // slightly too large
+  _textField.drawsBackground = YES;
+  _textField.backgroundColor = [NSColor clearColor];
   _textField.cell.scrollable = YES;
   _textField.cell.wraps = NO;
   _textField.font =
@@ -119,6 +128,22 @@ const CGFloat kNumberFieldHeight = 15.0;
     [_textField.centerYAnchor constraintEqualToAnchor:self.centerYAnchor
                                              constant:kInputBottomMargin],
   ]];
+
+  _focusRingOverlay = [[KKFocusRingOverlay alloc]
+      initWithColor:[NSColor keyboardFocusIndicator]];
+
+  _focusRingPanel =
+      [[NSPanel alloc] initWithContentRect:NSMakeRect(0, 0, 1, 1)
+                                 styleMask:NSWindowStyleMaskBorderless |
+                                           NSWindowStyleMaskNonactivatingPanel
+                                   backing:NSBackingStoreBuffered
+                                     defer:NO];
+  _focusRingPanel.backgroundColor = [NSColor clearColor];
+  _focusRingPanel.opaque = NO;
+  _focusRingPanel.hasShadow = NO;
+  _focusRingPanel.ignoresMouseEvents = YES;
+  _focusRingPanel.hidesOnDeactivate = NO;
+  _focusRingPanel.contentView = _focusRingOverlay;
 
   [self addTrackingArea:_trackingArea];
 }
@@ -155,20 +180,21 @@ const CGFloat kNumberFieldHeight = 15.0;
 
 - (void)mouseEntered:(NSEvent *)event {
   _isHovered = [self _isMouseInTextBoundsForEvent:event];
-  [self updateBackgroundColor];
+  // TODO hover state rather than active state
+  // [self updateActiveState];
 }
 
 - (void)mouseMoved:(NSEvent *)event {
   BOOL inTextBounds = [self _isMouseInTextBoundsForEvent:event];
   if (inTextBounds != _isHovered) {
     _isHovered = inTextBounds;
-    [self updateBackgroundColor];
+    // [self updateActiveState];
   }
 }
 
 - (void)mouseExited:(NSEvent *)event {
   _isHovered = NO;
-  [self updateBackgroundColor];
+  // [self updateActiveState];
 }
 
 - (NSSize)intrinsicContentSize {
@@ -216,9 +242,7 @@ const CGFloat kNumberFieldHeight = 15.0;
   if (event.clickCount == 2) {
     [self enterEditMode];
   } else if (event.clickCount == 1) {
-    [self.window makeFirstResponder:self];
-    [self updateBackgroundColor];
-    // Prepare for potential drag
+    // Prepare for potential drag — don't enter stepper mode until mouseUp
     _dragStartValue = self.numberValue;
     _didDrag = NO;
     _preDragDeltaX = 0;
@@ -238,58 +262,61 @@ const CGFloat kNumberFieldHeight = 15.0;
   if (!_mouseDownInInputRect) {
     return;
   }
-  if (_isStepperMode) {
-    if (!_didDrag) {
-      if (fabs(event.deltaX) > kMaxDeltaPerEvent ||
-          fabs(event.deltaY) > kMaxDeltaPerEvent) {
-        return;
-      }
-      _preDragDeltaX += event.deltaX;
-      _preDragDeltaY += event.deltaY;
+  // Drag works in any non-edit state
+  if (_textField.currentEditor) {
+    return;
+  }
 
-      if (fabs(_preDragDeltaX) >= kDragThreshold ||
-          fabs(_preDragDeltaY) >= kDragThreshold) {
-        _dragAxisIsVertical = fabs(_preDragDeltaY) > fabs(_preDragDeltaX);
-        _totalDragDelta = 0;
-        _didDrag = YES;
-        _lastModifierFlags = event.modifierFlags;
-        CGWarpMouseCursorPosition(CGPointMake(0, 0));
-        return;
-      }
+  if (!_didDrag) {
+    if (fabs(event.deltaX) > kMaxDeltaPerEvent ||
+        fabs(event.deltaY) > kMaxDeltaPerEvent) {
+      return;
     }
+    _preDragDeltaX += event.deltaX;
+    _preDragDeltaY += event.deltaY;
 
-    if (_didDrag) {
-      [[self transparentCursor] set];
-      // Pin to top-left; transparent cursor avoids option-key reveal in FxPlug
+    if (fabs(_preDragDeltaX) >= kDragThreshold ||
+        fabs(_preDragDeltaY) >= kDragThreshold) {
+      _dragAxisIsVertical = fabs(_preDragDeltaY) > fabs(_preDragDeltaX);
+      _totalDragDelta = 0;
+      _didDrag = YES;
+      _lastModifierFlags = event.modifierFlags;
       CGWarpMouseCursorPosition(CGPointMake(0, 0));
-
-      // When modifiers change, reset drag from current value
-      NSEventModifierFlags relevantFlags =
-          event.modifierFlags &
-          (NSEventModifierFlagShift | NSEventModifierFlagOption);
-      NSEventModifierFlags lastRelevantFlags =
-          _lastModifierFlags &
-          (NSEventModifierFlagShift | NSEventModifierFlagOption);
-
-      if (relevantFlags != lastRelevantFlags) {
-        _dragStartValue = self.numberValue;
-        _totalDragDelta = 0;
-        _lastModifierFlags = event.modifierFlags;
-        return;
-      }
-
-      CGFloat axisDelta = _dragAxisIsVertical ? -event.deltaY : event.deltaX;
-      if (fabs(axisDelta) > kMaxDeltaPerEvent) {
-        return;
-      }
-      _totalDragDelta += axisDelta;
-
-      CGFloat effectiveStep =
-          [self effectiveStepWithModifiers:event.modifierFlags];
-      CGFloat steps = round(_totalDragDelta / _dragScale);
-      self.numberValue = _dragStartValue + (steps * effectiveStep);
-      _textField.doubleValue = self.numberValue;
+      return;
     }
+  }
+
+  if (_didDrag) {
+    [[self transparentCursor] set];
+    // Pin to top-left; transparent cursor avoids option-key reveal in FxPlug
+    CGWarpMouseCursorPosition(CGPointMake(0, 0));
+
+    // When modifiers change, reset drag from current value
+    NSEventModifierFlags relevantFlags =
+        event.modifierFlags &
+        (NSEventModifierFlagShift | NSEventModifierFlagOption);
+    NSEventModifierFlags lastRelevantFlags =
+        _lastModifierFlags &
+        (NSEventModifierFlagShift | NSEventModifierFlagOption);
+
+    if (relevantFlags != lastRelevantFlags) {
+      _dragStartValue = self.numberValue;
+      _totalDragDelta = 0;
+      _lastModifierFlags = event.modifierFlags;
+      return;
+    }
+
+    CGFloat axisDelta = _dragAxisIsVertical ? -event.deltaY : event.deltaX;
+    if (fabs(axisDelta) > kMaxDeltaPerEvent) {
+      return;
+    }
+    _totalDragDelta += axisDelta;
+
+    CGFloat effectiveStep =
+        [self effectiveStepWithModifiers:event.modifierFlags];
+    CGFloat steps = round(_totalDragDelta / _dragScale);
+    self.numberValue = _dragStartValue + (steps * effectiveStep);
+    _textField.doubleValue = self.numberValue;
   }
 }
 
@@ -307,18 +334,56 @@ const CGFloat kNumberFieldHeight = 15.0;
 }
 
 - (void)mouseUp:(NSEvent *)event {
-  if (!_mouseDownInInputRect || !_didDrag) {
+  if (!_mouseDownInInputRect) {
     return;
   }
-  _didDrag = NO;
-  [[NSCursor arrowCursor] set];
-  CGWarpMouseCursorPosition(_dragStartScreenPoint);
+  if (_didDrag) {
+    _didDrag = NO;
+    [[NSCursor arrowCursor] set];
+    CGWarpMouseCursorPosition(_dragStartScreenPoint);
+  } else if (self.window.firstResponder != _textField) {
+    // Single click without drag → enter stepper mode
+    _isStepperMode = YES;
+    [self.window makeFirstResponder:self];
+    [self updateFocusRingPanelFrameWithPadding:kFocusRingPostAnimPadding];
+    if (self.window && !_focusRingPanel.parentWindow) {
+      [self.window addChildWindow:_focusRingPanel ordered:NSWindowAbove];
+    }
+    [self updateActiveState];
+  }
+}
+
+- (void)updateFocusRingPanelFrameWithPadding:(CGFloat)padding {
+  if (!self.window)
+    return;
+  NSRect frameInWindow = [_textField convertRect:_textField.bounds toView:nil];
+  NSRect frameOnScreen = [self.window convertRectToScreen:frameInWindow];
+  frameOnScreen = NSInsetRect(frameOnScreen, -padding, -padding);
+  [_focusRingOverlay setPanelPadding:padding];
+  [_focusRingPanel setFrame:frameOnScreen display:NO];
 }
 
 - (void)enterEditMode {
   _isStepperMode = NO;
   _textField.editable = YES;
-  [self updateBackgroundColor];
+
+  [self updateFocusRingPanelFrameWithPadding:kFocusRingPanelPadding];
+  if (self.window && !_focusRingPanel.parentWindow) {
+    [self.window addChildWindow:_focusRingPanel ordered:NSWindowAbove];
+  }
+  [_focusRingPanel orderFront:nil];
+  [_focusRingOverlay show];
+
+  __weak typeof(self) weak = self;
+  dispatch_after(
+      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.30 * NSEC_PER_SEC)),
+      dispatch_get_main_queue(), ^{
+        __strong typeof(self) strong = weak;
+        if (!strong || strong->_isStepperMode)
+          return;
+        [strong updateFocusRingPanelFrameWithPadding:kFocusRingPostAnimPadding];
+      });
+
   [self.window makeFirstResponder:_textField];
 }
 
@@ -326,8 +391,7 @@ const CGFloat kNumberFieldHeight = 15.0;
   _isStepperMode = YES;
   _textField.editable = NO;
   self.numberValue = _textField.doubleValue;
-
-  [self updateBackgroundColor];
+  [self updateActiveState];
 }
 
 - (BOOL)acceptsFirstResponder {
@@ -336,7 +400,12 @@ const CGFloat kNumberFieldHeight = 15.0;
 
 - (BOOL)resignFirstResponder {
   if (_isStepperMode) {
-    _textField.backgroundColor = [NSColor redColor];
+    _isStepperMode = NO;
+    [_focusRingOverlay hide];
+    if (_focusRingPanel.parentWindow) {
+      [_focusRingPanel.parentWindow removeChildWindow:_focusRingPanel];
+    }
+    [_focusRingPanel orderOut:nil];
   }
   return [super resignFirstResponder];
 }
@@ -481,18 +550,26 @@ const CGFloat kNumberFieldHeight = 15.0;
     [self.suffix drawInRect:suffixRect withAttributes:attrs];
   }
 }
-// TODO draw focus ring
 
 // TODO this is to become focus drawing
-- (void)updateBackgroundColor {
-  BOOL active = !_isStepperMode || self.window.firstResponder == self;
+- (void)updateActiveState {
+  BOOL active = _textField.isEditable ||
+                (_isStepperMode && self.window.firstResponder == self);
 
   if (active) {
-    _textField.backgroundColor = [NSColor greenColor];
+    // TODO show focus
+    [_focusRingPanel orderFront:nil];
+    _focusRingPanel.ignoresMouseEvents = YES;
+    [_focusRingOverlay animateIn];
   } else if (_isHovered) {
+    // TODO only when either not active or in stepper mode, NOT EDIT MODE
     _textField.backgroundColor = [NSColor blueColor];
   } else {
-    _textField.backgroundColor = [NSColor redColor];
+    [_focusRingOverlay hide];
+    if (_focusRingPanel.parentWindow) {
+      [_focusRingPanel.parentWindow removeChildWindow:_focusRingPanel];
+    }
+    [_focusRingPanel orderOut:nil];
   }
 }
 

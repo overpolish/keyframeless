@@ -4,11 +4,8 @@
  */
 
 #import "KKNumberFieldCell.h"
+#include <CoreFoundation/CFCGTypes.h>
 #include <Foundation/Foundation.h>
-
-static CGFloat const kOffsetY =
-    -1.0; // Apple Motion/FCP render their text off-center
-static CGFloat const kOffsetX = 1.0; // Apple Motion/FCP pull towards the right
 
 @implementation KKNumberFieldCell
 
@@ -19,8 +16,6 @@ static CGFloat const kOffsetX = 1.0; // Apple Motion/FCP pull towards the right
                   start:(NSInteger)selStart
                  length:(NSInteger)selLength {
   NSRect adjustedRect = rect;
-  adjustedRect.origin.y += kOffsetY;
-  adjustedRect.origin.x += kOffsetX;
 
   [super selectWithFrame:adjustedRect
                   inView:controlView
@@ -30,32 +25,20 @@ static CGFloat const kOffsetX = 1.0; // Apple Motion/FCP pull towards the right
                   length:selLength];
 }
 
+- (NSRect)drawingRectForBounds:(NSRect)rect {
+  // Remove cell's default vertical insets so focus ring matches the background
+  // rect
+  NSRect adjustedRect = [super drawingRectForBounds:rect];
+  rect.origin.y = rect.origin.y;
+  rect.size.height = rect.size.height;
+  return adjustedRect;
+}
+
 - (void)drawInteriorWithFrame:(NSRect)cellFrame inView:(NSView *)controlView {
   [NSGraphicsContext saveGraphicsState];
   [[NSBezierPath bezierPathWithRect:cellFrame] addClip];
-
-  NSRect adjustedFrame = cellFrame;
-  adjustedFrame.origin.y += kOffsetY;
-  adjustedFrame.origin.x += kOffsetX;
-
   [super drawInteriorWithFrame:cellFrame inView:controlView];
   [NSGraphicsContext restoreGraphicsState];
-}
-
-- (NSText *)setUpFieldEditorAttributes:(NSText *)textObj {
-  NSText *result = [super setUpFieldEditorAttributes:textObj];
-
-  if ([result isKindOfClass:[NSTextView class]]) {
-    NSTextView *textView = (NSTextView *)result;
-    [textView setSelectedTextAttributes:@{
-      // TODO pull out into const
-      NSBackgroundColorAttributeName : [NSColor colorWithRed:0x59 / 255.0
-                                                       green:0x59 / 255.0
-                                                        blue:0xE1 / 255.0
-                                                       alpha:1.0]
-    }];
-  }
-  return result;
 }
 
 @end
