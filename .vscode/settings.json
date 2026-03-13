@@ -61,6 +61,7 @@
     "synthesize",
     "texcoord",
     "Tileable",
+    "Toggleable",
     "uint",
     "unhide",
     "unichar",
