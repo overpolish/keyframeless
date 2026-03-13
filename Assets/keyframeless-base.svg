@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="24"
+   height="24"
+   viewBox="0 0 24 24"
+   fill="none"
+   stroke="currentColor"
+   stroke-width="2"
+   stroke-linecap="round"
+   stroke-linejoin="round"
+   class="lucide lucide-diamond-minus-icon lucide-diamond-minus"
+   version="1.1"
+   id="svg2"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs2" />
+  <path
+     id="path1"
+     style="display:inline;fill:#ffffff;fill-opacity:1;stroke:none"
+     d="M 11.994141,2.0039062 A 2.41,2.41 0 0 0 10.289062,2.7109375 L 2.6992188,10.300781 a 2.41,2.41 0 0 0 0,3.410157 l 7.5898432,7.589843 a 2.41,2.41 0 0 0 3.410157,0 l 7.589843,-7.589843 a 2.41,2.41 0 0 0 0,-3.410157 L 13.699219,2.7109375 A 2.41,2.41 0 0 0 11.994141,2.0039062 Z M 6.9980469,10.5 H 17.001953 a 1.5,1.5 0 0 1 1.5,1.5 1.5,1.5 0 0 1 -1.5,1.5 H 6.9980469 a 1.5,1.5 0 0 1 -1.5,-1.5 1.5,1.5 0 0 1 1.5,-1.5 z" />
+  <path
+     id="rect3"
+     style="display:none;fill:#000000;fill-opacity:1;stroke:none;stroke-width:3;stroke-dasharray:none"
+     d="M 11.994141,2.0039062 V 10.5 h 5.007812 c 0.828427,0 1.5,0.671573 1.5,1.5 0,0.828427 -0.671573,1.5 -1.5,1.5 h -5.007812 v 8.507812 c 0.639668,-5.5e-5 1.253072,-0.254411 1.705078,-0.707031 l 7.589843,-7.589843 c 0.452621,-0.452006 0.706977,-1.065411 0.707032,-1.705079 -5.5e-5,-0.639668 -0.254411,-1.253072 -0.707032,-1.705078 L 13.699219,2.7109375 C 13.247213,2.2583169 12.633809,2.0039612 11.994141,2.0039062 Z" />
+</svg>
