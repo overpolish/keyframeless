@@ -72,8 +72,8 @@ const CGFloat kNumberFieldHeight = 15.0;
     _apiManager = apiManager;
     _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
 
-    _minValue = -10.0;
-    _maxValue = 100.0;
+    _minValue = -INFINITY;
+    _maxValue = INFINITY;
     _stepValue = 1.0;
     _dragScale = 1.0;
     _shiftStepMultiplier = 10.0;

@@ -75,11 +75,11 @@
     return YES;
   }
 
-  // Numeric and bounds validation
+  // Numeric validation (bounds are enforced on exit, not during typing)
   NSScanner *scanner = [NSScanner scannerWithString:partialString];
   double value;
   if ([scanner scanDouble:&value] && [scanner isAtEnd]) {
-    return (value >= _minValue && value <= _maxValue);
+    return YES;
   }
 
   return NO;
