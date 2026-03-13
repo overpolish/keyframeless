@@ -71,33 +71,7 @@
     return NO;
   }
 
-  // Adding a label with text pushes custom control down
-  [paramAPI addCustomParameterWithName:@""
-                           parameterID:13
-                          defaultValue:nil
-                        parameterFlags:kFxParameterFlag_CUSTOM_UI |
-                                       kFxParameterFlag_USE_FULL_VIEW_WIDTH];
-
-  // TODO add per corner radius parameters
-
   return YES;
-}
-
-- (NSView *)createViewForParameterID:(UInt32)parameterID {
-  // TODO pull out into const
-  if (parameterID == 13) {
-    // TODO pull out into constant - this is the height of a inspector row
-    CGFloat height = 23.0;
-
-    KKCustomGroupHeaderView *view = [[KKCustomGroupHeaderView alloc]
-        initWithFrame:NSMakeRect(0, 0, 100.0, height)
-           apiManager:self.apiManager
-          parameterId:13];
-
-    view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-    return view;
-  }
-  return nil;
 }
 
 - (BOOL)pluginState:(NSData **)pluginState
