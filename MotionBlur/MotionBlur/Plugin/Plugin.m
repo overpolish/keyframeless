@@ -8,12 +8,16 @@
 #import <AppKit/NSView.h>
 #import <Foundation/Foundation.h>
 #import <IOSurface/IOSurfaceObjC.h>
+#import <KeyframelessKit/KKLog.h>
 #import <QuartzCore/QuartzCore.h>
 
-@implementation Plugin
+@implementation Plugin {
+  KKLog *_log;
+}
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager {
-  NSLog(@"MotionBlurPlugin: loading");
+  _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
+  [_log info:@"MotionBlurPlugin: loading"];
   self = [super initWithAPIManager:newApiManager];
   return self;
 }
