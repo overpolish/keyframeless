@@ -7,6 +7,7 @@
 #import "NSColor+KKColors.h"
 #import <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 
@@ -14,12 +15,14 @@
 @end
 
 @implementation KKOnScreenControl {
+  KKLog *_log;
   BOOL _isHovered;
   BOOL _isDragging;
 }
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
   self = [super init];
+  _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
   if (self) {
     _apiManager = apiManager;
     _isHovered = NO;
@@ -104,8 +107,8 @@
 
   id<MTLLibrary> lib = [device newDefaultLibraryWithBundle:bundle error:&error];
   if (!lib || error) {
-    NSLog(@"%@: Failed to load Metal library: %@",
-          NSStringFromClass([self class]), error);
+    [_log error:@"%@: Failed to load Metal library: %@",
+                NSStringFromClass([self class]), error];
     return nil;
   }
 
@@ -114,7 +117,8 @@
       [lib newFunctionWithName:[self fragmentFunctionName]];
 
   if (!vertFn || !fragFn) {
-    NSLog(@"%@: Required shaders not found.", NSStringFromClass([self class]));
+    [_log error:@"%@: Required shaders not found.",
+                NSStringFromClass([self class])];
     return nil;
   }
 
@@ -126,8 +130,8 @@
 
   ps = [device newRenderPipelineStateWithDescriptor:desc error:&error];
   if (!ps || error) {
-    NSLog(@"%@: Failed to create pipeline state: %@",
-          NSStringFromClass([self class]), error);
+    [_log error:@"%@: Failed to create pipeline state: %@",
+                NSStringFromClass([self class]), error];
     return nil;
   }
 
