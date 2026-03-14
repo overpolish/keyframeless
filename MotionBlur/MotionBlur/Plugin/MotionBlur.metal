@@ -27,9 +27,14 @@ vertex KKRasterizerData vertexShader(uint vertexID [[vertex_id]],
     return out;
 }
 
-// Passthrough — returns the source frame unchanged.
-fragment float4 fragmentShader(KKRasterizerData in [[stage_in]], texture2d<half> currentFrame [[texture(0)]],
-                               texture2d<half> previousFrame [[texture(1)]]) {
+fragment float4 fragmentShader(KKRasterizerData in [[stage_in]],
+                               array<texture2d<half>, MOTION_BLUR_SAMPLE_COUNT> frames [[texture(0)]],
+                               constant int &sampleCount [[buffer(0)]]) {
     constexpr sampler s(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
-    return float4(currentFrame.sample(s, in.textureCoordinate));
+
+    float4 result = float4(0.0);
+    for (int i = 0; i < sampleCount; i++) {
+        result += float4(frames[i].sample(s, in.textureCoordinate));
+    }
+    return result / float(sampleCount);
 }

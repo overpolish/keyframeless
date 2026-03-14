@@ -5,6 +5,7 @@
 
 #import "Plugin.h"
 #import "Constants.h"
+#import "ShaderTypes.h"
 #import <AppKit/NSView.h>
 #include <CoreMedia/CMTime.h>
 #import <Foundation/Foundation.h>
@@ -12,9 +13,14 @@
 #import <KeyframelessKit/KKLog.h>
 #import <QuartzCore/QuartzCore.h>
 
+typedef struct {
+  CMTime frameDuration;
+  float strength; // 0..1
+  int sampleCount;
+} MotionBlurState;
+
 @implementation Plugin {
   KKLog *_log;
-  CMTime _frameDuration;
 }
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager {
@@ -27,9 +33,9 @@
 - (BOOL)properties:(NSDictionary *_Nonnull *)properties
              error:(NSError *_Nullable *)error {
   *properties = @{
-    kFxPropertyKey_MayRemapTime : @NO,
+    kFxPropertyKey_MayRemapTime : @YES,
     kFxPropertyKey_PixelTransformSupport : @(kFxPixelTransform_ScaleTranslate),
-    kFxPropertyKey_VariesWhenParamsAreStatic : @NO,
+    kFxPropertyKey_VariesWhenParamsAreStatic : @YES,
   };
   return YES;
 }
@@ -50,6 +56,8 @@
     return NO;
   }
 
+  // Strength: 0 = no blur, 100 = full-frame blur. Mapped to shutter angle
+  // internally (strength / 100 * 360°).
   if (![paramAPI addFloatSliderWithName:@"Strength"
                             parameterID:1
                            defaultValue:50.0
@@ -77,12 +85,32 @@
              atTime:(CMTime)renderTime
             quality:(FxQuality)qualityLevel
               error:(NSError **)error {
-  // Timing API doesn't seem to work directly from `scheduleInputs`
+  MotionBlurState state = {};
+
   id<FxTimingAPI_v4> timingAPI =
       [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-  [timingAPI frameDuration:&_frameDuration];
+  [timingAPI frameDuration:&state.frameDuration];
 
-  *pluginState = [NSData data];
+  double strength = 50.0;
+  id<FxParameterRetrievalAPI_v6> paramAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  [paramAPI getFloatValue:&strength fromParameter:1 atTime:renderTime];
+  state.strength = (float)(strength / 100.0);
+
+  // Use fewer samples during preview/scrubbing for real-time playback.
+  switch (qualityLevel) {
+  case kFxQuality_LOW:
+    state.sampleCount = 4;
+    break;
+  case kFxQuality_MEDIUM:
+    state.sampleCount = 8;
+    break;
+  default:
+    state.sampleCount = MOTION_BLUR_SAMPLE_COUNT;
+    break;
+  }
+
+  *pluginState = [NSData dataWithBytes:&state length:sizeof(state)];
   return YES;
 }
 
@@ -90,24 +118,34 @@
        withPluginState:(NSData *)pluginState
                 atTime:(CMTime)renderTime
                  error:(NSError **)error {
-  CMTime previousFrame = CMTimeSubtract(renderTime, _frameDuration);
-  if (CMTimeCompare(previousFrame, kCMTimeZero) < 0) {
-    previousFrame = renderTime;
+  MotionBlurState state = {};
+  if (pluginState.length >= sizeof(state)) {
+    [pluginState getBytes:&state length:sizeof(state)];
   }
 
-  FxImageTileRequest *currentReq = [[FxImageTileRequest alloc]
-      initWithSource:kFxImageTileRequestSourceEffectClip
-                time:renderTime
-      includeFilters:YES
-         parameterID:0];
+  double shutterSeconds =
+      CMTimeGetSeconds(state.frameDuration) * state.strength;
 
-  FxImageTileRequest *prevReq = [[FxImageTileRequest alloc]
-      initWithSource:kFxImageTileRequestSourceEffectClip
-                time:previousFrame
-      includeFilters:YES
-         parameterID:0];
+  int n = state.sampleCount > 0 ? state.sampleCount : MOTION_BLUR_SAMPLE_COUNT;
+  NSMutableArray *requests = [NSMutableArray arrayWithCapacity:n];
+  for (int i = 0; i < n; i++) {
+    double fraction = (n > 1) ? (double)i / (double)(n - 1) : 0.0;
+    double offsetSeconds = shutterSeconds * fraction;
+    CMTime frameTime = CMTimeSubtract(
+        renderTime, CMTimeMakeWithSeconds(offsetSeconds, renderTime.timescale));
+    if (CMTimeCompare(frameTime, kCMTimeZero) < 0) {
+      frameTime = kCMTimeZero;
+    }
 
-  *inputImageRequests = @[ currentReq, prevReq ];
+    FxImageTileRequest *req = [[FxImageTileRequest alloc]
+        initWithSource:kFxImageTileRequestSourceEffectClip
+                  time:frameTime
+        includeFilters:YES
+           parameterID:0];
+    [requests addObject:req];
+  }
+
+  *inputImageRequests = requests;
   return YES;
 }
 
@@ -141,7 +179,15 @@
                    pluginState:(NSData *)pluginState
                         atTime:(CMTime)renderTime
                          error:(NSError *_Nullable *)outError {
-  if (!destinationImage.ioSurface || sourceImages.count < 2) {
+  MotionBlurState state = {};
+  if (pluginState.length >= sizeof(state)) {
+    [pluginState getBytes:&state length:sizeof(state)];
+  }
+  int sampleCount =
+      state.sampleCount > 0 ? state.sampleCount : MOTION_BLUR_SAMPLE_COUNT;
+  int actualSamples = (int)MIN((NSUInteger)sampleCount, sourceImages.count);
+
+  if (!destinationImage.ioSurface || actualSamples == 0) {
     if (outError) {
       *outError =
           [NSError errorWithDomain:FxPlugErrorDomain
@@ -171,12 +217,17 @@
                                              *inputTextures) {
                                        [encoder setRenderPipelineState:
                                                     pipelineState];
+                                       for (NSUInteger i = 0;
+                                            i < inputTextures.count; i++) {
+                                         [encoder
+                                             setFragmentTexture:inputTextures[i]
+                                                        atIndex:i];
+                                       }
                                        [encoder
-                                           setFragmentTexture:inputTextures[0]
-                                                      atIndex:0];
-                                       [encoder
-                                           setFragmentTexture:inputTextures[1]
-                                                      atIndex:1];
+                                           setFragmentBytes:&actualSamples
+                                                     length:sizeof(
+                                                                actualSamples)
+                                                    atIndex:0];
                                        [encoder
                                            drawPrimitives:
                                                MTLPrimitiveTypeTriangleStrip

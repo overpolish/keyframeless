@@ -7,5 +7,4 @@
 
 #import <simd/simd.h>
 
-// Placeholder — no blur samples needed for passthrough.
-#define MOTION_BLUR_SAMPLE_COUNT 1
+#define MOTION_BLUR_SAMPLE_COUNT 16
