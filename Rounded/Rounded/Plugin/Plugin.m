@@ -32,7 +32,7 @@
   *properties = @{
     kFxPropertyKey_MayRemapTime : @NO,
     kFxPropertyKey_PixelTransformSupport : @(kFxPixelTransform_ScaleTranslate),
-    kFxPropertyKey_VariesWhenParamsAreStatic : @NO
+    kFxPropertyKey_VariesWhenParamsAreStatic : @YES
   };
 
   return YES;
@@ -75,6 +75,38 @@
     return NO;
   }
 
+  if (![paramAPI addToggleButtonWithName:@"Animate In"
+                             parameterID:2
+                            defaultValue:NO
+                          parameterFlags:kFxParameterFlag_DEFAULT]) {
+    if (error != NULL) {
+      *error = [NSError errorWithDomain:FxPlugErrorDomain
+                                   code:kFxError_InvalidParameter
+                               userInfo:@{
+                                 NSLocalizedDescriptionKey :
+                                     @"Unable to add animate in toggle"
+                               }];
+    }
+
+    return NO;
+  }
+
+  if (![paramAPI addToggleButtonWithName:@"Animate Out"
+                             parameterID:3
+                            defaultValue:NO
+                          parameterFlags:kFxParameterFlag_DEFAULT]) {
+    if (error != NULL) {
+      *error = [NSError errorWithDomain:FxPlugErrorDomain
+                                   code:kFxError_InvalidParameter
+                               userInfo:@{
+                                 NSLocalizedDescriptionKey :
+                                     @"Unable to add animate out toggle"
+                               }];
+    }
+
+    return NO;
+  }
+
   return YES;
 }
 
@@ -98,7 +130,58 @@
   }
   double radius = 20.0;
   [paramGetAPI getFloatValue:&radius fromParameter:1 atTime:renderTime];
-  *pluginState = [NSData dataWithBytes:&radius length:sizeof(radius)];
+
+  BOOL animateIn = NO;
+  BOOL animateOut = NO;
+  [paramGetAPI getBoolValue:&animateIn fromParameter:2 atTime:renderTime];
+  [paramGetAPI getBoolValue:&animateOut fromParameter:3 atTime:renderTime];
+
+  double effectiveRadius = radius;
+
+  // TODO not linear...
+  if (animateIn || animateOut) {
+    id<FxTimingAPI_v4> timingAPI =
+        [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+    if (timingAPI) {
+      CMTime frameDuration = kCMTimeZero;
+      [timingAPI frameDuration:&frameDuration];
+
+      CMTime clipStart = kCMTimeZero;
+      [timingAPI startTimeOfInputToFilter:&clipStart];
+
+      CMTime clipDuration = kCMTimeZero;
+      [timingAPI durationTimeOfInputToFilter:&clipDuration];
+
+      static const int kAnimFrameCount = 15;
+      double frameSecs = CMTimeGetSeconds(frameDuration);
+      double animDuration = kAnimFrameCount * frameSecs;
+      double clipStartSecs = CMTimeGetSeconds(clipStart);
+      double clipDurationSecs = CMTimeGetSeconds(clipDuration);
+      double renderTimeSecs = CMTimeGetSeconds(renderTime);
+
+      double t = 1.0;
+
+      if (animateIn) {
+        double timeFromStart = renderTimeSecs - clipStartSecs;
+        double inFactor = timeFromStart / animDuration;
+        inFactor = MAX(0.0, MIN(1.0, inFactor));
+        t *= inFactor;
+      }
+
+      if (animateOut) {
+        double clipEndSecs = clipStartSecs + clipDurationSecs;
+        double timeToEnd = clipEndSecs - renderTimeSecs;
+        double outFactor = timeToEnd / animDuration;
+        outFactor = MAX(0.0, MIN(1.0, outFactor));
+        t *= outFactor;
+      }
+
+      effectiveRadius = radius * t;
+    }
+  }
+
+  *pluginState = [NSData dataWithBytes:&effectiveRadius
+                                length:sizeof(effectiveRadius)];
   return (*pluginState != nil);
 }
 
