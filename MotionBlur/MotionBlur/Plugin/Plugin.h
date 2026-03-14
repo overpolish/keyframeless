@@ -8,5 +8,5 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 
-@interface Plugin : KKPlugin <FxTileableEffect>
+@interface MotionBlurPlugin : KKPlugin <FxTileableEffect>
 @end

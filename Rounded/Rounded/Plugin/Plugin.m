@@ -12,7 +12,7 @@
 #import <KeyframelessKit/KeyframelessKit.h>
 #import <QuartzCore/QuartzCore.h>
 
-@implementation Plugin {
+@implementation RoundedPlugin {
   KKLog *_log;
 }
 

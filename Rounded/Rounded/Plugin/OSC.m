@@ -45,7 +45,7 @@ static BOOL getCornerPoints(id<PROAPIAccessing> apiManager, CGPoint *topRight,
   return YES;
 }
 
-@implementation OSC {
+@implementation RoundedOSC {
   CGPoint _dragStartPosition;
   double _dragStartRadius;
 }

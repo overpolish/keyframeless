@@ -7,17 +7,17 @@
 #import "Constants.h"
 #import <KeyframelessKit/KeyframelessKit.h>
 
-static MetalDeviceCache *gDeviceCache = nil;
+static MotionBlurMetalDeviceCache *gDeviceCache = nil;
 
-@implementation MetalDeviceCache {
+@implementation MotionBlurMetalDeviceCache {
   KKLog *_log;
 }
 
-+ (MetalDeviceCache *)deviceCache;
++ (MotionBlurMetalDeviceCache *)deviceCache;
 {
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
-    gDeviceCache = [[MetalDeviceCache alloc] init];
+    gDeviceCache = [[MotionBlurMetalDeviceCache alloc] init];
   });
   return gDeviceCache;
 }
