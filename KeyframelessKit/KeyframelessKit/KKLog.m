@@ -5,6 +5,14 @@
 
 #import "KKLog.h"
 
+@import CocoaLumberjack;
+
+#ifdef DEBUG
+static const DDLogLevel ddLogLevel = DDLogLevelDebug;
+#else
+static const DDLogLevel ddLogLevel = DDLogLevelWarning;
+#endif
+
 static NSString *const KKLogBaseIdentifier = @"co.overpolish.keyframeless";
 
 @interface KKLog ()
