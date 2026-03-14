@@ -9,16 +9,20 @@
 #import <AppKit/NSView.h>
 #import <Foundation/Foundation.h>
 #import <IOSurface/IOSurfaceObjC.h>
+#import <KeyframelessKit/KeyframelessKit.h>
 #import <QuartzCore/QuartzCore.h>
 
-@implementation Plugin
+@implementation Plugin {
+  KKLog *_log;
+}
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager;
 {
-  NSLog(@"RoundedPlugin: initWithAPIManager called - plugin is loading");
+  _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
+  [_log info:@"RoundedPlugin: initWithAPIManager called - plugin is loading"];
   self = [super initWithAPIManager:newApiManager];
   if (self != nil) {
-    NSLog(@"RoundedPlugin: Successfully initialized");
+    [_log info:@"RoundedPlugin: Successfully initialized"];
   }
   return self;
 }
@@ -105,7 +109,7 @@
                       atTime:(CMTime)renderTime
                        error:(NSError *_Nullable *)outError {
   if (sourceImages.count < 1) {
-    NSLog(@"No inputImages list");
+    [_log error:@"No inputImages list"];
     return NO;
   }
 

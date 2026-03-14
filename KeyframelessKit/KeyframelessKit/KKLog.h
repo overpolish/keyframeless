@@ -5,13 +5,7 @@
 
 #pragma once
 
-@import CocoaLumberjack;
-
-#ifdef DEBUG
-static const DDLogLevel ddLogLevel = DDLogLevelDebug;
-#else
-static const DDLogLevel ddLogLevel = DDLogLevelWarning;
-#endif
+#import <Foundation/Foundation.h>
 
 /// Per-plugin logger. Each instance routes to the OS log and to a dedicated
 /// log file under ~/Library/Logs/co.overpolish.keyframeless/<pluginID>/.

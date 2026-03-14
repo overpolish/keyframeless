@@ -9,7 +9,9 @@
 
 static MetalDeviceCache *gDeviceCache = nil;
 
-@implementation MetalDeviceCache
+@implementation MetalDeviceCache {
+  KKLog *_log;
+}
 
 + (MetalDeviceCache *)deviceCache;
 {
@@ -23,6 +25,7 @@ static MetalDeviceCache *gDeviceCache = nil;
 - (id<MTLRenderPipelineState>)pipelineStateWithRegistryID:(uint64_t)registryID
                                               pixelFormat:
                                                   (MTLPixelFormat)pixelFormat {
+  _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
   KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
 
   id<MTLRenderPipelineState> ps = [cache pipelineStateForPluginID:kPluginID
@@ -44,8 +47,9 @@ static MetalDeviceCache *gDeviceCache = nil;
                                        blendMode:KKBlendModePremultipliedAlpha];
   NSError *error = nil;
   ps = [device newRenderPipelineStateWithDescriptor:desc error:&error];
-  if (error)
-    NSLog(@"MetalDeviceCache: pipeline error: %@", error);
+  if (error) {
+    [_log error:@"MetalDeviceCache: pipeline error: %@", error];
+  }
 
   [cache registerPipelineState:ps
                    forPluginID:kPluginID
