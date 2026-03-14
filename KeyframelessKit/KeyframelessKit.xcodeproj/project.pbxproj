@@ -11,6 +11,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		F21399642F65423400E1EC03 /* MotionBlur.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = MotionBlur.xcodeproj; path = ../MotionBlur/MotionBlur.xcodeproj; sourceTree = "<group>"; };
 		F21E97D52F4EE9CC00DF8CF3 /* FxPlug.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FxPlug.framework; path = ../../../../../Library/Developer/Frameworks/FxPlug.framework; sourceTree = "<group>"; };
 		F26E01B62F4DE280009D949A /* KeyframelessKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = KeyframelessKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F26E02092F4DE539009D949A /* Rounded.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Rounded.xcodeproj; path = ../Rounded/Rounded.xcodeproj; sourceTree = SOURCE_ROOT; };
@@ -21,6 +22,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			publicHeaders = (
 				KeyframelessKit.h,
+				KKLog.h,
 				Metal/KKMetalDeviceCache.h,
 				Metal/KKRenderPrimitives.h,
 				Metal/KKShaderTypes.h,
@@ -56,6 +58,13 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		F2139A0D2F65426100E1EC03 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
 		F21E97D42F4EE9CC00DF8CF3 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -67,6 +76,7 @@
 		F26E01AC2F4DE280009D949A = {
 			isa = PBXGroup;
 			children = (
+				F21399642F65423400E1EC03 /* MotionBlur.xcodeproj */,
 				F26E02092F4DE539009D949A /* Rounded.xcodeproj */,
 				F26E01B82F4DE280009D949A /* KeyframelessKit */,
 				F21E97D42F4EE9CC00DF8CF3 /* Frameworks */,
@@ -156,6 +166,10 @@
 			productRefGroup = F26E01B72F4DE280009D949A /* Products */;
 			projectDirPath = "";
 			projectReferences = (
+				{
+					ProductGroup = F2139A0D2F65426100E1EC03 /* Products */;
+					ProjectRef = F21399642F65423400E1EC03 /* MotionBlur.xcodeproj */;
+				},
 				{
 					ProductGroup = F26E02462F4DE539009D949A /* Products */;
 					ProjectRef = F26E02092F4DE539009D949A /* Rounded.xcodeproj */;
