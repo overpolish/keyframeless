@@ -107,6 +107,27 @@
     return NO;
   }
 
+  if (![paramAPI addFloatSliderWithName:@"Duration"
+                            parameterID:4
+                           defaultValue:0.5
+                           parameterMin:0.1
+                           parameterMax:2.0
+                              sliderMin:0.1
+                              sliderMax:2.0
+                                  delta:0.1
+                         parameterFlags:kFxParameterFlag_DEFAULT]) {
+    if (error != NULL) {
+      *error = [NSError
+          errorWithDomain:FxPlugErrorDomain
+                     code:kFxError_InvalidParameter
+                 userInfo:@{
+                   NSLocalizedDescriptionKey : @"Unable to add duration slider"
+                 }];
+    }
+
+    return NO;
+  }
+
   return YES;
 }
 
@@ -136,43 +157,46 @@
   [paramGetAPI getBoolValue:&animateIn fromParameter:2 atTime:renderTime];
   [paramGetAPI getBoolValue:&animateOut fromParameter:3 atTime:renderTime];
 
+  double animDurationParam = 0.5;
+  [paramGetAPI getFloatValue:&animDurationParam
+               fromParameter:4
+                      atTime:renderTime];
+
   double effectiveRadius = radius;
 
-  // TODO not linear...
   if (animateIn || animateOut) {
     id<FxTimingAPI_v4> timingAPI =
         [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
     if (timingAPI) {
-      CMTime frameDuration = kCMTimeZero;
-      [timingAPI frameDuration:&frameDuration];
+      CMTime effectStart = kCMTimeZero;
+      [timingAPI startTimeForEffect:&effectStart];
 
-      CMTime clipStart = kCMTimeZero;
-      [timingAPI startTimeOfInputToFilter:&clipStart];
+      CMTime effectDuration = kCMTimeZero;
+      [timingAPI durationTimeForEffect:&effectDuration];
 
-      CMTime clipDuration = kCMTimeZero;
-      [timingAPI durationTimeOfInputToFilter:&clipDuration];
-
-      static const int kAnimFrameCount = 15;
-      double frameSecs = CMTimeGetSeconds(frameDuration);
-      double animDuration = kAnimFrameCount * frameSecs;
-      double clipStartSecs = CMTimeGetSeconds(clipStart);
-      double clipDurationSecs = CMTimeGetSeconds(clipDuration);
+      double animDuration = animDurationParam;
+      double effectStartSecs = CMTimeGetSeconds(effectStart);
+      double effectDurationSecs = CMTimeGetSeconds(effectDuration);
       double renderTimeSecs = CMTimeGetSeconds(renderTime);
 
       double t = 1.0;
 
       if (animateIn) {
-        double timeFromStart = renderTimeSecs - clipStartSecs;
+        double timeFromStart = renderTimeSecs - effectStartSecs;
         double inFactor = timeFromStart / animDuration;
         inFactor = MAX(0.0, MIN(1.0, inFactor));
+        // ease-out cubic: fast expand, gentle settle
+        inFactor = 1.0 - pow(1.0 - inFactor, 3.0);
         t *= inFactor;
       }
 
       if (animateOut) {
-        double clipEndSecs = clipStartSecs + clipDurationSecs;
-        double timeToEnd = clipEndSecs - renderTimeSecs;
+        double effectEndSecs = effectStartSecs + effectDurationSecs;
+        double timeToEnd = effectEndSecs - renderTimeSecs;
         double outFactor = timeToEnd / animDuration;
         outFactor = MAX(0.0, MIN(1.0, outFactor));
+        // ease-in cubic: holds full radius, then snaps away
+        outFactor = pow(outFactor, 3.0);
         t *= outFactor;
       }
 
