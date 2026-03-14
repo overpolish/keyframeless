@@ -73,28 +73,6 @@
 			<key>version</key>
 			<string>1.0</string>
 		</dict>
-		<dict>
-			<key>className</key>
-			<string>OSC</string>
-			<key>displayName</key>
-			<string>MotionBlur OSC</string>
-			<key>group</key>
-			<string>E9D4426B-339A-46F4-8286-2631C4F568B4</string>
-			<key>infoString</key>
-			<string>MotionBlur Radius Control</string>
-			<key>protocolNames</key>
-			<array>
-				<string>FxOnScreenControl</string>
-			</array>
-			<key>supportedPlugins</key>
-			<array>
-				<string>743DCF68-3350-487D-8A0A-B23D0A0BD8ED</string>
-			</array>
-			<key>uuid</key>
-			<string>D8D4A876-A849-4DA3-A5FE-E8AEFC0D81B2</string>
-			<key>version</key>
-			<string>1.0</string>
-		</dict>
 	</array>
 	<key>XPCService</key>
 	<dict>

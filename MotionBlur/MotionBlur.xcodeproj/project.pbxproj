@@ -97,9 +97,8 @@
 				Plugin/Info.plist,
 				Plugin/main.m,
 				Plugin/MetalDeviceCache.m,
-				Plugin/OSC.m,
-				Plugin/Plugin.m,
 				Plugin/MotionBlur.metal,
+				Plugin/Plugin.m,
 				"Wrapper Application/Info.plist",
 			);
 			target = F2E2ED742F4CA530008620D9 /* Wrapper Application */;
@@ -179,6 +178,8 @@
 		F2E2ED772F4CA530008620D9 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				F20326442F65BAAD0063351E /* CoreVideo.framework */,
+				F20326422F65BAA50063351E /* Vision.framework */,
 				F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */,
 				F2E2ED782F4CA530008620D9 /* Cocoa.framework */,
 				F2E2ED842F4CA530008620D9 /* Foundation.framework */,

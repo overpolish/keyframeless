@@ -6,6 +6,7 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
+#import <KeyframelessKit/KeyframelessKit.h>
 
 const NSUInteger kMaxCommandQueues = 5;
 
@@ -103,6 +104,7 @@ static NSString *kKey_CommandQueue = @"CommandQueue";
 
 @implementation KKMetalDeviceCache {
   NSMutableArray<KKMetalDeviceCacheItem *> *_deviceCaches;
+  KKLog *_log;
 }
 
 + (instancetype)sharedCache {
@@ -116,6 +118,7 @@ static NSString *kKey_CommandQueue = @"CommandQueue";
 
 - (instancetype)init {
   self = [super init];
+  _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
   if (self != nil) {
     NSArray<id<MTLDevice>> *devices = MTLCopyAllDevices();
     _deviceCaches = [[NSMutableArray alloc] initWithCapacity:devices.count];
@@ -186,7 +189,7 @@ static NSString *kKey_CommandQueue = @"CommandQueue";
   if (bundleID) {
     NSBundle *bundle = [NSBundle bundleWithIdentifier:bundleID];
     if (!bundle) {
-      NSLog(@"KKMetalDeviceCache: bundle not found for ID: %@", bundleID);
+      [_log error:@"KKMetalDeviceCache: bundle not found for ID: %@", bundleID];
       return nil;
     }
     library = [device newDefaultLibraryWithBundle:bundle error:&error];
@@ -195,9 +198,9 @@ static NSString *kKey_CommandQueue = @"CommandQueue";
   }
 
   if (!library || error) {
-    NSLog(
-        @"KKMetalDeviceCache: failed to load Metal library (bundleID: %@): %@",
-        bundleID, error);
+    [_log error:@"KKMetalDeviceCache: failed to load Metal library (bundleID: "
+                @"%@): %@",
+                bundleID, error];
     return nil;
   }
 
@@ -205,22 +208,23 @@ static NSString *kKey_CommandQueue = @"CommandQueue";
   id<MTLFunction> fragFn = [library newFunctionWithName:fragmentShader];
 
   if (!vertFn || !fragFn) {
-    NSLog(@"KKMetalDeviceCache: shader functions not found (%@, %@)",
-          vertexShader, fragmentShader);
+    [_log error:@"KKMetalDeviceCache: shader functions not found (%@, %@)",
+                vertexShader, fragmentShader];
     return nil;
   }
 
   MTLRenderPipelineDescriptor *desc =
       [KKRenderPrimitives createPipelineDescriptorWithVertexFunction:vertFn
-                                                 fragmentFunction:fragFn
-                                                      pixelFormat:pixelFormat
-                                                        blendMode:blendMode];
+                                                    fragmentFunction:fragFn
+                                                         pixelFormat:pixelFormat
+                                                           blendMode:blendMode];
 
   id<MTLRenderPipelineState> ps =
       [device newRenderPipelineStateWithDescriptor:desc error:&error];
   if (!ps || error) {
-    NSLog(@"KKMetalDeviceCache: failed to create pipeline state for %@: %@",
-          pluginID, error);
+    [_log
+        error:@"KKMetalDeviceCache: failed to create pipeline state for %@: %@",
+              pluginID, error];
     return nil;
   }
 

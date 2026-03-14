@@ -7,67 +7,74 @@
 #import "Constants.h"
 #import "ShaderTypes.h"
 #import <AppKit/NSView.h>
+#include <CoreMedia/CMTime.h>
 #import <Foundation/Foundation.h>
 #import <IOSurface/IOSurfaceObjC.h>
+#import <KeyframelessKit/KKLog.h>
 #import <QuartzCore/QuartzCore.h>
 
-@implementation Plugin
+typedef struct {
+  CMTime frameDuration;
+  float strength; // 0..1
+  int sampleCount;
+} MotionBlurState;
 
-- (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager;
-{
-  NSLog(@"MotionBlurPlugin: initWithAPIManager called - plugin is loading");
+@implementation Plugin {
+  KKLog *_log;
+}
+
+- (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager {
+  _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
+  [_log info:@"MotionBlurPlugin: loading"];
   self = [super initWithAPIManager:newApiManager];
-  if (self != nil) {
-    NSLog(@"MotionBlurPlugin: Successfully initialized");
-  }
   return self;
 }
 
 - (BOOL)properties:(NSDictionary *_Nonnull *)properties
              error:(NSError *_Nullable *)error {
   *properties = @{
-    kFxPropertyKey_MayRemapTime : @NO,
+    kFxPropertyKey_MayRemapTime : @YES,
     kFxPropertyKey_PixelTransformSupport : @(kFxPixelTransform_ScaleTranslate),
-    kFxPropertyKey_VariesWhenParamsAreStatic : @NO
+    kFxPropertyKey_VariesWhenParamsAreStatic : @YES,
   };
-
   return YES;
 }
 
 - (BOOL)addParametersWithError:(NSError **)error {
   id<FxParameterCreationAPI_v5> paramAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterCreationAPI_v5)];
-  if (paramAPI == nil) {
-    if (error != NULL) {
-      *error = [NSError errorWithDomain:FxPlugErrorDomain
-                                   code:kFxError_APIUnavailable
-                               userInfo:@{
-                                 NSLocalizedDescriptionKey :
-                                     @"Unable to obtain an FxPlug API Object"
-                               }];
+  if (!paramAPI) {
+    if (error) {
+      *error =
+          [NSError errorWithDomain:FxPlugErrorDomain
+                              code:kFxError_APIUnavailable
+                          userInfo:@{
+                            NSLocalizedDescriptionKey :
+                                @"Unable to obtain FxParameterCreationAPI_v5"
+                          }];
     }
-
     return NO;
   }
 
-  if (![paramAPI addFloatSliderWithName:@"Radius"
+  // Strength: 0 = no blur, 100 = full-frame blur. Mapped to shutter angle
+  // internally (strength / 100 * 360°).
+  if (![paramAPI addFloatSliderWithName:@"Strength"
                             parameterID:1
-                           defaultValue:20.0
+                           defaultValue:50.0
                            parameterMin:0.0
                            parameterMax:100.0
                               sliderMin:0.0
                               sliderMax:100.0
                                   delta:1.0
                          parameterFlags:kFxParameterFlag_DEFAULT]) {
-    if (error != NULL) {
+    if (error) {
       *error = [NSError
           errorWithDomain:FxPlugErrorDomain
                      code:kFxError_InvalidParameter
                  userInfo:@{
-                   NSLocalizedDescriptionKey : @"Unable to add radius slider"
+                   NSLocalizedDescriptionKey : @"Unable to add Strength slider"
                  }];
     }
-
     return NO;
   }
 
@@ -78,24 +85,68 @@
              atTime:(CMTime)renderTime
             quality:(FxQuality)qualityLevel
               error:(NSError **)error {
-  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+  MotionBlurState state = {};
+
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  [timingAPI frameDuration:&state.frameDuration];
+
+  double strength = 50.0;
+  id<FxParameterRetrievalAPI_v6> paramAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  if (paramGetAPI == nil) {
-    if (error != NULL) {
-      *error =
-          [NSError errorWithDomain:FxPlugErrorDomain
-                              code:kFxError_ThirdPartyDeveloperStart + 20
-                          userInfo:@{
-                            NSLocalizedDescriptionKey :
-                                @"Unable to retrieve FxParameterRetrievalAPI_v6"
-                          }];
-    }
-    return NO;
+  [paramAPI getFloatValue:&strength fromParameter:1 atTime:renderTime];
+  state.strength = (float)(strength / 100.0);
+
+  // Use fewer samples during preview/scrubbing for real-time playback.
+  switch (qualityLevel) {
+  case kFxQuality_LOW:
+    state.sampleCount = 4;
+    break;
+  case kFxQuality_MEDIUM:
+    state.sampleCount = 8;
+    break;
+  default:
+    state.sampleCount = MOTION_BLUR_SAMPLE_COUNT;
+    break;
   }
-  double radius = 20.0;
-  [paramGetAPI getFloatValue:&radius fromParameter:1 atTime:renderTime];
-  *pluginState = [NSData dataWithBytes:&radius length:sizeof(radius)];
-  return (*pluginState != nil);
+
+  *pluginState = [NSData dataWithBytes:&state length:sizeof(state)];
+  return YES;
+}
+
+- (BOOL)scheduleInputs:(NSArray<FxImageTileRequest *> **)inputImageRequests
+       withPluginState:(NSData *)pluginState
+                atTime:(CMTime)renderTime
+                 error:(NSError **)error {
+  MotionBlurState state = {};
+  if (pluginState.length >= sizeof(state)) {
+    [pluginState getBytes:&state length:sizeof(state)];
+  }
+
+  double shutterSeconds =
+      CMTimeGetSeconds(state.frameDuration) * state.strength;
+
+  int n = state.sampleCount > 0 ? state.sampleCount : MOTION_BLUR_SAMPLE_COUNT;
+  NSMutableArray *requests = [NSMutableArray arrayWithCapacity:n];
+  for (int i = 0; i < n; i++) {
+    double fraction = (n > 1) ? (double)i / (double)(n - 1) : 0.0;
+    double offsetSeconds = shutterSeconds * fraction;
+    CMTime frameTime = CMTimeSubtract(
+        renderTime, CMTimeMakeWithSeconds(offsetSeconds, renderTime.timescale));
+    if (CMTimeCompare(frameTime, kCMTimeZero) < 0) {
+      frameTime = kCMTimeZero;
+    }
+
+    FxImageTileRequest *req = [[FxImageTileRequest alloc]
+        initWithSource:kFxImageTileRequestSourceEffectClip
+                  time:frameTime
+        includeFilters:YES
+           parameterID:0];
+    [requests addObject:req];
+  }
+
+  *inputImageRequests = requests;
+  return YES;
 }
 
 - (BOOL)destinationImageRect:(FxRect *)destinationImageRect
@@ -105,14 +156,9 @@
                       atTime:(CMTime)renderTime
                        error:(NSError *_Nullable *)outError {
   if (sourceImages.count < 1) {
-    NSLog(@"No inputImages list");
     return NO;
   }
-
-  // In the case of a filter that only changed RGB values,
-  // the output rect is the same as the input rect.
   *destinationImageRect = sourceImages[0].imagePixelBounds;
-
   return YES;
 }
 
@@ -133,23 +179,25 @@
                    pluginState:(NSData *)pluginState
                         atTime:(CMTime)renderTime
                          error:(NSError *_Nullable *)outError {
-  if (!pluginState || !sourceImages[0].ioSurface ||
-      !destinationImage.ioSurface) {
-    if (outError != NULL) {
+  MotionBlurState state = {};
+  if (pluginState.length >= sizeof(state)) {
+    [pluginState getBytes:&state length:sizeof(state)];
+  }
+  int sampleCount =
+      state.sampleCount > 0 ? state.sampleCount : MOTION_BLUR_SAMPLE_COUNT;
+  int actualSamples = (int)MIN((NSUInteger)sampleCount, sourceImages.count);
+
+  if (!destinationImage.ioSurface || actualSamples == 0) {
+    if (outError) {
       *outError =
           [NSError errorWithDomain:FxPlugErrorDomain
                               code:kFxError_InvalidParameter
                           userInfo:@{
-                            NSLocalizedDescriptionKey :
-                                @"Invalid plugin state received from host"
+                            NSLocalizedDescriptionKey : @"Missing source images"
                           }];
     }
-
     return NO;
   }
-
-  double radius = 0.0;
-  [pluginState getBytes:&radius length:sizeof(radius)];
 
   id<MTLRenderPipelineState> pipelineState =
       [self pipelineStateForPluginID:kPluginID
@@ -157,20 +205,8 @@
                         vertexShader:@"vertexShader"
                       fragmentShader:@"fragmentShader"
                            blendMode:KKBlendModePremultipliedAlpha];
-
   if (!pipelineState)
     return NO;
-
-  float fragmentRadius = (float)radius;
-  simd_float2 imageSize = {(float)(destinationImage.imagePixelBounds.right -
-                                   destinationImage.imagePixelBounds.left),
-                           (float)(destinationImage.imagePixelBounds.top -
-                                   destinationImage.imagePixelBounds.bottom)};
-  simd_float2 tileOffset = {
-      roundf((float)(destinationImage.tilePixelBounds.left -
-                     destinationImage.imagePixelBounds.left)),
-      roundf((float)(destinationImage.tilePixelBounds.bottom -
-                     destinationImage.imagePixelBounds.bottom))};
 
   return [self
       encodeRenderCommandsForDestinationImage:destinationImage
@@ -181,26 +217,17 @@
                                              *inputTextures) {
                                        [encoder setRenderPipelineState:
                                                     pipelineState];
+                                       for (NSUInteger i = 0;
+                                            i < inputTextures.count; i++) {
+                                         [encoder
+                                             setFragmentTexture:inputTextures[i]
+                                                        atIndex:i];
+                                       }
                                        [encoder
-                                           setFragmentTexture:inputTextures[0]
-                                                      atIndex:
-                                                          KKTextureIndex_InputImage];
-                                       [encoder
-                                           setFragmentBytes:&fragmentRadius
+                                           setFragmentBytes:&actualSamples
                                                      length:sizeof(
-                                                                fragmentRadius)
-                                                    atIndex:
-                                                        FragmentIndex_Radius];
-                                       [encoder
-                                           setFragmentBytes:&imageSize
-                                                     length:sizeof(imageSize)
-                                                    atIndex:
-                                                        FragmentIndex_ImageSize];
-                                       [encoder
-                                           setFragmentBytes:&tileOffset
-                                                     length:sizeof(tileOffset)
-                                                    atIndex:
-                                                        FragmentIndex_TileOffset];
+                                                                actualSamples)
+                                                    atIndex:0];
                                        [encoder
                                            drawPrimitives:
                                                MTLPrimitiveTypeTriangleStrip
