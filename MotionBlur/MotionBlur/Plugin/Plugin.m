@@ -6,6 +6,7 @@
 #import "Plugin.h"
 #import "Constants.h"
 #import <AppKit/NSView.h>
+#include <CoreMedia/CMTime.h>
 #import <Foundation/Foundation.h>
 #import <IOSurface/IOSurfaceObjC.h>
 #import <KeyframelessKit/KKLog.h>
@@ -13,6 +14,7 @@
 
 @implementation Plugin {
   KKLog *_log;
+  CMTime _frameDuration;
 }
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager {
@@ -75,7 +77,11 @@
              atTime:(CMTime)renderTime
             quality:(FxQuality)qualityLevel
               error:(NSError **)error {
-  // No state needed for passthrough — return empty data so the host is happy.
+  // Timing API doesn't seem to work directly from `scheduleInputs`
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  [timingAPI frameDuration:&_frameDuration];
+
   *pluginState = [NSData data];
   return YES;
 }
@@ -84,12 +90,24 @@
        withPluginState:(NSData *)pluginState
                 atTime:(CMTime)renderTime
                  error:(NSError **)error {
-  FxImageTileRequest *req = [[FxImageTileRequest alloc]
+  CMTime previousFrame = CMTimeSubtract(renderTime, _frameDuration);
+  if (CMTimeCompare(previousFrame, kCMTimeZero) < 0) {
+    previousFrame = renderTime;
+  }
+
+  FxImageTileRequest *currentReq = [[FxImageTileRequest alloc]
       initWithSource:kFxImageTileRequestSourceEffectClip
                 time:renderTime
       includeFilters:YES
          parameterID:0];
-  *inputImageRequests = @[ req ];
+
+  FxImageTileRequest *prevReq = [[FxImageTileRequest alloc]
+      initWithSource:kFxImageTileRequestSourceEffectClip
+                time:previousFrame
+      includeFilters:YES
+         parameterID:0];
+
+  *inputImageRequests = @[ currentReq, prevReq ];
   return YES;
 }
 
@@ -123,13 +141,13 @@
                    pluginState:(NSData *)pluginState
                         atTime:(CMTime)renderTime
                          error:(NSError *_Nullable *)outError {
-  if (!destinationImage.ioSurface || sourceImages.count < 1) {
+  if (!destinationImage.ioSurface || sourceImages.count < 2) {
     if (outError) {
       *outError =
           [NSError errorWithDomain:FxPlugErrorDomain
                               code:kFxError_InvalidParameter
                           userInfo:@{
-                            NSLocalizedDescriptionKey : @"Missing source image"
+                            NSLocalizedDescriptionKey : @"Missing source images"
                           }];
     }
     return NO;
@@ -156,6 +174,9 @@
                                        [encoder
                                            setFragmentTexture:inputTextures[0]
                                                       atIndex:0];
+                                       [encoder
+                                           setFragmentTexture:inputTextures[1]
+                                                      atIndex:1];
                                        [encoder
                                            drawPrimitives:
                                                MTLPrimitiveTypeTriangleStrip
