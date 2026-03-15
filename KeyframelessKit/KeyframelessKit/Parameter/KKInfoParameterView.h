@@ -22,7 +22,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property(nonatomic, copy) NSString *text;
 @property(nonatomic, strong) NSColor *color;
-@property(nonatomic, strong, readonly) NSView *container;
+@property(nonatomic, strong, nullable) NSBezierPath *icon;
 
 @end
 

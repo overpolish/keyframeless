@@ -21,6 +21,8 @@
 		F26E01BB2F4DE280009D949A /* Exceptions for "KeyframelessKit" folder in "KeyframelessKit" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			publicHeaders = (
+				Icons/KKIcon.h,
+				Icons/KKIcons.h,
 				KeyframelessKit.h,
 				KKLog.h,
 				Metal/KKMetalDeviceCache.h,

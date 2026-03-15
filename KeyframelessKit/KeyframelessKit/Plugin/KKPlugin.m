@@ -69,6 +69,7 @@ static double kkEaseInSpring(double t) {
 
 @implementation KKPlugin {
   NSMutableDictionary<NSNumber *, NSString *> *_infoParameterTexts;
+  NSMutableDictionary<NSNumber *, NSBezierPath *> *_infoParameterIcons;
 }
 
 + (id)servicePrincipalDelegate {
@@ -80,6 +81,7 @@ static double kkEaseInSpring(double t) {
   if (self) {
     _apiManager = apiManager;
     _infoParameterTexts = [[NSMutableDictionary alloc] init];
+    _infoParameterIcons = [[NSMutableDictionary alloc] init];
   }
   return self;
 }
@@ -342,10 +344,14 @@ static double kkEaseInSpring(double t) {
 }
 
 - (BOOL)addInfoParameterWithText:(NSString *)text
+                            icon:(nullable NSBezierPath *)icon
                      parameterID:(UInt32)parameterID
                          withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                            error:(NSError **)error {
   _infoParameterTexts[@(parameterID)] = [text copy];
+  if (icon) {
+    _infoParameterIcons[@(parameterID)] = icon;
+  }
 
 // Suppress non null error on `defaultValue:nil` - this is only a info parameter
 // row
@@ -384,7 +390,10 @@ static double kkEaseInSpring(double t) {
     return nil;
   }
 
-  return [[KKInfoParameterView alloc] initWithText:text].container;
+  KKInfoParameterView *infoView =
+      [[KKInfoParameterView alloc] initWithText:text];
+  infoView.icon = _infoParameterIcons[@(parameterID)];
+  return infoView;
 }
 
 @end

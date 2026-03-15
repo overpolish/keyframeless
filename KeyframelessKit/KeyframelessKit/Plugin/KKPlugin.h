@@ -11,6 +11,7 @@
 #import <Metal/Metal.h>
 
 @class FxImageTile;
+@class NSBezierPath;
 @protocol PROAPIAccessing;
 @protocol FxParameterCreationAPI_v5;
 
@@ -80,6 +81,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// The parameter is not animatable and stores no meaningful value — it is
 /// purely a static label in the inspector.
 - (BOOL)addInfoParameterWithText:(NSString *)text
+                            icon:(nullable NSBezierPath *)icon
                      parameterID:(UInt32)parameterID
                          withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                            error:(NSError **)error;
