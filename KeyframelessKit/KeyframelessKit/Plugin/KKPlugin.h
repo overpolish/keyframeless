@@ -14,6 +14,15 @@
 @protocol PROAPIAccessing;
 @protocol FxParameterCreationAPI_v5;
 
+/// Interpolation curve presets for animationFactorAtTime:baseParamID:.
+/// Values are 0-indexed to match the FxPlug popup menu convention.
+typedef NS_ENUM(NSInteger, KKAnimationCurve) {
+  KKAnimationCurveLinear = 0, ///< No easing — constant rate
+  KKAnimationCurveSmooth = 1, ///< Smoothstep — symmetric ease in/out
+  KKAnimationCurveCubic = 2,  ///< Ease-out in, ease-in out — snappy (default)
+  KKAnimationCurveSpring = 3, ///< Sinusoidal spring — overshoots and settles
+};
+
 NS_ASSUME_NONNULL_BEGIN
 
 @interface KKPlugin : NSObject
@@ -51,11 +60,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// main().
 + (id)servicePrincipalDelegate;
 
-/// Adds "Animate In" (toggle), "Animate Out" (toggle), and "Duration" (float
-/// slider, seconds) parameters occupying three consecutive IDs starting at
-/// baseID. Call from addParametersWithError: to opt a plugin into auto
-/// animation. Plugins that don't need it (e.g. motion blur) simply don't call
-/// this.
+/// Adds "Animate In" (toggle), "Animate Out" (toggle), "Duration" (float
+/// slider, seconds), and "Interpolation" (popup) parameters occupying four
+/// consecutive IDs starting at baseID. Call from addParametersWithError: to
+/// opt a plugin into auto animation. Plugins that don't need it (e.g. motion
+/// blur) simply don't call this.
 - (BOOL)addAnimationParametersStartingAtID:(UInt32)baseID
                                    withAPI:
                                        (id<FxParameterCreationAPI_v5>)paramAPI

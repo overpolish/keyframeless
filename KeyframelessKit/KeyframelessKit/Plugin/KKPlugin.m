@@ -9,6 +9,34 @@
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 
+// ---------------------------------------------------------------------------
+// Animation curve functions
+// In-factor:  raw 0→1 as clip progresses from start (used for animate-in)
+// Out-factor: raw 1→0 as clip approaches end       (used for animate-out)
+// Bounce and Elastic may exceed [0,1] intentionally (overshoot effect).
+// ---------------------------------------------------------------------------
+
+static double kkSmoothstep(double t) { return t * t * (3.0 - 2.0 * t); }
+
+// In: ease-out cubic — fast start, decelerates to rest
+static double kkEaseOutCubic(double t) { return 1.0 - pow(1.0 - t, 3.0); }
+
+// Out: ease-in cubic — slow start, accelerates away
+static double kkEaseInCubic(double t) { return t * t * t; }
+
+// In: spring — overshoots target once, settles back (ease-out-back)
+static double kkEaseOutSpring(double t) {
+  const double c1 = 1.70158, c3 = c1 + 1.0;
+  return 1.0 + c3 * pow(t - 1.0, 3.0) + c1 * pow(t - 1.0, 2.0);
+}
+
+// Out: spring — holds near full, brief anticipation dip, snaps away
+// (ease-in-back)
+static double kkEaseInSpring(double t) {
+  const double c1 = 1.70158, c3 = c1 + 1.0;
+  return c3 * t * t * t - c1 * t * t;
+}
+
 @interface KKPrincipalDelegate : NSObject <FxPrincipalDelegate>
 + (instancetype)shared;
 @end
@@ -201,6 +229,22 @@
     return NO;
   }
 
+  if (![paramAPI
+          addPopupMenuWithName:@"Interpolation"
+                   parameterID:baseID + 3
+                  defaultValue:KKAnimationCurveCubic
+                   menuEntries:@[ @"Linear", @"Smooth", @"Cubic", @"Spring" ]
+                parameterFlags:kFxParameterFlag_DEFAULT]) {
+    if (error != NULL)
+      *error = [NSError errorWithDomain:@"co.overpolish.keyframeless.error"
+                                   code:1
+                               userInfo:@{
+                                 NSLocalizedDescriptionKey :
+                                     @"Unable to add Interpolation popup"
+                               }];
+    return NO;
+  }
+
   return YES;
 }
 
@@ -225,6 +269,9 @@
                fromParameter:baseID + 2
                       atTime:renderTime];
 
+  int curve = KKAnimationCurveCubic;
+  [paramGetAPI getIntValue:&curve fromParameter:baseID + 3 atTime:renderTime];
+
   id<FxTimingAPI_v4> timingAPI =
       [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
   if (!timingAPI)
@@ -242,20 +289,42 @@
   double t = 1.0;
 
   if (animateIn) {
-    double inFactor = (renderTimeSecs - effectStartSecs) / animDuration;
-    inFactor = MAX(0.0, MIN(1.0, inFactor));
-    // ease-out cubic: fast expand, gentle settle
-    inFactor = 1.0 - pow(1.0 - inFactor, 3.0);
-    t *= inFactor;
+    double raw =
+        MAX(0.0, MIN(1.0, (renderTimeSecs - effectStartSecs) / animDuration));
+    switch (curve) {
+    case KKAnimationCurveLinear:
+      t *= raw;
+      break;
+    case KKAnimationCurveSmooth:
+      t *= kkSmoothstep(raw);
+      break;
+    case KKAnimationCurveSpring:
+      t *= kkEaseOutSpring(raw);
+      break;
+    default:
+      t *= kkEaseOutCubic(raw);
+      break;
+    }
   }
 
   if (animateOut) {
     double effectEndSecs = effectStartSecs + effectDurationSecs;
-    double outFactor = (effectEndSecs - renderTimeSecs) / animDuration;
-    outFactor = MAX(0.0, MIN(1.0, outFactor));
-    // ease-in cubic: holds full value, then snaps away
-    outFactor = pow(outFactor, 3.0);
-    t *= outFactor;
+    double raw =
+        MAX(0.0, MIN(1.0, (effectEndSecs - renderTimeSecs) / animDuration));
+    switch (curve) {
+    case KKAnimationCurveLinear:
+      t *= raw;
+      break;
+    case KKAnimationCurveSmooth:
+      t *= kkSmoothstep(raw);
+      break;
+    case KKAnimationCurveSpring:
+      t *= kkEaseInSpring(raw);
+      break;
+    default:
+      t *= kkEaseInCubic(raw);
+      break;
+    }
   }
 
   return t;
