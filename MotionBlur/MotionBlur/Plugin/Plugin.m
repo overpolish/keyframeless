@@ -10,6 +10,7 @@
 #include <CoreMedia/CMTime.h>
 #import <Foundation/Foundation.h>
 #import <IOSurface/IOSurfaceObjC.h>
+#import <KeyframelessKit/KKIcons.h>
 #import <KeyframelessKit/KKLog.h>
 #import <QuartzCore/QuartzCore.h>
 
@@ -81,6 +82,7 @@ typedef struct {
   return [self
       addInfoParameterWithText:
           @"Best used on an Adjustment Clip; also works on a Compound Clip."
+                          icon:[KKIcons info]
                    parameterID:2
                        withAPI:paramAPI
                          error:error];
