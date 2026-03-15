@@ -6,6 +6,9 @@
 #import "KKPlugin.h"
 #import "../Parameter/KKInfoParameterView.h"
 #import "KKHostInfo.h"
+#include <AppKit/AppKit.h>
+#include <AppKit/NSView.h>
+#include <Foundation/Foundation.h>
 #import <FxPlug/FxPlugSDK.h>
 #include <FxPlug/FxTypes.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
@@ -360,13 +363,15 @@ static double kkEaseInSpring(double t) {
 #pragma clang diagnostic pop
 
     _infoParameterTexts[@(parameterID)] = nil;
-    if (error != NULL)
+    if (error != NULL) {
       *error = [NSError
           errorWithDomain:@"co.overpolish.keyframeless.error"
                      code:1
                  userInfo:@{
                    NSLocalizedDescriptionKey : @"Unable to add info parameter"
                  }];
+    }
+
     return NO;
   }
 
@@ -375,9 +380,11 @@ static double kkEaseInSpring(double t) {
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
   NSString *text = _infoParameterTexts[@(parameterID)];
-  if (!text)
+  if (!text) {
     return nil;
-  return [[KKInfoParameterView alloc] initWithText:text];
+  }
+
+  return [[KKInfoParameterView alloc] initWithText:text].container;
 }
 
 @end

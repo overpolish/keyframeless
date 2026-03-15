@@ -78,10 +78,12 @@ typedef struct {
     return NO;
   }
 
-  return [self addInfoParameterWithText:@"TEXT"
-                            parameterID:2
-                                withAPI:paramAPI
-                                  error:error];
+  return [self
+      addInfoParameterWithText:
+          @"Best used on an Adjustment Clip; also works on a Compound Clip."
+                   parameterID:2
+                       withAPI:paramAPI
+                         error:error];
 }
 
 - (BOOL)pluginState:(NSData **)pluginState

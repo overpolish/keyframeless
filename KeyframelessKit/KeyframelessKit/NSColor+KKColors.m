@@ -5,6 +5,7 @@
 
 #import "KKHostInfo.h"
 #import "NSColor+KKColors.h"
+#include <AppKit/AppKit.h>
 
 @implementation NSColor (KKColors)
 
@@ -62,6 +63,20 @@
                          green:0x00 / 255.0
                           blue:0x00 / 255.0
                          alpha:0.0f];
+}
+
++ (NSColor *)accent {
+  return [NSColor colorWithRed:0x5A / 255.0
+                         green:0x5A / 255.0
+                          blue:0xEF / 255.0
+                         alpha:1.0];
+}
+
++ (NSColor *)warning {
+  return [NSColor colorWithRed:0xD5 / 255.0
+                         green:0xBF / 255.0
+                          blue:0x30 / 255.0
+                         alpha:1.0];
 }
 
 - (simd_float4)simdFloat4 {
