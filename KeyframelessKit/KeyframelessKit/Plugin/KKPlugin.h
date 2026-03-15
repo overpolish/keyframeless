@@ -76,6 +76,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// Returns 1.0 when animation is off or the timing API is unavailable.
 - (double)animationFactorAtTime:(CMTime)renderTime baseParamID:(UInt32)baseID;
 
+/// Adds a full-width informational text display occupying one parameter ID.
+/// The parameter is not animatable and stores no meaningful value — it is
+/// purely a static label in the inspector.
+- (BOOL)addInfoParameterWithText:(NSString *)text
+                     parameterID:(UInt32)parameterID
+                         withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
+                           error:(NSError **)error;
+
 @end
 
 NS_ASSUME_NONNULL_END

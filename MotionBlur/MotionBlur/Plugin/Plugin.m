@@ -78,7 +78,10 @@ typedef struct {
     return NO;
   }
 
-  return YES;
+  return [self addInfoParameterWithText:@"TEXT"
+                            parameterID:2
+                                withAPI:paramAPI
+                                  error:error];
 }
 
 - (BOOL)pluginState:(NSData **)pluginState
