@@ -4,8 +4,9 @@
  */
 
 #import "KKPointOSC.h"
-#import <FxPlug/FxPlugSDK.h>
+#import "../../KKTokens.h"
 #import "../Base/KKOSCShaderTypes.h"
+#import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 
 static NSString *kPointOSCPluginID = @"co.overpolish.keyframelesskit.PointOSC";
@@ -15,8 +16,8 @@ static NSString *kPointOSCPluginID = @"co.overpolish.keyframelesskit.PointOSC";
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
   self = [super initWithAPIManager:apiManager];
   if (self) {
-    _oscRadius = 7.0f;
-    _outlineWidth = 2.0f;
+    _oscRadius = KKOSCPointRadius;
+    _outlineWidth = KKOSCOutlineWidth;
   }
   return self;
 }

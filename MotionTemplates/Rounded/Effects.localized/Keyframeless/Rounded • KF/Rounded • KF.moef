@@ -171,14 +171,14 @@
 	</sceneSettings>
 	<publishSettings>
 		<version>2</version>
-		<target object="3001886286" channel="./1" name="Radius"/>
-		<target object="3001886286" channel="./2" name="Animate In"/>
-		<target object="3001886286" channel="./3" name="Animate Out"/>
-		<target object="3001886286" channel="./4" name="Duration"/>
-		<target object="3001886286" channel="./5" name="Interpolation"/>
+		<target object="3001886296" channel="./1" name="Radius"/>
+		<target object="3001886296" channel="./9900" name=""/>
+		<target object="3001886296" channel="./9901" name="Animate In"/>
+		<target object="3001886296" channel="./9902" name="Animate Out"/>
+		<target object="3001886296" channel="./9903" name="Duration"/>
+		<target object="3001886296" channel="./9904" name="Interpolation"/>
 	</publishSettings>
-	<currentFrame>0 1 1 0</currentFrame>
-	<currentObject>3001886277</currentObject>
+	<currentFrame>15360 153600 1 0</currentFrame>
 	<activeLayer>3001886279</activeLayer>
 	<timeRange offset="0 1 1 0" duration="307200 153600 1 0"/>
 	<playRange offset="0 1 1 0" duration="307200 153600 1 0"/>
@@ -204,7 +204,7 @@
 		<flags>0</flags>
 		<timing in="0 1 1 0" out="-2560 153600 1 0" offset="0 1 1 0"/>
 		<foldFlags>0</foldFlags>
-		<baseFlags>268435473</baseFlags>
+		<baseFlags>16</baseFlags>
 		<parameter name="Properties" id="1" flags="8589938704">
 			<parameter name="HDR White Level" id="103" flags="8606744592" default="0.75" value="0.75"/>
 		</parameter>
@@ -219,68 +219,6 @@
 			<foldFlags>16384</foldFlags>
 			<baseFlags>524368</baseFlags>
 			<parameter name="Properties" id="1" flags="8589938704">
-				<parameter name="Transform" id="100" flags="8589938704">
-					<parameter name="Position" id="101" flags="8589938704">
-						<foldFlags>15</foldFlags>
-						<parameter name="X" id="1" flags="8606711824">
-							<curve type="1" default="0" value="0">
-								<numberOfKeypoints>2</numberOfKeypoints>
-								<keypoint flags="0">
-									<time>12800 153600 1 0</time>
-									<value>0</value>
-									<inputTangentTime>-0.0055555555555555558</inputTangentTime>
-									<inputTangentValue>-0</inputTangentValue>
-									<outputTangentTime>0.0055555555555555558</outputTangentTime>
-									<outputTangentValue>0</outputTangentValue>
-								</keypoint>
-								<keypoint flags="0">
-									<time>15360 153600 1 0</time>
-									<value>0</value>
-									<inputTangentTime>-0.0055555555555555558</inputTangentTime>
-									<inputTangentValue>0</inputTangentValue>
-								</keypoint>
-							</curve>
-						</parameter>
-						<parameter name="Y" id="2" flags="8606711824">
-							<curve type="1" default="0" value="0">
-								<numberOfKeypoints>2</numberOfKeypoints>
-								<keypoint flags="0">
-									<time>12800 153600 1 0</time>
-									<value>0</value>
-									<inputTangentTime>-0.0055555555555555558</inputTangentTime>
-									<inputTangentValue>-0</inputTangentValue>
-									<outputTangentTime>0.0055555555555555558</outputTangentTime>
-									<outputTangentValue>0</outputTangentValue>
-								</keypoint>
-								<keypoint flags="0">
-									<time>15360 153600 1 0</time>
-									<value>0</value>
-									<inputTangentTime>-0.0055555555555555558</inputTangentTime>
-									<inputTangentValue>0</inputTangentValue>
-								</keypoint>
-							</curve>
-						</parameter>
-						<parameter name="Z" id="3" flags="8606711824">
-							<curve type="1" default="0" value="0">
-								<numberOfKeypoints>2</numberOfKeypoints>
-								<keypoint flags="0">
-									<time>12800 153600 1 0</time>
-									<value>0</value>
-									<inputTangentTime>-0.0055555555555555558</inputTangentTime>
-									<inputTangentValue>-0</inputTangentValue>
-									<outputTangentTime>0.0055555555555555558</outputTangentTime>
-									<outputTangentValue>0</outputTangentValue>
-								</keypoint>
-								<keypoint flags="0">
-									<time>15360 153600 1 0</time>
-									<value>0</value>
-									<inputTangentTime>-0.0055555555555555558</inputTangentTime>
-									<inputTangentValue>0</inputTangentValue>
-								</keypoint>
-							</curve>
-						</parameter>
-					</parameter>
-				</parameter>
 				<parameter name="Cinematic" id="344" flags="8589938706">
 					<foldFlags>131076</foldFlags>
 					<parameter name="Depth of Field" id="346" flags="8589934608" default="1.3999999999999999" value="2"/>
@@ -337,15 +275,20 @@
 				</parameter>
 				<parameter name="Height" id="314" flags="8589934610" default="1" value="1080"/>
 			</parameter>
-			<filter name="Rounded · KF" id="3001886286" factoryID="6" pluginUUID="A5D350B8-198F-499E-A35A-A6CE420473E4" pluginVersion="1" pluginName="Rounded · KF" pluginDynamicParams="0">
+			<filter name="Rounded · KF" id="3001886296" factoryID="6" pluginUUID="A5D350B8-198F-499E-A35A-A6CE420473E4" pluginVersion="1" pluginName="Rounded · KF" pluginDynamicParams="0">
 				<timing in="0 1 1 0" out="304640 153600 1 0" offset="0 1 1 0"/>
 				<baseFlags>8589934608</baseFlags>
 				<parameter name="Radius" id="1" flags="12901679120" default="20" value="20"/>
-				<parameter name="Animate In" id="2" flags="12901679120" default="0" value="0"/>
-				<parameter name="Animate Out" id="3" flags="12901679120" default="0" value="0"/>
-				<parameter name="Duration" id="4" flags="12901679120" default="0.5" value="0.5"/>
-				<parameter name="Interpolation" id="5" flags="12901679120" default="2" value="2"/>
-				<parameter name="Mix" id="10001" flags="12901679105" default="1" value="1"/>
+				<parameter name="" id="9900" flags="12901679124">
+					<numberOfKeypoints>0</numberOfKeypoints>
+					<defaultVal>*********IoeMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0CMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM**cEhJ74tpP4k62FcY8H6rGIlMKZk********-*E*********A********************MUU*0**F*-c*7**d*16*Bk-7*2s*Kk-h*4w*QE-p*5g-1*********6-*********-********************2B</defaultVal>
+					<dataValue>*********IoeMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0CMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM**cEhJ74tpP4k62FcY8H6rGIlMKZk********-*E*********A********************MUU*0**F*-c*7**d*16*Bk-7*2s*Kk-h*4w*QE-p*5g-1*********6-*********-********************2B</dataValue>
+				</parameter>
+				<parameter name="Animate In" id="9901" flags="12901679120" default="0" value="0"/>
+				<parameter name="Animate Out" id="9902" flags="12901679120" default="0" value="0"/>
+				<parameter name="Duration" id="9903" flags="12901679120" default="0.5" value="0.5"/>
+				<parameter name="Interpolation" id="9904" flags="12901679120" default="2" value="2"/>
+				<parameter name="Mix" id="10001" flags="12901679104" default="1" value="1"/>
 				<parameter name="Flip" id="10002" flags="12905938976" default="0" value="0"/>
 				<parameter name="Input Points" id="10003" flags="12905938976" default="1" value="1"/>
 				<parameter name="Publish OSC" id="10005" flags="12901679104" default="0" value="0"/>
