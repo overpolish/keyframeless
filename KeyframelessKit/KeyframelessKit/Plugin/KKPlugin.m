@@ -5,6 +5,7 @@
 
 #import "KKPlugin.h"
 #import "../Parameter/KKInfoParameterView.h"
+#import "../Parameter/KKKbd.h"
 #import "KKHostInfo.h"
 #include <AppKit/AppKit.h>
 #include <AppKit/NSView.h>
@@ -69,6 +70,8 @@ static double kkEaseInSpring(double t) {
 
 @implementation KKPlugin {
   NSMutableDictionary<NSNumber *, NSString *> *_infoParameterTexts;
+  NSMutableDictionary<NSNumber *, NSAttributedString *>
+      *_infoParameterAttributedTexts;
   NSMutableDictionary<NSNumber *, NSBezierPath *> *_infoParameterIcons;
 }
 
@@ -81,6 +84,7 @@ static double kkEaseInSpring(double t) {
   if (self) {
     _apiManager = apiManager;
     _infoParameterTexts = [[NSMutableDictionary alloc] init];
+    _infoParameterAttributedTexts = [[NSMutableDictionary alloc] init];
     _infoParameterIcons = [[NSMutableDictionary alloc] init];
   }
   return self;
@@ -384,7 +388,55 @@ static double kkEaseInSpring(double t) {
   return YES;
 }
 
+- (BOOL)addInfoParameterWithAttributedText:(NSAttributedString *)text
+                                      icon:(nullable NSBezierPath *)icon
+                               parameterID:(UInt32)parameterID
+                                   withAPI:
+                                       (id<FxParameterCreationAPI_v5>)paramAPI
+                                     error:(NSError **)error {
+  _infoParameterAttributedTexts[@(parameterID)] = [text copy];
+  if (icon) {
+    _infoParameterIcons[@(parameterID)] = icon;
+  }
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wnonnull"
+  if (![paramAPI
+          addCustomParameterWithName:@""
+                         parameterID:parameterID
+                        defaultValue:nil
+                      parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
+                                     kFxParameterFlag_CUSTOM_UI |
+                                     kFxParameterFlag_USE_FULL_VIEW_WIDTH |
+                                     kFxParameterFlag_DISABLED]) {
+#pragma clang diagnostic pop
+
+    _infoParameterAttributedTexts[@(parameterID)] = nil;
+    if (error != NULL) {
+      *error = [NSError
+          errorWithDomain:@"co.overpolish.keyframeless.error"
+                     code:1
+                 userInfo:@{
+                   NSLocalizedDescriptionKey : @"Unable to add info parameter"
+                 }];
+    }
+
+    return NO;
+  }
+
+  return YES;
+}
+
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
+  NSAttributedString *attributedText =
+      _infoParameterAttributedTexts[@(parameterID)];
+  if (attributedText) {
+    KKInfoParameterView *infoView =
+        [[KKInfoParameterView alloc] initWithAttributedText:attributedText];
+    infoView.icon = _infoParameterIcons[@(parameterID)];
+    return infoView;
+  }
+
   NSString *text = _infoParameterTexts[@(parameterID)];
   if (!text) {
     return nil;

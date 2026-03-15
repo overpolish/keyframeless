@@ -73,7 +73,7 @@
 	<cameraType>0</cameraType>
 	<cameraName>Active Camera</cameraName>
 	<mirrorHMD>0</mirrorHMD>
-	<panZoom camera="0" zoom="1.0010416507720947" panX="5" panY="45" mode="2" centered="1"/>
+	<panZoom camera="0" zoom="1.0177083015441895" panX="5" panY="36" mode="2" centered="1"/>
 </viewer>
 
 <projectPanel>
@@ -110,7 +110,7 @@
 	<displayEffects>1</displayEffects>
 	<videoVerticalZoom>1.6111111640930176</videoVerticalZoom>
 	<audioVerticalZoom>1.6111111640930176</audioVerticalZoom>
-	<displayRange in="-183585275 1974609375 3 0" out="2092972958 1000000000 3 0"/>
+	<displayRange in="-157578488 1733363712 3 0" out="2090909073 1000000000 3 0"/>
 </timeline>
 
 <curveeditor>
@@ -118,8 +118,8 @@
 	<snapping>0</snapping>
 	<displayAudioWaveform>0</displayAudioWaveform>
 	<lockKeyframesInTime>0</lockKeyframesInTime>
-	<displayRange in="-183585275 1974609375 3 0" out="2092972958 1000000000 3 0"/>
-	<currentviewvolume originx="-0.092972958259149363" originy="-62.5" width="2.1859459160000001" height="125"/>
+	<displayRange in="-157578488 1733363712 3 0" out="2090909073 1000000000 3 0"/>
+	<currentviewvolume originx="-0.090909072867449064" originy="-62.5" width="2.1818181459999999" height="125"/>
 	<snapshotChannels>0</snapshotChannels>
 </curveeditor>
 

@@ -37,6 +37,19 @@ static const CGFloat KKInfoParameterViewIconGap = 6.0;
   return [self initWithText:text color:[NSColor accent]];
 }
 
+- (instancetype)initWithAttributedText:(NSAttributedString *)text {
+  return [self initWithAttributedText:text color:[NSColor accent]];
+}
+
+- (instancetype)initWithAttributedText:(NSAttributedString *)text
+                                 color:(NSColor *)color {
+  self = [self initWithText:@"" color:color];
+  if (self) {
+    _label.attributedStringValue = text;
+  }
+  return self;
+}
+
 - (instancetype)initWithText:(NSString *)text color:(NSColor *)color {
   // TODO pull out 23 as row height into layout constants
   self = [super initWithFrame:NSMakeRect(0, 0, 0.0, 46.0)];
@@ -68,6 +81,7 @@ static const CGFloat KKInfoParameterViewIconGap = 6.0;
 
     _label = [NSTextField wrappingLabelWithString:_text];
     _label.translatesAutoresizingMaskIntoConstraints = NO;
+    _label.selectable = NO;
     _label.textColor = _color;
     _label.backgroundColor = [NSColor clearColor];
     _label.font = [KKInfoParameterView labelFont];
