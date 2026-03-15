@@ -7,5 +7,5 @@
 
 #import <KeyframelessKit/KeyframelessKit.h>
 
-@interface OSC : KKPointOSC
+@interface RoundedOSC : KKPointOSC
 @end

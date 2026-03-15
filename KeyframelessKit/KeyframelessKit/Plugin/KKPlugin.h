@@ -12,6 +12,16 @@
 
 @class FxImageTile;
 @protocol PROAPIAccessing;
+@protocol FxParameterCreationAPI_v5;
+
+/// Interpolation curve presets for animationFactorAtTime:baseParamID:.
+/// Values are 0-indexed to match the FxPlug popup menu convention.
+typedef NS_ENUM(NSInteger, KKAnimationCurve) {
+  KKAnimationCurveLinear = 0, ///< No easing — constant rate
+  KKAnimationCurveSmooth = 1, ///< Smoothstep — symmetric ease in/out
+  KKAnimationCurveCubic = 2,  ///< Ease-out in, ease-in out — snappy (default)
+  KKAnimationCurveSpring = 3, ///< Sinusoidal spring — overshoots and settles
+};
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -49,6 +59,22 @@ NS_ASSUME_NONNULL_BEGIN
 /// KKHostInfo. Pass to +[FxPrincipal startServicePrincipalWithDelegate:] in
 /// main().
 + (id)servicePrincipalDelegate;
+
+/// Adds "Animate In" (toggle), "Animate Out" (toggle), "Duration" (float
+/// slider, seconds), and "Interpolation" (popup) parameters occupying four
+/// consecutive IDs starting at baseID. Call from addParametersWithError: to
+/// opt a plugin into auto animation. Plugins that don't need it (e.g. motion
+/// blur) simply don't call this.
+- (BOOL)addAnimationParametersStartingAtID:(UInt32)baseID
+                                   withAPI:
+                                       (id<FxParameterCreationAPI_v5>)paramAPI
+                                     error:(NSError **)error;
+
+/// Returns the animation factor t ∈ [0,1] at renderTime using the three
+/// parameters registered at baseID via addAnimationParametersStartingAtID:.
+/// Apply t to any parameters you want animated — radius, position, scale, etc.
+/// Returns 1.0 when animation is off or the timing API is unavailable.
+- (double)animationFactorAtTime:(CMTime)renderTime baseParamID:(UInt32)baseID;
 
 @end
 

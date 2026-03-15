@@ -12,7 +12,7 @@
 #import <KeyframelessKit/KeyframelessKit.h>
 #import <QuartzCore/QuartzCore.h>
 
-@implementation Plugin {
+@implementation RoundedPlugin {
   KKLog *_log;
 }
 
@@ -32,7 +32,7 @@
   *properties = @{
     kFxPropertyKey_MayRemapTime : @NO,
     kFxPropertyKey_PixelTransformSupport : @(kFxPixelTransform_ScaleTranslate),
-    kFxPropertyKey_VariesWhenParamsAreStatic : @NO
+    kFxPropertyKey_VariesWhenParamsAreStatic : @YES
   };
 
   return YES;
@@ -75,7 +75,9 @@
     return NO;
   }
 
-  return YES;
+  return [self addAnimationParametersStartingAtID:2
+                                          withAPI:paramAPI
+                                            error:error];
 }
 
 - (BOOL)pluginState:(NSData **)pluginState
@@ -98,7 +100,12 @@
   }
   double radius = 20.0;
   [paramGetAPI getFloatValue:&radius fromParameter:1 atTime:renderTime];
-  *pluginState = [NSData dataWithBytes:&radius length:sizeof(radius)];
+
+  double effectiveRadius = radius * [self animationFactorAtTime:renderTime
+                                                    baseParamID:2];
+
+  *pluginState = [NSData dataWithBytes:&effectiveRadius
+                                length:sizeof(effectiveRadius)];
   return (*pluginState != nil);
 }
 
