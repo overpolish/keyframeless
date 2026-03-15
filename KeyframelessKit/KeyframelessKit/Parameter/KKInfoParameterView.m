@@ -6,6 +6,7 @@
 #import "KKInfoParameterView.h"
 #import "../Icons/KKIcon.h"
 #import "../Icons/KKIcons.h"
+#import "../KKTokens.h"
 #import "KKHostInfo.h"
 #import "NSColor+KKColors.h"
 #import <AppKit/AppKit.h>
@@ -15,17 +16,8 @@
 #import <KeyframelessKit/KKLog.h>
 #include <objc/objc.h>
 
-static const CGFloat KKInfoParameterViewHeight = 46.0; // Size of 2 rows;
-static const CGFloat KKInfoParameterViewVerticalPadding = 6.0;
-
-// TODO this is layout match to motion, rename, move to layout constants
-static const CGFloat KKInfoParameterViewHorizontalPadding = 21.0;
-
-// TODO move into layout constants - under spacing enum or something?
-static const CGFloat Padding = 6.0;
-
+static const CGFloat KKInfoParameterViewHeight = KKInspectorRowHeight * 2;
 static const CGFloat KKInfoParameterViewIconSize = 12.0;
-static const CGFloat KKInfoParameterViewIconGap = 6.0;
 
 @implementation KKInfoParameterView {
   NSTextField *_label;
@@ -51,8 +43,7 @@ static const CGFloat KKInfoParameterViewIconGap = 6.0;
 }
 
 - (instancetype)initWithText:(NSString *)text color:(NSColor *)color {
-  // TODO pull out 23 as row height into layout constants
-  self = [super initWithFrame:NSMakeRect(0, 0, 0.0, 46.0)];
+  self = [super initWithFrame:NSMakeRect(0, 0, 0.0, KKInfoParameterViewHeight)];
   _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
 
   if (self) {
@@ -69,8 +60,7 @@ static const CGFloat KKInfoParameterViewIconGap = 6.0;
     contentView.wantsLayer = YES;
     contentView.layer.backgroundColor =
         [[_color colorWithAlphaComponent:0.1] CGColor];
-    // TODO pull out into layout constants
-    contentView.layer.cornerRadius = 8.0;
+    contentView.layer.cornerRadius = KKRadiusMD;
     contentView.layer.masksToBounds = YES;
     [self addSubview:contentView];
 
@@ -93,35 +83,34 @@ static const CGFloat KKInfoParameterViewIconGap = 6.0;
       [contentView.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
       [contentView.leadingAnchor
           constraintEqualToAnchor:self.leadingAnchor
-                         constant:KKInfoParameterViewHorizontalPadding],
+                         constant:KKInspectorHorizontalInset],
       [contentView.trailingAnchor
           constraintEqualToAnchor:self.trailingAnchor
-                         constant:-KKInfoParameterViewHorizontalPadding],
+                         constant:-KKInspectorHorizontalInset],
 
       [_iconView.widthAnchor
           constraintEqualToConstant:KKInfoParameterViewIconSize],
       [_iconView.heightAnchor
           constraintEqualToConstant:KKInfoParameterViewIconSize],
       [_iconView.leadingAnchor constraintEqualToAnchor:contentView.leadingAnchor
-                                              constant:Padding * 1.5],
+                                              constant:KKSpacingMD * 1.5],
       [_iconView.topAnchor constraintEqualToAnchor:contentView.topAnchor
-                                          constant:Padding + 1.0],
+                                          constant:KKSpacingMD + 1.0],
 
       [_label.topAnchor constraintEqualToAnchor:contentView.topAnchor
-                                       constant:Padding],
+                                       constant:KKSpacingMD],
       [_label.leadingAnchor constraintEqualToAnchor:_iconView.trailingAnchor
-                                           constant:KKInfoParameterViewIconGap],
+                                           constant:KKSpacingMD],
       [_label.bottomAnchor constraintEqualToAnchor:contentView.bottomAnchor
-                                          constant:-Padding],
+                                          constant:-KKSpacingMD],
       [_label.trailingAnchor constraintEqualToAnchor:contentView.trailingAnchor
-                                            constant:-Padding],
+                                            constant:-KKSpacingMD],
     ]];
   }
 
   return self;
 }
 
-// TODO pull into layout consts?
 + (NSFont *)labelFont {
   static NSFont *font = nil;
   static dispatch_once_t onceToken;

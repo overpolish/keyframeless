@@ -25,6 +25,7 @@
 				Icons/KKIcons.h,
 				KeyframelessKit.h,
 				KKLog.h,
+				KKTokens.h,
 				Metal/KKMetalDeviceCache.h,
 				Metal/KKRenderPrimitives.h,
 				Metal/KKShaderTypes.h,

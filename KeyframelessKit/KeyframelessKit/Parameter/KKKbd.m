@@ -4,14 +4,12 @@
  */
 
 #import "KKKbd.h"
+#import "../KKTokens.h"
 #import "../NSColor+KKColors.h"
 
-// TODO move into layout consts
 static const CGFloat KKKbdHorizontalPadding = 3.0;
 static const CGFloat KKKbdVerticalPadding = 0.5;
-static const CGFloat KKKbdCornerRadius = 2.5;
 static const CGFloat KKKbdFontSize = 9.0;
-static const CGFloat KKKbdBorderWidth = 0.5;
 
 @implementation KKKbd
 
@@ -40,40 +38,40 @@ static const CGFloat KKKbdBorderWidth = 0.5;
 
   NSSize textSize = [key sizeWithAttributes:textAttrs];
 
-  CGFloat width =
-      ceil(textSize.width) + KKKbdHorizontalPadding * 2 + KKKbdBorderWidth * 2;
-  CGFloat height =
-      ceil(textSize.height) + KKKbdVerticalPadding * 2 + KKKbdBorderWidth * 2;
+  CGFloat width = ceil(textSize.width) + KKKbdHorizontalPadding * 2 +
+                  KKBorderWidthHairline * 2;
+  CGFloat height = ceil(textSize.height) + KKKbdVerticalPadding * 2 +
+                   KKBorderWidthHairline * 2;
   NSSize imageSize = NSMakeSize(width, height);
 
   NSColor *bgColor = [color colorWithAlphaComponent:0.1];
   NSColor *borderColor = [color colorWithAlphaComponent:0.25];
 
-  NSImage *image = [NSImage
-       imageWithSize:imageSize
-             flipped:NO
-      drawingHandler:^BOOL(NSRect rect) {
-        NSRect inset =
-            NSInsetRect(rect, KKKbdBorderWidth * 0.5, KKKbdBorderWidth * 0.5);
-        NSBezierPath *path =
-            [NSBezierPath bezierPathWithRoundedRect:inset
-                                            xRadius:KKKbdCornerRadius
-                                            yRadius:KKKbdCornerRadius];
+  NSImage *image =
+      [NSImage imageWithSize:imageSize
+                     flipped:NO
+              drawingHandler:^BOOL(NSRect rect) {
+                NSRect inset = NSInsetRect(rect, KKBorderWidthHairline * 0.5,
+                                           KKBorderWidthHairline * 0.5);
+                NSBezierPath *path =
+                    [NSBezierPath bezierPathWithRoundedRect:inset
+                                                    xRadius:KKRadiusSM
+                                                    yRadius:KKRadiusSM];
 
-        [bgColor set];
-        [path fill];
+                [bgColor set];
+                [path fill];
 
-        path.lineWidth = KKKbdBorderWidth;
-        [borderColor set];
-        [path stroke];
+                path.lineWidth = KKBorderWidthHairline;
+                [borderColor set];
+                [path stroke];
 
-        NSPoint textOrigin =
-            NSMakePoint(KKKbdHorizontalPadding + KKKbdBorderWidth,
-                        KKKbdVerticalPadding + KKKbdBorderWidth);
-        [key drawAtPoint:textOrigin withAttributes:textAttrs];
+                NSPoint textOrigin =
+                    NSMakePoint(KKKbdHorizontalPadding + KKBorderWidthHairline,
+                                KKKbdVerticalPadding + KKBorderWidthHairline);
+                [key drawAtPoint:textOrigin withAttributes:textAttrs];
 
-        return YES;
-      }];
+                return YES;
+              }];
 
   NSTextAttachment *attachment = [[NSTextAttachment alloc] init];
   attachment.image = image;
