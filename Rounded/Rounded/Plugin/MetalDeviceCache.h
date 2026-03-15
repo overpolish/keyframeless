@@ -8,9 +8,9 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <Metal/Metal.h>
 
-@interface MetalDeviceCache : NSObject
+@interface RoundedMetalDeviceCache : NSObject
 
-+ (MetalDeviceCache *)deviceCache;
++ (RoundedMetalDeviceCache *)deviceCache;
 
 - (id<MTLRenderPipelineState>)pipelineStateWithRegistryID:(uint64_t)registryID
                                               pixelFormat:

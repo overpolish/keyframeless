@@ -172,9 +172,13 @@
 	<publishSettings>
 		<version>2</version>
 		<target object="3001886286" channel="./1" name="Radius"/>
+		<target object="3001886286" channel="./2" name="Animate In"/>
+		<target object="3001886286" channel="./3" name="Animate Out"/>
+		<target object="3001886286" channel="./4" name="Duration"/>
+		<target object="3001886286" channel="./5" name="Interpolation"/>
 	</publishSettings>
 	<currentFrame>0 1 1 0</currentFrame>
-	<currentObject>3001886282</currentObject>
+	<currentObject>3001886277</currentObject>
 	<activeLayer>3001886279</activeLayer>
 	<timeRange offset="0 1 1 0" duration="307200 153600 1 0"/>
 	<playRange offset="0 1 1 0" duration="307200 153600 1 0"/>
@@ -200,7 +204,7 @@
 		<flags>0</flags>
 		<timing in="0 1 1 0" out="-2560 153600 1 0" offset="0 1 1 0"/>
 		<foldFlags>0</foldFlags>
-		<baseFlags>16</baseFlags>
+		<baseFlags>268435473</baseFlags>
 		<parameter name="Properties" id="1" flags="8589938704">
 			<parameter name="HDR White Level" id="103" flags="8606744592" default="0.75" value="0.75"/>
 		</parameter>
@@ -212,7 +216,7 @@
 			<aspectRatio>1</aspectRatio>
 			<flags>0</flags>
 			<timing in="0 1 1 0" out="304640 153600 1 0" offset="0 1 1 0"/>
-			<foldFlags>24576</foldFlags>
+			<foldFlags>16384</foldFlags>
 			<baseFlags>524368</baseFlags>
 			<parameter name="Properties" id="1" flags="8589938704">
 				<parameter name="Transform" id="100" flags="8589938704">
@@ -335,8 +339,12 @@
 			</parameter>
 			<filter name="Rounded · KF" id="3001886286" factoryID="6" pluginUUID="A5D350B8-198F-499E-A35A-A6CE420473E4" pluginVersion="1" pluginName="Rounded · KF" pluginDynamicParams="0">
 				<timing in="0 1 1 0" out="304640 153600 1 0" offset="0 1 1 0"/>
-				<baseFlags>8858370065</baseFlags>
+				<baseFlags>8589934608</baseFlags>
 				<parameter name="Radius" id="1" flags="12901679120" default="20" value="20"/>
+				<parameter name="Animate In" id="2" flags="12901679120" default="0" value="0"/>
+				<parameter name="Animate Out" id="3" flags="12901679120" default="0" value="0"/>
+				<parameter name="Duration" id="4" flags="12901679120" default="0.5" value="0.5"/>
+				<parameter name="Interpolation" id="5" flags="12901679120" default="2" value="2"/>
 				<parameter name="Mix" id="10001" flags="12901679105" default="1" value="1"/>
 				<parameter name="Flip" id="10002" flags="12905938976" default="0" value="0"/>
 				<parameter name="Input Points" id="10003" flags="12905938976" default="1" value="1"/>

@@ -19,7 +19,7 @@ typedef struct {
   int sampleCount;
 } MotionBlurState;
 
-@implementation Plugin {
+@implementation MotionBlurPlugin {
   KKLog *_log;
 }
 
