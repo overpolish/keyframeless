@@ -4,8 +4,10 @@
  */
 
 #import "KKPlugin.h"
+#import "../Parameter/KKInfoParameterView.h"
 #import "KKHostInfo.h"
 #import <FxPlug/FxPlugSDK.h>
+#include <FxPlug/FxTypes.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 
@@ -59,7 +61,12 @@ static double kkEaseInSpring(double t) {
 
 @end
 
-@implementation KKPlugin
+@interface KKPlugin () <FxCustomParameterViewHost_v2>
+@end
+
+@implementation KKPlugin {
+  NSMutableDictionary<NSNumber *, NSString *> *_infoParameterTexts;
+}
 
 + (id)servicePrincipalDelegate {
   return [KKPrincipalDelegate shared];
@@ -69,6 +76,7 @@ static double kkEaseInSpring(double t) {
   self = [super init];
   if (self) {
     _apiManager = apiManager;
+    _infoParameterTexts = [[NSMutableDictionary alloc] init];
   }
   return self;
 }
@@ -328,6 +336,48 @@ static double kkEaseInSpring(double t) {
   }
 
   return t;
+}
+
+- (BOOL)addInfoParameterWithText:(NSString *)text
+                     parameterID:(UInt32)parameterID
+                         withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
+                           error:(NSError **)error {
+  _infoParameterTexts[@(parameterID)] = [text copy];
+
+// Suppress non null error on `defaultValue:nil` - this is only a info parameter
+// row
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wnonnull"
+  if (![paramAPI
+          addCustomParameterWithName:@"" // If not empty pushes entire control
+                                         // down when FULL_WIDTH
+                         parameterID:parameterID
+                        defaultValue:nil
+                      parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
+                                     kFxParameterFlag_CUSTOM_UI |
+                                     kFxParameterFlag_USE_FULL_VIEW_WIDTH |
+                                     kFxParameterFlag_DISABLED]) {
+#pragma clang diagnostic pop
+
+    _infoParameterTexts[@(parameterID)] = nil;
+    if (error != NULL)
+      *error = [NSError
+          errorWithDomain:@"co.overpolish.keyframeless.error"
+                     code:1
+                 userInfo:@{
+                   NSLocalizedDescriptionKey : @"Unable to add info parameter"
+                 }];
+    return NO;
+  }
+
+  return YES;
+}
+
+- (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
+  NSString *text = _infoParameterTexts[@(parameterID)];
+  if (!text)
+    return nil;
+  return [[KKInfoParameterView alloc] initWithText:text];
 }
 
 @end
