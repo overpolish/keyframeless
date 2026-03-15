@@ -66,16 +66,17 @@
 }
 
 + (NSColor *)accent {
-  return [NSColor colorWithRed:0x5A / 255.0
-                         green:0x5A / 255.0
-                          blue:0xEF / 255.0
+  // Lighter than the shade as used in Motion/FCP for better accessibility
+  return [NSColor colorWithRed:0x8B / 255.0
+                         green:0x8B / 255.0
+                          blue:0xF0 / 255.0
                          alpha:1.0];
 }
 
 + (NSColor *)warning {
-  return [NSColor colorWithRed:0xD5 / 255.0
-                         green:0xBF / 255.0
-                          blue:0x30 / 255.0
+  return [NSColor colorWithRed:0xFF / 255.0
+                         green:0xCC / 255.0
+                          blue:0x02 / 255.0
                          alpha:1.0];
 }
 
