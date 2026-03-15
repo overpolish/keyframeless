@@ -4,8 +4,11 @@
  */
 
 #import "KKPlugin.h"
+#import "../Icons/KKIcons.h"
+#import "../KKConstants.h"
 #import "../Parameter/KKInfoParameterView.h"
 #import "../Parameter/KKKbd.h"
+#import "../Parameter/KKSeparatorParameterView.h"
 #import "KKHostInfo.h"
 #include <AppKit/AppKit.h>
 #include <AppKit/NSView.h>
@@ -73,6 +76,10 @@ static double kkEaseInSpring(double t) {
   NSMutableDictionary<NSNumber *, NSAttributedString *>
       *_infoParameterAttributedTexts;
   NSMutableDictionary<NSNumber *, NSBezierPath *> *_infoParameterIcons;
+  // Separator parameters: maps parameterID → optional text (empty string = no
+  // label)
+  NSMutableDictionary<NSNumber *, NSString *> *_separatorParameterTexts;
+  NSMutableDictionary<NSNumber *, NSBezierPath *> *_separatorParameterIcons;
 }
 
 + (id)servicePrincipalDelegate {
@@ -86,6 +93,8 @@ static double kkEaseInSpring(double t) {
     _infoParameterTexts = [[NSMutableDictionary alloc] init];
     _infoParameterAttributedTexts = [[NSMutableDictionary alloc] init];
     _infoParameterIcons = [[NSMutableDictionary alloc] init];
+    _separatorParameterTexts = [[NSMutableDictionary alloc] init];
+    _separatorParameterIcons = [[NSMutableDictionary alloc] init];
   }
   return self;
 }
@@ -195,12 +204,18 @@ static double kkEaseInSpring(double t) {
   return YES;
 }
 
-- (BOOL)addAnimationParametersStartingAtID:(UInt32)baseID
-                                   withAPI:
-                                       (id<FxParameterCreationAPI_v5>)paramAPI
-                                     error:(NSError **)error {
+- (BOOL)addAnimationParametersWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
+                                error:(NSError **)error {
+  if (![self addSeparatorParameterWithText:@"Timing"
+                                      icon:[KKIcons timer]
+                               parameterID:kKKParamAnimationSeparator
+                                   withAPI:paramAPI
+                                     error:error]) {
+    return NO;
+  }
+
   if (![paramAPI addToggleButtonWithName:@"Animate In"
-                             parameterID:baseID
+                             parameterID:kKKParamAnimateIn
                             defaultValue:NO
                           parameterFlags:kFxParameterFlag_DEFAULT]) {
     if (error != NULL)
@@ -214,7 +229,7 @@ static double kkEaseInSpring(double t) {
   }
 
   if (![paramAPI addToggleButtonWithName:@"Animate Out"
-                             parameterID:baseID + 1
+                             parameterID:kKKParamAnimateOut
                             defaultValue:NO
                           parameterFlags:kFxParameterFlag_DEFAULT]) {
     if (error != NULL)
@@ -228,7 +243,7 @@ static double kkEaseInSpring(double t) {
   }
 
   if (![paramAPI addFloatSliderWithName:@"Duration"
-                            parameterID:baseID + 2
+                            parameterID:kKKParamAnimationDuration
                            defaultValue:0.5
                            parameterMin:0.1
                            parameterMax:2.0
@@ -248,7 +263,7 @@ static double kkEaseInSpring(double t) {
 
   if (![paramAPI
           addPopupMenuWithName:@"Interpolation"
-                   parameterID:baseID + 3
+                   parameterID:kKKParamAnimationInterpolation
                   defaultValue:KKAnimationCurveCubic
                    menuEntries:@[ @"Linear", @"Smooth", @"Cubic", @"Spring" ]
                 parameterFlags:kFxParameterFlag_DEFAULT]) {
@@ -265,7 +280,7 @@ static double kkEaseInSpring(double t) {
   return YES;
 }
 
-- (double)animationFactorAtTime:(CMTime)renderTime baseParamID:(UInt32)baseID {
+- (double)animationFactorAtTime:(CMTime)renderTime {
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   if (!paramGetAPI)
@@ -273,9 +288,11 @@ static double kkEaseInSpring(double t) {
 
   BOOL animateIn = NO;
   BOOL animateOut = NO;
-  [paramGetAPI getBoolValue:&animateIn fromParameter:baseID atTime:renderTime];
+  [paramGetAPI getBoolValue:&animateIn
+              fromParameter:kKKParamAnimateIn
+                     atTime:renderTime];
   [paramGetAPI getBoolValue:&animateOut
-              fromParameter:baseID + 1
+              fromParameter:kKKParamAnimateOut
                      atTime:renderTime];
 
   if (!animateIn && !animateOut)
@@ -283,11 +300,13 @@ static double kkEaseInSpring(double t) {
 
   double animDuration = 0.5;
   [paramGetAPI getFloatValue:&animDuration
-               fromParameter:baseID + 2
+               fromParameter:kKKParamAnimationDuration
                       atTime:renderTime];
 
   int curve = KKAnimationCurveCubic;
-  [paramGetAPI getIntValue:&curve fromParameter:baseID + 3 atTime:renderTime];
+  [paramGetAPI getIntValue:&curve
+             fromParameter:kKKParamAnimationInterpolation
+                    atTime:renderTime];
 
   id<FxTimingAPI_v4> timingAPI =
       [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
@@ -427,7 +446,52 @@ static double kkEaseInSpring(double t) {
   return YES;
 }
 
+- (BOOL)addSeparatorParameterWithText:(nullable NSString *)text
+                                 icon:(nullable NSBezierPath *)icon
+                          parameterID:(UInt32)parameterID
+                              withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
+                                error:(NSError **)error {
+  _separatorParameterTexts[@(parameterID)] = [text copy] ?: @"";
+  if (icon) {
+    _separatorParameterIcons[@(parameterID)] = icon;
+  }
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wnonnull"
+  if (![paramAPI
+          addCustomParameterWithName:@""
+                         parameterID:parameterID
+                        defaultValue:nil
+                      parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
+                                     kFxParameterFlag_CUSTOM_UI |
+                                     kFxParameterFlag_USE_FULL_VIEW_WIDTH |
+                                     kFxParameterFlag_DISABLED]) {
+#pragma clang diagnostic pop
+
+    _separatorParameterTexts[@(parameterID)] = nil;
+    if (error != NULL) {
+      *error = [NSError errorWithDomain:@"co.overpolish.keyframeless.error"
+                                   code:1
+                               userInfo:@{
+                                 NSLocalizedDescriptionKey :
+                                     @"Unable to add separator parameter"
+                               }];
+    }
+    return NO;
+  }
+
+  return YES;
+}
+
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
+  NSString *separatorText = _separatorParameterTexts[@(parameterID)];
+  if (separatorText) {
+    KKSeparatorParameterView *sepView = [[KKSeparatorParameterView alloc]
+        initWithText:(separatorText.length > 0 ? separatorText : nil)
+                icon:_separatorParameterIcons[@(parameterID)]];
+    return sepView;
+  }
+
   NSAttributedString *attributedText =
       _infoParameterAttributedTexts[@(parameterID)];
   if (attributedText) {

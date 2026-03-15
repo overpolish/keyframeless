@@ -55,7 +55,7 @@
   }
 
   if (![paramAPI addFloatSliderWithName:@"Radius"
-                            parameterID:1
+                            parameterID:kParamRadius
                            defaultValue:20.0
                            parameterMin:0.0
                            parameterMax:100.0
@@ -75,9 +75,7 @@
     return NO;
   }
 
-  return [self addAnimationParametersStartingAtID:2
-                                          withAPI:paramAPI
-                                            error:error];
+  return [self addAnimationParametersWithAPI:paramAPI error:error];
 }
 
 - (BOOL)pluginState:(NSData **)pluginState
@@ -99,10 +97,11 @@
     return NO;
   }
   double radius = 20.0;
-  [paramGetAPI getFloatValue:&radius fromParameter:1 atTime:renderTime];
+  [paramGetAPI getFloatValue:&radius
+               fromParameter:kParamRadius
+                      atTime:renderTime];
 
-  double effectiveRadius = radius * [self animationFactorAtTime:renderTime
-                                                    baseParamID:2];
+  double effectiveRadius = radius * [self animationFactorAtTime:renderTime];
 
   *pluginState = [NSData dataWithBytes:&effectiveRadius
                                 length:sizeof(effectiveRadius)];

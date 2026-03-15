@@ -73,7 +73,7 @@
 	<cameraType>0</cameraType>
 	<cameraName>Active Camera</cameraName>
 	<mirrorHMD>0</mirrorHMD>
-	<panZoom camera="0" zoom="1.0177083015441895" panX="5" panY="36" mode="2" centered="1"/>
+	<panZoom camera="0" zoom="1.0625" panX="5" panY="12" mode="2" centered="1"/>
 </viewer>
 
 <projectPanel>
@@ -110,7 +110,7 @@
 	<displayEffects>1</displayEffects>
 	<videoVerticalZoom>1.6111111640930176</videoVerticalZoom>
 	<audioVerticalZoom>1.6111111640930176</audioVerticalZoom>
-	<displayRange in="-157578488 1733363712 3 0" out="2090909073 1000000000 3 0"/>
+	<displayRange in="-182385188 2125000000 3 0" out="2085828324 1000000000 3 0"/>
 </timeline>
 
 <curveeditor>
@@ -118,8 +118,8 @@
 	<snapping>0</snapping>
 	<displayAudioWaveform>0</displayAudioWaveform>
 	<lockKeyframesInTime>0</lockKeyframesInTime>
-	<displayRange in="-157578488 1733363712 3 0" out="2090909073 1000000000 3 0"/>
-	<currentviewvolume originx="-0.090909072867449064" originy="-62.5" width="2.1818181459999999" height="125"/>
+	<displayRange in="-182385188 2125000000 3 0" out="2085828324 1000000000 3 0"/>
+	<currentviewvolume originx="-0.08582832376470588" originy="-62.5" width="2.1716566479999999" height="125"/>
 	<snapshotChannels>0</snapshotChannels>
 </curveeditor>
 
@@ -162,11 +162,10 @@
 	</sceneSettings>
 	<publishSettings>
 		<version>2</version>
-		<target object="12214" channel="./2" name=""/>
+		<target object="12214" channel="./9000" name=""/>
 		<target object="12214" channel="./1" name="Strength"/>
 	</publishSettings>
 	<currentFrame>0 1 1 0</currentFrame>
-	<currentObject>12207</currentObject>
 	<activeLayer>12209</activeLayer>
 	<timeRange offset="0 1 1 0" duration="307200 153600 1 0"/>
 	<playRange offset="0 1 1 0" duration="307200 153600 1 0"/>
@@ -192,7 +191,7 @@
 		<flags>0</flags>
 		<timing in="0 1 1 0" out="-2560 153600 1 0" offset="0 1 1 0"/>
 		<foldFlags>0</foldFlags>
-		<baseFlags>268435473</baseFlags>
+		<baseFlags>16</baseFlags>
 		<parameter name="Properties" id="1" flags="8589938704">
 			<parameter name="HDR White Level" id="103" flags="8606744592" default="0.75" value="0.75"/>
 		</parameter>
@@ -287,7 +286,7 @@
 			<timing in="0 1 1 0" out="304640 153600 1 0" offset="0 1 1 0"/>
 			<baseFlags>8589934608</baseFlags>
 			<parameter name="Strength" id="1" flags="12901679121" default="50" value="50"/>
-			<parameter name="" id="2" flags="12901679124">
+			<parameter name="" id="9000" flags="12901679124">
 				<numberOfKeypoints>0</numberOfKeypoints>
 				<defaultVal>*********IoeMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0CMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM**cEhJ74tpP4k62FcY8H6rGIlMKZk********-*E*********A********************MUU*0**F*-c*7**d*16*Bk-7*2s*Kk-h*4w*QE-p*5g-1*********6-*********-********************2B</defaultVal>
 				<dataValue>*********IoeMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0CMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM**cEhJ74tpP4k62FcY8H6rGIlMKZk********-*E*********A********************MUU*0**F*-c*7**d*16*Bk-7*2s*Kk-h*4w*QE-p*5g-1*********6-*********-********************2B</dataValue>

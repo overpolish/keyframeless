@@ -8,6 +8,7 @@
 #import <CoreFoundation/CFCGTypes.h>
 
 /// Standard UI spacing unit used for padding and gaps.
+static const CGFloat KKSpacingSM = 4.0;
 static const CGFloat KKSpacingMD = 6.0;
 
 /// Hairline border/stroke width.

@@ -24,6 +24,7 @@
 				Icons/KKIcon.h,
 				Icons/KKIcons.h,
 				KeyframelessKit.h,
+				KKConstants.h,
 				KKLog.h,
 				KKTokens.h,
 				Metal/KKMetalDeviceCache.h,
@@ -34,6 +35,7 @@
 				OSC/Controls/KKPointOSC.h,
 				Parameter/KKInfoParameterView.h,
 				Parameter/KKKbd.h,
+				Parameter/KKSeparatorParameterView.h,
 				Plugin/KKPlugin.h,
 			);
 			target = F26E01B52F4DE280009D949A /* KeyframelessKit */;
