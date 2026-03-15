@@ -19,6 +19,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable instancetype)initWithCoder:(NSCoder *)coder NS_UNAVAILABLE;
 
 @property(nonatomic, copy) NSString *text;
+@property(nonatomic, strong, readonly) NSView *container;
 
 @end
 
