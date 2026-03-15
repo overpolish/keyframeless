@@ -61,21 +61,19 @@ NS_ASSUME_NONNULL_BEGIN
 /// main().
 + (id)servicePrincipalDelegate;
 
-/// Adds "Animate In" (toggle), "Animate Out" (toggle), "Duration" (float
-/// slider, seconds), and "Interpolation" (popup) parameters occupying four
-/// consecutive IDs starting at baseID. Call from addParametersWithError: to
-/// opt a plugin into auto animation. Plugins that don't need it (e.g. motion
-/// blur) simply don't call this.
-- (BOOL)addAnimationParametersStartingAtID:(UInt32)baseID
-                                   withAPI:
-                                       (id<FxParameterCreationAPI_v5>)paramAPI
-                                     error:(NSError **)error;
+/// Adds a "Timing" separator, "Animate In" (toggle), "Animate Out" (toggle),
+/// "Duration" (float slider, seconds), and "Interpolation" (popup) at the
+/// fixed IDs defined in KKConstants.h (kKKParamAnimationSeparator … 9904).
+/// Call from addParametersWithError: to opt a plugin into auto animation.
+/// Plugins that don't need it (e.g. motion blur) simply don't call this.
+- (BOOL)addAnimationParametersWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
+                                error:(NSError **)error;
 
-/// Returns the animation factor t ∈ [0,1] at renderTime using the three
-/// parameters registered at baseID via addAnimationParametersStartingAtID:.
+/// Returns the animation factor t ∈ [0,1] at renderTime using the fixed
+/// animation parameter IDs defined in KKConstants.h.
 /// Apply t to any parameters you want animated — radius, position, scale, etc.
 /// Returns 1.0 when animation is off or the timing API is unavailable.
-- (double)animationFactorAtTime:(CMTime)renderTime baseParamID:(UInt32)baseID;
+- (double)animationFactorAtTime:(CMTime)renderTime;
 
 /// Adds a full-width informational text display occupying one parameter ID.
 /// The parameter is not animatable and stores no meaningful value — it is
@@ -94,6 +92,15 @@ NS_ASSUME_NONNULL_BEGIN
                                    withAPI:
                                        (id<FxParameterCreationAPI_v5>)paramAPI
                                      error:(NSError **)error;
+
+/// Adds a full-width horizontal divider occupying one parameter ID.
+/// Pass text and/or icon to render  ──── [icon] [text] ────  centred on the
+/// line; pass nil for both for a plain rule.
+- (BOOL)addSeparatorParameterWithText:(nullable NSString *)text
+                                 icon:(nullable NSBezierPath *)icon
+                          parameterID:(UInt32)parameterID
+                              withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
+                                error:(NSError **)error;
 
 @end
 

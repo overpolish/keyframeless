@@ -61,7 +61,7 @@ typedef struct {
   // Strength: 0 = no blur, 100 = full-frame blur. Mapped to shutter angle
   // internally (strength / 100 * 360°).
   if (![paramAPI addFloatSliderWithName:@"Strength"
-                            parameterID:1
+                            parameterID:kParamStrength
                            defaultValue:50.0
                            parameterMin:0.0
                            parameterMax:100.0
@@ -86,7 +86,7 @@ typedef struct {
 
   return [self addInfoParameterWithAttributedText:infoText
                                              icon:[KKIcons info]
-                                      parameterID:2
+                                      parameterID:kParamInfoUsage
                                           withAPI:paramAPI
                                             error:error];
 }
@@ -104,7 +104,9 @@ typedef struct {
   double strength = 50.0;
   id<FxParameterRetrievalAPI_v6> paramAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  [paramAPI getFloatValue:&strength fromParameter:1 atTime:renderTime];
+  [paramAPI getFloatValue:&strength
+            fromParameter:kParamStrength
+                   atTime:renderTime];
   state.strength = (float)(strength / 100.0);
 
   // Use fewer samples during preview/scrubbing for real-time playback.

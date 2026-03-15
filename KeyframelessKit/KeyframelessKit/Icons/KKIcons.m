@@ -33,4 +33,22 @@ static NSBezierPath *KKIconPath(void) {
   return path;
 }
 
+/// Source - https://lucide.dev/icons/timer
++ (NSBezierPath *)timer {
+  static NSBezierPath *path = nil;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    path = KKIconPath();
+
+    [path moveToPoint:NSMakePoint(10, 2)];
+    [path lineToPoint:NSMakePoint(14, 2)];
+
+    [path moveToPoint:NSMakePoint(12, 14)];
+    [path lineToPoint:NSMakePoint(15, 11)];
+
+    [path appendBezierPathWithOvalInRect:NSMakeRect(4, 6, 16, 16)];
+  });
+  return path;
+}
+
 @end

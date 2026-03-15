@@ -18,6 +18,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Lucide `info` - https://lucide.dev/icons/info
 + (NSBezierPath *)info;
 
+/// Lucide `timer` - https://lucide.dev/icons/timer
++ (NSBezierPath *)timer;
+
 @end
 
 NS_ASSUME_NONNULL_END
