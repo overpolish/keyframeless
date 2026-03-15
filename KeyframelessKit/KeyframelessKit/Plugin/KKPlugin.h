@@ -86,6 +86,15 @@ NS_ASSUME_NONNULL_BEGIN
                          withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                            error:(NSError **)error;
 
+/// Accepts an attributed string — use to embed KKKbd badges
+/// or other inline styled content.
+- (BOOL)addInfoParameterWithAttributedText:(NSAttributedString *)text
+                                      icon:(nullable NSBezierPath *)icon
+                               parameterID:(UInt32)parameterID
+                                   withAPI:
+                                       (id<FxParameterCreationAPI_v5>)paramAPI
+                                     error:(NSError **)error;
+
 @end
 
 NS_ASSUME_NONNULL_END

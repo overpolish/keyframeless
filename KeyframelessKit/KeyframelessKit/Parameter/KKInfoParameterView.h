@@ -16,6 +16,12 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithText:(NSString *)text;
 - (instancetype)initWithText:(NSString *)text
                        color:(NSColor *)color NS_DESIGNATED_INITIALIZER;
+
+/// Initialize with an attributed string (e.g. one containing KKKbd badges).
+- (instancetype)initWithAttributedText:(NSAttributedString *)text;
+- (instancetype)initWithAttributedText:(NSAttributedString *)text
+                                 color:(NSColor *)color;
+
 - (instancetype)init NS_UNAVAILABLE;
 - (instancetype)initWithFrame:(NSRect)frameRect NS_UNAVAILABLE;
 - (nullable instancetype)initWithCoder:(NSCoder *)coder NS_UNAVAILABLE;

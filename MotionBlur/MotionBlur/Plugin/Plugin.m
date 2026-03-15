@@ -11,6 +11,7 @@
 #import <Foundation/Foundation.h>
 #import <IOSurface/IOSurfaceObjC.h>
 #import <KeyframelessKit/KKIcons.h>
+#import <KeyframelessKit/KKKbd.h>
 #import <KeyframelessKit/KKLog.h>
 #import <QuartzCore/QuartzCore.h>
 
@@ -79,13 +80,15 @@ typedef struct {
     return NO;
   }
 
-  return [self
-      addInfoParameterWithText:
-          @"Best used on an Adjustment Clip; also works on a Compound Clip."
-                          icon:[KKIcons info]
-                   parameterID:2
-                       withAPI:paramAPI
-                         error:error];
+  NSMutableAttributedString *infoText = [[NSMutableAttributedString alloc]
+      initWithString:@"Use on a Adjustment Clip "];
+  [infoText appendAttributedString:[KKKbd attributedStringWithKey:@"⌥ A"]];
+
+  return [self addInfoParameterWithAttributedText:infoText
+                                             icon:[KKIcons info]
+                                      parameterID:2
+                                          withAPI:paramAPI
+                                            error:error];
 }
 
 - (BOOL)pluginState:(NSData **)pluginState
