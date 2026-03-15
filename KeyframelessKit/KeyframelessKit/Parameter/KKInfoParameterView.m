@@ -28,14 +28,19 @@ static const CGFloat KKInfoParameterViewHorizontalPadding = 21.0;
 // overall inspector.
 
 - (instancetype)initWithText:(NSString *)text {
+  return [self initWithText:text color:[NSColor accent]];
+}
+
+- (instancetype)initWithText:(NSString *)text color:(NSColor *)color {
   self = [super initWithFrame:NSMakeRect(0, 0, 0.0, 46.0)]; // height of 2 rows
   _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
 
   if (self) {
     _text = [text copy];
+    _color = color;
     _label = [[NSTextField alloc] initWithFrame:self.bounds];
     _label.stringValue = _text;
-    _label.textColor = [NSColor warning];
+    _label.textColor = _color;
     _label.backgroundColor = [NSColor clearColor];
     _label.font = [KKInfoParameterView labelFont];
     _label.lineBreakMode = NSLineBreakByWordWrapping;
@@ -88,6 +93,11 @@ static const CGFloat KKInfoParameterViewHorizontalPadding = 21.0;
   _text = [text copy];
   _label.stringValue = text;
   [self setFrameSize:NSMakeSize(self.frame.size.width, 0)];
+}
+
+- (void)setColor:(NSColor *)color {
+  _color = color;
+  _label.textColor = color;
 }
 
 @end
