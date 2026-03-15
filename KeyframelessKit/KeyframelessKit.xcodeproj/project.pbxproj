@@ -21,14 +21,21 @@
 		F26E01BB2F4DE280009D949A /* Exceptions for "KeyframelessKit" folder in "KeyframelessKit" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			publicHeaders = (
+				Icons/KKIcon.h,
+				Icons/KKIcons.h,
 				KeyframelessKit.h,
+				KKConstants.h,
 				KKLog.h,
+				KKTokens.h,
 				Metal/KKMetalDeviceCache.h,
 				Metal/KKRenderPrimitives.h,
 				Metal/KKShaderTypes.h,
 				OSC/Base/KKOnScreenControl.h,
 				OSC/Controls/KKArcOSC.h,
 				OSC/Controls/KKPointOSC.h,
+				Parameter/KKInfoParameterView.h,
+				Parameter/KKKbd.h,
+				Parameter/KKSeparatorParameterView.h,
 				Plugin/KKPlugin.h,
 			);
 			target = F26E01B52F4DE280009D949A /* KeyframelessKit */;

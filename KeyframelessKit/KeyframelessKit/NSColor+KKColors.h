@@ -20,6 +20,9 @@
 + (NSColor *)active;
 + (NSColor *)transparent;
 
++ (NSColor *)accent;
++ (NSColor *)warning;
+
 - (simd_float4)simdFloat4;
 
 @end
