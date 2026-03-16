@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-#import "KKInfoParameterView.h"
+#import "KKAlertView.h"
 #import "../Icons/KKIcon.h"
 #import "../Icons/KKIcons.h"
-#import "../KKFonts.h"
-#import "../KKTokens.h"
+#import "../Style/KKFonts.h"
+#import "../Style/KKTokens.h"
 #import "KKHostInfo.h"
-#import "NSColor+KKColors.h"
+#import "../Style/NSColor+KKColors.h"
 #import <AppKit/AppKit.h>
 #include <AppKit/NSView.h>
 #import <CoreFoundation/CFCGTypes.h>
@@ -17,9 +17,9 @@
 #import <KeyframelessKit/KKLog.h>
 #include <objc/objc.h>
 
-static const CGFloat KKInfoParameterViewHeight = KKInspectorRowHeight * 2;
+static const CGFloat KKAlertViewHeight = KKInspectorRowHeight * 2;
 
-@implementation KKInfoParameterView {
+@implementation KKAlertView {
   NSTextField *_label;
   KKIcon *_iconView;
   KKLog *_log;
@@ -43,7 +43,7 @@ static const CGFloat KKInfoParameterViewHeight = KKInspectorRowHeight * 2;
 }
 
 - (instancetype)initWithText:(NSString *)text color:(NSColor *)color {
-  self = [super initWithFrame:NSMakeRect(0, 0, 0.0, KKInfoParameterViewHeight)];
+  self = [super initWithFrame:NSMakeRect(0, 0, 0.0, KKAlertViewHeight)];
   _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
 
   if (self) {

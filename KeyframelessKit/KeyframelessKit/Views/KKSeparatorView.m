@@ -3,18 +3,18 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-#import "KKSeparatorParameterView.h"
+#import "KKSeparatorView.h"
 #import "../Icons/KKIcon.h"
-#import "../KKFonts.h"
-#import "../KKTokens.h"
+#import "../Style/KKFonts.h"
+#import "../Style/KKTokens.h"
 #import "KKHostInfo.h"
-#import "NSColor+KKColors.h"
+#import "../Style/NSColor+KKColors.h"
 #import <AppKit/AppKit.h>
 
-static const CGFloat KKSeparatorParameterViewHeight = KKInspectorRowHeight;
+static const CGFloat KKSeparatorViewHeight = KKInspectorRowHeight;
 static const CGFloat KKSeparatorLineHeight = 1.0;
 
-@implementation KKSeparatorParameterView {
+@implementation KKSeparatorView {
   NSView *_leftLine;
   NSView *_rightLine;
   KKIcon *_iconView;
@@ -29,7 +29,7 @@ static const CGFloat KKSeparatorLineHeight = 1.0;
 
 - (instancetype)initWithText:(NSString *)text icon:(NSBezierPath *)icon {
   self = [super
-      initWithFrame:NSMakeRect(0, 0, 0.0, KKSeparatorParameterViewHeight)];
+      initWithFrame:NSMakeRect(0, 0, 0.0, KKSeparatorViewHeight)];
   if (self) {
     _text = [text copy];
     _icon = icon;
@@ -53,7 +53,7 @@ static const CGFloat KKSeparatorLineHeight = 1.0;
           constraintEqualToAnchor:self.trailingAnchor
                          constant:-KKInspectorHorizontalInset],
       [contentView.heightAnchor
-          constraintEqualToConstant:KKSeparatorParameterViewHeight],
+          constraintEqualToConstant:KKSeparatorViewHeight],
     ]];
 
     _leftLine = [self _makeLine];

@@ -4,7 +4,7 @@
  */
 
 #import "KKPointOSC.h"
-#import "../../KKTokens.h"
+#import "../../Style/KKTokens.h"
 #import "../Base/KKOSCShaderTypes.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>

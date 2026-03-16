@@ -11,7 +11,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// A full-width read-only label displayed in the inspector for informational
 /// custom parameters added via -[KKPlugin addInfoParameterWithName:text:…].
-@interface KKInfoParameterView : NSView
+@interface KKAlertView : NSView
 
 - (instancetype)initWithText:(NSString *)text;
 - (instancetype)initWithText:(NSString *)text

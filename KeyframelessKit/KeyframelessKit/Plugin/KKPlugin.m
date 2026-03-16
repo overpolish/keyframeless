@@ -5,10 +5,10 @@
 
 #import "KKPlugin.h"
 #import "../Icons/KKIcons.h"
-#import "../KKConstants.h"
-#import "../Parameter/KKInfoParameterView.h"
-#import "../Parameter/KKKbd.h"
-#import "../Parameter/KKSeparatorParameterView.h"
+#import "KKConstants.h"
+#import "../Views/KKAlertView.h"
+#import "../Views/KKKbd.h"
+#import "../Views/KKSeparatorView.h"
 #import "KKHostInfo.h"
 #include <AppKit/AppKit.h>
 #include <AppKit/NSView.h>
@@ -480,7 +480,7 @@ static double kkEaseInSpring(double t) {
   NSString *separatorText =
       kkClassRegistry([self class], kKKSepTexts)[@(parameterID)];
   if (separatorText) {
-    return [[KKSeparatorParameterView alloc]
+    return [[KKSeparatorView alloc]
         initWithText:(separatorText.length > 0 ? separatorText : nil)
                 icon:kkClassRegistry([self class],
                                      kKKSepIcons)[@(parameterID)]];
@@ -489,8 +489,8 @@ static double kkEaseInSpring(double t) {
   NSAttributedString *attributedText =
       kkClassRegistry([self class], kKKInfoAttrTexts)[@(parameterID)];
   if (attributedText) {
-    KKInfoParameterView *infoView =
-        [[KKInfoParameterView alloc] initWithAttributedText:attributedText];
+    KKAlertView *infoView =
+        [[KKAlertView alloc] initWithAttributedText:attributedText];
     infoView.icon = kkClassRegistry([self class], kKKInfoIcons)[@(parameterID)];
     return infoView;
   }
@@ -500,8 +500,8 @@ static double kkEaseInSpring(double t) {
     return nil;
   }
 
-  KKInfoParameterView *infoView =
-      [[KKInfoParameterView alloc] initWithText:text];
+  KKAlertView *infoView =
+      [[KKAlertView alloc] initWithText:text];
   infoView.icon = kkClassRegistry([self class], kKKInfoIcons)[@(parameterID)];
   return infoView;
 }

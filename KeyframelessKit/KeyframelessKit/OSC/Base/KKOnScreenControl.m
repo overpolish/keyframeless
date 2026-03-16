@@ -4,7 +4,7 @@
  */
 
 #import "KKOnScreenControl.h"
-#import "NSColor+KKColors.h"
+#import "../../Style/NSColor+KKColors.h"
 #import <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKLog.h>
