@@ -3,40 +3,16 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import AppKit
-import Combine
 import CoreMedia
 import Foundation
-import ProExtensionHost
 
-class FCPModel: ObservableObject {
+enum FCPXMLBuilder {
 
-	@Published var timelineDuration: String = "—"
-
-	func updateFromTimeline() {
-		let host = ProExtensionHostSingleton() as! FCPXHost
-		guard let timeline = host.timeline else {
-			timelineDuration = "—"
-			return
-		}
-		let seconds = CMTimeGetSeconds(timeline.sequenceTimeRange.duration)
-		if seconds.isNaN || seconds < 0 {
-			timelineDuration = "—"
-		} else {
-			timelineDuration = String(format: "%.2fs", seconds)
-		}
-	}
-
-	func insertTitle() {
-		let host = ProExtensionHostSingleton() as! FCPXHost
-		let sequence = host.timeline?.activeSequence
-		let frameDuration = sequence?.frameDuration ?? CMTime(value: 1, timescale: 30)
+	static func titlesXML(words: [String], frameDuration: CMTime) -> String {
 		let frameValue = frameDuration.value
 		let timescale = frameDuration.timescale
 
 		let wordDurationSecs = 0.5
-		let words = "hello from keyframeless x".split(separator: " ").map(String.init)
-
 		let framesPerWord = Int(round(wordDurationSecs * Double(timescale) / Double(frameValue)))
 		let ticksPerWord = framesPerWord * Int(frameValue)
 
@@ -118,7 +94,7 @@ class FCPModel: ObservableObject {
 				"""
 		}.joined(separator: "\n")
 
-		let fcpxml = """
+		return """
 			<?xml version="1.0" encoding="UTF-8"?>
 			<!DOCTYPE fcpxml>
 			<fcpxml version="1.14">
@@ -143,11 +119,6 @@ class FCPModel: ObservableObject {
 			  </library>
 			</fcpxml>
 			"""
-
-		let tmpURL = FileManager.default.temporaryDirectory
-			.appendingPathComponent("keyframeless_title.fcpxml")
-		try? fcpxml.write(to: tmpURL, atomically: true, encoding: .utf8)
-		NSWorkspace.shared.open(tmpURL)
 	}
 
 }

@@ -10,7 +10,7 @@ import SwiftUI
 
 @objc class Keyframeless_X_FCPViewController: NSViewController {
 
-	private let model = FCPModel()
+	private let model = CaptionsModel()
 
 	override func loadView() {
 		view = NSView()
@@ -20,7 +20,7 @@ import SwiftUI
 	override func viewDidLoad() {
 		super.viewDidLoad()
 
-		let hostingVC = NSHostingController(rootView: ContentView(model: model))
+		let hostingVC = NSHostingController(rootView: AppShell(captionsModel: model))
 		addChild(hostingVC)
 		hostingVC.view.translatesAutoresizingMaskIntoConstraints = false
 		view.addSubview(hostingVC.view)
@@ -31,8 +31,7 @@ import SwiftUI
 			hostingVC.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
 		])
 
-		let host = ProExtensionHostSingleton() as! FCPXHost
-		host.timeline?.add(self)
+		FCPHost.shared.timeline?.add(self)
 		model.updateFromTimeline()
 	}
 
@@ -43,12 +42,11 @@ import SwiftUI
 
 	override func viewWillDisappear() {
 		super.viewWillDisappear()
-		let host = ProExtensionHostSingleton() as! FCPXHost
-		host.timeline?.remove(self)
+		FCPHost.shared.timeline?.remove(self)
 	}
 
 	@objc var hostInfoString: String {
-		let host = ProExtensionHostSingleton() as! FCPXHost
+		let host = FCPHost.shared
 		return String(format: "%@ %@", host.name, host.versionString)
 	}
 
