@@ -17,6 +17,26 @@
 #include <FxPlug/FxTypes.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
+#import <objc/runtime.h>
+
+// FxPlug calls createViewForParameterID: on a fresh plugin instance, not the
+// one that ran addParametersWithError:. Store parameter metadata at class level
+// (keyed by the concrete plugin class) so any instance can look it up.
+static const void *const kKKSepTexts = &kKKSepTexts;
+static const void *const kKKSepIcons = &kKKSepIcons;
+static const void *const kKKInfoTexts = &kKKInfoTexts;
+static const void *const kKKInfoAttrTexts = &kKKInfoAttrTexts;
+static const void *const kKKInfoIcons = &kKKInfoIcons;
+
+static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
+                                                            const void *key) {
+  NSMutableDictionary *dict = objc_getAssociatedObject(cls, key);
+  if (!dict) {
+    dict = [NSMutableDictionary new];
+    objc_setAssociatedObject(cls, key, dict, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  }
+  return dict;
+}
 
 // ---------------------------------------------------------------------------
 // Animation curve functions
@@ -71,16 +91,7 @@ static double kkEaseInSpring(double t) {
 @interface KKPlugin () <FxCustomParameterViewHost_v2>
 @end
 
-@implementation KKPlugin {
-  NSMutableDictionary<NSNumber *, NSString *> *_infoParameterTexts;
-  NSMutableDictionary<NSNumber *, NSAttributedString *>
-      *_infoParameterAttributedTexts;
-  NSMutableDictionary<NSNumber *, NSBezierPath *> *_infoParameterIcons;
-  // Separator parameters: maps parameterID → optional text (empty string = no
-  // label)
-  NSMutableDictionary<NSNumber *, NSString *> *_separatorParameterTexts;
-  NSMutableDictionary<NSNumber *, NSBezierPath *> *_separatorParameterIcons;
-}
+@implementation KKPlugin
 
 + (id)servicePrincipalDelegate {
   return [KKPrincipalDelegate shared];
@@ -90,11 +101,6 @@ static double kkEaseInSpring(double t) {
   self = [super init];
   if (self) {
     _apiManager = apiManager;
-    _infoParameterTexts = [[NSMutableDictionary alloc] init];
-    _infoParameterAttributedTexts = [[NSMutableDictionary alloc] init];
-    _infoParameterIcons = [[NSMutableDictionary alloc] init];
-    _separatorParameterTexts = [[NSMutableDictionary alloc] init];
-    _separatorParameterIcons = [[NSMutableDictionary alloc] init];
   }
   return self;
 }
@@ -371,27 +377,21 @@ static double kkEaseInSpring(double t) {
                      parameterID:(UInt32)parameterID
                          withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                            error:(NSError **)error {
-  _infoParameterTexts[@(parameterID)] = [text copy];
+  kkClassRegistry([self class], kKKInfoTexts)[@(parameterID)] = [text copy];
   if (icon) {
-    _infoParameterIcons[@(parameterID)] = icon;
+    kkClassRegistry([self class], kKKInfoIcons)[@(parameterID)] = icon;
   }
 
-// Suppress non null error on `defaultValue:nil` - this is only a info parameter
-// row
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wnonnull"
   if (![paramAPI
           addCustomParameterWithName:@"" // If not empty pushes entire control
                                          // down when FULL_WIDTH
                          parameterID:parameterID
-                        defaultValue:nil
+                        defaultValue:@(parameterID)
                       parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
                                      kFxParameterFlag_CUSTOM_UI |
                                      kFxParameterFlag_USE_FULL_VIEW_WIDTH |
                                      kFxParameterFlag_DISABLED]) {
-#pragma clang diagnostic pop
-
-    _infoParameterTexts[@(parameterID)] = nil;
+    kkClassRegistry([self class], kKKInfoTexts)[@(parameterID)] = nil;
     if (error != NULL) {
       *error = [NSError
           errorWithDomain:@"co.overpolish.keyframeless.error"
@@ -413,24 +413,20 @@ static double kkEaseInSpring(double t) {
                                    withAPI:
                                        (id<FxParameterCreationAPI_v5>)paramAPI
                                      error:(NSError **)error {
-  _infoParameterAttributedTexts[@(parameterID)] = [text copy];
+  kkClassRegistry([self class], kKKInfoAttrTexts)[@(parameterID)] = [text copy];
   if (icon) {
-    _infoParameterIcons[@(parameterID)] = icon;
+    kkClassRegistry([self class], kKKInfoIcons)[@(parameterID)] = icon;
   }
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wnonnull"
   if (![paramAPI
           addCustomParameterWithName:@""
                          parameterID:parameterID
-                        defaultValue:nil
+                        defaultValue:@(parameterID)
                       parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
                                      kFxParameterFlag_CUSTOM_UI |
                                      kFxParameterFlag_USE_FULL_VIEW_WIDTH |
                                      kFxParameterFlag_DISABLED]) {
-#pragma clang diagnostic pop
-
-    _infoParameterAttributedTexts[@(parameterID)] = nil;
+    kkClassRegistry([self class], kKKInfoAttrTexts)[@(parameterID)] = nil;
     if (error != NULL) {
       *error = [NSError
           errorWithDomain:@"co.overpolish.keyframeless.error"
@@ -451,24 +447,21 @@ static double kkEaseInSpring(double t) {
                           parameterID:(UInt32)parameterID
                               withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                                 error:(NSError **)error {
-  _separatorParameterTexts[@(parameterID)] = [text copy] ?: @"";
+  kkClassRegistry([self class], kKKSepTexts)[@(parameterID)] =
+      [text copy] ?: @"";
   if (icon) {
-    _separatorParameterIcons[@(parameterID)] = icon;
+    kkClassRegistry([self class], kKKSepIcons)[@(parameterID)] = icon;
   }
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wnonnull"
   if (![paramAPI
           addCustomParameterWithName:@""
                          parameterID:parameterID
-                        defaultValue:nil
+                        defaultValue:@(parameterID)
                       parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
                                      kFxParameterFlag_CUSTOM_UI |
                                      kFxParameterFlag_USE_FULL_VIEW_WIDTH |
                                      kFxParameterFlag_DISABLED]) {
-#pragma clang diagnostic pop
-
-    _separatorParameterTexts[@(parameterID)] = nil;
+    kkClassRegistry([self class], kKKSepTexts)[@(parameterID)] = nil;
     if (error != NULL) {
       *error = [NSError errorWithDomain:@"co.overpolish.keyframeless.error"
                                    code:1
@@ -484,31 +477,32 @@ static double kkEaseInSpring(double t) {
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
-  NSString *separatorText = _separatorParameterTexts[@(parameterID)];
+  NSString *separatorText =
+      kkClassRegistry([self class], kKKSepTexts)[@(parameterID)];
   if (separatorText) {
-    KKSeparatorParameterView *sepView = [[KKSeparatorParameterView alloc]
+    return [[KKSeparatorParameterView alloc]
         initWithText:(separatorText.length > 0 ? separatorText : nil)
-                icon:_separatorParameterIcons[@(parameterID)]];
-    return sepView;
+                icon:kkClassRegistry([self class],
+                                     kKKSepIcons)[@(parameterID)]];
   }
 
   NSAttributedString *attributedText =
-      _infoParameterAttributedTexts[@(parameterID)];
+      kkClassRegistry([self class], kKKInfoAttrTexts)[@(parameterID)];
   if (attributedText) {
     KKInfoParameterView *infoView =
         [[KKInfoParameterView alloc] initWithAttributedText:attributedText];
-    infoView.icon = _infoParameterIcons[@(parameterID)];
+    infoView.icon = kkClassRegistry([self class], kKKInfoIcons)[@(parameterID)];
     return infoView;
   }
 
-  NSString *text = _infoParameterTexts[@(parameterID)];
+  NSString *text = kkClassRegistry([self class], kKKInfoTexts)[@(parameterID)];
   if (!text) {
     return nil;
   }
 
   KKInfoParameterView *infoView =
       [[KKInfoParameterView alloc] initWithText:text];
-  infoView.icon = _infoParameterIcons[@(parameterID)];
+  infoView.icon = kkClassRegistry([self class], kKKInfoIcons)[@(parameterID)];
   return infoView;
 }
 
