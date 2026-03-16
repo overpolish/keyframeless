@@ -97,7 +97,7 @@ private struct PillTabItem: View {
 
 private struct KKSeparatorViewRepresentable: NSViewRepresentable {
 	var text: String? = nil
-	var icon: NSBezierPath? = nil
+	var icon: NSImage? = nil
 
 	func makeNSView(context: Context) -> KKSeparatorView {
 		KKSeparatorView(text: text, icon: icon)
@@ -111,7 +111,7 @@ private struct KKSeparatorViewRepresentable: NSViewRepresentable {
 
 private struct KKAlertViewRepresentable: NSViewRepresentable {
 	let text: String
-	var icon: NSBezierPath? = nil
+	var icon: NSImage? = nil
 
 	func makeNSView(context: Context) -> KKAlertView {
 		KKAlertView(text: text)
@@ -130,8 +130,11 @@ struct CaptionsView: View {
 		VStack(spacing: KKSpacingLG) {
 			Spacer()
 			KKAlertViewRepresentable(
-				text: "Hello from KKAlertView", icon: KKIcons.info())
-			KKSeparatorViewRepresentable(text: "Timer", icon: KKIcons.timer())
+				text: "Hello from KKAlertView",
+				icon: NSImage(systemSymbolName: "info.circle", accessibilityDescription: nil))
+			KKSeparatorViewRepresentable(
+				text: "Timer",
+				icon: NSImage(systemSymbolName: "timer", accessibilityDescription: nil))
 			Button("Insert Title") {
 				model.insertTitle()
 			}

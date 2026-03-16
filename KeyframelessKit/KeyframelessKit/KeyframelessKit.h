@@ -11,12 +11,10 @@ FOUNDATION_EXPORT double KeyframelessKitVersionNumber; //! Version number
 FOUNDATION_EXPORT const unsigned char
     KeyframelessKitVersionString[]; //! Version string
 
+#import <KeyframelessKit/KKAlertView.h>
 #import <KeyframelessKit/KKArcOSC.h>
 #import <KeyframelessKit/KKConstants.h>
 #import <KeyframelessKit/KKHostInfo.h>
-#import <KeyframelessKit/KKIcon.h>
-#import <KeyframelessKit/KKIcons.h>
-#import <KeyframelessKit/KKAlertView.h>
 #import <KeyframelessKit/KKKbd.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>

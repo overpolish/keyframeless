@@ -4,17 +4,16 @@
  */
 
 #import "KKPlugin.h"
-#import "../Icons/KKIcons.h"
-#import "KKConstants.h"
 #import "../Views/KKAlertView.h"
 #import "../Views/KKKbd.h"
 #import "../Views/KKSeparatorView.h"
+#import "KKConstants.h"
 #import "KKHostInfo.h"
-#include <AppKit/AppKit.h>
-#include <AppKit/NSView.h>
-#include <Foundation/Foundation.h>
+#import <AppKit/AppKit.h>
+#import <AppKit/NSView.h>
+#import <Foundation/Foundation.h>
 #import <FxPlug/FxPlugSDK.h>
-#include <FxPlug/FxTypes.h>
+#import <FxPlug/FxTypes.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 #import <objc/runtime.h>
@@ -212,11 +211,14 @@ static double kkEaseInSpring(double t) {
 
 - (BOOL)addAnimationParametersWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                                 error:(NSError **)error {
-  if (![self addSeparatorParameterWithText:@"Timing"
-                                      icon:[KKIcons timer]
-                               parameterID:kKKParamAnimationSeparator
-                                   withAPI:paramAPI
-                                     error:error]) {
+  if (![self
+          addSeparatorParameterWithText:@"Timing"
+                                   icon:[NSImage
+                                            imageWithSystemSymbolName:@"timer"
+                                             accessibilityDescription:nil]
+                            parameterID:kKKParamAnimationSeparator
+                                withAPI:paramAPI
+                                  error:error]) {
     return NO;
   }
 
@@ -373,7 +375,7 @@ static double kkEaseInSpring(double t) {
 }
 
 - (BOOL)addInfoParameterWithText:(NSString *)text
-                            icon:(nullable NSBezierPath *)icon
+                            icon:(nullable NSImage *)icon
                      parameterID:(UInt32)parameterID
                          withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                            error:(NSError **)error {
@@ -408,7 +410,7 @@ static double kkEaseInSpring(double t) {
 }
 
 - (BOOL)addInfoParameterWithAttributedText:(NSAttributedString *)text
-                                      icon:(nullable NSBezierPath *)icon
+                                      icon:(nullable NSImage *)icon
                                parameterID:(UInt32)parameterID
                                    withAPI:
                                        (id<FxParameterCreationAPI_v5>)paramAPI
@@ -443,7 +445,7 @@ static double kkEaseInSpring(double t) {
 }
 
 - (BOOL)addSeparatorParameterWithText:(nullable NSString *)text
-                                 icon:(nullable NSBezierPath *)icon
+                                 icon:(nullable NSImage *)icon
                           parameterID:(UInt32)parameterID
                               withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                                 error:(NSError **)error {
@@ -500,8 +502,7 @@ static double kkEaseInSpring(double t) {
     return nil;
   }
 
-  KKAlertView *infoView =
-      [[KKAlertView alloc] initWithText:text];
+  KKAlertView *infoView = [[KKAlertView alloc] initWithText:text];
   infoView.icon = kkClassRegistry([self class], kKKInfoIcons)[@(parameterID)];
   return infoView;
 }

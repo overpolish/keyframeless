@@ -4,24 +4,22 @@
  */
 
 #import "KKAlertView.h"
-#import "../Icons/KKIcon.h"
-#import "../Icons/KKIcons.h"
 #import "../Style/KKFonts.h"
 #import "../Style/KKTokens.h"
-#import "KKHostInfo.h"
 #import "../Style/NSColor+KKColors.h"
+#import "KKHostInfo.h"
 #import <AppKit/AppKit.h>
-#include <AppKit/NSView.h>
+#import <AppKit/NSView.h>
 #import <CoreFoundation/CFCGTypes.h>
 #import <Foundation/Foundation.h>
 #import <KeyframelessKit/KKLog.h>
-#include <objc/objc.h>
+#import <objc/objc.h>
 
 static const CGFloat KKAlertViewHeight = KKInspectorRowHeight * 2;
 
 @implementation KKAlertView {
   NSTextField *_label;
-  KKIcon *_iconView;
+  NSImageView *_iconView;
   KKLog *_log;
 }
 
@@ -64,9 +62,11 @@ static const CGFloat KKAlertViewHeight = KKInspectorRowHeight * 2;
     contentView.layer.masksToBounds = YES;
     [self addSubview:contentView];
 
-    _iconView = [[KKIcon alloc] initWithPath:Nil strokeColor:_color];
+    _iconView = [[NSImageView alloc] init];
     _iconView.hidden = YES;
     _iconView.translatesAutoresizingMaskIntoConstraints = NO;
+    _iconView.imageScaling = NSImageScaleProportionallyUpOrDown;
+    _iconView.contentTintColor = _color;
     [contentView addSubview:_iconView];
 
     _label = [NSTextField wrappingLabelWithString:_text];
@@ -117,18 +117,16 @@ static const CGFloat KKAlertViewHeight = KKInspectorRowHeight * 2;
   [self setFrameSize:NSMakeSize(self.frame.size.width, 0)];
 }
 
-- (void)setIcon:(NSBezierPath *)icon {
+- (void)setIcon:(NSImage *)icon {
   _icon = icon;
-  _iconView.path = icon;
+  _iconView.image = icon;
   _iconView.hidden = (icon == nil);
-  [_iconView setNeedsDisplay:YES];
 }
 
 - (void)setColor:(NSColor *)color {
   _color = color;
   _label.textColor = color;
-  _iconView.strokeColor = color;
-  [_iconView setNeedsDisplay:YES];
+  _iconView.contentTintColor = color;
 }
 
 @end

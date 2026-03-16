@@ -4,11 +4,10 @@
  */
 
 #import "KKSeparatorView.h"
-#import "../Icons/KKIcon.h"
 #import "../Style/KKFonts.h"
 #import "../Style/KKTokens.h"
-#import "KKHostInfo.h"
 #import "../Style/NSColor+KKColors.h"
+#import "KKHostInfo.h"
 #import <AppKit/AppKit.h>
 
 static const CGFloat KKSeparatorViewHeight = KKInspectorRowHeight;
@@ -17,7 +16,7 @@ static const CGFloat KKSeparatorLineHeight = 1.0;
 @implementation KKSeparatorView {
   NSView *_leftLine;
   NSView *_rightLine;
-  KKIcon *_iconView;
+  NSImageView *_iconView;
   NSTextField *_label;
   // Stack holding icon + label; collapses to zero width when both are hidden
   NSStackView *_contentStack;
@@ -27,9 +26,8 @@ static const CGFloat KKSeparatorLineHeight = 1.0;
   return [self initWithText:nil icon:nil];
 }
 
-- (instancetype)initWithText:(NSString *)text icon:(NSBezierPath *)icon {
-  self = [super
-      initWithFrame:NSMakeRect(0, 0, 0.0, KKSeparatorViewHeight)];
+- (instancetype)initWithText:(NSString *)text icon:(NSImage *)icon {
+  self = [super initWithFrame:NSMakeRect(0, 0, 0.0, KKSeparatorViewHeight)];
   if (self) {
     _text = [text copy];
     _icon = icon;
@@ -62,8 +60,10 @@ static const CGFloat KKSeparatorLineHeight = 1.0;
     _rightLine = [self _makeLine];
     [contentView addSubview:_rightLine];
 
-    _iconView = [[KKIcon alloc] initWithPath:nil strokeColor:labelColor];
+    _iconView = [[NSImageView alloc] init];
     _iconView.translatesAutoresizingMaskIntoConstraints = NO;
+    _iconView.imageScaling = NSImageScaleProportionallyUpOrDown;
+    _iconView.contentTintColor = labelColor;
     [NSLayoutConstraint activateConstraints:@[
       [_iconView.widthAnchor
           constraintEqualToConstant:[KKFonts inspectorIconSize]],
@@ -121,7 +121,7 @@ static const CGFloat KKSeparatorLineHeight = 1.0;
     // Apply initial values — triggers detach logic via hidden=YES
     _iconView.hidden = (icon == nil);
     if (icon) {
-      _iconView.path = icon;
+      _iconView.image = icon;
     }
 
     _label.hidden = (text.length == 0);
@@ -142,29 +142,25 @@ static const CGFloat KKSeparatorLineHeight = 1.0;
   return line;
 }
 
-#pragma mark - Property setters
-
 - (void)setText:(NSString *)text {
   _text = [text copy];
   _label.stringValue = text ?: @"";
   _label.hidden = (text.length == 0);
 }
 
-- (void)setIcon:(NSBezierPath *)icon {
+- (void)setIcon:(NSImage *)icon {
   _icon = icon;
-  _iconView.path = icon;
+  _iconView.image = icon;
   _iconView.hidden = (icon == nil);
-  [_iconView setNeedsDisplay:YES];
 }
 
 - (void)setColor:(NSColor *)color {
   _color = color;
   _label.textColor = color;
-  _iconView.strokeColor = color;
+  _iconView.contentTintColor = color;
   CGColorRef lineColor = [[color colorWithAlphaComponent:0.3] CGColor];
   _leftLine.layer.backgroundColor = lineColor;
   _rightLine.layer.backgroundColor = lineColor;
-  [_iconView setNeedsDisplay:YES];
 }
 
 @end
