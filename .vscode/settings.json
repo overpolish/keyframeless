@@ -69,6 +69,7 @@
     "synthesize",
     "texcoord",
     "Tileable",
+    "titlebar",
     "Toggleable",
     "uint",
     "unhide",
