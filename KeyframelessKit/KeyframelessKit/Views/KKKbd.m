@@ -4,8 +4,8 @@
  */
 
 #import "KKKbd.h"
-#import "../KKTokens.h"
-#import "../NSColor+KKColors.h"
+#import "../Style/KKTokens.h"
+#import "../Style/NSColor+KKColors.h"
 
 static const CGFloat KKKbdHorizontalPadding = 3.0;
 static const CGFloat KKKbdVerticalPadding = 0.5;

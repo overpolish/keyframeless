@@ -4,7 +4,7 @@
  */
 
 #import "KKIcon.h"
-#import "NSColor+KKColors.h"
+#import "../Style/NSColor+KKColors.h"
 
 static const CGFloat KKIconViewBoxSize = 24.0;
 

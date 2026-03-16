@@ -95,29 +95,29 @@ private struct PillTabItem: View {
 	}
 }
 
-private struct KKSeparatorParameterViewRepresentable: NSViewRepresentable {
+private struct KKSeparatorViewRepresentable: NSViewRepresentable {
 	var text: String? = nil
 	var icon: NSBezierPath? = nil
 
-	func makeNSView(context: Context) -> KKSeparatorParameterView {
-		KKSeparatorParameterView(text: text, icon: icon)
+	func makeNSView(context: Context) -> KKSeparatorView {
+		KKSeparatorView(text: text, icon: icon)
 	}
 
-	func updateNSView(_ nsView: KKSeparatorParameterView, context: Context) {
+	func updateNSView(_ nsView: KKSeparatorView, context: Context) {
 		nsView.text = text
 		nsView.icon = icon
 	}
 }
 
-private struct KKInfoParameterViewRepresentable: NSViewRepresentable {
+private struct KKAlertViewRepresentable: NSViewRepresentable {
 	let text: String
 	var icon: NSBezierPath? = nil
 
-	func makeNSView(context: Context) -> KKInfoParameterView {
-		KKInfoParameterView(text: text)
+	func makeNSView(context: Context) -> KKAlertView {
+		KKAlertView(text: text)
 	}
 
-	func updateNSView(_ nsView: KKInfoParameterView, context: Context) {
+	func updateNSView(_ nsView: KKAlertView, context: Context) {
 		nsView.text = text
 		nsView.icon = icon
 	}
@@ -129,9 +129,9 @@ struct CaptionsView: View {
 	var body: some View {
 		VStack(spacing: KKSpacingLG) {
 			Spacer()
-			KKInfoParameterViewRepresentable(
-				text: "Hello from KKInfoParameterView", icon: KKIcons.info())
-			KKSeparatorParameterViewRepresentable(text: "Timer", icon: KKIcons.timer())
+			KKAlertViewRepresentable(
+				text: "Hello from KKAlertView", icon: KKIcons.info())
+			KKSeparatorViewRepresentable(text: "Timer", icon: KKIcons.timer())
 			Button("Insert Title") {
 				model.insertTitle()
 			}

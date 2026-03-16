@@ -13,7 +13,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// an icon are provided they appear centred between two line segments:
 ///   ──── [icon] [text] ────
 /// All arguments are optional; passing nil for both renders a plain divider.
-@interface KKSeparatorParameterView : NSView
+@interface KKSeparatorView : NSView
 
 - (instancetype)init;
 - (instancetype)initWithText:(nullable NSString *)text

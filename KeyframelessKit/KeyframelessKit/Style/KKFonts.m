@@ -4,7 +4,7 @@
  */
 
 #import "KKFonts.h"
-#import "Plugin/KKHostInfo.h"
+#import "../Plugin/KKHostInfo.h"
 
 @implementation KKFonts
 
