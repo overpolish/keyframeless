@@ -11,12 +11,8 @@ import ProExtensionHost
 
 	private let timelineLengthLabel = NSTextField(labelWithString: "Timeline: —")
 
-	override func awakeFromNib() {
-		super.awakeFromNib()
-	}
-
-	override var nibName: NSNib.Name? {
-		return NSNib.Name("Keyframeless_X_FCPViewController")
+	override func loadView() {
+		view = NSView()
 	}
 
 	override func viewDidLoad() {
