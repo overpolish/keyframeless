@@ -95,12 +95,43 @@ private struct PillTabItem: View {
 	}
 }
 
+private struct KKSeparatorParameterViewRepresentable: NSViewRepresentable {
+	var text: String? = nil
+	var icon: NSBezierPath? = nil
+
+	func makeNSView(context: Context) -> KKSeparatorParameterView {
+		KKSeparatorParameterView(text: text, icon: icon)
+	}
+
+	func updateNSView(_ nsView: KKSeparatorParameterView, context: Context) {
+		nsView.text = text
+		nsView.icon = icon
+	}
+}
+
+private struct KKInfoParameterViewRepresentable: NSViewRepresentable {
+	let text: String
+	var icon: NSBezierPath? = nil
+
+	func makeNSView(context: Context) -> KKInfoParameterView {
+		KKInfoParameterView(text: text)
+	}
+
+	func updateNSView(_ nsView: KKInfoParameterView, context: Context) {
+		nsView.text = text
+		nsView.icon = icon
+	}
+}
+
 struct CaptionsView: View {
 	@ObservedObject var model: FCPModel
 
 	var body: some View {
 		VStack(spacing: KKSpacingLG) {
 			Spacer()
+			KKInfoParameterViewRepresentable(
+				text: "Hello from KKInfoParameterView", icon: KKIcons.info())
+			KKSeparatorParameterViewRepresentable(text: "Timer", icon: KKIcons.timer())
 			Button("Insert Title") {
 				model.insertTitle()
 			}

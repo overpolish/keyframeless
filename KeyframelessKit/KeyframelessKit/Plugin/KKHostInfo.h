@@ -15,8 +15,10 @@ NS_ASSUME_NONNULL_BEGIN
 @interface KKHostInfo : NSObject
 
 @property(nonatomic, copy, nullable) NSString *hostID;
+@property(nonatomic, assign) BOOL isWorkflowExtension;
 
 + (BOOL)isRunningInFinalCut;
++ (BOOL)isRunningInWorkflowExtension;
 + (instancetype)shared;
 
 @end

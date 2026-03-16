@@ -5,13 +5,14 @@
 
 #import "KKSeparatorParameterView.h"
 #import "../Icons/KKIcon.h"
+#import "../KKFonts.h"
 #import "../KKTokens.h"
+#import "KKHostInfo.h"
 #import "NSColor+KKColors.h"
 #import <AppKit/AppKit.h>
 
 static const CGFloat KKSeparatorParameterViewHeight = KKInspectorRowHeight;
 static const CGFloat KKSeparatorLineHeight = 1.0;
-static const CGFloat KKSeparatorIconSize = 12.0;
 
 @implementation KKSeparatorParameterView {
   NSView *_leftLine;
@@ -64,8 +65,10 @@ static const CGFloat KKSeparatorIconSize = 12.0;
     _iconView = [[KKIcon alloc] initWithPath:nil strokeColor:labelColor];
     _iconView.translatesAutoresizingMaskIntoConstraints = NO;
     [NSLayoutConstraint activateConstraints:@[
-      [_iconView.widthAnchor constraintEqualToConstant:KKSeparatorIconSize],
-      [_iconView.heightAnchor constraintEqualToConstant:KKSeparatorIconSize],
+      [_iconView.widthAnchor
+          constraintEqualToConstant:[KKFonts inspectorIconSize]],
+      [_iconView.heightAnchor
+          constraintEqualToConstant:[KKFonts inspectorIconSize]],
     ]];
 
     _label = [NSTextField labelWithString:@""];
@@ -73,8 +76,7 @@ static const CGFloat KKSeparatorIconSize = 12.0;
     _label.selectable = NO;
     _label.textColor = labelColor;
     _label.backgroundColor = [NSColor clearColor];
-    _label.font = [NSFont systemFontOfSize:[NSFont smallSystemFontSize]
-                                    weight:NSFontWeightLight];
+    _label.font = [KKFonts inspectorLabelFont];
     _label.lineBreakMode = NSLineBreakByClipping;
     _label.maximumNumberOfLines = 1;
 

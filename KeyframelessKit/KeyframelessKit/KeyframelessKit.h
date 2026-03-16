@@ -13,6 +13,7 @@ FOUNDATION_EXPORT const unsigned char
 
 #import <KeyframelessKit/KKArcOSC.h>
 #import <KeyframelessKit/KKConstants.h>
+#import <KeyframelessKit/KKHostInfo.h>
 #import <KeyframelessKit/KKIcon.h>
 #import <KeyframelessKit/KKIcons.h>
 #import <KeyframelessKit/KKInfoParameterView.h>

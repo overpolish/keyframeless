@@ -6,6 +6,7 @@
 #import "KKInfoParameterView.h"
 #import "../Icons/KKIcon.h"
 #import "../Icons/KKIcons.h"
+#import "../KKFonts.h"
 #import "../KKTokens.h"
 #import "KKHostInfo.h"
 #import "NSColor+KKColors.h"
@@ -17,7 +18,6 @@
 #include <objc/objc.h>
 
 static const CGFloat KKInfoParameterViewHeight = KKInspectorRowHeight * 2;
-static const CGFloat KKInfoParameterViewIconSize = 12.0;
 
 @implementation KKInfoParameterView {
   NSTextField *_label;
@@ -74,7 +74,7 @@ static const CGFloat KKInfoParameterViewIconSize = 12.0;
     _label.selectable = NO;
     _label.textColor = _color;
     _label.backgroundColor = [NSColor clearColor];
-    _label.font = [KKInfoParameterView labelFont];
+    _label.font = [KKFonts inspectorLabelFont];
     _label.lineBreakMode = NSLineBreakByWordWrapping;
     _label.maximumNumberOfLines = 2;
     [contentView addSubview:_label];
@@ -89,9 +89,9 @@ static const CGFloat KKInfoParameterViewIconSize = 12.0;
                          constant:-KKInspectorHorizontalInset],
 
       [_iconView.widthAnchor
-          constraintEqualToConstant:KKInfoParameterViewIconSize],
+          constraintEqualToConstant:[KKFonts inspectorIconSize]],
       [_iconView.heightAnchor
-          constraintEqualToConstant:KKInfoParameterViewIconSize],
+          constraintEqualToConstant:[KKFonts inspectorIconSize]],
       [_iconView.leadingAnchor constraintEqualToAnchor:contentView.leadingAnchor
                                               constant:KKSpacingMD * 1.5],
       [_iconView.topAnchor constraintEqualToAnchor:contentView.topAnchor
@@ -109,16 +109,6 @@ static const CGFloat KKInfoParameterViewIconSize = 12.0;
   }
 
   return self;
-}
-
-+ (NSFont *)labelFont {
-  static NSFont *font = nil;
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^{
-    font = [NSFont systemFontOfSize:[NSFont smallSystemFontSize]
-                             weight:NSFontWeightLight];
-  });
-  return font;
 }
 
 - (void)setText:(NSString *)text {

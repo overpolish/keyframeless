@@ -4,6 +4,7 @@
  */
 
 import Cocoa
+import KeyframelessKit
 import ProExtensionHost
 import SwiftUI
 
@@ -13,6 +14,7 @@ import SwiftUI
 
 	override func loadView() {
 		view = NSView()
+		KKHostInfo.shared().isWorkflowExtension = true
 	}
 
 	override func viewDidLoad() {

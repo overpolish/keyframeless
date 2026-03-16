@@ -11,6 +11,10 @@
   return [[self shared].hostID isEqualToString:@"com.apple.FinalCut"];
 }
 
++ (BOOL)isRunningInWorkflowExtension {
+  return [self shared].isWorkflowExtension;
+}
+
 + (instancetype)shared {
   static KKHostInfo *instance = nil;
   static dispatch_once_t onceToken;
