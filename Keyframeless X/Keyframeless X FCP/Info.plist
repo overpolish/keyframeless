@@ -10,6 +10,13 @@
 		<string>com.apple.FinalCut.WorkflowExtension</string>
 		<key>ProExtensionPrincipalViewControllerClass</key>
 		<string>$(PRODUCT_MODULE_NAME).Keyframeless_X_FCPViewController</string>
+		<key>ProExtensionAttributes</key>
+		<dict>
+			<key>ContentViewMinimumWidth</key>
+			<integer>800</integer>
+			<key>ContentViewMinimumHeight</key>
+			<integer>600</integer>
+		</dict>
 	</dict>
 </dict>
 </plist>
