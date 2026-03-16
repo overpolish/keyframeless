@@ -38,40 +38,40 @@ static const CGFloat KKKbdFontSize = 9.0;
 
   NSSize textSize = [key sizeWithAttributes:textAttrs];
 
-  CGFloat width = ceil(textSize.width) + KKKbdHorizontalPadding * 2 +
-                  KKBorderWidthHairline * 2;
-  CGFloat height = ceil(textSize.height) + KKKbdVerticalPadding * 2 +
-                   KKBorderWidthHairline * 2;
+  CGFloat width =
+      ceil(textSize.width) + KKKbdHorizontalPadding * 2 + KKBorderWidthXS * 2;
+  CGFloat height =
+      ceil(textSize.height) + KKKbdVerticalPadding * 2 + KKBorderWidthXS * 2;
   NSSize imageSize = NSMakeSize(width, height);
 
   NSColor *bgColor = [color colorWithAlphaComponent:0.1];
   NSColor *borderColor = [color colorWithAlphaComponent:0.25];
 
-  NSImage *image =
-      [NSImage imageWithSize:imageSize
-                     flipped:NO
-              drawingHandler:^BOOL(NSRect rect) {
-                NSRect inset = NSInsetRect(rect, KKBorderWidthHairline * 0.5,
-                                           KKBorderWidthHairline * 0.5);
-                NSBezierPath *path =
-                    [NSBezierPath bezierPathWithRoundedRect:inset
-                                                    xRadius:KKRadiusSM
-                                                    yRadius:KKRadiusSM];
+  NSImage *image = [NSImage
+       imageWithSize:imageSize
+             flipped:NO
+      drawingHandler:^BOOL(NSRect rect) {
+        NSRect inset =
+            NSInsetRect(rect, KKBorderWidthXS * 0.5, KKBorderWidthXS * 0.5);
+        NSBezierPath *path =
+            [NSBezierPath bezierPathWithRoundedRect:inset
+                                            xRadius:KKRadiusSM
+                                            yRadius:KKRadiusSM];
 
-                [bgColor set];
-                [path fill];
+        [bgColor set];
+        [path fill];
 
-                path.lineWidth = KKBorderWidthHairline;
-                [borderColor set];
-                [path stroke];
+        path.lineWidth = KKBorderWidthXS;
+        [borderColor set];
+        [path stroke];
 
-                NSPoint textOrigin =
-                    NSMakePoint(KKKbdHorizontalPadding + KKBorderWidthHairline,
-                                KKKbdVerticalPadding + KKBorderWidthHairline);
-                [key drawAtPoint:textOrigin withAttributes:textAttrs];
+        NSPoint textOrigin =
+            NSMakePoint(KKKbdHorizontalPadding + KKBorderWidthXS,
+                        KKKbdVerticalPadding + KKBorderWidthXS);
+        [key drawAtPoint:textOrigin withAttributes:textAttrs];
 
-                return YES;
-              }];
+        return YES;
+      }];
 
   NSTextAttachment *attachment = [[NSTextAttachment alloc] init];
   attachment.image = image;

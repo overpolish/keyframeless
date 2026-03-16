@@ -291,7 +291,7 @@
 				<parameter name="Mix" id="10001" flags="12901679104" default="1" value="1"/>
 				<parameter name="Flip" id="10002" flags="12905938976" default="0" value="0"/>
 				<parameter name="Input Points" id="10003" flags="12905938976" default="1" value="1"/>
-				<parameter name="Publish OSC" id="10005" flags="12901679104" default="0" value="0"/>
+				<parameter name="Publish OSC" id="10005" flags="12901679104" default="0" value="1"/>
 			</filter>
 		</scenenode>
 		<aspectRatio>1</aspectRatio>

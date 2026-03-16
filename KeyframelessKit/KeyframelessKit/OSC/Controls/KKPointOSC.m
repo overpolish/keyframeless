@@ -16,8 +16,8 @@ static NSString *kPointOSCPluginID = @"co.overpolish.keyframelesskit.PointOSC";
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
   self = [super initWithAPIManager:apiManager];
   if (self) {
-    _oscRadius = KKOSCPointRadius;
-    _outlineWidth = KKOSCOutlineWidth;
+    _oscRadius = KKRadiusMD;
+    _outlineWidth = KKBorderWidthXS;
   }
   return self;
 }
