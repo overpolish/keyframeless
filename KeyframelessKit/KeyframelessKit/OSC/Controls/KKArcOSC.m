@@ -14,9 +14,9 @@
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
   self = [super initWithAPIManager:apiManager];
   if (self) {
-    _oscRadius = KKOSCArcRadius;
-    _strokeWidth = KKOSCArcStrokeWidth;
-    _outlineWidth = KKOSCOutlineWidth;
+    _oscRadius = 23.0f;
+    _strokeWidth = 10.0f;
+    _outlineWidth = KKBorderWidthXS;
   }
   return self;
 }

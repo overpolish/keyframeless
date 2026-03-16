@@ -31,6 +31,7 @@
 				Metal/KKMetalDeviceCache.h,
 				Metal/KKRenderPrimitives.h,
 				Metal/KKShaderTypes.h,
+				"NSColor+KKColors.h",
 				OSC/Base/KKOnScreenControl.h,
 				OSC/Controls/KKArcOSC.h,
 				OSC/Controls/KKPointOSC.h,

@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F28BD2302F68595000C5F6B7 /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F28BD22F2F68595000C5F6B7 /* KeyframelessKit.framework */; };
+		F28BD2312F68595000C5F6B7 /* KeyframelessKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F28BD22F2F68595000C5F6B7 /* KeyframelessKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F29C84ED2F6820750073B1A9 /* Keyframeless X FCP.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F29C84E02F6820750073B1A9 /* Keyframeless X FCP.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -21,6 +23,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		F28BD2322F68595000C5F6B7 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				F28BD2312F68595000C5F6B7 /* KeyframelessKit.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F29C84F22F6820750073B1A9 /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -35,6 +48,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F28BD22F2F68595000C5F6B7 /* KeyframelessKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = KeyframelessKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F29C84C62F68205E0073B1A9 /* Keyframeless X.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Keyframeless X.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F29C84E02F6820750073B1A9 /* Keyframeless X FCP.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Keyframeless X FCP.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -77,17 +91,27 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F28BD2302F68595000C5F6B7 /* KeyframelessKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		F28BD22E2F68595000C5F6B7 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				F28BD22F2F68595000C5F6B7 /* KeyframelessKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		F29C84BD2F68205E0073B1A9 = {
 			isa = PBXGroup;
 			children = (
 				F29C84C82F68205E0073B1A9 /* Keyframeless X */,
 				F29C84E12F6820750073B1A9 /* Keyframeless X FCP */,
+				F28BD22E2F68595000C5F6B7 /* Frameworks */,
 				F29C84C72F68205E0073B1A9 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -135,6 +159,7 @@
 				F29C84DC2F6820750073B1A9 /* Sources */,
 				F29C84DD2F6820750073B1A9 /* Frameworks */,
 				F29C84DE2F6820750073B1A9 /* Resources */,
+				F28BD2322F68595000C5F6B7 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
