@@ -7,10 +7,9 @@
 #import "Constants.h"
 #import "ShaderTypes.h"
 #import <AppKit/NSView.h>
-#include <CoreMedia/CMTime.h>
+#import <CoreMedia/CMTime.h>
 #import <Foundation/Foundation.h>
 #import <IOSurface/IOSurfaceObjC.h>
-#import <KeyframelessKit/KKIcons.h>
 #import <KeyframelessKit/KKKbd.h>
 #import <KeyframelessKit/KKLog.h>
 #import <QuartzCore/QuartzCore.h>
@@ -84,11 +83,14 @@ typedef struct {
       initWithString:@"Use on a Adjustment Clip "];
   [infoText appendAttributedString:[KKKbd attributedStringWithKey:@"⌥ A"]];
 
-  return [self addInfoParameterWithAttributedText:infoText
-                                             icon:[KKIcons info]
-                                      parameterID:kParamInfoUsage
-                                          withAPI:paramAPI
-                                            error:error];
+  return [self
+      addInfoParameterWithAttributedText:infoText
+                                    icon:[NSImage imageWithSystemSymbolName:
+                                                      @"info.circle"
+                                                   accessibilityDescription:nil]
+                             parameterID:kParamInfoUsage
+                                 withAPI:paramAPI
+                                   error:error];
 }
 
 - (BOOL)pluginState:(NSData **)pluginState

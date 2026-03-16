@@ -17,13 +17,13 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (instancetype)init;
 - (instancetype)initWithText:(nullable NSString *)text
-                        icon:(nullable NSBezierPath *)icon;
+                        icon:(nullable NSImage *)icon;
 
 - (instancetype)initWithFrame:(NSRect)frameRect NS_UNAVAILABLE;
 - (nullable instancetype)initWithCoder:(NSCoder *)coder NS_UNAVAILABLE;
 
 @property(nonatomic, copy, nullable) NSString *text;
-@property(nonatomic, strong, nullable) NSBezierPath *icon;
+@property(nonatomic, strong, nullable) NSImage *icon;
 @property(nonatomic, strong) NSColor *color;
 
 @end
