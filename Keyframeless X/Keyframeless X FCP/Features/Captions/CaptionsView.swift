@@ -48,7 +48,7 @@ struct CaptionsView: View {
 				}
 			}
 			.frame(maxWidth: .infinity)
-			.frame(height: 80)
+			.frame(minHeight: 80)
 			.padding(.horizontal, KKPaddingMD)
 
 			Spacer()
