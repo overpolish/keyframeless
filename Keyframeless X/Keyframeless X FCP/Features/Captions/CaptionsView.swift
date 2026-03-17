@@ -10,6 +10,7 @@ struct CaptionsView: View {
 	@ObservedObject var model: CaptionsModel
 	@StateObject private var audioPlayer = AudioPlayer()
 	@State private var audioClips: [FCPXMLParser.AudioClip] = []
+	@State private var didDrop = false
 	@State private var isTargeted = false
 
 	var body: some View {
@@ -47,12 +48,17 @@ struct CaptionsView: View {
 				Image(systemName: "arrow.down.doc")
 					.font(.title2)
 					.foregroundStyle(.secondary)
-				Text(audioClips.isEmpty ? "Drop FCP clips here" : "\(audioClips.count) clips")
-					.font(.caption)
-					.foregroundStyle(.secondary)
+				Text(
+					didDrop && audioClips.isEmpty
+						? "No dialogue found"
+						: audioClips.isEmpty ? "Drop FCP clips here" : "\(audioClips.count) clips"
+				)
+				.font(.caption)
+				.foregroundStyle(.secondary)
 			}
 			FCPDropZoneView { clips in
 				audioClips = clips
+				didDrop = true
 				isTargeted = false
 			}
 		}

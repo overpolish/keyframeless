@@ -38,29 +38,26 @@ enum FCPXMLParser {
 	static func audioClips(in doc: XMLDocument) -> [AudioClip] {
 		let assets = assetResources(in: doc)
 		var clips: [AudioClip] = []
+
+		let dialogueXPath =
+			"asset-clip[starts-with(@audioRole, 'dialogue') and not(audio-channel-source[starts-with(@role, 'effects')])]"
+
+		// Sequence/library drag: clips live inside project > sequence > spine
 		for seqNode in (try? doc.nodes(forXPath: "//project/sequence")) ?? [] {
 			guard let seq = seqNode as? XMLElement else { continue }
 			let tcStart = parseTime(seq.attribute(forName: "tcStart")?.stringValue ?? "0s")
-			let xpath =
-				"spine//asset-clip[starts-with(@audioRole, 'dialogue') and not(audio-channel-source[starts-with(@role, 'effects')])]"
-			for clipNode in (try? seq.nodes(forXPath: xpath)) ?? [] {
+			for clipNode in (try? seq.nodes(forXPath: "spine//" + dialogueXPath)) ?? [] {
 				guard let el = clipNode as? XMLElement else { continue }
-				let ref = el.attribute(forName: "ref")?.stringValue
-				let asset = ref.flatMap { assets[$0] }
-				let dur = parseTime(el.attribute(forName: "duration")?.stringValue ?? "0s")
-				let clipStart = parseTime(el.attribute(forName: "start")?.stringValue ?? "0s")
-				clips.append(
-					AudioClip(
-						name: el.attribute(forName: "name")?.stringValue ?? "clip",
-						start: projectTime(of: el, tcStart: tcStart),
-						end: projectTime(of: el, tcStart: tcStart) + dur,
-						sourceStart: clipStart - (asset?.mediaStart ?? 0),
-						sourceDuration: dur,
-						url: asset?.url,
-						bookmark: asset?.bookmark
-					))
+				clips.append(makeClip(from: el, assets: assets, tcStart: tcStart))
 			}
 		}
+
+		// Individual clip drag: asset-clips are direct children of <fcpxml> root
+		for clipNode in (try? doc.nodes(forXPath: "fcpxml/" + dialogueXPath)) ?? [] {
+			guard let el = clipNode as? XMLElement else { continue }
+			clips.append(makeClip(from: el, assets: assets, tcStart: nil))
+		}
+
 		return clips
 	}
 
@@ -90,6 +87,25 @@ enum FCPXMLParser {
 			)
 		}
 		return map
+	}
+
+	private static func makeClip(
+		from el: XMLElement, assets: [String: AssetResource], tcStart: Double?
+	) -> AudioClip {
+		let ref = el.attribute(forName: "ref")?.stringValue
+		let asset = ref.flatMap { assets[$0] }
+		let dur = parseTime(el.attribute(forName: "duration")?.stringValue ?? "0s")
+		let clipStart = parseTime(el.attribute(forName: "start")?.stringValue ?? "0s")
+		let start = tcStart.map { projectTime(of: el, tcStart: $0) } ?? 0
+		return AudioClip(
+			name: el.attribute(forName: "name")?.stringValue ?? "clip",
+			start: start,
+			end: start + dur,
+			sourceStart: clipStart - (asset?.mediaStart ?? 0),
+			sourceDuration: dur,
+			url: asset?.url,
+			bookmark: asset?.bookmark
+		)
 	}
 
 	private static func projectTime(of el: XMLElement, tcStart: Double) -> Double {
