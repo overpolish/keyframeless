@@ -21,7 +21,7 @@ final class AudioPlayer: ObservableObject {
 			return
 		}
 		stop()
-		guard let data = try? resolveData(for: clip),
+		guard let data = try? clip.data(),
 			let newPlayer = try? AVAudioPlayer(data: data)
 		else { return }
 		newPlayer.prepareToPlay()
@@ -38,23 +38,5 @@ final class AudioPlayer: ObservableObject {
 		player?.stop()
 		player = nil
 		playingURL = nil
-	}
-
-	private func resolveData(for clip: FCPXMLParser.AudioClip) throws -> Data {
-		if let bookmark = clip.bookmark {
-			var isStale = false
-			if let scopedURL = try? URL(
-				resolvingBookmarkData: bookmark,
-				options: .withSecurityScope,
-				relativeTo: nil,
-				bookmarkDataIsStale: &isStale
-			) {
-				let accessing = scopedURL.startAccessingSecurityScopedResource()
-				defer { if accessing { scopedURL.stopAccessingSecurityScopedResource() } }
-				return try Data(contentsOf: scopedURL)
-			}
-		}
-		guard let url = clip.url else { throw CocoaError(.fileNoSuchFile) }
-		return try Data(contentsOf: url)
 	}
 }
