@@ -58,12 +58,14 @@ class FCPDropTargetView: NSView {
 	}
 }
 
-struct FCPXMLParser {
+enum FCPXMLParser {
 
 	struct AudioClip {
 		let name: String
 		let start: Double
 		let end: Double
+		let sourceStart: Double
+		let sourceDuration: Double
 		let url: URL?
 		let bookmark: Data?
 	}
@@ -74,34 +76,36 @@ struct FCPXMLParser {
 		for seqNode in (try? doc.nodes(forXPath: "//project/sequence")) ?? [] {
 			guard let seq = seqNode as? XMLElement else { continue }
 			let tcStart = parseTime(seq.attribute(forName: "tcStart")?.stringValue ?? "0s")
-			for clipNode
-				in (try? seq.nodes(
-					forXPath:
-						"spine//asset-clip[starts-with(@audioRole, 'dialogue') and not(audio-channel-source[starts-with(@role, 'effects')])]"
-				)) ?? []
-			{
+			let xpath =
+				"spine//asset-clip[starts-with(@audioRole, 'dialogue') and not(audio-channel-source[starts-with(@role, 'effects')])]"
+			for clipNode in (try? seq.nodes(forXPath: xpath)) ?? [] {
 				guard let el = clipNode as? XMLElement else { continue }
-				let name = el.attribute(forName: "name")?.stringValue ?? "clip"
 				let ref = el.attribute(forName: "ref")?.stringValue
-				let start = projectTime(of: el, tcStart: tcStart)
+				let asset = ref.flatMap { assets[$0] }
 				let dur = parseTime(el.attribute(forName: "duration")?.stringValue ?? "0s")
+				let clipStart = parseTime(el.attribute(forName: "start")?.stringValue ?? "0s")
 				clips.append(
 					AudioClip(
-						name: name, start: start, end: start + dur,
-						url: ref.flatMap { assets[$0]?.url },
-						bookmark: ref.flatMap { assets[$0]?.bookmark }
+						name: el.attribute(forName: "name")?.stringValue ?? "clip",
+						start: projectTime(of: el, tcStart: tcStart),
+						end: projectTime(of: el, tcStart: tcStart) + dur,
+						sourceStart: clipStart - (asset?.mediaStart ?? 0),
+						sourceDuration: dur,
+						url: asset?.url,
+						bookmark: asset?.bookmark
 					))
 			}
 		}
 		return clips
 	}
 
-	struct AssetResource {
+	private struct AssetResource {
 		let url: URL
 		let bookmark: Data?
+		let mediaStart: Double
 	}
 
-	static func assetResources(in doc: XMLDocument) -> [String: AssetResource] {
+	private static func assetResources(in doc: XMLDocument) -> [String: AssetResource] {
 		var map: [String: AssetResource] = [:]
 		let resources = doc.rootElement()?.elements(forName: "resources").first
 		for asset in resources?.elements(forName: "asset") ?? [] {
@@ -112,26 +116,18 @@ struct FCPXMLParser {
 			else { continue }
 			let bookmarkStr = mediaRep.elements(forName: "bookmark").first?.stringValue?
 				.trimmingCharacters(in: .whitespacesAndNewlines)
-			let bookmark = bookmarkStr.flatMap {
-				Data(base64Encoded: $0, options: .ignoreUnknownCharacters)
-			}
-			map[id] = AssetResource(url: url, bookmark: bookmark)
+			map[id] = AssetResource(
+				url: url,
+				bookmark: bookmarkStr.flatMap {
+					Data(base64Encoded: $0, options: .ignoreUnknownCharacters)
+				},
+				mediaStart: parseTime(asset.attribute(forName: "start")?.stringValue ?? "0s")
+			)
 		}
 		return map
 	}
 
-	static func detectFPS(_ doc: XMLDocument) -> Double {
-		let seqFormatID = (try? doc.nodes(forXPath: "//project/sequence/@format"))?.first?
-			.stringValue
-		let xpath = seqFormatID.map { "//format[@id='\($0)']" } ?? "//format[@frameDuration]"
-		guard let el = (try? doc.nodes(forXPath: xpath))?.first as? XMLElement,
-			let frameDur = el.attribute(forName: "frameDuration")?.stringValue
-		else { return 0 }
-		let d = parseTime(frameDur)
-		return d > 0 ? 1.0 / d : 0
-	}
-
-	static func projectTime(of el: XMLElement, tcStart: Double) -> Double {
+	private static func projectTime(of el: XMLElement, tcStart: Double) -> Double {
 		let offset = parseTime(el.attribute(forName: "offset")?.stringValue ?? "0s")
 		guard let parent = el.parent as? XMLElement,
 			parent.name != "spine", parent.name != "sequence"
@@ -140,25 +136,7 @@ struct FCPXMLParser {
 		return projectTime(of: parent, tcStart: tcStart) + (offset - parentStart)
 	}
 
-	static func timecode(_ sec: Double, fps: Double) -> String {
-		guard fps > 0 else {
-			let m = Int(sec) / 60
-			let s = sec - Double(m * 60)
-			return String(format: "%d:%05.2f", m, s)
-		}
-		let totalFrames = Int(round(sec * fps))
-		let fpsInt = Int(round(fps))
-		let ff = totalFrames % fpsInt
-		let totalSecs = totalFrames / fpsInt
-		let ss = totalSecs % 60
-		let mm = (totalSecs / 60) % 60
-		let hh = totalSecs / 3600
-		return hh > 0
-			? String(format: "%d:%02d:%02d:%02d", hh, mm, ss, ff)
-			: String(format: "%d:%02d:%02d", mm, ss, ff)
-	}
-
-	static func parseTime(_ s: String) -> Double {
+	private static func parseTime(_ s: String) -> Double {
 		let raw = s.hasSuffix("s") ? String(s.dropLast()) : s
 		if let slash = raw.firstIndex(of: "/") {
 			let num = Double(raw[raw.startIndex..<slash]) ?? 0
