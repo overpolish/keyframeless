@@ -85,7 +85,12 @@ struct FCPXMLParser {
 		for seqNode in (try? doc.nodes(forXPath: "//project/sequence")) ?? [] {
 			guard let seq = seqNode as? XMLElement else { continue }
 			let tcStart = parseTime(seq.attribute(forName: "tcStart")?.stringValue ?? "0s")
-			for clipNode in (try? seq.nodes(forXPath: "spine//asset-clip[@audioRole]")) ?? [] {
+			for clipNode
+				in (try? seq.nodes(
+					forXPath:
+						"spine//asset-clip[starts-with(@audioRole, 'dialogue') and not(audio-channel-source[starts-with(@role, 'effects')])]"
+				)) ?? []
+			{
 				guard let el = clipNode as? XMLElement else { continue }
 				let name = el.attribute(forName: "name")?.stringValue ?? "clip"
 				let start = projectTime(of: el, tcStart: tcStart)
