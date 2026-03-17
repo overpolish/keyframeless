@@ -7,7 +7,7 @@ import AppKit
 import SwiftUI
 
 struct FCPDropZoneView: NSViewRepresentable {
-	var onDrop: (String) -> Void
+	var onDrop: ([FCPXMLParser.AudioClip]) -> Void
 
 	func makeNSView(context: Context) -> FCPDropTargetView {
 		let view = FCPDropTargetView()
@@ -21,7 +21,7 @@ struct FCPDropZoneView: NSViewRepresentable {
 }
 
 class FCPDropTargetView: NSView {
-	var onDrop: ((String) -> Void)?
+	var onDrop: (([FCPXMLParser.AudioClip]) -> Void)?
 
 	private let fcpPasteboardTypes: [NSPasteboard.PasteboardType] = [
 		"com.apple.finalcutpro.xml.v1-10",
@@ -49,11 +49,8 @@ class FCPDropTargetView: NSView {
 			guard let available = pasteboard.types, available.contains(type),
 				let data = pasteboard.data(forType: type)
 			else { continue }
-			do {
-				let doc = try XMLDocument(data: data, options: [])
-				onDrop?(FCPXMLParser.summarize(doc))
-			} catch {
-				onDrop?("Parse error: \(error.localizedDescription)")
+			if let doc = try? XMLDocument(data: data, options: []) {
+				onDrop?(FCPXMLParser.audioClips(in: doc))
 			}
 			return true
 		}
@@ -67,20 +64,12 @@ struct FCPXMLParser {
 		let name: String
 		let start: Double
 		let end: Double
-	}
-
-	static func summarize(_ doc: XMLDocument) -> String {
-		let fps = detectFPS(doc)
-		let clips = audioClips(in: doc)
-		guard !clips.isEmpty else { return "No audio clips found in sequence" }
-		let lines = clips.prefix(5).map {
-			"\($0.name): \(timecode($0.start, fps: fps)) → \(timecode($0.end, fps: fps))"
-		}
-		let suffix = clips.count > 5 ? "\n+ \(clips.count - 5) more" : ""
-		return lines.joined(separator: "\n") + suffix
+		let url: URL?
+		let bookmark: Data?
 	}
 
 	static func audioClips(in doc: XMLDocument) -> [AudioClip] {
+		let assets = assetResources(in: doc)
 		var clips: [AudioClip] = []
 		for seqNode in (try? doc.nodes(forXPath: "//project/sequence")) ?? [] {
 			guard let seq = seqNode as? XMLElement else { continue }
@@ -93,12 +82,42 @@ struct FCPXMLParser {
 			{
 				guard let el = clipNode as? XMLElement else { continue }
 				let name = el.attribute(forName: "name")?.stringValue ?? "clip"
+				let ref = el.attribute(forName: "ref")?.stringValue
 				let start = projectTime(of: el, tcStart: tcStart)
 				let dur = parseTime(el.attribute(forName: "duration")?.stringValue ?? "0s")
-				clips.append(AudioClip(name: name, start: start, end: start + dur))
+				clips.append(
+					AudioClip(
+						name: name, start: start, end: start + dur,
+						url: ref.flatMap { assets[$0]?.url },
+						bookmark: ref.flatMap { assets[$0]?.bookmark }
+					))
 			}
 		}
 		return clips
+	}
+
+	struct AssetResource {
+		let url: URL
+		let bookmark: Data?
+	}
+
+	static func assetResources(in doc: XMLDocument) -> [String: AssetResource] {
+		var map: [String: AssetResource] = [:]
+		let resources = doc.rootElement()?.elements(forName: "resources").first
+		for asset in resources?.elements(forName: "asset") ?? [] {
+			guard let id = asset.attribute(forName: "id")?.stringValue,
+				let mediaRep = asset.elements(forName: "media-rep").first,
+				let src = mediaRep.attribute(forName: "src")?.stringValue,
+				let url = URL(string: src)
+			else { continue }
+			let bookmarkStr = mediaRep.elements(forName: "bookmark").first?.stringValue?
+				.trimmingCharacters(in: .whitespacesAndNewlines)
+			let bookmark = bookmarkStr.flatMap {
+				Data(base64Encoded: $0, options: .ignoreUnknownCharacters)
+			}
+			map[id] = AssetResource(url: url, bookmark: bookmark)
+		}
+		return map
 	}
 
 	static func detectFPS(_ doc: XMLDocument) -> Double {
