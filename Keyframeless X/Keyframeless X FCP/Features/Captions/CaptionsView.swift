@@ -22,9 +22,9 @@ struct CaptionsView: View {
 			KKSeparatorRepresentable(
 				text: "Timer",
 				icon: NSImage(systemSymbolName: "timer", accessibilityDescription: nil))
-			Button("Insert Title") {
-				model.insertTitle()
-			}
+			FCPDragZoneView()
+				.frame(maxWidth: .infinity)
+				.frame(height: 44)
 			Text("Timeline: \(model.timelineDuration)")
 				.font(.system(.body, design: .monospaced))
 				.foregroundStyle(.secondary)
