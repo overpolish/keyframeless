@@ -11,6 +11,7 @@ struct FCPDropZoneView: NSViewRepresentable {
 	var onFormat: (FCPXMLParser.ProjectFormat) -> Void
 	var onItems: ([FCPXMLParser.DropItem]) -> Void
 	var onDenied: () -> Void
+	var onTargeted: (Bool) -> Void
 
 	func makeNSView(context: Context) -> FCPDropTargetView {
 		let view = FCPDropTargetView()
@@ -18,6 +19,7 @@ struct FCPDropZoneView: NSViewRepresentable {
 		view.onFormat = onFormat
 		view.onItems = onItems
 		view.onDenied = onDenied
+		view.onTargeted = onTargeted
 		return view
 	}
 
@@ -26,6 +28,7 @@ struct FCPDropZoneView: NSViewRepresentable {
 		nsView.onFormat = onFormat
 		nsView.onItems = onItems
 		nsView.onDenied = onDenied
+		nsView.onTargeted = onTargeted
 	}
 }
 
@@ -34,6 +37,7 @@ class FCPDropTargetView: NSView {
 	var onFormat: ((FCPXMLParser.ProjectFormat) -> Void)?
 	var onItems: (([FCPXMLParser.DropItem]) -> Void)?
 	var onDenied: (() -> Void)?
+	var onTargeted: ((Bool) -> Void)?
 
 	private let fcpPasteboardTypes: [NSPasteboard.PasteboardType] = [
 		"com.apple.finalcutpro.xml.v1-10",
@@ -50,9 +54,22 @@ class FCPDropTargetView: NSView {
 		fatalError("init(coder:) not implemented")
 	}
 
+	// Passthrough for all mouse events — drag system uses bounds, not hitTest
+	override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
 	override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
 		let available = sender.draggingPasteboard.types ?? []
-		return fcpPasteboardTypes.contains(where: { available.contains($0) }) ? .copy : []
+		guard fcpPasteboardTypes.contains(where: { available.contains($0) }) else { return [] }
+		onTargeted?(true)
+		return .copy
+	}
+
+	override func draggingExited(_ sender: NSDraggingInfo?) {
+		onTargeted?(false)
+	}
+
+	override func draggingEnded(_ sender: NSDraggingInfo) {
+		onTargeted?(false)
 	}
 
 	override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {

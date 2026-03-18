@@ -14,6 +14,7 @@ struct CaptionsView: View {
 	@State private var dropState: DropState = .idle
 	@State private var isTargeted = false
 	@State private var useTimecode = true
+	@State private var timelineLoadID = UUID()
 
 	enum DropState { case idle, denied, dropped }
 
@@ -22,21 +23,14 @@ struct CaptionsView: View {
 			FCPDragZoneView()
 				.frame(maxWidth: .infinity)
 				.frame(height: 44)
-			dropZone
 			if let fmt = model.projectFormat {
 				formatLabels(fmt)
 			}
 			if !dropItems.isEmpty {
 				itemList
 			}
+			timelineArea
 			if !audioClips.isEmpty {
-				timeToggle
-				TimelineAxisView(
-					duration: timelineDuration,
-					format: model.projectFormat,
-					useTimecode: useTimecode
-				)
-				.padding(.horizontal, KKPaddingMD)
 				clipList
 			}
 			Spacer()
@@ -44,25 +38,43 @@ struct CaptionsView: View {
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 	}
 
-	private var dropZone: some View {
+	private var timelineArea: some View {
 		ZStack {
 			RoundedRectangle(cornerRadius: 8)
 				.strokeBorder(
-					isTargeted ? Color.accentColor : Color.secondary.opacity(0.4),
-					style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
+					isTargeted
+						? Color.green
+						: Color.secondary.opacity(audioClips.isEmpty ? 0.4 : 0.15),
+					style: StrokeStyle(lineWidth: 1.5, dash: audioClips.isEmpty ? [6, 4] : [])
 				)
-			VStack(spacing: 6) {
-				Image(systemName: dropState == .denied ? "xmark.circle" : "arrow.down.doc")
-					.font(.title2)
-					.foregroundStyle(dropState == .denied ? Color.red.opacity(0.7) : .secondary)
-				Text(dropZoneLabel)
-					.font(.caption)
-					.foregroundStyle(dropState == .denied ? Color.red.opacity(0.7) : .secondary)
+			if audioClips.isEmpty {
+				VStack(spacing: 6) {
+					Image(systemName: dropState == .denied ? "xmark.circle" : "arrow.down.doc")
+						.font(.title2)
+						.foregroundStyle(dropState == .denied ? Color.red.opacity(0.7) : .secondary)
+					Text(dropZoneLabel)
+						.font(.caption)
+						.foregroundStyle(dropState == .denied ? Color.red.opacity(0.7) : .secondary)
+				}
+			} else {
+				VStack(spacing: 0) {
+					timeToggle
+						.padding(.top, KKPaddingMD)
+					TimelineAxisView(
+						duration: timelineDuration,
+						format: model.projectFormat,
+						useTimecode: useTimecode
+					)
+					.id(timelineLoadID)
+					.padding(.horizontal, KKPaddingMD)
+					.padding(.bottom, KKPaddingMD)
+				}
 			}
 			FCPDropZoneView { clips in
 				audioClips = clips
 				dropState = .dropped
 				isTargeted = false
+				timelineLoadID = UUID()
 			} onFormat: { fmt in
 				model.projectFormat = fmt
 				useTimecode = !fmt.fpsDisplay.isEmpty
@@ -71,10 +83,12 @@ struct CaptionsView: View {
 			} onDenied: {
 				dropState = .denied
 				isTargeted = false
+			} onTargeted: { targeted in
+				isTargeted = targeted
 			}
 		}
 		.frame(maxWidth: .infinity)
-		.frame(minHeight: 80)
+		.frame(minHeight: audioClips.isEmpty ? 80 : 60)
 		.padding(.horizontal, KKPaddingMD)
 	}
 
