@@ -39,56 +39,65 @@ struct CaptionsView: View {
 	}
 
 	private var timelineArea: some View {
-		ZStack {
-			RoundedRectangle(cornerRadius: 8)
-				.strokeBorder(
-					isTargeted
-						? Color.green
-						: Color.secondary.opacity(audioClips.isEmpty ? 0.4 : 0.15),
-					style: StrokeStyle(lineWidth: 1.5, dash: audioClips.isEmpty ? [6, 4] : [])
-				)
-			if audioClips.isEmpty {
-				VStack(spacing: 6) {
-					Image(systemName: dropState == .denied ? "xmark.circle" : "arrow.down.doc")
-						.font(.title2)
-						.foregroundStyle(dropState == .denied ? Color.red.opacity(0.7) : .secondary)
-					Text(dropZoneLabel)
-						.font(.caption)
-						.foregroundStyle(dropState == .denied ? Color.red.opacity(0.7) : .secondary)
-				}
-			} else {
-				VStack(spacing: 0) {
-					timeToggle
-						.padding(.top, KKPaddingMD)
+		VStack(spacing: 0) {
+			ZStack {
+				RoundedRectangle(cornerRadius: 8)
+					.strokeBorder(
+						isTargeted
+							? Color.green
+							: Color.secondary.opacity(audioClips.isEmpty ? 0.4 : 0.15),
+						style: StrokeStyle(lineWidth: 1.5, dash: audioClips.isEmpty ? [6, 4] : [])
+					)
+				if audioClips.isEmpty {
+					VStack(spacing: 6) {
+						Image(systemName: dropState == .denied ? "xmark.circle" : "arrow.down.doc")
+							.font(.title2)
+							.foregroundStyle(
+								// TODO error color
+								dropState == .denied ? Color.red.opacity(0.7) : .secondary)
+						Text(dropZoneLabel)
+							.font(.caption)
+							.foregroundStyle(
+								// TODO error color
+								dropState == .denied ? Color.red.opacity(0.7) : .secondary)
+					}
+				} else {
 					TimelineAxisView(
 						duration: timelineDuration,
 						format: model.projectFormat,
 						useTimecode: useTimecode
 					)
 					.id(timelineLoadID)
-					.padding(.horizontal, KKPaddingMD)
-					.padding(.bottom, KKPaddingMD)
+					.padding(.horizontal, 8)
+					.frame(maxWidth: .infinity, maxHeight: .infinity)
+				}
+				FCPDropZoneView { clips in
+					audioClips = clips
+					dropState = .dropped
+					isTargeted = false
+					timelineLoadID = UUID()
+				} onFormat: { fmt in
+					model.projectFormat = fmt
+					useTimecode = !fmt.fpsDisplay.isEmpty
+				} onItems: { items in
+					dropItems = items
+				} onDenied: {
+					dropState = .denied
+					isTargeted = false
+				} onTargeted: { targeted in
+					isTargeted = targeted
 				}
 			}
-			FCPDropZoneView { clips in
-				audioClips = clips
-				dropState = .dropped
-				isTargeted = false
-				timelineLoadID = UUID()
-			} onFormat: { fmt in
-				model.projectFormat = fmt
-				useTimecode = !fmt.fpsDisplay.isEmpty
-			} onItems: { items in
-				dropItems = items
-			} onDenied: {
-				dropState = .denied
-				isTargeted = false
-			} onTargeted: { targeted in
-				isTargeted = targeted
+			.frame(maxWidth: .infinity)
+			.frame(minHeight: 80)
+			if !audioClips.isEmpty {
+				HStack {
+					Spacer()
+					timeToggle
+				}
+				.padding(.top, 4)
 			}
 		}
-		.frame(maxWidth: .infinity)
-		.frame(minHeight: audioClips.isEmpty ? 80 : 60)
 		.padding(.horizontal, KKPaddingMD)
 	}
 
@@ -124,13 +133,31 @@ struct CaptionsView: View {
 	}
 
 	private var timeToggle: some View {
-		Picker("", selection: $useTimecode) {
-			Text("Timecode").tag(true)
-			Text("Seconds").tag(false)
+		HStack(spacing: 2) {
+			pillToggleOption("Timecode", value: true)
+			pillToggleOption("Seconds", value: false)
 		}
-		.pickerStyle(.segmented)
-		.padding(.horizontal, KKPaddingMD)
+		.padding(3)
+		.background(Capsule().fill(Color.white.opacity(0.08)))
 		.disabled(model.projectFormat?.fpsDisplay.isEmpty ?? true)
+	}
+
+	private func pillToggleOption(_ label: String, value: Bool) -> some View {
+		Button {
+			useTimecode = value
+		} label: {
+			Text(label)
+				.font(.system(size: 10, weight: .medium))
+				.padding(.horizontal, 8)
+				.padding(.vertical, 3)
+				.background {
+					if useTimecode == value {
+						Capsule().fill(Color(nsColor: .accent()))
+					}
+				}
+				.foregroundStyle(useTimecode == value ? .white : .secondary)
+		}
+		.buttonStyle(.plain)
 	}
 
 	private var itemList: some View {

@@ -22,6 +22,7 @@
 
 + (NSColor *)accent;
 + (NSColor *)warning;
++ (NSColor *)secondaryLabel;
 
 - (simd_float4)simdFloat4;
 

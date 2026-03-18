@@ -80,6 +80,13 @@
                          alpha:1.0];
 }
 
++ (NSColor *)secondaryLabel {
+  return [NSColor colorWithRed:0x70 / 255.0
+                         green:0x70 / 255.0
+                          blue:0x70 / 255.0
+                         alpha:1.0];
+}
+
 - (simd_float4)simdFloat4 {
   NSColor *rgb = [self colorUsingColorSpace:NSColorSpace.genericRGBColorSpace];
   return (simd_float4){
