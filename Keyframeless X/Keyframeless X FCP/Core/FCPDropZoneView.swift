@@ -9,23 +9,31 @@ import SwiftUI
 struct FCPDropZoneView: NSViewRepresentable {
 	var onDrop: ([FCPXMLParser.AudioClip]) -> Void
 	var onFormat: (FCPXMLParser.ProjectFormat) -> Void
+	var onItems: ([FCPXMLParser.DropItem]) -> Void
+	var onDenied: () -> Void
 
 	func makeNSView(context: Context) -> FCPDropTargetView {
 		let view = FCPDropTargetView()
 		view.onDrop = onDrop
 		view.onFormat = onFormat
+		view.onItems = onItems
+		view.onDenied = onDenied
 		return view
 	}
 
 	func updateNSView(_ nsView: FCPDropTargetView, context: Context) {
 		nsView.onDrop = onDrop
 		nsView.onFormat = onFormat
+		nsView.onItems = onItems
+		nsView.onDenied = onDenied
 	}
 }
 
 class FCPDropTargetView: NSView {
 	var onDrop: (([FCPXMLParser.AudioClip]) -> Void)?
 	var onFormat: ((FCPXMLParser.ProjectFormat) -> Void)?
+	var onItems: (([FCPXMLParser.DropItem]) -> Void)?
+	var onDenied: (() -> Void)?
 
 	private let fcpPasteboardTypes: [NSPasteboard.PasteboardType] = [
 		"com.apple.finalcutpro.xml.v1-10",
@@ -53,11 +61,15 @@ class FCPDropTargetView: NSView {
 			guard let available = pasteboard.types, available.contains(type),
 				let data = pasteboard.data(forType: type)
 			else { continue }
-			if let doc = try? XMLDocument(data: data, options: []) {
-				onDrop?(FCPXMLParser.audioClips(in: doc))
-				if let fmt = FCPXMLParser.projectFormat(in: doc) {
-					onFormat?(fmt)
-				}
+			guard let doc = try? XMLDocument(data: data, options: []) else { return true }
+			if FCPXMLParser.isDeniedDrop(in: doc) {
+				onDenied?()
+				return false
+			}
+			onDrop?(FCPXMLParser.audioClips(in: doc))
+			onItems?(FCPXMLParser.topLevelItems(in: doc))
+			if let fmt = FCPXMLParser.projectFormat(in: doc) {
+				onFormat?(fmt)
 			}
 			return true
 		}

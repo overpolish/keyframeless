@@ -31,8 +31,6 @@ import SwiftUI
 			hostingVC.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
 		])
 
-		FCPHost.shared.timeline?.add(self)
-		model.updateFromTimeline()
 	}
 
 	override func viewDidAppear() {
@@ -40,24 +38,9 @@ import SwiftUI
 		view.window?.title = ""
 	}
 
-	override func viewWillDisappear() {
-		super.viewWillDisappear()
-		FCPHost.shared.timeline?.remove(self)
-	}
-
 	@objc var hostInfoString: String {
 		let host = FCPHost.shared
 		return String(format: "%@ %@", host.name, host.versionString)
 	}
 
-}
-
-extension Keyframeless_X_FCPViewController: FCPXTimelineObserver {
-	func sequenceTimeRangeChanged() {
-		DispatchQueue.main.async { self.model.updateFromTimeline() }
-	}
-
-	func activeSequenceChanged() {
-		DispatchQueue.main.async { self.model.updateFromTimeline() }
-	}
 }
