@@ -30,7 +30,18 @@ enum FCPXMLParser {
 			let count: Int
 			switch el.name {
 			case "project":
-				count = (try? el.nodes(forXPath: ".//" + dialogueClipXPath))?.count ?? 0
+				var projectCount = (try? el.nodes(forXPath: ".//" + dialogueClipXPath))?.count ?? 0
+				let refIds =
+					(try? el.nodes(forXPath: ".//ref-clip/@ref"))?
+					.compactMap { $0.stringValue } ?? []
+				for mediaId in refIds {
+					let media = resources?.elements(forName: "media").first {
+						$0.attribute(forName: "id")?.stringValue == mediaId
+					}
+					projectCount +=
+						(try? media?.nodes(forXPath: ".//" + dialogueClipXPath))?.count ?? 0
+				}
+				count = projectCount
 			case "asset-clip":
 				let role = el.attribute(forName: "audioRole")?.stringValue ?? ""
 				let hasEffects = el.elements(forName: "audio-channel-source").contains {
@@ -201,35 +212,89 @@ enum FCPXMLParser {
 
 	static func audioClips(in doc: XMLDocument) -> [AudioClip] {
 		let assets = assetResources(in: doc)
+		let resources = doc.rootElement()?.elements(forName: "resources").first
+
+		var mediaMap: [String: XMLElement] = [:]
+		for media in resources?.elements(forName: "media") ?? [] {
+			guard let id = media.attribute(forName: "id")?.stringValue,
+				let seq = media.elements(forName: "sequence").first
+			else { continue }
+			mediaMap[id] = seq
+		}
+
 		var clips: [AudioClip] = []
+		let topLevel =
+			doc.rootElement()?.children?.compactMap { $0 as? XMLElement }
+			.filter { $0.name != "resources" } ?? []
 
-		// Sequence/library drag: clips live inside project > sequence > spine
-		for seqNode in (try? doc.nodes(forXPath: "//project/sequence")) ?? [] {
-			guard let seq = seqNode as? XMLElement else { continue }
-			let tcStart = parseTime(seq.attribute(forName: "tcStart")?.stringValue ?? "0s")
-			for clipNode in (try? seq.nodes(forXPath: "spine//" + dialogueClipXPath)) ?? [] {
-				guard let el = clipNode as? XMLElement else { continue }
-				clips.append(makeClip(from: el, assets: assets, tcStart: tcStart))
+		for el in topLevel {
+			switch el.name {
+			case "project":
+				guard let seq = el.elements(forName: "sequence").first,
+					let spine = seq.elements(forName: "spine").first
+				else { continue }
+				let tcStart = parseTime(seq.attribute(forName: "tcStart")?.stringValue ?? "0s")
+				walkElement(
+					spine, tcStart: tcStart, assets: assets, mediaMap: mediaMap, into: &clips)
+			case "ref-clip":
+				walkElement(el, tcStart: 0, assets: assets, mediaMap: mediaMap, into: &clips)
+				if let mediaId = el.attribute(forName: "ref")?.stringValue,
+					let mediaSeq = mediaMap[mediaId],
+					let mediaSpine = mediaSeq.elements(forName: "spine").first
+				{
+					let mediaTcStart = parseTime(
+						mediaSeq.attribute(forName: "tcStart")?.stringValue ?? "0s")
+					walkElement(
+						mediaSpine, tcStart: mediaTcStart, assets: assets, mediaMap: mediaMap,
+						into: &clips)
+				}
+			case "asset-clip":
+				if isDialogue(el) {
+					clips.append(makeClip(from: el, assets: assets, tcStart: nil))
+				}
+			default:
+				break
 			}
-		}
-
-		// Compound clip drag: clips live inside media > sequence > spine
-		for seqNode in (try? doc.nodes(forXPath: "//media/sequence")) ?? [] {
-			guard let seq = seqNode as? XMLElement else { continue }
-			let tcStart = parseTime(seq.attribute(forName: "tcStart")?.stringValue ?? "0s")
-			for clipNode in (try? seq.nodes(forXPath: "spine//" + dialogueClipXPath)) ?? [] {
-				guard let el = clipNode as? XMLElement else { continue }
-				clips.append(makeClip(from: el, assets: assets, tcStart: tcStart))
-			}
-		}
-
-		// Individual clip drag: asset-clips are direct children of <fcpxml> root
-		for clipNode in (try? doc.nodes(forXPath: "fcpxml/" + dialogueClipXPath)) ?? [] {
-			guard let el = clipNode as? XMLElement else { continue }
-			clips.append(makeClip(from: el, assets: assets, tcStart: nil))
 		}
 
 		return clips
+	}
+
+	private static func isDialogue(_ el: XMLElement) -> Bool {
+		guard (el.attribute(forName: "audioRole")?.stringValue ?? "").hasPrefix("dialogue")
+		else { return false }
+		return !el.elements(forName: "audio-channel-source").contains {
+			($0.attribute(forName: "role")?.stringValue ?? "").hasPrefix("effects")
+		}
+	}
+
+	private static func walkElement(
+		_ el: XMLElement, tcStart: Double, assets: [String: AssetResource],
+		mediaMap: [String: XMLElement], into clips: inout [AudioClip]
+	) {
+		for child in el.children?.compactMap({ $0 as? XMLElement }) ?? [] {
+			if child.name == "asset-clip", isDialogue(child) {
+				clips.append(makeClip(from: child, assets: assets, tcStart: tcStart))
+			} else if child.name == "ref-clip" {
+				// Walk the ref-clip's XML children for connected audio clips
+				walkElement(
+					child, tcStart: tcStart, assets: assets, mediaMap: mediaMap, into: &clips)
+				// Then recurse into the compound clip's media spine
+				if let mediaId = child.attribute(forName: "ref")?.stringValue,
+					let mediaSeq = mediaMap[mediaId],
+					let mediaSpine = mediaSeq.elements(forName: "spine").first
+				{
+					let mediaTcStart = parseTime(
+						mediaSeq.attribute(forName: "tcStart")?.stringValue ?? "0s")
+					walkElement(
+						mediaSpine, tcStart: mediaTcStart, assets: assets, mediaMap: mediaMap,
+						into: &clips)
+				}
+			} else {
+				walkElement(
+					child, tcStart: tcStart, assets: assets, mediaMap: mediaMap, into: &clips)
+			}
+		}
 	}
 
 	private struct AssetResource {
@@ -281,9 +346,14 @@ enum FCPXMLParser {
 
 	private static func projectTime(of el: XMLElement, tcStart: Double) -> Double {
 		let offset = parseTime(el.attribute(forName: "offset")?.stringValue ?? "0s")
-		guard let parent = el.parent as? XMLElement,
-			parent.name != "spine", parent.name != "sequence"
-		else { return offset - tcStart }
+		guard let parent = el.parent as? XMLElement else { return offset - tcStart }
+		// Primary spine (no lane) and sequence use sequence-absolute offsets — stop here
+		let isPrimaryContainer =
+			parent.name == "sequence"
+			|| (parent.name == "spine" && parent.attribute(forName: "lane") == nil)
+		guard !isPrimaryContainer else { return offset - tcStart }
+		// Secondary storylines (spine with lane) have storyline-relative offsets,
+		// so continue climbing like any other container.
 		let parentStart = parseTime(parent.attribute(forName: "start")?.stringValue ?? "0s")
 		return projectTime(of: parent, tcStart: tcStart) + (offset - parentStart)
 	}
