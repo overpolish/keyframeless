@@ -4,6 +4,7 @@
  */
 
 import AppKit
+import KeyframelessKit
 import SwiftUI
 
 struct TimelineAxisView: View {
@@ -19,20 +20,17 @@ struct TimelineAxisView: View {
 				duration: duration,
 				zoom: $zoom,
 				availableWidth: geo.size.width,
+				availableHeight: geo.size.height,
 				labelForTime: labelForTime
 			)
 		}
-		.frame(height: 36)
 	}
 
-	private func labelForTime(_ seconds: Double) -> String {
-		if useTimecode, let fmt = format {
-			return fmt.timecode(for: seconds)
-		}
-		if seconds < 60 { return String(format: "%.0fs", seconds) }
-		let m = Int(seconds) / 60
-		let s = Int(seconds) % 60
-		return s == 0 ? "\(m)m" : "\(m)m\(s)s"
+	private func labelForTime(_ time: Double) -> String {
+		let h = Int(time) / 3600
+		let m = Int(time) % 3600 / 60
+		let s = Int(time) % 60
+		return String(format: "%02d:%02d:%02d", h, m, s)
 	}
 }
 
@@ -40,6 +38,7 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 	let duration: Double
 	@Binding var zoom: CGFloat
 	let availableWidth: CGFloat
+	let availableHeight: CGFloat
 	let labelForTime: (Double) -> String
 
 	func makeCoordinator() -> Coordinator { Coordinator() }
@@ -66,7 +65,8 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 
 		guard let docView = scrollView.documentView as? AxisDocumentView else { return }
 		let contentWidth = max(availableWidth, availableWidth * zoom)
-		docView.frame = NSRect(x: 0, y: 0, width: contentWidth, height: 36)
+		let docHeight = availableHeight > 0 ? availableHeight : 36
+		docView.frame = NSRect(x: 0, y: 0, width: contentWidth, height: docHeight)
 		docView.duration = duration
 		docView.labelForTime = labelForTime
 		docView.needsDisplay = true
@@ -113,39 +113,47 @@ private class AxisDocumentView: NSView {
 
 		let pps = bounds.width / CGFloat(duration)
 		let interval = tickInterval(pixelsPerSecond: pps)
-		let baseline = bounds.height - 1
+		let baseline: CGFloat = 5
 
-		ctx.setLineWidth(0.5)
+		let strokeWidth: CGFloat = 1.0
+		ctx.setLineWidth(strokeWidth)
 
-		ctx.setStrokeColor(NSColor.secondaryLabelColor.withAlphaComponent(0.3).cgColor)
-		ctx.move(to: CGPoint(x: 0, y: baseline))
-		ctx.addLine(to: CGPoint(x: bounds.width, y: baseline))
-		ctx.strokePath()
-
+		let tickColor = NSColor(
+			// TODO can we move to kkcolor
+			red: 0x79 / 255.0, green: 0x79 / 255.0, blue: 0x79 / 255.0, alpha: 1.0)
+		let tickHeight: CGFloat = 12
 		let attrs: [NSAttributedString.Key: Any] = [
-			.font: NSFont.systemFont(ofSize: 9),
-			.foregroundColor: NSColor.secondaryLabelColor,
+			.font: NSFont.boldSystemFont(ofSize: 10),
+			.foregroundColor: NSColor(
+				// TODO can we use kkcolor here?
+				red: 0x70 / 255.0, green: 0x70 / 255.0, blue: 0x70 / 255.0, alpha: 1.0),
 		]
+
+		ctx.setStrokeColor(tickColor.cgColor)
+		ctx.beginPath()
 
 		var t = 0.0
 		while t <= duration + 0.001 {
-			let x = CGFloat(t) * pps
+			let rawX = CGFloat(t) * pps
+			let x = max(strokeWidth / 2, rawX)
 
-			ctx.setStrokeColor(NSColor.secondaryLabelColor.withAlphaComponent(0.5).cgColor)
-			ctx.move(to: CGPoint(x: x, y: baseline - 10))
-			ctx.addLine(to: CGPoint(x: x, y: baseline))
-			ctx.strokePath()
+			ctx.move(to: CGPoint(x: x, y: baseline))
+			ctx.addLine(to: CGPoint(x: x, y: baseline + tickHeight))
 
 			let label = labelForTime?(t) ?? String(format: "%.0fs", t)
-			(label as NSString).draw(at: CGPoint(x: x + 3, y: baseline - 20), withAttributes: attrs)
+			let labelSize = (label as NSString).size(withAttributes: attrs)
+			let labelY = baseline + (tickHeight - labelSize.height) / 2
+			(label as NSString).draw(at: CGPoint(x: x + 5, y: labelY), withAttributes: attrs)
 
 			t += interval
 		}
+
+		ctx.strokePath()
 	}
 
 	private func tickInterval(pixelsPerSecond: CGFloat) -> Double {
 		let minSpacing: CGFloat = 70
-		let candidates = [0.5, 1.0, 2, 5, 10, 15, 30, 60, 120, 300, 600]
+		let candidates = [1.0, 2, 5, 10, 15, 30, 60, 120, 300, 600]
 		return candidates.first { CGFloat($0) * pixelsPerSecond >= minSpacing } ?? 600
 	}
 }
