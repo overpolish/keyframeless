@@ -7,25 +7,113 @@ import Foundation
 
 enum FCPXMLParser {
 
+	struct DropItem {
+		let name: String
+		let kind: String
+		let dialogueCount: Int
+	}
+
+	static func isDeniedDrop(in doc: XMLDocument) -> Bool {
+		let children = doc.rootElement()?.children?.compactMap { $0 as? XMLElement } ?? []
+		return children.contains { $0.name == "library" || $0.name == "event" }
+	}
+
+	static func topLevelItems(in doc: XMLDocument) -> [DropItem] {
+		let children = doc.rootElement()?.children?.compactMap { $0 as? XMLElement } ?? []
+		return children.filter { $0.name != "resources" }.map { el in
+			let name = el.attribute(forName: "name")?.stringValue ?? el.name ?? "?"
+			let kind = el.name ?? "?"
+			let count: Int
+			switch el.name {
+			case "project":
+				count =
+					(try? el.nodes(
+						forXPath:
+							".//asset-clip[starts-with(@audioRole, 'dialogue') and not(audio-channel-source[starts-with(@role, 'effects')])]"
+					))?.count ?? 0
+			case "asset-clip":
+				let role = el.attribute(forName: "audioRole")?.stringValue ?? ""
+				let hasEffects = el.elements(forName: "audio-channel-source").contains {
+					$0.attribute(forName: "role")?.stringValue?.hasPrefix("effects") ?? false
+				}
+				count = role.hasPrefix("dialogue") && !hasEffects ? 1 : 0
+			default:
+				count = 0
+			}
+			return DropItem(name: name, kind: kind, dialogueCount: count)
+		}
+	}
+
 	struct ProjectFormat {
 		let name: String
 		let frameDuration: String
 		let width: Int
 		let height: Int
+		let sequenceDuration: Double
+
+		var durationDisplay: String {
+			let raw = frameDuration.hasSuffix("s") ? String(frameDuration.dropLast()) : frameDuration
+			guard !raw.isEmpty else {
+				return String(format: "%.2fs", sequenceDuration)
+			}
+			let fps: Double
+			if let slash = raw.firstIndex(of: "/") {
+				let num = Double(raw[raw.startIndex..<slash]) ?? 1
+				let den = Double(raw[raw.index(after: slash)...]) ?? 1
+				fps = den / num
+			} else {
+				fps = Double(raw) ?? 0
+			}
+			guard fps > 0 else {
+				return String(format: "%.2fs", sequenceDuration)
+			}
+			let roundedFps = Int(fps.rounded())
+			let totalFrames = Int(round(sequenceDuration * fps))
+			let ff = totalFrames % roundedFps
+			let totalSecs = totalFrames / roundedFps
+			let ss = totalSecs % 60
+			let mm = (totalSecs / 60) % 60
+			let hh = totalSecs / 3600
+			if hh > 0 {
+				return String(format: "%d:%02d:%02d:%02d", hh, mm, ss, ff)
+			} else if mm > 0 {
+				return String(format: "%d:%02d:%02d", mm, ss, ff)
+			} else {
+				return String(format: "%d:%02d", ss, ff)
+			}
+		}
 	}
 
 	static func projectFormat(in doc: XMLDocument) -> ProjectFormat? {
 		let resources = doc.rootElement()?.elements(forName: "resources").first
-		guard
-			let format = resources?.elements(forName: "format").first(where: {
-				$0.attribute(forName: "id")?.stringValue == "r1"
-			})
-		else { return nil }
+		let seq = (try? doc.nodes(forXPath: "//project/sequence"))?.first as? XMLElement
+		let topClips = doc.rootElement()?.children?.compactMap { $0 as? XMLElement }
+			.filter { $0.name == "asset-clip" || $0.name == "clip" } ?? []
+
+		let formatId = seq?.attribute(forName: "format")?.stringValue
+			?? topClips.first?.attribute(forName: "format")?.stringValue
+			?? "r1"
+
+		guard let format = resources?.elements(forName: "format").first(where: {
+			$0.attribute(forName: "id")?.stringValue == formatId
+		}) else { return nil }
+
+		let duration: Double
+		if let seq {
+			duration = parseTime(seq.attribute(forName: "duration")?.stringValue ?? "0s")
+		} else {
+			duration = topClips
+				.compactMap { $0.attribute(forName: "duration")?.stringValue }
+				.map { parseTime($0) }
+				.reduce(0, +)
+		}
+
 		return ProjectFormat(
 			name: format.attribute(forName: "name")?.stringValue ?? "",
 			frameDuration: format.attribute(forName: "frameDuration")?.stringValue ?? "",
 			width: Int(format.attribute(forName: "width")?.stringValue ?? "") ?? 0,
-			height: Int(format.attribute(forName: "height")?.stringValue ?? "") ?? 0
+			height: Int(format.attribute(forName: "height")?.stringValue ?? "") ?? 0,
+			sequenceDuration: duration
 		)
 	}
 
