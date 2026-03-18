@@ -81,7 +81,7 @@ struct CaptionsView: View {
 	private func formatLabels(_ fmt: FCPXMLParser.ProjectFormat) -> some View {
 		VStack(spacing: 2) {
 			Text(fmt.name)
-			Text("\(fmt.width) x \(fmt.height)  ·  \(fmt.frameDuration)")
+			Text("\(fmt.width) x \(fmt.height)  ·  \(fmt.fpsDisplay)")
 			Text("Duration: \(fmt.durationDisplay)")
 		}
 		.font(.caption)
