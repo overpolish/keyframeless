@@ -95,12 +95,14 @@ enum FCPXMLParser {
 				: String(format: "%.2f fps", fps)
 		}
 
-		var durationDisplay: String {
+		var durationDisplay: String { timecode(for: sequenceDuration) }
+
+		func timecode(for seconds: Double) -> String {
 			guard let fps, fps > 0 else {
-				return String(format: "%.2fs", sequenceDuration)
+				return String(format: "%.2fs", seconds)
 			}
 			let roundedFps = Int(fps.rounded())
-			let totalFrames = Int(round(sequenceDuration * fps))
+			let totalFrames = Int(round(seconds * fps))
 			let ff = totalFrames % roundedFps
 			let totalSecs = totalFrames / roundedFps
 			let ss = totalSecs % 60

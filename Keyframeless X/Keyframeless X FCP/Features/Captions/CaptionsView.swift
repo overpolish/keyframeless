@@ -13,6 +13,7 @@ struct CaptionsView: View {
 	@State private var dropItems: [FCPXMLParser.DropItem] = []
 	@State private var dropState: DropState = .idle
 	@State private var isTargeted = false
+	@State private var useTimecode = true
 
 	enum DropState { case idle, denied, dropped }
 
@@ -29,6 +30,13 @@ struct CaptionsView: View {
 				itemList
 			}
 			if !audioClips.isEmpty {
+				timeToggle
+				TimelineAxisView(
+					duration: timelineDuration,
+					format: model.projectFormat,
+					useTimecode: useTimecode
+				)
+				.padding(.horizontal, KKPaddingMD)
 				clipList
 			}
 			Spacer()
@@ -57,6 +65,7 @@ struct CaptionsView: View {
 				isTargeted = false
 			} onFormat: { fmt in
 				model.projectFormat = fmt
+				useTimecode = !fmt.fpsDisplay.isEmpty
 			} onItems: { items in
 				dropItems = items
 			} onDenied: {
@@ -89,6 +98,27 @@ struct CaptionsView: View {
 		.padding(.horizontal, KKPaddingMD)
 	}
 
+	private var timelineDuration: Double {
+		model.projectFormat?.sequenceDuration ?? audioClips.map(\.end).max() ?? 0
+	}
+
+	private func formatClipTime(_ clip: FCPXMLParser.AudioClip) -> String {
+		if useTimecode, let fmt = model.projectFormat {
+			return "\(fmt.timecode(for: clip.start)) - \(fmt.timecode(for: clip.end))"
+		}
+		return String(format: "%.2fs - %.2fs", clip.start, clip.end)
+	}
+
+	private var timeToggle: some View {
+		Picker("", selection: $useTimecode) {
+			Text("Timecode").tag(true)
+			Text("Seconds").tag(false)
+		}
+		.pickerStyle(.segmented)
+		.padding(.horizontal, KKPaddingMD)
+		.disabled(model.projectFormat?.fpsDisplay.isEmpty ?? true)
+	}
+
 	private var itemList: some View {
 		VStack(spacing: 2) {
 			ForEach(Array(dropItems.enumerated()), id: \.offset) { _, item in
@@ -114,7 +144,7 @@ struct CaptionsView: View {
 						Text(clip.name)
 							.font(.caption)
 							.lineLimit(1)
-						Text(String(format: "%.2fs - %.2fs", clip.start, clip.end))
+						Text(formatClipTime(clip))
 							.font(.caption2)
 							.foregroundStyle(.secondary)
 					}
