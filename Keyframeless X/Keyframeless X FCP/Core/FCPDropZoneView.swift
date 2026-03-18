@@ -68,9 +68,7 @@ class FCPDropTargetView: NSView {
 			}
 			onDrop?(FCPXMLParser.audioClips(in: doc))
 			onItems?(FCPXMLParser.topLevelItems(in: doc))
-			if let fmt = FCPXMLParser.projectFormat(in: doc) {
-				onFormat?(fmt)
-			}
+			onFormat?(FCPXMLParser.projectFormat(in: doc) ?? .default)
 			return true
 		}
 		return false

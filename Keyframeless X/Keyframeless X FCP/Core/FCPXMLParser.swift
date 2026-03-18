@@ -7,6 +7,9 @@ import Foundation
 
 enum FCPXMLParser {
 
+	private static let dialogueClipXPath =
+		"asset-clip[starts-with(@audioRole, 'dialogue') and not(audio-channel-source[starts-with(@role, 'effects')])]"
+
 	struct DropItem {
 		let name: String
 		let kind: String
@@ -19,6 +22,7 @@ enum FCPXMLParser {
 	}
 
 	static func topLevelItems(in doc: XMLDocument) -> [DropItem] {
+		let resources = doc.rootElement()?.elements(forName: "resources").first
 		let children = doc.rootElement()?.children?.compactMap { $0 as? XMLElement } ?? []
 		return children.filter { $0.name != "resources" }.map { el in
 			let name = el.attribute(forName: "name")?.stringValue ?? el.name ?? "?"
@@ -26,17 +30,19 @@ enum FCPXMLParser {
 			let count: Int
 			switch el.name {
 			case "project":
-				count =
-					(try? el.nodes(
-						forXPath:
-							".//asset-clip[starts-with(@audioRole, 'dialogue') and not(audio-channel-source[starts-with(@role, 'effects')])]"
-					))?.count ?? 0
+				count = (try? el.nodes(forXPath: ".//" + dialogueClipXPath))?.count ?? 0
 			case "asset-clip":
 				let role = el.attribute(forName: "audioRole")?.stringValue ?? ""
 				let hasEffects = el.elements(forName: "audio-channel-source").contains {
 					$0.attribute(forName: "role")?.stringValue?.hasPrefix("effects") ?? false
 				}
 				count = role.hasPrefix("dialogue") && !hasEffects ? 1 : 0
+			case "ref-clip":
+				let mediaId = el.attribute(forName: "ref")?.stringValue ?? ""
+				let media = resources?.elements(forName: "media").first {
+					$0.attribute(forName: "id")?.stringValue == mediaId
+				}
+				count = (try? media?.nodes(forXPath: ".//" + dialogueClipXPath))?.count ?? 0
 			default:
 				count = 0
 			}
@@ -45,26 +51,41 @@ enum FCPXMLParser {
 	}
 
 	struct ProjectFormat {
+		static let `default` = ProjectFormat(
+			name: "FFVideoFormat1080p60",
+			frameDuration: "100/6000s",
+			width: 1920,
+			height: 1080,
+			sequenceDuration: 0
+		)
+
 		let name: String
 		let frameDuration: String
 		let width: Int
 		let height: Int
 		let sequenceDuration: Double
 
-		var durationDisplay: String {
-			let raw = frameDuration.hasSuffix("s") ? String(frameDuration.dropLast()) : frameDuration
-			guard !raw.isEmpty else {
-				return String(format: "%.2fs", sequenceDuration)
-			}
-			let fps: Double
+		private var fps: Double? {
+			let raw =
+				frameDuration.hasSuffix("s") ? String(frameDuration.dropLast()) : frameDuration
+			guard !raw.isEmpty else { return nil }
 			if let slash = raw.firstIndex(of: "/") {
 				let num = Double(raw[raw.startIndex..<slash]) ?? 1
 				let den = Double(raw[raw.index(after: slash)...]) ?? 1
-				fps = den / num
-			} else {
-				fps = Double(raw) ?? 0
+				return num > 0 ? den / num : nil
 			}
-			guard fps > 0 else {
+			return Double(raw)
+		}
+
+		var fpsDisplay: String {
+			guard let fps else { return "" }
+			return fps.truncatingRemainder(dividingBy: 1) == 0
+				? "\(Int(fps)) fps"
+				: String(format: "%.2f fps", fps)
+		}
+
+		var durationDisplay: String {
+			guard let fps, fps > 0 else {
 				return String(format: "%.2fs", sequenceDuration)
 			}
 			let roundedFps = Int(fps.rounded())
@@ -87,32 +108,65 @@ enum FCPXMLParser {
 	static func projectFormat(in doc: XMLDocument) -> ProjectFormat? {
 		let resources = doc.rootElement()?.elements(forName: "resources").first
 		let seq = (try? doc.nodes(forXPath: "//project/sequence"))?.first as? XMLElement
-		let topClips = doc.rootElement()?.children?.compactMap { $0 as? XMLElement }
+		let topClips =
+			doc.rootElement()?.children?.compactMap { $0 as? XMLElement }
 			.filter { $0.name == "asset-clip" || $0.name == "clip" } ?? []
+		let topRefClips =
+			doc.rootElement()?.children?.compactMap { $0 as? XMLElement }
+			.filter { $0.name == "ref-clip" } ?? []
 
-		let formatId = seq?.attribute(forName: "format")?.stringValue
-			?? topClips.first?.attribute(forName: "format")?.stringValue
-			?? "r1"
+		// Resolve format ID: project sequence → direct clip → compound clip (ref-clip → media → sequence)
+		let formatId: String
+		if let id = seq?.attribute(forName: "format")?.stringValue {
+			formatId = id
+		} else if let id = topClips.first?.attribute(forName: "format")?.stringValue {
+			formatId = id
+		} else if let refClip = topRefClips.first,
+			let mediaId = refClip.attribute(forName: "ref")?.stringValue,
+			let media = resources?.elements(forName: "media").first(where: {
+				$0.attribute(forName: "id")?.stringValue == mediaId
+			}),
+			let mediaSeq = media.elements(forName: "sequence").first,
+			let id = mediaSeq.attribute(forName: "format")?.stringValue
+		{
+			formatId = id
+		} else {
+			formatId = "r1"
+		}
 
-		guard let format = resources?.elements(forName: "format").first(where: {
-			$0.attribute(forName: "id")?.stringValue == formatId
-		}) else { return nil }
+		guard
+			let format = resources?.elements(forName: "format").first(where: {
+				$0.attribute(forName: "id")?.stringValue == formatId
+			})
+		else { return nil }
 
 		let duration: Double
 		if let seq {
 			duration = parseTime(seq.attribute(forName: "duration")?.stringValue ?? "0s")
-		} else {
-			duration = topClips
+		} else if !topClips.isEmpty {
+			duration =
+				topClips
 				.compactMap { $0.attribute(forName: "duration")?.stringValue }
 				.map { parseTime($0) }
 				.reduce(0, +)
+		} else if let refClip = topRefClips.first {
+			duration = parseTime(refClip.attribute(forName: "duration")?.stringValue ?? "0s")
+		} else {
+			duration = 0
 		}
 
+		let name = format.attribute(forName: "name")?.stringValue ?? ""
+		let width = Int(format.attribute(forName: "width")?.stringValue ?? "") ?? 0
+		let height = Int(format.attribute(forName: "height")?.stringValue ?? "") ?? 0
+		let isUsable =
+			width > 0 && height > 0 && !name.localizedCaseInsensitiveContains("undefined")
 		return ProjectFormat(
-			name: format.attribute(forName: "name")?.stringValue ?? "",
-			frameDuration: format.attribute(forName: "frameDuration")?.stringValue ?? "",
-			width: Int(format.attribute(forName: "width")?.stringValue ?? "") ?? 0,
-			height: Int(format.attribute(forName: "height")?.stringValue ?? "") ?? 0,
+			name: isUsable ? name : ProjectFormat.default.name,
+			frameDuration: isUsable
+				? (format.attribute(forName: "frameDuration")?.stringValue ?? "")
+				: ProjectFormat.default.frameDuration,
+			width: isUsable ? width : ProjectFormat.default.width,
+			height: isUsable ? height : ProjectFormat.default.height,
 			sequenceDuration: duration
 		)
 	}
@@ -149,21 +203,28 @@ enum FCPXMLParser {
 		let assets = assetResources(in: doc)
 		var clips: [AudioClip] = []
 
-		let dialogueXPath =
-			"asset-clip[starts-with(@audioRole, 'dialogue') and not(audio-channel-source[starts-with(@role, 'effects')])]"
-
 		// Sequence/library drag: clips live inside project > sequence > spine
 		for seqNode in (try? doc.nodes(forXPath: "//project/sequence")) ?? [] {
 			guard let seq = seqNode as? XMLElement else { continue }
 			let tcStart = parseTime(seq.attribute(forName: "tcStart")?.stringValue ?? "0s")
-			for clipNode in (try? seq.nodes(forXPath: "spine//" + dialogueXPath)) ?? [] {
+			for clipNode in (try? seq.nodes(forXPath: "spine//" + dialogueClipXPath)) ?? [] {
+				guard let el = clipNode as? XMLElement else { continue }
+				clips.append(makeClip(from: el, assets: assets, tcStart: tcStart))
+			}
+		}
+
+		// Compound clip drag: clips live inside media > sequence > spine
+		for seqNode in (try? doc.nodes(forXPath: "//media/sequence")) ?? [] {
+			guard let seq = seqNode as? XMLElement else { continue }
+			let tcStart = parseTime(seq.attribute(forName: "tcStart")?.stringValue ?? "0s")
+			for clipNode in (try? seq.nodes(forXPath: "spine//" + dialogueClipXPath)) ?? [] {
 				guard let el = clipNode as? XMLElement else { continue }
 				clips.append(makeClip(from: el, assets: assets, tcStart: tcStart))
 			}
 		}
 
 		// Individual clip drag: asset-clips are direct children of <fcpxml> root
-		for clipNode in (try? doc.nodes(forXPath: "fcpxml/" + dialogueXPath)) ?? [] {
+		for clipNode in (try? doc.nodes(forXPath: "fcpxml/" + dialogueClipXPath)) ?? [] {
 			guard let el = clipNode as? XMLElement else { continue }
 			clips.append(makeClip(from: el, assets: assets, tcStart: nil))
 		}
