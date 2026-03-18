@@ -29,6 +29,9 @@ struct CaptionsView: View {
 				.font(.system(.body, design: .monospaced))
 				.foregroundStyle(.secondary)
 			dropZone
+			if let fmt = model.projectFormat {
+				formatLabels(fmt)
+			}
 			if !audioClips.isEmpty {
 				clipList
 			}
@@ -60,10 +63,22 @@ struct CaptionsView: View {
 				audioClips = clips
 				didDrop = true
 				isTargeted = false
+			} onFormat: { fmt in
+				model.projectFormat = fmt
 			}
 		}
 		.frame(maxWidth: .infinity)
 		.frame(minHeight: 80)
+		.padding(.horizontal, KKPaddingMD)
+	}
+
+	private func formatLabels(_ fmt: FCPXMLParser.ProjectFormat) -> some View {
+		VStack(spacing: 2) {
+			Text(fmt.name)
+			Text("\(fmt.width) x \(fmt.height)  ·  \(fmt.frameDuration)")
+		}
+		.font(.caption)
+		.foregroundStyle(.secondary)
 		.padding(.horizontal, KKPaddingMD)
 	}
 
@@ -75,7 +90,7 @@ struct CaptionsView: View {
 						Text(clip.name)
 							.font(.caption)
 							.lineLimit(1)
-						Text(String(format: "%.2fs – %.2fs", clip.start, clip.end))
+						Text(String(format: "%.2fs - %.2fs", clip.start, clip.end))
 							.font(.caption2)
 							.foregroundStyle(.secondary)
 					}

@@ -7,6 +7,28 @@ import Foundation
 
 enum FCPXMLParser {
 
+	struct ProjectFormat {
+		let name: String
+		let frameDuration: String
+		let width: Int
+		let height: Int
+	}
+
+	static func projectFormat(in doc: XMLDocument) -> ProjectFormat? {
+		let resources = doc.rootElement()?.elements(forName: "resources").first
+		guard
+			let format = resources?.elements(forName: "format").first(where: {
+				$0.attribute(forName: "id")?.stringValue == "r1"
+			})
+		else { return nil }
+		return ProjectFormat(
+			name: format.attribute(forName: "name")?.stringValue ?? "",
+			frameDuration: format.attribute(forName: "frameDuration")?.stringValue ?? "",
+			width: Int(format.attribute(forName: "width")?.stringValue ?? "") ?? 0,
+			height: Int(format.attribute(forName: "height")?.stringValue ?? "") ?? 0
+		)
+	}
+
 	struct AudioClip {
 		let name: String
 		let start: Double

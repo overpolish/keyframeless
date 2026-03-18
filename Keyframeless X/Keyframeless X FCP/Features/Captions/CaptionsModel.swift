@@ -12,6 +12,7 @@ import ProExtensionHost
 class CaptionsModel: ObservableObject {
 
 	@Published var timelineDuration: String = "—"
+	@Published var projectFormat: FCPXMLParser.ProjectFormat?
 
 	func updateFromTimeline() {
 		guard let timeline = FCPHost.shared.timeline else {
