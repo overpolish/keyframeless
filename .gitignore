@@ -5,3 +5,5 @@ xcuserdata/
 *.xcuserstate
 .clangd
 buildServer.json
+scripts/*.fcpxml
+!scripts/*.template.fcpxml

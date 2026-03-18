@@ -27,10 +27,7 @@ class CaptionsModel: ObservableObject {
 	}
 
 	func insertTitle() {
-		let sequence = FCPHost.shared.timeline?.activeSequence
-		let frameDuration = sequence?.frameDuration ?? CMTime(value: 1, timescale: 30)
-		let words = "hello from keyframeless x".split(separator: " ").map(String.init)
-		let fcpxml = FCPXMLBuilder.titlesXML(words: words, frameDuration: frameDuration)
+		let fcpxml = FCPXMLBuilder.titleStorylineXML(text: "hello from keyframeless x")
 		let tmpURL = FileManager.default.temporaryDirectory
 			.appendingPathComponent("keyframeless_title.fcpxml")
 		try? fcpxml.write(to: tmpURL, atomically: true, encoding: .utf8)
