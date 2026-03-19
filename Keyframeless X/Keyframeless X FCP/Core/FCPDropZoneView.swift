@@ -7,35 +7,27 @@ import AppKit
 import SwiftUI
 
 struct FCPDropZoneView: NSViewRepresentable {
-	var onDrop: ([FCPXMLParser.AudioClip]) -> Void
-	var onFormat: (FCPXMLParser.ProjectFormat) -> Void
-	var onItems: ([FCPXMLParser.DropItem]) -> Void = { _ in }
+	var onDocument: (XMLDocument) -> Void
 	var onDenied: () -> Void
 	var onTargeted: (Bool) -> Void
 
 	func makeNSView(context: Context) -> FCPDropTargetView {
 		let view = FCPDropTargetView()
-		view.onDrop = onDrop
-		view.onFormat = onFormat
-		view.onItems = onItems
+		view.onDocument = onDocument
 		view.onDenied = onDenied
 		view.onTargeted = onTargeted
 		return view
 	}
 
 	func updateNSView(_ nsView: FCPDropTargetView, context: Context) {
-		nsView.onDrop = onDrop
-		nsView.onFormat = onFormat
-		nsView.onItems = onItems
+		nsView.onDocument = onDocument
 		nsView.onDenied = onDenied
 		nsView.onTargeted = onTargeted
 	}
 }
 
 class FCPDropTargetView: NSView {
-	var onDrop: (([FCPXMLParser.AudioClip]) -> Void)?
-	var onFormat: ((FCPXMLParser.ProjectFormat) -> Void)?
-	var onItems: (([FCPXMLParser.DropItem]) -> Void)?
+	var onDocument: ((XMLDocument) -> Void)?
 	var onDenied: (() -> Void)?
 	var onTargeted: ((Bool) -> Void)?
 
@@ -83,11 +75,7 @@ class FCPDropTargetView: NSView {
 				onDenied?()
 				return false
 			}
-			// TODO should be a callback so its polymorphic
-			onDrop?(FCPXMLParser.audioClips(in: doc))
-			onItems?(FCPXMLParser.topLevelItems(in: doc))
-			onFormat?(FCPXMLParser.projectFormat(in: doc) ?? .default)
-			print(doc)
+			onDocument?(doc)
 			return true
 		}
 		return false
