@@ -96,6 +96,13 @@ struct CaptionsView: View {
 			.frame(maxWidth: .infinity)
 			.frame(minHeight: 80)
 			HStack {
+				HStack(spacing: 4) {
+					Image(systemName: "pointer.arrow.motionlines")
+						.font(.system(size: 12))
+					Text("Click and drag to quickly select/deselect clips")
+						.font(.system(size: 9, weight: .light))
+				}
+				.foregroundStyle(.secondary)
 				Spacer()
 				timeToggle
 			}
