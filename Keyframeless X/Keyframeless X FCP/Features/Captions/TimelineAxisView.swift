@@ -305,6 +305,25 @@ private class AxisDocumentView: NSView {
 					width: playBtnSize, height: playBtnSize)
 				drawPlayButton(in: playBtnRect, context: ctx, isPlaying: isPlaying)
 
+				let titleX = rect.minX + 4 + playBtnSize + 6
+				let titleW = rect.maxX - titleX - 6
+				if titleW > 10 {
+					let para = NSMutableParagraphStyle()
+					para.lineBreakMode = .byTruncatingTail
+					let titleAttrs: [NSAttributedString.Key: Any] = [
+						.font: NSFont.systemFont(ofSize: 10, weight: .medium),
+						.foregroundColor: NSColor.white.withAlphaComponent(0.85),
+						.paragraphStyle: para,
+					]
+					let titleStr = clip.name as NSString
+					let titleH = titleStr.size(withAttributes: titleAttrs).height
+					let titleY = rect.minY + (playBtnSize + 8 - titleH) / 2
+					let titleRect = CGRect(x: titleX, y: titleY, width: titleW, height: titleH)
+					titleStr.draw(
+						with: titleRect, options: .usesLineFragmentOrigin, attributes: titleAttrs,
+						context: nil)
+				}
+
 				var progress: Double?
 				if isPlaying, let ct = audioPlayer?.currentTime {
 					let offset = ct - clip.sourceStart
