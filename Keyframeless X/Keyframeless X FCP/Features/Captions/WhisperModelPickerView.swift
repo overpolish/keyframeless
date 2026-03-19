@@ -35,6 +35,9 @@ struct WhisperModelPickerView: View {
 				VStack(alignment: .leading) {}
 					.frame(maxWidth: .infinity)
 			}
+
+			HelperText("Recommended is based on detected hardware.")
+				.padding(.horizontal, KKPaddingLG)
 		}
 	}
 
@@ -54,6 +57,18 @@ struct WhisperModelPickerView: View {
 					Text(model.displayName)
 						.font(.system(size: 12, weight: isSelected ? .medium : .regular))
 						.foregroundStyle(isDownloaded ? .primary : .secondary)
+					if model.id == WhisperModelManager.recommendedModelId {
+						HStack(spacing: 3) {
+							Image(systemName: "desktopcomputer.and.macbook")
+								.font(.system(size: 8))
+							Text("Recommended")
+								.font(.system(size: 9, weight: .medium))
+						}
+						.foregroundStyle(.green)
+						.padding(.horizontal, 5)
+						.padding(.vertical, 2)
+						.background(Capsule().fill(Color.green.opacity(0.15)))
+					}
 					Text(model.sizeDescription)
 						.font(.system(size: 10))
 						.foregroundStyle(.tertiary)

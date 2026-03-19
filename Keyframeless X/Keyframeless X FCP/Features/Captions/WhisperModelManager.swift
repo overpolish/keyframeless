@@ -4,6 +4,7 @@
  */
 
 import Combine
+import Darwin
 import Foundation
 import WhisperKit
 
@@ -15,6 +16,17 @@ class WhisperModelManager: ObservableObject {
 		let displayName: String
 		let sizeDescription: String
 		let hint: String
+	}
+
+	static var recommendedModelId: String {
+		var size = 0
+		let isAppleSilicon = sysctlbyname("hw.optional.arm64", nil, &size, nil, 0) == 0
+		let ramGB = Int(ProcessInfo.processInfo.physicalMemory / (1_073_741_824))
+		if isAppleSilicon {
+			if ramGB >= 16 { return "openai_whisper-large-v3" }
+			if ramGB >= 8 { return "openai_whisper-small" }
+		}
+		return "openai_whisper-base"
 	}
 
 	static let models: [ModelInfo] = [
