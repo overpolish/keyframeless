@@ -72,21 +72,22 @@ struct CaptionsView: View {
 					.frame(maxWidth: .infinity, maxHeight: .infinity)
 					.blur(radius: isTargeted ? 3 : 0)
 				}
-				FCPDropZoneView { clips in
+				FCPDropZoneView { doc in
+					let clips = FCPXMLParser.audioClips(in: doc)
 					model.audioClips = clips
 					model.selectedClips = Set(clips.indices)
+					model.dropItems = FCPXMLParser.topLevelItems(in: doc)
+					let fmt = FCPXMLParser.projectFormat(in: doc) ?? .default
+					model.projectFormat = fmt
+					model.useTimecode = !fmt.fpsDisplay.isEmpty
 					dropState = .dropped
 					isTargeted = false
 					timelineLoadID = UUID()
-				} onFormat: { fmt in
-					model.projectFormat = fmt
-					model.useTimecode = !fmt.fpsDisplay.isEmpty
-				} onItems: { items in
-					model.dropItems = items
 				} onDenied: {
 					dropState = .denied
 					model.audioClips = []
 					model.selectedClips = []
+					model.dropItems = []
 					isTargeted = false
 				} onTargeted: { targeted in
 					isTargeted = targeted
