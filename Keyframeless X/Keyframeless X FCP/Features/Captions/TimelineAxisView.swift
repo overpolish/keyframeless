@@ -242,10 +242,8 @@ private class AxisDocumentView: NSView {
 	override func draw(_ dirtyRect: NSRect) {
 		guard let ctx = NSGraphicsContext.current?.cgContext, duration > 0 else { return }
 
-		let rawPps = bounds.width / CGFloat(max(1, duration))
-		let interval = tickInterval(pixelsPerSecond: rawPps)
-		let displayDuration = (floor(duration / interval) + 1.0) * interval
-		let pps = bounds.width / CGFloat(displayDuration)
+		let pps = bounds.width / CGFloat(max(1, duration))
+		let interval = tickInterval(pixelsPerSecond: pps)
 
 		let emptyX = CGFloat(duration) * pps
 		ctx.setFillColor(NSColor.black.withAlphaComponent(0.15).cgColor)
@@ -280,7 +278,9 @@ private class AxisDocumentView: NSView {
 			let label = labelForTime?(t) ?? String(format: "%.0fs", t)
 			let labelSize = (label as NSString).size(withAttributes: attrs)
 			let labelY = baseline + (tickHeight - labelSize.height) / 2
-			(label as NSString).draw(at: CGPoint(x: x + 5, y: labelY), withAttributes: attrs)
+			if x + 5 + labelSize.width <= bounds.width {
+				(label as NSString).draw(at: CGPoint(x: x + 5, y: labelY), withAttributes: attrs)
+			}
 
 			t += interval
 		}
