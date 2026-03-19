@@ -8,6 +8,7 @@ import SwiftUI
 
 struct CaptionsView: View {
 	@ObservedObject var model: CaptionsModel
+	@Binding var isTranscribing: Bool
 	@StateObject private var audioPlayer = AudioPlayer()
 	@StateObject private var whisperManager = WhisperModelManager()
 	@State private var dropState: DropState = .idle
@@ -31,7 +32,12 @@ struct CaptionsView: View {
 			.padding(.horizontal, KKPaddingMD)
 			TranscribeButton(
 				disabled: model.selectedClips.isEmpty
-					|| whisperManager.selectedModel == nil
+					|| whisperManager.selectedModel == nil,
+				action: {
+					withAnimation(.easeInOut(duration: 0.3)) {
+						isTranscribing = true
+					}
+				}
 			)
 			.padding(.horizontal, KKPaddingMD)
 			.padding(.bottom, KKPaddingXL + 4)
