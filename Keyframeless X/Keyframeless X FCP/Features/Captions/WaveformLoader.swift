@@ -17,13 +17,14 @@ actor WaveformLoader {
 
 	private var cache: [CacheKey: [Float]] = [:]
 
-	func waveform(for clip: FCPXMLParser.AudioClip, buckets: Int = 300) async throws -> [Float] {
+	func waveform(for clip: FCPXMLParser.AudioClip) async throws -> [Float] {
 		let key = CacheKey(
 			urlString: clip.url?.absoluteString ?? "",
 			sourceStart: clip.sourceStart,
 			sourceDuration: clip.sourceDuration
 		)
 		if let cached = cache[key] { return cached }
+		let buckets = min(4000, max(300, Int(clip.sourceDuration * 200)))
 		let samples = try load(clip: clip, buckets: buckets)
 		cache[key] = samples
 		return samples

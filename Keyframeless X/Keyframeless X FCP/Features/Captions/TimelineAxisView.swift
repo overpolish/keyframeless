@@ -379,7 +379,6 @@ private class AxisDocumentView: NSView {
 		ctx.setStrokeColor(NSColor.white.withAlphaComponent(alpha).cgColor)
 
 		let barCount = max(1, Int(rect.width / 2))
-		let stride = max(1, samples.count / barCount)
 		let barWidth = rect.width / CGFloat(barCount)
 		let midY = rect.midY
 		let halfH = rect.height * 0.35  // 70% total height, split symmetrically
@@ -390,7 +389,8 @@ private class AxisDocumentView: NSView {
 		ctx.setLineWidth(max(1, barWidth * 0.75))
 		ctx.beginPath()
 		for b in 0..<barCount {
-			let sampleIndex = min(b * stride, samples.count - 1)
+			let sampleIndex = min(
+				Int(Double(b) * Double(samples.count) / Double(barCount)), samples.count - 1)
 			let amp = CGFloat(samples[sampleIndex]) * scale
 			let sx = rect.minX + (CGFloat(b) + 0.5) * barWidth
 			let h = max(1, amp * halfH)
