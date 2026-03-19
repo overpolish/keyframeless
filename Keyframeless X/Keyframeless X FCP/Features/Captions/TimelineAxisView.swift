@@ -287,7 +287,10 @@ private class AxisDocumentView: NSView {
 			cachedClipRects.append((rect: rect, index: i))
 
 			let alpha: CGFloat = selectedClips.contains(i) ? 0.85 : 0.25
-			ctx.setFillColor(NSColor.accent().withAlphaComponent(alpha).cgColor)
+			let clipColor =
+				clip.isCompound
+				? NSColor.warning() ?? NSColor.yellow : NSColor.accent() ?? NSColor.blue
+			ctx.setFillColor(clipColor.withAlphaComponent(alpha).cgColor)
 			let path = CGPath(
 				roundedRect: rect, cornerWidth: cornerRadius, cornerHeight: cornerRadius,
 				transform: nil)

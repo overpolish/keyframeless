@@ -138,6 +138,100 @@ struct CaptionsView: View {
 		return String(format: "%.2fs - %.2fs", clip.start, clip.end)
 	}
 
+	private var clipToolbar: some View {
+		let hasMain = audioClips.contains { !$0.isCompound }
+		let hasCompound = audioClips.contains { $0.isCompound }
+		return HStack(spacing: 0) {
+			toolbarItem {
+				HStack(spacing: 1) {
+					Text("\(selectedClips.count)")
+						.foregroundStyle(Color(nsColor: .accent() ?? .blue))
+					Text("/ \(audioClips.count) selected")
+						.foregroundStyle(.secondary)
+				}
+				.font(.caption2)
+			}
+			if hasMain {
+				toolbarDivider
+				Button {
+					selectedClips = Set(audioClips.indices.filter { !audioClips[$0].isCompound })
+				} label: {
+					toolbarItem {
+						HStack(spacing: 4) {
+							Circle()
+								.fill(Color(nsColor: .accent() ?? .blue))
+								.frame(width: 6, height: 6)
+							Text("Main")
+								.font(.caption2)
+								.foregroundStyle(.secondary)
+						}
+						.contentShape(Rectangle())
+					}
+				}
+				.buttonStyle(.plain)
+			}
+			if hasCompound {
+				toolbarDivider
+				Button {
+					selectedClips = Set(audioClips.indices.filter { audioClips[$0].isCompound })
+				} label: {
+					toolbarItem {
+						HStack(spacing: 4) {
+							Circle()
+								.fill(Color(nsColor: .warning() ?? .yellow))
+								.frame(width: 6, height: 6)
+							Text("Compound")
+								.font(.caption2)
+								.foregroundStyle(.secondary)
+						}
+						.contentShape(Rectangle())
+					}
+				}
+				.buttonStyle(.plain)
+			}
+			toolbarDivider
+			Button {
+				selectedClips = Set(audioClips.indices)
+			} label: {
+				toolbarItem {
+					Label("Select All", systemImage: "checkmark.rectangle.stack.fill")
+						.font(.caption2)
+						.foregroundStyle(.secondary)
+						.contentShape(Rectangle())
+				}
+			}
+			.buttonStyle(.plain)
+			toolbarDivider
+			Button {
+				selectedClips = []
+			} label: {
+				toolbarItem {
+					Label("Deselect All", systemImage: "rectangle.stack")
+						.font(.caption2)
+						.foregroundStyle(.secondary)
+						.contentShape(Rectangle())
+				}
+			}
+			.buttonStyle(.plain)
+		}
+		.background(RoundedRectangle(cornerRadius: 999).fill(Color.white.opacity(0.06)))
+		.overlay(
+			RoundedRectangle(cornerRadius: 999).strokeBorder(
+				Color.secondary.opacity(0.2), lineWidth: 1))
+	}
+
+	private var toolbarDivider: some View {
+		Rectangle()
+			.fill(Color.secondary.opacity(0.2))
+			.frame(width: 1, height: 14)
+	}
+
+	private func toolbarItem<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+		content()
+			.padding(.horizontal, 8)
+			.padding(.vertical, 4)
+	}
+
 	private var timeToggle: some View {
 		HStack(spacing: 2) {
 			pillToggleOption("Timecode", value: true)
@@ -174,11 +268,9 @@ struct CaptionsView: View {
 						.font(.caption)
 						.lineLimit(1)
 					Spacer()
-					Text("\(item.dialogueCount) dialogue")
-						.font(.caption2)
-						.foregroundStyle(.secondary)
+					clipToolbar
 				}
-				.padding(.horizontal, KKPaddingMD)
+				.padding(.horizontal, KKPaddingLG)
 			}
 		}
 	}
@@ -209,7 +301,7 @@ struct CaptionsView: View {
 						.buttonStyle(.plain)
 					}
 				}
-				.padding(.horizontal, KKPaddingMD)
+				.padding(.horizontal, 8)
 			}
 		}
 	}
