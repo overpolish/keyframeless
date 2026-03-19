@@ -16,12 +16,15 @@ struct AppShell: View {
 				.padding(.top, KKPaddingSM)
 				.padding(.bottom, KKPaddingXL)
 
-			switch selectedTab {
-			case .captions:
-				CaptionsView(model: captionsModel)
-			case .other:
-				ComingSoonView()
+			Group {
+				switch selectedTab {
+				case .captions:
+					CaptionsView(model: captionsModel)
+				case .other:
+					ComingSoonView()
+				}
 			}
+			.padding([.leading, .trailing, .bottom], KKSpacingXL)
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 		.background(Color(nsColor: .windowBackground()))

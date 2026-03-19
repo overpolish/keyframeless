@@ -9,7 +9,7 @@ import SwiftUI
 struct FCPDropZoneView: NSViewRepresentable {
 	var onDrop: ([FCPXMLParser.AudioClip]) -> Void
 	var onFormat: (FCPXMLParser.ProjectFormat) -> Void
-	var onItems: ([FCPXMLParser.DropItem]) -> Void
+	var onItems: ([FCPXMLParser.DropItem]) -> Void = { _ in }
 	var onDenied: () -> Void
 	var onTargeted: (Bool) -> Void
 

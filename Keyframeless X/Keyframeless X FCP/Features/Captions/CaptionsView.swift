@@ -21,19 +21,10 @@ struct CaptionsView: View {
 
 	var body: some View {
 		VStack(spacing: KKSpacingLG) {
-			FCPDragZoneView()
-				.frame(maxWidth: .infinity)
-				.frame(height: 44)
-			if let fmt = model.projectFormat {
-				formatLabels(fmt)
-			}
 			if !dropItems.isEmpty {
 				itemList
 			}
 			timelineArea
-			if !audioClips.isEmpty {
-				clipList
-			}
 			Spacer()
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -46,21 +37,26 @@ struct CaptionsView: View {
 					.strokeBorder(
 						isTargeted
 							? Color(nsColor: .accent())
-							: Color.secondary.opacity(audioClips.isEmpty ? 0.4 : 0.15),
+							: dropState == .denied
+								? Color(nsColor: .error())
+								: dropState == .dropped && audioClips.isEmpty
+									? Color(nsColor: .warning())
+									: Color.secondary.opacity(audioClips.isEmpty ? 0.4 : 0.15),
 						style: StrokeStyle(lineWidth: 1.5, dash: audioClips.isEmpty ? [6, 4] : [])
 					)
 				if audioClips.isEmpty {
 					VStack(spacing: 6) {
-						Image(systemName: dropState == .denied ? "xmark.circle" : "arrow.down.doc")
-							.font(.title2)
-							.foregroundStyle(
-								dropState == .denied
-									? Color(nsColor: .error()) : Color(nsColor: .timelineLabel()))
+						Image(
+							systemName: dropState == .denied
+								? "xmark.circle"
+								: dropState == .dropped
+									? "exclamationmark.triangle" : "arrow.down.doc"
+						)
+						.font(.title)
+						.foregroundStyle(emptyStateColor)
 						Text(dropZoneLabel)
-							.font(.caption)
-							.foregroundStyle(
-								dropState == .denied
-									? Color(nsColor: .error()) : Color(nsColor: .timelineLabel()))
+							.font(.title3)
+							.foregroundStyle(emptyStateColor)
 					}
 				} else {
 					TimelineAxisView(
@@ -89,6 +85,8 @@ struct CaptionsView: View {
 					dropItems = items
 				} onDenied: {
 					dropState = .denied
+					audioClips = []
+					selectedClips = []
 					isTargeted = false
 				} onTargeted: { targeted in
 					isTargeted = targeted
@@ -96,15 +94,21 @@ struct CaptionsView: View {
 			}
 			.frame(maxWidth: .infinity)
 			.frame(minHeight: 80)
-			if !audioClips.isEmpty {
-				HStack {
-					Spacer()
-					timeToggle
-				}
-				.padding(.top, 4)
+			HStack {
+				Spacer()
+				timeToggle
 			}
+			.padding(.top, 4)
 		}
 		.padding(.horizontal, KKPaddingMD)
+	}
+
+	private var emptyStateColor: Color {
+		switch dropState {
+		case .denied: return Color(nsColor: .error())
+		case .dropped: return Color(nsColor: .warning())
+		case .idle: return Color(nsColor: .timelineLabel())
+		}
 	}
 
 	private var dropZoneLabel: String {
@@ -116,26 +120,42 @@ struct CaptionsView: View {
 		}
 	}
 
-	private func formatLabels(_ fmt: FCPXMLParser.ProjectFormat) -> some View {
-		VStack(spacing: 2) {
-			Text(fmt.name)
-			Text("\(fmt.width) x \(fmt.height)  ·  \(fmt.fpsDisplay)")
-			Text("Duration: \(fmt.durationDisplay)")
-		}
-		.font(.caption)
-		.foregroundStyle(.secondary)
-		.padding(.horizontal, KKPaddingMD)
-	}
-
 	private var timelineDuration: Double {
 		model.projectFormat?.sequenceDuration ?? audioClips.map(\.end).max() ?? 0
 	}
 
-	private func formatClipTime(_ clip: FCPXMLParser.AudioClip) -> String {
-		if useTimecode, let fmt = model.projectFormat {
-			return "\(fmt.timecode(for: clip.start)) - \(fmt.timecode(for: clip.end))"
+	private var timeToggle: some View {
+		HStack(spacing: 2) {
+			pillToggleOption("Timecode", value: true)
+			pillToggleOption("Seconds", value: false)
 		}
-		return String(format: "%.2fs - %.2fs", clip.start, clip.end)
+		.padding(3)
+		.background(Capsule().fill(Color.white.opacity(0.08)))
+		.disabled(audioClips.isEmpty || (model.projectFormat?.fpsDisplay.isEmpty ?? true))
+	}
+
+	private var itemList: some View {
+		VStack(spacing: 2) {
+			ForEach(Array(dropItems.enumerated()), id: \.offset) { _, item in
+				HStack {
+					Text(item.name)
+						.font(.title2)
+						.lineLimit(1)
+						.opacity(dropState == .denied ? 0 : 1)
+					Spacer()
+					HStack(spacing: 1) {
+						Text("\(selectedClips.count)")
+							.foregroundStyle(Color(nsColor: .accent() ?? .blue))
+						Text("/ \(audioClips.count) selected")
+							.foregroundStyle(.secondary)
+					}
+					.font(.caption2)
+					.padding(.trailing, 2)
+					clipToolbar
+				}
+				.padding(.horizontal, KKPaddingLG)
+			}
+		}
 	}
 
 	private var clipToolbar: some View {
@@ -155,7 +175,6 @@ struct CaptionsView: View {
 								.font(.caption2)
 								.foregroundStyle(.secondary)
 						}
-						.contentShape(Rectangle())
 					}
 				}
 				.buttonStyle(.plain)
@@ -174,7 +193,6 @@ struct CaptionsView: View {
 								.font(.caption2)
 								.foregroundStyle(.secondary)
 						}
-						.contentShape(Rectangle())
 					}
 				}
 				.buttonStyle(.plain)
@@ -190,7 +208,6 @@ struct CaptionsView: View {
 					}
 					.font(.caption2)
 					.foregroundStyle(.secondary)
-					.contentShape(Rectangle())
 				}
 			}
 			.buttonStyle(.plain)
@@ -205,11 +222,11 @@ struct CaptionsView: View {
 					}
 					.font(.caption2)
 					.foregroundStyle(.secondary)
-					.contentShape(Rectangle())
 				}
 			}
 			.buttonStyle(.plain)
 		}
+		.disabled(audioClips.isEmpty)
 		.background(RoundedRectangle(cornerRadius: 999).fill(Color.white.opacity(0.06)))
 		.overlay(
 			RoundedRectangle(cornerRadius: 999).strokeBorder(
@@ -226,16 +243,7 @@ struct CaptionsView: View {
 		content()
 			.padding(.horizontal, 8)
 			.padding(.vertical, 4)
-	}
-
-	private var timeToggle: some View {
-		HStack(spacing: 2) {
-			pillToggleOption("Timecode", value: true)
-			pillToggleOption("Seconds", value: false)
-		}
-		.padding(3)
-		.background(Capsule().fill(Color.white.opacity(0.08)))
-		.disabled(model.projectFormat?.fpsDisplay.isEmpty ?? true)
+			.contentShape(Rectangle())
 	}
 
 	private func pillToggleOption(_ label: String, value: Bool) -> some View {
@@ -252,61 +260,8 @@ struct CaptionsView: View {
 					}
 				}
 				.foregroundStyle(useTimecode == value ? .white : .secondary)
+				.contentShape(Capsule())
 		}
 		.buttonStyle(.plain)
-	}
-
-	private var itemList: some View {
-		VStack(spacing: 2) {
-			ForEach(Array(dropItems.enumerated()), id: \.offset) { _, item in
-				HStack {
-					Text(item.name)
-						.font(.title2)
-						.lineLimit(1)
-					Spacer()
-					HStack(spacing: 1) {
-						Text("\(selectedClips.count)")
-							.foregroundStyle(Color(nsColor: .accent() ?? .blue))
-						Text("/ \(audioClips.count) selected")
-							.foregroundStyle(.secondary)
-					}
-					.font(.caption2)
-					.padding(.trailing, 2)
-					clipToolbar
-				}
-				.padding(.horizontal, KKPaddingLG)
-			}
-		}
-	}
-
-	private var clipList: some View {
-		VStack(spacing: 4) {
-			ForEach(Array(audioClips.enumerated()), id: \.offset) { index, clip in
-				HStack {
-					VStack(alignment: .leading, spacing: 2) {
-						Text(clip.name)
-							.font(.caption)
-							.lineLimit(1)
-						Text(formatClipTime(clip))
-							.font(.caption2)
-							.foregroundStyle(.secondary)
-					}
-					Spacer()
-					if clip.url != nil {
-						Button {
-							audioPlayer.toggle(clip: clip, index: index)
-						} label: {
-							Image(
-								systemName: audioPlayer.isPlaying(index: index)
-									? "stop.fill" : "play.fill"
-							)
-							.font(.caption)
-						}
-						.buttonStyle(.plain)
-					}
-				}
-				.padding(.horizontal, 8)
-			}
-		}
 	}
 }
