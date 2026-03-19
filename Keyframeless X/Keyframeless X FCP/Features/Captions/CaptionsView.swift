@@ -73,7 +73,7 @@ struct CaptionsView: View {
 					)
 					.id(timelineLoadID)
 					.padding(.horizontal, 8)
-					.padding(.bottom, 8)
+					.padding(.bottom, 4)
 					.frame(maxWidth: .infinity, maxHeight: .infinity)
 				}
 				FCPDropZoneView { clips in

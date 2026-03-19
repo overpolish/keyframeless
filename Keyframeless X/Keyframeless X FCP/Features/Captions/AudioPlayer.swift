@@ -64,7 +64,7 @@ final class AudioPlayer: ObservableObject {
 		player = newPlayer
 		playingIndex = index
 		currentTime = time
-		progressTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) {
+		progressTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) {
 			[weak self] _ in
 			MainActor.assumeIsolated { self?.currentTime = self?.player?.currentTime }
 		}
