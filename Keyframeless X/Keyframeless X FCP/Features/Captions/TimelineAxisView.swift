@@ -306,12 +306,10 @@ private class AxisDocumentView: NSView {
 	}
 
 	private func drawPlayButton(in rect: CGRect, context ctx: CGContext, isPlaying: Bool) {
-		let iconH = min(10.0, rect.height - 8)
-		guard iconH > 2 else { return }
 		let cx = rect.minX + rect.width / 2
 		let cy = rect.midY
+		let r = rect.height / 2 + 2
 
-		let r = iconH / 2 + 4
 		let circleRect = CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2)
 		ctx.saveGState()
 		ctx.setShadow(offset: .zero, blur: 8, color: NSColor.black.withAlphaComponent(0.5).cgColor)
@@ -319,22 +317,24 @@ private class AxisDocumentView: NSView {
 		ctx.fillEllipse(in: circleRect)
 		ctx.restoreGState()
 
-		ctx.setFillColor(NSColor.white.withAlphaComponent(0.9).cgColor)
-		if isPlaying {
-			let barW = max(2.0, iconH * 0.25)
-			let barH = iconH * 0.8
-			ctx.fill(CGRect(x: cx - iconH * 0.3, y: cy - barH / 2, width: barW, height: barH))
-			ctx.fill(CGRect(x: cx + iconH * 0.05, y: cy - barH / 2, width: barW, height: barH))
-		} else {
-			let tw = iconH * 0.7
-			let th = iconH * 0.85
-			ctx.beginPath()
-			ctx.move(to: CGPoint(x: cx - tw * 0.25, y: cy - th / 2))
-			ctx.addLine(to: CGPoint(x: cx - tw * 0.25, y: cy + th / 2))
-			ctx.addLine(to: CGPoint(x: cx + tw * 0.75, y: cy))
-			ctx.closePath()
-			ctx.fillPath()
-		}
+		let symbolName = isPlaying ? "pause.fill" : "play.fill"
+		let config = NSImage.SymbolConfiguration(pointSize: rect.height * 0.6, weight: .regular)
+		guard
+			let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?
+				.withSymbolConfiguration(config)
+		else { return }
+		image.lockFocus()
+		NSColor.white.withAlphaComponent(0.9).set()
+		NSRect(origin: .zero, size: image.size).fill(using: .sourceAtop)
+		image.unlockFocus()
+
+		let imgSize = image.size
+		let imgRect = CGRect(
+			x: cx - imgSize.width / 2 + 0.5,
+			y: cy - imgSize.height / 2,
+			width: imgSize.width,
+			height: imgSize.height)
+		image.draw(in: imgRect)
 	}
 
 	private func drawScrubBar(in rect: CGRect, context ctx: CGContext, progress: Double?) {

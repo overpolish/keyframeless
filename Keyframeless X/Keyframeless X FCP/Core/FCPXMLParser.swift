@@ -240,6 +240,7 @@ enum FCPXMLParser {
 					spine, tcStart: tcStart, compound: nil, assets: assets, mediaMap: mediaMap,
 					into: &clips)
 			case "ref-clip":
+				guard isEnabled(el) else { continue }
 				walkElement(
 					el, tcStart: 0, compound: nil, assets: assets, mediaMap: mediaMap,
 					into: &clips)
@@ -254,7 +255,7 @@ enum FCPXMLParser {
 						mediaMap: mediaMap, into: &clips)
 				}
 			case "asset-clip":
-				if isDialogue(el) {
+				if isEnabled(el), isDialogue(el) {
 					clips.append(makeClip(from: el, assets: assets, tcStart: nil))
 				}
 			default:
@@ -263,6 +264,10 @@ enum FCPXMLParser {
 		}
 
 		return clips
+	}
+
+	private static func isEnabled(_ el: XMLElement) -> Bool {
+		el.attribute(forName: "enabled")?.stringValue != "0"
 	}
 
 	private static func isDialogue(_ el: XMLElement) -> Bool {
@@ -290,7 +295,7 @@ enum FCPXMLParser {
 		into clips: inout [AudioClip]
 	) {
 		for child in el.children?.compactMap({ $0 as? XMLElement }) ?? [] {
-			if child.name == "asset-clip", isDialogue(child) {
+			if child.name == "asset-clip", isEnabled(child), isDialogue(child) {
 				if let ctx = compound {
 					// Position in compound's time space (tcStart-relative), walking the full
 					// parent chain so nested containers (e.g. video → secondary spine → clip)
@@ -323,7 +328,7 @@ enum FCPXMLParser {
 				} else {
 					clips.append(makeClip(from: child, assets: assets, tcStart: tcStart))
 				}
-			} else if child.name == "ref-clip" {
+			} else if child.name == "ref-clip", isEnabled(child) {
 				// Connected clips (XML children of the ref-clip) are in the main XML tree;
 				// projectTime works for them as-is.
 				walkElement(
