@@ -87,7 +87,6 @@ struct CaptionsView: View {
 					dropState = .denied
 					model.audioClips = []
 					model.selectedClips = []
-					model.dropItems = []
 					isTargeted = false
 				} onTargeted: { targeted in
 					isTargeted = targeted
@@ -134,12 +133,10 @@ struct CaptionsView: View {
 	}
 
 	private var timeToggle: some View {
-		HStack(spacing: 2) {
-			pillToggleOption("Timecode", value: true)
-			pillToggleOption("Seconds", value: false)
-		}
-		.padding(3)
-		.background(Capsule().fill(Color.white.opacity(0.08)))
+		PillToggle(
+			selection: $model.useTimecode,
+			options: [("Timecode", true), ("Seconds", false)]
+		)
 		.disabled(model.audioClips.isEmpty || (model.projectFormat?.fpsDisplay.isEmpty ?? true))
 	}
 
@@ -170,13 +167,13 @@ struct CaptionsView: View {
 	private var clipToolbar: some View {
 		let hasMain = model.audioClips.contains { !$0.isCompound }
 		let hasCompound = model.audioClips.contains { $0.isCompound }
-		return HStack(spacing: 0) {
+		return ToolbarGroup {
 			if hasMain {
 				Button {
 					model.selectedClips = Set(
 						model.audioClips.indices.filter { !model.audioClips[$0].isCompound })
 				} label: {
-					toolbarItem {
+					ToolbarCell {
 						HStack(spacing: 4) {
 							Circle()
 								.fill(Color(nsColor: .accent() ?? .blue))
@@ -188,14 +185,14 @@ struct CaptionsView: View {
 					}
 				}
 				.buttonStyle(.plain)
-				toolbarDivider
+				ToolbarDivider()
 			}
 			if hasCompound {
 				Button {
 					model.selectedClips = Set(
 						model.audioClips.indices.filter { model.audioClips[$0].isCompound })
 				} label: {
-					toolbarItem {
+					ToolbarCell {
 						HStack(spacing: 4) {
 							Circle()
 								.fill(Color(nsColor: .warning() ?? .yellow))
@@ -207,12 +204,12 @@ struct CaptionsView: View {
 					}
 				}
 				.buttonStyle(.plain)
-				toolbarDivider
+				ToolbarDivider()
 			}
 			Button {
 				model.selectedClips = Set(model.audioClips.indices)
 			} label: {
-				toolbarItem {
+				ToolbarCell {
 					HStack(spacing: 4) {
 						Image(systemName: "checkmark.rectangle.stack.fill")
 						Text("Select All")
@@ -222,11 +219,11 @@ struct CaptionsView: View {
 				}
 			}
 			.buttonStyle(.plain)
-			toolbarDivider
+			ToolbarDivider()
 			Button {
 				model.selectedClips = []
 			} label: {
-				toolbarItem {
+				ToolbarCell {
 					HStack(spacing: 4) {
 						Image(systemName: "rectangle.stack")
 						Text("Deselect All")
@@ -238,41 +235,6 @@ struct CaptionsView: View {
 			.buttonStyle(.plain)
 		}
 		.disabled(model.audioClips.isEmpty)
-		.background(RoundedRectangle(cornerRadius: 999).fill(Color.white.opacity(0.06)))
-		.overlay(
-			RoundedRectangle(cornerRadius: 999).strokeBorder(
-				Color.secondary.opacity(0.2), lineWidth: 1))
 	}
 
-	private var toolbarDivider: some View {
-		Rectangle()
-			.fill(Color.secondary.opacity(0.2))
-			.frame(width: 1, height: 14)
-	}
-
-	private func toolbarItem<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-		content()
-			.padding(.horizontal, 8)
-			.padding(.vertical, 4)
-			.contentShape(Rectangle())
-	}
-
-	private func pillToggleOption(_ label: String, value: Bool) -> some View {
-		Button {
-			model.useTimecode = value
-		} label: {
-			Text(label)
-				.font(.system(size: 10, weight: .medium))
-				.padding(.horizontal, 8)
-				.padding(.vertical, 3)
-				.background {
-					if model.useTimecode == value {
-						Capsule().fill(Color(nsColor: .accent()))
-					}
-				}
-				.foregroundStyle(model.useTimecode == value ? .white : .secondary)
-				.contentShape(Capsule())
-		}
-		.buttonStyle(.plain)
-	}
 }
