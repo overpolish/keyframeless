@@ -8,35 +8,73 @@ import Combine
 
 @MainActor
 final class AudioPlayer: ObservableObject {
-	@Published private(set) var playingURL: URL?
+	@Published private(set) var playingIndex: Int?
+	@Published private(set) var currentTime: Double?
 
 	private var player: AVAudioPlayer?
 	private var stopWorkItem: DispatchWorkItem?
+	private var progressTimer: Timer?
 
-	func toggle(clip: FCPXMLParser.AudioClip) {
+	func isPlaying(index: Int) -> Bool {
+		playingIndex == index
+	}
+
+	func toggle(clip: FCPXMLParser.AudioClip, index: Int) {
 		stopWorkItem?.cancel()
 		stopWorkItem = nil
-		if playingURL == clip.url {
+		if isPlaying(index: index) {
 			stop()
 			return
 		}
+		startPlaying(clip: clip, index: index, from: clip.sourceStart)
+	}
+
+	func scrub(clip: FCPXMLParser.AudioClip, index: Int, progress: Double) {
+		let offset = clip.sourceStart + progress * clip.sourceDuration
+		if isPlaying(index: index), let player = player {
+			stopWorkItem?.cancel()
+			player.currentTime = offset
+			currentTime = offset
+			let remaining = clip.sourceDuration * (1 - progress)
+			scheduleStop(after: max(0, remaining))
+		} else {
+			startPlaying(clip: clip, index: index, from: offset)
+		}
+	}
+
+	func stop() {
+		progressTimer?.invalidate()
+		progressTimer = nil
+		stopWorkItem?.cancel()
+		stopWorkItem = nil
+		player?.stop()
+		player = nil
+		playingIndex = nil
+		currentTime = nil
+	}
+
+	private func startPlaying(clip: FCPXMLParser.AudioClip, index: Int, from time: Double) {
 		stop()
 		guard let data = try? clip.data(),
 			let newPlayer = try? AVAudioPlayer(data: data)
 		else { return }
 		newPlayer.prepareToPlay()
-		newPlayer.currentTime = clip.sourceStart
+		newPlayer.currentTime = time
 		newPlayer.play()
 		player = newPlayer
-		playingURL = clip.url
-		let work = DispatchWorkItem { [weak self] in self?.stop() }
-		stopWorkItem = work
-		DispatchQueue.main.asyncAfter(deadline: .now() + clip.sourceDuration, execute: work)
+		playingIndex = index
+		currentTime = time
+		progressTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) {
+			[weak self] _ in
+			MainActor.assumeIsolated { self?.currentTime = self?.player?.currentTime }
+		}
+		let remaining = clip.sourceDuration - (time - clip.sourceStart)
+		scheduleStop(after: max(0, remaining))
 	}
 
-	func stop() {
-		player?.stop()
-		player = nil
-		playingURL = nil
+	private func scheduleStop(after delay: Double) {
+		let work = DispatchWorkItem { [weak self] in self?.stop() }
+		stopWorkItem = work
+		DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
 	}
 }
