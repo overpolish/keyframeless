@@ -58,6 +58,7 @@ struct CaptionsView: View {
 							.font(.title3)
 							.foregroundStyle(emptyStateColor)
 					}
+					.blur(radius: isTargeted ? 3 : 0)
 				} else {
 					TimelineAxisView(
 						duration: timelineDuration,
@@ -71,6 +72,7 @@ struct CaptionsView: View {
 					.padding(.horizontal, 8)
 					.padding(.bottom, 4)
 					.frame(maxWidth: .infinity, maxHeight: .infinity)
+					.blur(radius: isTargeted ? 3 : 0)
 				}
 				FCPDropZoneView { clips in
 					audioClips = clips
