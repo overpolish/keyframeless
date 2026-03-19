@@ -17,9 +17,9 @@ struct WhisperModelPickerView: View {
 				.padding(.horizontal, KKPaddingLG)
 
 			HStack(alignment: .top, spacing: KKSpacingLG) {
-				VStack(spacing: 2) {
+				VStack(spacing: KKSpacingXS) {
 					ForEach(WhisperModelManager.models) { model in
-						modelRow(model)
+						WhisperModelRow(model: model, manager: manager)
 					}
 				}
 				.padding(KKPaddingMD)
@@ -28,7 +28,7 @@ struct WhisperModelPickerView: View {
 				)
 				.overlay(
 					RoundedRectangle(cornerRadius: KKRadiusMD + 4)
-						.strokeBorder(Color.secondary.opacity(0.15), lineWidth: 1)
+						.strokeBorder(Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
 				)
 				.frame(maxWidth: .infinity)
 
@@ -40,14 +40,19 @@ struct WhisperModelPickerView: View {
 				.padding(.horizontal, KKPaddingLG)
 		}
 	}
+}
 
-	private func modelRow(_ model: WhisperModelManager.ModelInfo) -> some View {
+private struct WhisperModelRow: View {
+	let model: WhisperModelManager.ModelInfo
+	@ObservedObject var manager: WhisperModelManager
+
+	var body: some View {
 		let isDownloaded = manager.downloadedModels.contains(model.id)
 		let isDownloading = manager.downloadingModel == model.id
 		let isSelected = manager.selectedModel == model.id
 		let accent = Color(nsColor: .accent() ?? .blue)
 
-		return HStack(spacing: KKSpacingLG) {
+		HStack(spacing: KKSpacingLG) {
 			Circle()
 				.fill(isSelected ? accent : Color.secondary.opacity(0.3))
 				.frame(width: 6, height: 6)
@@ -58,16 +63,7 @@ struct WhisperModelPickerView: View {
 						.font(.system(size: 12, weight: isSelected ? .medium : .regular))
 						.foregroundStyle(isDownloaded ? .primary : .secondary)
 					if model.id == WhisperModelManager.recommendedModelId {
-						HStack(spacing: 3) {
-							Image(systemName: "desktopcomputer.and.macbook")
-								.font(.system(size: 8))
-							Text("Recommended")
-								.font(.system(size: 9, weight: .medium))
-						}
-						.foregroundStyle(.green)
-						.padding(.horizontal, 5)
-						.padding(.vertical, 2)
-						.background(Capsule().fill(Color.green.opacity(0.15)))
+						RecommendedBadge()
 					}
 					Text(model.sizeDescription)
 						.font(.system(size: 10))
@@ -81,29 +77,11 @@ struct WhisperModelPickerView: View {
 			Spacer()
 
 			if isDownloading {
-				HStack(spacing: 4) {
-					ProgressView(value: manager.downloadProgress)
-						.progressViewStyle(.linear)
-						.tint(accent)
-						.frame(width: 60)
-					Text("\(Int(manager.downloadProgress * 100))%")
-						.font(.system(size: 9))
-						.foregroundStyle(.secondary)
-						.monospacedDigit()
-				}
+				ModelDownloadProgress(progress: manager.downloadProgress, accent: accent)
 			} else if !isDownloaded {
-				Button {
+				ModelDownloadButton(accent: accent, disabled: manager.downloadingModel != nil) {
 					Task { await manager.download(model.id) }
-				} label: {
-					HStack(spacing: 3) {
-						Image(systemName: "arrow.down.circle")
-						Text("Download")
-					}
-					.font(.system(size: 10))
-					.foregroundStyle(accent)
 				}
-				.buttonStyle(.plain)
-				.disabled(manager.downloadingModel != nil)
 			}
 		}
 		.padding(.horizontal, KKPaddingLG)
@@ -125,5 +103,57 @@ struct WhisperModelPickerView: View {
 				}
 			}
 		}
+	}
+}
+
+private struct RecommendedBadge: View {
+	var body: some View {
+		HStack(spacing: 3) {
+			Image(systemName: "desktopcomputer.and.macbook")
+				.font(.system(size: 8))
+			Text("Recommended")
+				.font(.system(size: 9, weight: .medium))
+		}
+		.foregroundStyle(.green)
+		.padding(.horizontal, KKPaddingSM + 1)
+		.padding(.vertical, KKSpacingXS)
+		.background(Capsule().fill(Color.green.opacity(0.15)))
+	}
+}
+
+private struct ModelDownloadProgress: View {
+	let progress: Double
+	let accent: Color
+
+	var body: some View {
+		HStack(spacing: KKSpacingSM) {
+			ProgressView(value: progress)
+				.progressViewStyle(.linear)
+				.tint(accent)
+				.frame(width: 60)
+			Text("\(Int(progress * 100))%")
+				.font(.system(size: 9))
+				.foregroundStyle(.secondary)
+				.monospacedDigit()
+		}
+	}
+}
+
+private struct ModelDownloadButton: View {
+	let accent: Color
+	let disabled: Bool
+	let action: () -> Void
+
+	var body: some View {
+		Button(action: action) {
+			HStack(spacing: 3) {
+				Image(systemName: "arrow.down.circle")
+				Text("Download")
+			}
+			.font(.system(size: 10))
+			.foregroundStyle(accent)
+		}
+		.buttonStyle(.plain)
+		.disabled(disabled)
 	}
 }
