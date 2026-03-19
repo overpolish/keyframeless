@@ -12,6 +12,7 @@ struct TimelineAxisView: View {
 	let format: FCPXMLParser.ProjectFormat?
 	let useTimecode: Bool
 	let clips: [FCPXMLParser.AudioClip]
+	@Binding var selectedClips: Set<Int>
 
 	@State private var zoom: CGFloat = 1.0
 
@@ -20,6 +21,7 @@ struct TimelineAxisView: View {
 			TimelineAxisScrollView(
 				duration: duration,
 				clips: clips,
+				selectedClips: $selectedClips,
 				zoom: $zoom,
 				availableWidth: geo.size.width,
 				availableHeight: geo.size.height,
@@ -39,6 +41,7 @@ struct TimelineAxisView: View {
 private struct TimelineAxisScrollView: NSViewRepresentable {
 	let duration: Double
 	let clips: [FCPXMLParser.AudioClip]
+	@Binding var selectedClips: Set<Int>
 	@Binding var zoom: CGFloat
 	let availableWidth: CGFloat
 	let availableHeight: CGFloat
@@ -72,6 +75,14 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 		docView.frame = NSRect(x: 0, y: 0, width: contentWidth, height: docHeight)
 		docView.duration = duration
 		docView.clips = clips
+		docView.selectedClips = selectedClips
+		docView.onToggleClip = { index in
+			if selectedClips.contains(index) {
+				selectedClips.remove(index)
+			} else {
+				selectedClips.insert(index)
+			}
+		}
 		docView.labelForTime = labelForTime
 		docView.needsDisplay = true
 	}
@@ -102,15 +113,54 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 
 private class AxisDocumentView: NSView {
 	var duration: Double = 0
-	var clips: [FCPXMLParser.AudioClip] = []
+	var clips: [FCPXMLParser.AudioClip] = [] {
+		didSet { loadWaveformsIfNeeded(from: oldValue) }
+	}
+	var selectedClips: Set<Int> = []
+	var onToggleClip: ((Int) -> Void)?
 	var labelForTime: ((Double) -> String)?
 	var onMagnify: ((CGFloat, CGFloat) -> Void)?
 
+	private var cachedClipRects: [(rect: CGRect, index: Int)] = []
+	private var waveforms: [Int: [Float]] = [:]
+	private var waveformTasks: [Int: Task<Void, Never>] = [:]
+
 	override var isFlipped: Bool { true }
+
+	private func loadWaveformsIfNeeded(from oldClips: [FCPXMLParser.AudioClip]) {
+		let urlsChanged = clips.map(\.url) != oldClips.map(\.url)
+		if urlsChanged {
+			waveformTasks.values.forEach { $0.cancel() }
+			waveformTasks = [:]
+			waveforms = [:]
+		}
+		for (i, clip) in clips.enumerated() {
+			guard waveforms[i] == nil, waveformTasks[i] == nil else { continue }
+			waveformTasks[i] = Task {
+				guard let samples = try? await WaveformLoader.shared.waveform(for: clip) else {
+					return
+				}
+				await MainActor.run { [weak self] in
+					self?.waveforms[i] = samples
+					self?.needsDisplay = true
+				}
+			}
+		}
+	}
 
 	override func magnify(with event: NSEvent) {
 		let mouseX = convert(event.locationInWindow, from: nil).x
 		onMagnify?(1 + event.magnification, mouseX)
+	}
+
+	override func mouseDown(with event: NSEvent) {
+		let point = convert(event.locationInWindow, from: nil)
+		for entry in cachedClipRects.reversed() {
+			if entry.rect.contains(point) {
+				onToggleClip?(entry.index)
+				return
+			}
+		}
 	}
 
 	override func draw(_ dirtyRect: NSRect) {
@@ -160,19 +210,55 @@ private class AxisDocumentView: NSView {
 		let laneHeight = max(4, (clipAreaHeight - laneGap * (numLanes - 1)) / numLanes)
 		let cornerRadius: CGFloat = 6
 
-		ctx.setFillColor(NSColor.accent().withAlphaComponent(0.5).cgColor)
+		cachedClipRects = []
 		for (i, clip) in clips.enumerated() {
 			let lane = CGFloat(assignments[i])
 			let x = CGFloat(clip.start) * pps
 			let w = max(laneHeight, CGFloat(clip.end - clip.start) * pps)
 			let y = clipAreaTop + lane * (laneHeight + laneGap)
 			let rect = CGRect(x: x, y: y, width: w, height: laneHeight)
+			cachedClipRects.append((rect: rect, index: i))
+
+			let alpha: CGFloat = selectedClips.contains(i) ? 0.85 : 0.25
+			ctx.setFillColor(NSColor.accent().withAlphaComponent(alpha).cgColor)
 			let path = CGPath(
 				roundedRect: rect, cornerWidth: cornerRadius, cornerHeight: cornerRadius,
 				transform: nil)
 			ctx.addPath(path)
+			ctx.fillPath()
+
+			if let samples = waveforms[i], !samples.isEmpty {
+				drawWaveform(samples, in: rect, context: ctx, selected: selectedClips.contains(i))
+			}
 		}
-		ctx.fillPath()
+	}
+
+	private func drawWaveform(
+		_ samples: [Float], in rect: CGRect, context ctx: CGContext, selected: Bool
+	) {
+		let alpha: CGFloat = selected ? 0.7 : 0.35
+		ctx.setStrokeColor(NSColor.white.withAlphaComponent(alpha).cgColor)
+
+		let barCount = max(1, Int(rect.width / 2))
+		let stride = max(1, samples.count / barCount)
+		let barWidth = rect.width / CGFloat(barCount)
+		let midY = rect.midY
+		let halfH = rect.height * 0.35  // 70% total height, split symmetrically
+
+		let peak = samples.max() ?? 1
+		let scale = peak > 0 ? 1 / CGFloat(peak) : 1
+
+		ctx.setLineWidth(max(1, barWidth * 0.75))
+		ctx.beginPath()
+		for b in 0..<barCount {
+			let sampleIndex = min(b * stride, samples.count - 1)
+			let amp = CGFloat(samples[sampleIndex]) * scale
+			let sx = rect.minX + (CGFloat(b) + 0.5) * barWidth
+			let h = max(1, amp * halfH)
+			ctx.move(to: CGPoint(x: sx, y: midY - h))
+			ctx.addLine(to: CGPoint(x: sx, y: midY + h))
+		}
+		ctx.strokePath()
 	}
 
 	private func laneAssignments(for clips: [FCPXMLParser.AudioClip]) -> [Int] {

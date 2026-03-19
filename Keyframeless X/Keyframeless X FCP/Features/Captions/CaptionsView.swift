@@ -10,6 +10,7 @@ struct CaptionsView: View {
 	@ObservedObject var model: CaptionsModel
 	@StateObject private var audioPlayer = AudioPlayer()
 	@State private var audioClips: [FCPXMLParser.AudioClip] = []
+	@State private var selectedClips: Set<Int> = []
 	@State private var dropItems: [FCPXMLParser.DropItem] = []
 	@State private var dropState: DropState = .idle
 	@State private var isTargeted = false
@@ -66,7 +67,8 @@ struct CaptionsView: View {
 						duration: timelineDuration,
 						format: model.projectFormat,
 						useTimecode: useTimecode,
-						clips: audioClips
+						clips: audioClips,
+						selectedClips: $selectedClips
 					)
 					.id(timelineLoadID)
 					.padding(.horizontal, 8)
@@ -75,6 +77,7 @@ struct CaptionsView: View {
 				}
 				FCPDropZoneView { clips in
 					audioClips = clips
+					selectedClips = Set(clips.indices)
 					dropState = .dropped
 					isTargeted = false
 					timelineLoadID = UUID()
