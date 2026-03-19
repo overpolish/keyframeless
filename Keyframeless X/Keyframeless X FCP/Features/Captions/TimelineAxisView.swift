@@ -224,7 +224,7 @@ private class AxisDocumentView: NSView {
 	override func draw(_ dirtyRect: NSRect) {
 		guard let ctx = NSGraphicsContext.current?.cgContext, duration > 0 else { return }
 
-		let displayDuration = duration + 0.3  // Space for final tick to render
+		let displayDuration = floor(duration) + 1.0  // Round up to next whole second
 		let pps = bounds.width / CGFloat(displayDuration)
 		let interval = tickInterval(pixelsPerSecond: pps)
 
@@ -282,7 +282,7 @@ private class AxisDocumentView: NSView {
 		for (i, clip) in clips.enumerated() {
 			let lane = CGFloat(assignments[i])
 			let x = CGFloat(clip.start) * pps
-			let w = min(max(laneHeight, CGFloat(clip.end - clip.start) * pps), emptyX - x)
+			let w = min(max(cornerRadius * 2, CGFloat(clip.end - clip.start) * pps), emptyX - x)
 			let y = clipAreaTop + lane * (laneHeight + laneGap)
 			let rect = CGRect(x: x, y: y, width: w, height: laneHeight)
 			cachedClipRects.append((rect: rect, index: i))

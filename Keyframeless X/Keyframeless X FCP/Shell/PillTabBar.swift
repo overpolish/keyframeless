@@ -39,6 +39,7 @@ private struct PillTabItem: View {
 					}
 				}
 				.foregroundStyle(isSelected ? .white : .secondary)
+				.contentShape(Capsule())
 		}
 		.buttonStyle(.plain)
 		.disabled(!tab.isEnabled)
