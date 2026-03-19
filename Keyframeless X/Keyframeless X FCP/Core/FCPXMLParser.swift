@@ -10,7 +10,7 @@ enum FCPXMLParser {
 	private static let dialogueClipXPath =
 		"asset-clip[starts-with(@audioRole, 'dialogue') and not(audio-channel-source[starts-with(@role, 'effects')])]"
 
-	struct DropItem {
+	struct DropItem: Codable {
 		let name: String
 		let kind: String
 		let dialogueCount: Int
@@ -61,7 +61,7 @@ enum FCPXMLParser {
 		}
 	}
 
-	struct ProjectFormat {
+	struct ProjectFormat: Codable {
 		static let `default` = ProjectFormat(
 			name: "FFVideoFormat1080p60",
 			frameDuration: "100/6000s",
@@ -184,7 +184,7 @@ enum FCPXMLParser {
 		)
 	}
 
-	struct AudioClip {
+	struct AudioClip: Codable {
 		let name: String
 		let start: Double
 		let end: Double

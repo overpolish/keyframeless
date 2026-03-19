@@ -9,19 +9,15 @@ import SwiftUI
 struct CaptionsView: View {
 	@ObservedObject var model: CaptionsModel
 	@StateObject private var audioPlayer = AudioPlayer()
-	@State private var audioClips: [FCPXMLParser.AudioClip] = []
-	@State private var selectedClips: Set<Int> = []
-	@State private var dropItems: [FCPXMLParser.DropItem] = []
 	@State private var dropState: DropState = .idle
 	@State private var isTargeted = false
-	@State private var useTimecode = true
 	@State private var timelineLoadID = UUID()
 
 	enum DropState { case idle, denied, dropped }
 
 	var body: some View {
 		VStack(spacing: KKSpacingLG) {
-			if !dropItems.isEmpty {
+			if !model.dropItems.isEmpty {
 				itemList
 			}
 			timelineArea
@@ -39,12 +35,14 @@ struct CaptionsView: View {
 							? Color(nsColor: .accent())
 							: dropState == .denied
 								? Color(nsColor: .error())
-								: dropState == .dropped && audioClips.isEmpty
+								: dropState == .dropped && model.audioClips.isEmpty
 									? Color(nsColor: .warning())
-									: Color.secondary.opacity(audioClips.isEmpty ? 0.4 : 0.15),
-						style: StrokeStyle(lineWidth: 1.5, dash: audioClips.isEmpty ? [6, 4] : [])
+									: Color.secondary.opacity(
+										model.audioClips.isEmpty ? 0.4 : 0.15),
+						style: StrokeStyle(
+							lineWidth: 1.5, dash: model.audioClips.isEmpty ? [6, 4] : [])
 					)
-				if audioClips.isEmpty {
+				if model.audioClips.isEmpty {
 					VStack(spacing: 6) {
 						Image(
 							systemName: dropState == .denied
@@ -63,9 +61,9 @@ struct CaptionsView: View {
 					TimelineAxisView(
 						duration: timelineDuration,
 						format: model.projectFormat,
-						useTimecode: useTimecode,
-						clips: audioClips,
-						selectedClips: $selectedClips,
+						useTimecode: model.useTimecode,
+						clips: model.audioClips,
+						selectedClips: $model.selectedClips,
 						audioPlayer: audioPlayer
 					)
 					.id(timelineLoadID)
@@ -75,20 +73,20 @@ struct CaptionsView: View {
 					.blur(radius: isTargeted ? 3 : 0)
 				}
 				FCPDropZoneView { clips in
-					audioClips = clips
-					selectedClips = Set(clips.indices)
+					model.audioClips = clips
+					model.selectedClips = Set(clips.indices)
 					dropState = .dropped
 					isTargeted = false
 					timelineLoadID = UUID()
 				} onFormat: { fmt in
 					model.projectFormat = fmt
-					useTimecode = !fmt.fpsDisplay.isEmpty
+					model.useTimecode = !fmt.fpsDisplay.isEmpty
 				} onItems: { items in
-					dropItems = items
+					model.dropItems = items
 				} onDenied: {
 					dropState = .denied
-					audioClips = []
-					selectedClips = []
+					model.audioClips = []
+					model.selectedClips = []
 					isTargeted = false
 				} onTargeted: { targeted in
 					isTargeted = targeted
@@ -118,12 +116,13 @@ struct CaptionsView: View {
 		case .idle: return "Drop FCP clips here"
 		case .denied: return "Cannot drop library or event"
 		case .dropped:
-			return audioClips.isEmpty ? "No dialogue found" : "\(audioClips.count) dialogue clips"
+			return model.audioClips.isEmpty
+				? "No dialogue found" : "\(model.audioClips.count) dialogue clips"
 		}
 	}
 
 	private var timelineDuration: Double {
-		model.projectFormat?.sequenceDuration ?? audioClips.map(\.end).max() ?? 0
+		model.projectFormat?.sequenceDuration ?? model.audioClips.map(\.end).max() ?? 0
 	}
 
 	private var timeToggle: some View {
@@ -133,12 +132,12 @@ struct CaptionsView: View {
 		}
 		.padding(3)
 		.background(Capsule().fill(Color.white.opacity(0.08)))
-		.disabled(audioClips.isEmpty || (model.projectFormat?.fpsDisplay.isEmpty ?? true))
+		.disabled(model.audioClips.isEmpty || (model.projectFormat?.fpsDisplay.isEmpty ?? true))
 	}
 
 	private var itemList: some View {
 		VStack(spacing: 2) {
-			ForEach(Array(dropItems.enumerated()), id: \.offset) { _, item in
+			ForEach(Array(model.dropItems.enumerated()), id: \.offset) { _, item in
 				HStack {
 					Text(item.name)
 						.font(.title2)
@@ -146,9 +145,9 @@ struct CaptionsView: View {
 						.opacity(dropState == .denied ? 0 : 1)
 					Spacer()
 					HStack(spacing: 1) {
-						Text("\(selectedClips.count)")
+						Text("\(model.selectedClips.count)")
 							.foregroundStyle(Color(nsColor: .accent() ?? .blue))
-						Text("/ \(audioClips.count) selected")
+						Text("/ \(model.audioClips.count) selected")
 							.foregroundStyle(.secondary)
 					}
 					.font(.caption2)
@@ -161,12 +160,13 @@ struct CaptionsView: View {
 	}
 
 	private var clipToolbar: some View {
-		let hasMain = audioClips.contains { !$0.isCompound }
-		let hasCompound = audioClips.contains { $0.isCompound }
+		let hasMain = model.audioClips.contains { !$0.isCompound }
+		let hasCompound = model.audioClips.contains { $0.isCompound }
 		return HStack(spacing: 0) {
 			if hasMain {
 				Button {
-					selectedClips = Set(audioClips.indices.filter { !audioClips[$0].isCompound })
+					model.selectedClips = Set(
+						model.audioClips.indices.filter { !model.audioClips[$0].isCompound })
 				} label: {
 					toolbarItem {
 						HStack(spacing: 4) {
@@ -184,7 +184,8 @@ struct CaptionsView: View {
 			}
 			if hasCompound {
 				Button {
-					selectedClips = Set(audioClips.indices.filter { audioClips[$0].isCompound })
+					model.selectedClips = Set(
+						model.audioClips.indices.filter { model.audioClips[$0].isCompound })
 				} label: {
 					toolbarItem {
 						HStack(spacing: 4) {
@@ -201,7 +202,7 @@ struct CaptionsView: View {
 				toolbarDivider
 			}
 			Button {
-				selectedClips = Set(audioClips.indices)
+				model.selectedClips = Set(model.audioClips.indices)
 			} label: {
 				toolbarItem {
 					HStack(spacing: 4) {
@@ -215,7 +216,7 @@ struct CaptionsView: View {
 			.buttonStyle(.plain)
 			toolbarDivider
 			Button {
-				selectedClips = []
+				model.selectedClips = []
 			} label: {
 				toolbarItem {
 					HStack(spacing: 4) {
@@ -228,7 +229,7 @@ struct CaptionsView: View {
 			}
 			.buttonStyle(.plain)
 		}
-		.disabled(audioClips.isEmpty)
+		.disabled(model.audioClips.isEmpty)
 		.background(RoundedRectangle(cornerRadius: 999).fill(Color.white.opacity(0.06)))
 		.overlay(
 			RoundedRectangle(cornerRadius: 999).strokeBorder(
@@ -250,18 +251,18 @@ struct CaptionsView: View {
 
 	private func pillToggleOption(_ label: String, value: Bool) -> some View {
 		Button {
-			useTimecode = value
+			model.useTimecode = value
 		} label: {
 			Text(label)
 				.font(.system(size: 10, weight: .medium))
 				.padding(.horizontal, 8)
 				.padding(.vertical, 3)
 				.background {
-					if useTimecode == value {
+					if model.useTimecode == value {
 						Capsule().fill(Color(nsColor: .accent()))
 					}
 				}
-				.foregroundStyle(useTimecode == value ? .white : .secondary)
+				.foregroundStyle(model.useTimecode == value ? .white : .secondary)
 				.contentShape(Capsule())
 		}
 		.buttonStyle(.plain)
