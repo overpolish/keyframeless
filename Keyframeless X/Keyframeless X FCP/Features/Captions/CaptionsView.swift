@@ -32,7 +32,6 @@ struct CaptionsView: View {
 			TranscribeButton(
 				disabled: model.selectedClips.isEmpty
 					|| whisperManager.selectedModel == nil
-					|| whisperManager.selectedLanguage == nil
 			)
 			.padding(.horizontal, KKPaddingMD)
 			.padding(.bottom, KKPaddingXL + 4)
@@ -88,19 +87,14 @@ struct CaptionsView: View {
 			}
 			.frame(maxWidth: .infinity)
 			.frame(minHeight: 80)
-			HStack {
+			.overlay(alignment: .bottomTrailing) {
 				HelperText(
 					"Click and drag to quickly select/deselect clips.",
-					systemImage: "pointer.arrow.motionlines")
-				Spacer()
-				PillToggle(
-					selection: $model.useTimecode,
-					options: [("Timecode", true), ("Seconds", false)]
+					systemImage: "pointer.arrow.motionlines"
 				)
-				.disabled(
-					model.audioClips.isEmpty || (model.projectFormat?.fpsDisplay.isEmpty ?? true))
+				.padding(.trailing, KKPaddingSM)
+				.alignmentGuide(.bottom) { d in d[.top] - KKSpacingMD }
 			}
-			.padding(.top, KKSpacingSM)
 			ClipCountDisplay(
 				selectedCount: model.selectedClips.count,
 				totalCount: model.audioClips.count
