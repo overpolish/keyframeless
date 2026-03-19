@@ -9,6 +9,8 @@
 
 @implementation NSColor (KKColors)
 
+#pragma mark - FxPlug
+
 + (NSColor *)inspectorLabel {
   return [NSColor colorWithRed:0xB3 / 255.0
                          green:0xB3 / 255.0
@@ -29,6 +31,31 @@
                           blue:0x2D / 255.0
                          alpha:1.0];
 }
+
+#pragma mark - Workflow Extension
+
++ (NSColor *)windowBackground {
+  return [NSColor colorWithRed:0x27 / 255.0
+                         green:0x27 / 255.0
+                          blue:0x27 / 255.0
+                         alpha:1.0];
+}
+
++ (NSColor *)timelineLabel {
+  return [NSColor colorWithRed:0x70 / 255.0
+                         green:0x70 / 255.0
+                          blue:0x70 / 255.0
+                         alpha:1.0];
+}
+
++ (NSColor *)timelineTick {
+  return [NSColor colorWithRed:0x79 / 255.0
+                         green:0x79 / 255.0
+                          blue:0x79 / 255.0
+                         alpha:1.0];
+}
+
+#pragma mark - Shared
 
 + (NSColor *)primary {
   return [NSColor colorWithRed:0xB3 / 255.0
@@ -80,10 +107,10 @@
                          alpha:1.0];
 }
 
-+ (NSColor *)secondaryLabel {
-  return [NSColor colorWithRed:0x70 / 255.0
-                         green:0x70 / 255.0
-                          blue:0x70 / 255.0
++ (NSColor *)error {
+  return [NSColor colorWithRed:0xFB / 255.0
+                         green:0x2C / 255.0
+                          blue:0x36 / 255.0
                          alpha:1.0];
 }
 

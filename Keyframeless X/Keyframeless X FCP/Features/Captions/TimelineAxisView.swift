@@ -11,6 +11,7 @@ struct TimelineAxisView: View {
 	let duration: Double
 	let format: FCPXMLParser.ProjectFormat?
 	let useTimecode: Bool
+	let clips: [FCPXMLParser.AudioClip]
 
 	@State private var zoom: CGFloat = 1.0
 
@@ -18,6 +19,7 @@ struct TimelineAxisView: View {
 		GeometryReader { geo in
 			TimelineAxisScrollView(
 				duration: duration,
+				clips: clips,
 				zoom: $zoom,
 				availableWidth: geo.size.width,
 				availableHeight: geo.size.height,
@@ -36,6 +38,7 @@ struct TimelineAxisView: View {
 
 private struct TimelineAxisScrollView: NSViewRepresentable {
 	let duration: Double
+	let clips: [FCPXMLParser.AudioClip]
 	@Binding var zoom: CGFloat
 	let availableWidth: CGFloat
 	let availableHeight: CGFloat
@@ -68,6 +71,7 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 		let docHeight = availableHeight > 0 ? availableHeight : 36
 		docView.frame = NSRect(x: 0, y: 0, width: contentWidth, height: docHeight)
 		docView.duration = duration
+		docView.clips = clips
 		docView.labelForTime = labelForTime
 		docView.needsDisplay = true
 	}
@@ -98,6 +102,7 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 
 private class AxisDocumentView: NSView {
 	var duration: Double = 0
+	var clips: [FCPXMLParser.AudioClip] = []
 	var labelForTime: ((Double) -> String)?
 	var onMagnify: ((CGFloat, CGFloat) -> Void)?
 
@@ -118,18 +123,13 @@ private class AxisDocumentView: NSView {
 		let strokeWidth: CGFloat = 1.0
 		ctx.setLineWidth(strokeWidth)
 
-		let tickColor = NSColor(
-			// TODO can we move to kkcolor
-			red: 0x79 / 255.0, green: 0x79 / 255.0, blue: 0x79 / 255.0, alpha: 1.0)
 		let tickHeight: CGFloat = 12
 		let attrs: [NSAttributedString.Key: Any] = [
 			.font: NSFont.boldSystemFont(ofSize: 10),
-			.foregroundColor: NSColor(
-				// TODO can we use kkcolor here?
-				red: 0x70 / 255.0, green: 0x70 / 255.0, blue: 0x70 / 255.0, alpha: 1.0),
+			.foregroundColor: NSColor.timelineLabel()!,
 		]
 
-		ctx.setStrokeColor(tickColor.cgColor)
+		ctx.setStrokeColor(NSColor.timelineTick().cgColor)
 		ctx.beginPath()
 
 		var t = 0.0
@@ -149,6 +149,46 @@ private class AxisDocumentView: NSView {
 		}
 
 		ctx.strokePath()
+
+		guard !clips.isEmpty else { return }
+
+		let laneGap: CGFloat = 4
+		let clipAreaTop: CGFloat = baseline + tickHeight + 6
+		let clipAreaHeight = bounds.height - clipAreaTop - 4
+		let assignments = laneAssignments(for: clips)
+		let numLanes = CGFloat((assignments.max() ?? 0) + 1)
+		let laneHeight = max(4, (clipAreaHeight - laneGap * (numLanes - 1)) / numLanes)
+		let cornerRadius: CGFloat = 6
+
+		ctx.setFillColor(NSColor.accent().withAlphaComponent(0.5).cgColor)
+		for (i, clip) in clips.enumerated() {
+			let lane = CGFloat(assignments[i])
+			let x = CGFloat(clip.start) * pps
+			let w = max(laneHeight, CGFloat(clip.end - clip.start) * pps)
+			let y = clipAreaTop + lane * (laneHeight + laneGap)
+			let rect = CGRect(x: x, y: y, width: w, height: laneHeight)
+			let path = CGPath(
+				roundedRect: rect, cornerWidth: cornerRadius, cornerHeight: cornerRadius,
+				transform: nil)
+			ctx.addPath(path)
+		}
+		ctx.fillPath()
+	}
+
+	private func laneAssignments(for clips: [FCPXMLParser.AudioClip]) -> [Int] {
+		var result = [Int](repeating: 0, count: clips.count)
+		var laneEnds = [Double]()
+		for (origIdx, clip) in clips.enumerated().sorted(by: { $0.element.start < $1.element.start }
+		) {
+			if let lane = laneEnds.firstIndex(where: { $0 <= clip.start }) {
+				result[origIdx] = lane
+				laneEnds[lane] = clip.end
+			} else {
+				result[origIdx] = laneEnds.count
+				laneEnds.append(clip.end)
+			}
+		}
+		return result
 	}
 
 	private func tickInterval(pixelsPerSecond: CGFloat) -> Double {

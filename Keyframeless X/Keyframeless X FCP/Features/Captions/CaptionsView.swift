@@ -44,7 +44,7 @@ struct CaptionsView: View {
 				RoundedRectangle(cornerRadius: 8)
 					.strokeBorder(
 						isTargeted
-							? Color.green
+							? Color(nsColor: .accent())
 							: Color.secondary.opacity(audioClips.isEmpty ? 0.4 : 0.15),
 						style: StrokeStyle(lineWidth: 1.5, dash: audioClips.isEmpty ? [6, 4] : [])
 					)
@@ -53,22 +53,24 @@ struct CaptionsView: View {
 						Image(systemName: dropState == .denied ? "xmark.circle" : "arrow.down.doc")
 							.font(.title2)
 							.foregroundStyle(
-								// TODO error color
-								dropState == .denied ? Color.red.opacity(0.7) : .secondary)
+								dropState == .denied
+									? Color(nsColor: .error()) : Color(nsColor: .timelineLabel()))
 						Text(dropZoneLabel)
 							.font(.caption)
 							.foregroundStyle(
-								// TODO error color
-								dropState == .denied ? Color.red.opacity(0.7) : .secondary)
+								dropState == .denied
+									? Color(nsColor: .error()) : Color(nsColor: .timelineLabel()))
 					}
 				} else {
 					TimelineAxisView(
 						duration: timelineDuration,
 						format: model.projectFormat,
-						useTimecode: useTimecode
+						useTimecode: useTimecode,
+						clips: audioClips
 					)
 					.id(timelineLoadID)
 					.padding(.horizontal, 8)
+					.padding(.bottom, 8)
 					.frame(maxWidth: .infinity, maxHeight: .infinity)
 				}
 				FCPDropZoneView { clips in
