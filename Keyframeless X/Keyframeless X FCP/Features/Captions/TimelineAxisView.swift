@@ -140,6 +140,8 @@ private class AxisDocumentView: NSView {
 	private var waveformTasks: [Int: Task<Void, Never>] = [:]
 	private var cancellables: Set<AnyCancellable> = []
 	private var scrubbingClipIndex: Int?
+	private var isDraggingSelection = false
+	private var dragHoveredIndex: Int?
 
 	private let playBtnSize: CGFloat = 12
 	private let minHeightForControls: CGFloat = 16
@@ -204,21 +206,37 @@ private class AxisDocumentView: NSView {
 				}
 			}
 
+			isDraggingSelection = true
+			dragHoveredIndex = entry.index
 			onToggleClip?(entry.index)
 			return
 		}
+		isDraggingSelection = true
 	}
 
 	override func mouseDragged(with event: NSEvent) {
-		guard let idx = scrubbingClipIndex, idx < clips.count else { return }
-		guard let clipRect = cachedClipRects.first(where: { $0.index == idx })?.rect else { return }
 		let point = convert(event.locationInWindow, from: nil)
-		let progress = Double((point.x - clipRect.minX) / clipRect.width)
-		audioPlayer?.scrub(clip: clips[idx], index: idx, progress: max(0, min(1, progress)))
+		if let idx = scrubbingClipIndex, idx < clips.count,
+			let clipRect = cachedClipRects.first(where: { $0.index == idx })?.rect
+		{
+			let progress = Double((point.x - clipRect.minX) / clipRect.width)
+			audioPlayer?.scrub(clip: clips[idx], index: idx, progress: max(0, min(1, progress)))
+			return
+		}
+		guard isDraggingSelection else { return }
+		let hoveredIndex = cachedClipRects.reversed().first { $0.rect.contains(point) }?.index
+		if hoveredIndex != dragHoveredIndex {
+			dragHoveredIndex = hoveredIndex
+			if let index = hoveredIndex {
+				onToggleClip?(index)
+			}
+		}
 	}
 
 	override func mouseUp(with event: NSEvent) {
 		scrubbingClipIndex = nil
+		isDraggingSelection = false
+		dragHoveredIndex = nil
 	}
 
 	override func draw(_ dirtyRect: NSRect) {
