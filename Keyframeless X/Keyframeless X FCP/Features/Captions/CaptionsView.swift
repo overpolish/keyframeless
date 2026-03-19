@@ -18,13 +18,24 @@ struct CaptionsView: View {
 
 	var body: some View {
 		VStack(spacing: KKSpacingLG) {
-			if !model.dropItems.isEmpty {
-				itemList
-			}
+			topRow
 			timelineArea
-			WhisperModelPickerView(manager: whisperManager)
-				.padding(.horizontal, KKPaddingMD)
-			Spacer()
+				.frame(maxHeight: .infinity)
+				.layoutPriority(1)
+			HStack(alignment: .top, spacing: KKSpacingLG) {
+				WhisperModelPickerView(manager: whisperManager)
+				WhisperLanguagePickerView(manager: whisperManager)
+					.frame(maxHeight: .infinity)
+			}
+			.frame(maxHeight: .infinity)
+			.padding(.horizontal, KKPaddingMD)
+			TranscribeButton(
+				disabled: model.selectedClips.isEmpty
+					|| whisperManager.selectedModel == nil
+					|| whisperManager.selectedLanguage == nil
+			)
+			.padding(.horizontal, KKPaddingMD)
+			.padding(.bottom, KKPaddingXL + 4)
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 	}
@@ -111,16 +122,17 @@ struct CaptionsView: View {
 		model.projectFormat?.sequenceDuration ?? model.audioClips.map(\.end).max() ?? 0
 	}
 
-	private var itemList: some View {
-		VStack(spacing: KKSpacingXS) {
-			ForEach(Array(model.dropItems.enumerated()), id: \.offset) { _, item in
-				CaptionItemRow(
-					name: item.name,
-					isHidden: dropState == .denied,
-					clips: model.audioClips,
-					selectedClips: $model.selectedClips
-				)
+	private var topRow: some View {
+		HStack {
+			if let item = model.dropItems.first {
+				Text(item.name)
+					.font(.title2)
+					.lineLimit(1)
+					.opacity(dropState == .denied ? 0 : 1)
 			}
+			Spacer()
+			ClipSelectionToolbar(clips: model.audioClips, selectedClips: $model.selectedClips)
 		}
+		.padding(.horizontal, KKPaddingLG)
 	}
 }
