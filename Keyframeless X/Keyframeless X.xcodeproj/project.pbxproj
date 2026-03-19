@@ -10,6 +10,7 @@
 		F28BD2302F68595000C5F6B7 /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F28BD22F2F68595000C5F6B7 /* KeyframelessKit.framework */; };
 		F28BD2312F68595000C5F6B7 /* KeyframelessKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F28BD22F2F68595000C5F6B7 /* KeyframelessKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F29C84ED2F6820750073B1A9 /* Keyframeless X FCP.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F29C84E02F6820750073B1A9 /* Keyframeless X FCP.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		F2A8FB212F6C52C2007989B9 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = F2A8FB202F6C52C2007989B9 /* WhisperKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -91,6 +92,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F2A8FB212F6C52C2007989B9 /* WhisperKit in Frameworks */,
 				F28BD2302F68595000C5F6B7 /* KeyframelessKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -170,6 +172,7 @@
 			);
 			name = "Keyframeless X FCP";
 			packageProductDependencies = (
+				F2A8FB202F6C52C2007989B9 /* WhisperKit */,
 			);
 			productName = "Keyframeless X FCP";
 			productReference = F29C84E02F6820750073B1A9 /* Keyframeless X FCP.appex */;
@@ -202,6 +205,9 @@
 			);
 			mainGroup = F29C84BD2F68205E0073B1A9;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				F2A8FB1F2F6C52C2007989B9 /* XCRemoteSwiftPackageReference "WhisperKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F29C84C72F68205E0073B1A9 /* Products */;
 			projectDirPath = "";
@@ -565,6 +571,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		F2A8FB1F2F6C52C2007989B9 /* XCRemoteSwiftPackageReference "WhisperKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/argmaxinc/WhisperKit";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F2A8FB202F6C52C2007989B9 /* WhisperKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F2A8FB1F2F6C52C2007989B9 /* XCRemoteSwiftPackageReference "WhisperKit" */;
+			productName = WhisperKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = F29C84BE2F68205E0073B1A9 /* Project object */;
 }

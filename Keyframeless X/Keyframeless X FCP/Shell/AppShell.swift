@@ -24,7 +24,8 @@ struct AppShell: View {
 					ComingSoonView()
 				}
 			}
-			.padding([.leading, .trailing, .bottom], KKSpacingXL)
+			.padding([.leading, .trailing], KKSpacingXL)
+			.padding(.bottom, KKSpacingXS)
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 		.background(Color(nsColor: .windowBackground()))

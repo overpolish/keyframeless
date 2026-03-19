@@ -9,6 +9,7 @@ import SwiftUI
 struct CaptionsView: View {
 	@ObservedObject var model: CaptionsModel
 	@StateObject private var audioPlayer = AudioPlayer()
+	@StateObject private var whisperManager = WhisperModelManager()
 	@State private var dropState: DropState = .idle
 	@State private var isTargeted = false
 	@State private var timelineLoadID = UUID()
@@ -21,6 +22,8 @@ struct CaptionsView: View {
 				itemList
 			}
 			timelineArea
+			WhisperModelPickerView(manager: whisperManager)
+				.padding(.horizontal, KKPaddingMD)
 			Spacer()
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
