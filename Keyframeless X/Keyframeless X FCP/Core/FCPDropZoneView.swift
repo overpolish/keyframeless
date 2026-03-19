@@ -83,6 +83,7 @@ class FCPDropTargetView: NSView {
 				onDenied?()
 				return false
 			}
+			// TODO should be a callback so its polymorphic
 			onDrop?(FCPXMLParser.audioClips(in: doc))
 			onItems?(FCPXMLParser.topLevelItems(in: doc))
 			onFormat?(FCPXMLParser.projectFormat(in: doc) ?? .default)
