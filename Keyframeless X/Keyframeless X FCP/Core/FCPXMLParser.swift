@@ -237,9 +237,12 @@ enum FCPXMLParser {
 				else { continue }
 				let tcStart = parseTime(seq.attribute(forName: "tcStart")?.stringValue ?? "0s")
 				walkElement(
-					spine, tcStart: tcStart, assets: assets, mediaMap: mediaMap, into: &clips)
+					spine, tcStart: tcStart, compound: nil, assets: assets, mediaMap: mediaMap,
+					into: &clips)
 			case "ref-clip":
-				walkElement(el, tcStart: 0, assets: assets, mediaMap: mediaMap, into: &clips)
+				walkElement(
+					el, tcStart: 0, compound: nil, assets: assets, mediaMap: mediaMap,
+					into: &clips)
 				if let mediaId = el.attribute(forName: "ref")?.stringValue,
 					let mediaSeq = mediaMap[mediaId],
 					let mediaSpine = mediaSeq.elements(forName: "spine").first
@@ -247,8 +250,8 @@ enum FCPXMLParser {
 					let mediaTcStart = parseTime(
 						mediaSeq.attribute(forName: "tcStart")?.stringValue ?? "0s")
 					walkElement(
-						mediaSpine, tcStart: mediaTcStart, assets: assets, mediaMap: mediaMap,
-						into: &clips)
+						mediaSpine, tcStart: mediaTcStart, compound: nil, assets: assets,
+						mediaMap: mediaMap, into: &clips)
 				}
 			case "asset-clip":
 				if isDialogue(el) {
@@ -270,31 +273,88 @@ enum FCPXMLParser {
 		}
 	}
 
+	// Carries the mapping context when walking inside a compound clip's media spine.
+	// mainOffset: where the ref-clip starts in the main timeline
+	// internalStart/End: the trimmed window in the compound clip's time space (tcStart-relative)
+	// tcStart: the compound sequence's tcStart, used to normalise clip offsets
+	private struct CompoundContext {
+		let mainOffset: Double
+		let internalStart: Double
+		let internalEnd: Double
+		let tcStart: Double
+	}
+
 	private static func walkElement(
-		_ el: XMLElement, tcStart: Double, assets: [String: AssetResource],
-		mediaMap: [String: XMLElement], into clips: inout [AudioClip]
+		_ el: XMLElement, tcStart: Double, compound: CompoundContext?,
+		assets: [String: AssetResource], mediaMap: [String: XMLElement],
+		into clips: inout [AudioClip]
 	) {
 		for child in el.children?.compactMap({ $0 as? XMLElement }) ?? [] {
 			if child.name == "asset-clip", isDialogue(child) {
-				clips.append(makeClip(from: child, assets: assets, tcStart: tcStart))
+				if let ctx = compound {
+					// Position in compound's time space (tcStart-relative), walking the full
+					// parent chain so nested containers (e.g. video → secondary spine → clip)
+					// are resolved correctly rather than reading just the raw offset attribute.
+					let internalOffset = projectTime(of: child, tcStart: ctx.tcStart)
+					let clipDur = parseTime(
+						child.attribute(forName: "duration")?.stringValue ?? "0s")
+					// Skip if entirely outside the trimmed window
+					guard internalOffset < ctx.internalEnd,
+						internalOffset + clipDur > ctx.internalStart
+					else { continue }
+					// Clamp to the visible window
+					let visibleStart = max(internalOffset, ctx.internalStart)
+					let visibleEnd = min(internalOffset + clipDur, ctx.internalEnd)
+					let mainStart = ctx.mainOffset + (visibleStart - ctx.internalStart)
+					let ref = child.attribute(forName: "ref")?.stringValue
+					let asset = ref.flatMap { assets[$0] }
+					let clipSourceStart = parseTime(
+						child.attribute(forName: "start")?.stringValue ?? "0s")
+					clips.append(
+						AudioClip(
+							name: child.attribute(forName: "name")?.stringValue ?? "clip",
+							start: mainStart,
+							end: mainStart + (visibleEnd - visibleStart),
+							sourceStart: clipSourceStart - (asset?.mediaStart ?? 0),
+							sourceDuration: visibleEnd - visibleStart,
+							url: asset?.url,
+							bookmark: asset?.bookmark
+						))
+				} else {
+					clips.append(makeClip(from: child, assets: assets, tcStart: tcStart))
+				}
 			} else if child.name == "ref-clip" {
-				// Walk the ref-clip's XML children for connected audio clips
+				// Connected clips (XML children of the ref-clip) are in the main XML tree;
+				// projectTime works for them as-is.
 				walkElement(
-					child, tcStart: tcStart, assets: assets, mediaMap: mediaMap, into: &clips)
-				// Then recurse into the compound clip's media spine
+					child, tcStart: tcStart, compound: nil, assets: assets, mediaMap: mediaMap,
+					into: &clips)
+				// Recurse into compound clip's media spine with explicit position + trim context.
 				if let mediaId = child.attribute(forName: "ref")?.stringValue,
 					let mediaSeq = mediaMap[mediaId],
 					let mediaSpine = mediaSeq.elements(forName: "spine").first
 				{
 					let mediaTcStart = parseTime(
 						mediaSeq.attribute(forName: "tcStart")?.stringValue ?? "0s")
+					let refTrimStart = parseTime(
+						child.attribute(forName: "start")?.stringValue ?? "0s")
+					let refDuration = parseTime(
+						child.attribute(forName: "duration")?.stringValue ?? "0s")
+					let refMainOffset = projectTime(of: child, tcStart: tcStart)
+					let ctx = CompoundContext(
+						mainOffset: refMainOffset,
+						internalStart: refTrimStart - mediaTcStart,
+						internalEnd: refTrimStart - mediaTcStart + refDuration,
+						tcStart: mediaTcStart
+					)
 					walkElement(
-						mediaSpine, tcStart: mediaTcStart, assets: assets, mediaMap: mediaMap,
-						into: &clips)
+						mediaSpine, tcStart: mediaTcStart, compound: ctx, assets: assets,
+						mediaMap: mediaMap, into: &clips)
 				}
 			} else {
 				walkElement(
-					child, tcStart: tcStart, assets: assets, mediaMap: mediaMap, into: &clips)
+					child, tcStart: tcStart, compound: compound, assets: assets,
+					mediaMap: mediaMap, into: &clips)
 			}
 		}
 	}

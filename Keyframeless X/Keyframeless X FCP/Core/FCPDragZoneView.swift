@@ -4,6 +4,7 @@
  */
 
 import AppKit
+import KeyframelessKit
 import SwiftUI
 
 struct FCPDragZoneView: NSViewRepresentable {
@@ -42,9 +43,9 @@ class FCPXMLItemProvider: NSObject, NSPasteboardItemDataProvider {
 class FCPDragSourceView: NSView, NSDraggingSource {
 	override func draw(_ dirtyRect: NSRect) {
 		let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 6, yRadius: 6)
-		NSColor.secondaryLabelColor.withAlphaComponent(0.12).setFill()
+		NSColor.timelineLabel().withAlphaComponent(0.12).setFill()
 		path.fill()
-		NSColor.secondaryLabelColor.withAlphaComponent(0.4).setStroke()
+		NSColor.timelineLabel().withAlphaComponent(0.4).setStroke()
 		path.lineWidth = 1.5
 		let dashes: [CGFloat] = [6, 4]
 		path.setLineDash(dashes, count: dashes.count, phase: 0)
@@ -53,7 +54,7 @@ class FCPDragSourceView: NSView, NSDraggingSource {
 		let label = "Drag to FCP" as NSString
 		let attrs: [NSAttributedString.Key: Any] = [
 			.font: NSFont.systemFont(ofSize: 11),
-			.foregroundColor: NSColor.secondaryLabelColor,
+			.foregroundColor: NSColor.timelineLabel()!,
 		]
 		let size = label.size(withAttributes: attrs)
 		let origin = CGPoint(

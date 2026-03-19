@@ -10,8 +10,18 @@
 
 @interface NSColor (KKColors)
 
+#pragma mark FxPlug
+
 + (NSColor *)inspectorLabel;
 + (NSColor *)inspectorBackground;
+
+#pragma mark Workflow Extension
+
++ (NSColor *)windowBackground;
++ (NSColor *)timelineLabel;
++ (NSColor *)timelineTick;
+
+#pragma mark Shared
 
 // Mainly for OSC
 + (NSColor *)primary;
@@ -22,7 +32,7 @@
 
 + (NSColor *)accent;
 + (NSColor *)warning;
-+ (NSColor *)secondaryLabel;
++ (NSColor *)error;
 
 - (simd_float4)simdFloat4;
 

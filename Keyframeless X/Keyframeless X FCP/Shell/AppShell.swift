@@ -6,8 +6,6 @@
 import KeyframelessKit
 import SwiftUI
 
-private let windowBg = Color(nsColor: .init(white: 0x27 / 255, alpha: 1))
-
 struct AppShell: View {
 	@ObservedObject var captionsModel: CaptionsModel
 	@State private var selectedTab: AppTab = .captions
@@ -26,7 +24,7 @@ struct AppShell: View {
 			}
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
-		.background(windowBg)
+		.background(Color(nsColor: .windowBackground()))
 		.overlay(alignment: .bottomTrailing) {
 			Image("keyframeless-logo")
 				.resizable()
