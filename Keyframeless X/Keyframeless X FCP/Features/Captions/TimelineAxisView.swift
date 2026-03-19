@@ -141,7 +141,7 @@ private class AxisDocumentView: NSView {
 	private var cancellables: Set<AnyCancellable> = []
 	private var scrubbingClipIndex: Int?
 
-	private let playBtnSize: CGFloat = 20
+	private let playBtnSize: CGFloat = 12
 	private let minHeightForControls: CGFloat = 16
 	private let scrubStripHeight: CGFloat = 14
 
@@ -184,9 +184,10 @@ private class AxisDocumentView: NSView {
 				&& clip.url != nil
 
 			if showControls {
+				let titleStripH: CGFloat = playBtnSize + 8
 				let playBtnRect = CGRect(
-					x: entry.rect.minX + 4, y: entry.rect.minY + 4,
-					width: playBtnSize, height: playBtnSize)
+					x: entry.rect.minX, y: entry.rect.minY,
+					width: titleStripH, height: titleStripH)
 				if playBtnRect.contains(point) {
 					audioPlayer?.toggle(clip: clip, index: entry.index)
 					return
@@ -297,18 +298,34 @@ private class AxisDocumentView: NSView {
 			ctx.addPath(path)
 			ctx.fillPath()
 
+			let showControls =
+				laneHeight >= minHeightForControls && w > playBtnSize + 8 && clip.url != nil
 			if let samples = waveforms[i], !samples.isEmpty {
-				drawWaveform(samples, in: rect, context: ctx, selected: selectedClips.contains(i))
+				if showControls {
+					let titleStripH: CGFloat = playBtnSize + 8
+					let waveformY = rect.minY + titleStripH
+					let waveformH = rect.height - titleStripH - scrubStripHeight
+					if waveformH > 4 {
+						drawWaveform(
+							samples,
+							in: CGRect(
+								x: rect.minX, y: waveformY, width: rect.width, height: waveformH),
+							context: ctx, selected: selectedClips.contains(i))
+					}
+				} else {
+					drawWaveform(
+						samples, in: rect, context: ctx, selected: selectedClips.contains(i))
+				}
 			}
 
-			if laneHeight >= minHeightForControls && w > playBtnSize + 8 && clip.url != nil {
+			if showControls {
 				let isPlaying = audioPlayer?.isPlaying(index: i) == true
 				let playBtnRect = CGRect(
 					x: rect.minX + 4, y: rect.minY + 4,
 					width: playBtnSize, height: playBtnSize)
 				drawPlayButton(in: playBtnRect, context: ctx, isPlaying: isPlaying)
 
-				let titleX = rect.minX + 4 + playBtnSize + 6
+				let titleX = rect.minX + 4 + playBtnSize + 10
 				let titleW = rect.maxX - titleX - 6
 				if titleW > 10 {
 					let para = NSMutableParagraphStyle()
@@ -320,7 +337,8 @@ private class AxisDocumentView: NSView {
 					]
 					let titleStr = clip.name as NSString
 					let titleH = titleStr.size(withAttributes: titleAttrs).height
-					let titleY = rect.minY + (playBtnSize + 8 - titleH) / 2
+					let btnCenterY = rect.minY + 4 + playBtnSize / 2 + 2
+					let titleY = btnCenterY - titleH / 2
 					let titleRect = CGRect(x: titleX, y: titleY, width: titleW, height: titleH)
 					titleStr.draw(
 						with: titleRect, options: .usesLineFragmentOrigin, attributes: titleAttrs,

@@ -142,17 +142,7 @@ struct CaptionsView: View {
 		let hasMain = audioClips.contains { !$0.isCompound }
 		let hasCompound = audioClips.contains { $0.isCompound }
 		return HStack(spacing: 0) {
-			toolbarItem {
-				HStack(spacing: 1) {
-					Text("\(selectedClips.count)")
-						.foregroundStyle(Color(nsColor: .accent() ?? .blue))
-					Text("/ \(audioClips.count) selected")
-						.foregroundStyle(.secondary)
-				}
-				.font(.caption2)
-			}
 			if hasMain {
-				toolbarDivider
 				Button {
 					selectedClips = Set(audioClips.indices.filter { !audioClips[$0].isCompound })
 				} label: {
@@ -169,9 +159,9 @@ struct CaptionsView: View {
 					}
 				}
 				.buttonStyle(.plain)
+				toolbarDivider
 			}
 			if hasCompound {
-				toolbarDivider
 				Button {
 					selectedClips = Set(audioClips.indices.filter { audioClips[$0].isCompound })
 				} label: {
@@ -188,16 +178,19 @@ struct CaptionsView: View {
 					}
 				}
 				.buttonStyle(.plain)
+				toolbarDivider
 			}
-			toolbarDivider
 			Button {
 				selectedClips = Set(audioClips.indices)
 			} label: {
 				toolbarItem {
-					Label("Select All", systemImage: "checkmark.rectangle.stack.fill")
-						.font(.caption2)
-						.foregroundStyle(.secondary)
-						.contentShape(Rectangle())
+					HStack(spacing: 4) {
+						Image(systemName: "checkmark.rectangle.stack.fill")
+						Text("Select All")
+					}
+					.font(.caption2)
+					.foregroundStyle(.secondary)
+					.contentShape(Rectangle())
 				}
 			}
 			.buttonStyle(.plain)
@@ -206,10 +199,13 @@ struct CaptionsView: View {
 				selectedClips = []
 			} label: {
 				toolbarItem {
-					Label("Deselect All", systemImage: "rectangle.stack")
-						.font(.caption2)
-						.foregroundStyle(.secondary)
-						.contentShape(Rectangle())
+					HStack(spacing: 4) {
+						Image(systemName: "rectangle.stack")
+						Text("Deselect All")
+					}
+					.font(.caption2)
+					.foregroundStyle(.secondary)
+					.contentShape(Rectangle())
 				}
 			}
 			.buttonStyle(.plain)
@@ -265,9 +261,17 @@ struct CaptionsView: View {
 			ForEach(Array(dropItems.enumerated()), id: \.offset) { _, item in
 				HStack {
 					Text(item.name)
-						.font(.caption)
+						.font(.title2)
 						.lineLimit(1)
 					Spacer()
+					HStack(spacing: 1) {
+						Text("\(selectedClips.count)")
+							.foregroundStyle(Color(nsColor: .accent() ?? .blue))
+						Text("/ \(audioClips.count) selected")
+							.foregroundStyle(.secondary)
+					}
+					.font(.caption2)
+					.padding(.trailing, 2)
 					clipToolbar
 				}
 				.padding(.horizontal, KKPaddingLG)

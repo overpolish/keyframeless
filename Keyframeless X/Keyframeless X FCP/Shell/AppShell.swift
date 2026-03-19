@@ -25,13 +25,13 @@ struct AppShell: View {
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 		.background(Color(nsColor: .windowBackground()))
-		.overlay(alignment: .bottomTrailing) {
+		.overlay(alignment: .topTrailing) {
 			Image("keyframeless-logo")
 				.resizable()
 				.scaledToFit()
 				.frame(width: 48)
 				.opacity(0.15)
-				.padding(KKSpacingXL)
+				.padding([.bottom, .trailing], KKSpacingXL)
 		}
 	}
 }
