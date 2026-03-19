@@ -54,8 +54,16 @@ class WhisperModelManager: ObservableObject {
 		}
 	}
 
+	@Published var selectedLanguage: String? {
+		didSet {
+			TranscriptionSettings.shared.selectedLanguage = selectedLanguage
+			TranscriptionSettings.shared.save()
+		}
+	}
+
 	init() {
 		selectedModel = TranscriptionSettings.shared.selectedModel
+		selectedLanguage = TranscriptionSettings.shared.selectedLanguage
 		Task { await refreshDownloadedModels() }
 	}
 

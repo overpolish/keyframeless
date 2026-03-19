@@ -11,33 +11,29 @@ struct WhisperModelPickerView: View {
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: KKSpacingMD) {
-			Text("Transcription")
-				.font(.title3)
-				.foregroundStyle(.secondary)
-				.padding(.horizontal, KKPaddingLG)
-
-			HStack(alignment: .top, spacing: KKSpacingLG) {
-				VStack(spacing: KKSpacingXS) {
-					ForEach(WhisperModelManager.models) { model in
-						WhisperModelRow(model: model, manager: manager)
-					}
-				}
-				.padding(KKPaddingMD)
-				.background(
-					RoundedRectangle(cornerRadius: KKRadiusMD + 4).fill(Color.white.opacity(0.04))
-				)
-				.overlay(
-					RoundedRectangle(cornerRadius: KKRadiusMD + 4)
-						.strokeBorder(Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
-				)
-				.frame(maxWidth: .infinity)
-
-				VStack(alignment: .leading) {}
-					.frame(maxWidth: .infinity)
+			HStack(alignment: .firstTextBaseline) {
+				Text("Transcription")
+					.font(.title3)
+					.foregroundStyle(.secondary)
+				Spacer()
+				HelperText("Recommended is based on detected hardware.")
 			}
+			.padding(.horizontal, KKPaddingLG)
 
-			HelperText("Recommended is based on detected hardware.")
-				.padding(.horizontal, KKPaddingLG)
+			VStack(spacing: KKSpacingXS) {
+				ForEach(WhisperModelManager.models) { model in
+					WhisperModelRow(model: model, manager: manager)
+				}
+			}
+			.padding(KKPaddingMD)
+			.background(
+				RoundedRectangle(cornerRadius: KKRadiusMD + 4).fill(Color.white.opacity(0.04))
+			)
+			.overlay(
+				RoundedRectangle(cornerRadius: KKRadiusMD + 4)
+					.strokeBorder(Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
+			)
+			.frame(maxWidth: .infinity)
 		}
 	}
 }

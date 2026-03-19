@@ -10,11 +10,13 @@ class TranscriptionSettings {
 	static let shared = TranscriptionSettings()
 
 	var selectedModel: String?
+	var selectedLanguage: String?
 
 	private init() { load() }
 
 	private struct Persisted: Codable {
 		var selectedModel: String?
+		var selectedLanguage: String?
 	}
 
 	private var fileURL: URL? {
@@ -29,13 +31,16 @@ class TranscriptionSettings {
 			let state = try? JSONDecoder().decode(Persisted.self, from: data)
 		else { return }
 		selectedModel = state.selectedModel
+		selectedLanguage = state.selectedLanguage
 	}
 
 	func save() {
 		guard let url = fileURL else { return }
 		let dir = url.deletingLastPathComponent()
 		try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-		try? JSONEncoder().encode(Persisted(selectedModel: selectedModel)).write(
+		try? JSONEncoder().encode(
+			Persisted(selectedModel: selectedModel, selectedLanguage: selectedLanguage)
+		).write(
 			to: url, options: .atomic)
 	}
 

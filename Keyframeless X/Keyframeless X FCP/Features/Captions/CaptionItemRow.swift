@@ -19,7 +19,6 @@ struct CaptionItemRow: View {
 				.lineLimit(1)
 				.opacity(isHidden ? 0 : 1)
 			Spacer()
-			ClipSelectionToolbar(clips: clips, selectedClips: $selectedClips)
 		}
 		.padding(.horizontal, KKPaddingLG)
 	}
