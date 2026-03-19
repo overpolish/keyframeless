@@ -223,8 +223,18 @@ private class AxisDocumentView: NSView {
 	override func draw(_ dirtyRect: NSRect) {
 		guard let ctx = NSGraphicsContext.current?.cgContext, duration > 0 else { return }
 
-		let pps = bounds.width / CGFloat(duration)
+		let displayDuration = duration + 0.3  // Space for final tick to render
+		let pps = bounds.width / CGFloat(displayDuration)
 		let interval = tickInterval(pixelsPerSecond: pps)
+
+		let emptyX = CGFloat(duration) * pps
+		ctx.setFillColor(NSColor.black.withAlphaComponent(0.15).cgColor)
+		let emptyFillTop: CGFloat = 5 + 12 + 6  // baseline + tickHeight + gap
+		let emptyFillBottom: CGFloat = bounds.height - 4
+		ctx.fill(
+			CGRect(
+				x: emptyX, y: emptyFillTop, width: bounds.width - emptyX,
+				height: emptyFillBottom - emptyFillTop))
 		let baseline: CGFloat = 5
 
 		let strokeWidth: CGFloat = 1.0
@@ -240,7 +250,7 @@ private class AxisDocumentView: NSView {
 		ctx.beginPath()
 
 		var t = 0.0
-		while t <= duration + 0.001 {
+		while t <= duration + 0.001 {  // only tick up to real duration
 			let rawX = CGFloat(t) * pps
 			let x = max(strokeWidth / 2, rawX)
 
@@ -271,7 +281,7 @@ private class AxisDocumentView: NSView {
 		for (i, clip) in clips.enumerated() {
 			let lane = CGFloat(assignments[i])
 			let x = CGFloat(clip.start) * pps
-			let w = max(laneHeight, CGFloat(clip.end - clip.start) * pps)
+			let w = min(max(laneHeight, CGFloat(clip.end - clip.start) * pps), emptyX - x)
 			let y = clipAreaTop + lane * (laneHeight + laneGap)
 			let rect = CGRect(x: x, y: y, width: w, height: laneHeight)
 			cachedClipRects.append((rect: rect, index: i))
@@ -306,8 +316,9 @@ private class AxisDocumentView: NSView {
 	}
 
 	private func drawPlayButton(in rect: CGRect, context ctx: CGContext, isPlaying: Bool) {
-		let cx = rect.minX + rect.width / 2
-		let cy = rect.midY
+		let padding: CGFloat = 2
+		let cx = rect.minX + rect.width / 2 + padding
+		let cy = rect.midY + padding
 		let r = rect.height / 2 + 2
 
 		let circleRect = CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2)
