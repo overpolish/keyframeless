@@ -106,6 +106,26 @@ struct CaptionsView: View {
 				timeToggle
 			}
 			.padding(.top, 4)
+			HStack(alignment: .lastTextBaseline, spacing: 6) {
+				if model.audioClips.isEmpty {
+					Text("No Clips Found")
+						.font(.title)
+						.foregroundStyle(.secondary)
+				} else {
+					Text("\(model.selectedClips.count)")
+						.foregroundStyle(Color(nsColor: .accent() ?? .blue))
+						.font(.title)
+					Text("Clips Selected")
+						.font(.title)
+					Text("\(model.audioClips.count) total")
+						.font(.subheadline)
+						.foregroundStyle(.secondary)
+						.italic()
+				}
+				Spacer()
+			}
+			.padding(.horizontal, KKPaddingLG)
+			.padding(.top, KKSpacingMD)
 		}
 		.padding(.horizontal, KKPaddingMD)
 	}
@@ -149,14 +169,6 @@ struct CaptionsView: View {
 						.lineLimit(1)
 						.opacity(dropState == .denied ? 0 : 1)
 					Spacer()
-					HStack(spacing: 1) {
-						Text("\(model.selectedClips.count)")
-							.foregroundStyle(Color(nsColor: .accent() ?? .blue))
-						Text("/ \(model.audioClips.count) selected")
-							.foregroundStyle(.secondary)
-					}
-					.font(.caption2)
-					.padding(.trailing, 2)
 					clipToolbar
 				}
 				.padding(.horizontal, KKPaddingLG)

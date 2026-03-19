@@ -18,7 +18,7 @@ enum AppTab: CaseIterable {
 
 	var icon: String {
 		switch self {
-		case .captions: "globe"
+		case .captions: "captions.bubble.fill"
 		case .other: "sparkles"
 		}
 	}
