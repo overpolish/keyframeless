@@ -4,6 +4,7 @@
  */
 
 import AppKit
+import Combine
 import KeyframelessKit
 import SwiftUI
 
@@ -13,6 +14,7 @@ struct TimelineAxisView: View {
 	let useTimecode: Bool
 	let clips: [FCPXMLParser.AudioClip]
 	@Binding var selectedClips: Set<Int>
+	@ObservedObject var audioPlayer: AudioPlayer
 
 	@State private var zoom: CGFloat = 1.0
 
@@ -25,7 +27,8 @@ struct TimelineAxisView: View {
 				zoom: $zoom,
 				availableWidth: geo.size.width,
 				availableHeight: geo.size.height,
-				labelForTime: labelForTime
+				labelForTime: labelForTime,
+				audioPlayer: audioPlayer
 			)
 		}
 	}
@@ -46,6 +49,7 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 	let availableWidth: CGFloat
 	let availableHeight: CGFloat
 	let labelForTime: (Double) -> String
+	@ObservedObject var audioPlayer: AudioPlayer
 
 	func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -76,6 +80,7 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 		docView.duration = duration
 		docView.clips = clips
 		docView.selectedClips = selectedClips
+		docView.audioPlayer = audioPlayer
 		docView.onToggleClip = { index in
 			if selectedClips.contains(index) {
 				selectedClips.remove(index)
@@ -120,10 +125,25 @@ private class AxisDocumentView: NSView {
 	var onToggleClip: ((Int) -> Void)?
 	var labelForTime: ((Double) -> String)?
 	var onMagnify: ((CGFloat, CGFloat) -> Void)?
+	var audioPlayer: AudioPlayer? {
+		didSet {
+			cancellables = []
+			audioPlayer?.objectWillChange
+				.receive(on: RunLoop.main)
+				.sink { [weak self] _ in self?.needsDisplay = true }
+				.store(in: &cancellables)
+		}
+	}
 
 	private var cachedClipRects: [(rect: CGRect, index: Int)] = []
 	private var waveforms: [Int: [Float]] = [:]
 	private var waveformTasks: [Int: Task<Void, Never>] = [:]
+	private var cancellables: Set<AnyCancellable> = []
+	private var scrubbingClipIndex: Int?
+
+	private let playBtnSize: CGFloat = 20
+	private let minHeightForControls: CGFloat = 16
+	private let scrubStripHeight: CGFloat = 14
 
 	override var isFlipped: Bool { true }
 
@@ -156,11 +176,48 @@ private class AxisDocumentView: NSView {
 	override func mouseDown(with event: NSEvent) {
 		let point = convert(event.locationInWindow, from: nil)
 		for entry in cachedClipRects.reversed() {
-			if entry.rect.contains(point) {
-				onToggleClip?(entry.index)
-				return
+			guard entry.rect.contains(point) else { continue }
+			let clip = clips[entry.index]
+			let showControls =
+				entry.rect.height >= minHeightForControls
+				&& entry.rect.width > playBtnSize + 8
+				&& clip.url != nil
+
+			if showControls {
+				let playBtnRect = CGRect(
+					x: entry.rect.minX + 4, y: entry.rect.minY + 4,
+					width: playBtnSize, height: playBtnSize)
+				if playBtnRect.contains(point) {
+					audioPlayer?.toggle(clip: clip, index: entry.index)
+					return
+				}
+				let scrubStripRect = CGRect(
+					x: entry.rect.minX, y: entry.rect.maxY - scrubStripHeight,
+					width: entry.rect.width, height: scrubStripHeight)
+				if scrubStripRect.contains(point) {
+					scrubbingClipIndex = entry.index
+					let progress = Double((point.x - entry.rect.minX) / entry.rect.width)
+					audioPlayer?.scrub(
+						clip: clip, index: entry.index, progress: max(0, min(1, progress)))
+					return
+				}
 			}
+
+			onToggleClip?(entry.index)
+			return
 		}
+	}
+
+	override func mouseDragged(with event: NSEvent) {
+		guard let idx = scrubbingClipIndex, idx < clips.count else { return }
+		guard let clipRect = cachedClipRects.first(where: { $0.index == idx })?.rect else { return }
+		let point = convert(event.locationInWindow, from: nil)
+		let progress = Double((point.x - clipRect.minX) / clipRect.width)
+		audioPlayer?.scrub(clip: clips[idx], index: idx, progress: max(0, min(1, progress)))
+	}
+
+	override func mouseUp(with event: NSEvent) {
+		scrubbingClipIndex = nil
 	}
 
 	override func draw(_ dirtyRect: NSRect) {
@@ -230,7 +287,89 @@ private class AxisDocumentView: NSView {
 			if let samples = waveforms[i], !samples.isEmpty {
 				drawWaveform(samples, in: rect, context: ctx, selected: selectedClips.contains(i))
 			}
+
+			if laneHeight >= minHeightForControls && w > playBtnSize + 8 && clip.url != nil {
+				let isPlaying = audioPlayer?.isPlaying(index: i) == true
+				let playBtnRect = CGRect(
+					x: rect.minX + 4, y: rect.minY + 4,
+					width: playBtnSize, height: playBtnSize)
+				drawPlayButton(in: playBtnRect, context: ctx, isPlaying: isPlaying)
+
+				var progress: Double?
+				if isPlaying, let ct = audioPlayer?.currentTime {
+					let offset = ct - clip.sourceStart
+					progress = max(0, min(1, offset / clip.sourceDuration))
+				}
+				drawScrubBar(in: rect, context: ctx, progress: progress)
+			}
 		}
+	}
+
+	private func drawPlayButton(in rect: CGRect, context ctx: CGContext, isPlaying: Bool) {
+		let iconH = min(10.0, rect.height - 8)
+		guard iconH > 2 else { return }
+		let cx = rect.minX + rect.width / 2
+		let cy = rect.midY
+
+		let r = iconH / 2 + 4
+		let circleRect = CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2)
+		ctx.saveGState()
+		ctx.setShadow(offset: .zero, blur: 8, color: NSColor.black.withAlphaComponent(0.5).cgColor)
+		ctx.setFillColor(NSColor.white.withAlphaComponent(0.35).cgColor)
+		ctx.fillEllipse(in: circleRect)
+		ctx.restoreGState()
+
+		ctx.setFillColor(NSColor.white.withAlphaComponent(0.9).cgColor)
+		if isPlaying {
+			let barW = max(2.0, iconH * 0.25)
+			let barH = iconH * 0.8
+			ctx.fill(CGRect(x: cx - iconH * 0.3, y: cy - barH / 2, width: barW, height: barH))
+			ctx.fill(CGRect(x: cx + iconH * 0.05, y: cy - barH / 2, width: barW, height: barH))
+		} else {
+			let tw = iconH * 0.7
+			let th = iconH * 0.85
+			ctx.beginPath()
+			ctx.move(to: CGPoint(x: cx - tw * 0.25, y: cy - th / 2))
+			ctx.addLine(to: CGPoint(x: cx - tw * 0.25, y: cy + th / 2))
+			ctx.addLine(to: CGPoint(x: cx + tw * 0.75, y: cy))
+			ctx.closePath()
+			ctx.fillPath()
+		}
+	}
+
+	private func drawScrubBar(in rect: CGRect, context ctx: CGContext, progress: Double?) {
+		let trackH: CGFloat = 3
+		let trackX = rect.minX
+		let trackW = rect.width
+		guard trackW > 0 else { return }
+		let trackY = rect.maxY - trackH - 5
+
+		ctx.setFillColor(NSColor.white.withAlphaComponent(0.2).cgColor)
+		let trackPath = CGPath(
+			roundedRect: CGRect(x: trackX, y: trackY, width: trackW, height: trackH),
+			cornerWidth: trackH / 2, cornerHeight: trackH / 2, transform: nil)
+		ctx.addPath(trackPath)
+		ctx.fillPath()
+
+		guard let progress else { return }
+
+		let fillW = trackW * CGFloat(progress)
+		if fillW > 0 {
+			ctx.setFillColor(NSColor.white.withAlphaComponent(0.85).cgColor)
+			let fillPath = CGPath(
+				roundedRect: CGRect(x: trackX, y: trackY, width: fillW, height: trackH),
+				cornerWidth: trackH / 2, cornerHeight: trackH / 2, transform: nil)
+			ctx.addPath(fillPath)
+			ctx.fillPath()
+		}
+
+		let knobR: CGFloat = 4.5
+		let knobX = trackX + fillW
+		ctx.setFillColor(NSColor.white.cgColor)
+		ctx.fillEllipse(
+			in: CGRect(
+				x: knobX - knobR, y: trackY + trackH / 2 - knobR,
+				width: knobR * 2, height: knobR * 2))
 	}
 
 	private func drawWaveform(

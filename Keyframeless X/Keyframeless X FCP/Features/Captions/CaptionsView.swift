@@ -68,7 +68,8 @@ struct CaptionsView: View {
 						format: model.projectFormat,
 						useTimecode: useTimecode,
 						clips: audioClips,
-						selectedClips: $selectedClips
+						selectedClips: $selectedClips,
+						audioPlayer: audioPlayer
 					)
 					.id(timelineLoadID)
 					.padding(.horizontal, 8)
@@ -184,7 +185,7 @@ struct CaptionsView: View {
 
 	private var clipList: some View {
 		VStack(spacing: 4) {
-			ForEach(Array(audioClips.enumerated()), id: \.offset) { _, clip in
+			ForEach(Array(audioClips.enumerated()), id: \.offset) { index, clip in
 				HStack {
 					VStack(alignment: .leading, spacing: 2) {
 						Text(clip.name)
@@ -197,10 +198,10 @@ struct CaptionsView: View {
 					Spacer()
 					if clip.url != nil {
 						Button {
-							audioPlayer.toggle(clip: clip)
+							audioPlayer.toggle(clip: clip, index: index)
 						} label: {
 							Image(
-								systemName: audioPlayer.playingURL == clip.url
+								systemName: audioPlayer.isPlaying(index: index)
 									? "stop.fill" : "play.fill"
 							)
 							.font(.caption)
