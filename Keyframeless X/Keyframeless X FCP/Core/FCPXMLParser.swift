@@ -192,6 +192,7 @@ enum FCPXMLParser {
 		let sourceDuration: Double
 		let url: URL?
 		let bookmark: Data?
+		let isCompound: Bool
 
 		func data() throws -> Data {
 			if let bookmark {
@@ -323,7 +324,8 @@ enum FCPXMLParser {
 							sourceStart: clipSourceStart - (asset?.mediaStart ?? 0),
 							sourceDuration: visibleEnd - visibleStart,
 							url: asset?.url,
-							bookmark: asset?.bookmark
+							bookmark: asset?.bookmark,
+							isCompound: true
 						))
 				} else {
 					clips.append(makeClip(from: child, assets: assets, tcStart: tcStart))
@@ -407,7 +409,8 @@ enum FCPXMLParser {
 			sourceStart: clipStart - (asset?.mediaStart ?? 0),
 			sourceDuration: dur,
 			url: asset?.url,
-			bookmark: asset?.bookmark
+			bookmark: asset?.bookmark,
+			isCompound: false
 		)
 	}
 
