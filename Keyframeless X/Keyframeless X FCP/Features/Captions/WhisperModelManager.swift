@@ -32,16 +32,16 @@ class WhisperModelManager: ObservableObject {
 	static let models: [ModelInfo] = [
 		ModelInfo(
 			id: "openai_whisper-tiny", displayName: "Tiny", sizeDescription: "~390 MB",
-			hint: "Fastest, good for rough drafts or quick checks"),
+			hint: "Fastest, best for rough drafts"),
 		ModelInfo(
 			id: "openai_whisper-base", displayName: "Base", sizeDescription: "~670 MB",
-			hint: "Balance of speed and accuracy for clear audio"),
+			hint: "Good speed and accuracy"),
 		ModelInfo(
 			id: "openai_whisper-small", displayName: "Small", sizeDescription: "~1.4 GB",
-			hint: "Handles accents and noisy audio well"),
+			hint: "Handles accents and noise"),
 		ModelInfo(
 			id: "openai_whisper-large-v3", displayName: "Large v3", sizeDescription: "~6 GB",
-			hint: "Best accuracy, recommended for final exports"),
+			hint: "Best accuracy, final exports"),
 	]
 
 	@Published var downloadedModels: Set<String> = []
@@ -61,9 +61,17 @@ class WhisperModelManager: ObservableObject {
 		}
 	}
 
+	@Published var hotWords: [String] = [] {
+		didSet {
+			TranscriptionSettings.shared.hotWords = hotWords
+			TranscriptionSettings.shared.save()
+		}
+	}
+
 	init() {
 		selectedModel = TranscriptionSettings.shared.selectedModel
 		selectedLanguage = TranscriptionSettings.shared.selectedLanguage
+		hotWords = TranscriptionSettings.shared.hotWords
 		Task { await refreshDownloadedModels() }
 	}
 

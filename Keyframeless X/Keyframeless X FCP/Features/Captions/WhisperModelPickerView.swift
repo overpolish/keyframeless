@@ -12,11 +12,11 @@ struct WhisperModelPickerView: View {
 	var body: some View {
 		VStack(alignment: .leading, spacing: KKSpacingMD) {
 			HStack(alignment: .firstTextBaseline) {
-				Text("Transcription")
+				Text("Model")
 					.font(.title3)
 					.foregroundStyle(.secondary)
 				Spacer()
-				HelperText("Recommended is based on detected hardware.")
+				HelperText("Recommended is based on hardware")
 			}
 			.padding(.horizontal, KKPaddingLG)
 

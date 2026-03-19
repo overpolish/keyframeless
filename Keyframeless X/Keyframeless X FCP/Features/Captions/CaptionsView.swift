@@ -27,6 +27,8 @@ struct CaptionsView: View {
 				WhisperModelPickerView(manager: whisperManager)
 				WhisperLanguagePickerView(manager: whisperManager)
 					.frame(maxHeight: .infinity)
+				WhisperTermsView(manager: whisperManager)
+					.frame(maxHeight: .infinity)
 			}
 			.frame(maxHeight: .infinity)
 			.padding(.horizontal, KKPaddingMD)
@@ -95,7 +97,7 @@ struct CaptionsView: View {
 			.frame(minHeight: 80)
 			.overlay(alignment: .bottomTrailing) {
 				HelperText(
-					"Click and drag to quickly select/deselect clips.",
+					"Click and drag to quickly select/deselect clips",
 					systemImage: "pointer.arrow.motionlines"
 				)
 				.padding(.trailing, KKPaddingSM)
