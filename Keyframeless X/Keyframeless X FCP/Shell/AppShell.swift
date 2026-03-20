@@ -18,10 +18,16 @@ struct AppShell: View {
 			Group {
 				switch selectedTab {
 				case .audio:
-					AudioView(
-						model: captionsModel,
-						isProcessing: $isProcessing
-					)
+					switch captionsModel.stage {
+					case .setup:
+						AudioSetupView(
+							model: captionsModel,
+							isProcessing: $isProcessing
+						)
+					case .captioning:
+						Text("Edit view")
+						Spacer()
+					}
 				}
 			}
 		}
