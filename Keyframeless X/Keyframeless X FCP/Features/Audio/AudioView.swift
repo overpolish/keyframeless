@@ -6,9 +6,9 @@
 import KeyframelessKit
 import SwiftUI
 
-struct CaptionsView: View {
+struct AudioView: View {
 	@ObservedObject var model: CaptionsModel
-	@Binding var isTranscribing: Bool
+	@Binding var isProcessing: Bool
 	@StateObject private var audioPlayer = AudioPlayer()
 	@StateObject private var whisperManager = WhisperModelManager()
 	@State private var dropState: DropState = .idle
@@ -31,12 +31,12 @@ struct CaptionsView: View {
 					.frame(maxHeight: .infinity)
 			}
 			.frame(maxHeight: .infinity)
-			TranscribeButton(
+			ProcessButton(
 				disabled: model.selectedClips.isEmpty
 					|| whisperManager.selectedModel == nil,
 				action: {
 					withAnimation(.easeInOut(duration: 0.3)) {
-						isTranscribing = true
+						isProcessing = true
 					}
 				}
 			)

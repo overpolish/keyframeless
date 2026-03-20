@@ -9,9 +9,9 @@ import Foundation
 
 class CaptionsModel: ObservableObject {
 
-	enum Stage { case transcription, captioning }
+	enum Stage { case setup, captioning }
 
-	@Published var stage: Stage = .transcription
+	@Published var stage: Stage = .setup
 	@Published var projectFormat: FCPXMLParser.ProjectFormat?
 	@Published var audioClips: [FCPXMLParser.AudioClip] = []
 	@Published var selectedClips: Set<Int> = []

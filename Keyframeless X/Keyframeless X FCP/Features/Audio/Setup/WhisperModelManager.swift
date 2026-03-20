@@ -49,29 +49,29 @@ class WhisperModelManager: ObservableObject {
 	@Published var downloadProgress: Double = 0
 	@Published var selectedModel: String? {
 		didSet {
-			TranscriptionSettings.shared.selectedModel = selectedModel
-			TranscriptionSettings.shared.save()
+			AudioSetupSettings.shared.selectedModel = selectedModel
+			AudioSetupSettings.shared.save()
 		}
 	}
 
 	@Published var selectedLanguage: String? {
 		didSet {
-			TranscriptionSettings.shared.selectedLanguage = selectedLanguage
-			TranscriptionSettings.shared.save()
+			AudioSetupSettings.shared.selectedLanguage = selectedLanguage
+			AudioSetupSettings.shared.save()
 		}
 	}
 
 	@Published var hotWords: [String] = [] {
 		didSet {
-			TranscriptionSettings.shared.hotWords = hotWords
-			TranscriptionSettings.shared.save()
+			AudioSetupSettings.shared.hotWords = hotWords
+			AudioSetupSettings.shared.save()
 		}
 	}
 
 	init() {
-		selectedModel = TranscriptionSettings.shared.selectedModel
-		selectedLanguage = TranscriptionSettings.shared.selectedLanguage
-		hotWords = TranscriptionSettings.shared.hotWords
+		selectedModel = AudioSetupSettings.shared.selectedModel
+		selectedLanguage = AudioSetupSettings.shared.selectedLanguage
+		hotWords = AudioSetupSettings.shared.hotWords
 		Task { await refreshDownloadedModels() }
 	}
 

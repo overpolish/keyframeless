@@ -5,9 +5,9 @@
 
 import Foundation
 
-class TranscriptionSettings {
+class AudioSetupSettings {
 
-	static let shared = TranscriptionSettings()
+	static let shared = AudioSetupSettings()
 
 	var selectedModel: String?
 	var selectedLanguage: String?
@@ -24,7 +24,7 @@ class TranscriptionSettings {
 	private var fileURL: URL? {
 		FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
 			.first?
-			.appendingPathComponent("Keyframeless/transcription_settings.json")
+			.appendingPathComponent("Keyframeless/audio_setup_settings.json")
 	}
 
 	private func load() {

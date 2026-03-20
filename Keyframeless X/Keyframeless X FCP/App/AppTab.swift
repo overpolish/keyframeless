@@ -6,27 +6,23 @@
 import Foundation
 
 enum AppTab: CaseIterable {
-	case captions
-	case other
+	case audio
 
 	var label: String {
 		switch self {
-		case .captions: "Captions"
-		case .other: "Other"
+		case .audio: "Audio"
 		}
 	}
 
 	var icon: String {
 		switch self {
-		case .captions: "captions.bubble.fill"
-		case .other: "sparkles"
+		case .audio: "waveform"
 		}
 	}
 
 	var isEnabled: Bool {
 		switch self {
-		case .captions: true
-		case .other: true
+		case .audio: true
 		}
 	}
 }
