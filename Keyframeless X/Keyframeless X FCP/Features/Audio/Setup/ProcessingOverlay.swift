@@ -7,7 +7,8 @@ import KeyframelessKit
 import SwiftUI
 
 struct ProcessingOverlay: View {
-	let progress: Double
+	let statusLabel: String
+	let progress: Double?
 	let onCancel: () -> Void
 
 	@State private var spinAngle: Double = 0
@@ -56,14 +57,16 @@ struct ProcessingOverlay: View {
 
 	private var progressContent: some View {
 		VStack(spacing: KKSpacingSM) {
-			Text("Processing")
+			Text(statusLabel)
 				.font(.system(size: 14, weight: .medium))
-			ProgressView(value: progress)
-				.frame(width: 180)
-				.tint(Color(nsColor: .accent()))
-			Text("\(Int(progress * 100))%")
-				.font(.system(size: 12).monospacedDigit())
-				.foregroundStyle(.secondary)
+			if let progress {
+				ProgressView(value: progress)
+					.frame(width: 180)
+					.tint(Color(nsColor: .accent()))
+				Text("\(Int(progress * 100))%")
+					.font(.system(size: 12).monospacedDigit())
+					.foregroundStyle(.secondary)
+			}
 		}
 	}
 }

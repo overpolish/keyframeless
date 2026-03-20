@@ -8,9 +8,9 @@ import SwiftUI
 
 struct AudioSetupView: View {
 	@ObservedObject var model: CaptionsModel
-	@Binding var isProcessing: Bool
+	@ObservedObject var whisperManager: WhisperModelManager
+	var onProcess: (_ replaceAll: Bool) -> Void
 	@StateObject private var audioPlayer = AudioPlayer()
-	@StateObject private var whisperManager = WhisperModelManager()
 	@State private var dropState: DropState = .idle
 	@State private var isTargeted = false
 	@State private var timelineLoadID = UUID()
@@ -31,17 +31,19 @@ struct AudioSetupView: View {
 					.frame(maxHeight: .infinity)
 			}
 			.frame(maxHeight: .infinity)
-			ProcessButton(
-				disabled: model.selectedClips.isEmpty
-					|| whisperManager.selectedModel == nil,
-				action: {
-					withAnimation(.easeInOut(duration: 0.3)) {
-						isProcessing = true
-					}
-				}
-			)
+			HStack(spacing: KKSpacingMD) {
+				ProcessButton(
+					disabled: processDisabled,
+					action: { onProcess(true) }
+				)
+				RetranscribeButton(
+					disabled: processDisabled,
+					action: { onProcess(false) }
+				)
+			}
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
+		.onDisappear { audioPlayer.stop() }
 	}
 
 	private var timelineArea: some View {
@@ -105,6 +107,12 @@ struct AudioSetupView: View {
 			)
 			.padding(.top, KKSpacingMD)
 		}
+	}
+
+	private var processDisabled: Bool {
+		model.selectedClips.isEmpty
+			|| whisperManager.selectedModel == nil
+			|| whisperManager.downloadingModel != nil
 	}
 
 	private var dropZoneBorderColor: Color {
