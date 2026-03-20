@@ -7,7 +7,7 @@ import KeyframelessKit
 import SwiftUI
 
 struct AppShell: View {
-	@ObservedObject var captionsModel: CaptionsModel
+	@ObservedObject var audioModel: AudioModel
 	@StateObject private var whisperManager = WhisperModelManager()
 	@StateObject private var processingCoordinator = AudioProcessingCoordinator()
 	@State private var selectedTab: AppTab = .audio
@@ -18,24 +18,24 @@ struct AppShell: View {
 			Group {
 				switch selectedTab {
 				case .audio:
-					switch captionsModel.stage {
+					switch audioModel.stage {
 					case .setup:
 						AudioSetupView(
-							model: captionsModel,
+							model: audioModel,
 							whisperManager: whisperManager,
 							onProcess: { replaceAll in
 								withAnimation(.easeInOut(duration: 0.3)) {
 									processingCoordinator.isProcessing = true
 								}
 								processingCoordinator.process(
-									model: captionsModel,
+									model: audioModel,
 									whisperManager: whisperManager,
 									replaceAll: replaceAll
 								)
 							}
 						)
-					case .captioning:
-						CaptionEditView(model: captionsModel)
+					case .edit:
+						AudioEditView(model: audioModel)
 					}
 				}
 			}
@@ -74,14 +74,14 @@ struct AppShell: View {
 	private var toolNav: some View {
 		switch selectedTab {
 		case .audio:
-			PillIconToggle<CaptionsModel.Stage>(
-				selection: $captionsModel.stage,
+			PillIconToggle<AudioModel.Stage>(
+				selection: $audioModel.stage,
 				options: [
 					(
 						label: "Setup", systemImage: "sparkles.rectangle.stack.fill",
 						value: .setup
 					),
-					(label: "Edit", systemImage: "bubble.and.pencil", value: .captioning),
+					(label: "Edit", systemImage: "bubble.and.pencil", value: .edit),
 				]
 			)
 		}

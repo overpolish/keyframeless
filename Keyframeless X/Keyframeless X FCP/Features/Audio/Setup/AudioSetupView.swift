@@ -7,7 +7,7 @@ import KeyframelessKit
 import SwiftUI
 
 struct AudioSetupView: View {
-	@ObservedObject var model: CaptionsModel
+	@ObservedObject var model: AudioModel
 	@ObservedObject var whisperManager: WhisperModelManager
 	var onProcess: (_ replaceAll: Bool) -> Void
 	@StateObject private var audioPlayer = AudioPlayer()

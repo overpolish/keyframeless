@@ -6,8 +6,8 @@
 import KeyframelessKit
 import SwiftUI
 
-struct CaptionEditView: View {
-	@ObservedObject var model: CaptionsModel
+struct AudioEditView: View {
+	@ObservedObject var model: AudioModel
 
 	@State private var rows: [Row] = []
 
