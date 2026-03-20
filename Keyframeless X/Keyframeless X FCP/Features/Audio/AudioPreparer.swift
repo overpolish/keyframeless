@@ -141,13 +141,15 @@ struct AudioPreparer {
 			else { continue }
 			try audioFile.read(into: buffer, frameCount: frameCount)
 
+			let whisperBuffer = try resampleToWhisperFormat(buffer: buffer)
+
 			let outURL = FileManager.default.temporaryDirectory
 				.appendingPathComponent("kk_segment_\(UUID().uuidString).wav")
 			let outFile = try AVAudioFile(
 				forWriting: outURL,
-				settings: buffer.format.settings
+				settings: whisperBuffer.format.settings
 			)
-			try outFile.write(from: buffer)
+			try outFile.write(from: whisperBuffer)
 
 			prepared.append(
 				PreparedSegment(
@@ -170,6 +172,46 @@ struct AudioPreparer {
 		for segment in segments {
 			try? FileManager.default.removeItem(at: segment.tempFileURL)
 		}
+	}
+
+	private static let whisperSampleRate: Double = 16000
+
+	private static func resampleToWhisperFormat(buffer: AVAudioPCMBuffer) throws -> AVAudioPCMBuffer
+	{
+		guard
+			let monoFormat = AVAudioFormat(
+				commonFormat: .pcmFormatFloat32,
+				sampleRate: whisperSampleRate,
+				channels: 1,
+				interleaved: false
+			)
+		else { throw NSError(domain: "AudioPreparer", code: 1) }
+
+		if buffer.format.sampleRate == whisperSampleRate && buffer.format.channelCount == 1 {
+			return buffer
+		}
+
+		guard let converter = AVAudioConverter(from: buffer.format, to: monoFormat) else {
+			throw NSError(domain: "AudioPreparer", code: 2)
+		}
+
+		let ratio = whisperSampleRate / buffer.format.sampleRate
+		let outputFrameCount = AVAudioFrameCount(Double(buffer.frameLength) * ratio)
+		guard
+			let outputBuffer = AVAudioPCMBuffer(
+				pcmFormat: monoFormat,
+				frameCapacity: outputFrameCount
+			)
+		else { throw NSError(domain: "AudioPreparer", code: 3) }
+
+		var error: NSError?
+		converter.convert(to: outputBuffer, error: &error) { _, outStatus in
+			outStatus.pointee = .haveData
+			return buffer
+		}
+		if let error { throw error }
+
+		return outputBuffer
 	}
 
 	static func mergeRanges(
