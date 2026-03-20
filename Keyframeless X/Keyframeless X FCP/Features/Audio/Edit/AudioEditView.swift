@@ -128,9 +128,9 @@ struct AudioEditView: View {
 								player: player,
 								editingRowID: $editingRowID,
 								sentenceRowIDs: sentenceRowIDs
-							) { rowID, editedText in
+							) { rowID, editedWords in
 								if let idx = rows.firstIndex(where: { $0.id == rowID }) {
-									rows[idx].editedText = editedText
+									rows[idx].editedWords = editedWords
 								}
 							}
 						}
