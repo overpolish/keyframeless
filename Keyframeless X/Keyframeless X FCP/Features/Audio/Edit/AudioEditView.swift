@@ -8,6 +8,7 @@ import SwiftUI
 
 struct AudioEditView: View {
 	@ObservedObject var model: AudioModel
+	@StateObject private var player = AudioPlayer()
 
 	@State private var rows: [Row] = []
 	@State private var hoveredClipIndex: Int?
@@ -27,6 +28,8 @@ struct AudioEditView: View {
 		let timestamp: String
 		let isHeader: Bool
 		let isTranscribed: Bool
+		var sentenceStart: Double = 0
+		var sentenceEnd: Double = 0
 	}
 
 	var body: some View {
@@ -130,6 +133,16 @@ struct AudioEditView: View {
 								}
 							} else {
 								HStack(alignment: .top, spacing: KKSpacingMD) {
+									PlayButton(
+										isPlaying: player.isPlaying(index: row.id)
+									) {
+										player.toggleRange(
+											clip: model.audioClips[row.clipIndex],
+											index: row.id,
+											from: row.sentenceStart,
+											to: row.sentenceEnd
+										)
+									}
 									Text(row.timestamp)
 										.font(.system(size: 11).monospacedDigit())
 										.foregroundStyle(.tertiary)
@@ -214,7 +227,9 @@ struct AudioEditView: View {
 							text: text,
 							timestamp: formatTimestamp(sentence.first!.start),
 							isHeader: false,
-							isTranscribed: true
+							isTranscribed: true,
+							sentenceStart: Double(sentence.first!.start),
+							sentenceEnd: Double(sentence.last!.end)
 						))
 					nextID += 1
 				}
@@ -225,6 +240,7 @@ struct AudioEditView: View {
 
 	private static let sentenceEndChars = CharacterSet(charactersIn: ".!?")
 	private static let pauseThreshold: Float = 0.7
+	private static let maxSentenceDuration: Float = 5.0
 
 	private func groupIntoSentences(
 		_ words: [TranscriptionStore.StoredWord]
@@ -237,6 +253,13 @@ struct AudioEditView: View {
 		for word in words {
 			if let prev = current.last,
 				word.start - prev.end > Self.pauseThreshold
+			{
+				sentences.append(current)
+				current = []
+			}
+
+			if let first = current.first,
+				word.end - first.start > Self.maxSentenceDuration
 			{
 				sentences.append(current)
 				current = []

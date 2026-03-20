@@ -97,6 +97,10 @@ actor AudioTranscriber {
 			let allWords = results.flatMap { $0.allWords }
 			let cleanedWords = Self.cleanWords(allWords)
 
+			print(
+				"[Transcriber] segment \(i): \(allWords.count) raw words, \(cleanedWords.count) cleaned, range \(segment.range.start)–\(segment.range.end)"
+			)
+
 			for mapping in segment.clipMappings {
 				let clipWords = cleanedWords.compactMap { word, cleaned -> WordResult? in
 					let sourceTime = Double(word.start) + segment.range.start
@@ -109,6 +113,11 @@ actor AudioTranscriber {
 						start: Float(sourceTime),
 						end: Float(Double(word.end) + segment.range.start),
 						probability: word.probability
+					)
+				}
+				if clipWords.isEmpty {
+					print(
+						"[Transcriber] clip \(mapping.clipIndex): 0 words matched (source \(mapping.clipSourceStart)–\(mapping.clipSourceStart + mapping.clipSourceDuration))"
 					)
 				}
 				allClipResults.append(
