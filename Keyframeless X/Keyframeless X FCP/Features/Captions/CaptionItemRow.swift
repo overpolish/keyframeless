@@ -20,6 +20,5 @@ struct CaptionItemRow: View {
 				.opacity(isHidden ? 0 : 1)
 			Spacer()
 		}
-		.padding(.horizontal, KKPaddingLG)
 	}
 }

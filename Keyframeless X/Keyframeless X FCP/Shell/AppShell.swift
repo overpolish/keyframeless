@@ -13,11 +13,8 @@ struct AppShell: View {
 	@State private var transcribeProgress: Double = 0
 
 	var body: some View {
-		VStack(spacing: 0) {
-			PillTabBar(selected: $selectedTab)
-				.padding(.top, KKPaddingSM)
-				.padding(.bottom, KKPaddingXL)
-
+		VStack(spacing: KKSpacingMD) {
+			topBar
 			Group {
 				switch selectedTab {
 				case .captions:
@@ -29,19 +26,10 @@ struct AppShell: View {
 					ComingSoonView()
 				}
 			}
-			.padding([.leading, .trailing], KKSpacingXL)
-			.padding(.bottom, KKSpacingXS)
 		}
+		.padding([.horizontal, .bottom], KKPadding2XL)
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 		.background(Color(nsColor: .windowBackground()))
-		.overlay(alignment: .topTrailing) {
-			Image("keyframeless-logo")
-				.resizable()
-				.scaledToFit()
-				.frame(width: 48)
-				.opacity(0.15)
-				.padding([.bottom, .trailing], KKSpacingXL)
-		}
 		.overlay {
 			if isTranscribing {
 				TranscribingOverlay(
@@ -54,6 +42,40 @@ struct AppShell: View {
 				)
 				.transition(.opacity)
 			}
+		}
+	}
+
+	private var topBar: some View {
+		HStack {
+			PillTabBar(selected: $selectedTab)
+			Spacer()
+			toolNav
+		}
+		.overlay {
+			Image("keyframeless-logo")
+				.resizable()
+				.scaledToFit()
+				.frame(width: 36)
+				.opacity(0.15)
+		}
+	}
+
+	@ViewBuilder
+	private var toolNav: some View {
+		switch selectedTab {
+		case .captions:
+			PillIconToggle<CaptionsModel.Stage>(
+				selection: $captionsModel.stage,
+				options: [
+					(
+						label: "Transcription", systemImage: "sparkles.rectangle.stack.fill",
+						value: .transcription
+					),
+					(label: "Captioning", systemImage: "bubble.fill", value: .captioning),
+				]
+			)
+		case .other:
+			EmptyView()
 		}
 	}
 }
