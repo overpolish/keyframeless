@@ -6,7 +6,7 @@
 import KeyframelessKit
 import SwiftUI
 
-struct AudioView: View {
+struct AudioSetupView: View {
 	@ObservedObject var model: CaptionsModel
 	@Binding var isProcessing: Bool
 	@StateObject private var audioPlayer = AudioPlayer()
