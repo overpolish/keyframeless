@@ -30,6 +30,7 @@ struct AudioEditView: View {
 		let isTranscribed: Bool
 		var sentenceStart: Double = 0
 		var sentenceEnd: Double = 0
+		var words: [TranscriptionStore.StoredWord] = []
 	}
 
 	var body: some View {
@@ -156,8 +157,11 @@ struct AudioEditView: View {
 										.font(.system(size: 11).monospacedDigit())
 										.foregroundStyle(.tertiary)
 										.frame(width: 80, alignment: .trailing)
-									Text(row.text)
-										.font(.system(size: 13))
+									HighlightedSentence(
+										words: row.words,
+										currentTime: player.isPlaying(index: row.id)
+											? player.currentTime : nil
+									)
 									Spacer()
 								}
 								.padding(.vertical, KKPaddingXS)
@@ -166,7 +170,9 @@ struct AudioEditView: View {
 									RoundedRectangle(cornerRadius: CGFloat(KKRadiusSM))
 										.fill(
 											Color(nsColor: .hover()).opacity(
-												hoveredClipIndex == row.clipIndex ? 1 : 0
+												hoveredClipIndex == row.clipIndex
+													&& !player.isPlaying(index: row.id)
+													? 1 : 0
 											))
 								)
 								.onHover { hovering in
@@ -185,6 +191,9 @@ struct AudioEditView: View {
 				model.editSelectedClips = transcribedIndices
 			}
 			buildRows()
+		}
+		.onDisappear {
+			player.stop()
 		}
 	}
 
@@ -238,7 +247,8 @@ struct AudioEditView: View {
 							isHeader: false,
 							isTranscribed: true,
 							sentenceStart: Double(sentence.first!.start),
-							sentenceEnd: Double(sentence.last!.end)
+							sentenceEnd: Double(sentence.last!.end),
+							words: sentence
 						))
 					nextID += 1
 				}
@@ -249,7 +259,6 @@ struct AudioEditView: View {
 
 	private static let sentenceEndChars = CharacterSet(charactersIn: ".!?")
 	private static let pauseThreshold: Float = 0.7
-	private static let maxSentenceDuration: Float = 5.0
 
 	private func groupIntoSentences(
 		_ words: [TranscriptionStore.StoredWord]
@@ -262,13 +271,6 @@ struct AudioEditView: View {
 		for word in words {
 			if let prev = current.last,
 				word.start - prev.end > Self.pauseThreshold
-			{
-				sentences.append(current)
-				current = []
-			}
-
-			if let first = current.first,
-				word.end - first.start > Self.maxSentenceDuration
 			{
 				sentences.append(current)
 				current = []
