@@ -8,17 +8,17 @@ import SwiftUI
 
 struct HighlightedSentence: View {
 	let words: [TranscriptionStore.StoredWord]
-	var editedText: String?
+	var editedWords: [TranscriptionStore.StoredWord]?
 	let currentTime: Double?
+
+	private var displayWords: [TranscriptionStore.StoredWord] {
+		editedWords ?? words
+	}
 
 	var body: some View {
 		if let currentTime {
 			Text(attributedString(currentTime: currentTime))
 				.font(.system(size: 13))
-		} else if let editedText {
-			Text(editedText)
-				.font(.system(size: 13))
-				.foregroundStyle(.primary)
 		} else {
 			Text(plainText)
 				.font(.system(size: 13))
@@ -26,7 +26,7 @@ struct HighlightedSentence: View {
 	}
 
 	private var plainText: String {
-		words.map { $0.word.trimmingCharacters(in: .whitespaces) }.joined(separator: " ")
+		displayWords.map { $0.word.trimmingCharacters(in: .whitespaces) }.joined(separator: " ")
 	}
 
 	private static let highlightDelay: Double = 0.3
@@ -34,7 +34,7 @@ struct HighlightedSentence: View {
 	private func attributedString(currentTime: Double) -> AttributedString {
 		let adjusted = currentTime - Self.highlightDelay
 		var result = AttributedString()
-		for (i, word) in words.enumerated() {
+		for (i, word) in displayWords.enumerated() {
 			let trimmed = word.word.trimmingCharacters(in: .whitespaces)
 			var part = AttributedString(i > 0 ? " \(trimmed)" : trimmed)
 			let isActive = adjusted >= Double(word.start) && adjusted < Double(word.end)

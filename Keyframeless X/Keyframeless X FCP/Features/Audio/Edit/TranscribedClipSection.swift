@@ -21,7 +21,7 @@ struct TranscribedClipSection: View {
 	@ObservedObject var player: AudioPlayer
 	@Binding var editingRowID: Int?
 	var sentenceRowIDs: [Int] = []
-	var onSentenceEdit: (Int, String?) -> Void = { _, _ in }
+	var onSentenceEdit: (Int, [TranscriptionStore.StoredWord]?) -> Void = { _, _ in }
 	@State private var isHovered = false
 
 	private var clipColor: Color {
@@ -47,16 +47,18 @@ struct TranscribedClipSection: View {
 				) { newText in
 					let clip = clips[row.clipIndex]
 					let store = TranscriptionStore.shared
-					let editedText: String?
+					let editedWords: [TranscriptionStore.StoredWord]?
 					if newText == row.text {
-						editedText = nil
-						store.setEditedText(nil, for: clip, sentenceStart: Float(row.sentenceStart))
+						editedWords = nil
+						store.setEditedWords(
+							nil, for: clip, sentenceStart: Float(row.sentenceStart))
 					} else {
-						editedText = newText
-						store.setEditedText(
-							newText, for: clip, sentenceStart: Float(row.sentenceStart))
+						editedWords = TranscriptionStore.alignWords(
+							original: row.words, editedText: newText)
+						store.setEditedWords(
+							editedWords, for: clip, sentenceStart: Float(row.sentenceStart))
 					}
-					onSentenceEdit(row.id, editedText)
+					onSentenceEdit(row.id, editedWords)
 				}
 			}
 		}

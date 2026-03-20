@@ -37,7 +37,11 @@ struct SentenceRow: View {
 		.padding(.vertical, KKPaddingXS)
 		.onChange(of: editingRowID) {
 			if editingRowID == row.id {
-				draft = row.editedText ?? row.text
+				draft =
+					row.editedWords.map {
+						$0.map { $0.word.trimmingCharacters(in: .whitespaces) }
+							.joined(separator: " ")
+					} ?? row.text
 			}
 		}
 	}
@@ -62,12 +66,16 @@ struct SentenceRow: View {
 		} else {
 			HighlightedSentence(
 				words: row.words,
-				editedText: row.editedText,
+				editedWords: row.editedWords,
 				currentTime: player.isPlaying(index: row.id)
 					? player.currentTime : nil
 			)
-			.onTapGesture(count: 2) {
-				draft = row.editedText ?? row.text
+			.onTapGesture {
+				draft =
+					row.editedWords.map {
+						$0.map { $0.word.trimmingCharacters(in: .whitespaces) }
+							.joined(separator: " ")
+					} ?? row.text
 				editingRowID = row.id
 			}
 		}
