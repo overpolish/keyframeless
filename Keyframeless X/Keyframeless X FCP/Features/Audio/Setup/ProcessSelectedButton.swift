@@ -6,7 +6,7 @@
 import KeyframelessKit
 import SwiftUI
 
-struct RetranscribeButton: View {
+struct ProcessSelectedButton: View {
 	let disabled: Bool
 	var action: () -> Void = {}
 	@State private var showInfo = false
@@ -15,7 +15,7 @@ struct RetranscribeButton: View {
 		Button(action: action) {
 			HStack(spacing: KKSpacingSM) {
 				Image(systemName: "arrow.trianglehead.2.counterclockwise")
-				Text("Retranscribe Selected")
+				Text("Process Selected")
 					.font(.system(size: 13, weight: .medium))
 			}
 			.frame(maxWidth: .infinity)
@@ -30,7 +30,7 @@ struct RetranscribeButton: View {
 				.padding(.bottom, KKPaddingMD)
 				.onHover { showInfo = $0 }
 				.popover(isPresented: $showInfo, arrowEdge: .bottom) {
-					Text("Mix and match models by retranscribing only the selected clips.")
+					Text("Mix and match settings by processing only the selected clips.")
 						.font(.system(size: 11))
 						.padding(KKPaddingSM)
 						.fixedSize(horizontal: false, vertical: true)
