@@ -20,9 +20,18 @@ struct AudioSetupView: View {
 	var body: some View {
 		VStack(spacing: KKSpacingLG) {
 			topRow
-			timelineArea
-				.frame(maxHeight: .infinity)
-				.layoutPriority(1)
+			SetupTimelineArea(
+				model: model,
+				audioPlayer: audioPlayer,
+				dropState: dropState,
+				isTargeted: isTargeted,
+				timelineLoadID: timelineLoadID,
+				onDrop: handleDrop,
+				onDenied: handleDenied,
+				onTargeted: { isTargeted = $0 }
+			)
+			.frame(maxHeight: .infinity)
+			.layoutPriority(1)
 			HStack(alignment: .top, spacing: KKSpacingLG) {
 				WhisperModelPickerView(manager: whisperManager)
 				WhisperLanguagePickerView(manager: whisperManager)
@@ -36,7 +45,7 @@ struct AudioSetupView: View {
 					disabled: processDisabled,
 					action: { onProcess(true) }
 				)
-				RetranscribeButton(
+				ProcessSelectedButton(
 					disabled: processDisabled,
 					action: { onProcess(false) }
 				)
@@ -46,87 +55,10 @@ struct AudioSetupView: View {
 		.onDisappear { audioPlayer.stop() }
 	}
 
-	private var timelineArea: some View {
-		VStack(spacing: 0) {
-			ZStack {
-				RoundedRectangle(cornerRadius: 8)
-					.strokeBorder(
-						dropZoneBorderColor,
-						style: StrokeStyle(
-							lineWidth: 1.5, dash: model.audioClips.isEmpty ? [6, 4] : [])
-					)
-				if model.audioClips.isEmpty {
-					DropZoneEmptyState(dropState: dropState, isTargeted: isTargeted)
-				} else {
-					TimelineAxisView(
-						duration: timelineDuration,
-						format: model.projectFormat,
-						useTimecode: model.useTimecode,
-						clips: model.audioClips,
-						selectedClips: $model.selectedClips,
-						audioPlayer: audioPlayer,
-						showWaveforms: true
-					)
-					.id(timelineLoadID)
-					.padding(.bottom, KKSpacingSM)
-					.frame(maxWidth: .infinity, maxHeight: .infinity)
-					.blur(radius: isTargeted ? 3 : 0)
-				}
-				FCPDropZoneView { doc in
-					let clips = FCPXMLParser.audioClips(in: doc)
-					model.audioClips = clips
-					model.selectedClips = Set(clips.indices)
-					model.editSelectedClips = nil
-					model.dropItems = FCPXMLParser.topLevelItems(in: doc)
-					let fmt = FCPXMLParser.projectFormat(in: doc) ?? .default
-					model.projectFormat = fmt
-					model.useTimecode = !fmt.fpsDisplay.isEmpty
-					dropState = .dropped
-					isTargeted = false
-					timelineLoadID = UUID()
-				} onDenied: {
-					dropState = .denied
-					model.audioClips = []
-					model.selectedClips = []
-					model.editSelectedClips = nil
-					isTargeted = false
-				} onTargeted: { targeted in
-					isTargeted = targeted
-				}
-			}
-			.frame(maxWidth: .infinity)
-			.frame(minHeight: 80)
-			.overlay(alignment: .bottomTrailing) {
-				HelperText(
-					"Click and drag to quickly select/deselect clips",
-					systemImage: "pointer.arrow.motionlines"
-				)
-				.padding(.trailing, KKPaddingSM)
-				.alignmentGuide(.bottom) { d in d[.top] - KKSpacingMD }
-			}
-			ClipCountDisplay(
-				selectedCount: model.selectedClips.count,
-				totalCount: model.audioClips.count
-			)
-			.padding(.top, KKSpacingMD)
-		}
-	}
-
 	private var processDisabled: Bool {
 		model.selectedClips.isEmpty
 			|| whisperManager.selectedModel == nil
 			|| whisperManager.downloadingModel != nil
-	}
-
-	private var dropZoneBorderColor: Color {
-		if isTargeted { return Color(nsColor: .accent()) }
-		if dropState == .denied { return Color(nsColor: .error()) }
-		if dropState == .dropped && model.audioClips.isEmpty { return Color(nsColor: .warning()) }
-		return Color.secondary.opacity(model.audioClips.isEmpty ? 0.4 : 0.15)
-	}
-
-	private var timelineDuration: Double {
-		model.projectFormat?.sequenceDuration ?? model.audioClips.map(\.end).max() ?? 0
 	}
 
 	private var topRow: some View {
@@ -140,5 +72,27 @@ struct AudioSetupView: View {
 			Spacer()
 			ClipSelectionToolbar(clips: model.audioClips, selectedClips: $model.selectedClips)
 		}
+	}
+
+	private func handleDrop(_ doc: XMLDocument) {
+		let clips = FCPXMLParser.audioClips(in: doc)
+		model.audioClips = clips
+		model.selectedClips = Set(clips.indices)
+		model.editSelectedClips = nil
+		model.dropItems = FCPXMLParser.topLevelItems(in: doc)
+		let fmt = FCPXMLParser.projectFormat(in: doc) ?? .default
+		model.projectFormat = fmt
+		model.useTimecode = !fmt.fpsDisplay.isEmpty
+		dropState = .dropped
+		isTargeted = false
+		timelineLoadID = UUID()
+	}
+
+	private func handleDenied() {
+		dropState = .denied
+		model.audioClips = []
+		model.selectedClips = []
+		model.editSelectedClips = nil
+		isTargeted = false
 	}
 }
