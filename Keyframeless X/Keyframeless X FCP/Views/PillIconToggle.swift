@@ -9,12 +9,14 @@ import SwiftUI
 struct PillIconToggle<Value: Hashable>: View {
 	@Binding var selection: Value
 	let options: [(label: String, systemImage: String, value: Value)]
+	var disabledValues: Set<Value> = []
 
 	var body: some View {
 		HStack(spacing: KKSpacingSM) {
 			ForEach(options.indices, id: \.self) { i in
 				let option = options[i]
 				let isSelected = selection == option.value
+				let isDisabled = disabledValues.contains(option.value)
 				Button {
 					selection = option.value
 				} label: {
@@ -29,8 +31,10 @@ struct PillIconToggle<Value: Hashable>: View {
 						}
 						.foregroundStyle(isSelected ? .primary : .secondary)
 						.contentShape(Capsule())
+						.opacity(isDisabled ? 0.35 : 1)
 				}
 				.buttonStyle(.plain)
+				.disabled(isDisabled)
 			}
 		}
 		.padding(KKPaddingSM)

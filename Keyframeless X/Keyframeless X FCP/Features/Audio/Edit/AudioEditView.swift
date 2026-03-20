@@ -11,6 +11,13 @@ struct AudioEditView: View {
 
 	@State private var rows: [Row] = []
 
+	private var editSelectedClips: Binding<Set<Int>> {
+		Binding(
+			get: { model.editSelectedClips ?? [] },
+			set: { model.editSelectedClips = $0 }
+		)
+	}
+
 	struct Row: Identifiable {
 		let id: Int
 		let clipName: String
@@ -20,32 +27,108 @@ struct AudioEditView: View {
 	}
 
 	var body: some View {
-		ScrollView {
-			LazyVStack(alignment: .leading, spacing: 0) {
-				ForEach(rows) { row in
-					if row.isHeader {
-						Text(row.clipName)
-							.font(.system(size: 12, weight: .semibold))
-							.foregroundStyle(.secondary)
-							.padding(.top, KKSpacingLG)
-							.padding(.bottom, KKSpacingXS)
-					} else {
-						HStack(alignment: .top, spacing: KKSpacingMD) {
-							Text(row.timestamp)
-								.font(.system(size: 11).monospacedDigit())
-								.foregroundStyle(.tertiary)
-								.frame(width: 80, alignment: .trailing)
-							Text(row.text)
-								.font(.system(size: 13))
-							Spacer()
+		GeometryReader { geo in
+			VStack(spacing: KKSpacingLG) {
+				HStack {
+					if let item = model.dropItems.first {
+						Text(item.name)
+							.font(.title2)
+							.lineLimit(1)
+					}
+					Spacer()
+					ClipSelectionToolbar(
+						clips: model.audioClips,
+						selectedClips: editSelectedClips
+					)
+				}
+				VStack(spacing: 0) {
+					ZStack {
+						RoundedRectangle(cornerRadius: CGFloat(KKRadiusMD))
+							.strokeBorder(Color.secondary.opacity(0.15), lineWidth: 1.5)
+						if transcribedIndices.isEmpty {
+							VStack(spacing: KKSpacingLG) {
+								Image(systemName: "waveform.slash")
+									.font(.title)
+									.foregroundStyle(Color(nsColor: .timelineLabel()))
+								Text("No transcribed clips")
+									.font(.title3)
+									.foregroundStyle(Color(nsColor: .timelineLabel()))
+							}
+						} else {
+							TimelineAxisView(
+								duration: timelineDuration,
+								format: model.projectFormat,
+								useTimecode: model.useTimecode,
+								clips: model.audioClips,
+								selectedClips: editSelectedClips,
+								visibleIndices: transcribedIndices,
+								showWaveforms: false
+							)
 						}
 					}
+					.frame(height: geo.size.height * 0.2)
+					.overlay(alignment: .bottomTrailing) {
+						HelperText(
+							"Click and drag to quickly select/deselect clips",
+							systemImage: "pointer.arrow.motionlines"
+						)
+						.padding(.trailing, KKPaddingSM)
+						.alignmentGuide(.bottom) { d in d[.top] - KKSpacingMD }
+					}
+					ClipCountDisplay(
+						selectedCount: model.editSelectedClips?.count ?? 0,
+						totalCount: model.audioClips.count
+					)
+					.padding(.top, KKSpacingMD)
 				}
+				ScrollView {
+					LazyVStack(alignment: .leading, spacing: 0) {
+						ForEach(rows) { row in
+							if row.isHeader {
+								Text(row.clipName)
+									.font(.system(size: 12, weight: .semibold))
+									.foregroundStyle(.secondary)
+									.padding(.top, KKSpacingLG)
+									.padding(.bottom, KKSpacingXS)
+							} else {
+								HStack(alignment: .top, spacing: KKSpacingMD) {
+									Text(row.timestamp)
+										.font(.system(size: 11).monospacedDigit())
+										.foregroundStyle(.tertiary)
+										.frame(width: 80, alignment: .trailing)
+									Text(row.text)
+										.font(.system(size: 13))
+									Spacer()
+								}
+							}
+						}
+					}
+					.padding(KKPaddingMD)
+				}
+				.frame(maxWidth: .infinity, maxHeight: .infinity)
 			}
-			.padding(KKPaddingMD)
 		}
-		.frame(maxWidth: .infinity, maxHeight: .infinity)
-		.onAppear { buildRows() }
+		.onAppear {
+			if model.editSelectedClips == nil {
+				model.editSelectedClips = transcribedIndices
+			}
+			buildRows()
+		}
+	}
+
+	private var timelineDuration: Double {
+		model.projectFormat?.sequenceDuration ?? model.audioClips.map(\.end).max() ?? 0
+	}
+
+	private var transcribedIndices: Set<Int> {
+		let store = TranscriptionStore.shared
+		var result = Set<Int>()
+		for i in model.audioClips.indices {
+			if store.words(for: model.audioClips[i]) != nil {
+				result.insert(i)
+			}
+		}
+		return result
 	}
 
 	private func buildRows() {

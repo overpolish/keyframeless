@@ -82,7 +82,8 @@ struct AppShell: View {
 						value: .setup
 					),
 					(label: "Edit", systemImage: "bubble.and.pencil", value: .edit),
-				]
+				],
+				disabledValues: audioModel.audioClips.isEmpty ? [.edit] : []
 			)
 		}
 	}

@@ -14,7 +14,9 @@ struct TimelineAxisView: View {
 	let useTimecode: Bool
 	let clips: [FCPXMLParser.AudioClip]
 	@Binding var selectedClips: Set<Int>
-	@ObservedObject var audioPlayer: AudioPlayer
+	var audioPlayer: AudioPlayer? = nil
+	var visibleIndices: Set<Int>? = nil
+	var showWaveforms: Bool = true
 
 	@State private var zoom: CGFloat = 1.0
 
@@ -28,9 +30,12 @@ struct TimelineAxisView: View {
 				availableWidth: geo.size.width,
 				availableHeight: geo.size.height,
 				labelForTime: labelForTime,
-				audioPlayer: audioPlayer
+				audioPlayer: audioPlayer,
+				visibleIndices: visibleIndices,
+				showWaveforms: showWaveforms
 			)
 		}
+		.padding(.horizontal, KKPaddingMD)
 	}
 
 	private func labelForTime(_ time: Double) -> String {
@@ -49,7 +54,9 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 	let availableWidth: CGFloat
 	let availableHeight: CGFloat
 	let labelForTime: (Double) -> String
-	@ObservedObject var audioPlayer: AudioPlayer
+	var audioPlayer: AudioPlayer?
+	var visibleIndices: Set<Int>?
+	var showWaveforms: Bool
 
 	func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -81,6 +88,8 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 		docView.clips = clips
 		docView.selectedClips = selectedClips
 		docView.audioPlayer = audioPlayer
+		docView.visibleIndices = visibleIndices
+		docView.showWaveforms = showWaveforms
 		docView.onToggleClip = { index in
 			if selectedClips.contains(index) {
 				selectedClips.remove(index)
@@ -119,9 +128,11 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 private class AxisDocumentView: NSView {
 	var duration: Double = 0
 	var clips: [FCPXMLParser.AudioClip] = [] {
-		didSet { loadWaveformsIfNeeded(from: oldValue) }
+		didSet { if showWaveforms { loadWaveformsIfNeeded(from: oldValue) } }
 	}
 	var selectedClips: Set<Int> = []
+	var visibleIndices: Set<Int>?
+	var showWaveforms: Bool = true
 	var onToggleClip: ((Int) -> Void)?
 	var labelForTime: ((Double) -> String)?
 	var onMagnify: ((CGFloat, CGFloat) -> Void)?
@@ -180,12 +191,13 @@ private class AxisDocumentView: NSView {
 		for entry in cachedClipRects.reversed() {
 			guard entry.rect.contains(point) else { continue }
 			let clip = clips[entry.index]
-			let showControls =
-				entry.rect.height >= minHeightForControls
+			let hasAudioControls =
+				audioPlayer != nil
+				&& entry.rect.height >= minHeightForControls
 				&& entry.rect.width > playBtnSize + 8
 				&& clip.url != nil
 
-			if showControls {
+			if hasAudioControls {
 				let titleStripH: CGFloat = playBtnSize + 8
 				let playBtnRect = CGRect(
 					x: entry.rect.minX, y: entry.rect.minY,
@@ -299,6 +311,7 @@ private class AxisDocumentView: NSView {
 
 		cachedClipRects = []
 		for (i, clip) in clips.enumerated() {
+			if let visible = visibleIndices, !visible.contains(i) { continue }
 			let lane = CGFloat(assignments[i])
 			let x = CGFloat(clip.start) * pps
 			let w = min(max(cornerRadius * 2, CGFloat(clip.end - clip.start) * pps), emptyX - x)
@@ -317,10 +330,13 @@ private class AxisDocumentView: NSView {
 			ctx.addPath(path)
 			ctx.fillPath()
 
-			let showControls =
-				laneHeight >= minHeightForControls && w > playBtnSize + 8 && clip.url != nil
-			if let samples = waveforms[i], !samples.isEmpty {
-				if showControls {
+			let hasAudioControls =
+				audioPlayer != nil
+				&& laneHeight >= minHeightForControls
+				&& w > playBtnSize + 8
+				&& clip.url != nil
+			if showWaveforms, let samples = waveforms[i], !samples.isEmpty {
+				if hasAudioControls {
 					let titleStripH: CGFloat = playBtnSize + 8
 					let waveformY = rect.minY + titleStripH
 					let waveformH = rect.height - titleStripH - scrubStripHeight
@@ -337,7 +353,7 @@ private class AxisDocumentView: NSView {
 				}
 			}
 
-			if showControls {
+			if hasAudioControls {
 				let isPlaying = audioPlayer?.isPlaying(index: i) == true
 				let playBtnRect = CGRect(
 					x: rect.minX + 4, y: rect.minY + 4,
@@ -370,6 +386,23 @@ private class AxisDocumentView: NSView {
 					progress = max(0, min(1, offset / clip.sourceDuration))
 				}
 				drawScrubBar(in: rect, context: ctx, progress: progress)
+			} else if laneHeight >= 16 && w > 30 {
+				let isSelected = selectedClips.contains(i)
+				let para = NSMutableParagraphStyle()
+				para.lineBreakMode = .byTruncatingTail
+				let titleAttrs: [NSAttributedString.Key: Any] = [
+					.font: NSFont.systemFont(ofSize: 10, weight: .medium),
+					.foregroundColor: NSColor.white.withAlphaComponent(isSelected ? 0.85 : 0.5),
+					.paragraphStyle: para,
+				]
+				let titleStr = clip.name as NSString
+				let titleH = titleStr.size(withAttributes: titleAttrs).height
+				let titleRect = CGRect(
+					x: rect.minX + 6, y: rect.midY - titleH / 2,
+					width: rect.width - 12, height: titleH)
+				titleStr.draw(
+					with: titleRect, options: .usesLineFragmentOrigin,
+					attributes: titleAttrs, context: nil)
 			}
 		}
 	}
