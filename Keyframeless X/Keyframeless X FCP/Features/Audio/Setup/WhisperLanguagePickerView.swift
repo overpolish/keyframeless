@@ -49,23 +49,34 @@ struct WhisperLanguagePickerView: View {
 					)
 
 				ScrollShadowView {
-					LazyVStack(spacing: 0) {
-						LanguageRow(
-							name: "Auto-detect", code: nil,
-							selected: manager.selectedLanguage == nil
-						) {
-							manager.selectedLanguage = nil
-						}
-						ForEach(filtered, id: \.code) { lang in
+					ScrollViewReader { proxy in
+						LazyVStack(spacing: 0) {
 							LanguageRow(
-								name: lang.name, code: lang.code,
-								selected: manager.selectedLanguage == lang.code
+								name: "Auto-detect", code: nil,
+								selected: manager.selectedLanguage == nil
 							) {
-								manager.selectedLanguage = lang.code
+								manager.selectedLanguage = nil
+							}
+							.id("auto")
+							ForEach(filtered, id: \.code) { lang in
+								LanguageRow(
+									name: lang.name, code: lang.code,
+									selected: manager.selectedLanguage == lang.code
+								) {
+									manager.selectedLanguage = lang.code
+								}
+								.id(lang.code)
+							}
+						}
+						.padding(KKPaddingMD)
+						.onAppear {
+							DispatchQueue.main.async {
+								proxy.scrollTo(
+									manager.selectedLanguage ?? "auto",
+									anchor: .center)
 							}
 						}
 					}
-					.padding(KKPaddingMD)
 				}
 				.clipShape(
 					UnevenRoundedRectangle(
