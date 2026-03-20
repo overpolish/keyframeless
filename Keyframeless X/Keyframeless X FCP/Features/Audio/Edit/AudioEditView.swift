@@ -10,6 +10,7 @@ struct AudioEditView: View {
 	@ObservedObject var model: AudioModel
 
 	@State private var rows: [Row] = []
+	@State private var hoveredClipIndex: Int?
 
 	private var editSelectedClips: Binding<Set<Int>> {
 		Binding(
@@ -20,6 +21,7 @@ struct AudioEditView: View {
 
 	struct Row: Identifiable {
 		let id: Int
+		let clipIndex: Int
 		let clipName: String
 		let text: String
 		let timestamp: String
@@ -62,7 +64,8 @@ struct AudioEditView: View {
 								clips: model.audioClips,
 								selectedClips: editSelectedClips,
 								visibleIndices: transcribedIndices,
-								showWaveforms: false
+								showWaveforms: false,
+								hoveredClipIndex: $hoveredClipIndex
 							)
 						}
 					}
@@ -77,7 +80,7 @@ struct AudioEditView: View {
 					}
 					ClipCountDisplay(
 						selectedCount: model.editSelectedClips?.count ?? 0,
-						totalCount: model.audioClips.count
+						totalCount: transcribedIndices.count
 					)
 					.padding(.top, KKSpacingMD)
 				}
@@ -85,11 +88,33 @@ struct AudioEditView: View {
 					LazyVStack(alignment: .leading, spacing: 0) {
 						ForEach(rows) { row in
 							if row.isHeader {
-								Text(row.clipName)
-									.font(.system(size: 12, weight: .semibold))
-									.foregroundStyle(.secondary)
-									.padding(.top, KKSpacingLG)
-									.padding(.bottom, KKSpacingXS)
+								HStack(spacing: KKSpacingMD) {
+									Toggle(
+										isOn: Binding(
+											get: {
+												editSelectedClips.wrappedValue.contains(
+													row.clipIndex)
+											},
+											set: { isOn in
+												if isOn {
+													editSelectedClips.wrappedValue.insert(
+														row.clipIndex)
+												} else {
+													editSelectedClips.wrappedValue.remove(
+														row.clipIndex)
+												}
+											}
+										)
+									) {
+										Text(row.clipName)
+											.font(.system(size: 12, weight: .semibold))
+											.foregroundStyle(.secondary)
+									}
+									.toggleStyle(.checkbox)
+									.tint(Color(nsColor: .accent()))
+								}
+								.padding(.top, KKSpacingLG)
+								.padding(.bottom, KKSpacingXS)
 							} else {
 								HStack(alignment: .top, spacing: KKSpacingMD) {
 									Text(row.timestamp)
@@ -99,6 +124,18 @@ struct AudioEditView: View {
 									Text(row.text)
 										.font(.system(size: 13))
 									Spacer()
+								}
+								.padding(.vertical, KKPaddingXS)
+								.padding(.horizontal, KKPaddingSM)
+								.background(
+									RoundedRectangle(cornerRadius: CGFloat(KKRadiusSM))
+										.fill(
+											Color(nsColor: .hover()).opacity(
+												hoveredClipIndex == row.clipIndex ? 1 : 0
+											))
+								)
+								.onHover { hovering in
+									hoveredClipIndex = hovering ? row.clipIndex : nil
 								}
 							}
 						}
@@ -142,7 +179,9 @@ struct AudioEditView: View {
 
 			let clip = model.audioClips[idx]
 			result.append(
-				Row(id: nextID, clipName: clip.name, text: "", timestamp: "", isHeader: true))
+				Row(
+					id: nextID, clipIndex: idx, clipName: clip.name, text: "", timestamp: "",
+					isHeader: true))
 			nextID += 1
 
 			let sentences = groupIntoSentences(words)
@@ -152,6 +191,7 @@ struct AudioEditView: View {
 				result.append(
 					Row(
 						id: nextID,
+						clipIndex: idx,
 						clipName: clip.name,
 						text: text,
 						timestamp: formatTimestamp(sentence.first!.start),

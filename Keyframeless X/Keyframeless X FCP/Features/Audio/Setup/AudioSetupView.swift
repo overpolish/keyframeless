@@ -76,6 +76,7 @@ struct AudioSetupView: View {
 					let clips = FCPXMLParser.audioClips(in: doc)
 					model.audioClips = clips
 					model.selectedClips = Set(clips.indices)
+					model.editSelectedClips = nil
 					model.dropItems = FCPXMLParser.topLevelItems(in: doc)
 					let fmt = FCPXMLParser.projectFormat(in: doc) ?? .default
 					model.projectFormat = fmt
@@ -87,6 +88,7 @@ struct AudioSetupView: View {
 					dropState = .denied
 					model.audioClips = []
 					model.selectedClips = []
+					model.editSelectedClips = nil
 					isTargeted = false
 				} onTargeted: { targeted in
 					isTargeted = targeted
