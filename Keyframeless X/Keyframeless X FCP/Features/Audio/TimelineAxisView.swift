@@ -19,6 +19,7 @@ struct TimelineAxisView: View {
 	var dimmedIndices: Set<Int> = []
 	var showWaveforms: Bool = true
 	var hoveredClipIndex: Binding<Int?> = .constant(nil)
+	var onClickDimmed: ((Int) -> Void)? = nil
 
 	@State private var zoom: CGFloat = 1.0
 
@@ -36,7 +37,8 @@ struct TimelineAxisView: View {
 				visibleIndices: visibleIndices,
 				dimmedIndices: dimmedIndices,
 				showWaveforms: showWaveforms,
-				hoveredClipIndex: hoveredClipIndex
+				hoveredClipIndex: hoveredClipIndex,
+				onClickDimmed: onClickDimmed
 			)
 		}
 		.padding(.horizontal, KKPaddingMD)
@@ -63,6 +65,7 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 	var dimmedIndices: Set<Int> = []
 	var showWaveforms: Bool
 	var hoveredClipIndex: Binding<Int?>
+	var onClickDimmed: ((Int) -> Void)?
 
 	func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -108,6 +111,7 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 				selectedClips.insert(index)
 			}
 		}
+		docView.onClickDimmed = onClickDimmed
 		docView.labelForTime = labelForTime
 		docView.needsDisplay = true
 	}
@@ -148,6 +152,7 @@ private class AxisDocumentView: NSView {
 	var hoveredClipIndex: Int?
 	var onHoverClip: ((Int?) -> Void)?
 	var onToggleClip: ((Int) -> Void)?
+	var onClickDimmed: ((Int) -> Void)?
 	var labelForTime: ((Double) -> String)?
 	var onMagnify: ((CGFloat, CGFloat) -> Void)?
 	var audioPlayer: AudioPlayer? {
@@ -252,7 +257,11 @@ private class AxisDocumentView: NSView {
 	override func mouseDown(with event: NSEvent) {
 		let point = convert(event.locationInWindow, from: nil)
 		for entry in cachedClipRects.reversed() {
-			guard entry.rect.contains(point), !dimmedIndices.contains(entry.index) else { continue }
+			guard entry.rect.contains(point) else { continue }
+			if dimmedIndices.contains(entry.index) {
+				onClickDimmed?(entry.index)
+				return
+			}
 			let clip = clips[entry.index]
 			let hasAudioControls =
 				audioPlayer != nil
@@ -399,6 +408,19 @@ private class AxisDocumentView: NSView {
 				transform: nil)
 			ctx.addPath(path)
 			ctx.fillPath()
+
+			if isDimmed && hoveredClipIndex == i {
+				let pulse = 0.7 + 0.3 * sin(pulsePhase * 2.0 * .pi / 2.0)
+				ctx.saveGState()
+				ctx.clip(to: rect.insetBy(dx: -3, dy: -3))
+				ctx.setShadow(
+					offset: .zero, blur: 4,
+					color: clipColor.withAlphaComponent(pulse * 0.4).cgColor)
+				ctx.setFillColor(clipColor.withAlphaComponent(pulse * 0.2).cgColor)
+				ctx.addPath(path)
+				ctx.fillPath()
+				ctx.restoreGState()
+			}
 
 			if isDimmed || isHoverDimmed { continue }
 
