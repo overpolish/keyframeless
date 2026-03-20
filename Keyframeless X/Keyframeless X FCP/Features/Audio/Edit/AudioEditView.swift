@@ -12,6 +12,8 @@ struct AudioEditView: View {
 
 	@State private var rows: [AudioEditRow] = []
 	@State private var hoveredClipIndex: Int?
+	@State private var editingRowID: Int?
+	@State private var clickMonitor: Any?
 
 	private var editSelectedClips: Binding<Set<Int>> {
 		Binding(
@@ -34,9 +36,23 @@ struct AudioEditView: View {
 			}
 			rows = AudioEditRowBuilder.buildRows(
 				clips: model.audioClips, format: model.projectFormat)
+			clickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
+				if editingRowID != nil {
+					let location = event.locationInWindow
+					if let contentView = event.window?.contentView {
+						let hitView = contentView.hitTest(location)
+						if !(hitView is NSTextField || hitView is NSTextView) {
+							event.window?.makeFirstResponder(nil)
+						}
+					}
+				}
+				return event
+			}
 		}
 		.onDisappear {
 			player.stop()
+			if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
+			clickMonitor = nil
 		}
 	}
 
@@ -109,8 +125,14 @@ struct AudioEditView: View {
 								clips: model.audioClips,
 								selectedClips: editSelectedClips,
 								hoveredClipIndex: $hoveredClipIndex,
-								player: player
-							)
+								player: player,
+								editingRowID: $editingRowID,
+								sentenceRowIDs: sentenceRowIDs
+							) { rowID, editedText in
+								if let idx = rows.firstIndex(where: { $0.id == rowID }) {
+									rows[idx].editedText = editedText
+								}
+							}
 						}
 					}
 					.padding(KKPaddingMD)
@@ -200,6 +222,10 @@ struct AudioEditView: View {
 
 	private var untranscribedIndices: Set<Int> {
 		Set(model.audioClips.indices).subtracting(transcribedIndices)
+	}
+
+	private var sentenceRowIDs: [Int] {
+		rows.filter { !$0.isHeader && $0.isTranscribed }.map(\.id)
 	}
 
 	private var transcribedIndices: Set<Int> {

@@ -8,12 +8,17 @@ import SwiftUI
 
 struct HighlightedSentence: View {
 	let words: [TranscriptionStore.StoredWord]
+	var editedText: String?
 	let currentTime: Double?
 
 	var body: some View {
 		if let currentTime {
 			Text(attributedString(currentTime: currentTime))
 				.font(.system(size: 13))
+		} else if let editedText {
+			Text(editedText)
+				.font(.system(size: 13))
+				.foregroundStyle(.primary)
 		} else {
 			Text(plainText)
 				.font(.system(size: 13))
