@@ -47,6 +47,12 @@ class TranscriptionStore {
 	func store(results: [AudioTranscriber.ClipResult], clips: [FCPXMLParser.AudioClip]) {
 		for result in results {
 			guard clips.indices.contains(result.clipIndex) else { continue }
+			if result.words.isEmpty {
+				print(
+					"[TranscriptionStore] clip \(result.clipIndex) (\(clips[result.clipIndex].name)) produced 0 words — skipping store"
+				)
+				continue
+			}
 			store(words: result.words, for: clips[result.clipIndex])
 		}
 	}

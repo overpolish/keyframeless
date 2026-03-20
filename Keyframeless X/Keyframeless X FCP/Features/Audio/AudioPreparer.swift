@@ -138,7 +138,12 @@ struct AudioPreparer {
 					pcmFormat: audioFile.processingFormat,
 					frameCapacity: frameCount
 				)
-			else { continue }
+			else {
+				print(
+					"[AudioPreparer] skipping segment \(segment.sourceName) — buffer alloc failed (frameCount: \(frameCount))"
+				)
+				continue
+			}
 			try audioFile.read(into: buffer, frameCount: frameCount)
 
 			let whisperBuffer = try resampleToWhisperFormat(buffer: buffer)
