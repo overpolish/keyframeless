@@ -34,7 +34,6 @@ struct WhisperLanguagePickerView: View {
 			Text("Language")
 				.font(.title3)
 				.foregroundStyle(.secondary)
-				.padding(.horizontal, KKPaddingLG)
 
 			VStack(spacing: 0) {
 				TextField("Search", text: $search)

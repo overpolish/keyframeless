@@ -18,6 +18,7 @@ static const CGFloat KKPaddingSM __attribute__((unused)) = 4.0;
 static const CGFloat KKPaddingMD __attribute__((unused)) = 6.0;
 static const CGFloat KKPaddingLG __attribute__((unused)) = 8.0;
 static const CGFloat KKPaddingXL __attribute__((unused)) = 12.0;
+static const CGFloat KKPadding2XL __attribute__((unused)) = 20.0;
 
 static const CGFloat KKBorderWidthXS __attribute__((unused)) = 1.0;
 static const CGFloat KKBorderWidthSM __attribute__((unused)) = 2.0;

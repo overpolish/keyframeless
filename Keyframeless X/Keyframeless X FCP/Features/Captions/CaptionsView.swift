@@ -31,7 +31,6 @@ struct CaptionsView: View {
 					.frame(maxHeight: .infinity)
 			}
 			.frame(maxHeight: .infinity)
-			.padding(.horizontal, KKPaddingMD)
 			TranscribeButton(
 				disabled: model.selectedClips.isEmpty
 					|| whisperManager.selectedModel == nil,
@@ -41,8 +40,6 @@ struct CaptionsView: View {
 					}
 				}
 			)
-			.padding(.horizontal, KKPaddingMD)
-			.padding(.bottom, KKPaddingXL + 4)
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 	}
@@ -68,7 +65,6 @@ struct CaptionsView: View {
 						audioPlayer: audioPlayer
 					)
 					.id(timelineLoadID)
-					.padding(.horizontal, KKPaddingLG)
 					.padding(.bottom, KKSpacingSM)
 					.frame(maxWidth: .infinity, maxHeight: .infinity)
 					.blur(radius: isTargeted ? 3 : 0)
@@ -107,10 +103,8 @@ struct CaptionsView: View {
 				selectedCount: model.selectedClips.count,
 				totalCount: model.audioClips.count
 			)
-			.padding(.horizontal, KKPaddingLG)
 			.padding(.top, KKSpacingMD)
 		}
-		.padding(.horizontal, KKPaddingMD)
 	}
 
 	private var dropZoneBorderColor: Color {
@@ -135,6 +129,5 @@ struct CaptionsView: View {
 			Spacer()
 			ClipSelectionToolbar(clips: model.audioClips, selectedClips: $model.selectedClips)
 		}
-		.padding(.horizontal, KKPaddingLG)
 	}
 }
