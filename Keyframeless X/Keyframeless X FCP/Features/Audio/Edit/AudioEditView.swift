@@ -26,6 +26,7 @@ struct AudioEditView: View {
 		let text: String
 		let timestamp: String
 		let isHeader: Bool
+		let isTranscribed: Bool
 	}
 
 	var body: some View {
@@ -40,7 +41,8 @@ struct AudioEditView: View {
 					Spacer()
 					ClipSelectionToolbar(
 						clips: model.audioClips,
-						selectedClips: editSelectedClips
+						selectedClips: editSelectedClips,
+						allowedIndices: transcribedIndices
 					)
 				}
 				VStack(spacing: 0) {
@@ -63,7 +65,7 @@ struct AudioEditView: View {
 								useTimecode: model.useTimecode,
 								clips: model.audioClips,
 								selectedClips: editSelectedClips,
-								visibleIndices: transcribedIndices,
+								dimmedIndices: untranscribedIndices,
 								showWaveforms: false,
 								hoveredClipIndex: $hoveredClipIndex
 							)
@@ -80,7 +82,9 @@ struct AudioEditView: View {
 					}
 					ClipCountDisplay(
 						selectedCount: model.editSelectedClips?.count ?? 0,
-						totalCount: transcribedIndices.count
+						totalCount: transcribedIndices.count,
+						emptyLabel: "No Transcriptions Found",
+						selectedLabel: "Transcriptions Selected"
 					)
 					.padding(.top, KKSpacingMD)
 				}
@@ -88,33 +92,42 @@ struct AudioEditView: View {
 					LazyVStack(alignment: .leading, spacing: 0) {
 						ForEach(rows) { row in
 							if row.isHeader {
-								HStack(spacing: KKSpacingMD) {
-									Toggle(
-										isOn: Binding(
-											get: {
-												editSelectedClips.wrappedValue.contains(
-													row.clipIndex)
-											},
-											set: { isOn in
-												if isOn {
-													editSelectedClips.wrappedValue.insert(
+								if row.isTranscribed {
+									HStack(spacing: KKSpacingMD) {
+										Toggle(
+											isOn: Binding(
+												get: {
+													editSelectedClips.wrappedValue.contains(
 														row.clipIndex)
-												} else {
-													editSelectedClips.wrappedValue.remove(
-														row.clipIndex)
+												},
+												set: { isOn in
+													if isOn {
+														editSelectedClips.wrappedValue.insert(
+															row.clipIndex)
+													} else {
+														editSelectedClips.wrappedValue.remove(
+															row.clipIndex)
+													}
 												}
-											}
-										)
-									) {
-										Text(row.clipName)
-											.font(.system(size: 12, weight: .semibold))
-											.foregroundStyle(.secondary)
+											)
+										) {
+											Text(row.clipName)
+												.font(.system(size: 12, weight: .semibold))
+												.foregroundStyle(.secondary)
+										}
+										.toggleStyle(.checkbox)
+										.tint(Color(nsColor: .accent()))
 									}
-									.toggleStyle(.checkbox)
-									.tint(Color(nsColor: .accent()))
+									.padding(.top, KKSpacingLG)
+									.padding(.bottom, KKSpacingXS)
+								} else {
+									UntranscribedClipRow(clipName: row.clipName) {
+										model.selectedClips = [row.clipIndex]
+										model.stage = .setup
+									}
+									.padding(.top, KKSpacingLG)
+									.padding(.bottom, KKSpacingXS)
 								}
-								.padding(.top, KKSpacingLG)
-								.padding(.bottom, KKSpacingXS)
 							} else {
 								HStack(alignment: .top, spacing: KKSpacingMD) {
 									Text(row.timestamp)
@@ -157,6 +170,10 @@ struct AudioEditView: View {
 		model.projectFormat?.sequenceDuration ?? model.audioClips.map(\.end).max() ?? 0
 	}
 
+	private var untranscribedIndices: Set<Int> {
+		Set(model.audioClips.indices).subtracting(transcribedIndices)
+	}
+
 	private var transcribedIndices: Set<Int> {
 		let store = TranscriptionStore.shared
 		var result = Set<Int>()
@@ -174,30 +191,33 @@ struct AudioEditView: View {
 		var nextID = 0
 
 		for idx in model.audioClips.indices {
-			guard let words = store.words(for: model.audioClips[idx])
-			else { continue }
-
 			let clip = model.audioClips[idx]
+			let words = store.words(for: clip)
+			let hasTranscription = words != nil
+
 			result.append(
 				Row(
 					id: nextID, clipIndex: idx, clipName: clip.name, text: "", timestamp: "",
-					isHeader: true))
+					isHeader: true, isTranscribed: hasTranscription))
 			nextID += 1
 
-			let sentences = groupIntoSentences(words)
-			for sentence in sentences {
-				let text = sentence.map { $0.word.trimmingCharacters(in: .whitespaces) }
-					.joined(separator: " ")
-				result.append(
-					Row(
-						id: nextID,
-						clipIndex: idx,
-						clipName: clip.name,
-						text: text,
-						timestamp: formatTimestamp(sentence.first!.start),
-						isHeader: false
-					))
-				nextID += 1
+			if let words {
+				let sentences = groupIntoSentences(words)
+				for sentence in sentences {
+					let text = sentence.map { $0.word.trimmingCharacters(in: .whitespaces) }
+						.joined(separator: " ")
+					result.append(
+						Row(
+							id: nextID,
+							clipIndex: idx,
+							clipName: clip.name,
+							text: text,
+							timestamp: formatTimestamp(sentence.first!.start),
+							isHeader: false,
+							isTranscribed: true
+						))
+					nextID += 1
+				}
 			}
 		}
 		rows = result

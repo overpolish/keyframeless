@@ -9,15 +9,17 @@ import SwiftUI
 struct ClipSelectionToolbar: View {
 	let clips: [FCPXMLParser.AudioClip]
 	@Binding var selectedClips: Set<Int>
+	var allowedIndices: Set<Int>?
 
 	var body: some View {
-		let hasMain = clips.contains { !$0.isCompound }
-		let hasCompound = clips.contains { $0.isCompound }
+		let allowed = allowedIndices ?? Set(clips.indices)
+		let hasMain = allowed.contains { !clips[$0].isCompound }
+		let hasCompound = allowed.contains { clips[$0].isCompound }
 
 		ToolbarGroup {
 			if hasMain {
 				ClipTypeFilterButton(label: "Main", color: Color(nsColor: .accent() ?? .blue)) {
-					selectedClips = Set(clips.indices.filter { !clips[$0].isCompound })
+					selectedClips = allowed.filter { !clips[$0].isCompound }
 				}
 				ToolbarDivider()
 			}
@@ -25,12 +27,12 @@ struct ClipSelectionToolbar: View {
 				ClipTypeFilterButton(
 					label: "Compound", color: Color(nsColor: .warning() ?? .yellow)
 				) {
-					selectedClips = Set(clips.indices.filter { clips[$0].isCompound })
+					selectedClips = allowed.filter { clips[$0].isCompound }
 				}
 				ToolbarDivider()
 			}
 			ClipActionButton(label: "Select All", systemImage: "checkmark.rectangle.stack.fill") {
-				selectedClips = Set(clips.indices)
+				selectedClips = allowed
 			}
 			ToolbarDivider()
 			ClipActionButton(label: "Deselect All", systemImage: "rectangle.stack") {

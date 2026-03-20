@@ -16,6 +16,7 @@ struct TimelineAxisView: View {
 	@Binding var selectedClips: Set<Int>
 	var audioPlayer: AudioPlayer? = nil
 	var visibleIndices: Set<Int>? = nil
+	var dimmedIndices: Set<Int> = []
 	var showWaveforms: Bool = true
 	var hoveredClipIndex: Binding<Int?> = .constant(nil)
 
@@ -33,6 +34,7 @@ struct TimelineAxisView: View {
 				labelForTime: labelForTime,
 				audioPlayer: audioPlayer,
 				visibleIndices: visibleIndices,
+				dimmedIndices: dimmedIndices,
 				showWaveforms: showWaveforms,
 				hoveredClipIndex: hoveredClipIndex
 			)
@@ -58,6 +60,7 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 	let labelForTime: (Double) -> String
 	var audioPlayer: AudioPlayer?
 	var visibleIndices: Set<Int>?
+	var dimmedIndices: Set<Int> = []
 	var showWaveforms: Bool
 	var hoveredClipIndex: Binding<Int?>
 
@@ -92,6 +95,7 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 		docView.selectedClips = selectedClips
 		docView.audioPlayer = audioPlayer
 		docView.visibleIndices = visibleIndices
+		docView.dimmedIndices = dimmedIndices
 		docView.showWaveforms = showWaveforms
 		docView.hoveredClipIndex = hoveredClipIndex.wrappedValue
 		docView.onHoverClip = { index in
@@ -139,6 +143,7 @@ private class AxisDocumentView: NSView {
 	}
 	var selectedClips: Set<Int> = []
 	var visibleIndices: Set<Int>?
+	var dimmedIndices: Set<Int> = []
 	var showWaveforms: Bool = true
 	var hoveredClipIndex: Int?
 	var onHoverClip: ((Int?) -> Void)?
@@ -247,7 +252,7 @@ private class AxisDocumentView: NSView {
 	override func mouseDown(with event: NSEvent) {
 		let point = convert(event.locationInWindow, from: nil)
 		for entry in cachedClipRects.reversed() {
-			guard entry.rect.contains(point) else { continue }
+			guard entry.rect.contains(point), !dimmedIndices.contains(entry.index) else { continue }
 			let clip = clips[entry.index]
 			let hasAudioControls =
 				audioPlayer != nil
@@ -294,7 +299,9 @@ private class AxisDocumentView: NSView {
 			return
 		}
 		guard isDraggingSelection else { return }
-		let hoveredIndex = cachedClipRects.reversed().first { $0.rect.contains(point) }?.index
+		let hoveredIndex = cachedClipRects.reversed().first {
+			$0.rect.contains(point) && !dimmedIndices.contains($0.index)
+		}?.index
 		if hoveredIndex != dragHoveredIndex {
 			dragHoveredIndex = hoveredIndex
 			if let index = hoveredIndex {
@@ -377,16 +384,23 @@ private class AxisDocumentView: NSView {
 			let rect = CGRect(x: x, y: y, width: w, height: laneHeight)
 			cachedClipRects.append((rect: rect, index: i))
 
-			let alpha: CGFloat = selectedClips.contains(i) ? 0.85 : 0.25
+			let isDimmed = dimmedIndices.contains(i)
+			let isHoverDimmed = hoveredClipIndex != nil && hoveredClipIndex != i && !isDimmed
+			let alpha: CGFloat =
+				isDimmed ? 0.1 : isHoverDimmed ? 0.25 : selectedClips.contains(i) ? 0.85 : 0.25
 			let clipColor =
-				clip.isCompound
-				? NSColor.warning() ?? NSColor.yellow : NSColor.accent() ?? NSColor.blue
+				isDimmed
+				? NSColor.secondaryLabelColor
+				: clip.isCompound
+					? NSColor.warning() ?? NSColor.yellow : NSColor.accent() ?? NSColor.blue
 			ctx.setFillColor(clipColor.withAlphaComponent(alpha).cgColor)
 			let path = CGPath(
 				roundedRect: rect, cornerWidth: cornerRadius, cornerHeight: cornerRadius,
 				transform: nil)
 			ctx.addPath(path)
 			ctx.fillPath()
+
+			if isDimmed || isHoverDimmed { continue }
 
 			if hoveredClipIndex == i {
 				let pulse = 0.7 + 0.3 * sin(pulsePhase * 2.0 * .pi / 2.0)

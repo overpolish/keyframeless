@@ -9,18 +9,20 @@ import SwiftUI
 struct ClipCountDisplay: View {
 	let selectedCount: Int
 	let totalCount: Int
+	var emptyLabel: String = "No Clips Found"
+	var selectedLabel: String = "Clips Selected"
 
 	var body: some View {
 		HStack(alignment: .lastTextBaseline, spacing: KKSpacingLG) {
 			if totalCount == 0 {
-				Text("No Clips Found")
+				Text(emptyLabel)
 					.font(.title)
 					.foregroundStyle(.secondary)
 			} else {
 				Text("\(selectedCount)")
 					.foregroundStyle(Color(nsColor: .accent() ?? .blue))
 					.font(.title)
-				Text("Clips Selected")
+				Text(selectedLabel)
 					.font(.title)
 				Text("\(totalCount) total")
 					.font(.subheadline)
