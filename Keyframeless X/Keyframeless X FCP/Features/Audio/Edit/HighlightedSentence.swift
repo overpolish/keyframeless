@@ -24,7 +24,7 @@ struct HighlightedSentence: View {
 		words.map { $0.word.trimmingCharacters(in: .whitespaces) }.joined(separator: " ")
 	}
 
-	private static let highlightDelay: Double = 0.3075
+	private static let highlightDelay: Double = 0.3
 
 	private func attributedString(currentTime: Double) -> AttributedString {
 		let adjusted = currentTime - Self.highlightDelay

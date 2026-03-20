@@ -13,6 +13,7 @@ struct AudioEditRow: Identifiable {
 	let timestamp: String
 	let isHeader: Bool
 	let isTranscribed: Bool
+	let isCompound: Bool
 	var sentenceStart: Double = 0
 	var sentenceEnd: Double = 0
 	var words: [TranscriptionStore.StoredWord] = []
@@ -35,7 +36,7 @@ enum AudioEditRowBuilder {
 			result.append(
 				AudioEditRow(
 					id: nextID, clipIndex: idx, clipName: clip.name, text: "", timestamp: "",
-					isHeader: true, isTranscribed: hasTranscription))
+					isHeader: true, isTranscribed: hasTranscription, isCompound: clip.isCompound))
 			nextID += 1
 
 			if let words {
@@ -43,15 +44,22 @@ enum AudioEditRowBuilder {
 				for sentence in sentences {
 					let text = sentence.map { $0.word.trimmingCharacters(in: .whitespaces) }
 						.joined(separator: " ")
+					let sourceToTimeline = Float(clip.start - clip.sourceStart)
+					let timelineStart = sentence.first!.start + sourceToTimeline
+					let timelineEnd = sentence.last!.end + sourceToTimeline
+					let stamp =
+						formatTimestamp(timelineStart, format: format) + " → "
+						+ formatTimestamp(timelineEnd, format: format)
 					result.append(
 						AudioEditRow(
 							id: nextID,
 							clipIndex: idx,
 							clipName: clip.name,
 							text: text,
-							timestamp: formatTimestamp(sentence.first!.start, format: format),
+							timestamp: stamp,
 							isHeader: false,
 							isTranscribed: true,
+							isCompound: clip.isCompound,
 							sentenceStart: Double(sentence.first!.start),
 							sentenceEnd: Double(sentence.last!.end),
 							words: sentence
@@ -101,12 +109,18 @@ enum AudioEditRowBuilder {
 	private static func formatTimestamp(
 		_ time: Float, format: FCPXMLParser.ProjectFormat?
 	) -> String {
+		let t = max(0, Double(time))
 		if let format {
-			return format.timecode(for: Double(time))
+			let tc = format.timecode(for: t)
+			var parts = tc.split(separator: ":").map { $0.count < 2 ? "0\($0)" : String($0) }
+			while parts.count < 4 { parts.insert("00", at: 0) }
+			return parts.joined(separator: ":")
 		}
-		let s = Int(time) % 60
-		let m = Int(time) / 60
-		let ms = Int((time - Float(Int(time))) * 100)
-		return String(format: "%d:%02d.%02d", m, s, ms)
+		let totalSecs = Int(t)
+		let ss = totalSecs % 60
+		let mm = (totalSecs / 60) % 60
+		let hh = totalSecs / 3600
+		let ms = Int((t - Double(totalSecs)) * 100)
+		return String(format: "%02d:%02d:%02d.%02d", hh, mm, ss, ms)
 	}
 }

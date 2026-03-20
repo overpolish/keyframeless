@@ -61,24 +61,21 @@ struct AudioEditView: View {
 			ZStack {
 				RoundedRectangle(cornerRadius: CGFloat(KKRadiusMD))
 					.strokeBorder(Color.secondary.opacity(0.15), lineWidth: 1.5)
-				if transcribedIndices.isEmpty {
-					EmptyTimelinePlaceholder()
-				} else {
-					TimelineAxisView(
-						duration: timelineDuration,
-						format: model.projectFormat,
-						useTimecode: model.useTimecode,
-						clips: model.audioClips,
-						selectedClips: editSelectedClips,
-						dimmedIndices: untranscribedIndices,
-						showWaveforms: false,
-						hoveredClipIndex: $hoveredClipIndex,
-						onClickDimmed: { index in
-							model.selectedClips = [index]
-							model.stage = .setup
-						}
-					)
-				}
+				TimelineAxisView(
+					duration: timelineDuration,
+					format: model.projectFormat,
+					useTimecode: model.useTimecode,
+					clips: model.audioClips,
+					selectedClips: editSelectedClips,
+					dimmedIndices: transcribedIndices.isEmpty
+						? Set(model.audioClips.indices) : untranscribedIndices,
+					showWaveforms: false,
+					hoveredClipIndex: $hoveredClipIndex,
+					onClickDimmed: { index in
+						model.selectedClips = [index]
+						model.stage = .setup
+					}
+				)
 			}
 			.frame(height: height)
 			.overlay(alignment: .bottomTrailing) {
@@ -100,43 +97,101 @@ struct AudioEditView: View {
 	}
 
 	private var transcriptionList: some View {
-		ScrollView {
-			LazyVStack(alignment: .leading, spacing: 0) {
-				ForEach(rows) { row in
-					if row.isHeader {
-						if row.isTranscribed {
-							TranscribedClipHeader(
-								clipName: row.clipName,
-								clipIndex: row.clipIndex,
-								selectedClips: editSelectedClips
+		VStack(alignment: .leading, spacing: KKSpacingLG) {
+			ScrollShadowView {
+				if transcribedClipGroups.isEmpty {
+					EmptyTranscriptionPlaceholder()
+				} else {
+					LazyVStack(alignment: .leading, spacing: 0) {
+						ForEach(transcribedClipGroups, id: \.clipIndex) { group in
+							TranscribedClipSection(
+								group: group,
+								clips: model.audioClips,
+								selectedClips: editSelectedClips,
+								hoveredClipIndex: $hoveredClipIndex,
+								player: player
 							)
-						} else {
+						}
+					}
+					.padding(KKPaddingMD)
+				}
+			}
+			.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD + 4))
+			.background(
+				RoundedRectangle(cornerRadius: KKRadiusMD + 4)
+					.fill(Color.white.opacity(0.04))
+			)
+			.overlay(
+				RoundedRectangle(cornerRadius: KKRadiusMD + 4)
+					.strokeBorder(Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
+			)
+
+			if !untranscribedRows.isEmpty {
+				HStack {
+					Text("Untranscribed Clips")
+						.font(.title3)
+						.foregroundStyle(.secondary)
+					Spacer()
+					Button {
+						model.selectedClips = Set(untranscribedRows.map(\.clipIndex))
+						model.stage = .setup
+					} label: {
+						Text("Transcribe All")
+							.font(.system(size: 11))
+					}
+					.buttonStyle(.plain)
+					.foregroundStyle(Color(nsColor: .accent() ?? .blue))
+				}
+				ScrollShadowView {
+					LazyVStack(alignment: .leading, spacing: 0) {
+						ForEach(untranscribedRows) { row in
 							UntranscribedClipRow(
 								clipName: row.clipName,
 								clipIndex: row.clipIndex,
+								isCompound: row.isCompound,
 								isHighlighted: hoveredClipIndex == row.clipIndex,
 								hoveredClipIndex: $hoveredClipIndex
 							) {
 								model.selectedClips = [row.clipIndex]
 								model.stage = .setup
 							}
-							.padding(.top, KKSpacingLG)
-							.padding(.bottom, KKSpacingXS)
 						}
-					} else {
-						SentenceRow(
-							row: row,
-							clip: model.audioClips[row.clipIndex],
-							isHovered: hoveredClipIndex == row.clipIndex,
-							player: player,
-							hoveredClipIndex: $hoveredClipIndex
-						)
 					}
+					.padding(KKPaddingMD)
 				}
+				.frame(maxHeight: 100, alignment: .top)
+				.fixedSize(horizontal: false, vertical: true)
+				.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD + 4))
+				.background(
+					RoundedRectangle(cornerRadius: KKRadiusMD + 4)
+						.fill(Color.white.opacity(0.04))
+				)
+				.overlay(
+					RoundedRectangle(cornerRadius: KKRadiusMD + 4)
+						.strokeBorder(Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
+				)
 			}
-			.padding(KKPaddingMD)
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
+	}
+
+	private var transcribedClipGroups: [TranscribedClipGroup] {
+		var groups: [TranscribedClipGroup] = []
+		for row in rows where row.isHeader && row.isTranscribed {
+			let sentences = rows.filter { !$0.isHeader && $0.clipIndex == row.clipIndex }
+			groups.append(
+				TranscribedClipGroup(
+					clipIndex: row.clipIndex,
+					clipName: row.clipName,
+					isCompound: row.isCompound,
+					sentences: sentences
+				))
+		}
+		return groups
+	}
+
+	private var untranscribedRows: [AudioEditRow] {
+		rows.filter { $0.isHeader && !$0.isTranscribed }
 	}
 
 	private var timelineDuration: Double {
@@ -159,15 +214,17 @@ struct AudioEditView: View {
 	}
 }
 
-private struct EmptyTimelinePlaceholder: View {
+private struct EmptyTranscriptionPlaceholder: View {
 	var body: some View {
-		VStack(spacing: KKSpacingLG) {
+		VStack(spacing: KKSpacingSM) {
 			Image(systemName: "waveform.slash")
-				.font(.title)
-				.foregroundStyle(Color(nsColor: .timelineLabel()))
-			Text("No transcribed clips")
 				.font(.title3)
-				.foregroundStyle(Color(nsColor: .timelineLabel()))
+				.foregroundStyle(.tertiary)
+			Text("No transcribed clips")
+				.font(.subheadline)
+				.foregroundStyle(.tertiary)
 		}
+		.frame(maxWidth: .infinity, maxHeight: .infinity)
+		.padding(KKPaddingLG)
 	}
 }

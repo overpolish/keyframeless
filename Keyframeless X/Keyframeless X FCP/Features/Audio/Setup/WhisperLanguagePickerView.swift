@@ -48,7 +48,7 @@ struct WhisperLanguagePickerView: View {
 						alignment: .bottom
 					)
 
-				ScrollView {
+				ScrollShadowView {
 					LazyVStack(spacing: 0) {
 						LanguageRow(
 							name: "Auto-detect", code: nil,
@@ -67,6 +67,9 @@ struct WhisperLanguagePickerView: View {
 					}
 					.padding(KKPaddingMD)
 				}
+				.clipShape(
+					UnevenRoundedRectangle(
+						bottomLeadingRadius: KKRadiusMD + 4, bottomTrailingRadius: KKRadiusMD + 4))
 			}
 			.frame(maxHeight: .infinity)
 			.background(
