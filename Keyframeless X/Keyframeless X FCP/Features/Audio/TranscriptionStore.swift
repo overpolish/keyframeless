@@ -29,11 +29,42 @@ class TranscriptionStore {
 	}
 
 	private var entries: [ClipKey: [StoredWord]] = [:]
+	private var sentenceEdits: [ClipKey: [String: String]] = [:]
 
-	private init() { load() }
+	private init() {
+		load()
+		loadEdits()
+	}
 
 	func words(for clip: FCPXMLParser.AudioClip) -> [StoredWord]? {
 		entries[ClipKey(clip: clip)]
+	}
+
+	func editedText(
+		for clip: FCPXMLParser.AudioClip, sentenceStart: Float
+	) -> String? {
+		sentenceEdits[ClipKey(clip: clip)]?[sentenceStartKey(sentenceStart)]
+	}
+
+	func setEditedText(
+		_ text: String?, for clip: FCPXMLParser.AudioClip, sentenceStart: Float
+	) {
+		let key = ClipKey(clip: clip)
+		let sKey = sentenceStartKey(sentenceStart)
+		if let text {
+			if sentenceEdits[key] == nil { sentenceEdits[key] = [:] }
+			sentenceEdits[key]![sKey] = text
+		} else {
+			sentenceEdits[key]?[sKey] = nil
+			if sentenceEdits[key]?.isEmpty == true {
+				sentenceEdits[key] = nil
+			}
+		}
+		saveEdits()
+	}
+
+	private func sentenceStartKey(_ start: Float) -> String {
+		String(format: "%.4f", start)
 	}
 
 	func store(words: [AudioTranscriber.WordResult], for clip: FCPXMLParser.AudioClip) {
@@ -81,6 +112,28 @@ class TranscriptionStore {
 		let dir = url.deletingLastPathComponent()
 		try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 		try? JSONEncoder().encode(entries).write(to: url, options: .atomic)
+	}
+
+	private var editsFileURL: URL? {
+		FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+			.first?
+			.appendingPathComponent("Keyframeless/transcription_edits.json")
+	}
+
+	private func loadEdits() {
+		guard let url = editsFileURL,
+			let data = try? Data(contentsOf: url),
+			let decoded = try? JSONDecoder().decode(
+				[ClipKey: [String: String]].self, from: data)
+		else { return }
+		sentenceEdits = decoded
+	}
+
+	private func saveEdits() {
+		guard let url = editsFileURL else { return }
+		let dir = url.deletingLastPathComponent()
+		try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+		try? JSONEncoder().encode(sentenceEdits).write(to: url, options: .atomic)
 	}
 
 }

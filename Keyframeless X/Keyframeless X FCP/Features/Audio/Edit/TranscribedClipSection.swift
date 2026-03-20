@@ -19,6 +19,9 @@ struct TranscribedClipSection: View {
 	@Binding var selectedClips: Set<Int>
 	@Binding var hoveredClipIndex: Int?
 	@ObservedObject var player: AudioPlayer
+	@Binding var editingRowID: Int?
+	var sentenceRowIDs: [Int] = []
+	var onSentenceEdit: (Int, String?) -> Void = { _, _ in }
 	@State private var isHovered = false
 
 	private var clipColor: Color {
@@ -38,8 +41,23 @@ struct TranscribedClipSection: View {
 				SentenceRow(
 					row: row,
 					clip: clips[row.clipIndex],
-					player: player
-				)
+					player: player,
+					editingRowID: $editingRowID,
+					sentenceRowIDs: sentenceRowIDs
+				) { newText in
+					let clip = clips[row.clipIndex]
+					let store = TranscriptionStore.shared
+					let editedText: String?
+					if newText == row.text {
+						editedText = nil
+						store.setEditedText(nil, for: clip, sentenceStart: Float(row.sentenceStart))
+					} else {
+						editedText = newText
+						store.setEditedText(
+							newText, for: clip, sentenceStart: Float(row.sentenceStart))
+					}
+					onSentenceEdit(row.id, editedText)
+				}
 			}
 		}
 		.padding(.top, KKPaddingMD)

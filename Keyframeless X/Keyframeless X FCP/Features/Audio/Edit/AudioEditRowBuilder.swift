@@ -17,6 +17,7 @@ struct AudioEditRow: Identifiable {
 	var sentenceStart: Double = 0
 	var sentenceEnd: Double = 0
 	var words: [TranscriptionStore.StoredWord] = []
+	var editedText: String?
 }
 
 enum AudioEditRowBuilder {
@@ -50,6 +51,8 @@ enum AudioEditRowBuilder {
 					let stamp =
 						formatTimestamp(timelineStart, format: format) + " → "
 						+ formatTimestamp(timelineEnd, format: format)
+					let edited = store.editedText(
+						for: clip, sentenceStart: sentence.first!.start)
 					result.append(
 						AudioEditRow(
 							id: nextID,
@@ -62,7 +65,8 @@ enum AudioEditRowBuilder {
 							isCompound: clip.isCompound,
 							sentenceStart: Double(sentence.first!.start),
 							sentenceEnd: Double(sentence.last!.end),
-							words: sentence
+							words: sentence,
+							editedText: edited
 						))
 					nextID += 1
 				}
