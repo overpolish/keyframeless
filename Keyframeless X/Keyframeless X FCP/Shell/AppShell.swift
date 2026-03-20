@@ -8,9 +8,9 @@ import SwiftUI
 
 struct AppShell: View {
 	@ObservedObject var captionsModel: CaptionsModel
+	@StateObject private var whisperManager = WhisperModelManager()
+	@StateObject private var processingCoordinator = AudioProcessingCoordinator()
 	@State private var selectedTab: AppTab = .audio
-	@State private var isProcessing = false
-	@State private var processProgress: Double = 0
 
 	var body: some View {
 		VStack(spacing: KKSpacingMD) {
@@ -22,11 +22,20 @@ struct AppShell: View {
 					case .setup:
 						AudioSetupView(
 							model: captionsModel,
-							isProcessing: $isProcessing
+							whisperManager: whisperManager,
+							onProcess: { replaceAll in
+								withAnimation(.easeInOut(duration: 0.3)) {
+									processingCoordinator.isProcessing = true
+								}
+								processingCoordinator.process(
+									model: captionsModel,
+									whisperManager: whisperManager,
+									replaceAll: replaceAll
+								)
+							}
 						)
 					case .captioning:
-						Text("Edit view")
-						Spacer()
+						CaptionEditView(model: captionsModel)
 					}
 				}
 			}
@@ -35,14 +44,11 @@ struct AppShell: View {
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 		.background(Color(nsColor: .windowBackground()))
 		.overlay {
-			if isProcessing {
+			if processingCoordinator.isProcessing {
 				ProcessingOverlay(
-					progress: processProgress,
-					onCancel: {
-						withAnimation(.easeOut(duration: 0.25)) {
-							isProcessing = false
-						}
-					}
+					statusLabel: processingCoordinator.statusLabel,
+					progress: processingCoordinator.progress,
+					onCancel: { processingCoordinator.cancel() }
 				)
 				.transition(.opacity)
 			}
