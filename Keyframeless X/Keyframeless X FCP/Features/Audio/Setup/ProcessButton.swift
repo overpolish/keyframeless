@@ -5,13 +5,13 @@
 
 import SwiftUI
 
-struct TranscribeButton: View {
+struct ProcessButton: View {
 	let disabled: Bool
 	var action: () -> Void = {}
 
 	var body: some View {
 		PrimaryButton(
-			label: "Transcribe", systemImage: "sparkles.rectangle.stack.fill", disabled: disabled,
+			label: "Process", systemImage: "sparkles.rectangle.stack.fill", disabled: disabled,
 			action: action)
 	}
 }

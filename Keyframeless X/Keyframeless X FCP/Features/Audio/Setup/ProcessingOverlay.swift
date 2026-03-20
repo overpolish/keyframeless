@@ -6,7 +6,7 @@
 import KeyframelessKit
 import SwiftUI
 
-struct TranscribingOverlay: View {
+struct ProcessingOverlay: View {
 	let progress: Double
 	let onCancel: () -> Void
 
@@ -56,7 +56,7 @@ struct TranscribingOverlay: View {
 
 	private var progressContent: some View {
 		VStack(spacing: KKSpacingSM) {
-			Text("Transcribing")
+			Text("Processing")
 				.font(.system(size: 14, weight: .medium))
 			ProgressView(value: progress)
 				.frame(width: 180)

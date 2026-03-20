@@ -7,7 +7,7 @@ import KeyframelessKit
 import SwiftUI
 
 struct DropZoneEmptyState: View {
-	let dropState: CaptionsView.DropState
+	let dropState: AudioView.DropState
 	let isTargeted: Bool
 
 	var body: some View {

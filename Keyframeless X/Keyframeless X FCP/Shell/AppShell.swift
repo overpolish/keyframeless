@@ -8,22 +8,20 @@ import SwiftUI
 
 struct AppShell: View {
 	@ObservedObject var captionsModel: CaptionsModel
-	@State private var selectedTab: AppTab = .captions
-	@State private var isTranscribing = false
-	@State private var transcribeProgress: Double = 0
+	@State private var selectedTab: AppTab = .audio
+	@State private var isProcessing = false
+	@State private var processProgress: Double = 0
 
 	var body: some View {
 		VStack(spacing: KKSpacingMD) {
 			topBar
 			Group {
 				switch selectedTab {
-				case .captions:
-					CaptionsView(
+				case .audio:
+					AudioView(
 						model: captionsModel,
-						isTranscribing: $isTranscribing
+						isProcessing: $isProcessing
 					)
-				case .other:
-					ComingSoonView()
 				}
 			}
 		}
@@ -31,12 +29,12 @@ struct AppShell: View {
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 		.background(Color(nsColor: .windowBackground()))
 		.overlay {
-			if isTranscribing {
-				TranscribingOverlay(
-					progress: transcribeProgress,
+			if isProcessing {
+				ProcessingOverlay(
+					progress: processProgress,
 					onCancel: {
 						withAnimation(.easeOut(duration: 0.25)) {
-							isTranscribing = false
+							isProcessing = false
 						}
 					}
 				)
@@ -63,19 +61,17 @@ struct AppShell: View {
 	@ViewBuilder
 	private var toolNav: some View {
 		switch selectedTab {
-		case .captions:
+		case .audio:
 			PillIconToggle<CaptionsModel.Stage>(
 				selection: $captionsModel.stage,
 				options: [
 					(
-						label: "Transcription", systemImage: "sparkles.rectangle.stack.fill",
-						value: .transcription
+						label: "Setup", systemImage: "sparkles.rectangle.stack.fill",
+						value: .setup
 					),
-					(label: "Captioning", systemImage: "bubble.fill", value: .captioning),
+					(label: "Edit", systemImage: "bubble.and.pencil", value: .captioning),
 				]
 			)
-		case .other:
-			EmptyView()
 		}
 	}
 }
