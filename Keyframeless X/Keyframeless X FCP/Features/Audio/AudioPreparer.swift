@@ -19,6 +19,7 @@ struct AudioPreparer {
 		let sourceName: String
 		let range: SourceRange
 		let clipMappings: [ClipMapping]
+		var paddingDuration: Double = 0
 	}
 
 	struct ProcessingSegment {
@@ -37,6 +38,7 @@ struct AudioPreparer {
 	}
 
 	static let mergeThreshold: Double = 5.0
+	static let minimumSegmentDuration: Double = 3.0
 
 	static func prepare(
 		clips: [FCPXMLParser.AudioClip],
@@ -148,12 +150,26 @@ struct AudioPreparer {
 
 			let whisperBuffer = try resampleToWhisperFormat(buffer: buffer)
 
+			var paddingDuration: Double = 0
+			let segmentDuration = segment.range.duration
 			let outURL = FileManager.default.temporaryDirectory
 				.appendingPathComponent("kk_segment_\(UUID().uuidString).wav")
 			let outFile = try AVAudioFile(
 				forWriting: outURL,
 				settings: whisperBuffer.format.settings
 			)
+
+			if segmentDuration < minimumSegmentDuration {
+				paddingDuration = minimumSegmentDuration - segmentDuration
+				let padFrames = AVAudioFrameCount(paddingDuration * whisperBuffer.format.sampleRate)
+				if let silenceBuffer = AVAudioPCMBuffer(
+					pcmFormat: whisperBuffer.format, frameCapacity: padFrames
+				) {
+					silenceBuffer.frameLength = padFrames
+					try outFile.write(from: silenceBuffer)
+				}
+			}
+
 			try outFile.write(from: whisperBuffer)
 
 			prepared.append(
@@ -161,7 +177,8 @@ struct AudioPreparer {
 					tempFileURL: outURL,
 					sourceName: segment.sourceName,
 					range: segment.range,
-					clipMappings: segment.clipMappings
+					clipMappings: segment.clipMappings,
+					paddingDuration: paddingDuration
 				)
 			)
 		}

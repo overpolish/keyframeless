@@ -103,7 +103,9 @@ actor AudioTranscriber {
 
 			for mapping in segment.clipMappings {
 				let clipWords = cleanedWords.compactMap { word, cleaned -> WordResult? in
-					let sourceTime = Double(word.start) + segment.range.start
+					let sourceTime =
+						Double(word.start) - segment.paddingDuration + segment.range.start
+					let sourceEnd = Double(word.end) - segment.paddingDuration + segment.range.start
 					let clipEnd = mapping.clipSourceStart + mapping.clipSourceDuration
 					guard sourceTime >= mapping.clipSourceStart - 0.05,
 						sourceTime < clipEnd + 0.05
@@ -111,7 +113,7 @@ actor AudioTranscriber {
 					return WordResult(
 						word: cleaned,
 						start: Float(sourceTime),
-						end: Float(Double(word.end) + segment.range.start),
+						end: Float(sourceEnd),
 						probability: word.probability
 					)
 				}
