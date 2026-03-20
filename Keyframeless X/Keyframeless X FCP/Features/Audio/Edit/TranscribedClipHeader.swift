@@ -9,10 +9,15 @@ import SwiftUI
 struct TranscribedClipHeader: View {
 	let clipName: String
 	let clipIndex: Int
+	let isCompound: Bool
 	@Binding var selectedClips: Set<Int>
 
+	private var clipColor: Color {
+		Color(nsColor: isCompound ? .warning() ?? .yellow : .accent() ?? .blue)
+	}
+
 	var body: some View {
-		HStack(spacing: KKSpacingMD) {
+		HStack(spacing: KKSpacingLG) {
 			Toggle(
 				isOn: Binding(
 					get: { selectedClips.contains(clipIndex) },
@@ -30,9 +35,7 @@ struct TranscribedClipHeader: View {
 					.foregroundStyle(.secondary)
 			}
 			.toggleStyle(.checkbox)
-			.tint(Color(nsColor: .accent()))
+			.tint(clipColor)
 		}
-		.padding(.top, KKSpacingLG)
-		.padding(.bottom, KKSpacingXS)
 	}
 }
