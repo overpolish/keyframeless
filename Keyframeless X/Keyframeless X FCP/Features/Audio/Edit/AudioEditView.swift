@@ -14,6 +14,8 @@ struct AudioEditView: View {
 	@State private var hoveredClipIndex: Int?
 	@State private var editingRowID: Int?
 	@State private var clickMonitor: Any?
+	@State private var rowFrames: [Int: CGRect] = [:]
+	@State private var viewportHeight: CGFloat = 0
 
 	private var editSelectedClips: Binding<Set<Int>> {
 		Binding(
@@ -115,29 +117,54 @@ struct AudioEditView: View {
 	private var transcriptionList: some View {
 		VStack(alignment: .leading, spacing: KKSpacingLG) {
 			ScrollShadowView {
-				if transcribedClipGroups.isEmpty {
-					EmptyTranscriptionPlaceholder()
-				} else {
-					LazyVStack(alignment: .leading, spacing: 0) {
-						ForEach(transcribedClipGroups, id: \.clipIndex) { group in
-							TranscribedClipSection(
-								group: group,
-								clips: model.audioClips,
-								selectedClips: editSelectedClips,
-								hoveredClipIndex: $hoveredClipIndex,
-								player: player,
-								editingRowID: $editingRowID,
-								sentenceRowIDs: sentenceRowIDs
-							) { rowID, editedWords in
-								if let idx = rows.firstIndex(where: { $0.id == rowID }) {
-									rows[idx].editedWords = editedWords
+				ScrollViewReader { proxy in
+					if transcribedClipGroups.isEmpty {
+						EmptyTranscriptionPlaceholder()
+					} else {
+						VStack(alignment: .leading, spacing: 0) {
+							ForEach(transcribedClipGroups, id: \.clipIndex) { group in
+								TranscribedClipSection(
+									group: group,
+									clips: model.audioClips,
+									selectedClips: editSelectedClips,
+									hoveredClipIndex: $hoveredClipIndex,
+									player: player,
+									editingRowID: $editingRowID,
+									sentenceRowIDs: sentenceRowIDs,
+									onSentenceEdit: { rowID, editedWords in
+										if let idx = rows.firstIndex(where: { $0.id == rowID }) {
+											rows[idx].editedWords = editedWords
+										}
+									}
+								)
+							}
+						}
+						.padding(KKPaddingMD)
+					}
+					Color.clear
+						.frame(height: 0)
+						.onChange(of: editingRowID) {
+							guard let id = editingRowID,
+								let frame = rowFrames[id]
+							else { return }
+							let isAbove = frame.minY < 0
+							let isBelow = frame.maxY > viewportHeight
+							if isAbove || isBelow {
+								withAnimation {
+									proxy.scrollTo(id, anchor: .center)
 								}
 							}
 						}
-					}
-					.padding(KKPaddingMD)
 				}
 			}
+			.coordinateSpace(name: "editScroll")
+			.onPreferenceChange(RowFrameKey.self) { rowFrames = $0 }
+			.background(
+				GeometryReader { geo in
+					Color.clear.onAppear { viewportHeight = geo.size.height }
+						.onChange(of: geo.size.height) { viewportHeight = geo.size.height }
+				}
+			)
 			.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD + 4))
 			.background(
 				RoundedRectangle(cornerRadius: KKRadiusMD + 4)

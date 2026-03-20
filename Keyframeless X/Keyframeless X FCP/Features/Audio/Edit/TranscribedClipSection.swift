@@ -13,6 +13,13 @@ struct TranscribedClipGroup {
 	let sentences: [AudioEditRow]
 }
 
+struct RowFrameKey: PreferenceKey {
+	static var defaultValue: [Int: CGRect] = [:]
+	static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
+		value.merge(nextValue()) { $1 }
+	}
+}
+
 struct TranscribedClipSection: View {
 	let group: TranscribedClipGroup
 	let clips: [FCPXMLParser.AudioClip]
@@ -43,23 +50,40 @@ struct TranscribedClipSection: View {
 					clip: clips[row.clipIndex],
 					player: player,
 					editingRowID: $editingRowID,
-					sentenceRowIDs: sentenceRowIDs
-				) { newText in
-					let clip = clips[row.clipIndex]
-					let store = TranscriptionStore.shared
-					let editedWords: [TranscriptionStore.StoredWord]?
-					if newText == row.text {
-						editedWords = nil
-						store.setEditedWords(
-							nil, for: clip, sentenceStart: Float(row.sentenceStart))
-					} else {
-						editedWords = TranscriptionStore.alignWords(
-							original: row.words, editedText: newText)
-						store.setEditedWords(
-							editedWords, for: clip, sentenceStart: Float(row.sentenceStart))
+					sentenceRowIDs: sentenceRowIDs,
+					onEdit: { newText in
+						let clip = clips[row.clipIndex]
+						let store = TranscriptionStore.shared
+						let editedWords: [TranscriptionStore.StoredWord]?
+						if newText == row.text {
+							editedWords = nil
+							store.setEditedWords(
+								nil, for: clip, sentenceStart: Float(row.sentenceStart))
+						} else {
+							editedWords = TranscriptionStore.alignWords(
+								original: row.words, editedText: newText)
+							store.setEditedWords(
+								editedWords, for: clip, sentenceStart: Float(row.sentenceStart))
+						}
+						onSentenceEdit(row.id, editedWords)
+					},
+					onReset: row.editedWords != nil
+						? {
+							let clip = clips[row.clipIndex]
+							TranscriptionStore.shared.setEditedWords(
+								nil, for: clip, sentenceStart: Float(row.sentenceStart))
+							onSentenceEdit(row.id, nil)
+						} : nil
+				)
+				.id(row.id)
+				.background(
+					GeometryReader { geo in
+						Color.clear.preference(
+							key: RowFrameKey.self,
+							value: [row.id: geo.frame(in: .named("editScroll"))]
+						)
 					}
-					onSentenceEdit(row.id, editedWords)
-				}
+				)
 			}
 		}
 		.padding(.top, KKPaddingMD)
