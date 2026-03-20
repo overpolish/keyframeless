@@ -14,7 +14,7 @@ struct CaptionEditView: View {
 	struct Row: Identifiable {
 		let id: Int
 		let clipName: String
-		let word: String
+		let text: String
 		let timestamp: String
 		let isHeader: Bool
 	}
@@ -30,12 +30,12 @@ struct CaptionEditView: View {
 							.padding(.top, KKSpacingLG)
 							.padding(.bottom, KKSpacingXS)
 					} else {
-						HStack(spacing: KKSpacingMD) {
+						HStack(alignment: .top, spacing: KKSpacingMD) {
 							Text(row.timestamp)
 								.font(.system(size: 11).monospacedDigit())
 								.foregroundStyle(.tertiary)
 								.frame(width: 80, alignment: .trailing)
-							Text(row.word)
+							Text(row.text)
 								.font(.system(size: 13))
 							Spacer()
 						}
@@ -59,22 +59,60 @@ struct CaptionEditView: View {
 
 			let clip = model.audioClips[idx]
 			result.append(
-				Row(id: nextID, clipName: clip.name, word: "", timestamp: "", isHeader: true))
+				Row(id: nextID, clipName: clip.name, text: "", timestamp: "", isHeader: true))
 			nextID += 1
 
-			for word in words {
+			let sentences = groupIntoSentences(words)
+			for sentence in sentences {
+				let text = sentence.map { $0.word.trimmingCharacters(in: .whitespaces) }
+					.joined(separator: " ")
 				result.append(
 					Row(
 						id: nextID,
 						clipName: clip.name,
-						word: word.word.trimmingCharacters(in: .whitespaces),
-						timestamp: formatTimestamp(word.start),
+						text: text,
+						timestamp: formatTimestamp(sentence.first!.start),
 						isHeader: false
 					))
 				nextID += 1
 			}
 		}
 		rows = result
+	}
+
+	private static let sentenceEndChars = CharacterSet(charactersIn: ".!?")
+	private static let pauseThreshold: Float = 0.7
+
+	private func groupIntoSentences(
+		_ words: [TranscriptionStore.StoredWord]
+	) -> [[TranscriptionStore.StoredWord]] {
+		guard !words.isEmpty else { return [] }
+
+		var sentences: [[TranscriptionStore.StoredWord]] = []
+		var current: [TranscriptionStore.StoredWord] = []
+
+		for word in words {
+			if let prev = current.last,
+				word.start - prev.end > Self.pauseThreshold
+			{
+				sentences.append(current)
+				current = []
+			}
+
+			current.append(word)
+
+			let trimmed = word.word.trimmingCharacters(in: .whitespaces)
+			if trimmed.unicodeScalars.last.map({ Self.sentenceEndChars.contains($0) }) == true {
+				sentences.append(current)
+				current = []
+			}
+		}
+
+		if !current.isEmpty {
+			sentences.append(current)
+		}
+
+		return sentences
 	}
 
 	private func formatTimestamp(_ time: Float) -> String {
