@@ -16,7 +16,7 @@ class AudioProcessingCoordinator: ObservableObject {
 	private var processingTask: Task<Void, Never>?
 
 	func process(
-		model: CaptionsModel,
+		model: AudioModel,
 		whisperManager: WhisperModelManager,
 		replaceAll: Bool
 	) {
@@ -64,7 +64,7 @@ class AudioProcessingCoordinator: ObservableObject {
 				AudioPreparer.cleanUp(segments: prepared)
 				withAnimation(.easeOut(duration: 0.25)) {
 					self.isProcessing = false
-					model.stage = .captioning
+					model.stage = .edit
 				}
 			} catch is CancellationError {
 				print("[AudioProcessing] cancelled")

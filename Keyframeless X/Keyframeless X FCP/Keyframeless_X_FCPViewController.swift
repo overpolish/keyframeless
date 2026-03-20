@@ -10,7 +10,7 @@ import SwiftUI
 
 @objc class Keyframeless_X_FCPViewController: NSViewController {
 
-	private let model = CaptionsModel()
+	private let model = AudioModel()
 
 	override func loadView() {
 		view = NSView()
@@ -20,7 +20,7 @@ import SwiftUI
 	override func viewDidLoad() {
 		super.viewDidLoad()
 
-		let hostingVC = NSHostingController(rootView: AppShell(captionsModel: model))
+		let hostingVC = NSHostingController(rootView: AppShell(audioModel: model))
 		addChild(hostingVC)
 		hostingVC.view.translatesAutoresizingMaskIntoConstraints = false
 		view.addSubview(hostingVC.view)

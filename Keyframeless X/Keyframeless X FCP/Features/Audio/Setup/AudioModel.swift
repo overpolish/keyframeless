@@ -7,9 +7,9 @@ import AppKit
 import Combine
 import Foundation
 
-class CaptionsModel: ObservableObject {
+class AudioModel: ObservableObject {
 
-	enum Stage { case setup, captioning }
+	enum Stage { case setup, edit }
 
 	@Published var stage: Stage = .setup
 	@Published var projectFormat: FCPXMLParser.ProjectFormat?
@@ -54,7 +54,7 @@ class CaptionsModel: ObservableObject {
 	private var stateFileURL: URL? {
 		FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
 			.first?
-			.appendingPathComponent("Keyframeless/captions_state.json")
+			.appendingPathComponent("Keyframeless/audio_state.json")
 	}
 
 	private func load() {
