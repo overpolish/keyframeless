@@ -70,7 +70,11 @@ struct AudioEditView: View {
 								selectedClips: editSelectedClips,
 								dimmedIndices: untranscribedIndices,
 								showWaveforms: false,
-								hoveredClipIndex: $hoveredClipIndex
+								hoveredClipIndex: $hoveredClipIndex,
+								onClickDimmed: { index in
+									model.selectedClips = [index]
+									model.stage = .setup
+								}
 							)
 						}
 					}
@@ -124,7 +128,12 @@ struct AudioEditView: View {
 									.padding(.top, KKSpacingLG)
 									.padding(.bottom, KKSpacingXS)
 								} else {
-									UntranscribedClipRow(clipName: row.clipName) {
+									UntranscribedClipRow(
+										clipName: row.clipName,
+										clipIndex: row.clipIndex,
+										isHighlighted: hoveredClipIndex == row.clipIndex,
+										hoveredClipIndex: $hoveredClipIndex
+									) {
 										model.selectedClips = [row.clipIndex]
 										model.stage = .setup
 									}

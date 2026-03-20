@@ -8,6 +8,9 @@ import SwiftUI
 
 struct UntranscribedClipRow: View {
 	let clipName: String
+	let clipIndex: Int
+	let isHighlighted: Bool
+	@Binding var hoveredClipIndex: Int?
 	var onTranscribe: () -> Void
 
 	var body: some View {
@@ -27,6 +30,14 @@ struct UntranscribedClipRow: View {
 			}
 			.buttonStyle(.plain)
 			.foregroundStyle(Color(nsColor: .accent()))
+		}
+		.padding(.horizontal, KKPaddingSM)
+		.background(
+			RoundedRectangle(cornerRadius: CGFloat(KKRadiusSM))
+				.fill(Color(nsColor: .hover()).opacity(isHighlighted ? 1 : 0))
+		)
+		.onHover { hovering in
+			hoveredClipIndex = hovering ? clipIndex : nil
 		}
 	}
 }
