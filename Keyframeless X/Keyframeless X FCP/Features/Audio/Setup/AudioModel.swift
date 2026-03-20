@@ -15,6 +15,7 @@ class AudioModel: ObservableObject {
 	@Published var projectFormat: FCPXMLParser.ProjectFormat?
 	@Published var audioClips: [FCPXMLParser.AudioClip] = []
 	@Published var selectedClips: Set<Int> = []
+	@Published var editSelectedClips: Set<Int>?
 	@Published var dropItems: [FCPXMLParser.DropItem] = []
 	@Published var useTimecode: Bool = true
 
@@ -41,6 +42,7 @@ class AudioModel: ObservableObject {
 		var projectFormat: FCPXMLParser.ProjectFormat?
 		var audioClips: [FCPXMLParser.AudioClip]
 		var selectedClips: [Int]
+		var editSelectedClips: [Int]?
 		var dropItems: [FCPXMLParser.DropItem]
 		var useTimecode: Bool
 	}
@@ -67,6 +69,7 @@ class AudioModel: ObservableObject {
 		projectFormat = state.projectFormat
 		audioClips = state.audioClips
 		selectedClips = Set(state.selectedClips)
+		editSelectedClips = state.editSelectedClips.map(Set.init)
 		dropItems = state.dropItems
 		useTimecode = state.useTimecode
 	}
@@ -80,6 +83,7 @@ class AudioModel: ObservableObject {
 			projectFormat: projectFormat,
 			audioClips: audioClips,
 			selectedClips: Array(selectedClips),
+			editSelectedClips: editSelectedClips.map(Array.init),
 			dropItems: dropItems,
 			useTimecode: useTimecode
 		)

@@ -64,7 +64,8 @@ struct AudioSetupView: View {
 						useTimecode: model.useTimecode,
 						clips: model.audioClips,
 						selectedClips: $model.selectedClips,
-						audioPlayer: audioPlayer
+						audioPlayer: audioPlayer,
+						showWaveforms: true
 					)
 					.id(timelineLoadID)
 					.padding(.bottom, KKSpacingSM)
