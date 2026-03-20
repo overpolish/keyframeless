@@ -13,6 +13,7 @@ struct SentenceRow: View {
 	@Binding var editingRowID: Int?
 	var sentenceRowIDs: [Int] = []
 	var onEdit: (String) -> Void = { _ in }
+	var onReset: (() -> Void)?
 
 	@State private var draft = ""
 
@@ -23,6 +24,9 @@ struct SentenceRow: View {
 			TimestampBadge(timestamp: row.timestamp)
 			sentenceContent
 			Spacer()
+			if row.editedWords != nil, let onReset {
+				ResetButton { onReset() }
+			}
 			PlayButton(
 				isPlaying: player.isPlaying(index: row.id)
 			) {
