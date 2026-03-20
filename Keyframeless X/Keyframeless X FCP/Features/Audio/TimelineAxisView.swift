@@ -17,6 +17,7 @@ struct TimelineAxisView: View {
 	var audioPlayer: AudioPlayer? = nil
 	var visibleIndices: Set<Int>? = nil
 	var showWaveforms: Bool = true
+	var hoveredClipIndex: Binding<Int?> = .constant(nil)
 
 	@State private var zoom: CGFloat = 1.0
 
@@ -32,7 +33,8 @@ struct TimelineAxisView: View {
 				labelForTime: labelForTime,
 				audioPlayer: audioPlayer,
 				visibleIndices: visibleIndices,
-				showWaveforms: showWaveforms
+				showWaveforms: showWaveforms,
+				hoveredClipIndex: hoveredClipIndex
 			)
 		}
 		.padding(.horizontal, KKPaddingMD)
@@ -57,6 +59,7 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 	var audioPlayer: AudioPlayer?
 	var visibleIndices: Set<Int>?
 	var showWaveforms: Bool
+	var hoveredClipIndex: Binding<Int?>
 
 	func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -90,6 +93,10 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 		docView.audioPlayer = audioPlayer
 		docView.visibleIndices = visibleIndices
 		docView.showWaveforms = showWaveforms
+		docView.hoveredClipIndex = hoveredClipIndex.wrappedValue
+		docView.onHoverClip = { index in
+			hoveredClipIndex.wrappedValue = index
+		}
 		docView.onToggleClip = { index in
 			if selectedClips.contains(index) {
 				selectedClips.remove(index)
@@ -133,6 +140,8 @@ private class AxisDocumentView: NSView {
 	var selectedClips: Set<Int> = []
 	var visibleIndices: Set<Int>?
 	var showWaveforms: Bool = true
+	var hoveredClipIndex: Int?
+	var onHoverClip: ((Int?) -> Void)?
 	var onToggleClip: ((Int) -> Void)?
 	var labelForTime: ((Double) -> String)?
 	var onMagnify: ((CGFloat, CGFloat) -> Void)?
@@ -153,12 +162,61 @@ private class AxisDocumentView: NSView {
 	private var scrubbingClipIndex: Int?
 	private var isDraggingSelection = false
 	private var dragHoveredIndex: Int?
+	private var pulseTimer: Timer?
+	private var pulsePhase: CGFloat = 0
 
 	private let playBtnSize: CGFloat = 12
 	private let minHeightForControls: CGFloat = 16
 	private let scrubStripHeight: CGFloat = 14
 
+	private var trackingArea: NSTrackingArea?
+
 	override var isFlipped: Bool { true }
+
+	override func updateTrackingAreas() {
+		super.updateTrackingAreas()
+		if let existing = trackingArea { removeTrackingArea(existing) }
+		trackingArea = NSTrackingArea(
+			rect: bounds,
+			options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow],
+			owner: self,
+			userInfo: nil
+		)
+		addTrackingArea(trackingArea!)
+	}
+
+	override func mouseMoved(with event: NSEvent) {
+		let point = convert(event.locationInWindow, from: nil)
+		let index = cachedClipRects.reversed().first { $0.rect.contains(point) }?.index
+		if index != hoveredClipIndex {
+			onHoverClip?(index)
+			if index != nil { startPulse() } else { stopPulse() }
+		}
+	}
+
+	override func mouseExited(with event: NSEvent) {
+		if hoveredClipIndex != nil {
+			onHoverClip?(nil)
+		}
+		stopPulse()
+	}
+
+	private func startPulse() {
+		guard pulseTimer == nil else { return }
+		pulsePhase = 0
+		pulseTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) {
+			[weak self] _ in
+			guard let self else { return }
+			self.pulsePhase += CGFloat(1.0 / 30)
+			self.needsDisplay = true
+		}
+	}
+
+	private func stopPulse() {
+		pulseTimer?.invalidate()
+		pulseTimer = nil
+		pulsePhase = 0
+	}
 
 	private func loadWaveformsIfNeeded(from oldClips: [FCPXMLParser.AudioClip]) {
 		let urlsChanged = clips.map(\.url) != oldClips.map(\.url)
@@ -329,6 +387,22 @@ private class AxisDocumentView: NSView {
 				transform: nil)
 			ctx.addPath(path)
 			ctx.fillPath()
+
+			if hoveredClipIndex == i {
+				let pulse = 0.7 + 0.3 * sin(pulsePhase * 2.0 * .pi / 2.0)
+				ctx.saveGState()
+				ctx.clip(to: rect.insetBy(dx: -3, dy: -3))
+				ctx.setShadow(
+					offset: .zero, blur: 4,
+					color: clipColor.withAlphaComponent(pulse).cgColor)
+				ctx.setFillColor(clipColor.withAlphaComponent(pulse).cgColor)
+				ctx.addPath(path)
+				ctx.fillPath()
+				ctx.restoreGState()
+				ctx.setFillColor(clipColor.withAlphaComponent(pulse * 0.5).cgColor)
+				ctx.addPath(path)
+				ctx.fillPath()
+			}
 
 			let hasAudioControls =
 				audioPlayer != nil
