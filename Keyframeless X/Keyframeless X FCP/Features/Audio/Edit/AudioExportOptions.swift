@@ -12,7 +12,7 @@ struct AudioExportOptionsView: View {
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: KKSpacingLG) {
-			ProjectSettingsHeader(model: model)
+			ProjectSettingsHeader(model: model).padding(.bottom, KKPaddingMD)
 			GeometryReader { geo in
 				let halfWidth = (geo.size.width - KKSpacingXL) / 2
 				HStack(alignment: .top, spacing: KKSpacingXL) {
@@ -23,6 +23,8 @@ struct AudioExportOptionsView: View {
 				}
 			}
 			.frame(height: 100)
+			Divider().padding(.top, KKPaddingXL)
+			CaptionSettingsPanel(model: model)
 		}
 		.onAppear {
 			guard !model.exportSettingsInitialized else { return }
@@ -146,8 +148,38 @@ private struct TextSettingsPanel: View {
 private struct DimensionsPreview: View {
 	@ObservedObject var model: AudioModel
 
+	private static let sampleWords = [
+		"The", "quick", "brown", "fox", "jumps", "over", "the", "lazy", "dog", "nearby",
+		"while", "the", "cat", "sleeps", "under", "a", "warm", "golden", "sun", "today",
+		"and", "birds", "sing", "softly", "in", "the", "tall", "green", "trees", "above",
+	]
+
 	private var exportWidth: CGFloat { CGFloat(Int(model.exportWidth) ?? 1920) }
 	private var exportHeight: CGFloat { CGFloat(Int(model.exportHeight) ?? 1080) }
+
+	private func previewText(availableWidth: CGFloat, font: NSFont) -> String {
+		let maxWords = Int(model.maxWordsPerLine)
+		let lineCount = model.captionLines == .two ? 2 : 1
+		let attrs: [NSAttributedString.Key: Any] = [.font: font]
+		var lines: [String] = []
+		var wordIndex = 0
+		for _ in 0..<lineCount {
+			var lineWords: [String] = []
+			for _ in 0..<maxWords {
+				guard wordIndex < Self.sampleWords.count else { break }
+				let candidate = (lineWords + [Self.sampleWords[wordIndex]]).joined(separator: " ")
+				let width = (candidate as NSString).size(withAttributes: attrs).width
+				if !lineWords.isEmpty && width > availableWidth { break }
+				lineWords.append(Self.sampleWords[wordIndex])
+				wordIndex += 1
+			}
+			if !lineWords.isEmpty {
+				lines.append(lineWords.joined(separator: " "))
+			}
+		}
+		let text = lines.joined(separator: "\n")
+		return model.allCaps ? text.uppercased() : text
+	}
 
 	private func fitSize(in container: CGSize) -> CGSize {
 		let boundingAspect: CGFloat = 16.0 / 9.0
@@ -174,19 +206,74 @@ private struct DimensionsPreview: View {
 						RoundedRectangle(cornerRadius: KKRadiusMD)
 							.strokeBorder(Color.secondary.opacity(0.3), lineWidth: KKBorderWidthXS)
 					)
-					.overlay(alignment: .top) {
-						Text("The quick brown fox jumps. Over the lazy dog nearby.")
+					.overlay(alignment: .bottom) {
+						let textWidth = fit.width * CGFloat(model.textWidthPercent / 100)
+						let nsFont =
+							NSFont(name: model.textFont, size: max(fontSize, 2))
+							?? NSFont.systemFont(ofSize: max(fontSize, 2))
+						Text(previewText(availableWidth: textWidth, font: nsFont))
 							.font(.custom(model.textFont, size: max(fontSize, 2)))
 							.foregroundStyle(.white)
-							.lineLimit(1)
-							.minimumScaleFactor(0.5)
-							.frame(width: fit.width * CGFloat(model.textWidthPercent / 100))
-							.offset(y: textBlockY - fontSize / 2)
+							.multilineTextAlignment(.center)
+							.fixedSize(horizontal: true, vertical: true)
+							.frame(width: textWidth)
+							.offset(y: -(fit.height - textBlockY))
 					}
 					.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD))
 					.shadow(color: .black.opacity(0.4), radius: 4, y: 2)
 			}
 			.frame(width: geo.size.width, height: geo.size.height)
+		}
+	}
+}
+
+private struct CaptionSettingsPanel: View {
+	@ObservedObject var model: AudioModel
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: KKSpacingLG) {
+			HStack(spacing: KKSpacingLG) {
+				LabeledSlider(
+					label: "Max Words", value: $model.maxWordsPerLine, range: 1...10,
+					step: 1, valueWidth: 16
+				).padding(.trailing, KKSpacingMD)
+				HStack(spacing: KKSpacingLG) {
+					PillToggle(
+						selection: $model.captionLines,
+						options: [
+							(label: "One", value: AudioModel.CaptionLineCount.one),
+							(label: "Two", value: AudioModel.CaptionLineCount.two),
+						]
+					)
+					Text("Lines")
+						.font(.caption)
+						.foregroundStyle(.secondary)
+				}
+			}
+			HStack(alignment: .center, spacing: KKSpacingMD) {
+				CapsuleToggle(
+					isOn: $model.allCaps,
+					label: "ALL CAPS",
+					systemImage: "textformat"
+				)
+				CapsuleToggle(
+					isOn: $model.censorProfanity,
+					label: "Censor Profanity",
+					systemImage: "checkmark.circle.trianglebadge.exclamationmark.fill"
+				)
+				Divider().frame(height: 12).padding(.horizontal, KKPaddingMD)
+				CapsuleToggle(
+					isOn: $model.stripPunctuation,
+					label: "Strip Punctuation",
+					systemImage: "xmark.triangle.circle.square.fill"
+				)
+				CapsuleToggle(
+					isOn: $model.keepQuestionMarks,
+					label: "Keep",
+					systemImage: "questionmark",
+					disabled: !model.stripPunctuation
+				)
+			}.frame(maxWidth: .infinity)
 		}
 	}
 }

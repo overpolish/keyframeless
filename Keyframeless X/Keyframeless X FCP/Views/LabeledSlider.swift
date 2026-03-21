@@ -11,7 +11,9 @@ struct LabeledSlider: View {
 	let label: String
 	@Binding var value: Double
 	let range: ClosedRange<Double>
+	var step: Double? = nil
 	var suffix: String = ""
+	var valueWidth: CGFloat = 40
 
 	@State private var isEditing = false
 	@State private var editText = ""
@@ -22,7 +24,7 @@ struct LabeledSlider: View {
 				.font(.caption)
 				.foregroundStyle(.secondary)
 				.frame(width: 68, alignment: .leading)
-			MiniSlider(value: $value, range: range)
+			MiniSlider(value: $value, range: range, step: step)
 			if isEditing {
 				HStack(spacing: 0) {
 					SliderTextField(
@@ -36,12 +38,12 @@ struct LabeledSlider: View {
 							.foregroundStyle(.secondary)
 					}
 				}
-				.frame(width: 40, height: 14)
+				.frame(width: valueWidth, height: 14)
 			} else {
 				Text("\(Int(value))\(suffix)")
 					.font(.caption.monospacedDigit())
 					.foregroundStyle(.secondary)
-					.frame(width: 40, alignment: .trailing)
+					.frame(width: valueWidth, alignment: .trailing)
 					.contentShape(Rectangle())
 					.onTapGesture {
 						editText = "\(Int(value))"
@@ -130,6 +132,7 @@ private struct SliderTextField: NSViewRepresentable {
 private struct MiniSlider: View {
 	@Binding var value: Double
 	let range: ClosedRange<Double>
+	var step: Double? = nil
 
 	private let trackHeight: CGFloat = 3
 	private let thumbSize: CGFloat = 10
@@ -138,10 +141,23 @@ private struct MiniSlider: View {
 		(value - range.lowerBound) / (range.upperBound - range.lowerBound)
 	}
 
+	private func snap(_ raw: Double) -> Double {
+		guard let step else { return raw }
+		return (raw / step).rounded() * step
+	}
+
+	private var tickCount: Int? {
+		guard let step else { return nil }
+		let span = range.upperBound - range.lowerBound
+		let count = Int(span / step) + 1
+		return count <= 20 ? count : nil
+	}
+
 	var body: some View {
 		GeometryReader { geo in
 			let trackWidth = geo.size.width
-			let thumbX = thumbSize / 2 + CGFloat(fraction) * (trackWidth - thumbSize)
+			let usable = trackWidth - thumbSize
+			let thumbX = thumbSize / 2 + CGFloat(fraction) * usable
 
 			ZStack(alignment: .leading) {
 				Capsule()
@@ -155,15 +171,29 @@ private struct MiniSlider: View {
 					.frame(width: thumbSize, height: thumbSize)
 					.offset(x: thumbX - thumbSize / 2)
 			}
-			.frame(height: geo.size.height)
+			.frame(height: thumbSize)
+			.overlay(alignment: .bottom) {
+				if let tickCount, tickCount > 1 {
+					HStack(spacing: 0) {
+						ForEach(0..<tickCount, id: \.self) { i in
+							if i > 0 { Spacer(minLength: 0) }
+							Circle()
+								.fill(Color.white.opacity(0.25))
+								.frame(width: 2, height: 2)
+						}
+					}
+					.padding(.horizontal, thumbSize / 2 - 1)
+					.offset(y: 4)
+				}
+			}
 			.contentShape(Rectangle())
 			.gesture(
 				DragGesture(minimumDistance: 0)
 					.onChanged { drag in
-						let pct = Double(
-							(drag.location.x - thumbSize / 2) / (trackWidth - thumbSize))
+						let pct = Double((drag.location.x - thumbSize / 2) / usable)
 						let clamped = min(max(pct, 0), 1)
-						value = range.lowerBound + clamped * (range.upperBound - range.lowerBound)
+						let raw = range.lowerBound + clamped * (range.upperBound - range.lowerBound)
+						value = snap(raw)
 					}
 			)
 		}
