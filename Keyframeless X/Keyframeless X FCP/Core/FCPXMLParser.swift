@@ -272,9 +272,18 @@ enum FCPXMLParser {
 	}
 
 	private static func isDialogue(_ el: XMLElement) -> Bool {
-		guard (el.attribute(forName: "audioRole")?.stringValue ?? "").hasPrefix("dialogue")
-		else { return false }
-		return !el.elements(forName: "audio-channel-source").contains {
+		let channelSources = el.elements(forName: "audio-channel-source")
+		let topRole = el.attribute(forName: "audioRole")?.stringValue ?? ""
+
+		// If any channel-source overrides to dialogue, treat as dialogue
+		let hasDialogueChannel = channelSources.contains {
+			($0.attribute(forName: "role")?.stringValue ?? "").hasPrefix("dialogue")
+		}
+
+		guard topRole.hasPrefix("dialogue") || hasDialogueChannel else { return false }
+
+		// Exclude clips where a channel-source reassigns to effects
+		return !channelSources.contains {
 			($0.attribute(forName: "role")?.stringValue ?? "").hasPrefix("effects")
 		}
 	}
@@ -330,6 +339,10 @@ enum FCPXMLParser {
 				} else {
 					clips.append(makeClip(from: child, assets: assets, tcStart: tcStart))
 				}
+				// Recurse into asset-clip to find nested audio clips
+				walkElement(
+					child, tcStart: tcStart, compound: compound, assets: assets,
+					mediaMap: mediaMap, into: &clips)
 			} else if child.name == "ref-clip", isEnabled(child) {
 				// Connected clips (XML children of the ref-clip) are in the main XML tree;
 				// projectTime works for them as-is.
