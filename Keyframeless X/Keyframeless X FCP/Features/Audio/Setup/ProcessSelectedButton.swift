@@ -35,6 +35,7 @@ struct ProcessSelectedButton: View {
 						.padding(KKPaddingSM)
 						.fixedSize(horizontal: false, vertical: true)
 						.frame(maxWidth: 240)
+						.background(PopoverBackgroundClearer())
 				}
 		}
 	}

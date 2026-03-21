@@ -11,16 +11,70 @@ struct AudioExportOptionsView: View {
 	@ObservedObject var model: AudioModel
 
 	var body: some View {
+		VStack(alignment: .leading, spacing: KKSpacingLG) {
+			ProjectSettingsHeader(model: model)
+			GeometryReader { geo in
+				let halfWidth = (geo.size.width - KKSpacingXL) / 2
+				HStack(alignment: .top, spacing: KKSpacingXL) {
+					TextSettingsPanel(model: model)
+						.frame(width: halfWidth)
+					DimensionsPreview(model: model)
+						.frame(width: halfWidth)
+				}
+			}
+			.frame(height: 100)
+		}
+		.onAppear {
+			guard !model.exportSettingsInitialized else { return }
+			let format = model.projectFormat ?? .default
+			model.exportWidth = "\(format.width)"
+			model.exportHeight = "\(format.height)"
+			model.exportFramerate = Framerate.from(frameDuration: format.frameDuration)
+			model.exportSettingsInitialized = true
+		}
+	}
+}
+
+private struct ProjectSettingsHeader: View {
+	@ObservedObject var model: AudioModel
+
+	private var projectFormat: FCPXMLParser.ProjectFormat {
+		model.projectFormat ?? .default
+	}
+
+	private var hasChanges: Bool {
+		model.exportWidth != "\(projectFormat.width)"
+			|| model.exportHeight != "\(projectFormat.height)"
+			|| model.exportFramerate != Framerate.from(frameDuration: projectFormat.frameDuration)
+	}
+
+	var body: some View {
 		HStack(spacing: KKSpacingSM) {
 			Text("Project Settings")
 				.font(.subheadline)
 				.foregroundStyle(.secondary)
 			Spacer()
-			IntegerField(placeholder: "Width", text: $model.exportWidth)
+			if hasChanges {
+				Button {
+					model.exportWidth = "\(projectFormat.width)"
+					model.exportHeight = "\(projectFormat.height)"
+					model.exportFramerate = Framerate.from(
+						frameDuration: projectFormat.frameDuration)
+				} label: {
+					Image(systemName: "arrow.uturn.backward")
+						.font(.system(size: 10))
+						.padding(.horizontal, KKPaddingSM)
+						.padding(.vertical, KKSpacingSM)
+						.contentShape(Rectangle())
+				}
+				.buttonStyle(.plain)
+				.foregroundStyle(.secondary)
+			}
+			IntegerField(placeholder: "Width", text: $model.exportWidth, min: 60, max: 7680)
 				.frame(width: 60)
 			Text("\u{00d7}")
 				.foregroundStyle(.secondary)
-			IntegerField(placeholder: "Height", text: $model.exportHeight)
+			IntegerField(placeholder: "Height", text: $model.exportHeight, min: 60, max: 4320)
 				.frame(width: 60)
 			Picker("", selection: $model.exportFramerate) {
 				ForEach(Framerate.allCases) { rate in
@@ -30,13 +84,109 @@ struct AudioExportOptionsView: View {
 			.labelsHidden()
 			.frame(width: 100)
 		}
+	}
+}
+
+private struct TextSettingsPanel: View {
+	@ObservedObject var model: AudioModel
+	@State private var initialStyle: TextStyleSettings?
+
+	private var hasChanges: Bool {
+		guard let initialStyle else { return false }
+		return model.textStyle != initialStyle
+	}
+
+	var body: some View {
+		VStack(spacing: KKSpacingLG) {
+			FontPickerRow(selectedFont: $model.textFont)
+			LabeledSlider(
+				label: "Text Width", value: $model.textWidthPercent, range: 10...100,
+				suffix: "%")
+			LabeledSlider(
+				label: "Text Size", value: $model.textSize, range: 10...200,
+				suffix: "pt")
+			LabeledSlider(
+				label: "Y Position", value: $model.textYPosition, range: 0...100,
+				suffix: "%")
+			HStack(spacing: KKSpacingLG) {
+				Button {
+					TextStyleDefaults.shared.save(model.textStyle)
+					initialStyle = model.textStyle
+				} label: {
+					Label("Make Default", systemImage: "star")
+						.font(.system(size: 10))
+						.padding(.horizontal, KKPaddingLG)
+						.padding(.vertical, KKSpacingSM)
+						.contentShape(Capsule())
+				}
+				.buttonStyle(.plain)
+				.foregroundStyle(Color(nsColor: .accent() ?? .blue))
+				Spacer()
+				if hasChanges {
+					Button {
+						model.textStyle = initialStyle ?? TextStyleDefaults.shared.settings
+					} label: {
+						Label("Reset", systemImage: "arrow.uturn.backward")
+							.font(.system(size: 10))
+							.padding(.horizontal, KKPaddingLG)
+							.padding(.vertical, KKSpacingSM)
+							.contentShape(Capsule())
+					}
+					.buttonStyle(.plain)
+					.foregroundStyle(.secondary)
+				}
+			}
+		}
 		.onAppear {
-			guard !model.exportSettingsInitialized else { return }
-			let format = model.projectFormat ?? .default
-			model.exportWidth = "\(format.width)"
-			model.exportHeight = "\(format.height)"
-			model.exportFramerate = Framerate.from(frameDuration: format.frameDuration)
-			model.exportSettingsInitialized = true
+			initialStyle = model.textStyle
+		}
+	}
+}
+
+private struct DimensionsPreview: View {
+	@ObservedObject var model: AudioModel
+
+	private var exportWidth: CGFloat { CGFloat(Int(model.exportWidth) ?? 1920) }
+	private var exportHeight: CGFloat { CGFloat(Int(model.exportHeight) ?? 1080) }
+
+	private func fitSize(in container: CGSize) -> CGSize {
+		let boundingAspect: CGFloat = 16.0 / 9.0
+		let videoAspect = exportWidth / exportHeight
+		if videoAspect > boundingAspect {
+			return CGSize(width: container.width, height: container.width / videoAspect)
+		} else {
+			return CGSize(width: container.height * videoAspect, height: container.height)
+		}
+	}
+
+	var body: some View {
+		GeometryReader { geo in
+			let fit = fitSize(in: geo.size)
+			let scaleFactor = fit.width / exportWidth
+			let fontSize = model.textSize * scaleFactor
+			let textBlockY = fit.height * CGFloat(1 - model.textYPosition / 100)
+
+			ZStack {
+				RoundedRectangle(cornerRadius: KKRadiusSM)
+					.fill(Color.white.opacity(0.08))
+					.frame(width: fit.width, height: fit.height)
+					.overlay(
+						RoundedRectangle(cornerRadius: KKRadiusMD)
+							.strokeBorder(Color.secondary.opacity(0.3), lineWidth: KKBorderWidthXS)
+					)
+					.overlay(alignment: .top) {
+						Text("The quick brown fox jumps. Over the lazy dog nearby.")
+							.font(.custom(model.textFont, size: max(fontSize, 2)))
+							.foregroundStyle(.white)
+							.lineLimit(1)
+							.minimumScaleFactor(0.5)
+							.frame(width: fit.width * CGFloat(model.textWidthPercent / 100))
+							.offset(y: textBlockY - fontSize / 2)
+					}
+					.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD))
+					.shadow(color: .black.opacity(0.4), radius: 4, y: 2)
+			}
+			.frame(width: geo.size.width, height: geo.size.height)
 		}
 	}
 }
@@ -81,7 +231,7 @@ struct AudioExportOptionsSidebar: View {
 			AudioExportOptionsView(model: model)
 			Spacer()
 		}
-		.padding(KKPaddingLG)
+		.padding(KKPaddingXL)
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 		.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD + 4))
 		.background(
@@ -92,65 +242,5 @@ struct AudioExportOptionsSidebar: View {
 			RoundedRectangle(cornerRadius: KKRadiusMD + 4)
 				.strokeBorder(Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
 		)
-	}
-}
-
-private class AccentTextField: NSTextField {
-	override func becomeFirstResponder() -> Bool {
-		let result = super.becomeFirstResponder()
-		if result,
-			let editor = currentEditor() as? NSTextView,
-			let accent = NSColor.accent()
-		{
-			editor.insertionPointColor = accent
-			editor.selectedTextAttributes = [
-				.backgroundColor: accent.withAlphaComponent(0.3)
-			]
-		}
-		return result
-	}
-}
-
-private struct IntegerField: NSViewRepresentable {
-	var placeholder: String
-	@Binding var text: String
-
-	func makeNSView(context: Context) -> AccentTextField {
-		let field = AccentTextField()
-		field.placeholderString = placeholder
-		field.bezelStyle = .roundedBezel
-		field.focusRingType = .none
-		field.font = .systemFont(ofSize: NSFont.systemFontSize)
-		field.alignment = .center
-		field.delegate = context.coordinator
-		field.stringValue = text
-		return field
-	}
-
-	func updateNSView(_ nsView: AccentTextField, context: Context) {
-		if nsView.stringValue != text {
-			nsView.stringValue = text
-		}
-	}
-
-	func makeCoordinator() -> Coordinator {
-		Coordinator(self)
-	}
-
-	class Coordinator: NSObject, NSTextFieldDelegate {
-		var parent: IntegerField
-
-		init(_ parent: IntegerField) {
-			self.parent = parent
-		}
-
-		func controlTextDidChange(_ obj: Notification) {
-			guard let field = obj.object as? NSTextField else { return }
-			let filtered = field.stringValue.filter(\.isWholeNumber)
-			if field.stringValue != filtered {
-				field.stringValue = filtered
-			}
-			parent.text = filtered
-		}
 	}
 }
