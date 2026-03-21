@@ -7,6 +7,42 @@ import AppKit
 import Combine
 import Foundation
 
+struct TextStyleSettings: Codable, Equatable {
+	var textWidthPercent: Double = 80
+	var textSize: Double = 100
+	var textYPosition: Double = 15
+	var textFont: String = "HelveticaNeue"
+}
+
+class TextStyleDefaults {
+	static let shared = TextStyleDefaults()
+	private(set) var settings = TextStyleSettings()
+
+	private var fileURL: URL? {
+		FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+			.first?
+			.appendingPathComponent("Keyframeless/text_style_defaults.json")
+	}
+
+	private init() { load() }
+
+	func save(_ settings: TextStyleSettings) {
+		self.settings = settings
+		guard let url = fileURL else { return }
+		let dir = url.deletingLastPathComponent()
+		try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+		try? JSONEncoder().encode(settings).write(to: url, options: .atomic)
+	}
+
+	private func load() {
+		guard let url = fileURL,
+			let data = try? Data(contentsOf: url),
+			let saved = try? JSONDecoder().decode(TextStyleSettings.self, from: data)
+		else { return }
+		settings = saved
+	}
+}
+
 class AudioModel: ObservableObject {
 
 	enum Stage { case setup, edit }
@@ -22,6 +58,24 @@ class AudioModel: ObservableObject {
 	@Published var exportHeight: String = ""
 	@Published var exportFramerate: Framerate = .fps30
 	@Published var exportSettingsInitialized: Bool = false
+	@Published var textWidthPercent: Double = TextStyleDefaults.shared.settings.textWidthPercent
+	@Published var textSize: Double = TextStyleDefaults.shared.settings.textSize
+	@Published var textYPosition: Double = TextStyleDefaults.shared.settings.textYPosition
+	@Published var textFont: String = TextStyleDefaults.shared.settings.textFont
+
+	var textStyle: TextStyleSettings {
+		get {
+			TextStyleSettings(
+				textWidthPercent: textWidthPercent, textSize: textSize,
+				textYPosition: textYPosition, textFont: textFont)
+		}
+		set {
+			textWidthPercent = newValue.textWidthPercent
+			textSize = newValue.textSize
+			textYPosition = newValue.textYPosition
+			textFont = newValue.textFont
+		}
+	}
 
 	private var cancellables = Set<AnyCancellable>()
 
@@ -52,6 +106,10 @@ class AudioModel: ObservableObject {
 		var exportWidth: String?
 		var exportHeight: String?
 		var exportFramerate: Framerate?
+		var textWidthPercent: Double?
+		var textSize: Double?
+		var textYPosition: Double?
+		var textFont: String?
 	}
 
 	private static var fcpProcessID: Int32? {
@@ -82,6 +140,10 @@ class AudioModel: ObservableObject {
 		if let w = state.exportWidth { exportWidth = w }
 		if let h = state.exportHeight { exportHeight = h }
 		if let fr = state.exportFramerate { exportFramerate = fr }
+		if let tw = state.textWidthPercent { textWidthPercent = tw }
+		if let ts = state.textSize { textSize = ts }
+		if let ty = state.textYPosition { textYPosition = ty }
+		if let tf = state.textFont { textFont = tf }
 		if state.exportWidth != nil { exportSettingsInitialized = true }
 	}
 
@@ -99,7 +161,11 @@ class AudioModel: ObservableObject {
 			useTimecode: useTimecode,
 			exportWidth: exportWidth.isEmpty ? nil : exportWidth,
 			exportHeight: exportHeight.isEmpty ? nil : exportHeight,
-			exportFramerate: exportFramerate
+			exportFramerate: exportFramerate,
+			textWidthPercent: textWidthPercent,
+			textSize: textSize,
+			textYPosition: textYPosition,
+			textFont: textFont
 		)
 		try? JSONEncoder().encode(state).write(to: url, options: .atomic)
 	}
