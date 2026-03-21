@@ -8,11 +8,20 @@ import KeyframelessKit
 import SwiftUI
 
 struct FCPDragZoneView: NSViewRepresentable {
+	let xmlProvider: () -> String
+	let onDragStateChanged: (Bool) -> Void
+
 	func makeNSView(context: Context) -> FCPDragSourceView {
-		FCPDragSourceView()
+		let view = FCPDragSourceView()
+		view.xmlProvider = xmlProvider
+		view.onDragStateChanged = onDragStateChanged
+		return view
 	}
 
-	func updateNSView(_ nsView: FCPDragSourceView, context: Context) {}
+	func updateNSView(_ nsView: FCPDragSourceView, context: Context) {
+		nsView.xmlProvider = xmlProvider
+		nsView.onDragStateChanged = onDragStateChanged
+	}
 }
 
 private let fcpPasteboardTypes = [
@@ -41,30 +50,51 @@ class FCPXMLItemProvider: NSObject, NSPasteboardItemDataProvider {
 }
 
 class FCPDragSourceView: NSView, NSDraggingSource {
+	var xmlProvider: (() -> String)?
+	var onDragStateChanged: ((Bool) -> Void)?
+
 	override func draw(_ dirtyRect: NSRect) {
+		let accentColor = NSColor.accent() ?? NSColor.systemBlue
+
 		let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 6, yRadius: 6)
-		NSColor.timelineLabel().withAlphaComponent(0.12).setFill()
+		accentColor.withAlphaComponent(0.15).setFill()
 		path.fill()
-		NSColor.timelineLabel().withAlphaComponent(0.4).setStroke()
+		accentColor.withAlphaComponent(0.6).setStroke()
 		path.lineWidth = 1.5
 		let dashes: [CGFloat] = [6, 4]
 		path.setLineDash(dashes, count: dashes.count, phase: 0)
 		path.stroke()
 
-		let label = "Drag to FCP" as NSString
-		let attrs: [NSAttributedString.Key: Any] = [
-			.font: NSFont.systemFont(ofSize: 11),
-			.foregroundColor: NSColor.timelineLabel()!,
-		]
-		let size = label.size(withAttributes: attrs)
+		let iconAttachment = NSTextAttachment()
+		let iconConfig = NSImage.SymbolConfiguration(pointSize: 11, weight: .medium)
+		iconAttachment.image = NSImage(
+			systemSymbolName: "arrow.up.right.square", accessibilityDescription: nil)?
+			.withSymbolConfiguration(iconConfig)
+
+		let iconString = NSAttributedString(attachment: iconAttachment)
+		let labelString = NSAttributedString(
+			string: " Drag to FCP",
+			attributes: [
+				.font: NSFont.systemFont(ofSize: 11, weight: .medium),
+				.foregroundColor: accentColor,
+			])
+
+		let combined = NSMutableAttributedString()
+		combined.append(iconString)
+		combined.append(labelString)
+		combined.addAttribute(
+			.foregroundColor, value: accentColor,
+			range: NSRange(location: 0, length: combined.length))
+
+		let size = combined.size()
 		let origin = CGPoint(
 			x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2)
-		label.draw(at: origin, withAttributes: attrs)
+		combined.draw(at: origin)
 	}
 
 	override func mouseDown(with event: NSEvent) {
-		let xml = FCPXMLBuilder.titleStorylineXML(text: "hello from keyframeless x")
-		print(xml)
+		guard let xmlProvider else { return }
+		let xml = xmlProvider()
 
 		let provider = FCPXMLItemProvider(xml: xml)
 		let item = NSPasteboardItem()
@@ -73,6 +103,7 @@ class FCPDragSourceView: NSView, NSDraggingSource {
 		let draggingItem = NSDraggingItem(pasteboardWriter: item)
 		draggingItem.setDraggingFrame(bounds, contents: snapshot())
 
+		onDragStateChanged?(true)
 		beginDraggingSession(with: [draggingItem], event: event, source: self)
 	}
 
@@ -81,6 +112,14 @@ class FCPDragSourceView: NSView, NSDraggingSource {
 		sourceOperationMaskFor context: NSDraggingContext
 	) -> NSDragOperation {
 		.copy
+	}
+
+	func draggingSession(
+		_ session: NSDraggingSession,
+		endedAt screenPoint: NSPoint,
+		operation: NSDragOperation
+	) {
+		onDragStateChanged?(false)
 	}
 
 	private func snapshot() -> NSImage {

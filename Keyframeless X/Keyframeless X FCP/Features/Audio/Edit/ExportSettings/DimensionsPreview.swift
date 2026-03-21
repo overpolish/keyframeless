@@ -58,7 +58,7 @@ struct DimensionsPreview: View {
 			let fit = fitSize(in: geo.size)
 			let scaleFactor = fit.width / exportWidth
 			let fontSize = model.textSize * scaleFactor
-			let textBlockY = fit.height * CGFloat(1 - model.textYPosition / 100)
+			let yOffset = fit.height * CGFloat(50 - model.textYPosition) / 100
 
 			ZStack {
 				RoundedRectangle(cornerRadius: KKRadiusSM)
@@ -68,7 +68,7 @@ struct DimensionsPreview: View {
 						RoundedRectangle(cornerRadius: KKRadiusMD)
 							.strokeBorder(Color.secondary.opacity(0.3), lineWidth: KKBorderWidthXS)
 					)
-					.overlay(alignment: .bottom) {
+					.overlay {
 						let textWidth = fit.width * CGFloat(model.textWidthPercent / 100)
 						let nsFont =
 							NSFont(name: model.textFont, size: max(fontSize, 2))
@@ -79,7 +79,7 @@ struct DimensionsPreview: View {
 							.multilineTextAlignment(.center)
 							.fixedSize(horizontal: true, vertical: true)
 							.frame(width: textWidth)
-							.offset(y: -(fit.height - textBlockY))
+							.offset(y: yOffset)
 					}
 					.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD))
 					.shadow(color: .black.opacity(0.4), radius: 4, y: 2)

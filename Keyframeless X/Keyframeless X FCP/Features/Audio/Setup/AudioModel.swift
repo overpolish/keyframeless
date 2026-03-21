@@ -48,7 +48,7 @@ class CaptionStyleDefaults {
 struct TextStyleSettings: Codable, Equatable {
 	var textWidthPercent: Double = 80
 	var textSize: Double = 100
-	var textYPosition: Double = 15
+	var textYPosition: Double = 20
 	var textFont: String = "HelveticaNeue"
 }
 
@@ -86,6 +86,7 @@ class AudioModel: ObservableObject {
 	enum Stage { case setup, edit }
 
 	@Published var stage: Stage = .setup
+	@Published var isDraggingToFCP: Bool = false
 	@Published var projectFormat: FCPXMLParser.ProjectFormat?
 	@Published var audioClips: [FCPXMLParser.AudioClip] = []
 	@Published var selectedClips: Set<Int> = []
@@ -154,10 +155,37 @@ class AudioModel: ObservableObject {
 			.store(in: &cancellables)
 	}
 
-	func insertTitle() {
-		let fcpxml = FCPXMLBuilder.titleStorylineXML(text: "hello from keyframeless x")
+	func buildCaptionSegments(from rows: [AudioEditRow]) -> [CaptionSegment] {
+		let selected = editSelectedClips ?? Set(audioClips.indices)
+		let filtered = rows.filter { $0.isHeader || selected.contains($0.clipIndex) }
+		return CaptionBuilder.build(
+			rows: filtered,
+			clips: audioClips,
+			style: captionStyle,
+			textStyle: textStyle,
+			exportWidth: Int(exportWidth) ?? projectFormat?.width ?? 1920,
+			language: AudioSetupSettings.shared.selectedLanguage
+		)
+	}
+
+	func buildFCPXML(from rows: [AudioEditRow]) -> String {
+		let segments = buildCaptionSegments(from: rows)
+		let format = FCPXMLBuilder.ExportFormat(
+			width: Int(exportWidth) ?? projectFormat?.width ?? 1920,
+			height: Int(exportHeight) ?? projectFormat?.height ?? 1080,
+			frameDuration: exportFramerate.rawValue
+		)
+		return FCPXMLBuilder.build(
+			segments: segments,
+			textStyle: textStyle,
+			format: format
+		)
+	}
+
+	func insertTitle(rows: [AudioEditRow]) {
+		let fcpxml = buildFCPXML(from: rows)
 		let tmpURL = FileManager.default.temporaryDirectory
-			.appendingPathComponent("keyframeless_title.fcpxml")
+			.appendingPathComponent("keyframeless_captions.fcpxml")
 		try? fcpxml.write(to: tmpURL, atomically: true, encoding: .utf8)
 		NSWorkspace.shared.open(tmpURL)
 	}
@@ -173,16 +201,6 @@ class AudioModel: ObservableObject {
 		var exportWidth: String?
 		var exportHeight: String?
 		var exportFramerate: Framerate?
-		var textWidthPercent: Double?
-		var textSize: Double?
-		var textYPosition: Double?
-		var textFont: String?
-		var maxWordsPerLine: Double?
-		var captionLines: CaptionLineCount?
-		var allCaps: Bool?
-		var censorProfanity: Bool?
-		var stripPunctuation: Bool?
-		var keepQuestionMarks: Bool?
 	}
 
 	private static var fcpProcessID: Int32? {
@@ -213,16 +231,6 @@ class AudioModel: ObservableObject {
 		if let w = state.exportWidth { exportWidth = w }
 		if let h = state.exportHeight { exportHeight = h }
 		if let fr = state.exportFramerate { exportFramerate = fr }
-		if let tw = state.textWidthPercent { textWidthPercent = tw }
-		if let ts = state.textSize { textSize = ts }
-		if let ty = state.textYPosition { textYPosition = ty }
-		if let tf = state.textFont { textFont = tf }
-		if let mw = state.maxWordsPerLine { maxWordsPerLine = mw }
-		if let cl = state.captionLines { captionLines = cl }
-		if let ac = state.allCaps { allCaps = ac }
-		if let cp = state.censorProfanity { censorProfanity = cp }
-		if let sp = state.stripPunctuation { stripPunctuation = sp }
-		if let kq = state.keepQuestionMarks { keepQuestionMarks = kq }
 		if state.exportWidth != nil { exportSettingsInitialized = true }
 	}
 
@@ -240,17 +248,7 @@ class AudioModel: ObservableObject {
 			useTimecode: useTimecode,
 			exportWidth: exportWidth.isEmpty ? nil : exportWidth,
 			exportHeight: exportHeight.isEmpty ? nil : exportHeight,
-			exportFramerate: exportFramerate,
-			textWidthPercent: textWidthPercent,
-			textSize: textSize,
-			textYPosition: textYPosition,
-			textFont: textFont,
-			maxWordsPerLine: maxWordsPerLine,
-			captionLines: captionLines,
-			allCaps: allCaps,
-			censorProfanity: censorProfanity,
-			stripPunctuation: stripPunctuation,
-			keepQuestionMarks: keepQuestionMarks
+			exportFramerate: exportFramerate
 		)
 		try? JSONEncoder().encode(state).write(to: url, options: .atomic)
 	}

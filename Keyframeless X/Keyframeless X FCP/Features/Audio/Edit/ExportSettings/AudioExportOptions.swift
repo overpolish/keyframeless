@@ -122,11 +122,24 @@ struct AudioExportOptionsView: View {
 
 struct AudioExportOptionsSidebar: View {
 	@ObservedObject var model: AudioModel
+	let rows: [AudioEditRow]
+
+	private var hasTranscribedSelection: Bool {
+		let selected = model.editSelectedClips ?? Set(model.audioClips.indices)
+		return rows.contains { !$0.isHeader && $0.isTranscribed && selected.contains($0.clipIndex) }
+	}
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: KKSpacingLG) {
 			AudioExportOptionsView(model: model)
 			Spacer()
+			FCPDragZoneView(
+				xmlProvider: { model.buildFCPXML(from: rows) },
+				onDragStateChanged: { model.isDraggingToFCP = $0 }
+			)
+			.frame(height: 40)
+			.allowsHitTesting(hasTranscribedSelection)
+			.opacity(hasTranscribedSelection ? 1 : 0.4)
 		}
 		.padding(KKPaddingXL)
 		.frame(maxWidth: .infinity, maxHeight: .infinity)

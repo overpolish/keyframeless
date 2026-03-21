@@ -237,8 +237,7 @@ struct AudioEditView: View {
 					}
 				}
 				.frame(maxWidth: .infinity, maxHeight: .infinity)
-
-				AudioExportOptionsSidebar(model: model)
+				AudioExportOptionsSidebar(model: model, rows: rows)
 					.frame(maxWidth: .infinity, maxHeight: .infinity)
 			}
 		}
