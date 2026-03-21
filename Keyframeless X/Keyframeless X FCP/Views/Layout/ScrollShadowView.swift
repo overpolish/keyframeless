@@ -43,7 +43,7 @@ struct ScrollShadowView<Content: View>: View {
 				Color.clear
 					.overlay(alignment: .top) {
 						LinearGradient(
-							colors: [Color.black.opacity(0.3), .clear],
+							colors: [Color.black.opacity(0.15), .clear],
 							startPoint: .top,
 							endPoint: .bottom
 						)
@@ -52,7 +52,7 @@ struct ScrollShadowView<Content: View>: View {
 					}
 					.overlay(alignment: .bottom) {
 						LinearGradient(
-							colors: [.clear, Color.black.opacity(0.5)],
+							colors: [.clear, Color.black.opacity(0.3)],
 							startPoint: .top,
 							endPoint: .bottom
 						)

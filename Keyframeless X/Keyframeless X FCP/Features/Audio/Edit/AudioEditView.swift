@@ -287,18 +287,3 @@ struct AudioEditView: View {
 		return result
 	}
 }
-
-private struct EmptyTranscriptionPlaceholder: View {
-	var body: some View {
-		VStack(spacing: KKSpacingSM) {
-			Image(systemName: "waveform.slash")
-				.font(.title3)
-				.foregroundStyle(.tertiary)
-			Text("No transcribed clips")
-				.font(.subheadline)
-				.foregroundStyle(.tertiary)
-		}
-		.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-		.padding(KKPaddingLG)
-	}
-}
