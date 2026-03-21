@@ -4,6 +4,7 @@
  */
 
 import Combine
+import KeyframelessKit
 import SwiftUI
 
 @MainActor
@@ -32,6 +33,8 @@ class AudioProcessingCoordinator: ObservableObject {
 			}
 			return
 		}
+
+		let previouslyTranscribed = transcribedIndices(for: clips)
 
 		if replaceAll {
 			TranscriptionStore.shared.removeAll()
@@ -62,6 +65,10 @@ class AudioProcessingCoordinator: ObservableObject {
 				)
 				TranscriptionStore.shared.store(results: results, clips: clips)
 				AudioPreparer.cleanUp(segments: prepared)
+				let newlyTranscribed = selected.subtracting(previouslyTranscribed)
+				if !newlyTranscribed.isEmpty, model.editSelectedClips != nil {
+					model.editSelectedClips = model.editSelectedClips?.union(newlyTranscribed)
+				}
 				withAnimation(.easeOut(duration: 0.25)) {
 					self.isProcessing = false
 					model.stage = .edit
@@ -75,6 +82,15 @@ class AudioProcessingCoordinator: ObservableObject {
 				}
 			}
 		}
+	}
+
+	private func transcribedIndices(for clips: [FCPXMLParser.AudioClip]) -> Set<Int> {
+		let store = TranscriptionStore.shared
+		var result = Set<Int>()
+		for i in clips.indices where store.words(for: clips[i]) != nil {
+			result.insert(i)
+		}
+		return result
 	}
 
 	func cancel() {
