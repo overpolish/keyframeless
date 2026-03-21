@@ -105,7 +105,8 @@ actor AudioTranscriber {
 				let clipWords = cleanedWords.compactMap { word, cleaned -> WordResult? in
 					let sourceTime =
 						Double(word.start) - segment.paddingDuration + segment.range.start
-					let sourceEnd = Double(word.end) - segment.paddingDuration + segment.range.start
+					let sourceEnd =
+						Double(word.end) - segment.paddingDuration + segment.range.start + 0.05
 					let clipEnd = mapping.clipSourceStart + mapping.clipSourceDuration
 					guard sourceTime >= mapping.clipSourceStart - 0.05,
 						sourceTime < clipEnd + 0.05
