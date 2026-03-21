@@ -4,9 +4,28 @@
  */
 
 import AppKit
+import KeyframelessKit
 import SwiftUI
 
-struct IntegerField: NSViewRepresentable {
+struct IntegerField: View {
+	var placeholder: String
+	@Binding var text: String
+	var min: Int?
+	var max: Int?
+
+	var body: some View {
+		IntegerFieldRepresentable(placeholder: placeholder, text: $text, min: min, max: max)
+			.padding(.horizontal, KKPaddingLG)
+			.padding(.vertical, KKPaddingXS)
+			.background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: KKRadiusMD))
+			.overlay(
+				RoundedRectangle(cornerRadius: KKRadiusMD)
+					.strokeBorder(Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
+			)
+	}
+}
+
+private struct IntegerFieldRepresentable: NSViewRepresentable {
 	var placeholder: String
 	@Binding var text: String
 	var min: Int?
@@ -15,7 +34,8 @@ struct IntegerField: NSViewRepresentable {
 	func makeNSView(context: Context) -> AccentTextField {
 		let field = AccentTextField()
 		field.placeholderString = placeholder
-		field.bezelStyle = .roundedBezel
+		field.isBezeled = false
+		field.drawsBackground = false
 		field.focusRingType = .none
 		field.font = .systemFont(ofSize: NSFont.systemFontSize)
 		field.alignment = .center
@@ -35,9 +55,9 @@ struct IntegerField: NSViewRepresentable {
 	}
 
 	class Coordinator: NSObject, NSTextFieldDelegate {
-		var parent: IntegerField
+		var parent: IntegerFieldRepresentable
 
-		init(_ parent: IntegerField) {
+		init(_ parent: IntegerFieldRepresentable) {
 			self.parent = parent
 		}
 
