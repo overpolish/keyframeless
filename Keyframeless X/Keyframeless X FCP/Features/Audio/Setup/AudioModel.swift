@@ -18,6 +18,10 @@ class AudioModel: ObservableObject {
 	@Published var editSelectedClips: Set<Int>?
 	@Published var dropItems: [FCPXMLParser.DropItem] = []
 	@Published var useTimecode: Bool = true
+	@Published var exportWidth: String = ""
+	@Published var exportHeight: String = ""
+	@Published var exportFramerate: Framerate = .fps30
+	@Published var exportSettingsInitialized: Bool = false
 
 	private var cancellables = Set<AnyCancellable>()
 
@@ -45,6 +49,9 @@ class AudioModel: ObservableObject {
 		var editSelectedClips: [Int]?
 		var dropItems: [FCPXMLParser.DropItem]
 		var useTimecode: Bool
+		var exportWidth: String?
+		var exportHeight: String?
+		var exportFramerate: Framerate?
 	}
 
 	private static var fcpProcessID: Int32? {
@@ -72,6 +79,10 @@ class AudioModel: ObservableObject {
 		editSelectedClips = state.editSelectedClips.map(Set.init)
 		dropItems = state.dropItems
 		useTimecode = state.useTimecode
+		if let w = state.exportWidth { exportWidth = w }
+		if let h = state.exportHeight { exportHeight = h }
+		if let fr = state.exportFramerate { exportFramerate = fr }
+		if state.exportWidth != nil { exportSettingsInitialized = true }
 	}
 
 	private func save() {
@@ -85,7 +96,10 @@ class AudioModel: ObservableObject {
 			selectedClips: Array(selectedClips),
 			editSelectedClips: editSelectedClips.map(Array.init),
 			dropItems: dropItems,
-			useTimecode: useTimecode
+			useTimecode: useTimecode,
+			exportWidth: exportWidth.isEmpty ? nil : exportWidth,
+			exportHeight: exportHeight.isEmpty ? nil : exportHeight,
+			exportFramerate: exportFramerate
 		)
 		try? JSONEncoder().encode(state).write(to: url, options: .atomic)
 	}
