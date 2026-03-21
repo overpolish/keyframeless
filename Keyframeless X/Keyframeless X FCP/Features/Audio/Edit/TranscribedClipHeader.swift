@@ -10,6 +10,7 @@ struct TranscribedClipHeader: View {
 	let clipName: String
 	let clipIndex: Int
 	let isCompound: Bool
+	var containsProfanity: Bool = false
 	@Binding var selectedClips: Set<Int>
 
 	private var clipColor: Color {
@@ -36,6 +37,15 @@ struct TranscribedClipHeader: View {
 			}
 			.toggleStyle(.checkbox)
 			.tint(clipColor)
+			Spacer()
+			if containsProfanity {
+				InfoBadge(
+					label: "Profanity",
+					systemImage:
+						"checkmark.circle.trianglebadge.exclamationmark.fill",
+					color: Color(nsColor: .error())
+				)
+			}
 		}
 	}
 }

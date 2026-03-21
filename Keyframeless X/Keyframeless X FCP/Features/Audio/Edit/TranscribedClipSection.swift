@@ -31,6 +31,17 @@ struct TranscribedClipSection: View {
 	var onSentenceEdit: (Int, [TranscriptionStore.StoredWord]?) -> Void = { _, _ in }
 	@State private var isHovered = false
 
+	private var groupContainsProfanity: Bool {
+		let language = AudioSetupSettings.shared.selectedLanguage
+		return group.sentences.contains { row in
+			let words = row.editedWords ?? row.words
+			return words.contains {
+				ProfanityFilter.isProfane(
+					$0.word.trimmingCharacters(in: .whitespaces), language: language)
+			}
+		}
+	}
+
 	private var clipColor: Color {
 		Color(nsColor: group.isCompound ? .warning() ?? .yellow : .accent() ?? .blue)
 	}
@@ -41,6 +52,7 @@ struct TranscribedClipSection: View {
 				clipName: group.clipName,
 				clipIndex: group.clipIndex,
 				isCompound: group.isCompound,
+				containsProfanity: groupContainsProfanity,
 				selectedClips: $selectedClips
 			)
 

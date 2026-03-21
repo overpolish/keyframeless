@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F274D93A2F6E7AC2001FE373 /* Profanity in Resources */ = {isa = PBXBuildFile; fileRef = F274D9392F6E7AC2001FE373 /* Profanity */; };
 		F28BD2302F68595000C5F6B7 /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F28BD22F2F68595000C5F6B7 /* KeyframelessKit.framework */; };
 		F28BD2312F68595000C5F6B7 /* KeyframelessKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F28BD22F2F68595000C5F6B7 /* KeyframelessKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F29C84ED2F6820750073B1A9 /* Keyframeless X FCP.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F29C84E02F6820750073B1A9 /* Keyframeless X FCP.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -49,6 +50,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F274D9392F6E7AC2001FE373 /* Profanity */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Profanity; path = "Keyframeless X FCP/Resources/Profanity"; sourceTree = "<group>"; };
 		F28BD22F2F68595000C5F6B7 /* KeyframelessKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = KeyframelessKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F29C84C62F68205E0073B1A9 /* Keyframeless X.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Keyframeless X.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F29C84E02F6820750073B1A9 /* Keyframeless X FCP.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Keyframeless X FCP.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -59,6 +61,32 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+				Resources/Profanity/ar.txt,
+				Resources/Profanity/cs.txt,
+				Resources/Profanity/da.txt,
+				Resources/Profanity/de.txt,
+				Resources/Profanity/en.txt,
+				Resources/Profanity/eo.txt,
+				Resources/Profanity/es.txt,
+				Resources/Profanity/fa.txt,
+				Resources/Profanity/fi.txt,
+				Resources/Profanity/fil.txt,
+				Resources/Profanity/fr.txt,
+				Resources/Profanity/hi.txt,
+				Resources/Profanity/hu.txt,
+				Resources/Profanity/it.txt,
+				Resources/Profanity/ja.txt,
+				Resources/Profanity/ko.txt,
+				Resources/Profanity/nl.txt,
+				Resources/Profanity/no.txt,
+				Resources/Profanity/pl.txt,
+				Resources/Profanity/pt.txt,
+				Resources/Profanity/ru.txt,
+				Resources/Profanity/sv.txt,
+				Resources/Profanity/th.txt,
+				Resources/Profanity/tr.txt,
+				Resources/Profanity/uk.txt,
+				Resources/Profanity/zh.txt,
 			);
 			target = F29C84DF2F6820750073B1A9 /* Keyframeless X FCP */;
 		};
@@ -111,6 +139,7 @@
 		F29C84BD2F68205E0073B1A9 = {
 			isa = PBXGroup;
 			children = (
+				F274D9392F6E7AC2001FE373 /* Profanity */,
 				F29C84C82F68205E0073B1A9 /* Keyframeless X */,
 				F29C84E12F6820750073B1A9 /* Keyframeless X FCP */,
 				F28BD22E2F68595000C5F6B7 /* Frameworks */,
@@ -231,6 +260,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F274D93A2F6E7AC2001FE373 /* Profanity in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
