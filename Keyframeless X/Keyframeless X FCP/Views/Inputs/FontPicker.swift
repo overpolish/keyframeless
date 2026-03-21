@@ -8,11 +8,25 @@ import Combine
 import KeyframelessKit
 import SwiftUI
 
+enum FontCache {
+	private static var cached: [FontFamily]?
+	private static let queue = DispatchQueue(label: "font-cache", qos: .userInitiated)
+
+	static func warmup() {
+		queue.async {
+			let families = FontFamily.all()
+			DispatchQueue.main.async { cached = families }
+		}
+	}
+
+	static var families: [FontFamily] {
+		cached ?? FontFamily.all()
+	}
+}
+
 struct FontPickerRow: View {
 	@Binding var selectedFont: String
 	@State private var isOpen = false
-
-	private static let fontFamilies: [FontFamily] = FontFamily.all()
 
 	private var displayName: String {
 		NSFont(name: selectedFont, size: 12)?.displayName ?? selectedFont
@@ -46,7 +60,7 @@ struct FontPickerRow: View {
 			.contentShape(RoundedRectangle(cornerRadius: KKRadiusMD))
 			.onTapGesture { isOpen.toggle() }
 			.popover(isPresented: $isOpen, arrowEdge: .top) {
-				FontListPopover(selectedFont: $selectedFont, fonts: Self.fontFamilies)
+				FontListPopover(selectedFont: $selectedFont, fonts: FontCache.families)
 					.background(PopoverBackgroundClearer())
 			}
 		}

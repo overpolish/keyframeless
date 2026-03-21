@@ -48,6 +48,7 @@ struct AppShell: View {
 		.blur(radius: audioModel.isDraggingToFCP ? 3 : 0)
 		.animation(.easeInOut(duration: 0.2), value: audioModel.isDraggingToFCP)
 		.background(Color(nsColor: .windowBackground()))
+		.onAppear { FontCache.warmup() }
 		.overlay {
 			if processingCoordinator.isProcessing {
 				ProcessingOverlay(
