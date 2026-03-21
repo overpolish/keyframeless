@@ -45,6 +45,8 @@ struct AppShell: View {
 		}
 		.padding([.horizontal, .bottom], KKPadding2XL)
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
+		.blur(radius: audioModel.isDraggingToFCP ? 3 : 0)
+		.animation(.easeInOut(duration: 0.2), value: audioModel.isDraggingToFCP)
 		.background(Color(nsColor: .windowBackground()))
 		.overlay {
 			if processingCoordinator.isProcessing {
