@@ -169,6 +169,7 @@ actor AudioTranscriber {
 				text
 				.replacingOccurrences(of: "...", with: "")
 				.replacingOccurrences(of: "…", with: "")
+				.replacingOccurrences(of: ">>", with: "")
 				.trimmingCharacters(in: .whitespacesAndNewlines)
 			guard !cleaned.isEmpty else { continue }
 
