@@ -58,6 +58,14 @@ class WhisperModelManager: ObservableObject {
 		didSet {
 			AudioSetupSettings.shared.selectedLanguage = selectedLanguage
 			AudioSetupSettings.shared.save()
+			if selectedLanguage == "en" { translateToEnglish = false }
+		}
+	}
+
+	@Published var translateToEnglish: Bool = false {
+		didSet {
+			AudioSetupSettings.shared.translateToEnglish = translateToEnglish
+			AudioSetupSettings.shared.save()
 		}
 	}
 
@@ -71,6 +79,7 @@ class WhisperModelManager: ObservableObject {
 	init() {
 		selectedModel = AudioSetupSettings.shared.selectedModel
 		selectedLanguage = AudioSetupSettings.shared.selectedLanguage
+		translateToEnglish = AudioSetupSettings.shared.translateToEnglish
 		hotWords = AudioSetupSettings.shared.hotWords
 		Task { await refreshDownloadedModels() }
 	}

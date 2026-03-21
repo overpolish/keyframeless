@@ -42,6 +42,7 @@ actor AudioTranscriber {
 		segments: [AudioPreparer.PreparedSegment],
 		modelVariant: String,
 		language: String?,
+		translateToEnglish: Bool,
 		hotWords: [String],
 		onProgress: @Sendable (Progress) -> Void
 	) async throws -> [ClipResult] {
@@ -70,6 +71,7 @@ actor AudioTranscriber {
 		let promptTokens = tokenize(hotWords: hotWords, using: kit)
 
 		let options = DecodingOptions(
+			task: translateToEnglish ? .translate : .transcribe,
 			language: language,
 			temperatureFallbackCount: 3,
 			skipSpecialTokens: true,
