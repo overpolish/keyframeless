@@ -24,6 +24,9 @@ struct AppShell: View {
 							model: audioModel,
 							whisperManager: whisperManager,
 							onProcess: { replaceAll in
+								if replaceAll {
+									audioModel.editSelectedClips = nil
+								}
 								withAnimation(.easeInOut(duration: 0.3)) {
 									processingCoordinator.isProcessing = true
 								}
