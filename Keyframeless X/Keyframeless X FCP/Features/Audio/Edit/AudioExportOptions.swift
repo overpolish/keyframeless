@@ -9,13 +9,21 @@ import SwiftUI
 
 struct AudioExportOptionsView: View {
 	@ObservedObject var model: AudioModel
+	@State private var initialTextStyle: TextStyleSettings?
+	@State private var initialCaptionStyle: CaptionStyleSettings?
+
+	private var hasChanges: Bool {
+		if let initialTextStyle, model.textStyle != initialTextStyle { return true }
+		if let initialCaptionStyle, model.captionStyle != initialCaptionStyle { return true }
+		return false
+	}
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: KKSpacingLG) {
 			ProjectSettingsHeader(model: model).padding(.bottom, KKPaddingMD)
 			GeometryReader { geo in
 				let halfWidth = (geo.size.width - KKSpacingXL) / 2
-				HStack(alignment: .top, spacing: KKSpacingXL) {
+				HStack(alignment: .bottom, spacing: KKSpacingXL) {
 					TextSettingsPanel(model: model)
 						.frame(width: halfWidth)
 					DimensionsPreview(model: model)
@@ -23,16 +31,92 @@ struct AudioExportOptionsView: View {
 				}
 			}
 			.frame(height: 100)
-			Divider().padding(.top, KKPaddingXL)
-			CaptionSettingsPanel(model: model)
+			HStack(spacing: KKSpacingLG) {
+				LabeledSlider(
+					label: "Max Words", value: $model.maxWordsPerLine, range: 1...10,
+					step: 1, valueWidth: 16
+				).padding(.trailing, KKSpacingMD)
+				HStack(spacing: KKSpacingLG) {
+					PillToggle(
+						selection: $model.captionLines,
+						options: [
+							(label: "One", value: AudioModel.CaptionLineCount.one),
+							(label: "Two", value: AudioModel.CaptionLineCount.two),
+						]
+					)
+					Text("Lines")
+						.font(.caption)
+						.foregroundStyle(.secondary)
+				}
+			}
+			HStack(alignment: .center, spacing: KKSpacingMD) {
+				CapsuleToggle(
+					isOn: $model.allCaps,
+					label: "ALL CAPS",
+					systemImage: "textformat"
+				)
+				CapsuleToggle(
+					isOn: $model.censorProfanity,
+					label: "Censor Profanity",
+					systemImage: "checkmark.circle.trianglebadge.exclamationmark.fill"
+				)
+				Divider().frame(height: 12).padding(.horizontal, KKPaddingMD)
+				CapsuleToggle(
+					isOn: $model.stripPunctuation,
+					label: "Strip Punctuation",
+					systemImage: "xmark.triangle.circle.square.fill"
+				)
+				CapsuleToggle(
+					isOn: $model.keepQuestionMarks,
+					label: "Keep",
+					systemImage: "questionmark",
+					disabled: !model.stripPunctuation
+				)
+			}.frame(maxWidth: .infinity)
+			HStack(spacing: KKSpacingLG) {
+				Button {
+					TextStyleDefaults.shared.save(model.textStyle)
+					CaptionStyleDefaults.shared.save(model.captionStyle)
+					initialTextStyle = model.textStyle
+					initialCaptionStyle = model.captionStyle
+				} label: {
+					Label("Make Default", systemImage: "star")
+						.font(.system(size: 10))
+						.padding(.horizontal, KKPaddingLG)
+						.padding(.vertical, KKSpacingSM)
+						.contentShape(Capsule())
+				}
+				.buttonStyle(.plain)
+				.foregroundStyle(Color(nsColor: .accent() ?? .blue))
+				Spacer()
+				if hasChanges {
+					Button {
+						model.textStyle = initialTextStyle ?? TextStyleDefaults.shared.settings
+						model.captionStyle =
+							initialCaptionStyle ?? CaptionStyleDefaults.shared.settings
+					} label: {
+						Label("Reset", systemImage: "arrow.uturn.backward")
+							.font(.system(size: 10))
+							.padding(.horizontal, KKPaddingLG)
+							.padding(.vertical, KKSpacingSM)
+							.contentShape(Capsule())
+					}
+					.buttonStyle(.plain)
+					.foregroundStyle(.secondary)
+				}
+			}
+			Divider()
 		}
 		.onAppear {
-			guard !model.exportSettingsInitialized else { return }
-			let format = model.projectFormat ?? .default
-			model.exportWidth = "\(format.width)"
-			model.exportHeight = "\(format.height)"
-			model.exportFramerate = Framerate.from(frameDuration: format.frameDuration)
-			model.exportSettingsInitialized = true
+			if !model.exportSettingsInitialized {
+				let format = model.projectFormat ?? .default
+				model.exportWidth = "\(format.width)"
+				model.exportHeight = "\(format.height)"
+				model.exportFramerate = Framerate.from(frameDuration: format.frameDuration)
+				model.exportSettingsInitialized = true
+			}
+			initialTextStyle = model.textStyle
+			initialCaptionStyle = model.captionStyle
 		}
 	}
 }
@@ -53,7 +137,7 @@ private struct ProjectSettingsHeader: View {
 	var body: some View {
 		HStack(spacing: KKSpacingSM) {
 			Text("Project Settings")
-				.font(.subheadline)
+				.font(.caption)
 				.foregroundStyle(.secondary)
 			Spacer()
 			if hasChanges {
@@ -78,25 +162,13 @@ private struct ProjectSettingsHeader: View {
 				.foregroundStyle(.secondary)
 			IntegerField(placeholder: "Height", text: $model.exportHeight, min: 60, max: 4320)
 				.frame(width: 60)
-			Picker("", selection: $model.exportFramerate) {
-				ForEach(Framerate.allCases) { rate in
-					Text(rate.label).tag(rate)
-				}
-			}
-			.labelsHidden()
-			.frame(width: 100)
+			FrameratePickerButton(selection: $model.exportFramerate)
 		}
 	}
 }
 
 private struct TextSettingsPanel: View {
 	@ObservedObject var model: AudioModel
-	@State private var initialStyle: TextStyleSettings?
-
-	private var hasChanges: Bool {
-		guard let initialStyle else { return false }
-		return model.textStyle != initialStyle
-	}
 
 	var body: some View {
 		VStack(spacing: KKSpacingLG) {
@@ -110,37 +182,6 @@ private struct TextSettingsPanel: View {
 			LabeledSlider(
 				label: "Y Position", value: $model.textYPosition, range: 0...100,
 				suffix: "%")
-			HStack(spacing: KKSpacingLG) {
-				Button {
-					TextStyleDefaults.shared.save(model.textStyle)
-					initialStyle = model.textStyle
-				} label: {
-					Label("Make Default", systemImage: "star")
-						.font(.system(size: 10))
-						.padding(.horizontal, KKPaddingLG)
-						.padding(.vertical, KKSpacingSM)
-						.contentShape(Capsule())
-				}
-				.buttonStyle(.plain)
-				.foregroundStyle(Color(nsColor: .accent() ?? .blue))
-				Spacer()
-				if hasChanges {
-					Button {
-						model.textStyle = initialStyle ?? TextStyleDefaults.shared.settings
-					} label: {
-						Label("Reset", systemImage: "arrow.uturn.backward")
-							.font(.system(size: 10))
-							.padding(.horizontal, KKPaddingLG)
-							.padding(.vertical, KKSpacingSM)
-							.contentShape(Capsule())
-					}
-					.buttonStyle(.plain)
-					.foregroundStyle(.secondary)
-				}
-			}
-		}
-		.onAppear {
-			initialStyle = model.textStyle
 		}
 	}
 }
@@ -227,53 +268,55 @@ private struct DimensionsPreview: View {
 	}
 }
 
-private struct CaptionSettingsPanel: View {
-	@ObservedObject var model: AudioModel
+struct FrameratePickerButton: View {
+	@Binding var selection: Framerate
+	@State private var isOpen = false
 
 	var body: some View {
-		VStack(alignment: .leading, spacing: KKSpacingLG) {
-			HStack(spacing: KKSpacingLG) {
-				LabeledSlider(
-					label: "Max Words", value: $model.maxWordsPerLine, range: 1...10,
-					step: 1, valueWidth: 16
-				).padding(.trailing, KKSpacingMD)
-				HStack(spacing: KKSpacingLG) {
-					PillToggle(
-						selection: $model.captionLines,
-						options: [
-							(label: "One", value: AudioModel.CaptionLineCount.one),
-							(label: "Two", value: AudioModel.CaptionLineCount.two),
-						]
+		let accent = Color(nsColor: .accent() ?? .blue)
+
+		HStack(spacing: KKSpacingSM) {
+			Text(selection.label)
+			Spacer()
+			Image(systemName: "chevron.up.chevron.down")
+				.font(.caption2)
+				.foregroundStyle(.secondary)
+		}
+		.frame(width: 80)
+		.padding(.horizontal, KKPaddingLG)
+		.padding(.vertical, KKPaddingXS)
+		.background(
+			Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: KKRadiusMD)
+		)
+		.overlay(
+			RoundedRectangle(cornerRadius: KKRadiusMD)
+				.strokeBorder(Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
+		)
+		.contentShape(Rectangle())
+		.onTapGesture { isOpen.toggle() }
+		.popover(isPresented: $isOpen, arrowEdge: .top) {
+			VStack(spacing: 0) {
+				ForEach(Framerate.allCases) { rate in
+					HStack {
+						Text(rate.label)
+							.font(.system(size: 12))
+						Spacer()
+					}
+					.padding(.horizontal, KKPaddingLG)
+					.padding(.vertical, KKSpacingMD)
+					.background(
+						RoundedRectangle(cornerRadius: KKRadiusMD)
+							.fill(selection == rate ? accent.opacity(0.12) : Color.clear)
 					)
-					Text("Lines")
-						.font(.caption)
-						.foregroundStyle(.secondary)
+					.contentShape(Rectangle())
+					.onTapGesture {
+						selection = rate
+						isOpen = false
+					}
 				}
 			}
-			HStack(alignment: .center, spacing: KKSpacingMD) {
-				CapsuleToggle(
-					isOn: $model.allCaps,
-					label: "ALL CAPS",
-					systemImage: "textformat"
-				)
-				CapsuleToggle(
-					isOn: $model.censorProfanity,
-					label: "Censor Profanity",
-					systemImage: "checkmark.circle.trianglebadge.exclamationmark.fill"
-				)
-				Divider().frame(height: 12).padding(.horizontal, KKPaddingMD)
-				CapsuleToggle(
-					isOn: $model.stripPunctuation,
-					label: "Strip Punctuation",
-					systemImage: "xmark.triangle.circle.square.fill"
-				)
-				CapsuleToggle(
-					isOn: $model.keepQuestionMarks,
-					label: "Keep",
-					systemImage: "questionmark",
-					disabled: !model.stripPunctuation
-				)
-			}.frame(maxWidth: .infinity)
+			.padding(KKPaddingMD)
+			.background(PopoverBackgroundClearer())
 		}
 	}
 }

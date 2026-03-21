@@ -7,6 +7,44 @@ import AppKit
 import Combine
 import Foundation
 
+struct CaptionStyleSettings: Codable, Equatable {
+	var maxWordsPerLine: Double = 5
+	var captionLines: AudioModel.CaptionLineCount = .two
+	var allCaps: Bool = false
+	var censorProfanity: Bool = true
+	var stripPunctuation: Bool = true
+	var keepQuestionMarks: Bool = true
+}
+
+class CaptionStyleDefaults {
+	static let shared = CaptionStyleDefaults()
+	private(set) var settings = CaptionStyleSettings()
+
+	private var fileURL: URL? {
+		FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+			.first?
+			.appendingPathComponent("Keyframeless/caption_style_defaults.json")
+	}
+
+	private init() { load() }
+
+	func save(_ settings: CaptionStyleSettings) {
+		self.settings = settings
+		guard let url = fileURL else { return }
+		let dir = url.deletingLastPathComponent()
+		try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+		try? JSONEncoder().encode(settings).write(to: url, options: .atomic)
+	}
+
+	private func load() {
+		guard let url = fileURL,
+			let data = try? Data(contentsOf: url),
+			let saved = try? JSONDecoder().decode(CaptionStyleSettings.self, from: data)
+		else { return }
+		settings = saved
+	}
+}
+
 struct TextStyleSettings: Codable, Equatable {
 	var textWidthPercent: Double = 80
 	var textSize: Double = 100
@@ -63,12 +101,13 @@ class AudioModel: ObservableObject {
 	@Published var textYPosition: Double = TextStyleDefaults.shared.settings.textYPosition
 	@Published var textFont: String = TextStyleDefaults.shared.settings.textFont
 
-	@Published var maxWordsPerLine: Double = 5
-	@Published var captionLines: CaptionLineCount = .two
-	@Published var allCaps: Bool = false
-	@Published var censorProfanity: Bool = true
-	@Published var stripPunctuation: Bool = true
-	@Published var keepQuestionMarks: Bool = true
+	@Published var maxWordsPerLine: Double = CaptionStyleDefaults.shared.settings.maxWordsPerLine
+	@Published var captionLines: CaptionLineCount = CaptionStyleDefaults.shared.settings
+		.captionLines
+	@Published var allCaps: Bool = CaptionStyleDefaults.shared.settings.allCaps
+	@Published var censorProfanity: Bool = CaptionStyleDefaults.shared.settings.censorProfanity
+	@Published var stripPunctuation: Bool = CaptionStyleDefaults.shared.settings.stripPunctuation
+	@Published var keepQuestionMarks: Bool = CaptionStyleDefaults.shared.settings.keepQuestionMarks
 
 	enum CaptionLineCount: String, Codable {
 		case one, two
@@ -85,6 +124,23 @@ class AudioModel: ObservableObject {
 			textSize = newValue.textSize
 			textYPosition = newValue.textYPosition
 			textFont = newValue.textFont
+		}
+	}
+
+	var captionStyle: CaptionStyleSettings {
+		get {
+			CaptionStyleSettings(
+				maxWordsPerLine: maxWordsPerLine, captionLines: captionLines,
+				allCaps: allCaps, censorProfanity: censorProfanity,
+				stripPunctuation: stripPunctuation, keepQuestionMarks: keepQuestionMarks)
+		}
+		set {
+			maxWordsPerLine = newValue.maxWordsPerLine
+			captionLines = newValue.captionLines
+			allCaps = newValue.allCaps
+			censorProfanity = newValue.censorProfanity
+			stripPunctuation = newValue.stripPunctuation
+			keepQuestionMarks = newValue.keepQuestionMarks
 		}
 	}
 
