@@ -11,6 +11,7 @@ class AudioSetupSettings {
 
 	var selectedModel: String?
 	var selectedLanguage: String?
+	var translateToEnglish: Bool = false
 	var hotWords: [String] = []
 
 	private init() { load() }
@@ -18,6 +19,7 @@ class AudioSetupSettings {
 	private struct Persisted: Codable {
 		var selectedModel: String?
 		var selectedLanguage: String?
+		var translateToEnglish: Bool?
 		var hotWords: [String]?
 	}
 
@@ -34,6 +36,7 @@ class AudioSetupSettings {
 		else { return }
 		selectedModel = state.selectedModel
 		selectedLanguage = state.selectedLanguage
+		translateToEnglish = state.translateToEnglish ?? false
 		hotWords = state.hotWords ?? []
 	}
 
@@ -43,7 +46,8 @@ class AudioSetupSettings {
 		try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 		try? JSONEncoder().encode(
 			Persisted(
-				selectedModel: selectedModel, selectedLanguage: selectedLanguage, hotWords: hotWords
+				selectedModel: selectedModel, selectedLanguage: selectedLanguage,
+				translateToEnglish: translateToEnglish, hotWords: hotWords
 			)
 		).write(
 			to: url, options: .atomic)

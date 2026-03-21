@@ -31,11 +31,22 @@ struct WhisperLanguagePickerView: View {
 		}
 	}
 
+	private var isEnglish: Bool {
+		manager.selectedLanguage == "en"
+	}
+
 	var body: some View {
 		VStack(alignment: .leading, spacing: KKSpacingMD) {
-			Text("Language")
-				.font(.title3)
-				.foregroundStyle(.secondary)
+			HStack {
+				Text("Language")
+					.font(.title3)
+					.foregroundStyle(.secondary)
+				Spacer()
+				TranslateToggle(
+					isOn: $manager.translateToEnglish,
+					disabled: isEnglish
+				)
+			}
 
 			VStack(spacing: 0) {
 				TextField("Search", text: $search)
@@ -95,6 +106,41 @@ struct WhisperLanguagePickerView: View {
 					.strokeBorder(Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
 			)
 		}
+	}
+}
+
+private struct TranslateToggle: View {
+	@Binding var isOn: Bool
+	let disabled: Bool
+
+	var body: some View {
+		Button {
+			isOn.toggle()
+		} label: {
+			HStack(spacing: KKSpacingSM) {
+				Image(systemName: "translate")
+					.font(.system(size: 10))
+				Text("Translate to English")
+					.font(.system(size: 10, weight: .medium))
+			}
+			.padding(.horizontal, 8)
+			.padding(.vertical, 4)
+			.background(
+				Capsule().fill(
+					isOn ? Color(nsColor: .accent()).opacity(0.2) : Color.white.opacity(0.08)
+				)
+			)
+			.overlay(
+				Capsule().strokeBorder(
+					isOn ? Color(nsColor: .accent()).opacity(0.4) : Color.clear,
+					lineWidth: KKBorderWidthXS
+				)
+			)
+			.foregroundStyle(isOn ? .primary : .secondary)
+		}
+		.buttonStyle(.plain)
+		.disabled(disabled)
+		.opacity(disabled ? 0.4 : 1)
 	}
 }
 
