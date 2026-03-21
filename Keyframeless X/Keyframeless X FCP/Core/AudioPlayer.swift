@@ -29,8 +29,6 @@ final class AudioPlayer: ObservableObject {
 		startPlaying(clip: clip, index: index, from: clip.sourceStart)
 	}
 
-	private static let wordTimingLeadIn: Double = 0.15
-
 	func toggleRange(clip: FCPXMLParser.AudioClip, index: Int, from: Double, to: Double) {
 		stopWorkItem?.cancel()
 		stopWorkItem = nil
@@ -39,11 +37,10 @@ final class AudioPlayer: ObservableObject {
 			return
 		}
 		let clipEnd = clip.sourceStart + clip.sourceDuration
-		let adjustedFrom = max(clip.sourceStart, from - Self.wordTimingLeadIn)
 		let clampedTo = min(clipEnd, to)
-		startPlaying(clip: clip, index: index, from: adjustedFrom)
+		startPlaying(clip: clip, index: index, from: from)
 		stopWorkItem?.cancel()
-		scheduleStop(after: max(0, clampedTo - adjustedFrom))
+		scheduleStop(after: max(0, clampedTo - from))
 	}
 
 	func scrub(clip: FCPXMLParser.AudioClip, index: Int, progress: Double) {
