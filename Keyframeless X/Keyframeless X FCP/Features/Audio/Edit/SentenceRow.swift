@@ -21,7 +21,7 @@ struct SentenceRow: View {
 
 	var body: some View {
 		HStack(alignment: .top, spacing: KKSpacingMD) {
-			TimestampBadge(timestamp: row.timestamp)
+			InfoBadge(label: row.timestamp, monospaced: true)
 			sentenceContent
 			Spacer()
 			if row.editedWords != nil, let onReset {
@@ -72,7 +72,8 @@ struct SentenceRow: View {
 				words: row.words,
 				editedWords: row.editedWords,
 				currentTime: player.isPlaying(index: row.id)
-					? player.currentTime : nil
+					? player.currentTime : nil,
+				language: AudioSetupSettings.shared.selectedLanguage
 			)
 			.onTapGesture {
 				draft =
@@ -122,6 +123,14 @@ struct SentenceTextField: NSViewRepresentable {
 		field.stringValue = draft
 		DispatchQueue.main.async {
 			field.window?.makeFirstResponder(field)
+			if let editor = field.currentEditor() as? NSTextView,
+				let accent = NSColor.accent()
+			{
+				editor.insertionPointColor = accent
+				editor.selectedTextAttributes = [
+					.backgroundColor: accent.withAlphaComponent(0.3)
+				]
+			}
 		}
 		return field
 	}

@@ -11,6 +11,8 @@ struct WhisperLanguagePickerView: View {
 	@ObservedObject var manager: WhisperModelManager
 	@State private var search: String = ""
 
+	private static let profanityLanguages = ProfanityFilter.availableLanguages
+
 	private static let sortedLanguages: [(name: String, code: String)] = {
 		var seen = Set<String>()
 		return Constants.languages
@@ -53,7 +55,8 @@ struct WhisperLanguagePickerView: View {
 						LazyVStack(spacing: 0) {
 							LanguageRow(
 								name: "Auto-detect", code: nil,
-								selected: manager.selectedLanguage == nil
+								selected: manager.selectedLanguage == nil,
+								hasProfanityList: false
 							) {
 								manager.selectedLanguage = nil
 							}
@@ -61,7 +64,8 @@ struct WhisperLanguagePickerView: View {
 							ForEach(filtered, id: \.code) { lang in
 								LanguageRow(
 									name: lang.name, code: lang.code,
-									selected: manager.selectedLanguage == lang.code
+									selected: manager.selectedLanguage == lang.code,
+									hasProfanityList: Self.profanityLanguages.contains(lang.code)
 								) {
 									manager.selectedLanguage = lang.code
 								}
@@ -98,6 +102,7 @@ private struct LanguageRow: View {
 	let name: String
 	let code: String?
 	let selected: Bool
+	let hasProfanityList: Bool
 	let action: () -> Void
 
 	var body: some View {
@@ -110,11 +115,19 @@ private struct LanguageRow: View {
 			Text(name)
 				.font(.system(size: 12, weight: selected ? .medium : .regular))
 			Spacer()
+			if hasProfanityList {
+				InfoBadge(
+					label: "Profanity",
+					systemImage:
+						"checkmark.circle.trianglebadge.exclamationmark.fill",
+					color: Color(nsColor: .error())
+				)
+			}
 			if let code {
 				Text(code.uppercased())
-					.font(.system(size: 10))
+					.font(.system(size: 10).monospaced())
 					.foregroundStyle(.tertiary)
-					.monospacedDigit()
+					.frame(width: 24, alignment: .trailing)
 			}
 		}
 		.padding(.horizontal, KKPaddingLG)

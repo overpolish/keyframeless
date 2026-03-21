@@ -58,7 +58,11 @@ private struct WhisperModelRow: View {
 						.font(.system(size: 12, weight: isSelected ? .medium : .regular))
 						.foregroundStyle(isDownloaded ? .primary : .secondary)
 					if model.id == WhisperModelManager.recommendedModelId {
-						RecommendedBadge()
+						InfoBadge(
+							label: "Recommended",
+							systemImage: "desktopcomputer.and.macbook",
+							color: .green
+						)
 					}
 					Text(model.sizeDescription)
 						.font(.system(size: 10))
@@ -98,21 +102,6 @@ private struct WhisperModelRow: View {
 				}
 			}
 		}
-	}
-}
-
-private struct RecommendedBadge: View {
-	var body: some View {
-		HStack(spacing: 3) {
-			Image(systemName: "desktopcomputer.and.macbook")
-				.font(.system(size: 8))
-			Text("Recommended")
-				.font(.system(size: 9, weight: .medium))
-		}
-		.foregroundStyle(.green)
-		.padding(.horizontal, KKPaddingSM + 1)
-		.padding(.vertical, KKSpacingXS)
-		.background(Capsule().fill(Color.green.opacity(0.15)))
 	}
 }
 
