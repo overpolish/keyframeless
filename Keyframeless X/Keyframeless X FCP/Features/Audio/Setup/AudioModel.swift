@@ -63,6 +63,17 @@ class AudioModel: ObservableObject {
 	@Published var textYPosition: Double = TextStyleDefaults.shared.settings.textYPosition
 	@Published var textFont: String = TextStyleDefaults.shared.settings.textFont
 
+	@Published var maxWordsPerLine: Double = 5
+	@Published var captionLines: CaptionLineCount = .two
+	@Published var allCaps: Bool = false
+	@Published var censorProfanity: Bool = true
+	@Published var stripPunctuation: Bool = true
+	@Published var keepQuestionMarks: Bool = true
+
+	enum CaptionLineCount: String, Codable {
+		case one, two
+	}
+
 	var textStyle: TextStyleSettings {
 		get {
 			TextStyleSettings(
@@ -110,6 +121,12 @@ class AudioModel: ObservableObject {
 		var textSize: Double?
 		var textYPosition: Double?
 		var textFont: String?
+		var maxWordsPerLine: Double?
+		var captionLines: CaptionLineCount?
+		var allCaps: Bool?
+		var censorProfanity: Bool?
+		var stripPunctuation: Bool?
+		var keepQuestionMarks: Bool?
 	}
 
 	private static var fcpProcessID: Int32? {
@@ -144,6 +161,12 @@ class AudioModel: ObservableObject {
 		if let ts = state.textSize { textSize = ts }
 		if let ty = state.textYPosition { textYPosition = ty }
 		if let tf = state.textFont { textFont = tf }
+		if let mw = state.maxWordsPerLine { maxWordsPerLine = mw }
+		if let cl = state.captionLines { captionLines = cl }
+		if let ac = state.allCaps { allCaps = ac }
+		if let cp = state.censorProfanity { censorProfanity = cp }
+		if let sp = state.stripPunctuation { stripPunctuation = sp }
+		if let kq = state.keepQuestionMarks { keepQuestionMarks = kq }
 		if state.exportWidth != nil { exportSettingsInitialized = true }
 	}
 
@@ -165,7 +188,13 @@ class AudioModel: ObservableObject {
 			textWidthPercent: textWidthPercent,
 			textSize: textSize,
 			textYPosition: textYPosition,
-			textFont: textFont
+			textFont: textFont,
+			maxWordsPerLine: maxWordsPerLine,
+			captionLines: captionLines,
+			allCaps: allCaps,
+			censorProfanity: censorProfanity,
+			stripPunctuation: stripPunctuation,
+			keepQuestionMarks: keepQuestionMarks
 		)
 		try? JSONEncoder().encode(state).write(to: url, options: .atomic)
 	}

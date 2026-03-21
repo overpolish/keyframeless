@@ -114,33 +114,12 @@ private struct TranslateToggle: View {
 	let disabled: Bool
 
 	var body: some View {
-		Button {
-			isOn.toggle()
-		} label: {
-			HStack(spacing: KKSpacingSM) {
-				Image(systemName: "translate")
-					.font(.system(size: 10))
-				Text("Translate to English")
-					.font(.system(size: 10, weight: .medium))
-			}
-			.padding(.horizontal, 8)
-			.padding(.vertical, 4)
-			.background(
-				Capsule().fill(
-					isOn ? Color(nsColor: .accent()).opacity(0.2) : Color.white.opacity(0.08)
-				)
-			)
-			.overlay(
-				Capsule().strokeBorder(
-					isOn ? Color(nsColor: .accent()).opacity(0.4) : Color.clear,
-					lineWidth: KKBorderWidthXS
-				)
-			)
-			.foregroundStyle(isOn ? .primary : .secondary)
-		}
-		.buttonStyle(.plain)
-		.disabled(disabled)
-		.opacity(disabled ? 0.4 : 1)
+		CapsuleToggle(
+			isOn: $isOn,
+			label: "Translate to English",
+			systemImage: "translate",
+			disabled: disabled
+		)
 	}
 }
 
