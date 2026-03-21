@@ -39,15 +39,12 @@ struct HighlightedSentence: View {
 		return result
 	}
 
-	private static let highlightDelay: Double = 0.3
-
 	private func attributedString(currentTime: Double) -> AttributedString {
-		let adjusted = currentTime - Self.highlightDelay
 		var result = AttributedString()
 		for (i, word) in displayWords.enumerated() {
 			let trimmed = word.word.trimmingCharacters(in: .whitespaces)
 			var part = AttributedString(i > 0 ? " \(trimmed)" : trimmed)
-			let isActive = adjusted >= Double(word.start) && adjusted < Double(word.end)
+			let isActive = currentTime >= Double(word.start) && currentTime < Double(word.end)
 			if ProfanityFilter.isProfane(trimmed, language: language) {
 				part.foregroundColor = Color(nsColor: .error())
 				if isActive {
