@@ -39,13 +39,11 @@ struct AudioEditView: View {
 			rows = AudioEditRowBuilder.buildRows(
 				clips: model.audioClips, format: model.projectFormat)
 			clickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
-				if editingRowID != nil {
-					let location = event.locationInWindow
-					if let contentView = event.window?.contentView {
-						let hitView = contentView.hitTest(location)
-						if !(hitView is NSTextField || hitView is NSTextView) {
-							event.window?.makeFirstResponder(nil)
-						}
+				let location = event.locationInWindow
+				if let contentView = event.window?.contentView {
+					let hitView = contentView.hitTest(location)
+					if !(hitView is NSTextField || hitView is NSTextView) {
+						event.window?.makeFirstResponder(nil)
 					}
 				}
 				return event
@@ -104,121 +102,144 @@ struct AudioEditView: View {
 				.padding(.trailing, KKPaddingSM)
 				.alignmentGuide(.bottom) { d in d[.top] - KKSpacingMD }
 			}
+		}
+	}
+
+	private var transcriptionList: some View {
+		VStack(alignment: .leading, spacing: KKSpacingLG) {
 			ClipCountDisplay(
 				selectedCount: model.editSelectedClips?.count ?? 0,
 				totalCount: transcribedIndices.count,
 				emptyLabel: "No Transcriptions Found",
 				selectedLabel: "Transcriptions Selected"
 			)
-			.padding(.top, KKSpacingMD)
-		}
-	}
-
-	private var transcriptionList: some View {
-		VStack(alignment: .leading, spacing: KKSpacingLG) {
-			ScrollShadowView {
-				ScrollViewReader { proxy in
+			HStack(alignment: .top, spacing: KKSpacingLG) {
+				VStack(alignment: .leading, spacing: KKSpacingLG) {
 					if transcribedClipGroups.isEmpty {
 						EmptyTranscriptionPlaceholder()
+							.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD + 4))
+							.background(
+								RoundedRectangle(cornerRadius: KKRadiusMD + 4)
+									.fill(Color.white.opacity(0.04))
+							)
+							.overlay(
+								RoundedRectangle(cornerRadius: KKRadiusMD + 4)
+									.strokeBorder(
+										Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
+							)
 					} else {
-						VStack(alignment: .leading, spacing: 0) {
-							ForEach(transcribedClipGroups, id: \.clipIndex) { group in
-								TranscribedClipSection(
-									group: group,
-									clips: model.audioClips,
-									selectedClips: editSelectedClips,
-									hoveredClipIndex: $hoveredClipIndex,
-									player: player,
-									editingRowID: $editingRowID,
-									sentenceRowIDs: sentenceRowIDs,
-									onSentenceEdit: { rowID, editedWords in
-										if let idx = rows.firstIndex(where: { $0.id == rowID }) {
-											rows[idx].editedWords = editedWords
+						ScrollShadowView {
+							ScrollViewReader { proxy in
+								VStack(alignment: .leading, spacing: 0) {
+									ForEach(transcribedClipGroups, id: \.clipIndex) { group in
+										TranscribedClipSection(
+											group: group,
+											clips: model.audioClips,
+											selectedClips: editSelectedClips,
+											hoveredClipIndex: $hoveredClipIndex,
+											player: player,
+											editingRowID: $editingRowID,
+											sentenceRowIDs: sentenceRowIDs,
+											onSentenceEdit: { rowID, editedWords in
+												if let idx = rows.firstIndex(where: {
+													$0.id == rowID
+												}) {
+													rows[idx].editedWords = editedWords
+												}
+											}
+										)
+									}
+								}
+								.padding(KKPaddingMD)
+								Color.clear
+									.frame(height: 0)
+									.onChange(of: editingRowID) {
+										guard let id = editingRowID,
+											let frame = rowFrames[id]
+										else { return }
+										let isAbove = frame.minY < 0
+										let isBelow = frame.maxY > viewportHeight
+										if isAbove || isBelow {
+											withAnimation {
+												proxy.scrollTo(id, anchor: .center)
+											}
 										}
 									}
-								)
 							}
 						}
-						.padding(KKPaddingMD)
+						.coordinateSpace(name: "editScroll")
+						.onPreferenceChange(RowFrameKey.self) { rowFrames = $0 }
+						.background(
+							GeometryReader { geo in
+								Color.clear.onAppear { viewportHeight = geo.size.height }
+									.onChange(of: geo.size.height) {
+										viewportHeight = geo.size.height
+									}
+							}
+						)
+						.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD + 4))
+						.background(
+							RoundedRectangle(cornerRadius: KKRadiusMD + 4)
+								.fill(Color.white.opacity(0.04))
+						)
+						.overlay(
+							RoundedRectangle(cornerRadius: KKRadiusMD + 4)
+								.strokeBorder(
+									Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
+						)
 					}
-					Color.clear
-						.frame(height: 0)
-						.onChange(of: editingRowID) {
-							guard let id = editingRowID,
-								let frame = rowFrames[id]
-							else { return }
-							let isAbove = frame.minY < 0
-							let isBelow = frame.maxY > viewportHeight
-							if isAbove || isBelow {
-								withAnimation {
-									proxy.scrollTo(id, anchor: .center)
+
+					if !untranscribedRows.isEmpty {
+						HStack {
+							Text("Untranscribed Clips")
+								.font(.title3)
+								.foregroundStyle(.secondary)
+							Spacer()
+							Button {
+								model.selectedClips = Set(untranscribedRows.map(\.clipIndex))
+								model.stage = .setup
+							} label: {
+								Text("Transcribe All")
+									.font(.system(size: 11))
+							}
+							.buttonStyle(.plain)
+							.foregroundStyle(Color(nsColor: .accent() ?? .blue))
+						}
+						ScrollShadowView {
+							LazyVStack(alignment: .leading, spacing: 0) {
+								ForEach(untranscribedRows) { row in
+									UntranscribedClipRow(
+										clipName: row.clipName,
+										clipIndex: row.clipIndex,
+										isCompound: row.isCompound,
+										isHighlighted: hoveredClipIndex == row.clipIndex,
+										hoveredClipIndex: $hoveredClipIndex
+									) {
+										model.selectedClips = [row.clipIndex]
+										model.stage = .setup
+									}
 								}
 							}
+							.padding(KKPaddingMD)
 						}
+						.frame(maxHeight: 100, alignment: .top)
+						.fixedSize(horizontal: false, vertical: true)
+						.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD + 4))
+						.background(
+							RoundedRectangle(cornerRadius: KKRadiusMD + 4)
+								.fill(Color.white.opacity(0.04))
+						)
+						.overlay(
+							RoundedRectangle(cornerRadius: KKRadiusMD + 4)
+								.strokeBorder(
+									Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
+						)
+					}
 				}
-			}
-			.coordinateSpace(name: "editScroll")
-			.onPreferenceChange(RowFrameKey.self) { rowFrames = $0 }
-			.background(
-				GeometryReader { geo in
-					Color.clear.onAppear { viewportHeight = geo.size.height }
-						.onChange(of: geo.size.height) { viewportHeight = geo.size.height }
-				}
-			)
-			.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD + 4))
-			.background(
-				RoundedRectangle(cornerRadius: KKRadiusMD + 4)
-					.fill(Color.white.opacity(0.04))
-			)
-			.overlay(
-				RoundedRectangle(cornerRadius: KKRadiusMD + 4)
-					.strokeBorder(Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
-			)
+				.frame(maxWidth: .infinity, maxHeight: .infinity)
 
-			if !untranscribedRows.isEmpty {
-				HStack {
-					Text("Untranscribed Clips")
-						.font(.title3)
-						.foregroundStyle(.secondary)
-					Spacer()
-					Button {
-						model.selectedClips = Set(untranscribedRows.map(\.clipIndex))
-						model.stage = .setup
-					} label: {
-						Text("Transcribe All")
-							.font(.system(size: 11))
-					}
-					.buttonStyle(.plain)
-					.foregroundStyle(Color(nsColor: .accent() ?? .blue))
-				}
-				ScrollShadowView {
-					LazyVStack(alignment: .leading, spacing: 0) {
-						ForEach(untranscribedRows) { row in
-							UntranscribedClipRow(
-								clipName: row.clipName,
-								clipIndex: row.clipIndex,
-								isCompound: row.isCompound,
-								isHighlighted: hoveredClipIndex == row.clipIndex,
-								hoveredClipIndex: $hoveredClipIndex
-							) {
-								model.selectedClips = [row.clipIndex]
-								model.stage = .setup
-							}
-						}
-					}
-					.padding(KKPaddingMD)
-				}
-				.frame(maxHeight: 100, alignment: .top)
-				.fixedSize(horizontal: false, vertical: true)
-				.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD + 4))
-				.background(
-					RoundedRectangle(cornerRadius: KKRadiusMD + 4)
-						.fill(Color.white.opacity(0.04))
-				)
-				.overlay(
-					RoundedRectangle(cornerRadius: KKRadiusMD + 4)
-						.strokeBorder(Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
-				)
+				AudioExportOptionsSidebar(model: model)
+					.frame(maxWidth: .infinity, maxHeight: .infinity)
 			}
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -277,7 +298,7 @@ private struct EmptyTranscriptionPlaceholder: View {
 				.font(.subheadline)
 				.foregroundStyle(.tertiary)
 		}
-		.frame(maxWidth: .infinity, maxHeight: .infinity)
+		.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
 		.padding(KKPaddingLG)
 	}
 }

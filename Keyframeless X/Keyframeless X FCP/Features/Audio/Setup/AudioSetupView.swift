@@ -82,6 +82,10 @@ struct AudioSetupView: View {
 		model.dropItems = FCPXMLParser.topLevelItems(in: doc)
 		let fmt = FCPXMLParser.projectFormat(in: doc) ?? .default
 		model.projectFormat = fmt
+		model.exportWidth = "\(fmt.width)"
+		model.exportHeight = "\(fmt.height)"
+		model.exportFramerate = Framerate.from(frameDuration: fmt.frameDuration)
+		model.exportSettingsInitialized = true
 		model.useTimecode = !fmt.fpsDisplay.isEmpty
 		dropState = .dropped
 		isTargeted = false
