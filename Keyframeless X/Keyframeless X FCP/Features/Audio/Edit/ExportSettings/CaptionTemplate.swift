@@ -10,7 +10,9 @@ struct CaptionTemplate: Identifiable, Equatable, Codable {
 	let id: String
 	let name: String
 	let uid: String
-	let supportsAnimateOn: Bool
+	let supportsPerWordAnimation: Bool
+	let wordsInParamName: String?
+	let wordsInKeyPath: String?
 	let isBuiltIn: Bool
 	let isCustom: Bool
 	var thumbnailPath: String?
@@ -20,7 +22,9 @@ struct CaptionTemplate: Identifiable, Equatable, Codable {
 		id: "basic-title",
 		name: "Basic Title",
 		uid: ".../Titles.localized/Bumper:Opener.localized/Basic Title.localized/Basic Title.moti",
-		supportsAnimateOn: false,
+		supportsPerWordAnimation: false,
+		wordsInParamName: nil,
+		wordsInKeyPath: nil,
 		isBuiltIn: true,
 		isCustom: false,
 		thumbnailPath: nil,
@@ -79,7 +83,7 @@ struct CaptionTemplate: Identifiable, Equatable, Codable {
 			thumbnailPath = nil
 		}
 
-		let supportsAnimateOn = CaptionTemplateScanner.checkAnimateOnSupport(motiFile: url)
+		let perWord = CaptionTemplateScanner.checkPerWordSupport(motiFile: url)
 
 		let standardPath = (url.standardizedFileURL.path as NSString).resolvingSymlinksInPath
 		let motionTemplatesBase =
@@ -98,7 +102,9 @@ struct CaptionTemplate: Identifiable, Equatable, Codable {
 			id: "custom:\(url.path)",
 			name: name,
 			uid: uid,
-			supportsAnimateOn: supportsAnimateOn,
+			supportsPerWordAnimation: perWord != nil,
+			wordsInParamName: perWord?.name,
+			wordsInKeyPath: perWord?.keyPath,
 			isBuiltIn: false,
 			isCustom: true,
 			thumbnailPath: thumbnailPath
@@ -182,14 +188,16 @@ enum CaptionTemplateScanner {
 					thumbnailPath = nil
 				}
 
-				let supportsAnimateOn = checkAnimateOnSupport(motiFile: motiFile)
+				let perWord = checkPerWordSupport(motiFile: motiFile)
 
 				templates.append(
 					CaptionTemplate(
 						id: uid,
 						name: name,
 						uid: uid,
-						supportsAnimateOn: supportsAnimateOn,
+						supportsPerWordAnimation: perWord != nil,
+						wordsInParamName: perWord?.name,
+						wordsInKeyPath: perWord?.keyPath,
 						isBuiltIn: false,
 						isCustom: false,
 						thumbnailPath: thumbnailPath
@@ -214,10 +222,36 @@ enum CaptionTemplateScanner {
 		return templates
 	}
 
-	static func checkAnimateOnSupport(motiFile: URL) -> Bool {
+	struct PerWordInfo {
+		let name: String
+		let keyPath: String
+	}
+
+	static func checkPerWordSupport(motiFile: URL) -> PerWordInfo? {
 		guard let data = try? Data(contentsOf: motiFile, options: .mappedIfSafe),
 			let content = String(data: data, encoding: .utf8)
-		else { return false }
-		return content.contains("Animate On")
+		else { return nil }
+
+		guard let pubStart = content.range(of: "<publishSettings>"),
+			let pubEnd = content.range(of: "</publishSettings>")
+		else { return nil }
+
+		let publishBlock = content[pubStart.lowerBound..<pubEnd.upperBound]
+		let knownNames = ["Animate On", "Words In"]
+		for paramName in knownNames {
+			guard publishBlock.contains("name=\"\(paramName)\"") else { continue }
+			let pattern =
+				"object=\"(\\d+)\"\\s+channel=\"([^\"]+)\"\\s+name=\"\(NSRegularExpression.escapedPattern(for: paramName))\""
+			guard let regex = try? NSRegularExpression(pattern: pattern),
+				let match = regex.firstMatch(
+					in: String(publishBlock),
+					range: NSRange(publishBlock.startIndex..., in: publishBlock))
+			else { continue }
+			let objID = (publishBlock as NSString).substring(with: match.range(at: 1))
+			let channel = (publishBlock as NSString).substring(with: match.range(at: 2))
+			let keyPath = "9999/1825766846/100/\(objID)/\(channel)"
+			return PerWordInfo(name: paramName, keyPath: keyPath)
+		}
+		return nil
 	}
 }

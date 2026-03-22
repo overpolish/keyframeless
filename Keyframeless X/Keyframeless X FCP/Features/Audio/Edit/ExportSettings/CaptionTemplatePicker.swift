@@ -63,6 +63,7 @@ struct CaptionTemplatePicker: View {
 	@State private var isDropTargeted = false
 	@State private var searchText = ""
 	@State private var showFavoritesOnly = false
+	@State private var showPerWordOnly = false
 
 	private func sorted(_ list: [CaptionTemplate]) -> [CaptionTemplate] {
 		list.sorted { a, b in
@@ -77,6 +78,9 @@ struct CaptionTemplatePicker: View {
 		var result = list
 		if showFavoritesOnly {
 			result = result.filter { favorites.contains($0.id) }
+		}
+		if showPerWordOnly {
+			result = result.filter { $0.supportsPerWordAnimation }
 		}
 		if !searchText.isEmpty {
 			result = result.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
@@ -125,9 +129,26 @@ struct CaptionTemplatePicker: View {
 								? Color(nsColor: .warning())
 								: .secondary
 						)
+						.frame(maxHeight: .infinity)
+						.contentShape(Rectangle())
+				}
+				.buttonStyle(.plain)
+				Button {
+					showPerWordOnly.toggle()
+				} label: {
+					Image(systemName: "directcurrent")
+						.font(.system(size: 11))
+						.foregroundStyle(
+							showPerWordOnly
+								? .green
+								: .secondary
+						)
+						.frame(maxHeight: .infinity)
+						.contentShape(Rectangle())
 				}
 				.buttonStyle(.plain)
 			}
+			.fixedSize(horizontal: false, vertical: true)
 			ScrollShadowView(cornerRadius: KKRadiusSM) {
 				VStack(alignment: .leading, spacing: KKSpacingLG) {
 					TemplateSection(title: "Keyframeless") {
@@ -269,7 +290,7 @@ struct CaptionTemplateCard: View {
 						.font(.system(size: 20))
 						.foregroundStyle(.secondary)
 				}
-				VStack {
+				VStack(spacing: 0) {
 					HStack {
 						if isHovered, let onRemove {
 							Button {
@@ -302,6 +323,16 @@ struct CaptionTemplateCard: View {
 					Spacer()
 				}
 			}
+			.overlay(alignment: .top) {
+				if template.supportsPerWordAnimation {
+					InfoBadge(
+						label: "Per word",
+						systemImage: "directcurrent",
+						color: .green
+					)
+					.padding(KKPaddingMD)
+				}
+			}
 			.overlay(alignment: .bottom) {
 				if isHovered && gifURL != nil {
 					GeometryReader { geo in
@@ -332,17 +363,10 @@ struct CaptionTemplateCard: View {
 					)
 			)
 
-			VStack(spacing: 0) {
-				Text(template.name)
-					.font(.system(size: 9))
-					.foregroundStyle(isSelected ? .primary : .secondary)
-					.lineLimit(1)
-				if !template.isBuiltIn && !template.supportsAnimateOn {
-					Text("No animation")
-						.font(.system(size: 8))
-						.foregroundStyle(Color(nsColor: .warning() ?? .yellow).opacity(0.8))
-				}
-			}
+			Text(template.name)
+				.font(.system(size: 9))
+				.foregroundStyle(isSelected ? .primary : .secondary)
+				.lineLimit(1)
 		}
 		.onHover { hovering in
 			isHovered = hovering
