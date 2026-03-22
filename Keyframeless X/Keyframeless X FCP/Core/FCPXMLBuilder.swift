@@ -49,11 +49,14 @@ enum FCPXMLBuilder {
 		}
 
 		let lastEnd = segments.map(\.endTime).max() ?? 0
-		let totalDuration = rationalTime(lastEnd, frameDuration: format.frameDuration)
+		let fd = format.frameDuration
+		let frameRate = parseFrameDuration(fd)
+		let totalDuration = rationalTime(seconds: lastEnd, frameRate: frameRate)
 		let fontSize = max(10, Int(textStyle.textSize))
 		let yPosition = textYOffset(percent: textStyle.textYPosition)
-		let fd = format.frameDuration
 		let font = fontInfo(postScriptName: textStyle.textFont)
+		let escapedFamily = xmlEscape(font.familyName)
+		let escapedFace = xmlEscape(font.faceName)
 
 		var clipGroups: [(clipIndex: Int, clipName: String, segments: [CaptionSegment])] = []
 		for segment in segments {
@@ -65,7 +68,25 @@ enum FCPXMLBuilder {
 			}
 		}
 
-		var spineElements: [String] = []
+		var xml = ""
+		let estimatedSize = segments.count * 512 + 512
+		xml.reserveCapacity(estimatedSize)
+
+		xml += "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+		xml +=
+			"<!DOCTYPE fcpxml SYSTEM \"https://raw.githubusercontent.com/CommandPost/CommandPost/refs/heads/develop/src/extensions/cp/apple/fcpxml/dtd/FCPXMLv1_14.dtd\">\n"
+		xml += "<fcpxml version=\"1.14\">\n"
+		xml += "\t<resources>\n"
+		xml +=
+			"\t\t<format id=\"r1\" frameDuration=\"\(fd)\" width=\"\(format.width)\" height=\"\(format.height)\" colorSpace=\"1-1-1 (Rec. 709)\" />\n"
+		xml += "\t\t<effect id=\"r2\" name=\"Basic Title\"\n"
+		xml +=
+			"\t\t\tuid=\".../Titles.localized/Bumper:Opener.localized/Basic Title.localized/Basic Title.moti\" />\n"
+		xml += "\t\t<media id=\"r3\" name=\"Captions\">\n"
+		xml += "\t\t\t<sequence format=\"r1\" duration=\"\(totalDuration)\">\n"
+		xml += "\t\t\t\t<spine>\n"
+		xml += "\t\t\t\t\t<gap duration=\"\(totalDuration)\">\n"
+
 		var tsCounter = 0
 
 		for (laneIndex, group) in clipGroups.enumerated() {
@@ -73,67 +94,50 @@ enum FCPXMLBuilder {
 			let sorted = group.segments.sorted { $0.startTime < $1.startTime }
 			guard let first = sorted.first else { continue }
 
-			let spineOffset = rationalTime(first.startTime, frameDuration: fd)
-			var elements: [String] = []
+			let spineOffset = rationalTime(seconds: first.startTime, frameRate: frameRate)
+			xml += "\t\t\t\t\t\t\t<spine lane=\"\(lane)\" offset=\"\(spineOffset)\">\n"
+
 			var cursor = first.startTime
 
 			for segment in sorted {
 				let gapDuration = segment.startTime - cursor
 				if gapDuration > 0.001 {
-					elements.append(
-						"\t\t\t\t\t\t\t\t<gap duration=\"\(rationalTime(gapDuration, frameDuration: fd))\" />"
-					)
+					xml +=
+						"\t\t\t\t\t\t\t\t<gap duration=\"\(rationalTime(seconds: gapDuration, frameRate: frameRate))\" />\n"
 				}
 
 				tsCounter += 1
 				let tsID = "ts\(tsCounter)"
 				let segDuration = segment.endTime - segment.startTime
-				elements.append(
-					"\t\t\t\t\t\t\t\t<title ref=\"r2\" duration=\"\(rationalTime(segDuration, frameDuration: fd))\" name=\"\(xmlEscape(segment.lines.first ?? ""))\">\n"
-						+ "\t\t\t\t\t\t\t\t\t<param name=\"Font\" key=\"9999/999166631/999166633/5/999166635/83\" value=\"\(font.paramValue)\" />\n"
-						+ "\t\t\t\t\t\t\t\t\t<param name=\"Size\" key=\"9999/999166631/999166633/5/999166635/3\" value=\"\(fontSize)\" />\n"
-						+ "\t\t\t\t\t\t\t\t\t<text>\n"
-						+ "\t\t\t\t\t\t\t\t\t\t<text-style ref=\"\(tsID)\">\(xmlEscape(segment.text))</text-style>\n"
-						+ "\t\t\t\t\t\t\t\t\t</text>\n"
-						+ "\t\t\t\t\t\t\t\t\t<text-style-def id=\"\(tsID)\">\n"
-						+ "\t\t\t\t\t\t\t\t\t\t<text-style font=\"\(xmlEscape(font.familyName))\" fontSize=\"\(fontSize)\" fontFace=\"\(xmlEscape(font.faceName))\" fontColor=\"1 1 1 1\" alignment=\"center\" />\n"
-						+ "\t\t\t\t\t\t\t\t\t</text-style-def>\n"
-						+ "\t\t\t\t\t\t\t\t\t<adjust-transform position=\"0 \(yPosition)\" />\n"
-						+ "\t\t\t\t\t\t\t\t</title>"
-				)
+				xml +=
+					"\t\t\t\t\t\t\t\t<title ref=\"r2\" duration=\"\(rationalTime(seconds: segDuration, frameRate: frameRate))\" name=\"\(xmlEscape(segment.lines.first ?? ""))\">\n"
+				xml +=
+					"\t\t\t\t\t\t\t\t\t<param name=\"Font\" key=\"9999/999166631/999166633/5/999166635/83\" value=\"\(font.paramValue)\" />\n"
+				xml +=
+					"\t\t\t\t\t\t\t\t\t<param name=\"Size\" key=\"9999/999166631/999166633/5/999166635/3\" value=\"\(fontSize)\" />\n"
+				xml += "\t\t\t\t\t\t\t\t\t<text>\n"
+				xml +=
+					"\t\t\t\t\t\t\t\t\t\t<text-style ref=\"\(tsID)\">\(xmlEscape(segment.text))</text-style>\n"
+				xml += "\t\t\t\t\t\t\t\t\t</text>\n"
+				xml += "\t\t\t\t\t\t\t\t\t<text-style-def id=\"\(tsID)\">\n"
+				xml +=
+					"\t\t\t\t\t\t\t\t\t\t<text-style font=\"\(escapedFamily)\" fontSize=\"\(fontSize)\" fontFace=\"\(escapedFace)\" fontColor=\"1 1 1 1\" alignment=\"center\" />\n"
+				xml += "\t\t\t\t\t\t\t\t\t</text-style-def>\n"
+				xml += "\t\t\t\t\t\t\t\t\t<adjust-transform position=\"0 \(yPosition)\" />\n"
+				xml += "\t\t\t\t\t\t\t\t</title>\n"
 				cursor = segment.endTime
 			}
 
-			let childrenXML = elements.joined(separator: "\n")
-			spineElements.append(
-				"\t\t\t\t\t\t\t<spine lane=\"\(lane)\" offset=\"\(spineOffset)\">\n"
-					+ childrenXML + "\n"
-					+ "\t\t\t\t\t\t\t</spine>"
-			)
+			xml += "\t\t\t\t\t\t\t</spine>\n"
 		}
 
-		let spinesXML = spineElements.joined(separator: "\n")
-
-		let xml =
-			"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-			+ "<!DOCTYPE fcpxml SYSTEM \"https://raw.githubusercontent.com/CommandPost/CommandPost/refs/heads/develop/src/extensions/cp/apple/fcpxml/dtd/FCPXMLv1_14.dtd\">\n"
-			+ "<fcpxml version=\"1.14\">\n"
-			+ "\t<resources>\n"
-			+ "\t\t<format id=\"r1\" frameDuration=\"\(fd)\" width=\"\(format.width)\" height=\"\(format.height)\" colorSpace=\"1-1-1 (Rec. 709)\" />\n"
-			+ "\t\t<effect id=\"r2\" name=\"Basic Title\"\n"
-			+ "\t\t\tuid=\".../Titles.localized/Bumper:Opener.localized/Basic Title.localized/Basic Title.moti\" />\n"
-			+ "\t\t<media id=\"r3\" name=\"Captions\">\n"
-			+ "\t\t\t<sequence format=\"r1\" duration=\"\(totalDuration)\">\n"
-			+ "\t\t\t\t<spine>\n"
-			+ "\t\t\t\t\t<gap duration=\"\(totalDuration)\">\n"
-			+ spinesXML + "\n"
-			+ "\t\t\t\t\t</gap>\n"
-			+ "\t\t\t\t</spine>\n"
-			+ "\t\t\t</sequence>\n"
-			+ "\t\t</media>\n"
-			+ "\t</resources>\n"
-			+ "\t<ref-clip ref=\"r3\" duration=\"\(totalDuration)\" />\n"
-			+ "</fcpxml>"
+		xml += "\t\t\t\t\t</gap>\n"
+		xml += "\t\t\t\t</spine>\n"
+		xml += "\t\t\t</sequence>\n"
+		xml += "\t\t</media>\n"
+		xml += "\t</resources>\n"
+		xml += "\t<ref-clip ref=\"r3\" duration=\"\(totalDuration)\" />\n"
+		xml += "</fcpxml>"
 		return xml
 	}
 
@@ -147,16 +151,25 @@ enum FCPXMLBuilder {
 			+ "</fcpxml>"
 	}
 
-	private static func rationalTime(_ seconds: Double, frameDuration: String) -> String {
+	struct FrameRate {
+		let numerator: Int
+		let denominator: Int
+	}
+
+	private static func parseFrameDuration(_ frameDuration: String) -> FrameRate {
 		let raw = frameDuration.hasSuffix("s") ? String(frameDuration.dropLast()) : frameDuration
 		guard let slash = raw.firstIndex(of: "/") else {
-			return "\(Int(round(seconds)))s"
+			return FrameRate(numerator: 1, denominator: 1)
 		}
 		let num = Int(Double(raw[raw.startIndex..<slash]) ?? 1)
 		let den = Int(Double(raw[raw.index(after: slash)...]) ?? 1)
-		guard num > 0 else { return "0s" }
-		let frames = Int(round(seconds * Double(den) / Double(num)))
-		return "\(frames * num)/\(den)s"
+		return FrameRate(numerator: max(num, 1), denominator: max(den, 1))
+	}
+
+	private static func rationalTime(seconds: Double, frameRate: FrameRate) -> String {
+		let frames = Int(
+			round(seconds * Double(frameRate.denominator) / Double(frameRate.numerator)))
+		return "\(frames * frameRate.numerator)/\(frameRate.denominator)s"
 	}
 
 	private static func textYOffset(percent: Double) -> String {
@@ -170,12 +183,18 @@ enum FCPXMLBuilder {
 		let paramValue: String
 	}
 
+	private static var fontInfoCache: [String: FontInfo] = [:]
+
 	static func fontInfo(postScriptName: String) -> FontInfo {
+		if let cached = fontInfoCache[postScriptName] { return cached }
+
 		let manager = NSFontManager.shared
 		let families = manager.availableFontFamilies.sorted()
 
 		guard let font = NSFont(name: postScriptName, size: 12) else {
-			return FontInfo(familyName: postScriptName, faceName: "Regular", paramValue: "0 0")
+			let info = FontInfo(familyName: postScriptName, faceName: "Regular", paramValue: "0 0")
+			fontInfoCache[postScriptName] = info
+			return info
 		}
 
 		let familyName = font.familyName ?? postScriptName
@@ -192,11 +211,13 @@ enum FCPXMLBuilder {
 			}
 		}
 
-		return FontInfo(
+		let info = FontInfo(
 			familyName: familyName,
 			faceName: faceName,
 			paramValue: "\(familyIndex) \(faceIndex)"
 		)
+		fontInfoCache[postScriptName] = info
+		return info
 	}
 
 	private static func xmlEscape(_ string: String) -> String {
