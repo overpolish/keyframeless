@@ -126,6 +126,27 @@ struct AudioEditView: View {
 			)
 			HStack(alignment: .top, spacing: KKSpacingLG) {
 				VStack(alignment: .leading, spacing: KKSpacingLG) {
+					HStack(alignment: .firstTextBaseline) {
+						Text("Transcriptions")
+							.font(.title3)
+							.foregroundStyle(.secondary)
+						Spacer()
+						if let selected = model.editSelectedClips, !selected.isEmpty {
+							Button {
+								model.selectedClips = selected
+								model.stage = .setup
+							} label: {
+								Label(
+									"Reprocess Selected",
+									systemImage: "arrow.trianglehead.2.counterclockwise"
+								)
+								.font(.system(size: 11))
+							}
+							.buttonStyle(.plain)
+							.foregroundStyle(Color(nsColor: .accent() ?? .blue))
+						}
+					}
+
 					if transcribedClipGroups.isEmpty {
 						EmptyTranscriptionPlaceholder()
 							.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD + 4))

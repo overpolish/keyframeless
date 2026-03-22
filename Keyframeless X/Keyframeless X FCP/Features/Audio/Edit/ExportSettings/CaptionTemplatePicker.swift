@@ -9,7 +9,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 private let cardAspect: CGFloat = 16.0 / 9.0
-private let cardMinWidth: CGFloat = 120
+private let cardMinWidth: CGFloat = 160
 private let cardSpacing = KKSpacingLG
 private let selectionInset: CGFloat = 3
 private let scrollMaxHeight: CGFloat = 240

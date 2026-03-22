@@ -138,34 +138,39 @@ struct AudioExportOptionsSidebar: View {
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: KKSpacingLG) {
-			AudioExportOptionsView(model: model)
-			Spacer()
-			HStack(spacing: KKSpacingLG) {
-				FCPDragZoneView(
-					xmlProvider: { model.buildFCPXML(from: rows) },
-					onDragStateChanged: { model.isDraggingToFCP = $0 }
-				)
-				.frame(height: 40)
-				.allowsHitTesting(hasTranscribedSelection)
-				.opacity(hasTranscribedSelection ? 1 : 0.4)
-				SRTExportButton(
-					hasOverlaps: srtHasOverlaps,
-					action: { model.exportSRT(from: rows) }
-				)
-				.allowsHitTesting(hasTranscribedSelection)
-				.opacity(hasTranscribedSelection ? 1 : 0.4)
+			Text("Export Settings")
+				.font(.title3)
+				.foregroundStyle(.secondary)
+			VStack(spacing: KKSpacingLG) {
+				AudioExportOptionsView(model: model)
+				Spacer()
+				HStack(spacing: KKSpacingLG) {
+					FCPDragZoneView(
+						xmlProvider: { model.buildFCPXML(from: rows) },
+						onDragStateChanged: { model.isDraggingToFCP = $0 }
+					)
+					.frame(height: 40)
+					.allowsHitTesting(hasTranscribedSelection)
+					.opacity(hasTranscribedSelection ? 1 : 0.4)
+					SRTExportButton(
+						hasOverlaps: srtHasOverlaps,
+						action: { model.exportSRT(from: rows) }
+					)
+					.allowsHitTesting(hasTranscribedSelection)
+					.opacity(hasTranscribedSelection ? 1 : 0.4)
+				}
 			}
+			.padding(KKPaddingXL)
+			.frame(maxWidth: .infinity, maxHeight: .infinity)
+			.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD + 4))
+			.background(
+				RoundedRectangle(cornerRadius: KKRadiusMD + 4)
+					.fill(Color.white.opacity(0.04))
+			)
+			.overlay(
+				RoundedRectangle(cornerRadius: KKRadiusMD + 4)
+					.strokeBorder(Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
+			)
 		}
-		.padding(KKPaddingXL)
-		.frame(maxWidth: .infinity, maxHeight: .infinity)
-		.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD + 4))
-		.background(
-			RoundedRectangle(cornerRadius: KKRadiusMD + 4)
-				.fill(Color.white.opacity(0.04))
-		)
-		.overlay(
-			RoundedRectangle(cornerRadius: KKRadiusMD + 4)
-				.strokeBorder(Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
-		)
 	}
 }
