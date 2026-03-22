@@ -148,6 +148,59 @@ enum CaptionBuilder {
 		return result
 	}
 
+	struct OverlapRegion {
+		let start: Double
+		let end: Double
+	}
+
+	static func overlapRegions(_ segments: [CaptionSegment]) -> [OverlapRegion] {
+		let sorted = segments.sorted { $0.startTime < $1.startTime }
+		var regions: [OverlapRegion] = []
+		var maxEnd = -Double.infinity
+		for seg in sorted {
+			if seg.startTime < maxEnd {
+				regions.append(
+					OverlapRegion(
+						start: seg.startTime,
+						end: min(maxEnd, seg.endTime)
+					))
+			}
+			maxEnd = max(maxEnd, seg.endTime)
+		}
+		return regions
+	}
+
+	static func hasOverlaps(_ segments: [CaptionSegment]) -> Bool {
+		let sorted = segments.sorted { $0.startTime < $1.startTime }
+		var maxEnd = -Double.infinity
+		for seg in sorted {
+			if seg.startTime < maxEnd { return true }
+			maxEnd = max(maxEnd, seg.endTime)
+		}
+		return false
+	}
+
+	static func formatSRT(_ segments: [CaptionSegment]) -> String {
+		let sorted = segments.sorted { $0.startTime < $1.startTime }
+		var lines: [String] = []
+		for (i, seg) in sorted.enumerated() {
+			lines.append("\(i + 1)")
+			lines.append("\(srtTimestamp(seg.startTime)) --> \(srtTimestamp(seg.endTime))")
+			lines.append(seg.text)
+			lines.append("")
+		}
+		return lines.joined(separator: "\n")
+	}
+
+	private static func srtTimestamp(_ seconds: Double) -> String {
+		let total = max(0, seconds)
+		let h = Int(total) / 3600
+		let m = (Int(total) % 3600) / 60
+		let s = Int(total) % 60
+		let ms = Int((total - Double(Int(total))) * 1000)
+		return String(format: "%02d:%02d:%02d,%03d", h, m, s, ms)
+	}
+
 	private static func removeOverlaps(_ segments: [CaptionSegment]) -> [CaptionSegment] {
 		guard segments.count > 1 else { return segments }
 		var result = segments

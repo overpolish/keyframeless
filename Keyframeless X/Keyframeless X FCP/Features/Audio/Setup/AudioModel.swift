@@ -6,6 +6,7 @@
 import AppKit
 import Combine
 import Foundation
+import UniformTypeIdentifiers
 
 struct CaptionStyleSettings: Codable, Equatable {
 	var maxWordsPerLine: Double = 5
@@ -181,6 +182,47 @@ class AudioModel: ObservableObject {
 			textStyle: textStyle,
 			format: format
 		)
+	}
+
+	func srtHasOverlaps(from rows: [AudioEditRow]) -> Bool {
+		CaptionBuilder.hasOverlaps(buildCaptionSegments(from: rows))
+	}
+
+	func srtOverlapRegions(from rows: [AudioEditRow]) -> [CaptionBuilder.OverlapRegion] {
+		let selected = editSelectedClips ?? Set(audioClips.indices)
+		let clips = audioClips.enumerated()
+			.filter { selected.contains($0.offset) }
+			.map { $0.element }
+		let sorted = clips.sorted { $0.start < $1.start }
+		var regions: [CaptionBuilder.OverlapRegion] = []
+		var maxEnd = -Double.infinity
+		for i in 0..<sorted.count {
+			if sorted[i].start < maxEnd {
+				regions.append(
+					CaptionBuilder.OverlapRegion(
+						start: sorted[i].start,
+						end: min(maxEnd, sorted[i].end)
+					))
+			}
+			maxEnd = max(maxEnd, sorted[i].end)
+		}
+		return regions
+	}
+
+	func exportSRT(from rows: [AudioEditRow]) {
+		let segments = buildCaptionSegments(from: rows)
+		let srt = CaptionBuilder.formatSRT(segments)
+
+		let projectName = dropItems.first?.name ?? "captions"
+		let timestamp = ISO8601DateFormatter().string(from: Date())
+			.replacingOccurrences(of: ":", with: "-")
+		let defaultName = "\(projectName)_\(timestamp).srt"
+
+		let panel = NSSavePanel()
+		panel.nameFieldStringValue = defaultName
+		panel.allowedContentTypes = [UTType(filenameExtension: "srt") ?? .plainText]
+		guard panel.runModal() == .OK, let url = panel.url else { return }
+		try? srt.write(to: url, atomically: true, encoding: .utf8)
 	}
 
 	func insertTitle(rows: [AudioEditRow]) {

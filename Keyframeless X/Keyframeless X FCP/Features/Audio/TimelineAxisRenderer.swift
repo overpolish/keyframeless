@@ -13,8 +13,10 @@ struct TimelineAxisRenderer {
 	let selectedClips: Set<Int>
 	let visibleIndices: Set<Int>?
 	let dimmedIndices: Set<Int>
+	let overlapRegions: [CaptionBuilder.OverlapRegion]
 	let showWaveforms: Bool
 	let hoveredClipIndex: Int?
+	let glowClipIndex: Int?
 	let pulsePhase: CGFloat
 	let waveforms: [Int: [Float]]
 	let hasAudioPlayer: Bool
@@ -35,6 +37,41 @@ struct TimelineAxisRenderer {
 		drawEmptyRegion(in: ctx, pps: pps, emptyX: emptyX)
 		drawTickMarks(in: ctx, pps: pps)
 		drawClips(in: ctx, pps: pps, emptyX: emptyX, cachedClipRects: &cachedClipRects)
+		drawOverlapRegions(in: ctx, pps: pps)
+	}
+
+	private func drawOverlapRegions(in ctx: CGContext, pps: CGFloat) {
+		guard !overlapRegions.isEmpty else { return }
+		let top: CGFloat = 5 + 12 + 6
+		let height = bounds.height - top - 4
+		let stripeColor = NSColor.error().withAlphaComponent(0.25)
+		let stripeWidth: CGFloat = 6
+		let stripeSpacing: CGFloat = 3
+
+		for region in overlapRegions {
+			let x = CGFloat(region.start) * pps
+			let w = CGFloat(region.end - region.start) * pps
+			let rect = CGRect(x: x, y: top, width: max(2, w), height: height)
+
+			ctx.saveGState()
+			ctx.clip(to: rect)
+			ctx.setFillColor(stripeColor.cgColor)
+
+			let stride = stripeWidth + stripeSpacing
+			let diagonal = w + height
+			var offset: CGFloat = -height
+
+			while offset < diagonal {
+				ctx.move(to: CGPoint(x: x + offset, y: top + height))
+				ctx.addLine(to: CGPoint(x: x + offset + stripeWidth, y: top + height))
+				ctx.addLine(to: CGPoint(x: x + offset + height + stripeWidth, y: top))
+				ctx.addLine(to: CGPoint(x: x + offset + height, y: top))
+				ctx.closePath()
+				offset += stride
+			}
+			ctx.fillPath()
+			ctx.restoreGState()
+		}
 	}
 
 	private func drawEmptyRegion(in ctx: CGContext, pps: CGFloat, emptyX: CGFloat) {
@@ -141,13 +178,16 @@ struct TimelineAxisRenderer {
 		ctx.addPath(path)
 		ctx.fillPath()
 
-		if isDimmed && hoveredClipIndex == state.index {
+		if isDimmed && glowClipIndex == state.index {
 			drawPulseGlow(rect: state.rect, path: path, color: clipColor, dimmed: true, in: ctx)
 		}
 
-		if !isDimmed && !isHoverDimmed && hoveredClipIndex == state.index {
-			drawPulseGlow(rect: state.rect, path: path, color: clipColor, dimmed: false, in: ctx)
+		if !isDimmed && !isHoverDimmed && glowClipIndex == state.index {
+			let isSelected = selectedClips.contains(state.index)
+			drawPulseGlow(
+				rect: state.rect, path: path, color: clipColor, dimmed: !isSelected, in: ctx)
 		}
+
 	}
 
 	private func drawPulseGlow(
