@@ -157,7 +157,6 @@ struct CaptionTemplatePicker: View {
 				}
 				.padding(.vertical, KKPaddingXS)
 			}
-			.frame(maxHeight: scrollMaxHeight)
 		}
 		.onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
 			handleDrop(providers)
