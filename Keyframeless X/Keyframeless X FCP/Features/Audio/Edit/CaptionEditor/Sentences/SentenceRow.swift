@@ -19,6 +19,13 @@ struct SentenceRow: View {
 
 	private var isEditing: Bool { editingRowID == row.id }
 
+	private var draftText: String {
+		row.editedWords.map {
+			$0.map { $0.word.trimmingCharacters(in: .whitespaces) }
+				.joined(separator: " ")
+		} ?? row.text
+	}
+
 	var body: some View {
 		HStack(alignment: .top, spacing: KKSpacingMD) {
 			InfoBadge(label: row.timestamp, monospaced: true)
@@ -41,11 +48,7 @@ struct SentenceRow: View {
 		.padding(.vertical, KKPaddingXS)
 		.onChange(of: editingRowID) {
 			if editingRowID == row.id {
-				draft =
-					row.editedWords.map {
-						$0.map { $0.word.trimmingCharacters(in: .whitespaces) }
-							.joined(separator: " ")
-					} ?? row.text
+				draft = draftText
 			}
 		}
 	}
@@ -76,11 +79,7 @@ struct SentenceRow: View {
 				language: AudioSetupSettings.shared.selectedLanguage
 			)
 			.onTapGesture {
-				draft =
-					row.editedWords.map {
-						$0.map { $0.word.trimmingCharacters(in: .whitespaces) }
-							.joined(separator: " ")
-					} ?? row.text
+				draft = draftText
 				editingRowID = row.id
 			}
 		}

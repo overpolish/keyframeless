@@ -33,8 +33,8 @@ struct DropZoneEmptyState: View {
 	private var color: Color {
 		switch dropState {
 		case .idle: return Color(nsColor: .timelineLabel())
-		case .denied: return Color(nsColor: .error())
-		case .dropped: return Color(nsColor: .warning())
+		case .denied: return Color.kkError
+		case .dropped: return Color.kkWarning
 		}
 	}
 

@@ -42,9 +42,7 @@ struct TranscribedClipSection: View {
 		}
 	}
 
-	private var clipColor: Color {
-		Color(nsColor: group.isCompound ? .warning() ?? .yellow : .accent() ?? .blue)
-	}
+	private var clipColor: Color { .kkClipColor(isCompound: group.isCompound) }
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: KKSpacingXS) {

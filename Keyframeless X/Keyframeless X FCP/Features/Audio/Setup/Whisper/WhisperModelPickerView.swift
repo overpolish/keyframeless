@@ -25,13 +25,7 @@ struct WhisperModelPickerView: View {
 				}
 			}
 			.padding(KKPaddingMD)
-			.background(
-				RoundedRectangle(cornerRadius: KKRadiusMD + 4).fill(Color.white.opacity(0.04))
-			)
-			.overlay(
-				RoundedRectangle(cornerRadius: KKRadiusMD + 4)
-					.strokeBorder(Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
-			)
+			.kkPanel()
 			.frame(maxWidth: .infinity)
 		}
 	}
@@ -45,7 +39,7 @@ private struct WhisperModelRow: View {
 		let isDownloaded = manager.downloadedModels.contains(model.id)
 		let isDownloading = manager.downloadingModel == model.id
 		let isSelected = manager.selectedModel == model.id
-		let accent = Color(nsColor: .accent() ?? .blue)
+		let accent = Color.kkAccent
 
 		HStack(spacing: KKSpacingLG) {
 			Circle()
@@ -85,10 +79,7 @@ private struct WhisperModelRow: View {
 		}
 		.padding(.horizontal, KKPaddingLG)
 		.padding(.vertical, KKSpacingMD)
-		.background(
-			RoundedRectangle(cornerRadius: KKRadiusMD)
-				.fill(isSelected ? accent.opacity(0.12) : Color.clear)
-		)
+		.kkSelectableBackground(isSelected)
 		.contentShape(Rectangle())
 		.onTapGesture {
 			if isDownloaded { manager.selectedModel = model.id }

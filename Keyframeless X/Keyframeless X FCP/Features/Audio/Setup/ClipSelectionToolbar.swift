@@ -18,14 +18,14 @@ struct ClipSelectionToolbar: View {
 
 		ToolbarGroup {
 			if hasMain {
-				ClipTypeFilterButton(label: "Main", color: Color(nsColor: .accent() ?? .blue)) {
+				ClipTypeFilterButton(label: "Main", color: Color.kkAccent) {
 					selectedClips = allowed.filter { !clips[$0].isCompound }
 				}
 				ToolbarDivider()
 			}
 			if hasCompound {
 				ClipTypeFilterButton(
-					label: "Compound", color: Color(nsColor: .warning() ?? .yellow)
+					label: "Compound", color: Color.kkWarning
 				) {
 					selectedClips = allowed.filter { clips[$0].isCompound }
 				}

@@ -14,9 +14,7 @@ struct UntranscribedClipRow: View {
 	@Binding var hoveredClipIndex: Int?
 	var onTranscribe: () -> Void
 
-	private var clipColor: Color {
-		Color(nsColor: isCompound ? .warning() ?? .yellow : .accent() ?? .blue)
-	}
+	private var clipColor: Color { .kkClipColor(isCompound: isCompound) }
 
 	var body: some View {
 		HStack(spacing: KKSpacingLG) {

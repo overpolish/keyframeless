@@ -35,7 +35,7 @@ private struct PillTabItem: View {
 				.padding(.vertical, KKSpacingMD)
 				.background {
 					if isSelected {
-						Capsule().fill(Color(nsColor: .accent()))
+						Capsule().fill(Color.kkAccent)
 					}
 				}
 				.foregroundStyle(isSelected ? .white : .secondary)

@@ -23,7 +23,7 @@ struct PillToggle<Value: Hashable>: View {
 						.padding(.vertical, 3)
 						.background {
 							if selection == option.value {
-								Capsule().fill(Color(nsColor: .accent()))
+								Capsule().fill(Color.kkAccent)
 							}
 						}
 						.foregroundStyle(selection == option.value ? .white : .secondary)

@@ -36,7 +36,7 @@ struct HighlightedSentence: View {
 			let trimmed = word.word.trimmingCharacters(in: .whitespaces)
 			var part = AttributedString(i > 0 ? " \(trimmed)" : trimmed)
 			if ProfanityFilter.isProfane(trimmed, language: language) {
-				part.foregroundColor = Color(nsColor: .error())
+				part.foregroundColor = Color.kkError
 			}
 			result.append(part)
 		}
@@ -50,12 +50,12 @@ struct HighlightedSentence: View {
 			var part = AttributedString(i > 0 ? " \(trimmed)" : trimmed)
 			let isActive = currentTime >= Double(word.start) && currentTime < Double(word.end)
 			if ProfanityFilter.isProfane(trimmed, language: language) {
-				part.foregroundColor = Color(nsColor: .error())
+				part.foregroundColor = Color.kkError
 				if isActive {
 					part.font = .system(size: 13, weight: .semibold)
 				}
 			} else if isActive {
-				part.foregroundColor = Color(nsColor: .accent())
+				part.foregroundColor = Color.kkAccent
 				part.font = .system(size: 13, weight: .semibold)
 			}
 			result.append(part)

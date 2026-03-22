@@ -39,8 +39,8 @@ struct AudioExportOptionsView: View {
 					PillToggle(
 						selection: $model.captionLines,
 						options: [
-							(label: "One", value: AudioModel.CaptionLineCount.one),
-							(label: "Two", value: AudioModel.CaptionLineCount.two),
+							(label: "One", value: CaptionLineCount.one),
+							(label: "Two", value: CaptionLineCount.two),
 						]
 					)
 					Text("Lines")
@@ -86,7 +86,7 @@ struct AudioExportOptionsView: View {
 						.contentShape(Capsule())
 				}
 				.buttonStyle(.plain)
-				.foregroundStyle(Color(nsColor: .accent() ?? .blue))
+				.foregroundStyle(Color.kkAccent)
 				Spacer()
 				if hasChanges {
 					Button {
@@ -162,15 +162,7 @@ struct AudioExportOptionsSidebar: View {
 			}
 			.padding(KKPaddingXL)
 			.frame(maxWidth: .infinity, maxHeight: .infinity)
-			.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD + 4))
-			.background(
-				RoundedRectangle(cornerRadius: KKRadiusMD + 4)
-					.fill(Color.white.opacity(0.04))
-			)
-			.overlay(
-				RoundedRectangle(cornerRadius: KKRadiusMD + 4)
-					.strokeBorder(Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
-			)
+			.kkPanel()
 		}
 	}
 }

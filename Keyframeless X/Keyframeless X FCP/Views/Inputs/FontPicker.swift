@@ -3,26 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import AppKit
-import Combine
 import KeyframelessKit
 import SwiftUI
-
-enum FontCache {
-	private static var cached: [FontFamily]?
-	private static let queue = DispatchQueue(label: "font-cache", qos: .userInitiated)
-
-	static func warmup() {
-		queue.async {
-			let families = FontFamily.all()
-			DispatchQueue.main.async { cached = families }
-		}
-	}
-
-	static var families: [FontFamily] {
-		cached ?? FontFamily.all()
-	}
-}
 
 struct FontPickerRow: View {
 	@Binding var selectedFont: String
@@ -49,85 +31,13 @@ struct FontPickerRow: View {
 			}
 			.frame(height: KKInspectorRowHeight)
 			.padding(.horizontal, KKPaddingLG)
-			.background(
-				RoundedRectangle(cornerRadius: KKRadiusMD)
-					.fill(Color.white.opacity(0.04))
-			)
-			.overlay(
-				RoundedRectangle(cornerRadius: KKRadiusMD)
-					.strokeBorder(Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
-			)
+			.kkPanel(cornerRadius: KKRadiusMD)
 			.contentShape(RoundedRectangle(cornerRadius: KKRadiusMD))
 			.onTapGesture { isOpen.toggle() }
 			.popover(isPresented: $isOpen, arrowEdge: .top) {
 				FontListPopover(selectedFont: $selectedFont, fonts: FontCache.families)
 					.background(PopoverBackgroundClearer())
 			}
-		}
-	}
-}
-
-class FontFavorites: ObservableObject {
-	static let shared = FontFavorites()
-	@Published private(set) var familyNames: Set<String> = []
-
-	private var fileURL: URL? {
-		FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-			.first?
-			.appendingPathComponent("Keyframeless/font_favorites.json")
-	}
-
-	private init() { load() }
-
-	func contains(_ name: String) -> Bool { familyNames.contains(name) }
-
-	func toggle(_ name: String) {
-		if familyNames.contains(name) {
-			familyNames.remove(name)
-		} else {
-			familyNames.insert(name)
-		}
-		save()
-	}
-
-	private func load() {
-		guard let url = fileURL,
-			let data = try? Data(contentsOf: url),
-			let names = try? JSONDecoder().decode(Set<String>.self, from: data)
-		else { return }
-		familyNames = names
-	}
-
-	private func save() {
-		guard let url = fileURL else { return }
-		let dir = url.deletingLastPathComponent()
-		try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-		try? JSONEncoder().encode(familyNames).write(to: url, options: .atomic)
-	}
-}
-
-struct FontVariant: Identifiable {
-	let postScriptName: String
-	let styleName: String
-	var id: String { postScriptName }
-}
-
-struct FontFamily: Identifiable {
-	let name: String
-	let variants: [FontVariant]
-	var id: String { name }
-
-	static func all() -> [FontFamily] {
-		let manager = NSFontManager.shared
-		return manager.availableFontFamilies.sorted().map { family in
-			let members = manager.availableMembers(ofFontFamily: family) ?? []
-			let variants = members.compactMap { member -> FontVariant? in
-				guard let postScript = member[0] as? String,
-					let style = member[1] as? String
-				else { return nil }
-				return FontVariant(postScriptName: postScript, styleName: style)
-			}
-			return FontFamily(name: family, variants: variants)
 		}
 	}
 }
@@ -231,8 +141,6 @@ private struct FontFamilyRow: View {
 	private var isFavorite: Bool { favorites.contains(family.name) }
 
 	var body: some View {
-		let accent = Color(nsColor: .accent() ?? .blue)
-
 		HStack(spacing: KKSpacingLG) {
 			Button {
 				favorites.toggle(family.name)
@@ -240,7 +148,7 @@ private struct FontFamilyRow: View {
 				Image(systemName: isFavorite ? "star.fill" : "star")
 					.font(.system(size: 9))
 					.foregroundStyle(
-						isFavorite ? Color(nsColor: .warning()) : .secondary.opacity(0.4))
+						isFavorite ? Color.kkWarning : .secondary.opacity(0.4))
 			}
 			.buttonStyle(.plain)
 			Text(family.name)
@@ -256,10 +164,7 @@ private struct FontFamilyRow: View {
 		.frame(maxWidth: .infinity)
 		.padding(.horizontal, KKPaddingLG)
 		.padding(.vertical, KKSpacingMD)
-		.background(
-			RoundedRectangle(cornerRadius: KKRadiusMD)
-				.fill(isSelected ? accent.opacity(0.12) : Color.clear)
-		)
+		.kkSelectableBackground(isSelected)
 		.contentShape(Rectangle())
 		.onTapGesture {
 			if hasVariants {
@@ -287,8 +192,6 @@ private struct FontVariantPopover: View {
 	let onSelect: (String) -> Void
 
 	var body: some View {
-		let accent = Color(nsColor: .accent() ?? .blue)
-
 		ScrollView {
 			VStack(spacing: 0) {
 				ForEach(family.variants) { variant in
@@ -303,36 +206,16 @@ private struct FontVariantPopover: View {
 					.frame(maxWidth: .infinity)
 					.padding(.horizontal, KKPaddingLG)
 					.padding(.vertical, KKSpacingMD)
-					.background(
-						GeometryReader { geo in
-							let _ = print(
-								"[VariantRow] '\(variant.styleName)' frame: \(geo.size), origin: \(geo.frame(in: .named("variantScroll")).origin)"
-							)
-							RoundedRectangle(cornerRadius: KKRadiusMD)
-								.fill(variantSelected ? accent.opacity(0.12) : Color.clear)
-						}
-					)
+					.kkSelectableBackground(variantSelected)
 					.contentShape(Rectangle())
 					.onTapGesture { onSelect(variant.postScriptName) }
 				}
 			}
 			.padding(KKPaddingMD)
 			.frame(width: 180)
-			.background(
-				GeometryReader { geo in
-					let _ = print("[VariantVStack] size: \(geo.size)")
-					Color.clear
-				}
-			)
 		}
 		.coordinateSpace(name: "variantScroll")
 		.scrollIndicators(.never)
-		.background(
-			GeometryReader { geo in
-				let _ = print("[VariantScrollView] size: \(geo.size)")
-				Color.clear
-			}
-		)
 		.frame(width: 180, height: min(CGFloat(family.variants.count) * 26 + KKPaddingMD * 2, 200))
 		.background(PopoverBackgroundClearer())
 	}

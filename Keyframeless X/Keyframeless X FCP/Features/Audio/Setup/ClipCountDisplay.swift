@@ -20,7 +20,7 @@ struct ClipCountDisplay: View {
 					.foregroundStyle(.secondary)
 			} else {
 				Text("\(selectedCount)")
-					.foregroundStyle(Color(nsColor: .accent() ?? .blue))
+					.foregroundStyle(Color.kkAccent)
 					.font(.title)
 				Text(selectedLabel)
 					.font(.title)

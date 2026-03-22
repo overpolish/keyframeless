@@ -8,80 +8,6 @@ import Combine
 import Foundation
 import UniformTypeIdentifiers
 
-struct CaptionStyleSettings: Codable, Equatable {
-	var maxWordsPerLine: Double = 5
-	var captionLines: AudioModel.CaptionLineCount = .two
-	var allCaps: Bool = false
-	var censorProfanity: Bool = true
-	var stripPunctuation: Bool = true
-	var keepQuestionMarks: Bool = true
-}
-
-class CaptionStyleDefaults {
-	static let shared = CaptionStyleDefaults()
-	private(set) var settings = CaptionStyleSettings()
-
-	private var fileURL: URL? {
-		FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-			.first?
-			.appendingPathComponent("Keyframeless/caption_style_defaults.json")
-	}
-
-	private init() { load() }
-
-	func save(_ settings: CaptionStyleSettings) {
-		self.settings = settings
-		guard let url = fileURL else { return }
-		let dir = url.deletingLastPathComponent()
-		try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-		try? JSONEncoder().encode(settings).write(to: url, options: .atomic)
-	}
-
-	private func load() {
-		guard let url = fileURL,
-			let data = try? Data(contentsOf: url),
-			let saved = try? JSONDecoder().decode(CaptionStyleSettings.self, from: data)
-		else { return }
-		settings = saved
-	}
-}
-
-struct TextStyleSettings: Codable, Equatable {
-	var textWidthPercent: Double = 80
-	var textSize: Double = 100
-	var textYPosition: Double = 20
-	var textFont: String = "HelveticaNeue"
-}
-
-class TextStyleDefaults {
-	static let shared = TextStyleDefaults()
-	private(set) var settings = TextStyleSettings()
-
-	private var fileURL: URL? {
-		FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-			.first?
-			.appendingPathComponent("Keyframeless/text_style_defaults.json")
-	}
-
-	private init() { load() }
-
-	func save(_ settings: TextStyleSettings) {
-		self.settings = settings
-		guard let url = fileURL else { return }
-		let dir = url.deletingLastPathComponent()
-		try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-		try? JSONEncoder().encode(settings).write(to: url, options: .atomic)
-	}
-
-	private func load() {
-		guard let url = fileURL,
-			let data = try? Data(contentsOf: url),
-			let saved = try? JSONDecoder().decode(TextStyleSettings.self, from: data)
-		else { return }
-		settings = saved
-	}
-}
-
 class AudioModel: ObservableObject {
 
 	enum Stage { case setup, edit }
@@ -113,10 +39,6 @@ class AudioModel: ObservableObject {
 
 	@Published var captionTemplates: [CaptionTemplate] = []
 	@Published var selectedTemplate: CaptionTemplate = .basicTitle
-
-	enum CaptionLineCount: String, Codable {
-		case one, two
-	}
 
 	var textStyle: TextStyleSettings {
 		get {

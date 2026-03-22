@@ -28,12 +28,12 @@ struct CapsuleToggle: View {
 			.padding(.vertical, 4)
 			.background(
 				Capsule().fill(
-					isOn ? Color(nsColor: .accent()).opacity(0.2) : Color.white.opacity(0.08)
+					isOn ? Color.kkAccent.opacity(0.2) : Color.white.opacity(0.08)
 				)
 			)
 			.overlay(
 				Capsule().strokeBorder(
-					isOn ? Color(nsColor: .accent()).opacity(0.4) : Color.clear,
+					isOn ? Color.kkAccent.opacity(0.4) : Color.clear,
 					lineWidth: KKBorderWidthXS
 				)
 			)

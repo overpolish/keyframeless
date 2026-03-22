@@ -66,16 +66,16 @@ struct WhisperTermsView: View {
 					if let error = validationError {
 						Text(error)
 							.font(.system(size: 10))
-							.foregroundStyle(Color(nsColor: .error()))
+							.foregroundStyle(Color.kkError)
 					} else {
 						let count = manager.hotWords.count
 						Text("\(count)/\(Self.maxTerms)")
 							.font(.system(size: 10).monospacedDigit())
 							.foregroundStyle(
 								count >= Self.maxTerms
-									? Color(nsColor: .error())
+									? Color.kkError
 									: count >= 12
-										? Color(nsColor: .warning())
+										? Color.kkWarning
 										: Color.secondary.opacity(0.4)
 							)
 					}
@@ -85,7 +85,7 @@ struct WhisperTermsView: View {
 							.font(.system(size: 10))
 							.foregroundStyle(
 								canAdd
-									? Color(nsColor: .accent() ?? .blue)
+									? Color.kkAccent
 									: Color.secondary.opacity(0.4))
 					}
 					.buttonStyle(.plain)
@@ -124,13 +124,7 @@ struct WhisperTermsView: View {
 				}
 			}
 			.frame(maxHeight: .infinity)
-			.background(
-				RoundedRectangle(cornerRadius: KKRadiusMD + 4).fill(Color.white.opacity(0.04))
-			)
-			.overlay(
-				RoundedRectangle(cornerRadius: KKRadiusMD + 4)
-					.strokeBorder(Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
-			)
+			.kkPanel()
 		}
 	}
 }

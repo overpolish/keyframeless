@@ -164,7 +164,7 @@ private struct MiniSlider: View {
 					.fill(Color.white.opacity(0.1))
 					.frame(height: trackHeight)
 				Capsule()
-					.fill(Color(nsColor: .accent()))
+					.fill(Color.kkAccent)
 					.frame(width: thumbX, height: trackHeight)
 				Circle()
 					.fill(Color.white)

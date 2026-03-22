@@ -25,7 +25,7 @@ struct PrimaryButton: View {
 			.padding(.vertical, KKSpacingMD)
 		}
 		.buttonStyle(.borderedProminent)
-		.tint(Color(nsColor: .accent() ?? .blue))
+		.tint(Color.kkAccent)
 		.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD))
 		.disabled(disabled)
 	}
