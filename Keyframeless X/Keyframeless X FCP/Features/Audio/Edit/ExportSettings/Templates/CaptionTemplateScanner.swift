@@ -91,7 +91,10 @@ enum CaptionTemplateScanner {
 					range: NSRange(publishBlock.startIndex..., in: publishBlock))
 			else { continue }
 			let objID = (publishBlock as NSString).substring(with: match.range(at: 1))
-			let channel = (publishBlock as NSString).substring(with: match.range(at: 2))
+			var channel = (publishBlock as NSString).substring(with: match.range(at: 2))
+			if channel.hasPrefix("./") {
+				channel = String(channel.dropFirst(2))
+			}
 			let keyPath = "9999/1825766846/100/\(objID)/\(channel)"
 			return PerWordInfo(name: paramName, keyPath: keyPath)
 		}

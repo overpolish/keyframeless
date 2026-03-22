@@ -31,7 +31,7 @@ struct AudioEditView: View {
 		GeometryReader { geo in
 			VStack(spacing: KKSpacingLG) {
 				topRow
-				timelineSection(height: geo.size.height * 0.2)
+				timelineSection(height: geo.size.height * 0.1)
 				transcriptionList
 			}
 		}
