@@ -110,7 +110,7 @@ enum FCPXMLBuilder {
 				let tsID = "ts\(tsCounter)"
 				let segDuration = segment.endTime - segment.startTime
 				xml +=
-					"\t\t\t\t\t\t\t\t<title ref=\"r2\" duration=\"\(rationalTime(seconds: segDuration, frameRate: frameRate))\" name=\"\(xmlEscape(segment.lines.first ?? ""))\">\n"
+					"\t\t\t\t\t\t\t\t<title ref=\"r2\" duration=\"\(rationalTime(seconds: segDuration, frameRate: frameRate))\" name=\"\(xmlEscape(segment.lines.first ?? ""))\" role=\"Captions.Captions-1\">\n"
 				xml +=
 					"\t\t\t\t\t\t\t\t\t<param name=\"Font\" key=\"9999/999166631/999166633/5/999166635/83\" value=\"\(font.paramValue)\" />\n"
 				xml +=
