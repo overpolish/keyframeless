@@ -20,9 +20,13 @@ struct HighlightedSentence: View {
 		if let currentTime {
 			Text(attributedString(currentTime: currentTime))
 				.font(.system(size: 13))
+				.lineLimit(nil)
+				.fixedSize(horizontal: false, vertical: true)
 		} else {
 			Text(styledText)
 				.font(.system(size: 13))
+				.lineLimit(nil)
+				.fixedSize(horizontal: false, vertical: true)
 		}
 	}
 
