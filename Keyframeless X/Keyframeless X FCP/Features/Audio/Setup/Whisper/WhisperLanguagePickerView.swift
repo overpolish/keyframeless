@@ -145,7 +145,7 @@ private struct LanguageRow: View {
 					label: "Profanity",
 					systemImage:
 						"checkmark.circle.trianglebadge.exclamationmark.fill",
-					color: Color(nsColor: .error())
+					color: .green
 				)
 			}
 			if let code {
