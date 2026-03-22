@@ -79,9 +79,9 @@ enum FCPXMLBuilder {
 		xml += "\t<resources>\n"
 		xml +=
 			"\t\t<format id=\"r1\" frameDuration=\"\(fd)\" width=\"\(format.width)\" height=\"\(format.height)\" colorSpace=\"1-1-1 (Rec. 709)\" />\n"
-		xml += "\t\t<effect id=\"r2\" name=\"Basic Title\"\n"
+		xml += "\t\t<effect id=\"r2\" name=\"Text Caption\"\n"
 		xml +=
-			"\t\t\tuid=\".../Titles.localized/Bumper:Opener.localized/Basic Title.localized/Basic Title.moti\" />\n"
+			"\t\t\tuid=\"~/Titles.localized/Keyframeless/Text Caption/Text Caption.moti\" />\n"
 		xml += "\t\t<media id=\"r3\" name=\"Captions\">\n"
 		xml += "\t\t\t<sequence format=\"r1\" duration=\"\(totalDuration)\">\n"
 		xml += "\t\t\t\t<spine>\n"
@@ -109,12 +109,28 @@ enum FCPXMLBuilder {
 				tsCounter += 1
 				let tsID = "ts\(tsCounter)"
 				let segDuration = segment.endTime - segment.startTime
+				let mediaStart = 3600.0
 				xml +=
-					"\t\t\t\t\t\t\t\t<title ref=\"r2\" duration=\"\(rationalTime(seconds: segDuration, frameRate: frameRate))\" name=\"\(xmlEscape(segment.lines.first ?? ""))\" role=\"Captions.Captions-1\">\n"
-				xml +=
-					"\t\t\t\t\t\t\t\t\t<param name=\"Font\" key=\"9999/999166631/999166633/5/999166635/83\" value=\"\(font.paramValue)\" />\n"
-				xml +=
-					"\t\t\t\t\t\t\t\t\t<param name=\"Size\" key=\"9999/999166631/999166633/5/999166635/3\" value=\"\(fontSize)\" />\n"
+					"\t\t\t\t\t\t\t\t<title ref=\"r2\" duration=\"\(rationalTime(seconds: segDuration, frameRate: frameRate))\" start=\"\(rationalTime(seconds: mediaStart, frameRate: frameRate))\" name=\"\(xmlEscape(segment.lines.first ?? ""))\" role=\"Captions.Captions-1\">\n"
+				let wordCount = segment.wordStarts.count
+				if wordCount > 0 {
+					xml +=
+						"\t\t\t\t\t\t\t\t\t<param name=\"Animate On\" key=\"9999/1825766846/100/1825766847/2/100\">\n"
+					xml += "\t\t\t\t\t\t\t\t\t\t<keyframeAnimation>\n"
+					let divisor = Double(wordCount)
+					for (i, wordStart) in segment.wordStarts.enumerated() {
+						let offset = wordStart - segment.startTime
+						let time = rationalTime(
+							seconds: mediaStart + offset, frameRate: frameRate)
+						let value = Double(i + 1) / divisor
+						let valueStr =
+							value == 1 ? "1" : String(format: "%g", value)
+						xml +=
+							"\t\t\t\t\t\t\t\t\t\t\t<keyframe time=\"\(time)\" value=\"\(valueStr)\"/>\n"
+					}
+					xml += "\t\t\t\t\t\t\t\t\t\t</keyframeAnimation>\n"
+					xml += "\t\t\t\t\t\t\t\t\t</param>\n"
+				}
 				xml += "\t\t\t\t\t\t\t\t\t<text>\n"
 				xml +=
 					"\t\t\t\t\t\t\t\t\t\t<text-style ref=\"\(tsID)\">\(xmlEscape(segment.text))</text-style>\n"

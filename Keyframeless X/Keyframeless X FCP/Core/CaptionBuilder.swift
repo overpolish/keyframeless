@@ -13,6 +13,7 @@ struct CaptionSegment {
 	let lines: [String]
 	let startTime: Double
 	let endTime: Double
+	let wordStarts: [Double]
 }
 
 enum CaptionBuilder {
@@ -72,7 +73,8 @@ enum CaptionBuilder {
 						text: text,
 						lines: lines,
 						startTime: Double(group.startTime) + timelineOffset,
-						endTime: Double(group.endTime) + timelineOffset
+						endTime: Double(group.endTime) + timelineOffset,
+						wordStarts: group.wordStarts.map { Double($0) + timelineOffset }
 					))
 			}
 		}
@@ -89,25 +91,32 @@ enum CaptionBuilder {
 	) -> [CaptionSegment] {
 		guard !segments.isEmpty else { return segments }
 		var result: [CaptionSegment] = []
+		var i = 0
 
-		for segment in segments {
+		while i < segments.count {
+			let segment = segments[i]
 			let duration = segment.endTime - segment.startTime
+
 			if duration < minimumDuration,
-				let prev = result.last,
-				prev.clipIndex == segment.clipIndex,
-				segment.startTime - prev.endTime < gapCloseThreshold,
-				prev.lines.count + segment.lines.count <= maxLines
+				i + 1 < segments.count,
+				segments[i + 1].clipIndex == segment.clipIndex,
+				segments[i + 1].startTime - segment.endTime < gapCloseThreshold,
+				segment.lines.count + segments[i + 1].lines.count <= maxLines
 			{
-				let mergedLines = prev.lines + segment.lines
+				let next = segments[i + 1]
+				let mergedLines = segment.lines + next.lines
 				let mergedText = mergedLines.joined(separator: "\n")
-				result[result.count - 1] = CaptionSegment(
-					clipIndex: segment.clipIndex,
-					clipName: segment.clipName,
-					text: mergedText,
-					lines: mergedLines,
-					startTime: prev.startTime,
-					endTime: segment.endTime
-				)
+				result.append(
+					CaptionSegment(
+						clipIndex: segment.clipIndex,
+						clipName: segment.clipName,
+						text: mergedText,
+						lines: mergedLines,
+						startTime: segment.startTime,
+						endTime: next.endTime,
+						wordStarts: segment.wordStarts + next.wordStarts
+					))
+				i += 2
 			} else if duration < minimumDuration {
 				result.append(
 					CaptionSegment(
@@ -116,10 +125,13 @@ enum CaptionBuilder {
 						text: segment.text,
 						lines: segment.lines,
 						startTime: segment.startTime,
-						endTime: segment.startTime + minimumDuration
+						endTime: segment.startTime + minimumDuration,
+						wordStarts: segment.wordStarts
 					))
+				i += 1
 			} else {
 				result.append(segment)
+				i += 1
 			}
 		}
 
@@ -140,7 +152,8 @@ enum CaptionBuilder {
 					text: result[i].text,
 					lines: result[i].lines,
 					startTime: result[i].startTime,
-					endTime: result[i + 1].startTime
+					endTime: result[i + 1].startTime,
+					wordStarts: result[i].wordStarts
 				)
 			}
 		}
@@ -214,7 +227,8 @@ enum CaptionBuilder {
 					text: result[i].text,
 					lines: result[i].lines,
 					startTime: result[i].startTime,
-					endTime: result[i + 1].startTime
+					endTime: result[i + 1].startTime,
+					wordStarts: result[i].wordStarts
 				)
 			}
 		}
@@ -226,6 +240,7 @@ enum CaptionBuilder {
 		let lines: [String]
 		let startTime: Float
 		let endTime: Float
+		let wordStarts: [Float]
 	}
 
 	private static func processWord(
@@ -240,9 +255,8 @@ enum CaptionBuilder {
 
 		if isCensored {
 			let base = word.trimmingCharacters(in: .punctuationCharacters)
-			let grawlixChars: [Character] = ["@", "#", "$", "%", "&", "!"]
-			let grawlix = String((0..<base.count).map { grawlixChars[$0 % grawlixChars.count] })
-			word = grawlix
+			let dashes = String(repeating: "-", count: max(1, base.count - 1))
+			word = String(base.prefix(1)) + dashes
 		}
 
 		if !isCensored && style.stripPunctuation {
@@ -296,6 +310,7 @@ enum CaptionBuilder {
 		while i < words.count {
 			var segmentLines: [String] = []
 			let segmentStart = i
+			var segmentWordStarts: [Float] = []
 
 			for _ in 0..<lineCount {
 				guard i < words.count else { break }
@@ -315,6 +330,7 @@ enum CaptionBuilder {
 					if !lineWords.isEmpty && candidateWidth > CGFloat(availableWidth) {
 						break
 					}
+					segmentWordStarts.append(timings[i].start)
 					lineWords.append(word)
 					lineWidth = candidateWidth
 					wordCount += 1
@@ -332,7 +348,8 @@ enum CaptionBuilder {
 					LineGroup(
 						lines: segmentLines,
 						startTime: segTimings.first!.start,
-						endTime: segTimings.last!.end
+						endTime: segTimings.last!.end,
+						wordStarts: segmentWordStarts
 					))
 			}
 		}
