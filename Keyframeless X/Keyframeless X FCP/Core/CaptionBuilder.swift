@@ -26,14 +26,16 @@ enum CaptionBuilder {
 		style: CaptionStyleSettings,
 		textStyle: TextStyleSettings,
 		exportWidth: Int,
+		exportHeight: Int,
 		language: String?
 	) -> [CaptionSegment] {
 		let sentences = rows.filter { !$0.isHeader && $0.isTranscribed }
 		let maxLines = style.captionLines == .two ? 2 : 1
 		let availableWidth = Double(exportWidth) * textStyle.textWidthPercent / 100.0
+		let fcpFontSize = textStyle.textSize * Double(exportHeight) / 1080.0
 		let font =
-			NSFont(name: textStyle.textFont, size: CGFloat(textStyle.textSize))
-			?? NSFont.systemFont(ofSize: CGFloat(textStyle.textSize))
+			NSFont(name: textStyle.textFont, size: CGFloat(fcpFontSize))
+			?? NSFont.systemFont(ofSize: CGFloat(fcpFontSize))
 		var segments: [CaptionSegment] = []
 
 		for sentence in sentences {

@@ -164,6 +164,7 @@ class AudioModel: ObservableObject {
 			style: captionStyle,
 			textStyle: textStyle,
 			exportWidth: Int(exportWidth) ?? projectFormat?.width ?? 1920,
+			exportHeight: Int(exportHeight) ?? projectFormat?.height ?? 1080,
 			language: AudioSetupSettings.shared.selectedLanguage
 		)
 	}
@@ -201,6 +202,8 @@ class AudioModel: ObservableObject {
 		var exportWidth: String?
 		var exportHeight: String?
 		var exportFramerate: Framerate?
+		var textStyle: TextStyleSettings?
+		var captionStyle: CaptionStyleSettings?
 	}
 
 	private static var fcpProcessID: Int32? {
@@ -232,6 +235,8 @@ class AudioModel: ObservableObject {
 		if let h = state.exportHeight { exportHeight = h }
 		if let fr = state.exportFramerate { exportFramerate = fr }
 		if state.exportWidth != nil { exportSettingsInitialized = true }
+		if let ts = state.textStyle { textStyle = ts }
+		if let cs = state.captionStyle { captionStyle = cs }
 	}
 
 	private func save() {
@@ -248,7 +253,9 @@ class AudioModel: ObservableObject {
 			useTimecode: useTimecode,
 			exportWidth: exportWidth.isEmpty ? nil : exportWidth,
 			exportHeight: exportHeight.isEmpty ? nil : exportHeight,
-			exportFramerate: exportFramerate
+			exportFramerate: exportFramerate,
+			textStyle: textStyle,
+			captionStyle: captionStyle
 		)
 		try? JSONEncoder().encode(state).write(to: url, options: .atomic)
 	}

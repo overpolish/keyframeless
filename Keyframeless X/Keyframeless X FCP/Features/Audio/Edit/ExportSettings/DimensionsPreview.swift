@@ -57,8 +57,12 @@ struct DimensionsPreview: View {
 		GeometryReader { geo in
 			let fit = fitSize(in: geo.size)
 			let scaleFactor = fit.width / exportWidth
-			let fontSize = model.textSize * scaleFactor
-			let yOffset = fit.height * CGFloat(50 - model.textYPosition) / 100
+			let textWidthExport = exportWidth * CGFloat(model.textWidthPercent / 100)
+			let fcpFontSize = max(model.textSize * (exportHeight / 1080.0), 2)
+			let fullFont =
+				NSFont(name: model.textFont, size: fcpFontSize)
+				?? NSFont.systemFont(ofSize: fcpFontSize)
+			let yOffsetExport = exportHeight * CGFloat(50 - model.textYPosition) / 100
 
 			ZStack {
 				RoundedRectangle(cornerRadius: KKRadiusSM)
@@ -69,17 +73,14 @@ struct DimensionsPreview: View {
 							.strokeBorder(Color.secondary.opacity(0.3), lineWidth: KKBorderWidthXS)
 					)
 					.overlay {
-						let textWidth = fit.width * CGFloat(model.textWidthPercent / 100)
-						let nsFont =
-							NSFont(name: model.textFont, size: max(fontSize, 2))
-							?? NSFont.systemFont(ofSize: max(fontSize, 2))
-						Text(previewText(availableWidth: textWidth, font: nsFont))
-							.font(.custom(model.textFont, size: max(fontSize, 2)))
+						Text(previewText(availableWidth: textWidthExport, font: fullFont))
+							.font(.custom(model.textFont, size: fcpFontSize))
 							.foregroundStyle(.white)
 							.multilineTextAlignment(.center)
 							.fixedSize(horizontal: true, vertical: true)
-							.frame(width: textWidth)
-							.offset(y: yOffset)
+							.offset(y: yOffsetExport)
+							.frame(width: exportWidth, height: exportHeight)
+							.scaleEffect(scaleFactor)
 					}
 					.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD))
 					.shadow(color: .black.opacity(0.4), radius: 4, y: 2)

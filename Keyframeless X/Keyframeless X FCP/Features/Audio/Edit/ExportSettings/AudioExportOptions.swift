@@ -114,8 +114,8 @@ struct AudioExportOptionsView: View {
 				model.exportFramerate = Framerate.from(frameDuration: format.frameDuration)
 				model.exportSettingsInitialized = true
 			}
-			initialTextStyle = model.textStyle
-			initialCaptionStyle = model.captionStyle
+			initialTextStyle = TextStyleDefaults.shared.settings
+			initialCaptionStyle = CaptionStyleDefaults.shared.settings
 		}
 	}
 }

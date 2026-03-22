@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import AppKit
 import CoreMedia
 import Foundation
 
@@ -14,7 +15,13 @@ enum FCPXMLBuilder {
 		let frameDuration: String
 
 		var formatName: String {
-			"FFVideoFormat\(width)x\(height)p\(fpsLabel)"
+			let resolution: String
+			switch (width, height) {
+			case (7680, 4320): resolution = "8K"
+			case (3840, 2160): resolution = "4K"
+			default: resolution = "\(height)"
+			}
+			return "FFVideoFormat\(resolution)p\(fpsLabel)"
 		}
 
 		private var fpsLabel: String {
@@ -46,6 +53,7 @@ enum FCPXMLBuilder {
 		let fontSize = max(10, Int(textStyle.textSize))
 		let yPosition = textYOffset(percent: textStyle.textYPosition)
 		let fd = format.frameDuration
+		let font = fontInfo(postScriptName: textStyle.textFont)
 
 		var clipGroups: [(clipIndex: Int, clipName: String, segments: [CaptionSegment])] = []
 		for segment in segments {
@@ -82,13 +90,13 @@ enum FCPXMLBuilder {
 				let segDuration = segment.endTime - segment.startTime
 				elements.append(
 					"\t\t\t\t\t\t\t\t<title ref=\"r2\" duration=\"\(rationalTime(segDuration, frameDuration: fd))\" name=\"\(xmlEscape(segment.lines.first ?? ""))\">\n"
+						+ "\t\t\t\t\t\t\t\t\t<param name=\"Font\" key=\"9999/999166631/999166633/5/999166635/83\" value=\"\(font.paramValue)\" />\n"
 						+ "\t\t\t\t\t\t\t\t\t<param name=\"Size\" key=\"9999/999166631/999166633/5/999166635/3\" value=\"\(fontSize)\" />\n"
 						+ "\t\t\t\t\t\t\t\t\t<text>\n"
 						+ "\t\t\t\t\t\t\t\t\t\t<text-style ref=\"\(tsID)\">\(xmlEscape(segment.text))</text-style>\n"
 						+ "\t\t\t\t\t\t\t\t\t</text>\n"
 						+ "\t\t\t\t\t\t\t\t\t<text-style-def id=\"\(tsID)\">\n"
-						+ "\t\t\t\t\t\t\t\t\t\t<text-style font=\"\(xmlEscape(textStyle.textFont))\" fontSize=\"\(fontSize)\" fontFace=\"Regular\"\n"
-						+ "\t\t\t\t\t\t\t\t\t\t\tfontColor=\"1 1 1 1\" alignment=\"center\" />\n"
+						+ "\t\t\t\t\t\t\t\t\t\t<text-style font=\"\(xmlEscape(font.familyName))\" fontSize=\"\(fontSize)\" fontFace=\"\(xmlEscape(font.faceName))\" fontColor=\"1 1 1 1\" alignment=\"center\" />\n"
 						+ "\t\t\t\t\t\t\t\t\t</text-style-def>\n"
 						+ "\t\t\t\t\t\t\t\t\t<adjust-transform position=\"0 \(yPosition)\" />\n"
 						+ "\t\t\t\t\t\t\t\t</title>"
@@ -111,7 +119,7 @@ enum FCPXMLBuilder {
 			+ "<!DOCTYPE fcpxml SYSTEM \"https://raw.githubusercontent.com/CommandPost/CommandPost/refs/heads/develop/src/extensions/cp/apple/fcpxml/dtd/FCPXMLv1_14.dtd\">\n"
 			+ "<fcpxml version=\"1.14\">\n"
 			+ "\t<resources>\n"
-			+ "\t\t<format id=\"r1\" name=\"\(format.formatName)\" frameDuration=\"\(fd)\" width=\"\(format.width)\" height=\"\(format.height)\" />\n"
+			+ "\t\t<format id=\"r1\" frameDuration=\"\(fd)\" width=\"\(format.width)\" height=\"\(format.height)\" colorSpace=\"1-1-1 (Rec. 709)\" />\n"
 			+ "\t\t<effect id=\"r2\" name=\"Basic Title\"\n"
 			+ "\t\t\tuid=\".../Titles.localized/Bumper:Opener.localized/Basic Title.localized/Basic Title.moti\" />\n"
 			+ "\t\t<media id=\"r3\" name=\"Captions\">\n"
@@ -134,7 +142,7 @@ enum FCPXMLBuilder {
 			+ "<!DOCTYPE fcpxml SYSTEM \"https://raw.githubusercontent.com/CommandPost/CommandPost/refs/heads/develop/src/extensions/cp/apple/fcpxml/dtd/FCPXMLv1_14.dtd\">\n"
 			+ "<fcpxml version=\"1.14\">\n"
 			+ "\t<resources>\n"
-			+ "\t\t<format id=\"r1\" name=\"\(format.formatName)\" frameDuration=\"\(format.frameDuration)\" width=\"\(format.width)\" height=\"\(format.height)\" />\n"
+			+ "\t\t<format id=\"r1\" frameDuration=\"\(format.frameDuration)\" width=\"\(format.width)\" height=\"\(format.height)\" colorSpace=\"1-1-1 (Rec. 709)\" />\n"
 			+ "\t</resources>\n"
 			+ "</fcpxml>"
 	}
@@ -154,6 +162,41 @@ enum FCPXMLBuilder {
 	private static func textYOffset(percent: Double) -> String {
 		let y = percent - 50.0
 		return String(format: "%.1f", y)
+	}
+
+	struct FontInfo {
+		let familyName: String
+		let faceName: String
+		let paramValue: String
+	}
+
+	static func fontInfo(postScriptName: String) -> FontInfo {
+		let manager = NSFontManager.shared
+		let families = manager.availableFontFamilies.sorted()
+
+		guard let font = NSFont(name: postScriptName, size: 12) else {
+			return FontInfo(familyName: postScriptName, faceName: "Regular", paramValue: "0 0")
+		}
+
+		let familyName = font.familyName ?? postScriptName
+		let familyIndex = families.firstIndex(of: familyName) ?? 0
+
+		let members = manager.availableMembers(ofFontFamily: familyName) ?? []
+		var faceIndex = 0
+		var faceName = "Regular"
+		for (i, member) in members.enumerated() {
+			if (member[0] as? String) == postScriptName {
+				faceIndex = i
+				faceName = (member[1] as? String) ?? "Regular"
+				break
+			}
+		}
+
+		return FontInfo(
+			familyName: familyName,
+			faceName: faceName,
+			paramValue: "\(familyIndex) \(faceIndex)"
+		)
 	}
 
 	private static func xmlEscape(_ string: String) -> String {
