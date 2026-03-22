@@ -42,7 +42,8 @@ enum FCPXMLBuilder {
 	static func build(
 		segments: [CaptionSegment],
 		textStyle: TextStyleSettings,
-		format: ExportFormat
+		format: ExportFormat,
+		template: CaptionTemplate = .basicTitle
 	) -> String {
 		guard !segments.isEmpty else {
 			return emptyXML(format: format)
@@ -79,9 +80,9 @@ enum FCPXMLBuilder {
 		xml += "\t<resources>\n"
 		xml +=
 			"\t\t<format id=\"r1\" frameDuration=\"\(fd)\" width=\"\(format.width)\" height=\"\(format.height)\" colorSpace=\"1-1-1 (Rec. 709)\" />\n"
-		xml += "\t\t<effect id=\"r2\" name=\"Text Caption\"\n"
+		xml += "\t\t<effect id=\"r2\" name=\"\(xmlEscape(template.name))\"\n"
 		xml +=
-			"\t\t\tuid=\"~/Titles.localized/Keyframeless/Text Caption/Text Caption.moti\" />\n"
+			"\t\t\tuid=\"\(xmlEscape(template.uid))\" />\n"
 		xml += "\t\t<media id=\"r3\" name=\"Captions\">\n"
 		xml += "\t\t\t<sequence format=\"r1\" duration=\"\(totalDuration)\">\n"
 		xml += "\t\t\t\t<spine>\n"
@@ -113,7 +114,7 @@ enum FCPXMLBuilder {
 				xml +=
 					"\t\t\t\t\t\t\t\t<title ref=\"r2\" duration=\"\(rationalTime(seconds: segDuration, frameRate: frameRate))\" start=\"\(rationalTime(seconds: mediaStart, frameRate: frameRate))\" name=\"\(xmlEscape(segment.lines.first ?? ""))\" role=\"Captions.Captions-1\">\n"
 				let wordCount = segment.wordStarts.count
-				if wordCount > 0 {
+				if wordCount > 0 && template.supportsAnimateOn {
 					xml +=
 						"\t\t\t\t\t\t\t\t\t<param name=\"Animate On\" key=\"9999/1825766846/100/1825766847/2/100\">\n"
 					xml += "\t\t\t\t\t\t\t\t\t\t<keyframeAnimation>\n"
