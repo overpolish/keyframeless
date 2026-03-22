@@ -8,13 +8,18 @@ import SwiftUI
 
 struct ScrollShadowView<Content: View>: View {
 	let shadowHeight: CGFloat
+	let cornerRadius: CGFloat
 	@ViewBuilder var content: () -> Content
 
 	@State private var topOpacity: CGFloat = 0
 	@State private var bottomOpacity: CGFloat = 0
 
-	init(shadowHeight: CGFloat = 20, @ViewBuilder content: @escaping () -> Content) {
+	init(
+		shadowHeight: CGFloat = 20, cornerRadius: CGFloat = 0,
+		@ViewBuilder content: @escaping () -> Content
+	) {
 		self.shadowHeight = shadowHeight
+		self.cornerRadius = cornerRadius
 		self.content = content
 	}
 
@@ -30,6 +35,7 @@ struct ScrollShadowView<Content: View>: View {
 				}
 			}
 		}
+		.clipShape(RoundedRectangle(cornerRadius: cornerRadius))
 		.coordinateSpace(name: "scroll")
 		.overlayPreferenceValue(ContentFrameKey.self) { contentFrame in
 			GeometryReader { viewport in
@@ -60,6 +66,7 @@ struct ScrollShadowView<Content: View>: View {
 						.opacity(canScroll ? min(max(1 - scrollPercent, 0), 1) : 0)
 					}
 			}
+			.clipShape(RoundedRectangle(cornerRadius: cornerRadius))
 			.allowsHitTesting(false)
 		}
 	}

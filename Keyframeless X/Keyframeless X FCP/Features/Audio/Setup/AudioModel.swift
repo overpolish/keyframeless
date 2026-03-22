@@ -111,6 +111,9 @@ class AudioModel: ObservableObject {
 	@Published var stripPunctuation: Bool = CaptionStyleDefaults.shared.settings.stripPunctuation
 	@Published var keepQuestionMarks: Bool = CaptionStyleDefaults.shared.settings.keepQuestionMarks
 
+	@Published var captionTemplates: [CaptionTemplate] = []
+	@Published var selectedTemplate: CaptionTemplate = .basicTitle
+
 	enum CaptionLineCount: String, Codable {
 		case one, two
 	}
@@ -150,10 +153,40 @@ class AudioModel: ObservableObject {
 
 	init() {
 		load()
+		captionTemplates = CaptionTemplateScanner.scan(
+			customTemplates: CustomTemplateStore.shared.templates)
+		resolveSelectedTemplate()
 		objectWillChange
 			.debounce(for: .milliseconds(500), scheduler: RunLoop.main)
 			.sink { [weak self] _ in self?.save() }
 			.store(in: &cancellables)
+	}
+
+	func refreshTemplates() {
+		captionTemplates = CaptionTemplateScanner.scan(
+			customTemplates: CustomTemplateStore.shared.templates)
+		if !captionTemplates.contains(where: { $0.id == selectedTemplate.id }) {
+			selectedTemplate = captionTemplates.first ?? .basicTitle
+		}
+	}
+
+	func addCustomTemplate(from url: URL) {
+		guard let template = CaptionTemplate.fromMotiFile(at: url) else { return }
+		if let existing = captionTemplates.first(where: { $0.uid == template.uid }) {
+			selectedTemplate = existing
+			return
+		}
+		let store = CustomTemplateStore.shared
+		store.add(template)
+		refreshTemplates()
+		if let added = captionTemplates.first(where: { $0.id == template.id }) {
+			selectedTemplate = added
+		}
+	}
+
+	func removeCustomTemplate(_ template: CaptionTemplate) {
+		CustomTemplateStore.shared.remove(template)
+		refreshTemplates()
 	}
 
 	func buildCaptionSegments(from rows: [AudioEditRow]) -> [CaptionSegment] {
@@ -180,7 +213,8 @@ class AudioModel: ObservableObject {
 		return FCPXMLBuilder.build(
 			segments: segments,
 			textStyle: textStyle,
-			format: format
+			format: format,
+			template: selectedTemplate
 		)
 	}
 
@@ -246,6 +280,7 @@ class AudioModel: ObservableObject {
 		var exportFramerate: Framerate?
 		var textStyle: TextStyleSettings?
 		var captionStyle: CaptionStyleSettings?
+		var selectedTemplateID: String?
 	}
 
 	private static var fcpProcessID: Int32? {
@@ -279,6 +314,17 @@ class AudioModel: ObservableObject {
 		if state.exportWidth != nil { exportSettingsInitialized = true }
 		if let ts = state.textStyle { textStyle = ts }
 		if let cs = state.captionStyle { captionStyle = cs }
+		if let tid = state.selectedTemplateID { _pendingTemplateID = tid }
+	}
+
+	private var _pendingTemplateID: String?
+
+	func resolveSelectedTemplate() {
+		guard let tid = _pendingTemplateID,
+			let match = captionTemplates.first(where: { $0.id == tid })
+		else { return }
+		selectedTemplate = match
+		_pendingTemplateID = nil
 	}
 
 	private func save() {
@@ -297,7 +343,8 @@ class AudioModel: ObservableObject {
 			exportHeight: exportHeight.isEmpty ? nil : exportHeight,
 			exportFramerate: exportFramerate,
 			textStyle: textStyle,
-			captionStyle: captionStyle
+			captionStyle: captionStyle,
+			selectedTemplateID: selectedTemplate.id
 		)
 		try? JSONEncoder().encode(state).write(to: url, options: .atomic)
 	}

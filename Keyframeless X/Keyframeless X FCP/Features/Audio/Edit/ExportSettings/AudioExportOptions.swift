@@ -105,6 +105,12 @@ struct AudioExportOptionsView: View {
 				}
 			}
 			Divider()
+			CaptionTemplatePicker(
+				selectedTemplate: $model.selectedTemplate,
+				templates: model.captionTemplates,
+				onDropMoti: { model.addCustomTemplate(from: $0) },
+				onRemoveCustom: { model.removeCustomTemplate($0) }
+			)
 		}
 		.onAppear {
 			if !model.exportSettingsInitialized {
