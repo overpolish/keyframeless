@@ -114,9 +114,12 @@ enum FCPXMLBuilder {
 				xml +=
 					"\t\t\t\t\t\t\t\t<title ref=\"r2\" duration=\"\(rationalTime(seconds: segDuration, frameRate: frameRate))\" start=\"\(rationalTime(seconds: mediaStart, frameRate: frameRate))\" name=\"\(xmlEscape(segment.lines.first ?? ""))\" role=\"Captions.Captions-1\">\n"
 				let wordCount = segment.wordStarts.count
-				if wordCount > 0 && template.supportsAnimateOn {
+				if wordCount > 0 && template.supportsPerWordAnimation,
+					let paramName = template.wordsInParamName,
+					let keyPath = template.wordsInKeyPath
+				{
 					xml +=
-						"\t\t\t\t\t\t\t\t\t<param name=\"Animate On\" key=\"9999/1825766846/100/1825766847/2/100\">\n"
+						"\t\t\t\t\t\t\t\t\t<param name=\"\(paramName)\" key=\"\(keyPath)\">\n"
 					xml += "\t\t\t\t\t\t\t\t\t\t<keyframeAnimation>\n"
 					let divisor = Double(wordCount)
 					for (i, wordStart) in segment.wordStarts.enumerated() {
