@@ -227,6 +227,15 @@ enum CaptionBuilder {
 		let maxWords = max(1, Int(style.maxWordsPerLine))
 		let lineCount = style.captionLines == .two ? 2 : 1
 		let attrs: [NSAttributedString.Key: Any] = [.font: font]
+		let spaceWidth = (" " as NSString).size(withAttributes: attrs).width
+
+		var wordWidths: [CGFloat] = []
+		wordWidths.reserveCapacity(words.count)
+		for word in words {
+			wordWidths.append(
+				word.isEmpty ? 0 : (word as NSString).size(withAttributes: attrs).width
+			)
+		}
 
 		var groups: [LineGroup] = []
 		var i = 0
@@ -239,6 +248,7 @@ enum CaptionBuilder {
 				guard i < words.count else { break }
 				var lineWords: [String] = []
 				var wordCount = 0
+				var lineWidth: CGFloat = 0
 
 				while i < words.count && wordCount < maxWords {
 					let word = words[i]
@@ -246,12 +256,14 @@ enum CaptionBuilder {
 						i += 1
 						continue
 					}
-					let candidate = (lineWords + [word]).joined(separator: " ")
-					let width = (candidate as NSString).size(withAttributes: attrs).width
-					if !lineWords.isEmpty && width > CGFloat(availableWidth) {
+					let wWidth = wordWidths[i]
+					let candidateWidth =
+						lineWords.isEmpty ? wWidth : lineWidth + spaceWidth + wWidth
+					if !lineWords.isEmpty && candidateWidth > CGFloat(availableWidth) {
 						break
 					}
 					lineWords.append(word)
+					lineWidth = candidateWidth
 					wordCount += 1
 					i += 1
 				}
