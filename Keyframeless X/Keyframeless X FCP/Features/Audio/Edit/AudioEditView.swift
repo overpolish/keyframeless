@@ -143,22 +143,13 @@ struct AudioEditView: View {
 								.font(.system(size: 11))
 							}
 							.buttonStyle(.plain)
-							.foregroundStyle(Color(nsColor: .accent() ?? .blue))
+							.foregroundStyle(Color.kkAccent)
 						}
 					}
 
 					if transcribedClipGroups.isEmpty {
 						EmptyTranscriptionPlaceholder()
-							.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD + 4))
-							.background(
-								RoundedRectangle(cornerRadius: KKRadiusMD + 4)
-									.fill(Color.white.opacity(0.04))
-							)
-							.overlay(
-								RoundedRectangle(cornerRadius: KKRadiusMD + 4)
-									.strokeBorder(
-										Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
-							)
+							.kkPanel()
 					} else {
 						ScrollShadowView {
 							ScrollViewReader { proxy in
@@ -209,16 +200,7 @@ struct AudioEditView: View {
 									}
 							}
 						)
-						.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD + 4))
-						.background(
-							RoundedRectangle(cornerRadius: KKRadiusMD + 4)
-								.fill(Color.white.opacity(0.04))
-						)
-						.overlay(
-							RoundedRectangle(cornerRadius: KKRadiusMD + 4)
-								.strokeBorder(
-									Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
-						)
+						.kkPanel()
 					}
 
 					if !untranscribedRows.isEmpty {
@@ -235,7 +217,7 @@ struct AudioEditView: View {
 									.font(.system(size: 11))
 							}
 							.buttonStyle(.plain)
-							.foregroundStyle(Color(nsColor: .accent() ?? .blue))
+							.foregroundStyle(Color.kkAccent)
 						}
 						ScrollShadowView {
 							LazyVStack(alignment: .leading, spacing: 0) {
@@ -256,16 +238,7 @@ struct AudioEditView: View {
 						}
 						.frame(maxHeight: 100, alignment: .top)
 						.fixedSize(horizontal: false, vertical: true)
-						.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD + 4))
-						.background(
-							RoundedRectangle(cornerRadius: KKRadiusMD + 4)
-								.fill(Color.white.opacity(0.04))
-						)
-						.overlay(
-							RoundedRectangle(cornerRadius: KKRadiusMD + 4)
-								.strokeBorder(
-									Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
-						)
+						.kkPanel()
 					}
 				}
 				.frame(maxWidth: .infinity, maxHeight: .infinity)

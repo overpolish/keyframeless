@@ -13,9 +13,7 @@ struct TranscribedClipHeader: View {
 	var containsProfanity: Bool = false
 	@Binding var selectedClips: Set<Int>
 
-	private var clipColor: Color {
-		Color(nsColor: isCompound ? .warning() ?? .yellow : .accent() ?? .blue)
-	}
+	private var clipColor: Color { .kkClipColor(isCompound: isCompound) }
 
 	var body: some View {
 		HStack(spacing: KKSpacingLG) {
@@ -43,7 +41,7 @@ struct TranscribedClipHeader: View {
 					label: "Profanity",
 					systemImage:
 						"checkmark.circle.trianglebadge.exclamationmark.fill",
-					color: Color(nsColor: .error())
+					color: Color.kkError
 				)
 			}
 		}

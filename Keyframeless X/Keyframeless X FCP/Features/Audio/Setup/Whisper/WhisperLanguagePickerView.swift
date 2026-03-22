@@ -98,13 +98,7 @@ struct WhisperLanguagePickerView: View {
 						bottomLeadingRadius: KKRadiusMD + 4, bottomTrailingRadius: KKRadiusMD + 4))
 			}
 			.frame(maxHeight: .infinity)
-			.background(
-				RoundedRectangle(cornerRadius: KKRadiusMD + 4).fill(Color.white.opacity(0.04))
-			)
-			.overlay(
-				RoundedRectangle(cornerRadius: KKRadiusMD + 4)
-					.strokeBorder(Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
-			)
+			.kkPanel()
 		}
 	}
 }
@@ -131,7 +125,7 @@ private struct LanguageRow: View {
 	let action: () -> Void
 
 	var body: some View {
-		let accent = Color(nsColor: .accent() ?? .blue)
+		let accent = Color.kkAccent
 
 		HStack(spacing: KKSpacingLG) {
 			Circle()
@@ -157,10 +151,7 @@ private struct LanguageRow: View {
 		}
 		.padding(.horizontal, KKPaddingLG)
 		.padding(.vertical, KKSpacingMD)
-		.background(
-			RoundedRectangle(cornerRadius: KKRadiusMD)
-				.fill(selected ? accent.opacity(0.12) : Color.clear)
-		)
+		.kkSelectableBackground(selected)
 		.contentShape(Rectangle())
 		.onTapGesture { action() }
 	}

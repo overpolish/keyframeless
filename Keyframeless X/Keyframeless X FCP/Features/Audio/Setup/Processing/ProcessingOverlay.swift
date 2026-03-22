@@ -62,7 +62,7 @@ struct ProcessingOverlay: View {
 			if let progress {
 				ProgressView(value: progress)
 					.frame(width: 180)
-					.tint(Color(nsColor: .accent()))
+					.tint(Color.kkAccent)
 				Text("\(Int(progress * 100))%")
 					.font(.system(size: 12).monospacedDigit())
 					.foregroundStyle(.secondary)

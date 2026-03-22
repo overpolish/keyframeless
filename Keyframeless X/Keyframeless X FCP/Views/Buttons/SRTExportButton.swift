@@ -21,7 +21,7 @@ struct SRTExportButton: View {
 					.font(.system(size: 11, weight: .medium))
 			}
 			.foregroundStyle(
-				hasOverlaps ? .secondary : Color(nsColor: .warning())
+				hasOverlaps ? .secondary : Color.kkWarning
 			)
 			.padding(.horizontal, KKPaddingXL)
 		}

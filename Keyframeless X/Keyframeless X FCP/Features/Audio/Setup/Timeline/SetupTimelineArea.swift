@@ -60,9 +60,9 @@ struct SetupTimelineArea: View {
 	}
 
 	private var borderColor: Color {
-		if isTargeted { return Color(nsColor: .accent()) }
-		if dropState == .denied { return Color(nsColor: .error()) }
-		if dropState == .dropped && model.audioClips.isEmpty { return Color(nsColor: .warning()) }
+		if isTargeted { return Color.kkAccent }
+		if dropState == .denied { return Color.kkError }
+		if dropState == .dropped && model.audioClips.isEmpty { return Color.kkWarning }
 		return Color.secondary.opacity(model.audioClips.isEmpty ? 0.4 : 0.15)
 	}
 }

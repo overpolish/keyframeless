@@ -210,47 +210,23 @@ class TranscriptionStore {
 		save()
 	}
 
-	private var fileURL: URL? {
-		FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-			.first?
-			.appendingPathComponent("Keyframeless/transcription_store.json")
-	}
-
 	private func load() {
-		guard let url = fileURL,
-			let data = try? Data(contentsOf: url),
-			let decoded = try? JSONDecoder().decode([ClipKey: [StoredWord]].self, from: data)
-		else { return }
-		entries = decoded
+		entries =
+			KKStore.load([ClipKey: [StoredWord]].self, from: "transcription_store.json") ?? [:]
 	}
 
 	private func save() {
-		guard let url = fileURL else { return }
-		let dir = url.deletingLastPathComponent()
-		try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-		try? JSONEncoder().encode(entries).write(to: url, options: .atomic)
-	}
-
-	private var editsFileURL: URL? {
-		FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
-			.first?
-			.appendingPathComponent("Keyframeless/transcription_edits.json")
+		KKStore.save(entries, to: "transcription_store.json")
 	}
 
 	private func loadEdits() {
-		guard let url = editsFileURL,
-			let data = try? Data(contentsOf: url),
-			let decoded = try? JSONDecoder().decode(
-				[ClipKey: [String: [StoredWord]]].self, from: data)
-		else { return }
-		sentenceEdits = decoded
+		sentenceEdits =
+			KKStore.load([ClipKey: [String: [StoredWord]]].self, from: "transcription_edits.json")
+			?? [:]
 	}
 
 	private func saveEdits() {
-		guard let url = editsFileURL else { return }
-		let dir = url.deletingLastPathComponent()
-		try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-		try? JSONEncoder().encode(sentenceEdits).write(to: url, options: .atomic)
+		KKStore.save(sentenceEdits, to: "transcription_edits.json")
 	}
 
 }

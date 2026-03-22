@@ -14,7 +14,7 @@ struct ResetButton: View {
 		Button(action: action) {
 			Image(systemName: "arrow.uturn.backward")
 				.font(.system(size: size, weight: .semibold))
-				.foregroundStyle(Color(nsColor: .warning()))
+				.foregroundStyle(Color.kkWarning)
 				.contentShape(Rectangle())
 		}
 		.buttonStyle(.plain)

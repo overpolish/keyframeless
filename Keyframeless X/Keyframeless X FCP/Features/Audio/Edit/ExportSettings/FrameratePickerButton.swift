@@ -11,8 +11,6 @@ struct FrameratePickerButton: View {
 	@State private var isOpen = false
 
 	var body: some View {
-		let accent = Color(nsColor: .accent() ?? .blue)
-
 		HStack(spacing: KKSpacingSM) {
 			Text(selection.label)
 			Spacer()
@@ -23,13 +21,7 @@ struct FrameratePickerButton: View {
 		.frame(width: 80)
 		.padding(.horizontal, KKPaddingLG)
 		.padding(.vertical, KKPaddingXS)
-		.background(
-			Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: KKRadiusMD)
-		)
-		.overlay(
-			RoundedRectangle(cornerRadius: KKRadiusMD)
-				.strokeBorder(Color.secondary.opacity(0.15), lineWidth: KKBorderWidthXS)
-		)
+		.kkPanel(cornerRadius: KKRadiusMD)
 		.contentShape(Rectangle())
 		.onTapGesture { isOpen.toggle() }
 		.popover(isPresented: $isOpen, arrowEdge: .top) {
@@ -42,10 +34,7 @@ struct FrameratePickerButton: View {
 					}
 					.padding(.horizontal, KKPaddingLG)
 					.padding(.vertical, KKSpacingMD)
-					.background(
-						RoundedRectangle(cornerRadius: KKRadiusMD)
-							.fill(selection == rate ? accent.opacity(0.12) : Color.clear)
-					)
+					.kkSelectableBackground(selection == rate)
 					.contentShape(Rectangle())
 					.onTapGesture {
 						selection = rate
