@@ -17,6 +17,7 @@ struct TimelineAxisView: View {
 	var audioPlayer: AudioPlayer? = nil
 	var visibleIndices: Set<Int>? = nil
 	var dimmedIndices: Set<Int> = []
+	var overlapRegions: [CaptionBuilder.OverlapRegion] = []
 	var showWaveforms: Bool = true
 	var hoveredClipIndex: Binding<Int?> = .constant(nil)
 	var onClickDimmed: ((Int) -> Void)? = nil
@@ -36,6 +37,7 @@ struct TimelineAxisView: View {
 				audioPlayer: audioPlayer,
 				visibleIndices: visibleIndices,
 				dimmedIndices: dimmedIndices,
+				overlapRegions: overlapRegions,
 				showWaveforms: showWaveforms,
 				hoveredClipIndex: hoveredClipIndex,
 				onClickDimmed: onClickDimmed
@@ -63,6 +65,7 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 	var audioPlayer: AudioPlayer?
 	var visibleIndices: Set<Int>?
 	var dimmedIndices: Set<Int> = []
+	var overlapRegions: [CaptionBuilder.OverlapRegion] = []
 	var showWaveforms: Bool
 	var hoveredClipIndex: Binding<Int?>
 	var onClickDimmed: ((Int) -> Void)?
@@ -99,10 +102,16 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 		docView.audioPlayer = audioPlayer
 		docView.visibleIndices = visibleIndices
 		docView.dimmedIndices = dimmedIndices
+		docView.overlapRegions = overlapRegions
 		docView.showWaveforms = showWaveforms
+		let oldHovered = docView.hoveredClipIndex
 		docView.hoveredClipIndex = hoveredClipIndex.wrappedValue
-		docView.onHoverClip = { index in
-			hoveredClipIndex.wrappedValue = index
+		if hoveredClipIndex.wrappedValue != oldHovered {
+			if hoveredClipIndex.wrappedValue != nil {
+				docView.startPulse()
+			} else if docView.localHoveredIndex == nil {
+				docView.stopPulse()
+			}
 		}
 		docView.onToggleClip = { index in
 			if selectedClips.contains(index) {
@@ -147,6 +156,7 @@ private class AxisDocumentView: NSView {
 	var selectedClips: Set<Int> = []
 	var visibleIndices: Set<Int>?
 	var dimmedIndices: Set<Int> = []
+	var overlapRegions: [CaptionBuilder.OverlapRegion] = []
 	var showWaveforms: Bool = true
 	var hoveredClipIndex: Int?
 	var onHoverClip: ((Int?) -> Void)?
@@ -164,6 +174,7 @@ private class AxisDocumentView: NSView {
 		}
 	}
 
+	fileprivate var localHoveredIndex: Int?
 	private var cachedClipRects: [(rect: CGRect, index: Int)] = []
 	private var waveforms: [Int: [Float]] = [:]
 	private var waveformTasks: [Int: Task<Void, Never>] = [:]
@@ -197,17 +208,19 @@ private class AxisDocumentView: NSView {
 	override func mouseMoved(with event: NSEvent) {
 		let point = convert(event.locationInWindow, from: nil)
 		let index = cachedClipRects.reversed().first { $0.rect.contains(point) }?.index
-		if index != hoveredClipIndex {
-			onHoverClip?(index)
+		if index != localHoveredIndex {
+			localHoveredIndex = index
 			if index != nil { startPulse() } else { stopPulse() }
+			needsDisplay = true
 		}
 	}
 
 	override func mouseExited(with event: NSEvent) {
-		if hoveredClipIndex != nil {
-			onHoverClip?(nil)
+		if localHoveredIndex != nil {
+			localHoveredIndex = nil
 		}
 		stopPulse()
+		needsDisplay = true
 	}
 
 	override func magnify(with event: NSEvent) {
@@ -270,8 +283,10 @@ private class AxisDocumentView: NSView {
 			selectedClips: selectedClips,
 			visibleIndices: visibleIndices,
 			dimmedIndices: dimmedIndices,
+			overlapRegions: overlapRegions,
 			showWaveforms: showWaveforms,
 			hoveredClipIndex: hoveredClipIndex,
+			glowClipIndex: hoveredClipIndex ?? localHoveredIndex,
 			pulsePhase: pulsePhase,
 			waveforms: waveforms,
 			hasAudioPlayer: audioPlayer != nil,
@@ -315,7 +330,7 @@ private class AxisDocumentView: NSView {
 		return false
 	}
 
-	private func startPulse() {
+	fileprivate func startPulse() {
 		guard pulseTimer == nil else { return }
 		pulsePhase = 0
 		pulseTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) {
@@ -326,7 +341,7 @@ private class AxisDocumentView: NSView {
 		}
 	}
 
-	private func stopPulse() {
+	fileprivate func stopPulse() {
 		pulseTimer?.invalidate()
 		pulseTimer = nil
 		pulsePhase = 0

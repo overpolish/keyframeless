@@ -123,6 +123,7 @@ struct AudioExportOptionsView: View {
 struct AudioExportOptionsSidebar: View {
 	@ObservedObject var model: AudioModel
 	let rows: [AudioEditRow]
+	let srtHasOverlaps: Bool
 
 	private var hasTranscribedSelection: Bool {
 		let selected = model.editSelectedClips ?? Set(model.audioClips.indices)
@@ -133,13 +134,21 @@ struct AudioExportOptionsSidebar: View {
 		VStack(alignment: .leading, spacing: KKSpacingLG) {
 			AudioExportOptionsView(model: model)
 			Spacer()
-			FCPDragZoneView(
-				xmlProvider: { model.buildFCPXML(from: rows) },
-				onDragStateChanged: { model.isDraggingToFCP = $0 }
-			)
-			.frame(height: 40)
-			.allowsHitTesting(hasTranscribedSelection)
-			.opacity(hasTranscribedSelection ? 1 : 0.4)
+			HStack(spacing: KKSpacingLG) {
+				FCPDragZoneView(
+					xmlProvider: { model.buildFCPXML(from: rows) },
+					onDragStateChanged: { model.isDraggingToFCP = $0 }
+				)
+				.frame(height: 40)
+				.allowsHitTesting(hasTranscribedSelection)
+				.opacity(hasTranscribedSelection ? 1 : 0.4)
+				SRTExportButton(
+					hasOverlaps: srtHasOverlaps,
+					action: { model.exportSRT(from: rows) }
+				)
+				.allowsHitTesting(hasTranscribedSelection)
+				.opacity(hasTranscribedSelection ? 1 : 0.4)
+			}
 		}
 		.padding(KKPaddingXL)
 		.frame(maxWidth: .infinity, maxHeight: .infinity)

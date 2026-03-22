@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import Combine
 import KeyframelessKit
 import SwiftUI
 
@@ -16,6 +17,8 @@ struct AudioEditView: View {
 	@State private var clickMonitor: Any?
 	@State private var rowFrames: [Int: CGRect] = [:]
 	@State private var viewportHeight: CGFloat = 0
+	@State private var srtHasOverlaps: Bool = false
+	@State private var srtOverlapRegions: [CaptionBuilder.OverlapRegion] = []
 
 	private var editSelectedClips: Binding<Set<Int>> {
 		Binding(
@@ -38,6 +41,7 @@ struct AudioEditView: View {
 			}
 			rows = AudioEditRowBuilder.buildRows(
 				clips: model.audioClips, format: model.projectFormat)
+			updateSRTOverlaps()
 			clickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
 				let location = event.locationInWindow
 				if let contentView = event.window?.contentView {
@@ -48,6 +52,12 @@ struct AudioEditView: View {
 				}
 				return event
 			}
+		}
+		.onReceive(
+			model.objectWillChange
+				.debounce(for: .milliseconds(300), scheduler: RunLoop.main)
+		) { _ in
+			updateSRTOverlaps()
 		}
 		.onDisappear {
 			player.stop()
@@ -85,6 +95,7 @@ struct AudioEditView: View {
 					selectedClips: editSelectedClips,
 					dimmedIndices: transcribedIndices.isEmpty
 						? Set(model.audioClips.indices) : untranscribedIndices,
+					overlapRegions: srtOverlapRegions,
 					showWaveforms: false,
 					hoveredClipIndex: $hoveredClipIndex,
 					onClickDimmed: { index in
@@ -237,8 +248,10 @@ struct AudioEditView: View {
 					}
 				}
 				.frame(maxWidth: .infinity, maxHeight: .infinity)
-				AudioExportOptionsSidebar(model: model, rows: rows)
-					.frame(maxWidth: .infinity, maxHeight: .infinity)
+				AudioExportOptionsSidebar(
+					model: model, rows: rows, srtHasOverlaps: srtHasOverlaps
+				)
+				.frame(maxWidth: .infinity, maxHeight: .infinity)
 			}
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -269,6 +282,11 @@ struct AudioEditView: View {
 
 	private var untranscribedIndices: Set<Int> {
 		Set(model.audioClips.indices).subtracting(transcribedIndices)
+	}
+
+	private func updateSRTOverlaps() {
+		srtOverlapRegions = model.srtOverlapRegions(from: rows)
+		srtHasOverlaps = !srtOverlapRegions.isEmpty
 	}
 
 	private var sentenceRowIDs: [Int] {
