@@ -6,10 +6,10 @@
 import Foundation
 
 enum CommunityPublisher {
-	private static let owner = "overpolish"
-	private static let repo = "keyframeless-community"
-	private static let baseBranch = "main"
-	private static let apiBase = "https://api.github.com"
+	private static let owner = CommunityTemplateStore.owner
+	private static let repo = CommunityTemplateStore.repo
+	private static let baseBranch = CommunityTemplateStore.branch
+	private static let apiBase = CommunityTemplateStore.apiBase
 
 	struct TemplatePayload {
 		let id: String

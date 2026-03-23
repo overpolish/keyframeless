@@ -19,11 +19,11 @@ struct CommunityTemplate: Identifiable {
 class CommunityTemplateStore: ObservableObject {
 	static let shared = CommunityTemplateStore()
 
-	private static let owner = "overpolish"
-	private static let repo = "keyframeless-community"
-	private static let branch = "main"
-	private static let apiBase = "https://api.github.com"
-	private static let rawBase = "https://raw.githubusercontent.com"
+	static let owner = "overpolish"
+	static let repo = "keyframeless-community"
+	static let branch = "main"
+	static let apiBase = "https://api.github.com"
+	static let rawBase = "https://raw.githubusercontent.com"
 
 	@Published private(set) var templates: [CommunityTemplate] = []
 	@Published private(set) var isLoading = false

@@ -66,10 +66,7 @@ struct CaptionTemplate: Identifiable, Equatable, Codable {
 		return NSImage(contentsOfFile: path)
 	}
 
-	private func loadGifMiddleFrame() -> NSImage? {
-		guard let url = loadPreviewGifURL(),
-			let source = CGImageSourceCreateWithURL(url as CFURL, nil)
-		else { return nil }
+	static func gifMiddleFrame(from source: CGImageSource) -> NSImage? {
 		let count = CGImageSourceGetCount(source)
 		guard count > 0 else { return nil }
 		let middleIndex = count / 2
@@ -77,6 +74,23 @@ struct CaptionTemplate: Identifiable, Equatable, Codable {
 			return nil
 		}
 		return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+	}
+
+	private func loadGifMiddleFrame() -> NSImage? {
+		guard let url = loadPreviewGifURL(),
+			let source = CGImageSourceCreateWithURL(url as CFURL, nil)
+		else { return nil }
+		return Self.gifMiddleFrame(from: source)
+	}
+
+	func resolvedMotiURL() -> URL? {
+		if uid.hasPrefix("~/") {
+			let relative = String(uid.dropFirst(2))
+			let base = FileManager.default.homeDirectoryForCurrentUser
+				.appendingPathComponent("Movies/Motion Templates.localized")
+			return base.appendingPathComponent(relative)
+		}
+		return URL(fileURLWithPath: uid)
 	}
 
 	static func fromMotiFile(at url: URL) -> CaptionTemplate? {
