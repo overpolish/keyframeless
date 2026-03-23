@@ -39,11 +39,18 @@ enum FCPXMLBuilder {
 		}
 	}
 
+	struct PublishedParamEntry {
+		let name: String
+		let key: String
+		let value: String
+	}
+
 	static func build(
 		segments: [CaptionSegment],
 		textStyle: TextStyleSettings,
 		format: ExportFormat,
-		template: CaptionTemplate = .basicTitle
+		template: CaptionTemplate = .basicTitle,
+		publishedParams: [PublishedParamEntry] = []
 	) -> String {
 		guard !segments.isEmpty else {
 			return emptyXML(format: format)
@@ -135,6 +142,10 @@ enum FCPXMLBuilder {
 					}
 					xml += "\t\t\t\t\t\t\t\t\t\t</keyframeAnimation>\n"
 					xml += "\t\t\t\t\t\t\t\t\t</param>\n"
+				}
+				for pp in publishedParams {
+					xml +=
+						"\t\t\t\t\t\t\t\t\t<param name=\"\(xmlEscape(pp.name))\" key=\"\(pp.key)\" value=\"\(pp.value)\"/>\n"
 				}
 				xml += "\t\t\t\t\t\t\t\t\t<text>\n"
 				xml +=

@@ -43,6 +43,9 @@ class AudioModel: ObservableObject {
 
 	@Published var captionTemplates: [CaptionTemplate] = []
 	@Published var selectedTemplate: CaptionTemplate = .basicTitle
+	@Published var paramsModalTemplate: CaptionTemplate?
+	@Published var paramsModalParams: [PublishedParameter] = []
+	@Published var paramsModalHasPerWord: Bool = false
 
 	var textStyle: TextStyleSettings {
 		get {
@@ -142,12 +145,40 @@ class AudioModel: ObservableObject {
 			height: Int(exportHeight) ?? projectFormat?.height ?? 1080,
 			frameDuration: exportFramerate.rawValue
 		)
+		let publishedParams = buildPublishedParamEntries()
 		return FCPXMLBuilder.build(
 			segments: segments,
 			textStyle: textStyle,
 			format: format,
-			template: selectedTemplate
+			template: selectedTemplate,
+			publishedParams: publishedParams
 		)
+	}
+
+	private func buildPublishedParamEntries() -> [FCPXMLBuilder.PublishedParamEntry] {
+		let store = TemplatePublishedParamsStore.shared
+		guard let settings = store.params(for: selectedTemplate.id) else { return [] }
+		var entries: [FCPXMLBuilder.PublishedParamEntry] = []
+		for param in settings.allParams
+		where settings.enabledIDs.contains(param.id) && param.isToggleable {
+			let channel =
+				param.channel.hasPrefix("./")
+				? String(param.channel.dropFirst(2)) : param.channel
+			let key = "9999/10003/\(param.objectID)/\(channel)"
+			let val = store.value(paramID: param.id, for: selectedTemplate.id)
+			let valueStr: String
+			switch param.kind {
+			case .color:
+				valueStr = "\(val.r) \(val.g) \(val.b) \(val.a)"
+			case .slider:
+				valueStr = "\(val.sliderValue)"
+			default:
+				continue
+			}
+			entries.append(
+				FCPXMLBuilder.PublishedParamEntry(name: param.name, key: key, value: valueStr))
+		}
+		return entries
 	}
 
 	func srtHasOverlaps(from rows: [AudioEditRow]) -> Bool {

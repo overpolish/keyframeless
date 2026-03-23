@@ -9,10 +9,12 @@ import SwiftUI
 
 struct LabeledSlider: View {
 	let label: String
+	var labelWidth: CGFloat? = 68
 	@Binding var value: Double
 	let range: ClosedRange<Double>
 	var step: Double? = nil
 	var suffix: String = ""
+	var textColor: Color = .secondary
 	var valueWidth: CGFloat = 40
 
 	@State private var isEditing = false
@@ -22,8 +24,8 @@ struct LabeledSlider: View {
 		HStack(spacing: KKSpacingSM) {
 			Text(label)
 				.font(.caption)
-				.foregroundStyle(.secondary)
-				.frame(width: 68, alignment: .leading)
+				.foregroundStyle(textColor)
+				.frame(width: labelWidth, alignment: .leading)
 			MiniSlider(value: $value, range: range, step: step)
 			if isEditing {
 				HStack(spacing: 0) {
@@ -35,14 +37,14 @@ struct LabeledSlider: View {
 					if !suffix.isEmpty {
 						Text(suffix)
 							.font(.caption.monospacedDigit())
-							.foregroundStyle(.secondary)
+							.foregroundStyle(textColor)
 					}
 				}
 				.frame(width: valueWidth, height: 14)
 			} else {
 				Text("\(Int(value))\(suffix)")
 					.font(.caption.monospacedDigit())
-					.foregroundStyle(.secondary)
+					.foregroundStyle(textColor)
 					.frame(width: valueWidth, alignment: .trailing)
 					.contentShape(Rectangle())
 					.onTapGesture {
