@@ -46,6 +46,7 @@ class AudioModel: ObservableObject {
 	@Published var paramsModalTemplate: CaptionTemplate?
 	@Published var paramsModalParams: [PublishedParameter] = []
 	@Published var paramsModalHasPerWord: Bool = false
+	@Published var publishModalTemplate: CaptionTemplate?
 
 	var textStyle: TextStyleSettings {
 		get {

@@ -155,7 +155,8 @@ struct CaptionTemplatePicker: View {
 								onSelect: { model.selectedTemplate = template },
 								onToggleFavorite: { favorites.toggle(template.id) },
 								onRemove: { onRemoveCustom?(template) },
-								onSettings: { showParamsModal(for: template) }
+								onSettings: { showParamsModal(for: template) },
+								onPublish: { model.publishModalTemplate = template }
 							)
 							.id(template.id)
 						}
