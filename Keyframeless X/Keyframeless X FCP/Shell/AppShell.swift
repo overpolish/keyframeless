@@ -87,9 +87,7 @@ struct AppShell: View {
 					template: template,
 					params: TemplatePublishedParamsStore.shared.params(for: template.id)?
 						.allParams ?? [],
-					hasPerWordAnimation: TemplatePublishedParamsStore.shared.params(
-						for: template.id)?
-						.hasPerWordAnimation ?? false,
+					hasPerWordAnimation: template.supportsPerWordAnimation,
 					enabledIDs: TemplatePublishedParamsStore.shared.params(for: template.id)?
 						.enabledIDs ?? [],
 					onDismiss: { audioModel.publishModalTemplate = nil }

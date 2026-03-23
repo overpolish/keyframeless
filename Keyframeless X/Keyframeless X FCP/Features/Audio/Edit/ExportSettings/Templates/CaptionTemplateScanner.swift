@@ -32,6 +32,9 @@ enum CaptionTemplateScanner {
 				let uid = "~/Titles.localized/Keyframeless/\(name)/\(name).moti"
 				let thumbnailPath = CaptionTemplate.findThumbnail(in: entry)
 				let perWord = checkPerWordSupport(motiFile: motiFile)
+				let gifPath = entry.appendingPathComponent("preview.gif")
+				let previewGifPath =
+					FileManager.default.fileExists(atPath: gifPath.path) ? gifPath.path : nil
 
 				templates.append(
 					CaptionTemplate(
@@ -43,7 +46,8 @@ enum CaptionTemplateScanner {
 						wordsInKeyPath: perWord?.keyPath,
 						isBuiltIn: false,
 						isCustom: false,
-						thumbnailPath: thumbnailPath
+						thumbnailPath: thumbnailPath,
+						previewGifPath: previewGifPath
 					)
 				)
 			}
