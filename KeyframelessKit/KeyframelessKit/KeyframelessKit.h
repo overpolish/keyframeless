@@ -24,4 +24,5 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKSeparatorView.h>
 #import <KeyframelessKit/KKShaderTypes.h>
 #import <KeyframelessKit/KKTokens.h>
+#import <KeyframelessKit/KKUpdateChecker.h>
 #import <KeyframelessKit/NSColor+KKColors.h>
