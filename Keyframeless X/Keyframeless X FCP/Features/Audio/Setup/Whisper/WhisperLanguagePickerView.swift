@@ -47,6 +47,7 @@ struct WhisperLanguagePickerView: View {
 					disabled: isEnglish
 				)
 			}
+			.frame(height: 20)
 
 			VStack(spacing: 0) {
 				TextField("Search", text: $search)
