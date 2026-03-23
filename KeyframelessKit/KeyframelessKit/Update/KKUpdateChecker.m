@@ -136,17 +136,22 @@ static NSTimeInterval const kCheckInterval = 86400; // 24 hours
 
           NSUserDefaults *defs = [NSUserDefaults standardUserDefaults];
           [defs setObject:[NSDate date] forKey:kLastCheckKey];
-          [defs setObject:version forKey:kCachedVersionKey];
-          if (htmlURL) {
-            [defs setObject:htmlURL forKey:kCachedURLKey];
+
+          if (newer) {
+            [defs setObject:version forKey:kCachedVersionKey];
+            if (htmlURL) {
+              [defs setObject:htmlURL forKey:kCachedURLKey];
+            }
+          } else {
+            [defs removeObjectForKey:kCachedVersionKey];
+            [defs removeObjectForKey:kCachedURLKey];
           }
 
           dispatch_async(dispatch_get_main_queue(), ^{
             self->_latestVersion = version;
             self->_updateAvailable = newer;
-            if (htmlURL) {
-              self->_downloadURL = [NSURL URLWithString:htmlURL];
-            }
+            self->_downloadURL =
+                newer && htmlURL ? [NSURL URLWithString:htmlURL] : nil;
             if (completion)
               completion(newer);
           });
