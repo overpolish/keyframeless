@@ -22,6 +22,8 @@ struct TemplatePublishModal: View {
 	@State private var gifWrongAspect = false
 	@State private var focusName = false
 	@State private var focusAuthor = false
+	@State private var isPublishing = false
+	@State private var publishError: String?
 
 	init(
 		template: CaptionTemplate,
@@ -113,6 +115,18 @@ struct TemplatePublishModal: View {
 						Text("16:9 Aspect Ratio - Max size 300Kb").font(.caption).foregroundStyle(
 							.secondary)
 					}
+					Button {
+						downloadSampleAudio()
+					} label: {
+						HStack(spacing: KKSpacingSM) {
+							Image(systemName: "arrow.down.circle.fill")
+								.font(.system(size: 10))
+							Text("Download Sample Audio")
+								.font(.system(size: 11))
+						}
+						.foregroundStyle(Color.kkAccent)
+					}
+					.buttonStyle(.plain)
 					GifDropZone(
 						gifURL: previewGifURL,
 						isDropTargeted: $isDropTargeted,
@@ -144,15 +158,25 @@ struct TemplatePublishModal: View {
 					}
 				}
 
+				if let publishError {
+					Text(publishError)
+						.font(.system(size: 10))
+						.foregroundStyle(Color.kkError)
+						.fixedSize(horizontal: false, vertical: true)
+				}
+
 				HStack {
 					Button("Cancel") { onDismiss() }
 						.buttonStyle(.plain)
 						.foregroundStyle(.secondary)
 					Spacer()
-					Button("Publish") { publish() }
+					Button(isPublishing ? "Publishing..." : "Publish") { publish() }
 						.buttonStyle(.plain)
-						.foregroundStyle(canPublish ? Color.kkAccent : .secondary.opacity(0.4))
-						.disabled(!canPublish)
+						.foregroundStyle(
+							canPublish && !isPublishing
+								? Color.kkAccent : .secondary.opacity(0.4)
+						)
+						.disabled(!canPublish || isPublishing)
 				}
 			}
 			.padding(KKPaddingXL)
@@ -195,6 +219,20 @@ struct TemplatePublishModal: View {
 		previewGifURL = url
 	}
 
+	private func downloadSampleAudio() {
+		guard
+			let sourceURL = Bundle.main.url(
+				forResource: "the-quick-brown-fox-jumps-over-the-lazy-dog",
+				withExtension: "m4a"
+			)
+		else { return }
+		let panel = NSSavePanel()
+		panel.nameFieldStringValue = "the-quick-brown-fox-jumps-over-the-lazy-dog.m4a"
+		panel.allowedContentTypes = [UTType.mpeg4Audio]
+		guard panel.runModal() == .OK, let destURL = panel.url else { return }
+		try? FileManager.default.copyItem(at: sourceURL, to: destURL)
+	}
+
 	private func pickGif() {
 		let panel = NSOpenPanel()
 		panel.allowedContentTypes = [UTType.gif]
@@ -216,23 +254,55 @@ struct TemplatePublishModal: View {
 		return true
 	}
 
-	private func publish() {
-		guard canPublish else { return }
-		let publishID = UUID().uuidString
-		print("=== PUBLISH TEMPLATE ===")
-		print("Publish ID: \(publishID)")
-		print("Name: \(name)")
-		print("Author: \(author.isEmpty ? "(none)" : author)")
-		print("Template ID: \(template.id)")
-		print("Template UID: \(template.uid)")
-		print("Preview GIF: \(previewGifURL?.path ?? "none")")
-		print("Per-word animation: \(hasPerWordAnimation)")
-		print("Enabled params (\(enabledParams.count)):")
-		for param in enabledParams {
-			print("  - \(param.name) [\(param.kind)]")
+	private func resolveMotiDirectory() -> URL? {
+		let uid = template.uid
+		let motiURL: URL
+		if uid.hasPrefix("~/") {
+			let relative = String(uid.dropFirst(2))
+			let base = FileManager.default.homeDirectoryForCurrentUser
+				.appendingPathComponent("Movies/Motion Templates.localized")
+			motiURL = base.appendingPathComponent(relative)
+		} else {
+			motiURL = URL(fileURLWithPath: uid)
 		}
-		print("========================")
-		onDismiss()
+		return motiURL.deletingLastPathComponent()
+	}
+
+	private func publish() {
+		guard canPublish, !isPublishing else { return }
+		guard let motiDir = resolveMotiDirectory() else {
+			publishError = "Could not locate template directory"
+			return
+		}
+		guard let gifURL = previewGifURL else { return }
+
+		isPublishing = true
+		publishError = nil
+
+		let payload = CommunityPublisher.TemplatePayload(
+			id: UUID().uuidString,
+			name: name.trimmingCharacters(in: .whitespaces),
+			author: author.trimmingCharacters(in: .whitespaces),
+			perWord: hasPerWordAnimation,
+			params: enabledParams.map { ["name": $0.name, "kind": "\($0.kind)"] },
+			motiDirectoryURL: motiDir,
+			previewGifURL: gifURL
+		)
+
+		Task {
+			do {
+				try await CommunityPublisher.publish(payload)
+				await MainActor.run {
+					isPublishing = false
+					onDismiss()
+				}
+			} catch {
+				await MainActor.run {
+					isPublishing = false
+					publishError = error.localizedDescription
+				}
+			}
+		}
 	}
 }
 

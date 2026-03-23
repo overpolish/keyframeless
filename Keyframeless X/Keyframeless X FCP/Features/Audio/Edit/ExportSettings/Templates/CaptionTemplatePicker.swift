@@ -20,10 +20,12 @@ struct CaptionTemplatePicker: View {
 
 	@ObservedObject private var favorites = TemplateFavorites.shared
 	@ObservedObject private var paramsStore = TemplatePublishedParamsStore.shared
+	@ObservedObject private var communityStore = CommunityTemplateStore.shared
 	@State private var isDropTargeted = false
 	@State private var searchText = ""
 	@State private var showFavoritesOnly = false
 	@State private var showPerWordOnly = false
+	@State private var showCommunity = true
 	@State private var showControlsPopover = false
 
 	private func sorted(_ list: [CaptionTemplate]) -> [CaptionTemplate] {
@@ -55,6 +57,27 @@ struct CaptionTemplatePicker: View {
 
 	private var customTemplates: [CaptionTemplate] {
 		filtered(templates.filter { $0.isCustom })
+	}
+
+	private var filteredCommunityTemplates: [CommunityTemplate] {
+		let installedNames = Set(keyframelessTemplates.map { $0.name })
+		var result = communityStore.templates.filter { !installedNames.contains($0.name) }
+		if showPerWordOnly {
+			result = result.filter { $0.perWord }
+		}
+		if !searchText.isEmpty {
+			result = result.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+		}
+		return result
+	}
+
+	private var mergedKeyframelessItems: [KeyframelessItem] {
+		let installed = keyframelessTemplates.map { KeyframelessItem.installed($0) }
+		let community =
+			showCommunity ? filteredCommunityTemplates.map { KeyframelessItem.community($0) } : []
+		return (installed + community).sorted {
+			$0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+		}
 	}
 
 	private var hasEnabledControls: Bool {
@@ -111,6 +134,20 @@ struct CaptionTemplatePicker: View {
 						.contentShape(Rectangle())
 				}
 				.buttonStyle(.plain)
+				Button {
+					showCommunity.toggle()
+				} label: {
+					Image(systemName: "arrow.down.circle.fill")
+						.font(.system(size: 11))
+						.foregroundStyle(
+							showCommunity
+								? Color.kkAccent
+								: .secondary
+						)
+						.frame(maxHeight: .infinity)
+						.contentShape(Rectangle())
+				}
+				.buttonStyle(.plain)
 				Spacer()
 				if hasEnabledControls {
 					Button {
@@ -135,15 +172,35 @@ struct CaptionTemplatePicker: View {
 			ScrollShadowView(cornerRadius: KKRadiusSM, scrollToID: model.selectedTemplate.id) {
 				VStack(alignment: .leading, spacing: KKSpacingLG) {
 					TemplateSection(title: "Keyframeless") {
-						ForEach(keyframelessTemplates) { template in
-							CaptionTemplateCard(
-								template: template,
-								isSelected: template.id == model.selectedTemplate.id,
-								isFavorite: favorites.contains(template.id),
-								onSelect: { model.selectedTemplate = template },
-								onToggleFavorite: { favorites.toggle(template.id) }
-							)
-							.id(template.id)
+						ForEach(mergedKeyframelessItems) { item in
+							switch item {
+							case .installed(let template):
+								CaptionTemplateCard(
+									template: template,
+									isSelected: template.id == model.selectedTemplate.id,
+									isFavorite: favorites.contains(template.id),
+									onSelect: { model.selectedTemplate = template },
+									onToggleFavorite: { favorites.toggle(template.id) }
+								)
+								.id(template.id)
+							case .community(let template):
+								CommunityTemplateCard(
+									template: template,
+									onDownload: { downloadCommunityTemplate(template) }
+								)
+							}
+						}
+						if communityStore.isLoading {
+							HStack {
+								Spacer()
+								ProgressView()
+									.controlSize(.small)
+								Text("Loading community templates...")
+									.font(.system(size: 10))
+									.foregroundStyle(.secondary)
+								Spacer()
+							}
+							.padding(.vertical, KKPaddingLG)
 						}
 					}
 					TemplateSection(title: "Custom") {
@@ -166,8 +223,20 @@ struct CaptionTemplatePicker: View {
 				.padding(.vertical, KKPaddingXS)
 			}
 		}
+		.onAppear { communityStore.fetchIfNeeded() }
 		.onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
 			handleDrop(providers)
+		}
+	}
+
+	private func downloadCommunityTemplate(_ template: CommunityTemplate) {
+		Task {
+			do {
+				try await CommunityTemplateStore.download(template)
+				await MainActor.run { model.refreshTemplates() }
+			} catch {
+				print("Download failed: \(error.localizedDescription)")
+			}
 		}
 	}
 
@@ -231,6 +300,25 @@ struct CaptionTemplatePicker: View {
 			return base.appendingPathComponent(relative)
 		}
 		return URL(fileURLWithPath: uid)
+	}
+}
+
+enum KeyframelessItem: Identifiable {
+	case installed(CaptionTemplate)
+	case community(CommunityTemplate)
+
+	var id: String {
+		switch self {
+		case .installed(let t): return t.id
+		case .community(let t): return "community-\(t.id)"
+		}
+	}
+
+	var name: String {
+		switch self {
+		case .installed(let t): return t.name
+		case .community(let t): return t.name
+		}
 	}
 }
 

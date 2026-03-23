@@ -8,7 +8,7 @@
 	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
-	<key>com.apple.security.assets.movies.read-only</key>
+	<key>com.apple.security.assets.movies.read-write</key>
 	<true/>
 </dict>
 </plist>

@@ -14,6 +14,7 @@ struct PublishedParamsModal: View {
 	let onDismiss: () -> Void
 
 	@State private var enabledIDs: Set<String>
+	@State private var paramListHeight: CGFloat = 0
 
 	init(
 		templateName: String,
@@ -86,7 +87,13 @@ struct PublishedParamsModal: View {
 								)
 							}
 						}
+						.onGeometryChange(for: CGFloat.self) { proxy in
+							proxy.size.height
+						} action: { height in
+							paramListHeight = height
+						}
 					}
+					.frame(height: min(paramListHeight, 300))
 				}
 				HStack {
 					if params.isEmpty {
@@ -107,8 +114,6 @@ struct PublishedParamsModal: View {
 			}
 			.padding(KKPaddingXL)
 			.frame(width: 360)
-			.fixedSize(horizontal: false, vertical: true)
-			.frame(maxHeight: 500)
 			.kkPanel()
 			.background(
 				RoundedRectangle(cornerRadius: KKRadiusMD + 4)
