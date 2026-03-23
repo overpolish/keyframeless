@@ -28,6 +28,10 @@ class AudioModel: ObservableObject {
 	@Published var textSize: Double = TextStyleDefaults.shared.settings.textSize
 	@Published var textYPosition: Double = TextStyleDefaults.shared.settings.textYPosition
 	@Published var textFont: String = TextStyleDefaults.shared.settings.textFont
+	@Published var textColorR: Double = TextStyleDefaults.shared.settings.textColorR
+	@Published var textColorG: Double = TextStyleDefaults.shared.settings.textColorG
+	@Published var textColorB: Double = TextStyleDefaults.shared.settings.textColorB
+	@Published var textColorA: Double = TextStyleDefaults.shared.settings.textColorA
 
 	@Published var maxWordsPerLine: Double = CaptionStyleDefaults.shared.settings.maxWordsPerLine
 	@Published var captionLines: CaptionLineCount = CaptionStyleDefaults.shared.settings
@@ -44,13 +48,19 @@ class AudioModel: ObservableObject {
 		get {
 			TextStyleSettings(
 				textWidthPercent: textWidthPercent, textSize: textSize,
-				textYPosition: textYPosition, textFont: textFont)
+				textYPosition: textYPosition, textFont: textFont,
+				textColorR: textColorR, textColorG: textColorG,
+				textColorB: textColorB, textColorA: textColorA)
 		}
 		set {
 			textWidthPercent = newValue.textWidthPercent
 			textSize = newValue.textSize
 			textYPosition = newValue.textYPosition
 			textFont = newValue.textFont
+			textColorR = newValue.textColorR
+			textColorG = newValue.textColorG
+			textColorB = newValue.textColorB
+			textColorA = newValue.textColorA
 		}
 	}
 

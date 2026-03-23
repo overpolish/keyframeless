@@ -39,6 +39,14 @@ struct TextStyleSettings: Codable, Equatable {
 	var textSize: Double = 100
 	var textYPosition: Double = 20
 	var textFont: String = "HelveticaNeue"
+	var textColorR: Double = 1
+	var textColorG: Double = 1
+	var textColorB: Double = 1
+	var textColorA: Double = 1
+
+	var fontColorString: String {
+		"\(textColorR) \(textColorG) \(textColorB) \(textColorA)"
+	}
 }
 
 class TextStyleDefaults {

@@ -58,6 +58,7 @@ enum FCPXMLBuilder {
 		let font = fontInfo(postScriptName: textStyle.textFont)
 		let escapedFamily = xmlEscape(font.familyName)
 		let escapedFace = xmlEscape(font.faceName)
+		let fontColor = textStyle.fontColorString
 
 		var clipGroups: [(clipIndex: Int, clipName: String, segments: [CaptionSegment])] = []
 		for segment in segments {
@@ -141,7 +142,7 @@ enum FCPXMLBuilder {
 				xml += "\t\t\t\t\t\t\t\t\t</text>\n"
 				xml += "\t\t\t\t\t\t\t\t\t<text-style-def id=\"\(tsID)\">\n"
 				xml +=
-					"\t\t\t\t\t\t\t\t\t\t<text-style font=\"\(escapedFamily)\" fontSize=\"\(fontSize)\" fontFace=\"\(escapedFace)\" fontColor=\"1 1 1 1\" alignment=\"center\" />\n"
+					"\t\t\t\t\t\t\t\t\t\t<text-style font=\"\(escapedFamily)\" fontSize=\"\(fontSize)\" fontFace=\"\(escapedFace)\" fontColor=\"\(fontColor)\" alignment=\"center\" />\n"
 				xml += "\t\t\t\t\t\t\t\t\t</text-style-def>\n"
 				xml += "\t\t\t\t\t\t\t\t\t<adjust-transform position=\"0 \(yPosition)\" />\n"
 				xml += "\t\t\t\t\t\t\t\t</title>\n"

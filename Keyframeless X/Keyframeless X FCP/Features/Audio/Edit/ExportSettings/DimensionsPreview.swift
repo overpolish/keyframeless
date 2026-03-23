@@ -75,7 +75,14 @@ struct DimensionsPreview: View {
 					.overlay {
 						Text(previewText(availableWidth: textWidthExport, font: fullFont))
 							.font(.custom(model.textFont, size: fcpFontSize))
-							.foregroundStyle(.white)
+							.foregroundStyle(
+								Color(
+									red: model.textColorR,
+									green: model.textColorG,
+									blue: model.textColorB,
+									opacity: model.textColorA
+								)
+							)
 							.multilineTextAlignment(.center)
 							.fixedSize(horizontal: true, vertical: true)
 							.offset(y: yOffsetExport)
