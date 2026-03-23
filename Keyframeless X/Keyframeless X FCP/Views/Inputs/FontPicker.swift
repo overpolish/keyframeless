@@ -8,6 +8,10 @@ import SwiftUI
 
 struct FontPickerRow: View {
 	@Binding var selectedFont: String
+	@Binding var textColorR: Double
+	@Binding var textColorG: Double
+	@Binding var textColorB: Double
+	@Binding var textColorA: Double
 	@State private var isOpen = false
 
 	private var displayName: String {
@@ -38,6 +42,12 @@ struct FontPickerRow: View {
 				FontListPopover(selectedFont: $selectedFont, fonts: FontCache.families)
 					.background(PopoverBackgroundClearer())
 			}
+			ColorSwatch(
+				colorR: $textColorR,
+				colorG: $textColorG,
+				colorB: $textColorB,
+				colorA: $textColorA
+			)
 		}
 	}
 }

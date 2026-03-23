@@ -11,7 +11,13 @@ struct TextSettingsPanel: View {
 
 	var body: some View {
 		VStack(spacing: KKSpacingLG) {
-			FontPickerRow(selectedFont: $model.textFont)
+			FontPickerRow(
+				selectedFont: $model.textFont,
+				textColorR: $model.textColorR,
+				textColorG: $model.textColorG,
+				textColorB: $model.textColorB,
+				textColorA: $model.textColorA,
+			)
 			LabeledSlider(
 				label: "Text Width", value: $model.textWidthPercent, range: 10...100,
 				suffix: "%")
