@@ -141,10 +141,16 @@ struct CaptionTemplateCard: View {
 					)
 			)
 
-			Text(template.name)
-				.font(.system(size: 9))
-				.foregroundStyle(isSelected ? .primary : .secondary)
-				.lineLimit(1)
+			HStack {
+				Text(template.name)
+					.font(.system(size: 9))
+					.foregroundStyle(isSelected ? .primary : .secondary)
+					.lineLimit(1)
+				if let author = template.author {
+					Spacer()
+					InfoBadge(label: author, systemImage: "person.fill")
+				}
+			}
 		}
 		.onHover { hovering in
 			isHovered = hovering

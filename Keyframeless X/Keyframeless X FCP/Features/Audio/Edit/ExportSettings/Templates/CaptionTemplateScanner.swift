@@ -46,6 +46,7 @@ enum CaptionTemplateScanner {
 						wordsInKeyPath: perWord?.keyPath,
 						isBuiltIn: false,
 						isCustom: false,
+						author: CaptionTemplate.readAuthor(in: entry),
 						thumbnailPath: thumbnailPath,
 						previewGifPath: previewGifPath
 					)

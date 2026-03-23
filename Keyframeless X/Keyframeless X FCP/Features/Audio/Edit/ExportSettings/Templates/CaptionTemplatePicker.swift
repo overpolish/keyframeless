@@ -41,7 +41,10 @@ struct CaptionTemplatePicker: View {
 			result = result.filter { $0.supportsPerWordAnimation }
 		}
 		if !searchText.isEmpty {
-			result = result.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+			result = result.filter {
+				$0.name.localizedCaseInsensitiveContains(searchText)
+					|| ($0.author?.localizedCaseInsensitiveContains(searchText) ?? false)
+			}
 		}
 		return sorted(result)
 	}
@@ -61,7 +64,10 @@ struct CaptionTemplatePicker: View {
 			result = result.filter { $0.perWord }
 		}
 		if !searchText.isEmpty {
-			result = result.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+			result = result.filter {
+				$0.name.localizedCaseInsensitiveContains(searchText)
+					|| $0.author.localizedCaseInsensitiveContains(searchText)
+			}
 		}
 		return result
 	}
