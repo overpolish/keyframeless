@@ -6,9 +6,6 @@
 import KeyframelessKit
 import SwiftUI
 
-private let cardAspect: CGFloat = 16.0 / 9.0
-private let selectionInset: CGFloat = 3
-
 struct CommunityTemplateCard: View {
 	let template: CommunityTemplate
 	let onDownload: () -> Void
@@ -106,14 +103,9 @@ struct CommunityTemplateCard: View {
 				.appendingPathComponent("\(template.id)-preview.gif")
 			try data.write(to: tempURL)
 
-			guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return }
-			let count = CGImageSourceGetCount(source)
-			guard count > 0 else { return }
-			let middleIndex = count / 2
-			guard let cgImage = CGImageSourceCreateImageAtIndex(source, middleIndex, nil)
+			guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+				let image = CaptionTemplate.gifMiddleFrame(from: source)
 			else { return }
-			let image = NSImage(
-				cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
 
 			await MainActor.run {
 				thumbnail = image

@@ -6,9 +6,6 @@
 import KeyframelessKit
 import SwiftUI
 
-private let cardAspect: CGFloat = 16.0 / 9.0
-private let selectionInset: CGFloat = 3
-
 struct CaptionTemplateCard: View {
 	let template: CaptionTemplate
 	let isSelected: Bool
