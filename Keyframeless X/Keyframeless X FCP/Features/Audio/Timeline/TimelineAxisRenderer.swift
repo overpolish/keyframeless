@@ -23,6 +23,7 @@ struct TimelineAxisRenderer {
 	let playingIndex: Int?
 	let currentTime: Double?
 	let labelForTime: ((Double) -> String)?
+	var skipWaveforms: Bool = false
 
 	let playBtnSize: CGFloat = 12
 	let minHeightForControls: CGFloat = 16
@@ -222,7 +223,7 @@ struct TimelineAxisRenderer {
 			&& state.w > playBtnSize + 8
 			&& state.clip.url != nil
 
-		if showWaveforms, let samples = waveforms[state.index], !samples.isEmpty {
+		if showWaveforms, !skipWaveforms, let samples = waveforms[state.index], !samples.isEmpty {
 			drawClipWaveform(
 				samples, state: state, hasAudioControls: hasAudioControls, in: ctx)
 		}

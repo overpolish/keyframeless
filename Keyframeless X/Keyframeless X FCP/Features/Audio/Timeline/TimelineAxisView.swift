@@ -95,18 +95,48 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 		guard let docView = scrollView.documentView as? AxisDocumentView else { return }
 		let contentWidth = max(availableWidth, availableWidth * zoom)
 		let docHeight = availableHeight > 0 ? availableHeight : 36
-		docView.frame = NSRect(x: 0, y: 0, width: contentWidth, height: docHeight)
-		docView.duration = duration
-		docView.clips = clips
-		docView.selectedClips = selectedClips
+		let newFrame = NSRect(x: 0, y: 0, width: contentWidth, height: docHeight)
+		let frameChanged = docView.frame != newFrame
+		docView.frame = newFrame
+
+		var stateChanged = frameChanged
+		if docView.duration != duration {
+			docView.duration = duration
+			stateChanged = true
+		}
+		if docView.selectedClips != selectedClips {
+			docView.selectedClips = selectedClips
+			stateChanged = true
+		}
+		if docView.visibleIndices != visibleIndices {
+			docView.visibleIndices = visibleIndices
+			stateChanged = true
+		}
+		if docView.dimmedIndices != dimmedIndices {
+			docView.dimmedIndices = dimmedIndices
+			stateChanged = true
+		}
+		if docView.showWaveforms != showWaveforms {
+			docView.showWaveforms = showWaveforms
+			stateChanged = true
+		}
+
+		// clips triggers waveform loading via didSet, so always assign through the setter
+		let clipsChanged =
+			clips.map(\.url) != docView.clips.map(\.url)
+			|| clips.count != docView.clips.count
+		if clipsChanged {
+			docView.clips = clips
+			stateChanged = true
+		}
+
 		docView.audioPlayer = audioPlayer
-		docView.visibleIndices = visibleIndices
-		docView.dimmedIndices = dimmedIndices
 		docView.overlapRegions = overlapRegions
-		docView.showWaveforms = showWaveforms
+
 		let oldHovered = docView.hoveredClipIndex
 		docView.hoveredClipIndex = hoveredClipIndex.wrappedValue
 		if hoveredClipIndex.wrappedValue != oldHovered {
+			stateChanged = true
 			if hoveredClipIndex.wrappedValue != nil {
 				docView.startPulse()
 			} else if docView.localHoveredIndex == nil {
@@ -122,7 +152,10 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 		}
 		docView.onClickDimmed = onClickDimmed
 		docView.labelForTime = labelForTime
-		docView.needsDisplay = true
+
+		if stateChanged {
+			docView.needsDisplay = true
+		}
 	}
 
 	class Coordinator {
@@ -184,7 +217,6 @@ private class AxisDocumentView: NSView {
 	private var dragHoveredIndex: Int?
 	private var pulseTimer: Timer?
 	private var pulsePhase: CGFloat = 0
-
 	private let playBtnSize: CGFloat = 12
 	private let minHeightForControls: CGFloat = 16
 	private let scrubStripHeight: CGFloat = 14
@@ -192,6 +224,10 @@ private class AxisDocumentView: NSView {
 	private var trackingArea: NSTrackingArea?
 
 	override var isFlipped: Bool { true }
+	override var wantsLayer: Bool {
+		get { true }
+		set {}
+	}
 
 	override func updateTrackingAreas() {
 		super.updateTrackingAreas()
@@ -292,9 +328,15 @@ private class AxisDocumentView: NSView {
 			hasAudioPlayer: audioPlayer != nil,
 			playingIndex: audioPlayer?.playingIndex,
 			currentTime: audioPlayer?.currentTime,
-			labelForTime: labelForTime
+			labelForTime: labelForTime,
+			skipWaveforms: inLiveResize
 		)
 		renderer.draw(in: ctx, cachedClipRects: &cachedClipRects)
+	}
+
+	override func viewDidEndLiveResize() {
+		super.viewDidEndLiveResize()
+		needsDisplay = true
 	}
 
 	private func handleAudioControlClick(

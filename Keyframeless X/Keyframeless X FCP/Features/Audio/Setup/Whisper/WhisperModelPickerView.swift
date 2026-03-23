@@ -18,6 +18,7 @@ struct WhisperModelPickerView: View {
 				Spacer()
 				HelperText("Recommended is based on hardware")
 			}
+			.frame(height: 20)
 
 			VStack(spacing: KKSpacingXS) {
 				ForEach(WhisperModelManager.models) { model in

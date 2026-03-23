@@ -66,9 +66,10 @@ struct CaptionTemplateCard: View {
 											? Color.kkWarning
 											: .secondary.opacity(0.4)
 									)
+									.padding(KKPaddingLG)
+									.contentShape(Rectangle())
 							}
 							.buttonStyle(.plain)
-							.padding(KKPaddingMD)
 						}
 					}
 					Spacer()

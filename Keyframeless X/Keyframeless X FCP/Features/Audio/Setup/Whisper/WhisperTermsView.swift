@@ -49,6 +49,7 @@ struct WhisperTermsView: View {
 				Spacer()
 				HelperText("Optional")
 			}
+			.frame(height: 20)
 
 			VStack(spacing: 0) {
 				HStack(spacing: KKSpacingSM) {
