@@ -16,6 +16,7 @@ struct CaptionTemplateCard: View {
 	let onSelect: () -> Void
 	var onToggleFavorite: (() -> Void)?
 	var onRemove: (() -> Void)?
+	var onSettings: (() -> Void)?
 
 	@State private var thumbnail: NSImage?
 	@State private var gifURL: URL?
@@ -73,6 +74,21 @@ struct CaptionTemplateCard: View {
 						}
 					}
 					Spacer()
+					HStack {
+						if isHovered, let onSettings {
+							Button {
+								onSettings()
+							} label: {
+								Image(systemName: "gearshape.fill")
+									.font(.system(size: 10))
+									.foregroundStyle(.secondary)
+									.padding(KKPaddingMD)
+									.contentShape(Rectangle())
+							}
+							.buttonStyle(.plain)
+						}
+						Spacer()
+					}
 				}
 			}
 			.overlay(alignment: .top) {

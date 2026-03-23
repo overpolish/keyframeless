@@ -9,6 +9,7 @@ import SwiftUI
 struct ScrollShadowView<Content: View>: View {
 	let shadowHeight: CGFloat
 	let cornerRadius: CGFloat
+	let scrollToID: AnyHashable?
 	@ViewBuilder var content: () -> Content
 
 	@State private var topOpacity: CGFloat = 0
@@ -16,22 +17,31 @@ struct ScrollShadowView<Content: View>: View {
 
 	init(
 		shadowHeight: CGFloat = 20, cornerRadius: CGFloat = 0,
+		scrollToID: AnyHashable? = nil,
 		@ViewBuilder content: @escaping () -> Content
 	) {
 		self.shadowHeight = shadowHeight
 		self.cornerRadius = cornerRadius
+		self.scrollToID = scrollToID
 		self.content = content
 	}
 
 	var body: some View {
-		ScrollView {
-			ZStack {
-				content()
-				GeometryReader { inner in
-					Color.clear
-						.anchorPreference(key: ContentFrameKey.self, value: .bounds) { anchor in
-							inner.frame(in: .named("scroll"))
-						}
+		ScrollViewReader { proxy in
+			ScrollView {
+				ZStack {
+					content()
+					GeometryReader { inner in
+						Color.clear
+							.anchorPreference(key: ContentFrameKey.self, value: .bounds) { anchor in
+								inner.frame(in: .named("scroll"))
+							}
+					}
+				}
+			}
+			.onAppear {
+				if let scrollToID {
+					proxy.scrollTo(scrollToID, anchor: .center)
 				}
 			}
 		}
