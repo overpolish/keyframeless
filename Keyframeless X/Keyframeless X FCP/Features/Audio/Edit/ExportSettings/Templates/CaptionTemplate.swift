@@ -15,6 +15,7 @@ struct CaptionTemplate: Identifiable, Equatable, Codable {
 	let wordsInKeyPath: String?
 	let isBuiltIn: Bool
 	let isCustom: Bool
+	var author: String?
 	var thumbnailPath: String?
 	var previewGifPath: String?
 
@@ -93,10 +94,21 @@ struct CaptionTemplate: Identifiable, Equatable, Codable {
 		return URL(fileURLWithPath: uid)
 	}
 
+	static func readAuthor(in directory: URL) -> String? {
+		let file = directory.appendingPathComponent("author.txt")
+		guard
+			let text = try? String(contentsOf: file, encoding: .utf8)
+				.trimmingCharacters(in: .whitespacesAndNewlines),
+			!text.isEmpty
+		else { return nil }
+		return text
+	}
+
 	static func fromMotiFile(at url: URL) -> CaptionTemplate? {
 		let dir = url.deletingLastPathComponent()
 		let name = url.deletingPathExtension().lastPathComponent
 		let thumbnailPath = findThumbnail(in: dir)
+		let author = readAuthor(in: dir)
 		let perWord = CaptionTemplateScanner.checkPerWordSupport(motiFile: url)
 
 		let standardPath = (url.standardizedFileURL.path as NSString).resolvingSymlinksInPath
@@ -121,6 +133,7 @@ struct CaptionTemplate: Identifiable, Equatable, Codable {
 			wordsInKeyPath: perWord?.keyPath,
 			isBuiltIn: false,
 			isCustom: true,
+			author: author,
 			thumbnailPath: thumbnailPath
 		)
 	}

@@ -82,10 +82,18 @@ struct CommunityTemplateCard: View {
 			)
 			.padding(selectionInset)
 
-			Text(template.name)
-				.font(.system(size: 9))
-				.foregroundStyle(.secondary)
-				.lineLimit(1)
+			HStack {
+				Text(template.name)
+					.font(.system(size: 9))
+					.foregroundStyle(.secondary)
+					.lineLimit(1)
+				if !template.author.isEmpty {
+					Spacer()
+					InfoBadge(label: template.author, systemImage: "person.fill", color: .kkAccent)
+				}
+			}
+			.frame(height: 9)
+			.padding(.horizontal, KKPaddingMD)
 		}
 		.onHover { hovering in
 			isHovered = hovering

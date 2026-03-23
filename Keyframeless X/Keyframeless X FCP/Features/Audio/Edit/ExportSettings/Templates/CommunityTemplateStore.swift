@@ -135,6 +135,11 @@ class CommunityTemplateStore: ObservableObject {
 		let destDir = installBase.appendingPathComponent(template.name)
 		try FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
 
+		if !template.author.isEmpty {
+			let authorFile = destDir.appendingPathComponent("author.txt")
+			try template.author.write(to: authorFile, atomically: true, encoding: .utf8)
+		}
+
 		for item in items {
 			guard let fileName = item["name"] as? String,
 				let downloadURL = item["download_url"] as? String,
