@@ -11,9 +11,20 @@ struct AppShell: View {
 	@StateObject private var whisperManager = WhisperModelManager()
 	@StateObject private var processingCoordinator = AudioProcessingCoordinator()
 	@State private var selectedTab: AppTab = .audio
+	@State private var updateVersion: String?
+	@State private var updateURL: URL?
+	@State private var updateDismissed = false
 
 	var body: some View {
 		VStack(spacing: KKSpacingMD) {
+			if let version = updateVersion, !updateDismissed {
+				UpdateBanner(
+					version: version,
+					url: updateURL,
+					onDismiss: { withAnimation { updateDismissed = true } }
+				)
+				.transition(.move(edge: .top).combined(with: .opacity))
+			}
 			topBar
 			Group {
 				switch selectedTab {
@@ -54,7 +65,16 @@ struct AppShell: View {
 			audioModel.paramsModalTemplate == nil && audioModel.publishModalTemplate == nil
 		)
 		.background(Color(nsColor: .windowBackground()))
-		.onAppear { FontCache.warmup() }
+		.onAppear {
+			FontCache.warmup()
+			KKUpdateChecker.shared().check { available in
+				guard available else { return }
+				withAnimation {
+					updateVersion = KKUpdateChecker.shared().latestVersion
+					updateURL = KKUpdateChecker.shared().downloadURL
+				}
+			}
+		}
 		.overlay {
 			if processingCoordinator.isProcessing {
 				ProcessingOverlay(

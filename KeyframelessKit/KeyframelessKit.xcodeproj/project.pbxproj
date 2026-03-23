@@ -35,6 +35,7 @@
 				Plugin/KKPlugin.h,
 				Style/KKTokens.h,
 				"Style/NSColor+KKColors.h",
+				Update/KKUpdateChecker.h,
 				Views/KKAlertView.h,
 				Views/KKKbd.h,
 				Views/KKSeparatorView.h,
@@ -228,6 +229,7 @@
 			buildSettings = {
 				ADDITIONAL_SDKS = /Library/Developer/SDKs/FxPlug.sdk;
 				CODE_SIGN_IDENTITY = "";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -269,6 +271,7 @@
 			buildSettings = {
 				ADDITIONAL_SDKS = /Library/Developer/SDKs/FxPlug.sdk;
 				CODE_SIGN_IDENTITY = "";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
