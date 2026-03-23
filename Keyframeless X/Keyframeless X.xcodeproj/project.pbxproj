@@ -1,0 +1,689 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		F274D93A2F6E7AC2001FE373 /* Profanity in Resources */ = {isa = PBXBuildFile; fileRef = F274D9392F6E7AC2001FE373 /* Profanity */; };
+		F28BD2302F68595000C5F6B7 /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F28BD22F2F68595000C5F6B7 /* KeyframelessKit.framework */; };
+		F28BD2312F68595000C5F6B7 /* KeyframelessKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F28BD22F2F68595000C5F6B7 /* KeyframelessKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		F29C84ED2F6820750073B1A9 /* Keyframeless X FCP.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F29C84E02F6820750073B1A9 /* Keyframeless X FCP.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		F2A8FB212F6C52C2007989B9 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = F2A8FB202F6C52C2007989B9 /* WhisperKit */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		F29C84EB2F6820750073B1A9 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F29C84BE2F68205E0073B1A9 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F29C84DF2F6820750073B1A9;
+			remoteInfo = "Keyframeless X FCP";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		F28BD2322F68595000C5F6B7 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				F28BD2312F68595000C5F6B7 /* KeyframelessKit.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F29C84F22F6820750073B1A9 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				F29C84ED2F6820750073B1A9 /* Keyframeless X FCP.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		F274D9392F6E7AC2001FE373 /* Profanity */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Profanity; path = "Keyframeless X FCP/Resources/Profanity"; sourceTree = "<group>"; };
+		F28BD22F2F68595000C5F6B7 /* KeyframelessKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = KeyframelessKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		F29C84C62F68205E0073B1A9 /* Keyframeless X.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Keyframeless X.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		F29C84E02F6820750073B1A9 /* Keyframeless X FCP.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Keyframeless X FCP.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		F29C84EE2F6820750073B1A9 /* Exceptions for "Keyframeless X FCP" folder in "Keyframeless X FCP" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+				Resources/Profanity/ar.txt,
+				Resources/Profanity/cs.txt,
+				Resources/Profanity/da.txt,
+				Resources/Profanity/de.txt,
+				Resources/Profanity/en.txt,
+				Resources/Profanity/eo.txt,
+				Resources/Profanity/es.txt,
+				Resources/Profanity/fa.txt,
+				Resources/Profanity/fi.txt,
+				Resources/Profanity/fil.txt,
+				Resources/Profanity/fr.txt,
+				Resources/Profanity/hi.txt,
+				Resources/Profanity/hu.txt,
+				Resources/Profanity/it.txt,
+				Resources/Profanity/ja.txt,
+				Resources/Profanity/ko.txt,
+				Resources/Profanity/nl.txt,
+				Resources/Profanity/no.txt,
+				Resources/Profanity/pl.txt,
+				Resources/Profanity/pt.txt,
+				Resources/Profanity/ru.txt,
+				Resources/Profanity/sv.txt,
+				Resources/Profanity/th.txt,
+				Resources/Profanity/tr.txt,
+				Resources/Profanity/uk.txt,
+				Resources/Profanity/zh.txt,
+			);
+			target = F29C84DF2F6820750073B1A9 /* Keyframeless X FCP */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		F29C84C82F68205E0073B1A9 /* Keyframeless X */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "Keyframeless X";
+			sourceTree = "<group>";
+		};
+		F29C84E12F6820750073B1A9 /* Keyframeless X FCP */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				F29C84EE2F6820750073B1A9 /* Exceptions for "Keyframeless X FCP" folder in "Keyframeless X FCP" target */,
+			);
+			path = "Keyframeless X FCP";
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		F29C84C32F68205E0073B1A9 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F29C84DD2F6820750073B1A9 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F2A8FB212F6C52C2007989B9 /* WhisperKit in Frameworks */,
+				F28BD2302F68595000C5F6B7 /* KeyframelessKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		F28BD22E2F68595000C5F6B7 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				F28BD22F2F68595000C5F6B7 /* KeyframelessKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		F29C84BD2F68205E0073B1A9 = {
+			isa = PBXGroup;
+			children = (
+				F274D9392F6E7AC2001FE373 /* Profanity */,
+				F29C84C82F68205E0073B1A9 /* Keyframeless X */,
+				F29C84E12F6820750073B1A9 /* Keyframeless X FCP */,
+				F28BD22E2F68595000C5F6B7 /* Frameworks */,
+				F29C84C72F68205E0073B1A9 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		F29C84C72F68205E0073B1A9 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				F29C84C62F68205E0073B1A9 /* Keyframeless X.app */,
+				F29C84E02F6820750073B1A9 /* Keyframeless X FCP.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		F29C84C52F68205E0073B1A9 /* Keyframeless X */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F29C84D12F68205F0073B1A9 /* Build configuration list for PBXNativeTarget "Keyframeless X" */;
+			buildPhases = (
+				F29C84C22F68205E0073B1A9 /* Sources */,
+				F29C84C32F68205E0073B1A9 /* Frameworks */,
+				F29C84C42F68205E0073B1A9 /* Resources */,
+				F29C84F22F6820750073B1A9 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				F29C84EC2F6820750073B1A9 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				F29C84C82F68205E0073B1A9 /* Keyframeless X */,
+			);
+			name = "Keyframeless X";
+			packageProductDependencies = (
+			);
+			productName = "Keyframeless X";
+			productReference = F29C84C62F68205E0073B1A9 /* Keyframeless X.app */;
+			productType = "com.apple.product-type.application";
+		};
+		F29C84DF2F6820750073B1A9 /* Keyframeless X FCP */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F29C84EF2F6820750073B1A9 /* Build configuration list for PBXNativeTarget "Keyframeless X FCP" */;
+			buildPhases = (
+				F29C84DC2F6820750073B1A9 /* Sources */,
+				F29C84DD2F6820750073B1A9 /* Frameworks */,
+				F29C84DE2F6820750073B1A9 /* Resources */,
+				F28BD2322F68595000C5F6B7 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				F29C84E12F6820750073B1A9 /* Keyframeless X FCP */,
+			);
+			name = "Keyframeless X FCP";
+			packageProductDependencies = (
+				F2A8FB202F6C52C2007989B9 /* WhisperKit */,
+			);
+			productName = "Keyframeless X FCP";
+			productReference = F29C84E02F6820750073B1A9 /* Keyframeless X FCP.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		F29C84BE2F68205E0073B1A9 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2630;
+				LastUpgradeCheck = 2630;
+				TargetAttributes = {
+					F29C84C52F68205E0073B1A9 = {
+						CreatedOnToolsVersion = 26.3;
+					};
+					F29C84DF2F6820750073B1A9 = {
+						CreatedOnToolsVersion = 26.3;
+					};
+				};
+			};
+			buildConfigurationList = F29C84C12F68205E0073B1A9 /* Build configuration list for PBXProject "Keyframeless X" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = F29C84BD2F68205E0073B1A9;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				F2A8FB1F2F6C52C2007989B9 /* XCRemoteSwiftPackageReference "WhisperKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = F29C84C72F68205E0073B1A9 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				F29C84C52F68205E0073B1A9 /* Keyframeless X */,
+				F29C84DF2F6820750073B1A9 /* Keyframeless X FCP */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		F29C84C42F68205E0073B1A9 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F29C84DE2F6820750073B1A9 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F274D93A2F6E7AC2001FE373 /* Profanity in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		F29C84C22F68205E0073B1A9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F29C84DC2F6820750073B1A9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		F29C84EC2F6820750073B1A9 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F29C84DF2F6820750073B1A9 /* Keyframeless X FCP */;
+			targetProxy = F29C84EB2F6820750073B1A9 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		F29C84CF2F68205F0073B1A9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		F29C84D02F68205F0073B1A9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		F29C84D22F68205F0073B1A9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = keyframeless;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = 378WQ9W95U;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "co.overpolish.keyframeless.Keyframeless-X";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		F29C84D32F68205F0073B1A9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = keyframeless;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = 378WQ9W95U;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "co.overpolish.keyframeless.Keyframeless-X";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		F29C84F02F6820750073B1A9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ADDITIONAL_SDKS = /Library/Developer/SDKs/WorkflowExtensionSDK.sdk;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				AUTOMATION_APPLE_EVENTS = NO;
+				CODE_SIGN_ENTITLEMENTS = "Keyframeless X FCP/Keyframeless_X_FCP.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = 378WQ9W95U;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_FILE_ACCESS_MOVIES_FOLDER = readwrite;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				FRAMEWORK_SEARCH_PATHS = (
+					/Library/Frameworks,
+					"$(inherited)",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					/usr/include,
+					"$(inherited)",
+				);
+				INFOPLIST_FILE = "Keyframeless X FCP/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Keyframeless X";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_ENTRY_POINT = _ProExtensionMain;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					/usr/lib,
+					"$(inherited)",
+				);
+				MACH_O_TYPE = mh_execute;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-fapplication-extension",
+					"-lProExtension",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
+				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
+				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
+				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
+				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
+				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "Keyframeless X FCP/Keyframeless_X_FCP-Bridging-Header.h";
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				WRAPPER_EXTENSION = appex;
+			};
+			name = Debug;
+		};
+		F29C84F12F6820750073B1A9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ADDITIONAL_SDKS = /Library/Developer/SDKs/WorkflowExtensionSDK.sdk;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				AUTOMATION_APPLE_EVENTS = NO;
+				CODE_SIGN_ENTITLEMENTS = "Keyframeless X FCP/Keyframeless_X_FCP.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = 378WQ9W95U;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_FILE_ACCESS_MOVIES_FOLDER = readwrite;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				FRAMEWORK_SEARCH_PATHS = (
+					/Library/Frameworks,
+					"$(inherited)",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					/usr/include,
+					"$(inherited)",
+				);
+				INFOPLIST_FILE = "Keyframeless X FCP/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Keyframeless X";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_ENTRY_POINT = _ProExtensionMain;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					/usr/lib,
+					"$(inherited)",
+				);
+				MACH_O_TYPE = mh_execute;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-fapplication-extension",
+					"-lProExtension",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
+				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
+				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
+				RUNTIME_EXCEPTION_DEBUGGING_TOOL = NO;
+				RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION = NO;
+				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "Keyframeless X FCP/Keyframeless_X_FCP-Bridging-Header.h";
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				WRAPPER_EXTENSION = appex;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		F29C84C12F68205E0073B1A9 /* Build configuration list for PBXProject "Keyframeless X" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F29C84CF2F68205F0073B1A9 /* Debug */,
+				F29C84D02F68205F0073B1A9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F29C84D12F68205F0073B1A9 /* Build configuration list for PBXNativeTarget "Keyframeless X" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F29C84D22F68205F0073B1A9 /* Debug */,
+				F29C84D32F68205F0073B1A9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F29C84EF2F6820750073B1A9 /* Build configuration list for PBXNativeTarget "Keyframeless X FCP" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F29C84F02F6820750073B1A9 /* Debug */,
+				F29C84F12F6820750073B1A9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		F2A8FB1F2F6C52C2007989B9 /* XCRemoteSwiftPackageReference "WhisperKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/argmaxinc/WhisperKit";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F2A8FB202F6C52C2007989B9 /* WhisperKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F2A8FB1F2F6C52C2007989B9 /* XCRemoteSwiftPackageReference "WhisperKit" */;
+			productName = WhisperKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = F29C84BE2F68205E0073B1A9 /* Project object */;
+}

@@ -4,6 +4,7 @@
  */
 
 #import "AppDelegate.h"
+#import <KeyframelessKit/KeyframelessKit.h>
 
 @interface AppDelegate ()
 
@@ -13,6 +14,7 @@
 @implementation AppDelegate
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
+  [[KKUpdateChecker shared] checkAndNotify];
 }
 
 - (void)applicationWillTerminate:(NSNotification *)aNotification {

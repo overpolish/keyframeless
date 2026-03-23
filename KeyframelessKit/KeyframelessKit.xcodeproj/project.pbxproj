@@ -15,28 +15,30 @@
 		F21E97D52F4EE9CC00DF8CF3 /* FxPlug.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FxPlug.framework; path = ../../../../../Library/Developer/Frameworks/FxPlug.framework; sourceTree = "<group>"; };
 		F26E01B62F4DE280009D949A /* KeyframelessKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = KeyframelessKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F26E02092F4DE539009D949A /* Rounded.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Rounded.xcodeproj; path = ../Rounded/Rounded.xcodeproj; sourceTree = SOURCE_ROOT; };
+		F29C84D42F68205F0073B1A9 /* Keyframeless X.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = "Keyframeless X.xcodeproj"; path = "../Keyframeless X/Keyframeless X.xcodeproj"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
 		F26E01BB2F4DE280009D949A /* Exceptions for "KeyframelessKit" folder in "KeyframelessKit" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			publicHeaders = (
-				Icons/KKIcon.h,
-				Icons/KKIcons.h,
 				KeyframelessKit.h,
-				KKConstants.h,
 				KKLog.h,
-				KKTokens.h,
 				Metal/KKMetalDeviceCache.h,
 				Metal/KKRenderPrimitives.h,
 				Metal/KKShaderTypes.h,
 				OSC/Base/KKOnScreenControl.h,
 				OSC/Controls/KKArcOSC.h,
 				OSC/Controls/KKPointOSC.h,
-				Parameter/KKInfoParameterView.h,
-				Parameter/KKKbd.h,
-				Parameter/KKSeparatorParameterView.h,
+				Plugin/KKConstants.h,
+				Plugin/KKHostInfo.h,
 				Plugin/KKPlugin.h,
+				Style/KKTokens.h,
+				"Style/NSColor+KKColors.h",
+				Update/KKUpdateChecker.h,
+				Views/KKAlertView.h,
+				Views/KKKbd.h,
+				Views/KKSeparatorView.h,
 			);
 			target = F26E01B52F4DE280009D949A /* KeyframelessKit */;
 		};
@@ -83,6 +85,7 @@
 		F26E01AC2F4DE280009D949A = {
 			isa = PBXGroup;
 			children = (
+				F29C84D42F68205F0073B1A9 /* Keyframeless X.xcodeproj */,
 				F21399642F65423400E1EC03 /* MotionBlur.xcodeproj */,
 				F26E02092F4DE539009D949A /* Rounded.xcodeproj */,
 				F26E01B82F4DE280009D949A /* KeyframelessKit */,
@@ -100,6 +103,13 @@
 			sourceTree = "<group>";
 		};
 		F26E02462F4DE539009D949A /* Products */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		F29C84D72F68205F0073B1A9 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -150,7 +160,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastUpgradeCheck = 2600;
+				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					F26E01B52F4DE280009D949A = {
 						CreatedOnToolsVersion = 26.0.1;
@@ -173,6 +183,10 @@
 			productRefGroup = F26E01B72F4DE280009D949A /* Products */;
 			projectDirPath = "";
 			projectReferences = (
+				{
+					ProductGroup = F29C84D72F68205F0073B1A9 /* Products */;
+					ProjectRef = F29C84D42F68205F0073B1A9 /* Keyframeless X.xcodeproj */;
+				},
 				{
 					ProductGroup = F2139A0D2F65426100E1EC03 /* Products */;
 					ProjectRef = F21399642F65423400E1EC03 /* MotionBlur.xcodeproj */;
@@ -214,13 +228,19 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ADDITIONAL_SDKS = /Library/Developer/SDKs/FxPlug.sdk;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = 378WQ9W95U;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_MODULE_VERIFIER = YES;
 				FRAMEWORK_SEARCH_PATHS = (
 					/Library/Frameworks,
@@ -239,6 +259,7 @@
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
 				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.KeyframelessKit;
 				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -249,13 +270,19 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ADDITIONAL_SDKS = /Library/Developer/SDKs/FxPlug.sdk;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = 378WQ9W95U;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_MODULE_VERIFIER = YES;
 				FRAMEWORK_SEARCH_PATHS = (
 					/Library/Frameworks,
@@ -274,6 +301,7 @@
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
 				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.KeyframelessKit;
 				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -315,6 +343,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -339,6 +368,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
 			};
@@ -379,6 +409,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -396,6 +427,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
 			};
