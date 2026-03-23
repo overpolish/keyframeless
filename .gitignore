@@ -1,7 +1,10 @@
 build/
+release/
 DerivedData/
 xcuserdata/
 .DS_Store
 *.xcuserstate
 .clangd
 buildServer.json
+scripts/*.fcpxml
+!scripts/*.template.fcpxml

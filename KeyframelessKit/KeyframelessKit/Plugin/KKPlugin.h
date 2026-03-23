@@ -79,7 +79,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// The parameter is not animatable and stores no meaningful value — it is
 /// purely a static label in the inspector.
 - (BOOL)addInfoParameterWithText:(NSString *)text
-                            icon:(nullable NSBezierPath *)icon
+                            icon:(nullable NSImage *)icon
                      parameterID:(UInt32)parameterID
                          withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                            error:(NSError **)error;
@@ -87,7 +87,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Accepts an attributed string — use to embed KKKbd badges
 /// or other inline styled content.
 - (BOOL)addInfoParameterWithAttributedText:(NSAttributedString *)text
-                                      icon:(nullable NSBezierPath *)icon
+                                      icon:(nullable NSImage *)icon
                                parameterID:(UInt32)parameterID
                                    withAPI:
                                        (id<FxParameterCreationAPI_v5>)paramAPI
@@ -97,7 +97,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Pass text and/or icon to render  ──── [icon] [text] ────  centred on the
 /// line; pass nil for both for a plain rule.
 - (BOOL)addSeparatorParameterWithText:(nullable NSString *)text
-                                 icon:(nullable NSBezierPath *)icon
+                                 icon:(nullable NSImage *)icon
                           parameterID:(UInt32)parameterID
                               withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                                 error:(NSError **)error;
