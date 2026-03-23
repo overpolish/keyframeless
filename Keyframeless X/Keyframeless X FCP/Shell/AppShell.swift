@@ -45,9 +45,14 @@ struct AppShell: View {
 		}
 		.padding([.horizontal, .bottom], KKPadding2XL)
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
-		.blur(radius: audioModel.isDraggingToFCP || audioModel.paramsModalTemplate != nil ? 3 : 0)
+		.blur(
+			radius: audioModel.isDraggingToFCP || audioModel.paramsModalTemplate != nil
+				|| audioModel.publishModalTemplate != nil ? 3 : 0
+		)
 		.animation(.easeInOut(duration: 0.2), value: audioModel.isDraggingToFCP)
-		.allowsHitTesting(audioModel.paramsModalTemplate == nil)
+		.allowsHitTesting(
+			audioModel.paramsModalTemplate == nil && audioModel.publishModalTemplate == nil
+		)
 		.background(Color(nsColor: .windowBackground()))
 		.onAppear { FontCache.warmup() }
 		.overlay {
@@ -77,8 +82,23 @@ struct AppShell: View {
 				)
 				.transition(.opacity)
 			}
+			if let template = audioModel.publishModalTemplate {
+				TemplatePublishModal(
+					template: template,
+					params: TemplatePublishedParamsStore.shared.params(for: template.id)?
+						.allParams ?? [],
+					hasPerWordAnimation: TemplatePublishedParamsStore.shared.params(
+						for: template.id)?
+						.hasPerWordAnimation ?? false,
+					enabledIDs: TemplatePublishedParamsStore.shared.params(for: template.id)?
+						.enabledIDs ?? [],
+					onDismiss: { audioModel.publishModalTemplate = nil }
+				)
+				.transition(.opacity)
+			}
 		}
 		.animation(.easeInOut(duration: 0.2), value: audioModel.paramsModalTemplate != nil)
+		.animation(.easeInOut(duration: 0.2), value: audioModel.publishModalTemplate != nil)
 	}
 
 	private var topBar: some View {

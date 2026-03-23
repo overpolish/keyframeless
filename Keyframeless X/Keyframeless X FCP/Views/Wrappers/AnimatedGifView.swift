@@ -16,6 +16,7 @@ struct AnimatedGifView: NSViewRepresentable {
 		imageView.canDrawSubviewsIntoLayer = true
 		imageView.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
 		imageView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+		imageView.unregisterDraggedTypes()
 
 		if let source = CGImageSourceCreateWithURL(url as CFURL, nil) {
 			let count = CGImageSourceGetCount(source)

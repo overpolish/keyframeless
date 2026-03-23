@@ -68,21 +68,23 @@ struct PublishedParamsModal: View {
 					}
 				}
 				if !params.isEmpty {
-					VStack(spacing: KKSpacingSM) {
-						ForEach(params) { param in
-							ParamToggleRow(
-								param: param,
-								isOn: Binding(
-									get: { enabledIDs.contains(param.id) },
-									set: { on in
-										if on {
-											enabledIDs.insert(param.id)
-										} else {
-											enabledIDs.remove(param.id)
+					ScrollShadowView {
+						VStack(spacing: KKSpacingSM) {
+							ForEach(params) { param in
+								ParamToggleRow(
+									param: param,
+									isOn: Binding(
+										get: { enabledIDs.contains(param.id) },
+										set: { on in
+											if on {
+												enabledIDs.insert(param.id)
+											} else {
+												enabledIDs.remove(param.id)
+											}
 										}
-									}
+									)
 								)
-							)
+							}
 						}
 					}
 				}
@@ -105,6 +107,8 @@ struct PublishedParamsModal: View {
 			}
 			.padding(KKPaddingXL)
 			.frame(width: 360)
+			.fixedSize(horizontal: false, vertical: true)
+			.frame(maxHeight: 500)
 			.kkPanel()
 			.background(
 				RoundedRectangle(cornerRadius: KKRadiusMD + 4)
