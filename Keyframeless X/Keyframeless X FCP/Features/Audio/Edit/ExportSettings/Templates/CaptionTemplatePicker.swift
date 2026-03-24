@@ -85,9 +85,7 @@ struct CaptionTemplatePicker: View {
 		guard let settings = paramsStore.params(for: model.selectedTemplate.id) else {
 			return false
 		}
-		return settings.allParams.contains {
-			settings.enabledIDs.contains($0.id) && $0.isToggleable
-		}
+		return settings.allParams.contains(where: \.isToggleable)
 	}
 
 	var body: some View {
@@ -267,12 +265,10 @@ struct CaptionTemplatePicker: View {
 		onDropMoti?(url)
 		guard !result.customParams.isEmpty else { return }
 		let templateID = "custom:\(url.path)"
-		DispatchQueue.main.async {
-			if let added = templates.first(where: { $0.id == templateID }) {
-				model.paramsModalParams = result.customParams
-				model.paramsModalHasPerWord = result.hasPerWordAnimation
-				model.paramsModalTemplate = added
-			}
+		if let added = model.captionTemplates.first(where: { $0.id == templateID }) {
+			model.paramsModalParams = result.customParams
+			model.paramsModalHasPerWord = result.hasPerWordAnimation
+			model.paramsModalTemplate = added
 		}
 	}
 
