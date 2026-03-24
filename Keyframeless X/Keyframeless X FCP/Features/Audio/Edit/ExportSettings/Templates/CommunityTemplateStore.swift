@@ -11,6 +11,7 @@ struct CommunityTemplate: Identifiable {
 	let name: String
 	let author: String
 	let perWord: Bool
+	let perWordStartsAtZero: Bool
 	let params: [[String: String]]
 	let previewGifURL: URL
 	let folderName: String
@@ -112,6 +113,7 @@ class CommunityTemplateStore: ObservableObject {
 			name: name,
 			author: meta["author"] as? String ?? "",
 			perWord: meta["perWord"] as? Bool ?? false,
+			perWordStartsAtZero: meta["perWordStartsAtZero"] as? Bool ?? false,
 			params: meta["params"] as? [[String: String]] ?? [],
 			previewGifURL: previewGifURL,
 			folderName: templateFolderName
@@ -159,10 +161,10 @@ class CommunityTemplateStore: ObservableObject {
 		}
 
 		let motiURL = destDir.appendingPathComponent("\(template.name).moti")
-		if !template.params.isEmpty {
-			let templateID =
-				"~/Titles.localized/Keyframeless/\(template.name)/\(template.name).moti"
-			let result = PublishedParameter.parseAll(from: motiURL)
+		let templateID =
+			"~/Titles.localized/Keyframeless/\(template.name)/\(template.name).moti"
+		let result = PublishedParameter.parseAll(from: motiURL)
+		if !template.params.isEmpty || result.hasPerWordAnimation {
 			let kindsByName = Dictionary(
 				template.params.compactMap { dict -> (String, String)? in
 					guard let name = dict["name"], let kind = dict["kind"] else { return nil }
@@ -179,10 +181,14 @@ class CommunityTemplateStore: ObservableObject {
 				}
 				return p
 			}
+			let store = TemplatePublishedParamsStore.shared
 			await MainActor.run {
-				TemplatePublishedParamsStore.shared.setParams(
+				store.setParams(
 					configured, hasPerWordAnimation: result.hasPerWordAnimation,
 					for: templateID)
+				if template.perWord {
+					store.setPerWordStartsAtZero(template.perWordStartsAtZero, for: templateID)
+				}
 			}
 		}
 
