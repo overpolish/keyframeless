@@ -324,10 +324,10 @@ struct CaptionTemplatePicker: View {
 		for template in keyframelessTemplates where !template.isBuiltIn {
 			guard paramsStore.params(for: template.id) == nil,
 				let community = communityByName[template.name],
-				!community.params.isEmpty,
 				let motiURL = template.resolvedMotiURL()
 			else { continue }
 			let result = PublishedParameter.parseAll(from: motiURL)
+			guard !community.params.isEmpty || result.hasPerWordAnimation else { continue }
 			let kindsByName = Dictionary(
 				community.params.compactMap { dict -> (String, String)? in
 					guard let name = dict["name"], let kind = dict["kind"] else { return nil }
@@ -347,6 +347,10 @@ struct CaptionTemplatePicker: View {
 			paramsStore.setParams(
 				configured, hasPerWordAnimation: result.hasPerWordAnimation,
 				for: template.id)
+			if community.perWord {
+				paramsStore.setPerWordStartsAtZero(
+					community.perWordStartsAtZero, for: template.id)
+			}
 		}
 	}
 
