@@ -6,12 +6,9 @@
 #import "KKUpdateChecker.h"
 #import "KKLog.h"
 #import <AppKit/AppKit.h>
-#import <UserNotifications/UserNotifications.h>
 
 static NSString *const kOwner = @"overpolish";
 static NSString *const kRepo = @"keyframeless";
-static NSString *const kCategoryUpdate = @"co.overpolish.keyframeless.update";
-static NSString *const kActionDownload = @"DOWNLOAD_ACTION";
 static NSString *const kLastCheckKey =
     @"co.overpolish.keyframeless.lastUpdateCheck";
 static NSString *const kCachedVersionKey =
@@ -41,9 +38,6 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
     @"Rounded-XPC-Service" : @"rounded",
   };
 }
-
-@interface KKUpdateChecker () <UNUserNotificationCenterDelegate>
-@end
 
 @implementation KKUpdateChecker {
   KKLog *_log;
@@ -279,97 +273,6 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
     if (completion)
       completion(hasUpdate);
   });
-}
-
-- (void)checkAndNotify {
-  UNUserNotificationCenter *center =
-      [UNUserNotificationCenter currentNotificationCenter];
-  center.delegate = self;
-
-  UNNotificationAction *downloadAction = [UNNotificationAction
-      actionWithIdentifier:kActionDownload
-                     title:@"Download"
-                   options:UNNotificationActionOptionForeground];
-
-  UNNotificationCategory *category =
-      [UNNotificationCategory categoryWithIdentifier:kCategoryUpdate
-                                             actions:@[ downloadAction ]
-                                   intentIdentifiers:@[]
-                                             options:0];
-
-  [center setNotificationCategories:[NSSet setWithObject:category]];
-
-  [self checkWithCompletion:^(BOOL updateAvailable) {
-    if (!updateAvailable)
-      return;
-
-    NSString *body = [self notificationBody];
-
-    UNMutableNotificationContent *content =
-        [[UNMutableNotificationContent alloc] init];
-    content.title = @"Keyframeless Update Available";
-    content.body = body;
-    content.categoryIdentifier = kCategoryUpdate;
-
-    UNNotificationRequest *request =
-        [UNNotificationRequest requestWithIdentifier:kCategoryUpdate
-                                             content:content
-                                             trigger:nil];
-
-    [center
-        requestAuthorizationWithOptions:UNAuthorizationOptionAlert
-                      completionHandler:^(BOOL granted, NSError *error) {
-                        [self->_log debug:@"Notification auth granted: %d, "
-                                          @"error: %@",
-                                          granted, error];
-                        if (!granted)
-                          return;
-                        [center
-                            addNotificationRequest:request
-                             withCompletionHandler:^(NSError *err) {
-                               if (err) {
-                                 [self->_log
-                                     error:@"Notification send failed: %@",
-                                           err];
-                               } else {
-                                 [self->_log debug:@"Notification scheduled"];
-                               }
-                             }];
-                      }];
-  }];
-}
-
-- (NSString *)notificationBody {
-  NSMutableArray<NSString *> *parts = [NSMutableArray array];
-
-  if (self.availableVersion) {
-    NSString *name =
-        KKKnownComponents()[_componentKey] ?: _componentKey ?: @"Keyframeless";
-    [parts addObject:[NSString stringWithFormat:@"%@ %@", name,
-                                                self.availableVersion]];
-  }
-  for (NSString *key in self.availableComponentKeys) {
-    [parts addObject:key];
-  }
-
-  if (parts.count == 0)
-    return @"A new version is ready to download.";
-
-  return [NSString stringWithFormat:@"Available: %@",
-                                    [parts componentsJoinedByString:@", "]];
-}
-
-- (void)userNotificationCenter:(UNUserNotificationCenter *)center
-    didReceiveNotificationResponse:(UNNotificationResponse *)response
-             withCompletionHandler:(void (^)(void))completionHandler {
-  if ([response.actionIdentifier isEqualToString:kActionDownload]) {
-    NSURL *url = self.downloadURL;
-    if (url) {
-      [_log debug:@"Opening download URL: %@", url];
-      [[NSWorkspace sharedWorkspace] openURL:url];
-    }
-  }
-  completionHandler();
 }
 
 - (void)callCompletion:(void (^)(BOOL))completion {

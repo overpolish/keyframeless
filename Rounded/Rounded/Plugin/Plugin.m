@@ -54,6 +54,10 @@
     return NO;
   }
 
+  if (![self addUpdateBannerParameterWithAPI:paramAPI error:error]) {
+    return NO;
+  }
+
   if (![paramAPI addFloatSliderWithName:@"Radius"
                             parameterID:kParamRadius
                            defaultValue:20.0
@@ -79,7 +83,7 @@
     return NO;
   }
 
-  return [self addUpdateBannerParameterWithAPI:paramAPI error:error];
+  return YES;
 }
 
 - (BOOL)pluginState:(NSData **)pluginState

@@ -14,7 +14,7 @@
 @implementation AppDelegate
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
-  [[KKUpdateChecker shared] checkAndNotify];
+  [[KKUpdateChecker shared] checkWithCompletion:nil];
 }
 
 - (void)applicationWillTerminate:(NSNotification *)aNotification {
