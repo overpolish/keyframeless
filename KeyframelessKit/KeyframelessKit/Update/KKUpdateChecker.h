@@ -46,10 +46,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// Calls `completion` on the main queue.
 - (void)forceCheckWithCompletion:(void (^)(BOOL updateAvailable))completion;
 
-/// Checks for updates and posts a system notification with a "Download"
-/// action if one is available. Call from `-applicationDidFinishLaunching:`.
-- (void)checkAndNotify;
-
 @end
 
 NS_ASSUME_NONNULL_END

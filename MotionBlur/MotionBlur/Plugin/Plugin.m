@@ -57,6 +57,25 @@ typedef struct {
     return NO;
   }
 
+  if (![self addUpdateBannerParameterWithAPI:paramAPI error:error]) {
+    return NO;
+  }
+
+  NSMutableAttributedString *infoText = [[NSMutableAttributedString alloc]
+      initWithString:@"Use on a Adjustment Clip "];
+  [infoText appendAttributedString:[KKKbd attributedStringWithKey:@"⌥ A"]];
+  if (![self
+          addInfoParameterWithAttributedText:infoText
+                                        icon:[NSImage
+                                                 imageWithSystemSymbolName:
+                                                     @"info.circle"
+                                                  accessibilityDescription:nil]
+                                 parameterID:kParamInfoUsage
+                                     withAPI:paramAPI
+                                       error:error]) {
+    return NO;
+  }
+
   // Strength: 0 = no blur, 100 = full-frame blur. Mapped to shutter angle
   // internally (strength / 100 * 360°).
   if (![paramAPI addFloatSliderWithName:@"Strength"
@@ -79,23 +98,7 @@ typedef struct {
     return NO;
   }
 
-  NSMutableAttributedString *infoText = [[NSMutableAttributedString alloc]
-      initWithString:@"Use on a Adjustment Clip "];
-  [infoText appendAttributedString:[KKKbd attributedStringWithKey:@"⌥ A"]];
-
-  if (![self
-          addInfoParameterWithAttributedText:infoText
-                                        icon:[NSImage
-                                                 imageWithSystemSymbolName:
-                                                     @"info.circle"
-                                                  accessibilityDescription:nil]
-                                 parameterID:kParamInfoUsage
-                                     withAPI:paramAPI
-                                       error:error]) {
-    return NO;
-  }
-
-  return [self addUpdateBannerParameterWithAPI:paramAPI error:error];
+  return YES;
 }
 
 - (BOOL)pluginState:(NSData **)pluginState
