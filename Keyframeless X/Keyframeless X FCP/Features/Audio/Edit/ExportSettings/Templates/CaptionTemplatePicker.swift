@@ -75,7 +75,8 @@ struct CaptionTemplatePicker: View {
 	private var mergedKeyframelessItems: [KeyframelessItem] {
 		let installed = keyframelessTemplates.map { KeyframelessItem.installed($0) }
 		let community =
-			showCommunity ? filteredCommunityTemplates.map { KeyframelessItem.community($0) } : []
+			showCommunity && !showFavoritesOnly
+			? filteredCommunityTemplates.map { KeyframelessItem.community($0) } : []
 		return (installed + community).sorted {
 			$0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
 		}
@@ -147,7 +148,31 @@ struct CaptionTemplatePicker: View {
 						.contentShape(Rectangle())
 				}
 				.buttonStyle(.plain)
+				Button {
+					communityStore.fetch()
+					model.refreshTemplates()
+				} label: {
+					Image(systemName: "arrow.clockwise")
+						.font(.system(size: 11))
+						.foregroundStyle(.secondary)
+						.frame(maxHeight: .infinity)
+						.contentShape(Rectangle())
+				}
+				.buttonStyle(.plain)
 				Spacer()
+				if communityStore.needsFCPRestart {
+					Button {
+						exit(0)
+					} label: {
+						HStack(spacing: 4) {
+							Image(systemName: "arrow.trianglehead.2.counterclockwise")
+							Text("Restart FCP")
+						}
+						.font(.system(size: 10, weight: .medium))
+						.foregroundStyle(Color.kkAccent)
+					}
+					.buttonStyle(.plain)
+				}
 				if hasEnabledControls {
 					Button {
 						showControlsPopover.toggle()
@@ -222,7 +247,7 @@ struct CaptionTemplatePicker: View {
 				.padding(.vertical, KKPaddingXS)
 			}
 		}
-		.onAppear { communityStore.fetchIfNeeded() }
+		.onAppear { communityStore.fetch() }
 		.onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
 			handleDrop(providers)
 		}
@@ -263,7 +288,7 @@ struct CaptionTemplatePicker: View {
 	private func addMotiAndDetectParams(_ url: URL) {
 		let result = PublishedParameter.parseAll(from: url)
 		onDropMoti?(url)
-		guard !result.customParams.isEmpty else { return }
+		guard !result.customParams.isEmpty || result.hasPerWordAnimation else { return }
 		let templateID = "custom:\(url.path)"
 		if let added = model.captionTemplates.first(where: { $0.id == templateID }) {
 			model.paramsModalParams = result.customParams

@@ -10,18 +10,20 @@ struct PublishedParamsModal: View {
 	let templateName: String
 	let params: [PublishedParameter]
 	let hasPerWordAnimation: Bool
-	let onSave: ([PublishedParameter]) -> Void
+	let onSave: ([PublishedParameter], Bool) -> Void
 	let onDismiss: () -> Void
 
 	@State private var paramKinds: [String: PublishedParameter.ParamKind]
 	@State private var paramListHeight: CGFloat = 0
+	@State private var perWordStartsAtZero: Bool
 
 	init(
 		templateName: String,
 		params: [PublishedParameter],
 		hasPerWordAnimation: Bool = false,
 		initialKinds: [String: PublishedParameter.ParamKind] = [:],
-		onSave: @escaping ([PublishedParameter]) -> Void,
+		initialPerWordStartsAtZero: Bool = false,
+		onSave: @escaping ([PublishedParameter], Bool) -> Void,
 		onDismiss: @escaping () -> Void
 	) {
 		self.templateName = templateName
@@ -34,6 +36,7 @@ struct PublishedParamsModal: View {
 				uniqueKeysWithValues: params.map {
 					($0.id, initialKinds[$0.id] ?? .off)
 				}))
+		_perWordStartsAtZero = State(initialValue: initialPerWordStartsAtZero)
 	}
 
 	var body: some View {
@@ -56,12 +59,20 @@ struct PublishedParamsModal: View {
 							)
 						}
 					}
-					if params.isEmpty {
+					if params.isEmpty && !hasPerWordAnimation {
 						Text("No published parameters detected in \"\(templateName)\".")
 							.font(.system(size: 11))
 							.foregroundStyle(.secondary)
 							.padding(.vertical, KKPaddingLG)
 							.fixedSize(horizontal: false, vertical: true)
+					} else if params.isEmpty {
+						Text(
+							"Configure per-word animation for \"\(templateName)\"."
+						)
+						.font(.system(size: 11))
+						.foregroundStyle(.secondary)
+						.padding(.vertical, KKPaddingLG)
+						.fixedSize(horizontal: false, vertical: true)
 					} else {
 						Text(
 							"Detected the following published parameters in \"\(templateName)\". Choose a type for each parameter."
@@ -70,6 +81,21 @@ struct PublishedParamsModal: View {
 						.foregroundStyle(.secondary)
 						.padding(.vertical, KKPaddingLG)
 						.fixedSize(horizontal: false, vertical: true)
+					}
+				}
+				if hasPerWordAnimation {
+					HStack(alignment: .center, spacing: KKSpacingSM) {
+						Text("Word Timing")
+							.font(.caption)
+							.foregroundStyle(.primary)
+						Spacer()
+						PillToggle(
+							selection: $perWordStartsAtZero,
+							options: [
+								(label: "Straight Away", value: true),
+								(label: "Late Start", value: false),
+							]
+						)
 					}
 				}
 				if !params.isEmpty {
@@ -94,7 +120,7 @@ struct PublishedParamsModal: View {
 					.frame(height: min(paramListHeight, 300))
 				}
 				HStack {
-					if params.isEmpty {
+					if params.isEmpty && !hasPerWordAnimation {
 						Spacer()
 						Button("OK") { onDismiss() }
 							.buttonStyle(.plain)
@@ -126,7 +152,7 @@ struct PublishedParamsModal: View {
 			p.kind = paramKinds[param.id] ?? .off
 			return p
 		}
-		onSave(updated)
+		onSave(updated, perWordStartsAtZero)
 	}
 }
 
