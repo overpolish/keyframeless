@@ -264,11 +264,14 @@ struct TemplatePublishModal: View {
 		isPublishing = true
 		publishError = nil
 
+		let perWordStartsAtZero =
+			TemplatePublishedParamsStore.shared.params(for: template.id)?.perWordStartsAtZero ?? false
 		let payload = CommunityPublisher.TemplatePayload(
 			id: UUID().uuidString,
 			name: name.trimmingCharacters(in: .whitespaces),
 			author: author.trimmingCharacters(in: .whitespaces),
 			perWord: hasPerWordAnimation,
+			perWordStartsAtZero: perWordStartsAtZero,
 			params: enabledParams.map { ["name": $0.name, "kind": "\($0.kind)"] },
 			motiDirectoryURL: motiDir,
 			previewGifURL: gifURL

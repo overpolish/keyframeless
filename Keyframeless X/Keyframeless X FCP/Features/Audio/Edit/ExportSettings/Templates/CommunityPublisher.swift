@@ -16,6 +16,7 @@ enum CommunityPublisher {
 		let name: String
 		let author: String
 		let perWord: Bool
+		let perWordStartsAtZero: Bool
 		let params: [[String: String]]
 		let motiDirectoryURL: URL
 		let previewGifURL: URL
@@ -79,13 +80,16 @@ enum CommunityPublisher {
 			"sha": gifBlobSHA,
 		])
 
-		let indexEntry: [String: Any] = [
+		var indexEntry: [String: Any] = [
 			"id": payload.id,
 			"name": payload.name,
 			"author": payload.author,
 			"perWord": payload.perWord,
 			"params": payload.params,
 		]
+		if payload.perWord {
+			indexEntry["perWordStartsAtZero"] = payload.perWordStartsAtZero
+		}
 		let indexData = try JSONSerialization.data(
 			withJSONObject: indexEntry, options: [.prettyPrinted, .sortedKeys])
 		let indexBlobSHA = try await createBlobFromData(indexData, token: token)
