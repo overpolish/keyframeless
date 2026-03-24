@@ -17,9 +17,9 @@ Attempting to drastically speed up editing with intuitive On Screen Controls, an
 </div>
 
 <div align="center">
-<img width="500" alt="Setup view of AI Captions, multiple clips with waveforms, model selection, language selection, terms, and action buttons" src="https://github.com/user-attachments/assets/b6d6d26e-5f2d-4438-a778-b22ecbe68443" />
-<img width="500" alt="Edit view of AI Captions, timeline at the top, caption editor on the left hand side with timecodes and text, customization on the right, and a drag to export feature in the bottom right" src="https://github.com/user-attachments/assets/d99e1c77-e113-48be-9b5b-2390046050c8" />
-<img width="400" alt="Published parameters section with custom banner and separator" src="https://github.com/user-attachments/assets/e5c98f76-7249-4f83-803b-33befcbe7c7e" />
+<img width="500" alt="Setup view of AI Captions, multiple clips with waveforms, model selection, language selection, terms, and action buttons" src="./.github/images/keyframeless-x-audio-setup.png" />
+<img width="500" alt="Edit view of AI Captions, timeline at the top, caption editor on the left hand side with timecodes and text, customization on the right, and a drag to export feature in the bottom right" src="./.github/images/keyframeless-x-audio-edit.png" />
+<img width="400" alt="Published parameters section with custom banner and separator" src="./.github/images/keyframeless-rounded-parameters.png" />
 </div>
 
 # 🤝 Install
@@ -27,7 +27,7 @@ Attempting to drastically speed up editing with intuitive On Screen Controls, an
 Download the latest version from the [Releases](https://github.com/overpolish/keyframeless/releases) page. Pick and choose which features you want to install.
 
 <div align="center">
-<img width="500" alt="Installation window showcasing the various tools available for install." src="https://github.com/user-attachments/assets/b8b92b10-db83-49fe-abbc-72eea30edfcf" />
+<img width="500" alt="Installation window showcasing the various tools available for install." src="./.github/images/keyframeless-installer.png" />
 </div>
 
 # ⚡️ Supercharge Your Workflow

@@ -11,22 +11,15 @@
 > [!IMPORTANT]
 > macOS registers apps with Launch Services from every location — including Trash, archives, and archive intermediates. If you delete or move a copy of the wrapper app, stale registrations stick around and `pluginkit` can end up parenting the extension to a host app that no longer exists. FCP silently skips it.
 >
-> Check for stale entries (`fnfErr` = file gone):
+> Unregister stale paths and re-register the debug build:
 >
 > ```sh
 > LS=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 >
-> $LS -dump | grep -B20 'identifier:.*co.overpolish.keyframeless.Keyframeless-X$' | grep -E "^path|^bundle id|not found"
+> # find and unregister stale entries
+> $LS -dump | grep -B20 'identifier:.*co.overpolish.keyframeless.Keyframeless-X$' | grep "path:" | sed 's/.*path: *//' | sed 's/ (0x.*//' | while read -r p; do [ ! -e "$p" ] && $LS -u "$p" && echo "Unregistered: $p"; done
 >
-> # ! = disabled, + = enabled
-> pluginkit -m -A -p com.apple.FinalCut.WorkflowExtension
-> ```
->
-> Unregister every stale path, then re-register the debug build:
->
-> ```sh
-> $LS -u "/path/to/stale/Keyframeless X.app"
->
+> # re-register the debug build
 > $LS -f -R -trusted "$(pwd)/DerivedData/Keyframeless/Build/Products/Debug/Keyframeless X.app"
 >
 > pluginkit -a "$(pwd)/DerivedData/Keyframeless/Build/Products/Debug/Keyframeless X.app/Contents/PlugIns/Keyframeless X FCP.appex"

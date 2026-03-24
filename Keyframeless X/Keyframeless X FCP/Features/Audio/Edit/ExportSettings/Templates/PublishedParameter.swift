@@ -13,6 +13,7 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 	var kind: ParamKind
 	var isProjectRoot: Bool = false
 	var parentLayerID: String?
+	var parentScenenodeID: String?
 	var defaultR: Double?
 	var defaultG: Double?
 	var defaultB: Double?
@@ -76,11 +77,12 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 			let rgb = extractColorDefaults(
 				objectID: objectID, channelPath: channelPath, in: content)
 			let layerID = findContainingLayerID(for: objectID, in: content)
+			let parentScenenode = findParentScenenodeID(for: objectID, in: content)
 			customParams.append(
 				PublishedParameter(
 					name: name, objectID: objectID, channel: channel, kind: .off,
 					isProjectRoot: objectID == projectRootID,
-					parentLayerID: layerID,
+					parentLayerID: layerID, parentScenenodeID: parentScenenode,
 					defaultR: rgb?.r, defaultG: rgb?.g, defaultB: rgb?.b))
 		}
 
@@ -93,7 +95,7 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 		let ids = channelPath.split(separator: "/").map(String.init)
 		guard !ids.isEmpty else { return nil }
 
-		let nodePattern = "scenenode[^>]*\\sid=\"\(objectID)\""
+		let nodePattern = "\\bid=\"\(objectID)\""
 		guard let nodeRegex = try? NSRegularExpression(pattern: nodePattern),
 			let nodeMatch = nodeRegex.firstMatch(
 				in: content, range: NSRange(content.startIndex..., in: content))
@@ -110,8 +112,9 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 		}
 
 		let lookahead = String(content[searchStart...].prefix(2000))
-		guard lookahead.contains("name=\"Red\""), lookahead.contains("name=\"Green\""),
-			lookahead.contains("name=\"Blue\"")
+		guard
+			lookahead.contains("name=\"Red\"") || lookahead.contains("name=\"Green\"")
+				|| lookahead.contains("name=\"Blue\"")
 		else { return nil }
 
 		func val(for name: String) -> Double? {
@@ -123,9 +126,7 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 			return Double((lookahead as NSString).substring(with: m.range(at: 1)))
 		}
 
-		guard let r = val(for: "Red"), let g = val(for: "Green"), let b = val(for: "Blue")
-		else { return nil }
-		return (r, g, b)
+		return (val(for: "Red") ?? 1, val(for: "Green") ?? 1, val(for: "Blue") ?? 1)
 	}
 
 	private static func extractProjectRootID(from content: String) -> String? {
@@ -135,6 +136,20 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 				in: content, range: NSRange(content.startIndex..., in: content))
 		else { return nil }
 		return (content as NSString).substring(with: match.range(at: 1))
+	}
+
+	private static func findParentScenenodeID(for objectID: String, in content: String) -> String? {
+		let behaviorPattern = "<behavior[^>]*\\sid=\"\(objectID)\""
+		guard let regex = try? NSRegularExpression(pattern: behaviorPattern),
+			let match = regex.firstMatch(
+				in: content, range: NSRange(content.startIndex..., in: content))
+		else { return nil }
+		let beforeBehavior = (content as NSString).substring(to: match.range.location)
+		let scenenodePattern = "<scenenode[^>]*\\sid=\"(\\d+)\""
+		guard let snRegex = try? NSRegularExpression(pattern: scenenodePattern) else { return nil }
+		let matches = snRegex.matches(
+			in: beforeBehavior, range: NSRange(beforeBehavior.startIndex..., in: beforeBehavior))
+		return matches.last.map { (beforeBehavior as NSString).substring(with: $0.range(at: 1)) }
 	}
 
 	private static func findContainingLayerID(for objectID: String, in content: String) -> String? {

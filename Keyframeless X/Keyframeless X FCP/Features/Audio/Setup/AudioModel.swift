@@ -166,10 +166,16 @@ class AudioModel: ObservableObject {
 		var entries: [FCPXMLBuilder.PublishedParamEntry] = []
 		for param in settings.allParams where param.isToggleable {
 			let val = store.value(paramID: param.id, for: selectedTemplate.id)
-			let key =
-				param.isProjectRoot
-				? "9999/\(param.objectID)/\(param.channelPath)"
-				: "9999/\(param.parentLayerID ?? "10003")/\(param.objectID)/\(param.channelPath)"
+			let key: String
+			if param.isProjectRoot {
+				key = "9999/\(param.objectID)/\(param.channelPath)"
+			} else if let parentScenenode = param.parentScenenodeID {
+				key =
+					"9999/\(param.parentLayerID ?? "10003")/\(parentScenenode)/4/\(param.objectID)/\(param.channelPath)"
+			} else {
+				key =
+					"9999/\(param.parentLayerID ?? "10003")/\(param.objectID)/\(param.channelPath)"
+			}
 			let valueStr: String
 			switch param.kind {
 			case .color:
