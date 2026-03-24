@@ -94,11 +94,11 @@ struct AppShell: View {
 					templateName: template.name,
 					params: audioModel.paramsModalParams,
 					hasPerWordAnimation: audioModel.paramsModalHasPerWord,
-					initialEnabled: TemplatePublishedParamsStore.shared.params(for: template.id)?
-						.enabledIDs ?? [],
-					onSave: { enabledIDs in
+					initialKinds: TemplatePublishedParamsStore.shared.kindMap(
+						for: template.id),
+					onSave: { params in
 						TemplatePublishedParamsStore.shared.setParams(
-							audioModel.paramsModalParams, enabledIDs: enabledIDs,
+							params,
 							hasPerWordAnimation: audioModel.paramsModalHasPerWord,
 							for: template.id)
 						audioModel.paramsModalTemplate = nil
@@ -113,8 +113,6 @@ struct AppShell: View {
 					params: TemplatePublishedParamsStore.shared.params(for: template.id)?
 						.allParams ?? [],
 					hasPerWordAnimation: template.supportsPerWordAnimation,
-					enabledIDs: TemplatePublishedParamsStore.shared.params(for: template.id)?
-						.enabledIDs ?? [],
 					onDismiss: { audioModel.publishModalTemplate = nil }
 				)
 				.transition(.opacity)

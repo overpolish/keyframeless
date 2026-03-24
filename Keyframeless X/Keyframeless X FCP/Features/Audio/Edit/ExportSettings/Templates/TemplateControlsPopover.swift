@@ -12,7 +12,7 @@ struct TemplateControlsPopover: View {
 
 	private var enabledParams: [PublishedParameter] {
 		guard let settings = store.params(for: template.id) else { return [] }
-		return settings.allParams.filter { settings.enabledIDs.contains($0.id) && $0.isToggleable }
+		return settings.allParams.filter(\.isToggleable)
 	}
 
 	var body: some View {
@@ -64,6 +64,8 @@ private struct ParamControlRow: View {
 			ColorParamControl(param: param, templateID: templateID, store: store)
 		case .slider:
 			SliderParamControl(param: param, templateID: templateID, store: store)
+		case .toggle:
+			ToggleParamControl(param: param, templateID: templateID, store: store)
 		default:
 			EmptyView()
 		}
@@ -142,5 +144,40 @@ private struct SliderParamControl: View {
 			textColor: .primary,
 			valueWidth: 20
 		)
+	}
+}
+
+private struct ToggleParamControl: View {
+	let param: PublishedParameter
+	let templateID: String
+	@ObservedObject var store: TemplatePublishedParamsStore
+
+	private var toggleValue: Binding<Bool> {
+		Binding(
+			get: { store.value(paramID: param.id, for: templateID).toggleValue },
+			set: { newVal in
+				var val = store.value(paramID: param.id, for: templateID)
+				val.toggleValue = newVal
+				store.setValue(val, paramID: param.id, for: templateID)
+			}
+		)
+	}
+
+	var body: some View {
+		HStack(spacing: KKSpacingMD) {
+			Text(param.name)
+				.font(.caption)
+				.foregroundStyle(.primary)
+			Spacer()
+			Toggle("", isOn: toggleValue)
+				.toggleStyle(.checkbox)
+				.controlSize(.small)
+				.labelsHidden()
+				.tint(.kkAccent)
+				.overlay(
+					RoundedRectangle(cornerRadius: 3)
+						.stroke(Color.secondary.opacity(0.4), lineWidth: 1)
+				)
+		}
 	}
 }
