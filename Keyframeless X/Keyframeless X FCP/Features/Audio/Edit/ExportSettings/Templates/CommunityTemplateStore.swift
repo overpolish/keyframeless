@@ -11,6 +11,7 @@ struct CommunityTemplate: Identifiable {
 	let name: String
 	let author: String
 	let perWord: Bool
+	let perWordStartsAtZero: Bool
 	let params: [[String: String]]
 	let previewGifURL: URL
 	let folderName: String
@@ -112,6 +113,7 @@ class CommunityTemplateStore: ObservableObject {
 			name: name,
 			author: meta["author"] as? String ?? "",
 			perWord: meta["perWord"] as? Bool ?? false,
+			perWordStartsAtZero: meta["perWordStartsAtZero"] as? Bool ?? false,
 			params: meta["params"] as? [[String: String]] ?? [],
 			previewGifURL: previewGifURL,
 			folderName: templateFolderName
@@ -156,6 +158,38 @@ class CommunityTemplateStore: ObservableObject {
 				destFile = destDir.appendingPathComponent(fileName)
 			}
 			try fileData.write(to: destFile)
+		}
+
+		let motiURL = destDir.appendingPathComponent("\(template.name).moti")
+		let templateID =
+			"~/Titles.localized/Keyframeless/\(template.name)/\(template.name).moti"
+		let result = PublishedParameter.parseAll(from: motiURL)
+		if !template.params.isEmpty || result.hasPerWordAnimation {
+			let kindsByName = Dictionary(
+				template.params.compactMap { dict -> (String, String)? in
+					guard let name = dict["name"], let kind = dict["kind"] else { return nil }
+					return (name, kind)
+				},
+				uniquingKeysWith: { _, last in last }
+			)
+			let configured = result.customParams.map { param -> PublishedParameter in
+				var p = param
+				if let kindRaw = kindsByName[p.name],
+					let kind = PublishedParameter.ParamKind(rawValue: kindRaw)
+				{
+					p.kind = kind
+				}
+				return p
+			}
+			let store = TemplatePublishedParamsStore.shared
+			await MainActor.run {
+				store.setParams(
+					configured, hasPerWordAnimation: result.hasPerWordAnimation,
+					for: templateID)
+				if template.perWord {
+					store.setPerWordStartsAtZero(template.perWordStartsAtZero, for: templateID)
+				}
+			}
 		}
 
 		await MainActor.run { shared.needsFCPRestart = true }

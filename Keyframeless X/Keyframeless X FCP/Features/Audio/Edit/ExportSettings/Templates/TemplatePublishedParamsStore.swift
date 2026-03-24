@@ -19,7 +19,6 @@ class TemplatePublishedParamsStore: ObservableObject {
 		var a: Double = 1
 		var sliderValue: Double = 0
 		var toggleValue: Bool = false
-
 		static func fromDefaults(_ param: PublishedParameter) -> ParamValue {
 			switch param.kind {
 			case .color:
