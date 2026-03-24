@@ -10,18 +10,18 @@ struct PublishedParamsModal: View {
 	let templateName: String
 	let params: [PublishedParameter]
 	let hasPerWordAnimation: Bool
-	let onSave: (Set<String>) -> Void
+	let onSave: ([PublishedParameter]) -> Void
 	let onDismiss: () -> Void
 
-	@State private var enabledIDs: Set<String>
+	@State private var paramKinds: [String: PublishedParameter.ParamKind]
 	@State private var paramListHeight: CGFloat = 0
 
 	init(
 		templateName: String,
 		params: [PublishedParameter],
 		hasPerWordAnimation: Bool = false,
-		initialEnabled: Set<String> = [],
-		onSave: @escaping (Set<String>) -> Void,
+		initialKinds: [String: PublishedParameter.ParamKind] = [:],
+		onSave: @escaping ([PublishedParameter]) -> Void,
 		onDismiss: @escaping () -> Void
 	) {
 		self.templateName = templateName
@@ -29,7 +29,11 @@ struct PublishedParamsModal: View {
 		self.hasPerWordAnimation = hasPerWordAnimation
 		self.onSave = onSave
 		self.onDismiss = onDismiss
-		_enabledIDs = State(initialValue: initialEnabled)
+		_paramKinds = State(
+			initialValue: Dictionary(
+				uniqueKeysWithValues: params.map {
+					($0.id, initialKinds[$0.id] ?? .off)
+				}))
 	}
 
 	var body: some View {
@@ -60,7 +64,7 @@ struct PublishedParamsModal: View {
 							.fixedSize(horizontal: false, vertical: true)
 					} else {
 						Text(
-							"Detected the following published parameters in \"\(templateName)\". Toggle which should be available from Keyframeless X."
+							"Detected the following published parameters in \"\(templateName)\". Choose a type for each parameter."
 						)
 						.font(.system(size: 11))
 						.foregroundStyle(.secondary)
@@ -70,19 +74,13 @@ struct PublishedParamsModal: View {
 				}
 				if !params.isEmpty {
 					ScrollShadowView {
-						VStack(spacing: KKSpacingSM) {
+						VStack(spacing: KKSpacingMD) {
 							ForEach(params) { param in
-								ParamToggleRow(
-									param: param,
-									isOn: Binding(
-										get: { enabledIDs.contains(param.id) },
-										set: { on in
-											if on {
-												enabledIDs.insert(param.id)
-											} else {
-												enabledIDs.remove(param.id)
-											}
-										}
+								ParamKindRow(
+									name: param.name,
+									kind: Binding(
+										get: { paramKinds[param.id] ?? .off },
+										set: { paramKinds[param.id] = $0 }
 									)
 								)
 							}
@@ -106,7 +104,7 @@ struct PublishedParamsModal: View {
 							.buttonStyle(.plain)
 							.foregroundStyle(.secondary)
 						Spacer()
-						Button("Save") { onSave(enabledIDs) }
+						Button("Save") { save() }
 							.buttonStyle(.plain)
 							.foregroundStyle(Color.kkAccent)
 					}
@@ -121,49 +119,40 @@ struct PublishedParamsModal: View {
 			)
 		}
 	}
+
+	private func save() {
+		let updated = params.map { param -> PublishedParameter in
+			var p = param
+			p.kind = paramKinds[param.id] ?? .off
+			return p
+		}
+		onSave(updated)
+	}
 }
 
-private struct ParamToggleRow: View {
-	let param: PublishedParameter
-	@Binding var isOn: Bool
+private struct ParamKindRow: View {
+	let name: String
+	@Binding var kind: PublishedParameter.ParamKind
+
+	private let kindOptions:
+		[(label: String, value: PublishedParameter.ParamKind, icon: String?, color: Color?)] = [
+			("Off", .off, nil, .kkError),
+			("Color", .color, "paintpalette", .kkAccent),
+			("Slider", .slider, "slider.horizontal.3", .kkWarning),
+			("Toggle", .toggle, "checkmark.circle", .green),
+		]
 
 	var body: some View {
 		HStack(spacing: KKSpacingMD) {
-			VStack(alignment: .leading, spacing: 2) {
-				Text(param.name)
-					.font(.system(size: 11))
-					.foregroundStyle(.primary)
-				if param.kind == .unsupported {
-					Text("Unsupported type")
-						.font(.system(size: 9))
-						.foregroundStyle(.secondary.opacity(0.6))
-				}
-			}
+			Text(name)
+				.font(.system(size: 11))
+				.foregroundStyle(.primary)
+				.lineLimit(2)
+				.fixedSize(horizontal: false, vertical: true)
 			Spacer()
-			kindBadge
-			if param.isToggleable {
-				Toggle("", isOn: $isOn)
-					.toggleStyle(.switch)
-					.controlSize(.mini)
-					.labelsHidden()
-					.tint(.kkAccent)
-			}
+			PillToggle(selection: $kind, options: kindOptions)
+				.fixedSize()
 		}
 		.padding(.vertical, KKPaddingXS)
-		.opacity(param.isToggleable ? 1 : 0.5)
-	}
-
-	@ViewBuilder
-	private var kindBadge: some View {
-		switch param.kind {
-		case .color:
-			InfoBadge(label: "Color", systemImage: "paintpalette", color: .kkAccent)
-		case .slider:
-			InfoBadge(label: "Slider", systemImage: "slider.horizontal.3", color: .kkWarning)
-		case .unsupported:
-			InfoBadge(label: "Unsupported", color: .secondary)
-		case .animation:
-			EmptyView()
-		}
 	}
 }
