@@ -248,6 +248,9 @@ struct CaptionTemplatePicker: View {
 			}
 		}
 		.onAppear { communityStore.fetch() }
+		.onChange(of: communityStore.templates.map(\.id)) {
+			reconcileCommunityParams()
+		}
 		.onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
 			handleDrop(providers)
 		}
@@ -311,6 +314,40 @@ struct CaptionTemplatePicker: View {
 			model.paramsModalHasPerWord = false
 		}
 		model.paramsModalTemplate = template
+	}
+
+	private func reconcileCommunityParams() {
+		let communityByName = Dictionary(
+			communityStore.templates.map { ($0.name, $0) },
+			uniquingKeysWith: { first, _ in first }
+		)
+		for template in keyframelessTemplates where !template.isBuiltIn {
+			guard paramsStore.params(for: template.id) == nil,
+				let community = communityByName[template.name],
+				!community.params.isEmpty,
+				let motiURL = template.resolvedMotiURL()
+			else { continue }
+			let result = PublishedParameter.parseAll(from: motiURL)
+			let kindsByName = Dictionary(
+				community.params.compactMap { dict -> (String, String)? in
+					guard let name = dict["name"], let kind = dict["kind"] else { return nil }
+					return (name, kind)
+				},
+				uniquingKeysWith: { _, last in last }
+			)
+			let configured = result.customParams.map { param -> PublishedParameter in
+				var p = param
+				if let kindRaw = kindsByName[p.name],
+					let kind = PublishedParameter.ParamKind(rawValue: kindRaw)
+				{
+					p.kind = kind
+				}
+				return p
+			}
+			paramsStore.setParams(
+				configured, hasPerWordAnimation: result.hasPerWordAnimation,
+				for: template.id)
+		}
 	}
 
 }
