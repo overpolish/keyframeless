@@ -9,27 +9,42 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// Checks the GitHub Releases API for newer versions of Keyframeless.
+/// Checks the latest GitHub release for a `manifest.json` asset and compares
+/// this component's version against the manifest entry.
 ///
-/// Call `-checkWithCompletion:` to fetch the latest release. The checker
-/// rate-limits itself to one network request per day and caches the result
-/// in `NSUserDefaults`.
+/// Call `-checkWithCompletion:` on launch (rate-limited to one network request
+/// per 24 hours) or `-forceCheckWithCompletion:` for a manual refresh.
 @interface KKUpdateChecker : NSObject
 
+/// The running component's version from its main bundle.
 @property(nonatomic, copy, readonly) NSString *currentVersion;
-@property(nonatomic, copy, readonly, nullable) NSString *latestVersion;
+
+/// The newer version available in the manifest, or nil if up to date.
+@property(nonatomic, copy, readonly, nullable) NSString *availableVersion;
+
+/// Manifest keys that aren't in the known component map (new plugins).
+@property(nonatomic, copy, readonly)
+    NSArray<NSString *> *availableComponentKeys;
+
+/// YES when this component has an update or new components exist.
 @property(nonatomic, assign, readonly) BOOL updateAvailable;
+
+/// URL to the GitHub release page.
 @property(nonatomic, copy, readonly, nullable) NSURL *downloadURL;
 
 + (instancetype)shared;
 
-/// Fetches the latest release from GitHub if a check hasn't been performed
-/// in the last 24 hours. Calls `completion` on the main queue.
+/// Returns the user-facing display name for a component identifier,
+/// or nil if the identifier is unknown.
++ (nullable NSString *)displayNameForComponent:(NSString *)componentID;
+
+/// Fetches the manifest from the latest GitHub release if more than 24 hours
+/// have elapsed since the last check. Calls `completion` on the main queue.
 - (void)checkWithCompletion:(void (^)(BOOL updateAvailable))completion;
 
-/// Checks for updates and posts a system notification with a "Download"
-/// action if one is available. Call from `-applicationDidFinishLaunching:`.
-- (void)checkAndNotify;
+/// Fetches the manifest regardless of when the last check occurred.
+/// Calls `completion` on the main queue.
+- (void)forceCheckWithCompletion:(void (^)(BOOL updateAvailable))completion;
 
 @end
 

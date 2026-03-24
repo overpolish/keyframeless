@@ -3,87 +3,110 @@
 # SPDX-FileCopyrightText: 2026 overpolish
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Bumps the version number across all plugins, the framework,
-# Keyframeless X, and the installer .pkgproj.
+# Bumps the version for a single component and updates manifest.json.
+#
+# Usage: bump-version.sh <component> <version>
+#
+# Components:
+#   motionblur     MotionBlur plugin
+#   rounded        Rounded plugin
+#   keyframelessx  Keyframeless X app
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+MANIFEST="$ROOT/manifest.json"
 
-# --- Discover current version from KeyframelessKit ---
-
-CURRENT=$(/usr/libexec/PlistBuddy -c \
-  "Print :CFBundleShortVersionString" \
-  "$ROOT/MotionBlur/MotionBlur/Wrapper Application/Info.plist")
-
-echo "Current version: $CURRENT"
-printf "New version: "
-read -r NEW
-
-if [[ -z "$NEW" ]]; then
-  echo "No version entered, aborting."
+usage() {
+  echo "Usage: bump-version.sh <component> <version>"
+  echo ""
+  echo "Components:"
+  echo "  motionblur     MotionBlur plugin"
+  echo "  rounded        Rounded plugin"
+  echo "  keyframelessx  Keyframeless X app"
   exit 1
+}
+
+if [[ $# -ne 2 ]]; then
+  usage
 fi
 
-if [[ "$NEW" == "$CURRENT" ]]; then
-  echo "Version unchanged, aborting."
-  exit 1
-fi
+COMPONENT="$1"
+VERSION="$2"
 
-# --- Info.plist files (CFBundleShortVersionString) ---
-
-PLISTS=(
-  "MotionBlur/MotionBlur/Wrapper Application/Info.plist"
-  "MotionBlur/MotionBlur/Plugin/Info.plist"
-  "Rounded/Rounded/Wrapper Application/Info.plist"
-  "Rounded/Rounded/Plugin/Info.plist"
-)
-
-for plist in "${PLISTS[@]}"; do
+bump_plist() {
+  local plist="$1"
   echo "  $plist"
   /usr/libexec/PlistBuddy -c \
-    "Set :CFBundleShortVersionString $NEW" "$ROOT/$plist"
-done
+    "Set :CFBundleShortVersionString $VERSION" "$ROOT/$plist"
+}
 
-# --- FxPlug ProPlugPlugInList version strings ---
-
-FXPLUG_PLISTS=(
-  "MotionBlur/MotionBlur/Plugin/Info.plist"
-  "Rounded/Rounded/Plugin/Info.plist"
-)
-
-for plist in "${FXPLUG_PLISTS[@]}"; do
-  full="$ROOT/$plist"
-  i=0
+bump_fxplug() {
+  local plist="$1"
+  local full="$ROOT/$plist"
+  local i=0
   while /usr/libexec/PlistBuddy -c \
     "Print :ProPlugPlugInList:$i:ProPlugPlugInVersion" "$full" \
     &>/dev/null; do
     echo "  $plist ProPlugPlugInList[$i]"
     /usr/libexec/PlistBuddy -c \
-      "Set :ProPlugPlugInList:$i:ProPlugPlugInVersion $NEW" "$full"
+      "Set :ProPlugPlugInList:$i:ProPlugPlugInVersion $VERSION" "$full"
     ((i++))
   done
-done
+}
 
-# --- Xcode projects (MARKETING_VERSION) ---
+bump_manifest() {
+  python3 -c "
+import json, sys
+key_path, value = sys.argv[1], sys.argv[2]
+with open('$MANIFEST', 'r') as f:
+    m = json.load(f)
+keys = key_path.split('.')
+obj = m
+for k in keys[:-1]:
+    obj = obj[k]
+obj[keys[-1]] = value
+with open('$MANIFEST', 'w') as f:
+    json.dump(m, f, indent=2)
+    f.write('\n')
+" "$@"
+}
 
-PBXPROJS=(
-  "Keyframeless X/Keyframeless X.xcodeproj/project.pbxproj"
-  "KeyframelessKit/KeyframelessKit.xcodeproj/project.pbxproj"
-)
+case "$COMPONENT" in
+  motionblur)
+    echo "Bumping MotionBlur to $VERSION"
+    bump_plist "MotionBlur/MotionBlur/Wrapper Application/Info.plist"
+    bump_plist "MotionBlur/MotionBlur/Plugin/Info.plist"
+    bump_fxplug "MotionBlur/MotionBlur/Plugin/Info.plist"
+    bump_manifest "motionblur" "$VERSION"
+    ;;
 
-for proj in "${PBXPROJS[@]}"; do
-  echo "  $proj"
-  sed -i '' "s/MARKETING_VERSION = $CURRENT;/MARKETING_VERSION = $NEW;/g" \
-    "$ROOT/$proj"
-done
+  rounded)
+    echo "Bumping Rounded to $VERSION"
+    bump_plist "Rounded/Rounded/Wrapper Application/Info.plist"
+    bump_plist "Rounded/Rounded/Plugin/Info.plist"
+    bump_fxplug "Rounded/Rounded/Plugin/Info.plist"
+    bump_manifest "rounded" "$VERSION"
+    ;;
 
-# --- Packages .pkgproj (installer version) ---
+  keyframelessx)
+    echo "Bumping Keyframeless X to $VERSION"
+    proj="Keyframeless X/Keyframeless X.xcodeproj/project.pbxproj"
+    echo "  $proj"
+    current=$(grep -m1 'MARKETING_VERSION' "$ROOT/$proj" \
+      | sed 's/.*= //;s/;.*//' | tr -d ' ')
+    sed -i '' \
+      "s/MARKETING_VERSION = $current;/MARKETING_VERSION = $VERSION;/g" \
+      "$ROOT/$proj"
+    bump_manifest "keyframelessx" "$VERSION"
+    ;;
 
-PKGPROJ="Distribution/Keyframeless.pkgproj"
-echo "  $PKGPROJ"
-sed -i '' "s|<string>$CURRENT</string>|<string>$NEW</string>|g" \
-  "$ROOT/$PKGPROJ"
+  *)
+    echo "Unknown component: $COMPONENT"
+    usage
+    ;;
+esac
 
 echo ""
-echo "Bumped $CURRENT -> $NEW"
+echo "Done — $COMPONENT bumped to $VERSION"
+echo "  manifest.json updated"

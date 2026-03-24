@@ -7,7 +7,7 @@ import KeyframelessKit
 import SwiftUI
 
 struct UpdateBanner: View {
-	let version: String
+	let message: String
 	let url: URL?
 	let onDismiss: () -> Void
 
@@ -15,7 +15,7 @@ struct UpdateBanner: View {
 		HStack(spacing: KKSpacingLG) {
 			Image(systemName: "arrow.down.circle.fill")
 				.font(.system(size: 12))
-			Text("Keyframeless \(version) is available")
+			Text(message)
 				.font(.system(size: 11, weight: .medium))
 			Spacer()
 			if let url {
