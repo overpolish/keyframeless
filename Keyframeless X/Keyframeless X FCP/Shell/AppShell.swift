@@ -96,11 +96,15 @@ struct AppShell: View {
 					hasPerWordAnimation: audioModel.paramsModalHasPerWord,
 					initialKinds: TemplatePublishedParamsStore.shared.kindMap(
 						for: template.id),
-					onSave: { params in
+					initialPerWordStartsAtZero: TemplatePublishedParamsStore.shared
+						.params(for: template.id)?.perWordStartsAtZero ?? false,
+					onSave: { params, perWordStartsAtZero in
 						TemplatePublishedParamsStore.shared.setParams(
 							params,
 							hasPerWordAnimation: audioModel.paramsModalHasPerWord,
 							for: template.id)
+						TemplatePublishedParamsStore.shared.setPerWordStartsAtZero(
+							perWordStartsAtZero, for: template.id)
 						audioModel.paramsModalTemplate = nil
 					},
 					onDismiss: { audioModel.paramsModalTemplate = nil }

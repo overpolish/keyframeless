@@ -38,6 +38,7 @@ class TemplatePublishedParamsStore: ObservableObject {
 		/// Now derived from param kinds on save. Safe to remove once all users have migrated.
 		var enabledIDs: Set<String> = []
 		var hasPerWordAnimation: Bool = false
+		var perWordStartsAtZero: Bool = false
 	}
 
 	private let filename = "template_published_params.json"
@@ -102,6 +103,14 @@ class TemplatePublishedParamsStore: ObservableObject {
 
 	func resetValues(for templateID: String) {
 		sessionValues.removeValue(forKey: templateID)
+	}
+
+	func setPerWordStartsAtZero(_ value: Bool, for templateID: String) {
+		if settings[templateID] == nil {
+			settings[templateID] = TemplateParamSettings(allParams: [], hasPerWordAnimation: true)
+		}
+		settings[templateID]?.perWordStartsAtZero = value
+		KKStore.save(settings, to: filename)
 	}
 
 	func removeSettings(for templateID: String) {

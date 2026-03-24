@@ -148,9 +148,10 @@ struct CaptionTemplateCard: View {
 					.lineLimit(1)
 				if let author = template.author {
 					Spacer()
-					InfoBadge(label: author, systemImage: "person.fill")
+					InfoBadge(label: author, systemImage: "person.fill", color: .kkAccent)
 				}
 			}
+			.frame(height: 9)
 		}
 		.onHover { hovering in
 			isHovered = hovering

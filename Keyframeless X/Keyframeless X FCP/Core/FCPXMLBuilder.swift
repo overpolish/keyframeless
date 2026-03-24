@@ -50,7 +50,8 @@ enum FCPXMLBuilder {
 		textStyle: TextStyleSettings,
 		format: ExportFormat,
 		template: CaptionTemplate = .basicTitle,
-		publishedParams: [PublishedParamEntry] = []
+		publishedParams: [PublishedParamEntry] = [],
+		perWordStartsAtZero: Bool = false
 	) -> String {
 		guard !segments.isEmpty else {
 			return emptyXML(format: format)
@@ -134,7 +135,10 @@ enum FCPXMLBuilder {
 						let offset = wordStart - segment.startTime
 						let time = rationalTime(
 							seconds: mediaStart + offset, frameRate: frameRate)
-						let value = Double(i + 1) / divisor
+						let value =
+							perWordStartsAtZero
+							? Double(i) / divisor
+							: Double(i + 1) / divisor
 						let valueStr =
 							value == 1 ? "1" : String(format: "%g", value)
 						xml +=

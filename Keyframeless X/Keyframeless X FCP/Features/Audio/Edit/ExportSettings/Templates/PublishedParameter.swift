@@ -12,6 +12,7 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 	let channel: String
 	var kind: ParamKind
 	var isProjectRoot: Bool = false
+	var parentLayerID: String?
 	var defaultR: Double?
 	var defaultG: Double?
 	var defaultB: Double?
@@ -74,10 +75,12 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 			let channelPath = channel.hasPrefix("./") ? String(channel.dropFirst(2)) : channel
 			let rgb = extractColorDefaults(
 				objectID: objectID, channelPath: channelPath, in: content)
+			let layerID = findContainingLayerID(for: objectID, in: content)
 			customParams.append(
 				PublishedParameter(
 					name: name, objectID: objectID, channel: channel, kind: .off,
 					isProjectRoot: objectID == projectRootID,
+					parentLayerID: layerID,
 					defaultR: rgb?.r, defaultG: rgb?.g, defaultB: rgb?.b))
 		}
 
@@ -132,5 +135,19 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 				in: content, range: NSRange(content.startIndex..., in: content))
 		else { return nil }
 		return (content as NSString).substring(with: match.range(at: 1))
+	}
+
+	private static func findContainingLayerID(for objectID: String, in content: String) -> String? {
+		let objPattern = "id=\"\(objectID)\""
+		guard let objRegex = try? NSRegularExpression(pattern: objPattern),
+			let objMatch = objRegex.firstMatch(
+				in: content, range: NSRange(content.startIndex..., in: content))
+		else { return nil }
+		let beforeObj = (content as NSString).substring(to: objMatch.range.location)
+		let layerPattern = "<layer[^>]*\\sid=\"(\\d+)\""
+		guard let layerRegex = try? NSRegularExpression(pattern: layerPattern) else { return nil }
+		let matches = layerRegex.matches(
+			in: beforeObj, range: NSRange(beforeObj.startIndex..., in: beforeObj))
+		return matches.last.map { (beforeObj as NSString).substring(with: $0.range(at: 1)) }
 	}
 }
