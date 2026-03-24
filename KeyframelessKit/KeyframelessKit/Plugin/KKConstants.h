@@ -13,6 +13,7 @@
 /// 9000–9899  decorative UI parameters (info labels, separators)
 /// 9900–9999  animation system parameters (added by KKPlugin)
 
+static const UInt32 kKKParamUpdateBanner __attribute__((unused)) = 9990;
 static const UInt32 kKKParamAnimationSeparator __attribute__((unused)) = 9900;
 static const UInt32 kKKParamAnimateIn __attribute__((unused)) = 9901;
 static const UInt32 kKKParamAnimateOut __attribute__((unused)) = 9902;

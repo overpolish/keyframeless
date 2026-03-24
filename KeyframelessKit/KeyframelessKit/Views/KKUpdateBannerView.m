@@ -1,0 +1,80 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+#import "KKUpdateBannerView.h"
+#import "../Style/KKFonts.h"
+#import "../Style/KKTokens.h"
+#import "../Style/NSColor+KKColors.h"
+#import "../Update/KKUpdateChecker.h"
+#import <AppKit/AppKit.h>
+
+static const CGFloat KKLogoSize = 28.0;
+
+@implementation KKUpdateBannerView
+
+- (instancetype)init {
+  self = [super initWithFrame:NSMakeRect(0, 0, 0, KKInspectorRowHeight * 2)];
+  if (self) {
+    self.autoresizingMask =
+        NSViewWidthSizable | NSViewHeightSizable | NSViewMinYMargin;
+
+    NSBundle *frameworkBundle =
+        [NSBundle bundleForClass:[KKUpdateBannerView class]];
+    NSImage *logo = [[NSImage alloc]
+        initByReferencingFile:[frameworkBundle
+                                  pathForResource:@"keyframeless-logo"
+                                           ofType:@"png"]];
+
+    NSImageView *logoView = [[NSImageView alloc] init];
+    logoView.translatesAutoresizingMaskIntoConstraints = NO;
+    logoView.imageScaling = NSImageScaleProportionallyUpOrDown;
+    logoView.image = logo;
+    [self addSubview:logoView];
+
+    [NSLayoutConstraint activateConstraints:@[
+      [logoView.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
+      [logoView.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [logoView.widthAnchor constraintEqualToConstant:KKLogoSize],
+      [logoView.heightAnchor constraintEqualToConstant:KKLogoSize],
+    ]];
+
+    if ([KKUpdateChecker shared].updateAvailable) {
+      NSImage *dlIcon =
+          [NSImage imageWithSystemSymbolName:@"arrow.down.circle.fill"
+                    accessibilityDescription:@"Download"];
+
+      NSButton *button = [NSButton buttonWithTitle:@" New Version"
+                                             image:dlIcon
+                                            target:self
+                                            action:@selector(openDownloadURL:)];
+      button.translatesAutoresizingMaskIntoConstraints = NO;
+      button.bezelStyle = NSBezelStyleRecessed;
+      button.bordered = NO;
+      button.imagePosition = NSImageLeft;
+      button.font =
+          [NSFont systemFontOfSize:[KKFonts inspectorLabelFont].pointSize
+                            weight:NSFontWeightMedium];
+      button.contentTintColor = [NSColor accent];
+      [self addSubview:button];
+
+      [NSLayoutConstraint activateConstraints:@[
+        [button.trailingAnchor
+            constraintEqualToAnchor:self.trailingAnchor
+                           constant:-KKInspectorHorizontalInset],
+        [button.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      ]];
+    }
+  }
+  return self;
+}
+
+- (void)openDownloadURL:(id)sender {
+  NSURL *url = [KKUpdateChecker shared].downloadURL;
+  if (url) {
+    [[NSWorkspace sharedWorkspace] openURL:url];
+  }
+}
+
+@end

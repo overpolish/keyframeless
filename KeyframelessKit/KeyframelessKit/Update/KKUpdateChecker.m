@@ -15,16 +15,39 @@ static NSString *const kActionDownload = @"DOWNLOAD_ACTION";
 static NSString *const kLastCheckKey =
     @"co.overpolish.keyframeless.lastUpdateCheck";
 static NSString *const kCachedVersionKey =
-    @"co.overpolish.keyframeless.cachedLatestVersion";
+    @"co.overpolish.keyframeless.cachedAvailableVersion";
+static NSString *const kCachedNewKeysKey =
+    @"co.overpolish.keyframeless.cachedAvailableComponentKeys";
 static NSString *const kCachedURLKey =
     @"co.overpolish.keyframeless.cachedDownloadURL";
-static NSTimeInterval const kCheckInterval = 86400; // 24 hours
+static NSTimeInterval const kCheckInterval = 86400;
+
+static NSDictionary<NSString *, NSString *> *KKKnownComponents(void) {
+  return @{
+    @"keyframelessx" : @"Keyframeless X",
+    @"rounded" : @"Rounded",
+    @"motionblur" : @"MotionBlur",
+  };
+}
+
+static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
+  return @{
+    @"co.overpolish.keyframeless.Keyframeless-X" : @"keyframelessx",
+    @"co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP" :
+        @"keyframelessx",
+    @"MotionBlur" : @"motionblur",
+    @"MotionBlur-XPC-Service" : @"motionblur",
+    @"Rounded" : @"rounded",
+    @"Rounded-XPC-Service" : @"rounded",
+  };
+}
 
 @interface KKUpdateChecker () <UNUserNotificationCenterDelegate>
 @end
 
 @implementation KKUpdateChecker {
   KKLog *_log;
+  NSString *_componentKey;
 }
 
 + (instancetype)shared {
@@ -36,10 +59,20 @@ static NSTimeInterval const kCheckInterval = 86400; // 24 hours
   return instance;
 }
 
++ (nullable NSString *)displayNameForComponent:(NSString *)componentID {
+  return KKKnownComponents()[componentID];
+}
+
 - (instancetype)init {
   self = [super init];
   if (self) {
     _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless.updateChecker"];
+
+    NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier] ?: @"";
+    _componentKey = KKBundleIDToComponent()[bundleID];
+    if (!_componentKey) {
+      [_log warn:@"Unknown bundle identifier: %@", bundleID];
+    }
 
     _currentVersion =
         [[NSBundle mainBundle]
@@ -47,13 +80,14 @@ static NSTimeInterval const kCheckInterval = 86400; // 24 hours
             ?: @"0.0.0";
 
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    _latestVersion = [defaults stringForKey:kCachedVersionKey];
+    _availableVersion = [defaults stringForKey:kCachedVersionKey];
+    _availableComponentKeys = [defaults arrayForKey:kCachedNewKeysKey] ?: @[];
     NSString *cachedURL = [defaults stringForKey:kCachedURLKey];
     if (cachedURL) {
       _downloadURL = [NSURL URLWithString:cachedURL];
     }
-    _updateAvailable = [self isVersion:_latestVersion
-                             newerThan:_currentVersion];
+    _updateAvailable =
+        _availableVersion != nil || _availableComponentKeys.count > 0;
   }
   return self;
 }
@@ -72,6 +106,14 @@ static NSTimeInterval const kCheckInterval = 86400; // 24 hours
     return;
   }
 
+  [self fetchManifestWithCompletion:completion];
+}
+
+- (void)forceCheckWithCompletion:(void (^)(BOOL))completion {
+  [self fetchManifestWithCompletion:completion];
+}
+
+- (void)fetchManifestWithCompletion:(void (^)(BOOL))completion {
   NSString *urlString = [NSString
       stringWithFormat:@"https://api.github.com/repos/%@/%@/releases/latest",
                        kOwner, kRepo];
@@ -90,10 +132,7 @@ static NSTimeInterval const kCheckInterval = 86400; // 24 hours
           if (error) {
             [self->_log
                 warn:@"Update check failed: %@", error.localizedDescription];
-            dispatch_async(dispatch_get_main_queue(), ^{
-              if (completion)
-                completion(self.updateAvailable);
-            });
+            [self callCompletion:completion];
             return;
           }
 
@@ -101,62 +140,145 @@ static NSTimeInterval const kCheckInterval = 86400; // 24 hours
           if (http.statusCode != 200) {
             [self->_log
                 warn:@"Update check got HTTP %ld", (long)http.statusCode];
-            dispatch_async(dispatch_get_main_queue(), ^{
-              if (completion)
-                completion(self.updateAvailable);
-            });
+            [self clearCacheAndComplete:completion];
             return;
           }
 
           NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data
                                                                options:0
                                                                  error:nil];
-          NSString *tag = json[@"tag_name"];
-          NSString *htmlURL = json[@"html_url"];
-
-          if (!tag) {
-            [self->_log warn:@"No tag_name in release response"];
-            dispatch_async(dispatch_get_main_queue(), ^{
-              if (completion)
-                completion(self.updateAvailable);
-            });
+          NSArray *assets = json[@"assets"];
+          if (![assets isKindOfClass:[NSArray class]]) {
+            [self->_log warn:@"No assets array in release response"];
+            [self clearCacheAndComplete:completion];
             return;
           }
 
-          // Strip leading "v" from tag (e.g. "v1.2" -> "1.2")
-          NSString *version = tag;
-          if ([version hasPrefix:@"v"] || [version hasPrefix:@"V"]) {
-            version = [version substringFromIndex:1];
-          }
+          NSString *htmlURL = json[@"html_url"];
 
-          BOOL newer = [self isVersion:version newerThan:self.currentVersion];
-
-          [self->_log info:@"Latest: %@ Current: %@ Update: %@", version,
-                           self.currentVersion, newer ? @"YES" : @"NO"];
-
-          NSUserDefaults *defs = [NSUserDefaults standardUserDefaults];
-          [defs setObject:[NSDate date] forKey:kLastCheckKey];
-
-          if (newer) {
-            [defs setObject:version forKey:kCachedVersionKey];
-            if (htmlURL) {
-              [defs setObject:htmlURL forKey:kCachedURLKey];
+          NSURL *manifestURL = nil;
+          for (NSDictionary *asset in assets) {
+            if ([asset[@"name"] isEqualToString:@"manifest.json"]) {
+              NSString *assetURL = asset[@"browser_download_url"];
+              if (assetURL) {
+                manifestURL = [NSURL URLWithString:assetURL];
+              }
+              break;
             }
-          } else {
-            [defs removeObjectForKey:kCachedVersionKey];
-            [defs removeObjectForKey:kCachedURLKey];
           }
 
-          dispatch_async(dispatch_get_main_queue(), ^{
-            self->_latestVersion = version;
-            self->_updateAvailable = newer;
-            self->_downloadURL =
-                newer && htmlURL ? [NSURL URLWithString:htmlURL] : nil;
-            if (completion)
-              completion(newer);
-          });
+          if (!manifestURL) {
+            [self->_log warn:@"No manifest.json asset found in release"];
+            [self clearCacheAndComplete:completion];
+            return;
+          }
+
+          [self downloadManifest:manifestURL
+                      releaseURL:htmlURL
+                      completion:completion];
         }];
   [task resume];
+}
+
+- (void)downloadManifest:(NSURL *)manifestURL
+              releaseURL:(NSString *)releaseURL
+              completion:(void (^)(BOOL))completion {
+  NSMutableURLRequest *request =
+      [NSMutableURLRequest requestWithURL:manifestURL];
+
+  NSURLSessionDataTask *task = [[NSURLSession sharedSession]
+      dataTaskWithRequest:request
+        completionHandler:^(NSData *data, NSURLResponse *response,
+                            NSError *error) {
+          if (error) {
+            [self->_log warn:@"Manifest download failed: %@",
+                             error.localizedDescription];
+            [self callCompletion:completion];
+            return;
+          }
+
+          NSHTTPURLResponse *http = (NSHTTPURLResponse *)response;
+          if (http.statusCode != 200) {
+            [self->_log
+                warn:@"Manifest download got HTTP %ld", (long)http.statusCode];
+            [self clearCacheAndComplete:completion];
+            return;
+          }
+
+          NSDictionary *manifest = [NSJSONSerialization JSONObjectWithData:data
+                                                                   options:0
+                                                                     error:nil];
+          if (![manifest isKindOfClass:[NSDictionary class]]) {
+            [self->_log warn:@"Failed to parse manifest.json"];
+            [self clearCacheAndComplete:completion];
+            return;
+          }
+
+          [self processManifest:manifest
+                     releaseURL:releaseURL
+                     completion:completion];
+        }];
+  [task resume];
+}
+
+- (void)processManifest:(NSDictionary *)manifest
+             releaseURL:(NSString *)releaseURL
+             completion:(void (^)(BOOL))completion {
+  NSDictionary<NSString *, NSString *> *known = KKKnownComponents();
+
+  NSString *newerVersion = nil;
+  if (_componentKey) {
+    NSString *manifestVersion = manifest[_componentKey];
+    if ([manifestVersion isKindOfClass:[NSString class]] &&
+        [self isVersion:manifestVersion newerThan:_currentVersion]) {
+      [_log info:@"Update available for %@: %@ -> %@", _componentKey,
+                 _currentVersion, manifestVersion];
+      newerVersion = manifestVersion;
+    } else {
+      [_log debug:@"%@ is up to date (%@)", _componentKey, _currentVersion];
+    }
+  }
+
+  NSMutableArray<NSString *> *newKeys = [NSMutableArray array];
+  for (NSString *key in manifest) {
+    if (![manifest[key] isKindOfClass:[NSString class]])
+      continue;
+    if (!known[key]) {
+      [_log info:@"New component in manifest: %@", key];
+      [newKeys addObject:key];
+    }
+  }
+
+  BOOL hasUpdate = newerVersion != nil || newKeys.count > 0;
+
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+  [defaults setObject:[NSDate date] forKey:kLastCheckKey];
+
+  if (hasUpdate) {
+    if (newerVersion) {
+      [defaults setObject:newerVersion forKey:kCachedVersionKey];
+    } else {
+      [defaults removeObjectForKey:kCachedVersionKey];
+    }
+    [defaults setObject:[newKeys copy] forKey:kCachedNewKeysKey];
+    if (releaseURL) {
+      [defaults setObject:releaseURL forKey:kCachedURLKey];
+    }
+  } else {
+    [defaults removeObjectForKey:kCachedVersionKey];
+    [defaults removeObjectForKey:kCachedNewKeysKey];
+    [defaults removeObjectForKey:kCachedURLKey];
+  }
+
+  dispatch_async(dispatch_get_main_queue(), ^{
+    self->_availableVersion = newerVersion;
+    self->_availableComponentKeys = [newKeys copy];
+    self->_updateAvailable = hasUpdate;
+    self->_downloadURL =
+        hasUpdate && releaseURL ? [NSURL URLWithString:releaseURL] : nil;
+    if (completion)
+      completion(hasUpdate);
+  });
 }
 
 - (void)checkAndNotify {
@@ -181,13 +303,12 @@ static NSTimeInterval const kCheckInterval = 86400; // 24 hours
     if (!updateAvailable)
       return;
 
-    NSString *version = self.latestVersion ?: @"new version";
+    NSString *body = [self notificationBody];
 
     UNMutableNotificationContent *content =
         [[UNMutableNotificationContent alloc] init];
     content.title = @"Keyframeless Update Available";
-    content.body = [NSString
-        stringWithFormat:@"Version %@ is ready to download.", version];
+    content.body = body;
     content.categoryIdentifier = kCategoryUpdate;
 
     UNNotificationRequest *request =
@@ -218,6 +339,26 @@ static NSTimeInterval const kCheckInterval = 86400; // 24 hours
   }];
 }
 
+- (NSString *)notificationBody {
+  NSMutableArray<NSString *> *parts = [NSMutableArray array];
+
+  if (self.availableVersion) {
+    NSString *name =
+        KKKnownComponents()[_componentKey] ?: _componentKey ?: @"Keyframeless";
+    [parts addObject:[NSString stringWithFormat:@"%@ %@", name,
+                                                self.availableVersion]];
+  }
+  for (NSString *key in self.availableComponentKeys) {
+    [parts addObject:key];
+  }
+
+  if (parts.count == 0)
+    return @"A new version is ready to download.";
+
+  return [NSString stringWithFormat:@"Available: %@",
+                                    [parts componentsJoinedByString:@", "]];
+}
+
 - (void)userNotificationCenter:(UNUserNotificationCenter *)center
     didReceiveNotificationResponse:(UNNotificationResponse *)response
              withCompletionHandler:(void (^)(void))completionHandler {
@@ -231,7 +372,30 @@ static NSTimeInterval const kCheckInterval = 86400; // 24 hours
   completionHandler();
 }
 
-/// Simple numeric version comparison (e.g. "1.2.3" > "1.2").
+- (void)callCompletion:(void (^)(BOOL))completion {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if (completion)
+      completion(self.updateAvailable);
+  });
+}
+
+- (void)clearCacheAndComplete:(void (^)(BOOL))completion {
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+  [defaults setObject:[NSDate date] forKey:kLastCheckKey];
+  [defaults removeObjectForKey:kCachedVersionKey];
+  [defaults removeObjectForKey:kCachedNewKeysKey];
+  [defaults removeObjectForKey:kCachedURLKey];
+
+  dispatch_async(dispatch_get_main_queue(), ^{
+    self->_availableVersion = nil;
+    self->_availableComponentKeys = @[];
+    self->_updateAvailable = NO;
+    self->_downloadURL = nil;
+    if (completion)
+      completion(NO);
+  });
+}
+
 - (BOOL)isVersion:(nullable NSString *)a newerThan:(nullable NSString *)b {
   if (!a || !b)
     return NO;

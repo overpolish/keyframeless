@@ -4,9 +4,11 @@
  */
 
 #import "KKPlugin.h"
+#import "../Update/KKUpdateChecker.h"
 #import "../Views/KKAlertView.h"
 #import "../Views/KKKbd.h"
 #import "../Views/KKSeparatorView.h"
+#import "../Views/KKUpdateBannerView.h"
 #import "KKConstants.h"
 #import "KKHostInfo.h"
 #import <AppKit/AppKit.h>
@@ -83,6 +85,8 @@ static double kkEaseInSpring(double t) {
 - (void)didEstablishConnectionWithHost:(NSString *)hostBundleIdentifier
                                version:(NSString *)hostVersionString {
   [KKHostInfo shared].hostID = hostBundleIdentifier;
+  [[KKUpdateChecker shared] checkWithCompletion:^(BOOL __unused available){
+  }];
 }
 
 @end
@@ -478,7 +482,34 @@ static double kkEaseInSpring(double t) {
   return YES;
 }
 
+- (BOOL)addUpdateBannerParameterWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
+                                  error:(NSError **)error {
+  if (![paramAPI
+          addCustomParameterWithName:@""
+                         parameterID:kKKParamUpdateBanner
+                        defaultValue:@(kKKParamUpdateBanner)
+                      parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
+                                     kFxParameterFlag_CUSTOM_UI |
+                                     kFxParameterFlag_USE_FULL_VIEW_WIDTH |
+                                     kFxParameterFlag_DISABLED]) {
+    if (error != NULL) {
+      *error = [NSError errorWithDomain:@"co.overpolish.keyframeless.error"
+                                   code:1
+                               userInfo:@{
+                                 NSLocalizedDescriptionKey :
+                                     @"Unable to add update banner parameter"
+                               }];
+    }
+    return NO;
+  }
+  return YES;
+}
+
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
+  if (parameterID == kKKParamUpdateBanner) {
+    return [[KKUpdateBannerView alloc] init];
+  }
+
   NSString *separatorText =
       kkClassRegistry([self class], kKKSepTexts)[@(parameterID)];
   if (separatorText) {

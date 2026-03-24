@@ -7,8 +7,41 @@
 
 ## Version Management
 
-- Each package has its own version inside `Packages` tool.
-- Additionally, versions need to be bumped in the `Info.plist` of the corresponding plugin.
+Each component (`motionblur`, `rounded`, `keyframelessx`) is versioned independently.
+
+### Bumping a version
+
+```sh
+scripts/bump-version.sh <component> <version>
+```
+
+This updates the relevant `Info.plist` / `.pbxproj` files and writes the new version into `manifest.json`.
+
+### How update checking works
+
+On app launch, `KKUpdateChecker` fetches the latest GitHub release and looks for a `manifest.json` asset. It compares each component version in the manifest against the `CFBundleShortVersionString` of the locally installed bundle at `/Applications/Keyframeless/`. If any component has a newer version, or a component exists in the manifest but isn't installed, the update banner is shown.
+
+### Releasing
+
+GitHub releases are tagged by date (e.g. `2026-03-24`) rather than a component version — the `manifest.json` asset is what communicates individual component versions to the update checker.
+
+1. Bump the component(s) that changed using the script above.
+2. Build, sign, and notarize the `.pkg` (see below).
+3. Create a GitHub release tagged with today's date and attach both the signed `.pkg` and the repo root `manifest.json` as release assets.
+
+### KeyframelessKit
+
+`KeyframelessKit` is a shared framework linked by all components — it has no version in the manifest. When it changes, bump whichever components ship with the new behaviour. If it's a framework-wide fix, bump all components.
+
+### Adding a new component
+
+The manifest key is the project name lowercased with no spaces or separators (e.g. `MotionBlur` → `motionblur`, `Keyframeless X` → `keyframelessx`).
+
+1. Add an entry to `manifest.json` with the key and initial version (e.g. `"newplugin": "1.0.0"`).
+2. Add the key to `KKKnownComponents()` and `KKBundleIDToComponent()` in `KKUpdateChecker.m` — map both the wrapper app and XPC service bundle IDs.
+3. Add a case to `scripts/bump-version.sh` that updates the relevant `Info.plist` files and calls `bump_manifest`.
+4. Call `addUpdateBannerParameterWithAPI:error:` at the end of `addParametersWithError:` and pass `[KKPlugin servicePrincipalDelegate]` to `startServicePrincipalWithDelegate:` in `main()` to wire up update checking.
+5. Add the component to `Packages` as a separate package so end users can install it independently.
 
 ## Code Signing & Notarization
 

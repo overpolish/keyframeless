@@ -75,7 +75,11 @@
     return NO;
   }
 
-  return [self addAnimationParametersWithAPI:paramAPI error:error];
+  if (![self addAnimationParametersWithAPI:paramAPI error:error]) {
+    return NO;
+  }
+
+  return [self addUpdateBannerParameterWithAPI:paramAPI error:error];
 }
 
 - (BOOL)pluginState:(NSData **)pluginState
