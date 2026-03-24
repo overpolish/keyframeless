@@ -83,14 +83,19 @@ typedef struct {
       initWithString:@"Use on a Adjustment Clip "];
   [infoText appendAttributedString:[KKKbd attributedStringWithKey:@"⌥ A"]];
 
-  return [self
-      addInfoParameterWithAttributedText:infoText
-                                    icon:[NSImage imageWithSystemSymbolName:
-                                                      @"info.circle"
-                                                   accessibilityDescription:nil]
-                             parameterID:kParamInfoUsage
-                                 withAPI:paramAPI
-                                   error:error];
+  if (![self
+          addInfoParameterWithAttributedText:infoText
+                                        icon:[NSImage
+                                                 imageWithSystemSymbolName:
+                                                     @"info.circle"
+                                                  accessibilityDescription:nil]
+                                 parameterID:kParamInfoUsage
+                                     withAPI:paramAPI
+                                       error:error]) {
+    return NO;
+  }
+
+  return [self addUpdateBannerParameterWithAPI:paramAPI error:error];
 }
 
 - (BOOL)pluginState:(NSData **)pluginState

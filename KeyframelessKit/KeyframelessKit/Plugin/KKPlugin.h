@@ -75,6 +75,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// Returns 1.0 when animation is off or the timing API is unavailable.
 - (double)animationFactorAtTime:(CMTime)renderTime;
 
+/// Adds an update banner at parameter ID 9990 that shows when a newer version
+/// is available. Call at the end of addParametersWithError:.
+- (BOOL)addUpdateBannerParameterWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
+                                  error:(NSError **)error;
+
 /// Adds a full-width informational text display occupying one parameter ID.
 /// The parameter is not animatable and stores no meaningful value — it is
 /// purely a static label in the inspector.
