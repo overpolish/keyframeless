@@ -225,7 +225,7 @@ enum FCPXMLBuilder {
 		if let cached = fontInfoCache[postScriptName] { return cached }
 
 		let manager = NSFontManager.shared
-		let families = manager.availableFontFamilies.sorted()
+		let families = manager.availableFontFamilies
 
 		guard let font = NSFont(name: postScriptName, size: 12) else {
 			let info = FontInfo(familyName: postScriptName, faceName: "Regular", paramValue: "0 0")

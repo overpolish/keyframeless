@@ -166,6 +166,7 @@ class AudioModel: ObservableObject {
 		var entries: [FCPXMLBuilder.PublishedParamEntry] = []
 		for param in settings.allParams where param.isToggleable {
 			let val = store.value(paramID: param.id, for: selectedTemplate.id)
+			if param.isFont { continue }
 			let key: String
 			if param.isProjectRoot {
 				key = "9999/\(param.objectID)/\(param.channelPath)"

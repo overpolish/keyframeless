@@ -17,6 +17,7 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 	var defaultR: Double?
 	var defaultG: Double?
 	var defaultB: Double?
+	var defaultFont: String?
 
 	enum ParamKind: String, Codable, Equatable {
 		case off
@@ -24,13 +25,18 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 		case slider
 		case toggle
 		case animation
+		case font
 
 		init(from decoder: Decoder) throws {
 			let raw = try decoder.singleValueContainer().decode(String.self)
-			self = ParamKind(rawValue: raw) ?? .off
+			switch raw {
+			case "fontProject", "fontCustom": self = .font
+			default: self = ParamKind(rawValue: raw) ?? .off
+			}
 		}
 	}
 
+	var isFont: Bool { kind == .font }
 	var isToggleable: Bool { kind == .color || kind == .slider || kind == .toggle }
 
 	var channelPath: String {
@@ -74,19 +80,58 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 			}
 
 			let channelPath = channel.hasPrefix("./") ? String(channel.dropFirst(2)) : channel
-			let rgb = extractColorDefaults(
+			let fontDefault = extractFontDefault(
 				objectID: objectID, channelPath: channelPath, in: content)
-			let layerID = findContainingLayerID(for: objectID, in: content)
-			let parentScenenode = findParentScenenodeID(for: objectID, in: content)
+			let isFont = fontDefault != nil
+			let rgb =
+				isFont
+				? nil
+				: extractColorDefaults(
+					objectID: objectID, channelPath: channelPath, in: content)
+			let layerID = isFont ? nil : findContainingLayerID(for: objectID, in: content)
+			let parentScenenode = isFont ? nil : findParentScenenodeID(for: objectID, in: content)
 			customParams.append(
 				PublishedParameter(
-					name: name, objectID: objectID, channel: channel, kind: .off,
+					name: name, objectID: objectID, channel: channel,
+					kind: isFont ? .font : .off,
 					isProjectRoot: objectID == projectRootID,
 					parentLayerID: layerID, parentScenenodeID: parentScenenode,
-					defaultR: rgb?.r, defaultG: rgb?.g, defaultB: rgb?.b))
+					defaultR: rgb?.r, defaultG: rgb?.g, defaultB: rgb?.b,
+					defaultFont: fontDefault))
 		}
 
 		return ParseResult(customParams: customParams, hasPerWordAnimation: hasPerWord)
+	}
+
+	private static func extractFontDefault(
+		objectID: String, channelPath: String, in content: String
+	) -> String? {
+		let ids = channelPath.split(separator: "/").map(String.init)
+		guard !ids.isEmpty else { return nil }
+
+		let nodePattern = "\\bid=\"\(objectID)\""
+		guard let nodeRegex = try? NSRegularExpression(pattern: nodePattern),
+			let nodeMatch = nodeRegex.firstMatch(
+				in: content, range: NSRange(content.startIndex..., in: content))
+		else { return nil }
+
+		var searchStart = content.index(content.startIndex, offsetBy: nodeMatch.range.location)
+		for pathID in ids {
+			let paramTag = "parameter[^>]*\\sid=\"\(pathID)\""
+			guard let paramRegex = try? NSRegularExpression(pattern: paramTag),
+				let paramMatch = paramRegex.firstMatch(
+					in: content, range: NSRange(searchStart..., in: content))
+			else { return nil }
+			searchStart = content.index(content.startIndex, offsetBy: paramMatch.range.location)
+		}
+
+		let lookahead = String(content[searchStart...].prefix(500))
+		let fontPattern = "<font>([^<]+)</font>"
+		guard let fontRegex = try? NSRegularExpression(pattern: fontPattern),
+			let fontMatch = fontRegex.firstMatch(
+				in: lookahead, range: NSRange(lookahead.startIndex..., in: lookahead))
+		else { return nil }
+		return (lookahead as NSString).substring(with: fontMatch.range(at: 1))
 	}
 
 	private static func extractColorDefaults(
