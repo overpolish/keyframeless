@@ -147,12 +147,16 @@ class AudioModel: ObservableObject {
 			frameDuration: exportFramerate.rawValue
 		)
 		let publishedParams = buildPublishedParamEntries()
+		let startsAtZero =
+			TemplatePublishedParamsStore.shared.params(for: selectedTemplate.id)?
+			.perWordStartsAtZero ?? false
 		return FCPXMLBuilder.build(
 			segments: segments,
 			textStyle: textStyle,
 			format: format,
 			template: selectedTemplate,
-			publishedParams: publishedParams
+			publishedParams: publishedParams,
+			perWordStartsAtZero: startsAtZero
 		)
 	}
 
@@ -165,7 +169,7 @@ class AudioModel: ObservableObject {
 			let key =
 				param.isProjectRoot
 				? "9999/\(param.objectID)/\(param.channelPath)"
-				: "9999/10003/\(param.objectID)/\(param.channelPath)"
+				: "9999/\(param.parentLayerID ?? "10003")/\(param.objectID)/\(param.channelPath)"
 			let valueStr: String
 			switch param.kind {
 			case .color:

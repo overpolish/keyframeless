@@ -75,7 +75,8 @@ struct CaptionTemplatePicker: View {
 	private var mergedKeyframelessItems: [KeyframelessItem] {
 		let installed = keyframelessTemplates.map { KeyframelessItem.installed($0) }
 		let community =
-			showCommunity ? filteredCommunityTemplates.map { KeyframelessItem.community($0) } : []
+			showCommunity && !showFavoritesOnly
+			? filteredCommunityTemplates.map { KeyframelessItem.community($0) } : []
 		return (installed + community).sorted {
 			$0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
 		}
@@ -143,6 +144,17 @@ struct CaptionTemplatePicker: View {
 								? Color.kkAccent
 								: .secondary
 						)
+						.frame(maxHeight: .infinity)
+						.contentShape(Rectangle())
+				}
+				.buttonStyle(.plain)
+				Button {
+					communityStore.fetch()
+					model.refreshTemplates()
+				} label: {
+					Image(systemName: "arrow.clockwise")
+						.font(.system(size: 11))
+						.foregroundStyle(.secondary)
 						.frame(maxHeight: .infinity)
 						.contentShape(Rectangle())
 				}
@@ -235,7 +247,7 @@ struct CaptionTemplatePicker: View {
 				.padding(.vertical, KKPaddingXS)
 			}
 		}
-		.onAppear { communityStore.fetchIfNeeded() }
+		.onAppear { communityStore.fetch() }
 		.onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
 			handleDrop(providers)
 		}
@@ -276,7 +288,7 @@ struct CaptionTemplatePicker: View {
 	private func addMotiAndDetectParams(_ url: URL) {
 		let result = PublishedParameter.parseAll(from: url)
 		onDropMoti?(url)
-		guard !result.customParams.isEmpty else { return }
+		guard !result.customParams.isEmpty || result.hasPerWordAnimation else { return }
 		let templateID = "custom:\(url.path)"
 		if let added = model.captionTemplates.first(where: { $0.id == templateID }) {
 			model.paramsModalParams = result.customParams
