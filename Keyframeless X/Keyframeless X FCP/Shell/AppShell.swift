@@ -11,17 +11,21 @@ struct AppShell: View {
 	@StateObject private var whisperManager = WhisperModelManager()
 	@StateObject private var processingCoordinator = AudioProcessingCoordinator()
 	@State private var selectedTab: AppTab = .audio
-	@State private var updateVersion: String?
+	@State private var updateMessage: String?
 	@State private var updateURL: URL?
-	@State private var updateDismissed = false
+	@State private var updateDismissed = Self.dismissed
+	private static var dismissed = false
 
 	var body: some View {
 		VStack(spacing: KKSpacingMD) {
-			if let version = updateVersion, !updateDismissed {
+			if let message = updateMessage, !updateDismissed {
 				UpdateBanner(
-					version: version,
+					message: message,
 					url: updateURL,
-					onDismiss: { withAnimation { updateDismissed = true } }
+					onDismiss: {
+						withAnimation { updateDismissed = true }
+						Self.dismissed = true
+					}
 				)
 				.transition(.move(edge: .top).combined(with: .opacity))
 			}
@@ -69,9 +73,10 @@ struct AppShell: View {
 			FontCache.warmup()
 			KKUpdateChecker.shared().check { available in
 				guard available else { return }
+				let checker = KKUpdateChecker.shared()
 				withAnimation {
-					updateVersion = KKUpdateChecker.shared().latestVersion
-					updateURL = KKUpdateChecker.shared().downloadURL
+					updateMessage = Self.updateMessage(from: checker)
+					updateURL = checker.downloadURL
 				}
 			}
 		}
@@ -132,6 +137,17 @@ struct AppShell: View {
 				.frame(width: 36)
 				.opacity(0.15)
 		}
+	}
+
+	private static func updateMessage(from checker: KKUpdateChecker) -> String {
+		var parts: [String] = []
+		if let version = checker.availableVersion {
+			parts.append("Keyframeless X \(version) available")
+		}
+		for key in checker.availableComponentKeys {
+			parts.append("\(key) now available")
+		}
+		return parts.joined(separator: " · ")
 	}
 
 	@ViewBuilder
