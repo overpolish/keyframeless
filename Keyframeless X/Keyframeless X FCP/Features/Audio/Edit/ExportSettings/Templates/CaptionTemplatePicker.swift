@@ -148,6 +148,19 @@ struct CaptionTemplatePicker: View {
 				}
 				.buttonStyle(.plain)
 				Spacer()
+				if communityStore.needsFCPRestart {
+					Button {
+						exit(0)
+					} label: {
+						HStack(spacing: 4) {
+							Image(systemName: "arrow.trianglehead.2.counterclockwise")
+							Text("Restart FCP")
+						}
+						.font(.system(size: 10, weight: .medium))
+						.foregroundStyle(Color.kkAccent)
+					}
+					.buttonStyle(.plain)
+				}
 				if hasEnabledControls {
 					Button {
 						showControlsPopover.toggle()

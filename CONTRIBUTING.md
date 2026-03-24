@@ -9,23 +9,31 @@
 ## Troubleshooting
 
 > [!IMPORTANT]
-> macOS registers apps with LaunchServices even from Trash. If an FCP extension stops showing up in Final Cut Pro, stale copies of the wrapper app (in Trash, archives, etc.) with the same bundle ID can confuse `pluginkit` about which extension to load. Empty Trash and unregister stale entries:
+> macOS registers apps with Launch Services from every location — including Trash, archives, and archive intermediates. If you delete or move a copy of the wrapper app, stale registrations stick around and `pluginkit` can end up parenting the extension to a host app that no longer exists. FCP silently skips it.
+>
+> Check for stale entries (`fnfErr` = file gone):
 >
 > ```sh
-> # List all registrations for the bundle ID
-> /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -dump | grep -B10 "co.overpolish.keyframeless.Keyframeless-X$" | grep -E "path|identifier"
+> LS=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 >
-> # Unregister a stale path
-> /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "/path/to/stale/Keyframeless X.app"
+> $LS -dump | grep -B20 'identifier:.*co.overpolish.keyframeless.Keyframeless-X$' | grep -E "^path|^bundle id|not found"
 >
-> # Force re-register the debug build
-> /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "/path/to/DerivedData/.../Debug/Keyframeless X.app"
+> # ! = disabled, + = enabled
+> pluginkit -m -A -p com.apple.FinalCut.WorkflowExtension
+> ```
 >
-> # Enable the extension if pluginkit shows it as disabled (!)
+> Unregister every stale path, then re-register the debug build:
+>
+> ```sh
+> $LS -u "/path/to/stale/Keyframeless X.app"
+>
+> $LS -f -R -trusted "$(pwd)/DerivedData/Keyframeless/Build/Products/Debug/Keyframeless X.app"
+>
+> pluginkit -a "$(pwd)/DerivedData/Keyframeless/Build/Products/Debug/Keyframeless X.app/Contents/PlugIns/Keyframeless X FCP.appex"
 > pluginkit -e use -i co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP
 > ```
 >
-> Restart FCP after fixing registrations.
+> Restart FCP after fixing.
 
 ## VSCode
 
