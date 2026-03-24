@@ -12,12 +12,17 @@ struct TemplateControlsPopover: View {
 
 	private var enabledParams: [PublishedParameter] {
 		guard let settings = store.params(for: template.id) else { return [] }
-		return settings.allParams.filter(\.isToggleable)
+		return settings.allParams.filter { $0.isToggleable && !$0.isFont }
+	}
+
+	private var fontParams: [PublishedParameter] {
+		guard let settings = store.params(for: template.id) else { return [] }
+		return settings.allParams.filter(\.isFont)
 	}
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: KKSpacingLG) {
-			if enabledParams.isEmpty {
+			if enabledParams.isEmpty && fontParams.isEmpty {
 				Text("No parameters enabled")
 					.font(.system(size: 11))
 					.foregroundStyle(.secondary.opacity(0.6))
@@ -29,6 +34,9 @@ struct TemplateControlsPopover: View {
 							templateID: template.id,
 							store: store
 						)
+					}
+					ForEach(fontParams) { param in
+						FontParamNote(name: param.name)
 					}
 				}
 			}
@@ -178,6 +186,25 @@ private struct ToggleParamControl: View {
 					RoundedRectangle(cornerRadius: 3)
 						.stroke(Color.secondary.opacity(0.4), lineWidth: 1)
 				)
+		}
+	}
+}
+
+private struct FontParamNote: View {
+	let name: String
+
+	var body: some View {
+		HStack(spacing: KKSpacingSM) {
+			Image(systemName: "textformat")
+				.font(.system(size: 9))
+				.foregroundStyle(.secondary.opacity(0.6))
+			Text(name)
+				.font(.caption)
+				.foregroundStyle(.secondary.opacity(0.6))
+			Spacer()
+			Text("Set in FCP")
+				.font(.system(size: 9))
+				.foregroundStyle(.secondary.opacity(0.4))
 		}
 	}
 }

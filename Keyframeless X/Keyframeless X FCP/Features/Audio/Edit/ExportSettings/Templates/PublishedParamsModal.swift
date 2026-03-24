@@ -33,10 +33,22 @@ struct PublishedParamsModal: View {
 		self.onDismiss = onDismiss
 		_paramKinds = State(
 			initialValue: Dictionary(
-				uniqueKeysWithValues: params.map {
+				uniqueKeysWithValues: params.filter { $0.defaultFont == nil }.map {
 					($0.id, initialKinds[$0.id] ?? .off)
 				}))
 		_perWordStartsAtZero = State(initialValue: initialPerWordStartsAtZero)
+	}
+
+	private var fontParams: [PublishedParameter] {
+		params.filter { $0.defaultFont != nil }
+	}
+
+	private var nonFontParams: [PublishedParameter] {
+		params.filter { $0.defaultFont == nil }
+	}
+
+	private var hasAnyContent: Bool {
+		!params.isEmpty || hasPerWordAnimation
 	}
 
 	var body: some View {
@@ -59,7 +71,7 @@ struct PublishedParamsModal: View {
 							)
 						}
 					}
-					if params.isEmpty && !hasPerWordAnimation {
+					if !hasAnyContent {
 						Text("No published parameters detected in \"\(templateName)\".")
 							.font(.system(size: 11))
 							.foregroundStyle(.secondary)
@@ -98,10 +110,20 @@ struct PublishedParamsModal: View {
 						)
 					}
 				}
-				if !params.isEmpty {
+				if !fontParams.isEmpty {
+					KKAlertRepresentable(
+						text: "Font parameters must be set manually in Final Cut Pro",
+						icon: NSImage(
+							systemSymbolName: "textformat", accessibilityDescription: nil),
+						fontSize: 10
+					)
+					.frame(maxWidth: .infinity)
+					.frame(height: 32)
+				}
+				if !nonFontParams.isEmpty {
 					ScrollShadowView {
 						VStack(spacing: KKSpacingMD) {
-							ForEach(params) { param in
+							ForEach(nonFontParams) { param in
 								ParamKindRow(
 									name: param.name,
 									kind: Binding(
@@ -120,7 +142,7 @@ struct PublishedParamsModal: View {
 					.frame(height: min(paramListHeight, 300))
 				}
 				HStack {
-					if params.isEmpty && !hasPerWordAnimation {
+					if !hasAnyContent {
 						Spacer()
 						Button("OK") { onDismiss() }
 							.buttonStyle(.plain)
