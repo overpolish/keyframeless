@@ -40,11 +40,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Fetches the manifest from the latest GitHub release if more than 24 hours
 /// have elapsed since the last check. Calls `completion` on the main queue.
-- (void)checkWithCompletion:(void (^)(BOOL updateAvailable))completion;
+- (void)checkWithCompletion:(nullable void (^)(BOOL updateAvailable))completion;
 
 /// Fetches the manifest regardless of when the last check occurred.
 /// Calls `completion` on the main queue.
-- (void)forceCheckWithCompletion:(void (^)(BOOL updateAvailable))completion;
+- (void)forceCheckWithCompletion:
+    (nullable void (^)(BOOL updateAvailable))completion;
 
 @end
 
