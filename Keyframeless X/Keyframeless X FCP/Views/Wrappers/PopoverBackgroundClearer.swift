@@ -36,17 +36,20 @@ struct PopoverBackgroundClearer: NSViewRepresentable {
 		return nil
 	}
 
-	private func clearSystemBackground(in view: NSView) {
-		for sub in view.subviews {
+	private func clearSystemBackground(in popoverFrame: NSView) {
+		for sub in popoverFrame.subviews {
 			let typeName = String(describing: type(of: sub))
-			if typeName.hasPrefix("_NSCoreHostingView") {
-				sub.wantsLayer = true
-				sub.layer?.opacity = 0
-			} else if typeName == "ContentHolderView" {
-				sub.wantsLayer = true
-				sub.layer?.backgroundColor = .clear
+			guard typeName.hasPrefix("NSGlassView") else { continue }
+			for glassSub in sub.subviews {
+				let glassSubType = String(describing: type(of: glassSub))
+				if glassSubType.hasPrefix("_NSCoreHostingView") {
+					glassSub.wantsLayer = true
+					glassSub.layer?.opacity = 0
+				} else if glassSubType == "ContentHolderView" {
+					glassSub.wantsLayer = true
+					glassSub.layer?.backgroundColor = .clear
+				}
 			}
-			clearSystemBackground(in: sub)
 		}
 	}
 }

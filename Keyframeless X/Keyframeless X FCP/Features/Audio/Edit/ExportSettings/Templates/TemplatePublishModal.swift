@@ -11,7 +11,6 @@ struct TemplatePublishModal: View {
 	let template: CaptionTemplate
 	let params: [PublishedParameter]
 	let hasPerWordAnimation: Bool
-	let enabledIDs: Set<String>
 	let onDismiss: () -> Void
 
 	@State private var name: String
@@ -29,13 +28,11 @@ struct TemplatePublishModal: View {
 		template: CaptionTemplate,
 		params: [PublishedParameter],
 		hasPerWordAnimation: Bool,
-		enabledIDs: Set<String>,
 		onDismiss: @escaping () -> Void
 	) {
 		self.template = template
 		self.params = params
 		self.hasPerWordAnimation = hasPerWordAnimation
-		self.enabledIDs = enabledIDs
 		self.onDismiss = onDismiss
 		_name = State(initialValue: template.name)
 	}
@@ -46,7 +43,7 @@ struct TemplatePublishModal: View {
 	}
 
 	private var enabledParams: [PublishedParameter] {
-		params.filter { enabledIDs.contains($0.id) && $0.isToggleable }
+		params.filter(\.isToggleable)
 	}
 
 	var body: some View {
@@ -196,6 +193,8 @@ struct TemplatePublishModal: View {
 			InfoBadge(label: param.name, systemImage: "paintpalette", color: .kkAccent)
 		case .slider:
 			InfoBadge(label: param.name, systemImage: "slider.horizontal.3", color: .kkWarning)
+		case .toggle:
+			InfoBadge(label: param.name, systemImage: "checkmark.circle", color: .green)
 		default:
 			InfoBadge(label: param.name, color: .secondary)
 		}

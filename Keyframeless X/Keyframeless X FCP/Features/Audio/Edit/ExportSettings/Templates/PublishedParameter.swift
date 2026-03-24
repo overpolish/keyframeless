@@ -10,20 +10,30 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 	let name: String
 	let objectID: String
 	let channel: String
-	let kind: ParamKind
-	let defaultR: Double?
-	let defaultG: Double?
-	let defaultB: Double?
-	let defaultSlider: Double?
+	var kind: ParamKind
+	var isProjectRoot: Bool = false
+	var defaultR: Double?
+	var defaultG: Double?
+	var defaultB: Double?
 
 	enum ParamKind: String, Codable, Equatable {
+		case off
 		case color
 		case slider
+		case toggle
 		case animation
-		case unsupported
+
+		init(from decoder: Decoder) throws {
+			let raw = try decoder.singleValueContainer().decode(String.self)
+			self = ParamKind(rawValue: raw) ?? .off
+		}
 	}
 
-	var isToggleable: Bool { kind == .color || kind == .slider }
+	var isToggleable: Bool { kind == .color || kind == .slider || kind == .toggle }
+
+	var channelPath: String {
+		channel.hasPrefix("./") ? String(channel.dropFirst(2)) : channel
+	}
 
 	private static let animationNames: Set<String> = ["Words In", "Animate On"]
 
@@ -45,6 +55,8 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 			return ParseResult(customParams: [], hasPerWordAnimation: false)
 		}
 
+		let projectRootID = extractProjectRootID(from: content)
+
 		let matches = regex.matches(in: block, range: NSRange(block.startIndex..., in: block))
 		var customParams: [PublishedParameter] = []
 		var hasPerWord = false
@@ -59,79 +71,53 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 				continue
 			}
 
-			let info = detectKindAndDefaults(objectID: objectID, channel: channel, in: content)
+			let channelPath = channel.hasPrefix("./") ? String(channel.dropFirst(2)) : channel
+			let rgb = extractColorDefaults(
+				objectID: objectID, channelPath: channelPath, in: content)
 			customParams.append(
 				PublishedParameter(
-					name: name, objectID: objectID, channel: channel, kind: info.kind,
-					defaultR: info.r, defaultG: info.g, defaultB: info.b,
-					defaultSlider: info.slider))
+					name: name, objectID: objectID, channel: channel, kind: .off,
+					isProjectRoot: objectID == projectRootID,
+					defaultR: rgb?.r, defaultG: rgb?.g, defaultB: rgb?.b))
 		}
 
 		return ParseResult(customParams: customParams, hasPerWordAnimation: hasPerWord)
 	}
 
-	private struct DetectionResult {
-		let kind: ParamKind
-		var r: Double?
-		var g: Double?
-		var b: Double?
-		var slider: Double?
-	}
-
-	private static func detectKindAndDefaults(
-		objectID: String, channel: String, in content: String
-	) -> DetectionResult {
-		let ids = channel.replacingOccurrences(of: "./", with: "")
-			.split(separator: "/").map(String.init)
-		guard !ids.isEmpty else { return DetectionResult(kind: .unsupported) }
+	private static func extractColorDefaults(
+		objectID: String, channelPath: String, in content: String
+	) -> (r: Double, g: Double, b: Double)? {
+		let ids = channelPath.split(separator: "/").map(String.init)
+		guard !ids.isEmpty else { return nil }
 
 		let nodePattern = "scenenode[^>]*\\sid=\"\(objectID)\""
 		guard let nodeRegex = try? NSRegularExpression(pattern: nodePattern),
 			let nodeMatch = nodeRegex.firstMatch(
 				in: content, range: NSRange(content.startIndex..., in: content))
-		else { return DetectionResult(kind: .unsupported) }
+		else { return nil }
 
 		var searchStart = content.index(content.startIndex, offsetBy: nodeMatch.range.location)
-		var depth = 0
 		for pathID in ids {
 			let paramTag = "parameter[^>]*\\sid=\"\(pathID)\""
-			guard let paramRegex = try? NSRegularExpression(pattern: paramTag) else {
-				return DetectionResult(kind: .unsupported)
-			}
-			let searchRange = NSRange(searchStart..., in: content)
-			guard let paramMatch = paramRegex.firstMatch(in: content, range: searchRange) else {
-				if depth >= ids.count - 1 { return DetectionResult(kind: .slider) }
-				return DetectionResult(kind: .unsupported)
-			}
-			searchStart = content.index(
-				content.startIndex, offsetBy: paramMatch.range.location)
-			depth += 1
+			guard let paramRegex = try? NSRegularExpression(pattern: paramTag),
+				let paramMatch = paramRegex.firstMatch(
+					in: content, range: NSRange(searchStart..., in: content))
+			else { return nil }
+			searchStart = content.index(content.startIndex, offsetBy: paramMatch.range.location)
 		}
 
-		let remaining = content[searchStart...]
-		let lookahead = String(remaining.prefix(2000))
-
-		if let rgb = extractColorDefaults(from: lookahead) {
-			return DetectionResult(kind: .color, r: rgb.r, g: rgb.g, b: rgb.b)
-		}
-
-		let sliderDefault = extractSliderDefault(leafID: ids.last ?? "", from: lookahead)
-		return DetectionResult(kind: .slider, slider: sliderDefault)
-	}
-
-	private static func extractColorDefaults(from text: String) -> (
-		r: Double, g: Double, b: Double
-	)? {
-		guard text.contains("name=\"Red\""), text.contains("name=\"Green\""),
-			text.contains("name=\"Blue\"")
+		let lookahead = String(content[searchStart...].prefix(2000))
+		guard lookahead.contains("name=\"Red\""), lookahead.contains("name=\"Green\""),
+			lookahead.contains("name=\"Blue\"")
 		else { return nil }
 
 		func val(for name: String) -> Double? {
 			let p = "name=\"\(name)\"[^>]*value=\"([^\"]+)\""
 			guard let rx = try? NSRegularExpression(pattern: p),
-				let m = rx.firstMatch(in: text, range: NSRange(text.startIndex..., in: text))
+				let m = rx.firstMatch(
+					in: lookahead, range: NSRange(lookahead.startIndex..., in: lookahead))
 			else { return nil }
-			return Double((text as NSString).substring(with: m.range(at: 1)))
+			return Double((lookahead as NSString).substring(with: m.range(at: 1)))
 		}
 
 		guard let r = val(for: "Red"), let g = val(for: "Green"), let b = val(for: "Blue")
@@ -139,11 +125,12 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 		return (r, g, b)
 	}
 
-	private static func extractSliderDefault(leafID: String, from text: String) -> Double? {
-		let p = "<parameter[^>]*\\sid=\"\(leafID)\"[^>]*(?:default|value)=\"([^\"]+)\""
-		guard let rx = try? NSRegularExpression(pattern: p),
-			let m = rx.firstMatch(in: text, range: NSRange(text.startIndex..., in: text))
+	private static func extractProjectRootID(from content: String) -> String? {
+		let pattern = #"<scenenode[^>]*\sid="(\d+)"[^>]*factoryID="13""#
+		guard let regex = try? NSRegularExpression(pattern: pattern),
+			let match = regex.firstMatch(
+				in: content, range: NSRange(content.startIndex..., in: content))
 		else { return nil }
-		return Double((text as NSString).substring(with: m.range(at: 1)))
+		return (content as NSString).substring(with: match.range(at: 1))
 	}
 }

@@ -160,19 +160,20 @@ class AudioModel: ObservableObject {
 		let store = TemplatePublishedParamsStore.shared
 		guard let settings = store.params(for: selectedTemplate.id) else { return [] }
 		var entries: [FCPXMLBuilder.PublishedParamEntry] = []
-		for param in settings.allParams
-		where settings.enabledIDs.contains(param.id) && param.isToggleable {
-			let channel =
-				param.channel.hasPrefix("./")
-				? String(param.channel.dropFirst(2)) : param.channel
-			let key = "9999/10003/\(param.objectID)/\(channel)"
+		for param in settings.allParams where param.isToggleable {
 			let val = store.value(paramID: param.id, for: selectedTemplate.id)
+			let key =
+				param.isProjectRoot
+				? "9999/\(param.objectID)/\(param.channelPath)"
+				: "9999/10003/\(param.objectID)/\(param.channelPath)"
 			let valueStr: String
 			switch param.kind {
 			case .color:
 				valueStr = "\(val.r) \(val.g) \(val.b) \(val.a)"
 			case .slider:
 				valueStr = "\(val.sliderValue)"
+			case .toggle:
+				valueStr = val.toggleValue ? "1" : "0"
 			default:
 				continue
 			}
