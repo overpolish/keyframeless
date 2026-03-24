@@ -28,6 +28,7 @@ class CommunityTemplateStore: ObservableObject {
 	@Published private(set) var templates: [CommunityTemplate] = []
 	@Published private(set) var isLoading = false
 	@Published private(set) var error: String?
+	@Published private(set) var needsFCPRestart = false
 
 	private var hasFetched = false
 
@@ -156,5 +157,7 @@ class CommunityTemplateStore: ObservableObject {
 			}
 			try fileData.write(to: destFile)
 		}
+
+		await MainActor.run { shared.needsFCPRestart = true }
 	}
 }
