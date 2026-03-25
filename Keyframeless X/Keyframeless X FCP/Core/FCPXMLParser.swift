@@ -256,7 +256,7 @@ enum FCPXMLParser {
 						mediaMap: mediaMap, into: &clips)
 				}
 			case "asset-clip":
-				if isEnabled(el), isDialogue(el) {
+				if isEnabled(el), isDialogue(el), !isMuted(el) {
 					clips.append(makeClip(from: el, assets: assets, tcStart: nil))
 				}
 			default:
@@ -288,6 +288,31 @@ enum FCPXMLParser {
 		}
 	}
 
+	private static func isMuted(_ el: XMLElement) -> Bool {
+		guard let adjustVolume = el.elements(forName: "adjust-volume").first else {
+			return false
+		}
+
+		if let param = adjustVolume.elements(forName: "param").first(where: {
+			$0.attribute(forName: "name")?.stringValue == "amount"
+		}) {
+			let keyframes = param.elements(forName: "keyframeAnimation").first?
+				.elements(forName: "keyframe") ?? []
+			if !keyframes.isEmpty {
+				return keyframes.allSatisfy {
+					parseVolume($0.attribute(forName: "value")?.stringValue ?? "0dB") <= -96
+				}
+			}
+		}
+
+		return parseVolume(
+			adjustVolume.attribute(forName: "amount")?.stringValue ?? "0dB") <= -96
+	}
+
+	private static func parseVolume(_ s: String) -> Double {
+		Double(s.replacingOccurrences(of: "dB", with: "")) ?? 0
+	}
+
 	// Carries the mapping context when walking inside a compound clip's media spine.
 	// mainOffset: where the ref-clip starts in the main timeline
 	// internalStart/End: the trimmed window in the compound clip's time space (tcStart-relative)
@@ -306,40 +331,42 @@ enum FCPXMLParser {
 	) {
 		for child in el.children?.compactMap({ $0 as? XMLElement }) ?? [] {
 			if child.name == "asset-clip", isEnabled(child), isDialogue(child) {
-				if let ctx = compound {
-					// Position in compound's time space (tcStart-relative), walking the full
-					// parent chain so nested containers (e.g. video → secondary spine → clip)
-					// are resolved correctly rather than reading just the raw offset attribute.
-					let internalOffset = projectTime(of: child, tcStart: ctx.tcStart)
-					let clipDur = parseTime(
-						child.attribute(forName: "duration")?.stringValue ?? "0s")
-					// Skip if entirely outside the trimmed window
-					guard internalOffset < ctx.internalEnd,
-						internalOffset + clipDur > ctx.internalStart
-					else { continue }
-					// Clamp to the visible window
-					let visibleStart = max(internalOffset, ctx.internalStart)
-					let visibleEnd = min(internalOffset + clipDur, ctx.internalEnd)
-					let mainStart = ctx.mainOffset + (visibleStart - ctx.internalStart)
-					let ref = child.attribute(forName: "ref")?.stringValue
-					let asset = ref.flatMap { assets[$0] }
-					let clipSourceStart = parseTime(
-						child.attribute(forName: "start")?.stringValue ?? "0s")
-					clips.append(
-						AudioClip(
-							name: child.attribute(forName: "name")?.stringValue ?? "clip",
-							start: mainStart,
-							end: mainStart + (visibleEnd - visibleStart),
-							sourceStart: clipSourceStart - (asset?.mediaStart ?? 0),
-							sourceDuration: visibleEnd - visibleStart,
-							url: asset?.url,
-							bookmark: asset?.bookmark,
-							isCompound: true
-						))
-				} else {
-					clips.append(makeClip(from: child, assets: assets, tcStart: tcStart))
+				if !isMuted(child) {
+					if let ctx = compound {
+						let internalOffset = projectTime(of: child, tcStart: ctx.tcStart)
+						let clipDur = parseTime(
+							child.attribute(forName: "duration")?.stringValue ?? "0s")
+						guard internalOffset < ctx.internalEnd,
+							internalOffset + clipDur > ctx.internalStart
+						else {
+							walkElement(
+								child, tcStart: tcStart, compound: compound, assets: assets,
+								mediaMap: mediaMap, into: &clips)
+							continue
+						}
+						let visibleStart = max(internalOffset, ctx.internalStart)
+						let visibleEnd = min(internalOffset + clipDur, ctx.internalEnd)
+						let mainStart = ctx.mainOffset + (visibleStart - ctx.internalStart)
+						let ref = child.attribute(forName: "ref")?.stringValue
+						let asset = ref.flatMap { assets[$0] }
+						let clipSourceStart = parseTime(
+							child.attribute(forName: "start")?.stringValue ?? "0s")
+						clips.append(
+							AudioClip(
+								name: child.attribute(forName: "name")?.stringValue ?? "clip",
+								start: mainStart,
+								end: mainStart + (visibleEnd - visibleStart),
+								sourceStart: clipSourceStart - (asset?.mediaStart ?? 0),
+								sourceDuration: visibleEnd - visibleStart,
+								url: asset?.url,
+								bookmark: asset?.bookmark,
+								isCompound: true
+							))
+					} else {
+						clips.append(makeClip(from: child, assets: assets, tcStart: tcStart))
+					}
 				}
-				// Recurse into asset-clip to find nested audio clips
+				// Recurse into asset-clip to find nested audio clips even if muted
 				walkElement(
 					child, tcStart: tcStart, compound: compound, assets: assets,
 					mediaMap: mediaMap, into: &clips)
