@@ -25,21 +25,54 @@ fragment float4 KKArcOSCFragment(KKRasterizerData in [[stage_in]],
     float dist = length(pos);
 
     float ringAlpha = kkEdgeAlpha(dist - innerRadius) * kkEdgeAlpha(outerRadius - dist);
-    if (ringAlpha < 0.001)
-        discard_fragment();
 
-    // Gap dividers
-    float gapAlpha = 0.0;
-    for (int i = 0; i < 4; i++) {
-        float2 dividerDir = float2(cos(float(i) * M_PI_2_F), sin(float(i) * M_PI_2_F));
-        float distToDivider = abs(pos.x * dividerDir.y - pos.y * dividerDir.x);
-        gapAlpha = max(gapAlpha, kkLineAlpha(distToDivider, kDividerWidth));
+    // Plus sign in center when active
+    float plusAlpha = 0.0;
+    float plusOutlineFactor = 0.0;
+    if (params->plusHalfLen > 0.0) {
+        float phl = params->plusHalfLen;
+        float pfhw = params->plusFillHalfWidth;
+        float pow = params->plusOutlineWidth;
+        float ohw = pfhw + pow;
+
+        // Fill SDF (inner cross)
+        float hFill = max(abs(pos.x) - phl, abs(pos.y) - pfhw);
+        float vFill = max(abs(pos.y) - phl, abs(pos.x) - pfhw);
+        float fillSDF = min(hFill, vFill);
+
+        // Outer SDF (fill + outline)
+        float hOuter = max(abs(pos.x) - (phl + pow), abs(pos.y) - ohw);
+        float vOuter = max(abs(pos.y) - (phl + pow), abs(pos.x) - ohw);
+        float outerSDF = min(hOuter, vOuter);
+
+        plusAlpha = kkEdgeAlpha(-outerSDF);
+        plusOutlineFactor = 1.0 - kkEdgeAlpha(-fillSDF);
     }
 
-    float outlineFactor =
-        max(kkLineAlpha(abs(dist - innerRadius), outlineWidth), kkLineAlpha(abs(outerRadius - dist), outlineWidth));
+    if (ringAlpha < 0.001 && plusAlpha < 0.001)
+        discard_fragment();
 
-    return kkOSCColor(fillColor, outlineColor, outlineFactor, gapAlpha, ringAlpha);
+    // Ring coloring
+    float4 color = float4(0.0);
+    if (ringAlpha > 0.001) {
+        float gapAlpha = 0.0;
+        for (int i = 0; i < 4; i++) {
+            float2 dividerDir = float2(cos(float(i) * M_PI_2_F), sin(float(i) * M_PI_2_F));
+            float distToDivider = abs(pos.x * dividerDir.y - pos.y * dividerDir.x);
+            gapAlpha = max(gapAlpha, kkLineAlpha(distToDivider, kDividerWidth));
+        }
+        float outlineFactor =
+            max(kkLineAlpha(abs(dist - innerRadius), outlineWidth), kkLineAlpha(abs(outerRadius - dist), outlineWidth));
+        color = kkOSCColor(fillColor, outlineColor, outlineFactor, gapAlpha, ringAlpha);
+    }
+
+    // Composite plus on top
+    if (plusAlpha > 0.001) {
+        float4 plusColor = kkOSCColor(fillColor, outlineColor, plusOutlineFactor, plusAlpha);
+        color = color * (1.0 - plusColor.a) + plusColor;
+    }
+
+    return color;
 }
 
 /// Fragment shader for rendering a point/dot OSC control with outline and depth shadow.

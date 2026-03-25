@@ -12,6 +12,9 @@ typedef enum KKOSCFragmentIndex { KKOSCFragmentIndex_DrawColor = 0 } KKOSCFragme
 typedef struct KKArcOSCParams {
     float innerRadius;
     float outlineWidth;
+    float plusHalfLen;
+    float plusFillHalfWidth;
+    float plusOutlineWidth;
     vector_float4 fillColor;
     vector_float4 outlineColor;
 } KKArcOSCParams;
