@@ -93,7 +93,7 @@ struct AudioPreparer {
 		return segments
 	}
 
-	static func extractAudio(for segments: [ProcessingSegment]) throws -> [PreparedSegment] {
+	static func extractAudio(for segments: [ProcessingSegment]) async throws -> [PreparedSegment] {
 		var sourceFileCache: [String: URL] = [:]
 		var audioURLCache: [String: URL] = [:]
 		var prepared: [PreparedSegment] = []
@@ -131,7 +131,7 @@ struct AudioPreparer {
 			)) != nil {
 				audioURL = sourceFileURL
 			} else {
-				let wavURL = try extractAudioTrack(from: sourceFileURL)
+				let wavURL = try await extractAudioTrack(from: sourceFileURL)
 				audioURLCache[cacheKey] = wavURL
 				audioURL = wavURL
 			}
@@ -209,9 +209,9 @@ struct AudioPreparer {
 		return prepared
 	}
 
-	private static func extractAudioTrack(from url: URL) throws -> URL {
+	private static func extractAudioTrack(from url: URL) async throws -> URL {
 		let asset = AVURLAsset(url: url)
-		guard let track = asset.tracks(withMediaType: .audio).first else {
+		guard let track = try await asset.loadTracks(withMediaType: .audio).first else {
 			throw NSError(domain: "AudioPreparer", code: 10)
 		}
 
