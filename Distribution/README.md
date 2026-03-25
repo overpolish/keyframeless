@@ -17,9 +17,20 @@ scripts/bump-version.sh <component> <version>
 
 This updates the relevant `Info.plist` / `.pbxproj` files and writes the new version into `manifest.json`.
 
+### Pre-release / alpha builds
+
+Use a `-` suffix for pre-release versions (e.g. `1.0.1-v0`). Pre-release versions update the app version but **skip** `manifest.json` — the manifest only ever contains official release versions.
+
+```sh
+scripts/bump-version.sh keyframelessx 1.0.1-v0   # alpha build, manifest unchanged
+scripts/bump-version.sh keyframelessx 1.0.1       # official release, manifest updated
+```
+
+When the official `1.0.1` release ships, users running `1.0.1-v0` will see the update banner because a release version is always considered newer than a pre-release with the same base version.
+
 ### How update checking works
 
-On app launch, `KKUpdateChecker` fetches the latest GitHub release and looks for a `manifest.json` asset. It compares each component version in the manifest against the `CFBundleShortVersionString` of the locally installed bundle at `/Applications/Keyframeless/`. If any component has a newer version, or a component exists in the manifest but isn't installed, the update banner is shown.
+On app launch, `KKUpdateChecker` fetches the latest GitHub release and looks for a `manifest.json` asset. It compares each component version in the manifest against the `CFBundleShortVersionString` of the locally installed bundle at `/Applications/Keyframeless/`. If any component has a newer version, or a component exists in the manifest but isn't installed, the update banner is shown. Pre-release suffixes (e.g. `-v0`) are stripped for comparison, and a release version is treated as newer than a pre-release with the same base version.
 
 ### Releasing
 

@@ -65,6 +65,10 @@ bump_pkgproj() {
 }
 
 bump_manifest() {
+  if [[ "$VERSION" == *-* ]]; then
+    echo "  manifest.json skipped (pre-release)"
+    return
+  fi
   python3 -c "
 import json, sys
 key_path, value = sys.argv[1], sys.argv[2]

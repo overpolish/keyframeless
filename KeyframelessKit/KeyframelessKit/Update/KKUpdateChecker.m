@@ -303,8 +303,16 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
   if (!a || !b)
     return NO;
 
-  NSArray<NSString *> *partsA = [a componentsSeparatedByString:@"."];
-  NSArray<NSString *> *partsB = [b componentsSeparatedByString:@"."];
+  // Strip pre-release suffix (e.g. "1.0.1-v0" → base "1.0.1")
+  NSRange dashA = [a rangeOfString:@"-"];
+  NSString *baseA =
+      dashA.location != NSNotFound ? [a substringToIndex:dashA.location] : a;
+  NSRange dashB = [b rangeOfString:@"-"];
+  NSString *baseB =
+      dashB.location != NSNotFound ? [b substringToIndex:dashB.location] : b;
+
+  NSArray<NSString *> *partsA = [baseA componentsSeparatedByString:@"."];
+  NSArray<NSString *> *partsB = [baseB componentsSeparatedByString:@"."];
   NSUInteger count = MAX(partsA.count, partsB.count);
 
   for (NSUInteger i = 0; i < count; i++) {
@@ -315,6 +323,11 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
     if (va < vb)
       return NO;
   }
+
+  // Base versions equal — release is newer than pre-release (1.0.1 > 1.0.1-v0)
+  if (dashA.location == NSNotFound && dashB.location != NSNotFound)
+    return YES;
+
   return NO;
 }
 
