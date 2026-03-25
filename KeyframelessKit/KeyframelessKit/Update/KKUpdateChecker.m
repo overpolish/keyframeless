@@ -21,6 +21,7 @@ static NSDictionary<NSString *, NSString *> *KKKnownComponents(void) {
     @"keyframelessx" : @"Keyframeless X",
     @"rounded" : @"Rounded",
     @"motionblur" : @"MotionBlur",
+    @"magicmove" : @"MagicMove"
   };
 }
 
@@ -33,6 +34,8 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
     @"MotionBlur-XPC-Service" : @"motionblur",
     @"Rounded" : @"rounded",
     @"Rounded-XPC-Service" : @"rounded",
+    @"MagicMove" : @"magicmove",
+    @"MagicMove-XPC-Service" : @"magicmove"
   };
 }
 

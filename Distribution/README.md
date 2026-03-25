@@ -51,7 +51,7 @@ The manifest key is the project name lowercased with no spaces or separators (e.
 1. Add an entry to `manifest.json` with the key and initial version (e.g. `"newplugin": "1.0.0"`).
 2. Add the key to `KKKnownComponents()` and `KKBundleIDToComponent()` in `KKUpdateChecker.m` — map both the wrapper app and XPC service bundle IDs.
 3. Add a case to `scripts/bump-version.sh` that updates the relevant `Info.plist` files and calls `bump_manifest`.
-4. Call `addUpdateBannerParameterWithAPI:error:` at the end of `addParametersWithError:` and pass `[KKPlugin servicePrincipalDelegate]` to `startServicePrincipalWithDelegate:` in `main()` to wire up update checking.
+4. Call `addUpdateBannerParameterWithAPI:error:` at the start of `addParametersWithError:` and pass `[KKPlugin servicePrincipalDelegate]` to `startServicePrincipalWithDelegate:` in `main()` to wire up update checking.
 5. Add the component to `Packages` as a separate package so end users can install it independently.
 
 ## Code Signing & Notarization
