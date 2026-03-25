@@ -14,9 +14,9 @@
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
   self = [super initWithAPIManager:apiManager];
   if (self) {
-    _oscRadius = 23.0f;
+    _oscRadius = 25.0f;
     _strokeWidth = 10.0f;
-    _outlineWidth = KKBorderWidthXS;
+    _outlineWidth = KKBorderWidthXS + 0.75;
   }
   return self;
 }
@@ -45,11 +45,15 @@
   if (!ps)
     return;
 
-  float outerRadiusPixels = _oscRadius + _outlineWidth;
+  float radius = isActive ? 31.0f : _oscRadius;
+  float outerRadiusPixels = radius + _outlineWidth;
 
   KKArcOSCParams params = {
-      .innerRadius = (_oscRadius - _strokeWidth) / outerRadiusPixels,
+      .innerRadius = (radius - _strokeWidth) / outerRadiusPixels,
       .outlineWidth = _outlineWidth / outerRadiusPixels,
+      .plusHalfLen = isActive ? 7.0f / outerRadiusPixels : 0.0f,
+      .plusFillHalfWidth = 1.0f / outerRadiusPixels,
+      .plusOutlineWidth = 2.0f / outerRadiusPixels,
       .fillColor = [self colorForHovered:isHovered active:isActive],
       .outlineColor = self.outlineColor};
 
