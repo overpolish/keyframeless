@@ -44,9 +44,10 @@ struct DimensionsPreview: View {
 	}
 
 	private func fitSize(in container: CGSize) -> CGSize {
-		let boundingAspect: CGFloat = 16.0 / 9.0
+		guard container.width > 0 && container.height > 0 else { return .zero }
 		let videoAspect = exportWidth / exportHeight
-		if videoAspect > boundingAspect {
+		let containerAspect = container.width / container.height
+		if videoAspect > containerAspect {
 			return CGSize(width: container.width, height: container.width / videoAspect)
 		} else {
 			return CGSize(width: container.height * videoAspect, height: container.height)
