@@ -25,12 +25,12 @@ actor WaveformLoader {
 		)
 		if let cached = cache[key] { return cached }
 		let buckets = min(4000, max(300, Int(clip.sourceDuration * 200)))
-		let samples = try load(clip: clip, buckets: buckets)
+		let samples = try await load(clip: clip, buckets: buckets)
 		cache[key] = samples
 		return samples
 	}
 
-	private func load(clip: FCPXMLParser.AudioClip, buckets: Int) throws -> [Float] {
+	private func load(clip: FCPXMLParser.AudioClip, buckets: Int) async throws -> [Float] {
 		let data = try clip.data()
 
 		let ext = clip.url?.pathExtension ?? ""
@@ -60,22 +60,24 @@ actor WaveformLoader {
 			}
 		}
 
-		return try loadViaAssetReader(url: tmpURL, clip: clip, buckets: buckets)
+		return try await loadViaAssetReader(url: tmpURL, clip: clip, buckets: buckets)
 	}
 
 	private func loadViaAssetReader(
 		url: URL, clip: FCPXMLParser.AudioClip, buckets: Int
-	) throws -> [Float] {
+	) async throws -> [Float] {
 		let asset = AVURLAsset(url: url)
-		guard let track = asset.tracks(withMediaType: .audio).first else { return [] }
+		guard let track = try await asset.loadTracks(withMediaType: .audio).first else { return [] }
 		let reader = try AVAssetReader(asset: asset)
-		let output = AVAssetReaderTrackOutput(track: track, outputSettings: [
-			AVFormatIDKey: kAudioFormatLinearPCM,
-			AVLinearPCMBitDepthKey: 32,
-			AVLinearPCMIsFloatKey: true,
-			AVLinearPCMIsBigEndianKey: false,
-			AVLinearPCMIsNonInterleaved: false,
-		])
+		let output = AVAssetReaderTrackOutput(
+			track: track,
+			outputSettings: [
+				AVFormatIDKey: kAudioFormatLinearPCM,
+				AVLinearPCMBitDepthKey: 32,
+				AVLinearPCMIsFloatKey: true,
+				AVLinearPCMIsBigEndianKey: false,
+				AVLinearPCMIsNonInterleaved: false,
+			])
 		reader.add(output)
 		reader.timeRange = CMTimeRange(
 			start: CMTime(seconds: clip.sourceStart, preferredTimescale: 48000),
