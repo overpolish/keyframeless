@@ -74,9 +74,16 @@ final class AudioPlayer: ObservableObject {
 
 	private func startPlaying(clip: FCPXMLParser.AudioClip, index: Int, from time: Double) {
 		stop()
-		guard let data = try? clip.data(),
-			let newPlayer = try? AVAudioPlayer(data: data)
-		else { return }
+		guard let data = try? clip.data() else { return }
+		let ext = clip.url?.pathExtension ?? ""
+		let url = FileManager.default.temporaryDirectory
+			.appendingPathComponent(UUID().uuidString + (ext.isEmpty ? "" : ".\(ext)"))
+		do { try data.write(to: url) } catch { return }
+		guard let newPlayer = try? AVAudioPlayer(contentsOf: url) else {
+			try? FileManager.default.removeItem(at: url)
+			return
+		}
+		tmpAudioURL = url
 		newPlayer.prepareToPlay()
 		newPlayer.currentTime = time
 		newPlayer.play()

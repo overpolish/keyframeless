@@ -95,6 +95,7 @@ struct AudioPreparer {
 
 	static func extractAudio(for segments: [ProcessingSegment]) throws -> [PreparedSegment] {
 		var sourceFileCache: [String: URL] = [:]
+		var audioURLCache: [String: URL] = [:]
 		var prepared: [PreparedSegment] = []
 
 		for segment in segments {
@@ -113,15 +114,30 @@ struct AudioPreparer {
 					isCompound: false
 				)
 				let data = try clip.data()
+				let ext = segment.sourceURL?.pathExtension ?? ""
 				let tmpURL = FileManager.default.temporaryDirectory
-					.appendingPathComponent("kk_audio_\(UUID().uuidString)")
+					.appendingPathComponent(
+						"kk_audio_\(UUID().uuidString)" + (ext.isEmpty ? "" : ".\(ext)"))
 				try data.write(to: tmpURL)
 				sourceFileCache[cacheKey] = tmpURL
 				sourceFileURL = tmpURL
 			}
 
+			let audioURL: URL
+			if let cached = audioURLCache[cacheKey] {
+				audioURL = cached
+			} else if (try? AVAudioFile(
+				forReading: sourceFileURL, commonFormat: .pcmFormatFloat32, interleaved: false
+			)) != nil {
+				audioURL = sourceFileURL
+			} else {
+				let wavURL = try extractAudioTrack(from: sourceFileURL)
+				audioURLCache[cacheKey] = wavURL
+				audioURL = wavURL
+			}
+
 			let audioFile = try AVAudioFile(
-				forReading: sourceFileURL,
+				forReading: audioURL,
 				commonFormat: .pcmFormatFloat32,
 				interleaved: false
 			)
@@ -186,8 +202,75 @@ struct AudioPreparer {
 		for url in sourceFileCache.values {
 			try? FileManager.default.removeItem(at: url)
 		}
+		for url in audioURLCache.values {
+			try? FileManager.default.removeItem(at: url)
+		}
 
 		return prepared
+	}
+
+	private static func extractAudioTrack(from url: URL) throws -> URL {
+		let asset = AVURLAsset(url: url)
+		guard let track = asset.tracks(withMediaType: .audio).first else {
+			throw NSError(domain: "AudioPreparer", code: 10)
+		}
+
+		let reader = try AVAssetReader(asset: asset)
+		let output = AVAssetReaderTrackOutput(
+			track: track,
+			outputSettings: [
+				AVFormatIDKey: kAudioFormatLinearPCM,
+				AVLinearPCMBitDepthKey: 32,
+				AVLinearPCMIsFloatKey: true,
+				AVLinearPCMIsBigEndianKey: false,
+				AVLinearPCMIsNonInterleaved: false,
+			])
+		reader.add(output)
+		reader.startReading()
+
+		guard let firstBuffer = output.copyNextSampleBuffer(),
+			let formatDesc = CMSampleBufferGetFormatDescription(firstBuffer),
+			let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc)?.pointee,
+			let format = AVAudioFormat(
+				commonFormat: .pcmFormatFloat32,
+				sampleRate: asbd.mSampleRate,
+				channels: AVAudioChannelCount(max(1, asbd.mChannelsPerFrame)),
+				interleaved: true
+			)
+		else {
+			throw NSError(domain: "AudioPreparer", code: 11)
+		}
+
+		let wavURL = FileManager.default.temporaryDirectory
+			.appendingPathComponent("kk_extracted_\(UUID().uuidString).wav")
+		let outFile = try AVAudioFile(forWriting: wavURL, settings: format.settings)
+
+		try writeSampleBuffer(firstBuffer, format: format, to: outFile)
+		while let sampleBuffer = output.copyNextSampleBuffer() {
+			try writeSampleBuffer(sampleBuffer, format: format, to: outFile)
+		}
+
+		return wavURL
+	}
+
+	private static func writeSampleBuffer(
+		_ sampleBuffer: CMSampleBuffer, format: AVAudioFormat, to outFile: AVAudioFile
+	) throws {
+		guard let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else { return }
+		let frameCount = AVAudioFrameCount(CMSampleBufferGetNumSamples(sampleBuffer))
+		guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount)
+		else { return }
+		buffer.frameLength = frameCount
+
+		var length = 0
+		var dataPointer: UnsafeMutablePointer<Int8>?
+		CMBlockBufferGetDataPointer(
+			blockBuffer, atOffset: 0, lengthAtOffsetOut: nil,
+			totalLengthOut: &length, dataPointerOut: &dataPointer
+		)
+		guard let ptr = dataPointer else { return }
+		memcpy(buffer.floatChannelData![0], ptr, length)
+		try outFile.write(from: buffer)
 	}
 
 	static func cleanUp(segments: [PreparedSegment]) {
