@@ -12,9 +12,11 @@ class AudioProcessingCoordinator: ObservableObject {
 	@Published var isProcessing = false
 	@Published var statusLabel = ""
 	@Published var progress: Double?
+	@Published var estimatedTimeRemaining: String?
 
 	private let transcriber = AudioTranscriber()
 	private var processingTask: Task<Void, Never>?
+	private var transcriptionStartTime: Date?
 
 	func process(
 		model: AudioModel,
@@ -43,6 +45,8 @@ class AudioProcessingCoordinator: ObservableObject {
 
 		statusLabel = AudioTranscriber.Phase.preparingAudio.rawValue
 		progress = nil
+		estimatedTimeRemaining = nil
+		transcriptionStartTime = nil
 
 		let segments = AudioPreparer.prepare(clips: clips, selectedIndices: selected)
 
@@ -59,9 +63,19 @@ class AudioProcessingCoordinator: ObservableObject {
 					hotWords: hotWords,
 					onProgress: { progress in
 						Task { @MainActor [weak self] in
-							self?.statusLabel = progress.phase.rawValue
-							self?.progress =
-								progress.phase == .transcribing ? progress.fraction : nil
+							guard let self else { return }
+							self.statusLabel = progress.phase.rawValue
+							if progress.phase == .transcribing, progress.segmentProgress > 0 {
+								let frac = progress.fraction
+								self.progress = frac
+								if self.transcriptionStartTime == nil {
+									self.transcriptionStartTime = Date()
+								}
+								self.estimatedTimeRemaining = self.formatETA(fraction: frac)
+							} else if progress.phase != .transcribing {
+								self.progress = nil
+								self.estimatedTimeRemaining = nil
+							}
 						}
 					}
 				)
@@ -95,9 +109,25 @@ class AudioProcessingCoordinator: ObservableObject {
 		return result
 	}
 
+	private func formatETA(fraction: Double) -> String? {
+		guard fraction > 0.05,
+			let start = transcriptionStartTime
+		else { return nil }
+		let elapsed = Date().timeIntervalSince(start)
+		let total = elapsed / fraction
+		let remaining = total - elapsed
+		let seconds = Int(remaining)
+		if seconds < 5 { return "Almost done" }
+		if seconds < 60 { return "About \(seconds)s remaining" }
+		let minutes = seconds / 60
+		if minutes == 1 { return "About 1 min remaining" }
+		return "About \(minutes) min remaining"
+	}
+
 	func cancel() {
 		processingTask?.cancel()
 		processingTask = nil
+		Task { await transcriber.forceUnload() }
 		withAnimation(.easeOut(duration: 0.25)) {
 			isProcessing = false
 		}

@@ -13,7 +13,6 @@ class TranscriptionStore {
 		let word: String
 		let start: Float
 		let end: Float
-		let probability: Float
 	}
 
 	struct ClipKey: Codable, Hashable {
@@ -123,8 +122,7 @@ class TranscriptionStore {
 					StoredWord(
 						word: editedTokens[ei],
 						start: original[oi].start,
-						end: original[oi].end,
-						probability: original[oi].probability))
+						end: original[oi].end))
 			} else {
 				unmatched.append(ei)
 			}
@@ -175,8 +173,7 @@ class TranscriptionStore {
 			StoredWord(
 				word: tokens[ei],
 				start: rangeStart + Float(offset) * sliceDuration,
-				end: rangeStart + Float(offset + 1) * sliceDuration,
-				probability: 0)
+				end: rangeStart + Float(offset + 1) * sliceDuration)
 		}
 	}
 
@@ -186,7 +183,7 @@ class TranscriptionStore {
 
 	func store(words: [AudioTranscriber.WordResult], for clip: FCPXMLParser.AudioClip) {
 		let stored = words.map {
-			StoredWord(word: $0.word, start: $0.start, end: $0.end, probability: $0.probability)
+			StoredWord(word: $0.word, start: $0.start, end: $0.end)
 		}
 		entries[ClipKey(clip: clip)] = stored
 		save()

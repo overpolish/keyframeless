@@ -76,8 +76,10 @@ enum AudioEditRowBuilder {
 	}
 
 	private static let sentenceEndChars = CharacterSet(charactersIn: ".!?")
-	private static let pauseThreshold: Float = 0.7
-	private static let minSentenceDuration: Float = 5.0
+	private static let clauseBreakChars = CharacterSet(charactersIn: ".,;:!?")
+	private static let pauseThreshold: Float = 1.5
+	private static let minSentenceDuration: Float = 4.0
+	private static let maxDuration: Float = 7.0
 
 	private static func groupIntoSentences(
 		_ words: [TranscriptionStore.StoredWord]
@@ -99,9 +101,14 @@ enum AudioEditRowBuilder {
 
 			let duration = current.last!.end - current.first!.start
 			let trimmed = word.word.trimmingCharacters(in: .whitespaces)
-			if duration >= minSentenceDuration,
-				trimmed.unicodeScalars.last.map({ sentenceEndChars.contains($0) }) == true
-			{
+			let lastScalar = trimmed.unicodeScalars.last
+			let endsWithSentenceEnd = lastScalar.map { sentenceEndChars.contains($0) } == true
+			let endsWithClauseBreak = lastScalar.map { clauseBreakChars.contains($0) } == true
+
+			if endsWithSentenceEnd && duration >= minSentenceDuration {
+				sentences.append(current)
+				current = []
+			} else if duration >= maxDuration && endsWithClauseBreak {
 				sentences.append(current)
 				current = []
 			}
