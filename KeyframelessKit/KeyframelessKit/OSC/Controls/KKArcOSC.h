@@ -11,7 +11,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface KKArcOSC : KKOnScreenControl
 
-/// Outer radius of the ring in canvas pixels. Default 25.
+/// Outer radius of the ring in canvas pixels. Default 23.
 @property(nonatomic) float oscRadius;
 
 /// Thickness of the ring stroke. Default 10.

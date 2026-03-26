@@ -124,16 +124,16 @@ static NSCursor *resizeCursorForAngle(double radians) {
   float outerRadiusPixels = _ringRadius + fillWidth / 2.0f + outlineWidth;
 
   simd_float4 fillColor;
-  simd_float4 outlineColor;
+  simd_float4 strokeColor;
   if (isActive) {
     fillColor = [[NSColor ringActiveFill] simdFloat4];
-    outlineColor = [[NSColor ringActiveStroke] simdFloat4];
+    strokeColor = [[NSColor ringActiveStroke] simdFloat4];
   } else if (isHovered) {
     fillColor = [[NSColor ringHoverFill] simdFloat4];
-    outlineColor = [[NSColor ringHoverStroke] simdFloat4];
+    strokeColor = [[NSColor ringHoverStroke] simdFloat4];
   } else {
     fillColor = [[NSColor ringIdleFill] simdFloat4];
-    outlineColor = [[NSColor ringIdleStroke] simdFloat4];
+    strokeColor = [[NSColor ringIdleStroke] simdFloat4];
   }
 
   KKRingOSCParams params = {.ringRadius = _ringRadius / outerRadiusPixels,
@@ -141,11 +141,12 @@ static NSCursor *resizeCursorForAngle(double radians) {
                                 (fillWidth / 2.0f) / outerRadiusPixels,
                             .outlineWidth = outlineWidth / outerRadiusPixels,
                             .fillColor = fillColor,
-                            .outlineColor = outlineColor};
+                            .strokeColor = strokeColor};
 
   [self
       encodeRenderCommandsForDestinationImage:destinationImage
                                canvasPosition:canvasPosition
+                             clearDestination:NO
                                      commands:^(
                                          id<MTLRenderCommandEncoder> encoder,
                                          CGPoint metalPosition,

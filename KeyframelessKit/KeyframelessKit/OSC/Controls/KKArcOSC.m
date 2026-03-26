@@ -5,7 +5,9 @@
 
 #import "KKArcOSC.h"
 #import "../../Style/KKTokens.h"
+#import "../../Style/NSColor+KKColors.h"
 #import "../Base/KKOSCShaderTypes.h"
+#include <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 
@@ -14,7 +16,7 @@
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
   self = [super initWithAPIManager:apiManager];
   if (self) {
-    _oscRadius = 25.0f;
+    _oscRadius = 23.0f;
     _strokeWidth = 10.0f;
     _outlineWidth = KKBorderWidthXS + 0.75;
   }
@@ -54,8 +56,8 @@
       .plusHalfLen = isActive ? 7.0f / outerRadiusPixels : 0.0f,
       .plusFillHalfWidth = 1.0f / outerRadiusPixels,
       .plusOutlineWidth = 2.0f / outerRadiusPixels,
-      .fillColor = [self colorForHovered:isHovered active:isActive],
-      .outlineColor = self.outlineColor};
+      .fillColor = [[NSColor arcFill] simdFloat4],
+      .strokeColor = [[NSColor arcStroke] simdFloat4]};
 
   [self
       encodeRenderCommandsForDestinationImage:destinationImage

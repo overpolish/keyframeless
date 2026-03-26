@@ -19,7 +19,7 @@ fragment float4 KKArcOSCFragment(KKRasterizerData in [[stage_in]],
     float innerRadius = params->innerRadius;
     float outlineWidth = params->outlineWidth;
     float4 fillColor = float4(params->fillColor);
-    float4 outlineColor = float4(params->outlineColor);
+    float4 strokeColor = float4(params->strokeColor);
 
     float2 pos = in.textureCoordinate;
     float dist = length(pos);
@@ -63,12 +63,12 @@ fragment float4 KKArcOSCFragment(KKRasterizerData in [[stage_in]],
         }
         float outlineFactor =
             max(kkLineAlpha(abs(dist - innerRadius), outlineWidth), kkLineAlpha(abs(outerRadius - dist), outlineWidth));
-        color = kkOSCColor(fillColor, outlineColor, outlineFactor, gapAlpha, ringAlpha);
+        color = kkOSCColor(fillColor, strokeColor, outlineFactor, gapAlpha, ringAlpha);
     }
 
     // Composite plus on top
     if (plusAlpha > 0.001) {
-        float4 plusColor = kkOSCColor(fillColor, outlineColor, plusOutlineFactor, plusAlpha);
+        float4 plusColor = kkOSCColor(fillColor, strokeColor, plusOutlineFactor, plusAlpha);
         color = color * (1.0 - plusColor.a) + plusColor;
     }
 
@@ -82,7 +82,7 @@ fragment float4 KKRingOSCFragment(KKRasterizerData in [[stage_in]],
     float fillHalfWidth = params->fillHalfWidth;
     float outlineWidth = params->outlineWidth;
     float4 fillColor = float4(params->fillColor);
-    float4 outlineColor = float4(params->outlineColor);
+    float4 strokeColor = float4(params->strokeColor);
 
     float2 pos = in.textureCoordinate;
     float dist = length(pos);
@@ -96,7 +96,7 @@ fragment float4 KKRingOSCFragment(KKRasterizerData in [[stage_in]],
 
     float outlineFactor = 1.0 - kkEdgeAlpha(fillHalfWidth - ringDist);
 
-    return kkOSCColor(fillColor, outlineColor, outlineFactor, shapeAlpha);
+    return kkOSCColor(fillColor, strokeColor, outlineFactor, shapeAlpha);
 }
 
 /// Fragment shader for rendering a point/dot OSC control with outline and depth shadow.
@@ -105,7 +105,7 @@ fragment float4 KKPointOSCFragment(KKRasterizerData in [[stage_in]],
     float outerRadius = 1.0;
     float outlineWidth = params->outlineWidth;
     float4 fillColor = float4(params->fillColor);
-    float4 outlineColor = float4(params->outlineColor);
+    float4 strokeColor = float4(params->strokeColor);
 
     float2 pos = in.textureCoordinate;
     float dist = length(pos);
@@ -122,8 +122,8 @@ fragment float4 KKPointOSCFragment(KKRasterizerData in [[stage_in]],
     float edgePadding = smoothstep(0.0, outlineWidth * 4.0, outerRadius - dist);
     shadowFactor *= edgePadding;
 
-    float4 shadowColor = float4(0.0, 0.0, 0.0, outlineColor.a);
-    float4 color = kkOSCColor(fillColor, outlineColor, outlineFactor, circleAlpha);
+    float4 shadowColor = float4(0.0, 0.0, 0.0, strokeColor.a);
+    float4 color = kkOSCColor(fillColor, strokeColor, outlineFactor, circleAlpha);
     color = mix(color, shadowColor, shadowFactor);
 
     return color;
