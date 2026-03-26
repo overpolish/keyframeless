@@ -388,6 +388,7 @@
 					"@loader_path/../Frameworks",
 				);
 				MACH_O_TYPE = mh_execute;
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
 				PRODUCT_NAME = "MotionBlur $(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -413,6 +414,7 @@
 					"@loader_path/../Frameworks",
 				);
 				MACH_O_TYPE = mh_execute;
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
 				PRODUCT_NAME = "MotionBlur $(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -436,6 +438,7 @@
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				INFOPLIST_FILE = "MotionBlur/Wrapper Application/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "@loader_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
 				PRODUCT_NAME = MotionBlur;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -458,6 +461,7 @@
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				INFOPLIST_FILE = "MotionBlur/Wrapper Application/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "@loader_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
 				PRODUCT_NAME = MotionBlur;
 				PROVISIONING_PROFILE_SPECIFIER = "";
