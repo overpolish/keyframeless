@@ -18,8 +18,7 @@ struct WhisperTermsView: View {
 		let trimmed = input.trimmingCharacters(in: .whitespaces)
 		if trimmed.isEmpty { return nil }
 		if trimmed.count > Self.maxTermLength { return "Max \(Self.maxTermLength) characters" }
-		if manager.hotWords.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame })
-		{
+		if manager.terms.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) {
 			return "Already added"
 		}
 		return nil
@@ -29,14 +28,14 @@ struct WhisperTermsView: View {
 		let trimmed = input.trimmingCharacters(in: .whitespaces)
 		return !trimmed.isEmpty
 			&& validationError == nil
-			&& manager.hotWords.count < Self.maxTerms
+			&& manager.terms.count < Self.maxTerms
 	}
 
 	private func addTerm() {
 		let trimmed = input.trimmingCharacters(in: .whitespaces)
-		guard !trimmed.isEmpty, validationError == nil, manager.hotWords.count < Self.maxTerms
+		guard !trimmed.isEmpty, validationError == nil, manager.terms.count < Self.maxTerms
 		else { return }
-		manager.hotWords.append(trimmed)
+		manager.terms.append(trimmed)
 		input = ""
 	}
 
@@ -69,7 +68,7 @@ struct WhisperTermsView: View {
 							.font(.system(size: 10))
 							.foregroundStyle(Color.kkError)
 					} else {
-						let count = manager.hotWords.count
+						let count = manager.terms.count
 						Text("\(count)/\(Self.maxTerms)")
 							.font(.system(size: 10).monospacedDigit())
 							.foregroundStyle(
@@ -101,7 +100,7 @@ struct WhisperTermsView: View {
 					alignment: .bottom
 				)
 
-				if manager.hotWords.isEmpty {
+				if manager.terms.isEmpty {
 					VStack {
 						Spacer()
 						Text("Keywords to help the AI catch names and jargon.")
@@ -114,9 +113,9 @@ struct WhisperTermsView: View {
 				} else {
 					ScrollView {
 						LazyVStack(spacing: 0) {
-							ForEach(manager.hotWords, id: \.self) { term in
+							ForEach(manager.terms, id: \.self) { term in
 								TermRow(term: term) {
-									manager.hotWords.removeAll { $0 == term }
+									manager.terms.removeAll { $0 == term }
 								}
 							}
 						}

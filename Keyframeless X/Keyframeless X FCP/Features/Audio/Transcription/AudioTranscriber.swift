@@ -4,10 +4,28 @@
  */
 
 import AVFoundation
+import CoreML
 import Foundation
 import SwiftWhisper
 import WhisperKit
 import whisper_cpp
+
+final class TermBoostFilter: LogitsFiltering {
+	let tokenIndexes: [[NSNumber]]
+	let boost: Float
+
+	init(tokenIds: [Int], boost: Float = 5.0) {
+		self.tokenIndexes = tokenIds.map { [0 as NSNumber, 0 as NSNumber, $0 as NSNumber] }
+		self.boost = boost
+	}
+
+	func filterLogits(_ logits: MLMultiArray, withTokens tokens: [Int]) -> MLMultiArray {
+		for index in tokenIndexes {
+			logits[index] = NSNumber(value: logits[index].floatValue + boost)
+		}
+		return logits
+	}
+}
 
 actor AudioTranscriber {
 
@@ -55,7 +73,7 @@ actor AudioTranscriber {
 		modelVariant: String,
 		language: String?,
 		translateToEnglish: Bool,
-		hotWords: [String],
+		terms: [String],
 		onProgress: @escaping @Sendable (Progress) -> Void
 	) async throws -> [ClipResult] {
 		defer { unloadModel() }
@@ -63,12 +81,12 @@ actor AudioTranscriber {
 			return try await transcribeWithWhisperKit(
 				segments: segments, modelVariant: modelVariant,
 				language: language, translateToEnglish: translateToEnglish,
-				hotWords: hotWords, onProgress: onProgress)
+				terms: terms, onProgress: onProgress)
 		} else {
 			return try await transcribeWithWhisperCpp(
 				segments: segments, modelVariant: modelVariant,
 				language: language, translateToEnglish: translateToEnglish,
-				hotWords: hotWords, onProgress: onProgress)
+				terms: terms, onProgress: onProgress)
 		}
 	}
 
@@ -94,7 +112,7 @@ actor AudioTranscriber {
 		modelVariant: String,
 		language: String?,
 		translateToEnglish: Bool,
-		hotWords: [String],
+		terms: [String],
 		onProgress: @escaping @Sendable (Progress) -> Void
 	) async throws -> [ClipResult] {
 		onProgress(
@@ -119,7 +137,12 @@ actor AudioTranscriber {
 			loadedWhisperKitVariant = modelVariant
 		}
 
-		let promptTokens = tokenize(hotWords: hotWords, using: kit)
+		let termTokens = tokenize(terms: terms, using: kit)
+		if termTokens.isEmpty {
+			kit.textDecoder.logitsFilters = []
+		} else {
+			kit.textDecoder.logitsFilters = [TermBoostFilter(tokenIds: termTokens)]
+		}
 
 		let options = DecodingOptions(
 			task: translateToEnglish ? .translate : .transcribe,
@@ -128,7 +151,6 @@ actor AudioTranscriber {
 			detectLanguage: language == nil,
 			skipSpecialTokens: true,
 			wordTimestamps: true,
-			promptTokens: promptTokens.isEmpty ? nil : promptTokens,
 			suppressBlank: true,
 			compressionRatioThreshold: 2.4,
 			logProbThreshold: -1.0,
@@ -208,9 +230,9 @@ actor AudioTranscriber {
 		return allClipResults
 	}
 
-	private func tokenize(hotWords: [String], using kit: WhisperKit) -> [Int] {
+	private func tokenize(terms: [String], using kit: WhisperKit) -> [Int] {
 		guard let tokenizer = kit.tokenizer else { return [] }
-		return hotWords.flatMap { word in
+		return terms.flatMap { word in
 			tokenizer.encode(text: " \(word)").filter {
 				$0 < tokenizer.specialTokens.specialTokenBegin
 			}
@@ -266,7 +288,7 @@ actor AudioTranscriber {
 		modelVariant: String,
 		language: String?,
 		translateToEnglish: Bool,
-		hotWords: [String],
+		terms: [String],
 		onProgress: @escaping @Sendable (Progress) -> Void
 	) async throws -> [ClipResult] {
 		onProgress(
@@ -302,8 +324,8 @@ actor AudioTranscriber {
 
 		promptCString?.deallocate()
 		promptCString = nil
-		if !hotWords.isEmpty {
-			let str = hotWords.joined(separator: ", ")
+		if !terms.isEmpty {
+			let str = terms.joined(separator: ", ")
 			let cStr = strdup(str)
 			promptCString = cStr
 			w.params.initial_prompt = UnsafePointer(cStr)
