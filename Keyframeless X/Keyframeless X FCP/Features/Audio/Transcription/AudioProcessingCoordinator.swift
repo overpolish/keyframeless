@@ -127,6 +127,7 @@ class AudioProcessingCoordinator: ObservableObject {
 	func cancel() {
 		processingTask?.cancel()
 		processingTask = nil
+		Task { await transcriber.forceUnload() }
 		withAnimation(.easeOut(duration: 0.25)) {
 			isProcessing = false
 		}
