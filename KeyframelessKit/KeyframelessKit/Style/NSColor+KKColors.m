@@ -114,6 +114,28 @@
                          alpha:1.0];
 }
 
+- (NSColor *)shiftedHueBy:(CGFloat)amount {
+  NSColor *hsb = [self colorUsingColorSpace:NSColorSpace.deviceRGBColorSpace];
+  if (!hsb) return self;
+  CGFloat h, s, b, a;
+  [hsb getHue:&h saturation:&s brightness:&b alpha:&a];
+  return [NSColor colorWithHue:fmod(h + amount + 1.0, 1.0)
+                    saturation:s
+                    brightness:b
+                         alpha:a];
+}
+
+- (NSColor *)compound {
+  NSColor *hsb = [self colorUsingColorSpace:NSColorSpace.deviceRGBColorSpace];
+  if (!hsb) return self;
+  CGFloat h, s, b, a;
+  [hsb getHue:&h saturation:&s brightness:&b alpha:&a];
+  return [NSColor colorWithHue:fmod(h + 0.333 + 1.0, 1.0)
+                    saturation:s * 0.45
+                    brightness:b * 0.75
+                         alpha:a];
+}
+
 - (simd_float4)simdFloat4 {
   NSColor *rgb = [self colorUsingColorSpace:NSColorSpace.genericRGBColorSpace];
   return (simd_float4){

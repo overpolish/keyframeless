@@ -161,7 +161,7 @@ private struct LanguageRow: View {
 				InfoBadge(
 					label: "Profanity",
 					systemImage:
-						"checkmark.circle.trianglebadge.exclamationmark.fill",
+						"exclamationmark.bubble.fill",
 					color: .green
 				)
 			}

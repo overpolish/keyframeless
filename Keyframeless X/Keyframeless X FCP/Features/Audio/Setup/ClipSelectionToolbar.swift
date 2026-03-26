@@ -25,7 +25,7 @@ struct ClipSelectionToolbar: View {
 			}
 			if hasCompound {
 				ClipTypeFilterButton(
-					label: "Compound", color: Color.kkWarning
+					label: "Compound", color: Color.kkCompoundAccent
 				) {
 					selectedClips = allowed.filter { clips[$0].isCompound }
 				}

@@ -108,7 +108,7 @@ struct AudioEditView: View {
 			.overlay(alignment: .bottomTrailing) {
 				HelperText(
 					"Click and drag to quickly select/deselect clips",
-					systemImage: "pointer.arrow.motionlines"
+					systemImage: "cursorarrow.motionlines"
 				)
 				.padding(.trailing, KKPaddingSM)
 				.alignmentGuide(.bottom) { d in d[.top] - KKSpacingMD }

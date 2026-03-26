@@ -33,6 +33,8 @@
 + (NSColor *)accent;
 + (NSColor *)warning;
 + (NSColor *)error;
+- (NSColor *)shiftedHueBy:(CGFloat)amount;
+- (NSColor *)compound;
 
 - (simd_float4)simdFloat4;
 

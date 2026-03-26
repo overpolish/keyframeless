@@ -57,7 +57,7 @@ struct AudioExportOptionsView: View {
 				CapsuleToggle(
 					isOn: $model.censorProfanity,
 					label: "Censor Profanity",
-					systemImage: "checkmark.circle.trianglebadge.exclamationmark.fill"
+					systemImage: "exclamationmark.bubble.fill"
 				)
 				Divider().frame(height: 12).padding(.horizontal, KKPaddingMD)
 				CapsuleToggle(
