@@ -15,10 +15,12 @@ import SwiftUI
 struct PopoverBackgroundClearer: NSViewRepresentable {
 	func makeNSView(context: Context) -> NSView {
 		let view = NSView()
-		DispatchQueue.main.async {
-			guard let popoverFrame = self.findAncestor(from: view, matching: "NSPopoverFrame")
-			else { return }
-			self.clearSystemBackground(in: popoverFrame)
+		if #available(macOS 26, *) {
+			DispatchQueue.main.async {
+				guard let popoverFrame = self.findAncestor(from: view, matching: "NSPopoverFrame")
+				else { return }
+				self.clearSystemBackground(in: popoverFrame)
+			}
 		}
 		return view
 	}
