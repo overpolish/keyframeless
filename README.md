@@ -8,6 +8,7 @@
 	<img alt="Downloads" src="https://img.shields.io/github/downloads/overpolish/keyframeless/total?color=ff5000" />
 	<img alt="Release" src="https://img.shields.io/github/v/release/overpolish/keyframeless?color=ff5000" />
 	<img alt="License GPL-3.0" src="https://img.shields.io/github/license/overpolish/keyframeless?color=ff5000" />
+	<img alt="macOS 15+" src="https://img.shields.io/badge/15%2B-macOS?logo=apple&label=macOS&labelColor=5C5C5C&color=ff5000">
 	<img alt="Architectures - Silicon and Intel" src="https://img.shields.io/badge/Silicon_%7C_Intel-architectures?logo=apple&label=Compatible%20with&labelColor=5C5C5C&color=ff5000">
 </div>
 
