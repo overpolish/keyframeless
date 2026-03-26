@@ -90,9 +90,9 @@ class AccentTextField: NSTextField {
 	override func becomeFirstResponder() -> Bool {
 		let result = super.becomeFirstResponder()
 		if result,
-			let editor = currentEditor() as? NSTextView,
-			let accent = NSColor.accent()
+			let editor = currentEditor() as? NSTextView
 		{
+			let accent = NSColor.controlAccentColor
 			editor.insertionPointColor = accent
 			editor.selectedTextAttributes = [
 				.backgroundColor: accent.withAlphaComponent(0.3)
