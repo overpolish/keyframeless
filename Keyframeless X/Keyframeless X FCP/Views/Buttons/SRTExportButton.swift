@@ -33,9 +33,8 @@ struct SRTExportButton: View {
 		.popover(isPresented: .constant(isHovered && hasOverlaps), arrowEdge: .top) {
 			Text("SRT cannot have overlapping captions")
 				.font(.system(size: 11))
-				.padding(KKPaddingMD)
-				.fixedSize(horizontal: false, vertical: true)
-				.frame(maxWidth: 240)
+				.multilineTextAlignment(.center)
+				.padding(KKPaddingLG)
 				.background(PopoverBackgroundClearer())
 		}
 		.help(hasOverlaps ? "" : "Export SRT")

@@ -32,9 +32,8 @@ struct ProcessSelectedButton: View {
 				.popover(isPresented: $showInfo, arrowEdge: .bottom) {
 					Text("Mix and match settings by processing only the selected clips.")
 						.font(.system(size: 11))
-						.padding(KKPaddingSM)
-						.fixedSize(horizontal: false, vertical: true)
-						.frame(maxWidth: 240)
+						.multilineTextAlignment(.center)
+						.padding(KKPaddingLG)
 						.background(PopoverBackgroundClearer())
 				}
 		}
