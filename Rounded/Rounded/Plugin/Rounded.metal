@@ -66,5 +66,7 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
         alpha = 1.0 - smoothstep(0.0, fwidth(distance) * 2.0, distance);
     }
 
-    return float4(float3(colorSample.rgb) * alpha, alpha);
+    float sourceAlpha = colorSample.a;
+    float combinedAlpha = sourceAlpha * alpha;
+    return float4(float3(colorSample.rgb) * alpha, combinedAlpha);
 }
