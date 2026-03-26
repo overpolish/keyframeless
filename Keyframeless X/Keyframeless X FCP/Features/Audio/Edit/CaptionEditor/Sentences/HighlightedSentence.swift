@@ -52,11 +52,11 @@ struct HighlightedSentence: View {
 			if ProfanityFilter.isProfane(trimmed, language: language) {
 				part.foregroundColor = Color.kkError
 				if isActive {
-					part.font = .system(size: 13, weight: .semibold)
+					part.font = .system(size: 13)
 				}
 			} else if isActive {
 				part.foregroundColor = Color.kkAccent
-				part.font = .system(size: 13, weight: .semibold)
+				part.font = .system(size: 13)
 			}
 			result.append(part)
 		}
