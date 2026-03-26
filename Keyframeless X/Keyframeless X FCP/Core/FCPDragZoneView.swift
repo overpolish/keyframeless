@@ -54,7 +54,7 @@ class FCPDragSourceView: NSView, NSDraggingSource {
 	var onDragStateChanged: ((Bool) -> Void)?
 
 	override func draw(_ dirtyRect: NSRect) {
-		let accentColor = NSColor.accent() ?? NSColor.systemBlue
+		let accentColor = NSColor.controlAccentColor
 
 		let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 6, yRadius: 6)
 		accentColor.withAlphaComponent(0.15).setFill()

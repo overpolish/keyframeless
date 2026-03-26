@@ -7,11 +7,12 @@ import KeyframelessKit
 import SwiftUI
 
 extension Color {
-	static let kkAccent = Color(nsColor: .accent() ?? .blue)
+	static var kkAccent: Color { .accentColor }
+	static var kkCompoundAccent: Color { Color(nsColor: NSColor(name: nil) { _ in NSColor.controlAccentColor.compound() }) }
 	static let kkWarning = Color(nsColor: .warning())
 	static let kkError = Color(nsColor: .error())
 
 	static func kkClipColor(isCompound: Bool) -> Color {
-		isCompound ? .kkWarning : .kkAccent
+		isCompound ? .kkCompoundAccent : .kkAccent
 	}
 }

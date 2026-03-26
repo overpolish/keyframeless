@@ -420,7 +420,7 @@ struct TimelineAxisRenderer {
 		isDimmed
 			? NSColor.secondaryLabelColor
 			: clip.isCompound
-				? NSColor.warning() ?? NSColor.yellow : NSColor.accent() ?? NSColor.blue
+				? NSColor.controlAccentColor.compound() : NSColor.controlAccentColor
 	}
 
 	private func laneAssignments(for clips: [FCPXMLParser.AudioClip]) -> [Int] {
