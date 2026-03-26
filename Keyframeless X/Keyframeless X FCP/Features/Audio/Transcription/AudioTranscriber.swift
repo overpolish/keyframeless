@@ -30,8 +30,10 @@ actor AudioTranscriber {
 		let phase: Phase
 		let completedSegments: Int
 		let totalSegments: Int
+		var segmentProgress: Double = 0
 		var fraction: Double {
-			totalSegments > 0 ? Double(completedSegments) / Double(totalSegments) : 0
+			guard totalSegments > 0 else { return 0 }
+			return (Double(completedSegments) + segmentProgress) / Double(totalSegments)
 		}
 	}
 
@@ -44,7 +46,7 @@ actor AudioTranscriber {
 		language: String?,
 		translateToEnglish: Bool,
 		hotWords: [String],
-		onProgress: @Sendable (Progress) -> Void
+		onProgress: @escaping @Sendable (Progress) -> Void
 	) async throws -> [ClipResult] {
 		onProgress(
 			Progress(phase: .loadingModel, completedSegments: 0, totalSegments: segments.count))
@@ -74,6 +76,7 @@ actor AudioTranscriber {
 			task: translateToEnglish ? .translate : .transcribe,
 			language: language,
 			temperatureFallbackCount: 3,
+			detectLanguage: language == nil,
 			skipSpecialTokens: true,
 			wordTimestamps: true,
 			promptTokens: promptTokens.isEmpty ? nil : promptTokens,
@@ -91,9 +94,25 @@ actor AudioTranscriber {
 			onProgress(
 				Progress(phase: .transcribing, completedSegments: i, totalSegments: segments.count))
 
+			let segmentCount = segments.count
+			let segmentDuration = segment.range.duration + segment.paddingDuration
+			let estWindows = max(1.0, ceil(segmentDuration / 29))
 			let results: [TranscriptionResult] = try await kit.transcribe(
 				audioPath: segment.tempFileURL.path,
-				decodeOptions: options
+				decodeOptions: options,
+				callback: { whisperProgress in
+					let windowFrac = min(
+						0.99, Double(whisperProgress.windowId) / estWindows)
+					onProgress(
+						Progress(
+							phase: .transcribing,
+							completedSegments: i,
+							totalSegments: segmentCount,
+							segmentProgress: windowFrac
+						)
+					)
+					return nil
+				}
 			)
 
 			let allWords = results.flatMap { $0.allWords }

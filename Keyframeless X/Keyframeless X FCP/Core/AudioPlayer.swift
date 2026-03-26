@@ -14,6 +14,7 @@ final class AudioPlayer: ObservableObject {
 	private var player: AVAudioPlayer?
 	private var stopWorkItem: DispatchWorkItem?
 	private var progressTimer: Timer?
+	private var tmpAudioURL: URL?
 
 	func isPlaying(index: Int) -> Bool {
 		playingIndex == index
@@ -65,13 +66,24 @@ final class AudioPlayer: ObservableObject {
 		player = nil
 		playingIndex = nil
 		currentTime = nil
+		if let url = tmpAudioURL {
+			try? FileManager.default.removeItem(at: url)
+			tmpAudioURL = nil
+		}
 	}
 
 	private func startPlaying(clip: FCPXMLParser.AudioClip, index: Int, from time: Double) {
 		stop()
-		guard let data = try? clip.data(),
-			let newPlayer = try? AVAudioPlayer(data: data)
-		else { return }
+		guard let data = try? clip.data() else { return }
+		let ext = clip.url?.pathExtension ?? ""
+		let url = FileManager.default.temporaryDirectory
+			.appendingPathComponent(UUID().uuidString + (ext.isEmpty ? "" : ".\(ext)"))
+		do { try data.write(to: url) } catch { return }
+		guard let newPlayer = try? AVAudioPlayer(contentsOf: url) else {
+			try? FileManager.default.removeItem(at: url)
+			return
+		}
+		tmpAudioURL = url
 		newPlayer.prepareToPlay()
 		newPlayer.currentTime = time
 		newPlayer.play()

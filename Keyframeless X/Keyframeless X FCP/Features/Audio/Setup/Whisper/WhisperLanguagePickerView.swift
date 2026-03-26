@@ -14,13 +14,18 @@ struct WhisperLanguagePickerView: View {
 	private static let profanityLanguages = ProfanityFilter.availableLanguages
 
 	private static let sortedLanguages: [(name: String, code: String)] = {
-		var seen = Set<String>()
-		return Constants.languages
-			.sorted { $0.key < $1.key }
-			.compactMap { name, code in
-				guard seen.insert(code).inserted else { return nil }
-				return (name: name.capitalized, code: code)
+		var best: [String: String] = [:]
+		for (name, code) in Constants.languages {
+			if let existing = best[code] {
+				if name.count < existing.count { best[code] = name }
+			} else {
+				best[code] = name
 			}
+		}
+		return
+			best
+			.map { code, name in (name: name.capitalized, code: code) }
+			.sorted { $0.name < $1.name }
 	}()
 
 	private var filtered: [(name: String, code: String)] {

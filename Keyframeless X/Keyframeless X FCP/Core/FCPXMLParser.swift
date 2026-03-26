@@ -41,6 +41,28 @@ enum FCPXMLParser {
 					projectCount +=
 						(try? media?.nodes(forXPath: ".//" + dialogueClipXPath))?.count ?? 0
 				}
+				let mcClips =
+					(try? el.nodes(forXPath: ".//mc-clip"))?
+					.compactMap { $0 as? XMLElement } ?? []
+				for mcClip in mcClips {
+					let mcMediaId = mcClip.attribute(forName: "ref")?.stringValue ?? ""
+					let mcMedia = resources?.elements(forName: "media").first {
+						$0.attribute(forName: "id")?.stringValue == mcMediaId
+					}
+					guard let multicam = mcMedia?.elements(forName: "multicam").first
+					else { continue }
+					let activeAngles = audioAngleIDs(from: mcClip)
+					for angle in multicam.elements(forName: "mc-angle") {
+						if let activeAngles {
+							let angleID =
+								angle.attribute(forName: "angleID")?.stringValue ?? ""
+							guard activeAngles.contains(angleID) else { continue }
+						}
+						projectCount +=
+							(try? angle.nodes(forXPath: ".//" + dialogueClipXPath))?.count
+							?? 0
+					}
+				}
 				count = projectCount
 			case "asset-clip":
 				let role = el.attribute(forName: "audioRole")?.stringValue ?? ""
@@ -54,6 +76,24 @@ enum FCPXMLParser {
 					$0.attribute(forName: "id")?.stringValue == mediaId
 				}
 				count = (try? media?.nodes(forXPath: ".//" + dialogueClipXPath))?.count ?? 0
+			case "mc-clip":
+				let mediaId = el.attribute(forName: "ref")?.stringValue ?? ""
+				let media = resources?.elements(forName: "media").first {
+					$0.attribute(forName: "id")?.stringValue == mediaId
+				}
+				let multicam = media?.elements(forName: "multicam").first
+				let activeAngles = audioAngleIDs(from: el)
+				var mcCount = 0
+				for angle in multicam?.elements(forName: "mc-angle") ?? [] {
+					if let activeAngles {
+						let angleID =
+							angle.attribute(forName: "angleID")?.stringValue ?? ""
+						guard activeAngles.contains(angleID) else { continue }
+					}
+					mcCount +=
+						(try? angle.nodes(forXPath: ".//" + dialogueClipXPath))?.count ?? 0
+				}
+				count = mcCount
 			default:
 				count = 0
 			}
@@ -127,8 +167,11 @@ enum FCPXMLParser {
 		let topRefClips =
 			doc.rootElement()?.children?.compactMap { $0 as? XMLElement }
 			.filter { $0.name == "ref-clip" } ?? []
+		let topMcClips =
+			doc.rootElement()?.children?.compactMap { $0 as? XMLElement }
+			.filter { $0.name == "mc-clip" } ?? []
 
-		// Resolve format ID: project sequence → direct clip → compound clip (ref-clip → media → sequence)
+		// Resolve format ID: project sequence → direct clip → compound clip → multicam clip
 		let formatId: String
 		if let id = seq?.attribute(forName: "format")?.stringValue {
 			formatId = id
@@ -141,6 +184,15 @@ enum FCPXMLParser {
 			}),
 			let mediaSeq = media.elements(forName: "sequence").first,
 			let id = mediaSeq.attribute(forName: "format")?.stringValue
+		{
+			formatId = id
+		} else if let mcClip = topMcClips.first,
+			let mediaId = mcClip.attribute(forName: "ref")?.stringValue,
+			let media = resources?.elements(forName: "media").first(where: {
+				$0.attribute(forName: "id")?.stringValue == mediaId
+			}),
+			let multicam = media.elements(forName: "multicam").first,
+			let id = multicam.attribute(forName: "format")?.stringValue
 		{
 			formatId = id
 		} else {
@@ -164,6 +216,8 @@ enum FCPXMLParser {
 				.reduce(0, +)
 		} else if let refClip = topRefClips.first {
 			duration = parseTime(refClip.attribute(forName: "duration")?.stringValue ?? "0s")
+		} else if let mcClip = topMcClips.first {
+			duration = parseTime(mcClip.attribute(forName: "duration")?.stringValue ?? "0s")
 		} else {
 			duration = 0
 		}
@@ -218,11 +272,15 @@ enum FCPXMLParser {
 		let resources = doc.rootElement()?.elements(forName: "resources").first
 
 		var mediaMap: [String: XMLElement] = [:]
+		var multicamMap: [String: XMLElement] = [:]
 		for media in resources?.elements(forName: "media") ?? [] {
-			guard let id = media.attribute(forName: "id")?.stringValue,
-				let seq = media.elements(forName: "sequence").first
-			else { continue }
-			mediaMap[id] = seq
+			guard let id = media.attribute(forName: "id")?.stringValue else { continue }
+			if let seq = media.elements(forName: "sequence").first {
+				mediaMap[id] = seq
+			}
+			if let multicam = media.elements(forName: "multicam").first {
+				multicamMap[id] = multicam
+			}
 		}
 
 		var clips: [AudioClip] = []
@@ -239,12 +297,12 @@ enum FCPXMLParser {
 				let tcStart = parseTime(seq.attribute(forName: "tcStart")?.stringValue ?? "0s")
 				walkElement(
 					spine, tcStart: tcStart, compound: nil, assets: assets, mediaMap: mediaMap,
-					into: &clips)
+					multicamMap: multicamMap, into: &clips)
 			case "ref-clip":
 				guard isEnabled(el) else { continue }
 				walkElement(
 					el, tcStart: 0, compound: nil, assets: assets, mediaMap: mediaMap,
-					into: &clips)
+					multicamMap: multicamMap, into: &clips)
 				if let mediaId = el.attribute(forName: "ref")?.stringValue,
 					let mediaSeq = mediaMap[mediaId],
 					let mediaSpine = mediaSeq.elements(forName: "spine").first
@@ -253,10 +311,39 @@ enum FCPXMLParser {
 						mediaSeq.attribute(forName: "tcStart")?.stringValue ?? "0s")
 					walkElement(
 						mediaSpine, tcStart: mediaTcStart, compound: nil, assets: assets,
-						mediaMap: mediaMap, into: &clips)
+						mediaMap: mediaMap, multicamMap: multicamMap, into: &clips)
+				}
+			case "mc-clip":
+				guard isEnabled(el),
+					let mediaId = el.attribute(forName: "ref")?.stringValue,
+					let multicam = multicamMap[mediaId]
+				else { continue }
+				let activeAngles = audioAngleIDs(from: el)
+				let mcTcStart = parseTime(
+					multicam.attribute(forName: "tcStart")?.stringValue ?? "0s")
+				let mcDuration = parseTime(
+					el.attribute(forName: "duration")?.stringValue ?? "0s")
+				let trimStart = parseTime(
+					el.attribute(forName: "start")?.stringValue
+						?? multicam.attribute(forName: "tcStart")?.stringValue ?? "0s")
+				let ctx = CompoundContext(
+					mainOffset: 0,
+					internalStart: trimStart - mcTcStart,
+					internalEnd: trimStart - mcTcStart + mcDuration,
+					tcStart: mcTcStart
+				)
+				for angle in multicam.elements(forName: "mc-angle") {
+					if let activeAngles {
+						let angleID =
+							angle.attribute(forName: "angleID")?.stringValue ?? ""
+						guard activeAngles.contains(angleID) else { continue }
+					}
+					walkElement(
+						angle, tcStart: mcTcStart, compound: ctx, assets: assets,
+						mediaMap: mediaMap, multicamMap: multicamMap, into: &clips)
 				}
 			case "asset-clip":
-				if isEnabled(el), isDialogue(el) {
+				if isEnabled(el), isDialogue(el), !isMuted(el) {
 					clips.append(makeClip(from: el, assets: assets, tcStart: nil))
 				}
 			default:
@@ -288,6 +375,49 @@ enum FCPXMLParser {
 		}
 	}
 
+	private static func isMuted(_ el: XMLElement) -> Bool {
+		guard let adjustVolume = el.elements(forName: "adjust-volume").first else {
+			return false
+		}
+
+		if let param = adjustVolume.elements(forName: "param").first(where: {
+			$0.attribute(forName: "name")?.stringValue == "amount"
+		}) {
+			let keyframes =
+				param.elements(forName: "keyframeAnimation").first?
+				.elements(forName: "keyframe") ?? []
+			if !keyframes.isEmpty {
+				return keyframes.allSatisfy {
+					parseVolume($0.attribute(forName: "value")?.stringValue ?? "0dB") <= -96
+				}
+			}
+		}
+
+		return parseVolume(
+			adjustVolume.attribute(forName: "amount")?.stringValue ?? "0dB") <= -96
+	}
+
+	private static func parseVolume(_ s: String) -> Double {
+		Double(s.replacingOccurrences(of: "dB", with: "")) ?? 0
+	}
+
+	/// Returns the set of angle IDs providing audio in a multicam clip,
+	/// or nil when all angles should be used (no explicit mc-source selection).
+	private static func audioAngleIDs(from mcClip: XMLElement) -> Set<String>? {
+		let sources = mcClip.elements(forName: "mc-source")
+		guard !sources.isEmpty else { return nil }
+		var ids = Set<String>()
+		for source in sources {
+			let enable = source.attribute(forName: "srcEnable")?.stringValue ?? "all"
+			if enable == "all" || enable == "audio" {
+				if let angleID = source.attribute(forName: "angleID")?.stringValue {
+					ids.insert(angleID)
+				}
+			}
+		}
+		return ids.isEmpty ? nil : ids
+	}
+
 	// Carries the mapping context when walking inside a compound clip's media spine.
 	// mainOffset: where the ref-clip starts in the main timeline
 	// internalStart/End: the trimmed window in the compound clip's time space (tcStart-relative)
@@ -302,53 +432,56 @@ enum FCPXMLParser {
 	private static func walkElement(
 		_ el: XMLElement, tcStart: Double, compound: CompoundContext?,
 		assets: [String: AssetResource], mediaMap: [String: XMLElement],
+		multicamMap: [String: XMLElement],
 		into clips: inout [AudioClip]
 	) {
 		for child in el.children?.compactMap({ $0 as? XMLElement }) ?? [] {
 			if child.name == "asset-clip", isEnabled(child), isDialogue(child) {
-				if let ctx = compound {
-					// Position in compound's time space (tcStart-relative), walking the full
-					// parent chain so nested containers (e.g. video → secondary spine → clip)
-					// are resolved correctly rather than reading just the raw offset attribute.
-					let internalOffset = projectTime(of: child, tcStart: ctx.tcStart)
-					let clipDur = parseTime(
-						child.attribute(forName: "duration")?.stringValue ?? "0s")
-					// Skip if entirely outside the trimmed window
-					guard internalOffset < ctx.internalEnd,
-						internalOffset + clipDur > ctx.internalStart
-					else { continue }
-					// Clamp to the visible window
-					let visibleStart = max(internalOffset, ctx.internalStart)
-					let visibleEnd = min(internalOffset + clipDur, ctx.internalEnd)
-					let mainStart = ctx.mainOffset + (visibleStart - ctx.internalStart)
-					let ref = child.attribute(forName: "ref")?.stringValue
-					let asset = ref.flatMap { assets[$0] }
-					let clipSourceStart = parseTime(
-						child.attribute(forName: "start")?.stringValue ?? "0s")
-					clips.append(
-						AudioClip(
-							name: child.attribute(forName: "name")?.stringValue ?? "clip",
-							start: mainStart,
-							end: mainStart + (visibleEnd - visibleStart),
-							sourceStart: clipSourceStart - (asset?.mediaStart ?? 0),
-							sourceDuration: visibleEnd - visibleStart,
-							url: asset?.url,
-							bookmark: asset?.bookmark,
-							isCompound: true
-						))
-				} else {
-					clips.append(makeClip(from: child, assets: assets, tcStart: tcStart))
+				if !isMuted(child) {
+					if let ctx = compound {
+						let internalOffset = projectTime(of: child, tcStart: ctx.tcStart)
+						let clipDur = parseTime(
+							child.attribute(forName: "duration")?.stringValue ?? "0s")
+						guard internalOffset < ctx.internalEnd,
+							internalOffset + clipDur > ctx.internalStart
+						else {
+							walkElement(
+								child, tcStart: tcStart, compound: compound, assets: assets,
+								mediaMap: mediaMap, multicamMap: multicamMap, into: &clips)
+							continue
+						}
+						let visibleStart = max(internalOffset, ctx.internalStart)
+						let visibleEnd = min(internalOffset + clipDur, ctx.internalEnd)
+						let mainStart = ctx.mainOffset + (visibleStart - ctx.internalStart)
+						let ref = child.attribute(forName: "ref")?.stringValue
+						let asset = ref.flatMap { assets[$0] }
+						let clipSourceStart = parseTime(
+							child.attribute(forName: "start")?.stringValue ?? "0s")
+						clips.append(
+							AudioClip(
+								name: child.attribute(forName: "name")?.stringValue ?? "clip",
+								start: mainStart,
+								end: mainStart + (visibleEnd - visibleStart),
+								sourceStart: clipSourceStart - (asset?.mediaStart ?? 0),
+								sourceDuration: visibleEnd - visibleStart,
+								url: asset?.url,
+								bookmark: asset?.bookmark,
+								isCompound: true
+							))
+					} else {
+						clips.append(makeClip(from: child, assets: assets, tcStart: tcStart))
+					}
 				}
-				// Recurse into asset-clip to find nested audio clips
+				// Recurse into asset-clip to find nested audio clips even if muted
 				walkElement(
 					child, tcStart: tcStart, compound: compound, assets: assets,
-					mediaMap: mediaMap, into: &clips)
+					mediaMap: mediaMap, multicamMap: multicamMap, into: &clips)
 			} else if child.name == "ref-clip", isEnabled(child) {
 				// Connected clips (XML children of the ref-clip) are in the main XML tree;
 				// projectTime works for them as-is.
 				walkElement(
 					child, tcStart: tcStart, compound: nil, assets: assets, mediaMap: mediaMap,
-					into: &clips)
+					multicamMap: multicamMap, into: &clips)
 				// Recurse into compound clip's media spine with explicit position + trim context.
 				if let mediaId = child.attribute(forName: "ref")?.stringValue,
 					let mediaSeq = mediaMap[mediaId],
@@ -369,12 +502,46 @@ enum FCPXMLParser {
 					)
 					walkElement(
 						mediaSpine, tcStart: mediaTcStart, compound: ctx, assets: assets,
-						mediaMap: mediaMap, into: &clips)
+						mediaMap: mediaMap, multicamMap: multicamMap, into: &clips)
 				}
+			} else if child.name == "mc-clip", isEnabled(child) {
+				if let mediaId = child.attribute(forName: "ref")?.stringValue,
+					let multicam = multicamMap[mediaId]
+				{
+					let activeAngles = audioAngleIDs(from: child)
+					let mcTcStart = parseTime(
+						multicam.attribute(forName: "tcStart")?.stringValue ?? "0s")
+					let trimStart = parseTime(
+						child.attribute(forName: "start")?.stringValue
+							?? multicam.attribute(forName: "tcStart")?.stringValue ?? "0s")
+					let mcDuration = parseTime(
+						child.attribute(forName: "duration")?.stringValue ?? "0s")
+					let mcMainOffset = projectTime(of: child, tcStart: tcStart)
+					let ctx = CompoundContext(
+						mainOffset: mcMainOffset,
+						internalStart: trimStart - mcTcStart,
+						internalEnd: trimStart - mcTcStart + mcDuration,
+						tcStart: mcTcStart
+					)
+					for angle in multicam.elements(forName: "mc-angle") {
+						if let activeAngles {
+							let angleID =
+								angle.attribute(forName: "angleID")?.stringValue ?? ""
+							guard activeAngles.contains(angleID) else { continue }
+						}
+						walkElement(
+							angle, tcStart: mcTcStart, compound: ctx, assets: assets,
+							mediaMap: mediaMap, multicamMap: multicamMap, into: &clips)
+					}
+				}
+				// Walk mc-clip's own children for connected clips
+				walkElement(
+					child, tcStart: tcStart, compound: compound, assets: assets,
+					mediaMap: mediaMap, multicamMap: multicamMap, into: &clips)
 			} else {
 				walkElement(
 					child, tcStart: tcStart, compound: compound, assets: assets,
-					mediaMap: mediaMap, into: &clips)
+					mediaMap: mediaMap, multicamMap: multicamMap, into: &clips)
 			}
 		}
 	}
@@ -434,6 +601,7 @@ enum FCPXMLParser {
 		let isPrimaryContainer =
 			parent.name == "sequence"
 			|| (parent.name == "spine" && parent.attribute(forName: "lane") == nil)
+			|| parent.name == "mc-angle"
 		guard !isPrimaryContainer else { return offset - tcStart }
 		// Secondary storylines (spine with lane) have storyline-relative offsets,
 		// so continue climbing like any other container.

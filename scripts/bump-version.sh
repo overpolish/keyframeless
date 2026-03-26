@@ -55,7 +55,20 @@ bump_fxplug() {
   done
 }
 
+bump_pkgproj() {
+  local identifier="$1"
+  local pkgproj="Distribution/Keyframeless.pkgproj"
+  echo "  $pkgproj ($identifier)"
+  perl -i -0pe \
+    "s|(<key>IDENTIFIER</key>\s*<string>\Q$identifier\E</string>.*?<key>VERSION</key>\s*<string>)[^<]*(</string>)|\${1}$VERSION\${2}|s" \
+    "$ROOT/$pkgproj"
+}
+
 bump_manifest() {
+  if [[ "$VERSION" == *-* ]]; then
+    echo "  manifest.json skipped (pre-release)"
+    return
+  fi
   python3 -c "
 import json, sys
 key_path, value = sys.argv[1], sys.argv[2]
@@ -78,6 +91,7 @@ case "$COMPONENT" in
     bump_plist "MotionBlur/MotionBlur/Wrapper Application/Info.plist"
     bump_plist "MotionBlur/MotionBlur/Plugin/Info.plist"
     bump_fxplug "MotionBlur/MotionBlur/Plugin/Info.plist"
+    bump_pkgproj "co.overpolish.keyframeless.MotionBlur"
     bump_manifest "motionblur" "$VERSION"
     ;;
 
@@ -86,6 +100,7 @@ case "$COMPONENT" in
     bump_plist "Rounded/Rounded/Wrapper Application/Info.plist"
     bump_plist "Rounded/Rounded/Plugin/Info.plist"
     bump_fxplug "Rounded/Rounded/Plugin/Info.plist"
+    bump_pkgproj "co.overpolish.keyframeless.Rounded"
     bump_manifest "rounded" "$VERSION"
     ;;
 
@@ -98,6 +113,7 @@ case "$COMPONENT" in
     sed -i '' \
       "s/MARKETING_VERSION = $current;/MARKETING_VERSION = $VERSION;/g" \
       "$ROOT/$proj"
+    bump_pkgproj "co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP"
     bump_manifest "keyframelessx" "$VERSION"
     ;;
 
