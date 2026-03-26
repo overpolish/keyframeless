@@ -57,39 +57,77 @@
 
 #pragma mark - Shared
 
-+ (NSColor *)primary {
++ (NSColor *)transparent {
+  return [NSColor colorWithRed:0x00 / 255.0
+                         green:0x00 / 255.0
+                          blue:0x00 / 255.0
+                         alpha:0.0f];
+}
+
++ (NSColor *)accent {
+  // Lighter than the shade as used in Motion/FCP for better accessibility
+  return [NSColor colorWithRed:0x8B / 255.0
+                         green:0x8B / 255.0
+                          blue:0xF0 / 255.0
+                         alpha:1.0];
+}
+
++ (NSColor *)warning {
+  return [NSColor colorWithRed:0xFF / 255.0
+                         green:0xCC / 255.0
+                          blue:0x02 / 255.0
+                         alpha:1.0];
+}
+
++ (NSColor *)error {
+  return [NSColor colorWithRed:0xFB / 255.0
+                         green:0x2C / 255.0
+                          blue:0x36 / 255.0
+                         alpha:1.0];
+}
+
+#pragma mark - OSC
+
++ (NSColor *)arcFill {
+  return [NSColor colorWithRed:0xC1 / 255.0
+                         green:0xC1 / 255.0
+                          blue:0xC1 / 255.0
+                         alpha:1.0f];
+}
+
++ (NSColor *)arcStroke {
+  return [NSColor colorWithRed:0x00 / 255.0
+                         green:0x00 / 255.0
+                          blue:0x00 / 255.0
+                         alpha:0.8f];
+}
+
++ (NSColor *)pointFill {
   return [NSColor colorWithRed:0xB3 / 255.0
                          green:0xB3 / 255.0
                           blue:0xB3 / 255.0
                          alpha:0.65f];
 }
 
-+ (NSColor *)outline {
++ (NSColor *)pointStroke {
   return [NSColor colorWithRed:0x00 / 255.0
                          green:0x00 / 255.0
                           blue:0x00 / 255.0
                          alpha:0.8f];
 }
 
-+ (NSColor *)hover {
++ (NSColor *)pointFillHover {
   return [NSColor colorWithRed:0xB3 / 255.0
                          green:0xB3 / 255.0
                           blue:0xB3 / 255.0
                          alpha:0.8f];
 }
 
-+ (NSColor *)active {
++ (NSColor *)pointFillActive {
   return [NSColor colorWithRed:0xB3 / 255.0
                          green:0xB3 / 255.0
                           blue:0xB3 / 255.0
                          alpha:0.95f];
-}
-
-+ (NSColor *)transparent {
-  return [NSColor colorWithRed:0x00 / 255.0
-                         green:0x00 / 255.0
-                          blue:0x00 / 255.0
-                         alpha:0.0f];
 }
 
 + (NSColor *)ringIdleFill {
@@ -158,7 +196,8 @@
 
 - (NSColor *)shiftedHueBy:(CGFloat)amount {
   NSColor *hsb = [self colorUsingColorSpace:NSColorSpace.deviceRGBColorSpace];
-  if (!hsb) return self;
+  if (!hsb)
+    return self;
   CGFloat h, s, b, a;
   [hsb getHue:&h saturation:&s brightness:&b alpha:&a];
   return [NSColor colorWithHue:fmod(h + amount + 1.0, 1.0)
@@ -169,7 +208,8 @@
 
 - (NSColor *)compound {
   NSColor *hsb = [self colorUsingColorSpace:NSColorSpace.deviceRGBColorSpace];
-  if (!hsb) return self;
+  if (!hsb)
+    return self;
   CGFloat h, s, b, a;
   [hsb getHue:&h saturation:&s brightness:&b alpha:&a];
   return [NSColor colorWithHue:fmod(h + 0.333 + 1.0, 1.0)
@@ -179,7 +219,7 @@
 }
 
 - (simd_float4)simdFloat4 {
-  NSColor *rgb = [self colorUsingColorSpace:NSColorSpace.genericRGBColorSpace];
+  NSColor *rgb = [self colorUsingColorSpace:NSColorSpace.deviceRGBColorSpace];
   return (simd_float4){
       (float)rgb.redComponent,
       (float)rgb.greenComponent,

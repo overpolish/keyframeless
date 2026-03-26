@@ -27,10 +27,6 @@
     _apiManager = apiManager;
     _isHovered = NO;
     _isDragging = NO;
-    _primaryColor = [[NSColor primary] simdFloat4];
-    _outlineColor = [[NSColor outline] simdFloat4];
-    _hoverColor = [[NSColor hover] simdFloat4];
-    _activeColor = [[NSColor active] simdFloat4];
   }
   return self;
 }
@@ -153,6 +149,21 @@
                                            id<MTLRenderCommandEncoder> encoder,
                                            CGPoint metalPosition,
                                            simd_uint2 viewportSize))commands {
+  [self encodeRenderCommandsForDestinationImage:destinationImage
+                                 canvasPosition:canvasPosition
+                               clearDestination:YES
+                                       commands:commands];
+}
+
+- (void)
+    encodeRenderCommandsForDestinationImage:(FxImageTile *)destinationImage
+                             canvasPosition:(CGPoint)canvasPosition
+                           clearDestination:(BOOL)clear
+                                   commands:
+                                       (void (^)(
+                                           id<MTLRenderCommandEncoder> encoder,
+                                           CGPoint metalPosition,
+                                           simd_uint2 viewportSize))commands {
   KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
 
   id<MTLDevice> gpuDevice =
@@ -172,9 +183,17 @@
 
   id<MTLTexture> outputTexture =
       [destinationImage metalTextureForDevice:gpuDevice];
-  MTLRenderPassDescriptor *rpd = [KKRenderPrimitives
-      createClearRenderPassWithTexture:outputTexture
-                            clearColor:MTLClearColorMake(0, 0, 0, 0)];
+
+  MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
+  rpd.colorAttachments[0].texture = outputTexture;
+  rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+  if (clear) {
+    rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
+    rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+  } else {
+    rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+  }
+
   id<MTLRenderCommandEncoder> encoder =
       [commandBuffer renderCommandEncoderWithDescriptor:rpd];
 

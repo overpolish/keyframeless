@@ -5,7 +5,9 @@
 
 #import "KKPointOSC.h"
 #import "../../Style/KKTokens.h"
+#import "../../Style/NSColor+KKColors.h"
 #import "../Base/KKOSCShaderTypes.h"
+#include <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 
@@ -48,10 +50,12 @@ static NSString *kPointOSCPluginID = @"co.overpolish.keyframelesskit.PointOSC";
 
   float outerRadiusPixels = _oscRadius + _outlineWidth;
 
-  KKPointOSCParams params = {.outlineWidth = _outlineWidth / outerRadiusPixels,
-                             .fillColor = [self colorForHovered:isHovered
-                                                         active:isActive],
-                             .outlineColor = self.outlineColor};
+  KKPointOSCParams params = {
+      .outlineWidth = _outlineWidth / outerRadiusPixels,
+      .fillColor = isActive    ? [[NSColor pointFillActive] simdFloat4]
+                   : isHovered ? [[NSColor pointFillHover] simdFloat4]
+                               : [[NSColor pointFill] simdFloat4],
+      .strokeColor = [[NSColor pointStroke] simdFloat4]};
 
   [self
       encodeRenderCommandsForDestinationImage:destinationImage

@@ -16,7 +16,7 @@ typedef struct KKArcOSCParams {
     float plusFillHalfWidth;
     float plusOutlineWidth;
     vector_float4 fillColor;
-    vector_float4 outlineColor;
+    vector_float4 strokeColor;
 } KKArcOSCParams;
 
 typedef struct KKRingOSCParams {
@@ -24,13 +24,13 @@ typedef struct KKRingOSCParams {
     float fillHalfWidth;
     float outlineWidth;
     vector_float4 fillColor;
-    vector_float4 outlineColor;
+    vector_float4 strokeColor;
 } KKRingOSCParams;
 
 typedef struct KKPointOSCParams {
     float outlineWidth;
     vector_float4 fillColor;
-    vector_float4 outlineColor;
+    vector_float4 strokeColor;
 } KKPointOSCParams;
 
 #ifdef __METAL_VERSION__
@@ -52,19 +52,19 @@ inline float kkLineAlpha(float distToLine, float halfWidth) {
 }
 
 /// Composites fill, outline, and divider colors with correct alpha handling.
-inline float4 kkOSCColor(float4 fillColor, float4 outlineColor, float outlineFactor, float dividerFactor,
+inline float4 kkOSCColor(float4 fillColor, float4 strokeColor, float outlineFactor, float dividerFactor,
                          float shapeAlpha) {
-    float4 premultOutline = float4(outlineColor.rgb * outlineColor.a, outlineColor.a);
+    float4 premultOutline = float4(strokeColor.rgb * strokeColor.a, strokeColor.a);
     float blendFactor = max(outlineFactor, dividerFactor);
     float4 color = mix(fillColor, premultOutline, outlineFactor);
     color = mix(color, premultOutline, dividerFactor);
-    color.a = shapeAlpha * mix(fillColor.a, outlineColor.a, blendFactor);
+    color.a = shapeAlpha * mix(fillColor.a, strokeColor.a, blendFactor);
     return color;
 }
 
 /// Composites fill and outline colors with correct alpha handling.
-inline float4 kkOSCColor(float4 fillColor, float4 outlineColor, float outlineFactor, float shapeAlpha) {
-    return kkOSCColor(fillColor, outlineColor, outlineFactor, 0.0, shapeAlpha);
+inline float4 kkOSCColor(float4 fillColor, float4 strokeColor, float outlineFactor, float shapeAlpha) {
+    return kkOSCColor(fillColor, strokeColor, outlineFactor, 0.0, shapeAlpha);
 }
 
 #endif
