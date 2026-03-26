@@ -42,16 +42,17 @@ struct AudioEditView: View {
 			rows = AudioEditRowBuilder.buildRows(
 				clips: model.audioClips, format: model.projectFormat)
 			updateSRTOverlaps()
+			// On non-text-field clicks, redirect first responder to the timeline's
+			// AxisDocumentView so spacebar can stop playback. Must happen during a
+			// real mouseDown — see TimelineFirstResponder comment for details.
 			clickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
-				guard let window = event.window,
-					window.firstResponder is NSTextView || window.firstResponder is NSTextField
-				else { return event }
+				guard let window = event.window else { return event }
 				let hitView = window.contentView?.hitTest(event.locationInWindow)
 				let isEditableText =
 					hitView is NSTextField
 					|| (hitView as? NSTextView)?.isEditable == true
 				if !isEditableText {
-					window.makeFirstResponder(nil)
+					TimelineFirstResponder.claim(in: window)
 				}
 				return event
 			}
