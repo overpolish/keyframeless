@@ -43,22 +43,38 @@ struct HighlightedSentence: View {
 		return result
 	}
 
+	private func splitPunctuation(_ text: String) -> (word: String, trailing: String) {
+		let reversed = String(text.reversed())
+		let punctuation = reversed.prefix(while: { $0.isPunctuation })
+		let word = String(text.dropLast(punctuation.count))
+		return (word, String(punctuation.reversed()))
+	}
+
 	private func attributedString(currentTime: Double) -> AttributedString {
 		var result = AttributedString()
 		for (i, word) in displayWords.enumerated() {
 			let trimmed = word.word.trimmingCharacters(in: .whitespaces)
-			var part = AttributedString(i > 0 ? " \(trimmed)" : trimmed)
+			if i > 0 {
+				result.append(AttributedString(" "))
+			}
+			let (core, trailing) = splitPunctuation(trimmed)
+			var part = AttributedString(core)
 			let isActive = currentTime >= Double(word.start) && currentTime < Double(word.end)
 			if ProfanityFilter.isProfane(trimmed, language: language) {
-				part.foregroundColor = Color.kkError
 				if isActive {
+					part.backgroundColor = Color.kkError
 					part.font = .system(size: 13)
+				} else {
+					part.foregroundColor = Color.kkError
 				}
 			} else if isActive {
-				part.foregroundColor = Color.kkAccent
+				part.backgroundColor = Color.kkAccent
 				part.font = .system(size: 13)
 			}
 			result.append(part)
+			if !trailing.isEmpty {
+				result.append(AttributedString(trailing))
+			}
 		}
 		return result
 	}
