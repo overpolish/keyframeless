@@ -28,7 +28,7 @@ class AudioProcessingCoordinator: ObservableObject {
 		let selected = model.selectedClips
 		let language = whisperManager.selectedLanguage
 		let translateToEnglish = whisperManager.translateToEnglish
-		let hotWords = whisperManager.hotWords
+		let terms = whisperManager.terms
 
 		guard !selected.isEmpty else {
 			withAnimation(.easeOut(duration: 0.25)) {
@@ -60,7 +60,7 @@ class AudioProcessingCoordinator: ObservableObject {
 					modelVariant: modelVariant,
 					language: language,
 					translateToEnglish: translateToEnglish,
-					hotWords: hotWords,
+					terms: terms,
 					onProgress: { progress in
 						Task { @MainActor [weak self] in
 							guard let self else { return }
