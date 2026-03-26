@@ -18,6 +18,7 @@ struct AudioEditRow: Identifiable {
 	var sentenceEnd: Double = 0
 	var words: [TranscriptionStore.StoredWord] = []
 	var editedWords: [TranscriptionStore.StoredWord]?
+	var captionBreaks: [Int] = []
 }
 
 enum AudioEditRowBuilder {
@@ -53,6 +54,8 @@ enum AudioEditRowBuilder {
 						+ formatTimestamp(timelineEnd, format: format)
 					let edited = store.editedWords(
 						for: clip, sentenceStart: sentence.first!.start)
+					let breaks = store.captionBreakIndices(
+						for: clip, sentenceStart: sentence.first!.start)
 					result.append(
 						AudioEditRow(
 							id: nextID,
@@ -66,7 +69,8 @@ enum AudioEditRowBuilder {
 							sentenceStart: Double(sentence.first!.start),
 							sentenceEnd: Double(sentence.last!.end),
 							words: sentence,
-							editedWords: edited
+							editedWords: edited,
+							captionBreaks: breaks ?? []
 						))
 					nextID += 1
 				}

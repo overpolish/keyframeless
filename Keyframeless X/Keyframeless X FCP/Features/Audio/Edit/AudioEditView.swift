@@ -47,7 +47,10 @@ struct AudioEditView: View {
 					window.firstResponder is NSTextView || window.firstResponder is NSTextField
 				else { return event }
 				let hitView = window.contentView?.hitTest(event.locationInWindow)
-				if !(hitView is NSTextField || hitView is NSTextView) {
+				let isEditableText =
+					hitView is NSTextField
+					|| (hitView as? NSTextView)?.isEditable == true
+				if !isEditableText {
 					window.makeFirstResponder(nil)
 				}
 				return event
@@ -169,6 +172,14 @@ struct AudioEditView: View {
 												}) {
 													rows[idx].editedWords = editedWords
 												}
+											},
+											onBreakToggle: { rowID, breaks in
+												if let idx = rows.firstIndex(where: {
+													$0.id == rowID
+												}) {
+													rows[idx].captionBreaks = breaks
+												}
+												updateSRTOverlaps()
 											}
 										)
 									}
