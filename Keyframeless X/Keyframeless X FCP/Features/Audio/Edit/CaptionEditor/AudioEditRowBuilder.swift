@@ -78,6 +78,7 @@ enum AudioEditRowBuilder {
 	private static let sentenceEndChars = CharacterSet(charactersIn: ".!?")
 	private static let clauseBreakChars = CharacterSet(charactersIn: ".,;:!?")
 	private static let pauseThreshold: Float = 1.5
+	private static let softPauseThreshold: Float = 0.5
 	private static let minSentenceDuration: Float = 4.0
 	private static let maxDuration: Float = 7.0
 	private static let hardMaxDuration: Float = 10.0
@@ -91,11 +92,15 @@ enum AudioEditRowBuilder {
 		var current: [TranscriptionStore.StoredWord] = []
 
 		for word in words {
-			if let prev = current.last,
-				word.start - prev.end > pauseThreshold
-			{
-				sentences.append(current)
-				current = []
+			if let prev = current.last {
+				let gap = word.start - prev.end
+				let duration = prev.end - current.first!.start
+				if gap > pauseThreshold
+					|| (gap > softPauseThreshold && duration >= minSentenceDuration)
+				{
+					sentences.append(current)
+					current = []
+				}
 			}
 
 			current.append(word)
