@@ -329,7 +329,8 @@ private class AxisDocumentView: NSView {
 			playingIndex: audioPlayer?.playingIndex,
 			currentTime: audioPlayer?.currentTime,
 			labelForTime: labelForTime,
-			skipWaveforms: inLiveResize
+			skipWaveforms: inLiveResize,
+			dirtyRect: dirtyRect
 		)
 		renderer.draw(in: ctx, cachedClipRects: &cachedClipRects)
 	}
