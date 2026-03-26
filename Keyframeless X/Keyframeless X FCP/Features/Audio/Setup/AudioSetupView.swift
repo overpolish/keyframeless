@@ -14,7 +14,6 @@ struct AudioSetupView: View {
 	@State private var dropState: DropState = .idle
 	@State private var isTargeted = false
 	@State private var timelineLoadID = UUID()
-
 	enum DropState { case idle, denied, dropped }
 
 	var body: some View {

@@ -8,6 +8,30 @@ import Combine
 import KeyframelessKit
 import SwiftUI
 
+// Spacebar-to-stop in FCP workflow extensions:
+//
+// FCP intercepts key events at the host level. The extension's local event
+// monitors (NSEvent.addLocalMonitorForEvents) never receive keyDown unless a
+// native NSView has been made first responder through an actual user click.
+// Programmatic makeFirstResponder calls (e.g. in viewDidAppear) do NOT prime
+// the routing — only a real mouseDown on an NSView that accepts first responder
+// causes the system to start forwarding key events to the extension process.
+//
+// Solution: AxisDocumentView accepts first responder and overrides keyDown to
+// catch spacebar. On the setup page the user clicks the timeline directly, so
+// mouseDown makes it first responder naturally. On the edit page the user
+// clicks SwiftUI play buttons instead, so AudioEditView's click monitor calls
+// TimelineFirstResponder.claim() during the real mouseDown event to redirect
+// first responder to the timeline's AxisDocumentView.
+enum TimelineFirstResponder {
+	fileprivate static weak var view: NSView?
+
+	static func claim(in window: NSWindow?) {
+		guard let view, let window, view.window == window else { return }
+		window.makeFirstResponder(view)
+	}
+}
+
 struct TimelineAxisView: View {
 	let duration: Double
 	let format: FCPXMLParser.ProjectFormat?
@@ -80,6 +104,7 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 		scrollView.horizontalScrollElasticity = .allowed
 
 		let docView = AxisDocumentView()
+		TimelineFirstResponder.view = docView
 		docView.onMagnify = { delta, mouseX in
 			context.coordinator.handleMagnify(delta: delta, mouseX: mouseX, scrollView: scrollView)
 		}
@@ -223,6 +248,8 @@ private class AxisDocumentView: NSView {
 
 	private var trackingArea: NSTrackingArea?
 
+	// See TimelineFirstResponder comment for why this view handles keyboard events.
+	override var acceptsFirstResponder: Bool { true }
 	override var isFlipped: Bool { true }
 	override var wantsLayer: Bool {
 		get { true }
@@ -264,7 +291,18 @@ private class AxisDocumentView: NSView {
 		onMagnify?(1 + event.magnification, mouseX)
 	}
 
+	override func keyDown(with event: NSEvent) {
+		if event.keyCode == 49, AudioPlayer.isAnyPlaying {
+			AudioPlayer.stopAll()
+		} else {
+			super.keyDown(with: event)
+		}
+	}
+
 	override func mouseDown(with event: NSEvent) {
+		// Claiming first responder on click primes FCP's key event routing
+		// to the extension — see TimelineFirstResponder comment.
+		window?.makeFirstResponder(self)
 		let point = convert(event.locationInWindow, from: nil)
 		for entry in cachedClipRects.reversed() {
 			guard entry.rect.contains(point) else { continue }
