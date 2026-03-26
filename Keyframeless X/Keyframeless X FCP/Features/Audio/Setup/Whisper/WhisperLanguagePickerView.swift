@@ -5,7 +5,6 @@
 
 import KeyframelessKit
 import SwiftUI
-import WhisperKit
 
 struct WhisperLanguagePickerView: View {
 	@ObservedObject var manager: WhisperModelManager
@@ -13,20 +12,38 @@ struct WhisperLanguagePickerView: View {
 
 	private static let profanityLanguages = ProfanityFilter.availableLanguages
 
-	private static let sortedLanguages: [(name: String, code: String)] = {
-		var best: [String: String] = [:]
-		for (name, code) in Constants.languages {
-			if let existing = best[code] {
-				if name.count < existing.count { best[code] = name }
-			} else {
-				best[code] = name
-			}
-		}
-		return
-			best
-			.map { code, name in (name: name.capitalized, code: code) }
-			.sorted { $0.name < $1.name }
-	}()
+	private static let whisperLanguages: [String: String] = [
+		"af": "Afrikaans", "am": "Amharic", "ar": "Arabic", "as": "Assamese",
+		"az": "Azerbaijani", "ba": "Bashkir", "be": "Belarusian", "bg": "Bulgarian",
+		"bn": "Bengali", "bo": "Tibetan", "br": "Breton", "bs": "Bosnian",
+		"ca": "Catalan", "cs": "Czech", "cy": "Welsh", "da": "Danish",
+		"de": "German", "el": "Greek", "en": "English", "es": "Spanish",
+		"et": "Estonian", "eu": "Basque", "fa": "Persian", "fi": "Finnish",
+		"fo": "Faroese", "fr": "French", "gl": "Galician", "gu": "Gujarati",
+		"ha": "Hausa", "haw": "Hawaiian", "he": "Hebrew", "hi": "Hindi",
+		"hr": "Croatian", "ht": "Haitian", "hu": "Hungarian", "hy": "Armenian",
+		"id": "Indonesian", "is": "Icelandic", "it": "Italian", "ja": "Japanese",
+		"jw": "Javanese", "ka": "Georgian", "kk": "Kazakh", "km": "Khmer",
+		"kn": "Kannada", "ko": "Korean", "la": "Latin", "lb": "Luxembourgish",
+		"ln": "Lingala", "lo": "Lao", "lt": "Lithuanian", "lv": "Latvian",
+		"mg": "Malagasy", "mi": "Maori", "mk": "Macedonian", "ml": "Malayalam",
+		"mn": "Mongolian", "mr": "Marathi", "ms": "Malay", "mt": "Maltese",
+		"my": "Myanmar", "ne": "Nepali", "nl": "Dutch", "nn": "Nynorsk",
+		"no": "Norwegian", "oc": "Occitan", "pa": "Punjabi", "pl": "Polish",
+		"ps": "Pashto", "pt": "Portuguese", "ro": "Romanian", "ru": "Russian",
+		"sa": "Sanskrit", "sd": "Sindhi", "si": "Sinhala", "sk": "Slovak",
+		"sl": "Slovenian", "sn": "Shona", "so": "Somali", "sq": "Albanian",
+		"sr": "Serbian", "su": "Sundanese", "sv": "Swedish", "sw": "Swahili",
+		"ta": "Tamil", "te": "Telugu", "tg": "Tajik", "th": "Thai",
+		"tk": "Turkmen", "tl": "Tagalog", "tr": "Turkish", "tt": "Tatar",
+		"uk": "Ukrainian", "ur": "Urdu", "uz": "Uzbek", "vi": "Vietnamese",
+		"yi": "Yiddish", "yo": "Yoruba", "yue": "Cantonese", "zh": "Chinese",
+	]
+
+	private static let sortedLanguages: [(name: String, code: String)] =
+		whisperLanguages
+		.map { code, name in (name: name, code: code) }
+		.sorted { $0.name < $1.name }
 
 	private var filtered: [(name: String, code: String)] {
 		guard !search.isEmpty else { return Self.sortedLanguages }

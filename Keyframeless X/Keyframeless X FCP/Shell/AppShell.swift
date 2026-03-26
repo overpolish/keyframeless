@@ -67,6 +67,7 @@ struct AppShell: View {
 		.animation(.easeInOut(duration: 0.2), value: audioModel.isDraggingToFCP)
 		.allowsHitTesting(
 			audioModel.paramsModalTemplate == nil && audioModel.publishModalTemplate == nil
+				&& !processingCoordinator.isProcessing
 		)
 		.background(Color(nsColor: .windowBackground()))
 		.onAppear {
@@ -85,6 +86,7 @@ struct AppShell: View {
 				ProcessingOverlay(
 					statusLabel: processingCoordinator.statusLabel,
 					progress: processingCoordinator.progress,
+					estimatedTimeRemaining: processingCoordinator.estimatedTimeRemaining,
 					onCancel: { processingCoordinator.cancel() }
 				)
 				.transition(.opacity)
