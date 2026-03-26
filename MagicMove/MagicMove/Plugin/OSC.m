@@ -6,6 +6,9 @@
 #import "OSC.h"
 #import <FxPlug/FxPlugSDK.h>
 
+@interface KKArcOSC (FxOSC) <FxOnScreenControl_v4>
+@end
+
 #define CLAMP(x, lo, hi) MAX((lo), MIN((hi), (x)))
 
 static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
@@ -32,11 +35,23 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
   *center = CGPointMake((topRight.x + bottomLeft.x) / 2.0,
                         (topRight.y + bottomLeft.y) / 2.0);
   *minDim =
-      fminf(fabsf(topRight.x - bottomLeft.x), fabsf(topRight.y - bottomLeft.y));
+      fmin(fabs(topRight.x - bottomLeft.x), fabs(topRight.y - bottomLeft.y));
   return YES;
 }
 
-@implementation MagicMoveOSC
+@implementation MagicMoveOSC {
+  KKRingOSC *_ringOSC;
+  BOOL _ringIsHovered;
+  BOOL _ringIsDragging;
+}
+
+- (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
+  self = [super initWithAPIManager:apiManager];
+  if (self) {
+    _ringOSC = [[KKRingOSC alloc] initWithAPIManager:apiManager];
+  }
+  return self;
+}
 
 - (CGPoint)oscPositionAtTime:(CMTime)time {
   CGPoint center;
@@ -46,32 +61,109 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
   return center;
 }
 
+- (float)ringRadiusAtTime:(CMTime)time {
+  CGPoint center;
+  float minDim;
+  if (!getCenterAndMinDim(self.apiManager, &center, &minDim))
+    return 50.0f;
+  return minDim * 0.2f;
+}
+
+- (void)drawOSCWithWidth:(NSInteger)width
+                  height:(NSInteger)height
+              activePart:(NSInteger)activePart
+        destinationImage:(FxImageTile *)destinationImage
+                  atTime:(CMTime)time {
+  CGPoint position = [self oscPositionAtTime:time];
+
+  [self drawAtCanvasPosition:position
+                   isHovered:self.isHovered
+                    isActive:self.isDragging
+            destinationImage:destinationImage
+                      atTime:time];
+
+  _ringOSC.center = position;
+  _ringOSC.ringRadius = [self ringRadiusAtTime:time];
+  [_ringOSC drawAtCanvasPosition:position
+                       isHovered:_ringIsHovered
+                        isActive:_ringIsDragging
+                destinationImage:destinationImage
+                          atTime:time];
+}
+
+- (void)hitTestOSCAtMousePositionX:(double)positionX
+                    mousePositionY:(double)positionY
+                        activePart:(NSInteger *)activePart
+                            atTime:(CMTime)time {
+  _ringIsHovered = NO;
+
+  [super hitTestOSCAtMousePositionX:positionX
+                     mousePositionY:positionY
+                         activePart:activePart
+                             atTime:time];
+
+  _ringOSC.center = [self oscPositionAtTime:time];
+  _ringOSC.ringRadius = [self ringRadiusAtTime:time];
+  if ([_ringOSC hitTestAtMousePositionX:positionX
+                              positionY:positionY
+                                 atTime:time]) {
+    _ringIsHovered = YES;
+    *activePart = 2;
+  }
+}
+
+- (void)mouseDownAtPositionX:(double)positionX
+                   positionY:(double)positionY
+                  activePart:(NSInteger)activePart
+                   modifiers:(NSUInteger)modifiers
+                 forceUpdate:(BOOL *)forceUpdate
+                      atTime:(CMTime)time {
+  if (activePart == 2) {
+    _ringIsDragging = YES;
+    [_ringOSC updateCursorForMouseX:positionX positionY:positionY];
+    *forceUpdate = YES;
+  } else {
+    [super mouseDownAtPositionX:positionX
+                      positionY:positionY
+                     activePart:activePart
+                      modifiers:modifiers
+                    forceUpdate:forceUpdate
+                         atTime:time];
+  }
+}
+
 - (void)mouseDraggedAtPositionX:(double)positionX
                       positionY:(double)positionY
                      activePart:(NSInteger)activePart
                       modifiers:(NSUInteger)modifiers
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
-  if (activePart == 0)
-    return;
+  if (activePart == 2) {
+    [_ringOSC updateCursorForMouseX:positionX positionY:positionY];
+    *forceUpdate = YES;
+  } else {
+    [super mouseDraggedAtPositionX:positionX
+                         positionY:positionY
+                        activePart:activePart
+                         modifiers:modifiers
+                       forceUpdate:forceUpdate
+                            atTime:time];
+  }
+}
 
-  id<FxParameterSettingAPI_v5> paramSetAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!paramSetAPI)
-    return;
-
-  CGPoint center;
-  float minDim;
-  if (!getCenterAndMinDim(self.apiManager, &center, &minDim))
-    return;
-
-  double dx = positionX - center.x;
-  double dy = positionY - center.y;
-  double dist = sqrt(dx * dx + dy * dy);
-  double newRadius = CLAMP(dist / (minDim * 0.5) * 100.0, 0.0, 100.0);
-
-  [paramSetAPI setFloatValue:newRadius toParameter:1 atTime:time];
-  *forceUpdate = YES;
+- (void)mouseUpAtPositionX:(double)positionX
+                 positionY:(double)positionY
+                activePart:(NSInteger)activePart
+                 modifiers:(NSUInteger)modifiers
+               forceUpdate:(BOOL *)forceUpdate
+                    atTime:(CMTime)time {
+  _ringIsDragging = NO;
+  [super mouseUpAtPositionX:positionX
+                  positionY:positionY
+                 activePart:activePart
+                  modifiers:modifiers
+                forceUpdate:forceUpdate
+                     atTime:time];
 }
 
 @end

@@ -30,6 +30,13 @@
 + (NSColor *)active;
 + (NSColor *)transparent;
 
++ (NSColor *)ringIdleFill;
++ (NSColor *)ringIdleStroke;
++ (NSColor *)ringHoverFill;
++ (NSColor *)ringHoverStroke;
++ (NSColor *)ringActiveFill;
++ (NSColor *)ringActiveStroke;
+
 + (NSColor *)accent;
 + (NSColor *)warning;
 + (NSColor *)error;

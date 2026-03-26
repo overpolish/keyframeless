@@ -92,6 +92,48 @@
                          alpha:0.0f];
 }
 
++ (NSColor *)ringIdleFill {
+  return [NSColor colorWithRed:0xCE / 255.0
+                         green:0xCB / 255.0
+                          blue:0xCE / 255.0
+                         alpha:0xB1 / 255.0];
+}
+
++ (NSColor *)ringIdleStroke {
+  return [NSColor colorWithRed:0x1B / 255.0
+                         green:0x18 / 255.0
+                          blue:0x1D / 255.0
+                         alpha:0x9F / 255.0];
+}
+
++ (NSColor *)ringHoverFill {
+  return [NSColor colorWithRed:0xD0 / 255.0
+                         green:0xCA / 255.0
+                          blue:0xCD / 255.0
+                         alpha:0xB2 / 255.0];
+}
+
++ (NSColor *)ringHoverStroke {
+  return [NSColor colorWithRed:0x09 / 255.0
+                         green:0x07 / 255.0
+                          blue:0x0A / 255.0
+                         alpha:0xAD / 255.0];
+}
+
++ (NSColor *)ringActiveFill {
+  return [NSColor colorWithRed:0xFF / 255.0
+                         green:0xFF / 255.0
+                          blue:0xFF / 255.0
+                         alpha:1.0];
+}
+
++ (NSColor *)ringActiveStroke {
+  return [NSColor colorWithRed:0x00 / 255.0
+                         green:0x00 / 255.0
+                          blue:0x00 / 255.0
+                         alpha:1.0];
+}
+
 + (NSColor *)accent {
   // Lighter than the shade as used in Motion/FCP for better accessibility
   return [NSColor colorWithRed:0x8B / 255.0
