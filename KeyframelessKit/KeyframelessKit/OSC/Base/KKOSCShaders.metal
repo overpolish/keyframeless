@@ -75,6 +75,30 @@ fragment float4 KKArcOSCFragment(KKRasterizerData in [[stage_in]],
     return color;
 }
 
+/// Fragment shader for rendering a thin ring OSC control with fill and outline.
+fragment float4 KKRingOSCFragment(KKRasterizerData in [[stage_in]],
+                                  constant KKRingOSCParams *params [[buffer(KKOSCFragmentIndex_DrawColor)]]) {
+    float ringRadius = params->ringRadius;
+    float fillHalfWidth = params->fillHalfWidth;
+    float outlineWidth = params->outlineWidth;
+    float4 fillColor = float4(params->fillColor);
+    float4 outlineColor = float4(params->outlineColor);
+
+    float2 pos = in.textureCoordinate;
+    float dist = length(pos);
+
+    float ringDist = abs(dist - ringRadius);
+    float outerHalfWidth = fillHalfWidth + outlineWidth;
+
+    float shapeAlpha = kkEdgeAlpha(outerHalfWidth - ringDist);
+    if (shapeAlpha < 0.001)
+        discard_fragment();
+
+    float outlineFactor = 1.0 - kkEdgeAlpha(fillHalfWidth - ringDist);
+
+    return kkOSCColor(fillColor, outlineColor, outlineFactor, shapeAlpha);
+}
+
 /// Fragment shader for rendering a point/dot OSC control with outline and depth shadow.
 fragment float4 KKPointOSCFragment(KKRasterizerData in [[stage_in]],
                                    constant KKPointOSCParams *params [[buffer(KKOSCFragmentIndex_DrawColor)]]) {

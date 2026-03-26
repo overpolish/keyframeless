@@ -21,6 +21,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKPlugin.h>
 #import <KeyframelessKit/KKPointOSC.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
+#import <KeyframelessKit/KKRingOSC.h>
 #import <KeyframelessKit/KKSeparatorView.h>
 #import <KeyframelessKit/KKShaderTypes.h>
 #import <KeyframelessKit/KKTokens.h>

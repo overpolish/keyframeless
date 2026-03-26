@@ -19,6 +19,14 @@ typedef struct KKArcOSCParams {
     vector_float4 outlineColor;
 } KKArcOSCParams;
 
+typedef struct KKRingOSCParams {
+    float ringRadius;
+    float fillHalfWidth;
+    float outlineWidth;
+    vector_float4 fillColor;
+    vector_float4 outlineColor;
+} KKRingOSCParams;
+
 typedef struct KKPointOSCParams {
     float outlineWidth;
     vector_float4 fillColor;
