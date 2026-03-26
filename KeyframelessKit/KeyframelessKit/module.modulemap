@@ -1,0 +1,5 @@
+framework module KeyframelessKit {
+  umbrella header "KeyframelessKit.h"
+  export *
+  module * { export * }
+}

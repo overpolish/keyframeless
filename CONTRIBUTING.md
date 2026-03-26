@@ -44,3 +44,13 @@ xcode-build-server config -workspace Keyframeless.xcworkspace -scheme "Keyframel
 ```
 
 Re-run with a different scheme if you're editing files in that target. Then restart the language server.
+
+### "Module map file not found" error
+
+If clangd reports `Module map file '…/DerivedData/…/module.modulemap' not found`, the `.clangd` config has drifted to reference DerivedData-generated paths that don't exist yet. The fix is to keep a static `module.modulemap` in the source tree and point `.clangd` at that instead.
+
+`KeyframelessKit/KeyframelessKit/module.modulemap` already exists for this purpose. If `.clangd` ever regresses to a DerivedData path, update the `-fmodule-map-file` flag back to:
+
+```
+-fmodule-map-file=/path/to/repo/KeyframelessKit/KeyframelessKit/module.modulemap
+```
