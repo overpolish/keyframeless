@@ -43,12 +43,12 @@ struct AudioEditView: View {
 				clips: model.audioClips, format: model.projectFormat)
 			updateSRTOverlaps()
 			clickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
-				let location = event.locationInWindow
-				if let contentView = event.window?.contentView {
-					let hitView = contentView.hitTest(location)
-					if !(hitView is NSTextField || hitView is NSTextView) {
-						event.window?.makeFirstResponder(nil)
-					}
+				guard let window = event.window,
+					window.firstResponder is NSTextView || window.firstResponder is NSTextField
+				else { return event }
+				let hitView = window.contentView?.hitTest(event.locationInWindow)
+				if !(hitView is NSTextField || hitView is NSTextView) {
+					window.makeFirstResponder(nil)
 				}
 				return event
 			}

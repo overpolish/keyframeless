@@ -16,7 +16,6 @@ struct SentenceRow: View {
 	var onReset: (() -> Void)?
 
 	@State private var draft = ""
-	@FocusState private var isFocused: Bool
 
 	private var isEditing: Bool { editingRowID == row.id }
 
@@ -57,35 +56,25 @@ struct SentenceRow: View {
 	@ViewBuilder
 	private var sentenceContent: some View {
 		if isEditing {
-			TextField("", text: $draft, axis: .vertical)
-				.textFieldStyle(.plain)
-				.font(.system(size: 13))
-				.lineLimit(nil)
-				.fixedSize(horizontal: false, vertical: true)
-				.focused($isFocused)
-				.onAppear { isFocused = true }
-				.onKeyPress(phases: .down) { keyPress in
-					switch keyPress.key {
-					case .return:
-						saveEdit()
-						editingRowID = nil
-						return .handled
-					case .escape:
-						saveEdit()
-						editingRowID = nil
-						return .handled
-					case .tab:
-						saveEdit()
-						if keyPress.modifiers.contains(.shift) {
-							navigateToSentence(offset: -1)
-						} else {
-							navigateToSentence(offset: 1)
-						}
-						return .handled
-					default:
-						return .ignored
-					}
+			SentenceTextField(
+				text: $draft,
+				onCommit: {
+					saveEdit()
+					editingRowID = nil
+				},
+				onTab: {
+					saveEdit()
+					navigateToSentence(offset: 1)
+				},
+				onBackTab: {
+					saveEdit()
+					navigateToSentence(offset: -1)
+				},
+				onFocusLost: {
+					saveEdit()
+					editingRowID = nil
 				}
+			)
 		} else {
 			HighlightedSentence(
 				words: row.words,
@@ -115,5 +104,117 @@ struct SentenceRow: View {
 		let nextIndex = currentIndex + offset
 		guard sentenceRowIDs.indices.contains(nextIndex) else { return }
 		editingRowID = sentenceRowIDs[nextIndex]
+	}
+}
+
+private class SentenceTextView: NSTextView {
+	override var intrinsicContentSize: NSSize {
+		guard let container = textContainer, let layoutManager else {
+			return super.intrinsicContentSize
+		}
+		layoutManager.ensureLayout(for: container)
+		let rect = layoutManager.usedRect(for: container)
+		return NSSize(width: NSView.noIntrinsicMetric, height: ceil(rect.height))
+	}
+
+	override func didChangeText() {
+		super.didChangeText()
+		invalidateIntrinsicContentSize()
+	}
+
+	override func layout() {
+		super.layout()
+		invalidateIntrinsicContentSize()
+	}
+}
+
+private struct SentenceTextField: NSViewRepresentable {
+	@Binding var text: String
+	var onCommit: () -> Void
+	var onTab: () -> Void
+	var onBackTab: () -> Void
+	var onFocusLost: () -> Void = {}
+
+	func makeNSView(context: Context) -> SentenceTextView {
+		let textView = SentenceTextView()
+		textView.font = .systemFont(ofSize: 13)
+		textView.textContainerInset = .zero
+		textView.textContainer?.lineFragmentPadding = 0
+		textView.textContainer?.widthTracksTextView = true
+		textView.isRichText = false
+		textView.drawsBackground = false
+		textView.isEditable = true
+		textView.isSelectable = true
+		textView.isVerticallyResizable = true
+		textView.isHorizontallyResizable = false
+		textView.string = text
+		textView.delegate = context.coordinator
+		let accent = NSColor.controlAccentColor
+		textView.insertionPointColor = accent
+		textView.selectedTextAttributes = [
+			.backgroundColor: accent.withAlphaComponent(0.3)
+		]
+		DispatchQueue.main.async {
+			textView.window?.makeFirstResponder(textView)
+			let windowPoint = textView.window?.mouseLocationOutsideOfEventStream ?? .zero
+			let viewPoint = textView.convert(windowPoint, from: nil)
+			let index = textView.characterIndexForInsertion(at: viewPoint)
+			textView.setSelectedRange(NSRange(location: index, length: 0))
+		}
+		return textView
+	}
+
+	func updateNSView(_ textView: SentenceTextView, context: Context) {
+		if textView.string != text {
+			textView.string = text
+		}
+	}
+
+	func makeCoordinator() -> Coordinator {
+		Coordinator(self)
+	}
+
+	class Coordinator: NSObject, NSTextViewDelegate {
+		var parent: SentenceTextField
+		var handledByCommand = false
+
+		init(_ parent: SentenceTextField) {
+			self.parent = parent
+		}
+
+		func textDidChange(_ notification: Notification) {
+			guard let textView = notification.object as? NSTextView else { return }
+			parent.text = textView.string
+		}
+
+		func textDidEndEditing(_ notification: Notification) {
+			if !handledByCommand {
+				parent.onFocusLost()
+			}
+			handledByCommand = false
+		}
+
+		func textView(
+			_ textView: NSTextView, doCommandBy commandSelector: Selector
+		) -> Bool {
+			if commandSelector == #selector(NSResponder.insertNewline(_:))
+				|| commandSelector == #selector(NSResponder.cancelOperation(_:))
+			{
+				handledByCommand = true
+				parent.onCommit()
+				return true
+			}
+			if commandSelector == #selector(NSResponder.insertTab(_:)) {
+				handledByCommand = true
+				parent.onTab()
+				return true
+			}
+			if commandSelector == #selector(NSResponder.insertBacktab(_:)) {
+				handledByCommand = true
+				parent.onBackTab()
+				return true
+			}
+			return false
+		}
 	}
 }

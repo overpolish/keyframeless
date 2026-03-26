@@ -16,6 +16,7 @@
   },
   "cSpell.words": [
     "ANIMATABLE",
+    "argmaxinc",
     "autoreleasepool",
     "autoreleasing",
     "autoresizing",
@@ -26,6 +27,7 @@
     "CGHID",
     "checkmark",
     "clipspace",
+    "coreml",
     "dealloc",
     "exclamationmark",
     "fabs",
@@ -35,7 +37,9 @@
     "fmax",
     "fmin",
     "fwidth",
+    "ggml",
     "grawlix",
+    "huggingface",
     "ifdef",
     "instancetype",
     "interp",
@@ -92,6 +96,7 @@
     "ushort",
     "uturn",
     "viewport",
+    "whisperkit",
     "xcodeproj",
     "xcworkspace",
     "xmark"

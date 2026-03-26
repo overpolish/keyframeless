@@ -87,6 +87,8 @@ private struct IntegerFieldRepresentable: NSViewRepresentable {
 }
 
 class AccentTextField: NSTextField {
+	override var canBecomeKeyView: Bool { false }
+
 	override func becomeFirstResponder() -> Bool {
 		let result = super.becomeFirstResponder()
 		if result,
