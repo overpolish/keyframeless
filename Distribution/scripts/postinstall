@@ -10,6 +10,7 @@ for TEMPLATE_TYPE_DIR in Effects.localized Generators.localized Titles.localized
     if [ -d "./$TEMPLATE_TYPE_DIR" ]; then
         DEST_DIR="$MOTION_TEMPLATES_BASE/$TEMPLATE_TYPE_DIR"
         mkdir -p "$DEST_DIR"
+        chown "$CURRENT_USER:staff" "$MOTION_TEMPLATES_BASE"
         chown "$CURRENT_USER:staff" "$DEST_DIR"
         cp -R "./$TEMPLATE_TYPE_DIR/"* "$DEST_DIR/"
         chown -R "$CURRENT_USER:staff" "$DEST_DIR"
