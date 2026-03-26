@@ -16,7 +16,7 @@ struct SentenceRow: View {
 	var onReset: (() -> Void)?
 
 	@State private var draft = ""
-	@State private var contentHeight: CGFloat?
+	@FocusState private var isFocused: Bool
 
 	private var isEditing: Bool { editingRowID == row.id }
 
@@ -57,21 +57,35 @@ struct SentenceRow: View {
 	@ViewBuilder
 	private var sentenceContent: some View {
 		if isEditing {
-			SentenceTextField(
-				draft: $draft,
-				onCommit: {
-					saveEdit()
-					editingRowID = nil
-				},
-				onTab: {
-					saveEdit()
-					navigateToSentence(offset: 1)
-				},
-				onShiftTab: {
-					saveEdit()
-					navigateToSentence(offset: -1)
-				})
-				.frame(minHeight: contentHeight, alignment: .top)
+			TextField("", text: $draft, axis: .vertical)
+				.textFieldStyle(.plain)
+				.font(.system(size: 13))
+				.lineLimit(nil)
+				.fixedSize(horizontal: false, vertical: true)
+				.focused($isFocused)
+				.onAppear { isFocused = true }
+				.onKeyPress(phases: .down) { keyPress in
+					switch keyPress.key {
+					case .return:
+						saveEdit()
+						editingRowID = nil
+						return .handled
+					case .escape:
+						saveEdit()
+						editingRowID = nil
+						return .handled
+					case .tab:
+						saveEdit()
+						if keyPress.modifiers.contains(.shift) {
+							navigateToSentence(offset: -1)
+						} else {
+							navigateToSentence(offset: 1)
+						}
+						return .handled
+					default:
+						return .ignored
+					}
+				}
 		} else {
 			HighlightedSentence(
 				words: row.words,
@@ -80,10 +94,6 @@ struct SentenceRow: View {
 					? player.currentTime : nil,
 				language: AudioSetupSettings.shared.selectedLanguage
 			)
-			.background(GeometryReader { geo in
-				Color.clear.preference(key: ContentHeightKey.self, value: geo.size.height)
-			})
-			.onPreferenceChange(ContentHeightKey.self) { contentHeight = $0 }
 			.onTapGesture {
 				draft = draftText
 				editingRowID = row.id
@@ -105,101 +115,5 @@ struct SentenceRow: View {
 		let nextIndex = currentIndex + offset
 		guard sentenceRowIDs.indices.contains(nextIndex) else { return }
 		editingRowID = sentenceRowIDs[nextIndex]
-	}
-}
-
-struct SentenceTextField: NSViewRepresentable {
-	@Binding var draft: String
-	var onCommit: () -> Void
-	var onTab: () -> Void = {}
-	var onShiftTab: () -> Void = {}
-
-	func makeNSView(context: Context) -> NSTextField {
-		let field = NSTextField()
-		field.isBordered = false
-		field.drawsBackground = false
-		field.font = .systemFont(ofSize: 13)
-		field.focusRingType = .none
-		field.lineBreakMode = .byWordWrapping
-		field.cell?.wraps = true
-		field.cell?.isScrollable = false
-		field.maximumNumberOfLines = 0
-		field.setContentHuggingPriority(.defaultLow, for: .vertical)
-		field.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
-		field.delegate = context.coordinator
-		field.stringValue = draft
-		DispatchQueue.main.async {
-			field.window?.makeFirstResponder(field)
-			if let editor = field.currentEditor() as? NSTextView,
-				let accent = NSColor.accent()
-			{
-				editor.insertionPointColor = accent
-				editor.selectedTextAttributes = [
-					.backgroundColor: accent.withAlphaComponent(0.3)
-				]
-			}
-		}
-		return field
-	}
-
-	func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSTextField, context: Context) -> CGSize? {
-		guard let width = proposal.width else { return nil }
-		nsView.preferredMaxLayoutWidth = width
-		let height = max(proposal.height ?? 0, nsView.intrinsicContentSize.height)
-		return CGSize(width: width, height: height)
-	}
-
-	func updateNSView(_ nsView: NSTextField, context: Context) {
-		if nsView.stringValue != draft {
-			nsView.stringValue = draft
-		}
-	}
-
-	func makeCoordinator() -> Coordinator {
-		Coordinator(self)
-	}
-
-	class Coordinator: NSObject, NSTextFieldDelegate {
-		var parent: SentenceTextField
-
-		init(_ parent: SentenceTextField) {
-			self.parent = parent
-		}
-
-		func controlTextDidChange(_ obj: Notification) {
-			guard let field = obj.object as? NSTextField else { return }
-			parent.draft = field.stringValue
-		}
-
-		func controlTextDidEndEditing(_ obj: Notification) {
-			let movement =
-				obj.userInfo?["NSTextMovement"] as? Int ?? NSOtherTextMovement
-			switch movement {
-			case NSTabTextMovement:
-				parent.onTab()
-			case NSBacktabTextMovement:
-				parent.onShiftTab()
-			default:
-				parent.onCommit()
-			}
-		}
-
-		func control(
-			_ control: NSControl, textView: NSTextView,
-			doCommandBy commandSelector: Selector
-		) -> Bool {
-			if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
-				parent.onCommit()
-				return true
-			}
-			return false
-		}
-	}
-}
-
-private struct ContentHeightKey: PreferenceKey {
-	static let defaultValue: CGFloat = 0
-	static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-		value = max(value, nextValue())
 	}
 }
