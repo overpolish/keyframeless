@@ -12,7 +12,10 @@ struct SentenceRow: View {
 	@ObservedObject var player: AudioPlayer
 	@Binding var editingRowID: Int?
 	var sentenceRowIDs: [Int] = []
+	var captionBreaks: Set<Int> = []
+	var onToggleBreak: ((Int) -> Void)? = nil
 	var onEdit: (String) -> Void = { _ in }
+	var onBreaksEdited: ([Int]) -> Void = { _ in }
 	var onReset: (() -> Void)?
 
 	@State private var draft = ""
@@ -20,10 +23,18 @@ struct SentenceRow: View {
 	private var isEditing: Bool { editingRowID == row.id }
 
 	private var draftText: String {
-		row.editedWords.map {
-			$0.map { $0.word.trimmingCharacters(in: .whitespaces) }
-				.joined(separator: " ")
-		} ?? row.text
+		let words =
+			(row.editedWords ?? row.words).map {
+				$0.word.trimmingCharacters(in: .whitespaces)
+			}
+		var tokens: [String] = []
+		for (i, word) in words.enumerated() {
+			if captionBreaks.contains(i) && i > 0 {
+				tokens.append("|")
+			}
+			tokens.append(word)
+		}
+		return tokens.joined(separator: " ")
 	}
 
 	var body: some View {
@@ -81,7 +92,9 @@ struct SentenceRow: View {
 				editedWords: row.editedWords,
 				currentTime: player.isPlaying(index: row.id)
 					? player.currentTime : nil,
-				language: AudioSetupSettings.shared.selectedLanguage
+				language: AudioSetupSettings.shared.selectedLanguage,
+				captionBreaks: captionBreaks,
+				onToggleBreak: onToggleBreak
 			)
 			.onTapGesture {
 				draft = draftText
@@ -91,12 +104,23 @@ struct SentenceRow: View {
 	}
 
 	private func saveEdit() {
-		let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-		if trimmed.isEmpty || trimmed == row.text {
+		let tokens = draft.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+		var cleanTokens: [String] = []
+		var newBreaks: [Int] = []
+		for token in tokens {
+			if token == "|" {
+				newBreaks.append(cleanTokens.count)
+			} else {
+				cleanTokens.append(token)
+			}
+		}
+		let cleanText = cleanTokens.joined(separator: " ")
+		if cleanText.isEmpty || cleanText == row.text {
 			onEdit(row.text)
 		} else {
-			onEdit(trimmed)
+			onEdit(cleanText)
 		}
+		onBreaksEdited(newBreaks)
 	}
 
 	private func navigateToSentence(offset: Int) {
@@ -107,24 +131,35 @@ struct SentenceRow: View {
 	}
 }
 
-private class SentenceTextView: NSTextView {
-	override var intrinsicContentSize: NSSize {
-		guard let container = textContainer, let layoutManager else {
-			return super.intrinsicContentSize
-		}
-		layoutManager.ensureLayout(for: container)
-		let rect = layoutManager.usedRect(for: container)
-		return NSSize(width: NSView.noIntrinsicMetric, height: ceil(rect.height))
+private class SentenceTextView: AutoSizingTextView {
+	var onResignFirstResponder: (() -> Void)?
+
+	override func resignFirstResponder() -> Bool {
+		let result = super.resignFirstResponder()
+		if result { onResignFirstResponder?() }
+		return result
 	}
 
 	override func didChangeText() {
 		super.didChangeText()
-		invalidateIntrinsicContentSize()
+		colorPipeCharacters()
 	}
 
-	override func layout() {
-		super.layout()
-		invalidateIntrinsicContentSize()
+	func colorPipeCharacters() {
+		guard let storage = textStorage else { return }
+		let text = storage.string
+		let defaultColor = NSColor.labelColor
+		let accentColor = NSColor.controlAccentColor
+		storage.beginEditing()
+		storage.addAttribute(
+			.foregroundColor, value: defaultColor,
+			range: NSRange(location: 0, length: storage.length))
+		for (i, char) in text.enumerated() where char == "|" {
+			storage.addAttribute(
+				.foregroundColor, value: accentColor,
+				range: NSRange(location: i, length: 1))
+		}
+		storage.endEditing()
 	}
 }
 
@@ -149,11 +184,17 @@ private struct SentenceTextField: NSViewRepresentable {
 		textView.isHorizontallyResizable = false
 		textView.string = text
 		textView.delegate = context.coordinator
+		let coordinator = context.coordinator
+		textView.onResignFirstResponder = { [weak coordinator] in
+			guard let coordinator, !coordinator.handledByCommand else { return }
+			coordinator.parent.onFocusLost()
+		}
 		let accent = NSColor.controlAccentColor
 		textView.insertionPointColor = accent
 		textView.selectedTextAttributes = [
 			.backgroundColor: accent.withAlphaComponent(0.3)
 		]
+		textView.colorPipeCharacters()
 		DispatchQueue.main.async {
 			textView.window?.makeFirstResponder(textView)
 			let windowPoint = textView.window?.mouseLocationOutsideOfEventStream ?? .zero
@@ -167,6 +208,7 @@ private struct SentenceTextField: NSViewRepresentable {
 	func updateNSView(_ textView: SentenceTextView, context: Context) {
 		if textView.string != text {
 			textView.string = text
+			textView.colorPipeCharacters()
 		}
 	}
 
@@ -183,15 +225,8 @@ private struct SentenceTextField: NSViewRepresentable {
 		}
 
 		func textDidChange(_ notification: Notification) {
-			guard let textView = notification.object as? NSTextView else { return }
+			guard let textView = notification.object as? SentenceTextView else { return }
 			parent.text = textView.string
-		}
-
-		func textDidEndEditing(_ notification: Notification) {
-			if !handledByCommand {
-				parent.onFocusLost()
-			}
-			handledByCommand = false
 		}
 
 		func textView(

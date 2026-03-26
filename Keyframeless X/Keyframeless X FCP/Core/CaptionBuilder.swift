@@ -60,7 +60,8 @@ enum CaptionBuilder {
 				timings: words,
 				style: style,
 				font: font,
-				availableWidth: availableWidth
+				availableWidth: availableWidth,
+				forcedBreaks: Set(sentence.captionBreaks)
 			)
 
 			for group in lineGroups {
@@ -318,7 +319,8 @@ enum CaptionBuilder {
 		timings: [TranscriptionStore.StoredWord],
 		style: CaptionStyleSettings,
 		font: NSFont,
-		availableWidth: Double
+		availableWidth: Double,
+		forcedBreaks: Set<Int> = []
 	) -> [LineGroup] {
 		let maxWords = max(1, Int(style.maxWordsPerLine))
 		let lineCount = style.captionLines == .two ? 2 : 1
@@ -365,9 +367,13 @@ enum CaptionBuilder {
 				continue
 			}
 
-			// Step 2: Find best natural break point within segment
+			// Step 2: Find break point — forced breaks take priority
 			var segEnd = greedyEnd
-			if segEnd < words.count {
+			let firstForced = forcedBreaks.filter { $0 > segStart && $0 < greedyEnd }
+				.min()
+			if let firstForced {
+				segEnd = firstForced
+			} else if segEnd < words.count {
 				let nonEmptyCount = (segStart..<segEnd).filter({ !words[$0].isEmpty }).count
 				let minKeep = max(1, nonEmptyCount / 2)
 				var bestBreakAt = -1

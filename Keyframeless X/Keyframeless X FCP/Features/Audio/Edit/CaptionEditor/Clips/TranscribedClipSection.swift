@@ -29,6 +29,7 @@ struct TranscribedClipSection: View {
 	@Binding var editingRowID: Int?
 	var sentenceRowIDs: [Int] = []
 	var onSentenceEdit: (Int, [TranscriptionStore.StoredWord]?) -> Void = { _, _ in }
+	var onBreakToggle: (Int, [Int]) -> Void = { _, _ in }
 	@State private var isHovered = false
 
 	private var groupContainsProfanity: Bool {
@@ -61,6 +62,18 @@ struct TranscribedClipSection: View {
 					player: player,
 					editingRowID: $editingRowID,
 					sentenceRowIDs: sentenceRowIDs,
+					captionBreaks: Set(row.captionBreaks),
+					onToggleBreak: { wordIndex in
+						guard wordIndex > 0 else { return }
+						let clip = clips[row.clipIndex]
+						TranscriptionStore.shared.toggleCaptionBreak(
+							at: wordIndex, for: clip,
+							sentenceStart: Float(row.sentenceStart))
+						let updated =
+							TranscriptionStore.shared.captionBreakIndices(
+								for: clip, sentenceStart: Float(row.sentenceStart)) ?? []
+						onBreakToggle(row.id, updated)
+					},
 					onEdit: { newText in
 						let clip = clips[row.clipIndex]
 						let store = TranscriptionStore.shared
@@ -76,6 +89,13 @@ struct TranscribedClipSection: View {
 								editedWords, for: clip, sentenceStart: Float(row.sentenceStart))
 						}
 						onSentenceEdit(row.id, editedWords)
+					},
+					onBreaksEdited: { newBreaks in
+						let clip = clips[row.clipIndex]
+						TranscriptionStore.shared.setCaptionBreakIndices(
+							newBreaks.isEmpty ? nil : newBreaks,
+							for: clip, sentenceStart: Float(row.sentenceStart))
+						onBreakToggle(row.id, newBreaks)
 					},
 					onReset: row.editedWords != nil
 						? {
