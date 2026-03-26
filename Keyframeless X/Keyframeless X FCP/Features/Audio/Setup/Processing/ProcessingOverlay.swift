@@ -9,6 +9,7 @@ import SwiftUI
 struct ProcessingOverlay: View {
 	let statusLabel: String
 	let progress: Double?
+	let estimatedTimeRemaining: String?
 	let onCancel: () -> Void
 
 	@State private var spinAngle: Double = 0
@@ -33,6 +34,7 @@ struct ProcessingOverlay: View {
 			.scaleEffect(appeared ? 1 : 0.8)
 			.opacity(appeared ? 1 : 0)
 		}
+		.contentShape(Rectangle())
 		.onAppear {
 			withAnimation(.spring(response: 0.45, dampingFraction: 0.72)) {
 				appeared = true
@@ -60,12 +62,22 @@ struct ProcessingOverlay: View {
 			Text(statusLabel)
 				.font(.system(size: 14, weight: .medium))
 			if let progress {
-				ProgressView(value: progress)
+				let clamped = max(0, min(1, progress))
+				ProgressView(value: clamped)
 					.frame(width: 180)
 					.tint(Color.kkAccent)
-				Text("\(Int(progress * 100))%")
-					.font(.system(size: 12).monospacedDigit())
-					.foregroundStyle(.secondary)
+				HStack {
+					Text("\(Int(clamped * 100))%")
+						.font(.system(size: 12).monospacedDigit())
+						.foregroundStyle(.secondary)
+					if let estimatedTimeRemaining {
+						Spacer()
+						Text(estimatedTimeRemaining)
+							.font(.system(size: 12))
+							.foregroundStyle(.tertiary)
+					}
+				}
+				.frame(width: 180)
 			}
 		}
 	}

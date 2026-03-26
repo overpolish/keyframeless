@@ -16,6 +16,7 @@ struct SentenceRow: View {
 	var onReset: (() -> Void)?
 
 	@State private var draft = ""
+	@State private var contentHeight: CGFloat?
 
 	private var isEditing: Bool { editingRowID == row.id }
 
@@ -70,6 +71,7 @@ struct SentenceRow: View {
 					saveEdit()
 					navigateToSentence(offset: -1)
 				})
+				.frame(minHeight: contentHeight, alignment: .top)
 		} else {
 			HighlightedSentence(
 				words: row.words,
@@ -78,6 +80,10 @@ struct SentenceRow: View {
 					? player.currentTime : nil,
 				language: AudioSetupSettings.shared.selectedLanguage
 			)
+			.background(GeometryReader { geo in
+				Color.clear.preference(key: ContentHeightKey.self, value: geo.size.height)
+			})
+			.onPreferenceChange(ContentHeightKey.self) { contentHeight = $0 }
 			.onTapGesture {
 				draft = draftText
 				editingRowID = row.id
@@ -118,6 +124,8 @@ struct SentenceTextField: NSViewRepresentable {
 		field.cell?.wraps = true
 		field.cell?.isScrollable = false
 		field.maximumNumberOfLines = 0
+		field.setContentHuggingPriority(.defaultLow, for: .vertical)
+		field.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
 		field.delegate = context.coordinator
 		field.stringValue = draft
 		DispatchQueue.main.async {
@@ -132,6 +140,13 @@ struct SentenceTextField: NSViewRepresentable {
 			}
 		}
 		return field
+	}
+
+	func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSTextField, context: Context) -> CGSize? {
+		guard let width = proposal.width else { return nil }
+		nsView.preferredMaxLayoutWidth = width
+		let height = max(proposal.height ?? 0, nsView.intrinsicContentSize.height)
+		return CGSize(width: width, height: height)
 	}
 
 	func updateNSView(_ nsView: NSTextField, context: Context) {
@@ -179,5 +194,12 @@ struct SentenceTextField: NSViewRepresentable {
 			}
 			return false
 		}
+	}
+}
+
+private struct ContentHeightKey: PreferenceKey {
+	static let defaultValue: CGFloat = 0
+	static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+		value = max(value, nextValue())
 	}
 }
