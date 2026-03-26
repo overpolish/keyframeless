@@ -80,6 +80,7 @@ enum AudioEditRowBuilder {
 	private static let pauseThreshold: Float = 1.5
 	private static let minSentenceDuration: Float = 4.0
 	private static let maxDuration: Float = 7.0
+	private static let hardMaxDuration: Float = 10.0
 
 	private static func groupIntoSentences(
 		_ words: [TranscriptionStore.StoredWord]
@@ -109,6 +110,9 @@ enum AudioEditRowBuilder {
 				sentences.append(current)
 				current = []
 			} else if duration >= maxDuration && endsWithClauseBreak {
+				sentences.append(current)
+				current = []
+			} else if duration >= hardMaxDuration {
 				sentences.append(current)
 				current = []
 			}
