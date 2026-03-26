@@ -24,6 +24,9 @@ struct WhisperModelPickerView: View {
 				ForEach(WhisperModelManager.models) { model in
 					WhisperModelRow(model: model, manager: manager)
 				}
+				if !WhisperModelManager.isAppleSilicon {
+					IntelModelNote()
+				}
 			}
 			.padding(KKPaddingMD)
 			.kkPanel()
@@ -94,6 +97,20 @@ private struct WhisperModelRow: View {
 				}
 			}
 		}
+	}
+}
+
+private struct IntelModelNote: View {
+	var body: some View {
+		HStack(spacing: KKSpacingSM) {
+			Image(systemName: "apple.logo")
+				.font(.system(size: 10))
+				.foregroundStyle(.tertiary)
+			Text("Larger models are available on Apple Silicon Macs")
+				.font(.system(size: 10))
+				.foregroundStyle(.tertiary)
+		}
+		.padding(.top, KKSpacingSM)
 	}
 }
 
