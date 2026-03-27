@@ -74,27 +74,7 @@ struct SentenceRow: View {
 
 	@ViewBuilder
 	private var sentenceContent: some View {
-		if isEditing {
-			SentenceTextField(
-				text: $draft,
-				onCommit: {
-					saveEdit()
-					editingRowID = nil
-				},
-				onTab: {
-					saveEdit()
-					navigateToSentence(offset: 1)
-				},
-				onBackTab: {
-					saveEdit()
-					navigateToSentence(offset: -1)
-				},
-				onFocusLost: {
-					saveEdit()
-					editingRowID = nil
-				}
-			)
-		} else {
+		ZStack(alignment: .topLeading) {
 			HighlightedSentence(
 				words: row.words,
 				editedWords: row.editedWords,
@@ -109,6 +89,30 @@ struct SentenceRow: View {
 					editingRowID = row.id
 				}
 			)
+			.opacity(isEditing ? 0 : 1)
+			.allowsHitTesting(!isEditing)
+
+			if isEditing {
+				SentenceTextField(
+					text: $draft,
+					onCommit: {
+						saveEdit()
+						editingRowID = nil
+					},
+					onTab: {
+						saveEdit()
+						navigateToSentence(offset: 1)
+					},
+					onBackTab: {
+						saveEdit()
+						navigateToSentence(offset: -1)
+					},
+					onFocusLost: {
+						saveEdit()
+						editingRowID = nil
+					}
+				)
+			}
 		}
 	}
 
