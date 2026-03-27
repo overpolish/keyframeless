@@ -524,12 +524,28 @@
 						<key>UID</key>
 						<integer>0</integer>
 					</dict>
+					<dict>
+						<key>CHILDREN</key>
+						<array/>
+						<key>GID</key>
+						<integer>0</integer>
+						<key>PATH</key>
+						<string>scripts/uninstall</string>
+						<key>PATH_TYPE</key>
+						<integer>1</integer>
+						<key>PERMISSIONS</key>
+						<integer>493</integer>
+						<key>TYPE</key>
+						<integer>3</integer>
+						<key>UID</key>
+						<integer>0</integer>
+					</dict>
 				</array>
 			</dict>
 			<key>PACKAGE_SETTINGS</key>
 			<dict>
 				<key>AUTHENTICATION</key>
-				<integer>0</integer>
+				<integer>1</integer>
 				<key>CONCLUSION_ACTION</key>
 				<integer>0</integer>
 				<key>FOLLOW_SYMBOLIC_LINKS</key>
@@ -1078,12 +1094,28 @@
 						<key>UID</key>
 						<integer>0</integer>
 					</dict>
+					<dict>
+						<key>CHILDREN</key>
+						<array/>
+						<key>GID</key>
+						<integer>0</integer>
+						<key>PATH</key>
+						<string>scripts/uninstall</string>
+						<key>PATH_TYPE</key>
+						<integer>1</integer>
+						<key>PERMISSIONS</key>
+						<integer>493</integer>
+						<key>TYPE</key>
+						<integer>3</integer>
+						<key>UID</key>
+						<integer>0</integer>
+					</dict>
 				</array>
 			</dict>
 			<key>PACKAGE_SETTINGS</key>
 			<dict>
 				<key>AUTHENTICATION</key>
-				<integer>0</integer>
+				<integer>1</integer>
 				<key>CONCLUSION_ACTION</key>
 				<integer>0</integer>
 				<key>FOLLOW_SYMBOLIC_LINKS</key>
@@ -1604,8 +1636,10 @@
 			<dict>
 				<key>POSTINSTALL_PATH</key>
 				<dict>
+					<key>PATH</key>
+					<string>scripts/postinstall</string>
 					<key>PATH_TYPE</key>
-					<integer>0</integer>
+					<integer>1</integer>
 				</dict>
 				<key>PREINSTALL_PATH</key>
 				<dict>
@@ -1620,7 +1654,7 @@
 						<key>GID</key>
 						<integer>0</integer>
 						<key>PATH</key>
-						<string>../MotionTemplates/Rounded/Effects.localized</string>
+						<string>scripts/uninstall</string>
 						<key>PATH_TYPE</key>
 						<integer>1</integer>
 						<key>PERMISSIONS</key>
@@ -1635,7 +1669,7 @@
 			<key>PACKAGE_SETTINGS</key>
 			<dict>
 				<key>AUTHENTICATION</key>
-				<integer>0</integer>
+				<integer>1</integer>
 				<key>CONCLUSION_ACTION</key>
 				<integer>0</integer>
 				<key>FOLLOW_SYMBOLIC_LINKS</key>

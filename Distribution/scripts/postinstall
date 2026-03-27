@@ -18,8 +18,11 @@ for TEMPLATE_TYPE_DIR in Effects.localized Generators.localized Titles.localized
     fi
 done
 
-if [ $FOUND_TEMPLATES -eq 0 ]; then
-    exit 1
+# Install uninstall script alongside the app
+SCRIPT_DIR="$(dirname "$0")"
+if [ -f "$SCRIPT_DIR/uninstall" ] && [ -d "$2" ]; then
+    cp "$SCRIPT_DIR/uninstall" "$2/Uninstall Keyframeless"
+    chmod +x "$2/Uninstall Keyframeless"
 fi
 
 exit 0
