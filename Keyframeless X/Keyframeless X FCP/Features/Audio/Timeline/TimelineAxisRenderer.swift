@@ -142,7 +142,7 @@ struct TimelineAxisRenderer {
 			if let visible = visibleIndices, !visible.contains(i) { continue }
 			let lane = CGFloat(assignments[i])
 			let x = CGFloat(clip.start) * pps
-			let w = min(max(cornerRadius * 2, CGFloat(clip.end - clip.start) * pps), emptyX - x)
+			let w = min(CGFloat(clip.end - clip.start) * pps, emptyX - x)
 			let y = clipAreaTop + lane * (laneHeight + laneGap)
 			let rect = CGRect(x: x, y: y, width: w, height: laneHeight)
 			cachedClipRects.append((rect: rect, index: i))
