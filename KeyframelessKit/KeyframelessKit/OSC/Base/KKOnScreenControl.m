@@ -89,14 +89,17 @@
   return isActive ? _activeColor : (isHovered ? _hoverColor : _primaryColor);
 }
 
-- (nullable id<MTLRenderPipelineState>)pipelineStateForRegistryID:
-    (uint64_t)registryID {
+- (nullable id<MTLRenderPipelineState>)pipelineStateForDestinationImage:
+    (FxImageTile *)destinationImage {
   KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
+  uint64_t registryID = destinationImage.deviceRegistryID;
+  MTLPixelFormat pixelFormat =
+      [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
 
   id<MTLRenderPipelineState> ps =
       [cache pipelineStateForPluginID:[self pipelinePluginID]
                            registryID:registryID
-                          pixelFormat:MTLPixelFormatRGBA8Unorm];
+                          pixelFormat:pixelFormat];
   if (ps)
     return ps;
 
@@ -125,7 +128,7 @@
   MTLRenderPipelineDescriptor *desc = [KKRenderPrimitives
       createPipelineDescriptorWithVertexFunction:vertFn
                                 fragmentFunction:fragFn
-                                     pixelFormat:MTLPixelFormatRGBA8Unorm
+                                     pixelFormat:pixelFormat
                                        blendMode:KKBlendModeStraightAlpha];
 
   ps = [device newRenderPipelineStateWithDescriptor:desc error:&error];
@@ -138,7 +141,7 @@
   [cache registerPipelineState:ps
                    forPluginID:[self pipelinePluginID]
                     registryID:registryID
-                   pixelFormat:MTLPixelFormatRGBA8Unorm];
+                   pixelFormat:pixelFormat];
   return ps;
 }
 
@@ -154,9 +157,11 @@
 
   id<MTLDevice> gpuDevice =
       [cache deviceWithRegistryID:destinationImage.deviceRegistryID];
+  MTLPixelFormat pixelFormat =
+      [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
   id<MTLCommandQueue> queue =
       [cache commandQueueWithRegistryID:destinationImage.deviceRegistryID
-                            pixelFormat:MTLPixelFormatRGBA8Unorm];
+                            pixelFormat:pixelFormat];
 
   if (!gpuDevice || !queue)
     return;

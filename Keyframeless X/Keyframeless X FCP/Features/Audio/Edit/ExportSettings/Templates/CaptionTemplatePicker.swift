@@ -22,6 +22,7 @@ struct CaptionTemplatePicker: View {
 	@State private var showPerWordOnly = false
 	@State private var showCommunity = true
 	@State private var showControlsPopover = false
+	@State private var downloadError: String?
 
 	private func sorted(_ list: [CaptionTemplate]) -> [CaptionTemplate] {
 		list.sorted { a, b in
@@ -160,6 +161,14 @@ struct CaptionTemplatePicker: View {
 				}
 				.buttonStyle(.plain)
 				Spacer()
+				if let downloadError {
+					HStack(spacing: 4) {
+						Image(systemName: "exclamationmark.triangle.fill")
+						Text(downloadError)
+					}
+					.font(.system(size: 10, weight: .medium))
+					.foregroundStyle(Color.kkError)
+				}
 				if communityStore.needsFCPRestart {
 					HStack(spacing: 4) {
 						Image(systemName: "arrow.trianglehead.2.counterclockwise")
@@ -252,12 +261,19 @@ struct CaptionTemplatePicker: View {
 	}
 
 	private func downloadCommunityTemplate(_ template: CommunityTemplate) {
+		downloadError = nil
 		Task {
 			do {
 				try await CommunityTemplateStore.download(template)
 				await MainActor.run { model.refreshTemplates() }
+			} catch let error as CocoaError where error.code == .fileWriteNoPermission {
+				await MainActor.run {
+					downloadError = "Permission denied. Run: sudo chown $USER ~/Movies/Motion\\ Templates.localized"
+				}
 			} catch {
-				print("Download failed: \(error.localizedDescription)")
+				await MainActor.run {
+					downloadError = error.localizedDescription
+				}
 			}
 		}
 	}

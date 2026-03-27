@@ -8,6 +8,30 @@ import Combine
 import KeyframelessKit
 import SwiftUI
 
+// Spacebar-to-stop in FCP workflow extensions:
+//
+// FCP intercepts key events at the host level. The extension's local event
+// monitors (NSEvent.addLocalMonitorForEvents) never receive keyDown unless a
+// native NSView has been made first responder through an actual user click.
+// Programmatic makeFirstResponder calls (e.g. in viewDidAppear) do NOT prime
+// the routing — only a real mouseDown on an NSView that accepts first responder
+// causes the system to start forwarding key events to the extension process.
+//
+// Solution: AxisDocumentView accepts first responder and overrides keyDown to
+// catch spacebar. On the setup page the user clicks the timeline directly, so
+// mouseDown makes it first responder naturally. On the edit page the user
+// clicks SwiftUI play buttons instead, so AudioEditView's click monitor calls
+// TimelineFirstResponder.claim() during the real mouseDown event to redirect
+// first responder to the timeline's AxisDocumentView.
+enum TimelineFirstResponder {
+	fileprivate static weak var view: NSView?
+
+	static func claim(in window: NSWindow?) {
+		guard let view, let window, view.window == window else { return }
+		window.makeFirstResponder(view)
+	}
+}
+
 struct TimelineAxisView: View {
 	let duration: Double
 	let format: FCPXMLParser.ProjectFormat?
@@ -80,6 +104,7 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 		scrollView.horizontalScrollElasticity = .allowed
 
 		let docView = AxisDocumentView()
+		TimelineFirstResponder.view = docView
 		docView.onMagnify = { delta, mouseX in
 			context.coordinator.handleMagnify(delta: delta, mouseX: mouseX, scrollView: scrollView)
 		}
@@ -199,10 +224,19 @@ private class AxisDocumentView: NSView {
 	var onMagnify: ((CGFloat, CGFloat) -> Void)?
 	var audioPlayer: AudioPlayer? {
 		didSet {
+			guard audioPlayer !== oldValue else { return }
 			cancellables = []
-			audioPlayer?.objectWillChange
+			guard let audioPlayer else {
+				hidePlaybackOverlay()
+				return
+			}
+			audioPlayer.$playingIndex
 				.receive(on: RunLoop.main)
 				.sink { [weak self] _ in self?.needsDisplay = true }
+				.store(in: &cancellables)
+			audioPlayer.currentTimeSubject
+				.receive(on: RunLoop.main)
+				.sink { [weak self] _ in self?.updatePlaybackOverlay() }
 				.store(in: &cancellables)
 		}
 	}
@@ -220,9 +254,13 @@ private class AxisDocumentView: NSView {
 	private let playBtnSize: CGFloat = 12
 	private let minHeightForControls: CGFloat = 16
 	private let scrubStripHeight: CGFloat = 14
+	private var progressFillLayer: CALayer?
+	private var knobOverlayLayer: CALayer?
 
 	private var trackingArea: NSTrackingArea?
 
+	// See TimelineFirstResponder comment for why this view handles keyboard events.
+	override var acceptsFirstResponder: Bool { true }
 	override var isFlipped: Bool { true }
 	override var wantsLayer: Bool {
 		get { true }
@@ -264,7 +302,18 @@ private class AxisDocumentView: NSView {
 		onMagnify?(1 + event.magnification, mouseX)
 	}
 
+	override func keyDown(with event: NSEvent) {
+		if event.keyCode == 49, AudioPlayer.isAnyPlaying {
+			AudioPlayer.stopAll()
+		} else {
+			super.keyDown(with: event)
+		}
+	}
+
 	override func mouseDown(with event: NSEvent) {
+		// Claiming first responder on click primes FCP's key event routing
+		// to the extension — see TimelineFirstResponder comment.
+		window?.makeFirstResponder(self)
 		let point = convert(event.locationInWindow, from: nil)
 		for entry in cachedClipRects.reversed() {
 			guard entry.rect.contains(point) else { continue }
@@ -327,16 +376,74 @@ private class AxisDocumentView: NSView {
 			waveforms: waveforms,
 			hasAudioPlayer: audioPlayer != nil,
 			playingIndex: audioPlayer?.playingIndex,
-			currentTime: audioPlayer?.currentTime,
 			labelForTime: labelForTime,
-			skipWaveforms: inLiveResize
+			skipWaveforms: inLiveResize,
+			dirtyRect: dirtyRect
 		)
 		renderer.draw(in: ctx, cachedClipRects: &cachedClipRects)
+		updatePlaybackOverlay()
 	}
 
 	override func viewDidEndLiveResize() {
 		super.viewDidEndLiveResize()
 		needsDisplay = true
+	}
+
+	private func ensureOverlayLayers() {
+		guard let viewLayer = layer else { return }
+		if progressFillLayer == nil {
+			let fill = CALayer()
+			fill.backgroundColor = NSColor.white.withAlphaComponent(0.85).cgColor
+			fill.cornerRadius = 1.5
+			fill.isHidden = true
+			viewLayer.addSublayer(fill)
+			progressFillLayer = fill
+		}
+		if knobOverlayLayer == nil {
+			let knob = CALayer()
+			knob.backgroundColor = NSColor.white.cgColor
+			knob.cornerRadius = 4.5
+			knob.isHidden = true
+			viewLayer.addSublayer(knob)
+			knobOverlayLayer = knob
+		}
+	}
+
+	private func updatePlaybackOverlay() {
+		ensureOverlayLayers()
+		guard let audioPlayer,
+			let playIdx = audioPlayer.playingIndex,
+			let time = audioPlayer.currentTime,
+			playIdx < clips.count,
+			let entry = cachedClipRects.first(where: { $0.index == playIdx })
+		else {
+			hidePlaybackOverlay()
+			return
+		}
+		let clip = clips[playIdx]
+		let offset = time - clip.sourceStart
+		let progress = CGFloat(max(0, min(1, offset / clip.sourceDuration)))
+		let trackH: CGFloat = 3
+		let trackX = entry.rect.minX
+		let trackW = entry.rect.width
+		let trackY = entry.rect.maxY - trackH - 5
+		let fillW = trackW * progress
+		CATransaction.begin()
+		CATransaction.setDisableActions(true)
+		progressFillLayer?.frame = CGRect(
+			x: trackX, y: trackY, width: max(0, fillW), height: trackH)
+		progressFillLayer?.isHidden = false
+		let knobR: CGFloat = 4.5
+		knobOverlayLayer?.frame = CGRect(
+			x: trackX + fillW - knobR, y: trackY + trackH / 2 - knobR,
+			width: knobR * 2, height: knobR * 2)
+		knobOverlayLayer?.isHidden = false
+		CATransaction.commit()
+	}
+
+	private func hidePlaybackOverlay() {
+		progressFillLayer?.isHidden = true
+		knobOverlayLayer?.isHidden = true
 	}
 
 	private func handleAudioControlClick(

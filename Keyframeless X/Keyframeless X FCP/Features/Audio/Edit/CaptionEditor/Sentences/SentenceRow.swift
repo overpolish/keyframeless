@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import Combine
 import KeyframelessKit
 import SwiftUI
 
@@ -12,19 +13,32 @@ struct SentenceRow: View {
 	@ObservedObject var player: AudioPlayer
 	@Binding var editingRowID: Int?
 	var sentenceRowIDs: [Int] = []
+	var captionBreaks: Set<Int> = []
+	var predictedBreaks: Set<Int> = []
+	var onToggleBreak: ((Int) -> Void)? = nil
 	var onEdit: (String) -> Void = { _ in }
+	var onBreaksEdited: ([Int]) -> Void = { _ in }
 	var onReset: (() -> Void)?
+	var showTrailingBreak: Bool = false
 
 	@State private var draft = ""
-	@State private var contentHeight: CGFloat?
+	@State private var highlightTime: Double?
 
 	private var isEditing: Bool { editingRowID == row.id }
 
 	private var draftText: String {
-		row.editedWords.map {
-			$0.map { $0.word.trimmingCharacters(in: .whitespaces) }
-				.joined(separator: " ")
-		} ?? row.text
+		let words =
+			(row.editedWords ?? row.words).map {
+				$0.word.trimmingCharacters(in: .whitespaces)
+			}
+		var tokens: [String] = []
+		for (i, word) in words.enumerated() {
+			if captionBreaks.contains(i) && i > 0 {
+				tokens.append("|")
+			}
+			tokens.append(word)
+		}
+		return tokens.joined(separator: " ")
 	}
 
 	var body: some View {
@@ -52,52 +66,74 @@ struct SentenceRow: View {
 				draft = draftText
 			}
 		}
+		.onReceive(player.currentTimeSubject) { time in
+			let newTime = player.isPlaying(index: row.id) ? time : nil
+			if newTime != highlightTime { highlightTime = newTime }
+		}
 	}
 
 	@ViewBuilder
 	private var sentenceContent: some View {
-		if isEditing {
-			SentenceTextField(
-				draft: $draft,
-				onCommit: {
-					saveEdit()
-					editingRowID = nil
-				},
-				onTab: {
-					saveEdit()
-					navigateToSentence(offset: 1)
-				},
-				onShiftTab: {
-					saveEdit()
-					navigateToSentence(offset: -1)
-				})
-				.frame(minHeight: contentHeight, alignment: .top)
-		} else {
+		ZStack(alignment: .topLeading) {
 			HighlightedSentence(
 				words: row.words,
 				editedWords: row.editedWords,
-				currentTime: player.isPlaying(index: row.id)
-					? player.currentTime : nil,
-				language: AudioSetupSettings.shared.selectedLanguage
+				currentTime: highlightTime,
+				language: AudioSetupSettings.shared.selectedLanguage,
+				captionBreaks: captionBreaks,
+				predictedBreaks: predictedBreaks,
+				onToggleBreak: onToggleBreak,
+				showTrailingBreak: showTrailingBreak,
+				onTap: {
+					draft = draftText
+					editingRowID = row.id
+				}
 			)
-			.background(GeometryReader { geo in
-				Color.clear.preference(key: ContentHeightKey.self, value: geo.size.height)
-			})
-			.onPreferenceChange(ContentHeightKey.self) { contentHeight = $0 }
-			.onTapGesture {
-				draft = draftText
-				editingRowID = row.id
+			.opacity(isEditing ? 0 : 1)
+			.allowsHitTesting(!isEditing)
+
+			if isEditing {
+				SentenceTextField(
+					text: $draft,
+					onCommit: {
+						saveEdit()
+						editingRowID = nil
+					},
+					onTab: {
+						saveEdit()
+						navigateToSentence(offset: 1)
+					},
+					onBackTab: {
+						saveEdit()
+						navigateToSentence(offset: -1)
+					},
+					onFocusLost: {
+						saveEdit()
+						editingRowID = nil
+					}
+				)
 			}
 		}
 	}
 
 	private func saveEdit() {
-		let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-		if trimmed.isEmpty || trimmed == row.text {
+		let tokens = draft.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+		var cleanTokens: [String] = []
+		var newBreaks: [Int] = []
+		for token in tokens {
+			if token == "|" {
+				newBreaks.append(cleanTokens.count)
+			} else {
+				cleanTokens.append(token)
+			}
+		}
+		let cleanText = cleanTokens.joined(separator: " ")
+		if cleanText.isEmpty || cleanText == row.text {
 			onEdit(row.text)
 		} else {
-			onEdit(trimmed)
+			onEdit(cleanText)
 		}
+		onBreaksEdited(newBreaks)
 	}
 
 	private func navigateToSentence(offset: Int) {
@@ -108,50 +144,84 @@ struct SentenceRow: View {
 	}
 }
 
-struct SentenceTextField: NSViewRepresentable {
-	@Binding var draft: String
-	var onCommit: () -> Void
-	var onTab: () -> Void = {}
-	var onShiftTab: () -> Void = {}
+private class SentenceTextView: AutoSizingTextView {
+	var onResignFirstResponder: (() -> Void)?
 
-	func makeNSView(context: Context) -> NSTextField {
-		let field = NSTextField()
-		field.isBordered = false
-		field.drawsBackground = false
-		field.font = .systemFont(ofSize: 13)
-		field.focusRingType = .none
-		field.lineBreakMode = .byWordWrapping
-		field.cell?.wraps = true
-		field.cell?.isScrollable = false
-		field.maximumNumberOfLines = 0
-		field.setContentHuggingPriority(.defaultLow, for: .vertical)
-		field.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
-		field.delegate = context.coordinator
-		field.stringValue = draft
-		DispatchQueue.main.async {
-			field.window?.makeFirstResponder(field)
-			if let editor = field.currentEditor() as? NSTextView,
-				let accent = NSColor.accent()
-			{
-				editor.insertionPointColor = accent
-				editor.selectedTextAttributes = [
-					.backgroundColor: accent.withAlphaComponent(0.3)
-				]
-			}
+	override func resignFirstResponder() -> Bool {
+		let result = super.resignFirstResponder()
+		if result { onResignFirstResponder?() }
+		return result
+	}
+
+	override func didChangeText() {
+		super.didChangeText()
+		colorPipeCharacters()
+	}
+
+	func colorPipeCharacters() {
+		guard let storage = textStorage else { return }
+		let text = storage.string
+		let defaultColor = NSColor.labelColor
+		let accentColor = NSColor.controlAccentColor
+		storage.beginEditing()
+		storage.addAttribute(
+			.foregroundColor, value: defaultColor,
+			range: NSRange(location: 0, length: storage.length))
+		for (i, char) in text.enumerated() where char == "|" {
+			storage.addAttribute(
+				.foregroundColor, value: accentColor,
+				range: NSRange(location: i, length: 1))
 		}
-		return field
+		storage.endEditing()
+	}
+}
+
+private struct SentenceTextField: NSViewRepresentable {
+	@Binding var text: String
+	var onCommit: () -> Void
+	var onTab: () -> Void
+	var onBackTab: () -> Void
+	var onFocusLost: () -> Void = {}
+
+	func makeNSView(context: Context) -> SentenceTextView {
+		let textView = SentenceTextView()
+		textView.font = .systemFont(ofSize: 13)
+		textView.textContainerInset = .zero
+		textView.textContainer?.lineFragmentPadding = 0
+		textView.textContainer?.widthTracksTextView = true
+		textView.isRichText = false
+		textView.drawsBackground = false
+		textView.isEditable = true
+		textView.isSelectable = true
+		textView.isVerticallyResizable = true
+		textView.isHorizontallyResizable = false
+		textView.string = text
+		textView.delegate = context.coordinator
+		let coordinator = context.coordinator
+		textView.onResignFirstResponder = { [weak coordinator] in
+			guard let coordinator, !coordinator.handledByCommand else { return }
+			coordinator.parent.onFocusLost()
+		}
+		let accent = NSColor.controlAccentColor
+		textView.insertionPointColor = accent
+		textView.selectedTextAttributes = [
+			.backgroundColor: accent.withAlphaComponent(0.3)
+		]
+		textView.colorPipeCharacters()
+		DispatchQueue.main.async {
+			textView.window?.makeFirstResponder(textView)
+			let windowPoint = textView.window?.mouseLocationOutsideOfEventStream ?? .zero
+			let viewPoint = textView.convert(windowPoint, from: nil)
+			let index = textView.characterIndexForInsertion(at: viewPoint)
+			textView.setSelectedRange(NSRange(location: index, length: 0))
+		}
+		return textView
 	}
 
-	func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSTextField, context: Context) -> CGSize? {
-		guard let width = proposal.width else { return nil }
-		nsView.preferredMaxLayoutWidth = width
-		let height = max(proposal.height ?? 0, nsView.intrinsicContentSize.height)
-		return CGSize(width: width, height: height)
-	}
-
-	func updateNSView(_ nsView: NSTextField, context: Context) {
-		if nsView.stringValue != draft {
-			nsView.stringValue = draft
+	func updateNSView(_ textView: SentenceTextView, context: Context) {
+		if textView.string != text {
+			textView.string = text
+			textView.colorPipeCharacters()
 		}
 	}
 
@@ -159,47 +229,40 @@ struct SentenceTextField: NSViewRepresentable {
 		Coordinator(self)
 	}
 
-	class Coordinator: NSObject, NSTextFieldDelegate {
+	class Coordinator: NSObject, NSTextViewDelegate {
 		var parent: SentenceTextField
+		var handledByCommand = false
 
 		init(_ parent: SentenceTextField) {
 			self.parent = parent
 		}
 
-		func controlTextDidChange(_ obj: Notification) {
-			guard let field = obj.object as? NSTextField else { return }
-			parent.draft = field.stringValue
+		func textDidChange(_ notification: Notification) {
+			guard let textView = notification.object as? SentenceTextView else { return }
+			parent.text = textView.string
 		}
 
-		func controlTextDidEndEditing(_ obj: Notification) {
-			let movement =
-				obj.userInfo?["NSTextMovement"] as? Int ?? NSOtherTextMovement
-			switch movement {
-			case NSTabTextMovement:
-				parent.onTab()
-			case NSBacktabTextMovement:
-				parent.onShiftTab()
-			default:
-				parent.onCommit()
-			}
-		}
-
-		func control(
-			_ control: NSControl, textView: NSTextView,
-			doCommandBy commandSelector: Selector
+		func textView(
+			_ textView: NSTextView, doCommandBy commandSelector: Selector
 		) -> Bool {
-			if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+			if commandSelector == #selector(NSResponder.insertNewline(_:))
+				|| commandSelector == #selector(NSResponder.cancelOperation(_:))
+			{
+				handledByCommand = true
 				parent.onCommit()
+				return true
+			}
+			if commandSelector == #selector(NSResponder.insertTab(_:)) {
+				handledByCommand = true
+				parent.onTab()
+				return true
+			}
+			if commandSelector == #selector(NSResponder.insertBacktab(_:)) {
+				handledByCommand = true
+				parent.onBackTab()
 				return true
 			}
 			return false
 		}
-	}
-}
-
-private struct ContentHeightKey: PreferenceKey {
-	static let defaultValue: CGFloat = 0
-	static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-		value = max(value, nextValue())
 	}
 }

@@ -42,7 +42,7 @@ static NSString *kPointOSCPluginID = @"co.overpolish.keyframelesskit.PointOSC";
             destinationImage:(FxImageTile *)destinationImage
                       atTime:(CMTime)time {
   id<MTLRenderPipelineState> ps =
-      [self pipelineStateForRegistryID:destinationImage.deviceRegistryID];
+      [self pipelineStateForDestinationImage:destinationImage];
   if (!ps)
     return;
 

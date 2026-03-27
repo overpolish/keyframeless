@@ -40,7 +40,7 @@ struct TranscribedClipHeader: View {
 				InfoBadge(
 					label: "Profanity",
 					systemImage:
-						"checkmark.circle.trianglebadge.exclamationmark.fill",
+						"exclamationmark.bubble.fill",
 					color: Color.kkError
 				)
 			}

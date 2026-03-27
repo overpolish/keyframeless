@@ -60,7 +60,8 @@ enum CaptionBuilder {
 				timings: words,
 				style: style,
 				font: font,
-				availableWidth: availableWidth
+				availableWidth: availableWidth,
+				forcedBreaks: Set(sentence.captionBreaks)
 			)
 
 			for group in lineGroups {
@@ -241,6 +242,7 @@ enum CaptionBuilder {
 		let startTime: Float
 		let endTime: Float
 		let wordStarts: [Float]
+		let wordStartIndex: Int
 	}
 
 	private static func processWord(
@@ -276,6 +278,8 @@ enum CaptionBuilder {
 			if char.isPunctuation || char.isSymbol {
 				if keepQuestionMarks && char == "?" {
 					result.append(char)
+				} else if char == "'" || char == "\u{2019}" {
+					result.append(char)
 				}
 			} else {
 				result.append(char)
@@ -284,12 +288,40 @@ enum CaptionBuilder {
 		return result
 	}
 
+	private static let breakSentenceEndChars = CharacterSet(charactersIn: ".!?")
+	private static let breakClauseChars = CharacterSet(charactersIn: ".,;:!?")
+	private static let breakPauseThreshold: Float = 0.3
+
+	private static func naturalBreakScore(
+		afterWordAt idx: Int,
+		timings: [TranscriptionStore.StoredWord],
+		totalWordCount: Int
+	) -> Int {
+		var score = 0
+		let trimmed = timings[idx].word.trimmingCharacters(in: .whitespaces)
+		if let lastScalar = trimmed.unicodeScalars.last {
+			if breakSentenceEndChars.contains(lastScalar) {
+				score = 3
+			} else if breakClauseChars.contains(lastScalar) {
+				score = 1
+			}
+		}
+		if idx + 1 < totalWordCount {
+			let gap = timings[idx + 1].start - timings[idx].end
+			if gap > breakPauseThreshold {
+				score = max(score, 2)
+			}
+		}
+		return score
+	}
+
 	private static func splitIntoLines(
 		words: [String],
 		timings: [TranscriptionStore.StoredWord],
 		style: CaptionStyleSettings,
 		font: NSFont,
-		availableWidth: Double
+		availableWidth: Double,
+		forcedBreaks: Set<Int> = []
 	) -> [LineGroup] {
 		let maxWords = max(1, Int(style.maxWordsPerLine))
 		let lineCount = style.captionLines == .two ? 2 : 1
@@ -308,33 +340,91 @@ enum CaptionBuilder {
 		var i = 0
 
 		while i < words.count {
-			var segmentLines: [String] = []
-			let segmentStart = i
-			var segmentWordStarts: [Float] = []
+			let segStart = i
 
+			// Step 1: Greedily determine how many words fit in this segment
+			var greedyEnd = segStart
 			for _ in 0..<lineCount {
-				guard i < words.count else { break }
-				var lineWords: [String] = []
-				var wordCount = 0
+				guard greedyEnd < words.count else { break }
 				var lineWidth: CGFloat = 0
-
-				while i < words.count && wordCount < maxWords {
-					let word = words[i]
-					guard !word.isEmpty else {
-						i += 1
+				var wordCount = 0
+				while greedyEnd < words.count && wordCount < maxWords {
+					guard !words[greedyEnd].isEmpty else {
+						greedyEnd += 1
 						continue
 					}
-					let wWidth = wordWidths[i]
+					let wWidth = wordWidths[greedyEnd]
 					let candidateWidth =
-						lineWords.isEmpty ? wWidth : lineWidth + spaceWidth + wWidth
-					if !lineWords.isEmpty && candidateWidth > CGFloat(availableWidth) {
-						break
-					}
-					segmentWordStarts.append(timings[i].start)
-					lineWords.append(word)
+						wordCount == 0 ? wWidth : lineWidth + spaceWidth + wWidth
+					if wordCount > 0 && candidateWidth > CGFloat(availableWidth) { break }
 					lineWidth = candidateWidth
 					wordCount += 1
-					i += 1
+					greedyEnd += 1
+				}
+			}
+
+			guard greedyEnd > segStart else {
+				i += 1
+				continue
+			}
+
+			// Step 2: Find break point — forced breaks take priority
+			var segEnd = greedyEnd
+			let firstForced = forcedBreaks.filter { $0 > segStart && $0 < greedyEnd }
+				.min()
+			if let firstForced {
+				segEnd = firstForced
+			} else if segEnd < words.count {
+				let nonEmptyCount = (segStart..<segEnd).filter({ !words[$0].isEmpty }).count
+				let minKeep = max(1, nonEmptyCount / 2)
+				var bestBreakAt = -1
+				var bestScore = 0
+				var seen = 0
+
+				for j in segStart..<segEnd {
+					guard !words[j].isEmpty else { continue }
+					seen += 1
+					guard seen >= minKeep else { continue }
+					let score = naturalBreakScore(
+						afterWordAt: j, timings: timings, totalWordCount: words.count)
+					if score > bestScore {
+						bestScore = score
+						bestBreakAt = j + 1
+					}
+				}
+
+				if bestScore > 0 && bestBreakAt > segStart && bestBreakAt < segEnd {
+					segEnd = bestBreakAt
+				}
+			}
+
+			// Step 3: Layout words[segStart..<segEnd] into lines
+			var segmentLines: [String] = []
+			var segmentWordStarts: [Float] = []
+			var lastWordIdx = segStart
+			var wi = segStart
+
+			for _ in 0..<lineCount {
+				guard wi < segEnd else { break }
+				var lineWords: [String] = []
+				var lineWidth: CGFloat = 0
+				var wordCount = 0
+
+				while wi < segEnd && wordCount < maxWords {
+					guard !words[wi].isEmpty else {
+						wi += 1
+						continue
+					}
+					let wWidth = wordWidths[wi]
+					let candidateWidth =
+						lineWords.isEmpty ? wWidth : lineWidth + spaceWidth + wWidth
+					if !lineWords.isEmpty && candidateWidth > CGFloat(availableWidth) { break }
+					segmentWordStarts.append(timings[wi].start)
+					lineWords.append(words[wi])
+					lineWidth = candidateWidth
+					wordCount += 1
+					lastWordIdx = wi
+					wi += 1
 				}
 
 				if !lineWords.isEmpty {
@@ -342,18 +432,57 @@ enum CaptionBuilder {
 				}
 			}
 
-			if !segmentLines.isEmpty && i > segmentStart {
-				let segTimings = Array(timings[segmentStart..<i])
+			if !segmentLines.isEmpty {
 				groups.append(
 					LineGroup(
 						lines: segmentLines,
-						startTime: segTimings.first!.start,
-						endTime: segTimings.last!.end,
-						wordStarts: segmentWordStarts
+						startTime: timings[segStart].start,
+						endTime: timings[lastWordIdx].end,
+						wordStarts: segmentWordStarts,
+						wordStartIndex: segStart
 					))
 			}
+
+			i = segEnd
 		}
 
 		return groups
+	}
+
+	static func predictedBreakIndices(
+		row: AudioEditRow,
+		style: CaptionStyleSettings,
+		textStyle: TextStyleSettings,
+		exportWidth: Int,
+		exportHeight: Int,
+		language: String?
+	) -> Set<Int> {
+		let words = row.editedWords ?? row.words
+		guard words.count > 1 else { return [] }
+
+		let fcpFontSize = textStyle.textSize * Double(exportHeight) / 1080.0
+		let font =
+			NSFont(name: textStyle.textFont, size: CGFloat(fcpFontSize))
+			?? NSFont.systemFont(ofSize: CGFloat(fcpFontSize))
+		let availableWidth = Double(exportWidth) * textStyle.textWidthPercent / 100.0
+
+		let processedWords = words.map { word in
+			processWord(word.word, style: style, language: language)
+		}
+
+		let lineGroups = splitIntoLines(
+			words: processedWords,
+			timings: words,
+			style: style,
+			font: font,
+			availableWidth: availableWidth,
+			forcedBreaks: Set(row.captionBreaks)
+		)
+
+		var breakIndices = Set<Int>()
+		for i in 1..<lineGroups.count {
+			breakIndices.insert(lineGroups[i].wordStartIndex)
+		}
+		return breakIndices
 	}
 }

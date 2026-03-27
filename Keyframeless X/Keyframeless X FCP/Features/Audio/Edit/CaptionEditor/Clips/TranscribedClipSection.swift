@@ -28,7 +28,9 @@ struct TranscribedClipSection: View {
 	@ObservedObject var player: AudioPlayer
 	@Binding var editingRowID: Int?
 	var sentenceRowIDs: [Int] = []
+	var predictedBreaks: [Int: Set<Int>] = [:]
 	var onSentenceEdit: (Int, [TranscriptionStore.StoredWord]?) -> Void = { _, _ in }
+	var onBreakToggle: (Int, [Int]) -> Void = { _, _ in }
 	@State private var isHovered = false
 
 	private var groupContainsProfanity: Bool {
@@ -54,13 +56,26 @@ struct TranscribedClipSection: View {
 				selectedClips: $selectedClips
 			)
 
-			ForEach(group.sentences) { row in
+			ForEach(Array(group.sentences.enumerated()), id: \.element.id) { index, row in
 				SentenceRow(
 					row: row,
 					clip: clips[row.clipIndex],
 					player: player,
 					editingRowID: $editingRowID,
 					sentenceRowIDs: sentenceRowIDs,
+					captionBreaks: Set(row.captionBreaks),
+					predictedBreaks: predictedBreaks[row.id] ?? [],
+					onToggleBreak: { wordIndex in
+						guard wordIndex > 0 else { return }
+						let clip = clips[row.clipIndex]
+						TranscriptionStore.shared.toggleCaptionBreak(
+							at: wordIndex, for: clip,
+							sentenceStart: Float(row.sentenceStart))
+						let updated =
+							TranscriptionStore.shared.captionBreakIndices(
+								for: clip, sentenceStart: Float(row.sentenceStart)) ?? []
+						onBreakToggle(row.id, updated)
+					},
 					onEdit: { newText in
 						let clip = clips[row.clipIndex]
 						let store = TranscriptionStore.shared
@@ -77,13 +92,21 @@ struct TranscribedClipSection: View {
 						}
 						onSentenceEdit(row.id, editedWords)
 					},
+					onBreaksEdited: { newBreaks in
+						let clip = clips[row.clipIndex]
+						TranscriptionStore.shared.setCaptionBreakIndices(
+							newBreaks.isEmpty ? nil : newBreaks,
+							for: clip, sentenceStart: Float(row.sentenceStart))
+						onBreakToggle(row.id, newBreaks)
+					},
 					onReset: row.editedWords != nil
 						? {
 							let clip = clips[row.clipIndex]
 							TranscriptionStore.shared.setEditedWords(
 								nil, for: clip, sentenceStart: Float(row.sentenceStart))
 							onSentenceEdit(row.id, nil)
-						} : nil
+						} : nil,
+					showTrailingBreak: index < group.sentences.count - 1
 				)
 				.id(row.id)
 				.background(

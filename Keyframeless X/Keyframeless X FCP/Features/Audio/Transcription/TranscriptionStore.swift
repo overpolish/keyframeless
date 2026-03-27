@@ -29,10 +29,12 @@ class TranscriptionStore {
 
 	private var entries: [ClipKey: [StoredWord]] = [:]
 	private var sentenceEdits: [ClipKey: [String: [StoredWord]]] = [:]
+	private var captionBreaks: [ClipKey: [String: [Int]]] = [:]
 
 	private init() {
 		load()
 		loadEdits()
+		loadBreaks()
 	}
 
 	func words(for clip: FCPXMLParser.AudioClip) -> [StoredWord]? {
@@ -202,9 +204,47 @@ class TranscriptionStore {
 		}
 	}
 
+	func captionBreakIndices(
+		for clip: FCPXMLParser.AudioClip, sentenceStart: Float
+	) -> [Int]? {
+		captionBreaks[ClipKey(clip: clip)]?[sentenceStartKey(sentenceStart)]
+	}
+
+	func setCaptionBreakIndices(
+		_ indices: [Int]?, for clip: FCPXMLParser.AudioClip, sentenceStart: Float
+	) {
+		let key = ClipKey(clip: clip)
+		let sKey = sentenceStartKey(sentenceStart)
+		if let indices, !indices.isEmpty {
+			if captionBreaks[key] == nil { captionBreaks[key] = [:] }
+			captionBreaks[key]![sKey] = indices.sorted()
+		} else {
+			captionBreaks[key]?[sKey] = nil
+			if captionBreaks[key]?.isEmpty == true {
+				captionBreaks[key] = nil
+			}
+		}
+		saveBreaks()
+	}
+
+	func toggleCaptionBreak(
+		at wordIndex: Int, for clip: FCPXMLParser.AudioClip, sentenceStart: Float
+	) {
+		var indices = captionBreakIndices(for: clip, sentenceStart: sentenceStart) ?? []
+		if let existing = indices.firstIndex(of: wordIndex) {
+			indices.remove(at: existing)
+		} else {
+			indices.append(wordIndex)
+		}
+		setCaptionBreakIndices(
+			indices.isEmpty ? nil : indices, for: clip, sentenceStart: sentenceStart)
+	}
+
 	func removeAll() {
 		entries = [:]
+		captionBreaks = [:]
 		save()
+		saveBreaks()
 	}
 
 	private func load() {
@@ -224,6 +264,15 @@ class TranscriptionStore {
 
 	private func saveEdits() {
 		KKStore.save(sentenceEdits, to: "transcription_edits.json")
+	}
+
+	private func loadBreaks() {
+		captionBreaks =
+			KKStore.load([ClipKey: [String: [Int]]].self, from: "transcription_breaks.json") ?? [:]
+	}
+
+	private func saveBreaks() {
+		KKStore.save(captionBreaks, to: "transcription_breaks.json")
 	}
 
 }
