@@ -130,10 +130,15 @@ struct AudioEditView: View {
 			)
 			HStack(alignment: .top, spacing: KKSpacingLG) {
 				VStack(alignment: .leading, spacing: KKSpacingLG) {
-					HStack(alignment: .firstTextBaseline) {
+					HStack(alignment: .bottom) {
 						Text("Transcriptions")
 							.font(.title3)
 							.foregroundStyle(.secondary)
+						HelperText(
+							"Right-click to add/remove breaks",
+							systemImage: "square.fill.and.line.vertical.and.square.fill"
+						)
+						.padding(.horizontal, KKPaddingSM)
 						Spacer()
 						if let selected = model.editSelectedClips, !selected.isEmpty {
 							Button {
