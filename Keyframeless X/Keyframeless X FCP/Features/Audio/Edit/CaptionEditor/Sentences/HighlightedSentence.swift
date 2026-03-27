@@ -117,7 +117,7 @@ private struct HighlightedSentenceTextView: NSViewRepresentable {
 					string: " | ",
 					attributes: [
 						.font: font,
-						.foregroundColor: NSColor.controlAccentColor,
+						.foregroundColor: NSColor.systemBlue,
 					])
 				result.append(marker)
 			} else if i > 0 && predictedBreaks.contains(i) {
