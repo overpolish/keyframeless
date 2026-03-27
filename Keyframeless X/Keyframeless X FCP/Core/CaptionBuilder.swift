@@ -170,9 +170,10 @@ enum CaptionBuilder {
 	static func overlapRegions(_ segments: [CaptionSegment]) -> [OverlapRegion] {
 		let sorted = segments.sorted { $0.startTime < $1.startTime }
 		var regions: [OverlapRegion] = []
+		let epsilon = 0.001
 		var maxEnd = -Double.infinity
 		for seg in sorted {
-			if seg.startTime < maxEnd {
+			if seg.startTime < maxEnd - epsilon {
 				regions.append(
 					OverlapRegion(
 						start: seg.startTime,
@@ -186,9 +187,10 @@ enum CaptionBuilder {
 
 	static func hasOverlaps(_ segments: [CaptionSegment]) -> Bool {
 		let sorted = segments.sorted { $0.startTime < $1.startTime }
+		let epsilon = 0.001
 		var maxEnd = -Double.infinity
 		for seg in sorted {
-			if seg.startTime < maxEnd { return true }
+			if seg.startTime < maxEnd - epsilon { return true }
 			maxEnd = max(maxEnd, seg.endTime)
 		}
 		return false

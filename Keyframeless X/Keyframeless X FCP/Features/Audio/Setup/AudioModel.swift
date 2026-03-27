@@ -205,9 +205,10 @@ class AudioModel: ObservableObject {
 			.map { $0.element }
 		let sorted = clips.sorted { $0.start < $1.start }
 		var regions: [CaptionBuilder.OverlapRegion] = []
+		let epsilon = 0.001
 		var maxEnd = -Double.infinity
 		for i in 0..<sorted.count {
-			if sorted[i].start < maxEnd {
+			if sorted[i].start < maxEnd - epsilon {
 				regions.append(
 					CaptionBuilder.OverlapRegion(
 						start: sorted[i].start,

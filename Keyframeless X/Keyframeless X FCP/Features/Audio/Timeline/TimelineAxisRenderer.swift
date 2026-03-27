@@ -422,9 +422,10 @@ struct TimelineAxisRenderer {
 	private func laneAssignments(for clips: [FCPXMLParser.AudioClip]) -> [Int] {
 		var result = [Int](repeating: 0, count: clips.count)
 		var laneEnds = [Double]()
+		let epsilon = 0.001
 		for (origIdx, clip) in clips.enumerated().sorted(by: { $0.element.start < $1.element.start }
 		) {
-			if let lane = laneEnds.firstIndex(where: { $0 <= clip.start }) {
+			if let lane = laneEnds.firstIndex(where: { $0 <= clip.start + epsilon }) {
 				result[origIdx] = lane
 				laneEnds[lane] = clip.end
 			} else {
