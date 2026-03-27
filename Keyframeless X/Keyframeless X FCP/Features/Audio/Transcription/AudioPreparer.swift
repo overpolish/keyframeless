@@ -94,6 +94,7 @@ struct AudioPreparer {
 	}
 
 	static func extractAudio(for segments: [ProcessingSegment]) async throws -> [PreparedSegment] {
+		print("[AudioPreparer] BEGIN extractAudio — \(segments.count) segments")
 		var sourceFileCache: [String: URL] = [:]
 		var audioURLCache: [String: URL] = [:]
 		var prepared: [PreparedSegment] = []
@@ -101,41 +102,57 @@ struct AudioPreparer {
 		for segment in segments {
 			let cacheKey = segment.sourceURL?.absoluteString ?? segment.sourceName
 
+			print(
+				"[AudioPreparer] segment: bookmark=\(segment.bookmark != nil), url=\(segment.sourceURL?.lastPathComponent ?? "nil")"
+			)
 			let sourceFileURL: URL
 			if let cached = sourceFileCache[cacheKey] {
 				sourceFileURL = cached
+			} else if let bookmark = segment.bookmark,
+				let scopedURL = {
+					var isStale = false
+					return try? URL(
+						resolvingBookmarkData: bookmark,
+						options: .withSecurityScope,
+						relativeTo: nil,
+						bookmarkDataIsStale: &isStale)
+				}()
+			{
+				_ = scopedURL.startAccessingSecurityScopedResource()
+				sourceFileCache[cacheKey] = scopedURL
+				sourceFileURL = scopedURL
+			} else if let url = segment.sourceURL {
+				sourceFileCache[cacheKey] = url
+				sourceFileURL = url
 			} else {
-				let clip = FCPXMLParser.AudioClip(
-					name: segment.sourceName,
-					start: 0, end: 0,
-					sourceStart: 0, sourceDuration: 0,
-					url: segment.sourceURL,
-					bookmark: segment.bookmark,
-					isCompound: false
-				)
-				let data = try clip.data()
-				let ext = segment.sourceURL?.pathExtension ?? ""
-				let tmpURL = FileManager.default.temporaryDirectory
-					.appendingPathComponent(
-						"kk_audio_\(UUID().uuidString)" + (ext.isEmpty ? "" : ".\(ext)"))
-				try data.write(to: tmpURL)
-				sourceFileCache[cacheKey] = tmpURL
-				sourceFileURL = tmpURL
+				throw CocoaError(.fileNoSuchFile)
 			}
+
+			let videoExtensions: Set<String> = ["mp4", "mov", "m4v", "mxf", "mts", "avi"]
+			let isVideo = videoExtensions.contains(
+				sourceFileURL.pathExtension.lowercased())
 
 			let audioURL: URL
 			if let cached = audioURLCache[cacheKey] {
 				audioURL = cached
-			} else if (try? AVAudioFile(
-				forReading: sourceFileURL, commonFormat: .pcmFormatFloat32, interleaved: false
-			)) != nil {
+			} else if !isVideo,
+				(try? AVAudioFile(
+					forReading: sourceFileURL, commonFormat: .pcmFormatFloat32, interleaved: false
+				)) != nil
+			{
 				audioURL = sourceFileURL
 			} else {
+				print("[AudioPreparer] extracting audio from \(sourceFileURL.lastPathComponent)")
 				let wavURL = try await extractAudioTrack(from: sourceFileURL)
+				let size =
+					(try? FileManager.default.attributesOfItem(atPath: wavURL.path)[.size] as? Int)
+					?? 0
+				print("[AudioPreparer] extracted WAV: \(size) bytes at \(wavURL.lastPathComponent)")
 				audioURLCache[cacheKey] = wavURL
 				audioURL = wavURL
 			}
 
+			print("[AudioPreparer] opening audioURL: \(audioURL.lastPathComponent)")
 			let audioFile = try AVAudioFile(
 				forReading: audioURL,
 				commonFormat: .pcmFormatFloat32,
@@ -200,7 +217,7 @@ struct AudioPreparer {
 		}
 
 		for url in sourceFileCache.values {
-			try? FileManager.default.removeItem(at: url)
+			url.stopAccessingSecurityScopedResource()
 		}
 		for url in audioURLCache.values {
 			try? FileManager.default.removeItem(at: url)
@@ -216,7 +233,7 @@ struct AudioPreparer {
 		}
 
 		let reader = try AVAssetReader(asset: asset)
-		let output = AVAssetReaderTrackOutput(
+		let readerOutput = AVAssetReaderTrackOutput(
 			track: track,
 			outputSettings: [
 				AVFormatIDKey: kAudioFormatLinearPCM,
@@ -224,53 +241,49 @@ struct AudioPreparer {
 				AVLinearPCMIsFloatKey: true,
 				AVLinearPCMIsBigEndianKey: false,
 				AVLinearPCMIsNonInterleaved: false,
+				AVNumberOfChannelsKey: 1,
 			])
-		reader.add(output)
-		reader.startReading()
-
-		guard let firstBuffer = output.copyNextSampleBuffer(),
-			let formatDesc = CMSampleBufferGetFormatDescription(firstBuffer),
-			let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc)?.pointee,
-			let format = AVAudioFormat(
-				commonFormat: .pcmFormatFloat32,
-				sampleRate: asbd.mSampleRate,
-				channels: AVAudioChannelCount(max(1, asbd.mChannelsPerFrame)),
-				interleaved: true
-			)
-		else {
-			throw NSError(domain: "AudioPreparer", code: 11)
-		}
+		reader.add(readerOutput)
 
 		let wavURL = FileManager.default.temporaryDirectory
 			.appendingPathComponent("kk_extracted_\(UUID().uuidString).wav")
-		let outFile = try AVAudioFile(forWriting: wavURL, settings: format.settings)
+		let writer = try AVAssetWriter(outputURL: wavURL, fileType: .wav)
+		let writerInput = AVAssetWriterInput(
+			mediaType: .audio,
+			outputSettings: [
+				AVFormatIDKey: kAudioFormatLinearPCM,
+				AVLinearPCMBitDepthKey: 16,
+				AVLinearPCMIsFloatKey: false,
+				AVLinearPCMIsBigEndianKey: false,
+				AVLinearPCMIsNonInterleaved: false,
+				AVNumberOfChannelsKey: 1,
+				AVSampleRateKey: 48000,
+			])
+		writer.add(writerInput)
 
-		try writeSampleBuffer(firstBuffer, format: format, to: outFile)
-		while let sampleBuffer = output.copyNextSampleBuffer() {
-			try writeSampleBuffer(sampleBuffer, format: format, to: outFile)
+		reader.startReading()
+		writer.startWriting()
+		writer.startSession(atSourceTime: .zero)
+
+		while reader.status == .reading {
+			if let buffer = readerOutput.copyNextSampleBuffer() {
+				while !writerInput.isReadyForMoreMediaData {
+					try await Task.sleep(nanoseconds: 10_000_000)
+				}
+				writerInput.append(buffer)
+			} else {
+				break
+			}
+		}
+
+		writerInput.markAsFinished()
+		await writer.finishWriting()
+
+		guard writer.status == .completed else {
+			throw writer.error ?? NSError(domain: "AudioPreparer", code: 12)
 		}
 
 		return wavURL
-	}
-
-	private static func writeSampleBuffer(
-		_ sampleBuffer: CMSampleBuffer, format: AVAudioFormat, to outFile: AVAudioFile
-	) throws {
-		guard let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else { return }
-		let frameCount = AVAudioFrameCount(CMSampleBufferGetNumSamples(sampleBuffer))
-		guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount)
-		else { return }
-		buffer.frameLength = frameCount
-
-		var length = 0
-		var dataPointer: UnsafeMutablePointer<Int8>?
-		CMBlockBufferGetDataPointer(
-			blockBuffer, atOffset: 0, lengthAtOffsetOut: nil,
-			totalLengthOut: &length, dataPointerOut: &dataPointer
-		)
-		guard let ptr = dataPointer else { return }
-		memcpy(buffer.floatChannelData![0], ptr, length)
-		try outFile.write(from: buffer)
 	}
 
 	static func cleanUp(segments: [PreparedSegment]) {
