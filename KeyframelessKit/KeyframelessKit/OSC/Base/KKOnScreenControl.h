@@ -29,9 +29,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// Override to provide the fragment shader function name.
 - (NSString *)fragmentFunctionName;
 
-/// Selects the appropriate color based on hover/active state.
-- (simd_float4)colorForHovered:(BOOL)isHovered active:(BOOL)isActive;
-
 /// Loads or retrieves cached pipeline state matching the destination image's
 /// pixel format.
 - (nullable id<MTLRenderPipelineState>)pipelineStateForDestinationImage:

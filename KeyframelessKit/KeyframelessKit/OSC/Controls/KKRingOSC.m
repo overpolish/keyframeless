@@ -115,7 +115,7 @@ static NSCursor *resizeCursorForAngle(double radians) {
             destinationImage:(FxImageTile *)destinationImage
                       atTime:(CMTime)time {
   id<MTLRenderPipelineState> ps =
-      [self pipelineStateForRegistryID:destinationImage.deviceRegistryID];
+      [self pipelineStateForDestinationImage:destinationImage];
   if (!ps)
     return;
 

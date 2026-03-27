@@ -45,10 +45,6 @@
 + (NSColor *)ringActiveFill;
 + (NSColor *)ringActiveStroke;
 
-+ (NSColor *)accent;
-+ (NSColor *)warning;
-+ (NSColor *)error;
-
 - (NSColor *)shiftedHueBy:(CGFloat)amount;
 - (NSColor *)compound;
 
