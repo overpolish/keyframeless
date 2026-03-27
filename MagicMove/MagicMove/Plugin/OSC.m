@@ -4,6 +4,7 @@
  */
 
 #import "OSC.h"
+#import "Constants.h"
 #import <FxPlug/FxPlugSDK.h>
 
 @interface KKArcOSC (FxOSC) <FxOnScreenControl_v4>
@@ -41,16 +42,32 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
 
 @implementation MagicMoveOSC {
   KKRingOSC *_ringOSC;
+  KKRotationOSC *_rotationOSC;
   BOOL _ringIsHovered;
   BOOL _ringIsDragging;
+  BOOL _rotationIsHovered;
+  BOOL _rotationIsDragging;
+  double _rotationDragPrevAngle;
+  double _rotationDragAccum;
 }
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
   self = [super initWithAPIManager:apiManager];
   if (self) {
     _ringOSC = [[KKRingOSC alloc] initWithAPIManager:apiManager];
+    _rotationOSC = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
   }
   return self;
+}
+
+- (float)rotationAngleAtTime:(CMTime)time {
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!paramGetAPI)
+    return 0.0f;
+  double degrees = 0.0;
+  [paramGetAPI getFloatValue:&degrees fromParameter:kParamRotation atTime:time];
+  return (float)(degrees * M_PI / 180.0);
 }
 
 - (CGPoint)oscPositionAtTime:(CMTime)time {
@@ -89,6 +106,14 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
                         isActive:_ringIsDragging
                 destinationImage:destinationImage
                           atTime:time];
+
+  _rotationOSC.center = position;
+  _rotationOSC.angle = [self rotationAngleAtTime:time];
+  [_rotationOSC drawAtCanvasPosition:position
+                           isHovered:_rotationIsHovered
+                            isActive:_rotationIsDragging
+                    destinationImage:destinationImage
+                              atTime:time];
 }
 
 - (void)hitTestOSCAtMousePositionX:(double)positionX
@@ -96,6 +121,7 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
                         activePart:(NSInteger *)activePart
                             atTime:(CMTime)time {
   _ringIsHovered = NO;
+  _rotationIsHovered = NO;
 
   [super hitTestOSCAtMousePositionX:positionX
                      mousePositionY:positionY
@@ -110,6 +136,15 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
     _ringIsHovered = YES;
     *activePart = 2;
   }
+
+  _rotationOSC.center = [self oscPositionAtTime:time];
+  _rotationOSC.angle = [self rotationAngleAtTime:time];
+  if ([_rotationOSC hitTestAtMousePositionX:positionX
+                                  positionY:positionY
+                                     atTime:time]) {
+    _rotationIsHovered = YES;
+    *activePart = 3;
+  }
 }
 
 - (void)mouseDownAtPositionX:(double)positionX
@@ -118,7 +153,18 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
                    modifiers:(NSUInteger)modifiers
                  forceUpdate:(BOOL *)forceUpdate
                       atTime:(CMTime)time {
-  if (activePart == 2) {
+  if (activePart == 3) {
+    _rotationIsDragging = YES;
+    CGPoint center = [self oscPositionAtTime:time];
+    double dx = positionX - center.x;
+    double dy = positionY - center.y;
+    _rotationDragPrevAngle = atan2(-dy, dx) * 180.0 / M_PI;
+    _rotationDragAccum = [self rotationAngleAtTime:time] * 180.0 / M_PI;
+    id<FxOnScreenControlAPI_v4> oscAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    [oscAPI setCursor:[NSCursor crosshairCursor]];
+    *forceUpdate = YES;
+  } else if (activePart == 2) {
     _ringIsDragging = YES;
     [_ringOSC updateCursorForMouseX:positionX positionY:positionY];
     *forceUpdate = YES;
@@ -138,7 +184,30 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
                       modifiers:(NSUInteger)modifiers
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
-  if (activePart == 2) {
+  if (activePart == 3) {
+    CGPoint center = [self oscPositionAtTime:time];
+    double dx = positionX - center.x;
+    double dy = positionY - center.y;
+    double currentAngle = atan2(-dy, dx) * 180.0 / M_PI;
+
+    double delta = currentAngle - _rotationDragPrevAngle;
+    if (delta > 180.0)
+      delta -= 360.0;
+    else if (delta < -180.0)
+      delta += 360.0;
+
+    _rotationDragAccum += delta;
+    _rotationDragPrevAngle = currentAngle;
+
+    id<FxParameterSettingAPI_v5> paramSetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    if (paramSetAPI) {
+      [paramSetAPI setFloatValue:_rotationDragAccum
+                     toParameter:kParamRotation
+                          atTime:time];
+    }
+    *forceUpdate = YES;
+  } else if (activePart == 2) {
     [_ringOSC updateCursorForMouseX:positionX positionY:positionY];
     *forceUpdate = YES;
   } else {
@@ -158,6 +227,10 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
                forceUpdate:(BOOL *)forceUpdate
                     atTime:(CMTime)time {
   _ringIsDragging = NO;
+  _rotationIsDragging = NO;
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  [oscAPI setCursor:[NSCursor arrowCursor]];
   [super mouseUpAtPositionX:positionX
                   positionY:positionY
                  activePart:activePart

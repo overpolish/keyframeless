@@ -5,6 +5,7 @@
 
 #import "KKOnScreenControl.h"
 #import "../../Style/NSColor+KKColors.h"
+#import "KKOSCShaderTypes.h"
 #import <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKLog.h>
@@ -135,6 +136,65 @@
                     registryID:registryID
                    pixelFormat:pixelFormat];
   return ps;
+}
+
+- (void)drawQuadForDestinationImage:(FxImageTile *)destinationImage
+                     canvasPosition:(CGPoint)canvasPosition
+                      pipelineState:(id<MTLRenderPipelineState>)pipelineState
+                       fragmentData:(const void *)fragmentData
+                   fragmentDataSize:(size_t)fragmentDataSize
+                               size:(float)size {
+  [self drawQuadForDestinationImage:destinationImage
+                     canvasPosition:canvasPosition
+                   clearDestination:YES
+                      pipelineState:pipelineState
+                       fragmentData:fragmentData
+                   fragmentDataSize:fragmentDataSize
+                               size:size];
+}
+
+- (void)drawQuadForDestinationImage:(FxImageTile *)destinationImage
+                     canvasPosition:(CGPoint)canvasPosition
+                   clearDestination:(BOOL)clear
+                      pipelineState:(id<MTLRenderPipelineState>)pipelineState
+                       fragmentData:(const void *)fragmentData
+                   fragmentDataSize:(size_t)fragmentDataSize
+                               size:(float)size {
+  [self
+      encodeRenderCommandsForDestinationImage:destinationImage
+                               canvasPosition:canvasPosition
+                             clearDestination:clear
+                                     commands:^(
+                                         id<MTLRenderCommandEncoder> encoder,
+                                         CGPoint metalPosition,
+                                         simd_uint2 viewportSize) {
+                                       KKVertex2D quadVertices[6];
+                                       [KKRenderPrimitives
+                                           generateQuadVertices:quadVertices
+                                                         center:metalPosition
+                                                           size:size];
+                                       [encoder setRenderPipelineState:
+                                                    pipelineState];
+                                       [encoder
+                                           setVertexBytes:quadVertices
+                                                   length:sizeof(quadVertices)
+                                                  atIndex:
+                                                      KKVertexInputIndex_Vertices];
+                                       [encoder
+                                           setVertexBytes:&viewportSize
+                                                   length:sizeof(viewportSize)
+                                                  atIndex:
+                                                      KKVertexInputIndex_ViewportSize];
+                                       [encoder
+                                           setFragmentBytes:fragmentData
+                                                     length:fragmentDataSize
+                                                    atIndex:
+                                                        KKOSCFragmentIndex_DrawColor];
+                                       [encoder drawPrimitives:
+                                                    MTLPrimitiveTypeTriangle
+                                                   vertexStart:0
+                                                   vertexCount:6];
+                                     }];
 }
 
 - (void)

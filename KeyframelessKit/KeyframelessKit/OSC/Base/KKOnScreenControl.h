@@ -89,9 +89,27 @@ NS_ASSUME_NONNULL_BEGIN
                  didHandle:(BOOL *)didHandle
                     atTime:(CMTime)time;
 
-/// Shared Metal setup/teardown. Call from drawAtCanvasPosition: with a block
-/// containing your encoder commands. Handles device, queue, command buffer,
-/// render pass, viewport, and cleanup automatically. Clears the destination.
+/// Draws a quad with the given fragment data. Handles pipeline, vertices,
+/// viewport, and cleanup. Clears the destination by default.
+- (void)drawQuadForDestinationImage:(FxImageTile *)destinationImage
+                     canvasPosition:(CGPoint)canvasPosition
+                      pipelineState:(id<MTLRenderPipelineState>)pipelineState
+                       fragmentData:(const void *)fragmentData
+                   fragmentDataSize:(size_t)fragmentDataSize
+                               size:(float)size;
+
+/// Same as above but allows preserving existing destination content.
+- (void)drawQuadForDestinationImage:(FxImageTile *)destinationImage
+                     canvasPosition:(CGPoint)canvasPosition
+                   clearDestination:(BOOL)clear
+                      pipelineState:(id<MTLRenderPipelineState>)pipelineState
+                       fragmentData:(const void *)fragmentData
+                   fragmentDataSize:(size_t)fragmentDataSize
+                               size:(float)size;
+
+/// Low-level Metal setup/teardown. Use drawQuadForDestinationImage: for
+/// standard quad rendering. This is for custom encoder commands. Clears the
+/// destination.
 - (void)
     encodeRenderCommandsForDestinationImage:(FxImageTile *)destinationImage
                              canvasPosition:(CGPoint)canvasPosition

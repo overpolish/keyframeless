@@ -32,6 +32,7 @@
 				OSC/Controls/KKArcOSC.h,
 				OSC/Controls/KKPointOSC.h,
 				OSC/Controls/KKRingOSC.h,
+				OSC/Controls/KKRotationOSC.h,
 				Plugin/KKConstants.h,
 				Plugin/KKHostInfo.h,
 				Plugin/KKPlugin.h,

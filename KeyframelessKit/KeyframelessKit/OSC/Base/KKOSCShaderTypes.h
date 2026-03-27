@@ -33,6 +33,27 @@ typedef struct KKPointOSCParams {
     vector_float4 strokeColor;
 } KKPointOSCParams;
 
+typedef struct KKRotationOSCParams {
+    float armLength;
+    float centerOffset;
+    float circleRadius;
+    float lineHalfWidth;
+    float outlineWidth;
+    float angle;
+    vector_float4 fillColor;
+    vector_float4 strokeColor;
+    float donutRadius;
+    float donutFillHalfWidth;
+    float donutOutlineWidth;
+    vector_float4 donutFillColor;
+    vector_float4 donutStrokeColor;
+    float markerAngle;
+    float markerRadius;
+    float markerOutlineWidth;
+    vector_float4 markerFillColor;
+    vector_float4 markerStrokeColor;
+} KKRotationOSCParams;
+
 #ifdef __METAL_VERSION__
 
 #include <metal_stdlib>
@@ -65,6 +86,24 @@ inline float4 kkOSCColor(float4 fillColor, float4 strokeColor, float outlineFact
 /// Composites fill and outline colors with correct alpha handling.
 inline float4 kkOSCColor(float4 fillColor, float4 strokeColor, float outlineFactor, float shapeAlpha) {
     return kkOSCColor(fillColor, strokeColor, outlineFactor, 0.0, shapeAlpha);
+}
+
+/// Source-over composite of two straight-alpha colors, returning straight alpha.
+inline float4 kkCompositeOver(float4 src, float4 dst) {
+    float4 srcPM = float4(src.rgb * src.a, src.a);
+    float4 dstPM = float4(dst.rgb * dst.a, dst.a);
+    float4 out = srcPM + dstPM * (1.0 - srcPM.a);
+    return out.a > 0.001 ? float4(out.rgb / out.a, out.a) : float4(0.0);
+}
+
+/// Computes a filled circle color with outline and subtle bottom shadow (used by point and rotation handles).
+inline float4 kkPointColor(float4 fillColor, float4 strokeColor, float outlineFactor, float shapeAlpha, float relY,
+                           float radius, float dist, float outlineWidth) {
+    float shadowFactor = smoothstep(0.1, -0.3, -relY) * 0.15 * (1.0 - outlineFactor);
+    float edgePadding = smoothstep(0.0, outlineWidth * 4.0, radius - dist);
+    shadowFactor *= edgePadding;
+    float4 color = kkOSCColor(fillColor, strokeColor, outlineFactor, shapeAlpha);
+    return mix(color, float4(0.0, 0.0, 0.0, strokeColor.a), shadowFactor);
 }
 
 #endif
