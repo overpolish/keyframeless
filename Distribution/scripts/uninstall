@@ -1,0 +1,38 @@
+#!/bin/bash
+
+echo "Keyframeless Uninstaller"
+echo "========================"
+echo ""
+echo "This will remove Keyframeless from your system."
+echo ""
+
+MOTION_TEMPLATES="$HOME/Movies/Motion Templates.localized/Effects.localized/Keyframeless"
+APP_DIR="/Applications/Keyframeless"
+
+echo "The following will be deleted:"
+echo "  $APP_DIR"
+if [ -d "$MOTION_TEMPLATES" ]; then
+    echo "  $MOTION_TEMPLATES"
+fi
+echo ""
+
+read -p "Continue? (y/n) " -n 1 -r
+echo ""
+
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Uninstall cancelled."
+    exit 0
+fi
+
+if [ -d "$MOTION_TEMPLATES" ]; then
+    rm -rf "$MOTION_TEMPLATES"
+    echo "Removed Motion Templates."
+fi
+
+sudo rm -rf "$APP_DIR"
+echo "Removed Keyframeless."
+
+echo ""
+echo "Keyframeless has been uninstalled."
+sleep 2
+osascript -e 'tell application "Terminal" to close front window' &

@@ -21,9 +21,9 @@ struct TimelineAxisRenderer {
 	let waveforms: [Int: [Float]]
 	let hasAudioPlayer: Bool
 	let playingIndex: Int?
-	let currentTime: Double?
 	let labelForTime: ((Double) -> String)?
 	var skipWaveforms: Bool = false
+	var dirtyRect: CGRect = .null
 
 	let playBtnSize: CGFloat = 12
 	let minHeightForControls: CGFloat = 16
@@ -273,12 +273,7 @@ struct TimelineAxisRenderer {
 				alpha: 0.85, in: ctx)
 		}
 
-		var progress: Double?
-		if isPlaying, let ct = currentTime {
-			let offset = ct - state.clip.sourceStart
-			progress = max(0, min(1, offset / state.clip.sourceDuration))
-		}
-		drawScrubBar(in: state.rect, context: ctx, progress: progress)
+		drawScrubBar(in: state.rect, context: ctx)
 	}
 
 	private func drawClipTitle(_ state: ClipDrawState, in ctx: CGContext) {
@@ -353,7 +348,7 @@ struct TimelineAxisRenderer {
 		image.draw(in: imgRect)
 	}
 
-	func drawScrubBar(in rect: CGRect, context ctx: CGContext, progress: Double?) {
+	func drawScrubBar(in rect: CGRect, context ctx: CGContext) {
 		let trackH: CGFloat = 3
 		let trackX = rect.minX
 		let trackW = rect.width
@@ -366,61 +361,62 @@ struct TimelineAxisRenderer {
 			cornerWidth: trackH / 2, cornerHeight: trackH / 2, transform: nil)
 		ctx.addPath(trackPath)
 		ctx.fillPath()
-
-		guard let progress else { return }
-
-		let fillW = trackW * CGFloat(progress)
-		if fillW > 0 {
-			ctx.setFillColor(NSColor.white.withAlphaComponent(0.85).cgColor)
-			let fillPath = CGPath(
-				roundedRect: CGRect(x: trackX, y: trackY, width: fillW, height: trackH),
-				cornerWidth: trackH / 2, cornerHeight: trackH / 2, transform: nil)
-			ctx.addPath(fillPath)
-			ctx.fillPath()
-		}
-
-		let knobR: CGFloat = 4.5
-		let knobX = trackX + fillW
-		ctx.setFillColor(NSColor.white.cgColor)
-		ctx.fillEllipse(
-			in: CGRect(
-				x: knobX - knobR, y: trackY + trackH / 2 - knobR,
-				width: knobR * 2, height: knobR * 2))
 	}
 
 	func drawWaveform(
 		_ samples: [Float], in rect: CGRect, context ctx: CGContext, selected: Bool
 	) {
 		let alpha: CGFloat = selected ? 0.7 : 0.35
-		ctx.setStrokeColor(NSColor.white.withAlphaComponent(alpha).cgColor)
-
-		let barCount = max(1, Int(rect.width / 2))
-		let barWidth = rect.width / CGFloat(barCount)
 		let midY = rect.midY
-		let halfH = rect.height * 0.35
+		let halfH = rect.height * 0.4
 
 		let peak = samples.max() ?? 1
 		let scale = peak > 0 ? 1 / CGFloat(peak) : 1
 
-		ctx.setLineWidth(max(1, barWidth * 0.75))
-		ctx.beginPath()
-		for b in 0..<barCount {
-			let sampleIndex = min(
-				Int(Double(b) * Double(samples.count) / Double(barCount)), samples.count - 1)
-			let amp = CGFloat(samples[sampleIndex]) * scale
-			let sx = rect.minX + (CGFloat(b) + 0.5) * barWidth
-			let h = max(1, amp * halfH)
-			ctx.move(to: CGPoint(x: sx, y: midY - h))
-			ctx.addLine(to: CGPoint(x: sx, y: midY + h))
+		// Only draw the visible portion of the waveform
+		let visX = dirtyRect.isNull ? rect : rect.intersection(dirtyRect)
+		guard !visX.isEmpty else { return }
+		let drawStart = max(0, Int(visX.minX - rect.minX) - 1)
+		let drawEnd = min(Int(rect.width), Int(visX.maxX - rect.minX) + 1)
+		let drawCount = drawEnd - drawStart
+		guard drawCount > 0 else { return }
+
+		// Map buckets to visible pixels using max of all buckets per pixel
+		let totalPoints = max(1, Int(rect.width))
+		let ratio = Double(samples.count) / Double(totalPoints)
+		var pixelAmps = [CGFloat](repeating: 0, count: drawCount)
+		for i in 0..<drawCount {
+			let pi = drawStart + i
+			let lo = Int(Double(pi) * ratio)
+			let hi = min(Int(Double(pi + 1) * ratio), samples.count)
+			var maxVal: Float = 0
+			for j in lo..<hi { maxVal = max(maxVal, samples[j]) }
+			pixelAmps[i] = CGFloat(maxVal) * scale
 		}
-		ctx.strokePath()
+
+		// Build filled envelope path: top edge forward, bottom edge backward
+		ctx.beginPath()
+		for i in 0..<drawCount {
+			let x = rect.minX + CGFloat(drawStart + i)
+			let h = pixelAmps[i] * halfH
+			let pt = CGPoint(x: x, y: midY - h)
+			if i == 0 { ctx.move(to: pt) } else { ctx.addLine(to: pt) }
+		}
+		for i in stride(from: drawCount - 1, through: 0, by: -1) {
+			let x = rect.minX + CGFloat(drawStart + i)
+			let h = pixelAmps[i] * halfH
+			ctx.addLine(to: CGPoint(x: x, y: midY + h))
+		}
+		ctx.closePath()
+		ctx.setFillColor(NSColor.white.withAlphaComponent(alpha).cgColor)
+		ctx.fillPath()
 	}
 
 	private func clipColor(for clip: FCPXMLParser.AudioClip, isDimmed: Bool) -> NSColor {
 		isDimmed
 			? NSColor.secondaryLabelColor
 			: clip.isCompound
-				? NSColor.warning() ?? NSColor.yellow : NSColor.accent() ?? NSColor.blue
+				? NSColor.controlAccentColor.compound() : NSColor.controlAccentColor
 	}
 
 	private func laneAssignments(for clips: [FCPXMLParser.AudioClip]) -> [Int] {

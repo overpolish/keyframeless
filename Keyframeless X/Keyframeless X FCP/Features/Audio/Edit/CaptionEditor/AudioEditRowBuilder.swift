@@ -18,6 +18,7 @@ struct AudioEditRow: Identifiable {
 	var sentenceEnd: Double = 0
 	var words: [TranscriptionStore.StoredWord] = []
 	var editedWords: [TranscriptionStore.StoredWord]?
+	var captionBreaks: [Int] = []
 }
 
 enum AudioEditRowBuilder {
@@ -53,6 +54,8 @@ enum AudioEditRowBuilder {
 						+ formatTimestamp(timelineEnd, format: format)
 					let edited = store.editedWords(
 						for: clip, sentenceStart: sentence.first!.start)
+					let breaks = store.captionBreakIndices(
+						for: clip, sentenceStart: sentence.first!.start)
 					result.append(
 						AudioEditRow(
 							id: nextID,
@@ -66,7 +69,8 @@ enum AudioEditRowBuilder {
 							sentenceStart: Double(sentence.first!.start),
 							sentenceEnd: Double(sentence.last!.end),
 							words: sentence,
-							editedWords: edited
+							editedWords: edited,
+							captionBreaks: breaks ?? []
 						))
 					nextID += 1
 				}
@@ -78,8 +82,10 @@ enum AudioEditRowBuilder {
 	private static let sentenceEndChars = CharacterSet(charactersIn: ".!?")
 	private static let clauseBreakChars = CharacterSet(charactersIn: ".,;:!?")
 	private static let pauseThreshold: Float = 1.5
+	private static let softPauseThreshold: Float = 0.5
 	private static let minSentenceDuration: Float = 4.0
 	private static let maxDuration: Float = 7.0
+	private static let hardMaxDuration: Float = 10.0
 
 	private static func groupIntoSentences(
 		_ words: [TranscriptionStore.StoredWord]
@@ -90,11 +96,15 @@ enum AudioEditRowBuilder {
 		var current: [TranscriptionStore.StoredWord] = []
 
 		for word in words {
-			if let prev = current.last,
-				word.start - prev.end > pauseThreshold
-			{
-				sentences.append(current)
-				current = []
+			if let prev = current.last {
+				let gap = word.start - prev.end
+				let duration = prev.end - current.first!.start
+				if gap > pauseThreshold
+					|| (gap > softPauseThreshold && duration >= minSentenceDuration)
+				{
+					sentences.append(current)
+					current = []
+				}
 			}
 
 			current.append(word)
@@ -109,6 +119,9 @@ enum AudioEditRowBuilder {
 				sentences.append(current)
 				current = []
 			} else if duration >= maxDuration && endsWithClauseBreak {
+				sentences.append(current)
+				current = []
+			} else if duration >= hardMaxDuration {
 				sentences.append(current)
 				current = []
 			}

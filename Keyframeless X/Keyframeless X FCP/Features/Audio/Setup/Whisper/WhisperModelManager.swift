@@ -90,9 +90,9 @@ class WhisperModelManager: ObservableObject {
 		}
 	}
 
-	@Published var hotWords: [String] = [] {
+	@Published var terms: [String] = [] {
 		didSet {
-			AudioSetupSettings.shared.hotWords = hotWords
+			AudioSetupSettings.shared.terms = terms
 			AudioSetupSettings.shared.save()
 		}
 	}
@@ -103,7 +103,7 @@ class WhisperModelManager: ObservableObject {
 		selectedModel = model
 		selectedLanguage = AudioSetupSettings.shared.selectedLanguage
 		translateToEnglish = AudioSetupSettings.shared.translateToEnglish
-		hotWords = AudioSetupSettings.shared.hotWords
+		terms = AudioSetupSettings.shared.terms
 		Task { await refreshDownloadedModels() }
 	}
 
@@ -111,7 +111,12 @@ class WhisperModelManager: ObservableObject {
 		for model in Self.models where isDownloaded(model.id) {
 			downloadedModels.insert(model.id)
 		}
-		if selectedModel == nil {
+		let validModelIds = Set(Self.models.map(\.id))
+		if let current = selectedModel,
+			!validModelIds.contains(current) || !downloadedModels.contains(current)
+		{
+			selectedModel = Self.models.first(where: { downloadedModels.contains($0.id) })?.id
+		} else if selectedModel == nil {
 			selectedModel = Self.models.first(where: { downloadedModels.contains($0.id) })?.id
 		}
 	}

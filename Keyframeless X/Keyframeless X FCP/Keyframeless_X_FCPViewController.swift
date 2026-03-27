@@ -21,6 +21,7 @@ import SwiftUI
 		super.viewDidLoad()
 
 		let hostingVC = NSHostingController(rootView: AppShell(audioModel: model))
+		hostingVC.sizingOptions = []
 		addChild(hostingVC)
 		hostingVC.view.translatesAutoresizingMaskIntoConstraints = false
 		view.addSubview(hostingVC.view)

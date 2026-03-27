@@ -8,13 +8,35 @@ import Combine
 
 @MainActor
 final class AudioPlayer: ObservableObject {
+	// Spacebar-to-stop support: each view (setup, edit) owns its own AudioPlayer
+	// instance, so we track all live instances here to allow AxisDocumentView's
+	// keyDown to stop whichever one is currently playing.
+	private static var activeInstances = NSHashTable<AudioPlayer>.weakObjects()
+
+	static var isAnyPlaying: Bool {
+		activeInstances.allObjects.contains { $0.playingIndex != nil }
+	}
+
+	static func stopAll() {
+		for instance in activeInstances.allObjects {
+			instance.stop()
+		}
+	}
+
 	@Published private(set) var playingIndex: Int?
-	@Published private(set) var currentTime: Double?
+	private(set) var currentTime: Double? {
+		didSet { currentTimeSubject.send(currentTime) }
+	}
+	let currentTimeSubject = PassthroughSubject<Double?, Never>()
 
 	private var player: AVAudioPlayer?
 	private var stopWorkItem: DispatchWorkItem?
 	private var progressTimer: Timer?
 	private var tmpAudioURL: URL?
+
+	init() {
+		Self.activeInstances.add(self)
+	}
 
 	func isPlaying(index: Int) -> Bool {
 		playingIndex == index
@@ -90,7 +112,7 @@ final class AudioPlayer: ObservableObject {
 		player = newPlayer
 		playingIndex = index
 		currentTime = time
-		progressTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) {
+		progressTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) {
 			[weak self] _ in
 			MainActor.assumeIsolated { self?.currentTime = self?.player?.currentTime }
 		}

@@ -42,13 +42,17 @@ struct AudioEditView: View {
 			rows = AudioEditRowBuilder.buildRows(
 				clips: model.audioClips, format: model.projectFormat)
 			updateSRTOverlaps()
+			// On non-text-field clicks, redirect first responder to the timeline's
+			// AxisDocumentView so spacebar can stop playback. Must happen during a
+			// real mouseDown — see TimelineFirstResponder comment for details.
 			clickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
-				let location = event.locationInWindow
-				if let contentView = event.window?.contentView {
-					let hitView = contentView.hitTest(location)
-					if !(hitView is NSTextField || hitView is NSTextView) {
-						event.window?.makeFirstResponder(nil)
-					}
+				guard let window = event.window else { return event }
+				let hitView = window.contentView?.hitTest(event.locationInWindow)
+				let isEditableText =
+					hitView is NSTextField
+					|| (hitView as? NSTextView)?.isEditable == true
+				if !isEditableText {
+					TimelineFirstResponder.claim(in: window)
 				}
 				return event
 			}
@@ -108,7 +112,7 @@ struct AudioEditView: View {
 			.overlay(alignment: .bottomTrailing) {
 				HelperText(
 					"Click and drag to quickly select/deselect clips",
-					systemImage: "pointer.arrow.motionlines"
+					systemImage: "cursorarrow.motionlines"
 				)
 				.padding(.trailing, KKPaddingSM)
 				.alignmentGuide(.bottom) { d in d[.top] - KKSpacingMD }
@@ -130,6 +134,7 @@ struct AudioEditView: View {
 						Text("Transcriptions")
 							.font(.title3)
 							.foregroundStyle(.secondary)
+							.padding(.horizontal, KKPaddingSM)
 						Spacer()
 						if let selected = model.editSelectedClips, !selected.isEmpty {
 							Button {
@@ -154,6 +159,16 @@ struct AudioEditView: View {
 						ScrollShadowView {
 							ScrollViewReader { proxy in
 								VStack(alignment: .leading, spacing: 0) {
+									HStack {
+										HelperText(
+											"Right-click to add/remove manual breaks",
+											systemImage:
+												"square.fill.and.line.vertical.and.square.fill"
+										)
+										Spacer()
+										BreakLegend()
+									}
+									.padding(.all, KKSpacingMD)
 									ForEach(transcribedClipGroups, id: \.clipIndex) { group in
 										TranscribedClipSection(
 											group: group,
@@ -163,12 +178,21 @@ struct AudioEditView: View {
 											player: player,
 											editingRowID: $editingRowID,
 											sentenceRowIDs: sentenceRowIDs,
+											predictedBreaks: predictedBreaksForGroup(group),
 											onSentenceEdit: { rowID, editedWords in
 												if let idx = rows.firstIndex(where: {
 													$0.id == rowID
 												}) {
 													rows[idx].editedWords = editedWords
 												}
+											},
+											onBreakToggle: { rowID, breaks in
+												if let idx = rows.firstIndex(where: {
+													$0.id == rowID
+												}) {
+													rows[idx].captionBreaks = breaks
+												}
+												updateSRTOverlaps()
 											}
 										)
 									}
@@ -243,7 +267,8 @@ struct AudioEditView: View {
 				}
 				.frame(maxWidth: .infinity, maxHeight: .infinity)
 				AudioExportOptionsSidebar(
-					model: model, rows: rows, srtHasOverlaps: srtHasOverlaps
+					model: model, rows: rows, srtHasOverlaps: srtHasOverlaps,
+					titleCount: titleCount
 				)
 				.frame(maxWidth: .infinity, maxHeight: .infinity)
 			}
@@ -294,6 +319,37 @@ struct AudioEditView: View {
 			if store.words(for: model.audioClips[i]) != nil {
 				result.insert(i)
 			}
+		}
+		return result
+	}
+
+	private var titleCount: Int {
+		let width = Int(model.exportWidth) ?? model.projectFormat?.width ?? 1920
+		let height = Int(model.exportHeight) ?? model.projectFormat?.height ?? 1080
+		let language = AudioSetupSettings.shared.selectedLanguage
+		return rows.filter({ !$0.isHeader && $0.isTranscribed }).reduce(0) { total, row in
+			let breaks = CaptionBuilder.predictedBreakIndices(
+				row: row, style: model.captionStyle, textStyle: model.textStyle,
+				exportWidth: width, exportHeight: height, language: language
+			)
+			return total + breaks.count + 1
+		}
+	}
+
+	private func predictedBreaksForGroup(_ group: TranscribedClipGroup) -> [Int: Set<Int>] {
+		let width = Int(model.exportWidth) ?? model.projectFormat?.width ?? 1920
+		let height = Int(model.exportHeight) ?? model.projectFormat?.height ?? 1080
+		let language = AudioSetupSettings.shared.selectedLanguage
+		var result: [Int: Set<Int>] = [:]
+		for row in group.sentences {
+			result[row.id] = CaptionBuilder.predictedBreakIndices(
+				row: row,
+				style: model.captionStyle,
+				textStyle: model.textStyle,
+				exportWidth: width,
+				exportHeight: height,
+				language: language
+			)
 		}
 		return result
 	}

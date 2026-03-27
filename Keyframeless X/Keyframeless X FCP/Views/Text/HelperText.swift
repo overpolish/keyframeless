@@ -8,20 +8,27 @@ import SwiftUI
 struct HelperText: View {
 	let text: String
 	var systemImage: String? = nil
+	var warning: Bool = false
 
-	init(_ text: String, systemImage: String? = nil) {
+	init(_ text: String, systemImage: String? = nil, warning: Bool = false) {
 		self.text = text
 		self.systemImage = systemImage
+		self.warning = warning
 	}
 
 	var body: some View {
-		HStack(spacing: 4) {
+		let content = HStack(spacing: 4) {
 			if let systemImage {
 				Image(systemName: systemImage)
 			}
 			Text(text)
 		}
 		.font(.system(size: 10, weight: .light))
-		.foregroundStyle(.tertiary)
+
+		if warning {
+			content.foregroundStyle(Color.kkWarning)
+		} else {
+			content.foregroundStyle(.tertiary)
+		}
 	}
 }

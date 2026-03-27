@@ -57,7 +57,7 @@ struct AudioExportOptionsView: View {
 				CapsuleToggle(
 					isOn: $model.censorProfanity,
 					label: "Censor Profanity",
-					systemImage: "checkmark.circle.trianglebadge.exclamationmark.fill"
+					systemImage: "exclamationmark.bubble.fill"
 				)
 				Divider().frame(height: 12).padding(.horizontal, KKPaddingMD)
 				CapsuleToggle(
@@ -130,6 +130,7 @@ struct AudioExportOptionsSidebar: View {
 	@ObservedObject var model: AudioModel
 	let rows: [AudioEditRow]
 	let srtHasOverlaps: Bool
+	var titleCount: Int = 0
 
 	private var hasTranscribedSelection: Bool {
 		let selected = model.editSelectedClips ?? Set(model.audioClips.indices)
@@ -147,8 +148,19 @@ struct AudioExportOptionsSidebar: View {
 				HStack(spacing: KKSpacingLG) {
 					FCPDragZoneView(
 						xmlProvider: { model.buildFCPXML(from: rows) },
-						onDragStateChanged: { model.isDraggingToFCP = $0 }
+						onDragStateChanged: { model.isDraggingToFCP = $0 },
+						showWarning: titleCount > 750
 					)
+					.overlay(alignment: .top) {
+						if titleCount > 750 {
+							HelperText(
+								"Large title count - drag into library, then add to timeline",
+								systemImage: "exclamationmark.triangle.fill",
+								warning: true
+							)
+							.offset(y: -KKSpacingXL - KKSpacingSM)
+						}
+					}
 					.frame(height: 40)
 					.allowsHitTesting(hasTranscribedSelection)
 					.opacity(hasTranscribedSelection ? 1 : 0.4)
