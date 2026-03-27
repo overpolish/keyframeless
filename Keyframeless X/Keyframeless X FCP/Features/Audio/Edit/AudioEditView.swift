@@ -130,15 +130,11 @@ struct AudioEditView: View {
 			)
 			HStack(alignment: .top, spacing: KKSpacingLG) {
 				VStack(alignment: .leading, spacing: KKSpacingLG) {
-					HStack(alignment: .bottom) {
+					HStack(alignment: .firstTextBaseline) {
 						Text("Transcriptions")
 							.font(.title3)
 							.foregroundStyle(.secondary)
-						HelperText(
-							"Right-click to add/remove breaks",
-							systemImage: "square.fill.and.line.vertical.and.square.fill"
-						)
-						.padding(.horizontal, KKPaddingSM)
+							.padding(.horizontal, KKPaddingSM)
 						Spacer()
 						if let selected = model.editSelectedClips, !selected.isEmpty {
 							Button {
@@ -163,6 +159,16 @@ struct AudioEditView: View {
 						ScrollShadowView {
 							ScrollViewReader { proxy in
 								VStack(alignment: .leading, spacing: 0) {
+									HStack {
+										HelperText(
+											"Right-click to add/remove manual breaks",
+											systemImage:
+												"square.fill.and.line.vertical.and.square.fill"
+										)
+										Spacer()
+										BreakLegend()
+									}
+									.padding(.all, KKSpacingMD)
 									ForEach(transcribedClipGroups, id: \.clipIndex) { group in
 										TranscribedClipSection(
 											group: group,
