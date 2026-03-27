@@ -15,6 +15,7 @@ struct HighlightedSentence: View {
 	var predictedBreaks: Set<Int> = []
 	var onToggleBreak: ((Int) -> Void)? = nil
 	var showTrailingBreak: Bool = false
+	var onTap: (() -> Void)? = nil
 
 	private var displayWords: [TranscriptionStore.StoredWord] {
 		editedWords ?? words
@@ -28,7 +29,8 @@ struct HighlightedSentence: View {
 			captionBreaks: captionBreaks,
 			predictedBreaks: predictedBreaks,
 			onToggleBreak: onToggleBreak,
-			showTrailingBreak: showTrailingBreak
+			showTrailingBreak: showTrailingBreak,
+			onTap: onTap
 		)
 	}
 }
@@ -36,6 +38,11 @@ struct HighlightedSentence: View {
 private class SentenceDisplayView: NSTextView {
 	var wordRanges: [(wordIndex: Int, range: NSRange)] = []
 	var onToggleBreak: ((Int) -> Void)?
+	var onTap: (() -> Void)?
+
+	override func mouseDown(with event: NSEvent) {
+		onTap?()
+	}
 
 	override var intrinsicContentSize: NSSize {
 		guard let container = textContainer, let layoutManager else {
@@ -77,6 +84,7 @@ private struct HighlightedSentenceTextView: NSViewRepresentable {
 	let predictedBreaks: Set<Int>
 	let onToggleBreak: ((Int) -> Void)?
 	let showTrailingBreak: Bool
+	var onTap: (() -> Void)?
 
 	func makeNSView(context: Context) -> SentenceDisplayView {
 		let textView = SentenceDisplayView()
@@ -89,12 +97,14 @@ private struct HighlightedSentenceTextView: NSViewRepresentable {
 		textView.isVerticallyResizable = true
 		textView.isHorizontallyResizable = false
 		textView.onToggleBreak = onToggleBreak
+		textView.onTap = onTap
 		applyAttributedString(to: textView)
 		return textView
 	}
 
 	func updateNSView(_ textView: SentenceDisplayView, context: Context) {
 		textView.onToggleBreak = onToggleBreak
+		textView.onTap = onTap
 		applyAttributedString(to: textView)
 		textView.invalidateIntrinsicContentSize()
 	}
