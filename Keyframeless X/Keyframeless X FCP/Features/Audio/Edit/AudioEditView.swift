@@ -158,7 +158,7 @@ struct AudioEditView: View {
 					} else {
 						ScrollShadowView {
 							ScrollViewReader { proxy in
-								VStack(alignment: .leading, spacing: 0) {
+								LazyVStack(alignment: .leading, spacing: 0) {
 									HStack {
 										HelperText(
 											"Right-click to add/remove manual breaks",
@@ -201,15 +201,14 @@ struct AudioEditView: View {
 								Color.clear
 									.frame(height: 0)
 									.onChange(of: editingRowID) {
-										guard let id = editingRowID,
-											let frame = rowFrames[id]
-										else { return }
-										let isAbove = frame.minY < 0
-										let isBelow = frame.maxY > viewportHeight
-										if isAbove || isBelow {
-											withAnimation {
-												proxy.scrollTo(id, anchor: .center)
-											}
+										guard let id = editingRowID else { return }
+										if let frame = rowFrames[id] {
+											let isAbove = frame.minY < 0
+											let isBelow = frame.maxY > viewportHeight
+											guard isAbove || isBelow else { return }
+										}
+										withAnimation {
+											proxy.scrollTo(id, anchor: .center)
 										}
 									}
 							}
