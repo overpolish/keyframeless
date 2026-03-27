@@ -187,7 +187,7 @@ actor AudioTranscriber {
 			)
 
 			let allWords = results.flatMap { $0.allWords }
-			let cleanedWords = Self.cleanWhisperKitWords(allWords)
+			let cleanedWords = Self.cleanWhisperKitWords(allWords, language: language)
 
 			print(
 				"[Transcriber] segment \(i): \(allWords.count) raw words, \(cleanedWords.count) cleaned, range \(segment.range.start)–\(segment.range.end)"
@@ -239,7 +239,9 @@ actor AudioTranscriber {
 		}
 	}
 
-	private static func cleanWhisperKitWords(_ words: [WordTiming]) -> [(WordTiming, String)] {
+	private static func cleanWhisperKitWords(_ words: [WordTiming], language: String?) -> [(
+		WordTiming, String
+	)] {
 		var result: [(WordTiming, String)] = []
 		var skipUntilCloseBracket = false
 		var skipUntilCloseParen = false
@@ -258,6 +260,8 @@ actor AudioTranscriber {
 				if text.contains(")") { skipUntilCloseParen = false }
 				continue
 			}
+
+			if isHallucination(text, language: language) { continue }
 
 			var cleaned =
 				text
@@ -378,7 +382,7 @@ actor AudioTranscriber {
 			let audioFrames = try Self.loadAudioFrames(from: segment.tempFileURL)
 			let whisperSegments = try await w.transcribe(audioFrames: audioFrames)
 
-			let cleanedSegments = Self.cleanWhisperCppSegments(whisperSegments)
+			let cleanedSegments = Self.cleanWhisperCppSegments(whisperSegments, language: language)
 
 			print(
 				"[Transcriber] segment \(i): \(whisperSegments.count) raw words, \(cleanedSegments.count) cleaned, range \(segment.range.start)–\(segment.range.end)"
@@ -445,7 +449,7 @@ actor AudioTranscriber {
 	}
 
 	private static func cleanWhisperCppSegments(
-		_ segments: [SwiftWhisper.Segment]
+		_ segments: [SwiftWhisper.Segment], language: String?
 	) -> [(SwiftWhisper.Segment, String)] {
 		var result: [(SwiftWhisper.Segment, String)] = []
 		var skipUntilCloseBracket = false
@@ -465,6 +469,8 @@ actor AudioTranscriber {
 				if text.contains(")") { skipUntilCloseParen = false }
 				continue
 			}
+
+			if isHallucination(text, language: language) { continue }
 
 			var cleaned =
 				text
@@ -510,6 +516,71 @@ actor AudioTranscriber {
 			s = String(s.dropFirst()).trimmingCharacters(in: .whitespaces)
 		}
 		return s
+	}
+
+	private static func isHallucination(_ text: String, language: String?) -> Bool {
+		let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard !trimmed.isEmpty else { return true }
+
+		// Non-Latin script in Latin-script languages
+		let latinLanguages: Set<String?> = [
+			nil, "en", "es", "fr", "de", "it", "pt", "nl", "pl", "ro", "cs", "sk",
+			"hr", "da", "fi", "sv", "nb", "hu", "tr", "vi", "id", "ms", "tl",
+		]
+		if latinLanguages.contains(language) {
+			let letters = trimmed.unicodeScalars.filter { CharacterSet.letters.contains($0) }
+			if !letters.isEmpty {
+				let latinCount = letters.filter {
+					CharacterSet(charactersIn: "a"..."z")
+						.union(CharacterSet(charactersIn: "A"..."Z"))
+						.union(CharacterSet(charactersIn: "\u{00C0}"..."\u{024F}"))
+						.contains($0)
+				}.count
+				if Double(latinCount) / Double(letters.count) < 0.5 {
+					return true
+				}
+			}
+		}
+
+		// Excessive repetition: same token repeated many times
+		let words = trimmed.split(whereSeparator: { $0.isWhitespace })
+		if words.count >= 4 {
+			let unique = Set(words.map { $0.lowercased() })
+			if unique.count == 1 { return true }
+			// Most words are the same (e.g. "the the the the end")
+			let mostCommon =
+				unique.map { u in words.filter { $0.lowercased() == u }.count }.max() ?? 0
+			if Double(mostCommon) / Double(words.count) > 0.7 { return true }
+		}
+
+		// Single repeated character (e.g. "AAAAAAA")
+		let uniqueChars = Set(trimmed.lowercased().filter { !$0.isWhitespace && !$0.isPunctuation })
+		if uniqueChars.count <= 1, trimmed.count > 3 { return true }
+
+		// Common Whisper hallucination phrases
+		let lower = trimmed.lowercased()
+		let hallucinationPhrases = [
+			"thank you for watching",
+			"thanks for watching",
+			"please subscribe",
+			"subscribe to my channel",
+			"like and subscribe",
+			"see you next time",
+			"see you in the next",
+			"thanks for listening",
+			"thank you for listening",
+			"please like and subscribe",
+			"don't forget to subscribe",
+			"subtitles by",
+			"captioned by",
+			"translated by",
+			"amara.org",
+		]
+		for phrase in hallucinationPhrases {
+			if lower.contains(phrase) { return true }
+		}
+
+		return false
 	}
 
 	private static let numberWords: [String: String] = [

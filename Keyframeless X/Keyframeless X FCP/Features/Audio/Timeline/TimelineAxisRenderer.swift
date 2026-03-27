@@ -142,7 +142,7 @@ struct TimelineAxisRenderer {
 			if let visible = visibleIndices, !visible.contains(i) { continue }
 			let lane = CGFloat(assignments[i])
 			let x = CGFloat(clip.start) * pps
-			let w = min(max(cornerRadius * 2, CGFloat(clip.end - clip.start) * pps), emptyX - x)
+			let w = min(CGFloat(clip.end - clip.start) * pps, emptyX - x)
 			let y = clipAreaTop + lane * (laneHeight + laneGap)
 			let rect = CGRect(x: x, y: y, width: w, height: laneHeight)
 			cachedClipRects.append((rect: rect, index: i))
@@ -422,9 +422,10 @@ struct TimelineAxisRenderer {
 	private func laneAssignments(for clips: [FCPXMLParser.AudioClip]) -> [Int] {
 		var result = [Int](repeating: 0, count: clips.count)
 		var laneEnds = [Double]()
+		let epsilon = 0.001
 		for (origIdx, clip) in clips.enumerated().sorted(by: { $0.element.start < $1.element.start }
 		) {
-			if let lane = laneEnds.firstIndex(where: { $0 <= clip.start }) {
+			if let lane = laneEnds.firstIndex(where: { $0 <= clip.start + epsilon }) {
 				result[origIdx] = lane
 				laneEnds[lane] = clip.end
 			} else {
