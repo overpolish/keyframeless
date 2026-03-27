@@ -242,6 +242,7 @@ enum CaptionBuilder {
 		let startTime: Float
 		let endTime: Float
 		let wordStarts: [Float]
+		let wordStartIndex: Int
 	}
 
 	private static func processWord(
@@ -437,7 +438,8 @@ enum CaptionBuilder {
 						lines: segmentLines,
 						startTime: timings[segStart].start,
 						endTime: timings[lastWordIdx].end,
-						wordStarts: segmentWordStarts
+						wordStarts: segmentWordStarts,
+						wordStartIndex: segStart
 					))
 			}
 
@@ -445,5 +447,42 @@ enum CaptionBuilder {
 		}
 
 		return groups
+	}
+
+	static func predictedBreakIndices(
+		row: AudioEditRow,
+		style: CaptionStyleSettings,
+		textStyle: TextStyleSettings,
+		exportWidth: Int,
+		exportHeight: Int,
+		language: String?
+	) -> Set<Int> {
+		let words = row.editedWords ?? row.words
+		guard words.count > 1 else { return [] }
+
+		let fcpFontSize = textStyle.textSize * Double(exportHeight) / 1080.0
+		let font =
+			NSFont(name: textStyle.textFont, size: CGFloat(fcpFontSize))
+			?? NSFont.systemFont(ofSize: CGFloat(fcpFontSize))
+		let availableWidth = Double(exportWidth) * textStyle.textWidthPercent / 100.0
+
+		let processedWords = words.map { word in
+			processWord(word.word, style: style, language: language)
+		}
+
+		let lineGroups = splitIntoLines(
+			words: processedWords,
+			timings: words,
+			style: style,
+			font: font,
+			availableWidth: availableWidth,
+			forcedBreaks: Set(row.captionBreaks)
+		)
+
+		var breakIndices = Set<Int>()
+		for i in 1..<lineGroups.count {
+			breakIndices.insert(lineGroups[i].wordStartIndex)
+		}
+		return breakIndices
 	}
 }

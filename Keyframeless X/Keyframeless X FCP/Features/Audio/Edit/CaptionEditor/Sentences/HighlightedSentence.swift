@@ -12,6 +12,7 @@ struct HighlightedSentence: View {
 	let currentTime: Double?
 	var language: String? = nil
 	var captionBreaks: Set<Int> = []
+	var predictedBreaks: Set<Int> = []
 	var onToggleBreak: ((Int) -> Void)? = nil
 
 	private var displayWords: [TranscriptionStore.StoredWord] {
@@ -24,6 +25,7 @@ struct HighlightedSentence: View {
 			currentTime: currentTime,
 			language: language,
 			captionBreaks: captionBreaks,
+			predictedBreaks: predictedBreaks,
 			onToggleBreak: onToggleBreak
 		)
 	}
@@ -70,6 +72,7 @@ private struct HighlightedSentenceTextView: NSViewRepresentable {
 	let currentTime: Double?
 	let language: String?
 	let captionBreaks: Set<Int>
+	let predictedBreaks: Set<Int>
 	let onToggleBreak: ((Int) -> Void)?
 
 	func makeNSView(context: Context) -> SentenceDisplayView {
@@ -114,6 +117,14 @@ private struct HighlightedSentenceTextView: NSViewRepresentable {
 						.foregroundColor: NSColor.controlAccentColor,
 					])
 				result.append(marker)
+			} else if i > 0 && predictedBreaks.contains(i) {
+				let marker = NSAttributedString(
+					string: " | ",
+					attributes: [
+						.font: font,
+						.foregroundColor: NSColor.warning() as NSColor,
+					])
+				result.append(marker)
 			} else if i > 0 {
 				result.append(NSAttributedString(string: " ", attributes: defaultAttrs))
 			}
@@ -129,9 +140,9 @@ private struct HighlightedSentenceTextView: NSViewRepresentable {
 				var coreAttrs = defaultAttrs
 				if isProfane {
 					if isActive {
-						coreAttrs[.backgroundColor] = NSColor.error()
+						coreAttrs[.backgroundColor] = NSColor.error() as NSColor
 					} else {
-						coreAttrs[.foregroundColor] = NSColor.error()
+						coreAttrs[.foregroundColor] = NSColor.error() as NSColor
 					}
 				} else if isActive {
 					coreAttrs[.backgroundColor] = NSColor.controlAccentColor
@@ -143,7 +154,7 @@ private struct HighlightedSentenceTextView: NSViewRepresentable {
 			} else {
 				var attrs = defaultAttrs
 				if ProfanityFilter.isProfane(trimmed, language: language) {
-					attrs[.foregroundColor] = NSColor.error()
+					attrs[.foregroundColor] = NSColor.error() as NSColor
 				}
 				result.append(NSAttributedString(string: trimmed, attributes: attrs))
 			}

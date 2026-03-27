@@ -28,6 +28,7 @@ struct TranscribedClipSection: View {
 	@ObservedObject var player: AudioPlayer
 	@Binding var editingRowID: Int?
 	var sentenceRowIDs: [Int] = []
+	var predictedBreaks: [Int: Set<Int>] = [:]
 	var onSentenceEdit: (Int, [TranscriptionStore.StoredWord]?) -> Void = { _, _ in }
 	var onBreakToggle: (Int, [Int]) -> Void = { _, _ in }
 	@State private var isHovered = false
@@ -63,6 +64,7 @@ struct TranscribedClipSection: View {
 					editingRowID: $editingRowID,
 					sentenceRowIDs: sentenceRowIDs,
 					captionBreaks: Set(row.captionBreaks),
+					predictedBreaks: predictedBreaks[row.id] ?? [],
 					onToggleBreak: { wordIndex in
 						guard wordIndex > 0 else { return }
 						let clip = clips[row.clipIndex]

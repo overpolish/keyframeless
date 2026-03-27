@@ -172,6 +172,7 @@ struct AudioEditView: View {
 											player: player,
 											editingRowID: $editingRowID,
 											sentenceRowIDs: sentenceRowIDs,
+											predictedBreaks: predictedBreaksForGroup(group),
 											onSentenceEdit: { rowID, editedWords in
 												if let idx = rows.firstIndex(where: {
 													$0.id == rowID
@@ -311,6 +312,24 @@ struct AudioEditView: View {
 			if store.words(for: model.audioClips[i]) != nil {
 				result.insert(i)
 			}
+		}
+		return result
+	}
+
+	private func predictedBreaksForGroup(_ group: TranscribedClipGroup) -> [Int: Set<Int>] {
+		let width = Int(model.exportWidth) ?? model.projectFormat?.width ?? 1920
+		let height = Int(model.exportHeight) ?? model.projectFormat?.height ?? 1080
+		let language = AudioSetupSettings.shared.selectedLanguage
+		var result: [Int: Set<Int>] = [:]
+		for row in group.sentences {
+			result[row.id] = CaptionBuilder.predictedBreakIndices(
+				row: row,
+				style: model.captionStyle,
+				textStyle: model.textStyle,
+				exportWidth: width,
+				exportHeight: height,
+				language: language
+			)
 		}
 		return result
 	}
