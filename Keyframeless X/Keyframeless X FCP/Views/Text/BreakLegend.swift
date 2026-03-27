@@ -10,7 +10,7 @@ struct BreakLegend: View {
 	var body: some View {
 		HStack(spacing: KKSpacingXL) {
 			LegendItem(label: "Auto", color: Color(NSColor.warning()))
-			LegendItem(label: "Manual", color: Color.accentColor)
+			LegendItem(label: "Manual", color: Color(.systemBlue))
 		}
 	}
 }
