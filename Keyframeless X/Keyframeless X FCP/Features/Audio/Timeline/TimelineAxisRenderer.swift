@@ -21,7 +21,6 @@ struct TimelineAxisRenderer {
 	let waveforms: [Int: [Float]]
 	let hasAudioPlayer: Bool
 	let playingIndex: Int?
-	let currentTime: Double?
 	let labelForTime: ((Double) -> String)?
 	var skipWaveforms: Bool = false
 	var dirtyRect: CGRect = .null
@@ -274,12 +273,7 @@ struct TimelineAxisRenderer {
 				alpha: 0.85, in: ctx)
 		}
 
-		var progress: Double?
-		if isPlaying, let ct = currentTime {
-			let offset = ct - state.clip.sourceStart
-			progress = max(0, min(1, offset / state.clip.sourceDuration))
-		}
-		drawScrubBar(in: state.rect, context: ctx, progress: progress)
+		drawScrubBar(in: state.rect, context: ctx)
 	}
 
 	private func drawClipTitle(_ state: ClipDrawState, in ctx: CGContext) {
@@ -354,7 +348,7 @@ struct TimelineAxisRenderer {
 		image.draw(in: imgRect)
 	}
 
-	func drawScrubBar(in rect: CGRect, context ctx: CGContext, progress: Double?) {
+	func drawScrubBar(in rect: CGRect, context ctx: CGContext) {
 		let trackH: CGFloat = 3
 		let trackX = rect.minX
 		let trackW = rect.width
@@ -367,26 +361,6 @@ struct TimelineAxisRenderer {
 			cornerWidth: trackH / 2, cornerHeight: trackH / 2, transform: nil)
 		ctx.addPath(trackPath)
 		ctx.fillPath()
-
-		guard let progress else { return }
-
-		let fillW = trackW * CGFloat(progress)
-		if fillW > 0 {
-			ctx.setFillColor(NSColor.white.withAlphaComponent(0.85).cgColor)
-			let fillPath = CGPath(
-				roundedRect: CGRect(x: trackX, y: trackY, width: fillW, height: trackH),
-				cornerWidth: trackH / 2, cornerHeight: trackH / 2, transform: nil)
-			ctx.addPath(fillPath)
-			ctx.fillPath()
-		}
-
-		let knobR: CGFloat = 4.5
-		let knobX = trackX + fillW
-		ctx.setFillColor(NSColor.white.cgColor)
-		ctx.fillEllipse(
-			in: CGRect(
-				x: knobX - knobR, y: trackY + trackH / 2 - knobR,
-				width: knobR * 2, height: knobR * 2))
 	}
 
 	func drawWaveform(

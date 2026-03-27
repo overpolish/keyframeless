@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import Combine
 import KeyframelessKit
 import SwiftUI
 
@@ -19,6 +20,7 @@ struct SentenceRow: View {
 	var onReset: (() -> Void)?
 
 	@State private var draft = ""
+	@State private var highlightTime: Double?
 
 	private var isEditing: Bool { editingRowID == row.id }
 
@@ -62,6 +64,10 @@ struct SentenceRow: View {
 				draft = draftText
 			}
 		}
+		.onReceive(player.currentTimeSubject) { time in
+			let newTime = player.isPlaying(index: row.id) ? time : nil
+			if newTime != highlightTime { highlightTime = newTime }
+		}
 	}
 
 	@ViewBuilder
@@ -90,8 +96,7 @@ struct SentenceRow: View {
 			HighlightedSentence(
 				words: row.words,
 				editedWords: row.editedWords,
-				currentTime: player.isPlaying(index: row.id)
-					? player.currentTime : nil,
+				currentTime: highlightTime,
 				language: AudioSetupSettings.shared.selectedLanguage,
 				captionBreaks: captionBreaks,
 				onToggleBreak: onToggleBreak
