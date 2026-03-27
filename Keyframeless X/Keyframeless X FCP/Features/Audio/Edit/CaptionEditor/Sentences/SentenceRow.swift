@@ -103,12 +103,12 @@ struct SentenceRow: View {
 				captionBreaks: captionBreaks,
 				predictedBreaks: predictedBreaks,
 				onToggleBreak: onToggleBreak,
-				showTrailingBreak: showTrailingBreak
+				showTrailingBreak: showTrailingBreak,
+				onTap: {
+					draft = draftText
+					editingRowID = row.id
+				}
 			)
-			.onTapGesture {
-				draft = draftText
-				editingRowID = row.id
-			}
 		}
 	}
 
