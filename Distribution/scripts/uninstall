@@ -34,6 +34,5 @@ echo "Removed Keyframeless."
 
 echo ""
 echo "Keyframeless has been uninstalled."
-echo ""
-read -n 1 -s -r -p "Press any key to quit."
+sleep 2
 osascript -e 'tell application "Terminal" to close front window' &
