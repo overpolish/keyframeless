@@ -172,28 +172,6 @@
                          alpha:1.0];
 }
 
-+ (NSColor *)accent {
-  // Lighter than the shade as used in Motion/FCP for better accessibility
-  return [NSColor colorWithRed:0x8B / 255.0
-                         green:0x8B / 255.0
-                          blue:0xF0 / 255.0
-                         alpha:1.0];
-}
-
-+ (NSColor *)warning {
-  return [NSColor colorWithRed:0xFF / 255.0
-                         green:0xCC / 255.0
-                          blue:0x02 / 255.0
-                         alpha:1.0];
-}
-
-+ (NSColor *)error {
-  return [NSColor colorWithRed:0xFB / 255.0
-                         green:0x2C / 255.0
-                          blue:0x36 / 255.0
-                         alpha:1.0];
-}
-
 - (NSColor *)shiftedHueBy:(CGFloat)amount {
   NSColor *hsb = [self colorUsingColorSpace:NSColorSpace.deviceRGBColorSpace];
   if (!hsb)

@@ -81,10 +81,6 @@
            @"drawAtCanvasPosition:isHovered:isActive:destinationImage:atTime:");
 }
 
-- (simd_float4)colorForHovered:(BOOL)isHovered active:(BOOL)isActive {
-  return isActive ? _activeColor : (isHovered ? _hoverColor : _primaryColor);
-}
-
 - (nullable id<MTLRenderPipelineState>)pipelineStateForDestinationImage:
     (FxImageTile *)destinationImage {
   KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
