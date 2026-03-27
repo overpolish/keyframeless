@@ -14,6 +14,7 @@ struct HighlightedSentence: View {
 	var captionBreaks: Set<Int> = []
 	var predictedBreaks: Set<Int> = []
 	var onToggleBreak: ((Int) -> Void)? = nil
+	var showTrailingBreak: Bool = false
 
 	private var displayWords: [TranscriptionStore.StoredWord] {
 		editedWords ?? words
@@ -26,7 +27,8 @@ struct HighlightedSentence: View {
 			language: language,
 			captionBreaks: captionBreaks,
 			predictedBreaks: predictedBreaks,
-			onToggleBreak: onToggleBreak
+			onToggleBreak: onToggleBreak,
+			showTrailingBreak: showTrailingBreak
 		)
 	}
 }
@@ -74,6 +76,7 @@ private struct HighlightedSentenceTextView: NSViewRepresentable {
 	let captionBreaks: Set<Int>
 	let predictedBreaks: Set<Int>
 	let onToggleBreak: ((Int) -> Void)?
+	let showTrailingBreak: Bool
 
 	func makeNSView(context: Context) -> SentenceDisplayView {
 		let textView = SentenceDisplayView()
@@ -163,6 +166,16 @@ private struct HighlightedSentenceTextView: NSViewRepresentable {
 			let rangeStart = i == 0 ? wordStart : hitStart
 			wordRanges.append(
 				(wordIndex: i, range: NSRange(location: rangeStart, length: wordEnd - rangeStart)))
+		}
+
+		if showTrailingBreak {
+			let marker = NSAttributedString(
+				string: " |",
+				attributes: [
+					.font: font,
+					.foregroundColor: NSColor.warning() as NSColor,
+				])
+			result.append(marker)
 		}
 
 		textView.wordRanges = wordRanges

@@ -19,6 +19,7 @@ struct SentenceRow: View {
 	var onEdit: (String) -> Void = { _ in }
 	var onBreaksEdited: ([Int]) -> Void = { _ in }
 	var onReset: (() -> Void)?
+	var showTrailingBreak: Bool = false
 
 	@State private var draft = ""
 	@State private var highlightTime: Double?
@@ -101,7 +102,8 @@ struct SentenceRow: View {
 				language: AudioSetupSettings.shared.selectedLanguage,
 				captionBreaks: captionBreaks,
 				predictedBreaks: predictedBreaks,
-				onToggleBreak: onToggleBreak
+				onToggleBreak: onToggleBreak,
+				showTrailingBreak: showTrailingBreak
 			)
 			.onTapGesture {
 				draft = draftText

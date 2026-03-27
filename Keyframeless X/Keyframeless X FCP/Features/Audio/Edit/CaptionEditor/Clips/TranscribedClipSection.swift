@@ -56,7 +56,7 @@ struct TranscribedClipSection: View {
 				selectedClips: $selectedClips
 			)
 
-			ForEach(group.sentences) { row in
+			ForEach(Array(group.sentences.enumerated()), id: \.element.id) { index, row in
 				SentenceRow(
 					row: row,
 					clip: clips[row.clipIndex],
@@ -105,7 +105,8 @@ struct TranscribedClipSection: View {
 							TranscriptionStore.shared.setEditedWords(
 								nil, for: clip, sentenceStart: Float(row.sentenceStart))
 							onSentenceEdit(row.id, nil)
-						} : nil
+						} : nil,
+					showTrailingBreak: index < group.sentences.count - 1
 				)
 				.id(row.id)
 				.background(
