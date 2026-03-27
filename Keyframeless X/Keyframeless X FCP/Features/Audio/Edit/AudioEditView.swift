@@ -267,7 +267,8 @@ struct AudioEditView: View {
 				}
 				.frame(maxWidth: .infinity, maxHeight: .infinity)
 				AudioExportOptionsSidebar(
-					model: model, rows: rows, srtHasOverlaps: srtHasOverlaps
+					model: model, rows: rows, srtHasOverlaps: srtHasOverlaps,
+					titleCount: titleCount
 				)
 				.frame(maxWidth: .infinity, maxHeight: .infinity)
 			}
@@ -320,6 +321,19 @@ struct AudioEditView: View {
 			}
 		}
 		return result
+	}
+
+	private var titleCount: Int {
+		let width = Int(model.exportWidth) ?? model.projectFormat?.width ?? 1920
+		let height = Int(model.exportHeight) ?? model.projectFormat?.height ?? 1080
+		let language = AudioSetupSettings.shared.selectedLanguage
+		return rows.filter({ !$0.isHeader && $0.isTranscribed }).reduce(0) { total, row in
+			let breaks = CaptionBuilder.predictedBreakIndices(
+				row: row, style: model.captionStyle, textStyle: model.textStyle,
+				exportWidth: width, exportHeight: height, language: language
+			)
+			return total + breaks.count + 1
+		}
 	}
 
 	private func predictedBreaksForGroup(_ group: TranscribedClipGroup) -> [Int: Set<Int>] {

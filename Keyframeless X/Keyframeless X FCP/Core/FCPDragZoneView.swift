@@ -10,17 +10,21 @@ import SwiftUI
 struct FCPDragZoneView: NSViewRepresentable {
 	let xmlProvider: () -> String
 	let onDragStateChanged: (Bool) -> Void
+	var showWarning = false
 
 	func makeNSView(context: Context) -> FCPDragSourceView {
 		let view = FCPDragSourceView()
 		view.xmlProvider = xmlProvider
 		view.onDragStateChanged = onDragStateChanged
+		view.showWarning = showWarning
 		return view
 	}
 
 	func updateNSView(_ nsView: FCPDragSourceView, context: Context) {
 		nsView.xmlProvider = xmlProvider
 		nsView.onDragStateChanged = onDragStateChanged
+		nsView.showWarning = showWarning
+		nsView.needsDisplay = true
 	}
 }
 
@@ -52,9 +56,11 @@ class FCPXMLItemProvider: NSObject, NSPasteboardItemDataProvider {
 class FCPDragSourceView: NSView, NSDraggingSource {
 	var xmlProvider: (() -> String)?
 	var onDragStateChanged: ((Bool) -> Void)?
+	var showWarning = false
 
 	override func draw(_ dirtyRect: NSRect) {
-		let accentColor = NSColor.controlAccentColor
+		let accentColor: NSColor =
+			showWarning ? .warning() ?? .controlAccentColor : .controlAccentColor
 
 		let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 6, yRadius: 6)
 		accentColor.withAlphaComponent(0.15).setFill()
