@@ -79,6 +79,27 @@
     return NO;
   }
 
+  if (![paramAPI addFloatSliderWithName:@"Rotation"
+                            parameterID:kParamRotation
+                           defaultValue:0.0
+                           parameterMin:-FLT_MAX
+                           parameterMax:FLT_MAX
+                              sliderMin:-360.0
+                              sliderMax:360.0
+                                  delta:1.0
+                         parameterFlags:kFxParameterFlag_DEFAULT]) {
+    if (error != NULL) {
+      *error = [NSError
+          errorWithDomain:FxPlugErrorDomain
+                     code:kFxError_InvalidParameter
+                 userInfo:@{
+                   NSLocalizedDescriptionKey : @"Unable to add rotation slider"
+                 }];
+    }
+
+    return NO;
+  }
+
   if (![self addAnimationParametersWithAPI:paramAPI error:error]) {
     return NO;
   }

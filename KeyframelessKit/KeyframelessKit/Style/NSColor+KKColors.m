@@ -172,6 +172,20 @@
                          alpha:1.0];
 }
 
++ (NSColor *)donutFill {
+  return [NSColor colorWithRed:0x00 / 255.0
+                         green:0x00 / 255.0
+                          blue:0x00 / 255.0
+                         alpha:0.13f];
+}
+
++ (NSColor *)donutStroke {
+  return [NSColor colorWithRed:0xFF / 255.0
+                         green:0xFF / 255.0
+                          blue:0xFF / 255.0
+                         alpha:0.2f];
+}
+
 - (NSColor *)shiftedHueBy:(CGFloat)amount {
   NSColor *hsb = [self colorUsingColorSpace:NSColorSpace.deviceRGBColorSpace];
   if (!hsb)

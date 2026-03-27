@@ -45,6 +45,9 @@
 + (NSColor *)ringActiveFill;
 + (NSColor *)ringActiveStroke;
 
++ (NSColor *)donutFill;
++ (NSColor *)donutStroke;
+
 - (NSColor *)shiftedHueBy:(CGFloat)amount;
 - (NSColor *)compound;
 

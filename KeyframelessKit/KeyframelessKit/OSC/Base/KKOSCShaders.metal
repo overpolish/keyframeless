@@ -99,6 +99,103 @@ fragment float4 KKRingOSCFragment(KKRasterizerData in [[stage_in]],
     return kkOSCColor(fillColor, strokeColor, outlineFactor, shapeAlpha);
 }
 
+/// Fragment shader for rendering a rotation arm with a handle circle at the end.
+fragment float4 KKRotationOSCFragment(KKRasterizerData in [[stage_in]],
+                                      constant KKRotationOSCParams *params [[buffer(KKOSCFragmentIndex_DrawColor)]]) {
+    float armLength = params->armLength;
+    float centerOffset = params->centerOffset;
+    float circleRadius = params->circleRadius;
+    float lineHalfWidth = params->lineHalfWidth;
+    float outlineWidth = params->outlineWidth;
+    float angle = params->angle;
+    float4 fillColor = float4(params->fillColor);
+    float4 strokeColor = float4(params->strokeColor);
+
+    float2 pos = in.textureCoordinate;
+
+    // --- Donut ring around center (hover indicator) ---
+    float donutRadius = params->donutRadius;
+    float4 donutColor = float4(0.0);
+    if (donutRadius > 0.0) {
+        float dist = length(pos);
+        float donutFillHW = params->donutFillHalfWidth;
+        float donutOW = params->donutOutlineWidth;
+        float donutDist = abs(dist - donutRadius);
+        float donutOuterHW = donutFillHW + donutOW;
+        float donutShape = kkEdgeAlpha(donutOuterHW - donutDist);
+        if (donutShape > 0.001) {
+            float donutOutlineFactor = 1.0 - kkEdgeAlpha(donutFillHW - donutDist);
+            float4 df = float4(params->donutFillColor);
+            float4 ds = float4(params->donutStrokeColor);
+            float3 col = mix(df.rgb, ds.rgb, donutOutlineFactor);
+            float a = mix(df.a, ds.a, donutOutlineFactor) * donutShape;
+            donutColor = float4(col, a);
+        }
+
+        // Marker circle at initial position on the donut ring
+        float markerRadius = params->markerRadius;
+        if (markerRadius > 0.0) {
+            float markerAngle = params->markerAngle;
+            float2 markerCenter = donutRadius * float2(cos(markerAngle), sin(markerAngle));
+            float markerDist = length(pos - markerCenter);
+            float markerOW = params->markerOutlineWidth;
+            float markerShape = kkEdgeAlpha((markerRadius + markerOW) - markerDist);
+            if (markerShape > 0.001) {
+                float markerOutlineFactor = kkLineAlpha(abs(markerRadius - markerDist), markerOW);
+                float4 mf = float4(params->markerFillColor);
+                float4 ms = float4(params->markerStrokeColor);
+                float4 markerColor = float4(mix(mf.rgb, ms.rgb, markerOutlineFactor),
+                                            mix(mf.a, ms.a, markerOutlineFactor) * markerShape);
+                donutColor = kkCompositeOver(markerColor, donutColor);
+            }
+        }
+    }
+
+    // --- Rotate into local space where the arm points along +x ---
+    float cs = cos(angle);
+    float sn = sin(angle);
+    float2 lp = float2(pos.x * cs + pos.y * sn, -pos.x * sn + pos.y * cs);
+
+    // Circle handle at end of arm
+    float2 circleCenter = float2(armLength, 0.0);
+    float circleDist = length(lp - circleCenter);
+    float circleAlpha = kkEdgeAlpha(circleRadius - circleDist);
+    float circleOutlineFactor = kkLineAlpha(abs(circleRadius - circleDist), outlineWidth);
+
+    // Line segment from centerOffset to armLength (open at center end)
+    float lineDist = abs(lp.y);
+    float lineOuter = lineHalfWidth + outlineWidth;
+    float lineAlpha =
+        kkEdgeAlpha(lineOuter - lineDist) * kkEdgeAlpha(lp.x - centerOffset) * kkEdgeAlpha(armLength - lp.x);
+    float lineOutlineFactor = 1.0 - kkEdgeAlpha(lineHalfWidth - lineDist);
+
+    float totalAlpha = max(circleAlpha, lineAlpha);
+    if (totalAlpha < 0.001 && donutColor.a < 0.001)
+        discard_fragment();
+
+    // Composite: line first, circle on top
+    float4 color = float4(0.0);
+
+    if (lineAlpha > 0.001) {
+        color = kkOSCColor(fillColor, strokeColor, lineOutlineFactor, lineAlpha);
+    }
+
+    if (circleAlpha > 0.001) {
+        float2 circleWorldCenter = float2(armLength * cos(angle), armLength * sin(angle));
+        float relY = (pos - circleWorldCenter).y;
+        float4 cColor = kkPointColor(fillColor, strokeColor, circleOutlineFactor, circleAlpha, relY, circleRadius,
+                                     circleDist, outlineWidth);
+        color = color * (1.0 - cColor.a) + cColor;
+    }
+
+    // Composite arm/circle over donut
+    if (donutColor.a > 0.001) {
+        color = kkCompositeOver(color, donutColor);
+    }
+
+    return color;
+}
+
 /// Fragment shader for rendering a point/dot OSC control with outline and depth shadow.
 fragment float4 KKPointOSCFragment(KKRasterizerData in [[stage_in]],
                                    constant KKPointOSCParams *params [[buffer(KKOSCFragmentIndex_DrawColor)]]) {
@@ -114,17 +211,7 @@ fragment float4 KKPointOSCFragment(KKRasterizerData in [[stage_in]],
     if (circleAlpha < 0.001)
         discard_fragment();
 
-    // Outline
     float outlineFactor = kkLineAlpha(abs(outerRadius - dist), outlineWidth);
 
-    // Subtle shadow on lower half
-    float shadowFactor = smoothstep(0.1, -0.3, -pos.y) * 0.15 * (1.0 - outlineFactor);
-    float edgePadding = smoothstep(0.0, outlineWidth * 4.0, outerRadius - dist);
-    shadowFactor *= edgePadding;
-
-    float4 shadowColor = float4(0.0, 0.0, 0.0, strokeColor.a);
-    float4 color = kkOSCColor(fillColor, strokeColor, outlineFactor, circleAlpha);
-    color = mix(color, shadowColor, shadowFactor);
-
-    return color;
+    return kkPointColor(fillColor, strokeColor, outlineFactor, circleAlpha, pos.y, outerRadius, dist, outlineWidth);
 }

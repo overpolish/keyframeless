@@ -143,42 +143,13 @@ static NSCursor *resizeCursorForAngle(double radians) {
                             .fillColor = fillColor,
                             .strokeColor = strokeColor};
 
-  [self
-      encodeRenderCommandsForDestinationImage:destinationImage
-                               canvasPosition:canvasPosition
-                             clearDestination:NO
-                                     commands:^(
-                                         id<MTLRenderCommandEncoder> encoder,
-                                         CGPoint metalPosition,
-                                         simd_uint2 viewportSize) {
-                                       KKVertex2D quadVertices[6];
-                                       [KKRenderPrimitives
-                                           generateQuadVertices:quadVertices
-                                                         center:metalPosition
-                                                           size:
-                                                               outerRadiusPixels];
-
-                                       [encoder setRenderPipelineState:ps];
-                                       [encoder
-                                           setVertexBytes:quadVertices
-                                                   length:sizeof(quadVertices)
-                                                  atIndex:
-                                                      KKVertexInputIndex_Vertices];
-                                       [encoder
-                                           setVertexBytes:&viewportSize
-                                                   length:sizeof(viewportSize)
-                                                  atIndex:
-                                                      KKVertexInputIndex_ViewportSize];
-                                       [encoder
-                                           setFragmentBytes:&params
-                                                     length:sizeof(params)
-                                                    atIndex:
-                                                        KKOSCFragmentIndex_DrawColor];
-                                       [encoder drawPrimitives:
-                                                    MTLPrimitiveTypeTriangle
-                                                   vertexStart:0
-                                                   vertexCount:6];
-                                     }];
+  [self drawQuadForDestinationImage:destinationImage
+                     canvasPosition:canvasPosition
+                   clearDestination:NO
+                      pipelineState:ps
+                       fragmentData:&params
+                   fragmentDataSize:sizeof(params)
+                               size:outerRadiusPixels];
 }
 
 @end
