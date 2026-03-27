@@ -248,7 +248,15 @@ enum FCPXMLParser {
 		let bookmark: Data?
 		let isCompound: Bool
 
-		func data() throws -> Data {
+		struct ResolvedURL {
+			let url: URL
+			let isSecurityScoped: Bool
+			func stopAccess() {
+				if isSecurityScoped { url.stopAccessingSecurityScopedResource() }
+			}
+		}
+
+		func resolvedURL() throws -> ResolvedURL {
 			if let bookmark {
 				var isStale = false
 				if let scopedURL = try? URL(
@@ -258,12 +266,17 @@ enum FCPXMLParser {
 					bookmarkDataIsStale: &isStale
 				) {
 					let accessing = scopedURL.startAccessingSecurityScopedResource()
-					defer { if accessing { scopedURL.stopAccessingSecurityScopedResource() } }
-					return try Data(contentsOf: scopedURL)
+					return ResolvedURL(url: scopedURL, isSecurityScoped: accessing)
 				}
 			}
 			guard let url else { throw CocoaError(.fileNoSuchFile) }
-			return try Data(contentsOf: url)
+			return ResolvedURL(url: url, isSecurityScoped: false)
+		}
+
+		func data() throws -> Data {
+			let resolved = try resolvedURL()
+			defer { resolved.stopAccess() }
+			return try Data(contentsOf: resolved.url)
 		}
 	}
 
@@ -401,6 +414,14 @@ enum FCPXMLParser {
 		Double(s.replacingOccurrences(of: "dB", with: "")) ?? 0
 	}
 
+	private static func dialogueAudioRef(_ el: XMLElement) -> String? {
+		let audios =
+			(try? el.nodes(forXPath: ".//audio"))?.compactMap { $0 as? XMLElement } ?? []
+		return audios.first {
+			($0.attribute(forName: "role")?.stringValue ?? "").hasPrefix("dialogue")
+		}?.attribute(forName: "ref")?.stringValue
+	}
+
 	/// Returns the set of angle IDs providing audio in a multicam clip,
 	/// or nil when all angles should be used (no explicit mc-source selection).
 	private static func audioAngleIDs(from mcClip: XMLElement) -> Set<String>? {
@@ -535,6 +556,54 @@ enum FCPXMLParser {
 					}
 				}
 				// Walk mc-clip's own children for connected clips
+				walkElement(
+					child, tcStart: tcStart, compound: compound, assets: assets,
+					mediaMap: mediaMap, multicamMap: multicamMap, into: &clips)
+			} else if child.name == "clip", isEnabled(child), !isMuted(child),
+				let audioRef = dialogueAudioRef(child)
+			{
+				let asset = assets[audioRef]
+				let dur = parseTime(child.attribute(forName: "duration")?.stringValue ?? "0s")
+				let clipStart = parseTime(
+					child.attribute(forName: "start")?.stringValue ?? "0s")
+				if let ctx = compound {
+					let internalOffset = projectTime(of: child, tcStart: ctx.tcStart)
+					guard internalOffset < ctx.internalEnd,
+						internalOffset + dur > ctx.internalStart
+					else {
+						walkElement(
+							child, tcStart: tcStart, compound: compound, assets: assets,
+							mediaMap: mediaMap, multicamMap: multicamMap, into: &clips)
+						continue
+					}
+					let visibleStart = max(internalOffset, ctx.internalStart)
+					let visibleEnd = min(internalOffset + dur, ctx.internalEnd)
+					let mainStart = ctx.mainOffset + (visibleStart - ctx.internalStart)
+					clips.append(
+						AudioClip(
+							name: child.attribute(forName: "name")?.stringValue ?? "clip",
+							start: mainStart,
+							end: mainStart + (visibleEnd - visibleStart),
+							sourceStart: clipStart - (asset?.mediaStart ?? 0),
+							sourceDuration: visibleEnd - visibleStart,
+							url: asset?.url,
+							bookmark: asset?.bookmark,
+							isCompound: true
+						))
+				} else {
+					let start = projectTime(of: child, tcStart: tcStart)
+					clips.append(
+						AudioClip(
+							name: child.attribute(forName: "name")?.stringValue ?? "clip",
+							start: start,
+							end: start + dur,
+							sourceStart: clipStart - (asset?.mediaStart ?? 0),
+							sourceDuration: dur,
+							url: asset?.url,
+							bookmark: asset?.bookmark,
+							isCompound: false
+						))
+				}
 				walkElement(
 					child, tcStart: tcStart, compound: compound, assets: assets,
 					mediaMap: mediaMap, multicamMap: multicamMap, into: &clips)
