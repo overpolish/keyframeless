@@ -224,10 +224,19 @@ private class AxisDocumentView: NSView {
 	var onMagnify: ((CGFloat, CGFloat) -> Void)?
 	var audioPlayer: AudioPlayer? {
 		didSet {
+			guard audioPlayer !== oldValue else { return }
 			cancellables = []
-			audioPlayer?.objectWillChange
+			guard let audioPlayer else {
+				hidePlaybackOverlay()
+				return
+			}
+			audioPlayer.$playingIndex
 				.receive(on: RunLoop.main)
 				.sink { [weak self] _ in self?.needsDisplay = true }
+				.store(in: &cancellables)
+			audioPlayer.currentTimeSubject
+				.receive(on: RunLoop.main)
+				.sink { [weak self] _ in self?.updatePlaybackOverlay() }
 				.store(in: &cancellables)
 		}
 	}
@@ -245,6 +254,8 @@ private class AxisDocumentView: NSView {
 	private let playBtnSize: CGFloat = 12
 	private let minHeightForControls: CGFloat = 16
 	private let scrubStripHeight: CGFloat = 14
+	private var progressFillLayer: CALayer?
+	private var knobOverlayLayer: CALayer?
 
 	private var trackingArea: NSTrackingArea?
 
@@ -365,17 +376,74 @@ private class AxisDocumentView: NSView {
 			waveforms: waveforms,
 			hasAudioPlayer: audioPlayer != nil,
 			playingIndex: audioPlayer?.playingIndex,
-			currentTime: audioPlayer?.currentTime,
 			labelForTime: labelForTime,
 			skipWaveforms: inLiveResize,
 			dirtyRect: dirtyRect
 		)
 		renderer.draw(in: ctx, cachedClipRects: &cachedClipRects)
+		updatePlaybackOverlay()
 	}
 
 	override func viewDidEndLiveResize() {
 		super.viewDidEndLiveResize()
 		needsDisplay = true
+	}
+
+	private func ensureOverlayLayers() {
+		guard let viewLayer = layer else { return }
+		if progressFillLayer == nil {
+			let fill = CALayer()
+			fill.backgroundColor = NSColor.white.withAlphaComponent(0.85).cgColor
+			fill.cornerRadius = 1.5
+			fill.isHidden = true
+			viewLayer.addSublayer(fill)
+			progressFillLayer = fill
+		}
+		if knobOverlayLayer == nil {
+			let knob = CALayer()
+			knob.backgroundColor = NSColor.white.cgColor
+			knob.cornerRadius = 4.5
+			knob.isHidden = true
+			viewLayer.addSublayer(knob)
+			knobOverlayLayer = knob
+		}
+	}
+
+	private func updatePlaybackOverlay() {
+		ensureOverlayLayers()
+		guard let audioPlayer,
+			let playIdx = audioPlayer.playingIndex,
+			let time = audioPlayer.currentTime,
+			playIdx < clips.count,
+			let entry = cachedClipRects.first(where: { $0.index == playIdx })
+		else {
+			hidePlaybackOverlay()
+			return
+		}
+		let clip = clips[playIdx]
+		let offset = time - clip.sourceStart
+		let progress = CGFloat(max(0, min(1, offset / clip.sourceDuration)))
+		let trackH: CGFloat = 3
+		let trackX = entry.rect.minX
+		let trackW = entry.rect.width
+		let trackY = entry.rect.maxY - trackH - 5
+		let fillW = trackW * progress
+		CATransaction.begin()
+		CATransaction.setDisableActions(true)
+		progressFillLayer?.frame = CGRect(
+			x: trackX, y: trackY, width: max(0, fillW), height: trackH)
+		progressFillLayer?.isHidden = false
+		let knobR: CGFloat = 4.5
+		knobOverlayLayer?.frame = CGRect(
+			x: trackX + fillW - knobR, y: trackY + trackH / 2 - knobR,
+			width: knobR * 2, height: knobR * 2)
+		knobOverlayLayer?.isHidden = false
+		CATransaction.commit()
+	}
+
+	private func hidePlaybackOverlay() {
+		progressFillLayer?.isHidden = true
+		knobOverlayLayer?.isHidden = true
 	}
 
 	private func handleAudioControlClick(
