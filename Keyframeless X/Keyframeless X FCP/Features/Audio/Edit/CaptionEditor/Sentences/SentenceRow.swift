@@ -14,6 +14,7 @@ struct SentenceRow: View {
 	@Binding var editingRowID: Int?
 	var sentenceRowIDs: [Int] = []
 	var captionBreaks: Set<Int> = []
+	var predictedBreaks: Set<Int> = []
 	var onToggleBreak: ((Int) -> Void)? = nil
 	var onEdit: (String) -> Void = { _ in }
 	var onBreaksEdited: ([Int]) -> Void = { _ in }
@@ -99,6 +100,7 @@ struct SentenceRow: View {
 				currentTime: highlightTime,
 				language: AudioSetupSettings.shared.selectedLanguage,
 				captionBreaks: captionBreaks,
+				predictedBreaks: predictedBreaks,
 				onToggleBreak: onToggleBreak
 			)
 			.onTapGesture {
