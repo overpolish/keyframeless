@@ -32,44 +32,23 @@ actor WaveformLoader {
 		return samples
 	}
 
+	private static let videoExtensions: Set<String> = ["mp4", "mov", "m4v", "mxf", "mts", "avi"]
+
 	private func load(clip: FCPXMLParser.AudioClip, buckets: Int) async throws -> [Float] {
-		// Try direct file access first (avoids reading entire file into Data + temp file)
-		if let samples = try? loadDirect(clip: clip, buckets: buckets) {
+		let resolved = try clip.resolvedURL()
+		defer { resolved.stopAccess() }
+
+		let isVideo = Self.videoExtensions.contains(resolved.url.pathExtension.lowercased())
+
+		// AVAudioFile: fast path for audio-only files (WAV, AIFF, CAF, MP3)
+		if !isVideo,
+			let samples = try? loadFromAudioFile(url: resolved.url, clip: clip, buckets: buckets)
+		{
 			return samples
 		}
 
-		// Fallback: data → temp file
-		let data = try clip.data()
-		let ext = clip.url?.pathExtension ?? ""
-		let tmpURL = FileManager.default.temporaryDirectory
-			.appendingPathComponent(UUID().uuidString + (ext.isEmpty ? "" : ".\(ext)"))
-		try data.write(to: tmpURL)
-		defer { try? FileManager.default.removeItem(at: tmpURL) }
-
-		if let samples = try? loadFromAudioFile(url: tmpURL, clip: clip, buckets: buckets) {
-			return samples
-		}
-
-		return try await loadViaAssetReader(url: tmpURL, clip: clip, buckets: buckets)
-	}
-
-	private func loadDirect(
-		clip: FCPXMLParser.AudioClip, buckets: Int
-	) throws -> [Float] {
-		if let bookmark = clip.bookmark {
-			var isStale = false
-			let scopedURL = try URL(
-				resolvingBookmarkData: bookmark,
-				options: .withSecurityScope,
-				relativeTo: nil,
-				bookmarkDataIsStale: &isStale
-			)
-			let accessing = scopedURL.startAccessingSecurityScopedResource()
-			defer { if accessing { scopedURL.stopAccessingSecurityScopedResource() } }
-			return try loadFromAudioFile(url: scopedURL, clip: clip, buckets: buckets)
-		}
-		guard let url = clip.url else { throw CocoaError(.fileNoSuchFile) }
-		return try loadFromAudioFile(url: url, clip: clip, buckets: buckets)
+		// AVAssetReader: handles video containers (.MP4, .MOV) — streams audio, never loads full file
+		return try await loadViaAssetReader(url: resolved.url, clip: clip, buckets: buckets)
 	}
 
 	private func loadFromAudioFile(

@@ -12,6 +12,7 @@ final class AudioPlayer: ObservableObject {
 	// instance, so we track all live instances here to allow AxisDocumentView's
 	// keyDown to stop whichever one is currently playing.
 	private static var activeInstances = NSHashTable<AudioPlayer>.weakObjects()
+	private static let videoExtensions: Set<String> = ["mp4", "mov", "m4v", "mxf", "mts", "avi"]
 
 	static var isAnyPlaying: Bool {
 		activeInstances.allObjects.contains { $0.playingIndex != nil }
@@ -29,10 +30,11 @@ final class AudioPlayer: ObservableObject {
 	}
 	let currentTimeSubject = PassthroughSubject<Double?, Never>()
 
-	private var player: AVAudioPlayer?
+	private var audioPlayer: AVAudioPlayer?
+	private var avPlayer: AVPlayer?
 	private var stopWorkItem: DispatchWorkItem?
 	private var progressTimer: Timer?
-	private var tmpAudioURL: URL?
+	private var scopedURL: URL?
 
 	init() {
 		Self.activeInstances.add(self)
@@ -68,9 +70,15 @@ final class AudioPlayer: ObservableObject {
 
 	func scrub(clip: FCPXMLParser.AudioClip, index: Int, progress: Double) {
 		let offset = clip.sourceStart + progress * clip.sourceDuration
-		if isPlaying(index: index), let player = player {
+		if isPlaying(index: index) {
 			stopWorkItem?.cancel()
-			player.currentTime = offset
+			if let avPlayer {
+				avPlayer.seek(
+					to: CMTime(seconds: offset, preferredTimescale: 48000),
+					toleranceBefore: .zero, toleranceAfter: .zero)
+			} else if let audioPlayer {
+				audioPlayer.currentTime = offset
+			}
 			currentTime = offset
 			let remaining = clip.sourceDuration * (1 - progress)
 			scheduleStop(after: max(0, remaining))
@@ -84,37 +92,55 @@ final class AudioPlayer: ObservableObject {
 		progressTimer = nil
 		stopWorkItem?.cancel()
 		stopWorkItem = nil
-		player?.stop()
-		player = nil
+		avPlayer?.pause()
+		avPlayer = nil
+		audioPlayer?.stop()
+		audioPlayer = nil
 		playingIndex = nil
 		currentTime = nil
-		if let url = tmpAudioURL {
-			try? FileManager.default.removeItem(at: url)
-			tmpAudioURL = nil
+		if let url = scopedURL {
+			url.stopAccessingSecurityScopedResource()
+			scopedURL = nil
 		}
 	}
 
 	private func startPlaying(clip: FCPXMLParser.AudioClip, index: Int, from time: Double) {
 		stop()
-		guard let data = try? clip.data() else { return }
-		let ext = clip.url?.pathExtension ?? ""
-		let url = FileManager.default.temporaryDirectory
-			.appendingPathComponent(UUID().uuidString + (ext.isEmpty ? "" : ".\(ext)"))
-		do { try data.write(to: url) } catch { return }
-		guard let newPlayer = try? AVAudioPlayer(contentsOf: url) else {
-			try? FileManager.default.removeItem(at: url)
-			return
+		guard let resolved = try? clip.resolvedURL() else { return }
+
+		let isVideo = Self.videoExtensions.contains(resolved.url.pathExtension.lowercased())
+
+		if isVideo {
+			let playerItem = AVPlayerItem(url: resolved.url)
+			let newPlayer = AVPlayer(playerItem: playerItem)
+			newPlayer.seek(
+				to: CMTime(seconds: time, preferredTimescale: 48000),
+				toleranceBefore: .zero, toleranceAfter: .zero)
+			newPlayer.play()
+			avPlayer = newPlayer
+		} else {
+			guard let newPlayer = try? AVAudioPlayer(contentsOf: resolved.url) else {
+				resolved.stopAccess()
+				return
+			}
+			newPlayer.prepareToPlay()
+			newPlayer.currentTime = time
+			newPlayer.play()
+			audioPlayer = newPlayer
 		}
-		tmpAudioURL = url
-		newPlayer.prepareToPlay()
-		newPlayer.currentTime = time
-		newPlayer.play()
-		player = newPlayer
+
+		if resolved.isSecurityScoped { scopedURL = resolved.url } else { resolved.stopAccess() }
 		playingIndex = index
 		currentTime = time
 		progressTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) {
 			[weak self] _ in
-			MainActor.assumeIsolated { self?.currentTime = self?.player?.currentTime }
+			MainActor.assumeIsolated {
+				if let avp = self?.avPlayer {
+					self?.currentTime = avp.currentTime().seconds
+				} else {
+					self?.currentTime = self?.audioPlayer?.currentTime
+				}
+			}
 		}
 		let remaining = clip.sourceDuration - (time - clip.sourceStart)
 		scheduleStop(after: max(0, remaining))

@@ -9,15 +9,12 @@
 
 static NSString *const kOwner = @"overpolish";
 static NSString *const kRepo = @"keyframeless";
-static NSString *const kLastCheckKey =
-    @"co.overpolish.keyframeless.lastUpdateCheck";
 static NSString *const kCachedVersionKey =
     @"co.overpolish.keyframeless.cachedAvailableVersion";
 static NSString *const kCachedNewKeysKey =
     @"co.overpolish.keyframeless.cachedAvailableComponentKeys";
 static NSString *const kCachedURLKey =
     @"co.overpolish.keyframeless.cachedDownloadURL";
-static NSTimeInterval const kCheckInterval = 86400;
 
 static NSDictionary<NSString *, NSString *> *KKKnownComponents(void) {
   return @{
@@ -42,6 +39,7 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
 @implementation KKUpdateChecker {
   KKLog *_log;
   NSString *_componentKey;
+  BOOL _checkedThisSession;
 }
 
 + (instancetype)shared {
@@ -80,6 +78,18 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
     if (cachedURL) {
       _downloadURL = [NSURL URLWithString:cachedURL];
     }
+    // Validate cached version against current — clear stale cache from
+    // pre-update
+    if (_availableVersion && ![self isVersion:_availableVersion
+                                    newerThan:_currentVersion]) {
+      _availableVersion = nil;
+      _availableComponentKeys = @[];
+      _downloadURL = nil;
+      [defaults removeObjectForKey:kCachedVersionKey];
+      [defaults removeObjectForKey:kCachedNewKeysKey];
+      [defaults removeObjectForKey:kCachedURLKey];
+    }
+
     _updateAvailable =
         _availableVersion != nil || _availableComponentKeys.count > 0;
   }
@@ -87,11 +97,8 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
 }
 
 - (void)checkWithCompletion:(void (^)(BOOL))completion {
-  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-  NSDate *lastCheck = [defaults objectForKey:kLastCheckKey];
-  if (lastCheck &&
-      [[NSDate date] timeIntervalSinceDate:lastCheck] < kCheckInterval) {
-    [_log debug:@"Skipping update check — last check was %@", lastCheck];
+  if (_checkedThisSession) {
+    [_log debug:@"Skipping update check — already checked this session"];
     if (completion) {
       dispatch_async(dispatch_get_main_queue(), ^{
         completion(self.updateAvailable);
@@ -100,6 +107,7 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
     return;
   }
 
+  _checkedThisSession = YES;
   [self fetchManifestWithCompletion:completion];
 }
 
@@ -246,7 +254,6 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
   BOOL hasUpdate = newerVersion != nil || newKeys.count > 0;
 
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-  [defaults setObject:[NSDate date] forKey:kLastCheckKey];
 
   if (hasUpdate) {
     if (newerVersion) {
@@ -284,7 +291,6 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
 
 - (void)clearCacheAndComplete:(void (^)(BOOL))completion {
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-  [defaults setObject:[NSDate date] forKey:kLastCheckKey];
   [defaults removeObjectForKey:kCachedVersionKey];
   [defaults removeObjectForKey:kCachedNewKeysKey];
   [defaults removeObjectForKey:kCachedURLKey];
