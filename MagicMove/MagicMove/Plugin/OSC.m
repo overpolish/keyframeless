@@ -466,21 +466,47 @@ static const float kSnapThreshold = 8.0f;
                        Y:(double)canvasY
               snapTarget:(CGPoint)snapTarget
                   atTime:(CMTime)time {
-  _snapX = fabs(canvasX - snapTarget.x) < kSnapThreshold;
-  _snapY = fabs(canvasY - snapTarget.y) < kSnapThreshold;
-  if (_snapX) {
-    canvasX = snapTarget.x;
-    _snapXVal = (float)snapTarget.x;
-  }
-  if (_snapY) {
-    canvasY = snapTarget.y;
-    _snapYVal = (float)snapTarget.y;
-  }
-
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
   if (!oscAPI)
     return;
+
+  CGPoint canvasCenter;
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:0.5
+                          fromY:0.5
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&canvasCenter.x
+                            toY:&canvasCenter.y];
+
+  double distPointX = fabs(canvasX - snapTarget.x);
+  double distCenterX = fabs(canvasX - canvasCenter.x);
+  double distPointY = fabs(canvasY - snapTarget.y);
+  double distCenterY = fabs(canvasY - canvasCenter.y);
+
+  _snapX = NO;
+  _snapY = NO;
+
+  if (distPointX < kSnapThreshold && distPointX <= distCenterX) {
+    _snapX = YES;
+    canvasX = snapTarget.x;
+    _snapXVal = (float)snapTarget.x;
+  } else if (distCenterX < kSnapThreshold) {
+    _snapX = YES;
+    canvasX = canvasCenter.x;
+    _snapXVal = (float)canvasCenter.x;
+  }
+
+  if (distPointY < kSnapThreshold && distPointY <= distCenterY) {
+    _snapY = YES;
+    canvasY = snapTarget.y;
+    _snapYVal = (float)snapTarget.y;
+  } else if (distCenterY < kSnapThreshold) {
+    _snapY = YES;
+    canvasY = canvasCenter.y;
+    _snapYVal = (float)canvasCenter.y;
+  }
+
   double objX, objY;
   [oscAPI convertPointFromSpace:kFxDrawingCoordinates_CANVAS
                           fromX:canvasX
