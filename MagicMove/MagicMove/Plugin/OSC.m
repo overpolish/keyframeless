@@ -11,6 +11,7 @@
 @end
 
 #define CLAMP(x, lo, hi) MAX((lo), MIN((hi), (x)))
+#define kPointCount 2
 
 typedef struct {
   UInt32 pointParam, rotParam, scaleParam;
@@ -26,38 +27,10 @@ typedef struct {
   double ringDragStartDist, ringDragStartVal;
 } PointOSCState;
 
-static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
-                               float *minDim) {
-  id<FxOnScreenControlAPI_v4> oscAPI =
-      [apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-  if (!oscAPI)
-    return NO;
-
-  CGPoint topRight, bottomLeft;
-  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
-                          fromX:1.0
-                          fromY:1.0
-                        toSpace:kFxDrawingCoordinates_CANVAS
-                            toX:&topRight.x
-                            toY:&topRight.y];
-  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
-                          fromX:0.0
-                          fromY:0.0
-                        toSpace:kFxDrawingCoordinates_CANVAS
-                            toX:&bottomLeft.x
-                            toY:&bottomLeft.y];
-
-  *center = CGPointMake((topRight.x + bottomLeft.x) / 2.0,
-                        (topRight.y + bottomLeft.y) / 2.0);
-  *minDim =
-      fmin(fabs(topRight.x - bottomLeft.x), fabs(topRight.y - bottomLeft.y));
-  return YES;
-}
-
 static const float kSnapThreshold = 8.0f;
 
 @implementation MagicMoveOSC {
-  PointOSCState _points[2];
+  PointOSCState _points[kPointCount];
   KKOSCLabel *_labelA;
   KKRingOSC *_ringA;
   KKRotationOSC *_rotA;
@@ -145,16 +118,34 @@ static const float kSnapThreshold = 8.0f;
   return (float)(degrees * M_PI / 180.0);
 }
 
+- (float)canvasMinDim {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  if (!oscAPI)
+    return 500.0f;
+  CGPoint topRight, bottomLeft;
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:1.0
+                          fromY:1.0
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&topRight.x
+                            toY:&topRight.y];
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:0.0
+                          fromY:0.0
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&bottomLeft.x
+                            toY:&bottomLeft.y];
+  return fmin(fabs(topRight.x - bottomLeft.x), fabs(topRight.y - bottomLeft.y));
+}
+
 - (float)ringRadiusForScaleParam:(UInt32)paramID atTime:(CMTime)time {
-  CGPoint center;
-  float minDim;
-  if (!getCenterAndMinDim(self.apiManager, &center, &minDim))
-    return 50.0f;
+  float minDim = [self canvasMinDim];
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   double scale = 1.0;
   [paramGetAPI getFloatValue:&scale fromParameter:paramID atTime:time];
-  return minDim * 0.2f * (float)scale;
+  return minDim * 0.1f * (float)scale;
 }
 
 - (CGPoint)oscPositionAtTime:(CMTime)time {
@@ -194,92 +185,6 @@ static const float kSnapThreshold = 8.0f;
   CGPoint labelPos = CGPointMake(pos.x, pos.y - arcOuter - 4.0f -
                                             pt->label.size.height / 2.0f);
   [pt->label drawAtCanvasPosition:labelPos destinationImage:dest];
-}
-
-- (void)drawLineFrom:(CGPoint)canvasA
-                  to:(CGPoint)canvasB
-               color:(simd_float4)lineColor
-           halfWidth:(float)hw
-    destinationImage:(FxImageTile *)destinationImage {
-  KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
-  uint64_t registryID = destinationImage.deviceRegistryID;
-  MTLPixelFormat pixelFormat =
-      [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
-  id<MTLRenderPipelineState> ps = [cache
-      buildAndRegisterPipelineStateForPluginID:
-          @"co.overpolish.keyframelesskit.Line"
-                                    registryID:registryID
-                                   pixelFormat:pixelFormat
-                                      bundleID:@"co.overpolish"
-                                                ".keyframeless"
-                                                ".KeyframelessKit"
-                                  vertexShader:@"KKVertexShader"
-                                fragmentShader:@"KKLineFragment"
-                                     blendMode:KKBlendModePremultipliedAlpha];
-  if (!ps)
-    return;
-
-  CGPoint mid =
-      CGPointMake((canvasA.x + canvasB.x) / 2.0, (canvasA.y + canvasB.y) / 2.0);
-
-  [self
-      encodeRenderCommandsForDestinationImage:destinationImage
-                               canvasPosition:mid
-                             clearDestination:NO
-                                     commands:^(
-                                         id<MTLRenderCommandEncoder> encoder,
-                                         CGPoint metalMid,
-                                         simd_uint2 viewportSize) {
-                                       float ioW = viewportSize.x;
-                                       float ioH = viewportSize.y;
-                                       simd_float2 mA = {
-                                           (float)(canvasA.x - ioW / 2.0),
-                                           (float)(ioH / 2.0 - canvasA.y)};
-                                       simd_float2 mB = {
-                                           (float)(canvasB.x - ioW / 2.0),
-                                           (float)(ioH / 2.0 - canvasB.y)};
-
-                                       simd_float2 d = mB - mA;
-                                       float len = simd_length(d);
-                                       if (len < 0.001f)
-                                         return;
-                                       simd_float2 dir = d / len;
-                                       simd_float2 perp = {-dir.y, dir.x};
-                                       float pad = hw + 1.0f;
-
-                                       simd_float2 v0 = mA + perp * pad;
-                                       simd_float2 v1 = mA - perp * pad;
-                                       simd_float2 v2 = mB + perp * pad;
-                                       simd_float2 v3 = mB - perp * pad;
-
-                                       float edge = pad / hw;
-                                       KKVertex2D verts[6] = {
-                                           {v0, {0, edge}},  {v1, {0, -edge}},
-                                           {v2, {0, edge}},  {v1, {0, -edge}},
-                                           {v3, {0, -edge}}, {v2, {0, edge}},
-                                       };
-
-                                       simd_float4 color = lineColor;
-
-                                       [encoder setRenderPipelineState:ps];
-                                       [encoder
-                                           setVertexBytes:verts
-                                                   length:sizeof(verts)
-                                                  atIndex:
-                                                      KKVertexInputIndex_Vertices];
-                                       [encoder
-                                           setVertexBytes:&viewportSize
-                                                   length:sizeof(viewportSize)
-                                                  atIndex:
-                                                      KKVertexInputIndex_ViewportSize];
-                                       [encoder setFragmentBytes:&color
-                                                          length:sizeof(color)
-                                                         atIndex:0];
-                                       [encoder drawPrimitives:
-                                                    MTLPrimitiveTypeTriangle
-                                                   vertexStart:0
-                                                   vertexCount:6];
-                                     }];
 }
 
 - (void)drawOSCWithWidth:(NSInteger)width
@@ -340,7 +245,7 @@ static const float kSnapThreshold = 8.0f;
     }
   }
 
-  for (int i = 0; i < 2; i++)
+  for (int i = 0; i < kPointCount; i++)
     [self drawPoint:&_points[i] destinationImage:destinationImage atTime:time];
 }
 
@@ -393,7 +298,7 @@ static const float kSnapThreshold = 8.0f;
                     mousePositionY:(double)positionY
                         activePart:(NSInteger *)activePart
                             atTime:(CMTime)time {
-  for (int i = 0; i < 2; i++)
+  for (int i = 0; i < kPointCount; i++)
     [self hitTestPoint:&_points[i]
              positionX:positionX
              positionY:positionY
@@ -463,7 +368,7 @@ static const float kSnapThreshold = 8.0f;
                    modifiers:(NSUInteger)modifiers
                  forceUpdate:(BOOL *)forceUpdate
                       atTime:(CMTime)time {
-  for (int i = 0; i < 2; i++) {
+  for (int i = 0; i < kPointCount; i++) {
     if ([self mouseDownForPoint:&_points[i]
                       positionX:positionX
                       positionY:positionY
@@ -577,7 +482,7 @@ static const float kSnapThreshold = 8.0f;
                       modifiers:(NSUInteger)modifiers
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
-  for (int i = 0; i < 2; i++) {
+  for (int i = 0; i < kPointCount; i++) {
     int other = (i == 0) ? 1 : 0;
     CGPoint snapTarget = [self positionForParam:_points[other].pointParam
                                          atTime:time];
@@ -607,7 +512,7 @@ static const float kSnapThreshold = 8.0f;
                     atTime:(CMTime)time {
   _snapX = NO;
   _snapY = NO;
-  for (int i = 0; i < 2; i++) {
+  for (int i = 0; i < kPointCount; i++) {
     _points[i].arcDragging = NO;
     _points[i].ringDragging = NO;
     _points[i].rotDragging = NO;

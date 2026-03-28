@@ -139,6 +139,91 @@
   return ps;
 }
 
+- (void)drawLineFrom:(CGPoint)canvasA
+                  to:(CGPoint)canvasB
+               color:(simd_float4)lineColor
+           halfWidth:(float)hw
+    destinationImage:(FxImageTile *)destinationImage {
+  KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
+  uint64_t registryID = destinationImage.deviceRegistryID;
+  MTLPixelFormat pixelFormat =
+      [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
+  id<MTLRenderPipelineState> ps = [cache
+      buildAndRegisterPipelineStateForPluginID:
+          @"co.overpolish.keyframelesskit.Line"
+                                    registryID:registryID
+                                   pixelFormat:pixelFormat
+                                      bundleID:@"co.overpolish"
+                                                ".keyframeless"
+                                                ".KeyframelessKit"
+                                  vertexShader:@"KKVertexShader"
+                                fragmentShader:@"KKLineFragment"
+                                     blendMode:KKBlendModePremultipliedAlpha];
+  if (!ps)
+    return;
+
+  CGPoint mid =
+      CGPointMake((canvasA.x + canvasB.x) / 2.0, (canvasA.y + canvasB.y) / 2.0);
+
+  [self
+      encodeRenderCommandsForDestinationImage:destinationImage
+                               canvasPosition:mid
+                             clearDestination:NO
+                                     commands:^(
+                                         id<MTLRenderCommandEncoder> encoder,
+                                         CGPoint metalMid,
+                                         simd_uint2 viewportSize) {
+                                       float ioW = viewportSize.x;
+                                       float ioH = viewportSize.y;
+                                       simd_float2 mA = {
+                                           (float)(canvasA.x - ioW / 2.0),
+                                           (float)(ioH / 2.0 - canvasA.y)};
+                                       simd_float2 mB = {
+                                           (float)(canvasB.x - ioW / 2.0),
+                                           (float)(ioH / 2.0 - canvasB.y)};
+
+                                       simd_float2 d = mB - mA;
+                                       float len = simd_length(d);
+                                       if (len < 0.001f)
+                                         return;
+                                       simd_float2 dir = d / len;
+                                       simd_float2 perp = {-dir.y, dir.x};
+                                       float pad = hw + 1.0f;
+
+                                       simd_float2 v0 = mA + perp * pad;
+                                       simd_float2 v1 = mA - perp * pad;
+                                       simd_float2 v2 = mB + perp * pad;
+                                       simd_float2 v3 = mB - perp * pad;
+
+                                       float edge = pad / hw;
+                                       KKVertex2D verts[6] = {
+                                           {v0, {0, edge}},  {v1, {0, -edge}},
+                                           {v2, {0, edge}},  {v1, {0, -edge}},
+                                           {v3, {0, -edge}}, {v2, {0, edge}},
+                                       };
+
+                                       simd_float4 color = lineColor;
+                                       [encoder setRenderPipelineState:ps];
+                                       [encoder
+                                           setVertexBytes:verts
+                                                   length:sizeof(verts)
+                                                  atIndex:
+                                                      KKVertexInputIndex_Vertices];
+                                       [encoder
+                                           setVertexBytes:&viewportSize
+                                                   length:sizeof(viewportSize)
+                                                  atIndex:
+                                                      KKVertexInputIndex_ViewportSize];
+                                       [encoder setFragmentBytes:&color
+                                                          length:sizeof(color)
+                                                         atIndex:0];
+                                       [encoder drawPrimitives:
+                                                    MTLPrimitiveTypeTriangle
+                                                   vertexStart:0
+                                                   vertexCount:6];
+                                     }];
+}
+
 - (void)drawQuadForDestinationImage:(FxImageTile *)destinationImage
                      canvasPosition:(CGPoint)canvasPosition
                       pipelineState:(id<MTLRenderPipelineState>)pipelineState

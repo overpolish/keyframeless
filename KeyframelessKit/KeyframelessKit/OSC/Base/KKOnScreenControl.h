@@ -111,6 +111,13 @@ NS_ASSUME_NONNULL_BEGIN
                    fragmentDataSize:(size_t)fragmentDataSize
                                size:(float)size;
 
+/// Draws an antialiased line between two canvas-space points.
+- (void)drawLineFrom:(CGPoint)canvasA
+                  to:(CGPoint)canvasB
+               color:(simd_float4)color
+           halfWidth:(float)halfWidth
+    destinationImage:(FxImageTile *)destinationImage;
+
 /// Low-level Metal setup/teardown. Use drawQuadForDestinationImage: for
 /// standard quad rendering. This is for custom encoder commands. Clears the
 /// destination.

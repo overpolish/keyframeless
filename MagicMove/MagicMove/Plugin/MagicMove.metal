@@ -46,8 +46,9 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
     p = float2(cs * p.x - sn * p.y, sn * p.x + cs * p.y);
     p.x /= aspect;
 
-    if (params->scale > 0.001)
-        p /= params->scale;
+    if (params->scale < 0.001)
+        return float4(0.0);
+    p /= params->scale;
 
     float2 src = p + 0.5;
 
