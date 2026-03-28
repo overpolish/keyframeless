@@ -9,8 +9,14 @@
 
 static NSString *const kPluginID = @"co.overpolish.keyframeless.MagicMove";
 
-// Parameter IDs
+// Parameter IDs — Point A
 static const UInt32 kParamGroupPointA = 1;
 static const UInt32 kParamPointA = 2;
-static const UInt32 kParamRotation = 3;
-static const UInt32 kParamScale = 4;
+static const UInt32 kParamRotationA = 3;
+static const UInt32 kParamScaleA = 4;
+
+// Parameter IDs — Point B
+static const UInt32 kParamGroupPointB = 5;
+static const UInt32 kParamPointB = 6;
+static const UInt32 kParamRotationB = 7;
+static const UInt32 kParamScaleB = 8;

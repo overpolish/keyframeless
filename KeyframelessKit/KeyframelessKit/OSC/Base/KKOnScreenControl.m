@@ -28,6 +28,7 @@
     _apiManager = apiManager;
     _isHovered = NO;
     _isDragging = NO;
+    _clearsOnDraw = YES;
   }
   return self;
 }
@@ -146,7 +147,7 @@
                                size:(float)size {
   [self drawQuadForDestinationImage:destinationImage
                      canvasPosition:canvasPosition
-                   clearDestination:YES
+                   clearDestination:_clearsOnDraw
                       pipelineState:pipelineState
                        fragmentData:fragmentData
                    fragmentDataSize:fragmentDataSize
