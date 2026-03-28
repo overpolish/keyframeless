@@ -190,6 +190,92 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
   [pt->label drawAtCanvasPosition:labelPos destinationImage:dest];
 }
 
+- (void)drawLineFrom:(CGPoint)canvasA
+                  to:(CGPoint)canvasB
+    destinationImage:(FxImageTile *)destinationImage {
+  KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
+  uint64_t registryID = destinationImage.deviceRegistryID;
+  MTLPixelFormat pixelFormat =
+      [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
+  id<MTLRenderPipelineState> ps = [cache
+      buildAndRegisterPipelineStateForPluginID:
+          @"co.overpolish.keyframelesskit.Line"
+                                    registryID:registryID
+                                   pixelFormat:pixelFormat
+                                      bundleID:@"co.overpolish"
+                                                ".keyframeless"
+                                                ".KeyframelessKit"
+                                  vertexShader:@"KKVertexShader"
+                                fragmentShader:@"KKLineFragment"
+                                     blendMode:KKBlendModePremultipliedAlpha];
+  if (!ps)
+    return;
+
+  CGPoint mid =
+      CGPointMake((canvasA.x + canvasB.x) / 2.0, (canvasA.y + canvasB.y) / 2.0);
+
+  [self
+      encodeRenderCommandsForDestinationImage:destinationImage
+                               canvasPosition:mid
+                             clearDestination:NO
+                                     commands:^(
+                                         id<MTLRenderCommandEncoder> encoder,
+                                         CGPoint metalMid,
+                                         simd_uint2 viewportSize) {
+                                       float ioW = viewportSize.x;
+                                       float ioH = viewportSize.y;
+                                       simd_float2 mA = {
+                                           (float)(canvasA.x - ioW / 2.0),
+                                           (float)(ioH / 2.0 - canvasA.y)};
+                                       simd_float2 mB = {
+                                           (float)(canvasB.x - ioW / 2.0),
+                                           (float)(ioH / 2.0 - canvasB.y)};
+
+                                       simd_float2 d = mB - mA;
+                                       float len = simd_length(d);
+                                       if (len < 0.001f)
+                                         return;
+                                       simd_float2 dir = d / len;
+                                       simd_float2 perp = {-dir.y, dir.x};
+                                       float hw = 2.0f;
+                                       float pad = hw + 1.0f;
+
+                                       simd_float2 v0 = mA + perp * pad;
+                                       simd_float2 v1 = mA - perp * pad;
+                                       simd_float2 v2 = mB + perp * pad;
+                                       simd_float2 v3 = mB - perp * pad;
+
+                                       float edge = pad / hw;
+                                       KKVertex2D verts[6] = {
+                                           {v0, {0, edge}},  {v1, {0, -edge}},
+                                           {v2, {0, edge}},  {v1, {0, -edge}},
+                                           {v3, {0, -edge}}, {v2, {0, edge}},
+                                       };
+
+                                       simd_float4 color = {1.0f, 0.0f, 0.0f,
+                                                            1.0f};
+
+                                       [encoder setRenderPipelineState:ps];
+                                       [encoder
+                                           setVertexBytes:verts
+                                                   length:sizeof(verts)
+                                                  atIndex:
+                                                      KKVertexInputIndex_Vertices];
+                                       [encoder
+                                           setVertexBytes:&viewportSize
+                                                   length:sizeof(viewportSize)
+                                                  atIndex:
+                                                      KKVertexInputIndex_ViewportSize];
+                                       [encoder setFragmentBytes:&color
+                                                          length:sizeof(color)
+                                                         atIndex:0];
+                                       [encoder drawPrimitives:
+                                                    MTLPrimitiveTypeTriangle
+                                                   vertexStart:0
+                                                   vertexCount:6];
+                                     }];
+}
+
 - (void)drawOSCWithWidth:(NSInteger)width
                   height:(NSInteger)height
               activePart:(NSInteger)activePart
@@ -201,6 +287,10 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
                                        commands:^(id<MTLRenderCommandEncoder> e,
                                                   CGPoint p, simd_uint2 v){
                                        }];
+
+  CGPoint posA = [self positionForParam:kParamPointA atTime:time];
+  CGPoint posB = [self positionForParam:kParamPointB atTime:time];
+  [self drawLineFrom:posA to:posB destinationImage:destinationImage];
 
   for (int i = 0; i < 2; i++)
     [self drawPoint:&_points[i] destinationImage:destinationImage atTime:time];

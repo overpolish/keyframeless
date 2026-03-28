@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#include "ShaderTypes.h"
 #include <KeyframelessKit/KKShaderTypes.h>
 #include <metal_stdlib>
 #include <simd/simd.h>
@@ -32,8 +33,28 @@ vertex RasterizerData vertexShader(uint vertexID [[vertex_id]],
 }
 
 fragment float4 fragmentShader(RasterizerData in [[stage_in]],
-                               texture2d<half> colorTexture [[texture(KKTextureIndex_InputImage)]]) {
-    constexpr sampler textureSampler(mag_filter::linear, min_filter::linear);
-    half4 c = colorTexture.sample(textureSampler, in.textureCoordinate);
+                               texture2d<half> colorTexture [[texture(KKTextureIndex_InputImage)]],
+                               constant MagicMoveParams *params [[buffer(FragmentIndex_Params)]]) {
+    float2 p = in.textureCoordinate - 0.5;
+
+    p -= params->translate;
+
+    float aspect = float(colorTexture.get_width()) / float(colorTexture.get_height());
+    p.x *= aspect;
+    float cs = cos(params->rotation);
+    float sn = sin(params->rotation);
+    p = float2(cs * p.x - sn * p.y, sn * p.x + cs * p.y);
+    p.x /= aspect;
+
+    if (params->scale > 0.001)
+        p /= params->scale;
+
+    float2 src = p + 0.5;
+
+    if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0)
+        return float4(0.0);
+
+    constexpr sampler s(mag_filter::linear, min_filter::linear);
+    half4 c = colorTexture.sample(s, src);
     return float4(c);
 }
