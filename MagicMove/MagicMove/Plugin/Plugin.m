@@ -5,6 +5,7 @@
 
 #import "Plugin.h"
 #import "Constants.h"
+#import "ShaderTypes.h"
 #import <AppKit/NSView.h>
 #import <Foundation/Foundation.h>
 #import <IOSurface/IOSurfaceObjC.h>
@@ -103,6 +104,16 @@
   if (![self addUpdateBannerParameterWithAPI:paramAPI error:error])
     return NO;
 
+  if (![self addInfoParameterWithText:
+                 @"Create a Compound Clip before applying to avoid clipping"
+                                 icon:[NSImage imageWithSystemSymbolName:
+                                                   @"exclamationmark.triangle"
+                                                accessibilityDescription:nil]
+                          parameterID:kParamInfoCompound
+                              withAPI:paramAPI
+                                error:error])
+    return NO;
+
   if (![self addPointGroupWithName:@"Point A"
                            groupID:kParamGroupPointA
                            pointID:kParamPointA
@@ -147,9 +158,52 @@
     }
     return NO;
   }
-  // Passthrough — no effect-specific state needed yet.
-  uint8_t placeholder = 1;
-  *pluginState = [NSData dataWithBytes:&placeholder length:sizeof(placeholder)];
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
+  if (timingAPI) {
+    [timingAPI startTimeForEffect:&effectStart];
+    [timingAPI durationTimeForEffect:&effectDuration];
+  }
+
+  double startSecs = CMTimeGetSeconds(effectStart);
+  double durationSecs = CMTimeGetSeconds(effectDuration);
+  double renderSecs = CMTimeGetSeconds(renderTime);
+  double t = (durationSecs > 0)
+                 ? fmax(0, fmin(1, (renderSecs - startSecs) / durationSecs))
+                 : 0;
+
+  double posAx = 0.5, posAy = 0.5, posBx = 0.5, posBy = 0.5;
+  [paramGetAPI getXValue:&posAx
+                  YValue:&posAy
+           fromParameter:kParamPointA
+                  atTime:renderTime];
+  [paramGetAPI getXValue:&posBx
+                  YValue:&posBy
+           fromParameter:kParamPointB
+                  atTime:renderTime];
+
+  double rotA = 0, rotB = 0, scaleA = 1, scaleB = 1;
+  [paramGetAPI getFloatValue:&rotA
+               fromParameter:kParamRotationA
+                      atTime:renderTime];
+  [paramGetAPI getFloatValue:&rotB
+               fromParameter:kParamRotationB
+                      atTime:renderTime];
+  [paramGetAPI getFloatValue:&scaleA
+               fromParameter:kParamScaleA
+                      atTime:renderTime];
+  [paramGetAPI getFloatValue:&scaleB
+               fromParameter:kParamScaleB
+                      atTime:renderTime];
+
+  MagicMoveParams params;
+  params.translate = (simd_float2){(float)((1 - t) * posAx + t * posBx - 0.5),
+                                   (float)((1 - t) * posAy + t * posBy - 0.5)};
+  params.rotation = (float)(((1 - t) * rotA + t * rotB) * M_PI / 180.0);
+  params.scale = (float)((1 - t) * scaleA + t * scaleB);
+
+  *pluginState = [NSData dataWithBytes:&params length:sizeof(params)];
   return (*pluginState != nil);
 }
 
@@ -164,8 +218,6 @@
     return NO;
   }
 
-  // In the case of a filter that only changed RGB values,
-  // the output rect is the same as the input rect.
   *destinationImageRect = sourceImages[0].imagePixelBounds;
 
   return YES;
@@ -203,6 +255,9 @@
     return NO;
   }
 
+  MagicMoveParams params;
+  [pluginState getBytes:&params length:sizeof(params)];
+
   id<MTLRenderPipelineState> pipelineState =
       [self pipelineStateForPluginID:kPluginID
                     destinationImage:destinationImage
@@ -226,6 +281,11 @@
                                            setFragmentTexture:inputTextures[0]
                                                       atIndex:
                                                           KKTextureIndex_InputImage];
+                                       [encoder
+                                           setFragmentBytes:&params
+                                                     length:sizeof(params)
+                                                    atIndex:
+                                                        FragmentIndex_Params];
                                        [encoder
                                            drawPrimitives:
                                                MTLPrimitiveTypeTriangleStrip

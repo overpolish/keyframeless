@@ -196,6 +196,17 @@ fragment float4 KKRotationOSCFragment(KKRasterizerData in [[stage_in]],
     return color;
 }
 
+/// Fragment shader for an antialiased line. textureCoordinate.y encodes
+/// signed distance from the line center in normalized units (-1 to 1).
+fragment float4 KKLineFragment(KKRasterizerData in [[stage_in]],
+                               constant float4 *color [[buffer(KKOSCFragmentIndex_DrawColor)]]) {
+    float dist = abs(in.textureCoordinate.y);
+    float alpha = 1.0 - smoothstep(1.0 - fwidth(dist) * 2.0, 1.0, dist);
+    if (alpha < 0.001)
+        discard_fragment();
+    return float4(color->rgb * alpha, alpha);
+}
+
 /// Fragment shader for rendering a text label texture.
 fragment float4 KKLabelFragment(KKRasterizerData in [[stage_in]], texture2d<float> labelTexture [[texture(0)]]) {
     constexpr sampler s(mag_filter::linear, min_filter::linear);

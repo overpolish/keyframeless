@@ -20,3 +20,6 @@ static const UInt32 kParamGroupPointB = 5;
 static const UInt32 kParamPointB = 6;
 static const UInt32 kParamRotationB = 7;
 static const UInt32 kParamScaleB = 8;
+
+// Info
+static const UInt32 kParamInfoCompound = 9000;
