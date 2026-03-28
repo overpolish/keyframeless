@@ -201,12 +201,21 @@ static const float kSnapThreshold = 8.0f;
 
   CGPoint posA = [self positionForParam:kParamPointA atTime:time];
   CGPoint posB = [self positionForParam:kParamPointB atTime:time];
+  double ldx = posB.x - posA.x;
+  double ldy = posB.y - posA.y;
+  double len = hypot(ldx, ldy);
   simd_float4 red = {1, 0, 0, 1};
-  [self drawLineFrom:posA
-                    to:posB
-                 color:red
-             halfWidth:2.0f
-      destinationImage:destinationImage];
+  BOOL arcActive = _points[0].arcDragging || _points[1].arcDragging;
+  double inset = arcActive ? 22.0 : 14.0;
+  if (len > inset * 2.0) {
+    double nx = ldx / len * inset;
+    double ny = ldy / len * inset;
+    [self drawLineFrom:(CGPoint){posA.x + nx, posA.y + ny}
+                      to:(CGPoint){posB.x - nx, posB.y - ny}
+                   color:red
+               halfWidth:2.0f
+        destinationImage:destinationImage];
+  }
 
   if (_snapX || _snapY) {
     CGPoint topRight, bottomLeft;
