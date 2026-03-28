@@ -158,20 +158,7 @@
     }
     return NO;
   }
-  id<FxTimingAPI_v4> timingAPI =
-      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-  CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
-  if (timingAPI) {
-    [timingAPI startTimeForEffect:&effectStart];
-    [timingAPI durationTimeForEffect:&effectDuration];
-  }
-
-  double startSecs = CMTimeGetSeconds(effectStart);
-  double durationSecs = CMTimeGetSeconds(effectDuration);
-  double renderSecs = CMTimeGetSeconds(renderTime);
-  double t = (durationSecs > 0)
-                 ? fmax(0, fmin(1, (renderSecs - startSecs) / durationSecs))
-                 : 0;
+  double t = [self animationFactorAtTime:renderTime];
 
   double posAx = 0.5, posAy = 0.5, posBx = 0.5, posBy = 0.5;
   [paramGetAPI getXValue:&posAx
