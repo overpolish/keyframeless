@@ -8,6 +8,7 @@
 #import "ShaderTypes.h"
 #import <AppKit/NSView.h>
 #import <Foundation/Foundation.h>
+#include <FxPlug/FxTypes.h>
 #import <IOSurface/IOSurfaceObjC.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 #import <QuartzCore/QuartzCore.h>
@@ -225,7 +226,8 @@ static double mmApplyCurveOut(double raw, int curve) {
                                parameterID:kParamExitPoint
                                   defaultX:0.5
                                   defaultY:0.5
-                            parameterFlags:kFxParameterFlag_DEFAULT])
+                            parameterFlags:kFxParameterFlag_DEFAULT |
+                                           kFxParameterFlag_HIDDEN])
     return NO;
 
   if (![paramAPI addAngleSliderWithName:@"Rotation"
@@ -253,6 +255,55 @@ static double mmApplyCurveOut(double raw, int curve) {
   if (![self addAnimationParametersWithAPI:paramAPI error:error])
     return NO;
 
+  return YES;
+}
+
+- (void)updateParameterVisibilityAtTime:(CMTime)time {
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> paramSetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  if (!paramGetAPI || !paramSetAPI)
+    return;
+
+  BOOL animIn = NO, animOut = NO, driftOn = NO, exitOn = NO;
+  [paramGetAPI getBoolValue:&animIn
+              fromParameter:kKKParamAnimateIn
+                     atTime:time];
+  [paramGetAPI getBoolValue:&animOut
+              fromParameter:kKKParamAnimateOut
+                     atTime:time];
+  [paramGetAPI getBoolValue:&driftOn fromParameter:kParamDrift atTime:time];
+  [paramGetAPI getBoolValue:&exitOn fromParameter:kParamExit atTime:time];
+
+  BOOL showA = animIn || (animOut && !exitOn);
+  BOOL showExit = exitOn && animOut;
+
+  FxParameterFlags flagA =
+      showA ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+  FxParameterFlags flagDrift =
+      driftOn ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+  FxParameterFlags flagExit =
+      showExit ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+
+  // Point A group
+  [paramSetAPI setParameterFlags:flagA toParameter:kParamGroupPointA];
+
+  // Drift sub-parameters (keep Enable toggle visible)
+  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftPoint];
+  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftRotation];
+  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftScale];
+
+  // Exit sub-parameters (keep Enable toggle visible)
+  [paramSetAPI setParameterFlags:flagExit toParameter:kParamExitPoint];
+  [paramSetAPI setParameterFlags:flagExit toParameter:kParamExitRotation];
+  [paramSetAPI setParameterFlags:flagExit toParameter:kParamExitScale];
+}
+
+- (BOOL)parameterChanged:(UInt32)parameterID
+                  atTime:(CMTime)time
+                   error:(NSError **)error {
+  [self updateParameterVisibilityAtTime:time];
   return YES;
 }
 
