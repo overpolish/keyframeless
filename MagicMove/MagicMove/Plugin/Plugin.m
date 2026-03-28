@@ -91,26 +91,23 @@ static double mmApplyCurveOut(double raw, int curve) {
                             parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
-  if (![paramAPI addFloatSliderWithName:@"Rotation"
+  if (![paramAPI addAngleSliderWithName:@"Rotation"
                             parameterID:rotationID
-                           defaultValue:0.0
-                           parameterMin:-FLT_MAX
-                           parameterMax:FLT_MAX
-                              sliderMin:-360.0
-                              sliderMax:360.0
-                                  delta:1.0
+                         defaultDegrees:0.0
+                    parameterMinDegrees:-FLT_MAX
+                    parameterMaxDegrees:FLT_MAX
                          parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
-  if (![paramAPI addFloatSliderWithName:@"Scale"
-                            parameterID:scaleID
-                           defaultValue:1.0
-                           parameterMin:0.0
-                           parameterMax:10.0
-                              sliderMin:0.0
-                              sliderMax:5.0
-                                  delta:0.01
-                         parameterFlags:kFxParameterFlag_DEFAULT])
+  if (![paramAPI addPercentSliderWithName:@"Scale"
+                              parameterID:scaleID
+                             defaultValue:1.0
+                             parameterMin:0.0
+                             parameterMax:10.0
+                                sliderMin:0.0
+                                sliderMax:5.0
+                                    delta:0.01
+                           parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
   if (![paramAPI endParameterSubGroup])
@@ -191,26 +188,23 @@ static double mmApplyCurveOut(double raw, int curve) {
                             parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
-  if (![paramAPI addFloatSliderWithName:@"Rotation"
+  if (![paramAPI addAngleSliderWithName:@"Rotation"
                             parameterID:kParamDriftRotation
-                           defaultValue:0.0
-                           parameterMin:-FLT_MAX
-                           parameterMax:FLT_MAX
-                              sliderMin:-360.0
-                              sliderMax:360.0
-                                  delta:1.0
+                         defaultDegrees:0.0
+                    parameterMinDegrees:-FLT_MAX
+                    parameterMaxDegrees:FLT_MAX
                          parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
-  if (![paramAPI addFloatSliderWithName:@"Scale"
-                            parameterID:kParamDriftScale
-                           defaultValue:1.0
-                           parameterMin:0.0
-                           parameterMax:10.0
-                              sliderMin:0.0
-                              sliderMax:5.0
-                                  delta:0.01
-                         parameterFlags:kFxParameterFlag_DEFAULT])
+  if (![paramAPI addPercentSliderWithName:@"Scale"
+                              parameterID:kParamDriftScale
+                             defaultValue:1.0
+                             parameterMin:0.0
+                             parameterMax:10.0
+                                sliderMin:0.0
+                                sliderMax:5.0
+                                    delta:0.01
+                           parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
   if (![paramAPI endParameterSubGroup])
@@ -234,26 +228,23 @@ static double mmApplyCurveOut(double raw, int curve) {
                             parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
-  if (![paramAPI addFloatSliderWithName:@"Rotation"
+  if (![paramAPI addAngleSliderWithName:@"Rotation"
                             parameterID:kParamExitRotation
-                           defaultValue:0.0
-                           parameterMin:-FLT_MAX
-                           parameterMax:FLT_MAX
-                              sliderMin:-360.0
-                              sliderMax:360.0
-                                  delta:1.0
+                         defaultDegrees:0.0
+                    parameterMinDegrees:-FLT_MAX
+                    parameterMaxDegrees:FLT_MAX
                          parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
-  if (![paramAPI addFloatSliderWithName:@"Scale"
-                            parameterID:kParamExitScale
-                           defaultValue:1.0
-                           parameterMin:0.0
-                           parameterMax:10.0
-                              sliderMin:0.0
-                              sliderMax:5.0
-                                  delta:0.01
-                         parameterFlags:kFxParameterFlag_DEFAULT])
+  if (![paramAPI addPercentSliderWithName:@"Scale"
+                              parameterID:kParamExitScale
+                             defaultValue:1.0
+                             parameterMin:0.0
+                             parameterMax:10.0
+                                sliderMin:0.0
+                                sliderMax:5.0
+                                    delta:0.01
+                           parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
   if (![paramAPI endParameterSubGroup])
@@ -411,13 +402,13 @@ static double mmApplyCurveOut(double raw, int curve) {
     params.translate =
         (simd_float2){(float)((1 - tIn) * posAx + tIn * effX - 0.5),
                       (float)((1 - tIn) * posAy + tIn * effY - 0.5)};
-    params.rotation = (float)(((1 - tIn) * rotA + tIn * effRot) * M_PI / 180.0);
+    params.rotation = (float)((1 - tIn) * rotA + tIn * effRot);
     params.scale = (float)((1 - tIn) * scaleA + tIn * effScale);
   } else {
     params.translate =
         (simd_float2){(float)((1 - t) * posAx + t * targetX - 0.5),
                       (float)((1 - t) * posAy + t * targetY - 0.5)};
-    params.rotation = (float)(((1 - t) * rotA + t * targetRot) * M_PI / 180.0);
+    params.rotation = (float)((1 - t) * rotA + t * targetRot);
     params.scale = (float)((1 - t) * scaleA + t * targetScale);
   }
 
@@ -465,7 +456,7 @@ static double mmApplyCurveOut(double raw, int curve) {
       prevX = (1 - tP) * posAx + tP * tgtX - 0.5;
     }
     double vx = (curX - prevX) / window;
-    params.rotation -= (float)(vx * 5.0 * M_PI / 180.0);
+    params.rotation -= (float)(vx * 5.0 * (M_PI / 180.0));
   }
 
   *pluginState = [NSData dataWithBytes:&params length:sizeof(params)];
