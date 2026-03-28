@@ -319,10 +319,15 @@ static double mmApplyCurveOut(double raw, int curve) {
                         atTime:renderTime];
   }
 
-  BOOL exitEnabled = NO;
-  [paramGetAPI getBoolValue:&exitEnabled
+  BOOL exitToggle = NO;
+  [paramGetAPI getBoolValue:&exitToggle
               fromParameter:kParamExit
                      atTime:renderTime];
+  BOOL animateOut = NO;
+  [paramGetAPI getBoolValue:&animateOut
+              fromParameter:kKKParamAnimateOut
+                     atTime:renderTime];
+  BOOL exitEnabled = exitToggle && animateOut;
 
   double exitX = 0.5, exitY = 0.5, exitRot = 0, exitScale = 1;
   if (exitEnabled) {
