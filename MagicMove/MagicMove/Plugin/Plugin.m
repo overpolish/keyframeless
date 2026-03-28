@@ -140,6 +140,49 @@
                           parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
+  if (![paramAPI startParameterSubGroup:@"Drift"
+                            parameterID:kParamGroupDrift
+                         parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
+  if (![paramAPI addToggleButtonWithName:@"Enable"
+                             parameterID:kParamDrift
+                            defaultValue:NO
+                          parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
+  if (![paramAPI addPointParameterWithName:@"Position"
+                               parameterID:kParamDriftPoint
+                                  defaultX:0.5
+                                  defaultY:0.5
+                            parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
+  if (![paramAPI addFloatSliderWithName:@"Rotation"
+                            parameterID:kParamDriftRotation
+                           defaultValue:0.0
+                           parameterMin:-FLT_MAX
+                           parameterMax:FLT_MAX
+                              sliderMin:-360.0
+                              sliderMax:360.0
+                                  delta:1.0
+                         parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
+  if (![paramAPI addFloatSliderWithName:@"Scale"
+                            parameterID:kParamDriftScale
+                           defaultValue:1.0
+                           parameterMin:0.0
+                           parameterMax:10.0
+                              sliderMin:0.0
+                              sliderMax:5.0
+                                  delta:0.01
+                         parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
+  if (![paramAPI endParameterSubGroup])
+    return NO;
+
   if (![self addAnimationParametersWithAPI:paramAPI error:error])
     return NO;
 
@@ -190,11 +233,53 @@
                fromParameter:kParamScaleB
                       atTime:renderTime];
 
+  BOOL driftEnabled = NO;
+  [paramGetAPI getBoolValue:&driftEnabled
+              fromParameter:kParamDrift
+                     atTime:renderTime];
+
+  double driftX = 0.5, driftY = 0.5;
   MagicMoveParams params;
-  params.translate = (simd_float2){(float)((1 - t) * posAx + t * posBx - 0.5),
-                                   (float)((1 - t) * posAy + t * posBy - 0.5)};
-  params.rotation = (float)(((1 - t) * rotA + t * rotB) * M_PI / 180.0);
-  params.scale = (float)((1 - t) * scaleA + t * scaleB);
+  if (driftEnabled) {
+    [paramGetAPI getXValue:&driftX
+                    YValue:&driftY
+             fromParameter:kParamDriftPoint
+                    atTime:renderTime];
+    double driftRot = 0, driftScale = 1;
+    [paramGetAPI getFloatValue:&driftRot
+                 fromParameter:kParamDriftRotation
+                        atTime:renderTime];
+    [paramGetAPI getFloatValue:&driftScale
+                 fromParameter:kParamDriftScale
+                        atTime:renderTime];
+
+    id<FxTimingAPI_v4> timingAPI =
+        [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+    CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
+    [timingAPI startTimeForEffect:&effectStart];
+    [timingAPI durationTimeForEffect:&effectDuration];
+    double startSec = CMTimeGetSeconds(effectStart);
+    double durSec = CMTimeGetSeconds(effectDuration);
+    double nowSec = CMTimeGetSeconds(renderTime);
+
+    double d = (durSec > 0) ? (nowSec - startSec) / durSec : 1.0;
+    d = MAX(0.0, MIN(1.0, d));
+    double targetX = (1 - d) * posBx + d * driftX;
+    double targetY = (1 - d) * posBy + d * driftY;
+    double targetRot = (1 - d) * rotB + d * driftRot;
+    double targetScale = (1 - d) * scaleB + d * driftScale;
+    params.translate =
+        (simd_float2){(float)((1 - t) * posAx + t * targetX - 0.5),
+                      (float)((1 - t) * posAy + t * targetY - 0.5)};
+    params.rotation = (float)(((1 - t) * rotA + t * targetRot) * M_PI / 180.0);
+    params.scale = (float)((1 - t) * scaleA + t * targetScale);
+  } else {
+    params.translate =
+        (simd_float2){(float)((1 - t) * posAx + t * posBx - 0.5),
+                      (float)((1 - t) * posAy + t * posBy - 0.5)};
+    params.rotation = (float)(((1 - t) * rotA + t * rotB) * M_PI / 180.0);
+    params.scale = (float)((1 - t) * scaleA + t * scaleB);
+  }
 
   BOOL rotateWithMotion = NO;
   [paramGetAPI getBoolValue:&rotateWithMotion
@@ -202,9 +287,30 @@
                      atTime:renderTime];
 
   if (rotateWithMotion) {
-    double dx = posBx - posAx;
-    double arc = 4.0 * t * (1.0 - t);
-    params.rotation -= (float)(arc * dx * 10.0 * M_PI / 180.0);
+    double curX = (double)params.translate.x;
+    double window = 1.0 / 12.0;
+    CMTime tPrev =
+        CMTimeSubtract(renderTime, CMTimeMakeWithSeconds(window, 600));
+    double tP = [self animationFactorAtTime:tPrev];
+    double prevSec = CMTimeGetSeconds(tPrev);
+    double prevX;
+    if (driftEnabled) {
+      id<FxTimingAPI_v4> timAPI =
+          [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+      CMTime es = kCMTimeZero, ed = kCMTimeZero;
+      [timAPI startTimeForEffect:&es];
+      [timAPI durationTimeForEffect:&ed];
+      double ds = CMTimeGetSeconds(es);
+      double dd = CMTimeGetSeconds(ed);
+      double dP = (dd > 0) ? (prevSec - ds) / dd : 1.0;
+      dP = MAX(0.0, MIN(1.0, dP));
+      double tgtX = (1 - dP) * posBx + dP * driftX;
+      prevX = (1 - tP) * posAx + tP * tgtX - 0.5;
+    } else {
+      prevX = (1 - tP) * posAx + tP * posBx - 0.5;
+    }
+    double vx = (curX - prevX) / window;
+    params.rotation -= (float)(vx * 5.0 * M_PI / 180.0);
   }
 
   *pluginState = [NSData dataWithBytes:&params length:sizeof(params)];
