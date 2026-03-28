@@ -161,9 +161,9 @@ static const float kSnapThreshold = 8.0f;
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   if (!paramGetAPI)
     return 0.0f;
-  double degrees = 0.0;
-  [paramGetAPI getFloatValue:&degrees fromParameter:paramID atTime:time];
-  return (float)(degrees * M_PI / 180.0);
+  double radians = 0.0;
+  [paramGetAPI getFloatValue:&radians fromParameter:paramID atTime:time];
+  return (float)radians;
 }
 
 - (float)canvasMinDim {
@@ -455,9 +455,8 @@ static const float kSnapThreshold = 8.0f;
     CGPoint center = [self positionForParam:pt->pointParam atTime:time];
     double dx = positionX - center.x;
     double dy = positionY - center.y;
-    pt->rotDragPrevAngle = atan2(-dy, dx) * 180.0 / M_PI;
-    pt->rotDragAccum =
-        [self rotationForParam:pt->rotParam atTime:time] * 180.0 / M_PI;
+    pt->rotDragPrevAngle = atan2(-dy, dx);
+    pt->rotDragAccum = [self rotationForParam:pt->rotParam atTime:time];
     [oscAPI setCursor:[NSCursor crosshairCursor]];
     *forceUpdate = YES;
     return YES;
@@ -590,12 +589,12 @@ static const float kSnapThreshold = 8.0f;
   if (activePart == pt->rotPart) {
     double dx = positionX - center.x;
     double dy = positionY - center.y;
-    double angle = atan2(-dy, dx) * 180.0 / M_PI;
+    double angle = atan2(-dy, dx);
     double delta = angle - pt->rotDragPrevAngle;
-    if (delta > 180.0)
-      delta -= 360.0;
-    else if (delta < -180.0)
-      delta += 360.0;
+    if (delta > M_PI)
+      delta -= 2.0 * M_PI;
+    else if (delta < -M_PI)
+      delta += 2.0 * M_PI;
     pt->rotDragAccum += delta;
     pt->rotDragPrevAngle = angle;
     id<FxParameterSettingAPI_v5> paramSetAPI =
