@@ -37,6 +37,54 @@
   return YES;
 }
 
+- (BOOL)addPointGroupWithName:(NSString *)name
+                      groupID:(UInt32)groupID
+                      pointID:(UInt32)pointID
+                   rotationID:(UInt32)rotationID
+                      scaleID:(UInt32)scaleID
+                     defaultX:(double)defaultX
+                     defaultY:(double)defaultY
+                      withAPI:(id<FxParameterCreationAPI_v5>)paramAPI {
+  if (![paramAPI startParameterSubGroup:name
+                            parameterID:groupID
+                         parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
+  if (![paramAPI addPointParameterWithName:@"Position"
+                               parameterID:pointID
+                                  defaultX:defaultX
+                                  defaultY:defaultY
+                            parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
+  if (![paramAPI addFloatSliderWithName:@"Rotation"
+                            parameterID:rotationID
+                           defaultValue:0.0
+                           parameterMin:-FLT_MAX
+                           parameterMax:FLT_MAX
+                              sliderMin:-360.0
+                              sliderMax:360.0
+                                  delta:1.0
+                         parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
+  if (![paramAPI addFloatSliderWithName:@"Scale"
+                            parameterID:scaleID
+                           defaultValue:1.0
+                           parameterMin:0.0
+                           parameterMax:10.0
+                              sliderMin:0.0
+                              sliderMax:5.0
+                                  delta:0.01
+                         parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
+  if (![paramAPI endParameterSubGroup])
+    return NO;
+
+  return YES;
+}
+
 - (BOOL)addParametersWithError:(NSError **)error {
   id<FxParameterCreationAPI_v5> paramAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterCreationAPI_v5)];
@@ -49,59 +97,34 @@
                                      @"Unable to obtain an FxPlug API Object"
                                }];
     }
-
     return NO;
   }
 
-  if (![self addUpdateBannerParameterWithAPI:paramAPI error:error]) {
+  if (![self addUpdateBannerParameterWithAPI:paramAPI error:error])
     return NO;
-  }
 
-  if (![paramAPI startParameterSubGroup:@"Point A"
-                            parameterID:kParamGroupPointA
-                         parameterFlags:kFxParameterFlag_DEFAULT]) {
+  if (![self addPointGroupWithName:@"Point A"
+                           groupID:kParamGroupPointA
+                           pointID:kParamPointA
+                        rotationID:kParamRotationA
+                           scaleID:kParamScaleA
+                          defaultX:0.5
+                          defaultY:0.5
+                           withAPI:paramAPI])
     return NO;
-  }
 
-  if (![paramAPI addPointParameterWithName:@"Position"
-                               parameterID:kParamPointA
-                                  defaultX:0.5
-                                  defaultY:0.5
-                            parameterFlags:kFxParameterFlag_DEFAULT]) {
+  if (![self addPointGroupWithName:@"Point B"
+                           groupID:kParamGroupPointB
+                           pointID:kParamPointB
+                        rotationID:kParamRotationB
+                           scaleID:kParamScaleB
+                          defaultX:0.5
+                          defaultY:0.5
+                           withAPI:paramAPI])
     return NO;
-  }
 
-  if (![paramAPI addFloatSliderWithName:@"Rotation"
-                            parameterID:kParamRotation
-                           defaultValue:0.0
-                           parameterMin:-FLT_MAX
-                           parameterMax:FLT_MAX
-                              sliderMin:-360.0
-                              sliderMax:360.0
-                                  delta:1.0
-                         parameterFlags:kFxParameterFlag_DEFAULT]) {
+  if (![self addAnimationParametersWithAPI:paramAPI error:error])
     return NO;
-  }
-
-  if (![paramAPI addFloatSliderWithName:@"Scale"
-                            parameterID:kParamScale
-                           defaultValue:1.0
-                           parameterMin:0.0
-                           parameterMax:10.0
-                              sliderMin:0.0
-                              sliderMax:5.0
-                                  delta:0.01
-                         parameterFlags:kFxParameterFlag_DEFAULT]) {
-    return NO;
-  }
-
-  if (![paramAPI endParameterSubGroup]) {
-    return NO;
-  }
-
-  if (![self addAnimationParametersWithAPI:paramAPI error:error]) {
-    return NO;
-  }
 
   return YES;
 }

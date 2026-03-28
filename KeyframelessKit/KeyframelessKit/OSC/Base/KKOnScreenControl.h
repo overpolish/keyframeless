@@ -21,6 +21,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, readonly) BOOL isHovered;
 @property(nonatomic, readonly) BOOL isDragging;
 
+/// When YES (default), the convenience drawQuad method clears the destination
+/// before drawing. Set to NO when compositing multiple controls into one image.
+@property(nonatomic) BOOL clearsOnDraw;
+
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager;
 
 /// Override to provide plugin ID for pipeline state caching.
