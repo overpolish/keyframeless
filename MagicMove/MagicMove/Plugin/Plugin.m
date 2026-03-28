@@ -134,6 +134,12 @@
                            withAPI:paramAPI])
     return NO;
 
+  if (![paramAPI addToggleButtonWithName:@"Rotate with Motion"
+                             parameterID:kParamRotateWithMotion
+                            defaultValue:NO
+                          parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
   if (![self addAnimationParametersWithAPI:paramAPI error:error])
     return NO;
 
@@ -189,6 +195,17 @@
                                    (float)((1 - t) * posAy + t * posBy - 0.5)};
   params.rotation = (float)(((1 - t) * rotA + t * rotB) * M_PI / 180.0);
   params.scale = (float)((1 - t) * scaleA + t * scaleB);
+
+  BOOL rotateWithMotion = NO;
+  [paramGetAPI getBoolValue:&rotateWithMotion
+              fromParameter:kParamRotateWithMotion
+                     atTime:renderTime];
+
+  if (rotateWithMotion) {
+    double dx = posBx - posAx;
+    double arc = 4.0 * t * (1.0 - t);
+    params.rotation -= (float)(arc * dx * 10.0 * M_PI / 180.0);
+  }
 
   *pluginState = [NSData dataWithBytes:&params length:sizeof(params)];
   return (*pluginState != nil);

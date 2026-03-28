@@ -51,20 +51,10 @@ static double kkSmoothstep(double t) { return t * t * (3.0 - 2.0 * t); }
 // In: ease-out cubic — fast start, decelerates to rest
 static double kkEaseOutCubic(double t) { return 1.0 - pow(1.0 - t, 3.0); }
 
-// Out: ease-in cubic — slow start, accelerates away
-static double kkEaseInCubic(double t) { return t * t * t; }
-
 // In: spring — overshoots target once, settles back (ease-out-back)
 static double kkEaseOutSpring(double t) {
-  const double c1 = 1.70158, c3 = c1 + 1.0;
+  const double c1 = 1.0, c3 = c1 + 1.0;
   return 1.0 + c3 * pow(t - 1.0, 3.0) + c1 * pow(t - 1.0, 2.0);
-}
-
-// Out: spring — holds near full, brief anticipation dip, snaps away
-// (ease-in-back)
-static double kkEaseInSpring(double t) {
-  const double c1 = 1.70158, c3 = c1 + 1.0;
-  return c3 * t * t * t - c1 * t * t;
 }
 
 @interface KKPrincipalDelegate : NSObject <FxPrincipalDelegate>
@@ -367,10 +357,10 @@ static double kkEaseInSpring(double t) {
       t *= kkSmoothstep(raw);
       break;
     case KKAnimationCurveSpring:
-      t *= kkEaseInSpring(raw);
+      t *= kkEaseOutSpring(raw);
       break;
     default:
-      t *= kkEaseInCubic(raw);
+      t *= kkSmoothstep(raw);
       break;
     }
   }
