@@ -107,5 +107,6 @@
     "xcodeproj",
     "xcworkspace",
     "xmark"
-  ]
+  ],
+  "conventionalCommits.scopes": ["MagicMove"]
 }

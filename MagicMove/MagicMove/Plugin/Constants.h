@@ -21,5 +21,8 @@ static const UInt32 kParamPointB = 6;
 static const UInt32 kParamRotationB = 7;
 static const UInt32 kParamScaleB = 8;
 
+// Rotate with Motion
+static const UInt32 kParamRotateWithMotion = 10;
+
 // Info
 static const UInt32 kParamInfoCompound = 9000;
