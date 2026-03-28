@@ -11,7 +11,7 @@
 @end
 
 #define CLAMP(x, lo, hi) MAX((lo), MIN((hi), (x)))
-#define kPointCount 2
+#define kPointCount 3
 
 typedef struct {
   UInt32 pointParam, rotParam, scaleParam;
@@ -38,6 +38,10 @@ static const float kSnapThreshold = 8.0f;
   KKOSCLabel *_labelB;
   KKRingOSC *_ringB;
   KKRotationOSC *_rotB;
+  KKArcOSC *_arcDrift;
+  KKOSCLabel *_labelDrift;
+  KKRingOSC *_ringDrift;
+  KKRotationOSC *_rotDrift;
   BOOL _snapX;
   BOOL _snapY;
   float _snapXVal;
@@ -84,6 +88,26 @@ static const float kSnapThreshold = 8.0f;
         .label = _labelB,
         .ring = _ringB,
         .rot = _rotB,
+    };
+
+    _arcDrift = [[KKArcOSC alloc] initWithAPIManager:apiManager];
+    _arcDrift.clearsOnDraw = NO;
+    _labelDrift = [[KKOSCLabel alloc] initWithAPIManager:apiManager];
+    _labelDrift.text = @"Drift";
+    _ringDrift = [[KKRingOSC alloc] initWithAPIManager:apiManager];
+    _rotDrift = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
+
+    _points[2] = (PointOSCState){
+        .pointParam = kParamDriftPoint,
+        .rotParam = kParamDriftRotation,
+        .scaleParam = kParamDriftScale,
+        .arcPart = 7,
+        .ringPart = 8,
+        .rotPart = 9,
+        .arc = _arcDrift,
+        .label = _labelDrift,
+        .ring = _ringDrift,
+        .rot = _rotDrift,
     };
   }
   return self;
@@ -148,6 +172,14 @@ static const float kSnapThreshold = 8.0f;
   return minDim * 0.1f * (float)scale;
 }
 
+- (BOOL)driftEnabledAtTime:(CMTime)time {
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  BOOL enabled = NO;
+  [paramGetAPI getBoolValue:&enabled fromParameter:kParamDrift atTime:time];
+  return enabled;
+}
+
 - (CGPoint)oscPositionAtTime:(CMTime)time {
   return [self positionForParam:kParamPointA atTime:time];
 }
@@ -201,20 +233,45 @@ static const float kSnapThreshold = 8.0f;
 
   CGPoint posA = [self positionForParam:kParamPointA atTime:time];
   CGPoint posB = [self positionForParam:kParamPointB atTime:time];
-  double ldx = posB.x - posA.x;
-  double ldy = posB.y - posA.y;
-  double len = hypot(ldx, ldy);
   simd_float4 red = {1, 0, 0, 1};
-  BOOL arcActive = _points[0].arcDragging || _points[1].arcDragging;
-  double inset = arcActive ? 22.0 : 14.0;
-  if (len > inset * 2.0) {
-    double nx = ldx / len * inset;
-    double ny = ldy / len * inset;
-    [self drawLineFrom:(CGPoint){posA.x + nx, posA.y + ny}
-                      to:(CGPoint){posB.x - nx, posB.y - ny}
-                   color:red
-               halfWidth:2.0f
-        destinationImage:destinationImage];
+  BOOL driftOn = [self driftEnabledAtTime:time];
+  BOOL anyArcActive = _points[0].arcDragging || _points[1].arcDragging ||
+                      _points[2].arcDragging;
+  double inset = anyArcActive ? 22.0 : 14.0;
+
+  if (driftOn) {
+    CGPoint posD = [self positionForParam:kParamDriftPoint atTime:time];
+    double d1x = posB.x - posA.x, d1y = posB.y - posA.y;
+    double l1 = hypot(d1x, d1y);
+    if (l1 > inset * 2.0) {
+      double n1x = d1x / l1 * inset, n1y = d1y / l1 * inset;
+      [self drawLineFrom:(CGPoint){posA.x + n1x, posA.y + n1y}
+                        to:(CGPoint){posB.x - n1x, posB.y - n1y}
+                     color:red
+                 halfWidth:2.0f
+          destinationImage:destinationImage];
+    }
+    double d2x = posD.x - posB.x, d2y = posD.y - posB.y;
+    double l2 = hypot(d2x, d2y);
+    if (l2 > inset * 2.0) {
+      double n2x = d2x / l2 * inset, n2y = d2y / l2 * inset;
+      [self drawLineFrom:(CGPoint){posB.x + n2x, posB.y + n2y}
+                        to:(CGPoint){posD.x - n2x, posD.y - n2y}
+                     color:red
+                 halfWidth:2.0f
+          destinationImage:destinationImage];
+    }
+  } else {
+    double ldx = posB.x - posA.x, ldy = posB.y - posA.y;
+    double len = hypot(ldx, ldy);
+    if (len > inset * 2.0) {
+      double nx = ldx / len * inset, ny = ldy / len * inset;
+      [self drawLineFrom:(CGPoint){posA.x + nx, posA.y + ny}
+                        to:(CGPoint){posB.x - nx, posB.y - ny}
+                     color:red
+                 halfWidth:2.0f
+          destinationImage:destinationImage];
+    }
   }
 
   if (_snapX || _snapY) {
@@ -254,8 +311,11 @@ static const float kSnapThreshold = 8.0f;
     }
   }
 
-  for (int i = 0; i < kPointCount; i++)
+  for (int i = 0; i < 2; i++)
     [self drawPoint:&_points[i] destinationImage:destinationImage atTime:time];
+
+  if (driftOn)
+    [self drawPoint:&_points[2] destinationImage:destinationImage atTime:time];
 }
 
 - (void)hitTestPoint:(PointOSCState *)pt
@@ -307,8 +367,15 @@ static const float kSnapThreshold = 8.0f;
                     mousePositionY:(double)positionY
                         activePart:(NSInteger *)activePart
                             atTime:(CMTime)time {
-  for (int i = 0; i < kPointCount; i++)
+  for (int i = 0; i < 2; i++)
     [self hitTestPoint:&_points[i]
+             positionX:positionX
+             positionY:positionY
+            activePart:activePart
+                atTime:time];
+
+  if ([self driftEnabledAtTime:time])
+    [self hitTestPoint:&_points[2]
              positionX:positionX
              positionY:positionY
             activePart:activePart
@@ -492,9 +559,9 @@ static const float kSnapThreshold = 8.0f;
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
   for (int i = 0; i < kPointCount; i++) {
-    int other = (i == 0) ? 1 : 0;
-    CGPoint snapTarget = [self positionForParam:_points[other].pointParam
-                                         atTime:time];
+    CGPoint snapTarget =
+        [self positionForParam:_points[(i + 1) % kPointCount].pointParam
+                        atTime:time];
     if ([self mouseDraggedForPoint:&_points[i]
                         snapTarget:snapTarget
                          positionX:positionX

@@ -24,5 +24,12 @@ static const UInt32 kParamScaleB = 8;
 // Rotate with Motion
 static const UInt32 kParamRotateWithMotion = 10;
 
+// Drift
+static const UInt32 kParamGroupDrift = 20;
+static const UInt32 kParamDrift = 21;
+static const UInt32 kParamDriftPoint = 22;
+static const UInt32 kParamDriftRotation = 23;
+static const UInt32 kParamDriftScale = 24;
+
 // Info
 static const UInt32 kParamInfoCompound = 9000;
