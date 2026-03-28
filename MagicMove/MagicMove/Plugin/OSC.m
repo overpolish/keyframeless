@@ -49,6 +49,8 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
   BOOL _rotationIsDragging;
   double _rotationDragPrevAngle;
   double _rotationDragAccum;
+  double _ringDragStartDistance;
+  double _ringDragStartValue;
 }
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
@@ -83,7 +85,11 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
   float minDim;
   if (!getCenterAndMinDim(self.apiManager, &center, &minDim))
     return 50.0f;
-  return minDim * 0.2f;
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  double scale = 1.0;
+  [paramGetAPI getFloatValue:&scale fromParameter:kParamScale atTime:time];
+  return minDim * 0.2f * (float)scale;
 }
 
 - (void)drawOSCWithWidth:(NSInteger)width
@@ -166,6 +172,17 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
     *forceUpdate = YES;
   } else if (activePart == 2) {
     _ringIsDragging = YES;
+    CGPoint center = [self oscPositionAtTime:time];
+    double dx = positionX - center.x;
+    double dy = positionY - center.y;
+    _ringDragStartDistance = sqrt(dx * dx + dy * dy);
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    double currentScale = 1.0;
+    [paramGetAPI getFloatValue:&currentScale
+                 fromParameter:kParamScale
+                        atTime:time];
+    _ringDragStartValue = currentScale;
     [_ringOSC updateCursorForMouseX:positionX positionY:positionY];
     *forceUpdate = YES;
   } else {
@@ -208,6 +225,22 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
     }
     *forceUpdate = YES;
   } else if (activePart == 2) {
+    CGPoint center = [self oscPositionAtTime:time];
+    double dx = positionX - center.x;
+    double dy = positionY - center.y;
+    double currentDistance = sqrt(dx * dx + dy * dy);
+    if (_ringDragStartDistance > 0) {
+      double newValue =
+          _ringDragStartValue * (currentDistance / _ringDragStartDistance);
+      newValue = CLAMP(newValue, 0.0, 10.0);
+      id<FxParameterSettingAPI_v5> paramSetAPI =
+          [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      if (paramSetAPI) {
+        [paramSetAPI setFloatValue:newValue
+                       toParameter:kParamScale
+                            atTime:time];
+      }
+    }
     [_ringOSC updateCursorForMouseX:positionX positionY:positionY];
     *forceUpdate = YES;
   } else {
