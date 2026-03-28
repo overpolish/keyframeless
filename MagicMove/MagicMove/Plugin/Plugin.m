@@ -100,6 +100,27 @@
     return NO;
   }
 
+  if (![paramAPI addFloatSliderWithName:@"Scale"
+                            parameterID:kParamScale
+                           defaultValue:1.0
+                           parameterMin:0.0
+                           parameterMax:10.0
+                              sliderMin:0.0
+                              sliderMax:5.0
+                                  delta:0.01
+                         parameterFlags:kFxParameterFlag_DEFAULT]) {
+    if (error != NULL) {
+      *error = [NSError
+          errorWithDomain:FxPlugErrorDomain
+                     code:kFxError_InvalidParameter
+                 userInfo:@{
+                   NSLocalizedDescriptionKey : @"Unable to add scale slider"
+                 }];
+    }
+
+    return NO;
+  }
+
   if (![self addAnimationParametersWithAPI:paramAPI error:error]) {
     return NO;
   }
