@@ -133,11 +133,6 @@ static const CGFloat kStrokePt = 3.0;
   float halfH = _size.height / 2.0f;
   id<MTLTexture> tex = _texture;
 
-  id<FxOnScreenControlAPI_v4> oscAPI =
-      [_apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-  if (!oscAPI)
-    return;
-
   float ioW = [destinationImage.ioSurface width];
   float ioH = [destinationImage.ioSurface height];
 
