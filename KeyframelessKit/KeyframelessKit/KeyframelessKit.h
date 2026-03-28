@@ -18,6 +18,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKKbd.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
+#import <KeyframelessKit/KKOSCLabel.h>
 #import <KeyframelessKit/KKPlugin.h>
 #import <KeyframelessKit/KKPointOSC.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>

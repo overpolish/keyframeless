@@ -41,6 +41,7 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
 }
 
 @implementation MagicMoveOSC {
+  KKOSCLabel *_label;
   KKRingOSC *_ringOSC;
   KKRotationOSC *_rotationOSC;
   BOOL _ringIsHovered;
@@ -56,6 +57,8 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
   self = [super initWithAPIManager:apiManager];
   if (self) {
+    _label = [[KKOSCLabel alloc] initWithAPIManager:apiManager];
+    _label.text = @"Point A";
     _ringOSC = [[KKRingOSC alloc] initWithAPIManager:apiManager];
     _rotationOSC = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
   }
@@ -73,11 +76,24 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
 }
 
 - (CGPoint)oscPositionAtTime:(CMTime)time {
-  CGPoint center;
-  float minDim;
-  if (!getCenterAndMinDim(self.apiManager, &center, &minDim))
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  if (!oscAPI)
     return CGPointZero;
-  return center;
+
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  double x = 0.5, y = 0.5;
+  [paramGetAPI getXValue:&x YValue:&y fromParameter:kParamPointA atTime:time];
+
+  CGPoint canvas;
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:x
+                          fromY:y
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&canvas.x
+                            toY:&canvas.y];
+  return canvas;
 }
 
 - (float)ringRadiusAtTime:(CMTime)time {
@@ -104,6 +120,13 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
                     isActive:self.isDragging
             destinationImage:destinationImage
                       atTime:time];
+
+  float arcOuter = self.oscRadius + self.outlineWidth;
+  float labelPadding = 4.0f;
+  CGPoint labelPos =
+      CGPointMake(position.x, position.y - arcOuter - labelPadding -
+                                  _label.size.height / 2.0f);
+  [_label drawAtCanvasPosition:labelPos destinationImage:destinationImage];
 
   _ringOSC.center = position;
   _ringOSC.ringRadius = [self ringRadiusAtTime:time];
@@ -192,6 +215,11 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
                       modifiers:modifiers
                     forceUpdate:forceUpdate
                          atTime:time];
+    if (activePart == 1) {
+      id<FxOnScreenControlAPI_v4> oscAPI =
+          [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+      [oscAPI setCursor:[NSCursor openHandCursor]];
+    }
   }
 }
 
@@ -242,6 +270,27 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
       }
     }
     [_ringOSC updateCursorForMouseX:positionX positionY:positionY];
+    *forceUpdate = YES;
+  } else if (activePart == 1) {
+    id<FxOnScreenControlAPI_v4> oscAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    if (oscAPI) {
+      double objX, objY;
+      [oscAPI convertPointFromSpace:kFxDrawingCoordinates_CANVAS
+                              fromX:positionX
+                              fromY:positionY
+                            toSpace:kFxDrawingCoordinates_OBJECT
+                                toX:&objX
+                                toY:&objY];
+      id<FxParameterSettingAPI_v5> paramSetAPI =
+          [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      if (paramSetAPI) {
+        [paramSetAPI setXValue:objX
+                        YValue:objY
+                   toParameter:kParamPointA
+                        atTime:time];
+      }
+    }
     *forceUpdate = YES;
   } else {
     [super mouseDraggedAtPositionX:positionX

@@ -5,7 +5,6 @@
 
 #import "Plugin.h"
 #import "Constants.h"
-#import "ShaderTypes.h"
 #import <AppKit/NSView.h>
 #import <Foundation/Foundation.h>
 #import <IOSurface/IOSurfaceObjC.h>
@@ -58,24 +57,17 @@
     return NO;
   }
 
-  if (![paramAPI addFloatSliderWithName:@"Radius"
-                            parameterID:kParamRadius
-                           defaultValue:20.0
-                           parameterMin:0.0
-                           parameterMax:100.0
-                              sliderMin:0.0
-                              sliderMax:100.0
-                                  delta:1.0
+  if (![paramAPI startParameterSubGroup:@"Point A"
+                            parameterID:kParamGroupPointA
                          parameterFlags:kFxParameterFlag_DEFAULT]) {
-    if (error != NULL) {
-      *error = [NSError
-          errorWithDomain:FxPlugErrorDomain
-                     code:kFxError_InvalidParameter
-                 userInfo:@{
-                   NSLocalizedDescriptionKey : @"Unable to add radius slider"
-                 }];
-    }
+    return NO;
+  }
 
+  if (![paramAPI addPointParameterWithName:@"Position"
+                               parameterID:kParamPointA
+                                  defaultX:0.5
+                                  defaultY:0.5
+                            parameterFlags:kFxParameterFlag_DEFAULT]) {
     return NO;
   }
 
@@ -88,15 +80,6 @@
                               sliderMax:360.0
                                   delta:1.0
                          parameterFlags:kFxParameterFlag_DEFAULT]) {
-    if (error != NULL) {
-      *error = [NSError
-          errorWithDomain:FxPlugErrorDomain
-                     code:kFxError_InvalidParameter
-                 userInfo:@{
-                   NSLocalizedDescriptionKey : @"Unable to add rotation slider"
-                 }];
-    }
-
     return NO;
   }
 
@@ -109,15 +92,10 @@
                               sliderMax:5.0
                                   delta:0.01
                          parameterFlags:kFxParameterFlag_DEFAULT]) {
-    if (error != NULL) {
-      *error = [NSError
-          errorWithDomain:FxPlugErrorDomain
-                     code:kFxError_InvalidParameter
-                 userInfo:@{
-                   NSLocalizedDescriptionKey : @"Unable to add scale slider"
-                 }];
-    }
+    return NO;
+  }
 
+  if (![paramAPI endParameterSubGroup]) {
     return NO;
   }
 
@@ -146,15 +124,9 @@
     }
     return NO;
   }
-  double radius = 20.0;
-  [paramGetAPI getFloatValue:&radius
-               fromParameter:kParamRadius
-                      atTime:renderTime];
-
-  double effectiveRadius = radius * [self animationFactorAtTime:renderTime];
-
-  *pluginState = [NSData dataWithBytes:&effectiveRadius
-                                length:sizeof(effectiveRadius)];
+  // Passthrough — no effect-specific state needed yet.
+  uint8_t placeholder = 1;
+  *pluginState = [NSData dataWithBytes:&placeholder length:sizeof(placeholder)];
   return (*pluginState != nil);
 }
 
@@ -208,9 +180,6 @@
     return NO;
   }
 
-  double radius = 0.0;
-  [pluginState getBytes:&radius length:sizeof(radius)];
-
   id<MTLRenderPipelineState> pipelineState =
       [self pipelineStateForPluginID:kPluginID
                     destinationImage:destinationImage
@@ -220,17 +189,6 @@
 
   if (!pipelineState)
     return NO;
-
-  float fragmentRadius = (float)radius;
-  simd_float2 imageSize = {(float)(destinationImage.imagePixelBounds.right -
-                                   destinationImage.imagePixelBounds.left),
-                           (float)(destinationImage.imagePixelBounds.top -
-                                   destinationImage.imagePixelBounds.bottom)};
-  simd_float2 tileOffset = {
-      roundf((float)(destinationImage.tilePixelBounds.left -
-                     destinationImage.imagePixelBounds.left)),
-      roundf((float)(destinationImage.tilePixelBounds.bottom -
-                     destinationImage.imagePixelBounds.bottom))};
 
   return [self
       encodeRenderCommandsForDestinationImage:destinationImage
@@ -245,22 +203,6 @@
                                            setFragmentTexture:inputTextures[0]
                                                       atIndex:
                                                           KKTextureIndex_InputImage];
-                                       [encoder
-                                           setFragmentBytes:&fragmentRadius
-                                                     length:sizeof(
-                                                                fragmentRadius)
-                                                    atIndex:
-                                                        FragmentIndex_Radius];
-                                       [encoder
-                                           setFragmentBytes:&imageSize
-                                                     length:sizeof(imageSize)
-                                                    atIndex:
-                                                        FragmentIndex_ImageSize];
-                                       [encoder
-                                           setFragmentBytes:&tileOffset
-                                                     length:sizeof(tileOffset)
-                                                    atIndex:
-                                                        FragmentIndex_TileOffset];
                                        [encoder
                                            drawPrimitives:
                                                MTLPrimitiveTypeTriangleStrip
