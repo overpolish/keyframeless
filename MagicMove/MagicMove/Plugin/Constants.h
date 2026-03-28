@@ -31,5 +31,12 @@ static const UInt32 kParamDriftPoint = 22;
 static const UInt32 kParamDriftRotation = 23;
 static const UInt32 kParamDriftScale = 24;
 
+// Exit
+static const UInt32 kParamGroupExit = 30;
+static const UInt32 kParamExit = 31;
+static const UInt32 kParamExitPoint = 32;
+static const UInt32 kParamExitRotation = 33;
+static const UInt32 kParamExitScale = 34;
+
 // Info
 static const UInt32 kParamInfoCompound = 9000;

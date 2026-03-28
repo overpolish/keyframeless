@@ -11,7 +11,7 @@
 @end
 
 #define CLAMP(x, lo, hi) MAX((lo), MIN((hi), (x)))
-#define kPointCount 3
+#define kPointCount 4
 
 typedef struct {
   UInt32 pointParam, rotParam, scaleParam;
@@ -42,6 +42,10 @@ static const float kSnapThreshold = 8.0f;
   KKOSCLabel *_labelDrift;
   KKRingOSC *_ringDrift;
   KKRotationOSC *_rotDrift;
+  KKArcOSC *_arcExit;
+  KKOSCLabel *_labelExit;
+  KKRingOSC *_ringExit;
+  KKRotationOSC *_rotExit;
   BOOL _snapX;
   BOOL _snapY;
   float _snapXVal;
@@ -108,6 +112,26 @@ static const float kSnapThreshold = 8.0f;
         .label = _labelDrift,
         .ring = _ringDrift,
         .rot = _rotDrift,
+    };
+
+    _arcExit = [[KKArcOSC alloc] initWithAPIManager:apiManager];
+    _arcExit.clearsOnDraw = NO;
+    _labelExit = [[KKOSCLabel alloc] initWithAPIManager:apiManager];
+    _labelExit.text = @"Exit";
+    _ringExit = [[KKRingOSC alloc] initWithAPIManager:apiManager];
+    _rotExit = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
+
+    _points[3] = (PointOSCState){
+        .pointParam = kParamExitPoint,
+        .rotParam = kParamExitRotation,
+        .scaleParam = kParamExitScale,
+        .arcPart = 10,
+        .ringPart = 11,
+        .rotPart = 12,
+        .arc = _arcExit,
+        .label = _labelExit,
+        .ring = _ringExit,
+        .rot = _rotExit,
     };
   }
   return self;
@@ -180,6 +204,14 @@ static const float kSnapThreshold = 8.0f;
   return enabled;
 }
 
+- (BOOL)exitEnabledAtTime:(CMTime)time {
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  BOOL enabled = NO;
+  [paramGetAPI getBoolValue:&enabled fromParameter:kParamExit atTime:time];
+  return enabled;
+}
+
 - (CGPoint)oscPositionAtTime:(CMTime)time {
   return [self positionForParam:kParamPointA atTime:time];
 }
@@ -235,22 +267,25 @@ static const float kSnapThreshold = 8.0f;
   CGPoint posB = [self positionForParam:kParamPointB atTime:time];
   simd_float4 red = {1, 0, 0, 1};
   BOOL driftOn = [self driftEnabledAtTime:time];
+  BOOL exitOn = [self exitEnabledAtTime:time];
   BOOL anyArcActive = _points[0].arcDragging || _points[1].arcDragging ||
-                      _points[2].arcDragging;
+                      _points[2].arcDragging || _points[3].arcDragging;
   double inset = anyArcActive ? 22.0 : 14.0;
+
+  // Always draw A → B
+  double ldx = posB.x - posA.x, ldy = posB.y - posA.y;
+  double len = hypot(ldx, ldy);
+  if (len > inset * 2.0) {
+    double nx = ldx / len * inset, ny = ldy / len * inset;
+    [self drawLineFrom:(CGPoint){posA.x + nx, posA.y + ny}
+                      to:(CGPoint){posB.x - nx, posB.y - ny}
+                   color:red
+               halfWidth:2.0f
+        destinationImage:destinationImage];
+  }
 
   if (driftOn) {
     CGPoint posD = [self positionForParam:kParamDriftPoint atTime:time];
-    double d1x = posB.x - posA.x, d1y = posB.y - posA.y;
-    double l1 = hypot(d1x, d1y);
-    if (l1 > inset * 2.0) {
-      double n1x = d1x / l1 * inset, n1y = d1y / l1 * inset;
-      [self drawLineFrom:(CGPoint){posA.x + n1x, posA.y + n1y}
-                        to:(CGPoint){posB.x - n1x, posB.y - n1y}
-                     color:red
-                 halfWidth:2.0f
-          destinationImage:destinationImage];
-    }
     double d2x = posD.x - posB.x, d2y = posD.y - posB.y;
     double l2 = hypot(d2x, d2y);
     if (l2 > inset * 2.0) {
@@ -261,13 +296,27 @@ static const float kSnapThreshold = 8.0f;
                  halfWidth:2.0f
           destinationImage:destinationImage];
     }
-  } else {
-    double ldx = posB.x - posA.x, ldy = posB.y - posA.y;
-    double len = hypot(ldx, ldy);
-    if (len > inset * 2.0) {
-      double nx = ldx / len * inset, ny = ldy / len * inset;
-      [self drawLineFrom:(CGPoint){posA.x + nx, posA.y + ny}
-                        to:(CGPoint){posB.x - nx, posB.y - ny}
+    if (exitOn) {
+      CGPoint posE = [self positionForParam:kParamExitPoint atTime:time];
+      double d3x = posE.x - posD.x, d3y = posE.y - posD.y;
+      double l3 = hypot(d3x, d3y);
+      if (l3 > inset * 2.0) {
+        double n3x = d3x / l3 * inset, n3y = d3y / l3 * inset;
+        [self drawLineFrom:(CGPoint){posD.x + n3x, posD.y + n3y}
+                          to:(CGPoint){posE.x - n3x, posE.y - n3y}
+                       color:red
+                   halfWidth:2.0f
+            destinationImage:destinationImage];
+      }
+    }
+  } else if (exitOn) {
+    CGPoint posE = [self positionForParam:kParamExitPoint atTime:time];
+    double d2x = posE.x - posB.x, d2y = posE.y - posB.y;
+    double l2 = hypot(d2x, d2y);
+    if (l2 > inset * 2.0) {
+      double n2x = d2x / l2 * inset, n2y = d2y / l2 * inset;
+      [self drawLineFrom:(CGPoint){posB.x + n2x, posB.y + n2y}
+                        to:(CGPoint){posE.x - n2x, posE.y - n2y}
                      color:red
                  halfWidth:2.0f
           destinationImage:destinationImage];
@@ -316,6 +365,9 @@ static const float kSnapThreshold = 8.0f;
 
   if (driftOn)
     [self drawPoint:&_points[2] destinationImage:destinationImage atTime:time];
+
+  if (exitOn)
+    [self drawPoint:&_points[3] destinationImage:destinationImage atTime:time];
 }
 
 - (void)hitTestPoint:(PointOSCState *)pt
@@ -376,6 +428,13 @@ static const float kSnapThreshold = 8.0f;
 
   if ([self driftEnabledAtTime:time])
     [self hitTestPoint:&_points[2]
+             positionX:positionX
+             positionY:positionY
+            activePart:activePart
+                atTime:time];
+
+  if ([self exitEnabledAtTime:time])
+    [self hitTestPoint:&_points[3]
              positionX:positionX
              positionY:positionY
             activePart:activePart

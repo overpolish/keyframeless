@@ -12,6 +12,39 @@
 #import <KeyframelessKit/KeyframelessKit.h>
 #import <QuartzCore/QuartzCore.h>
 
+static double mmSmoothstep(double x) { return x * x * (3.0 - 2.0 * x); }
+static double mmEaseOutCubic(double x) { return 1.0 - pow(1.0 - x, 3.0); }
+static double mmEaseOutSpring(double x) {
+  const double c1 = 1.0, c3 = c1 + 1.0;
+  return 1.0 + c3 * pow(x - 1.0, 3.0) + c1 * pow(x - 1.0, 2.0);
+}
+
+static double mmApplyCurveIn(double raw, int curve) {
+  switch (curve) {
+  case 0:
+    return raw;
+  case 1:
+    return mmSmoothstep(raw);
+  case 3:
+    return mmEaseOutSpring(raw);
+  default:
+    return mmEaseOutCubic(raw);
+  }
+}
+
+static double mmApplyCurveOut(double raw, int curve) {
+  switch (curve) {
+  case 0:
+    return raw;
+  case 1:
+    return mmSmoothstep(raw);
+  case 3:
+    return mmEaseOutSpring(raw);
+  default:
+    return mmSmoothstep(raw);
+  }
+}
+
 @implementation MagicMovePlugin {
   KKLog *_log;
 }
@@ -183,6 +216,49 @@
   if (![paramAPI endParameterSubGroup])
     return NO;
 
+  if (![paramAPI startParameterSubGroup:@"Exit"
+                            parameterID:kParamGroupExit
+                         parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
+  if (![paramAPI addToggleButtonWithName:@"Enable"
+                             parameterID:kParamExit
+                            defaultValue:NO
+                          parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
+  if (![paramAPI addPointParameterWithName:@"Position"
+                               parameterID:kParamExitPoint
+                                  defaultX:0.5
+                                  defaultY:0.5
+                            parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
+  if (![paramAPI addFloatSliderWithName:@"Rotation"
+                            parameterID:kParamExitRotation
+                           defaultValue:0.0
+                           parameterMin:-FLT_MAX
+                           parameterMax:FLT_MAX
+                              sliderMin:-360.0
+                              sliderMax:360.0
+                                  delta:1.0
+                         parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
+  if (![paramAPI addFloatSliderWithName:@"Scale"
+                            parameterID:kParamExitScale
+                           defaultValue:1.0
+                           parameterMin:0.0
+                           parameterMax:10.0
+                              sliderMin:0.0
+                              sliderMax:5.0
+                                  delta:0.01
+                         parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
+  if (![paramAPI endParameterSubGroup])
+    return NO;
+
   if (![self addAnimationParametersWithAPI:paramAPI error:error])
     return NO;
 
@@ -238,47 +314,111 @@
               fromParameter:kParamDrift
                      atTime:renderTime];
 
-  double driftX = 0.5, driftY = 0.5;
-  MagicMoveParams params;
+  double driftX = 0.5, driftY = 0.5, driftRot = 0, driftScale = 1;
   if (driftEnabled) {
     [paramGetAPI getXValue:&driftX
                     YValue:&driftY
              fromParameter:kParamDriftPoint
                     atTime:renderTime];
-    double driftRot = 0, driftScale = 1;
     [paramGetAPI getFloatValue:&driftRot
                  fromParameter:kParamDriftRotation
                         atTime:renderTime];
     [paramGetAPI getFloatValue:&driftScale
                  fromParameter:kParamDriftScale
                         atTime:renderTime];
+  }
 
-    id<FxTimingAPI_v4> timingAPI =
-        [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  BOOL exitEnabled = NO;
+  [paramGetAPI getBoolValue:&exitEnabled
+              fromParameter:kParamExit
+                     atTime:renderTime];
+
+  double exitX = 0.5, exitY = 0.5, exitRot = 0, exitScale = 1;
+  if (exitEnabled) {
+    [paramGetAPI getXValue:&exitX
+                    YValue:&exitY
+             fromParameter:kParamExitPoint
+                    atTime:renderTime];
+    [paramGetAPI getFloatValue:&exitRot
+                 fromParameter:kParamExitRotation
+                        atTime:renderTime];
+    [paramGetAPI getFloatValue:&exitScale
+                 fromParameter:kParamExitScale
+                        atTime:renderTime];
+  }
+
+  double targetX = posBx, targetY = posBy;
+  double targetRot = rotB, targetScale = scaleB;
+
+  id<FxTimingAPI_v4> timingAPI = nil;
+  double startSec = 0, durSec = 0, nowSec = 0;
+  if (driftEnabled || exitEnabled) {
+    timingAPI = [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
     CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
     [timingAPI startTimeForEffect:&effectStart];
     [timingAPI durationTimeForEffect:&effectDuration];
-    double startSec = CMTimeGetSeconds(effectStart);
-    double durSec = CMTimeGetSeconds(effectDuration);
-    double nowSec = CMTimeGetSeconds(renderTime);
+    startSec = CMTimeGetSeconds(effectStart);
+    durSec = CMTimeGetSeconds(effectDuration);
+    nowSec = CMTimeGetSeconds(renderTime);
+  }
 
-    double d = (durSec > 0) ? (nowSec - startSec) / durSec : 1.0;
+  double animDur = 0.5;
+  if (exitEnabled)
+    [paramGetAPI getFloatValue:&animDur
+                 fromParameter:kKKParamAnimationDuration
+                        atTime:renderTime];
+
+  if (driftEnabled) {
+    double driftDur = exitEnabled ? durSec - animDur : durSec;
+    double d = (driftDur > 0) ? (nowSec - startSec) / driftDur : 1.0;
     d = MAX(0.0, MIN(1.0, d));
-    double targetX = (1 - d) * posBx + d * driftX;
-    double targetY = (1 - d) * posBy + d * driftY;
-    double targetRot = (1 - d) * rotB + d * driftRot;
-    double targetScale = (1 - d) * scaleB + d * driftScale;
+    targetX = (1 - d) * posBx + d * driftX;
+    targetY = (1 - d) * posBy + d * driftY;
+    targetRot = (1 - d) * rotB + d * driftRot;
+    targetScale = (1 - d) * scaleB + d * driftScale;
+  }
+
+  MagicMoveParams params;
+  if (exitEnabled) {
+    int curve = 2;
+    [paramGetAPI getIntValue:&curve
+               fromParameter:kKKParamAnimationInterpolation
+                      atTime:renderTime];
+
+    // Compute in-factor only (exit replaces animate-out for position)
+    double tIn = 1.0;
+    BOOL animateIn = NO;
+    [paramGetAPI getBoolValue:&animateIn
+                fromParameter:kKKParamAnimateIn
+                       atTime:renderTime];
+    if (animateIn) {
+      double rawIn = MAX(0.0, MIN(1.0, (nowSec - startSec) / animDur));
+      tIn = mmApplyCurveIn(rawIn, curve);
+    }
+
+    // Exit factor: 0 before out-window, 1 at effect end
+    double effectEndSec = startSec + durSec;
+    double rawE =
+        MAX(0.0, MIN(1.0, (nowSec - (effectEndSec - animDur)) / animDur));
+    double e = mmApplyCurveOut(rawE, curve);
+
+    // Blend target toward exit, then apply in-factor from A
+    double effX = (1 - e) * targetX + e * exitX;
+    double effY = (1 - e) * targetY + e * exitY;
+    double effRot = (1 - e) * targetRot + e * exitRot;
+    double effScale = (1 - e) * targetScale + e * exitScale;
+
+    params.translate =
+        (simd_float2){(float)((1 - tIn) * posAx + tIn * effX - 0.5),
+                      (float)((1 - tIn) * posAy + tIn * effY - 0.5)};
+    params.rotation = (float)(((1 - tIn) * rotA + tIn * effRot) * M_PI / 180.0);
+    params.scale = (float)((1 - tIn) * scaleA + tIn * effScale);
+  } else {
     params.translate =
         (simd_float2){(float)((1 - t) * posAx + t * targetX - 0.5),
                       (float)((1 - t) * posAy + t * targetY - 0.5)};
     params.rotation = (float)(((1 - t) * rotA + t * targetRot) * M_PI / 180.0);
     params.scale = (float)((1 - t) * scaleA + t * targetScale);
-  } else {
-    params.translate =
-        (simd_float2){(float)((1 - t) * posAx + t * posBx - 0.5),
-                      (float)((1 - t) * posAy + t * posBy - 0.5)};
-    params.rotation = (float)(((1 - t) * rotA + t * rotB) * M_PI / 180.0);
-    params.scale = (float)((1 - t) * scaleA + t * scaleB);
   }
 
   BOOL rotateWithMotion = NO;
@@ -291,23 +431,38 @@
     double window = 1.0 / 12.0;
     CMTime tPrev =
         CMTimeSubtract(renderTime, CMTimeMakeWithSeconds(window, 600));
-    double tP = [self animationFactorAtTime:tPrev];
     double prevSec = CMTimeGetSeconds(tPrev);
-    double prevX;
+    double tgtX = posBx;
     if (driftEnabled) {
-      id<FxTimingAPI_v4> timAPI =
-          [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-      CMTime es = kCMTimeZero, ed = kCMTimeZero;
-      [timAPI startTimeForEffect:&es];
-      [timAPI durationTimeForEffect:&ed];
-      double ds = CMTimeGetSeconds(es);
-      double dd = CMTimeGetSeconds(ed);
-      double dP = (dd > 0) ? (prevSec - ds) / dd : 1.0;
+      double driftDurP = exitEnabled ? durSec - animDur : durSec;
+      double dP = (driftDurP > 0) ? (prevSec - startSec) / driftDurP : 1.0;
       dP = MAX(0.0, MIN(1.0, dP));
-      double tgtX = (1 - dP) * posBx + dP * driftX;
-      prevX = (1 - tP) * posAx + tP * tgtX - 0.5;
+      tgtX = (1 - dP) * posBx + dP * driftX;
+    }
+    double prevX;
+    if (exitEnabled) {
+      int curve = 2;
+      [paramGetAPI getIntValue:&curve
+                 fromParameter:kKKParamAnimationInterpolation
+                        atTime:renderTime];
+      double tPIn = 1.0;
+      BOOL animateIn = NO;
+      [paramGetAPI getBoolValue:&animateIn
+                  fromParameter:kKKParamAnimateIn
+                         atTime:renderTime];
+      if (animateIn) {
+        double rawIn = MAX(0.0, MIN(1.0, (prevSec - startSec) / animDur));
+        tPIn = mmApplyCurveIn(rawIn, curve);
+      }
+      double effectEndSec = startSec + durSec;
+      double rawE =
+          MAX(0.0, MIN(1.0, (prevSec - (effectEndSec - animDur)) / animDur));
+      double eP = mmApplyCurveOut(rawE, curve);
+      double effX = (1 - eP) * tgtX + eP * exitX;
+      prevX = (1 - tPIn) * posAx + tPIn * effX - 0.5;
     } else {
-      prevX = (1 - tP) * posAx + tP * posBx - 0.5;
+      double tP = [self animationFactorAtTime:tPrev];
+      prevX = (1 - tP) * posAx + tP * tgtX - 0.5;
     }
     double vx = (curX - prevX) / window;
     params.rotation -= (float)(vx * 5.0 * M_PI / 180.0);
