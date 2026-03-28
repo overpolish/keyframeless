@@ -54,6 +54,8 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
   return YES;
 }
 
+static const float kSnapThreshold = 8.0f;
+
 @implementation MagicMoveOSC {
   PointOSCState _points[2];
   KKOSCLabel *_labelA;
@@ -63,6 +65,10 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
   KKOSCLabel *_labelB;
   KKRingOSC *_ringB;
   KKRotationOSC *_rotB;
+  BOOL _snapX;
+  BOOL _snapY;
+  float _snapXVal;
+  float _snapYVal;
 }
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
@@ -192,6 +198,8 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
 
 - (void)drawLineFrom:(CGPoint)canvasA
                   to:(CGPoint)canvasB
+               color:(simd_float4)lineColor
+           halfWidth:(float)hw
     destinationImage:(FxImageTile *)destinationImage {
   KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
   uint64_t registryID = destinationImage.deviceRegistryID;
@@ -237,7 +245,6 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
                                          return;
                                        simd_float2 dir = d / len;
                                        simd_float2 perp = {-dir.y, dir.x};
-                                       float hw = 2.0f;
                                        float pad = hw + 1.0f;
 
                                        simd_float2 v0 = mA + perp * pad;
@@ -252,8 +259,7 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
                                            {v3, {0, -edge}}, {v2, {0, edge}},
                                        };
 
-                                       simd_float4 color = {1.0f, 0.0f, 0.0f,
-                                                            1.0f};
+                                       simd_float4 color = lineColor;
 
                                        [encoder setRenderPipelineState:ps];
                                        [encoder
@@ -290,7 +296,49 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
 
   CGPoint posA = [self positionForParam:kParamPointA atTime:time];
   CGPoint posB = [self positionForParam:kParamPointB atTime:time];
-  [self drawLineFrom:posA to:posB destinationImage:destinationImage];
+  simd_float4 red = {1, 0, 0, 1};
+  [self drawLineFrom:posA
+                    to:posB
+                 color:red
+             halfWidth:2.0f
+      destinationImage:destinationImage];
+
+  if (_snapX || _snapY) {
+    CGPoint topRight, bottomLeft;
+    id<FxOnScreenControlAPI_v4> oscAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                            fromX:0.0
+                            fromY:0.0
+                          toSpace:kFxDrawingCoordinates_CANVAS
+                              toX:&bottomLeft.x
+                              toY:&bottomLeft.y];
+    [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                            fromX:1.0
+                            fromY:1.0
+                          toSpace:kFxDrawingCoordinates_CANVAS
+                              toX:&topRight.x
+                              toY:&topRight.y];
+    float minX = fmin(bottomLeft.x, topRight.x);
+    float maxX = fmax(bottomLeft.x, topRight.x);
+    float minY = fmin(bottomLeft.y, topRight.y);
+    float maxY = fmax(bottomLeft.y, topRight.y);
+    simd_float4 yellow = {1, 1, 0, 1};
+    if (_snapX) {
+      [self drawLineFrom:(CGPoint){_snapXVal, minY}
+                        to:(CGPoint){_snapXVal, maxY}
+                     color:yellow
+                 halfWidth:2.0f
+          destinationImage:destinationImage];
+    }
+    if (_snapY) {
+      [self drawLineFrom:(CGPoint){minX, _snapYVal}
+                        to:(CGPoint){maxX, _snapYVal}
+                     color:yellow
+                 halfWidth:2.0f
+          destinationImage:destinationImage];
+    }
+  }
 
   for (int i = 0; i < 2; i++)
     [self drawPoint:&_points[i] destinationImage:destinationImage atTime:time];
@@ -435,7 +483,19 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
 - (void)setPositionParam:(UInt32)paramID
                    fromX:(double)canvasX
                        Y:(double)canvasY
+              snapTarget:(CGPoint)snapTarget
                   atTime:(CMTime)time {
+  _snapX = fabs(canvasX - snapTarget.x) < kSnapThreshold;
+  _snapY = fabs(canvasY - snapTarget.y) < kSnapThreshold;
+  if (_snapX) {
+    canvasX = snapTarget.x;
+    _snapXVal = (float)snapTarget.x;
+  }
+  if (_snapY) {
+    canvasY = snapTarget.y;
+    _snapYVal = (float)snapTarget.y;
+  }
+
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
   if (!oscAPI)
@@ -454,6 +514,7 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
 }
 
 - (BOOL)mouseDraggedForPoint:(PointOSCState *)pt
+                  snapTarget:(CGPoint)snapTarget
                    positionX:(double)positionX
                    positionY:(double)positionY
                   activePart:(NSInteger)activePart
@@ -502,6 +563,7 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
     [self setPositionParam:pt->pointParam
                      fromX:positionX
                          Y:positionY
+                snapTarget:snapTarget
                     atTime:time];
     return YES;
   }
@@ -516,7 +578,11 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
   for (int i = 0; i < 2; i++) {
+    int other = (i == 0) ? 1 : 0;
+    CGPoint snapTarget = [self positionForParam:_points[other].pointParam
+                                         atTime:time];
     if ([self mouseDraggedForPoint:&_points[i]
+                        snapTarget:snapTarget
                          positionX:positionX
                          positionY:positionY
                         activePart:activePart
@@ -539,6 +605,8 @@ static BOOL getCenterAndMinDim(id<PROAPIAccessing> apiManager, CGPoint *center,
                  modifiers:(NSUInteger)modifiers
                forceUpdate:(BOOL *)forceUpdate
                     atTime:(CMTime)time {
+  _snapX = NO;
+  _snapY = NO;
   for (int i = 0; i < 2; i++) {
     _points[i].arcDragging = NO;
     _points[i].ringDragging = NO;
