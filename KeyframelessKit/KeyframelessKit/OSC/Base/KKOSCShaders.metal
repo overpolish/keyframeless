@@ -196,6 +196,12 @@ fragment float4 KKRotationOSCFragment(KKRasterizerData in [[stage_in]],
     return color;
 }
 
+/// Fragment shader for rendering a text label texture.
+fragment float4 KKLabelFragment(KKRasterizerData in [[stage_in]], texture2d<float> labelTexture [[texture(0)]]) {
+    constexpr sampler s(mag_filter::linear, min_filter::linear);
+    return labelTexture.sample(s, in.textureCoordinate);
+}
+
 /// Fragment shader for rendering a point/dot OSC control with outline and depth shadow.
 fragment float4 KKPointOSCFragment(KKRasterizerData in [[stage_in]],
                                    constant KKPointOSCParams *params [[buffer(KKOSCFragmentIndex_DrawColor)]]) {
