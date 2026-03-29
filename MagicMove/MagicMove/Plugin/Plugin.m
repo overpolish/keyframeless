@@ -230,36 +230,34 @@ static double mmApplyCurveOut(double raw, int curve) {
                                   kFxParameterFlag_DONT_DISPLAY_IN_DASHBOARD])
     return NO;
 
-  if (![self addInfoParameterWithText:
-                 @"Create a Compound Clip before applying to avoid clipping"
-                                 icon:[NSImage imageWithSystemSymbolName:
-                                                   @"exclamationmark.triangle"
-                                                accessibilityDescription:nil]
-                          parameterID:kParamInfoCompound
-                              withAPI:paramAPI
-                                error:error])
+  NSMutableAttributedString *compoundText = [[NSMutableAttributedString alloc]
+      initWithString:@"Create a Compound Clip "];
+  [compoundText appendAttributedString:[KKKbd attributedStringWithKey:@"⌥ G"]];
+  [compoundText
+      appendAttributedString:[[NSAttributedString alloc]
+                                 initWithString:@" before applying "
+                                                @"to avoid clipping"]];
+  if (![self
+          addInfoParameterWithAttributedText:compoundText
+                                        icon:[NSImage
+                                                 imageWithSystemSymbolName:
+                                                     @"info.circle"
+                                                  accessibilityDescription:nil]
+                                 parameterID:kParamInfoCompound
+                                     withAPI:paramAPI
+                                       error:error])
     return NO;
 
-  if (![self addInfoParameterWithText:@"Preview mode is active"
-                                 icon:[NSImage
-                                          imageWithSystemSymbolName:@"eye.fill"
-                                           accessibilityDescription:nil]
-                          parameterID:kParamPreviewWarning
-                              withAPI:paramAPI
-                                error:error])
+  if (![paramAPI
+          addCustomParameterWithName:@""
+                         parameterID:kParamPreviewWarning
+                        defaultValue:@(kParamPreviewWarning)
+                      parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
+                                     kFxParameterFlag_CUSTOM_UI |
+                                     kFxParameterFlag_USE_FULL_VIEW_WIDTH |
+                                     kFxParameterFlag_DISABLED |
+                                     kFxParameterFlag_HIDDEN])
     return NO;
-
-  // Hide alerts initially — updateParameterVisibilityAtTime: will show them
-  // when appropriate.
-  id<FxParameterSettingAPI_v5> initSetAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (initSetAPI) {
-    FxParameterFlags hiddenAlert =
-        kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_CUSTOM_UI |
-        kFxParameterFlag_USE_FULL_VIEW_WIDTH | kFxParameterFlag_DISABLED |
-        kFxParameterFlag_HIDDEN;
-    [initSetAPI setParameterFlags:hiddenAlert toParameter:kParamPreviewWarning];
-  }
 
   if (![self addAnimationParametersWithAPI:paramAPI error:error])
     return NO;
