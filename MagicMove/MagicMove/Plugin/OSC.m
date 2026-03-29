@@ -36,11 +36,29 @@ static const float kPathHitThreshold = 10.0f;
 static const float kPathPointHitRadius = 8.0f;
 static const NSUInteger kPathDrawResolution = 20;
 
-// Part ID ranges for path elements
-static const NSInteger kPartPathCurve = 50;
-static const NSInteger kPartPathPointBase = 100;
-static const NSInteger kPartPathInHandleBase = 200;
-static const NSInteger kPartPathOutHandleBase = 300;
+// Path segment config — each A→B, B→Drift, etc. is a segment
+typedef struct {
+  UInt32 pathParam;
+  UInt32 startParam;
+  UInt32 endParam;
+  NSInteger pathIndex; // 0-3, multiplied by 1000 for part IDs
+} PathSegConfig;
+
+// Part ID encoding: pathIndex * 1000 + offset
+// offset 50 = curve, 100+i = point, 200+i = inHandle, 300+i = outHandle
+static NSInteger pathPartCurve(NSInteger idx) { return idx * 1000 + 50; }
+static NSInteger pathPartPoint(NSInteger idx, NSUInteger i) {
+  return idx * 1000 + 100 + (NSInteger)i;
+}
+static NSInteger pathPartInHandle(NSInteger idx, NSUInteger i) {
+  return idx * 1000 + 200 + (NSInteger)i;
+}
+static NSInteger pathPartOutHandle(NSInteger idx, NSUInteger i) {
+  return idx * 1000 + 300 + (NSInteger)i;
+}
+static BOOL isPathPart(NSInteger part) { return part >= 50; }
+static NSInteger pathIndexFromPart(NSInteger part) { return part / 1000; }
+static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
 
 @implementation MagicMoveOSC {
   PointOSCState _points[kPointCount];
@@ -77,6 +95,7 @@ static const NSInteger kPartPathOutHandleBase = 300;
   BOOL _pathDragIsInHandle;
   BOOL _pathDragIsOutHandle;
   simd_float2 _pathDragStartObj;
+  UInt32 _pathActiveParam;
   NSTimeInterval _pathLastClickTime;
   NSInteger _pathLastClickIndex;
   BOOL _pathSnapX;
@@ -320,11 +339,11 @@ static const NSInteger kPartPathOutHandleBase = 300;
   return [self positionForParam:kParamPointA atTime:time];
 }
 
-- (MagicMovePath *)readPathABAtTime:(CMTime)time {
+- (MagicMovePath *)readPathParam:(UInt32)paramID {
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   NSString *str = nil;
-  [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathAB];
+  [paramGetAPI getStringParameterValue:&str fromParameter:paramID];
   if (str.length > 0) {
     NSData *data = [[NSData alloc] initWithBase64EncodedString:str options:0];
     if (data)
@@ -333,12 +352,12 @@ static const NSInteger kPartPathOutHandleBase = 300;
   return [[MagicMovePath alloc] init];
 }
 
-- (void)writePathAB:(MagicMovePath *)path atTime:(CMTime)time {
+- (void)writePathParam:(UInt32)paramID path:(MagicMovePath *)path {
   id<FxParameterSettingAPI_v5> paramSetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   NSData *data = [path dataRepresentation];
   NSString *str = [data base64EncodedStringWithOptions:0];
-  [paramSetAPI setStringParameterValue:str toParameter:kParamPathAB];
+  [paramSetAPI setStringParameterValue:str toParameter:paramID];
 }
 
 - (CGPoint)canvasPointFromObject:(simd_float2)objPt {
@@ -442,13 +461,15 @@ static const NSInteger kPartPathOutHandleBase = 300;
   pt->arc.fillAlpha = (opacity < 1.0) ? 0.25f : 1.0f;
 }
 
-- (void)drawPathABWithDestinationImage:(FxImageTile *)dest
-                                 color:(simd_float4)color
-                                 inset:(double)inset
-                                atTime:(CMTime)time {
-  MagicMovePath *path = [self readPathABAtTime:time];
-  simd_float2 startObj = [self objectPositionForParam:kParamPointA atTime:time];
-  simd_float2 endObj = [self objectPositionForParam:kParamPointB atTime:time];
+- (void)drawPathSegment:(PathSegConfig)cfg
+       destinationImage:(FxImageTile *)dest
+                  color:(simd_float4)color
+                  inset:(double)inset
+                 atTime:(CMTime)time {
+  MagicMovePath *path = [self readPathParam:cfg.pathParam];
+  simd_float2 startObj = [self objectPositionForParam:cfg.startParam
+                                               atTime:time];
+  simd_float2 endObj = [self objectPositionForParam:cfg.endParam atTime:time];
   NSUInteger segCount = path.segmentCount;
 
   // Draw curve segments
@@ -496,7 +517,7 @@ static const NSInteger kPartPathOutHandleBase = 300;
       CGPoint inCanvas = [self canvasPointFromObject:inObj];
       CGPoint outCanvas = [self canvasPointFromObject:outObj];
 
-      simd_float4 handleColor = {0.6f, 0.0f, 0.0f, 1.0f};
+      simd_float4 handleColor = {1.0f, 0.0f, 0.0f, 0.75f};
       [self drawLineFrom:ptCanvas
                         to:inCanvas
                      color:handleColor
@@ -530,59 +551,51 @@ static const NSInteger kPartPathOutHandleBase = 300;
   }
 }
 
-- (void)hitTestPathAtX:(double)mx
-                     Y:(double)my
-            activePart:(NSInteger *)activePart
-                atTime:(CMTime)time {
-  MagicMovePath *path = [self readPathABAtTime:time];
-  if (path.count == 0 && path.segmentCount == 1) {
-    // Only test curve for insertion on the straight line
-  }
-  simd_float2 startObj = [self objectPositionForParam:kParamPointA atTime:time];
-  simd_float2 endObj = [self objectPositionForParam:kParamPointB atTime:time];
+- (BOOL)hitTestPathSegment:(PathSegConfig)cfg
+                         x:(double)mx
+                         y:(double)my
+                activePart:(NSInteger *)activePart
+                   optDown:(BOOL)optDown
+                    oscAPI:(id<FxOnScreenControlAPI_v4>)oscAPI
+                    atTime:(CMTime)time {
+  MagicMovePath *path = [self readPathParam:cfg.pathParam];
+  simd_float2 startObj = [self objectPositionForParam:cfg.startParam
+                                               atTime:time];
+  simd_float2 endObj = [self objectPositionForParam:cfg.endParam atTime:time];
+  NSInteger pi = cfg.pathIndex;
 
-  // Test handles first (highest priority among path elements)
+  // Test handles
   for (NSUInteger i = 0; i < path.count; i++) {
     MagicMovePathPoint pt = [path pointAtIndex:i];
     if (pt.type != MagicMovePathPointBezier)
       continue;
-    simd_float2 inObj = {pt.x + pt.inX, pt.y + pt.inY};
-    simd_float2 outObj = {pt.x + pt.outX, pt.y + pt.outY};
-    CGPoint inC = [self canvasPointFromObject:inObj];
-    CGPoint outC = [self canvasPointFromObject:outObj];
+    CGPoint inC = [self
+        canvasPointFromObject:(simd_float2){pt.x + pt.inX, pt.y + pt.inY}];
+    CGPoint outC = [self
+        canvasPointFromObject:(simd_float2){pt.x + pt.outX, pt.y + pt.outY}];
     if (hypot(mx - inC.x, my - inC.y) < kPathPointHitRadius) {
-      *activePart = kPartPathInHandleBase + (NSInteger)i;
-      return;
+      *activePart = pathPartInHandle(pi, i);
+      return YES;
     }
     if (hypot(mx - outC.x, my - outC.y) < kPathPointHitRadius) {
-      *activePart = kPartPathOutHandleBase + (NSInteger)i;
-      return;
+      *activePart = pathPartOutHandle(pi, i);
+      return YES;
     }
   }
 
   // Test control points
-  CGEventFlags flags =
-      CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
-  BOOL optDown = (flags & kCGEventFlagMaskAlternate) != 0;
-  id<FxOnScreenControlAPI_v4> oscAPI =
-      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-
-  BOOL pathHit = NO;
   for (NSUInteger i = 0; i < path.count; i++) {
     MagicMovePathPoint pt = [path pointAtIndex:i];
     CGPoint ptC = [self canvasPointFromObject:(simd_float2){pt.x, pt.y}];
     if (hypot(mx - ptC.x, my - ptC.y) < kPathPointHitRadius) {
-      *activePart = kPartPathPointBase + (NSInteger)i;
-      pathHit = YES;
-      if (optDown)
-        [oscAPI setCursor:[NSCursor disappearingItemCursor]];
-      else
-        [oscAPI setCursor:[NSCursor arrowCursor]];
-      return;
+      *activePart = pathPartPoint(pi, i);
+      [oscAPI setCursor:optDown ? [NSCursor disappearingItemCursor]
+                                : [NSCursor arrowCursor]];
+      return YES;
     }
   }
 
-  // Test curve for insertion
+  // Test curve
   NSUInteger segCount = path.segmentCount;
   float bestDist = FLT_MAX;
   for (NSUInteger seg = 0; seg < segCount; seg++) {
@@ -610,16 +623,27 @@ static const NSInteger kPartPathOutHandleBase = 300;
     }
   }
   if (bestDist < kPathHitThreshold) {
-    *activePart = kPartPathCurve;
-    pathHit = YES;
-    if (optDown)
-      [oscAPI setCursor:[NSCursor crosshairCursor]];
-    else
-      [oscAPI setCursor:[NSCursor arrowCursor]];
+    *activePart = pathPartCurve(pi);
+    [oscAPI setCursor:optDown ? [NSCursor crosshairCursor]
+                              : [NSCursor arrowCursor]];
+    return YES;
   }
 
-  if (!pathHit)
-    [oscAPI setCursor:[NSCursor arrowCursor]];
+  return NO;
+}
+
+- (PathSegConfig)configForPathIndex:(NSInteger)pi {
+  switch (pi) {
+  case 1:
+    return (PathSegConfig){kParamPathBDrift, kParamPointB, kParamDriftPoint, 1};
+  case 2:
+    return (PathSegConfig){kParamPathDriftExit, kParamDriftPoint,
+                           kParamExitPoint, 2};
+  case 3:
+    return (PathSegConfig){kParamPathBExit, kParamPointB, kParamExitPoint, 3};
+  default:
+    return (PathSegConfig){kParamPathAB, kParamPointA, kParamPointB, 0};
+  }
 }
 
 - (BOOL)mouseDownForPathWithPart:(NSInteger)activePart
@@ -628,21 +652,28 @@ static const NSInteger kPartPathOutHandleBase = 300;
                        modifiers:(NSUInteger)modifiers
                      forceUpdate:(BOOL *)forceUpdate
                           atTime:(CMTime)time {
+  if (!isPathPart(activePart))
+    return NO;
+
   BOOL optHeld = (modifiers & kFxModifierKey_OPTION) != 0;
+  NSInteger pi = pathIndexFromPart(activePart);
+  NSInteger offset = pathPartOffset(activePart);
+  PathSegConfig cfg = [self configForPathIndex:pi];
+  _pathActiveParam = cfg.pathParam;
 
-  simd_float2 startObj = [self objectPositionForParam:kParamPointA atTime:time];
-  simd_float2 endObj = [self objectPositionForParam:kParamPointB atTime:time];
+  simd_float2 startObj = [self objectPositionForParam:cfg.startParam
+                                               atTime:time];
+  simd_float2 endObj = [self objectPositionForParam:cfg.endParam atTime:time];
 
-  if (activePart >= kPartPathPointBase &&
-      activePart < kPartPathPointBase + 100) {
-    NSUInteger idx = (NSUInteger)(activePart - kPartPathPointBase);
-    MagicMovePath *path = [self readPathABAtTime:time];
+  if (offset >= 100 && offset < 200) {
+    NSUInteger idx = (NSUInteger)(offset - 100);
+    MagicMovePath *path = [self readPathParam:cfg.pathParam];
     if (idx >= path.count)
       return NO;
 
     if (optHeld) {
       [path removeAtIndex:idx];
-      [self writePathAB:path atTime:time];
+      [self writePathParam:cfg.pathParam path:path];
       *forceUpdate = YES;
       return YES;
     }
@@ -651,7 +682,7 @@ static const NSInteger kPartPathOutHandleBase = 300;
     if (_pathLastClickIndex == (NSInteger)idx &&
         (now - _pathLastClickTime) < 0.35) {
       [path toggleTypeAtIndex:idx start:startObj end:endObj];
-      [self writePathAB:path atTime:time];
+      [self writePathParam:cfg.pathParam path:path];
       _pathLastClickIndex = -1;
       *forceUpdate = YES;
       return YES;
@@ -668,10 +699,9 @@ static const NSInteger kPartPathOutHandleBase = 300;
     return YES;
   }
 
-  if (activePart >= kPartPathInHandleBase &&
-      activePart < kPartPathInHandleBase + 100) {
-    NSUInteger idx = (NSUInteger)(activePart - kPartPathInHandleBase);
-    MagicMovePath *hPath = [self readPathABAtTime:time];
+  if (offset >= 200 && offset < 300) {
+    NSUInteger idx = (NSUInteger)(offset - 200);
+    MagicMovePath *hPath = [self readPathParam:cfg.pathParam];
     if (idx < hPath.count) {
       MagicMovePathPoint dragPt = [hPath pointAtIndex:idx];
       _pathDragStartObj =
@@ -684,10 +714,9 @@ static const NSInteger kPartPathOutHandleBase = 300;
     return YES;
   }
 
-  if (activePart >= kPartPathOutHandleBase &&
-      activePart < kPartPathOutHandleBase + 100) {
-    NSUInteger idx = (NSUInteger)(activePart - kPartPathOutHandleBase);
-    MagicMovePath *hPath = [self readPathABAtTime:time];
+  if (offset >= 300 && offset < 400) {
+    NSUInteger idx = (NSUInteger)(offset - 300);
+    MagicMovePath *hPath = [self readPathParam:cfg.pathParam];
     if (idx < hPath.count) {
       MagicMovePathPoint dragPt = [hPath pointAtIndex:idx];
       _pathDragStartObj =
@@ -700,12 +729,11 @@ static const NSInteger kPartPathOutHandleBase = 300;
     return YES;
   }
 
-  if (activePart == kPartPathCurve && optHeld) {
-    MagicMovePath *path = [self readPathABAtTime:time];
+  if (offset == 50 && optHeld) {
+    MagicMovePath *path = [self readPathParam:cfg.pathParam];
     simd_float2 mouseObj =
         [self objectPointFromCanvas:(CGPoint){positionX, positionY}];
 
-    // Find which segment and insert there
     NSUInteger bestSeg = 0;
     float bestDist = FLT_MAX;
     for (NSUInteger seg = 0; seg < path.segmentCount; seg++) {
@@ -724,7 +752,7 @@ static const NSInteger kPartPathOutHandleBase = 300;
     }
 
     [path insertAtIndex:bestSeg position:mouseObj];
-    [self writePathAB:path atTime:time];
+    [self writePathParam:cfg.pathParam path:path];
     _pathDragIndex = (NSInteger)bestSeg;
     _pathDragIsInHandle = NO;
     _pathDragIsOutHandle = NO;
@@ -739,11 +767,14 @@ static const NSInteger kPartPathOutHandleBase = 300;
                        count:(NSUInteger *)outCount
                         path:(MagicMovePath *)path
                    dragIndex:(NSUInteger)dragIndex
-                       start:(simd_float2)start
-                         end:(simd_float2)end {
+                      atTime:(CMTime)time {
   NSUInteger n = 0;
-  targets[n++] = start;
-  targets[n++] = end;
+  // All main points as snap targets
+  UInt32 mainParams[] = {kParamPointA, kParamPointB, kParamDriftPoint,
+                         kParamExitPoint};
+  for (int i = 0; i < 4; i++)
+    targets[n++] = [self objectPositionForParam:mainParams[i] atTime:time];
+  // Other control points on this path
   for (NSUInteger i = 0; i < path.count; i++) {
     if (i == dragIndex)
       continue;
@@ -800,7 +831,7 @@ static const NSInteger kPartPathOutHandleBase = 300;
   if (_pathDragIndex < 0)
     return NO;
 
-  MagicMovePath *path = [self readPathABAtTime:time];
+  MagicMovePath *path = [self readPathParam:_pathActiveParam];
   if ((NSUInteger)_pathDragIndex >= path.count)
     return NO;
 
@@ -824,9 +855,6 @@ static const NSInteger kPartPathOutHandleBase = 300;
     else
       mouseObj.x = _pathDragStartObj.x;
   }
-
-  simd_float2 startObj = [self objectPositionForParam:kParamPointA atTime:time];
-  simd_float2 endObj = [self objectPositionForParam:kParamPointB atTime:time];
 
   if (_pathDragIsInHandle) {
     MagicMovePathPoint pt = [path pointAtIndex:(NSUInteger)_pathDragIndex];
@@ -879,21 +907,20 @@ static const NSInteger kPartPathOutHandleBase = 300;
                 atIndex:(NSUInteger)_pathDragIndex];
   } else {
     // Snap control point to other points and endpoints
-    simd_float2 snapTargets[path.count + 2];
+    simd_float2 snapTargets[path.count + 4];
     NSUInteger snapCount;
     [self buildPathSnapTargets:snapTargets
                          count:&snapCount
                           path:path
                      dragIndex:(NSUInteger)_pathDragIndex
-                         start:startObj
-                           end:endObj];
+                        atTime:time];
     mouseObj = [self applyPathSnap:mouseObj
                            targets:snapTargets
                              count:snapCount];
     [path moveAtIndex:(NSUInteger)_pathDragIndex to:mouseObj];
   }
 
-  [self writePathAB:path atTime:time];
+  [self writePathParam:_pathActiveParam path:path];
   return YES;
 }
 
@@ -916,56 +943,42 @@ static const NSInteger kPartPathOutHandleBase = 300;
   BOOL showA = animInOn || (animOutOn && !exitOn);
   BOOL showExit = exitOn && animOutOn;
 
-  CGPoint posB = [self positionForParam:kParamPointB atTime:time];
   simd_float4 red = {1, 0, 0, 1};
   BOOL anyArcActive = _points[0].arcDragging || _points[1].arcDragging ||
                       _points[2].arcDragging || _points[3].arcDragging;
   double inset = anyArcActive ? 22.0 : 14.0;
 
-  if (showA) {
-    [self drawPathABWithDestinationImage:destinationImage
-                                   color:red
-                                   inset:inset
-                                  atTime:time];
-  }
+  PathSegConfig cfgAB = {kParamPathAB, kParamPointA, kParamPointB, 0};
+  PathSegConfig cfgBDrift = {kParamPathBDrift, kParamPointB, kParamDriftPoint,
+                             1};
+  PathSegConfig cfgDriftExit = {kParamPathDriftExit, kParamDriftPoint,
+                                kParamExitPoint, 2};
+  PathSegConfig cfgBExit = {kParamPathBExit, kParamPointB, kParamExitPoint, 3};
 
+  if (showA)
+    [self drawPathSegment:cfgAB
+         destinationImage:destinationImage
+                    color:red
+                    inset:inset
+                   atTime:time];
   if (driftOn) {
-    CGPoint posD = [self positionForParam:kParamDriftPoint atTime:time];
-    double d2x = posD.x - posB.x, d2y = posD.y - posB.y;
-    double l2 = hypot(d2x, d2y);
-    if (l2 > inset * 2.0) {
-      double n2x = d2x / l2 * inset, n2y = d2y / l2 * inset;
-      [self drawLineFrom:(CGPoint){posB.x + n2x, posB.y + n2y}
-                        to:(CGPoint){posD.x - n2x, posD.y - n2y}
-                     color:red
-                 halfWidth:2.0f
-          destinationImage:destinationImage];
-    }
-    if (showExit) {
-      CGPoint posE = [self positionForParam:kParamExitPoint atTime:time];
-      double d3x = posE.x - posD.x, d3y = posE.y - posD.y;
-      double l3 = hypot(d3x, d3y);
-      if (l3 > inset * 2.0) {
-        double n3x = d3x / l3 * inset, n3y = d3y / l3 * inset;
-        [self drawLineFrom:(CGPoint){posD.x + n3x, posD.y + n3y}
-                          to:(CGPoint){posE.x - n3x, posE.y - n3y}
-                       color:red
-                   halfWidth:2.0f
-            destinationImage:destinationImage];
-      }
-    }
+    [self drawPathSegment:cfgBDrift
+         destinationImage:destinationImage
+                    color:red
+                    inset:inset
+                   atTime:time];
+    if (showExit)
+      [self drawPathSegment:cfgDriftExit
+           destinationImage:destinationImage
+                      color:red
+                      inset:inset
+                     atTime:time];
   } else if (showExit) {
-    CGPoint posE = [self positionForParam:kParamExitPoint atTime:time];
-    double d2x = posE.x - posB.x, d2y = posE.y - posB.y;
-    double l2 = hypot(d2x, d2y);
-    if (l2 > inset * 2.0) {
-      double n2x = d2x / l2 * inset, n2y = d2y / l2 * inset;
-      [self drawLineFrom:(CGPoint){posB.x + n2x, posB.y + n2y}
-                        to:(CGPoint){posE.x - n2x, posE.y - n2y}
-                     color:red
-                 halfWidth:2.0f
-          destinationImage:destinationImage];
-    }
+    [self drawPathSegment:cfgBExit
+         destinationImage:destinationImage
+                    color:red
+                    inset:inset
+                   atTime:time];
   }
 
   if (_snapX || _snapY) {
@@ -1164,11 +1177,57 @@ static const NSInteger kPartPathOutHandleBase = 300;
                 atTime:time];
 
   // Path elements only if no main point was hit
-  if (*activePart == prePart && showA)
-    [self hitTestPathAtX:positionX
-                       Y:positionY
-              activePart:activePart
-                  atTime:time];
+  if (*activePart == prePart) {
+    CGEventFlags hflags =
+        CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+    BOOL hOpt = (hflags & kCGEventFlagMaskAlternate) != 0;
+    id<FxOnScreenControlAPI_v4> hOscAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+
+    PathSegConfig cfgAB = {kParamPathAB, kParamPointA, kParamPointB, 0};
+    PathSegConfig cfgBD = {kParamPathBDrift, kParamPointB, kParamDriftPoint, 1};
+    PathSegConfig cfgDE = {kParamPathDriftExit, kParamDriftPoint,
+                           kParamExitPoint, 2};
+    PathSegConfig cfgBE = {kParamPathBExit, kParamPointB, kParamExitPoint, 3};
+    BOOL driftOn = [self driftEnabledAtTime:time];
+    BOOL exitShow = exitOn && animOutOn;
+    BOOL hit = NO;
+
+    if (showA)
+      hit = [self hitTestPathSegment:cfgAB
+                                   x:positionX
+                                   y:positionY
+                          activePart:activePart
+                             optDown:hOpt
+                              oscAPI:hOscAPI
+                              atTime:time];
+    if (!hit && driftOn)
+      hit = [self hitTestPathSegment:cfgBD
+                                   x:positionX
+                                   y:positionY
+                          activePart:activePart
+                             optDown:hOpt
+                              oscAPI:hOscAPI
+                              atTime:time];
+    if (!hit && driftOn && exitShow)
+      hit = [self hitTestPathSegment:cfgDE
+                                   x:positionX
+                                   y:positionY
+                          activePart:activePart
+                             optDown:hOpt
+                              oscAPI:hOscAPI
+                              atTime:time];
+    if (!hit && !driftOn && exitShow)
+      hit = [self hitTestPathSegment:cfgBE
+                                   x:positionX
+                                   y:positionY
+                          activePart:activePart
+                             optDown:hOpt
+                              oscAPI:hOscAPI
+                              atTime:time];
+    if (!hit)
+      [hOscAPI setCursor:[NSCursor arrowCursor]];
+  }
 }
 
 - (BOOL)mouseDownForPoint:(PointOSCState *)pt

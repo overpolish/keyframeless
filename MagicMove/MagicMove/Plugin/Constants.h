@@ -48,6 +48,9 @@ static const UInt32 kParamExitOpacity = 36;
 
 // Path
 static const UInt32 kParamPathAB = 40;
+static const UInt32 kParamPathBDrift = 41;
+static const UInt32 kParamPathDriftExit = 42;
+static const UInt32 kParamPathBExit = 43;
 
 // Info
 static const UInt32 kParamInfoCompound = 9000;

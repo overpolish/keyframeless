@@ -325,11 +325,17 @@ static double mmApplyCurveOut(double raw, int curve) {
                            parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
-  if (![paramAPI addStringParameterWithName:@"PathAB"
-                                parameterID:kParamPathAB
-                               defaultValue:@""
-                             parameterFlags:kFxParameterFlag_HIDDEN])
-    return NO;
+  UInt32 pathIDs[] = {kParamPathAB, kParamPathBDrift, kParamPathDriftExit,
+                      kParamPathBExit};
+  NSString *pathNames[] = {@"PathAB", @"PathBDrift", @"PathDriftExit",
+                           @"PathBExit"};
+  for (int i = 0; i < 4; i++) {
+    if (![paramAPI addStringParameterWithName:pathNames[i]
+                                  parameterID:pathIDs[i]
+                                 defaultValue:@""
+                               parameterFlags:kFxParameterFlag_HIDDEN])
+      return NO;
+  }
 
   return YES;
 }
@@ -406,6 +412,18 @@ static double mmApplyCurveOut(double raw, int curve) {
   }
   [self updateParameterVisibilityAtTime:time];
   return YES;
+}
+
+- (MagicMovePath *)readPath:(UInt32)paramID
+                    withAPI:(id<FxParameterRetrievalAPI_v6>)api {
+  NSString *str = nil;
+  [api getStringParameterValue:&str fromParameter:paramID];
+  if (str.length > 0) {
+    NSData *data = [[NSData alloc] initWithBase64EncodedString:str options:0];
+    if (data)
+      return [MagicMovePath pathWithData:data];
+  }
+  return [[MagicMovePath alloc] init];
 }
 
 - (BOOL)pluginState:(NSData **)pluginState
@@ -601,21 +619,20 @@ static double mmApplyCurveOut(double raw, int curve) {
     double driftDur = exitEnabled ? durSec - animDur : durSec;
     double d = (driftDur > 0) ? (nowSec - startSec) / driftDur : 1.0;
     d = MAX(0.0, MIN(1.0, d));
-    targetX = (1 - d) * posBx + d * driftX;
-    targetY = (1 - d) * posBy + d * driftY;
+    MagicMovePath *pathBDrift = [self readPath:kParamPathBDrift
+                                       withAPI:paramGetAPI];
+    simd_float2 driftPos =
+        [pathBDrift positionAtT:(float)d
+                          start:(simd_float2){(float)posBx, (float)posBy}
+                            end:(simd_float2){(float)driftX, (float)driftY}];
+    targetX = driftPos.x;
+    targetY = driftPos.y;
     targetRot = (1 - d) * rotB + d * driftRot;
     targetScale = (1 - d) * scaleB + d * driftScale;
     targetOpacity = (1 - d) * opacityB + d * driftOpacity;
   }
 
-  NSString *pathStr = nil;
-  [paramGetAPI getStringParameterValue:&pathStr fromParameter:kParamPathAB];
-  NSData *pathData = (pathStr.length > 0)
-                         ? [[NSData alloc] initWithBase64EncodedString:pathStr
-                                                               options:0]
-                         : nil;
-  MagicMovePath *pathAB = pathData ? [MagicMovePath pathWithData:pathData]
-                                   : [[MagicMovePath alloc] init];
+  MagicMovePath *pathAB = [self readPath:kParamPathAB withAPI:paramGetAPI];
 
   MagicMoveParams params;
   if (exitEnabled) {
@@ -641,9 +658,16 @@ static double mmApplyCurveOut(double raw, int curve) {
         MAX(0.0, MIN(1.0, (nowSec - (effectEndSec - animDur)) / animDur));
     double e = mmApplyCurveOut(rawE, curve);
 
-    // Blend target toward exit, then apply in-factor from A
-    double effX = (1 - e) * targetX + e * exitX;
-    double effY = (1 - e) * targetY + e * exitY;
+    // Blend target toward exit along path
+    MagicMovePath *exitPath =
+        [self readPath:(driftEnabled ? kParamPathDriftExit : kParamPathBExit)
+               withAPI:paramGetAPI];
+    simd_float2 effPos =
+        [exitPath positionAtT:(float)e
+                        start:(simd_float2){(float)targetX, (float)targetY}
+                          end:(simd_float2){(float)exitX, (float)exitY}];
+    double effX = effPos.x;
+    double effY = effPos.y;
     double effRot = (1 - e) * targetRot + e * exitRot;
     double effScale = (1 - e) * targetScale + e * exitScale;
     double effOpacity = (1 - e) * targetOpacity + e * exitOpacity;
