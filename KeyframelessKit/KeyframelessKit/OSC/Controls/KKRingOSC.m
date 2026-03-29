@@ -88,6 +88,7 @@ static NSColor *ringActiveStrokeColor(void) {
   self = [super initWithAPIManager:apiManager];
   if (self) {
     _ringRadius = 50.0f;
+    _ringRadiusY = 50.0f;
     _fillWidth = 2.0f;
     _ringOutlineWidth = 1.5f;
   }
@@ -103,11 +104,13 @@ static NSColor *ringActiveStrokeColor(void) {
 }
 
 - (float)hitRadius {
-  return _ringRadius + _fillWidth / 2.0f + _ringOutlineWidth;
+  return fmaxf(_ringRadius, _ringRadiusY) + _fillWidth / 2.0f +
+         _ringOutlineWidth;
 }
 
 - (float)oscSize {
-  return _ringRadius + _fillWidth / 2.0f + _ringOutlineWidth;
+  return fmaxf(_ringRadius, _ringRadiusY) + _fillWidth / 2.0f +
+         _ringOutlineWidth;
 }
 
 - (void)updateCursorForMouseX:(double)positionX positionY:(double)positionY {
@@ -125,8 +128,11 @@ static NSColor *ringActiveStrokeColor(void) {
   CGPoint pos = _center;
   double dx = positionX - pos.x;
   double dy = positionY - pos.y;
-  double dist = sqrt(dx * dx + dy * dy);
-  double ringDist = fabs(dist - _ringRadius);
+  double nx = (_ringRadius > 0) ? dx / _ringRadius : 0;
+  double ny = (_ringRadiusY > 0) ? dy / _ringRadiusY : 0;
+  double ellipseDist = sqrt(nx * nx + ny * ny);
+  double meanRadius = (_ringRadius + _ringRadiusY) * 0.5;
+  double ringDist = fabs(ellipseDist - 1.0) * meanRadius;
   float hitWidth = _fillWidth / 2.0f + _ringOutlineWidth + 4.0f;
 
   id<FxOnScreenControlAPI_v4> oscAPI =
@@ -158,7 +164,9 @@ static NSColor *ringActiveStrokeColor(void) {
 
   float fillWidth = (isHovered || isActive) ? 2.5f : 2.0f;
   float outlineWidth = (isHovered || isActive) ? 1.5f : 1.0f;
-  float outerRadiusPixels = _ringRadius + fillWidth / 2.0f + outlineWidth;
+  float outerX = _ringRadius + fillWidth / 2.0f + outlineWidth;
+  float outerY = _ringRadiusY + fillWidth / 2.0f + outlineWidth;
+  float outerRadiusPixels = fmaxf(outerX, outerY);
 
   simd_float4 fillColor;
   simd_float4 strokeColor;
@@ -173,7 +181,8 @@ static NSColor *ringActiveStrokeColor(void) {
     strokeColor = [ringIdleStrokeColor() simdFloat4];
   }
 
-  KKRingOSCParams params = {.ringRadius = _ringRadius / outerRadiusPixels,
+  KKRingOSCParams params = {.ringRadiusX = _ringRadius / outerRadiusPixels,
+                            .ringRadiusY = _ringRadiusY / outerRadiusPixels,
                             .fillHalfWidth =
                                 (fillWidth / 2.0f) / outerRadiusPixels,
                             .outlineWidth = outlineWidth / outerRadiusPixels,

@@ -78,16 +78,20 @@ fragment float4 KKArcOSCFragment(KKRasterizerData in [[stage_in]],
 /// Fragment shader for rendering a thin ring OSC control with fill and outline.
 fragment float4 KKRingOSCFragment(KKRasterizerData in [[stage_in]],
                                   constant KKRingOSCParams *params [[buffer(KKOSCFragmentIndex_DrawColor)]]) {
-    float ringRadius = params->ringRadius;
+    float2 radii = float2(params->ringRadiusX, params->ringRadiusY);
     float fillHalfWidth = params->fillHalfWidth;
     float outlineWidth = params->outlineWidth;
     float4 fillColor = float4(params->fillColor);
     float4 strokeColor = float4(params->strokeColor);
 
     float2 pos = in.textureCoordinate;
-    float dist = length(pos);
-
-    float ringDist = abs(dist - ringRadius);
+    // Implicit ellipse: f(p) = (x/a)^2 + (y/b)^2 - 1
+    // Approximate distance to boundary: |f| / |grad f|
+    float2 pr = pos / radii;
+    float f = dot(pr, pr) - 1.0;
+    float2 grad = 2.0 * pos / (radii * radii);
+    float gradLen = length(grad);
+    float ringDist = (gradLen > 0.0001) ? abs(f) / gradLen : 0.0;
     float outerHalfWidth = fillHalfWidth + outlineWidth;
 
     float shapeAlpha = kkEdgeAlpha(outerHalfWidth - ringDist);

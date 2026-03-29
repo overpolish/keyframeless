@@ -16,7 +16,8 @@
 #define kPointCount 4
 
 typedef struct {
-  UInt32 pointParam, rotParam, scaleParam, previewParam, opacityParam;
+  UInt32 pointParam, rotParam, scaleXParam, scaleYParam, previewParam,
+      opacityParam;
   NSInteger arcPart, ringPart, rotPart, iconPart, opacityIconPart,
       scaleIconPart;
   __unsafe_unretained KKArcOSC *arc;
@@ -30,7 +31,9 @@ typedef struct {
   BOOL ringHovered, ringDragging;
   BOOL rotHovered, rotDragging;
   double rotDragPrevAngle, rotDragAccum;
-  double ringDragStartDist, ringDragStartVal;
+  double ringDragStartDist, ringDragStartValX, ringDragStartValY;
+  double ringDragStartAngle;
+  double ringLastClickTime;
   double arcDragStartX, arcDragStartY;
 } PointOSCState;
 
@@ -164,7 +167,8 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
     _points[0] = (PointOSCState){
         .pointParam = kParamPointA,
         .rotParam = kParamRotationA,
-        .scaleParam = kParamScaleA,
+        .scaleXParam = kParamScaleA,
+        .scaleYParam = kParamScaleYA,
         .previewParam = kParamPreviewA,
         .opacityParam = kParamOpacityA,
         .arcPart = 1,
@@ -184,7 +188,8 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
     _points[1] = (PointOSCState){
         .pointParam = kParamPointB,
         .rotParam = kParamRotationB,
-        .scaleParam = kParamScaleB,
+        .scaleXParam = kParamScaleB,
+        .scaleYParam = kParamScaleYB,
         .previewParam = kParamPreviewB,
         .opacityParam = kParamOpacityB,
         .arcPart = 4,
@@ -218,7 +223,8 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
     _points[2] = (PointOSCState){
         .pointParam = kParamDriftPoint,
         .rotParam = kParamDriftRotation,
-        .scaleParam = kParamDriftScale,
+        .scaleXParam = kParamDriftScale,
+        .scaleYParam = kParamDriftScaleY,
         .previewParam = kParamPreviewDrift,
         .opacityParam = kParamDriftOpacity,
         .arcPart = 7,
@@ -252,7 +258,8 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
     _points[3] = (PointOSCState){
         .pointParam = kParamExitPoint,
         .rotParam = kParamExitRotation,
-        .scaleParam = kParamExitScale,
+        .scaleXParam = kParamExitScale,
+        .scaleYParam = kParamExitScaleY,
         .previewParam = kParamPreviewExit,
         .opacityParam = kParamExitOpacity,
         .arcPart = 10,
@@ -334,13 +341,18 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
   return fmin(fabs(topRight.x - bottomLeft.x), fabs(topRight.y - bottomLeft.y));
 }
 
-- (float)ringRadiusForScaleParam:(UInt32)paramID atTime:(CMTime)time {
+- (void)updateRing:(KKRingOSC *)ring
+       scaleXParam:(UInt32)xParam
+       scaleYParam:(UInt32)yParam
+            atTime:(CMTime)time {
   float minDim = [self canvasMinDim];
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  double scale = 1.0;
-  [paramGetAPI getFloatValue:&scale fromParameter:paramID atTime:time];
-  return minDim * 0.1f * (float)scale;
+  double sx = 1.0, sy = 1.0;
+  [paramGetAPI getFloatValue:&sx fromParameter:xParam atTime:time];
+  [paramGetAPI getFloatValue:&sy fromParameter:yParam atTime:time];
+  ring.ringRadius = minDim * 0.1f * (float)sx;
+  ring.ringRadiusY = minDim * 0.1f * (float)sy;
 }
 
 - (BOOL)animateInEnabledAtTime:(CMTime)time {
@@ -442,11 +454,13 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
     destinationImage:(FxImageTile *)dest
               atTime:(CMTime)time {
   CGPoint pos = [self positionForParam:pt->pointParam atTime:time];
-  float ringRadius = [self ringRadiusForScaleParam:pt->scaleParam atTime:time];
+  [self updateRing:pt->ring
+       scaleXParam:pt->scaleXParam
+       scaleYParam:pt->scaleYParam
+            atTime:time];
   float rotAngle = [self rotationForParam:pt->rotParam atTime:time];
 
   pt->ring.center = pos;
-  pt->ring.ringRadius = ringRadius;
   [pt->ring drawAtCanvasPosition:pos
                        isHovered:pt->ringHovered
                         isActive:pt->ringDragging
@@ -492,8 +506,10 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
     pt->opacityIcon.iconName =
         @"circle.lefthalf.filled.righthalf.striped.horizontal.inverse";
 
-  double scale = 1.0;
-  [paramGetAPI getFloatValue:&scale fromParameter:pt->scaleParam atTime:time];
+  double scaleX = 1.0, scaleY = 1.0;
+  [paramGetAPI getFloatValue:&scaleX fromParameter:pt->scaleXParam atTime:time];
+  [paramGetAPI getFloatValue:&scaleY fromParameter:pt->scaleYParam atTime:time];
+  double scale = fmax(scaleX, scaleY);
   if (scale > 1.0)
     pt->scaleIcon.iconName = @"squareshape.dotted.squareshape";
   else if (scale == 1.0)
@@ -1220,8 +1236,10 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
   }
 
   pt->ring.center = pos;
-  pt->ring.ringRadius = [self ringRadiusForScaleParam:pt->scaleParam
-                                               atTime:time];
+  [self updateRing:pt->ring
+       scaleXParam:pt->scaleXParam
+       scaleYParam:pt->scaleYParam
+            atTime:time];
   if ([pt->ring hitTestAtMousePositionX:positionX
                               positionY:positionY
                                  atTime:time]) {
@@ -1378,11 +1396,12 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
         [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
     id<FxParameterSettingAPI_v5> paramSetAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    double scale = 1.0;
-    [paramGetAPI getFloatValue:&scale fromParameter:pt->scaleParam atTime:time];
-    [paramSetAPI setFloatValue:(scale >= 1.0) ? 0.0 : 1.0
-                   toParameter:pt->scaleParam
-                        atTime:time];
+    double sx = 1.0, sy = 1.0;
+    [paramGetAPI getFloatValue:&sx fromParameter:pt->scaleXParam atTime:time];
+    [paramGetAPI getFloatValue:&sy fromParameter:pt->scaleYParam atTime:time];
+    double newVal = (fmax(sx, sy) >= 1.0) ? 0.0 : 1.0;
+    [paramSetAPI setFloatValue:newVal toParameter:pt->scaleXParam atTime:time];
+    [paramSetAPI setFloatValue:newVal toParameter:pt->scaleYParam atTime:time];
     *forceUpdate = YES;
     return YES;
   }
@@ -1400,16 +1419,45 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
   }
 
   if (activePart == pt->ringPart) {
+    NSTimeInterval now = CACurrentMediaTime();
+    if ((now - pt->ringLastClickTime) < 0.35) {
+      id<FxParameterRetrievalAPI_v6> paramGetAPI = [self.apiManager
+          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      double sx = 1.0, sy = 1.0;
+      [paramGetAPI getFloatValue:&sx fromParameter:pt->scaleXParam atTime:time];
+      [paramGetAPI getFloatValue:&sy fromParameter:pt->scaleYParam atTime:time];
+      if (sx != sy) {
+        double smaller = fmin(sx, sy);
+        id<FxParameterSettingAPI_v5> paramSetAPI = [self.apiManager
+            apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+        if (paramSetAPI) {
+          [paramSetAPI setFloatValue:smaller
+                         toParameter:pt->scaleXParam
+                              atTime:time];
+          [paramSetAPI setFloatValue:smaller
+                         toParameter:pt->scaleYParam
+                              atTime:time];
+        }
+        *forceUpdate = YES;
+      }
+      pt->ringLastClickTime = 0;
+      return YES;
+    }
+    pt->ringLastClickTime = now;
+
     pt->ringDragging = YES;
     CGPoint center = [self positionForParam:pt->pointParam atTime:time];
     double dx = positionX - center.x;
     double dy = positionY - center.y;
     pt->ringDragStartDist = sqrt(dx * dx + dy * dy);
+    pt->ringDragStartAngle = atan2(fabs(dy), fabs(dx));
     id<FxParameterRetrievalAPI_v6> paramGetAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    double s = 1.0;
-    [paramGetAPI getFloatValue:&s fromParameter:pt->scaleParam atTime:time];
-    pt->ringDragStartVal = s;
+    double sx = 1.0, sy = 1.0;
+    [paramGetAPI getFloatValue:&sx fromParameter:pt->scaleXParam atTime:time];
+    [paramGetAPI getFloatValue:&sy fromParameter:pt->scaleYParam atTime:time];
+    pt->ringDragStartValX = sx;
+    pt->ringDragStartValY = sy;
     [pt->ring updateCursorForMouseX:positionX positionY:positionY];
     *forceUpdate = YES;
     return YES;
@@ -1570,14 +1618,39 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
     double dy = positionY - center.y;
     double dist = sqrt(dx * dx + dy * dy);
     if (pt->ringDragStartDist > 0) {
-      double newVal = CLAMP(
-          pt->ringDragStartVal * (dist / pt->ringDragStartDist), 0.0, 10.0);
+      double ratio = dist / pt->ringDragStartDist;
       id<FxParameterSettingAPI_v5> paramSetAPI =
           [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      if (paramSetAPI)
-        [paramSetAPI setFloatValue:newVal
-                       toParameter:pt->scaleParam
-                            atTime:time];
+      CGEventFlags flags =
+          CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+      BOOL shiftHeld = (flags & kCGEventFlagMaskShift) != 0;
+      if (shiftHeld) {
+        // Constrain to X or Y based on initial drag angle
+        BOOL horizontal = pt->ringDragStartAngle < M_PI / 4.0;
+        if (paramSetAPI) {
+          if (horizontal)
+            [paramSetAPI
+                setFloatValue:CLAMP(pt->ringDragStartValX * ratio, 0.0, 10.0)
+                  toParameter:pt->scaleXParam
+                       atTime:time];
+          else
+            [paramSetAPI
+                setFloatValue:CLAMP(pt->ringDragStartValY * ratio, 0.0, 10.0)
+                  toParameter:pt->scaleYParam
+                       atTime:time];
+        }
+      } else {
+        if (paramSetAPI) {
+          [paramSetAPI
+              setFloatValue:CLAMP(pt->ringDragStartValX * ratio, 0.0, 10.0)
+                toParameter:pt->scaleXParam
+                     atTime:time];
+          [paramSetAPI
+              setFloatValue:CLAMP(pt->ringDragStartValY * ratio, 0.0, 10.0)
+                toParameter:pt->scaleYParam
+                     atTime:time];
+        }
+      }
     }
     [pt->ring updateCursorForMouseX:positionX positionY:positionY];
     return YES;

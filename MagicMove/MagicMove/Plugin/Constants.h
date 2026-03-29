@@ -21,6 +21,7 @@ static const UInt32 kParamPreviewA = 15;
 static const UInt32 kParamOpacityA = 16;
 static const UInt32 kParamRotationXA = 50;
 static const UInt32 kParamRotationYA = 51;
+static const UInt32 kParamScaleYA = 60;
 
 // Parameter IDs — Point B
 static const UInt32 kParamGroupPointB = 5;
@@ -31,6 +32,7 @@ static const UInt32 kParamPreviewB = 9;
 static const UInt32 kParamOpacityB = 11;
 static const UInt32 kParamRotationXB = 52;
 static const UInt32 kParamRotationYB = 53;
+static const UInt32 kParamScaleYB = 61;
 
 // Drift
 static const UInt32 kParamGroupDrift = 20;
@@ -42,6 +44,7 @@ static const UInt32 kParamPreviewDrift = 25;
 static const UInt32 kParamDriftOpacity = 26;
 static const UInt32 kParamDriftRotationX = 54;
 static const UInt32 kParamDriftRotationY = 55;
+static const UInt32 kParamDriftScaleY = 62;
 
 // Exit
 static const UInt32 kParamGroupExit = 30;
@@ -53,6 +56,7 @@ static const UInt32 kParamPreviewExit = 35;
 static const UInt32 kParamExitOpacity = 36;
 static const UInt32 kParamExitRotationX = 56;
 static const UInt32 kParamExitRotationY = 57;
+static const UInt32 kParamExitScaleY = 63;
 
 // Path
 static const UInt32 kParamPathAB = 40;
