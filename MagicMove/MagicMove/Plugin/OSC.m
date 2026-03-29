@@ -17,13 +17,15 @@
 
 typedef struct {
   UInt32 pointParam, rotParam, scaleParam, previewParam, opacityParam;
-  NSInteger arcPart, ringPart, rotPart, iconPart, opacityIconPart;
+  NSInteger arcPart, ringPart, rotPart, iconPart, opacityIconPart,
+      scaleIconPart;
   __unsafe_unretained KKArcOSC *arc;
   __unsafe_unretained KKOSCLabel *label;
   __unsafe_unretained KKRingOSC *ring;
   __unsafe_unretained KKRotationOSC *rot;
   __unsafe_unretained KKIconButtonOSC *icon;
   __unsafe_unretained KKIconButtonOSC *opacityIcon;
+  __unsafe_unretained KKIconButtonOSC *scaleIcon;
   BOOL arcHovered, arcDragging;
   BOOL ringHovered, ringDragging;
   BOOL rotHovered, rotDragging;
@@ -89,24 +91,28 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
   KKRotationOSC *_rotA;
   KKIconButtonOSC *_iconA;
   KKIconButtonOSC *_opacityIconA;
+  KKIconButtonOSC *_scaleIconA;
   KKArcOSC *_arcB;
   KKOSCLabel *_labelB;
   KKRingOSC *_ringB;
   KKRotationOSC *_rotB;
   KKIconButtonOSC *_iconB;
   KKIconButtonOSC *_opacityIconB;
+  KKIconButtonOSC *_scaleIconB;
   KKArcOSC *_arcDrift;
   KKOSCLabel *_labelDrift;
   KKRingOSC *_ringDrift;
   KKRotationOSC *_rotDrift;
   KKIconButtonOSC *_iconDrift;
   KKIconButtonOSC *_opacityIconDrift;
+  KKIconButtonOSC *_scaleIconDrift;
   KKArcOSC *_arcExit;
   KKOSCLabel *_labelExit;
   KKRingOSC *_ringExit;
   KKRotationOSC *_rotExit;
   KKIconButtonOSC *_iconExit;
   KKIconButtonOSC *_opacityIconExit;
+  KKIconButtonOSC *_scaleIconExit;
   BOOL _snapX;
   BOOL _snapY;
   float _snapXVal;
@@ -139,6 +145,8 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
     _iconA.iconName = @"eye";
     _opacityIconA = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
     _opacityIconA.iconName = @"circle.fill";
+    _scaleIconA = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
+    _scaleIconA.iconName = @"squareshape.fill";
 
     _arcB = [[KKArcOSC alloc] initWithAPIManager:apiManager];
     _arcB.clearsOnDraw = NO;
@@ -150,6 +158,8 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
     _iconB.iconName = @"eye";
     _opacityIconB = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
     _opacityIconB.iconName = @"circle.fill";
+    _scaleIconB = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
+    _scaleIconB.iconName = @"squareshape.fill";
 
     _points[0] = (PointOSCState){
         .pointParam = kParamPointA,
@@ -162,12 +172,14 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
         .rotPart = 3,
         .iconPart = 13,
         .opacityIconPart = 17,
+        .scaleIconPart = 21,
         .arc = self,
         .label = _labelA,
         .ring = _ringA,
         .rot = _rotA,
         .icon = _iconA,
         .opacityIcon = _opacityIconA,
+        .scaleIcon = _scaleIconA,
     };
     _points[1] = (PointOSCState){
         .pointParam = kParamPointB,
@@ -180,12 +192,14 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
         .rotPart = 6,
         .iconPart = 14,
         .opacityIconPart = 18,
+        .scaleIconPart = 22,
         .arc = _arcB,
         .label = _labelB,
         .ring = _ringB,
         .rot = _rotB,
         .icon = _iconB,
         .opacityIcon = _opacityIconB,
+        .scaleIcon = _scaleIconB,
     };
 
     _arcDrift = [[KKArcOSC alloc] initWithAPIManager:apiManager];
@@ -198,6 +212,8 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
     _iconDrift.iconName = @"eye";
     _opacityIconDrift = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
     _opacityIconDrift.iconName = @"circle.fill";
+    _scaleIconDrift = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
+    _scaleIconDrift.iconName = @"squareshape.fill";
 
     _points[2] = (PointOSCState){
         .pointParam = kParamDriftPoint,
@@ -210,12 +226,14 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
         .rotPart = 9,
         .iconPart = 15,
         .opacityIconPart = 19,
+        .scaleIconPart = 23,
         .arc = _arcDrift,
         .label = _labelDrift,
         .ring = _ringDrift,
         .rot = _rotDrift,
         .icon = _iconDrift,
         .opacityIcon = _opacityIconDrift,
+        .scaleIcon = _scaleIconDrift,
     };
 
     _arcExit = [[KKArcOSC alloc] initWithAPIManager:apiManager];
@@ -228,6 +246,8 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
     _iconExit.iconName = @"eye";
     _opacityIconExit = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
     _opacityIconExit.iconName = @"circle.fill";
+    _scaleIconExit = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
+    _scaleIconExit.iconName = @"squareshape.fill";
 
     _points[3] = (PointOSCState){
         .pointParam = kParamExitPoint,
@@ -240,12 +260,14 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
         .rotPart = 12,
         .iconPart = 16,
         .opacityIconPart = 20,
+        .scaleIconPart = 24,
         .arc = _arcExit,
         .label = _labelExit,
         .ring = _ringExit,
         .rot = _rotExit,
         .icon = _iconExit,
         .opacityIcon = _opacityIconExit,
+        .scaleIcon = _scaleIconExit,
     };
 
     _pathPointOSC = [[KKPointOSC alloc] initWithAPIManager:apiManager];
@@ -470,15 +492,33 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
     pt->opacityIcon.iconName =
         @"circle.lefthalf.filled.righthalf.striped.horizontal.inverse";
 
+  double scale = 1.0;
+  [paramGetAPI getFloatValue:&scale fromParameter:pt->scaleParam atTime:time];
+  if (scale > 1.0)
+    pt->scaleIcon.iconName = @"squareshape.dotted.squareshape";
+  else if (scale == 1.0)
+    pt->scaleIcon.iconName = @"squareshape.fill";
+  else if (scale <= 0.0)
+    pt->scaleIcon.iconName = @"squareshape";
+  else
+    pt->scaleIcon.iconName = @"squareshape.squareshape.dotted";
+
   float gap = 6.0f;
-  float totalWidth = pt->icon.size.width + gap + pt->opacityIcon.size.width;
+  float totalWidth = pt->icon.size.width + gap + pt->opacityIcon.size.width +
+                     gap + pt->scaleIcon.size.width;
   float iconY = pos.y + arcOuter + 4.0f + pt->icon.size.height / 2.0f;
-  CGPoint previewPos = CGPointMake(
-      pos.x - totalWidth / 2.0f + pt->icon.size.width / 2.0f, iconY);
-  CGPoint opacityPos = CGPointMake(
-      pos.x + totalWidth / 2.0f - pt->opacityIcon.size.width / 2.0f, iconY);
+  float iconX = pos.x - totalWidth / 2.0f;
+  CGPoint previewPos = CGPointMake(iconX + pt->icon.size.width / 2.0f, iconY);
+  CGPoint opacityPos = CGPointMake(iconX + pt->icon.size.width + gap +
+                                       pt->opacityIcon.size.width / 2.0f,
+                                   iconY);
+  CGPoint scalePos = CGPointMake(iconX + pt->icon.size.width + gap +
+                                     pt->opacityIcon.size.width + gap +
+                                     pt->scaleIcon.size.width / 2.0f,
+                                 iconY);
   [pt->icon drawAtCanvasPosition:previewPos destinationImage:dest];
   [pt->opacityIcon drawAtCanvasPosition:opacityPos destinationImage:dest];
+  [pt->scaleIcon drawAtCanvasPosition:scalePos destinationImage:dest];
 
   pt->arc.fillAlpha = (opacity < 1.0) ? 0.25f : 1.0f;
 }
@@ -1130,15 +1170,22 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
 
   CGPoint pos = [self positionForParam:pt->pointParam atTime:time];
 
-  // Icon buttons below the arc (preview + opacity, centered as group)
+  // Icon buttons below the arc (preview + opacity + scale, centered as group)
   float arcOuter = pt->arc.oscRadius + pt->arc.outlineWidth;
   float gap = 6.0f;
-  float totalWidth = pt->icon.size.width + gap + pt->opacityIcon.size.width;
+  float totalWidth = pt->icon.size.width + gap + pt->opacityIcon.size.width +
+                     gap + pt->scaleIcon.size.width;
   float iconY = pos.y + arcOuter + 4.0f + pt->icon.size.height / 2.0f;
-  CGPoint previewCenter = CGPointMake(
-      pos.x - totalWidth / 2.0f + pt->icon.size.width / 2.0f, iconY);
-  CGPoint opacityCenter = CGPointMake(
-      pos.x + totalWidth / 2.0f - pt->opacityIcon.size.width / 2.0f, iconY);
+  float iconX = pos.x - totalWidth / 2.0f;
+  CGPoint previewCenter =
+      CGPointMake(iconX + pt->icon.size.width / 2.0f, iconY);
+  CGPoint opacityCenter = CGPointMake(iconX + pt->icon.size.width + gap +
+                                          pt->opacityIcon.size.width / 2.0f,
+                                      iconY);
+  CGPoint scaleCenter = CGPointMake(iconX + pt->icon.size.width + gap +
+                                        pt->opacityIcon.size.width + gap +
+                                        pt->scaleIcon.size.width / 2.0f,
+                                    iconY);
   if ([pt->icon hitTestAtMousePositionX:positionX
                               positionY:positionY
                                  center:previewCenter]) {
@@ -1149,6 +1196,12 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
                                      positionY:positionY
                                         center:opacityCenter]) {
     *activePart = pt->opacityIconPart;
+    return;
+  }
+  if ([pt->scaleIcon hitTestAtMousePositionX:positionX
+                                   positionY:positionY
+                                      center:scaleCenter]) {
+    *activePart = pt->scaleIconPart;
     return;
   }
 
@@ -1315,6 +1368,20 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
                         atTime:time];
     [paramSetAPI setFloatValue:(opacity >= 1.0) ? 0.0 : 1.0
                    toParameter:pt->opacityParam
+                        atTime:time];
+    *forceUpdate = YES;
+    return YES;
+  }
+
+  if (activePart == pt->scaleIconPart) {
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> paramSetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    double scale = 1.0;
+    [paramGetAPI getFloatValue:&scale fromParameter:pt->scaleParam atTime:time];
+    [paramSetAPI setFloatValue:(scale >= 1.0) ? 0.0 : 1.0
+                   toParameter:pt->scaleParam
                         atTime:time];
     *forceUpdate = YES;
     return YES;
