@@ -12,29 +12,18 @@
 #import <KeyframelessKit/KKRenderPrimitives.h>
 
 static NSColor *pointFillColor(void) {
-  return [NSColor colorWithRed:0xB3 / 255.0
-                         green:0xB3 / 255.0
-                          blue:0xB3 / 255.0
-                         alpha:0.65f];
-}
-static NSColor *pointFillHoverColor(void) {
-  return [NSColor colorWithRed:0xB3 / 255.0
-                         green:0xB3 / 255.0
-                          blue:0xB3 / 255.0
-                         alpha:0.8f];
-}
-static NSColor *pointFillActiveColor(void) {
-  return [NSColor colorWithRed:0xB3 / 255.0
-                         green:0xB3 / 255.0
-                          blue:0xB3 / 255.0
-                         alpha:0.95f];
+  return [NSColor colorWithRed:0xFF / 255.0
+                         green:0xFF / 255.0
+                          blue:0xFF / 255.0
+                         alpha:1.0f];
 }
 static NSColor *pointStrokeColor(void) {
   return [NSColor colorWithRed:0x00 / 255.0
                          green:0x00 / 255.0
                           blue:0x00 / 255.0
-                         alpha:0.8f];
+                         alpha:0.75f];
 }
+
 static NSColor *donutFillColor(void) {
   return [NSColor colorWithRed:0x00 / 255.0
                          green:0x00 / 255.0
@@ -46,6 +35,30 @@ static NSColor *donutStrokeColor(void) {
                          green:0xFF / 255.0
                           blue:0xFF / 255.0
                          alpha:0.2f];
+}
+static NSColor *armFillColor(void) {
+  return [NSColor colorWithRed:0xFF / 255.0
+                         green:0xFF / 255.0
+                          blue:0xFF / 255.0
+                         alpha:1.0f];
+}
+static NSColor *armStrokeColor(void) {
+  return [NSColor colorWithRed:0x00 / 255.0
+                         green:0x00 / 255.0
+                          blue:0x00 / 255.0
+                         alpha:1.0f];
+}
+static NSColor *markerFillColor(void) {
+  return [NSColor colorWithRed:0x00 / 255.0
+                         green:0x00 / 255.0
+                          blue:0x00 / 255.0
+                         alpha:0.4f];
+}
+static NSColor *markerStrokeColor(void) {
+  return [NSColor colorWithRed:0x00 / 255.0
+                         green:0x00 / 255.0
+                          blue:0x00 / 255.0
+                         alpha:0.55f];
 }
 
 @implementation KKRotationOSC {
@@ -121,10 +134,10 @@ static NSColor *donutStrokeColor(void) {
       .lineHalfWidth = (_lineWidth / 2.0f) / outerRadiusPixels,
       .outlineWidth = _outlineWidth / outerRadiusPixels,
       .angle = _angle,
-      .fillColor = isActive    ? [pointFillActiveColor() simdFloat4]
-                   : isHovered ? [pointFillHoverColor() simdFloat4]
-                               : [pointFillColor() simdFloat4],
+      .fillColor = [pointFillColor() simdFloat4],
       .strokeColor = [pointStrokeColor() simdFloat4],
+      .armFillColor = [armFillColor() simdFloat4],
+      .armStrokeColor = [armStrokeColor() simdFloat4],
       .donutRadius = showDonut ? donutR / outerRadiusPixels : 0.0f,
       .donutFillHalfWidth = donutFillHW / outerRadiusPixels,
       .donutOutlineWidth = donutOW / outerRadiusPixels,
@@ -133,8 +146,8 @@ static NSColor *donutStrokeColor(void) {
       .markerAngle = _initialAngle,
       .markerRadius = isActive ? 4.0f / outerRadiusPixels : 0.0f,
       .markerOutlineWidth = KKBorderWidthXS / outerRadiusPixels,
-      .markerFillColor = [pointFillColor() simdFloat4],
-      .markerStrokeColor = [pointStrokeColor() simdFloat4],
+      .markerFillColor = [markerFillColor() simdFloat4],
+      .markerStrokeColor = [markerStrokeColor() simdFloat4],
   };
 
   [self drawQuadForDestinationImage:destinationImage

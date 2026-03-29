@@ -110,6 +110,8 @@ fragment float4 KKRotationOSCFragment(KKRasterizerData in [[stage_in]],
     float angle = params->angle;
     float4 fillColor = float4(params->fillColor);
     float4 strokeColor = float4(params->strokeColor);
+    float4 armFillColor = float4(params->armFillColor);
+    float4 armStrokeColor = float4(params->armStrokeColor);
 
     float2 pos = in.textureCoordinate;
 
@@ -177,7 +179,7 @@ fragment float4 KKRotationOSCFragment(KKRasterizerData in [[stage_in]],
     float4 color = float4(0.0);
 
     if (lineAlpha > 0.001) {
-        color = kkOSCColor(fillColor, strokeColor, lineOutlineFactor, lineAlpha);
+        color = kkOSCColor(armFillColor, armStrokeColor, lineOutlineFactor, lineAlpha);
     }
 
     if (circleAlpha > 0.001) {
