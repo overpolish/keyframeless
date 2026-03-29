@@ -12,7 +12,8 @@ typedef struct {
     float rotation;
     float rotationX;
     float rotationY;
-    float scale;
+    float scaleX;
+    float scaleY;
     float opacity;
 } MagicMoveParams;
 

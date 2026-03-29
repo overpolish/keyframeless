@@ -20,7 +20,8 @@ typedef struct KKArcOSCParams {
 } KKArcOSCParams;
 
 typedef struct KKRingOSCParams {
-    float ringRadius;
+    float ringRadiusX;
+    float ringRadiusY;
     float fillHalfWidth;
     float outlineWidth;
     vector_float4 fillColor;

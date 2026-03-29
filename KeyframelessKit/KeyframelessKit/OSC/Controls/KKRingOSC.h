@@ -15,8 +15,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// testing or drawing.
 @property(nonatomic) CGPoint center;
 
-/// Radius from center to the middle of the ring stroke. Default 50.
+/// Horizontal radius from center to the middle of the ring stroke. Default 50.
 @property(nonatomic) float ringRadius;
+
+/// Vertical radius. When different from ringRadius the ring draws as an
+/// ellipse. Default 50.
+@property(nonatomic) float ringRadiusY;
 
 /// Width of the fill stroke. Default 2.
 @property(nonatomic) float fillWidth;
