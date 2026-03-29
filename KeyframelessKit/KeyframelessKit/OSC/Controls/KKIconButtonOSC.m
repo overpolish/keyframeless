@@ -4,7 +4,6 @@
  */
 
 #import "KKIconButtonOSC.h"
-#import "../../Style/NSColor+KKColors.h"
 #import "../Base/KKOSCShaderTypes.h"
 #include <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
@@ -17,6 +16,19 @@ static const CGFloat kScale = 2.0;
 static const CGFloat kSymbolSize = 19.0;
 static const CGFloat kHitRadius = 16.0;
 static const CGFloat kCanvasSize = 32.0;
+
+static NSColor *iconButtonFillColor(void) {
+  return [NSColor colorWithRed:0xC1 / 255.0
+                         green:0xC1 / 255.0
+                          blue:0xC1 / 255.0
+                         alpha:1.0f];
+}
+static NSColor *iconButtonStrokeColor(void) {
+  return [NSColor colorWithRed:0x00 / 255.0
+                         green:0x00 / 255.0
+                          blue:0x00 / 255.0
+                         alpha:0.5f];
+}
 
 @implementation KKIconButtonOSC {
   id<PROAPIAccessing> __weak _apiManager;
@@ -51,9 +63,9 @@ static const CGFloat kCanvasSize = 32.0;
       configurationWithPointSize:kSymbolSize
                           weight:NSFontWeightMedium];
   NSImageSymbolConfiguration *strokeCfg = [NSImageSymbolConfiguration
-      configurationWithPaletteColors:@[ [NSColor iconButtonStroke] ]];
+      configurationWithPaletteColors:@[ iconButtonStrokeColor() ]];
   NSImageSymbolConfiguration *fillCfg = [NSImageSymbolConfiguration
-      configurationWithPaletteColors:@[ [NSColor iconButtonFill] ]];
+      configurationWithPaletteColors:@[ iconButtonFillColor() ]];
   NSImage *strokeSymbol =
       [symbol imageWithSymbolConfiguration:
                   [sizeConfig configurationByApplyingConfiguration:strokeCfg]];

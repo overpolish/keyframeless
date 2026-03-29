@@ -43,6 +43,43 @@ static NSCursor *resizeCursorForAngle(double radians) {
   }
 }
 
+static NSColor *ringIdleFillColor(void) {
+  return [NSColor colorWithRed:0xCE / 255.0
+                         green:0xCB / 255.0
+                          blue:0xCE / 255.0
+                         alpha:0xB1 / 255.0];
+}
+static NSColor *ringIdleStrokeColor(void) {
+  return [NSColor colorWithRed:0x1B / 255.0
+                         green:0x18 / 255.0
+                          blue:0x1D / 255.0
+                         alpha:0x9F / 255.0];
+}
+static NSColor *ringHoverFillColor(void) {
+  return [NSColor colorWithRed:0xD0 / 255.0
+                         green:0xCA / 255.0
+                          blue:0xCD / 255.0
+                         alpha:0xB2 / 255.0];
+}
+static NSColor *ringHoverStrokeColor(void) {
+  return [NSColor colorWithRed:0x09 / 255.0
+                         green:0x07 / 255.0
+                          blue:0x0A / 255.0
+                         alpha:0xAD / 255.0];
+}
+static NSColor *ringActiveFillColor(void) {
+  return [NSColor colorWithRed:0xFF / 255.0
+                         green:0xFF / 255.0
+                          blue:0xFF / 255.0
+                         alpha:1.0f];
+}
+static NSColor *ringActiveStrokeColor(void) {
+  return [NSColor colorWithRed:0x00 / 255.0
+                         green:0x00 / 255.0
+                          blue:0x00 / 255.0
+                         alpha:1.0f];
+}
+
 @implementation KKRingOSC {
   BOOL _cursorSet;
 }
@@ -126,14 +163,14 @@ static NSCursor *resizeCursorForAngle(double radians) {
   simd_float4 fillColor;
   simd_float4 strokeColor;
   if (isActive) {
-    fillColor = [[NSColor ringActiveFill] simdFloat4];
-    strokeColor = [[NSColor ringActiveStroke] simdFloat4];
+    fillColor = [ringActiveFillColor() simdFloat4];
+    strokeColor = [ringActiveStrokeColor() simdFloat4];
   } else if (isHovered) {
-    fillColor = [[NSColor ringHoverFill] simdFloat4];
-    strokeColor = [[NSColor ringHoverStroke] simdFloat4];
+    fillColor = [ringHoverFillColor() simdFloat4];
+    strokeColor = [ringHoverStrokeColor() simdFloat4];
   } else {
-    fillColor = [[NSColor ringIdleFill] simdFloat4];
-    strokeColor = [[NSColor ringIdleStroke] simdFloat4];
+    fillColor = [ringIdleFillColor() simdFloat4];
+    strokeColor = [ringIdleStrokeColor() simdFloat4];
   }
 
   KKRingOSCParams params = {.ringRadius = _ringRadius / outerRadiusPixels,

@@ -11,6 +11,43 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 
+static NSColor *pointFillColor(void) {
+  return [NSColor colorWithRed:0xB3 / 255.0
+                         green:0xB3 / 255.0
+                          blue:0xB3 / 255.0
+                         alpha:0.65f];
+}
+static NSColor *pointFillHoverColor(void) {
+  return [NSColor colorWithRed:0xB3 / 255.0
+                         green:0xB3 / 255.0
+                          blue:0xB3 / 255.0
+                         alpha:0.8f];
+}
+static NSColor *pointFillActiveColor(void) {
+  return [NSColor colorWithRed:0xB3 / 255.0
+                         green:0xB3 / 255.0
+                          blue:0xB3 / 255.0
+                         alpha:0.95f];
+}
+static NSColor *pointStrokeColor(void) {
+  return [NSColor colorWithRed:0x00 / 255.0
+                         green:0x00 / 255.0
+                          blue:0x00 / 255.0
+                         alpha:0.8f];
+}
+static NSColor *donutFillColor(void) {
+  return [NSColor colorWithRed:0x00 / 255.0
+                         green:0x00 / 255.0
+                          blue:0x00 / 255.0
+                         alpha:0.13f];
+}
+static NSColor *donutStrokeColor(void) {
+  return [NSColor colorWithRed:0xFF / 255.0
+                         green:0xFF / 255.0
+                          blue:0xFF / 255.0
+                         alpha:0.2f];
+}
+
 @implementation KKRotationOSC {
   float _initialAngle;
   BOOL _wasActive;
@@ -84,20 +121,20 @@
       .lineHalfWidth = (_lineWidth / 2.0f) / outerRadiusPixels,
       .outlineWidth = _outlineWidth / outerRadiusPixels,
       .angle = _angle,
-      .fillColor = isActive    ? [[NSColor pointFillActive] simdFloat4]
-                   : isHovered ? [[NSColor pointFillHover] simdFloat4]
-                               : [[NSColor pointFill] simdFloat4],
-      .strokeColor = [[NSColor pointStroke] simdFloat4],
+      .fillColor = isActive    ? [pointFillActiveColor() simdFloat4]
+                   : isHovered ? [pointFillHoverColor() simdFloat4]
+                               : [pointFillColor() simdFloat4],
+      .strokeColor = [pointStrokeColor() simdFloat4],
       .donutRadius = showDonut ? donutR / outerRadiusPixels : 0.0f,
       .donutFillHalfWidth = donutFillHW / outerRadiusPixels,
       .donutOutlineWidth = donutOW / outerRadiusPixels,
-      .donutFillColor = [[NSColor donutFill] simdFloat4],
-      .donutStrokeColor = [[NSColor donutStroke] simdFloat4],
+      .donutFillColor = [donutFillColor() simdFloat4],
+      .donutStrokeColor = [donutStrokeColor() simdFloat4],
       .markerAngle = _initialAngle,
       .markerRadius = isActive ? 4.0f / outerRadiusPixels : 0.0f,
       .markerOutlineWidth = KKBorderWidthXS / outerRadiusPixels,
-      .markerFillColor = [[NSColor pointFill] simdFloat4],
-      .markerStrokeColor = [[NSColor pointStroke] simdFloat4],
+      .markerFillColor = [pointFillColor() simdFloat4],
+      .markerStrokeColor = [pointStrokeColor() simdFloat4],
   };
 
   [self drawQuadForDestinationImage:destinationImage
