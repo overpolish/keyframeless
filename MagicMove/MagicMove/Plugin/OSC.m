@@ -14,13 +14,14 @@
 #define kPointCount 4
 
 typedef struct {
-  UInt32 pointParam, rotParam, scaleParam, previewParam;
-  NSInteger arcPart, ringPart, rotPart, iconPart;
+  UInt32 pointParam, rotParam, scaleParam, previewParam, opacityParam;
+  NSInteger arcPart, ringPart, rotPart, iconPart, opacityIconPart;
   __unsafe_unretained KKArcOSC *arc;
   __unsafe_unretained KKOSCLabel *label;
   __unsafe_unretained KKRingOSC *ring;
   __unsafe_unretained KKRotationOSC *rot;
   __unsafe_unretained KKIconButtonOSC *icon;
+  __unsafe_unretained KKIconButtonOSC *opacityIcon;
   BOOL arcHovered, arcDragging;
   BOOL ringHovered, ringDragging;
   BOOL rotHovered, rotDragging;
@@ -36,21 +37,25 @@ static const float kSnapThreshold = 8.0f;
   KKRingOSC *_ringA;
   KKRotationOSC *_rotA;
   KKIconButtonOSC *_iconA;
+  KKIconButtonOSC *_opacityIconA;
   KKArcOSC *_arcB;
   KKOSCLabel *_labelB;
   KKRingOSC *_ringB;
   KKRotationOSC *_rotB;
   KKIconButtonOSC *_iconB;
+  KKIconButtonOSC *_opacityIconB;
   KKArcOSC *_arcDrift;
   KKOSCLabel *_labelDrift;
   KKRingOSC *_ringDrift;
   KKRotationOSC *_rotDrift;
   KKIconButtonOSC *_iconDrift;
+  KKIconButtonOSC *_opacityIconDrift;
   KKArcOSC *_arcExit;
   KKOSCLabel *_labelExit;
   KKRingOSC *_ringExit;
   KKRotationOSC *_rotExit;
   KKIconButtonOSC *_iconExit;
+  KKIconButtonOSC *_opacityIconExit;
   BOOL _snapX;
   BOOL _snapY;
   float _snapXVal;
@@ -68,6 +73,8 @@ static const float kSnapThreshold = 8.0f;
     _rotA = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
     _iconA = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
     _iconA.iconName = @"eye";
+    _opacityIconA = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
+    _opacityIconA.iconName = @"circle.fill";
 
     _arcB = [[KKArcOSC alloc] initWithAPIManager:apiManager];
     _arcB.clearsOnDraw = NO;
@@ -77,36 +84,44 @@ static const float kSnapThreshold = 8.0f;
     _rotB = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
     _iconB = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
     _iconB.iconName = @"eye";
+    _opacityIconB = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
+    _opacityIconB.iconName = @"circle.fill";
 
     _points[0] = (PointOSCState){
         .pointParam = kParamPointA,
         .rotParam = kParamRotationA,
         .scaleParam = kParamScaleA,
         .previewParam = kParamPreviewA,
+        .opacityParam = kParamOpacityA,
         .arcPart = 1,
         .ringPart = 2,
         .rotPart = 3,
         .iconPart = 13,
+        .opacityIconPart = 17,
         .arc = self,
         .label = _labelA,
         .ring = _ringA,
         .rot = _rotA,
         .icon = _iconA,
+        .opacityIcon = _opacityIconA,
     };
     _points[1] = (PointOSCState){
         .pointParam = kParamPointB,
         .rotParam = kParamRotationB,
         .scaleParam = kParamScaleB,
         .previewParam = kParamPreviewB,
+        .opacityParam = kParamOpacityB,
         .arcPart = 4,
         .ringPart = 5,
         .rotPart = 6,
         .iconPart = 14,
+        .opacityIconPart = 18,
         .arc = _arcB,
         .label = _labelB,
         .ring = _ringB,
         .rot = _rotB,
         .icon = _iconB,
+        .opacityIcon = _opacityIconB,
     };
 
     _arcDrift = [[KKArcOSC alloc] initWithAPIManager:apiManager];
@@ -117,21 +132,26 @@ static const float kSnapThreshold = 8.0f;
     _rotDrift = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
     _iconDrift = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
     _iconDrift.iconName = @"eye";
+    _opacityIconDrift = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
+    _opacityIconDrift.iconName = @"circle.fill";
 
     _points[2] = (PointOSCState){
         .pointParam = kParamDriftPoint,
         .rotParam = kParamDriftRotation,
         .scaleParam = kParamDriftScale,
         .previewParam = kParamPreviewDrift,
+        .opacityParam = kParamDriftOpacity,
         .arcPart = 7,
         .ringPart = 8,
         .rotPart = 9,
         .iconPart = 15,
+        .opacityIconPart = 19,
         .arc = _arcDrift,
         .label = _labelDrift,
         .ring = _ringDrift,
         .rot = _rotDrift,
         .icon = _iconDrift,
+        .opacityIcon = _opacityIconDrift,
     };
 
     _arcExit = [[KKArcOSC alloc] initWithAPIManager:apiManager];
@@ -142,21 +162,26 @@ static const float kSnapThreshold = 8.0f;
     _rotExit = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
     _iconExit = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
     _iconExit.iconName = @"eye";
+    _opacityIconExit = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
+    _opacityIconExit.iconName = @"circle.fill";
 
     _points[3] = (PointOSCState){
         .pointParam = kParamExitPoint,
         .rotParam = kParamExitRotation,
         .scaleParam = kParamExitScale,
         .previewParam = kParamPreviewExit,
+        .opacityParam = kParamExitOpacity,
         .arcPart = 10,
         .ringPart = 11,
         .rotPart = 12,
         .iconPart = 16,
+        .opacityIconPart = 20,
         .arc = _arcExit,
         .label = _labelExit,
         .ring = _ringExit,
         .rot = _rotExit,
         .icon = _iconExit,
+        .opacityIcon = _opacityIconExit,
     };
   }
   return self;
@@ -302,9 +327,30 @@ static const float kSnapThreshold = 8.0f;
               fromParameter:pt->previewParam
                      atTime:time];
   pt->icon.iconName = previewOn ? @"eye.fill" : @"eye";
-  CGPoint iconPos =
-      CGPointMake(pos.x, pos.y + arcOuter + 4.0f + pt->icon.size.height / 2.0f);
-  [pt->icon drawAtCanvasPosition:iconPos destinationImage:dest];
+
+  double opacity = 1.0;
+  [paramGetAPI getFloatValue:&opacity
+               fromParameter:pt->opacityParam
+                      atTime:time];
+  if (opacity >= 1.0)
+    pt->opacityIcon.iconName = @"circle.fill";
+  else if (opacity <= 0.0)
+    pt->opacityIcon.iconName = @"circle";
+  else
+    pt->opacityIcon.iconName =
+        @"circle.lefthalf.filled.righthalf.striped.horizontal.inverse";
+
+  float gap = 6.0f;
+  float totalWidth = pt->icon.size.width + gap + pt->opacityIcon.size.width;
+  float iconY = pos.y + arcOuter + 4.0f + pt->icon.size.height / 2.0f;
+  CGPoint previewPos = CGPointMake(
+      pos.x - totalWidth / 2.0f + pt->icon.size.width / 2.0f, iconY);
+  CGPoint opacityPos = CGPointMake(
+      pos.x + totalWidth / 2.0f - pt->opacityIcon.size.width / 2.0f, iconY);
+  [pt->icon drawAtCanvasPosition:previewPos destinationImage:dest];
+  [pt->opacityIcon drawAtCanvasPosition:opacityPos destinationImage:dest];
+
+  pt->arc.fillAlpha = (opacity < 1.0) ? 0.25f : 1.0f;
 }
 
 - (void)drawOSCWithWidth:(NSInteger)width
@@ -444,14 +490,25 @@ static const float kSnapThreshold = 8.0f;
 
   CGPoint pos = [self positionForParam:pt->pointParam atTime:time];
 
-  // Icon button above the arc
+  // Icon buttons below the arc (preview + opacity, centered as group)
   float arcOuter = pt->arc.oscRadius + pt->arc.outlineWidth;
-  CGPoint iconCenter =
-      CGPointMake(pos.x, pos.y + arcOuter + 4.0f + pt->icon.size.height / 2.0f);
+  float gap = 6.0f;
+  float totalWidth = pt->icon.size.width + gap + pt->opacityIcon.size.width;
+  float iconY = pos.y + arcOuter + 4.0f + pt->icon.size.height / 2.0f;
+  CGPoint previewCenter = CGPointMake(
+      pos.x - totalWidth / 2.0f + pt->icon.size.width / 2.0f, iconY);
+  CGPoint opacityCenter = CGPointMake(
+      pos.x + totalWidth / 2.0f - pt->opacityIcon.size.width / 2.0f, iconY);
   if ([pt->icon hitTestAtMousePositionX:positionX
                               positionY:positionY
-                                 center:iconCenter]) {
+                                 center:previewCenter]) {
     *activePart = pt->iconPart;
+    return;
+  }
+  if ([pt->opacityIcon hitTestAtMousePositionX:positionX
+                                     positionY:positionY
+                                        center:opacityCenter]) {
+    *activePart = pt->opacityIconPart;
     return;
   }
 
@@ -546,6 +603,22 @@ static const float kSnapThreshold = 8.0f;
     [paramSetAPI setBoolValue:!previewOn
                   toParameter:pt->previewParam
                        atTime:time];
+    *forceUpdate = YES;
+    return YES;
+  }
+
+  if (activePart == pt->opacityIconPart) {
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> paramSetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    double opacity = 1.0;
+    [paramGetAPI getFloatValue:&opacity
+                 fromParameter:pt->opacityParam
+                        atTime:time];
+    [paramSetAPI setFloatValue:(opacity >= 1.0) ? 0.0 : 1.0
+                   toParameter:pt->opacityParam
+                        atTime:time];
     *forceUpdate = YES;
     return YES;
   }

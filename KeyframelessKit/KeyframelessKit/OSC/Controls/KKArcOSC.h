@@ -20,6 +20,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Width of the outline around the ring. Default 1.75.
 @property(nonatomic) float outlineWidth;
 
+/// Multiplier for the fill color alpha. Default 1.0.
+@property(nonatomic) float fillAlpha;
+
 @end
 
 NS_ASSUME_NONNULL_END
