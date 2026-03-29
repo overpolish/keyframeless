@@ -29,6 +29,7 @@ typedef struct {
   BOOL rotHovered, rotDragging;
   double rotDragPrevAngle, rotDragAccum;
   double ringDragStartDist, ringDragStartVal;
+  double arcDragStartX, arcDragStartY;
 } PointOSCState;
 
 static const float kSnapThreshold = 8.0f;
@@ -1349,6 +1350,8 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
 
   if (activePart == pt->arcPart) {
     pt->arcDragging = YES;
+    pt->arcDragStartX = positionX;
+    pt->arcDragStartY = positionY;
     if (pt->arc == self) {
       [super mouseDownAtPositionX:positionX
                         positionY:positionY
@@ -1514,6 +1517,16 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
   }
 
   if (activePart == pt->arcPart) {
+    CGEventFlags flags =
+        CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+    if (flags & kCGEventFlagMaskShift) {
+      double dx = fabs(positionX - pt->arcDragStartX);
+      double dy = fabs(positionY - pt->arcDragStartY);
+      if (dx > dy)
+        positionY = pt->arcDragStartY;
+      else
+        positionX = pt->arcDragStartX;
+    }
     [self setPositionParam:pt->pointParam
                      fromX:positionX
                          Y:positionY
