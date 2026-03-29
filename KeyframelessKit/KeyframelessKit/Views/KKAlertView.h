@@ -30,6 +30,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, strong) NSColor *color;
 @property(nonatomic, strong, nullable) NSImage *icon;
 
+/// Optional view pinned to the trailing edge of the alert (e.g. a button).
+@property(nonatomic, strong, nullable) NSView *accessoryView;
+
 @end
 
 NS_ASSUME_NONNULL_END

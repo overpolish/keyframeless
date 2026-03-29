@@ -20,6 +20,8 @@ static const CGFloat KKAlertViewHeight = KKInspectorRowHeight * 2;
 @implementation KKAlertView {
   NSTextField *_label;
   NSImageView *_iconView;
+  NSView *_contentView;
+  NSLayoutConstraint *_labelTrailing;
   KKLog *_log;
 }
 
@@ -53,21 +55,21 @@ static const CGFloat KKAlertViewHeight = KKInspectorRowHeight * 2;
     self.autoresizingMask =
         NSViewWidthSizable | NSViewHeightSizable | NSViewMinYMargin;
 
-    NSView *contentView = [[NSView alloc] init];
-    contentView.translatesAutoresizingMaskIntoConstraints = NO;
-    contentView.wantsLayer = YES;
-    contentView.layer.backgroundColor =
+    _contentView = [[NSView alloc] init];
+    _contentView.translatesAutoresizingMaskIntoConstraints = NO;
+    _contentView.wantsLayer = YES;
+    _contentView.layer.backgroundColor =
         [[_color colorWithAlphaComponent:0.1] CGColor];
-    contentView.layer.cornerRadius = KKRadiusMD;
-    contentView.layer.masksToBounds = YES;
-    [self addSubview:contentView];
+    _contentView.layer.cornerRadius = KKRadiusMD;
+    _contentView.layer.masksToBounds = YES;
+    [self addSubview:_contentView];
 
     _iconView = [[NSImageView alloc] init];
     _iconView.hidden = YES;
     _iconView.translatesAutoresizingMaskIntoConstraints = NO;
     _iconView.imageScaling = NSImageScaleProportionallyUpOrDown;
     _iconView.contentTintColor = _color;
-    [contentView addSubview:_iconView];
+    [_contentView addSubview:_iconView];
 
     _label = [NSTextField wrappingLabelWithString:_text];
     _label.translatesAutoresizingMaskIntoConstraints = NO;
@@ -77,14 +79,18 @@ static const CGFloat KKAlertViewHeight = KKInspectorRowHeight * 2;
     _label.font = [KKFonts inspectorLabelFont];
     _label.lineBreakMode = NSLineBreakByWordWrapping;
     _label.maximumNumberOfLines = 2;
-    [contentView addSubview:_label];
+    [_contentView addSubview:_label];
+
+    _labelTrailing = [_label.trailingAnchor
+        constraintEqualToAnchor:_contentView.trailingAnchor
+                       constant:-KKSpacingMD];
 
     [NSLayoutConstraint activateConstraints:@[
-      [contentView.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-      [contentView.leadingAnchor
+      [_contentView.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [_contentView.leadingAnchor
           constraintEqualToAnchor:self.leadingAnchor
                          constant:KKInspectorHorizontalInset],
-      [contentView.trailingAnchor
+      [_contentView.trailingAnchor
           constraintEqualToAnchor:self.trailingAnchor
                          constant:-KKInspectorHorizontalInset],
 
@@ -92,19 +98,19 @@ static const CGFloat KKAlertViewHeight = KKInspectorRowHeight * 2;
           constraintEqualToConstant:[KKFonts inspectorIconSize]],
       [_iconView.heightAnchor
           constraintEqualToConstant:[KKFonts inspectorIconSize]],
-      [_iconView.leadingAnchor constraintEqualToAnchor:contentView.leadingAnchor
-                                              constant:KKSpacingMD * 1.5],
-      [_iconView.topAnchor constraintEqualToAnchor:contentView.topAnchor
+      [_iconView.leadingAnchor
+          constraintEqualToAnchor:_contentView.leadingAnchor
+                         constant:KKSpacingMD * 1.5],
+      [_iconView.topAnchor constraintEqualToAnchor:_contentView.topAnchor
                                           constant:KKSpacingMD + 1.0],
 
-      [_label.topAnchor constraintEqualToAnchor:contentView.topAnchor
+      [_label.topAnchor constraintEqualToAnchor:_contentView.topAnchor
                                        constant:KKSpacingMD],
       [_label.leadingAnchor constraintEqualToAnchor:_iconView.trailingAnchor
                                            constant:KKSpacingMD],
-      [_label.bottomAnchor constraintEqualToAnchor:contentView.bottomAnchor
+      [_label.bottomAnchor constraintEqualToAnchor:_contentView.bottomAnchor
                                           constant:-KKSpacingMD],
-      [_label.trailingAnchor constraintEqualToAnchor:contentView.trailingAnchor
-                                            constant:-KKSpacingMD],
+      _labelTrailing,
     ]];
   }
 
@@ -121,6 +127,33 @@ static const CGFloat KKAlertViewHeight = KKInspectorRowHeight * 2;
   _icon = icon;
   _iconView.image = icon;
   _iconView.hidden = (icon == nil);
+}
+
+- (void)setAccessoryView:(NSView *)accessoryView {
+  [_accessoryView removeFromSuperview];
+  _accessoryView = accessoryView;
+  if (!accessoryView) {
+    _labelTrailing.active = NO;
+    _labelTrailing = [_label.trailingAnchor
+        constraintEqualToAnchor:_contentView.trailingAnchor
+                       constant:-KKSpacingMD];
+    _labelTrailing.active = YES;
+    return;
+  }
+  accessoryView.translatesAutoresizingMaskIntoConstraints = NO;
+  [_contentView addSubview:accessoryView];
+  _labelTrailing.active = NO;
+  _labelTrailing = [_label.trailingAnchor
+      constraintLessThanOrEqualToAnchor:accessoryView.leadingAnchor
+                               constant:-KKSpacingMD];
+  _labelTrailing.active = YES;
+  [NSLayoutConstraint activateConstraints:@[
+    [accessoryView.trailingAnchor
+        constraintEqualToAnchor:_contentView.trailingAnchor
+                       constant:-KKSpacingSM],
+    [accessoryView.centerYAnchor
+        constraintEqualToAnchor:_contentView.centerYAnchor],
+  ]];
 }
 
 - (void)setColor:(NSColor *)color {
