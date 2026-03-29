@@ -36,6 +36,27 @@ static const float kPathHitThreshold = 10.0f;
 static const float kPathPointHitRadius = 8.0f;
 static const NSUInteger kPathDrawResolution = 20;
 
+// Returns the parametric t of the intersection between line (from→to) and a
+// circle (center, radius).  fromInside == YES means `from` is inside the circle
+// (we want the exit t), otherwise `from` is outside (we want the entry t).
+static double circleClipT(CGPoint from, CGPoint to, CGPoint center,
+                          double radius, BOOL fromInside) {
+  double dx = to.x - from.x, dy = to.y - from.y;
+  double wx = from.x - center.x, wy = from.y - center.y;
+  double a = dx * dx + dy * dy;
+  if (a < 1e-12)
+    return fromInside ? 1.0 : 0.0;
+  double b = 2.0 * (wx * dx + wy * dy);
+  double c = wx * wx + wy * wy - radius * radius;
+  double disc = b * b - 4.0 * a * c;
+  if (disc < 0.0)
+    return fromInside ? 1.0 : 0.0;
+  double sqrtDisc = sqrt(disc);
+  double t =
+      fromInside ? (-b + sqrtDisc) / (2.0 * a) : (-b - sqrtDisc) / (2.0 * a);
+  return fmax(0.0, fmin(1.0, t));
+}
+
 // Path segment config — each A→B, B→Drift, etc. is a segment
 typedef struct {
   UInt32 pathParam;
@@ -471,10 +492,13 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
                                                atTime:time];
   simd_float2 endObj = [self objectPositionForParam:cfg.endParam atTime:time];
   NSUInteger segCount = path.segmentCount;
+  CGPoint startCanvas = [self canvasPointFromObject:startObj];
+  CGPoint endCanvas = [self canvasPointFromObject:endObj];
 
-  // Draw curve segments
+  // Draw curve segments, clipping against endpoint inset circles
   for (NSUInteger seg = 0; seg < segCount; seg++) {
     CGPoint prev = CGPointZero;
+    double d1p = 0, d2p = 0;
     for (NSUInteger s = 0; s <= kPathDrawResolution; s++) {
       float localT = (float)s / (float)kPathDrawResolution;
       simd_float2 objPt = [path evaluateSegment:seg
@@ -482,26 +506,47 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
                                           start:startObj
                                             end:endObj];
       CGPoint cur = [self canvasPointFromObject:objPt];
+      double d1 = hypot(cur.x - startCanvas.x, cur.y - startCanvas.y);
+      double d2 = hypot(cur.x - endCanvas.x, cur.y - endCanvas.y);
       if (s > 0) {
-        // Skip segments too close to endpoints (inset)
-        BOOL tooCloseToStart = NO, tooCloseToEnd = NO;
-        CGPoint startCanvas = [self canvasPointFromObject:startObj];
-        CGPoint endCanvas = [self canvasPointFromObject:endObj];
-        double d1 = hypot(cur.x - startCanvas.x, cur.y - startCanvas.y);
-        double d2 = hypot(cur.x - endCanvas.x, cur.y - endCanvas.y);
-        double d1p = hypot(prev.x - startCanvas.x, prev.y - startCanvas.y);
-        double d2p = hypot(prev.x - endCanvas.x, prev.y - endCanvas.y);
-        tooCloseToStart = (d1 < inset && d1p < inset);
-        tooCloseToEnd = (d2 < inset && d2p < inset);
-        if (!tooCloseToStart && !tooCloseToEnd) {
-          [self drawLineFrom:prev
-                            to:cur
+        BOOL curInStart = d1 < inset, prevInStart = d1p < inset;
+        BOOL curInEnd = d2 < inset, prevInEnd = d2p < inset;
+        double tMin = 0.0, tMax = 1.0;
+        BOOL skip = NO;
+
+        if (curInStart && prevInStart) {
+          skip = YES;
+        } else if (prevInStart) {
+          tMin = fmax(tMin, circleClipT(prev, cur, startCanvas, inset, YES));
+        } else if (curInStart) {
+          tMax = fmin(tMax, circleClipT(prev, cur, startCanvas, inset, NO));
+        }
+
+        if (!skip) {
+          if (curInEnd && prevInEnd) {
+            skip = YES;
+          } else if (prevInEnd) {
+            tMin = fmax(tMin, circleClipT(prev, cur, endCanvas, inset, YES));
+          } else if (curInEnd) {
+            tMax = fmin(tMax, circleClipT(prev, cur, endCanvas, inset, NO));
+          }
+        }
+
+        if (!skip && tMin < tMax) {
+          CGPoint drawFrom = CGPointMake(prev.x + tMin * (cur.x - prev.x),
+                                         prev.y + tMin * (cur.y - prev.y));
+          CGPoint drawTo = CGPointMake(prev.x + tMax * (cur.x - prev.x),
+                                       prev.y + tMax * (cur.y - prev.y));
+          [self drawLineFrom:drawFrom
+                            to:drawTo
                          color:color
                      halfWidth:2.0f
               destinationImage:dest];
         }
       }
       prev = cur;
+      d1p = d1;
+      d2p = d2;
     }
   }
 
@@ -1350,7 +1395,8 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
 - (void)setPositionParam:(UInt32)paramID
                    fromX:(double)canvasX
                        Y:(double)canvasY
-              snapTarget:(CGPoint)snapTarget
+             snapTargets:(const CGPoint *)snapTargets
+                   count:(NSUInteger)snapCount
                   atTime:(CMTime)time {
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
@@ -1365,32 +1411,37 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
                             toX:&canvasCenter.x
                             toY:&canvasCenter.y];
 
-  double distPointX = fabs(canvasX - snapTarget.x);
-  double distCenterX = fabs(canvasX - canvasCenter.x);
-  double distPointY = fabs(canvasY - snapTarget.y);
-  double distCenterY = fabs(canvasY - canvasCenter.y);
+  double bestDistX = fabs(canvasX - canvasCenter.x);
+  double bestSnapX = canvasCenter.x;
+  double bestDistY = fabs(canvasY - canvasCenter.y);
+  double bestSnapY = canvasCenter.y;
+
+  for (NSUInteger i = 0; i < snapCount; i++) {
+    double dx = fabs(canvasX - snapTargets[i].x);
+    double dy = fabs(canvasY - snapTargets[i].y);
+    if (dx < bestDistX) {
+      bestDistX = dx;
+      bestSnapX = snapTargets[i].x;
+    }
+    if (dy < bestDistY) {
+      bestDistY = dy;
+      bestSnapY = snapTargets[i].y;
+    }
+  }
 
   _snapX = NO;
   _snapY = NO;
 
-  if (distPointX < kSnapThreshold && distPointX <= distCenterX) {
+  if (bestDistX < kSnapThreshold) {
     _snapX = YES;
-    canvasX = snapTarget.x;
-    _snapXVal = (float)snapTarget.x;
-  } else if (distCenterX < kSnapThreshold) {
-    _snapX = YES;
-    canvasX = canvasCenter.x;
-    _snapXVal = (float)canvasCenter.x;
+    canvasX = bestSnapX;
+    _snapXVal = (float)bestSnapX;
   }
 
-  if (distPointY < kSnapThreshold && distPointY <= distCenterY) {
+  if (bestDistY < kSnapThreshold) {
     _snapY = YES;
-    canvasY = snapTarget.y;
-    _snapYVal = (float)snapTarget.y;
-  } else if (distCenterY < kSnapThreshold) {
-    _snapY = YES;
-    canvasY = canvasCenter.y;
-    _snapYVal = (float)canvasCenter.y;
+    canvasY = bestSnapY;
+    _snapYVal = (float)bestSnapY;
   }
 
   double objX, objY;
@@ -1407,7 +1458,8 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
 }
 
 - (BOOL)mouseDraggedForPoint:(PointOSCState *)pt
-                  snapTarget:(CGPoint)snapTarget
+                 snapTargets:(const CGPoint *)snapTargets
+                   snapCount:(NSUInteger)snapCount
                    positionX:(double)positionX
                    positionY:(double)positionY
                   activePart:(NSInteger)activePart
@@ -1456,7 +1508,8 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
     [self setPositionParam:pt->pointParam
                      fromX:positionX
                          Y:positionY
-                snapTarget:snapTarget
+               snapTargets:snapTargets
+                     count:snapCount
                     atTime:time];
     return YES;
   }
@@ -1478,11 +1531,16 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
     return;
   }
   for (int i = 0; i < kPointCount; i++) {
-    CGPoint snapTarget =
-        [self positionForParam:_points[(i + 1) % kPointCount].pointParam
-                        atTime:time];
+    CGPoint snapTargets[kPointCount - 1];
+    NSUInteger snapCount = 0;
+    for (int j = 0; j < kPointCount; j++) {
+      if (j != i)
+        snapTargets[snapCount++] = [self positionForParam:_points[j].pointParam
+                                                   atTime:time];
+    }
     if ([self mouseDraggedForPoint:&_points[i]
-                        snapTarget:snapTarget
+                       snapTargets:snapTargets
+                         snapCount:snapCount
                          positionX:positionX
                          positionY:positionY
                         activePart:activePart
