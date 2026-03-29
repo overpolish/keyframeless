@@ -64,5 +64,6 @@ static const UInt32 kParamPathBDrift = 41;
 static const UInt32 kParamPathDriftExit = 42;
 static const UInt32 kParamPathBExit = 43;
 
-static const UInt32 kParamInfoCompound = 9000;
-static const UInt32 kParamPreviewWarning = 9001;
+static const UInt32 kParamForceShowAlerts = 9000;
+static const UInt32 kParamInfoCompound = 9001;
+static const UInt32 kParamPreviewWarning = 9002;
