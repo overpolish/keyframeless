@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-#import "KKOSCLabel.h"
+#import "KKIconButtonOSC.h"
 #import "../../Style/NSColor+KKColors.h"
 #import "../Base/KKOSCShaderTypes.h"
 #include <AppKit/AppKit.h>
@@ -11,15 +11,16 @@
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 
-static NSString *const kLabelPipelineID =
-    @"co.overpolish.keyframelesskit.Label";
+static NSString *const kIconButtonPipelineID =
+    @"co.overpolish.keyframelesskit.IconButton";
 static const CGFloat kScale = 2.0;
-static const CGFloat kFontSize = 20.0;
-static const CGFloat kStrokePt = 3.0;
+static const CGFloat kSymbolSize = 19.0;
+static const CGFloat kHitRadius = 16.0;
+static const CGFloat kCanvasSize = 32.0;
 
-@implementation KKOSCLabel {
+@implementation KKIconButtonOSC {
   id<PROAPIAccessing> __weak _apiManager;
-  NSString *_cachedText;
+  NSString *_cachedIconName;
   id<MTLTexture> _texture;
   CGSize _size;
 }
@@ -28,7 +29,7 @@ static const CGFloat kStrokePt = 3.0;
   self = [super init];
   if (self) {
     _apiManager = apiManager;
-    _text = @"";
+    _iconName = @"";
   }
   return self;
 }
@@ -38,28 +39,31 @@ static const CGFloat kStrokePt = 3.0;
 }
 
 - (void)updateTextureForDevice:(id<MTLDevice>)device {
-  if (_texture && [_cachedText isEqualToString:_text])
+  if (_texture && [_cachedIconName isEqualToString:_iconName])
     return;
 
-  NSFont *font = [NSFont systemFontOfSize:kFontSize weight:NSFontWeightMedium];
-  NSDictionary *strokeAttrs = @{
-    NSFontAttributeName : font,
-    NSForegroundColorAttributeName : [NSColor labelStroke],
-    NSStrokeColorAttributeName : [NSColor labelStroke],
-    NSStrokeWidthAttributeName : @(kStrokePt / kFontSize * 100.0)
-  };
-  NSDictionary *fillAttrs = @{
-    NSFontAttributeName : font,
-    NSForegroundColorAttributeName : [NSColor labelFill],
-  };
-  NSSize textSize = [_text sizeWithAttributes:fillAttrs];
+  NSImage *symbol = [NSImage imageWithSystemSymbolName:_iconName
+                              accessibilityDescription:nil];
+  if (!symbol)
+    return;
 
-  NSInteger logicalW = (NSInteger)ceil(textSize.width) + 4;
-  NSInteger logicalH = (NSInteger)ceil(textSize.height) + 2;
-  if (logicalW < 1)
-    logicalW = 1;
-  if (logicalH < 1)
-    logicalH = 1;
+  NSImageSymbolConfiguration *sizeConfig = [NSImageSymbolConfiguration
+      configurationWithPointSize:kSymbolSize
+                          weight:NSFontWeightMedium];
+  NSImageSymbolConfiguration *strokeCfg = [NSImageSymbolConfiguration
+      configurationWithPaletteColors:@[ [NSColor iconButtonStroke] ]];
+  NSImageSymbolConfiguration *fillCfg = [NSImageSymbolConfiguration
+      configurationWithPaletteColors:@[ [NSColor iconButtonFill] ]];
+  NSImage *strokeSymbol =
+      [symbol imageWithSymbolConfiguration:
+                  [sizeConfig configurationByApplyingConfiguration:strokeCfg]];
+  NSImage *fillSymbol =
+      [symbol imageWithSymbolConfiguration:
+                  [sizeConfig configurationByApplyingConfiguration:fillCfg]];
+
+  NSSize imageSize = fillSymbol.size;
+  NSInteger logicalW = (NSInteger)kCanvasSize;
+  NSInteger logicalH = (NSInteger)kCanvasSize;
 
   _size = CGSizeMake(logicalW, logicalH);
 
@@ -80,8 +84,31 @@ static const CGFloat kStrokePt = 3.0;
                                                                   flipped:NO];
   [NSGraphicsContext saveGraphicsState];
   [NSGraphicsContext setCurrentContext:gc];
-  [_text drawAtPoint:NSMakePoint(2, 1) withAttributes:strokeAttrs];
-  [_text drawAtPoint:NSMakePoint(2, 1) withAttributes:fillAttrs];
+
+  CGFloat originX = (logicalW - imageSize.width) / 2.0;
+  CGFloat originY = (logicalH - imageSize.height) / 2.0;
+  NSRect drawRect =
+      NSMakeRect(originX, originY, imageSize.width, imageSize.height);
+
+  // Outline: draw stroke symbol offset in 8 directions
+  CGFloat strokeOffset = 1.5;
+  for (CGFloat dx = -strokeOffset; dx <= strokeOffset; dx += strokeOffset) {
+    for (CGFloat dy = -strokeOffset; dy <= strokeOffset; dy += strokeOffset) {
+      if (dx == 0 && dy == 0)
+        continue;
+      [strokeSymbol drawInRect:NSOffsetRect(drawRect, dx, dy)
+                      fromRect:NSZeroRect
+                     operation:NSCompositingOperationSourceOver
+                      fraction:1.0];
+    }
+  }
+
+  // Fill symbol centered on top
+  [fillSymbol drawInRect:drawRect
+                fromRect:NSZeroRect
+               operation:NSCompositingOperationSourceOver
+                fraction:1.0];
+
   [NSGraphicsContext restoreGraphicsState];
 
   MTLTextureDescriptor *desc = [MTLTextureDescriptor
@@ -97,12 +124,12 @@ static const CGFloat kStrokePt = 3.0;
               bytesPerRow:pixelW * 4];
 
   CGContextRelease(ctx);
-  _cachedText = [_text copy];
+  _cachedIconName = [_iconName copy];
 }
 
 - (void)drawAtCanvasPosition:(CGPoint)canvasPosition
             destinationImage:(FxImageTile *)destinationImage {
-  if (_text.length == 0)
+  if (_iconName.length == 0)
     return;
 
   KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
@@ -118,7 +145,7 @@ static const CGFloat kStrokePt = 3.0;
   MTLPixelFormat pixelFormat =
       [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
   id<MTLRenderPipelineState> ps = [cache
-      buildAndRegisterPipelineStateForPluginID:kLabelPipelineID
+      buildAndRegisterPipelineStateForPluginID:kIconButtonPipelineID
                                     registryID:registryID
                                    pixelFormat:pixelFormat
                                       bundleID:@"co.overpolish"
@@ -132,7 +159,6 @@ static const CGFloat kStrokePt = 3.0;
 
   float halfW = _size.width / 2.0f;
   float halfH = _size.height / 2.0f;
-  id<MTLTexture> tex = _texture;
 
   float ioW = [destinationImage.ioSurface width];
   float ioH = [destinationImage.ioSurface height];
@@ -143,7 +169,7 @@ static const CGFloat kStrokePt = 3.0;
     return;
 
   id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
-  cmdBuf.label = @"KKOSCLabel Command Buffer";
+  cmdBuf.label = @"KKIconButtonOSC Command Buffer";
   [cmdBuf enqueue];
 
   id<MTLTexture> outTex = [destinationImage
@@ -181,13 +207,21 @@ static const CGFloat kStrokePt = 3.0;
   [encoder setVertexBytes:&viewportSize
                    length:sizeof(viewportSize)
                   atIndex:KKVertexInputIndex_ViewportSize];
-  [encoder setFragmentTexture:tex atIndex:0];
+  [encoder setFragmentTexture:_texture atIndex:0];
   [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
 
   [encoder endEncoding];
   [cmdBuf commit];
   [cmdBuf waitUntilScheduled];
   [cache returnCommandQueueToCache:queue];
+}
+
+- (BOOL)hitTestAtMousePositionX:(double)positionX
+                      positionY:(double)positionY
+                         center:(CGPoint)center {
+  double dx = positionX - center.x;
+  double dy = positionY - center.y;
+  return sqrt(dx * dx + dy * dy) < kHitRadius;
 }
 
 @end

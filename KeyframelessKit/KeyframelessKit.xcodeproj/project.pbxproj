@@ -30,6 +30,7 @@
 				Metal/KKShaderTypes.h,
 				OSC/Base/KKOnScreenControl.h,
 				OSC/Controls/KKArcOSC.h,
+				OSC/Controls/KKIconButtonOSC.h,
 				OSC/Controls/KKOSCLabel.h,
 				OSC/Controls/KKPointOSC.h,
 				OSC/Controls/KKRingOSC.h,

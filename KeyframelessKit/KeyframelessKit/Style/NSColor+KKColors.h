@@ -45,6 +45,12 @@
 + (NSColor *)ringActiveFill;
 + (NSColor *)ringActiveStroke;
 
++ (NSColor *)labelFill;
++ (NSColor *)labelStroke;
+
++ (NSColor *)iconButtonFill;
++ (NSColor *)iconButtonStroke;
+
 + (NSColor *)donutFill;
 + (NSColor *)donutStroke;
 
