@@ -46,5 +46,8 @@ static const UInt32 kParamExitScale = 34;
 static const UInt32 kParamPreviewExit = 35;
 static const UInt32 kParamExitOpacity = 36;
 
+// Path
+static const UInt32 kParamPathAB = 40;
+
 // Info
 static const UInt32 kParamInfoCompound = 9000;

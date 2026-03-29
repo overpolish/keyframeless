@@ -5,6 +5,8 @@
 
 #import "OSC.h"
 #import "Constants.h"
+#import "MagicMovePath.h"
+#import <CoreGraphics/CGEventSource.h>
 #import <FxPlug/FxPlugSDK.h>
 
 @interface KKArcOSC (FxOSC) <FxOnScreenControl_v4>
@@ -30,6 +32,15 @@ typedef struct {
 } PointOSCState;
 
 static const float kSnapThreshold = 8.0f;
+static const float kPathHitThreshold = 10.0f;
+static const float kPathPointHitRadius = 8.0f;
+static const NSUInteger kPathDrawResolution = 20;
+
+// Part ID ranges for path elements
+static const NSInteger kPartPathCurve = 50;
+static const NSInteger kPartPathPointBase = 100;
+static const NSInteger kPartPathInHandleBase = 200;
+static const NSInteger kPartPathOutHandleBase = 300;
 
 @implementation MagicMoveOSC {
   PointOSCState _points[kPointCount];
@@ -60,6 +71,18 @@ static const float kSnapThreshold = 8.0f;
   BOOL _snapY;
   float _snapXVal;
   float _snapYVal;
+  KKPointOSC *_pathPointOSC;
+  KKPointOSC *_pathHandleOSC;
+  NSInteger _pathDragIndex;
+  BOOL _pathDragIsInHandle;
+  BOOL _pathDragIsOutHandle;
+  simd_float2 _pathDragStartObj;
+  NSTimeInterval _pathLastClickTime;
+  NSInteger _pathLastClickIndex;
+  BOOL _pathSnapX;
+  BOOL _pathSnapY;
+  float _pathSnapXVal;
+  float _pathSnapYVal;
 }
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
@@ -183,6 +206,17 @@ static const float kSnapThreshold = 8.0f;
         .icon = _iconExit,
         .opacityIcon = _opacityIconExit,
     };
+
+    _pathPointOSC = [[KKPointOSC alloc] initWithAPIManager:apiManager];
+    _pathPointOSC.clearsOnDraw = NO;
+    _pathPointOSC.oscRadius = 5.0f;
+    _pathPointOSC.outlineWidth = 1.5f;
+    _pathHandleOSC = [[KKPointOSC alloc] initWithAPIManager:apiManager];
+    _pathHandleOSC.clearsOnDraw = NO;
+    _pathHandleOSC.oscRadius = 3.0f;
+    _pathHandleOSC.outlineWidth = 1.0f;
+    _pathDragIndex = -1;
+    _pathLastClickIndex = -1;
   }
   return self;
 }
@@ -286,6 +320,61 @@ static const float kSnapThreshold = 8.0f;
   return [self positionForParam:kParamPointA atTime:time];
 }
 
+- (MagicMovePath *)readPathABAtTime:(CMTime)time {
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  NSString *str = nil;
+  [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathAB];
+  if (str.length > 0) {
+    NSData *data = [[NSData alloc] initWithBase64EncodedString:str options:0];
+    if (data)
+      return [MagicMovePath pathWithData:data];
+  }
+  return [[MagicMovePath alloc] init];
+}
+
+- (void)writePathAB:(MagicMovePath *)path atTime:(CMTime)time {
+  id<FxParameterSettingAPI_v5> paramSetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  NSData *data = [path dataRepresentation];
+  NSString *str = [data base64EncodedStringWithOptions:0];
+  [paramSetAPI setStringParameterValue:str toParameter:kParamPathAB];
+}
+
+- (CGPoint)canvasPointFromObject:(simd_float2)objPt {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  CGPoint canvas;
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:objPt.x
+                          fromY:objPt.y
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&canvas.x
+                            toY:&canvas.y];
+  return canvas;
+}
+
+- (simd_float2)objectPointFromCanvas:(CGPoint)canvasPt {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  double objX, objY;
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_CANVAS
+                          fromX:canvasPt.x
+                          fromY:canvasPt.y
+                        toSpace:kFxDrawingCoordinates_OBJECT
+                            toX:&objX
+                            toY:&objY];
+  return (simd_float2){(float)objX, (float)objY};
+}
+
+- (simd_float2)objectPositionForParam:(UInt32)paramID atTime:(CMTime)time {
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  double x = 0.5, y = 0.5;
+  [paramGetAPI getXValue:&x YValue:&y fromParameter:paramID atTime:time];
+  return (simd_float2){(float)x, (float)y};
+}
+
 - (void)drawPoint:(PointOSCState *)pt
     destinationImage:(FxImageTile *)dest
               atTime:(CMTime)time {
@@ -353,6 +442,461 @@ static const float kSnapThreshold = 8.0f;
   pt->arc.fillAlpha = (opacity < 1.0) ? 0.25f : 1.0f;
 }
 
+- (void)drawPathABWithDestinationImage:(FxImageTile *)dest
+                                 color:(simd_float4)color
+                                 inset:(double)inset
+                                atTime:(CMTime)time {
+  MagicMovePath *path = [self readPathABAtTime:time];
+  simd_float2 startObj = [self objectPositionForParam:kParamPointA atTime:time];
+  simd_float2 endObj = [self objectPositionForParam:kParamPointB atTime:time];
+  NSUInteger segCount = path.segmentCount;
+
+  // Draw curve segments
+  for (NSUInteger seg = 0; seg < segCount; seg++) {
+    CGPoint prev = CGPointZero;
+    for (NSUInteger s = 0; s <= kPathDrawResolution; s++) {
+      float localT = (float)s / (float)kPathDrawResolution;
+      simd_float2 objPt = [path evaluateSegment:seg
+                                            atT:localT
+                                          start:startObj
+                                            end:endObj];
+      CGPoint cur = [self canvasPointFromObject:objPt];
+      if (s > 0) {
+        // Skip segments too close to endpoints (inset)
+        BOOL tooCloseToStart = NO, tooCloseToEnd = NO;
+        CGPoint startCanvas = [self canvasPointFromObject:startObj];
+        CGPoint endCanvas = [self canvasPointFromObject:endObj];
+        double d1 = hypot(cur.x - startCanvas.x, cur.y - startCanvas.y);
+        double d2 = hypot(cur.x - endCanvas.x, cur.y - endCanvas.y);
+        double d1p = hypot(prev.x - startCanvas.x, prev.y - startCanvas.y);
+        double d2p = hypot(prev.x - endCanvas.x, prev.y - endCanvas.y);
+        tooCloseToStart = (d1 < inset && d1p < inset);
+        tooCloseToEnd = (d2 < inset && d2p < inset);
+        if (!tooCloseToStart && !tooCloseToEnd) {
+          [self drawLineFrom:prev
+                            to:cur
+                         color:color
+                     halfWidth:2.0f
+              destinationImage:dest];
+        }
+      }
+      prev = cur;
+    }
+  }
+
+  // Draw control points and handles
+  for (NSUInteger i = 0; i < path.count; i++) {
+    MagicMovePathPoint pt = [path pointAtIndex:i];
+    simd_float2 ptObj = {pt.x, pt.y};
+    CGPoint ptCanvas = [self canvasPointFromObject:ptObj];
+
+    if (pt.type == MagicMovePathPointBezier) {
+      simd_float2 inObj = {pt.x + pt.inX, pt.y + pt.inY};
+      simd_float2 outObj = {pt.x + pt.outX, pt.y + pt.outY};
+      CGPoint inCanvas = [self canvasPointFromObject:inObj];
+      CGPoint outCanvas = [self canvasPointFromObject:outObj];
+
+      simd_float4 handleColor = {0.6f, 0.0f, 0.0f, 1.0f};
+      [self drawLineFrom:ptCanvas
+                        to:inCanvas
+                     color:handleColor
+                 halfWidth:2.0f
+          destinationImage:dest];
+      [self drawLineFrom:ptCanvas
+                        to:outCanvas
+                     color:handleColor
+                 halfWidth:2.0f
+          destinationImage:dest];
+
+      [_pathHandleOSC drawAtCanvasPosition:inCanvas
+                                 isHovered:NO
+                                  isActive:NO
+                          destinationImage:dest
+                                    atTime:time];
+      [_pathHandleOSC drawAtCanvasPosition:outCanvas
+                                 isHovered:NO
+                                  isActive:NO
+                          destinationImage:dest
+                                    atTime:time];
+    }
+
+    [_pathPointOSC
+        drawAtCanvasPosition:ptCanvas
+                   isHovered:NO
+                    isActive:(_pathDragIndex == (NSInteger)i &&
+                              !_pathDragIsInHandle && !_pathDragIsOutHandle)
+            destinationImage:dest
+                      atTime:time];
+  }
+}
+
+- (void)hitTestPathAtX:(double)mx
+                     Y:(double)my
+            activePart:(NSInteger *)activePart
+                atTime:(CMTime)time {
+  MagicMovePath *path = [self readPathABAtTime:time];
+  if (path.count == 0 && path.segmentCount == 1) {
+    // Only test curve for insertion on the straight line
+  }
+  simd_float2 startObj = [self objectPositionForParam:kParamPointA atTime:time];
+  simd_float2 endObj = [self objectPositionForParam:kParamPointB atTime:time];
+
+  // Test handles first (highest priority among path elements)
+  for (NSUInteger i = 0; i < path.count; i++) {
+    MagicMovePathPoint pt = [path pointAtIndex:i];
+    if (pt.type != MagicMovePathPointBezier)
+      continue;
+    simd_float2 inObj = {pt.x + pt.inX, pt.y + pt.inY};
+    simd_float2 outObj = {pt.x + pt.outX, pt.y + pt.outY};
+    CGPoint inC = [self canvasPointFromObject:inObj];
+    CGPoint outC = [self canvasPointFromObject:outObj];
+    if (hypot(mx - inC.x, my - inC.y) < kPathPointHitRadius) {
+      *activePart = kPartPathInHandleBase + (NSInteger)i;
+      return;
+    }
+    if (hypot(mx - outC.x, my - outC.y) < kPathPointHitRadius) {
+      *activePart = kPartPathOutHandleBase + (NSInteger)i;
+      return;
+    }
+  }
+
+  // Test control points
+  CGEventFlags flags =
+      CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+  BOOL optDown = (flags & kCGEventFlagMaskAlternate) != 0;
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+
+  BOOL pathHit = NO;
+  for (NSUInteger i = 0; i < path.count; i++) {
+    MagicMovePathPoint pt = [path pointAtIndex:i];
+    CGPoint ptC = [self canvasPointFromObject:(simd_float2){pt.x, pt.y}];
+    if (hypot(mx - ptC.x, my - ptC.y) < kPathPointHitRadius) {
+      *activePart = kPartPathPointBase + (NSInteger)i;
+      pathHit = YES;
+      if (optDown)
+        [oscAPI setCursor:[NSCursor disappearingItemCursor]];
+      else
+        [oscAPI setCursor:[NSCursor arrowCursor]];
+      return;
+    }
+  }
+
+  // Test curve for insertion
+  NSUInteger segCount = path.segmentCount;
+  float bestDist = FLT_MAX;
+  for (NSUInteger seg = 0; seg < segCount; seg++) {
+    CGPoint prev = CGPointZero;
+    for (NSUInteger s = 0; s <= kPathDrawResolution; s++) {
+      float localT = (float)s / (float)kPathDrawResolution;
+      simd_float2 objPt = [path evaluateSegment:seg
+                                            atT:localT
+                                          start:startObj
+                                            end:endObj];
+      CGPoint cur = [self canvasPointFromObject:objPt];
+      if (s > 0) {
+        double dx = cur.x - prev.x, dy = cur.y - prev.y;
+        double lenSq = dx * dx + dy * dy;
+        double t2 =
+            (lenSq > 0)
+                ? CLAMP(((mx - prev.x) * dx + (my - prev.y) * dy) / lenSq, 0, 1)
+                : 0;
+        double cx = prev.x + t2 * dx, cy = prev.y + t2 * dy;
+        float dist = (float)hypot(mx - cx, my - cy);
+        if (dist < bestDist)
+          bestDist = dist;
+      }
+      prev = cur;
+    }
+  }
+  if (bestDist < kPathHitThreshold) {
+    *activePart = kPartPathCurve;
+    pathHit = YES;
+    if (optDown)
+      [oscAPI setCursor:[NSCursor crosshairCursor]];
+    else
+      [oscAPI setCursor:[NSCursor arrowCursor]];
+  }
+
+  if (!pathHit)
+    [oscAPI setCursor:[NSCursor arrowCursor]];
+}
+
+- (BOOL)mouseDownForPathWithPart:(NSInteger)activePart
+                       positionX:(double)positionX
+                       positionY:(double)positionY
+                       modifiers:(NSUInteger)modifiers
+                     forceUpdate:(BOOL *)forceUpdate
+                          atTime:(CMTime)time {
+  BOOL optHeld = (modifiers & kFxModifierKey_OPTION) != 0;
+
+  simd_float2 startObj = [self objectPositionForParam:kParamPointA atTime:time];
+  simd_float2 endObj = [self objectPositionForParam:kParamPointB atTime:time];
+
+  if (activePart >= kPartPathPointBase &&
+      activePart < kPartPathPointBase + 100) {
+    NSUInteger idx = (NSUInteger)(activePart - kPartPathPointBase);
+    MagicMovePath *path = [self readPathABAtTime:time];
+    if (idx >= path.count)
+      return NO;
+
+    if (optHeld) {
+      [path removeAtIndex:idx];
+      [self writePathAB:path atTime:time];
+      *forceUpdate = YES;
+      return YES;
+    }
+
+    NSTimeInterval now = CACurrentMediaTime();
+    if (_pathLastClickIndex == (NSInteger)idx &&
+        (now - _pathLastClickTime) < 0.35) {
+      [path toggleTypeAtIndex:idx start:startObj end:endObj];
+      [self writePathAB:path atTime:time];
+      _pathLastClickIndex = -1;
+      *forceUpdate = YES;
+      return YES;
+    }
+    _pathLastClickTime = now;
+    _pathLastClickIndex = (NSInteger)idx;
+
+    MagicMovePathPoint dragPt = [path pointAtIndex:idx];
+    _pathDragStartObj = (simd_float2){dragPt.x, dragPt.y};
+    _pathDragIndex = (NSInteger)idx;
+    _pathDragIsInHandle = NO;
+    _pathDragIsOutHandle = NO;
+    *forceUpdate = YES;
+    return YES;
+  }
+
+  if (activePart >= kPartPathInHandleBase &&
+      activePart < kPartPathInHandleBase + 100) {
+    NSUInteger idx = (NSUInteger)(activePart - kPartPathInHandleBase);
+    MagicMovePath *hPath = [self readPathABAtTime:time];
+    if (idx < hPath.count) {
+      MagicMovePathPoint dragPt = [hPath pointAtIndex:idx];
+      _pathDragStartObj =
+          (simd_float2){dragPt.x + dragPt.inX, dragPt.y + dragPt.inY};
+    }
+    _pathDragIndex = (NSInteger)idx;
+    _pathDragIsInHandle = YES;
+    _pathDragIsOutHandle = NO;
+    *forceUpdate = YES;
+    return YES;
+  }
+
+  if (activePart >= kPartPathOutHandleBase &&
+      activePart < kPartPathOutHandleBase + 100) {
+    NSUInteger idx = (NSUInteger)(activePart - kPartPathOutHandleBase);
+    MagicMovePath *hPath = [self readPathABAtTime:time];
+    if (idx < hPath.count) {
+      MagicMovePathPoint dragPt = [hPath pointAtIndex:idx];
+      _pathDragStartObj =
+          (simd_float2){dragPt.x + dragPt.outX, dragPt.y + dragPt.outY};
+    }
+    _pathDragIndex = (NSInteger)idx;
+    _pathDragIsInHandle = NO;
+    _pathDragIsOutHandle = YES;
+    *forceUpdate = YES;
+    return YES;
+  }
+
+  if (activePart == kPartPathCurve && optHeld) {
+    MagicMovePath *path = [self readPathABAtTime:time];
+    simd_float2 mouseObj =
+        [self objectPointFromCanvas:(CGPoint){positionX, positionY}];
+
+    // Find which segment and insert there
+    NSUInteger bestSeg = 0;
+    float bestDist = FLT_MAX;
+    for (NSUInteger seg = 0; seg < path.segmentCount; seg++) {
+      for (NSUInteger s = 1; s <= kPathDrawResolution; s++) {
+        float localT = (float)s / (float)kPathDrawResolution;
+        simd_float2 objPt = [path evaluateSegment:seg
+                                              atT:localT
+                                            start:startObj
+                                              end:endObj];
+        float dist = simd_length(objPt - mouseObj);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestSeg = seg;
+        }
+      }
+    }
+
+    [path insertAtIndex:bestSeg position:mouseObj];
+    [self writePathAB:path atTime:time];
+    _pathDragIndex = (NSInteger)bestSeg;
+    _pathDragIsInHandle = NO;
+    _pathDragIsOutHandle = NO;
+    *forceUpdate = YES;
+    return YES;
+  }
+
+  return NO;
+}
+
+- (void)buildPathSnapTargets:(simd_float2 *)targets
+                       count:(NSUInteger *)outCount
+                        path:(MagicMovePath *)path
+                   dragIndex:(NSUInteger)dragIndex
+                       start:(simd_float2)start
+                         end:(simd_float2)end {
+  NSUInteger n = 0;
+  targets[n++] = start;
+  targets[n++] = end;
+  for (NSUInteger i = 0; i < path.count; i++) {
+    if (i == dragIndex)
+      continue;
+    MagicMovePathPoint pt = [path pointAtIndex:i];
+    targets[n++] = (simd_float2){pt.x, pt.y};
+  }
+  *outCount = n;
+}
+
+- (simd_float2)applyPathSnap:(simd_float2)pos
+                     targets:(simd_float2 *)targets
+                       count:(NSUInteger)count {
+  _pathSnapX = NO;
+  _pathSnapY = NO;
+
+  float canvasSnapThresh = kSnapThreshold;
+  // Convert threshold from canvas to object space (approximate)
+  CGPoint c0 = [self canvasPointFromObject:(simd_float2){0, 0}];
+  CGPoint c1 = [self canvasPointFromObject:(simd_float2){1, 0}];
+  float pixPerUnit = (float)fabs(c1.x - c0.x);
+  float objThresh = (pixPerUnit > 0) ? canvasSnapThresh / pixPerUnit : 0.005f;
+
+  float bestDX = FLT_MAX, bestDY = FLT_MAX;
+  float snapX = pos.x, snapY = pos.y;
+  for (NSUInteger i = 0; i < count; i++) {
+    float dx = fabsf(pos.x - targets[i].x);
+    float dy = fabsf(pos.y - targets[i].y);
+    if (dx < objThresh && dx < bestDX) {
+      bestDX = dx;
+      snapX = targets[i].x;
+    }
+    if (dy < objThresh && dy < bestDY) {
+      bestDY = dy;
+      snapY = targets[i].y;
+    }
+  }
+  if (bestDX < FLT_MAX) {
+    _pathSnapX = YES;
+    _pathSnapXVal = snapX;
+    pos.x = snapX;
+  }
+  if (bestDY < FLT_MAX) {
+    _pathSnapY = YES;
+    _pathSnapYVal = snapY;
+    pos.y = snapY;
+  }
+  return pos;
+}
+
+- (BOOL)mouseDraggedForPathWithPart:(NSInteger)activePart
+                          positionX:(double)positionX
+                          positionY:(double)positionY
+                             atTime:(CMTime)time {
+  if (_pathDragIndex < 0)
+    return NO;
+
+  MagicMovePath *path = [self readPathABAtTime:time];
+  if ((NSUInteger)_pathDragIndex >= path.count)
+    return NO;
+
+  simd_float2 mouseObj =
+      [self objectPointFromCanvas:(CGPoint){positionX, positionY}];
+
+  CGEventFlags flags =
+      CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+  BOOL optHeld = (flags & kCGEventFlagMaskAlternate) != 0;
+  BOOL shiftHeld = (flags & kCGEventFlagMaskShift) != 0;
+
+  _pathSnapX = NO;
+  _pathSnapY = NO;
+
+  // Shift constrains to horizontal or vertical from drag start
+  if (shiftHeld) {
+    float dx = fabsf(mouseObj.x - _pathDragStartObj.x);
+    float dy = fabsf(mouseObj.y - _pathDragStartObj.y);
+    if (dx > dy)
+      mouseObj.y = _pathDragStartObj.y;
+    else
+      mouseObj.x = _pathDragStartObj.x;
+  }
+
+  simd_float2 startObj = [self objectPositionForParam:kParamPointA atTime:time];
+  simd_float2 endObj = [self objectPositionForParam:kParamPointB atTime:time];
+
+  if (_pathDragIsInHandle) {
+    MagicMovePathPoint pt = [path pointAtIndex:(NSUInteger)_pathDragIndex];
+    simd_float2 handlePos = mouseObj;
+
+    // Snap handle to horizontal/vertical relative to control point
+    if (!shiftHeld) {
+      CGPoint ptC = [self canvasPointFromObject:(simd_float2){pt.x, pt.y}];
+      CGPoint hC = [self canvasPointFromObject:handlePos];
+      if (fabs(hC.y - ptC.y) < kSnapThreshold) {
+        handlePos.y = pt.y;
+        _pathSnapY = YES;
+        _pathSnapYVal = pt.y;
+      }
+      if (fabs(hC.x - ptC.x) < kSnapThreshold) {
+        handlePos.x = pt.x;
+        _pathSnapX = YES;
+        _pathSnapXVal = pt.x;
+      }
+    }
+
+    simd_float2 offset = {handlePos.x - pt.x, handlePos.y - pt.y};
+    [path setInHandle:offset atIndex:(NSUInteger)_pathDragIndex];
+    if (!optHeld)
+      [path setOutHandle:(simd_float2){-offset.x, -offset.y}
+                 atIndex:(NSUInteger)_pathDragIndex];
+  } else if (_pathDragIsOutHandle) {
+    MagicMovePathPoint pt = [path pointAtIndex:(NSUInteger)_pathDragIndex];
+    simd_float2 handlePos = mouseObj;
+
+    if (!shiftHeld) {
+      CGPoint ptC = [self canvasPointFromObject:(simd_float2){pt.x, pt.y}];
+      CGPoint hC = [self canvasPointFromObject:handlePos];
+      if (fabs(hC.y - ptC.y) < kSnapThreshold) {
+        handlePos.y = pt.y;
+        _pathSnapY = YES;
+        _pathSnapYVal = pt.y;
+      }
+      if (fabs(hC.x - ptC.x) < kSnapThreshold) {
+        handlePos.x = pt.x;
+        _pathSnapX = YES;
+        _pathSnapXVal = pt.x;
+      }
+    }
+
+    simd_float2 offset = {handlePos.x - pt.x, handlePos.y - pt.y};
+    [path setOutHandle:offset atIndex:(NSUInteger)_pathDragIndex];
+    if (!optHeld)
+      [path setInHandle:(simd_float2){-offset.x, -offset.y}
+                atIndex:(NSUInteger)_pathDragIndex];
+  } else {
+    // Snap control point to other points and endpoints
+    simd_float2 snapTargets[path.count + 2];
+    NSUInteger snapCount;
+    [self buildPathSnapTargets:snapTargets
+                         count:&snapCount
+                          path:path
+                     dragIndex:(NSUInteger)_pathDragIndex
+                         start:startObj
+                           end:endObj];
+    mouseObj = [self applyPathSnap:mouseObj
+                           targets:snapTargets
+                             count:snapCount];
+    [path moveAtIndex:(NSUInteger)_pathDragIndex to:mouseObj];
+  }
+
+  [self writePathAB:path atTime:time];
+  return YES;
+}
+
 - (void)drawOSCWithWidth:(NSInteger)width
                   height:(NSInteger)height
               activePart:(NSInteger)activePart
@@ -379,17 +923,10 @@ static const float kSnapThreshold = 8.0f;
   double inset = anyArcActive ? 22.0 : 14.0;
 
   if (showA) {
-    CGPoint posA = [self positionForParam:kParamPointA atTime:time];
-    double ldx = posB.x - posA.x, ldy = posB.y - posA.y;
-    double len = hypot(ldx, ldy);
-    if (len > inset * 2.0) {
-      double nx = ldx / len * inset, ny = ldy / len * inset;
-      [self drawLineFrom:(CGPoint){posA.x + nx, posA.y + ny}
-                        to:(CGPoint){posB.x - nx, posB.y - ny}
-                     color:red
-                 halfWidth:2.0f
-          destinationImage:destinationImage];
-    }
+    [self drawPathABWithDestinationImage:destinationImage
+                                   color:red
+                                   inset:inset
+                                  atTime:time];
   }
 
   if (driftOn) {
@@ -462,6 +999,47 @@ static const float kSnapThreshold = 8.0f;
     if (_snapY) {
       [self drawLineFrom:(CGPoint){minX, _snapYVal}
                         to:(CGPoint){maxX, _snapYVal}
+                     color:yellow
+                 halfWidth:2.0f
+          destinationImage:destinationImage];
+    }
+  }
+
+  if (_pathSnapX || _pathSnapY) {
+    CGPoint topRight, bottomLeft;
+    id<FxOnScreenControlAPI_v4> snapOscAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    [snapOscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                                fromX:0.0
+                                fromY:0.0
+                              toSpace:kFxDrawingCoordinates_CANVAS
+                                  toX:&bottomLeft.x
+                                  toY:&bottomLeft.y];
+    [snapOscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                                fromX:1.0
+                                fromY:1.0
+                              toSpace:kFxDrawingCoordinates_CANVAS
+                                  toX:&topRight.x
+                                  toY:&topRight.y];
+    float psMinX = fmin(bottomLeft.x, topRight.x);
+    float psMaxX = fmax(bottomLeft.x, topRight.x);
+    float psMinY = fmin(bottomLeft.y, topRight.y);
+    float psMaxY = fmax(bottomLeft.y, topRight.y);
+    simd_float4 yellow = {1, 1, 0, 1};
+    if (_pathSnapX) {
+      CGPoint snapC =
+          [self canvasPointFromObject:(simd_float2){_pathSnapXVal, 0}];
+      [self drawLineFrom:(CGPoint){snapC.x, psMinY}
+                        to:(CGPoint){snapC.x, psMaxY}
+                     color:yellow
+                 halfWidth:2.0f
+          destinationImage:destinationImage];
+    }
+    if (_pathSnapY) {
+      CGPoint snapC =
+          [self canvasPointFromObject:(simd_float2){0, _pathSnapYVal}];
+      [self drawLineFrom:(CGPoint){psMinX, snapC.y}
+                        to:(CGPoint){psMaxX, snapC.y}
                      color:yellow
                  halfWidth:2.0f
           destinationImage:destinationImage];
@@ -553,8 +1131,12 @@ static const float kSnapThreshold = 8.0f;
   BOOL animInOn = [self animateInEnabledAtTime:time];
   BOOL animOutOn = [self animateOutEnabledAtTime:time];
   BOOL exitOn = [self exitEnabledAtTime:time];
+  BOOL showA = animInOn || (animOutOn && !exitOn);
 
-  if (animInOn || (animOutOn && !exitOn))
+  // Main point controls first (highest priority)
+  NSInteger prePart = *activePart;
+
+  if (showA)
     [self hitTestPoint:&_points[0]
              positionX:positionX
              positionY:positionY
@@ -580,6 +1162,13 @@ static const float kSnapThreshold = 8.0f;
              positionY:positionY
             activePart:activePart
                 atTime:time];
+
+  // Path elements only if no main point was hit
+  if (*activePart == prePart && showA)
+    [self hitTestPathAtX:positionX
+                       Y:positionY
+              activePart:activePart
+                  atTime:time];
 }
 
 - (BOOL)mouseDownForPoint:(PointOSCState *)pt
@@ -684,6 +1273,13 @@ static const float kSnapThreshold = 8.0f;
                          atTime:time])
       return;
   }
+  if ([self mouseDownForPathWithPart:activePart
+                           positionX:positionX
+                           positionY:positionY
+                           modifiers:modifiers
+                         forceUpdate:forceUpdate
+                              atTime:time])
+    return;
   [super mouseDownAtPositionX:positionX
                     positionY:positionY
                    activePart:activePart
@@ -815,6 +1411,13 @@ static const float kSnapThreshold = 8.0f;
                       modifiers:(NSUInteger)modifiers
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
+  if ([self mouseDraggedForPathWithPart:activePart
+                              positionX:positionX
+                              positionY:positionY
+                                 atTime:time]) {
+    *forceUpdate = YES;
+    return;
+  }
   for (int i = 0; i < kPointCount; i++) {
     CGPoint snapTarget =
         [self positionForParam:_points[(i + 1) % kPointCount].pointParam
@@ -845,6 +1448,11 @@ static const float kSnapThreshold = 8.0f;
                     atTime:(CMTime)time {
   _snapX = NO;
   _snapY = NO;
+  _pathDragIndex = -1;
+  _pathDragIsInHandle = NO;
+  _pathDragIsOutHandle = NO;
+  _pathSnapX = NO;
+  _pathSnapY = NO;
   for (int i = 0; i < kPointCount; i++) {
     _points[i].arcDragging = NO;
     _points[i].arcHovered = NO;

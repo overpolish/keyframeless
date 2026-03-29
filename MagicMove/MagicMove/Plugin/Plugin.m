@@ -5,6 +5,7 @@
 
 #import "Plugin.h"
 #import "Constants.h"
+#import "MagicMovePath.h"
 #import "ShaderTypes.h"
 #import <AppKit/NSView.h>
 #import <Foundation/Foundation.h>
@@ -81,8 +82,12 @@ static double mmApplyCurveOut(double raw, int curve) {
                       previewID:(UInt32)previewID
                        defaultX:(double)defaultX
                        defaultY:(double)defaultY
+                  defaultHidden:(BOOL)defaultHidden
                         withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                           error:(NSError **)error {
+  FxParameterFlags flags =
+      defaultHidden ? kFxParameterFlag_HIDDEN : kFxParameterFlag_DEFAULT;
+
   NSImage *icon = [NSImage imageWithSystemSymbolName:@"circle.circle"
                             accessibilityDescription:nil];
   if (![self addSeparatorParameterWithText:name
@@ -96,7 +101,7 @@ static double mmApplyCurveOut(double raw, int curve) {
     if (![paramAPI addToggleButtonWithName:@"Preview"
                                parameterID:previewID
                               defaultValue:NO
-                            parameterFlags:kFxParameterFlag_DEFAULT])
+                            parameterFlags:flags])
       return NO;
   }
 
@@ -104,7 +109,7 @@ static double mmApplyCurveOut(double raw, int curve) {
                                parameterID:pointID
                                   defaultX:defaultX
                                   defaultY:defaultY
-                            parameterFlags:kFxParameterFlag_DEFAULT])
+                            parameterFlags:flags])
     return NO;
 
   if (![paramAPI addAngleSliderWithName:@"Rotation"
@@ -112,7 +117,7 @@ static double mmApplyCurveOut(double raw, int curve) {
                          defaultDegrees:0.0
                     parameterMinDegrees:-FLT_MAX
                     parameterMaxDegrees:FLT_MAX
-                         parameterFlags:kFxParameterFlag_DEFAULT])
+                         parameterFlags:flags])
     return NO;
 
   if (![paramAPI addPercentSliderWithName:@"Scale"
@@ -123,7 +128,7 @@ static double mmApplyCurveOut(double raw, int curve) {
                                 sliderMin:0.0
                                 sliderMax:5.0
                                     delta:0.01
-                           parameterFlags:kFxParameterFlag_DEFAULT])
+                           parameterFlags:flags])
     return NO;
 
   if (![paramAPI addPercentSliderWithName:@"Opacity"
@@ -134,7 +139,7 @@ static double mmApplyCurveOut(double raw, int curve) {
                                 sliderMin:0.0
                                 sliderMax:1.0
                                     delta:0.01
-                           parameterFlags:kFxParameterFlag_DEFAULT])
+                           parameterFlags:flags])
     return NO;
 
   return YES;
@@ -186,6 +191,7 @@ static double mmApplyCurveOut(double raw, int curve) {
                            previewID:kParamPreviewA
                             defaultX:0.5
                             defaultY:0.5
+                       defaultHidden:YES
                              withAPI:paramAPI
                                error:error])
     return NO;
@@ -199,6 +205,7 @@ static double mmApplyCurveOut(double raw, int curve) {
                            previewID:kParamPreviewB
                             defaultX:0.5
                             defaultY:0.5
+                       defaultHidden:NO
                              withAPI:paramAPI
                                error:error])
     return NO;
@@ -222,14 +229,14 @@ static double mmApplyCurveOut(double raw, int curve) {
   if (![paramAPI addToggleButtonWithName:@"Preview"
                              parameterID:kParamPreviewDrift
                             defaultValue:NO
-                          parameterFlags:kFxParameterFlag_DEFAULT])
+                          parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
   if (![paramAPI addPointParameterWithName:@"Position"
                                parameterID:kParamDriftPoint
                                   defaultX:0.5
                                   defaultY:0.5
-                            parameterFlags:kFxParameterFlag_DEFAULT])
+                            parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
   if (![paramAPI addAngleSliderWithName:@"Rotation"
@@ -237,7 +244,7 @@ static double mmApplyCurveOut(double raw, int curve) {
                          defaultDegrees:0.0
                     parameterMinDegrees:-FLT_MAX
                     parameterMaxDegrees:FLT_MAX
-                         parameterFlags:kFxParameterFlag_DEFAULT])
+                         parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
   if (![paramAPI addPercentSliderWithName:@"Scale"
@@ -248,7 +255,7 @@ static double mmApplyCurveOut(double raw, int curve) {
                                 sliderMin:0.0
                                 sliderMax:5.0
                                     delta:0.01
-                           parameterFlags:kFxParameterFlag_DEFAULT])
+                           parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
   if (![paramAPI addPercentSliderWithName:@"Opacity"
@@ -259,7 +266,7 @@ static double mmApplyCurveOut(double raw, int curve) {
                                 sliderMin:0.0
                                 sliderMax:1.0
                                     delta:0.01
-                           parameterFlags:kFxParameterFlag_DEFAULT])
+                           parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
   if (![self addSeparatorParameterWithText:@"Exit"
@@ -278,14 +285,14 @@ static double mmApplyCurveOut(double raw, int curve) {
   if (![paramAPI addToggleButtonWithName:@"Preview"
                              parameterID:kParamPreviewExit
                             defaultValue:NO
-                          parameterFlags:kFxParameterFlag_DEFAULT])
+                          parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
   if (![paramAPI addPointParameterWithName:@"Position"
                                parameterID:kParamExitPoint
                                   defaultX:0.5
                                   defaultY:0.5
-                            parameterFlags:kFxParameterFlag_DEFAULT])
+                            parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
   if (![paramAPI addAngleSliderWithName:@"Rotation"
@@ -293,7 +300,7 @@ static double mmApplyCurveOut(double raw, int curve) {
                          defaultDegrees:0.0
                     parameterMinDegrees:-FLT_MAX
                     parameterMaxDegrees:FLT_MAX
-                         parameterFlags:kFxParameterFlag_DEFAULT])
+                         parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
   if (![paramAPI addPercentSliderWithName:@"Scale"
@@ -304,7 +311,7 @@ static double mmApplyCurveOut(double raw, int curve) {
                                 sliderMin:0.0
                                 sliderMax:5.0
                                     delta:0.01
-                           parameterFlags:kFxParameterFlag_DEFAULT])
+                           parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
   if (![paramAPI addPercentSliderWithName:@"Opacity"
@@ -315,7 +322,13 @@ static double mmApplyCurveOut(double raw, int curve) {
                                 sliderMin:0.0
                                 sliderMax:1.0
                                     delta:0.01
-                           parameterFlags:kFxParameterFlag_DEFAULT])
+                           parameterFlags:kFxParameterFlag_HIDDEN])
+    return NO;
+
+  if (![paramAPI addStringParameterWithName:@"PathAB"
+                                parameterID:kParamPathAB
+                               defaultValue:@""
+                             parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
   return YES;
@@ -595,6 +608,15 @@ static double mmApplyCurveOut(double raw, int curve) {
     targetOpacity = (1 - d) * opacityB + d * driftOpacity;
   }
 
+  NSString *pathStr = nil;
+  [paramGetAPI getStringParameterValue:&pathStr fromParameter:kParamPathAB];
+  NSData *pathData = (pathStr.length > 0)
+                         ? [[NSData alloc] initWithBase64EncodedString:pathStr
+                                                               options:0]
+                         : nil;
+  MagicMovePath *pathAB = pathData ? [MagicMovePath pathWithData:pathData]
+                                   : [[MagicMovePath alloc] init];
+
   MagicMoveParams params;
   if (exitEnabled) {
     int curve = 2;
@@ -626,16 +648,18 @@ static double mmApplyCurveOut(double raw, int curve) {
     double effScale = (1 - e) * targetScale + e * exitScale;
     double effOpacity = (1 - e) * targetOpacity + e * exitOpacity;
 
-    params.translate =
-        (simd_float2){(float)((1 - tIn) * posAx + tIn * effX - 0.5),
-                      (float)((1 - tIn) * posAy + tIn * effY - 0.5)};
+    simd_float2 startPos = {(float)posAx, (float)posAy};
+    simd_float2 endPos = {(float)effX, (float)effY};
+    simd_float2 pos = [pathAB positionAtT:(float)tIn start:startPos end:endPos];
+    params.translate = (simd_float2){pos.x - 0.5f, pos.y - 0.5f};
     params.rotation = (float)((1 - tIn) * rotA + tIn * effRot);
     params.scale = (float)((1 - tIn) * scaleA + tIn * effScale);
     params.opacity = (float)((1 - tIn) * opacityA + tIn * effOpacity);
   } else {
-    params.translate =
-        (simd_float2){(float)((1 - t) * posAx + t * targetX - 0.5),
-                      (float)((1 - t) * posAy + t * targetY - 0.5)};
+    simd_float2 startPos = {(float)posAx, (float)posAy};
+    simd_float2 endPos = {(float)targetX, (float)targetY};
+    simd_float2 pos = [pathAB positionAtT:(float)t start:startPos end:endPos];
+    params.translate = (simd_float2){pos.x - 0.5f, pos.y - 0.5f};
     params.rotation = (float)((1 - t) * rotA + t * targetRot);
     params.scale = (float)((1 - t) * scaleA + t * targetScale);
     params.opacity = (float)((1 - t) * opacityA + t * targetOpacity);
