@@ -14,28 +14,16 @@
 static NSString *kPointOSCPluginID = @"co.overpolish.keyframelesskit.PointOSC";
 
 static NSColor *pointFillColor(void) {
-  return [NSColor colorWithRed:0xB3 / 255.0
-                         green:0xB3 / 255.0
-                          blue:0xB3 / 255.0
-                         alpha:0.65f];
-}
-static NSColor *pointFillHoverColor(void) {
-  return [NSColor colorWithRed:0xB3 / 255.0
-                         green:0xB3 / 255.0
-                          blue:0xB3 / 255.0
-                         alpha:0.8f];
-}
-static NSColor *pointFillActiveColor(void) {
-  return [NSColor colorWithRed:0xB3 / 255.0
-                         green:0xB3 / 255.0
-                          blue:0xB3 / 255.0
-                         alpha:0.95f];
+  return [NSColor colorWithRed:0xFF / 255.0
+                         green:0xFF / 255.0
+                          blue:0xFF / 255.0
+                         alpha:1.0f];
 }
 static NSColor *pointStrokeColor(void) {
   return [NSColor colorWithRed:0x00 / 255.0
                          green:0x00 / 255.0
                           blue:0x00 / 255.0
-                         alpha:0.8f];
+                         alpha:0.75f];
 }
 
 @implementation KKPointOSC
@@ -75,12 +63,9 @@ static NSColor *pointStrokeColor(void) {
 
   float outerRadiusPixels = _oscRadius + _outlineWidth;
 
-  KKPointOSCParams params = {
-      .outlineWidth = _outlineWidth / outerRadiusPixels,
-      .fillColor = isActive    ? [pointFillActiveColor() simdFloat4]
-                   : isHovered ? [pointFillHoverColor() simdFloat4]
-                               : [pointFillColor() simdFloat4],
-      .strokeColor = [pointStrokeColor() simdFloat4]};
+  KKPointOSCParams params = {.outlineWidth = _outlineWidth / outerRadiusPixels,
+                             .fillColor = [pointFillColor() simdFloat4],
+                             .strokeColor = [pointStrokeColor() simdFloat4]};
 
   [self drawQuadForDestinationImage:destinationImage
                      canvasPosition:canvasPosition

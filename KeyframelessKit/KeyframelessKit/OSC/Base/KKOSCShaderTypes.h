@@ -42,6 +42,8 @@ typedef struct KKRotationOSCParams {
     float angle;
     vector_float4 fillColor;
     vector_float4 strokeColor;
+    vector_float4 armFillColor;
+    vector_float4 armStrokeColor;
     float donutRadius;
     float donutFillHalfWidth;
     float donutOutlineWidth;
@@ -96,14 +98,15 @@ inline float4 kkCompositeOver(float4 src, float4 dst) {
     return out.a > 0.001 ? float4(out.rgb / out.a, out.a) : float4(0.0);
 }
 
-/// Computes a filled circle color with outline and subtle bottom shadow (used by point and rotation handles).
+/// Computes a filled circle color with outline and a top-to-bottom black-to-white gradient
+/// inset by the outline width for an inner-stroke effect.
 inline float4 kkPointColor(float4 fillColor, float4 strokeColor, float outlineFactor, float shapeAlpha, float relY,
                            float radius, float dist, float outlineWidth) {
-    float shadowFactor = smoothstep(0.1, -0.3, -relY) * 0.15 * (1.0 - outlineFactor);
-    float edgePadding = smoothstep(0.0, outlineWidth * 4.0, radius - dist);
-    shadowFactor *= edgePadding;
     float4 color = kkOSCColor(fillColor, strokeColor, outlineFactor, shapeAlpha);
-    return mix(color, float4(0.0, 0.0, 0.0, strokeColor.a), shadowFactor);
+    float inset = smoothstep(0.0, outlineWidth, radius - outlineWidth - dist);
+    float gradient = (-relY / radius) * 0.5 + 0.5;
+    color.rgb = mix(color.rgb, mix(float3(0.0), float3(1.0), gradient), inset * 0.35);
+    return color;
 }
 
 #endif
