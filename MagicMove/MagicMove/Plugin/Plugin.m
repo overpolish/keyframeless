@@ -77,6 +77,8 @@ static double mmApplyCurveOut(double raw, int curve) {
                     separatorID:(UInt32)separatorID
                         pointID:(UInt32)pointID
                      rotationID:(UInt32)rotationID
+                    rotationXID:(UInt32)rotationXID
+                    rotationYID:(UInt32)rotationYID
                         scaleID:(UInt32)scaleID
                       opacityID:(UInt32)opacityID
                       previewID:(UInt32)previewID
@@ -114,6 +116,22 @@ static double mmApplyCurveOut(double raw, int curve) {
 
   if (![paramAPI addAngleSliderWithName:@"Rotation"
                             parameterID:rotationID
+                         defaultDegrees:0.0
+                    parameterMinDegrees:-FLT_MAX
+                    parameterMaxDegrees:FLT_MAX
+                         parameterFlags:flags])
+    return NO;
+
+  if (![paramAPI addAngleSliderWithName:@"Rotation X"
+                            parameterID:rotationXID
+                         defaultDegrees:0.0
+                    parameterMinDegrees:-FLT_MAX
+                    parameterMaxDegrees:FLT_MAX
+                         parameterFlags:flags])
+    return NO;
+
+  if (![paramAPI addAngleSliderWithName:@"Rotation Y"
+                            parameterID:rotationYID
                          defaultDegrees:0.0
                     parameterMinDegrees:-FLT_MAX
                     parameterMaxDegrees:FLT_MAX
@@ -186,6 +204,8 @@ static double mmApplyCurveOut(double raw, int curve) {
                          separatorID:kParamGroupPointA
                              pointID:kParamPointA
                           rotationID:kParamRotationA
+                         rotationXID:kParamRotationXA
+                         rotationYID:kParamRotationYA
                              scaleID:kParamScaleA
                            opacityID:kParamOpacityA
                            previewID:kParamPreviewA
@@ -200,6 +220,8 @@ static double mmApplyCurveOut(double raw, int curve) {
                          separatorID:kParamGroupPointB
                              pointID:kParamPointB
                           rotationID:kParamRotationB
+                         rotationXID:kParamRotationXB
+                         rotationYID:kParamRotationYB
                              scaleID:kParamScaleB
                            opacityID:kParamOpacityB
                            previewID:kParamPreviewB
@@ -241,6 +263,22 @@ static double mmApplyCurveOut(double raw, int curve) {
 
   if (![paramAPI addAngleSliderWithName:@"Rotation"
                             parameterID:kParamDriftRotation
+                         defaultDegrees:0.0
+                    parameterMinDegrees:-FLT_MAX
+                    parameterMaxDegrees:FLT_MAX
+                         parameterFlags:kFxParameterFlag_HIDDEN])
+    return NO;
+
+  if (![paramAPI addAngleSliderWithName:@"Rotation X"
+                            parameterID:kParamDriftRotationX
+                         defaultDegrees:0.0
+                    parameterMinDegrees:-FLT_MAX
+                    parameterMaxDegrees:FLT_MAX
+                         parameterFlags:kFxParameterFlag_HIDDEN])
+    return NO;
+
+  if (![paramAPI addAngleSliderWithName:@"Rotation Y"
+                            parameterID:kParamDriftRotationY
                          defaultDegrees:0.0
                     parameterMinDegrees:-FLT_MAX
                     parameterMaxDegrees:FLT_MAX
@@ -297,6 +335,22 @@ static double mmApplyCurveOut(double raw, int curve) {
 
   if (![paramAPI addAngleSliderWithName:@"Rotation"
                             parameterID:kParamExitRotation
+                         defaultDegrees:0.0
+                    parameterMinDegrees:-FLT_MAX
+                    parameterMaxDegrees:FLT_MAX
+                         parameterFlags:kFxParameterFlag_HIDDEN])
+    return NO;
+
+  if (![paramAPI addAngleSliderWithName:@"Rotation X"
+                            parameterID:kParamExitRotationX
+                         defaultDegrees:0.0
+                    parameterMinDegrees:-FLT_MAX
+                    parameterMaxDegrees:FLT_MAX
+                         parameterFlags:kFxParameterFlag_HIDDEN])
+    return NO;
+
+  if (![paramAPI addAngleSliderWithName:@"Rotation Y"
+                            parameterID:kParamExitRotationY
                          defaultDegrees:0.0
                     parameterMinDegrees:-FLT_MAX
                     parameterMaxDegrees:FLT_MAX
@@ -372,6 +426,8 @@ static double mmApplyCurveOut(double raw, int curve) {
   [paramSetAPI setParameterFlags:flagA toParameter:kParamPreviewA];
   [paramSetAPI setParameterFlags:flagA toParameter:kParamPointA];
   [paramSetAPI setParameterFlags:flagA toParameter:kParamRotationA];
+  [paramSetAPI setParameterFlags:flagA toParameter:kParamRotationXA];
+  [paramSetAPI setParameterFlags:flagA toParameter:kParamRotationYA];
   [paramSetAPI setParameterFlags:flagA toParameter:kParamScaleA];
   [paramSetAPI setParameterFlags:flagA toParameter:kParamOpacityA];
 
@@ -379,6 +435,8 @@ static double mmApplyCurveOut(double raw, int curve) {
   [paramSetAPI setParameterFlags:flagDrift toParameter:kParamPreviewDrift];
   [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftPoint];
   [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftRotation];
+  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftRotationX];
+  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftRotationY];
   [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftScale];
   [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftOpacity];
 
@@ -386,6 +444,8 @@ static double mmApplyCurveOut(double raw, int curve) {
   [paramSetAPI setParameterFlags:flagExit toParameter:kParamPreviewExit];
   [paramSetAPI setParameterFlags:flagExit toParameter:kParamExitPoint];
   [paramSetAPI setParameterFlags:flagExit toParameter:kParamExitRotation];
+  [paramSetAPI setParameterFlags:flagExit toParameter:kParamExitRotationX];
+  [paramSetAPI setParameterFlags:flagExit toParameter:kParamExitRotationY];
   [paramSetAPI setParameterFlags:flagExit toParameter:kParamExitScale];
   [paramSetAPI setParameterFlags:flagExit toParameter:kParamExitOpacity];
 }
@@ -460,26 +520,34 @@ static double mmApplyCurveOut(double raw, int curve) {
               fromParameter:kParamPreviewExit
                      atTime:renderTime];
 
-  UInt32 previewPointID = 0, previewRotID = 0, previewScaleID = 0,
-         previewOpacityID = 0;
+  UInt32 previewPointID = 0, previewRotID = 0, previewRotXID = 0,
+         previewRotYID = 0, previewScaleID = 0, previewOpacityID = 0;
   if (previewA) {
     previewPointID = kParamPointA;
     previewRotID = kParamRotationA;
+    previewRotXID = kParamRotationXA;
+    previewRotYID = kParamRotationYA;
     previewScaleID = kParamScaleA;
     previewOpacityID = kParamOpacityA;
   } else if (previewB) {
     previewPointID = kParamPointB;
     previewRotID = kParamRotationB;
+    previewRotXID = kParamRotationXB;
+    previewRotYID = kParamRotationYB;
     previewScaleID = kParamScaleB;
     previewOpacityID = kParamOpacityB;
   } else if (previewDrift) {
     previewPointID = kParamDriftPoint;
     previewRotID = kParamDriftRotation;
+    previewRotXID = kParamDriftRotationX;
+    previewRotYID = kParamDriftRotationY;
     previewScaleID = kParamDriftScale;
     previewOpacityID = kParamDriftOpacity;
   } else if (previewExit) {
     previewPointID = kParamExitPoint;
     previewRotID = kParamExitRotation;
+    previewRotXID = kParamExitRotationX;
+    previewRotYID = kParamExitRotationY;
     previewScaleID = kParamExitScale;
     previewOpacityID = kParamExitOpacity;
   }
@@ -490,9 +558,15 @@ static double mmApplyCurveOut(double raw, int curve) {
                     YValue:&py
              fromParameter:previewPointID
                     atTime:renderTime];
-    double rot = 0, scale = 1, opacity = 1;
+    double rot = 0, rotX = 0, rotY = 0, scale = 1, opacity = 1;
     [paramGetAPI getFloatValue:&rot
                  fromParameter:previewRotID
+                        atTime:renderTime];
+    [paramGetAPI getFloatValue:&rotX
+                 fromParameter:previewRotXID
+                        atTime:renderTime];
+    [paramGetAPI getFloatValue:&rotY
+                 fromParameter:previewRotYID
                         atTime:renderTime];
     [paramGetAPI getFloatValue:&scale
                  fromParameter:previewScaleID
@@ -504,6 +578,8 @@ static double mmApplyCurveOut(double raw, int curve) {
     MagicMoveParams params;
     params.translate = (simd_float2){(float)(px - 0.5), (float)(py - 0.5)};
     params.rotation = (float)rot;
+    params.rotationX = (float)rotX;
+    params.rotationY = (float)rotY;
     params.scale = (float)scale;
     params.opacity = (float)opacity;
 
@@ -523,13 +599,25 @@ static double mmApplyCurveOut(double raw, int curve) {
            fromParameter:kParamPointB
                   atTime:renderTime];
 
-  double rotA = 0, rotB = 0, scaleA = 1, scaleB = 1;
-  double opacityA = 1, opacityB = 1;
+  double rotA = 0, rotB = 0, rotXA = 0, rotXB = 0, rotYA = 0, rotYB = 0;
+  double scaleA = 1, scaleB = 1, opacityA = 1, opacityB = 1;
   [paramGetAPI getFloatValue:&rotA
                fromParameter:kParamRotationA
                       atTime:renderTime];
   [paramGetAPI getFloatValue:&rotB
                fromParameter:kParamRotationB
+                      atTime:renderTime];
+  [paramGetAPI getFloatValue:&rotXA
+               fromParameter:kParamRotationXA
+                      atTime:renderTime];
+  [paramGetAPI getFloatValue:&rotXB
+               fromParameter:kParamRotationXB
+                      atTime:renderTime];
+  [paramGetAPI getFloatValue:&rotYA
+               fromParameter:kParamRotationYA
+                      atTime:renderTime];
+  [paramGetAPI getFloatValue:&rotYB
+               fromParameter:kParamRotationYB
                       atTime:renderTime];
   [paramGetAPI getFloatValue:&scaleA
                fromParameter:kParamScaleA
@@ -549,8 +637,8 @@ static double mmApplyCurveOut(double raw, int curve) {
               fromParameter:kParamDrift
                      atTime:renderTime];
 
-  double driftX = 0.5, driftY = 0.5, driftRot = 0, driftScale = 1,
-         driftOpacity = 1;
+  double driftX = 0.5, driftY = 0.5, driftRot = 0, driftRotX = 0, driftRotY = 0,
+         driftScale = 1, driftOpacity = 1;
   if (driftEnabled) {
     [paramGetAPI getXValue:&driftX
                     YValue:&driftY
@@ -558,6 +646,12 @@ static double mmApplyCurveOut(double raw, int curve) {
                     atTime:renderTime];
     [paramGetAPI getFloatValue:&driftRot
                  fromParameter:kParamDriftRotation
+                        atTime:renderTime];
+    [paramGetAPI getFloatValue:&driftRotX
+                 fromParameter:kParamDriftRotationX
+                        atTime:renderTime];
+    [paramGetAPI getFloatValue:&driftRotY
+                 fromParameter:kParamDriftRotationY
                         atTime:renderTime];
     [paramGetAPI getFloatValue:&driftScale
                  fromParameter:kParamDriftScale
@@ -577,7 +671,8 @@ static double mmApplyCurveOut(double raw, int curve) {
                      atTime:renderTime];
   BOOL exitEnabled = exitToggle && animateOut;
 
-  double exitX = 0.5, exitY = 0.5, exitRot = 0, exitScale = 1, exitOpacity = 1;
+  double exitX = 0.5, exitY = 0.5, exitRot = 0, exitRotX = 0, exitRotY = 0,
+         exitScale = 1, exitOpacity = 1;
   if (exitEnabled) {
     [paramGetAPI getXValue:&exitX
                     YValue:&exitY
@@ -585,6 +680,12 @@ static double mmApplyCurveOut(double raw, int curve) {
                     atTime:renderTime];
     [paramGetAPI getFloatValue:&exitRot
                  fromParameter:kParamExitRotation
+                        atTime:renderTime];
+    [paramGetAPI getFloatValue:&exitRotX
+                 fromParameter:kParamExitRotationX
+                        atTime:renderTime];
+    [paramGetAPI getFloatValue:&exitRotY
+                 fromParameter:kParamExitRotationY
                         atTime:renderTime];
     [paramGetAPI getFloatValue:&exitScale
                  fromParameter:kParamExitScale
@@ -595,7 +696,8 @@ static double mmApplyCurveOut(double raw, int curve) {
   }
 
   double targetX = posBx, targetY = posBy;
-  double targetRot = rotB, targetScale = scaleB, targetOpacity = opacityB;
+  double targetRot = rotB, targetRotX = rotXB, targetRotY = rotYB;
+  double targetScale = scaleB, targetOpacity = opacityB;
 
   id<FxTimingAPI_v4> timingAPI = nil;
   double startSec = 0, durSec = 0, nowSec = 0;
@@ -628,6 +730,8 @@ static double mmApplyCurveOut(double raw, int curve) {
     targetX = driftPos.x;
     targetY = driftPos.y;
     targetRot = (1 - d) * rotB + d * driftRot;
+    targetRotX = (1 - d) * rotXB + d * driftRotX;
+    targetRotY = (1 - d) * rotYB + d * driftRotY;
     targetScale = (1 - d) * scaleB + d * driftScale;
     targetOpacity = (1 - d) * opacityB + d * driftOpacity;
   }
@@ -669,6 +773,8 @@ static double mmApplyCurveOut(double raw, int curve) {
     double effX = effPos.x;
     double effY = effPos.y;
     double effRot = (1 - e) * targetRot + e * exitRot;
+    double effRotX = (1 - e) * targetRotX + e * exitRotX;
+    double effRotY = (1 - e) * targetRotY + e * exitRotY;
     double effScale = (1 - e) * targetScale + e * exitScale;
     double effOpacity = (1 - e) * targetOpacity + e * exitOpacity;
 
@@ -677,6 +783,8 @@ static double mmApplyCurveOut(double raw, int curve) {
     simd_float2 pos = [pathAB positionAtT:(float)tIn start:startPos end:endPos];
     params.translate = (simd_float2){pos.x - 0.5f, pos.y - 0.5f};
     params.rotation = (float)((1 - tIn) * rotA + tIn * effRot);
+    params.rotationX = (float)((1 - tIn) * rotXA + tIn * effRotX);
+    params.rotationY = (float)((1 - tIn) * rotYA + tIn * effRotY);
     params.scale = (float)((1 - tIn) * scaleA + tIn * effScale);
     params.opacity = (float)((1 - tIn) * opacityA + tIn * effOpacity);
   } else {
@@ -685,6 +793,8 @@ static double mmApplyCurveOut(double raw, int curve) {
     simd_float2 pos = [pathAB positionAtT:(float)t start:startPos end:endPos];
     params.translate = (simd_float2){pos.x - 0.5f, pos.y - 0.5f};
     params.rotation = (float)((1 - t) * rotA + t * targetRot);
+    params.rotationX = (float)((1 - t) * rotXA + t * targetRotX);
+    params.rotationY = (float)((1 - t) * rotYA + t * targetRotY);
     params.scale = (float)((1 - t) * scaleA + t * targetScale);
     params.opacity = (float)((1 - t) * opacityA + t * targetOpacity);
   }

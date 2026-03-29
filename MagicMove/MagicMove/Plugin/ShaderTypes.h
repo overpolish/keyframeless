@@ -10,6 +10,8 @@
 typedef struct {
     vector_float2 translate;
     float rotation;
+    float rotationX;
+    float rotationY;
     float scale;
     float opacity;
 } MagicMoveParams;

@@ -44,6 +44,23 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
     float cs = cos(params->rotation);
     float sn = sin(params->rotation);
     p = float2(cs * p.x - sn * p.y, sn * p.x + cs * p.y);
+
+    // 3D rotation (X/Y) with perspective via ray-plane intersection.
+    // Camera at (0,0,-camD), ray through screen point, inverse-rotated into
+    // source image space and intersected with z=0.
+    float sinRX = sin(params->rotationX), cosRX = cos(params->rotationX);
+    float sinRY = sin(params->rotationY), cosRY = cos(params->rotationY);
+    float camD = 2.0;
+
+    float3 O = float3(camD * sinRY * cosRX, -camD * sinRX, -camD * cosRY * cosRX);
+    float3 D = float3(p.x * cosRY + p.y * sinRY * sinRX - camD * sinRY * cosRX, p.y * cosRX + camD * sinRX,
+                      p.x * sinRY - p.y * cosRY * sinRX + camD * cosRY * cosRX);
+
+    if (abs(D.z) < 0.0001)
+        return float4(0.0);
+    float tHit = -O.z / D.z;
+    p = float2(O.x + tHit * D.x, O.y + tHit * D.y);
+
     p.x /= aspect;
 
     if (params->scale < 0.001)
