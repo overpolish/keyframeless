@@ -172,6 +172,22 @@
                          alpha:1.0];
 }
 
++ (NSColor *)labelFill {
+  return [self arcFill];
+}
+
++ (NSColor *)labelStroke {
+  return [self arcStroke];
+}
+
++ (NSColor *)iconButtonFill {
+  return [self arcFill];
+}
+
++ (NSColor *)iconButtonStroke {
+  return [[self arcStroke] colorWithAlphaComponent:0.5];
+}
+
 + (NSColor *)donutFill {
   return [NSColor colorWithRed:0x00 / 255.0
                          green:0x00 / 255.0

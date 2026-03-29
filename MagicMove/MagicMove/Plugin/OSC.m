@@ -14,12 +14,13 @@
 #define kPointCount 4
 
 typedef struct {
-  UInt32 pointParam, rotParam, scaleParam;
-  NSInteger arcPart, ringPart, rotPart;
+  UInt32 pointParam, rotParam, scaleParam, previewParam;
+  NSInteger arcPart, ringPart, rotPart, iconPart;
   __unsafe_unretained KKArcOSC *arc;
   __unsafe_unretained KKOSCLabel *label;
   __unsafe_unretained KKRingOSC *ring;
   __unsafe_unretained KKRotationOSC *rot;
+  __unsafe_unretained KKIconButtonOSC *icon;
   BOOL arcHovered, arcDragging;
   BOOL ringHovered, ringDragging;
   BOOL rotHovered, rotDragging;
@@ -34,18 +35,22 @@ static const float kSnapThreshold = 8.0f;
   KKOSCLabel *_labelA;
   KKRingOSC *_ringA;
   KKRotationOSC *_rotA;
+  KKIconButtonOSC *_iconA;
   KKArcOSC *_arcB;
   KKOSCLabel *_labelB;
   KKRingOSC *_ringB;
   KKRotationOSC *_rotB;
+  KKIconButtonOSC *_iconB;
   KKArcOSC *_arcDrift;
   KKOSCLabel *_labelDrift;
   KKRingOSC *_ringDrift;
   KKRotationOSC *_rotDrift;
+  KKIconButtonOSC *_iconDrift;
   KKArcOSC *_arcExit;
   KKOSCLabel *_labelExit;
   KKRingOSC *_ringExit;
   KKRotationOSC *_rotExit;
+  KKIconButtonOSC *_iconExit;
   BOOL _snapX;
   BOOL _snapY;
   float _snapXVal;
@@ -61,6 +66,8 @@ static const float kSnapThreshold = 8.0f;
     _labelA.text = @"Point A";
     _ringA = [[KKRingOSC alloc] initWithAPIManager:apiManager];
     _rotA = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
+    _iconA = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
+    _iconA.iconName = @"eye";
 
     _arcB = [[KKArcOSC alloc] initWithAPIManager:apiManager];
     _arcB.clearsOnDraw = NO;
@@ -68,30 +75,38 @@ static const float kSnapThreshold = 8.0f;
     _labelB.text = @"Point B";
     _ringB = [[KKRingOSC alloc] initWithAPIManager:apiManager];
     _rotB = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
+    _iconB = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
+    _iconB.iconName = @"eye";
 
     _points[0] = (PointOSCState){
         .pointParam = kParamPointA,
         .rotParam = kParamRotationA,
         .scaleParam = kParamScaleA,
+        .previewParam = kParamPreviewA,
         .arcPart = 1,
         .ringPart = 2,
         .rotPart = 3,
+        .iconPart = 13,
         .arc = self,
         .label = _labelA,
         .ring = _ringA,
         .rot = _rotA,
+        .icon = _iconA,
     };
     _points[1] = (PointOSCState){
         .pointParam = kParamPointB,
         .rotParam = kParamRotationB,
         .scaleParam = kParamScaleB,
+        .previewParam = kParamPreviewB,
         .arcPart = 4,
         .ringPart = 5,
         .rotPart = 6,
+        .iconPart = 14,
         .arc = _arcB,
         .label = _labelB,
         .ring = _ringB,
         .rot = _rotB,
+        .icon = _iconB,
     };
 
     _arcDrift = [[KKArcOSC alloc] initWithAPIManager:apiManager];
@@ -100,18 +115,23 @@ static const float kSnapThreshold = 8.0f;
     _labelDrift.text = @"Drift";
     _ringDrift = [[KKRingOSC alloc] initWithAPIManager:apiManager];
     _rotDrift = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
+    _iconDrift = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
+    _iconDrift.iconName = @"eye";
 
     _points[2] = (PointOSCState){
         .pointParam = kParamDriftPoint,
         .rotParam = kParamDriftRotation,
         .scaleParam = kParamDriftScale,
+        .previewParam = kParamPreviewDrift,
         .arcPart = 7,
         .ringPart = 8,
         .rotPart = 9,
+        .iconPart = 15,
         .arc = _arcDrift,
         .label = _labelDrift,
         .ring = _ringDrift,
         .rot = _rotDrift,
+        .icon = _iconDrift,
     };
 
     _arcExit = [[KKArcOSC alloc] initWithAPIManager:apiManager];
@@ -120,18 +140,23 @@ static const float kSnapThreshold = 8.0f;
     _labelExit.text = @"Exit";
     _ringExit = [[KKRingOSC alloc] initWithAPIManager:apiManager];
     _rotExit = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
+    _iconExit = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
+    _iconExit.iconName = @"eye";
 
     _points[3] = (PointOSCState){
         .pointParam = kParamExitPoint,
         .rotParam = kParamExitRotation,
         .scaleParam = kParamExitScale,
+        .previewParam = kParamPreviewExit,
         .arcPart = 10,
         .ringPart = 11,
         .rotPart = 12,
+        .iconPart = 16,
         .arc = _arcExit,
         .label = _labelExit,
         .ring = _ringExit,
         .rot = _rotExit,
+        .icon = _iconExit,
     };
   }
   return self;
@@ -269,6 +294,17 @@ static const float kSnapThreshold = 8.0f;
   CGPoint labelPos = CGPointMake(pos.x, pos.y - arcOuter - 4.0f -
                                             pt->label.size.height / 2.0f);
   [pt->label drawAtCanvasPosition:labelPos destinationImage:dest];
+
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  BOOL previewOn = NO;
+  [paramGetAPI getBoolValue:&previewOn
+              fromParameter:pt->previewParam
+                     atTime:time];
+  pt->icon.iconName = previewOn ? @"eye.fill" : @"eye";
+  CGPoint iconPos =
+      CGPointMake(pos.x, pos.y + arcOuter + 4.0f + pt->icon.size.height / 2.0f);
+  [pt->icon drawAtCanvasPosition:iconPos destinationImage:dest];
 }
 
 - (void)drawOSCWithWidth:(NSInteger)width
@@ -408,6 +444,17 @@ static const float kSnapThreshold = 8.0f;
 
   CGPoint pos = [self positionForParam:pt->pointParam atTime:time];
 
+  // Icon button above the arc
+  float arcOuter = pt->arc.oscRadius + pt->arc.outlineWidth;
+  CGPoint iconCenter =
+      CGPointMake(pos.x, pos.y + arcOuter + 4.0f + pt->icon.size.height / 2.0f);
+  if ([pt->icon hitTestAtMousePositionX:positionX
+                              positionY:positionY
+                                 center:iconCenter]) {
+    *activePart = pt->iconPart;
+    return;
+  }
+
   if (pt->arc == self) {
     [super hitTestOSCAtMousePositionX:positionX
                        mousePositionY:positionY
@@ -486,6 +533,22 @@ static const float kSnapThreshold = 8.0f;
                    atTime:(CMTime)time {
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+
+  if (activePart == pt->iconPart) {
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> paramSetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    BOOL previewOn = NO;
+    [paramGetAPI getBoolValue:&previewOn
+                fromParameter:pt->previewParam
+                       atTime:time];
+    [paramSetAPI setBoolValue:!previewOn
+                  toParameter:pt->previewParam
+                       atTime:time];
+    *forceUpdate = YES;
+    return YES;
+  }
 
   if (activePart == pt->rotPart) {
     pt->rotDragging = YES;
