@@ -13,6 +13,7 @@
 #import <IOSurface/IOSurfaceObjC.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 #import <QuartzCore/QuartzCore.h>
+#import <objc/runtime.h>
 
 static double mmSmoothstep(double x) { return x * x * (3.0 - 2.0 * x); }
 static double mmEaseOutCubic(double x) { return 1.0 - pow(1.0 - x, 3.0); }
@@ -46,6 +47,34 @@ static double mmApplyCurveOut(double raw, int curve) {
     return mmSmoothstep(raw);
   }
 }
+
+@interface MagicMovePreviewClearTarget : NSObject
+@property(nonatomic, weak) id<PROAPIAccessing> apiManager;
+- (void)clearPreviews:(id)sender;
+@end
+
+@implementation MagicMovePreviewClearTarget
+- (void)clearPreviews:(id)sender {
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+  id<FxParameterSettingAPI_v5> paramSetAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  id<FxTimingAPI_v4> timingAPI =
+      [_apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  CMTime now = kCMTimeZero;
+  if (timingAPI) {
+    CMTime start = kCMTimeZero;
+    [timingAPI startTimeForEffect:&start];
+    now = start;
+  }
+  UInt32 previews[] = {kParamPreviewA, kParamPreviewB, kParamPreviewDrift,
+                       kParamPreviewExit};
+  for (int i = 0; i < 4; i++)
+    [paramSetAPI setBoolValue:NO toParameter:previews[i] atTime:now];
+  [actionAPI endAction:self];
+}
+@end
 
 @implementation MagicMovePlugin {
   KKLog *_log;
@@ -199,6 +228,15 @@ static double mmApplyCurveOut(double raw, int curve) {
                                                    @"exclamationmark.triangle"
                                                 accessibilityDescription:nil]
                           parameterID:kParamInfoCompound
+                              withAPI:paramAPI
+                                error:error])
+    return NO;
+
+  if (![self addInfoParameterWithText:@"Preview mode is active"
+                                 icon:[NSImage
+                                          imageWithSystemSymbolName:@"eye.fill"
+                                           accessibilityDescription:nil]
+                          parameterID:kParamPreviewWarning
                               withAPI:paramAPI
                                 error:error])
     return NO;
@@ -448,6 +486,20 @@ static double mmApplyCurveOut(double raw, int curve) {
   [paramGetAPI getBoolValue:&driftOn fromParameter:kParamDrift atTime:time];
   [paramGetAPI getBoolValue:&exitOn fromParameter:kParamExit atTime:time];
 
+  BOOL previewA = NO, previewB = NO, previewDrift = NO, previewExit = NO;
+  [paramGetAPI getBoolValue:&previewA fromParameter:kParamPreviewA atTime:time];
+  [paramGetAPI getBoolValue:&previewB fromParameter:kParamPreviewB atTime:time];
+  [paramGetAPI getBoolValue:&previewDrift
+              fromParameter:kParamPreviewDrift
+                     atTime:time];
+  [paramGetAPI getBoolValue:&previewExit
+              fromParameter:kParamPreviewExit
+                     atTime:time];
+  BOOL anyPreview = previewA || previewB || previewDrift || previewExit;
+  [paramSetAPI setParameterFlags:anyPreview ? kFxParameterFlag_DEFAULT
+                                            : kFxParameterFlag_HIDDEN
+                     toParameter:kParamPreviewWarning];
+
   BOOL showA = animIn || (animOut && !exitOn);
   BOOL showExit = exitOn && animOut;
 
@@ -487,6 +539,36 @@ static double mmApplyCurveOut(double raw, int curve) {
   [paramSetAPI setParameterFlags:flagExit toParameter:kParamExitScale];
   [paramSetAPI setParameterFlags:flagExit toParameter:kParamExitScaleY];
   [paramSetAPI setParameterFlags:flagExit toParameter:kParamExitOpacity];
+}
+
+- (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
+  if (parameterID == kParamPreviewWarning) {
+    KKAlertView *alert =
+        [[KKAlertView alloc] initWithText:@"Preview mode is active"
+                                    color:[NSColor warning]];
+    alert.icon = [NSImage imageWithSystemSymbolName:@"eye.fill"
+                           accessibilityDescription:nil];
+
+    MagicMovePreviewClearTarget *target =
+        [[MagicMovePreviewClearTarget alloc] init];
+    target.apiManager = self.apiManager;
+    NSButton *clearBtn = [NSButton buttonWithTitle:@"Clear"
+                                            target:target
+                                            action:@selector(clearPreviews:)];
+    clearBtn.controlSize = NSControlSizeSmall;
+    clearBtn.bezelStyle = NSBezelStyleAccessoryBarAction;
+    clearBtn.contentTintColor = [NSColor warning];
+    // Keep target alive as long as the button exists
+    objc_setAssociatedObject(clearBtn, "clearTarget", target,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    alert.accessoryView = clearBtn;
+    return alert;
+  }
+  // KKPlugin implements this via FxCustomParameterViewHost_v2 in a private
+  // category, so call through to it explicitly.
+  typedef NSView *(*ViewIMP)(id, SEL, UInt32);
+  ViewIMP imp = (ViewIMP)[KKPlugin instanceMethodForSelector:_cmd];
+  return imp(self, _cmd, parameterID);
 }
 
 - (BOOL)parameterChanged:(UInt32)parameterID
