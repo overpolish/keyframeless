@@ -72,17 +72,22 @@ static double mmApplyCurveOut(double raw, int curve) {
   return YES;
 }
 
-- (BOOL)addPointGroupWithName:(NSString *)name
-                      groupID:(UInt32)groupID
-                      pointID:(UInt32)pointID
-                   rotationID:(UInt32)rotationID
-                      scaleID:(UInt32)scaleID
-                     defaultX:(double)defaultX
-                     defaultY:(double)defaultY
-                      withAPI:(id<FxParameterCreationAPI_v5>)paramAPI {
-  if (![paramAPI startParameterSubGroup:name
-                            parameterID:groupID
-                         parameterFlags:kFxParameterFlag_DEFAULT])
+- (BOOL)addPointSectionWithName:(NSString *)name
+                    separatorID:(UInt32)separatorID
+                        pointID:(UInt32)pointID
+                     rotationID:(UInt32)rotationID
+                        scaleID:(UInt32)scaleID
+                       defaultX:(double)defaultX
+                       defaultY:(double)defaultY
+                        withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
+                          error:(NSError **)error {
+  NSImage *icon = [NSImage imageWithSystemSymbolName:@"circle.circle"
+                            accessibilityDescription:nil];
+  if (![self addSeparatorParameterWithText:name
+                                      icon:icon
+                               parameterID:separatorID
+                                   withAPI:paramAPI
+                                     error:error])
     return NO;
 
   if (![paramAPI addPointParameterWithName:@"Position"
@@ -109,9 +114,6 @@ static double mmApplyCurveOut(double raw, int curve) {
                                 sliderMax:5.0
                                     delta:0.01
                            parameterFlags:kFxParameterFlag_DEFAULT])
-    return NO;
-
-  if (![paramAPI endParameterSubGroup])
     return NO;
 
   return YES;
@@ -145,35 +147,42 @@ static double mmApplyCurveOut(double raw, int curve) {
                                 error:error])
     return NO;
 
-  if (![self addPointGroupWithName:@"Point A"
-                           groupID:kParamGroupPointA
-                           pointID:kParamPointA
-                        rotationID:kParamRotationA
-                           scaleID:kParamScaleA
-                          defaultX:0.5
-                          defaultY:0.5
-                           withAPI:paramAPI])
-    return NO;
-
-  if (![self addPointGroupWithName:@"Point B"
-                           groupID:kParamGroupPointB
-                           pointID:kParamPointB
-                        rotationID:kParamRotationB
-                           scaleID:kParamScaleB
-                          defaultX:0.5
-                          defaultY:0.5
-                           withAPI:paramAPI])
-    return NO;
-
   if (![paramAPI addToggleButtonWithName:@"Rotate with Motion"
                              parameterID:kParamRotateWithMotion
                             defaultValue:NO
                           parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
-  if (![paramAPI startParameterSubGroup:@"Drift"
-                            parameterID:kParamGroupDrift
-                         parameterFlags:kFxParameterFlag_DEFAULT])
+  if (![self addPointSectionWithName:@"Point A"
+                         separatorID:kParamGroupPointA
+                             pointID:kParamPointA
+                          rotationID:kParamRotationA
+                             scaleID:kParamScaleA
+                            defaultX:0.5
+                            defaultY:0.5
+                             withAPI:paramAPI
+                               error:error])
+    return NO;
+
+  if (![self addPointSectionWithName:@"Point B"
+                         separatorID:kParamGroupPointB
+                             pointID:kParamPointB
+                          rotationID:kParamRotationB
+                             scaleID:kParamScaleB
+                            defaultX:0.5
+                            defaultY:0.5
+                             withAPI:paramAPI
+                               error:error])
+    return NO;
+
+  NSImage *circleIcon = [NSImage imageWithSystemSymbolName:@"circle.circle"
+                                  accessibilityDescription:nil];
+
+  if (![self addSeparatorParameterWithText:@"Drift"
+                                      icon:circleIcon
+                               parameterID:kParamGroupDrift
+                                   withAPI:paramAPI
+                                     error:error])
     return NO;
 
   if (![paramAPI addToggleButtonWithName:@"Enable"
@@ -208,12 +217,11 @@ static double mmApplyCurveOut(double raw, int curve) {
                            parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
-  if (![paramAPI endParameterSubGroup])
-    return NO;
-
-  if (![paramAPI startParameterSubGroup:@"Exit"
-                            parameterID:kParamGroupExit
-                         parameterFlags:kFxParameterFlag_DEFAULT])
+  if (![self addSeparatorParameterWithText:@"Exit"
+                                      icon:circleIcon
+                               parameterID:kParamGroupExit
+                                   withAPI:paramAPI
+                                     error:error])
     return NO;
 
   if (![paramAPI addToggleButtonWithName:@"Enable"
@@ -226,8 +234,7 @@ static double mmApplyCurveOut(double raw, int curve) {
                                parameterID:kParamExitPoint
                                   defaultX:0.5
                                   defaultY:0.5
-                            parameterFlags:kFxParameterFlag_DEFAULT |
-                                           kFxParameterFlag_HIDDEN])
+                            parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
   if (![paramAPI addAngleSliderWithName:@"Rotation"
@@ -247,9 +254,6 @@ static double mmApplyCurveOut(double raw, int curve) {
                                 sliderMax:5.0
                                     delta:0.01
                            parameterFlags:kFxParameterFlag_DEFAULT])
-    return NO;
-
-  if (![paramAPI endParameterSubGroup])
     return NO;
 
   if (![self addAnimationParametersWithAPI:paramAPI error:error])
@@ -286,8 +290,10 @@ static double mmApplyCurveOut(double raw, int curve) {
   FxParameterFlags flagExit =
       showExit ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
 
-  // Point A group
-  [paramSetAPI setParameterFlags:flagA toParameter:kParamGroupPointA];
+  // Point A: separator always visible, parameters hidden when not needed
+  [paramSetAPI setParameterFlags:flagA toParameter:kParamPointA];
+  [paramSetAPI setParameterFlags:flagA toParameter:kParamRotationA];
+  [paramSetAPI setParameterFlags:flagA toParameter:kParamScaleA];
 
   // Drift sub-parameters (keep Enable toggle visible)
   [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftPoint];
@@ -311,6 +317,8 @@ static double mmApplyCurveOut(double raw, int curve) {
              atTime:(CMTime)renderTime
             quality:(FxQuality)qualityLevel
               error:(NSError **)error {
+  [self updateParameterVisibilityAtTime:renderTime];
+
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   if (paramGetAPI == nil) {

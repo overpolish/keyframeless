@@ -711,8 +711,11 @@ static const float kSnapThreshold = 8.0f;
   _snapY = NO;
   for (int i = 0; i < kPointCount; i++) {
     _points[i].arcDragging = NO;
+    _points[i].arcHovered = NO;
     _points[i].ringDragging = NO;
+    _points[i].ringHovered = NO;
     _points[i].rotDragging = NO;
+    _points[i].rotHovered = NO;
   }
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
