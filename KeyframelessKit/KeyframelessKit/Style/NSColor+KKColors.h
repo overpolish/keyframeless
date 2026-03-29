@@ -28,32 +28,6 @@
 + (NSColor *)error;
 + (NSColor *)transparent;
 
-#pragma mark OSC
-
-+ (NSColor *)arcFill;
-+ (NSColor *)arcStroke;
-
-+ (NSColor *)pointFill;
-+ (NSColor *)pointStroke;
-+ (NSColor *)pointFillHover;
-+ (NSColor *)pointFillActive;
-
-+ (NSColor *)ringIdleFill;
-+ (NSColor *)ringIdleStroke;
-+ (NSColor *)ringHoverFill;
-+ (NSColor *)ringHoverStroke;
-+ (NSColor *)ringActiveFill;
-+ (NSColor *)ringActiveStroke;
-
-+ (NSColor *)labelFill;
-+ (NSColor *)labelStroke;
-
-+ (NSColor *)iconButtonFill;
-+ (NSColor *)iconButtonStroke;
-
-+ (NSColor *)donutFill;
-+ (NSColor *)donutStroke;
-
 - (NSColor *)shiftedHueBy:(CGFloat)amount;
 - (NSColor *)compound;
 

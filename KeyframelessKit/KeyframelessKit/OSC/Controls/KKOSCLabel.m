@@ -4,7 +4,6 @@
  */
 
 #import "KKOSCLabel.h"
-#import "../../Style/NSColor+KKColors.h"
 #import "../Base/KKOSCShaderTypes.h"
 #include <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
@@ -16,6 +15,19 @@ static NSString *const kLabelPipelineID =
 static const CGFloat kScale = 2.0;
 static const CGFloat kFontSize = 20.0;
 static const CGFloat kStrokePt = 3.0;
+
+static NSColor *labelFillColor(void) {
+  return [NSColor colorWithRed:0xC1 / 255.0
+                         green:0xC1 / 255.0
+                          blue:0xC1 / 255.0
+                         alpha:1.0f];
+}
+static NSColor *labelStrokeColor(void) {
+  return [NSColor colorWithRed:0x00 / 255.0
+                         green:0x00 / 255.0
+                          blue:0x00 / 255.0
+                         alpha:0.8f];
+}
 
 @implementation KKOSCLabel {
   id<PROAPIAccessing> __weak _apiManager;
@@ -44,13 +56,13 @@ static const CGFloat kStrokePt = 3.0;
   NSFont *font = [NSFont systemFontOfSize:kFontSize weight:NSFontWeightMedium];
   NSDictionary *strokeAttrs = @{
     NSFontAttributeName : font,
-    NSForegroundColorAttributeName : [NSColor labelStroke],
-    NSStrokeColorAttributeName : [NSColor labelStroke],
+    NSForegroundColorAttributeName : labelStrokeColor(),
+    NSStrokeColorAttributeName : labelStrokeColor(),
     NSStrokeWidthAttributeName : @(kStrokePt / kFontSize * 100.0)
   };
   NSDictionary *fillAttrs = @{
     NSFontAttributeName : font,
-    NSForegroundColorAttributeName : [NSColor labelFill],
+    NSForegroundColorAttributeName : labelFillColor(),
   };
   NSSize textSize = [_text sizeWithAttributes:fillAttrs];
 

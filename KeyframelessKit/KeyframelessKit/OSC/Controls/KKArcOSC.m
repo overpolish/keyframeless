@@ -11,6 +11,19 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 
+static NSColor *arcFillColor(void) {
+  return [NSColor colorWithRed:0xC1 / 255.0
+                         green:0xC1 / 255.0
+                          blue:0xC1 / 255.0
+                         alpha:1.0f];
+}
+static NSColor *arcStrokeColor(void) {
+  return [NSColor colorWithRed:0x00 / 255.0
+                         green:0x00 / 255.0
+                          blue:0x00 / 255.0
+                         alpha:0.8f];
+}
+
 @implementation KKArcOSC
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
@@ -56,8 +69,8 @@
       .plusHalfLen = isActive ? 7.0f / outerRadiusPixels : 0.0f,
       .plusFillHalfWidth = 1.0f / outerRadiusPixels,
       .plusOutlineWidth = 2.0f / outerRadiusPixels,
-      .fillColor = [[NSColor arcFill] simdFloat4],
-      .strokeColor = [[NSColor arcStroke] simdFloat4]};
+      .fillColor = [arcFillColor() simdFloat4],
+      .strokeColor = [arcStrokeColor() simdFloat4]};
 
   [self drawQuadForDestinationImage:destinationImage
                      canvasPosition:canvasPosition

@@ -13,6 +13,31 @@
 
 static NSString *kPointOSCPluginID = @"co.overpolish.keyframelesskit.PointOSC";
 
+static NSColor *pointFillColor(void) {
+  return [NSColor colorWithRed:0xB3 / 255.0
+                         green:0xB3 / 255.0
+                          blue:0xB3 / 255.0
+                         alpha:0.65f];
+}
+static NSColor *pointFillHoverColor(void) {
+  return [NSColor colorWithRed:0xB3 / 255.0
+                         green:0xB3 / 255.0
+                          blue:0xB3 / 255.0
+                         alpha:0.8f];
+}
+static NSColor *pointFillActiveColor(void) {
+  return [NSColor colorWithRed:0xB3 / 255.0
+                         green:0xB3 / 255.0
+                          blue:0xB3 / 255.0
+                         alpha:0.95f];
+}
+static NSColor *pointStrokeColor(void) {
+  return [NSColor colorWithRed:0x00 / 255.0
+                         green:0x00 / 255.0
+                          blue:0x00 / 255.0
+                         alpha:0.8f];
+}
+
 @implementation KKPointOSC
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
@@ -52,10 +77,10 @@ static NSString *kPointOSCPluginID = @"co.overpolish.keyframelesskit.PointOSC";
 
   KKPointOSCParams params = {
       .outlineWidth = _outlineWidth / outerRadiusPixels,
-      .fillColor = isActive    ? [[NSColor pointFillActive] simdFloat4]
-                   : isHovered ? [[NSColor pointFillHover] simdFloat4]
-                               : [[NSColor pointFill] simdFloat4],
-      .strokeColor = [[NSColor pointStroke] simdFloat4]};
+      .fillColor = isActive    ? [pointFillActiveColor() simdFloat4]
+                   : isHovered ? [pointFillHoverColor() simdFloat4]
+                               : [pointFillColor() simdFloat4],
+      .strokeColor = [pointStrokeColor() simdFloat4]};
 
   [self drawQuadForDestinationImage:destinationImage
                      canvasPosition:canvasPosition
