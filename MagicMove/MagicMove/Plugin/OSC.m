@@ -887,6 +887,7 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
       CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
   BOOL optHeld = (flags & kCGEventFlagMaskAlternate) != 0;
   BOOL shiftHeld = (flags & kCGEventFlagMaskShift) != 0;
+  BOOL ctrlHeld = (flags & kCGEventFlagMaskControl) != 0;
 
   _pathSnapX = NO;
   _pathSnapY = NO;
@@ -906,7 +907,7 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
     simd_float2 handlePos = mouseObj;
 
     // Snap handle to horizontal/vertical relative to control point
-    if (!shiftHeld) {
+    if (!shiftHeld && !ctrlHeld) {
       CGPoint ptC = [self canvasPointFromObject:(simd_float2){pt.x, pt.y}];
       CGPoint hC = [self canvasPointFromObject:handlePos];
       if (fabs(hC.y - ptC.y) < kSnapThreshold) {
@@ -930,7 +931,7 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
     MagicMovePathPoint pt = [path pointAtIndex:(NSUInteger)_pathDragIndex];
     simd_float2 handlePos = mouseObj;
 
-    if (!shiftHeld) {
+    if (!shiftHeld && !ctrlHeld) {
       CGPoint ptC = [self canvasPointFromObject:(simd_float2){pt.x, pt.y}];
       CGPoint hC = [self canvasPointFromObject:handlePos];
       if (fabs(hC.y - ptC.y) < kSnapThreshold) {
@@ -952,16 +953,18 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
                 atIndex:(NSUInteger)_pathDragIndex];
   } else {
     // Snap control point to other points and endpoints
-    simd_float2 snapTargets[path.count + 4];
-    NSUInteger snapCount;
-    [self buildPathSnapTargets:snapTargets
-                         count:&snapCount
-                          path:path
-                     dragIndex:(NSUInteger)_pathDragIndex
-                        atTime:time];
-    mouseObj = [self applyPathSnap:mouseObj
-                           targets:snapTargets
-                             count:snapCount];
+    if (!ctrlHeld) {
+      simd_float2 snapTargets[path.count + 4];
+      NSUInteger snapCount;
+      [self buildPathSnapTargets:snapTargets
+                           count:&snapCount
+                            path:path
+                       dragIndex:(NSUInteger)_pathDragIndex
+                          atTime:time];
+      mouseObj = [self applyPathSnap:mouseObj
+                             targets:snapTargets
+                               count:snapCount];
+    }
     [path moveAtIndex:(NSUInteger)_pathDragIndex to:mouseObj];
   }
 
@@ -1411,37 +1414,43 @@ static NSInteger pathPartOffset(NSInteger part) { return part % 1000; }
                             toX:&canvasCenter.x
                             toY:&canvasCenter.y];
 
-  double bestDistX = fabs(canvasX - canvasCenter.x);
-  double bestSnapX = canvasCenter.x;
-  double bestDistY = fabs(canvasY - canvasCenter.y);
-  double bestSnapY = canvasCenter.y;
-
-  for (NSUInteger i = 0; i < snapCount; i++) {
-    double dx = fabs(canvasX - snapTargets[i].x);
-    double dy = fabs(canvasY - snapTargets[i].y);
-    if (dx < bestDistX) {
-      bestDistX = dx;
-      bestSnapX = snapTargets[i].x;
-    }
-    if (dy < bestDistY) {
-      bestDistY = dy;
-      bestSnapY = snapTargets[i].y;
-    }
-  }
-
   _snapX = NO;
   _snapY = NO;
 
-  if (bestDistX < kSnapThreshold) {
-    _snapX = YES;
-    canvasX = bestSnapX;
-    _snapXVal = (float)bestSnapX;
-  }
+  CGEventFlags flags =
+      CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+  BOOL ctrlHeld = (flags & kCGEventFlagMaskControl) != 0;
 
-  if (bestDistY < kSnapThreshold) {
-    _snapY = YES;
-    canvasY = bestSnapY;
-    _snapYVal = (float)bestSnapY;
+  if (!ctrlHeld) {
+    double bestDistX = fabs(canvasX - canvasCenter.x);
+    double bestSnapX = canvasCenter.x;
+    double bestDistY = fabs(canvasY - canvasCenter.y);
+    double bestSnapY = canvasCenter.y;
+
+    for (NSUInteger i = 0; i < snapCount; i++) {
+      double dx = fabs(canvasX - snapTargets[i].x);
+      double dy = fabs(canvasY - snapTargets[i].y);
+      if (dx < bestDistX) {
+        bestDistX = dx;
+        bestSnapX = snapTargets[i].x;
+      }
+      if (dy < bestDistY) {
+        bestDistY = dy;
+        bestSnapY = snapTargets[i].y;
+      }
+    }
+
+    if (bestDistX < kSnapThreshold) {
+      _snapX = YES;
+      canvasX = bestSnapX;
+      _snapXVal = (float)bestSnapX;
+    }
+
+    if (bestDistY < kSnapThreshold) {
+      _snapY = YES;
+      canvasY = bestSnapY;
+      _snapYVal = (float)bestSnapY;
+    }
   }
 
   double objX, objY;
