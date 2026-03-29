@@ -77,6 +77,7 @@ static double mmApplyCurveOut(double raw, int curve) {
                         pointID:(UInt32)pointID
                      rotationID:(UInt32)rotationID
                         scaleID:(UInt32)scaleID
+                      previewID:(UInt32)previewID
                        defaultX:(double)defaultX
                        defaultY:(double)defaultY
                         withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
@@ -89,6 +90,14 @@ static double mmApplyCurveOut(double raw, int curve) {
                                    withAPI:paramAPI
                                      error:error])
     return NO;
+
+  if (previewID != 0) {
+    if (![paramAPI addToggleButtonWithName:@"Preview"
+                               parameterID:previewID
+                              defaultValue:NO
+                            parameterFlags:kFxParameterFlag_DEFAULT])
+      return NO;
+  }
 
   if (![paramAPI addPointParameterWithName:@"Position"
                                parameterID:pointID
@@ -147,6 +156,9 @@ static double mmApplyCurveOut(double raw, int curve) {
                                 error:error])
     return NO;
 
+  if (![self addAnimationParametersWithAPI:paramAPI error:error])
+    return NO;
+
   if (![paramAPI addToggleButtonWithName:@"Rotate with Motion"
                              parameterID:kParamRotateWithMotion
                             defaultValue:NO
@@ -158,6 +170,7 @@ static double mmApplyCurveOut(double raw, int curve) {
                              pointID:kParamPointA
                           rotationID:kParamRotationA
                              scaleID:kParamScaleA
+                           previewID:kParamPreviewA
                             defaultX:0.5
                             defaultY:0.5
                              withAPI:paramAPI
@@ -169,6 +182,7 @@ static double mmApplyCurveOut(double raw, int curve) {
                              pointID:kParamPointB
                           rotationID:kParamRotationB
                              scaleID:kParamScaleB
+                           previewID:kParamPreviewB
                             defaultX:0.5
                             defaultY:0.5
                              withAPI:paramAPI
@@ -187,6 +201,12 @@ static double mmApplyCurveOut(double raw, int curve) {
 
   if (![paramAPI addToggleButtonWithName:@"Enable"
                              parameterID:kParamDrift
+                            defaultValue:NO
+                          parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
+  if (![paramAPI addToggleButtonWithName:@"Preview"
+                             parameterID:kParamPreviewDrift
                             defaultValue:NO
                           parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
@@ -230,6 +250,12 @@ static double mmApplyCurveOut(double raw, int curve) {
                           parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
+  if (![paramAPI addToggleButtonWithName:@"Preview"
+                             parameterID:kParamPreviewExit
+                            defaultValue:NO
+                          parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
   if (![paramAPI addPointParameterWithName:@"Position"
                                parameterID:kParamExitPoint
                                   defaultX:0.5
@@ -254,9 +280,6 @@ static double mmApplyCurveOut(double raw, int curve) {
                                 sliderMax:5.0
                                     delta:0.01
                            parameterFlags:kFxParameterFlag_DEFAULT])
-    return NO;
-
-  if (![self addAnimationParametersWithAPI:paramAPI error:error])
     return NO;
 
   return YES;
@@ -291,16 +314,19 @@ static double mmApplyCurveOut(double raw, int curve) {
       showExit ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
 
   // Point A: separator always visible, parameters hidden when not needed
+  [paramSetAPI setParameterFlags:flagA toParameter:kParamPreviewA];
   [paramSetAPI setParameterFlags:flagA toParameter:kParamPointA];
   [paramSetAPI setParameterFlags:flagA toParameter:kParamRotationA];
   [paramSetAPI setParameterFlags:flagA toParameter:kParamScaleA];
 
   // Drift sub-parameters (keep Enable toggle visible)
+  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamPreviewDrift];
   [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftPoint];
   [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftRotation];
   [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftScale];
 
   // Exit sub-parameters (keep Enable toggle visible)
+  [paramSetAPI setParameterFlags:flagExit toParameter:kParamPreviewExit];
   [paramSetAPI setParameterFlags:flagExit toParameter:kParamExitPoint];
   [paramSetAPI setParameterFlags:flagExit toParameter:kParamExitRotation];
   [paramSetAPI setParameterFlags:flagExit toParameter:kParamExitScale];
@@ -309,6 +335,23 @@ static double mmApplyCurveOut(double raw, int curve) {
 - (BOOL)parameterChanged:(UInt32)parameterID
                   atTime:(CMTime)time
                    error:(NSError **)error {
+  if (parameterID == kParamPreviewA || parameterID == kParamPreviewB ||
+      parameterID == kParamPreviewDrift || parameterID == kParamPreviewExit) {
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> paramSetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    BOOL isOn = NO;
+    [paramGetAPI getBoolValue:&isOn fromParameter:parameterID atTime:time];
+    if (isOn) {
+      const UInt32 allPreviews[] = {kParamPreviewA, kParamPreviewB,
+                                    kParamPreviewDrift, kParamPreviewExit};
+      for (int i = 0; i < 4; i++) {
+        if (allPreviews[i] != parameterID)
+          [paramSetAPI setBoolValue:NO toParameter:allPreviews[i] atTime:time];
+      }
+    }
+  }
   [self updateParameterVisibilityAtTime:time];
   return YES;
 }
@@ -333,6 +376,62 @@ static double mmApplyCurveOut(double raw, int curve) {
     }
     return NO;
   }
+  BOOL previewA = NO, previewB = NO, previewDrift = NO, previewExit = NO;
+  [paramGetAPI getBoolValue:&previewA
+              fromParameter:kParamPreviewA
+                     atTime:renderTime];
+  [paramGetAPI getBoolValue:&previewB
+              fromParameter:kParamPreviewB
+                     atTime:renderTime];
+  [paramGetAPI getBoolValue:&previewDrift
+              fromParameter:kParamPreviewDrift
+                     atTime:renderTime];
+  [paramGetAPI getBoolValue:&previewExit
+              fromParameter:kParamPreviewExit
+                     atTime:renderTime];
+
+  UInt32 previewPointID = 0, previewRotID = 0, previewScaleID = 0;
+  if (previewA) {
+    previewPointID = kParamPointA;
+    previewRotID = kParamRotationA;
+    previewScaleID = kParamScaleA;
+  } else if (previewB) {
+    previewPointID = kParamPointB;
+    previewRotID = kParamRotationB;
+    previewScaleID = kParamScaleB;
+  } else if (previewDrift) {
+    previewPointID = kParamDriftPoint;
+    previewRotID = kParamDriftRotation;
+    previewScaleID = kParamDriftScale;
+  } else if (previewExit) {
+    previewPointID = kParamExitPoint;
+    previewRotID = kParamExitRotation;
+    previewScaleID = kParamExitScale;
+  }
+
+  if (previewPointID != 0) {
+    double px = 0.5, py = 0.5;
+    [paramGetAPI getXValue:&px
+                    YValue:&py
+             fromParameter:previewPointID
+                    atTime:renderTime];
+    double rot = 0, scale = 1;
+    [paramGetAPI getFloatValue:&rot
+                 fromParameter:previewRotID
+                        atTime:renderTime];
+    [paramGetAPI getFloatValue:&scale
+                 fromParameter:previewScaleID
+                        atTime:renderTime];
+
+    MagicMoveParams params;
+    params.translate = (simd_float2){(float)(px - 0.5), (float)(py - 0.5)};
+    params.rotation = (float)rot;
+    params.scale = (float)scale;
+
+    *pluginState = [NSData dataWithBytes:&params length:sizeof(params)];
+    return (*pluginState != nil);
+  }
+
   double t = [self animationFactorAtTime:renderTime];
 
   double posAx = 0.5, posAy = 0.5, posBx = 0.5, posBy = 0.5;
