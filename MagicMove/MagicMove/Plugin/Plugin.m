@@ -222,6 +222,14 @@ static double mmApplyCurveOut(double raw, int curve) {
   if (![self addUpdateBannerParameterWithAPI:paramAPI error:error])
     return NO;
 
+  if (![paramAPI
+          addToggleButtonWithName:@"Force Show Alerts"
+                      parameterID:kParamForceShowAlerts
+                     defaultValue:NO
+                   parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
+                                  kFxParameterFlag_DONT_DISPLAY_IN_DASHBOARD])
+    return NO;
+
   if (![self addInfoParameterWithText:
                  @"Create a Compound Clip before applying to avoid clipping"
                                  icon:[NSImage imageWithSystemSymbolName:
@@ -240,6 +248,18 @@ static double mmApplyCurveOut(double raw, int curve) {
                               withAPI:paramAPI
                                 error:error])
     return NO;
+
+  // Hide alerts initially — updateParameterVisibilityAtTime: will show them
+  // when appropriate.
+  id<FxParameterSettingAPI_v5> initSetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  if (initSetAPI) {
+    FxParameterFlags hiddenAlert =
+        kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_CUSTOM_UI |
+        kFxParameterFlag_USE_FULL_VIEW_WIDTH | kFxParameterFlag_DISABLED |
+        kFxParameterFlag_HIDDEN;
+    [initSetAPI setParameterFlags:hiddenAlert toParameter:kParamPreviewWarning];
+  }
 
   if (![self addAnimationParametersWithAPI:paramAPI error:error])
     return NO;
@@ -495,9 +515,19 @@ static double mmApplyCurveOut(double raw, int curve) {
   [paramGetAPI getBoolValue:&previewExit
               fromParameter:kParamPreviewExit
                      atTime:time];
+  BOOL forceAlerts = NO;
+  [paramGetAPI getBoolValue:&forceAlerts
+              fromParameter:kParamForceShowAlerts
+                     atTime:time];
+
+  FxParameterFlags alertBase =
+      kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_CUSTOM_UI |
+      kFxParameterFlag_USE_FULL_VIEW_WIDTH | kFxParameterFlag_DISABLED;
+
   BOOL anyPreview = previewA || previewB || previewDrift || previewExit;
-  [paramSetAPI setParameterFlags:anyPreview ? kFxParameterFlag_DEFAULT
-                                            : kFxParameterFlag_HIDDEN
+  [paramSetAPI setParameterFlags:(anyPreview || forceAlerts)
+                                     ? alertBase
+                                     : (alertBase | kFxParameterFlag_HIDDEN)
                      toParameter:kParamPreviewWarning];
 
   BOOL showA = animIn || (animOut && !exitOn);
@@ -1010,7 +1040,6 @@ static double mmApplyCurveOut(double raw, int curve) {
   }
 
   *destinationImageRect = sourceImages[0].imagePixelBounds;
-
   return YES;
 }
 
