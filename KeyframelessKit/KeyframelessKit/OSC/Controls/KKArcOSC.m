@@ -32,6 +32,7 @@ static NSColor *arcStrokeColor(void) {
     _oscRadius = 23.0f;
     _strokeWidth = 10.0f;
     _outlineWidth = KKBorderWidthXS + 0.75;
+    _fillAlpha = 1.0f;
   }
   return self;
 }
@@ -69,7 +70,8 @@ static NSColor *arcStrokeColor(void) {
       .plusHalfLen = isActive ? 7.0f / outerRadiusPixels : 0.0f,
       .plusFillHalfWidth = 1.0f / outerRadiusPixels,
       .plusOutlineWidth = 2.0f / outerRadiusPixels,
-      .fillColor = [arcFillColor() simdFloat4],
+      .fillColor =
+          [[arcFillColor() colorWithAlphaComponent:_fillAlpha] simdFloat4],
       .strokeColor = [arcStrokeColor() simdFloat4]};
 
   [self drawQuadForDestinationImage:destinationImage

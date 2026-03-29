@@ -57,5 +57,5 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
 
     constexpr sampler s(mag_filter::linear, min_filter::linear);
     half4 c = colorTexture.sample(s, src);
-    return float4(c);
+    return float4(c) * params->opacity;
 }

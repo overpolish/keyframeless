@@ -11,6 +11,7 @@ typedef struct {
     vector_float2 translate;
     float rotation;
     float scale;
+    float opacity;
 } MagicMoveParams;
 
 typedef enum { FragmentIndex_Params = 0 } FragmentIndex;
