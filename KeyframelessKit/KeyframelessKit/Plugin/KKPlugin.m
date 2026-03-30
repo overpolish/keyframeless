@@ -511,4 +511,25 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
   return infoView;
 }
 
+- (BOOL)forceShowAllParametersIfEnabled:(UInt32)forceShowParamID
+                               paramIDs:(NSArray<NSNumber *> *)paramIDs
+                                 atTime:(CMTime)time {
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  BOOL forceShow = NO;
+  [paramGetAPI getBoolValue:&forceShow
+              fromParameter:forceShowParamID
+                     atTime:time];
+  if (!forceShow)
+    return NO;
+
+  id<FxParameterSettingAPI_v5> paramSetAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  for (NSNumber *paramID in paramIDs) {
+    [paramSetAPI setParameterFlags:kFxParameterFlag_DEFAULT
+                       toParameter:paramID.unsignedIntValue];
+  }
+  return YES;
+}
+
 @end
