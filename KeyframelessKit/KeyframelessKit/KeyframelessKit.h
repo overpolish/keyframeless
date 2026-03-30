@@ -13,13 +13,17 @@ FOUNDATION_EXPORT const unsigned char
 
 #import <KeyframelessKit/KKAlertView.h>
 #import <KeyframelessKit/KKArcOSC.h>
+#import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/KKCompoundPointOSC.h>
 #import <KeyframelessKit/KKConstants.h>
+#import <KeyframelessKit/KKEasing.h>
 #import <KeyframelessKit/KKHostInfo.h>
 #import <KeyframelessKit/KKIconButtonOSC.h>
 #import <KeyframelessKit/KKKbd.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKOSCLabel.h>
+#import <KeyframelessKit/KKOnScreenControl+CoordinateSpace.h>
 #import <KeyframelessKit/KKPlugin.h>
 #import <KeyframelessKit/KKPointOSC.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
@@ -27,6 +31,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKRotationOSC.h>
 #import <KeyframelessKit/KKSeparatorView.h>
 #import <KeyframelessKit/KKShaderTypes.h>
+#import <KeyframelessKit/KKSnapEngine.h>
 #import <KeyframelessKit/KKTokens.h>
 #import <KeyframelessKit/KKUpdateChecker.h>
 #import <KeyframelessKit/NSColor+KKColors.h>
