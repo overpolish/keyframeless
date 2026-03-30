@@ -13,17 +13,20 @@
 
 static const CGFloat kChevronMarginLeft = 10.0;
 static const CGFloat kCheckboxTrailingMargin = 23.0;
+static const CGFloat kStatusTrailingMargin = 23.0;
 
 @implementation KKCustomGroupHeaderView {
   KKChevronView *_chevron;
   KKCheckboxView *_checkbox;
+  NSTextField *_statusLabel;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect
                    apiManager:(id<PROAPIAccessing>)apiManager
                   parameterId:(UInt32)parameterId
                          text:(NSString *)text
-                         icon:(NSImage *)icon {
+                         icon:(NSImage *)icon
+                showsCheckbox:(BOOL)showsCheckbox {
   self = [super initWithFrame:frameRect
                    apiManager:apiManager
                   parameterId:parameterId];
@@ -57,37 +60,56 @@ static const CGFloat kCheckboxTrailingMargin = 23.0;
     KKLabelView *label = [[KKLabelView alloc] initWithText:text icon:icon];
     self.leftView = label;
 
-    _checkbox = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
-    _checkbox.translatesAutoresizingMaskIntoConstraints = NO;
-    _checkbox.onToggle = ^(BOOL isChecked) {
-      __strong typeof(weakSelf) strongSelf = weakSelf;
-      if (!strongSelf)
-        return;
-      strongSelf->_isEnabled = isChecked;
-      strongSelf->_chevron.isInteractive = isChecked;
-      if (!isChecked && strongSelf->_isExpanded) {
-        strongSelf->_isExpanded = NO;
-        [strongSelf->_chevron setExpanded:NO animated:YES];
-        if (strongSelf.onExpandedChanged) {
-          strongSelf.onExpandedChanged(NO);
-        }
-      }
-      if (strongSelf.onEnabledChanged) {
-        strongSelf.onEnabledChanged(isChecked);
-      }
-    };
-
     NSView *rightContainer = [[NSView alloc] initWithFrame:NSZeroRect];
-    [rightContainer addSubview:_checkbox];
-    [NSLayoutConstraint activateConstraints:@[
-      [_checkbox.trailingAnchor
-          constraintEqualToAnchor:rightContainer.trailingAnchor
-                         constant:-kCheckboxTrailingMargin],
-      [_checkbox.centerYAnchor
-          constraintEqualToAnchor:rightContainer.centerYAnchor],
-      [_checkbox.widthAnchor constraintEqualToConstant:12.0],
-      [_checkbox.heightAnchor constraintEqualToConstant:12.0],
-    ]];
+
+    if (showsCheckbox) {
+      _checkbox = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
+      _checkbox.translatesAutoresizingMaskIntoConstraints = NO;
+      _checkbox.onToggle = ^(BOOL isChecked) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf)
+          return;
+        strongSelf->_isEnabled = isChecked;
+        strongSelf->_chevron.isInteractive = isChecked;
+        if (!isChecked && strongSelf->_isExpanded) {
+          strongSelf->_isExpanded = NO;
+          [strongSelf->_chevron setExpanded:NO animated:YES];
+          if (strongSelf.onExpandedChanged) {
+            strongSelf.onExpandedChanged(NO);
+          }
+        }
+        if (strongSelf.onEnabledChanged) {
+          strongSelf.onEnabledChanged(isChecked);
+        }
+      };
+
+      [rightContainer addSubview:_checkbox];
+      [NSLayoutConstraint activateConstraints:@[
+        [_checkbox.trailingAnchor
+            constraintEqualToAnchor:rightContainer.trailingAnchor
+                           constant:-kCheckboxTrailingMargin],
+        [_checkbox.centerYAnchor
+            constraintEqualToAnchor:rightContainer.centerYAnchor],
+        [_checkbox.widthAnchor constraintEqualToConstant:12.0],
+        [_checkbox.heightAnchor constraintEqualToConstant:12.0],
+      ]];
+    } else {
+      _statusLabel = [NSTextField labelWithString:@""];
+      _statusLabel.translatesAutoresizingMaskIntoConstraints = NO;
+      _statusLabel.font = [NSFont systemFontOfSize:10.0];
+      _statusLabel.textColor = [NSColor tertiaryLabelColor];
+      _statusLabel.hidden = YES;
+
+      [rightContainer addSubview:_statusLabel];
+      [NSLayoutConstraint activateConstraints:@[
+        [_statusLabel.trailingAnchor
+            constraintEqualToAnchor:rightContainer.trailingAnchor
+                           constant:-kStatusTrailingMargin],
+        [_statusLabel.centerYAnchor
+            constraintEqualToAnchor:rightContainer.centerYAnchor],
+      ]];
+    }
+
     self.rightView = rightContainer;
   }
   return self;
@@ -106,6 +128,17 @@ static const CGFloat kCheckboxTrailingMargin = 23.0;
 - (void)setIsExpanded:(BOOL)isExpanded {
   _isExpanded = isExpanded;
   [_chevron setExpanded:isExpanded animated:NO];
+}
+
+- (void)setStatusText:(NSString *)statusText {
+  _statusText = [statusText copy];
+  _statusLabel.stringValue = statusText ?: @"";
+  _statusLabel.hidden = (statusText.length == 0);
+}
+
+- (void)setStatusColor:(NSColor *)statusColor {
+  _statusColor = statusColor;
+  _statusLabel.textColor = statusColor ?: [NSColor tertiaryLabelColor];
 }
 
 @end

@@ -16,6 +16,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property(nonatomic, assign) BOOL isEnabled;
 @property(nonatomic, assign) BOOL isExpanded;
+@property(nonatomic, copy, nullable) NSString *statusText;
+@property(nonatomic, strong, nullable) NSColor *statusColor;
 
 @property(nonatomic, copy, nullable) void (^onEnabledChanged)(BOOL isEnabled);
 @property(nonatomic, copy, nullable) void (^onExpandedChanged)(BOOL isExpanded);
@@ -24,7 +26,8 @@ NS_ASSUME_NONNULL_BEGIN
                    apiManager:(id<PROAPIAccessing>)apiManager
                   parameterId:(UInt32)parameterId
                          text:(NSString *)text
-                         icon:(nullable NSImage *)icon;
+                         icon:(nullable NSImage *)icon
+                showsCheckbox:(BOOL)showsCheckbox;
 
 @end
 
