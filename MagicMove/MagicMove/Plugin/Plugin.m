@@ -125,6 +125,17 @@
                                      error:error])
     return NO;
 
+  if (separatorID == kParamGroupPointA) {
+    if (![paramAPI
+            addCustomParameterWithName:@""
+                           parameterID:kParamTestRowA
+                          defaultValue:@(kParamTestRowA)
+                        parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
+                                       kFxParameterFlag_CUSTOM_UI |
+                                       kFxParameterFlag_USE_FULL_VIEW_WIDTH])
+      return NO;
+  }
+
   if (previewID != 0) {
     if (![paramAPI addToggleButtonWithName:@"Preview"
                                parameterID:previewID
@@ -617,6 +628,29 @@
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
+  if (parameterID == kParamTestRowA) {
+    KKCustomGroupHeaderView *row =
+        [[KKCustomGroupHeaderView alloc] initWithFrame:NSMakeRect(0, 0, 300, 26)
+                                            apiManager:self.apiManager
+                                           parameterId:parameterID];
+    KKCheckboxView *checkbox =
+        [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
+    checkbox.translatesAutoresizingMaskIntoConstraints = NO;
+    checkbox.isChecked = YES;
+    NSView *rightContainer = [[NSView alloc] initWithFrame:NSZeroRect];
+    [rightContainer addSubview:checkbox];
+    [NSLayoutConstraint activateConstraints:@[
+      [checkbox.trailingAnchor
+          constraintEqualToAnchor:rightContainer.trailingAnchor
+                         constant:-23.0],
+      [checkbox.centerYAnchor
+          constraintEqualToAnchor:rightContainer.centerYAnchor],
+      [checkbox.widthAnchor constraintEqualToConstant:12.0],
+      [checkbox.heightAnchor constraintEqualToConstant:12.0],
+    ]];
+    row.rightView = rightContainer;
+    return row;
+  }
   if (parameterID == kParamPreviewWarning) {
     KKAlertView *alert =
         [[KKAlertView alloc] initWithText:@"Preview mode is active"

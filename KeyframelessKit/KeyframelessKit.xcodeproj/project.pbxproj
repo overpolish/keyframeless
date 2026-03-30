@@ -47,7 +47,12 @@
 				"Style/NSColor+KKColors.h",
 				Update/KKUpdateChecker.h,
 				Views/KKAlertView.h,
+				Views/KKCheckboxView.h,
+				Views/KKChevronView.h,
+				Views/KKCustomGroupHeaderView.h,
 				Views/KKKbd.h,
+				Views/KKLabelView.h,
+				Views/KKParameterRowView.h,
 				Views/KKSeparatorView.h,
 			);
 			target = F26E01B52F4DE280009D949A /* KeyframelessKit */;
