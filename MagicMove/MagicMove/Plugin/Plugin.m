@@ -74,6 +74,8 @@
 @implementation MagicMovePlugin {
   KKLog *_log;
   __weak KKCustomGroupHeaderView *_pointAHeader;
+  __weak KKCustomGroupHeaderView *_pointBHeader;
+  __weak KKCustomGroupHeaderView *_driftHeader;
   __weak KKCustomGroupHeaderView *_exitHeader;
 }
 
@@ -241,7 +243,7 @@
     return NO;
 
   if (![paramAPI
-          addToggleButtonWithName:@"Force Show Alerts"
+          addToggleButtonWithName:@"Force Show All Parameters"
                       parameterID:kParamForceShowAlerts
                      defaultValue:NO
                    parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
@@ -559,20 +561,39 @@
   [paramGetAPI getBoolValue:&previewExit
               fromParameter:kParamPreviewExit
                      atTime:time];
-  BOOL forceAlerts = NO;
-  [paramGetAPI getBoolValue:&forceAlerts
-              fromParameter:kParamForceShowAlerts
-                     atTime:time];
-
   FxParameterFlags alertBase =
       kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_CUSTOM_UI |
       kFxParameterFlag_USE_FULL_VIEW_WIDTH | kFxParameterFlag_DISABLED;
 
+  NSArray<NSNumber *> *allHideableParams = @[
+    @(kParamPreviewA),       @(kParamHideOSCA),      @(kParamPointA),
+    @(kParamRotationA),      @(kParamRotationXA),    @(kParamRotationYA),
+    @(kParamScaleA),         @(kParamScaleYA),       @(kParamOpacityA),
+    @(kParamPreviewB),       @(kParamHideOSCB),      @(kParamPointB),
+    @(kParamRotationB),      @(kParamRotationXB),    @(kParamRotationYB),
+    @(kParamScaleB),         @(kParamScaleYB),       @(kParamOpacityB),
+    @(kParamDrift),          @(kParamPreviewDrift),  @(kParamHideOSCDrift),
+    @(kParamDriftPoint),     @(kParamDriftRotation), @(kParamDriftRotationX),
+    @(kParamDriftRotationY), @(kParamDriftScale),    @(kParamDriftScaleY),
+    @(kParamDriftOpacity),   @(kParamExit),          @(kParamPreviewExit),
+    @(kParamHideOSCExit),    @(kParamExitPoint),     @(kParamExitRotation),
+    @(kParamExitRotationX),  @(kParamExitRotationY), @(kParamExitScale),
+    @(kParamExitScaleY),     @(kParamExitOpacity)
+  ];
+
+  if ([self forceShowAllParametersIfEnabled:kParamForceShowAlerts
+                                   paramIDs:allHideableParams
+                                     atTime:time]) {
+    [paramSetAPI setParameterFlags:alertBase toParameter:kParamPreviewWarning];
+    [paramSetAPI setParameterFlags:alertBase toParameter:kParamHideOSCWarning];
+    return;
+  }
+
   BOOL anyPreview = previewA || previewB || previewDrift || previewExit;
-  [paramSetAPI setParameterFlags:(anyPreview || forceAlerts)
-                                     ? alertBase
+  [paramSetAPI
+      setParameterFlags:(anyPreview) ? alertBase
                                      : (alertBase | kFxParameterFlag_HIDDEN)
-                     toParameter:kParamPreviewWarning];
+            toParameter:kParamPreviewWarning];
 
   BOOL hideA = NO, hideB = NO, hideDrift = NO, hideExit = NO;
   [paramGetAPI getBoolValue:&hideA fromParameter:kParamHideOSCA atTime:time];
@@ -584,10 +605,10 @@
               fromParameter:kParamHideOSCExit
                      atTime:time];
   BOOL anyHidden = hideA || hideB || hideDrift || hideExit;
-  [paramSetAPI setParameterFlags:(anyHidden || forceAlerts)
-                                     ? alertBase
-                                     : (alertBase | kFxParameterFlag_HIDDEN)
-                     toParameter:kParamHideOSCWarning];
+  [paramSetAPI
+      setParameterFlags:(anyHidden) ? alertBase
+                                    : (alertBase | kFxParameterFlag_HIDDEN)
+            toParameter:kParamHideOSCWarning];
 
   BOOL showA = animIn || (animOut && !exitOn);
   BOOL showExit = exitOn && animOut;
@@ -595,16 +616,24 @@
   if (_pointAHeader) {
     _pointAHeader.isEnabled = showA;
     if (!showA) {
-      NSString *reason = (!animIn && !animOut) ? @"Enable Animate In or Out"
-                                               : @"Overridden by Exit";
+      NSString *reason = (!animIn && !animOut)
+                             ? @"Enable Animate In or Out"
+                             : @"Overridden by Exit and Animate In is off";
       _pointAHeader.statusText = reason;
     } else {
       _pointAHeader.statusText = nil;
     }
   }
 
-  BOOL showAParams =
-      showA && (_pointAHeader == nil || _pointAHeader.isExpanded);
+  BOOL expandedA;
+  if (_pointAHeader) {
+    expandedA = _pointAHeader.isExpanded;
+  } else {
+    UInt32 f = 0;
+    [paramGetAPI getParameterFlags:&f fromParameter:kParamPointA];
+    expandedA = (f & kFxParameterFlag_HIDDEN) == 0;
+  }
+  BOOL showAParams = showA && expandedA;
   FxParameterFlags flagA =
       showAParams ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
   [paramSetAPI setParameterFlags:flagA toParameter:kParamPreviewA];
@@ -617,28 +646,52 @@
   [paramSetAPI setParameterFlags:flagA toParameter:kParamScaleYA];
   [paramSetAPI setParameterFlags:flagA toParameter:kParamOpacityA];
 
-  // Drift sub-parameters: only force-hide when drift is disabled.
-  // When enabled, the chevron expand/collapse controls visibility.
-  if (!driftOn) {
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamPreviewDrift];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamHideOSCDrift];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamDriftPoint];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamDriftRotation];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamDriftRotationX];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamDriftRotationY];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamDriftScale];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamDriftScaleY];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamDriftOpacity];
+  BOOL expandedB;
+  if (_pointBHeader) {
+    expandedB = _pointBHeader.isExpanded;
+  } else {
+    UInt32 f = 0;
+    [paramGetAPI getParameterFlags:&f fromParameter:kParamPointB];
+    expandedB = (f & kFxParameterFlag_HIDDEN) == 0;
   }
+  BOOL showBParams = expandedB;
+  FxParameterFlags flagB =
+      showBParams ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:flagB toParameter:kParamPreviewB];
+  [paramSetAPI setParameterFlags:flagB toParameter:kParamHideOSCB];
+  [paramSetAPI setParameterFlags:flagB toParameter:kParamPointB];
+  [paramSetAPI setParameterFlags:flagB toParameter:kParamRotationB];
+  [paramSetAPI setParameterFlags:flagB toParameter:kParamRotationXB];
+  [paramSetAPI setParameterFlags:flagB toParameter:kParamRotationYB];
+  [paramSetAPI setParameterFlags:flagB toParameter:kParamScaleB];
+  [paramSetAPI setParameterFlags:flagB toParameter:kParamScaleYB];
+  [paramSetAPI setParameterFlags:flagB toParameter:kParamOpacityB];
+
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamDrift];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamExit];
+
+  BOOL expandedDrift;
+  if (_driftHeader) {
+    expandedDrift = _driftHeader.isExpanded;
+  } else {
+    UInt32 f = 0;
+    [paramGetAPI getParameterFlags:&f fromParameter:kParamDriftPoint];
+    expandedDrift = (f & kFxParameterFlag_HIDDEN) == 0;
+  }
+  BOOL showDriftParams = driftOn && expandedDrift;
+  FxParameterFlags flagDrift =
+      showDriftParams ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamPreviewDrift];
+  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamHideOSCDrift];
+  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftPoint];
+  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftRotation];
+  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftRotationX];
+  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftRotationY];
+  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftScale];
+  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftScaleY];
+  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftOpacity];
 
   if (_exitHeader) {
     if (exitOn && !animOut) {
@@ -648,8 +701,15 @@
     }
   }
 
-  BOOL showExitParams =
-      showExit && (_exitHeader == nil || _exitHeader.isExpanded);
+  BOOL expandedExit;
+  if (_exitHeader) {
+    expandedExit = _exitHeader.isExpanded;
+  } else {
+    UInt32 f = 0;
+    [paramGetAPI getParameterFlags:&f fromParameter:kParamExitPoint];
+    expandedExit = (f & kFxParameterFlag_HIDDEN) == 0;
+  }
+  BOOL showExitParams = showExit && expandedExit;
   FxParameterFlags flagExit =
       showExitParams ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
 
@@ -748,8 +808,9 @@
     BOOL showA = animIn || (animOut && !exitOn);
     header.isEnabled = showA;
     if (!showA) {
-      header.statusText = (!animIn && !animOut) ? @"Enable Animate In or Out"
-                                                : @"Overridden by Exit";
+      header.statusText = (!animIn && !animOut)
+                              ? @"Enable Animate In or Out"
+                              : @"Overridden by Exit and Animate In is off";
     }
     if (showA) {
       UInt32 flags = 0;
@@ -785,6 +846,19 @@
       [weakSelf setGroupExpanded:isExpanded childParamIDs:pointBChildIDs];
     };
 
+    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actionAPI startAction:self];
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+
+    UInt32 flags = 0;
+    [paramGetAPI getParameterFlags:&flags fromParameter:kParamPointB];
+    header.isExpanded = (flags & kFxParameterFlag_HIDDEN) == 0;
+
+    [actionAPI endAction:self];
+
+    _pointBHeader = header;
     return header;
   }
   if (parameterID == kParamGroupDrift) {
@@ -836,6 +910,7 @@
     header.onExpandedChanged = ^(BOOL isExpanded) {
       [weakSelf setGroupExpanded:isExpanded childParamIDs:driftChildIDs];
     };
+    _driftHeader = header;
     return header;
   }
   if (parameterID == kParamGroupExit) {

@@ -107,6 +107,13 @@ NS_ASSUME_NONNULL_BEGIN
                               withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                                 error:(NSError **)error;
 
+/// Reads the bool at forceShowParamID; if YES, sets every param in paramIDs
+/// to kFxParameterFlag_DEFAULT and returns YES.  Caller should early-return
+/// from updateParameterVisibilityAtTime: when this returns YES.
+- (BOOL)forceShowAllParametersIfEnabled:(UInt32)forceShowParamID
+                               paramIDs:(NSArray<NSNumber *> *)paramIDs
+                                 atTime:(CMTime)time;
+
 @end
 
 NS_ASSUME_NONNULL_END
