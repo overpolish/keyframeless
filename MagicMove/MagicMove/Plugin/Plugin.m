@@ -43,6 +43,34 @@
 }
 @end
 
+@interface MagicMoveShowOSCTarget : NSObject
+@property(nonatomic, weak) id<PROAPIAccessing> apiManager;
+- (void)showAll:(id)sender;
+@end
+
+@implementation MagicMoveShowOSCTarget
+- (void)showAll:(id)sender {
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+  id<FxParameterSettingAPI_v5> paramSetAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  id<FxTimingAPI_v4> timingAPI =
+      [_apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  CMTime now = kCMTimeZero;
+  if (timingAPI) {
+    CMTime start = kCMTimeZero;
+    [timingAPI startTimeForEffect:&start];
+    now = start;
+  }
+  UInt32 hideParams[] = {kParamHideOSCA, kParamHideOSCB, kParamHideOSCDrift,
+                         kParamHideOSCExit};
+  for (int i = 0; i < 4; i++)
+    [paramSetAPI setBoolValue:NO toParameter:hideParams[i] atTime:now];
+  [actionAPI endAction:self];
+}
+@end
+
 @implementation MagicMovePlugin {
   KKLog *_log;
 }
@@ -79,6 +107,7 @@
                        scaleYID:(UInt32)scaleYID
                       opacityID:(UInt32)opacityID
                       previewID:(UInt32)previewID
+                      hideOSCID:(UInt32)hideOSCID
                        defaultX:(double)defaultX
                        defaultY:(double)defaultY
                   defaultHidden:(BOOL)defaultHidden
@@ -99,6 +128,14 @@
   if (previewID != 0) {
     if (![paramAPI addToggleButtonWithName:@"Preview"
                                parameterID:previewID
+                              defaultValue:NO
+                            parameterFlags:flags])
+      return NO;
+  }
+
+  if (hideOSCID != 0) {
+    if (![paramAPI addToggleButtonWithName:@"Hide Controls"
+                               parameterID:hideOSCID
                               defaultValue:NO
                             parameterFlags:flags])
       return NO;
@@ -226,6 +263,17 @@
                                      kFxParameterFlag_HIDDEN])
     return NO;
 
+  if (![paramAPI
+          addCustomParameterWithName:@""
+                         parameterID:kParamHideOSCWarning
+                        defaultValue:@(kParamHideOSCWarning)
+                      parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
+                                     kFxParameterFlag_CUSTOM_UI |
+                                     kFxParameterFlag_USE_FULL_VIEW_WIDTH |
+                                     kFxParameterFlag_DISABLED |
+                                     kFxParameterFlag_HIDDEN])
+    return NO;
+
   if (![self addAnimationParametersWithAPI:paramAPI error:error])
     return NO;
 
@@ -245,6 +293,7 @@
                             scaleYID:kParamScaleYA
                            opacityID:kParamOpacityA
                            previewID:kParamPreviewA
+                           hideOSCID:kParamHideOSCA
                             defaultX:0.5
                             defaultY:0.5
                        defaultHidden:YES
@@ -262,6 +311,7 @@
                             scaleYID:kParamScaleYB
                            opacityID:kParamOpacityB
                            previewID:kParamPreviewB
+                           hideOSCID:kParamHideOSCB
                             defaultX:0.5
                             defaultY:0.5
                        defaultHidden:NO
@@ -287,6 +337,12 @@
 
   if (![paramAPI addToggleButtonWithName:@"Preview"
                              parameterID:kParamPreviewDrift
+                            defaultValue:NO
+                          parameterFlags:kFxParameterFlag_HIDDEN])
+    return NO;
+
+  if (![paramAPI addToggleButtonWithName:@"Hide Controls"
+                             parameterID:kParamHideOSCDrift
                             defaultValue:NO
                           parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
@@ -370,6 +426,12 @@
 
   if (![paramAPI addToggleButtonWithName:@"Preview"
                              parameterID:kParamPreviewExit
+                            defaultValue:NO
+                          parameterFlags:kFxParameterFlag_HIDDEN])
+    return NO;
+
+  if (![paramAPI addToggleButtonWithName:@"Hide Controls"
+                             parameterID:kParamHideOSCExit
                             defaultValue:NO
                           parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
@@ -495,6 +557,21 @@
                                      : (alertBase | kFxParameterFlag_HIDDEN)
                      toParameter:kParamPreviewWarning];
 
+  BOOL hideA = NO, hideB = NO, hideDrift = NO, hideExit = NO;
+  [paramGetAPI getBoolValue:&hideA fromParameter:kParamHideOSCA atTime:time];
+  [paramGetAPI getBoolValue:&hideB fromParameter:kParamHideOSCB atTime:time];
+  [paramGetAPI getBoolValue:&hideDrift
+              fromParameter:kParamHideOSCDrift
+                     atTime:time];
+  [paramGetAPI getBoolValue:&hideExit
+              fromParameter:kParamHideOSCExit
+                     atTime:time];
+  BOOL anyHidden = hideA || hideB || hideDrift || hideExit;
+  [paramSetAPI setParameterFlags:(anyHidden || forceAlerts)
+                                     ? alertBase
+                                     : (alertBase | kFxParameterFlag_HIDDEN)
+                     toParameter:kParamHideOSCWarning];
+
   BOOL showA = animIn || (animOut && !exitOn);
   BOOL showExit = exitOn && animOut;
 
@@ -507,6 +584,7 @@
 
   // Point A: separator always visible, parameters hidden when not needed
   [paramSetAPI setParameterFlags:flagA toParameter:kParamPreviewA];
+  [paramSetAPI setParameterFlags:flagA toParameter:kParamHideOSCA];
   [paramSetAPI setParameterFlags:flagA toParameter:kParamPointA];
   [paramSetAPI setParameterFlags:flagA toParameter:kParamRotationA];
   [paramSetAPI setParameterFlags:flagA toParameter:kParamRotationXA];
@@ -517,6 +595,7 @@
 
   // Drift sub-parameters (keep Enable toggle visible)
   [paramSetAPI setParameterFlags:flagDrift toParameter:kParamPreviewDrift];
+  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamHideOSCDrift];
   [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftPoint];
   [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftRotation];
   [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftRotationX];
@@ -527,6 +606,7 @@
 
   // Exit sub-parameters (keep Enable toggle visible)
   [paramSetAPI setParameterFlags:flagExit toParameter:kParamPreviewExit];
+  [paramSetAPI setParameterFlags:flagExit toParameter:kParamHideOSCExit];
   [paramSetAPI setParameterFlags:flagExit toParameter:kParamExitPoint];
   [paramSetAPI setParameterFlags:flagExit toParameter:kParamExitRotation];
   [paramSetAPI setParameterFlags:flagExit toParameter:kParamExitRotationX];
@@ -557,6 +637,26 @@
     objc_setAssociatedObject(clearBtn, "clearTarget", target,
                              OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     alert.accessoryView = clearBtn;
+    return alert;
+  }
+  if (parameterID == kParamHideOSCWarning) {
+    KKAlertView *alert =
+        [[KKAlertView alloc] initWithText:@"Some controls are hidden"
+                                    color:[NSColor warning]];
+    alert.icon = [NSImage imageWithSystemSymbolName:@"circle.slash.fill"
+                           accessibilityDescription:nil];
+
+    MagicMoveShowOSCTarget *target = [[MagicMoveShowOSCTarget alloc] init];
+    target.apiManager = self.apiManager;
+    NSButton *showBtn = [NSButton buttonWithTitle:@"Show All"
+                                           target:target
+                                           action:@selector(showAll:)];
+    showBtn.controlSize = NSControlSizeSmall;
+    showBtn.bezelStyle = NSBezelStyleAccessoryBarAction;
+    showBtn.contentTintColor = [NSColor warning];
+    objc_setAssociatedObject(showBtn, "showTarget", target,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    alert.accessoryView = showBtn;
     return alert;
   }
   // KKPlugin implements this via FxCustomParameterViewHost_v2 in a private

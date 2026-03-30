@@ -67,6 +67,9 @@
 - (void)drawWithParentOSC:(KKOnScreenControl *)parentOSC
          destinationImage:(FxImageTile *)dest
                    atTime:(CMTime)time {
+  if (_hidden)
+    return;
+
   CGPoint pos = [parentOSC canvasPositionForParam:_pointParam atTime:time];
   [self updateRing:parentOSC atTime:time];
   float rotAngle = [parentOSC floatValueForParam:_rotParam atTime:time];
@@ -155,6 +158,8 @@
   _arcHovered = NO;
   _ringHovered = NO;
   _rotHovered = NO;
+  if (_hidden)
+    return;
 
   CGPoint pos = [parentOSC canvasPositionForParam:_pointParam atTime:time];
 

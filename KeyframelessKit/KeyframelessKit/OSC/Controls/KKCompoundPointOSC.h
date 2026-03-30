@@ -44,6 +44,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Whether this point's arc is the primary (first/self) arc or a secondary.
 @property(nonatomic, readonly) BOOL isPrimaryArc;
 
+/// When YES, draw and hitTest are skipped for this compound point.
+@property(nonatomic) BOOL hidden;
+
 /// Drag state (exposed for mouseUp reset).
 @property(nonatomic) BOOL arcDragging;
 @property(nonatomic) BOOL ringDragging;
