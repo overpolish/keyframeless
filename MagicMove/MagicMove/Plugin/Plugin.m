@@ -73,6 +73,7 @@
 
 @implementation MagicMovePlugin {
   KKLog *_log;
+  __weak KKCustomGroupHeaderView *_pointAHeader;
 }
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager;
@@ -111,19 +112,31 @@
                        defaultX:(double)defaultX
                        defaultY:(double)defaultY
                   defaultHidden:(BOOL)defaultHidden
+                    customGroup:(BOOL)customGroup
                         withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                           error:(NSError **)error {
   FxParameterFlags flags =
       defaultHidden ? kFxParameterFlag_HIDDEN : kFxParameterFlag_DEFAULT;
 
-  NSImage *icon = [NSImage imageWithSystemSymbolName:@"circle.circle"
-                            accessibilityDescription:nil];
-  if (![self addSeparatorParameterWithText:name
-                                      icon:icon
-                               parameterID:separatorID
-                                   withAPI:paramAPI
-                                     error:error])
-    return NO;
+  if (customGroup) {
+    if (![paramAPI
+            addCustomParameterWithName:@""
+                           parameterID:separatorID
+                          defaultValue:@(separatorID)
+                        parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
+                                       kFxParameterFlag_CUSTOM_UI |
+                                       kFxParameterFlag_USE_FULL_VIEW_WIDTH])
+      return NO;
+  } else {
+    NSImage *icon = [NSImage imageWithSystemSymbolName:@"circle.circle"
+                              accessibilityDescription:nil];
+    if (![self addSeparatorParameterWithText:name
+                                        icon:icon
+                                 parameterID:separatorID
+                                     withAPI:paramAPI
+                                       error:error])
+      return NO;
+  }
 
   if (previewID != 0) {
     if (![paramAPI addToggleButtonWithName:@"Preview"
@@ -297,6 +310,7 @@
                             defaultX:0.5
                             defaultY:0.5
                        defaultHidden:YES
+                         customGroup:YES
                              withAPI:paramAPI
                                error:error])
     return NO;
@@ -315,6 +329,7 @@
                             defaultX:0.5
                             defaultY:0.5
                        defaultHidden:NO
+                         customGroup:NO
                              withAPI:paramAPI
                                error:error])
     return NO;
@@ -576,12 +591,24 @@
   BOOL showA = animIn || (animOut && !exitOn);
   BOOL showExit = exitOn && animOut;
 
+  if (_pointAHeader) {
+    _pointAHeader.isEnabled = showA;
+    if (!showA) {
+      NSString *reason = (!animIn && !animOut) ? @"Enable Animate In or Out"
+                                               : @"Overridden by Exit";
+      _pointAHeader.statusText = reason;
+    } else {
+      _pointAHeader.statusText = nil;
+    }
+  }
+
+  BOOL showAParams =
+      showA && (_pointAHeader == nil || _pointAHeader.isExpanded);
   FxParameterFlags flagA =
-      showA ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+      showAParams ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
   FxParameterFlags flagExit =
       showExit ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
 
-  // Point A: separator always visible, parameters hidden when not needed
   [paramSetAPI setParameterFlags:flagA toParameter:kParamPreviewA];
   [paramSetAPI setParameterFlags:flagA toParameter:kParamHideOSCA];
   [paramSetAPI setParameterFlags:flagA toParameter:kParamPointA];
@@ -668,6 +695,63 @@
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
+  if (parameterID == kParamGroupPointA) {
+    NSImage *icon = [NSImage imageWithSystemSymbolName:@"circle.circle"
+                              accessibilityDescription:nil];
+    KKCustomGroupHeaderView *header =
+        [[KKCustomGroupHeaderView alloc] initWithFrame:NSMakeRect(0, 0, 300, 26)
+                                            apiManager:self.apiManager
+                                           parameterId:parameterID
+                                                  text:@"Point A"
+                                                  icon:icon
+                                         showsCheckbox:NO];
+
+    NSArray<NSNumber *> *pointAChildIDs = @[
+      @(kParamPreviewA), @(kParamHideOSCA), @(kParamPointA), @(kParamRotationA),
+      @(kParamRotationXA), @(kParamRotationYA), @(kParamScaleA),
+      @(kParamScaleYA), @(kParamOpacityA)
+    ];
+
+    __weak typeof(self) weakSelf = self;
+    header.onExpandedChanged = ^(BOOL isExpanded) {
+      [weakSelf setGroupExpanded:isExpanded childParamIDs:pointAChildIDs];
+    };
+
+    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actionAPI startAction:self];
+    CMTime currentTime = [actionAPI currentTime];
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+
+    BOOL animIn = NO, animOut = NO, exitOn = NO;
+    [paramGetAPI getBoolValue:&animIn
+                fromParameter:kKKParamAnimateIn
+                       atTime:currentTime];
+    [paramGetAPI getBoolValue:&animOut
+                fromParameter:kKKParamAnimateOut
+                       atTime:currentTime];
+    [paramGetAPI getBoolValue:&exitOn
+                fromParameter:kParamExit
+                       atTime:currentTime];
+
+    BOOL showA = animIn || (animOut && !exitOn);
+    header.isEnabled = showA;
+    if (!showA) {
+      header.statusText = (!animIn && !animOut) ? @"Enable Animate In or Out"
+                                                : @"Overridden by Exit";
+    }
+    if (showA) {
+      UInt32 flags = 0;
+      [paramGetAPI getParameterFlags:&flags fromParameter:kParamPointA];
+      header.isExpanded = (flags & kFxParameterFlag_HIDDEN) == 0;
+    }
+
+    [actionAPI endAction:self];
+
+    _pointAHeader = header;
+    return header;
+  }
   if (parameterID == kParamGroupDrift) {
     NSImage *icon =
         [NSImage imageWithSystemSymbolName:@"circle.dotted.and.circle"
@@ -677,7 +761,8 @@
                                             apiManager:self.apiManager
                                            parameterId:parameterID
                                                   text:@"Drift"
-                                                  icon:icon];
+                                                  icon:icon
+                                         showsCheckbox:YES];
 
     // Restore state from custom parameter and current param flags
     id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
