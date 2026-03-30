@@ -296,8 +296,10 @@
   if (![paramAPI addToggleButtonWithName:@"Rotate with Motion"
                              parameterID:kParamRotateWithMotion
                             defaultValue:NO
-                          parameterFlags:kFxParameterFlag_DEFAULT])
+                          parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
+
+  self.timingGroupExtraParamIDs = @[ @(kParamRotateWithMotion) ];
 
   if (![self addPointSectionWithName:@"Point A"
                          separatorID:kParamGroupPointA
@@ -610,6 +612,8 @@
                                     : (alertBase | kFxParameterFlag_HIDDEN)
             toParameter:kParamHideOSCWarning];
 
+  [self updateTimingParameterVisibility];
+
   BOOL showA = animIn || (animOut && !exitOn);
   BOOL showExit = exitOn && animOut;
 
@@ -741,24 +745,6 @@
   for (NSNumber *paramID in childIDs) {
     [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                        toParameter:paramID.unsignedIntValue];
-  }
-
-  [actionAPI endAction:self];
-}
-
-- (void)setGroupExpanded:(BOOL)expanded
-           childParamIDs:(NSArray<NSNumber *> *)childIDs {
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actionAPI startAction:self];
-
-  id<FxParameterSettingAPI_v5> paramSetAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-
-  FxParameterFlags flags =
-      expanded ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
-  for (NSNumber *paramID in childIDs) {
-    [paramSetAPI setParameterFlags:flags toParameter:paramID.unsignedIntValue];
   }
 
   [actionAPI endAction:self];
