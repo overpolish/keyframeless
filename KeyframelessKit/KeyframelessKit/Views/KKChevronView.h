@@ -16,6 +16,7 @@ extern const CGFloat kChevronHeight;
 @interface KKChevronView : NSView
 
 @property(nonatomic, assign) BOOL isExpanded;
+@property(nonatomic, assign) BOOL isInteractive;
 @property(nonatomic, copy, nullable) void (^onToggle)(BOOL isExpanded);
 
 - (void)setExpanded:(BOOL)expanded animated:(BOOL)animated;

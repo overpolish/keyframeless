@@ -20,7 +20,6 @@ static const UInt32 kParamPreviewA = 7;
 static const UInt32 kParamHideOSCA = 8;
 static const UInt32 kParamRotationXA = 9;
 static const UInt32 kParamRotationYA = 10;
-static const UInt32 kParamTestRowA = 11;
 
 // Parameter IDs — Point B (101–200)
 static const UInt32 kParamGroupPointB = 101;
