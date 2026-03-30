@@ -328,8 +328,8 @@
                            hideOSCID:kParamHideOSCB
                             defaultX:0.5
                             defaultY:0.5
-                       defaultHidden:NO
-                         customGroup:NO
+                       defaultHidden:YES
+                         customGroup:YES
                              withAPI:paramAPI
                                error:error])
     return NO;
@@ -750,6 +750,31 @@
     [actionAPI endAction:self];
 
     _pointAHeader = header;
+    return header;
+  }
+  if (parameterID == kParamGroupPointB) {
+    NSImage *icon = [NSImage imageWithSystemSymbolName:@"circle.circle"
+                              accessibilityDescription:nil];
+    KKCustomGroupHeaderView *header =
+        [[KKCustomGroupHeaderView alloc] initWithFrame:NSMakeRect(0, 0, 300, 26)
+                                            apiManager:self.apiManager
+                                           parameterId:parameterID
+                                                  text:@"Point B"
+                                                  icon:icon
+                                         showsCheckbox:NO];
+    header.isEnabled = YES;
+
+    NSArray<NSNumber *> *pointBChildIDs = @[
+      @(kParamPreviewB), @(kParamHideOSCB), @(kParamPointB), @(kParamRotationB),
+      @(kParamRotationXB), @(kParamRotationYB), @(kParamScaleB),
+      @(kParamScaleYB), @(kParamOpacityB)
+    ];
+
+    __weak typeof(self) weakSelf = self;
+    header.onExpandedChanged = ^(BOOL isExpanded) {
+      [weakSelf setGroupExpanded:isExpanded childParamIDs:pointBChildIDs];
+    };
+
     return header;
   }
   if (parameterID == kParamGroupDrift) {
