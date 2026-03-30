@@ -86,6 +86,13 @@
   return YES;
 }
 
+- (BOOL)parameterChanged:(UInt32)parameterID
+                  atTime:(CMTime)time
+                   error:(NSError **)error {
+  [self updateTimingParameterVisibility];
+  return YES;
+}
+
 - (BOOL)pluginState:(NSData **)pluginState
              atTime:(CMTime)renderTime
             quality:(FxQuality)qualityLevel

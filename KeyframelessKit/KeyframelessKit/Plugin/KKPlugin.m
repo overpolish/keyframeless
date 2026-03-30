@@ -7,6 +7,7 @@
 #import "../Math/KKEasing.h"
 #import "../Update/KKUpdateChecker.h"
 #import "../Views/KKAlertView.h"
+#import "../Views/KKCustomGroupHeaderView.h"
 #import "../Views/KKKbd.h"
 #import "../Views/KKSeparatorView.h"
 #import "../Views/KKUpdateBannerView.h"
@@ -29,6 +30,7 @@ static const void *const kKKSepIcons = &kKKSepIcons;
 static const void *const kKKInfoTexts = &kKKInfoTexts;
 static const void *const kKKInfoAttrTexts = &kKKInfoAttrTexts;
 static const void *const kKKInfoIcons = &kKKInfoIcons;
+static const void *const kKKTimingExtraIDs = &kKKTimingExtraIDs;
 
 static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
                                                             const void *key) {
@@ -67,7 +69,9 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
 @interface KKPlugin () <FxCustomParameterViewHost_v2>
 @end
 
-@implementation KKPlugin
+@implementation KKPlugin {
+  __weak KKCustomGroupHeaderView *_timingHeader;
+}
 
 + (id)servicePrincipalDelegate {
   return [KKPrincipalDelegate shared];
@@ -79,6 +83,15 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     _apiManager = apiManager;
   }
   return self;
+}
+
+- (void)setTimingGroupExtraParamIDs:(NSArray<NSNumber *> *)ids {
+  objc_setAssociatedObject([self class], kKKTimingExtraIDs, [ids copy],
+                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+- (NSArray<NSNumber *> *)timingGroupExtraParamIDs {
+  return objc_getAssociatedObject([self class], kKKTimingExtraIDs);
 }
 
 - (nullable id<MTLRenderPipelineState>)
@@ -188,21 +201,27 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
 
 - (BOOL)addAnimationParametersWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                                 error:(NSError **)error {
-  if (![self
-          addSeparatorParameterWithText:@"Timing"
-                                   icon:[NSImage
-                                            imageWithSystemSymbolName:@"timer"
-                                             accessibilityDescription:nil]
-                            parameterID:kKKParamAnimationSeparator
-                                withAPI:paramAPI
-                                  error:error]) {
+  if (![paramAPI
+          addCustomParameterWithName:@""
+                         parameterID:kKKParamAnimationSeparator
+                        defaultValue:@(kKKParamAnimationSeparator)
+                      parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
+                                     kFxParameterFlag_CUSTOM_UI |
+                                     kFxParameterFlag_USE_FULL_VIEW_WIDTH]) {
+    if (error != NULL)
+      *error = [NSError
+          errorWithDomain:@"co.overpolish.keyframeless.error"
+                     code:1
+                 userInfo:@{
+                   NSLocalizedDescriptionKey : @"Unable to add Timing group"
+                 }];
     return NO;
   }
 
   if (![paramAPI addToggleButtonWithName:@"Animate In"
                              parameterID:kKKParamAnimateIn
                             defaultValue:NO
-                          parameterFlags:kFxParameterFlag_DEFAULT]) {
+                          parameterFlags:kFxParameterFlag_HIDDEN]) {
     if (error != NULL)
       *error = [NSError errorWithDomain:@"co.overpolish.keyframeless.error"
                                    code:1
@@ -216,7 +235,7 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
   if (![paramAPI addToggleButtonWithName:@"Animate Out"
                              parameterID:kKKParamAnimateOut
                             defaultValue:NO
-                          parameterFlags:kFxParameterFlag_DEFAULT]) {
+                          parameterFlags:kFxParameterFlag_HIDDEN]) {
     if (error != NULL)
       *error = [NSError errorWithDomain:@"co.overpolish.keyframeless.error"
                                    code:1
@@ -235,7 +254,7 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
                               sliderMin:0.1
                               sliderMax:2.0
                                   delta:0.1
-                         parameterFlags:kFxParameterFlag_DEFAULT]) {
+                         parameterFlags:kFxParameterFlag_HIDDEN]) {
     if (error != NULL)
       *error = [NSError
           errorWithDomain:@"co.overpolish.keyframeless.error"
@@ -251,7 +270,7 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
                    parameterID:kKKParamAnimationInterpolation
                   defaultValue:KKAnimationCurveCubic
                    menuEntries:@[ @"Linear", @"Smooth", @"Cubic", @"Spring" ]
-                parameterFlags:kFxParameterFlag_DEFAULT]) {
+                parameterFlags:kFxParameterFlag_HIDDEN]) {
     if (error != NULL)
       *error = [NSError errorWithDomain:@"co.overpolish.keyframeless.error"
                                    code:1
@@ -483,6 +502,48 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     return [[KKUpdateBannerView alloc] init];
   }
 
+  if (parameterID == kKKParamAnimationSeparator) {
+    NSImage *icon = [NSImage imageWithSystemSymbolName:@"timer"
+                              accessibilityDescription:nil];
+    KKCustomGroupHeaderView *header =
+        [[KKCustomGroupHeaderView alloc] initWithFrame:NSMakeRect(0, 0, 300, 26)
+                                            apiManager:_apiManager
+                                           parameterId:parameterID
+                                                  text:@"Timing"
+                                                  icon:icon
+                                         showsCheckbox:NO];
+    header.isEnabled = YES;
+
+    NSArray<NSNumber *> *timingChildIDs = @[
+      @(kKKParamAnimateIn), @(kKKParamAnimateOut), @(kKKParamAnimationDuration),
+      @(kKKParamAnimationInterpolation)
+    ];
+
+    __weak typeof(self) weakSelf = self;
+    header.onExpandedChanged = ^(BOOL isExpanded) {
+      [weakSelf setGroupExpanded:isExpanded childParamIDs:timingChildIDs];
+      if (weakSelf.timingGroupExtraParamIDs) {
+        [weakSelf setGroupExpanded:isExpanded
+                     childParamIDs:weakSelf.timingGroupExtraParamIDs];
+      }
+    };
+
+    id<FxCustomParameterActionAPI_v4> actionAPI =
+        [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actionAPI startAction:self];
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+
+    UInt32 flags = 0;
+    [paramGetAPI getParameterFlags:&flags fromParameter:kKKParamAnimateIn];
+    header.isExpanded = (flags & kFxParameterFlag_HIDDEN) == 0;
+
+    [actionAPI endAction:self];
+
+    _timingHeader = header;
+    return header;
+  }
+
   NSString *separatorText =
       kkClassRegistry([self class], kKKSepTexts)[@(parameterID)];
   if (separatorText) {
@@ -509,6 +570,53 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
   KKAlertView *infoView = [[KKAlertView alloc] initWithText:text];
   infoView.icon = kkClassRegistry([self class], kKKInfoIcons)[@(parameterID)];
   return infoView;
+}
+
+- (void)updateTimingParameterVisibility {
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> paramSetAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  if (!paramGetAPI || !paramSetAPI)
+    return;
+  BOOL expandedTiming;
+  if (_timingHeader) {
+    expandedTiming = _timingHeader.isExpanded;
+  } else {
+    UInt32 f = 0;
+    [paramGetAPI getParameterFlags:&f fromParameter:kKKParamAnimateIn];
+    expandedTiming = (f & kFxParameterFlag_HIDDEN) == 0;
+  }
+  FxParameterFlags flagTiming =
+      expandedTiming ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:flagTiming toParameter:kKKParamAnimateIn];
+  [paramSetAPI setParameterFlags:flagTiming toParameter:kKKParamAnimateOut];
+  [paramSetAPI setParameterFlags:flagTiming
+                     toParameter:kKKParamAnimationDuration];
+  [paramSetAPI setParameterFlags:flagTiming
+                     toParameter:kKKParamAnimationInterpolation];
+  for (NSNumber *paramID in self.timingGroupExtraParamIDs) {
+    [paramSetAPI setParameterFlags:flagTiming
+                       toParameter:paramID.unsignedIntValue];
+  }
+}
+
+- (void)setGroupExpanded:(BOOL)expanded
+           childParamIDs:(NSArray<NSNumber *> *)childIDs {
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+
+  id<FxParameterSettingAPI_v5> paramSetAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+
+  FxParameterFlags flags =
+      expanded ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+  for (NSNumber *paramID in childIDs) {
+    [paramSetAPI setParameterFlags:flags toParameter:paramID.unsignedIntValue];
+  }
+
+  [actionAPI endAction:self];
 }
 
 - (BOOL)forceShowAllParametersIfEnabled:(UInt32)forceShowParamID

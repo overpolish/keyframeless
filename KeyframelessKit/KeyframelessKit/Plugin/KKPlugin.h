@@ -30,6 +30,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property(nonatomic, weak) id<PROAPIAccessing> apiManager;
 
+/// Extra parameter IDs to show/hide alongside the timing group's children.
+/// Set before the first render pass (e.g. in addParametersWithError:).
+@property(nonatomic, copy, nullable)
+    NSArray<NSNumber *> *timingGroupExtraParamIDs;
+
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager;
 
 /// Convenience wrapper around KKMetalDeviceCache buildAndRegisterPipelineState.
@@ -106,6 +111,15 @@ NS_ASSUME_NONNULL_BEGIN
                           parameterID:(UInt32)parameterID
                               withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                                 error:(NSError **)error;
+
+/// Toggles visibility flags on child parameters for a custom group header.
+- (void)setGroupExpanded:(BOOL)expanded
+           childParamIDs:(NSArray<NSNumber *> *)childIDs;
+
+/// Updates timing parameter visibility based on the timing group's expand
+/// state. Call from updateParameterVisibilityAtTime: in subclasses that use
+/// animation.
+- (void)updateTimingParameterVisibility;
 
 /// Reads the bool at forceShowParamID; if YES, sets every param in paramIDs
 /// to kFxParameterFlag_DEFAULT and returns YES.  Caller should early-return

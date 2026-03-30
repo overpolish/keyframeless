@@ -110,7 +110,7 @@
 	<displayEffects>1</displayEffects>
 	<videoVerticalZoom>1.6111111640930176</videoVerticalZoom>
 	<audioVerticalZoom>1.6111111640930176</audioVerticalZoom>
-	<displayRange in="-182385188 2125000000 3 0" out="2085828324 1000000000 3 0"/>
+	<displayRange in="-182515865 2107421875 3 0" out="2086606231 1000000000 3 0"/>
 </timeline>
 
 <curveeditor>
@@ -118,8 +118,8 @@
 	<snapping>0</snapping>
 	<displayAudioWaveform>0</displayAudioWaveform>
 	<lockKeyframesInTime>0</lockKeyframesInTime>
-	<displayRange in="-182385188 2125000000 3 0" out="2085828324 1000000000 3 0"/>
-	<currentviewvolume originx="-0.08582832376470588" originy="-62.5" width="2.1716566479999999" height="125"/>
+	<displayRange in="-182515865 2107421875 3 0" out="2086606231 1000000000 3 0"/>
+	<currentviewvolume originx="-0.086606230658016675" originy="-62.5" width="2.173212462" height="125"/>
 	<snapshotChannels>0</snapshotChannels>
 </curveeditor>
 
@@ -181,7 +181,7 @@
 		<target object="3001886296" channel="./10001" name="Mix"/>
 	</publishSettings>
 	<currentFrame>15360 153600 1 0</currentFrame>
-	<currentObject>3001886277</currentObject>
+	<currentObject>3001886282</currentObject>
 	<activeLayer>3001886279</activeLayer>
 	<timeRange offset="0 1 1 0" duration="307200 153600 1 0"/>
 	<playRange offset="0 1 1 0" duration="307200 153600 1 0"/>
@@ -207,7 +207,7 @@
 		<flags>0</flags>
 		<timing in="0 1 1 0" out="-2560 153600 1 0" offset="0 1 1 0"/>
 		<foldFlags>0</foldFlags>
-		<baseFlags>268435473</baseFlags>
+		<baseFlags>16</baseFlags>
 		<parameter name="Properties" id="1" flags="8589938704">
 			<parameter name="HDR White Level" id="103" flags="8606744592" default="0.75" value="0.75"/>
 		</parameter>
@@ -219,7 +219,7 @@
 			<aspectRatio>1</aspectRatio>
 			<flags>0</flags>
 			<timing in="0 1 1 0" out="304640 153600 1 0" offset="0 1 1 0"/>
-			<foldFlags>16384</foldFlags>
+			<foldFlags>24576</foldFlags>
 			<baseFlags>524368</baseFlags>
 			<parameter name="Properties" id="1" flags="8589938704">
 				<parameter name="Cinematic" id="344" flags="8589938706">
@@ -280,7 +280,7 @@
 			</parameter>
 			<filter name="Rounded · KF" id="3001886296" factoryID="6" pluginUUID="A5D350B8-198F-499E-A35A-A6CE420473E4" pluginVersion="1" pluginName="Rounded · KF" pluginDynamicParams="0">
 				<timing in="0 1 1 0" out="304640 153600 1 0" offset="0 1 1 0"/>
-				<baseFlags>8589934608</baseFlags>
+				<baseFlags>8858370065</baseFlags>
 				<parameter name="" id="9990" flags="12901679124">
 					<numberOfKeypoints>0</numberOfKeypoints>
 					<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GQ40-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
@@ -292,10 +292,10 @@
 					<defaultVal>*********IoeMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0CMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM**cEhJ74tpP4k62FcY8H6rGIlMKZk********-*E*********A********************MUU*0**F*-c*7**d*16*Bk-7*2s*Kk-h*4w*QE-p*5g-1*********6-*********-********************2B</defaultVal>
 					<dataValue>*********IoeMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0CMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM**cEhJ74tpP4k62FcY8H6rGIlMKZk********-*E*********A********************MUU*0**F*-c*7**d*16*Bk-7*2s*Kk-h*4w*QE-p*5g-1*********6-*********-********************2B</dataValue>
 				</parameter>
-				<parameter name="Animate In" id="9901" flags="12901679120" default="0" value="0"/>
-				<parameter name="Animate Out" id="9902" flags="12901679120" default="0" value="0"/>
-				<parameter name="Duration" id="9903" flags="12901679120" default="0.5" value="0.5"/>
-				<parameter name="Interpolation" id="9904" flags="12901679120" default="2" value="2"/>
+				<parameter name="Animate In" id="9901" flags="12905938992" default="0" value="0"/>
+				<parameter name="Animate Out" id="9902" flags="12905938992" default="0" value="0"/>
+				<parameter name="Duration" id="9903" flags="12905938992" default="0.5" value="0.5"/>
+				<parameter name="Interpolation" id="9904" flags="12905938992" default="2" value="2"/>
 				<parameter name="Mix" id="10001" flags="12901679104" default="1" value="1"/>
 				<parameter name="Flip" id="10002" flags="12905938976" default="0" value="0"/>
 				<parameter name="Input Points" id="10003" flags="12905938976" default="1" value="1"/>
