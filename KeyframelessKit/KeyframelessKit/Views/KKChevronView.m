@@ -51,6 +51,7 @@ static NSColor *chevronActiveColor(void) {
 
 - (void)commonInit {
   _isExpanded = NO;
+  _isInteractive = YES;
   _currentChevronRotation = 0.0;
   _chevronAnimationToken = 0;
 
@@ -190,6 +191,9 @@ static NSColor *chevronActiveColor(void) {
 }
 
 - (void)chevronClicked:(id)sender {
+  if (!_isInteractive)
+    return;
+
   [self setExpanded:!self.isExpanded animated:YES];
 
   if (self.onToggle) {

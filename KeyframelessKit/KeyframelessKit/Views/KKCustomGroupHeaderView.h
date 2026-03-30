@@ -13,6 +13,19 @@ NS_ASSUME_NONNULL_BEGIN
 @protocol PROAPIAccessing;
 
 @interface KKCustomGroupHeaderView : KKParameterRowView
+
+@property(nonatomic, assign) BOOL isEnabled;
+@property(nonatomic, assign) BOOL isExpanded;
+
+@property(nonatomic, copy, nullable) void (^onEnabledChanged)(BOOL isEnabled);
+@property(nonatomic, copy, nullable) void (^onExpandedChanged)(BOOL isExpanded);
+
+- (instancetype)initWithFrame:(NSRect)frame
+                   apiManager:(id<PROAPIAccessing>)apiManager
+                  parameterId:(UInt32)parameterId
+                         text:(NSString *)text
+                         icon:(nullable NSImage *)icon;
+
 @end
 
 NS_ASSUME_NONNULL_END

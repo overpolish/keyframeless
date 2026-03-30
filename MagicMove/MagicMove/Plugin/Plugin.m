@@ -125,17 +125,6 @@
                                      error:error])
     return NO;
 
-  if (separatorID == kParamGroupPointA) {
-    if (![paramAPI
-            addCustomParameterWithName:@""
-                           parameterID:kParamTestRowA
-                          defaultValue:@(kParamTestRowA)
-                        parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
-                                       kFxParameterFlag_CUSTOM_UI |
-                                       kFxParameterFlag_USE_FULL_VIEW_WIDTH])
-      return NO;
-  }
-
   if (previewID != 0) {
     if (![paramAPI addToggleButtonWithName:@"Preview"
                                parameterID:previewID
@@ -330,20 +319,19 @@
                                error:error])
     return NO;
 
-  NSImage *circleIcon = [NSImage imageWithSystemSymbolName:@"circle.circle"
-                                  accessibilityDescription:nil];
-
-  if (![self addSeparatorParameterWithText:@"Drift"
-                                      icon:circleIcon
-                               parameterID:kParamGroupDrift
-                                   withAPI:paramAPI
-                                     error:error])
+  if (![paramAPI
+          addCustomParameterWithName:@""
+                         parameterID:kParamGroupDrift
+                        defaultValue:@(kParamGroupDrift)
+                      parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
+                                     kFxParameterFlag_CUSTOM_UI |
+                                     kFxParameterFlag_USE_FULL_VIEW_WIDTH])
     return NO;
 
   if (![paramAPI addToggleButtonWithName:@"Enable"
                              parameterID:kParamDrift
                             defaultValue:NO
-                          parameterFlags:kFxParameterFlag_DEFAULT])
+                          parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
   if (![paramAPI addToggleButtonWithName:@"Preview"
@@ -422,6 +410,8 @@
                            parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
+  NSImage *circleIcon = [NSImage imageWithSystemSymbolName:@"circle.circle"
+                                  accessibilityDescription:nil];
   if (![self addSeparatorParameterWithText:@"Exit"
                                       icon:circleIcon
                                parameterID:kParamGroupExit
@@ -588,8 +578,6 @@
 
   FxParameterFlags flagA =
       showA ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
-  FxParameterFlags flagDrift =
-      driftOn ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
   FxParameterFlags flagExit =
       showExit ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
 
@@ -604,16 +592,28 @@
   [paramSetAPI setParameterFlags:flagA toParameter:kParamScaleYA];
   [paramSetAPI setParameterFlags:flagA toParameter:kParamOpacityA];
 
-  // Drift sub-parameters (keep Enable toggle visible)
-  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamPreviewDrift];
-  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamHideOSCDrift];
-  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftPoint];
-  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftRotation];
-  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftRotationX];
-  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftRotationY];
-  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftScale];
-  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftScaleY];
-  [paramSetAPI setParameterFlags:flagDrift toParameter:kParamDriftOpacity];
+  // Drift sub-parameters: only force-hide when drift is disabled.
+  // When enabled, the chevron expand/collapse controls visibility.
+  if (!driftOn) {
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamPreviewDrift];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamHideOSCDrift];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamDriftPoint];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamDriftRotation];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamDriftRotationX];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamDriftRotationY];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamDriftScale];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamDriftScaleY];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamDriftOpacity];
+  }
 
   // Exit sub-parameters (keep Enable toggle visible)
   [paramSetAPI setParameterFlags:flagExit toParameter:kParamPreviewExit];
@@ -627,29 +627,96 @@
   [paramSetAPI setParameterFlags:flagExit toParameter:kParamExitOpacity];
 }
 
+- (void)setGroupEnabled:(BOOL)enabled
+            boolParamID:(UInt32)boolParamID
+          childParamIDs:(NSArray<NSNumber *> *)childIDs {
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+
+  CMTime currentTime = [actionAPI currentTime];
+
+  id<FxParameterSettingAPI_v5> paramSetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+
+  [paramSetAPI setBoolValue:enabled toParameter:boolParamID atTime:currentTime];
+
+  for (NSNumber *paramID in childIDs) {
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:paramID.unsignedIntValue];
+  }
+
+  [actionAPI endAction:self];
+}
+
+- (void)setGroupExpanded:(BOOL)expanded
+           childParamIDs:(NSArray<NSNumber *> *)childIDs {
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+
+  id<FxParameterSettingAPI_v5> paramSetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+
+  FxParameterFlags flags =
+      expanded ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+  for (NSNumber *paramID in childIDs) {
+    [paramSetAPI setParameterFlags:flags toParameter:paramID.unsignedIntValue];
+  }
+
+  [actionAPI endAction:self];
+}
+
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
-  if (parameterID == kParamTestRowA) {
-    KKCustomGroupHeaderView *row =
+  if (parameterID == kParamGroupDrift) {
+    NSImage *icon =
+        [NSImage imageWithSystemSymbolName:@"circle.dotted.and.circle"
+                  accessibilityDescription:nil];
+    KKCustomGroupHeaderView *header =
         [[KKCustomGroupHeaderView alloc] initWithFrame:NSMakeRect(0, 0, 300, 26)
                                             apiManager:self.apiManager
-                                           parameterId:parameterID];
-    KKCheckboxView *checkbox =
-        [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
-    checkbox.translatesAutoresizingMaskIntoConstraints = NO;
-    checkbox.isChecked = YES;
-    NSView *rightContainer = [[NSView alloc] initWithFrame:NSZeroRect];
-    [rightContainer addSubview:checkbox];
-    [NSLayoutConstraint activateConstraints:@[
-      [checkbox.trailingAnchor
-          constraintEqualToAnchor:rightContainer.trailingAnchor
-                         constant:-23.0],
-      [checkbox.centerYAnchor
-          constraintEqualToAnchor:rightContainer.centerYAnchor],
-      [checkbox.widthAnchor constraintEqualToConstant:12.0],
-      [checkbox.heightAnchor constraintEqualToConstant:12.0],
-    ]];
-    row.rightView = rightContainer;
-    return row;
+                                           parameterId:parameterID
+                                                  text:@"Drift"
+                                                  icon:icon];
+
+    // Restore state from custom parameter and current param flags
+    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actionAPI startAction:self];
+    CMTime currentTime = [actionAPI currentTime];
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+
+    BOOL enabled = NO;
+    [paramGetAPI getBoolValue:&enabled
+                fromParameter:kParamDrift
+                       atTime:currentTime];
+    header.isEnabled = enabled;
+
+    if (enabled) {
+      UInt32 flags = 0;
+      [paramGetAPI getParameterFlags:&flags fromParameter:kParamDriftPoint];
+      header.isExpanded = (flags & kFxParameterFlag_HIDDEN) == 0;
+    }
+
+    [actionAPI endAction:self];
+
+    NSArray<NSNumber *> *driftChildIDs = @[
+      @(kParamPreviewDrift), @(kParamHideOSCDrift), @(kParamDriftPoint),
+      @(kParamDriftRotation), @(kParamDriftRotationX), @(kParamDriftRotationY),
+      @(kParamDriftScale), @(kParamDriftScaleY), @(kParamDriftOpacity)
+    ];
+
+    __weak typeof(self) weakSelf = self;
+    header.onEnabledChanged = ^(BOOL isEnabled) {
+      [weakSelf setGroupEnabled:isEnabled
+                    boolParamID:kParamDrift
+                  childParamIDs:driftChildIDs];
+    };
+    header.onExpandedChanged = ^(BOOL isExpanded) {
+      [weakSelf setGroupExpanded:isExpanded childParamIDs:driftChildIDs];
+    };
+    return header;
   }
   if (parameterID == kParamPreviewWarning) {
     KKAlertView *alert =
