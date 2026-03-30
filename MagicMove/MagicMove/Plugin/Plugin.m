@@ -5,48 +5,15 @@
 
 #import "Plugin.h"
 #import "Constants.h"
-#import "MagicMovePath.h"
 #import "ShaderTypes.h"
 #import <AppKit/NSView.h>
 #import <Foundation/Foundation.h>
 #include <FxPlug/FxTypes.h>
 #import <IOSurface/IOSurfaceObjC.h>
+#import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 #import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
-
-static double mmSmoothstep(double x) { return x * x * (3.0 - 2.0 * x); }
-static double mmEaseOutCubic(double x) { return 1.0 - pow(1.0 - x, 3.0); }
-static double mmEaseOutSpring(double x) {
-  const double c1 = 1.0, c3 = c1 + 1.0;
-  return 1.0 + c3 * pow(x - 1.0, 3.0) + c1 * pow(x - 1.0, 2.0);
-}
-
-static double mmApplyCurveIn(double raw, int curve) {
-  switch (curve) {
-  case 0:
-    return raw;
-  case 1:
-    return mmSmoothstep(raw);
-  case 3:
-    return mmEaseOutSpring(raw);
-  default:
-    return mmEaseOutCubic(raw);
-  }
-}
-
-static double mmApplyCurveOut(double raw, int curve) {
-  switch (curve) {
-  case 0:
-    return raw;
-  case 1:
-    return mmSmoothstep(raw);
-  case 3:
-    return mmEaseOutSpring(raw);
-  default:
-    return mmSmoothstep(raw);
-  }
-}
 
 @interface MagicMovePreviewClearTarget : NSObject
 @property(nonatomic, weak) id<PROAPIAccessing> apiManager;
@@ -623,16 +590,16 @@ static double mmApplyCurveOut(double raw, int curve) {
   return YES;
 }
 
-- (MagicMovePath *)readPath:(UInt32)paramID
-                    withAPI:(id<FxParameterRetrievalAPI_v6>)api {
+- (KKBezierPath *)readPath:(UInt32)paramID
+                   withAPI:(id<FxParameterRetrievalAPI_v6>)api {
   NSString *str = nil;
   [api getStringParameterValue:&str fromParameter:paramID];
   if (str.length > 0) {
     NSData *data = [[NSData alloc] initWithBase64EncodedString:str options:0];
     if (data)
-      return [MagicMovePath pathWithData:data];
+      return [KKBezierPath pathWithData:data];
   }
-  return [[MagicMovePath alloc] init];
+  return [[KKBezierPath alloc] init];
 }
 
 - (BOOL)pluginState:(NSData **)pluginState
@@ -893,8 +860,8 @@ static double mmApplyCurveOut(double raw, int curve) {
     double driftDur = exitEnabled ? durSec - animDur : durSec;
     double d = (driftDur > 0) ? (nowSec - startSec) / driftDur : 1.0;
     d = MAX(0.0, MIN(1.0, d));
-    MagicMovePath *pathBDrift = [self readPath:kParamPathBDrift
-                                       withAPI:paramGetAPI];
+    KKBezierPath *pathBDrift = [self readPath:kParamPathBDrift
+                                      withAPI:paramGetAPI];
     simd_float2 driftPos =
         [pathBDrift positionAtT:(float)d
                           start:(simd_float2){(float)posBx, (float)posBy}
@@ -909,7 +876,7 @@ static double mmApplyCurveOut(double raw, int curve) {
     targetOpacity = (1 - d) * opacityB + d * driftOpacity;
   }
 
-  MagicMovePath *pathAB = [self readPath:kParamPathAB withAPI:paramGetAPI];
+  KKBezierPath *pathAB = [self readPath:kParamPathAB withAPI:paramGetAPI];
 
   MagicMoveParams params;
   if (exitEnabled) {
@@ -926,17 +893,17 @@ static double mmApplyCurveOut(double raw, int curve) {
                        atTime:renderTime];
     if (animateIn) {
       double rawIn = MAX(0.0, MIN(1.0, (nowSec - startSec) / animDur));
-      tIn = mmApplyCurveIn(rawIn, curve);
+      tIn = KKApplyCurveIn(rawIn, curve);
     }
 
     // Exit factor: 0 before out-window, 1 at effect end
     double effectEndSec = startSec + durSec;
     double rawE =
         MAX(0.0, MIN(1.0, (nowSec - (effectEndSec - animDur)) / animDur));
-    double e = mmApplyCurveOut(rawE, curve);
+    double e = KKApplyCurveOut(rawE, curve);
 
     // Blend target toward exit along path
-    MagicMovePath *exitPath =
+    KKBezierPath *exitPath =
         [self readPath:(driftEnabled ? kParamPathDriftExit : kParamPathBExit)
                withAPI:paramGetAPI];
     simd_float2 effPos =
@@ -1006,12 +973,12 @@ static double mmApplyCurveOut(double raw, int curve) {
                          atTime:renderTime];
       if (animateIn) {
         double rawIn = MAX(0.0, MIN(1.0, (prevSec - startSec) / animDur));
-        tPIn = mmApplyCurveIn(rawIn, curve);
+        tPIn = KKApplyCurveIn(rawIn, curve);
       }
       double effectEndSec = startSec + durSec;
       double rawE =
           MAX(0.0, MIN(1.0, (prevSec - (effectEndSec - animDur)) / animDur));
-      double eP = mmApplyCurveOut(rawE, curve);
+      double eP = KKApplyCurveOut(rawE, curve);
       double effX = (1 - eP) * tgtX + eP * exitX;
       prevX = (1 - tPIn) * posAx + tPIn * effX - 0.5;
     } else {

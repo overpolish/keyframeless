@@ -9,20 +9,20 @@
 #import <simd/simd.h>
 
 typedef enum : uint32_t {
-  MagicMovePathPointLinear = 0,
-  MagicMovePathPointBezier = 1,
-} MagicMovePathPointType;
+  KKBezierPointLinear = 0,
+  KKBezierPointBezier = 1,
+} KKBezierPointType;
 
 typedef struct {
   float x, y;
   float inX, inY;
   float outX, outY;
   uint32_t type;
-} MagicMovePathPoint;
+} KKBezierPoint;
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface MagicMovePath : NSObject
+@interface KKBezierPath : NSObject
 
 /// Number of intermediate control points (excludes start/end).
 @property(nonatomic, readonly) NSUInteger count;
@@ -33,7 +33,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (instancetype)pathWithData:(nullable NSData *)data;
 - (NSData *)dataRepresentation;
 
-- (MagicMovePathPoint)pointAtIndex:(NSUInteger)index;
+- (KKBezierPoint)pointAtIndex:(NSUInteger)index;
 
 - (void)insertAtIndex:(NSUInteger)index position:(simd_float2)pos;
 - (void)removeAtIndex:(NSUInteger)index;

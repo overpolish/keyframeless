@@ -210,7 +210,8 @@ fragment float4 KKLineFragment(KKRasterizerData in [[stage_in]],
     float alpha = 1.0 - smoothstep(1.0 - fwidth(dist) * 2.0, 1.0, dist);
     if (alpha < 0.001)
         discard_fragment();
-    return float4(color->rgb * alpha, alpha);
+    float a = alpha * color->a;
+    return float4(color->rgb * a, a);
 }
 
 /// Fragment shader for rendering a text label texture.

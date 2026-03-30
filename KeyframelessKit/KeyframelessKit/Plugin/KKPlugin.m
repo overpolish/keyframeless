@@ -4,6 +4,7 @@
  */
 
 #import "KKPlugin.h"
+#import "../Math/KKEasing.h"
 #import "../Update/KKUpdateChecker.h"
 #import "../Views/KKAlertView.h"
 #import "../Views/KKKbd.h"
@@ -37,24 +38,6 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     objc_setAssociatedObject(cls, key, dict, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
   }
   return dict;
-}
-
-// ---------------------------------------------------------------------------
-// Animation curve functions
-// In-factor:  raw 0→1 as clip progresses from start (used for animate-in)
-// Out-factor: raw 1→0 as clip approaches end       (used for animate-out)
-// Bounce and Elastic may exceed [0,1] intentionally (overshoot effect).
-// ---------------------------------------------------------------------------
-
-static double kkSmoothstep(double t) { return t * t * (3.0 - 2.0 * t); }
-
-// In: ease-out cubic — fast start, decelerates to rest
-static double kkEaseOutCubic(double t) { return 1.0 - pow(1.0 - t, 3.0); }
-
-// In: spring — overshoots target once, settles back (ease-out-back)
-static double kkEaseOutSpring(double t) {
-  const double c1 = 1.0, c3 = c1 + 1.0;
-  return 1.0 + c3 * pow(t - 1.0, 3.0) + c1 * pow(t - 1.0, 2.0);
 }
 
 @interface KKPrincipalDelegate : NSObject <FxPrincipalDelegate>
@@ -334,13 +317,13 @@ static double kkEaseOutSpring(double t) {
       t *= raw;
       break;
     case KKAnimationCurveSmooth:
-      t *= kkSmoothstep(raw);
+      t *= KKEaseSmoothstep(raw);
       break;
     case KKAnimationCurveSpring:
-      t *= kkEaseOutSpring(raw);
+      t *= KKEaseOutSpring(raw);
       break;
     default:
-      t *= kkEaseOutCubic(raw);
+      t *= KKEaseOutCubic(raw);
       break;
     }
   }
@@ -354,13 +337,13 @@ static double kkEaseOutSpring(double t) {
       t *= raw;
       break;
     case KKAnimationCurveSmooth:
-      t *= kkSmoothstep(raw);
+      t *= KKEaseSmoothstep(raw);
       break;
     case KKAnimationCurveSpring:
-      t *= kkEaseOutSpring(raw);
+      t *= KKEaseOutSpring(raw);
       break;
     default:
-      t *= kkSmoothstep(raw);
+      t *= KKEaseSmoothstep(raw);
       break;
     }
   }
