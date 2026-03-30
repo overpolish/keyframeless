@@ -204,7 +204,8 @@ makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
 - (void)drawPathSegment:(PathSegConfig)cfg
        destinationImage:(FxImageTile *)dest
                   color:(simd_float4)color
-                  inset:(double)inset
+             startInset:(double)startInset
+               endInset:(double)endInset
                  atTime:(CMTime)time {
   KKBezierPath *path = [self readPathParam:cfg.pathParam];
   simd_float2 startObj = [self objectPositionForParam:cfg.startParam
@@ -228,26 +229,28 @@ makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
       double d1 = hypot(cur.x - startCanvas.x, cur.y - startCanvas.y);
       double d2 = hypot(cur.x - endCanvas.x, cur.y - endCanvas.y);
       if (s > 0) {
-        BOOL curInStart = d1 < inset, prevInStart = d1p < inset;
-        BOOL curInEnd = d2 < inset, prevInEnd = d2p < inset;
+        BOOL curInStart = d1 < startInset, prevInStart = d1p < startInset;
+        BOOL curInEnd = d2 < endInset, prevInEnd = d2p < endInset;
         double tMin = 0.0, tMax = 1.0;
         BOOL skip = NO;
 
         if (curInStart && prevInStart) {
           skip = YES;
         } else if (prevInStart) {
-          tMin = fmax(tMin, circleClipT(prev, cur, startCanvas, inset, YES));
+          tMin =
+              fmax(tMin, circleClipT(prev, cur, startCanvas, startInset, YES));
         } else if (curInStart) {
-          tMax = fmin(tMax, circleClipT(prev, cur, startCanvas, inset, NO));
+          tMax =
+              fmin(tMax, circleClipT(prev, cur, startCanvas, startInset, NO));
         }
 
         if (!skip) {
           if (curInEnd && prevInEnd) {
             skip = YES;
           } else if (prevInEnd) {
-            tMin = fmax(tMin, circleClipT(prev, cur, endCanvas, inset, YES));
+            tMin = fmax(tMin, circleClipT(prev, cur, endCanvas, endInset, YES));
           } else if (curInEnd) {
-            tMax = fmin(tMax, circleClipT(prev, cur, endCanvas, inset, NO));
+            tMax = fmin(tMax, circleClipT(prev, cur, endCanvas, endInset, NO));
           }
         }
 
@@ -682,10 +685,26 @@ makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
   BOOL showA = animInOn || (animOutOn && !exitOn);
   BOOL showExit = exitOn && animOutOn;
 
+  id<FxParameterRetrievalAPI_v6> hideAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  BOOL hideA = NO, hideB = NO, hideDrift = NO, hideExit = NO;
+  [hideAPI getBoolValue:&hideA fromParameter:kParamHideOSCA atTime:time];
+  [hideAPI getBoolValue:&hideB fromParameter:kParamHideOSCB atTime:time];
+  [hideAPI getBoolValue:&hideDrift
+          fromParameter:kParamHideOSCDrift
+                 atTime:time];
+  [hideAPI getBoolValue:&hideExit fromParameter:kParamHideOSCExit atTime:time];
+  _points[0].hidden = hideA;
+  _points[1].hidden = hideB;
+  _points[2].hidden = hideDrift;
+  _points[3].hidden = hideExit;
+
   simd_float4 red = {1, 0, 0, 1};
-  BOOL anyArcActive = _points[0].arcDragging || _points[1].arcDragging ||
-                      _points[2].arcDragging || _points[3].arcDragging;
-  double inset = anyArcActive ? 22.0 : 14.0;
+  double arcOuter = _points[0].arc.oscRadius + _points[0].arc.outlineWidth;
+  double insetA = hideA ? 0.0 : arcOuter;
+  double insetB = hideB ? 0.0 : arcOuter;
+  double insetDrift = hideDrift ? 0.0 : arcOuter;
+  double insetExit = hideExit ? 0.0 : arcOuter;
 
   PathSegConfig cfgAB = {kParamPathAB, kParamPointA, kParamPointB, 0};
   PathSegConfig cfgBDrift = {kParamPathBDrift, kParamPointB, kParamDriftPoint,
@@ -698,25 +717,29 @@ makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
     [self drawPathSegment:cfgAB
          destinationImage:destinationImage
                     color:red
-                    inset:inset
+               startInset:insetA
+                 endInset:insetB
                    atTime:time];
   if (driftOn) {
     [self drawPathSegment:cfgBDrift
          destinationImage:destinationImage
                     color:red
-                    inset:inset
+               startInset:insetB
+                 endInset:insetDrift
                    atTime:time];
     if (showExit)
       [self drawPathSegment:cfgDriftExit
            destinationImage:destinationImage
                       color:red
-                      inset:inset
+                 startInset:insetDrift
+                   endInset:insetExit
                      atTime:time];
   } else if (showExit) {
     [self drawPathSegment:cfgBExit
          destinationImage:destinationImage
                     color:red
-                    inset:inset
+               startInset:insetB
+                 endInset:insetExit
                    atTime:time];
   }
 
@@ -755,6 +778,19 @@ makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
   BOOL exitOn = [self exitEnabledAtTime:time];
   BOOL showA = animInOn || (animOutOn && !exitOn);
 
+  // When Cmd is held, temporarily unhide points so they can be hit-tested
+  // for the Cmd+click toggle gesture.
+  CGEventFlags cmdFlags =
+      CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+  BOOL cmdHeld = (cmdFlags & kCGEventFlagMaskCommand) != 0;
+  BOOL savedHidden[kPointCount];
+  if (cmdHeld) {
+    for (int i = 0; i < kPointCount; i++) {
+      savedHidden[i] = _points[i].hidden;
+      _points[i].hidden = NO;
+    }
+  }
+
   // Main point controls first (highest priority)
   NSInteger prePart = *activePart;
 
@@ -784,6 +820,12 @@ makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
                            positionY:positionY
                           activePart:activePart
                               atTime:time];
+
+  // Restore hidden state after hit testing
+  if (cmdHeld) {
+    for (int i = 0; i < kPointCount; i++)
+      _points[i].hidden = savedHidden[i];
+  }
 
   // Path elements only if no main point was hit
   if (*activePart == prePart) {
@@ -845,6 +887,29 @@ makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
                    modifiers:(NSUInteger)modifiers
                  forceUpdate:(BOOL *)forceUpdate
                       atTime:(CMTime)time {
+  // Cmd+click on arc toggles hide
+  if (modifiers & kFxModifierKey_COMMAND) {
+    static const UInt32 hideParams[] = {kParamHideOSCA, kParamHideOSCB,
+                                        kParamHideOSCDrift, kParamHideOSCExit};
+    for (int i = 0; i < kPointCount; i++) {
+      if (activePart == _points[i].arcPart) {
+        id<FxParameterRetrievalAPI_v6> paramGetAPI = [self.apiManager
+            apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+        id<FxParameterSettingAPI_v5> paramSetAPI = [self.apiManager
+            apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+        BOOL hidden = NO;
+        [paramGetAPI getBoolValue:&hidden
+                    fromParameter:hideParams[i]
+                           atTime:time];
+        [paramSetAPI setBoolValue:!hidden
+                      toParameter:hideParams[i]
+                           atTime:time];
+        *forceUpdate = YES;
+        return;
+      }
+    }
+  }
+
   for (int i = 0; i < kPointCount; i++) {
     if ([_points[i] mouseDownWithParentOSC:self
                                  positionX:positionX

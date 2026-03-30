@@ -125,6 +125,9 @@ static NSColor *ringActiveStrokeColor(void) {
 - (BOOL)hitTestAtMousePositionX:(double)positionX
                       positionY:(double)positionY
                          atTime:(CMTime)time {
+  if (_ringRadius < 1.0f && _ringRadiusY < 1.0f)
+    return NO;
+
   CGPoint pos = _center;
   double dx = positionX - pos.x;
   double dy = positionY - pos.y;
