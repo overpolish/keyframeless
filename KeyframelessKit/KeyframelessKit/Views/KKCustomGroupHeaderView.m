@@ -13,6 +13,7 @@
 
 static const CGFloat kChevronMarginLeft = 10.0;
 static const CGFloat kCheckboxTrailingMargin = 23.0;
+static const CGFloat kStatusCheckboxGap = 8.0;
 static const CGFloat kStatusTrailingMargin = 23.0;
 
 @implementation KKCustomGroupHeaderView {
@@ -62,6 +63,16 @@ static const CGFloat kStatusTrailingMargin = 23.0;
 
     NSView *rightContainer = [[NSView alloc] initWithFrame:NSZeroRect];
 
+    _statusLabel = [NSTextField labelWithString:@""];
+    _statusLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    _statusLabel.font = [NSFont systemFontOfSize:10.0];
+    _statusLabel.textColor = [NSColor tertiaryLabelColor];
+    _statusLabel.hidden = YES;
+    [rightContainer addSubview:_statusLabel];
+    [_statusLabel.centerYAnchor
+        constraintEqualToAnchor:rightContainer.centerYAnchor]
+        .active = YES;
+
     if (showsCheckbox) {
       _checkbox = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
       _checkbox.translatesAutoresizingMaskIntoConstraints = NO;
@@ -92,22 +103,15 @@ static const CGFloat kStatusTrailingMargin = 23.0;
             constraintEqualToAnchor:rightContainer.centerYAnchor],
         [_checkbox.widthAnchor constraintEqualToConstant:12.0],
         [_checkbox.heightAnchor constraintEqualToConstant:12.0],
+        [_statusLabel.trailingAnchor
+            constraintEqualToAnchor:_checkbox.leadingAnchor
+                           constant:-kStatusCheckboxGap],
       ]];
     } else {
-      _statusLabel = [NSTextField labelWithString:@""];
-      _statusLabel.translatesAutoresizingMaskIntoConstraints = NO;
-      _statusLabel.font = [NSFont systemFontOfSize:10.0];
-      _statusLabel.textColor = [NSColor tertiaryLabelColor];
-      _statusLabel.hidden = YES;
-
-      [rightContainer addSubview:_statusLabel];
-      [NSLayoutConstraint activateConstraints:@[
-        [_statusLabel.trailingAnchor
-            constraintEqualToAnchor:rightContainer.trailingAnchor
-                           constant:-kStatusTrailingMargin],
-        [_statusLabel.centerYAnchor
-            constraintEqualToAnchor:rightContainer.centerYAnchor],
-      ]];
+      [_statusLabel.trailingAnchor
+          constraintEqualToAnchor:rightContainer.trailingAnchor
+                         constant:-kStatusTrailingMargin]
+          .active = YES;
     }
 
     self.rightView = rightContainer;

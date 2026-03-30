@@ -74,6 +74,7 @@
 @implementation MagicMovePlugin {
   KKLog *_log;
   __weak KKCustomGroupHeaderView *_pointAHeader;
+  __weak KKCustomGroupHeaderView *_exitHeader;
 }
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager;
@@ -425,19 +426,19 @@
                            parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
-  NSImage *circleIcon = [NSImage imageWithSystemSymbolName:@"circle.circle"
-                                  accessibilityDescription:nil];
-  if (![self addSeparatorParameterWithText:@"Exit"
-                                      icon:circleIcon
-                               parameterID:kParamGroupExit
-                                   withAPI:paramAPI
-                                     error:error])
+  if (![paramAPI
+          addCustomParameterWithName:@""
+                         parameterID:kParamGroupExit
+                        defaultValue:@(kParamGroupExit)
+                      parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
+                                     kFxParameterFlag_CUSTOM_UI |
+                                     kFxParameterFlag_USE_FULL_VIEW_WIDTH])
     return NO;
 
   if (![paramAPI addToggleButtonWithName:@"Enable"
                              parameterID:kParamExit
                             defaultValue:NO
-                          parameterFlags:kFxParameterFlag_DEFAULT])
+                          parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
   if (![paramAPI addToggleButtonWithName:@"Preview"
@@ -606,9 +607,6 @@
       showA && (_pointAHeader == nil || _pointAHeader.isExpanded);
   FxParameterFlags flagA =
       showAParams ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
-  FxParameterFlags flagExit =
-      showExit ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
-
   [paramSetAPI setParameterFlags:flagA toParameter:kParamPreviewA];
   [paramSetAPI setParameterFlags:flagA toParameter:kParamHideOSCA];
   [paramSetAPI setParameterFlags:flagA toParameter:kParamPointA];
@@ -642,7 +640,19 @@
                        toParameter:kParamDriftOpacity];
   }
 
-  // Exit sub-parameters (keep Enable toggle visible)
+  if (_exitHeader) {
+    if (exitOn && !animOut) {
+      _exitHeader.statusText = @"Enable Animate Out";
+    } else {
+      _exitHeader.statusText = nil;
+    }
+  }
+
+  BOOL showExitParams =
+      showExit && (_exitHeader == nil || _exitHeader.isExpanded);
+  FxParameterFlags flagExit =
+      showExitParams ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+
   [paramSetAPI setParameterFlags:flagExit toParameter:kParamPreviewExit];
   [paramSetAPI setParameterFlags:flagExit toParameter:kParamHideOSCExit];
   [paramSetAPI setParameterFlags:flagExit toParameter:kParamExitPoint];
@@ -826,6 +836,65 @@
     header.onExpandedChanged = ^(BOOL isExpanded) {
       [weakSelf setGroupExpanded:isExpanded childParamIDs:driftChildIDs];
     };
+    return header;
+  }
+  if (parameterID == kParamGroupExit) {
+    NSImage *icon = [NSImage
+        imageWithSystemSymbolName:@"arrowshape.turn.up.right.circle.fill"
+         accessibilityDescription:nil];
+    KKCustomGroupHeaderView *header =
+        [[KKCustomGroupHeaderView alloc] initWithFrame:NSMakeRect(0, 0, 300, 26)
+                                            apiManager:self.apiManager
+                                           parameterId:parameterID
+                                                  text:@"Exit"
+                                                  icon:icon
+                                         showsCheckbox:YES];
+
+    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actionAPI startAction:self];
+    CMTime currentTime = [actionAPI currentTime];
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+
+    BOOL exitOn = NO, animOut = NO;
+    [paramGetAPI getBoolValue:&exitOn
+                fromParameter:kParamExit
+                       atTime:currentTime];
+    [paramGetAPI getBoolValue:&animOut
+                fromParameter:kKKParamAnimateOut
+                       atTime:currentTime];
+    header.isEnabled = exitOn;
+
+    if (exitOn && !animOut) {
+      header.statusText = @"Enable Animate Out";
+    }
+
+    if (exitOn) {
+      UInt32 flags = 0;
+      [paramGetAPI getParameterFlags:&flags fromParameter:kParamExitPoint];
+      header.isExpanded = (flags & kFxParameterFlag_HIDDEN) == 0;
+    }
+
+    [actionAPI endAction:self];
+
+    NSArray<NSNumber *> *exitChildIDs = @[
+      @(kParamPreviewExit), @(kParamHideOSCExit), @(kParamExitPoint),
+      @(kParamExitRotation), @(kParamExitRotationX), @(kParamExitRotationY),
+      @(kParamExitScale), @(kParamExitScaleY), @(kParamExitOpacity)
+    ];
+
+    __weak typeof(self) weakSelf = self;
+    header.onEnabledChanged = ^(BOOL isEnabled) {
+      [weakSelf setGroupEnabled:isEnabled
+                    boolParamID:kParamExit
+                  childParamIDs:exitChildIDs];
+    };
+    header.onExpandedChanged = ^(BOOL isExpanded) {
+      [weakSelf setGroupExpanded:isExpanded childParamIDs:exitChildIDs];
+    };
+
+    _exitHeader = header;
     return header;
   }
   if (parameterID == kParamPreviewWarning) {
