@@ -275,8 +275,7 @@
                       parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
                                      kFxParameterFlag_CUSTOM_UI |
                                      kFxParameterFlag_USE_FULL_VIEW_WIDTH |
-                                     kFxParameterFlag_DISABLED |
-                                     kFxParameterFlag_HIDDEN])
+                                     kFxParameterFlag_DISABLED])
     return NO;
 
   if (![paramAPI
@@ -286,8 +285,7 @@
                       parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
                                      kFxParameterFlag_CUSTOM_UI |
                                      kFxParameterFlag_USE_FULL_VIEW_WIDTH |
-                                     kFxParameterFlag_DISABLED |
-                                     kFxParameterFlag_HIDDEN])
+                                     kFxParameterFlag_DISABLED])
     return NO;
 
   if (![self addAnimationParametersWithAPI:paramAPI error:error])
@@ -591,26 +589,8 @@
     return;
   }
 
-  BOOL anyPreview = previewA || previewB || previewDrift || previewExit;
-  [paramSetAPI
-      setParameterFlags:(anyPreview) ? alertBase
-                                     : (alertBase | kFxParameterFlag_HIDDEN)
-            toParameter:kParamPreviewWarning];
-
-  BOOL hideA = NO, hideB = NO, hideDrift = NO, hideExit = NO;
-  [paramGetAPI getBoolValue:&hideA fromParameter:kParamHideOSCA atTime:time];
-  [paramGetAPI getBoolValue:&hideB fromParameter:kParamHideOSCB atTime:time];
-  [paramGetAPI getBoolValue:&hideDrift
-              fromParameter:kParamHideOSCDrift
-                     atTime:time];
-  [paramGetAPI getBoolValue:&hideExit
-              fromParameter:kParamHideOSCExit
-                     atTime:time];
-  BOOL anyHidden = hideA || hideB || hideDrift || hideExit;
-  [paramSetAPI
-      setParameterFlags:(anyHidden) ? alertBase
-                                    : (alertBase | kFxParameterFlag_HIDDEN)
-            toParameter:kParamHideOSCWarning];
+  [paramSetAPI setParameterFlags:alertBase toParameter:kParamPreviewWarning];
+  [paramSetAPI setParameterFlags:alertBase toParameter:kParamHideOSCWarning];
 
   [self updateTimingParameterVisibility];
 
