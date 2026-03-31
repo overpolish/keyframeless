@@ -13,6 +13,7 @@
 #import <CoreFoundation/CFCGTypes.h>
 #import <Foundation/Foundation.h>
 #import <KeyframelessKit/KKLog.h>
+#import <QuartzCore/CAMediaTimingFunction.h>
 #import <objc/objc.h>
 
 static const CGFloat KKAlertViewHeight = KKInspectorRowHeight * 2;
@@ -25,6 +26,13 @@ static const CGFloat KKAlertViewHeight = KKInspectorRowHeight * 2;
   KKLog *_log;
   NSUInteger _currentPage;
   NSTextField *_pageLabel;
+  NSImageView *_renderedLabel;
+  NSImageView *_renderedPageLabel;
+  NSArray<NSImage *> *_renderedPageImages;
+  NSView *_renderedClipView;
+  NSLayoutConstraint *_renderedLabelLeading;
+  NSTrackingArea *_trackingArea;
+  BOOL _isScrolling;
 }
 
 - (instancetype)initWithText:(NSString *)text {
@@ -167,6 +175,69 @@ static const CGFloat KKAlertViewHeight = KKInspectorRowHeight * 2;
 - (void)setAttributedPages:(NSArray<NSAttributedString *> *)attributedPages {
   _attributedPages = [attributedPages copy];
   _currentPage = 0;
+
+  NSMutableArray<NSImage *> *images = [NSMutableArray array];
+  for (NSAttributedString *page in _attributedPages) {
+    NSMutableAttributedString *colored = [page mutableCopy];
+    NSFont *defaultFont = [KKFonts inspectorLabelFont];
+    [colored enumerateAttributesInRange:NSMakeRange(0, colored.length)
+                                options:0
+                             usingBlock:^(NSDictionary *attrs, NSRange range,
+                                          BOOL *stop) {
+                               if (!attrs[NSForegroundColorAttributeName])
+                                 [colored
+                                     addAttribute:NSForegroundColorAttributeName
+                                            value:_color
+                                            range:range];
+                               if (!attrs[NSFontAttributeName])
+                                 [colored addAttribute:NSFontAttributeName
+                                                 value:defaultFont
+                                                 range:range];
+                             }];
+    NSSize size = [colored size];
+    NSImage *img = [[NSImage alloc]
+        initWithSize:NSMakeSize(ceil(size.width), ceil(size.height))];
+    [img lockFocus];
+    [colored drawAtPoint:NSZeroPoint];
+    [img unlockFocus];
+    [images addObject:img];
+  }
+  _renderedPageImages = images;
+
+  if (!_renderedLabel) {
+    _renderedClipView = [[NSView alloc] init];
+    _renderedClipView.translatesAutoresizingMaskIntoConstraints = NO;
+    _renderedClipView.wantsLayer = YES;
+    _renderedClipView.layer.masksToBounds = YES;
+    [_contentView addSubview:_renderedClipView];
+    [NSLayoutConstraint activateConstraints:@[
+      [_renderedClipView.leadingAnchor
+          constraintEqualToAnchor:_label.leadingAnchor],
+      [_renderedClipView.trailingAnchor
+          constraintEqualToAnchor:_label.trailingAnchor],
+      [_renderedClipView.topAnchor constraintEqualToAnchor:_label.topAnchor],
+      [_renderedClipView.bottomAnchor
+          constraintEqualToAnchor:_label.bottomAnchor],
+    ]];
+
+    _renderedLabel = [[NSImageView alloc] init];
+    _renderedLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    _renderedLabel.imageScaling = NSImageScaleNone;
+    _renderedLabel.imageAlignment = NSImageAlignLeft;
+    [_renderedClipView addSubview:_renderedLabel];
+    _renderedLabelLeading = [_renderedLabel.leadingAnchor
+        constraintEqualToAnchor:_renderedClipView.leadingAnchor];
+    [NSLayoutConstraint activateConstraints:@[
+      _renderedLabelLeading,
+      [_renderedLabel.centerYAnchor
+          constraintEqualToAnchor:_renderedClipView.centerYAnchor],
+    ]];
+    _label.alphaValue = 0;
+    _label.maximumNumberOfLines = 1;
+    [_label setContentHuggingPriority:1
+                       forOrientation:NSLayoutConstraintOrientationHorizontal];
+  }
+
   if (_attributedPages.count > 1) {
     [self _setupPageNavigation];
   }
@@ -214,13 +285,18 @@ static const CGFloat KKAlertViewHeight = KKInspectorRowHeight * 2;
   _pageLabel = [NSTextField labelWithString:@""];
   _pageLabel.font = [NSFont monospacedSystemFontOfSize:9.0
                                                 weight:NSFontWeightRegular];
-  _pageLabel.textColor = _color;
+  _pageLabel.textColor = [NSColor clearColor];
   _pageLabel.alignment = NSTextAlignmentCenter;
   _pageLabel.translatesAutoresizingMaskIntoConstraints = NO;
+
+  _renderedPageLabel = [[NSImageView alloc] init];
+  _renderedPageLabel.translatesAutoresizingMaskIntoConstraints = NO;
+  _renderedPageLabel.imageScaling = NSImageScaleNone;
 
   [navView addSubview:prevBtn];
   [navView addSubview:nextBtn];
   [navView addSubview:_pageLabel];
+  [navView addSubview:_renderedPageLabel];
 
   // [1/2] [▲] — buttons fill top/bottom halves for hit area, chevron views
   //       [▼]   pinned to the inner edges so they sit close together.
@@ -244,19 +320,44 @@ static const CGFloat KKAlertViewHeight = KKInspectorRowHeight * 2;
     [downView.centerXAnchor constraintEqualToAnchor:nextBtn.centerXAnchor],
     [downView.topAnchor constraintEqualToAnchor:nextBtn.topAnchor
                                        constant:KKSpacingXS],
+    [_renderedPageLabel.leadingAnchor
+        constraintEqualToAnchor:_pageLabel.leadingAnchor],
+    [_renderedPageLabel.centerYAnchor
+        constraintEqualToAnchor:_pageLabel.centerYAnchor],
   ]];
 
   self.accessoryView = navView;
 }
 
 - (void)_showCurrentPage {
+  [self _stopScroll];
+  if (_currentPage < _renderedPageImages.count) {
+    _renderedLabel.image = _renderedPageImages[_currentPage];
+  }
   if (_currentPage < _attributedPages.count) {
     _label.attributedStringValue = _attributedPages[_currentPage];
   }
   if (_pageLabel) {
-    _pageLabel.stringValue = [NSString
+    NSString *text = [NSString
         stringWithFormat:@"%lu/%lu", (unsigned long)(_currentPage + 1),
                          (unsigned long)_attributedPages.count];
+    _pageLabel.stringValue = text;
+
+    if (_renderedPageLabel) {
+      NSFont *font = [NSFont monospacedSystemFontOfSize:9.0
+                                                 weight:NSFontWeightRegular];
+      NSDictionary *attrs = @{
+        NSFontAttributeName : font,
+        NSForegroundColorAttributeName : _color,
+      };
+      NSSize size = [text sizeWithAttributes:attrs];
+      NSImage *img = [[NSImage alloc]
+          initWithSize:NSMakeSize(ceil(size.width), ceil(size.height))];
+      [img lockFocus];
+      [text drawAtPoint:NSZeroPoint withAttributes:attrs];
+      [img unlockFocus];
+      _renderedPageLabel.image = img;
+    }
   }
 }
 
@@ -273,6 +374,87 @@ static const CGFloat KKAlertViewHeight = KKInspectorRowHeight * 2;
     return;
   _currentPage = (_currentPage + 1) % _attributedPages.count;
   [self _showCurrentPage];
+}
+
+- (void)updateTrackingAreas {
+  [super updateTrackingAreas];
+  if (_trackingArea)
+    [self removeTrackingArea:_trackingArea];
+  if (_renderedLabel) {
+    _trackingArea =
+        [[NSTrackingArea alloc] initWithRect:self.bounds
+                                     options:NSTrackingMouseEnteredAndExited |
+                                             NSTrackingActiveInActiveApp
+                                       owner:self
+                                    userInfo:nil];
+    [self addTrackingArea:_trackingArea];
+  }
+}
+
+- (void)mouseEntered:(NSEvent *)event {
+  if (_isScrolling || !_renderedLabel.image)
+    return;
+  CGFloat overflow =
+      _renderedLabel.image.size.width - _renderedClipView.frame.size.width;
+  if (overflow <= 0)
+    return;
+  _isScrolling = YES;
+  [self _scrollToEnd:overflow];
+}
+
+- (void)mouseExited:(NSEvent *)event {
+  [self _stopScroll];
+}
+
+- (void)_scrollToEnd:(CGFloat)overflow {
+  if (!self->_isScrolling)
+    return;
+  [NSAnimationContext
+      runAnimationGroup:^(NSAnimationContext *ctx) {
+        ctx.duration = overflow / 30.0;
+        ctx.timingFunction = [CAMediaTimingFunction
+            functionWithName:kCAMediaTimingFunctionLinear];
+        self->_renderedLabelLeading.animator.constant = -overflow;
+      }
+      completionHandler:^{
+        if (!self->_isScrolling)
+          return;
+        dispatch_after(
+            dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+            dispatch_get_main_queue(), ^{
+              if (!self->_isScrolling)
+                return;
+              [self _scrollToStart:overflow];
+            });
+      }];
+}
+
+- (void)_scrollToStart:(CGFloat)overflow {
+  if (!self->_isScrolling)
+    return;
+  [NSAnimationContext
+      runAnimationGroup:^(NSAnimationContext *ctx) {
+        ctx.duration = overflow / 30.0;
+        ctx.timingFunction = [CAMediaTimingFunction
+            functionWithName:kCAMediaTimingFunctionLinear];
+        self->_renderedLabelLeading.animator.constant = 0;
+      }
+      completionHandler:^{
+        if (!self->_isScrolling)
+          return;
+        dispatch_after(
+            dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+            dispatch_get_main_queue(), ^{
+              if (!self->_isScrolling)
+                return;
+              [self _scrollToEnd:overflow];
+            });
+      }];
+}
+
+- (void)_stopScroll {
+  _isScrolling = NO;
+  _renderedLabelLeading.constant = 0;
 }
 
 @end

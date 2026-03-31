@@ -79,7 +79,7 @@
   NSImage *img = [NSImage imageWithSystemSymbolName:name
                            accessibilityDescription:nil];
   NSImageSymbolConfiguration *cfg = [NSImageSymbolConfiguration
-      configurationWithPointSize:labelFont.pointSize
+      configurationWithPointSize:labelFont.pointSize - 2.0
                           weight:NSFontWeightRegular];
   img = [img imageWithSymbolConfiguration:cfg];
 
@@ -99,7 +99,7 @@
 
   NSTextAttachment *att = [[NSTextAttachment alloc] init];
   att.image = tinted;
-  CGFloat yOff = floor((labelFont.capHeight - size.height) / 2.0);
+  CGFloat yOff = floor((labelFont.capHeight - size.height) / 2.0) + 0.5;
   att.bounds = NSMakeRect(0, yOff, size.width, size.height);
 
   return [NSAttributedString attributedStringWithAttachment:att];

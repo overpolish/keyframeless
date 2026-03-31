@@ -46,6 +46,7 @@
 				Style/KKTokens.h,
 				"Style/NSColor+KKColors.h",
 				Update/KKUpdateChecker.h,
+				Views/KKAlertStackView.h,
 				Views/KKAlertView.h,
 				Views/KKCheckboxView.h,
 				Views/KKChevronView.h,

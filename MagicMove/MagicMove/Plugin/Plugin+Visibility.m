@@ -75,6 +75,22 @@
   [paramSetAPI setParameterFlags:alertBase toParameter:kParamPreviewWarning];
   [paramSetAPI setParameterFlags:alertBase toParameter:kParamHideOSCWarning];
 
+  BOOL hideA = NO, hideB = NO, hideDrift = NO, hideExit = NO;
+  [paramGetAPI getBoolValue:&hideA fromParameter:kParamHideOSCA atTime:time];
+  [paramGetAPI getBoolValue:&hideB fromParameter:kParamHideOSCB atTime:time];
+  [paramGetAPI getBoolValue:&hideDrift
+              fromParameter:kParamHideOSCDrift
+                     atTime:time];
+  [paramGetAPI getBoolValue:&hideExit
+              fromParameter:kParamHideOSCExit
+                     atTime:time];
+
+  BOOL anyPreview = previewA || previewB || previewDrift || previewExit;
+  BOOL anyHidden = hideA || hideB || hideDrift || hideExit;
+
+  [self.alertStackView setAlert:self.previewAlertView active:anyPreview];
+  [self.alertStackView setAlert:self.hideOSCAlertView active:anyHidden];
+
   [self updateTimingParameterVisibility];
 
   BOOL showA = animIn || (animOut && !exitOn);

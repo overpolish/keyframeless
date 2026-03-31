@@ -18,6 +18,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *pointBHeader;
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *driftHeader;
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *exitHeader;
+@property(nonatomic, weak, nullable) KKAlertStackView *alertStackView;
+@property(nonatomic, weak, nullable) KKAlertView *previewAlertView;
+@property(nonatomic, weak, nullable) KKAlertView *hideOSCAlertView;
 @end
 
 @interface MagicMovePlugin (Parameters)
