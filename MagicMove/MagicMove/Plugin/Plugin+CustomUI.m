@@ -389,12 +389,13 @@
     self.previewAlertView = previewAlert;
     self.hideOSCAlertView = hideOSCAlert;
 
-    KKAlertStackView *stack =
-        [[KKAlertStackView alloc] initWithDefaultAlert:infoAlert];
+    KKAlertStackView *stack = [[KKAlertStackView alloc]
+        initWithDefaultAlert:infoAlert
+                  apiManager:self.apiManager
+          persistParameterID:kParamAlertStackSelected];
     [stack addAlert:previewAlert priority:0];
     [stack addAlert:hideOSCAlert priority:1];
 
-    // Read initial state
     id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
         apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
     [actionAPI startAction:self];
