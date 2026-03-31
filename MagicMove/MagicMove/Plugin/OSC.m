@@ -409,6 +409,8 @@ makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
                            kParamExitPoint, 2};
   case 3:
     return (PathSegConfig){kParamPathBExit, kParamPointB, kParamExitPoint, 3};
+  case 4:
+    return (PathSegConfig){kParamPathDriftA, kParamDriftPoint, kParamPointA, 4};
   default:
     return (PathSegConfig){kParamPathAB, kParamPointA, kParamPointB, 0};
   }
@@ -712,6 +714,8 @@ makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
   PathSegConfig cfgDriftExit = {kParamPathDriftExit, kParamDriftPoint,
                                 kParamExitPoint, 2};
   PathSegConfig cfgBExit = {kParamPathBExit, kParamPointB, kParamExitPoint, 3};
+  PathSegConfig cfgDriftA = {kParamPathDriftA, kParamDriftPoint, kParamPointA,
+                             4};
 
   if (showA)
     [self drawPathSegment:cfgAB
@@ -733,6 +737,13 @@ makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
                       color:red
                  startInset:insetDrift
                    endInset:insetExit
+                     atTime:time];
+    else if (animOutOn)
+      [self drawPathSegment:cfgDriftA
+           destinationImage:destinationImage
+                      color:red
+                 startInset:insetDrift
+                   endInset:insetA
                      atTime:time];
   } else if (showExit) {
     [self drawPathSegment:cfgBExit
@@ -840,6 +851,7 @@ makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
     PathSegConfig cfgDE = {kParamPathDriftExit, kParamDriftPoint,
                            kParamExitPoint, 2};
     PathSegConfig cfgBE = {kParamPathBExit, kParamPointB, kParamExitPoint, 3};
+    PathSegConfig cfgDA = {kParamPathDriftA, kParamDriftPoint, kParamPointA, 4};
     BOOL driftOn = [self driftEnabledAtTime:time];
     BOOL exitShow = exitOn && animOutOn;
     BOOL hit = NO;
@@ -862,6 +874,14 @@ makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
                               atTime:time];
     if (!hit && driftOn && exitShow)
       hit = [self hitTestPathSegment:cfgDE
+                                   x:positionX
+                                   y:positionY
+                          activePart:activePart
+                             optDown:hOpt
+                              oscAPI:hOscAPI
+                              atTime:time];
+    if (!hit && driftOn && !exitShow && animOutOn)
+      hit = [self hitTestPathSegment:cfgDA
                                    x:positionX
                                    y:positionY
                           activePart:activePart
