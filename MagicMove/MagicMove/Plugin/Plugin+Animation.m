@@ -168,7 +168,7 @@
   }
 
   double animDur = 0.5;
-  if (exitEnabled)
+  if (exitEnabled || driftEnabled)
     [paramGetAPI getFloatValue:&animDur
                  fromParameter:kKKParamAnimationDuration
                         atTime:renderTime];
@@ -233,6 +233,61 @@
     double effScaleY = (1 - e) * targetScaleY + e * exitV.scaleY;
     double effOpacity = (1 - e) * targetOpacity + e * exitV.opacity;
 
+    simd_float2 startPos = {(float)a.x, (float)a.y};
+    simd_float2 endPos = {(float)effX, (float)effY};
+    simd_float2 pos = [pathAB positionAtT:(float)tIn start:startPos end:endPos];
+    params.translate = (simd_float2){pos.x - 0.5f, pos.y - 0.5f};
+    params.rotation = (float)((1 - tIn) * a.rotation + tIn * effRot);
+    params.rotationX = (float)((1 - tIn) * a.rotationX + tIn * effRotX);
+    params.rotationY = (float)((1 - tIn) * a.rotationY + tIn * effRotY);
+    params.scaleX = (float)((1 - tIn) * a.scaleX + tIn * effScaleX);
+    params.scaleY = (float)((1 - tIn) * a.scaleY + tIn * effScaleY);
+    params.opacity = (float)((1 - tIn) * a.opacity + tIn * effOpacity);
+  } else if (driftEnabled) {
+    int curve = 2;
+    [paramGetAPI getIntValue:&curve
+               fromParameter:kKKParamAnimationInterpolation
+                      atTime:renderTime];
+
+    double tIn = 1.0;
+    BOOL animateIn = NO;
+    [paramGetAPI getBoolValue:&animateIn
+                fromParameter:kKKParamAnimateIn
+                       atTime:renderTime];
+    if (animateIn) {
+      double rawIn = MAX(0.0, MIN(1.0, (nowSec - startSec) / animDur));
+      tIn = KKApplyCurveIn(rawIn, curve);
+    }
+
+    double tOut = 0.0;
+    BOOL animateOut = NO;
+    [paramGetAPI getBoolValue:&animateOut
+                fromParameter:kKKParamAnimateOut
+                       atTime:renderTime];
+    if (animateOut) {
+      double effectEndSec = startSec + durSec;
+      double rawOut =
+          MAX(0.0, MIN(1.0, (nowSec - (effectEndSec - animDur)) / animDur));
+      tOut = KKApplyCurveOut(rawOut, curve);
+    }
+
+    // Blend target toward A along pathDriftA during animate-out
+    KKBezierPath *pathDriftA = [self readPath:kParamPathDriftA
+                                      withAPI:paramGetAPI];
+    simd_float2 outPos =
+        [pathDriftA positionAtT:(float)tOut
+                          start:(simd_float2){(float)targetX, (float)targetY}
+                            end:(simd_float2){(float)a.x, (float)a.y}];
+    double effX = outPos.x;
+    double effY = outPos.y;
+    double effRot = (1 - tOut) * targetRot + tOut * a.rotation;
+    double effRotX = (1 - tOut) * targetRotX + tOut * a.rotationX;
+    double effRotY = (1 - tOut) * targetRotY + tOut * a.rotationY;
+    double effScaleX = (1 - tOut) * targetScaleX + tOut * a.scaleX;
+    double effScaleY = (1 - tOut) * targetScaleY + tOut * a.scaleY;
+    double effOpacity = (1 - tOut) * targetOpacity + tOut * a.opacity;
+
+    // Animate in from A toward the out-blended position
     simd_float2 startPos = {(float)a.x, (float)a.y};
     simd_float2 endPos = {(float)effX, (float)effY};
     simd_float2 pos = [pathAB positionAtT:(float)tIn start:startPos end:endPos];

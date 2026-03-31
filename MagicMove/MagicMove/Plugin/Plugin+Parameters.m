@@ -249,10 +249,10 @@
     return NO;
 
   UInt32 pathIDs[] = {kParamPathAB, kParamPathBDrift, kParamPathDriftExit,
-                      kParamPathBExit};
+                      kParamPathBExit, kParamPathDriftA};
   NSString *pathNames[] = {@"PathAB", @"PathBDrift", @"PathDriftExit",
-                           @"PathBExit"};
-  for (int i = 0; i < 4; i++) {
+                           @"PathBExit", @"PathDriftA"};
+  for (int i = 0; i < 5; i++) {
     if (![paramAPI addStringParameterWithName:pathNames[i]
                                   parameterID:pathIDs[i]
                                  defaultValue:@""
