@@ -23,6 +23,8 @@ static const CGFloat KKAlertViewHeight = KKInspectorRowHeight * 2;
   NSView *_contentView;
   NSLayoutConstraint *_labelTrailing;
   KKLog *_log;
+  NSUInteger _currentPage;
+  NSTextField *_pageLabel;
 }
 
 - (instancetype)initWithText:(NSString *)text {
@@ -160,6 +162,117 @@ static const CGFloat KKAlertViewHeight = KKInspectorRowHeight * 2;
   _color = color;
   _label.textColor = color;
   _iconView.contentTintColor = color;
+}
+
+- (void)setAttributedPages:(NSArray<NSAttributedString *> *)attributedPages {
+  _attributedPages = [attributedPages copy];
+  _currentPage = 0;
+  if (_attributedPages.count > 1) {
+    [self _setupPageNavigation];
+  }
+  [self _showCurrentPage];
+}
+
+- (void)_setupPageNavigation {
+  NSView *navView = [[NSView alloc] init];
+  navView.translatesAutoresizingMaskIntoConstraints = NO;
+
+  NSImageSymbolConfiguration *chevronCfg = [NSImageSymbolConfiguration
+      configurationWithPointSize:8.0
+                          weight:NSFontWeightMedium];
+  NSImage *upChevron = [[NSImage imageWithSystemSymbolName:@"chevron.up"
+                                  accessibilityDescription:@"Previous"]
+      imageWithSymbolConfiguration:chevronCfg];
+  NSImage *downChevron = [[NSImage imageWithSystemSymbolName:@"chevron.down"
+                                    accessibilityDescription:@"Next"]
+      imageWithSymbolConfiguration:chevronCfg];
+
+  // Borderless hit-area buttons, each taking half the column height.
+  NSButton *prevBtn = [NSButton buttonWithTitle:@""
+                                         target:self
+                                         action:@selector(_prevPage:)];
+  prevBtn.bordered = NO;
+  prevBtn.translatesAutoresizingMaskIntoConstraints = NO;
+
+  NSButton *nextBtn = [NSButton buttonWithTitle:@""
+                                         target:self
+                                         action:@selector(_nextPage:)];
+  nextBtn.bordered = NO;
+  nextBtn.translatesAutoresizingMaskIntoConstraints = NO;
+
+  // Chevron views as subviews of their buttons so clicks pass through.
+  NSImageView *upView = [NSImageView imageViewWithImage:upChevron];
+  upView.contentTintColor = _color;
+  upView.translatesAutoresizingMaskIntoConstraints = NO;
+  [prevBtn addSubview:upView];
+
+  NSImageView *downView = [NSImageView imageViewWithImage:downChevron];
+  downView.contentTintColor = _color;
+  downView.translatesAutoresizingMaskIntoConstraints = NO;
+  [nextBtn addSubview:downView];
+
+  _pageLabel = [NSTextField labelWithString:@""];
+  _pageLabel.font = [NSFont monospacedSystemFontOfSize:9.0
+                                                weight:NSFontWeightRegular];
+  _pageLabel.textColor = _color;
+  _pageLabel.alignment = NSTextAlignmentCenter;
+  _pageLabel.translatesAutoresizingMaskIntoConstraints = NO;
+
+  [navView addSubview:prevBtn];
+  [navView addSubview:nextBtn];
+  [navView addSubview:_pageLabel];
+
+  // [1/2] [▲] — buttons fill top/bottom halves for hit area, chevron views
+  //       [▼]   pinned to the inner edges so they sit close together.
+  [NSLayoutConstraint activateConstraints:@[
+    [navView.heightAnchor constraintEqualToConstant:KKInspectorRowHeight * 1.5],
+    [_pageLabel.leadingAnchor constraintEqualToAnchor:navView.leadingAnchor],
+    [_pageLabel.centerYAnchor constraintEqualToAnchor:navView.centerYAnchor],
+    [prevBtn.leadingAnchor constraintEqualToAnchor:_pageLabel.trailingAnchor
+                                          constant:KKSpacingSM],
+    [prevBtn.topAnchor constraintEqualToAnchor:navView.topAnchor],
+    [prevBtn.bottomAnchor constraintEqualToAnchor:navView.centerYAnchor],
+    [prevBtn.widthAnchor constraintEqualToConstant:KKSpacingXL],
+    [prevBtn.trailingAnchor constraintEqualToAnchor:navView.trailingAnchor],
+    [nextBtn.leadingAnchor constraintEqualToAnchor:prevBtn.leadingAnchor],
+    [nextBtn.topAnchor constraintEqualToAnchor:navView.centerYAnchor],
+    [nextBtn.bottomAnchor constraintEqualToAnchor:navView.bottomAnchor],
+    [nextBtn.trailingAnchor constraintEqualToAnchor:navView.trailingAnchor],
+    [upView.centerXAnchor constraintEqualToAnchor:prevBtn.centerXAnchor],
+    [upView.bottomAnchor constraintEqualToAnchor:prevBtn.bottomAnchor
+                                        constant:-KKSpacingXS],
+    [downView.centerXAnchor constraintEqualToAnchor:nextBtn.centerXAnchor],
+    [downView.topAnchor constraintEqualToAnchor:nextBtn.topAnchor
+                                       constant:KKSpacingXS],
+  ]];
+
+  self.accessoryView = navView;
+}
+
+- (void)_showCurrentPage {
+  if (_currentPage < _attributedPages.count) {
+    _label.attributedStringValue = _attributedPages[_currentPage];
+  }
+  if (_pageLabel) {
+    _pageLabel.stringValue = [NSString
+        stringWithFormat:@"%lu/%lu", (unsigned long)(_currentPage + 1),
+                         (unsigned long)_attributedPages.count];
+  }
+}
+
+- (void)_prevPage:(id)sender {
+  if (_attributedPages.count == 0)
+    return;
+  _currentPage =
+      (_currentPage == 0) ? _attributedPages.count - 1 : _currentPage - 1;
+  [self _showCurrentPage];
+}
+
+- (void)_nextPage:(id)sender {
+  if (_attributedPages.count == 0)
+    return;
+  _currentPage = (_currentPage + 1) % _attributedPages.count;
+  [self _showCurrentPage];
 }
 
 @end
