@@ -197,6 +197,13 @@
                                      kFxParameterFlag_DISABLED])
     return NO;
 
+  if (![paramAPI addStringParameterWithName:@"Alert Selection"
+                                parameterID:kParamAlertStackSelected
+                               defaultValue:@""
+                             parameterFlags:kFxParameterFlag_HIDDEN |
+                                            kFxParameterFlag_NOT_ANIMATABLE])
+    return NO;
+
   if (![self addAnimationParametersWithAPI:paramAPI error:error])
     return NO;
 
