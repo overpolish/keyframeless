@@ -32,6 +32,17 @@ vertex RasterizerData vertexShader(uint vertexID [[vertex_id]],
     return out;
 }
 
+// Solid-color triangle with anti-aliased edges via barycentric coordinates.
+// Each vertex should have textureCoordinate set to one of (1,0), (0,1), (0,0).
+// The minimum barycentric component gives distance-to-edge which is smoothed.
+fragment float4 triangleFragment(RasterizerData in [[stage_in]], constant float4 *color [[buffer(0)]]) {
+    float2 bary2 = in.textureCoordinate;
+    float bary3 = 1.0 - bary2.x - bary2.y;
+    float edge = min(bary2.x, min(bary2.y, bary3));
+    float aa = smoothstep(0.0, fwidth(edge) * 1.5, edge);
+    return *color * aa;
+}
+
 fragment float4 fragmentShader(RasterizerData in [[stage_in]],
                                texture2d<half> colorTexture [[texture(KKTextureIndex_InputImage)]],
                                constant MagicMoveParams *params [[buffer(FragmentIndex_Params)]]) {
