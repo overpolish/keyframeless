@@ -24,6 +24,69 @@ static double circleClipT(CGPoint from, CGPoint to, CGPoint center,
   return fmax(0.0, fmin(1.0, t));
 }
 
+static void drawFilledTriangle(MagicMoveOSC *osc, CGPoint a, CGPoint b,
+                               CGPoint c, simd_float4 triColor,
+                               FxImageTile *dest) {
+  KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
+  uint64_t registryID = dest.deviceRegistryID;
+  MTLPixelFormat pixelFormat =
+      [KKMetalDeviceCache pixelFormatForImageTile:dest];
+  id<MTLRenderPipelineState> ps = [cache
+      buildAndRegisterPipelineStateForPluginID:
+          @"co.overpolish.keyframelesskit.Triangle"
+                                    registryID:registryID
+                                   pixelFormat:pixelFormat
+                                      bundleID:nil
+                                  vertexShader:@"vertexShader"
+                                fragmentShader:@"triangleFragment"
+                                     blendMode:KKBlendModePremultipliedAlpha];
+  if (!ps)
+    return;
+
+  CGPoint mid = CGPointMake((a.x + b.x + c.x) / 3.0, (a.y + b.y + c.y) / 3.0);
+
+  [osc
+      encodeRenderCommandsForDestinationImage:dest
+                               canvasPosition:mid
+                             clearDestination:NO
+                                     commands:^(id<MTLRenderCommandEncoder> enc,
+                                                CGPoint metalMid,
+                                                simd_uint2 viewportSize) {
+                                       float ioW = viewportSize.x;
+                                       float ioH = viewportSize.y;
+                                       KKVertex2D verts[3] = {
+                                           {{(float)(a.x - ioW / 2.0),
+                                             (float)(ioH / 2.0 - a.y)},
+                                            {1, 0}},
+                                           {{(float)(b.x - ioW / 2.0),
+                                             (float)(ioH / 2.0 - b.y)},
+                                            {0, 1}},
+                                           {{(float)(c.x - ioW / 2.0),
+                                             (float)(ioH / 2.0 - c.y)},
+                                            {0, 0}},
+                                       };
+                                       simd_float4 color = triColor;
+                                       [enc setRenderPipelineState:ps];
+                                       [enc
+                                           setVertexBytes:verts
+                                                   length:sizeof(verts)
+                                                  atIndex:
+                                                      KKVertexInputIndex_Vertices];
+                                       [enc
+                                           setVertexBytes:&viewportSize
+                                                   length:sizeof(viewportSize)
+                                                  atIndex:
+                                                      KKVertexInputIndex_ViewportSize];
+                                       [enc setFragmentBytes:&color
+                                                      length:sizeof(color)
+                                                     atIndex:0];
+                                       [enc drawPrimitives:
+                                                MTLPrimitiveTypeTriangle
+                                               vertexStart:0
+                                               vertexCount:3];
+                                     }];
+}
+
 @implementation MagicMoveOSC (Draw)
 
 - (void)drawPathSegment:(PathSegConfig)cfg
@@ -94,6 +157,44 @@ static double circleClipT(CGPoint from, CGPoint to, CGPoint center,
       d1p = d1;
       d2p = d2;
     }
+  }
+
+  // Draw direction chevrons along the path
+  static const int kChevronCount = 3;
+  static const float kChevronSize = 14.0f;
+  static const float kChevronAngle = 0.45f; // ~26 degrees half-angle
+  static const float kTangentEpsilon = 0.02f;
+  simd_float4 chevronColor = color;
+  for (int ci = 0; ci < kChevronCount; ci++) {
+    float t = (float)(ci + 1) / (float)(kChevronCount + 1);
+    simd_float2 posObj = [path positionAtT:t start:startObj end:endObj];
+    simd_float2 aheadObj = [path positionAtT:fminf(t + kTangentEpsilon, 1.0f)
+                                       start:startObj
+                                         end:endObj];
+    CGPoint pos = [self canvasPointFromObjectPoint:posObj];
+    CGPoint ahead = [self canvasPointFromObjectPoint:aheadObj];
+    float dx = ahead.x - pos.x;
+    float dy = ahead.y - pos.y;
+    float len = sqrtf(dx * dx + dy * dy);
+    if (len < 0.1f)
+      continue;
+    dx /= len;
+    dy /= len;
+
+    // Skip if inside either endpoint inset
+    double d1 = hypot(pos.x - startCanvas.x, pos.y - startCanvas.y);
+    double d2 = hypot(pos.x - endCanvas.x, pos.y - endCanvas.y);
+    if (d1 < startInset || d2 < endInset)
+      continue;
+
+    // Filled triangle pointing in the direction of travel
+    float cosA = cosf(kChevronAngle), sinA = sinf(kChevronAngle);
+    CGPoint tip = pos;
+    CGPoint armA = CGPointMake(pos.x - kChevronSize * (dx * cosA - dy * sinA),
+                               pos.y - kChevronSize * (dy * cosA + dx * sinA));
+    CGPoint armB = CGPointMake(pos.x - kChevronSize * (dx * cosA + dy * sinA),
+                               pos.y - kChevronSize * (dy * cosA - dx * sinA));
+    drawFilledTriangle(self, tip, armA, armB, chevronColor, dest);
   }
 
   for (NSUInteger i = 0; i < path.count; i++) {
@@ -192,7 +293,7 @@ static double circleClipT(CGPoint from, CGPoint to, CGPoint center,
   PathSegConfig cfgDriftA = {kParamPathDriftA, kParamDriftPoint, kParamPointA,
                              4};
 
-  if (showA)
+  if (animInOn)
     [self drawPathSegment:cfgAB
          destinationImage:destinationImage
                     color:red

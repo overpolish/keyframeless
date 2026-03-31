@@ -158,7 +158,7 @@
     BOOL exitShow = exitOn && animOutOn;
     BOOL hit = NO;
 
-    if (showA)
+    if (animInOn)
       hit = [self hitTestPathSegment:cfgAB
                                    x:positionX
                                    y:positionY
