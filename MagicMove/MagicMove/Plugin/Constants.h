@@ -73,3 +73,64 @@ static const UInt32 kParamForceShowAlerts = 9000;
 static const UInt32 kParamInfoCompound = 9001;
 static const UInt32 kParamPreviewWarning = 9002;
 static const UInt32 kParamHideOSCWarning = 9003;
+
+typedef struct {
+  UInt32 point, rotation, rotationX, rotationY, scaleX, scaleY, opacity;
+} MagicMovePointParamIDs;
+
+typedef struct {
+  double x, y, rotation, rotationX, rotationY, scaleX, scaleY, opacity;
+} MagicMovePointValues;
+
+typedef struct {
+  UInt32 group, enable, preview, hideOSC;
+  MagicMovePointParamIDs params;
+} MagicMoveGroupIDs;
+
+static const MagicMoveGroupIDs kGroupA = {
+    .group = kParamGroupPointA,
+    .preview = kParamPreviewA,
+    .hideOSC = kParamHideOSCA,
+    .params = {kParamPointA, kParamRotationA, kParamRotationXA,
+               kParamRotationYA, kParamScaleA, kParamScaleYA, kParamOpacityA}};
+
+static const MagicMoveGroupIDs kGroupB = {
+    .group = kParamGroupPointB,
+    .preview = kParamPreviewB,
+    .hideOSC = kParamHideOSCB,
+    .params = {kParamPointB, kParamRotationB, kParamRotationXB,
+               kParamRotationYB, kParamScaleB, kParamScaleYB, kParamOpacityB}};
+
+static const MagicMoveGroupIDs kGroupDrift = {
+    .group = kParamGroupDrift,
+    .enable = kParamDrift,
+    .preview = kParamPreviewDrift,
+    .hideOSC = kParamHideOSCDrift,
+    .params = {kParamDriftPoint, kParamDriftRotation, kParamDriftRotationX,
+               kParamDriftRotationY, kParamDriftScale, kParamDriftScaleY,
+               kParamDriftOpacity}};
+
+static const MagicMoveGroupIDs kGroupExit = {
+    .group = kParamGroupExit,
+    .enable = kParamExit,
+    .preview = kParamPreviewExit,
+    .hideOSC = kParamHideOSCExit,
+    .params = {kParamExitPoint, kParamExitRotation, kParamExitRotationX,
+               kParamExitRotationY, kParamExitScale, kParamExitScaleY,
+               kParamExitOpacity}};
+
+static inline NSArray<NSNumber *> *childIDsForGroup(MagicMoveGroupIDs g) {
+  NSMutableArray *a = [NSMutableArray arrayWithCapacity:9];
+  if (g.preview)
+    [a addObject:@(g.preview)];
+  if (g.hideOSC)
+    [a addObject:@(g.hideOSC)];
+  [a addObject:@(g.params.point)];
+  [a addObject:@(g.params.rotation)];
+  [a addObject:@(g.params.rotationX)];
+  [a addObject:@(g.params.rotationY)];
+  [a addObject:@(g.params.scaleX)];
+  [a addObject:@(g.params.scaleY)];
+  [a addObject:@(g.params.opacity)];
+  return [a copy];
+}
