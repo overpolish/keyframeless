@@ -258,47 +258,6 @@
     self.exitHeader = header;
     return header;
   }
-  if (parameterID == kParamPreviewWarning) {
-    KKAlertView *alert =
-        [[KKAlertView alloc] initWithText:@"Preview mode is active"
-                                    color:[NSColor warning]];
-    alert.icon = [NSImage imageWithSystemSymbolName:@"eye.fill"
-                           accessibilityDescription:nil];
-
-    MagicMovePreviewClearTarget *target =
-        [[MagicMovePreviewClearTarget alloc] init];
-    target.apiManager = self.apiManager;
-    NSButton *clearBtn = [NSButton buttonWithTitle:@"Clear"
-                                            target:target
-                                            action:@selector(clearPreviews:)];
-    clearBtn.controlSize = NSControlSizeSmall;
-    clearBtn.bezelStyle = NSBezelStyleAccessoryBarAction;
-    clearBtn.contentTintColor = [NSColor warning];
-    objc_setAssociatedObject(clearBtn, "clearTarget", target,
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    alert.accessoryView = clearBtn;
-    return alert;
-  }
-  if (parameterID == kParamHideOSCWarning) {
-    KKAlertView *alert =
-        [[KKAlertView alloc] initWithText:@"Some controls are hidden"
-                                    color:[NSColor warning]];
-    alert.icon = [NSImage imageWithSystemSymbolName:@"circle.slash.fill"
-                           accessibilityDescription:nil];
-
-    MagicMoveShowOSCTarget *target = [[MagicMoveShowOSCTarget alloc] init];
-    target.apiManager = self.apiManager;
-    NSButton *showBtn = [NSButton buttonWithTitle:@"Show All"
-                                           target:target
-                                           action:@selector(showAll:)];
-    showBtn.controlSize = NSControlSizeSmall;
-    showBtn.bezelStyle = NSBezelStyleAccessoryBarAction;
-    showBtn.contentTintColor = [NSColor warning];
-    objc_setAssociatedObject(showBtn, "showTarget", target,
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    alert.accessoryView = showBtn;
-    return alert;
-  }
   if (parameterID == kParamInfoCompound) {
     // Info alert
     NSArray<NSAttributedString *> *pages = @[

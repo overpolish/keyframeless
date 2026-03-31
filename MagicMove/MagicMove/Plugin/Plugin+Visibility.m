@@ -52,10 +52,6 @@
   [paramGetAPI getBoolValue:&previewExit
               fromParameter:kParamPreviewExit
                      atTime:time];
-  FxParameterFlags alertBase =
-      kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_CUSTOM_UI |
-      kFxParameterFlag_USE_FULL_VIEW_WIDTH | kFxParameterFlag_DISABLED;
-
   MagicMoveGroupIDs groups[] = {kGroupA, kGroupB, kGroupDrift, kGroupExit};
   NSMutableArray<NSNumber *> *allHideableParams = [NSMutableArray array];
   for (int i = 0; i < 4; i++) {
@@ -66,14 +62,8 @@
 
   if ([self forceShowAllParametersIfEnabled:kParamForceShowAlerts
                                    paramIDs:allHideableParams
-                                     atTime:time]) {
-    [paramSetAPI setParameterFlags:alertBase toParameter:kParamPreviewWarning];
-    [paramSetAPI setParameterFlags:alertBase toParameter:kParamHideOSCWarning];
+                                     atTime:time])
     return;
-  }
-
-  [paramSetAPI setParameterFlags:alertBase toParameter:kParamPreviewWarning];
-  [paramSetAPI setParameterFlags:alertBase toParameter:kParamHideOSCWarning];
 
   BOOL hideA = NO, hideB = NO, hideDrift = NO, hideExit = NO;
   [paramGetAPI getBoolValue:&hideA fromParameter:kParamHideOSCA atTime:time];

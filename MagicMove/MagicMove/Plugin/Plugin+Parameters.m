@@ -73,7 +73,7 @@
                             parameterFlags:flags])
     return NO;
 
-  if (![paramAPI addAngleSliderWithName:@"Rotation"
+  if (![paramAPI addAngleSliderWithName:@"Rotation Z"
                             parameterID:group.params.rotation
                          defaultDegrees:0.0
                     parameterMinDegrees:-FLT_MAX
@@ -175,26 +175,6 @@
                                  parameterID:kParamInfoCompound
                                      withAPI:paramAPI
                                        error:error])
-    return NO;
-
-  if (![paramAPI
-          addCustomParameterWithName:@""
-                         parameterID:kParamPreviewWarning
-                        defaultValue:@(kParamPreviewWarning)
-                      parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
-                                     kFxParameterFlag_CUSTOM_UI |
-                                     kFxParameterFlag_USE_FULL_VIEW_WIDTH |
-                                     kFxParameterFlag_DISABLED])
-    return NO;
-
-  if (![paramAPI
-          addCustomParameterWithName:@""
-                         parameterID:kParamHideOSCWarning
-                        defaultValue:@(kParamHideOSCWarning)
-                      parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
-                                     kFxParameterFlag_CUSTOM_UI |
-                                     kFxParameterFlag_USE_FULL_VIEW_WIDTH |
-                                     kFxParameterFlag_DISABLED])
     return NO;
 
   if (![paramAPI addStringParameterWithName:@"Alert Selection"
