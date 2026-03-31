@@ -300,6 +300,7 @@
     return alert;
   }
   if (parameterID == kParamInfoCompound) {
+    // Info alert
     NSArray<NSAttributedString *> *pages = @[
       [KKMarkup attributedStringFromMarkup:
                     @"Create a Compound Clip <kbd>⌥ G</kbd> before applying "
@@ -335,17 +336,128 @@
                     @"<symbol eye.fill color=white /> previews the clip at "
                     @"that point"],
     ];
-    KKAlertView *alert =
+    KKAlertView *infoAlert =
         [[KKAlertView alloc] initWithAttributedText:pages.firstObject];
-    alert.icon = [NSImage imageWithSystemSymbolName:@"info.circle"
-                           accessibilityDescription:nil];
-    alert.attributedPages = pages;
-    return alert;
+    infoAlert.icon = [NSImage imageWithSystemSymbolName:@"info.circle"
+                               accessibilityDescription:nil];
+    infoAlert.attributedPages = pages;
+
+    // Warning alerts
+    KKAlertView *previewAlert =
+        [[KKAlertView alloc] initWithText:@"Preview mode is active"
+                                    color:[NSColor warning]];
+    previewAlert.icon = [NSImage imageWithSystemSymbolName:@"eye.fill"
+                                  accessibilityDescription:nil];
+    [self _addRenderedText:@"Preview mode is active"
+                     color:[NSColor warning]
+                   toAlert:previewAlert];
+
+    MagicMovePreviewClearTarget *clearTarget =
+        [[MagicMovePreviewClearTarget alloc] init];
+    clearTarget.apiManager = self.apiManager;
+    NSButton *clearBtn = [NSButton buttonWithTitle:@"Clear"
+                                            target:clearTarget
+                                            action:@selector(clearPreviews:)];
+    clearBtn.controlSize = NSControlSizeSmall;
+    clearBtn.bezelStyle = NSBezelStyleAccessoryBarAction;
+    clearBtn.contentTintColor = [NSColor warning];
+    objc_setAssociatedObject(clearBtn, "clearTarget", clearTarget,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    previewAlert.accessoryView = clearBtn;
+
+    KKAlertView *hideOSCAlert =
+        [[KKAlertView alloc] initWithText:@"Some controls are hidden"
+                                    color:[NSColor warning]];
+    hideOSCAlert.icon = [NSImage imageWithSystemSymbolName:@"circle.slash.fill"
+                                  accessibilityDescription:nil];
+    [self _addRenderedText:@"Some controls are hidden"
+                     color:[NSColor warning]
+                   toAlert:hideOSCAlert];
+
+    MagicMoveShowOSCTarget *showTarget = [[MagicMoveShowOSCTarget alloc] init];
+    showTarget.apiManager = self.apiManager;
+    NSButton *showBtn = [NSButton buttonWithTitle:@"Show All"
+                                           target:showTarget
+                                           action:@selector(showAll:)];
+    showBtn.controlSize = NSControlSizeSmall;
+    showBtn.bezelStyle = NSBezelStyleAccessoryBarAction;
+    showBtn.contentTintColor = [NSColor warning];
+    objc_setAssociatedObject(showBtn, "showTarget", showTarget,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    hideOSCAlert.accessoryView = showBtn;
+
+    self.previewAlertView = previewAlert;
+    self.hideOSCAlertView = hideOSCAlert;
+
+    KKAlertStackView *stack =
+        [[KKAlertStackView alloc] initWithDefaultAlert:infoAlert];
+    [stack addAlert:previewAlert priority:0];
+    [stack addAlert:hideOSCAlert priority:1];
+
+    // Read initial state
+    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actionAPI startAction:self];
+    CMTime now = [actionAPI currentTime];
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+
+    BOOL pA = NO, pB = NO, pD = NO, pE = NO;
+    [paramGetAPI getBoolValue:&pA fromParameter:kParamPreviewA atTime:now];
+    [paramGetAPI getBoolValue:&pB fromParameter:kParamPreviewB atTime:now];
+    [paramGetAPI getBoolValue:&pD fromParameter:kParamPreviewDrift atTime:now];
+    [paramGetAPI getBoolValue:&pE fromParameter:kParamPreviewExit atTime:now];
+    BOOL hA = NO, hB = NO, hD = NO, hE = NO;
+    [paramGetAPI getBoolValue:&hA fromParameter:kParamHideOSCA atTime:now];
+    [paramGetAPI getBoolValue:&hB fromParameter:kParamHideOSCB atTime:now];
+    [paramGetAPI getBoolValue:&hD fromParameter:kParamHideOSCDrift atTime:now];
+    [paramGetAPI getBoolValue:&hE fromParameter:kParamHideOSCExit atTime:now];
+    [actionAPI endAction:self];
+
+    [stack setAlert:previewAlert active:(pA || pB || pD || pE)];
+    [stack setAlert:hideOSCAlert active:(hA || hB || hD || hE)];
+
+    self.alertStackView = stack;
+    return stack;
   }
 
   typedef NSView *(*ViewIMP)(id, SEL, UInt32);
   ViewIMP imp = (ViewIMP)[KKPlugin instanceMethodForSelector:_cmd];
   return imp(self, _cmd, parameterID);
+}
+
+- (void)_addRenderedText:(NSString *)text
+                   color:(NSColor *)color
+                 toAlert:(KKAlertView *)alert {
+  NSFont *font = [NSFont systemFontOfSize:[NSFont smallSystemFontSize]
+                                   weight:NSFontWeightLight];
+  NSDictionary *attrs = @{
+    NSFontAttributeName : font,
+    NSForegroundColorAttributeName : color,
+  };
+  NSSize textSize = [text sizeWithAttributes:attrs];
+  NSImage *img = [[NSImage alloc]
+      initWithSize:NSMakeSize(ceil(textSize.width), ceil(textSize.height))];
+  [img lockFocus];
+  [text drawAtPoint:NSZeroPoint withAttributes:attrs];
+  [img unlockFocus];
+
+  NSImageView *iv = [NSImageView imageViewWithImage:img];
+  iv.translatesAutoresizingMaskIntoConstraints = NO;
+  iv.imageScaling = NSImageScaleNone;
+  iv.imageAlignment = NSImageAlignLeft;
+  [alert addSubview:iv];
+
+  // Position over the label area: after icon, vertically centered in content.
+  NSView *content = alert.subviews.firstObject;
+  [NSLayoutConstraint activateConstraints:@[
+    [iv.leadingAnchor
+        constraintEqualToAnchor:content.leadingAnchor
+                       constant:KKSpacingMD * 1.5 + 12.0 + KKSpacingMD],
+    [iv.trailingAnchor constraintEqualToAnchor:content.trailingAnchor
+                                      constant:-KKSpacingMD],
+    [iv.centerYAnchor constraintEqualToAnchor:content.centerYAnchor],
+  ]];
 }
 
 @end

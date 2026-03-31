@@ -11,6 +11,7 @@ FOUNDATION_EXPORT double KeyframelessKitVersionNumber; //! Version number
 FOUNDATION_EXPORT const unsigned char
     KeyframelessKitVersionString[]; //! Version string
 
+#import <KeyframelessKit/KKAlertStackView.h>
 #import <KeyframelessKit/KKAlertView.h>
 #import <KeyframelessKit/KKArcOSC.h>
 #import <KeyframelessKit/KKBezierPath.h>

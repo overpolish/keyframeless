@@ -119,5 +119,5 @@
     "xcworkspace",
     "xmark"
   ],
-  "conventionalCommits.scopes": ["MagicMove"]
+  "conventionalCommits.scopes": ["MagicMove", "KeyframelessKit"]
 }
