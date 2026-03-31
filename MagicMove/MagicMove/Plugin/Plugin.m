@@ -980,6 +980,55 @@
     alert.accessoryView = showBtn;
     return alert;
   }
+  if (parameterID == kParamInfoCompound) {
+    NSArray<NSAttributedString *> *pages = @[
+      // Setup
+      [KKMarkup attributedStringFromMarkup:
+                    @"Create a Compound Clip <kbd>⌥ G</kbd> before applying "
+                    @"to avoid clipping"],
+      // Point & path editing
+      [KKMarkup attributedStringFromMarkup:
+                    @"<kbd>⌘ + click</kbd> a point to show or hide its "
+                    @"controls"],
+      [KKMarkup attributedStringFromMarkup:
+                    @"<kbd>⌥ + click</kbd> the path to add or remove a "
+                    @"control point"],
+      [KKMarkup attributedStringFromMarkup:
+                    @"Double-click a point to toggle between linear and "
+                    @"bezier"],
+      [KKMarkup attributedStringFromMarkup:
+                    @"Hold <kbd>⌥</kbd> to move a bezier handle "
+                    @"independently"],
+      // Drag modifiers
+      [KKMarkup attributedStringFromMarkup:
+                    @"Hold <kbd>Shift</kbd> while dragging to constrain to "
+                    @"X or Y axis"],
+      [KKMarkup attributedStringFromMarkup:
+                    @"Hold <kbd>⌥</kbd> while dragging to disable snapping"],
+      // Scale & opacity
+      [KKMarkup attributedStringFromMarkup:
+                    @"Hold <kbd>Shift</kbd> while scaling to lock to X or Y"],
+      [KKMarkup attributedStringFromMarkup:
+                    @"Double-click the scale ring to reset to 1:1 ratio"],
+      // OSC icon toggles
+      [KKMarkup attributedStringFromMarkup:
+                    @"<symbol squareshape.fill color=white /> toggles scale "
+                    @"between 0\% and 100\%"],
+      [KKMarkup attributedStringFromMarkup:
+                    @"<symbol circle.fill color=white /> toggles opacity "
+                    @"between 0\% and 100\%"],
+      [KKMarkup attributedStringFromMarkup:
+                    @"<symbol eye.fill color=white /> previews the clip at "
+                    @"that point"],
+    ];
+    KKAlertView *alert =
+        [[KKAlertView alloc] initWithAttributedText:pages.firstObject];
+    alert.icon = [NSImage imageWithSystemSymbolName:@"info.circle"
+                           accessibilityDescription:nil];
+    alert.attributedPages = pages;
+    return alert;
+  }
+
   // KKPlugin implements this via FxCustomParameterViewHost_v2 in a private
   // category, so call through to it explicitly.
   typedef NSView *(*ViewIMP)(id, SEL, UInt32);

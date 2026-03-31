@@ -25,6 +25,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKKbd.h>
 #import <KeyframelessKit/KKLabelView.h>
 #import <KeyframelessKit/KKLog.h>
+#import <KeyframelessKit/KKMarkup.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKOSCLabel.h>
 #import <KeyframelessKit/KKOnScreenControl+CoordinateSpace.h>
