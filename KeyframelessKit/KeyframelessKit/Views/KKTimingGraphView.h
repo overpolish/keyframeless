@@ -28,6 +28,10 @@ typedef NS_ENUM(NSInteger, KKTimingGraphSection) {
     (KKTimingGraphSection section);
 @property(nonatomic, copy, nullable) void (^onInToggled)(BOOL enabled);
 @property(nonatomic, copy, nullable) void (^onOutToggled)(BOOL enabled);
+@property(nonatomic, copy, nullable) void (^onInCurveChanged)
+    (KKEasingCurve curve);
+@property(nonatomic, copy, nullable) void (^onOutCurveChanged)
+    (KKEasingCurve curve);
 
 @end
 

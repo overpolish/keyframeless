@@ -8,12 +8,17 @@
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
 #import "KKCheckboxView.h"
+#import "KKSliderView.h"
 #import <AppKit/AppKit.h>
 
 static const CGFloat kGraphHeight = 60.0;
 static const CGFloat kLabelRowHeight = 20.0;
+static const CGFloat kSliderRowHeight = 28.0;
+static const CGFloat kTickHeight = 16.0;
+static const CGFloat kTickWidth = 22.0;
 static const CGFloat kCurvePadding = KKPaddingLG;
 static const NSInteger kCurveSegments = 40;
+static const NSInteger kTickSegments = 16;
 static const NSInteger kGridRows = 4;
 static const CGFloat kCheckboxSize = 12.0;
 
@@ -21,6 +26,8 @@ static const CGFloat kCheckboxSize = 12.0;
   NSImageView *_graphImageView;
   KKCheckboxView *_inCheckbox;
   KKCheckboxView *_outCheckbox;
+  KKSliderView *_curveSlider;
+  NSImageView *_tickImageView;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect {
@@ -28,8 +35,8 @@ static const CGFloat kCheckboxSize = 12.0;
   if (self) {
     _inEnabled = NO;
     _outEnabled = NO;
-    _inCurve = KKEasingCurveCubic;
-    _outCurve = KKEasingCurveCubic;
+    _inCurve = KKEasingCurveEaseOut;
+    _outCurve = KKEasingCurveEaseOut;
     _selectedSection = KKTimingGraphSectionMid;
 
     _graphImageView = [[NSImageView alloc] initWithFrame:NSZeroRect];
@@ -73,34 +80,119 @@ static const CGFloat kCheckboxSize = 12.0;
       if (weakSelf.onOutToggled)
         weakSelf.onOutToggled(isChecked);
     };
+
+    _curveSlider = [KKSliderView styledSlider];
+    _curveSlider.translatesAutoresizingMaskIntoConstraints = NO;
+    _curveSlider.minValue = 0;
+    _curveSlider.maxValue = KKEasingCurveCount - 1;
+    _curveSlider.doubleValue = KKEasingCurveEaseOut;
+    _curveSlider.continuous = YES;
+    _curveSlider.slider.allowsTickMarkValuesOnly = YES;
+    _curveSlider.slider.numberOfTickMarks = KKEasingCurveCount;
+    _curveSlider.hidden = YES;
+    _curveSlider.target = self;
+    _curveSlider.action = @selector(curveSliderChanged:);
+    [self addSubview:_curveSlider];
+
+    CGFloat sliderTop = kGraphHeight + kLabelRowHeight;
+    [NSLayoutConstraint activateConstraints:@[
+      [_curveSlider.leadingAnchor
+          constraintEqualToAnchor:self.leadingAnchor
+                         constant:KKInspectorHorizontalInset +
+                                  kTickWidth / 2.0],
+      [_curveSlider.trailingAnchor
+          constraintEqualToAnchor:self.trailingAnchor
+                         constant:-(KKInspectorHorizontalInset +
+                                    kTickWidth / 2.0)],
+      [_curveSlider.topAnchor constraintEqualToAnchor:self.topAnchor
+                                             constant:sliderTop],
+      [_curveSlider.heightAnchor constraintEqualToConstant:kSliderRowHeight],
+    ]];
+
+    _tickImageView = [[NSImageView alloc] initWithFrame:NSZeroRect];
+    _tickImageView.imageScaling = NSImageScaleNone;
+    _tickImageView.translatesAutoresizingMaskIntoConstraints = NO;
+    _tickImageView.hidden = YES;
+    [self addSubview:_tickImageView];
+
+    CGFloat tickTop = sliderTop + kSliderRowHeight;
+    [NSLayoutConstraint activateConstraints:@[
+      [_tickImageView.leadingAnchor
+          constraintEqualToAnchor:self.leadingAnchor
+                         constant:KKInspectorHorizontalInset],
+      [_tickImageView.trailingAnchor
+          constraintEqualToAnchor:self.trailingAnchor
+                         constant:-KKInspectorHorizontalInset],
+      [_tickImageView.topAnchor constraintEqualToAnchor:self.topAnchor
+                                               constant:tickTop],
+      [_tickImageView.heightAnchor constraintEqualToConstant:kTickHeight],
+    ]];
   }
   return self;
+}
+
+- (void)curveSliderChanged:(id)sender {
+  KKEasingCurve curve = (KKEasingCurve)lround(_curveSlider.doubleValue);
+  if (_selectedSection == KKTimingGraphSectionIn) {
+    _inCurve = curve;
+    [self renderGraph];
+    [self renderTicks];
+    if (self.onInCurveChanged)
+      self.onInCurveChanged(curve);
+  } else if (_selectedSection == KKTimingGraphSectionOut) {
+    _outCurve = curve;
+    [self renderGraph];
+    [self renderTicks];
+    if (self.onOutCurveChanged)
+      self.onOutCurveChanged(curve);
+  }
+}
+
+- (void)updateCurveSlider {
+  BOOL showIn = _selectedSection == KKTimingGraphSectionIn && _inEnabled;
+  BOOL showOut = _selectedSection == KKTimingGraphSectionOut && _outEnabled;
+  BOOL show = showIn || showOut;
+
+  _curveSlider.hidden = !show;
+  _tickImageView.hidden = !show;
+  if (showIn)
+    _curveSlider.doubleValue = _inCurve;
+  else if (showOut)
+    _curveSlider.doubleValue = _outCurve;
+
+  if (show)
+    [self renderTicks];
 }
 
 - (void)setInEnabled:(BOOL)inEnabled {
   _inEnabled = inEnabled;
   _inCheckbox.isChecked = inEnabled;
+  [self updateCurveSlider];
   [self renderGraph];
 }
 
 - (void)setOutEnabled:(BOOL)outEnabled {
   _outEnabled = outEnabled;
   _outCheckbox.isChecked = outEnabled;
+  [self updateCurveSlider];
   [self renderGraph];
 }
 
 - (void)setInCurve:(KKEasingCurve)inCurve {
   _inCurve = inCurve;
+  [self updateCurveSlider];
   [self renderGraph];
 }
 
 - (void)setOutCurve:(KKEasingCurve)outCurve {
   _outCurve = outCurve;
+  [self updateCurveSlider];
   [self renderGraph];
 }
 
 - (void)setSelectedSection:(KKTimingGraphSection)selectedSection {
   _selectedSection = selectedSection;
+  [self updateCurveSlider];
   [self renderGraph];
 }
 
@@ -113,7 +205,7 @@ static const CGFloat kCheckboxSize = 12.0;
 - (NSRect)sectionRectForSection:(KKTimingGraphSection)section
                           width:(CGFloat)totalWidth {
   CGFloat sectionWidth = floor(totalWidth / 3.0);
-  CGFloat x = section * sectionWidth;
+  CGFloat x = (CGFloat)section * sectionWidth;
   if (section == KKTimingGraphSectionOut)
     sectionWidth = totalWidth - x;
   return NSMakeRect(x, 0, sectionWidth, kGraphHeight);
@@ -151,6 +243,7 @@ static const CGFloat kCheckboxSize = 12.0;
   _outCheckbox.frame = NSMakeRect(outGroupX + outSize.width + KKSpacingSM, cbY,
                                   kCheckboxSize, kCheckboxSize);
 
+  [self updateCurveSlider];
   [self renderGraph];
 }
 
@@ -226,6 +319,27 @@ static const CGFloat kCheckboxSize = 12.0;
   [grid stroke];
 }
 
+- (void)globalCurveRangeMin:(CGFloat *)outMin max:(CGFloat *)outMax {
+  CGFloat minVal = 0.0, maxVal = 1.0;
+  KKEasingCurve curves[] = {_inCurve, _outCurve};
+  BOOL enabled[] = {_inEnabled, _outEnabled};
+  for (int c = 0; c < 2; c++) {
+    if (!enabled[c])
+      continue;
+    for (NSInteger i = 0; i <= kCurveSegments; i++) {
+      CGFloat t = (CGFloat)i / (CGFloat)kCurveSegments;
+      CGFloat v = (c == 1) ? KKApplyEasing(1.0 - t, curves[c])
+                           : KKApplyEasing(t, curves[c]);
+      if (v < minVal)
+        minVal = v;
+      if (v > maxVal)
+        maxVal = v;
+    }
+  }
+  *outMin = minVal;
+  *outMax = maxVal;
+}
+
 - (void)renderSection:(KKTimingGraphSection)section width:(CGFloat)totalWidth {
   NSRect rect = [self sectionRectForSection:section width:totalWidth];
   BOOL selected = (section == _selectedSection);
@@ -272,9 +386,13 @@ static const CGFloat kCheckboxSize = 12.0;
     curveRight = totalWidth - kCurvePadding;
   CGFloat x0 = curveLeft;
   CGFloat w = curveRight - curveLeft;
-  // Non-flipped: y=0 bottom, y increases upward
   CGFloat yBottom = kCurvePadding;
   CGFloat yTop = kGraphHeight - kCurvePadding;
+
+  // Use global range across both curves so all sections share the same scale
+  CGFloat minVal = 0.0, maxVal = 1.0;
+  [self globalCurveRangeMin:&minVal max:&maxVal];
+  CGFloat range = maxVal - minVal;
 
   for (NSInteger i = 0; i <= kCurveSegments; i++) {
     CGFloat rawT = (CGFloat)i / (CGFloat)kCurveSegments;
@@ -282,18 +400,19 @@ static const CGFloat kCheckboxSize = 12.0;
 
     switch (section) {
     case KKTimingGraphSectionIn:
-      easedT = enabled ? KKApplyCurveIn(rawT, _inCurve) : 1.0;
+      easedT = enabled ? KKApplyEasing(rawT, _inCurve) : 1.0;
       break;
     case KKTimingGraphSectionMid:
       easedT = 1.0;
       break;
     case KKTimingGraphSectionOut:
-      easedT = enabled ? KKApplyCurveOut(1.0 - rawT, _outCurve) : 1.0;
+      easedT = enabled ? KKApplyEasing(1.0 - rawT, _outCurve) : 1.0;
       break;
     }
 
+    CGFloat normalized = (range > 0) ? (easedT - minVal) / range : easedT;
     CGFloat px = x0 + rawT * w;
-    CGFloat py = yBottom + easedT * (yTop - yBottom);
+    CGFloat py = yBottom + normalized * (yTop - yBottom);
 
     if (i == 0)
       [curve moveToPoint:NSMakePoint(px, py)];
@@ -338,8 +457,114 @@ static const CGFloat kCheckboxSize = 12.0;
   [super drawRect:dirtyRect];
 }
 
+- (void)renderTicks {
+  CGFloat inset = KKInspectorHorizontalInset;
+  CGFloat tickPad = kTickWidth / 2.0;
+  CGFloat tickAreaWidth = NSWidth(self.bounds) - 2 * inset;
+  if (tickAreaWidth < 1)
+    return;
+
+  NSImage *image =
+      [[NSImage alloc] initWithSize:NSMakeSize(tickAreaWidth, kTickHeight)];
+  [image lockFocus];
+
+  CGFloat sliderWidth = tickAreaWidth - 2 * tickPad;
+  CGFloat knobInset = 9.5 / 2.0;
+  CGFloat usableWidth = sliderWidth - 2 * knobInset;
+  KKEasingCurve activeCurve = (KKEasingCurve)lround(_curveSlider.doubleValue);
+
+  BOOL isOut = _selectedSection == KKTimingGraphSectionOut;
+  for (NSInteger i = 0; i < KKEasingCurveCount; i++) {
+    CGFloat frac = (CGFloat)i / (CGFloat)(KKEasingCurveCount - 1);
+    CGFloat centerX = tickPad + knobInset + frac * usableWidth;
+    NSRect tickRect =
+        NSMakeRect(centerX - kTickWidth / 2.0, 0, kTickWidth, kTickHeight);
+    [self renderTickCurve:(KKEasingCurve)i
+                   inRect:tickRect
+                   active:(i == activeCurve)
+                 mirrored:isOut];
+  }
+
+  [image unlockFocus];
+  _tickImageView.image = image;
+}
+
+- (NSRect)tickHitRectForIndex:(NSInteger)index {
+  CGFloat inset = KKInspectorHorizontalInset;
+  CGFloat tickPad = kTickWidth / 2.0;
+  CGFloat sliderWidth = NSWidth(self.bounds) - 2 * inset - 2 * tickPad;
+  CGFloat knobInset = 9.5 / 2.0;
+  CGFloat usableWidth = sliderWidth - 2 * knobInset;
+  CGFloat tickY = kGraphHeight + kLabelRowHeight + kSliderRowHeight;
+
+  CGFloat frac = (CGFloat)index / (CGFloat)(KKEasingCurveCount - 1);
+  CGFloat centerX = inset + tickPad + knobInset + frac * usableWidth;
+  return NSMakeRect(centerX - kTickWidth / 2.0, tickY, kTickWidth, kTickHeight);
+}
+
+- (void)renderTickCurve:(KKEasingCurve)curve
+                 inRect:(NSRect)rect
+                 active:(BOOL)active
+               mirrored:(BOOL)mirrored {
+  NSColor *color =
+      active ? [NSColor accent]
+             : [[NSColor inspectorLabel] colorWithAlphaComponent:0.35];
+  [color setStroke];
+
+  CGFloat pad = 2.0;
+  CGFloat x0 = NSMinX(rect) + pad;
+  CGFloat x1 = NSMaxX(rect) - pad;
+  CGFloat yBot = NSMinY(rect) + pad;
+  CGFloat yTop = NSMaxY(rect) - pad;
+  CGFloat w = x1 - x0;
+
+  // Find the full range of the curve to scale it to fit
+  CGFloat minVal = 0.0, maxVal = 1.0;
+  for (NSInteger i = 0; i <= kTickSegments; i++) {
+    CGFloat t = (CGFloat)i / (CGFloat)kTickSegments;
+    CGFloat eased =
+        mirrored ? KKApplyEasing(1.0 - t, curve) : KKApplyEasing(t, curve);
+    if (eased < minVal)
+      minVal = eased;
+    if (eased > maxVal)
+      maxVal = eased;
+  }
+  CGFloat range = maxVal - minVal;
+  CGFloat h = yTop - yBot;
+
+  NSBezierPath *path = [NSBezierPath bezierPath];
+  path.lineWidth = active ? 1.5 : 1.0;
+
+  for (NSInteger i = 0; i <= kTickSegments; i++) {
+    CGFloat t = (CGFloat)i / (CGFloat)kTickSegments;
+    CGFloat eased =
+        mirrored ? KKApplyEasing(1.0 - t, curve) : KKApplyEasing(t, curve);
+    CGFloat normalized = (eased - minVal) / range;
+    CGFloat px = x0 + t * w;
+    CGFloat py = yBot + normalized * h;
+
+    if (i == 0)
+      [path moveToPoint:NSMakePoint(px, py)];
+    else
+      [path lineToPoint:NSMakePoint(px, py)];
+  }
+
+  [path stroke];
+}
+
 - (void)mouseDown:(NSEvent *)event {
   NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+
+  if (!_curveSlider.hidden) {
+    for (NSInteger i = 0; i < KKEasingCurveCount; i++) {
+      if (NSPointInRect(loc, [self tickHitRectForIndex:i])) {
+        _curveSlider.doubleValue = i;
+        [self curveSliderChanged:_curveSlider];
+        return;
+      }
+    }
+  }
+
   for (KKTimingGraphSection s = KKTimingGraphSectionIn;
        s <= KKTimingGraphSectionOut; s++) {
     if (NSPointInRect(loc, [self graphRectForSection:s])) {

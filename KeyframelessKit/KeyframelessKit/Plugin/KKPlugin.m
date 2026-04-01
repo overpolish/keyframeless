@@ -271,12 +271,14 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     return NO;
   }
 
-  if (![paramAPI
-          addPopupMenuWithName:@"In Curve"
-                   parameterID:kKKParamAnimateInInterpolation
-                  defaultValue:KKAnimationCurveCubic
-                   menuEntries:@[ @"Linear", @"Smooth", @"Cubic", @"Spring" ]
-                parameterFlags:kFxParameterFlag_HIDDEN]) {
+  if (![paramAPI addPopupMenuWithName:@"In Curve"
+                          parameterID:kKKParamAnimateInInterpolation
+                         defaultValue:KKEasingCurveEaseOut
+                          menuEntries:@[
+                            @"Ease In", @"Ease Out", @"Ease In Out", @"Elastic",
+                            @"Bounce"
+                          ]
+                       parameterFlags:kFxParameterFlag_HIDDEN]) {
     if (error != NULL)
       *error = [NSError
           errorWithDomain:@"co.overpolish.keyframeless.error"
@@ -320,12 +322,14 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     return NO;
   }
 
-  if (![paramAPI
-          addPopupMenuWithName:@"Out Curve"
-                   parameterID:kKKParamAnimateOutInterpolation
-                  defaultValue:KKAnimationCurveCubic
-                   menuEntries:@[ @"Linear", @"Smooth", @"Cubic", @"Spring" ]
-                parameterFlags:kFxParameterFlag_HIDDEN]) {
+  if (![paramAPI addPopupMenuWithName:@"Out Curve"
+                          parameterID:kKKParamAnimateOutInterpolation
+                         defaultValue:KKEasingCurveEaseOut
+                          menuEntries:@[
+                            @"Ease In", @"Ease Out", @"Ease In Out", @"Elastic",
+                            @"Bounce"
+                          ]
+                       parameterFlags:kFxParameterFlag_HIDDEN]) {
     if (error != NULL)
       *error = [NSError
           errorWithDomain:@"co.overpolish.keyframeless.error"
@@ -397,7 +401,7 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
                      atTime:renderTime];
 
   double inDuration = 0.5, outDuration = 0.5;
-  int inCurve = KKAnimationCurveCubic, outCurve = KKAnimationCurveCubic;
+  int inCurve = KKEasingCurveEaseOut, outCurve = KKEasingCurveEaseOut;
   if (animateIn) {
     [paramGetAPI getFloatValue:&inDuration
                  fromParameter:kKKParamAnimateInDuration
@@ -429,7 +433,7 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
       animateIn ? MAX(0.0, MIN(1.0, (nowSec - startSec) / inDuration)) : 1.0;
   KKEasingCurve inEasing = (KKEasingCurve)inCurve;
   KKTimingInterpolator inInterp = ^double(double t) {
-    return KKApplyCurveIn(t, inEasing);
+    return KKApplyEasing(t, inEasing);
   };
   KKTimingPhase *inPhase = [KKTimingPhase phaseWithEnabled:animateIn
                                                   duration:inDuration
@@ -441,7 +445,7 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
       animateOut ? MAX(0.0, MIN(1.0, (endSec - nowSec) / outDuration)) : 1.0;
   KKEasingCurve outEasing = (KKEasingCurve)outCurve;
   KKTimingInterpolator outInterp = ^double(double t) {
-    return KKApplyCurveOut(t, outEasing);
+    return KKApplyEasing(t, outEasing);
   };
   KKTimingPhase *outPhase = [KKTimingPhase phaseWithEnabled:animateOut
                                                    duration:outDuration
@@ -644,7 +648,7 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
   }
 
   if (parameterID == kKKParamTimingCurvePreview) {
-    NSView *wrapper = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, 80)];
+    NSView *wrapper = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, 124)];
     wrapper.autoresizingMask = NSViewWidthSizable;
 
     KKTimingGraphView *graphView =
@@ -667,7 +671,7 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     CMTime now = [actionAPI currentTime];
 
     BOOL animIn = NO, animOut = NO;
-    int inCurve = KKAnimationCurveCubic, outCurve = KKAnimationCurveCubic;
+    int inCurve = KKEasingCurveEaseOut, outCurve = KKEasingCurveEaseOut;
     [paramGetAPI getBoolValue:&animIn
                 fromParameter:kKKParamAnimateIn
                        atTime:now];
@@ -701,6 +705,12 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     };
     graphView.onSectionSelected = ^(KKTimingGraphSection section) {
       [weakSelf timingGraphSelectSection:section];
+    };
+    graphView.onInCurveChanged = ^(KKEasingCurve curve) {
+      [weakSelf timingGraphSetInCurve:curve];
+    };
+    graphView.onOutCurveChanged = ^(KKEasingCurve curve) {
+      [weakSelf timingGraphSetOutCurve:curve];
     };
 
     _timingGraph = graphView;
@@ -746,7 +756,7 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
   CMTime t = [actionAPI currentTime];
 
   BOOL animIn = NO, animOut = NO;
-  int inCurve = KKAnimationCurveCubic, outCurve = KKAnimationCurveCubic;
+  int inCurve = KKEasingCurveEaseOut, outCurve = KKEasingCurveEaseOut;
   int sel = KKTimingGraphSectionMid;
   [paramGetAPI getBoolValue:&animIn fromParameter:kKKParamAnimateIn atTime:t];
   [paramGetAPI getBoolValue:&animOut fromParameter:kKKParamAnimateOut atTime:t];
@@ -835,6 +845,32 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
   [self timingGraphApplyState];
 }
 
+- (void)timingGraphSetInCurve:(KKEasingCurve)curve {
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  [setAPI setIntValue:(int)curve
+          toParameter:kKKParamAnimateInInterpolation
+               atTime:[actAPI currentTime]];
+  [actAPI endAction:self];
+  [self timingGraphApplyState];
+}
+
+- (void)timingGraphSetOutCurve:(KKEasingCurve)curve {
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  [setAPI setIntValue:(int)curve
+          toParameter:kKKParamAnimateOutInterpolation
+               atTime:[actAPI currentTime]];
+  [actAPI endAction:self];
+  [self timingGraphApplyState];
+}
+
 - (void)updateTimingParameterVisibility {
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
@@ -854,7 +890,7 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
                      toParameter:kKKParamAnimateOut];
 
   BOOL animateIn = NO, animateOut = NO;
-  int inCurve = KKAnimationCurveCubic, outCurve = KKAnimationCurveCubic;
+  int inCurve = KKEasingCurveEaseOut, outCurve = KKEasingCurveEaseOut;
   if (expandedTiming) {
     [paramGetAPI getBoolValue:&animateIn
                 fromParameter:kKKParamAnimateIn
