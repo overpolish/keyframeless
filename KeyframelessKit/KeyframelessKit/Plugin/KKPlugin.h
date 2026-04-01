@@ -8,6 +8,7 @@
 #import <CoreMedia/CoreMedia.h>
 #import <Foundation/Foundation.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
+#import <KeyframelessKit/KKTiming.h>
 #import <Metal/Metal.h>
 
 @class FxImageTile;
@@ -74,11 +75,11 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)addAnimationParametersWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                                 error:(NSError **)error;
 
-/// Returns the animation factor t ∈ [0,1] at renderTime using the fixed
-/// animation parameter IDs defined in KKConstants.h.
-/// Apply t to any parameters you want animated — radius, position, scale, etc.
-/// Returns 1.0 when animation is off or the timing API is unavailable.
-- (double)animationFactorAtTime:(CMTime)renderTime;
+/// Returns per-phase timing at renderTime using the animation parameter IDs
+/// in KKConstants.h.  Each phase carries enabled, duration, progress, an
+/// interpolation block, and a convenience factor (= interpolate(progress)).
+/// Plugins apply phases selectively to whichever properties they animate.
+- (KKTimingResult *)timingAtTime:(CMTime)renderTime;
 
 /// Adds an update banner at parameter ID 9990 that shows when a newer version
 /// is available. Call at the end of addParametersWithError:.

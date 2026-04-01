@@ -116,7 +116,9 @@
                fromParameter:kParamRadius
                       atTime:renderTime];
 
-  double effectiveRadius = radius * [self animationFactorAtTime:renderTime];
+  KKTimingResult *timing = [self timingAtTime:renderTime];
+  double effectiveRadius = radius * timing.inPhase.factor *
+                           timing.midPhase.factor * timing.outPhase.factor;
 
   *pluginState = [NSData dataWithBytes:&effectiveRadius
                                 length:sizeof(effectiveRadius)];

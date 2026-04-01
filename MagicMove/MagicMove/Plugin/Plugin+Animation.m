@@ -109,7 +109,7 @@
     return (*pluginState != nil);
   }
 
-  double t = [self animationFactorAtTime:renderTime];
+  KKTimingResult *timing = [self timingAtTime:renderTime];
 
   MagicMovePointValues a = [self readPointValues:kGroupA.params
                                           atTime:renderTime
@@ -135,11 +135,7 @@
   [paramGetAPI getBoolValue:&exitToggle
               fromParameter:kParamExit
                      atTime:renderTime];
-  BOOL animateOut = NO;
-  [paramGetAPI getBoolValue:&animateOut
-              fromParameter:kKKParamAnimateOut
-                     atTime:renderTime];
-  BOOL exitEnabled = exitToggle && animateOut;
+  BOOL exitEnabled = exitToggle && timing.outPhase.enabled;
 
   MagicMovePointValues exitV = {
       .x = 0.5, .y = 0.5, .scaleX = 1, .scaleY = 1, .opacity = 1};
@@ -157,7 +153,7 @@
 
   id<FxTimingAPI_v4> timingAPI = nil;
   double startSec = 0, durSec = 0, nowSec = 0;
-  if (driftEnabled || exitEnabled) {
+  if (driftEnabled) {
     timingAPI = [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
     CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
     [timingAPI startTimeForEffect:&effectStart];
@@ -167,14 +163,8 @@
     nowSec = CMTimeGetSeconds(renderTime);
   }
 
-  double animDur = 0.5;
-  if (exitEnabled || driftEnabled)
-    [paramGetAPI getFloatValue:&animDur
-                 fromParameter:kKKParamAnimationDuration
-                        atTime:renderTime];
-
   if (driftEnabled) {
-    double driftDur = exitEnabled ? durSec - animDur : durSec;
+    double driftDur = exitEnabled ? durSec - timing.outPhase.duration : durSec;
     double d = (driftDur > 0) ? (nowSec - startSec) / driftDur : 1.0;
     d = MAX(0.0, MIN(1.0, d));
     KKBezierPath *pathBDrift = [self readPath:kParamPathBDrift
@@ -193,30 +183,13 @@
     targetOpacity = (1 - d) * b.opacity + d * drift.opacity;
   }
 
+  double tIn = timing.inPhase.factor;
+  double e = timing.outPhase.interpolate(1.0 - timing.outPhase.progress);
+
   KKBezierPath *pathAB = [self readPath:kParamPathAB withAPI:paramGetAPI];
 
   MagicMoveParams params;
   if (exitEnabled) {
-    int curve = 2;
-    [paramGetAPI getIntValue:&curve
-               fromParameter:kKKParamAnimationInterpolation
-                      atTime:renderTime];
-
-    double tIn = 1.0;
-    BOOL animateIn = NO;
-    [paramGetAPI getBoolValue:&animateIn
-                fromParameter:kKKParamAnimateIn
-                       atTime:renderTime];
-    if (animateIn) {
-      double rawIn = MAX(0.0, MIN(1.0, (nowSec - startSec) / animDur));
-      tIn = KKApplyCurveIn(rawIn, curve);
-    }
-
-    double effectEndSec = startSec + durSec;
-    double rawE =
-        MAX(0.0, MIN(1.0, (nowSec - (effectEndSec - animDur)) / animDur));
-    double e = KKApplyCurveOut(rawE, curve);
-
     KKBezierPath *exitPath =
         [self readPath:(driftEnabled ? kParamPathDriftExit : kParamPathBExit)
                withAPI:paramGetAPI];
@@ -244,34 +217,8 @@
     params.scaleY = (float)((1 - tIn) * a.scaleY + tIn * effScaleY);
     params.opacity = (float)((1 - tIn) * a.opacity + tIn * effOpacity);
   } else if (driftEnabled) {
-    int curve = 2;
-    [paramGetAPI getIntValue:&curve
-               fromParameter:kKKParamAnimationInterpolation
-                      atTime:renderTime];
+    double tOut = timing.outPhase.interpolate(1.0 - timing.outPhase.progress);
 
-    double tIn = 1.0;
-    BOOL animateIn = NO;
-    [paramGetAPI getBoolValue:&animateIn
-                fromParameter:kKKParamAnimateIn
-                       atTime:renderTime];
-    if (animateIn) {
-      double rawIn = MAX(0.0, MIN(1.0, (nowSec - startSec) / animDur));
-      tIn = KKApplyCurveIn(rawIn, curve);
-    }
-
-    double tOut = 0.0;
-    BOOL animateOut = NO;
-    [paramGetAPI getBoolValue:&animateOut
-                fromParameter:kKKParamAnimateOut
-                       atTime:renderTime];
-    if (animateOut) {
-      double effectEndSec = startSec + durSec;
-      double rawOut =
-          MAX(0.0, MIN(1.0, (nowSec - (effectEndSec - animDur)) / animDur));
-      tOut = KKApplyCurveOut(rawOut, curve);
-    }
-
-    // Blend target toward A along pathDriftA during animate-out
     KKBezierPath *pathDriftA = [self readPath:kParamPathDriftA
                                       withAPI:paramGetAPI];
     simd_float2 outPos =
@@ -287,7 +234,6 @@
     double effScaleY = (1 - tOut) * targetScaleY + tOut * a.scaleY;
     double effOpacity = (1 - tOut) * targetOpacity + tOut * a.opacity;
 
-    // Animate in from A toward the out-blended position
     simd_float2 startPos = {(float)a.x, (float)a.y};
     simd_float2 endPos = {(float)effX, (float)effY};
     simd_float2 pos = [pathAB positionAtT:(float)tIn start:startPos end:endPos];
@@ -299,6 +245,7 @@
     params.scaleY = (float)((1 - tIn) * a.scaleY + tIn * effScaleY);
     params.opacity = (float)((1 - tIn) * a.opacity + tIn * effOpacity);
   } else {
+    double t = timing.inPhase.factor * timing.outPhase.factor;
     simd_float2 startPos = {(float)a.x, (float)a.y};
     simd_float2 endPos = {(float)targetX, (float)targetY};
     simd_float2 pos = [pathAB positionAtT:(float)t start:startPos end:endPos];
@@ -321,37 +268,25 @@
     double window = 1.0 / 12.0;
     CMTime tPrev =
         CMTimeSubtract(renderTime, CMTimeMakeWithSeconds(window, 600));
-    double prevSec = CMTimeGetSeconds(tPrev);
+    KKTimingResult *prevTiming = [self timingAtTime:tPrev];
     double tgtX = b.x;
     if (driftEnabled) {
-      double driftDurP = exitEnabled ? durSec - animDur : durSec;
+      double prevSec = CMTimeGetSeconds(tPrev);
+      double driftDurP =
+          exitEnabled ? durSec - timing.outPhase.duration : durSec;
       double dP = (driftDurP > 0) ? (prevSec - startSec) / driftDurP : 1.0;
       dP = MAX(0.0, MIN(1.0, dP));
       tgtX = (1 - dP) * b.x + dP * drift.x;
     }
     double prevX;
     if (exitEnabled) {
-      int curve = 2;
-      [paramGetAPI getIntValue:&curve
-                 fromParameter:kKKParamAnimationInterpolation
-                        atTime:renderTime];
-      double tPIn = 1.0;
-      BOOL animateIn = NO;
-      [paramGetAPI getBoolValue:&animateIn
-                  fromParameter:kKKParamAnimateIn
-                         atTime:renderTime];
-      if (animateIn) {
-        double rawIn = MAX(0.0, MIN(1.0, (prevSec - startSec) / animDur));
-        tPIn = KKApplyCurveIn(rawIn, curve);
-      }
-      double effectEndSec = startSec + durSec;
-      double rawE =
-          MAX(0.0, MIN(1.0, (prevSec - (effectEndSec - animDur)) / animDur));
-      double eP = KKApplyCurveOut(rawE, curve);
+      double tPIn = prevTiming.inPhase.factor;
+      double eP =
+          prevTiming.outPhase.interpolate(1.0 - prevTiming.outPhase.progress);
       double effX = (1 - eP) * tgtX + eP * exitV.x;
       prevX = (1 - tPIn) * a.x + tPIn * effX - 0.5;
     } else {
-      double tP = [self animationFactorAtTime:tPrev];
+      double tP = prevTiming.inPhase.factor * prevTiming.outPhase.factor;
       prevX = (1 - tP) * a.x + tP * tgtX - 0.5;
     }
     double vx = (curX - prevX) / window;
