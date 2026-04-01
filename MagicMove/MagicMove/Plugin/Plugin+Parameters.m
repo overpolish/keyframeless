@@ -42,6 +42,15 @@
       return NO;
   }
 
+  if (group.expanded != 0) {
+    if (![paramAPI addToggleButtonWithName:@""
+                               parameterID:group.expanded
+                              defaultValue:NO
+                            parameterFlags:kFxParameterFlag_HIDDEN |
+                                           kFxParameterFlag_NOT_ANIMATABLE])
+      return NO;
+  }
+
   if (group.enable != 0) {
     if (![paramAPI addToggleButtonWithName:@"Enable"
                                parameterID:group.enable

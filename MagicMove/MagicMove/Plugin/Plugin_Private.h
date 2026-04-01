@@ -40,9 +40,6 @@ NS_ASSUME_NONNULL_BEGIN
         forGroup:(MagicMoveGroupIDs)group
          withAPI:(id<FxParameterSettingAPI_v5>)api;
 - (void)updateParameterVisibilityAtTime:(CMTime)time;
-- (void)setGroupEnabled:(BOOL)enabled
-            boolParamID:(UInt32)boolParamID
-          childParamIDs:(NSArray<NSNumber *> *)childIDs;
 @end
 
 @interface MagicMovePlugin (CustomUI)

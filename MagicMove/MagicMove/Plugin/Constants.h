@@ -20,6 +20,7 @@ static const UInt32 kParamPreviewA = 7;
 static const UInt32 kParamHideOSCA = 8;
 static const UInt32 kParamRotationXA = 9;
 static const UInt32 kParamRotationYA = 10;
+static const UInt32 kParamExpandedA = 11;
 
 // Parameter IDs — Point B (101–200)
 static const UInt32 kParamGroupPointB = 101;
@@ -32,6 +33,7 @@ static const UInt32 kParamPreviewB = 107;
 static const UInt32 kParamHideOSCB = 108;
 static const UInt32 kParamRotationXB = 109;
 static const UInt32 kParamRotationYB = 110;
+static const UInt32 kParamExpandedB = 111;
 
 // Parameter IDs — Drift (201–300)
 static const UInt32 kParamGroupDrift = 201;
@@ -45,6 +47,7 @@ static const UInt32 kParamPreviewDrift = 208;
 static const UInt32 kParamHideOSCDrift = 209;
 static const UInt32 kParamDriftRotationX = 210;
 static const UInt32 kParamDriftRotationY = 211;
+static const UInt32 kParamExpandedDrift = 212;
 
 // Parameter IDs — Exit (301–400)
 static const UInt32 kParamGroupExit = 301;
@@ -58,6 +61,7 @@ static const UInt32 kParamPreviewExit = 308;
 static const UInt32 kParamHideOSCExit = 309;
 static const UInt32 kParamExitRotationX = 310;
 static const UInt32 kParamExitRotationY = 311;
+static const UInt32 kParamExpandedExit = 312;
 
 // Path (401–500)
 static const UInt32 kParamPathAB = 401;
@@ -83,12 +87,13 @@ typedef struct {
 } MagicMovePointValues;
 
 typedef struct {
-  UInt32 group, enable, preview, hideOSC;
+  UInt32 group, enable, expanded, preview, hideOSC;
   MagicMovePointParamIDs params;
 } MagicMoveGroupIDs;
 
 static const MagicMoveGroupIDs kGroupA = {
     .group = kParamGroupPointA,
+    .expanded = kParamExpandedA,
     .preview = kParamPreviewA,
     .hideOSC = kParamHideOSCA,
     .params = {kParamPointA, kParamRotationA, kParamRotationXA,
@@ -96,6 +101,7 @@ static const MagicMoveGroupIDs kGroupA = {
 
 static const MagicMoveGroupIDs kGroupB = {
     .group = kParamGroupPointB,
+    .expanded = kParamExpandedB,
     .preview = kParamPreviewB,
     .hideOSC = kParamHideOSCB,
     .params = {kParamPointB, kParamRotationB, kParamRotationXB,
@@ -104,6 +110,7 @@ static const MagicMoveGroupIDs kGroupB = {
 static const MagicMoveGroupIDs kGroupDrift = {
     .group = kParamGroupDrift,
     .enable = kParamDrift,
+    .expanded = kParamExpandedDrift,
     .preview = kParamPreviewDrift,
     .hideOSC = kParamHideOSCDrift,
     .params = {kParamDriftPoint, kParamDriftRotation, kParamDriftRotationX,
@@ -113,6 +120,7 @@ static const MagicMoveGroupIDs kGroupDrift = {
 static const MagicMoveGroupIDs kGroupExit = {
     .group = kParamGroupExit,
     .enable = kParamExit,
+    .expanded = kParamExpandedExit,
     .preview = kParamPreviewExit,
     .hideOSC = kParamHideOSCExit,
     .params = {kParamExitPoint, kParamExitRotation, kParamExitRotationX,

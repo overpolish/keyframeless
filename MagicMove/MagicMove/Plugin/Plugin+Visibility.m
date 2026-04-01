@@ -98,28 +98,20 @@
     }
   }
 
-  BOOL expandedA;
-  if (self.pointAHeader) {
-    expandedA = self.pointAHeader.isExpanded;
-  } else {
-    UInt32 f = 0;
-    [paramGetAPI getParameterFlags:&f fromParameter:kParamPointA];
-    expandedA = (f & kFxParameterFlag_HIDDEN) == 0;
-  }
+  BOOL expandedA = NO;
+  [paramGetAPI getBoolValue:&expandedA
+              fromParameter:kParamExpandedA
+                     atTime:time];
   BOOL showAParams = showA && expandedA;
   [self setFlags:(showAParams ? kFxParameterFlag_DEFAULT
                               : kFxParameterFlag_HIDDEN)
         forGroup:kGroupA
          withAPI:paramSetAPI];
 
-  BOOL expandedB;
-  if (self.pointBHeader) {
-    expandedB = self.pointBHeader.isExpanded;
-  } else {
-    UInt32 f = 0;
-    [paramGetAPI getParameterFlags:&f fromParameter:kParamPointB];
-    expandedB = (f & kFxParameterFlag_HIDDEN) == 0;
-  }
+  BOOL expandedB = NO;
+  [paramGetAPI getBoolValue:&expandedB
+              fromParameter:kParamExpandedB
+                     atTime:time];
   [self
       setFlags:(expandedB ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN)
       forGroup:kGroupB
@@ -130,14 +122,10 @@
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamExit];
 
-  BOOL expandedDrift;
-  if (self.driftHeader) {
-    expandedDrift = self.driftHeader.isExpanded;
-  } else {
-    UInt32 f = 0;
-    [paramGetAPI getParameterFlags:&f fromParameter:kParamDriftPoint];
-    expandedDrift = (f & kFxParameterFlag_HIDDEN) == 0;
-  }
+  BOOL expandedDrift = NO;
+  [paramGetAPI getBoolValue:&expandedDrift
+              fromParameter:kParamExpandedDrift
+                     atTime:time];
   [self setFlags:((driftOn && expandedDrift) ? kFxParameterFlag_DEFAULT
                                              : kFxParameterFlag_HIDDEN)
         forGroup:kGroupDrift
@@ -151,40 +139,14 @@
     }
   }
 
-  BOOL expandedExit;
-  if (self.exitHeader) {
-    expandedExit = self.exitHeader.isExpanded;
-  } else {
-    UInt32 f = 0;
-    [paramGetAPI getParameterFlags:&f fromParameter:kParamExitPoint];
-    expandedExit = (f & kFxParameterFlag_HIDDEN) == 0;
-  }
+  BOOL expandedExit = NO;
+  [paramGetAPI getBoolValue:&expandedExit
+              fromParameter:kParamExpandedExit
+                     atTime:time];
   [self setFlags:((showExit && expandedExit) ? kFxParameterFlag_DEFAULT
                                              : kFxParameterFlag_HIDDEN)
         forGroup:kGroupExit
          withAPI:paramSetAPI];
-}
-
-- (void)setGroupEnabled:(BOOL)enabled
-            boolParamID:(UInt32)boolParamID
-          childParamIDs:(NSArray<NSNumber *> *)childIDs {
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actionAPI startAction:self];
-
-  CMTime currentTime = [actionAPI currentTime];
-
-  id<FxParameterSettingAPI_v5> paramSetAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-
-  [paramSetAPI setBoolValue:enabled toParameter:boolParamID atTime:currentTime];
-
-  for (NSNumber *paramID in childIDs) {
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:paramID.unsignedIntValue];
-  }
-
-  [actionAPI endAction:self];
 }
 
 @end

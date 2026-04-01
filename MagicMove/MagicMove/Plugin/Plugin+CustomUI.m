@@ -79,11 +79,20 @@
                                                   icon:icon
                                          showsCheckbox:NO];
 
-    NSArray<NSNumber *> *childIDs = childIDsForGroup(kGroupA);
-
     __weak typeof(self) weakSelf = self;
     header.onExpandedChanged = ^(BOOL isExpanded) {
-      [weakSelf setGroupExpanded:isExpanded childParamIDs:childIDs];
+      __strong typeof(weakSelf) strongSelf = weakSelf;
+      if (!strongSelf)
+        return;
+      id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      [actAPI startAction:strongSelf];
+      id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      [setAPI setBoolValue:isExpanded
+               toParameter:kParamExpandedA
+                    atTime:[actAPI currentTime]];
+      [actAPI endAction:strongSelf];
     };
 
     id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
@@ -112,9 +121,11 @@
                               : @"Overridden by Exit and Animate In is off";
     }
     if (showA) {
-      UInt32 flags = 0;
-      [paramGetAPI getParameterFlags:&flags fromParameter:kParamPointA];
-      header.isExpanded = (flags & kFxParameterFlag_HIDDEN) == 0;
+      BOOL expanded = NO;
+      [paramGetAPI getBoolValue:&expanded
+                  fromParameter:kParamExpandedA
+                         atTime:currentTime];
+      header.isExpanded = expanded;
     }
 
     [actionAPI endAction:self];
@@ -134,11 +145,20 @@
                                          showsCheckbox:NO];
     header.isEnabled = YES;
 
-    NSArray<NSNumber *> *childIDs = childIDsForGroup(kGroupB);
-
     __weak typeof(self) weakSelf = self;
     header.onExpandedChanged = ^(BOOL isExpanded) {
-      [weakSelf setGroupExpanded:isExpanded childParamIDs:childIDs];
+      __strong typeof(weakSelf) strongSelf = weakSelf;
+      if (!strongSelf)
+        return;
+      id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      [actAPI startAction:strongSelf];
+      id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      [setAPI setBoolValue:isExpanded
+               toParameter:kParamExpandedB
+                    atTime:[actAPI currentTime]];
+      [actAPI endAction:strongSelf];
     };
 
     id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
@@ -147,9 +167,11 @@
     id<FxParameterRetrievalAPI_v6> paramGetAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
 
-    UInt32 flags = 0;
-    [paramGetAPI getParameterFlags:&flags fromParameter:kParamPointB];
-    header.isExpanded = (flags & kFxParameterFlag_HIDDEN) == 0;
+    BOOL expanded = NO;
+    [paramGetAPI getBoolValue:&expanded
+                fromParameter:kParamExpandedB
+                       atTime:[actionAPI currentTime]];
+    header.isExpanded = expanded;
 
     [actionAPI endAction:self];
 
@@ -182,23 +204,43 @@
     header.isEnabled = enabled;
 
     if (enabled) {
-      UInt32 flags = 0;
-      [paramGetAPI getParameterFlags:&flags fromParameter:kParamDriftPoint];
-      header.isExpanded = (flags & kFxParameterFlag_HIDDEN) == 0;
+      BOOL expanded = NO;
+      [paramGetAPI getBoolValue:&expanded
+                  fromParameter:kParamExpandedDrift
+                         atTime:currentTime];
+      header.isExpanded = expanded;
     }
 
     [actionAPI endAction:self];
 
-    NSArray<NSNumber *> *childIDs = childIDsForGroup(kGroupDrift);
-
     __weak typeof(self) weakSelf = self;
     header.onEnabledChanged = ^(BOOL isEnabled) {
-      [weakSelf setGroupEnabled:isEnabled
-                    boolParamID:kParamDrift
-                  childParamIDs:childIDs];
+      __strong typeof(weakSelf) strongSelf = weakSelf;
+      if (!strongSelf)
+        return;
+      id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      [actAPI startAction:strongSelf];
+      id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      [setAPI setBoolValue:isEnabled
+               toParameter:kParamDrift
+                    atTime:[actAPI currentTime]];
+      [actAPI endAction:strongSelf];
     };
     header.onExpandedChanged = ^(BOOL isExpanded) {
-      [weakSelf setGroupExpanded:isExpanded childParamIDs:childIDs];
+      __strong typeof(weakSelf) strongSelf = weakSelf;
+      if (!strongSelf)
+        return;
+      id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      [actAPI startAction:strongSelf];
+      id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      [setAPI setBoolValue:isExpanded
+               toParameter:kParamExpandedDrift
+                    atTime:[actAPI currentTime]];
+      [actAPI endAction:strongSelf];
     };
     self.driftHeader = header;
     return header;
@@ -236,23 +278,43 @@
     }
 
     if (exitOn) {
-      UInt32 flags = 0;
-      [paramGetAPI getParameterFlags:&flags fromParameter:kParamExitPoint];
-      header.isExpanded = (flags & kFxParameterFlag_HIDDEN) == 0;
+      BOOL expanded = NO;
+      [paramGetAPI getBoolValue:&expanded
+                  fromParameter:kParamExpandedExit
+                         atTime:currentTime];
+      header.isExpanded = expanded;
     }
 
     [actionAPI endAction:self];
 
-    NSArray<NSNumber *> *childIDs = childIDsForGroup(kGroupExit);
-
     __weak typeof(self) weakSelf = self;
     header.onEnabledChanged = ^(BOOL isEnabled) {
-      [weakSelf setGroupEnabled:isEnabled
-                    boolParamID:kParamExit
-                  childParamIDs:childIDs];
+      __strong typeof(weakSelf) strongSelf = weakSelf;
+      if (!strongSelf)
+        return;
+      id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      [actAPI startAction:strongSelf];
+      id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      [setAPI setBoolValue:isEnabled
+               toParameter:kParamExit
+                    atTime:[actAPI currentTime]];
+      [actAPI endAction:strongSelf];
     };
     header.onExpandedChanged = ^(BOOL isExpanded) {
-      [weakSelf setGroupExpanded:isExpanded childParamIDs:childIDs];
+      __strong typeof(weakSelf) strongSelf = weakSelf;
+      if (!strongSelf)
+        return;
+      id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      [actAPI startAction:strongSelf];
+      id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      [setAPI setBoolValue:isExpanded
+               toParameter:kParamExpandedExit
+                    atTime:[actAPI currentTime]];
+      [actAPI endAction:strongSelf];
     };
 
     self.exitHeader = header;
