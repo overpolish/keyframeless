@@ -59,6 +59,15 @@
       [allHideableParams addObject:@(groups[i].enable)];
     [allHideableParams addObjectsFromArray:childIDsForGroup(groups[i])];
   }
+  [allHideableParams addObjectsFromArray:@[
+    @(kKKParamAnimateIn),
+    @(kKKParamAnimateOut),
+    @(kKKParamAnimateInDuration),
+    @(kKKParamAnimateInInterpolation),
+    @(kKKParamAnimateOutDuration),
+    @(kKKParamAnimateOutInterpolation),
+    @(kParamRotateWithMotion),
+  ]];
 
   if ([self forceShowAllParametersIfEnabled:kParamForceShowAlerts
                                    paramIDs:allHideableParams

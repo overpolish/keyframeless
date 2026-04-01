@@ -11,6 +11,7 @@
 #import "../Views/KKCustomGroupHeaderView.h"
 #import "../Views/KKKbd.h"
 #import "../Views/KKSeparatorView.h"
+#import "../Views/KKTimingGraphView.h"
 #import "../Views/KKUpdateBannerView.h"
 #import "KKConstants.h"
 #import "KKHostInfo.h"
@@ -72,6 +73,7 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
 
 @implementation KKPlugin {
   __weak KKCustomGroupHeaderView *_timingHeader;
+  __weak KKTimingGraphView *_timingGraph;
 }
 
 + (id)servicePrincipalDelegate {
@@ -346,6 +348,22 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
                                  NSLocalizedDescriptionKey :
                                      @"Unable to add Timing expanded toggle"
                                }];
+    return NO;
+  }
+
+  if (![paramAPI addPopupMenuWithName:@""
+                          parameterID:kKKParamTimingSelectedSection
+                         defaultValue:KKTimingGraphSectionMid
+                          menuEntries:@[ @"In", @"Mid", @"Out" ]
+                       parameterFlags:kFxParameterFlag_HIDDEN |
+                                      kFxParameterFlag_NOT_ANIMATABLE]) {
+    if (error != NULL)
+      *error = [NSError
+          errorWithDomain:@"co.overpolish.keyframeless.error"
+                     code:1
+                 userInfo:@{
+                   NSLocalizedDescriptionKey : @"Unable to add section selector"
+                 }];
     return NO;
   }
 
@@ -629,22 +647,63 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     NSView *wrapper = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, 80)];
     wrapper.autoresizingMask = NSViewWidthSizable;
 
-    NSView *curveView = [[NSView alloc] initWithFrame:NSZeroRect];
-    curveView.wantsLayer = YES;
-    curveView.layer.backgroundColor = NSColor.redColor.CGColor;
-    curveView.translatesAutoresizingMaskIntoConstraints = NO;
-    [wrapper addSubview:curveView];
+    KKTimingGraphView *graphView =
+        [[KKTimingGraphView alloc] initWithFrame:NSZeroRect];
+    graphView.translatesAutoresizingMaskIntoConstraints = NO;
+    [wrapper addSubview:graphView];
 
     [NSLayoutConstraint activateConstraints:@[
-      [curveView.leadingAnchor
-          constraintEqualToAnchor:wrapper.leadingAnchor
-                         constant:KKInspectorHorizontalInset],
-      [curveView.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
-      [curveView.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor],
-      [curveView.trailingAnchor constraintEqualToAnchor:wrapper.trailingAnchor
-                                               constant:-75.0],
+      [graphView.leadingAnchor constraintEqualToAnchor:wrapper.leadingAnchor],
+      [graphView.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
+      [graphView.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor],
+      [graphView.trailingAnchor constraintEqualToAnchor:wrapper.trailingAnchor],
     ]];
 
+    id<FxCustomParameterActionAPI_v4> actionAPI =
+        [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actionAPI startAction:self];
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    CMTime now = [actionAPI currentTime];
+
+    BOOL animIn = NO, animOut = NO;
+    int inCurve = KKAnimationCurveCubic, outCurve = KKAnimationCurveCubic;
+    [paramGetAPI getBoolValue:&animIn
+                fromParameter:kKKParamAnimateIn
+                       atTime:now];
+    [paramGetAPI getBoolValue:&animOut
+                fromParameter:kKKParamAnimateOut
+                       atTime:now];
+    [paramGetAPI getIntValue:&inCurve
+               fromParameter:kKKParamAnimateInInterpolation
+                      atTime:now];
+    [paramGetAPI getIntValue:&outCurve
+               fromParameter:kKKParamAnimateOutInterpolation
+                      atTime:now];
+    int selectedSection = KKTimingGraphSectionMid;
+    [paramGetAPI getIntValue:&selectedSection
+               fromParameter:kKKParamTimingSelectedSection
+                      atTime:now];
+    [actionAPI endAction:self];
+
+    graphView.inEnabled = animIn;
+    graphView.outEnabled = animOut;
+    graphView.inCurve = (KKEasingCurve)inCurve;
+    graphView.outCurve = (KKEasingCurve)outCurve;
+    graphView.selectedSection = (KKTimingGraphSection)selectedSection;
+
+    __weak typeof(self) weakSelf = self;
+    graphView.onInToggled = ^(BOOL enabled) {
+      [weakSelf timingGraphSetAnimateIn:enabled];
+    };
+    graphView.onOutToggled = ^(BOOL enabled) {
+      [weakSelf timingGraphSetAnimateOut:enabled];
+    };
+    graphView.onSectionSelected = ^(KKTimingGraphSection section) {
+      [weakSelf timingGraphSelectSection:section];
+    };
+
+    _timingGraph = graphView;
     return wrapper;
   }
 
@@ -676,6 +735,106 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
   return infoView;
 }
 
+- (void)timingGraphApplyState {
+  if (!_timingGraph)
+    return;
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  CMTime t = [actionAPI currentTime];
+
+  BOOL animIn = NO, animOut = NO;
+  int inCurve = KKAnimationCurveCubic, outCurve = KKAnimationCurveCubic;
+  int sel = KKTimingGraphSectionMid;
+  [paramGetAPI getBoolValue:&animIn fromParameter:kKKParamAnimateIn atTime:t];
+  [paramGetAPI getBoolValue:&animOut fromParameter:kKKParamAnimateOut atTime:t];
+  [paramGetAPI getIntValue:&inCurve
+             fromParameter:kKKParamAnimateInInterpolation
+                    atTime:t];
+  [paramGetAPI getIntValue:&outCurve
+             fromParameter:kKKParamAnimateOutInterpolation
+                    atTime:t];
+  [paramGetAPI getIntValue:&sel
+             fromParameter:kKKParamTimingSelectedSection
+                    atTime:t];
+  [actionAPI endAction:self];
+
+  _timingGraph.inEnabled = animIn;
+  _timingGraph.outEnabled = animOut;
+  _timingGraph.inCurve = (KKEasingCurve)inCurve;
+  _timingGraph.outCurve = (KKEasingCurve)outCurve;
+  _timingGraph.selectedSection = (KKTimingGraphSection)sel;
+}
+
+- (void)timingGraphSetAnimateIn:(BOOL)enabled {
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  CMTime t = [actAPI currentTime];
+  [setAPI setBoolValue:enabled toParameter:kKKParamAnimateIn atTime:t];
+  if (!enabled) {
+    int sel = KKTimingGraphSectionMid;
+    id<FxParameterRetrievalAPI_v6> getAPI =
+        [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    [getAPI getIntValue:&sel
+          fromParameter:kKKParamTimingSelectedSection
+                 atTime:t];
+    if (sel == KKTimingGraphSectionIn)
+      [setAPI setIntValue:KKTimingGraphSectionMid
+              toParameter:kKKParamTimingSelectedSection
+                   atTime:t];
+  }
+  [actAPI endAction:self];
+  [self timingGraphApplyState];
+}
+
+- (void)timingGraphSetAnimateOut:(BOOL)enabled {
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  CMTime t = [actAPI currentTime];
+  [setAPI setBoolValue:enabled toParameter:kKKParamAnimateOut atTime:t];
+  if (!enabled) {
+    int sel = KKTimingGraphSectionMid;
+    id<FxParameterRetrievalAPI_v6> getAPI =
+        [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    [getAPI getIntValue:&sel
+          fromParameter:kKKParamTimingSelectedSection
+                 atTime:t];
+    if (sel == KKTimingGraphSectionOut)
+      [setAPI setIntValue:KKTimingGraphSectionMid
+              toParameter:kKKParamTimingSelectedSection
+                   atTime:t];
+  }
+  [actAPI endAction:self];
+  [self timingGraphApplyState];
+}
+
+- (void)timingGraphSelectSection:(KKTimingGraphSection)section {
+  // Don't allow selecting disabled sections
+  if (section == KKTimingGraphSectionIn && !_timingGraph.inEnabled)
+    return;
+  if (section == KKTimingGraphSectionOut && !_timingGraph.outEnabled)
+    return;
+
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  [setAPI setIntValue:(int)section
+          toParameter:kKKParamTimingSelectedSection
+               atTime:[actAPI currentTime]];
+  [actAPI endAction:self];
+  [self timingGraphApplyState];
+}
+
 - (void)updateTimingParameterVisibility {
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
@@ -687,12 +846,15 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
   [paramGetAPI getBoolValue:&expandedTiming
               fromParameter:kKKParamTimingExpanded
                      atTime:kCMTimeZero];
-  FxParameterFlags flagTiming =
-      expandedTiming ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
-  [paramSetAPI setParameterFlags:flagTiming toParameter:kKKParamAnimateIn];
-  [paramSetAPI setParameterFlags:flagTiming toParameter:kKKParamAnimateOut];
+
+  // Animate In/Out toggles are handled by the graph checkboxes — always hide
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kKKParamAnimateIn];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kKKParamAnimateOut];
 
   BOOL animateIn = NO, animateOut = NO;
+  int inCurve = KKAnimationCurveCubic, outCurve = KKAnimationCurveCubic;
   if (expandedTiming) {
     [paramGetAPI getBoolValue:&animateIn
                 fromParameter:kKKParamAnimateIn
@@ -700,24 +862,37 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     [paramGetAPI getBoolValue:&animateOut
                 fromParameter:kKKParamAnimateOut
                        atTime:kCMTimeZero];
+    [paramGetAPI getIntValue:&inCurve
+               fromParameter:kKKParamAnimateInInterpolation
+                      atTime:kCMTimeZero];
+    [paramGetAPI getIntValue:&outCurve
+               fromParameter:kKKParamAnimateOutInterpolation
+                      atTime:kCMTimeZero];
   }
 
-  FxParameterFlags flagIn = (expandedTiming && animateIn)
-                                ? kFxParameterFlag_DEFAULT
-                                : kFxParameterFlag_HIDDEN;
+  int sel = KKTimingGraphSectionMid;
+  [paramGetAPI getIntValue:&sel
+             fromParameter:kKKParamTimingSelectedSection
+                    atTime:kCMTimeZero];
+
+  BOOL showIn = expandedTiming && sel == KKTimingGraphSectionIn && animateIn;
+  FxParameterFlags flagIn =
+      showIn ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
   [paramSetAPI setParameterFlags:flagIn toParameter:kKKParamAnimateInDuration];
   [paramSetAPI setParameterFlags:flagIn
                      toParameter:kKKParamAnimateInInterpolation];
 
-  FxParameterFlags flagOut = (expandedTiming && animateOut)
-                                 ? kFxParameterFlag_DEFAULT
-                                 : kFxParameterFlag_HIDDEN;
+  BOOL showOut = expandedTiming && sel == KKTimingGraphSectionOut && animateOut;
+  FxParameterFlags flagOut =
+      showOut ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
   [paramSetAPI setParameterFlags:flagOut
                      toParameter:kKKParamAnimateOutDuration];
   [paramSetAPI setParameterFlags:flagOut
                      toParameter:kKKParamAnimateOutInterpolation];
 
   for (NSNumber *paramID in self.timingGroupExtraParamIDs) {
+    FxParameterFlags flagTiming =
+        expandedTiming ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
     [paramSetAPI setParameterFlags:flagTiming
                        toParameter:paramID.unsignedIntValue];
   }
