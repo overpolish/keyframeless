@@ -19,3 +19,4 @@ static const UInt32 kKKParamAnimateIn __attribute__((unused)) = 9901;
 static const UInt32 kKKParamAnimateOut __attribute__((unused)) = 9902;
 static const UInt32 kKKParamAnimationDuration __attribute__((unused)) = 9903;
 static const UInt32 kKKParamAnimationInterpolation __attribute__((unused)) = 9904;
+static const UInt32 kKKParamTimingCurvePreview __attribute__((unused)) = 9905;

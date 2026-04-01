@@ -5,6 +5,7 @@
 
 #import "KKPlugin.h"
 #import "../Math/KKEasing.h"
+#import "../Style/KKTokens.h"
 #import "../Update/KKUpdateChecker.h"
 #import "../Views/KKAlertView.h"
 #import "../Views/KKCustomGroupHeaderView.h"
@@ -201,6 +202,23 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
 
 - (BOOL)addAnimationParametersWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                                 error:(NSError **)error {
+  if (![paramAPI
+          addCustomParameterWithName:@""
+                         parameterID:kKKParamTimingCurvePreview
+                        defaultValue:@(kKKParamTimingCurvePreview)
+                      parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
+                                     kFxParameterFlag_CUSTOM_UI |
+                                     kFxParameterFlag_USE_FULL_VIEW_WIDTH]) {
+    if (error != NULL)
+      *error = [NSError
+          errorWithDomain:@"co.overpolish.keyframeless.error"
+                     code:1
+                 userInfo:@{
+                   NSLocalizedDescriptionKey : @"Unable to add Curve Preview"
+                 }];
+    return NO;
+  }
+
   if (![paramAPI
           addCustomParameterWithName:@""
                          parameterID:kKKParamAnimationSeparator
@@ -542,6 +560,29 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
 
     _timingHeader = header;
     return header;
+  }
+
+  if (parameterID == kKKParamTimingCurvePreview) {
+    NSView *wrapper = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, 80)];
+    wrapper.autoresizingMask = NSViewWidthSizable;
+
+    NSView *curveView = [[NSView alloc] initWithFrame:NSZeroRect];
+    curveView.wantsLayer = YES;
+    curveView.layer.backgroundColor = NSColor.redColor.CGColor;
+    curveView.translatesAutoresizingMaskIntoConstraints = NO;
+    [wrapper addSubview:curveView];
+
+    [NSLayoutConstraint activateConstraints:@[
+      [curveView.leadingAnchor
+          constraintEqualToAnchor:wrapper.leadingAnchor
+                         constant:KKInspectorHorizontalInset],
+      [curveView.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
+      [curveView.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor],
+      [curveView.trailingAnchor constraintEqualToAnchor:wrapper.trailingAnchor
+                                               constant:-75.0],
+    ]];
+
+    return wrapper;
   }
 
   NSString *separatorText =
