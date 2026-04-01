@@ -6,37 +6,57 @@
 #import "KKEasing.h"
 #import <math.h>
 
-double KKEaseSmoothstep(double t) { return t * t * (3.0 - 2.0 * t); }
+double KKEaseInQuart(double t) { return t * t * t * t; }
 
-double KKEaseOutCubic(double t) { return 1.0 - pow(1.0 - t, 3.0); }
-
-double KKEaseOutSpring(double t) {
-  const double c1 = 1.0, c3 = c1 + 1.0;
-  return 1.0 + c3 * pow(t - 1.0, 3.0) + c1 * pow(t - 1.0, 2.0);
+double KKEaseOutQuart(double t) {
+  double u = 1.0 - t;
+  return 1.0 - u * u * u * u;
 }
 
-double KKApplyCurveIn(double raw, KKEasingCurve curve) {
-  switch (curve) {
-  case KKEasingCurveLinear:
-    return raw;
-  case KKEasingCurveSmooth:
-    return KKEaseSmoothstep(raw);
-  case KKEasingCurveSpring:
-    return KKEaseOutSpring(raw);
-  default:
-    return KKEaseOutCubic(raw);
+double KKEaseInOutQuart(double t) {
+  if (t < 0.5)
+    return 8.0 * t * t * t * t;
+  double u = -2.0 * t + 2.0;
+  return 1.0 - u * u * u * u / 2.0;
+}
+
+double KKEaseOutElastic(double t) {
+  if (t <= 0.0)
+    return 0.0;
+  if (t >= 1.0)
+    return 1.0;
+  return pow(2.0, -10.0 * t) * sin((t * 10.0 - 0.75) * (2.0 * M_PI / 3.0)) +
+         1.0;
+}
+
+double KKEaseOutBounce(double t) {
+  if (t < 1.0 / 2.75)
+    return 7.5625 * t * t;
+  if (t < 2.0 / 2.75) {
+    t -= 1.5 / 2.75;
+    return 7.5625 * t * t + 0.75;
   }
+  if (t < 2.5 / 2.75) {
+    t -= 2.25 / 2.75;
+    return 7.5625 * t * t + 0.9375;
+  }
+  t -= 2.625 / 2.75;
+  return 7.5625 * t * t + 0.984375;
 }
 
-double KKApplyCurveOut(double raw, KKEasingCurve curve) {
+double KKApplyEasing(double raw, KKEasingCurve curve) {
   switch (curve) {
-  case KKEasingCurveLinear:
-    return raw;
-  case KKEasingCurveSmooth:
-    return KKEaseSmoothstep(raw);
-  case KKEasingCurveSpring:
-    return KKEaseOutSpring(raw);
+  case KKEasingCurveEaseIn:
+    return KKEaseInQuart(raw);
+  case KKEasingCurveEaseOut:
+    return KKEaseOutQuart(raw);
+  case KKEasingCurveEaseInOut:
+    return KKEaseInOutQuart(raw);
+  case KKEasingCurveElastic:
+    return KKEaseOutElastic(raw);
+  case KKEasingCurveBounce:
+    return KKEaseOutBounce(raw);
   default:
-    return KKEaseSmoothstep(raw);
+    return KKEaseOutQuart(raw);
   }
 }

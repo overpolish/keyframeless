@@ -16,15 +16,6 @@
 @protocol PROAPIAccessing;
 @protocol FxParameterCreationAPI_v5;
 
-/// Interpolation curve presets for animationFactorAtTime:baseParamID:.
-/// Values are 0-indexed to match the FxPlug popup menu convention.
-typedef NS_ENUM(NSInteger, KKAnimationCurve) {
-  KKAnimationCurveLinear = 0, ///< No easing — constant rate
-  KKAnimationCurveSmooth = 1, ///< Smoothstep — symmetric ease in/out
-  KKAnimationCurveCubic = 2,  ///< Ease-out in, ease-in out — snappy (default)
-  KKAnimationCurveSpring = 3, ///< Sinusoidal spring — overshoots and settles
-};
-
 NS_ASSUME_NONNULL_BEGIN
 
 @interface KKPlugin : NSObject

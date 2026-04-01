@@ -7,27 +7,21 @@
 
 #import <Foundation/Foundation.h>
 
-/// Animation curve presets matching KKEasingCurve in KKPlugin.h.
 typedef NS_ENUM(NSInteger, KKEasingCurve) {
-  KKEasingCurveLinear = 0,
-  KKEasingCurveSmooth = 1,
-  KKEasingCurveCubic = 2,
-  KKEasingCurveSpring = 3,
+  KKEasingCurveEaseIn = 0,
+  KKEasingCurveEaseOut = 1,
+  KKEasingCurveEaseInOut = 2,
+  KKEasingCurveElastic = 3,
+  KKEasingCurveBounce = 4,
 };
 
-/// Hermite smoothstep: symmetric ease in/out.
-double KKEaseSmoothstep(double t);
+static const NSInteger KKEasingCurveCount __attribute__((unused)) = 5;
 
-/// Ease-out cubic: fast start, decelerates to rest.
-double KKEaseOutCubic(double t);
+double KKEaseInQuart(double t);
+double KKEaseOutQuart(double t);
+double KKEaseInOutQuart(double t);
+double KKEaseOutElastic(double t);
+double KKEaseOutBounce(double t);
 
-/// Ease-out spring (back): overshoots target once, settles back.
-double KKEaseOutSpring(double t);
-
-/// Apply the given animation curve for an animate-in factor.
-/// Default (Cubic) uses ease-out cubic.
-double KKApplyCurveIn(double raw, KKEasingCurve curve);
-
-/// Apply the given animation curve for an animate-out factor.
-/// Default (Cubic) uses smoothstep.
-double KKApplyCurveOut(double raw, KKEasingCurve curve);
+/// Apply the given curve to a raw 0→1 factor.
+double KKApplyEasing(double raw, KKEasingCurve curve);
