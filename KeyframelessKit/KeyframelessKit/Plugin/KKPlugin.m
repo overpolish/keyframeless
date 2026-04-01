@@ -250,6 +250,41 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     return NO;
   }
 
+  if (![paramAPI addFloatSliderWithName:@"In Duration"
+                            parameterID:kKKParamAnimateInDuration
+                           defaultValue:0.5
+                           parameterMin:0.1
+                           parameterMax:2.0
+                              sliderMin:0.1
+                              sliderMax:2.0
+                                  delta:0.1
+                         parameterFlags:kFxParameterFlag_HIDDEN]) {
+    if (error != NULL)
+      *error = [NSError errorWithDomain:@"co.overpolish.keyframeless.error"
+                                   code:1
+                               userInfo:@{
+                                 NSLocalizedDescriptionKey :
+                                     @"Unable to add In Duration slider"
+                               }];
+    return NO;
+  }
+
+  if (![paramAPI
+          addPopupMenuWithName:@"In Curve"
+                   parameterID:kKKParamAnimateInInterpolation
+                  defaultValue:KKAnimationCurveCubic
+                   menuEntries:@[ @"Linear", @"Smooth", @"Cubic", @"Spring" ]
+                parameterFlags:kFxParameterFlag_HIDDEN]) {
+    if (error != NULL)
+      *error = [NSError
+          errorWithDomain:@"co.overpolish.keyframeless.error"
+                     code:1
+                 userInfo:@{
+                   NSLocalizedDescriptionKey : @"Unable to add In Curve popup"
+                 }];
+    return NO;
+  }
+
   if (![paramAPI addToggleButtonWithName:@"Animate Out"
                              parameterID:kKKParamAnimateOut
                             defaultValue:NO
@@ -264,8 +299,8 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     return NO;
   }
 
-  if (![paramAPI addFloatSliderWithName:@"Duration"
-                            parameterID:kKKParamAnimationDuration
+  if (![paramAPI addFloatSliderWithName:@"Out Duration"
+                            parameterID:kKKParamAnimateOutDuration
                            defaultValue:0.5
                            parameterMin:0.1
                            parameterMax:2.0
@@ -274,42 +309,53 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
                                   delta:0.1
                          parameterFlags:kFxParameterFlag_HIDDEN]) {
     if (error != NULL)
-      *error = [NSError
-          errorWithDomain:@"co.overpolish.keyframeless.error"
-                     code:1
-                 userInfo:@{
-                   NSLocalizedDescriptionKey : @"Unable to add Duration slider"
-                 }];
-    return NO;
-  }
-
-  if (![paramAPI
-          addPopupMenuWithName:@"Interpolation"
-                   parameterID:kKKParamAnimationInterpolation
-                  defaultValue:KKAnimationCurveCubic
-                   menuEntries:@[ @"Linear", @"Smooth", @"Cubic", @"Spring" ]
-                parameterFlags:kFxParameterFlag_HIDDEN]) {
-    if (error != NULL)
       *error = [NSError errorWithDomain:@"co.overpolish.keyframeless.error"
                                    code:1
                                userInfo:@{
                                  NSLocalizedDescriptionKey :
-                                     @"Unable to add Interpolation popup"
+                                     @"Unable to add Out Duration slider"
                                }];
+    return NO;
+  }
+
+  if (![paramAPI
+          addPopupMenuWithName:@"Out Curve"
+                   parameterID:kKKParamAnimateOutInterpolation
+                  defaultValue:KKAnimationCurveCubic
+                   menuEntries:@[ @"Linear", @"Smooth", @"Cubic", @"Spring" ]
+                parameterFlags:kFxParameterFlag_HIDDEN]) {
+    if (error != NULL)
+      *error = [NSError
+          errorWithDomain:@"co.overpolish.keyframeless.error"
+                     code:1
+                 userInfo:@{
+                   NSLocalizedDescriptionKey : @"Unable to add Out Curve popup"
+                 }];
     return NO;
   }
 
   return YES;
 }
 
-- (double)animationFactorAtTime:(CMTime)renderTime {
+- (KKTimingResult *)timingAtTime:(CMTime)renderTime {
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  if (!paramGetAPI)
-    return 1.0;
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
 
-  BOOL animateIn = NO;
-  BOOL animateOut = NO;
+  KKTimingInterpolator identity = ^double(double t) {
+    return t;
+  };
+
+  if (!paramGetAPI || !timingAPI) {
+    KKTimingPhase *off = [KKTimingPhase phaseWithEnabled:NO
+                                                duration:0
+                                                progress:1.0
+                                             interpolate:identity];
+    return [KKTimingResult resultWithIn:off mid:off out:off];
+  }
+
+  BOOL animateIn = NO, animateOut = NO;
   [paramGetAPI getBoolValue:&animateIn
               fromParameter:kKKParamAnimateIn
                      atTime:renderTime];
@@ -317,75 +363,73 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
               fromParameter:kKKParamAnimateOut
                      atTime:renderTime];
 
-  if (!animateIn && !animateOut)
-    return 1.0;
-
-  double animDuration = 0.5;
-  [paramGetAPI getFloatValue:&animDuration
-               fromParameter:kKKParamAnimationDuration
+  double inDuration = 0.5, outDuration = 0.5;
+  int inCurve = KKAnimationCurveCubic, outCurve = KKAnimationCurveCubic;
+  if (animateIn) {
+    [paramGetAPI getFloatValue:&inDuration
+                 fromParameter:kKKParamAnimateInDuration
+                        atTime:renderTime];
+    [paramGetAPI getIntValue:&inCurve
+               fromParameter:kKKParamAnimateInInterpolation
                       atTime:renderTime];
+  }
+  if (animateOut) {
+    [paramGetAPI getFloatValue:&outDuration
+                 fromParameter:kKKParamAnimateOutDuration
+                        atTime:renderTime];
+    [paramGetAPI getIntValue:&outCurve
+               fromParameter:kKKParamAnimateOutInterpolation
+                      atTime:renderTime];
+  }
 
-  int curve = KKAnimationCurveCubic;
-  [paramGetAPI getIntValue:&curve
-             fromParameter:kKKParamAnimationInterpolation
-                    atTime:renderTime];
-
-  id<FxTimingAPI_v4> timingAPI =
-      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-  if (!timingAPI)
-    return 1.0;
-
-  CMTime effectStart = kCMTimeZero;
+  CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
   [timingAPI startTimeForEffect:&effectStart];
-
-  CMTime effectDuration = kCMTimeZero;
   [timingAPI durationTimeForEffect:&effectDuration];
 
-  double effectStartSecs = CMTimeGetSeconds(effectStart);
-  double effectDurationSecs = CMTimeGetSeconds(effectDuration);
-  double renderTimeSecs = CMTimeGetSeconds(renderTime);
-  double t = 1.0;
+  double startSec = CMTimeGetSeconds(effectStart);
+  double durSec = CMTimeGetSeconds(effectDuration);
+  double nowSec = CMTimeGetSeconds(renderTime);
+  double endSec = startSec + durSec;
 
-  if (animateIn) {
-    double raw =
-        MAX(0.0, MIN(1.0, (renderTimeSecs - effectStartSecs) / animDuration));
-    switch (curve) {
-    case KKAnimationCurveLinear:
-      t *= raw;
-      break;
-    case KKAnimationCurveSmooth:
-      t *= KKEaseSmoothstep(raw);
-      break;
-    case KKAnimationCurveSpring:
-      t *= KKEaseOutSpring(raw);
-      break;
-    default:
-      t *= KKEaseOutCubic(raw);
-      break;
-    }
-  }
+  // In phase: progress 0→1
+  double inProgress =
+      animateIn ? MAX(0.0, MIN(1.0, (nowSec - startSec) / inDuration)) : 1.0;
+  KKEasingCurve inEasing = (KKEasingCurve)inCurve;
+  KKTimingInterpolator inInterp = ^double(double t) {
+    return KKApplyCurveIn(t, inEasing);
+  };
+  KKTimingPhase *inPhase = [KKTimingPhase phaseWithEnabled:animateIn
+                                                  duration:inDuration
+                                                  progress:inProgress
+                                               interpolate:inInterp];
 
-  if (animateOut) {
-    double effectEndSecs = effectStartSecs + effectDurationSecs;
-    double raw =
-        MAX(0.0, MIN(1.0, (effectEndSecs - renderTimeSecs) / animDuration));
-    switch (curve) {
-    case KKAnimationCurveLinear:
-      t *= raw;
-      break;
-    case KKAnimationCurveSmooth:
-      t *= KKEaseSmoothstep(raw);
-      break;
-    case KKAnimationCurveSpring:
-      t *= KKEaseOutSpring(raw);
-      break;
-    default:
-      t *= KKEaseSmoothstep(raw);
-      break;
-    }
-  }
+  // Out phase: progress 1→0
+  double outProgress =
+      animateOut ? MAX(0.0, MIN(1.0, (endSec - nowSec) / outDuration)) : 1.0;
+  KKEasingCurve outEasing = (KKEasingCurve)outCurve;
+  KKTimingInterpolator outInterp = ^double(double t) {
+    return KKApplyCurveOut(t, outEasing);
+  };
+  KKTimingPhase *outPhase = [KKTimingPhase phaseWithEnabled:animateOut
+                                                   duration:outDuration
+                                                   progress:outProgress
+                                                interpolate:outInterp];
 
-  return t;
+  // Mid phase: hold at 1.0, fills the gap between in and out
+  double inEnd = startSec + (animateIn ? inDuration : 0);
+  double outStart = endSec - (animateOut ? outDuration : 0);
+  double midDur = MAX(0.0, outStart - inEnd);
+  double midProgress =
+      (midDur > 0) ? MAX(0.0, MIN(1.0, (nowSec - inEnd) / midDur)) : 1.0;
+  KKTimingInterpolator hold = ^double(double __unused t) {
+    return 1.0;
+  };
+  KKTimingPhase *midPhase = [KKTimingPhase phaseWithEnabled:YES
+                                                   duration:midDur
+                                                   progress:midProgress
+                                                interpolate:hold];
+
+  return [KKTimingResult resultWithIn:inPhase mid:midPhase out:outPhase];
 }
 
 - (BOOL)addInfoParameterWithText:(NSString *)text
@@ -532,10 +576,8 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
                                          showsCheckbox:NO];
     header.isEnabled = YES;
 
-    NSArray<NSNumber *> *timingChildIDs = @[
-      @(kKKParamAnimateIn), @(kKKParamAnimateOut), @(kKKParamAnimationDuration),
-      @(kKKParamAnimationInterpolation)
-    ];
+    NSArray<NSNumber *> *timingChildIDs =
+        @[ @(kKKParamAnimateIn), @(kKKParamAnimateOut) ];
 
     __weak typeof(self) weakSelf = self;
     header.onExpandedChanged = ^(BOOL isExpanded) {
@@ -632,10 +674,32 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
       expandedTiming ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
   [paramSetAPI setParameterFlags:flagTiming toParameter:kKKParamAnimateIn];
   [paramSetAPI setParameterFlags:flagTiming toParameter:kKKParamAnimateOut];
-  [paramSetAPI setParameterFlags:flagTiming
-                     toParameter:kKKParamAnimationDuration];
-  [paramSetAPI setParameterFlags:flagTiming
-                     toParameter:kKKParamAnimationInterpolation];
+
+  BOOL animateIn = NO, animateOut = NO;
+  if (expandedTiming) {
+    [paramGetAPI getBoolValue:&animateIn
+                fromParameter:kKKParamAnimateIn
+                       atTime:kCMTimeZero];
+    [paramGetAPI getBoolValue:&animateOut
+                fromParameter:kKKParamAnimateOut
+                       atTime:kCMTimeZero];
+  }
+
+  FxParameterFlags flagIn = (expandedTiming && animateIn)
+                                ? kFxParameterFlag_DEFAULT
+                                : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:flagIn toParameter:kKKParamAnimateInDuration];
+  [paramSetAPI setParameterFlags:flagIn
+                     toParameter:kKKParamAnimateInInterpolation];
+
+  FxParameterFlags flagOut = (expandedTiming && animateOut)
+                                 ? kFxParameterFlag_DEFAULT
+                                 : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:flagOut
+                     toParameter:kKKParamAnimateOutDuration];
+  [paramSetAPI setParameterFlags:flagOut
+                     toParameter:kKKParamAnimateOutInterpolation];
+
   for (NSNumber *paramID in self.timingGroupExtraParamIDs) {
     [paramSetAPI setParameterFlags:flagTiming
                        toParameter:paramID.unsignedIntValue];
