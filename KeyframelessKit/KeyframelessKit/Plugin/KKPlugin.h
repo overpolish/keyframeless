@@ -113,10 +113,6 @@ NS_ASSUME_NONNULL_BEGIN
                               withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                                 error:(NSError **)error;
 
-/// Toggles visibility flags on child parameters for a custom group header.
-- (void)setGroupExpanded:(BOOL)expanded
-           childParamIDs:(NSArray<NSNumber *> *)childIDs;
-
 /// Updates timing parameter visibility based on the timing group's expand
 /// state. Call from updateParameterVisibilityAtTime: in subclasses that use
 /// animation.

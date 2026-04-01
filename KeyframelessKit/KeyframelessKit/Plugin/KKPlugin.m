@@ -334,6 +334,21 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     return NO;
   }
 
+  if (![paramAPI addToggleButtonWithName:@""
+                             parameterID:kKKParamTimingExpanded
+                            defaultValue:NO
+                          parameterFlags:kFxParameterFlag_HIDDEN |
+                                         kFxParameterFlag_NOT_ANIMATABLE]) {
+    if (error != NULL)
+      *error = [NSError errorWithDomain:@"co.overpolish.keyframeless.error"
+                                   code:1
+                               userInfo:@{
+                                 NSLocalizedDescriptionKey :
+                                     @"Unable to add Timing expanded toggle"
+                               }];
+    return NO;
+  }
+
   return YES;
 }
 
@@ -576,16 +591,20 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
                                          showsCheckbox:NO];
     header.isEnabled = YES;
 
-    NSArray<NSNumber *> *timingChildIDs =
-        @[ @(kKKParamAnimateIn), @(kKKParamAnimateOut) ];
-
     __weak typeof(self) weakSelf = self;
     header.onExpandedChanged = ^(BOOL isExpanded) {
-      [weakSelf setGroupExpanded:isExpanded childParamIDs:timingChildIDs];
-      if (weakSelf.timingGroupExtraParamIDs) {
-        [weakSelf setGroupExpanded:isExpanded
-                     childParamIDs:weakSelf.timingGroupExtraParamIDs];
-      }
+      __strong typeof(weakSelf) strongSelf = weakSelf;
+      if (!strongSelf)
+        return;
+      id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf->_apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      [actAPI startAction:strongSelf];
+      id<FxParameterSettingAPI_v5> setAPI = [strongSelf->_apiManager
+          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      [setAPI setBoolValue:isExpanded
+               toParameter:kKKParamTimingExpanded
+                    atTime:[actAPI currentTime]];
+      [actAPI endAction:strongSelf];
     };
 
     id<FxCustomParameterActionAPI_v4> actionAPI =
@@ -594,9 +613,11 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     id<FxParameterRetrievalAPI_v6> paramGetAPI =
         [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
 
-    UInt32 flags = 0;
-    [paramGetAPI getParameterFlags:&flags fromParameter:kKKParamAnimateIn];
-    header.isExpanded = (flags & kFxParameterFlag_HIDDEN) == 0;
+    BOOL expanded = NO;
+    [paramGetAPI getBoolValue:&expanded
+                fromParameter:kKKParamTimingExpanded
+                       atTime:[actionAPI currentTime]];
+    header.isExpanded = expanded;
 
     [actionAPI endAction:self];
 
@@ -662,14 +683,10 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
       [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   if (!paramGetAPI || !paramSetAPI)
     return;
-  BOOL expandedTiming;
-  if (_timingHeader) {
-    expandedTiming = _timingHeader.isExpanded;
-  } else {
-    UInt32 f = 0;
-    [paramGetAPI getParameterFlags:&f fromParameter:kKKParamAnimateIn];
-    expandedTiming = (f & kFxParameterFlag_HIDDEN) == 0;
-  }
+  BOOL expandedTiming = NO;
+  [paramGetAPI getBoolValue:&expandedTiming
+              fromParameter:kKKParamTimingExpanded
+                     atTime:kCMTimeZero];
   FxParameterFlags flagTiming =
       expandedTiming ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
   [paramSetAPI setParameterFlags:flagTiming toParameter:kKKParamAnimateIn];
@@ -704,24 +721,6 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     [paramSetAPI setParameterFlags:flagTiming
                        toParameter:paramID.unsignedIntValue];
   }
-}
-
-- (void)setGroupExpanded:(BOOL)expanded
-           childParamIDs:(NSArray<NSNumber *> *)childIDs {
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actionAPI startAction:self];
-
-  id<FxParameterSettingAPI_v5> paramSetAPI =
-      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-
-  FxParameterFlags flags =
-      expanded ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
-  for (NSNumber *paramID in childIDs) {
-    [paramSetAPI setParameterFlags:flags toParameter:paramID.unsignedIntValue];
-  }
-
-  [actionAPI endAction:self];
 }
 
 - (BOOL)forceShowAllParametersIfEnabled:(UInt32)forceShowParamID
