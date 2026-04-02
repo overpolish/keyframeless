@@ -22,8 +22,8 @@
   KKSliderView *_intensitySlider;
   KKSliderView *_frequencySlider;
   NSButton *_seedButton;
-  NSStackView *_globalSlotContainer;
-  NSStackView *_sectionSlotContainer;
+  NSMutableArray<NSView *> *_globalSlotViews;
+  NSMutableArray<NSView *> *_sectionSlotViews;
   NSLayoutConstraint *_intensityTrailingHalf;
   NSLayoutConstraint *_intensityTrailingFull;
   KKAlertView *_emptyPlaceholder;
@@ -56,6 +56,9 @@
     _outFrequency = 0.5;
     _midFrequency = 0.5;
     _selectedSection = KKTimingGraphSectionMid;
+
+    self.wantsLayer = YES;
+    self.layer.masksToBounds = YES;
 
     // Row 0: [Pill curve selector (left)] [Duration slider + ticks (right)]
     _curvePillView = [[KKCurvePillView alloc] initWithFrame:NSZeroRect];
@@ -204,36 +207,8 @@
     _midSeedStack.hidden = YES;
     [self addSubview:_midSeedStack];
 
-    // Global slot container
-    _globalSlotContainer = [NSStackView stackViewWithViews:@[]];
-    _globalSlotContainer.orientation = NSUserInterfaceLayoutOrientationVertical;
-    _globalSlotContainer.spacing = KKSpacingSM;
-    _globalSlotContainer.translatesAutoresizingMaskIntoConstraints = NO;
-    _globalSlotContainer.hidden = YES;
-    [self addSubview:_globalSlotContainer];
-
-    [NSLayoutConstraint activateConstraints:@[
-      [_globalSlotContainer.leadingAnchor
-          constraintEqualToAnchor:self.leadingAnchor],
-      [_globalSlotContainer.trailingAnchor
-          constraintEqualToAnchor:self.trailingAnchor],
-    ]];
-
-    // Section slot container
-    _sectionSlotContainer = [NSStackView stackViewWithViews:@[]];
-    _sectionSlotContainer.orientation =
-        NSUserInterfaceLayoutOrientationVertical;
-    _sectionSlotContainer.spacing = KKSpacingSM;
-    _sectionSlotContainer.translatesAutoresizingMaskIntoConstraints = NO;
-    _sectionSlotContainer.hidden = YES;
-    [self addSubview:_sectionSlotContainer];
-
-    [NSLayoutConstraint activateConstraints:@[
-      [_sectionSlotContainer.leadingAnchor
-          constraintEqualToAnchor:self.leadingAnchor],
-      [_sectionSlotContainer.trailingAnchor
-          constraintEqualToAnchor:self.trailingAnchor],
-    ]];
+    _globalSlotViews = [NSMutableArray array];
+    _sectionSlotViews = [NSMutableArray array];
 
     // Row 2: [Intensity slider+ticks] [Frequency slider+ticks]
     // Intensity can go full-width when frequency is hidden.
@@ -578,18 +553,22 @@
   [self renderGraph];
 }
 
-- (void)_populateContainer:(NSStackView *)container
+- (void)_populateSlotViews:(NSMutableArray<NSView *> *)viewArray
                  withSlots:(NSArray<KKTimingSlot *> *)slots {
-  for (NSView *v in [container.arrangedSubviews copy])
-    [container removeArrangedSubview:v];
-  for (KKTimingSlot *slot in slots)
-    [container addArrangedSubview:slot.view];
-  container.hidden = (slots.count == 0);
+  for (NSView *v in viewArray)
+    [v removeFromSuperview];
+  [viewArray removeAllObjects];
+  for (KKTimingSlot *slot in slots) {
+    slot.view.autoresizingMask = 0;
+    [self addSubview:slot.view];
+    [viewArray addObject:slot.view];
+  }
+  [self setNeedsLayout:YES];
 }
 
 - (void)setGlobalSlots:(NSArray<KKTimingSlot *> *)globalSlots {
   _globalSlots = [globalSlots copy];
-  [self _populateContainer:_globalSlotContainer withSlots:_globalSlots];
+  [self _populateSlotViews:_globalSlotViews withSlots:_globalSlots];
 }
 
 - (void)setInSectionSlots:(NSArray<KKTimingSlot *> *)inSectionSlots {
@@ -620,7 +599,7 @@
     slots = _outSectionSlots;
     break;
   }
-  [self _populateContainer:_sectionSlotContainer withSlots:slots];
+  [self _populateSlotViews:_sectionSlotViews withSlots:slots];
 }
 
 - (BOOL)isFlipped {
@@ -685,17 +664,30 @@
   CGFloat slotsY = graphTop + kGraphHeight + kLabelRowHeight +
                    kSliderRowHeight + kTickHeight + KKPaddingSM;
 
-  if (!_globalSlotContainer.hidden) {
-    NSSize globalSize = _globalSlotContainer.fittingSize;
-    _globalSlotContainer.frame =
-        NSMakeRect(0, slotsY, viewWidth, globalSize.height);
-    slotsY += globalSize.height + KKSpacingSM;
+  for (NSUInteger i = 0; i < _globalSlots.count; i++) {
+    NSView *v = _globalSlotViews[i];
+    CGFloat h = _globalSlots[i].height;
+    v.frame = NSMakeRect(0, slotsY, viewWidth, h);
+    slotsY += h + KKSpacingSM;
   }
 
-  if (!_sectionSlotContainer.hidden) {
-    NSSize sectionSize = _sectionSlotContainer.fittingSize;
-    _sectionSlotContainer.frame =
-        NSMakeRect(0, slotsY, viewWidth, sectionSize.height);
+  NSArray<KKTimingSlot *> *sectionSlots;
+  switch (_selectedSection) {
+  case KKTimingGraphSectionIn:
+    sectionSlots = _inSectionSlots;
+    break;
+  case KKTimingGraphSectionMid:
+    sectionSlots = _midSectionSlots;
+    break;
+  case KKTimingGraphSectionOut:
+    sectionSlots = _outSectionSlots;
+    break;
+  }
+  for (NSUInteger i = 0; i < sectionSlots.count; i++) {
+    NSView *v = _sectionSlotViews[i];
+    CGFloat h = sectionSlots[i].height;
+    v.frame = NSMakeRect(0, slotsY, viewWidth, h);
+    slotsY += h + KKSpacingSM;
   }
 
   [self updateControls];

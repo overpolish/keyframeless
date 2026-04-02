@@ -67,6 +67,14 @@
     @(kKKParamAnimateOutDuration),
     @(kKKParamAnimateOutInterpolation),
     @(kParamRotateWithMotion),
+    @(kParamHoldPositionX),
+    @(kParamHoldPositionY),
+    @(kParamHoldScaleX),
+    @(kParamHoldScaleY),
+    @(kParamHoldRotationZ),
+    @(kParamHoldRotationX),
+    @(kParamHoldRotationY),
+    @(kParamHoldOpacity),
   ]];
 
   if ([self forceShowAllParametersIfEnabled:kParamForceShowAlerts
