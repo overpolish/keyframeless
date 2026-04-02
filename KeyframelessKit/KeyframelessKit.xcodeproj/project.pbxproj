@@ -11,6 +11,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		F20815D82F73D0A6004260DF /* MagicMove.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = MagicMove.xcodeproj; path = ../MagicMove/MagicMove.xcodeproj; sourceTree = SOURCE_ROOT; };
 		F21399642F65423400E1EC03 /* MotionBlur.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = MotionBlur.xcodeproj; path = ../MotionBlur/MotionBlur.xcodeproj; sourceTree = "<group>"; };
 		F21E97D52F4EE9CC00DF8CF3 /* FxPlug.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FxPlug.framework; path = ../../../../../Library/Developer/Frameworks/FxPlug.framework; sourceTree = "<group>"; };
 		F26E01B62F4DE280009D949A /* KeyframelessKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = KeyframelessKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -24,21 +25,41 @@
 			publicHeaders = (
 				KeyframelessKit.h,
 				KKLog.h,
+				Math/KKBezierPath.h,
+				Math/KKEasing.h,
+				Math/KKTiming.h,
 				Metal/KKMetalDeviceCache.h,
 				Metal/KKRenderPrimitives.h,
 				Metal/KKShaderTypes.h,
 				OSC/Base/KKOnScreenControl.h,
+				"OSC/Base/KKOnScreenControl+CoordinateSpace.h",
+				OSC/Controls/KKSquarePointOSC.h,
 				OSC/Controls/KKArcOSC.h,
+				OSC/Controls/KKCompoundPointOSC.h,
+				OSC/Controls/KKIconButtonOSC.h,
+				OSC/Controls/KKOSCLabel.h,
 				OSC/Controls/KKPointOSC.h,
+				OSC/Controls/KKRingOSC.h,
+				OSC/Controls/KKRotationOSC.h,
+				OSC/Utilities/KKSnapEngine.h,
 				Plugin/KKConstants.h,
 				Plugin/KKHostInfo.h,
 				Plugin/KKPlugin.h,
 				Style/KKTokens.h,
 				"Style/NSColor+KKColors.h",
 				Update/KKUpdateChecker.h,
+				Views/KKAlertStackView.h,
 				Views/KKAlertView.h,
+				Views/KKCheckboxView.h,
+				Views/KKChevronView.h,
+				Views/KKCustomGroupHeaderView.h,
 				Views/KKKbd.h,
+				Views/KKLabelView.h,
+				Views/KKMarkup.h,
+				Views/KKParameterRowView.h,
+				Views/KKPillToggleRowView.h,
 				Views/KKSeparatorView.h,
+				Views/KKTimingSlot.h,
 			);
 			target = F26E01B52F4DE280009D949A /* KeyframelessKit */;
 		};
@@ -67,6 +88,13 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		F20816252F73D0A6004260DF /* Products */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
 		F2139A0D2F65426100E1EC03 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -91,6 +119,7 @@
 				F26E01B82F4DE280009D949A /* KeyframelessKit */,
 				F21E97D42F4EE9CC00DF8CF3 /* Frameworks */,
 				F26E01B72F4DE280009D949A /* Products */,
+				F20815D82F73D0A6004260DF /* MagicMove.xcodeproj */,
 			);
 			sourceTree = "<group>";
 		};
@@ -186,6 +215,10 @@
 				{
 					ProductGroup = F29C84D72F68205F0073B1A9 /* Products */;
 					ProjectRef = F29C84D42F68205F0073B1A9 /* Keyframeless X.xcodeproj */;
+				},
+				{
+					ProductGroup = F20816252F73D0A6004260DF /* Products */;
+					ProjectRef = F20815D82F73D0A6004260DF /* MagicMove.xcodeproj */;
 				},
 				{
 					ProductGroup = F2139A0D2F65426100E1EC03 /* Products */;

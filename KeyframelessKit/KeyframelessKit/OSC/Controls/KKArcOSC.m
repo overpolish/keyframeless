@@ -5,9 +5,24 @@
 
 #import "KKArcOSC.h"
 #import "../../Style/KKTokens.h"
+#import "../../Style/NSColor+KKColors.h"
 #import "../Base/KKOSCShaderTypes.h"
+#include <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
+
+static NSColor *arcFillColor(void) {
+  return [NSColor colorWithRed:0xC1 / 255.0
+                         green:0xC1 / 255.0
+                          blue:0xC1 / 255.0
+                         alpha:1.0f];
+}
+static NSColor *arcStrokeColor(void) {
+  return [NSColor colorWithRed:0x00 / 255.0
+                         green:0x00 / 255.0
+                          blue:0x00 / 255.0
+                         alpha:0.8f];
+}
 
 @implementation KKArcOSC
 
@@ -16,7 +31,8 @@
   if (self) {
     _oscRadius = 23.0f;
     _strokeWidth = 10.0f;
-    _outlineWidth = KKBorderWidthXS;
+    _outlineWidth = KKBorderWidthXS + 0.75;
+    _fillAlpha = 1.0f;
   }
   return self;
 }
@@ -45,49 +61,25 @@
   if (!ps)
     return;
 
-  float outerRadiusPixels = _oscRadius + _outlineWidth;
+  float radius = isActive ? 31.0f : _oscRadius;
+  float outerRadiusPixels = radius + _outlineWidth;
 
   KKArcOSCParams params = {
-      .innerRadius = (_oscRadius - _strokeWidth) / outerRadiusPixels,
+      .innerRadius = (radius - _strokeWidth) / outerRadiusPixels,
       .outlineWidth = _outlineWidth / outerRadiusPixels,
-      .fillColor = [self colorForHovered:isHovered active:isActive],
-      .outlineColor = self.outlineColor};
+      .plusHalfLen = isActive ? 7.0f / outerRadiusPixels : 0.0f,
+      .plusFillHalfWidth = 1.0f / outerRadiusPixels,
+      .plusOutlineWidth = 2.0f / outerRadiusPixels,
+      .fillColor =
+          [[arcFillColor() colorWithAlphaComponent:_fillAlpha] simdFloat4],
+      .strokeColor = [arcStrokeColor() simdFloat4]};
 
-  [self
-      encodeRenderCommandsForDestinationImage:destinationImage
-                               canvasPosition:canvasPosition
-                                     commands:^(
-                                         id<MTLRenderCommandEncoder> encoder,
-                                         CGPoint metalPosition,
-                                         simd_uint2 viewportSize) {
-                                       KKVertex2D quadVertices[6];
-                                       [KKRenderPrimitives
-                                           generateQuadVertices:quadVertices
-                                                         center:metalPosition
-                                                           size:
-                                                               outerRadiusPixels];
-
-                                       [encoder setRenderPipelineState:ps];
-                                       [encoder
-                                           setVertexBytes:quadVertices
-                                                   length:sizeof(quadVertices)
-                                                  atIndex:
-                                                      KKVertexInputIndex_Vertices];
-                                       [encoder
-                                           setVertexBytes:&viewportSize
-                                                   length:sizeof(viewportSize)
-                                                  atIndex:
-                                                      KKVertexInputIndex_ViewportSize];
-                                       [encoder
-                                           setFragmentBytes:&params
-                                                     length:sizeof(params)
-                                                    atIndex:
-                                                        KKOSCFragmentIndex_DrawColor];
-                                       [encoder drawPrimitives:
-                                                    MTLPrimitiveTypeTriangle
-                                                   vertexStart:0
-                                                   vertexCount:6];
-                                     }];
+  [self drawQuadForDestinationImage:destinationImage
+                     canvasPosition:canvasPosition
+                      pipelineState:ps
+                       fragmentData:&params
+                   fragmentDataSize:sizeof(params)
+                               size:outerRadiusPixels];
 }
 
 @end

@@ -86,6 +86,13 @@
   return YES;
 }
 
+- (BOOL)parameterChanged:(UInt32)parameterID
+                  atTime:(CMTime)time
+                   error:(NSError **)error {
+  [self updateTimingParameterVisibility];
+  return YES;
+}
+
 - (BOOL)pluginState:(NSData **)pluginState
              atTime:(CMTime)renderTime
             quality:(FxQuality)qualityLevel
@@ -109,7 +116,9 @@
                fromParameter:kParamRadius
                       atTime:renderTime];
 
-  double effectiveRadius = radius * [self animationFactorAtTime:renderTime];
+  KKTimingResult *timing = [self timingAtTime:renderTime];
+  double effectiveRadius = radius * timing.inPhase.factor *
+                           timing.holdPhase.factor * timing.outPhase.factor;
 
   *pluginState = [NSData dataWithBytes:&effectiveRadius
                                 length:sizeof(effectiveRadius)];
