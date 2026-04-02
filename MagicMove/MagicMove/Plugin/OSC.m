@@ -117,6 +117,8 @@ makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
     return (PathSegConfig){kParamPathBExit, kParamPointB, kParamExitPoint, 3};
   case 4:
     return (PathSegConfig){kParamPathDriftA, kParamDriftPoint, kParamPointA, 4};
+  case 5:
+    return (PathSegConfig){kParamPathBA, kParamPointB, kParamPointA, 5};
   default:
     return (PathSegConfig){kParamPathAB, kParamPointA, kParamPointB, 0};
   }

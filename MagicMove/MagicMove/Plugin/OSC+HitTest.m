@@ -154,6 +154,7 @@
                            kParamExitPoint, 2};
     PathSegConfig cfgBE = {kParamPathBExit, kParamPointB, kParamExitPoint, 3};
     PathSegConfig cfgDA = {kParamPathDriftA, kParamDriftPoint, kParamPointA, 4};
+    PathSegConfig cfgBA = {kParamPathBA, kParamPointB, kParamPointA, 5};
     BOOL driftOn = [self boolParam:kParamDrift atTime:time];
     BOOL exitShow = exitOn && animOutOn;
     BOOL hit = NO;
@@ -192,6 +193,14 @@
                               atTime:time];
     if (!hit && !driftOn && exitShow)
       hit = [self hitTestPathSegment:cfgBE
+                                   x:positionX
+                                   y:positionY
+                          activePart:activePart
+                             optDown:hOpt
+                              oscAPI:hOscAPI
+                              atTime:time];
+    if (!hit && !driftOn && !exitShow && animOutOn && !animInOn)
+      hit = [self hitTestPathSegment:cfgBA
                                    x:positionX
                                    y:positionY
                           activePart:activePart
