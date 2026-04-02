@@ -28,6 +28,8 @@ static const CGFloat kCheckboxSize = 12.0;
   KKCheckboxView *_outCheckbox;
   KKSliderView *_curveSlider;
   NSImageView *_tickImageView;
+  KKSliderView *_intensitySlider;
+  NSImageView *_intensityTickImageView;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect {
@@ -38,6 +40,8 @@ static const CGFloat kCheckboxSize = 12.0;
     _inCurve = KKEasingCurveEaseOut;
     _outCurve = KKEasingCurveEaseOut;
     _midHoldEffect = KKHoldEffectNone;
+    _inIntensity = 0.5;
+    _outIntensity = 0.5;
     _selectedSection = KKTimingGraphSectionMid;
 
     _graphImageView = [[NSImageView alloc] initWithFrame:NSZeroRect];
@@ -128,6 +132,55 @@ static const CGFloat kCheckboxSize = 12.0;
                                                constant:tickTop],
       [_tickImageView.heightAnchor constraintEqualToConstant:kTickHeight],
     ]];
+
+    _intensitySlider = [KKSliderView styledSlider];
+    _intensitySlider.translatesAutoresizingMaskIntoConstraints = NO;
+    _intensitySlider.minValue = 0.0;
+    _intensitySlider.maxValue = 1.0;
+    _intensitySlider.doubleValue = 0.5;
+    _intensitySlider.continuous = YES;
+    _intensitySlider.trackFillColor = [NSColor accent];
+    _intensitySlider.hidden = YES;
+    _intensitySlider.target = self;
+    _intensitySlider.action = @selector(intensitySliderChanged:);
+    [self addSubview:_intensitySlider];
+
+    CGFloat intensityTop = tickTop + kTickHeight;
+    [NSLayoutConstraint activateConstraints:@[
+      [_intensitySlider.leadingAnchor
+          constraintEqualToAnchor:self.leadingAnchor
+                         constant:KKInspectorHorizontalInset +
+                                  kTickWidth / 2.0],
+      [_intensitySlider.trailingAnchor
+          constraintEqualToAnchor:self.trailingAnchor
+                         constant:-(KKInspectorHorizontalInset +
+                                    kTickWidth / 2.0)],
+      [_intensitySlider.topAnchor constraintEqualToAnchor:self.topAnchor
+                                                 constant:intensityTop],
+      [_intensitySlider.heightAnchor
+          constraintEqualToConstant:kSliderRowHeight],
+    ]];
+
+    _intensityTickImageView = [[NSImageView alloc] initWithFrame:NSZeroRect];
+    _intensityTickImageView.imageScaling = NSImageScaleNone;
+    _intensityTickImageView.translatesAutoresizingMaskIntoConstraints = NO;
+    _intensityTickImageView.hidden = YES;
+    [self addSubview:_intensityTickImageView];
+
+    CGFloat intensityTickTop = intensityTop + kSliderRowHeight;
+    [NSLayoutConstraint activateConstraints:@[
+      [_intensityTickImageView.leadingAnchor
+          constraintEqualToAnchor:self.leadingAnchor
+                         constant:KKInspectorHorizontalInset],
+      [_intensityTickImageView.trailingAnchor
+          constraintEqualToAnchor:self.trailingAnchor
+                         constant:-KKInspectorHorizontalInset],
+      [_intensityTickImageView.topAnchor
+          constraintEqualToAnchor:self.topAnchor
+                         constant:intensityTickTop],
+      [_intensityTickImageView.heightAnchor
+          constraintEqualToConstant:kTickHeight],
+    ]];
   }
   return self;
 }
@@ -153,6 +206,22 @@ static const CGFloat kCheckboxSize = 12.0;
   }
   [self renderGraph];
   [self renderTicks];
+  [self renderIntensityTicks];
+}
+
+- (void)intensitySliderChanged:(id)sender {
+  double val = _intensitySlider.doubleValue;
+  if (_selectedSection == KKTimingGraphSectionIn) {
+    _inIntensity = val;
+    if (self.onInIntensityChanged)
+      self.onInIntensityChanged(val);
+  } else if (_selectedSection == KKTimingGraphSectionOut) {
+    _outIntensity = val;
+    if (self.onOutIntensityChanged)
+      self.onOutIntensityChanged(val);
+  }
+  [self renderGraph];
+  [self renderIntensityTicks];
 }
 
 - (void)updateCurveSlider {
@@ -173,8 +242,18 @@ static const CGFloat kCheckboxSize = 12.0;
     _curveSlider.doubleValue = _midHoldEffect;
   }
 
+  BOOL showIntensity = showIn || showOut;
+  _intensitySlider.hidden = !showIntensity;
+  _intensityTickImageView.hidden = !showIntensity;
+  if (showIn)
+    _intensitySlider.doubleValue = _inIntensity;
+  else if (showOut)
+    _intensitySlider.doubleValue = _outIntensity;
+
   if (show)
     [self renderTicks];
+  if (showIntensity)
+    [self renderIntensityTicks];
 }
 
 - (void)setInEnabled:(BOOL)inEnabled {
@@ -205,6 +284,18 @@ static const CGFloat kCheckboxSize = 12.0;
 
 - (void)setMidHoldEffect:(KKHoldEffect)midHoldEffect {
   _midHoldEffect = midHoldEffect;
+  [self updateCurveSlider];
+  [self renderGraph];
+}
+
+- (void)setInIntensity:(double)inIntensity {
+  _inIntensity = inIntensity;
+  [self updateCurveSlider];
+  [self renderGraph];
+}
+
+- (void)setOutIntensity:(double)outIntensity {
+  _outIntensity = outIntensity;
   [self updateCurveSlider];
   [self renderGraph];
 }
@@ -347,8 +438,9 @@ static const CGFloat kCheckboxSize = 12.0;
       continue;
     for (NSInteger i = 0; i <= kCurveSegments; i++) {
       CGFloat t = (CGFloat)i / (CGFloat)kCurveSegments;
-      CGFloat v = (c == 1) ? KKApplyEasing(1.0 - t, curves[c])
-                           : KKApplyEasing(t, curves[c]);
+      double inten = (c == 0) ? _inIntensity : _outIntensity;
+      CGFloat v = (c == 1) ? KKApplyEasing(1.0 - t, curves[c], inten)
+                           : KKApplyEasing(t, curves[c], inten);
       if (v < minVal)
         minVal = v;
       if (v > maxVal)
@@ -429,13 +521,14 @@ static const CGFloat kCheckboxSize = 12.0;
 
     switch (section) {
     case KKTimingGraphSectionIn:
-      easedT = enabled ? KKApplyEasing(rawT, _inCurve) : 1.0;
+      easedT = enabled ? KKApplyEasing(rawT, _inCurve, _inIntensity) : 1.0;
       break;
     case KKTimingGraphSectionMid:
       easedT = KKApplyHoldEffect(rawT, _midHoldEffect);
       break;
     case KKTimingGraphSectionOut:
-      easedT = enabled ? KKApplyEasing(1.0 - rawT, _outCurve) : 1.0;
+      easedT =
+          enabled ? KKApplyEasing(1.0 - rawT, _outCurve, _outIntensity) : 1.0;
       break;
     }
 
@@ -486,7 +579,11 @@ static const CGFloat kCheckboxSize = 12.0;
   [super drawRect:dirtyRect];
 }
 
-- (void)renderTicks {
+- (void)renderTicksToImageView:(NSImageView *)imageView
+                     tickCount:(NSInteger)tickCount
+                   activeIndex:(NSInteger)activeIndex
+                    valueBlock:
+                        (CGFloat (^)(NSInteger tickIndex, CGFloat t))block {
   CGFloat inset = KKInspectorHorizontalInset;
   CGFloat tickPad = kTickWidth / 2.0;
   CGFloat tickAreaWidth = NSWidth(self.bounds) - 2 * inset;
@@ -500,11 +597,6 @@ static const CGFloat kCheckboxSize = 12.0;
   CGFloat sliderWidth = tickAreaWidth - 2 * tickPad;
   CGFloat knobInset = 9.5 / 2.0;
   CGFloat usableWidth = sliderWidth - 2 * knobInset;
-  NSInteger activeVal = lround(_curveSlider.doubleValue);
-
-  BOOL isMid = _selectedSection == KKTimingGraphSectionMid;
-  BOOL isOut = _selectedSection == KKTimingGraphSectionOut;
-  NSInteger tickCount = isMid ? KKHoldEffectCount : KKEasingCurveCount;
 
   for (NSInteger i = 0; i < tickCount; i++) {
     CGFloat frac =
@@ -512,27 +604,54 @@ static const CGFloat kCheckboxSize = 12.0;
     CGFloat centerX = tickPad + knobInset + frac * usableWidth;
     NSRect tickRect =
         NSMakeRect(centerX - kTickWidth / 2.0, 0, kTickWidth, kTickHeight);
-
-    if (isMid) {
-      KKHoldEffect eff = (KKHoldEffect)i;
-      [self renderTickInRect:tickRect
-                      active:(i == activeVal)
-                       value:^CGFloat(CGFloat t) {
-                         return KKApplyHoldEffect(t, eff);
-                       }];
-    } else {
-      KKEasingCurve curve = (KKEasingCurve)i;
-      [self renderTickInRect:tickRect
-                      active:(i == activeVal)
-                       value:^CGFloat(CGFloat t) {
-                         return isOut ? KKApplyEasing(1.0 - t, curve)
-                                      : KKApplyEasing(t, curve);
-                       }];
-    }
+    [self renderTickInRect:tickRect
+                    active:(i == activeIndex)
+                     value:^CGFloat(CGFloat t) {
+                       return block(i, t);
+                     }];
   }
 
   [image unlockFocus];
-  _tickImageView.image = image;
+  imageView.image = image;
+}
+
+- (void)renderTicks {
+  BOOL isMid = _selectedSection == KKTimingGraphSectionMid;
+  BOOL isOut = _selectedSection == KKTimingGraphSectionOut;
+  NSInteger tickCount = isMid ? KKHoldEffectCount : KKEasingCurveCount;
+  NSInteger activeVal = lround(_curveSlider.doubleValue);
+
+  [self renderTicksToImageView:_tickImageView
+                     tickCount:tickCount
+                   activeIndex:activeVal
+                    valueBlock:^CGFloat(NSInteger idx, CGFloat t) {
+                      if (isMid)
+                        return KKApplyHoldEffect(t, (KKHoldEffect)idx);
+                      double inten =
+                          isOut ? self->_outIntensity : self->_inIntensity;
+                      KKEasingCurve curve = (KKEasingCurve)idx;
+                      return isOut ? KKApplyEasing(1.0 - t, curve, inten)
+                                   : KKApplyEasing(t, curve, inten);
+                    }];
+}
+
+static const NSInteger kIntensityTickCount = 5;
+
+- (void)renderIntensityTicks {
+  BOOL isOut = _selectedSection == KKTimingGraphSectionOut;
+  KKEasingCurve curve = isOut ? _outCurve : _inCurve;
+  double currentIntensity = isOut ? _outIntensity : _inIntensity;
+  NSInteger nearest = lround(currentIntensity * (kIntensityTickCount - 1));
+
+  [self renderTicksToImageView:_intensityTickImageView
+                     tickCount:kIntensityTickCount
+                   activeIndex:nearest
+                    valueBlock:^CGFloat(NSInteger idx, CGFloat t) {
+                      double inten =
+                          (double)idx / (double)(kIntensityTickCount - 1);
+                      return isOut ? KKApplyEasing(1.0 - t, curve, inten)
+                                   : KKApplyEasing(t, curve, inten);
+                    }];
 }
 
 - (NSRect)tickHitRectForIndex:(NSInteger)index {

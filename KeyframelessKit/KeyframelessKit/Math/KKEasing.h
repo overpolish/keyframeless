@@ -25,14 +25,9 @@ typedef NS_ENUM(NSInteger, KKHoldEffect) {
 
 static const NSInteger KKHoldEffectCount __attribute__((unused)) = 3;
 
-double KKEaseInQuart(double t);
-double KKEaseOutQuart(double t);
-double KKEaseInOutQuart(double t);
-double KKEaseOutElastic(double t);
-double KKEaseOutBounce(double t);
-
 /// Apply the given curve to a raw 0→1 factor.
-double KKApplyEasing(double raw, KKEasingCurve curve);
+/// intensity: 0.0 (gentle) to 1.0 (pronounced), 0.5 = default.
+double KKApplyEasing(double raw, KKEasingCurve curve, double intensity);
 
 /// Apply a hold effect at time t (0→1 through the mid phase).
 /// Returns a value centred around 1.0.

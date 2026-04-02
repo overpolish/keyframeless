@@ -49,6 +49,7 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
 }
 
 @interface KKSliderCell : NSSliderCell
+@property(nonatomic, strong, nullable) NSColor *trackFillColor;
 @end
 
 @implementation KKSliderCell
@@ -64,6 +65,8 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
 - (void)drawBarInside:(NSRect)rect flipped:(BOOL)flipped {
   NSRect trackRect = [self trackRectForBarRect:rect];
   [self drawTrackBackground:trackRect];
+  if (_trackFillColor)
+    [self drawTrackFill:trackRect];
 }
 
 - (NSRect)trackRectForBarRect:(NSRect)barRect {
@@ -85,6 +88,8 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
 - (void)drawTrackFill:(NSRect)trackRect {
   CGFloat normalizedValue = [self normalizedValue];
   CGFloat filledWidth = trackRect.size.width * normalizedValue;
+  if (filledWidth < 1.0)
+    return;
 
   NSRect filledRect = NSMakeRect(trackRect.origin.x, trackRect.origin.y,
                                  filledWidth, kTrackHeight);
@@ -92,7 +97,7 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
       [NSBezierPath bezierPathWithRoundedRect:filledRect
                                       xRadius:kTrackCornerRadius
                                       yRadius:kTrackCornerRadius];
-  [sliderTrackBackground() setFill];
+  [_trackFillColor setFill];
   [filledPath fill];
 }
 
@@ -285,6 +290,15 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
 
 - (SEL)action {
   return _slider.action;
+}
+
+- (void)setTrackFillColor:(NSColor *)trackFillColor {
+  ((KKSliderCell *)_slider.cell).trackFillColor = trackFillColor;
+  [_slider setNeedsDisplay:YES];
+}
+
+- (NSColor *)trackFillColor {
+  return ((KKSliderCell *)_slider.cell).trackFillColor;
 }
 
 @end
