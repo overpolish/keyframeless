@@ -258,6 +258,18 @@
     params.opacity = (float)((1 - t) * a.opacity + t * targetOpacity);
   }
 
+  static const double kHoldTranslateAmount = 0.08;
+  static const double kHoldRotationDegrees = 20.0;
+
+  double midF = timing.midPhase.factor;
+  double midD = midF - 1.0;
+  params.translate.x += (float)(midD * kHoldTranslateAmount);
+  params.translate.y += (float)(midD * kHoldTranslateAmount);
+  params.rotation += (float)(midD * kHoldRotationDegrees * (M_PI / 180.0));
+  params.scaleX *= (float)midF;
+  params.scaleY *= (float)midF;
+  params.opacity = (float)fmax(0.0, fmin(1.0, (double)params.opacity * midF));
+
   BOOL rotateWithMotion = NO;
   [paramGetAPI getBoolValue:&rotateWithMotion
               fromParameter:kParamRotateWithMotion

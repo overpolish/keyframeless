@@ -44,6 +44,29 @@ double KKEaseOutBounce(double t) {
   return 7.5625 * t * t + 0.984375;
 }
 
+static double KKHoldBounce(double t) {
+  return 1.0 + 0.15 * sin(t * M_PI * 4.0) * (1.0 - t);
+}
+
+static double KKHoldWiggle(double t) {
+  double envelope = sin(t * M_PI);
+  double noise = sin(t * 17.0) * 0.4 + sin(t * 31.0) * 0.3 +
+                 sin(t * 59.0) * 0.2 + sin(t * 97.0) * 0.1;
+  return 1.0 + 0.08 * noise * envelope;
+}
+
+double KKApplyHoldEffect(double t, KKHoldEffect effect) {
+  switch (effect) {
+  case KKHoldEffectBounce:
+    return KKHoldBounce(t);
+  case KKHoldEffectWiggle:
+    return KKHoldWiggle(t);
+  case KKHoldEffectNone:
+  default:
+    return 1.0;
+  }
+}
+
 double KKApplyEasing(double raw, KKEasingCurve curve) {
   switch (curve) {
   case KKEasingCurveEaseIn:

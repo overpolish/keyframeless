@@ -37,6 +37,7 @@ static const CGFloat kCheckboxSize = 12.0;
     _outEnabled = NO;
     _inCurve = KKEasingCurveEaseOut;
     _outCurve = KKEasingCurveEaseOut;
+    _midHoldEffect = KKHoldEffectNone;
     _selectedSection = KKTimingGraphSectionMid;
 
     _graphImageView = [[NSImageView alloc] initWithFrame:NSZeroRect];
@@ -132,33 +133,45 @@ static const CGFloat kCheckboxSize = 12.0;
 }
 
 - (void)curveSliderChanged:(id)sender {
-  KKEasingCurve curve = (KKEasingCurve)lround(_curveSlider.doubleValue);
-  if (_selectedSection == KKTimingGraphSectionIn) {
-    _inCurve = curve;
-    [self renderGraph];
-    [self renderTicks];
+  NSInteger val = lround(_curveSlider.doubleValue);
+  switch (_selectedSection) {
+  case KKTimingGraphSectionIn:
+    _inCurve = (KKEasingCurve)val;
     if (self.onInCurveChanged)
-      self.onInCurveChanged(curve);
-  } else if (_selectedSection == KKTimingGraphSectionOut) {
-    _outCurve = curve;
-    [self renderGraph];
-    [self renderTicks];
+      self.onInCurveChanged(_inCurve);
+    break;
+  case KKTimingGraphSectionOut:
+    _outCurve = (KKEasingCurve)val;
     if (self.onOutCurveChanged)
-      self.onOutCurveChanged(curve);
+      self.onOutCurveChanged(_outCurve);
+    break;
+  case KKTimingGraphSectionMid:
+    _midHoldEffect = (KKHoldEffect)val;
+    if (self.onMidHoldEffectChanged)
+      self.onMidHoldEffectChanged(_midHoldEffect);
+    break;
   }
+  [self renderGraph];
+  [self renderTicks];
 }
 
 - (void)updateCurveSlider {
   BOOL showIn = _selectedSection == KKTimingGraphSectionIn && _inEnabled;
   BOOL showOut = _selectedSection == KKTimingGraphSectionOut && _outEnabled;
-  BOOL show = showIn || showOut;
+  BOOL showMid = _selectedSection == KKTimingGraphSectionMid;
+  BOOL show = showIn || showOut || showMid;
 
   _curveSlider.hidden = !show;
   _tickImageView.hidden = !show;
-  if (showIn)
-    _curveSlider.doubleValue = _inCurve;
-  else if (showOut)
-    _curveSlider.doubleValue = _outCurve;
+  if (showIn || showOut) {
+    _curveSlider.maxValue = KKEasingCurveCount - 1;
+    _curveSlider.slider.numberOfTickMarks = KKEasingCurveCount;
+    _curveSlider.doubleValue = showIn ? _inCurve : _outCurve;
+  } else if (showMid) {
+    _curveSlider.maxValue = KKHoldEffectCount - 1;
+    _curveSlider.slider.numberOfTickMarks = KKHoldEffectCount;
+    _curveSlider.doubleValue = _midHoldEffect;
+  }
 
   if (show)
     [self renderTicks];
@@ -186,6 +199,12 @@ static const CGFloat kCheckboxSize = 12.0;
 
 - (void)setOutCurve:(KKEasingCurve)outCurve {
   _outCurve = outCurve;
+  [self updateCurveSlider];
+  [self renderGraph];
+}
+
+- (void)setMidHoldEffect:(KKHoldEffect)midHoldEffect {
+  _midHoldEffect = midHoldEffect;
   [self updateCurveSlider];
   [self renderGraph];
 }
@@ -336,6 +355,16 @@ static const CGFloat kCheckboxSize = 12.0;
         maxVal = v;
     }
   }
+  if (_midHoldEffect != KKHoldEffectNone) {
+    for (NSInteger i = 0; i <= kCurveSegments; i++) {
+      CGFloat t = (CGFloat)i / (CGFloat)kCurveSegments;
+      CGFloat v = KKApplyHoldEffect(t, _midHoldEffect);
+      if (v < minVal)
+        minVal = v;
+      if (v > maxVal)
+        maxVal = v;
+    }
+  }
   *outMin = minVal;
   *outMax = maxVal;
 }
@@ -403,7 +432,7 @@ static const CGFloat kCheckboxSize = 12.0;
       easedT = enabled ? KKApplyEasing(rawT, _inCurve) : 1.0;
       break;
     case KKTimingGraphSectionMid:
-      easedT = 1.0;
+      easedT = KKApplyHoldEffect(rawT, _midHoldEffect);
       break;
     case KKTimingGraphSectionOut:
       easedT = enabled ? KKApplyEasing(1.0 - rawT, _outCurve) : 1.0;
@@ -471,18 +500,35 @@ static const CGFloat kCheckboxSize = 12.0;
   CGFloat sliderWidth = tickAreaWidth - 2 * tickPad;
   CGFloat knobInset = 9.5 / 2.0;
   CGFloat usableWidth = sliderWidth - 2 * knobInset;
-  KKEasingCurve activeCurve = (KKEasingCurve)lround(_curveSlider.doubleValue);
+  NSInteger activeVal = lround(_curveSlider.doubleValue);
 
+  BOOL isMid = _selectedSection == KKTimingGraphSectionMid;
   BOOL isOut = _selectedSection == KKTimingGraphSectionOut;
-  for (NSInteger i = 0; i < KKEasingCurveCount; i++) {
-    CGFloat frac = (CGFloat)i / (CGFloat)(KKEasingCurveCount - 1);
+  NSInteger tickCount = isMid ? KKHoldEffectCount : KKEasingCurveCount;
+
+  for (NSInteger i = 0; i < tickCount; i++) {
+    CGFloat frac =
+        (tickCount > 1) ? (CGFloat)i / (CGFloat)(tickCount - 1) : 0.5;
     CGFloat centerX = tickPad + knobInset + frac * usableWidth;
     NSRect tickRect =
         NSMakeRect(centerX - kTickWidth / 2.0, 0, kTickWidth, kTickHeight);
-    [self renderTickCurve:(KKEasingCurve)i
-                   inRect:tickRect
-                   active:(i == activeCurve)
-                 mirrored:isOut];
+
+    if (isMid) {
+      KKHoldEffect eff = (KKHoldEffect)i;
+      [self renderTickInRect:tickRect
+                      active:(i == activeVal)
+                       value:^CGFloat(CGFloat t) {
+                         return KKApplyHoldEffect(t, eff);
+                       }];
+    } else {
+      KKEasingCurve curve = (KKEasingCurve)i;
+      [self renderTickInRect:tickRect
+                      active:(i == activeVal)
+                       value:^CGFloat(CGFloat t) {
+                         return isOut ? KKApplyEasing(1.0 - t, curve)
+                                      : KKApplyEasing(t, curve);
+                       }];
+    }
   }
 
   [image unlockFocus];
@@ -497,15 +543,18 @@ static const CGFloat kCheckboxSize = 12.0;
   CGFloat usableWidth = sliderWidth - 2 * knobInset;
   CGFloat tickY = kGraphHeight + kLabelRowHeight + kSliderRowHeight;
 
-  CGFloat frac = (CGFloat)index / (CGFloat)(KKEasingCurveCount - 1);
+  NSInteger tickCount = (_selectedSection == KKTimingGraphSectionMid)
+                            ? KKHoldEffectCount
+                            : KKEasingCurveCount;
+  CGFloat frac =
+      (tickCount > 1) ? (CGFloat)index / (CGFloat)(tickCount - 1) : 0.5;
   CGFloat centerX = inset + tickPad + knobInset + frac * usableWidth;
   return NSMakeRect(centerX - kTickWidth / 2.0, tickY, kTickWidth, kTickHeight);
 }
 
-- (void)renderTickCurve:(KKEasingCurve)curve
-                 inRect:(NSRect)rect
-                 active:(BOOL)active
-               mirrored:(BOOL)mirrored {
+- (void)renderTickInRect:(NSRect)rect
+                  active:(BOOL)active
+                   value:(CGFloat (^)(CGFloat t))value {
   NSColor *color =
       active ? [NSColor accent]
              : [[NSColor inspectorLabel] colorWithAlphaComponent:0.35];
@@ -518,16 +567,14 @@ static const CGFloat kCheckboxSize = 12.0;
   CGFloat yTop = NSMaxY(rect) - pad;
   CGFloat w = x1 - x0;
 
-  // Find the full range of the curve to scale it to fit
   CGFloat minVal = 0.0, maxVal = 1.0;
   for (NSInteger i = 0; i <= kTickSegments; i++) {
     CGFloat t = (CGFloat)i / (CGFloat)kTickSegments;
-    CGFloat eased =
-        mirrored ? KKApplyEasing(1.0 - t, curve) : KKApplyEasing(t, curve);
-    if (eased < minVal)
-      minVal = eased;
-    if (eased > maxVal)
-      maxVal = eased;
+    CGFloat v = value(t);
+    if (v < minVal)
+      minVal = v;
+    if (v > maxVal)
+      maxVal = v;
   }
   CGFloat range = maxVal - minVal;
   CGFloat h = yTop - yBot;
@@ -537,9 +584,8 @@ static const CGFloat kCheckboxSize = 12.0;
 
   for (NSInteger i = 0; i <= kTickSegments; i++) {
     CGFloat t = (CGFloat)i / (CGFloat)kTickSegments;
-    CGFloat eased =
-        mirrored ? KKApplyEasing(1.0 - t, curve) : KKApplyEasing(t, curve);
-    CGFloat normalized = (eased - minVal) / range;
+    CGFloat v = value(t);
+    CGFloat normalized = (range > 0) ? (v - minVal) / range : 0.5;
     CGFloat px = x0 + t * w;
     CGFloat py = yBot + normalized * h;
 
@@ -556,7 +602,10 @@ static const CGFloat kCheckboxSize = 12.0;
   NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
 
   if (!_curveSlider.hidden) {
-    for (NSInteger i = 0; i < KKEasingCurveCount; i++) {
+    NSInteger tickCount = (_selectedSection == KKTimingGraphSectionMid)
+                              ? KKHoldEffectCount
+                              : KKEasingCurveCount;
+    for (NSInteger i = 0; i < tickCount; i++) {
       if (NSPointInRect(loc, [self tickHitRectForIndex:i])) {
         _curveSlider.doubleValue = i;
         [self curveSliderChanged:_curveSlider];
