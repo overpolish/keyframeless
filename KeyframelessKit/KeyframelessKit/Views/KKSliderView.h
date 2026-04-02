@@ -19,6 +19,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, weak, nullable) id target;
 @property(nonatomic, assign, nullable) SEL action;
 
+@property(nonatomic, strong, nullable) NSColor *trackFillColor;
+
 + (instancetype)styledSlider;
 
 @end

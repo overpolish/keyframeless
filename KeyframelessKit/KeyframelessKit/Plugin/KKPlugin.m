@@ -289,6 +289,25 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     return NO;
   }
 
+  if (![paramAPI addFloatSliderWithName:@"In Intensity"
+                            parameterID:kKKParamAnimateInIntensity
+                           defaultValue:0.5
+                           parameterMin:0.0
+                           parameterMax:1.0
+                              sliderMin:0.0
+                              sliderMax:1.0
+                                  delta:0.01
+                         parameterFlags:kFxParameterFlag_HIDDEN]) {
+    if (error != NULL)
+      *error = [NSError errorWithDomain:@"co.overpolish.keyframeless.error"
+                                   code:1
+                               userInfo:@{
+                                 NSLocalizedDescriptionKey :
+                                     @"Unable to add In Intensity slider"
+                               }];
+    return NO;
+  }
+
   if (![paramAPI addToggleButtonWithName:@"Animate Out"
                              parameterID:kKKParamAnimateOut
                             defaultValue:NO
@@ -337,6 +356,25 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
                  userInfo:@{
                    NSLocalizedDescriptionKey : @"Unable to add Out Curve popup"
                  }];
+    return NO;
+  }
+
+  if (![paramAPI addFloatSliderWithName:@"Out Intensity"
+                            parameterID:kKKParamAnimateOutIntensity
+                           defaultValue:0.5
+                           parameterMin:0.0
+                           parameterMax:1.0
+                              sliderMin:0.0
+                              sliderMax:1.0
+                                  delta:0.01
+                         parameterFlags:kFxParameterFlag_HIDDEN]) {
+    if (error != NULL)
+      *error = [NSError errorWithDomain:@"co.overpolish.keyframeless.error"
+                                   code:1
+                               userInfo:@{
+                                 NSLocalizedDescriptionKey :
+                                     @"Unable to add Out Intensity slider"
+                               }];
     return NO;
   }
 
@@ -446,9 +484,16 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
   // In phase: progress 0→1
   double inProgress =
       animateIn ? MAX(0.0, MIN(1.0, (nowSec - startSec) / inDuration)) : 1.0;
+  double inIntensity = 0.5;
+  if (animateIn) {
+    [paramGetAPI getFloatValue:&inIntensity
+                 fromParameter:kKKParamAnimateInIntensity
+                        atTime:renderTime];
+  }
+
   KKEasingCurve inEasing = (KKEasingCurve)inCurve;
   KKTimingInterpolator inInterp = ^double(double t) {
-    return KKApplyEasing(t, inEasing);
+    return KKApplyEasing(t, inEasing, inIntensity);
   };
   KKTimingPhase *inPhase = [KKTimingPhase phaseWithEnabled:animateIn
                                                   duration:inDuration
@@ -458,9 +503,16 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
   // Out phase: progress 1→0
   double outProgress =
       animateOut ? MAX(0.0, MIN(1.0, (endSec - nowSec) / outDuration)) : 1.0;
+  double outIntensity = 0.5;
+  if (animateOut) {
+    [paramGetAPI getFloatValue:&outIntensity
+                 fromParameter:kKKParamAnimateOutIntensity
+                        atTime:renderTime];
+  }
+
   KKEasingCurve outEasing = (KKEasingCurve)outCurve;
   KKTimingInterpolator outInterp = ^double(double t) {
-    return KKApplyEasing(t, outEasing);
+    return KKApplyEasing(t, outEasing, outIntensity);
   };
   KKTimingPhase *outPhase = [KKTimingPhase phaseWithEnabled:animateOut
                                                    duration:outDuration
@@ -672,7 +724,7 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
   }
 
   if (parameterID == kKKParamTimingCurvePreview) {
-    NSView *wrapper = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, 124)];
+    NSView *wrapper = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, 168)];
     wrapper.autoresizingMask = NSViewWidthSizable;
 
     KKTimingGraphView *graphView =
@@ -716,6 +768,13 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     [paramGetAPI getIntValue:&midHold
                fromParameter:kKKParamMidHoldEffect
                       atTime:now];
+    double inIntensity = 0.5, outIntensity = 0.5;
+    [paramGetAPI getFloatValue:&inIntensity
+                 fromParameter:kKKParamAnimateInIntensity
+                        atTime:now];
+    [paramGetAPI getFloatValue:&outIntensity
+                 fromParameter:kKKParamAnimateOutIntensity
+                        atTime:now];
     [actionAPI endAction:self];
 
     graphView.inEnabled = animIn;
@@ -723,6 +782,8 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     graphView.inCurve = (KKEasingCurve)inCurve;
     graphView.outCurve = (KKEasingCurve)outCurve;
     graphView.midHoldEffect = (KKHoldEffect)midHold;
+    graphView.inIntensity = inIntensity;
+    graphView.outIntensity = outIntensity;
     graphView.selectedSection = (KKTimingGraphSection)selectedSection;
 
     __weak typeof(self) weakSelf = self;
@@ -746,6 +807,14 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     graphView.onMidHoldEffectChanged = ^(KKHoldEffect effect) {
       [weakSelf timingGraphSetIntValue:(int)effect
                           forParameter:kKKParamMidHoldEffect];
+    };
+    graphView.onInIntensityChanged = ^(double intensity) {
+      [weakSelf timingGraphSetFloatValue:intensity
+                            forParameter:kKKParamAnimateInIntensity];
+    };
+    graphView.onOutIntensityChanged = ^(double intensity) {
+      [weakSelf timingGraphSetFloatValue:intensity
+                            forParameter:kKKParamAnimateOutIntensity];
     };
 
     _timingGraph = graphView;
@@ -808,6 +877,13 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
   [paramGetAPI getIntValue:&midHold
              fromParameter:kKKParamMidHoldEffect
                     atTime:t];
+  double inIntensity = 0.5, outIntensity = 0.5;
+  [paramGetAPI getFloatValue:&inIntensity
+               fromParameter:kKKParamAnimateInIntensity
+                      atTime:t];
+  [paramGetAPI getFloatValue:&outIntensity
+               fromParameter:kKKParamAnimateOutIntensity
+                      atTime:t];
   [actionAPI endAction:self];
 
   _timingGraph.inEnabled = animIn;
@@ -815,6 +891,8 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
   _timingGraph.inCurve = (KKEasingCurve)inCurve;
   _timingGraph.outCurve = (KKEasingCurve)outCurve;
   _timingGraph.midHoldEffect = (KKHoldEffect)midHold;
+  _timingGraph.inIntensity = inIntensity;
+  _timingGraph.outIntensity = outIntensity;
   _timingGraph.selectedSection = (KKTimingGraphSection)sel;
 }
 
@@ -896,6 +974,17 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
   [self timingGraphApplyState];
 }
 
+- (void)timingGraphSetFloatValue:(double)value forParameter:(UInt32)paramID {
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  [setAPI setFloatValue:value toParameter:paramID atTime:[actAPI currentTime]];
+  [actAPI endAction:self];
+  [self timingGraphApplyState];
+}
+
 - (void)updateTimingParameterVisibility {
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
@@ -942,6 +1031,7 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
   [paramSetAPI setParameterFlags:flagIn toParameter:kKKParamAnimateInDuration];
   [paramSetAPI setParameterFlags:flagIn
                      toParameter:kKKParamAnimateInInterpolation];
+  [paramSetAPI setParameterFlags:flagIn toParameter:kKKParamAnimateInIntensity];
 
   BOOL showOut = expandedTiming && sel == KKTimingGraphSectionOut && animateOut;
   FxParameterFlags flagOut =
@@ -950,6 +1040,8 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
                      toParameter:kKKParamAnimateOutDuration];
   [paramSetAPI setParameterFlags:flagOut
                      toParameter:kKKParamAnimateOutInterpolation];
+  [paramSetAPI setParameterFlags:flagOut
+                     toParameter:kKKParamAnimateOutIntensity];
 
   BOOL showMid = expandedTiming && sel == KKTimingGraphSectionMid;
   FxParameterFlags flagMid =
