@@ -52,20 +52,25 @@ static double KKEaseInOut(double t, double intensity) {
   return power * (1.0 - blend) + back * blend;
 }
 
-static double KKEaseOutElastic(double t, double intensity) {
+static double KKEaseOutElastic(double t, double intensity, double frequency) {
   if (t <= 0.0)
     return 0.0;
   if (t >= 1.0)
     return 1.0;
   double amplitude = 0.5 + intensity * 0.5;
-  double period = 0.45 - intensity * 0.15;
+  double basePeriod = 0.45 - intensity * 0.15;
+  double period =
+      basePeriod * (1.5 - frequency); // more frequency = shorter period
+  if (period < 0.05)
+    period = 0.05;
   return amplitude * pow(2.0, -10.0 * t) *
              sin((t - period / 4.0) * (2.0 * M_PI) / period) +
          1.0;
 }
 
-static double KKEaseOutBounce(double t, double intensity) {
-  double n = 2.0 + intensity * 1.5;
+static double KKEaseOutBounce(double t, double intensity, double frequency) {
+  double n =
+      2.0 + intensity * 1.5 + frequency * 3.0; // more frequency = more bounces
   double n2 = n * n;
   double offset4 = (2.5 + n) / (2.0 * n);
   double h4 = 1.0 - (n - 2.5) * (n - 2.5) / 4.0;
@@ -83,7 +88,8 @@ static double KKEaseOutBounce(double t, double intensity) {
   return n2 * t * t + h4;
 }
 
-double KKApplyEasing(double raw, KKEasingCurve curve, double intensity) {
+double KKApplyEasing(double raw, KKEasingCurve curve, double intensity,
+                     double frequency) {
   switch (curve) {
   case KKEasingCurveEaseIn:
     return KKEaseIn(raw, intensity);
@@ -92,31 +98,68 @@ double KKApplyEasing(double raw, KKEasingCurve curve, double intensity) {
   case KKEasingCurveEaseInOut:
     return KKEaseInOut(raw, intensity);
   case KKEasingCurveElastic:
-    return KKEaseOutElastic(raw, intensity);
+    return KKEaseOutElastic(raw, intensity, frequency);
   case KKEasingCurveBounce:
-    return KKEaseOutBounce(raw, intensity);
+    return KKEaseOutBounce(raw, intensity, frequency);
   default:
     return KKEaseOut(raw, intensity);
   }
 }
 
-static double KKHoldBounce(double t) {
-  return 1.0 + 0.15 * sin(t * M_PI * 4.0) * sin(t * M_PI);
+// Derive a pseudo-random double from a seed and index.
+static double KKSeedHash(int seed, int idx) {
+  unsigned v = (unsigned)(seed * 2654435761u + idx * 2246822519u);
+  v ^= v >> 16;
+  v *= 0x45d9f3b;
+  v ^= v >> 16;
+  return (double)(v & 0xFFFF) / 65535.0;
 }
 
-static double KKHoldWiggle(double t) {
+double KKSeedSign(int seed, int index) {
+  if (seed == 0)
+    return 1.0;
+  return (KKSeedHash(seed, index + 100) > 0.5) ? 1.0 : -1.0;
+}
+
+static double KKHoldBounce(double t, double frequency, int seed) {
+  double freq = 2.0 + frequency * 6.0;
+  double phase = (seed != 0) ? KKSeedHash(seed, 0) * M_PI * 2.0 : 0.0;
+  return 1.0 + 0.15 * sin(t * M_PI * freq + phase) * sin(t * M_PI);
+}
+
+static double KKHoldWiggle(double t, double frequency, int seed) {
+  double fScale = 0.5 + frequency * 1.5;
   double envelope = sin(t * M_PI);
-  double noise = sin(t * 17.0) * 0.4 + sin(t * 31.0) * 0.3 +
-                 sin(t * 59.0) * 0.2 + sin(t * 97.0) * 0.1;
+  double f0 = 17.0, f1 = 31.0, f2 = 59.0, f3 = 97.0;
+  double p0 = 0, p1 = 0, p2 = 0, p3 = 0;
+  if (seed != 0) {
+    f0 = 13.0 + KKSeedHash(seed, 0) * 10.0;
+    f1 = 27.0 + KKSeedHash(seed, 1) * 12.0;
+    f2 = 47.0 + KKSeedHash(seed, 2) * 24.0;
+    f3 = 79.0 + KKSeedHash(seed, 3) * 36.0;
+    p0 = KKSeedHash(seed, 4) * M_PI * 2.0;
+    p1 = KKSeedHash(seed, 5) * M_PI * 2.0;
+    p2 = KKSeedHash(seed, 6) * M_PI * 2.0;
+    p3 = KKSeedHash(seed, 7) * M_PI * 2.0;
+  }
+  double noise =
+      sin(t * f0 * fScale + p0) * 0.4 + sin(t * f1 * fScale + p1) * 0.3 +
+      sin(t * f2 * fScale + p2) * 0.2 + sin(t * f3 * fScale + p3) * 0.1;
   return 1.0 + 0.08 * noise * envelope;
 }
 
-double KKApplyHoldEffect(double t, KKHoldEffect effect) {
+double KKApplyHoldEffect(double t, KKHoldEffect effect, double intensity,
+                         double frequency, int seed) {
+  double scale = 0.5 + intensity * 1.5; // 0.5 at min, 2.0 at max
   switch (effect) {
-  case KKHoldEffectBounce:
-    return KKHoldBounce(t);
-  case KKHoldEffectWiggle:
-    return KKHoldWiggle(t);
+  case KKHoldEffectBounce: {
+    double raw = KKHoldBounce(t, frequency, seed);
+    return 1.0 + (raw - 1.0) * scale;
+  }
+  case KKHoldEffectWiggle: {
+    double raw = KKHoldWiggle(t, frequency, seed);
+    return 1.0 + (raw - 1.0) * scale;
+  }
   case KKHoldEffectNone:
   default:
     return 1.0;

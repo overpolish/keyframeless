@@ -26,5 +26,10 @@ static const UInt32 kKKParamTimingSelectedSection __attribute__((unused)) = 9909
 static const UInt32 kKKParamMidHoldEffect __attribute__((unused)) = 9910;
 static const UInt32 kKKParamAnimateInIntensity __attribute__((unused)) = 9911;
 static const UInt32 kKKParamAnimateOutIntensity __attribute__((unused)) = 9912;
+static const UInt32 kKKParamMidHoldIntensity __attribute__((unused)) = 9913;
+static const UInt32 kKKParamAnimateInFrequency __attribute__((unused)) = 9914;
+static const UInt32 kKKParamAnimateOutFrequency __attribute__((unused)) = 9915;
+static const UInt32 kKKParamMidHoldFrequency __attribute__((unused)) = 9916;
+static const UInt32 kKKParamMidHoldSeed __attribute__((unused)) = 9917;
 
 static const UInt32 kKKParamUpdateBanner __attribute__((unused)) = 9990;

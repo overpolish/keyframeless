@@ -7,6 +7,7 @@
 #import "Plugin_Private.h"
 #import "ShaderTypes.h"
 #import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/KKEasing.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 
 #pragma clang diagnostic push
@@ -261,13 +262,26 @@
   static const double kHoldTranslateAmount = 0.08;
   static const double kHoldRotationDegrees = 20.0;
 
+  int midSeed = 0;
+  [paramGetAPI getIntValue:&midSeed
+             fromParameter:kKKParamMidHoldSeed
+                    atTime:renderTime];
+
   double midF = timing.midPhase.factor;
   double midD = midF - 1.0;
-  params.translate.x += (float)(midD * kHoldTranslateAmount);
-  params.translate.y += (float)(midD * kHoldTranslateAmount);
-  params.rotation += (float)(midD * kHoldRotationDegrees * (M_PI / 180.0));
-  params.scaleX *= (float)midF;
-  params.scaleY *= (float)midF;
+  double signTX = KKSeedSign(midSeed, 0);
+  double signTY = KKSeedSign(midSeed, 1);
+  double signRot = KKSeedSign(midSeed, 2);
+  double signSX = KKSeedSign(midSeed, 3);
+  double signSY = KKSeedSign(midSeed, 4);
+  params.translate.x += (float)(midD * kHoldTranslateAmount * signTX);
+  params.translate.y += (float)(midD * kHoldTranslateAmount * signTY);
+  params.rotation +=
+      (float)(midD * kHoldRotationDegrees * (M_PI / 180.0) * signRot);
+  double sxD = midD * signSX;
+  double syD = midD * signSY;
+  params.scaleX *= (float)(1.0 + sxD);
+  params.scaleY *= (float)(1.0 + syD);
   params.opacity = (float)fmax(0.0, fmin(1.0, (double)params.opacity * midF));
 
   BOOL rotateWithMotion = NO;
