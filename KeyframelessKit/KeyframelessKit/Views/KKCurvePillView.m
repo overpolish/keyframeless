@@ -113,6 +113,10 @@ static const NSInteger kSegments = 60;
   [path stroke];
 }
 
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+  return YES;
+}
+
 - (void)mouseDown:(NSEvent *)event {
   NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
   for (NSInteger i = 0; i < _pillCount; i++) {
