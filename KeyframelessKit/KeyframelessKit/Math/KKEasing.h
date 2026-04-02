@@ -8,14 +8,15 @@
 #import <Foundation/Foundation.h>
 
 typedef NS_ENUM(NSInteger, KKEasingCurve) {
-  KKEasingCurveEaseIn = 0,
-  KKEasingCurveEaseOut = 1,
-  KKEasingCurveEaseInOut = 2,
-  KKEasingCurveElastic = 3,
-  KKEasingCurveBounce = 4,
+  KKEasingCurveLinear = 0,
+  KKEasingCurveEaseIn = 1,
+  KKEasingCurveEaseOut = 2,
+  KKEasingCurveEaseInOut = 3,
+  KKEasingCurveElastic = 4,
+  KKEasingCurveBounce = 5,
 };
 
-static const NSInteger KKEasingCurveCount __attribute__((unused)) = 5;
+static const NSInteger KKEasingCurveCount __attribute__((unused)) = 6;
 
 typedef NS_ENUM(NSInteger, KKHoldEffect) {
   KKHoldEffectNone = 0,
