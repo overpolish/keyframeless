@@ -202,6 +202,23 @@
                           parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
+  UInt32 holdProps[] = {kParamHoldPositionX, kParamHoldPositionY,
+                        kParamHoldScaleX,    kParamHoldScaleY,
+                        kParamHoldRotationZ, kParamHoldRotationX,
+                        kParamHoldRotationY, kParamHoldOpacity};
+  NSString *holdNames[] = {@"Hold Pos X",      @"Hold Pos Y",
+                           @"Hold Scale X",    @"Hold Scale Y",
+                           @"Hold Rotation",   @"Hold Rotation X",
+                           @"Hold Rotation Y", @"Hold Opacity"};
+  BOOL holdDefaults[] = {YES, YES, YES, YES, YES, NO, NO, NO};
+  for (int i = 0; i < 8; i++) {
+    if (![paramAPI addToggleButtonWithName:holdNames[i]
+                               parameterID:holdProps[i]
+                              defaultValue:holdDefaults[i]
+                            parameterFlags:kFxParameterFlag_HIDDEN])
+      return NO;
+  }
+
   if (![self addPointSectionWithName:@"Point A"
                                group:kGroupA
                             defaultX:0.5

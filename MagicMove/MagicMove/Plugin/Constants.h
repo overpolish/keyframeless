@@ -73,6 +73,14 @@ static const UInt32 kParamPathBA = 406;
 
 // Global (501–600)
 static const UInt32 kParamRotateWithMotion = 501;
+static const UInt32 kParamHoldPositionX = 502;
+static const UInt32 kParamHoldPositionY = 503;
+static const UInt32 kParamHoldScaleX = 504;
+static const UInt32 kParamHoldScaleY = 505;
+static const UInt32 kParamHoldRotationZ = 506;
+static const UInt32 kParamHoldRotationX = 507;
+static const UInt32 kParamHoldRotationY = 508;
+static const UInt32 kParamHoldOpacity = 509;
 
 // Alerts & Info (9000+)
 static const UInt32 kParamForceShowAlerts = 9000;

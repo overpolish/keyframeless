@@ -31,6 +31,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKOSCLabel.h>
 #import <KeyframelessKit/KKOnScreenControl+CoordinateSpace.h>
 #import <KeyframelessKit/KKParameterRowView.h>
+#import <KeyframelessKit/KKPillToggleRowView.h>
 #import <KeyframelessKit/KKPlugin.h>
 #import <KeyframelessKit/KKPointOSC.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
