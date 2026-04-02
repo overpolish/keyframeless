@@ -6,6 +6,7 @@
 #pragma once
 
 #import "../Math/KKEasing.h"
+#import "KKTimingSlot.h"
 #import <AppKit/AppKit.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -20,6 +21,8 @@ typedef NS_ENUM(NSInteger, KKTimingGraphSection) {
 
 @property(nonatomic) BOOL inEnabled;
 @property(nonatomic) BOOL outEnabled;
+@property(nonatomic) double inDuration;
+@property(nonatomic) double outDuration;
 @property(nonatomic) KKEasingCurve inCurve;
 @property(nonatomic) KKEasingCurve outCurve;
 @property(nonatomic) KKHoldEffect midHoldEffect;
@@ -55,6 +58,15 @@ typedef NS_ENUM(NSInteger, KKTimingGraphSection) {
 @property(nonatomic, copy, nullable) void (^onMidFrequencyChanged)
     (double frequency);
 @property(nonatomic, copy, nullable) void (^onMidSeedChanged)(int seed);
+@property(nonatomic, copy, nullable) void (^onInDurationChanged)
+    (double duration);
+@property(nonatomic, copy, nullable) void (^onOutDurationChanged)
+    (double duration);
+
+@property(nonatomic, copy, nullable) NSArray<KKTimingSlot *> *globalSlots;
+@property(nonatomic, copy, nullable) NSArray<KKTimingSlot *> *inSectionSlots;
+@property(nonatomic, copy, nullable) NSArray<KKTimingSlot *> *midSectionSlots;
+@property(nonatomic, copy, nullable) NSArray<KKTimingSlot *> *outSectionSlots;
 
 @end
 

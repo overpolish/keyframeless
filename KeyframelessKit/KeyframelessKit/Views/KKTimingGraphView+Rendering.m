@@ -6,21 +6,24 @@
 #import "../Math/KKEasing.h"
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
+#import "KKCurvePillView.h"
 #import "KKSliderView.h"
 #import "KKTimingGraphView_Private.h"
 #import <AppKit/AppKit.h>
 
-static const CGFloat kGraphHeight = 60.0;
-static const CGFloat kLabelRowHeight = 20.0;
-static const CGFloat kTickHeight = 16.0;
-static const CGFloat kTickWidth = 22.0;
 static const CGFloat kCurvePadding = KKPaddingLG;
-static const NSInteger kCurveSegments = 40;
-static const NSInteger kTickSegments = 16;
+static const NSInteger kCurveSegments = 100;
 static const NSInteger kGridRows = 4;
-static const CGFloat kCheckboxSize = 12.0;
-static const NSInteger kIntensityTickCount = 5;
-static const NSInteger kFrequencyTickCount = 5;
+static const double kTickEpsilon = 0.01;
+
+static NSInteger KKExactTickIndex(double value, NSInteger tickCount) {
+  for (NSInteger i = 0; i < tickCount; i++) {
+    double tickVal = (double)i / (double)(tickCount - 1);
+    if (fabs(value - tickVal) < kTickEpsilon)
+      return i;
+  }
+  return -1;
+}
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
@@ -248,63 +251,145 @@ static const NSInteger kFrequencyTickCount = 5;
   }
 }
 
-- (void)renderTicksToImageView:(NSImageView *)imageView
-                     tickCount:(NSInteger)tickCount
-                   activeIndex:(NSInteger)activeIndex
-                    valueBlock:
-                        (CGFloat (^)(NSInteger tickIndex, CGFloat t))block {
-  CGFloat inset = KKInspectorHorizontalInset;
-  CGFloat tickPad = kTickWidth / 2.0;
-  CGFloat tickAreaWidth = NSWidth(self.bounds) - 2 * inset;
+- (void)renderCurvePills {
+  BOOL isMid = self.selectedSection == KKTimingGraphSectionMid;
+  BOOL isOut = self.selectedSection == KKTimingGraphSectionOut;
+
+  __weak typeof(self) weakSelf = self;
+  self.curvePillView.valueBlock = ^CGFloat(NSInteger idx, CGFloat t) {
+    __strong typeof(weakSelf) s = weakSelf;
+    if (!s)
+      return t;
+    if (isMid)
+      return KKApplyHoldEffect(t, (KKHoldEffect)idx, s.midIntensity,
+                               s.midFrequency, s.midSeed);
+    double inten = isOut ? s.outIntensity : s.inIntensity;
+    double freq = isOut ? s.outFrequency : s.inFrequency;
+    KKEasingCurve curve = (KKEasingCurve)idx;
+    return isOut ? KKApplyEasing(1.0 - t, curve, inten, freq)
+                 : KKApplyEasing(t, curve, inten, freq);
+  };
+  [self.curvePillView redraw];
+}
+
+- (void)renderDurationTicks {
+  static NSString *const labels[] = {@"0s", @"1.0s", @"2.0s"};
+  static const double values[] = {0.0, 1.0, 2.0};
+  static const NSInteger count = 3;
+
+  CGFloat tickAreaWidth = NSWidth(self.durationTickImageView.bounds);
   if (tickAreaWidth < 1)
     return;
+
+  NSImage *image = [[NSImage alloc]
+      initWithSize:NSMakeSize(tickAreaWidth, kDurationTickHeight)];
+  [image lockFocus];
+
+  double currentVal = self.durationSlider.doubleValue;
+  NSInteger exact = -1;
+  for (NSInteger i = 0; i < count; i++) {
+    if (fabs(currentVal - values[i]) < kTickEpsilon) {
+      exact = i;
+      break;
+    }
+  }
+
+  for (NSInteger i = 0; i < count; i++) {
+    CGFloat frac = (CGFloat)i / (CGFloat)(count - 1);
+    CGFloat centerX = frac * tickAreaWidth;
+    BOOL active = (i == exact);
+
+    NSDictionary *attrs = @{
+      NSFontAttributeName : [NSFont systemFontOfSize:8.0
+                                              weight:NSFontWeightMedium],
+      NSForegroundColorAttributeName : active
+          ? [NSColor accentMatchingHost]
+          : [[NSColor inspectorLabel] colorWithAlphaComponent:0.35],
+    };
+    NSSize labelSize = [labels[i] sizeWithAttributes:attrs];
+    CGFloat labelX = centerX - labelSize.width / 2.0;
+    labelX = MAX(0, MIN(labelX, tickAreaWidth - labelSize.width));
+    CGFloat labelY = (kDurationTickHeight - labelSize.height) / 2.0;
+    [labels[i] drawAtPoint:NSMakePoint(labelX, labelY) withAttributes:attrs];
+  }
+
+  [image unlockFocus];
+  self.durationTickImageView.image = image;
+}
+
+- (void)renderHalfWidthTicksToImageView:(NSImageView *)imageView
+                              tickCount:(NSInteger)tickCount
+                            activeIndex:(NSInteger)activeIndex
+                            activeColor:(NSColor *)activeColor
+                             valueBlock:(CGFloat (^)(NSInteger tickIndex,
+                                                     CGFloat t))block {
+  CGFloat tickAreaWidth = NSWidth(imageView.bounds);
+  if (tickAreaWidth < 1)
+    return;
+
+  static const CGFloat kHalfTickWidth = 18.0;
+  static const NSInteger kTickSegments = 60;
 
   NSImage *image =
       [[NSImage alloc] initWithSize:NSMakeSize(tickAreaWidth, kTickHeight)];
   [image lockFocus];
 
-  CGFloat sliderWidth = tickAreaWidth - 2 * tickPad;
-  CGFloat knobInset = 9.5 / 2.0;
-  CGFloat usableWidth = sliderWidth - 2 * knobInset;
+  CGFloat tickPad = kHalfTickWidth / 2.0;
+  CGFloat usableWidth = tickAreaWidth - 2 * tickPad;
 
   for (NSInteger i = 0; i < tickCount; i++) {
     CGFloat frac =
         (tickCount > 1) ? (CGFloat)i / (CGFloat)(tickCount - 1) : 0.5;
-    CGFloat centerX = tickPad + knobInset + frac * usableWidth;
-    NSRect tickRect =
-        NSMakeRect(centerX - kTickWidth / 2.0, 0, kTickWidth, kTickHeight);
-    [self renderTickInRect:tickRect
-                    active:(i == activeIndex)
-                     value:^CGFloat(CGFloat t) {
-                       return block(i, t);
-                     }];
+    CGFloat centerX = tickPad + frac * usableWidth;
+    NSRect tickRect = NSMakeRect(centerX - kHalfTickWidth / 2.0, 0,
+                                 kHalfTickWidth, kTickHeight);
+    BOOL active = (i == activeIndex);
+
+    NSColor *color =
+        active ? activeColor
+               : [[NSColor inspectorLabel] colorWithAlphaComponent:0.35];
+    [color setStroke];
+
+    CGFloat pad = 2.0;
+    CGFloat x0 = NSMinX(tickRect) + pad;
+    CGFloat x1 = NSMaxX(tickRect) - pad;
+    CGFloat yBot = NSMinY(tickRect) + pad;
+    CGFloat yTop = NSMaxY(tickRect) - pad;
+    CGFloat w = x1 - x0;
+    CGFloat h = yTop - yBot;
+
+    CGFloat minVal = 0.0, maxVal = 1.0;
+    for (NSInteger j = 0; j <= kTickSegments; j++) {
+      CGFloat t = (CGFloat)j / (CGFloat)kTickSegments;
+      CGFloat v = block(i, t);
+      if (v < minVal)
+        minVal = v;
+      if (v > maxVal)
+        maxVal = v;
+    }
+    CGFloat range = maxVal - minVal;
+
+    NSBezierPath *path = [NSBezierPath bezierPath];
+    path.lineWidth = active ? 1.5 : 1.0;
+
+    for (NSInteger j = 0; j <= kTickSegments; j++) {
+      CGFloat t = (CGFloat)j / (CGFloat)kTickSegments;
+      CGFloat v = block(i, t);
+      CGFloat normalized = (range > 0) ? (v - minVal) / range : 0.5;
+      CGFloat px = x0 + t * w;
+      CGFloat py = yBot + normalized * h;
+
+      if (j == 0)
+        [path moveToPoint:NSMakePoint(px, py)];
+      else
+        [path lineToPoint:NSMakePoint(px, py)];
+    }
+
+    [path stroke];
   }
 
   [image unlockFocus];
   imageView.image = image;
-}
-
-- (void)renderTicks {
-  BOOL isMid = self.selectedSection == KKTimingGraphSectionMid;
-  BOOL isOut = self.selectedSection == KKTimingGraphSectionOut;
-  NSInteger tickCount = isMid ? KKHoldEffectCount : KKEasingCurveCount;
-  NSInteger activeVal = lround(self.curveSlider.doubleValue);
-
-  [self
-      renderTicksToImageView:self.tickImageView
-                   tickCount:tickCount
-                 activeIndex:activeVal
-                  valueBlock:^CGFloat(NSInteger idx, CGFloat t) {
-                    if (isMid)
-                      return KKApplyHoldEffect(t, (KKHoldEffect)idx,
-                                               self.midIntensity,
-                                               self.midFrequency, self.midSeed);
-                    double inten = isOut ? self.outIntensity : self.inIntensity;
-                    double freq = isOut ? self.outFrequency : self.inFrequency;
-                    KKEasingCurve curve = (KKEasingCurve)idx;
-                    return isOut ? KKApplyEasing(1.0 - t, curve, inten, freq)
-                                 : KKApplyEasing(t, curve, inten, freq);
-                  }];
 }
 
 - (void)renderIntensityTicks {
@@ -317,33 +402,39 @@ static const NSInteger kFrequencyTickCount = 5;
     currentIntensity = self.outIntensity;
   else
     currentIntensity = self.inIntensity;
-  NSInteger nearest = lround(currentIntensity * (kIntensityTickCount - 1));
+  NSInteger exact = KKExactTickIndex(currentIntensity, kIntensityTickCount);
 
   if (isMid) {
     KKHoldEffect effect = self.midHoldEffect;
-    [self renderTicksToImageView:self.intensityTickImageView
-                       tickCount:kIntensityTickCount
-                     activeIndex:nearest
-                      valueBlock:^CGFloat(NSInteger idx, CGFloat t) {
-                        double inten =
-                            (double)idx / (double)(kIntensityTickCount - 1);
-                        return KKApplyHoldEffect(
-                            t, effect, inten, self.midFrequency, self.midSeed);
-                      }];
+    [self renderHalfWidthTicksToImageView:self.intensityTickImageView
+                                tickCount:kIntensityTickCount
+                              activeIndex:exact
+                              activeColor:[NSColor accentMatchingHost]
+                               valueBlock:^CGFloat(NSInteger idx, CGFloat t) {
+                                 double inten =
+                                     (double)idx /
+                                     (double)(kIntensityTickCount - 1);
+                                 return KKApplyHoldEffect(t, effect, inten,
+                                                          self.midFrequency,
+                                                          self.midSeed);
+                               }];
   } else {
     KKEasingCurve curve = isOut ? self.outCurve : self.inCurve;
-    [self renderTicksToImageView:self.intensityTickImageView
-                       tickCount:kIntensityTickCount
-                     activeIndex:nearest
-                      valueBlock:^CGFloat(NSInteger idx, CGFloat t) {
-                        double inten =
-                            (double)idx / (double)(kIntensityTickCount - 1);
-                        double freq =
-                            isOut ? self.outFrequency : self.inFrequency;
-                        return isOut
-                                   ? KKApplyEasing(1.0 - t, curve, inten, freq)
-                                   : KKApplyEasing(t, curve, inten, freq);
-                      }];
+    [self renderHalfWidthTicksToImageView:self.intensityTickImageView
+                                tickCount:kIntensityTickCount
+                              activeIndex:exact
+                              activeColor:[NSColor accentMatchingHost]
+                               valueBlock:^CGFloat(NSInteger idx, CGFloat t) {
+                                 double inten =
+                                     (double)idx /
+                                     (double)(kIntensityTickCount - 1);
+                                 double freq = isOut ? self.outFrequency
+                                                     : self.inFrequency;
+                                 return isOut ? KKApplyEasing(1.0 - t, curve,
+                                                              inten, freq)
+                                              : KKApplyEasing(t, curve, inten,
+                                                              freq);
+                               }];
   }
 }
 
@@ -357,80 +448,39 @@ static const NSInteger kFrequencyTickCount = 5;
     currentFrequency = self.outFrequency;
   else
     currentFrequency = self.inFrequency;
-  NSInteger nearest = lround(currentFrequency * (kFrequencyTickCount - 1));
+  NSInteger exact = KKExactTickIndex(currentFrequency, kFrequencyTickCount);
 
   if (isMid) {
     KKHoldEffect effect = self.midHoldEffect;
     double inten = self.midIntensity;
-    [self renderTicksToImageView:self.frequencyTickImageView
-                       tickCount:kFrequencyTickCount
-                     activeIndex:nearest
-                      valueBlock:^CGFloat(NSInteger idx, CGFloat t) {
-                        double freq =
-                            (double)idx / (double)(kFrequencyTickCount - 1);
-                        return KKApplyHoldEffect(t, effect, inten, freq,
-                                                 self.midSeed);
-                      }];
+    [self renderHalfWidthTicksToImageView:self.frequencyTickImageView
+                                tickCount:kFrequencyTickCount
+                              activeIndex:exact
+                              activeColor:[NSColor warning]
+                               valueBlock:^CGFloat(NSInteger idx, CGFloat t) {
+                                 double freq =
+                                     (double)idx /
+                                     (double)(kFrequencyTickCount - 1);
+                                 return KKApplyHoldEffect(t, effect, inten,
+                                                          freq, self.midSeed);
+                               }];
   } else {
     KKEasingCurve curve = isOut ? self.outCurve : self.inCurve;
     double inten = isOut ? self.outIntensity : self.inIntensity;
-    [self renderTicksToImageView:self.frequencyTickImageView
-                       tickCount:kFrequencyTickCount
-                     activeIndex:nearest
-                      valueBlock:^CGFloat(NSInteger idx, CGFloat t) {
-                        double freq =
-                            (double)idx / (double)(kFrequencyTickCount - 1);
-                        return isOut
-                                   ? KKApplyEasing(1.0 - t, curve, inten, freq)
-                                   : KKApplyEasing(t, curve, inten, freq);
-                      }];
+    [self renderHalfWidthTicksToImageView:self.frequencyTickImageView
+                                tickCount:kFrequencyTickCount
+                              activeIndex:exact
+                              activeColor:[NSColor warning]
+                               valueBlock:^CGFloat(NSInteger idx, CGFloat t) {
+                                 double freq =
+                                     (double)idx /
+                                     (double)(kFrequencyTickCount - 1);
+                                 return isOut ? KKApplyEasing(1.0 - t, curve,
+                                                              inten, freq)
+                                              : KKApplyEasing(t, curve, inten,
+                                                              freq);
+                               }];
   }
-}
-
-- (void)renderTickInRect:(NSRect)rect
-                  active:(BOOL)active
-                   value:(CGFloat (^)(CGFloat t))value {
-  NSColor *color =
-      active ? [NSColor accentMatchingHost]
-             : [[NSColor inspectorLabel] colorWithAlphaComponent:0.35];
-  [color setStroke];
-
-  CGFloat pad = 2.0;
-  CGFloat x0 = NSMinX(rect) + pad;
-  CGFloat x1 = NSMaxX(rect) - pad;
-  CGFloat yBot = NSMinY(rect) + pad;
-  CGFloat yTop = NSMaxY(rect) - pad;
-  CGFloat w = x1 - x0;
-
-  CGFloat minVal = 0.0, maxVal = 1.0;
-  for (NSInteger i = 0; i <= kTickSegments; i++) {
-    CGFloat t = (CGFloat)i / (CGFloat)kTickSegments;
-    CGFloat v = value(t);
-    if (v < minVal)
-      minVal = v;
-    if (v > maxVal)
-      maxVal = v;
-  }
-  CGFloat range = maxVal - minVal;
-  CGFloat h = yTop - yBot;
-
-  NSBezierPath *path = [NSBezierPath bezierPath];
-  path.lineWidth = active ? 1.5 : 1.0;
-
-  for (NSInteger i = 0; i <= kTickSegments; i++) {
-    CGFloat t = (CGFloat)i / (CGFloat)kTickSegments;
-    CGFloat v = value(t);
-    CGFloat normalized = (range > 0) ? (v - minVal) / range : 0.5;
-    CGFloat px = x0 + t * w;
-    CGFloat py = yBot + normalized * h;
-
-    if (i == 0)
-      [path moveToPoint:NSMakePoint(px, py)];
-    else
-      [path lineToPoint:NSMakePoint(px, py)];
-  }
-
-  [path stroke];
 }
 
 @end

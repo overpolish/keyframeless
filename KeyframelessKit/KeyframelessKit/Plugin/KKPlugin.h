@@ -12,6 +12,7 @@
 #import <Metal/Metal.h>
 
 @class FxImageTile;
+@class KKTimingSlot;
 @class NSBezierPath;
 @protocol PROAPIAccessing;
 @protocol FxParameterCreationAPI_v5;
@@ -108,6 +109,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// state. Call from updateParameterVisibilityAtTime: in subclasses that use
 /// animation.
 - (void)updateTimingParameterVisibility;
+
+/// Override in subclasses to provide custom views that appear above the
+/// duration slider, always visible when the timing group is expanded.
+/// Build views using KK components (KKCheckboxView, KKSliderView, etc.)
+/// and return them wrapped in KKTimingSlot objects with applyState blocks.
+- (NSArray<KKTimingSlot *> *)timingGlobalSlots;
+
+/// Override in subclasses to provide custom views that appear below the
+/// graph, changing based on the selected section (0=In, 1=Mid, 2=Out).
+- (NSArray<KKTimingSlot *> *)timingSlotsForSection:(NSInteger)section;
 
 /// Reads the bool at forceShowParamID; if YES, sets every param in paramIDs
 /// to kFxParameterFlag_DEFAULT and returns YES.  Caller should early-return

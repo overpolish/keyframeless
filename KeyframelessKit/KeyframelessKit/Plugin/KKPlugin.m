@@ -4,6 +4,7 @@
  */
 
 #import "../Update/KKUpdateChecker.h"
+#import "../Views/KKTimingSlot.h"
 #import "KKHostInfo.h"
 #import "KKPlugin_Private.h"
 #import <AppKit/AppKit.h>
@@ -187,6 +188,14 @@
                        toParameter:paramID.unsignedIntValue];
   }
   return YES;
+}
+
+- (NSArray<KKTimingSlot *> *)timingGlobalSlots {
+  return @[];
+}
+
+- (NSArray<KKTimingSlot *> *)timingSlotsForSection:(NSInteger)section {
+  return @[];
 }
 
 @end
