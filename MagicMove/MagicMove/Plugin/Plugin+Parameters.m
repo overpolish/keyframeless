@@ -202,8 +202,6 @@
                           parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
-  self.timingGroupExtraParamIDs = @[ @(kParamRotateWithMotion) ];
-
   if (![self addPointSectionWithName:@"Point A"
                                group:kGroupA
                             defaultX:0.5

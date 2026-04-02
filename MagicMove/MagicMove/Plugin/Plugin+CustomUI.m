@@ -67,6 +67,60 @@
 
 @implementation MagicMovePlugin (CustomUI)
 
+- (NSArray<KKTimingSlot *> *)timingGlobalSlots {
+  KKParameterRowView *row = [[KKParameterRowView alloc]
+      initWithFrame:NSMakeRect(0, 0, 300, KKInspectorRowHeight)
+         apiManager:self.apiManager
+        parameterId:kParamRotateWithMotion];
+
+  KKLabelView *label = [[KKLabelView alloc] initWithText:@"Rotate with Motion"];
+  row.leftView = label;
+
+  NSView *rightContainer = [[NSView alloc] initWithFrame:NSZeroRect];
+  KKCheckboxView *checkbox = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
+  checkbox.translatesAutoresizingMaskIntoConstraints = NO;
+  [rightContainer addSubview:checkbox];
+  [NSLayoutConstraint activateConstraints:@[
+    [checkbox.trailingAnchor
+        constraintEqualToAnchor:rightContainer.trailingAnchor
+                       constant:-23.0],
+    [checkbox.centerYAnchor
+        constraintEqualToAnchor:rightContainer.centerYAnchor],
+    [checkbox.widthAnchor constraintEqualToConstant:12.0],
+    [checkbox.heightAnchor constraintEqualToConstant:12.0],
+  ]];
+  row.rightView = rightContainer;
+
+  __weak typeof(self) weakSelf = self;
+  checkbox.onToggle = ^(BOOL isChecked) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actAPI startAction:strongSelf];
+    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [setAPI setBoolValue:isChecked
+             toParameter:kParamRotateWithMotion
+                  atTime:[actAPI currentTime]];
+    [actAPI endAction:strongSelf];
+  };
+
+  KKTimingSlot *slot = [KKTimingSlot
+      slotWithView:row
+            height:KKInspectorRowHeight
+        applyState:^(id<FxParameterRetrievalAPI_v6> paramAPI, CMTime time) {
+          BOOL val = NO;
+          [paramAPI getBoolValue:&val
+                   fromParameter:kParamRotateWithMotion
+                          atTime:time];
+          checkbox.isChecked = val;
+        }];
+
+  return @[ slot ];
+}
+
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
   if (parameterID == kParamGroupPointA) {
     NSImage *icon = [NSImage imageWithSystemSymbolName:@"circle.circle"
