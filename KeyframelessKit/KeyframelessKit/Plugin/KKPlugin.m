@@ -424,6 +424,101 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     return NO;
   }
 
+  if (![paramAPI addFloatSliderWithName:@"Hold Intensity"
+                            parameterID:kKKParamMidHoldIntensity
+                           defaultValue:0.5
+                           parameterMin:0.0
+                           parameterMax:1.0
+                              sliderMin:0.0
+                              sliderMax:1.0
+                                  delta:0.01
+                         parameterFlags:kFxParameterFlag_HIDDEN]) {
+    if (error != NULL)
+      *error = [NSError errorWithDomain:@"co.overpolish.keyframeless.error"
+                                   code:1
+                               userInfo:@{
+                                 NSLocalizedDescriptionKey :
+                                     @"Unable to add Hold Intensity slider"
+                               }];
+    return NO;
+  }
+
+  if (![paramAPI addFloatSliderWithName:@"In Frequency"
+                            parameterID:kKKParamAnimateInFrequency
+                           defaultValue:0.5
+                           parameterMin:0.0
+                           parameterMax:1.0
+                              sliderMin:0.0
+                              sliderMax:1.0
+                                  delta:0.01
+                         parameterFlags:kFxParameterFlag_HIDDEN]) {
+    if (error != NULL)
+      *error = [NSError errorWithDomain:@"co.overpolish.keyframeless.error"
+                                   code:1
+                               userInfo:@{
+                                 NSLocalizedDescriptionKey :
+                                     @"Unable to add In Frequency slider"
+                               }];
+    return NO;
+  }
+
+  if (![paramAPI addFloatSliderWithName:@"Out Frequency"
+                            parameterID:kKKParamAnimateOutFrequency
+                           defaultValue:0.5
+                           parameterMin:0.0
+                           parameterMax:1.0
+                              sliderMin:0.0
+                              sliderMax:1.0
+                                  delta:0.01
+                         parameterFlags:kFxParameterFlag_HIDDEN]) {
+    if (error != NULL)
+      *error = [NSError errorWithDomain:@"co.overpolish.keyframeless.error"
+                                   code:1
+                               userInfo:@{
+                                 NSLocalizedDescriptionKey :
+                                     @"Unable to add Out Frequency slider"
+                               }];
+    return NO;
+  }
+
+  if (![paramAPI addFloatSliderWithName:@"Hold Frequency"
+                            parameterID:kKKParamMidHoldFrequency
+                           defaultValue:0.5
+                           parameterMin:0.0
+                           parameterMax:1.0
+                              sliderMin:0.0
+                              sliderMax:1.0
+                                  delta:0.01
+                         parameterFlags:kFxParameterFlag_HIDDEN]) {
+    if (error != NULL)
+      *error = [NSError errorWithDomain:@"co.overpolish.keyframeless.error"
+                                   code:1
+                               userInfo:@{
+                                 NSLocalizedDescriptionKey :
+                                     @"Unable to add Hold Frequency slider"
+                               }];
+    return NO;
+  }
+
+  if (![paramAPI addIntSliderWithName:@"Hold Seed"
+                          parameterID:kKKParamMidHoldSeed
+                         defaultValue:0
+                         parameterMin:0
+                         parameterMax:INT_MAX
+                            sliderMin:0
+                            sliderMax:INT_MAX
+                                delta:1
+                       parameterFlags:kFxParameterFlag_HIDDEN]) {
+    if (error != NULL)
+      *error = [NSError
+          errorWithDomain:@"co.overpolish.keyframeless.error"
+                     code:1
+                 userInfo:@{
+                   NSLocalizedDescriptionKey : @"Unable to add Hold Seed slider"
+                 }];
+    return NO;
+  }
+
   return YES;
 }
 
@@ -491,9 +586,15 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
                         atTime:renderTime];
   }
 
+  double inFrequency = 0.5;
+  if (animateIn) {
+    [paramGetAPI getFloatValue:&inFrequency
+                 fromParameter:kKKParamAnimateInFrequency
+                        atTime:renderTime];
+  }
   KKEasingCurve inEasing = (KKEasingCurve)inCurve;
   KKTimingInterpolator inInterp = ^double(double t) {
-    return KKApplyEasing(t, inEasing, inIntensity);
+    return KKApplyEasing(t, inEasing, inIntensity, inFrequency);
   };
   KKTimingPhase *inPhase = [KKTimingPhase phaseWithEnabled:animateIn
                                                   duration:inDuration
@@ -510,9 +611,15 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
                         atTime:renderTime];
   }
 
+  double outFrequency = 0.5;
+  if (animateOut) {
+    [paramGetAPI getFloatValue:&outFrequency
+                 fromParameter:kKKParamAnimateOutFrequency
+                        atTime:renderTime];
+  }
   KKEasingCurve outEasing = (KKEasingCurve)outCurve;
   KKTimingInterpolator outInterp = ^double(double t) {
-    return KKApplyEasing(t, outEasing, outIntensity);
+    return KKApplyEasing(t, outEasing, outIntensity, outFrequency);
   };
   KKTimingPhase *outPhase = [KKTimingPhase phaseWithEnabled:animateOut
                                                    duration:outDuration
@@ -525,6 +632,18 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
              fromParameter:kKKParamMidHoldEffect
                     atTime:renderTime];
   KKHoldEffect midHold = (KKHoldEffect)midHoldInt;
+  double midHoldIntensity = 0.5;
+  [paramGetAPI getFloatValue:&midHoldIntensity
+               fromParameter:kKKParamMidHoldIntensity
+                      atTime:renderTime];
+  double midHoldFrequency = 0.5;
+  [paramGetAPI getFloatValue:&midHoldFrequency
+               fromParameter:kKKParamMidHoldFrequency
+                      atTime:renderTime];
+  int midHoldSeed = 0;
+  [paramGetAPI getIntValue:&midHoldSeed
+             fromParameter:kKKParamMidHoldSeed
+                    atTime:renderTime];
 
   static const double kMidOverlap = 0.3;
   double inEnd = startSec + (animateIn ? inDuration : 0);
@@ -535,7 +654,8 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
   double midProgress =
       (midDur > 0) ? MAX(0.0, MIN(1.0, (nowSec - midStart) / midDur)) : 1.0;
   KKTimingInterpolator holdInterp = ^double(double t) {
-    return KKApplyHoldEffect(t, midHold);
+    return KKApplyHoldEffect(t, midHold, midHoldIntensity, midHoldFrequency,
+                             midHoldSeed);
   };
   KKTimingPhase *midPhase = [KKTimingPhase phaseWithEnabled:YES
                                                    duration:midDur
@@ -724,7 +844,7 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
   }
 
   if (parameterID == kKKParamTimingCurvePreview) {
-    NSView *wrapper = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, 168)];
+    NSView *wrapper = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, 212)];
     wrapper.autoresizingMask = NSViewWidthSizable;
 
     KKTimingGraphView *graphView =
@@ -768,13 +888,30 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     [paramGetAPI getIntValue:&midHold
                fromParameter:kKKParamMidHoldEffect
                       atTime:now];
-    double inIntensity = 0.5, outIntensity = 0.5;
+    double inIntensity = 0.5, outIntensity = 0.5, midIntensity = 0.5;
     [paramGetAPI getFloatValue:&inIntensity
                  fromParameter:kKKParamAnimateInIntensity
                         atTime:now];
     [paramGetAPI getFloatValue:&outIntensity
                  fromParameter:kKKParamAnimateOutIntensity
                         atTime:now];
+    [paramGetAPI getFloatValue:&midIntensity
+                 fromParameter:kKKParamMidHoldIntensity
+                        atTime:now];
+    double inFrequency = 0.5, outFrequency = 0.5, midFrequency = 0.5;
+    [paramGetAPI getFloatValue:&inFrequency
+                 fromParameter:kKKParamAnimateInFrequency
+                        atTime:now];
+    [paramGetAPI getFloatValue:&outFrequency
+                 fromParameter:kKKParamAnimateOutFrequency
+                        atTime:now];
+    [paramGetAPI getFloatValue:&midFrequency
+                 fromParameter:kKKParamMidHoldFrequency
+                        atTime:now];
+    int midSeed = 0;
+    [paramGetAPI getIntValue:&midSeed
+               fromParameter:kKKParamMidHoldSeed
+                      atTime:now];
     [actionAPI endAction:self];
 
     graphView.inEnabled = animIn;
@@ -784,6 +921,11 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     graphView.midHoldEffect = (KKHoldEffect)midHold;
     graphView.inIntensity = inIntensity;
     graphView.outIntensity = outIntensity;
+    graphView.midIntensity = midIntensity;
+    graphView.inFrequency = inFrequency;
+    graphView.outFrequency = outFrequency;
+    graphView.midFrequency = midFrequency;
+    graphView.midSeed = midSeed;
     graphView.selectedSection = (KKTimingGraphSection)selectedSection;
 
     __weak typeof(self) weakSelf = self;
@@ -815,6 +957,25 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     graphView.onOutIntensityChanged = ^(double intensity) {
       [weakSelf timingGraphSetFloatValue:intensity
                             forParameter:kKKParamAnimateOutIntensity];
+    };
+    graphView.onMidIntensityChanged = ^(double intensity) {
+      [weakSelf timingGraphSetFloatValue:intensity
+                            forParameter:kKKParamMidHoldIntensity];
+    };
+    graphView.onInFrequencyChanged = ^(double frequency) {
+      [weakSelf timingGraphSetFloatValue:frequency
+                            forParameter:kKKParamAnimateInFrequency];
+    };
+    graphView.onOutFrequencyChanged = ^(double frequency) {
+      [weakSelf timingGraphSetFloatValue:frequency
+                            forParameter:kKKParamAnimateOutFrequency];
+    };
+    graphView.onMidFrequencyChanged = ^(double frequency) {
+      [weakSelf timingGraphSetFloatValue:frequency
+                            forParameter:kKKParamMidHoldFrequency];
+    };
+    graphView.onMidSeedChanged = ^(int seed) {
+      [weakSelf timingGraphSetIntValue:seed forParameter:kKKParamMidHoldSeed];
     };
 
     _timingGraph = graphView;
@@ -877,13 +1038,28 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
   [paramGetAPI getIntValue:&midHold
              fromParameter:kKKParamMidHoldEffect
                     atTime:t];
-  double inIntensity = 0.5, outIntensity = 0.5;
+  double inIntensity = 0.5, outIntensity = 0.5, midIntensity = 0.5;
   [paramGetAPI getFloatValue:&inIntensity
                fromParameter:kKKParamAnimateInIntensity
                       atTime:t];
   [paramGetAPI getFloatValue:&outIntensity
                fromParameter:kKKParamAnimateOutIntensity
                       atTime:t];
+  [paramGetAPI getFloatValue:&midIntensity
+               fromParameter:kKKParamMidHoldIntensity
+                      atTime:t];
+  double inFrequency = 0.5, outFrequency = 0.5, midFrequency = 0.5;
+  [paramGetAPI getFloatValue:&inFrequency
+               fromParameter:kKKParamAnimateInFrequency
+                      atTime:t];
+  [paramGetAPI getFloatValue:&outFrequency
+               fromParameter:kKKParamAnimateOutFrequency
+                      atTime:t];
+  [paramGetAPI getFloatValue:&midFrequency
+               fromParameter:kKKParamMidHoldFrequency
+                      atTime:t];
+  int midSeed = 0;
+  [paramGetAPI getIntValue:&midSeed fromParameter:kKKParamMidHoldSeed atTime:t];
   [actionAPI endAction:self];
 
   _timingGraph.inEnabled = animIn;
@@ -893,6 +1069,11 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
   _timingGraph.midHoldEffect = (KKHoldEffect)midHold;
   _timingGraph.inIntensity = inIntensity;
   _timingGraph.outIntensity = outIntensity;
+  _timingGraph.midIntensity = midIntensity;
+  _timingGraph.inFrequency = inFrequency;
+  _timingGraph.outFrequency = outFrequency;
+  _timingGraph.midFrequency = midFrequency;
+  _timingGraph.midSeed = midSeed;
   _timingGraph.selectedSection = (KKTimingGraphSection)sel;
 }
 
@@ -1046,6 +1227,16 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
 
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kKKParamMidHoldEffect];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kKKParamMidHoldIntensity];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kKKParamAnimateInFrequency];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kKKParamAnimateOutFrequency];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kKKParamMidHoldFrequency];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kKKParamMidHoldSeed];
 
   for (NSNumber *paramID in self.timingGroupExtraParamIDs) {
     FxParameterFlags flagTiming =
