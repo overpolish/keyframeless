@@ -47,6 +47,7 @@
     "hypot",
     "ifdef",
     "instancetype",
+    "inten",
     "interp",
     "Keyframeless",
     "keyframelesskit",
@@ -54,6 +55,7 @@
     "KKOSC",
     "KKRing",
     "lefthalf",
+    "lround",
     "Lucide",
     "magicmove",
     "malloc",
@@ -115,8 +117,10 @@
     "uturn",
     "viewport",
     "whisperkit",
+    "Wobjc",
     "xcodeproj",
     "xcworkspace",
+    "xform",
     "xmark"
   ],
   "conventionalCommits.scopes": ["MagicMove", "KeyframelessKit", "FxPlug"]
