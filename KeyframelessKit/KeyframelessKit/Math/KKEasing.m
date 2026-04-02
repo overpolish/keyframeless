@@ -57,13 +57,15 @@ static double KKEaseOutElastic(double t, double intensity, double frequency) {
     return 0.0;
   if (t >= 1.0)
     return 1.0;
-  double amplitude = 0.5 + intensity * 0.5;
-  double basePeriod = 0.45 - intensity * 0.15;
-  double period =
-      basePeriod * (1.5 - frequency); // more frequency = shorter period
+
+  // Amplitude always 1 so the curve naturally starts at 0
+  double period = 0.45 * (1.5 - frequency);
   if (period < 0.05)
     period = 0.05;
-  return amplitude * pow(2.0, -10.0 * t) *
+  // Low intensity = fast decay (subtle), high intensity = slow decay (dramatic)
+  double decay = 12.0 - intensity * 7.0;
+
+  return pow(2.0, -decay * t) *
              sin((t - period / 4.0) * (2.0 * M_PI) / period) +
          1.0;
 }
