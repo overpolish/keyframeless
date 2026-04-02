@@ -470,17 +470,8 @@ static const FxParameterFlags kCustomUIDisabled =
              fromParameter:kKKParamTimingSelectedSection
                     atTime:kCMTimeZero];
 
-  BOOL showIn = expandedTiming && sel == KKTimingGraphSectionIn && animateIn;
-  [paramSetAPI setParameterFlags:(showIn ? kFxParameterFlag_DEFAULT
-                                         : kFxParameterFlag_HIDDEN)
-                     toParameter:kKKParamAnimateInDuration];
-
-  BOOL showOut = expandedTiming && sel == KKTimingGraphSectionOut && animateOut;
-  [paramSetAPI setParameterFlags:(showOut ? kFxParameterFlag_DEFAULT
-                                          : kFxParameterFlag_HIDDEN)
-                     toParameter:kKKParamAnimateOutDuration];
-
   UInt32 alwaysHidden[] = {
+      kKKParamAnimateInDuration,       kKKParamAnimateOutDuration,
       kKKParamAnimateInInterpolation,  kKKParamAnimateInIntensity,
       kKKParamAnimateOutInterpolation, kKKParamAnimateOutIntensity,
       kKKParamMidHoldEffect,           kKKParamMidHoldIntensity,
