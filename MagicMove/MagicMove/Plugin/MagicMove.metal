@@ -86,10 +86,14 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
 
     float2 src = p + 0.5;
 
-    if (src.x < 0.0 || src.x > 1.0 || src.y < 0.0 || src.y > 1.0)
+    float2 fw = fwidth(src);
+    float edgeAA = smoothstep(0.0, fw.x, src.x) * smoothstep(0.0, fw.x, 1.0 - src.x) * smoothstep(0.0, fw.y, src.y) *
+                   smoothstep(0.0, fw.y, 1.0 - src.y);
+
+    if (edgeAA <= 0.0)
         return float4(0.0);
 
     constexpr sampler s(mag_filter::linear, min_filter::linear);
     half4 c = colorTexture.sample(s, src);
-    return float4(c) * params->opacity;
+    return float4(c) * params->opacity * edgeAA;
 }
