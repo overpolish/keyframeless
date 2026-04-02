@@ -7,7 +7,7 @@
 
 ## Version Management
 
-Each component (`motionblur`, `rounded`, `keyframelessx`) is versioned independently.
+Each component (`motionblur`, `rounded`, `magicmove`, `keyframelessx`) is versioned independently.
 
 ### Bumping a version
 

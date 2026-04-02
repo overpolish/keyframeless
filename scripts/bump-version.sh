@@ -10,6 +10,7 @@
 # Components:
 #   motionblur     MotionBlur plugin
 #   rounded        Rounded plugin
+#   magicmove      MagicMove plugin
 #   keyframelessx  Keyframeless X app
 
 set -euo pipefail
@@ -23,6 +24,7 @@ usage() {
   echo "Components:"
   echo "  motionblur     MotionBlur plugin"
   echo "  rounded        Rounded plugin"
+  echo "  magicmove      MagicMove plugin"
   echo "  keyframelessx  Keyframeless X app"
   exit 1
 }
@@ -102,6 +104,15 @@ case "$COMPONENT" in
     bump_fxplug "Rounded/Rounded/Plugin/Info.plist"
     bump_pkgproj "co.overpolish.keyframeless.Rounded"
     bump_manifest "rounded" "$VERSION"
+    ;;
+
+  magicmove)
+    echo "Bumping MagicMove to $VERSION"
+    bump_plist "MagicMove/MagicMove/Wrapper Application/Info.plist"
+    bump_plist "MagicMove/MagicMove/Plugin/Info.plist"
+    bump_fxplug "MagicMove/MagicMove/Plugin/Info.plist"
+    bump_pkgproj "co.overpolish.keyframeless.MagicMove"
+    bump_manifest "magicmove" "$VERSION"
     ;;
 
   keyframelessx)
