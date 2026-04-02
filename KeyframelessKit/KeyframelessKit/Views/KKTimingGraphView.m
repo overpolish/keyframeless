@@ -139,7 +139,7 @@ static const CGFloat kCheckboxSize = 12.0;
     _intensitySlider.maxValue = 1.0;
     _intensitySlider.doubleValue = 0.5;
     _intensitySlider.continuous = YES;
-    _intensitySlider.trackFillColor = [NSColor accent];
+    _intensitySlider.trackFillColor = [NSColor accentMatchingHost];
     _intensitySlider.hidden = YES;
     _intensitySlider.target = self;
     _intensitySlider.action = @selector(intensitySliderChanged:);
@@ -466,7 +466,8 @@ static const CGFloat kCheckboxSize = 12.0;
   BOOL selected = (section == _selectedSection);
 
   if (selected) {
-    NSColor *selColor = [[NSColor accent] colorWithAlphaComponent:0.1];
+    NSColor *selColor =
+        [[NSColor accentMatchingHost] colorWithAlphaComponent:0.1];
     [selColor setFill];
     [[NSBezierPath bezierPathWithRoundedRect:rect
                                      xRadius:KKRadiusMD
@@ -487,7 +488,7 @@ static const CGFloat kCheckboxSize = 12.0;
   }
 
   NSColor *curveColor =
-      enabled ? [NSColor accent]
+      enabled ? [NSColor accentMatchingHost]
               : [[NSColor inspectorLabel] colorWithAlphaComponent:0.3];
   [curveColor setStroke];
 
@@ -671,11 +672,27 @@ static const NSInteger kIntensityTickCount = 5;
   return NSMakeRect(centerX - kTickWidth / 2.0, tickY, kTickWidth, kTickHeight);
 }
 
+- (NSRect)intensityTickHitRectForIndex:(NSInteger)index {
+  CGFloat inset = KKInspectorHorizontalInset;
+  CGFloat tickPad = kTickWidth / 2.0;
+  CGFloat sliderWidth = NSWidth(self.bounds) - 2 * inset - 2 * tickPad;
+  CGFloat knobInset = 9.5 / 2.0;
+  CGFloat usableWidth = sliderWidth - 2 * knobInset;
+  CGFloat tickY = kGraphHeight + kLabelRowHeight + kSliderRowHeight +
+                  kTickHeight + kSliderRowHeight;
+
+  CGFloat frac = (kIntensityTickCount > 1)
+                     ? (CGFloat)index / (CGFloat)(kIntensityTickCount - 1)
+                     : 0.5;
+  CGFloat centerX = inset + tickPad + knobInset + frac * usableWidth;
+  return NSMakeRect(centerX - kTickWidth / 2.0, tickY, kTickWidth, kTickHeight);
+}
+
 - (void)renderTickInRect:(NSRect)rect
                   active:(BOOL)active
                    value:(CGFloat (^)(CGFloat t))value {
   NSColor *color =
-      active ? [NSColor accent]
+      active ? [NSColor accentMatchingHost]
              : [[NSColor inspectorLabel] colorWithAlphaComponent:0.35];
   [color setStroke];
 
@@ -719,6 +736,17 @@ static const NSInteger kIntensityTickCount = 5;
 
 - (void)mouseDown:(NSEvent *)event {
   NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+
+  if (!_intensitySlider.hidden) {
+    for (NSInteger i = 0; i < kIntensityTickCount; i++) {
+      if (NSPointInRect(loc, [self intensityTickHitRectForIndex:i])) {
+        double val = (double)i / (double)(kIntensityTickCount - 1);
+        _intensitySlider.doubleValue = val;
+        [self intensitySliderChanged:_intensitySlider];
+        return;
+      }
+    }
+  }
 
   if (!_curveSlider.hidden) {
     NSInteger tickCount = (_selectedSection == KKTimingGraphSectionMid)

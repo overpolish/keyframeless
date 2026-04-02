@@ -24,6 +24,7 @@
 #pragma mark Shared
 
 + (NSColor *)accent;
++ (NSColor *)accentMatchingHost;
 + (NSColor *)warning;
 + (NSColor *)error;
 + (NSColor *)transparent;
