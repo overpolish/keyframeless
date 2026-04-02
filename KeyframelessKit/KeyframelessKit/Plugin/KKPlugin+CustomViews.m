@@ -4,6 +4,7 @@
  */
 
 #import "../Math/KKEasing.h"
+#import "../Style/KKTokens.h"
 #import "../Views/KKAlertView.h"
 #import "../Views/KKCustomGroupHeaderView.h"
 #import "../Views/KKSeparatorView.h"
@@ -157,12 +158,29 @@
   id<FxCustomParameterActionAPI_v4> actionAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actionAPI startAction:self];
-  id<FxParameterRetrievalAPI_v6> paramGetAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  BOOL expanded = NO;
-  [paramGetAPI getBoolValue:&expanded
-              fromParameter:kKKParamTimingExpanded
-                     atTime:[actionAPI currentTime]];
+
+  static pid_t sInitializedPID = 0;
+  pid_t currentPID = getpid();
+  BOOL isNewProcess = (sInitializedPID != currentPID);
+  if (isNewProcess)
+    sInitializedPID = currentPID;
+
+  BOOL expanded;
+  if (isNewProcess) {
+    expanded = YES;
+    id<FxParameterSettingAPI_v5> setAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [setAPI setBoolValue:YES
+             toParameter:kKKParamTimingExpanded
+                  atTime:[actionAPI currentTime]];
+  } else {
+    expanded = NO;
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    [paramGetAPI getBoolValue:&expanded
+                fromParameter:kKKParamTimingExpanded
+                       atTime:[actionAPI currentTime]];
+  }
   header.isExpanded = expanded;
   [actionAPI endAction:self];
 
@@ -194,7 +212,9 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
   CGFloat maxSectionHeight =
       MAX(KKTotalSlotHeight(inSlots),
           MAX(KKTotalSlotHeight(midSlots), KKTotalSlotHeight(outSlots)));
-  CGFloat totalHeight = kBaseHeight + globalHeight + maxSectionHeight;
+  CGFloat slotHeight = globalHeight + maxSectionHeight;
+  CGFloat totalHeight =
+      kBaseHeight + (slotHeight > 0 ? KKPaddingSM + slotHeight : 0);
 
   NSView *wrapper =
       [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, totalHeight)];

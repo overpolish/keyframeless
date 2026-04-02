@@ -683,7 +683,7 @@
   CGFloat viewWidth = NSWidth(self.bounds);
 
   CGFloat slotsY = graphTop + kGraphHeight + kLabelRowHeight +
-                   kSliderRowHeight + kTickHeight;
+                   kSliderRowHeight + kTickHeight + KKPaddingSM;
 
   if (!_globalSlotContainer.hidden) {
     NSSize globalSize = _globalSlotContainer.fittingSize;
