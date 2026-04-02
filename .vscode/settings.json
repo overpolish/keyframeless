@@ -123,5 +123,10 @@
     "xform",
     "xmark"
   ],
-  "conventionalCommits.scopes": ["MagicMove", "KeyframelessKit", "FxPlug"]
+  "conventionalCommits.scopes": [
+    "MagicMove",
+    "KeyframelessKit",
+    "FxPlug",
+    "Rounded"
+  ]
 }
