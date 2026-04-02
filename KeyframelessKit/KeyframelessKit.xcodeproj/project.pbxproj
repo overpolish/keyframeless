@@ -57,6 +57,7 @@
 				Views/KKMarkup.h,
 				Views/KKParameterRowView.h,
 				Views/KKSeparatorView.h,
+				Views/KKTimingSlot.h,
 			);
 			target = F26E01B52F4DE280009D949A /* KeyframelessKit */;
 		};

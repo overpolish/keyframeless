@@ -6,6 +6,7 @@
 #import "../Math/KKEasing.h"
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
+#import "KKAlertView.h"
 #import "KKCheckboxView.h"
 #import "KKCurvePillView.h"
 #import "KKSliderView.h"
@@ -25,6 +26,7 @@
   NSStackView *_sectionSlotContainer;
   NSLayoutConstraint *_intensityTrailingHalf;
   NSLayoutConstraint *_intensityTrailingFull;
+  KKAlertView *_emptyPlaceholder;
 }
 
 #pragma clang diagnostic pop
@@ -212,11 +214,9 @@
 
     [NSLayoutConstraint activateConstraints:@[
       [_globalSlotContainer.leadingAnchor
-          constraintEqualToAnchor:self.leadingAnchor
-                         constant:KKInspectorHorizontalInset],
+          constraintEqualToAnchor:self.leadingAnchor],
       [_globalSlotContainer.trailingAnchor
-          constraintEqualToAnchor:self.trailingAnchor
-                         constant:-KKInspectorHorizontalInset],
+          constraintEqualToAnchor:self.trailingAnchor],
     ]];
 
     // Section slot container
@@ -230,11 +230,9 @@
 
     [NSLayoutConstraint activateConstraints:@[
       [_sectionSlotContainer.leadingAnchor
-          constraintEqualToAnchor:self.leadingAnchor
-                         constant:KKInspectorHorizontalInset],
+          constraintEqualToAnchor:self.leadingAnchor],
       [_sectionSlotContainer.trailingAnchor
-          constraintEqualToAnchor:self.trailingAnchor
-                         constant:-KKInspectorHorizontalInset],
+          constraintEqualToAnchor:self.trailingAnchor],
     ]];
 
     // Row 2: [Intensity slider+ticks] [Frequency slider+ticks]
@@ -332,6 +330,28 @@
                                                         constant:ticksTop],
       [_frequencyTickImageView.heightAnchor
           constraintEqualToConstant:kTickHeight],
+    ]];
+
+    // Empty placeholder for when no bottom controls are visible
+    _emptyPlaceholder = [[KKAlertView alloc]
+        initWithText:@"No controls for current selection"
+               color:[[NSColor inspectorLabel] colorWithAlphaComponent:0.3]];
+    _emptyPlaceholder.icon =
+        [NSImage imageWithSystemSymbolName:@"slider.horizontal.below.rectangle"
+                  accessibilityDescription:nil];
+    _emptyPlaceholder.translatesAutoresizingMaskIntoConstraints = NO;
+    _emptyPlaceholder.hidden = YES;
+    [self addSubview:_emptyPlaceholder];
+
+    [NSLayoutConstraint activateConstraints:@[
+      [_emptyPlaceholder.leadingAnchor
+          constraintEqualToAnchor:self.leadingAnchor],
+      [_emptyPlaceholder.trailingAnchor
+          constraintEqualToAnchor:self.trailingAnchor],
+      [_emptyPlaceholder.topAnchor constraintEqualToAnchor:self.topAnchor
+                                                  constant:slidersTop],
+      [_emptyPlaceholder.heightAnchor
+          constraintEqualToConstant:kSliderRowHeight + kTickHeight],
     ]];
   }
   return self;
@@ -487,6 +507,9 @@
     _frequencySlider.doubleValue = _outFrequency;
   else if (showMidIntensity)
     _frequencySlider.doubleValue = _midFrequency;
+
+  // Placeholder when no bottom controls
+  _emptyPlaceholder.hidden = showIntensity || !show;
 
   if (showIntensity)
     [self renderIntensityTicks];
@@ -657,22 +680,22 @@
       graphTop + kGraphHeight + (kLabelRowHeight - stackHeight) / 2.0;
   _midSeedStack.frame = NSMakeRect(stackX, stackY, stackWidth, stackHeight);
 
-  CGFloat viewWidth = NSWidth(self.bounds) - 2 * KKInspectorHorizontalInset;
+  CGFloat viewWidth = NSWidth(self.bounds);
 
   CGFloat slotsY = graphTop + kGraphHeight + kLabelRowHeight +
                    kSliderRowHeight + kTickHeight;
 
   if (!_globalSlotContainer.hidden) {
     NSSize globalSize = _globalSlotContainer.fittingSize;
-    _globalSlotContainer.frame = NSMakeRect(KKInspectorHorizontalInset, slotsY,
-                                            viewWidth, globalSize.height);
+    _globalSlotContainer.frame =
+        NSMakeRect(0, slotsY, viewWidth, globalSize.height);
     slotsY += globalSize.height + KKSpacingSM;
   }
 
   if (!_sectionSlotContainer.hidden) {
     NSSize sectionSize = _sectionSlotContainer.fittingSize;
-    _sectionSlotContainer.frame = NSMakeRect(KKInspectorHorizontalInset, slotsY,
-                                             viewWidth, sectionSize.height);
+    _sectionSlotContainer.frame =
+        NSMakeRect(0, slotsY, viewWidth, sectionSize.height);
   }
 
   [self updateControls];

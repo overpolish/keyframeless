@@ -36,18 +36,18 @@ static const FxParameterFlags kCustomUIDisabled =
                                 error:(NSError **)error {
   if (!KKAddParam([paramAPI
                       addCustomParameterWithName:@""
-                                     parameterID:kKKParamTimingCurvePreview
-                                    defaultValue:@(kKKParamTimingCurvePreview)
-                                  parameterFlags:kCustomUI],
-                  error, @"Unable to add Curve Preview"))
-    return NO;
-
-  if (!KKAddParam([paramAPI
-                      addCustomParameterWithName:@""
                                      parameterID:kKKParamAnimationSeparator
                                     defaultValue:@(kKKParamAnimationSeparator)
                                   parameterFlags:kCustomUI],
                   error, @"Unable to add Timing group"))
+    return NO;
+
+  if (!KKAddParam([paramAPI
+                      addCustomParameterWithName:@""
+                                     parameterID:kKKParamTimingCurvePreview
+                                    defaultValue:@(kKKParamTimingCurvePreview)
+                                  parameterFlags:kCustomUIDisabled],
+                  error, @"Unable to add Curve Preview"))
     return NO;
 
   if (!KKAddParam([paramAPI addToggleButtonWithName:@"Animate In"
@@ -137,7 +137,7 @@ static const FxParameterFlags kCustomUIDisabled =
   if (!KKAddParam([paramAPI
                       addToggleButtonWithName:@""
                                   parameterID:kKKParamTimingExpanded
-                                 defaultValue:NO
+                                 defaultValue:YES
                                parameterFlags:kFxParameterFlag_HIDDEN |
                                               kFxParameterFlag_NOT_ANIMATABLE],
                   error, @"Unable to add Timing expanded toggle"))
@@ -442,6 +442,10 @@ static const FxParameterFlags kCustomUIDisabled =
   [paramGetAPI getBoolValue:&expandedTiming
               fromParameter:kKKParamTimingExpanded
                      atTime:kCMTimeZero];
+
+  [paramSetAPI
+      setParameterFlags:(expandedTiming ? kCustomUI : kFxParameterFlag_HIDDEN)
+            toParameter:kKKParamTimingCurvePreview];
 
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kKKParamAnimateIn];
