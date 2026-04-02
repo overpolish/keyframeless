@@ -69,23 +69,44 @@ static double KKEaseOutElastic(double t, double intensity, double frequency) {
 }
 
 static double KKEaseOutBounce(double t, double intensity, double frequency) {
-  double n =
-      2.0 + intensity * 1.5 + frequency * 3.0; // more frequency = more bounces
-  double n2 = n * n;
-  double offset4 = (2.5 + n) / (2.0 * n);
-  double h4 = 1.0 - (n - 2.5) * (n - 2.5) / 4.0;
-  if (t < 1.0 / n)
-    return n2 * t * t;
-  if (t < 2.0 / n) {
-    t -= 1.5 / n;
-    return n2 * t * t + 0.75;
+  if (t <= 0.0)
+    return 0.0;
+  if (t >= 1.0)
+    return 1.0;
+
+  // intensity: restitution (how much speed is retained per bounce)
+  // frequency: number of bounces (2-5)
+  double restitution = 0.3 + intensity * 0.4;
+  int numBounces = 2 + (int)round(frequency * 3.0);
+
+  // Compute segment durations proportional to air time per bounce
+  double durations[8];
+  durations[0] = 1.0;
+  double total = 1.0;
+  for (int i = 1; i <= numBounces; i++) {
+    durations[i] = pow(restitution, i);
+    total += durations[i];
   }
-  if (t < 2.5 / n) {
-    t -= 2.25 / n;
-    return n2 * t * t + 0.9375;
+  for (int i = 0; i <= numBounces; i++)
+    durations[i] /= total;
+
+  // Find which segment t falls into
+  double cumul = 0;
+  for (int i = 0; i <= numBounces; i++) {
+    double d = durations[i];
+    if (t <= cumul + d || i == numBounces) {
+      double local = (t - cumul) / d;
+      if (i == 0) {
+        // First arc: ease-out parabola from 0 to 1
+        return 1.0 - (1.0 - local) * (1.0 - local);
+      }
+      // Bounce arc: starts at 1, dips to 1-depth, returns to 1
+      double depth = pow(restitution, 2.0 * i);
+      return 1.0 - depth * 4.0 * local * (1.0 - local);
+    }
+    cumul += d;
   }
-  t -= offset4;
-  return n2 * t * t + h4;
+  return 1.0;
 }
 
 double KKApplyEasing(double raw, KKEasingCurve curve, double intensity,
