@@ -84,6 +84,18 @@
                                      atTime:time])
     return;
 
+  UInt32 graphControlledParams[] = {
+      kParamRotateWithMotionIn,  kParamRotateWithMotionHold,
+      kParamRotateWithMotionOut, kParamHoldPositionX,
+      kParamHoldPositionY,       kParamHoldScaleX,
+      kParamHoldScaleY,          kParamHoldRotationZ,
+      kParamHoldRotationX,       kParamHoldRotationY,
+      kParamHoldOpacity};
+  for (int i = 0; i < 11; i++) {
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:graphControlledParams[i]];
+  }
+
   BOOL hideA = NO, hideB = NO, hideDrift = NO, hideExit = NO;
   [paramGetAPI getBoolValue:&hideA fromParameter:kParamHideOSCA atTime:time];
   [paramGetAPI getBoolValue:&hideB fromParameter:kParamHideOSCB atTime:time];
