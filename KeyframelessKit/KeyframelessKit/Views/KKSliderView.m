@@ -4,6 +4,7 @@
  */
 
 #import "KKSliderView.h"
+#import "KKHostInfo.h"
 #import <AppKit/AppKit.h>
 
 static const CGFloat kTrackHeight = 2.0;
@@ -20,6 +21,12 @@ static const CGFloat kKnobPointCurveControl = 1.0;
 static const CGFloat kKnobSideCurveRatio = 0.3;
 
 static NSColor *sliderTrackBackground(void) {
+  if ([KKHostInfo isRunningInFinalCut]) {
+    return [NSColor colorWithRed:0x2D / 255.0
+                           green:0x2D / 255.0
+                            blue:0x2D / 255.0
+                           alpha:1.0];
+  }
   return [NSColor colorWithRed:0x16 / 255.0
                          green:0x16 / 255.0
                           blue:0x16 / 255.0
