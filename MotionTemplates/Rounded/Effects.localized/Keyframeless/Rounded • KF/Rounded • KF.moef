@@ -173,12 +173,12 @@
 		<version>2</version>
 		<target object="3001886296" channel="./9990" name=""/>
 		<target object="3001886296" channel="./1" name="Radius"/>
-		<target object="3001886296" channel="./9900" name=""/>
 		<target object="3001886296" channel="./9901" name="Animate In"/>
 		<target object="3001886296" channel="./9902" name="Animate Out"/>
 		<target object="3001886296" channel="./9903" name="Duration"/>
 		<target object="3001886296" channel="./9904" name="Interpolation"/>
-		<target object="3001886296" channel="./10001" name="Mix"/>
+		<target object="3001886296" channel="./9900" name=""/>
+		<target object="3001886296" channel="./9905" name=""/>
 	</publishSettings>
 	<currentFrame>15360 153600 1 0</currentFrame>
 	<currentObject>3001886277</currentObject>
@@ -292,10 +292,27 @@
 					<defaultVal>*********IoeMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0CMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM**cEhJ74tpP4k62FcY8H6rGIlMKZk********-*E*********A********************MUU*0**F*-c*7**d*16*Bk-7*2s*Kk-h*4w*QE-p*5g-1*********6-*********-********************2B</defaultVal>
 					<dataValue>*********IoeMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0CMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM**cEhJ74tpP4k62FcY8H6rGIlMKZk********-*E*********A********************MUU*0**F*-c*7**d*16*Bk-7*2s*Kk-h*4w*QE-p*5g-1*********6-*********-********************2B</dataValue>
 				</parameter>
-				<parameter name="Animate In" id="9901" flags="12901679120" default="0" value="0"/>
-				<parameter name="Animate Out" id="9902" flags="12901679120" default="0" value="0"/>
-				<parameter name="Duration" id="9903" flags="12901679120" default="0.5" value="0.5"/>
-				<parameter name="Interpolation" id="9904" flags="12901679120" default="2" value="2"/>
+				<parameter name="" id="9905" flags="12901679120">
+					<numberOfKeypoints>0</numberOfKeypoints>
+					<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GOl0-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
+					<dataValue>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GOl0-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</dataValue>
+				</parameter>
+				<parameter name="Animate In" id="9901" flags="12905938992" default="0" value="0"/>
+				<parameter name="In Duration" id="9903" flags="12905938992" default="0.5" value="0.5"/>
+				<parameter name="In Curve" id="9904" flags="12905938992" default="2" value="2"/>
+				<parameter name="In Intensity" id="9911" flags="12905938992" default="0.5" value="0.5"/>
+				<parameter name="Animate Out" id="9902" flags="12905938992" default="0" value="0"/>
+				<parameter name="Out Duration" id="9906" flags="12905938992" default="0.5" value="0.5"/>
+				<parameter name="Out Curve" id="9907" flags="12905938992" default="2" value="2"/>
+				<parameter name="Out Intensity" id="9912" flags="12905938992" default="0.5" value="0.5"/>
+				<parameter name="" id="9908" flags="12905938992" default="1" value="1"/>
+				<parameter name="" id="9909" flags="12905938992" default="1" value="1"/>
+				<parameter name="Hold Effect" id="9910" flags="12905938992" default="0" value="0"/>
+				<parameter name="Hold Intensity" id="9913" flags="12905938992" default="0.5" value="0.5"/>
+				<parameter name="In Frequency" id="9914" flags="12905938992" default="0.5" value="0.5"/>
+				<parameter name="Out Frequency" id="9915" flags="12905938992" default="0.5" value="0.5"/>
+				<parameter name="Hold Frequency" id="9916" flags="12905938992" default="0.5" value="0.5"/>
+				<parameter name="Hold Seed" id="9917" flags="12905938992" default="0" value="0"/>
 				<parameter name="Mix" id="10001" flags="12901679104" default="1" value="1"/>
 				<parameter name="Flip" id="10002" flags="12905938976" default="0" value="0"/>
 				<parameter name="Input Points" id="10003" flags="12905938976" default="1" value="1"/>
