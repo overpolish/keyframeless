@@ -69,6 +69,7 @@ static const UInt32 kParamPathBDrift = 402;
 static const UInt32 kParamPathDriftExit = 403;
 static const UInt32 kParamPathBExit = 404;
 static const UInt32 kParamPathDriftA = 405;
+static const UInt32 kParamPathBA = 406;
 
 // Global (501–600)
 static const UInt32 kParamRotateWithMotion = 501;

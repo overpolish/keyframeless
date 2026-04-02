@@ -208,7 +208,8 @@ static void drawFilledTriangle(MagicMoveOSC *osc, CGPoint a, CGPoint b,
       CGPoint inCanvas = [self canvasPointFromObjectPoint:inObj];
       CGPoint outCanvas = [self canvasPointFromObjectPoint:outObj];
 
-      simd_float4 handleColor = {1.0f, 0.0f, 0.0f, 0.33f};
+      simd_float4 handleColor = color;
+      handleColor.w = 0.33f;
       [self drawLineFrom:ptCanvas
                         to:inCanvas
                      color:handleColor
@@ -276,7 +277,7 @@ static void drawFilledTriangle(MagicMoveOSC *osc, CGPoint a, CGPoint b,
   self.points[2].hidden = hideDrift;
   self.points[3].hidden = hideExit;
 
-  simd_float4 red = {1, 0, 0, 1};
+  simd_float4 pathColor = [[NSColor systemRedColor] simdFloat4];
   double arcOuter =
       self.points[0].arc.oscRadius + self.points[0].arc.outlineWidth;
   double insetA = hideA ? 0.0 : arcOuter;
@@ -292,41 +293,49 @@ static void drawFilledTriangle(MagicMoveOSC *osc, CGPoint a, CGPoint b,
   PathSegConfig cfgBExit = {kParamPathBExit, kParamPointB, kParamExitPoint, 3};
   PathSegConfig cfgDriftA = {kParamPathDriftA, kParamDriftPoint, kParamPointA,
                              4};
+  PathSegConfig cfgBA = {kParamPathBA, kParamPointB, kParamPointA, 5};
 
   if (animInOn)
     [self drawPathSegment:cfgAB
          destinationImage:destinationImage
-                    color:red
+                    color:pathColor
                startInset:insetA
                  endInset:insetB
                    atTime:time];
   if (driftOn) {
     [self drawPathSegment:cfgBDrift
          destinationImage:destinationImage
-                    color:red
+                    color:pathColor
                startInset:insetB
                  endInset:insetDrift
                    atTime:time];
     if (showExit)
       [self drawPathSegment:cfgDriftExit
            destinationImage:destinationImage
-                      color:red
+                      color:pathColor
                  startInset:insetDrift
                    endInset:insetExit
                      atTime:time];
     else if (animOutOn)
       [self drawPathSegment:cfgDriftA
            destinationImage:destinationImage
-                      color:red
+                      color:pathColor
                  startInset:insetDrift
                    endInset:insetA
                      atTime:time];
   } else if (showExit) {
     [self drawPathSegment:cfgBExit
          destinationImage:destinationImage
-                    color:red
+                    color:pathColor
                startInset:insetB
                  endInset:insetExit
+                   atTime:time];
+  } else if (animOutOn && !animInOn) {
+    [self drawPathSegment:cfgBA
+         destinationImage:destinationImage
+                    color:pathColor
+               startInset:insetB
+                 endInset:insetA
                    atTime:time];
   }
 
