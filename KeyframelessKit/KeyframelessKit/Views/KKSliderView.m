@@ -20,24 +20,24 @@ static const CGFloat kKnobPointCurveControl = 1.0;
 static const CGFloat kKnobSideCurveRatio = 0.3;
 
 static NSColor *sliderTrackBackground(void) {
-  return [NSColor colorWithRed:0x3A / 255.0
-                         green:0x3A / 255.0
-                          blue:0x3A / 255.0
+  return [NSColor colorWithRed:0x16 / 255.0
+                         green:0x16 / 255.0
+                          blue:0x16 / 255.0
                          alpha:1.0];
 }
 
 static NSColor *sliderKnobFill(void) {
-  return [NSColor colorWithRed:0xC8 / 255.0
-                         green:0xC8 / 255.0
-                          blue:0xC8 / 255.0
+  return [NSColor colorWithRed:0x80 / 255.0
+                         green:0x80 / 255.0
+                          blue:0x80 / 255.0
                          alpha:1.0];
 }
 
 static NSColor *sliderKnobOutline(void) {
-  return [NSColor colorWithRed:0x1A / 255.0
-                         green:0x1A / 255.0
-                          blue:0x1A / 255.0
-                         alpha:0.6];
+  return [NSColor colorWithRed:0x14 / 255.0
+                         green:0x14 / 255.0
+                          blue:0x14 / 255.0
+                         alpha:1.0];
 }
 
 static inline CGFloat ClampValue(CGFloat value, CGFloat min, CGFloat max) {

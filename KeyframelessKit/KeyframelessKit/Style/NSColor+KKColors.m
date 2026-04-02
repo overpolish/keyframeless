@@ -72,6 +72,13 @@
                          alpha:1.0];
 }
 
++ (NSColor *)accentMatchingHost {
+  return [NSColor colorWithRed:0x5B / 255.0
+                         green:0x5C / 255.0
+                          blue:0xE9 / 255.0
+                         alpha:1.0];
+}
+
 + (NSColor *)warning {
   return [NSColor colorWithRed:0xFF / 255.0
                          green:0xCC / 255.0

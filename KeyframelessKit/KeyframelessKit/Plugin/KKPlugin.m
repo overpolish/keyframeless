@@ -1029,24 +1029,23 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
   FxParameterFlags flagIn =
       showIn ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
   [paramSetAPI setParameterFlags:flagIn toParameter:kKKParamAnimateInDuration];
-  [paramSetAPI setParameterFlags:flagIn
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kKKParamAnimateInInterpolation];
-  [paramSetAPI setParameterFlags:flagIn toParameter:kKKParamAnimateInIntensity];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kKKParamAnimateInIntensity];
 
   BOOL showOut = expandedTiming && sel == KKTimingGraphSectionOut && animateOut;
   FxParameterFlags flagOut =
       showOut ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
   [paramSetAPI setParameterFlags:flagOut
                      toParameter:kKKParamAnimateOutDuration];
-  [paramSetAPI setParameterFlags:flagOut
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kKKParamAnimateOutInterpolation];
-  [paramSetAPI setParameterFlags:flagOut
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kKKParamAnimateOutIntensity];
 
-  BOOL showMid = expandedTiming && sel == KKTimingGraphSectionMid;
-  FxParameterFlags flagMid =
-      showMid ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
-  [paramSetAPI setParameterFlags:flagMid toParameter:kKKParamMidHoldEffect];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kKKParamMidHoldEffect];
 
   for (NSNumber *paramID in self.timingGroupExtraParamIDs) {
     FxParameterFlags flagTiming =
