@@ -24,6 +24,10 @@ static const CGFloat kCornerRadius = 3.0;
   return self;
 }
 
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+  return YES;
+}
+
 - (void)handleClick:(NSClickGestureRecognizer *)sender {
   _isChecked = !_isChecked;
   [self setNeedsDisplay:YES];

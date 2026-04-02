@@ -723,6 +723,10 @@
                     NSHeight(frame));
 }
 
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+  return YES;
+}
+
 - (void)mouseDown:(NSEvent *)event {
   NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
 

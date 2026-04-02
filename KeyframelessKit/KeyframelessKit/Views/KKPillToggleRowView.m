@@ -144,6 +144,10 @@ static const CGFloat kPillPadX = 5.0;
   }
 }
 
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+  return YES;
+}
+
 - (void)mouseDown:(NSEvent *)event {
   NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
   NSArray<NSValue *> *rects = [self pillRects];
