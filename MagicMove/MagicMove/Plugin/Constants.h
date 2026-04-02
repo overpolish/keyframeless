@@ -84,6 +84,9 @@ static const UInt32 kParamHoldRotationX = 507;
 static const UInt32 kParamHoldRotationY = 508;
 static const UInt32 kParamHoldOpacity = 509;
 
+// Anchor (601)
+static const UInt32 kParamAnchorPoint = 601;
+
 // Alerts & Info (9000+)
 static const UInt32 kParamForceShowAlerts = 9000;
 static const UInt32 kParamInfoCompound = 9001;

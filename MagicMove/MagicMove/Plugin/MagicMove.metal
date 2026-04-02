@@ -50,6 +50,9 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
 
     p -= params->translate;
 
+    float2 anchor = params->anchorOffset;
+    p -= anchor;
+
     float aspect = float(colorTexture.get_width()) / float(colorTexture.get_height());
     p.x *= aspect;
     float cs = cos(params->rotation);
@@ -78,6 +81,8 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
         return float4(0.0);
     p.x /= params->scaleX;
     p.y /= params->scaleY;
+
+    p += anchor;
 
     float2 src = p + 0.5;
 

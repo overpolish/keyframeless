@@ -220,6 +220,53 @@ fragment float4 KKLabelFragment(KKRasterizerData in [[stage_in]], texture2d<floa
     return labelTexture.sample(s, in.textureCoordinate);
 }
 
+/// Signed distance to a rounded rectangle centered at the origin.
+inline float kkRoundedRectSDF(float2 p, float2 halfSize, float cornerRadius) {
+    float2 d = abs(p) - halfSize + cornerRadius;
+    return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - cornerRadius;
+}
+
+/// Fragment shader for rendering an anchor point OSC as a rounded square with
+/// drop shadow and outline, similar to the point OSC style.
+fragment float4 KKSquarePointOSCFragment(KKRasterizerData in [[stage_in]], constant KKSquarePointOSCParams *params
+                                         [[buffer(KKOSCFragmentIndex_DrawColor)]]) {
+    float cornerRadius = params->cornerRadius;
+    float outlineWidth = params->outlineWidth;
+    float shadowOffset = params->shadowOffset;
+    float shadowRadius = params->shadowRadius;
+    float4 fillColor = float4(params->fillColor);
+    float4 strokeColor = float4(params->strokeColor);
+    float4 shadowColor = float4(params->shadowColor);
+
+    float2 pos = in.textureCoordinate;
+
+    float halfSize = 1.0 - outlineWidth;
+
+    // Shadow (offset downward)
+    float2 shadowPos = pos - float2(0.0, shadowOffset);
+    float shadowDist = kkRoundedRectSDF(shadowPos, float2(halfSize), cornerRadius);
+    float shadowAlpha = shadowColor.a * (1.0 - smoothstep(-shadowRadius, 0.0, shadowDist));
+
+    // Main shape
+    float dist = kkRoundedRectSDF(pos, float2(halfSize), cornerRadius);
+    float shapeAlpha = kkEdgeAlpha(-dist);
+
+    if (shapeAlpha < 0.001 && shadowAlpha < 0.001)
+        discard_fragment();
+
+    // Start with shadow
+    float4 color = float4(shadowColor.rgb * shadowAlpha, shadowAlpha);
+
+    // Composite shape on top
+    if (shapeAlpha > 0.001) {
+        float outlineFactor = 1.0 - kkEdgeAlpha(-(dist + outlineWidth));
+        float4 shapeColor = kkOSCColor(fillColor, strokeColor, outlineFactor, shapeAlpha);
+        color = color * (1.0 - shapeColor.a) + shapeColor;
+    }
+
+    return color;
+}
+
 /// Fragment shader for rendering a point/dot OSC control with outline and depth shadow.
 fragment float4 KKPointOSCFragment(KKRasterizerData in [[stage_in]],
                                    constant KKPointOSCParams *params [[buffer(KKOSCFragmentIndex_DrawColor)]]) {

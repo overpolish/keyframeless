@@ -226,6 +226,13 @@
       return NO;
   }
 
+  if (![paramAPI addPointParameterWithName:@"Anchor Point"
+                               parameterID:kParamAnchorPoint
+                                  defaultX:0.5
+                                  defaultY:0.5
+                            parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
   if (![self addPointSectionWithName:@"Point A"
                                group:kGroupA
                             defaultX:0.5

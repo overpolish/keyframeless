@@ -34,6 +34,16 @@ typedef struct KKPointOSCParams {
     vector_float4 strokeColor;
 } KKPointOSCParams;
 
+typedef struct KKSquarePointOSCParams {
+    float cornerRadius;
+    float outlineWidth;
+    float shadowOffset;
+    float shadowRadius;
+    vector_float4 fillColor;
+    vector_float4 strokeColor;
+    vector_float4 shadowColor;
+} KKSquarePointOSCParams;
+
 typedef struct KKRotationOSCParams {
     float armLength;
     float centerOffset;

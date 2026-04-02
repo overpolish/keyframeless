@@ -345,6 +345,19 @@ static void drawFilledTriangle(MagicMoveOSC *osc, CGPoint a, CGPoint b,
   [self.pathSnap drawSnapGuidesWithOSC:self
                          isObjectSpace:YES
                       destinationImage:destinationImage];
+  [self.anchorSnap drawSnapGuidesWithOSC:self
+                           isObjectSpace:YES
+                        destinationImage:destinationImage];
+
+  {
+    CGPoint anchorCanvas = [self canvasPositionForParam:kParamAnchorPoint
+                                                 atTime:time];
+    [self.anchorOSC drawAtCanvasPosition:anchorCanvas
+                               isHovered:self.anchorHovered
+                                isActive:self.anchorDragging
+                        destinationImage:destinationImage
+                                  atTime:time];
+  }
 
   if (showA)
     [self.points[0] drawWithParentOSC:self

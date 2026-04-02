@@ -92,6 +92,13 @@
     hasPreview = YES;
   }
 
+  double anchorX = 0.5, anchorY = 0.5;
+  [paramGetAPI getXValue:&anchorX
+                  YValue:&anchorY
+           fromParameter:kParamAnchorPoint
+                  atTime:renderTime];
+  simd_float2 anchorOffset = {(float)(anchorX - 0.5), (float)(anchorY - 0.5)};
+
   if (hasPreview) {
     MagicMovePointValues v = [self readPointValues:previewIDs
                                             atTime:renderTime
@@ -99,6 +106,7 @@
 
     MagicMoveParams params;
     params.translate = (simd_float2){(float)(v.x - 0.5), (float)(v.y - 0.5)};
+    params.anchorOffset = anchorOffset;
     params.rotation = (float)v.rotation;
     params.rotationX = (float)v.rotationX;
     params.rotationY = (float)v.rotationY;
@@ -258,6 +266,8 @@
     params.scaleY = (float)((1 - t) * a.scaleY + t * targetScaleY);
     params.opacity = (float)((1 - t) * a.opacity + t * targetOpacity);
   }
+
+  params.anchorOffset = anchorOffset;
 
   static const double kHoldTranslateAmount = 0.08;
   static const double kHoldRotationDegrees = 20.0;
