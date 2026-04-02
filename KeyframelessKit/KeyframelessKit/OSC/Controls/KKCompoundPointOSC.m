@@ -16,6 +16,7 @@
   BOOL _ringHovered;
   BOOL _rotHovered;
   double _rotDragPrevAngle, _rotDragAccum;
+  UInt32 _rotDragTargetParam;
   double _ringDragStartDist, _ringDragStartValX, _ringDragStartValY;
   double _ringDragStartAngle;
   double _ringLastClickTime;
@@ -72,7 +73,8 @@
 
   CGPoint pos = [parentOSC canvasPositionForParam:_pointParam atTime:time];
   [self updateRing:parentOSC atTime:time];
-  float rotAngle = [parentOSC floatValueForParam:_rotParam atTime:time];
+  UInt32 rotParamToDraw = _rotDragging ? _rotDragTargetParam : _rotParam;
+  float rotAngle = [parentOSC floatValueForParam:rotParamToDraw atTime:time];
 
   _ring.center = pos;
   [_ring drawAtCanvasPosition:pos
@@ -282,11 +284,20 @@
 
   if (activePart == _rotPart) {
     _rotDragging = YES;
+    CGEventFlags flags =
+        CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+    if (flags & kCGEventFlagMaskCommand)
+      _rotDragTargetParam = _rotXParam;
+    else if (flags & kCGEventFlagMaskAlternate)
+      _rotDragTargetParam = _rotYParam;
+    else
+      _rotDragTargetParam = _rotParam;
     CGPoint center = [parentOSC canvasPositionForParam:_pointParam atTime:time];
     double dx = positionX - center.x;
     double dy = positionY - center.y;
     _rotDragPrevAngle = atan2(-dy, dx);
-    _rotDragAccum = [parentOSC floatValueForParam:_rotParam atTime:time];
+    _rotDragAccum = [parentOSC floatValueForParam:_rotDragTargetParam
+                                           atTime:time];
     [oscAPI setCursor:[NSCursor crosshairCursor]];
     *forceUpdate = YES;
     return YES;
@@ -370,11 +381,18 @@
       delta += 2.0 * M_PI;
     _rotDragAccum += delta;
     _rotDragPrevAngle = angle;
+    static const double kSnapToZeroThreshold = 3.0 * (M_PI / 180.0);
+    double value = _rotDragAccum;
+    CGEventFlags rotFlags =
+        CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+    BOOL snapDisabled = (rotFlags & kCGEventFlagMaskAlternate) != 0;
+    if (!snapDisabled && fabs(value) < kSnapToZeroThreshold)
+      value = 0.0;
     id<FxParameterSettingAPI_v5> paramSetAPI =
         [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
     if (paramSetAPI)
-      [paramSetAPI setFloatValue:_rotDragAccum
-                     toParameter:_rotParam
+      [paramSetAPI setFloatValue:value
+                     toParameter:_rotDragTargetParam
                           atTime:time];
     return YES;
   }

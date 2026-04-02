@@ -19,6 +19,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// FxPlug parameter IDs for this point.
 @property(nonatomic) UInt32 pointParam;
 @property(nonatomic) UInt32 rotParam;
+@property(nonatomic) UInt32 rotXParam;
+@property(nonatomic) UInt32 rotYParam;
 @property(nonatomic) UInt32 scaleXParam;
 @property(nonatomic) UInt32 scaleYParam;
 @property(nonatomic) UInt32 previewParam;
