@@ -262,9 +262,9 @@
   static const double kHoldTranslateAmount = 0.08;
   static const double kHoldRotationDegrees = 20.0;
 
-  int midSeed = 0;
-  [paramGetAPI getIntValue:&midSeed
-             fromParameter:kKKParamMidHoldSeed
+  int holdSeed = 0;
+  [paramGetAPI getIntValue:&holdSeed
+             fromParameter:kKKParamHoldSeed
                     atTime:renderTime];
 
   BOOL holdPosX = YES, holdPosY = YES, holdSX = YES, holdSY = YES;
@@ -294,47 +294,57 @@
               fromParameter:kParamHoldOpacity
                      atTime:renderTime];
 
-  double midF = timing.midPhase.factor;
-  double midD = midF - 1.0;
-  double signTX = KKSeedSign(midSeed, 0);
-  double signTY = KKSeedSign(midSeed, 1);
-  double signRot = KKSeedSign(midSeed, 2);
-  double signSX = KKSeedSign(midSeed, 3);
-  double signSY = KKSeedSign(midSeed, 4);
+  double holdF = timing.holdPhase.factor;
+  double holdD = holdF - 1.0;
+  double signTX = KKSeedSign(holdSeed, 0);
+  double signTY = KKSeedSign(holdSeed, 1);
+  double signRot = KKSeedSign(holdSeed, 2);
+  double signSX = KKSeedSign(holdSeed, 3);
+  double signSY = KKSeedSign(holdSeed, 4);
   if (holdPosX)
-    params.translate.x += (float)(midD * kHoldTranslateAmount * signTX);
+    params.translate.x += (float)(holdD * kHoldTranslateAmount * signTX);
   if (holdPosY)
-    params.translate.y += (float)(midD * kHoldTranslateAmount * signTY);
+    params.translate.y += (float)(holdD * kHoldTranslateAmount * signTY);
   if (holdRotZ) {
     params.rotation +=
-        (float)(midD * kHoldRotationDegrees * (M_PI / 180.0) * signRot);
+        (float)(holdD * kHoldRotationDegrees * (M_PI / 180.0) * signRot);
   }
   if (holdRotX) {
-    double signRX = KKSeedSign(midSeed, 5);
+    double signRX = KKSeedSign(holdSeed, 5);
     params.rotationX +=
-        (float)(midD * kHoldRotationDegrees * (M_PI / 180.0) * signRX);
+        (float)(holdD * kHoldRotationDegrees * (M_PI / 180.0) * signRX);
   }
   if (holdRotY) {
-    double signRY = KKSeedSign(midSeed, 6);
+    double signRY = KKSeedSign(holdSeed, 6);
     params.rotationY +=
-        (float)(midD * kHoldRotationDegrees * (M_PI / 180.0) * signRY);
+        (float)(holdD * kHoldRotationDegrees * (M_PI / 180.0) * signRY);
   }
   if (holdSX) {
-    params.scaleX *= (float)(1.0 + midD * signSX);
+    params.scaleX *= (float)(1.0 + holdD * signSX);
   }
   if (holdSY) {
-    params.scaleY *= (float)(1.0 + midD * signSY);
+    params.scaleY *= (float)(1.0 + holdD * signSY);
   }
   if (holdOpacity) {
-    params.opacity = (float)fmax(0.0, fmin(1.0, (double)params.opacity * midF));
+    params.opacity =
+        (float)fmax(0.0, fmin(1.0, (double)params.opacity * holdF));
   }
 
-  BOOL rotateWithMotion = NO;
-  [paramGetAPI getBoolValue:&rotateWithMotion
-              fromParameter:kParamRotateWithMotion
+  BOOL rwmIn = NO, rwmHold = NO, rwmOut = NO;
+  [paramGetAPI getBoolValue:&rwmIn
+              fromParameter:kParamRotateWithMotionIn
+                     atTime:renderTime];
+  [paramGetAPI getBoolValue:&rwmHold
+              fromParameter:kParamRotateWithMotionHold
+                     atTime:renderTime];
+  [paramGetAPI getBoolValue:&rwmOut
+              fromParameter:kParamRotateWithMotionOut
                      atTime:renderTime];
 
-  if (rotateWithMotion) {
+  BOOL applyRwm = (rwmIn && timing.inPhase.progress < 1.0) || rwmHold ||
+                  (rwmOut && timing.outPhase.progress < 1.0);
+
+  if (applyRwm) {
     double curX = (double)params.translate.x;
     double window = 1.0 / 12.0;
     CMTime tPrev =

@@ -196,11 +196,18 @@
   if (![self addAnimationParametersWithAPI:paramAPI error:error])
     return NO;
 
-  if (![paramAPI addToggleButtonWithName:@"Rotate with Motion"
-                             parameterID:kParamRotateWithMotion
-                            defaultValue:NO
-                          parameterFlags:kFxParameterFlag_HIDDEN])
-    return NO;
+  UInt32 rwmIDs[] = {kParamRotateWithMotionIn, kParamRotateWithMotionHold,
+                     kParamRotateWithMotionOut};
+  NSString *rwmNames[] = {@"Rotate with Motion (In)",
+                          @"Rotate with Motion (Hold)",
+                          @"Rotate with Motion (Out)"};
+  for (int i = 0; i < 3; i++) {
+    if (![paramAPI addToggleButtonWithName:rwmNames[i]
+                               parameterID:rwmIDs[i]
+                              defaultValue:NO
+                            parameterFlags:kFxParameterFlag_HIDDEN])
+      return NO;
+  }
 
   UInt32 holdProps[] = {kParamHoldPositionX, kParamHoldPositionY,
                         kParamHoldScaleX,    kParamHoldScaleY,

@@ -146,8 +146,8 @@ static const FxParameterFlags kCustomUIDisabled =
   if (!KKAddParam([paramAPI
                       addPopupMenuWithName:@""
                                parameterID:kKKParamTimingSelectedSection
-                              defaultValue:KKTimingGraphSectionMid
-                               menuEntries:@[ @"In", @"Mid", @"Out" ]
+                              defaultValue:KKTimingGraphSectionHold
+                               menuEntries:@[ @"In", @"Hold", @"Out" ]
                             parameterFlags:kFxParameterFlag_HIDDEN |
                                            kFxParameterFlag_NOT_ANIMATABLE],
                   error, @"Unable to add section selector"))
@@ -155,7 +155,7 @@ static const FxParameterFlags kCustomUIDisabled =
 
   if (!KKAddParam([paramAPI
                       addPopupMenuWithName:@"Hold Effect"
-                               parameterID:kKKParamMidHoldEffect
+                               parameterID:kKKParamHoldEffect
                               defaultValue:KKHoldEffectNone
                                menuEntries:@[ @"None", @"Bounce", @"Wiggle" ]
                             parameterFlags:kFxParameterFlag_HIDDEN],
@@ -163,7 +163,7 @@ static const FxParameterFlags kCustomUIDisabled =
     return NO;
 
   if (!KKAddParam([paramAPI addFloatSliderWithName:@"Hold Intensity"
-                                       parameterID:kKKParamMidHoldIntensity
+                                       parameterID:kKKParamHoldIntensity
                                       defaultValue:0.5
                                       parameterMin:0.0
                                       parameterMax:1.0
@@ -199,7 +199,7 @@ static const FxParameterFlags kCustomUIDisabled =
     return NO;
 
   if (!KKAddParam([paramAPI addFloatSliderWithName:@"Hold Frequency"
-                                       parameterID:kKKParamMidHoldFrequency
+                                       parameterID:kKKParamHoldFrequency
                                       defaultValue:0.5
                                       parameterMin:0.0
                                       parameterMax:1.0
@@ -211,7 +211,7 @@ static const FxParameterFlags kCustomUIDisabled =
     return NO;
 
   if (!KKAddParam([paramAPI addIntSliderWithName:@"Hold Seed"
-                                     parameterID:kKKParamMidHoldSeed
+                                     parameterID:kKKParamHoldSeed
                                     defaultValue:0
                                     parameterMin:0
                                     parameterMax:INT_MAX
@@ -240,7 +240,7 @@ static const FxParameterFlags kCustomUIDisabled =
                                                 duration:0
                                                 progress:1.0
                                              interpolate:identity];
-    return [KKTimingResult resultWithIn:off mid:off out:off];
+    return [KKTimingResult resultWithIn:off hold:off out:off];
   }
 
   BOOL animateIn = NO, animateOut = NO;
@@ -321,42 +321,42 @@ static const FxParameterFlags kCustomUIDisabled =
                                                    progress:outProgress
                                                 interpolate:outInterp];
 
-  // Mid phase
-  int midHoldInt = KKHoldEffectNone;
-  [paramGetAPI getIntValue:&midHoldInt
-             fromParameter:kKKParamMidHoldEffect
+  // Hold phase
+  int holdEffectInt = KKHoldEffectNone;
+  [paramGetAPI getIntValue:&holdEffectInt
+             fromParameter:kKKParamHoldEffect
                     atTime:renderTime];
-  KKHoldEffect midHold = (KKHoldEffect)midHoldInt;
-  double midHoldIntensity = 0.5, midHoldFrequency = 0.5;
-  [paramGetAPI getFloatValue:&midHoldIntensity
-               fromParameter:kKKParamMidHoldIntensity
+  KKHoldEffect holdEffect = (KKHoldEffect)holdEffectInt;
+  double holdIntensity = 0.5, holdFrequency = 0.5;
+  [paramGetAPI getFloatValue:&holdIntensity
+               fromParameter:kKKParamHoldIntensity
                       atTime:renderTime];
-  [paramGetAPI getFloatValue:&midHoldFrequency
-               fromParameter:kKKParamMidHoldFrequency
+  [paramGetAPI getFloatValue:&holdFrequency
+               fromParameter:kKKParamHoldFrequency
                       atTime:renderTime];
-  int midHoldSeed = 0;
-  [paramGetAPI getIntValue:&midHoldSeed
-             fromParameter:kKKParamMidHoldSeed
+  int holdSeed = 0;
+  [paramGetAPI getIntValue:&holdSeed
+             fromParameter:kKKParamHoldSeed
                     atTime:renderTime];
 
-  static const double kMidOverlap = 0.3;
+  static const double kHoldOverlap = 0.3;
   double inEnd = startSec + (animateIn ? inDuration : 0);
   double outStart = endSec - (animateOut ? outDuration : 0);
-  double midStart = inEnd - (animateIn ? inDuration * kMidOverlap : 0);
-  double midEnd = outStart + (animateOut ? outDuration * kMidOverlap : 0);
-  double midDur = MAX(0.0, midEnd - midStart);
-  double midProgress =
-      (midDur > 0) ? MAX(0.0, MIN(1.0, (nowSec - midStart) / midDur)) : 1.0;
+  double holdStart = inEnd - (animateIn ? inDuration * kHoldOverlap : 0);
+  double holdEnd = outStart + (animateOut ? outDuration * kHoldOverlap : 0);
+  double holdDur = MAX(0.0, holdEnd - holdStart);
+  double holdProgress =
+      (holdDur > 0) ? MAX(0.0, MIN(1.0, (nowSec - holdStart) / holdDur)) : 1.0;
   KKTimingInterpolator holdInterp = ^double(double t) {
-    return KKApplyHoldEffect(t, midHold, midHoldIntensity, midHoldFrequency,
-                             midHoldSeed);
+    return KKApplyHoldEffect(t, holdEffect, holdIntensity, holdFrequency,
+                             holdSeed);
   };
-  KKTimingPhase *midPhase = [KKTimingPhase phaseWithEnabled:YES
-                                                   duration:midDur
-                                                   progress:midProgress
-                                                interpolate:holdInterp];
+  KKTimingPhase *holdPhase = [KKTimingPhase phaseWithEnabled:YES
+                                                    duration:holdDur
+                                                    progress:holdProgress
+                                                 interpolate:holdInterp];
 
-  return [KKTimingResult resultWithIn:inPhase mid:midPhase out:outPhase];
+  return [KKTimingResult resultWithIn:inPhase hold:holdPhase out:outPhase];
 }
 
 - (BOOL)addInfoParameterWithText:(NSString *)text
@@ -469,18 +469,24 @@ static const FxParameterFlags kCustomUIDisabled =
                       atTime:kCMTimeZero];
   }
 
-  int sel = KKTimingGraphSectionMid;
+  int sel = KKTimingGraphSectionHold;
   [paramGetAPI getIntValue:&sel
              fromParameter:kKKParamTimingSelectedSection
                     atTime:kCMTimeZero];
 
   UInt32 alwaysHidden[] = {
-      kKKParamAnimateInDuration,       kKKParamAnimateOutDuration,
-      kKKParamAnimateInInterpolation,  kKKParamAnimateInIntensity,
-      kKKParamAnimateOutInterpolation, kKKParamAnimateOutIntensity,
-      kKKParamMidHoldEffect,           kKKParamMidHoldIntensity,
-      kKKParamAnimateInFrequency,      kKKParamAnimateOutFrequency,
-      kKKParamMidHoldFrequency,        kKKParamMidHoldSeed,
+      kKKParamAnimateInDuration,
+      kKKParamAnimateOutDuration,
+      kKKParamAnimateInInterpolation,
+      kKKParamAnimateInIntensity,
+      kKKParamAnimateOutInterpolation,
+      kKKParamAnimateOutIntensity,
+      kKKParamHoldEffect,
+      kKKParamHoldIntensity,
+      kKKParamAnimateInFrequency,
+      kKKParamAnimateOutFrequency,
+      kKKParamHoldFrequency,
+      kKKParamHoldSeed,
   };
   for (NSUInteger i = 0; i < sizeof(alwaysHidden) / sizeof(alwaysHidden[0]);
        i++) {

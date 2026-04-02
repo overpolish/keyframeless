@@ -37,7 +37,7 @@
 @synthesize graphImageView = _graphImageView;
 @synthesize intensityTickImageView = _intensityTickImageView;
 @synthesize frequencyTickImageView = _frequencyTickImageView;
-@synthesize midSeedStack = _midSeedStack;
+@synthesize holdSeedStack = _holdSeedStack;
 
 - (instancetype)initWithFrame:(NSRect)frameRect {
   self = [super initWithFrame:frameRect];
@@ -48,14 +48,14 @@
     _outDuration = 0.5;
     _inCurve = KKEasingCurveEaseOut;
     _outCurve = KKEasingCurveEaseOut;
-    _midHoldEffect = KKHoldEffectNone;
+    _holdEffect = KKHoldEffectNone;
     _inIntensity = 0.5;
     _outIntensity = 0.5;
-    _midIntensity = 0.5;
+    _holdIntensity = 0.5;
     _inFrequency = 0.5;
     _outFrequency = 0.5;
-    _midFrequency = 0.5;
-    _selectedSection = KKTimingGraphSectionMid;
+    _holdFrequency = 0.5;
+    _selectedSection = KKTimingGraphSectionHold;
 
     self.wantsLayer = YES;
     self.layer.masksToBounds = YES;
@@ -182,9 +182,9 @@
         weakSelf.onOutToggled(isChecked);
     };
 
-    NSTextField *midLabel = [NSTextField labelWithString:@"Mid"];
-    midLabel.font = [NSFont systemFontOfSize:9.0 weight:NSFontWeightMedium];
-    midLabel.textColor = [NSColor inspectorLabel];
+    NSTextField *holdLabel = [NSTextField labelWithString:@"Hold"];
+    holdLabel.font = [NSFont systemFontOfSize:9.0 weight:NSFontWeightMedium];
+    holdLabel.textColor = [NSColor inspectorLabel];
 
     _seedButton = [NSButton
         buttonWithImage:[NSImage imageWithSystemSymbolName:@"shuffle"
@@ -199,13 +199,14 @@
       [_seedButton.heightAnchor constraintEqualToConstant:kCheckboxSize],
     ]];
 
-    _midSeedStack = [NSStackView stackViewWithViews:@[ midLabel, _seedButton ]];
-    _midSeedStack.orientation = NSUserInterfaceLayoutOrientationHorizontal;
-    _midSeedStack.spacing = KKSpacingMD;
-    _midSeedStack.alignment = NSLayoutAttributeCenterY;
-    _midSeedStack.translatesAutoresizingMaskIntoConstraints = NO;
-    _midSeedStack.hidden = YES;
-    [self addSubview:_midSeedStack];
+    _holdSeedStack =
+        [NSStackView stackViewWithViews:@[ holdLabel, _seedButton ]];
+    _holdSeedStack.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    _holdSeedStack.spacing = KKSpacingMD;
+    _holdSeedStack.alignment = NSLayoutAttributeCenterY;
+    _holdSeedStack.translatesAutoresizingMaskIntoConstraints = NO;
+    _holdSeedStack.hidden = YES;
+    [self addSubview:_holdSeedStack];
 
     _globalSlotViews = [NSMutableArray array];
     _sectionSlotViews = [NSMutableArray array];
@@ -358,10 +359,10 @@
     if (self.onOutCurveChanged)
       self.onOutCurveChanged(_outCurve);
     break;
-  case KKTimingGraphSectionMid:
-    _midHoldEffect = (KKHoldEffect)index;
-    if (self.onMidHoldEffectChanged)
-      self.onMidHoldEffectChanged(_midHoldEffect);
+  case KKTimingGraphSectionHold:
+    _holdEffect = (KKHoldEffect)index;
+    if (self.onHoldEffectChanged)
+      self.onHoldEffectChanged(_holdEffect);
     break;
   }
   [self updateControls];
@@ -378,10 +379,10 @@
     _outIntensity = val;
     if (self.onOutIntensityChanged)
       self.onOutIntensityChanged(val);
-  } else if (_selectedSection == KKTimingGraphSectionMid) {
-    _midIntensity = val;
-    if (self.onMidIntensityChanged)
-      self.onMidIntensityChanged(val);
+  } else if (_selectedSection == KKTimingGraphSectionHold) {
+    _holdIntensity = val;
+    if (self.onHoldIntensityChanged)
+      self.onHoldIntensityChanged(val);
   }
   [self renderGraph];
   [self renderCurvePills];
@@ -390,9 +391,9 @@
 }
 
 - (void)seedButtonPressed:(id)sender {
-  _midSeed = arc4random();
-  if (self.onMidSeedChanged)
-    self.onMidSeedChanged(_midSeed);
+  _holdSeed = arc4random();
+  if (self.onHoldSeedChanged)
+    self.onHoldSeedChanged(_holdSeed);
   [self renderGraph];
   [self renderCurvePills];
   [self renderIntensityTicks];
@@ -409,10 +410,10 @@
     _outFrequency = val;
     if (self.onOutFrequencyChanged)
       self.onOutFrequencyChanged(val);
-  } else if (_selectedSection == KKTimingGraphSectionMid) {
-    _midFrequency = val;
-    if (self.onMidFrequencyChanged)
-      self.onMidFrequencyChanged(val);
+  } else if (_selectedSection == KKTimingGraphSectionHold) {
+    _holdFrequency = val;
+    if (self.onHoldFrequencyChanged)
+      self.onHoldFrequencyChanged(val);
   }
   [self renderGraph];
   [self renderCurvePills];
@@ -422,7 +423,7 @@
 - (void)updateControls {
   BOOL showIn = _selectedSection == KKTimingGraphSectionIn && _inEnabled;
   BOOL showOut = _selectedSection == KKTimingGraphSectionOut && _outEnabled;
-  BOOL showMid = _selectedSection == KKTimingGraphSectionMid;
+  BOOL showMid = _selectedSection == KKTimingGraphSectionHold;
   BOOL show = showIn || showOut || showMid;
 
   // Pill selector
@@ -432,7 +433,7 @@
     _curvePillView.selectedIndex = showIn ? _inCurve : _outCurve;
   } else if (showMid) {
     _curvePillView.pillCount = KKHoldEffectCount;
-    _curvePillView.selectedIndex = _midHoldEffect;
+    _curvePillView.selectedIndex = _holdEffect;
   }
   if (show)
     [self renderCurvePills];
@@ -448,8 +449,8 @@
   if (showDuration)
     [self renderDurationTicks];
 
-  BOOL showMidIntensity = showMid && _midHoldEffect != KKHoldEffectNone;
-  _midSeedStack.hidden = !showMidIntensity;
+  BOOL showMidIntensity = showMid && _holdEffect != KKHoldEffectNone;
+  _holdSeedStack.hidden = !showMidIntensity;
 
   // Intensity
   BOOL showInIntensity = showIn && _inCurve != KKEasingCurveLinear;
@@ -462,7 +463,7 @@
   else if (showOutIntensity)
     _intensitySlider.doubleValue = _outIntensity;
   else if (showMidIntensity)
-    _intensitySlider.doubleValue = _midIntensity;
+    _intensitySlider.doubleValue = _holdIntensity;
 
   // Frequency
   BOOL showInFreq = showIn && (_inCurve == KKEasingCurveBounce ||
@@ -481,7 +482,7 @@
   else if (showOutFreq)
     _frequencySlider.doubleValue = _outFrequency;
   else if (showMidIntensity)
-    _frequencySlider.doubleValue = _midFrequency;
+    _frequencySlider.doubleValue = _holdFrequency;
 
   // Placeholder when no bottom controls
   _emptyPlaceholder.hidden = showIntensity || !show;
@@ -528,8 +529,8 @@
   [self renderGraph];
 }
 
-- (void)setMidHoldEffect:(KKHoldEffect)midHoldEffect {
-  _midHoldEffect = midHoldEffect;
+- (void)setHoldEffect:(KKHoldEffect)holdEffect {
+  _holdEffect = holdEffect;
   [self updateControls];
   [self renderGraph];
 }
@@ -576,8 +577,8 @@
   [self updateSectionSlots];
 }
 
-- (void)setMidSectionSlots:(NSArray<KKTimingSlot *> *)midSectionSlots {
-  _midSectionSlots = [midSectionSlots copy];
+- (void)setHoldSectionSlots:(NSArray<KKTimingSlot *> *)holdSectionSlots {
+  _holdSectionSlots = [holdSectionSlots copy];
   [self updateSectionSlots];
 }
 
@@ -592,8 +593,8 @@
   case KKTimingGraphSectionIn:
     slots = _inSectionSlots;
     break;
-  case KKTimingGraphSectionMid:
-    slots = _midSectionSlots;
+  case KKTimingGraphSectionHold:
+    slots = _holdSectionSlots;
     break;
   case KKTimingGraphSectionOut:
     slots = _outSectionSlots;
@@ -651,13 +652,13 @@
   _outCheckbox.frame = NSMakeRect(outGroupX + outSize.width + KKSpacingSM, cbY,
                                   kCheckboxSize, kCheckboxSize);
 
-  NSRect midRect = [self graphRectForSection:KKTimingGraphSectionMid];
-  CGFloat stackWidth = _midSeedStack.fittingSize.width;
-  CGFloat stackHeight = _midSeedStack.fittingSize.height;
-  CGFloat stackX = NSMidX(midRect) - stackWidth / 2.0;
+  NSRect holdRect = [self graphRectForSection:KKTimingGraphSectionHold];
+  CGFloat stackWidth = _holdSeedStack.fittingSize.width;
+  CGFloat stackHeight = _holdSeedStack.fittingSize.height;
+  CGFloat stackX = NSMidX(holdRect) - stackWidth / 2.0;
   CGFloat stackY =
       graphTop + kGraphHeight + (kLabelRowHeight - stackHeight) / 2.0;
-  _midSeedStack.frame = NSMakeRect(stackX, stackY, stackWidth, stackHeight);
+  _holdSeedStack.frame = NSMakeRect(stackX, stackY, stackWidth, stackHeight);
 
   CGFloat viewWidth = NSWidth(self.bounds);
 
@@ -676,8 +677,8 @@
   case KKTimingGraphSectionIn:
     sectionSlots = _inSectionSlots;
     break;
-  case KKTimingGraphSectionMid:
-    sectionSlots = _midSectionSlots;
+  case KKTimingGraphSectionHold:
+    sectionSlots = _holdSectionSlots;
     break;
   case KKTimingGraphSectionOut:
     sectionSlots = _outSectionSlots;

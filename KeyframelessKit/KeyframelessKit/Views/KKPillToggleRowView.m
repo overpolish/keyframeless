@@ -10,7 +10,6 @@
 
 static const CGFloat kPillHeight = 18.0;
 static const CGFloat kPillSpacing = 2.0;
-static const CGFloat kRowSpacing = 2.0;
 static const CGFloat kPillPadX = 5.0;
 
 @implementation KKPillToggleRowView {

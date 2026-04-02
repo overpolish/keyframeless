@@ -37,7 +37,7 @@ double KKApplyEasing(double raw, KKEasingCurve curve, double intensity,
 /// Useful for randomising per-property direction of hold effects.
 double KKSeedSign(int seed, int index);
 
-/// Apply a hold effect at time t (0→1 through the mid phase).
+/// Apply a hold effect at time t (0→1 through the hold phase).
 /// intensity: 0.0 (subtle) to 1.0 (pronounced), 0.5 = default.
 /// frequency: 0.0 (slow) to 1.0 (fast), 0.5 = default.
 /// seed: integer seed for variation (0 = deterministic default).
