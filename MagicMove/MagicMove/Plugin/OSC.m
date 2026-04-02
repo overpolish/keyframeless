@@ -11,15 +11,18 @@
 
 static KKCompoundPointOSC *
 makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
-          UInt32 pointP, UInt32 rotP, UInt32 sxP, UInt32 syP, UInt32 prevP,
-          UInt32 opP, NSInteger arcPt, NSInteger ringPt, NSInteger rotPt,
-          NSInteger iconPt, NSInteger opIconPt, NSInteger scIconPt) {
+          UInt32 pointP, UInt32 rotP, UInt32 rotXP, UInt32 rotYP, UInt32 sxP,
+          UInt32 syP, UInt32 prevP, UInt32 opP, NSInteger arcPt,
+          NSInteger ringPt, NSInteger rotPt, NSInteger iconPt,
+          NSInteger opIconPt, NSInteger scIconPt) {
   KKCompoundPointOSC *p =
       [[KKCompoundPointOSC alloc] initWithAPIManager:api
                                            labelText:label
                                           primaryArc:primaryArc];
   p.pointParam = pointP;
   p.rotParam = rotP;
+  p.rotXParam = rotXP;
+  p.rotYParam = rotYP;
   p.scaleXParam = sxP;
   p.scaleYParam = syP;
   p.previewParam = prevP;
@@ -44,17 +47,19 @@ makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
 
     self.points = @[
       makePoint(apiManager, @"Point A", self, kParamPointA, kParamRotationA,
-                kParamScaleA, kParamScaleYA, kParamPreviewA, kParamOpacityA, 1,
-                2, 3, 13, 17, 21),
+                kParamRotationXA, kParamRotationYA, kParamScaleA, kParamScaleYA,
+                kParamPreviewA, kParamOpacityA, 1, 2, 3, 13, 17, 21),
       makePoint(apiManager, @"Point B", nil, kParamPointB, kParamRotationB,
-                kParamScaleB, kParamScaleYB, kParamPreviewB, kParamOpacityB, 4,
-                5, 6, 14, 18, 22),
+                kParamRotationXB, kParamRotationYB, kParamScaleB, kParamScaleYB,
+                kParamPreviewB, kParamOpacityB, 4, 5, 6, 14, 18, 22),
       makePoint(apiManager, @"Drift", nil, kParamDriftPoint,
-                kParamDriftRotation, kParamDriftScale, kParamDriftScaleY,
-                kParamPreviewDrift, kParamDriftOpacity, 7, 8, 9, 15, 19, 23),
+                kParamDriftRotation, kParamDriftRotationX, kParamDriftRotationY,
+                kParamDriftScale, kParamDriftScaleY, kParamPreviewDrift,
+                kParamDriftOpacity, 7, 8, 9, 15, 19, 23),
       makePoint(apiManager, @"Exit", nil, kParamExitPoint, kParamExitRotation,
-                kParamExitScale, kParamExitScaleY, kParamPreviewExit,
-                kParamExitOpacity, 10, 11, 12, 16, 20, 24),
+                kParamExitRotationX, kParamExitRotationY, kParamExitScale,
+                kParamExitScaleY, kParamPreviewExit, kParamExitOpacity, 10, 11,
+                12, 16, 20, 24),
     ];
 
     self.pathPointOSC = [[KKPointOSC alloc] initWithAPIManager:apiManager];
