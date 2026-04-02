@@ -24,7 +24,7 @@
                            atTime:(CMTime)t {
   BOOL animIn = NO, animOut = NO;
   int inCurve = KKEasingCurveEaseOut, outCurve = KKEasingCurveEaseOut;
-  int sel = KKTimingGraphSectionMid, midHold = KKHoldEffectNone;
+  int sel = KKTimingGraphSectionHold, holdEffectVal = KKHoldEffectNone;
   [paramGetAPI getBoolValue:&animIn fromParameter:kKKParamAnimateIn atTime:t];
   [paramGetAPI getBoolValue:&animOut fromParameter:kKKParamAnimateOut atTime:t];
   [paramGetAPI getIntValue:&inCurve
@@ -36,34 +36,34 @@
   [paramGetAPI getIntValue:&sel
              fromParameter:kKKParamTimingSelectedSection
                     atTime:t];
-  [paramGetAPI getIntValue:&midHold
-             fromParameter:kKKParamMidHoldEffect
+  [paramGetAPI getIntValue:&holdEffectVal
+             fromParameter:kKKParamHoldEffect
                     atTime:t];
 
-  double inIntensity = 0.5, outIntensity = 0.5, midIntensity = 0.5;
+  double inIntensity = 0.5, outIntensity = 0.5, holdIntensity = 0.5;
   [paramGetAPI getFloatValue:&inIntensity
                fromParameter:kKKParamAnimateInIntensity
                       atTime:t];
   [paramGetAPI getFloatValue:&outIntensity
                fromParameter:kKKParamAnimateOutIntensity
                       atTime:t];
-  [paramGetAPI getFloatValue:&midIntensity
-               fromParameter:kKKParamMidHoldIntensity
+  [paramGetAPI getFloatValue:&holdIntensity
+               fromParameter:kKKParamHoldIntensity
                       atTime:t];
 
-  double inFrequency = 0.5, outFrequency = 0.5, midFrequency = 0.5;
+  double inFrequency = 0.5, outFrequency = 0.5, holdFrequency = 0.5;
   [paramGetAPI getFloatValue:&inFrequency
                fromParameter:kKKParamAnimateInFrequency
                       atTime:t];
   [paramGetAPI getFloatValue:&outFrequency
                fromParameter:kKKParamAnimateOutFrequency
                       atTime:t];
-  [paramGetAPI getFloatValue:&midFrequency
-               fromParameter:kKKParamMidHoldFrequency
+  [paramGetAPI getFloatValue:&holdFrequency
+               fromParameter:kKKParamHoldFrequency
                       atTime:t];
 
-  int midSeed = 0;
-  [paramGetAPI getIntValue:&midSeed fromParameter:kKKParamMidHoldSeed atTime:t];
+  int holdSeed = 0;
+  [paramGetAPI getIntValue:&holdSeed fromParameter:kKKParamHoldSeed atTime:t];
 
   double inDuration = 0.5, outDuration = 0.5;
   [paramGetAPI getFloatValue:&inDuration
@@ -79,14 +79,14 @@
   graph.outDuration = outDuration;
   graph.inCurve = (KKEasingCurve)inCurve;
   graph.outCurve = (KKEasingCurve)outCurve;
-  graph.midHoldEffect = (KKHoldEffect)midHold;
+  graph.holdEffect = (KKHoldEffect)holdEffectVal;
   graph.inIntensity = inIntensity;
   graph.outIntensity = outIntensity;
-  graph.midIntensity = midIntensity;
+  graph.holdIntensity = holdIntensity;
   graph.inFrequency = inFrequency;
   graph.outFrequency = outFrequency;
-  graph.midFrequency = midFrequency;
-  graph.midSeed = midSeed;
+  graph.holdFrequency = holdFrequency;
+  graph.holdSeed = holdSeed;
   graph.selectedSection = (KKTimingGraphSection)sel;
 }
 
@@ -203,15 +203,15 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
   NSArray<KKTimingSlot *> *globalSlots = [self timingGlobalSlots];
   NSArray<KKTimingSlot *> *inSlots =
       [self timingSlotsForSection:KKTimingGraphSectionIn];
-  NSArray<KKTimingSlot *> *midSlots =
-      [self timingSlotsForSection:KKTimingGraphSectionMid];
+  NSArray<KKTimingSlot *> *holdSlots =
+      [self timingSlotsForSection:KKTimingGraphSectionHold];
   NSArray<KKTimingSlot *> *outSlots =
       [self timingSlotsForSection:KKTimingGraphSectionOut];
 
   CGFloat globalHeight = KKTotalSlotHeight(globalSlots);
   CGFloat maxSectionHeight =
       MAX(KKTotalSlotHeight(inSlots),
-          MAX(KKTotalSlotHeight(midSlots), KKTotalSlotHeight(outSlots)));
+          MAX(KKTotalSlotHeight(holdSlots), KKTotalSlotHeight(outSlots)));
   CGFloat slotHeight = globalHeight + maxSectionHeight;
   CGFloat totalHeight =
       kBaseHeight + (slotHeight > 0 ? KKPaddingSM + slotHeight : 0);
@@ -272,9 +272,9 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
     [weakSelf timingGraphSetIntValue:(int)curve
                         forParameter:kKKParamAnimateOutInterpolation];
   };
-  graphView.onMidHoldEffectChanged = ^(KKHoldEffect effect) {
+  graphView.onHoldEffectChanged = ^(KKHoldEffect effect) {
     [weakSelf timingGraphSetIntValue:(int)effect
-                        forParameter:kKKParamMidHoldEffect];
+                        forParameter:kKKParamHoldEffect];
   };
   graphView.onInIntensityChanged = ^(double intensity) {
     [weakSelf timingGraphSetFloatValue:intensity
@@ -284,9 +284,9 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
     [weakSelf timingGraphSetFloatValue:intensity
                           forParameter:kKKParamAnimateOutIntensity];
   };
-  graphView.onMidIntensityChanged = ^(double intensity) {
+  graphView.onHoldIntensityChanged = ^(double intensity) {
     [weakSelf timingGraphSetFloatValue:intensity
-                          forParameter:kKKParamMidHoldIntensity];
+                          forParameter:kKKParamHoldIntensity];
   };
   graphView.onInFrequencyChanged = ^(double frequency) {
     [weakSelf timingGraphSetFloatValue:frequency
@@ -296,20 +296,29 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
     [weakSelf timingGraphSetFloatValue:frequency
                           forParameter:kKKParamAnimateOutFrequency];
   };
-  graphView.onMidFrequencyChanged = ^(double frequency) {
+  graphView.onHoldFrequencyChanged = ^(double frequency) {
     [weakSelf timingGraphSetFloatValue:frequency
-                          forParameter:kKKParamMidHoldFrequency];
+                          forParameter:kKKParamHoldFrequency];
   };
-  graphView.onMidSeedChanged = ^(int seed) {
-    [weakSelf timingGraphSetIntValue:seed forParameter:kKKParamMidHoldSeed];
+  graphView.onHoldSeedChanged = ^(int seed) {
+    [weakSelf timingGraphSetIntValue:seed forParameter:kKKParamHoldSeed];
   };
 
   graphView.globalSlots = globalSlots;
   graphView.inSectionSlots = inSlots;
-  graphView.midSectionSlots = midSlots;
+  graphView.holdSectionSlots = holdSlots;
   graphView.outSectionSlots = outSlots;
 
   self.timingGraph = graphView;
+
+  [actionAPI startAction:self];
+  CMTime t = [actionAPI currentTime];
+  [self _applySlotState:globalSlots withParamAPI:paramGetAPI atTime:t];
+  [self _applySlotState:inSlots withParamAPI:paramGetAPI atTime:t];
+  [self _applySlotState:holdSlots withParamAPI:paramGetAPI atTime:t];
+  [self _applySlotState:outSlots withParamAPI:paramGetAPI atTime:t];
+  [actionAPI endAction:self];
+
   return wrapper;
 }
 
@@ -338,7 +347,7 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
   [self _applySlotState:self.timingGraph.inSectionSlots
            withParamAPI:paramGetAPI
                  atTime:t];
-  [self _applySlotState:self.timingGraph.midSectionSlots
+  [self _applySlotState:self.timingGraph.holdSectionSlots
            withParamAPI:paramGetAPI
                  atTime:t];
   [self _applySlotState:self.timingGraph.outSectionSlots
@@ -358,14 +367,14 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
   CMTime t = [actAPI currentTime];
   [setAPI setBoolValue:enabled toParameter:paramID atTime:t];
   if (!enabled) {
-    int sel = KKTimingGraphSectionMid;
+    int sel = KKTimingGraphSectionHold;
     id<FxParameterRetrievalAPI_v6> getAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
     [getAPI getIntValue:&sel
           fromParameter:kKKParamTimingSelectedSection
                  atTime:t];
     if (sel == (int)section)
-      [setAPI setIntValue:KKTimingGraphSectionMid
+      [setAPI setIntValue:KKTimingGraphSectionHold
               toParameter:kKKParamTimingSelectedSection
                    atTime:t];
   }

@@ -28,11 +28,11 @@
 @implementation KKTimingResult
 
 + (instancetype)resultWithIn:(KKTimingPhase *)inPhase
-                         mid:(KKTimingPhase *)midPhase
+                        hold:(KKTimingPhase *)holdPhase
                          out:(KKTimingPhase *)outPhase {
   KKTimingResult *result = [[KKTimingResult alloc] init];
   result->_inPhase = inPhase;
-  result->_midPhase = midPhase;
+  result->_holdPhase = holdPhase;
   result->_outPhase = outPhase;
   return result;
 }

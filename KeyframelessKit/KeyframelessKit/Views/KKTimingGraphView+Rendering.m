@@ -116,11 +116,11 @@ static NSInteger KKExactTickIndex(double value, NSInteger tickCount) {
         maxVal = v;
     }
   }
-  if (self.midHoldEffect != KKHoldEffectNone) {
+  if (self.holdEffect != KKHoldEffectNone) {
     for (NSInteger i = 0; i <= kCurveSegments; i++) {
       CGFloat t = (CGFloat)i / (CGFloat)kCurveSegments;
-      CGFloat v = KKApplyHoldEffect(t, self.midHoldEffect, self.midIntensity,
-                                    self.midFrequency, self.midSeed);
+      CGFloat v = KKApplyHoldEffect(t, self.holdEffect, self.holdIntensity,
+                                    self.holdFrequency, self.holdSeed);
       if (v < minVal)
         minVal = v;
       if (v > maxVal)
@@ -195,9 +195,9 @@ static NSInteger KKExactTickIndex(double value, NSInteger tickCount) {
                                        self.inFrequency)
                        : 1.0;
       break;
-    case KKTimingGraphSectionMid:
-      easedT = KKApplyHoldEffect(rawT, self.midHoldEffect, self.midIntensity,
-                                 self.midFrequency, self.midSeed);
+    case KKTimingGraphSectionHold:
+      easedT = KKApplyHoldEffect(rawT, self.holdEffect, self.holdIntensity,
+                                 self.holdFrequency, self.holdSeed);
       break;
     case KKTimingGraphSectionOut:
       easedT = enabled ? KKApplyEasing(1.0 - rawT, self.outCurve,
@@ -220,7 +220,7 @@ static NSInteger KKExactTickIndex(double value, NSInteger tickCount) {
 }
 
 - (void)renderLabelsWithWidth:(CGFloat)totalWidth {
-  NSString *labels[] = {@"In", @"Mid", @"Out"};
+  NSString *labels[] = {@"In", @"Hold", @"Out"};
 
   for (KKTimingGraphSection s = KKTimingGraphSectionIn;
        s <= KKTimingGraphSectionOut; s++) {
@@ -237,11 +237,11 @@ static NSInteger KKExactTickIndex(double value, NSInteger tickCount) {
     NSSize labelSize = [labels[s] sizeWithAttributes:attrs];
     CGFloat labelY = (kLabelRowHeight - labelSize.height) / 2.0;
 
-    if (s == KKTimingGraphSectionMid && !self.midSeedStack.hidden)
+    if (s == KKTimingGraphSectionHold && !self.holdSeedStack.hidden)
       continue;
 
     CGFloat labelX;
-    if (s == KKTimingGraphSectionMid) {
+    if (s == KKTimingGraphSectionHold) {
       labelX = NSMidX(sRect) - labelSize.width / 2.0;
     } else {
       CGFloat groupWidth = labelSize.width + KKSpacingSM + kCheckboxSize;
@@ -252,7 +252,7 @@ static NSInteger KKExactTickIndex(double value, NSInteger tickCount) {
 }
 
 - (void)renderCurvePills {
-  BOOL isMid = self.selectedSection == KKTimingGraphSectionMid;
+  BOOL isHold = self.selectedSection == KKTimingGraphSectionHold;
   BOOL isOut = self.selectedSection == KKTimingGraphSectionOut;
 
   __weak typeof(self) weakSelf = self;
@@ -260,9 +260,9 @@ static NSInteger KKExactTickIndex(double value, NSInteger tickCount) {
     __strong typeof(weakSelf) s = weakSelf;
     if (!s)
       return t;
-    if (isMid)
-      return KKApplyHoldEffect(t, (KKHoldEffect)idx, s.midIntensity,
-                               s.midFrequency, s.midSeed);
+    if (isHold)
+      return KKApplyHoldEffect(t, (KKHoldEffect)idx, s.holdIntensity,
+                               s.holdFrequency, s.holdSeed);
     double inten = isOut ? s.outIntensity : s.inIntensity;
     double freq = isOut ? s.outFrequency : s.inFrequency;
     KKEasingCurve curve = (KKEasingCurve)idx;
@@ -394,18 +394,18 @@ static NSInteger KKExactTickIndex(double value, NSInteger tickCount) {
 
 - (void)renderIntensityTicks {
   BOOL isOut = self.selectedSection == KKTimingGraphSectionOut;
-  BOOL isMid = self.selectedSection == KKTimingGraphSectionMid;
+  BOOL isHold = self.selectedSection == KKTimingGraphSectionHold;
   double currentIntensity;
-  if (isMid)
-    currentIntensity = self.midIntensity;
+  if (isHold)
+    currentIntensity = self.holdIntensity;
   else if (isOut)
     currentIntensity = self.outIntensity;
   else
     currentIntensity = self.inIntensity;
   NSInteger exact = KKExactTickIndex(currentIntensity, kIntensityTickCount);
 
-  if (isMid) {
-    KKHoldEffect effect = self.midHoldEffect;
+  if (isHold) {
+    KKHoldEffect effect = self.holdEffect;
     [self renderHalfWidthTicksToImageView:self.intensityTickImageView
                                 tickCount:kIntensityTickCount
                               activeIndex:exact
@@ -415,8 +415,8 @@ static NSInteger KKExactTickIndex(double value, NSInteger tickCount) {
                                      (double)idx /
                                      (double)(kIntensityTickCount - 1);
                                  return KKApplyHoldEffect(t, effect, inten,
-                                                          self.midFrequency,
-                                                          self.midSeed);
+                                                          self.holdFrequency,
+                                                          self.holdSeed);
                                }];
   } else {
     KKEasingCurve curve = isOut ? self.outCurve : self.inCurve;
@@ -440,19 +440,19 @@ static NSInteger KKExactTickIndex(double value, NSInteger tickCount) {
 
 - (void)renderFrequencyTicks {
   BOOL isOut = self.selectedSection == KKTimingGraphSectionOut;
-  BOOL isMid = self.selectedSection == KKTimingGraphSectionMid;
+  BOOL isHold = self.selectedSection == KKTimingGraphSectionHold;
   double currentFrequency;
-  if (isMid)
-    currentFrequency = self.midFrequency;
+  if (isHold)
+    currentFrequency = self.holdFrequency;
   else if (isOut)
     currentFrequency = self.outFrequency;
   else
     currentFrequency = self.inFrequency;
   NSInteger exact = KKExactTickIndex(currentFrequency, kFrequencyTickCount);
 
-  if (isMid) {
-    KKHoldEffect effect = self.midHoldEffect;
-    double inten = self.midIntensity;
+  if (isHold) {
+    KKHoldEffect effect = self.holdEffect;
+    double inten = self.holdIntensity;
     [self renderHalfWidthTicksToImageView:self.frequencyTickImageView
                                 tickCount:kFrequencyTickCount
                               activeIndex:exact
@@ -462,7 +462,7 @@ static NSInteger KKExactTickIndex(double value, NSInteger tickCount) {
                                      (double)idx /
                                      (double)(kFrequencyTickCount - 1);
                                  return KKApplyHoldEffect(t, effect, inten,
-                                                          freq, self.midSeed);
+                                                          freq, self.holdSeed);
                                }];
   } else {
     KKEasingCurve curve = isOut ? self.outCurve : self.inCurve;

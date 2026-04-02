@@ -68,10 +68,14 @@
 @implementation MagicMovePlugin (CustomUI)
 
 - (NSArray<KKTimingSlot *> *)timingGlobalSlots {
+  return @[];
+}
+
+- (KKTimingSlot *)_rotateWithMotionSlotForParam:(UInt32)paramID {
   KKParameterRowView *row = [[KKParameterRowView alloc]
       initWithFrame:NSMakeRect(0, 0, 300, KKInspectorRowHeight)
          apiManager:self.apiManager
-        parameterId:kParamRotateWithMotion];
+        parameterId:paramID];
 
   KKLabelView *label = [[KKLabelView alloc] initWithText:@"Rotate with Motion"];
   row.leftView = label;
@@ -102,47 +106,49 @@
     id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
         apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
     [setAPI setBoolValue:isChecked
-             toParameter:kParamRotateWithMotion
+             toParameter:paramID
                   atTime:[actAPI currentTime]];
     [actAPI endAction:strongSelf];
   };
 
-  KKTimingSlot *slot = [KKTimingSlot
+  return [KKTimingSlot
       slotWithView:row
             height:KKInspectorRowHeight
         applyState:^(id<FxParameterRetrievalAPI_v6> paramAPI, CMTime time) {
           BOOL val = NO;
-          [paramAPI getBoolValue:&val
-                   fromParameter:kParamRotateWithMotion
-                          atTime:time];
+          [paramAPI getBoolValue:&val fromParameter:paramID atTime:time];
           checkbox.isChecked = val;
         }];
-
-  return @[ slot ];
 }
 
 - (NSArray<KKTimingSlot *> *)timingSlotsForSection:(NSInteger)section {
-  if (section == 1) // Mid
-    return [self _midHoldPropertySlots];
-  return [self _nonMidPlaceholderSlot];
+  static const UInt32 rwmParams[] = {kParamRotateWithMotionIn,
+                                     kParamRotateWithMotionHold,
+                                     kParamRotateWithMotionOut};
+  KKTimingSlot *rwmSlot =
+      [self _rotateWithMotionSlotForParam:rwmParams[section]];
+  if (section == 1) {
+    NSMutableArray *slots = [NSMutableArray arrayWithObject:rwmSlot];
+    [slots addObjectsFromArray:[self _holdPropertySlots]];
+    return slots;
+  }
+  return @[ rwmSlot, [self _holdPlaceholderSlot] ];
 }
 
-- (NSArray<KKTimingSlot *> *)_nonMidPlaceholderSlot {
+- (KKTimingSlot *)_holdPlaceholderSlot {
   KKAlertView *alert = [[KKAlertView alloc]
-      initWithText:@"Hold properties only available for Mid"
+      initWithText:@"Hold properties only available for Hold"
              color:[[NSColor inspectorLabel] colorWithAlphaComponent:0.3]];
   alert.icon = [NSImage imageWithSystemSymbolName:@"info.circle"
                          accessibilityDescription:nil];
-
-  KKTimingSlot *slot =
+  return
       [KKTimingSlot slotWithView:alert
                           height:KKInspectorRowHeight * 2
                       applyState:^(id<FxParameterRetrievalAPI_v6> p, CMTime t){
                       }];
-  return @[ slot ];
 }
 
-- (NSArray<KKTimingSlot *> *)_midHoldPropertySlots {
+- (NSArray<KKTimingSlot *> *)_holdPropertySlots {
   static const UInt32 holdParams[] = {
       kParamHoldPositionX, kParamHoldPositionY, kParamHoldScaleX,
       kParamHoldScaleY,    kParamHoldRotationZ, kParamHoldRotationX,

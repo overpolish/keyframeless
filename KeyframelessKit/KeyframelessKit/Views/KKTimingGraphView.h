@@ -13,7 +13,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 typedef NS_ENUM(NSInteger, KKTimingGraphSection) {
   KKTimingGraphSectionIn = 0,
-  KKTimingGraphSectionMid = 1,
+  KKTimingGraphSectionHold = 1,
   KKTimingGraphSectionOut = 2,
 };
 
@@ -25,14 +25,14 @@ typedef NS_ENUM(NSInteger, KKTimingGraphSection) {
 @property(nonatomic) double outDuration;
 @property(nonatomic) KKEasingCurve inCurve;
 @property(nonatomic) KKEasingCurve outCurve;
-@property(nonatomic) KKHoldEffect midHoldEffect;
+@property(nonatomic) KKHoldEffect holdEffect;
 @property(nonatomic) double inIntensity;
 @property(nonatomic) double outIntensity;
-@property(nonatomic) double midIntensity;
+@property(nonatomic) double holdIntensity;
 @property(nonatomic) double inFrequency;
 @property(nonatomic) double outFrequency;
-@property(nonatomic) double midFrequency;
-@property(nonatomic) int midSeed;
+@property(nonatomic) double holdFrequency;
+@property(nonatomic) int holdSeed;
 
 @property(nonatomic) KKTimingGraphSection selectedSection;
 @property(nonatomic, copy, nullable) void (^onSectionSelected)
@@ -43,21 +43,21 @@ typedef NS_ENUM(NSInteger, KKTimingGraphSection) {
     (KKEasingCurve curve);
 @property(nonatomic, copy, nullable) void (^onOutCurveChanged)
     (KKEasingCurve curve);
-@property(nonatomic, copy, nullable) void (^onMidHoldEffectChanged)
+@property(nonatomic, copy, nullable) void (^onHoldEffectChanged)
     (KKHoldEffect effect);
 @property(nonatomic, copy, nullable) void (^onInIntensityChanged)
     (double intensity);
 @property(nonatomic, copy, nullable) void (^onOutIntensityChanged)
     (double intensity);
-@property(nonatomic, copy, nullable) void (^onMidIntensityChanged)
+@property(nonatomic, copy, nullable) void (^onHoldIntensityChanged)
     (double intensity);
 @property(nonatomic, copy, nullable) void (^onInFrequencyChanged)
     (double frequency);
 @property(nonatomic, copy, nullable) void (^onOutFrequencyChanged)
     (double frequency);
-@property(nonatomic, copy, nullable) void (^onMidFrequencyChanged)
+@property(nonatomic, copy, nullable) void (^onHoldFrequencyChanged)
     (double frequency);
-@property(nonatomic, copy, nullable) void (^onMidSeedChanged)(int seed);
+@property(nonatomic, copy, nullable) void (^onHoldSeedChanged)(int seed);
 @property(nonatomic, copy, nullable) void (^onInDurationChanged)
     (double duration);
 @property(nonatomic, copy, nullable) void (^onOutDurationChanged)
@@ -65,7 +65,7 @@ typedef NS_ENUM(NSInteger, KKTimingGraphSection) {
 
 @property(nonatomic, copy, nullable) NSArray<KKTimingSlot *> *globalSlots;
 @property(nonatomic, copy, nullable) NSArray<KKTimingSlot *> *inSectionSlots;
-@property(nonatomic, copy, nullable) NSArray<KKTimingSlot *> *midSectionSlots;
+@property(nonatomic, copy, nullable) NSArray<KKTimingSlot *> *holdSectionSlots;
 @property(nonatomic, copy, nullable) NSArray<KKTimingSlot *> *outSectionSlots;
 
 @end

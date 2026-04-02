@@ -118,7 +118,7 @@
 
   KKTimingResult *timing = [self timingAtTime:renderTime];
   double effectiveRadius = radius * timing.inPhase.factor *
-                           timing.midPhase.factor * timing.outPhase.factor;
+                           timing.holdPhase.factor * timing.outPhase.factor;
 
   *pluginState = [NSData dataWithBytes:&effectiveRadius
                                 length:sizeof(effectiveRadius)];

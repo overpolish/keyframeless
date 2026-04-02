@@ -33,7 +33,7 @@ static const NSInteger kFrequencyTickCount __attribute__((unused)) = 3;
 @property(nonatomic, readonly) NSImageView *graphImageView;
 @property(nonatomic, readonly) NSImageView *intensityTickImageView;
 @property(nonatomic, readonly) NSImageView *frequencyTickImageView;
-@property(nonatomic, readonly) NSStackView *midSeedStack;
+@property(nonatomic, readonly) NSStackView *holdSeedStack;
 
 - (void)renderGraph;
 - (void)renderCurvePills;

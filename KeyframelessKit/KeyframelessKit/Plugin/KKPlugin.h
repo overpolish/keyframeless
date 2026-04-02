@@ -117,7 +117,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSArray<KKTimingSlot *> *)timingGlobalSlots;
 
 /// Override in subclasses to provide custom views that appear below the
-/// graph, changing based on the selected section (0=In, 1=Mid, 2=Out).
+/// graph, changing based on the selected section (0=In, 1=Hold, 2=Out).
 - (NSArray<KKTimingSlot *> *)timingSlotsForSection:(NSInteger)section;
 
 /// Reads the bool at forceShowParamID; if YES, sets every param in paramIDs
