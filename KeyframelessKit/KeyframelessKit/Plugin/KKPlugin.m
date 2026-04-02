@@ -474,11 +474,14 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
                     atTime:renderTime];
   KKHoldEffect midHold = (KKHoldEffect)midHoldInt;
 
+  static const double kMidOverlap = 0.3;
   double inEnd = startSec + (animateIn ? inDuration : 0);
   double outStart = endSec - (animateOut ? outDuration : 0);
-  double midDur = MAX(0.0, outStart - inEnd);
+  double midStart = inEnd - (animateIn ? inDuration * kMidOverlap : 0);
+  double midEnd = outStart + (animateOut ? outDuration * kMidOverlap : 0);
+  double midDur = MAX(0.0, midEnd - midStart);
   double midProgress =
-      (midDur > 0) ? MAX(0.0, MIN(1.0, (nowSec - inEnd) / midDur)) : 1.0;
+      (midDur > 0) ? MAX(0.0, MIN(1.0, (nowSec - midStart) / midDur)) : 1.0;
   KKTimingInterpolator holdInterp = ^double(double t) {
     return KKApplyHoldEffect(t, midHold);
   };

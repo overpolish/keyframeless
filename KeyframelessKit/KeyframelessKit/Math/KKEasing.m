@@ -45,7 +45,7 @@ double KKEaseOutBounce(double t) {
 }
 
 static double KKHoldBounce(double t) {
-  return 1.0 + 0.15 * sin(t * M_PI * 4.0) * (1.0 - t);
+  return 1.0 + 0.15 * sin(t * M_PI * 4.0) * sin(t * M_PI);
 }
 
 static double KKHoldWiggle(double t) {
