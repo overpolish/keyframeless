@@ -22,6 +22,7 @@ typedef NS_ENUM(NSInteger, KKTimingGraphSection) {
 @property(nonatomic) BOOL outEnabled;
 @property(nonatomic) KKEasingCurve inCurve;
 @property(nonatomic) KKEasingCurve outCurve;
+@property(nonatomic) KKHoldEffect midHoldEffect;
 
 @property(nonatomic) KKTimingGraphSection selectedSection;
 @property(nonatomic, copy, nullable) void (^onSectionSelected)
@@ -32,6 +33,8 @@ typedef NS_ENUM(NSInteger, KKTimingGraphSection) {
     (KKEasingCurve curve);
 @property(nonatomic, copy, nullable) void (^onOutCurveChanged)
     (KKEasingCurve curve);
+@property(nonatomic, copy, nullable) void (^onMidHoldEffectChanged)
+    (KKHoldEffect effect);
 
 @end
 

@@ -371,6 +371,21 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     return NO;
   }
 
+  if (![paramAPI addPopupMenuWithName:@"Hold Effect"
+                          parameterID:kKKParamMidHoldEffect
+                         defaultValue:KKHoldEffectNone
+                          menuEntries:@[ @"None", @"Bounce", @"Wiggle" ]
+                       parameterFlags:kFxParameterFlag_HIDDEN]) {
+    if (error != NULL)
+      *error = [NSError errorWithDomain:@"co.overpolish.keyframeless.error"
+                                   code:1
+                               userInfo:@{
+                                 NSLocalizedDescriptionKey :
+                                     @"Unable to add Hold Effect popup"
+                               }];
+    return NO;
+  }
+
   return YES;
 }
 
@@ -452,19 +467,25 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
                                                    progress:outProgress
                                                 interpolate:outInterp];
 
-  // Mid phase: hold at 1.0, fills the gap between in and out
+  // Mid phase: hold effect fills the gap between in and out
+  int midHoldInt = KKHoldEffectNone;
+  [paramGetAPI getIntValue:&midHoldInt
+             fromParameter:kKKParamMidHoldEffect
+                    atTime:renderTime];
+  KKHoldEffect midHold = (KKHoldEffect)midHoldInt;
+
   double inEnd = startSec + (animateIn ? inDuration : 0);
   double outStart = endSec - (animateOut ? outDuration : 0);
   double midDur = MAX(0.0, outStart - inEnd);
   double midProgress =
       (midDur > 0) ? MAX(0.0, MIN(1.0, (nowSec - inEnd) / midDur)) : 1.0;
-  KKTimingInterpolator hold = ^double(double __unused t) {
-    return 1.0;
+  KKTimingInterpolator holdInterp = ^double(double t) {
+    return KKApplyHoldEffect(t, midHold);
   };
   KKTimingPhase *midPhase = [KKTimingPhase phaseWithEnabled:YES
                                                    duration:midDur
                                                    progress:midProgress
-                                                interpolate:hold];
+                                                interpolate:holdInterp];
 
   return [KKTimingResult resultWithIn:inPhase mid:midPhase out:outPhase];
 }
@@ -685,8 +706,12 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
                fromParameter:kKKParamAnimateOutInterpolation
                       atTime:now];
     int selectedSection = KKTimingGraphSectionMid;
+    int midHold = KKHoldEffectNone;
     [paramGetAPI getIntValue:&selectedSection
                fromParameter:kKKParamTimingSelectedSection
+                      atTime:now];
+    [paramGetAPI getIntValue:&midHold
+               fromParameter:kKKParamMidHoldEffect
                       atTime:now];
     [actionAPI endAction:self];
 
@@ -694,6 +719,7 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
     graphView.outEnabled = animOut;
     graphView.inCurve = (KKEasingCurve)inCurve;
     graphView.outCurve = (KKEasingCurve)outCurve;
+    graphView.midHoldEffect = (KKHoldEffect)midHold;
     graphView.selectedSection = (KKTimingGraphSection)selectedSection;
 
     __weak typeof(self) weakSelf = self;
@@ -707,10 +733,16 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
       [weakSelf timingGraphSelectSection:section];
     };
     graphView.onInCurveChanged = ^(KKEasingCurve curve) {
-      [weakSelf timingGraphSetInCurve:curve];
+      [weakSelf timingGraphSetIntValue:(int)curve
+                          forParameter:kKKParamAnimateInInterpolation];
     };
     graphView.onOutCurveChanged = ^(KKEasingCurve curve) {
-      [weakSelf timingGraphSetOutCurve:curve];
+      [weakSelf timingGraphSetIntValue:(int)curve
+                          forParameter:kKKParamAnimateOutInterpolation];
+    };
+    graphView.onMidHoldEffectChanged = ^(KKHoldEffect effect) {
+      [weakSelf timingGraphSetIntValue:(int)effect
+                          forParameter:kKKParamMidHoldEffect];
     };
 
     _timingGraph = graphView;
@@ -769,12 +801,17 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
   [paramGetAPI getIntValue:&sel
              fromParameter:kKKParamTimingSelectedSection
                     atTime:t];
+  int midHold = KKHoldEffectNone;
+  [paramGetAPI getIntValue:&midHold
+             fromParameter:kKKParamMidHoldEffect
+                    atTime:t];
   [actionAPI endAction:self];
 
   _timingGraph.inEnabled = animIn;
   _timingGraph.outEnabled = animOut;
   _timingGraph.inCurve = (KKEasingCurve)inCurve;
   _timingGraph.outCurve = (KKEasingCurve)outCurve;
+  _timingGraph.midHoldEffect = (KKHoldEffect)midHold;
   _timingGraph.selectedSection = (KKTimingGraphSection)sel;
 }
 
@@ -845,28 +882,13 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
   [self timingGraphApplyState];
 }
 
-- (void)timingGraphSetInCurve:(KKEasingCurve)curve {
+- (void)timingGraphSetIntValue:(int)value forParameter:(UInt32)paramID {
   id<FxCustomParameterActionAPI_v4> actAPI =
       [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actAPI startAction:self];
   id<FxParameterSettingAPI_v5> setAPI =
       [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  [setAPI setIntValue:(int)curve
-          toParameter:kKKParamAnimateInInterpolation
-               atTime:[actAPI currentTime]];
-  [actAPI endAction:self];
-  [self timingGraphApplyState];
-}
-
-- (void)timingGraphSetOutCurve:(KKEasingCurve)curve {
-  id<FxCustomParameterActionAPI_v4> actAPI =
-      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actAPI startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  [setAPI setIntValue:(int)curve
-          toParameter:kKKParamAnimateOutInterpolation
-               atTime:[actAPI currentTime]];
+  [setAPI setIntValue:value toParameter:paramID atTime:[actAPI currentTime]];
   [actAPI endAction:self];
   [self timingGraphApplyState];
 }
@@ -925,6 +947,11 @@ static NSMutableDictionary<NSNumber *, id> *kkClassRegistry(Class cls,
                      toParameter:kKKParamAnimateOutDuration];
   [paramSetAPI setParameterFlags:flagOut
                      toParameter:kKKParamAnimateOutInterpolation];
+
+  BOOL showMid = expandedTiming && sel == KKTimingGraphSectionMid;
+  FxParameterFlags flagMid =
+      showMid ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:flagMid toParameter:kKKParamMidHoldEffect];
 
   for (NSNumber *paramID in self.timingGroupExtraParamIDs) {
     FxParameterFlags flagTiming =

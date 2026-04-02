@@ -23,5 +23,6 @@ static const UInt32 kKKParamAnimateOutDuration __attribute__((unused)) = 9906;
 static const UInt32 kKKParamAnimateOutInterpolation __attribute__((unused)) = 9907;
 static const UInt32 kKKParamTimingExpanded __attribute__((unused)) = 9908;
 static const UInt32 kKKParamTimingSelectedSection __attribute__((unused)) = 9909;
+static const UInt32 kKKParamMidHoldEffect __attribute__((unused)) = 9910;
 
 static const UInt32 kKKParamUpdateBanner __attribute__((unused)) = 9990;
