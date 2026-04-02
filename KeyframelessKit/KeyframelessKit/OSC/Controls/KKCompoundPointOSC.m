@@ -469,10 +469,42 @@
     BOOL ctrlHeld = (ctrlFlags & kCGEventFlagMaskControl) != 0;
 
     if (!ctrlHeld) {
-      NSUInteger allCount = snapCount + 1;
+      CGPoint thirdsCanvas[4];
+      double tx, ty;
+      [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                              fromX:1.0 / 3.0
+                              fromY:0.5
+                            toSpace:kFxDrawingCoordinates_CANVAS
+                                toX:&tx
+                                toY:&ty];
+      thirdsCanvas[0] = (CGPoint){tx, ty};
+      [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                              fromX:2.0 / 3.0
+                              fromY:0.5
+                            toSpace:kFxDrawingCoordinates_CANVAS
+                                toX:&tx
+                                toY:&ty];
+      thirdsCanvas[1] = (CGPoint){tx, ty};
+      [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                              fromX:0.5
+                              fromY:1.0 / 3.0
+                            toSpace:kFxDrawingCoordinates_CANVAS
+                                toX:&tx
+                                toY:&ty];
+      thirdsCanvas[2] = (CGPoint){tx, ty};
+      [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                              fromX:0.5
+                              fromY:2.0 / 3.0
+                            toSpace:kFxDrawingCoordinates_CANVAS
+                                toX:&tx
+                                toY:&ty];
+      thirdsCanvas[3] = (CGPoint){tx, ty};
+
+      NSUInteger allCount = snapCount + 5;
       CGPoint *allTargets = alloca(allCount * sizeof(CGPoint));
       allTargets[0] = canvasCenter;
       memcpy(allTargets + 1, snapTargets, snapCount * sizeof(CGPoint));
+      memcpy(allTargets + 1 + snapCount, thirdsCanvas, sizeof(thirdsCanvas));
 
       CGPoint snapped =
           [snapEngine snapCanvasPoint:(CGPoint){positionX, positionY}

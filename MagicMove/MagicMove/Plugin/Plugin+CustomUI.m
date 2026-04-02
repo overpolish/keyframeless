@@ -177,7 +177,8 @@
   pills.alignment = NSLayoutAttributeTrailing;
 
   KKParameterRowView *row = [[KKParameterRowView alloc]
-      initWithFrame:NSMakeRect(0, 0, 300, KKInspectorRowHeight * 2)
+      initWithFrame:NSMakeRect(0, 0, 300,
+                               KKInspectorRowHeight * 2 + KKSpacingSM * 2)
          apiManager:self.apiManager
         parameterId:kParamHoldPositionX];
 
@@ -193,6 +194,12 @@
     [pills.centerYAnchor constraintEqualToAnchor:rightContainer.centerYAnchor],
     [pills.leadingAnchor
         constraintGreaterThanOrEqualToAnchor:rightContainer.leadingAnchor],
+    [pills.topAnchor
+        constraintGreaterThanOrEqualToAnchor:rightContainer.topAnchor
+                                    constant:KKSpacingSM],
+    [pills.bottomAnchor
+        constraintLessThanOrEqualToAnchor:rightContainer.bottomAnchor
+                                 constant:-KKSpacingSM],
   ]];
   row.rightView = rightContainer;
 
@@ -220,7 +227,7 @@
 
   KKTimingSlot *slot = [KKTimingSlot
       slotWithView:row
-            height:KKInspectorRowHeight * 2
+            height:KKInspectorRowHeight * 2 + KKSpacingSM * 2
         applyState:^(id<FxParameterRetrievalAPI_v6> paramAPI, CMTime time) {
           for (NSInteger i = 0; i < holdCount; i++) {
             BOOL val = YES;
@@ -512,7 +519,7 @@
                     @"Hold <kbd>Shift</kbd> while dragging to constrain to "
                     @"X or Y axis"],
       [KKMarkup attributedStringFromMarkup:
-                    @"Hold <kbd>⌥</kbd> while dragging to disable snapping"],
+                    @"Hold <kbd>⌃</kbd> while dragging to disable snapping"],
       [KKMarkup attributedStringFromMarkup:
                     @"Hold <kbd>⌘</kbd> and click rotation to rotate X axis"],
       [KKMarkup attributedStringFromMarkup:

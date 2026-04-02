@@ -70,6 +70,9 @@ makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
     self.pathHandleOSC.clearsOnDraw = NO;
     self.pathHandleOSC.oscRadius = 3.0f;
     self.pathHandleOSC.outlineWidth = 1.0f;
+    self.anchorOSC = [[KKSquarePointOSC alloc] initWithAPIManager:apiManager];
+    self.anchorOSC.clearsOnDraw = NO;
+    self.anchorSnap = [[KKSnapEngine alloc] init];
     self.pathDragIndex = -1;
     self.pathLastClickIndex = -1;
     self.pointSnap = [[KKSnapEngine alloc] init];
@@ -166,6 +169,14 @@ makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
                                         atTime:time])
       return;
   }
+  if (activePart == kAnchorPart) {
+    self.anchorDragging = YES;
+    id<FxOnScreenControlAPI_v4> oscAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    [oscAPI setCursor:[NSCursor openHandCursor]];
+    *forceUpdate = YES;
+    return;
+  }
   if ([self mouseDownForPathWithPart:activePart
                            positionX:positionX
                            positionY:positionY
@@ -187,6 +198,56 @@ makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
                       modifiers:(NSUInteger)modifiers
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
+  if (activePart == kAnchorPart) {
+    id<FxOnScreenControlAPI_v4> oscAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    double objX, objY;
+    [oscAPI convertPointFromSpace:kFxDrawingCoordinates_CANVAS
+                            fromX:positionX
+                            fromY:positionY
+                          toSpace:kFxDrawingCoordinates_OBJECT
+                              toX:&objX
+                              toY:&objY];
+    simd_float2 pos = {(float)objX, (float)objY};
+
+    CGEventFlags anchorFlags =
+        CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+    BOOL snapDisabled = (anchorFlags & kCGEventFlagMaskAlternate) != 0;
+    if (!snapDisabled) {
+      static const simd_float2 kAnchorTargets[] = {
+          {0.5f, 0.5f},                      // center
+          {0.0f, 0.0f},        {1.0f, 0.0f}, // corners
+          {0.0f, 1.0f},        {1.0f, 1.0f},
+          {0.5f, 0.0f},        {1.0f, 0.5f}, // edge midpoints
+          {0.5f, 1.0f},        {0.0f, 0.5f},
+          {1.0f / 3.0f, 0.0f}, {2.0f / 3.0f, 0.0f}, // thirds X
+          {1.0f / 3.0f, 1.0f}, {2.0f / 3.0f, 1.0f},
+          {0.0f, 1.0f / 3.0f}, {0.0f, 2.0f / 3.0f}, // thirds Y
+          {1.0f, 1.0f / 3.0f}, {1.0f, 2.0f / 3.0f},
+      };
+      static const NSUInteger kAnchorTargetCount =
+          sizeof(kAnchorTargets) / sizeof(kAnchorTargets[0]);
+      CGPoint c0 = [self canvasPointFromObjectPoint:(simd_float2){0, 0}];
+      CGPoint c1 = [self canvasPointFromObjectPoint:(simd_float2){1, 0}];
+      float pixPerUnit = (float)fabs(c1.x - c0.x);
+      pos = [self.anchorSnap snapObjectPoint:pos
+                                   toTargets:kAnchorTargets
+                                       count:kAnchorTargetCount
+                               pixelsPerUnit:pixPerUnit];
+    } else {
+      [self.anchorSnap reset];
+    }
+
+    id<FxParameterSettingAPI_v5> paramSetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    if (paramSetAPI)
+      [paramSetAPI setXValue:pos.x
+                      YValue:pos.y
+                 toParameter:kParamAnchorPoint
+                      atTime:time];
+    *forceUpdate = YES;
+    return;
+  }
   if ([self mouseDraggedForPathWithPart:activePart
                               positionX:positionX
                               positionY:positionY
@@ -230,6 +291,9 @@ makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
                     atTime:(CMTime)time {
   [self.pointSnap reset];
   [self.pathSnap reset];
+  [self.anchorSnap reset];
+  self.anchorDragging = NO;
+  self.anchorHovered = NO;
   self.pathDragIndex = -1;
   self.pathDragIsInHandle = NO;
   self.pathDragIsOutHandle = NO;

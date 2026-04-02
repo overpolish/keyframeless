@@ -9,9 +9,11 @@
 #import "OSC.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/KKSquarePointOSC.h>
 
 #define CLAMP(x, lo, hi) MAX((lo), MIN((hi), (x)))
 #define kPointCount 4
+static const NSInteger kAnchorPart = 25;
 
 static const float kSnapThreshold = 8.0f;
 static const float kPathHitThreshold = 10.0f;
@@ -47,6 +49,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, strong) NSArray<KKCompoundPointOSC *> *points;
 @property(nonatomic, strong) KKSnapEngine *pointSnap;
 @property(nonatomic, strong) KKSnapEngine *pathSnap;
+@property(nonatomic, strong) KKSquarePointOSC *anchorOSC;
+@property(nonatomic, strong) KKSnapEngine *anchorSnap;
+@property(nonatomic) BOOL anchorHovered;
+@property(nonatomic) BOOL anchorDragging;
 @property(nonatomic, strong) KKPointOSC *pathPointOSC;
 @property(nonatomic, strong) KKPointOSC *pathHandleOSC;
 @property(nonatomic) NSInteger pathDragIndex;

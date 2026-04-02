@@ -9,6 +9,7 @@
 
 typedef struct {
     vector_float2 translate;
+    vector_float2 anchorOffset;
     float rotation;
     float rotationX;
     float rotationY;
