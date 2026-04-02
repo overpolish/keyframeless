@@ -73,8 +73,8 @@ static const FxParameterFlags kCustomUIDisabled =
                                      parameterID:kKKParamAnimateInInterpolation
                                     defaultValue:KKEasingCurveEaseOut
                                      menuEntries:@[
-                                       @"Ease In", @"Ease Out", @"Ease In Out",
-                                       @"Elastic", @"Bounce"
+                                       @"Linear", @"Ease In", @"Ease Out",
+                                       @"Ease In Out", @"Elastic", @"Bounce"
                                      ]
                                   parameterFlags:kFxParameterFlag_HIDDEN],
                   error, @"Unable to add In Curve popup"))
@@ -115,8 +115,8 @@ static const FxParameterFlags kCustomUIDisabled =
                                      parameterID:kKKParamAnimateOutInterpolation
                                     defaultValue:KKEasingCurveEaseOut
                                      menuEntries:@[
-                                       @"Ease In", @"Ease Out", @"Ease In Out",
-                                       @"Elastic", @"Bounce"
+                                       @"Linear", @"Ease In", @"Ease Out",
+                                       @"Ease In Out", @"Elastic", @"Bounce"
                                      ]
                                   parameterFlags:kFxParameterFlag_HIDDEN],
                   error, @"Unable to add Out Curve popup"))

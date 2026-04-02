@@ -91,6 +91,8 @@ static double KKEaseOutBounce(double t, double intensity, double frequency) {
 double KKApplyEasing(double raw, KKEasingCurve curve, double intensity,
                      double frequency) {
   switch (curve) {
+  case KKEasingCurveLinear:
+    return raw;
   case KKEasingCurveEaseIn:
     return KKEaseIn(raw, intensity);
   case KKEasingCurveEaseOut:
@@ -102,7 +104,7 @@ double KKApplyEasing(double raw, KKEasingCurve curve, double intensity,
   case KKEasingCurveBounce:
     return KKEaseOutBounce(raw, intensity, frequency);
   default:
-    return KKEaseOut(raw, intensity);
+    return raw;
   }
 }
 

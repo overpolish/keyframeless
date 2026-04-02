@@ -75,6 +75,9 @@ static const NSInteger kFrequencyTickCount = 5;
   NSImageView *ticks = [[NSImageView alloc] initWithFrame:NSZeroRect];
   ticks.imageScaling = NSImageScaleNone;
   ticks.translatesAutoresizingMaskIntoConstraints = NO;
+  [ticks setContentCompressionResistancePriority:NSLayoutPriorityDefaultLow
+                                  forOrientation:
+                                      NSLayoutConstraintOrientationHorizontal];
   ticks.hidden = YES;
   [self addSubview:ticks];
 
@@ -122,11 +125,15 @@ static const NSInteger kFrequencyTickCount = 5;
     _curveSlider.slider.numberOfTickMarks = KKEasingCurveCount;
 
     // Row 2: Graph + labels
-    CGFloat graphTop = curveTop + kSliderRowHeight + kTickHeight;
+    CGFloat graphTop = curveTop + kSliderRowHeight + kTickHeight + KKSpacingLG;
 
     _graphImageView = [[NSImageView alloc] initWithFrame:NSZeroRect];
     _graphImageView.imageScaling = NSImageScaleNone;
     _graphImageView.translatesAutoresizingMaskIntoConstraints = NO;
+    [_graphImageView
+        setContentCompressionResistancePriority:NSLayoutPriorityDefaultLow
+                                 forOrientation:
+                                     NSLayoutConstraintOrientationHorizontal];
     [self addSubview:_graphImageView];
 
     [NSLayoutConstraint activateConstraints:@[
@@ -312,12 +319,14 @@ static const NSInteger kFrequencyTickCount = 5;
   BOOL showMidIntensity = showMid && _midHoldEffect != KKHoldEffectNone;
   _midSeedStack.hidden = !showMidIntensity;
 
-  BOOL showIntensity = showIn || showOut || showMidIntensity;
+  BOOL showInIntensity = showIn && _inCurve != KKEasingCurveLinear;
+  BOOL showOutIntensity = showOut && _outCurve != KKEasingCurveLinear;
+  BOOL showIntensity = showInIntensity || showOutIntensity || showMidIntensity;
   _intensitySlider.hidden = !showIntensity;
   _intensityTickImageView.hidden = !showIntensity;
-  if (showIn)
+  if (showInIntensity)
     _intensitySlider.doubleValue = _inIntensity;
-  else if (showOut)
+  else if (showOutIntensity)
     _intensitySlider.doubleValue = _outIntensity;
   else if (showMidIntensity)
     _intensitySlider.doubleValue = _midIntensity;
@@ -423,7 +432,7 @@ static const NSInteger kFrequencyTickCount = 5;
     NSFontAttributeName : [NSFont systemFontOfSize:9.0
                                             weight:NSFontWeightMedium],
   };
-  CGFloat graphTop = kSliderRowHeight + kTickHeight;
+  CGFloat graphTop = kSliderRowHeight + kTickHeight + KKSpacingLG;
   CGFloat cbY =
       graphTop + kGraphHeight + (kLabelRowHeight - kCheckboxSize) / 2.0;
 
@@ -481,20 +490,20 @@ static const NSInteger kFrequencyTickCount = 5;
 }
 
 - (NSRect)intensityTickHitRectForIndex:(NSInteger)index {
-  return
-      [self _hitRectForTickIndex:index
-                       tickCount:kIntensityTickCount
-                           tickY:kSliderRowHeight + kTickHeight + kGraphHeight +
-                                 kLabelRowHeight + kSliderRowHeight];
+  return [self
+      _hitRectForTickIndex:index
+                 tickCount:kIntensityTickCount
+                     tickY:kSliderRowHeight + kTickHeight + KKSpacingLG +
+                           kGraphHeight + kLabelRowHeight + kSliderRowHeight];
 }
 
 - (NSRect)frequencyTickHitRectForIndex:(NSInteger)index {
-  return
-      [self _hitRectForTickIndex:index
-                       tickCount:kFrequencyTickCount
-                           tickY:kSliderRowHeight + kTickHeight + kGraphHeight +
-                                 kLabelRowHeight + kSliderRowHeight +
-                                 kTickHeight + kSliderRowHeight];
+  return [self
+      _hitRectForTickIndex:index
+                 tickCount:kFrequencyTickCount
+                     tickY:kSliderRowHeight + kTickHeight + KKSpacingLG +
+                           kGraphHeight + kLabelRowHeight + kSliderRowHeight +
+                           kTickHeight + kSliderRowHeight];
 }
 
 - (void)mouseDown:(NSEvent *)event {

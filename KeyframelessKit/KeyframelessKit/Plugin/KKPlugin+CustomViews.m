@@ -160,7 +160,7 @@
 }
 
 - (NSView *)_createTimingGraphView {
-  NSView *wrapper = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, 212)];
+  NSView *wrapper = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, 220)];
   wrapper.autoresizingMask = NSViewWidthSizable;
 
   KKTimingGraphView *graphView =
