@@ -6,11 +6,19 @@
 #import "Plugin.h"
 #import "Constants.h"
 #import "ShaderTypes.h"
-#import <AppKit/NSView.h>
+#import <AppKit/AppKit.h>
 #import <Foundation/Foundation.h>
 #import <IOSurface/IOSurfaceObjC.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 #import <QuartzCore/QuartzCore.h>
+
+typedef struct {
+  double radius;
+  double cropTop;
+  double cropBottom;
+  double cropLeft;
+  double cropRight;
+} RoundedPluginState;
 
 @implementation RoundedPlugin {
   KKLog *_log;
@@ -79,6 +87,72 @@
     return NO;
   }
 
+  if (![paramAPI
+          addCustomParameterWithName:@""
+                         parameterID:kParamCropGroup
+                        defaultValue:@(kParamCropGroup)
+                      parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
+                                     kFxParameterFlag_CUSTOM_UI |
+                                     kFxParameterFlag_USE_FULL_VIEW_WIDTH]) {
+    return NO;
+  }
+
+  if (![paramAPI addToggleButtonWithName:@""
+                             parameterID:kParamCropExpanded
+                            defaultValue:NO
+                          parameterFlags:kFxParameterFlag_HIDDEN |
+                                         kFxParameterFlag_NOT_ANIMATABLE]) {
+    return NO;
+  }
+
+  if (![paramAPI addPercentSliderWithName:@"Top"
+                              parameterID:kParamCropTop
+                             defaultValue:0.0
+                             parameterMin:0.0
+                             parameterMax:1.0
+                                sliderMin:0.0
+                                sliderMax:1.0
+                                    delta:0.001
+                           parameterFlags:kFxParameterFlag_HIDDEN]) {
+    return NO;
+  }
+
+  if (![paramAPI addPercentSliderWithName:@"Bottom"
+                              parameterID:kParamCropBottom
+                             defaultValue:0.0
+                             parameterMin:0.0
+                             parameterMax:1.0
+                                sliderMin:0.0
+                                sliderMax:1.0
+                                    delta:0.001
+                           parameterFlags:kFxParameterFlag_HIDDEN]) {
+    return NO;
+  }
+
+  if (![paramAPI addPercentSliderWithName:@"Left"
+                              parameterID:kParamCropLeft
+                             defaultValue:0.0
+                             parameterMin:0.0
+                             parameterMax:1.0
+                                sliderMin:0.0
+                                sliderMax:1.0
+                                    delta:0.001
+                           parameterFlags:kFxParameterFlag_HIDDEN]) {
+    return NO;
+  }
+
+  if (![paramAPI addPercentSliderWithName:@"Right"
+                              parameterID:kParamCropRight
+                             defaultValue:0.0
+                             parameterMin:0.0
+                             parameterMax:1.0
+                                sliderMin:0.0
+                                sliderMax:1.0
+                                    delta:0.001
+                           parameterFlags:kFxParameterFlag_HIDDEN]) {
+    return NO;
+  }
+
   if (![self addAnimationParametersWithAPI:paramAPI error:error]) {
     return NO;
   }
@@ -90,7 +164,32 @@
                   atTime:(CMTime)time
                    error:(NSError **)error {
   [self updateTimingParameterVisibility];
+  [self updateCropParameterVisibility];
   return YES;
+}
+
+- (void)updateCropParameterVisibility {
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> paramSetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  if (!paramGetAPI || !paramSetAPI)
+    return;
+
+  BOOL expanded = NO;
+  [paramGetAPI getBoolValue:&expanded
+              fromParameter:kParamCropExpanded
+                     atTime:kCMTimeZero];
+
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamCropExpanded];
+
+  FxParameterFlags flags =
+      expanded ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:flags toParameter:kParamCropTop];
+  [paramSetAPI setParameterFlags:flags toParameter:kParamCropBottom];
+  [paramSetAPI setParameterFlags:flags toParameter:kParamCropLeft];
+  [paramSetAPI setParameterFlags:flags toParameter:kParamCropRight];
 }
 
 - (BOOL)pluginState:(NSData **)pluginState
@@ -120,8 +219,26 @@
   double effectiveRadius = radius * timing.inPhase.factor *
                            timing.holdPhase.factor * timing.outPhase.factor;
 
-  *pluginState = [NSData dataWithBytes:&effectiveRadius
-                                length:sizeof(effectiveRadius)];
+  RoundedPluginState state;
+  state.radius = effectiveRadius;
+  state.cropTop = 0.0;
+  state.cropBottom = 0.0;
+  state.cropLeft = 0.0;
+  state.cropRight = 0.0;
+  [paramGetAPI getFloatValue:&state.cropTop
+               fromParameter:kParamCropTop
+                      atTime:renderTime];
+  [paramGetAPI getFloatValue:&state.cropBottom
+               fromParameter:kParamCropBottom
+                      atTime:renderTime];
+  [paramGetAPI getFloatValue:&state.cropLeft
+               fromParameter:kParamCropLeft
+                      atTime:renderTime];
+  [paramGetAPI getFloatValue:&state.cropRight
+               fromParameter:kParamCropRight
+                      atTime:renderTime];
+
+  *pluginState = [NSData dataWithBytes:&state length:sizeof(state)];
   return (*pluginState != nil);
 }
 
@@ -175,8 +292,8 @@
     return NO;
   }
 
-  double radius = 0.0;
-  [pluginState getBytes:&radius length:sizeof(radius)];
+  RoundedPluginState state;
+  [pluginState getBytes:&state length:sizeof(state)];
 
   id<MTLRenderPipelineState> pipelineState =
       [self pipelineStateForPluginID:kPluginID
@@ -188,7 +305,7 @@
   if (!pipelineState)
     return NO;
 
-  float fragmentRadius = (float)radius;
+  float fragmentRadius = (float)state.radius;
   simd_float2 imageSize = {(float)(destinationImage.imagePixelBounds.right -
                                    destinationImage.imagePixelBounds.left),
                            (float)(destinationImage.imagePixelBounds.top -
@@ -198,6 +315,15 @@
                      destinationImage.imagePixelBounds.left)),
       roundf((float)(destinationImage.tilePixelBounds.bottom -
                      destinationImage.imagePixelBounds.bottom))};
+
+  // Crop bounding box from edge insets (percentage of image size)
+  float cropL = (float)state.cropLeft * imageSize.x;
+  float cropR = (float)state.cropRight * imageSize.x;
+  float cropB = (float)state.cropBottom * imageSize.y;
+  float cropT = (float)state.cropTop * imageSize.y;
+  simd_float2 cropCenter = {(cropL - cropR) * 0.5f, (cropB - cropT) * 0.5f};
+  simd_float2 cropSize = {imageSize.x - cropL - cropR,
+                          imageSize.y - cropB - cropT};
 
   return [self
       encodeRenderCommandsForDestinationImage:destinationImage
@@ -228,6 +354,16 @@
                                                      length:sizeof(tileOffset)
                                                     atIndex:
                                                         FragmentIndex_TileOffset];
+                                       [encoder
+                                           setFragmentBytes:&cropCenter
+                                                     length:sizeof(cropCenter)
+                                                    atIndex:
+                                                        FragmentIndex_CropCenter];
+                                       [encoder
+                                           setFragmentBytes:&cropSize
+                                                     length:sizeof(cropSize)
+                                                    atIndex:
+                                                        FragmentIndex_CropSize];
                                        [encoder
                                            drawPrimitives:
                                                MTLPrimitiveTypeTriangleStrip

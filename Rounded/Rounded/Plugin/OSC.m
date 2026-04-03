@@ -4,6 +4,7 @@
  */
 
 #import "OSC.h"
+#import "Constants.h"
 #import <FxPlug/FxPlugSDK.h>
 
 #define CLAMP(x, lo, hi) MAX((lo), MIN((hi), (x)))
@@ -21,27 +22,59 @@ static float paddingForRadius(double radius, float minDim) {
   return minDim * 0.05f + cornerRadiusPixels * insetFactor * squircleCorrection;
 }
 
-/// Fetches corner geometry from OSC API - topRight, bottomLeft in canvas space.
+/// Fetches crop-adjusted corner geometry in canvas space.
+/// The crop parameters define a sub-rectangle of the image; the returned
+/// corners reflect that bounding box.
 /// @returns NO if API is unavailable.
 static BOOL getCornerPoints(id<PROAPIAccessing> apiManager, CGPoint *topRight,
-                            CGPoint *bottomLeft) {
+                            CGPoint *bottomLeft, CMTime time) {
   id<FxOnScreenControlAPI_v4> oscAPI =
       [apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
   if (!oscAPI)
     return NO;
 
+  // Get full image corners in canvas space
+  CGPoint fullTR = {0, 0}, fullBL = {0, 0};
   [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
                           fromX:1.0
                           fromY:1.0
                         toSpace:kFxDrawingCoordinates_CANVAS
-                            toX:&topRight->x
-                            toY:&topRight->y];
+                            toX:&fullTR.x
+                            toY:&fullTR.y];
   [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
                           fromX:0.0
                           fromY:0.0
                         toSpace:kFxDrawingCoordinates_CANVAS
-                            toX:&bottomLeft->x
-                            toY:&bottomLeft->y];
+                            toX:&fullBL.x
+                            toY:&fullBL.y];
+
+  // Read crop edge insets
+  double cropTop = 0.0, cropBottom = 0.0, cropLeft = 0.0, cropRight = 0.0;
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (paramGetAPI) {
+    [paramGetAPI getFloatValue:&cropTop
+                 fromParameter:kParamCropTop
+                        atTime:time];
+    [paramGetAPI getFloatValue:&cropBottom
+                 fromParameter:kParamCropBottom
+                        atTime:time];
+    [paramGetAPI getFloatValue:&cropLeft
+                 fromParameter:kParamCropLeft
+                        atTime:time];
+    [paramGetAPI getFloatValue:&cropRight
+                 fromParameter:kParamCropRight
+                        atTime:time];
+  }
+
+  // Apply edge insets to canvas corners
+  float canvasW = fullTR.x - fullBL.x;
+  float canvasH = fullTR.y - fullBL.y;
+  topRight->x = fullTR.x - cropRight * canvasW;
+  topRight->y = fullTR.y - cropTop * canvasH;
+  bottomLeft->x = fullBL.x + cropLeft * canvasW;
+  bottomLeft->y = fullBL.y + cropBottom * canvasH;
+
   return YES;
 }
 
@@ -52,7 +85,7 @@ static BOOL getCornerPoints(id<PROAPIAccessing> apiManager, CGPoint *topRight,
 
 - (CGPoint)oscPositionAtTime:(CMTime)time {
   CGPoint topRight = {0, 0}, bottomLeft = {0, 0};
-  if (!getCornerPoints(self.apiManager, &topRight, &bottomLeft))
+  if (!getCornerPoints(self.apiManager, &topRight, &bottomLeft, time))
     return CGPointZero;
 
   float canvasImageWidth = topRight.x - bottomLeft.x;
@@ -118,7 +151,7 @@ static BOOL getCornerPoints(id<PROAPIAccessing> apiManager, CGPoint *topRight,
     return;
 
   CGPoint topRight = {0, 0}, bottomLeft = {0, 0};
-  if (!getCornerPoints(self.apiManager, &topRight, &bottomLeft))
+  if (!getCornerPoints(self.apiManager, &topRight, &bottomLeft, time))
     return;
 
   float canvasImageWidth = topRight.x - bottomLeft.x;
