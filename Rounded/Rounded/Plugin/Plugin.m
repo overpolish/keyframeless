@@ -310,6 +310,7 @@ typedef struct {
                                    destinationImage.imagePixelBounds.left),
                            (float)(destinationImage.imagePixelBounds.top -
                                    destinationImage.imagePixelBounds.bottom)};
+
   simd_float2 tileOffset = {
       roundf((float)(destinationImage.tilePixelBounds.left -
                      destinationImage.imagePixelBounds.left)),

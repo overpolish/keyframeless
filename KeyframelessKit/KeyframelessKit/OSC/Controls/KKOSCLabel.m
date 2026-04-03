@@ -32,6 +32,7 @@ static NSColor *labelStrokeColor(void) {
 @implementation KKOSCLabel {
   id<PROAPIAccessing> __weak _apiManager;
   NSString *_cachedText;
+  BOOL _cachedMonospaced;
   id<MTLTexture> _texture;
   CGSize _size;
 }
@@ -50,10 +51,15 @@ static NSColor *labelStrokeColor(void) {
 }
 
 - (void)updateTextureForDevice:(id<MTLDevice>)device {
-  if (_texture && [_cachedText isEqualToString:_text])
+  if (_texture && [_cachedText isEqualToString:_text] &&
+      _cachedMonospaced == _monospaced)
     return;
 
-  NSFont *font = [NSFont systemFontOfSize:kFontSize weight:NSFontWeightMedium];
+  NSFont *font = _monospaced
+                     ? [NSFont monospacedSystemFontOfSize:kFontSize
+                                                   weight:NSFontWeightMedium]
+                     : [NSFont systemFontOfSize:kFontSize
+                                         weight:NSFontWeightMedium];
   NSDictionary *strokeAttrs = @{
     NSFontAttributeName : font,
     NSForegroundColorAttributeName : labelStrokeColor(),
@@ -110,6 +116,7 @@ static NSColor *labelStrokeColor(void) {
 
   CGContextRelease(ctx);
   _cachedText = [_text copy];
+  _cachedMonospaced = _monospaced;
 }
 
 - (void)drawAtCanvasPosition:(CGPoint)canvasPosition

@@ -12,4 +12,5 @@
 @property(nonatomic) BOOL cropTopLeftHovered;
 @property(nonatomic) BOOL cropTopLeftDragging;
 @property(nonatomic, strong) KKRectBorderOSC *cropBorderOSC;
+@property(nonatomic, strong) KKOSCLabel *cropSizeLabel;
 @end
