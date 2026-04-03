@@ -34,6 +34,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKPillToggleRowView.h>
 #import <KeyframelessKit/KKPlugin.h>
 #import <KeyframelessKit/KKPointOSC.h>
+#import <KeyframelessKit/KKRectBorderOSC.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 #import <KeyframelessKit/KKRingOSC.h>
 #import <KeyframelessKit/KKRotationOSC.h>
