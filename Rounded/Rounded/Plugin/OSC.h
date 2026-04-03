@@ -7,10 +7,12 @@
 
 #import <KeyframelessKit/KeyframelessKit.h>
 
+#define kCropPointCount 8
+
 @interface RoundedOSC : KKPointOSC
-@property(nonatomic, strong) KKPointOSC *cropTopLeftOSC;
-@property(nonatomic) BOOL cropTopLeftHovered;
-@property(nonatomic) BOOL cropTopLeftDragging;
+@property(nonatomic, strong) NSArray<KKPointOSC *> *cropPointOSCs;
+@property(nonatomic) NSInteger cropHoveredIndex;
+@property(nonatomic) NSInteger cropDraggingIndex;
 @property(nonatomic, strong) KKRectBorderOSC *cropBorderOSC;
 @property(nonatomic, strong) KKOSCLabel *cropSizeLabel;
 @end
