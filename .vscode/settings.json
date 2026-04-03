@@ -127,6 +127,7 @@
     "MagicMove",
     "KeyframelessKit",
     "FxPlug",
-    "Rounded"
+    "Rounded",
+    "MotionBlur"
   ]
 }
