@@ -4,9 +4,8 @@
  */
 
 #import "Constants.h"
-#import "Plugin.h"
+#import "Plugin_Private.h"
 #import <AppKit/AppKit.h>
-#import <KeyframelessKit/KeyframelessKit.h>
 
 @implementation RoundedPlugin (CustomUI)
 
