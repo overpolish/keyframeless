@@ -5,16 +5,71 @@
 
 #import "OSC.h"
 #import "Constants.h"
+#import <CoreGraphics/CGEventSource.h>
 #import <FxPlug/FxPlugSDK.h>
 
 #define CLAMP(x, lo, hi) MAX((lo), MIN((hi), (x)))
 
 static const NSInteger kRadiusPart = 1;
-static const NSInteger kCropTopLeftPart = 2;
-static const NSInteger kCropRectPart = 3;
+static const NSInteger kCropPointBasePart = 2;
+static const NSInteger kCropRectPart = 10;
 
-/// Computes canvas-space padding offset for a given radius value and image
-/// size. Matches squicle/circle inset geometry used to position the OSC.
+enum {
+  kCropPt_TopLeft = 0,
+  kCropPt_TopCenter,
+  kCropPt_TopRight,
+  kCropPt_RightCenter,
+  kCropPt_BottomRight,
+  kCropPt_BottomCenter,
+  kCropPt_BottomLeft,
+  kCropPt_LeftCenter,
+};
+
+typedef struct {
+  BOOL left;
+  BOOL right;
+  BOOL top;
+  BOOL bottom;
+  BOOL isEdge;
+} CropPointConfig;
+
+static const CropPointConfig kCropConfigs[kCropPointCount] = {
+    {YES, NO, YES, NO, NO}, // TopLeft
+    {NO, NO, YES, NO, YES}, // TopCenter
+    {NO, YES, YES, NO, NO}, // TopRight
+    {NO, YES, NO, NO, YES}, // RightCenter
+    {NO, YES, NO, YES, NO}, // BottomRight
+    {NO, NO, NO, YES, YES}, // BottomCenter
+    {YES, NO, NO, YES, NO}, // BottomLeft
+    {YES, NO, NO, NO, YES}, // LeftCenter
+};
+
+static CGPoint cropPointPosition(NSInteger idx, CGPoint topRight,
+                                 CGPoint bottomLeft) {
+  double mx = (topRight.x + bottomLeft.x) * 0.5;
+  double my = (topRight.y + bottomLeft.y) * 0.5;
+  switch (idx) {
+  case kCropPt_TopLeft:
+    return (CGPoint){bottomLeft.x, topRight.y};
+  case kCropPt_TopCenter:
+    return (CGPoint){mx, topRight.y};
+  case kCropPt_TopRight:
+    return (CGPoint){topRight.x, topRight.y};
+  case kCropPt_RightCenter:
+    return (CGPoint){topRight.x, my};
+  case kCropPt_BottomRight:
+    return (CGPoint){topRight.x, bottomLeft.y};
+  case kCropPt_BottomCenter:
+    return (CGPoint){mx, bottomLeft.y};
+  case kCropPt_BottomLeft:
+    return (CGPoint){bottomLeft.x, bottomLeft.y};
+  case kCropPt_LeftCenter:
+    return (CGPoint){bottomLeft.x, my};
+  default:
+    return CGPointZero;
+  }
+}
+
 static float paddingForRadius(double radius, float minDim) {
   float t = radius / 100.0f;
   float power = 5.0f * (1.0f - t) + 2.0f * t;
@@ -26,10 +81,6 @@ static float paddingForRadius(double radius, float minDim) {
   return minDim * 0.05f + cornerRadiusPixels * insetFactor * squircleCorrection;
 }
 
-/// Fetches crop-adjusted corner geometry in canvas space.
-/// The crop parameters define a sub-rectangle of the image; the returned
-/// corners reflect that bounding box.
-/// @returns NO if API is unavailable.
 static BOOL getCornerPoints(id<PROAPIAccessing> apiManager, CGPoint *topRight,
                             CGPoint *bottomLeft, CGSize *fullImageCanvas,
                             CMTime time) {
@@ -38,7 +89,6 @@ static BOOL getCornerPoints(id<PROAPIAccessing> apiManager, CGPoint *topRight,
   if (!oscAPI)
     return NO;
 
-  // Get full image corners in canvas space
   CGPoint fullTR = {0, 0}, fullBL = {0, 0};
   [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
                           fromX:1.0
@@ -53,7 +103,6 @@ static BOOL getCornerPoints(id<PROAPIAccessing> apiManager, CGPoint *topRight,
                             toX:&fullBL.x
                             toY:&fullBL.y];
 
-  // Read crop edge insets
   double cropTop = 0.0, cropBottom = 0.0, cropLeft = 0.0, cropRight = 0.0;
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
@@ -72,7 +121,6 @@ static BOOL getCornerPoints(id<PROAPIAccessing> apiManager, CGPoint *topRight,
                         atTime:time];
   }
 
-  // Apply edge insets to canvas corners
   float canvasW = fullTR.x - fullBL.x;
   float canvasH = fullTR.y - fullBL.y;
   topRight->x = fullTR.x - cropRight * canvasW;
@@ -102,10 +150,19 @@ static BOOL getCornerPoints(id<PROAPIAccessing> apiManager, CGPoint *topRight,
   self = [super initWithAPIManager:apiManager];
   if (self) {
     self.clearsOnDraw = NO;
-    self.cropTopLeftOSC = [[KKPointOSC alloc] initWithAPIManager:apiManager];
-    self.cropTopLeftOSC.clearsOnDraw = NO;
-    self.cropTopLeftOSC.oscRadius = 5.0f;
-    self.cropTopLeftOSC.outlineWidth = 1.5f;
+    self.cropHoveredIndex = -1;
+    self.cropDraggingIndex = -1;
+
+    NSMutableArray *points = [NSMutableArray arrayWithCapacity:kCropPointCount];
+    for (int i = 0; i < kCropPointCount; i++) {
+      KKPointOSC *pt = [[KKPointOSC alloc] initWithAPIManager:apiManager];
+      pt.clearsOnDraw = NO;
+      pt.oscRadius = 5.0f;
+      pt.outlineWidth = 1.5f;
+      [points addObject:pt];
+    }
+    self.cropPointOSCs = points;
+
     self.cropBorderOSC =
         [[KKRectBorderOSC alloc] initWithAPIManager:apiManager];
     self.cropBorderOSC.clearsOnDraw = NO;
@@ -113,13 +170,6 @@ static BOOL getCornerPoints(id<PROAPIAccessing> apiManager, CGPoint *topRight,
     self.cropSizeLabel.monospaced = YES;
   }
   return self;
-}
-
-- (CGPoint)cropTopLeftCanvasPositionAtTime:(CMTime)time {
-  CGPoint topRight = {0, 0}, bottomLeft = {0, 0};
-  if (!getCornerPoints(self.apiManager, &topRight, &bottomLeft, NULL, time))
-    return CGPointZero;
-  return CGPointMake(bottomLeft.x, topRight.y);
 }
 
 - (CGPoint)oscPositionAtTime:(CMTime)time {
@@ -204,14 +254,16 @@ static BOOL getCornerPoints(id<PROAPIAccessing> apiManager, CGPoint *topRight,
                            : (labelSize.height / 2.0 + 4.0);
     [self.cropSizeLabel drawAtCanvasPosition:labelPos
                             destinationImage:destinationImage];
-  }
 
-  CGPoint cropTL = {bottomLeft.x, topRight.y};
-  [self.cropTopLeftOSC drawAtCanvasPosition:cropTL
-                                  isHovered:self.cropTopLeftHovered
-                                   isActive:self.cropTopLeftDragging
-                           destinationImage:destinationImage
-                                     atTime:time];
+    for (int i = 0; i < kCropPointCount; i++) {
+      CGPoint pos = cropPointPosition(i, topRight, bottomLeft);
+      [self.cropPointOSCs[i] drawAtCanvasPosition:pos
+                                        isHovered:(self.cropHoveredIndex == i)
+                                         isActive:(self.cropDraggingIndex == i)
+                                 destinationImage:destinationImage
+                                           atTime:time];
+    }
+  }
 
   CGPoint radiusPos = [self oscPositionAtTime:time];
   [self drawAtCanvasPosition:radiusPos
@@ -225,7 +277,7 @@ static BOOL getCornerPoints(id<PROAPIAccessing> apiManager, CGPoint *topRight,
                     mousePositionY:(double)positionY
                         activePart:(NSInteger *)activePart
                             atTime:(CMTime)time {
-  self.cropTopLeftHovered = NO;
+  self.cropHoveredIndex = -1;
   *activePart = 0;
 
   CGPoint topRight = {0, 0}, bottomLeft = {0, 0};
@@ -238,6 +290,16 @@ static BOOL getCornerPoints(id<PROAPIAccessing> apiManager, CGPoint *topRight,
         positionY <= maxY) {
       *activePart = kCropRectPart;
     }
+
+    for (int i = 0; i < kCropPointCount; i++) {
+      CGPoint pos = cropPointPosition(i, topRight, bottomLeft);
+      double dx = positionX - pos.x;
+      double dy = positionY - pos.y;
+      if (sqrt(dx * dx + dy * dy) < self.cropPointOSCs[i].hitRadius) {
+        self.cropHoveredIndex = i;
+        *activePart = kCropPointBasePart + i;
+      }
+    }
   }
 
   if ([self hitTestAtMousePositionX:positionX
@@ -245,13 +307,24 @@ static BOOL getCornerPoints(id<PROAPIAccessing> apiManager, CGPoint *topRight,
                              atTime:time]) {
     *activePart = kRadiusPart;
   }
+}
 
-  CGPoint cropTL = [self cropTopLeftCanvasPositionAtTime:time];
-  double dx = positionX - cropTL.x;
-  double dy = positionY - cropTL.y;
-  if (sqrt(dx * dx + dy * dy) < self.cropTopLeftOSC.hitRadius) {
-    self.cropTopLeftHovered = YES;
-    *activePart = kCropTopLeftPart;
+- (void)readCropValues:(double *)cL
+                    cR:(double *)cR
+                    cT:(double *)cT
+                    cB:(double *)cB
+                atTime:(CMTime)time {
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  *cL = 0;
+  *cR = 0;
+  *cT = 0;
+  *cB = 0;
+  if (paramGetAPI) {
+    [paramGetAPI getFloatValue:cL fromParameter:kParamCropLeft atTime:time];
+    [paramGetAPI getFloatValue:cR fromParameter:kParamCropRight atTime:time];
+    [paramGetAPI getFloatValue:cT fromParameter:kParamCropTop atTime:time];
+    [paramGetAPI getFloatValue:cB fromParameter:kParamCropBottom atTime:time];
   }
 }
 
@@ -272,43 +345,23 @@ static BOOL getCornerPoints(id<PROAPIAccessing> apiManager, CGPoint *topRight,
                                 toX:&_dragStartObjX
                                 toY:&_dragStartObjY];
     }
-    id<FxParameterRetrievalAPI_v6> paramGetAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    if (paramGetAPI) {
-      [paramGetAPI getFloatValue:&_dragStartCropTop
-                   fromParameter:kParamCropTop
-                          atTime:time];
-      [paramGetAPI getFloatValue:&_dragStartCropBottom
-                   fromParameter:kParamCropBottom
-                          atTime:time];
-      [paramGetAPI getFloatValue:&_dragStartCropLeft
-                   fromParameter:kParamCropLeft
-                          atTime:time];
-      [paramGetAPI getFloatValue:&_dragStartCropRight
-                   fromParameter:kParamCropRight
-                          atTime:time];
-    }
+    [self readCropValues:&_dragStartCropLeft
+                      cR:&_dragStartCropRight
+                      cT:&_dragStartCropTop
+                      cB:&_dragStartCropBottom
+                  atTime:time];
     *forceUpdate = YES;
     return;
   }
 
-  if (activePart == kCropTopLeftPart) {
-    id<FxParameterRetrievalAPI_v6> paramGetAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    double cL = 0, cR = 0, cT = 0, cB = 0;
-    if (paramGetAPI) {
-      [paramGetAPI getFloatValue:&cL fromParameter:kParamCropLeft atTime:time];
-      [paramGetAPI getFloatValue:&cR fromParameter:kParamCropRight atTime:time];
-      [paramGetAPI getFloatValue:&cT fromParameter:kParamCropTop atTime:time];
-      [paramGetAPI getFloatValue:&cB
-                   fromParameter:kParamCropBottom
-                          atTime:time];
-    }
+  NSInteger cropIdx = activePart - kCropPointBasePart;
+  if (cropIdx >= 0 && cropIdx < kCropPointCount) {
+    double cL, cR, cT, cB;
+    [self readCropValues:&cL cR:&cR cT:&cT cB:&cB atTime:time];
     double startW = 1.0 - cL - cR;
     double startH = 1.0 - cT - cB;
     _cropStartAspect = (startH > 0.001) ? startW / startH : 1.0;
-
-    self.cropTopLeftDragging = YES;
+    self.cropDraggingIndex = cropIdx;
     *forceUpdate = YES;
     return;
   }
@@ -378,7 +431,8 @@ static BOOL getCornerPoints(id<PROAPIAccessing> apiManager, CGPoint *topRight,
     return;
   }
 
-  if (activePart == kCropTopLeftPart) {
+  NSInteger cropIdx = activePart - kCropPointBasePart;
+  if (cropIdx >= 0 && cropIdx < kCropPointCount) {
     id<FxOnScreenControlAPI_v4> oscAPI =
         [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
     if (!oscAPI)
@@ -392,66 +446,102 @@ static BOOL getCornerPoints(id<PROAPIAccessing> apiManager, CGPoint *topRight,
                               toX:&objX
                               toY:&objY];
 
-    double cropLeft = CLAMP(objX, 0.0, 1.0);
-    double cropTop = CLAMP(1.0 - objY, 0.0, 1.0);
+    CropPointConfig cfg = kCropConfigs[cropIdx];
+    double cL, cR, cT, cB;
+    [self readCropValues:&cL cR:&cR cT:&cT cB:&cB atTime:time];
+    double prevL = cL, prevR = cR, prevT = cT, prevB = cB;
 
     CGEventFlags flags =
         CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
-    if (flags & kCGEventFlagMaskShift) {
-      id<FxParameterRetrievalAPI_v6> paramGetAPI = [self.apiManager
-          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-      double cropRight = 0.0, cropBottom = 0.0;
-      if (paramGetAPI) {
-        [paramGetAPI getFloatValue:&cropRight
-                     fromParameter:kParamCropRight
-                            atTime:time];
-        [paramGetAPI getFloatValue:&cropBottom
-                     fromParameter:kParamCropBottom
-                            atTime:time];
+    BOOL optHeld = (flags & kCGEventFlagMaskAlternate) != 0;
+    BOOL shiftHeld = (flags & kCGEventFlagMaskShift) != 0;
+
+    if (cfg.left)
+      cL = CLAMP(objX, 0.0, 1.0);
+    if (cfg.right)
+      cR = CLAMP(1.0 - objX, 0.0, 1.0);
+    if (cfg.top)
+      cT = CLAMP(1.0 - objY, 0.0, 1.0);
+    if (cfg.bottom)
+      cB = CLAMP(objY, 0.0, 1.0);
+
+    if (optHeld) {
+      if (cfg.isEdge) {
+        if (cfg.top)
+          cB = CLAMP(prevB + (cT - prevT), 0.0, 1.0);
+        else if (cfg.bottom)
+          cT = CLAMP(prevT + (cB - prevB), 0.0, 1.0);
+        if (cfg.left)
+          cR = CLAMP(prevR + (cL - prevL), 0.0, 1.0);
+        else if (cfg.right)
+          cL = CLAMP(prevL + (cR - prevR), 0.0, 1.0);
+      } else {
+        // Corner + opt: force pixel-space square
+        double cx0, cy0, cx1, cy1;
+        [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                                fromX:0.0
+                                fromY:0.0
+                              toSpace:kFxDrawingCoordinates_CANVAS
+                                  toX:&cx0
+                                  toY:&cy0];
+        [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                                fromX:1.0
+                                fromY:1.0
+                              toSpace:kFxDrawingCoordinates_CANVAS
+                                  toX:&cx1
+                                  toY:&cy1];
+        double imgW = fabs(cx1 - cx0);
+        double imgH = fabs(cy1 - cy0);
+        double aspect = (imgH > 0.001) ? imgW / imgH : 1.0;
+        double w = 1.0 - cL - cR;
+        double targetH = w * aspect;
+        double currentH = 1.0 - cT - cB;
+        double diff = currentH - targetH;
+        if (cfg.top)
+          cT = CLAMP(cT + diff, 0.0, 1.0);
+        else
+          cB = CLAMP(cB + diff, 0.0, 1.0);
       }
-      double w = 1.0 - cropLeft - cropRight;
-      double h = w / _cropStartAspect;
-      cropTop = CLAMP(1.0 - cropBottom - h, 0.0, 1.0);
-    } else if (flags & kCGEventFlagMaskAlternate) {
-      id<FxParameterRetrievalAPI_v6> paramGetAPI = [self.apiManager
-          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-      double cropRight = 0.0, cropBottom = 0.0;
-      if (paramGetAPI) {
-        [paramGetAPI getFloatValue:&cropRight
-                     fromParameter:kParamCropRight
-                            atTime:time];
-        [paramGetAPI getFloatValue:&cropBottom
-                     fromParameter:kParamCropBottom
-                            atTime:time];
+    }
+
+    if (shiftHeld) {
+      BOOL changesH = cfg.top || cfg.bottom;
+      BOOL changesW = cfg.left || cfg.right;
+
+      if (changesW && changesH) {
+        // Corner: width drives, adjust the corner's own vertical edge
+        double w = 1.0 - cL - cR;
+        double targetH = w / _cropStartAspect;
+        double currentH = 1.0 - cT - cB;
+        double diff = currentH - targetH;
+        if (cfg.top)
+          cT = CLAMP(cT + diff, 0.0, 1.0);
+        else
+          cB = CLAMP(cB + diff, 0.0, 1.0);
+      } else if (changesW) {
+        // LeftCenter/RightCenter: width drives, adjust height symmetrically
+        double w = 1.0 - cL - cR;
+        double targetH = w / _cropStartAspect;
+        double diff = (1.0 - cT - cB) - targetH;
+        cT = CLAMP(cT + diff * 0.5, 0.0, 1.0);
+        cB = CLAMP(cB + diff * 0.5, 0.0, 1.0);
+      } else {
+        // TopCenter/BottomCenter: height drives, adjust width symmetrically
+        double h = 1.0 - cT - cB;
+        double targetW = h * _cropStartAspect;
+        double diff = (1.0 - cL - cR) - targetW;
+        cL = CLAMP(cL + diff * 0.5, 0.0, 1.0);
+        cR = CLAMP(cR + diff * 0.5, 0.0, 1.0);
       }
-      double cx0, cy0, cx1, cy1;
-      [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
-                              fromX:0.0
-                              fromY:0.0
-                            toSpace:kFxDrawingCoordinates_CANVAS
-                                toX:&cx0
-                                toY:&cy0];
-      [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
-                              fromX:1.0
-                              fromY:1.0
-                            toSpace:kFxDrawingCoordinates_CANVAS
-                                toX:&cx1
-                                toY:&cy1];
-      double imgW = fabs(cx1 - cx0);
-      double imgH = fabs(cy1 - cy0);
-      double aspect = (imgH > 0.001) ? imgW / imgH : 1.0;
-      double w = 1.0 - cropLeft - cropRight;
-      double h = w * aspect;
-      cropTop = CLAMP(1.0 - cropBottom - h, 0.0, 1.0);
     }
 
     id<FxParameterSettingAPI_v5> paramSetAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
     if (paramSetAPI) {
-      [paramSetAPI setFloatValue:cropLeft
-                     toParameter:kParamCropLeft
-                          atTime:time];
-      [paramSetAPI setFloatValue:cropTop toParameter:kParamCropTop atTime:time];
+      [paramSetAPI setFloatValue:cL toParameter:kParamCropLeft atTime:time];
+      [paramSetAPI setFloatValue:cR toParameter:kParamCropRight atTime:time];
+      [paramSetAPI setFloatValue:cT toParameter:kParamCropTop atTime:time];
+      [paramSetAPI setFloatValue:cB toParameter:kParamCropBottom atTime:time];
     }
     *forceUpdate = YES;
     return;
@@ -475,18 +565,13 @@ static BOOL getCornerPoints(id<PROAPIAccessing> apiManager, CGPoint *topRight,
   BOOL isFlippedX = canvasImageWidth < 0;
   BOOL isFlippedY = canvasImageHeight < 0;
 
-  // Use signed distance along the diagonal axis
   double dx = positionX - topRight.x;
   double dy = positionY - topRight.y;
   double signX = isFlippedX ? -1.0 : 1.0;
   double signY = isFlippedY ? -1.0 : 1.0;
 
-  // Projected distance from corner to mouse along the OSC's diagonal axis,
-  // minus oscSize since padding(t) is what we're solving for, not the full
-  // offset.
   double mouseDist = (-dx * signX + -dy * signY) * 0.5 - self.oscSize;
 
-  // Binary search for t such that padding(t) == mouseDist
   float lo = 0.0f, hi = 100.0f;
   for (int i = 0; i < 32; i++) {
     float mid = (lo + hi) * 0.5f;
@@ -509,8 +594,8 @@ static BOOL getCornerPoints(id<PROAPIAccessing> apiManager, CGPoint *topRight,
                  modifiers:(NSUInteger)modifiers
                forceUpdate:(BOOL *)forceUpdate
                     atTime:(CMTime)time {
-  self.cropTopLeftDragging = NO;
-  self.cropTopLeftHovered = NO;
+  self.cropDraggingIndex = -1;
+  self.cropHoveredIndex = -1;
   [super mouseUpAtPositionX:positionX
                   positionY:positionY
                  activePart:activePart
