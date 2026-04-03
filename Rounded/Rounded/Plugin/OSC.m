@@ -6,7 +6,6 @@
 #import "OSC.h"
 #import "Constants.h"
 #import <FxPlug/FxPlugSDK.h>
-#import <QuartzCore/CABase.h>
 
 #define CLAMP(x, lo, hi) MAX((lo), MIN((hi), (x)))
 
@@ -97,7 +96,6 @@ static BOOL getCornerPoints(id<PROAPIAccessing> apiManager, CGPoint *topRight,
   double _dragStartObjX;
   double _dragStartObjY;
   double _cropStartAspect;
-  NSTimeInterval _cropTopLeftLastClickTime;
 }
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
@@ -310,19 +308,6 @@ static BOOL getCornerPoints(id<PROAPIAccessing> apiManager, CGPoint *topRight,
     double startH = 1.0 - cT - cB;
     _cropStartAspect = (startH > 0.001) ? startW / startH : 1.0;
 
-    NSTimeInterval now = CACurrentMediaTime();
-    if (now - _cropTopLeftLastClickTime < 0.35) {
-      id<FxParameterSettingAPI_v5> paramSetAPI =
-          [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      if (paramSetAPI) {
-        [paramSetAPI setFloatValue:0.0 toParameter:kParamCropTop atTime:time];
-        [paramSetAPI setFloatValue:0.0 toParameter:kParamCropLeft atTime:time];
-      }
-      _cropTopLeftLastClickTime = 0;
-      *forceUpdate = YES;
-      return;
-    }
-    _cropTopLeftLastClickTime = now;
     self.cropTopLeftDragging = YES;
     *forceUpdate = YES;
     return;

@@ -219,6 +219,9 @@ typedef struct {
   double effectiveRadius = radius * timing.inPhase.factor *
                            timing.holdPhase.factor * timing.outPhase.factor;
 
+  double timingFactor =
+      timing.inPhase.factor * timing.holdPhase.factor * timing.outPhase.factor;
+
   RoundedPluginState state;
   state.radius = effectiveRadius;
   state.cropTop = 0.0;
@@ -237,6 +240,10 @@ typedef struct {
   [paramGetAPI getFloatValue:&state.cropRight
                fromParameter:kParamCropRight
                       atTime:renderTime];
+  state.cropTop *= timingFactor;
+  state.cropBottom *= timingFactor;
+  state.cropLeft *= timingFactor;
+  state.cropRight *= timingFactor;
 
   *pluginState = [NSData dataWithBytes:&state length:sizeof(state)];
   return (*pluginState != nil);
