@@ -10,13 +10,14 @@
 #import <CoreMedia/CMTime.h>
 #import <Foundation/Foundation.h>
 #import <IOSurface/IOSurfaceObjC.h>
-#import <KeyframelessKit/KKKbd.h>
 #import <KeyframelessKit/KKLog.h>
+#import <KeyframelessKit/KKMarkup.h>
 #import <QuartzCore/QuartzCore.h>
+#import <objc/message.h>
 
 typedef struct {
   CMTime frameDuration;
-  float strength; // 0..1
+  double shutterAngle; // 0..360 degrees
   int sampleCount;
 } MotionBlurState;
 
@@ -61,9 +62,10 @@ typedef struct {
     return NO;
   }
 
-  NSMutableAttributedString *infoText = [[NSMutableAttributedString alloc]
-      initWithString:@"Use on a Adjustment Clip "];
-  [infoText appendAttributedString:[KKKbd attributedStringWithKey:@"⌥ A"]];
+  NSAttributedString *infoText = [KKMarkup
+      attributedStringFromMarkup:
+          @"Use on an Adjustment Clip <kbd>⌥ A</kbd> or a Compound Clip "
+          @"<kbd>⌥ G</kbd>"];
   if (![self
           addInfoParameterWithAttributedText:infoText
                                         icon:[NSImage
@@ -76,23 +78,45 @@ typedef struct {
     return NO;
   }
 
-  // Strength: 0 = no blur, 100 = full-frame blur. Mapped to shutter angle
-  // internally (strength / 100 * 360°).
-  if (![paramAPI addFloatSliderWithName:@"Strength"
-                            parameterID:kParamStrength
-                           defaultValue:50.0
-                           parameterMin:0.0
-                           parameterMax:100.0
-                              sliderMin:0.0
-                              sliderMax:100.0
-                                  delta:1.0
-                         parameterFlags:kFxParameterFlag_DEFAULT]) {
+  // Length: 0-100% maps to 0-360 degree shutter angle.
+  // Default 50% = 180 degrees (half frame duration).
+  if (![paramAPI addPercentSliderWithName:@"Length"
+                              parameterID:kParamLength
+                             defaultValue:0.5
+                             parameterMin:0.0
+                             parameterMax:1.0
+                                sliderMin:0.0
+                                sliderMax:1.0
+                                    delta:0.01
+                           parameterFlags:kFxParameterFlag_DEFAULT]) {
     if (error) {
       *error = [NSError
           errorWithDomain:FxPlugErrorDomain
                      code:kFxError_InvalidParameter
                  userInfo:@{
-                   NSLocalizedDescriptionKey : @"Unable to add Strength slider"
+                   NSLocalizedDescriptionKey : @"Unable to add Length slider"
+                 }];
+    }
+    return NO;
+  }
+
+  // Quality: 0-100% maps to 2-128 samples.
+  // Default 50% = 65 samples.
+  if (![paramAPI addPercentSliderWithName:@"Quality"
+                              parameterID:kParamQuality
+                             defaultValue:0.5
+                             parameterMin:0.0
+                             parameterMax:1.0
+                                sliderMin:0.0
+                                sliderMax:1.0
+                                    delta:0.01
+                           parameterFlags:kFxParameterFlag_DEFAULT]) {
+    if (error) {
+      *error = [NSError
+          errorWithDomain:FxPlugErrorDomain
+                     code:kFxError_InvalidParameter
+                 userInfo:@{
+                   NSLocalizedDescriptionKey : @"Unable to add Quality slider"
                  }];
     }
     return NO;
@@ -111,26 +135,20 @@ typedef struct {
       [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
   [timingAPI frameDuration:&state.frameDuration];
 
-  double strength = 50.0;
   id<FxParameterRetrievalAPI_v6> paramAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  [paramAPI getFloatValue:&strength
-            fromParameter:kParamStrength
-                   atTime:renderTime];
-  state.strength = (float)(strength / 100.0);
 
-  // Use fewer samples during preview/scrubbing for real-time playback.
-  switch (qualityLevel) {
-  case kFxQuality_LOW:
-    state.sampleCount = 4;
-    break;
-  case kFxQuality_MEDIUM:
-    state.sampleCount = 8;
-    break;
-  default:
-    state.sampleCount = MOTION_BLUR_SAMPLE_COUNT;
-    break;
-  }
+  double length = 0.5;
+  [paramAPI getFloatValue:&length fromParameter:kParamLength atTime:renderTime];
+  state.shutterAngle = length * 360.0;
+
+  double quality = 0.5;
+  [paramAPI getFloatValue:&quality
+            fromParameter:kParamQuality
+                   atTime:renderTime];
+  // Exponential mapping: more control at low end where it matters.
+  // 0%=2, 50%=16, 100%=128.
+  state.sampleCount = MAX(2, (int)(2.0 * pow(64.0, quality)));
 
   *pluginState = [NSData dataWithBytes:&state length:sizeof(state)];
   return YES;
@@ -145,23 +163,22 @@ typedef struct {
     [pluginState getBytes:&state length:sizeof(state)];
   }
 
-  double shutterSeconds =
-      CMTimeGetSeconds(state.frameDuration) * state.strength;
+  double frameSec = CMTimeGetSeconds(state.frameDuration);
+  double shutterSec = frameSec * (state.shutterAngle / 360.0);
+  int n = state.sampleCount;
 
-  int n = state.sampleCount > 0 ? state.sampleCount : MOTION_BLUR_SAMPLE_COUNT;
   NSMutableArray *requests = [NSMutableArray arrayWithCapacity:n];
   for (int i = 0; i < n; i++) {
-    double fraction = (n > 1) ? (double)i / (double)(n - 1) : 0.0;
-    double offsetSeconds = shutterSeconds * fraction;
-    CMTime frameTime = CMTimeSubtract(
-        renderTime, CMTimeMakeWithSeconds(offsetSeconds, renderTime.timescale));
-    if (CMTimeCompare(frameTime, kCMTimeZero) < 0) {
-      frameTime = kCMTimeZero;
-    }
+    double t = (n > 1) ? (double)i / (double)(n - 1) : 0.0;
+    double offsetSec = shutterSec * t;
+    CMTime sampleTime = CMTimeSubtract(
+        renderTime, CMTimeMakeWithSeconds(offsetSec, renderTime.timescale));
+    if (CMTimeCompare(sampleTime, kCMTimeZero) < 0)
+      sampleTime = kCMTimeZero;
 
     FxImageTileRequest *req = [[FxImageTileRequest alloc]
         initWithSource:kFxImageTileRequestSourceEffectClip
-                  time:frameTime
+                  time:sampleTime
         includeFilters:YES
            parameterID:0];
     [requests addObject:req];
@@ -177,9 +194,8 @@ typedef struct {
                  pluginState:(NSData *)pluginState
                       atTime:(CMTime)renderTime
                        error:(NSError *_Nullable *)outError {
-  if (sourceImages.count < 1) {
+  if (sourceImages.count < 1)
     return NO;
-  }
   *destinationImageRect = sourceImages[0].imagePixelBounds;
   return YES;
 }
@@ -205,10 +221,9 @@ typedef struct {
   if (pluginState.length >= sizeof(state)) {
     [pluginState getBytes:&state length:sizeof(state)];
   }
-  int sampleCount =
-      state.sampleCount > 0 ? state.sampleCount : MOTION_BLUR_SAMPLE_COUNT;
-  int actualSamples = (int)MIN((NSUInteger)sampleCount, sourceImages.count);
 
+  int actualSamples =
+      (int)MIN((NSUInteger)state.sampleCount, sourceImages.count);
   if (!destinationImage.ioSurface || actualSamples == 0) {
     if (outError) {
       *outError =
@@ -256,6 +271,22 @@ typedef struct {
                                               vertexStart:0
                                               vertexCount:4];
                                      }];
+}
+
+- (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
+  if (parameterID == kParamInfoUsage) {
+    NSAttributedString *text = [KKMarkup
+        attributedStringFromMarkup:
+            @"Use on an Adjustment Clip <kbd>⌥ A</kbd> or a Compound Clip "
+            @"<kbd>⌥ G</kbd>"];
+    KKAlertView *alert = [[KKAlertView alloc] initWithAttributedText:text];
+    alert.icon = [NSImage imageWithSystemSymbolName:@"info.circle"
+                           accessibilityDescription:nil];
+    return alert;
+  }
+  struct objc_super sup = {self, [KKPlugin class]};
+  return ((NSView * (*)(struct objc_super *, SEL, UInt32)) objc_msgSendSuper)(
+      &sup, @selector(createViewForParameterID:), parameterID);
 }
 
 @end

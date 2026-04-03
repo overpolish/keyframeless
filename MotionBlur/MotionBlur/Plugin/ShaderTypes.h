@@ -7,4 +7,4 @@
 
 #import <simd/simd.h>
 
-#define MOTION_BLUR_SAMPLE_COUNT 16
+#define MOTION_BLUR_MAX_SAMPLES 128

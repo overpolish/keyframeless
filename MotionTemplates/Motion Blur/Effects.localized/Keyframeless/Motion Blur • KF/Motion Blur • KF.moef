@@ -162,12 +162,13 @@
 	</sceneSettings>
 	<publishSettings>
 		<version>2</version>
-		<target object="12214" channel="./9990" name=""/>
-		<target object="12214" channel="./9000" name=""/>
-		<target object="12214" channel="./1" name="Strength"/>
+		<target object="3001887075" channel="./9990" name=""/>
+		<target object="3001887075" channel="./9000" name=""/>
+		<target object="3001887075" channel="./1" name="Length"/>
+		<target object="3001887075" channel="./2" name="Quality"/>
 	</publishSettings>
 	<currentFrame>0 1 1 0</currentFrame>
-	<currentObject>12207</currentObject>
+	<currentObject>12209</currentObject>
 	<activeLayer>12209</activeLayer>
 	<timeRange offset="0 1 1 0" duration="307200 153600 1 0"/>
 	<playRange offset="0 1 1 0" duration="307200 153600 1 0"/>
@@ -193,7 +194,7 @@
 		<flags>0</flags>
 		<timing in="0 1 1 0" out="-2560 153600 1 0" offset="0 1 1 0"/>
 		<foldFlags>0</foldFlags>
-		<baseFlags>268435473</baseFlags>
+		<baseFlags>16</baseFlags>
 		<parameter name="Properties" id="1" flags="8589938704">
 			<parameter name="HDR White Level" id="103" flags="8606744592" default="0.75" value="0.75"/>
 		</parameter>
@@ -258,7 +259,7 @@
 		<aspectRatio>1</aspectRatio>
 		<flags>0</flags>
 		<timing in="0 1 1 0" out="304640 153600 1 0" offset="0 1 1 0"/>
-		<foldFlags>0</foldFlags>
+		<foldFlags>8192</foldFlags>
 		<baseFlags>524304</baseFlags>
 		<parameter name="Properties" id="1" flags="8589938704">
 			<parameter name="Lighting" id="230" flags="8589938706">
@@ -277,16 +278,16 @@
 			</parameter>
 		</parameter>
 		<parameter name="Object" id="2" flags="8589938704">
-			<parameter name="Fixed Width" id="302" flags="12884901908" default="1920" value="1920"/>
-			<parameter name="Fixed Height" id="303" flags="12884901908" default="1080" value="1080"/>
+			<parameter name="Fixed Width" id="302" flags="12901679124" default="1920" value="1920"/>
+			<parameter name="Fixed Height" id="303" flags="12901679124" default="1080" value="1080"/>
 			<parameter name="Flatten" id="311" flags="8589934610" default="0" value="0"/>
 			<parameter name="Layer Order" id="305" flags="8589934610" default="0" value="0"/>
 			<parameter name="Aperture Width" id="312" flags="12884901906" default="1920" value="1920"/>
 			<parameter name="Aperture Height" id="313" flags="12884901906" default="1080" value="1080"/>
 		</parameter>
-		<filter name="Motion Blur · KF" id="12214" factoryID="6" pluginUUID="743DCF68-3350-487D-8A0A-B23D0A0BD8ED" pluginVersion="1" pluginName="Motion Blur · KF" pluginDynamicParams="0">
+		<filter name="Motion Blur · KF" id="3001887075" factoryID="6" pluginUUID="743DCF68-3350-487D-8A0A-B23D0A0BD8ED" pluginVersion="1" pluginName="Motion Blur · KF" pluginDynamicParams="0">
 			<timing in="0 1 1 0" out="304640 153600 1 0" offset="0 1 1 0"/>
-			<baseFlags>8589934608</baseFlags>
+			<baseFlags>8589934609</baseFlags>
 			<parameter name="" id="9990" flags="12901679124">
 				<numberOfKeypoints>0</numberOfKeypoints>
 				<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GQ40-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
@@ -294,10 +295,11 @@
 			</parameter>
 			<parameter name="" id="9000" flags="12901679124">
 				<numberOfKeypoints>0</numberOfKeypoints>
-				<defaultVal>*********IoeMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0CMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM**cEhJ74tpP4k62FcY8H6rGIlMKZk********-*E*********A********************MUU*0**F*-c*7**d*16*Bk-7*2s*Kk-h*4w*QE-p*5g-1*********6-*********-********************2B</defaultVal>
-				<dataValue>*********IoeMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0CMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM**cEhJ74tpP4k62FcY8H6rGIlMKZk********-*E*********A********************MUU*0**F*-c*7**d*16*Bk-7*2s*Kk-h*4w*QE-p*5g-1*********6-*********-********************2B</dataValue>
+				<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GAc0-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
+				<dataValue>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GAc0-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</dataValue>
 			</parameter>
-			<parameter name="Strength" id="1" flags="12901679121" default="50" value="50"/>
+			<parameter name="Length" id="1" flags="12901679120" default="0.5" value="0.5"/>
+			<parameter name="Quality" id="2" flags="12901679120" default="0.5" value="0.5"/>
 			<parameter name="Mix" id="10001" flags="12901679104" default="1" value="1"/>
 			<parameter name="Flip" id="10002" flags="12905938976" default="0" value="0"/>
 			<parameter name="Input Points" id="10003" flags="12905938976" default="1" value="1"/>
@@ -335,7 +337,7 @@
 			</parameter>
 		</clip>
 		<flags>0</flags>
-		<timing in="0 1 1 0" out="-2560 153600 1 0" offset="0 1 1 0"/>
+		<timing in="0 1 1 0" out="0 153600 1 0" offset="0 1 1 0"/>
 		<foldFlags>0</foldFlags>
 		<baseFlags>524304</baseFlags>
 		<parameter name="Properties" id="1" flags="8589938704"/>
