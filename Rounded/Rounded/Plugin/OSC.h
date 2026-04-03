@@ -8,4 +8,8 @@
 #import <KeyframelessKit/KeyframelessKit.h>
 
 @interface RoundedOSC : KKPointOSC
+@property(nonatomic, strong) KKPointOSC *cropTopLeftOSC;
+@property(nonatomic) BOOL cropTopLeftHovered;
+@property(nonatomic) BOOL cropTopLeftDragging;
+@property(nonatomic, strong) KKRectBorderOSC *cropBorderOSC;
 @end
