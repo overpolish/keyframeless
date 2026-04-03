@@ -97,7 +97,6 @@
 				Plugin/Info.plist,
 				Plugin/MagicMove.metal,
 				Plugin/main.m,
-				Plugin/MetalDeviceCache.m,
 				Plugin/OSC.m,
 				"Plugin/OSC+Draw.m",
 				"Plugin/OSC+HitTest.m",
