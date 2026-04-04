@@ -18,8 +18,8 @@ struct CaptionSegment {
 
 enum CaptionBuilder {
 
-	private static let minimumDuration: Double = 0.8
-	private static let gapCloseThreshold: Double = 0.2
+	private static let minimumDuration: Double = 0.15
+	private static let gapCloseThreshold: Double = 0.15
 
 	static func build(
 		rows: [AudioEditRow],
@@ -98,45 +98,55 @@ enum CaptionBuilder {
 		var i = 0
 
 		while i < segments.count {
-			let segment = segments[i]
-			let duration = segment.endTime - segment.startTime
+			var merged = segments[i]
+			var duration = merged.endTime - merged.startTime
 
-			if duration < minimumDuration,
+			while duration < minimumDuration,
 				i + 1 < segments.count,
-				segments[i + 1].clipIndex == segment.clipIndex,
-				segments[i + 1].startTime - segment.endTime < gapCloseThreshold,
-				segment.lines.count + segments[i + 1].lines.count <= maxLines
+				segments[i + 1].clipIndex == merged.clipIndex,
+				segments[i + 1].startTime - merged.endTime < gapCloseThreshold
 			{
 				let next = segments[i + 1]
-				let mergedLines = segment.lines + next.lines
-				let mergedText = mergedLines.joined(separator: "\n")
-				result.append(
-					CaptionSegment(
-						clipIndex: segment.clipIndex,
-						clipName: segment.clipName,
-						text: mergedText,
-						lines: mergedLines,
-						startTime: segment.startTime,
-						endTime: next.endTime,
-						wordStarts: segment.wordStarts + next.wordStarts
-					))
-				i += 2
-			} else if duration < minimumDuration {
-				result.append(
-					CaptionSegment(
-						clipIndex: segment.clipIndex,
-						clipName: segment.clipName,
-						text: segment.text,
-						lines: segment.lines,
-						startTime: segment.startTime,
-						endTime: segment.startTime + minimumDuration,
-						wordStarts: segment.wordStarts
-					))
+				let combinedLines = merged.lines.count + next.lines.count
+				let mergedLines: [String]
+				if combinedLines <= maxLines {
+					mergedLines = merged.lines + next.lines
+				} else {
+					let lastLine = merged.lines.last ?? ""
+					let nextFirst = next.lines.first ?? ""
+					let joined = lastLine.isEmpty ? nextFirst : "\(lastLine) \(nextFirst)"
+					var lines = Array(merged.lines.dropLast())
+					lines.append(joined)
+					lines.append(contentsOf: next.lines.dropFirst())
+					mergedLines = lines
+				}
+				merged = CaptionSegment(
+					clipIndex: merged.clipIndex,
+					clipName: merged.clipName,
+					text: mergedLines.joined(separator: "\n"),
+					lines: mergedLines,
+					startTime: merged.startTime,
+					endTime: next.endTime,
+					wordStarts: merged.wordStarts + next.wordStarts
+				)
 				i += 1
-			} else {
-				result.append(segment)
-				i += 1
+				duration = merged.endTime - merged.startTime
 			}
+
+			if duration < minimumDuration {
+				merged = CaptionSegment(
+					clipIndex: merged.clipIndex,
+					clipName: merged.clipName,
+					text: merged.text,
+					lines: merged.lines,
+					startTime: merged.startTime,
+					endTime: merged.startTime + minimumDuration,
+					wordStarts: merged.wordStarts
+				)
+			}
+
+			result.append(merged)
+			i += 1
 		}
 
 		return result
@@ -506,9 +516,33 @@ enum CaptionBuilder {
 			forcedBreaks: Set(row.captionBreaks)
 		)
 
+		var merged: [LineGroup] = []
+		var j = 0
+		while j < lineGroups.count {
+			var group = lineGroups[j]
+			var duration = group.endTime - group.startTime
+			while duration < Float(minimumDuration),
+				j + 1 < lineGroups.count,
+				lineGroups[j + 1].startTime - group.endTime < Float(gapCloseThreshold)
+			{
+				let next = lineGroups[j + 1]
+				group = LineGroup(
+					lines: group.lines,
+					startTime: group.startTime,
+					endTime: next.endTime,
+					wordStarts: group.wordStarts + next.wordStarts,
+					wordStartIndex: group.wordStartIndex
+				)
+				j += 1
+				duration = group.endTime - group.startTime
+			}
+			merged.append(group)
+			j += 1
+		}
+
 		var breakIndices = Set<Int>()
-		for i in 1..<lineGroups.count {
-			breakIndices.insert(lineGroups[i].wordStartIndex)
+		for i in 1..<merged.count {
+			breakIndices.insert(merged[i].wordStartIndex)
 		}
 		return breakIndices
 	}
