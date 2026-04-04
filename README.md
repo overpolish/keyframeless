@@ -82,7 +82,7 @@ There's also community captions — download and use existing ones, or make your
 
 <div align="center">
 	<a href="http://www.youtube.com/watch?v=OLCgGaR87rE" title="An Actual Caption Tool for Final Cut Pro">
-		<img src="https://img.youtube.com/vi/OLCgGaR87rE/0.jpg" alt="AI Captions Walkthrough" width="480" height="253" style="object-fit: cover;" />
+		<img src="https://img.youtube.com/vi/OLCgGaR87rE/maxresdefault.jpg" alt="AI Captions Walkthrough" width="480" />
 	</a>
 	<p>An Actual Caption Tool for Final Cut Pro</p>
 </div>
