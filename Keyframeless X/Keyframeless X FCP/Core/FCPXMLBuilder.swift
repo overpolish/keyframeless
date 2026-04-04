@@ -89,14 +89,24 @@ enum FCPXMLBuilder {
 
 		var tsCounter = 0
 
-		for segment in segments {
+		for (si, segment) in segments.enumerated() {
 			tsCounter += 1
 			let tsID = "ts\(tsCounter)"
-			let segDuration = segment.endTime - segment.startTime
 			let mediaStart = 3600.0
-			let offset = rationalTime(seconds: segment.startTime, frameRate: frameRate)
+			let offsetFrames = frames(seconds: segment.startTime, frameRate: frameRate)
+			let offset = rationalFromFrames(offsetFrames, frameRate: frameRate)
+			let durationStr: String
+			if si + 1 < segments.count,
+				segments[si + 1].startTime - segment.endTime < 0.001
+			{
+				let nextFrames = frames(seconds: segments[si + 1].startTime, frameRate: frameRate)
+				durationStr = rationalFromFrames(nextFrames - offsetFrames, frameRate: frameRate)
+			} else {
+				durationStr = rationalTime(
+					seconds: segment.endTime - segment.startTime, frameRate: frameRate)
+			}
 			xml +=
-				"\t\t\t\t\t\t<title lane=\"1\" offset=\"\(offset)\" ref=\"r2\" duration=\"\(rationalTime(seconds: segDuration, frameRate: frameRate))\" start=\"\(rationalTime(seconds: mediaStart, frameRate: frameRate))\" name=\"\(xmlEscape(segment.lines.first ?? ""))\" role=\"Captions.Captions-1\">\n"
+				"\t\t\t\t\t\t<title lane=\"1\" offset=\"\(offset)\" ref=\"r2\" duration=\"\(durationStr)\" start=\"\(rationalTime(seconds: mediaStart, frameRate: frameRate))\" name=\"\(xmlEscape(segment.lines.first ?? ""))\" role=\"Captions.Captions-1\">\n"
 			let wordCount = segment.wordStarts.count
 			if wordCount > 0 && template.supportsPerWordAnimation,
 				let paramName = template.wordsInParamName,
@@ -171,6 +181,14 @@ enum FCPXMLBuilder {
 		let num = Int(Double(raw[raw.startIndex..<slash]) ?? 1)
 		let den = Int(Double(raw[raw.index(after: slash)...]) ?? 1)
 		return FrameRate(numerator: max(num, 1), denominator: max(den, 1))
+	}
+
+	private static func frames(seconds: Double, frameRate: FrameRate) -> Int {
+		Int(round(seconds * Double(frameRate.denominator) / Double(frameRate.numerator)))
+	}
+
+	private static func rationalFromFrames(_ frameCount: Int, frameRate: FrameRate) -> String {
+		"\(frameCount * frameRate.numerator)/\(frameRate.denominator)s"
 	}
 
 	private static func rationalTime(seconds: Double, frameRate: FrameRate) -> String {
