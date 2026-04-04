@@ -169,6 +169,85 @@
   return YES;
 }
 
+- (BOOL)destinationImageRect:(FxRect *)destinationImageRect
+                sourceImages:(NSArray<FxImageTile *> *)sourceImages
+            destinationImage:(FxImageTile *)destinationImage
+                 pluginState:(NSData *)pluginState
+                      atTime:(CMTime)renderTime
+                       error:(NSError *_Nullable *)outError {
+  if (sourceImages.count < 1)
+    return NO;
+  *destinationImageRect = sourceImages[0].imagePixelBounds;
+  return YES;
+}
+
+- (BOOL)sourceTileRect:(FxRect *)sourceTileRect
+       sourceImageIndex:(NSUInteger)sourceImageIndex
+           sourceImages:(NSArray<FxImageTile *> *)sourceImages
+    destinationTileRect:(FxRect)destinationTileRect
+       destinationImage:(FxImageTile *)destinationImage
+            pluginState:(NSData *)pluginState
+                 atTime:(CMTime)renderTime
+                  error:(NSError *_Nullable *)outError {
+  *sourceTileRect = destinationTileRect;
+  return YES;
+}
+
+- (BOOL)renderDestinationImage:(FxImageTile *)destinationImage
+                  sourceImages:(NSArray<FxImageTile *> *)sourceImages
+                      pluginID:(NSString *)pluginID
+                 fragmentBytes:(const void *)fragmentBytes
+              fragmentBytesLen:(size_t)fragmentBytesLen
+           fragmentBufferIndex:(NSUInteger)fragmentBufferIndex
+                         error:(NSError *_Nullable *)outError {
+  if (!sourceImages[0].ioSurface || !destinationImage.ioSurface) {
+    if (outError) {
+      *outError =
+          [NSError errorWithDomain:@"co.overpolish.keyframeless"
+                              code:-1
+                          userInfo:@{
+                            NSLocalizedDescriptionKey :
+                                @"Invalid plugin state received from host"
+                          }];
+    }
+    return NO;
+  }
+
+  id<MTLRenderPipelineState> pipelineState =
+      [self pipelineStateForPluginID:pluginID
+                    destinationImage:destinationImage
+                        vertexShader:@"vertexShader"
+                      fragmentShader:@"fragmentShader"
+                           blendMode:KKBlendModePremultipliedAlpha];
+  if (!pipelineState)
+    return NO;
+
+  return [self
+      encodeRenderCommandsForDestinationImage:destinationImage
+                                 sourceImages:sourceImages
+                                     commands:^(
+                                         id<MTLRenderCommandEncoder> encoder,
+                                         NSArray<id<MTLTexture>>
+                                             *inputTextures) {
+                                       [encoder setRenderPipelineState:
+                                                    pipelineState];
+                                       [encoder
+                                           setFragmentTexture:inputTextures[0]
+                                                      atIndex:
+                                                          KKTextureIndex_InputImage];
+                                       [encoder
+                                           setFragmentBytes:fragmentBytes
+                                                     length:fragmentBytesLen
+                                                    atIndex:
+                                                        fragmentBufferIndex];
+                                       [encoder
+                                           drawPrimitives:
+                                               MTLPrimitiveTypeTriangleStrip
+                                              vertexStart:0
+                                              vertexCount:4];
+                                     }];
+}
+
 - (BOOL)forceShowAllParametersIfEnabled:(UInt32)forceShowParamID
                                paramIDs:(NSArray<NSNumber *> *)paramIDs
                                  atTime:(CMTime)time {

@@ -27,20 +27,6 @@ NS_ASSUME_NONNULL_BEGIN
              atTime:(CMTime)renderTime
             quality:(FxQuality)qualityLevel
               error:(NSError **)error;
-- (BOOL)destinationImageRect:(FxRect *)destinationImageRect
-                sourceImages:(NSArray<FxImageTile *> *)sourceImages
-            destinationImage:(FxImageTile *)destinationImage
-                 pluginState:(NSData *)pluginState
-                      atTime:(CMTime)renderTime
-                       error:(NSError *_Nullable *)outError;
-- (BOOL)sourceTileRect:(FxRect *)sourceTileRect
-       sourceImageIndex:(NSUInteger)sourceImageIndex
-           sourceImages:(NSArray<FxImageTile *> *)sourceImages
-    destinationTileRect:(FxRect)destinationTileRect
-       destinationImage:(FxImageTile *)destinationImage
-            pluginState:(NSData *)pluginState
-                 atTime:(CMTime)renderTime
-                  error:(NSError *_Nullable *)outError;
 - (BOOL)renderDestinationImage:(FxImageTile *)destinationImage
                   sourceImages:(NSArray<FxImageTile *> *)sourceImages
                    pluginState:(NSData *)pluginState
