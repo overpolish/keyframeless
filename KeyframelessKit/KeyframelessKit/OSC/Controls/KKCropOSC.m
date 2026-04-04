@@ -6,6 +6,7 @@
 #import "KKCropOSC.h"
 #import <CoreGraphics/CGEventSource.h>
 #import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KKHostInfo.h>
 #import <KeyframelessKit/KKOSCLabel.h>
 #import <KeyframelessKit/KKPointOSC.h>
 #import <KeyframelessKit/KKRectBorderOSC.h>
@@ -188,8 +189,10 @@ static CGPoint cropPointPosition(NSInteger idx, CGPoint topRight,
 
   double cL, cR, cT, cB;
   [self readCropValues:&cL cR:&cR cT:&cT cB:&cB atTime:time];
-  double fullW = round(fabs(fullCanvas.width) / zoom + 0.5);
-  double fullH = round(fabs(fullCanvas.height) / zoom + 0.5);
+  // Motion under-reports by ~1px without the nudge, FCP over-reports with it.
+  double nudge = [KKHostInfo isRunningInFinalCut] ? 0.0 : 0.5;
+  double fullW = round(fabs(fullCanvas.width) / zoom + nudge);
+  double fullH = round(fabs(fullCanvas.height) / zoom + nudge);
   double cropW = (1.0 - cL - cR) * lround(fullW);
   double cropH = (1.0 - cT - cB) * lround(fullH);
   long pxW = lround(cropW);
