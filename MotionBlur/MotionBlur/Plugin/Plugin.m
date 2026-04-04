@@ -21,6 +21,9 @@ typedef struct {
   int sampleCount;
 } MotionBlurState;
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wprotocol"
+
 @implementation MotionBlurPlugin {
   KKLog *_log;
 }
@@ -188,30 +191,6 @@ typedef struct {
   return YES;
 }
 
-- (BOOL)destinationImageRect:(FxRect *)destinationImageRect
-                sourceImages:(NSArray<FxImageTile *> *)sourceImages
-            destinationImage:(nonnull FxImageTile *)destinationImage
-                 pluginState:(NSData *)pluginState
-                      atTime:(CMTime)renderTime
-                       error:(NSError *_Nullable *)outError {
-  if (sourceImages.count < 1)
-    return NO;
-  *destinationImageRect = sourceImages[0].imagePixelBounds;
-  return YES;
-}
-
-- (BOOL)sourceTileRect:(FxRect *)sourceTileRect
-       sourceImageIndex:(NSUInteger)sourceImageIndex
-           sourceImages:(NSArray<FxImageTile *> *)sourceImages
-    destinationTileRect:(FxRect)destinationTileRect
-       destinationImage:(FxImageTile *)destinationImage
-            pluginState:(NSData *)pluginState
-                 atTime:(CMTime)renderTime
-                  error:(NSError *_Nullable *)outError {
-  *sourceTileRect = destinationTileRect;
-  return YES;
-}
-
 - (BOOL)renderDestinationImage:(FxImageTile *)destinationImage
                   sourceImages:(NSArray<FxImageTile *> *)sourceImages
                    pluginState:(NSData *)pluginState
@@ -290,3 +269,4 @@ typedef struct {
 }
 
 @end
+#pragma clang diagnostic pop
