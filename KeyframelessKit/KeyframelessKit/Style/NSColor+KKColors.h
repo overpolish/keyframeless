@@ -23,16 +23,12 @@
 
 #pragma mark Shared
 
-// Mainly for OSC
-+ (NSColor *)primary;
-+ (NSColor *)outline;
-+ (NSColor *)hover;
-+ (NSColor *)active;
-+ (NSColor *)transparent;
-
 + (NSColor *)accent;
++ (NSColor *)accentMatchingHost;
 + (NSColor *)warning;
 + (NSColor *)error;
++ (NSColor *)transparent;
+
 - (NSColor *)shiftedHueBy:(CGFloat)amount;
 - (NSColor *)compound;
 

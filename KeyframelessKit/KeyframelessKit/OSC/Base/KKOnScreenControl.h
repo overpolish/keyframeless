@@ -21,10 +21,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, readonly) BOOL isHovered;
 @property(nonatomic, readonly) BOOL isDragging;
 
-@property(nonatomic) simd_float4 primaryColor;
-@property(nonatomic) simd_float4 outlineColor;
-@property(nonatomic) simd_float4 hoverColor;
-@property(nonatomic) simd_float4 activeColor;
+/// When YES (default), the convenience drawQuad method clears the destination
+/// before drawing. Set to NO when compositing multiple controls into one image.
+@property(nonatomic) BOOL clearsOnDraw;
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager;
 
@@ -33,9 +32,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Override to provide the fragment shader function name.
 - (NSString *)fragmentFunctionName;
-
-/// Selects the appropriate color based on hover/active state.
-- (simd_float4)colorForHovered:(BOOL)isHovered active:(BOOL)isActive;
 
 /// Loads or retrieves cached pipeline state matching the destination image's
 /// pixel format.
@@ -97,12 +93,49 @@ NS_ASSUME_NONNULL_BEGIN
                  didHandle:(BOOL *)didHandle
                     atTime:(CMTime)time;
 
-/// Shared Metal setup/teardown. Call from drawAtCanvasPosition: with a block
-/// containing your encoder commands. Handles device, queue, command buffer,
-/// render pass, viewport, and cleanup automatically.
+/// Draws a quad with the given fragment data. Handles pipeline, vertices,
+/// viewport, and cleanup. Clears the destination by default.
+- (void)drawQuadForDestinationImage:(FxImageTile *)destinationImage
+                     canvasPosition:(CGPoint)canvasPosition
+                      pipelineState:(id<MTLRenderPipelineState>)pipelineState
+                       fragmentData:(const void *)fragmentData
+                   fragmentDataSize:(size_t)fragmentDataSize
+                               size:(float)size;
+
+/// Same as above but allows preserving existing destination content.
+- (void)drawQuadForDestinationImage:(FxImageTile *)destinationImage
+                     canvasPosition:(CGPoint)canvasPosition
+                   clearDestination:(BOOL)clear
+                      pipelineState:(id<MTLRenderPipelineState>)pipelineState
+                       fragmentData:(const void *)fragmentData
+                   fragmentDataSize:(size_t)fragmentDataSize
+                               size:(float)size;
+
+/// Draws an antialiased line between two canvas-space points.
+- (void)drawLineFrom:(CGPoint)canvasA
+                  to:(CGPoint)canvasB
+               color:(simd_float4)color
+           halfWidth:(float)halfWidth
+    destinationImage:(FxImageTile *)destinationImage;
+
+/// Low-level Metal setup/teardown. Use drawQuadForDestinationImage: for
+/// standard quad rendering. This is for custom encoder commands. Clears the
+/// destination.
 - (void)
     encodeRenderCommandsForDestinationImage:(FxImageTile *)destinationImage
                              canvasPosition:(CGPoint)canvasPosition
+                                   commands:
+                                       (void (^)(
+                                           id<MTLRenderCommandEncoder> encoder,
+                                           CGPoint metalPosition,
+                                           simd_uint2 viewportSize))commands;
+
+/// Same as above but allows preserving existing destination content when
+/// composing multiple controls into the same image.
+- (void)
+    encodeRenderCommandsForDestinationImage:(FxImageTile *)destinationImage
+                             canvasPosition:(CGPoint)canvasPosition
+                           clearDestination:(BOOL)clear
                                    commands:
                                        (void (^)(
                                            id<MTLRenderCommandEncoder> encoder,

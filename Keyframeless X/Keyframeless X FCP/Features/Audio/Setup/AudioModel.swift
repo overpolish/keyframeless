@@ -40,6 +40,7 @@ class AudioModel: ObservableObject {
 	@Published var censorProfanity: Bool = CaptionStyleDefaults.shared.settings.censorProfanity
 	@Published var stripPunctuation: Bool = CaptionStyleDefaults.shared.settings.stripPunctuation
 	@Published var keepQuestionMarks: Bool = CaptionStyleDefaults.shared.settings.keepQuestionMarks
+	@Published var noGaps: Bool = CaptionStyleDefaults.shared.settings.noGaps
 
 	@Published var captionTemplates: [CaptionTemplate] = []
 	@Published var selectedTemplate: CaptionTemplate = .basicTitle
@@ -73,7 +74,8 @@ class AudioModel: ObservableObject {
 			CaptionStyleSettings(
 				maxWordsPerLine: maxWordsPerLine, captionLines: captionLines,
 				allCaps: allCaps, censorProfanity: censorProfanity,
-				stripPunctuation: stripPunctuation, keepQuestionMarks: keepQuestionMarks)
+				stripPunctuation: stripPunctuation, keepQuestionMarks: keepQuestionMarks,
+				noGaps: noGaps)
 		}
 		set {
 			maxWordsPerLine = newValue.maxWordsPerLine
@@ -82,6 +84,7 @@ class AudioModel: ObservableObject {
 			censorProfanity = newValue.censorProfanity
 			stripPunctuation = newValue.stripPunctuation
 			keepQuestionMarks = newValue.keepQuestionMarks
+			noGaps = newValue.noGaps
 		}
 	}
 

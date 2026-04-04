@@ -5,11 +5,26 @@
 
 #import "KKPointOSC.h"
 #import "../../Style/KKTokens.h"
+#import "../../Style/NSColor+KKColors.h"
 #import "../Base/KKOSCShaderTypes.h"
+#include <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 
 static NSString *kPointOSCPluginID = @"co.overpolish.keyframelesskit.PointOSC";
+
+static NSColor *pointFillColor(void) {
+  return [NSColor colorWithRed:0xFF / 255.0
+                         green:0xFF / 255.0
+                          blue:0xFF / 255.0
+                         alpha:1.0f];
+}
+static NSColor *pointStrokeColor(void) {
+  return [NSColor colorWithRed:0x00 / 255.0
+                         green:0x00 / 255.0
+                          blue:0x00 / 255.0
+                         alpha:0.75f];
+}
 
 @implementation KKPointOSC
 
@@ -49,45 +64,15 @@ static NSString *kPointOSCPluginID = @"co.overpolish.keyframelesskit.PointOSC";
   float outerRadiusPixels = _oscRadius + _outlineWidth;
 
   KKPointOSCParams params = {.outlineWidth = _outlineWidth / outerRadiusPixels,
-                             .fillColor = [self colorForHovered:isHovered
-                                                         active:isActive],
-                             .outlineColor = self.outlineColor};
+                             .fillColor = [pointFillColor() simdFloat4],
+                             .strokeColor = [pointStrokeColor() simdFloat4]};
 
-  [self
-      encodeRenderCommandsForDestinationImage:destinationImage
-                               canvasPosition:canvasPosition
-                                     commands:^(
-                                         id<MTLRenderCommandEncoder> encoder,
-                                         CGPoint metalPosition,
-                                         simd_uint2 viewportSize) {
-                                       KKVertex2D quadVertices[6];
-                                       [KKRenderPrimitives
-                                           generateQuadVertices:quadVertices
-                                                         center:metalPosition
-                                                           size:
-                                                               outerRadiusPixels];
-
-                                       [encoder setRenderPipelineState:ps];
-                                       [encoder
-                                           setVertexBytes:quadVertices
-                                                   length:sizeof(quadVertices)
-                                                  atIndex:
-                                                      KKVertexInputIndex_Vertices];
-                                       [encoder
-                                           setVertexBytes:&viewportSize
-                                                   length:sizeof(viewportSize)
-                                                  atIndex:
-                                                      KKVertexInputIndex_ViewportSize];
-                                       [encoder
-                                           setFragmentBytes:&params
-                                                     length:sizeof(params)
-                                                    atIndex:
-                                                        KKOSCFragmentIndex_DrawColor];
-                                       [encoder drawPrimitives:
-                                                    MTLPrimitiveTypeTriangle
-                                                   vertexStart:0
-                                                   vertexCount:6];
-                                     }];
+  [self drawQuadForDestinationImage:destinationImage
+                     canvasPosition:canvasPosition
+                      pipelineState:ps
+                       fragmentData:&params
+                   fragmentDataSize:sizeof(params)
+                               size:outerRadiusPixels];
 }
 
 @end

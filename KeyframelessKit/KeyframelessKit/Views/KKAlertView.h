@@ -30,6 +30,15 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, strong) NSColor *color;
 @property(nonatomic, strong, nullable) NSImage *icon;
 
+/// Optional view pinned to the trailing edge of the alert (e.g. a button).
+@property(nonatomic, strong, nullable) NSView *accessoryView;
+
+/// Multiple attributed-text pages. When count > 1, navigation arrows and a
+/// page indicator ("1/2") appear in the trailing section. Setting this
+/// overrides the text shown by the initializer.
+@property(nonatomic, copy, nullable)
+    NSArray<NSAttributedString *> *attributedPages;
+
 @end
 
 NS_ASSUME_NONNULL_END
