@@ -96,9 +96,12 @@
 				"/Localized: Plugin/Localizable.strings",
 				Plugin/Info.plist,
 				Plugin/main.m,
-				Plugin/MetalDeviceCache.m,
 				Plugin/OSC.m,
 				Plugin/Plugin.m,
+				"Plugin/Plugin+CustomUI.m",
+				"Plugin/Plugin+Parameters.m",
+				"Plugin/Plugin+Render.m",
+				"Plugin/Plugin+Visibility.m",
 				Plugin/Rounded.metal,
 				"Wrapper Application/Info.plist",
 			);

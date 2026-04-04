@@ -1,0 +1,40 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+#pragma once
+
+#import "KKPlugin.h"
+#import <FxPlug/FxPlugSDK.h>
+#import <objc/runtime.h>
+
+@class KKCustomGroupHeaderView;
+@class KKTimingGraphView;
+
+@interface KKPlugin () <FxCustomParameterViewHost_v2>
+
+@property(nonatomic, weak) KKCustomGroupHeaderView *timingHeader;
+@property(nonatomic, weak) KKTimingGraphView *timingGraph;
+
+@end
+
+// FxPlug calls createViewForParameterID: on a fresh plugin instance, not the
+// one that ran addParametersWithError:. Store parameter metadata at class level
+// (keyed by the concrete plugin class) so any instance can look it up.
+static const void *const kKKSepTexts = &kKKSepTexts;
+static const void *const kKKSepIcons = &kKKSepIcons;
+static const void *const kKKInfoTexts = &kKKInfoTexts;
+static const void *const kKKInfoAttrTexts = &kKKInfoAttrTexts;
+static const void *const kKKInfoIcons = &kKKInfoIcons;
+static const void *const kKKTimingExtraIDs = &kKKTimingExtraIDs;
+
+static inline NSMutableDictionary<NSNumber *, id> *
+kkClassRegistry(Class cls, const void *key) {
+  NSMutableDictionary *dict = objc_getAssociatedObject(cls, key);
+  if (!dict) {
+    dict = [NSMutableDictionary new];
+    objc_setAssociatedObject(cls, key, dict, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  }
+  return dict;
+}

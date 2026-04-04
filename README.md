@@ -5,7 +5,7 @@
 <h1 align="center">Keyframeless</h1>
 
 <div align="center">
-	<img alt="Downloads" src="https://img.shields.io/github/downloads/overpolish/keyframeless/total?color=ff5000" />
+	<img alt="Downloads" src="https://img.shields.io/github/downloads/overpolish/keyframeless/Keyframeless.pkg?displayAssetName=false&color=ff5000" />
 	<img alt="Release" src="https://img.shields.io/github/v/release/overpolish/keyframeless?color=ff5000" />
 	<img alt="License GPL-3.0" src="https://img.shields.io/github/license/overpolish/keyframeless?color=ff5000" />
 	<img alt="macOS 15+" src="https://img.shields.io/badge/15%2B-macOS?logo=apple&label=macOS&labelColor=5C5C5C&color=ff5000">
@@ -15,34 +15,104 @@
 <br />
 
 <div align="center">
-Attempting to drastically speed up editing with intuitive On Screen Controls, and <i>no</i> keyframes.
+	Drastically speed up editing with intuitive On Screen Controls, and <i>no</i> keyframes.
 </div>
 
+<br />
+
 <div align="center">
-<img width="500" alt="Setup view of AI Captions, multiple clips with waveforms, model selection, language selection, terms, and action buttons" src="./.github/images/keyframeless-x-audio-setup.png" />
-<img width="500" alt="Edit view of AI Captions, timeline at the top, caption editor on the left hand side with timecodes and text, customization on the right, and a drag to export feature in the bottom right" src="./.github/images/keyframeless-x-audio-edit.png" />
-<img width="400" alt="Published parameters section with custom banner and separator" src="./.github/images/keyframeless-rounded-parameters.png" />
+	<img width="500" alt="Published parameters section with custom banner and separator" src="./.github/images/magic-move-screenshot.png" />
 </div>
+
+<br />
+
+<details>
+<summary><b>Table of Contents</b></summary>
+
+- [Install](#-install)
+- [Supercharge Your Workflow](#️-supercharge-your-workflow)
+  - [Magic Move](#magic-move)
+  - [AI Captions](#ai-captions)
+  - [Motion Blur](#motion-blur)
+  - [Rounded](#rounded)
+
+</details>
+
+<br />
 
 # 🤝 Install
 
 Download the latest version from the [Releases](https://github.com/overpolish/keyframeless/releases) page. Pick and choose which features you want to install.
 
 <div align="center">
-<img width="500" alt="Installation window showcasing the various tools available for install." src="./.github/images/keyframeless-installer.png" />
+	<img width="500" alt="Installation window showcasing the various tools available for install." src="./.github/images/installer.png" />
 </div>
+
+<br />
 
 # ⚡️ Supercharge Your Workflow
 
-What do each of these tools do?
+No clutter in your inspector with working groups in Final Cut Pro.
+
+<div align="center">
+	<img width="400" alt="Published parameters showcasing expanded timing section" src="./.github/images/published-properties-showcasing-groups.png" />
+</div>
+
+## Magic Move
+
+Easy to use animation engine with, you guessed it, no keyframes. You have the option of enable/disabling 4 points `A`, `B` (always on), `Drift`, and `Exit`.
+
+Intuitive on-screen controls make animating a breeze, for more fine-tuning you can go into each point and be as precise as you need.
 
 <div align="center">
 
-| Tool           | ⚙️ In Action                                                                                                                                                  | Notes                                                                                                    |
-|----------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------|
-| Keyframeless X | Have a look at the top of this repository!                                                                                                                    | ⚠️ Intel performance is limited by CPU. For best performance, and better models, Silicon is recommended. |
-| Rounded        | <img width="300" alt="White solid animating rounded corners" src="https://github.com/user-attachments/assets/79c0585b-597b-49d0-9ff9-320251292e68" />         | -                                                                                                        |
-| Motion Blur    | <img width="300" alt="Red square moving from left to right and back" src="https://github.com/user-attachments/assets/3d3408f5-f290-4c10-8a62-54ec5f03ad77" /> | Use on an Adjustment Clip to quickly enable/disable Motion Blur across your project.                     |
+https://github.com/user-attachments/assets/b80cc61b-a673-4a49-80af-2215712e162a
 
+</div>
+
+## AI Captions
+
+Ever felt like AI caption tools are too basic? No way to edit captions before pulling them into Final Cut Pro, leaving you to fix things title-by-title? This is the first clip-based caption workflow - see your Final Cut Pro audio timeline, pick which clips to transcribe, and use different models for different clips.
+
+There's also community captions — download and use existing ones, or make your own Motion Templates, drag them in, and you're good to go. Customize published parameters **BEFORE** dragging them into Final Cut Pro so you don't have to touch titles once they're on the timeline.
+
+<div align="center">
+
+https://github.com/user-attachments/assets/9acce740-950d-4ab1-88c6-f727fcdcd1f5
+
+</div>
+
+<br />
+
+<div align="center">
+	<a href="http://www.youtube.com/watch?v=OLCgGaR87rE" title="An Actual Caption Tool for Final Cut Pro">
+		<img src="https://img.youtube.com/vi/OLCgGaR87rE/maxresdefault.jpg" alt="AI Captions Walkthrough" width="480" />
+	</a>
+	<p>An Actual Caption Tool for Final Cut Pro</p>
+</div>
+
+<br />
+<br />
+
+> [!WARNING]
+> Intel performance is limited by CPU. For best performance, and better models, Silicon is recommended.
+
+## Motion Blur
+
+Use Motion Blur on an Adjustment/Compound Clip to allow quick enable/disable Motion Blur across your project. Now, you can disable it whilst working and enable it on render.
+
+<div align="center">
+
+https://github.com/user-attachments/assets/43cb4cd7-2eb7-463e-94aa-b9016d3b7eb9
+	
+</div>
+
+## Rounded
+
+Easily crop and round your videos corners,
+
+<div align="center">
+
+https://github.com/user-attachments/assets/d1d37d7d-85af-4e92-afba-9ed331c22e96
 
 </div>

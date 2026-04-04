@@ -57,34 +57,6 @@
 
 #pragma mark - Shared
 
-+ (NSColor *)primary {
-  return [NSColor colorWithRed:0xB3 / 255.0
-                         green:0xB3 / 255.0
-                          blue:0xB3 / 255.0
-                         alpha:0.65f];
-}
-
-+ (NSColor *)outline {
-  return [NSColor colorWithRed:0x00 / 255.0
-                         green:0x00 / 255.0
-                          blue:0x00 / 255.0
-                         alpha:0.8f];
-}
-
-+ (NSColor *)hover {
-  return [NSColor colorWithRed:0xB3 / 255.0
-                         green:0xB3 / 255.0
-                          blue:0xB3 / 255.0
-                         alpha:0.8f];
-}
-
-+ (NSColor *)active {
-  return [NSColor colorWithRed:0xB3 / 255.0
-                         green:0xB3 / 255.0
-                          blue:0xB3 / 255.0
-                         alpha:0.95f];
-}
-
 + (NSColor *)transparent {
   return [NSColor colorWithRed:0x00 / 255.0
                          green:0x00 / 255.0
@@ -97,6 +69,13 @@
   return [NSColor colorWithRed:0x8B / 255.0
                          green:0x8B / 255.0
                           blue:0xF0 / 255.0
+                         alpha:1.0];
+}
+
++ (NSColor *)accentMatchingHost {
+  return [NSColor colorWithRed:0x5B / 255.0
+                         green:0x5C / 255.0
+                          blue:0xE9 / 255.0
                          alpha:1.0];
 }
 
@@ -116,7 +95,8 @@
 
 - (NSColor *)shiftedHueBy:(CGFloat)amount {
   NSColor *hsb = [self colorUsingColorSpace:NSColorSpace.deviceRGBColorSpace];
-  if (!hsb) return self;
+  if (!hsb)
+    return self;
   CGFloat h, s, b, a;
   [hsb getHue:&h saturation:&s brightness:&b alpha:&a];
   return [NSColor colorWithHue:fmod(h + amount + 1.0, 1.0)
@@ -127,7 +107,8 @@
 
 - (NSColor *)compound {
   NSColor *hsb = [self colorUsingColorSpace:NSColorSpace.deviceRGBColorSpace];
-  if (!hsb) return self;
+  if (!hsb)
+    return self;
   CGFloat h, s, b, a;
   [hsb getHue:&h saturation:&s brightness:&b alpha:&a];
   return [NSColor colorWithHue:fmod(h + 0.333 + 1.0, 1.0)
@@ -137,7 +118,7 @@
 }
 
 - (simd_float4)simdFloat4 {
-  NSColor *rgb = [self colorUsingColorSpace:NSColorSpace.genericRGBColorSpace];
+  NSColor *rgb = [self colorUsingColorSpace:NSColorSpace.deviceRGBColorSpace];
   return (simd_float4){
       (float)rgb.redComponent,
       (float)rgb.greenComponent,

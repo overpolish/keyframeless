@@ -17,8 +17,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// Thickness of the ring stroke. Default 10.
 @property(nonatomic) float strokeWidth;
 
-/// Width of the outline around the ring. Default 2.
+/// Width of the outline around the ring. Default 1.75.
 @property(nonatomic) float outlineWidth;
+
+/// Multiplier for the fill color alpha. Default 1.0.
+@property(nonatomic) float fillAlpha;
 
 @end
 

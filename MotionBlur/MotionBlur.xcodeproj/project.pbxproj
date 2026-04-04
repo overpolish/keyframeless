@@ -96,7 +96,6 @@
 				"/Localized: Plugin/Localizable.strings",
 				Plugin/Info.plist,
 				Plugin/main.m,
-				Plugin/MetalDeviceCache.m,
 				Plugin/MotionBlur.metal,
 				Plugin/Plugin.m,
 				"Wrapper Application/Info.plist",
