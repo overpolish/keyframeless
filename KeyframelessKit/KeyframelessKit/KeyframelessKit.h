@@ -19,6 +19,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKChevronView.h>
 #import <KeyframelessKit/KKCompoundPointOSC.h>
 #import <KeyframelessKit/KKConstants.h>
+#import <KeyframelessKit/KKCropOSC.h>
 #import <KeyframelessKit/KKCustomGroupHeaderView.h>
 #import <KeyframelessKit/KKEasing.h>
 #import <KeyframelessKit/KKHostInfo.h>
@@ -32,8 +33,10 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKOnScreenControl+CoordinateSpace.h>
 #import <KeyframelessKit/KKParameterRowView.h>
 #import <KeyframelessKit/KKPillToggleRowView.h>
+#import <KeyframelessKit/KKPlugin+Crop.h>
 #import <KeyframelessKit/KKPlugin.h>
 #import <KeyframelessKit/KKPointOSC.h>
+#import <KeyframelessKit/KKRectBorderOSC.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 #import <KeyframelessKit/KKRingOSC.h>
 #import <KeyframelessKit/KKRotationOSC.h>

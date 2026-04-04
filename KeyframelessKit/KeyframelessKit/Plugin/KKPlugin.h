@@ -19,6 +19,18 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// Drop this macro into main.m to eliminate per-plugin boilerplate.
+/// Every plugin's main() is identical, so this removes the need for the file.
+#define KK_PLUGIN_MAIN()                                                       \
+  int main(int argc, const char *argv[]) {                                     \
+    @autoreleasepool {                                                         \
+      [FxPrincipal                                                             \
+          startServicePrincipalWithDelegate:[KKPlugin                          \
+                                                servicePrincipalDelegate]];    \
+    }                                                                          \
+    return 0;                                                                  \
+  }
+
 @interface KKPlugin : NSObject
 
 @property(nonatomic, weak) id<PROAPIAccessing> apiManager;
@@ -53,6 +65,19 @@ NS_ASSUME_NONNULL_BEGIN
                                            id<MTLRenderCommandEncoder> encoder,
                                            NSArray<id<MTLTexture>>
                                                *inputTextures))commands;
+
+/// Simple single-pass render: validates inputs, gets pipeline state, encodes
+/// a fullscreen quad with one source texture and your fragment bytes.
+/// Covers the common case where you just need to pass a state struct to
+/// the fragment shader. Uses "vertexShader"/"fragmentShader" function names
+/// and premultiplied alpha blending.
+- (BOOL)renderDestinationImage:(FxImageTile *)destinationImage
+                  sourceImages:(NSArray<FxImageTile *> *)sourceImages
+                      pluginID:(NSString *)pluginID
+                 fragmentBytes:(const void *)fragmentBytes
+              fragmentBytesLen:(size_t)fragmentBytesLen
+           fragmentBufferIndex:(NSUInteger)fragmentBufferIndex
+                         error:(NSError *_Nullable *)outError;
 
 /// Returns the shared FxPrincipalDelegate that captures the host ID into
 /// KKHostInfo. Pass to +[FxPrincipal startServicePrincipalWithDelegate:] in
