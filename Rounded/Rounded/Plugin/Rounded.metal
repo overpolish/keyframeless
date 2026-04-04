@@ -36,7 +36,9 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
                                texture2d<half> colorTexture [[texture(KKTextureIndex_InputImage)]],
                                constant float *radius [[buffer(FragmentIndex_Radius)]],
                                constant float2 *imageSize [[buffer(FragmentIndex_ImageSize)]],
-                               constant float2 *tileOffset [[buffer(FragmentIndex_TileOffset)]]) {
+                               constant float2 *tileOffset [[buffer(FragmentIndex_TileOffset)]],
+                               constant float2 *cropCenter [[buffer(FragmentIndex_CropCenter)]],
+                               constant float2 *cropSize [[buffer(FragmentIndex_CropSize)]]) {
     constexpr sampler textureSampler(mag_filter::linear, min_filter::linear);
 
     half4 colorSample = colorTexture.sample(textureSampler, in.textureCoordinate);
@@ -45,10 +47,13 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
     float2 pixelInTile = in.textureCoordinate * tileSize;
     float2 pixelInFullImage = pixelInTile + (*tileOffset);
 
-    float2 center = (*imageSize) * 0.5;
-    float2 pos = pixelInFullImage - center;
+    // Crop bounding box: center of image + crop offset, sized by cropSize
+    float2 imageCenter = (*imageSize) * 0.5;
+    float2 boxCenter = imageCenter + (*cropCenter);
+    float2 halfSize = (*cropSize) * 0.5;
 
-    float2 halfSize = (*imageSize) * 0.5;
+    float2 pos = pixelInFullImage - boxCenter;
+
     float scaledRadius = (*radius / 100.0) * min(halfSize.x, halfSize.y);
 
     float alpha;

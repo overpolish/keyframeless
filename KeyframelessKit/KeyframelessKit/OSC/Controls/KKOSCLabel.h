@@ -14,6 +14,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// The text to display. Changing this invalidates the cached texture.
 @property(nonatomic, copy) NSString *text;
 
+/// When YES, uses a monospaced font. Default NO.
+@property(nonatomic) BOOL monospaced;
+
 /// Logical size of the rendered label in canvas units.
 @property(nonatomic, readonly) CGSize size;
 
