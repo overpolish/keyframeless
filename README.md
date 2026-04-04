@@ -65,7 +65,9 @@ Easy to use animation engine with, you guessed it, no keyframes. You have the op
 Intuitive on-screen controls make animating a breeze, for more fine-tuning you can go into each point and be as precise as you need.
 
 <div align="center">
-	<video width="800" src="./.github/images/magic-move-demo.mp4" autoplay loop muted playsinline></video>
+
+https://github.com/user-attachments/assets/b80cc61b-a673-4a49-80af-2215712e162a
+
 </div>
 
 ## AI Captions
@@ -75,7 +77,9 @@ Ever felt like AI caption tools are too basic? No way to edit captions before pu
 There's also community captions — download and use existing ones, or make your own Motion Templates, drag them in, and you're good to go. Customize published parameters **BEFORE** dragging them into Final Cut Pro so you don't have to touch titles once they're on the timeline.
 
 <div align="center">
-	<video width="800" src="./.github/images/ai-captions-demo.mp4" autoplay loop muted playsinline></video>
+
+https://github.com/user-attachments/assets/9acce740-950d-4ab1-88c6-f727fcdcd1f5
+
 </div>
 
 <br />
@@ -98,7 +102,9 @@ There's also community captions — download and use existing ones, or make your
 Use Motion Blur on an Adjustment/Compound Clip to allow quick enable/disable Motion Blur across your project. Now, you can disable it whilst working and enable it on render.
 
 <div align="center">
-	<video width="800" src="./.github/images/motion-blur-demo.mp4" autoplay loop muted playsinline></video>
+
+https://github.com/user-attachments/assets/43cb4cd7-2eb7-463e-94aa-b9016d3b7eb9
+	
 </div>
 
 ## Rounded
@@ -106,5 +112,7 @@ Use Motion Blur on an Adjustment/Compound Clip to allow quick enable/disable Mot
 Easily crop and round your videos corners,
 
 <div align="center">
-	<video width="800" src="./.github/images/rounded-demo.mp4" autoplay loop muted playsinline></video>
+
+https://github.com/user-attachments/assets/d1d37d7d-85af-4e92-afba-9ed331c22e96
+
 </div>
