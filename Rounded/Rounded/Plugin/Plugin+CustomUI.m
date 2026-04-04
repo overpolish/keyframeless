@@ -25,28 +25,12 @@
         apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
     [actionAPI startAction:self];
 
-    static pid_t sInitializedPID = 0;
-    pid_t currentPID = getpid();
-    BOOL isNewProcess = (sInitializedPID != currentPID);
-    if (isNewProcess)
-      sInitializedPID = currentPID;
-
-    BOOL expanded;
-    if (isNewProcess) {
-      expanded = YES;
-      id<FxParameterSettingAPI_v5> setAPI =
-          [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      [setAPI setBoolValue:YES
-               toParameter:kParamCropExpanded
-                    atTime:[actionAPI currentTime]];
-    } else {
-      expanded = NO;
-      id<FxParameterRetrievalAPI_v6> paramGetAPI = [self.apiManager
-          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-      [paramGetAPI getBoolValue:&expanded
-                  fromParameter:kParamCropExpanded
-                         atTime:[actionAPI currentTime]];
-    }
+    BOOL expanded = NO;
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    [paramGetAPI getBoolValue:&expanded
+                fromParameter:kParamCropExpanded
+                       atTime:[actionAPI currentTime]];
     header.isExpanded = expanded;
     header.isEnabled = YES;
 
