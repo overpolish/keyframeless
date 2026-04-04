@@ -16,6 +16,7 @@ struct CaptionStyleSettings: Codable, Equatable {
 	var censorProfanity: Bool = true
 	var stripPunctuation: Bool = true
 	var keepQuestionMarks: Bool = true
+	var noGaps: Bool = false
 }
 
 class CaptionStyleDefaults {

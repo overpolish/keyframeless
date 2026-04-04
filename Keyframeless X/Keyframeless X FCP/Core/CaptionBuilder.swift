@@ -83,6 +83,9 @@ enum CaptionBuilder {
 		segments = mergeShortSegments(segments, maxLines: maxLines)
 		segments = closeGaps(segments)
 		segments = removeOverlaps(segments)
+		if style.noGaps {
+			segments = closeAllGaps(segments)
+		}
 
 		return segments
 	}
@@ -147,6 +150,28 @@ enum CaptionBuilder {
 			guard result[i].clipIndex == result[i + 1].clipIndex else { continue }
 			let gap = result[i + 1].startTime - result[i].endTime
 			if gap > 0 && gap <= gapCloseThreshold {
+				result[i] = CaptionSegment(
+					clipIndex: result[i].clipIndex,
+					clipName: result[i].clipName,
+					text: result[i].text,
+					lines: result[i].lines,
+					startTime: result[i].startTime,
+					endTime: result[i + 1].startTime,
+					wordStarts: result[i].wordStarts
+				)
+			}
+		}
+
+		return result
+	}
+
+	private static func closeAllGaps(_ segments: [CaptionSegment]) -> [CaptionSegment] {
+		guard segments.count > 1 else { return segments }
+		var result = segments.sorted { $0.startTime < $1.startTime }
+
+		for i in 0..<(result.count - 1) {
+			let gap = result[i + 1].startTime - result[i].endTime
+			if gap > 0 {
 				result[i] = CaptionSegment(
 					clipIndex: result[i].clipIndex,
 					clipName: result[i].clipName,
