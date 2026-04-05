@@ -10,20 +10,17 @@ import SwiftUI
 struct FCPDragZoneView: NSViewRepresentable {
 	let nativeDataProvider: () -> Data?
 	let onDragStateChanged: (Bool) -> Void
-	var showWarning = false
 
 	func makeNSView(context: Context) -> FCPDragSourceView {
 		let view = FCPDragSourceView()
 		view.nativeDataProvider = nativeDataProvider
 		view.onDragStateChanged = onDragStateChanged
-		view.showWarning = showWarning
 		return view
 	}
 
 	func updateNSView(_ nsView: FCPDragSourceView, context: Context) {
 		nsView.nativeDataProvider = nativeDataProvider
 		nsView.onDragStateChanged = onDragStateChanged
-		nsView.showWarning = showWarning
 		nsView.needsDisplay = true
 	}
 }
@@ -35,11 +32,9 @@ private let proFFPasteboardType = NSPasteboard.PasteboardType(
 class FCPDragSourceView: NSView, NSDraggingSource {
 	var nativeDataProvider: (() -> Data?)?
 	var onDragStateChanged: ((Bool) -> Void)?
-	var showWarning = false
 
 	override func draw(_ dirtyRect: NSRect) {
-		let accentColor: NSColor =
-			showWarning ? .warning() ?? .controlAccentColor : .controlAccentColor
+		let accentColor: NSColor = .controlAccentColor
 
 		let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 6, yRadius: 6)
 		accentColor.withAlphaComponent(0.15).setFill()
@@ -116,5 +111,21 @@ class FCPDragSourceView: NSView, NSDraggingSource {
 		}
 		image.unlockFocus()
 		return image
+	}
+
+	static func pasteToTimeline(data: Data) {
+		let pb = NSPasteboard.general
+		pb.clearContents()
+		pb.setData(data, forType: proFFPasteboardType)
+
+		DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+			let src = CGEventSource(stateID: .hidSystemState)
+			let keyDown = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: true)
+			keyDown?.flags = .maskCommand
+			let keyUp = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: false)
+			keyUp?.flags = .maskCommand
+			keyDown?.post(tap: .cghidEventTap)
+			keyUp?.post(tap: .cghidEventTap)
+		}
 	}
 }
