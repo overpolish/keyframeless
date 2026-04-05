@@ -46,8 +46,14 @@ enum FCPNativePasteboardBuilder {
 	// [83] AudioLayoutMap, [84] UUID
 	// [87] FFAnchoredCollection class
 
+	struct StorylineGroup {
+		let titles: [TitleEntry]
+		let clipStartTime: Double
+	}
+
 	static func build(
-		titles: [TitleEntry],
+		storylines: [[TitleEntry]],
+		clipStartTimes: [Double]? = nil,
 		style: Style = Style(
 			fontFamily: "Helvetica", fontSize: 63,
 			colorR: 1, colorG: 1, colorB: 1, colorA: 1,
@@ -55,7 +61,8 @@ enum FCPNativePasteboardBuilder {
 		frameDuration: String = "1001/24000s",
 		mediaStartTime: Double = 3600.0
 	) -> Data? {
-		guard !titles.isEmpty else { return nil }
+		let allTitles = storylines.flatMap { $0 }
+		guard !allTitles.isEmpty else { return nil }
 		let frameRate = parseFrameDuration(frameDuration)
 
 		guard
@@ -72,18 +79,15 @@ enum FCPNativePasteboardBuilder {
 			var objects = archive["$objects"] as? [Any]
 		else { return nil }
 
-		// Load base ozml for text/font/size patching
 		guard
 			let ozmlURL = Bundle(for: FCPDragSourceView.self)
 				.url(forResource: "BasicTitleOzml", withExtension: "xml"),
 			let baseOzml = try? String(contentsOf: ozmlURL, encoding: .utf8)
 		else { return nil }
 
-		// Patch transform Y position
 		let yPercent = style.yPositionPercent - 50.0
 		patchTransformY(in: &objects, at: 54, yPercent: yPercent)
 
-		// Add FFMotionEffectValue class definition (not in this template)
 		let mevClassIdx = objects.count
 		objects.append(
 			[
@@ -94,57 +98,6 @@ enum FCPNativePasteboardBuilder {
 				],
 			] as [String: Any])
 
-		// Add effectValues for first title
-		addEffectValues(
-			into: &objects, mevClassIdx: mevClassIdx, customEffectIdx: 22,
-			baseOzml: baseOzml, text: titles.sorted(by: { $0.startTime < $1.startTime })[0].text,
-			style: style)
-
-		// Build storyline items using absolute frame positions
-		let sorted = titles.sorted { $0.startTime < $1.startTime }
-		var storylineItems: [Any] = []
-		var cursorFrames = frames(seconds: sorted[0].startTime, frameRate: frameRate)
-
-		for (i, title) in sorted.enumerated() {
-			let titleStartFrames = frames(seconds: title.startTime, frameRate: frameRate)
-			let titleEndFrames: Int
-			if i + 1 < sorted.count,
-				sorted[i + 1].startTime - (title.startTime + title.duration) < 0.001
-			{
-				titleEndFrames = frames(seconds: sorted[i + 1].startTime, frameRate: frameRate)
-			} else {
-				titleEndFrames = frames(
-					seconds: title.startTime + title.duration, frameRate: frameRate)
-			}
-
-			let gapFrames = titleStartFrames - cursorFrames
-			if gapFrames > 0 {
-				storylineItems.append(
-					makeGap(
-						into: &objects, durationFrames: gapFrames,
-						mediaStartTime: mediaStartTime, frameRate: frameRate))
-			}
-
-			let titleDurFrames = titleEndFrames - titleStartFrames
-			let range = rationalRange(
-				startSeconds: mediaStartTime, durationFrames: titleDurFrames, frameRate: frameRate)
-
-			if i == 0 {
-				objects[17] = title.displayName
-				objects[19] = range
-				regenerateUUIDs(in: &objects, at: cloneIndices)
-				storylineItems.append(makeUID(15))
-			} else {
-				storylineItems.append(
-					cloneTitle(
-						into: &objects, displayName: title.displayName,
-						text: title.text, range: range, style: style,
-						baseOzml: baseOzml, mevClassIdx: mevClassIdx))
-			}
-
-			cursorFrames = titleEndFrames
-		}
-
 		// Remove anchor properties from template title (storyline will own them)
 		if var t = objects[15] as? [String: Any] {
 			t.removeValue(forKey: "anchoredLane")
@@ -152,64 +105,101 @@ enum FCPNativePasteboardBuilder {
 			objects[15] = t
 		}
 
-		if storylineItems.count == 1 {
-			// Single title — restore anchor properties
-			if var t = objects[15] as? [String: Any] {
-				t["anchoredLane"] = 1 as NSNumber
-				t["anchorPair"] = makeUID(18)
-				objects[15] = t
+		var usedTemplateTitle = false
+		var storylineUIDs: [Any] = []
+		var globalEarliestFrame = Int.max
+		var globalLatestFrame = 0
+
+		for (slIndex, titles) in storylines.enumerated() {
+			guard !titles.isEmpty else { continue }
+			let sorted = titles.sorted { $0.startTime < $1.startTime }
+
+			// Clip anchor: if provided, storyline anchors to the clip's start
+			// Titles are positioned relative to the clip start
+			let clipStart = clipStartTimes?[slIndex] ?? sorted[0].startTime
+			let clipStartFrames = frames(seconds: clipStart, frameRate: frameRate)
+
+			var items: [Any] = []
+			var cursorFrames = clipStartFrames
+
+			for (i, title) in sorted.enumerated() {
+				let titleStartFrames = frames(seconds: title.startTime, frameRate: frameRate)
+				let titleEndFrames: Int
+				if i + 1 < sorted.count,
+					sorted[i + 1].startTime - (title.startTime + title.duration) < 0.001
+				{
+					titleEndFrames = frames(seconds: sorted[i + 1].startTime, frameRate: frameRate)
+				} else {
+					titleEndFrames = frames(
+						seconds: title.startTime + title.duration, frameRate: frameRate)
+				}
+
+				let gapFrames = titleStartFrames - cursorFrames
+				if gapFrames > 0 {
+					items.append(
+						makeGap(
+							into: &objects, durationFrames: gapFrames,
+							mediaStartTime: mediaStartTime, frameRate: frameRate))
+				}
+
+				let titleDurFrames = titleEndFrames - titleStartFrames
+				let range = rationalRange(
+					startSeconds: mediaStartTime, durationFrames: titleDurFrames,
+					frameRate: frameRate)
+
+				if !usedTemplateTitle {
+					usedTemplateTitle = true
+					objects[17] = title.displayName
+					objects[19] = range
+					regenerateUUIDs(in: &objects, at: cloneIndices)
+					addEffectValues(
+						into: &objects, mevClassIdx: mevClassIdx, customEffectIdx: 22,
+						baseOzml: baseOzml, text: title.text, style: style)
+					items.append(makeUID(15))
+				} else {
+					items.append(
+						cloneTitle(
+							into: &objects, displayName: title.displayName,
+							text: title.text, range: range, style: style,
+							baseOzml: baseOzml, mevClassIdx: mevClassIdx))
+				}
+
+				cursorFrames = titleEndFrames
 			}
-			objects[14] =
-				[
-					"$class": makeUID(61),
-					"NS.objects": [makeUID(15)],
-				] as [String: Any]
+
+			globalEarliestFrame = min(globalEarliestFrame, clipStartFrames)
+			globalLatestFrame = max(globalLatestFrame, cursorFrames)
+
+			// anchorPair second value = absolute media time where storyline anchors
+			let anchorMediaTime = mediaStartTime + (clipStartTimes?[slIndex] ?? sorted[0].startTime)
+			let lane = slIndex + 1
+			storylineUIDs.append(
+				makeStoryline(
+					into: &objects, items: items, lane: lane,
+					anchorMediaTime: anchorMediaTime, frameRate: frameRate))
+		}
+
+		// Set gap anchoredItems to all storylines
+		objects[14] =
+			[
+				"$class": makeUID(61),
+				"NS.objects": storylineUIDs,
+			] as [String: Any]
+
+		// Update gap range to span all titles
+		let totalFrames = globalLatestFrame - globalEarliestFrame
+		objects[8] = "{(0/1),(\(totalFrames * frameRate.numerator)/\(frameRate.denominator))}"
+		objects[13] = rationalRange(
+			startSeconds: mediaStartTime, durationFrames: totalFrames, frameRate: frameRate)
+
+		if storylineUIDs.count == 1 {
+			// Single storyline: skip container (drag-friendly)
 			if var topArr = objects[4] as? [String: Any] {
-				topArr["NS.objects"] = [makeUID(15)]
-				objects[4] = topArr
-			}
-		} else {
-			// Create storyline
-			let slContentsIdx = objects.count
-			objects.append(
-				[
-					"$class": makeUID(38),
-					"NS.objects": storylineItems,
-				] as [String: Any])
-
-			let slIdx = objects.count
-			objects.append(
-				[
-					"$class": makeUID(87),
-					"anchorPair": makeUID(18),
-					"anchoredLane": 1 as NSNumber,
-					"aoFlagsMask": -1 as NSNumber,
-					"containedItems": makeUID(slContentsIdx),
-					"displayName": makeUID(slIdx + 1),
-					"isSpine": true as NSNumber,
-					"persistentID": makeUID(slIdx + 2),
-					"unclippedStart": makeUID(66),
-					"videoProps": makeUID(67),
-				] as [String: Any])
-			objects.append("Storyline")
-			objects.append(UUID().uuidString.uppercased())
-
-			objects[14] =
-				[
-					"$class": makeUID(61),
-					"NS.objects": [makeUID(slIdx)],
-				] as [String: Any]
-
-			if var topArr = objects[4] as? [String: Any] {
-				topArr["NS.objects"] = [makeUID(slIdx)]
+				topArr["NS.objects"] = storylineUIDs
 				objects[4] = topArr
 			}
 		}
-
-		// Update gap range
-		let totalFrames = cursorFrames - frames(seconds: sorted[0].startTime, frameRate: frameRate)
-		objects[13] = rationalRange(
-			startSeconds: mediaStartTime, durationFrames: totalFrames, frameRate: frameRate)
+		// Multi storyline: keep container [5] as top-level (paste needs it for anchor pairs)
 
 		regenerateUUIDs(in: &objects, at: [6, 11])
 
@@ -236,6 +226,43 @@ enum FCPNativePasteboardBuilder {
 		51, 52, 54,
 		59, 83, 84,
 	]
+
+	private static func makeStoryline(
+		into objects: inout [Any], items: [Any], lane: Int,
+		anchorMediaTime: Double = 3600.0, frameRate: FrameRate
+	) -> Any {
+		let contentsIdx = objects.count
+		objects.append(
+			[
+				"$class": makeUID(38),
+				"NS.objects": items,
+			] as [String: Any])
+
+		// anchorPair: {(0/1),(mediaTime)} — first value is 0, second is absolute media time
+		let anchorPairIdx = objects.count
+		let anchorFrames = frames(seconds: anchorMediaTime, frameRate: frameRate)
+		let anchorTicks = anchorFrames * frameRate.numerator
+		objects.append("{(0/1),(\(anchorTicks)/\(frameRate.denominator))}")
+
+		let slIdx = objects.count
+		objects.append(
+			[
+				"$class": makeUID(87),
+				"anchorPair": makeUID(anchorPairIdx),
+				"anchoredLane": lane as NSNumber,
+				"aoFlagsMask": -1 as NSNumber,
+				"containedItems": makeUID(contentsIdx),
+				"displayName": makeUID(slIdx + 1),
+				"isSpine": true as NSNumber,
+				"persistentID": makeUID(slIdx + 2),
+				"unclippedStart": makeUID(66),
+				"videoProps": makeUID(67),
+			] as [String: Any])
+		objects.append("Storyline")
+		objects.append(UUID().uuidString.uppercased())
+
+		return makeUID(slIdx)
+	}
 
 	private static func makeGap(
 		into objects: inout [Any],

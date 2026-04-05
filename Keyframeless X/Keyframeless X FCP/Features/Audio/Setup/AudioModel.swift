@@ -144,13 +144,34 @@ class AudioModel: ObservableObject {
 
 	func buildNativePasteboardData(from rows: [AudioEditRow]) -> Data? {
 		let segments = buildCaptionSegments(from: rows)
-		let titles = segments.map { segment in
+		let allTitles = segments.map { segment in
 			FCPNativePasteboardBuilder.TitleEntry(
 				displayName: segment.lines.first ?? "",
 				text: segment.text,
 				startTime: segment.startTime,
 				duration: segment.endTime - segment.startTime
 			)
+		}
+		let hasOverlaps = CaptionBuilder.hasOverlaps(segments)
+		let storylines: [[FCPNativePasteboardBuilder.TitleEntry]]
+		let clipStarts: [Double]?
+		if hasOverlaps {
+			let grouped = Dictionary(grouping: segments, by: { $0.clipIndex })
+			let sortedClipIndices = grouped.keys.sorted()
+			storylines = sortedClipIndices.map { clipIdx in
+				grouped[clipIdx]!.map { segment in
+					FCPNativePasteboardBuilder.TitleEntry(
+						displayName: segment.lines.first ?? "",
+						text: segment.text,
+						startTime: segment.startTime,
+						duration: segment.endTime - segment.startTime
+					)
+				}
+			}
+			clipStarts = sortedClipIndices.map { audioClips[$0].start }
+		} else {
+			storylines = [allTitles]
+			clipStarts = nil
 		}
 		let font = FCPXMLBuilder.fontInfo(postScriptName: textStyle.textFont)
 		let style = FCPNativePasteboardBuilder.Style(
@@ -163,7 +184,8 @@ class AudioModel: ObservableObject {
 			yPositionPercent: textStyle.textYPosition
 		)
 		return FCPNativePasteboardBuilder.build(
-			titles: titles,
+			storylines: storylines,
+			clipStartTimes: clipStarts,
 			style: style,
 			frameDuration: exportFramerate.rawValue
 		)
