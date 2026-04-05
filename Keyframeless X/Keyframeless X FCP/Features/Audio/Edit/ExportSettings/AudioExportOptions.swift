@@ -135,7 +135,6 @@ struct AudioExportOptionsSidebar: View {
 	@ObservedObject var model: AudioModel
 	let rows: [AudioEditRow]
 	let srtHasOverlaps: Bool
-	var titleCount: Int = 0
 
 	private var hasTranscribedSelection: Bool {
 		let selected = model.editSelectedClips ?? Set(model.audioClips.indices)
