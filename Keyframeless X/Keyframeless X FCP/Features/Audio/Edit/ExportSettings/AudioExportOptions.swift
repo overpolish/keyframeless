@@ -152,7 +152,7 @@ struct AudioExportOptionsSidebar: View {
 				Spacer()
 				HStack(spacing: KKSpacingLG) {
 					FCPDragZoneView(
-						xmlProvider: { model.buildFCPXML(from: rows) },
+						nativeDataProvider: { model.buildNativePasteboardData(from: rows) },
 						onDragStateChanged: { model.isDraggingToFCP = $0 },
 						showWarning: titleCount > 750
 					)

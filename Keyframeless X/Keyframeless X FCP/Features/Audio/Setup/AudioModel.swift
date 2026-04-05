@@ -142,6 +142,33 @@ class AudioModel: ObservableObject {
 		)
 	}
 
+	func buildNativePasteboardData(from rows: [AudioEditRow]) -> Data? {
+		let segments = buildCaptionSegments(from: rows)
+		let titles = segments.map { segment in
+			FCPNativePasteboardBuilder.TitleEntry(
+				displayName: segment.lines.first ?? "",
+				text: segment.text,
+				startTime: segment.startTime,
+				duration: segment.endTime - segment.startTime
+			)
+		}
+		let font = FCPXMLBuilder.fontInfo(postScriptName: textStyle.textFont)
+		let style = FCPNativePasteboardBuilder.Style(
+			fontFamily: font.familyName,
+			fontSize: max(10, Int(textStyle.textSize)),
+			colorR: textStyle.textColorR,
+			colorG: textStyle.textColorG,
+			colorB: textStyle.textColorB,
+			colorA: textStyle.textColorA,
+			yPositionPercent: textStyle.textYPosition
+		)
+		return FCPNativePasteboardBuilder.build(
+			titles: titles,
+			style: style,
+			frameDuration: exportFramerate.rawValue
+		)
+	}
+
 	func buildFCPXML(from rows: [AudioEditRow]) -> String {
 		let segments = buildCaptionSegments(from: rows)
 		let format = FCPXMLBuilder.ExportFormat(
