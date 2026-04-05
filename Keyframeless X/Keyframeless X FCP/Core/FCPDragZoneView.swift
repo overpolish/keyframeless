@@ -8,53 +8,32 @@ import KeyframelessKit
 import SwiftUI
 
 struct FCPDragZoneView: NSViewRepresentable {
-	let xmlProvider: () -> String
+	let nativeDataProvider: () -> Data?
 	let onDragStateChanged: (Bool) -> Void
 	var showWarning = false
 
 	func makeNSView(context: Context) -> FCPDragSourceView {
 		let view = FCPDragSourceView()
-		view.xmlProvider = xmlProvider
+		view.nativeDataProvider = nativeDataProvider
 		view.onDragStateChanged = onDragStateChanged
 		view.showWarning = showWarning
 		return view
 	}
 
 	func updateNSView(_ nsView: FCPDragSourceView, context: Context) {
-		nsView.xmlProvider = xmlProvider
+		nsView.nativeDataProvider = nativeDataProvider
 		nsView.onDragStateChanged = onDragStateChanged
 		nsView.showWarning = showWarning
 		nsView.needsDisplay = true
 	}
 }
 
-private let fcpPasteboardTypes = [
-	"com.apple.finalcutpro.xml.v1-10", "com.apple.finalcutpro.xml.v1-9",
-	"com.apple.finalcutpro.xml",
-]
-.map { NSPasteboard.PasteboardType($0) }
-
-class FCPXMLItemProvider: NSObject, NSPasteboardItemDataProvider {
-	private let xml: String
-
-	init(xml: String) {
-		self.xml = xml
-	}
-
-	func pasteboard(
-		_ pasteboard: NSPasteboard?,
-		item: NSPasteboardItem,
-		provideDataForType type: NSPasteboard.PasteboardType
-	) {
-		guard fcpPasteboardTypes.contains(type),
-			let data = xml.data(using: .utf8)
-		else { return }
-		item.setData(data, forType: type)
-	}
-}
+private let proFFPasteboardType = NSPasteboard.PasteboardType(
+	"com.apple.flexo.proFFPasteboardUTI"
+)
 
 class FCPDragSourceView: NSView, NSDraggingSource {
-	var xmlProvider: (() -> String)?
+	var nativeDataProvider: (() -> Data?)?
 	var onDragStateChanged: ((Bool) -> Void)?
 	var showWarning = false
 
@@ -99,18 +78,19 @@ class FCPDragSourceView: NSView, NSDraggingSource {
 	}
 
 	override func mouseDown(with event: NSEvent) {
-		guard let xmlProvider else { return }
-		let xml = xmlProvider()
+		guard let nativeDataProvider, let data = nativeDataProvider(),
+			!data.isEmpty
+		else { return }
 
-		let provider = FCPXMLItemProvider(xml: xml)
-		let item = NSPasteboardItem()
-		item.setDataProvider(provider, forTypes: fcpPasteboardTypes)
+		let pbItem = NSPasteboardItem()
+		pbItem.setData(data, forType: proFFPasteboardType)
 
-		let draggingItem = NSDraggingItem(pasteboardWriter: item)
+		let draggingItem = NSDraggingItem(pasteboardWriter: pbItem)
 		draggingItem.setDraggingFrame(bounds, contents: snapshot())
 
 		onDragStateChanged?(true)
-		beginDraggingSession(with: [draggingItem], event: event, source: self)
+		let session = beginDraggingSession(with: [draggingItem], event: event, source: self)
+		session.animatesToStartingPositionsOnCancelOrFail = true
 	}
 
 	func draggingSession(
