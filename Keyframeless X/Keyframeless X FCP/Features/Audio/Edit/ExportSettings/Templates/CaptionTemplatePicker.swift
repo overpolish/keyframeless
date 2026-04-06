@@ -268,7 +268,8 @@ struct CaptionTemplatePicker: View {
 				await MainActor.run { model.refreshTemplates() }
 			} catch let error as CocoaError where error.code == .fileWriteNoPermission {
 				await MainActor.run {
-					downloadError = "Permission denied. Run: sudo chown $USER ~/Movies/Motion\\ Templates.localized"
+					downloadError =
+						"Permission denied. Run: sudo chown $USER ~/Movies/Motion\\ Templates.localized"
 				}
 			} catch {
 				await MainActor.run {
@@ -302,9 +303,13 @@ struct CaptionTemplatePicker: View {
 	private func addMotiAndDetectParams(_ url: URL) {
 		let result = PublishedParameter.parseAll(from: url)
 		onDropMoti?(url)
-		guard !result.customParams.isEmpty || result.hasPerWordAnimation else { return }
 		let templateID = "custom:\(url.path)"
 		if let added = model.captionTemplates.first(where: { $0.id == templateID }) {
+			// Store text ozml even if no published params
+			if let textOzml = result.textOzml {
+				paramsStore.setTextOzml(textOzml, for: templateID)
+			}
+			guard !result.customParams.isEmpty || result.hasPerWordAnimation else { return }
 			model.paramsModalParams = result.customParams
 			model.paramsModalHasPerWord = result.hasPerWordAnimation
 			model.paramsModalTemplate = added
@@ -317,6 +322,9 @@ struct CaptionTemplatePicker: View {
 			let result = PublishedParameter.parseAll(from: url)
 			model.paramsModalParams = result.customParams
 			model.paramsModalHasPerWord = result.hasPerWordAnimation
+			if let textOzml = result.textOzml {
+				paramsStore.setTextOzml(textOzml, for: template.id)
+			}
 		} else if let existing {
 			model.paramsModalParams = existing.allParams
 			model.paramsModalHasPerWord = existing.hasPerWordAnimation
@@ -357,7 +365,7 @@ struct CaptionTemplatePicker: View {
 			}
 			paramsStore.setParams(
 				configured, hasPerWordAnimation: result.hasPerWordAnimation,
-				for: template.id)
+				textOzml: result.textOzml, for: template.id)
 			if community.perWord {
 				paramsStore.setPerWordStartsAtZero(
 					community.perWordStartsAtZero, for: template.id)

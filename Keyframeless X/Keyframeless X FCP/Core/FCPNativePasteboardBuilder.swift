@@ -13,16 +13,35 @@ enum FCPNativePasteboardBuilder {
 		let text: String
 		let startTime: Double
 		let duration: Double
+		var wordStarts: [Double] = []
 	}
 
 	struct Style {
 		let fontFamily: String
+		let fontPostScript: String
 		let fontSize: Int
 		let colorR: Double
 		let colorG: Double
 		let colorB: Double
 		let colorA: Double
 		let yPositionPercent: Double
+	}
+
+	struct TemplateInfo {
+		let effectID: String
+		let fileURL: String
+		let name: String
+		var wordsInKeyPath: String?
+		var perWordStartsAtZero: Bool = false
+		var textOzmlKey: String?
+		var textOzml: String?
+		var textOzmlDefaultText: String?
+		var textOzmlStyleID: String?
+	}
+
+	struct EffectValueEntry {
+		let key: String
+		let data: Data
 	}
 
 	// Template object indices (from fcp_position_paste.plist captured with Y=200):
@@ -55,11 +74,14 @@ enum FCPNativePasteboardBuilder {
 		storylines: [[TitleEntry]],
 		clipStartTimes: [Double]? = nil,
 		style: Style = Style(
-			fontFamily: "Helvetica", fontSize: 63,
+			fontFamily: "Helvetica", fontPostScript: "Helvetica",
+			fontSize: 63,
 			colorR: 1, colorG: 1, colorB: 1, colorA: 1,
 			yPositionPercent: 50),
 		frameDuration: String = "1001/24000s",
-		mediaStartTime: Double = 3600.0
+		mediaStartTime: Double = 3600.0,
+		templateInfo: TemplateInfo? = nil,
+		publishedParams: [EffectValueEntry] = []
 	) -> Data? {
 		let allTitles = storylines.flatMap { $0 }
 		guard !allTitles.isEmpty else { return nil }
@@ -79,11 +101,24 @@ enum FCPNativePasteboardBuilder {
 			var objects = archive["$objects"] as? [Any]
 		else { return nil }
 
-		guard
-			let ozmlURL = Bundle(for: FCPDragSourceView.self)
-				.url(forResource: "BasicTitleOzml", withExtension: "xml"),
-			let baseOzml = try? String(contentsOf: ozmlURL, encoding: .utf8)
-		else { return nil }
+		let isBasicTitle = templateInfo == nil
+
+		var baseOzml: String?
+		if isBasicTitle {
+			guard
+				let ozmlURL = Bundle(for: FCPDragSourceView.self)
+					.url(forResource: "BasicTitleOzml", withExtension: "xml"),
+				let ozml = try? String(contentsOf: ozmlURL, encoding: .utf8)
+			else { return nil }
+			baseOzml = ozml
+		}
+
+		// Swap template URL/effectID for custom templates
+		if let info = templateInfo {
+			objects[17] = info.name
+			objects[24] = info.fileURL
+			objects[27] = info.effectID
+		}
 
 		let yPercent = style.yPositionPercent - 50.0
 		patchTransformY(in: &objects, at: 54, yPercent: yPercent)
@@ -147,21 +182,27 @@ enum FCPNativePasteboardBuilder {
 					startSeconds: mediaStartTime, durationFrames: titleDurFrames,
 					frameRate: frameRate)
 
+				let titleEVs = buildTitleEffectValues(
+					title: title, style: style, baseOzml: baseOzml,
+					publishedParams: publishedParams, templateInfo: templateInfo,
+					mediaStartTime: mediaStartTime, frameRate: frameRate)
+
 				if !usedTemplateTitle {
 					usedTemplateTitle = true
-					objects[17] = title.displayName
+					if templateInfo == nil { objects[17] = title.displayName }
 					objects[19] = range
 					regenerateUUIDs(in: &objects, at: cloneIndices)
 					addEffectValues(
 						into: &objects, mevClassIdx: mevClassIdx, customEffectIdx: 22,
-						baseOzml: baseOzml, text: title.text, style: style)
+						entries: titleEVs)
 					items.append(makeUID(15))
 				} else {
 					items.append(
 						cloneTitle(
 							into: &objects, displayName: title.displayName,
-							text: title.text, range: range, style: style,
-							baseOzml: baseOzml, mevClassIdx: mevClassIdx))
+							range: range, style: style,
+							mevClassIdx: mevClassIdx, entries: titleEVs,
+							isBasicTitle: isBasicTitle))
 				}
 
 				cursorFrames = titleEndFrames
@@ -215,290 +256,106 @@ enum FCPNativePasteboardBuilder {
 		)
 	}
 
-	// Per-title objects to clone
-	private static let cloneIndices: [Int] = [
-		15, 16, 17, 19,
-		20, 21,
-		22, 23, 26,
-		31, 32, 33, 37,
-		40, 41,
-		45, 46, 48,
-		51, 52, 54,
-		59, 83, 84,
-	]
-
-	private static func makeStoryline(
-		into objects: inout [Any], items: [Any], lane: Int,
-		anchorMediaTime: Double = 3600.0, frameRate: FrameRate
-	) -> Any {
-		let contentsIdx = objects.count
-		objects.append(
-			[
-				"$class": makeUID(38),
-				"NS.objects": items,
-			] as [String: Any])
-
-		// anchorPair: {(0/1),(mediaTime)} — first value is 0, second is absolute media time
-		let anchorPairIdx = objects.count
-		let anchorFrames = frames(seconds: anchorMediaTime, frameRate: frameRate)
-		let anchorTicks = anchorFrames * frameRate.numerator
-		objects.append("{(0/1),(\(anchorTicks)/\(frameRate.denominator))}")
-
-		let slIdx = objects.count
-		objects.append(
-			[
-				"$class": makeUID(87),
-				"anchorPair": makeUID(anchorPairIdx),
-				"anchoredLane": lane as NSNumber,
-				"aoFlagsMask": -1 as NSNumber,
-				"containedItems": makeUID(contentsIdx),
-				"displayName": makeUID(slIdx + 1),
-				"isSpine": true as NSNumber,
-				"persistentID": makeUID(slIdx + 2),
-				"unclippedStart": makeUID(66),
-				"videoProps": makeUID(67),
-			] as [String: Any])
-		objects.append("Storyline")
-		objects.append(UUID().uuidString.uppercased())
-
-		return makeUID(slIdx)
-	}
-
-	private static func makeGap(
-		into objects: inout [Any],
-		durationFrames: Int,
+	static func buildTitleEffectValues(
+		title: TitleEntry,
+		style: Style,
+		baseOzml: String?,
+		publishedParams: [EffectValueEntry],
+		templateInfo: TemplateInfo?,
 		mediaStartTime: Double,
 		frameRate: FrameRate
-	) -> Any {
-		let idx = objects.count
-		objects.append(
-			[
-				"$class": makeUID(62),
-				"aoFlagsMask": -1 as NSNumber,
-				"clippedRange": makeUID(idx + 2),
-				"displayName": makeUID(12),
-				"hasAudio": 0 as NSNumber,
-				"hasVideo": 0 as NSNumber,
-				"persistentID": makeUID(idx + 1),
-			] as [String: Any])
-		objects.append(UUID().uuidString.uppercased())
-		objects.append(
-			rationalRange(
-				startSeconds: mediaStartTime, durationFrames: durationFrames, frameRate: frameRate))
-		return makeUID(idx)
-	}
-
-	private static func cloneTitle(
-		into objects: inout [Any],
-		displayName: String,
-		text: String,
-		range: String,
-		style: Style,
-		baseOzml: String,
-		mevClassIdx: Int
-	) -> Any {
-		var remap: [Int: Int] = [:]
-		let baseIdx = objects.count
-		for (offset, origIdx) in cloneIndices.enumerated() {
-			remap[origIdx] = baseIdx + offset
-		}
-		for origIdx in cloneIndices {
-			objects.append(deepCopy(objects[origIdx], remap: remap))
-		}
-		objects[remap[17]!] = displayName
-		objects[remap[19]!] = range
-		regenerateUUIDs(in: &objects, at: Array(remap.values))
-
-		// Patch transform Y
-		patchTransformY(in: &objects, at: remap[54]!, yPercent: style.yPositionPercent - 50.0)
-
-		// Add effectValues for this clone
-		addEffectValues(
-			into: &objects, mevClassIdx: mevClassIdx, customEffectIdx: remap[22]!,
-			baseOzml: baseOzml, text: text, style: style)
-
-		// Remove anchor properties (storyline owns them)
-		if var t = objects[remap[15]!] as? [String: Any] {
-			t.removeValue(forKey: "anchoredLane")
-			t.removeValue(forKey: "anchorPair")
-			objects[remap[15]!] = t
-		}
-
-		return makeUID(remap[15]!)
-	}
-
-	private static func addEffectValues(
-		into objects: inout [Any],
-		mevClassIdx: Int,
-		customEffectIdx: Int,
-		baseOzml: String,
-		text: String,
-		style: Style
-	) {
-		let escaped =
-			text
+	) -> [EffectValueEntry] {
+		var entries: [EffectValueEntry] = []
+		let escaped = title.text
 			.replacingOccurrences(of: "&", with: "&amp;")
 			.replacingOccurrences(of: "<", with: "&lt;")
 			.replacingOccurrences(of: ">", with: "&gt;")
-		var ozml = baseOzml
-		ozml = ozml.replacingOccurrences(
-			of: "<text>Hello World</text>", with: "<text>\(escaped)</text>")
-		ozml = ozml.replacingOccurrences(
-			of: "<font>Helvetica</font>", with: "<font>\(style.fontFamily)</font>")
-		ozml = ozml.replacingOccurrences(
-			of: "default=\"63\" value=\"63\"",
-			with: "default=\"\(style.fontSize)\" value=\"\(style.fontSize)\"")
 
-		var evUIDs: [Any] = []
-		evUIDs.append(
-			addEffectValue(
-				into: &objects, classIdx: mevClassIdx,
-				key: "9999/999166631/999166633", data: ozml.data(using: .utf8)!))
-
-		let colorBase = "9999/999166631/999166633/5/999166635/14/16"
-		for (name, suffix, paramID, value) in [
-			("Red", "/1", 1, style.colorR),
-			("Green", "/2", 2, style.colorG),
-			("Blue", "/3", 3, style.colorB),
-		] as [(String, String, Int, Double)] {
-			evUIDs.append(
-				addEffectValue(
-					into: &objects, classIdx: mevClassIdx,
-					key: "\(colorBase)\(suffix)", data: makeColorData(name, paramID, value)))
-		}
-
-		let evArrayIdx = objects.count
-		objects.append(
-			[
-				"$class": makeUID(61),
-				"NS.objects": evUIDs,
-			] as [String: Any])
-
-		if var ce = objects[customEffectIdx] as? [String: Any] {
-			ce["effectValues"] = makeUID(evArrayIdx)
-			objects[customEffectIdx] = ce
-		}
-	}
-
-	private static func addEffectValue(
-		into objects: inout [Any], classIdx: Int, key: String, data: Data
-	) -> Any {
-		let idx = objects.count
-		objects.append(
-			[
-				"$class": makeUID(classIdx),
-				"data": makeUID(idx + 3),
-				"key": makeUID(idx + 2),
-				"persistentID": makeUID(idx + 1),
-			] as [String: Any])
-		objects.append(UUID().uuidString.uppercased())
-		objects.append(key)
-		objects.append(data)
-		return makeUID(idx)
-	}
-
-	private static func makeColorData(_ name: String, _ paramID: Int, _ value: Double) -> Data {
-		let s =
-			"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE ozxmlscene>\n"
-			+ "<ozml version=\"5.14\">\n"
-			+ "<factory id=\"1\" uuid=\"fdc1944b229111d7b1c300039389b702\">\n"
-			+ "\t<description>Channel</description>\n\t<manufacturer>Apple</manufacturer>\n"
-			+ "\t<version>1</version>\n</factory>\n"
-			+ "<parameter name=\"\(name)\" id=\"\(paramID)\" factoryID=\"1\">\n"
-			+ "\t<flags>8589934608</flags>\n"
-			+ "\t<curve type=\"1\" default=\"\(value)\" value=\"\(value)\">\n"
-			+ "\t\t<min>-6</min>\n\t\t<max>8</max>\n"
-			+ "\t</curve>\n</parameter>\n</ozml>\n"
-		return s.data(using: .utf8)!
-	}
-
-	private static func patchTransformY(in objects: inout [Any], at index: Int, yPercent: Double) {
-		guard let data = objects[index] as? Data,
-			var ozml = String(data: data, encoding: .utf8)
-		else { return }
-		// Find and replace the Y curve value
-		if let r = ozml.range(of: "value=\"18.518518518518519\"") {
-			ozml.replaceSubrange(r, with: "value=\"\(yPercent)\"")
+		if let baseOzml {
+			var ozml = baseOzml
+			ozml = ozml.replacingOccurrences(
+				of: "<text>Hello World</text>", with: "<text>\(escaped)</text>")
+			ozml = ozml.replacingOccurrences(
+				of: "<font>Helvetica</font>", with: "<font>\(style.fontPostScript)</font>")
+			ozml = ozml.replacingOccurrences(
+				of: "default=\"63\" value=\"63\"",
+				with: "default=\"\(style.fontSize)\" value=\"\(style.fontSize)\"")
+			entries.append(
+				EffectValueEntry(
+					key: "9999/999166631/999166633", data: ozml.data(using: .utf8)!))
+			entries.append(
+				contentsOf: OzmlBuilder.colorEntries(
+					keyBase: "9999/999166631/999166633/5/999166635/14/16",
+					r: style.colorR, g: style.colorG, b: style.colorB))
 		} else {
-			// Fallback: find last value= in the Y parameter curve
-			var searchRange = ozml.startIndex..<ozml.endIndex
-			var lastRange: Range<String.Index>?
-			while let found = ozml.range(of: "value=\"", range: searchRange) {
-				lastRange = found
-				searchRange = found.upperBound..<ozml.endIndex
-			}
-			if let lr = lastRange {
-				let afterQuote = ozml[lr.upperBound...]
-				if let endQuote = afterQuote.firstIndex(of: "\"") {
-					let fullRange = lr.lowerBound..<ozml.index(after: endQuote)
-					ozml.replaceSubrange(fullRange, with: "value=\"\(yPercent)\"")
+			entries.append(contentsOf: publishedParams)
+			if let info = templateInfo,
+				let textOzmlKey = info.textOzmlKey,
+				let textOzml = info.textOzml,
+				let defaultText = info.textOzmlDefaultText
+			{
+				var patched = textOzml.replacingOccurrences(
+					of: "<text>\(defaultText)</text>", with: "<text>\(escaped)</text>")
+				patchOzmlAttribute(
+					&patched, tag: "<font>", endTag: "</font>",
+					replacement: style.fontPostScript)
+				patchOzmlAttribute(
+					&patched, after: "name=\"Size\" id=\"3\"",
+					attribute: "value", replacement: "\(style.fontSize)")
+				entries.append(
+					EffectValueEntry(
+						key: textOzmlKey, data: patched.data(using: .utf8)!))
+				if let styleID = info.textOzmlStyleID {
+					entries.append(
+						contentsOf: OzmlBuilder.colorEntries(
+							keyBase: "\(textOzmlKey)/5/\(styleID)/14/16",
+							r: style.colorR, g: style.colorG, b: style.colorB))
 				}
 			}
 		}
-		objects[index] = ozml.data(using: .utf8)!
+
+		if let info = templateInfo,
+			let wordsInKey = info.wordsInKeyPath,
+			!title.wordStarts.isEmpty
+		{
+			entries.append(
+				EffectValueEntry(
+					key: wordsInKey,
+					data: OzmlBuilder.wordsIn(
+						wordStarts: title.wordStarts,
+						titleStartTime: title.startTime,
+						mediaStartTime: mediaStartTime,
+						frameRate: frameRate,
+						startsAtZero: info.perWordStartsAtZero)))
+		}
+
+		return entries
+	}
+
+	private static func patchOzmlAttribute(
+		_ ozml: inout String, tag: String, endTag: String, replacement: String
+	) {
+		if let start = ozml.range(of: tag),
+			let end = ozml.range(of: endTag, range: start.upperBound..<ozml.endIndex)
+		{
+			ozml.replaceSubrange(start.upperBound..<end.lowerBound, with: replacement)
+		}
+	}
+
+	private static func patchOzmlAttribute(
+		_ ozml: inout String, after marker: String, attribute: String, replacement: String
+	) {
+		if let markerRange = ozml.range(of: marker),
+			let attrStart = ozml.range(
+				of: "\(attribute)=\"", range: markerRange.upperBound..<ozml.endIndex),
+			let attrEnd = ozml.range(of: "\"", range: attrStart.upperBound..<ozml.endIndex)
+		{
+			ozml.replaceSubrange(attrStart.upperBound..<attrEnd.lowerBound, with: replacement)
+		}
 	}
 
 	struct FrameRate {
 		let numerator: Int
 		let denominator: Int
-	}
-
-	private static func parseFrameDuration(_ fd: String) -> FrameRate {
-		let raw = fd.hasSuffix("s") ? String(fd.dropLast()) : fd
-		guard let slash = raw.firstIndex(of: "/") else {
-			return FrameRate(numerator: 1, denominator: 1)
-		}
-		let num = Int(Double(raw[raw.startIndex..<slash]) ?? 1)
-		let den = Int(Double(raw[raw.index(after: slash)...]) ?? 1)
-		return FrameRate(numerator: max(num, 1), denominator: max(den, 1))
-	}
-
-	private static func frames(seconds: Double, frameRate: FrameRate) -> Int {
-		Int(round(seconds * Double(frameRate.denominator) / Double(frameRate.numerator)))
-	}
-
-	private static func rationalRange(
-		startSeconds: Double, durationFrames: Int, frameRate: FrameRate
-	) -> String {
-		let startFrames = frames(seconds: startSeconds, frameRate: frameRate)
-		let s = startFrames * frameRate.numerator
-		let d = durationFrames * frameRate.numerator
-		return "{(\(s)/\(frameRate.denominator)),(\(d)/\(frameRate.denominator))}"
-	}
-
-	private static func regenerateUUIDs(in objects: inout [Any], at indices: [Int]) {
-		for idx in indices {
-			guard idx < objects.count else { continue }
-			if let str = objects[idx] as? String, str.count == 36, UUID(uuidString: str) != nil {
-				objects[idx] = UUID().uuidString.uppercased()
-			}
-		}
-	}
-
-	private static func makeUID(_ value: Int) -> Any {
-		let xml =
-			"<?xml version=\"1.0\" encoding=\"UTF-8\"?><!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\"><plist version=\"1.0\"><dict><key>CF$UID</key><integer>\(value)</integer></dict></plist>"
-		return try! PropertyListSerialization.propertyList(
-			from: xml.data(using: .utf8)!, format: nil)
-	}
-
-	private static func uidValue(_ val: Any) -> Int? {
-		let desc = "\(val)"
-		guard desc.contains("CFKeyedArchiverUID"),
-			let range = desc.range(of: "value = "),
-			let end = desc[range.upperBound...].firstIndex(of: "}")
-		else { return nil }
-		return Int(desc[range.upperBound..<end])
-	}
-
-	private static func deepCopy(_ obj: Any, remap: [Int: Int]) -> Any {
-		if let dict = obj as? [String: Any] {
-			var result: [String: Any] = [:]
-			for (key, val) in dict { result[key] = deepCopy(val, remap: remap) }
-			return result
-		}
-		if let arr = obj as? [Any] { return arr.map { deepCopy($0, remap: remap) } }
-		if let uid = uidValue(obj) { return makeUID(remap[uid] ?? uid) }
-		return obj
 	}
 }

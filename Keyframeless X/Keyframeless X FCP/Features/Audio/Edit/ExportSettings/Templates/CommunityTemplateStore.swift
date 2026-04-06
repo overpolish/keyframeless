@@ -185,7 +185,7 @@ class CommunityTemplateStore: ObservableObject {
 			await MainActor.run {
 				store.setParams(
 					configured, hasPerWordAnimation: result.hasPerWordAnimation,
-					for: templateID)
+					textOzml: result.textOzml, for: templateID)
 				if template.perWord {
 					store.setPerWordStartsAtZero(template.perWordStartsAtZero, for: templateID)
 				}

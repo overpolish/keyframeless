@@ -36,7 +36,11 @@ struct TemplateControlsPopover: View {
 						)
 					}
 					ForEach(fontParams) { param in
-						FontParamNote(name: param.name)
+						FontParamControl(
+							param: param,
+							templateID: template.id,
+							store: store
+						)
 					}
 				}
 			}
@@ -190,21 +194,54 @@ private struct ToggleParamControl: View {
 	}
 }
 
-private struct FontParamNote: View {
-	let name: String
+private struct FontParamControl: View {
+	let param: PublishedParameter
+	let templateID: String
+	@ObservedObject var store: TemplatePublishedParamsStore
+
+	private var customFont: Binding<String> {
+		Binding(
+			get: {
+				store.value(paramID: param.id, for: templateID).customFont ?? param.defaultFont
+					?? "HelveticaNeue"
+			},
+			set: { newVal in
+				var val = store.value(paramID: param.id, for: templateID)
+				val.customFont = newVal
+				store.setValue(val, paramID: param.id, for: templateID)
+			}
+		)
+	}
+
+	private var displayName: String {
+		NSFont(name: customFont.wrappedValue, size: 12)?.displayName ?? customFont.wrappedValue
+	}
+
+	@State private var isFontOpen = false
 
 	var body: some View {
-		HStack(spacing: KKSpacingSM) {
-			Image(systemName: "textformat")
-				.font(.system(size: 9))
-				.foregroundStyle(.secondary.opacity(0.6))
-			Text(name)
+		HStack(spacing: KKSpacingMD) {
+			Text(param.name)
 				.font(.caption)
-				.foregroundStyle(.secondary.opacity(0.6))
+				.foregroundStyle(.primary)
 			Spacer()
-			Text("Set in FCP")
-				.font(.system(size: 9))
-				.foregroundStyle(.secondary.opacity(0.4))
+			HStack(spacing: KKSpacingSM) {
+				Text(displayName)
+					.font(.custom(customFont.wrappedValue, size: 11))
+					.lineLimit(1)
+				Image(systemName: "chevron.up.chevron.down")
+					.font(.caption2)
+					.foregroundStyle(.secondary)
+			}
+			.frame(height: KKInspectorRowHeight)
+			.padding(.horizontal, KKPaddingLG)
+			.kkPanel(cornerRadius: KKRadiusMD)
+			.contentShape(RoundedRectangle(cornerRadius: KKRadiusMD))
+			.onTapGesture { isFontOpen.toggle() }
+			.popover(isPresented: $isFontOpen, arrowEdge: .top) {
+				FontListPopover(selectedFont: customFont, fonts: FontCache.families)
+					.background(PopoverBackgroundClearer())
+			}
 		}
 	}
 }

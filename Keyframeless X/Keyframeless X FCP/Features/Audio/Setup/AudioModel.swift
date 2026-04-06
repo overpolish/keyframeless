@@ -142,55 +142,6 @@ class AudioModel: ObservableObject {
 		)
 	}
 
-	func buildNativePasteboardData(from rows: [AudioEditRow]) -> Data? {
-		let segments = buildCaptionSegments(from: rows)
-		let allTitles = segments.map { segment in
-			FCPNativePasteboardBuilder.TitleEntry(
-				displayName: segment.lines.first ?? "",
-				text: segment.text,
-				startTime: segment.startTime,
-				duration: segment.endTime - segment.startTime
-			)
-		}
-		let hasOverlaps = CaptionBuilder.hasOverlaps(segments)
-		let storylines: [[FCPNativePasteboardBuilder.TitleEntry]]
-		let clipStarts: [Double]?
-		if hasOverlaps {
-			let grouped = Dictionary(grouping: segments, by: { $0.clipIndex })
-			let sortedClipIndices = grouped.keys.sorted()
-			storylines = sortedClipIndices.map { clipIdx in
-				grouped[clipIdx]!.map { segment in
-					FCPNativePasteboardBuilder.TitleEntry(
-						displayName: segment.lines.first ?? "",
-						text: segment.text,
-						startTime: segment.startTime,
-						duration: segment.endTime - segment.startTime
-					)
-				}
-			}
-			clipStarts = sortedClipIndices.map { audioClips[$0].start }
-		} else {
-			storylines = [allTitles]
-			clipStarts = nil
-		}
-		let font = FCPXMLBuilder.fontInfo(postScriptName: textStyle.textFont)
-		let style = FCPNativePasteboardBuilder.Style(
-			fontFamily: font.familyName,
-			fontSize: max(10, Int(textStyle.textSize)),
-			colorR: textStyle.textColorR,
-			colorG: textStyle.textColorG,
-			colorB: textStyle.textColorB,
-			colorA: textStyle.textColorA,
-			yPositionPercent: textStyle.textYPosition
-		)
-		return FCPNativePasteboardBuilder.build(
-			storylines: storylines,
-			clipStartTimes: clipStarts,
-			style: style,
-			frameDuration: exportFramerate.rawValue
-		)
-	}
-
 	func buildFCPXML(from rows: [AudioEditRow]) -> String {
 		let segments = buildCaptionSegments(from: rows)
 		let format = FCPXMLBuilder.ExportFormat(
@@ -210,40 +161,6 @@ class AudioModel: ObservableObject {
 			publishedParams: publishedParams,
 			perWordStartsAtZero: startsAtZero
 		)
-	}
-
-	private func buildPublishedParamEntries() -> [FCPXMLBuilder.PublishedParamEntry] {
-		let store = TemplatePublishedParamsStore.shared
-		guard let settings = store.params(for: selectedTemplate.id) else { return [] }
-		var entries: [FCPXMLBuilder.PublishedParamEntry] = []
-		for param in settings.allParams where param.isToggleable {
-			let val = store.value(paramID: param.id, for: selectedTemplate.id)
-			if param.isFont { continue }
-			let key: String
-			if param.isProjectRoot {
-				key = "9999/\(param.objectID)/\(param.channelPath)"
-			} else if let parentScenenode = param.parentScenenodeID {
-				key =
-					"9999/\(param.parentLayerID ?? "10003")/\(parentScenenode)/4/\(param.objectID)/\(param.channelPath)"
-			} else {
-				key =
-					"9999/\(param.parentLayerID ?? "10003")/\(param.objectID)/\(param.channelPath)"
-			}
-			let valueStr: String
-			switch param.kind {
-			case .color:
-				valueStr = "\(val.r) \(val.g) \(val.b) \(val.a)"
-			case .slider:
-				valueStr = "\(val.sliderValue)"
-			case .toggle:
-				valueStr = val.toggleValue ? "1" : "0"
-			default:
-				continue
-			}
-			entries.append(
-				FCPXMLBuilder.PublishedParamEntry(name: param.name, key: key, value: valueStr))
-		}
-		return entries
 	}
 
 	func srtHasOverlaps(from rows: [AudioEditRow]) -> Bool {
