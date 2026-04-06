@@ -45,131 +45,88 @@ struct PublishedParamsModal: View {
 		_perWordStartsAtZero = State(initialValue: initialPerWordStartsAtZero)
 	}
 
-	private var fontParams: [PublishedParameter] {
-		params.filter { $0.defaultFont != nil }
-	}
-
-	private var nonFontParams: [PublishedParameter] {
-		params.filter { $0.defaultFont == nil }
-	}
-
-	private var hasAnyContent: Bool {
-		!params.isEmpty || hasPerWordAnimation
-	}
+	private var fontParams: [PublishedParameter] { params.filter { $0.defaultFont != nil } }
+	private var nonFontParams: [PublishedParameter] { params.filter { $0.defaultFont == nil } }
+	private var hasAnyContent: Bool { !params.isEmpty || hasPerWordAnimation }
 
 	var body: some View {
-		ZStack {
-			Color.black.opacity(0.5)
-				.ignoresSafeArea()
-				.onTapGesture { onDismiss() }
-			VStack(alignment: .leading, spacing: KKSpacingXL) {
-				VStack(alignment: .leading, spacing: KKSpacingSM) {
-					HStack(spacing: KKSpacingMD) {
-						Text("Customize Available Parameters")
-							.font(.title3)
-							.foregroundStyle(.primary)
-						Spacer()
-						if hasPerWordAnimation {
-							InfoBadge(
-								label: "Per word",
-								systemImage: "directcurrent",
-								color: .green
-							)
-						}
-					}
-					if !hasAnyContent {
-						Text("No published parameters detected in \"\(templateName)\".")
-							.font(.system(size: 11))
-							.foregroundStyle(.secondary)
-							.padding(.vertical, KKPaddingLG)
-							.fixedSize(horizontal: false, vertical: true)
-					} else if params.isEmpty {
-						Text(
-							"Configure per-word animation for \"\(templateName)\"."
-						)
-						.font(.system(size: 11))
-						.foregroundStyle(.secondary)
-						.padding(.vertical, KKPaddingLG)
-						.fixedSize(horizontal: false, vertical: true)
-					} else {
-						Text(
-							"Detected the following published parameters in \"\(templateName)\". Choose a type for each parameter."
-						)
-						.font(.system(size: 11))
-						.foregroundStyle(.secondary)
-						.padding(.vertical, KKPaddingLG)
-						.fixedSize(horizontal: false, vertical: true)
+		ModalContainer(width: 360, onDismiss: onDismiss) {
+			VStack(alignment: .leading, spacing: KKSpacingSM) {
+				HStack(spacing: KKSpacingMD) {
+					Text("Customize Available Parameters")
+						.font(.title3).foregroundStyle(.primary)
+					Spacer()
+					if hasPerWordAnimation {
+						InfoBadge(label: "Per word", systemImage: "directcurrent", color: .green)
 					}
 				}
-				if hasPerWordAnimation {
-					HStack(alignment: .center, spacing: KKSpacingSM) {
-						Text("Word Timing")
-							.font(.caption)
-							.foregroundStyle(.primary)
-						Spacer()
-						PillToggle(
-							selection: $perWordStartsAtZero,
-							options: [
-								(label: "Straight Away", value: true),
-								(label: "Late Start", value: false),
-							]
-						)
-					}
-				}
-				ForEach(fontParams) { param in
-					FontModeRow(
-						name: param.name,
-						fontMode: Binding(
-							get: { fontModes[param.id] ?? .base },
-							set: { fontModes[param.id] = $0 }
-						)
+				if !hasAnyContent {
+					Text("No published parameters detected in \"\(templateName)\".")
+						.font(.system(size: 11)).foregroundStyle(.secondary)
+						.padding(.vertical, KKPaddingLG)
+						.fixedSize(horizontal: false, vertical: true)
+				} else if params.isEmpty {
+					Text("Configure per-word animation for \"\(templateName)\".")
+						.font(.system(size: 11)).foregroundStyle(.secondary)
+						.padding(.vertical, KKPaddingLG)
+						.fixedSize(horizontal: false, vertical: true)
+				} else {
+					Text(
+						"Detected the following published parameters in \"\(templateName)\". Choose a type for each parameter."
 					)
-				}
-				if !nonFontParams.isEmpty {
-					ScrollShadowView {
-						VStack(spacing: KKSpacingMD) {
-							ForEach(nonFontParams) { param in
-								ParamKindRow(
-									name: param.name,
-									kind: Binding(
-										get: { paramKinds[param.id] ?? .off },
-										set: { paramKinds[param.id] = $0 }
-									)
-								)
-							}
-						}
-						.onGeometryChange(for: CGFloat.self) { proxy in
-							proxy.size.height
-						} action: { height in
-							paramListHeight = height
-						}
-					}
-					.frame(height: min(paramListHeight, 300))
-				}
-				HStack {
-					if !hasAnyContent {
-						Spacer()
-						Button("OK") { onDismiss() }
-							.buttonStyle(.plain)
-							.foregroundStyle(Color.kkAccent)
-					} else {
-						Button("Cancel") { onDismiss() }
-							.buttonStyle(.plain)
-							.foregroundStyle(.secondary)
-						Spacer()
-						Button("Save") { save() }
-							.buttonStyle(.plain)
-							.foregroundStyle(Color.kkAccent)
-					}
+					.font(.system(size: 11)).foregroundStyle(.secondary)
+					.padding(.vertical, KKPaddingLG)
+					.fixedSize(horizontal: false, vertical: true)
 				}
 			}
-			.padding(KKPaddingXL)
-			.frame(width: 360)
-			.kkPanel()
-			.background(
-				RoundedRectangle(cornerRadius: KKRadiusMD + 4)
-					.fill(Color(nsColor: .windowBackgroundColor))
-			)
+			if hasPerWordAnimation {
+				HStack(alignment: .center, spacing: KKSpacingSM) {
+					Text("Word Timing").font(.caption).foregroundStyle(.primary)
+					Spacer()
+					PillToggle(
+						selection: $perWordStartsAtZero,
+						options: [
+							(label: "Straight Away", value: true),
+							(label: "Late Start", value: false),
+						])
+				}
+			}
+			ForEach(fontParams) { param in
+				FontModeRow(
+					name: param.name,
+					fontMode: Binding(
+						get: { fontModes[param.id] ?? .base },
+						set: { fontModes[param.id] = $0 }))
+			}
+			if !nonFontParams.isEmpty {
+				ScrollShadowView {
+					VStack(spacing: KKSpacingMD) {
+						ForEach(nonFontParams) { param in
+							ParamKindRow(
+								name: param.name,
+								kind: Binding(
+									get: { paramKinds[param.id] ?? .off },
+									set: { paramKinds[param.id] = $0 }))
+						}
+					}
+					.onGeometryChange(for: CGFloat.self) {
+						$0.size.height
+					} action: {
+						paramListHeight = $0
+					}
+				}
+				.frame(height: min(paramListHeight, 300))
+			}
+			HStack {
+				if !hasAnyContent {
+					Spacer()
+					Button("OK") { onDismiss() }.buttonStyle(.plain).foregroundStyle(Color.kkAccent)
+				} else {
+					Button("Cancel") { onDismiss() }.buttonStyle(.plain).foregroundStyle(.secondary)
+					Spacer()
+					Button("Save") { save() }.buttonStyle(.plain).foregroundStyle(Color.kkAccent)
+				}
+			}
 		}
 	}
 
@@ -184,57 +141,5 @@ struct PublishedParamsModal: View {
 			return p
 		}
 		onSave(updated, perWordStartsAtZero)
-	}
-}
-
-private struct FontModeRow: View {
-	let name: String
-	@Binding var fontMode: TemplatePublishedParamsStore.FontMode
-
-	var body: some View {
-		HStack(spacing: KKSpacingMD) {
-			Image(systemName: "textformat")
-				.font(.system(size: 9))
-				.foregroundStyle(.secondary)
-			Text(name)
-				.font(.system(size: 11))
-				.foregroundStyle(.primary)
-			Spacer()
-			PillToggle(
-				selection: $fontMode,
-				options: [
-					(label: "Base", value: TemplatePublishedParamsStore.FontMode.base),
-					(label: "Custom", value: TemplatePublishedParamsStore.FontMode.custom),
-				]
-			)
-		}
-		.padding(.vertical, KKPaddingXS)
-	}
-}
-
-private struct ParamKindRow: View {
-	let name: String
-	@Binding var kind: PublishedParameter.ParamKind
-
-	private let kindOptions:
-		[(label: String, value: PublishedParameter.ParamKind, icon: String?, color: Color?)] = [
-			("Off", .off, nil, .kkError),
-			("Color", .color, "paintpalette", .kkAccent),
-			("Slider", .slider, "slider.horizontal.3", .kkWarning),
-			("Toggle", .toggle, "checkmark.circle", .green),
-		]
-
-	var body: some View {
-		HStack(spacing: KKSpacingMD) {
-			Text(name)
-				.font(.system(size: 11))
-				.foregroundStyle(.primary)
-				.lineLimit(2)
-				.fixedSize(horizontal: false, vertical: true)
-			Spacer()
-			PillToggle(selection: $kind, options: kindOptions)
-				.fixedSize()
-		}
-		.padding(.vertical, KKPaddingXS)
 	}
 }
