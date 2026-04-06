@@ -185,18 +185,26 @@ struct CaptionTemplatePicker: View {
 							ForEach(mergedKeyframelessItems) { item in
 								switch item {
 								case .installed(let template):
+									let community = communityStore.templates.first {
+										$0.name == template.name
+									}
 									CaptionTemplateCard(
 										template: template,
 										isSelected: template.id == model.selectedTemplate.id,
 										isFavorite: favorites.contains(template.id),
 										onSelect: { model.selectedTemplate = template },
-										onToggleFavorite: { favorites.toggle(template.id) }
+										onToggleFavorite: { favorites.toggle(template.id) },
+										onUpdate: community.map { c in
+											{ showUpdateModal(for: c) }
+										}
 									)
 									.id(template.id)
-								case .community(let template):
+								case .community(let community):
 									CommunityTemplateCard(
-										template: template,
-										onDownload: { downloadCommunityTemplate(template) }
+										template: community,
+										isInstalled: templates.contains { $0.name == community.name },
+										onDownload: { downloadCommunityTemplate(community) },
+										onUpdate: { showUpdateModal(for: community) }
 									)
 								}
 							}
@@ -321,6 +329,16 @@ struct CaptionTemplatePicker: View {
 			model.paramsModalHasPerWord = false
 		}
 		model.paramsModalTemplate = template
+	}
+
+	private func showUpdateModal(for community: CommunityTemplate) {
+		let local = templates.first { $0.name == community.name }
+		let template = local ?? CaptionTemplate(
+			id: community.id, name: community.name, uid: "",
+			supportsPerWordAnimation: community.perWord,
+			wordsInParamName: nil, wordsInKeyPath: nil,
+			isBuiltIn: false, isCustom: false)
+		model.updateModalTemplate = (template, community)
 	}
 
 	private func reconcileCommunityParams() {

@@ -15,6 +15,7 @@ struct CaptionTemplateCard: View {
 	var onRemove: (() -> Void)?
 	var onSettings: (() -> Void)?
 	var onPublish: (() -> Void)?
+	var onUpdate: (() -> Void)?
 
 	@State private var thumbnail: NSImage?
 	@State private var gifURL: URL?
@@ -86,7 +87,18 @@ struct CaptionTemplateCard: View {
 							.buttonStyle(.plain)
 						}
 						Spacer()
-						if isHovered, let onPublish {
+						if isHovered, let onUpdate {
+							Button {
+								onUpdate()
+							} label: {
+								Image(systemName: "arrow.up.circle.fill")
+									.font(.system(size: 10))
+									.foregroundStyle(.secondary)
+									.padding(KKPaddingMD)
+									.contentShape(Rectangle())
+							}
+							.buttonStyle(.plain)
+						} else if isHovered, let onPublish {
 							Button {
 								onPublish()
 							} label: {
