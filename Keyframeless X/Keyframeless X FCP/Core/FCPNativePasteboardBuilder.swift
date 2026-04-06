@@ -102,6 +102,9 @@ enum FCPNativePasteboardBuilder {
 			var objects = archive["$objects"] as? [Any]
 		else { return nil }
 
+		// Assign Captions role (subrole UUID from template's embedded roles data)
+		objects[59] = "VaUwsjFSHS5Cpf3PuyPV0Cw"
+
 		let isBasicTitle = templateInfo == nil
 
 		var baseOzml: String?
