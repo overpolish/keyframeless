@@ -14,6 +14,7 @@ struct PublishedParamsModal: View {
 	let onDismiss: () -> Void
 
 	@State private var paramKinds: [String: PublishedParameter.ParamKind]
+	@State private var fontModes: [String: TemplatePublishedParamsStore.FontMode]
 	@State private var paramListHeight: CGFloat = 0
 	@State private var perWordStartsAtZero: Bool
 
@@ -35,6 +36,11 @@ struct PublishedParamsModal: View {
 			initialValue: Dictionary(
 				uniqueKeysWithValues: params.filter { $0.defaultFont == nil }.map {
 					($0.id, initialKinds[$0.id] ?? .off)
+				}))
+		_fontModes = State(
+			initialValue: Dictionary(
+				uniqueKeysWithValues: params.filter { $0.defaultFont != nil }.map {
+					($0.id, initialKinds[$0.id] == .font ? .custom : .base)
 				}))
 		_perWordStartsAtZero = State(initialValue: initialPerWordStartsAtZero)
 	}
@@ -110,15 +116,14 @@ struct PublishedParamsModal: View {
 						)
 					}
 				}
-				if !fontParams.isEmpty {
-					KKAlertRepresentable(
-						text: "Font parameters must be set manually in Final Cut Pro",
-						icon: NSImage(
-							systemSymbolName: "textformat", accessibilityDescription: nil),
-						fontSize: 10
+				ForEach(fontParams) { param in
+					FontModeRow(
+						name: param.name,
+						fontMode: Binding(
+							get: { fontModes[param.id] ?? .base },
+							set: { fontModes[param.id] = $0 }
+						)
 					)
-					.frame(maxWidth: .infinity)
-					.frame(height: 32)
 				}
 				if !nonFontParams.isEmpty {
 					ScrollShadowView {
@@ -171,10 +176,39 @@ struct PublishedParamsModal: View {
 	private func save() {
 		let updated = params.map { param -> PublishedParameter in
 			var p = param
-			p.kind = paramKinds[param.id] ?? .off
+			if p.defaultFont != nil {
+				p.kind = fontModes[param.id] == .custom ? .font : .off
+			} else {
+				p.kind = paramKinds[param.id] ?? .off
+			}
 			return p
 		}
 		onSave(updated, perWordStartsAtZero)
+	}
+}
+
+private struct FontModeRow: View {
+	let name: String
+	@Binding var fontMode: TemplatePublishedParamsStore.FontMode
+
+	var body: some View {
+		HStack(spacing: KKSpacingMD) {
+			Image(systemName: "textformat")
+				.font(.system(size: 9))
+				.foregroundStyle(.secondary)
+			Text(name)
+				.font(.system(size: 11))
+				.foregroundStyle(.primary)
+			Spacer()
+			PillToggle(
+				selection: $fontMode,
+				options: [
+					(label: "Base", value: TemplatePublishedParamsStore.FontMode.base),
+					(label: "Custom", value: TemplatePublishedParamsStore.FontMode.custom),
+				]
+			)
+		}
+		.padding(.vertical, KKPaddingXS)
 	}
 }
 
