@@ -15,6 +15,7 @@ struct CommunityTemplate: Identifiable {
 	let params: [[String: String]]
 	let previewGifURL: URL
 	let folderName: String
+	let version: Int
 }
 
 class CommunityTemplateStore: ObservableObject {
@@ -51,6 +52,7 @@ class CommunityTemplateStore: ObservableObject {
 					self.templates = templates
 					self.isLoading = false
 				}
+				await Self.checkAndUpdateInstalled(templates)
 			} catch {
 				await MainActor.run {
 					self.error = error.localizedDescription
@@ -116,8 +118,20 @@ class CommunityTemplateStore: ObservableObject {
 			perWordStartsAtZero: meta["perWordStartsAtZero"] as? Bool ?? false,
 			params: meta["params"] as? [[String: String]] ?? [],
 			previewGifURL: previewGifURL,
-			folderName: templateFolderName
+			folderName: templateFolderName,
+			version: meta["version"] as? Int ?? 1
 		)
+	}
+
+	private static func checkAndUpdateInstalled(_ templates: [CommunityTemplate]) async {
+		let versionStore = InstalledTemplateVersions.shared
+		for template in templates {
+			let localDir = installBase.appendingPathComponent(template.name)
+			guard FileManager.default.fileExists(atPath: localDir.path) else { continue }
+			let installed = await MainActor.run { versionStore.version(for: template.id) }
+			guard template.version > installed else { continue }
+			try? await download(template)
+		}
 	}
 
 	private static let installBase: URL = {
@@ -192,6 +206,9 @@ class CommunityTemplateStore: ObservableObject {
 			}
 		}
 
-		await MainActor.run { shared.needsFCPRestart = true }
+		await MainActor.run {
+			InstalledTemplateVersions.shared.setVersion(template.version, for: template.id)
+			shared.needsFCPRestart = true
+		}
 	}
 }

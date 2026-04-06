@@ -273,6 +273,7 @@ struct TemplatePublishModal: View {
 			perWord: hasPerWordAnimation,
 			perWordStartsAtZero: perWordStartsAtZero,
 			params: enabledParams.map { ["name": $0.name, "kind": "\($0.kind)"] },
+			version: 1,
 			motiDirectoryURL: motiDir,
 			previewGifURL: gifURL
 		)
