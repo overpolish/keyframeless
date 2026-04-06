@@ -21,7 +21,6 @@ struct CaptionTemplatePicker: View {
 	@State private var showFavoritesOnly = false
 	@State private var showPerWordOnly = false
 	@State private var showCommunity = true
-	@State private var showControlsPopover = false
 	@State private var downloadError: String?
 
 	private func sorted(_ list: [CaptionTemplate]) -> [CaptionTemplate] {
@@ -177,78 +176,67 @@ struct CaptionTemplatePicker: View {
 					.font(.system(size: 10, weight: .medium))
 					.foregroundStyle(Color.kkAccent)
 				}
-				if hasEnabledControls {
-					Button {
-						showControlsPopover.toggle()
-					} label: {
-						Image(systemName: "paintpalette.fill")
-							.font(.system(size: 11))
-							.foregroundStyle(showControlsPopover ? Color.kkAccent : .secondary)
-							.frame(maxHeight: .infinity)
-							.contentShape(Rectangle())
-					}
-					.buttonStyle(.plain)
-					.popover(isPresented: $showControlsPopover, arrowEdge: .trailing) {
-						TemplateControlsPopover(
-							template: model.selectedTemplate,
-							store: paramsStore
-						)
-					}
-				}
 			}
 			.fixedSize(horizontal: false, vertical: true)
-			ScrollShadowView(cornerRadius: KKRadiusSM, scrollToID: model.selectedTemplate.id) {
-				VStack(alignment: .leading, spacing: KKSpacingLG) {
-					TemplateSection(title: "Keyframeless") {
-						ForEach(mergedKeyframelessItems) { item in
-							switch item {
-							case .installed(let template):
+			HStack(spacing: KKSpacingLG) {
+				ScrollShadowView(cornerRadius: KKRadiusSM, scrollToID: model.selectedTemplate.id) {
+					VStack(alignment: .leading, spacing: KKSpacingLG) {
+						TemplateSection(title: "Keyframeless") {
+							ForEach(mergedKeyframelessItems) { item in
+								switch item {
+								case .installed(let template):
+									CaptionTemplateCard(
+										template: template,
+										isSelected: template.id == model.selectedTemplate.id,
+										isFavorite: favorites.contains(template.id),
+										onSelect: { model.selectedTemplate = template },
+										onToggleFavorite: { favorites.toggle(template.id) }
+									)
+									.id(template.id)
+								case .community(let template):
+									CommunityTemplateCard(
+										template: template,
+										onDownload: { downloadCommunityTemplate(template) }
+									)
+								}
+							}
+							if communityStore.isLoading {
+								HStack {
+									Spacer()
+									ProgressView()
+										.controlSize(.small)
+									Text("Loading community templates...")
+										.font(.system(size: 10))
+										.foregroundStyle(.secondary)
+									Spacer()
+								}
+								.padding(.vertical, KKPaddingLG)
+							}
+						}
+						TemplateSection(title: "Custom") {
+							ForEach(customTemplates) { template in
 								CaptionTemplateCard(
 									template: template,
 									isSelected: template.id == model.selectedTemplate.id,
 									isFavorite: favorites.contains(template.id),
 									onSelect: { model.selectedTemplate = template },
-									onToggleFavorite: { favorites.toggle(template.id) }
+									onToggleFavorite: { favorites.toggle(template.id) },
+									onRemove: { onRemoveCustom?(template) },
+									onSettings: { showParamsModal(for: template) },
+									onPublish: { model.publishModalTemplate = template }
 								)
 								.id(template.id)
-							case .community(let template):
-								CommunityTemplateCard(
-									template: template,
-									onDownload: { downloadCommunityTemplate(template) }
-								)
 							}
-						}
-						if communityStore.isLoading {
-							HStack {
-								Spacer()
-								ProgressView()
-									.controlSize(.small)
-								Text("Loading community templates...")
-									.font(.system(size: 10))
-									.foregroundStyle(.secondary)
-								Spacer()
-							}
-							.padding(.vertical, KKPaddingLG)
+							MotiDropTarget(onPickFile: pickMotiFile)
 						}
 					}
-					TemplateSection(title: "Custom") {
-						ForEach(customTemplates) { template in
-							CaptionTemplateCard(
-								template: template,
-								isSelected: template.id == model.selectedTemplate.id,
-								isFavorite: favorites.contains(template.id),
-								onSelect: { model.selectedTemplate = template },
-								onToggleFavorite: { favorites.toggle(template.id) },
-								onRemove: { onRemoveCustom?(template) },
-								onSettings: { showParamsModal(for: template) },
-								onPublish: { model.publishModalTemplate = template }
-							)
-							.id(template.id)
-						}
-						MotiDropTarget(onPickFile: pickMotiFile)
-					}
+					.padding(.vertical, KKPaddingXS)
 				}
-				.padding(.vertical, KKPaddingXS)
+				TemplateParamsPanel(
+					template: model.selectedTemplate,
+					store: paramsStore
+				)
+				.frame(width: 200)
 			}
 		}
 		.onAppear { communityStore.fetch() }
