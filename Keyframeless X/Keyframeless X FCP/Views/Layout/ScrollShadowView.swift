@@ -29,15 +29,16 @@ struct ScrollShadowView<Content: View>: View {
 	var body: some View {
 		ScrollViewReader { proxy in
 			ScrollView {
-				ZStack {
-					content()
-					GeometryReader { inner in
-						Color.clear
-							.anchorPreference(key: ContentFrameKey.self, value: .bounds) { anchor in
-								inner.frame(in: .named("scroll"))
-							}
-					}
-				}
+				content()
+					.background(
+						GeometryReader { inner in
+							Color.clear
+								.anchorPreference(key: ContentFrameKey.self, value: .bounds) {
+									anchor in
+									inner.frame(in: .named("scroll"))
+								}
+						}
+					)
 			}
 			.onAppear {
 				if let scrollToID {

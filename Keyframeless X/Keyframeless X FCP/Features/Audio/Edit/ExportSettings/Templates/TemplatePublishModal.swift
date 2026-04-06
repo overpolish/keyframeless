@@ -47,142 +47,127 @@ struct TemplatePublishModal: View {
 	}
 
 	var body: some View {
-		ZStack {
-			Color.black.opacity(0.5)
-				.ignoresSafeArea()
-				.onTapGesture { onDismiss() }
-			VStack(alignment: .leading, spacing: KKSpacingXL) {
-				HStack {
-					Text("Publish Template")
-						.font(.title3)
-						.foregroundStyle(.primary)
-					Spacer()
-					if hasPerWordAnimation {
-						HStack(spacing: KKSpacingMD) {
-							InfoBadge(
-								label: "Per word",
-								systemImage: "directcurrent",
-								color: .green
-							)
-						}
-					}
-				}
-
-				VStack(alignment: .leading, spacing: KKSpacingLG) {
-					LabeledField(label: "Name") {
-						HStack(spacing: KKSpacingSM) {
-							Image(systemName: "tag.fill")
-								.font(.system(size: 10))
-								.foregroundStyle(.secondary)
-							PublishTextField(
-								text: $name, placeholder: "Template name", requestFocus: $focusName
-							)
-							.frame(height: 16)
-						}
-						.padding(.horizontal, KKPaddingLG)
-						.padding(.vertical, KKPaddingLG)
-						.contentShape(Rectangle())
-						.onTapGesture { focusName.toggle() }
-						.kkPanel(cornerRadius: KKRadiusMD)
-					}
-					LabeledField(label: "Author") {
-						HStack(spacing: KKSpacingSM) {
-							Image(systemName: "person.circle.fill")
-								.font(.system(size: 10))
-								.foregroundStyle(.secondary)
-							PublishTextField(
-								text: $author, placeholder: "Optional", requestFocus: $focusAuthor
-							)
-							.frame(height: 16)
-						}
-						.padding(.horizontal, KKPaddingLG)
-						.padding(.vertical, KKPaddingLG)
-						.contentShape(Rectangle())
-						.onTapGesture { focusAuthor.toggle() }
-						.kkPanel(cornerRadius: KKRadiusMD)
-					}
-				}
-
-				VStack(alignment: .leading, spacing: KKSpacingSM) {
-					HStack {
-						Text("Preview")
-							.font(.system(size: 11))
-							.foregroundStyle(.secondary)
-						Spacer()
-						Text("16:9 Aspect Ratio - Max size 300Kb").font(.caption).foregroundStyle(
-							.secondary)
-					}
-					Button {
-						downloadSampleAudio()
-					} label: {
-						HStack(spacing: KKSpacingSM) {
-							Image(systemName: "arrow.down.circle.fill")
-								.font(.system(size: 10))
-							Text("Download Sample Audio")
-								.font(.system(size: 11))
-						}
-						.foregroundStyle(Color.kkAccent)
-					}
-					.buttonStyle(.plain)
-					GifDropZone(
-						gifURL: previewGifURL,
-						isDropTargeted: $isDropTargeted,
-						onPick: pickGif,
-						onDrop: handleGifDrop
-					)
-					if gifTooLarge {
-						Text("GIF exceeds 300 KB limit")
-							.font(.system(size: 10))
-							.foregroundStyle(Color.kkError)
-					}
-					if gifWrongAspect {
-						Text("GIF must be 16:9 aspect ratio")
-							.font(.system(size: 10))
-							.foregroundStyle(Color.kkError)
-					}
-				}
-
-				if !enabledParams.isEmpty {
-					VStack(alignment: .leading, spacing: KKSpacingSM) {
-						Text("Parameters")
-							.font(.system(size: 11))
-							.foregroundStyle(.secondary)
-						HStack(spacing: KKSpacingSM) {
-							ForEach(enabledParams) { param in
-								paramBadge(param)
-							}
-						}
-					}
-				}
-
-				if let publishError {
-					Text(publishError)
-						.font(.system(size: 10))
-						.foregroundStyle(Color.kkError)
-						.fixedSize(horizontal: false, vertical: true)
-				}
-
-				HStack {
-					Button("Cancel") { onDismiss() }
-						.buttonStyle(.plain)
-						.foregroundStyle(.secondary)
-					Spacer()
-					Button(isPublishing ? "Publishing..." : "Publish") { publish() }
-						.buttonStyle(.plain)
-						.foregroundStyle(
-							canPublish && !isPublishing
-								? Color.kkAccent : .secondary.opacity(0.4)
-						)
-						.disabled(!canPublish || isPublishing)
+		ModalContainer(width: 360, onDismiss: onDismiss) {
+			HStack {
+				Text("Publish Template")
+					.font(.title3)
+					.foregroundStyle(.primary)
+				Spacer()
+				if hasPerWordAnimation {
+					InfoBadge(label: "Per word", systemImage: "directcurrent", color: .green)
 				}
 			}
-			.padding(KKPaddingXL)
-			.frame(width: 360)
-			.kkPanel()
-			.background(
-				RoundedRectangle(cornerRadius: KKRadiusMD + 4)
-					.fill(Color(nsColor: .windowBackgroundColor))
-			)
+
+			VStack(alignment: .leading, spacing: KKSpacingLG) {
+				LabeledField(label: "Name") {
+					HStack(spacing: KKSpacingSM) {
+						Image(systemName: "tag.fill")
+							.font(.system(size: 10))
+							.foregroundStyle(.secondary)
+						PublishTextField(
+							text: $name, placeholder: "Template name",
+							requestFocus: $focusName
+						)
+						.frame(height: 16)
+					}
+					.padding(.horizontal, KKPaddingLG)
+					.padding(.vertical, KKPaddingLG)
+					.contentShape(Rectangle())
+					.onTapGesture { focusName.toggle() }
+					.kkPanel(cornerRadius: KKRadiusMD)
+				}
+				LabeledField(label: "Author") {
+					HStack(spacing: KKSpacingSM) {
+						Image(systemName: "person.circle.fill")
+							.font(.system(size: 10))
+							.foregroundStyle(.secondary)
+						PublishTextField(
+							text: $author, placeholder: "Optional",
+							requestFocus: $focusAuthor
+						)
+						.frame(height: 16)
+					}
+					.padding(.horizontal, KKPaddingLG)
+					.padding(.vertical, KKPaddingLG)
+					.contentShape(Rectangle())
+					.onTapGesture { focusAuthor.toggle() }
+					.kkPanel(cornerRadius: KKRadiusMD)
+				}
+			}
+
+			VStack(alignment: .leading, spacing: KKSpacingSM) {
+				HStack {
+					Text("Preview")
+						.font(.system(size: 11))
+						.foregroundStyle(.secondary)
+					Spacer()
+					Text("16:9 Aspect Ratio - Max size 300Kb")
+						.font(.caption)
+						.foregroundStyle(.secondary)
+				}
+				Button {
+					downloadSampleAudio()
+				} label: {
+					HStack(spacing: KKSpacingSM) {
+						Image(systemName: "arrow.down.circle.fill")
+							.font(.system(size: 10))
+						Text("Download Sample Audio")
+							.font(.system(size: 11))
+					}
+					.foregroundStyle(Color.kkAccent)
+				}
+				.buttonStyle(.plain)
+				GifDropZone(
+					gifURL: previewGifURL,
+					isDropTargeted: $isDropTargeted,
+					onPick: { FilePicker.pickGif { setGif($0) } },
+					onDrop: { FilePicker.handleDrop($0, extension: "gif") { setGif($0) } }
+				)
+				if gifTooLarge {
+					Text("GIF exceeds 300 KB limit")
+						.font(.system(size: 10))
+						.foregroundStyle(Color.kkError)
+				}
+				if gifWrongAspect {
+					Text("GIF must be 16:9 aspect ratio")
+						.font(.system(size: 10))
+						.foregroundStyle(Color.kkError)
+				}
+			}
+
+			if !enabledParams.isEmpty {
+				VStack(alignment: .leading, spacing: KKSpacingSM) {
+					Text("Parameters")
+						.font(.system(size: 11))
+						.foregroundStyle(.secondary)
+					HStack(spacing: KKSpacingSM) {
+						ForEach(enabledParams) { param in
+							paramBadge(param)
+						}
+					}
+				}
+			}
+
+			if let publishError {
+				Text(publishError)
+					.font(.system(size: 10))
+					.foregroundStyle(Color.kkError)
+					.fixedSize(horizontal: false, vertical: true)
+			}
+
+			HStack {
+				Button("Cancel") { onDismiss() }
+					.buttonStyle(.plain)
+					.foregroundStyle(.secondary)
+				Spacer()
+				Button(isPublishing ? "Publishing..." : "Publish") { publish() }
+					.buttonStyle(.plain)
+					.foregroundStyle(
+						canPublish && !isPublishing
+							? Color.kkAccent : .secondary.opacity(0.4)
+					)
+					.disabled(!canPublish || isPublishing)
+			}
 		}
 	}
 
@@ -200,21 +185,10 @@ struct TemplatePublishModal: View {
 		}
 	}
 
-	private static let maxGifSize = 300 * 1024
-
 	private func setGif(_ url: URL) {
-		let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
-		gifTooLarge = size > Self.maxGifSize
-		if let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-			let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-			let w = props[kCGImagePropertyPixelWidth] as? Int,
-			let h = props[kCGImagePropertyPixelHeight] as? Int, h > 0
-		{
-			let ratio = Double(w) / Double(h)
-			gifWrongAspect = abs(ratio - 16.0 / 9.0) > 0.05
-		} else {
-			gifWrongAspect = true
-		}
+		let result = GifValidator.validate(url)
+		gifTooLarge = result.isTooLarge
+		gifWrongAspect = result.isWrongAspect
 		previewGifURL = url
 	}
 
@@ -232,27 +206,6 @@ struct TemplatePublishModal: View {
 		try? FileManager.default.copyItem(at: sourceURL, to: destURL)
 	}
 
-	private func pickGif() {
-		let panel = NSOpenPanel()
-		panel.allowedContentTypes = [UTType.gif]
-		panel.allowsMultipleSelection = false
-		guard panel.runModal() == .OK, let url = panel.url else { return }
-		setGif(url)
-	}
-
-	private func handleGifDrop(_ providers: [NSItemProvider]) -> Bool {
-		for provider in providers {
-			provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier) { item, _ in
-				guard let data = item as? Data,
-					let url = URL(dataRepresentation: data, relativeTo: nil),
-					url.pathExtension.lowercased() == "gif"
-				else { return }
-				DispatchQueue.main.async { setGif(url) }
-			}
-		}
-		return true
-	}
-
 	private func publish() {
 		guard canPublish, !isPublishing else { return }
 		guard let motiDir = template.resolvedMotiURL()?.deletingLastPathComponent() else {
@@ -265,7 +218,8 @@ struct TemplatePublishModal: View {
 		publishError = nil
 
 		let perWordStartsAtZero =
-			TemplatePublishedParamsStore.shared.params(for: template.id)?.perWordStartsAtZero ?? false
+			TemplatePublishedParamsStore.shared.params(for: template.id)?.perWordStartsAtZero
+			?? false
 		let payload = CommunityPublisher.TemplatePayload(
 			id: UUID().uuidString,
 			name: name.trimmingCharacters(in: .whitespaces),
