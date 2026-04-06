@@ -153,8 +153,18 @@ class AudioModel: ObservableObject {
 		let startsAtZero =
 			TemplatePublishedParamsStore.shared.params(for: selectedTemplate.id)?
 			.perWordStartsAtZero ?? false
+
+		let hasOverlaps = CaptionBuilder.hasOverlaps(segments)
+		let storylines: [[CaptionSegment]]
+		if hasOverlaps {
+			let grouped = Dictionary(grouping: segments, by: { $0.clipIndex })
+			storylines = grouped.keys.sorted().map { grouped[$0]! }
+		} else {
+			storylines = [segments]
+		}
+
 		return FCPXMLBuilder.build(
-			segments: segments,
+			storylines: storylines,
 			textStyle: textStyle,
 			format: format,
 			template: selectedTemplate,

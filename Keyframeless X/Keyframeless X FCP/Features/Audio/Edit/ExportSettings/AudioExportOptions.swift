@@ -167,6 +167,11 @@ struct AudioExportOptionsSidebar: View {
 							FCPDragSourceView.pasteToTimeline(data: data)
 						}
 					}
+					FCPXMLImportButton(
+						action: { model.insertTitle(rows: rows) }
+					)
+					.allowsHitTesting(hasTranscribedSelection)
+					.opacity(hasTranscribedSelection ? 1 : 0.4)
 					SRTExportButton(
 						hasOverlaps: srtHasOverlaps,
 						action: { model.exportSRT(from: rows) }
