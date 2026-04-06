@@ -43,6 +43,10 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 		channel.hasPrefix("./") ? String(channel.dropFirst(2)) : channel
 	}
 
+	var channelParamID: String {
+		channelPath.split(separator: "/").last.map(String.init) ?? channelPath
+	}
+
 	var effectValueKey: String {
 		if isProjectRoot {
 			return "9999/\(objectID)/\(channelPath)"
@@ -241,29 +245,39 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 		else { return nil }
 		let layerID = (content as NSString).substring(with: layerMatch.range(at: 1))
 
-		// Find text scenenodes (factoryID 16 or 21), prefer non-"copy" names
-		let snPattern = #"<scenenode\s+name="([^"]+)"\s+id="(\d+)"\s+factoryID="(16|21)""#
+		// Find scenenodes containing <text> tags, prefer non-"copy" names
+		let snPattern = #"<scenenode\s+name="([^"]+)"\s+id="(\d+)"\s+factoryID="\d+""#
 		guard let snRegex = try? NSRegularExpression(pattern: snPattern) else { return nil }
 		let snMatches = snRegex.matches(
 			in: content, range: NSRange(content.startIndex..., in: content))
-		guard !snMatches.isEmpty else { return nil }
+
+		// Filter to scenenodes that contain a <text> tag before the next <scenenode>
+		let textScenenodes = snMatches.filter { match in
+			let matchEnd = match.range.location + match.range.length
+			let searchStart = content.index(content.startIndex, offsetBy: matchEnd)
+			let lookahead = String(content[searchStart...].prefix(5000))
+			guard let textPos = lookahead.range(of: "<text>") else { return false }
+			if let nextScenenode = lookahead.range(of: "<scenenode") {
+				return textPos.lowerBound < nextScenenode.lowerBound
+			}
+			return true
+		}
+		guard !textScenenodes.isEmpty else { return nil }
 
 		let bestMatch =
-			snMatches.first(where: {
+			textScenenodes.first(where: {
 				let name = (content as NSString).substring(with: $0.range(at: 1))
 				return !name.lowercased().contains("copy")
-			}) ?? snMatches.last!
+			}) ?? textScenenodes.last!
 
 		let scenenodeID = (content as NSString).substring(with: bestMatch.range(at: 2))
 
-		// Find the full scenenode open tag
 		let tagSearchStart = content.index(
 			content.startIndex, offsetBy: bestMatch.range.location)
 		guard let tagEnd = content.range(of: ">", range: tagSearchStart..<content.endIndex)
 		else { return nil }
 		let tagStart = tagSearchStart
 
-		// Find matching </scenenode> with nesting
 		var depth = 1
 		var pos = tagEnd.upperBound
 		var closeEnd: String.Index?
