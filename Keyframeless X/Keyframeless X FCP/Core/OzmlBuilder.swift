@@ -45,9 +45,9 @@ enum OzmlBuilder {
 		}
 	}
 
-	static func slider(name: String, value: Double) -> Data {
+	static func slider(name: String, paramID: String, value: Double) -> Data {
 		let body =
-			"<parameter name=\"\(name)\" id=\"100\" factoryID=\"1\">\n"
+			"<parameter name=\"\(name)\" id=\"\(paramID)\" factoryID=\"1\">\n"
 			+ "\t<flags>8589934608</flags>\n"
 			+ "\t<curve type=\"1\" default=\"\(value)\" value=\"\(value)\">\n"
 			+ "\t\t<min>0</min>\n\t\t<max>100</max>\n"
@@ -55,19 +55,21 @@ enum OzmlBuilder {
 		return wrap(channelFactory, body).data(using: .utf8)!
 	}
 
-	static func toggle(name: String, value: Bool) -> Data {
+	static func toggle(name: String, paramID: String, value: Bool) -> Data {
 		let v = value ? 1.0 : 0.0
 		let body =
-			"<parameter name=\"\(name)\" id=\"100\" factoryID=\"1\">\n"
+			"<parameter name=\"\(name)\" id=\"\(paramID)\" factoryID=\"1\">\n"
 			+ "\t<flags>8589934608</flags>\n"
 			+ "\t<curve type=\"0\" default=\"\(v)\" value=\"\(v)\"/>\n"
 			+ "</parameter>\n"
 		return wrap(channelFactory, body).data(using: .utf8)!
 	}
 
-	static func font(name: String, font: String, defaultFont: String) -> Data {
+	static func font(name: String, paramID: String = "83", font: String, defaultFont: String)
+		-> Data
+	{
 		let body =
-			"<parameter name=\"\(name)\" id=\"83\" factoryID=\"1\">\n"
+			"<parameter name=\"\(name)\" id=\"\(paramID)\" factoryID=\"1\">\n"
 			+ "\t<font>\(font)</font>\n"
 			+ "\t<defaultFont>\(defaultFont)</defaultFont>\n"
 			+ "</parameter>\n"
@@ -75,6 +77,8 @@ enum OzmlBuilder {
 	}
 
 	static func wordsIn(
+		paramName: String = "Words In",
+		paramID: String = "100",
 		wordStarts: [Double],
 		titleStartTime: Double,
 		mediaStartTime: Double,
@@ -99,7 +103,7 @@ enum OzmlBuilder {
 		}
 		let firstValue = startsAtZero ? "0" : String(format: "%g", 1.0 / divisor)
 		let body =
-			"<parameter name=\"Words In\" id=\"100\" factoryID=\"1\">\n"
+			"<parameter name=\"\(paramName)\" id=\"\(paramID)\" factoryID=\"1\">\n"
 			+ "\t<flags>12901679376</flags>\n"
 			+ "\t<curve type=\"1\" default=\"\(firstValue)\" value=\"\(firstValue)\">\n"
 			+ "\t\t<numberOfKeypoints>\(wordCount)</numberOfKeypoints>\n"

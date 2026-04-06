@@ -70,6 +70,7 @@ extension AudioModel {
 				fileURL: fileURL,
 				name: selectedTemplate.name,
 				wordsInKeyPath: selectedTemplate.wordsInKeyPath,
+				wordsInParamName: selectedTemplate.wordsInParamName,
 				perWordStartsAtZero: storedSettings?.perWordStartsAtZero ?? false,
 				textOzmlKey: storedSettings?.textOzmlKey,
 				textOzml: storedSettings?.textOzml,
@@ -104,13 +105,17 @@ extension AudioModel {
 			case .slider:
 				entries.append(
 					.init(
-						key: key, data: OzmlBuilder.slider(name: param.name, value: val.sliderValue)
-					))
+						key: key,
+						data: OzmlBuilder.slider(
+							name: param.name, paramID: param.channelParamID,
+							value: val.sliderValue)))
 			case .toggle:
 				entries.append(
 					.init(
-						key: key, data: OzmlBuilder.toggle(name: param.name, value: val.toggleValue)
-					))
+						key: key,
+						data: OzmlBuilder.toggle(
+							name: param.name, paramID: param.channelParamID,
+							value: val.toggleValue)))
 			default:
 				if let defaultFont = param.defaultFont {
 					let fontToUse =
@@ -120,7 +125,8 @@ extension AudioModel {
 						.init(
 							key: key,
 							data: OzmlBuilder.font(
-								name: param.name, font: fontToUse, defaultFont: defaultFont)))
+								name: param.name, paramID: param.channelParamID,
+								font: fontToUse, defaultFont: defaultFont)))
 				}
 			}
 		}

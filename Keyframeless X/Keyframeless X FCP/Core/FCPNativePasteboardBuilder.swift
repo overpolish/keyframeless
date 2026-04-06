@@ -32,6 +32,7 @@ enum FCPNativePasteboardBuilder {
 		let fileURL: String
 		let name: String
 		var wordsInKeyPath: String?
+		var wordsInParamName: String?
 		var perWordStartsAtZero: Bool = false
 		var textOzmlKey: String?
 		var textOzml: String?
@@ -318,10 +319,13 @@ enum FCPNativePasteboardBuilder {
 			let wordsInKey = info.wordsInKeyPath,
 			!title.wordStarts.isEmpty
 		{
+			let wordsInParamID = wordsInKey.split(separator: "/").last.map(String.init) ?? "100"
 			entries.append(
 				EffectValueEntry(
 					key: wordsInKey,
 					data: OzmlBuilder.wordsIn(
+						paramName: info.wordsInParamName ?? "Words In",
+						paramID: wordsInParamID,
 						wordStarts: title.wordStarts,
 						titleStartTime: title.startTime,
 						mediaStartTime: mediaStartTime,
