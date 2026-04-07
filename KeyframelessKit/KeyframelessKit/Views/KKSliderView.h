@@ -21,6 +21,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property(nonatomic, strong, nullable) NSColor *trackFillColor;
 
+/// Piecewise scale break. When both are > 0, the range [minValue,
+/// scaleBreakValue] occupies the first scaleBreakPosition fraction of the
+/// track (e.g. 0.8 = 80%), and [scaleBreakValue, maxValue] occupies the rest.
+@property(nonatomic, assign) double scaleBreakValue;
+@property(nonatomic, assign) double scaleBreakPosition;
+
 + (instancetype)styledSlider;
 
 @end
