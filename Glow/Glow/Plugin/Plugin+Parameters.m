@@ -46,6 +46,41 @@
     return NO;
   }
 
+  if (![paramAPI addFloatSliderWithName:@"Radius"
+                            parameterID:kParamRadius
+                           defaultValue:20.0
+                           parameterMin:0.0
+                           parameterMax:FLT_MAX
+                              sliderMin:0.0
+                              sliderMax:100.0
+                                  delta:1.0
+                         parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
+  if (![paramAPI addPercentSliderWithName:@"Intensity"
+                              parameterID:kParamIntensity
+                             defaultValue:1.5
+                             parameterMin:0.0
+                             parameterMax:5.0
+                                sliderMin:0.0
+                                sliderMax:3.0
+                                    delta:0.01
+                           parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
+  if (![self addAnimationParametersWithAPI:paramAPI error:error])
+    return NO;
+
+  UInt32 holdParams[] = {kParamHoldRadius, kParamHoldIntensity};
+  NSString *holdNames[] = {@"Hold Radius", @"Hold Intensity"};
+  for (int i = 0; i < 2; i++) {
+    if (![paramAPI addToggleButtonWithName:holdNames[i]
+                               parameterID:holdParams[i]
+                              defaultValue:YES
+                            parameterFlags:kFxParameterFlag_HIDDEN])
+      return NO;
+  }
+
   return YES;
 }
 
