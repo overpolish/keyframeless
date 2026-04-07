@@ -30,6 +30,22 @@
     return NO;
   }
 
+  NSAttributedString *infoText = [KKMarkup
+      attributedStringFromMarkup:
+          @"Use on an Adjustment Clip <kbd>⌥ A</kbd> or a Compound Clip "
+          @"<kbd>⌥ G</kbd>"];
+  if (![self
+          addInfoParameterWithAttributedText:infoText
+                                        icon:[NSImage
+                                                 imageWithSystemSymbolName:
+                                                     @"info.circle"
+                                                  accessibilityDescription:nil]
+                                 parameterID:kParamInfoUsage
+                                     withAPI:paramAPI
+                                       error:error]) {
+    return NO;
+  }
+
   return YES;
 }
 

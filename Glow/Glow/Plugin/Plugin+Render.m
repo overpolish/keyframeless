@@ -51,6 +51,17 @@
   if (!pipelineState)
     return NO;
 
+  simd_float2 imageSize = {(float)(destinationImage.imagePixelBounds.right -
+                                   destinationImage.imagePixelBounds.left),
+                           (float)(destinationImage.imagePixelBounds.top -
+                                   destinationImage.imagePixelBounds.bottom)};
+
+  simd_float2 tileOffset = {
+      roundf((float)(destinationImage.tilePixelBounds.left -
+                     destinationImage.imagePixelBounds.left)),
+      roundf((float)(destinationImage.tilePixelBounds.bottom -
+                     destinationImage.imagePixelBounds.bottom))};
+
   return [self
       encodeRenderCommandsForDestinationImage:destinationImage
                                  sourceImages:sourceImages
@@ -64,6 +75,16 @@
                                            setFragmentTexture:inputTextures[0]
                                                       atIndex:
                                                           KKTextureIndex_InputImage];
+                                       [encoder
+                                           setFragmentBytes:&imageSize
+                                                     length:sizeof(imageSize)
+                                                    atIndex:
+                                                        FragmentIndex_ImageSize];
+                                       [encoder
+                                           setFragmentBytes:&tileOffset
+                                                     length:sizeof(tileOffset)
+                                                    atIndex:
+                                                        FragmentIndex_TileOffset];
                                        [encoder
                                            drawPrimitives:
                                                MTLPrimitiveTypeTriangleStrip

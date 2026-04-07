@@ -33,8 +33,41 @@ vertex RasterizerData vertexShader(uint vertexID [[vertex_id]],
 }
 
 fragment float4 fragmentShader(RasterizerData in [[stage_in]],
-                               texture2d<half> colorTexture [[texture(KKTextureIndex_InputImage)]]) {
+                               texture2d<half> colorTexture [[texture(KKTextureIndex_InputImage)]],
+                               constant float2 *imageSize [[buffer(FragmentIndex_ImageSize)]],
+                               constant float2 *tileOffset [[buffer(FragmentIndex_TileOffset)]]) {
     constexpr sampler textureSampler(mag_filter::linear, min_filter::linear);
-    half4 colorSample = colorTexture.sample(textureSampler, in.textureCoordinate);
-    return float4(colorSample);
+
+    float glowRadius = 20.0;
+    float glowIntensity = 1.5;
+
+    float2 texelSize = 1.0 / float2(colorTexture.get_width(), colorTexture.get_height());
+
+    float alphaSum = 0.0;
+    float weightSum = 0.0;
+    int samples = int(ceil(glowRadius));
+
+    for (int y = -samples; y <= samples; y++) {
+        for (int x = -samples; x <= samples; x++) {
+            float dist = length(float2(x, y));
+            if (dist > glowRadius)
+                continue;
+
+            float weight = exp(-0.5 * (dist * dist) / (glowRadius * glowRadius * 0.16));
+            float2 offset = float2(x, y) * texelSize;
+            half4 s = colorTexture.sample(textureSampler, in.textureCoordinate + offset);
+            alphaSum += float(s.a) * weight;
+            weightSum += weight;
+        }
+    }
+
+    float glowAlpha = saturate((alphaSum / weightSum) * glowIntensity);
+
+    half4 original = colorTexture.sample(textureSampler, in.textureCoordinate);
+    float3 glowColor = float3(1.0, 1.0, 1.0);
+
+    float3 result = glowColor * glowAlpha * (1.0 - float(original.a)) + float3(original.rgb);
+    float resultAlpha = glowAlpha * (1.0 - float(original.a)) + float(original.a);
+
+    return float4(result, resultAlpha);
 }
