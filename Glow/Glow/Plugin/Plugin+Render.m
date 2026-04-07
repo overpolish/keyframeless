@@ -15,6 +15,7 @@ typedef struct {
   float radius;
   float intensity;
   float falloff;
+  simd_float2 offset;
   simd_float3 glowColor;
   int colorMode;
 } GlowPluginState;
@@ -53,12 +54,19 @@ typedef struct {
                fromParameter:kParamFalloff
                       atTime:renderTime];
 
+  double offsetX = 0.5, offsetY = 0.5;
+  [paramGetAPI getXValue:&offsetX
+                  YValue:&offsetY
+           fromParameter:kParamOffset
+                  atTime:renderTime];
+
   KKTimingResult *timing = [self timingAtTime:renderTime];
   double inF = timing.inPhase.factor;
   double outF = timing.outPhase.factor;
   double holdF = timing.holdPhase.factor;
 
-  BOOL holdRadius = YES, holdIntensity = YES, holdFalloff = YES;
+  BOOL holdRadius = YES, holdIntensity = YES, holdFalloff = YES,
+       holdOffset = YES;
   [paramGetAPI getBoolValue:&holdRadius
               fromParameter:kParamHoldRadius
                      atTime:renderTime];
@@ -67,6 +75,9 @@ typedef struct {
                      atTime:renderTime];
   [paramGetAPI getBoolValue:&holdFalloff
               fromParameter:kParamHoldFalloff
+                     atTime:renderTime];
+  [paramGetAPI getBoolValue:&holdOffset
+              fromParameter:kParamHoldOffset
                      atTime:renderTime];
 
   int colorMode = kColorModeSolid;
@@ -86,11 +97,14 @@ typedef struct {
   double radiusFactor = inF * (holdRadius ? holdF : 1.0) * outF;
   double intensityFactor = inF * (holdIntensity ? holdF : 1.0) * outF;
   double falloffFactor = inF * (holdFalloff ? holdF : 1.0) * outF;
+  double offsetFactor = inF * (holdOffset ? holdF : 1.0) * outF;
 
   GlowPluginState state;
   state.radius = (float)(radius * radiusFactor);
   state.intensity = (float)(intensity * intensityFactor);
   state.falloff = (float)(1.0 + falloff * falloffFactor);
+  state.offset = (simd_float2){(float)((offsetX - 0.5) * offsetFactor),
+                               (float)((offsetY - 0.5) * offsetFactor)};
   state.glowColor = (simd_float3){(float)red, (float)green, (float)blue};
   state.colorMode = colorMode;
 
@@ -123,6 +137,7 @@ typedef struct {
   float fragmentRadius = state.radius;
   float fragmentIntensity = state.intensity;
   float fragmentFalloff = state.falloff;
+  simd_float2 fragmentOffset = state.offset;
   simd_float3 fragmentColor = state.glowColor;
   int fragmentColorMode = state.colorMode;
 
@@ -261,6 +276,9 @@ typedef struct {
     [encoder setFragmentBytes:&fragmentFalloff
                        length:sizeof(fragmentFalloff)
                       atIndex:FragmentIndex_Falloff];
+    [encoder setFragmentBytes:&fragmentOffset
+                       length:sizeof(fragmentOffset)
+                      atIndex:FragmentIndex_Offset];
     [encoder setFragmentBytes:&fragmentColor
                        length:sizeof(fragmentColor)
                       atIndex:FragmentIndex_GlowColor];

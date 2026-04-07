@@ -87,6 +87,13 @@
                            parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
+  if (![paramAPI addPointParameterWithName:@"Offset"
+                               parameterID:kParamOffset
+                                  defaultX:0.5
+                                  defaultY:0.5
+                            parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
   if (![paramAPI addPopupMenuWithName:@"Color Mode"
                           parameterID:kParamColorMode
                          defaultValue:kColorModeSolid
@@ -106,9 +113,10 @@
     return NO;
 
   UInt32 holdParams[] = {kParamHoldRadius, kParamHoldIntensity,
-                         kParamHoldFalloff};
-  NSString *holdNames[] = {@"Hold Radius", @"Hold Intensity", @"Hold Falloff"};
-  for (int i = 0; i < 3; i++) {
+                         kParamHoldFalloff, kParamHoldOffset};
+  NSString *holdNames[] = {@"Hold Radius", @"Hold Intensity", @"Hold Falloff",
+                           @"Hold Offset"};
+  for (int i = 0; i < 4; i++) {
     if (![paramAPI addToggleButtonWithName:holdNames[i]
                                parameterID:holdParams[i]
                               defaultValue:YES
