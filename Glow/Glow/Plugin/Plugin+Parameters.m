@@ -30,6 +30,14 @@
     return NO;
   }
 
+  if (![paramAPI
+          addToggleButtonWithName:@"Force Show All Parameters"
+                      parameterID:kParamForceShow
+                     defaultValue:NO
+                   parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
+                                  kFxParameterFlag_DONT_DISPLAY_IN_DASHBOARD])
+    return NO;
+
   NSAttributedString *infoText = [KKMarkup
       attributedStringFromMarkup:
           @"Use on an Adjustment Clip <kbd>⌥ A</kbd> or a Compound Clip "
@@ -66,6 +74,14 @@
                                 sliderMax:3.0
                                     delta:0.01
                            parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
+  if (![paramAPI addColorParameterWithName:@"Color"
+                               parameterID:kParamColor
+                                defaultRed:1.0
+                              defaultGreen:1.0
+                               defaultBlue:1.0
+                            parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
   if (![self addAnimationParametersWithAPI:paramAPI error:error])

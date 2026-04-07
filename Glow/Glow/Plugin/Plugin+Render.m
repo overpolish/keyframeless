@@ -14,6 +14,7 @@
 typedef struct {
   float radius;
   float intensity;
+  simd_float3 glowColor;
 } GlowPluginState;
 
 @implementation GlowPlugin (Render)
@@ -39,7 +40,9 @@ typedef struct {
 
   double radius = 20.0;
   double intensity = 1.5;
-  [paramGetAPI getFloatValue:&radius fromParameter:kParamRadius atTime:renderTime];
+  [paramGetAPI getFloatValue:&radius
+               fromParameter:kParamRadius
+                      atTime:renderTime];
   [paramGetAPI getFloatValue:&intensity
                fromParameter:kParamIntensity
                       atTime:renderTime];
@@ -57,12 +60,20 @@ typedef struct {
               fromParameter:kParamHoldIntensity
                      atTime:renderTime];
 
+  double red = 1.0, green = 1.0, blue = 1.0;
+  [paramGetAPI getRedValue:&red
+                greenValue:&green
+                 blueValue:&blue
+             fromParameter:kParamColor
+                    atTime:renderTime];
+
   double radiusFactor = inF * (holdRadius ? holdF : 1.0) * outF;
   double intensityFactor = inF * (holdIntensity ? holdF : 1.0) * outF;
 
   GlowPluginState state;
   state.radius = (float)(radius * radiusFactor);
   state.intensity = (float)(intensity * intensityFactor);
+  state.glowColor = (simd_float3){(float)red, (float)green, (float)blue};
 
   *pluginState = [NSData dataWithBytes:&state length:sizeof(state)];
   return (*pluginState != nil);
@@ -92,6 +103,7 @@ typedef struct {
 
   float fragmentRadius = state.radius;
   float fragmentIntensity = state.intensity;
+  simd_float3 fragmentColor = state.glowColor;
 
   KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
   MTLPixelFormat pixelFormat =
@@ -106,8 +118,7 @@ typedef struct {
 
   id<MTLTexture> outputTexture =
       [destinationImage metalTextureForDevice:device];
-  id<MTLTexture> inputTexture =
-      [sourceImages[0] metalTextureForDevice:device];
+  id<MTLTexture> inputTexture = [sourceImages[0] metalTextureForDevice:device];
 
   float outputWidth = (float)(destinationImage.tilePixelBounds.right -
                               destinationImage.tilePixelBounds.left);
@@ -119,7 +130,8 @@ typedef struct {
                                    width:(NSUInteger)outputWidth
                                   height:(NSUInteger)outputHeight
                                mipmapped:NO];
-  intermediateDesc.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+  intermediateDesc.usage =
+      MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
   intermediateDesc.storageMode = MTLStorageModePrivate;
   id<MTLTexture> intermediateTexture =
       [device newTextureWithDescriptor:intermediateDesc];
@@ -133,21 +145,21 @@ typedef struct {
 
   id<MTLRenderPipelineState> hBlurPipeline =
       [cache buildAndRegisterPipelineStateForPluginID:kHBlurID
-                                            registryID:registryID
-                                           pixelFormat:pixelFormat
-                                              bundleID:nil
-                                          vertexShader:@"vertexShader"
-                                        fragmentShader:@"blurHorizontal"
-                                             blendMode:KKBlendModeNone];
+                                           registryID:registryID
+                                          pixelFormat:pixelFormat
+                                             bundleID:nil
+                                         vertexShader:@"vertexShader"
+                                       fragmentShader:@"blurHorizontal"
+                                            blendMode:KKBlendModeNone];
 
   id<MTLRenderPipelineState> vCompPipeline =
       [cache buildAndRegisterPipelineStateForPluginID:kVCompID
-                                            registryID:registryID
-                                           pixelFormat:pixelFormat
-                                              bundleID:nil
-                                          vertexShader:@"vertexShader"
-                                        fragmentShader:@"blurVerticalComposite"
-                                             blendMode:KKBlendModeNone];
+                                           registryID:registryID
+                                          pixelFormat:pixelFormat
+                                             bundleID:nil
+                                         vertexShader:@"vertexShader"
+                                       fragmentShader:@"blurVerticalComposite"
+                                            blendMode:KKBlendModeNone];
 
   if (!hBlurPipeline || !vCompPipeline) {
     [cache returnCommandQueueToCache:commandQueue];
@@ -186,8 +198,7 @@ typedef struct {
                      length:sizeof(viewportSize)
                     atIndex:KKVertexInputIndex_ViewportSize];
     [encoder setRenderPipelineState:hBlurPipeline];
-    [encoder setFragmentTexture:inputTexture
-                        atIndex:KKTextureIndex_InputImage];
+    [encoder setFragmentTexture:inputTexture atIndex:KKTextureIndex_InputImage];
     [encoder setFragmentBytes:&fragmentRadius
                        length:sizeof(fragmentRadius)
                       atIndex:FragmentIndex_Radius];
@@ -215,8 +226,7 @@ typedef struct {
                      length:sizeof(viewportSize)
                     atIndex:KKVertexInputIndex_ViewportSize];
     [encoder setRenderPipelineState:vCompPipeline];
-    [encoder setFragmentTexture:inputTexture
-                        atIndex:KKTextureIndex_InputImage];
+    [encoder setFragmentTexture:inputTexture atIndex:KKTextureIndex_InputImage];
     [encoder setFragmentTexture:intermediateTexture atIndex:1];
     [encoder setFragmentBytes:&fragmentRadius
                        length:sizeof(fragmentRadius)
@@ -224,6 +234,9 @@ typedef struct {
     [encoder setFragmentBytes:&fragmentIntensity
                        length:sizeof(fragmentIntensity)
                       atIndex:FragmentIndex_Intensity];
+    [encoder setFragmentBytes:&fragmentColor
+                       length:sizeof(fragmentColor)
+                      atIndex:FragmentIndex_GlowColor];
     [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                 vertexStart:0
                 vertexCount:4];

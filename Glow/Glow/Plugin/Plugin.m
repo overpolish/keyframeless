@@ -33,6 +33,7 @@
 - (BOOL)parameterChanged:(UInt32)parameterID
                   atTime:(CMTime)time
                    error:(NSError **)error {
+  [self updateParameterVisibilityAtTime:time];
   return YES;
 }
 
