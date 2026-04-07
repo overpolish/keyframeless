@@ -142,8 +142,12 @@ static NSColor *ringActiveStrokeColor(void) {
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
 
   if (ringDist < hitWidth) {
-    double angle = atan2(dy, dx);
-    [oscAPI setCursor:resizeCursorForAngle(angle)];
+    if (_hoverCursor)
+      [oscAPI setCursor:_hoverCursor];
+    else {
+      double angle = atan2(dy, dx);
+      [oscAPI setCursor:resizeCursorForAngle(angle)];
+    }
     _cursorSet = YES;
     return YES;
   }
@@ -173,7 +177,22 @@ static NSColor *ringActiveStrokeColor(void) {
 
   simd_float4 fillColor;
   simd_float4 strokeColor;
-  if (isActive) {
+  if (_tintColor) {
+    CGFloat r, g, b, a;
+    NSColor *rgb =
+        [_tintColor colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
+    [rgb getRed:&r green:&g blue:&b alpha:&a];
+    if (isActive) {
+      fillColor = (simd_float4){(float)r, (float)g, (float)b, 1.0f};
+      strokeColor = [ringActiveStrokeColor() simdFloat4];
+    } else if (isHovered) {
+      fillColor = (simd_float4){(float)r, (float)g, (float)b, 0.85f};
+      strokeColor = [ringHoverStrokeColor() simdFloat4];
+    } else {
+      fillColor = (simd_float4){(float)r, (float)g, (float)b, 0.7f};
+      strokeColor = [ringIdleStrokeColor() simdFloat4];
+    }
+  } else if (isActive) {
     fillColor = [ringActiveFillColor() simdFloat4];
     strokeColor = [ringActiveStrokeColor() simdFloat4];
   } else if (isHovered) {

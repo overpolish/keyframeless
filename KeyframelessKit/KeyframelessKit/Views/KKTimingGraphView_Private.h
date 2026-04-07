@@ -19,9 +19,9 @@ static const CGFloat kSliderRowHeight __attribute__((unused)) = 28.0;
 static const CGFloat kTickHeight __attribute__((unused)) = 16.0;
 static const CGFloat kDurationTickHeight __attribute__((unused)) = 10.0;
 static const CGFloat kCheckboxSize __attribute__((unused)) = 12.0;
-static const NSInteger kDurationTickCount __attribute__((unused)) = 3;
+static const NSInteger kDurationTickCount __attribute__((unused)) = 4;
 static const double kDurationTickValues[]
-    __attribute__((unused)) = {0.0, 1.0, 2.0};
+    __attribute__((unused)) = {0.0, 1.0, 2.0, 10.0};
 static const NSInteger kIntensityTickCount __attribute__((unused)) = 3;
 static const NSInteger kFrequencyTickCount __attribute__((unused)) = 3;
 
@@ -40,6 +40,7 @@ static const NSInteger kFrequencyTickCount __attribute__((unused)) = 3;
 - (void)renderDurationTicks;
 - (void)renderIntensityTicks;
 - (void)renderFrequencyTicks;
+- (CGFloat)durationTickPosition:(double)value;
 
 - (NSRect)sectionRectForSection:(KKTimingGraphSection)section
                           width:(CGFloat)totalWidth;

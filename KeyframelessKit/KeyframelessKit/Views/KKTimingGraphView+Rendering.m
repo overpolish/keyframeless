@@ -272,46 +272,76 @@ static NSInteger KKExactTickIndex(double value, NSInteger tickCount) {
   [self.curvePillView redraw];
 }
 
-- (void)renderDurationTicks {
-  static NSString *const labels[] = {@"0s", @"1.0s", @"2.0s"};
-  static const double values[] = {0.0, 1.0, 2.0};
-  static const NSInteger count = 3;
+- (CGFloat)durationTickPosition:(double)value {
+  double lo = self.durationSlider.minValue;
+  double bp = self.durationSlider.scaleBreakPosition;
+  double bv = self.durationSlider.scaleBreakValue;
+  double hi = self.durationSlider.maxValue;
+  if (bv > 0 && bp > 0) {
+    if (value <= bv)
+      return bp * (value - lo) / (bv - lo);
+    return bp + (1.0 - bp) * (value - bv) / (hi - bv);
+  }
+  return (value - lo) / (hi - lo);
+}
 
+- (void)renderDurationTicks {
   CGFloat tickAreaWidth = NSWidth(self.durationTickImageView.bounds);
   if (tickAreaWidth < 1)
     return;
+
+  double currentVal = self.durationSlider.doubleValue;
+  CGFloat currentFrac = [self durationTickPosition:currentVal];
+  CGFloat currentCenterX = currentFrac * tickAreaWidth;
+
+  static const NSInteger count = 4;
+  double values[] = {0.0, 1.0, 2.0, 10.0};
+  NSString *labels[4] = {@"0s", @"1.0s", @"2.0s", @"10s"};
+
+  NSDictionary *dimAttrs = @{
+    NSFontAttributeName : [NSFont systemFontOfSize:8.0
+                                            weight:NSFontWeightMedium],
+    NSForegroundColorAttributeName :
+        [[NSColor inspectorLabel] colorWithAlphaComponent:0.35],
+  };
+  NSDictionary *activeAttrs = @{
+    NSFontAttributeName : [NSFont systemFontOfSize:8.0
+                                            weight:NSFontWeightMedium],
+    NSForegroundColorAttributeName : [NSColor accentMatchingHost],
+  };
+
+  NSString *currentLabel = [NSString stringWithFormat:@"%.1fs", currentVal];
+  NSSize currentLabelSize = [currentLabel sizeWithAttributes:activeAttrs];
+  static const CGFloat kHideThreshold = 6.0;
 
   NSImage *image = [[NSImage alloc]
       initWithSize:NSMakeSize(tickAreaWidth, kDurationTickHeight)];
   [image lockFocus];
 
-  double currentVal = self.durationSlider.doubleValue;
-  NSInteger exact = -1;
-  for (NSInteger i = 0; i < count; i++) {
-    if (fabs(currentVal - values[i]) < kTickEpsilon) {
-      exact = i;
-      break;
-    }
-  }
+  CGFloat curLabelX = currentCenterX - currentLabelSize.width / 2.0;
+  curLabelX = MAX(0, MIN(curLabelX, tickAreaWidth - currentLabelSize.width));
+  CGFloat curLabelRight = curLabelX + currentLabelSize.width;
 
   for (NSInteger i = 0; i < count; i++) {
-    CGFloat frac = (CGFloat)i / (CGFloat)(count - 1);
+    CGFloat frac = [self durationTickPosition:values[i]];
     CGFloat centerX = frac * tickAreaWidth;
-    BOOL active = (i == exact);
 
-    NSDictionary *attrs = @{
-      NSFontAttributeName : [NSFont systemFontOfSize:8.0
-                                              weight:NSFontWeightMedium],
-      NSForegroundColorAttributeName : active
-          ? [NSColor accentMatchingHost]
-          : [[NSColor inspectorLabel] colorWithAlphaComponent:0.35],
-    };
-    NSSize labelSize = [labels[i] sizeWithAttributes:attrs];
+    NSSize labelSize = [labels[i] sizeWithAttributes:dimAttrs];
     CGFloat labelX = centerX - labelSize.width / 2.0;
     labelX = MAX(0, MIN(labelX, tickAreaWidth - labelSize.width));
+    CGFloat labelRight = labelX + labelSize.width;
+
+    BOOL overlaps = labelX < curLabelRight + kHideThreshold &&
+                    labelRight > curLabelX - kHideThreshold;
+    if (overlaps)
+      continue;
+
     CGFloat labelY = (kDurationTickHeight - labelSize.height) / 2.0;
-    [labels[i] drawAtPoint:NSMakePoint(labelX, labelY) withAttributes:attrs];
+    [labels[i] drawAtPoint:NSMakePoint(labelX, labelY) withAttributes:dimAttrs];
   }
+  CGFloat curLabelY = (kDurationTickHeight - currentLabelSize.height) / 2.0;
+  [currentLabel drawAtPoint:NSMakePoint(curLabelX, curLabelY)
+             withAttributes:activeAttrs];
 
   [image unlockFocus];
   self.durationTickImageView.image = image;
