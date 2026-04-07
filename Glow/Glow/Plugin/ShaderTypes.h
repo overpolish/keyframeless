@@ -6,3 +6,5 @@
 #pragma once
 
 #import <simd/simd.h>
+
+typedef enum FragmentIndex { FragmentIndex_ImageSize = 0, FragmentIndex_TileOffset = 1 } FragmentIndex;
