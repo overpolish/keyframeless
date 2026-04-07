@@ -85,7 +85,9 @@
     _durationSlider = [KKSliderView styledSlider];
     _durationSlider.translatesAutoresizingMaskIntoConstraints = NO;
     _durationSlider.minValue = 0.1;
-    _durationSlider.maxValue = 2.0;
+    _durationSlider.maxValue = 10.0;
+    _durationSlider.scaleBreakValue = 2.0;
+    _durationSlider.scaleBreakPosition = 0.8;
     _durationSlider.doubleValue = 0.5;
     _durationSlider.continuous = YES;
     _durationSlider.trackFillColor = [NSColor accentMatchingHost];
@@ -704,9 +706,7 @@
   CGFloat tickY = NSMaxY(_curvePillView.frame);
   CGFloat tickAreaWidth = NSWidth(sliderFrame);
   CGFloat tickW = tickAreaWidth / kDurationTickCount;
-  CGFloat frac = (kDurationTickCount > 1)
-                     ? (CGFloat)index / (CGFloat)(kDurationTickCount - 1)
-                     : 0.5;
+  CGFloat frac = [self durationTickPosition:kDurationTickValues[index]];
   CGFloat centerX = NSMinX(sliderFrame) + frac * tickAreaWidth;
   return NSMakeRect(centerX - tickW / 2.0, tickY, tickW, kDurationTickHeight);
 }

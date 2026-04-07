@@ -62,11 +62,13 @@ struct AppShell: View {
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 		.blur(
 			radius: audioModel.isDraggingToFCP || audioModel.paramsModalTemplate != nil
-				|| audioModel.publishModalTemplate != nil ? 3 : 0
+				|| audioModel.publishModalTemplate != nil
+				|| audioModel.updateModalTemplate != nil ? 3 : 0
 		)
 		.animation(.easeInOut(duration: 0.2), value: audioModel.isDraggingToFCP)
 		.allowsHitTesting(
 			audioModel.paramsModalTemplate == nil && audioModel.publishModalTemplate == nil
+				&& audioModel.updateModalTemplate == nil
 				&& !processingCoordinator.isProcessing
 		)
 		.background(Color(nsColor: .windowBackground()))
@@ -123,9 +125,21 @@ struct AppShell: View {
 				)
 				.transition(.opacity)
 			}
+			if let (template, community) = audioModel.updateModalTemplate {
+				TemplateUpdateModal(
+					template: template,
+					communityTemplate: community,
+					params: TemplatePublishedParamsStore.shared.params(for: template.id)?
+						.allParams ?? [],
+					hasPerWordAnimation: template.supportsPerWordAnimation,
+					onDismiss: { audioModel.updateModalTemplate = nil }
+				)
+				.transition(.opacity)
+			}
 		}
 		.animation(.easeInOut(duration: 0.2), value: audioModel.paramsModalTemplate != nil)
 		.animation(.easeInOut(duration: 0.2), value: audioModel.publishModalTemplate != nil)
+		.animation(.easeInOut(duration: 0.2), value: audioModel.updateModalTemplate != nil)
 	}
 
 	private var topBar: some View {

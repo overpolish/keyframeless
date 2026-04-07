@@ -32,6 +32,13 @@ enum CaptionTemplateScanner {
 				let uid = "~/Titles.localized/Keyframeless/\(name)/\(name).moti"
 				let thumbnailPath = CaptionTemplate.findThumbnail(in: entry)
 				let perWord = checkPerWordSupport(motiFile: motiFile)
+
+				// Extract and store text ozml (always refresh from .moti)
+				let store = TemplatePublishedParamsStore.shared
+				let result = PublishedParameter.parseAll(from: motiFile)
+				if let textOzml = result.textOzml {
+					store.setTextOzml(textOzml, for: uid)
+				}
 				let gifPath = entry.appendingPathComponent("preview.gif")
 				let previewGifPath =
 					FileManager.default.fileExists(atPath: gifPath.path) ? gifPath.path : nil

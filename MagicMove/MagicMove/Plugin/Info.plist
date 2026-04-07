@@ -17,7 +17,7 @@
 	<key>CFBundlePackageType</key>
 	<string>XPC!</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0</string>
+	<string>1.1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>NSHumanReadableCopyright</key>
@@ -98,12 +98,12 @@
 	</array>
 	<key>XPCService</key>
 	<dict>
-		<key>ServiceType</key>
-		<string>Application</string>
 		<key>JoinExistingSession</key>
 		<true/>
 		<key>RunLoopType</key>
 		<string>_NSApplicationMain</string>
+		<key>ServiceType</key>
+		<string>Application</string>
 		<key>_AdditionalSubServices</key>
 		<dict>
 			<key>viewbridge</key>

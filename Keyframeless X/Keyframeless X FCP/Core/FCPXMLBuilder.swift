@@ -46,18 +46,19 @@ enum FCPXMLBuilder {
 	}
 
 	static func build(
-		segments: [CaptionSegment],
+		storylines: [[CaptionSegment]],
 		textStyle: TextStyleSettings,
 		format: ExportFormat,
 		template: CaptionTemplate = .basicTitle,
 		publishedParams: [PublishedParamEntry] = [],
 		perWordStartsAtZero: Bool = false
 	) -> String {
-		guard !segments.isEmpty else {
+		let allSegments = storylines.flatMap { $0 }
+		guard !allSegments.isEmpty else {
 			return emptyXML(format: format)
 		}
 
-		let lastEnd = segments.map(\.endTime).max() ?? 0
+		let lastEnd = allSegments.map(\.endTime).max() ?? 0
 		let fd = format.frameDuration
 		let frameRate = parseFrameDuration(fd)
 		let totalDuration = rationalTime(seconds: lastEnd, frameRate: frameRate)
@@ -69,7 +70,7 @@ enum FCPXMLBuilder {
 		let fontColor = textStyle.fontColorString
 
 		var xml = ""
-		let estimatedSize = segments.count * 512 + 512
+		let estimatedSize = allSegments.count * 512 + 512
 		xml.reserveCapacity(estimatedSize)
 
 		xml += "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
@@ -82,78 +83,88 @@ enum FCPXMLBuilder {
 		xml += "\t\t<effect id=\"r2\" name=\"\(xmlEscape(template.name))\"\n"
 		xml +=
 			"\t\t\tuid=\"\(xmlEscape(template.uid))\" />\n"
-		xml += "\t\t<media id=\"r3\" name=\"Captions\">\n"
-		xml += "\t\t\t<sequence format=\"r1\" duration=\"\(totalDuration)\">\n"
-		xml += "\t\t\t\t<spine>\n"
-		xml += "\t\t\t\t\t<gap duration=\"\(totalDuration)\">\n"
+		xml += "\t</resources>\n"
+		xml += "\t<library>\n"
+		xml += "\t\t<event name=\"Captions\">\n"
+		xml += "\t\t\t<project name=\"Captions\">\n"
+		xml += "\t\t\t\t<sequence format=\"r1\" duration=\"\(totalDuration)\">\n"
+		xml += "\t\t\t\t\t<spine>\n"
+		xml += "\t\t\t\t\t\t<gap duration=\"\(totalDuration)\">\n"
 
 		var tsCounter = 0
 
-		for (si, segment) in segments.enumerated() {
-			tsCounter += 1
-			let tsID = "ts\(tsCounter)"
-			let mediaStart = 3600.0
-			let offsetFrames = frames(seconds: segment.startTime, frameRate: frameRate)
-			let offset = rationalFromFrames(offsetFrames, frameRate: frameRate)
-			let durationStr: String
-			if si + 1 < segments.count,
-				segments[si + 1].startTime - segment.endTime < 0.001
-			{
-				let nextFrames = frames(seconds: segments[si + 1].startTime, frameRate: frameRate)
-				durationStr = rationalFromFrames(nextFrames - offsetFrames, frameRate: frameRate)
-			} else {
-				durationStr = rationalTime(
-					seconds: segment.endTime - segment.startTime, frameRate: frameRate)
-			}
-			xml +=
-				"\t\t\t\t\t\t<title lane=\"1\" offset=\"\(offset)\" ref=\"r2\" duration=\"\(durationStr)\" start=\"\(rationalTime(seconds: mediaStart, frameRate: frameRate))\" name=\"\(xmlEscape(segment.lines.first ?? ""))\" role=\"Captions.Captions-1\">\n"
-			let wordCount = segment.wordStarts.count
-			if wordCount > 0 && template.supportsPerWordAnimation,
-				let paramName = template.wordsInParamName,
-				let keyPath = template.wordsInKeyPath
-			{
-				xml +=
-					"\t\t\t\t\t\t\t<param name=\"\(paramName)\" key=\"\(keyPath)\">\n"
-				xml += "\t\t\t\t\t\t\t\t<keyframeAnimation>\n"
-				let divisor = Double(wordCount)
-				for (i, wordStart) in segment.wordStarts.enumerated() {
-					let wordOffset = wordStart - segment.startTime
-					let time = rationalTime(
-						seconds: mediaStart + wordOffset, frameRate: frameRate)
-					let value =
-						perWordStartsAtZero
-						? Double(i) / divisor
-						: Double(i + 1) / divisor
-					let valueStr =
-						value == 1 ? "1" : String(format: "%g", value)
-					xml +=
-						"\t\t\t\t\t\t\t\t\t<keyframe time=\"\(time)\" value=\"\(valueStr)\"/>\n"
+		for (slIndex, segments) in storylines.enumerated() {
+			let lane = slIndex + 1
+			let sorted = segments.sorted { $0.startTime < $1.startTime }
+
+			for (si, segment) in sorted.enumerated() {
+				tsCounter += 1
+				let tsID = "ts\(tsCounter)"
+				let mediaStart = 3600.0
+				let offsetFrames = frames(seconds: segment.startTime, frameRate: frameRate)
+				let offset = rationalFromFrames(offsetFrames, frameRate: frameRate)
+				let durationStr: String
+				if si + 1 < sorted.count,
+					sorted[si + 1].startTime - segment.endTime < 0.001
+				{
+					let nextFrames = frames(
+						seconds: sorted[si + 1].startTime, frameRate: frameRate)
+					durationStr = rationalFromFrames(
+						nextFrames - offsetFrames, frameRate: frameRate)
+				} else {
+					durationStr = rationalTime(
+						seconds: segment.endTime - segment.startTime, frameRate: frameRate)
 				}
-				xml += "\t\t\t\t\t\t\t\t</keyframeAnimation>\n"
-				xml += "\t\t\t\t\t\t\t</param>\n"
-			}
-			for pp in publishedParams {
 				xml +=
-					"\t\t\t\t\t\t\t<param name=\"\(xmlEscape(pp.name))\" key=\"\(pp.key)\" value=\"\(pp.value)\"/>\n"
+					"\t\t\t\t\t\t\t<title lane=\"\(lane)\" offset=\"\(offset)\" ref=\"r2\" duration=\"\(durationStr)\" start=\"\(rationalTime(seconds: mediaStart, frameRate: frameRate))\" name=\"\(xmlEscape(segment.lines.first ?? ""))\" role=\"Captions.Captions-1\">\n"
+				let wordCount = segment.wordStarts.count
+				if wordCount > 0 && template.supportsPerWordAnimation,
+					let paramName = template.wordsInParamName,
+					let keyPath = template.wordsInKeyPath
+				{
+					xml +=
+						"\t\t\t\t\t\t\t\t<param name=\"\(paramName)\" key=\"\(keyPath)\">\n"
+					xml += "\t\t\t\t\t\t\t\t\t<keyframeAnimation>\n"
+					let divisor = Double(wordCount)
+					for (i, wordStart) in segment.wordStarts.enumerated() {
+						let wordOffset = wordStart - segment.startTime
+						let time = rationalTime(
+							seconds: mediaStart + wordOffset, frameRate: frameRate)
+						let value =
+							perWordStartsAtZero
+							? Double(i) / divisor
+							: Double(i + 1) / divisor
+						let valueStr =
+							value == 1 ? "1" : String(format: "%g", value)
+						xml +=
+							"\t\t\t\t\t\t\t\t\t\t<keyframe time=\"\(time)\" value=\"\(valueStr)\"/>\n"
+					}
+					xml += "\t\t\t\t\t\t\t\t\t</keyframeAnimation>\n"
+					xml += "\t\t\t\t\t\t\t\t</param>\n"
+				}
+				for pp in publishedParams {
+					xml +=
+						"\t\t\t\t\t\t\t\t<param name=\"\(xmlEscape(pp.name))\" key=\"\(pp.key)\" value=\"\(pp.value)\"/>\n"
+				}
+				xml += "\t\t\t\t\t\t\t\t<text>\n"
+				xml +=
+					"\t\t\t\t\t\t\t\t\t<text-style ref=\"\(tsID)\">\(xmlEscape(segment.text))</text-style>\n"
+				xml += "\t\t\t\t\t\t\t\t</text>\n"
+				xml += "\t\t\t\t\t\t\t\t<text-style-def id=\"\(tsID)\">\n"
+				xml +=
+					"\t\t\t\t\t\t\t\t\t<text-style font=\"\(escapedFamily)\" fontSize=\"\(fontSize)\" fontFace=\"\(escapedFace)\" fontColor=\"\(fontColor)\" alignment=\"center\" />\n"
+				xml += "\t\t\t\t\t\t\t\t</text-style-def>\n"
+				xml += "\t\t\t\t\t\t\t\t<adjust-transform position=\"0 \(yPosition)\" />\n"
+				xml += "\t\t\t\t\t\t\t</title>\n"
 			}
-			xml += "\t\t\t\t\t\t\t<text>\n"
-			xml +=
-				"\t\t\t\t\t\t\t\t<text-style ref=\"\(tsID)\">\(xmlEscape(segment.text))</text-style>\n"
-			xml += "\t\t\t\t\t\t\t</text>\n"
-			xml += "\t\t\t\t\t\t\t<text-style-def id=\"\(tsID)\">\n"
-			xml +=
-				"\t\t\t\t\t\t\t\t<text-style font=\"\(escapedFamily)\" fontSize=\"\(fontSize)\" fontFace=\"\(escapedFace)\" fontColor=\"\(fontColor)\" alignment=\"center\" />\n"
-			xml += "\t\t\t\t\t\t\t</text-style-def>\n"
-			xml += "\t\t\t\t\t\t\t<adjust-transform position=\"0 \(yPosition)\" />\n"
-			xml += "\t\t\t\t\t\t</title>\n"
 		}
 
-		xml += "\t\t\t\t\t</gap>\n"
-		xml += "\t\t\t\t</spine>\n"
-		xml += "\t\t\t</sequence>\n"
-		xml += "\t\t</media>\n"
-		xml += "\t</resources>\n"
-		xml += "\t<ref-clip ref=\"r3\" duration=\"\(totalDuration)\" />\n"
+		xml += "\t\t\t\t\t\t</gap>\n"
+		xml += "\t\t\t\t\t</spine>\n"
+		xml += "\t\t\t\t</sequence>\n"
+		xml += "\t\t\t</project>\n"
+		xml += "\t\t</event>\n"
+		xml += "\t</library>\n"
 		xml += "</fcpxml>"
 		return xml
 	}
