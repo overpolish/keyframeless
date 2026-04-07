@@ -8,7 +8,9 @@ import SwiftUI
 
 struct CommunityTemplateCard: View {
 	let template: CommunityTemplate
+	let isInstalled: Bool
 	let onDownload: () -> Void
+	var onUpdate: (() -> Void)?
 
 	@State private var gifData: Data?
 	@State private var gifLocalURL: URL?
@@ -38,16 +40,31 @@ struct CommunityTemplateCard: View {
 					Spacer()
 					HStack {
 						Spacer()
-						Button {
-							onDownload()
-						} label: {
-							Image(systemName: "arrow.down.circle.fill")
-								.font(.system(size: 16))
-								.foregroundStyle(Color.kkAccent)
-								.padding(KKPaddingLG)
-								.contentShape(Rectangle())
+						if isInstalled {
+							if isHovered, let onUpdate {
+								Button {
+									onUpdate()
+								} label: {
+									Image(systemName: "arrow.up.circle.fill")
+										.font(.system(size: 16))
+										.foregroundStyle(.secondary)
+										.padding(KKPaddingLG)
+										.contentShape(Rectangle())
+								}
+								.buttonStyle(.plain)
+							}
+						} else {
+							Button {
+								onDownload()
+							} label: {
+								Image(systemName: "arrow.down.circle.fill")
+									.font(.system(size: 16))
+									.foregroundStyle(Color.kkAccent)
+									.padding(KKPaddingLG)
+									.contentShape(Rectangle())
+							}
+							.buttonStyle(.plain)
 						}
-						.buttonStyle(.plain)
 					}
 				}
 			}

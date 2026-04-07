@@ -8,59 +8,33 @@ import KeyframelessKit
 import SwiftUI
 
 struct FCPDragZoneView: NSViewRepresentable {
-	let xmlProvider: () -> String
+	let nativeDataProvider: () -> Data?
 	let onDragStateChanged: (Bool) -> Void
-	var showWarning = false
 
 	func makeNSView(context: Context) -> FCPDragSourceView {
 		let view = FCPDragSourceView()
-		view.xmlProvider = xmlProvider
+		view.nativeDataProvider = nativeDataProvider
 		view.onDragStateChanged = onDragStateChanged
-		view.showWarning = showWarning
 		return view
 	}
 
 	func updateNSView(_ nsView: FCPDragSourceView, context: Context) {
-		nsView.xmlProvider = xmlProvider
+		nsView.nativeDataProvider = nativeDataProvider
 		nsView.onDragStateChanged = onDragStateChanged
-		nsView.showWarning = showWarning
 		nsView.needsDisplay = true
 	}
 }
 
-private let fcpPasteboardTypes = [
-	"com.apple.finalcutpro.xml.v1-10", "com.apple.finalcutpro.xml.v1-9",
-	"com.apple.finalcutpro.xml",
-]
-.map { NSPasteboard.PasteboardType($0) }
-
-class FCPXMLItemProvider: NSObject, NSPasteboardItemDataProvider {
-	private let xml: String
-
-	init(xml: String) {
-		self.xml = xml
-	}
-
-	func pasteboard(
-		_ pasteboard: NSPasteboard?,
-		item: NSPasteboardItem,
-		provideDataForType type: NSPasteboard.PasteboardType
-	) {
-		guard fcpPasteboardTypes.contains(type),
-			let data = xml.data(using: .utf8)
-		else { return }
-		item.setData(data, forType: type)
-	}
-}
+private let proFFPasteboardType = NSPasteboard.PasteboardType(
+	"com.apple.flexo.proFFPasteboardUTI"
+)
 
 class FCPDragSourceView: NSView, NSDraggingSource {
-	var xmlProvider: (() -> String)?
+	var nativeDataProvider: (() -> Data?)?
 	var onDragStateChanged: ((Bool) -> Void)?
-	var showWarning = false
 
 	override func draw(_ dirtyRect: NSRect) {
-		let accentColor: NSColor =
-			showWarning ? .warning() ?? .controlAccentColor : .controlAccentColor
+		let accentColor: NSColor = .controlAccentColor
 
 		let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 6, yRadius: 6)
 		accentColor.withAlphaComponent(0.15).setFill()
@@ -99,19 +73,87 @@ class FCPDragSourceView: NSView, NSDraggingSource {
 	}
 
 	override func mouseDown(with event: NSEvent) {
-		guard let xmlProvider else { return }
-		let xml = xmlProvider()
+		guard let nativeDataProvider, let data = nativeDataProvider(),
+			!data.isEmpty
+		else { return }
 
-		let provider = FCPXMLItemProvider(xml: xml)
-		let item = NSPasteboardItem()
-		item.setDataProvider(provider, forTypes: fcpPasteboardTypes)
+		let dragEvent = event
+		let dragData = data
 
-		let draggingItem = NSDraggingItem(pasteboardWriter: item)
-		draggingItem.setDraggingFrame(bounds, contents: snapshot())
+		ensureCaptionRoleExists { [weak self] in
+			guard let self else { return }
+			let pbItem = NSPasteboardItem()
+			pbItem.setData(dragData, forType: proFFPasteboardType)
 
-		onDragStateChanged?(true)
-		beginDraggingSession(with: [draggingItem], event: event, source: self)
+			let draggingItem = NSDraggingItem(pasteboardWriter: pbItem)
+			draggingItem.setDraggingFrame(bounds, contents: snapshot())
+
+			onDragStateChanged?(true)
+			let session = beginDraggingSession(with: [draggingItem], event: dragEvent, source: self)
+			session.animatesToStartingPositionsOnCancelOrFail = true
+		}
 	}
+
+	// FCP's drag handler doesn't create custom roles from the embedded roles data
+	// in the native pasteboard — only paste (Cmd+V) does. So before every drag we
+	// silently paste a 1-frame stub with the Captions role and immediately undo it.
+	// This forces FCP to register the role in the library, after which the native
+	// drag works fine. Hacky but there's no public API to create roles.
+	private func ensureCaptionRoleExists(then completion: @escaping () -> Void) {
+		let pb = NSPasteboard.general
+		pb.clearContents()
+		pb.setData(Self.roleBootstrapStub, forType: proFFPasteboardType)
+
+		let src = CGEventSource(stateID: .hidSystemState)
+
+		let vDown = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: true)
+		vDown?.flags = .maskCommand
+		let vUp = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: false)
+		vUp?.flags = .maskCommand
+		vDown?.post(tap: .cghidEventTap)
+		vUp?.post(tap: .cghidEventTap)
+
+		DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+			let zDown = CGEvent(keyboardEventSource: src, virtualKey: 0x06, keyDown: true)
+			zDown?.flags = .maskCommand
+			let zUp = CGEvent(keyboardEventSource: src, virtualKey: 0x06, keyDown: false)
+			zUp?.flags = .maskCommand
+			zDown?.post(tap: .cghidEventTap)
+			zUp?.post(tap: .cghidEventTap)
+
+			DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+				completion()
+			}
+		}
+	}
+
+	private static let roleBootstrapStub: Data = {
+		let bundlePath = Bundle(for: FCPDragSourceView.self)
+			.url(forResource: "BasicTitleTemplate", withExtension: "plist")!
+		let templateData = try! Data(contentsOf: bundlePath)
+		var plist =
+			try! PropertyListSerialization.propertyList(
+				from: templateData, options: .mutableContainersAndLeaves, format: nil
+			) as! [String: Any]
+		let objData = plist["ffpasteboardobject"] as! Data
+		var archive =
+			try! PropertyListSerialization.propertyList(
+				from: objData, options: .mutableContainersAndLeaves, format: nil
+			) as! [String: Any]
+		var objects = archive["$objects"] as! [Any]
+		// Set Captions subrole UUID
+		objects[59] = "VaUwsjFSHS5Cpf3PuyPV0Cw"
+		// Minimal duration: 1 frame
+		objects[8] = "{(0/1),(1001/24000)}"
+		objects[13] = "{(21600000/6000),(1001/24000)}"
+		objects[19] = "{(21600000/6000),(1001/24000)}"
+		archive["$objects"] = objects
+		let newObjData = try! PropertyListSerialization.data(
+			fromPropertyList: archive, format: .binary, options: 0)
+		plist["ffpasteboardobject"] = newObjData
+		return try! PropertyListSerialization.data(
+			fromPropertyList: plist, format: .binary, options: 0)
+	}()
 
 	func draggingSession(
 		_ session: NSDraggingSession,
@@ -136,5 +178,21 @@ class FCPDragSourceView: NSView, NSDraggingSource {
 		}
 		image.unlockFocus()
 		return image
+	}
+
+	static func pasteToTimeline(data: Data) {
+		let pb = NSPasteboard.general
+		pb.clearContents()
+		pb.setData(data, forType: proFFPasteboardType)
+
+		DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+			let src = CGEventSource(stateID: .hidSystemState)
+			let keyDown = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: true)
+			keyDown?.flags = .maskCommand
+			let keyUp = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: false)
+			keyUp?.flags = .maskCommand
+			keyDown?.post(tap: .cghidEventTap)
+			keyUp?.post(tap: .cghidEventTap)
+		}
 	}
 }

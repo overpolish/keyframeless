@@ -135,7 +135,6 @@ struct AudioExportOptionsSidebar: View {
 	@ObservedObject var model: AudioModel
 	let rows: [AudioEditRow]
 	let srtHasOverlaps: Bool
-	var titleCount: Int = 0
 
 	private var hasTranscribedSelection: Bool {
 		let selected = model.editSelectedClips ?? Set(model.audioClips.indices)
@@ -152,21 +151,25 @@ struct AudioExportOptionsSidebar: View {
 				Spacer()
 				HStack(spacing: KKSpacingLG) {
 					FCPDragZoneView(
-						xmlProvider: { model.buildFCPXML(from: rows) },
-						onDragStateChanged: { model.isDraggingToFCP = $0 },
-						showWarning: titleCount > 750
+						nativeDataProvider: { model.buildNativePasteboardData(from: rows) },
+						onDragStateChanged: { model.isDraggingToFCP = $0 }
 					)
-					.overlay(alignment: .top) {
-						if titleCount > 750 {
-							HelperText(
-								"Large title count - drag into library, then add to timeline",
-								systemImage: "exclamationmark.triangle.fill",
-								warning: true
-							)
-							.offset(y: -KKSpacingXL - KKSpacingSM)
+					.frame(height: 40)
+					.allowsHitTesting(hasTranscribedSelection && !srtHasOverlaps)
+					.opacity(hasTranscribedSelection && !srtHasOverlaps ? 1 : 0.4)
+					PrimaryButton(
+						label: "Paste to FCP",
+						systemImage: "doc.on.clipboard",
+						disabled: !hasTranscribedSelection,
+						fontSize: 11
+					) {
+						if let data = model.buildNativePasteboardData(from: rows) {
+							FCPDragSourceView.pasteToTimeline(data: data)
 						}
 					}
-					.frame(height: 40)
+					FCPXMLImportButton(
+						action: { model.insertTitle(rows: rows) }
+					)
 					.allowsHitTesting(hasTranscribedSelection)
 					.opacity(hasTranscribedSelection ? 1 : 0.4)
 					SRTExportButton(
@@ -175,6 +178,17 @@ struct AudioExportOptionsSidebar: View {
 					)
 					.allowsHitTesting(hasTranscribedSelection)
 					.opacity(hasTranscribedSelection ? 1 : 0.4)
+				}
+				.overlay(alignment: .top) {
+					if hasTranscribedSelection {
+						HelperText(
+							srtHasOverlaps
+								? "Use paste for overlapping clips"
+								: "Drag for single clip, paste for multiple",
+							systemImage: "info.circle"
+						)
+						.offset(y: -KKSpacingXL - KKSpacingSM)
+					}
 				}
 			}
 			.padding(KKPaddingXL)

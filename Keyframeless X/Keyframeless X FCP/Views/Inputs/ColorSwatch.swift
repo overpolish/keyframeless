@@ -49,6 +49,18 @@ private final class ColorPanelController: NSObject {
 		panel.color = color
 		panel.setTarget(self)
 		panel.setAction(#selector(colorDidChange(_:)))
+
+		// Add as child window of the extension's window so they stay grouped
+		// in Mission Control and the panel doesn't get pushed behind FCP
+		if let extensionWindow = NSApp.windows.first(where: {
+			!($0 is NSColorPanel) && $0.isVisible
+		}) {
+			if panel.parent != extensionWindow {
+				panel.parent?.removeChildWindow(panel)
+				extensionWindow.addChildWindow(panel, ordered: .above)
+			}
+		}
+
 		panel.orderFront(nil)
 	}
 

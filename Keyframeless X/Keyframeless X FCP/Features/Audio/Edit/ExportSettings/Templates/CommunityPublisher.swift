@@ -18,8 +18,9 @@ enum CommunityPublisher {
 		let perWord: Bool
 		let perWordStartsAtZero: Bool
 		let params: [[String: String]]
-		let motiDirectoryURL: URL
-		let previewGifURL: URL
+		let version: Int
+		let motiDirectoryURL: URL?
+		let previewGifURL: URL?
 	}
 
 	enum PublishError: LocalizedError {
@@ -39,46 +40,58 @@ enum CommunityPublisher {
 	static func publish(_ payload: TemplatePayload) async throws {
 		let token = Token.decoded
 		let branchName = "community/\(payload.id)"
+		let isUpdate = payload.version > 1
 
 		let mainSHA = try await getRef(branch: baseBranch, token: token)
-		try await createRef(branch: branchName, sha: mainSHA, token: token)
 
-		var treeEntries: [[String: String]] = []
-
-		let motiDir = payload.motiDirectoryURL
-		let resolvedMotiDir = motiDir.resolvingSymlinksInPath().standardizedFileURL.path
-		let templateFolder = sanitizePath(payload.name)
-		let motiFiles = try collectFiles(in: motiDir)
-		for file in motiFiles {
-			let resolvedFile = file.resolvingSymlinksInPath().standardizedFileURL.path
-			let originalName =
-				resolvedFile.hasPrefix(resolvedMotiDir + "/")
-				? String(resolvedFile.dropFirst(resolvedMotiDir.count + 1))
-				: file.lastPathComponent
-			let fileName: String
-			if originalName.hasSuffix(".moti") {
-				fileName = "\(templateFolder).moti"
-			} else {
-				fileName = sanitizePath(originalName)
-			}
-			let treePath = "Captions/\(payload.id)/\(templateFolder)/\(fileName)"
-			let blobSHA = try await createBlob(
-				fileURL: file, token: token)
-			treeEntries.append([
-				"path": treePath,
-				"mode": "100644",
-				"type": "blob",
-				"sha": blobSHA,
-			])
+		// For updates the branch may already exist; create or force-update
+		if isUpdate {
+			try? await updateRef(branch: branchName, sha: mainSHA, token: token)
+		}
+		do {
+			try await createRef(branch: branchName, sha: mainSHA, token: token)
+		} catch {
+			try await updateRef(branch: branchName, sha: mainSHA, token: token)
 		}
 
-		let gifBlobSHA = try await createBlob(fileURL: payload.previewGifURL, token: token)
-		treeEntries.append([
-			"path": "Captions/\(payload.id)/\(templateFolder)/preview.gif",
-			"mode": "100644",
-			"type": "blob",
-			"sha": gifBlobSHA,
-		])
+		var treeEntries: [[String: String]] = []
+		let templateFolder = sanitizePath(payload.name)
+
+		if let motiDir = payload.motiDirectoryURL {
+			let resolvedMotiDir = motiDir.resolvingSymlinksInPath().standardizedFileURL.path
+			let motiFiles = try collectFiles(in: motiDir)
+			for file in motiFiles {
+				let resolvedFile = file.resolvingSymlinksInPath().standardizedFileURL.path
+				let originalName =
+					resolvedFile.hasPrefix(resolvedMotiDir + "/")
+					? String(resolvedFile.dropFirst(resolvedMotiDir.count + 1))
+					: file.lastPathComponent
+				let fileName: String
+				if originalName.hasSuffix(".moti") {
+					fileName = "\(templateFolder).moti"
+				} else {
+					fileName = sanitizePath(originalName)
+				}
+				let treePath = "Captions/\(payload.id)/\(templateFolder)/\(fileName)"
+				let blobSHA = try await createBlob(fileURL: file, token: token)
+				treeEntries.append([
+					"path": treePath,
+					"mode": "100644",
+					"type": "blob",
+					"sha": blobSHA,
+				])
+			}
+		}
+
+		if let gifURL = payload.previewGifURL {
+			let gifBlobSHA = try await createBlob(fileURL: gifURL, token: token)
+			treeEntries.append([
+				"path": "Captions/\(payload.id)/\(templateFolder)/preview.gif",
+				"mode": "100644",
+				"type": "blob",
+				"sha": gifBlobSHA,
+			])
+		}
 
 		var indexEntry: [String: Any] = [
 			"id": payload.id,
@@ -86,6 +99,7 @@ enum CommunityPublisher {
 			"author": payload.author,
 			"perWord": payload.perWord,
 			"params": payload.params,
+			"version": payload.version,
 		]
 		if payload.perWord {
 			indexEntry["perWordStartsAtZero"] = payload.perWordStartsAtZero
@@ -100,17 +114,34 @@ enum CommunityPublisher {
 			"sha": indexBlobSHA,
 		])
 
-		let treeSHA = try await createTree(
-			baseTreeSHA: mainSHA, entries: treeEntries, token: token)
+		// Use existing branch tree as base so unchanged files are preserved
+		let baseTreeSHA: String
+		if isUpdate, let treeSHA = try? await getTreeSHA(branch: branchName, token: token) {
+			baseTreeSHA = treeSHA
+		} else {
+			baseTreeSHA = mainSHA
+		}
 
-		let commitMessage = "Add community template: \(payload.name)"
+		let treeSHA = try await createTree(
+			baseTreeSHA: baseTreeSHA, entries: treeEntries, token: token)
+
+		let commitMessage =
+			isUpdate
+			? "Update community template: \(payload.name) to v\(payload.version)"
+			: "Add community template: \(payload.name)"
 		let commitSHA = try await createCommit(
 			message: commitMessage, treeSHA: treeSHA, parentSHA: mainSHA, token: token)
 
 		try await updateRef(branch: branchName, sha: commitSHA, token: token)
 
-		let prTitle = "Add template: \(payload.name)"
-		var prBody = "Adds community template **\(payload.name)**"
+		let prTitle =
+			isUpdate
+			? "Update template: \(payload.name) v\(payload.version)"
+			: "Add template: \(payload.name)"
+		var prBody =
+			isUpdate
+			? "Updates community template **\(payload.name)** to version \(payload.version)"
+			: "Adds community template **\(payload.name)**"
 		if !payload.author.isEmpty {
 			prBody += " by \(payload.author)"
 		}
@@ -160,6 +191,17 @@ enum CommunityPublisher {
 			let obj = json["object"] as? [String: Any],
 			let sha = obj["sha"] as? String
 		else { throw PublishError.gitHub("Failed to get ref for \(branch)") }
+		return sha
+	}
+
+	private static func getTreeSHA(branch: String, token: String) async throws -> String {
+		let commitSHA = try await getRef(branch: branch, token: token)
+		let url = URL(string: "\(apiBase)/repos/\(owner)/\(repo)/git/commits/\(commitSHA)")!
+		let data = try await request(url: url, method: "GET", token: token)
+		guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+			let tree = json["tree"] as? [String: Any],
+			let sha = tree["sha"] as? String
+		else { throw PublishError.gitHub("Failed to get tree SHA") }
 		return sha
 	}
 
