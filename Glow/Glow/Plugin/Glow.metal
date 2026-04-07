@@ -68,7 +68,8 @@ fragment float4 blurVerticalComposite(RasterizerData in [[stage_in]],
                                       texture2d<half> colorTexture [[texture(KKTextureIndex_InputImage)]],
                                       texture2d<half> blurredTexture [[texture(1)]],
                                       constant float *radius [[buffer(FragmentIndex_Radius)]],
-                                      constant float *intensity [[buffer(FragmentIndex_Intensity)]]) {
+                                      constant float *intensity [[buffer(FragmentIndex_Intensity)]],
+                                      constant float3 *glowColorPtr [[buffer(FragmentIndex_GlowColor)]]) {
     constexpr sampler textureSampler(mag_filter::linear, min_filter::linear);
     constexpr int kSamples = 32;
 
@@ -100,7 +101,7 @@ fragment float4 blurVerticalComposite(RasterizerData in [[stage_in]],
 
     float glowAlpha = saturate((alphaSum / weightSum) * glowIntensity);
 
-    float3 glowColor = float3(1.0, 1.0, 1.0);
+    float3 glowColor = *glowColorPtr;
     float3 result = glowColor * glowAlpha * (1.0 - float(original.a)) + float3(original.rgb);
     float resultAlpha = glowAlpha * (1.0 - float(original.a)) + float(original.a);
 

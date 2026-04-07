@@ -14,6 +14,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)addParametersWithError:(NSError **)error;
 @end
 
+@interface GlowPlugin (Visibility)
+- (void)updateParameterVisibilityAtTime:(CMTime)time;
+@end
+
 @interface GlowPlugin (Render)
 - (BOOL)pluginState:(NSData *_Nullable *_Nonnull)pluginState
              atTime:(CMTime)renderTime
