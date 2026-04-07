@@ -7,4 +7,7 @@
 
 #import <simd/simd.h>
 
-typedef enum FragmentIndex { FragmentIndex_ImageSize = 0, FragmentIndex_TileOffset = 1 } FragmentIndex;
+typedef enum FragmentIndex {
+    FragmentIndex_Radius = 0,
+    FragmentIndex_Intensity = 1
+} FragmentIndex;
