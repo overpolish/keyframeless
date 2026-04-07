@@ -21,7 +21,6 @@ struct CaptionTemplatePicker: View {
 	@State private var showFavoritesOnly = false
 	@State private var showPerWordOnly = false
 	@State private var showCommunity = true
-	@State private var showControlsPopover = false
 	@State private var downloadError: String?
 
 	private func sorted(_ list: [CaptionTemplate]) -> [CaptionTemplate] {
@@ -177,78 +176,77 @@ struct CaptionTemplatePicker: View {
 					.font(.system(size: 10, weight: .medium))
 					.foregroundStyle(Color.kkAccent)
 				}
-				if hasEnabledControls {
-					Button {
-						showControlsPopover.toggle()
-					} label: {
-						Image(systemName: "paintpalette.fill")
-							.font(.system(size: 11))
-							.foregroundStyle(showControlsPopover ? Color.kkAccent : .secondary)
-							.frame(maxHeight: .infinity)
-							.contentShape(Rectangle())
-					}
-					.buttonStyle(.plain)
-					.popover(isPresented: $showControlsPopover, arrowEdge: .trailing) {
-						TemplateControlsPopover(
-							template: model.selectedTemplate,
-							store: paramsStore
-						)
-					}
-				}
 			}
 			.fixedSize(horizontal: false, vertical: true)
-			ScrollShadowView(cornerRadius: KKRadiusSM, scrollToID: model.selectedTemplate.id) {
-				VStack(alignment: .leading, spacing: KKSpacingLG) {
-					TemplateSection(title: "Keyframeless") {
-						ForEach(mergedKeyframelessItems) { item in
-							switch item {
-							case .installed(let template):
+			HStack(spacing: KKSpacingLG) {
+				ScrollShadowView(cornerRadius: KKRadiusSM, scrollToID: model.selectedTemplate.id) {
+					VStack(alignment: .leading, spacing: KKSpacingLG) {
+						TemplateSection(title: "Keyframeless") {
+							ForEach(mergedKeyframelessItems) { item in
+								switch item {
+								case .installed(let template):
+									let community = communityStore.templates.first {
+										$0.name == template.name
+									}
+									CaptionTemplateCard(
+										template: template,
+										isSelected: template.id == model.selectedTemplate.id,
+										isFavorite: favorites.contains(template.id),
+										onSelect: { model.selectedTemplate = template },
+										onToggleFavorite: { favorites.toggle(template.id) },
+										onUpdate: community.map { c in
+											{ showUpdateModal(for: c) }
+										}
+									)
+									.id(template.id)
+								case .community(let community):
+									CommunityTemplateCard(
+										template: community,
+										isInstalled: templates.contains {
+											$0.name == community.name
+										},
+										onDownload: { downloadCommunityTemplate(community) },
+										onUpdate: { showUpdateModal(for: community) }
+									)
+								}
+							}
+							if communityStore.isLoading {
+								HStack {
+									Spacer()
+									ProgressView()
+										.controlSize(.small)
+									Text("Loading community templates...")
+										.font(.system(size: 10))
+										.foregroundStyle(.secondary)
+									Spacer()
+								}
+								.padding(.vertical, KKPaddingLG)
+							}
+						}
+						TemplateSection(title: "Custom") {
+							ForEach(customTemplates) { template in
 								CaptionTemplateCard(
 									template: template,
 									isSelected: template.id == model.selectedTemplate.id,
 									isFavorite: favorites.contains(template.id),
 									onSelect: { model.selectedTemplate = template },
-									onToggleFavorite: { favorites.toggle(template.id) }
+									onToggleFavorite: { favorites.toggle(template.id) },
+									onRemove: { onRemoveCustom?(template) },
+									onSettings: { showParamsModal(for: template) },
+									onPublish: { model.publishModalTemplate = template }
 								)
 								.id(template.id)
-							case .community(let template):
-								CommunityTemplateCard(
-									template: template,
-									onDownload: { downloadCommunityTemplate(template) }
-								)
 							}
-						}
-						if communityStore.isLoading {
-							HStack {
-								Spacer()
-								ProgressView()
-									.controlSize(.small)
-								Text("Loading community templates...")
-									.font(.system(size: 10))
-									.foregroundStyle(.secondary)
-								Spacer()
-							}
-							.padding(.vertical, KKPaddingLG)
+							MotiDropTarget(onPickFile: pickMotiFile)
 						}
 					}
-					TemplateSection(title: "Custom") {
-						ForEach(customTemplates) { template in
-							CaptionTemplateCard(
-								template: template,
-								isSelected: template.id == model.selectedTemplate.id,
-								isFavorite: favorites.contains(template.id),
-								onSelect: { model.selectedTemplate = template },
-								onToggleFavorite: { favorites.toggle(template.id) },
-								onRemove: { onRemoveCustom?(template) },
-								onSettings: { showParamsModal(for: template) },
-								onPublish: { model.publishModalTemplate = template }
-							)
-							.id(template.id)
-						}
-						MotiDropTarget(onPickFile: pickMotiFile)
-					}
+					.padding(.vertical, KKPaddingXS)
 				}
-				.padding(.vertical, KKPaddingXS)
+				TemplateParamsPanel(
+					template: model.selectedTemplate,
+					store: paramsStore
+				)
+				.frame(width: 200)
 			}
 		}
 		.onAppear { communityStore.fetch() }
@@ -268,7 +266,8 @@ struct CaptionTemplatePicker: View {
 				await MainActor.run { model.refreshTemplates() }
 			} catch let error as CocoaError where error.code == .fileWriteNoPermission {
 				await MainActor.run {
-					downloadError = "Permission denied. Run: sudo chown $USER ~/Movies/Motion\\ Templates.localized"
+					downloadError =
+						"Permission denied. Run: sudo chown $USER ~/Movies/Motion\\ Templates.localized"
 				}
 			} catch {
 				await MainActor.run {
@@ -302,9 +301,13 @@ struct CaptionTemplatePicker: View {
 	private func addMotiAndDetectParams(_ url: URL) {
 		let result = PublishedParameter.parseAll(from: url)
 		onDropMoti?(url)
-		guard !result.customParams.isEmpty || result.hasPerWordAnimation else { return }
 		let templateID = "custom:\(url.path)"
 		if let added = model.captionTemplates.first(where: { $0.id == templateID }) {
+			// Store text ozml even if no published params
+			if let textOzml = result.textOzml {
+				paramsStore.setTextOzml(textOzml, for: templateID)
+			}
+			guard !result.customParams.isEmpty || result.hasPerWordAnimation else { return }
 			model.paramsModalParams = result.customParams
 			model.paramsModalHasPerWord = result.hasPerWordAnimation
 			model.paramsModalTemplate = added
@@ -317,6 +320,9 @@ struct CaptionTemplatePicker: View {
 			let result = PublishedParameter.parseAll(from: url)
 			model.paramsModalParams = result.customParams
 			model.paramsModalHasPerWord = result.hasPerWordAnimation
+			if let textOzml = result.textOzml {
+				paramsStore.setTextOzml(textOzml, for: template.id)
+			}
 		} else if let existing {
 			model.paramsModalParams = existing.allParams
 			model.paramsModalHasPerWord = existing.hasPerWordAnimation
@@ -327,14 +333,32 @@ struct CaptionTemplatePicker: View {
 		model.paramsModalTemplate = template
 	}
 
+	private func showUpdateModal(for community: CommunityTemplate) {
+		let local = templates.first { $0.name == community.name }
+		let template =
+			local
+			?? CaptionTemplate(
+				id: community.id, name: community.name, uid: "",
+				supportsPerWordAnimation: community.perWord,
+				wordsInParamName: nil, wordsInKeyPath: nil,
+				isBuiltIn: false, isCustom: false)
+		model.updateModalTemplate = (template, community)
+	}
+
 	private func reconcileCommunityParams() {
 		let communityByName = Dictionary(
 			communityStore.templates.map { ($0.name, $0) },
 			uniquingKeysWith: { first, _ in first }
 		)
 		for template in keyframelessTemplates where !template.isBuiltIn {
-			guard paramsStore.params(for: template.id) == nil,
-				let community = communityByName[template.name],
+			guard let community = communityByName[template.name] else { continue }
+
+			if community.perWord {
+				paramsStore.setPerWordStartsAtZero(
+					community.perWordStartsAtZero, for: template.id)
+			}
+
+			guard paramsStore.params(for: template.id)?.allParams.isEmpty ?? true,
 				let motiURL = template.resolvedMotiURL()
 			else { continue }
 			let result = PublishedParameter.parseAll(from: motiURL)
@@ -357,11 +381,7 @@ struct CaptionTemplatePicker: View {
 			}
 			paramsStore.setParams(
 				configured, hasPerWordAnimation: result.hasPerWordAnimation,
-				for: template.id)
-			if community.perWord {
-				paramsStore.setPerWordStartsAtZero(
-					community.perWordStartsAtZero, for: template.id)
-			}
+				textOzml: result.textOzml, for: template.id)
 		}
 	}
 

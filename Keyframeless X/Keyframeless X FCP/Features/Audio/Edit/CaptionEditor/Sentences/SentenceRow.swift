@@ -85,6 +85,7 @@ struct SentenceRow: View {
 				onToggleBreak: onToggleBreak,
 				showTrailingBreak: showTrailingBreak,
 				onTap: {
+					player.stop()
 					draft = draftText
 					editingRowID = row.id
 				}

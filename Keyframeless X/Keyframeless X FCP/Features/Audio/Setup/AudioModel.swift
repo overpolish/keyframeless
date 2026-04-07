@@ -48,6 +48,7 @@ class AudioModel: ObservableObject {
 	@Published var paramsModalParams: [PublishedParameter] = []
 	@Published var paramsModalHasPerWord: Bool = false
 	@Published var publishModalTemplate: CaptionTemplate?
+	@Published var updateModalTemplate: (CaptionTemplate, CommunityTemplate)?
 
 	var textStyle: TextStyleSettings {
 		get {
@@ -153,48 +154,24 @@ class AudioModel: ObservableObject {
 		let startsAtZero =
 			TemplatePublishedParamsStore.shared.params(for: selectedTemplate.id)?
 			.perWordStartsAtZero ?? false
+
+		let hasOverlaps = CaptionBuilder.hasOverlaps(segments)
+		let storylines: [[CaptionSegment]]
+		if hasOverlaps {
+			let grouped = Dictionary(grouping: segments, by: { $0.clipIndex })
+			storylines = grouped.keys.sorted().map { grouped[$0]! }
+		} else {
+			storylines = [segments]
+		}
+
 		return FCPXMLBuilder.build(
-			segments: segments,
+			storylines: storylines,
 			textStyle: textStyle,
 			format: format,
 			template: selectedTemplate,
 			publishedParams: publishedParams,
 			perWordStartsAtZero: startsAtZero
 		)
-	}
-
-	private func buildPublishedParamEntries() -> [FCPXMLBuilder.PublishedParamEntry] {
-		let store = TemplatePublishedParamsStore.shared
-		guard let settings = store.params(for: selectedTemplate.id) else { return [] }
-		var entries: [FCPXMLBuilder.PublishedParamEntry] = []
-		for param in settings.allParams where param.isToggleable {
-			let val = store.value(paramID: param.id, for: selectedTemplate.id)
-			if param.isFont { continue }
-			let key: String
-			if param.isProjectRoot {
-				key = "9999/\(param.objectID)/\(param.channelPath)"
-			} else if let parentScenenode = param.parentScenenodeID {
-				key =
-					"9999/\(param.parentLayerID ?? "10003")/\(parentScenenode)/4/\(param.objectID)/\(param.channelPath)"
-			} else {
-				key =
-					"9999/\(param.parentLayerID ?? "10003")/\(param.objectID)/\(param.channelPath)"
-			}
-			let valueStr: String
-			switch param.kind {
-			case .color:
-				valueStr = "\(val.r) \(val.g) \(val.b) \(val.a)"
-			case .slider:
-				valueStr = "\(val.sliderValue)"
-			case .toggle:
-				valueStr = val.toggleValue ? "1" : "0"
-			default:
-				continue
-			}
-			entries.append(
-				FCPXMLBuilder.PublishedParamEntry(name: param.name, key: key, value: valueStr))
-		}
-		return entries
 	}
 
 	func srtHasOverlaps(from rows: [AudioEditRow]) -> Bool {

@@ -26,7 +26,6 @@ struct SRTExportButton: View {
 			.padding(.horizontal, KKPaddingXL)
 		}
 		.buttonStyle(.plain)
-		.frame(height: 40)
 		.disabled(hasOverlaps)
 		.opacity(hasOverlaps ? 0.6 : 1)
 		.onHover { isHovered = $0 }

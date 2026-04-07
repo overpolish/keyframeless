@@ -43,11 +43,34 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 		channel.hasPrefix("./") ? String(channel.dropFirst(2)) : channel
 	}
 
+	var channelParamID: String {
+		channelPath.split(separator: "/").last.map(String.init) ?? channelPath
+	}
+
+	var effectValueKey: String {
+		if isProjectRoot {
+			return "9999/\(objectID)/\(channelPath)"
+		} else if let parentScenenode = parentScenenodeID {
+			return
+				"9999/\(parentLayerID ?? "10003")/\(parentScenenode)/4/\(objectID)/\(channelPath)"
+		} else {
+			return "9999/\(parentLayerID ?? "10003")/\(objectID)/\(channelPath)"
+		}
+	}
+
 	private static let animationNames: Set<String> = ["Words In", "Animate On"]
+
+	struct TextOzmlInfo {
+		let key: String
+		let ozml: String
+		let defaultText: String
+		let styleID: String?
+	}
 
 	struct ParseResult {
 		let customParams: [PublishedParameter]
 		let hasPerWordAnimation: Bool
+		var textOzml: TextOzmlInfo?
 	}
 
 	static func parseAll(from motiURL: URL) -> ParseResult {
@@ -88,19 +111,21 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 				? nil
 				: extractColorDefaults(
 					objectID: objectID, channelPath: channelPath, in: content)
-			let layerID = isFont ? nil : findContainingLayerID(for: objectID, in: content)
-			let parentScenenode = isFont ? nil : findParentScenenodeID(for: objectID, in: content)
+			let layerID = findContainingLayerID(for: objectID, in: content)
+			let parentScenenode = findParentScenenodeID(for: objectID, in: content)
 			customParams.append(
 				PublishedParameter(
 					name: name, objectID: objectID, channel: channel,
-					kind: isFont ? .font : .off,
+					kind: .off,
 					isProjectRoot: objectID == projectRootID,
 					parentLayerID: layerID, parentScenenodeID: parentScenenode,
 					defaultR: rgb?.r, defaultG: rgb?.g, defaultB: rgb?.b,
 					defaultFont: fontDefault))
 		}
 
-		return ParseResult(customParams: customParams, hasPerWordAnimation: hasPerWord)
+		let textOzml = extractTextOzml(from: content)
+		return ParseResult(
+			customParams: customParams, hasPerWordAnimation: hasPerWord, textOzml: textOzml)
 	}
 
 	private static func extractFontDefault(
@@ -209,5 +234,104 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 		let matches = layerRegex.matches(
 			in: beforeObj, range: NSRange(beforeObj.startIndex..., in: beforeObj))
 		return matches.last.map { (beforeObj as NSString).substring(with: $0.range(at: 1)) }
+	}
+
+	private static func extractTextOzml(from content: String) -> TextOzmlInfo? {
+		// Find the layer ID
+		let layerPattern = #"<layer[^>]*\sid="(\d+)""#
+		guard let layerRegex = try? NSRegularExpression(pattern: layerPattern),
+			let layerMatch = layerRegex.firstMatch(
+				in: content, range: NSRange(content.startIndex..., in: content))
+		else { return nil }
+		let layerID = (content as NSString).substring(with: layerMatch.range(at: 1))
+
+		// Find scenenodes containing <text> tags, prefer non-"copy" names
+		let snPattern = #"<scenenode\s+name="([^"]+)"\s+id="(\d+)"\s+factoryID="\d+""#
+		guard let snRegex = try? NSRegularExpression(pattern: snPattern) else { return nil }
+		let snMatches = snRegex.matches(
+			in: content, range: NSRange(content.startIndex..., in: content))
+
+		// Filter to scenenodes that contain a <text> tag before the next <scenenode>
+		let textScenenodes = snMatches.filter { match in
+			let matchEnd = match.range.location + match.range.length
+			let searchStart = content.index(content.startIndex, offsetBy: matchEnd)
+			let lookahead = String(content[searchStart...].prefix(5000))
+			guard let textPos = lookahead.range(of: "<text>") else { return false }
+			if let nextScenenode = lookahead.range(of: "<scenenode") {
+				return textPos.lowerBound < nextScenenode.lowerBound
+			}
+			return true
+		}
+		guard !textScenenodes.isEmpty else { return nil }
+
+		let bestMatch =
+			textScenenodes.first(where: {
+				let name = (content as NSString).substring(with: $0.range(at: 1))
+				return !name.lowercased().contains("copy")
+			}) ?? textScenenodes.last!
+
+		let scenenodeID = (content as NSString).substring(with: bestMatch.range(at: 2))
+
+		let tagSearchStart = content.index(
+			content.startIndex, offsetBy: bestMatch.range.location)
+		guard let tagEnd = content.range(of: ">", range: tagSearchStart..<content.endIndex)
+		else { return nil }
+		let tagStart = tagSearchStart
+
+		var depth = 1
+		var pos = tagEnd.upperBound
+		var closeEnd: String.Index?
+		while depth > 0 && pos < content.endIndex {
+			let remaining = pos..<content.endIndex
+			let openRange = content.range(of: "<scenenode", range: remaining)
+			let closeRange = content.range(of: "</scenenode>", range: remaining)
+			guard let cr = closeRange else { break }
+			if let or = openRange, or.lowerBound < cr.lowerBound {
+				depth += 1
+				pos = or.upperBound
+			} else {
+				depth -= 1
+				if depth == 0 { closeEnd = cr.upperBound }
+				pos = cr.upperBound
+			}
+		}
+		guard let end = closeEnd else { return nil }
+		let fullScenenode = String(content[tagStart..<end])
+
+		// Extract default text
+		var defaultText = "Title"
+		if let tStart = fullScenenode.range(of: "<text>"),
+			let tEnd = fullScenenode.range(of: "</text>")
+		{
+			defaultText = String(fullScenenode[tStart.upperBound..<tEnd.lowerBound])
+		}
+
+		// Extract style ID (for face color channel keypaths)
+		var styleID: String?
+		let stylePattern = #"<style[^>]*\sid="(\d+)""#
+		if let styleRegex = try? NSRegularExpression(pattern: stylePattern),
+			let styleMatch = styleRegex.firstMatch(
+				in: fullScenenode, range: NSRange(fullScenenode.startIndex..., in: fullScenenode))
+		{
+			styleID = (fullScenenode as NSString).substring(with: styleMatch.range(at: 1))
+		}
+
+		// Extract ALL factory definitions
+		var factories = ""
+		var searchStart = content.startIndex
+		while let fStart = content.range(of: "<factory ", range: searchStart..<content.endIndex),
+			let fEnd = content.range(
+				of: "</factory>", range: fStart.lowerBound..<content.endIndex)
+		{
+			factories += String(content[fStart.lowerBound..<fEnd.upperBound]) + "\n\n"
+			searchStart = fEnd.upperBound
+		}
+
+		let ozml =
+			"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE ozxmlscene>\n<ozml version=\"5.14\">\n\n"
+			+ factories + "\n" + fullScenenode + "\n</ozml>\n"
+
+		let key = "9999/\(layerID)/\(scenenodeID)"
+		return TextOzmlInfo(key: key, ozml: ozml, defaultText: defaultText, styleID: styleID)
 	}
 }

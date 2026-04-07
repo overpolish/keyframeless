@@ -57,6 +57,11 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
 
 @interface KKSliderCell : NSSliderCell
 @property(nonatomic, strong, nullable) NSColor *trackFillColor;
+/// Piecewise scale break. When scaleBreakValue > 0, the range
+/// [minValue, scaleBreakValue] occupies the first scaleBreakPosition fraction
+/// of the track, and [scaleBreakValue, maxValue] occupies the rest.
+@property(nonatomic) double scaleBreakValue;
+@property(nonatomic) double scaleBreakPosition;
 @end
 
 @implementation KKSliderCell
@@ -195,7 +200,24 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
          (usableWidth * normalizedValue);
 }
 
+- (BOOL)continueTracking:(NSPoint)lastPoint
+                      at:(NSPoint)currentPoint
+                  inView:(NSView *)controlView {
+  if (_scaleBreakValue > 0 && _scaleBreakPosition > 0) {
+    [self jumpToPosition:currentPoint];
+    [NSApp sendAction:self.action to:self.target from:controlView];
+    return YES;
+  }
+  return [super continueTracking:lastPoint at:currentPoint inView:controlView];
+}
+
 - (BOOL)startTrackingAt:(NSPoint)startPoint inView:(NSView *)controlView {
+  if (_scaleBreakValue > 0 && _scaleBreakPosition > 0) {
+    [self jumpToPosition:startPoint];
+    [NSApp sendAction:self.action to:self.target from:controlView];
+    return YES;
+  }
+
   NSRect knobRect = [self knobRectFlipped:NO];
 
   if (NSPointInRect(startPoint, knobRect))
@@ -205,19 +227,38 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
   return [super startTrackingAt:startPoint inView:controlView];
 }
 
+- (CGFloat)valueToNormalized:(double)value {
+  double lo = self.minValue, hi = self.maxValue;
+  if (_scaleBreakValue > 0 && _scaleBreakPosition > 0) {
+    double bv = _scaleBreakValue, bp = _scaleBreakPosition;
+    if (value <= bv)
+      return ClampValue(bp * (value - lo) / (bv - lo), 0.0, 1.0);
+    return ClampValue(bp + (1.0 - bp) * (value - bv) / (hi - bv), 0.0, 1.0);
+  }
+  return NormalizeValue(value, lo, hi);
+}
+
+- (double)normalizedToValue:(CGFloat)norm {
+  double lo = self.minValue, hi = self.maxValue;
+  if (_scaleBreakValue > 0 && _scaleBreakPosition > 0) {
+    double bv = _scaleBreakValue, bp = _scaleBreakPosition;
+    if (norm <= bp)
+      return lo + (bv - lo) * (norm / bp);
+    return bv + (hi - bv) * ((norm - bp) / (1.0 - bp));
+  }
+  return lo + (hi - lo) * norm;
+}
+
 - (void)jumpToPosition:(NSPoint)point {
   NSRect barRect = [self barRectFlipped:NO];
   CGFloat usableWidth = barRect.size.width - kKnobWidth;
   CGFloat relativeX = point.x - barRect.origin.x - (kKnobWidth / 2.0);
-  CGFloat normalizedValue = ClampValue(relativeX / usableWidth, 0.0, 1.0);
-
-  double newValue =
-      self.minValue + (normalizedValue * (self.maxValue - self.minValue));
-  self.doubleValue = newValue;
+  CGFloat norm = ClampValue(relativeX / usableWidth, 0.0, 1.0);
+  self.doubleValue = [self normalizedToValue:norm];
 }
 
 - (CGFloat)normalizedValue {
-  return NormalizeValue(self.doubleValue, self.minValue, self.maxValue);
+  return [self valueToNormalized:self.doubleValue];
 }
 
 @end
@@ -306,6 +347,24 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
 
 - (NSColor *)trackFillColor {
   return ((KKSliderCell *)_slider.cell).trackFillColor;
+}
+
+- (void)setScaleBreakValue:(double)scaleBreakValue {
+  ((KKSliderCell *)_slider.cell).scaleBreakValue = scaleBreakValue;
+  [_slider setNeedsDisplay:YES];
+}
+
+- (double)scaleBreakValue {
+  return ((KKSliderCell *)_slider.cell).scaleBreakValue;
+}
+
+- (void)setScaleBreakPosition:(double)scaleBreakPosition {
+  ((KKSliderCell *)_slider.cell).scaleBreakPosition = scaleBreakPosition;
+  [_slider setNeedsDisplay:YES];
+}
+
+- (double)scaleBreakPosition {
+  return ((KKSliderCell *)_slider.cell).scaleBreakPosition;
 }
 
 @end

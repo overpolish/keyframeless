@@ -18,7 +18,7 @@ struct FrameratePickerButton: View {
 				.font(.caption2)
 				.foregroundStyle(.secondary)
 		}
-		.frame(width: 80)
+		.frame(width: 85)
 		.padding(.horizontal, KKPaddingLG)
 		.padding(.vertical, KKPaddingXS)
 		.kkPanel(cornerRadius: KKRadiusMD)
