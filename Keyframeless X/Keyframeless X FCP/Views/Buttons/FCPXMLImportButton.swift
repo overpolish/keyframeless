@@ -21,7 +21,6 @@ struct FCPXMLImportButton: View {
 			.padding(.horizontal, KKPaddingXL)
 		}
 		.buttonStyle(.plain)
-		.frame(height: 40)
 		.help("Import FCPXML into FCP")
 	}
 }

@@ -40,7 +40,7 @@ struct PublishedParamsModal: View {
 		_fontModes = State(
 			initialValue: Dictionary(
 				uniqueKeysWithValues: params.filter { $0.defaultFont != nil }.map {
-					($0.id, initialKinds[$0.id] == .font ? .custom : .base)
+					($0.id, TemplatePublishedParamsStore.FontMode.base)
 				}))
 		_perWordStartsAtZero = State(initialValue: initialPerWordStartsAtZero)
 	}

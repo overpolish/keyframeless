@@ -41,4 +41,8 @@ if [[ ! -f "$UNSIGNED" ]]; then
 fi
 
 echo ""
-exec "$ROOT/scripts/sign-pkg.sh" "$APPLE_ID" "$TEAM_ID"
+"$ROOT/scripts/sign-pkg.sh" "$APPLE_ID" "$TEAM_ID"
+
+echo "Copying manifest.json to build folder..."
+cp "$ROOT/manifest.json" "$BUILD_DIR/manifest.json"
+echo "Done — manifest.json copied to $BUILD_DIR/"

@@ -36,14 +36,21 @@ class FCPDragSourceView: NSView, NSDraggingSource {
 	override func draw(_ dirtyRect: NSRect) {
 		let accentColor: NSColor = .controlAccentColor
 
-		let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 6, yRadius: 6)
+		let lineWidth: CGFloat = 1.5
+		let strokeInset = lineWidth / 2 + 0.5
+		let strokePath = NSBezierPath(
+			roundedRect: bounds.insetBy(dx: strokeInset, dy: strokeInset), xRadius: 6, yRadius: 6)
+		let fillPath = NSBezierPath(
+			roundedRect: bounds.insetBy(
+				dx: strokeInset + lineWidth / 2, dy: strokeInset + lineWidth / 2), xRadius: 5,
+			yRadius: 5)
 		accentColor.withAlphaComponent(0.15).setFill()
-		path.fill()
+		fillPath.fill()
 		accentColor.withAlphaComponent(0.6).setStroke()
-		path.lineWidth = 1.5
+		strokePath.lineWidth = lineWidth
 		let dashes: [CGFloat] = [6, 4]
-		path.setLineDash(dashes, count: dashes.count, phase: 0)
-		path.stroke()
+		strokePath.setLineDash(dashes, count: dashes.count, phase: 0)
+		strokePath.stroke()
 
 		let iconAttachment = NSTextAttachment()
 		let iconConfig = NSImage.SymbolConfiguration(pointSize: 11, weight: .medium)

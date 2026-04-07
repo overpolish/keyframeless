@@ -93,7 +93,8 @@ class TemplatePublishedParamsStore: ObservableObject {
 		let enabledIDs = Set(params.filter { $0.isToggleable || $0.isFont }.map(\.id))
 		let existing = settings[templateID]
 		var s = TemplateParamSettings(
-			allParams: params, enabledIDs: enabledIDs, hasPerWordAnimation: hasPerWordAnimation)
+			allParams: params, enabledIDs: enabledIDs, hasPerWordAnimation: hasPerWordAnimation,
+			perWordStartsAtZero: existing?.perWordStartsAtZero ?? false)
 		s.textOzmlKey = textOzml?.key ?? existing?.textOzmlKey
 		s.textOzml = textOzml?.ozml ?? existing?.textOzml
 		s.textOzmlDefaultText = textOzml?.defaultText ?? existing?.textOzmlDefaultText

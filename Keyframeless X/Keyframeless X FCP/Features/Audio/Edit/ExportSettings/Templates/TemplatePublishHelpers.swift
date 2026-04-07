@@ -341,8 +341,8 @@ struct FontControlRow: View {
 	var body: some View {
 		HStack(spacing: KKSpacingSM) {
 			Text(param.name)
-				.font(compact ? .system(size: 9) : .caption)
-				.foregroundStyle(compact ? .secondary : .primary)
+				.font(.system(size: 10))
+				.foregroundStyle(.primary)
 				.lineLimit(1)
 			Spacer()
 			HStack(spacing: KKSpacingSM) {
