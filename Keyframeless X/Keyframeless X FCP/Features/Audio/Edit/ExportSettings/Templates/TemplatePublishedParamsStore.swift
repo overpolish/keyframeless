@@ -12,6 +12,11 @@ class TemplatePublishedParamsStore: ObservableObject {
 	@Published private(set) var settings: [String: TemplateParamSettings] = [:]
 	@Published private var sessionValues: [String: [String: ParamValue]] = [:]
 
+	enum FontMode: String, Codable, Equatable, Hashable {
+		case base
+		case custom
+	}
+
 	struct ParamValue: Codable, Equatable {
 		var r: Double = 1
 		var g: Double = 1
@@ -19,12 +24,16 @@ class TemplatePublishedParamsStore: ObservableObject {
 		var a: Double = 1
 		var sliderValue: Double = 0
 		var toggleValue: Bool = false
+		var fontMode: FontMode = .base
+		var customFont: String?
 		static func fromDefaults(_ param: PublishedParameter) -> ParamValue {
 			switch param.kind {
 			case .color:
 				return ParamValue(
 					r: param.defaultR ?? 1, g: param.defaultG ?? 1,
 					b: param.defaultB ?? 1)
+			case .font:
+				return ParamValue(fontMode: .base, customFont: param.defaultFont)
 			default:
 				return ParamValue()
 			}
@@ -38,6 +47,10 @@ class TemplatePublishedParamsStore: ObservableObject {
 		var enabledIDs: Set<String> = []
 		var hasPerWordAnimation: Bool = false
 		var perWordStartsAtZero: Bool = false
+		var textOzmlKey: String?
+		var textOzml: String?
+		var textOzmlDefaultText: String?
+		var textOzmlStyleID: String?
 	}
 
 	private let filename = "template_published_params.json"
@@ -51,7 +64,7 @@ class TemplatePublishedParamsStore: ObservableObject {
 			var changed = false
 			for i in setting.allParams.indices {
 				let param = setting.allParams[i]
-				if param.kind != .off && param.kind != .animation
+				if param.kind != .off && param.kind != .animation && param.kind != .font
 					&& !legacy.contains(param.id)
 				{
 					setting.allParams[i].kind = .off
@@ -74,12 +87,30 @@ class TemplatePublishedParamsStore: ObservableObject {
 
 	func setParams(
 		_ params: [PublishedParameter], hasPerWordAnimation: Bool = false,
+		textOzml: PublishedParameter.TextOzmlInfo? = nil,
 		for templateID: String
 	) {
-		let enabledIDs = Set(params.filter(\.isToggleable).map(\.id))
-		settings[templateID] = TemplateParamSettings(
+		let enabledIDs = Set(params.filter { $0.isToggleable || $0.isFont }.map(\.id))
+		let existing = settings[templateID]
+		var s = TemplateParamSettings(
 			allParams: params, enabledIDs: enabledIDs, hasPerWordAnimation: hasPerWordAnimation)
+		s.textOzmlKey = textOzml?.key ?? existing?.textOzmlKey
+		s.textOzml = textOzml?.ozml ?? existing?.textOzml
+		s.textOzmlDefaultText = textOzml?.defaultText ?? existing?.textOzmlDefaultText
+		s.textOzmlStyleID = textOzml?.styleID ?? existing?.textOzmlStyleID
+		settings[templateID] = s
 		resetValues(for: templateID)
+		KKStore.save(settings, to: filename)
+	}
+
+	func setTextOzml(_ info: PublishedParameter.TextOzmlInfo, for templateID: String) {
+		if settings[templateID] == nil {
+			settings[templateID] = TemplateParamSettings(allParams: [])
+		}
+		settings[templateID]?.textOzmlKey = info.key
+		settings[templateID]?.textOzml = info.ozml
+		settings[templateID]?.textOzmlDefaultText = info.defaultText
+		settings[templateID]?.textOzmlStyleID = info.styleID
 		KKStore.save(settings, to: filename)
 	}
 

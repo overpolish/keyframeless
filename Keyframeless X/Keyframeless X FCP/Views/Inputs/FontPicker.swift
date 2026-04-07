@@ -52,7 +52,7 @@ struct FontPickerRow: View {
 	}
 }
 
-private struct FontListPopover: View {
+struct FontListPopover: View {
 	@Binding var selectedFont: String
 	let fonts: [FontFamily]
 	@ObservedObject private var favorites = FontFavorites.shared

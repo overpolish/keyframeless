@@ -63,19 +63,17 @@ struct DimensionsPreview: View {
 			let fullFont =
 				NSFont(name: model.textFont, size: fcpFontSize)
 				?? NSFont.systemFont(ofSize: fcpFontSize)
-			let yOffsetExport = exportHeight * CGFloat(50 - model.textYPosition) / 100
+			let yOffsetExport =
+				exportHeight * CGFloat(50 - model.textYPosition) / 100 + fullFont.capHeight / 3
 
 			ZStack {
 				RoundedRectangle(cornerRadius: KKRadiusSM)
 					.fill(Color.white.opacity(0.08))
 					.frame(width: fit.width, height: fit.height)
-					.overlay(
-						RoundedRectangle(cornerRadius: KKRadiusMD)
-							.strokeBorder(Color.secondary.opacity(0.3), lineWidth: KKBorderWidthXS)
-					)
 					.overlay {
 						Text(previewText(availableWidth: textWidthExport, font: fullFont))
 							.font(.custom(model.textFont, size: fcpFontSize))
+							.lineSpacing(fcpFontSize * 0.3)
 							.foregroundStyle(
 								Color(
 									red: model.textColorR,

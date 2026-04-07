@@ -7,7 +7,7 @@ import KeyframelessKit
 import SwiftUI
 
 let cardAspect: CGFloat = 16.0 / 9.0
-let cardMinWidth: CGFloat = 160
+let cardMinWidth: CGFloat = 130
 let cardSpacing = KKSpacingLG
 let selectionInset: CGFloat = 3
 
