@@ -61,7 +61,7 @@ static const FxParameterFlags kCustomUIDisabled =
                                        parameterID:kKKParamAnimateInDuration
                                       defaultValue:0.5
                                       parameterMin:0.1
-                                      parameterMax:2.0
+                                      parameterMax:10.0
                                          sliderMin:0.1
                                          sliderMax:2.0
                                              delta:0.1
@@ -103,7 +103,7 @@ static const FxParameterFlags kCustomUIDisabled =
                                        parameterID:kKKParamAnimateOutDuration
                                       defaultValue:0.5
                                       parameterMin:0.1
-                                      parameterMax:2.0
+                                      parameterMax:10.0
                                          sliderMin:0.1
                                          sliderMax:2.0
                                              delta:0.1
