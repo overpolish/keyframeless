@@ -15,7 +15,10 @@
   BOOL _arcHovered;
   BOOL _ringHovered;
   BOOL _rotHovered;
+  BOOL _rotXRingHovered;
+  BOOL _rotYRingHovered;
   double _rotDragPrevAngle, _rotDragAccum;
+  double _rotRingDragPrevPos;
   UInt32 _rotDragTargetParam;
   double _ringDragStartDist, _ringDragStartValX, _ringDragStartValY;
   double _ringDragStartAngle;
@@ -44,6 +47,27 @@
     _label.text = labelText;
     _ring = [[KKRingOSC alloc] initWithAPIManager:apiManager];
     _rot = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
+
+    _rotXRing = [[KKRingOSC alloc] initWithAPIManager:apiManager];
+    _rotXRing.tintColor = [NSColor colorWithRed:0.9
+                                          green:0.2
+                                           blue:0.2
+                                          alpha:1.0];
+    _rotXRing.ringRadius = 70.0f;
+    _rotXRing.ringRadiusY = 40.0f;
+    _rotXRing.fillWidth = 3.0f;
+    _rotXRing.hoverCursor = [NSCursor resizeLeftRightCursor];
+
+    _rotYRing = [[KKRingOSC alloc] initWithAPIManager:apiManager];
+    _rotYRing.tintColor = [NSColor colorWithRed:0.2
+                                          green:0.8
+                                           blue:0.2
+                                          alpha:1.0];
+    _rotYRing.ringRadius = 40.0f;
+    _rotYRing.ringRadiusY = 70.0f;
+    _rotYRing.fillWidth = 3.0f;
+    _rotYRing.hoverCursor = [NSCursor resizeUpDownCursor];
+
     _previewIcon = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
     _previewIcon.iconName = @"eye";
     _opacityIcon = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
@@ -73,23 +97,45 @@
 
   CGPoint pos = [parentOSC canvasPositionForParam:_pointParam atTime:time];
   [self updateRing:parentOSC atTime:time];
-  UInt32 rotParamToDraw = _rotDragging ? _rotDragTargetParam : _rotParam;
-  float rotAngle = [parentOSC floatValueForParam:rotParamToDraw atTime:time];
 
-  _ring.center = pos;
-  [_ring drawAtCanvasPosition:pos
-                    isHovered:_ringHovered
-                     isActive:_ringDragging
-             destinationImage:dest
-                       atTime:time];
+  CGEventFlags drawFlags =
+      CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+  BOOL optHeld = (drawFlags & kCGEventFlagMaskAlternate) != 0;
+  BOOL showRotXY = optHeld || _rotXRingDragging || _rotYRingDragging ||
+                   _rotXRingHovered || _rotYRingHovered;
 
-  _rot.center = pos;
-  _rot.angle = rotAngle;
-  [_rot drawAtCanvasPosition:pos
-                   isHovered:_rotHovered
-                    isActive:_rotDragging
-            destinationImage:dest
-                      atTime:time];
+  if (showRotXY) {
+    _rotXRing.center = pos;
+    [_rotXRing drawAtCanvasPosition:pos
+                          isHovered:_rotXRingHovered
+                           isActive:_rotXRingDragging
+                   destinationImage:dest
+                             atTime:time];
+
+    _rotYRing.center = pos;
+    [_rotYRing drawAtCanvasPosition:pos
+                          isHovered:_rotYRingHovered
+                           isActive:_rotYRingDragging
+                   destinationImage:dest
+                             atTime:time];
+  } else {
+    _ring.center = pos;
+    [_ring drawAtCanvasPosition:pos
+                      isHovered:_ringHovered
+                       isActive:_ringDragging
+               destinationImage:dest
+                         atTime:time];
+
+    UInt32 rotParamToDraw = _rotDragging ? _rotDragTargetParam : _rotParam;
+    float rotAngle = [parentOSC floatValueForParam:rotParamToDraw atTime:time];
+    _rot.center = pos;
+    _rot.angle = rotAngle;
+    [_rot drawAtCanvasPosition:pos
+                     isHovered:_rotHovered
+                      isActive:_rotDragging
+              destinationImage:dest
+                        atTime:time];
+  }
 
   [_arc drawAtCanvasPosition:pos
                    isHovered:_arcHovered
@@ -160,6 +206,8 @@
   _arcHovered = NO;
   _ringHovered = NO;
   _rotHovered = NO;
+  _rotXRingHovered = NO;
+  _rotYRingHovered = NO;
   if (_hidden)
     return;
 
@@ -209,22 +257,44 @@
     }
   }
 
-  _ring.center = pos;
-  [self updateRing:parentOSC atTime:time];
-  if ([_ring hitTestAtMousePositionX:positionX
-                           positionY:positionY
-                              atTime:time]) {
-    _ringHovered = YES;
-    *activePart = _ringPart;
-  }
+  CGEventFlags hitFlags =
+      CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+  BOOL optHeld = (hitFlags & kCGEventFlagMaskAlternate) != 0;
 
-  _rot.center = pos;
-  _rot.angle = [parentOSC floatValueForParam:_rotParam atTime:time];
-  if ([_rot hitTestAtMousePositionX:positionX
-                          positionY:positionY
-                             atTime:time]) {
-    _rotHovered = YES;
-    *activePart = _rotPart;
+  if (optHeld) {
+    _rotXRing.center = pos;
+    if ([_rotXRing hitTestAtMousePositionX:positionX
+                                 positionY:positionY
+                                    atTime:time]) {
+      _rotXRingHovered = YES;
+      *activePart = _rotXRingPart;
+    }
+
+    _rotYRing.center = pos;
+    if ([_rotYRing hitTestAtMousePositionX:positionX
+                                 positionY:positionY
+                                    atTime:time]) {
+      _rotYRingHovered = YES;
+      *activePart = _rotYRingPart;
+    }
+  } else {
+    _ring.center = pos;
+    [self updateRing:parentOSC atTime:time];
+    if ([_ring hitTestAtMousePositionX:positionX
+                             positionY:positionY
+                                atTime:time]) {
+      _ringHovered = YES;
+      *activePart = _ringPart;
+    }
+
+    _rot.center = pos;
+    _rot.angle = [parentOSC floatValueForParam:_rotParam atTime:time];
+    if ([_rot hitTestAtMousePositionX:positionX
+                            positionY:positionY
+                               atTime:time]) {
+      _rotHovered = YES;
+      *activePart = _rotPart;
+    }
   }
 }
 
@@ -284,18 +354,29 @@
 
   if (activePart == _rotPart) {
     _rotDragging = YES;
-    CGEventFlags flags =
-        CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
-    if (flags & kCGEventFlagMaskCommand)
-      _rotDragTargetParam = _rotXParam;
-    else if (flags & kCGEventFlagMaskAlternate)
-      _rotDragTargetParam = _rotYParam;
-    else
-      _rotDragTargetParam = _rotParam;
+    _rotDragTargetParam = _rotParam;
     CGPoint center = [parentOSC canvasPositionForParam:_pointParam atTime:time];
     double dx = positionX - center.x;
     double dy = positionY - center.y;
     _rotDragPrevAngle = atan2(-dy, dx);
+    _rotDragAccum = [parentOSC floatValueForParam:_rotDragTargetParam
+                                           atTime:time];
+    [oscAPI setCursor:[NSCursor crosshairCursor]];
+    *forceUpdate = YES;
+    return YES;
+  }
+
+  if (activePart == _rotXRingPart || activePart == _rotYRingPart) {
+    if (activePart == _rotXRingPart) {
+      _rotXRingDragging = YES;
+      _rotDragTargetParam = _rotYParam;
+      _rotRingDragPrevPos = positionX;
+    } else {
+      _rotYRingDragging = YES;
+      _rotDragTargetParam = _rotXParam;
+      _rotRingDragPrevPos = positionY;
+    }
+    _rotDragging = YES;
     _rotDragAccum = [parentOSC floatValueForParam:_rotDragTargetParam
                                            atTime:time];
     [oscAPI setCursor:[NSCursor crosshairCursor]];
@@ -370,6 +451,26 @@
                            atTime:(CMTime)time {
   CGPoint center = [parentOSC canvasPositionForParam:_pointParam atTime:time];
 
+  if (activePart == _rotXRingPart || activePart == _rotYRingPart) {
+    double pos = (activePart == _rotXRingPart) ? positionX : positionY;
+    double delta = (pos - _rotRingDragPrevPos) * (M_PI / 200.0);
+    if (activePart == _rotYRingPart)
+      delta = -delta;
+    _rotRingDragPrevPos = pos;
+    _rotDragAccum += delta;
+    static const double kSnapToZeroThreshold = 3.0 * (M_PI / 180.0);
+    double value = _rotDragAccum;
+    if (fabs(value) < kSnapToZeroThreshold)
+      value = 0.0;
+    id<FxParameterSettingAPI_v5> paramSetAPI =
+        [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    if (paramSetAPI)
+      [paramSetAPI setFloatValue:value
+                     toParameter:_rotDragTargetParam
+                          atTime:time];
+    return YES;
+  }
+
   if (activePart == _rotPart) {
     double dx = positionX - center.x;
     double dy = positionY - center.y;
@@ -383,10 +484,7 @@
     _rotDragPrevAngle = angle;
     static const double kSnapToZeroThreshold = 3.0 * (M_PI / 180.0);
     double value = _rotDragAccum;
-    CGEventFlags rotFlags =
-        CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
-    BOOL snapDisabled = (rotFlags & kCGEventFlagMaskAlternate) != 0;
-    if (!snapDisabled && fabs(value) < kSnapToZeroThreshold)
+    if (fabs(value) < kSnapToZeroThreshold)
       value = 0.0;
     id<FxParameterSettingAPI_v5> paramSetAPI =
         [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
@@ -543,6 +641,10 @@
   _ringHovered = NO;
   _rotDragging = NO;
   _rotHovered = NO;
+  _rotXRingDragging = NO;
+  _rotXRingHovered = NO;
+  _rotYRingDragging = NO;
+  _rotYRingHovered = NO;
 }
 
 @end

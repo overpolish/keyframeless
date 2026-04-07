@@ -30,6 +30,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) NSInteger arcPart;
 @property(nonatomic) NSInteger ringPart;
 @property(nonatomic) NSInteger rotPart;
+@property(nonatomic) NSInteger rotXRingPart;
+@property(nonatomic) NSInteger rotYRingPart;
 @property(nonatomic) NSInteger iconPart;
 @property(nonatomic) NSInteger opacityIconPart;
 @property(nonatomic) NSInteger scaleIconPart;
@@ -39,6 +41,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, readonly) KKOSCLabel *label;
 @property(nonatomic, readonly) KKRingOSC *ring;
 @property(nonatomic, readonly) KKRotationOSC *rot;
+@property(nonatomic, readonly) KKRingOSC *rotXRing;
+@property(nonatomic, readonly) KKRingOSC *rotYRing;
 @property(nonatomic, readonly) KKIconButtonOSC *previewIcon;
 @property(nonatomic, readonly) KKIconButtonOSC *opacityIcon;
 @property(nonatomic, readonly) KKIconButtonOSC *scaleIcon;
@@ -53,6 +57,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) BOOL arcDragging;
 @property(nonatomic) BOOL ringDragging;
 @property(nonatomic) BOOL rotDragging;
+@property(nonatomic) BOOL rotXRingDragging;
+@property(nonatomic) BOOL rotYRingDragging;
 
 /// Create a compound point. If primaryArc is non-nil, it is used as the arc
 /// (for point A which shares the parent OSC's arc). Otherwise a new arc is

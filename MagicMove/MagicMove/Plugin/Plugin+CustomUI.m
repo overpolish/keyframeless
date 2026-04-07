@@ -521,9 +521,7 @@
       [KKMarkup attributedStringFromMarkup:
                     @"Hold <kbd>⌃</kbd> while dragging to disable snapping"],
       [KKMarkup attributedStringFromMarkup:
-                    @"Hold <kbd>⌘</kbd> and click rotation to rotate X axis"],
-      [KKMarkup attributedStringFromMarkup:
-                    @"Hold <kbd>⌥</kbd> and click rotation to rotate Y axis"],
+                    @"Hold <kbd>⌥</kbd> to show X and Y rotation rings"],
       [KKMarkup attributedStringFromMarkup:
                     @"Hold <kbd>Shift</kbd> while scaling to lock to X or Y"],
       [KKMarkup attributedStringFromMarkup:
