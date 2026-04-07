@@ -79,6 +79,7 @@ fragment float4 blurVerticalComposite(RasterizerData in [[stage_in]],
                                       constant float *radius [[buffer(FragmentIndex_Radius)]],
                                       constant float *intensity [[buffer(FragmentIndex_Intensity)]],
                                       constant float *falloff [[buffer(FragmentIndex_Falloff)]],
+                                      constant float2 *offsetPtr [[buffer(FragmentIndex_Offset)]],
                                       constant float3 *glowColorPtr [[buffer(FragmentIndex_GlowColor)]],
                                       constant int *colorMode [[buffer(FragmentIndex_ColorMode)]]) {
     constexpr sampler textureSampler(mag_filter::linear, min_filter::linear);
@@ -88,17 +89,20 @@ fragment float4 blurVerticalComposite(RasterizerData in [[stage_in]],
     float glowRadius = *radius;
     float glowIntensity = *intensity;
     float glowFalloff = *falloff;
+    float2 glowOffset = *offsetPtr;
     bool dynamic = (*colorMode == 1);
 
     if (glowRadius < 0.01)
         return float4(original);
+
+    float2 offsetUV = in.textureCoordinate + glowOffset;
 
     float texelY = 1.0 / float(blurredTexture.get_height());
     float step = glowRadius / float(kSamples);
     float sigma = glowRadius * 0.5;
     float invTwoSigmaSq = -0.5 / (sigma * sigma);
 
-    half4 center = blurredTexture.sample(textureSampler, in.textureCoordinate);
+    half4 center = blurredTexture.sample(textureSampler, offsetUV);
     float4 colorSum = float4(center);
     float weightSum = 1.0;
 
@@ -106,8 +110,8 @@ fragment float4 blurVerticalComposite(RasterizerData in [[stage_in]],
         float d = float(i) * step;
         float weight = exp(d * d * invTwoSigmaSq);
         float offsetY = d * texelY;
-        half4 s0 = blurredTexture.sample(textureSampler, in.textureCoordinate + float2(0, offsetY));
-        half4 s1 = blurredTexture.sample(textureSampler, in.textureCoordinate + float2(0, -offsetY));
+        half4 s0 = blurredTexture.sample(textureSampler, offsetUV + float2(0, offsetY));
+        half4 s1 = blurredTexture.sample(textureSampler, offsetUV + float2(0, -offsetY));
         colorSum += (float4(s0) + float4(s1)) * weight;
         weightSum += weight * 2.0;
     }
