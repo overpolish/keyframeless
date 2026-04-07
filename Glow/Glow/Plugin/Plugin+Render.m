@@ -14,7 +14,9 @@
 typedef struct {
   float radius;
   float intensity;
+  float falloff;
   simd_float3 glowColor;
+  int colorMode;
 } GlowPluginState;
 
 @implementation GlowPlugin (Render)
@@ -40,11 +42,15 @@ typedef struct {
 
   double radius = 20.0;
   double intensity = 1.5;
+  double falloff = 1.0;
   [paramGetAPI getFloatValue:&radius
                fromParameter:kParamRadius
                       atTime:renderTime];
   [paramGetAPI getFloatValue:&intensity
                fromParameter:kParamIntensity
+                      atTime:renderTime];
+  [paramGetAPI getFloatValue:&falloff
+               fromParameter:kParamFalloff
                       atTime:renderTime];
 
   KKTimingResult *timing = [self timingAtTime:renderTime];
@@ -52,28 +58,41 @@ typedef struct {
   double outF = timing.outPhase.factor;
   double holdF = timing.holdPhase.factor;
 
-  BOOL holdRadius = YES, holdIntensity = YES;
+  BOOL holdRadius = YES, holdIntensity = YES, holdFalloff = YES;
   [paramGetAPI getBoolValue:&holdRadius
               fromParameter:kParamHoldRadius
                      atTime:renderTime];
   [paramGetAPI getBoolValue:&holdIntensity
               fromParameter:kParamHoldIntensity
                      atTime:renderTime];
+  [paramGetAPI getBoolValue:&holdFalloff
+              fromParameter:kParamHoldFalloff
+                     atTime:renderTime];
+
+  int colorMode = kColorModeSolid;
+  [paramGetAPI getIntValue:&colorMode
+             fromParameter:kParamColorMode
+                    atTime:renderTime];
 
   double red = 1.0, green = 1.0, blue = 1.0;
-  [paramGetAPI getRedValue:&red
-                greenValue:&green
-                 blueValue:&blue
-             fromParameter:kParamColor
-                    atTime:renderTime];
+  if (colorMode == kColorModeSolid) {
+    [paramGetAPI getRedValue:&red
+                  greenValue:&green
+                   blueValue:&blue
+               fromParameter:kParamColor
+                      atTime:renderTime];
+  }
 
   double radiusFactor = inF * (holdRadius ? holdF : 1.0) * outF;
   double intensityFactor = inF * (holdIntensity ? holdF : 1.0) * outF;
+  double falloffFactor = inF * (holdFalloff ? holdF : 1.0) * outF;
 
   GlowPluginState state;
   state.radius = (float)(radius * radiusFactor);
   state.intensity = (float)(intensity * intensityFactor);
+  state.falloff = (float)(1.0 + falloff * falloffFactor);
   state.glowColor = (simd_float3){(float)red, (float)green, (float)blue};
+  state.colorMode = colorMode;
 
   *pluginState = [NSData dataWithBytes:&state length:sizeof(state)];
   return (*pluginState != nil);
@@ -103,7 +122,9 @@ typedef struct {
 
   float fragmentRadius = state.radius;
   float fragmentIntensity = state.intensity;
+  float fragmentFalloff = state.falloff;
   simd_float3 fragmentColor = state.glowColor;
+  int fragmentColorMode = state.colorMode;
 
   KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
   MTLPixelFormat pixelFormat =
@@ -202,6 +223,9 @@ typedef struct {
     [encoder setFragmentBytes:&fragmentRadius
                        length:sizeof(fragmentRadius)
                       atIndex:FragmentIndex_Radius];
+    [encoder setFragmentBytes:&fragmentColorMode
+                       length:sizeof(fragmentColorMode)
+                      atIndex:FragmentIndex_ColorMode];
     [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                 vertexStart:0
                 vertexCount:4];
@@ -234,9 +258,15 @@ typedef struct {
     [encoder setFragmentBytes:&fragmentIntensity
                        length:sizeof(fragmentIntensity)
                       atIndex:FragmentIndex_Intensity];
+    [encoder setFragmentBytes:&fragmentFalloff
+                       length:sizeof(fragmentFalloff)
+                      atIndex:FragmentIndex_Falloff];
     [encoder setFragmentBytes:&fragmentColor
                        length:sizeof(fragmentColor)
                       atIndex:FragmentIndex_GlowColor];
+    [encoder setFragmentBytes:&fragmentColorMode
+                       length:sizeof(fragmentColorMode)
+                      atIndex:FragmentIndex_ColorMode];
     [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                 vertexStart:0
                 vertexCount:4];
