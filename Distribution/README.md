@@ -12,21 +12,20 @@ Each component (`motionblur`, `rounded`, `magicmove`, `keyframelessx`) is versio
 ### Bumping a version
 
 ```sh
-scripts/bump-version.sh <component> <version>
+scripts/bump-version.sh <component> <breaking|major|minor|alpha|release>
 ```
 
-This updates the relevant `Info.plist` / `.pbxproj` files and writes the new version into `manifest.json`.
-
-### Pre-release / alpha builds
-
-Use a `-` suffix for pre-release versions (e.g. `1.0.1-v0`). Pre-release versions update the app version but **skip** `manifest.json` — the manifest only ever contains official release versions.
+Version format is `BREAKING.MAJOR.MINOR[-vN]`. The script reads the current version, increments the specified segment, and updates the relevant `Info.plist` / `.pbxproj` files.
 
 ```sh
-scripts/bump-version.sh keyframelessx 1.0.1-v0   # alpha build, manifest unchanged
-scripts/bump-version.sh keyframelessx 1.0.1       # official release, manifest updated
+scripts/bump-version.sh magicmove minor    # 1.0.0 -> 1.0.1
+scripts/bump-version.sh magicmove major    # 1.0.0 -> 1.1.0
+scripts/bump-version.sh magicmove breaking # 1.0.0 -> 2.0.0
+scripts/bump-version.sh magicmove alpha    # 1.0.1 -> 1.0.1-v0, then 1.0.1-v1, etc.
+scripts/bump-version.sh magicmove release  # 1.0.1-v2 -> 1.0.1
 ```
 
-When the official `1.0.1` release ships, users running `1.0.1-v0` will see the update banner because a release version is always considered newer than a pre-release with the same base version.
+`alpha` adds or increments a `-vN` suffix and **skips** `manifest.json` — the manifest only ever contains official release versions. `release` strips the suffix and updates the manifest. Users running `1.0.1-v0` will see the update banner when the official `1.0.1` ships because a release version is always considered newer than a pre-release with the same base version.
 
 ### How update checking works
 

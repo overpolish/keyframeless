@@ -5,7 +5,7 @@
 #
 # Bumps the version for a single component and updates manifest.json.
 #
-# Usage: bump-version.sh <component> <version>
+# Usage: bump-version.sh <component> <breaking|major|minor|alpha|release>
 #
 # Components:
 #   motionblur     MotionBlur plugin
@@ -19,13 +19,22 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MANIFEST="$ROOT/manifest.json"
 
 usage() {
-  echo "Usage: bump-version.sh <component> <version>"
+  echo "Usage: bump-version.sh <component> <breaking|major|minor|alpha|release>"
   echo ""
   echo "Components:"
   echo "  motionblur     MotionBlur plugin"
   echo "  rounded        Rounded plugin"
   echo "  magicmove      MagicMove plugin"
   echo "  keyframelessx  Keyframeless X app"
+  echo ""
+  echo "Version format: BREAKING.MAJOR.MINOR[-vN]"
+  echo ""
+  echo "Bump types:"
+  echo "  breaking  Increment breaking version, reset major and minor"
+  echo "  major     Increment major version, reset minor"
+  echo "  minor     Increment minor version"
+  echo "  alpha     Add or increment -vN suffix (manifest unchanged)"
+  echo "  release   Strip -vN suffix and update manifest"
   exit 1
 }
 
@@ -34,7 +43,96 @@ if [[ $# -ne 2 ]]; then
 fi
 
 COMPONENT="$1"
-VERSION="$2"
+BUMP="$2"
+
+# Returns the primary plist path for a component (used to read current version
+# for alpha/release operations where the plist may differ from manifest).
+plist_for_component() {
+  case "$1" in
+    motionblur)    echo "MotionBlur/MotionBlur/Plugin/Info.plist" ;;
+    rounded)       echo "Rounded/Rounded/Plugin/Info.plist" ;;
+    magicmove)     echo "MagicMove/MagicMove/Plugin/Info.plist" ;;
+    keyframelessx) echo "" ;;
+  esac
+}
+
+# Read current version from the installed plist (includes -vN if present).
+read_plist_version() {
+  local plist
+  plist=$(plist_for_component "$COMPONENT")
+  if [[ -n "$plist" ]]; then
+    /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$ROOT/$plist"
+  else
+    grep -m1 'MARKETING_VERSION' "$ROOT/Keyframeless X/Keyframeless X.xcodeproj/project.pbxproj" \
+      | sed 's/.*= //;s/;.*//' | tr -d ' '
+  fi
+}
+
+# Read base version from manifest.json (never has -vN suffix).
+read_manifest_version() {
+  python3 -c "
+import json, sys
+with open('$MANIFEST') as f:
+    m = json.load(f)
+print(m.get(sys.argv[1], '0.0.0'))
+" "$COMPONENT"
+}
+
+MANIFEST_VERSION=$(read_manifest_version)
+
+if [[ "$MANIFEST_VERSION" == "0.0.0" ]]; then
+  echo "Unknown component: $COMPONENT"
+  usage
+fi
+
+case "$BUMP" in
+  breaking|major|minor)
+    IFS='.' read -r BREAKING MAJOR MINOR <<< "$MANIFEST_VERSION"
+    case "$BUMP" in
+      breaking)
+        BREAKING=$((BREAKING + 1))
+        MAJOR=0
+        MINOR=0
+        ;;
+      major)
+        MAJOR=$((MAJOR + 1))
+        MINOR=0
+        ;;
+      minor)
+        MINOR=$((MINOR + 1))
+        ;;
+    esac
+    VERSION="$BREAKING.$MAJOR.$MINOR"
+    UPDATE_MANIFEST=true
+    ;;
+  alpha)
+    PLIST_VERSION=$(read_plist_version)
+    BASE="${PLIST_VERSION%%-*}"
+    if [[ "$PLIST_VERSION" == *-v* ]]; then
+      N="${PLIST_VERSION##*-v}"
+      N=$((N + 1))
+    else
+      N=0
+    fi
+    VERSION="$BASE-v$N"
+    UPDATE_MANIFEST=false
+    ;;
+  release)
+    PLIST_VERSION=$(read_plist_version)
+    if [[ "$PLIST_VERSION" != *-v* ]]; then
+      echo "Already a release version: $PLIST_VERSION"
+      exit 0
+    fi
+    VERSION="${PLIST_VERSION%%-*}"
+    UPDATE_MANIFEST=true
+    ;;
+  *)
+    echo "Unknown bump type: $BUMP"
+    usage
+    ;;
+esac
+
+CURRENT=$(read_plist_version)
 
 bump_plist() {
   local plist="$1"
@@ -67,10 +165,6 @@ bump_pkgproj() {
 }
 
 bump_manifest() {
-  if [[ "$VERSION" == *-* ]]; then
-    echo "  manifest.json skipped (pre-release)"
-    return
-  fi
   python3 -c "
 import json, sys
 key_path, value = sys.argv[1], sys.argv[2]
@@ -87,36 +181,31 @@ with open('$MANIFEST', 'w') as f:
 " "$@"
 }
 
+echo "Bumping $COMPONENT: $CURRENT -> $VERSION"
+
 case "$COMPONENT" in
   motionblur)
-    echo "Bumping MotionBlur to $VERSION"
     bump_plist "MotionBlur/MotionBlur/Wrapper Application/Info.plist"
     bump_plist "MotionBlur/MotionBlur/Plugin/Info.plist"
     bump_fxplug "MotionBlur/MotionBlur/Plugin/Info.plist"
     bump_pkgproj "co.overpolish.keyframeless.MotionBlur"
-    bump_manifest "motionblur" "$VERSION"
     ;;
 
   rounded)
-    echo "Bumping Rounded to $VERSION"
     bump_plist "Rounded/Rounded/Wrapper Application/Info.plist"
     bump_plist "Rounded/Rounded/Plugin/Info.plist"
     bump_fxplug "Rounded/Rounded/Plugin/Info.plist"
     bump_pkgproj "co.overpolish.keyframeless.Rounded"
-    bump_manifest "rounded" "$VERSION"
     ;;
 
   magicmove)
-    echo "Bumping MagicMove to $VERSION"
     bump_plist "MagicMove/MagicMove/Wrapper Application/Info.plist"
     bump_plist "MagicMove/MagicMove/Plugin/Info.plist"
     bump_fxplug "MagicMove/MagicMove/Plugin/Info.plist"
     bump_pkgproj "co.overpolish.keyframeless.MagicMove"
-    bump_manifest "magicmove" "$VERSION"
     ;;
 
   keyframelessx)
-    echo "Bumping Keyframeless X to $VERSION"
     proj="Keyframeless X/Keyframeless X.xcodeproj/project.pbxproj"
     echo "  $proj"
     current=$(grep -m1 'MARKETING_VERSION' "$ROOT/$proj" \
@@ -125,7 +214,6 @@ case "$COMPONENT" in
       "s/MARKETING_VERSION = $current;/MARKETING_VERSION = $VERSION;/g" \
       "$ROOT/$proj"
     bump_pkgproj "co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP"
-    bump_manifest "keyframelessx" "$VERSION"
     ;;
 
   *)
@@ -134,6 +222,13 @@ case "$COMPONENT" in
     ;;
 esac
 
-echo ""
-echo "Done — $COMPONENT bumped to $VERSION"
-echo "  manifest.json updated"
+if [[ "$UPDATE_MANIFEST" == true ]]; then
+  bump_manifest "$COMPONENT" "$VERSION"
+  echo ""
+  echo "Done — $COMPONENT bumped to $VERSION"
+  echo "  manifest.json updated"
+else
+  echo ""
+  echo "Done — $COMPONENT bumped to $VERSION"
+  echo "  manifest.json unchanged (alpha)"
+fi
