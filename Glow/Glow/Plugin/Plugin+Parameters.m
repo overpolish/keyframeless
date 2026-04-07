@@ -76,6 +76,24 @@
                            parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
+  if (![paramAPI addPercentSliderWithName:@"Falloff"
+                              parameterID:kParamFalloff
+                             defaultValue:0.0
+                             parameterMin:0.0
+                             parameterMax:4.0
+                                sliderMin:0.0
+                                sliderMax:2.0
+                                    delta:0.01
+                           parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
+  if (![paramAPI addPopupMenuWithName:@"Color Mode"
+                          parameterID:kParamColorMode
+                         defaultValue:kColorModeSolid
+                          menuEntries:@[ @"Solid", @"Dynamic" ]
+                       parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
   if (![paramAPI addColorParameterWithName:@"Color"
                                parameterID:kParamColor
                                 defaultRed:1.0
@@ -87,9 +105,10 @@
   if (![self addAnimationParametersWithAPI:paramAPI error:error])
     return NO;
 
-  UInt32 holdParams[] = {kParamHoldRadius, kParamHoldIntensity};
-  NSString *holdNames[] = {@"Hold Radius", @"Hold Intensity"};
-  for (int i = 0; i < 2; i++) {
+  UInt32 holdParams[] = {kParamHoldRadius, kParamHoldIntensity,
+                         kParamHoldFalloff};
+  NSString *holdNames[] = {@"Hold Radius", @"Hold Intensity", @"Hold Falloff"};
+  for (int i = 0; i < 3; i++) {
     if (![paramAPI addToggleButtonWithName:holdNames[i]
                                parameterID:holdParams[i]
                               defaultValue:YES

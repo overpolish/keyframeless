@@ -28,13 +28,14 @@
 }
 
 - (NSArray<KKTimingSlot *> *)_holdPropertySlots {
-  static const UInt32 holdParams[] = {kParamHoldRadius, kParamHoldIntensity};
-  static const NSInteger holdCount = 2;
+  static const UInt32 holdParams[] = {kParamHoldRadius, kParamHoldIntensity,
+                                      kParamHoldFalloff};
+  static const NSInteger holdCount = 3;
 
   static const CGFloat kPillRowH = 18.0;
 
   KKPillToggleRowView *row1 = [[KKPillToggleRowView alloc]
-      initWithLabels:@[ @"Radius", @"Intensity" ]];
+      initWithLabels:@[ @"Radius", @"Intensity", @"Falloff" ]];
   row1.translatesAutoresizingMaskIntoConstraints = NO;
   [row1.heightAnchor constraintEqualToConstant:kPillRowH].active = YES;
 
