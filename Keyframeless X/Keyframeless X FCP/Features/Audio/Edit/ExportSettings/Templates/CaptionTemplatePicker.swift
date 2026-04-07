@@ -202,7 +202,9 @@ struct CaptionTemplatePicker: View {
 								case .community(let community):
 									CommunityTemplateCard(
 										template: community,
-										isInstalled: templates.contains { $0.name == community.name },
+										isInstalled: templates.contains {
+											$0.name == community.name
+										},
 										onDownload: { downloadCommunityTemplate(community) },
 										onUpdate: { showUpdateModal(for: community) }
 									)
@@ -333,11 +335,13 @@ struct CaptionTemplatePicker: View {
 
 	private func showUpdateModal(for community: CommunityTemplate) {
 		let local = templates.first { $0.name == community.name }
-		let template = local ?? CaptionTemplate(
-			id: community.id, name: community.name, uid: "",
-			supportsPerWordAnimation: community.perWord,
-			wordsInParamName: nil, wordsInKeyPath: nil,
-			isBuiltIn: false, isCustom: false)
+		let template =
+			local
+			?? CaptionTemplate(
+				id: community.id, name: community.name, uid: "",
+				supportsPerWordAnimation: community.perWord,
+				wordsInParamName: nil, wordsInKeyPath: nil,
+				isBuiltIn: false, isCustom: false)
 		model.updateModalTemplate = (template, community)
 	}
 
@@ -347,8 +351,14 @@ struct CaptionTemplatePicker: View {
 			uniquingKeysWith: { first, _ in first }
 		)
 		for template in keyframelessTemplates where !template.isBuiltIn {
-			guard paramsStore.params(for: template.id) == nil,
-				let community = communityByName[template.name],
+			guard let community = communityByName[template.name] else { continue }
+
+			if community.perWord {
+				paramsStore.setPerWordStartsAtZero(
+					community.perWordStartsAtZero, for: template.id)
+			}
+
+			guard paramsStore.params(for: template.id)?.allParams.isEmpty ?? true,
 				let motiURL = template.resolvedMotiURL()
 			else { continue }
 			let result = PublishedParameter.parseAll(from: motiURL)
@@ -372,10 +382,6 @@ struct CaptionTemplatePicker: View {
 			paramsStore.setParams(
 				configured, hasPerWordAnimation: result.hasPerWordAnimation,
 				textOzml: result.textOzml, for: template.id)
-			if community.perWord {
-				paramsStore.setPerWordStartsAtZero(
-					community.perWordStartsAtZero, for: template.id)
-			}
 		}
 	}
 

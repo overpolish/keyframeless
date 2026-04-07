@@ -136,6 +136,9 @@ struct AudioExportOptionsSidebar: View {
 	let rows: [AudioEditRow]
 	let srtHasOverlaps: Bool
 
+	@State private var hasAccessibility = AXIsProcessTrusted()
+	@State private var accessibilityTimer: Timer?
+
 	private var hasTranscribedSelection: Bool {
 		let selected = model.editSelectedClips ?? Set(model.audioClips.indices)
 		return rows.contains { !$0.isHeader && $0.isTranscribed && selected.contains($0.clipIndex) }
@@ -154,19 +157,32 @@ struct AudioExportOptionsSidebar: View {
 						nativeDataProvider: { model.buildNativePasteboardData(from: rows) },
 						onDragStateChanged: { model.isDraggingToFCP = $0 }
 					)
-					.frame(height: 40)
 					.allowsHitTesting(hasTranscribedSelection && !srtHasOverlaps)
 					.opacity(hasTranscribedSelection && !srtHasOverlaps ? 1 : 0.4)
 					PrimaryButton(
 						label: "Paste to FCP",
 						systemImage: "doc.on.clipboard",
-						disabled: !hasTranscribedSelection,
+						disabled: !hasTranscribedSelection || !hasAccessibility,
 						fontSize: 11
 					) {
 						if let data = model.buildNativePasteboardData(from: rows) {
 							FCPDragSourceView.pasteToTimeline(data: data)
 						}
 					}
+					.onAppear {
+						hasAccessibility = AXIsProcessTrusted()
+						guard !hasAccessibility else { return }
+						accessibilityTimer = Timer.scheduledTimer(
+							withTimeInterval: 2, repeats: true
+						) { _ in
+							let granted = AXIsProcessTrusted()
+							DispatchQueue.main.async {
+								hasAccessibility = granted
+								if granted { accessibilityTimer?.invalidate() }
+							}
+						}
+					}
+					.onDisappear { accessibilityTimer?.invalidate() }
 					FCPXMLImportButton(
 						action: { model.insertTitle(rows: rows) }
 					)
@@ -179,8 +195,23 @@ struct AudioExportOptionsSidebar: View {
 					.allowsHitTesting(hasTranscribedSelection)
 					.opacity(hasTranscribedSelection ? 1 : 0.4)
 				}
+				.fixedSize(horizontal: false, vertical: true)
 				.overlay(alignment: .top) {
-					if hasTranscribedSelection {
+					if !hasAccessibility {
+						Text(
+							"Paste requires Accessibility access. [Open Settings](x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility)"
+						)
+						.font(.system(size: 10, weight: .light))
+						.foregroundStyle(.secondary)
+						.environment(
+							\.openURL,
+							OpenURLAction { url in
+								NSWorkspace.shared.open(url)
+								return .handled
+							}
+						)
+						.offset(y: -KKSpacingXL - KKSpacingSM)
+					} else if hasTranscribedSelection {
 						HelperText(
 							srtHasOverlaps
 								? "Use paste for overlapping clips"

@@ -116,7 +116,7 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 			customParams.append(
 				PublishedParameter(
 					name: name, objectID: objectID, channel: channel,
-					kind: isFont ? .font : .off,
+					kind: .off,
 					isProjectRoot: objectID == projectRootID,
 					parentLayerID: layerID, parentScenenodeID: parentScenenode,
 					defaultR: rgb?.r, defaultG: rgb?.g, defaultB: rgb?.b,
