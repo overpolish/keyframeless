@@ -91,14 +91,14 @@ fragment float4 blurVerticalComposite(RasterizerData in [[stage_in]],
     float glowIntensity = *intensity;
     float glowFalloff = *falloff;
     float2 glowOffset = *offsetPtr;
-    bool dynamic = (*colorMode == 2);
-    bool gradient = (*colorMode == 1);
+    int mode = *colorMode;
 
     if (glowRadius < 0.01)
         return float4(original);
 
     float2 offsetUV = in.textureCoordinate + glowOffset;
 
+    // Vertical Gaussian blur
     float texelY = 1.0 / float(blurredTexture.get_height());
     float step = glowRadius / float(kSamples);
     float sigma = glowRadius * 0.5;
@@ -119,31 +119,34 @@ fragment float4 blurVerticalComposite(RasterizerData in [[stage_in]],
     }
 
     float4 blurred = colorSum / weightSum;
-    float glowAlpha = saturate(pow(blurred.a, glowFalloff) * glowIntensity);
-    glowAlpha = smoothstep(0.0, 0.02, glowAlpha) * glowAlpha;
 
+    // Distance from source: 0 at object edge, 1 at glow boundary
+    float t = 1.0 - blurred.a;
+
+    // Opacity: smooth fade from full at source to zero at edge.
+    // Falloff controls where zero is reached (higher = tighter glow).
+    float fade = 1.0 - smoothstep(0.0, 1.0 / glowFalloff, t);
+    float glowAlpha = saturate(fade * glowIntensity);
+
+    // Color
     float3 glowColor;
-    if (dynamic) {
+    if (mode == 2) {
         glowColor = blurred.a > 0.001 ? blurred.rgb / blurred.a : float3(0);
-    } else if (gradient) {
-        // For a Gaussian blur with sigma = radius/2, the relationship
-        // sqrt(-log(2*alpha)) is proportional to distance from the object
-        // edge, with a constant independent of radius. At d = radius,
-        // 2*alpha = erfc(sqrt(2)) ≈ 0.0455, giving sqrt(-log(0.0455)) ≈ 1.76.
-        constexpr float kGradNorm = 1.76;
-        float t = blurred.a < 0.5 ? saturate(sqrt(max(-log(max(2.0 * blurred.a, 0.0001)), 0.0)) / kGradNorm) : 0.0;
-        float lutIndex = t * float(KK_GRADIENT_LUT_SIZE - 1);
-        int idx0 = int(floor(lutIndex));
+    } else if (mode == 1) {
+        float gradT = saturate(t * 2.0 - 1.0);
+        float lutPos = gradT * float(KK_GRADIENT_LUT_SIZE - 1);
+        int idx0 = int(floor(lutPos));
         int idx1 = min(idx0 + 1, KK_GRADIENT_LUT_SIZE - 1);
-        float frac = lutIndex - float(idx0);
-        float3 srgb = mix(gradientLUT[idx0], gradientLUT[idx1], frac);
+        float3 srgb = mix(gradientLUT[idx0], gradientLUT[idx1], lutPos - float(idx0));
         glowColor = pow(srgb, 2.2);
     } else {
         glowColor = pow(*glowColorPtr, 2.2);
     }
 
-    float3 result = glowColor * glowAlpha * (1.0 - float(original.a)) + float3(original.rgb);
-    float resultAlpha = glowAlpha * (1.0 - float(original.a)) + float(original.a);
+    // Composite glow behind original
+    float behindAlpha = glowAlpha * (1.0 - float(original.a));
+    float3 result = glowColor * behindAlpha + float3(original.rgb);
+    float resultAlpha = behindAlpha + float(original.a);
 
     return float4(result, resultAlpha);
 }
