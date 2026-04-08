@@ -120,6 +120,7 @@ fragment float4 blurVerticalComposite(RasterizerData in [[stage_in]],
 
     float4 blurred = colorSum / weightSum;
     float glowAlpha = saturate(pow(blurred.a, glowFalloff) * glowIntensity);
+    glowAlpha = smoothstep(0.0, 0.02, glowAlpha) * glowAlpha;
 
     float3 glowColor;
     if (dynamic) {
