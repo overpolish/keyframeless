@@ -115,6 +115,7 @@
                            accessibilityDescription:nil];
     return alert;
   }
+
   struct objc_super sup = {self, [KKPlugin class]};
   return ((NSView * (*)(struct objc_super *, SEL, UInt32)) objc_msgSendSuper)(
       &sup, @selector(createViewForParameterID:), parameterID);
