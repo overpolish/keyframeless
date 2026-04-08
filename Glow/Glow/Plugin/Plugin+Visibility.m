@@ -6,6 +6,15 @@
 #import "Constants.h"
 #import "Plugin_Private.h"
 
+static void setFlagsIfChanged(id<FxParameterSettingAPI_v5> setAPI,
+                              id<FxParameterRetrievalAPI_v6> getAPI,
+                              FxParameterFlags newFlags, UInt32 paramID) {
+  FxParameterFlags current = 0;
+  [getAPI getParameterFlags:&current fromParameter:paramID];
+  if (current != newFlags)
+    [setAPI setParameterFlags:newFlags toParameter:paramID];
+}
+
 @implementation GlowPlugin (Visibility)
 
 - (void)updateParameterVisibilityAtTime:(CMTime)time {
@@ -27,16 +36,17 @@
 
   BOOL isGradient = (colorMode == KKColorModeGradient);
 
-  [paramSetAPI
-      setParameterFlags:(isGradient ? (kFxParameterFlag_NOT_ANIMATABLE)
-                                    : (kFxParameterFlag_HIDDEN |
-                                       kFxParameterFlag_NOT_ANIMATABLE))
-            toParameter:kParamGradientType];
+  setFlagsIfChanged(
+      paramSetAPI, paramGetAPI,
+      isGradient ? kFxParameterFlag_NOT_ANIMATABLE
+                 : (kFxParameterFlag_HIDDEN | kFxParameterFlag_NOT_ANIMATABLE),
+      kParamGradientType);
 
   BOOL showAngle = isGradient && (gradType == 1);
-  [paramSetAPI setParameterFlags:(showAngle ? kFxParameterFlag_DEFAULT
-                                            : kFxParameterFlag_HIDDEN)
-                     toParameter:kParamGradientAngle];
+  setFlagsIfChanged(paramSetAPI, paramGetAPI,
+                    showAngle ? kFxParameterFlag_DEFAULT
+                              : kFxParameterFlag_HIDDEN,
+                    kParamGradientAngle);
 }
 
 @end

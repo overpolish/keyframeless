@@ -192,11 +192,17 @@ static NSString *_stopsToJSON(NSArray<KKGradientStop *> *stops) {
 - (void)updateColorParameterVisibility {
   id<FxParameterSettingAPI_v5> paramSetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   UInt32 hidden[] = {kKKParamColorMode, kKKParamColorR, kKKParamColorG,
                      kKKParamColorB, kKKParamGradientData};
-  for (int i = 0; i < 5; i++)
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:hidden[i]];
+  for (int i = 0; i < 5; i++) {
+    FxParameterFlags current = 0;
+    [paramGetAPI getParameterFlags:&current fromParameter:hidden[i]];
+    if (current != kFxParameterFlag_HIDDEN)
+      [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                         toParameter:hidden[i]];
+  }
 }
 
 - (NSView *)_createColorCustomUI:(UInt32)parameterID {
