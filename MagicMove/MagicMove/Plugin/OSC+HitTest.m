@@ -149,7 +149,7 @@
     double ady = positionY - anchorCanvas.y;
     if (fmax(fabs(adx), fabs(ady)) < [self.anchorOSC hitRadius]) {
       self.anchorHovered = YES;
-      *activePart = kAnchorPart;
+      *activePart = kOSCAnchorPart;
     }
   }
 

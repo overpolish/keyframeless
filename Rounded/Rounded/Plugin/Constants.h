@@ -19,3 +19,6 @@ static const UInt32 kParamCropTop = 12;
 static const UInt32 kParamCropBottom = 13;
 static const UInt32 kParamCropLeft = 14;
 static const UInt32 kParamCropRight = 15;
+
+// OSC part IDs
+static const NSInteger kOSCRadiusPart = 100;
