@@ -67,7 +67,7 @@
 
   if (![paramAPI addPercentSliderWithName:@"Intensity"
                               parameterID:kParamIntensity
-                             defaultValue:1.5
+                             defaultValue:1.0
                              parameterMin:0.0
                              parameterMax:5.0
                                 sliderMin:0.0
