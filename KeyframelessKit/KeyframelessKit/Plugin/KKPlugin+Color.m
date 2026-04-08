@@ -13,6 +13,7 @@
 #import <KeyframelessKit/KKGradientFavoritesPopover.h>
 #import <KeyframelessKit/KKLabelView.h>
 #import <KeyframelessKit/KKParameterRowView.h>
+#import <KeyframelessKit/KKPopupSelectView.h>
 #import <KeyframelessKit/KKTokens.h>
 #import <KeyframelessKit/NSColor+KKColors.h>
 #import <objc/runtime.h>
@@ -264,71 +265,16 @@ static NSString *_stopsToJSON(NSArray<KKGradientStop *> *stops) {
       }
     }
 
-    NSPopUpButton *popup = [[NSPopUpButton alloc] initWithFrame:NSZeroRect
-                                                      pullsDown:NO];
-    [popup addItemsWithTitles:titles];
-    popup.bordered = NO;
-    popup.font = [NSFont systemFontOfSize:11.0];
-    ((NSPopUpButtonCell *)popup.cell).arrowPosition = NSPopUpNoArrow;
-    popup.translatesAutoresizingMaskIntoConstraints = NO;
+    KKPopupSelectView *popupSelect =
+        [[KKPopupSelectView alloc] initWithTitles:titles];
 
     NSInteger popupIndex = [modes indexOfObject:@(colorMode)];
     if (popupIndex != NSNotFound)
-      [popup selectItemAtIndex:popupIndex];
-    objc_setAssociatedObject([self class], kColorModePopupKey, popup,
+      [popupSelect selectIndex:popupIndex];
+    objc_setAssociatedObject([self class], kColorModePopupKey, popupSelect,
                              OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-    NSColor *chevronColor = [NSColor colorWithRed:0xAB / 255.0
-                                            green:0xAB / 255.0
-                                             blue:0xAA / 255.0
-                                            alpha:1.0];
-    NSImageSymbolConfiguration *chevronCfg = [NSImageSymbolConfiguration
-        configurationWithPointSize:11.0
-                            weight:NSFontWeightSemibold];
-    CGFloat chevronW = 11.0 - 3.0;
-
-    NSImage *upImg = [[NSImage imageWithSystemSymbolName:@"chevron.up"
-                                accessibilityDescription:nil]
-        imageWithSymbolConfiguration:chevronCfg];
-    NSImageView *upChevron = [[NSImageView alloc] init];
-    upChevron.image = upImg;
-    upChevron.contentTintColor = chevronColor;
-    upChevron.imageScaling = NSImageScaleAxesIndependently;
-    upChevron.translatesAutoresizingMaskIntoConstraints = NO;
-
-    NSImage *downImg = [[NSImage imageWithSystemSymbolName:@"chevron.down"
-                                  accessibilityDescription:nil]
-        imageWithSymbolConfiguration:chevronCfg];
-    NSImageView *downChevron = [[NSImageView alloc] init];
-    downChevron.image = downImg;
-    downChevron.contentTintColor = chevronColor;
-    downChevron.imageScaling = NSImageScaleAxesIndependently;
-    downChevron.translatesAutoresizingMaskIntoConstraints = NO;
-
-    NSView *modeRight = [[NSView alloc] initWithFrame:NSZeroRect];
-    [modeRight addSubview:popup];
-    [modeRight addSubview:upChevron];
-    [modeRight addSubview:downChevron];
-    [NSLayoutConstraint activateConstraints:@[
-      [popup.trailingAnchor constraintEqualToAnchor:upChevron.leadingAnchor],
-      [popup.centerYAnchor constraintEqualToAnchor:modeRight.centerYAnchor],
-
-      [upChevron.trailingAnchor constraintEqualToAnchor:modeRight.trailingAnchor
-                                               constant:-KKSpacingLG],
-      [upChevron.widthAnchor constraintEqualToConstant:chevronW],
-      [upChevron.heightAnchor constraintEqualToConstant:6.0],
-      [upChevron.bottomAnchor constraintEqualToAnchor:modeRight.centerYAnchor
-                                             constant:0.0],
-
-      [downChevron.trailingAnchor
-          constraintEqualToAnchor:modeRight.trailingAnchor
-                         constant:-KKSpacingLG],
-      [downChevron.widthAnchor constraintEqualToConstant:chevronW],
-      [downChevron.heightAnchor constraintEqualToConstant:6.0],
-      [downChevron.topAnchor constraintEqualToAnchor:modeRight.centerYAnchor
-                                            constant:0.0],
-    ]];
-    modeRow.rightView = modeRight;
+    modeRow.rightView = popupSelect;
 
     [container addSubview:modeRow];
     [NSLayoutConstraint activateConstraints:@[
@@ -341,8 +287,12 @@ static NSString *_stopsToJSON(NSArray<KKGradientStop *> *stops) {
     anchorAbove = modeRow;
     anchorEdge = NSLayoutAttributeBottom;
 
-    popup.target = self;
-    popup.action = @selector(_kkColorModeChanged:);
+    __weak typeof(self) weakModeRef = self;
+    popupSelect.onSelectionChanged = ^(NSInteger selectedIndex) {
+      __strong typeof(weakModeRef) strongSelf = weakModeRef;
+      if (strongSelf)
+        [strongSelf _kkColorModeChangedToIndex:selectedIndex];
+    };
   }
 
   BOOL hasSolid = [modes containsObject:@(KKColorModeSolid)];
@@ -538,9 +488,8 @@ static NSString *_stopsToJSON(NSArray<KKGradientStop *> *stops) {
   return container;
 }
 
-- (void)_kkColorModeChanged:(NSPopUpButton *)sender {
+- (void)_kkColorModeChangedToIndex:(NSInteger)selectedIndex {
   NSArray<NSNumber *> *modes = _colorModes(self);
-  NSInteger selectedIndex = sender.indexOfSelectedItem;
   if (selectedIndex < 0 || selectedIndex >= (NSInteger)modes.count)
     return;
   int mode = modes[selectedIndex].intValue;

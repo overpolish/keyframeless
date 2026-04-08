@@ -6,6 +6,7 @@
 #import "Constants.h"
 #import "Plugin_Private.h"
 #import <objc/message.h>
+#import <objc/runtime.h>
 
 @interface KKPlugin (TimingGraph)
 - (void)timingGraphApplyState;
@@ -55,8 +56,8 @@
                                       kParamHoldFalloff, kParamHoldOffset};
   static const NSInteger holdCount = 4;
   return [^(id paramAPI, CMTime time) {
-    KKPillToggleRowView *toggles = objc_getAssociatedObject(
-        [self class], @selector(holdPropertyView));
+    KKPillToggleRowView *toggles =
+        objc_getAssociatedObject([self class], @selector(holdPropertyView));
     if (!toggles)
       return;
     for (NSInteger i = 0; i < holdCount; i++) {

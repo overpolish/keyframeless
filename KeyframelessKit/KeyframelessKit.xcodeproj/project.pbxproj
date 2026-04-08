@@ -68,6 +68,7 @@
 				Views/KKMarkup.h,
 				Views/KKParameterRowView.h,
 				Views/KKPillToggleRowView.h,
+				Views/KKPopupSelectView.h,
 				Views/KKSeparatorView.h,
 				Views/KKTimingSlot.h,
 			);

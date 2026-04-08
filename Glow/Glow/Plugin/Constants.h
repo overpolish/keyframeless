@@ -17,6 +17,8 @@ static const UInt32 kParamIntensity = 101;
 static const UInt32 kParamFalloff = 102;
 
 static const UInt32 kParamOffset = 103;
+static const UInt32 kParamGradientType = 104;
+static const UInt32 kParamGradientAngle = 105;
 
 static const UInt32 kParamHoldRadius = 500;
 static const UInt32 kParamHoldIntensity = 501;

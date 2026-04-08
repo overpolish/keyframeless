@@ -42,6 +42,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKPlugin+Crop.h>
 #import <KeyframelessKit/KKPlugin.h>
 #import <KeyframelessKit/KKPointOSC.h>
+#import <KeyframelessKit/KKPopupSelectView.h>
 #import <KeyframelessKit/KKRectBorderOSC.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 #import <KeyframelessKit/KKRingOSC.h>
