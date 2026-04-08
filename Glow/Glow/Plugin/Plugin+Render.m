@@ -19,6 +19,8 @@ typedef struct {
   simd_float2 offset;
   simd_float3 glowColor;
   int colorMode;
+  int gradientType;
+  float gradientAngle;
   simd_float3 gradientLUT[KK_GRADIENT_LUT_SIZE];
 } GlowPluginState;
 
@@ -43,7 +45,7 @@ typedef struct {
     return NO;
   }
 
-  double radius = 20.0;
+  double radius = 100.0;
   double intensity = 1.5;
   double falloff = 1.0;
   [paramGetAPI getFloatValue:&radius
@@ -87,6 +89,15 @@ typedef struct {
              fromParameter:kKKParamHoldSeed
                     atTime:renderTime];
 
+  int gradientType = 0;
+  double gradientAngle = 0.0;
+  [paramGetAPI getIntValue:&gradientType
+             fromParameter:kParamGradientType
+                    atTime:renderTime];
+  [paramGetAPI getFloatValue:&gradientAngle
+               fromParameter:kParamGradientAngle
+                      atTime:renderTime];
+
   KKColorResult *colorResult = [self colorAtTime:renderTime];
   int colorMode = (int)colorResult.mode;
   double red = colorResult.solidColor.x;
@@ -114,6 +125,8 @@ typedef struct {
                     (float)((offsetY - 0.5) * offsetInOut + holdOffsetY)};
   state.glowColor = (simd_float3){(float)red, (float)green, (float)blue};
   state.colorMode = colorMode;
+  state.gradientType = gradientType;
+  state.gradientAngle = (float)gradientAngle;
 
   if (colorMode == KKColorModeGradient &&
       colorResult.gradientStops.count >= 2) {
@@ -221,15 +234,18 @@ typedef struct {
   intermediateDesc.usage =
       MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
   intermediateDesc.storageMode = MTLStorageModePrivate;
-  id<MTLTexture> intermediateTexture =
+  id<MTLTexture> hBlurTexture =
       [device newTextureWithDescriptor:intermediateDesc];
-  if (!intermediateTexture) {
+  id<MTLTexture> fullBlurTexture =
+      [device newTextureWithDescriptor:intermediateDesc];
+  if (!hBlurTexture || !fullBlurTexture) {
     [cache returnCommandQueueToCache:commandQueue];
     return NO;
   }
 
   static NSString *const kHBlurID = @"co.overpolish.keyframeless.Glow.hblur";
-  static NSString *const kVCompID = @"co.overpolish.keyframeless.Glow.vcomp";
+  static NSString *const kVBlurID = @"co.overpolish.keyframeless.Glow.vblur";
+  static NSString *const kCompID = @"co.overpolish.keyframeless.Glow.comp";
 
   id<MTLRenderPipelineState> hBlurPipeline =
       [cache buildAndRegisterPipelineStateForPluginID:kHBlurID
@@ -240,16 +256,25 @@ typedef struct {
                                        fragmentShader:@"blurHorizontal"
                                             blendMode:KKBlendModeNone];
 
-  id<MTLRenderPipelineState> vCompPipeline =
-      [cache buildAndRegisterPipelineStateForPluginID:kVCompID
+  id<MTLRenderPipelineState> vBlurPipeline =
+      [cache buildAndRegisterPipelineStateForPluginID:kVBlurID
                                            registryID:registryID
                                           pixelFormat:pixelFormat
                                              bundleID:nil
                                          vertexShader:@"vertexShader"
-                                       fragmentShader:@"blurVerticalComposite"
+                                       fragmentShader:@"blurVertical"
                                             blendMode:KKBlendModeNone];
 
-  if (!hBlurPipeline || !vCompPipeline) {
+  id<MTLRenderPipelineState> compPipeline =
+      [cache buildAndRegisterPipelineStateForPluginID:kCompID
+                                           registryID:registryID
+                                          pixelFormat:pixelFormat
+                                             bundleID:nil
+                                         vertexShader:@"vertexShader"
+                                       fragmentShader:@"composite"
+                                            blendMode:KKBlendModeNone];
+
+  if (!hBlurPipeline || !vBlurPipeline || !compPipeline) {
     [cache returnCommandQueueToCache:commandQueue];
     return NO;
   }
@@ -268,11 +293,11 @@ typedef struct {
   commandBuffer.label = @"Glow Command Buffer";
   [commandBuffer enqueue];
 
-  // Pass 1: horizontal blur → intermediate texture
+  // Pass 1: horizontal blur → hBlurTexture
   {
     MTLRenderPassDescriptor *rpd =
         [MTLRenderPassDescriptor renderPassDescriptor];
-    rpd.colorAttachments[0].texture = intermediateTexture;
+    rpd.colorAttachments[0].texture = hBlurTexture;
     rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
     rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
 
@@ -299,7 +324,35 @@ typedef struct {
     [encoder endEncoding];
   }
 
-  // Pass 2: vertical blur + composite → destination
+  // Pass 2: vertical blur → fullBlurTexture
+  {
+    MTLRenderPassDescriptor *rpd =
+        [MTLRenderPassDescriptor renderPassDescriptor];
+    rpd.colorAttachments[0].texture = fullBlurTexture;
+    rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+    rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
+
+    id<MTLRenderCommandEncoder> encoder =
+        [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+    [encoder setViewport:viewport];
+    [encoder setVertexBytes:vertices
+                     length:sizeof(vertices)
+                    atIndex:KKVertexInputIndex_Vertices];
+    [encoder setVertexBytes:&viewportSize
+                     length:sizeof(viewportSize)
+                    atIndex:KKVertexInputIndex_ViewportSize];
+    [encoder setRenderPipelineState:vBlurPipeline];
+    [encoder setFragmentTexture:hBlurTexture atIndex:KKTextureIndex_InputImage];
+    [encoder setFragmentBytes:&fragmentRadius
+                       length:sizeof(fragmentRadius)
+                      atIndex:FragmentIndex_Radius];
+    [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                vertexStart:0
+                vertexCount:4];
+    [encoder endEncoding];
+  }
+
+  // Pass 3: composite → destination
   {
     MTLRenderPassDescriptor *rpd =
         [MTLRenderPassDescriptor renderPassDescriptor];
@@ -316,9 +369,9 @@ typedef struct {
     [encoder setVertexBytes:&viewportSize
                      length:sizeof(viewportSize)
                     atIndex:KKVertexInputIndex_ViewportSize];
-    [encoder setRenderPipelineState:vCompPipeline];
+    [encoder setRenderPipelineState:compPipeline];
     [encoder setFragmentTexture:inputTexture atIndex:KKTextureIndex_InputImage];
-    [encoder setFragmentTexture:intermediateTexture atIndex:1];
+    [encoder setFragmentTexture:fullBlurTexture atIndex:1];
     [encoder setFragmentBytes:&fragmentRadius
                        length:sizeof(fragmentRadius)
                       atIndex:FragmentIndex_Radius];
@@ -340,6 +393,14 @@ typedef struct {
     [encoder setFragmentBytes:state.gradientLUT
                        length:sizeof(state.gradientLUT)
                       atIndex:FragmentIndex_GradientLUT];
+    int fragGradType = state.gradientType;
+    float fragGradAngle = state.gradientAngle;
+    [encoder setFragmentBytes:&fragGradType
+                       length:sizeof(fragGradType)
+                      atIndex:FragmentIndex_GradientType];
+    [encoder setFragmentBytes:&fragGradAngle
+                       length:sizeof(fragGradAngle)
+                      atIndex:FragmentIndex_GradientAngle];
     [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                 vertexStart:0
                 vertexCount:4];

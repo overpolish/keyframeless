@@ -56,7 +56,7 @@
 
   if (![paramAPI addFloatSliderWithName:@"Radius"
                             parameterID:kParamRadius
-                           defaultValue:20.0
+                           defaultValue:100.0
                            parameterMin:0.0
                            parameterMax:FLT_MAX
                               sliderMin:0.0
@@ -100,6 +100,22 @@
                                    @(KKColorModeDynamic)
                                  ]
                                  error:error])
+    return NO;
+
+  if (![paramAPI addPopupMenuWithName:@"Gradient Type"
+                          parameterID:kParamGradientType
+                         defaultValue:0
+                          menuEntries:@[ @"Radial", @"Linear" ]
+                       parameterFlags:kFxParameterFlag_HIDDEN |
+                                      kFxParameterFlag_NOT_ANIMATABLE])
+    return NO;
+
+  if (![paramAPI addAngleSliderWithName:@"Angle"
+                            parameterID:kParamGradientAngle
+                         defaultDegrees:0.0
+                    parameterMinDegrees:-360.0
+                    parameterMaxDegrees:360.0
+                         parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
   if (![self addAnimationParametersWithAPI:paramAPI error:error])
