@@ -10,6 +10,7 @@
 #import <KeyframelessKit/KKAlertView.h>
 #import <KeyframelessKit/KKColorWellView.h>
 #import <KeyframelessKit/KKGradientBarView.h>
+#import <KeyframelessKit/KKGradientFavoritesPopover.h>
 #import <KeyframelessKit/KKLabelView.h>
 #import <KeyframelessKit/KKParameterRowView.h>
 #import <KeyframelessKit/KKTokens.h>
@@ -22,6 +23,7 @@ static const void *const kGradientBarKey = &kGradientBarKey;
 static const void *const kColorModePopupKey = &kColorModePopupKey;
 static const void *const kColorDynamicAlertKey = &kColorDynamicAlertKey;
 static const void *const kColorRowKey = &kColorRowKey;
+static const void *const kGradientFavPopoverKey = &kGradientFavPopoverKey;
 
 static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
   return objc_getAssociatedObject([self class], kColorModesKey)
@@ -375,11 +377,35 @@ static NSString *_stopsToJSON(NSArray<KKGradientStop *> *stops) {
   bar.hidden = (colorMode != KKColorModeGradient);
   bar.interactionEnabled = (colorMode == KKColorModeGradient);
 
+  NSImageSymbolConfiguration *starCfg = [NSImageSymbolConfiguration
+      configurationWithPointSize:10.0
+                          weight:NSFontWeightRegular];
+  NSImage *starImg = [[NSImage imageWithSystemSymbolName:@"star"
+                                accessibilityDescription:@"Favorites"]
+      imageWithSymbolConfiguration:starCfg];
+  NSButton *starBtn =
+      [NSButton buttonWithImage:starImg
+                         target:self
+                         action:@selector(_kkGradientFavTapped:)];
+  starBtn.bordered = NO;
+  starBtn.contentTintColor =
+      [NSColor.inspectorLabel colorWithAlphaComponent:0.5];
+  starBtn.translatesAutoresizingMaskIntoConstraints = NO;
+  starBtn.hidden = (colorMode != KKColorModeGradient);
+
+  KKGradientFavoritesPopover *favPopover =
+      [[KKGradientFavoritesPopover alloc] init];
+  favPopover.currentStops = bar.stops;
+  objc_setAssociatedObject([self class], kGradientFavPopoverKey, favPopover,
+                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
   NSView *colorRight = [[NSView alloc] initWithFrame:NSZeroRect];
   if (hasSolid)
     [colorRight addSubview:well];
-  if (hasGradient)
+  if (hasGradient) {
     [colorRight addSubview:bar];
+    [colorRight addSubview:starBtn];
+  }
 
   NSMutableArray *constraints = [NSMutableArray new];
   if (hasSolid) {
@@ -393,8 +419,14 @@ static NSString *_stopsToJSON(NSArray<KKGradientStop *> *stops) {
   }
   if (hasGradient) {
     [constraints addObjectsFromArray:@[
-      [bar.trailingAnchor constraintEqualToAnchor:colorRight.trailingAnchor
-                                         constant:-23.0],
+      [starBtn.trailingAnchor constraintEqualToAnchor:colorRight.trailingAnchor
+                                             constant:-23.0],
+      [starBtn.topAnchor constraintEqualToAnchor:bar.topAnchor constant:5.0],
+      [starBtn.widthAnchor constraintEqualToConstant:16.0],
+      [starBtn.heightAnchor constraintEqualToConstant:16.0],
+
+      [bar.trailingAnchor constraintEqualToAnchor:starBtn.leadingAnchor
+                                         constant:-KKSpacingSM],
       [bar.leadingAnchor constraintEqualToAnchor:colorRight.leadingAnchor],
       [bar.topAnchor constraintEqualToAnchor:colorRight.topAnchor],
       [bar.bottomAnchor constraintEqualToAnchor:colorRight.bottomAnchor],
@@ -466,6 +498,31 @@ static NSString *_stopsToJSON(NSArray<KKGradientStop *> *stops) {
     NSString *json = _stopsToJSON(newStops);
     if (!json)
       return;
+    KKGradientFavoritesPopover *fp =
+        objc_getAssociatedObject([strongSelf class], kGradientFavPopoverKey);
+    fp.currentStops = newStops;
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actAPI startAction:strongSelf];
+    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [setAPI setStringParameterValue:json toParameter:kKKParamGradientData];
+    [actAPI endAction:strongSelf];
+  };
+
+  favPopover.onApplyFavorite = ^(NSArray<KKGradientStop *> *newStops) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    KKGradientBarView *b =
+        objc_getAssociatedObject([strongSelf class], kGradientBarKey);
+    b.stops = newStops;
+    KKGradientFavoritesPopover *fp =
+        objc_getAssociatedObject([strongSelf class], kGradientFavPopoverKey);
+    fp.currentStops = newStops;
+    NSString *json = _stopsToJSON(newStops);
+    if (!json)
+      return;
     id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
         apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
     [actAPI startAction:strongSelf];
@@ -507,6 +564,14 @@ static NSString *_stopsToJSON(NSArray<KKGradientStop *> *stops) {
           toParameter:kKKParamColorMode
                atTime:[actAPI currentTime]];
   [actAPI endAction:self];
+}
+
+- (void)_kkGradientFavTapped:(NSButton *)sender {
+  KKGradientFavoritesPopover *favPopover =
+      objc_getAssociatedObject([self class], kGradientFavPopoverKey);
+  if (!favPopover)
+    return;
+  [favPopover showRelativeToRect:sender.bounds ofView:sender];
 }
 
 @end

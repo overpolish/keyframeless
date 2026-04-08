@@ -61,6 +61,8 @@
 				Views/KKColorWellView.h,
 				Views/KKCustomGroupHeaderView.h,
 				Views/KKGradientBarView.h,
+				Views/KKGradientFavorites.h,
+				Views/KKGradientFavoritesPopover.h,
 				Views/KKKbd.h,
 				Views/KKLabelView.h,
 				Views/KKMarkup.h,
