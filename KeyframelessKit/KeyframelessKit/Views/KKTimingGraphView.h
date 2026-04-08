@@ -67,6 +67,10 @@ typedef NS_ENUM(NSInteger, KKTimingGraphSection) {
 @property(nonatomic, copy, nullable) NSArray<KKTimingSlot *> *inSectionSlots;
 @property(nonatomic, copy, nullable) NSArray<KKTimingSlot *> *holdSectionSlots;
 @property(nonatomic, copy, nullable) NSArray<KKTimingSlot *> *outSectionSlots;
+@property(nonatomic, strong, nullable) NSView *holdPropertyView;
+@property(nonatomic, assign) CGFloat holdPropertyViewHeight;
+@property(nonatomic, copy, nullable) void (^holdPropertyApplyState)
+    (id paramAPI, CMTime time);
 
 @end
 

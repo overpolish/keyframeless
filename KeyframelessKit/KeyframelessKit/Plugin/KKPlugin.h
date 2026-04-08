@@ -145,6 +145,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// graph, changing based on the selected section (0=In, 1=Hold, 2=Out).
 - (NSArray<KKTimingSlot *> *)timingSlotsForSection:(NSInteger)section;
 
+/// Override to provide a view with hold property toggles. This view is added
+/// as a direct subview of the timing graph and shown when the hold section is
+/// selected and a non-static hold effect is active. Return nil for no toggles.
+- (nullable NSView *)holdPropertyView;
+- (CGFloat)holdPropertyViewHeight;
+- (nullable void (^)(id, CMTime))holdPropertyApplyState;
+
 /// Reads the bool at forceShowParamID; if YES, sets every param in paramIDs
 /// to kFxParameterFlag_DEFAULT and returns YES.  Caller should early-return
 /// from updateParameterVisibilityAtTime: when this returns YES.
