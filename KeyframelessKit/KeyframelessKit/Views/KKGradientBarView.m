@@ -305,6 +305,8 @@ void KKDrawCheckerboard(NSRect rect) {
     _dragOrigin = point;
     _selectedMidpointIndex = -1;
     [self _selectIndex:hitIndex];
+    if ([NSColorPanel sharedColorPanel].visible)
+      [self _openColorPickerForStopAtIndex:hitIndex];
     return;
   }
 
