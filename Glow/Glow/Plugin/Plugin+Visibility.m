@@ -18,6 +18,11 @@ static void setFlagsIfChanged(id<FxParameterSettingAPI_v5> setAPI,
 @implementation GlowPlugin (Visibility)
 
 - (void)updateParameterVisibilityAtTime:(CMTime)time {
+  static BOOL sUpdating = NO;
+  if (sUpdating)
+    return;
+  sUpdating = YES;
+
   [self updateTimingParameterVisibility];
   [self updateColorParameterVisibility];
 
@@ -25,6 +30,16 @@ static void setFlagsIfChanged(id<FxParameterSettingAPI_v5> setAPI,
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   id<FxParameterSettingAPI_v5> paramSetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+
+  if ([self
+          forceShowAllParametersIfEnabled:kParamForceShow
+                                 paramIDs:@[
+                                   @(kParamGradientType), @(kParamGradientAngle)
+                                 ]
+                                   atTime:time]) {
+    sUpdating = NO;
+    return;
+  }
 
   int colorMode = 0, gradType = 0;
   [paramGetAPI getIntValue:&colorMode
@@ -47,6 +62,8 @@ static void setFlagsIfChanged(id<FxParameterSettingAPI_v5> setAPI,
                     showAngle ? kFxParameterFlag_DEFAULT
                               : kFxParameterFlag_HIDDEN,
                     kParamGradientAngle);
+
+  sUpdating = NO;
 }
 
 @end

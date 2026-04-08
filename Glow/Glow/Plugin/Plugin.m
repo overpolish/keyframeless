@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#import "Constants.h"
 #import "Plugin_Private.h"
 
 #pragma clang diagnostic push
@@ -33,7 +34,18 @@
 - (BOOL)parameterChanged:(UInt32)parameterID
                   atTime:(CMTime)time
                    error:(NSError **)error {
-  [self updateParameterVisibilityAtTime:time];
+  switch (parameterID) {
+  case kKKParamColorMode:
+  case kParamGradientType:
+  case kParamForceShow:
+  case kKKParamTimingExpanded:
+  case kKKParamAnimateIn:
+  case kKKParamAnimateOut:
+    [self updateParameterVisibilityAtTime:time];
+    break;
+  default:
+    break;
+  }
   return YES;
 }
 

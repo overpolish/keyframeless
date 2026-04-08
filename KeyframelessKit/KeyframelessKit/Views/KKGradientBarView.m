@@ -405,6 +405,33 @@ void KKDrawCheckerboard(NSRect rect) {
   _dragStarted = NO;
 }
 
+- (void)rightMouseDown:(NSEvent *)event {
+  if (!_interactionEnabled)
+    return;
+  NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];
+  NSInteger hitIndex = [self _stopIndexAtPoint:point];
+  if (hitIndex < 0)
+    return;
+
+  NSArray<KKGradientStop *> *sorted = [self _sortedStops];
+  KKGradientStop *hitStop = _stops[hitIndex];
+  NSInteger sortedIdx = [sorted indexOfObjectIdenticalTo:hitStop];
+  if (sortedIdx == NSNotFound)
+    return;
+
+  CGFloat newPos;
+  if (sortedIdx == 0) {
+    newPos = 0.0;
+  } else if (sortedIdx == (NSInteger)sorted.count - 1) {
+    newPos = 1.0;
+  } else {
+    newPos =
+        (sorted[sortedIdx - 1].position + sorted[sortedIdx + 1].position) * 0.5;
+  }
+
+  [self setPosition:newPos forStopAtIndex:hitIndex];
+}
+
 - (void)_openColorPickerForStopAtIndex:(NSInteger)index {
   if (!self.window)
     return;

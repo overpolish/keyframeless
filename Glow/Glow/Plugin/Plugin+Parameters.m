@@ -60,7 +60,7 @@
                            parameterMin:0.0
                            parameterMax:FLT_MAX
                               sliderMin:0.0
-                              sliderMax:100.0
+                              sliderMax:500.0
                                   delta:1.0
                          parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
