@@ -127,6 +127,13 @@ typedef struct {
                       ? (t - lo.position) / (hi.position - lo.position)
                       : 0.0;
       f = fmax(0.0, fmin(1.0, f));
+      CGFloat m = lo.midpoint;
+      if (m > 0.0 && m < 1.0) {
+        if (f <= m)
+          f = 0.5 * (f / m);
+        else
+          f = 0.5 + 0.5 * ((f - m) / (1.0 - m));
+      }
       NSColor *blended = [lo.color blendedColorWithFraction:f ofColor:hi.color];
       NSColor *rgb =
           [blended colorUsingColorSpace:[NSColorSpace sRGBColorSpace]];

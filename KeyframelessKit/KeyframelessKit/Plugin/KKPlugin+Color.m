@@ -43,13 +43,15 @@ static NSArray<KKGradientStop *> *_parseStops(NSString *json) {
   for (NSDictionary *d in arr) {
     if (![d isKindOfClass:[NSDictionary class]])
       continue;
+    CGFloat midpoint = d[@"m"] ? [d[@"m"] doubleValue] : 0.5;
     [stops addObject:[KKGradientStop
                          stopWithPosition:[d[@"p"] doubleValue]
                                     color:[NSColor
                                               colorWithRed:[d[@"r"] doubleValue]
                                                      green:[d[@"g"] doubleValue]
                                                       blue:[d[@"b"] doubleValue]
-                                                     alpha:1.0]]];
+                                                     alpha:1.0]
+                                 midpoint:midpoint]];
   }
   return stops.count >= 2 ? stops : nil;
 }
@@ -67,7 +69,8 @@ static NSString *_stopsToJSON(NSArray<KKGradientStop *> *stops) {
       @"p" : @((double)s.position),
       @"r" : @((double)r),
       @"g" : @((double)g),
-      @"b" : @((double)b)
+      @"b" : @((double)b),
+      @"m" : @((double)s.midpoint)
     }];
   }
   NSData *data = [NSJSONSerialization dataWithJSONObject:arr
