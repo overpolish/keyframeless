@@ -101,8 +101,43 @@ typedef struct {
   state.glowColor = (simd_float3){(float)red, (float)green, (float)blue};
   state.colorMode = colorMode;
 
-  for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++)
-    state.gradientLUT[i] = state.glowColor;
+  if (colorMode == KKColorModeGradient &&
+      colorResult.gradientStops.count >= 2) {
+    NSArray<KKGradientStop *> *sorted = [colorResult.gradientStops
+        sortedArrayUsingComparator:^(KKGradientStop *a, KKGradientStop *b) {
+          if (a.position < b.position)
+            return NSOrderedAscending;
+          if (a.position > b.position)
+            return NSOrderedDescending;
+          return NSOrderedSame;
+        }];
+    for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++) {
+      CGFloat t = (CGFloat)i / (CGFloat)(KK_GRADIENT_LUT_SIZE - 1);
+      // Find surrounding stops
+      KKGradientStop *lo = sorted.firstObject;
+      KKGradientStop *hi = sorted.lastObject;
+      for (NSUInteger j = 0; j < sorted.count - 1; j++) {
+        if (t >= sorted[j].position && t <= sorted[j + 1].position) {
+          lo = sorted[j];
+          hi = sorted[j + 1];
+          break;
+        }
+      }
+      CGFloat f = (hi.position > lo.position)
+                      ? (t - lo.position) / (hi.position - lo.position)
+                      : 0.0;
+      f = fmax(0.0, fmin(1.0, f));
+      NSColor *blended = [lo.color blendedColorWithFraction:f ofColor:hi.color];
+      NSColor *rgb =
+          [blended colorUsingColorSpace:[NSColorSpace sRGBColorSpace]];
+      state.gradientLUT[i] =
+          (simd_float3){(float)[rgb redComponent], (float)[rgb greenComponent],
+                        (float)[rgb blueComponent]};
+    }
+  } else {
+    for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++)
+      state.gradientLUT[i] = state.glowColor;
+  }
 
   *pluginState = [NSData dataWithBytes:&state length:sizeof(state)];
   return (*pluginState != nil);
