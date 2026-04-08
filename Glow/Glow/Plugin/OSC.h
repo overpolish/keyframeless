@@ -7,5 +7,8 @@
 
 #import <KeyframelessKit/KeyframelessKit.h>
 
-@interface GlowOSC : KKPointOSC
+@interface GlowOSC : KKArcOSC
+
+@property(nonatomic, readonly) KKRingOSC *radiusRing;
+
 @end
