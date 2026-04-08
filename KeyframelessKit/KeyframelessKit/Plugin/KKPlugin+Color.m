@@ -24,6 +24,7 @@ static const void *const kColorModePopupKey = &kColorModePopupKey;
 static const void *const kColorDynamicAlertKey = &kColorDynamicAlertKey;
 static const void *const kColorRowKey = &kColorRowKey;
 static const void *const kGradientFavPopoverKey = &kGradientFavPopoverKey;
+static const void *const kGradientFavBtnKey = &kGradientFavBtnKey;
 
 static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
   return objc_getAssociatedObject([self class], kColorModesKey)
@@ -392,6 +393,8 @@ static NSString *_stopsToJSON(NSArray<KKGradientStop *> *stops) {
       [NSColor.inspectorLabel colorWithAlphaComponent:0.5];
   starBtn.translatesAutoresizingMaskIntoConstraints = NO;
   starBtn.hidden = (colorMode != KKColorModeGradient);
+  objc_setAssociatedObject([self class], kGradientFavBtnKey, starBtn,
+                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
   KKGradientFavoritesPopover *favPopover =
       [[KKGradientFavoritesPopover alloc] init];
@@ -552,6 +555,9 @@ static NSString *_stopsToJSON(NSArray<KKGradientStop *> *stops) {
   well.hidden = (mode != KKColorModeSolid);
   bar.hidden = (mode != KKColorModeGradient);
   bar.interactionEnabled = (mode == KKColorModeGradient);
+  NSButton *starBtn =
+      objc_getAssociatedObject([self class], kGradientFavBtnKey);
+  starBtn.hidden = (mode != KKColorModeGradient);
   colorRow.hidden = (mode == KKColorModeDynamic);
   dynAlert.hidden = (mode != KKColorModeDynamic);
 
