@@ -7,6 +7,7 @@
 #import "Plugin_Private.h"
 #import "ShaderTypes.h"
 #import <IOSurface/IOSurfaceObjC.h>
+#import <KeyframelessKit/KKEasing.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
@@ -81,6 +82,11 @@ typedef struct {
               fromParameter:kParamHoldOffset
                      atTime:renderTime];
 
+  int holdSeed = 0;
+  [paramGetAPI getIntValue:&holdSeed
+             fromParameter:kKKParamHoldSeed
+                    atTime:renderTime];
+
   KKColorResult *colorResult = [self colorAtTime:renderTime];
   int colorMode = (int)colorResult.mode;
   double red = colorResult.solidColor.x;
@@ -90,14 +96,22 @@ typedef struct {
   double radiusFactor = inF * (holdRadius ? holdF : 1.0) * outF;
   double intensityFactor = inF * (holdIntensity ? holdF : 1.0) * outF;
   double falloffFactor = inF * (holdFalloff ? holdF : 1.0) * outF;
-  double offsetFactor = inF * (holdOffset ? holdF : 1.0) * outF;
+  double offsetInOut = inF * outF;
+
+  static const double kHoldOffsetAmount = 0.03;
+  double holdD = holdF - 1.0;
+  double holdOffsetX =
+      holdOffset ? holdD * kHoldOffsetAmount * KKSeedSign(holdSeed, 0) : 0.0;
+  double holdOffsetY =
+      holdOffset ? holdD * kHoldOffsetAmount * KKSeedSign(holdSeed, 1) : 0.0;
 
   GlowPluginState state;
   state.radius = (float)(radius * radiusFactor);
   state.intensity = (float)(intensity * intensityFactor);
   state.falloff = (float)(1.0 + falloff * falloffFactor);
-  state.offset = (simd_float2){(float)((offsetX - 0.5) * offsetFactor),
-                               (float)((offsetY - 0.5) * offsetFactor)};
+  state.offset =
+      (simd_float2){(float)((offsetX - 0.5) * offsetInOut + holdOffsetX),
+                    (float)((offsetY - 0.5) * offsetInOut + holdOffsetY)};
   state.glowColor = (simd_float3){(float)red, (float)green, (float)blue};
   state.colorMode = colorMode;
 
