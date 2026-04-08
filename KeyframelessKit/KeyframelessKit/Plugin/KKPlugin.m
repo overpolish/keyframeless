@@ -277,4 +277,16 @@
   return @[];
 }
 
+- (NSView *)holdPropertyView {
+  return nil;
+}
+
+- (CGFloat)holdPropertyViewHeight {
+  return 23.0;
+}
+
+- (void (^)(id, CMTime))holdPropertyApplyState {
+  return nil;
+}
+
 @end

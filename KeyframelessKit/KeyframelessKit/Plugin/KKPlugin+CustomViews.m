@@ -212,9 +212,14 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
       [self timingSlotsForSection:KKTimingGraphSectionOut];
 
   CGFloat globalHeight = KKTotalSlotHeight(globalSlots);
+  CGFloat holdPropHeight =
+      [self holdPropertyView]
+          ? MAX([self holdPropertyViewHeight], 14.0) + KKSpacingSM
+          : 0;
   CGFloat maxSectionHeight =
       MAX(KKTotalSlotHeight(inSlots),
-          MAX(KKTotalSlotHeight(holdSlots), KKTotalSlotHeight(outSlots)));
+          MAX(KKTotalSlotHeight(holdSlots) + holdPropHeight,
+              KKTotalSlotHeight(outSlots)));
   CGFloat slotHeight = globalHeight + maxSectionHeight;
   CGFloat totalHeight =
       kBaseHeight + (slotHeight > 0 ? KKPaddingSM + slotHeight : 0);
@@ -312,6 +317,13 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
   graphView.holdSectionSlots = holdSlots;
   graphView.outSectionSlots = outSlots;
 
+  NSView *holdPropView = [self holdPropertyView];
+  if (holdPropView) {
+    graphView.holdPropertyView = holdPropView;
+    graphView.holdPropertyViewHeight = [self holdPropertyViewHeight];
+    graphView.holdPropertyApplyState = [self holdPropertyApplyState];
+  }
+
   self.timingGraph = graphView;
 
   [actionAPI startAction:self];
@@ -320,6 +332,8 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
   [self _applySlotState:inSlots withParamAPI:paramGetAPI atTime:t];
   [self _applySlotState:holdSlots withParamAPI:paramGetAPI atTime:t];
   [self _applySlotState:outSlots withParamAPI:paramGetAPI atTime:t];
+  if (graphView.holdPropertyApplyState)
+    graphView.holdPropertyApplyState(paramGetAPI, t);
   [actionAPI endAction:self];
 
   return wrapper;
@@ -356,6 +370,8 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
   [self _applySlotState:self.timingGraph.outSectionSlots
            withParamAPI:paramGetAPI
                  atTime:t];
+  if (self.timingGraph.holdPropertyApplyState)
+    self.timingGraph.holdPropertyApplyState(paramGetAPI, t);
   [actionAPI endAction:self];
 }
 
