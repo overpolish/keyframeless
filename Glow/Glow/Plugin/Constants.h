@@ -25,3 +25,4 @@ static const UInt32 kParamHoldOffset = 503;
 
 // OSC part IDs
 static const NSInteger kOSCOffsetPart = 1;
+static const NSInteger kOSCRadiusPart = 2;
