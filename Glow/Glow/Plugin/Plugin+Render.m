@@ -18,6 +18,7 @@ typedef struct {
   simd_float2 offset;
   simd_float3 glowColor;
   int colorMode;
+  simd_float3 gradientLUT[KK_GRADIENT_LUT_SIZE];
 } GlowPluginState;
 
 @implementation GlowPlugin (Render)
@@ -80,19 +81,11 @@ typedef struct {
               fromParameter:kParamHoldOffset
                      atTime:renderTime];
 
-  int colorMode = kColorModeSolid;
-  [paramGetAPI getIntValue:&colorMode
-             fromParameter:kParamColorMode
-                    atTime:renderTime];
-
-  double red = 1.0, green = 1.0, blue = 1.0;
-  if (colorMode == kColorModeSolid) {
-    [paramGetAPI getRedValue:&red
-                  greenValue:&green
-                   blueValue:&blue
-               fromParameter:kParamColor
-                      atTime:renderTime];
-  }
+  KKColorResult *colorResult = [self colorAtTime:renderTime];
+  int colorMode = (int)colorResult.mode;
+  double red = colorResult.solidColor.x;
+  double green = colorResult.solidColor.y;
+  double blue = colorResult.solidColor.z;
 
   double radiusFactor = inF * (holdRadius ? holdF : 1.0) * outF;
   double intensityFactor = inF * (holdIntensity ? holdF : 1.0) * outF;
@@ -107,6 +100,9 @@ typedef struct {
                                (float)((offsetY - 0.5) * offsetFactor)};
   state.glowColor = (simd_float3){(float)red, (float)green, (float)blue};
   state.colorMode = colorMode;
+
+  for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++)
+    state.gradientLUT[i] = state.glowColor;
 
   *pluginState = [NSData dataWithBytes:&state length:sizeof(state)];
   return (*pluginState != nil);
@@ -285,6 +281,9 @@ typedef struct {
     [encoder setFragmentBytes:&fragmentColorMode
                        length:sizeof(fragmentColorMode)
                       atIndex:FragmentIndex_ColorMode];
+    [encoder setFragmentBytes:state.gradientLUT
+                       length:sizeof(state.gradientLUT)
+                      atIndex:FragmentIndex_GradientLUT];
     [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                 vertexStart:0
                 vertexCount:4];

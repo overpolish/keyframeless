@@ -94,19 +94,12 @@
                             parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
-  if (![paramAPI addPopupMenuWithName:@"Color Mode"
-                          parameterID:kParamColorMode
-                         defaultValue:kColorModeSolid
-                          menuEntries:@[ @"Solid", @"Dynamic" ]
-                       parameterFlags:kFxParameterFlag_DEFAULT])
-    return NO;
-
-  if (![paramAPI addColorParameterWithName:@"Color"
-                               parameterID:kParamColor
-                                defaultRed:1.0
-                              defaultGreen:1.0
-                               defaultBlue:1.0
-                            parameterFlags:kFxParameterFlag_DEFAULT])
+  if (![self addColorParametersWithAPI:paramAPI
+                                 modes:@[
+                                   @(KKColorModeSolid), @(KKColorModeGradient),
+                                   @(KKColorModeDynamic)
+                                 ]
+                                 error:error])
     return NO;
 
   if (![self addAnimationParametersWithAPI:paramAPI error:error])

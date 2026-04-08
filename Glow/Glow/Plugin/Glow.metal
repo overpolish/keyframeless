@@ -40,7 +40,7 @@ fragment float4 blurHorizontal(RasterizerData in [[stage_in]],
     constexpr int kSamples = 32;
 
     float glowRadius = *radius;
-    bool dynamic = (*colorMode == 1);
+    bool dynamic = (*colorMode == 2);
 
     if (glowRadius < 0.01) {
         half4 c = colorTexture.sample(textureSampler, in.textureCoordinate);
@@ -81,7 +81,8 @@ fragment float4 blurVerticalComposite(RasterizerData in [[stage_in]],
                                       constant float *falloff [[buffer(FragmentIndex_Falloff)]],
                                       constant float2 *offsetPtr [[buffer(FragmentIndex_Offset)]],
                                       constant float3 *glowColorPtr [[buffer(FragmentIndex_GlowColor)]],
-                                      constant int *colorMode [[buffer(FragmentIndex_ColorMode)]]) {
+                                      constant int *colorMode [[buffer(FragmentIndex_ColorMode)]],
+                                      constant float3 *gradientLUT [[buffer(FragmentIndex_GradientLUT)]]) {
     constexpr sampler textureSampler(mag_filter::linear, min_filter::linear);
     constexpr int kSamples = 32;
 
@@ -90,7 +91,8 @@ fragment float4 blurVerticalComposite(RasterizerData in [[stage_in]],
     float glowIntensity = *intensity;
     float glowFalloff = *falloff;
     float2 glowOffset = *offsetPtr;
-    bool dynamic = (*colorMode == 1);
+    bool dynamic = (*colorMode == 2);
+    bool gradient = (*colorMode == 1);
 
     if (glowRadius < 0.01)
         return float4(original);
@@ -122,6 +124,12 @@ fragment float4 blurVerticalComposite(RasterizerData in [[stage_in]],
     float3 glowColor;
     if (dynamic) {
         glowColor = blurred.a > 0.001 ? blurred.rgb / blurred.a : float3(0);
+    } else if (gradient) {
+        float lutIndex = (1.0 - glowAlpha) * float(KK_GRADIENT_LUT_SIZE - 1);
+        int idx0 = int(floor(lutIndex));
+        int idx1 = min(idx0 + 1, KK_GRADIENT_LUT_SIZE - 1);
+        float frac = lutIndex - float(idx0);
+        glowColor = mix(gradientLUT[idx0], gradientLUT[idx1], frac);
     } else {
         glowColor = *glowColorPtr;
     }

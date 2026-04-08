@@ -19,6 +19,10 @@
 
 @end
 
+@interface KKPlugin (ColorViews)
+- (NSView *)_createColorCustomUI:(UInt32)parameterID;
+@end
+
 // FxPlug calls createViewForParameterID: on a fresh plugin instance, not the
 // one that ran addParametersWithError:. Store parameter metadata at class level
 // (keyed by the concrete plugin class) so any instance can look it up.
