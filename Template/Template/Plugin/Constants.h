@@ -8,3 +8,6 @@
 #import <Foundation/Foundation.h>
 
 static NSString *const kPluginID = @"co.overpolish.keyframeless.Template";
+
+// OSC part IDs
+static const NSInteger kOSCPointPart = 1;

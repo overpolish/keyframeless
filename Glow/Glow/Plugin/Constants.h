@@ -22,3 +22,6 @@ static const UInt32 kParamHoldRadius = 500;
 static const UInt32 kParamHoldIntensity = 501;
 static const UInt32 kParamHoldFalloff = 502;
 static const UInt32 kParamHoldOffset = 503;
+
+// OSC part IDs
+static const NSInteger kOSCOffsetPart = 1;

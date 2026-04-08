@@ -4,6 +4,7 @@
  */
 
 #import "OSC.h"
+#import "Constants.h"
 #import <FxPlug/FxPlugSDK.h>
 
 @implementation TemplateOSC
@@ -34,8 +35,8 @@
 
   CGPoint center = [self oscPositionAtTime:time];
   [self drawAtCanvasPosition:center
-                   isHovered:(activePart == 1)
-                    isActive:self.isDragging && (activePart == 1)
+                   isHovered:(activePart == kOSCPointPart)
+                    isActive:self.isDragging && (activePart == kOSCPointPart)
             destinationImage:destinationImage
                       atTime:time];
 }
@@ -48,7 +49,7 @@
   if ([self hitTestAtMousePositionX:positionX
                           positionY:positionY
                              atTime:time]) {
-    *activePart = 1;
+    *activePart = kOSCPointPart;
   }
 }
 

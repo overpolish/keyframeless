@@ -92,6 +92,17 @@ static const UInt32 kParamForceShowAlerts = 9000;
 static const UInt32 kParamInfoCompound = 9001;
 static const UInt32 kParamAlertStackSelected = 9004;
 
+// OSC part IDs
+typedef struct {
+  NSInteger arc, ring, rot, rotXRing, rotYRing, icon, opacityIcon, scaleIcon;
+} MagicMoveOSCParts;
+
+static const MagicMoveOSCParts kOSCPartsA = {1, 2, 3, 25, 26, 13, 17, 21};
+static const MagicMoveOSCParts kOSCPartsB = {4, 5, 6, 27, 28, 14, 18, 22};
+static const MagicMoveOSCParts kOSCPartsDrift = {7, 8, 9, 29, 30, 15, 19, 23};
+static const MagicMoveOSCParts kOSCPartsExit = {10, 11, 12, 31, 32, 16, 20, 24};
+static const NSInteger kOSCAnchorPart = 33;
+
 typedef struct {
   UInt32 point, rotation, rotationX, rotationY, scaleX, scaleY, opacity;
 } MagicMovePointParamIDs;
