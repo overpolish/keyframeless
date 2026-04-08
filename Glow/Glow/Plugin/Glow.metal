@@ -125,13 +125,20 @@ fragment float4 blurVerticalComposite(RasterizerData in [[stage_in]],
     if (dynamic) {
         glowColor = blurred.a > 0.001 ? blurred.rgb / blurred.a : float3(0);
     } else if (gradient) {
-        float lutIndex = (1.0 - glowAlpha) * float(KK_GRADIENT_LUT_SIZE - 1);
+        // For a Gaussian blur with sigma = radius/2, the relationship
+        // sqrt(-log(2*alpha)) is proportional to distance from the object
+        // edge, with a constant independent of radius. At d = radius,
+        // 2*alpha = erfc(sqrt(2)) ≈ 0.0455, giving sqrt(-log(0.0455)) ≈ 1.76.
+        constexpr float kGradNorm = 1.76;
+        float t = blurred.a < 0.5 ? saturate(sqrt(max(-log(max(2.0 * blurred.a, 0.0001)), 0.0)) / kGradNorm) : 0.0;
+        float lutIndex = t * float(KK_GRADIENT_LUT_SIZE - 1);
         int idx0 = int(floor(lutIndex));
         int idx1 = min(idx0 + 1, KK_GRADIENT_LUT_SIZE - 1);
         float frac = lutIndex - float(idx0);
-        glowColor = mix(gradientLUT[idx0], gradientLUT[idx1], frac);
+        float3 srgb = mix(gradientLUT[idx0], gradientLUT[idx1], frac);
+        glowColor = pow(srgb, 2.2);
     } else {
-        glowColor = *glowColorPtr;
+        glowColor = pow(*glowColorPtr, 2.2);
     }
 
     float3 result = glowColor * glowAlpha * (1.0 - float(original.a)) + float3(original.rgb);
