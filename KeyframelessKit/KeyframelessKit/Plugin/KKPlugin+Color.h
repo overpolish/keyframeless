@@ -10,14 +10,10 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@class KKColorWellView;
-@class KKGradientBarView;
-
 @interface KKPlugin (Color)
 
-/// Registers color parameters (separator, custom UI, mode, RGB, gradient data).
-/// Pass the modes the plugin supports (e.g. @[@(KKColorModeSolid),
-/// @(KKColorModeGradient)]). When only one mode is given no popup is shown.
+/// Registers native color parameters (mode popup, color swatch, gradient,
+/// dynamic info). Pass the modes the plugin supports.
 - (BOOL)addColorParametersWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                             modes:(NSArray<NSNumber *> *)modes
                             error:(NSError **)error;
@@ -25,8 +21,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Returns the current color state at renderTime.
 - (KKColorResult *)colorAtTime:(CMTime)renderTime;
 
-/// Updates color parameter visibility. Call from
-/// updateParameterVisibilityAtTime:.
+/// Updates color parameter visibility (hides params based on mode).
 - (void)updateColorParameterVisibility;
 
 @end

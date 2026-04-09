@@ -4,17 +4,30 @@
  */
 
 #import "KKColor.h"
+#import <stdlib.h>
 
-@implementation KKColorResult
+@implementation KKColorResult {
+  simd_float3 _lutStorage[KK_GRADIENT_LUT_SIZE];
+}
 
 + (instancetype)resultWithMode:(KKColorMode)mode
-                    solidColor:(simd_float3)solidColor
-                 gradientStops:(NSArray<KKGradientStop *> *)stops {
+                    solidColor:(simd_float3)solidColor {
   KKColorResult *r = [[KKColorResult alloc] init];
   r->_mode = mode;
   r->_solidColor = solidColor;
-  r->_gradientStops = [stops copy];
   return r;
+}
+
++ (instancetype)resultWithGradientLUT:(simd_float3 *)lut {
+  KKColorResult *r = [[KKColorResult alloc] init];
+  r->_mode = KKColorModeGradient;
+  r->_solidColor = (simd_float3){1, 1, 1};
+  memcpy(r->_lutStorage, lut, sizeof(r->_lutStorage));
+  return r;
+}
+
+- (const simd_float3 *)gradientLUT {
+  return _lutStorage;
 }
 
 @end
