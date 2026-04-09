@@ -38,27 +38,11 @@
                                   kFxParameterFlag_DONT_DISPLAY_IN_DASHBOARD])
     return NO;
 
-  NSAttributedString *infoText = [KKMarkup
-      attributedStringFromMarkup:
-          @"Use on an Adjustment Clip <kbd>⌥ A</kbd> or a Compound Clip "
-          @"<kbd>⌥ G</kbd>"];
-  if (![self
-          addInfoParameterWithAttributedText:infoText
-                                        icon:[NSImage
-                                                 imageWithSystemSymbolName:
-                                                     @"info.circle"
-                                                  accessibilityDescription:nil]
-                                 parameterID:kParamInfoUsage
-                                     withAPI:paramAPI
-                                       error:error]) {
-    return NO;
-  }
-
   if (![paramAPI addFloatSliderWithName:@"Radius"
                             parameterID:kParamRadius
                            defaultValue:100.0
                            parameterMin:0.0
-                           parameterMax:FLT_MAX
+                           parameterMax:1000.0
                               sliderMin:0.0
                               sliderMax:500.0
                                   delta:1.0
@@ -87,11 +71,26 @@
                            parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
-  if (![paramAPI addPointParameterWithName:@"Offset"
-                               parameterID:kParamOffset
-                                  defaultX:0.5
-                                  defaultY:0.5
-                            parameterFlags:kFxParameterFlag_DEFAULT])
+  if (![paramAPI addFloatSliderWithName:@"Offset X"
+                            parameterID:kParamOffsetX
+                           defaultValue:0.0
+                           parameterMin:-5.0
+                           parameterMax:5.0
+                              sliderMin:-1.0
+                              sliderMax:1.0
+                                  delta:0.01
+                         parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
+  if (![paramAPI addFloatSliderWithName:@"Offset Y"
+                            parameterID:kParamOffsetY
+                           defaultValue:0.0
+                           parameterMin:-5.0
+                           parameterMax:5.0
+                              sliderMin:-1.0
+                              sliderMax:1.0
+                                  delta:0.01
+                         parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
   if (![self addColorParametersWithAPI:paramAPI

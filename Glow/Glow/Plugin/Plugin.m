@@ -25,7 +25,9 @@
   *properties = @{
     kFxPropertyKey_MayRemapTime : @NO,
     kFxPropertyKey_PixelTransformSupport : @(kFxPixelTransform_ScaleTranslate),
-    kFxPropertyKey_VariesWhenParamsAreStatic : @YES
+    kFxPropertyKey_VariesWhenParamsAreStatic : @YES,
+    kFxPropertyKey_ChangesOutputSize : @YES,
+    kFxPropertyKey_NeedsFullBuffer : @YES
   };
 
   return YES;
@@ -39,8 +41,6 @@
   case kParamGradientType:
   case kParamForceShow:
   case kKKParamTimingExpanded:
-  case kKKParamAnimateIn:
-  case kKKParamAnimateOut:
     [self updateParameterVisibilityAtTime:time];
     break;
   default:

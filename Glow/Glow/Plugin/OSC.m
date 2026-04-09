@@ -18,6 +18,8 @@
   BOOL _ringHovered;
   BOOL _ringDragging;
   double _arcDragStartX, _arcDragStartY;
+  double _arcDragStartParamX, _arcDragStartParamY;
+  double _arcCanvasToParamX, _arcCanvasToParamY;
   double _ringDragStartDist, _ringDragStartVal;
   KKSnapEngine *_offsetSnap;
 }
@@ -36,9 +38,23 @@
 }
 
 - (CGPoint)oscPositionAtTime:(CMTime)time {
-  simd_float2 obj = [self objectPositionForParam:kParamOffset atTime:time];
-  return [self
-      canvasPointFromObjectPoint:(simd_float2){1.0f - obj.x, 1.0f - obj.y}];
+  id<FxParameterRetrievalAPI_v6> api =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+
+  double offX = 0, offY = 0;
+  [api getFloatValue:&offX fromParameter:kParamOffsetX atTime:time];
+  [api getFloatValue:&offY fromParameter:kParamOffsetY atTime:time];
+
+  double cx, cy;
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:0.5 + offX
+                          fromY:0.5 + offY
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&cx
+                            toY:&cy];
+  return CGPointMake(cx, cy);
 }
 
 - (void)updateRingAtTime:(CMTime)time {
@@ -134,6 +150,46 @@
     _arcDragging = YES;
     _arcDragStartX = positionX;
     _arcDragStartY = positionY;
+
+    // Capture canvas→param scale at drag start (stable during drag).
+    double c0x, c0y, c1x, c1y;
+    [oscAPI convertPointFromSpace:kFxDrawingCoordinates_CANVAS
+                            fromX:positionX
+                            fromY:positionY
+                          toSpace:kFxDrawingCoordinates_OBJECT
+                              toX:&c0x
+                              toY:&c0y];
+    [oscAPI convertPointFromSpace:kFxDrawingCoordinates_CANVAS
+                            fromX:positionX + 100
+                            fromY:positionY + 100
+                          toSpace:kFxDrawingCoordinates_OBJECT
+                              toX:&c1x
+                              toY:&c1y];
+    _arcCanvasToParamX = (c1x - c0x) / 100.0;
+    _arcCanvasToParamY = (c1y - c0y) / 100.0;
+
+    // Jump glow center to mouse position on click.
+    double centerX, centerY;
+    [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                            fromX:0.5
+                            fromY:0.5
+                          toSpace:kFxDrawingCoordinates_CANVAS
+                              toX:&centerX
+                              toY:&centerY];
+    _arcDragStartParamX = (positionX - centerX) * _arcCanvasToParamX;
+    _arcDragStartParamY = (positionY - centerY) * _arcCanvasToParamY;
+
+    id<FxParameterSettingAPI_v5> paramSetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    if (paramSetAPI) {
+      [paramSetAPI setFloatValue:_arcDragStartParamX
+                     toParameter:kParamOffsetX
+                          atTime:time];
+      [paramSetAPI setFloatValue:_arcDragStartParamY
+                     toParameter:kParamOffsetY
+                          atTime:time];
+    }
+
     [oscAPI setCursor:[NSCursor openHandCursor]];
     *forceUpdate = YES;
     return;
@@ -190,23 +246,18 @@
         [_offsetSnap snapCanvasPoint:(CGPoint){positionX, positionY}
                            toTargets:snapTargets
                                count:1];
-    positionX = snapped.x;
-    positionY = snapped.y;
 
-    double objX, objY;
-    [oscAPI convertPointFromSpace:kFxDrawingCoordinates_CANVAS
-                            fromX:positionX
-                            fromY:positionY
-                          toSpace:kFxDrawingCoordinates_OBJECT
-                              toX:&objX
-                              toY:&objY];
+    double deltaX = snapped.x - _arcDragStartX;
+    double deltaY = snapped.y - _arcDragStartY;
+    double newOffX = _arcDragStartParamX + deltaX * _arcCanvasToParamX;
+    double newOffY = _arcDragStartParamY + deltaY * _arcCanvasToParamY;
+
     id<FxParameterSettingAPI_v5> paramSetAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    if (paramSetAPI)
-      [paramSetAPI setXValue:1.0 - objX
-                      YValue:1.0 - objY
-                 toParameter:kParamOffset
-                      atTime:time];
+    if (paramSetAPI) {
+      [paramSetAPI setFloatValue:newOffX toParameter:kParamOffsetX atTime:time];
+      [paramSetAPI setFloatValue:newOffY toParameter:kParamOffsetY atTime:time];
+    }
     *forceUpdate = YES;
     return;
   }

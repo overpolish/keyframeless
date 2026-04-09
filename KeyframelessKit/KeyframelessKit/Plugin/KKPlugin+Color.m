@@ -8,14 +8,16 @@
 #import <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKAlertView.h>
+#import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKTokens.h>
 #import <objc/runtime.h>
 
 static const void *const kColorModesKey = &kColorModesKey;
 
 static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
-  return objc_getAssociatedObject([self class], kColorModesKey)
-             ?: @[ @(KKColorModeSolid) ];
+  return objc_getAssociatedObject([self class], kColorModesKey) ?: @[
+    @(KKColorModeSolid), @(KKColorModeGradient), @(KKColorModeDynamic)
+  ];
 }
 
 @implementation KKPlugin (Color)
@@ -53,20 +55,26 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
       return NO;
   }
 
+  KKColorMode defaultMode = (KKColorMode)modes.firstObject.integerValue;
+
   if (hasSolid) {
     if (![paramAPI addColorParameterWithName:@"Color"
                                  parameterID:kKKParamColorSolid
                                   defaultRed:1.0
                                 defaultGreen:1.0
                                  defaultBlue:1.0
-                              parameterFlags:kFxParameterFlag_DEFAULT])
+                              parameterFlags:(defaultMode == KKColorModeSolid)
+                                                 ? kFxParameterFlag_DEFAULT
+                                                 : kFxParameterFlag_HIDDEN])
       return NO;
   }
 
   if (hasGradient) {
     if (![paramAPI addGradientWithName:@"Gradient"
                            parameterID:kKKParamColorGradient
-                        parameterFlags:kFxParameterFlag_DEFAULT])
+                        parameterFlags:(defaultMode == KKColorModeGradient)
+                                           ? kFxParameterFlag_DEFAULT
+                                           : kFxParameterFlag_HIDDEN])
       return NO;
   }
 
@@ -74,8 +82,19 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
 }
 
 - (KKColorResult *)colorAtTime:(CMTime)renderTime {
+  static KKLog *sLog;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    sLog = [KKLog loggerForPlugin:@"co.overpolish.keyframeless.Color"];
+  });
+
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!paramGetAPI) {
+    [sLog warn:@"colorAtTime: paramGetAPI is nil"];
+    return [KKColorResult resultWithMode:KKColorModeSolid
+                              solidColor:(simd_float3){1, 1, 1}];
+  }
 
   NSArray<NSNumber *> *modes = _colorModes(self);
   int modeIndex = 0;
@@ -87,17 +106,32 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
                          ? (KKColorMode)modes[modeIndex].integerValue
                          : (KKColorMode)modes.firstObject.integerValue;
 
+  [sLog verbose:@"colorAtTime: modeIndex=%d mode=%ld modes.count=%lu",
+                modeIndex, (long)mode, (unsigned long)modes.count];
+
   if (mode == KKColorModeGradient) {
     float samples[KK_GRADIENT_LUT_SIZE * 4];
-    [paramGetAPI getGradientSamples:samples
-                         numSamples:KK_GRADIENT_LUT_SIZE
-                              depth:kFxDepth_FLOAT32
-                      fromParameter:kKKParamColorGradient
-                             atTime:renderTime];
+    memset(samples, 0, sizeof(samples));
+    BOOL ok = [paramGetAPI getGradientSamples:samples
+                                   numSamples:KK_GRADIENT_LUT_SIZE
+                                        depth:kFxDepth_FLOAT32
+                                fromParameter:kKKParamColorGradient
+                                       atTime:renderTime];
+    if (!ok) {
+      [sLog error:@"getGradientSamples failed"];
+      return [KKColorResult resultWithMode:KKColorModeSolid
+                                solidColor:(simd_float3){1, 1, 1}];
+    }
     simd_float3 lut[KK_GRADIENT_LUT_SIZE];
     for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++) {
-      lut[i] =
-          (simd_float3){samples[i * 4], samples[i * 4 + 1], samples[i * 4 + 2]};
+      float r = samples[i * 4], g = samples[i * 4 + 1], b = samples[i * 4 + 2];
+      if (!isfinite(r))
+        r = 1;
+      if (!isfinite(g))
+        g = 1;
+      if (!isfinite(b))
+        b = 1;
+      lut[i] = (simd_float3){r, g, b};
     }
     return [KKColorResult resultWithGradientLUT:lut];
   }
