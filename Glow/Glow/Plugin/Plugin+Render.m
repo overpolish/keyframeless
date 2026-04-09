@@ -100,9 +100,6 @@ typedef struct {
 
   KKColorResult *colorResult = [self colorAtTime:renderTime];
   int colorMode = (int)colorResult.mode;
-  double red = colorResult.solidColor.x;
-  double green = colorResult.solidColor.y;
-  double blue = colorResult.solidColor.z;
 
   double radiusFactor = inF * (holdRadius ? holdF : 1.0) * outF;
   double intensityFactor = inF * (holdIntensity ? holdF : 1.0) * outF;
@@ -123,51 +120,14 @@ typedef struct {
   state.offset =
       (simd_float2){(float)((offsetX - 0.5) * offsetInOut + holdOffsetX),
                     (float)((offsetY - 0.5) * offsetInOut + holdOffsetY)};
-  state.glowColor = (simd_float3){(float)red, (float)green, (float)blue};
+  state.glowColor = colorResult.solidColor;
   state.colorMode = colorMode;
   state.gradientType = gradientType;
   state.gradientAngle = (float)gradientAngle;
 
-  if (colorMode == KKColorModeGradient &&
-      colorResult.gradientStops.count >= 2) {
-    NSArray<KKGradientStop *> *sorted = [colorResult.gradientStops
-        sortedArrayUsingComparator:^(KKGradientStop *a, KKGradientStop *b) {
-          if (a.position < b.position)
-            return NSOrderedAscending;
-          if (a.position > b.position)
-            return NSOrderedDescending;
-          return NSOrderedSame;
-        }];
-    for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++) {
-      CGFloat t = (CGFloat)i / (CGFloat)(KK_GRADIENT_LUT_SIZE - 1);
-      // Find surrounding stops
-      KKGradientStop *lo = sorted.firstObject;
-      KKGradientStop *hi = sorted.lastObject;
-      for (NSUInteger j = 0; j < sorted.count - 1; j++) {
-        if (t >= sorted[j].position && t <= sorted[j + 1].position) {
-          lo = sorted[j];
-          hi = sorted[j + 1];
-          break;
-        }
-      }
-      CGFloat f = (hi.position > lo.position)
-                      ? (t - lo.position) / (hi.position - lo.position)
-                      : 0.0;
-      f = fmax(0.0, fmin(1.0, f));
-      CGFloat m = lo.midpoint;
-      if (m > 0.0 && m < 1.0) {
-        if (f <= m)
-          f = 0.5 * (f / m);
-        else
-          f = 0.5 + 0.5 * ((f - m) / (1.0 - m));
-      }
-      NSColor *blended = [lo.color blendedColorWithFraction:f ofColor:hi.color];
-      NSColor *rgb =
-          [blended colorUsingColorSpace:[NSColorSpace sRGBColorSpace]];
-      state.gradientLUT[i] =
-          (simd_float3){(float)[rgb redComponent], (float)[rgb greenComponent],
-                        (float)[rgb blueComponent]};
-    }
+  if (colorMode == KKColorModeGradient) {
+    memcpy(state.gradientLUT, colorResult.gradientLUT,
+           sizeof(state.gradientLUT));
   } else {
     for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++)
       state.gradientLUT[i] = state.glowColor;
