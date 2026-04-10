@@ -23,6 +23,7 @@ typedef struct {
   float radius;
   float intensity;
   float falloff;
+  float noise;
   simd_float2 offset;
   simd_float3 glowColor;
   int colorMode;
@@ -53,12 +54,13 @@ static const float kMaxBlurDimension = 2048.0f;
     return NO;
   }
 
-  double radius = 100, intensity = 1.5, falloff = 1.0;
+  double radius = 100, intensity = 1.5, falloff = 1.0, noise = 0.0;
   [api getFloatValue:&radius fromParameter:kParamRadius atTime:renderTime];
   [api getFloatValue:&intensity
        fromParameter:kParamIntensity
               atTime:renderTime];
   [api getFloatValue:&falloff fromParameter:kParamFalloff atTime:renderTime];
+  [api getFloatValue:&noise fromParameter:kParamNoise atTime:renderTime];
 
   double offX = 0, offY = 0;
   [api getFloatValue:&offX fromParameter:kParamOffsetX atTime:renderTime];
@@ -78,10 +80,11 @@ static const float kMaxBlurDimension = 2048.0f;
   double outF = timing.outPhase.factor;
   double holdF = timing.holdPhase.factor;
 
-  BOOL holdR = YES, holdI = YES, holdFl = YES, holdO = YES;
+  BOOL holdR = YES, holdI = YES, holdFl = YES, holdN = YES, holdO = YES;
   [api getBoolValue:&holdR fromParameter:kParamHoldRadius atTime:renderTime];
   [api getBoolValue:&holdI fromParameter:kParamHoldIntensity atTime:renderTime];
   [api getBoolValue:&holdFl fromParameter:kParamHoldFalloff atTime:renderTime];
+  [api getBoolValue:&holdN fromParameter:kParamHoldNoise atTime:renderTime];
   [api getBoolValue:&holdO fromParameter:kParamHoldOffset atTime:renderTime];
 
   int holdSeed = 0;
@@ -90,6 +93,7 @@ static const float kMaxBlurDimension = 2048.0f;
   double rF = inF * (holdR ? holdF : 1.0) * outF;
   double iF = inF * (holdI ? holdF : 1.0) * outF;
   double fF = inF * (holdFl ? holdF : 1.0) * outF;
+  double nF = inF * (holdN ? holdF : 1.0) * outF;
   double oF = inF * outF;
   double hD = holdF - 1.0;
   double hOX = holdO ? hD * 0.03 * KKSeedSign(holdSeed, 0) : 0.0;
@@ -101,6 +105,7 @@ static const float kMaxBlurDimension = 2048.0f;
       .radius = (float)(radius * rF),
       .intensity = (float)(intensity * iF),
       .falloff = (float)(1.0 + falloff * fF),
+      .noise = (float)(noise * nF),
       .offset = {(float)(offX * oF + hOX), (float)(offY * oF + hOY)},
       .glowColor = color.solidColor,
       .colorMode = (int)color.mode,
@@ -351,12 +356,14 @@ static const float kMaxBlurDimension = 2048.0f;
     [e setRenderPipelineState:compPS];
     [e setFragmentTexture:inTex atIndex:KKTextureIndex_InputImage];
     [e setFragmentTexture:blurTex atIndex:1];
-    float r = state.radius, i = state.intensity, f = state.falloff;
-    // Offset is a fraction of source min dimension → convert to UV.
+    float r = state.radius, i = state.intensity, f = state.falloff,
+          n = state.noise;
+    // Offset is in object-space fractions → convert to UV.
     FxRect sp = sourceImages[0].imagePixelBounds;
-    float srcMin = fminf(sp.right - sp.left, sp.top - sp.bottom);
-    simd_float2 off = {-state.offset.x * srcMin / outW,
-                       -state.offset.y * srcMin / outH};
+    float srcW = sp.right - sp.left;
+    float srcH = sp.top - sp.bottom;
+    simd_float2 off = {-state.offset.x * srcW / outW,
+                       -state.offset.y * srcH / outH};
     int cm = state.colorMode, gt = state.gradientType;
     float ga = state.gradientAngle;
     [e setFragmentBytes:&r length:sizeof(r) atIndex:FragmentIndex_Radius];
@@ -376,6 +383,7 @@ static const float kMaxBlurDimension = 2048.0f;
     [e setFragmentBytes:&ga
                  length:sizeof(ga)
                 atIndex:FragmentIndex_GradientAngle];
+    [e setFragmentBytes:&n length:sizeof(n) atIndex:FragmentIndex_Noise];
     [e drawPrimitives:MTLPrimitiveTypeTriangleStrip
           vertexStart:0
           vertexCount:4];
