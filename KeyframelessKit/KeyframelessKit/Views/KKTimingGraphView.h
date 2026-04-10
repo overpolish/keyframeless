@@ -67,6 +67,16 @@ typedef NS_ENUM(NSInteger, KKTimingGraphSection) {
 @property(nonatomic, copy, nullable) NSArray<KKTimingSlot *> *inSectionSlots;
 @property(nonatomic, copy, nullable) NSArray<KKTimingSlot *> *holdSectionSlots;
 @property(nonatomic, copy, nullable) NSArray<KKTimingSlot *> *outSectionSlots;
+@property(nonatomic, strong, nullable) NSView *holdPropertyView;
+@property(nonatomic, assign) CGFloat holdPropertyViewHeight;
+@property(nonatomic, copy, nullable) void (^holdPropertyApplyState)
+    (id paramAPI, CMTime time);
+
+/// When YES, holdPropertyView is shown for all sections (In/Hold/Out), not
+/// just Hold. The label changes per section. For Hold, the existing condition
+/// (hold effect active) still applies. For In/Out, shown when animate in/out
+/// is enabled. holdPropertyApplyState should be section-aware when this is set.
+@property(nonatomic) BOOL showPropertyViewForAllSections;
 
 @end
 

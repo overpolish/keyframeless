@@ -12,6 +12,7 @@
 #import <Metal/Metal.h>
 
 @class FxImageTile;
+@class KKAnimatableProperty;
 @class KKTimingSlot;
 @class NSBezierPath;
 @protocol PROAPIAccessing;
@@ -135,6 +136,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// animation.
 - (void)updateTimingParameterVisibility;
 
+/// Pairs of parameter IDs that maintain their aspect ratio when the user
+/// holds Cmd while dragging either slider. Set before first use (e.g. in
+/// addParametersWithError:). Each element is @[@(paramA), @(paramB)].
+@property(nonatomic, copy, nullable)
+    NSArray<NSArray<NSNumber *> *> *linkedParameterPairs;
+
+/// Call from parameterChanged:atTime:error: for any parameter that may be
+/// part of a linked pair. Returns YES if the change was handled (the other
+/// parameter in the pair was updated to maintain ratio). Returns NO if the
+/// parameter is not part of a pair or Cmd is not held.
+- (BOOL)handleLinkedParameterChanged:(UInt32)parameterID atTime:(CMTime)time;
+
 /// Override in subclasses to provide custom views that appear above the
 /// duration slider, always visible when the timing group is expanded.
 /// Build views using KK components (KKCheckboxView, KKSliderView, etc.)
@@ -145,12 +158,35 @@ NS_ASSUME_NONNULL_BEGIN
 /// graph, changing based on the selected section (0=In, 1=Hold, 2=Out).
 - (NSArray<KKTimingSlot *> *)timingSlotsForSection:(NSInteger)section;
 
+/// Override to declare animatable properties. When non-nil, the timing graph
+/// auto-generates pill toggles for In/Hold/Out sections using the param IDs
+/// from each KKAnimatableProperty. This replaces the manual holdPropertyView
+/// mechanism — do not override both.
+- (nullable NSArray<KKAnimatableProperty *> *)animatableProperties;
+
+/// Override to provide a view with hold property toggles. This view is added
+/// as a direct subview of the timing graph and shown when the hold section is
+/// selected and a non-static hold effect is active. Return nil for no toggles.
+/// Ignored when animatableProperties returns non-nil.
+- (nullable NSView *)holdPropertyView;
+- (CGFloat)holdPropertyViewHeight;
+- (nullable void (^)(id, CMTime))holdPropertyApplyState;
+
 /// Reads the bool at forceShowParamID; if YES, sets every param in paramIDs
 /// to kFxParameterFlag_DEFAULT and returns YES.  Caller should early-return
 /// from updateParameterVisibilityAtTime: when this returns YES.
 - (BOOL)forceShowAllParametersIfEnabled:(UInt32)forceShowParamID
                                paramIDs:(NSArray<NSNumber *> *)paramIDs
                                  atTime:(CMTime)time;
+
+/// Creates a collapsible group header view wired to a hidden bool toggle.
+/// Use from createViewForParameterID: — the returned view reads/writes
+/// the expanded state at expandedParamID via an action scope.
+- (NSView *)createGroupHeaderWithTitle:(NSString *)title
+                                  icon:(nullable NSImage *)icon
+                           parameterID:(UInt32)parameterID
+                       expandedParamID:(UInt32)expandedParamID
+    NS_RETURNS_RETAINED;
 
 @end
 
