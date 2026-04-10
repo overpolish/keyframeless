@@ -36,7 +36,13 @@ static void setFlagsIfChanged(id<FxParameterSettingAPI_v5> setAPI,
                                  @(kParamOffsetX), @(kParamOffsetY),
                                  @(kKKParamColorMode), @(kKKParamColorSolid),
                                  @(kKKParamColorGradient),
-                                 @(kParamGradientType), @(kParamGradientAngle)
+                                 @(kParamGradientType), @(kParamGradientAngle),
+                                 @(kParamTimingInColor),
+                                 @(kParamTimingHoldColor),
+                                 @(kParamTimingOutColor),
+                                 @(kParamTimingInGradient),
+                                 @(kParamTimingHoldGradient),
+                                 @(kParamTimingOutGradient)
                                ]
                                  atTime:time];
     if (forceShow)
@@ -95,6 +101,84 @@ static void setFlagsIfChanged(id<FxParameterSettingAPI_v5> setAPI,
       setFlagsIfChanged(paramSetAPI, paramGetAPI, kFxParameterFlag_HIDDEN,
                         kParamGradientAngle);
     }
+
+    // --- Timing color params ---
+    BOOL timingExpanded = NO;
+    [paramGetAPI getBoolValue:&timingExpanded
+                fromParameter:kKKParamTimingExpanded
+                       atTime:kCMTimeZero];
+
+    int colorModeIdx = 0;
+    [paramGetAPI getIntValue:&colorModeIdx
+               fromParameter:kKKParamColorMode
+                      atTime:time];
+    BOOL isSolid = (colorModeIdx == KKColorModeSolid);
+    BOOL isGradient = (colorModeIdx == KKColorModeGradient);
+
+    BOOL animateIn = NO, animateOut = NO;
+    [paramGetAPI getBoolValue:&animateIn
+                fromParameter:kKKParamAnimateIn
+                       atTime:time];
+    [paramGetAPI getBoolValue:&animateOut
+                fromParameter:kKKParamAnimateOut
+                       atTime:time];
+
+    BOOL inColorToggle = NO, holdColorToggle = NO, outColorToggle = NO;
+    [paramGetAPI getBoolValue:&inColorToggle
+                fromParameter:kParamInColor
+                       atTime:time];
+    [paramGetAPI getBoolValue:&holdColorToggle
+                fromParameter:kParamHoldColor
+                       atTime:time];
+    [paramGetAPI getBoolValue:&outColorToggle
+                fromParameter:kParamOutColor
+                       atTime:time];
+
+    int selectedSection = 1; // Hold
+    [paramGetAPI getIntValue:&selectedSection
+               fromParameter:kKKParamTimingSelectedSection
+                      atTime:kCMTimeZero];
+
+    BOOL sectionIsIn = (selectedSection == 0);
+    BOOL sectionIsHold = (selectedSection == 1);
+    BOOL sectionIsOut = (selectedSection == 2);
+
+    int holdEffect = 0;
+    [paramGetAPI getIntValue:&holdEffect
+               fromParameter:kKKParamHoldEffect
+                      atTime:time];
+    BOOL holdHasEffect = (holdEffect != 0);
+
+    BOOL inActive = timingExpanded && animateIn && inColorToggle && sectionIsIn;
+    BOOL holdActive =
+        timingExpanded && holdColorToggle && holdHasEffect && sectionIsHold;
+    BOOL outActive =
+        timingExpanded && animateOut && outColorToggle && sectionIsOut;
+
+    setFlagsIfChanged(paramSetAPI, paramGetAPI,
+                      (inActive && isSolid) ? kFxParameterFlag_DEFAULT
+                                            : kFxParameterFlag_HIDDEN,
+                      kParamTimingInColor);
+    setFlagsIfChanged(paramSetAPI, paramGetAPI,
+                      (holdActive && isSolid) ? kFxParameterFlag_DEFAULT
+                                              : kFxParameterFlag_HIDDEN,
+                      kParamTimingHoldColor);
+    setFlagsIfChanged(paramSetAPI, paramGetAPI,
+                      (outActive && isSolid) ? kFxParameterFlag_DEFAULT
+                                             : kFxParameterFlag_HIDDEN,
+                      kParamTimingOutColor);
+    setFlagsIfChanged(paramSetAPI, paramGetAPI,
+                      (inActive && isGradient) ? kFxParameterFlag_DEFAULT
+                                               : kFxParameterFlag_HIDDEN,
+                      kParamTimingInGradient);
+    setFlagsIfChanged(paramSetAPI, paramGetAPI,
+                      (holdActive && isGradient) ? kFxParameterFlag_DEFAULT
+                                                 : kFxParameterFlag_HIDDEN,
+                      kParamTimingHoldGradient);
+    setFlagsIfChanged(paramSetAPI, paramGetAPI,
+                      (outActive && isGradient) ? kFxParameterFlag_DEFAULT
+                                                : kFxParameterFlag_HIDDEN,
+                      kParamTimingOutGradient);
   } @finally {
     sUpdating = NO;
   }
