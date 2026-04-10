@@ -43,15 +43,35 @@
                                        inID:kParamInColor
                                      holdID:kParamHoldColor
                                       outID:kParamOutColor],
+    [KKAnimatableProperty propertyWithLabel:@"N. Offset"
+                                       inID:kParamInNoiseOffset
+                                     holdID:kParamHoldNoiseOffset
+                                      outID:kParamOutNoiseOffset],
   ];
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
+  if (parameterID == kParamNoiseGroup)
+    return [self
+        createGroupHeaderWithTitle:@"Noise"
+                              icon:[NSImage
+                                       imageWithSystemSymbolName:
+                                           @"circle.bottomrighthalf.pattern"
+                                           @".checkered"
+                                        accessibilityDescription:nil]
+                       parameterID:parameterID
+                   expandedParamID:kParamNoiseExpanded];
+
   if (parameterID == kParamOffsetGroup)
-    return [self createGroupHeaderWithTitle:@"Offset"
-                                       icon:nil
-                                parameterID:parameterID
-                            expandedParamID:kParamOffsetExpanded];
+    return [self
+        createGroupHeaderWithTitle:@"Offset"
+                              icon:[NSImage
+                                       imageWithSystemSymbolName:
+                                           @"arrow.down.left.arrow.up.right"
+                                           @".circle"
+                                        accessibilityDescription:nil]
+                       parameterID:parameterID
+                   expandedParamID:kParamOffsetExpanded];
 
   struct objc_super sup = {self, [KKPlugin class]};
   return ((NSView * (*)(struct objc_super *, SEL, UInt32)) objc_msgSendSuper)(

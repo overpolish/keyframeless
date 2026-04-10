@@ -48,6 +48,7 @@
   case kParamInColor:
   case kParamHoldColor:
   case kParamOutColor:
+  case kParamNoiseExpanded:
   case kParamOffsetExpanded:
   case kKKParamColorExpanded:
     [self updateParameterVisibilityAtTime:time];

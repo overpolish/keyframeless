@@ -61,7 +61,8 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
                               constant int *gradientType [[buffer(FragmentIndex_GradientType)]],
                               constant float *gradientAngle [[buffer(FragmentIndex_GradientAngle)]],
                               constant float *noiseAmount [[buffer(FragmentIndex_Noise)]],
-                              constant float *noiseOffset [[buffer(FragmentIndex_NoiseOffset)]]) {
+                              constant float *noiseOffset [[buffer(FragmentIndex_NoiseOffset)]],
+                              constant float *noiseSeed [[buffer(FragmentIndex_NoiseSeed)]]) {
 
     constexpr sampler s(mag_filter::linear, min_filter::linear);
 
@@ -89,7 +90,20 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
     float nAmt = *noiseAmount;
     if (nAmt > 0.0) {
         float2 px = in.textureCoordinate * float2(blurred.get_width(), blurred.get_height());
-        float n = hash12(floor(px));
+        float radialDist = 1.0 - blur.a;
+        float pixelRand = hash12(floor(px));
+        // Single radial flow — all layers move outward at the same speed
+        float rp = radialDist * 6.0 - *noiseSeed + pixelRand * 0.5;
+        float band = floor(rp);
+        float blend = smoothstep(0.0, 1.0, fract(rp));
+        // Fine + coarse spatial scales share the same radial band
+        float2 fine = floor(px);
+        float2 coarse = floor(px * 0.5);
+        float nFine =
+            mix(hash12(fine + band * float2(127.1, 311.7)), hash12(fine + (band + 1.0) * float2(127.1, 311.7)), blend);
+        float nCoarse = mix(hash12(coarse + band * float2(269.5, 183.3)),
+                            hash12(coarse + (band + 1.0) * float2(269.5, 183.3)), blend);
+        float n = nFine * 0.7 + nCoarse * 0.3;
         float nOff = *noiseOffset;
         float nScale = nOff > 0.0 ? 1.0 - smoothstep(0.0, 1.0 - nOff + 0.01, blur.a) : 1.0;
         fade *= saturate(1.0 - nAmt * nScale * (1.0 - n));

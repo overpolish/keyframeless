@@ -33,8 +33,10 @@ static void setFlagsIfChanged(id<FxParameterSettingAPI_v5> setAPI,
     BOOL forceShow = [self
         forceShowAllParametersIfEnabled:kParamForceShow
                                paramIDs:@[
-                                 @(kParamOffsetX), @(kParamOffsetY),
-                                 @(kKKParamColorMode), @(kKKParamColorSolid),
+                                 @(kParamNoise), @(kParamNoiseOffset),
+                                 @(kParamNoiseSpeed), @(kParamOffsetX),
+                                 @(kParamOffsetY), @(kKKParamColorMode),
+                                 @(kKKParamColorSolid),
                                  @(kKKParamColorGradient),
                                  @(kParamGradientType), @(kParamGradientAngle),
                                  @(kParamTimingInColor),
@@ -47,6 +49,18 @@ static void setFlagsIfChanged(id<FxParameterSettingAPI_v5> setAPI,
                                  atTime:time];
     if (forceShow)
       return;
+
+    // --- Noise group ---
+    BOOL noiseExpanded = NO;
+    [paramGetAPI getBoolValue:&noiseExpanded
+                fromParameter:kParamNoiseExpanded
+                       atTime:kCMTimeZero];
+
+    FxParameterFlags noiseFlags =
+        noiseExpanded ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+    setFlagsIfChanged(paramSetAPI, paramGetAPI, noiseFlags, kParamNoise);
+    setFlagsIfChanged(paramSetAPI, paramGetAPI, noiseFlags, kParamNoiseOffset);
+    setFlagsIfChanged(paramSetAPI, paramGetAPI, noiseFlags, kParamNoiseSpeed);
 
     // --- Offset group ---
     BOOL offsetExpanded = NO;
