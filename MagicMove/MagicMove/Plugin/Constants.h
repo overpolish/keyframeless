@@ -84,6 +84,26 @@ static const UInt32 kParamHoldRotationX = 507;
 static const UInt32 kParamHoldRotationY = 508;
 static const UInt32 kParamHoldOpacity = 509;
 
+// In property toggles (520–527)
+static const UInt32 kParamInPositionX = 520;
+static const UInt32 kParamInPositionY = 521;
+static const UInt32 kParamInScaleX = 522;
+static const UInt32 kParamInScaleY = 523;
+static const UInt32 kParamInRotationZ = 524;
+static const UInt32 kParamInRotationX = 525;
+static const UInt32 kParamInRotationY = 526;
+static const UInt32 kParamInOpacity = 527;
+
+// Out property toggles (530–537)
+static const UInt32 kParamOutPositionX = 530;
+static const UInt32 kParamOutPositionY = 531;
+static const UInt32 kParamOutScaleX = 532;
+static const UInt32 kParamOutScaleY = 533;
+static const UInt32 kParamOutRotationZ = 534;
+static const UInt32 kParamOutRotationX = 535;
+static const UInt32 kParamOutRotationY = 536;
+static const UInt32 kParamOutOpacity = 537;
+
 // Anchor (601)
 static const UInt32 kParamAnchorPoint = 601;
 

@@ -132,95 +132,41 @@
   return @[ [self _rotateWithMotionSlotForParam:rwmParams[section]] ];
 }
 
-- (NSView *)holdPropertyView {
-  static const UInt32 holdParams[] = {
-      kParamHoldPositionX, kParamHoldPositionY, kParamHoldScaleX,
-      kParamHoldScaleY,    kParamHoldRotationZ, kParamHoldRotationX,
-      kParamHoldRotationY, kParamHoldOpacity,
-  };
-  static const NSInteger holdCount = 8;
-
-  static const CGFloat kPillRowH = 18.0;
-
-  KKPillToggleRowView *row1 = [[KKPillToggleRowView alloc]
-      initWithLabels:@[ @"Pos X", @"Pos Y", @"Sca X", @"Sca Y" ]];
-  row1.autoresizingMask = NSViewWidthSizable;
-
-  KKPillToggleRowView *row2 = [[KKPillToggleRowView alloc]
-      initWithLabels:@[ @"Rot Z", @"Rot X", @"Rot Y", @"Opa" ]];
-  [row2 setState:NO atIndex:1];
-  [row2 setState:NO atIndex:2];
-  [row2 setState:NO atIndex:3];
-  row2.autoresizingMask = NSViewWidthSizable;
-
-  CGFloat totalH = kPillRowH * 2 + KKSpacingXS;
-  NSView *container = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, totalH)];
-  row1.frame = NSMakeRect(0, 0, 300, kPillRowH);
-  row2.frame = NSMakeRect(0, kPillRowH + KKSpacingXS, 300, kPillRowH);
-  [container addSubview:row1];
-  [container addSubview:row2];
-
-  __weak typeof(self) weakSelf = self;
-  void (^handleToggle)(NSInteger, BOOL) = ^(NSInteger paramIdx, BOOL isOn) {
-    __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf || paramIdx >= holdCount)
-      return;
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actAPI startAction:strongSelf];
-    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    [setAPI setBoolValue:isOn
-             toParameter:holdParams[paramIdx]
-                  atTime:[actAPI currentTime]];
-    [actAPI endAction:strongSelf];
-  };
-  row1.onToggled = ^(NSInteger index, BOOL isOn) {
-    handleToggle(index, isOn);
-  };
-  row2.onToggled = ^(NSInteger index, BOOL isOn) {
-    handleToggle(index + 4, isOn);
-  };
-
-  static const void *const kRow1Key = &kRow1Key;
-  static const void *const kRow2Key = &kRow2Key;
-  objc_setAssociatedObject([self class], kRow1Key, row1,
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-  objc_setAssociatedObject([self class], kRow2Key, row2,
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-  return container;
-}
-
-- (CGFloat)holdPropertyViewHeight {
-  return 18.0 * 2 + KKSpacingXS;
-}
-
-- (void (^)(id, CMTime))holdPropertyApplyState {
-  static const UInt32 holdParams[] = {
-      kParamHoldPositionX, kParamHoldPositionY, kParamHoldScaleX,
-      kParamHoldScaleY,    kParamHoldRotationZ, kParamHoldRotationX,
-      kParamHoldRotationY, kParamHoldOpacity,
-  };
-  static const NSInteger holdCount = 8;
-  static const void *const kRow1Key = &kRow1Key;
-  static const void *const kRow2Key = &kRow2Key;
-  return [^(id paramAPI, CMTime time) {
-    KKPillToggleRowView *r1 =
-        objc_getAssociatedObject([self class], kRow1Key);
-    KKPillToggleRowView *r2 =
-        objc_getAssociatedObject([self class], kRow2Key);
-    if (!r1 || !r2)
-      return;
-    for (NSInteger i = 0; i < holdCount; i++) {
-      BOOL val = YES;
-      [paramAPI getBoolValue:&val fromParameter:holdParams[i] atTime:time];
-      if (i < 4)
-        [r1 setState:val atIndex:i];
-      else
-        [r2 setState:val atIndex:i - 4];
-    }
-  } copy];
+- (NSArray<KKAnimatableProperty *> *)animatableProperties {
+  return @[
+    [KKAnimatableProperty propertyWithLabel:@"Pos X"
+                                       inID:kParamInPositionX
+                                     holdID:kParamHoldPositionX
+                                      outID:kParamOutPositionX],
+    [KKAnimatableProperty propertyWithLabel:@"Pos Y"
+                                       inID:kParamInPositionY
+                                     holdID:kParamHoldPositionY
+                                      outID:kParamOutPositionY],
+    [KKAnimatableProperty propertyWithLabel:@"Sca X"
+                                       inID:kParamInScaleX
+                                     holdID:kParamHoldScaleX
+                                      outID:kParamOutScaleX],
+    [KKAnimatableProperty propertyWithLabel:@"Sca Y"
+                                       inID:kParamInScaleY
+                                     holdID:kParamHoldScaleY
+                                      outID:kParamOutScaleY],
+    [KKAnimatableProperty propertyWithLabel:@"Rot Z"
+                                       inID:kParamInRotationZ
+                                     holdID:kParamHoldRotationZ
+                                      outID:kParamOutRotationZ],
+    [KKAnimatableProperty propertyWithLabel:@"Rot X"
+                                       inID:kParamInRotationX
+                                     holdID:kParamHoldRotationX
+                                      outID:kParamOutRotationX],
+    [KKAnimatableProperty propertyWithLabel:@"Rot Y"
+                                       inID:kParamInRotationY
+                                     holdID:kParamHoldRotationY
+                                      outID:kParamOutRotationY],
+    [KKAnimatableProperty propertyWithLabel:@"Opa"
+                                       inID:kParamInOpacity
+                                     holdID:kParamHoldOpacity
+                                      outID:kParamOutOpacity],
+  ];
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
