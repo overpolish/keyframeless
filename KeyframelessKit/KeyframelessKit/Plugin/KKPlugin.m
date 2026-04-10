@@ -277,6 +277,10 @@
   return @[];
 }
 
+- (NSArray<KKAnimatableProperty *> *)animatableProperties {
+  return nil;
+}
+
 - (NSView *)holdPropertyView {
   return nil;
 }

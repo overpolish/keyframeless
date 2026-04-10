@@ -503,14 +503,35 @@
   else if (showMidIntensity)
     _frequencySlider.doubleValue = _holdFrequency;
 
-  // Placeholder when no bottom controls
-  _emptyPlaceholder.hidden = showIntensity || !show;
+  // Property view & static alert
+  BOOL secIn = _selectedSection == KKTimingGraphSectionIn;
+  BOOL secOut = _selectedSection == KKTimingGraphSectionOut;
+  BOOL showProps, showAlert;
+  if (_showPropertyViewForAllSections) {
+    showProps = (secIn && _inEnabled) || (showMid && _holdEffect != KKHoldEffectNone) || (secOut && _outEnabled);
+    showAlert = (secIn && !_inEnabled) || (showMid && _holdEffect == KKHoldEffectNone) || (secOut && !_outEnabled);
+    if (showProps) {
+      NSString *label = secIn ? @"In Properties" : secOut ? @"Out Properties" : @"Hold Properties";
+      _holdPropertyLabel.stringValue = label;
+    }
+    if (showAlert) {
+      if (secIn)
+        _holdStaticAlert.text = @"Enable Animate In to animate properties";
+      else if (secOut)
+        _holdStaticAlert.text = @"Enable Animate Out to animate properties";
+      else
+        _holdStaticAlert.text = @"Select a hold effect to animate properties";
+    }
+  } else {
+    showProps = showMid && _holdEffect != KKHoldEffectNone;
+    showAlert = showMid && !showProps;
+  }
+  _holdPropertyView.hidden = !showProps;
+  _holdPropertyLabel.hidden = !showProps;
+  _holdStaticAlert.hidden = !showAlert;
 
-  // Hold property view & static alert
-  BOOL showHoldProps = showMid && _holdEffect != KKHoldEffectNone;
-  _holdPropertyView.hidden = !showHoldProps;
-  _holdPropertyLabel.hidden = !showHoldProps;
-  _holdStaticAlert.hidden = !showMid || showHoldProps;
+  // Placeholder when no bottom controls (hidden if property alert will show)
+  _emptyPlaceholder.hidden = showIntensity || !show || showAlert;
 
   if (showIntensity)
     [self renderIntensityTicks];
@@ -698,7 +719,7 @@
   CGFloat viewWidth = NSWidth(self.bounds);
 
   CGFloat slotsY = graphTop + kGraphHeight + kLabelRowHeight +
-                   kSliderRowHeight + kTickHeight + KKPaddingSM;
+                   kSliderRowHeight + kTickHeight + KKPaddingSM + 4.0;
 
   for (NSUInteger i = 0; i < _globalSlots.count; i++) {
     NSView *v = _globalSlotViews[i];

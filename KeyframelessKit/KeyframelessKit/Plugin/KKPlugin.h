@@ -12,6 +12,7 @@
 #import <Metal/Metal.h>
 
 @class FxImageTile;
+@class KKAnimatableProperty;
 @class KKTimingSlot;
 @class NSBezierPath;
 @protocol PROAPIAccessing;
@@ -145,9 +146,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// graph, changing based on the selected section (0=In, 1=Hold, 2=Out).
 - (NSArray<KKTimingSlot *> *)timingSlotsForSection:(NSInteger)section;
 
+/// Override to declare animatable properties. When non-nil, the timing graph
+/// auto-generates pill toggles for In/Hold/Out sections using the param IDs
+/// from each KKAnimatableProperty. This replaces the manual holdPropertyView
+/// mechanism — do not override both.
+- (nullable NSArray<KKAnimatableProperty *> *)animatableProperties;
+
 /// Override to provide a view with hold property toggles. This view is added
 /// as a direct subview of the timing graph and shown when the hold section is
 /// selected and a non-static hold effect is active. Return nil for no toggles.
+/// Ignored when animatableProperties returns non-nil.
 - (nullable NSView *)holdPropertyView;
 - (CGFloat)holdPropertyViewHeight;
 - (nullable void (^)(id, CMTime))holdPropertyApplyState;

@@ -88,6 +88,13 @@ static const float kMaxBlurDimension = 2048.0f;
   double outF = timing.outPhase.factor;
   double holdF = timing.holdPhase.factor;
 
+  BOOL inR = YES, inI = YES, inFl = YES, inN = YES, inO = YES;
+  [api getBoolValue:&inR fromParameter:kParamInRadius atTime:renderTime];
+  [api getBoolValue:&inI fromParameter:kParamInIntensity atTime:renderTime];
+  [api getBoolValue:&inFl fromParameter:kParamInFalloff atTime:renderTime];
+  [api getBoolValue:&inN fromParameter:kParamInNoise atTime:renderTime];
+  [api getBoolValue:&inO fromParameter:kParamInOffset atTime:renderTime];
+
   BOOL holdR = YES, holdI = YES, holdFl = YES, holdN = YES, holdO = YES;
   [api getBoolValue:&holdR fromParameter:kParamHoldRadius atTime:renderTime];
   [api getBoolValue:&holdI fromParameter:kParamHoldIntensity atTime:renderTime];
@@ -95,14 +102,22 @@ static const float kMaxBlurDimension = 2048.0f;
   [api getBoolValue:&holdN fromParameter:kParamHoldNoise atTime:renderTime];
   [api getBoolValue:&holdO fromParameter:kParamHoldOffset atTime:renderTime];
 
+  BOOL outR = YES, outI = YES, outFl = YES, outN = YES, outO = YES;
+  [api getBoolValue:&outR fromParameter:kParamOutRadius atTime:renderTime];
+  [api getBoolValue:&outI fromParameter:kParamOutIntensity atTime:renderTime];
+  [api getBoolValue:&outFl fromParameter:kParamOutFalloff atTime:renderTime];
+  [api getBoolValue:&outN fromParameter:kParamOutNoise atTime:renderTime];
+  [api getBoolValue:&outO fromParameter:kParamOutOffset atTime:renderTime];
+
   int holdSeed = 0;
   [api getIntValue:&holdSeed fromParameter:kKKParamHoldSeed atTime:renderTime];
 
-  double rF = inF * (holdR ? holdF : 1.0) * outF;
-  double iF = inF * (holdI ? holdF : 1.0) * outF;
-  double fF = inF * (holdFl ? holdF : 1.0) * outF;
-  double nF = inF * (holdN ? holdF : 1.0) * outF;
-  double oF = inF * outF;
+  double rF = (inR ? inF : 1.0) * (holdR ? holdF : 1.0) * (outR ? outF : 1.0);
+  double iF = (inI ? inF : 1.0) * (holdI ? holdF : 1.0) * (outI ? outF : 1.0);
+  double fF =
+      (inFl ? inF : 1.0) * (holdFl ? holdF : 1.0) * (outFl ? outF : 1.0);
+  double nF = (inN ? inF : 1.0) * (holdN ? holdF : 1.0) * (outN ? outF : 1.0);
+  double oF = (inO ? inF : 1.0) * (outO ? outF : 1.0);
   double hD = holdF - 1.0;
   double hOX = holdO ? hD * 0.03 * KKSeedSign(holdSeed, 0) : 0.0;
   double hOY = holdO ? hD * 0.03 * KKSeedSign(holdSeed, 1) : 0.0;
