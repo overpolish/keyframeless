@@ -54,6 +54,7 @@
       }
     }
   }
+  [self handleLinkedParameterChanged:parameterID atTime:time];
   [self updateParameterVisibilityAtTime:time];
   return YES;
 }
