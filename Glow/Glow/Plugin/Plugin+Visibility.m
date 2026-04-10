@@ -90,7 +90,7 @@ static void setFlagsIfChanged(id<FxParameterSettingAPI_v5> setAPI,
                  fromParameter:kParamGradientType
                         atTime:time];
 
-      BOOL isGradient = (colorMode == KKColorModeGradient);
+      BOOL isGradient = (colorMode == 2); // Gradient (index 2 in modes array)
 
       setFlagsIfChanged(paramSetAPI, paramGetAPI,
                         isGradient ? kFxParameterFlag_NOT_ANIMATABLE
@@ -126,8 +126,9 @@ static void setFlagsIfChanged(id<FxParameterSettingAPI_v5> setAPI,
     [paramGetAPI getIntValue:&colorModeIdx
                fromParameter:kKKParamColorMode
                       atTime:time];
-    BOOL isSolid = (colorModeIdx == KKColorModeSolid);
-    BOOL isGradient = (colorModeIdx == KKColorModeGradient);
+    // modes array order: Dynamic(0), Solid(1), Gradient(2)
+    BOOL isSolid = (colorModeIdx == 1);
+    BOOL isGradient = (colorModeIdx == 2);
 
     BOOL animateIn = NO, animateOut = NO;
     [paramGetAPI getBoolValue:&animateIn

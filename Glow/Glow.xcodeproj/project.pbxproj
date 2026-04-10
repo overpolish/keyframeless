@@ -94,6 +94,7 @@
 			membershipExceptions = (
 				"/Localized: Plugin/InfoPlist.strings",
 				"/Localized: Plugin/Localizable.strings",
+				Plugin/Glow.metal,
 				Plugin/Info.plist,
 				Plugin/main.m,
 				Plugin/OSC.m,
@@ -101,8 +102,8 @@
 				"Plugin/Plugin+CustomUI.m",
 				"Plugin/Plugin+Parameters.m",
 				"Plugin/Plugin+Render.m",
+				"Plugin/Plugin+Presets.m",
 				"Plugin/Plugin+Visibility.m",
-				Plugin/Glow.metal,
 				"Wrapper Application/Info.plist",
 			);
 			target = F2E2ED742F4CA530008620D9 /* Wrapper Application */;

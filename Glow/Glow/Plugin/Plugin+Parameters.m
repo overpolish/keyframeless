@@ -38,6 +38,13 @@
                                   kFxParameterFlag_DONT_DISPLAY_IN_DASHBOARD])
     return NO;
 
+  if (![paramAPI addPopupMenuWithName:@"Preset"
+                          parameterID:kParamPreset
+                         defaultValue:GlowPresetSoftGlow
+                          menuEntries:@[ @"Soft Glow", @"Shadow", @"Fire" ]
+                       parameterFlags:kFxParameterFlag_NOT_ANIMATABLE])
+    return NO;
+
   if (![paramAPI addFloatSliderWithName:@"Radius X"
                             parameterID:kParamRadiusX
                            defaultValue:100.0
@@ -84,8 +91,8 @@
 
   if (![self addColorParametersWithAPI:paramAPI
                                  modes:@[
-                                   @(KKColorModeSolid), @(KKColorModeGradient),
-                                   @(KKColorModeDynamic)
+                                   @(KKColorModeDynamic), @(KKColorModeSolid),
+                                   @(KKColorModeGradient)
                                  ]
                                  error:error])
     return NO;

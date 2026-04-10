@@ -53,6 +53,9 @@
   case kKKParamColorExpanded:
     [self updateParameterVisibilityAtTime:time];
     break;
+  case kParamPreset:
+    [self applyPresetAtTime:time];
+    break;
   default:
     [self handleLinkedParameterChanged:parameterID atTime:time];
     break;
