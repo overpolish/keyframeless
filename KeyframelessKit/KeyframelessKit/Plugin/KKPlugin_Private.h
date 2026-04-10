@@ -36,6 +36,10 @@ static const void *const kKKInfoTexts = &kKKInfoTexts;
 static const void *const kKKInfoAttrTexts = &kKKInfoAttrTexts;
 static const void *const kKKInfoIcons = &kKKInfoIcons;
 static const void *const kKKTimingExtraIDs = &kKKTimingExtraIDs;
+static const void *const kKKLinkedPairs = &kKKLinkedPairs;
+static const void *const kKKLinkedLocking = &kKKLinkedLocking;
+static const void *const kKKLinkedRatio = &kKKLinkedRatio;
+static const void *const kKKLinkedSource = &kKKLinkedSource;
 
 static inline NSMutableDictionary<NSNumber *, id> *
 kkClassRegistry(Class cls, const void *key) {

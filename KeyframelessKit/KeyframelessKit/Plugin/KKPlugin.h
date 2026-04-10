@@ -136,6 +136,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// animation.
 - (void)updateTimingParameterVisibility;
 
+/// Pairs of parameter IDs that maintain their aspect ratio when the user
+/// holds Cmd while dragging either slider. Set before first use (e.g. in
+/// addParametersWithError:). Each element is @[@(paramA), @(paramB)].
+@property(nonatomic, copy, nullable)
+    NSArray<NSArray<NSNumber *> *> *linkedParameterPairs;
+
+/// Call from parameterChanged:atTime:error: for any parameter that may be
+/// part of a linked pair. Returns YES if the change was handled (the other
+/// parameter in the pair was updated to maintain ratio). Returns NO if the
+/// parameter is not part of a pair or Cmd is not held.
+- (BOOL)handleLinkedParameterChanged:(UInt32)parameterID atTime:(CMTime)time;
+
 /// Override in subclasses to provide custom views that appear above the
 /// duration slider, always visible when the timing group is expanded.
 /// Build views using KK components (KKCheckboxView, KKSliderView, etc.)

@@ -232,6 +232,8 @@
                       parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
+  self.linkedParameterPairs = @[ @[ @(kParamRadiusX), @(kParamRadiusY) ] ];
+
   return YES;
 }
 
