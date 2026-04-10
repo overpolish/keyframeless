@@ -28,8 +28,20 @@ static const UInt32 kParamOffsetY = 211;
 static const UInt32 kParamHoldRadius = 500;
 static const UInt32 kParamHoldIntensity = 501;
 static const UInt32 kParamHoldFalloff = 502;
-static const UInt32 kParamHoldNoise = 504;
 static const UInt32 kParamHoldOffset = 503;
+static const UInt32 kParamHoldNoise = 504;
+
+static const UInt32 kParamInRadius = 600;
+static const UInt32 kParamInIntensity = 601;
+static const UInt32 kParamInFalloff = 602;
+static const UInt32 kParamInOffset = 603;
+static const UInt32 kParamInNoise = 604;
+
+static const UInt32 kParamOutRadius = 700;
+static const UInt32 kParamOutIntensity = 701;
+static const UInt32 kParamOutFalloff = 702;
+static const UInt32 kParamOutOffset = 703;
+static const UInt32 kParamOutNoise = 704;
 
 static const NSInteger kOSCOffsetPart = 1;
 static const NSInteger kOSCRadiusPart = 2;
