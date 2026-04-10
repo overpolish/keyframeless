@@ -8,6 +8,7 @@
 #import "KKHostInfo.h"
 #import "KKPlugin_Private.h"
 #import <AppKit/AppKit.h>
+#import <Carbon/Carbon.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
@@ -64,6 +65,94 @@
 
 - (NSArray<NSNumber *> *)timingGroupExtraParamIDs {
   return objc_getAssociatedObject([self class], kKKTimingExtraIDs);
+}
+
+- (void)setLinkedParameterPairs:(NSArray<NSArray<NSNumber *> *> *)pairs {
+  objc_setAssociatedObject(self, kKKLinkedPairs, [pairs copy],
+                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+- (NSArray<NSArray<NSNumber *> *> *)linkedParameterPairs {
+  return objc_getAssociatedObject(self, kKKLinkedPairs);
+}
+
+- (BOOL)handleLinkedParameterChanged:(UInt32)parameterID atTime:(CMTime)time {
+  NSNumber *locking = objc_getAssociatedObject(self, kKKLinkedLocking);
+  if (locking.boolValue)
+    return YES;
+
+  CGEventFlags flags =
+      CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+  BOOL cmdHeld = (flags & kCGEventFlagMaskCommand) != 0;
+  BOOL optHeld = (flags & kCGEventFlagMaskAlternate) != 0;
+
+  if (!cmdHeld && !optHeld) {
+    objc_setAssociatedObject(self, kKKLinkedSource, nil,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    return NO;
+  }
+
+  NSArray<NSArray<NSNumber *> *> *pairs = self.linkedParameterPairs;
+  UInt32 otherID = 0;
+  BOOL found = NO;
+  for (NSArray<NSNumber *> *pair in pairs) {
+    if (pair.count < 2)
+      continue;
+    if (pair[0].unsignedIntValue == parameterID) {
+      otherID = pair[1].unsignedIntValue;
+      found = YES;
+      break;
+    }
+    if (pair[1].unsignedIntValue == parameterID) {
+      otherID = pair[0].unsignedIntValue;
+      found = YES;
+      break;
+    }
+  }
+  if (!found)
+    return NO;
+
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  if (!getAPI || !setAPI)
+    return NO;
+
+  double valA = 0;
+  [getAPI getFloatValue:&valA fromParameter:parameterID atTime:time];
+
+  if (optHeld) {
+    objc_setAssociatedObject(self, kKKLinkedLocking, @YES,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [setAPI setFloatValue:valA toParameter:otherID atTime:time];
+    objc_setAssociatedObject(self, kKKLinkedLocking, @NO,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    return YES;
+  }
+
+  double valB = 0;
+  [getAPI getFloatValue:&valB fromParameter:otherID atTime:time];
+
+  NSNumber *prevSource = objc_getAssociatedObject(self, kKKLinkedSource);
+  if (!prevSource || prevSource.unsignedIntValue != parameterID) {
+    objc_setAssociatedObject(self, kKKLinkedSource, @(parameterID),
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    double ratio = (valA > 0) ? valB / valA : 1.0;
+    objc_setAssociatedObject(self, kKKLinkedRatio, @(ratio),
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  }
+
+  NSNumber *ratioNum = objc_getAssociatedObject(self, kKKLinkedRatio);
+  double ratio = ratioNum ? ratioNum.doubleValue : 1.0;
+
+  objc_setAssociatedObject(self, kKKLinkedLocking, @YES,
+                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  [setAPI setFloatValue:valA * ratio toParameter:otherID atTime:time];
+  objc_setAssociatedObject(self, kKKLinkedLocking, @NO,
+                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+  return YES;
 }
 
 - (nullable id<MTLRenderPipelineState>)

@@ -53,6 +53,7 @@
     [self updateParameterVisibilityAtTime:time];
     break;
   default:
+    [self handleLinkedParameterChanged:parameterID atTime:time];
     break;
   }
   return YES;
