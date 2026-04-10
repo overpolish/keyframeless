@@ -27,6 +27,8 @@
   NSLayoutConstraint *_intensityTrailingHalf;
   NSLayoutConstraint *_intensityTrailingFull;
   KKAlertView *_emptyPlaceholder;
+  KKAlertView *_holdStaticAlert;
+  NSTextField *_holdPropertyLabel;
 }
 
 #pragma clang diagnostic pop
@@ -331,6 +333,21 @@
       [_emptyPlaceholder.heightAnchor
           constraintEqualToConstant:kSliderRowHeight + kTickHeight],
     ]];
+
+    _holdStaticAlert = [[KKAlertView alloc]
+        initWithText:@"Select a hold effect to animate properties"
+               color:[[NSColor inspectorLabel] colorWithAlphaComponent:0.3]];
+    _holdStaticAlert.icon =
+        [NSImage imageWithSystemSymbolName:@"info.circle"
+                  accessibilityDescription:nil];
+    _holdStaticAlert.hidden = YES;
+    [self addSubview:_holdStaticAlert];
+
+    _holdPropertyLabel = [NSTextField labelWithString:@"Hold Properties"];
+    _holdPropertyLabel.font = [NSFont systemFontOfSize:11.0];
+    _holdPropertyLabel.textColor = [NSColor inspectorLabel];
+    _holdPropertyLabel.hidden = YES;
+    [self addSubview:_holdPropertyLabel];
   }
   return self;
 }
@@ -486,13 +503,50 @@
   else if (showMidIntensity)
     _frequencySlider.doubleValue = _holdFrequency;
 
-  // Placeholder when no bottom controls
-  _emptyPlaceholder.hidden = showIntensity || !show;
+  // Property view & static alert
+  BOOL secIn = _selectedSection == KKTimingGraphSectionIn;
+  BOOL secOut = _selectedSection == KKTimingGraphSectionOut;
+  BOOL showProps, showAlert;
+  if (_showPropertyViewForAllSections) {
+    showProps = (secIn && _inEnabled) || (showMid && _holdEffect != KKHoldEffectNone) || (secOut && _outEnabled);
+    showAlert = (secIn && !_inEnabled) || (showMid && _holdEffect == KKHoldEffectNone) || (secOut && !_outEnabled);
+    if (showProps) {
+      NSString *label = secIn ? @"In Properties" : secOut ? @"Out Properties" : @"Hold Properties";
+      _holdPropertyLabel.stringValue = label;
+    }
+    if (showAlert) {
+      if (secIn)
+        _holdStaticAlert.text = @"Enable Animate In to animate properties";
+      else if (secOut)
+        _holdStaticAlert.text = @"Enable Animate Out to animate properties";
+      else
+        _holdStaticAlert.text = @"Select a hold effect to animate properties";
+    }
+  } else {
+    showProps = showMid && _holdEffect != KKHoldEffectNone;
+    showAlert = showMid && !showProps;
+  }
+  _holdPropertyView.hidden = !showProps;
+  _holdPropertyLabel.hidden = !showProps;
+  _holdStaticAlert.hidden = !showAlert;
+
+  // Placeholder when no bottom controls (hidden if property alert will show)
+  _emptyPlaceholder.hidden = showIntensity || !show || showAlert;
 
   if (showIntensity)
     [self renderIntensityTicks];
   if (showFrequency)
     [self renderFrequencyTicks];
+}
+
+- (void)setHoldPropertyView:(NSView *)holdPropertyView {
+  [_holdPropertyView removeFromSuperview];
+  _holdPropertyView = holdPropertyView;
+  if (_holdPropertyView) {
+    _holdPropertyView.hidden = YES;
+    [self addSubview:_holdPropertyView];
+  }
+  [self setNeedsLayout:YES];
 }
 
 - (void)setInEnabled:(BOOL)inEnabled {
@@ -665,7 +719,7 @@
   CGFloat viewWidth = NSWidth(self.bounds);
 
   CGFloat slotsY = graphTop + kGraphHeight + kLabelRowHeight +
-                   kSliderRowHeight + kTickHeight + KKPaddingSM;
+                   kSliderRowHeight + kTickHeight + KKPaddingSM + 4.0;
 
   for (NSUInteger i = 0; i < _globalSlots.count; i++) {
     NSView *v = _globalSlotViews[i];
@@ -686,6 +740,23 @@
     sectionSlots = _outSectionSlots;
     break;
   }
+  if (_holdPropertyView) {
+    CGFloat inset = KKInspectorHorizontalInset;
+    CGFloat hpH = _holdPropertyViewHeight > 0 ? _holdPropertyViewHeight
+                                               : KKInspectorRowHeight;
+    CGFloat rowH = MAX(hpH, 14.0);
+    CGFloat holdY = slotsY - 4.0;
+    CGFloat labelY = holdY + (rowH - 14.0) / 2.0;
+    CGFloat viewY = holdY + (rowH - hpH) / 2.0;
+    _holdPropertyLabel.frame =
+        NSMakeRect(inset, labelY, viewWidth * 0.35, 14.0);
+    _holdPropertyView.frame =
+        NSMakeRect(inset, viewY, viewWidth - inset * 2, hpH);
+    _holdStaticAlert.frame =
+        NSMakeRect(0, holdY, viewWidth, rowH);
+    slotsY = holdY + rowH + KKSpacingSM;
+  }
+
   for (NSUInteger i = 0; i < sectionSlots.count; i++) {
     NSView *v = _sectionSlotViews[i];
     CGFloat h = sectionSlots[i].height;
@@ -719,8 +790,9 @@
   CGFloat frac =
       (tickCount > 1) ? (CGFloat)index / (CGFloat)(tickCount - 1) : 0.5;
   CGFloat centerX = NSMinX(frame) + frac * NSWidth(frame);
-  return NSMakeRect(centerX - tickW / 2.0, NSMinY(frame), tickW,
-                    NSHeight(frame));
+  NSRect hitRect =
+      NSMakeRect(centerX - tickW / 2.0, NSMinY(frame), tickW, NSHeight(frame));
+  return NSIntersectionRect(hitRect, frame);
 }
 
 - (BOOL)acceptsFirstMouse:(NSEvent *)event {

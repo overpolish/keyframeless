@@ -430,6 +430,15 @@ static const FxParameterFlags kCustomUIDisabled =
                     error, @"Unable to add update banner parameter");
 }
 
+static void _setFlagsIfNeeded(id<FxParameterSettingAPI_v5> setAPI,
+                              id<FxParameterRetrievalAPI_v6> getAPI,
+                              FxParameterFlags flags, UInt32 paramID) {
+  FxParameterFlags cur = 0;
+  [getAPI getParameterFlags:&cur fromParameter:paramID];
+  if (cur != flags)
+    [setAPI setParameterFlags:flags toParameter:paramID];
+}
+
 - (void)updateTimingParameterVisibility {
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
@@ -443,14 +452,14 @@ static const FxParameterFlags kCustomUIDisabled =
               fromParameter:kKKParamTimingExpanded
                      atTime:kCMTimeZero];
 
-  [paramSetAPI
-      setParameterFlags:(expandedTiming ? kCustomUI : kFxParameterFlag_HIDDEN)
-            toParameter:kKKParamTimingCurvePreview];
+  _setFlagsIfNeeded(paramSetAPI, paramGetAPI,
+                    expandedTiming ? kCustomUI : kFxParameterFlag_HIDDEN,
+                    kKKParamTimingCurvePreview);
 
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kKKParamAnimateIn];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kKKParamAnimateOut];
+  _setFlagsIfNeeded(paramSetAPI, paramGetAPI, kFxParameterFlag_HIDDEN,
+                    kKKParamAnimateIn);
+  _setFlagsIfNeeded(paramSetAPI, paramGetAPI, kFxParameterFlag_HIDDEN,
+                    kKKParamAnimateOut);
 
   BOOL animateIn = NO, animateOut = NO;
   int inCurve = KKEasingCurveEaseOut, outCurve = KKEasingCurveEaseOut;
@@ -490,15 +499,15 @@ static const FxParameterFlags kCustomUIDisabled =
   };
   for (NSUInteger i = 0; i < sizeof(alwaysHidden) / sizeof(alwaysHidden[0]);
        i++) {
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:alwaysHidden[i]];
+    _setFlagsIfNeeded(paramSetAPI, paramGetAPI, kFxParameterFlag_HIDDEN,
+                      alwaysHidden[i]);
   }
 
   for (NSNumber *paramID in self.timingGroupExtraParamIDs) {
     FxParameterFlags flagTiming =
         expandedTiming ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
-    [paramSetAPI setParameterFlags:flagTiming
-                       toParameter:paramID.unsignedIntValue];
+    _setFlagsIfNeeded(paramSetAPI, paramGetAPI, flagTiming,
+                      paramID.unsignedIntValue);
   }
 }
 

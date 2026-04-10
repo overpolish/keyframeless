@@ -13,15 +13,21 @@ FOUNDATION_EXPORT const unsigned char
 
 #import <KeyframelessKit/KKAlertStackView.h>
 #import <KeyframelessKit/KKAlertView.h>
+#import <KeyframelessKit/KKAnimatableProperty.h>
 #import <KeyframelessKit/KKArcOSC.h>
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKCheckboxView.h>
 #import <KeyframelessKit/KKChevronView.h>
+#import <KeyframelessKit/KKColor.h>
+#import <KeyframelessKit/KKColorWellView.h>
 #import <KeyframelessKit/KKCompoundPointOSC.h>
 #import <KeyframelessKit/KKConstants.h>
 #import <KeyframelessKit/KKCropOSC.h>
 #import <KeyframelessKit/KKCustomGroupHeaderView.h>
 #import <KeyframelessKit/KKEasing.h>
+#import <KeyframelessKit/KKGradientBarView.h>
+#import <KeyframelessKit/KKGradientFavorites.h>
+#import <KeyframelessKit/KKGradientFavoritesPopover.h>
 #import <KeyframelessKit/KKHostInfo.h>
 #import <KeyframelessKit/KKIconButtonOSC.h>
 #import <KeyframelessKit/KKKbd.h>
@@ -33,9 +39,11 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKOnScreenControl+CoordinateSpace.h>
 #import <KeyframelessKit/KKParameterRowView.h>
 #import <KeyframelessKit/KKPillToggleRowView.h>
+#import <KeyframelessKit/KKPlugin+Color.h>
 #import <KeyframelessKit/KKPlugin+Crop.h>
 #import <KeyframelessKit/KKPlugin.h>
 #import <KeyframelessKit/KKPointOSC.h>
+#import <KeyframelessKit/KKPopupSelectView.h>
 #import <KeyframelessKit/KKRectBorderOSC.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 #import <KeyframelessKit/KKRingOSC.h>

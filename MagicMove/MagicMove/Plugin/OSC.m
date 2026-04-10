@@ -9,13 +9,11 @@
 @interface KKArcOSC (FxOSC) <FxOnScreenControl_v4>
 @end
 
-static KKCompoundPointOSC *
-makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
-          UInt32 pointP, UInt32 rotP, UInt32 rotXP, UInt32 rotYP, UInt32 sxP,
-          UInt32 syP, UInt32 prevP, UInt32 opP, NSInteger arcPt,
-          NSInteger ringPt, NSInteger rotPt, NSInteger rotXRingPt,
-          NSInteger rotYRingPt, NSInteger iconPt, NSInteger opIconPt,
-          NSInteger scIconPt) {
+static KKCompoundPointOSC *makePoint(id<PROAPIAccessing> api, NSString *label,
+                                     KKArcOSC *primaryArc, UInt32 pointP,
+                                     UInt32 rotP, UInt32 rotXP, UInt32 rotYP,
+                                     UInt32 sxP, UInt32 syP, UInt32 prevP,
+                                     UInt32 opP, MagicMoveOSCParts parts) {
   KKCompoundPointOSC *p =
       [[KKCompoundPointOSC alloc] initWithAPIManager:api
                                            labelText:label
@@ -28,14 +26,14 @@ makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
   p.scaleYParam = syP;
   p.previewParam = prevP;
   p.opacityParam = opP;
-  p.arcPart = arcPt;
-  p.ringPart = ringPt;
-  p.rotPart = rotPt;
-  p.rotXRingPart = rotXRingPt;
-  p.rotYRingPart = rotYRingPt;
-  p.iconPart = iconPt;
-  p.opacityIconPart = opIconPt;
-  p.scaleIconPart = scIconPt;
+  p.arcPart = parts.arc;
+  p.ringPart = parts.ring;
+  p.rotPart = parts.rot;
+  p.rotXRingPart = parts.rotXRing;
+  p.rotYRingPart = parts.rotYRing;
+  p.iconPart = parts.icon;
+  p.opacityIconPart = parts.opacityIcon;
+  p.scaleIconPart = parts.scaleIcon;
   return p;
 }
 
@@ -51,18 +49,18 @@ makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
     self.points = @[
       makePoint(apiManager, @"Point A", self, kParamPointA, kParamRotationA,
                 kParamRotationXA, kParamRotationYA, kParamScaleA, kParamScaleYA,
-                kParamPreviewA, kParamOpacityA, 1, 2, 3, 25, 26, 13, 17, 21),
+                kParamPreviewA, kParamOpacityA, kOSCPartsA),
       makePoint(apiManager, @"Point B", nil, kParamPointB, kParamRotationB,
                 kParamRotationXB, kParamRotationYB, kParamScaleB, kParamScaleYB,
-                kParamPreviewB, kParamOpacityB, 4, 5, 6, 27, 28, 14, 18, 22),
+                kParamPreviewB, kParamOpacityB, kOSCPartsB),
       makePoint(apiManager, @"Drift", nil, kParamDriftPoint,
                 kParamDriftRotation, kParamDriftRotationX, kParamDriftRotationY,
                 kParamDriftScale, kParamDriftScaleY, kParamPreviewDrift,
-                kParamDriftOpacity, 7, 8, 9, 29, 30, 15, 19, 23),
+                kParamDriftOpacity, kOSCPartsDrift),
       makePoint(apiManager, @"Exit", nil, kParamExitPoint, kParamExitRotation,
                 kParamExitRotationX, kParamExitRotationY, kParamExitScale,
-                kParamExitScaleY, kParamPreviewExit, kParamExitOpacity, 10, 11,
-                12, 31, 32, 16, 20, 24),
+                kParamExitScaleY, kParamPreviewExit, kParamExitOpacity,
+                kOSCPartsExit),
     ];
 
     self.pathPointOSC = [[KKPointOSC alloc] initWithAPIManager:apiManager];
@@ -172,7 +170,7 @@ makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
                                         atTime:time])
       return;
   }
-  if (activePart == kAnchorPart) {
+  if (activePart == kOSCAnchorPart) {
     self.anchorDragging = YES;
     id<FxOnScreenControlAPI_v4> oscAPI =
         [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
@@ -201,7 +199,7 @@ makePoint(id<PROAPIAccessing> api, NSString *label, KKArcOSC *primaryArc,
                       modifiers:(NSUInteger)modifiers
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
-  if (activePart == kAnchorPart) {
+  if (activePart == kOSCAnchorPart) {
     id<FxOnScreenControlAPI_v4> oscAPI =
         [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
     double objX, objY;

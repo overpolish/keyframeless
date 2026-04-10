@@ -9,6 +9,10 @@
 #import <KeyframelessKit/KeyframelessKit.h>
 #import <objc/runtime.h>
 
+@interface KKPlugin (TimingGraph)
+- (void)timingGraphApplyState;
+@end
+
 @interface MagicMovePreviewClearTarget : NSObject
 @property(nonatomic, weak) id<PROAPIAccessing> apiManager;
 - (void)clearPreviews:(id)sender;
@@ -125,123 +129,44 @@
   static const UInt32 rwmParams[] = {kParamRotateWithMotionIn,
                                      kParamRotateWithMotionHold,
                                      kParamRotateWithMotionOut};
-  KKTimingSlot *rwmSlot =
-      [self _rotateWithMotionSlotForParam:rwmParams[section]];
-  if (section == 1) {
-    NSMutableArray *slots = [NSMutableArray arrayWithObject:rwmSlot];
-    [slots addObjectsFromArray:[self _holdPropertySlots]];
-    return slots;
-  }
-  return @[ rwmSlot, [self _holdPlaceholderSlot] ];
+  return @[ [self _rotateWithMotionSlotForParam:rwmParams[section]] ];
 }
 
-- (KKTimingSlot *)_holdPlaceholderSlot {
-  KKAlertView *alert = [[KKAlertView alloc]
-      initWithText:@"Hold properties only available for Hold"
-             color:[[NSColor inspectorLabel] colorWithAlphaComponent:0.3]];
-  alert.icon = [NSImage imageWithSystemSymbolName:@"info.circle"
-                         accessibilityDescription:nil];
-  return
-      [KKTimingSlot slotWithView:alert
-                          height:KKInspectorRowHeight * 2
-                      applyState:^(id<FxParameterRetrievalAPI_v6> p, CMTime t){
-                      }];
-}
-
-- (NSArray<KKTimingSlot *> *)_holdPropertySlots {
-  static const UInt32 holdParams[] = {
-      kParamHoldPositionX, kParamHoldPositionY, kParamHoldScaleX,
-      kParamHoldScaleY,    kParamHoldRotationZ, kParamHoldRotationX,
-      kParamHoldRotationY, kParamHoldOpacity,
-  };
-  static const NSInteger holdCount = 8;
-
-  static const CGFloat kPillRowH = 18.0;
-
-  KKPillToggleRowView *row1 = [[KKPillToggleRowView alloc]
-      initWithLabels:@[ @"Pos X", @"Pos Y", @"Sca X", @"Sca Y" ]];
-  row1.translatesAutoresizingMaskIntoConstraints = NO;
-  [row1.heightAnchor constraintEqualToConstant:kPillRowH].active = YES;
-
-  KKPillToggleRowView *row2 = [[KKPillToggleRowView alloc]
-      initWithLabels:@[ @"Rot Z", @"Rot X", @"Rot Y", @"Opa" ]];
-  [row2 setState:NO atIndex:1]; // Rot X
-  [row2 setState:NO atIndex:2]; // Rot Y
-  [row2 setState:NO atIndex:3]; // Opa
-  row2.translatesAutoresizingMaskIntoConstraints = NO;
-  [row2.heightAnchor constraintEqualToConstant:kPillRowH].active = YES;
-
-  NSStackView *pills = [NSStackView stackViewWithViews:@[ row1, row2 ]];
-  pills.orientation = NSUserInterfaceLayoutOrientationVertical;
-  pills.spacing = KKSpacingXS;
-  pills.alignment = NSLayoutAttributeTrailing;
-
-  KKParameterRowView *row = [[KKParameterRowView alloc]
-      initWithFrame:NSMakeRect(0, 0, 300,
-                               KKInspectorRowHeight * 2 + KKSpacingSM * 2)
-         apiManager:self.apiManager
-        parameterId:kParamHoldPositionX];
-
-  KKLabelView *label = [[KKLabelView alloc] initWithText:@"Hold Properties"];
-  row.leftView = label;
-
-  NSView *rightContainer = [[NSView alloc] initWithFrame:NSZeroRect];
-  pills.translatesAutoresizingMaskIntoConstraints = NO;
-  [rightContainer addSubview:pills];
-  [NSLayoutConstraint activateConstraints:@[
-    [pills.trailingAnchor constraintEqualToAnchor:rightContainer.trailingAnchor
-                                         constant:-23.0],
-    [pills.centerYAnchor constraintEqualToAnchor:rightContainer.centerYAnchor],
-    [pills.leadingAnchor
-        constraintGreaterThanOrEqualToAnchor:rightContainer.leadingAnchor],
-    [pills.topAnchor
-        constraintGreaterThanOrEqualToAnchor:rightContainer.topAnchor
-                                    constant:KKSpacingSM],
-    [pills.bottomAnchor
-        constraintLessThanOrEqualToAnchor:rightContainer.bottomAnchor
-                                 constant:-KKSpacingSM],
-  ]];
-  row.rightView = rightContainer;
-
-  __weak typeof(self) weakSelf = self;
-  void (^handleToggle)(NSInteger, BOOL) = ^(NSInteger paramIdx, BOOL isOn) {
-    __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf || paramIdx >= holdCount)
-      return;
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actAPI startAction:strongSelf];
-    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    [setAPI setBoolValue:isOn
-             toParameter:holdParams[paramIdx]
-                  atTime:[actAPI currentTime]];
-    [actAPI endAction:strongSelf];
-  };
-  row1.onToggled = ^(NSInteger index, BOOL isOn) {
-    handleToggle(index, isOn);
-  };
-  row2.onToggled = ^(NSInteger index, BOOL isOn) {
-    handleToggle(index + 4, isOn);
-  };
-
-  KKTimingSlot *slot = [KKTimingSlot
-      slotWithView:row
-            height:KKInspectorRowHeight * 2 + KKSpacingSM * 2
-        applyState:^(id<FxParameterRetrievalAPI_v6> paramAPI, CMTime time) {
-          for (NSInteger i = 0; i < holdCount; i++) {
-            BOOL val = YES;
-            [paramAPI getBoolValue:&val
-                     fromParameter:holdParams[i]
-                            atTime:time];
-            if (i < 4)
-              [row1 setState:val atIndex:i];
-            else
-              [row2 setState:val atIndex:i - 4];
-          }
-        }];
-
-  return @[ slot ];
+- (NSArray<KKAnimatableProperty *> *)animatableProperties {
+  return @[
+    [KKAnimatableProperty propertyWithLabel:@"Pos X"
+                                       inID:kParamInPositionX
+                                     holdID:kParamHoldPositionX
+                                      outID:kParamOutPositionX],
+    [KKAnimatableProperty propertyWithLabel:@"Pos Y"
+                                       inID:kParamInPositionY
+                                     holdID:kParamHoldPositionY
+                                      outID:kParamOutPositionY],
+    [KKAnimatableProperty propertyWithLabel:@"Sca X"
+                                       inID:kParamInScaleX
+                                     holdID:kParamHoldScaleX
+                                      outID:kParamOutScaleX],
+    [KKAnimatableProperty propertyWithLabel:@"Sca Y"
+                                       inID:kParamInScaleY
+                                     holdID:kParamHoldScaleY
+                                      outID:kParamOutScaleY],
+    [KKAnimatableProperty propertyWithLabel:@"Rot Z"
+                                       inID:kParamInRotationZ
+                                     holdID:kParamHoldRotationZ
+                                      outID:kParamOutRotationZ],
+    [KKAnimatableProperty propertyWithLabel:@"Rot X"
+                                       inID:kParamInRotationX
+                                     holdID:kParamHoldRotationX
+                                      outID:kParamOutRotationX],
+    [KKAnimatableProperty propertyWithLabel:@"Rot Y"
+                                       inID:kParamInRotationY
+                                     holdID:kParamHoldRotationY
+                                      outID:kParamOutRotationY],
+    [KKAnimatableProperty propertyWithLabel:@"Opa"
+                                       inID:kParamInOpacity
+                                     holdID:kParamHoldOpacity
+                                      outID:kParamOutOpacity],
+  ];
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {

@@ -13,7 +13,6 @@
 
 #define CLAMP(x, lo, hi) MAX((lo), MIN((hi), (x)))
 #define kPointCount 4
-static const NSInteger kAnchorPart = 25;
 
 static const float kSnapThreshold = 8.0f;
 static const float kPathHitThreshold = 10.0f;
