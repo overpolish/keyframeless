@@ -317,6 +317,14 @@
       return NO;
   }
 
+  self.linkedParameterPairs = @[
+    @[ @(kParamScaleA), @(kParamScaleYA) ],
+    @[ @(kParamScaleB), @(kParamScaleYB) ],
+    @[ @(kParamDriftScale), @(kParamDriftScaleY) ],
+    @[ @(kParamExitScale), @(kParamExitScaleY) ],
+    @[ @(kParamHoldScaleX), @(kParamHoldScaleY) ],
+  ];
+
   return YES;
 }
 
