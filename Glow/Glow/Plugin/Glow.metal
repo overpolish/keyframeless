@@ -10,6 +10,12 @@
 
 using namespace metal;
 
+static float hash12(float2 p) {
+    float3 p3 = fract(float3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
 typedef struct {
     float4 clipSpacePosition [[position]];
     float2 textureCoordinate;
@@ -52,7 +58,8 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
                               constant int *colorMode [[buffer(FragmentIndex_ColorMode)]],
                               constant float3 *gradientLUT [[buffer(FragmentIndex_GradientLUT)]],
                               constant int *gradientType [[buffer(FragmentIndex_GradientType)]],
-                              constant float *gradientAngle [[buffer(FragmentIndex_GradientAngle)]]) {
+                              constant float *gradientAngle [[buffer(FragmentIndex_GradientAngle)]],
+                              constant float *noiseAmount [[buffer(FragmentIndex_Noise)]]) {
 
     constexpr sampler s(mag_filter::linear, min_filter::linear);
 
@@ -78,6 +85,12 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
 
     // Opacity
     float fade = 1.0 - smoothstep(0.0, 1.0 / glowFalloff, t);
+    float nAmt = *noiseAmount;
+    if (nAmt > 0.0) {
+        float2 px = in.textureCoordinate * float2(blurred.get_width(), blurred.get_height());
+        float n = hash12(floor(px));
+        fade *= saturate(1.0 - nAmt * (1.0 - n));
+    }
     float glowAlpha = saturate(fade * glowIntensity);
 
     // Color

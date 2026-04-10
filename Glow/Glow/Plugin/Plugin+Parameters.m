@@ -71,6 +71,17 @@
                            parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
+  if (![paramAPI addPercentSliderWithName:@"Noise"
+                              parameterID:kParamNoise
+                             defaultValue:0.0
+                             parameterMin:0.0
+                             parameterMax:5.0
+                                sliderMin:0.0
+                                sliderMax:5.0
+                                    delta:0.01
+                           parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
   // --- Offset group ---
   if (![paramAPI
           addCustomParameterWithName:@""
@@ -138,10 +149,10 @@
     return NO;
 
   UInt32 holdParams[] = {kParamHoldRadius, kParamHoldIntensity,
-                         kParamHoldFalloff, kParamHoldOffset};
+                         kParamHoldFalloff, kParamHoldNoise, kParamHoldOffset};
   NSString *holdNames[] = {@"Hold Radius", @"Hold Intensity", @"Hold Falloff",
-                           @"Hold Offset"};
-  for (int i = 0; i < 4; i++) {
+                           @"Hold Noise", @"Hold Offset"};
+  for (int i = 0; i < 5; i++) {
     if (![paramAPI addToggleButtonWithName:holdNames[i]
                                parameterID:holdParams[i]
                               defaultValue:YES

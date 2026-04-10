@@ -20,11 +20,13 @@
 
 - (NSView *)holdPropertyView {
   static const UInt32 holdParams[] = {kParamHoldRadius, kParamHoldIntensity,
-                                      kParamHoldFalloff, kParamHoldOffset};
-  static const NSInteger holdCount = 4;
+                                      kParamHoldFalloff, kParamHoldNoise,
+                                      kParamHoldOffset};
+  static const NSInteger holdCount = 5;
 
-  KKPillToggleRowView *toggles = [[KKPillToggleRowView alloc]
-      initWithLabels:@[ @"Radius", @"Intensity", @"Falloff", @"Offset" ]];
+  KKPillToggleRowView *toggles = [[KKPillToggleRowView alloc] initWithLabels:@[
+    @"Radius", @"Intensity", @"Falloff", @"Noise", @"Offset"
+  ]];
   objc_setAssociatedObject([self class], @selector(holdPropertyView), toggles,
                            OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
@@ -53,8 +55,9 @@
 
 - (void (^)(id, CMTime))holdPropertyApplyState {
   static const UInt32 holdParams[] = {kParamHoldRadius, kParamHoldIntensity,
-                                      kParamHoldFalloff, kParamHoldOffset};
-  static const NSInteger holdCount = 4;
+                                      kParamHoldFalloff, kParamHoldNoise,
+                                      kParamHoldOffset};
+  static const NSInteger holdCount = 5;
   return [^(id paramAPI, CMTime time) {
     KKPillToggleRowView *toggles =
         objc_getAssociatedObject([self class], @selector(holdPropertyView));
