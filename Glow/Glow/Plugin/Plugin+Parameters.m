@@ -82,26 +82,28 @@
                            parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
-  if (![paramAPI addPercentSliderWithName:@"Noise"
-                              parameterID:kParamNoise
-                             defaultValue:0.0
-                             parameterMin:0.0
-                             parameterMax:5.0
-                                sliderMin:0.0
-                                sliderMax:5.0
-                                    delta:0.01
-                           parameterFlags:kFxParameterFlag_DEFAULT])
+  if (![self addColorParametersWithAPI:paramAPI
+                                 modes:@[
+                                   @(KKColorModeSolid), @(KKColorModeGradient),
+                                   @(KKColorModeDynamic)
+                                 ]
+                                 error:error])
     return NO;
 
-  if (![paramAPI addPercentSliderWithName:@"Noise Offset"
-                              parameterID:kParamNoiseOffset
-                             defaultValue:0.0
-                             parameterMin:0.0
-                             parameterMax:1.0
-                                sliderMin:0.0
-                                sliderMax:1.0
-                                    delta:0.01
-                           parameterFlags:kFxParameterFlag_DEFAULT])
+  if (![paramAPI addPopupMenuWithName:@"Gradient Type"
+                          parameterID:kParamGradientType
+                         defaultValue:0
+                          menuEntries:@[ @"Radial", @"Linear" ]
+                       parameterFlags:kFxParameterFlag_HIDDEN |
+                                      kFxParameterFlag_NOT_ANIMATABLE])
+    return NO;
+
+  if (![paramAPI addAngleSliderWithName:@"Angle"
+                            parameterID:kParamGradientAngle
+                         defaultDegrees:0.0
+                    parameterMinDegrees:-360.0
+                    parameterMaxDegrees:360.0
+                         parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
   // --- Offset group ---
@@ -143,49 +145,78 @@
                          parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
-  if (![self addColorParametersWithAPI:paramAPI
-                                 modes:@[
-                                   @(KKColorModeSolid), @(KKColorModeGradient),
-                                   @(KKColorModeDynamic)
-                                 ]
-                                 error:error])
+  // --- Noise group ---
+  if (![paramAPI
+          addCustomParameterWithName:@""
+                         parameterID:kParamNoiseGroup
+                        defaultValue:@(kParamNoiseGroup)
+                      parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
+                                     kFxParameterFlag_CUSTOM_UI |
+                                     kFxParameterFlag_USE_FULL_VIEW_WIDTH])
     return NO;
 
-  if (![paramAPI addPopupMenuWithName:@"Gradient Type"
-                          parameterID:kParamGradientType
-                         defaultValue:0
-                          menuEntries:@[ @"Radial", @"Linear" ]
-                       parameterFlags:kFxParameterFlag_HIDDEN |
-                                      kFxParameterFlag_NOT_ANIMATABLE])
+  if (![paramAPI addToggleButtonWithName:@""
+                             parameterID:kParamNoiseExpanded
+                            defaultValue:NO
+                          parameterFlags:kFxParameterFlag_HIDDEN |
+                                         kFxParameterFlag_NOT_ANIMATABLE])
     return NO;
 
-  if (![paramAPI addAngleSliderWithName:@"Angle"
-                            parameterID:kParamGradientAngle
-                         defaultDegrees:0.0
-                    parameterMinDegrees:-360.0
-                    parameterMaxDegrees:360.0
-                         parameterFlags:kFxParameterFlag_HIDDEN])
+  if (![paramAPI addPercentSliderWithName:@"Amount"
+                              parameterID:kParamNoise
+                             defaultValue:0.0
+                             parameterMin:0.0
+                             parameterMax:5.0
+                                sliderMin:0.0
+                                sliderMax:5.0
+                                    delta:0.01
+                           parameterFlags:kFxParameterFlag_HIDDEN])
+    return NO;
+
+  if (![paramAPI addPercentSliderWithName:@"Offset"
+                              parameterID:kParamNoiseOffset
+                             defaultValue:0.0
+                             parameterMin:0.0
+                             parameterMax:1.0
+                                sliderMin:0.0
+                                sliderMax:1.0
+                                    delta:0.01
+                           parameterFlags:kFxParameterFlag_HIDDEN])
+    return NO;
+
+  if (![paramAPI addPercentSliderWithName:@"Speed"
+                              parameterID:kParamNoiseSpeed
+                             defaultValue:0.0
+                             parameterMin:0.0
+                             parameterMax:5.0
+                                sliderMin:0.0
+                                sliderMax:2.0
+                                    delta:0.01
+                           parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
   if (![self addAnimationParametersWithAPI:paramAPI error:error])
     return NO;
 
   UInt32 animParams[] = {
-      kParamInRadius,   kParamInIntensity,   kParamInFalloff,
-      kParamInNoise,    kParamInOffset,      kParamInColor,
-      kParamHoldRadius, kParamHoldIntensity, kParamHoldFalloff,
-      kParamHoldNoise,  kParamHoldOffset,    kParamHoldColor,
-      kParamOutRadius,  kParamOutIntensity,  kParamOutFalloff,
-      kParamOutNoise,   kParamOutOffset,     kParamOutColor,
+      kParamInRadius,      kParamInIntensity,     kParamInFalloff,
+      kParamInNoise,       kParamInOffset,        kParamInColor,
+      kParamInNoiseOffset, kParamHoldRadius,      kParamHoldIntensity,
+      kParamHoldFalloff,   kParamHoldNoise,       kParamHoldOffset,
+      kParamHoldColor,     kParamHoldNoiseOffset, kParamOutRadius,
+      kParamOutIntensity,  kParamOutFalloff,      kParamOutNoise,
+      kParamOutOffset,     kParamOutColor,        kParamOutNoiseOffset,
   };
   NSString *animNames[] = {
-      @"In Radius",    @"In Intensity",  @"In Falloff",  @"In Noise",
-      @"In Offset",    @"In Color",      @"Hold Radius", @"Hold Intensity",
-      @"Hold Falloff", @"Hold Noise",    @"Hold Offset", @"Hold Color",
-      @"Out Radius",   @"Out Intensity", @"Out Falloff", @"Out Noise",
-      @"Out Offset",   @"Out Color",
+      @"In Radius",       @"In Intensity",      @"In Falloff",
+      @"In Noise",        @"In Offset",         @"In Color",
+      @"In Noise Offset", @"Hold Radius",       @"Hold Intensity",
+      @"Hold Falloff",    @"Hold Noise",        @"Hold Offset",
+      @"Hold Color",      @"Hold Noise Offset", @"Out Radius",
+      @"Out Intensity",   @"Out Falloff",       @"Out Noise",
+      @"Out Offset",      @"Out Color",         @"Out Noise Offset",
   };
-  for (int i = 0; i < 18; i++) {
+  for (int i = 0; i < 21; i++) {
     if (![paramAPI addToggleButtonWithName:animNames[i]
                                parameterID:animParams[i]
                               defaultValue:YES

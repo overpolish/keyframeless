@@ -32,6 +32,7 @@ typedef struct {
   int gradientType;
   float gradientAngle;
   simd_float3 gradientLUT[KK_GRADIENT_LUT_SIZE];
+  float noiseSeed;
 } GlowPluginState;
 
 static const float kExpandMultiplier = 1.2f;
@@ -71,6 +72,11 @@ static const float kMaxBlurDimension = 2048.0f;
   [api getFloatValue:&noiseOffset
        fromParameter:kParamNoiseOffset
               atTime:renderTime];
+  double noiseSpeed = 0.0;
+  [api getFloatValue:&noiseSpeed
+       fromParameter:kParamNoiseSpeed
+              atTime:renderTime];
+  double noiseSeedVal = CMTimeGetSeconds(renderTime) * noiseSpeed * 5.0;
 
   double offX = 0, offY = 0;
   [api getFloatValue:&offX fromParameter:kParamOffsetX atTime:renderTime];
@@ -116,6 +122,15 @@ static const float kMaxBlurDimension = 2048.0f;
   [api getBoolValue:&holdC fromParameter:kParamHoldColor atTime:renderTime];
   [api getBoolValue:&outC fromParameter:kParamOutColor atTime:renderTime];
 
+  BOOL inNO = YES, holdNO = YES, outNO = YES;
+  [api getBoolValue:&inNO fromParameter:kParamInNoiseOffset atTime:renderTime];
+  [api getBoolValue:&holdNO
+      fromParameter:kParamHoldNoiseOffset
+             atTime:renderTime];
+  [api getBoolValue:&outNO
+      fromParameter:kParamOutNoiseOffset
+             atTime:renderTime];
+
   int holdSeed = 0;
   [api getIntValue:&holdSeed fromParameter:kKKParamHoldSeed atTime:renderTime];
 
@@ -130,6 +145,8 @@ static const float kMaxBlurDimension = 2048.0f;
   double fF =
       (inFl ? inF : 1.0) * (holdFl ? holdF : 1.0) * (outFl ? outF : 1.0);
   double nF = (inN ? inF : 1.0) * (holdN ? holdF : 1.0) * (outN ? outF : 1.0);
+  double noF =
+      (inNO ? inF : 1.0) * (holdNO ? holdF : 1.0) * (outNO ? outF : 1.0);
   double oF = (inO ? inF : 1.0) * (outO ? outF : 1.0);
   double hD = holdF - 1.0;
   double hOX = holdO ? hD * 0.03 * KKSeedSign(holdSeed, 0) : 0.0;
@@ -244,12 +261,13 @@ static const float kMaxBlurDimension = 2048.0f;
       .intensity = (float)(intensity * iF),
       .falloff = (float)(1.0 + falloff * fF),
       .noise = (float)(noise * nF),
-      .noiseOffset = (float)noiseOffset,
+      .noiseOffset = (float)(noiseOffset * noF),
       .offset = {(float)(offX * oF + hOX), (float)(offY * oF + hOY)},
       .glowColor = finalColor,
       .colorMode = (int)color.mode,
       .gradientType = gradType,
       .gradientAngle = (float)gradAngle,
+      .noiseSeed = (float)noiseSeedVal,
   };
 
   if (color.mode == KKColorModeGradient) {
@@ -524,6 +542,10 @@ static const float kMaxBlurDimension = 2048.0f;
     [e setFragmentBytes:&noff
                  length:sizeof(noff)
                 atIndex:FragmentIndex_NoiseOffset];
+    float nseed = state.noiseSeed;
+    [e setFragmentBytes:&nseed
+                 length:sizeof(nseed)
+                atIndex:FragmentIndex_NoiseSeed];
     [e drawPrimitives:MTLPrimitiveTypeTriangleStrip
           vertexStart:0
           vertexCount:4];

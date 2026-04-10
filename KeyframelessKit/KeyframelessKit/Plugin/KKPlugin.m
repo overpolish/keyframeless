@@ -68,12 +68,12 @@
 }
 
 - (void)setLinkedParameterPairs:(NSArray<NSArray<NSNumber *> *> *)pairs {
-  objc_setAssociatedObject(self, kKKLinkedPairs, [pairs copy],
+  objc_setAssociatedObject([self class], kKKLinkedPairs, [pairs copy],
                            OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 - (NSArray<NSArray<NSNumber *> *> *)linkedParameterPairs {
-  return objc_getAssociatedObject(self, kKKLinkedPairs);
+  return objc_getAssociatedObject([self class], kKKLinkedPairs);
 }
 
 - (BOOL)handleLinkedParameterChanged:(UInt32)parameterID atTime:(CMTime)time {
