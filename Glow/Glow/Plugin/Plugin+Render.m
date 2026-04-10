@@ -203,8 +203,6 @@ static const float kMaxBlurDimension = 2048.0f;
       finalColor = simd_mix(oc, finalColor, (simd_float3){t, t, t});
     }
   } else if (color.mode == KKColorModeGradient) {
-    simd_float3 tempLUT[KK_GRADIENT_LUT_SIZE];
-
     if (inC && timing.inPhase.enabled) {
       float samples[KK_GRADIENT_LUT_SIZE * 4];
       if ([api getGradientSamples:samples
