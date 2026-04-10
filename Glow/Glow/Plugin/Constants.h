@@ -9,7 +9,14 @@
 
 static NSString *const kPluginID = @"co.overpolish.keyframeless.Glow";
 
+static const UInt32 kParamPreset = 109;
 static const UInt32 kParamForceShow = 9001;
+
+typedef NS_ENUM(NSInteger, GlowPreset) {
+  GlowPresetSoftGlow = 0,
+  GlowPresetShadow = 1,
+  GlowPresetFire = 2,
+};
 
 static const UInt32 kParamRadiusX = 100;
 static const UInt32 kParamRadiusY = 101;
