@@ -84,6 +84,26 @@ static const UInt32 kParamHoldRotationX = 507;
 static const UInt32 kParamHoldRotationY = 508;
 static const UInt32 kParamHoldOpacity = 509;
 
+// In property toggles (520–527)
+static const UInt32 kParamInPositionX = 520;
+static const UInt32 kParamInPositionY = 521;
+static const UInt32 kParamInScaleX = 522;
+static const UInt32 kParamInScaleY = 523;
+static const UInt32 kParamInRotationZ = 524;
+static const UInt32 kParamInRotationX = 525;
+static const UInt32 kParamInRotationY = 526;
+static const UInt32 kParamInOpacity = 527;
+
+// Out property toggles (530–537)
+static const UInt32 kParamOutPositionX = 530;
+static const UInt32 kParamOutPositionY = 531;
+static const UInt32 kParamOutScaleX = 532;
+static const UInt32 kParamOutScaleY = 533;
+static const UInt32 kParamOutRotationZ = 534;
+static const UInt32 kParamOutRotationX = 535;
+static const UInt32 kParamOutRotationY = 536;
+static const UInt32 kParamOutOpacity = 537;
+
 // Anchor (601)
 static const UInt32 kParamAnchorPoint = 601;
 
@@ -91,6 +111,17 @@ static const UInt32 kParamAnchorPoint = 601;
 static const UInt32 kParamForceShowAlerts = 9000;
 static const UInt32 kParamInfoCompound = 9001;
 static const UInt32 kParamAlertStackSelected = 9004;
+
+// OSC part IDs
+typedef struct {
+  NSInteger arc, ring, rot, rotXRing, rotYRing, icon, opacityIcon, scaleIcon;
+} MagicMoveOSCParts;
+
+static const MagicMoveOSCParts kOSCPartsA = {1, 2, 3, 25, 26, 13, 17, 21};
+static const MagicMoveOSCParts kOSCPartsB = {4, 5, 6, 27, 28, 14, 18, 22};
+static const MagicMoveOSCParts kOSCPartsDrift = {7, 8, 9, 29, 30, 15, 19, 23};
+static const MagicMoveOSCParts kOSCPartsExit = {10, 11, 12, 31, 32, 16, 20, 24};
+static const NSInteger kOSCAnchorPart = 33;
 
 typedef struct {
   UInt32 point, rotation, rotationX, rotationY, scaleX, scaleY, opacity;

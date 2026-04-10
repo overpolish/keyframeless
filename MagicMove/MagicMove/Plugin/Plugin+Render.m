@@ -32,5 +32,17 @@
                                 error:outError];
 }
 
+- (BOOL)sourceTileRect:(FxRect *)sourceTileRect
+       sourceImageIndex:(NSUInteger)sourceImageIndex
+           sourceImages:(NSArray<FxImageTile *> *)sourceImages
+    destinationTileRect:(FxRect)destinationTileRect
+       destinationImage:(FxImageTile *)destinationImage
+            pluginState:(NSData *)pluginState
+                 atTime:(CMTime)renderTime
+                  error:(NSError *_Nullable *)outError {
+  *sourceTileRect = sourceImages[sourceImageIndex].imagePixelBounds;
+  return YES;
+}
+
 @end
 #pragma clang diagnostic pop

@@ -65,6 +65,22 @@
     return NO;
   }
 
+  UInt32 animParams[] = {
+      kParamInRadius, kParamInCrop,    kParamHoldRadius,
+      kParamHoldCrop, kParamOutRadius, kParamOutCrop,
+  };
+  NSString *animNames[] = {
+      @"In Radius", @"In Crop",    @"Hold Radius",
+      @"Hold Crop", @"Out Radius", @"Out Crop",
+  };
+  for (int i = 0; i < 6; i++) {
+    if (![paramAPI addToggleButtonWithName:animNames[i]
+                               parameterID:animParams[i]
+                              defaultValue:YES
+                            parameterFlags:kFxParameterFlag_HIDDEN])
+      return NO;
+  }
+
   return YES;
 }
 

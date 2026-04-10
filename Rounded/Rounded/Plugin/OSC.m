@@ -9,8 +9,6 @@
 
 #define CLAMP(x, lo, hi) MAX((lo), MIN((hi), (x)))
 
-static const NSInteger kRadiusPart = 100;
-
 static float paddingForRadius(double radius, float minDim) {
   float t = radius / 100.0f;
   float power = 5.0f * (1.0f - t) + 2.0f * t;
@@ -91,8 +89,8 @@ static float paddingForRadius(double radius, float minDim) {
 
   CGPoint radiusPos = [self oscPositionAtTime:time];
   [self drawAtCanvasPosition:radiusPos
-                   isHovered:(activePart == kRadiusPart)
-                    isActive:self.isDragging && (activePart == kRadiusPart)
+                   isHovered:(activePart == kOSCRadiusPart)
+                    isActive:self.isDragging && (activePart == kOSCRadiusPart)
             destinationImage:destinationImage
                       atTime:time];
 }
@@ -113,7 +111,7 @@ static float paddingForRadius(double radius, float minDim) {
   if ([self hitTestAtMousePositionX:positionX
                           positionY:positionY
                              atTime:time]) {
-    *activePart = kRadiusPart;
+    *activePart = kOSCRadiusPart;
   }
 }
 
