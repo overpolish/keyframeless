@@ -42,9 +42,9 @@
                             parameterID:kParamRadius
                            defaultValue:100.0
                            parameterMin:0.0
-                           parameterMax:1000.0
+                           parameterMax:500.0
                               sliderMin:0.0
-                              sliderMax:500.0
+                              sliderMax:300.0
                                   delta:1.0
                          parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
