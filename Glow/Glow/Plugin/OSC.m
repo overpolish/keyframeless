@@ -49,7 +49,10 @@
   [api getFloatValue:&offX fromParameter:kParamOffsetX atTime:time];
   [api getFloatValue:&offY fromParameter:kParamOffsetY atTime:time];
 
-  double cx, cy;
+  if (!oscAPI)
+    return CGPointZero;
+
+  double cx = 0, cy = 0;
   [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
                           fromX:0.5 + offX
                           fromY:0.5 + offY
