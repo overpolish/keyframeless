@@ -209,6 +209,22 @@
       return NO;
   }
 
+  UInt32 inProps[] = {kParamInPositionX, kParamInPositionY,
+                      kParamInScaleX,    kParamInScaleY,
+                      kParamInRotationZ, kParamInRotationX,
+                      kParamInRotationY, kParamInOpacity};
+  NSString *inNames[] = {@"In Pos X",      @"In Pos Y",
+                         @"In Scale X",    @"In Scale Y",
+                         @"In Rotation",   @"In Rotation X",
+                         @"In Rotation Y", @"In Opacity"};
+  for (int i = 0; i < 8; i++) {
+    if (![paramAPI addToggleButtonWithName:inNames[i]
+                               parameterID:inProps[i]
+                              defaultValue:YES
+                            parameterFlags:kFxParameterFlag_HIDDEN])
+      return NO;
+  }
+
   UInt32 holdProps[] = {kParamHoldPositionX, kParamHoldPositionY,
                         kParamHoldScaleX,    kParamHoldScaleY,
                         kParamHoldRotationZ, kParamHoldRotationX,
@@ -222,6 +238,22 @@
     if (![paramAPI addToggleButtonWithName:holdNames[i]
                                parameterID:holdProps[i]
                               defaultValue:holdDefaults[i]
+                            parameterFlags:kFxParameterFlag_HIDDEN])
+      return NO;
+  }
+
+  UInt32 outProps[] = {kParamOutPositionX, kParamOutPositionY,
+                       kParamOutScaleX,    kParamOutScaleY,
+                       kParamOutRotationZ, kParamOutRotationX,
+                       kParamOutRotationY, kParamOutOpacity};
+  NSString *outNames[] = {@"Out Pos X",      @"Out Pos Y",
+                          @"Out Scale X",    @"Out Scale Y",
+                          @"Out Rotation",   @"Out Rotation X",
+                          @"Out Rotation Y", @"Out Opacity"};
+  for (int i = 0; i < 8; i++) {
+    if (![paramAPI addToggleButtonWithName:outNames[i]
+                               parameterID:outProps[i]
+                              defaultValue:YES
                             parameterFlags:kFxParameterFlag_HIDDEN])
       return NO;
   }

@@ -268,10 +268,16 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
       [self timingSlotsForSection:KKTimingGraphSectionOut];
 
   CGFloat globalHeight = KKTotalSlotHeight(globalSlots);
-  BOOL hasAnimProps = [self animatableProperties].count > 0;
+  NSArray<KKAnimatableProperty *> *animPropsForHeight =
+      [self animatableProperties];
+  BOOL hasAnimProps = animPropsForHeight.count > 0;
+  CGFloat animPropH = hasAnimProps
+                          ? (animPropsForHeight.count > 5 ? 18.0 * 2 + KKSpacingXS
+                                                          : 18.0)
+                          : 0;
   CGFloat propHeight =
       (hasAnimProps || [self holdPropertyView])
-          ? MAX(hasAnimProps ? 18.0 : [self holdPropertyViewHeight], 14.0) +
+          ? MAX(hasAnimProps ? animPropH : [self holdPropertyViewHeight], 14.0) +
                 KKSpacingSM
           : 0;
   CGFloat maxSectionHeight;
@@ -385,14 +391,45 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
 
   NSArray<KKAnimatableProperty *> *animProps = [self animatableProperties];
   if (animProps.count > 0) {
+    static const CGFloat kRowH = 18.0;
     NSMutableArray<NSString *> *labels = [NSMutableArray new];
     for (KKAnimatableProperty *p in animProps)
       [labels addObject:p.label];
-    KKPillToggleRowView *toggles =
-        [[KKPillToggleRowView alloc] initWithLabels:labels];
+
+    // Split into 2 rows when >5 properties.
+    BOOL twoRows = animProps.count > 5;
+    NSView *propView;
+    KKPillToggleRowView *row1, *row2;
+    NSUInteger splitAt = twoRows ? (animProps.count + 1) / 2 : animProps.count;
+    CGFloat totalH;
+
+    if (twoRows) {
+      NSArray *labels1 = [labels subarrayWithRange:NSMakeRange(0, splitAt)];
+      NSArray *labels2 =
+          [labels subarrayWithRange:NSMakeRange(splitAt, animProps.count - splitAt)];
+      row1 = [[KKPillToggleRowView alloc] initWithLabels:labels1];
+      row2 = [[KKPillToggleRowView alloc] initWithLabels:labels2];
+      row1.autoresizingMask = NSViewWidthSizable;
+      row2.autoresizingMask = NSViewWidthSizable;
+      totalH = kRowH * 2 + KKSpacingXS;
+      NSView *container =
+          [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, totalH)];
+      row1.frame = NSMakeRect(0, 0, 300, kRowH);
+      row2.frame = NSMakeRect(0, kRowH + KKSpacingXS, 300, kRowH);
+      [container addSubview:row1];
+      [container addSubview:row2];
+      propView = container;
+    } else {
+      row1 = [[KKPillToggleRowView alloc] initWithLabels:labels];
+      row2 = nil;
+      totalH = kRowH;
+      propView = row1;
+    }
+
     __weak typeof(self) weakSelf = self;
     __weak KKTimingGraphView *weakGraph = graphView;
-    toggles.onToggled = ^(NSInteger index, BOOL isOn) {
+
+    void (^handleToggle)(NSInteger, BOOL) = ^(NSInteger index, BOOL isOn) {
       __strong typeof(weakSelf) strongSelf = weakSelf;
       KKTimingGraphView *graph = weakGraph;
       if (!strongSelf || !graph || (NSUInteger)index >= animProps.count)
@@ -418,8 +455,17 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
       [setAPI setBoolValue:isOn toParameter:paramID atTime:[actAPI currentTime]];
       [actAPI endAction:strongSelf];
     };
-    graphView.holdPropertyView = toggles;
-    graphView.holdPropertyViewHeight = 18.0;
+    row1.onToggled = ^(NSInteger index, BOOL isOn) {
+      handleToggle(index, isOn);
+    };
+    if (row2) {
+      row2.onToggled = ^(NSInteger index, BOOL isOn) {
+        handleToggle(index + (NSInteger)splitAt, isOn);
+      };
+    }
+
+    graphView.holdPropertyView = propView;
+    graphView.holdPropertyViewHeight = totalH;
     graphView.showPropertyViewForAllSections = YES;
     graphView.holdPropertyApplyState = ^(id paramAPI, CMTime time) {
       KKTimingGraphView *graph = weakGraph;
@@ -441,7 +487,10 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
         }
         BOOL val = YES;
         [paramAPI getBoolValue:&val fromParameter:paramID atTime:time];
-        [toggles setState:val atIndex:i];
+        if (i < splitAt)
+          [row1 setState:val atIndex:i];
+        else
+          [row2 setState:val atIndex:i - splitAt];
       }
     };
   } else {
