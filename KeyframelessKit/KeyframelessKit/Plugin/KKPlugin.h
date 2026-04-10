@@ -159,6 +159,15 @@ NS_ASSUME_NONNULL_BEGIN
                                paramIDs:(NSArray<NSNumber *> *)paramIDs
                                  atTime:(CMTime)time;
 
+/// Creates a collapsible group header view wired to a hidden bool toggle.
+/// Use from createViewForParameterID: — the returned view reads/writes
+/// the expanded state at expandedParamID via an action scope.
+- (NSView *)createGroupHeaderWithTitle:(NSString *)title
+                                  icon:(nullable NSImage *)icon
+                           parameterID:(UInt32)parameterID
+                       expandedParamID:(UInt32)expandedParamID
+    NS_RETURNS_RETAINED;
+
 @end
 
 NS_ASSUME_NONNULL_END

@@ -69,6 +69,12 @@
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
+  if (parameterID == kParamOffsetGroup)
+    return [self createGroupHeaderWithTitle:@"Offset"
+                                       icon:nil
+                                parameterID:parameterID
+                            expandedParamID:kParamOffsetExpanded];
+
   struct objc_super sup = {self, [KKPlugin class]};
   return ((NSView * (*)(struct objc_super *, SEL, UInt32)) objc_msgSendSuper)(
       &sup, @selector(createViewForParameterID:), parameterID);

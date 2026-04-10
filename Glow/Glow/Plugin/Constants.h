@@ -19,6 +19,9 @@ static const UInt32 kParamOffsetY = 111;
 static const UInt32 kParamGradientType = 104;
 static const UInt32 kParamGradientAngle = 105;
 
+static const UInt32 kParamOffsetGroup = 200;
+static const UInt32 kParamOffsetExpanded = 201;
+
 static const UInt32 kParamHoldRadius = 500;
 static const UInt32 kParamHoldIntensity = 501;
 static const UInt32 kParamHoldFalloff = 502;

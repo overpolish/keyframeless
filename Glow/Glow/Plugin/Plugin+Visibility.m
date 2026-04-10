@@ -24,42 +24,77 @@ static void setFlagsIfChanged(id<FxParameterSettingAPI_v5> setAPI,
   sUpdating = YES;
   @try {
     [self updateTimingParameterVisibility];
-    [self updateColorParameterVisibility];
 
     id<FxParameterRetrievalAPI_v6> paramGetAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
     id<FxParameterSettingAPI_v5> paramSetAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
 
-    if ([self forceShowAllParametersIfEnabled:kParamForceShow
-                                     paramIDs:@[
-                                       @(kParamGradientType),
-                                       @(kParamGradientAngle)
-                                     ]
-                                       atTime:time])
+    BOOL forceShow = [self
+        forceShowAllParametersIfEnabled:kParamForceShow
+                               paramIDs:@[
+                                 @(kParamOffsetX), @(kParamOffsetY),
+                                 @(kKKParamColorMode), @(kKKParamColorSolid),
+                                 @(kKKParamColorGradient),
+                                 @(kParamGradientType), @(kParamGradientAngle)
+                               ]
+                                 atTime:time];
+    if (forceShow)
       return;
 
-    int colorMode = 0, gradType = 0;
-    [paramGetAPI getIntValue:&colorMode
-               fromParameter:kKKParamColorMode
-                      atTime:time];
-    [paramGetAPI getIntValue:&gradType
-               fromParameter:kParamGradientType
-                      atTime:time];
+    // --- Offset group ---
+    BOOL offsetExpanded = NO;
+    [paramGetAPI getBoolValue:&offsetExpanded
+                fromParameter:kParamOffsetExpanded
+                       atTime:kCMTimeZero];
 
-    BOOL isGradient = (colorMode == KKColorModeGradient);
+    FxParameterFlags offsetFlags =
+        offsetExpanded ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+    setFlagsIfChanged(paramSetAPI, paramGetAPI, offsetFlags, kParamOffsetX);
+    setFlagsIfChanged(paramSetAPI, paramGetAPI, offsetFlags, kParamOffsetY);
 
-    setFlagsIfChanged(paramSetAPI, paramGetAPI,
-                      isGradient ? kFxParameterFlag_NOT_ANIMATABLE
-                                 : (kFxParameterFlag_HIDDEN |
-                                    kFxParameterFlag_NOT_ANIMATABLE),
-                      kParamGradientType);
+    // --- Color group ---
+    BOOL colorExpanded = NO;
+    [paramGetAPI getBoolValue:&colorExpanded
+                fromParameter:kKKParamColorExpanded
+                       atTime:kCMTimeZero];
 
-    BOOL showAngle = isGradient && (gradType == 1);
-    setFlagsIfChanged(paramSetAPI, paramGetAPI,
-                      showAngle ? kFxParameterFlag_DEFAULT
-                                : kFxParameterFlag_HIDDEN,
-                      kParamGradientAngle);
+    if (colorExpanded) {
+      [self updateColorParameterVisibility];
+
+      int colorMode = 0, gradType = 0;
+      [paramGetAPI getIntValue:&colorMode
+                 fromParameter:kKKParamColorMode
+                        atTime:time];
+      [paramGetAPI getIntValue:&gradType
+                 fromParameter:kParamGradientType
+                        atTime:time];
+
+      BOOL isGradient = (colorMode == KKColorModeGradient);
+
+      setFlagsIfChanged(paramSetAPI, paramGetAPI,
+                        isGradient ? kFxParameterFlag_NOT_ANIMATABLE
+                                   : (kFxParameterFlag_HIDDEN |
+                                      kFxParameterFlag_NOT_ANIMATABLE),
+                        kParamGradientType);
+
+      BOOL showAngle = isGradient && (gradType == 1);
+      setFlagsIfChanged(paramSetAPI, paramGetAPI,
+                        showAngle ? kFxParameterFlag_DEFAULT
+                                  : kFxParameterFlag_HIDDEN,
+                        kParamGradientAngle);
+    } else {
+      setFlagsIfChanged(paramSetAPI, paramGetAPI, kFxParameterFlag_HIDDEN,
+                        kKKParamColorMode);
+      setFlagsIfChanged(paramSetAPI, paramGetAPI, kFxParameterFlag_HIDDEN,
+                        kKKParamColorSolid);
+      setFlagsIfChanged(paramSetAPI, paramGetAPI, kFxParameterFlag_HIDDEN,
+                        kKKParamColorGradient);
+      setFlagsIfChanged(paramSetAPI, paramGetAPI, kFxParameterFlag_HIDDEN,
+                        kParamGradientType);
+      setFlagsIfChanged(paramSetAPI, paramGetAPI, kFxParameterFlag_HIDDEN,
+                        kParamGradientAngle);
+    }
   } @finally {
     sUpdating = NO;
   }

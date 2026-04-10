@@ -41,6 +41,8 @@
   case kParamGradientType:
   case kParamForceShow:
   case kKKParamTimingExpanded:
+  case kParamOffsetExpanded:
+  case kKKParamColorExpanded:
     [self updateParameterVisibilityAtTime:time];
     break;
   default:

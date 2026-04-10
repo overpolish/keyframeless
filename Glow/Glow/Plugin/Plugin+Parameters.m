@@ -71,6 +71,23 @@
                            parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
+  // --- Offset group ---
+  if (![paramAPI
+          addCustomParameterWithName:@""
+                         parameterID:kParamOffsetGroup
+                        defaultValue:@(kParamOffsetGroup)
+                      parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
+                                     kFxParameterFlag_CUSTOM_UI |
+                                     kFxParameterFlag_USE_FULL_VIEW_WIDTH])
+    return NO;
+
+  if (![paramAPI addToggleButtonWithName:@""
+                             parameterID:kParamOffsetExpanded
+                            defaultValue:NO
+                          parameterFlags:kFxParameterFlag_HIDDEN |
+                                         kFxParameterFlag_NOT_ANIMATABLE])
+    return NO;
+
   if (![paramAPI addFloatSliderWithName:@"Offset X"
                             parameterID:kParamOffsetX
                            defaultValue:0.0
@@ -79,7 +96,7 @@
                               sliderMin:-1.0
                               sliderMax:1.0
                                   delta:0.01
-                         parameterFlags:kFxParameterFlag_DEFAULT])
+                         parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
   if (![paramAPI addFloatSliderWithName:@"Offset Y"
@@ -90,7 +107,7 @@
                               sliderMin:-1.0
                               sliderMax:1.0
                                   delta:0.01
-                         parameterFlags:kFxParameterFlag_DEFAULT])
+                         parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
   if (![self addColorParametersWithAPI:paramAPI
