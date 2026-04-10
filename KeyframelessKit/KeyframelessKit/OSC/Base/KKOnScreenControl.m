@@ -325,6 +325,10 @@
 
   id<MTLTexture> outputTexture =
       [destinationImage metalTextureForDevice:gpuDevice];
+  if (!outputTexture) {
+    [cache returnCommandQueueToCache:queue];
+    return;
+  }
 
   MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
   rpd.colorAttachments[0].texture = outputTexture;
