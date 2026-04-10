@@ -213,36 +213,37 @@
 	</sceneSettings>
 	<publishSettings>
 		<version>2</version>
-		<target object="3001886323" channel="./9990" name=""/>
-		<target object="3001886323" channel="./109" name="Preset"/>
-		<target object="3001886323" channel="./100" name="Radius X"/>
-		<target object="3001886323" channel="./101" name="Radius Y"/>
-		<target object="3001886323" channel="./102" name="Intensity"/>
-		<target object="3001886323" channel="./103" name="Falloff"/>
-		<target object="3001886323" channel="./9800" name=""/>
-		<target object="3001886323" channel="./9801" name="Color Mode"/>
-		<target object="3001886323" channel="./9802" name="Color"/>
-		<target object="3001886323" channel="./9803" name="Gradient"/>
-		<target object="3001886323" channel="./106" name="Gradient Type"/>
-		<target object="3001886323" channel="./107" name="Angle"/>
-		<target object="3001886323" channel="./200" name=""/>
-		<target object="3001886323" channel="./210" name="Offset X"/>
-		<target object="3001886323" channel="./211" name="Offset Y"/>
-		<target object="3001886323" channel="./150" name=""/>
-		<target object="3001886323" channel="./104" name="Amount"/>
-		<target object="3001886323" channel="./105" name="Offset"/>
-		<target object="3001886323" channel="./108" name="Speed"/>
-		<target object="3001886323" channel="./9900" name=""/>
-		<target object="3001886323" channel="./9905" name=""/>
-		<target object="3001886323" channel="./800" name="In Color"/>
-		<target object="3001886323" channel="./801" name="Hold Color"/>
-		<target object="3001886323" channel="./802" name="Out Color"/>
-		<target object="3001886323" channel="./803" name="In Gradient"/>
-		<target object="3001886323" channel="./804" name="Hold Gradient"/>
-		<target object="3001886323" channel="./805" name="Out Gradient"/>
+		<target object="3001886603" channel="./9990" name=""/>
+		<target object="3001886603" channel="./9000" name=""/>
+		<target object="3001886603" channel="./109" name="Preset"/>
+		<target object="3001886603" channel="./100" name="Radius X"/>
+		<target object="3001886603" channel="./101" name="Radius Y"/>
+		<target object="3001886603" channel="./102" name="Intensity"/>
+		<target object="3001886603" channel="./103" name="Falloff"/>
+		<target object="3001886603" channel="./9800" name=""/>
+		<target object="3001886603" channel="./9801" name="Color Mode"/>
+		<target object="3001886603" channel="./9802" name="Color"/>
+		<target object="3001886603" channel="./9803" name="Gradient"/>
+		<target object="3001886603" channel="./106" name="Gradient Type"/>
+		<target object="3001886603" channel="./107" name="Angle"/>
+		<target object="3001886603" channel="./200" name=""/>
+		<target object="3001886603" channel="./210" name="Offset X"/>
+		<target object="3001886603" channel="./211" name="Offset Y"/>
+		<target object="3001886603" channel="./150" name=""/>
+		<target object="3001886603" channel="./104" name="Amount"/>
+		<target object="3001886603" channel="./105" name="Offset"/>
+		<target object="3001886603" channel="./108" name="Speed"/>
+		<target object="3001886603" channel="./9900" name=""/>
+		<target object="3001886603" channel="./9905" name=""/>
+		<target object="3001886603" channel="./800" name="In Color"/>
+		<target object="3001886603" channel="./801" name="Hold Color"/>
+		<target object="3001886603" channel="./802" name="Out Color"/>
+		<target object="3001886603" channel="./803" name="In Gradient"/>
+		<target object="3001886603" channel="./804" name="Hold Gradient"/>
+		<target object="3001886603" channel="./805" name="Out Gradient"/>
 	</publishSettings>
 	<currentFrame>15360 153600 1 0</currentFrame>
-	<currentObject>3001886277</currentObject>
+	<currentObject>3001886282</currentObject>
 	<activeLayer>3001886279</activeLayer>
 	<timeRange offset="0 1 1 0" duration="307200 153600 1 0"/>
 	<playRange offset="0 1 1 0" duration="307200 153600 1 0"/>
@@ -268,7 +269,7 @@
 		<flags>0</flags>
 		<timing in="0 1 1 0" out="-2560 153600 1 0" offset="0 1 1 0"/>
 		<foldFlags>0</foldFlags>
-		<baseFlags>268435473</baseFlags>
+		<baseFlags>16</baseFlags>
 		<parameter name="Properties" id="1" flags="8589938704">
 			<parameter name="HDR White Level" id="103" flags="8606744592" default="0.75" value="0.75"/>
 		</parameter>
@@ -280,7 +281,7 @@
 			<aspectRatio>1</aspectRatio>
 			<flags>0</flags>
 			<timing in="0 1 1 0" out="304640 153600 1 0" offset="0 1 1 0"/>
-			<foldFlags>16384</foldFlags>
+			<foldFlags>24576</foldFlags>
 			<baseFlags>524368</baseFlags>
 			<parameter name="Properties" id="1" flags="8589938704">
 				<parameter name="Cinematic" id="344" flags="8589938706">
@@ -339,13 +340,18 @@
 				</parameter>
 				<parameter name="Height" id="314" flags="8589934610" default="1" value="1080"/>
 			</parameter>
-			<filter name="Glow · KF" id="3001886323" factoryID="13" pluginUUID="7E866F79-E273-43B3-AF28-D9F423B1427C" pluginVersion="1" pluginName="Glow · KF" pluginDynamicParams="0">
+			<filter name="Glow · KF" id="3001886603" factoryID="13" pluginUUID="7E866F79-E273-43B3-AF28-D9F423B1427C" pluginVersion="1" pluginName="Glow · KF" pluginDynamicParams="0">
 				<timing in="0 1 1 0" out="304640 153600 1 0" offset="0 1 1 0"/>
-				<baseFlags>8589934608</baseFlags>
+				<baseFlags>8858370065</baseFlags>
 				<parameter name="" id="9990" flags="12901679124">
 					<numberOfKeypoints>0</numberOfKeypoints>
 					<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GQ40-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
 					<dataValue>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GQ40-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</dataValue>
+				</parameter>
+				<parameter name="" id="9000" flags="12901679124">
+					<numberOfKeypoints>0</numberOfKeypoints>
+					<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GAc0-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
+					<dataValue>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GAc0-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</dataValue>
 				</parameter>
 				<parameter name="Force Show All Parameters" id="9001" flags="12901679104" default="0" value="0"/>
 				<parameter name="Preset" id="109" flags="12901744656" default="0" value="0"/>
@@ -359,7 +365,7 @@
 					<dataValue>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GN60-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</dataValue>
 				</parameter>
 				<parameter name="" id="9804" flags="12905938992" default="0" value="0"/>
-				<parameter name="Color Mode" id="9801" flags="12905938992" default="2" value="2"/>
+				<parameter name="Color Mode" id="9801" flags="12905938992" default="0" value="0"/>
 				<parameter name="Color" id="9802" flags="12889165872">
 					<foldFlags>15</foldFlags>
 				</parameter>
@@ -367,7 +373,7 @@
 					<foldFlags>15</foldFlags>
 					<parameter name="RGB" id="1" flags="8589938704">
 						<flags>8589938704</flags>
-						<parameter name="RGB1" id="3001886324" factoryID="2">
+						<parameter name="RGB1" id="3001886604" factoryID="2">
 							<flags>8589938704</flags>
 							<parameter name="Location" id="1" factoryID="3">
 								<flags>8606711824</flags>
@@ -384,8 +390,8 @@
 								</curve>
 							</parameter>
 							<parameter name="Interpolation" id="100" factoryID="5">
-								<flags>8606777360</flags>
-								<curve type="0" default="2" value="2">
+								<flags>8606711824</flags>
+								<curve type="1" default="2" value="2">
 									<min>0</min>
 									<max>4294967295</max>
 								</curve>
@@ -423,7 +429,7 @@
 								</parameter>
 							</parameter>
 						</parameter>
-						<parameter name="RGB2" id="3001886325" factoryID="2">
+						<parameter name="RGB2" id="3001886605" factoryID="2">
 							<flags>8589938704</flags>
 							<parameter name="Location" id="1" factoryID="3">
 								<flags>8606711824</flags>
@@ -440,8 +446,8 @@
 								</curve>
 							</parameter>
 							<parameter name="Interpolation" id="100" factoryID="5">
-								<flags>8606777360</flags>
-								<curve type="0" default="2" value="2">
+								<flags>8606711824</flags>
+								<curve type="1" default="2" value="2">
 									<min>0</min>
 									<max>4294967295</max>
 								</curve>
@@ -482,7 +488,7 @@
 					</parameter>
 					<parameter name="Opacity" id="2" flags="8589938704">
 						<flags>8589938704</flags>
-						<parameter name="Opacity1" id="3001886326" factoryID="1">
+						<parameter name="Opacity1" id="3001886606" factoryID="1">
 							<flags>8589938704</flags>
 							<parameter name="Location" id="1" factoryID="3">
 								<flags>8606711824</flags>
@@ -499,8 +505,8 @@
 								</curve>
 							</parameter>
 							<parameter name="Interpolation" id="100" factoryID="5">
-								<flags>8606777360</flags>
-								<curve type="0" default="2" value="2">
+								<flags>8606711824</flags>
+								<curve type="1" default="2" value="2">
 									<min>0</min>
 									<max>4294967295</max>
 								</curve>
@@ -594,7 +600,7 @@
 					<foldFlags>15</foldFlags>
 					<parameter name="RGB" id="1" flags="8589938704">
 						<flags>8589938704</flags>
-						<parameter name="RGB1" id="3001886327" factoryID="2">
+						<parameter name="RGB1" id="3001886607" factoryID="2">
 							<flags>8589938704</flags>
 							<parameter name="Location" id="1" factoryID="3">
 								<flags>8606711824</flags>
@@ -650,7 +656,7 @@
 								</parameter>
 							</parameter>
 						</parameter>
-						<parameter name="RGB2" id="3001886328" factoryID="2">
+						<parameter name="RGB2" id="3001886608" factoryID="2">
 							<flags>8589938704</flags>
 							<parameter name="Location" id="1" factoryID="3">
 								<flags>8606711824</flags>
@@ -709,7 +715,7 @@
 					</parameter>
 					<parameter name="Opacity" id="2" flags="8589938704">
 						<flags>8589938704</flags>
-						<parameter name="Opacity1" id="3001886329" factoryID="1">
+						<parameter name="Opacity1" id="3001886609" factoryID="1">
 							<flags>8589938704</flags>
 							<parameter name="Location" id="1" factoryID="3">
 								<flags>8606711824</flags>
@@ -746,7 +752,7 @@
 					<foldFlags>15</foldFlags>
 					<parameter name="RGB" id="1" flags="8589938704">
 						<flags>8589938704</flags>
-						<parameter name="RGB1" id="3001886330" factoryID="2">
+						<parameter name="RGB1" id="3001886610" factoryID="2">
 							<flags>8589938704</flags>
 							<parameter name="Location" id="1" factoryID="3">
 								<flags>8606711824</flags>
@@ -802,7 +808,7 @@
 								</parameter>
 							</parameter>
 						</parameter>
-						<parameter name="RGB2" id="3001886331" factoryID="2">
+						<parameter name="RGB2" id="3001886611" factoryID="2">
 							<flags>8589938704</flags>
 							<parameter name="Location" id="1" factoryID="3">
 								<flags>8606711824</flags>
@@ -861,7 +867,7 @@
 					</parameter>
 					<parameter name="Opacity" id="2" flags="8589938704">
 						<flags>8589938704</flags>
-						<parameter name="Opacity1" id="3001886332" factoryID="1">
+						<parameter name="Opacity1" id="3001886612" factoryID="1">
 							<flags>8589938704</flags>
 							<parameter name="Location" id="1" factoryID="3">
 								<flags>8606711824</flags>
@@ -894,11 +900,11 @@
 						</parameter>
 					</parameter>
 				</parameter>
-				<parameter name="Out Gradient" id="805" flags="12889165873">
+				<parameter name="Out Gradient" id="805" flags="12889165872">
 					<foldFlags>15</foldFlags>
 					<parameter name="RGB" id="1" flags="8589938704">
 						<flags>8589938704</flags>
-						<parameter name="RGB1" id="3001886333" factoryID="2">
+						<parameter name="RGB1" id="3001886613" factoryID="2">
 							<flags>8589938704</flags>
 							<parameter name="Location" id="1" factoryID="3">
 								<flags>8606711824</flags>
@@ -954,7 +960,7 @@
 								</parameter>
 							</parameter>
 						</parameter>
-						<parameter name="RGB2" id="3001886334" factoryID="2">
+						<parameter name="RGB2" id="3001886614" factoryID="2">
 							<flags>8589938704</flags>
 							<parameter name="Location" id="1" factoryID="3">
 								<flags>8606711824</flags>
@@ -1013,7 +1019,7 @@
 					</parameter>
 					<parameter name="Opacity" id="2" flags="8589938704">
 						<flags>8589938704</flags>
-						<parameter name="Opacity1" id="3001886335" factoryID="1">
+						<parameter name="Opacity1" id="3001886615" factoryID="1">
 							<flags>8589938704</flags>
 							<parameter name="Location" id="1" factoryID="3">
 								<flags>8606711824</flags>
