@@ -75,13 +75,7 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
     float2 offsetUV = in.textureCoordinate + *offsetPtr;
     float4 blur = float4(blurred.sample(s, offsetUV));
 
-    // Normalize alpha by peak so glow profile is consistent at any radius.
-    // With per-object rendering the object is always within the tile,
-    // so the peak is at or near (0.5, 0.5) in the blurred texture.
-    float peakAlpha = float(blurred.sample(s, float2(0.5, 0.5)).a);
-    peakAlpha = max(peakAlpha, 0.001);
-    float normAlpha = min(blur.a / peakAlpha, 1.0);
-    float t = 1.0 - normAlpha;
+    float t = 1.0 - blur.a;
 
     // Opacity
     float fade = 1.0 - smoothstep(0.0, 1.0 / glowFalloff, t);
