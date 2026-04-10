@@ -9,6 +9,8 @@
 #import "../Views/KKCustomGroupHeaderView.h"
 #import "../Views/KKSeparatorView.h"
 #import "../Views/KKTimingGraphView.h"
+#import "../Views/KKAnimatableProperty.h"
+#import "../Views/KKPillToggleRowView.h"
 #import "../Views/KKTimingSlot.h"
 #import "../Views/KKUpdateBannerView.h"
 #import "KKConstants.h"
@@ -94,6 +96,16 @@
   if (parameterID == kKKParamUpdateBanner)
     return [[KKUpdateBannerView alloc] init];
 
+
+  if (parameterID == kKKParamColorGroup)
+    return [self
+        createGroupHeaderWithTitle:@"Color Style"
+                              icon:[NSImage
+                                       imageWithSystemSymbolName:@"paintpalette"
+                                       accessibilityDescription:nil]
+                       parameterID:parameterID
+                   expandedParamID:kKKParamColorExpanded];
+
   if (parameterID == kKKParamAnimationSeparator)
     return [self _createTimingHeader:parameterID];
 
@@ -125,6 +137,53 @@
   KKAlertView *infoView = [[KKAlertView alloc] initWithText:text];
   infoView.icon = kkClassRegistry([self class], kKKInfoIcons)[@(parameterID)];
   return infoView;
+}
+
+- (NSView *)createGroupHeaderWithTitle:(NSString *)title
+                                  icon:(nullable NSImage *)icon
+                           parameterID:(UInt32)parameterID
+                       expandedParamID:(UInt32)expandedParamID
+    NS_RETURNS_RETAINED {
+  KKCustomGroupHeaderView *header =
+      [[KKCustomGroupHeaderView alloc] initWithFrame:NSMakeRect(0, 0, 300, 26)
+                                          apiManager:self.apiManager
+                                         parameterId:parameterID
+                                                text:title
+                                                icon:icon
+                                       showsCheckbox:NO];
+
+  id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
+      apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+
+  BOOL expanded = NO;
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  [paramGetAPI getBoolValue:&expanded
+              fromParameter:expandedParamID
+                     atTime:[actionAPI currentTime]];
+  header.isExpanded = expanded;
+  header.isEnabled = YES;
+
+  [actionAPI endAction:self];
+
+  __weak typeof(self) weakSelf = self;
+  header.onExpandedChanged = ^(BOOL isExpanded) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actAPI startAction:strongSelf];
+    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [setAPI setBoolValue:isExpanded
+             toParameter:expandedParamID
+                  atTime:[actAPI currentTime]];
+    [actAPI endAction:strongSelf];
+  };
+
+  return header;
 }
 
 - (NSView *)_createTimingHeader:(UInt32)parameterID {
@@ -198,7 +257,7 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
 - (NSView *)_createTimingGraphView {
   // pill(24) + ticks(16) + spacing(8) + graph(60) + labels(20) + slider(28) +
   // ticks(16)
-  static const CGFloat kBaseHeight = 172.0;
+  static const CGFloat kBaseHeight = 170.0;
 
   NSArray<KKTimingSlot *> *globalSlots = [self timingGlobalSlots];
   NSArray<KKTimingSlot *> *inSlots =
@@ -209,9 +268,30 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
       [self timingSlotsForSection:KKTimingGraphSectionOut];
 
   CGFloat globalHeight = KKTotalSlotHeight(globalSlots);
-  CGFloat maxSectionHeight =
-      MAX(KKTotalSlotHeight(inSlots),
-          MAX(KKTotalSlotHeight(holdSlots), KKTotalSlotHeight(outSlots)));
+  NSArray<KKAnimatableProperty *> *animPropsForHeight =
+      [self animatableProperties];
+  BOOL hasAnimProps = animPropsForHeight.count > 0;
+  CGFloat animPropH = hasAnimProps
+                          ? (animPropsForHeight.count > 5 ? 18.0 * 2 + KKSpacingXS
+                                                          : 18.0)
+                          : 0;
+  CGFloat propHeight =
+      (hasAnimProps || [self holdPropertyView])
+          ? MAX(hasAnimProps ? animPropH : [self holdPropertyViewHeight], 14.0) +
+                KKSpacingSM
+          : 0;
+  CGFloat maxSectionHeight;
+  if (hasAnimProps) {
+    maxSectionHeight =
+        MAX(KKTotalSlotHeight(inSlots) + propHeight,
+            MAX(KKTotalSlotHeight(holdSlots) + propHeight,
+                KKTotalSlotHeight(outSlots) + propHeight));
+  } else {
+    maxSectionHeight =
+        MAX(KKTotalSlotHeight(inSlots),
+            MAX(KKTotalSlotHeight(holdSlots) + propHeight,
+                KKTotalSlotHeight(outSlots)));
+  }
   CGFloat slotHeight = globalHeight + maxSectionHeight;
   CGFloat totalHeight =
       kBaseHeight + (slotHeight > 0 ? KKPaddingSM + slotHeight : 0);
@@ -309,6 +389,119 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
   graphView.holdSectionSlots = holdSlots;
   graphView.outSectionSlots = outSlots;
 
+  NSArray<KKAnimatableProperty *> *animProps = [self animatableProperties];
+  if (animProps.count > 0) {
+    static const CGFloat kRowH = 18.0;
+    NSMutableArray<NSString *> *labels = [NSMutableArray new];
+    for (KKAnimatableProperty *p in animProps)
+      [labels addObject:p.label];
+
+    // Split into 2 rows when >5 properties.
+    BOOL twoRows = animProps.count > 5;
+    NSView *propView;
+    KKPillToggleRowView *row1, *row2;
+    NSUInteger splitAt = twoRows ? (animProps.count + 1) / 2 : animProps.count;
+    CGFloat totalH;
+
+    if (twoRows) {
+      NSArray *labels1 = [labels subarrayWithRange:NSMakeRange(0, splitAt)];
+      NSArray *labels2 =
+          [labels subarrayWithRange:NSMakeRange(splitAt, animProps.count - splitAt)];
+      row1 = [[KKPillToggleRowView alloc] initWithLabels:labels1];
+      row2 = [[KKPillToggleRowView alloc] initWithLabels:labels2];
+      row1.autoresizingMask = NSViewWidthSizable;
+      row2.autoresizingMask = NSViewWidthSizable;
+      totalH = kRowH * 2 + KKSpacingXS;
+      NSView *container =
+          [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, totalH)];
+      row1.frame = NSMakeRect(0, 0, 300, kRowH);
+      row2.frame = NSMakeRect(0, kRowH + KKSpacingXS, 300, kRowH);
+      [container addSubview:row1];
+      [container addSubview:row2];
+      propView = container;
+    } else {
+      row1 = [[KKPillToggleRowView alloc] initWithLabels:labels];
+      row2 = nil;
+      totalH = kRowH;
+      propView = row1;
+    }
+
+    __weak typeof(self) weakSelf = self;
+    __weak KKTimingGraphView *weakGraph = graphView;
+
+    void (^handleToggle)(NSInteger, BOOL) = ^(NSInteger index, BOOL isOn) {
+      __strong typeof(weakSelf) strongSelf = weakSelf;
+      KKTimingGraphView *graph = weakGraph;
+      if (!strongSelf || !graph || (NSUInteger)index >= animProps.count)
+        return;
+      KKAnimatableProperty *prop = animProps[index];
+      UInt32 paramID;
+      switch (graph.selectedSection) {
+      case KKTimingGraphSectionIn:
+        paramID = prop.inParamID;
+        break;
+      case KKTimingGraphSectionOut:
+        paramID = prop.outParamID;
+        break;
+      default:
+        paramID = prop.holdParamID;
+        break;
+      }
+      id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      [actAPI startAction:strongSelf];
+      id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      [setAPI setBoolValue:isOn toParameter:paramID atTime:[actAPI currentTime]];
+      [actAPI endAction:strongSelf];
+    };
+    row1.onToggled = ^(NSInteger index, BOOL isOn) {
+      handleToggle(index, isOn);
+    };
+    if (row2) {
+      row2.onToggled = ^(NSInteger index, BOOL isOn) {
+        handleToggle(index + (NSInteger)splitAt, isOn);
+      };
+    }
+
+    graphView.holdPropertyView = propView;
+    graphView.holdPropertyViewHeight = totalH;
+    graphView.showPropertyViewForAllSections = YES;
+    graphView.holdPropertyApplyState = ^(id paramAPI, CMTime time) {
+      KKTimingGraphView *graph = weakGraph;
+      if (!graph)
+        return;
+      for (NSUInteger i = 0; i < animProps.count; i++) {
+        KKAnimatableProperty *prop = animProps[i];
+        UInt32 paramID;
+        switch (graph.selectedSection) {
+        case KKTimingGraphSectionIn:
+          paramID = prop.inParamID;
+          break;
+        case KKTimingGraphSectionOut:
+          paramID = prop.outParamID;
+          break;
+        default:
+          paramID = prop.holdParamID;
+          break;
+        }
+        BOOL val = YES;
+        [paramAPI getBoolValue:&val fromParameter:paramID atTime:time];
+        if (i < splitAt)
+          [row1 setState:val atIndex:i];
+        else
+          [row2 setState:val atIndex:i - splitAt];
+      }
+    };
+  } else {
+    NSView *holdPropView = [self holdPropertyView];
+    if (holdPropView) {
+      graphView.holdPropertyView = holdPropView;
+      graphView.holdPropertyViewHeight = [self holdPropertyViewHeight];
+      graphView.holdPropertyApplyState = [self holdPropertyApplyState];
+    }
+  }
+
   self.timingGraph = graphView;
 
   [actionAPI startAction:self];
@@ -317,6 +510,8 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
   [self _applySlotState:inSlots withParamAPI:paramGetAPI atTime:t];
   [self _applySlotState:holdSlots withParamAPI:paramGetAPI atTime:t];
   [self _applySlotState:outSlots withParamAPI:paramGetAPI atTime:t];
+  if (graphView.holdPropertyApplyState)
+    graphView.holdPropertyApplyState(paramGetAPI, t);
   [actionAPI endAction:self];
 
   return wrapper;
@@ -353,6 +548,8 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
   [self _applySlotState:self.timingGraph.outSectionSlots
            withParamAPI:paramGetAPI
                  atTime:t];
+  if (self.timingGraph.holdPropertyApplyState)
+    self.timingGraph.holdPropertyApplyState(paramGetAPI, t);
   [actionAPI endAction:self];
 }
 

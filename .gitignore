@@ -9,3 +9,4 @@ buildServer.json
 scripts/*.fcpxml
 !scripts/*.template.fcpxml
 .derived-data*
+.claude

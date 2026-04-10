@@ -12,6 +12,7 @@
 #   rounded        Rounded plugin
 #   magicmove      MagicMove plugin
 #   keyframelessx  Keyframeless X app
+#   glow         Glow plugin
 
 set -euo pipefail
 
@@ -26,6 +27,7 @@ usage() {
   echo "  rounded        Rounded plugin"
   echo "  magicmove      MagicMove plugin"
   echo "  keyframelessx  Keyframeless X app"
+  echo "  glow           Glow plugin"
   echo ""
   echo "Version format: BREAKING.MAJOR.MINOR[-vN]"
   echo ""
@@ -52,6 +54,7 @@ plist_for_component() {
     motionblur)    echo "MotionBlur/MotionBlur/Plugin/Info.plist" ;;
     rounded)       echo "Rounded/Rounded/Plugin/Info.plist" ;;
     magicmove)     echo "MagicMove/MagicMove/Plugin/Info.plist" ;;
+    glow)          echo "Glow/Glow/Plugin/Info.plist" ;;
     keyframelessx) echo "" ;;
   esac
 }
@@ -205,6 +208,13 @@ case "$COMPONENT" in
     bump_pkgproj "co.overpolish.keyframeless.MagicMove"
     ;;
 
+
+  glow)
+    bump_plist "Glow/Glow/Wrapper Application/Info.plist"
+    bump_plist "Glow/Glow/Plugin/Info.plist"
+    bump_fxplug "Glow/Glow/Plugin/Info.plist"
+    bump_pkgproj "co.overpolish.keyframeless.Glow"
+    ;;
   keyframelessx)
     proj="Keyframeless X/Keyframeless X.xcodeproj/project.pbxproj"
     echo "  $proj"

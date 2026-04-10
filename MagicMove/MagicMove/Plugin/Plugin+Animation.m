@@ -192,8 +192,63 @@
     targetOpacity = (1 - d) * b.opacity + d * drift.opacity;
   }
 
+  BOOL inPosX = YES, inPosY = YES, inSX = YES, inSY = YES;
+  BOOL inRotZ = YES, inRotX = YES, inRotY = YES, inOpacity = YES;
+  [paramGetAPI getBoolValue:&inPosX fromParameter:kParamInPositionX atTime:renderTime];
+  [paramGetAPI getBoolValue:&inPosY fromParameter:kParamInPositionY atTime:renderTime];
+  [paramGetAPI getBoolValue:&inSX fromParameter:kParamInScaleX atTime:renderTime];
+  [paramGetAPI getBoolValue:&inSY fromParameter:kParamInScaleY atTime:renderTime];
+  [paramGetAPI getBoolValue:&inRotZ fromParameter:kParamInRotationZ atTime:renderTime];
+  [paramGetAPI getBoolValue:&inRotX fromParameter:kParamInRotationX atTime:renderTime];
+  [paramGetAPI getBoolValue:&inRotY fromParameter:kParamInRotationY atTime:renderTime];
+  [paramGetAPI getBoolValue:&inOpacity fromParameter:kParamInOpacity atTime:renderTime];
+
+  BOOL outPosX = YES, outPosY = YES, outSX = YES, outSY = YES;
+  BOOL outRotZ = YES, outRotX = YES, outRotY = YES, outOpacity = YES;
+  [paramGetAPI getBoolValue:&outPosX fromParameter:kParamOutPositionX atTime:renderTime];
+  [paramGetAPI getBoolValue:&outPosY fromParameter:kParamOutPositionY atTime:renderTime];
+  [paramGetAPI getBoolValue:&outSX fromParameter:kParamOutScaleX atTime:renderTime];
+  [paramGetAPI getBoolValue:&outSY fromParameter:kParamOutScaleY atTime:renderTime];
+  [paramGetAPI getBoolValue:&outRotZ fromParameter:kParamOutRotationZ atTime:renderTime];
+  [paramGetAPI getBoolValue:&outRotX fromParameter:kParamOutRotationX atTime:renderTime];
+  [paramGetAPI getBoolValue:&outRotY fromParameter:kParamOutRotationY atTime:renderTime];
+  [paramGetAPI getBoolValue:&outOpacity fromParameter:kParamOutOpacity atTime:renderTime];
+
   double tIn = timing.inPhase.factor;
   double e = timing.outPhase.interpolate(1.0 - timing.outPhase.progress);
+
+  // Adjusted In start: when In is disabled for a property, start at target.
+  MagicMovePointValues sA = a;
+  if (!inPosX) sA.x = targetX;
+  if (!inPosY) sA.y = targetY;
+  if (!inRotZ) sA.rotation = targetRot;
+  if (!inRotX) sA.rotationX = targetRotX;
+  if (!inRotY) sA.rotationY = targetRotY;
+  if (!inSX) sA.scaleX = targetScaleX;
+  if (!inSY) sA.scaleY = targetScaleY;
+  if (!inOpacity) sA.opacity = targetOpacity;
+
+  // Adjusted Out endpoints: when Out is disabled, stay at target.
+  MagicMovePointValues sExit = exitV;
+  if (!outPosX) sExit.x = targetX;
+  if (!outPosY) sExit.y = targetY;
+  if (!outRotZ) sExit.rotation = targetRot;
+  if (!outRotX) sExit.rotationX = targetRotX;
+  if (!outRotY) sExit.rotationY = targetRotY;
+  if (!outSX) sExit.scaleX = targetScaleX;
+  if (!outSY) sExit.scaleY = targetScaleY;
+  if (!outOpacity) sExit.opacity = targetOpacity;
+
+  // For drift Out (target→A), disable means stay at target.
+  MagicMovePointValues sReturn = a;
+  if (!outPosX) sReturn.x = targetX;
+  if (!outPosY) sReturn.y = targetY;
+  if (!outRotZ) sReturn.rotation = targetRot;
+  if (!outRotX) sReturn.rotationX = targetRotX;
+  if (!outRotY) sReturn.rotationY = targetRotY;
+  if (!outSX) sReturn.scaleX = targetScaleX;
+  if (!outSY) sReturn.scaleY = targetScaleY;
+  if (!outOpacity) sReturn.opacity = targetOpacity;
 
   KKBezierPath *pathAB = [self readPath:kParamPathAB withAPI:paramGetAPI];
 
@@ -205,26 +260,26 @@
     simd_float2 effPos =
         [exitPath positionAtT:(float)e
                         start:(simd_float2){(float)targetX, (float)targetY}
-                          end:(simd_float2){(float)exitV.x, (float)exitV.y}];
+                          end:(simd_float2){(float)sExit.x, (float)sExit.y}];
     double effX = effPos.x;
     double effY = effPos.y;
-    double effRot = (1 - e) * targetRot + e * exitV.rotation;
-    double effRotX = (1 - e) * targetRotX + e * exitV.rotationX;
-    double effRotY = (1 - e) * targetRotY + e * exitV.rotationY;
-    double effScaleX = (1 - e) * targetScaleX + e * exitV.scaleX;
-    double effScaleY = (1 - e) * targetScaleY + e * exitV.scaleY;
-    double effOpacity = (1 - e) * targetOpacity + e * exitV.opacity;
+    double effRot = (1 - e) * targetRot + e * sExit.rotation;
+    double effRotX = (1 - e) * targetRotX + e * sExit.rotationX;
+    double effRotY = (1 - e) * targetRotY + e * sExit.rotationY;
+    double effScaleX = (1 - e) * targetScaleX + e * sExit.scaleX;
+    double effScaleY = (1 - e) * targetScaleY + e * sExit.scaleY;
+    double effOpacity = (1 - e) * targetOpacity + e * sExit.opacity;
 
-    simd_float2 startPos = {(float)a.x, (float)a.y};
+    simd_float2 startPos = {(float)sA.x, (float)sA.y};
     simd_float2 endPos = {(float)effX, (float)effY};
     simd_float2 pos = [pathAB positionAtT:(float)tIn start:startPos end:endPos];
     params.translate = (simd_float2){pos.x - 0.5f, pos.y - 0.5f};
-    params.rotation = (float)((1 - tIn) * a.rotation + tIn * effRot);
-    params.rotationX = (float)((1 - tIn) * a.rotationX + tIn * effRotX);
-    params.rotationY = (float)((1 - tIn) * a.rotationY + tIn * effRotY);
-    params.scaleX = (float)((1 - tIn) * a.scaleX + tIn * effScaleX);
-    params.scaleY = (float)((1 - tIn) * a.scaleY + tIn * effScaleY);
-    params.opacity = (float)((1 - tIn) * a.opacity + tIn * effOpacity);
+    params.rotation = (float)((1 - tIn) * sA.rotation + tIn * effRot);
+    params.rotationX = (float)((1 - tIn) * sA.rotationX + tIn * effRotX);
+    params.rotationY = (float)((1 - tIn) * sA.rotationY + tIn * effRotY);
+    params.scaleX = (float)((1 - tIn) * sA.scaleX + tIn * effScaleX);
+    params.scaleY = (float)((1 - tIn) * sA.scaleY + tIn * effScaleY);
+    params.opacity = (float)((1 - tIn) * sA.opacity + tIn * effOpacity);
   } else if (driftEnabled) {
     double tOut = timing.outPhase.interpolate(1.0 - timing.outPhase.progress);
 
@@ -233,38 +288,53 @@
     simd_float2 outPos =
         [pathDriftA positionAtT:(float)tOut
                           start:(simd_float2){(float)targetX, (float)targetY}
-                            end:(simd_float2){(float)a.x, (float)a.y}];
+                            end:(simd_float2){(float)sReturn.x, (float)sReturn.y}];
     double effX = outPos.x;
     double effY = outPos.y;
-    double effRot = (1 - tOut) * targetRot + tOut * a.rotation;
-    double effRotX = (1 - tOut) * targetRotX + tOut * a.rotationX;
-    double effRotY = (1 - tOut) * targetRotY + tOut * a.rotationY;
-    double effScaleX = (1 - tOut) * targetScaleX + tOut * a.scaleX;
-    double effScaleY = (1 - tOut) * targetScaleY + tOut * a.scaleY;
-    double effOpacity = (1 - tOut) * targetOpacity + tOut * a.opacity;
+    double effRot = (1 - tOut) * targetRot + tOut * sReturn.rotation;
+    double effRotX = (1 - tOut) * targetRotX + tOut * sReturn.rotationX;
+    double effRotY = (1 - tOut) * targetRotY + tOut * sReturn.rotationY;
+    double effScaleX = (1 - tOut) * targetScaleX + tOut * sReturn.scaleX;
+    double effScaleY = (1 - tOut) * targetScaleY + tOut * sReturn.scaleY;
+    double effOpacity = (1 - tOut) * targetOpacity + tOut * sReturn.opacity;
 
-    simd_float2 startPos = {(float)a.x, (float)a.y};
+    simd_float2 startPos = {(float)sA.x, (float)sA.y};
     simd_float2 endPos = {(float)effX, (float)effY};
     simd_float2 pos = [pathAB positionAtT:(float)tIn start:startPos end:endPos];
     params.translate = (simd_float2){pos.x - 0.5f, pos.y - 0.5f};
-    params.rotation = (float)((1 - tIn) * a.rotation + tIn * effRot);
-    params.rotationX = (float)((1 - tIn) * a.rotationX + tIn * effRotX);
-    params.rotationY = (float)((1 - tIn) * a.rotationY + tIn * effRotY);
-    params.scaleX = (float)((1 - tIn) * a.scaleX + tIn * effScaleX);
-    params.scaleY = (float)((1 - tIn) * a.scaleY + tIn * effScaleY);
-    params.opacity = (float)((1 - tIn) * a.opacity + tIn * effOpacity);
+    params.rotation = (float)((1 - tIn) * sA.rotation + tIn * effRot);
+    params.rotationX = (float)((1 - tIn) * sA.rotationX + tIn * effRotX);
+    params.rotationY = (float)((1 - tIn) * sA.rotationY + tIn * effRotY);
+    params.scaleX = (float)((1 - tIn) * sA.scaleX + tIn * effScaleX);
+    params.scaleY = (float)((1 - tIn) * sA.scaleY + tIn * effScaleY);
+    params.opacity = (float)((1 - tIn) * sA.opacity + tIn * effOpacity);
   } else {
-    double t = timing.inPhase.factor * timing.outPhase.factor;
-    simd_float2 startPos = {(float)a.x, (float)a.y};
-    simd_float2 endPos = {(float)targetX, (float)targetY};
-    simd_float2 pos = [pathAB positionAtT:(float)t start:startPos end:endPos];
+    double tOut = timing.outPhase.interpolate(1.0 - timing.outPhase.progress);
+
+    KKBezierPath *pathBA = [self readPath:kParamPathBA withAPI:paramGetAPI];
+    simd_float2 outPos =
+        [pathBA positionAtT:(float)tOut
+                      start:(simd_float2){(float)targetX, (float)targetY}
+                        end:(simd_float2){(float)sReturn.x, (float)sReturn.y}];
+    double effX = outPos.x;
+    double effY = outPos.y;
+    double effRot = (1 - tOut) * targetRot + tOut * sReturn.rotation;
+    double effRotX = (1 - tOut) * targetRotX + tOut * sReturn.rotationX;
+    double effRotY = (1 - tOut) * targetRotY + tOut * sReturn.rotationY;
+    double effScaleX = (1 - tOut) * targetScaleX + tOut * sReturn.scaleX;
+    double effScaleY = (1 - tOut) * targetScaleY + tOut * sReturn.scaleY;
+    double effOpacity = (1 - tOut) * targetOpacity + tOut * sReturn.opacity;
+
+    simd_float2 startPos = {(float)sA.x, (float)sA.y};
+    simd_float2 endPos = {(float)effX, (float)effY};
+    simd_float2 pos = [pathAB positionAtT:(float)tIn start:startPos end:endPos];
     params.translate = (simd_float2){pos.x - 0.5f, pos.y - 0.5f};
-    params.rotation = (float)((1 - t) * a.rotation + t * targetRot);
-    params.rotationX = (float)((1 - t) * a.rotationX + t * targetRotX);
-    params.rotationY = (float)((1 - t) * a.rotationY + t * targetRotY);
-    params.scaleX = (float)((1 - t) * a.scaleX + t * targetScaleX);
-    params.scaleY = (float)((1 - t) * a.scaleY + t * targetScaleY);
-    params.opacity = (float)((1 - t) * a.opacity + t * targetOpacity);
+    params.rotation = (float)((1 - tIn) * sA.rotation + tIn * effRot);
+    params.rotationX = (float)((1 - tIn) * sA.rotationX + tIn * effRotX);
+    params.rotationY = (float)((1 - tIn) * sA.rotationY + tIn * effRotY);
+    params.scaleX = (float)((1 - tIn) * sA.scaleX + tIn * effScaleX);
+    params.scaleY = (float)((1 - tIn) * sA.scaleY + tIn * effScaleY);
+    params.opacity = (float)((1 - tIn) * sA.opacity + tIn * effOpacity);
   }
 
   params.anchorOffset = anchorOffset;
