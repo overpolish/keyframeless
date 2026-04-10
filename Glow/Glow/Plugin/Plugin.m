@@ -41,6 +41,13 @@
   case kParamGradientType:
   case kParamForceShow:
   case kKKParamTimingExpanded:
+  case kKKParamTimingSelectedSection:
+  case kKKParamAnimateIn:
+  case kKKParamAnimateOut:
+  case kKKParamHoldEffect:
+  case kParamInColor:
+  case kParamHoldColor:
+  case kParamOutColor:
   case kParamOffsetExpanded:
   case kKKParamColorExpanded:
     [self updateParameterVisibilityAtTime:time];

@@ -39,6 +39,10 @@
                                        inID:kParamInOffset
                                      holdID:kParamHoldOffset
                                       outID:kParamOutOffset],
+    [KKAnimatableProperty propertyWithLabel:@"Color"
+                                       inID:kParamInColor
+                                     holdID:kParamHoldColor
+                                      outID:kParamOutColor],
   ];
 }
 

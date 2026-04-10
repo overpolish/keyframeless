@@ -46,6 +46,8 @@ static const float kMaxBlurDimension = 2048.0f;
              atTime:(CMTime)renderTime
             quality:(FxQuality)qualityLevel
               error:(NSError **)error {
+  [self updateParameterVisibilityAtTime:renderTime];
+
   id<FxParameterRetrievalAPI_v6> api =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   if (!api) {
@@ -109,8 +111,19 @@ static const float kMaxBlurDimension = 2048.0f;
   [api getBoolValue:&outN fromParameter:kParamOutNoise atTime:renderTime];
   [api getBoolValue:&outO fromParameter:kParamOutOffset atTime:renderTime];
 
+  BOOL inC = YES, holdC = YES, outC = YES;
+  [api getBoolValue:&inC fromParameter:kParamInColor atTime:renderTime];
+  [api getBoolValue:&holdC fromParameter:kParamHoldColor atTime:renderTime];
+  [api getBoolValue:&outC fromParameter:kParamOutColor atTime:renderTime];
+
   int holdSeed = 0;
   [api getIntValue:&holdSeed fromParameter:kKKParamHoldSeed atTime:renderTime];
+
+  int holdEffectVal = 0;
+  [api getIntValue:&holdEffectVal
+      fromParameter:kKKParamHoldEffect
+             atTime:renderTime];
+  BOOL holdHasEffect = (holdEffectVal != 0);
 
   double rF = (inR ? inF : 1.0) * (holdR ? holdF : 1.0) * (outR ? outF : 1.0);
   double iF = (inI ? inF : 1.0) * (holdI ? holdF : 1.0) * (outI ? outF : 1.0);
@@ -124,6 +137,107 @@ static const float kMaxBlurDimension = 2048.0f;
 
   KKColorResult *color = [self colorAtTime:renderTime];
 
+  // --- Timing color blending ---
+  simd_float3 finalColor = color.solidColor;
+  simd_float3 finalLUT[KK_GRADIENT_LUT_SIZE];
+
+  if (color.mode == KKColorModeGradient) {
+    if (color.gradientLUT)
+      memcpy(finalLUT, color.gradientLUT,
+             sizeof(simd_float3) * KK_GRADIENT_LUT_SIZE);
+    else
+      for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++)
+        finalLUT[i] = (simd_float3){1, 1, 1};
+  }
+
+  if (color.mode == KKColorModeSolid) {
+    if (inC && timing.inPhase.enabled) {
+      double r = 1, g = 1, b = 1;
+      [api getRedValue:&r
+             greenValue:&g
+              blueValue:&b
+          fromParameter:kParamTimingInColor
+                 atTime:renderTime];
+      float t = (float)inF;
+      simd_float3 ic = {(float)r, (float)g, (float)b};
+      finalColor = simd_mix(ic, finalColor, (simd_float3){t, t, t});
+    }
+    if (holdC && holdHasEffect) {
+      double r = 1, g = 1, b = 1;
+      [api getRedValue:&r
+             greenValue:&g
+              blueValue:&b
+          fromParameter:kParamTimingHoldColor
+                 atTime:renderTime];
+      float hBlend = (float)timing.holdPhase.progress;
+      simd_float3 hc = {(float)r, (float)g, (float)b};
+      finalColor =
+          simd_mix(finalColor, hc, (simd_float3){hBlend, hBlend, hBlend});
+    }
+    if (outC && timing.outPhase.enabled) {
+      double r = 1, g = 1, b = 1;
+      [api getRedValue:&r
+             greenValue:&g
+              blueValue:&b
+          fromParameter:kParamTimingOutColor
+                 atTime:renderTime];
+      float t = (float)outF;
+      simd_float3 oc = {(float)r, (float)g, (float)b};
+      finalColor = simd_mix(oc, finalColor, (simd_float3){t, t, t});
+    }
+  } else if (color.mode == KKColorModeGradient) {
+    simd_float3 tempLUT[KK_GRADIENT_LUT_SIZE];
+
+    if (inC && timing.inPhase.enabled) {
+      float samples[KK_GRADIENT_LUT_SIZE * 4];
+      if ([api getGradientSamples:samples
+                       numSamples:KK_GRADIENT_LUT_SIZE
+                            depth:kFxDepth_FLOAT32
+                    fromParameter:kParamTimingInGradient
+                           atTime:renderTime]) {
+        float t = (float)inF;
+        simd_float3 tv = {t, t, t};
+        for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++) {
+          simd_float3 ic = {samples[i * 4], samples[i * 4 + 1],
+                            samples[i * 4 + 2]};
+          finalLUT[i] = simd_mix(ic, finalLUT[i], tv);
+        }
+      }
+    }
+    if (holdC && holdHasEffect) {
+      float samples[KK_GRADIENT_LUT_SIZE * 4];
+      if ([api getGradientSamples:samples
+                       numSamples:KK_GRADIENT_LUT_SIZE
+                            depth:kFxDepth_FLOAT32
+                    fromParameter:kParamTimingHoldGradient
+                           atTime:renderTime]) {
+        float hBlend = (float)timing.holdPhase.progress;
+        simd_float3 hv = {hBlend, hBlend, hBlend};
+        for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++) {
+          simd_float3 hc = {samples[i * 4], samples[i * 4 + 1],
+                            samples[i * 4 + 2]};
+          finalLUT[i] = simd_mix(finalLUT[i], hc, hv);
+        }
+      }
+    }
+    if (outC && timing.outPhase.enabled) {
+      float samples[KK_GRADIENT_LUT_SIZE * 4];
+      if ([api getGradientSamples:samples
+                       numSamples:KK_GRADIENT_LUT_SIZE
+                            depth:kFxDepth_FLOAT32
+                    fromParameter:kParamTimingOutGradient
+                           atTime:renderTime]) {
+        float t = (float)outF;
+        simd_float3 tv = {t, t, t};
+        for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++) {
+          simd_float3 oc = {samples[i * 4], samples[i * 4 + 1],
+                            samples[i * 4 + 2]};
+          finalLUT[i] = simd_mix(oc, finalLUT[i], tv);
+        }
+      }
+    }
+  }
+
   GlowPluginState state = {
       .radiusX = (float)(radiusX * rF),
       .radiusY = (float)(radiusY * rF),
@@ -132,20 +246,14 @@ static const float kMaxBlurDimension = 2048.0f;
       .noise = (float)(noise * nF),
       .noiseOffset = (float)noiseOffset,
       .offset = {(float)(offX * oF + hOX), (float)(offY * oF + hOY)},
-      .glowColor = color.solidColor,
+      .glowColor = finalColor,
       .colorMode = (int)color.mode,
       .gradientType = gradType,
       .gradientAngle = (float)gradAngle,
   };
 
   if (color.mode == KKColorModeGradient) {
-    if (color.gradientLUT) {
-      memcpy(state.gradientLUT, color.gradientLUT, sizeof(state.gradientLUT));
-    } else {
-      [_renderLog() warn:@"gradientLUT is NULL despite gradient mode"];
-      for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++)
-        state.gradientLUT[i] = (simd_float3){1, 1, 1};
-    }
+    memcpy(state.gradientLUT, finalLUT, sizeof(state.gradientLUT));
   } else {
     for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++)
       state.gradientLUT[i] = state.glowColor;

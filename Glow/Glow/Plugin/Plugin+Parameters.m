@@ -171,25 +171,66 @@
     return NO;
 
   UInt32 animParams[] = {
-      kParamInRadius,      kParamInIntensity, kParamInFalloff,
-      kParamInNoise,       kParamInOffset,    kParamHoldRadius,
-      kParamHoldIntensity, kParamHoldFalloff, kParamHoldNoise,
-      kParamHoldOffset,    kParamOutRadius,   kParamOutIntensity,
-      kParamOutFalloff,    kParamOutNoise,    kParamOutOffset,
+      kParamInRadius,   kParamInIntensity,   kParamInFalloff,
+      kParamInNoise,    kParamInOffset,      kParamInColor,
+      kParamHoldRadius, kParamHoldIntensity, kParamHoldFalloff,
+      kParamHoldNoise,  kParamHoldOffset,    kParamHoldColor,
+      kParamOutRadius,  kParamOutIntensity,  kParamOutFalloff,
+      kParamOutNoise,   kParamOutOffset,     kParamOutColor,
   };
   NSString *animNames[] = {
-      @"In Radius",   @"In Intensity", @"In Falloff",     @"In Noise",
-      @"In Offset",   @"Hold Radius",  @"Hold Intensity", @"Hold Falloff",
-      @"Hold Noise",  @"Hold Offset",  @"Out Radius",     @"Out Intensity",
-      @"Out Falloff", @"Out Noise",    @"Out Offset",
+      @"In Radius",    @"In Intensity",  @"In Falloff",  @"In Noise",
+      @"In Offset",    @"In Color",      @"Hold Radius", @"Hold Intensity",
+      @"Hold Falloff", @"Hold Noise",    @"Hold Offset", @"Hold Color",
+      @"Out Radius",   @"Out Intensity", @"Out Falloff", @"Out Noise",
+      @"Out Offset",   @"Out Color",
   };
-  for (int i = 0; i < 15; i++) {
+  for (int i = 0; i < 18; i++) {
     if (![paramAPI addToggleButtonWithName:animNames[i]
                                parameterID:animParams[i]
                               defaultValue:YES
                             parameterFlags:kFxParameterFlag_HIDDEN])
       return NO;
   }
+
+  if (![paramAPI addColorParameterWithName:@"In Color"
+                               parameterID:kParamTimingInColor
+                                defaultRed:1.0
+                              defaultGreen:1.0
+                               defaultBlue:1.0
+                            parameterFlags:kFxParameterFlag_HIDDEN])
+    return NO;
+
+  if (![paramAPI addColorParameterWithName:@"Hold Color"
+                               parameterID:kParamTimingHoldColor
+                                defaultRed:1.0
+                              defaultGreen:1.0
+                               defaultBlue:1.0
+                            parameterFlags:kFxParameterFlag_HIDDEN])
+    return NO;
+
+  if (![paramAPI addColorParameterWithName:@"Out Color"
+                               parameterID:kParamTimingOutColor
+                                defaultRed:1.0
+                              defaultGreen:1.0
+                               defaultBlue:1.0
+                            parameterFlags:kFxParameterFlag_HIDDEN])
+    return NO;
+
+  if (![paramAPI addGradientWithName:@"In Gradient"
+                         parameterID:kParamTimingInGradient
+                      parameterFlags:kFxParameterFlag_HIDDEN])
+    return NO;
+
+  if (![paramAPI addGradientWithName:@"Hold Gradient"
+                         parameterID:kParamTimingHoldGradient
+                      parameterFlags:kFxParameterFlag_HIDDEN])
+    return NO;
+
+  if (![paramAPI addGradientWithName:@"Out Gradient"
+                         parameterID:kParamTimingOutGradient
+                      parameterFlags:kFxParameterFlag_HIDDEN])
+    return NO;
 
   return YES;
 }
