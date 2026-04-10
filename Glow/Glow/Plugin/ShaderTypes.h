@@ -20,7 +20,8 @@ typedef enum FragmentIndex {
     FragmentIndex_GradientAngle = 9,
     FragmentIndex_Noise = 10,
     FragmentIndex_NoiseOffset = 11,
-    FragmentIndex_NoiseSeed = 12
+    FragmentIndex_NoiseSeed = 12,
+    FragmentIndex_BlurUVScale = 13
 } FragmentIndex;
 
 #define KK_GRADIENT_LUT_SIZE 64
