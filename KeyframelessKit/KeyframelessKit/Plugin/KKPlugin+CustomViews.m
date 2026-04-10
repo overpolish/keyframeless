@@ -95,6 +95,15 @@
     return [[KKUpdateBannerView alloc] init];
 
 
+  if (parameterID == kKKParamColorGroup)
+    return [self
+        createGroupHeaderWithTitle:@"Color Style"
+                              icon:[NSImage
+                                       imageWithSystemSymbolName:@"paintpalette"
+                                       accessibilityDescription:nil]
+                       parameterID:parameterID
+                   expandedParamID:kKKParamColorExpanded];
+
   if (parameterID == kKKParamAnimationSeparator)
     return [self _createTimingHeader:parameterID];
 
@@ -126,6 +135,53 @@
   KKAlertView *infoView = [[KKAlertView alloc] initWithText:text];
   infoView.icon = kkClassRegistry([self class], kKKInfoIcons)[@(parameterID)];
   return infoView;
+}
+
+- (NSView *)createGroupHeaderWithTitle:(NSString *)title
+                                  icon:(nullable NSImage *)icon
+                           parameterID:(UInt32)parameterID
+                       expandedParamID:(UInt32)expandedParamID
+    NS_RETURNS_RETAINED {
+  KKCustomGroupHeaderView *header =
+      [[KKCustomGroupHeaderView alloc] initWithFrame:NSMakeRect(0, 0, 300, 26)
+                                          apiManager:self.apiManager
+                                         parameterId:parameterID
+                                                text:title
+                                                icon:icon
+                                       showsCheckbox:NO];
+
+  id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
+      apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+
+  BOOL expanded = NO;
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  [paramGetAPI getBoolValue:&expanded
+              fromParameter:expandedParamID
+                     atTime:[actionAPI currentTime]];
+  header.isExpanded = expanded;
+  header.isEnabled = YES;
+
+  [actionAPI endAction:self];
+
+  __weak typeof(self) weakSelf = self;
+  header.onExpandedChanged = ^(BOOL isExpanded) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actAPI startAction:strongSelf];
+    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [setAPI setBoolValue:isExpanded
+             toParameter:expandedParamID
+                  atTime:[actAPI currentTime]];
+    [actAPI endAction:strongSelf];
+  };
+
+  return header;
 }
 
 - (NSView *)_createTimingHeader:(UInt32)parameterID {

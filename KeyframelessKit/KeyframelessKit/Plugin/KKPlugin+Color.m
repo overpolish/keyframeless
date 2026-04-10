@@ -28,6 +28,22 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
   objc_setAssociatedObject([self class], kColorModesKey, modes,
                            OBJC_ASSOCIATION_COPY_NONATOMIC);
 
+  if (![paramAPI
+          addCustomParameterWithName:@""
+                         parameterID:kKKParamColorGroup
+                        defaultValue:@(kKKParamColorGroup)
+                      parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
+                                     kFxParameterFlag_CUSTOM_UI |
+                                     kFxParameterFlag_USE_FULL_VIEW_WIDTH])
+    return NO;
+
+  if (![paramAPI addToggleButtonWithName:@""
+                             parameterID:kKKParamColorExpanded
+                            defaultValue:NO
+                          parameterFlags:kFxParameterFlag_HIDDEN |
+                                         kFxParameterFlag_NOT_ANIMATABLE])
+    return NO;
+
   BOOL hasSolid = [modes containsObject:@(KKColorModeSolid)];
   BOOL hasGradient = [modes containsObject:@(KKColorModeGradient)];
 
@@ -51,11 +67,10 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
                      parameterID:kKKParamColorMode
                     defaultValue:(UInt32)modes.firstObject.unsignedIntValue
                      menuEntries:titles
-                  parameterFlags:kFxParameterFlag_NOT_ANIMATABLE])
+                  parameterFlags:kFxParameterFlag_HIDDEN |
+                                 kFxParameterFlag_NOT_ANIMATABLE])
       return NO;
   }
-
-  KKColorMode defaultMode = (KKColorMode)modes.firstObject.integerValue;
 
   if (hasSolid) {
     if (![paramAPI addColorParameterWithName:@"Color"
@@ -63,18 +78,14 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
                                   defaultRed:1.0
                                 defaultGreen:1.0
                                  defaultBlue:1.0
-                              parameterFlags:(defaultMode == KKColorModeSolid)
-                                                 ? kFxParameterFlag_DEFAULT
-                                                 : kFxParameterFlag_HIDDEN])
+                              parameterFlags:kFxParameterFlag_HIDDEN])
       return NO;
   }
 
   if (hasGradient) {
     if (![paramAPI addGradientWithName:@"Gradient"
                            parameterID:kKKParamColorGradient
-                        parameterFlags:(defaultMode == KKColorModeGradient)
-                                           ? kFxParameterFlag_DEFAULT
-                                           : kFxParameterFlag_HIDDEN])
+                        parameterFlags:kFxParameterFlag_HIDDEN])
       return NO;
   }
 
@@ -159,6 +170,12 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
   NSArray<NSNumber *> *modes = _colorModes(self);
   if (modes.count <= 1)
     return;
+
+  FxParameterFlags modeFlags = 0;
+  [paramGetAPI getParameterFlags:&modeFlags fromParameter:kKKParamColorMode];
+  if (modeFlags != kFxParameterFlag_NOT_ANIMATABLE)
+    [paramSetAPI setParameterFlags:kFxParameterFlag_NOT_ANIMATABLE
+                       toParameter:kKKParamColorMode];
 
   int modeIndex = 0;
   [paramGetAPI getIntValue:&modeIndex

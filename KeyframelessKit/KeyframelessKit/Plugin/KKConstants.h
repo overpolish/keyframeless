@@ -36,9 +36,11 @@ static const UInt32 kKKParamHoldFrequency __attribute__((unused)) = 9916;
 static const UInt32 kKKParamHoldSeed __attribute__((unused)) = 9917;
 
 /// Color system parameters (9800–9810)
+static const UInt32 kKKParamColorGroup __attribute__((unused)) = 9800;
 static const UInt32 kKKParamColorMode __attribute__((unused)) = 9801;
 static const UInt32 kKKParamColorSolid __attribute__((unused)) = 9802;
 static const UInt32 kKKParamColorGradient __attribute__((unused)) = 9803;
+static const UInt32 kKKParamColorExpanded __attribute__((unused)) = 9804;
 
 typedef NS_ENUM(NSInteger, KKColorMode) {
   KKColorModeSolid = 0,
