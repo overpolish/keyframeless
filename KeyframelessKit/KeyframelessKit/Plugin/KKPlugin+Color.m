@@ -62,13 +62,12 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
         break;
       }
     }
-    if (![paramAPI
-            addPopupMenuWithName:@"Color Mode"
-                     parameterID:kKKParamColorMode
-                    defaultValue:(UInt32)modes.firstObject.unsignedIntValue
-                     menuEntries:titles
-                  parameterFlags:kFxParameterFlag_HIDDEN |
-                                 kFxParameterFlag_NOT_ANIMATABLE])
+    if (![paramAPI addPopupMenuWithName:@"Color Mode"
+                            parameterID:kKKParamColorMode
+                           defaultValue:0
+                            menuEntries:titles
+                         parameterFlags:kFxParameterFlag_HIDDEN |
+                                        kFxParameterFlag_NOT_ANIMATABLE])
       return NO;
   }
 
