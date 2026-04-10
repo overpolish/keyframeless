@@ -24,6 +24,7 @@ typedef struct {
   float intensity;
   float falloff;
   float noise;
+  float noiseOffset;
   simd_float2 offset;
   simd_float3 glowColor;
   int colorMode;
@@ -61,6 +62,10 @@ static const float kMaxBlurDimension = 2048.0f;
               atTime:renderTime];
   [api getFloatValue:&falloff fromParameter:kParamFalloff atTime:renderTime];
   [api getFloatValue:&noise fromParameter:kParamNoise atTime:renderTime];
+  double noiseOffset = 0.0;
+  [api getFloatValue:&noiseOffset
+       fromParameter:kParamNoiseOffset
+              atTime:renderTime];
 
   double offX = 0, offY = 0;
   [api getFloatValue:&offX fromParameter:kParamOffsetX atTime:renderTime];
@@ -106,6 +111,7 @@ static const float kMaxBlurDimension = 2048.0f;
       .intensity = (float)(intensity * iF),
       .falloff = (float)(1.0 + falloff * fF),
       .noise = (float)(noise * nF),
+      .noiseOffset = (float)noiseOffset,
       .offset = {(float)(offX * oF + hOX), (float)(offY * oF + hOY)},
       .glowColor = color.solidColor,
       .colorMode = (int)color.mode,
@@ -384,6 +390,10 @@ static const float kMaxBlurDimension = 2048.0f;
                  length:sizeof(ga)
                 atIndex:FragmentIndex_GradientAngle];
     [e setFragmentBytes:&n length:sizeof(n) atIndex:FragmentIndex_Noise];
+    float noff = state.noiseOffset;
+    [e setFragmentBytes:&noff
+                 length:sizeof(noff)
+                atIndex:FragmentIndex_NoiseOffset];
     [e drawPrimitives:MTLPrimitiveTypeTriangleStrip
           vertexStart:0
           vertexCount:4];

@@ -15,6 +15,7 @@ static const UInt32 kParamRadius = 100;
 static const UInt32 kParamIntensity = 101;
 static const UInt32 kParamFalloff = 102;
 static const UInt32 kParamNoise = 103;
+static const UInt32 kParamNoiseOffset = 106;
 static const UInt32 kParamOffsetX = 110;
 static const UInt32 kParamOffsetY = 111;
 static const UInt32 kParamGradientType = 104;
