@@ -62,7 +62,8 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
                               constant float *gradientAngle [[buffer(FragmentIndex_GradientAngle)]],
                               constant float *noiseAmount [[buffer(FragmentIndex_Noise)]],
                               constant float *noiseOffset [[buffer(FragmentIndex_NoiseOffset)]],
-                              constant float *noiseSeed [[buffer(FragmentIndex_NoiseSeed)]]) {
+                              constant float *noiseSeed [[buffer(FragmentIndex_NoiseSeed)]],
+                              constant float2 *blurUVScale [[buffer(FragmentIndex_BlurUVScale)]]) {
 
     constexpr sampler s(mag_filter::linear, min_filter::linear);
 
@@ -77,10 +78,14 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
     if (maxR < 0.01)
         return float4(original);
 
+    // Remap UVs to the active sub-region of the pooled blur texture.
+    float2 bScale = *blurUVScale;
+    float2 baseUV = in.textureCoordinate * bScale;
+    float2 offsetUV = baseUV + *offsetPtr * bScale;
     // Scale UV to create elliptical glow from isotropic blur.
-    float2 offsetUV = in.textureCoordinate + *offsetPtr;
+    float2 bCenter = bScale * 0.5;
     float2 uvScale = float2(maxR / max(rx, 0.01), maxR / max(ry, 0.01));
-    float2 scaledUV = float2(0.5, 0.5) + (offsetUV - float2(0.5, 0.5)) * uvScale;
+    float2 scaledUV = bCenter + (offsetUV - bCenter) * uvScale;
     float4 blur = float4(blurred.sample(s, scaledUV));
 
     float t = 1.0 - blur.a;
