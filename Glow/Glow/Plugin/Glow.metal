@@ -50,7 +50,8 @@ fragment float4 glowPrep(RasterizerData in [[stage_in]], texture2d<half> source 
 fragment float4 glowComposite(RasterizerData in [[stage_in]],
                               texture2d<half> source [[texture(KKTextureIndex_InputImage)]],
                               texture2d<half> blurred [[texture(1)]],
-                              constant float *radius [[buffer(FragmentIndex_Radius)]],
+                              constant float *radiusX [[buffer(FragmentIndex_RadiusX)]],
+                              constant float *radiusY [[buffer(FragmentIndex_RadiusXY)]],
                               constant float *intensity [[buffer(FragmentIndex_Intensity)]],
                               constant float *falloff [[buffer(FragmentIndex_Falloff)]],
                               constant float2 *offsetPtr [[buffer(FragmentIndex_Offset)]],
@@ -65,16 +66,21 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
     constexpr sampler s(mag_filter::linear, min_filter::linear);
 
     half4 original = source.sample(s, in.textureCoordinate);
-    float glowRadius = *radius;
+    float rx = *radiusX;
+    float ry = *radiusY;
+    float maxR = max(rx, ry);
     float glowIntensity = *intensity;
     float glowFalloff = *falloff;
     int mode = *colorMode;
 
-    if (glowRadius < 0.01)
+    if (maxR < 0.01)
         return float4(original);
 
+    // Scale UV to create elliptical glow from isotropic blur.
     float2 offsetUV = in.textureCoordinate + *offsetPtr;
-    float4 blur = float4(blurred.sample(s, offsetUV));
+    float2 uvScale = float2(maxR / max(rx, 0.01), maxR / max(ry, 0.01));
+    float2 scaledUV = float2(0.5, 0.5) + (offsetUV - float2(0.5, 0.5)) * uvScale;
+    float4 blur = float4(blurred.sample(s, scaledUV));
 
     float t = 1.0 - blur.a;
 
@@ -104,7 +110,7 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
             float2 dir = float2(cos(angle), -sin(angle));
             float2 texel = float2(1.0 / float(blurred.get_width()), 1.0 / float(blurred.get_height()));
             float sumFwd = 0, sumBwd = 0, pd = 0;
-            float stepPx = max(glowRadius * 0.3, 2.0);
+            float stepPx = max(maxR * 0.3, 2.0);
             for (int pi = 0; pi < 64; pi++) {
                 pd += stepPx;
                 stepPx *= 1.08;

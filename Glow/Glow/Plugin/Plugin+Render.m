@@ -20,7 +20,8 @@ static KKLog *_renderLog(void) {
 }
 
 typedef struct {
-  float radius;
+  float radiusX;
+  float radiusY;
   float intensity;
   float falloff;
   float noise;
@@ -55,8 +56,10 @@ static const float kMaxBlurDimension = 2048.0f;
     return NO;
   }
 
-  double radius = 100, intensity = 1.5, falloff = 1.0, noise = 0.0;
-  [api getFloatValue:&radius fromParameter:kParamRadius atTime:renderTime];
+  double radiusX = 100, radiusY = 100, intensity = 1.5, falloff = 1.0,
+         noise = 0.0;
+  [api getFloatValue:&radiusX fromParameter:kParamRadiusX atTime:renderTime];
+  [api getFloatValue:&radiusY fromParameter:kParamRadiusY atTime:renderTime];
   [api getFloatValue:&intensity
        fromParameter:kParamIntensity
               atTime:renderTime];
@@ -107,7 +110,8 @@ static const float kMaxBlurDimension = 2048.0f;
   KKColorResult *color = [self colorAtTime:renderTime];
 
   GlowPluginState state = {
-      .radius = (float)(radius * rF),
+      .radiusX = (float)(radiusX * rF),
+      .radiusY = (float)(radiusY * rF),
       .intensity = (float)(intensity * iF),
       .falloff = (float)(1.0 + falloff * fF),
       .noise = (float)(noise * nF),
@@ -132,9 +136,10 @@ static const float kMaxBlurDimension = 2048.0f;
       state.gradientLUT[i] = state.glowColor;
   }
 
-  [_renderLog() verbose:@"state: r=%.1f i=%.2f mode=%d off=(%.3f,%.3f)",
-                        state.radius, state.intensity, state.colorMode,
-                        state.offset.x, state.offset.y];
+  [_renderLog()
+      verbose:@"state: rx=%.1f ry=%.1f i=%.2f mode=%d off=(%.3f,%.3f)",
+              state.radiusX, state.radiusY, state.intensity, state.colorMode,
+              state.offset.x, state.offset.y];
 
   *pluginState = [NSData dataWithBytes:&state length:sizeof(state)];
   return (*pluginState != nil);
@@ -164,10 +169,11 @@ static const float kMaxBlurDimension = 2048.0f;
   float imgW = ur.x - ll.x;
   float s = (pxW > 0) ? imgW / pxW : 1.0f;
   float srcMinDim = fminf(pxW, pxH);
+  float maxRadius = fmaxf(state.radiusX, state.radiusY);
   float offsetPx =
       fmaxf(fabsf(state.offset.x), fabsf(state.offset.y)) * srcMinDim;
   float expand =
-      (state.radius * kExpandMultiplier + offsetPx + kExpandHeadroom) * s;
+      (maxRadius * kExpandMultiplier + offsetPx + kExpandHeadroom) * s;
 
   FxMatrix44 *pt = destinationImage.pixelTransform;
   FxPoint2D dstLL = {ll.x - expand, ll.y - expand};
@@ -335,7 +341,7 @@ static const float kMaxBlurDimension = 2048.0f;
 
   // 2) MPS Gaussian blur
   {
-    float sigma = fmaxf(state.radius * 0.5f * bs, 0.5f);
+    float sigma = fmaxf(fmaxf(state.radiusX, state.radiusY) * 0.5f * bs, 0.5f);
     MPSImageGaussianBlur *mps =
         [[MPSImageGaussianBlur alloc] initWithDevice:device sigma:sigma];
     mps.edgeMode = MPSImageEdgeModeClamp;
@@ -362,8 +368,8 @@ static const float kMaxBlurDimension = 2048.0f;
     [e setRenderPipelineState:compPS];
     [e setFragmentTexture:inTex atIndex:KKTextureIndex_InputImage];
     [e setFragmentTexture:blurTex atIndex:1];
-    float r = state.radius, i = state.intensity, f = state.falloff,
-          n = state.noise;
+    float rx = state.radiusX, ry = state.radiusY;
+    float i = state.intensity, f = state.falloff, n = state.noise;
     // Offset is in object-space fractions → convert to UV.
     FxRect sp = sourceImages[0].imagePixelBounds;
     float srcW = sp.right - sp.left;
@@ -372,7 +378,8 @@ static const float kMaxBlurDimension = 2048.0f;
                        -state.offset.y * srcH / outH};
     int cm = state.colorMode, gt = state.gradientType;
     float ga = state.gradientAngle;
-    [e setFragmentBytes:&r length:sizeof(r) atIndex:FragmentIndex_Radius];
+    [e setFragmentBytes:&rx length:sizeof(rx) atIndex:FragmentIndex_RadiusX];
+    [e setFragmentBytes:&ry length:sizeof(ry) atIndex:FragmentIndex_RadiusY];
     [e setFragmentBytes:&i length:sizeof(i) atIndex:FragmentIndex_Intensity];
     [e setFragmentBytes:&f length:sizeof(f) atIndex:FragmentIndex_Falloff];
     [e setFragmentBytes:&off length:sizeof(off) atIndex:FragmentIndex_Offset];

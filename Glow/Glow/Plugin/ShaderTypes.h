@@ -8,17 +8,18 @@
 #import <simd/simd.h>
 
 typedef enum FragmentIndex {
-    FragmentIndex_Radius = 0,
-    FragmentIndex_Intensity = 1,
-    FragmentIndex_Falloff = 2,
-    FragmentIndex_Offset = 3,
-    FragmentIndex_GlowColor = 4,
-    FragmentIndex_ColorMode = 5,
-    FragmentIndex_GradientLUT = 6,
-    FragmentIndex_GradientType = 7,
-    FragmentIndex_GradientAngle = 8,
-    FragmentIndex_Noise = 9,
-    FragmentIndex_NoiseOffset = 10
+    FragmentIndex_RadiusX = 0,
+    FragmentIndex_RadiusY = 1,
+    FragmentIndex_Intensity = 2,
+    FragmentIndex_Falloff = 3,
+    FragmentIndex_Offset = 4,
+    FragmentIndex_GlowColor = 5,
+    FragmentIndex_ColorMode = 6,
+    FragmentIndex_GradientLUT = 7,
+    FragmentIndex_GradientType = 8,
+    FragmentIndex_GradientAngle = 9,
+    FragmentIndex_Noise = 10,
+    FragmentIndex_NoiseOffset = 11
 } FragmentIndex;
 
 #define KK_GRADIENT_LUT_SIZE 64

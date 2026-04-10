@@ -38,8 +38,19 @@
                                   kFxParameterFlag_DONT_DISPLAY_IN_DASHBOARD])
     return NO;
 
-  if (![paramAPI addFloatSliderWithName:@"Radius"
-                            parameterID:kParamRadius
+  if (![paramAPI addFloatSliderWithName:@"Radius X"
+                            parameterID:kParamRadiusX
+                           defaultValue:100.0
+                           parameterMin:0.0
+                           parameterMax:500.0
+                              sliderMin:0.0
+                              sliderMax:300.0
+                                  delta:1.0
+                         parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
+  if (![paramAPI addFloatSliderWithName:@"Radius Y"
+                            parameterID:kParamRadiusY
                            defaultValue:100.0
                            parameterMin:0.0
                            parameterMax:500.0

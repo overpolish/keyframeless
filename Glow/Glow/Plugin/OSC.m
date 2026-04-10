@@ -20,7 +20,9 @@
   double _arcDragStartX, _arcDragStartY;
   double _arcDragStartParamX, _arcDragStartParamY;
   double _arcCanvasToParamX, _arcCanvasToParamY;
-  double _ringDragStartDist, _ringDragStartVal;
+  double _ringDragStartDist, _ringDragStartAngle;
+  double _ringDragStartValX, _ringDragStartValY;
+  NSTimeInterval _ringLastClickTime;
   KKSnapEngine *_offsetSnap;
 }
 
@@ -59,10 +61,10 @@
 
 - (void)updateRingAtTime:(CMTime)time {
   float minDim = [self canvasMinDimension];
-  float radius = [self floatValueForParam:kParamRadius atTime:time];
-  float ringPx = minDim * 0.012f * sqrtf(radius);
-  _radiusRing.ringRadius = ringPx;
-  _radiusRing.ringRadiusY = ringPx;
+  float sx = [self floatValueForParam:kParamRadiusX atTime:time];
+  float sy = [self floatValueForParam:kParamRadiusY atTime:time];
+  _radiusRing.ringRadius = minDim * 0.012f * sqrtf(sx);
+  _radiusRing.ringRadiusY = minDim * 0.012f * sqrtf(sy);
 }
 
 - (void)drawOSCWithWidth:(NSInteger)width
@@ -135,12 +137,48 @@
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
 
   if (activePart == kOSCRadiusPart) {
+    // Double-click: reset aspect ratio to 1:1
+    NSTimeInterval now = CACurrentMediaTime();
+    if ((now - _ringLastClickTime) < 0.35) {
+      id<FxParameterRetrievalAPI_v6> paramGetAPI = [self.apiManager
+          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      double sx = 100, sy = 100;
+      [paramGetAPI getFloatValue:&sx fromParameter:kParamRadiusX atTime:time];
+      [paramGetAPI getFloatValue:&sy fromParameter:kParamRadiusY atTime:time];
+      if (sx != sy) {
+        double smaller = fmin(sx, sy);
+        id<FxParameterSettingAPI_v5> paramSetAPI = [self.apiManager
+            apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+        if (paramSetAPI) {
+          [paramSetAPI setFloatValue:smaller
+                         toParameter:kParamRadiusX
+                              atTime:time];
+          [paramSetAPI setFloatValue:smaller
+                         toParameter:kParamRadiusY
+                              atTime:time];
+        }
+        *forceUpdate = YES;
+      }
+      _ringLastClickTime = 0;
+      return;
+    }
+    _ringLastClickTime = now;
+
     _ringDragging = YES;
     CGPoint center = [self oscPositionAtTime:time];
     double dx = positionX - center.x;
     double dy = positionY - center.y;
     _ringDragStartDist = sqrt(dx * dx + dy * dy);
-    _ringDragStartVal = [self floatValueForParam:kParamRadius atTime:time];
+    _ringDragStartAngle = atan2(fabs(dy), fabs(dx));
+
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    double sx = 100, sy = 100;
+    [paramGetAPI getFloatValue:&sx fromParameter:kParamRadiusX atTime:time];
+    [paramGetAPI getFloatValue:&sy fromParameter:kParamRadiusY atTime:time];
+    _ringDragStartValX = sx;
+    _ringDragStartValY = sy;
+
     [_radiusRing updateCursorForMouseX:positionX positionY:positionY];
     *forceUpdate = YES;
     return;
@@ -216,11 +254,37 @@
     double dist = sqrt(dx * dx + dy * dy);
     if (_ringDragStartDist > 0) {
       double ratio = dist / _ringDragStartDist;
-      double newVal = CLAMP(_ringDragStartVal * ratio, 0.0, 500.0);
       id<FxParameterSettingAPI_v5> paramSetAPI =
           [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      if (paramSetAPI)
-        [paramSetAPI setFloatValue:newVal toParameter:kParamRadius atTime:time];
+      CGEventFlags flags =
+          CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+      BOOL shiftHeld = (flags & kCGEventFlagMaskShift) != 0;
+      if (shiftHeld) {
+        BOOL horizontal = _ringDragStartAngle < M_PI / 4.0;
+        if (paramSetAPI) {
+          if (horizontal)
+            [paramSetAPI
+                setFloatValue:CLAMP(_ringDragStartValX * ratio, 0.0, 500.0)
+                  toParameter:kParamRadiusX
+                       atTime:time];
+          else
+            [paramSetAPI
+                setFloatValue:CLAMP(_ringDragStartValY * ratio, 0.0, 500.0)
+                  toParameter:kParamRadiusY
+                       atTime:time];
+        }
+      } else {
+        if (paramSetAPI) {
+          [paramSetAPI
+              setFloatValue:CLAMP(_ringDragStartValX * ratio, 0.0, 500.0)
+                toParameter:kParamRadiusX
+                     atTime:time];
+          [paramSetAPI
+              setFloatValue:CLAMP(_ringDragStartValY * ratio, 0.0, 500.0)
+                toParameter:kParamRadiusY
+                     atTime:time];
+        }
+      }
     }
     [_radiusRing updateCursorForMouseX:positionX positionY:positionY];
     *forceUpdate = YES;
