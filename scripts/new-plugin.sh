@@ -3,11 +3,11 @@
 # new-plugin.sh — Scaffold a new Keyframeless plugin from the Template.
 #
 # Usage:
-#   ./scripts/new-plugin.sh <PluginName> [--bundle-prefix <prefix>] [--add-to-workspace]
+#   ./scripts/new-plugin.sh <PluginName> [--type effect|title|generator] [--bundle-prefix <prefix>] [--add-to-workspace]
 #
 # Example:
 #   ./scripts/new-plugin.sh Glitch
-#   ./scripts/new-plugin.sh BlurEdge --add-to-workspace
+#   ./scripts/new-plugin.sh BlurEdge --type effect --add-to-workspace
 
 set -euo pipefail
 
@@ -19,12 +19,13 @@ usage() {
     echo "  PluginName              PascalCase name (e.g. Glitch, BlurEdge)"
     echo ""
     echo "Options:"
+    echo "  --type <type>           Plugin type: effect (default), title, generator"
     echo "  --bundle-prefix <str>   Bundle ID prefix (default: co.overpolish.keyframeless)"
     echo "  --add-to-workspace      Add new project to Keyframeless.xcworkspace"
     echo "  -h, --help              Show this message"
     echo ""
     echo "Example:"
-    echo "  ./scripts/new-plugin.sh Glitch --add-to-workspace"
+    echo "  ./scripts/new-plugin.sh Glitch --type effect --add-to-workspace"
     exit 1
 }
 
@@ -41,16 +42,26 @@ to_lower() { echo "$1" | tr '[:upper:]' '[:lower:]'; }
 
 PLUGIN_NAME="$1"; shift
 BUNDLE_PREFIX="co.overpolish.keyframeless"
+PLUGIN_TYPE="effect"
 ADD_TO_WORKSPACE=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --type) PLUGIN_TYPE="$2"; shift 2 ;;
         --bundle-prefix) BUNDLE_PREFIX="$2"; shift 2 ;;
         --add-to-workspace) ADD_TO_WORKSPACE=true; shift ;;
         -h|--help) usage ;;
         *) fail "Unknown option: $1" ;;
     esac
 done
+
+# Validate plugin type
+case "$PLUGIN_TYPE" in
+    effect)    MOTION_TEMPLATE_TYPE="Effects" ;;
+    title)     MOTION_TEMPLATE_TYPE="Titles" ;;
+    generator) MOTION_TEMPLATE_TYPE="Generators" ;;
+    *) fail "Invalid --type '$PLUGIN_TYPE'. Must be: effect, title, or generator" ;;
+esac
 
 # Validate PascalCase
 if ! [[ "$PLUGIN_NAME" =~ ^[A-Z][a-zA-Z0-9]*$ ]]; then
@@ -66,6 +77,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SOURCE="$REPO_ROOT/Template"
 DEST="$REPO_ROOT/$PLUGIN_NAME"
 WORKSPACE="$REPO_ROOT/Keyframeless.xcworkspace/contents.xcworkspacedata"
+PKGPROJ="$REPO_ROOT/Distribution/Keyframeless.pkgproj"
 MANIFEST="$REPO_ROOT/manifest.json"
 BUMP_SCRIPT="$REPO_ROOT/scripts/bump-version.sh"
 UPDATE_CHECKER="$REPO_ROOT/KeyframelessKit/KeyframelessKit/Update/KKUpdateChecker.m"
@@ -91,6 +103,7 @@ NEW_UUID_GROUP=$(uuidgen | tr '[:lower:]' '[:upper:]')
 echo ""
 echo "Creating plugin: $PLUGIN_NAME"
 echo "  Bundle ID : $PLUGIN_ID"
+echo "  Type      : $PLUGIN_TYPE ($MOTION_TEMPLATE_TYPE)"
 echo "  Location  : $DEST"
 echo ""
 
@@ -212,7 +225,64 @@ sed -i '' "s|@\"MagicMove-XPC-Service\" : @\"magicmove\"|@\"MagicMove-XPC-Servic
 
 ok "Added '$PLUGIN_NAME' to KKUpdateChecker.m"
 
-# ── Step 8 (optional): Add to workspace ──────────────────────────────────────
+# ── Step 8: Register in installer pkgproj ────────────────────────────────────
+
+log "Registering in Keyframeless.pkgproj..."
+
+if [[ ! -f "$PKGPROJ" ]]; then
+    fail "Installer project not found: $PKGPROJ"
+fi
+
+PKG_UUID=$(uuidgen | tr '[:lower:]' '[:upper:]')
+CHOOSER_UUID=$(uuidgen | tr '[:lower:]' '[:upper:]')
+
+# Type label for installer description (capitalised)
+case "$PLUGIN_TYPE" in
+    effect)    TYPE_LABEL="Effect" ;;
+    title)     TYPE_LABEL="Title" ;;
+    generator) TYPE_LABEL="Generator" ;;
+esac
+
+# Render package template
+PKG_BLOCK=$(LC_ALL=C sed \
+    -e "s/__PLUGIN_NAME__/$PLUGIN_NAME/g" \
+    -e "s/__PLUGIN_ID__/$PLUGIN_ID/g" \
+    -e "s/__TEMPLATE_TYPE__/$MOTION_TEMPLATE_TYPE/g" \
+    -e "s/__PKG_UUID__/$PKG_UUID/g" \
+    "$SCRIPT_DIR/pkgproj-package.template")
+
+# Render chooser template
+CHOOSER_BLOCK=$(LC_ALL=C sed \
+    -e "s/__PLUGIN_NAME__/$PLUGIN_NAME/g" \
+    -e "s/__TYPE_LABEL__/$TYPE_LABEL/g" \
+    -e "s/__PKG_UUID__/$PKG_UUID/g" \
+    -e "s/__CHOOSER_UUID__/$CHOOSER_UUID/g" \
+    "$SCRIPT_DIR/pkgproj-chooser.template")
+
+python3 -c "
+import sys
+pkgproj = sys.argv[1]
+pkg_block = sys.argv[2]
+chooser_block = sys.argv[3]
+
+with open(pkgproj, 'r') as f:
+    content = f.read()
+
+anchor_pkg = '\t</array>\n\t<key>PROJECT</key>'
+assert anchor_pkg in content, 'Could not find package insertion anchor in pkgproj'
+content = content.replace(anchor_pkg, pkg_block + '\n' + anchor_pkg, 1)
+
+anchor_chooser = '\t\t\t\t\t\t\t</array>\n\t\t\t\t\t\t\t<key>REMOVED</key>'
+assert anchor_chooser in content, 'Could not find chooser insertion anchor in pkgproj'
+content = content.replace(anchor_chooser, chooser_block + anchor_chooser, 1)
+
+with open(pkgproj, 'w') as f:
+    f.write(content)
+" "$PKGPROJ" "$PKG_BLOCK" "$CHOOSER_BLOCK"
+
+ok "Added '$PLUGIN_NAME' to Keyframeless.pkgproj (pkg=$PKG_UUID)"
+
+# ── Step 9 (optional): Add to workspace ──────────────────────────────────────
 
 if $ADD_TO_WORKSPACE; then
     log "Adding to workspace..."
