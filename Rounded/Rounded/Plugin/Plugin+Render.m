@@ -45,11 +45,35 @@ typedef struct {
                       atTime:renderTime];
 
   KKTimingResult *timing = [self timingAtTime:renderTime];
-  double timingFactor =
-      timing.inPhase.factor * timing.holdPhase.factor * timing.outPhase.factor;
+  double inF = timing.inPhase.factor;
+  double holdF = timing.holdPhase.factor;
+  double outF = timing.outPhase.factor;
+
+  BOOL inR = YES, inC = YES;
+  [paramGetAPI getBoolValue:&inR
+              fromParameter:kParamInRadius
+                     atTime:renderTime];
+  [paramGetAPI getBoolValue:&inC fromParameter:kParamInCrop atTime:renderTime];
+  BOOL holdR = YES, holdC = YES;
+  [paramGetAPI getBoolValue:&holdR
+              fromParameter:kParamHoldRadius
+                     atTime:renderTime];
+  [paramGetAPI getBoolValue:&holdC
+              fromParameter:kParamHoldCrop
+                     atTime:renderTime];
+  BOOL outR = YES, outC = YES;
+  [paramGetAPI getBoolValue:&outR
+              fromParameter:kParamOutRadius
+                     atTime:renderTime];
+  [paramGetAPI getBoolValue:&outC
+              fromParameter:kParamOutCrop
+                     atTime:renderTime];
+
+  double rF = (inR ? inF : 1.0) * (holdR ? holdF : 1.0) * (outR ? outF : 1.0);
+  double cF = (inC ? inF : 1.0) * (holdC ? holdF : 1.0) * (outC ? outF : 1.0);
 
   RoundedPluginState state;
-  state.radius = radius * timingFactor;
+  state.radius = radius * rF;
   state.cropTop = 0.0;
   state.cropBottom = 0.0;
   state.cropLeft = 0.0;
@@ -66,10 +90,10 @@ typedef struct {
   [paramGetAPI getFloatValue:&state.cropRight
                fromParameter:kParamCropRight
                       atTime:renderTime];
-  state.cropTop *= timingFactor;
-  state.cropBottom *= timingFactor;
-  state.cropLeft *= timingFactor;
-  state.cropRight *= timingFactor;
+  state.cropTop *= cF;
+  state.cropBottom *= cF;
+  state.cropLeft *= cF;
+  state.cropRight *= cF;
 
   *pluginState = [NSData dataWithBytes:&state length:sizeof(state)];
   return (*pluginState != nil);

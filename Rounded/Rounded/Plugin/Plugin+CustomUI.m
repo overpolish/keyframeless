@@ -9,14 +9,27 @@
 
 @implementation RoundedPlugin (CustomUI)
 
+- (NSArray<KKAnimatableProperty *> *)animatableProperties {
+  return @[
+    [KKAnimatableProperty propertyWithLabel:@"Radius"
+                                       inID:kParamInRadius
+                                     holdID:kParamHoldRadius
+                                      outID:kParamOutRadius],
+    [KKAnimatableProperty propertyWithLabel:@"Crop"
+                                       inID:kParamInCrop
+                                     holdID:kParamHoldCrop
+                                      outID:kParamOutCrop],
+  ];
+}
+
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
   if (parameterID == kParamCropGroup) {
-    return [self createGroupHeaderWithTitle:@"Crop"
-                                       icon:[NSImage
-                                                imageWithSystemSymbolName:@"crop"
-                                                accessibilityDescription:nil]
-                                parameterID:parameterID
-                            expandedParamID:kParamCropExpanded];
+    return [self
+        createGroupHeaderWithTitle:@"Crop"
+                              icon:[NSImage imageWithSystemSymbolName:@"crop"
+                                             accessibilityDescription:nil]
+                       parameterID:parameterID
+                   expandedParamID:kParamCropExpanded];
   }
 
   typedef NSView *(*ViewIMP)(id, SEL, UInt32);
