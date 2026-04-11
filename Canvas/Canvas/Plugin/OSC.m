@@ -5,6 +5,7 @@
 
 #import "OSC.h"
 #import "Constants.h"
+#import <CoreGraphics/CGEventSource.h>
 #import <FxPlug/FxPlugSDK.h>
 
 static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
@@ -41,6 +42,7 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
         cursorFromBundle(@"PenAddControlPoint", NSMakePoint(10, 5));
     _moveCursor = cursorFromBundle(@"Move", NSMakePoint(8, 7));
     _editPointsCursor = cursorFromBundle(@"EditPoints", NSMakePoint(11, 8));
+    _penDeleteCursor = cursorFromBundle(@"PenX", NSMakePoint(15, 5));
   }
   return self;
 }
@@ -206,6 +208,10 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
 
+  CGEventFlags flags =
+      CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+  BOOL optDown = (flags & kCGEventFlagMaskAlternate) != 0;
+
   // Test handles first
   for (NSUInteger i = 0; i < self.path.count; i++) {
     KKBezierPoint pt = [self.path pointAtIndex:i];
@@ -235,7 +241,7 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     CGPoint ptCanvas = [self canvasPointForObjectX:pt.x objY:pt.y];
     if (hypot(positionX - ptCanvas.x, positionY - ptCanvas.y) < hitRadius) {
       *activePart = kOSCPathPointBase + (NSInteger)i;
-      [oscAPI setCursor:_moveCursor];
+      [oscAPI setCursor:optDown ? _penDeleteCursor : _moveCursor];
       return;
     }
   }
@@ -251,6 +257,18 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
                  forceUpdate:(BOOL *)forceUpdate
                       atTime:(CMTime)time {
   self.path = [self readPath];
+
+  // Option-click on point: delete it
+  if (activePart >= kOSCPathPointBase && activePart < kOSCInHandleBase &&
+      (modifiers & kFxModifierKey_OPTION)) {
+    NSInteger idx = activePart - kOSCPathPointBase;
+    if (idx >= 0 && idx < (NSInteger)self.path.count) {
+      [self.path removeAtIndex:idx];
+      [self writePath:self.path];
+    }
+    *forceUpdate = YES;
+    return;
+  }
 
   // Drag existing point
   if (activePart >= kOSCPathPointBase && activePart < kOSCInHandleBase) {

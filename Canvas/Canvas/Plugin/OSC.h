@@ -20,6 +20,7 @@
 @property(nonatomic, strong) NSCursor *penAddCursor;
 @property(nonatomic, strong) NSCursor *moveCursor;
 @property(nonatomic, strong) NSCursor *editPointsCursor;
+@property(nonatomic, strong) NSCursor *penDeleteCursor;
 
 - (KKBezierPath *)readPath;
 - (void)writePath:(KKBezierPath *)path;
