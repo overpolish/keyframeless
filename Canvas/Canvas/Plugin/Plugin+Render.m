@@ -37,15 +37,33 @@ static simd_float2 evaluateCubicBezierTangent(simd_float2 p0, simd_float2 p1,
               error:(NSError **)error {
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+
+  CanvasStrokeParams params;
+  double width = 8.0;
+  [paramGetAPI getFloatValue:&width
+               fromParameter:kParamStrokeWidth
+                      atTime:renderTime];
+  params.strokeWidth = (float)width;
+
+  double r = 1.0, g = 0.0, b = 0.0;
+  [paramGetAPI getRedValue:&r
+                greenValue:&g
+                 blueValue:&b
+             fromParameter:kParamStrokeColor
+                    atTime:renderTime];
+  params.r = (float)r;
+  params.g = (float)g;
+  params.b = (float)b;
+
   NSString *pathStr = nil;
   [paramGetAPI getStringParameterValue:&pathStr fromParameter:kParamPathData];
 
+  NSMutableData *state = [NSMutableData dataWithBytes:&params
+                                               length:sizeof(params)];
   if (pathStr.length > 0) {
-    *pluginState = [pathStr dataUsingEncoding:NSUTF8StringEncoding];
-  } else {
-    uint8_t empty = 0;
-    *pluginState = [NSData dataWithBytes:&empty length:sizeof(empty)];
+    [state appendData:[pathStr dataUsingEncoding:NSUTF8StringEncoding]];
   }
+  *pluginState = state;
   return (*pluginState != nil);
 }
 
@@ -87,16 +105,26 @@ static simd_float2 evaluateCubicBezierTangent(simd_float2 p0, simd_float2 p1,
   float outputHeight = (float)(destinationImage.tilePixelBounds.top -
                                destinationImage.tilePixelBounds.bottom);
 
-  // Read path data from pluginState (passed from pluginState: method)
+  // Unpack pluginState: CanvasStrokeParams header + base64 path string
+  CanvasStrokeParams strokeParams = {8.0f, 1.0f, 0.0f, 0.0f};
   KKBezierPath *path = nil;
-  if (pluginState.length > 1) {
-    NSString *pathStr = [[NSString alloc] initWithData:pluginState
-                                              encoding:NSUTF8StringEncoding];
-    if (pathStr.length > 0) {
-      NSData *data = [[NSData alloc] initWithBase64EncodedString:pathStr
-                                                         options:0];
-      if (data)
-        path = [KKBezierPath pathWithData:data];
+
+  if (pluginState.length >= sizeof(CanvasStrokeParams)) {
+    memcpy(&strokeParams, pluginState.bytes, sizeof(CanvasStrokeParams));
+
+    if (pluginState.length > sizeof(CanvasStrokeParams)) {
+      NSData *pathData = [pluginState
+          subdataWithRange:NSMakeRange(sizeof(CanvasStrokeParams),
+                                       pluginState.length -
+                                           sizeof(CanvasStrokeParams))];
+      NSString *pathStr = [[NSString alloc] initWithData:pathData
+                                                encoding:NSUTF8StringEncoding];
+      if (pathStr.length > 0) {
+        NSData *decoded = [[NSData alloc] initWithBase64EncodedString:pathStr
+                                                              options:0];
+        if (decoded)
+          path = [KKBezierPath pathWithData:decoded];
+      }
     }
   }
 
@@ -131,7 +159,7 @@ static simd_float2 evaluateCubicBezierTangent(simd_float2 p0, simd_float2 p1,
 
   // Second pass: draw strokes on top with blending
   {
-    float strokeWidth = 8.0f;
+    float strokeWidth = strokeParams.strokeWidth;
     float aaPadding = 1.0f;
     float halfWidth = (strokeWidth / 2.0f) + aaPadding;
 
@@ -257,6 +285,9 @@ static simd_float2 evaluateCubicBezierTangent(simd_float2 p0, simd_float2 p1,
                            options:MTLResourceStorageModeShared];
     [enc setVertexBuffer:vertexBuffer offset:0 atIndex:0];
     [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+
+    simd_float4 color = {strokeParams.r, strokeParams.g, strokeParams.b, 1.0f};
+    [enc setFragmentBytes:&color length:sizeof(color) atIndex:0];
 
     [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
             vertexStart:0
