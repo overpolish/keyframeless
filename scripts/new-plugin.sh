@@ -272,7 +272,7 @@ anchor_pkg = '\t</array>\n\t<key>PROJECT</key>'
 assert anchor_pkg in content, 'Could not find package insertion anchor in pkgproj'
 content = content.replace(anchor_pkg, pkg_block + '\n' + anchor_pkg, 1)
 
-anchor_chooser = '\t\t\t\t\t\t\t</array>\n\t\t\t\t\t\t\t<key>REMOVED</key>'
+anchor_chooser = '\t\t\t\t\t\t</array>\n\t\t\t\t\t\t<key>REMOVED</key>'
 assert anchor_chooser in content, 'Could not find chooser insertion anchor in pkgproj'
 content = content.replace(anchor_chooser, chooser_block + anchor_chooser, 1)
 

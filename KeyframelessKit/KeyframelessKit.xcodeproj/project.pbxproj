@@ -18,6 +18,7 @@
 		F26E01B62F4DE280009D949A /* KeyframelessKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = KeyframelessKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F26E02092F4DE539009D949A /* Rounded.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Rounded.xcodeproj; path = ../Rounded/Rounded.xcodeproj; sourceTree = SOURCE_ROOT; };
 		F29C84D42F68205F0073B1A9 /* Keyframeless X.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = "Keyframeless X.xcodeproj"; path = "../Keyframeless X/Keyframeless X.xcodeproj"; sourceTree = SOURCE_ROOT; };
+		F2D394A62F8AABA6003F4558 /* Canvas.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Canvas.xcodeproj; path = ../Canvas/Canvas.xcodeproj; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -132,6 +133,7 @@
 		F26E01AC2F4DE280009D949A = {
 			isa = PBXGroup;
 			children = (
+				F2D394A62F8AABA6003F4558 /* Canvas.xcodeproj */,
 				F2330A742F8577290020CB71 /* Glow.xcodeproj */,
 				F29C84D42F68205F0073B1A9 /* Keyframeless X.xcodeproj */,
 				F21399642F65423400E1EC03 /* MotionBlur.xcodeproj */,
@@ -159,6 +161,13 @@
 			sourceTree = "<group>";
 		};
 		F29C84D72F68205F0073B1A9 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		F2D394EA2F8AABA6003F4558 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -232,6 +241,10 @@
 			productRefGroup = F26E01B72F4DE280009D949A /* Products */;
 			projectDirPath = "";
 			projectReferences = (
+				{
+					ProductGroup = F2D394EA2F8AABA6003F4558 /* Products */;
+					ProjectRef = F2D394A62F8AABA6003F4558 /* Canvas.xcodeproj */;
+				},
 				{
 					ProductGroup = F2330AB82F8577290020CB71 /* Products */;
 					ProjectRef = F2330A742F8577290020CB71 /* Glow.xcodeproj */;
