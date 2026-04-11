@@ -112,8 +112,9 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   if (self.path.count == 0)
     return;
 
-  simd_float4 strokeColor = {1.0f, 1.0f, 1.0f, 0.8f};
-  simd_float4 handleColor = {1.0f, 1.0f, 1.0f, 0.33f};
+  simd_float4 strokeColor = [[NSColor systemRedColor] simdFloat4];
+  simd_float4 handleColor = strokeColor;
+  handleColor.w = 0.33f;
 
   // Draw bezier segments between consecutive points
   for (NSUInteger i = 0; i + 1 < self.path.count; i++) {
@@ -239,8 +240,8 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     }
   }
 
-  // Empty space - show pen cursor
-  [oscAPI setCursor:self.penCursor];
+  // Empty space - show pen add cursor
+  [oscAPI setCursor:self.penAddCursor];
 }
 
 - (void)mouseDownAtPositionX:(double)positionX
@@ -339,7 +340,7 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
 
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-  [oscAPI setCursor:self.penCursor];
+  [oscAPI setCursor:self.penAddCursor];
 
   *forceUpdate = YES;
   [super mouseUpAtPositionX:positionX
