@@ -9,5 +9,12 @@
 
 static NSString *const kPluginID = @"co.overpolish.keyframeless.Canvas";
 
+// Parameter IDs
+static const UInt32 kParamPathData = 100;
+
 // OSC part IDs
-static const NSInteger kOSCPointPart = 1;
+static const NSInteger kOSCCanvas = 1;          // empty space (captures clicks)
+static const NSInteger kOSCPathPointBase = 100; // 100 + index
+static const NSInteger kOSCInHandleBase = 1000; // 1000 + index
+static const NSInteger kOSCOutHandleBase = 2000;   // 2000 + index
+static const NSInteger kOSCPathSegmentBase = 3000; // 3000 + segment index
