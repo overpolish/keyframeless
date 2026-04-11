@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>CanvasXPCService</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>XPC!</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>NSHumanReadableCopyright</key>
+	<string></string>
+	<key>PlugInKit</key>
+	<dict>
+		<key>Attributes</key>
+		<dict>
+			<key>com.apple.protocol</key>
+			<string>FxPlug</string>
+			<key>com.apple.version</key>
+			<string>1.1</string>
+		</dict>
+		<key>PrincipalClass</key>
+		<string>FxPrincipal</string>
+		<key>Protocol</key>
+		<string>PROXPCProtocol</string>
+		<key>Subsystems</key>
+		<array>
+			<string>NSViewService_PKSubsystem</string>
+		</array>
+	</dict>
+	<key>ProPlugDictionaryVersion</key>
+	<string>1.0</string>
+	<key>ProPlugDynamicRegistration</key>
+	<false/>
+	<key>ProPlugPlugInGroupList</key>
+	<array>
+		<dict>
+			<key>groupName</key>
+			<string>Canvas Group</string>
+			<key>uuid</key>
+			<string>ADA48B0E-334D-4C2F-A440-AF5A918A212C</string>
+		</dict>
+	</array>
+	<key>ProPlugPlugInList</key>
+	<array>
+		<dict>
+			<key>className</key>
+			<string>CanvasPlugin</string>
+			<key>displayName</key>
+			<string>Canvas::FxPlug Name</string>
+			<key>group</key>
+			<string>ADA48B0E-334D-4C2F-A440-AF5A918A212C</string>
+			<key>infoString</key>
+			<string>Canvas::FxPlug Description</string>
+			<key>protocolNames</key>
+			<array>
+				<string>FxGenerator</string>
+			</array>
+			<key>uuid</key>
+			<string>8CF7922C-58A1-45DD-A21F-F29924FF3499</string>
+			<key>version</key>
+			<string>1.0</string>
+		</dict>
+		<dict>
+			<key>className</key>
+			<string>CanvasOSC</string>
+			<key>displayName</key>
+			<string>Canvas OSC</string>
+			<key>group</key>
+			<string>ADA48B0E-334D-4C2F-A440-AF5A918A212C</string>
+			<key>infoString</key>
+			<string>Canvas Point Control</string>
+			<key>protocolNames</key>
+			<array>
+				<string>FxOnScreenControl</string>
+			</array>
+			<key>supportedPlugins</key>
+			<array>
+				<string>8CF7922C-58A1-45DD-A21F-F29924FF3499</string>
+			</array>
+			<key>uuid</key>
+			<string>CB52A3CE-205F-4DD4-B96E-3BA06AA4EDE7</string>
+			<key>version</key>
+			<string>1.0</string>
+		</dict>
+	</array>
+	<key>XPCService</key>
+	<dict>
+		<key>JoinExistingSession</key>
+		<true/>
+		<key>RunLoopType</key>
+		<string>_NSApplicationMain</string>
+		<key>ServiceType</key>
+		<string>Application</string>
+		<key>_AdditionalSubServices</key>
+		<dict>
+			<key>viewbridge</key>
+			<true/>
+		</dict>
+	</dict>
+</dict>
+</plist>
