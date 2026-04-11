@@ -36,7 +36,8 @@ vertex RasterizerData vertexShader(uint vertexID [[vertex_id]],
 }
 
 // Prep: extract alpha-only (solid/gradient) or premultiplied RGBA (dynamic)
-// from the source image. Output is what MPS will blur.
+// from the source image. Output is what MPS will blur for the outer glow.
+// Threshold does NOT affect this pass — outer glow is independent of bloom.
 fragment float4 glowPrep(RasterizerData in [[stage_in]], texture2d<half> source [[texture(KKTextureIndex_InputImage)]],
                          constant int *colorMode [[buffer(0)]]) {
     constexpr sampler s(mag_filter::linear, min_filter::linear);
@@ -46,10 +47,28 @@ fragment float4 glowPrep(RasterizerData in [[stage_in]], texture2d<half> source 
     return float4(0, 0, 0, float(c.a));
 }
 
-// Composite: layer the blurred glow behind the original source.
+// Bloom prep: extract bright pixels from the source as premultiplied RGBA.
+// Uses max(r,g,b) so saturated colors (neon green, pure red) bloom too.
+fragment float4 glowBloomPrep(RasterizerData in [[stage_in]],
+                              texture2d<half> source [[texture(KKTextureIndex_InputImage)]],
+                              constant float *thresholdPtr [[buffer(0)]]) {
+    constexpr sampler s(mag_filter::linear, min_filter::linear);
+    half4 c = source.sample(s, in.textureCoordinate);
+    if (c.a < 0.001h)
+        return float4(0);
+    float thresh = *thresholdPtr;
+    float3 rgb = float3(c.rgb) / float(c.a);
+    float brightness = max(rgb.r, max(rgb.g, rgb.b));
+    float cutoff = 1.0 - thresh;
+    float bloom = smoothstep(cutoff, cutoff + 0.2, brightness);
+    return float4(rgb * bloom * float(c.a), bloom * float(c.a));
+}
+
+// Composite: layer the blurred glow behind the original source,
+// then additively blend the blurred bloom on top.
 fragment float4 glowComposite(RasterizerData in [[stage_in]],
                               texture2d<half> source [[texture(KKTextureIndex_InputImage)]],
-                              texture2d<half> blurred [[texture(1)]],
+                              texture2d<half> blurred [[texture(1)]], texture2d<half> bloomTex [[texture(2)]],
                               constant float *radiusX [[buffer(FragmentIndex_RadiusX)]],
                               constant float *radiusY [[buffer(FragmentIndex_RadiusY)]],
                               constant float *intensity [[buffer(FragmentIndex_Intensity)]],
@@ -63,7 +82,8 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
                               constant float *noiseAmount [[buffer(FragmentIndex_Noise)]],
                               constant float *noiseOffset [[buffer(FragmentIndex_NoiseOffset)]],
                               constant float *noiseSeed [[buffer(FragmentIndex_NoiseSeed)]],
-                              constant float2 *blurUVScale [[buffer(FragmentIndex_BlurUVScale)]]) {
+                              constant float2 *blurUVScale [[buffer(FragmentIndex_BlurUVScale)]],
+                              constant float *thresholdPtr [[buffer(FragmentIndex_Threshold)]]) {
 
     constexpr sampler s(mag_filter::linear, min_filter::linear);
 
@@ -157,5 +177,15 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
     float behindAlpha = glowAlpha * (1.0 - float(original.a));
     float3 result = glowColor * behindAlpha + float3(original.rgb);
     float resultAlpha = behindAlpha + float(original.a);
+
+    // Bloom: additive blend of separately-blurred bright-pass.
+    // Light scatters from bright sources — pure addition, preserves source color.
+    float thresh = *thresholdPtr;
+    if (thresh > 0.0) {
+        float2 bloomUV = in.textureCoordinate * bScale;
+        float4 bloom = float4(bloomTex.sample(s, bloomUV));
+        result += float3(bloom.rgb) * glowIntensity * float(original.a);
+    }
+
     return float4(result, resultAlpha);
 }
