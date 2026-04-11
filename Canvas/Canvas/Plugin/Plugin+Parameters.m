@@ -6,6 +6,8 @@
 #import "Constants.h"
 #import "Plugin_Private.h"
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 @implementation CanvasPlugin (Parameters)
 
 - (BOOL)addParametersWithError:(NSError **)error {
@@ -54,3 +56,4 @@
 }
 
 @end
+#pragma clang diagnostic pop

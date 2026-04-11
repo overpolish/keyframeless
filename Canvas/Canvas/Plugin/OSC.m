@@ -204,7 +204,7 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   *activePart = kOSCCanvas;
   self.path = [self readPath];
 
-  double hitRadius = 8.0;
+  double hitRadius = 12.0;
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
 
@@ -243,6 +243,32 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
       *activePart = kOSCPathPointBase + (NSInteger)i;
       [oscAPI setCursor:optDown ? _penDeleteCursor : _moveCursor];
       return;
+    }
+  }
+
+  // Test path segments
+  if (self.path.count >= 2) {
+    double segHitRadius = 10.0;
+    for (NSUInteger c = 0; c + 1 < self.path.count; c++) {
+      KKBezierPoint bp0 = [self.path pointAtIndex:c];
+      KKBezierPoint bp1 = [self.path pointAtIndex:c + 1];
+      simd_float2 a = {bp0.x, bp0.y};
+      simd_float2 cp1 = {bp0.x + bp0.outX, bp0.y + bp0.outY};
+      simd_float2 cp2 = {bp1.x + bp1.inX, bp1.y + bp1.inY};
+      simd_float2 b = {bp1.x, bp1.y};
+
+      for (NSUInteger s = 0; s <= 64; s++) {
+        float t = (float)s / 64.0f;
+        float u = 1.0f - t;
+        simd_float2 pos = u * u * u * a + 3.0f * u * u * t * cp1 +
+                          3.0f * u * t * t * cp2 + t * t * t * b;
+        CGPoint cur = [self canvasPointForObjectX:pos.x objY:pos.y];
+        if (hypot(positionX - cur.x, positionY - cur.y) < segHitRadius) {
+          *activePart = kOSCPathSegmentBase + (NSInteger)c;
+          [oscAPI setCursor:self.penAddCursor];
+          return;
+        }
+      }
     }
   }
 
@@ -293,6 +319,20 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     self.dragIndex = activePart - kOSCOutHandleBase;
     self.dragIsInHandle = NO;
     self.dragIsOutHandle = YES;
+    *forceUpdate = YES;
+    return;
+  }
+
+  // Click on path segment: insert a point at that position
+  if (activePart >= kOSCPathSegmentBase) {
+    NSInteger segIdx = activePart - kOSCPathSegmentBase;
+    simd_float2 objPos = [self objectPointForCanvasX:positionX
+                                             canvasY:positionY];
+    [self.path insertAtIndex:segIdx + 1 position:objPos];
+    [self writePath:self.path];
+    self.dragIndex = segIdx + 1;
+    self.dragIsInHandle = NO;
+    self.dragIsOutHandle = NO;
     *forceUpdate = YES;
     return;
   }
