@@ -22,6 +22,7 @@ static NSDictionary<NSString *, NSString *> *KKKnownComponents(void) {
     @"rounded" : @"Rounded",
     @"motionblur" : @"MotionBlur",
     @"magicmove" : @"MagicMove",
+    @"canvas" : @"Canvas",
     @"glow" : @"Glow"
   };
 }
@@ -37,6 +38,8 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
     @"Rounded-XPC-Service" : @"rounded",
     @"MagicMove" : @"magicmove",
     @"MagicMove-XPC-Service" : @"magicmove",
+    @"Canvas" : @"canvas",
+    @"Canvas-XPC-Service" : @"canvas",
     @"Glow" : @"glow",
     @"Glow-XPC-Service" : @"glow"
   };
