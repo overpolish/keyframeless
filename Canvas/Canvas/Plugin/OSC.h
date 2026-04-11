@@ -5,6 +5,8 @@
 
 #pragma once
 
+#import "CanvasToolbar.h"
+#import "Constants.h"
 #import <KeyframelessKit/KeyframelessKit.h>
 
 @interface CanvasOSC : KKOnScreenControl
@@ -21,6 +23,7 @@
 @property(nonatomic, strong) NSCursor *moveCursor;
 @property(nonatomic, strong) NSCursor *editPointsCursor;
 @property(nonatomic, strong) NSCursor *penDeleteCursor;
+@property(nonatomic, strong) CanvasToolbar *toolbar;
 
 - (KKBezierPath *)readPath;
 - (void)writePath:(KKBezierPath *)path;
