@@ -43,6 +43,8 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     _moveCursor = cursorFromBundle(@"Move", NSMakePoint(8, 7));
     _editPointsCursor = cursorFromBundle(@"EditPoints", NSMakePoint(11, 8));
     _penDeleteCursor = cursorFromBundle(@"PenX", NSMakePoint(15, 5));
+
+    self.toolbar = [[CanvasToolbar alloc] initWithAPIManager:apiManager];
   }
   return self;
 }
@@ -109,6 +111,11 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
                                        commands:^(id<MTLRenderCommandEncoder> e,
                                                   CGPoint p, simd_uint2 v){
                                        }];
+
+  // Draw toolbar at top center (always visible)
+  [self.toolbar drawWithWidth:width
+                       height:height
+             destinationImage:destinationImage];
 
   self.path = [self readPath];
   if (self.path.count == 0)
@@ -208,6 +215,14 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
 
+  // Test toolbar first
+  NSInteger toolbarPart = [self.toolbar hitTestAtX:positionX y:positionY];
+  if (toolbarPart != 0) {
+    *activePart = toolbarPart;
+    [oscAPI setCursor:[NSCursor arrowCursor]];
+    return;
+  }
+
   CGEventFlags flags =
       CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
   BOOL optDown = (flags & kCGEventFlagMaskAlternate) != 0;
@@ -282,6 +297,18 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
                    modifiers:(NSUInteger)modifiers
                  forceUpdate:(BOOL *)forceUpdate
                       atTime:(CMTime)time {
+  // Toolbar clicks
+  if (activePart == kOSCToolbarPen) {
+    self.toolbar.activeToolMode = CanvasToolPen;
+    *forceUpdate = YES;
+    return;
+  }
+  if (activePart == kOSCToolbarRect) {
+    self.toolbar.activeToolMode = CanvasToolRect;
+    *forceUpdate = YES;
+    return;
+  }
+
   self.path = [self readPath];
 
   // Option-click on point: delete it
