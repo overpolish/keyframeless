@@ -106,6 +106,17 @@
                            parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
+  if (![paramAPI addPercentSliderWithName:@"Threshold"
+                              parameterID:kParamThreshold
+                             defaultValue:0.0
+                             parameterMin:0.0
+                             parameterMax:1.0
+                                sliderMin:0.0
+                                sliderMax:1.0
+                                    delta:0.01
+                           parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
   if (![self addColorParametersWithAPI:paramAPI
                                  modes:@[
                                    @(KKColorModeDynamic), @(KKColorModeSolid),

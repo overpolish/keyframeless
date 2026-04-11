@@ -28,6 +28,7 @@ static const UInt32 kParamNoiseOffset = 105;
 static const UInt32 kParamGradientType = 106;
 static const UInt32 kParamNoiseSpeed = 108;
 static const UInt32 kParamGradientAngle = 107;
+static const UInt32 kParamThreshold = 110;
 
 static const UInt32 kParamNoiseGroup = 150;
 static const UInt32 kParamNoiseExpanded = 151;
