@@ -3348,7 +3348,7 @@
 						<key>GID</key>
 						<integer>0</integer>
 						<key>PATH</key>
-						<string>../MotionTemplates/Canvas/Generators.localized</string>
+						<string>../MotionTemplates/Canvas/Effects.localized</string>
 						<key>PATH_TYPE</key>
 						<integer>1</integer>
 						<key>PERMISSIONS</key>
@@ -3619,7 +3619,7 @@
 										<key>LANGUAGE</key>
 										<string>English</string>
 										<key>VALUE</key>
-										<string>Canvas plugin. Generator for use in Motion/Final Cut Pro.</string>
+										<string>Canvas plugin. Effect for use in Motion/Final Cut Pro.</string>
 									</dict>
 								</array>
 								<key>OPTIONS</key>

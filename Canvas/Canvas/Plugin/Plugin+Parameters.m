@@ -6,9 +6,6 @@
 #import "Constants.h"
 #import "Plugin_Private.h"
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
-
 @implementation CanvasPlugin (Parameters)
 
 - (BOOL)addParametersWithError:(NSError **)error {
@@ -30,8 +27,13 @@
     return NO;
   }
 
+  [paramAPI addStringParameterWithName:@"PathData"
+                           parameterID:kParamPathData
+                          defaultValue:@""
+                        parameterFlags:kFxParameterFlag_HIDDEN |
+                                       kFxParameterFlag_NOT_ANIMATABLE];
+
   return YES;
 }
 
 @end
-#pragma clang diagnostic pop
