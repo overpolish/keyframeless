@@ -6,3 +6,8 @@
 #pragma once
 
 #import <simd/simd.h>
+
+typedef struct {
+    vector_float2 position;
+    float edgeDistance; // -1 to +1, 0 = center of stroke
+} CanvasVertex;
