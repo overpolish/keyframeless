@@ -4,7 +4,6 @@
  */
 
 #include "ShaderTypes.h"
-#include <KeyframelessKit/KKShaderTypes.h>
 #include <metal_stdlib>
 #include <simd/simd.h>
 
@@ -12,29 +11,28 @@ using namespace metal;
 
 typedef struct {
     float4 clipSpacePosition [[position]];
-    float2 textureCoordinate;
-} RasterizerData;
+    float edgeDistance;
+} StrokeRasterizerData;
 
-vertex RasterizerData vertexShader(uint vertexID [[vertex_id]],
-                                   constant KKVertex2D *vertexArray [[buffer(KKVertexInputIndex_Vertices)]],
-                                   constant vector_uint2 *viewportSizePointer
-                                   [[buffer(KKVertexInputIndex_ViewportSize)]]) {
-    RasterizerData out;
+vertex StrokeRasterizerData strokeVertexShader(uint vertexID [[vertex_id]],
+                                               constant CanvasVertex *vertexArray [[buffer(0)]],
+                                               constant vector_uint2 *viewportSizePointer [[buffer(1)]]) {
+    StrokeRasterizerData out;
 
-    float2 pixelSpacePosition = vertexArray[vertexID].position.xy;
+    float2 pixelSpacePosition = vertexArray[vertexID].position;
     float2 viewportSize = float2(*viewportSizePointer);
 
     out.clipSpacePosition.xy = pixelSpacePosition / (viewportSize / 2.0);
     out.clipSpacePosition.z = 0.0;
     out.clipSpacePosition.w = 1.0;
-    out.textureCoordinate = vertexArray[vertexID].textureCoordinate;
+    out.edgeDistance = vertexArray[vertexID].edgeDistance;
 
     return out;
 }
 
-fragment float4 fragmentShader(RasterizerData in [[stage_in]],
-                               texture2d<half> colorTexture [[texture(KKTextureIndex_InputImage)]]) {
-    constexpr sampler textureSampler(mag_filter::linear, min_filter::linear);
-    half4 colorSample = colorTexture.sample(textureSampler, in.textureCoordinate);
-    return float4(colorSample);
+fragment float4 strokeFragmentShader(StrokeRasterizerData in [[stage_in]]) {
+    float dist = abs(in.edgeDistance);
+    float fw = fwidth(in.edgeDistance) * 1.5;
+    float alpha = 1.0 - smoothstep(1.0 - fw, 1.0, dist);
+    return float4(1.0, 0.0, 0.0, 1.0) * alpha;
 }
