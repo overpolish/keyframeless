@@ -33,6 +33,7 @@ typedef struct {
   float gradientAngle;
   simd_float3 gradientLUT[KK_GRADIENT_LUT_SIZE];
   float noiseSeed;
+  float threshold;
 } GlowPluginState;
 
 static const float kMaxBlurDimension = 2048.0f;
@@ -122,6 +123,10 @@ static void _texPairReturn(NSInteger idx) {
        fromParameter:kParamIntensity
               atTime:renderTime];
   [api getFloatValue:&falloff fromParameter:kParamFalloff atTime:renderTime];
+  double threshold = 0.0;
+  [api getFloatValue:&threshold
+       fromParameter:kParamThreshold
+              atTime:renderTime];
   [api getFloatValue:&noise fromParameter:kParamNoise atTime:renderTime];
   double noiseOffset = 0.0;
   [api getFloatValue:&noiseOffset
@@ -321,6 +326,7 @@ static void _texPairReturn(NSInteger idx) {
       .gradientType = gradType,
       .gradientAngle = (float)gradAngle,
       .noiseSeed = (float)noiseSeedVal,
+      .threshold = (float)threshold,
   };
 
   if (color.mode == KKColorModeGradient) {
@@ -456,6 +462,21 @@ static void _texPairReturn(NSInteger idx) {
     id<MTLTexture> prepTex = _texPairPool[texIdx].a;
     id<MTLTexture> blurTex = _texPairPool[texIdx].b;
 
+    // Lane 2: bloom (separate texture pair when threshold > 0)
+    BOOL hasBloom = state.threshold > 0.0f;
+    NSInteger bloomTexIdx = -1;
+    id<MTLTexture> bloomPrepTex = nil;
+    id<MTLTexture> bloomBlurTex = nil;
+    if (hasBloom) {
+      bloomTexIdx = _texPairCheckout(device, pf);
+      if (bloomTexIdx < 0)
+        hasBloom = NO;
+      else {
+        bloomPrepTex = _texPairPool[bloomTexIdx].a;
+        bloomBlurTex = _texPairPool[bloomTexIdx].b;
+      }
+    }
+
     // Pipeline states
     id<MTLRenderPipelineState> prepPS =
         [cache buildAndRegisterPipelineStateForPluginID:
@@ -475,7 +496,20 @@ static void _texPairReturn(NSInteger idx) {
                                            vertexShader:@"vertexShader"
                                          fragmentShader:@"glowComposite"
                                               blendMode:KKBlendModeNone];
+    id<MTLRenderPipelineState> bloomPrepPS = nil;
+    if (hasBloom) {
+      bloomPrepPS =
+          [cache buildAndRegisterPipelineStateForPluginID:
+                     @"co.overpolish.keyframeless.Glow.bloomPrep"
+                                               registryID:regID
+                                              pixelFormat:pf
+                                                 bundleID:nil
+                                             vertexShader:@"vertexShader"
+                                           fragmentShader:@"glowBloomPrep"
+                                                blendMode:KKBlendModeNone];
+    }
     if (!prepPS || !compPS) {
+      _texPairReturn(bloomTexIdx);
       [cache returnCommandQueueToCache:queue];
       return NO;
     }
@@ -547,8 +581,44 @@ static void _texPairReturn(NSInteger idx) {
               destinationTexture:blurTex];
     }
 
-    // 3) Composite: glow behind original → output
-    //    Blur result is in blurTex.
+    // 2b) Bloom lane: bright-pass extraction → blur (separate textures)
+    if (hasBloom && bloomPrepPS) {
+      {
+        MTLRenderPassDescriptor *rpd =
+            [MTLRenderPassDescriptor renderPassDescriptor];
+        rpd.colorAttachments[0].texture = bloomPrepTex;
+        rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+        rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
+        id<MTLRenderCommandEncoder> e =
+            [cb renderCommandEncoderWithDescriptor:rpd];
+        [e setViewport:bvp];
+        [e setVertexBytes:srcV
+                   length:sizeof(srcV)
+                  atIndex:KKVertexInputIndex_Vertices];
+        [e setVertexBytes:&bvs
+                   length:sizeof(bvs)
+                  atIndex:KKVertexInputIndex_ViewportSize];
+        [e setRenderPipelineState:bloomPrepPS];
+        [e setFragmentTexture:inTex atIndex:KKTextureIndex_InputImage];
+        float thr = state.threshold;
+        [e setFragmentBytes:&thr length:sizeof(thr) atIndex:0];
+        [e drawPrimitives:MTLPrimitiveTypeTriangleStrip
+              vertexStart:0
+              vertexCount:4];
+        [e endEncoding];
+      }
+      {
+        MPSImageGaussianBlur *mps =
+            [[MPSImageGaussianBlur alloc] initWithDevice:device sigma:sigma];
+        mps.edgeMode = MPSImageEdgeModeClamp;
+        [mps encodeToCommandBuffer:cb
+                     sourceTexture:bloomPrepTex
+                destinationTexture:bloomBlurTex];
+      }
+    }
+
+    // 3) Composite: glow behind original + bloom → output
+    //    Edge blur in blurTex, bloom blur in bloomBlurTex.
     {
       MTLRenderPassDescriptor *rpd =
           [MTLRenderPassDescriptor renderPassDescriptor];
@@ -567,6 +637,7 @@ static void _texPairReturn(NSInteger idx) {
       [e setRenderPipelineState:compPS];
       [e setFragmentTexture:inTex atIndex:KKTextureIndex_InputImage];
       [e setFragmentTexture:blurTex atIndex:1];
+      [e setFragmentTexture:(hasBloom ? bloomBlurTex : blurTex) atIndex:2];
       float rx = state.radiusX, ry = state.radiusY;
       float i = state.intensity, f = state.falloff, n = state.noise;
       // Offset is in object-space fractions → convert to UV.
@@ -611,6 +682,10 @@ static void _texPairReturn(NSInteger idx) {
       [e setFragmentBytes:&blurUVScale
                    length:sizeof(blurUVScale)
                   atIndex:FragmentIndex_BlurUVScale];
+      float thr = state.threshold;
+      [e setFragmentBytes:&thr
+                   length:sizeof(thr)
+                  atIndex:FragmentIndex_Threshold];
       [e drawPrimitives:MTLPrimitiveTypeTriangleStrip
             vertexStart:0
             vertexCount:4];
@@ -620,6 +695,7 @@ static void _texPairReturn(NSInteger idx) {
     [cb commit];
     [cb waitUntilCompleted];
     _texPairReturn(texIdx);
+    _texPairReturn(bloomTexIdx);
     [cache returnCommandQueueToCache:queue];
     return YES;
 

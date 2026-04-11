@@ -220,6 +220,7 @@
 		<target object="3001886603" channel="./101" name="Radius Y"/>
 		<target object="3001886603" channel="./102" name="Intensity"/>
 		<target object="3001886603" channel="./103" name="Falloff"/>
+		<target object="3001886603" channel="./110" name="Threshold"/>
 		<target object="3001886603" channel="./9800" name=""/>
 		<target object="3001886603" channel="./9801" name="Color Mode"/>
 		<target object="3001886603" channel="./9802" name="Color"/>
@@ -359,6 +360,7 @@
 				<parameter name="Radius Y" id="101" flags="12901679120" default="100" value="100"/>
 				<parameter name="Intensity" id="102" flags="12901679120" default="1" value="1"/>
 				<parameter name="Falloff" id="103" flags="12901679120" default="0" value="0"/>
+				<parameter name="Threshold" id="110" flags="12901679120" default="0" value="0"/>
 				<parameter name="" id="9800" flags="12901679120">
 					<numberOfKeypoints>0</numberOfKeypoints>
 					<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GN60-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
@@ -1055,7 +1057,7 @@
 				<parameter name="Mix" id="10001" flags="12901679104" default="1" value="1"/>
 				<parameter name="Flip" id="10002" flags="12905938976" default="0" value="0"/>
 				<parameter name="Input Points" id="10003" flags="12905938976" default="1" value="1"/>
-				<parameter name="Publish OSC" id="10005" flags="4311744512" default="0" value="1"/>
+				<parameter name="Publish OSC" id="10005" flags="12901679104" default="0" value="1"/>
 			</filter>
 		</scenenode>
 		<aspectRatio>1</aspectRatio>
