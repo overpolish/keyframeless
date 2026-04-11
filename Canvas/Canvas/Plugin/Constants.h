@@ -11,6 +11,8 @@ static NSString *const kPluginID = @"co.overpolish.keyframeless.Canvas";
 
 // Parameter IDs
 static const UInt32 kParamPathData = 100;
+static const UInt32 kParamStrokeWidth = 101;
+static const UInt32 kParamStrokeColor = 102;
 
 // OSC part IDs
 static const NSInteger kOSCCanvas = 1;          // empty space (captures clicks)

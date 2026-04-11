@@ -30,9 +30,9 @@ vertex StrokeRasterizerData strokeVertexShader(uint vertexID [[vertex_id]],
     return out;
 }
 
-fragment float4 strokeFragmentShader(StrokeRasterizerData in [[stage_in]]) {
+fragment float4 strokeFragmentShader(StrokeRasterizerData in [[stage_in]], constant float4 *strokeColor [[buffer(0)]]) {
     float dist = abs(in.edgeDistance);
     float fw = fwidth(in.edgeDistance) * 1.5;
     float alpha = 1.0 - smoothstep(1.0 - fw, 1.0, dist);
-    return float4(1.0, 0.0, 0.0, 1.0) * alpha;
+    return *strokeColor * alpha;
 }
