@@ -450,10 +450,13 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
   BOOL isPenMode = (self.toolbar.activeTag == kOSCToolbarPen);
 
-  // Close path (pen mode)
+  // Close path (pen mode): allow drag to adjust first point's in-handle
   if (activePart == kOSCClosePath && active) {
     active.closed = YES;
     [self writePaths:self.paths];
+    self.dragIndex = 0;
+    self.dragIsInHandle = YES;
+    self.dragIsOutHandle = NO;
     *forceUpdate = YES;
     return;
   }
@@ -598,7 +601,8 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
 
     self.dragIndex = (NSInteger)active.count - 1;
     self.dragIsInHandle = NO;
-    self.dragIsOutHandle = YES;
+    self.dragIsOutHandle = NO;
+    self.dragIsNewPoint = YES;
 
     *forceUpdate = YES;
     [super mouseDownAtPositionX:positionX
@@ -627,7 +631,15 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
 
   BOOL breakSymmetry = (modifiers & kFxModifierKey_OPTION) != 0;
 
-  if (self.dragIsInHandle) {
+  if (self.dragIsNewPoint) {
+    // New point: convert from linear to bezier on first drag
+    KKBezierPoint pt = [active pointAtIndex:self.dragIndex];
+    simd_float2 offset = {objPos.x - pt.x, objPos.y - pt.y};
+    [active setOutHandle:offset atIndex:self.dragIndex];
+    simd_float2 mirror = {-offset.x, -offset.y};
+    [active setInHandle:mirror atIndex:self.dragIndex];
+    [active setType:KKBezierPointBezier atIndex:self.dragIndex];
+  } else if (self.dragIsInHandle) {
     KKBezierPoint pt = [active pointAtIndex:self.dragIndex];
     simd_float2 offset = {objPos.x - pt.x, objPos.y - pt.y};
     [active setInHandle:offset atIndex:self.dragIndex];
@@ -662,6 +674,7 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   self.dragIndex = -1;
   self.dragIsInHandle = NO;
   self.dragIsOutHandle = NO;
+  self.dragIsNewPoint = NO;
 
   *forceUpdate = YES;
   [super mouseUpAtPositionX:positionX
