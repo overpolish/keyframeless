@@ -112,7 +112,7 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   for (NSUInteger p = 0; p < self.paths.count; p++) {
     KKBezierPath *path = self.paths[p];
     NSUInteger segCount = path.count - 1;
-    if (path.closed && path.count >= 3)
+    if (path.closed && path.count >= 2)
       segCount = path.count;
     for (NSUInteger c = 0; c < segCount; c++) {
       NSUInteger nextIdx = (c + 1) % path.count;
@@ -135,7 +135,7 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   if (!path || path.count < 2)
     return -1;
   NSUInteger segCount = path.count - 1;
-  if (path.closed && path.count >= 3)
+  if (path.closed && path.count >= 2)
     segCount = path.count;
   for (NSUInteger c = 0; c < segCount; c++) {
     NSUInteger nextIdx = (c + 1) % path.count;

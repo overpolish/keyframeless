@@ -188,7 +188,7 @@
 
     NSUInteger segsPerCurve = 128;
     NSUInteger curveCount = path.count - 1;
-    if (path.closed && path.count >= 3)
+    if (path.closed && path.count >= 2)
       curveCount = path.count;
     NSUInteger maxVertices = curveCount * ((segsPerCurve + 1) * 2 + 2) + 2;
     CanvasVertex *vertices =

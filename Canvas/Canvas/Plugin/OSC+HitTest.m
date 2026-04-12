@@ -80,7 +80,7 @@
       KKBezierPoint pt = [active pointAtIndex:i];
       CGPoint ptCanvas = [self canvasPointForBezierPoint:pt];
       if (hypot(positionX - ptCanvas.x, positionY - ptCanvas.y) < hitRadius) {
-        if (isPenMode && i == 0 && !active.closed && active.count >= 3) {
+        if (isPenMode && i == 0 && !active.closed && active.count >= 2) {
           *activePart = kOSCClosePath;
           [oscAPI setCursor:self.penCloseCursor];
           return;

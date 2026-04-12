@@ -14,7 +14,7 @@
                    color:(simd_float4)color
         destinationImage:(FxImageTile *)dest {
   NSUInteger segCount = path.count - 1;
-  if (path.closed && path.count >= 3)
+  if (path.closed && path.count >= 2)
     segCount = path.count;
 
   CGPoint prev = CGPointZero;
