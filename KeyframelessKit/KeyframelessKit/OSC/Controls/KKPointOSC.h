@@ -5,6 +5,7 @@
 
 #pragma once
 
+#import <AppKit/NSColor.h>
 #import <KeyframelessKit/KKOnScreenControl.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -16,6 +17,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Width of the outline around the point. Default 2.
 @property(nonatomic) float outlineWidth;
+
+/// Optional fill color override. When non-nil, replaces the default white fill.
+@property(nonatomic, strong, nullable) NSColor *fillColorOverride;
 
 @end
 

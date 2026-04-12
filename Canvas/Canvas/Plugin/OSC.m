@@ -26,6 +26,7 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     self.activePathIndex = -1;
     self.dragIndex = -1;
     self.lastClickIndex = -1;
+    self.selectedPoints = [NSMutableIndexSet indexSet];
 
     self.pathPointOSC = [[KKPointOSC alloc] initWithAPIManager:apiManager];
     self.pathPointOSC.clearsOnDraw = NO;
@@ -178,6 +179,7 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
 }
 
 - (void)drawPathControls:(KKBezierPath *)path
+               pathIndex:(NSUInteger)pathIndex
               activePart:(NSInteger)activePart
                    color:(simd_float4)color
         destinationImage:(FxImageTile *)dest
@@ -219,9 +221,31 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
                                         atTime:time];
     }
 
-    BOOL ptActive = (self.dragIndex == (NSInteger)i && !self.dragIsInHandle &&
-                     !self.dragIsOutHandle);
+    BOOL isSelected = [self isPointSelected:pathIndex point:i];
+    // Live preview: highlight/unhighlight points inside marquee rect
+    if (self.dragIsMarquee) {
+      CGFloat minX = MIN(self.marqueeStart.x, self.marqueeEnd.x);
+      CGFloat maxX = MAX(self.marqueeStart.x, self.marqueeEnd.x);
+      CGFloat minY = MIN(self.marqueeStart.y, self.marqueeEnd.y);
+      CGFloat maxY = MAX(self.marqueeStart.y, self.marqueeEnd.y);
+      BOOL inside = (ptCanvas.x >= minX && ptCanvas.x <= maxX &&
+                     ptCanvas.y >= minY && ptCanvas.y <= maxY);
+      CGEventFlags mf =
+          CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+      BOOL optHeld = (mf & kCGEventFlagMaskAlternate) != 0;
+      if (inside) {
+        if (optHeld)
+          isSelected = NO; // opt-marquee removes
+        else
+          isSelected = YES; // normal/shift-marquee adds
+      }
+    }
+    BOOL ptActive =
+        isSelected || (self.dragIndex == (NSInteger)i && !self.dragIsInHandle &&
+                       !self.dragIsOutHandle);
     BOOL ptHovered = (activePart == kOSCPathPointBase + (NSInteger)i);
+    self.pathPointOSC.fillColorOverride =
+        isSelected ? [NSColor systemBlueColor] : nil;
     [self.pathPointOSC drawAtCanvasPosition:ptCanvas
                                   isHovered:ptHovered
                                    isActive:ptActive
@@ -250,25 +274,76 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   simd_float4 dimColor = strokeColor;
   dimColor.w = 0.3f;
 
-  // Draw all paths, but only show controls for active path
+  BOOL hasSelection = self.selectedPoints.count > 0;
+  BOOL showAllControls = hasSelection || self.dragIsMarquee;
+
+  // Draw all paths; show controls for active path, or all when selecting
   for (NSUInteger p = 0; p < self.paths.count; p++) {
     KKBezierPath *path = self.paths[p];
     if (path.count == 0)
       continue;
 
     BOOL isActive = ((NSInteger)p == self.activePathIndex);
-    [self drawPathSegments:path
-                     color:isActive ? strokeColor : dimColor
-          destinationImage:destinationImage];
+    [self
+        drawPathSegments:path
+                   color:(isActive || showAllControls) ? strokeColor : dimColor
+        destinationImage:destinationImage];
 
-    if (isActive) {
+    if (isActive || showAllControls) {
       [self drawPathControls:path
+                   pathIndex:p
                   activePart:activePart
                        color:strokeColor
             destinationImage:destinationImage
                       atTime:time];
     }
   }
+
+  // Draw marquee rectangle (dashed, pixel-snapped)
+  if (self.dragIsMarquee) {
+    simd_float4 marqueeColor = {1.0f, 1.0f, 1.0f, 0.9f};
+    simd_float4 darkColor = {0.0f, 0.0f, 0.0f, 0.6f};
+    CGFloat hw = 1.5f;
+    CGFloat dash = 8.0f, gap = 5.0f;
+    // Snap to pixel centers to avoid sub-pixel brightness variation
+    CGFloat x0 = floor(MIN(self.marqueeStart.x, self.marqueeEnd.x)) + 0.5f;
+    CGFloat x1 = floor(MAX(self.marqueeStart.x, self.marqueeEnd.x)) + 0.5f;
+    CGFloat y0 = floor(MIN(self.marqueeStart.y, self.marqueeEnd.y)) + 0.5f;
+    CGFloat y1 = floor(MAX(self.marqueeStart.y, self.marqueeEnd.y)) + 0.5f;
+    CGPoint tl = {x0, y0}, tr = {x1, y0}, br = {x1, y1}, bl = {x0, y1};
+    CGPoint edges[4][2] = {{tl, tr}, {tr, br}, {br, bl}, {bl, tl}};
+    for (int e = 0; e < 4; e++) {
+      CGPoint from = edges[e][0], to = edges[e][1];
+      CGFloat dx = to.x - from.x, dy = to.y - from.y;
+      CGFloat len = hypot(dx, dy);
+      if (len < 0.1)
+        continue;
+      CGFloat nx = dx / len, ny = dy / len;
+      CGFloat pos = 0;
+      BOOL on = YES;
+      while (pos < len) {
+        CGFloat seg = on ? dash : gap;
+        CGFloat end = MIN(pos + seg, len);
+        CGPoint dFrom = {from.x + nx * pos, from.y + ny * pos};
+        CGPoint dTo = {from.x + nx * end, from.y + ny * end};
+        [self drawLineFrom:dFrom
+                          to:dTo
+                       color:on ? marqueeColor : darkColor
+                   halfWidth:hw
+            destinationImage:destinationImage];
+        pos = end;
+        on = !on;
+      }
+    }
+  }
+}
+
+static NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
+  return pathIdx * 100000 + ptIdx;
+}
+
+- (BOOL)isPointSelected:(NSUInteger)pathIdx point:(NSUInteger)ptIdx {
+  return [self.selectedPoints containsIndex:selKey(pathIdx, ptIdx)];
 }
 
 - (double)strokeHitRadius {
@@ -353,6 +428,7 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   CGEventFlags flags =
       CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
   BOOL optDown = (flags & kCGEventFlagMaskAlternate) != 0;
+  BOOL shiftDown = (flags & kCGEventFlagMaskShift) != 0;
   BOOL cmdDown = (flags & kCGEventFlagMaskCommand) != 0;
 
   KKBezierPath *active = [self activePath];
@@ -407,7 +483,13 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
       [oscAPI setCursor:[NSCursor arrowCursor]];
       return;
     }
-    [oscAPI setCursor:[NSCursor arrowCursor]];
+    // Empty space: marquee cursor, show +/- hints only when there's a selection
+    if (self.selectedPoints.count > 0 && shiftDown)
+      [oscAPI setCursor:[NSCursor dragCopyCursor]];
+    else if (self.selectedPoints.count > 0 && optDown)
+      [oscAPI setCursor:[NSCursor operationNotAllowedCursor]];
+    else
+      [oscAPI setCursor:[NSCursor crosshairCursor]];
     return;
   }
 
@@ -563,19 +645,68 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     return;
   }
 
-  // Cursor mode: click near a path to select + start drag, empty space
-  // deselects
+  // Cursor mode
   if (isCursorMode) {
+    BOOL shiftDown = (modifiers & kFxModifierKey_SHIFT) != 0;
+    BOOL optDown = (modifiers & kFxModifierKey_OPTION) != 0;
+
+    // Check if clicking a selected point → drag selection
+    if (self.selectedPoints.count > 0) {
+      for (NSUInteger p = 0; p < self.paths.count; p++) {
+        KKBezierPath *path = self.paths[p];
+        for (NSUInteger i = 0; i < path.count; i++) {
+          if (![self isPointSelected:p point:i])
+            continue;
+          KKBezierPoint pt = [path pointAtIndex:i];
+          CGPoint ptCanvas = [self canvasPointForBezierPoint:pt];
+          if (hypot(positionX - ptCanvas.x, positionY - ptCanvas.y) < 12.0) {
+            self.dragIsSelection = YES;
+            self.dragOrigin = [self
+                objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+            *forceUpdate = YES;
+            return;
+          }
+        }
+      }
+    }
+
+    // Check if clicking near a path
     double hitRadiusStroke = [self strokeHitRadius];
     NSInteger nearPath = [self pathIndexNearX:positionX
                                             y:positionY
                                        radius:hitRadiusStroke];
-    self.activePathIndex = nearPath;
     if (nearPath >= 0) {
+      KKBezierPath *hitPath = self.paths[nearPath];
+      if (shiftDown) {
+        // Shift+click: add all points of this path to selection
+        for (NSUInteger i = 0; i < hitPath.count; i++)
+          [self.selectedPoints addIndex:selKey(nearPath, i)];
+        *forceUpdate = YES;
+        return;
+      } else if (optDown) {
+        // Opt+click: remove all points of this path from selection
+        for (NSUInteger i = 0; i < hitPath.count; i++)
+          [self.selectedPoints removeIndex:selKey(nearPath, i)];
+        *forceUpdate = YES;
+        return;
+      }
+      // Plain click: select path + start drag
+      [self.selectedPoints removeAllIndexes];
+      self.activePathIndex = nearPath;
       self.dragIsPath = YES;
       self.dragOrigin =
           [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+      *forceUpdate = YES;
+      return;
     }
+
+    // Empty space: start marquee (or clear selection if no modifier)
+    if (!shiftDown && !optDown)
+      [self.selectedPoints removeAllIndexes];
+    self.activePathIndex = -1;
+    self.dragIsMarquee = YES;
+    self.marqueeStart = CGPointMake(positionX, positionY);
+    self.marqueeEnd = self.marqueeStart;
     *forceUpdate = YES;
     return;
   }
@@ -653,6 +784,33 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
                       modifiers:(NSUInteger)modifiers
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
+  // Marquee drag
+  if (self.dragIsMarquee) {
+    self.marqueeEnd = CGPointMake(positionX, positionY);
+    *forceUpdate = YES;
+    return;
+  }
+
+  // Drag selected points
+  if (self.dragIsSelection) {
+    simd_float2 objPos =
+        [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+    simd_float2 delta = objPos - self.dragOrigin;
+    self.dragOrigin = objPos;
+    for (NSUInteger p = 0; p < self.paths.count; p++) {
+      KKBezierPath *path = self.paths[p];
+      for (NSUInteger i = 0; i < path.count; i++) {
+        if ([self isPointSelected:p point:i]) {
+          KKBezierPoint pt = [path pointAtIndex:i];
+          [path moveAtIndex:i to:(simd_float2){pt.x + delta.x, pt.y + delta.y}];
+        }
+      }
+    }
+    [self writePaths:self.paths];
+    *forceUpdate = YES;
+    return;
+  }
+
   KKBezierPath *active = [self activePath];
   if (!active)
     return;
@@ -715,11 +873,45 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
                  modifiers:(NSUInteger)modifiers
                forceUpdate:(BOOL *)forceUpdate
                     atTime:(CMTime)time {
+  // Finalize marquee selection
+  if (self.dragIsMarquee) {
+    self.marqueeEnd = CGPointMake(positionX, positionY);
+    BOOL shiftDown = (modifiers & kFxModifierKey_SHIFT) != 0;
+    BOOL optDown = (modifiers & kFxModifierKey_OPTION) != 0;
+
+    CGFloat minX = MIN(self.marqueeStart.x, self.marqueeEnd.x);
+    CGFloat maxX = MAX(self.marqueeStart.x, self.marqueeEnd.x);
+    CGFloat minY = MIN(self.marqueeStart.y, self.marqueeEnd.y);
+    CGFloat maxY = MAX(self.marqueeStart.y, self.marqueeEnd.y);
+
+    // Only select if the marquee has some size (not just a click)
+    if (maxX - minX > 2.0 || maxY - minY > 2.0) {
+      for (NSUInteger p = 0; p < self.paths.count; p++) {
+        KKBezierPath *path = self.paths[p];
+        for (NSUInteger i = 0; i < path.count; i++) {
+          KKBezierPoint pt = [path pointAtIndex:i];
+          CGPoint canvas = [self canvasPointForBezierPoint:pt];
+          BOOL inside = (canvas.x >= minX && canvas.x <= maxX &&
+                         canvas.y >= minY && canvas.y <= maxY);
+          NSUInteger key = selKey(p, i);
+          if (inside) {
+            if (optDown)
+              [self.selectedPoints removeIndex:key];
+            else
+              [self.selectedPoints addIndex:key];
+          }
+        }
+      }
+    }
+  }
+
   self.dragIndex = -1;
   self.dragIsInHandle = NO;
   self.dragIsOutHandle = NO;
   self.dragIsNewPoint = NO;
   self.dragIsPath = NO;
+  self.dragIsMarquee = NO;
+  self.dragIsSelection = NO;
 
   *forceUpdate = YES;
   [super mouseUpAtPositionX:positionX
@@ -739,8 +931,9 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
                     atTime:(CMTime)time {
   BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
 
-  // Escape: deselect path and switch to cursor mode
+  // Escape: clear selection, deselect path, switch to cursor mode
   if (asciiKey == 27) {
+    [self.selectedPoints removeAllIndexes];
     self.activePathIndex = -1;
     self.toolbar.activeTag = kOSCToolbarCursor;
     *forceUpdate = YES;
@@ -751,6 +944,27 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   // Delete/Backspace
   if (asciiKey == 127 || asciiKey == 8) {
     self.paths = [self readPaths];
+
+    // If there's a marquee selection, delete selected points
+    if (isCursorMode && self.selectedPoints.count > 0) {
+      // Remove selected points in reverse order to preserve indices
+      for (NSInteger p = (NSInteger)self.paths.count - 1; p >= 0; p--) {
+        KKBezierPath *path = self.paths[p];
+        for (NSInteger i = (NSInteger)path.count - 1; i >= 0; i--) {
+          if ([self isPointSelected:p point:i])
+            [path removeAtIndex:i];
+        }
+        if (path.count == 0)
+          [self.paths removeObjectAtIndex:p];
+      }
+      [self.selectedPoints removeAllIndexes];
+      self.activePathIndex = -1;
+      [self writePaths:self.paths];
+      *forceUpdate = YES;
+      *didHandle = YES;
+      return;
+    }
+
     KKBezierPath *active = [self activePath];
     if (!active)
       return;

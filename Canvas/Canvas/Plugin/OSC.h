@@ -19,7 +19,13 @@
 @property(nonatomic, assign) BOOL dragIsOutHandle;
 @property(nonatomic, assign) BOOL dragIsNewPoint;
 @property(nonatomic, assign) BOOL dragIsPath;
+@property(nonatomic, assign) BOOL dragIsMarquee;
+@property(nonatomic, assign) BOOL dragIsSelection; // dragging selected points
 @property(nonatomic, assign) simd_float2 dragOrigin;
+@property(nonatomic, assign) CGPoint marqueeStart;
+@property(nonatomic, assign) CGPoint marqueeEnd;
+@property(nonatomic, strong)
+    NSMutableIndexSet *selectedPoints; // pathIdx*100000+ptIdx
 @property(nonatomic, assign) NSInteger lastClickIndex;
 @property(nonatomic, assign) CFAbsoluteTime lastClickTime;
 @property(nonatomic, strong) NSCursor *penCursor;
