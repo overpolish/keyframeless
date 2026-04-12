@@ -40,6 +40,16 @@
 
   KKBezierPath *active = [self activePath];
 
+  // Test corner radius handle
+  if (active && active.closed && active.count >= 4) {
+    CGPoint crPos = [self cornerRadiusHandlePositionForPath:active];
+    if (hypot(positionX - crPos.x, positionY - crPos.y) < hitRadius) {
+      *activePart = kOSCCornerRadius;
+      [oscAPI setCursor:self.editPointsCursor];
+      return;
+    }
+  }
+
   // Test active path's handles and points
   if (active) {
     for (NSUInteger i = 0; i < active.count; i++) {

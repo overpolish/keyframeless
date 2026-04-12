@@ -44,6 +44,7 @@ static const CGFloat kHighlightCorner = 8.0;
   id<MTLTexture> _highlightTexture;
   CGFloat _cachedToolbarW;
   CGFloat _cachedToolbarH;
+  NSRect _toolbarFrame;
 }
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager
@@ -239,6 +240,9 @@ static void drawTexturedQuad(id<MTLRenderCommandEncoder> encoder,
   CGFloat toolbarX = ioW / 2.0;
   CGFloat toolbarY = ioH - kToolbarMargin - toolbarH / 2.0;
 
+  _toolbarFrame = NSMakeRect(toolbarX - toolbarW / 2.0,
+                             toolbarY - toolbarH / 2.0, toolbarW, toolbarH);
+
   CGFloat startX = toolbarX - totalButtonsW / 2.0 + kButtonSize / 2.0;
   for (NSInteger i = 0; i < itemCount; i++) {
     CGFloat bx = startX + i * (kButtonSize + kButtonSpacing);
@@ -337,6 +341,9 @@ static void drawTexturedQuad(id<MTLRenderCommandEncoder> encoder,
     if (CGRectContainsPoint(rect, CGPointMake(x, y)))
       return _items[i].tag;
   }
+  // Background of toolbar: swallow click but don't select anything
+  if (CGRectContainsPoint(_toolbarFrame, CGPointMake(x, y)))
+    return -1;
   return 0;
 }
 

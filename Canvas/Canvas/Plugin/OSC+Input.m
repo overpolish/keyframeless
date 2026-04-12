@@ -56,13 +56,16 @@
                    modifiers:(NSUInteger)modifiers
                  forceUpdate:(BOOL *)forceUpdate
                       atTime:(CMTime)time {
-  // Toolbar
+  // Toolbar button
   if (activePart == kOSCToolbarCursor || activePart == kOSCToolbarPen ||
       activePart == kOSCToolbarRect) {
     self.toolbar.activeTag = activePart;
     *forceUpdate = YES;
     return;
   }
+  // Toolbar background (between buttons) — no-op
+  if (activePart == -1)
+    return;
 
   self.paths = [self readPaths];
   KKBezierPath *active = [self activePath];
@@ -135,6 +138,27 @@
     self.dragIndex = activePart - kOSCOutHandleBase;
     self.dragIsInHandle = NO;
     self.dragIsOutHandle = YES;
+    *forceUpdate = YES;
+    return;
+  }
+
+  // Corner radius drag — record starting state
+  if (activePart == kOSCCornerRadius && active) {
+    self.dragIndex = -2; // sentinel for corner radius drag
+    self.dragAnchor = (simd_float2){(float)positionX, (float)positionY};
+    // Compute current pixel radius from stored cornerRadius
+    simd_float2 bmin, bmax;
+    [self boundsOfPath:active min:&bmin max:&bmax];
+    CGPoint minC = [self canvasPointFromObjectPoint:bmin];
+    CGPoint maxC = [self canvasPointFromObjectPoint:bmax];
+    float canvasH = (float)fabs(maxC.y - minC.y);
+    float objH = bmax.y - bmin.y;
+    float storedPixelR =
+        (objH > 0.0001f) ? (active.cornerRadius / objH) * canvasH : 0;
+    // The inset position represents radius=0 visually, so offset accordingly
+    float inset = (float)[self strokeWidth] * 0.5f + 20.0f;
+    float insetPixelR = inset * 1.4142135624f;
+    self.dragStartPixelRadius = storedPixelR + insetPixelR;
     *forceUpdate = YES;
     return;
   }
@@ -382,6 +406,34 @@
 
   simd_float2 objPos =
       [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+
+  // Corner radius drag — use delta from start for smooth dragging
+  if (self.dragIndex == -2) {
+    simd_float2 min, max;
+    [self boundsOfPath:active min:&min max:&max];
+    // Diagonal delta from drag start in canvas space
+    float ddx = (float)(self.dragAnchor.x - positionX);
+    float ddy = (float)(self.dragAnchor.y - positionY);
+    // Project onto diagonal (inward = positive)
+    float diagDelta = (ddx + ddy) * 0.7071067812f;
+    float inset = (float)[self strokeWidth] * 0.5f + 20.0f;
+    float insetPixelR = inset * 1.4142135624f;
+    float pixelR =
+        fmaxf(0.0f, self.dragStartPixelRadius + diagDelta - insetPixelR);
+    // Convert pixel radius to object-space rx and ry
+    CGPoint minCanvas = [self canvasPointFromObjectPoint:min];
+    CGPoint maxCanvas = [self canvasPointFromObjectPoint:max];
+    float canvasW = (float)fabs(maxCanvas.x - minCanvas.x);
+    float canvasH = (float)fabs(maxCanvas.y - minCanvas.y);
+    float objW = max.x - min.x;
+    float objH = max.y - min.y;
+    float rx = (canvasW > 0.0001f) ? (pixelR / canvasW) * objW : 0;
+    float ry = (canvasH > 0.0001f) ? (pixelR / canvasH) * objH : 0;
+    [active setRoundedRectWithMin:min max:max radiusX:rx radiusY:ry];
+    [self writePaths:self.paths];
+    *forceUpdate = YES;
+    return;
+  }
 
   // Whole-path drag
   if (self.dragIsPath) {

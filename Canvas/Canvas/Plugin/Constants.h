@@ -20,6 +20,7 @@ static const NSInteger kOSCToolbarCursor = 2;
 static const NSInteger kOSCToolbarPen = 3;
 static const NSInteger kOSCToolbarRect = 4;
 static const NSInteger kOSCClosePath = 5;
+static const NSInteger kOSCCornerRadius = 6;
 static const NSInteger kOSCPathPointBase = 10000;    // 10000 + index
 static const NSInteger kOSCInHandleBase = 100000;    // 100000 + index
 static const NSInteger kOSCOutHandleBase = 200000;   // 200000 + index

@@ -196,6 +196,18 @@
             destinationImage:destinationImage
                       atTime:time];
     }
+
+    // Corner radius handle on active closed paths
+    if (isActive && path.closed && path.count >= 4) {
+      CGPoint handlePos = [self cornerRadiusHandlePositionForPath:path];
+      BOOL crActive = (activePart == kOSCCornerRadius);
+      self.pathPointOSC.fillColorOverride = nil;
+      [self.pathPointOSC drawAtCanvasPosition:handlePos
+                                    isHovered:NO
+                                     isActive:crActive
+                             destinationImage:destinationImage
+                                       atTime:time];
+    }
   }
 
   if (self.dragIsMarquee) {

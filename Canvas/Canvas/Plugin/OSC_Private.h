@@ -26,4 +26,12 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx);
                         radius:(double)radius
                         inPath:(KKBezierPath *)path;
 
+/// Returns the bounding box of a path's points.
+- (void)boundsOfPath:(KKBezierPath *)path
+                 min:(simd_float2 *)outMin
+                 max:(simd_float2 *)outMax;
+
+/// Canvas position of the corner radius OSC handle for the given path.
+- (CGPoint)cornerRadiusHandlePositionForPath:(KKBezierPath *)path;
+
 @end

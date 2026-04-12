@@ -209,4 +209,47 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   [paramSetAPI setStringParameterValue:str toParameter:kParamPathData];
 }
 
+- (void)boundsOfPath:(KKBezierPath *)path
+                 min:(simd_float2 *)outMin
+                 max:(simd_float2 *)outMax {
+  if (path.count == 0)
+    return;
+  KKBezierPoint p0 = [path pointAtIndex:0];
+  float minX = p0.x, minY = p0.y, maxX = p0.x, maxY = p0.y;
+  for (NSUInteger i = 1; i < path.count; i++) {
+    KKBezierPoint p = [path pointAtIndex:i];
+    minX = fminf(minX, p.x);
+    minY = fminf(minY, p.y);
+    maxX = fmaxf(maxX, p.x);
+    maxY = fmaxf(maxY, p.y);
+  }
+  *outMin = (simd_float2){minX, minY};
+  *outMax = (simd_float2){maxX, maxY};
+}
+
+- (CGPoint)cornerRadiusHandlePositionForPath:(KKBezierPath *)path {
+  simd_float2 min, max;
+  [self boundsOfPath:path min:&min max:&max];
+  // Work in canvas space for correct aspect ratio
+  CGPoint cornerCanvas =
+      [self canvasPointFromObjectPoint:(simd_float2){max.x, max.y}];
+  float r = path.cornerRadius;
+  if (r < 0.0001f) {
+    // At zero radius, offset inside the rect with padding
+    // Canvas Y increases upward, so -Y moves inward (down on screen)
+    float inset = (float)[self strokeWidth] * 0.5f + 20.0f;
+    return (CGPoint){cornerCanvas.x - inset, cornerCanvas.y - inset};
+  }
+  // Compute pixel radius from object-space ry
+  CGPoint minCanvas = [self canvasPointFromObjectPoint:min];
+  CGPoint maxCanvas = [self canvasPointFromObjectPoint:max];
+  float canvasH = (float)fabs(maxCanvas.y - minCanvas.y);
+  float objH = max.y - min.y;
+  float pixelR = (objH > 0.0001f) ? (r / objH) * canvasH : 0;
+  float insetPx = (float)[self strokeWidth] * 0.5f + 20.0f;
+  float diag = pixelR * 0.7071067812f + insetPx;
+  // Inward from top-right: -X and -Y in canvas coords
+  return (CGPoint){cornerCanvas.x - diag, cornerCanvas.y - diag};
+}
+
 @end
