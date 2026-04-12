@@ -178,6 +178,25 @@
   }
 
   [self writePaths:self.paths];
+
+  self.resizeOrigAspect = fabs(nW / nH);
+  self.resizeOrigMin = (simd_float2){nMinX, nMinY};
+  self.resizeOrigMax = (simd_float2){nMaxX, nMaxY};
+  NSMutableArray<NSData *> *snapshots = [NSMutableArray array];
+  for (NSUInteger s = 0; s < self.resizeOrigIndices.count; s++) {
+    NSUInteger pathIdx = self.resizeOrigIndices[s].unsignedIntegerValue;
+    if (pathIdx >= self.paths.count)
+      continue;
+    KKBezierPath *path = self.paths[pathIdx];
+    NSMutableData *snap =
+        [NSMutableData dataWithLength:path.count * sizeof(KKBezierPoint)];
+    KKBezierPoint *buf = snap.mutableBytes;
+    for (NSUInteger i = 0; i < path.count; i++)
+      buf[i] = [path pointAtIndex:i];
+    [snapshots addObject:snap];
+  }
+  self.resizeOrigSnapshots = snapshots;
+
   *forceUpdate = YES;
 }
 

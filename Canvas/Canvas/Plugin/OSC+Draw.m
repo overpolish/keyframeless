@@ -156,6 +156,15 @@
                          atTime:(CMTime)time {
   if (!path.closed || path.count < 4)
     return;
+  BOOL hasLinear = NO;
+  for (NSUInteger i = 0; i < path.count; i++) {
+    if ([path pointAtIndex:i].type == KKBezierPointLinear) {
+      hasLinear = YES;
+      break;
+    }
+  }
+  if (!hasLinear)
+    return;
   NSInteger crParts[4] = {kOSCCornerRadiusTL, kOSCCornerRadiusTR,
                           kOSCCornerRadiusBR, kOSCCornerRadiusBL};
   for (int ci = 0; ci < 4; ci++) {
@@ -185,10 +194,10 @@
     return;
 
   CGPoint tl = {x0, y0}, tr = {x1, y0}, br = {x1, y1}, bl = {x0, y1};
-  [self drawLineFrom:tl to:tr color:color halfWidth:1.0f destinationImage:dest];
-  [self drawLineFrom:tr to:br color:color halfWidth:1.0f destinationImage:dest];
-  [self drawLineFrom:br to:bl color:color halfWidth:1.0f destinationImage:dest];
-  [self drawLineFrom:bl to:tl color:color halfWidth:1.0f destinationImage:dest];
+  [self drawLineFrom:tl to:tr color:color halfWidth:1.5f destinationImage:dest];
+  [self drawLineFrom:tr to:br color:color halfWidth:1.5f destinationImage:dest];
+  [self drawLineFrom:br to:bl color:color halfWidth:1.5f destinationImage:dest];
+  [self drawLineFrom:bl to:tl color:color halfWidth:1.5f destinationImage:dest];
 
   NSInteger pxW = ix1 - ix0, pxH = iy1 - iy0;
   self.sizeLabel.text =
@@ -196,6 +205,38 @@
   CGSize labelSize = self.sizeLabel.size;
   CGPoint labelPos = {x1 - labelSize.width * 0.5f,
                       y0 - labelSize.height * 0.5f - 6.0f};
+  [self.sizeLabel drawAtCanvasPosition:labelPos destinationImage:dest];
+}
+
+- (void)drawEllipsePreview:(simd_float4)color
+          destinationImage:(FxImageTile *)dest {
+  simd_float2 a = self.rectStart, b = self.dragOrigin;
+  CGPoint ca = [self canvasPointFromObjectPoint:a];
+  CGPoint cb = [self canvasPointFromObjectPoint:b];
+  CGFloat cx = (ca.x + cb.x) * 0.5f, cy = (ca.y + cb.y) * 0.5f;
+  CGFloat rx = fabs(cb.x - ca.x) * 0.5f, ry = fabs(cb.y - ca.y) * 0.5f;
+  if (rx < 1.0 || ry < 1.0)
+    return;
+
+  NSUInteger segments = 64;
+  CGPoint prev = {cx + rx, cy};
+  for (NSUInteger i = 1; i <= segments; i++) {
+    float t = (float)i / (float)segments * 2.0f * M_PI;
+    CGPoint cur = {cx + rx * cosf(t), cy + ry * sinf(t)};
+    [self drawLineFrom:prev
+                      to:cur
+                   color:color
+               halfWidth:1.5f
+        destinationImage:dest];
+    prev = cur;
+  }
+
+  NSInteger pxW = (NSInteger)round(rx * 2.0), pxH = (NSInteger)round(ry * 2.0);
+  self.sizeLabel.text =
+      [NSString stringWithFormat:@"%ld × %ld", (long)pxW, (long)pxH];
+  CGSize labelSize = self.sizeLabel.size;
+  CGPoint labelPos = {MAX(ca.x, cb.x) - labelSize.width * 0.5f,
+                      MIN(ca.y, cb.y) - labelSize.height * 0.5f - 6.0f};
   [self.sizeLabel drawAtCanvasPosition:labelPos destinationImage:dest];
 }
 
@@ -314,6 +355,8 @@
 
   if (self.dragIsRect)
     [self drawRectPreview:strokeColor destinationImage:destinationImage];
+  if (self.dragIsEllipse)
+    [self drawEllipsePreview:strokeColor destinationImage:destinationImage];
 }
 
 @end
