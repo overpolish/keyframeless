@@ -18,6 +18,7 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx);
 - (CGPoint)canvasPointForBezierPoint:(KKBezierPoint)pt
                       inHandleOffset:(BOOL)useIn;
 - (BOOL)isPointSelected:(NSUInteger)pathIdx point:(NSUInteger)ptIdx;
+- (double)strokeWidth;
 - (double)strokeHitRadius;
 - (NSInteger)pathIndexNearX:(double)x y:(double)y radius:(double)radius;
 - (NSInteger)segmentIndexNearX:(double)x

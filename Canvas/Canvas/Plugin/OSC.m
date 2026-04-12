@@ -59,6 +59,9 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
                                                tag:kOSCToolbarRect],
                      ]];
     self.toolbar.activeTag = kOSCToolbarPen;
+
+    self.sizeLabel = [[KKOSCLabel alloc] initWithAPIManager:apiManager];
+    self.sizeLabel.monospaced = YES;
   }
   return self;
 }
@@ -91,14 +94,18 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   return [self.selectedPoints containsIndex:selKey(pathIdx, ptIdx)];
 }
 
-- (double)strokeHitRadius {
+- (double)strokeWidth {
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   double width = 8.0;
   [paramGetAPI getFloatValue:&width
                fromParameter:kParamStrokeWidth
                       atTime:kCMTimeZero];
-  return MAX(width * 0.5 + 4.0, 12.0);
+  return width;
+}
+
+- (double)strokeHitRadius {
+  return MAX([self strokeWidth] * 0.5 + 4.0, 12.0);
 }
 
 - (NSInteger)pathIndexNearX:(double)x y:(double)y radius:(double)radius {
