@@ -181,11 +181,26 @@
         simd_float2 centered = {pixelPos.x - outputWidth / 2.0f,
                                 pixelPos.y - outputHeight / 2.0f};
 
+        // capDistance ramps from 1→0 at path start and 0→1 at path end
+        float globalT =
+            ((float)c + (float)i / (float)segsPerCurve) / (float)curveCount;
+        float capFade = 1.0f; // pixels from end to fade over
+        float capDist = 0.0f;
+        float startDist = globalT * (float)curveCount * (float)segsPerCurve;
+        float endDist =
+            (1.0f - globalT) * (float)curveCount * (float)segsPerCurve;
+        if (startDist < capFade)
+          capDist = 1.0f - startDist / capFade;
+        if (endDist < capFade)
+          capDist = 1.0f - endDist / capFade;
+
         vertices[vertexCount].position = centered + normal * halfWidth;
         vertices[vertexCount].edgeDistance = 1.0f;
+        vertices[vertexCount].capDistance = capDist;
         vertexCount++;
         vertices[vertexCount].position = centered - normal * halfWidth;
         vertices[vertexCount].edgeDistance = -1.0f;
+        vertices[vertexCount].capDistance = capDist;
         vertexCount++;
       }
 

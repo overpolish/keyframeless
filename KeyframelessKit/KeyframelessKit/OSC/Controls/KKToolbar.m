@@ -36,7 +36,7 @@ static const CGFloat kHighlightCorner = 8.0;
 @implementation KKToolbar {
   id<PROAPIAccessing> __weak _apiManager;
   NSArray<KKToolbarItem *> *_items;
-  NSMutableArray<id<MTLTexture>> *_iconTextures;
+  NSMutableArray *_iconTextures;
   NSMutableArray<NSString *> *_cachedNames;
   NSMutableArray<NSValue *> *_buttonCenters;
   NSMutableArray<NSValue *> *_buttonRects;

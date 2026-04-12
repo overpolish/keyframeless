@@ -24,6 +24,7 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     self.clearsOnDraw = NO;
     self.path = [[KKBezierPath alloc] init];
     self.dragIndex = -1;
+    self.lastClickIndex = -1;
 
     self.pathPointOSC = [[KKPointOSC alloc] initWithAPIManager:apiManager];
     self.pathPointOSC.clearsOnDraw = NO;
@@ -148,12 +149,12 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
       [self drawLineFrom:ptCanvas
                         to:inCanvas
                      color:handleColor
-                 halfWidth:1.0f
+                 halfWidth:2.0f
           destinationImage:destinationImage];
       [self drawLineFrom:ptCanvas
                         to:outCanvas
                      color:handleColor
-                 halfWidth:1.0f
+                 halfWidth:2.0f
           destinationImage:destinationImage];
 
       BOOL inActive = (self.dragIndex == (NSInteger)i && self.dragIsInHandle);
@@ -285,7 +286,43 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   }
 
   if (activePart >= kOSCPathPointBase && activePart < kOSCInHandleBase) {
-    self.dragIndex = activePart - kOSCPathPointBase;
+    NSInteger idx = activePart - kOSCPathPointBase;
+    CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+
+    // Double-click: toggle linear/bezier
+    if (self.lastClickIndex == idx && (now - self.lastClickTime) < 0.35) {
+      KKBezierPoint pt = [self.path pointAtIndex:idx];
+      if (pt.type == KKBezierPointBezier) {
+        [self.path setType:KKBezierPointLinear atIndex:idx];
+        [self.path setInHandle:(simd_float2){0, 0} atIndex:idx];
+        [self.path setOutHandle:(simd_float2){0, 0} atIndex:idx];
+      } else {
+        // Generate default handles based on neighbouring points
+        simd_float2 pos = {pt.x, pt.y};
+        simd_float2 prev = pos, next = pos;
+        if (idx > 0) {
+          KKBezierPoint pp = [self.path pointAtIndex:idx - 1];
+          prev = (simd_float2){pp.x, pp.y};
+        }
+        if (idx + 1 < (NSInteger)self.path.count) {
+          KKBezierPoint np = [self.path pointAtIndex:idx + 1];
+          next = (simd_float2){np.x, np.y};
+        }
+        // Tangent direction from prev→next, handle length = 1/4 of that
+        simd_float2 dir = (next - prev) * 0.25f;
+        [self.path setOutHandle:dir atIndex:idx];
+        [self.path setInHandle:(simd_float2){-dir.x, -dir.y} atIndex:idx];
+        [self.path setType:KKBezierPointBezier atIndex:idx];
+      }
+      [self writePath:self.path];
+      self.lastClickIndex = -1;
+      *forceUpdate = YES;
+      return;
+    }
+
+    self.lastClickTime = now;
+    self.lastClickIndex = idx;
+    self.dragIndex = idx;
     self.dragIsInHandle = NO;
     self.dragIsOutHandle = NO;
     *forceUpdate = YES;
@@ -351,17 +388,25 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   simd_float2 objPos =
       [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
 
+  BOOL breakSymmetry = (modifiers & kFxModifierKey_OPTION) != 0;
+
   if (self.dragIsInHandle) {
     KKBezierPoint pt = [self.path pointAtIndex:self.dragIndex];
     simd_float2 offset = {objPos.x - pt.x, objPos.y - pt.y};
     [self.path setInHandle:offset atIndex:self.dragIndex];
+    if (!breakSymmetry) {
+      simd_float2 mirror = {-offset.x, -offset.y};
+      [self.path setOutHandle:mirror atIndex:self.dragIndex];
+    }
     [self.path setType:KKBezierPointBezier atIndex:self.dragIndex];
   } else if (self.dragIsOutHandle) {
     KKBezierPoint pt = [self.path pointAtIndex:self.dragIndex];
     simd_float2 offset = {objPos.x - pt.x, objPos.y - pt.y};
     [self.path setOutHandle:offset atIndex:self.dragIndex];
-    simd_float2 mirror = {-offset.x, -offset.y};
-    [self.path setInHandle:mirror atIndex:self.dragIndex];
+    if (!breakSymmetry) {
+      simd_float2 mirror = {-offset.x, -offset.y};
+      [self.path setInHandle:mirror atIndex:self.dragIndex];
+    }
     [self.path setType:KKBezierPointBezier atIndex:self.dragIndex];
   } else {
     [self.path moveAtIndex:self.dragIndex to:objPos];
