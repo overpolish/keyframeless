@@ -40,15 +40,28 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)moveAtIndex:(NSUInteger)index to:(simd_float2)pos;
 - (void)setInHandle:(simd_float2)offset atIndex:(NSUInteger)index;
 - (void)setOutHandle:(simd_float2)offset atIndex:(NSUInteger)index;
+- (void)setType:(KKBezierPointType)type atIndex:(NSUInteger)index;
 - (void)toggleTypeAtIndex:(NSUInteger)index
                     start:(simd_float2)start
                       end:(simd_float2)end;
 
 /// Evaluate a single path segment at local t (0-1).
+/// start/end are the anchor points for MagicMove-style relative paths.
 - (simd_float2)evaluateSegment:(NSUInteger)segIndex
                            atT:(float)t
                          start:(simd_float2)start
                            end:(simd_float2)end;
+
+/// Evaluate the cubic bezier between point at index and index+1 at t (0-1).
+/// Uses absolute coordinates (no start/end anchors).
+- (simd_float2)evaluatePointAtIndex:(NSUInteger)index
+                          nextIndex:(NSUInteger)nextIndex
+                                atT:(float)t;
+
+/// Evaluate the tangent between point at index and index+1 at t (0-1).
+- (simd_float2)evaluateTangentAtIndex:(NSUInteger)index
+                            nextIndex:(NSUInteger)nextIndex
+                                  atT:(float)t;
 
 /// Arc-length parameterized position along the full path at global t (0-1).
 - (simd_float2)positionAtT:(float)t

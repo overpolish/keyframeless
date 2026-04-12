@@ -115,6 +115,11 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   _points[index].outY = offset.y;
 }
 
+- (void)setType:(KKBezierPointType)type atIndex:(NSUInteger)index {
+  if (index < _count)
+    _points[index].type = type;
+}
+
 - (void)toggleTypeAtIndex:(NSUInteger)index
                     start:(simd_float2)start
                       end:(simd_float2)end {
@@ -216,6 +221,40 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
                     inH:inH
                   type1:type1
                     atT:t];
+}
+
+- (simd_float2)evaluatePointAtIndex:(NSUInteger)index
+                          nextIndex:(NSUInteger)nextIndex
+                                atT:(float)t {
+  if (index >= _count || nextIndex >= _count)
+    return (simd_float2){0, 0};
+  KKBezierPoint p0 = _points[index];
+  KKBezierPoint p1 = _points[nextIndex];
+  simd_float2 a = {p0.x, p0.y};
+  simd_float2 cp0 = {p0.x + p0.outX, p0.y + p0.outY};
+  simd_float2 cp1 = {p1.x + p1.inX, p1.y + p1.inY};
+  simd_float2 b = {p1.x, p1.y};
+  if (p0.type == KKBezierPointLinear && p1.type == KKBezierPointLinear)
+    return a + t * (b - a);
+  return evalCubicBezier(a, cp0, cp1, b, t);
+}
+
+- (simd_float2)evaluateTangentAtIndex:(NSUInteger)index
+                            nextIndex:(NSUInteger)nextIndex
+                                  atT:(float)t {
+  if (index >= _count || nextIndex >= _count)
+    return (simd_float2){1, 0};
+  KKBezierPoint p0 = _points[index];
+  KKBezierPoint p1 = _points[nextIndex];
+  simd_float2 a = {p0.x, p0.y};
+  simd_float2 cp0 = {p0.x + p0.outX, p0.y + p0.outY};
+  simd_float2 cp1 = {p1.x + p1.inX, p1.y + p1.inY};
+  simd_float2 b = {p1.x, p1.y};
+  if (p0.type == KKBezierPointLinear && p1.type == KKBezierPointLinear)
+    return b - a;
+  float u = 1.0f - t;
+  return 3.0f * u * u * (cp0 - a) + 6.0f * u * t * (cp1 - cp0) +
+         3.0f * t * t * (b - cp1);
 }
 
 - (simd_float2)positionAtT:(float)t

@@ -44,7 +44,14 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     _editPointsCursor = cursorFromBundle(@"EditPoints", NSMakePoint(11, 8));
     _penDeleteCursor = cursorFromBundle(@"PenX", NSMakePoint(15, 5));
 
-    self.toolbar = [[CanvasToolbar alloc] initWithAPIManager:apiManager];
+    self.toolbar = [[KKToolbar alloc]
+        initWithAPIManager:apiManager
+                     items:@[
+                       [KKToolbarItem itemWithIcon:@"pencil.and.outline"
+                                               tag:kOSCToolbarPen],
+                       [KKToolbarItem itemWithIcon:@"rectangle"
+                                               tag:kOSCToolbarRect],
+                     ]];
   }
   return self;
 }
@@ -74,30 +81,17 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   [paramSetAPI setStringParameterValue:str toParameter:kParamPathData];
 }
 
-- (CGPoint)canvasPointForObjectX:(double)objX objY:(double)objY {
-  id<FxOnScreenControlAPI_v4> oscAPI =
-      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-  double cx, cy;
-  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
-                          fromX:objX
-                          fromY:objY
-                        toSpace:kFxDrawingCoordinates_CANVAS
-                            toX:&cx
-                            toY:&cy];
-  return CGPointMake(cx, cy);
+- (CGPoint)canvasPointForBezierPoint:(KKBezierPoint)pt {
+  return [self canvasPointFromObjectPoint:(simd_float2){pt.x, pt.y}];
 }
 
-- (simd_float2)objectPointForCanvasX:(double)canvasX canvasY:(double)canvasY {
-  id<FxOnScreenControlAPI_v4> oscAPI =
-      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-  double ox, oy;
-  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_CANVAS
-                          fromX:canvasX
-                          fromY:canvasY
-                        toSpace:kFxDrawingCoordinates_OBJECT
-                            toX:&ox
-                            toY:&oy];
-  return (simd_float2){(float)ox, (float)oy};
+- (CGPoint)canvasPointForBezierPoint:(KKBezierPoint)pt
+                      inHandleOffset:(BOOL)useIn {
+  if (useIn)
+    return [self
+        canvasPointFromObjectPoint:(simd_float2){pt.x + pt.inX, pt.y + pt.inY}];
+  return [self
+      canvasPointFromObjectPoint:(simd_float2){pt.x + pt.outX, pt.y + pt.outY}];
 }
 
 - (void)drawOSCWithWidth:(NSInteger)width
@@ -112,10 +106,7 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
                                                   CGPoint p, simd_uint2 v){
                                        }];
 
-  // Draw toolbar at top center (always visible)
-  [self.toolbar drawWithWidth:width
-                       height:height
-             destinationImage:destinationImage];
+  [self.toolbar drawWithDestinationImage:destinationImage];
 
   self.path = [self readPath];
   if (self.path.count == 0)
@@ -125,25 +116,15 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   simd_float4 handleColor = strokeColor;
   handleColor.w = 0.33f;
 
-  // Draw bezier segments between consecutive points
+  // Draw bezier segments
   for (NSUInteger i = 0; i + 1 < self.path.count; i++) {
-    KKBezierPoint p0 = [self.path pointAtIndex:i];
-    KKBezierPoint p1 = [self.path pointAtIndex:i + 1];
-
     CGPoint prev = CGPointZero;
     for (NSUInteger s = 0; s <= 32; s++) {
       float t = (float)s / 32.0f;
-      float u = 1.0f - t;
-
-      simd_float2 a = {p0.x, p0.y};
-      simd_float2 cp1 = {p0.x + p0.outX, p0.y + p0.outY};
-      simd_float2 cp2 = {p1.x + p1.inX, p1.y + p1.inY};
-      simd_float2 b = {p1.x, p1.y};
-
-      simd_float2 pos = u * u * u * a + 3.0f * u * u * t * cp1 +
-                        3.0f * u * t * t * cp2 + t * t * t * b;
-
-      CGPoint cur = [self canvasPointForObjectX:pos.x objY:pos.y];
+      simd_float2 pos = [self.path evaluatePointAtIndex:i
+                                              nextIndex:i + 1
+                                                    atT:t];
+      CGPoint cur = [self canvasPointFromObjectPoint:pos];
       if (s > 0) {
         [self drawLineFrom:prev
                           to:cur
@@ -158,13 +139,11 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   // Draw control points and handles
   for (NSUInteger i = 0; i < self.path.count; i++) {
     KKBezierPoint pt = [self.path pointAtIndex:i];
-    CGPoint ptCanvas = [self canvasPointForObjectX:pt.x objY:pt.y];
+    CGPoint ptCanvas = [self canvasPointForBezierPoint:pt];
 
     if (pt.type == KKBezierPointBezier) {
-      CGPoint inCanvas = [self canvasPointForObjectX:pt.x + pt.inX
-                                                objY:pt.y + pt.inY];
-      CGPoint outCanvas = [self canvasPointForObjectX:pt.x + pt.outX
-                                                 objY:pt.y + pt.outY];
+      CGPoint inCanvas = [self canvasPointForBezierPoint:pt inHandleOffset:YES];
+      CGPoint outCanvas = [self canvasPointForBezierPoint:pt inHandleOffset:NO];
 
       [self drawLineFrom:ptCanvas
                         to:inCanvas
@@ -207,7 +186,6 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
                     mousePositionY:(double)positionY
                         activePart:(NSInteger *)activePart
                             atTime:(CMTime)time {
-  // Always return a non-zero part so FCP routes clicks to us
   *activePart = kOSCCanvas;
   self.path = [self readPath];
 
@@ -215,7 +193,7 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
 
-  // Test toolbar first
+  // Test toolbar
   NSInteger toolbarPart = [self.toolbar hitTestAtX:positionX y:positionY];
   if (toolbarPart != 0) {
     *activePart = toolbarPart;
@@ -227,22 +205,20 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
       CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
   BOOL optDown = (flags & kCGEventFlagMaskAlternate) != 0;
 
-  // Test handles first
+  // Test handles
   for (NSUInteger i = 0; i < self.path.count; i++) {
     KKBezierPoint pt = [self.path pointAtIndex:i];
     if (pt.type != KKBezierPointBezier)
       continue;
 
-    CGPoint inCanvas = [self canvasPointForObjectX:pt.x + pt.inX
-                                              objY:pt.y + pt.inY];
+    CGPoint inCanvas = [self canvasPointForBezierPoint:pt inHandleOffset:YES];
     if (hypot(positionX - inCanvas.x, positionY - inCanvas.y) < hitRadius) {
       *activePart = kOSCInHandleBase + (NSInteger)i;
       [oscAPI setCursor:_editPointsCursor];
       return;
     }
 
-    CGPoint outCanvas = [self canvasPointForObjectX:pt.x + pt.outX
-                                               objY:pt.y + pt.outY];
+    CGPoint outCanvas = [self canvasPointForBezierPoint:pt inHandleOffset:NO];
     if (hypot(positionX - outCanvas.x, positionY - outCanvas.y) < hitRadius) {
       *activePart = kOSCOutHandleBase + (NSInteger)i;
       [oscAPI setCursor:_editPointsCursor];
@@ -253,7 +229,7 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   // Test points
   for (NSUInteger i = 0; i < self.path.count; i++) {
     KKBezierPoint pt = [self.path pointAtIndex:i];
-    CGPoint ptCanvas = [self canvasPointForObjectX:pt.x objY:pt.y];
+    CGPoint ptCanvas = [self canvasPointForBezierPoint:pt];
     if (hypot(positionX - ptCanvas.x, positionY - ptCanvas.y) < hitRadius) {
       *activePart = kOSCPathPointBase + (NSInteger)i;
       [oscAPI setCursor:optDown ? _penDeleteCursor : _moveCursor];
@@ -265,19 +241,12 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   if (self.path.count >= 2) {
     double segHitRadius = 10.0;
     for (NSUInteger c = 0; c + 1 < self.path.count; c++) {
-      KKBezierPoint bp0 = [self.path pointAtIndex:c];
-      KKBezierPoint bp1 = [self.path pointAtIndex:c + 1];
-      simd_float2 a = {bp0.x, bp0.y};
-      simd_float2 cp1 = {bp0.x + bp0.outX, bp0.y + bp0.outY};
-      simd_float2 cp2 = {bp1.x + bp1.inX, bp1.y + bp1.inY};
-      simd_float2 b = {bp1.x, bp1.y};
-
       for (NSUInteger s = 0; s <= 64; s++) {
         float t = (float)s / 64.0f;
-        float u = 1.0f - t;
-        simd_float2 pos = u * u * u * a + 3.0f * u * u * t * cp1 +
-                          3.0f * u * t * t * cp2 + t * t * t * b;
-        CGPoint cur = [self canvasPointForObjectX:pos.x objY:pos.y];
+        simd_float2 pos = [self.path evaluatePointAtIndex:c
+                                                nextIndex:c + 1
+                                                      atT:t];
+        CGPoint cur = [self canvasPointFromObjectPoint:pos];
         if (hypot(positionX - cur.x, positionY - cur.y) < segHitRadius) {
           *activePart = kOSCPathSegmentBase + (NSInteger)c;
           [oscAPI setCursor:self.penAddCursor];
@@ -287,7 +256,6 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     }
   }
 
-  // Empty space - show pen add cursor
   [oscAPI setCursor:self.penAddCursor];
 }
 
@@ -297,21 +265,14 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
                    modifiers:(NSUInteger)modifiers
                  forceUpdate:(BOOL *)forceUpdate
                       atTime:(CMTime)time {
-  // Toolbar clicks
-  if (activePart == kOSCToolbarPen) {
-    self.toolbar.activeToolMode = CanvasToolPen;
-    *forceUpdate = YES;
-    return;
-  }
-  if (activePart == kOSCToolbarRect) {
-    self.toolbar.activeToolMode = CanvasToolRect;
+  if (activePart == kOSCToolbarPen || activePart == kOSCToolbarRect) {
+    self.toolbar.activeTag = activePart;
     *forceUpdate = YES;
     return;
   }
 
   self.path = [self readPath];
 
-  // Option-click on point: delete it
   if (activePart >= kOSCPathPointBase && activePart < kOSCInHandleBase &&
       (modifiers & kFxModifierKey_OPTION)) {
     NSInteger idx = activePart - kOSCPathPointBase;
@@ -323,7 +284,6 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     return;
   }
 
-  // Drag existing point
   if (activePart >= kOSCPathPointBase && activePart < kOSCInHandleBase) {
     self.dragIndex = activePart - kOSCPathPointBase;
     self.dragIsInHandle = NO;
@@ -332,7 +292,6 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     return;
   }
 
-  // Drag in-handle
   if (activePart >= kOSCInHandleBase && activePart < kOSCOutHandleBase) {
     self.dragIndex = activePart - kOSCInHandleBase;
     self.dragIsInHandle = YES;
@@ -341,7 +300,6 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     return;
   }
 
-  // Drag out-handle
   if (activePart >= kOSCOutHandleBase && activePart < kOSCPathSegmentBase) {
     self.dragIndex = activePart - kOSCOutHandleBase;
     self.dragIsInHandle = NO;
@@ -350,11 +308,10 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     return;
   }
 
-  // Click on path segment: insert a point at that position
   if (activePart >= kOSCPathSegmentBase) {
     NSInteger segIdx = activePart - kOSCPathSegmentBase;
-    simd_float2 objPos = [self objectPointForCanvasX:positionX
-                                             canvasY:positionY];
+    simd_float2 objPos =
+        [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
     [self.path insertAtIndex:segIdx + 1 position:objPos];
     [self writePath:self.path];
     self.dragIndex = segIdx + 1;
@@ -364,12 +321,11 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     return;
   }
 
-  // Canvas area or empty space: add a new point
-  simd_float2 objPos = [self objectPointForCanvasX:positionX canvasY:positionY];
+  simd_float2 objPos =
+      [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
   [self.path insertAtIndex:self.path.count position:objPos];
   [self writePath:self.path];
 
-  // Drag the new point's out-handle to create bezier curves
   self.dragIndex = (NSInteger)self.path.count - 1;
   self.dragIsInHandle = NO;
   self.dragIsOutHandle = YES;
@@ -392,19 +348,21 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   if (self.dragIndex < 0 || self.dragIndex >= (NSInteger)self.path.count)
     return;
 
-  simd_float2 objPos = [self objectPointForCanvasX:positionX canvasY:positionY];
+  simd_float2 objPos =
+      [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
 
   if (self.dragIsInHandle) {
     KKBezierPoint pt = [self.path pointAtIndex:self.dragIndex];
     simd_float2 offset = {objPos.x - pt.x, objPos.y - pt.y};
     [self.path setInHandle:offset atIndex:self.dragIndex];
+    [self.path setType:KKBezierPointBezier atIndex:self.dragIndex];
   } else if (self.dragIsOutHandle) {
     KKBezierPoint pt = [self.path pointAtIndex:self.dragIndex];
     simd_float2 offset = {objPos.x - pt.x, objPos.y - pt.y};
     [self.path setOutHandle:offset atIndex:self.dragIndex];
-    // Mirror in-handle for symmetric bezier
     simd_float2 mirror = {-offset.x, -offset.y};
     [self.path setInHandle:mirror atIndex:self.dragIndex];
+    [self.path setType:KKBezierPointBezier atIndex:self.dragIndex];
   } else {
     [self.path moveAtIndex:self.dragIndex to:objPos];
   }
@@ -443,7 +401,6 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
                forceUpdate:(BOOL *)forceUpdate
                  didHandle:(BOOL *)didHandle
                     atTime:(CMTime)time {
-  // Delete/Backspace removes last point
   if (asciiKey == 127 || asciiKey == 8) {
     self.path = [self readPath];
     if (self.path.count > 0) {

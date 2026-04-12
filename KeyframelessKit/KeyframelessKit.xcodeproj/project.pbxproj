@@ -45,6 +45,7 @@
 				OSC/Controls/KKRingOSC.h,
 				OSC/Controls/KKRotationOSC.h,
 				OSC/Controls/KKSquarePointOSC.h,
+				OSC/Controls/KKToolbar.h,
 				OSC/Utilities/KKSnapEngine.h,
 				Plugin/KKColor.h,
 				Plugin/KKConstants.h,

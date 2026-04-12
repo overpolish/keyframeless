@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-#import "CanvasToolbar.h"
+#import "KKToolbar.h"
 #import <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
@@ -11,43 +11,64 @@
 #import <KeyframelessKit/KKShaderTypes.h>
 
 static NSString *const kToolbarPipelineID =
-    @"co.overpolish.keyframeless.Canvas.Toolbar";
+    @"co.overpolish.keyframelesskit.Toolbar";
 
-// Layout constants
-static const CGFloat kIconSize = 28.0;       // SF Symbol point size
-static const CGFloat kButtonSize = 48.0;     // Clickable button area
-static const CGFloat kButtonSpacing = 8.0;   // Gap between buttons
-static const CGFloat kToolbarPadding = 14.0; // Padding inside pill
-static const CGFloat kToolbarMargin = 8.0;   // Margin from top edge
-static const CGFloat kScale = 2.0;           // Retina scale
-static const CGFloat kCornerRadius = 12.0;   // Background corner radius
-static const CGFloat kHighlightCorner = 8.0; // Highlight corner radius
+static const CGFloat kIconSize = 28.0;
+static const CGFloat kButtonSize = 48.0;
+static const CGFloat kButtonSpacing = 8.0;
+static const CGFloat kToolbarPadding = 14.0;
+static const CGFloat kToolbarMargin = 8.0;
+static const CGFloat kScale = 2.0;
+static const CGFloat kCornerRadius = 12.0;
+static const CGFloat kHighlightCorner = 8.0;
 
-typedef struct {
-  NSString *iconName;
-  CanvasToolMode mode;
-  NSInteger partID;
-} ToolbarItem;
+@implementation KKToolbarItem
 
-@implementation CanvasToolbar {
++ (instancetype)itemWithIcon:(NSString *)sfSymbolName tag:(NSInteger)tag {
+  KKToolbarItem *item = [[KKToolbarItem alloc] init];
+  item.iconName = sfSymbolName;
+  item.tag = tag;
+  return item;
+}
+
+@end
+
+@implementation KKToolbar {
   id<PROAPIAccessing> __weak _apiManager;
-  id<MTLTexture> _iconTextures[2];
-  NSString *_cachedNames[2];
-  CGPoint _buttonCenters[2];
-  CGRect _buttonRects[2];
-  NSInteger _itemCount;
-  ToolbarItem _items[2];
+  NSArray<KKToolbarItem *> *_items;
+  NSMutableArray<id<MTLTexture>> *_iconTextures;
+  NSMutableArray<NSString *> *_cachedNames;
+  NSMutableArray<NSValue *> *_buttonCenters;
+  NSMutableArray<NSValue *> *_buttonRects;
   id<MTLTexture> _bgTexture;
   id<MTLTexture> _highlightTexture;
   CGFloat _cachedToolbarW;
   CGFloat _cachedToolbarH;
 }
 
-- (id<MTLTexture>)roundedRectTextureWithDevice:(id<MTLDevice>)device
-                                         width:(CGFloat)w
-                                        height:(CGFloat)h
-                                        radius:(CGFloat)r
-                                         color:(NSColor *)color {
+- (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager
+                             items:(NSArray<KKToolbarItem *> *)items {
+  self = [super init];
+  if (self) {
+    _apiManager = apiManager;
+    _items = [items copy];
+    _activeTag = items.firstObject.tag;
+    _iconTextures = [NSMutableArray arrayWithCapacity:items.count];
+    _cachedNames = [NSMutableArray arrayWithCapacity:items.count];
+    _buttonCenters = [NSMutableArray arrayWithCapacity:items.count];
+    _buttonRects = [NSMutableArray arrayWithCapacity:items.count];
+    for (NSUInteger i = 0; i < items.count; i++) {
+      [_iconTextures addObject:[NSNull null]];
+      [_cachedNames addObject:@""];
+      [_buttonCenters addObject:[NSValue valueWithPoint:NSZeroPoint]];
+      [_buttonRects addObject:[NSValue valueWithRect:NSZeroRect]];
+    }
+  }
+  return self;
+}
+
+static id<MTLTexture> renderRoundedRect(id<MTLDevice> device, CGFloat w,
+                                        CGFloat h, CGFloat r, NSColor *color) {
   NSInteger pixelW = (NSInteger)(w * kScale);
   NSInteger pixelH = (NSInteger)(h * kScale);
 
@@ -91,23 +112,11 @@ typedef struct {
   return texture;
 }
 
-- (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
-  self = [super init];
-  if (self) {
-    _apiManager = apiManager;
-    _activeToolMode = CanvasToolPen;
-    _itemCount = 2;
-    _items[0] =
-        (ToolbarItem){@"pencil.and.outline", CanvasToolPen, kOSCToolbarPen};
-    _items[1] = (ToolbarItem){@"rectangle", CanvasToolRect, kOSCToolbarRect};
-  }
-  return self;
-}
-
 - (id<MTLTexture>)textureForIcon:(NSString *)name
                           device:(id<MTLDevice>)device
-                           index:(NSInteger)idx {
-  if (_iconTextures[idx] && [_cachedNames[idx] isEqualToString:name])
+                           index:(NSUInteger)idx {
+  if (idx < _iconTextures.count && _iconTextures[idx] != (id)[NSNull null] &&
+      [_cachedNames[idx] isEqualToString:name])
     return _iconTextures[idx];
 
   NSImage *symbol = [NSImage imageWithSystemSymbolName:name
@@ -176,9 +185,27 @@ typedef struct {
   return texture;
 }
 
-- (void)drawWithWidth:(NSInteger)width
-               height:(NSInteger)height
-     destinationImage:(FxImageTile *)destinationImage {
+static void drawTexturedQuad(id<MTLRenderCommandEncoder> encoder,
+                             id<MTLTexture> texture, CGPoint metalCenter,
+                             float halfW, float halfH,
+                             simd_uint2 viewportSize) {
+  float l = metalCenter.x - halfW;
+  float r = metalCenter.x + halfW;
+  float b = metalCenter.y - halfH;
+  float t = metalCenter.y + halfH;
+
+  KKVertex2D verts[6] = {
+      {{l, b}, {0, 0}}, {{r, b}, {1, 0}}, {{r, t}, {1, 1}},
+      {{l, b}, {0, 0}}, {{r, t}, {1, 1}}, {{l, t}, {0, 1}},
+  };
+  [encoder setVertexBytes:verts
+                   length:sizeof(verts)
+                  atIndex:KKVertexInputIndex_Vertices];
+  [encoder setFragmentTexture:texture atIndex:0];
+  [encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
+}
+
+- (void)drawWithDestinationImage:(FxImageTile *)destinationImage {
   KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
   uint64_t registryID = destinationImage.deviceRegistryID;
   id<MTLDevice> device = [cache deviceWithRegistryID:registryID];
@@ -201,27 +228,25 @@ typedef struct {
   if (!ps)
     return;
 
-  // Use IOSurface dimensions for consistent layout and rendering
   float ioW = [destinationImage.ioSurface width];
   float ioH = [destinationImage.ioSurface height];
 
-  // Calculate toolbar layout
+  NSInteger itemCount = (NSInteger)_items.count;
   CGFloat totalButtonsW =
-      _itemCount * kButtonSize + (_itemCount - 1) * kButtonSpacing;
+      itemCount * kButtonSize + (itemCount - 1) * kButtonSpacing;
   CGFloat toolbarW = totalButtonsW + kToolbarPadding * 2;
   CGFloat toolbarH = kButtonSize + kToolbarPadding * 2;
   CGFloat toolbarX = ioW / 2.0;
-  // Canvas Y=0 is bottom, top = ioH - offset
   CGFloat toolbarY = ioH - kToolbarMargin - toolbarH / 2.0;
 
-  // Calculate button centers
   CGFloat startX = toolbarX - totalButtonsW / 2.0 + kButtonSize / 2.0;
-  for (NSInteger i = 0; i < _itemCount; i++) {
+  for (NSInteger i = 0; i < itemCount; i++) {
     CGFloat bx = startX + i * (kButtonSize + kButtonSpacing);
-    _buttonCenters[i] = CGPointMake(bx, toolbarY);
+    _buttonCenters[i] = [NSValue valueWithPoint:NSMakePoint(bx, toolbarY)];
     _buttonRects[i] =
-        CGRectMake(bx - kButtonSize / 2.0, toolbarY - toolbarH / 2.0,
-                   kButtonSize, toolbarH);
+        [NSValue valueWithRect:NSMakeRect(bx - kButtonSize / 2.0,
+                                          toolbarY - toolbarH / 2.0,
+                                          kButtonSize, toolbarH)];
   }
 
   id<MTLCommandQueue> queue = [cache commandQueueWithRegistryID:registryID
@@ -232,7 +257,7 @@ typedef struct {
   id<MTLTexture> outTex = [destinationImage metalTextureForDevice:device];
 
   id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
-  cmdBuf.label = @"CanvasToolbar Command Buffer";
+  cmdBuf.label = @"KKToolbar Command Buffer";
   [cmdBuf enqueue];
 
   MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
@@ -252,110 +277,52 @@ typedef struct {
                    length:sizeof(viewportSize)
                   atIndex:KKVertexInputIndex_ViewportSize];
 
-  // Create/cache rounded rect textures
+  // Cache rounded rect textures
   if (!_bgTexture || _cachedToolbarW != toolbarW ||
       _cachedToolbarH != toolbarH) {
-    NSColor *bgColor = [NSColor colorWithRed:0.08
-                                       green:0.08
-                                        blue:0.08
-                                       alpha:0.92];
-    _bgTexture = [self roundedRectTextureWithDevice:device
-                                              width:toolbarW
-                                             height:toolbarH
-                                             radius:kCornerRadius
-                                              color:bgColor];
-    NSColor *hlColor = [NSColor colorWithRed:0.28
-                                       green:0.28
-                                        blue:0.28
-                                       alpha:0.95];
-    _highlightTexture = [self roundedRectTextureWithDevice:device
-                                                     width:kButtonSize
-                                                    height:kButtonSize
-                                                    radius:kHighlightCorner
-                                                     color:hlColor];
+    _bgTexture = renderRoundedRect(device, toolbarW, toolbarH, kCornerRadius,
+                                   [NSColor colorWithRed:0.08
+                                                   green:0.08
+                                                    blue:0.08
+                                                   alpha:0.92]);
+    _highlightTexture =
+        renderRoundedRect(device, kButtonSize, kButtonSize, kHighlightCorner,
+                          [NSColor colorWithRed:0.28
+                                          green:0.28
+                                           blue:0.28
+                                          alpha:0.95]);
     _cachedToolbarW = toolbarW;
     _cachedToolbarH = toolbarH;
   }
 
-  // Draw background
-  {
-    CGPoint metalCenter = {toolbarX - ioW / 2.0f, ioH / 2.0f - toolbarY};
-    float halfW = toolbarW / 2.0f;
-    float halfH = toolbarH / 2.0f;
-    float l = metalCenter.x - halfW;
-    float r = metalCenter.x + halfW;
-    float b = metalCenter.y - halfH;
-    float t = metalCenter.y + halfH;
+  // Background
+  CGPoint bgMetal = {toolbarX - ioW / 2.0f, ioH / 2.0f - toolbarY};
+  drawTexturedQuad(encoder, _bgTexture, bgMetal, toolbarW / 2.0f,
+                   toolbarH / 2.0f, viewportSize);
 
-    KKVertex2D bgVerts[6] = {
-        {{l, b}, {0, 0}}, {{r, b}, {1, 0}}, {{r, t}, {1, 1}},
-        {{l, b}, {0, 0}}, {{r, t}, {1, 1}}, {{l, t}, {0, 1}},
-    };
-    [encoder setVertexBytes:bgVerts
-                     length:sizeof(bgVerts)
-                    atIndex:KKVertexInputIndex_Vertices];
-    [encoder setFragmentTexture:_bgTexture atIndex:0];
-    [encoder drawPrimitives:MTLPrimitiveTypeTriangle
-                vertexStart:0
-                vertexCount:6];
-  }
-
-  // Draw highlight behind active tool
-  {
-    CGFloat activeX = 0;
-    for (NSInteger i = 0; i < _itemCount; i++) {
-      if (_items[i].mode == _activeToolMode)
-        activeX = _buttonCenters[i].x;
+  // Highlight behind active item
+  for (NSInteger i = 0; i < itemCount; i++) {
+    if (_items[i].tag == _activeTag) {
+      CGPoint center = _buttonCenters[i].pointValue;
+      CGPoint hlMetal = {center.x - ioW / 2.0f, ioH / 2.0f - center.y};
+      drawTexturedQuad(encoder, _highlightTexture, hlMetal, kButtonSize / 2.0f,
+                       kButtonSize / 2.0f, viewportSize);
+      break;
     }
-    CGPoint metalCenter = {activeX - ioW / 2.0f, ioH / 2.0f - toolbarY};
-    float halfW = kButtonSize / 2.0f;
-    float halfH = kButtonSize / 2.0f;
-    float l = metalCenter.x - halfW;
-    float r = metalCenter.x + halfW;
-    float b = metalCenter.y - halfH;
-    float t = metalCenter.y + halfH;
-
-    KKVertex2D hlVerts[6] = {
-        {{l, b}, {0, 0}}, {{r, b}, {1, 0}}, {{r, t}, {1, 1}},
-        {{l, b}, {0, 0}}, {{r, t}, {1, 1}}, {{l, t}, {0, 1}},
-    };
-    [encoder setVertexBytes:hlVerts
-                     length:sizeof(hlVerts)
-                    atIndex:KKVertexInputIndex_Vertices];
-    [encoder setFragmentTexture:_highlightTexture atIndex:0];
-    [encoder drawPrimitives:MTLPrimitiveTypeTriangle
-                vertexStart:0
-                vertexCount:6];
   }
 
-  // Draw icon textures
-  for (NSInteger i = 0; i < _itemCount; i++) {
+  // Icons
+  for (NSUInteger i = 0; i < (NSUInteger)itemCount; i++) {
     id<MTLTexture> iconTex = [self textureForIcon:_items[i].iconName
                                            device:device
                                             index:i];
     if (!iconTex)
       continue;
 
-    CGPoint metalPos = {_buttonCenters[i].x - ioW / 2.0f,
-                        ioH / 2.0f - _buttonCenters[i].y};
-    float halfW = kButtonSize / 2.0f;
-    float halfH = kButtonSize / 2.0f;
-    float l = metalPos.x - halfW;
-    float r = metalPos.x + halfW;
-    float b = metalPos.y - halfH;
-    float t = metalPos.y + halfH;
-
-    KKVertex2D verts[6] = {
-        {{l, b}, {0, 0}}, {{r, b}, {1, 0}}, {{r, t}, {1, 1}},
-        {{l, b}, {0, 0}}, {{r, t}, {1, 1}}, {{l, t}, {0, 1}},
-    };
-    [encoder setVertexBytes:verts
-                     length:sizeof(verts)
-                    atIndex:KKVertexInputIndex_Vertices];
-    [encoder setFragmentTexture:iconTex atIndex:0];
-    [encoder drawPrimitives:MTLPrimitiveTypeTriangle
-                vertexStart:0
-                vertexCount:6];
+    CGPoint center = _buttonCenters[i].pointValue;
+    CGPoint metalPos = {center.x - ioW / 2.0f, ioH / 2.0f - center.y};
+    drawTexturedQuad(encoder, iconTex, metalPos, kButtonSize / 2.0f,
+                     kButtonSize / 2.0f, viewportSize);
   }
 
   [encoder endEncoding];
@@ -365,9 +332,10 @@ typedef struct {
 }
 
 - (NSInteger)hitTestAtX:(double)x y:(double)y {
-  for (NSInteger i = 0; i < _itemCount; i++) {
-    if (CGRectContainsPoint(_buttonRects[i], CGPointMake(x, y)))
-      return _items[i].partID;
+  for (NSUInteger i = 0; i < _items.count; i++) {
+    NSRect rect = _buttonRects[i].rectValue;
+    if (CGRectContainsPoint(rect, CGPointMake(x, y)))
+      return _items[i].tag;
   }
   return 0;
 }

@@ -14,12 +14,6 @@ static const UInt32 kParamPathData = 100;
 static const UInt32 kParamStrokeWidth = 101;
 static const UInt32 kParamStrokeColor = 102;
 
-// Tool modes
-typedef NS_ENUM(NSInteger, CanvasToolMode) {
-  CanvasToolPen = 0,
-  CanvasToolRect = 1,
-};
-
 // OSC part IDs
 static const NSInteger kOSCCanvas = 1;          // empty space (captures clicks)
 static const NSInteger kOSCToolbarPen = 2;      // pen tool button
