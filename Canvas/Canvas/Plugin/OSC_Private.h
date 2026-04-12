@@ -25,14 +25,25 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx);
                              y:(double)y
                         radius:(double)radius
                         inPath:(KKBezierPath *)path;
-
-/// Returns the bounding box of a path's points.
 - (void)boundsOfPath:(KKBezierPath *)path
                  min:(simd_float2 *)outMin
                  max:(simd_float2 *)outMax;
-
-/// Canvas position of a corner radius handle. corner: 0=TL 1=TR 2=BR 3=BL.
 - (CGPoint)cornerRadiusHandlePosition:(NSInteger)corner
                               forPath:(KKBezierPath *)path;
+
+@end
+
+@interface CanvasOSC (Input)
+
+- (void)setHandle:(simd_float2)offset
+          atIndex:(NSInteger)idx
+             isIn:(BOOL)isIn
+    breakSymmetry:(BOOL)breakSymmetry
+           onPath:(KKBezierPath *)path;
+- (void)mouseDownOnSegment:(NSInteger)activePart
+                 positionX:(double)positionX
+                 positionY:(double)positionY
+                    active:(KKBezierPath *)active
+               forceUpdate:(BOOL *)forceUpdate;
 
 @end

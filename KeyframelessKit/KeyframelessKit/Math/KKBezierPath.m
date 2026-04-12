@@ -91,6 +91,54 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   return data;
 }
 
++ (NSMutableArray<KKBezierPath *> *)pathsFromBlob:(NSData *)blob {
+  if (!blob || blob.length < 4)
+    return [NSMutableArray array];
+
+  const uint8_t *bytes = blob.bytes;
+  NSUInteger offset = 0;
+  uint32_t pathCount;
+  memcpy(&pathCount, bytes + offset, 4);
+  offset += 4;
+
+  if (pathCount > 10000 || offset + pathCount * 4 > blob.length) {
+    KKBezierPath *single = [KKBezierPath pathWithData:blob];
+    if (single && single.count > 0)
+      return [NSMutableArray arrayWithObject:single];
+    return [NSMutableArray array];
+  }
+
+  NSMutableArray *result = [NSMutableArray arrayWithCapacity:pathCount];
+  for (uint32_t i = 0; i < pathCount; i++) {
+    if (offset + 4 > blob.length)
+      break;
+    uint32_t len;
+    memcpy(&len, bytes + offset, 4);
+    offset += 4;
+    if (offset + len > blob.length)
+      break;
+    NSData *pathData = [blob subdataWithRange:NSMakeRange(offset, len)];
+    KKBezierPath *path = [KKBezierPath pathWithData:pathData];
+    if (path)
+      [result addObject:path];
+    offset += len;
+  }
+  return result;
+}
+
++ (NSData *)blobFromPaths:(NSArray<KKBezierPath *> *)paths {
+  NSMutableData *blob = [NSMutableData data];
+  uint32_t pathCount = (uint32_t)paths.count;
+  [blob appendBytes:&pathCount length:4];
+  for (KKBezierPath *path in paths) {
+    NSData *pathData = [path dataRepresentation];
+    uint32_t len = (uint32_t)pathData.length;
+    [blob appendBytes:&len length:4];
+    [blob appendData:pathData];
+  }
+  return blob;
+}
+
 - (instancetype)init {
   self = [super init];
   if (self) {
