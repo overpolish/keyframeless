@@ -17,6 +17,7 @@
 @property(nonatomic, assign) NSInteger dragIndex;
 @property(nonatomic, assign) BOOL dragIsInHandle;
 @property(nonatomic, assign) BOOL dragIsOutHandle;
+@property(nonatomic, assign) BOOL dragIsNewPoint;
 @property(nonatomic, assign) NSInteger lastClickIndex;
 @property(nonatomic, assign) CFAbsoluteTime lastClickTime;
 @property(nonatomic, strong) NSCursor *penCursor;
