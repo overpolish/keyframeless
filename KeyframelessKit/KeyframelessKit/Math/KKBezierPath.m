@@ -135,6 +135,13 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     _points[index].type = type;
 }
 
+- (void)translateBy:(simd_float2)delta {
+  for (NSUInteger i = 0; i < _count; i++) {
+    _points[i].x += delta.x;
+    _points[i].y += delta.y;
+  }
+}
+
 - (void)toggleTypeAtIndex:(NSUInteger)index
                     start:(simd_float2)start
                       end:(simd_float2)end {

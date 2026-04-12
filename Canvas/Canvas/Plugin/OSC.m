@@ -353,6 +353,7 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   CGEventFlags flags =
       CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
   BOOL optDown = (flags & kCGEventFlagMaskAlternate) != 0;
+  BOOL cmdDown = (flags & kCGEventFlagMaskCommand) != 0;
 
   KKBezierPath *active = [self activePath];
 
@@ -408,6 +409,18 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     }
     [oscAPI setCursor:[NSCursor arrowCursor]];
     return;
+  }
+
+  // Pen mode + Cmd: show arrow cursor for path selection
+  if (isPenMode && cmdDown) {
+    NSInteger nearPath = [self pathIndexNearX:positionX
+                                            y:positionY
+                                       radius:hitRadiusStroke];
+    if (nearPath >= 0) {
+      *activePart = kOSCCanvas;
+      [oscAPI setCursor:[NSCursor arrowCursor]];
+      return;
+    }
   }
 
   // Pen mode: test active path's segments for insertion (open and closed)
@@ -550,15 +563,34 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     return;
   }
 
-  // Cursor mode: click near a path to select it, empty space to deselect
+  // Cursor mode: click near a path to select + start drag, empty space
+  // deselects
   if (isCursorMode) {
     double hitRadiusStroke = [self strokeHitRadius];
     NSInteger nearPath = [self pathIndexNearX:positionX
                                             y:positionY
                                        radius:hitRadiusStroke];
     self.activePathIndex = nearPath;
+    if (nearPath >= 0) {
+      self.dragIsPath = YES;
+      self.dragOrigin =
+          [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+    }
     *forceUpdate = YES;
     return;
+  }
+
+  // Pen mode + Cmd: select path (like cursor mode)
+  if (isPenMode && (modifiers & kFxModifierKey_COMMAND)) {
+    double hitRadiusStroke = [self strokeHitRadius];
+    NSInteger nearPath = [self pathIndexNearX:positionX
+                                            y:positionY
+                                       radius:hitRadiusStroke];
+    if (nearPath >= 0) {
+      self.activePathIndex = nearPath;
+      *forceUpdate = YES;
+      return;
+    }
   }
 
   // Pen mode: add point to active path, or start a new path
@@ -622,12 +654,24 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
   KKBezierPath *active = [self activePath];
-  if (!active || self.dragIndex < 0 ||
-      self.dragIndex >= (NSInteger)active.count)
+  if (!active)
     return;
 
   simd_float2 objPos =
       [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+
+  // Whole-path drag (cursor mode)
+  if (self.dragIsPath) {
+    simd_float2 delta = objPos - self.dragOrigin;
+    [active translateBy:delta];
+    self.dragOrigin = objPos;
+    [self writePaths:self.paths];
+    *forceUpdate = YES;
+    return;
+  }
+
+  if (self.dragIndex < 0 || self.dragIndex >= (NSInteger)active.count)
+    return;
 
   BOOL breakSymmetry = (modifiers & kFxModifierKey_OPTION) != 0;
 
@@ -675,6 +719,7 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   self.dragIsInHandle = NO;
   self.dragIsOutHandle = NO;
   self.dragIsNewPoint = NO;
+  self.dragIsPath = NO;
 
   *forceUpdate = YES;
   [super mouseUpAtPositionX:positionX
@@ -692,11 +737,33 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
                forceUpdate:(BOOL *)forceUpdate
                  didHandle:(BOOL *)didHandle
                     atTime:(CMTime)time {
-  // Delete/Backspace removes last point from active path
+  BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
+
+  // Escape: deselect path and switch to cursor mode
+  if (asciiKey == 27) {
+    self.activePathIndex = -1;
+    self.toolbar.activeTag = kOSCToolbarCursor;
+    *forceUpdate = YES;
+    *didHandle = YES;
+    return;
+  }
+
+  // Delete/Backspace
   if (asciiKey == 127 || asciiKey == 8) {
     self.paths = [self readPaths];
     KKBezierPath *active = [self activePath];
-    if (active && active.count > 0) {
+    if (!active)
+      return;
+
+    if (isCursorMode) {
+      // Cursor mode: delete entire selected path
+      [self.paths removeObjectAtIndex:self.activePathIndex];
+      self.activePathIndex = -1;
+      [self writePaths:self.paths];
+      *forceUpdate = YES;
+      *didHandle = YES;
+    } else if (active.count > 0) {
+      // Pen mode: remove last point
       [active removeAtIndex:active.count - 1];
       if (active.count == 0) {
         [self.paths removeObjectAtIndex:self.activePathIndex];
