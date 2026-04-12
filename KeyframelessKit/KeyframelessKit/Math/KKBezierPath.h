@@ -42,6 +42,9 @@ NS_ASSUME_NONNULL_BEGIN
 + (instancetype)pathWithData:(nullable NSData *)data;
 - (NSData *)dataRepresentation;
 
++ (NSMutableArray<KKBezierPath *> *)pathsFromBlob:(nullable NSData *)blob;
++ (NSData *)blobFromPaths:(NSArray<KKBezierPath *> *)paths;
+
 - (KKBezierPoint)pointAtIndex:(NSUInteger)index;
 
 - (void)insertAtIndex:(NSUInteger)index position:(simd_float2)pos;
