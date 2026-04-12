@@ -233,23 +233,17 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   // Work in canvas space for correct aspect ratio
   CGPoint cornerCanvas =
       [self canvasPointFromObjectPoint:(simd_float2){max.x, max.y}];
-  float r = path.cornerRadius;
-  if (r < 0.0001f) {
-    // At zero radius, offset inside the rect with padding
-    // Canvas Y increases upward, so -Y moves inward (down on screen)
-    float inset = (float)[self strokeWidth] * 0.5f + 20.0f;
-    return (CGPoint){cornerCanvas.x - inset, cornerCanvas.y - inset};
-  }
-  // Compute pixel radius from object-space ry
+  float fraction = path.cornerRadius; // 0–1
+  float insetPx = (float)[self strokeWidth] * 0.5f + 20.0f;
   CGPoint minCanvas = [self canvasPointFromObjectPoint:min];
   CGPoint maxCanvas = [self canvasPointFromObjectPoint:max];
-  float canvasH = (float)fabs(maxCanvas.y - minCanvas.y);
-  float objH = max.y - min.y;
-  float pixelR = (objH > 0.0001f) ? (r / objH) * canvasH : 0;
-  float insetPx = (float)[self strokeWidth] * 0.5f + 20.0f;
-  float diag = pixelR * 0.7071067812f + insetPx;
-  // Inward from top-right: -X and -Y in canvas coords
-  return (CGPoint){cornerCanvas.x - diag, cornerCanvas.y - diag};
+  float halfShort = fminf((float)fabs(maxCanvas.x - minCanvas.x),
+                          (float)fabs(maxCanvas.y - minCanvas.y)) *
+                    0.5f;
+  float maxTravel = fmaxf(0.0f, halfShort - insetPx);
+  float travel = fminf(100.0f, maxTravel);
+  float offset = insetPx + fraction * travel;
+  return (CGPoint){cornerCanvas.x - offset, cornerCanvas.y - offset};
 }
 
 @end
