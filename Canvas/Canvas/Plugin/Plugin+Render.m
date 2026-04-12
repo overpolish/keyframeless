@@ -219,6 +219,60 @@
 
         simd_float2 normal = {-tangent.y, tangent.x};
 
+        // Miter join: at shared corner points, average normals from both
+        // segments
+        BOOL isEnd = (i == segsPerCurve);
+        BOOL isStart = (i == 0);
+        // Miter helper: average two normals with length correction
+        simd_float2 (^miterNormal)(simd_float2, simd_float2) =
+            ^(simd_float2 n1, simd_float2 n2) {
+              simd_float2 avg = n1 + n2;
+              float avgLen = simd_length(avg);
+              if (avgLen < 1e-6f)
+                return n1;
+              avg /= avgLen;
+              // Scale by 1/dot(avg, n1) to extend miter to edge
+              float d = simd_dot(avg, n1);
+              if (d > 0.1f)
+                avg /= d;
+              return avg;
+            };
+
+        if (isEnd &&
+            (c < curveCount - 1 || (path.closed && c == curveCount - 1))) {
+          NSUInteger nextC, nextNext;
+          if (c < curveCount - 1) {
+            nextC = (c + 1) % path.count;
+            nextNext = (c + 2) % path.count;
+          } else {
+            nextC = 0;
+            nextNext = 1 % path.count;
+          }
+          simd_float2 nextTangent = [path evaluateTangentAtIndex:nextC
+                                                       nextIndex:nextNext
+                                                             atT:0.0f];
+          nextTangent.y = -nextTangent.y;
+          float nLen = simd_length(nextTangent);
+          if (nLen > 1e-6f) {
+            nextTangent /= nLen;
+            simd_float2 nextNormal = {-nextTangent.y, nextTangent.x};
+            normal = miterNormal(normal, nextNormal);
+          }
+        } else if (isStart && (c > 0 || (path.closed && c == 0))) {
+          NSUInteger prevC = (c > 0) ? c - 1 : curveCount - 1;
+          NSUInteger prevNext = c;
+          simd_float2 prevTangent = [path evaluateTangentAtIndex:prevC
+                                                       nextIndex:prevNext
+                                                             atT:1.0f];
+          prevTangent.y = -prevTangent.y;
+          float pLen = simd_length(prevTangent);
+          if (pLen > 1e-6f) {
+            prevTangent /= pLen;
+            simd_float2 prevNormal = {-prevTangent.y, prevTangent.x};
+            normal = miterNormal(prevNormal, normal);
+          }
+        }
+
         // Object space (0..1) to pixel space, then center
         // Y is inverted: object space Y=0 is bottom, pixel space Y=0 is top
         simd_float2 pixelPos = {pos.x * outputWidth,
