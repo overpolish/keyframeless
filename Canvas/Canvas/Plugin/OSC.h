@@ -10,7 +10,8 @@
 
 @interface CanvasOSC : KKOnScreenControl
 
-@property(nonatomic, strong) KKBezierPath *path;
+@property(nonatomic, strong) NSMutableArray<KKBezierPath *> *paths;
+@property(nonatomic, assign) NSInteger activePathIndex; // -1 = none selected
 @property(nonatomic, strong) KKPointOSC *pathPointOSC;
 @property(nonatomic, strong) KKPointOSC *pathHandleOSC;
 @property(nonatomic, assign) NSInteger dragIndex;
@@ -26,7 +27,8 @@
 @property(nonatomic, strong) NSCursor *penDeleteCursor;
 @property(nonatomic, strong) KKToolbar *toolbar;
 
-- (KKBezierPath *)readPath;
-- (void)writePath:(KKBezierPath *)path;
+- (NSMutableArray<KKBezierPath *> *)readPaths;
+- (void)writePaths:(NSArray<KKBezierPath *> *)paths;
+- (KKBezierPath *)activePath;
 
 @end

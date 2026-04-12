@@ -22,7 +22,8 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   self = [super initWithAPIManager:apiManager];
   if (self) {
     self.clearsOnDraw = NO;
-    self.path = [[KKBezierPath alloc] init];
+    self.paths = [NSMutableArray array];
+    self.activePathIndex = -1;
     self.dragIndex = -1;
     self.lastClickIndex = -1;
 
@@ -48,11 +49,14 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     self.toolbar = [[KKToolbar alloc]
         initWithAPIManager:apiManager
                      items:@[
+                       [KKToolbarItem itemWithIcon:@"cursorarrow"
+                                               tag:kOSCToolbarCursor],
                        [KKToolbarItem itemWithIcon:@"pencil.and.outline"
                                                tag:kOSCToolbarPen],
                        [KKToolbarItem itemWithIcon:@"rectangle"
                                                tag:kOSCToolbarRect],
                      ]];
+    self.toolbar.activeTag = kOSCToolbarPen;
   }
   return self;
 }
@@ -61,24 +65,76 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   return CGPointZero;
 }
 
-- (KKBezierPath *)readPath {
+- (KKBezierPath *)activePath {
+  if (self.activePathIndex >= 0 &&
+      self.activePathIndex < (NSInteger)self.paths.count)
+    return self.paths[self.activePathIndex];
+  return nil;
+}
+
+// Multi-path serialization: [uint32 pathCount] [pathData...]
+// Each pathData: [uint32 length] [bytes...]
+- (NSMutableArray<KKBezierPath *> *)readPaths {
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   NSString *str = nil;
   [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
-  if (str.length > 0) {
-    NSData *data = [[NSData alloc] initWithBase64EncodedString:str options:0];
-    if (data)
-      return [KKBezierPath pathWithData:data];
+  if (str.length == 0)
+    return [NSMutableArray array];
+
+  NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
+  if (!blob || blob.length < 4)
+    return [NSMutableArray array];
+
+  const uint8_t *bytes = blob.bytes;
+  NSUInteger offset = 0;
+
+  uint32_t pathCount;
+  memcpy(&pathCount, bytes + offset, 4);
+  offset += 4;
+
+  // Backwards compat: if this doesn't look like multi-path format,
+  // try reading as a single path
+  if (pathCount > 10000 || offset + pathCount * 4 > blob.length) {
+    KKBezierPath *single = [KKBezierPath pathWithData:blob];
+    if (single && single.count > 0)
+      return [NSMutableArray arrayWithObject:single];
+    return [NSMutableArray array];
   }
-  return [[KKBezierPath alloc] init];
+
+  NSMutableArray *result = [NSMutableArray arrayWithCapacity:pathCount];
+  for (uint32_t i = 0; i < pathCount; i++) {
+    if (offset + 4 > blob.length)
+      break;
+    uint32_t len;
+    memcpy(&len, bytes + offset, 4);
+    offset += 4;
+    if (offset + len > blob.length)
+      break;
+    NSData *pathData = [blob subdataWithRange:NSMakeRange(offset, len)];
+    KKBezierPath *path = [KKBezierPath pathWithData:pathData];
+    if (path)
+      [result addObject:path];
+    offset += len;
+  }
+  return result;
 }
 
-- (void)writePath:(KKBezierPath *)path {
+- (void)writePaths:(NSArray<KKBezierPath *> *)paths {
   id<FxParameterSettingAPI_v5> paramSetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  NSData *data = [path dataRepresentation];
-  NSString *str = [data base64EncodedStringWithOptions:0];
+
+  NSMutableData *blob = [NSMutableData data];
+  uint32_t pathCount = (uint32_t)paths.count;
+  [blob appendBytes:&pathCount length:4];
+  for (KKBezierPath *path in paths) {
+    NSData *pathData = [path dataRepresentation];
+    uint32_t len = (uint32_t)pathData.length;
+    [blob appendBytes:&len length:4];
+    [blob appendData:pathData];
+  }
+
+  NSString *str = [blob base64EncodedStringWithOptions:0];
   [paramSetAPI setStringParameterValue:str toParameter:kParamPathData];
 }
 
@@ -95,6 +151,85 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
       canvasPointFromObjectPoint:(simd_float2){pt.x + pt.outX, pt.y + pt.outY}];
 }
 
+- (void)drawPathSegments:(KKBezierPath *)path
+                   color:(simd_float4)color
+        destinationImage:(FxImageTile *)dest {
+  NSUInteger segCount = path.count - 1;
+  if (path.closed && path.count >= 3)
+    segCount = path.count;
+
+  for (NSUInteger i = 0; i < segCount; i++) {
+    NSUInteger nextIdx = (i + 1) % path.count;
+    CGPoint prev = CGPointZero;
+    for (NSUInteger s = 0; s <= 32; s++) {
+      float t = (float)s / 32.0f;
+      simd_float2 pos = [path evaluatePointAtIndex:i nextIndex:nextIdx atT:t];
+      CGPoint cur = [self canvasPointFromObjectPoint:pos];
+      if (s > 0) {
+        [self drawLineFrom:prev
+                          to:cur
+                       color:color
+                   halfWidth:1.5f
+            destinationImage:dest];
+      }
+      prev = cur;
+    }
+  }
+}
+
+- (void)drawPathControls:(KKBezierPath *)path
+              activePart:(NSInteger)activePart
+                   color:(simd_float4)color
+        destinationImage:(FxImageTile *)dest
+                  atTime:(CMTime)time {
+  simd_float4 handleColor = color;
+  handleColor.w = 0.33f;
+
+  for (NSUInteger i = 0; i < path.count; i++) {
+    KKBezierPoint pt = [path pointAtIndex:i];
+    CGPoint ptCanvas = [self canvasPointForBezierPoint:pt];
+
+    if (pt.type == KKBezierPointBezier) {
+      CGPoint inCanvas = [self canvasPointForBezierPoint:pt inHandleOffset:YES];
+      CGPoint outCanvas = [self canvasPointForBezierPoint:pt inHandleOffset:NO];
+
+      [self drawLineFrom:ptCanvas
+                        to:inCanvas
+                     color:handleColor
+                 halfWidth:2.0f
+          destinationImage:dest];
+      [self drawLineFrom:ptCanvas
+                        to:outCanvas
+                     color:handleColor
+                 halfWidth:2.0f
+          destinationImage:dest];
+
+      BOOL inActive = (self.dragIndex == (NSInteger)i && self.dragIsInHandle);
+      BOOL outActive = (self.dragIndex == (NSInteger)i && self.dragIsOutHandle);
+
+      [self.pathHandleOSC drawAtCanvasPosition:inCanvas
+                                     isHovered:NO
+                                      isActive:inActive
+                              destinationImage:dest
+                                        atTime:time];
+      [self.pathHandleOSC drawAtCanvasPosition:outCanvas
+                                     isHovered:NO
+                                      isActive:outActive
+                              destinationImage:dest
+                                        atTime:time];
+    }
+
+    BOOL ptActive = (self.dragIndex == (NSInteger)i && !self.dragIsInHandle &&
+                     !self.dragIsOutHandle);
+    BOOL ptHovered = (activePart == kOSCPathPointBase + (NSInteger)i);
+    [self.pathPointOSC drawAtCanvasPosition:ptCanvas
+                                  isHovered:ptHovered
+                                   isActive:ptActive
+                           destinationImage:dest
+                                     atTime:time];
+  }
+}
+
 - (void)drawOSCWithWidth:(NSInteger)width
                   height:(NSInteger)height
               activePart:(NSInteger)activePart
@@ -109,83 +244,88 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
 
   [self.toolbar drawWithDestinationImage:destinationImage];
 
-  self.path = [self readPath];
-  if (self.path.count == 0)
-    return;
+  self.paths = [self readPaths];
 
   simd_float4 strokeColor = [[NSColor systemRedColor] simdFloat4];
-  simd_float4 handleColor = strokeColor;
-  handleColor.w = 0.33f;
+  simd_float4 dimColor = strokeColor;
+  dimColor.w = 0.3f;
 
-  // Draw bezier segments (+ closing segment if closed)
-  NSUInteger segCount = self.path.count - 1;
-  if (self.path.closed && self.path.count >= 3)
-    segCount = self.path.count;
+  // Draw all paths, but only show controls for active path
+  for (NSUInteger p = 0; p < self.paths.count; p++) {
+    KKBezierPath *path = self.paths[p];
+    if (path.count == 0)
+      continue;
 
-  for (NSUInteger i = 0; i < segCount; i++) {
-    NSUInteger nextIdx = (i + 1) % self.path.count;
-    CGPoint prev = CGPointZero;
-    for (NSUInteger s = 0; s <= 32; s++) {
-      float t = (float)s / 32.0f;
-      simd_float2 pos = [self.path evaluatePointAtIndex:i
-                                              nextIndex:nextIdx
-                                                    atT:t];
-      CGPoint cur = [self canvasPointFromObjectPoint:pos];
-      if (s > 0) {
-        [self drawLineFrom:prev
-                          to:cur
+    BOOL isActive = ((NSInteger)p == self.activePathIndex);
+    [self drawPathSegments:path
+                     color:isActive ? strokeColor : dimColor
+          destinationImage:destinationImage];
+
+    if (isActive) {
+      [self drawPathControls:path
+                  activePart:activePart
                        color:strokeColor
-                   halfWidth:1.5f
-            destinationImage:destinationImage];
+            destinationImage:destinationImage
+                      atTime:time];
+    }
+  }
+}
+
+- (double)strokeHitRadius {
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  double width = 8.0;
+  [paramGetAPI getFloatValue:&width
+               fromParameter:kParamStrokeWidth
+                      atTime:kCMTimeZero];
+  return MAX(width * 0.5 + 4.0, 12.0);
+}
+
+// Returns the path index of a path whose segment is near (x, y), or -1
+- (NSInteger)pathIndexNearX:(double)x y:(double)y radius:(double)radius {
+  for (NSUInteger p = 0; p < self.paths.count; p++) {
+    KKBezierPath *path = self.paths[p];
+    NSUInteger segCount = path.count - 1;
+    if (path.closed && path.count >= 3)
+      segCount = path.count;
+
+    for (NSUInteger c = 0; c < segCount; c++) {
+      NSUInteger nextIdx = (c + 1) % path.count;
+      for (NSUInteger s = 0; s <= 64; s++) {
+        float t = (float)s / 64.0f;
+        simd_float2 pos = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
+        CGPoint cur = [self canvasPointFromObjectPoint:pos];
+        if (hypot(x - cur.x, y - cur.y) < radius)
+          return (NSInteger)p;
       }
-      prev = cur;
     }
   }
+  return -1;
+}
 
-  // Draw control points and handles
-  for (NSUInteger i = 0; i < self.path.count; i++) {
-    KKBezierPoint pt = [self.path pointAtIndex:i];
-    CGPoint ptCanvas = [self canvasPointForBezierPoint:pt];
+// Returns the segment index of the active path near (x, y), or -1
+- (NSInteger)segmentIndexNearX:(double)x
+                             y:(double)y
+                        radius:(double)radius
+                        inPath:(KKBezierPath *)path {
+  if (!path || path.count < 2)
+    return -1;
 
-    if (pt.type == KKBezierPointBezier) {
-      CGPoint inCanvas = [self canvasPointForBezierPoint:pt inHandleOffset:YES];
-      CGPoint outCanvas = [self canvasPointForBezierPoint:pt inHandleOffset:NO];
+  NSUInteger segCount = path.count - 1;
+  if (path.closed && path.count >= 3)
+    segCount = path.count;
 
-      [self drawLineFrom:ptCanvas
-                        to:inCanvas
-                     color:handleColor
-                 halfWidth:2.0f
-          destinationImage:destinationImage];
-      [self drawLineFrom:ptCanvas
-                        to:outCanvas
-                     color:handleColor
-                 halfWidth:2.0f
-          destinationImage:destinationImage];
-
-      BOOL inActive = (self.dragIndex == (NSInteger)i && self.dragIsInHandle);
-      BOOL outActive = (self.dragIndex == (NSInteger)i && self.dragIsOutHandle);
-
-      [self.pathHandleOSC drawAtCanvasPosition:inCanvas
-                                     isHovered:NO
-                                      isActive:inActive
-                              destinationImage:destinationImage
-                                        atTime:time];
-      [self.pathHandleOSC drawAtCanvasPosition:outCanvas
-                                     isHovered:NO
-                                      isActive:outActive
-                              destinationImage:destinationImage
-                                        atTime:time];
+  for (NSUInteger c = 0; c < segCount; c++) {
+    NSUInteger nextIdx = (c + 1) % path.count;
+    for (NSUInteger s = 0; s <= 64; s++) {
+      float t = (float)s / 64.0f;
+      simd_float2 pos = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
+      CGPoint cur = [self canvasPointFromObjectPoint:pos];
+      if (hypot(x - cur.x, y - cur.y) < radius)
+        return (NSInteger)c;
     }
-
-    BOOL ptActive = (self.dragIndex == (NSInteger)i && !self.dragIsInHandle &&
-                     !self.dragIsOutHandle);
-    BOOL ptHovered = (activePart == kOSCPathPointBase + (NSInteger)i);
-    [self.pathPointOSC drawAtCanvasPosition:ptCanvas
-                                  isHovered:ptHovered
-                                   isActive:ptActive
-                           destinationImage:destinationImage
-                                     atTime:time];
   }
+  return -1;
 }
 
 - (void)hitTestOSCAtMousePositionX:(double)positionX
@@ -193,7 +333,7 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
                         activePart:(NSInteger *)activePart
                             atTime:(CMTime)time {
   *activePart = kOSCCanvas;
-  self.path = [self readPath];
+  self.paths = [self readPaths];
 
   double hitRadius = 12.0;
   id<FxOnScreenControlAPI_v4> oscAPI =
@@ -207,68 +347,87 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     return;
   }
 
+  BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
+  BOOL isPenMode = (self.toolbar.activeTag == kOSCToolbarPen);
+
   CGEventFlags flags =
       CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
   BOOL optDown = (flags & kCGEventFlagMaskAlternate) != 0;
 
-  // Test handles
-  for (NSUInteger i = 0; i < self.path.count; i++) {
-    KKBezierPoint pt = [self.path pointAtIndex:i];
-    if (pt.type != KKBezierPointBezier)
-      continue;
+  KKBezierPath *active = [self activePath];
 
-    CGPoint inCanvas = [self canvasPointForBezierPoint:pt inHandleOffset:YES];
-    if (hypot(positionX - inCanvas.x, positionY - inCanvas.y) < hitRadius) {
-      *activePart = kOSCInHandleBase + (NSInteger)i;
-      [oscAPI setCursor:_editPointsCursor];
-      return;
-    }
+  // In cursor or pen mode, test active path's handles and points
+  if (active) {
+    for (NSUInteger i = 0; i < active.count; i++) {
+      KKBezierPoint pt = [active pointAtIndex:i];
+      if (pt.type != KKBezierPointBezier)
+        continue;
 
-    CGPoint outCanvas = [self canvasPointForBezierPoint:pt inHandleOffset:NO];
-    if (hypot(positionX - outCanvas.x, positionY - outCanvas.y) < hitRadius) {
-      *activePart = kOSCOutHandleBase + (NSInteger)i;
-      [oscAPI setCursor:_editPointsCursor];
-      return;
-    }
-  }
-
-  // Test points
-  for (NSUInteger i = 0; i < self.path.count; i++) {
-    KKBezierPoint pt = [self.path pointAtIndex:i];
-    CGPoint ptCanvas = [self canvasPointForBezierPoint:pt];
-    if (hypot(positionX - ptCanvas.x, positionY - ptCanvas.y) < hitRadius) {
-      // Hovering first point on open path with 3+ points: close path
-      if (i == 0 && !self.path.closed && self.path.count >= 3) {
-        *activePart = kOSCClosePath;
-        [oscAPI setCursor:self.penCloseCursor];
+      CGPoint inCanvas = [self canvasPointForBezierPoint:pt inHandleOffset:YES];
+      if (hypot(positionX - inCanvas.x, positionY - inCanvas.y) < hitRadius) {
+        *activePart = kOSCInHandleBase + (NSInteger)i;
+        [oscAPI setCursor:_editPointsCursor];
         return;
       }
-      *activePart = kOSCPathPointBase + (NSInteger)i;
-      [oscAPI setCursor:optDown ? _penDeleteCursor : _moveCursor];
-      return;
-    }
-  }
 
-  // Test path segments
-  if (self.path.count >= 2) {
-    double segHitRadius = 10.0;
-    for (NSUInteger c = 0; c + 1 < self.path.count; c++) {
-      for (NSUInteger s = 0; s <= 64; s++) {
-        float t = (float)s / 64.0f;
-        simd_float2 pos = [self.path evaluatePointAtIndex:c
-                                                nextIndex:c + 1
-                                                      atT:t];
-        CGPoint cur = [self canvasPointFromObjectPoint:pos];
-        if (hypot(positionX - cur.x, positionY - cur.y) < segHitRadius) {
-          *activePart = kOSCPathSegmentBase + (NSInteger)c;
-          [oscAPI setCursor:self.penAddCursor];
+      CGPoint outCanvas = [self canvasPointForBezierPoint:pt inHandleOffset:NO];
+      if (hypot(positionX - outCanvas.x, positionY - outCanvas.y) < hitRadius) {
+        *activePart = kOSCOutHandleBase + (NSInteger)i;
+        [oscAPI setCursor:_editPointsCursor];
+        return;
+      }
+    }
+
+    for (NSUInteger i = 0; i < active.count; i++) {
+      KKBezierPoint pt = [active pointAtIndex:i];
+      CGPoint ptCanvas = [self canvasPointForBezierPoint:pt];
+      if (hypot(positionX - ptCanvas.x, positionY - ptCanvas.y) < hitRadius) {
+        if (isPenMode && i == 0 && !active.closed && active.count >= 3) {
+          *activePart = kOSCClosePath;
+          [oscAPI setCursor:self.penCloseCursor];
           return;
         }
+        *activePart = kOSCPathPointBase + (NSInteger)i;
+        [oscAPI setCursor:optDown ? _penDeleteCursor : _moveCursor];
+        return;
       }
     }
   }
 
-  [oscAPI setCursor:self.penAddCursor];
+  double hitRadiusStroke = [self strokeHitRadius];
+
+  if (isCursorMode) {
+    // In cursor mode, test all paths for selection using stroke width
+    NSInteger nearPath = [self pathIndexNearX:positionX
+                                            y:positionY
+                                       radius:hitRadiusStroke];
+    if (nearPath >= 0) {
+      *activePart = kOSCCanvas; // will handle in mouseDown
+      [oscAPI setCursor:[NSCursor arrowCursor]];
+      return;
+    }
+    [oscAPI setCursor:[NSCursor arrowCursor]];
+    return;
+  }
+
+  // Pen mode: test active path's segments for insertion (open and closed)
+  if (isPenMode && active && active.count >= 2) {
+    NSInteger segIdx = [self segmentIndexNearX:positionX
+                                             y:positionY
+                                        radius:hitRadiusStroke
+                                        inPath:active];
+    if (segIdx >= 0) {
+      *activePart = kOSCPathSegmentBase + segIdx;
+      [oscAPI setCursor:self.penAddCursor];
+      return;
+    }
+  }
+
+  if (isPenMode) {
+    [oscAPI setCursor:self.penAddCursor];
+  } else {
+    [oscAPI setCursor:[NSCursor arrowCursor]];
+  }
 }
 
 - (void)mouseDownAtPositionX:(double)positionX
@@ -277,63 +436,73 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
                    modifiers:(NSUInteger)modifiers
                  forceUpdate:(BOOL *)forceUpdate
                       atTime:(CMTime)time {
-  if (activePart == kOSCToolbarPen || activePart == kOSCToolbarRect) {
+  // Toolbar
+  if (activePart == kOSCToolbarCursor || activePart == kOSCToolbarPen ||
+      activePart == kOSCToolbarRect) {
     self.toolbar.activeTag = activePart;
     *forceUpdate = YES;
     return;
   }
 
-  self.path = [self readPath];
+  self.paths = [self readPaths];
+  KKBezierPath *active = [self activePath];
 
-  // Close path
-  if (activePart == kOSCClosePath) {
-    self.path.closed = YES;
-    [self writePath:self.path];
+  BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
+  BOOL isPenMode = (self.toolbar.activeTag == kOSCToolbarPen);
+
+  // Close path (pen mode)
+  if (activePart == kOSCClosePath && active) {
+    active.closed = YES;
+    [self writePaths:self.paths];
     *forceUpdate = YES;
     return;
   }
 
+  // Option-click on point: delete
   if (activePart >= kOSCPathPointBase && activePart < kOSCInHandleBase &&
-      (modifiers & kFxModifierKey_OPTION)) {
+      (modifiers & kFxModifierKey_OPTION) && active) {
     NSInteger idx = activePart - kOSCPathPointBase;
-    if (idx >= 0 && idx < (NSInteger)self.path.count) {
-      [self.path removeAtIndex:idx];
-      [self writePath:self.path];
+    if (idx >= 0 && idx < (NSInteger)active.count) {
+      [active removeAtIndex:idx];
+      if (active.count == 0) {
+        [self.paths removeObjectAtIndex:self.activePathIndex];
+        self.activePathIndex = -1;
+      }
+      [self writePaths:self.paths];
     }
     *forceUpdate = YES;
     return;
   }
 
-  if (activePart >= kOSCPathPointBase && activePart < kOSCInHandleBase) {
+  // Click on point: drag or double-click toggle
+  if (activePart >= kOSCPathPointBase && activePart < kOSCInHandleBase &&
+      active) {
     NSInteger idx = activePart - kOSCPathPointBase;
     CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
 
-    // Double-click: toggle linear/bezier
     if (self.lastClickIndex == idx && (now - self.lastClickTime) < 0.35) {
-      KKBezierPoint pt = [self.path pointAtIndex:idx];
+      KKBezierPoint pt = [active pointAtIndex:idx];
       if (pt.type == KKBezierPointBezier) {
-        [self.path setType:KKBezierPointLinear atIndex:idx];
-        [self.path setInHandle:(simd_float2){0, 0} atIndex:idx];
-        [self.path setOutHandle:(simd_float2){0, 0} atIndex:idx];
+        [active setType:KKBezierPointLinear atIndex:idx];
+        [active setInHandle:(simd_float2){0, 0} atIndex:idx];
+        [active setOutHandle:(simd_float2){0, 0} atIndex:idx];
       } else {
-        // Generate default handles based on neighbouring points
         simd_float2 pos = {pt.x, pt.y};
         simd_float2 prev = pos, next = pos;
         if (idx > 0) {
-          KKBezierPoint pp = [self.path pointAtIndex:idx - 1];
+          KKBezierPoint pp = [active pointAtIndex:idx - 1];
           prev = (simd_float2){pp.x, pp.y};
         }
-        if (idx + 1 < (NSInteger)self.path.count) {
-          KKBezierPoint np = [self.path pointAtIndex:idx + 1];
+        if (idx + 1 < (NSInteger)active.count) {
+          KKBezierPoint np = [active pointAtIndex:idx + 1];
           next = (simd_float2){np.x, np.y};
         }
-        // Tangent direction from prev→next, handle length = 1/4 of that
         simd_float2 dir = (next - prev) * 0.25f;
-        [self.path setOutHandle:dir atIndex:idx];
-        [self.path setInHandle:(simd_float2){-dir.x, -dir.y} atIndex:idx];
-        [self.path setType:KKBezierPointBezier atIndex:idx];
+        [active setOutHandle:dir atIndex:idx];
+        [active setInHandle:(simd_float2){-dir.x, -dir.y} atIndex:idx];
+        [active setType:KKBezierPointBezier atIndex:idx];
       }
-      [self writePath:self.path];
+      [self writePaths:self.paths];
       self.lastClickIndex = -1;
       *forceUpdate = YES;
       return;
@@ -348,6 +517,7 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     return;
   }
 
+  // Drag handles
   if (activePart >= kOSCInHandleBase && activePart < kOSCOutHandleBase) {
     self.dragIndex = activePart - kOSCInHandleBase;
     self.dragIsInHandle = YES;
@@ -355,7 +525,6 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     *forceUpdate = YES;
     return;
   }
-
   if (activePart >= kOSCOutHandleBase && activePart < kOSCPathSegmentBase) {
     self.dragIndex = activePart - kOSCOutHandleBase;
     self.dragIsInHandle = NO;
@@ -364,12 +533,13 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     return;
   }
 
-  if (activePart >= kOSCPathSegmentBase) {
+  // Insert on segment (pen mode)
+  if (activePart >= kOSCPathSegmentBase && isPenMode && active) {
     NSInteger segIdx = activePart - kOSCPathSegmentBase;
     simd_float2 objPos =
         [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
-    [self.path insertAtIndex:segIdx + 1 position:objPos];
-    [self writePath:self.path];
+    [active insertAtIndex:segIdx + 1 position:objPos];
+    [self writePaths:self.paths];
     self.dragIndex = segIdx + 1;
     self.dragIsInHandle = NO;
     self.dragIsOutHandle = NO;
@@ -377,22 +547,68 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     return;
   }
 
-  simd_float2 objPos =
-      [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
-  [self.path insertAtIndex:self.path.count position:objPos];
-  [self writePath:self.path];
+  // Cursor mode: click near a path to select it, empty space to deselect
+  if (isCursorMode) {
+    double hitRadiusStroke = [self strokeHitRadius];
+    NSInteger nearPath = [self pathIndexNearX:positionX
+                                            y:positionY
+                                       radius:hitRadiusStroke];
+    self.activePathIndex = nearPath;
+    *forceUpdate = YES;
+    return;
+  }
 
-  self.dragIndex = (NSInteger)self.path.count - 1;
-  self.dragIsInHandle = NO;
-  self.dragIsOutHandle = YES;
+  // Pen mode: add point to active path, or start a new path
+  if (isPenMode) {
+    // If no active path, start a new one
+    if (!active) {
+      KKBezierPath *newPath = [[KKBezierPath alloc] init];
+      [self.paths addObject:newPath];
+      self.activePathIndex = (NSInteger)self.paths.count - 1;
+      active = newPath;
+    } else if (active.closed) {
+      // Closed path: check if clicking on a segment to insert
+      double hitRadiusStroke = [self strokeHitRadius];
+      NSInteger segIdx = [self segmentIndexNearX:positionX
+                                               y:positionY
+                                          radius:hitRadiusStroke
+                                          inPath:active];
+      if (segIdx >= 0) {
+        simd_float2 objPos =
+            [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+        [active insertAtIndex:segIdx + 1 position:objPos];
+        [self writePaths:self.paths];
+        self.dragIndex = segIdx + 1;
+        self.dragIsInHandle = NO;
+        self.dragIsOutHandle = NO;
+        *forceUpdate = YES;
+        return;
+      }
+      // Not on a segment: start a new path
+      KKBezierPath *newPath = [[KKBezierPath alloc] init];
+      [self.paths addObject:newPath];
+      self.activePathIndex = (NSInteger)self.paths.count - 1;
+      active = newPath;
+    }
 
-  *forceUpdate = YES;
-  [super mouseDownAtPositionX:positionX
-                    positionY:positionY
-                   activePart:activePart
-                    modifiers:modifiers
-                  forceUpdate:forceUpdate
-                       atTime:time];
+    simd_float2 objPos =
+        [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+    [active insertAtIndex:active.count position:objPos];
+    [self writePaths:self.paths];
+
+    self.dragIndex = (NSInteger)active.count - 1;
+    self.dragIsInHandle = NO;
+    self.dragIsOutHandle = YES;
+
+    *forceUpdate = YES;
+    [super mouseDownAtPositionX:positionX
+                      positionY:positionY
+                     activePart:activePart
+                      modifiers:modifiers
+                    forceUpdate:forceUpdate
+                         atTime:time];
+    return;
+  }
 }
 
 - (void)mouseDraggedAtPositionX:(double)positionX
@@ -401,7 +617,9 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
                       modifiers:(NSUInteger)modifiers
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
-  if (self.dragIndex < 0 || self.dragIndex >= (NSInteger)self.path.count)
+  KKBezierPath *active = [self activePath];
+  if (!active || self.dragIndex < 0 ||
+      self.dragIndex >= (NSInteger)active.count)
     return;
 
   simd_float2 objPos =
@@ -410,28 +628,28 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   BOOL breakSymmetry = (modifiers & kFxModifierKey_OPTION) != 0;
 
   if (self.dragIsInHandle) {
-    KKBezierPoint pt = [self.path pointAtIndex:self.dragIndex];
+    KKBezierPoint pt = [active pointAtIndex:self.dragIndex];
     simd_float2 offset = {objPos.x - pt.x, objPos.y - pt.y};
-    [self.path setInHandle:offset atIndex:self.dragIndex];
+    [active setInHandle:offset atIndex:self.dragIndex];
     if (!breakSymmetry) {
       simd_float2 mirror = {-offset.x, -offset.y};
-      [self.path setOutHandle:mirror atIndex:self.dragIndex];
+      [active setOutHandle:mirror atIndex:self.dragIndex];
     }
-    [self.path setType:KKBezierPointBezier atIndex:self.dragIndex];
+    [active setType:KKBezierPointBezier atIndex:self.dragIndex];
   } else if (self.dragIsOutHandle) {
-    KKBezierPoint pt = [self.path pointAtIndex:self.dragIndex];
+    KKBezierPoint pt = [active pointAtIndex:self.dragIndex];
     simd_float2 offset = {objPos.x - pt.x, objPos.y - pt.y};
-    [self.path setOutHandle:offset atIndex:self.dragIndex];
+    [active setOutHandle:offset atIndex:self.dragIndex];
     if (!breakSymmetry) {
       simd_float2 mirror = {-offset.x, -offset.y};
-      [self.path setInHandle:mirror atIndex:self.dragIndex];
+      [active setInHandle:mirror atIndex:self.dragIndex];
     }
-    [self.path setType:KKBezierPointBezier atIndex:self.dragIndex];
+    [active setType:KKBezierPointBezier atIndex:self.dragIndex];
   } else {
-    [self.path moveAtIndex:self.dragIndex to:objPos];
+    [active moveAtIndex:self.dragIndex to:objPos];
   }
 
-  [self writePath:self.path];
+  [self writePaths:self.paths];
   *forceUpdate = YES;
 }
 
@@ -444,10 +662,6 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   self.dragIndex = -1;
   self.dragIsInHandle = NO;
   self.dragIsOutHandle = NO;
-
-  id<FxOnScreenControlAPI_v4> oscAPI =
-      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-  [oscAPI setCursor:self.penAddCursor];
 
   *forceUpdate = YES;
   [super mouseUpAtPositionX:positionX
@@ -465,11 +679,17 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
                forceUpdate:(BOOL *)forceUpdate
                  didHandle:(BOOL *)didHandle
                     atTime:(CMTime)time {
+  // Delete/Backspace removes last point from active path
   if (asciiKey == 127 || asciiKey == 8) {
-    self.path = [self readPath];
-    if (self.path.count > 0) {
-      [self.path removeAtIndex:self.path.count - 1];
-      [self writePath:self.path];
+    self.paths = [self readPaths];
+    KKBezierPath *active = [self activePath];
+    if (active && active.count > 0) {
+      [active removeAtIndex:active.count - 1];
+      if (active.count == 0) {
+        [self.paths removeObjectAtIndex:self.activePathIndex];
+        self.activePathIndex = -1;
+      }
+      [self writePaths:self.paths];
       *forceUpdate = YES;
       *didHandle = YES;
     }

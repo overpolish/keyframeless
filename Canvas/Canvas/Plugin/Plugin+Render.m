@@ -86,25 +86,57 @@
   float outputHeight = (float)(destinationImage.tilePixelBounds.top -
                                destinationImage.tilePixelBounds.bottom);
 
-  // Unpack pluginState: CanvasStrokeParams header + base64 path string
+  // Unpack pluginState: CanvasStrokeParams header + base64 multi-path blob
   CanvasStrokeParams strokeParams = {8.0f, 1.0f, 0.0f, 0.0f};
-  KKBezierPath *path = nil;
+  NSArray<KKBezierPath *> *paths = @[];
 
   if (pluginState.length >= sizeof(CanvasStrokeParams)) {
     memcpy(&strokeParams, pluginState.bytes, sizeof(CanvasStrokeParams));
 
     if (pluginState.length > sizeof(CanvasStrokeParams)) {
-      NSData *pathData = [pluginState
+      NSData *blobData = [pluginState
           subdataWithRange:NSMakeRange(sizeof(CanvasStrokeParams),
                                        pluginState.length -
                                            sizeof(CanvasStrokeParams))];
-      NSString *pathStr = [[NSString alloc] initWithData:pathData
+      NSString *blobStr = [[NSString alloc] initWithData:blobData
                                                 encoding:NSUTF8StringEncoding];
-      if (pathStr.length > 0) {
-        NSData *decoded = [[NSData alloc] initWithBase64EncodedString:pathStr
+      if (blobStr.length > 0) {
+        NSData *decoded = [[NSData alloc] initWithBase64EncodedString:blobStr
                                                               options:0];
-        if (decoded)
-          path = [KKBezierPath pathWithData:decoded];
+        if (decoded) {
+          // Try multi-path format
+          const uint8_t *bytes = decoded.bytes;
+          if (decoded.length >= 4) {
+            uint32_t pathCount;
+            memcpy(&pathCount, bytes, 4);
+            if (pathCount <= 10000 && pathCount > 0) {
+              NSMutableArray *result =
+                  [NSMutableArray arrayWithCapacity:pathCount];
+              NSUInteger offset = 4;
+              for (uint32_t i = 0; i < pathCount; i++) {
+                if (offset + 4 > decoded.length)
+                  break;
+                uint32_t len;
+                memcpy(&len, bytes + offset, 4);
+                offset += 4;
+                if (offset + len > decoded.length)
+                  break;
+                NSData *pd =
+                    [decoded subdataWithRange:NSMakeRange(offset, len)];
+                KKBezierPath *p = [KKBezierPath pathWithData:pd];
+                if (p)
+                  [result addObject:p];
+                offset += len;
+              }
+              paths = result;
+            } else {
+              // Fallback: single path
+              KKBezierPath *single = [KKBezierPath pathWithData:decoded];
+              if (single && single.count > 0)
+                paths = @[ single ];
+            }
+          }
+        }
       }
     }
   }
@@ -130,8 +162,15 @@
     [blit endEncoding];
   }
 
-  // No path or too few points: just pass through source
-  if (!path || path.count < 2) {
+  // No paths: just pass through source
+  BOOL hasDrawablePaths = NO;
+  for (KKBezierPath *p in paths) {
+    if (p.count >= 2) {
+      hasDrawablePaths = YES;
+      break;
+    }
+  }
+  if (!hasDrawablePaths) {
     [commandBuffer commit];
     [commandBuffer waitUntilCompleted];
     [cache returnCommandQueueToCache:commandQueue];
@@ -139,7 +178,10 @@
   }
 
   // Second pass: draw strokes on top with blending
-  {
+  for (KKBezierPath *path in paths) {
+    if (path.count < 2)
+      continue;
+
     float strokeWidth = strokeParams.strokeWidth;
     float aaPadding = 1.0f;
     float halfWidth = (strokeWidth / 2.0f) + aaPadding;
