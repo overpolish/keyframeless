@@ -140,6 +140,37 @@
   *forceUpdate = YES;
 }
 
+- (void)mouseDownOnResizeHandle:(NSInteger)handleIndex
+                         active:(KKBezierPath *)active
+                    forceUpdate:(BOOL *)forceUpdate {
+  self.dragResizeHandle = handleIndex;
+  simd_float2 bmin, bmax;
+  [self boundsOfSelectedPaths:&bmin max:&bmax];
+  self.resizeOrigMin = bmin;
+  self.resizeOrigMax = bmax;
+  float w = bmax.x - bmin.x, h = bmax.y - bmin.y;
+  self.resizeOrigAspect = (h > 1e-6f) ? (w / h) : 1.0f;
+
+  NSMutableArray<NSData *> *snapshots = [NSMutableArray array];
+  NSMutableArray<NSNumber *> *indices = [NSMutableArray array];
+  [self.selectedPathIndices
+      enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+        if (idx >= self.paths.count)
+          return;
+        KKBezierPath *path = self.paths[idx];
+        NSMutableData *snap =
+            [NSMutableData dataWithLength:path.count * sizeof(KKBezierPoint)];
+        KKBezierPoint *buf = snap.mutableBytes;
+        for (NSUInteger i = 0; i < path.count; i++)
+          buf[i] = [path pointAtIndex:i];
+        [snapshots addObject:snap];
+        [indices addObject:@(idx)];
+      }];
+  self.resizeOrigSnapshots = snapshots;
+  self.resizeOrigIndices = indices;
+  *forceUpdate = YES;
+}
+
 - (void)mouseDownAtPositionX:(double)positionX
                    positionY:(double)positionY
                   activePart:(NSInteger)activePart
@@ -161,6 +192,33 @@
   BOOL isPenMode = (self.toolbar.activeTag == kOSCToolbarPen);
   BOOL isRectMode = (self.toolbar.activeTag == kOSCToolbarRect);
 
+  if (activePart >= kOSCResizeHandleBase &&
+      activePart < kOSCResizeHandleBase + 8 && active) {
+    [self mouseDownOnResizeHandle:activePart - kOSCResizeHandleBase
+                           active:active
+                      forceUpdate:forceUpdate];
+    return;
+  }
+
+  if (activePart == kOSCBoundingBox && self.selectedPathIndices.count > 0) {
+    self.dragIsSelection = YES;
+    self.dragOrigin =
+        [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+    self.dragAnchor = self.dragOrigin;
+    *forceUpdate = YES;
+    return;
+  }
+
+  if (activePart >= kOSCCornerRadiusTL && activePart <= kOSCCornerRadiusBL &&
+      active) {
+    [self mouseDownOnCornerRadius:activePart
+                        positionX:positionX
+                        positionY:positionY
+                           active:active
+                      forceUpdate:forceUpdate];
+    return;
+  }
+
   if (activePart == kOSCClosePath && active) {
     [self mouseDownOnClosePath:active forceUpdate:forceUpdate];
     return;
@@ -179,16 +237,6 @@
 
   if (activePart >= kOSCInHandleBase && activePart < kOSCPathSegmentBase) {
     [self mouseDownOnHandle:activePart forceUpdate:forceUpdate];
-    return;
-  }
-
-  if (activePart >= kOSCCornerRadiusTL && activePart <= kOSCCornerRadiusBL &&
-      active) {
-    [self mouseDownOnCornerRadius:activePart
-                        positionX:positionX
-                        positionY:positionY
-                           active:active
-                      forceUpdate:forceUpdate];
     return;
   }
 
@@ -235,47 +283,20 @@
                      modifiers:(NSUInteger)modifiers
                    forceUpdate:(BOOL *)forceUpdate {
   BOOL shiftDown = (modifiers & kFxModifierKey_SHIFT) != 0;
-  BOOL optDown = (modifiers & kFxModifierKey_OPTION) != 0;
-
-  if (self.selectedPoints.count > 0) {
-    for (NSUInteger p = 0; p < self.paths.count; p++) {
-      KKBezierPath *path = self.paths[p];
-      for (NSUInteger i = 0; i < path.count; i++) {
-        if (![self isPointSelected:p point:i])
-          continue;
-        KKBezierPoint pt = [path pointAtIndex:i];
-        CGPoint ptCanvas = [self canvasPointForBezierPoint:pt];
-        if (hypot(positionX - ptCanvas.x, positionY - ptCanvas.y) < 12.0) {
-          self.dragIsSelection = YES;
-          simd_float2 clickObj = [self
-              objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
-          self.dragOrigin = clickObj;
-          self.dragAnchor = clickObj;
-          *forceUpdate = YES;
-          return;
-        }
-      }
-    }
-  }
-
   double hitRadiusStroke = [self strokeHitRadius];
   NSInteger nearPath = [self pathIndexNearX:positionX
                                           y:positionY
                                      radius:hitRadiusStroke];
   if (nearPath >= 0) {
-    KKBezierPath *hitPath = self.paths[nearPath];
     if (shiftDown) {
-      for (NSUInteger i = 0; i < hitPath.count; i++)
-        [self.selectedPoints addIndex:selKey(nearPath, i)];
-      *forceUpdate = YES;
-      return;
-    } else if (optDown) {
-      for (NSUInteger i = 0; i < hitPath.count; i++)
-        [self.selectedPoints removeIndex:selKey(nearPath, i)];
-      *forceUpdate = YES;
-      return;
+      if ([self.selectedPathIndices containsIndex:nearPath])
+        [self.selectedPathIndices removeIndex:nearPath];
+      else
+        [self.selectedPathIndices addIndex:nearPath];
+    } else {
+      [self.selectedPathIndices removeAllIndexes];
+      [self.selectedPathIndices addIndex:nearPath];
     }
-    [self.selectedPoints removeAllIndexes];
     self.activePathIndex = nearPath;
     self.dragIsPath = YES;
     self.dragOrigin =
@@ -284,9 +305,10 @@
     return;
   }
 
-  if (!shiftDown && !optDown)
-    [self.selectedPoints removeAllIndexes];
-  self.activePathIndex = -1;
+  if (!shiftDown) {
+    [self.selectedPathIndices removeAllIndexes];
+    self.activePathIndex = -1;
+  }
   self.dragIsMarquee = YES;
   self.marqueeStart = CGPointMake(positionX, positionY);
   self.marqueeEnd = self.marqueeStart;

@@ -50,87 +50,26 @@
     objPos = [self shiftConstrainedPosition:objPos];
   simd_float2 delta = objPos - self.dragOrigin;
   self.dragOrigin = objPos;
-  for (NSUInteger p = 0; p < self.paths.count; p++) {
-    KKBezierPath *path = self.paths[p];
-    for (NSUInteger i = 0; i < path.count; i++) {
-      if ([self isPointSelected:p point:i]) {
-        KKBezierPoint pt = [path pointAtIndex:i];
-        [path moveAtIndex:i to:(simd_float2){pt.x + delta.x, pt.y + delta.y}];
+
+  BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
+  if (isCursorMode) {
+    [self.selectedPathIndices
+        enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+          if (idx < self.paths.count)
+            [self.paths[idx] translateBy:delta];
+        }];
+  } else {
+    for (NSUInteger p = 0; p < self.paths.count; p++) {
+      KKBezierPath *path = self.paths[p];
+      for (NSUInteger i = 0; i < path.count; i++) {
+        if ([self isPointSelected:p point:i]) {
+          KKBezierPoint pt = [path pointAtIndex:i];
+          [path moveAtIndex:i
+                         to:(simd_float2){pt.x + delta.x, pt.y + delta.y}];
+        }
       }
     }
   }
-  [self writePaths:self.paths];
-  *forceUpdate = YES;
-}
-
-- (void)dragCornerRadiusAtX:(double)positionX
-                          y:(double)positionY
-                  modifiers:(NSUInteger)modifiers
-                forceUpdate:(BOOL *)forceUpdate {
-  KKBezierPath *active = [self activePath];
-  if (!active)
-    return;
-
-  simd_float2 bmin, bmax;
-  [self boundsOfPath:active min:&bmin max:&bmax];
-  float ddx = (float)(self.dragAnchor.x - positionX);
-  float ddy = (float)(self.dragAnchor.y - positionY);
-  NSInteger ci = self.dragCornerIndex;
-  if (ci == 0 || ci == 3)
-    ddx = -ddx;
-  if (ci == 2 || ci == 3)
-    ddy = -ddy;
-  float delta = (ddx + ddy) * 0.5f;
-
-  CGPoint cMin = [self canvasPointFromObjectPoint:bmin];
-  CGPoint cMax = [self canvasPointFromObjectPoint:bmax];
-  float canvasW = (float)fabs(cMax.x - cMin.x);
-  float canvasH = (float)fabs(cMax.y - cMin.y);
-  float halfShort = fminf(canvasW, canvasH) * 0.5f;
-  float inset = (float)[self strokeWidth] * 0.5f + 20.0f;
-  float travel = fminf(100.0f, fmaxf(1.0f, halfShort - inset));
-  float rawFraction = self.dragStartPixelRadius + delta / travel;
-
-  float sw = (float)[self strokeWidth];
-  float maxPx = fmaxf(canvasW, canvasH) * 0.5f;
-  float minFraction = (maxPx > 0.0001f) ? (sw * 1.15f) / maxPx : 0;
-  float snapThreshold = minFraction * 0.5f;
-  float fraction;
-  if (rawFraction < snapThreshold)
-    fraction = 0.0f;
-  else
-    fraction = fmaxf(minFraction, fminf(1.0f, rawFraction));
-
-  BOOL optHeld = (modifiers & kFxModifierKey_OPTION) != 0;
-  float ftl = optHeld ? active.cornerRadiusTL : fraction;
-  float ftr = optHeld ? active.cornerRadiusTR : fraction;
-  float fbr = optHeld ? active.cornerRadiusBR : fraction;
-  float fbl = optHeld ? active.cornerRadiusBL : fraction;
-  if (optHeld) {
-    switch (ci) {
-    case 0:
-      ftl = fraction;
-      break;
-    case 1:
-      ftr = fraction;
-      break;
-    case 2:
-      fbr = fraction;
-      break;
-    case 3:
-      fbl = fraction;
-      break;
-    }
-  }
-
-  [active setRoundedRectWithMin:bmin
-                            max:bmax
-                     fractionTL:ftl
-                     fractionTR:ftr
-                     fractionBR:fbr
-                     fractionBL:fbl
-                    canvasWidth:canvasW
-                   canvasHeight:canvasH];
   [self writePaths:self.paths];
   *forceUpdate = YES;
 }
@@ -210,6 +149,13 @@
                   forceUpdate:forceUpdate];
     return;
   }
+  if (self.dragResizeHandle >= 0) {
+    [self dragResizeAtX:positionX
+                      y:positionY
+              modifiers:modifiers
+            forceUpdate:forceUpdate];
+    return;
+  }
   if (self.dragIsPath) {
     KKBezierPath *active = [self activePath];
     if (!active)
@@ -233,7 +179,6 @@
                          y:(double)positionY
                  modifiers:(NSUInteger)modifiers {
   self.marqueeEnd = CGPointMake(positionX, positionY);
-  BOOL optDown = (modifiers & kFxModifierKey_OPTION) != 0;
 
   CGFloat minX = MIN(self.marqueeStart.x, self.marqueeEnd.x);
   CGFloat maxX = MAX(self.marqueeStart.x, self.marqueeEnd.x);
@@ -243,6 +188,30 @@
   if (maxX - minX < 2.0 && maxY - minY < 2.0)
     return;
 
+  BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
+
+  if (isCursorMode) {
+    for (NSUInteger p = 0; p < self.paths.count; p++) {
+      KKBezierPath *path = self.paths[p];
+      if (path.count == 0)
+        continue;
+      simd_float2 bmin, bmax;
+      [self boundsOfPath:path min:&bmin max:&bmax];
+      CGPoint bl = [self canvasPointFromObjectPoint:bmin];
+      CGPoint tr = [self canvasPointFromObjectPoint:bmax];
+      CGFloat pMinX = MIN(bl.x, tr.x), pMaxX = MAX(bl.x, tr.x);
+      CGFloat pMinY = MIN(bl.y, tr.y), pMaxY = MAX(bl.y, tr.y);
+      BOOL fullyInside = (pMinX >= minX && pMaxX <= maxX &&
+                          pMinY >= minY && pMaxY <= maxY);
+      if (fullyInside) {
+        [self.selectedPathIndices addIndex:p];
+        self.activePathIndex = (NSInteger)p;
+      }
+    }
+    return;
+  }
+
+  BOOL optDown = (modifiers & kFxModifierKey_OPTION) != 0;
   for (NSUInteger p = 0; p < self.paths.count; p++) {
     KKBezierPath *path = self.paths[p];
     for (NSUInteger i = 0; i < path.count; i++) {
@@ -282,6 +251,7 @@
 
 - (void)resetDragState {
   self.dragIndex = -1;
+  self.dragResizeHandle = -1;
   self.dragIsInHandle = NO;
   self.dragIsOutHandle = NO;
   self.dragIsNewPoint = NO;
@@ -289,6 +259,8 @@
   self.dragIsMarquee = NO;
   self.dragIsSelection = NO;
   self.dragIsRect = NO;
+  self.resizeOrigSnapshots = nil;
+  self.resizeOrigIndices = nil;
 }
 
 - (void)mouseUpAtPositionX:(double)positionX
@@ -323,6 +295,7 @@
 
   if (asciiKey == 27) {
     [self.selectedPoints removeAllIndexes];
+    [self.selectedPathIndices removeAllIndexes];
     self.activePathIndex = -1;
     self.toolbar.activeTag = kOSCToolbarCursor;
     *forceUpdate = YES;
@@ -335,17 +308,14 @@
 
   self.paths = [self readPaths];
 
-  if (isCursorMode && self.selectedPoints.count > 0) {
-    for (NSInteger p = (NSInteger)self.paths.count - 1; p >= 0; p--) {
-      KKBezierPath *path = self.paths[p];
-      for (NSInteger i = (NSInteger)path.count - 1; i >= 0; i--) {
-        if ([self isPointSelected:p point:i])
-          [path removeAtIndex:i];
-      }
-      if (path.count < 2)
-        [self.paths removeObjectAtIndex:p];
-    }
-    [self.selectedPoints removeAllIndexes];
+  if (isCursorMode && self.selectedPathIndices.count > 0) {
+    [self.selectedPathIndices
+        enumerateIndexesWithOptions:NSEnumerationReverse
+                         usingBlock:^(NSUInteger idx, BOOL *stop) {
+                           if (idx < self.paths.count)
+                             [self.paths removeObjectAtIndex:idx];
+                         }];
+    [self.selectedPathIndices removeAllIndexes];
     self.activePathIndex = -1;
     [self writePaths:self.paths];
     *forceUpdate = YES;
@@ -359,6 +329,7 @@
 
   if (isCursorMode) {
     [self.paths removeObjectAtIndex:self.activePathIndex];
+    [self.selectedPathIndices removeAllIndexes];
     self.activePathIndex = -1;
     [self writePaths:self.paths];
     *forceUpdate = YES;

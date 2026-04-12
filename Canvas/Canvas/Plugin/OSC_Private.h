@@ -28,8 +28,25 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx);
 - (void)boundsOfPath:(KKBezierPath *)path
                  min:(simd_float2 *)outMin
                  max:(simd_float2 *)outMax;
+- (BOOL)boundsOfSelectedPaths:(simd_float2 *)outMin max:(simd_float2 *)outMax;
 - (CGPoint)cornerRadiusHandlePosition:(NSInteger)corner
                               forPath:(KKBezierPath *)path;
+- (CGPoint)resizeHandlePosition:(NSInteger)index
+                       topRight:(CGPoint)tr
+                     bottomLeft:(CGPoint)bl;
+
+@end
+
+@interface CanvasOSC (Transform)
+
+- (void)dragCornerRadiusAtX:(double)positionX
+                          y:(double)positionY
+                  modifiers:(NSUInteger)modifiers
+                forceUpdate:(BOOL *)forceUpdate;
+- (void)dragResizeAtX:(double)positionX
+                    y:(double)positionY
+            modifiers:(NSUInteger)modifiers
+          forceUpdate:(BOOL *)forceUpdate;
 
 @end
 
@@ -45,5 +62,8 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx);
                  positionY:(double)positionY
                     active:(KKBezierPath *)active
                forceUpdate:(BOOL *)forceUpdate;
+- (void)mouseDownOnResizeHandle:(NSInteger)handleIndex
+                         active:(KKBezierPath *)active
+                    forceUpdate:(BOOL *)forceUpdate;
 
 @end
