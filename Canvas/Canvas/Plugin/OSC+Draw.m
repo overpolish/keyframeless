@@ -17,14 +17,17 @@
   if (path.closed && path.count >= 3)
     segCount = path.count;
 
+  CGPoint prev = CGPointZero;
+  BOOL hasPrev = NO;
   for (NSUInteger i = 0; i < segCount; i++) {
     NSUInteger nextIdx = (i + 1) % path.count;
-    CGPoint prev = CGPointZero;
-    for (NSUInteger s = 0; s <= 32; s++) {
+    // Skip first point of segment if we already have it from previous segment
+    NSUInteger startS = (hasPrev && i > 0) ? 1 : 0;
+    for (NSUInteger s = startS; s <= 32; s++) {
       float t = (float)s / 32.0f;
       simd_float2 pos = [path evaluatePointAtIndex:i nextIndex:nextIdx atT:t];
       CGPoint cur = [self canvasPointFromObjectPoint:pos];
-      if (s > 0) {
+      if (hasPrev) {
         [self drawLineFrom:prev
                           to:cur
                        color:color
@@ -32,7 +35,18 @@
             destinationImage:dest];
       }
       prev = cur;
+      hasPrev = YES;
     }
+  }
+  // Close: connect last point back to first
+  if (path.closed && hasPrev) {
+    simd_float2 firstPos = [path evaluatePointAtIndex:0 nextIndex:1 atT:0.0f];
+    CGPoint first = [self canvasPointFromObjectPoint:firstPos];
+    [self drawLineFrom:prev
+                      to:first
+                   color:color
+               halfWidth:1.5f
+        destinationImage:dest];
   }
 }
 
@@ -221,7 +235,6 @@
     simd_float2 a = self.rectStart, b = self.dragOrigin;
     CGPoint ca = [self canvasPointFromObjectPoint:a];
     CGPoint cb = [self canvasPointFromObjectPoint:b];
-    CGFloat hw = (CGFloat)[self strokeWidth] * 0.5f;
     NSInteger ix0 = (NSInteger)round(MIN(ca.x, cb.x));
     NSInteger ix1 = (NSInteger)round(MAX(ca.x, cb.x));
     NSInteger iy0 = (NSInteger)round(MIN(ca.y, cb.y));
@@ -233,22 +246,22 @@
       [self drawLineFrom:tl
                         to:tr
                      color:strokeColor
-                 halfWidth:hw
+                 halfWidth:1.0f
           destinationImage:destinationImage];
       [self drawLineFrom:tr
                         to:br
                      color:strokeColor
-                 halfWidth:hw
+                 halfWidth:1.0f
           destinationImage:destinationImage];
       [self drawLineFrom:br
                         to:bl
                      color:strokeColor
-                 halfWidth:hw
+                 halfWidth:1.0f
           destinationImage:destinationImage];
       [self drawLineFrom:bl
                         to:tl
                      color:strokeColor
-                 halfWidth:hw
+                 halfWidth:1.0f
           destinationImage:destinationImage];
 
       // Size label below bottom-right (canvas Y=0 is bottom)
