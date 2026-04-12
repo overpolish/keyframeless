@@ -148,6 +148,15 @@
                                   destinationImage:dest
                                             atTime:time];
   }
+
+  NSInteger pxW = (NSInteger)round(fabs(tr.x - bl.x));
+  NSInteger pxH = (NSInteger)round(fabs(tr.y - bl.y));
+  self.sizeLabel.text =
+      [NSString stringWithFormat:@"%ld × %ld", (long)pxW, (long)pxH];
+  CGSize labelSize = self.sizeLabel.size;
+  CGPoint labelPos = {MAX(tr.x, bl.x) - labelSize.width * 0.5f,
+                      MIN(tr.y, bl.y) - labelSize.height * 0.5f - 6.0f};
+  [self.sizeLabel drawAtCanvasPosition:labelPos destinationImage:dest];
 }
 
 - (void)drawCornerRadiusHandles:(KKBezierPath *)path
