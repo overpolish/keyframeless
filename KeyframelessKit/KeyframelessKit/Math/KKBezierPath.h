@@ -49,12 +49,14 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setType:(KKBezierPointType)type atIndex:(NSUInteger)index;
 - (void)translateBy:(simd_float2)delta;
 
-/// Rebuild this path as a rounded rectangle with the given bounds and radii.
-/// radiusX/radiusY are in object-space units (may differ for correct circles).
+/// Rebuild this path as a rounded rectangle.
+/// fraction 0–1: 0 = sharp, 1 = full ellipse.
+/// Circular arcs until shorter side maxes, then elongates.
 - (void)setRoundedRectWithMin:(simd_float2)min
                           max:(simd_float2)max
-                      radiusX:(float)rx
-                      radiusY:(float)ry;
+                     fraction:(float)fraction
+                  canvasWidth:(float)canvasW
+                 canvasHeight:(float)canvasH;
 - (void)toggleTypeAtIndex:(NSUInteger)index
                     start:(simd_float2)start
                       end:(simd_float2)end;

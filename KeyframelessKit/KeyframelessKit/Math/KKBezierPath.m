@@ -153,15 +153,16 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
 
 - (void)setRoundedRectWithMin:(simd_float2)min
                           max:(simd_float2)max
-                      radiusX:(float)rx
-                      radiusY:(float)ry {
+                     fraction:(float)fraction
+                  canvasWidth:(float)canvasW
+                 canvasHeight:(float)canvasH {
+  fraction = fmaxf(0.0f, fminf(fraction, 1.0f));
+  _cornerRadius = fraction;
+
   float maxRX = (max.x - min.x) * 0.5f;
   float maxRY = (max.y - min.y) * 0.5f;
-  rx = fminf(rx, maxRX);
-  ry = fminf(ry, maxRY);
 
-  if (rx < 0.0001f || ry < 0.0001f) {
-    _cornerRadius = 0;
+  if (fraction < 0.0001f) {
     [self ensureCapacity:4];
     _count = 4;
     _closed = YES;
@@ -172,35 +173,81 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     return;
   }
 
-  // Store the pixel-space radius (ry maps more directly to visual size)
-  _cornerRadius = ry;
+  // Circular arcs: equal pixel radius, clamped per-axis
+  // At fraction=1.0, longer pixel side = its max, shorter already capped
+  float objW = max.x - min.x;
+  float objH = max.y - min.y;
+  float maxPxX = (objW > 0.0001f) ? (maxRX / objW) * canvasW : 0;
+  float maxPxY = (objH > 0.0001f) ? (maxRY / objH) * canvasH : 0;
+  float maxPx = fmaxf(maxPxX, maxPxY);
+  float pixelR = fraction * maxPx;
+  float pxX = fminf(pixelR, maxPxX);
+  float pxY = fminf(pixelR, maxPxY);
+  float rx = (canvasW > 0.0001f) ? (pxX / canvasW) * objW : 0;
+  float ry = (canvasH > 0.0001f) ? (pxY / canvasH) * objH : 0;
 
   float kx = rx * 0.5522847498f;
   float ky = ry * 0.5522847498f;
-  [self ensureCapacity:8];
-  _count = 8;
-  _closed = YES;
+  BOOL mergeH = (maxRX - rx) < 0.0001f; // top/bottom sides collapse
+  BOOL mergeV = (maxRY - ry) < 0.0001f; // left/right sides collapse
+  float cx = (min.x + max.x) * 0.5f;
+  float cy = (min.y + max.y) * 0.5f;
 
-  // Top-left corner (clockwise from left side)
-  _points[0] =
-      (KKBezierPoint){min.x, max.y - ry, 0, -ky, 0, ky, KKBezierPointBezier};
-  _points[1] =
-      (KKBezierPoint){min.x + rx, max.y, -kx, 0, kx, 0, KKBezierPointBezier};
-  // Top-right corner
-  _points[2] =
-      (KKBezierPoint){max.x - rx, max.y, -kx, 0, kx, 0, KKBezierPointBezier};
-  _points[3] =
-      (KKBezierPoint){max.x, max.y - ry, 0, ky, 0, -ky, KKBezierPointBezier};
-  // Bottom-right corner
-  _points[4] =
-      (KKBezierPoint){max.x, min.y + ry, 0, ky, 0, -ky, KKBezierPointBezier};
-  _points[5] =
-      (KKBezierPoint){max.x - rx, min.y, kx, 0, -kx, 0, KKBezierPointBezier};
-  // Bottom-left corner
-  _points[6] =
-      (KKBezierPoint){min.x + rx, min.y, kx, 0, -kx, 0, KKBezierPointBezier};
-  _points[7] =
-      (KKBezierPoint){min.x, min.y + ry, 0, -ky, 0, ky, KKBezierPointBezier};
+  // Build into temp array of up to 8, then merge adjacent pairs
+  KKBezierPoint tmp[8] = {
+      // Top-left corner (clockwise from left side)
+      {min.x, max.y - ry, 0, -ky, 0, ky, KKBezierPointBezier},
+      {min.x + rx, max.y, -kx, 0, kx, 0, KKBezierPointBezier},
+      // Top-right corner
+      {max.x - rx, max.y, -kx, 0, kx, 0, KKBezierPointBezier},
+      {max.x, max.y - ry, 0, ky, 0, -ky, KKBezierPointBezier},
+      // Bottom-right corner
+      {max.x, min.y + ry, 0, ky, 0, -ky, KKBezierPointBezier},
+      {max.x - rx, min.y, kx, 0, -kx, 0, KKBezierPointBezier},
+      // Bottom-left corner
+      {min.x + rx, min.y, kx, 0, -kx, 0, KKBezierPointBezier},
+      {min.x, min.y + ry, 0, -ky, 0, ky, KKBezierPointBezier},
+  };
+
+  if (mergeH && mergeV) {
+    // Full ellipse: 4 points
+    [self ensureCapacity:4];
+    _count = 4;
+    _points[0] = (KKBezierPoint){min.x, cy, 0, -ky, 0, ky, KKBezierPointBezier};
+    _points[1] = (KKBezierPoint){cx, max.y, -kx, 0, kx, 0, KKBezierPointBezier};
+    _points[2] = (KKBezierPoint){max.x, cy, 0, ky, 0, -ky, KKBezierPointBezier};
+    _points[3] = (KKBezierPoint){cx, min.y, kx, 0, -kx, 0, KKBezierPointBezier};
+  } else if (mergeH) {
+    // Top/bottom collapsed, left/right have straight edges: 6 points
+    [self ensureCapacity:6];
+    _count = 6;
+    _points[0] = tmp[0]; // left side of TL
+    _points[1] = (KKBezierPoint){
+        cx, max.y, -kx, 0, kx, 0, KKBezierPointBezier}; // top merged
+    _points[2] = tmp[3];                                // right side of TR
+    _points[3] = tmp[4];                                // right side of BR
+    _points[4] = (KKBezierPoint){
+        cx, min.y, kx, 0, -kx, 0, KKBezierPointBezier}; // bottom merged
+    _points[5] = tmp[7];                                // left side of BL
+  } else if (mergeV) {
+    // Left/right collapsed, top/bottom have straight edges: 6 points
+    [self ensureCapacity:6];
+    _count = 6;
+    _points[0] = (KKBezierPoint){
+        min.x, cy, 0, -ky, 0, ky, KKBezierPointBezier}; // left merged
+    _points[1] = tmp[1];                                // top side of TL
+    _points[2] = tmp[2];                                // top side of TR
+    _points[3] = (KKBezierPoint){
+        max.x, cy, 0, ky, 0, -ky, KKBezierPointBezier}; // right merged
+    _points[4] = tmp[5];                                // bottom side of BR
+    _points[5] = tmp[6];                                // bottom side of BL
+  } else {
+    // Standard 8-point rounded rect
+    [self ensureCapacity:8];
+    _count = 8;
+    memcpy(_points, tmp, 8 * sizeof(KKBezierPoint));
+  }
+  _closed = YES;
 }
 
 - (void)toggleTypeAtIndex:(NSUInteger)index

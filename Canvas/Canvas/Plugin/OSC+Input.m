@@ -146,19 +146,7 @@
   if (activePart == kOSCCornerRadius && active) {
     self.dragIndex = -2; // sentinel for corner radius drag
     self.dragAnchor = (simd_float2){(float)positionX, (float)positionY};
-    // Compute current pixel radius from stored cornerRadius
-    simd_float2 bmin, bmax;
-    [self boundsOfPath:active min:&bmin max:&bmax];
-    CGPoint minC = [self canvasPointFromObjectPoint:bmin];
-    CGPoint maxC = [self canvasPointFromObjectPoint:bmax];
-    float canvasH = (float)fabs(maxC.y - minC.y);
-    float objH = bmax.y - bmin.y;
-    float storedPixelR =
-        (objH > 0.0001f) ? (active.cornerRadius / objH) * canvasH : 0;
-    // The inset position represents radius=0 visually, so offset accordingly
-    float inset = (float)[self strokeWidth] * 0.5f + 20.0f;
-    float insetPixelR = inset * 1.4142135624f;
-    self.dragStartPixelRadius = storedPixelR + insetPixelR;
+    self.dragStartPixelRadius = active.cornerRadius; // fraction 0–1
     *forceUpdate = YES;
     return;
   }
@@ -411,25 +399,23 @@
   if (self.dragIndex == -2) {
     simd_float2 min, max;
     [self boundsOfPath:active min:&min max:&max];
-    // Diagonal delta from drag start in canvas space
     float ddx = (float)(self.dragAnchor.x - positionX);
     float ddy = (float)(self.dragAnchor.y - positionY);
-    // Project onto diagonal (inward = positive)
-    float diagDelta = (ddx + ddy) * 0.7071067812f;
+    float delta = (ddx + ddy) * 0.5f;
+    CGPoint cMin = [self canvasPointFromObjectPoint:min];
+    CGPoint cMax = [self canvasPointFromObjectPoint:max];
+    float canvasW = (float)fabs(cMax.x - cMin.x);
+    float canvasH = (float)fabs(cMax.y - cMin.y);
+    float halfShort = fminf(canvasW, canvasH) * 0.5f;
     float inset = (float)[self strokeWidth] * 0.5f + 20.0f;
-    float insetPixelR = inset * 1.4142135624f;
-    float pixelR =
-        fmaxf(0.0f, self.dragStartPixelRadius + diagDelta - insetPixelR);
-    // Convert pixel radius to object-space rx and ry
-    CGPoint minCanvas = [self canvasPointFromObjectPoint:min];
-    CGPoint maxCanvas = [self canvasPointFromObjectPoint:max];
-    float canvasW = (float)fabs(maxCanvas.x - minCanvas.x);
-    float canvasH = (float)fabs(maxCanvas.y - minCanvas.y);
-    float objW = max.x - min.x;
-    float objH = max.y - min.y;
-    float rx = (canvasW > 0.0001f) ? (pixelR / canvasW) * objW : 0;
-    float ry = (canvasH > 0.0001f) ? (pixelR / canvasH) * objH : 0;
-    [active setRoundedRectWithMin:min max:max radiusX:rx radiusY:ry];
+    float travel = fminf(100.0f, fmaxf(1.0f, halfShort - inset));
+    float fraction =
+        fmaxf(0.0f, fminf(1.0f, self.dragStartPixelRadius + delta / travel));
+    [active setRoundedRectWithMin:min
+                              max:max
+                         fraction:fraction
+                      canvasWidth:canvasW
+                     canvasHeight:canvasH];
     [self writePaths:self.paths];
     *forceUpdate = YES;
     return;
