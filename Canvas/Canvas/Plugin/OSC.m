@@ -58,8 +58,10 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
                                                tag:kOSCToolbarPen],
                        [KKToolbarItem itemWithIcon:@"rectangle.fill"
                                                tag:kOSCToolbarRect],
+                       [KKToolbarItem itemWithIcon:@"circle.fill"
+                                               tag:kOSCToolbarEllipse],
                      ]];
-    self.toolbar.activeTag = kOSCToolbarPen;
+    self.toolbar.activeTag = kOSCToolbarCursor;
 
     self.sizeLabel = [[KKOSCLabel alloc] initWithAPIManager:apiManager];
     self.sizeLabel.monospaced = YES;

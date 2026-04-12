@@ -64,8 +64,7 @@
       for (NSUInteger i = 0; i < path.count; i++) {
         if ([self isPointSelected:p point:i]) {
           KKBezierPoint pt = [path pointAtIndex:i];
-          [path moveAtIndex:i
-                         to:(simd_float2){pt.x + delta.x, pt.y + delta.y}];
+          [path moveAtIndex:i to:(simd_float2){pt.x + delta.x, pt.y + delta.y}];
         }
       }
     }
@@ -128,7 +127,7 @@
     *forceUpdate = YES;
     return;
   }
-  if (self.dragIsRect) {
+  if (self.dragIsRect || self.dragIsEllipse) {
     [self dragRectToX:positionX
                     y:positionY
             modifiers:modifiers
@@ -201,8 +200,8 @@
       CGPoint tr = [self canvasPointFromObjectPoint:bmax];
       CGFloat pMinX = MIN(bl.x, tr.x), pMaxX = MAX(bl.x, tr.x);
       CGFloat pMinY = MIN(bl.y, tr.y), pMaxY = MAX(bl.y, tr.y);
-      BOOL fullyInside = (pMinX >= minX && pMaxX <= maxX &&
-                          pMinY >= minY && pMaxY <= maxY);
+      BOOL fullyInside =
+          (pMinX >= minX && pMaxX <= maxX && pMinY >= minY && pMaxY <= maxY);
       if (fullyInside) {
         [self.selectedPathIndices addIndex:p];
         self.activePathIndex = (NSInteger)p;
@@ -246,6 +245,50 @@
   rect.closed = YES;
   [self.paths addObject:rect];
   self.activePathIndex = (NSInteger)self.paths.count - 1;
+  [self.selectedPathIndices removeAllIndexes];
+  [self.selectedPathIndices addIndex:self.activePathIndex];
+  [self writePaths:self.paths];
+}
+
+- (void)finalizeEllipse {
+  simd_float2 a = self.rectStart;
+  simd_float2 b = self.dragOrigin;
+  float minX = fminf(a.x, b.x), maxX = fmaxf(a.x, b.x);
+  float minY = fminf(a.y, b.y), maxY = fmaxf(a.y, b.y);
+  if (maxX - minX < 0.001f || maxY - minY < 0.001f)
+    return;
+
+  float cx = (minX + maxX) * 0.5f, cy = (minY + maxY) * 0.5f;
+  float rx = (maxX - minX) * 0.5f, ry = (maxY - minY) * 0.5f;
+  float kx = rx * 0.5522847498f, ky = ry * 0.5522847498f;
+
+  KKBezierPath *ellipse = [[KKBezierPath alloc] init];
+  [ellipse insertAtIndex:0 position:(simd_float2){cx, cy + ry}]; // top
+  [ellipse insertAtIndex:1 position:(simd_float2){cx + rx, cy}]; // right
+  [ellipse insertAtIndex:2 position:(simd_float2){cx, cy - ry}]; // bottom
+  [ellipse insertAtIndex:3 position:(simd_float2){cx - rx, cy}]; // left
+
+  [ellipse setOutHandle:(simd_float2){kx, 0} atIndex:0];
+  [ellipse setInHandle:(simd_float2){-kx, 0} atIndex:0];
+  [ellipse setType:KKBezierPointBezier atIndex:0];
+
+  [ellipse setOutHandle:(simd_float2){0, -ky} atIndex:1];
+  [ellipse setInHandle:(simd_float2){0, ky} atIndex:1];
+  [ellipse setType:KKBezierPointBezier atIndex:1];
+
+  [ellipse setOutHandle:(simd_float2){-kx, 0} atIndex:2];
+  [ellipse setInHandle:(simd_float2){kx, 0} atIndex:2];
+  [ellipse setType:KKBezierPointBezier atIndex:2];
+
+  [ellipse setOutHandle:(simd_float2){0, ky} atIndex:3];
+  [ellipse setInHandle:(simd_float2){0, -ky} atIndex:3];
+  [ellipse setType:KKBezierPointBezier atIndex:3];
+
+  ellipse.closed = YES;
+  [self.paths addObject:ellipse];
+  self.activePathIndex = (NSInteger)self.paths.count - 1;
+  [self.selectedPathIndices removeAllIndexes];
+  [self.selectedPathIndices addIndex:self.activePathIndex];
   [self writePaths:self.paths];
 }
 
@@ -259,6 +302,7 @@
   self.dragIsMarquee = NO;
   self.dragIsSelection = NO;
   self.dragIsRect = NO;
+  self.dragIsEllipse = NO;
   self.resizeOrigSnapshots = nil;
   self.resizeOrigIndices = nil;
 }
@@ -273,6 +317,8 @@
     [self finalizeMarqueeAtX:positionX y:positionY modifiers:modifiers];
   if (self.dragIsRect)
     [self finalizeRect];
+  if (self.dragIsEllipse)
+    [self finalizeEllipse];
 
   [self resetDragState];
   *forceUpdate = YES;

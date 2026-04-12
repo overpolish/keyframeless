@@ -178,7 +178,7 @@
                  forceUpdate:(BOOL *)forceUpdate
                       atTime:(CMTime)time {
   if (activePart == kOSCToolbarCursor || activePart == kOSCToolbarPen ||
-      activePart == kOSCToolbarRect) {
+      activePart == kOSCToolbarRect || activePart == kOSCToolbarEllipse) {
     self.toolbar.activeTag = activePart;
     *forceUpdate = YES;
     return;
@@ -191,6 +191,7 @@
   BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
   BOOL isPenMode = (self.toolbar.activeTag == kOSCToolbarPen);
   BOOL isRectMode = (self.toolbar.activeTag == kOSCToolbarRect);
+  BOOL isEllipseMode = (self.toolbar.activeTag == kOSCToolbarEllipse);
 
   if (activePart >= kOSCResizeHandleBase &&
       activePart < kOSCResizeHandleBase + 8 && active) {
@@ -268,12 +269,13 @@
     return;
   }
 
-  if (isRectMode) {
+  if (isRectMode || isEllipseMode) {
     simd_float2 objPos =
         [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
     self.rectStart = objPos;
     self.dragOrigin = objPos;
-    self.dragIsRect = YES;
+    self.dragIsRect = isRectMode;
+    self.dragIsEllipse = isEllipseMode;
     *forceUpdate = YES;
   }
 }

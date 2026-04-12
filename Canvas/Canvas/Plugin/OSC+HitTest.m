@@ -42,7 +42,14 @@
         NSUInteger idx = self.selectedPathIndices.firstIndex;
         if (idx < self.paths.count) {
           KKBezierPath *active = self.paths[idx];
-          if (active.closed && active.count >= 4) {
+          BOOL hasLinear = NO;
+          for (NSUInteger li = 0; li < active.count; li++) {
+            if ([active pointAtIndex:li].type == KKBezierPointLinear) {
+              hasLinear = YES;
+              break;
+            }
+          }
+          if (active.closed && active.count >= 4 && hasLinear) {
             NSInteger crParts[4] = {kOSCCornerRadiusTL, kOSCCornerRadiusTR,
                                     kOSCCornerRadiusBR, kOSCCornerRadiusBL};
             for (int ci = 0; ci < 4; ci++) {
@@ -182,13 +189,14 @@
 
   BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
   BOOL isRectMode = (self.toolbar.activeTag == kOSCToolbarRect);
+  BOOL isEllipseMode = (self.toolbar.activeTag == kOSCToolbarEllipse);
 
   if (isCursorMode) {
     [self hitTestCursorModeAtX:positionX y:positionY activePart:activePart];
     return;
   }
 
-  if (isRectMode) {
+  if (isRectMode || isEllipseMode) {
     [oscAPI setCursor:[NSCursor crosshairCursor]];
     return;
   }
