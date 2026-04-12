@@ -11,7 +11,7 @@
 @interface CanvasOSC : KKOnScreenControl
 
 @property(nonatomic, strong) NSMutableArray<KKBezierPath *> *paths;
-@property(nonatomic, assign) NSInteger activePathIndex; // -1 = none selected
+@property(nonatomic, assign) NSInteger activePathIndex;
 @property(nonatomic, strong) KKPointOSC *pathPointOSC;
 @property(nonatomic, strong) KKPointOSC *pathHandleOSC;
 @property(nonatomic, assign) NSInteger dragIndex;
@@ -20,12 +20,11 @@
 @property(nonatomic, assign) BOOL dragIsNewPoint;
 @property(nonatomic, assign) BOOL dragIsPath;
 @property(nonatomic, assign) BOOL dragIsMarquee;
-@property(nonatomic, assign) BOOL dragIsSelection; // dragging selected points
+@property(nonatomic, assign) BOOL dragIsSelection;
 @property(nonatomic, assign) simd_float2 dragOrigin;
 @property(nonatomic, assign) CGPoint marqueeStart;
 @property(nonatomic, assign) CGPoint marqueeEnd;
-@property(nonatomic, strong)
-    NSMutableIndexSet *selectedPoints; // pathIdx*100000+ptIdx
+@property(nonatomic, strong) NSMutableIndexSet *selectedPoints;
 @property(nonatomic, assign) NSInteger lastClickIndex;
 @property(nonatomic, assign) CFAbsoluteTime lastClickTime;
 @property(nonatomic, strong) NSCursor *penCursor;
