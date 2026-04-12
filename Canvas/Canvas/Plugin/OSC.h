@@ -31,6 +31,7 @@
 @property(nonatomic, assign) CGPoint marqueeStart;
 @property(nonatomic, assign) CGPoint marqueeEnd;
 @property(nonatomic, strong) NSMutableIndexSet *selectedPoints;
+@property(nonatomic, strong) NSMutableIndexSet *selectedPathIndices;
 @property(nonatomic, assign) NSInteger lastClickIndex;
 @property(nonatomic, assign) CFAbsoluteTime lastClickTime;
 @property(nonatomic, strong) NSCursor *penCursor;
@@ -41,6 +42,14 @@
 @property(nonatomic, strong) NSCursor *penDeleteCursor;
 @property(nonatomic, strong) KKToolbar *toolbar;
 @property(nonatomic, strong) KKOSCLabel *sizeLabel;
+@property(nonatomic, strong) KKRectBorderOSC *borderOSC;
+@property(nonatomic, strong) NSArray<KKPointOSC *> *resizeHandleOSCs;
+@property(nonatomic, assign) NSInteger dragResizeHandle;
+@property(nonatomic, assign) simd_float2 resizeOrigMin;
+@property(nonatomic, assign) simd_float2 resizeOrigMax;
+@property(nonatomic, assign) float resizeOrigAspect;
+@property(nonatomic, strong) NSArray<NSData *> *resizeOrigSnapshots;
+@property(nonatomic, strong) NSArray<NSNumber *> *resizeOrigIndices;
 
 - (NSMutableArray<KKBezierPath *> *)readPaths;
 - (void)writePaths:(NSArray<KKBezierPath *> *)paths;

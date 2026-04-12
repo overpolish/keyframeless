@@ -28,6 +28,7 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
     self.dragIndex = -1;
     self.lastClickIndex = -1;
     self.selectedPoints = [NSMutableIndexSet indexSet];
+    self.selectedPathIndices = [NSMutableIndexSet indexSet];
 
     self.pathPointOSC = [[KKPointOSC alloc] initWithAPIManager:apiManager];
     self.pathPointOSC.clearsOnDraw = NO;
@@ -62,6 +63,19 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
 
     self.sizeLabel = [[KKOSCLabel alloc] initWithAPIManager:apiManager];
     self.sizeLabel.monospaced = YES;
+
+    self.borderOSC = [[KKRectBorderOSC alloc] initWithAPIManager:apiManager];
+    self.borderOSC.clearsOnDraw = NO;
+    NSMutableArray *handles = [NSMutableArray arrayWithCapacity:8];
+    for (int i = 0; i < 8; i++) {
+      KKPointOSC *h = [[KKPointOSC alloc] initWithAPIManager:apiManager];
+      h.clearsOnDraw = NO;
+      h.oscRadius = 5.0f;
+      h.outlineWidth = 1.5f;
+      [handles addObject:h];
+    }
+    self.resizeHandleOSCs = handles;
+    self.dragResizeHandle = -1;
   }
   return self;
 }
@@ -187,6 +201,38 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   *outMax = (simd_float2){maxX, maxY};
 }
 
+- (BOOL)boundsOfSelectedPaths:(simd_float2 *)outMin max:(simd_float2 *)outMax {
+  __block BOOL found = NO;
+  __block float minX, minY, maxX, maxY;
+  [self.selectedPathIndices
+      enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+        if (idx >= self.paths.count)
+          return;
+        KKBezierPath *path = self.paths[idx];
+        if (path.count == 0)
+          return;
+        simd_float2 pMin, pMax;
+        [self boundsOfPath:path min:&pMin max:&pMax];
+        if (!found) {
+          minX = pMin.x;
+          minY = pMin.y;
+          maxX = pMax.x;
+          maxY = pMax.y;
+          found = YES;
+        } else {
+          minX = fminf(minX, pMin.x);
+          minY = fminf(minY, pMin.y);
+          maxX = fmaxf(maxX, pMax.x);
+          maxY = fmaxf(maxY, pMax.y);
+        }
+      }];
+  if (found) {
+    *outMin = (simd_float2){minX, minY};
+    *outMax = (simd_float2){maxX, maxY};
+  }
+  return found;
+}
+
 - (CGPoint)cornerRadiusHandlePosition:(NSInteger)corner
                               forPath:(KKBezierPath *)path {
   simd_float2 bmin, bmax;
@@ -214,6 +260,33 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
     return (CGPoint){maxC.x - offset, minC.y + offset};
   case 3: // BL: corner at (minX, minY), inward = +X, +Y
     return (CGPoint){minC.x + offset, minC.y + offset};
+  default:
+    return CGPointZero;
+  }
+}
+
+- (CGPoint)resizeHandlePosition:(NSInteger)index
+                       topRight:(CGPoint)tr
+                     bottomLeft:(CGPoint)bl {
+  double mx = (tr.x + bl.x) * 0.5;
+  double my = (tr.y + bl.y) * 0.5;
+  switch (index) {
+  case 0:
+    return (CGPoint){bl.x, tr.y}; // TL
+  case 1:
+    return (CGPoint){mx, tr.y}; // TC
+  case 2:
+    return (CGPoint){tr.x, tr.y}; // TR
+  case 3:
+    return (CGPoint){tr.x, my}; // RC
+  case 4:
+    return (CGPoint){tr.x, bl.y}; // BR
+  case 5:
+    return (CGPoint){mx, bl.y}; // BC
+  case 6:
+    return (CGPoint){bl.x, bl.y}; // BL
+  case 7:
+    return (CGPoint){bl.x, my}; // LC
   default:
     return CGPointZero;
   }

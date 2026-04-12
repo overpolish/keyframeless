@@ -10,27 +10,82 @@
 
 @implementation CanvasOSC (HitTest)
 
-- (void)hitTestOSCAtMousePositionX:(double)positionX
-                    mousePositionY:(double)positionY
-                        activePart:(NSInteger *)activePart
-                            atTime:(CMTime)time {
-  *activePart = kOSCCanvas;
-  self.paths = [self readPaths];
-
-  double hitRadius = 12.0;
+- (void)hitTestCursorModeAtX:(double)x
+                           y:(double)y
+                  activePart:(NSInteger *)activePart {
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  double hitRadius = 12.0;
 
-  NSInteger toolbarPart = [self.toolbar hitTestAtX:positionX y:positionY];
-  if (toolbarPart != 0) {
-    *activePart = toolbarPart;
+  if (self.selectedPathIndices.count > 0) {
+    simd_float2 bmin, bmax;
+    if ([self boundsOfSelectedPaths:&bmin max:&bmax]) {
+      CGPoint bl = [self canvasPointFromObjectPoint:bmin];
+      CGPoint tr = [self canvasPointFromObjectPoint:bmax];
+
+      for (NSInteger i = 0; i < 8; i++) {
+        CGPoint pos = [self resizeHandlePosition:i topRight:tr bottomLeft:bl];
+        if (hypot(x - pos.x, y - pos.y) < hitRadius) {
+          *activePart = kOSCResizeHandleBase + i;
+          BOOL isEdge = (i % 2 == 1);
+          if (isEdge)
+            [oscAPI setCursor:(i == 1 || i == 5)
+                                  ? [NSCursor resizeUpDownCursor]
+                                  : [NSCursor resizeLeftRightCursor]];
+          else
+            [oscAPI setCursor:self.editPointsCursor];
+          return;
+        }
+      }
+
+      if (self.selectedPathIndices.count == 1) {
+        NSUInteger idx = self.selectedPathIndices.firstIndex;
+        if (idx < self.paths.count) {
+          KKBezierPath *active = self.paths[idx];
+          if (active.closed && active.count >= 4) {
+            NSInteger crParts[4] = {kOSCCornerRadiusTL, kOSCCornerRadiusTR,
+                                    kOSCCornerRadiusBR, kOSCCornerRadiusBL};
+            for (int ci = 0; ci < 4; ci++) {
+              CGPoint crPos = [self cornerRadiusHandlePosition:ci
+                                                       forPath:active];
+              if (hypot(x - crPos.x, y - crPos.y) < hitRadius) {
+                *activePart = crParts[ci];
+                [oscAPI setCursor:self.editPointsCursor];
+                return;
+              }
+            }
+          }
+        }
+      }
+
+      BOOL insideBox = (x >= MIN(bl.x, tr.x) && x <= MAX(bl.x, tr.x) &&
+                        y >= MIN(bl.y, tr.y) && y <= MAX(bl.y, tr.y));
+      if (insideBox) {
+        *activePart = kOSCBoundingBox;
+        [oscAPI setCursor:self.moveCursor];
+        return;
+      }
+    }
+  }
+
+  double hitRadiusStroke = [self strokeHitRadius];
+  NSInteger nearPath = [self pathIndexNearX:x y:y radius:hitRadiusStroke];
+  if (nearPath >= 0) {
+    *activePart = kOSCCanvas;
     [oscAPI setCursor:[NSCursor arrowCursor]];
     return;
   }
 
-  BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
-  BOOL isPenMode = (self.toolbar.activeTag == kOSCToolbarPen);
-  BOOL isRectMode = (self.toolbar.activeTag == kOSCToolbarRect);
+  [oscAPI setCursor:[NSCursor arrowCursor]];
+}
+
+- (void)hitTestPenModeAtX:(double)x
+                        y:(double)y
+               activePart:(NSInteger *)activePart {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  double hitRadius = 12.0;
+  KKBezierPath *active = [self activePath];
 
   CGEventFlags flags =
       CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
@@ -38,23 +93,6 @@
   BOOL shiftDown = (flags & kCGEventFlagMaskShift) != 0;
   BOOL cmdDown = (flags & kCGEventFlagMaskCommand) != 0;
 
-  KKBezierPath *active = [self activePath];
-
-  // Test corner radius handles
-  if (active && active.closed && active.count >= 4) {
-    NSInteger crParts[4] = {kOSCCornerRadiusTL, kOSCCornerRadiusTR,
-                            kOSCCornerRadiusBR, kOSCCornerRadiusBL};
-    for (int ci = 0; ci < 4; ci++) {
-      CGPoint crPos = [self cornerRadiusHandlePosition:ci forPath:active];
-      if (hypot(positionX - crPos.x, positionY - crPos.y) < hitRadius) {
-        *activePart = crParts[ci];
-        [oscAPI setCursor:self.editPointsCursor];
-        return;
-      }
-    }
-  }
-
-  // Test active path's handles and points
   if (active) {
     for (NSUInteger i = 0; i < active.count; i++) {
       KKBezierPoint pt = [active pointAtIndex:i];
@@ -62,14 +100,14 @@
         continue;
 
       CGPoint inCanvas = [self canvasPointForBezierPoint:pt inHandleOffset:YES];
-      if (hypot(positionX - inCanvas.x, positionY - inCanvas.y) < hitRadius) {
+      if (hypot(x - inCanvas.x, y - inCanvas.y) < hitRadius) {
         *activePart = kOSCInHandleBase + (NSInteger)i;
         [oscAPI setCursor:self.editPointsCursor];
         return;
       }
 
       CGPoint outCanvas = [self canvasPointForBezierPoint:pt inHandleOffset:NO];
-      if (hypot(positionX - outCanvas.x, positionY - outCanvas.y) < hitRadius) {
+      if (hypot(x - outCanvas.x, y - outCanvas.y) < hitRadius) {
         *activePart = kOSCOutHandleBase + (NSInteger)i;
         [oscAPI setCursor:self.editPointsCursor];
         return;
@@ -79,8 +117,8 @@
     for (NSUInteger i = 0; i < active.count; i++) {
       KKBezierPoint pt = [active pointAtIndex:i];
       CGPoint ptCanvas = [self canvasPointForBezierPoint:pt];
-      if (hypot(positionX - ptCanvas.x, positionY - ptCanvas.y) < hitRadius) {
-        if (isPenMode && i == 0 && !active.closed && active.count >= 2) {
+      if (hypot(x - ptCanvas.x, y - ptCanvas.y) < hitRadius) {
+        if (i == 0 && !active.closed && active.count >= 2) {
           *activePart = kOSCClosePath;
           [oscAPI setCursor:self.penCloseCursor];
           return;
@@ -94,16 +132,13 @@
 
   double hitRadiusStroke = [self strokeHitRadius];
 
-  if (isCursorMode) {
-    NSInteger nearPath = [self pathIndexNearX:positionX
-                                            y:positionY
-                                       radius:hitRadiusStroke];
+  if (cmdDown) {
+    NSInteger nearPath = [self pathIndexNearX:x y:y radius:hitRadiusStroke];
     if (nearPath >= 0) {
       *activePart = kOSCCanvas;
       [oscAPI setCursor:[NSCursor arrowCursor]];
       return;
     }
-    // Empty space: marquee cursor with modifier hints
     if (self.selectedPoints.count > 0 && shiftDown)
       [oscAPI setCursor:[NSCursor dragCopyCursor]];
     else if (self.selectedPoints.count > 0 && optDown)
@@ -113,30 +148,9 @@
     return;
   }
 
-  // Pen mode + Cmd: temporary cursor mode (select, marquee, etc.)
-  if (isPenMode && cmdDown) {
-    NSInteger nearPath = [self pathIndexNearX:positionX
-                                            y:positionY
-                                       radius:hitRadiusStroke];
-    if (nearPath >= 0) {
-      *activePart = kOSCCanvas;
-      [oscAPI setCursor:[NSCursor arrowCursor]];
-      return;
-    }
-    // Empty space: marquee
-    if (self.selectedPoints.count > 0 && shiftDown)
-      [oscAPI setCursor:[NSCursor dragCopyCursor]];
-    else if (self.selectedPoints.count > 0 && optDown)
-      [oscAPI setCursor:[NSCursor operationNotAllowedCursor]];
-    else
-      [oscAPI setCursor:[NSCursor crosshairCursor]];
-    return;
-  }
-
-  // Pen mode: test active path's segments for insertion
-  if (isPenMode && active && active.count >= 2) {
-    NSInteger segIdx = [self segmentIndexNearX:positionX
-                                             y:positionY
+  if (active && active.count >= 2) {
+    NSInteger segIdx = [self segmentIndexNearX:x
+                                             y:y
                                         radius:hitRadiusStroke
                                         inPath:active];
     if (segIdx >= 0) {
@@ -146,12 +160,40 @@
     }
   }
 
-  if (isPenMode)
-    [oscAPI setCursor:self.penAddCursor];
-  else if (isRectMode)
-    [oscAPI setCursor:[NSCursor crosshairCursor]];
-  else
+  [oscAPI setCursor:self.penAddCursor];
+}
+
+- (void)hitTestOSCAtMousePositionX:(double)positionX
+                    mousePositionY:(double)positionY
+                        activePart:(NSInteger *)activePart
+                            atTime:(CMTime)time {
+  *activePart = kOSCCanvas;
+  self.paths = [self readPaths];
+
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+
+  NSInteger toolbarPart = [self.toolbar hitTestAtX:positionX y:positionY];
+  if (toolbarPart != 0) {
+    *activePart = toolbarPart;
     [oscAPI setCursor:[NSCursor arrowCursor]];
+    return;
+  }
+
+  BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
+  BOOL isRectMode = (self.toolbar.activeTag == kOSCToolbarRect);
+
+  if (isCursorMode) {
+    [self hitTestCursorModeAtX:positionX y:positionY activePart:activePart];
+    return;
+  }
+
+  if (isRectMode) {
+    [oscAPI setCursor:[NSCursor crosshairCursor]];
+    return;
+  }
+
+  [self hitTestPenModeAtX:positionX y:positionY activePart:activePart];
 }
 
 @end

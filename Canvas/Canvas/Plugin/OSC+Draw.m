@@ -21,7 +21,6 @@
   BOOL hasPrev = NO;
   for (NSUInteger i = 0; i < segCount; i++) {
     NSUInteger nextIdx = (i + 1) % path.count;
-    // Skip first point of segment if we already have it from previous segment
     NSUInteger startS = (hasPrev && i > 0) ? 1 : 0;
     for (NSUInteger s = startS; s <= 32; s++) {
       float t = (float)s / 32.0f;
@@ -38,7 +37,6 @@
       hasPrev = YES;
     }
   }
-  // Close: connect last point back to first
   if (path.closed && hasPrev) {
     simd_float2 firstPos = [path evaluatePointAtIndex:0 nextIndex:1 atT:0.0f];
     CGPoint first = [self canvasPointFromObjectPoint:firstPos];
@@ -130,6 +128,77 @@
   }
 }
 
+- (void)drawBoundingBoxWithMin:(simd_float2)bmin
+                           max:(simd_float2)bmax
+                    activePart:(NSInteger)activePart
+              destinationImage:(FxImageTile *)dest
+                        atTime:(CMTime)time {
+  CGPoint bl = [self canvasPointFromObjectPoint:bmin];
+  CGPoint tr = [self canvasPointFromObjectPoint:bmax];
+
+  [self.borderOSC drawWithTopRight:tr bottomLeft:bl destinationImage:dest];
+
+  for (NSInteger i = 0; i < 8; i++) {
+    CGPoint pos = [self resizeHandlePosition:i topRight:tr bottomLeft:bl];
+    BOOL hovered = (activePart == kOSCResizeHandleBase + i);
+    BOOL active = (self.dragResizeHandle == i);
+    [self.resizeHandleOSCs[i] drawAtCanvasPosition:pos
+                                         isHovered:hovered
+                                          isActive:active
+                                  destinationImage:dest
+                                            atTime:time];
+  }
+}
+
+- (void)drawCornerRadiusHandles:(KKBezierPath *)path
+                     activePart:(NSInteger)activePart
+               destinationImage:(FxImageTile *)dest
+                         atTime:(CMTime)time {
+  if (!path.closed || path.count < 4)
+    return;
+  NSInteger crParts[4] = {kOSCCornerRadiusTL, kOSCCornerRadiusTR,
+                          kOSCCornerRadiusBR, kOSCCornerRadiusBL};
+  for (int ci = 0; ci < 4; ci++) {
+    CGPoint handlePos = [self cornerRadiusHandlePosition:ci forPath:path];
+    BOOL crActive = (activePart == crParts[ci]);
+    self.pathPointOSC.fillColorOverride = [NSColor warning];
+    [self.pathPointOSC drawAtCanvasPosition:handlePos
+                                  isHovered:NO
+                                   isActive:crActive
+                           destinationImage:dest
+                                     atTime:time];
+  }
+}
+
+- (void)drawRectPreview:(simd_float4)color
+       destinationImage:(FxImageTile *)dest {
+  simd_float2 a = self.rectStart, b = self.dragOrigin;
+  CGPoint ca = [self canvasPointFromObjectPoint:a];
+  CGPoint cb = [self canvasPointFromObjectPoint:b];
+  NSInteger ix0 = (NSInteger)round(MIN(ca.x, cb.x));
+  NSInteger ix1 = (NSInteger)round(MAX(ca.x, cb.x));
+  NSInteger iy0 = (NSInteger)round(MIN(ca.y, cb.y));
+  NSInteger iy1 = (NSInteger)round(MAX(ca.y, cb.y));
+  CGFloat x0 = ix0 + 0.5f, x1 = ix1 + 0.5f;
+  CGFloat y0 = iy0 + 0.5f, y1 = iy1 + 0.5f;
+  if (ix1 - ix0 <= 0 || iy1 - iy0 <= 0)
+    return;
+
+  CGPoint tl = {x0, y0}, tr = {x1, y0}, br = {x1, y1}, bl = {x0, y1};
+  [self drawLineFrom:tl to:tr color:color halfWidth:1.0f destinationImage:dest];
+  [self drawLineFrom:tr to:br color:color halfWidth:1.0f destinationImage:dest];
+  [self drawLineFrom:br to:bl color:color halfWidth:1.0f destinationImage:dest];
+  [self drawLineFrom:bl to:tl color:color halfWidth:1.0f destinationImage:dest];
+
+  NSInteger pxW = ix1 - ix0, pxH = iy1 - iy0;
+  self.sizeLabel.text =
+      [NSString stringWithFormat:@"%ld × %ld", (long)pxW, (long)pxH];
+  CGSize labelSize = self.sizeLabel.size;
+  CGPoint labelPos = {x1 - labelSize.width * 0.5f,
+                      y0 - labelSize.height * 0.5f - 6.0f};
+  [self.sizeLabel drawAtCanvasPosition:labelPos destinationImage:dest];
+}
+
 - (void)drawDashedRectFrom:(CGPoint)a
                         to:(CGPoint)b
           destinationImage:(FxImageTile *)dest {
@@ -189,41 +258,50 @@
   simd_float4 dimColor = strokeColor;
   dimColor.w = 0.3f;
 
-  BOOL showAllControls = self.selectedPoints.count > 0 || self.dragIsMarquee;
+  BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
+  BOOL isPenMode = (self.toolbar.activeTag == kOSCToolbarPen);
 
   for (NSUInteger p = 0; p < self.paths.count; p++) {
     KKBezierPath *path = self.paths[p];
     if (path.count == 0)
       continue;
 
-    BOOL isActive = ((NSInteger)p == self.activePathIndex);
-    BOOL visible = isActive || showAllControls;
+    BOOL isSelected = [self.selectedPathIndices containsIndex:p];
     [self drawPathSegments:path
-                     color:visible ? strokeColor : dimColor
+                     color:isSelected ? strokeColor : dimColor
           destinationImage:destinationImage];
 
-    if (visible) {
-      [self drawPathControls:path
-                   pathIndex:p
-                  activePart:activePart
-                       color:strokeColor
-            destinationImage:destinationImage
-                      atTime:time];
+    if (isPenMode) {
+      BOOL isActive = ((NSInteger)p == self.activePathIndex);
+      BOOL showControls =
+          isActive || self.selectedPoints.count > 0 || self.dragIsMarquee;
+      if (showControls) {
+        [self drawPathControls:path
+                     pathIndex:p
+                    activePart:activePart
+                         color:strokeColor
+              destinationImage:destinationImage
+                        atTime:time];
+      }
     }
+  }
 
-    // Corner radius handles on active closed paths
-    if (isActive && path.closed && path.count >= 4) {
-      NSInteger crParts[4] = {kOSCCornerRadiusTL, kOSCCornerRadiusTR,
-                              kOSCCornerRadiusBR, kOSCCornerRadiusBL};
-      for (int ci = 0; ci < 4; ci++) {
-        CGPoint handlePos = [self cornerRadiusHandlePosition:ci forPath:path];
-        BOOL crActive = (activePart == crParts[ci]);
-        self.pathPointOSC.fillColorOverride = [NSColor warning];
-        [self.pathPointOSC drawAtCanvasPosition:handlePos
-                                      isHovered:NO
-                                       isActive:crActive
-                               destinationImage:destinationImage
-                                         atTime:time];
+  if (isCursorMode && self.selectedPathIndices.count > 0) {
+    simd_float2 bmin, bmax;
+    if ([self boundsOfSelectedPaths:&bmin max:&bmax]) {
+      [self drawBoundingBoxWithMin:bmin
+                               max:bmax
+                        activePart:activePart
+                  destinationImage:destinationImage
+                            atTime:time];
+    }
+    if (self.selectedPathIndices.count == 1) {
+      NSUInteger idx = self.selectedPathIndices.firstIndex;
+      if (idx < self.paths.count) {
+        [self drawCornerRadiusHandles:self.paths[idx]
+                           activePart:activePart
+                     destinationImage:destinationImage
+                               atTime:time];
       }
     }
   }
@@ -234,52 +312,8 @@
             destinationImage:destinationImage];
   }
 
-  // Rectangle tool preview
-  if (self.dragIsRect) {
-    simd_float2 a = self.rectStart, b = self.dragOrigin;
-    CGPoint ca = [self canvasPointFromObjectPoint:a];
-    CGPoint cb = [self canvasPointFromObjectPoint:b];
-    NSInteger ix0 = (NSInteger)round(MIN(ca.x, cb.x));
-    NSInteger ix1 = (NSInteger)round(MAX(ca.x, cb.x));
-    NSInteger iy0 = (NSInteger)round(MIN(ca.y, cb.y));
-    NSInteger iy1 = (NSInteger)round(MAX(ca.y, cb.y));
-    CGFloat x0 = ix0 + 0.5f, x1 = ix1 + 0.5f;
-    CGFloat y0 = iy0 + 0.5f, y1 = iy1 + 0.5f;
-    if (ix1 - ix0 > 0 && iy1 - iy0 > 0) {
-      CGPoint tl = {x0, y0}, tr = {x1, y0}, br = {x1, y1}, bl = {x0, y1};
-      [self drawLineFrom:tl
-                        to:tr
-                     color:strokeColor
-                 halfWidth:1.0f
-          destinationImage:destinationImage];
-      [self drawLineFrom:tr
-                        to:br
-                     color:strokeColor
-                 halfWidth:1.0f
-          destinationImage:destinationImage];
-      [self drawLineFrom:br
-                        to:bl
-                     color:strokeColor
-                 halfWidth:1.0f
-          destinationImage:destinationImage];
-      [self drawLineFrom:bl
-                        to:tl
-                     color:strokeColor
-                 halfWidth:1.0f
-          destinationImage:destinationImage];
-
-      // Size label below bottom-right (canvas Y=0 is bottom)
-      NSInteger pxW = ix1 - ix0;
-      NSInteger pxH = iy1 - iy0;
-      self.sizeLabel.text =
-          [NSString stringWithFormat:@"%ld × %ld", (long)pxW, (long)pxH];
-      CGSize labelSize = self.sizeLabel.size;
-      CGPoint labelPos = {x1 - labelSize.width * 0.5f,
-                          y0 - labelSize.height * 0.5f - 6.0f};
-      [self.sizeLabel drawAtCanvasPosition:labelPos
-                          destinationImage:destinationImage];
-    }
-  }
+  if (self.dragIsRect)
+    [self drawRectPreview:strokeColor destinationImage:destinationImage];
 }
 
 @end
