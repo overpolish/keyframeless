@@ -40,6 +40,11 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
       path->_capacity = count;
       path->_points = malloc(count * pointSize);
       memcpy(path->_points, bytes + 5, count * pointSize);
+      // Extended: corner radius after points
+      size_t extOffset = 5 + count * pointSize;
+      if ((flags & 2) && data.length >= extOffset + sizeof(float)) {
+        memcpy(&path->_cornerRadius, bytes + extOffset, sizeof(float));
+      }
     } else if (data.length >= oldExpected && count > 0) {
       path->_count = count;
       path->_capacity = count;
@@ -53,13 +58,17 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
 - (NSData *)dataRepresentation {
   uint32_t count = (uint32_t)_count;
   uint8_t flags = _closed ? 1 : 0;
+  if (_cornerRadius > 0)
+    flags |= 2;
   size_t pointSize = sizeof(KKBezierPoint);
-  NSMutableData *data =
-      [NSMutableData dataWithCapacity:4 + 1 + count * pointSize];
+  NSMutableData *data = [NSMutableData
+      dataWithCapacity:4 + 1 + count * pointSize + sizeof(float)];
   [data appendBytes:&count length:4];
   [data appendBytes:&flags length:1];
   if (count > 0)
     [data appendBytes:_points length:count * pointSize];
+  if (flags & 2)
+    [data appendBytes:&_cornerRadius length:sizeof(float)];
   return data;
 }
 
@@ -140,6 +149,58 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     _points[i].x += delta.x;
     _points[i].y += delta.y;
   }
+}
+
+- (void)setRoundedRectWithMin:(simd_float2)min
+                          max:(simd_float2)max
+                      radiusX:(float)rx
+                      radiusY:(float)ry {
+  float maxRX = (max.x - min.x) * 0.5f;
+  float maxRY = (max.y - min.y) * 0.5f;
+  rx = fminf(rx, maxRX);
+  ry = fminf(ry, maxRY);
+
+  if (rx < 0.0001f || ry < 0.0001f) {
+    _cornerRadius = 0;
+    [self ensureCapacity:4];
+    _count = 4;
+    _closed = YES;
+    _points[0] = (KKBezierPoint){min.x, max.y, 0, 0, 0, 0, KKBezierPointLinear};
+    _points[1] = (KKBezierPoint){max.x, max.y, 0, 0, 0, 0, KKBezierPointLinear};
+    _points[2] = (KKBezierPoint){max.x, min.y, 0, 0, 0, 0, KKBezierPointLinear};
+    _points[3] = (KKBezierPoint){min.x, min.y, 0, 0, 0, 0, KKBezierPointLinear};
+    return;
+  }
+
+  // Store the pixel-space radius (ry maps more directly to visual size)
+  _cornerRadius = ry;
+
+  float kx = rx * 0.5522847498f;
+  float ky = ry * 0.5522847498f;
+  [self ensureCapacity:8];
+  _count = 8;
+  _closed = YES;
+
+  // Top-left corner (clockwise from left side)
+  _points[0] =
+      (KKBezierPoint){min.x, max.y - ry, 0, -ky, 0, ky, KKBezierPointBezier};
+  _points[1] =
+      (KKBezierPoint){min.x + rx, max.y, -kx, 0, kx, 0, KKBezierPointBezier};
+  // Top-right corner
+  _points[2] =
+      (KKBezierPoint){max.x - rx, max.y, -kx, 0, kx, 0, KKBezierPointBezier};
+  _points[3] =
+      (KKBezierPoint){max.x, max.y - ry, 0, ky, 0, -ky, KKBezierPointBezier};
+  // Bottom-right corner
+  _points[4] =
+      (KKBezierPoint){max.x, min.y + ry, 0, ky, 0, -ky, KKBezierPointBezier};
+  _points[5] =
+      (KKBezierPoint){max.x - rx, min.y, kx, 0, -kx, 0, KKBezierPointBezier};
+  // Bottom-left corner
+  _points[6] =
+      (KKBezierPoint){min.x + rx, min.y, kx, 0, -kx, 0, KKBezierPointBezier};
+  _points[7] =
+      (KKBezierPoint){min.x, min.y + ry, 0, -ky, 0, ky, KKBezierPointBezier};
 }
 
 - (void)toggleTypeAtIndex:(NSUInteger)index

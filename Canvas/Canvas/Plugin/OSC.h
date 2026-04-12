@@ -26,6 +26,7 @@
 @property(nonatomic, assign)
     simd_float2 dragAnchor; // initial position for shift-constrain
 @property(nonatomic, assign) simd_float2 rectStart;
+@property(nonatomic, assign) float dragStartPixelRadius;
 @property(nonatomic, assign) CGPoint marqueeStart;
 @property(nonatomic, assign) CGPoint marqueeEnd;
 @property(nonatomic, strong) NSMutableIndexSet *selectedPoints;

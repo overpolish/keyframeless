@@ -33,6 +33,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Whether the path forms a closed loop (last point connects to first).
 @property(nonatomic, assign) BOOL closed;
 
+/// Corner radius for rectangle paths (0 = sharp corners).
+@property(nonatomic, assign) float cornerRadius;
+
 + (instancetype)pathWithData:(nullable NSData *)data;
 - (NSData *)dataRepresentation;
 
@@ -45,6 +48,13 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setOutHandle:(simd_float2)offset atIndex:(NSUInteger)index;
 - (void)setType:(KKBezierPointType)type atIndex:(NSUInteger)index;
 - (void)translateBy:(simd_float2)delta;
+
+/// Rebuild this path as a rounded rectangle with the given bounds and radii.
+/// radiusX/radiusY are in object-space units (may differ for correct circles).
+- (void)setRoundedRectWithMin:(simd_float2)min
+                          max:(simd_float2)max
+                      radiusX:(float)rx
+                      radiusY:(float)ry;
 - (void)toggleTypeAtIndex:(NSUInteger)index
                     start:(simd_float2)start
                       end:(simd_float2)end;
