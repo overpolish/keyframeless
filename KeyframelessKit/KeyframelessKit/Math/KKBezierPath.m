@@ -27,8 +27,20 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     uint32_t count;
     memcpy(&count, bytes, 4);
     size_t pointSize = sizeof(KKBezierPoint);
-    size_t expected = 4 + count * pointSize;
-    if (data.length >= expected && count > 0) {
+
+    // New format: 4 bytes count + 1 byte flags + points
+    size_t newExpected = 5 + count * pointSize;
+    // Old format: 4 bytes count + points (no flags)
+    size_t oldExpected = 4 + count * pointSize;
+
+    if (data.length >= newExpected && count > 0) {
+      uint8_t flags = bytes[4];
+      path->_closed = (flags & 1) != 0;
+      path->_count = count;
+      path->_capacity = count;
+      path->_points = malloc(count * pointSize);
+      memcpy(path->_points, bytes + 5, count * pointSize);
+    } else if (data.length >= oldExpected && count > 0) {
       path->_count = count;
       path->_capacity = count;
       path->_points = malloc(count * pointSize);
@@ -40,9 +52,12 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
 
 - (NSData *)dataRepresentation {
   uint32_t count = (uint32_t)_count;
+  uint8_t flags = _closed ? 1 : 0;
   size_t pointSize = sizeof(KKBezierPoint);
-  NSMutableData *data = [NSMutableData dataWithCapacity:4 + count * pointSize];
+  NSMutableData *data =
+      [NSMutableData dataWithCapacity:4 + 1 + count * pointSize];
   [data appendBytes:&count length:4];
+  [data appendBytes:&flags length:1];
   if (count > 0)
     [data appendBytes:_points length:count * pointSize];
   return data;

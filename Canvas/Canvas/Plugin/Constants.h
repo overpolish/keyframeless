@@ -22,3 +22,5 @@ static const NSInteger kOSCPathPointBase = 100; // 100 + index
 static const NSInteger kOSCInHandleBase = 1000; // 1000 + index
 static const NSInteger kOSCOutHandleBase = 2000;   // 2000 + index
 static const NSInteger kOSCPathSegmentBase = 3000; // 3000 + segment index
+static const NSInteger kOSCClosePath =
+    4000; // close path by clicking first point

@@ -146,6 +146,8 @@
 
     NSUInteger segsPerCurve = 128;
     NSUInteger curveCount = path.count - 1;
+    if (path.closed && path.count >= 3)
+      curveCount = path.count;
     NSUInteger maxVertices = curveCount * ((segsPerCurve + 1) * 2 + 2) + 2;
     CanvasVertex *vertices =
         (CanvasVertex *)malloc(maxVertices * sizeof(CanvasVertex));
@@ -159,9 +161,10 @@
 
       for (NSUInteger i = 0; i <= segsPerCurve; i++) {
         float t = (float)i / (float)segsPerCurve;
-        simd_float2 pos = [path evaluatePointAtIndex:c nextIndex:c + 1 atT:t];
+        NSUInteger nextIdx = (c + 1) % path.count;
+        simd_float2 pos = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
         simd_float2 tangent = [path evaluateTangentAtIndex:c
-                                                 nextIndex:c + 1
+                                                 nextIndex:nextIdx
                                                        atT:t];
         // Flip tangent Y to match pixel space (Y-down)
         tangent.y = -tangent.y;
@@ -181,18 +184,20 @@
         simd_float2 centered = {pixelPos.x - outputWidth / 2.0f,
                                 pixelPos.y - outputHeight / 2.0f};
 
-        // capDistance ramps from 1→0 at path start and 0→1 at path end
-        float globalT =
-            ((float)c + (float)i / (float)segsPerCurve) / (float)curveCount;
-        float capFade = 1.0f; // pixels from end to fade over
+        // capDistance: no caps on closed paths
         float capDist = 0.0f;
-        float startDist = globalT * (float)curveCount * (float)segsPerCurve;
-        float endDist =
-            (1.0f - globalT) * (float)curveCount * (float)segsPerCurve;
-        if (startDist < capFade)
-          capDist = 1.0f - startDist / capFade;
-        if (endDist < capFade)
-          capDist = 1.0f - endDist / capFade;
+        if (!path.closed) {
+          float globalT =
+              ((float)c + (float)i / (float)segsPerCurve) / (float)curveCount;
+          float capFade = 1.0f;
+          float startDist = globalT * (float)curveCount * (float)segsPerCurve;
+          float endDist =
+              (1.0f - globalT) * (float)curveCount * (float)segsPerCurve;
+          if (startDist < capFade)
+            capDist = 1.0f - startDist / capFade;
+          if (endDist < capFade)
+            capDist = 1.0f - endDist / capFade;
+        }
 
         vertices[vertexCount].position = centered + normal * halfWidth;
         vertices[vertexCount].edgeDistance = 1.0f;

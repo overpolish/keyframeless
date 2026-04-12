@@ -24,11 +24,14 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface KKBezierPath : NSObject
 
-/// Number of intermediate control points (excludes start/end).
+/// Number of points.
 @property(nonatomic, readonly) NSUInteger count;
 
-/// Number of path segments (count + 1).
+/// Number of path segments (count + 1 for MagicMove, count for closed paths).
 @property(nonatomic, readonly) NSUInteger segmentCount;
+
+/// Whether the path forms a closed loop (last point connects to first).
+@property(nonatomic, assign) BOOL closed;
 
 + (instancetype)pathWithData:(nullable NSData *)data;
 - (NSData *)dataRepresentation;
