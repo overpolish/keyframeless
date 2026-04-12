@@ -8,25 +8,6 @@
 #import "ShaderTypes.h"
 #import <IOSurface/IOSurfaceObjC.h>
 
-static simd_float2 evaluateCubicBezier(simd_float2 p0, simd_float2 p1,
-                                       simd_float2 p2, simd_float2 p3,
-                                       float t) {
-  float u = 1.0f - t;
-  float uu = u * u;
-  float uuu = uu * u;
-  float tt = t * t;
-  float ttt = tt * t;
-  return uuu * p0 + 3.0f * uu * t * p1 + 3.0f * u * tt * p2 + ttt * p3;
-}
-
-static simd_float2 evaluateCubicBezierTangent(simd_float2 p0, simd_float2 p1,
-                                              simd_float2 p2, simd_float2 p3,
-                                              float t) {
-  float u = 1.0f - t;
-  return 3.0f * u * u * (p1 - p0) + 6.0f * u * t * (p2 - p1) +
-         3.0f * t * t * (p3 - p2);
-}
-
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 @implementation CanvasPlugin (Render)
@@ -171,14 +152,6 @@ static simd_float2 evaluateCubicBezierTangent(simd_float2 p0, simd_float2 p1,
     NSUInteger vertexCount = 0;
 
     for (NSUInteger c = 0; c < curveCount; c++) {
-      KKBezierPoint bp0 = [path pointAtIndex:c];
-      KKBezierPoint bp1 = [path pointAtIndex:c + 1];
-
-      simd_float2 a = {bp0.x, bp0.y};
-      simd_float2 cp1 = {bp0.x + bp0.outX, bp0.y + bp0.outY};
-      simd_float2 cp2 = {bp1.x + bp1.inX, bp1.y + bp1.inY};
-      simd_float2 b = {bp1.x, bp1.y};
-
       if (c > 0 && vertexCount > 0) {
         vertices[vertexCount] = vertices[vertexCount - 1];
         vertexCount++;
@@ -186,8 +159,10 @@ static simd_float2 evaluateCubicBezierTangent(simd_float2 p0, simd_float2 p1,
 
       for (NSUInteger i = 0; i <= segsPerCurve; i++) {
         float t = (float)i / (float)segsPerCurve;
-        simd_float2 pos = evaluateCubicBezier(a, cp1, cp2, b, t);
-        simd_float2 tangent = evaluateCubicBezierTangent(a, cp1, cp2, b, t);
+        simd_float2 pos = [path evaluatePointAtIndex:c nextIndex:c + 1 atT:t];
+        simd_float2 tangent = [path evaluateTangentAtIndex:c
+                                                 nextIndex:c + 1
+                                                       atT:t];
         // Flip tangent Y to match pixel space (Y-down)
         tangent.y = -tangent.y;
 
