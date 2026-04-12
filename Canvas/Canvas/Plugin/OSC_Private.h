@@ -31,7 +31,8 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx);
                  min:(simd_float2 *)outMin
                  max:(simd_float2 *)outMax;
 
-/// Canvas position of the corner radius OSC handle for the given path.
-- (CGPoint)cornerRadiusHandlePositionForPath:(KKBezierPath *)path;
+/// Canvas position of a corner radius handle. corner: 0=TL 1=TR 2=BR 3=BL.
+- (CGPoint)cornerRadiusHandlePosition:(NSInteger)corner
+                              forPath:(KKBezierPath *)path;
 
 @end

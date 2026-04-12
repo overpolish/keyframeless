@@ -55,7 +55,7 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
                                                tag:kOSCToolbarCursor],
                        [KKToolbarItem itemWithIcon:@"pencil.and.outline"
                                                tag:kOSCToolbarPen],
-                       [KKToolbarItem itemWithIcon:@"rectangle"
+                       [KKToolbarItem itemWithIcon:@"rectangle.fill"
                                                tag:kOSCToolbarRect],
                      ]];
     self.toolbar.activeTag = kOSCToolbarPen;
@@ -227,23 +227,36 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   *outMax = (simd_float2){maxX, maxY};
 }
 
-- (CGPoint)cornerRadiusHandlePositionForPath:(KKBezierPath *)path {
-  simd_float2 min, max;
-  [self boundsOfPath:path min:&min max:&max];
-  // Work in canvas space for correct aspect ratio
-  CGPoint cornerCanvas =
-      [self canvasPointFromObjectPoint:(simd_float2){max.x, max.y}];
-  float fraction = path.cornerRadius; // 0–1
-  float insetPx = (float)[self strokeWidth] * 0.5f + 20.0f;
-  CGPoint minCanvas = [self canvasPointFromObjectPoint:min];
-  CGPoint maxCanvas = [self canvasPointFromObjectPoint:max];
-  float halfShort = fminf((float)fabs(maxCanvas.x - minCanvas.x),
-                          (float)fabs(maxCanvas.y - minCanvas.y)) *
-                    0.5f;
-  float maxTravel = fmaxf(0.0f, halfShort - insetPx);
-  float travel = fminf(100.0f, maxTravel);
-  float offset = insetPx + fraction * travel;
-  return (CGPoint){cornerCanvas.x - offset, cornerCanvas.y - offset};
+- (CGPoint)cornerRadiusHandlePosition:(NSInteger)corner
+                              forPath:(KKBezierPath *)path {
+  simd_float2 bmin, bmax;
+  [self boundsOfPath:path min:&bmin max:&bmax];
+  CGPoint minC = [self canvasPointFromObjectPoint:bmin];
+  CGPoint maxC = [self canvasPointFromObjectPoint:bmax];
+  float inset = (float)[self strokeWidth] * 0.5f + 20.0f;
+  float halfShort =
+      fminf((float)fabs(maxC.x - minC.x), (float)fabs(maxC.y - minC.y)) * 0.5f;
+  float travel = fminf(100.0f, fmaxf(0.0f, halfShort - inset));
+
+  float fracs[4] = {path.cornerRadiusTL, path.cornerRadiusTR,
+                    path.cornerRadiusBR, path.cornerRadiusBL};
+  float f = fracs[corner];
+  float offset = inset + f * travel;
+
+  // Each corner offsets inward from its respective corner
+  // Canvas Y increases upward
+  switch (corner) {
+  case 0: // TL: corner at (minX, maxY), inward = +X, -Y
+    return (CGPoint){minC.x + offset, maxC.y - offset};
+  case 1: // TR: corner at (maxX, maxY), inward = -X, -Y
+    return (CGPoint){maxC.x - offset, maxC.y - offset};
+  case 2: // BR: corner at (maxX, minY), inward = -X, +Y
+    return (CGPoint){maxC.x - offset, minC.y + offset};
+  case 3: // BL: corner at (minX, minY), inward = +X, +Y
+    return (CGPoint){minC.x + offset, minC.y + offset};
+  default:
+    return CGPointZero;
+  }
 }
 
 @end
