@@ -33,8 +33,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// Whether the path forms a closed loop (last point connects to first).
 @property(nonatomic, assign) BOOL closed;
 
-/// Corner radius for rectangle paths (0 = sharp corners).
-@property(nonatomic, assign) float cornerRadius;
+/// Per-corner radius fractions 0–1 (TL, TR, BR, BL). 0 = sharp, 1 = max.
+@property(nonatomic, assign) float cornerRadiusTL;
+@property(nonatomic, assign) float cornerRadiusTR;
+@property(nonatomic, assign) float cornerRadiusBR;
+@property(nonatomic, assign) float cornerRadiusBL;
 
 + (instancetype)pathWithData:(nullable NSData *)data;
 - (NSData *)dataRepresentation;
@@ -49,12 +52,14 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setType:(KKBezierPointType)type atIndex:(NSUInteger)index;
 - (void)translateBy:(simd_float2)delta;
 
-/// Rebuild this path as a rounded rectangle.
-/// fraction 0–1: 0 = sharp, 1 = full ellipse.
-/// Circular arcs until shorter side maxes, then elongates.
+/// Rebuild this path as a rounded rectangle with per-corner fractions.
+/// Each fraction 0–1: 0 = sharp, 1 = max radius for that corner.
 - (void)setRoundedRectWithMin:(simd_float2)min
                           max:(simd_float2)max
-                     fraction:(float)fraction
+                   fractionTL:(float)tl
+                   fractionTR:(float)tr
+                   fractionBR:(float)br
+                   fractionBL:(float)bl
                   canvasWidth:(float)canvasW
                  canvasHeight:(float)canvasH;
 - (void)toggleTypeAtIndex:(NSUInteger)index

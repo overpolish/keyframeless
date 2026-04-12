@@ -142,11 +142,15 @@
     return;
   }
 
-  // Corner radius drag — record starting state
-  if (activePart == kOSCCornerRadius && active) {
-    self.dragIndex = -2; // sentinel for corner radius drag
+  // Corner radius drag
+  if ((activePart >= kOSCCornerRadiusTL && activePart <= kOSCCornerRadiusBL) &&
+      active) {
+    self.dragIndex = -2;
+    self.dragCornerIndex = activePart - kOSCCornerRadiusTL;
     self.dragAnchor = (simd_float2){(float)positionX, (float)positionY};
-    self.dragStartPixelRadius = active.cornerRadius; // fraction 0–1
+    float fracs[4] = {active.cornerRadiusTL, active.cornerRadiusTR,
+                      active.cornerRadiusBR, active.cornerRadiusBL};
+    self.dragStartPixelRadius = fracs[self.dragCornerIndex];
     *forceUpdate = YES;
     return;
   }
@@ -395,36 +399,69 @@
   simd_float2 objPos =
       [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
 
-  // Corner radius drag — use delta from start for smooth dragging
+  // Corner radius drag
   if (self.dragIndex == -2) {
-    simd_float2 min, max;
-    [self boundsOfPath:active min:&min max:&max];
+    simd_float2 bmin, bmax;
+    [self boundsOfPath:active min:&bmin max:&bmax];
+    // Delta direction depends on corner (inward = positive)
     float ddx = (float)(self.dragAnchor.x - positionX);
     float ddy = (float)(self.dragAnchor.y - positionY);
+    // Flip axes per corner so "inward" is always positive
+    NSInteger ci = self.dragCornerIndex;
+    if (ci == 0 || ci == 3)
+      ddx = -ddx; // TL/BL: inward = +X, so flip
+    if (ci == 2 || ci == 3)
+      ddy = -ddy; // BR/BL: inward = +Y (canvas up), so flip
     float delta = (ddx + ddy) * 0.5f;
-    CGPoint cMin = [self canvasPointFromObjectPoint:min];
-    CGPoint cMax = [self canvasPointFromObjectPoint:max];
+
+    CGPoint cMin = [self canvasPointFromObjectPoint:bmin];
+    CGPoint cMax = [self canvasPointFromObjectPoint:bmax];
     float canvasW = (float)fabs(cMax.x - cMin.x);
     float canvasH = (float)fabs(cMax.y - cMin.y);
     float halfShort = fminf(canvasW, canvasH) * 0.5f;
     float inset = (float)[self strokeWidth] * 0.5f + 20.0f;
     float travel = fminf(100.0f, fmaxf(1.0f, halfShort - inset));
     float rawFraction = self.dragStartPixelRadius + delta / travel;
-    // Snap to zero when close, otherwise clamp min pixel radius to
-    // strokeWidth so the inner offset curve doesn't self-intersect
+
     float sw = (float)[self strokeWidth];
     float maxPx = fmaxf(canvasW, canvasH) * 0.5f;
     float minFraction = (maxPx > 0.0001f) ? (sw * 1.15f) / maxPx : 0;
     float snapThreshold = minFraction * 0.5f;
     float fraction;
-    if (rawFraction < snapThreshold) {
+    if (rawFraction < snapThreshold)
       fraction = 0.0f;
-    } else {
+    else
       fraction = fmaxf(minFraction, fminf(1.0f, rawFraction));
+
+    // Opt held = individual corner, otherwise all corners
+    BOOL optHeld = (modifiers & kFxModifierKey_OPTION) != 0;
+    float ftl = optHeld ? active.cornerRadiusTL : fraction;
+    float ftr = optHeld ? active.cornerRadiusTR : fraction;
+    float fbr = optHeld ? active.cornerRadiusBR : fraction;
+    float fbl = optHeld ? active.cornerRadiusBL : fraction;
+    if (optHeld) {
+      switch (ci) {
+      case 0:
+        ftl = fraction;
+        break;
+      case 1:
+        ftr = fraction;
+        break;
+      case 2:
+        fbr = fraction;
+        break;
+      case 3:
+        fbl = fraction;
+        break;
+      }
     }
-    [active setRoundedRectWithMin:min
-                              max:max
-                         fraction:fraction
+
+    [active setRoundedRectWithMin:bmin
+                              max:bmax
+                       fractionTL:ftl
+                       fractionTR:ftr
+                       fractionBR:fbr
+                       fractionBL:fbl
                       canvasWidth:canvasW
                      canvasHeight:canvasH];
     [self writePaths:self.paths];

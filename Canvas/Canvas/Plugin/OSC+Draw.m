@@ -211,16 +211,20 @@
                       atTime:time];
     }
 
-    // Corner radius handle on active closed paths
+    // Corner radius handles on active closed paths
     if (isActive && path.closed && path.count >= 4) {
-      CGPoint handlePos = [self cornerRadiusHandlePositionForPath:path];
-      BOOL crActive = (activePart == kOSCCornerRadius);
-      self.pathPointOSC.fillColorOverride = nil;
-      [self.pathPointOSC drawAtCanvasPosition:handlePos
-                                    isHovered:NO
-                                     isActive:crActive
-                             destinationImage:destinationImage
-                                       atTime:time];
+      NSInteger crParts[4] = {kOSCCornerRadiusTL, kOSCCornerRadiusTR,
+                              kOSCCornerRadiusBR, kOSCCornerRadiusBL};
+      for (int ci = 0; ci < 4; ci++) {
+        CGPoint handlePos = [self cornerRadiusHandlePosition:ci forPath:path];
+        BOOL crActive = (activePart == crParts[ci]);
+        self.pathPointOSC.fillColorOverride = [NSColor warning];
+        [self.pathPointOSC drawAtCanvasPosition:handlePos
+                                      isHovered:NO
+                                       isActive:crActive
+                               destinationImage:destinationImage
+                                         atTime:time];
+      }
     }
   }
 

@@ -40,10 +40,24 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
       path->_capacity = count;
       path->_points = malloc(count * pointSize);
       memcpy(path->_points, bytes + 5, count * pointSize);
-      // Extended: corner radius after points
+      // Extended: corner radii after points
       size_t extOffset = 5 + count * pointSize;
-      if ((flags & 2) && data.length >= extOffset + sizeof(float)) {
-        memcpy(&path->_cornerRadius, bytes + extOffset, sizeof(float));
+      if ((flags & 4) && data.length >= extOffset + 4 * sizeof(float)) {
+        // New: 4 per-corner radii
+        float cr[4];
+        memcpy(cr, bytes + extOffset, 4 * sizeof(float));
+        path->_cornerRadiusTL = cr[0];
+        path->_cornerRadiusTR = cr[1];
+        path->_cornerRadiusBR = cr[2];
+        path->_cornerRadiusBL = cr[3];
+      } else if ((flags & 2) && data.length >= extOffset + sizeof(float)) {
+        // Backwards compat: single radius applied to all corners
+        float r;
+        memcpy(&r, bytes + extOffset, sizeof(float));
+        path->_cornerRadiusTL = r;
+        path->_cornerRadiusTR = r;
+        path->_cornerRadiusBR = r;
+        path->_cornerRadiusBL = r;
       }
     } else if (data.length >= oldExpected && count > 0) {
       path->_count = count;
@@ -58,17 +72,22 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
 - (NSData *)dataRepresentation {
   uint32_t count = (uint32_t)_count;
   uint8_t flags = _closed ? 1 : 0;
-  if (_cornerRadius > 0)
-    flags |= 2;
+  BOOL hasRadius = (_cornerRadiusTL > 0 || _cornerRadiusTR > 0 ||
+                    _cornerRadiusBR > 0 || _cornerRadiusBL > 0);
+  if (hasRadius)
+    flags |= 4;
   size_t pointSize = sizeof(KKBezierPoint);
   NSMutableData *data = [NSMutableData
-      dataWithCapacity:4 + 1 + count * pointSize + sizeof(float)];
+      dataWithCapacity:4 + 1 + count * pointSize + 4 * sizeof(float)];
   [data appendBytes:&count length:4];
   [data appendBytes:&flags length:1];
   if (count > 0)
     [data appendBytes:_points length:count * pointSize];
-  if (flags & 2)
-    [data appendBytes:&_cornerRadius length:sizeof(float)];
+  if (hasRadius) {
+    float cr[4] = {_cornerRadiusTL, _cornerRadiusTR, _cornerRadiusBR,
+                   _cornerRadiusBL};
+    [data appendBytes:cr length:4 * sizeof(float)];
+  }
   return data;
 }
 
@@ -151,18 +170,48 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   }
 }
 
+static void cornerRadii(float fraction, float maxRX, float maxRY, float objW,
+                        float objH, float canvasW, float canvasH, float *outRX,
+                        float *outRY) {
+  float f = fmaxf(0.0f, fminf(fraction, 1.0f));
+  if (f < 0.0001f) {
+    *outRX = 0;
+    *outRY = 0;
+    return;
+  }
+  float maxPxX = (objW > 0.0001f) ? (maxRX / objW) * canvasW : 0;
+  float maxPxY = (objH > 0.0001f) ? (maxRY / objH) * canvasH : 0;
+  float maxPx = fmaxf(maxPxX, maxPxY);
+  float pixelR = f * maxPx;
+  *outRX = (canvasW > 0.0001f)
+               ? fminf((fminf(pixelR, maxPxX) / canvasW) * objW, maxRX)
+               : 0;
+  *outRY = (canvasH > 0.0001f)
+               ? fminf((fminf(pixelR, maxPxY) / canvasH) * objH, maxRY)
+               : 0;
+}
+
 - (void)setRoundedRectWithMin:(simd_float2)min
                           max:(simd_float2)max
-                     fraction:(float)fraction
+                   fractionTL:(float)ftl
+                   fractionTR:(float)ftr
+                   fractionBR:(float)fbr
+                   fractionBL:(float)fbl
                   canvasWidth:(float)canvasW
                  canvasHeight:(float)canvasH {
-  fraction = fmaxf(0.0f, fminf(fraction, 1.0f));
-  _cornerRadius = fraction;
+  _cornerRadiusTL = fmaxf(0.0f, fminf(ftl, 1.0f));
+  _cornerRadiusTR = fmaxf(0.0f, fminf(ftr, 1.0f));
+  _cornerRadiusBR = fmaxf(0.0f, fminf(fbr, 1.0f));
+  _cornerRadiusBL = fmaxf(0.0f, fminf(fbl, 1.0f));
 
   float maxRX = (max.x - min.x) * 0.5f;
   float maxRY = (max.y - min.y) * 0.5f;
+  float objW = max.x - min.x;
+  float objH = max.y - min.y;
 
-  if (fraction < 0.0001f) {
+  BOOL allZero = (_cornerRadiusTL < 0.0001f && _cornerRadiusTR < 0.0001f &&
+                  _cornerRadiusBR < 0.0001f && _cornerRadiusBL < 0.0001f);
+  if (allZero) {
     [self ensureCapacity:4];
     _count = 4;
     _closed = YES;
@@ -173,80 +222,96 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     return;
   }
 
-  // Circular arcs: equal pixel radius, clamped per-axis
-  // At fraction=1.0, longer pixel side = its max, shorter already capped
-  float objW = max.x - min.x;
-  float objH = max.y - min.y;
-  float maxPxX = (objW > 0.0001f) ? (maxRX / objW) * canvasW : 0;
-  float maxPxY = (objH > 0.0001f) ? (maxRY / objH) * canvasH : 0;
-  float maxPx = fmaxf(maxPxX, maxPxY);
-  float pixelR = fraction * maxPx;
-  float pxX = fminf(pixelR, maxPxX);
-  float pxY = fminf(pixelR, maxPxY);
-  float rx = (canvasW > 0.0001f) ? (pxX / canvasW) * objW : 0;
-  float ry = (canvasH > 0.0001f) ? (pxY / canvasH) * objH : 0;
+  // Compute per-corner rx/ry
+  float rx[4], ry[4];
+  float fracs[4] = {_cornerRadiusTL, _cornerRadiusTR, _cornerRadiusBR,
+                    _cornerRadiusBL};
+  for (int i = 0; i < 4; i++)
+    cornerRadii(fracs[i], maxRX, maxRY, objW, objH, canvasW, canvasH, &rx[i],
+                &ry[i]);
 
-  float kx = rx * 0.5522847498f;
-  float ky = ry * 0.5522847498f;
-  BOOL mergeH = (maxRX - rx) < 0.0001f; // top/bottom sides collapse
-  BOOL mergeV = (maxRY - ry) < 0.0001f; // left/right sides collapse
-  float cx = (min.x + max.x) * 0.5f;
-  float cy = (min.y + max.y) * 0.5f;
+  // Build points: 2 per rounded corner, 1 per sharp corner
+  KKBezierPoint tmp[12]; // max 8 rounded + potential
+  NSUInteger n = 0;
 
-  // Build into temp array of up to 8, then merge adjacent pairs
-  KKBezierPoint tmp[8] = {
-      // Top-left corner (clockwise from left side)
-      {min.x, max.y - ry, 0, -ky, 0, ky, KKBezierPointBezier},
-      {min.x + rx, max.y, -kx, 0, kx, 0, KKBezierPointBezier},
-      // Top-right corner
-      {max.x - rx, max.y, -kx, 0, kx, 0, KKBezierPointBezier},
-      {max.x, max.y - ry, 0, ky, 0, -ky, KKBezierPointBezier},
-      // Bottom-right corner
-      {max.x, min.y + ry, 0, ky, 0, -ky, KKBezierPointBezier},
-      {max.x - rx, min.y, kx, 0, -kx, 0, KKBezierPointBezier},
-      // Bottom-left corner
-      {min.x + rx, min.y, kx, 0, -kx, 0, KKBezierPointBezier},
-      {min.x, min.y + ry, 0, -ky, 0, ky, KKBezierPointBezier},
-  };
-
-  if (mergeH && mergeV) {
-    // Full ellipse: 4 points
-    [self ensureCapacity:4];
-    _count = 4;
-    _points[0] = (KKBezierPoint){min.x, cy, 0, -ky, 0, ky, KKBezierPointBezier};
-    _points[1] = (KKBezierPoint){cx, max.y, -kx, 0, kx, 0, KKBezierPointBezier};
-    _points[2] = (KKBezierPoint){max.x, cy, 0, ky, 0, -ky, KKBezierPointBezier};
-    _points[3] = (KKBezierPoint){cx, min.y, kx, 0, -kx, 0, KKBezierPointBezier};
-  } else if (mergeH) {
-    // Top/bottom collapsed, left/right have straight edges: 6 points
-    [self ensureCapacity:6];
-    _count = 6;
-    _points[0] = tmp[0]; // left side of TL
-    _points[1] = (KKBezierPoint){
-        cx, max.y, -kx, 0, kx, 0, KKBezierPointBezier}; // top merged
-    _points[2] = tmp[3];                                // right side of TR
-    _points[3] = tmp[4];                                // right side of BR
-    _points[4] = (KKBezierPoint){
-        cx, min.y, kx, 0, -kx, 0, KKBezierPointBezier}; // bottom merged
-    _points[5] = tmp[7];                                // left side of BL
-  } else if (mergeV) {
-    // Left/right collapsed, top/bottom have straight edges: 6 points
-    [self ensureCapacity:6];
-    _count = 6;
-    _points[0] = (KKBezierPoint){
-        min.x, cy, 0, -ky, 0, ky, KKBezierPointBezier}; // left merged
-    _points[1] = tmp[1];                                // top side of TL
-    _points[2] = tmp[2];                                // top side of TR
-    _points[3] = (KKBezierPoint){
-        max.x, cy, 0, ky, 0, -ky, KKBezierPointBezier}; // right merged
-    _points[4] = tmp[5];                                // bottom side of BR
-    _points[5] = tmp[6];                                // bottom side of BL
+  // TL corner (left side, then top side)
+  if (rx[0] > 0.0001f && ry[0] > 0.0001f) {
+    float kx = rx[0] * 0.5522847498f, ky = ry[0] * 0.5522847498f;
+    tmp[n++] = (KKBezierPoint){min.x, max.y - ry[0],      0, -ky, 0,
+                               ky,    KKBezierPointBezier};
+    tmp[n++] = (KKBezierPoint){min.x + rx[0],      max.y, -kx, 0, kx, 0,
+                               KKBezierPointBezier};
   } else {
-    // Standard 8-point rounded rect
-    [self ensureCapacity:8];
-    _count = 8;
-    memcpy(_points, tmp, 8 * sizeof(KKBezierPoint));
+    tmp[n++] = (KKBezierPoint){min.x, max.y, 0, 0, 0, 0, KKBezierPointLinear};
   }
+
+  // TR corner (top side, then right side)
+  if (rx[1] > 0.0001f && ry[1] > 0.0001f) {
+    float kx = rx[1] * 0.5522847498f, ky = ry[1] * 0.5522847498f;
+    tmp[n++] = (KKBezierPoint){max.x - rx[1],      max.y, -kx, 0, kx, 0,
+                               KKBezierPointBezier};
+    tmp[n++] = (KKBezierPoint){max.x, max.y - ry[1],      0, ky, 0,
+                               -ky,   KKBezierPointBezier};
+  } else {
+    tmp[n++] = (KKBezierPoint){max.x, max.y, 0, 0, 0, 0, KKBezierPointLinear};
+  }
+
+  // BR corner (right side, then bottom side)
+  if (rx[2] > 0.0001f && ry[2] > 0.0001f) {
+    float kx = rx[2] * 0.5522847498f, ky = ry[2] * 0.5522847498f;
+    tmp[n++] = (KKBezierPoint){max.x, min.y + ry[2],      0, ky, 0,
+                               -ky,   KKBezierPointBezier};
+    tmp[n++] = (KKBezierPoint){max.x - rx[2],      min.y, kx, 0, -kx, 0,
+                               KKBezierPointBezier};
+  } else {
+    tmp[n++] = (KKBezierPoint){max.x, min.y, 0, 0, 0, 0, KKBezierPointLinear};
+  }
+
+  // BL corner (bottom side, then left side)
+  if (rx[3] > 0.0001f && ry[3] > 0.0001f) {
+    float kx = rx[3] * 0.5522847498f, ky = ry[3] * 0.5522847498f;
+    tmp[n++] = (KKBezierPoint){min.x + rx[3],      min.y, kx, 0, -kx, 0,
+                               KKBezierPointBezier};
+    tmp[n++] = (KKBezierPoint){min.x, min.y + ry[3],      0, -ky, 0,
+                               ky,    KKBezierPointBezier};
+  } else {
+    tmp[n++] = (KKBezierPoint){min.x, min.y, 0, 0, 0, 0, KKBezierPointLinear};
+  }
+
+  // Merge adjacent points that overlap (when a side fully collapses)
+  KKBezierPoint merged[12];
+  NSUInteger m = 0;
+  for (NSUInteger i = 0; i < n; i++) {
+    NSUInteger next = (i + 1) % n;
+    float dx = tmp[next].x - tmp[i].x;
+    float dy = tmp[next].y - tmp[i].y;
+    if (dx * dx + dy * dy < 0.0001f && i < n - 1) {
+      // Merge: take in-handle from first, out-handle from second
+      merged[m] = tmp[i];
+      merged[m].outX = tmp[next].outX;
+      merged[m].outY = tmp[next].outY;
+      merged[m].type = KKBezierPointBezier;
+      m++;
+      i++; // skip next
+    } else {
+      merged[m++] = tmp[i];
+    }
+  }
+  // Also check wrap-around: last point and first point
+  if (m >= 2) {
+    float dx = merged[0].x - merged[m - 1].x;
+    float dy = merged[0].y - merged[m - 1].y;
+    if (dx * dx + dy * dy < 0.0001f) {
+      merged[0].inX = merged[m - 1].inX;
+      merged[0].inY = merged[m - 1].inY;
+      merged[0].type = KKBezierPointBezier;
+      m--;
+    }
+  }
+
+  [self ensureCapacity:m];
+  _count = m;
+  memcpy(_points, merged, m * sizeof(KKBezierPoint));
   _closed = YES;
 }
 
