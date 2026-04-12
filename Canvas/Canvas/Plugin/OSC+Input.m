@@ -409,8 +409,19 @@
     float halfShort = fminf(canvasW, canvasH) * 0.5f;
     float inset = (float)[self strokeWidth] * 0.5f + 20.0f;
     float travel = fminf(100.0f, fmaxf(1.0f, halfShort - inset));
-    float fraction =
-        fmaxf(0.0f, fminf(1.0f, self.dragStartPixelRadius + delta / travel));
+    float rawFraction = self.dragStartPixelRadius + delta / travel;
+    // Snap to zero when close, otherwise clamp min pixel radius to
+    // strokeWidth so the inner offset curve doesn't self-intersect
+    float sw = (float)[self strokeWidth];
+    float maxPx = fmaxf(canvasW, canvasH) * 0.5f;
+    float minFraction = (maxPx > 0.0001f) ? (sw * 1.15f) / maxPx : 0;
+    float snapThreshold = minFraction * 0.5f;
+    float fraction;
+    if (rawFraction < snapThreshold) {
+      fraction = 0.0f;
+    } else {
+      fraction = fmaxf(minFraction, fminf(1.0f, rawFraction));
+    }
     [active setRoundedRectWithMin:min
                               max:max
                          fraction:fraction
