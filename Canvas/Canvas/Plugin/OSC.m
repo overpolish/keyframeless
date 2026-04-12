@@ -117,13 +117,18 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   simd_float4 handleColor = strokeColor;
   handleColor.w = 0.33f;
 
-  // Draw bezier segments
-  for (NSUInteger i = 0; i + 1 < self.path.count; i++) {
+  // Draw bezier segments (+ closing segment if closed)
+  NSUInteger segCount = self.path.count - 1;
+  if (self.path.closed && self.path.count >= 3)
+    segCount = self.path.count;
+
+  for (NSUInteger i = 0; i < segCount; i++) {
+    NSUInteger nextIdx = (i + 1) % self.path.count;
     CGPoint prev = CGPointZero;
     for (NSUInteger s = 0; s <= 32; s++) {
       float t = (float)s / 32.0f;
       simd_float2 pos = [self.path evaluatePointAtIndex:i
-                                              nextIndex:i + 1
+                                              nextIndex:nextIdx
                                                     atT:t];
       CGPoint cur = [self canvasPointFromObjectPoint:pos];
       if (s > 0) {
@@ -232,6 +237,12 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
     KKBezierPoint pt = [self.path pointAtIndex:i];
     CGPoint ptCanvas = [self canvasPointForBezierPoint:pt];
     if (hypot(positionX - ptCanvas.x, positionY - ptCanvas.y) < hitRadius) {
+      // Hovering first point on open path with 3+ points: close path
+      if (i == 0 && !self.path.closed && self.path.count >= 3) {
+        *activePart = kOSCClosePath;
+        [oscAPI setCursor:self.penCloseCursor];
+        return;
+      }
       *activePart = kOSCPathPointBase + (NSInteger)i;
       [oscAPI setCursor:optDown ? _penDeleteCursor : _moveCursor];
       return;
@@ -273,6 +284,14 @@ static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
   }
 
   self.path = [self readPath];
+
+  // Close path
+  if (activePart == kOSCClosePath) {
+    self.path.closed = YES;
+    [self writePath:self.path];
+    *forceUpdate = YES;
+    return;
+  }
 
   if (activePart >= kOSCPathPointBase && activePart < kOSCInHandleBase &&
       (modifiers & kFxModifierKey_OPTION)) {
