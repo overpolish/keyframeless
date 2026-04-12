@@ -68,6 +68,7 @@
   KKBezierPath *active = [self activePath];
   BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
   BOOL isPenMode = (self.toolbar.activeTag == kOSCToolbarPen);
+  BOOL isRectMode = (self.toolbar.activeTag == kOSCToolbarRect);
 
   // Close path: allow drag to adjust first point's in-handle
   if (activePart == kOSCClosePath && active) {
@@ -86,7 +87,7 @@
     NSInteger idx = activePart - kOSCPathPointBase;
     if (idx >= 0 && idx < (NSInteger)active.count) {
       [active removeAtIndex:idx];
-      if (active.count == 0) {
+      if (active.count < 2) {
         [self.paths removeObjectAtIndex:self.activePathIndex];
         self.activePathIndex = -1;
       }
@@ -115,6 +116,9 @@
     self.dragIndex = idx;
     self.dragIsInHandle = NO;
     self.dragIsOutHandle = NO;
+    KKBezierPoint dragPt = [active pointAtIndex:idx];
+    self.dragOrigin = (simd_float2){dragPt.x, dragPt.y};
+    self.dragAnchor = self.dragOrigin;
     *forceUpdate = YES;
     return;
   }
@@ -158,17 +162,13 @@
     return;
   }
 
-  // Pen mode + Cmd: select path
+  // Pen mode + Cmd: temporary cursor mode (select, drag, marquee)
   if (isPenMode && (modifiers & kFxModifierKey_COMMAND)) {
-    double hitRadiusStroke = [self strokeHitRadius];
-    NSInteger nearPath = [self pathIndexNearX:positionX
-                                            y:positionY
-                                       radius:hitRadiusStroke];
-    if (nearPath >= 0) {
-      self.activePathIndex = nearPath;
-      *forceUpdate = YES;
-      return;
-    }
+    [self handleCursorMouseDownX:positionX
+                               y:positionY
+                       modifiers:modifiers
+                     forceUpdate:forceUpdate];
+    return;
   }
 
   // Pen mode: add point or start new path
@@ -180,6 +180,17 @@
                   forceUpdate:forceUpdate
                        atTime:time
                    activePart:activePart];
+    return;
+  }
+
+  // Rectangle mode: start drawing rect
+  if (isRectMode) {
+    simd_float2 objPos =
+        [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+    self.rectStart = objPos;
+    self.dragOrigin = objPos;
+    self.dragIsRect = YES;
+    *forceUpdate = YES;
   }
 }
 
@@ -201,8 +212,10 @@
         CGPoint ptCanvas = [self canvasPointForBezierPoint:pt];
         if (hypot(positionX - ptCanvas.x, positionY - ptCanvas.y) < 12.0) {
           self.dragIsSelection = YES;
-          self.dragOrigin = [self
+          simd_float2 clickObj = [self
               objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+          self.dragOrigin = clickObj;
+          self.dragAnchor = clickObj;
           *forceUpdate = YES;
           return;
         }
@@ -313,10 +326,40 @@
     return;
   }
 
+  // Rectangle tool: update preview (shift = square in pixel space)
+  if (self.dragIsRect) {
+    simd_float2 objPos =
+        [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+    if (modifiers & kFxModifierKey_SHIFT) {
+      // Work entirely in canvas pixel space for exact square
+      CGPoint sc = [self canvasPointFromObjectPoint:self.rectStart];
+      float dx = (float)(positionX - sc.x);
+      float dy = (float)(positionY - sc.y);
+      float side = roundf(fmaxf(fabsf(dx), fabsf(dy)));
+      // Compute both corners snapped to pixel grid, then force equal size
+      float sx = roundf((float)sc.x);
+      float sy = roundf((float)sc.y);
+      float ex = sx + copysignf(side, dx);
+      float ey = sy + copysignf(side, dy);
+      objPos = [self objectPointFromCanvasPoint:CGPointMake(ex, ey)];
+    }
+    self.dragOrigin = objPos;
+    *forceUpdate = YES;
+    return;
+  }
+
   // Drag selected points
   if (self.dragIsSelection) {
     simd_float2 objPos =
         [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+    // Shift: constrain to dominant axis from initial click
+    if (modifiers & kFxModifierKey_SHIFT) {
+      simd_float2 totalDelta = objPos - self.dragAnchor;
+      if (fabs(totalDelta.x) > fabs(totalDelta.y))
+        objPos.y = self.dragAnchor.y;
+      else
+        objPos.x = self.dragAnchor.x;
+    }
     simd_float2 delta = objPos - self.dragOrigin;
     self.dragOrigin = objPos;
     for (NSUInteger p = 0; p < self.paths.count; p++) {
@@ -376,6 +419,14 @@
         breakSymmetry:breakSymmetry
                onPath:active];
   } else {
+    // Shift: constrain to dominant axis from initial position
+    if (modifiers & kFxModifierKey_SHIFT) {
+      simd_float2 totalDelta = objPos - self.dragAnchor;
+      if (fabs(totalDelta.x) > fabs(totalDelta.y))
+        objPos.y = self.dragAnchor.y;
+      else
+        objPos.x = self.dragAnchor.x;
+    }
     [active moveAtIndex:self.dragIndex to:objPos];
   }
 
@@ -391,7 +442,6 @@
                     atTime:(CMTime)time {
   if (self.dragIsMarquee) {
     self.marqueeEnd = CGPointMake(positionX, positionY);
-    BOOL shiftDown = (modifiers & kFxModifierKey_SHIFT) != 0;
     BOOL optDown = (modifiers & kFxModifierKey_OPTION) != 0;
 
     CGFloat minX = MIN(self.marqueeStart.x, self.marqueeEnd.x);
@@ -419,6 +469,27 @@
     }
   }
 
+  // Finalize rectangle creation (use dragOrigin which has shift-square applied)
+  if (self.dragIsRect) {
+    simd_float2 a = self.rectStart;
+    simd_float2 b = self.dragOrigin;
+    float minX = fminf(a.x, b.x), maxX = fmaxf(a.x, b.x);
+    float minY = fminf(a.y, b.y), maxY = fmaxf(a.y, b.y);
+
+    // Only create if it has some size
+    if (maxX - minX > 0.001f && maxY - minY > 0.001f) {
+      KKBezierPath *rect = [[KKBezierPath alloc] init];
+      [rect insertAtIndex:0 position:(simd_float2){minX, maxY}]; // top-left
+      [rect insertAtIndex:1 position:(simd_float2){maxX, maxY}]; // top-right
+      [rect insertAtIndex:2 position:(simd_float2){maxX, minY}]; // bottom-right
+      [rect insertAtIndex:3 position:(simd_float2){minX, minY}]; // bottom-left
+      rect.closed = YES;
+      [self.paths addObject:rect];
+      self.activePathIndex = (NSInteger)self.paths.count - 1;
+      [self writePaths:self.paths];
+    }
+  }
+
   self.dragIndex = -1;
   self.dragIsInHandle = NO;
   self.dragIsOutHandle = NO;
@@ -426,6 +497,7 @@
   self.dragIsPath = NO;
   self.dragIsMarquee = NO;
   self.dragIsSelection = NO;
+  self.dragIsRect = NO;
 
   *forceUpdate = YES;
   [super mouseUpAtPositionX:positionX
@@ -466,7 +538,7 @@
           if ([self isPointSelected:p point:i])
             [path removeAtIndex:i];
         }
-        if (path.count == 0)
+        if (path.count < 2)
           [self.paths removeObjectAtIndex:p];
       }
       [self.selectedPoints removeAllIndexes];
@@ -489,7 +561,7 @@
       *didHandle = YES;
     } else if (active.count > 0) {
       [active removeAtIndex:active.count - 1];
-      if (active.count == 0) {
+      if (active.count < 2) {
         [self.paths removeObjectAtIndex:self.activePathIndex];
         self.activePathIndex = -1;
       }

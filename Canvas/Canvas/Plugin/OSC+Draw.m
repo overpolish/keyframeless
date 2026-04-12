@@ -203,6 +203,54 @@
                           to:self.marqueeEnd
             destinationImage:destinationImage];
   }
+
+  // Rectangle tool preview
+  if (self.dragIsRect) {
+    simd_float2 a = self.rectStart, b = self.dragOrigin;
+    CGPoint ca = [self canvasPointFromObjectPoint:a];
+    CGPoint cb = [self canvasPointFromObjectPoint:b];
+    CGFloat hw = (CGFloat)[self strokeWidth] * 0.5f;
+    NSInteger ix0 = (NSInteger)round(MIN(ca.x, cb.x));
+    NSInteger ix1 = (NSInteger)round(MAX(ca.x, cb.x));
+    NSInteger iy0 = (NSInteger)round(MIN(ca.y, cb.y));
+    NSInteger iy1 = (NSInteger)round(MAX(ca.y, cb.y));
+    CGFloat x0 = ix0 + 0.5f, x1 = ix1 + 0.5f;
+    CGFloat y0 = iy0 + 0.5f, y1 = iy1 + 0.5f;
+    if (ix1 - ix0 > 0 && iy1 - iy0 > 0) {
+      CGPoint tl = {x0, y0}, tr = {x1, y0}, br = {x1, y1}, bl = {x0, y1};
+      [self drawLineFrom:tl
+                        to:tr
+                     color:strokeColor
+                 halfWidth:hw
+          destinationImage:destinationImage];
+      [self drawLineFrom:tr
+                        to:br
+                     color:strokeColor
+                 halfWidth:hw
+          destinationImage:destinationImage];
+      [self drawLineFrom:br
+                        to:bl
+                     color:strokeColor
+                 halfWidth:hw
+          destinationImage:destinationImage];
+      [self drawLineFrom:bl
+                        to:tl
+                     color:strokeColor
+                 halfWidth:hw
+          destinationImage:destinationImage];
+
+      // Size label below bottom-right (canvas Y=0 is bottom)
+      NSInteger pxW = ix1 - ix0;
+      NSInteger pxH = iy1 - iy0;
+      self.sizeLabel.text =
+          [NSString stringWithFormat:@"%ld × %ld", (long)pxW, (long)pxH];
+      CGSize labelSize = self.sizeLabel.size;
+      CGPoint labelPos = {x1 - labelSize.width * 0.5f,
+                          y0 - labelSize.height * 0.5f - 6.0f};
+      [self.sizeLabel drawAtCanvasPosition:labelPos
+                          destinationImage:destinationImage];
+    }
+  }
 }
 
 @end

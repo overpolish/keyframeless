@@ -30,6 +30,7 @@
 
   BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
   BOOL isPenMode = (self.toolbar.activeTag == kOSCToolbarPen);
+  BOOL isRectMode = (self.toolbar.activeTag == kOSCToolbarRect);
 
   CGEventFlags flags =
       CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
@@ -98,7 +99,7 @@
     return;
   }
 
-  // Pen mode + Cmd: arrow cursor for path selection
+  // Pen mode + Cmd: temporary cursor mode (select, marquee, etc.)
   if (isPenMode && cmdDown) {
     NSInteger nearPath = [self pathIndexNearX:positionX
                                             y:positionY
@@ -108,6 +109,14 @@
       [oscAPI setCursor:[NSCursor arrowCursor]];
       return;
     }
+    // Empty space: marquee
+    if (self.selectedPoints.count > 0 && shiftDown)
+      [oscAPI setCursor:[NSCursor dragCopyCursor]];
+    else if (self.selectedPoints.count > 0 && optDown)
+      [oscAPI setCursor:[NSCursor operationNotAllowedCursor]];
+    else
+      [oscAPI setCursor:[NSCursor crosshairCursor]];
+    return;
   }
 
   // Pen mode: test active path's segments for insertion
@@ -125,6 +134,8 @@
 
   if (isPenMode)
     [oscAPI setCursor:self.penAddCursor];
+  else if (isRectMode)
+    [oscAPI setCursor:[NSCursor crosshairCursor]];
   else
     [oscAPI setCursor:[NSCursor arrowCursor]];
 }

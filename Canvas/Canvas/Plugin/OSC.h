@@ -21,7 +21,11 @@
 @property(nonatomic, assign) BOOL dragIsPath;
 @property(nonatomic, assign) BOOL dragIsMarquee;
 @property(nonatomic, assign) BOOL dragIsSelection;
+@property(nonatomic, assign) BOOL dragIsRect;
 @property(nonatomic, assign) simd_float2 dragOrigin;
+@property(nonatomic, assign)
+    simd_float2 dragAnchor; // initial position for shift-constrain
+@property(nonatomic, assign) simd_float2 rectStart;
 @property(nonatomic, assign) CGPoint marqueeStart;
 @property(nonatomic, assign) CGPoint marqueeEnd;
 @property(nonatomic, strong) NSMutableIndexSet *selectedPoints;
@@ -34,6 +38,7 @@
 @property(nonatomic, strong) NSCursor *editPointsCursor;
 @property(nonatomic, strong) NSCursor *penDeleteCursor;
 @property(nonatomic, strong) KKToolbar *toolbar;
+@property(nonatomic, strong) KKOSCLabel *sizeLabel;
 
 - (NSMutableArray<KKBezierPath *> *)readPaths;
 - (void)writePaths:(NSArray<KKBezierPath *> *)paths;
