@@ -231,13 +231,15 @@
               if (avgLen < 1e-6f)
                 return n1;
               avg /= avgLen;
-              // Scale by 1/dot(avg, n1) to extend miter to edge
               float d = simd_dot(avg, n1);
-              if (d > 0.1f)
+              // Miter limit: don't extend beyond 2x normal length
+              // Below d=0.5 the miter gets too long, just use average
+              if (d > 0.5f)
                 avg /= d;
               return avg;
             };
 
+        // Only apply miter at junctions between two linear segments
         if (isEnd &&
             (c < curveCount - 1 || (path.closed && c == curveCount - 1))) {
           NSUInteger nextC, nextNext;
@@ -248,28 +250,40 @@
             nextC = 0;
             nextNext = 1 % path.count;
           }
-          simd_float2 nextTangent = [path evaluateTangentAtIndex:nextC
-                                                       nextIndex:nextNext
-                                                             atT:0.0f];
-          nextTangent.y = -nextTangent.y;
-          float nLen = simd_length(nextTangent);
-          if (nLen > 1e-6f) {
-            nextTangent /= nLen;
-            simd_float2 nextNormal = {-nextTangent.y, nextTangent.x};
-            normal = miterNormal(normal, nextNormal);
+          KKBezierPoint curPt = [path pointAtIndex:nextIdx];
+          KKBezierPoint nxtPt = [path pointAtIndex:nextC];
+          BOOL bothLinear = (curPt.type == KKBezierPointLinear &&
+                             nxtPt.type == KKBezierPointLinear);
+          if (bothLinear) {
+            simd_float2 nextTangent = [path evaluateTangentAtIndex:nextC
+                                                         nextIndex:nextNext
+                                                               atT:0.0f];
+            nextTangent.y = -nextTangent.y;
+            float nLen = simd_length(nextTangent);
+            if (nLen > 1e-6f) {
+              nextTangent /= nLen;
+              simd_float2 nextNormal = {-nextTangent.y, nextTangent.x};
+              normal = miterNormal(normal, nextNormal);
+            }
           }
         } else if (isStart && (c > 0 || (path.closed && c == 0))) {
           NSUInteger prevC = (c > 0) ? c - 1 : curveCount - 1;
-          NSUInteger prevNext = c;
-          simd_float2 prevTangent = [path evaluateTangentAtIndex:prevC
-                                                       nextIndex:prevNext
-                                                             atT:1.0f];
-          prevTangent.y = -prevTangent.y;
-          float pLen = simd_length(prevTangent);
-          if (pLen > 1e-6f) {
-            prevTangent /= pLen;
-            simd_float2 prevNormal = {-prevTangent.y, prevTangent.x};
-            normal = miterNormal(prevNormal, normal);
+          NSUInteger prevIdx = c;
+          KKBezierPoint curPt = [path pointAtIndex:prevIdx];
+          KKBezierPoint prvPt = [path pointAtIndex:prevC];
+          BOOL bothLinear = (prvPt.type == KKBezierPointLinear &&
+                             curPt.type == KKBezierPointLinear);
+          if (bothLinear) {
+            simd_float2 prevTangent = [path evaluateTangentAtIndex:prevC
+                                                         nextIndex:prevIdx
+                                                               atT:1.0f];
+            prevTangent.y = -prevTangent.y;
+            float pLen = simd_length(prevTangent);
+            if (pLen > 1e-6f) {
+              prevTangent /= pLen;
+              simd_float2 prevNormal = {-prevTangent.y, prevTangent.x};
+              normal = miterNormal(prevNormal, normal);
+            }
           }
         }
 
