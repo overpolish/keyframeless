@@ -89,10 +89,30 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
 }
 
 - (void)selectRow:(NSButton *)sender {
-  NSIndexSet *sel = [NSIndexSet indexSetWithIndex:sender.tag];
-  sUISelection = sel;
-  sSelectedIndices = sel;
-  sPendingOSCSelection = sel;
+  NSUInteger clicked = sender.tag;
+  NSEventModifierFlags flags = NSEvent.modifierFlags;
+  NSMutableIndexSet *sel =
+      [sUISelection mutableCopy] ?: [NSMutableIndexSet indexSet];
+
+  if (flags & NSEventModifierFlagCommand) {
+    if ([sel containsIndex:clicked])
+      [sel removeIndex:clicked];
+    else
+      [sel addIndex:clicked];
+  } else if (flags & NSEventModifierFlagShift) {
+    NSUInteger anchor = sel.count > 0 ? sel.lastIndex : 0;
+    NSUInteger lo = MIN(anchor, clicked);
+    NSUInteger hi = MAX(anchor, clicked);
+    [sel addIndexesInRange:NSMakeRange(lo, hi - lo + 1)];
+  } else {
+    [sel removeAllIndexes];
+    [sel addIndex:clicked];
+  }
+
+  NSIndexSet *frozen = [sel copy];
+  sUISelection = frozen;
+  sSelectedIndices = frozen;
+  sPendingOSCSelection = frozen;
 
   id<FxCustomParameterActionAPI_v4> actionAPI =
       [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
