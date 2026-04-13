@@ -38,6 +38,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
       path->_closed = (flags & 1) != 0;
       path->_isRect = (flags & 8) != 0;
       path->_hidden = (flags & 16) != 0;
+      path->_locked = (flags & 32) != 0;
       path->_count = count;
       path->_capacity = count;
       path->_points = malloc(count * pointSize);
@@ -78,6 +79,8 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     flags |= 8;
   if (_hidden)
     flags |= 16;
+  if (_locked)
+    flags |= 32;
   BOOL hasRadius = (_cornerRadiusTL > 0 || _cornerRadiusTR > 0 ||
                     _cornerRadiusBR > 0 || _cornerRadiusBL > 0);
   if (hasRadius)

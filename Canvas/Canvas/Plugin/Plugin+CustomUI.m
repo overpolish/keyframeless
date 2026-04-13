@@ -26,14 +26,16 @@ static BOOL sForceRefresh = NO;
 void KKCanvasRefreshLayerList(NSUInteger pathCount,
                               NSArray<KKBezierPath *> *paths);
 
-@interface KKLayerVisibilityTarget : NSObject
+@interface KKLayerActionTarget : NSObject
 @property(nonatomic, weak) id<PROAPIAccessing> apiManager;
-- (void)toggle:(NSButton *)sender;
+- (void)toggleVisibility:(NSButton *)sender;
+- (void)toggleLock:(NSButton *)sender;
 @end
 
-@implementation KKLayerVisibilityTarget
+@implementation KKLayerActionTarget
 
-- (void)toggle:(NSButton *)sender {
+- (void)_toggleProperty:(NSButton *)sender
+                  apply:(void (^)(KKBezierPath *))apply {
   id<FxCustomParameterActionAPI_v4> actionAPI =
       [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actionAPI startAction:self];
@@ -57,7 +59,7 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
     return;
   }
 
-  paths[index].hidden = !paths[index].hidden;
+  apply(paths[index]);
   NSData *newBlob = [KKBezierPath blobFromPaths:paths];
   NSString *newStr = [newBlob base64EncodedStringWithOptions:0];
   [paramSetAPI setStringParameterValue:newStr toParameter:kParamPathData];
@@ -65,6 +67,20 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
 
   sForceRefresh = YES;
   KKCanvasRefreshLayerList(paths.count, paths);
+}
+
+- (void)toggleVisibility:(NSButton *)sender {
+  [self _toggleProperty:sender
+                  apply:^(KKBezierPath *p) {
+                    p.hidden = !p.hidden;
+                  }];
+}
+
+- (void)toggleLock:(NSButton *)sender {
+  [self _toggleProperty:sender
+                  apply:^(KKBezierPath *p) {
+                    p.locked = !p.locked;
+                  }];
 }
 
 @end
@@ -75,7 +91,7 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
 @property(nonatomic, strong) NSView *emptyView;
 @property(nonatomic, strong) NSView *contentView;
 @property(nonatomic, strong) NSLayoutConstraint *contentHeightConstraint;
-@property(nonatomic, strong) KKLayerVisibilityTarget *visibilityTarget;
+@property(nonatomic, strong) KKLayerActionTarget *actionTarget;
 @end
 
 static __weak KKLayerListContainer *sLayerListContainer;
@@ -93,8 +109,12 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
 
   NSMutableArray<NSNumber *> *hiddenStates =
       [NSMutableArray arrayWithCapacity:pathCount];
-  for (NSUInteger i = 0; i < pathCount; i++)
+  NSMutableArray<NSNumber *> *lockedStates =
+      [NSMutableArray arrayWithCapacity:pathCount];
+  for (NSUInteger i = 0; i < pathCount; i++) {
     [hiddenStates addObject:@(paths[i].hidden)];
+    [lockedStates addObject:@(paths[i].locked)];
+  }
 
   dispatch_async(dispatch_get_main_queue(), ^{
     KKLayerListContainer *container = sLayerListContainer;
@@ -117,18 +137,21 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
     CGFloat totalHeight = MAX(pathCount * kRowHeight + topPad, kListHeight);
     container.contentHeightConstraint.constant = totalHeight;
 
+    NSImageSymbolConfiguration *symConfig = [NSImageSymbolConfiguration
+        configurationWithPointSize:10.0
+                            weight:NSFontWeightRegular];
+
     for (NSUInteger i = 0; i < pathCount; i++) {
       BOOL isHidden = hiddenStates[i].boolValue;
-      NSString *iconName = isHidden ? @"eye.slash" : @"eye.fill";
-      NSImage *eyeIcon = [NSImage imageWithSystemSymbolName:iconName
-                                   accessibilityDescription:nil];
-      NSImageSymbolConfiguration *symConfig = [NSImageSymbolConfiguration
-          configurationWithPointSize:10.0
-                              weight:NSFontWeightRegular];
-      NSButton *eyeButton = [NSButton
-          buttonWithImage:[eyeIcon imageWithSymbolConfiguration:symConfig]
-                   target:container.visibilityTarget
-                   action:@selector(toggle:)];
+      BOOL isLocked = lockedStates[i].boolValue;
+
+      NSString *eyeName = isHidden ? @"eye.slash" : @"eye.fill";
+      NSButton *eyeButton =
+          [NSButton buttonWithImage:[[NSImage imageWithSystemSymbolName:eyeName
+                                               accessibilityDescription:nil]
+                                        imageWithSymbolConfiguration:symConfig]
+                             target:container.actionTarget
+                             action:@selector(toggleVisibility:)];
       eyeButton.bezelStyle = NSBezelStyleInline;
       eyeButton.bordered = NO;
       eyeButton.imagePosition = NSImageOnly;
@@ -144,14 +167,44 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
       label.font = [NSFont systemFontOfSize:11.0];
       label.textColor =
           isHidden ? [NSColor tertiaryLabelColor] : [NSColor labelColor];
+      [label setContentHuggingPriority:1
+                        forOrientation:NSLayoutConstraintOrientationHorizontal];
 
-      NSStackView *row = [NSStackView stackViewWithViews:@[ eyeButton, label ]];
+      NSString *lockName = isLocked ? @"lock.fill" : @"lock.open";
+      NSButton *lockButton =
+          [NSButton buttonWithImage:[[NSImage imageWithSystemSymbolName:lockName
+                                               accessibilityDescription:nil]
+                                        imageWithSymbolConfiguration:symConfig]
+                             target:container.actionTarget
+                             action:@selector(toggleLock:)];
+      lockButton.bezelStyle = NSBezelStyleInline;
+      lockButton.bordered = NO;
+      lockButton.imagePosition = NSImageOnly;
+      lockButton.tag = i;
+      lockButton.contentTintColor = isLocked ? [NSColor secondaryLabelColor]
+                                             : [NSColor tertiaryLabelColor];
+      [lockButton.widthAnchor constraintEqualToConstant:12.0].active = YES;
+      [lockButton.heightAnchor constraintEqualToConstant:12.0].active = YES;
+
+      NSStackView *row =
+          [NSStackView stackViewWithViews:@[ eyeButton, label, lockButton ]];
       row.orientation = NSUserInterfaceLayoutOrientationHorizontal;
       row.alignment = NSLayoutAttributeCenterY;
+      row.distribution = NSStackViewDistributionFill;
       row.spacing = 6.0;
-      row.frame = NSMakeRect(8, topPad + i * kRowHeight, 200, kRowHeight);
-      row.autoresizingMask = NSViewWidthSizable;
+      row.edgeInsets = NSEdgeInsetsMake(0, 0, 0, 4);
+      row.translatesAutoresizingMaskIntoConstraints = NO;
       [content addSubview:row];
+      [row.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
+                                        constant:8]
+          .active = YES;
+      [row.trailingAnchor constraintEqualToAnchor:content.trailingAnchor
+                                         constant:-8]
+          .active = YES;
+      [row.topAnchor constraintEqualToAnchor:content.topAnchor
+                                    constant:topPad + i * kRowHeight]
+          .active = YES;
+      [row.heightAnchor constraintEqualToConstant:kRowHeight].active = YES;
     }
   });
 }
@@ -250,13 +303,13 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
                                          constant:kListHeight / 2 - 7]
         .active = YES;
 
-    KKLayerVisibilityTarget *visTarget = [[KKLayerVisibilityTarget alloc] init];
+    KKLayerActionTarget *visTarget = [[KKLayerActionTarget alloc] init];
     visTarget.apiManager = self.apiManager;
 
     wrapper.emptyView = emptyStack;
     wrapper.contentView = content;
     wrapper.contentHeightConstraint = heightConstraint;
-    wrapper.visibilityTarget = visTarget;
+    wrapper.actionTarget = visTarget;
     sLayerListContainer = wrapper;
     sLastPathCount = NSUIntegerMax;
 
