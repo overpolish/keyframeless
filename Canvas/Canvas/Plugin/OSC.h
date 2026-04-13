@@ -23,6 +23,7 @@
 @property(nonatomic, assign) BOOL dragIsSelection;
 @property(nonatomic, assign) BOOL dragIsRect;
 @property(nonatomic, assign) BOOL dragIsEllipse;
+@property(nonatomic, assign) BOOL dragIsLine;
 @property(nonatomic, assign) simd_float2 dragOrigin;
 @property(nonatomic, assign)
     simd_float2 dragAnchor; // initial position for shift-constrain

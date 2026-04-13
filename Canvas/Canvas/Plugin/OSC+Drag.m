@@ -40,6 +40,27 @@
   *forceUpdate = YES;
 }
 
+- (void)dragLineToX:(double)positionX
+                  y:(double)positionY
+          modifiers:(NSUInteger)modifiers
+        forceUpdate:(BOOL *)forceUpdate {
+  simd_float2 objPos =
+      [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+  if (modifiers & kFxModifierKey_SHIFT) {
+    CGPoint sc = [self canvasPointFromObjectPoint:self.rectStart];
+    float dx = (float)(positionX - sc.x);
+    float dy = (float)(positionY - sc.y);
+    float angle = atan2f(dy, dx);
+    float snapped = roundf(angle / (M_PI / 4.0f)) * (M_PI / 4.0f);
+    float dist = hypotf(dx, dy);
+    float ex = (float)sc.x + dist * cosf(snapped);
+    float ey = (float)sc.y + dist * sinf(snapped);
+    objPos = [self objectPointFromCanvasPoint:CGPointMake(ex, ey)];
+  }
+  self.dragOrigin = objPos;
+  *forceUpdate = YES;
+}
+
 - (void)dragSelectionToX:(double)positionX
                        y:(double)positionY
                modifiers:(NSUInteger)modifiers
@@ -125,6 +146,13 @@
   if (self.dragIsMarquee) {
     self.marqueeEnd = CGPointMake(positionX, positionY);
     *forceUpdate = YES;
+    return;
+  }
+  if (self.dragIsLine) {
+    [self dragLineToX:positionX
+                    y:positionY
+            modifiers:modifiers
+          forceUpdate:forceUpdate];
     return;
   }
   if (self.dragIsRect || self.dragIsEllipse) {
@@ -292,6 +320,22 @@
   [self writePaths:self.paths];
 }
 
+- (void)finalizeLine {
+  simd_float2 a = self.rectStart;
+  simd_float2 b = self.dragOrigin;
+  if (fabs(a.x - b.x) < 0.001f && fabs(a.y - b.y) < 0.001f)
+    return;
+
+  KKBezierPath *line = [[KKBezierPath alloc] init];
+  [line insertAtIndex:0 position:a];
+  [line insertAtIndex:1 position:b];
+  [self.paths addObject:line];
+  self.activePathIndex = (NSInteger)self.paths.count - 1;
+  [self.selectedPathIndices removeAllIndexes];
+  [self.selectedPathIndices addIndex:self.activePathIndex];
+  [self writePaths:self.paths];
+}
+
 - (void)resetDragState {
   self.dragIndex = -1;
   self.dragResizeHandle = -1;
@@ -303,6 +347,7 @@
   self.dragIsSelection = NO;
   self.dragIsRect = NO;
   self.dragIsEllipse = NO;
+  self.dragIsLine = NO;
   self.resizeOrigSnapshots = nil;
   self.resizeOrigIndices = nil;
 }
@@ -319,6 +364,8 @@
     [self finalizeRect];
   if (self.dragIsEllipse)
     [self finalizeEllipse];
+  if (self.dragIsLine)
+    [self finalizeLine];
 
   [self resetDragState];
   *forceUpdate = YES;
