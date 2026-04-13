@@ -74,6 +74,23 @@
 
   BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
   if (isCursorMode) {
+    if ((modifiers & kFxModifierKey_OPTION) && !self.dragDidDuplicate) {
+      self.dragDidDuplicate = YES;
+      NSMutableIndexSet *newIndices = [NSMutableIndexSet indexSet];
+      [self.selectedPathIndices
+          enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+            if (idx >= self.paths.count)
+              return;
+            KKBezierPath *orig = self.paths[idx];
+            KKBezierPath *clone =
+                [KKBezierPath pathWithData:[orig dataRepresentation]];
+            [self.paths addObject:clone];
+            [newIndices addIndex:self.paths.count - 1];
+          }];
+      [self.selectedPathIndices removeAllIndexes];
+      [self.selectedPathIndices addIndexes:newIndices];
+      self.activePathIndex = (NSInteger)newIndices.lastIndex;
+    }
     [self.selectedPathIndices
         enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
           if (idx < self.paths.count)
@@ -195,6 +212,19 @@
     simd_float2 objPos =
         [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
     simd_float2 delta = objPos - self.dragOrigin;
+    BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
+    if (isCursorMode && (modifiers & kFxModifierKey_OPTION) &&
+        !self.dragDidDuplicate) {
+      self.dragDidDuplicate = YES;
+      KKBezierPath *clone =
+          [KKBezierPath pathWithData:[active dataRepresentation]];
+      [self.paths addObject:clone];
+      NSInteger cloneIdx = (NSInteger)self.paths.count - 1;
+      [self.selectedPathIndices removeAllIndexes];
+      [self.selectedPathIndices addIndex:cloneIdx];
+      self.activePathIndex = cloneIdx;
+    }
+    active = [self activePath];
     [active translateBy:delta];
     self.dragOrigin = objPos;
     [self writePaths:self.paths];
@@ -355,6 +385,7 @@
   self.dragIsRect = NO;
   self.dragIsEllipse = NO;
   self.dragIsLine = NO;
+  self.dragDidDuplicate = NO;
   self.resizeOrigSnapshots = nil;
   self.resizeOrigIndices = nil;
 }
