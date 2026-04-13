@@ -25,16 +25,60 @@ static const CGFloat kRowSpacing = 1.0;
 @end
 
 static BOOL sForceRefresh = NO;
+static BOOL sIsEditing = NO;
 static NSIndexSet *sSelectedIndices;
 static NSIndexSet *sUISelection;
 static NSIndexSet *sPendingOSCSelection;
 void KKCanvasRefreshLayerList(NSUInteger pathCount,
                               NSArray<KKBezierPath *> *paths);
 
-@interface KKLayerActionTarget : NSObject
+@class KKLayerActionTarget;
+
+@interface KKLayerListContainer : NSView
+@property(nonatomic, strong) NSScrollView *scrollView;
+@property(nonatomic, strong) NSView *borderView;
+@property(nonatomic, strong) NSView *emptyView;
+@property(nonatomic, strong) NSView *contentView;
+@property(nonatomic, strong) NSLayoutConstraint *contentHeightConstraint;
+@property(nonatomic, strong) KKLayerActionTarget *actionTarget;
+@end
+
+static __weak KKLayerListContainer *sLayerListContainer;
+
+@interface KKEditableLabel : NSTextField
+@end
+
+@implementation KKEditableLabel
+
+- (BOOL)performKeyEquivalent:(NSEvent *)event {
+  if (self.currentEditor) {
+    [self.currentEditor keyDown:event];
+    return YES;
+  }
+  return [super performKeyEquivalent:event];
+}
+
+- (BOOL)becomeFirstResponder {
+  BOOL ok = [super becomeFirstResponder];
+  if (ok) {
+    NSTextView *editor = (NSTextView *)self.currentEditor;
+    NSColor *accent = [NSColor accent];
+    editor.insertionPointColor = accent;
+    editor.selectedTextAttributes = @{
+      NSBackgroundColorAttributeName : [accent colorWithAlphaComponent:0.3],
+      NSForegroundColorAttributeName : [NSColor labelColor],
+    };
+  }
+  return ok;
+}
+
+@end
+
+@interface KKLayerActionTarget : NSObject <NSTextFieldDelegate>
 @property(nonatomic, weak) id<PROAPIAccessing> apiManager;
 - (void)toggleVisibility:(NSButton *)sender;
 - (void)toggleLock:(NSButton *)sender;
+- (void)renameRow:(NSMenuItem *)sender;
 @end
 
 @implementation KKLayerActionTarget
@@ -88,7 +132,89 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
                   }];
 }
 
+- (void)_commitEditing {
+  KKLayerListContainer *container = sLayerListContainer;
+  if (!container || !sIsEditing)
+    return;
+  [container.contentView.window makeFirstResponder:container.contentView];
+}
+
+- (void)renameRow:(NSMenuItem *)sender {
+  [self _commitEditing];
+
+  NSInteger index = sender.tag;
+  KKLayerListContainer *container = sLayerListContainer;
+  if (!container)
+    return;
+
+  NSView *content = container.contentView;
+  for (NSStackView *row in content.subviews) {
+    if (![row isKindOfClass:[NSStackView class]])
+      continue;
+    for (NSView *v in row.arrangedSubviews) {
+      if ([v isKindOfClass:[NSButton class]] && v.tag == index &&
+          [(NSButton *)v action] == @selector(selectRow:)) {
+        NSButton *btn = (NSButton *)v;
+        KKEditableLabel *field =
+            [KKEditableLabel textFieldWithString:btn.title];
+        field.font = btn.font;
+        field.tag = index;
+        field.bordered = NO;
+        field.focusRingType = NSFocusRingTypeNone;
+        field.drawsBackground = NO;
+        field.textColor = [NSColor labelColor];
+        field.delegate = self;
+        field.translatesAutoresizingMaskIntoConstraints = NO;
+        [field
+            setContentHuggingPriority:1
+                       forOrientation:NSLayoutConstraintOrientationHorizontal];
+
+        NSUInteger viewIndex = [row.arrangedSubviews indexOfObject:btn];
+        [row removeArrangedSubview:btn];
+        [btn removeFromSuperview];
+        [row insertArrangedSubview:field atIndex:viewIndex];
+
+        sIsEditing = YES;
+        [field.window makeFirstResponder:field];
+        return;
+      }
+    }
+  }
+}
+
+- (void)controlTextDidEndEditing:(NSNotification *)note {
+  NSTextField *field = note.object;
+  NSString *newName = field.stringValue;
+  NSInteger index = field.tag;
+
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> paramSetAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+
+  NSString *str = nil;
+  [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
+  if (str.length > 0) {
+    NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
+    NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+    if (index >= 0 && (NSUInteger)index < paths.count) {
+      paths[index].name = newName.length > 0 ? newName : nil;
+      NSData *newBlob = [KKBezierPath blobFromPaths:paths];
+      NSString *newStr = [newBlob base64EncodedStringWithOptions:0];
+      [paramSetAPI setStringParameterValue:newStr toParameter:kParamPathData];
+    }
+  }
+  [actionAPI endAction:self];
+
+  sIsEditing = NO;
+  sForceRefresh = YES;
+}
+
 - (void)selectRow:(NSButton *)sender {
+  [self _commitEditing];
   NSUInteger clicked = sender.tag;
   NSEventModifierFlags flags = NSEvent.modifierFlags;
   NSMutableIndexSet *sel =
@@ -136,20 +262,10 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
 
 @end
 
-@interface KKLayerListContainer : NSView
-@property(nonatomic, strong) NSScrollView *scrollView;
-@property(nonatomic, strong) NSView *borderView;
-@property(nonatomic, strong) NSView *emptyView;
-@property(nonatomic, strong) NSView *contentView;
-@property(nonatomic, strong) NSLayoutConstraint *contentHeightConstraint;
-@property(nonatomic, strong) KKLayerActionTarget *actionTarget;
-@end
-
-static __weak KKLayerListContainer *sLayerListContainer;
-static NSUInteger sLastListHash = NSUIntegerMax;
-
 @implementation KKLayerListContainer
 @end
+
+static NSUInteger sLastListHash = NSUIntegerMax;
 
 NSIndexSet *_Nullable KKCanvasConsumePendingSelection(void) {
   NSIndexSet *pending = sPendingOSCSelection;
@@ -205,6 +321,8 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
   dispatch_async(dispatch_get_main_queue(), ^{
     KKLayerListContainer *container = sLayerListContainer;
     if (!container)
+      return;
+    if (sIsEditing)
       return;
 
     NSView *content = container.contentView;
@@ -281,8 +399,18 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
       [lockButton.widthAnchor constraintEqualToConstant:12.0].active = YES;
       [lockButton.heightAnchor constraintEqualToConstant:12.0].active = YES;
 
+      NSMenu *ctxMenu = [[NSMenu alloc] init];
+      NSMenuItem *renameItem =
+          [[NSMenuItem alloc] initWithTitle:@"Rename"
+                                     action:@selector(renameRow:)
+                              keyEquivalent:@""];
+      renameItem.target = container.actionTarget;
+      renameItem.tag = i;
+      [ctxMenu addItem:renameItem];
+
       NSStackView *row = [NSStackView
           stackViewWithViews:@[ eyeButton, rowButton, lockButton ]];
+      row.menu = ctxMenu;
       row.orientation = NSUserInterfaceLayoutOrientationHorizontal;
       row.alignment = NSLayoutAttributeCenterY;
       row.distribution = NSStackViewDistributionFill;
