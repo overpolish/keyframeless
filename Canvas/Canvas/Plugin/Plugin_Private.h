@@ -14,6 +14,11 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)addParametersWithError:(NSError **)error;
 @end
 
+@interface CanvasPlugin (CustomUI)
+- (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED;
+- (void)refreshLayerList;
+@end
+
 @interface CanvasPlugin (Render)
 - (BOOL)pluginState:(NSData *_Nullable *_Nonnull)pluginState
              atTime:(CMTime)renderTime

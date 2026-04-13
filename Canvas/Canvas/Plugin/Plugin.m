@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#import "Constants.h"
 #import "Plugin_Private.h"
 
 #pragma clang diagnostic push
