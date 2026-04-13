@@ -23,10 +23,11 @@ static const CGFloat kRowHeight = 24.0;
 @end
 
 static BOOL sForceRefresh = NO;
+static BOOL sIsEditing = NO;
 void KKCanvasRefreshLayerList(NSUInteger pathCount,
                               NSArray<KKBezierPath *> *paths);
 
-@interface KKLayerActionTarget : NSObject
+@interface KKLayerActionTarget : NSObject <NSTextFieldDelegate>
 @property(nonatomic, weak) id<PROAPIAccessing> apiManager;
 - (void)toggleVisibility:(NSButton *)sender;
 - (void)toggleLock:(NSButton *)sender;
@@ -83,6 +84,70 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
                   }];
 }
 
+- (void)controlTextDidBeginEditing:(NSNotification *)note {
+  sIsEditing = YES;
+}
+
+- (void)controlTextDidEndEditing:(NSNotification *)note {
+  NSTextField *field = note.object;
+  NSString *newName = field.stringValue;
+  NSInteger index = field.tag;
+
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> paramSetAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+
+  NSString *str = nil;
+  [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
+  if (str.length > 0) {
+    NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
+    NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+    if (index >= 0 && (NSUInteger)index < paths.count) {
+      paths[index].name = newName.length > 0 ? newName : nil;
+      NSData *newBlob = [KKBezierPath blobFromPaths:paths];
+      NSString *newStr = [newBlob base64EncodedStringWithOptions:0];
+      [paramSetAPI setStringParameterValue:newStr toParameter:kParamPathData];
+    }
+  }
+  [actionAPI endAction:self];
+
+  sIsEditing = NO;
+  sForceRefresh = YES;
+}
+
+@end
+
+@interface KKEditableLabel : NSTextField
+@end
+
+@implementation KKEditableLabel
+
+- (BOOL)performKeyEquivalent:(NSEvent *)event {
+  if (self.currentEditor) {
+    [self.currentEditor keyDown:event];
+    return YES;
+  }
+  return [super performKeyEquivalent:event];
+}
+
+- (BOOL)becomeFirstResponder {
+  BOOL ok = [super becomeFirstResponder];
+  if (ok) {
+    NSTextView *editor = (NSTextView *)self.currentEditor;
+    NSColor *accent = [NSColor accent];
+    editor.insertionPointColor = accent;
+    editor.selectedTextAttributes = @{
+      NSBackgroundColorAttributeName : [accent colorWithAlphaComponent:0.3],
+      NSForegroundColorAttributeName : [NSColor labelColor],
+    };
+  }
+  return ok;
+}
+
 @end
 
 @interface KKLayerListContainer : NSView
@@ -106,6 +171,7 @@ static NSUInteger layerListHash(NSUInteger count,
   for (NSUInteger i = 0; i < count; i++) {
     h = h * 31 + (paths[i].hidden ? 1 : 0);
     h = h * 31 + (paths[i].locked ? 2 : 0);
+    h = h * 31 + paths[i].name.hash;
   }
   return h;
 }
@@ -122,14 +188,22 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
       [NSMutableArray arrayWithCapacity:pathCount];
   NSMutableArray<NSNumber *> *lockedStates =
       [NSMutableArray arrayWithCapacity:pathCount];
+  NSMutableArray<NSString *> *names =
+      [NSMutableArray arrayWithCapacity:pathCount];
   for (NSUInteger i = 0; i < pathCount; i++) {
     [hiddenStates addObject:@(paths[i].hidden)];
     [lockedStates addObject:@(paths[i].locked)];
+    [names addObject:paths[i].name
+                         ?: [NSString stringWithFormat:@"Path %lu",
+                                                       (unsigned long)(i + 1)]];
   }
 
   dispatch_async(dispatch_get_main_queue(), ^{
     KKLayerListContainer *container = sLayerListContainer;
     if (!container)
+      return;
+
+    if (sIsEditing)
       return;
 
     NSView *content = container.contentView;
@@ -172,12 +246,18 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
       [eyeButton.widthAnchor constraintEqualToConstant:12.0].active = YES;
       [eyeButton.heightAnchor constraintEqualToConstant:12.0].active = YES;
 
-      NSTextField *label = [NSTextField
-          labelWithString:[NSString stringWithFormat:@"Path %lu",
-                                                     (unsigned long)(i + 1)]];
+      KKEditableLabel *label = [KKEditableLabel labelWithString:names[i]];
       label.font = [NSFont systemFontOfSize:11.0];
       label.textColor =
           isHidden ? [NSColor tertiaryLabelColor] : [NSColor labelColor];
+      label.tag = i;
+      label.editable = YES;
+      label.selectable = YES;
+      label.bezeled = NO;
+      label.delegate = container.actionTarget;
+      label.focusRingType = NSFocusRingTypeNone;
+      label.drawsBackground = NO;
+      label.cell.lineBreakMode = NSLineBreakByTruncatingTail;
       [label setContentHuggingPriority:1
                         forOrientation:NSLayoutConstraintOrientationHorizontal];
 
