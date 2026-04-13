@@ -192,14 +192,23 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
                  max:(simd_float2 *)outMax {
   if (path.count == 0)
     return;
-  KKBezierPoint p0 = [path pointAtIndex:0];
-  float minX = p0.x, minY = p0.y, maxX = p0.x, maxY = p0.y;
-  for (NSUInteger i = 1; i < path.count; i++) {
-    KKBezierPoint p = [path pointAtIndex:i];
-    minX = fminf(minX, p.x);
-    minY = fminf(minY, p.y);
-    maxX = fmaxf(maxX, p.x);
-    maxY = fmaxf(maxY, p.y);
+  NSUInteger segCount = path.count - 1;
+  if (path.closed && path.count >= 2)
+    segCount = path.count;
+
+  simd_float2 first = [path evaluatePointAtIndex:0 nextIndex:0 atT:0.0f];
+  float minX = first.x, minY = first.y, maxX = first.x, maxY = first.y;
+
+  for (NSUInteger c = 0; c < segCount; c++) {
+    NSUInteger nextIdx = (c + 1) % path.count;
+    for (NSUInteger s = 0; s <= 16; s++) {
+      float t = (float)s / 16.0f;
+      simd_float2 pos = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
+      minX = fminf(minX, pos.x);
+      minY = fminf(minY, pos.y);
+      maxX = fmaxf(maxX, pos.x);
+      maxY = fmaxf(maxY, pos.y);
+    }
   }
   *outMin = (simd_float2){minX, minY};
   *outMax = (simd_float2){maxX, maxY};
