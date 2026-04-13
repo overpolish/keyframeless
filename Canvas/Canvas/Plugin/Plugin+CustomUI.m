@@ -17,6 +17,7 @@ static const CGFloat kRowSpacing = 1.0;
 
 @protocol KKLayerReorder
 - (void)_reorderFromIndices:(NSIndexSet *)indices toIndex:(NSUInteger)target;
+- (void)renameRow:(NSMenuItem *)sender;
 @end
 
 @class KKLayerActionTarget;
@@ -246,8 +247,21 @@ static __weak KKLayerListContainer *sLayerListContainer;
 
 - (void)mouseUp:(NSEvent *)event {
   [self highlight:NO];
-  if (!_didDrag)
+  if (_didDrag)
+    return;
+  if (event.clickCount >= 2) {
+    KKLayerRow *row = self.parentRow;
+    if (row) {
+      KKLayerListContainer *container = sLayerListContainer;
+      if (container) {
+        NSMenuItem *fake = [[NSMenuItem alloc] init];
+        fake.tag = row.rowIndex;
+        [(id<KKLayerReorder>)container.actionTarget renameRow:fake];
+      }
+    }
+  } else {
     [self performClick:self];
+  }
 }
 
 - (void)draggingSession:(NSDraggingSession *)session
