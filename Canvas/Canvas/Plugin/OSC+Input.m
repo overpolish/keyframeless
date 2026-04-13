@@ -28,6 +28,7 @@
 }
 
 - (void)toggleBezierAtIndex:(NSInteger)idx onPath:(KKBezierPath *)path {
+  path.isRect = NO;
   KKBezierPoint pt = [path pointAtIndex:idx];
   if (pt.type == KKBezierPointBezier) {
     [path setType:KKBezierPointLinear atIndex:idx];
@@ -65,6 +66,7 @@
                  forceUpdate:(BOOL *)forceUpdate {
   if (idx < 0 || idx >= (NSInteger)active.count)
     return;
+  active.isRect = NO;
   [active removeAtIndex:idx];
   if (active.count < 2) {
     [self.paths removeObjectAtIndex:self.activePathIndex];
@@ -132,6 +134,7 @@
   NSInteger segIdx = activePart - kOSCPathSegmentBase;
   simd_float2 objPos =
       [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+  active.isRect = NO;
   [active insertAtIndex:segIdx + 1 position:objPos];
   [self writePaths:self.paths];
   self.dragIndex = segIdx + 1;
@@ -252,7 +255,19 @@
     return;
   }
 
-  if (isCursorMode || (isPenMode && (modifiers & kFxModifierKey_COMMAND))) {
+  if (isPenMode && (modifiers & kFxModifierKey_COMMAND)) {
+    self.activePathIndex = -1;
+    [self handlePenMouseDownX:positionX
+                            y:positionY
+                       active:nil
+                    modifiers:modifiers
+                  forceUpdate:forceUpdate
+                       atTime:time
+                   activePart:activePart];
+    return;
+  }
+
+  if (isCursorMode) {
     [self handleCursorMouseDownX:positionX
                                y:positionY
                        modifiers:modifiers
