@@ -53,6 +53,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
         path->_cornerRadiusTR = cr[1];
         path->_cornerRadiusBR = cr[2];
         path->_cornerRadiusBL = cr[3];
+        extOffset += 4 * sizeof(float);
       } else if ((flags & 2) && data.length >= extOffset + sizeof(float)) {
         // Backwards compat: single radius applied to all corners
         float r;
@@ -61,6 +62,17 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
         path->_cornerRadiusTR = r;
         path->_cornerRadiusBR = r;
         path->_cornerRadiusBL = r;
+        extOffset += sizeof(float);
+      }
+      if ((flags & 64) && data.length >= extOffset + 2) {
+        uint16_t nameLen;
+        memcpy(&nameLen, bytes + extOffset, 2);
+        extOffset += 2;
+        if (nameLen > 0 && data.length >= extOffset + nameLen) {
+          path->_name = [[NSString alloc] initWithBytes:bytes + extOffset
+                                                 length:nameLen
+                                               encoding:NSUTF8StringEncoding];
+        }
       }
     } else if (data.length >= oldExpected && count > 0) {
       path->_count = count;
@@ -85,9 +97,13 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
                     _cornerRadiusBR > 0 || _cornerRadiusBL > 0);
   if (hasRadius)
     flags |= 4;
+  NSData *nameData = [_name dataUsingEncoding:NSUTF8StringEncoding];
+  if (nameData.length > 0)
+    flags |= 64;
   size_t pointSize = sizeof(KKBezierPoint);
-  NSMutableData *data = [NSMutableData
-      dataWithCapacity:4 + 1 + count * pointSize + 4 * sizeof(float)];
+  NSMutableData *data =
+      [NSMutableData dataWithCapacity:4 + 1 + count * pointSize +
+                                      4 * sizeof(float) + 2 + nameData.length];
   [data appendBytes:&count length:4];
   [data appendBytes:&flags length:1];
   if (count > 0)
@@ -96,6 +112,11 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     float cr[4] = {_cornerRadiusTL, _cornerRadiusTR, _cornerRadiusBR,
                    _cornerRadiusBL};
     [data appendBytes:cr length:4 * sizeof(float)];
+  }
+  if (nameData.length > 0) {
+    uint16_t nameLen = (uint16_t)nameData.length;
+    [data appendBytes:&nameLen length:2];
+    [data appendData:nameData];
   }
   return data;
 }

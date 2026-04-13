@@ -42,6 +42,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Whether the path is locked (visible but non-interactive).
 @property(nonatomic, assign) BOOL locked;
 
+/// Display name for the layer list.
+@property(nonatomic, copy, nullable) NSString *name;
+
 /// Per-corner radius fractions 0–1 (TL, TR, BR, BL). 0 = sharp, 1 = max.
 @property(nonatomic, assign) float cornerRadiusTL;
 @property(nonatomic, assign) float cornerRadiusTR;
