@@ -60,6 +60,8 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
                                                tag:kOSCToolbarRect],
                        [KKToolbarItem itemWithIcon:@"circle.fill"
                                                tag:kOSCToolbarEllipse],
+                       [KKToolbarItem itemWithIcon:@"line.diagonal"
+                                               tag:kOSCToolbarLine],
                      ]];
     self.toolbar.activeTag = kOSCToolbarCursor;
 

@@ -196,7 +196,9 @@
     return;
   }
 
-  if (isRectMode || isEllipseMode) {
+  BOOL isLineMode = (self.toolbar.activeTag == kOSCToolbarLine);
+
+  if (isRectMode || isEllipseMode || isLineMode) {
     [oscAPI setCursor:[NSCursor crosshairCursor]];
     return;
   }

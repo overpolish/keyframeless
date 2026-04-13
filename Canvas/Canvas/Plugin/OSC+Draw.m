@@ -366,6 +366,15 @@
     [self drawRectPreview:strokeColor destinationImage:destinationImage];
   if (self.dragIsEllipse)
     [self drawEllipsePreview:strokeColor destinationImage:destinationImage];
+  if (self.dragIsLine) {
+    CGPoint ca = [self canvasPointFromObjectPoint:self.rectStart];
+    CGPoint cb = [self canvasPointFromObjectPoint:self.dragOrigin];
+    [self drawLineFrom:ca
+                      to:cb
+                   color:strokeColor
+               halfWidth:1.5f
+        destinationImage:destinationImage];
+  }
 }
 
 @end
