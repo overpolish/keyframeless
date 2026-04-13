@@ -294,6 +294,20 @@
   [self.toolbar drawWithDestinationImage:destinationImage];
 
   self.paths = [self readPaths];
+
+  NSIndexSet *uiSelection = KKCanvasConsumePendingSelection();
+  if (uiSelection) {
+    KKLog *log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
+    [log info:@"drawOSC: consumed pending selection=%@", uiSelection];
+    [self.selectedPathIndices removeAllIndexes];
+    [self.selectedPathIndices addIndexes:uiSelection];
+    if (uiSelection.count > 0)
+      self.activePathIndex = (NSInteger)uiSelection.lastIndex;
+    else
+      self.activePathIndex = -1;
+  }
+
+  KKCanvasUpdateSelection(self.selectedPathIndices);
   KKCanvasRefreshLayerList(self.paths.count, self.paths);
 
   simd_float4 strokeColor = [[NSColor systemRedColor] simdFloat4];
@@ -305,10 +319,12 @@
 
   for (NSUInteger p = 0; p < self.paths.count; p++) {
     KKBezierPath *path = self.paths[p];
-    if (path.count == 0 || path.hidden)
+    if (path.count == 0)
       continue;
 
     BOOL isSelected = [self.selectedPathIndices containsIndex:p];
+    if (path.hidden && !isSelected)
+      continue;
     [self drawPathSegments:path
                      color:isSelected ? strokeColor : dimColor
           destinationImage:destinationImage];

@@ -79,7 +79,7 @@
       NSMutableIndexSet *newIndices = [NSMutableIndexSet indexSet];
       [self.selectedPathIndices
           enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
-            if (idx >= self.paths.count)
+            if (idx >= self.paths.count || self.paths[idx].locked)
               return;
             KKBezierPath *orig = self.paths[idx];
             KKBezierPath *clone =
@@ -93,7 +93,7 @@
     }
     [self.selectedPathIndices
         enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
-          if (idx < self.paths.count)
+          if (idx < self.paths.count && !self.paths[idx].locked)
             [self.paths[idx] translateBy:delta];
         }];
   } else {
