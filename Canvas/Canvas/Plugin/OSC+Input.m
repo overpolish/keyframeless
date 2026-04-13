@@ -256,14 +256,25 @@
   }
 
   if (isPenMode && (modifiers & kFxModifierKey_COMMAND)) {
-    self.activePathIndex = -1;
-    [self handlePenMouseDownX:positionX
-                            y:positionY
-                       active:nil
-                    modifiers:modifiers
-                  forceUpdate:forceUpdate
-                       atTime:time
-                   activePart:activePart];
+    double hitRadiusStroke = [self strokeHitRadius];
+    NSInteger nearPath = [self pathIndexNearX:positionX
+                                            y:positionY
+                                       radius:hitRadiusStroke];
+    if (nearPath >= 0) {
+      [self handleCursorMouseDownX:positionX
+                                 y:positionY
+                         modifiers:modifiers
+                       forceUpdate:forceUpdate];
+    } else {
+      self.activePathIndex = -1;
+      [self handlePenMouseDownX:positionX
+                              y:positionY
+                         active:nil
+                      modifiers:modifiers
+                    forceUpdate:forceUpdate
+                         atTime:time
+                     activePart:activePart];
+    }
     return;
   }
 
