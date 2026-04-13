@@ -294,6 +294,7 @@
   [self.toolbar drawWithDestinationImage:destinationImage];
 
   self.paths = [self readPaths];
+  KKCanvasRefreshLayerList(self.paths.count, self.paths);
 
   simd_float4 strokeColor = [[NSColor systemRedColor] simdFloat4];
   simd_float4 dimColor = strokeColor;
