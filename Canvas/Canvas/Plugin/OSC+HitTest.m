@@ -42,6 +42,9 @@
         NSUInteger idx = self.selectedPathIndices.firstIndex;
         if (idx < self.paths.count) {
           KKBezierPath *active = self.paths[idx];
+          BOOL hasRadius =
+              (active.cornerRadiusTL > 0 || active.cornerRadiusTR > 0 ||
+               active.cornerRadiusBR > 0 || active.cornerRadiusBL > 0);
           BOOL hasLinear = NO;
           for (NSUInteger li = 0; li < active.count; li++) {
             if ([active pointAtIndex:li].type == KKBezierPointLinear) {
@@ -49,7 +52,7 @@
               break;
             }
           }
-          if (active.closed && active.count >= 4 && hasLinear) {
+          if (active.closed && active.count >= 4 && (hasLinear || hasRadius)) {
             NSInteger crParts[4] = {kOSCCornerRadiusTL, kOSCCornerRadiusTR,
                                     kOSCCornerRadiusBR, kOSCCornerRadiusBL};
             for (int ci = 0; ci < 4; ci++) {
