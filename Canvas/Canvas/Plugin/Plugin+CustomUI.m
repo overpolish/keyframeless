@@ -11,13 +11,67 @@ static const CGFloat kListHeight = 100.0;
 static const CGFloat kVerticalPad = 4.0;
 static const CGFloat kTotalHeight = kListHeight + kVerticalPad * 2;
 
+static const CGFloat kRowHeight = 24.0;
+
+@interface KKFlippedView : NSView
+@end
+
+@implementation KKFlippedView
+- (BOOL)isFlipped {
+  return YES;
+}
+@end
+
 @interface KKLayerListContainer : NSView
 @property(nonatomic, strong) NSScrollView *scrollView;
 @property(nonatomic, strong) NSView *borderView;
+@property(nonatomic, strong) NSView *emptyView;
+@property(nonatomic, strong) NSView *contentView;
+@property(nonatomic, strong) NSLayoutConstraint *contentHeightConstraint;
 @end
 
 @implementation KKLayerListContainer
 @end
+
+static __weak KKLayerListContainer *sLayerListContainer;
+static NSUInteger sLastPathCount = NSUIntegerMax;
+
+void KKCanvasRefreshLayerList(NSUInteger pathCount) {
+  if (pathCount == sLastPathCount)
+    return;
+  sLastPathCount = pathCount;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    KKLayerListContainer *container = sLayerListContainer;
+    if (!container)
+      return;
+
+    NSView *content = container.contentView;
+    [content.subviews
+        makeObjectsPerformSelector:@selector(removeFromSuperview)];
+
+    if (pathCount == 0) {
+      container.emptyView.hidden = NO;
+      [content addSubview:container.emptyView];
+      container.contentHeightConstraint.constant = kListHeight;
+      return;
+    }
+
+    container.emptyView.hidden = YES;
+    CGFloat topPad = kVerticalPad;
+    CGFloat totalHeight = MAX(pathCount * kRowHeight + topPad, kListHeight);
+    container.contentHeightConstraint.constant = totalHeight;
+    for (NSUInteger i = 0; i < pathCount; i++) {
+      NSTextField *label = [NSTextField
+          labelWithString:[NSString stringWithFormat:@"Path %lu",
+                                                     (unsigned long)(i + 1)]];
+      label.font = [NSFont systemFontOfSize:11.0];
+      label.textColor = [NSColor labelColor];
+      label.frame = NSMakeRect(8, topPad + i * kRowHeight, 200, kRowHeight);
+      label.autoresizingMask = NSViewWidthSizable;
+      [content addSubview:label];
+    }
+  });
+}
 
 @implementation CanvasPlugin (CustomUI)
 
@@ -93,7 +147,7 @@ static const CGFloat kTotalHeight = kListHeight + kVerticalPad * 2;
     emptyStack.spacing = 4.0;
     emptyStack.translatesAutoresizingMaskIntoConstraints = NO;
 
-    NSView *content = [[NSView alloc] initWithFrame:NSZeroRect];
+    KKFlippedView *content = [[KKFlippedView alloc] initWithFrame:NSZeroRect];
     content.translatesAutoresizingMaskIntoConstraints = NO;
     [content addSubview:emptyStack];
     scrollView.documentView = content;
@@ -104,13 +158,36 @@ static const CGFloat kTotalHeight = kListHeight + kVerticalPad * 2;
     [content.trailingAnchor
         constraintEqualToAnchor:scrollView.contentView.trailingAnchor]
         .active = YES;
-    [content.heightAnchor constraintGreaterThanOrEqualToConstant:kListHeight]
-        .active = YES;
+    NSLayoutConstraint *heightConstraint =
+        [content.heightAnchor constraintEqualToConstant:kListHeight];
+    heightConstraint.active = YES;
     [emptyStack.centerXAnchor constraintEqualToAnchor:content.centerXAnchor]
         .active = YES;
     [emptyStack.topAnchor constraintEqualToAnchor:content.topAnchor
                                          constant:kListHeight / 2 - 7]
         .active = YES;
+
+    wrapper.emptyView = emptyStack;
+    wrapper.contentView = content;
+    wrapper.contentHeightConstraint = heightConstraint;
+    sLayerListContainer = wrapper;
+    sLastPathCount = NSUIntegerMax;
+
+    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actionAPI startAction:self];
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    NSString *str = nil;
+    [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
+    [actionAPI endAction:self];
+
+    if (str.length > 0) {
+      NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
+      NSUInteger count = [KKBezierPath pathsFromBlob:blob].count;
+      if (count > 0)
+        KKCanvasRefreshLayerList(count);
+    }
 
     return wrapper;
   }
