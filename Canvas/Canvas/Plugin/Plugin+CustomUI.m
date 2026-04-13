@@ -411,7 +411,7 @@ static __weak KKLayerListContainer *sLayerListContainer;
 
 - (void)duplicateRow:(NSMenuItem *)sender {
   NSIndexSet *sel = sUISelection;
-  if (!sel || sel.count == 0)
+  if (!sel || sel.count <= 1 || ![sel containsIndex:sender.tag])
     sel = [NSIndexSet indexSetWithIndex:sender.tag];
   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
     NSMutableIndexSet *newSel = [NSMutableIndexSet indexSet];
@@ -435,7 +435,7 @@ static __weak KKLayerListContainer *sLayerListContainer;
 
 - (void)deleteRow:(NSMenuItem *)sender {
   NSIndexSet *sel = sUISelection;
-  if (!sel || sel.count == 0)
+  if (!sel || sel.count <= 1 || ![sel containsIndex:sender.tag])
     sel = [NSIndexSet indexSetWithIndex:sender.tag];
   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
     [sel enumerateIndexesWithOptions:NSEnumerationReverse
@@ -443,10 +443,18 @@ static __weak KKLayerListContainer *sLayerListContainer;
                             if (idx < paths.count)
                               [paths removeObjectAtIndex:idx];
                           }];
-    NSIndexSet *empty = [NSIndexSet indexSet];
-    sUISelection = empty;
-    sSelectedIndices = empty;
-    sPendingOSCSelection = empty;
+    NSMutableIndexSet *adjusted =
+        [sUISelection mutableCopy] ?: [NSMutableIndexSet indexSet];
+    [sel enumerateIndexesWithOptions:NSEnumerationReverse
+                          usingBlock:^(NSUInteger idx, BOOL *stop) {
+                            [adjusted removeIndex:idx];
+                            [adjusted shiftIndexesStartingAtIndex:idx + 1
+                                                               by:-1];
+                          }];
+    NSIndexSet *frozen = [adjusted copy];
+    sUISelection = frozen;
+    sSelectedIndices = frozen;
+    sPendingOSCSelection = frozen;
   }];
 }
 
