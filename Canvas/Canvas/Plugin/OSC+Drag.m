@@ -257,7 +257,7 @@
   if (isCursorMode) {
     for (NSUInteger p = 0; p < self.paths.count; p++) {
       KKBezierPath *path = self.paths[p];
-      if (path.count == 0 || path.hidden)
+      if (path.count == 0 || path.hidden || path.locked)
         continue;
       simd_float2 bmin, bmax;
       [self boundsOfPath:path min:&bmin max:&bmax];
@@ -278,7 +278,7 @@
   BOOL optDown = (modifiers & kFxModifierKey_OPTION) != 0;
   for (NSUInteger p = 0; p < self.paths.count; p++) {
     KKBezierPath *path = self.paths[p];
-    if (path.hidden)
+    if (path.hidden || path.locked)
       continue;
     for (NSUInteger i = 0; i < path.count; i++) {
       KKBezierPoint pt = [path pointAtIndex:i];
