@@ -5,6 +5,7 @@
 
 #import "Constants.h"
 #import "Plugin_Private.h"
+#include <KeyframelessKit/KeyframelessKit.h>
 #import <objc/message.h>
 
 static const CGFloat kListHeight = 100.0;
@@ -12,6 +13,7 @@ static const CGFloat kVerticalPad = 4.0;
 static const CGFloat kTotalHeight = kListHeight + kVerticalPad * 2;
 
 static const CGFloat kRowHeight = 24.0;
+static const CGFloat kRowSpacing = 1.0;
 
 @interface KKFlippedView : NSView
 @end
@@ -23,11 +25,13 @@ static const CGFloat kRowHeight = 24.0;
 @end
 
 static BOOL sForceRefresh = NO;
-static BOOL sIsEditing = NO;
+static NSIndexSet *sSelectedIndices;
+static NSIndexSet *sUISelection;
+static NSIndexSet *sPendingOSCSelection;
 void KKCanvasRefreshLayerList(NSUInteger pathCount,
                               NSArray<KKBezierPath *> *paths);
 
-@interface KKLayerActionTarget : NSObject <NSTextFieldDelegate>
+@interface KKLayerActionTarget : NSObject
 @property(nonatomic, weak) id<PROAPIAccessing> apiManager;
 - (void)toggleVisibility:(NSButton *)sender;
 - (void)toggleLock:(NSButton *)sender;
@@ -84,14 +88,11 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
                   }];
 }
 
-- (void)controlTextDidBeginEditing:(NSNotification *)note {
-  sIsEditing = YES;
-}
-
-- (void)controlTextDidEndEditing:(NSNotification *)note {
-  NSTextField *field = note.object;
-  NSString *newName = field.stringValue;
-  NSInteger index = field.tag;
+- (void)selectRow:(NSButton *)sender {
+  NSIndexSet *sel = [NSIndexSet indexSetWithIndex:sender.tag];
+  sUISelection = sel;
+  sSelectedIndices = sel;
+  sPendingOSCSelection = sel;
 
   id<FxCustomParameterActionAPI_v4> actionAPI =
       [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
@@ -100,52 +101,17 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
       [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   id<FxParameterSettingAPI_v5> paramSetAPI =
       [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-
   NSString *str = nil;
   [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
-  if (str.length > 0) {
-    NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
-    NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
-    if (index >= 0 && (NSUInteger)index < paths.count) {
-      paths[index].name = newName.length > 0 ? newName : nil;
-      NSData *newBlob = [KKBezierPath blobFromPaths:paths];
-      NSString *newStr = [newBlob base64EncodedStringWithOptions:0];
-      [paramSetAPI setStringParameterValue:newStr toParameter:kParamPathData];
-    }
-  }
+  [paramSetAPI setStringParameterValue:str ?: @"" toParameter:kParamPathData];
   [actionAPI endAction:self];
 
-  sIsEditing = NO;
-  sForceRefresh = YES;
-}
-
-@end
-
-@interface KKEditableLabel : NSTextField
-@end
-
-@implementation KKEditableLabel
-
-- (BOOL)performKeyEquivalent:(NSEvent *)event {
-  if (self.currentEditor) {
-    [self.currentEditor keyDown:event];
-    return YES;
+  if (str.length > 0) {
+    NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
+    NSArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+    sForceRefresh = YES;
+    KKCanvasRefreshLayerList(paths.count, paths);
   }
-  return [super performKeyEquivalent:event];
-}
-
-- (BOOL)becomeFirstResponder {
-  BOOL ok = [super becomeFirstResponder];
-  if (ok) {
-    NSTextView *editor = (NSTextView *)self.currentEditor;
-    NSColor *accent = [NSColor accent];
-    editor.insertionPointColor = accent;
-    editor.selectedTextAttributes = @{
-      NSBackgroundColorAttributeName : [accent colorWithAlphaComponent:0.3],
-      NSForegroundColorAttributeName : [NSColor labelColor],
-    };
-  }
-  return ok;
 }
 
 @end
@@ -165,25 +131,43 @@ static NSUInteger sLastListHash = NSUIntegerMax;
 @implementation KKLayerListContainer
 @end
 
+NSIndexSet *_Nullable KKCanvasConsumePendingSelection(void) {
+  NSIndexSet *pending = sPendingOSCSelection;
+  sPendingOSCSelection = nil;
+  return pending;
+}
+
+void KKCanvasUpdateSelection(NSIndexSet *indices) {
+  NSIndexSet *copy = [indices copy];
+  sSelectedIndices = copy;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    sUISelection = copy;
+  });
+}
+
 static NSUInteger layerListHash(NSUInteger count,
-                                NSArray<KKBezierPath *> *paths) {
+                                NSArray<KKBezierPath *> *paths,
+                                NSIndexSet *selection) {
   NSUInteger h = count;
   for (NSUInteger i = 0; i < count; i++) {
     h = h * 31 + (paths[i].hidden ? 1 : 0);
     h = h * 31 + (paths[i].locked ? 2 : 0);
     h = h * 31 + paths[i].name.hash;
   }
+  h = h * 31 + selection.hash;
   return h;
 }
 
 void KKCanvasRefreshLayerList(NSUInteger pathCount,
                               NSArray<KKBezierPath *> *paths) {
-  NSUInteger hash = layerListHash(pathCount, paths);
+  NSIndexSet *selection = sSelectedIndices ?: [NSIndexSet indexSet];
+  NSUInteger hash = layerListHash(pathCount, paths, selection);
   if (hash == sLastListHash && !sForceRefresh)
     return;
   sLastListHash = hash;
   sForceRefresh = NO;
 
+  NSIndexSet *capturedSelection = [selection copy];
   NSMutableArray<NSNumber *> *hiddenStates =
       [NSMutableArray arrayWithCapacity:pathCount];
   NSMutableArray<NSNumber *> *lockedStates =
@@ -203,9 +187,6 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
     if (!container)
       return;
 
-    if (sIsEditing)
-      return;
-
     NSView *content = container.contentView;
     [content.subviews
         makeObjectsPerformSelector:@selector(removeFromSuperview)];
@@ -219,7 +200,8 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
 
     container.emptyView.hidden = YES;
     CGFloat topPad = kVerticalPad;
-    CGFloat totalHeight = MAX(pathCount * kRowHeight + topPad, kListHeight);
+    CGFloat stride = kRowHeight + kRowSpacing;
+    CGFloat totalHeight = MAX(pathCount * stride + topPad, kListHeight);
     container.contentHeightConstraint.constant = totalHeight;
 
     NSImageSymbolConfiguration *symConfig = [NSImageSymbolConfiguration
@@ -246,20 +228,22 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
       [eyeButton.widthAnchor constraintEqualToConstant:12.0].active = YES;
       [eyeButton.heightAnchor constraintEqualToConstant:12.0].active = YES;
 
-      KKEditableLabel *label = [KKEditableLabel labelWithString:names[i]];
-      label.font = [NSFont systemFontOfSize:11.0];
-      label.textColor =
+      BOOL isSelected = [capturedSelection containsIndex:i];
+
+      NSButton *rowButton = [NSButton buttonWithTitle:names[i]
+                                               target:container.actionTarget
+                                               action:@selector(selectRow:)];
+      rowButton.bezelStyle = NSBezelStyleInline;
+      rowButton.bordered = NO;
+      rowButton.tag = i;
+      rowButton.alignment = NSTextAlignmentLeft;
+      rowButton.font = [NSFont systemFontOfSize:11.0];
+      rowButton.contentTintColor =
           isHidden ? [NSColor tertiaryLabelColor] : [NSColor labelColor];
-      label.tag = i;
-      label.editable = YES;
-      label.selectable = YES;
-      label.bezeled = NO;
-      label.delegate = container.actionTarget;
-      label.focusRingType = NSFocusRingTypeNone;
-      label.drawsBackground = NO;
-      label.cell.lineBreakMode = NSLineBreakByTruncatingTail;
-      [label setContentHuggingPriority:1
-                        forOrientation:NSLayoutConstraintOrientationHorizontal];
+      rowButton.cell.lineBreakMode = NSLineBreakByTruncatingTail;
+      [rowButton
+          setContentHuggingPriority:1
+                     forOrientation:NSLayoutConstraintOrientationHorizontal];
 
       NSString *lockName = isLocked ? @"lock.fill" : @"lock.open";
       NSButton *lockButton =
@@ -277,23 +261,28 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
       [lockButton.widthAnchor constraintEqualToConstant:12.0].active = YES;
       [lockButton.heightAnchor constraintEqualToConstant:12.0].active = YES;
 
-      NSStackView *row =
-          [NSStackView stackViewWithViews:@[ eyeButton, label, lockButton ]];
+      NSStackView *row = [NSStackView
+          stackViewWithViews:@[ eyeButton, rowButton, lockButton ]];
       row.orientation = NSUserInterfaceLayoutOrientationHorizontal;
       row.alignment = NSLayoutAttributeCenterY;
       row.distribution = NSStackViewDistributionFill;
       row.spacing = 6.0;
-      row.edgeInsets = NSEdgeInsetsMake(0, 0, 0, 4);
+      row.edgeInsets = NSEdgeInsetsMake(0, KKPaddingMD, 0, KKPaddingMD);
+      row.wantsLayer = YES;
+      row.layer.cornerRadius = 4.0;
+      row.layer.backgroundColor =
+          isSelected ? [[NSColor accent] colorWithAlphaComponent:0.15].CGColor
+                     : [NSColor clearColor].CGColor;
       row.translatesAutoresizingMaskIntoConstraints = NO;
       [content addSubview:row];
       [row.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
-                                        constant:8]
+                                        constant:KKPaddingSM]
           .active = YES;
       [row.trailingAnchor constraintEqualToAnchor:content.trailingAnchor
-                                         constant:-8]
+                                         constant:-KKPaddingSM]
           .active = YES;
       [row.topAnchor constraintEqualToAnchor:content.topAnchor
-                                    constant:topPad + i * kRowHeight]
+                                    constant:topPad + i * stride]
           .active = YES;
       [row.heightAnchor constraintEqualToConstant:kRowHeight].active = YES;
     }

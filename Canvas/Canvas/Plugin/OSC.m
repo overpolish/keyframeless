@@ -91,7 +91,6 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
 - (KKBezierPath *)activePath {
   if (self.activePathIndex >= 0 &&
       self.activePathIndex < (NSInteger)self.paths.count &&
-      !self.paths[self.activePathIndex].hidden &&
       !self.paths[self.activePathIndex].locked)
     return self.paths[self.activePathIndex];
   return nil;

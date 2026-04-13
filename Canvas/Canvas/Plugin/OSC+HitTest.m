@@ -17,7 +17,18 @@
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
   double hitRadius = 12.0;
 
-  if (self.selectedPathIndices.count > 0) {
+  __block BOOL allLocked = YES;
+  [self.selectedPathIndices
+      enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+        if (idx < self.paths.count && !self.paths[idx].locked) {
+          allLocked = NO;
+          *stop = YES;
+        }
+      }];
+  if (self.selectedPathIndices.count == 0)
+    allLocked = NO;
+
+  if (self.selectedPathIndices.count > 0 && !allLocked) {
     simd_float2 bmin, bmax;
     if ([self boundsOfSelectedPaths:&bmin max:&bmax]) {
       CGPoint bl = [self canvasPointFromObjectPoint:bmin];

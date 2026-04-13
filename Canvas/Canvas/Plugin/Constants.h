@@ -21,6 +21,8 @@ static const UInt32 kParamLayerList = 103;
 
 void KKCanvasRefreshLayerList(NSUInteger pathCount,
                               NSArray<KKBezierPath *> *_Nullable paths);
+void KKCanvasUpdateSelection(NSIndexSet *indices);
+NSIndexSet *_Nullable KKCanvasConsumePendingSelection(void);
 
 // OSC part IDs
 static const NSInteger kOSCCanvas = 1;
