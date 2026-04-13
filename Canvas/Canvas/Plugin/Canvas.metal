@@ -12,6 +12,7 @@ using namespace metal;
 typedef struct {
     float4 clipSpacePosition [[position]];
     float edgeDistance;
+    float capDistance;
 } StrokeRasterizerData;
 
 vertex StrokeRasterizerData strokeVertexShader(uint vertexID [[vertex_id]],
@@ -26,13 +27,18 @@ vertex StrokeRasterizerData strokeVertexShader(uint vertexID [[vertex_id]],
     out.clipSpacePosition.z = 0.0;
     out.clipSpacePosition.w = 1.0;
     out.edgeDistance = vertexArray[vertexID].edgeDistance;
+    out.capDistance = vertexArray[vertexID].capDistance;
 
     return out;
 }
 
-fragment float4 strokeFragmentShader(StrokeRasterizerData in [[stage_in]]) {
-    float dist = abs(in.edgeDistance);
-    float fw = fwidth(in.edgeDistance) * 1.5;
-    float alpha = 1.0 - smoothstep(1.0 - fw, 1.0, dist);
-    return float4(1.0, 0.0, 0.0, 1.0) * alpha;
+fragment float4 strokeFragmentShader(StrokeRasterizerData in [[stage_in]], constant float4 *strokeColor [[buffer(0)]]) {
+    float edgeDist = abs(in.edgeDistance);
+    float edgeFw = fwidth(in.edgeDistance) * 1.5;
+    float edgeAlpha = 1.0 - smoothstep(1.0 - edgeFw, 1.0, edgeDist);
+
+    float capFw = fwidth(in.capDistance) * 1.5;
+    float capAlpha = 1.0 - smoothstep(1.0 - capFw, 1.0, in.capDistance);
+
+    return *strokeColor * edgeAlpha * capAlpha;
 }
