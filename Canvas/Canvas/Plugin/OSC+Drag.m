@@ -110,11 +110,16 @@
   simd_float2 offset = {objPos.x - pt.x, objPos.y - pt.y};
 
   if (self.dragIsNewPoint) {
-    [self setHandle:offset
-              atIndex:self.dragIndex
-                 isIn:NO
-        breakSymmetry:NO
-               onPath:active];
+    CGPoint ptCanvas =
+        [self canvasPointFromObjectPoint:(simd_float2){pt.x, pt.y}];
+    CGFloat canvasDist = hypot(positionX - ptCanvas.x, positionY - ptCanvas.y);
+    if (canvasDist > 4.0) {
+      [self setHandle:offset
+                atIndex:self.dragIndex
+                   isIn:NO
+          breakSymmetry:NO
+                 onPath:active];
+    }
   } else if (self.dragIsInHandle) {
     [self setHandle:offset
               atIndex:self.dragIndex
