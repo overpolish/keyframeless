@@ -95,16 +95,27 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
 @end
 
 static __weak KKLayerListContainer *sLayerListContainer;
-static NSUInteger sLastPathCount = NSUIntegerMax;
+static NSUInteger sLastListHash = NSUIntegerMax;
 
 @implementation KKLayerListContainer
 @end
 
+static NSUInteger layerListHash(NSUInteger count,
+                                NSArray<KKBezierPath *> *paths) {
+  NSUInteger h = count;
+  for (NSUInteger i = 0; i < count; i++) {
+    h = h * 31 + (paths[i].hidden ? 1 : 0);
+    h = h * 31 + (paths[i].locked ? 2 : 0);
+  }
+  return h;
+}
+
 void KKCanvasRefreshLayerList(NSUInteger pathCount,
                               NSArray<KKBezierPath *> *paths) {
-  if (pathCount == sLastPathCount && !sForceRefresh)
+  NSUInteger hash = layerListHash(pathCount, paths);
+  if (hash == sLastListHash && !sForceRefresh)
     return;
-  sLastPathCount = pathCount;
+  sLastListHash = hash;
   sForceRefresh = NO;
 
   NSMutableArray<NSNumber *> *hiddenStates =
@@ -311,7 +322,7 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
     wrapper.contentHeightConstraint = heightConstraint;
     wrapper.actionTarget = visTarget;
     sLayerListContainer = wrapper;
-    sLastPathCount = NSUIntegerMax;
+    sLastListHash = NSUIntegerMax;
 
     id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
         apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
