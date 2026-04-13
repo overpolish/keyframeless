@@ -15,24 +15,120 @@ static const CGFloat kTotalHeight = kListHeight + kVerticalPad * 2;
 static const CGFloat kRowHeight = 24.0;
 static const CGFloat kRowSpacing = 1.0;
 
-@interface KKFlippedView : NSView
+@protocol KKLayerReorder
+- (void)_reorderFromIndices:(NSIndexSet *)indices toIndex:(NSUInteger)target;
 @end
 
-@implementation KKFlippedView
+@class KKLayerActionTarget;
+
+@interface KKLayerContentView : NSView
+@property(nonatomic, weak) id<KKLayerReorder> actionTarget;
+@property(nonatomic) NSInteger dropIndex;
+@end
+
+@implementation KKLayerContentView {
+  NSView *_dropIndicator;
+}
+
 - (BOOL)isFlipped {
   return YES;
 }
+
+- (instancetype)initWithFrame:(NSRect)frame {
+  self = [super initWithFrame:frame];
+  if (self) {
+    self.dropIndex = -1;
+    [self registerForDraggedTypes:@[ @"com.overpolish.canvas.layerDrag" ]];
+  }
+  return self;
+}
+
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
+  return NSDragOperationMove;
+}
+
+- (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)sender {
+  NSPoint loc = [self convertPoint:sender.draggingLocation fromView:nil];
+  CGFloat stride = kRowHeight + kRowSpacing;
+  NSInteger idx = (NSInteger)round((loc.y - kVerticalPad) / stride);
+  NSUInteger rowCount = 0;
+  for (NSView *v in self.subviews) {
+    if ([v isKindOfClass:NSClassFromString(@"KKLayerRow")])
+      rowCount++;
+  }
+  idx = MAX(0, MIN(idx, (NSInteger)rowCount));
+
+  if (idx != self.dropIndex) {
+    self.dropIndex = idx;
+    [self _updateDropIndicator];
+  }
+  return NSDragOperationMove;
+}
+
+- (void)draggingExited:(id<NSDraggingInfo>)sender {
+  self.dropIndex = -1;
+  [self _removeDropIndicator];
+}
+
+- (BOOL)prepareForDragOperation:(id<NSDraggingInfo>)sender {
+  return YES;
+}
+
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)sender {
+  [self _removeDropIndicator];
+  NSInteger targetIndex = self.dropIndex;
+  self.dropIndex = -1;
+  if (targetIndex < 0)
+    return NO;
+
+  NSData *data = [sender.draggingPasteboard
+      dataForType:@"com.overpolish.canvas.layerDrag"];
+  if (!data)
+    return NO;
+
+  NSIndexSet *dragIndices =
+      [NSKeyedUnarchiver unarchivedObjectOfClass:[NSIndexSet class]
+                                        fromData:data
+                                           error:nil];
+  if (!dragIndices || dragIndices.count == 0)
+    return NO;
+
+  [self.actionTarget _reorderFromIndices:dragIndices
+                                 toIndex:(NSUInteger)targetIndex];
+  return YES;
+}
+
+- (void)_updateDropIndicator {
+  if (!_dropIndicator) {
+    _dropIndicator = [[NSView alloc] initWithFrame:NSZeroRect];
+    _dropIndicator.wantsLayer = YES;
+    _dropIndicator.layer.backgroundColor = [NSColor accent].CGColor;
+    _dropIndicator.layer.cornerRadius = 1.0;
+  }
+  CGFloat stride = kRowHeight + kRowSpacing;
+  CGFloat y = kVerticalPad + self.dropIndex * stride - 1.0;
+  _dropIndicator.frame =
+      NSMakeRect(KKPaddingSM, y, self.bounds.size.width - KKPaddingSM * 2, 2.0);
+  if (!_dropIndicator.superview)
+    [self addSubview:_dropIndicator];
+}
+
+- (void)_removeDropIndicator {
+  [_dropIndicator removeFromSuperview];
+  _dropIndicator = nil;
+}
+
 @end
 
 static BOOL sForceRefresh = NO;
 static BOOL sIsEditing = NO;
+static BOOL sIsDragging = NO;
+static NSString *const kLayerDragType = @"com.overpolish.canvas.layerDrag";
 static NSIndexSet *sSelectedIndices;
 static NSIndexSet *sUISelection;
 static NSIndexSet *sPendingOSCSelection;
 void KKCanvasRefreshLayerList(NSUInteger pathCount,
                               NSArray<KKBezierPath *> *paths);
-
-@class KKLayerActionTarget;
 
 @interface KKLayerListContainer : NSView
 @property(nonatomic, strong) NSScrollView *scrollView;
@@ -74,13 +170,103 @@ static __weak KKLayerListContainer *sLayerListContainer;
 
 @end
 
-@interface KKLayerActionTarget : NSObject <NSTextFieldDelegate>
+@interface KKLayerRow : NSStackView
+@property(nonatomic) NSUInteger rowIndex;
+- (NSImage *)snapshot;
+@end
+
+@implementation KKLayerRow
+
+- (NSImage *)snapshot {
+  NSBitmapImageRep *rep =
+      [self bitmapImageRepForCachingDisplayInRect:self.bounds];
+  [self cacheDisplayInRect:self.bounds toBitmapImageRep:rep];
+  NSImage *img = [[NSImage alloc] initWithSize:self.bounds.size];
+  [img addRepresentation:rep];
+  return img;
+}
+
+@end
+
+@interface KKLayerButton : NSButton <NSDraggingSource>
+@property(nonatomic, weak) KKLayerRow *parentRow;
+@end
+
+@implementation KKLayerButton {
+  NSPoint _mouseDownPoint;
+  BOOL _didDrag;
+}
+
+- (NSDragOperation)draggingSession:(NSDraggingSession *)session
+    sourceOperationMaskForDraggingContext:(NSDraggingContext)context {
+  return NSDragOperationMove;
+}
+
+- (void)mouseDown:(NSEvent *)event {
+  _mouseDownPoint = [self convertPoint:event.locationInWindow fromView:nil];
+  _didDrag = NO;
+  [self highlight:YES];
+}
+
+- (void)mouseDragged:(NSEvent *)event {
+  if (_didDrag)
+    return;
+  NSPoint current = [self convertPoint:event.locationInWindow fromView:nil];
+  CGFloat dist =
+      hypot(current.x - _mouseDownPoint.x, current.y - _mouseDownPoint.y);
+  if (dist < 3.0)
+    return;
+  _didDrag = YES;
+  [self highlight:NO];
+
+  KKLayerRow *row = self.parentRow;
+  if (!row)
+    return;
+
+  NSIndexSet *sel = sUISelection;
+  NSIndexSet *dragIndices;
+  if (sel && [sel containsIndex:row.rowIndex])
+    dragIndices = sel;
+  else
+    dragIndices = [NSIndexSet indexSetWithIndex:row.rowIndex];
+
+  NSData *data = [NSKeyedArchiver archivedDataWithRootObject:dragIndices
+                                       requiringSecureCoding:YES
+                                                       error:nil];
+  NSPasteboardItem *pbItem = [[NSPasteboardItem alloc] init];
+  [pbItem setData:data forType:kLayerDragType];
+
+  NSDraggingItem *dragItem =
+      [[NSDraggingItem alloc] initWithPasteboardWriter:pbItem];
+  [dragItem setDraggingFrame:row.bounds contents:[row snapshot]];
+
+  sIsDragging = YES;
+  [row beginDraggingSessionWithItems:@[ dragItem ] event:event source:self];
+}
+
+- (void)mouseUp:(NSEvent *)event {
+  [self highlight:NO];
+  if (!_didDrag)
+    [self performClick:self];
+}
+
+- (void)draggingSession:(NSDraggingSession *)session
+           endedAtPoint:(NSPoint)screenPoint
+              operation:(NSDragOperation)operation {
+  sIsDragging = NO;
+  sForceRefresh = YES;
+}
+
+@end
+
+@interface KKLayerActionTarget : NSObject <NSTextFieldDelegate, KKLayerReorder>
 @property(nonatomic, weak) id<PROAPIAccessing> apiManager;
 - (void)toggleVisibility:(NSButton *)sender;
 - (void)toggleLock:(NSButton *)sender;
 - (void)renameRow:(NSMenuItem *)sender;
 - (void)duplicateRow:(NSMenuItem *)sender;
 - (void)deleteRow:(NSMenuItem *)sender;
+- (void)_reorderFromIndices:(NSIndexSet *)indices toIndex:(NSUInteger)target;
 @end
 
 @implementation KKLayerActionTarget
@@ -250,6 +436,37 @@ static __weak KKLayerListContainer *sLayerListContainer;
   }];
 }
 
+- (void)_reorderFromIndices:(NSIndexSet *)indices toIndex:(NSUInteger)target {
+  [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
+    NSMutableArray<KKBezierPath *> *dragged = [NSMutableArray array];
+    [indices enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+      if (idx < paths.count)
+        [dragged addObject:paths[idx]];
+    }];
+
+    NSUInteger insertBefore = target;
+    NSUInteger countBefore =
+        [indices countOfIndexesInRange:NSMakeRange(0, insertBefore)];
+    insertBefore -= countBefore;
+
+    [indices enumerateIndexesWithOptions:NSEnumerationReverse
+                              usingBlock:^(NSUInteger idx, BOOL *stop) {
+                                if (idx < paths.count)
+                                  [paths removeObjectAtIndex:idx];
+                              }];
+
+    NSUInteger insertAt = MIN(insertBefore, paths.count);
+    for (NSUInteger i = 0; i < dragged.count; i++)
+      [paths insertObject:dragged[i] atIndex:insertAt + i];
+
+    NSIndexSet *newSel = [NSIndexSet
+        indexSetWithIndexesInRange:NSMakeRange(insertAt, dragged.count)];
+    sUISelection = newSel;
+    sSelectedIndices = newSel;
+    sPendingOSCSelection = newSel;
+  }];
+}
+
 - (void)controlTextDidEndEditing:(NSNotification *)note {
   NSTextField *field = note.object;
   NSString *newName = field.stringValue;
@@ -390,7 +607,7 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
     KKLayerListContainer *container = sLayerListContainer;
     if (!container)
       return;
-    if (sIsEditing)
+    if (sIsEditing || sIsDragging)
       return;
 
     NSView *content = container.contentView;
@@ -436,9 +653,10 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
 
       BOOL isSelected = [capturedSelection containsIndex:i];
 
-      NSButton *rowButton = [NSButton buttonWithTitle:names[i]
-                                               target:container.actionTarget
-                                               action:@selector(selectRow:)];
+      KKLayerButton *rowButton =
+          [KKLayerButton buttonWithTitle:names[i]
+                                  target:container.actionTarget
+                                  action:@selector(selectRow:)];
       rowButton.bezelStyle = NSBezelStyleInline;
       rowButton.bordered = NO;
       rowButton.tag = i;
@@ -512,8 +730,10 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
       deleteItem.attributedTitle = deleteTitle;
       [ctxMenu addItem:deleteItem];
 
-      NSStackView *row = [NSStackView
-          stackViewWithViews:@[ eyeButton, rowButton, lockButton ]];
+      KKLayerRow *row =
+          [KKLayerRow stackViewWithViews:@[ eyeButton, rowButton, lockButton ]];
+      row.rowIndex = i;
+      rowButton.parentRow = row;
       row.menu = ctxMenu;
       row.orientation = NSUserInterfaceLayoutOrientationHorizontal;
       row.alignment = NSLayoutAttributeCenterY;
@@ -615,7 +835,8 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
     emptyStack.spacing = 4.0;
     emptyStack.translatesAutoresizingMaskIntoConstraints = NO;
 
-    KKFlippedView *content = [[KKFlippedView alloc] initWithFrame:NSZeroRect];
+    KKLayerContentView *content =
+        [[KKLayerContentView alloc] initWithFrame:NSZeroRect];
     content.translatesAutoresizingMaskIntoConstraints = NO;
     [content addSubview:emptyStack];
     scrollView.documentView = content;
@@ -642,6 +863,7 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
     wrapper.contentView = content;
     wrapper.contentHeightConstraint = heightConstraint;
     wrapper.actionTarget = visTarget;
+    content.actionTarget = visTarget;
     sLayerListContainer = wrapper;
     sLastListHash = NSUIntegerMax;
 
