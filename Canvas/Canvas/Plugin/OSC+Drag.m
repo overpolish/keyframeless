@@ -305,6 +305,8 @@
     return;
 
   KKBezierPath *rect = [[KKBezierPath alloc] init];
+  rect.name = [NSString
+      stringWithFormat:@"Rectangle %lu", (unsigned long)(self.paths.count + 1)];
   [rect insertAtIndex:0 position:(simd_float2){minX, maxY}];
   [rect insertAtIndex:1 position:(simd_float2){maxX, maxY}];
   [rect insertAtIndex:2 position:(simd_float2){maxX, minY}];
@@ -331,6 +333,8 @@
   float kx = rx * 0.5522847498f, ky = ry * 0.5522847498f;
 
   KKBezierPath *ellipse = [[KKBezierPath alloc] init];
+  ellipse.name = [NSString
+      stringWithFormat:@"Ellipse %lu", (unsigned long)(self.paths.count + 1)];
   [ellipse insertAtIndex:0 position:(simd_float2){cx, cy + ry}]; // top
   [ellipse insertAtIndex:1 position:(simd_float2){cx + rx, cy}]; // right
   [ellipse insertAtIndex:2 position:(simd_float2){cx, cy - ry}]; // bottom
@@ -367,6 +371,8 @@
     return;
 
   KKBezierPath *line = [[KKBezierPath alloc] init];
+  line.name = [NSString
+      stringWithFormat:@"Line %lu", (unsigned long)(self.paths.count + 1)];
   [line insertAtIndex:0 position:a];
   [line insertAtIndex:1 position:b];
   [self.paths addObject:line];
