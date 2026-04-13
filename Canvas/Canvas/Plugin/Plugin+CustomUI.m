@@ -22,24 +22,80 @@ static const CGFloat kRowHeight = 24.0;
 }
 @end
 
+static BOOL sForceRefresh = NO;
+void KKCanvasRefreshLayerList(NSUInteger pathCount,
+                              NSArray<KKBezierPath *> *paths);
+
+@interface KKLayerVisibilityTarget : NSObject
+@property(nonatomic, weak) id<PROAPIAccessing> apiManager;
+- (void)toggle:(NSButton *)sender;
+@end
+
+@implementation KKLayerVisibilityTarget
+
+- (void)toggle:(NSButton *)sender {
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> paramSetAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+
+  NSString *str = nil;
+  [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
+  if (str.length == 0) {
+    [actionAPI endAction:self];
+    return;
+  }
+
+  NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
+  NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+  NSUInteger index = sender.tag;
+  if (index >= paths.count) {
+    [actionAPI endAction:self];
+    return;
+  }
+
+  paths[index].hidden = !paths[index].hidden;
+  NSData *newBlob = [KKBezierPath blobFromPaths:paths];
+  NSString *newStr = [newBlob base64EncodedStringWithOptions:0];
+  [paramSetAPI setStringParameterValue:newStr toParameter:kParamPathData];
+  [actionAPI endAction:self];
+
+  sForceRefresh = YES;
+  KKCanvasRefreshLayerList(paths.count, paths);
+}
+
+@end
+
 @interface KKLayerListContainer : NSView
 @property(nonatomic, strong) NSScrollView *scrollView;
 @property(nonatomic, strong) NSView *borderView;
 @property(nonatomic, strong) NSView *emptyView;
 @property(nonatomic, strong) NSView *contentView;
 @property(nonatomic, strong) NSLayoutConstraint *contentHeightConstraint;
-@end
-
-@implementation KKLayerListContainer
+@property(nonatomic, strong) KKLayerVisibilityTarget *visibilityTarget;
 @end
 
 static __weak KKLayerListContainer *sLayerListContainer;
 static NSUInteger sLastPathCount = NSUIntegerMax;
 
-void KKCanvasRefreshLayerList(NSUInteger pathCount) {
-  if (pathCount == sLastPathCount)
+@implementation KKLayerListContainer
+@end
+
+void KKCanvasRefreshLayerList(NSUInteger pathCount,
+                              NSArray<KKBezierPath *> *paths) {
+  if (pathCount == sLastPathCount && !sForceRefresh)
     return;
   sLastPathCount = pathCount;
+  sForceRefresh = NO;
+
+  NSMutableArray<NSNumber *> *hiddenStates =
+      [NSMutableArray arrayWithCapacity:pathCount];
+  for (NSUInteger i = 0; i < pathCount; i++)
+    [hiddenStates addObject:@(paths[i].hidden)];
+
   dispatch_async(dispatch_get_main_queue(), ^{
     KKLayerListContainer *container = sLayerListContainer;
     if (!container)
@@ -60,15 +116,42 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount) {
     CGFloat topPad = kVerticalPad;
     CGFloat totalHeight = MAX(pathCount * kRowHeight + topPad, kListHeight);
     container.contentHeightConstraint.constant = totalHeight;
+
     for (NSUInteger i = 0; i < pathCount; i++) {
+      BOOL isHidden = hiddenStates[i].boolValue;
+      NSString *iconName = isHidden ? @"eye.slash" : @"eye.fill";
+      NSImage *eyeIcon = [NSImage imageWithSystemSymbolName:iconName
+                                   accessibilityDescription:nil];
+      NSImageSymbolConfiguration *symConfig = [NSImageSymbolConfiguration
+          configurationWithPointSize:10.0
+                              weight:NSFontWeightRegular];
+      NSButton *eyeButton = [NSButton
+          buttonWithImage:[eyeIcon imageWithSymbolConfiguration:symConfig]
+                   target:container.visibilityTarget
+                   action:@selector(toggle:)];
+      eyeButton.bezelStyle = NSBezelStyleInline;
+      eyeButton.bordered = NO;
+      eyeButton.imagePosition = NSImageOnly;
+      eyeButton.tag = i;
+      eyeButton.contentTintColor = isHidden ? [NSColor tertiaryLabelColor]
+                                            : [NSColor secondaryLabelColor];
+      [eyeButton.widthAnchor constraintEqualToConstant:12.0].active = YES;
+      [eyeButton.heightAnchor constraintEqualToConstant:12.0].active = YES;
+
       NSTextField *label = [NSTextField
           labelWithString:[NSString stringWithFormat:@"Path %lu",
                                                      (unsigned long)(i + 1)]];
       label.font = [NSFont systemFontOfSize:11.0];
-      label.textColor = [NSColor labelColor];
-      label.frame = NSMakeRect(8, topPad + i * kRowHeight, 200, kRowHeight);
-      label.autoresizingMask = NSViewWidthSizable;
-      [content addSubview:label];
+      label.textColor =
+          isHidden ? [NSColor tertiaryLabelColor] : [NSColor labelColor];
+
+      NSStackView *row = [NSStackView stackViewWithViews:@[ eyeButton, label ]];
+      row.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+      row.alignment = NSLayoutAttributeCenterY;
+      row.spacing = 6.0;
+      row.frame = NSMakeRect(8, topPad + i * kRowHeight, 200, kRowHeight);
+      row.autoresizingMask = NSViewWidthSizable;
+      [content addSubview:row];
     }
   });
 }
@@ -167,9 +250,13 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount) {
                                          constant:kListHeight / 2 - 7]
         .active = YES;
 
+    KKLayerVisibilityTarget *visTarget = [[KKLayerVisibilityTarget alloc] init];
+    visTarget.apiManager = self.apiManager;
+
     wrapper.emptyView = emptyStack;
     wrapper.contentView = content;
     wrapper.contentHeightConstraint = heightConstraint;
+    wrapper.visibilityTarget = visTarget;
     sLayerListContainer = wrapper;
     sLastPathCount = NSUIntegerMax;
 
@@ -184,9 +271,9 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount) {
 
     if (str.length > 0) {
       NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
-      NSUInteger count = [KKBezierPath pathsFromBlob:blob].count;
-      if (count > 0)
-        KKCanvasRefreshLayerList(count);
+      NSArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+      if (paths.count > 0)
+        KKCanvasRefreshLayerList(paths.count, paths);
     }
 
     return wrapper;
