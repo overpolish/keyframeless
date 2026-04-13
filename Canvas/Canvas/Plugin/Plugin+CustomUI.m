@@ -79,6 +79,8 @@ static __weak KKLayerListContainer *sLayerListContainer;
 - (void)toggleVisibility:(NSButton *)sender;
 - (void)toggleLock:(NSButton *)sender;
 - (void)renameRow:(NSMenuItem *)sender;
+- (void)duplicateRow:(NSMenuItem *)sender;
+- (void)deleteRow:(NSMenuItem *)sender;
 @end
 
 @implementation KKLayerActionTarget
@@ -180,6 +182,72 @@ static __weak KKLayerListContainer *sLayerListContainer;
       }
     }
   }
+}
+
+- (void)_modifyPaths:(void (^)(NSMutableArray<KKBezierPath *> *))block {
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> paramSetAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+
+  NSString *str = nil;
+  [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
+  if (str.length > 0) {
+    NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
+    NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+    block(paths);
+    NSData *newBlob = [KKBezierPath blobFromPaths:paths];
+    NSString *newStr = [newBlob base64EncodedStringWithOptions:0];
+    [paramSetAPI setStringParameterValue:newStr toParameter:kParamPathData];
+
+    sForceRefresh = YES;
+    KKCanvasRefreshLayerList(paths.count, paths);
+  }
+  [actionAPI endAction:self];
+}
+
+- (void)duplicateRow:(NSMenuItem *)sender {
+  NSIndexSet *sel = sUISelection;
+  if (!sel || sel.count == 0)
+    sel = [NSIndexSet indexSetWithIndex:sender.tag];
+  [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
+    NSMutableIndexSet *newSel = [NSMutableIndexSet indexSet];
+    __block NSUInteger offset = 0;
+    [sel enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+      NSUInteger src = idx + offset;
+      if (src >= paths.count)
+        return;
+      KKBezierPath *clone =
+          [KKBezierPath pathWithData:[paths[src] dataRepresentation]];
+      [paths insertObject:clone atIndex:src + 1];
+      [newSel addIndex:src + 1];
+      offset++;
+    }];
+    NSIndexSet *frozen = [newSel copy];
+    sUISelection = frozen;
+    sSelectedIndices = frozen;
+    sPendingOSCSelection = frozen;
+  }];
+}
+
+- (void)deleteRow:(NSMenuItem *)sender {
+  NSIndexSet *sel = sUISelection;
+  if (!sel || sel.count == 0)
+    sel = [NSIndexSet indexSetWithIndex:sender.tag];
+  [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
+    [sel enumerateIndexesWithOptions:NSEnumerationReverse
+                          usingBlock:^(NSUInteger idx, BOOL *stop) {
+                            if (idx < paths.count)
+                              [paths removeObjectAtIndex:idx];
+                          }];
+    NSIndexSet *empty = [NSIndexSet indexSet];
+    sUISelection = empty;
+    sSelectedIndices = empty;
+    sPendingOSCSelection = empty;
+  }];
 }
 
 - (void)controlTextDidEndEditing:(NSNotification *)note {
@@ -399,14 +467,50 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
       [lockButton.widthAnchor constraintEqualToConstant:12.0].active = YES;
       [lockButton.heightAnchor constraintEqualToConstant:12.0].active = YES;
 
+      BOOL multiSelect = capturedSelection.count > 1;
+
       NSMenu *ctxMenu = [[NSMenu alloc] init];
-      NSMenuItem *renameItem =
-          [[NSMenuItem alloc] initWithTitle:@"Rename"
-                                     action:@selector(renameRow:)
+      if (!multiSelect) {
+        NSMenuItem *renameItem =
+            [[NSMenuItem alloc] initWithTitle:@"Rename"
+                                       action:@selector(renameRow:)
+                                keyEquivalent:@""];
+        renameItem.target = container.actionTarget;
+        renameItem.tag = i;
+        renameItem.image = [NSImage imageWithSystemSymbolName:@"pencil"
+                                     accessibilityDescription:nil];
+        [ctxMenu addItem:renameItem];
+      }
+
+      NSMenuItem *duplicateItem =
+          [[NSMenuItem alloc] initWithTitle:@"Duplicate"
+                                     action:@selector(duplicateRow:)
                               keyEquivalent:@""];
-      renameItem.target = container.actionTarget;
-      renameItem.tag = i;
-      [ctxMenu addItem:renameItem];
+      duplicateItem.target = container.actionTarget;
+      duplicateItem.tag = i;
+      duplicateItem.image =
+          [NSImage imageWithSystemSymbolName:@"plus.rectangle.on.rectangle"
+                    accessibilityDescription:nil];
+      [ctxMenu addItem:duplicateItem];
+
+      [ctxMenu addItem:[NSMenuItem separatorItem]];
+
+      NSMenuItem *deleteItem =
+          [[NSMenuItem alloc] initWithTitle:@"Delete"
+                                     action:@selector(deleteRow:)
+                              keyEquivalent:@""];
+      deleteItem.target = container.actionTarget;
+      deleteItem.tag = i;
+      deleteItem.image = [NSImage imageWithSystemSymbolName:@"trash"
+                                   accessibilityDescription:nil];
+      NSMutableAttributedString *deleteTitle =
+          [[NSMutableAttributedString alloc]
+              initWithString:@"Delete"
+                  attributes:@{
+                    NSForegroundColorAttributeName : [NSColor error]
+                  }];
+      deleteItem.attributedTitle = deleteTitle;
+      [ctxMenu addItem:deleteItem];
 
       NSStackView *row = [NSStackView
           stackViewWithViews:@[ eyeButton, rowButton, lockButton ]];
