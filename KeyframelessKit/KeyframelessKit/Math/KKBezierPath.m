@@ -27,8 +27,40 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     uint32_t count;
     memcpy(&count, bytes, 4);
     size_t pointSize = sizeof(KKBezierPoint);
-    size_t expected = 4 + count * pointSize;
-    if (data.length >= expected && count > 0) {
+
+    // New format: 4 bytes count + 1 byte flags + points
+    size_t newExpected = 5 + count * pointSize;
+    // Old format: 4 bytes count + points (no flags)
+    size_t oldExpected = 4 + count * pointSize;
+
+    if (data.length >= newExpected && count > 0) {
+      uint8_t flags = bytes[4];
+      path->_closed = (flags & 1) != 0;
+      path->_isRect = (flags & 8) != 0;
+      path->_count = count;
+      path->_capacity = count;
+      path->_points = malloc(count * pointSize);
+      memcpy(path->_points, bytes + 5, count * pointSize);
+      // Extended: corner radii after points
+      size_t extOffset = 5 + count * pointSize;
+      if ((flags & 4) && data.length >= extOffset + 4 * sizeof(float)) {
+        // New: 4 per-corner radii
+        float cr[4];
+        memcpy(cr, bytes + extOffset, 4 * sizeof(float));
+        path->_cornerRadiusTL = cr[0];
+        path->_cornerRadiusTR = cr[1];
+        path->_cornerRadiusBR = cr[2];
+        path->_cornerRadiusBL = cr[3];
+      } else if ((flags & 2) && data.length >= extOffset + sizeof(float)) {
+        // Backwards compat: single radius applied to all corners
+        float r;
+        memcpy(&r, bytes + extOffset, sizeof(float));
+        path->_cornerRadiusTL = r;
+        path->_cornerRadiusTR = r;
+        path->_cornerRadiusBR = r;
+        path->_cornerRadiusBL = r;
+      }
+    } else if (data.length >= oldExpected && count > 0) {
       path->_count = count;
       path->_capacity = count;
       path->_points = malloc(count * pointSize);
@@ -40,12 +72,74 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
 
 - (NSData *)dataRepresentation {
   uint32_t count = (uint32_t)_count;
+  uint8_t flags = _closed ? 1 : 0;
+  if (_isRect)
+    flags |= 8;
+  BOOL hasRadius = (_cornerRadiusTL > 0 || _cornerRadiusTR > 0 ||
+                    _cornerRadiusBR > 0 || _cornerRadiusBL > 0);
+  if (hasRadius)
+    flags |= 4;
   size_t pointSize = sizeof(KKBezierPoint);
-  NSMutableData *data = [NSMutableData dataWithCapacity:4 + count * pointSize];
+  NSMutableData *data = [NSMutableData
+      dataWithCapacity:4 + 1 + count * pointSize + 4 * sizeof(float)];
   [data appendBytes:&count length:4];
+  [data appendBytes:&flags length:1];
   if (count > 0)
     [data appendBytes:_points length:count * pointSize];
+  if (hasRadius) {
+    float cr[4] = {_cornerRadiusTL, _cornerRadiusTR, _cornerRadiusBR,
+                   _cornerRadiusBL};
+    [data appendBytes:cr length:4 * sizeof(float)];
+  }
   return data;
+}
+
++ (NSMutableArray<KKBezierPath *> *)pathsFromBlob:(NSData *)blob {
+  if (!blob || blob.length < 4)
+    return [NSMutableArray array];
+
+  const uint8_t *bytes = blob.bytes;
+  NSUInteger offset = 0;
+  uint32_t pathCount;
+  memcpy(&pathCount, bytes + offset, 4);
+  offset += 4;
+
+  if (pathCount > 10000 || offset + pathCount * 4 > blob.length) {
+    KKBezierPath *single = [KKBezierPath pathWithData:blob];
+    if (single && single.count > 0)
+      return [NSMutableArray arrayWithObject:single];
+    return [NSMutableArray array];
+  }
+
+  NSMutableArray *result = [NSMutableArray arrayWithCapacity:pathCount];
+  for (uint32_t i = 0; i < pathCount; i++) {
+    if (offset + 4 > blob.length)
+      break;
+    uint32_t len;
+    memcpy(&len, bytes + offset, 4);
+    offset += 4;
+    if (offset + len > blob.length)
+      break;
+    NSData *pathData = [blob subdataWithRange:NSMakeRange(offset, len)];
+    KKBezierPath *path = [KKBezierPath pathWithData:pathData];
+    if (path)
+      [result addObject:path];
+    offset += len;
+  }
+  return result;
+}
+
++ (NSData *)blobFromPaths:(NSArray<KKBezierPath *> *)paths {
+  NSMutableData *blob = [NSMutableData data];
+  uint32_t pathCount = (uint32_t)paths.count;
+  [blob appendBytes:&pathCount length:4];
+  for (KKBezierPath *path in paths) {
+    NSData *pathData = [path dataRepresentation];
+    uint32_t len = (uint32_t)pathData.length;
+    [blob appendBytes:&len length:4];
+    [blob appendData:pathData];
+  }
+  return blob;
 }
 
 - (instancetype)init {
@@ -113,6 +207,163 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
 - (void)setOutHandle:(simd_float2)offset atIndex:(NSUInteger)index {
   _points[index].outX = offset.x;
   _points[index].outY = offset.y;
+}
+
+- (void)setType:(KKBezierPointType)type atIndex:(NSUInteger)index {
+  if (index < _count)
+    _points[index].type = type;
+}
+
+- (void)translateBy:(simd_float2)delta {
+  for (NSUInteger i = 0; i < _count; i++) {
+    _points[i].x += delta.x;
+    _points[i].y += delta.y;
+  }
+}
+
+static void cornerRadii(float fraction, float maxRX, float maxRY, float objW,
+                        float objH, float canvasW, float canvasH, float *outRX,
+                        float *outRY) {
+  float f = fmaxf(0.0f, fminf(fraction, 1.0f));
+  if (f < 0.0001f) {
+    *outRX = 0;
+    *outRY = 0;
+    return;
+  }
+  float maxPxX = (objW > 0.0001f) ? (maxRX / objW) * canvasW : 0;
+  float maxPxY = (objH > 0.0001f) ? (maxRY / objH) * canvasH : 0;
+  float maxPx = fmaxf(maxPxX, maxPxY);
+  float pixelR = f * maxPx;
+  *outRX = (canvasW > 0.0001f)
+               ? fminf((fminf(pixelR, maxPxX) / canvasW) * objW, maxRX)
+               : 0;
+  *outRY = (canvasH > 0.0001f)
+               ? fminf((fminf(pixelR, maxPxY) / canvasH) * objH, maxRY)
+               : 0;
+}
+
+- (void)setRoundedRectWithMin:(simd_float2)min
+                          max:(simd_float2)max
+                   fractionTL:(float)ftl
+                   fractionTR:(float)ftr
+                   fractionBR:(float)fbr
+                   fractionBL:(float)fbl
+                  canvasWidth:(float)canvasW
+                 canvasHeight:(float)canvasH {
+  _cornerRadiusTL = fmaxf(0.0f, fminf(ftl, 1.0f));
+  _cornerRadiusTR = fmaxf(0.0f, fminf(ftr, 1.0f));
+  _cornerRadiusBR = fmaxf(0.0f, fminf(fbr, 1.0f));
+  _cornerRadiusBL = fmaxf(0.0f, fminf(fbl, 1.0f));
+
+  float maxRX = (max.x - min.x) * 0.5f;
+  float maxRY = (max.y - min.y) * 0.5f;
+  float objW = max.x - min.x;
+  float objH = max.y - min.y;
+
+  BOOL allZero = (_cornerRadiusTL < 0.0001f && _cornerRadiusTR < 0.0001f &&
+                  _cornerRadiusBR < 0.0001f && _cornerRadiusBL < 0.0001f);
+  if (allZero) {
+    [self ensureCapacity:4];
+    _count = 4;
+    _closed = YES;
+    _points[0] = (KKBezierPoint){min.x, max.y, 0, 0, 0, 0, KKBezierPointLinear};
+    _points[1] = (KKBezierPoint){max.x, max.y, 0, 0, 0, 0, KKBezierPointLinear};
+    _points[2] = (KKBezierPoint){max.x, min.y, 0, 0, 0, 0, KKBezierPointLinear};
+    _points[3] = (KKBezierPoint){min.x, min.y, 0, 0, 0, 0, KKBezierPointLinear};
+    return;
+  }
+
+  // Compute per-corner rx/ry
+  float rx[4], ry[4];
+  float fracs[4] = {_cornerRadiusTL, _cornerRadiusTR, _cornerRadiusBR,
+                    _cornerRadiusBL};
+  for (int i = 0; i < 4; i++)
+    cornerRadii(fracs[i], maxRX, maxRY, objW, objH, canvasW, canvasH, &rx[i],
+                &ry[i]);
+
+  // Build points: 2 per rounded corner, 1 per sharp corner
+  KKBezierPoint tmp[12]; // max 8 rounded + potential
+  NSUInteger n = 0;
+
+  // TL corner (left side, then top side)
+  if (rx[0] > 0.0001f && ry[0] > 0.0001f) {
+    float kx = rx[0] * 0.5522847498f, ky = ry[0] * 0.5522847498f;
+    tmp[n++] = (KKBezierPoint){min.x, max.y - ry[0],      0, -ky, 0,
+                               ky,    KKBezierPointBezier};
+    tmp[n++] = (KKBezierPoint){min.x + rx[0],      max.y, -kx, 0, kx, 0,
+                               KKBezierPointBezier};
+  } else {
+    tmp[n++] = (KKBezierPoint){min.x, max.y, 0, 0, 0, 0, KKBezierPointLinear};
+  }
+
+  // TR corner (top side, then right side)
+  if (rx[1] > 0.0001f && ry[1] > 0.0001f) {
+    float kx = rx[1] * 0.5522847498f, ky = ry[1] * 0.5522847498f;
+    tmp[n++] = (KKBezierPoint){max.x - rx[1],      max.y, -kx, 0, kx, 0,
+                               KKBezierPointBezier};
+    tmp[n++] = (KKBezierPoint){max.x, max.y - ry[1],      0, ky, 0,
+                               -ky,   KKBezierPointBezier};
+  } else {
+    tmp[n++] = (KKBezierPoint){max.x, max.y, 0, 0, 0, 0, KKBezierPointLinear};
+  }
+
+  // BR corner (right side, then bottom side)
+  if (rx[2] > 0.0001f && ry[2] > 0.0001f) {
+    float kx = rx[2] * 0.5522847498f, ky = ry[2] * 0.5522847498f;
+    tmp[n++] = (KKBezierPoint){max.x, min.y + ry[2],      0, ky, 0,
+                               -ky,   KKBezierPointBezier};
+    tmp[n++] = (KKBezierPoint){max.x - rx[2],      min.y, kx, 0, -kx, 0,
+                               KKBezierPointBezier};
+  } else {
+    tmp[n++] = (KKBezierPoint){max.x, min.y, 0, 0, 0, 0, KKBezierPointLinear};
+  }
+
+  // BL corner (bottom side, then left side)
+  if (rx[3] > 0.0001f && ry[3] > 0.0001f) {
+    float kx = rx[3] * 0.5522847498f, ky = ry[3] * 0.5522847498f;
+    tmp[n++] = (KKBezierPoint){min.x + rx[3],      min.y, kx, 0, -kx, 0,
+                               KKBezierPointBezier};
+    tmp[n++] = (KKBezierPoint){min.x, min.y + ry[3],      0, -ky, 0,
+                               ky,    KKBezierPointBezier};
+  } else {
+    tmp[n++] = (KKBezierPoint){min.x, min.y, 0, 0, 0, 0, KKBezierPointLinear};
+  }
+
+  // Merge adjacent points that overlap (when a side fully collapses)
+  KKBezierPoint merged[12];
+  NSUInteger m = 0;
+  for (NSUInteger i = 0; i < n; i++) {
+    NSUInteger next = (i + 1) % n;
+    float dx = tmp[next].x - tmp[i].x;
+    float dy = tmp[next].y - tmp[i].y;
+    if (dx * dx + dy * dy < 0.0001f && i < n - 1) {
+      // Merge: take in-handle from first, out-handle from second
+      merged[m] = tmp[i];
+      merged[m].outX = tmp[next].outX;
+      merged[m].outY = tmp[next].outY;
+      merged[m].type = KKBezierPointBezier;
+      m++;
+      i++; // skip next
+    } else {
+      merged[m++] = tmp[i];
+    }
+  }
+  // Also check wrap-around: last point and first point
+  if (m >= 2) {
+    float dx = merged[0].x - merged[m - 1].x;
+    float dy = merged[0].y - merged[m - 1].y;
+    if (dx * dx + dy * dy < 0.0001f) {
+      merged[0].inX = merged[m - 1].inX;
+      merged[0].inY = merged[m - 1].inY;
+      merged[0].type = KKBezierPointBezier;
+      m--;
+    }
+  }
+
+  [self ensureCapacity:m];
+  _count = m;
+  memcpy(_points, merged, m * sizeof(KKBezierPoint));
+  _closed = YES;
 }
 
 - (void)toggleTypeAtIndex:(NSUInteger)index
@@ -216,6 +467,40 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
                     inH:inH
                   type1:type1
                     atT:t];
+}
+
+- (simd_float2)evaluatePointAtIndex:(NSUInteger)index
+                          nextIndex:(NSUInteger)nextIndex
+                                atT:(float)t {
+  if (index >= _count || nextIndex >= _count)
+    return (simd_float2){0, 0};
+  KKBezierPoint p0 = _points[index];
+  KKBezierPoint p1 = _points[nextIndex];
+  simd_float2 a = {p0.x, p0.y};
+  simd_float2 cp0 = {p0.x + p0.outX, p0.y + p0.outY};
+  simd_float2 cp1 = {p1.x + p1.inX, p1.y + p1.inY};
+  simd_float2 b = {p1.x, p1.y};
+  if (p0.type == KKBezierPointLinear && p1.type == KKBezierPointLinear)
+    return a + t * (b - a);
+  return evalCubicBezier(a, cp0, cp1, b, t);
+}
+
+- (simd_float2)evaluateTangentAtIndex:(NSUInteger)index
+                            nextIndex:(NSUInteger)nextIndex
+                                  atT:(float)t {
+  if (index >= _count || nextIndex >= _count)
+    return (simd_float2){1, 0};
+  KKBezierPoint p0 = _points[index];
+  KKBezierPoint p1 = _points[nextIndex];
+  simd_float2 a = {p0.x, p0.y};
+  simd_float2 cp0 = {p0.x + p0.outX, p0.y + p0.outY};
+  simd_float2 cp1 = {p1.x + p1.inX, p1.y + p1.inY};
+  simd_float2 b = {p1.x, p1.y};
+  if (p0.type == KKBezierPointLinear && p1.type == KKBezierPointLinear)
+    return b - a;
+  float u = 1.0f - t;
+  return 3.0f * u * u * (cp0 - a) + 6.0f * u * t * (cp1 - cp0) +
+         3.0f * t * t * (b - cp1);
 }
 
 - (simd_float2)positionAtT:(float)t

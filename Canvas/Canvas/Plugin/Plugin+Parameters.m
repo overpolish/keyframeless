@@ -6,6 +6,8 @@
 #import "Constants.h"
 #import "Plugin_Private.h"
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 @implementation CanvasPlugin (Parameters)
 
 - (BOOL)addParametersWithError:(NSError **)error {
@@ -33,7 +35,25 @@
                         parameterFlags:kFxParameterFlag_HIDDEN |
                                        kFxParameterFlag_NOT_ANIMATABLE];
 
+  [paramAPI addFloatSliderWithName:@"Stroke Width"
+                       parameterID:kParamStrokeWidth
+                      defaultValue:8.0
+                      parameterMin:0.5
+                      parameterMax:10000.0
+                         sliderMin:0.5
+                         sliderMax:100.0
+                             delta:0.5
+                    parameterFlags:kFxParameterFlag_DEFAULT];
+
+  [paramAPI addColorParameterWithName:@"Stroke Color"
+                          parameterID:kParamStrokeColor
+                           defaultRed:1.0
+                         defaultGreen:0.0
+                          defaultBlue:0.0
+                       parameterFlags:kFxParameterFlag_DEFAULT];
+
   return YES;
 }
 
 @end
+#pragma clang diagnostic pop

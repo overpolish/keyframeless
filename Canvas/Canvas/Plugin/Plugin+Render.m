@@ -8,27 +8,139 @@
 #import "ShaderTypes.h"
 #import <IOSurface/IOSurfaceObjC.h>
 
-static simd_float2 evaluateCubicBezier(simd_float2 p0, simd_float2 p1,
-                                       simd_float2 p2, simd_float2 p3,
-                                       float t) {
-  float u = 1.0f - t;
-  float uu = u * u;
-  float uuu = uu * u;
-  float tt = t * t;
-  float ttt = tt * t;
-  return uuu * p0 + 3.0f * uu * t * p1 + 3.0f * u * tt * p2 + ttt * p3;
-}
-
-static simd_float2 evaluateCubicBezierTangent(simd_float2 p0, simd_float2 p1,
-                                              simd_float2 p2, simd_float2 p3,
-                                              float t) {
-  float u = 1.0f - t;
-  return 3.0f * u * u * (p1 - p0) + 6.0f * u * t * (p2 - p1) +
-         3.0f * t * t * (p3 - p2);
-}
-
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
+
+static simd_float2 miterNormal(simd_float2 n1, simd_float2 n2) {
+  simd_float2 avg = n1 + n2;
+  float avgLen = simd_length(avg);
+  if (avgLen < 1e-6f)
+    return n1;
+  avg /= avgLen;
+  float d = simd_dot(avg, n1);
+  if (d > 0.5f)
+    avg /= d;
+  return avg;
+}
+
+static simd_float2 normalAtPoint(KKBezierPath *path, NSUInteger c,
+                                 NSUInteger segsPerCurve, NSUInteger i,
+                                 NSUInteger curveCount) {
+  NSUInteger nextIdx = (c + 1) % path.count;
+  float t = (float)i / (float)segsPerCurve;
+  simd_float2 tangent = [path evaluateTangentAtIndex:c nextIndex:nextIdx atT:t];
+  tangent.y = -tangent.y;
+  float len = simd_length(tangent);
+  if (len < 1e-6f)
+    tangent = (simd_float2){1.0f, 0.0f};
+  else
+    tangent /= len;
+
+  simd_float2 normal = {-tangent.y, tangent.x};
+  BOOL isEnd = (i == segsPerCurve);
+  BOOL isStart = (i == 0);
+
+  if (isEnd && (c < curveCount - 1 || (path.closed && c == curveCount - 1))) {
+    NSUInteger nextC = (c < curveCount - 1) ? (c + 1) % path.count : 0;
+    NSUInteger nextNext =
+        (c < curveCount - 1) ? (c + 2) % path.count : 1 % path.count;
+    KKBezierPoint curPt = [path pointAtIndex:nextIdx];
+    KKBezierPoint nxtPt = [path pointAtIndex:nextC];
+    if (curPt.type == KKBezierPointLinear &&
+        nxtPt.type == KKBezierPointLinear) {
+      simd_float2 nextTangent = [path evaluateTangentAtIndex:nextC
+                                                   nextIndex:nextNext
+                                                         atT:0.0f];
+      nextTangent.y = -nextTangent.y;
+      float nLen = simd_length(nextTangent);
+      if (nLen > 1e-6f) {
+        nextTangent /= nLen;
+        normal =
+            miterNormal(normal, (simd_float2){-nextTangent.y, nextTangent.x});
+      }
+    }
+  } else if (isStart && (c > 0 || (path.closed && c == 0))) {
+    NSUInteger prevC = (c > 0) ? c - 1 : curveCount - 1;
+    NSUInteger prevIdx = c;
+    KKBezierPoint curPt = [path pointAtIndex:prevIdx];
+    KKBezierPoint prvPt = [path pointAtIndex:prevC];
+    if (prvPt.type == KKBezierPointLinear &&
+        curPt.type == KKBezierPointLinear) {
+      simd_float2 prevTangent = [path evaluateTangentAtIndex:prevC
+                                                   nextIndex:prevIdx
+                                                         atT:1.0f];
+      prevTangent.y = -prevTangent.y;
+      float pLen = simd_length(prevTangent);
+      if (pLen > 1e-6f) {
+        prevTangent /= pLen;
+        normal =
+            miterNormal((simd_float2){-prevTangent.y, prevTangent.x}, normal);
+      }
+    }
+  }
+  return normal;
+}
+
+static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
+                                 float outputWidth, float outputHeight,
+                                 CanvasVertex *vertices) {
+  float aaPadding = 1.0f;
+  float halfWidth = (strokeWidth / 2.0f) + aaPadding;
+  NSUInteger segsPerCurve = 128;
+  NSUInteger curveCount = path.count - 1;
+  if (path.closed && path.count >= 2)
+    curveCount = path.count;
+  NSUInteger vertexCount = 0;
+
+  for (NSUInteger c = 0; c < curveCount; c++) {
+    if (c > 0 && vertexCount > 0) {
+      vertices[vertexCount] = vertices[vertexCount - 1];
+      vertexCount++;
+    }
+
+    for (NSUInteger i = 0; i <= segsPerCurve; i++) {
+      float t = (float)i / (float)segsPerCurve;
+      NSUInteger nextIdx = (c + 1) % path.count;
+      simd_float2 pos = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
+      simd_float2 normal = normalAtPoint(path, c, segsPerCurve, i, curveCount);
+
+      simd_float2 pixelPos = {pos.x * outputWidth,
+                              (1.0f - pos.y) * outputHeight};
+      simd_float2 centered = {pixelPos.x - outputWidth / 2.0f,
+                              pixelPos.y - outputHeight / 2.0f};
+
+      float capDist = 0.0f;
+      if (!path.closed) {
+        float globalT =
+            ((float)c + (float)i / (float)segsPerCurve) / (float)curveCount;
+        float capFade = 1.0f;
+        float startDist = globalT * (float)curveCount * (float)segsPerCurve;
+        float endDist =
+            (1.0f - globalT) * (float)curveCount * (float)segsPerCurve;
+        if (startDist < capFade)
+          capDist = 1.0f - startDist / capFade;
+        if (endDist < capFade)
+          capDist = 1.0f - endDist / capFade;
+      }
+
+      vertices[vertexCount].position = centered + normal * halfWidth;
+      vertices[vertexCount].edgeDistance = 1.0f;
+      vertices[vertexCount].capDistance = capDist;
+      vertexCount++;
+      vertices[vertexCount].position = centered - normal * halfWidth;
+      vertices[vertexCount].edgeDistance = -1.0f;
+      vertices[vertexCount].capDistance = capDist;
+      vertexCount++;
+    }
+
+    if (c < curveCount - 1) {
+      vertices[vertexCount] = vertices[vertexCount - 1];
+      vertexCount++;
+    }
+  }
+  return vertexCount;
+}
+
 @implementation CanvasPlugin (Render)
 
 - (BOOL)pluginState:(NSData **)pluginState
@@ -37,15 +149,32 @@ static simd_float2 evaluateCubicBezierTangent(simd_float2 p0, simd_float2 p1,
               error:(NSError **)error {
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+
+  CanvasStrokeParams params;
+  double width = 8.0;
+  [paramGetAPI getFloatValue:&width
+               fromParameter:kParamStrokeWidth
+                      atTime:renderTime];
+  params.strokeWidth = (float)width;
+
+  double r = 1.0, g = 0.0, b = 0.0;
+  [paramGetAPI getRedValue:&r
+                greenValue:&g
+                 blueValue:&b
+             fromParameter:kParamStrokeColor
+                    atTime:renderTime];
+  params.r = (float)r;
+  params.g = (float)g;
+  params.b = (float)b;
+
   NSString *pathStr = nil;
   [paramGetAPI getStringParameterValue:&pathStr fromParameter:kParamPathData];
 
-  if (pathStr.length > 0) {
-    *pluginState = [pathStr dataUsingEncoding:NSUTF8StringEncoding];
-  } else {
-    uint8_t empty = 0;
-    *pluginState = [NSData dataWithBytes:&empty length:sizeof(empty)];
-  }
+  NSMutableData *state = [NSMutableData dataWithBytes:&params
+                                               length:sizeof(params)];
+  if (pathStr.length > 0)
+    [state appendData:[pathStr dataUsingEncoding:NSUTF8StringEncoding]];
+  *pluginState = state;
   return (*pluginState != nil);
 }
 
@@ -55,7 +184,7 @@ static simd_float2 evaluateCubicBezierTangent(simd_float2 p0, simd_float2 p1,
                         atTime:(CMTime)renderTime
                          error:(NSError *_Nullable *)outError {
   if (!pluginState || !destinationImage.ioSurface || sourceImages.count < 1) {
-    if (outError != NULL) {
+    if (outError != NULL)
       *outError =
           [NSError errorWithDomain:FxPlugErrorDomain
                               code:kFxError_InvalidParameter
@@ -63,7 +192,6 @@ static simd_float2 evaluateCubicBezierTangent(simd_float2 p0, simd_float2 p1,
                             NSLocalizedDescriptionKey :
                                 @"Invalid plugin state received from host"
                           }];
-    }
     return NO;
   }
 
@@ -71,7 +199,6 @@ static simd_float2 evaluateCubicBezierTangent(simd_float2 p0, simd_float2 p1,
   MTLPixelFormat pixelFormat =
       [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
   uint64_t registryID = destinationImage.deviceRegistryID;
-
   id<MTLCommandQueue> commandQueue =
       [cache commandQueueWithRegistryID:registryID pixelFormat:pixelFormat];
   if (!commandQueue)
@@ -87,20 +214,27 @@ static simd_float2 evaluateCubicBezierTangent(simd_float2 p0, simd_float2 p1,
   float outputHeight = (float)(destinationImage.tilePixelBounds.top -
                                destinationImage.tilePixelBounds.bottom);
 
-  // Read path data from pluginState (passed from pluginState: method)
-  KKBezierPath *path = nil;
-  if (pluginState.length > 1) {
-    NSString *pathStr = [[NSString alloc] initWithData:pluginState
-                                              encoding:NSUTF8StringEncoding];
-    if (pathStr.length > 0) {
-      NSData *data = [[NSData alloc] initWithBase64EncodedString:pathStr
-                                                         options:0];
-      if (data)
-        path = [KKBezierPath pathWithData:data];
+  CanvasStrokeParams strokeParams = {8.0f, 1.0f, 0.0f, 0.0f};
+  NSArray<KKBezierPath *> *paths = @[];
+
+  if (pluginState.length >= sizeof(CanvasStrokeParams)) {
+    memcpy(&strokeParams, pluginState.bytes, sizeof(CanvasStrokeParams));
+    if (pluginState.length > sizeof(CanvasStrokeParams)) {
+      NSData *blobData = [pluginState
+          subdataWithRange:NSMakeRange(sizeof(CanvasStrokeParams),
+                                       pluginState.length -
+                                           sizeof(CanvasStrokeParams))];
+      NSString *blobStr = [[NSString alloc] initWithData:blobData
+                                                encoding:NSUTF8StringEncoding];
+      if (blobStr.length > 0) {
+        NSData *decoded = [[NSData alloc] initWithBase64EncodedString:blobStr
+                                                              options:0];
+        if (decoded)
+          paths = [KKBezierPath pathsFromBlob:decoded];
+      }
     }
   }
 
-  // Copy source to output via blit
   id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
   commandBuffer.label = @"Canvas Command Buffer";
   [commandBuffer enqueue];
@@ -121,120 +255,71 @@ static simd_float2 evaluateCubicBezierTangent(simd_float2 p0, simd_float2 p1,
     [blit endEncoding];
   }
 
-  // No path or too few points: just pass through source
-  if (!path || path.count < 2) {
+  BOOL hasDrawablePaths = NO;
+  for (KKBezierPath *p in paths) {
+    if (p.count >= 2) {
+      hasDrawablePaths = YES;
+      break;
+    }
+  }
+  if (!hasDrawablePaths) {
     [commandBuffer commit];
     [commandBuffer waitUntilCompleted];
     [cache returnCommandQueueToCache:commandQueue];
     return YES;
   }
 
-  // Second pass: draw strokes on top with blending
-  {
-    float strokeWidth = 8.0f;
-    float aaPadding = 1.0f;
-    float halfWidth = (strokeWidth / 2.0f) + aaPadding;
+  NSString *strokeKey = [NSString
+      stringWithFormat:@"%@_stroke_%lu", kPluginID, (unsigned long)pixelFormat];
+  id<MTLRenderPipelineState> strokePS =
+      [cache pipelineStateForPluginID:strokeKey
+                           registryID:registryID
+                          pixelFormat:pixelFormat];
+  if (!strokePS) {
+    id<MTLLibrary> library = [device newDefaultLibrary];
+    MTLRenderPipelineDescriptor *desc =
+        [[MTLRenderPipelineDescriptor alloc] init];
+    desc.vertexFunction = [library newFunctionWithName:@"strokeVertexShader"];
+    desc.fragmentFunction =
+        [library newFunctionWithName:@"strokeFragmentShader"];
+    desc.colorAttachments[0].pixelFormat = pixelFormat;
+    desc.colorAttachments[0].blendingEnabled = YES;
+    desc.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorOne;
+    desc.colorAttachments[0].destinationRGBBlendFactor =
+        MTLBlendFactorOneMinusSourceAlpha;
+    desc.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
+    desc.colorAttachments[0].destinationAlphaBlendFactor =
+        MTLBlendFactorOneMinusSourceAlpha;
+
+    NSError *error = nil;
+    strokePS = [device newRenderPipelineStateWithDescriptor:desc error:&error];
+    if (!strokePS) {
+      [cache returnCommandQueueToCache:commandQueue];
+      return NO;
+    }
+    [cache registerPipelineState:strokePS
+                     forPluginID:strokeKey
+                      registryID:registryID
+                     pixelFormat:pixelFormat];
+  }
+
+  simd_float4 color = {strokeParams.r, strokeParams.g, strokeParams.b, 1.0f};
+  simd_uint2 viewportSize = {(unsigned int)outputWidth,
+                             (unsigned int)outputHeight};
+
+  for (KKBezierPath *path in paths) {
+    if (path.count < 2)
+      continue;
 
     NSUInteger segsPerCurve = 128;
     NSUInteger curveCount = path.count - 1;
+    if (path.closed && path.count >= 2)
+      curveCount = path.count;
     NSUInteger maxVertices = curveCount * ((segsPerCurve + 1) * 2 + 2) + 2;
     CanvasVertex *vertices =
         (CanvasVertex *)malloc(maxVertices * sizeof(CanvasVertex));
-    NSUInteger vertexCount = 0;
-
-    for (NSUInteger c = 0; c < curveCount; c++) {
-      KKBezierPoint bp0 = [path pointAtIndex:c];
-      KKBezierPoint bp1 = [path pointAtIndex:c + 1];
-
-      simd_float2 a = {bp0.x, bp0.y};
-      simd_float2 cp1 = {bp0.x + bp0.outX, bp0.y + bp0.outY};
-      simd_float2 cp2 = {bp1.x + bp1.inX, bp1.y + bp1.inY};
-      simd_float2 b = {bp1.x, bp1.y};
-
-      if (c > 0 && vertexCount > 0) {
-        vertices[vertexCount] = vertices[vertexCount - 1];
-        vertexCount++;
-      }
-
-      for (NSUInteger i = 0; i <= segsPerCurve; i++) {
-        float t = (float)i / (float)segsPerCurve;
-        simd_float2 pos = evaluateCubicBezier(a, cp1, cp2, b, t);
-        simd_float2 tangent = evaluateCubicBezierTangent(a, cp1, cp2, b, t);
-        // Flip tangent Y to match pixel space (Y-down)
-        tangent.y = -tangent.y;
-
-        float len = simd_length(tangent);
-        if (len < 1e-6f)
-          tangent = (simd_float2){1.0f, 0.0f};
-        else
-          tangent /= len;
-
-        simd_float2 normal = {-tangent.y, tangent.x};
-
-        // Object space (0..1) to pixel space, then center
-        // Y is inverted: object space Y=0 is bottom, pixel space Y=0 is top
-        simd_float2 pixelPos = {pos.x * outputWidth,
-                                (1.0f - pos.y) * outputHeight};
-        simd_float2 centered = {pixelPos.x - outputWidth / 2.0f,
-                                pixelPos.y - outputHeight / 2.0f};
-
-        vertices[vertexCount].position = centered + normal * halfWidth;
-        vertices[vertexCount].edgeDistance = 1.0f;
-        vertexCount++;
-        vertices[vertexCount].position = centered - normal * halfWidth;
-        vertices[vertexCount].edgeDistance = -1.0f;
-        vertexCount++;
-      }
-
-      if (c < curveCount - 1) {
-        vertices[vertexCount] = vertices[vertexCount - 1];
-        vertexCount++;
-      }
-    }
-
-    // Build stroke pipeline with blending
-    NSString *strokeKey =
-        [NSString stringWithFormat:@"%@_stroke_%lu", kPluginID,
-                                   (unsigned long)pixelFormat];
-    id<MTLRenderPipelineState> strokePS =
-        [cache pipelineStateForPluginID:strokeKey
-                             registryID:registryID
-                            pixelFormat:pixelFormat];
-
-    if (!strokePS) {
-      id<MTLLibrary> library = [device newDefaultLibrary];
-      id<MTLFunction> vertFn =
-          [library newFunctionWithName:@"strokeVertexShader"];
-      id<MTLFunction> fragFn =
-          [library newFunctionWithName:@"strokeFragmentShader"];
-
-      MTLRenderPipelineDescriptor *desc =
-          [[MTLRenderPipelineDescriptor alloc] init];
-      desc.vertexFunction = vertFn;
-      desc.fragmentFunction = fragFn;
-      desc.colorAttachments[0].pixelFormat = pixelFormat;
-      desc.colorAttachments[0].blendingEnabled = YES;
-      desc.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorOne;
-      desc.colorAttachments[0].destinationRGBBlendFactor =
-          MTLBlendFactorOneMinusSourceAlpha;
-      desc.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
-      desc.colorAttachments[0].destinationAlphaBlendFactor =
-          MTLBlendFactorOneMinusSourceAlpha;
-
-      NSError *error = nil;
-      strokePS = [device newRenderPipelineStateWithDescriptor:desc
-                                                        error:&error];
-      if (!strokePS) {
-        free(vertices);
-        [cache returnCommandQueueToCache:commandQueue];
-        return NO;
-      }
-
-      [cache registerPipelineState:strokePS
-                       forPluginID:strokeKey
-                        registryID:registryID
-                       pixelFormat:pixelFormat];
-    }
+    NSUInteger vertexCount = tessellatePath(
+        path, strokeParams.strokeWidth, outputWidth, outputHeight, vertices);
 
     MTLRenderPassDescriptor *rpd =
         [MTLRenderPassDescriptor renderPassDescriptor];
@@ -244,24 +329,19 @@ static simd_float2 evaluateCubicBezierTangent(simd_float2 p0, simd_float2 p1,
 
     id<MTLRenderCommandEncoder> enc =
         [commandBuffer renderCommandEncoderWithDescriptor:rpd];
-
-    MTLViewport viewport = {0, 0, outputWidth, outputHeight, -1.0, 1.0};
-    [enc setViewport:viewport];
+    [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1, 1}];
     [enc setRenderPipelineState:strokePS];
 
-    simd_uint2 viewportSize = {(unsigned int)outputWidth,
-                               (unsigned int)outputHeight};
     id<MTLBuffer> vertexBuffer =
         [device newBufferWithBytes:vertices
                             length:vertexCount * sizeof(CanvasVertex)
                            options:MTLResourceStorageModeShared];
     [enc setVertexBuffer:vertexBuffer offset:0 atIndex:0];
     [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
-
+    [enc setFragmentBytes:&color length:sizeof(color) atIndex:0];
     [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
             vertexStart:0
             vertexCount:vertexCount];
-
     [enc endEncoding];
     free(vertices);
   }
@@ -269,7 +349,6 @@ static simd_float2 evaluateCubicBezierTangent(simd_float2 p0, simd_float2 p1,
   [commandBuffer commit];
   [commandBuffer waitUntilCompleted];
   [cache returnCommandQueueToCache:commandQueue];
-
   return YES;
 }
 
