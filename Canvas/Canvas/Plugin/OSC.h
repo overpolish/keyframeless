@@ -21,6 +21,7 @@
 @property(nonatomic, assign) BOOL dragIsPath;
 @property(nonatomic, assign) BOOL dragIsMarquee;
 @property(nonatomic, assign) BOOL dragIsSelection;
+@property(nonatomic, assign) BOOL dragDidDuplicate;
 @property(nonatomic, assign) BOOL dragIsRect;
 @property(nonatomic, assign) BOOL dragIsEllipse;
 @property(nonatomic, assign) BOOL dragIsLine;
