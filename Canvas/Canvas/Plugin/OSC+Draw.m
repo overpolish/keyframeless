@@ -304,7 +304,7 @@
 
   for (NSUInteger p = 0; p < self.paths.count; p++) {
     KKBezierPath *path = self.paths[p];
-    if (path.count == 0)
+    if (path.count == 0 || path.hidden)
       continue;
 
     BOOL isSelected = [self.selectedPathIndices containsIndex:p];

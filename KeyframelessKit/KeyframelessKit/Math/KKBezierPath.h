@@ -36,6 +36,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Whether the path was created as a rectangle (enables corner radius handles).
 @property(nonatomic, assign) BOOL isRect;
 
+/// Whether the path is hidden in the canvas.
+@property(nonatomic, assign) BOOL hidden;
+
 /// Per-corner radius fractions 0–1 (TL, TR, BR, BL). 0 = sharp, 1 = max.
 @property(nonatomic, assign) float cornerRadiusTL;
 @property(nonatomic, assign) float cornerRadiusTR;
