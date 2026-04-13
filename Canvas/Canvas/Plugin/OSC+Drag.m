@@ -276,6 +276,7 @@
   [rect insertAtIndex:2 position:(simd_float2){maxX, minY}];
   [rect insertAtIndex:3 position:(simd_float2){minX, minY}];
   rect.closed = YES;
+  rect.isRect = YES;
   [self.paths addObject:rect];
   self.activePathIndex = (NSInteger)self.paths.count - 1;
   [self.selectedPathIndices removeAllIndexes];
@@ -335,9 +336,10 @@
   [line insertAtIndex:0 position:a];
   [line insertAtIndex:1 position:b];
   [self.paths addObject:line];
-  self.activePathIndex = (NSInteger)self.paths.count - 1;
+  NSInteger lineIdx = (NSInteger)self.paths.count - 1;
+  self.activePathIndex = -1;
   [self.selectedPathIndices removeAllIndexes];
-  [self.selectedPathIndices addIndex:self.activePathIndex];
+  [self.selectedPathIndices addIndex:lineIdx];
   [self writePaths:self.paths];
 }
 

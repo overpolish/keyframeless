@@ -33,6 +33,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Whether the path forms a closed loop (last point connects to first).
 @property(nonatomic, assign) BOOL closed;
 
+/// Whether the path was created as a rectangle (enables corner radius handles).
+@property(nonatomic, assign) BOOL isRect;
+
 /// Per-corner radius fractions 0–1 (TL, TR, BR, BL). 0 = sharp, 1 = max.
 @property(nonatomic, assign) float cornerRadiusTL;
 @property(nonatomic, assign) float cornerRadiusTR;

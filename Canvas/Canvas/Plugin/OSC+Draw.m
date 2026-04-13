@@ -163,18 +163,7 @@
                      activePart:(NSInteger)activePart
                destinationImage:(FxImageTile *)dest
                          atTime:(CMTime)time {
-  if (!path.closed || path.count < 4)
-    return;
-  BOOL hasRadius = (path.cornerRadiusTL > 0 || path.cornerRadiusTR > 0 ||
-                    path.cornerRadiusBR > 0 || path.cornerRadiusBL > 0);
-  BOOL hasLinear = NO;
-  for (NSUInteger i = 0; i < path.count; i++) {
-    if ([path pointAtIndex:i].type == KKBezierPointLinear) {
-      hasLinear = YES;
-      break;
-    }
-  }
-  if (!hasLinear && !hasRadius)
+  if (!path.isRect)
     return;
   NSInteger crParts[4] = {kOSCCornerRadiusTL, kOSCCornerRadiusTR,
                           kOSCCornerRadiusBR, kOSCCornerRadiusBL};
