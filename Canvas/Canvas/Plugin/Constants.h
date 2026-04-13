@@ -15,6 +15,8 @@ static const UInt32 kParamStrokeWidth = 101;
 static const UInt32 kParamStrokeColor = 102;
 static const UInt32 kParamLayerList = 103;
 
+void KKCanvasRefreshLayerList(NSUInteger pathCount);
+
 // OSC part IDs
 static const NSInteger kOSCCanvas = 1;
 static const NSInteger kOSCToolbarCursor = 2;
