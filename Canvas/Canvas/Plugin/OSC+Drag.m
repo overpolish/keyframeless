@@ -211,6 +211,8 @@
       return;
     simd_float2 objPos =
         [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+    if (modifiers & kFxModifierKey_SHIFT)
+      objPos = [self shiftConstrainedPosition:objPos];
     simd_float2 delta = objPos - self.dragOrigin;
     BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
     if (isCursorMode && (modifiers & kFxModifierKey_OPTION) &&
