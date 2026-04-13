@@ -165,6 +165,8 @@
                          atTime:(CMTime)time {
   if (!path.closed || path.count < 4)
     return;
+  BOOL hasRadius = (path.cornerRadiusTL > 0 || path.cornerRadiusTR > 0 ||
+                    path.cornerRadiusBR > 0 || path.cornerRadiusBL > 0);
   BOOL hasLinear = NO;
   for (NSUInteger i = 0; i < path.count; i++) {
     if ([path pointAtIndex:i].type == KKBezierPointLinear) {
@@ -172,7 +174,7 @@
       break;
     }
   }
-  if (!hasLinear)
+  if (!hasLinear && !hasRadius)
     return;
   NSInteger crParts[4] = {kOSCCornerRadiusTL, kOSCCornerRadiusTR,
                           kOSCCornerRadiusBR, kOSCCornerRadiusBL};
