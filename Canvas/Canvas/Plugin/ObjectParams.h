@@ -41,6 +41,21 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
   path.strokeR = (float)r;
   path.strokeG = (float)g;
   path.strokeB = (float)b;
+
+  BOOL fillOn = NO;
+  [paramGetAPI getBoolValue:&fillOn
+              fromParameter:kParamFillEnabled
+                     atTime:kCMTimeZero];
+  double fr = 1.0, fg = 1.0, fb = 1.0;
+  [paramGetAPI getRedValue:&fr
+                greenValue:&fg
+                 blueValue:&fb
+             fromParameter:kParamFillColor
+                    atTime:kCMTimeZero];
+  path.fillEnabled = fillOn;
+  path.fillR = (float)fr;
+  path.fillG = (float)fg;
+  path.fillB = (float)fb;
 }
 
 /// Write a path's per-object values to FxPlug params and show the rows.
@@ -60,6 +75,19 @@ KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                  blueValue:path.strokeB
                toParameter:kParamStrokeColor
                     atTime:kCMTimeZero];
+
+  [paramSetAPI setParameterFlags:kFxParameterFlag_NOT_ANIMATABLE
+                     toParameter:kParamFillEnabled];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_DEFAULT
+                     toParameter:kParamFillColor];
+  [paramSetAPI setBoolValue:path.fillEnabled
+                toParameter:kParamFillEnabled
+                     atTime:kCMTimeZero];
+  [paramSetAPI setRedValue:path.fillR
+                greenValue:path.fillG
+                 blueValue:path.fillB
+               toParameter:kParamFillColor
+                    atTime:kCMTimeZero];
 }
 
 /// Hide all per-object param rows.
@@ -70,14 +98,8 @@ KKHideObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
                      toParameter:kParamStrokeWidth];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamStrokeColor];
-}
-
-/// Patch per-object params from a CanvasStrokeParams struct onto a path.
-/// Used by pluginState: where params are already read into a struct.
-static inline void KKStrokeParamsToPath(float strokeWidth, float r, float g,
-                                        float b, KKBezierPath *_Nonnull path) {
-  path.strokeWidth = strokeWidth;
-  path.strokeR = r;
-  path.strokeG = g;
-  path.strokeB = b;
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamFillEnabled];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamFillColor];
 }

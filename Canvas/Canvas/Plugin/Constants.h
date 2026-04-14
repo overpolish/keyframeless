@@ -19,6 +19,8 @@ static const UInt32 kParamStrokeWidth = 101;
 static const UInt32 kParamStrokeColor = 102;
 static const UInt32 kParamLayerList = 103;
 static const UInt32 kParamInstanceID = 104;
+static const UInt32 kParamFillEnabled = 105;
+static const UInt32 kParamFillColor = 106;
 
 @protocol PROAPIAccessing;
 NSString *_Nullable KKLayerUUIDForAPI(id<PROAPIAccessing> _Nonnull api);

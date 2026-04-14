@@ -133,20 +133,53 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
     KKBezierPath *path = self.paths[p];
     if (path.hidden || path.locked || path.isGroup)
       continue;
-    double hitR = MAX(path.strokeWidth * 0.5 + 4.0, 12.0);
+
     NSUInteger segCount = path.count - 1;
     if (path.closed && path.count >= 2)
       segCount = path.count;
+
+    // Sample outline points for both stroke and fill hit testing.
+    NSUInteger totalSamples = segCount * 64 + segCount;
+    CGPoint *outline = malloc(totalSamples * sizeof(CGPoint));
+    NSUInteger oc = 0;
     for (NSUInteger c = 0; c < segCount; c++) {
       NSUInteger nextIdx = (c + 1) % path.count;
       for (NSUInteger s = 0; s <= 64; s++) {
         float t = (float)s / 64.0f;
         simd_float2 pos = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
-        CGPoint cur = [self canvasPointFromObjectPoint:pos];
-        if (hypot(x - cur.x, y - cur.y) < hitR)
-          return (NSInteger)p;
+        outline[oc++] = [self canvasPointFromObjectPoint:pos];
       }
     }
+
+    // Stroke hit test: distance to outline.
+    double hitR = MAX(path.strokeWidth * 0.5 + 4.0, 12.0);
+    for (NSUInteger i = 0; i < oc; i++) {
+      if (hypot(x - outline[i].x, y - outline[i].y) < hitR) {
+        free(outline);
+        return (NSInteger)p;
+      }
+    }
+
+    // Fill hit test: point-in-polygon ray casting for filled closed paths.
+    if (path.fillEnabled && path.closed && oc >= 3) {
+      NSUInteger crossings = 0;
+      for (NSUInteger i = 0; i < oc; i++) {
+        NSUInteger j = (i + 1) % oc;
+        CGFloat yi = outline[i].y, yj = outline[j].y;
+        if ((yi <= y && yj > y) || (yj <= y && yi > y)) {
+          CGFloat xi = outline[i].x, xj = outline[j].x;
+          CGFloat intersectX = xi + (y - yi) / (yj - yi) * (xj - xi);
+          if (x < intersectX)
+            crossings++;
+        }
+      }
+      if (crossings & 1) {
+        free(outline);
+        return (NSInteger)p;
+      }
+    }
+
+    free(outline);
   }
   return -1;
 }

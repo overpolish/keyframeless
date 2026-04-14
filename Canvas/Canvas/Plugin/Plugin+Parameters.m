@@ -59,6 +59,19 @@
                           defaultBlue:0.0
                        parameterFlags:kFxParameterFlag_HIDDEN];
 
+  [paramAPI addToggleButtonWithName:@"Fill"
+                        parameterID:kParamFillEnabled
+                       defaultValue:NO
+                     parameterFlags:kFxParameterFlag_HIDDEN |
+                                    kFxParameterFlag_NOT_ANIMATABLE];
+
+  [paramAPI addColorParameterWithName:@"Fill Color"
+                          parameterID:kParamFillColor
+                           defaultRed:1.0
+                         defaultGreen:1.0
+                          defaultBlue:1.0
+                       parameterFlags:kFxParameterFlag_HIDDEN];
+
   [paramAPI addStringParameterWithName:@"InstanceID"
                            parameterID:kParamInstanceID
                           defaultValue:@""

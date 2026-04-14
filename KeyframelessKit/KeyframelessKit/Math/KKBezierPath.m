@@ -107,16 +107,28 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
           extOffset += pgidLen;
         }
       }
-      // Stroke data: marker 0xAA + 4 floats (width, r, g, b)
-      if (data.length >= extOffset + 1 + 4 * sizeof(float) &&
-          bytes[extOffset] == 0xAA) {
-        extOffset += 1;
-        float strokeData[4];
-        memcpy(strokeData, bytes + extOffset, 4 * sizeof(float));
-        path->_strokeWidth = strokeData[0];
-        path->_strokeR = strokeData[1];
-        path->_strokeG = strokeData[2];
-        path->_strokeB = strokeData[3];
+      // Per-object properties: marker 0xAA + version + data.
+      if (data.length >= extOffset + 2 && bytes[extOffset] == 0xAA) {
+        uint8_t ver = bytes[extOffset + 1];
+        size_t hdr = extOffset + 2;
+        if (ver >= 1 && data.length >= hdr + 4 * sizeof(float)) {
+          float sd[4];
+          memcpy(sd, bytes + hdr, 4 * sizeof(float));
+          path->_strokeWidth = sd[0];
+          path->_strokeR = sd[1];
+          path->_strokeG = sd[2];
+          path->_strokeB = sd[3];
+          hdr += 4 * sizeof(float);
+        }
+        if (ver >= 1 && data.length >= hdr + 1 + 3 * sizeof(float)) {
+          path->_fillEnabled = bytes[hdr] != 0;
+          hdr += 1;
+          float fd[3];
+          memcpy(fd, bytes + hdr, 3 * sizeof(float));
+          path->_fillR = fd[0];
+          path->_fillG = fd[1];
+          path->_fillB = fd[2];
+        }
       }
     } else if (data.length >= oldExpected && count > 0) {
       path->_count = count;
@@ -177,11 +189,18 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   [data appendBytes:&pgidLen length:2];
   if (pgidLen > 0)
     [data appendData:parentGroupIDData];
-  // Stroke data: marker 0xAA + strokeWidth(float) + r,g,b(3 floats)
-  uint8_t strokeMarker = 0xAA;
-  [data appendBytes:&strokeMarker length:1];
+  // Per-object properties block: marker 0xAA + version + data.
+  // v1: stroke (4 floats) + fill enabled (1 byte) + fill color (3 floats).
+  uint8_t propMarker = 0xAA;
+  uint8_t propVersion = 1;
+  [data appendBytes:&propMarker length:1];
+  [data appendBytes:&propVersion length:1];
   float strokeData[4] = {_strokeWidth, _strokeR, _strokeG, _strokeB};
   [data appendBytes:strokeData length:4 * sizeof(float)];
+  uint8_t fillFlag = _fillEnabled ? 1 : 0;
+  [data appendBytes:&fillFlag length:1];
+  float fillData[3] = {_fillR, _fillG, _fillB};
+  [data appendBytes:fillData length:3 * sizeof(float)];
   return data;
 }
 
@@ -243,6 +262,10 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     _strokeR = 1.0f;
     _strokeG = 0.0f;
     _strokeB = 0.0f;
+    _fillEnabled = NO;
+    _fillR = 1.0f;
+    _fillG = 1.0f;
+    _fillB = 1.0f;
   }
   return self;
 }

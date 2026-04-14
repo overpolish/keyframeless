@@ -68,6 +68,14 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, assign) float strokeG;
 @property(nonatomic, assign) float strokeB;
 
+/// Whether this path has a solid fill (default NO).
+@property(nonatomic, assign) BOOL fillEnabled;
+
+/// Fill color components (default white: 1, 1, 1).
+@property(nonatomic, assign) float fillR;
+@property(nonatomic, assign) float fillG;
+@property(nonatomic, assign) float fillB;
+
 + (instancetype)pathWithData:(nullable NSData *)data;
 - (NSData *)dataRepresentation;
 
