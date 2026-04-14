@@ -118,6 +118,14 @@ NS_ASSUME_NONNULL_BEGIN
            halfWidth:(float)halfWidth
     destinationImage:(FxImageTile *)destinationImage;
 
+/// Draws a connected strip of antialiased line segments in a single render
+/// pass.
+- (void)drawLineStripWithPoints:(const CGPoint *)points
+                          count:(NSUInteger)count
+                          color:(simd_float4)color
+                      halfWidth:(float)halfWidth
+               destinationImage:(FxImageTile *)destinationImage;
+
 /// Low-level Metal setup/teardown. Use drawQuadForDestinationImage: for
 /// standard quad rendering. This is for custom encoder commands. Clears the
 /// destination.
