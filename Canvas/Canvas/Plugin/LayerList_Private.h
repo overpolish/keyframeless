@@ -22,6 +22,8 @@ static const CGFloat kLayerGroupIndent __attribute__((unused)) = 18.0;
 
 static NSString *const kLayerDragType __attribute__((unused)) =
     @"com.overpolish.canvas.layerDrag";
+static NSString *const kLayerDuplicateDragType __attribute__((unused)) =
+    @"com.overpolish.canvas.layerDuplicateDrag";
 
 @class KKLayerActionTarget;
 
@@ -29,6 +31,9 @@ static NSString *const kLayerDragType __attribute__((unused)) =
 - (void)_reorderFromIndices:(NSIndexSet *)indices
                     toIndex:(NSUInteger)target
               parentGroupID:(NSString *)parentGroupID;
+- (void)_duplicateFromIndices:(NSIndexSet *)indices
+                      toIndex:(NSUInteger)target
+                parentGroupID:(NSString *)parentGroupID;
 - (void)renameRow:(NSMenuItem *)sender;
 - (void)groupSelection:(NSMenuItem *)sender;
 @end
@@ -78,6 +83,9 @@ static NSString *const kLayerDragType __attribute__((unused)) =
 - (void)_reorderFromIndices:(NSIndexSet *)indices
                     toIndex:(NSUInteger)target
               parentGroupID:(NSString *)parentGroupID;
+- (void)_duplicateFromIndices:(NSIndexSet *)indices
+                      toIndex:(NSUInteger)target
+                parentGroupID:(NSString *)parentGroupID;
 @end
 
 extern BOOL sLayerForceRefresh;

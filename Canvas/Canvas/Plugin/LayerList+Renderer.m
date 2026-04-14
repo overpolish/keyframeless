@@ -39,6 +39,19 @@ void KKCanvasUpdateSelection(NSIndexSet *indices) {
   });
 }
 
+static BOOL isSoloActive(NSUInteger count, NSArray<NSNumber *> *hiddenStates) {
+  BOOL anyVis = NO, anyHid = NO;
+  for (NSUInteger i = 0; i < count; i++) {
+    if (hiddenStates[i].boolValue)
+      anyHid = YES;
+    else
+      anyVis = YES;
+    if (anyVis && anyHid)
+      return YES;
+  }
+  return NO;
+}
+
 static NSUInteger layerListHash(NSUInteger count,
                                 NSArray<KKBezierPath *> *paths,
                                 NSIndexSet *selection) {
@@ -127,12 +140,11 @@ static NSMenu *buildContextMenu(NSUInteger index, BOOL isGroup,
   return menu;
 }
 
-static KKLayerRow *buildRow(NSUInteger index, BOOL isGroup, BOOL isCollapsed,
-                            BOOL isHidden, BOOL isLocked, BOOL isSelected,
-                            NSString *name, NSString *gid, NSString *parentGID,
-                            NSUInteger depth, BOOL multiSelect,
-                            NSImageSymbolConfiguration *symConfig,
-                            KKLayerActionTarget *target) {
+static KKLayerRow *
+buildRow(NSUInteger index, BOOL isGroup, BOOL isCollapsed, BOOL isHidden,
+         BOOL isLocked, BOOL isSelected, BOOL isSolo, NSString *name,
+         NSString *gid, NSString *parentGID, NSUInteger depth, BOOL multiSelect,
+         NSImageSymbolConfiguration *symConfig, KKLayerActionTarget *target) {
   NSMutableArray<NSView *> *views = [NSMutableArray array];
 
   if (isGroup) {
@@ -144,7 +156,8 @@ static KKLayerRow *buildRow(NSUInteger index, BOOL isGroup, BOOL isCollapsed,
 
   NSString *eyeName = isHidden ? @"eye.slash" : @"eye.fill";
   NSColor *eyeColor =
-      isHidden ? [NSColor tertiaryLabelColor] : [NSColor secondaryLabelColor];
+      isHidden ? [NSColor tertiaryLabelColor]
+               : (isSolo ? [NSColor warning] : [NSColor secondaryLabelColor]);
   [views addObject:KKIconButton(eyeName, symConfig, target,
                                 @selector(toggleVisibility:), index, eyeColor)];
 
@@ -259,6 +272,7 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
     }
 
     BOOL multiSelect = capturedSelection.count > 1;
+    BOOL solo = isSoloActive(pathCount, hiddenStates);
     NSUInteger visRow = 0;
 
     for (NSUInteger i = 0; i < pathCount; i++) {
@@ -272,11 +286,11 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
       NSUInteger depth = groupDepth(i, parentGroupIDs, groupIndexMap);
       NSString *pgid = parentGroupIDs[i].length > 0 ? parentGroupIDs[i] : nil;
 
-      KKLayerRow *row =
-          buildRow(i, isGroup, collapsed, hiddenStates[i].boolValue,
-                   lockedStates[i].boolValue,
-                   [capturedSelection containsIndex:i], names[i], groupIDs[i],
-                   pgid, depth, multiSelect, symConfig, container.actionTarget);
+      KKLayerRow *row = buildRow(
+          i, isGroup, collapsed, hiddenStates[i].boolValue,
+          lockedStates[i].boolValue, [capturedSelection containsIndex:i],
+          solo && !hiddenStates[i].boolValue, names[i], groupIDs[i], pgid,
+          depth, multiSelect, symConfig, container.actionTarget);
 
       [content addSubview:row];
       [row.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
