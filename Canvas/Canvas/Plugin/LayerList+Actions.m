@@ -53,6 +53,29 @@
   }
 }
 
+// Returns indices of all ancestor group rows for the given path index.
+- (NSIndexSet *)_ancestorIndicesForIndex:(NSUInteger)idx
+                                   paths:(NSArray<KKBezierPath *> *)paths {
+  NSMutableIndexSet *result = [NSMutableIndexSet indexSet];
+  NSString *pid = paths[idx].parentGroupID;
+  NSUInteger guard = 0;
+  while (pid.length > 0 && guard < kGroupDepthGuard) {
+    BOOL found = NO;
+    for (NSUInteger i = 0; i < paths.count; i++) {
+      if (paths[i].isGroup && [paths[i].groupID isEqualToString:pid]) {
+        [result addIndex:i];
+        pid = paths[i].parentGroupID;
+        found = YES;
+        break;
+      }
+    }
+    if (!found)
+      break;
+    guard++;
+  }
+  return [result copy];
+}
+
 - (void)_toggleGroupProperty:(NSUInteger)idx
                        paths:(NSMutableArray<KKBezierPath *> *)paths
                        apply:(void (^)(KKBezierPath *))apply {
@@ -74,13 +97,12 @@
     if (idx >= paths.count)
       return;
     if (optionHeld) {
-      NSIndexSet *soloSet = [NSIndexSet indexSetWithIndex:idx];
+      NSMutableIndexSet *soloMut = [NSMutableIndexSet indexSetWithIndex:idx];
       if (paths[idx].isGroup)
-        soloSet = ({
-          NSMutableIndexSet *s = [soloSet mutableCopy];
-          [s addIndexes:KKDescendantIndices(idx, paths)];
-          [s copy];
-        });
+        [soloMut addIndexes:KKDescendantIndices(idx, paths)];
+      // Reveal ancestor groups so the solo'd layer is actually visible.
+      [soloMut addIndexes:[self _ancestorIndicesForIndex:idx paths:paths]];
+      NSIndexSet *soloSet = [soloMut copy];
       BOOL alreadySolo = YES;
       for (NSUInteger i = 0; i < paths.count; i++) {
         if ([soloSet containsIndex:i] && paths[i].hidden) {
@@ -95,13 +117,22 @@
       BOOL hideOthers = !alreadySolo;
       for (NSUInteger i = 0; i < paths.count; i++)
         paths[i].hidden = hideOthers ? ![soloSet containsIndex:i] : NO;
+      KKLayerStateForUUID(_instanceUUID).soloActive = hideOthers;
     } else {
+      KKLayerStateForUUID(_instanceUUID).soloActive = NO;
       BOOL newVal = !paths[idx].hidden;
       [self _toggleGroupProperty:idx
                            paths:paths
                            apply:^(KKBezierPath *p) {
                              p.hidden = newVal;
                            }];
+      // When making visible, also unhide ancestor groups so the layer renders.
+      if (!newVal) {
+        NSIndexSet *ancestors = [self _ancestorIndicesForIndex:idx paths:paths];
+        [ancestors enumerateIndexesUsingBlock:^(NSUInteger ai, BOOL *stop) {
+          paths[ai].hidden = NO;
+        }];
+      }
     }
   }];
 }
@@ -117,6 +148,13 @@
                          apply:^(KKBezierPath *p) {
                            p.locked = newVal;
                          }];
+    // When unlocking, also unlock ancestor groups so the layer is interactive.
+    if (!newVal) {
+      NSIndexSet *ancestors = [self _ancestorIndicesForIndex:idx paths:paths];
+      [ancestors enumerateIndexesUsingBlock:^(NSUInteger ai, BOOL *stop) {
+        paths[ai].locked = NO;
+      }];
+    }
   }];
 }
 

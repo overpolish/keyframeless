@@ -20,52 +20,55 @@ static const CGFloat kLayerSelectionAlpha __attribute__((unused)) = 0.15;
 static const CGFloat kLayerBorderAlpha __attribute__((unused)) = 0.05;
 static const CGFloat kLayerGroupIndent __attribute__((unused)) = 18.0;
 
-static NSString *const kLayerDragType __attribute__((unused)) =
+static NSString *const _Nonnull kLayerDragType __attribute__((unused)) =
     @"com.overpolish.canvas.layerDrag";
-static NSString *const kLayerDuplicateDragType __attribute__((unused)) =
-    @"com.overpolish.canvas.layerDuplicateDrag";
+static NSString *const _Nonnull kLayerDuplicateDragType
+    __attribute__((unused)) = @"com.overpolish.canvas.layerDuplicateDrag";
 
 @class KKLayerActionTarget;
 @class KKLayerListContainer;
+
+NS_ASSUME_NONNULL_BEGIN
 
 @interface KKLayerInstanceState : NSObject
 @property(nonatomic) BOOL forceRefresh;
 @property(nonatomic) BOOL isEditing;
 @property(nonatomic) BOOL isDragging;
-@property(nonatomic, copy) NSIndexSet *selectedIndices;
-@property(nonatomic, copy) NSIndexSet *uiSelection;
-@property(nonatomic, copy) NSIndexSet *pendingOSCSelection;
-@property(nonatomic, copy) NSSet<NSString *> *collapsedGroupIDs;
-@property(nonatomic, weak) KKLayerListContainer *container;
+@property(nonatomic) BOOL soloActive;
+@property(nonatomic, copy, nullable) NSIndexSet *selectedIndices;
+@property(nonatomic, copy, nullable) NSIndexSet *uiSelection;
+@property(nonatomic, copy, nullable) NSIndexSet *pendingOSCSelection;
+@property(nonatomic, copy, nullable) NSSet<NSString *> *collapsedGroupIDs;
+@property(nonatomic, weak, nullable) KKLayerListContainer *container;
 @property(nonatomic) NSUInteger listHash;
 @end
 
-NSString *KKLayerUUIDForAPI(id<PROAPIAccessing> api);
-KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid);
+NSString *_Nullable KKLayerUUIDForAPI(id<PROAPIAccessing> api);
+KKLayerInstanceState *_Nullable KKLayerStateForUUID(NSString *_Nullable uuid);
 
 @protocol KKLayerReorder
 - (void)_reorderFromIndices:(NSIndexSet *)indices
                     toIndex:(NSUInteger)target
-              parentGroupID:(NSString *)parentGroupID;
+              parentGroupID:(nullable NSString *)parentGroupID;
 - (void)_duplicateFromIndices:(NSIndexSet *)indices
                       toIndex:(NSUInteger)target
-                parentGroupID:(NSString *)parentGroupID;
+                parentGroupID:(nullable NSString *)parentGroupID;
 - (void)renameRow:(NSMenuItem *)sender;
 - (void)groupSelection:(NSMenuItem *)sender;
 @end
 
 @interface KKLayerRow : NSStackView
 @property(nonatomic) NSUInteger rowIndex;
-@property(nonatomic, copy) NSString *groupID;
-@property(nonatomic, copy) NSString *parentGroupID;
+@property(nonatomic, copy, nullable) NSString *groupID;
+@property(nonatomic, copy, nullable) NSString *parentGroupID;
 - (NSImage *)snapshot;
 @end
 
 @interface KKLayerContentView : NSView
-@property(nonatomic, weak) id<KKLayerReorder> actionTarget;
+@property(nonatomic, weak, nullable) id<KKLayerReorder> actionTarget;
 @property(nonatomic) NSInteger dropFlatIndex;
 @property(nonatomic) CGFloat dropIndent;
-@property(nonatomic, copy) NSString *dropParentGroupID;
+@property(nonatomic, copy, nullable) NSString *dropParentGroupID;
 @end
 
 @interface KKLayerListContainer : NSView
@@ -81,11 +84,11 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid);
 @end
 
 @interface KKLayerButton : NSButton <NSDraggingSource>
-@property(nonatomic, weak) KKLayerRow *parentRow;
+@property(nonatomic, weak, nullable) KKLayerRow *parentRow;
 @end
 
 @interface KKLayerActionTarget : NSObject <NSTextFieldDelegate, KKLayerReorder>
-@property(nonatomic, weak) id<PROAPIAccessing> apiManager;
+@property(nonatomic, weak, nullable) id<PROAPIAccessing> apiManager;
 @property(nonatomic, copy) NSString *instanceUUID;
 - (void)toggleVisibility:(NSButton *)sender;
 - (void)toggleLock:(NSButton *)sender;
@@ -99,17 +102,17 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid);
 - (void)selectRow:(NSButton *)sender;
 - (void)_reorderFromIndices:(NSIndexSet *)indices
                     toIndex:(NSUInteger)target
-              parentGroupID:(NSString *)parentGroupID;
+              parentGroupID:(nullable NSString *)parentGroupID;
 - (void)_duplicateFromIndices:(NSIndexSet *)indices
                       toIndex:(NSUInteger)target
-                parentGroupID:(NSString *)parentGroupID;
+                parentGroupID:(nullable NSString *)parentGroupID;
 @end
 
 NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
                                 NSArray<KKBezierPath *> *paths);
 
 void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
-                              NSArray<KKBezierPath *> *paths);
+                              NSArray<KKBezierPath *> *_Nullable paths);
 void KKCanvasUpdateSelection(NSString *uuid, NSIndexSet *indices);
 NSIndexSet *_Nullable KKCanvasConsumePendingSelection(NSString *uuid);
 
@@ -140,8 +143,9 @@ static inline NSButton *KKIconButton(NSString *symbolName,
   return btn;
 }
 
-static inline NSMenuItem *KKMenuItem(NSString *title, NSString *symbolName,
-                                     id target, SEL action, NSUInteger tag) {
+static inline NSMenuItem *KKMenuItem(NSString *title,
+                                     NSString *_Nullable symbolName, id target,
+                                     SEL action, NSUInteger tag) {
   NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:title
                                                 action:action
                                          keyEquivalent:@""];
@@ -152,3 +156,5 @@ static inline NSMenuItem *KKMenuItem(NSString *title, NSString *symbolName,
                            accessibilityDescription:nil];
   return item;
 }
+
+NS_ASSUME_NONNULL_END

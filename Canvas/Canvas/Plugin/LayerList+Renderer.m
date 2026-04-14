@@ -41,19 +41,6 @@ void KKCanvasUpdateSelection(NSString *uuid, NSIndexSet *indices) {
   });
 }
 
-static BOOL isSoloActive(NSUInteger count, NSArray<NSNumber *> *hiddenStates) {
-  BOOL anyVis = NO, anyHid = NO;
-  for (NSUInteger i = 0; i < count; i++) {
-    if (hiddenStates[i].boolValue)
-      anyHid = YES;
-    else
-      anyVis = YES;
-    if (anyVis && anyHid)
-      return YES;
-  }
-  return NO;
-}
-
 static NSUInteger layerListHash(NSUInteger count,
                                 NSArray<KKBezierPath *> *paths,
                                 NSIndexSet *selection) {
@@ -278,7 +265,7 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
     }
 
     BOOL multiSelect = capturedSelection.count > 1;
-    BOOL solo = isSoloActive(pathCount, hiddenStates);
+    BOOL solo = st.soloActive;
     NSUInteger visRow = 0;
 
     for (NSUInteger i = 0; i < pathCount; i++) {
