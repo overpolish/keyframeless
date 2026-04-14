@@ -45,9 +45,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// Whether this entry is a group (contains no points, acts as a folder).
 @property(nonatomic, assign) BOOL isGroup;
 
-/// Number of subsequent paths in the flat array that are children of this
-/// group.
-@property(nonatomic, assign) NSUInteger childCount;
+/// Unique identifier for this group (set on group entries only).
+@property(nonatomic, copy, nullable) NSString *groupID;
+
+/// The groupID of this item's parent group, or nil if top-level.
+@property(nonatomic, copy, nullable) NSString *parentGroupID;
 
 /// Display name for the layer list.
 @property(nonatomic, copy, nullable) NSString *name;

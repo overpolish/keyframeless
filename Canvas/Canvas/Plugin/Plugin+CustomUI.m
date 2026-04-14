@@ -16,15 +16,27 @@ static const CGFloat kRowHeight = 24.0;
 static const CGFloat kRowSpacing = 1.0;
 
 @protocol KKLayerReorder
-- (void)_reorderFromIndices:(NSIndexSet *)indices toIndex:(NSUInteger)target;
+- (void)_reorderFromIndices:(NSIndexSet *)indices
+                    toIndex:(NSUInteger)target
+              parentGroupID:(NSString *)parentGroupID;
 - (void)renameRow:(NSMenuItem *)sender;
+- (void)groupSelection:(NSMenuItem *)sender;
 @end
 
 @class KKLayerActionTarget;
 
+@interface KKLayerRow : NSStackView
+@property(nonatomic) NSUInteger rowIndex;
+@property(nonatomic, copy) NSString *groupID;
+@property(nonatomic, copy) NSString *parentGroupID;
+- (NSImage *)snapshot;
+@end
+
 @interface KKLayerContentView : NSView
 @property(nonatomic, weak) id<KKLayerReorder> actionTarget;
-@property(nonatomic) NSInteger dropIndex;
+@property(nonatomic) NSInteger dropFlatIndex;
+@property(nonatomic) CGFloat dropIndent;
+@property(nonatomic, copy) NSString *dropParentGroupID;
 @end
 
 @implementation KKLayerContentView {
@@ -38,7 +50,7 @@ static const CGFloat kRowSpacing = 1.0;
 - (instancetype)initWithFrame:(NSRect)frame {
   self = [super initWithFrame:frame];
   if (self) {
-    self.dropIndex = -1;
+    self.dropFlatIndex = -1;
     [self registerForDraggedTypes:@[ @"com.overpolish.canvas.layerDrag" ]];
   }
   return self;
@@ -51,23 +63,116 @@ static const CGFloat kRowSpacing = 1.0;
 - (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)sender {
   NSPoint loc = [self convertPoint:sender.draggingLocation fromView:nil];
   CGFloat stride = kRowHeight + kRowSpacing;
-  NSInteger idx = (NSInteger)round((loc.y - kVerticalPad) / stride);
-  NSUInteger rowCount = 0;
-  for (NSView *v in self.subviews) {
-    if ([v isKindOfClass:NSClassFromString(@"KKLayerRow")])
-      rowCount++;
-  }
-  idx = MAX(0, MIN(idx, (NSInteger)rowCount));
+  NSInteger visIdx = (NSInteger)round((loc.y - kVerticalPad) / stride);
 
-  if (idx != self.dropIndex) {
-    self.dropIndex = idx;
-    [self _updateDropIndicator];
+  // Build sorted list of visible rows
+  NSMutableArray<KKLayerRow *> *rows = [NSMutableArray array];
+  for (NSView *v in self.subviews) {
+    if ([v isKindOfClass:[KKLayerRow class]] && !v.hidden)
+      [rows addObject:(KKLayerRow *)v];
+  }
+  [rows sortUsingComparator:^NSComparisonResult(KKLayerRow *a, KKLayerRow *b) {
+    return a.rowIndex < b.rowIndex ? NSOrderedAscending : NSOrderedDescending;
+  }];
+
+  visIdx = MAX(0, MIN(visIdx, (NSInteger)rows.count));
+
+  NSInteger flatIdx;
+  CGFloat indent = 0;
+  NSString *parentGID = nil;
+
+  // Which row is the cursor actually over?
+  CGFloat rowY = loc.y - kVerticalPad;
+  CGFloat fractional = rowY / stride;
+  NSInteger hoverIdx = (NSInteger)fractional;
+  BOOL inTopHalf = (fractional - floor(fractional)) < 0.5;
+  hoverIdx = MAX(0, MIN(hoverIdx, (NSInteger)rows.count - 1));
+
+  KKLayerRow *hoverRow = (rows.count > 0) ? rows[(NSUInteger)hoverIdx] : nil;
+
+  // Get dragged indices to prevent dropping into self
+  NSData *dragData = [sender.draggingPasteboard
+      dataForType:@"com.overpolish.canvas.layerDrag"];
+  NSIndexSet *dragIndices =
+      dragData ? [NSKeyedUnarchiver unarchivedObjectOfClass:[NSIndexSet class]
+                                                   fromData:dragData
+                                                      error:nil]
+               : nil;
+
+  if (hoverRow) {
+    if (inTopHalf) {
+      flatIdx = (NSInteger)hoverRow.rowIndex;
+    } else {
+      flatIdx = (NSInteger)hoverRow.rowIndex + 1;
+    }
+    if (hoverRow.groupID && !inTopHalf)
+      parentGID = hoverRow.groupID;
+    else
+      parentGID = hoverRow.parentGroupID;
+
+    KKLog *log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
+    [log info:@"drag: hover=%lu topHalf=%d groupID=%@ parentGID=%@ "
+              @"dragIndices=%@",
+              (unsigned long)hoverRow.rowIndex, inTopHalf, hoverRow.groupID,
+              parentGID, dragIndices];
+
+    // Prevent dropping into a group that is being dragged
+    if (parentGID && dragIndices) {
+      // Walk the target parent chain — if any ancestor is being dragged,
+      // it would create a cycle
+      NSString *checkGID = parentGID;
+      NSUInteger guard = 0;
+      while (checkGID && guard < 20) {
+        guard++;
+        BOOL found = NO;
+        for (KKLayerRow *r in rows) {
+          if (r.groupID && [r.groupID isEqualToString:checkGID]) {
+            if ([dragIndices containsIndex:r.rowIndex]) {
+              // This group is being dragged — fall back to its parent
+              parentGID = r.parentGroupID;
+              checkGID = nil;
+            } else {
+              checkGID = r.parentGroupID;
+            }
+            found = YES;
+            break;
+          }
+        }
+        if (!found)
+          break;
+      }
+    }
+  } else {
+    flatIdx = 0;
+  }
+
+  // Calculate indent from parentGID depth
+  NSUInteger depthCount = 0;
+  NSString *pid = parentGID;
+  while (pid && depthCount < 20) {
+    depthCount++;
+    NSString *nextPid = nil;
+    for (KKLayerRow *r in rows) {
+      if ([r.groupID isEqualToString:pid]) {
+        nextPid = r.parentGroupID;
+        break;
+      }
+    }
+    pid = nextPid;
+  }
+  indent = depthCount * 18.0;
+
+  if (flatIdx != self.dropFlatIndex || fabs(indent - self.dropIndent) > 0.5) {
+    self.dropFlatIndex = flatIdx;
+    self.dropIndent = indent;
+    self.dropParentGroupID = parentGID;
+    [self _updateDropIndicatorAtVisRow:visIdx];
   }
   return NSDragOperationMove;
 }
 
 - (void)draggingExited:(id<NSDraggingInfo>)sender {
-  self.dropIndex = -1;
+  self.dropFlatIndex = -1;
   [self _removeDropIndicator];
 }
 
@@ -77,8 +182,8 @@ static const CGFloat kRowSpacing = 1.0;
 
 - (BOOL)performDragOperation:(id<NSDraggingInfo>)sender {
   [self _removeDropIndicator];
-  NSInteger targetIndex = self.dropIndex;
-  self.dropIndex = -1;
+  NSInteger targetIndex = self.dropFlatIndex;
+  self.dropFlatIndex = -1;
   if (targetIndex < 0)
     return NO;
 
@@ -94,12 +199,15 @@ static const CGFloat kRowSpacing = 1.0;
   if (!dragIndices || dragIndices.count == 0)
     return NO;
 
+  NSString *pgid = self.dropParentGroupID;
+  self.dropParentGroupID = nil;
   [self.actionTarget _reorderFromIndices:dragIndices
-                                 toIndex:(NSUInteger)targetIndex];
+                                 toIndex:(NSUInteger)targetIndex
+                           parentGroupID:pgid];
   return YES;
 }
 
-- (void)_updateDropIndicator {
+- (void)_updateDropIndicatorAtVisRow:(NSInteger)visRow {
   if (!_dropIndicator) {
     _dropIndicator = [[NSView alloc] initWithFrame:NSZeroRect];
     _dropIndicator.wantsLayer = YES;
@@ -107,9 +215,10 @@ static const CGFloat kRowSpacing = 1.0;
     _dropIndicator.layer.cornerRadius = 1.0;
   }
   CGFloat stride = kRowHeight + kRowSpacing;
-  CGFloat y = kVerticalPad + self.dropIndex * stride - 1.0;
+  CGFloat y = kVerticalPad + visRow * stride - 1.0;
+  CGFloat left = KKPaddingSM + self.dropIndent;
   _dropIndicator.frame =
-      NSMakeRect(KKPaddingSM, y, self.bounds.size.width - KKPaddingSM * 2, 2.0);
+      NSMakeRect(left, y, self.bounds.size.width - left - KKPaddingSM, 2.0);
   if (!_dropIndicator.superview)
     [self addSubview:_dropIndicator];
 }
@@ -117,6 +226,16 @@ static const CGFloat kRowSpacing = 1.0;
 - (void)_removeDropIndicator {
   [_dropIndicator removeFromSuperview];
   _dropIndicator = nil;
+}
+
+- (BOOL)performKeyEquivalent:(NSEvent *)event {
+  if (event.modifierFlags & NSEventModifierFlagCommand &&
+      [event.charactersIgnoringModifiers isEqualToString:@"g"]) {
+    NSMenuItem *fake = [[NSMenuItem alloc] init];
+    [self.actionTarget groupSelection:fake];
+    return YES;
+  }
+  return [super performKeyEquivalent:event];
 }
 
 @end
@@ -128,9 +247,29 @@ static NSString *const kLayerDragType = @"com.overpolish.canvas.layerDrag";
 static NSIndexSet *sSelectedIndices;
 static NSIndexSet *sUISelection;
 static NSIndexSet *sPendingOSCSelection;
-static NSIndexSet *sCollapsedGroups;
+static NSSet<NSString *> *sCollapsedGroupIDs;
 void KKCanvasRefreshLayerList(NSUInteger pathCount,
                               NSArray<KKBezierPath *> *paths);
+
+static NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
+                                       NSArray<KKBezierPath *> *paths) {
+  NSString *gid = paths[groupIdx].groupID;
+  if (!gid)
+    return [NSIndexSet indexSet];
+  NSMutableIndexSet *result = [NSMutableIndexSet indexSet];
+  NSMutableSet<NSString *> *groupIDs = [NSMutableSet setWithObject:gid];
+  for (NSUInteger i = 0; i < paths.count; i++) {
+    if (i == groupIdx)
+      continue;
+    if (paths[i].parentGroupID &&
+        [groupIDs containsObject:paths[i].parentGroupID]) {
+      [result addIndex:i];
+      if (paths[i].isGroup && paths[i].groupID)
+        [groupIDs addObject:paths[i].groupID];
+    }
+  }
+  return result;
+}
 
 @interface KKLayerListContainer : NSView
 @property(nonatomic, strong) NSScrollView *scrollView;
@@ -170,11 +309,6 @@ static __weak KKLayerListContainer *sLayerListContainer;
   return ok;
 }
 
-@end
-
-@interface KKLayerRow : NSStackView
-@property(nonatomic) NSUInteger rowIndex;
-- (NSImage *)snapshot;
 @end
 
 @implementation KKLayerRow
@@ -225,12 +359,9 @@ static __weak KKLayerListContainer *sLayerListContainer;
   if (!row)
     return;
 
-  NSIndexSet *sel = sUISelection;
-  NSIndexSet *dragIndices;
-  if (sel && [sel containsIndex:row.rowIndex])
-    dragIndices = sel;
-  else
-    dragIndices = [NSIndexSet indexSetWithIndex:row.rowIndex];
+  // Only include direct rows, not expanded group children.
+  // The reorder will expand groups via KKDescendantIndices.
+  NSIndexSet *dragIndices = [NSIndexSet indexSetWithIndex:row.rowIndex];
 
   NSData *data = [NSKeyedArchiver archivedDataWithRootObject:dragIndices
                                        requiringSecureCoding:YES
@@ -283,8 +414,11 @@ static __weak KKLayerListContainer *sLayerListContainer;
 - (void)deleteRow:(NSMenuItem *)sender;
 - (void)groupSelection:(NSMenuItem *)sender;
 - (void)ungroupRow:(NSMenuItem *)sender;
+- (void)removeFromGroup:(NSMenuItem *)sender;
 - (void)toggleGroupCollapse:(NSButton *)sender;
-- (void)_reorderFromIndices:(NSIndexSet *)indices toIndex:(NSUInteger)target;
+- (void)_reorderFromIndices:(NSIndexSet *)indices
+                    toIndex:(NSUInteger)target
+              parentGroupID:(NSString *)parentGroupID;
 @end
 
 @implementation KKLayerActionTarget
@@ -332,12 +466,10 @@ static __weak KKLayerListContainer *sLayerListContainer;
     BOOL newVal = !paths[idx].hidden;
     paths[idx].hidden = newVal;
     if (paths[idx].isGroup) {
-      NSUInteger cc = paths[idx].childCount;
-      for (NSUInteger c = 1; c <= cc && (idx + c) < paths.count; c++) {
-        paths[idx + c].hidden = newVal;
-        if (paths[idx + c].isGroup)
-          cc += paths[idx + c].childCount;
-      }
+      NSIndexSet *desc = KKDescendantIndices(idx, paths);
+      [desc enumerateIndexesUsingBlock:^(NSUInteger di, BOOL *stop) {
+        paths[di].hidden = newVal;
+      }];
     }
   }];
 }
@@ -350,12 +482,10 @@ static __weak KKLayerListContainer *sLayerListContainer;
     BOOL newVal = !paths[idx].locked;
     paths[idx].locked = newVal;
     if (paths[idx].isGroup) {
-      NSUInteger cc = paths[idx].childCount;
-      for (NSUInteger c = 1; c <= cc && (idx + c) < paths.count; c++) {
-        paths[idx + c].locked = newVal;
-        if (paths[idx + c].isGroup)
-          cc += paths[idx + c].childCount;
-      }
+      NSIndexSet *desc = KKDescendantIndices(idx, paths);
+      [desc enumerateIndexesUsingBlock:^(NSUInteger di, BOOL *stop) {
+        paths[di].locked = newVal;
+      }];
     }
   }];
 }
@@ -466,14 +596,8 @@ static __weak KKLayerListContainer *sLayerListContainer;
   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
     NSMutableIndexSet *expanded = [sel mutableCopy];
     [sel enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
-      if (idx < paths.count && paths[idx].isGroup) {
-        NSUInteger cc = paths[idx].childCount;
-        for (NSUInteger c = 1; c <= cc && (idx + c) < paths.count; c++) {
-          [expanded addIndex:idx + c];
-          if (paths[idx + c].isGroup)
-            cc += paths[idx + c].childCount;
-        }
-      }
+      if (idx < paths.count && paths[idx].isGroup)
+        [expanded addIndexes:KKDescendantIndices(idx, paths)];
     }];
     [expanded enumerateIndexesWithOptions:NSEnumerationReverse
                                usingBlock:^(NSUInteger idx, BOOL *stop) {
@@ -501,6 +625,9 @@ static __weak KKLayerListContainer *sLayerListContainer;
     return;
   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
     NSUInteger insertAt = sel.firstIndex;
+    NSString *inheritedParent =
+        insertAt < paths.count ? paths[insertAt].parentGroupID : nil;
+
     NSMutableArray<KKBezierPath *> *children = [NSMutableArray array];
     [sel enumerateIndexesWithOptions:NSEnumerationReverse
                           usingBlock:^(NSUInteger idx, BOOL *stop) {
@@ -511,8 +638,14 @@ static __weak KKLayerListContainer *sLayerListContainer;
                           }];
     KKBezierPath *group = [[KKBezierPath alloc] init];
     group.isGroup = YES;
-    group.childCount = children.count;
+    group.groupID = [[NSUUID UUID] UUIDString];
+    group.parentGroupID = inheritedParent;
     group.name = @"Group";
+    for (KKBezierPath *child in children) {
+      if ([child.parentGroupID isEqual:inheritedParent] ||
+          (!child.parentGroupID && !inheritedParent))
+        child.parentGroupID = group.groupID;
+    }
     insertAt = MIN(insertAt, paths.count);
     [paths insertObject:group atIndex:insertAt];
     for (NSUInteger i = 0; i < children.count; i++)
@@ -525,17 +658,31 @@ static __weak KKLayerListContainer *sLayerListContainer;
   }];
 }
 
+- (void)removeFromGroup:(NSMenuItem *)sender {
+  NSUInteger idx = sender.tag;
+  [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
+    if (idx >= paths.count)
+      return;
+    paths[idx].parentGroupID = nil;
+  }];
+}
+
 - (void)ungroupRow:(NSMenuItem *)sender {
   NSUInteger idx = sender.tag;
   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
     if (idx >= paths.count || !paths[idx].isGroup)
       return;
-    NSUInteger cc = paths[idx].childCount;
+    NSString *gid = paths[idx].groupID;
+    NSString *parentGID = paths[idx].parentGroupID;
     [paths removeObjectAtIndex:idx];
 
     NSMutableIndexSet *childSel = [NSMutableIndexSet indexSet];
-    for (NSUInteger i = 0; i < cc && (idx + i) < paths.count; i++)
-      [childSel addIndex:idx + i];
+    for (NSUInteger i = 0; i < paths.count; i++) {
+      if ([paths[i].parentGroupID isEqualToString:gid ?: @""]) {
+        paths[i].parentGroupID = parentGID;
+        [childSel addIndex:i];
+      }
+    }
     NSIndexSet *frozen = [childSel copy];
     sUISelection = frozen;
     sSelectedIndices = frozen;
@@ -545,13 +692,6 @@ static __weak KKLayerListContainer *sLayerListContainer;
 
 - (void)toggleGroupCollapse:(id)sender {
   NSUInteger idx = [(NSView *)sender tag];
-  NSMutableIndexSet *mut = sCollapsedGroups ? [sCollapsedGroups mutableCopy]
-                                            : [NSMutableIndexSet indexSet];
-  if ([mut containsIndex:idx])
-    [mut removeIndex:idx];
-  else
-    [mut addIndex:idx];
-  sCollapsedGroups = [mut copy];
 
   id<FxCustomParameterActionAPI_v4> actionAPI =
       [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
@@ -568,33 +708,66 @@ static __weak KKLayerListContainer *sLayerListContainer;
   if (str.length > 0) {
     NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
     NSArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+    if (idx < paths.count && paths[idx].groupID) {
+      NSString *gid = paths[idx].groupID;
+      NSMutableSet<NSString *> *mut = sCollapsedGroupIDs
+                                          ? [sCollapsedGroupIDs mutableCopy]
+                                          : [NSMutableSet set];
+      if ([mut containsObject:gid])
+        [mut removeObject:gid];
+      else
+        [mut addObject:gid];
+      sCollapsedGroupIDs = [mut copy];
+    }
     sForceRefresh = YES;
     KKCanvasRefreshLayerList(paths.count, paths);
   }
 }
 
-- (void)_reorderFromIndices:(NSIndexSet *)indices toIndex:(NSUInteger)target {
+- (void)_reorderFromIndices:(NSIndexSet *)indices
+                    toIndex:(NSUInteger)target
+              parentGroupID:(NSString *)parentGroupID {
   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
-    NSMutableArray<KKBezierPath *> *dragged = [NSMutableArray array];
+    // Expand to include descendants of any dragged groups
+    NSMutableIndexSet *expanded = [indices mutableCopy];
     [indices enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+      if (idx < paths.count && paths[idx].isGroup)
+        [expanded addIndexes:KKDescendantIndices(idx, paths)];
+    }];
+
+    // Tag direct items (the ones user actually dragged) before removal
+    NSMutableSet *directItems = [NSMutableSet set];
+    [indices enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+      if (idx < paths.count)
+        [directItems addObject:paths[idx]];
+    }];
+
+    // Collect in order
+    NSMutableArray<KKBezierPath *> *dragged = [NSMutableArray array];
+    [expanded enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
       if (idx < paths.count)
         [dragged addObject:paths[idx]];
     }];
 
+    // Calculate insert position
     NSUInteger insertBefore = target;
-    NSUInteger countBefore =
-        [indices countOfIndexesInRange:NSMakeRange(0, insertBefore)];
-    insertBefore -= countBefore;
+    insertBefore -=
+        [expanded countOfIndexesInRange:NSMakeRange(0, insertBefore)];
 
-    [indices enumerateIndexesWithOptions:NSEnumerationReverse
-                              usingBlock:^(NSUInteger idx, BOOL *stop) {
-                                if (idx < paths.count)
-                                  [paths removeObjectAtIndex:idx];
-                              }];
+    // Remove
+    [expanded enumerateIndexesWithOptions:NSEnumerationReverse
+                               usingBlock:^(NSUInteger idx, BOOL *stop) {
+                                 if (idx < paths.count)
+                                   [paths removeObjectAtIndex:idx];
+                               }];
 
+    // Insert and update parentGroupID only on direct items
     NSUInteger insertAt = MIN(insertBefore, paths.count);
-    for (NSUInteger i = 0; i < dragged.count; i++)
+    for (NSUInteger i = 0; i < dragged.count; i++) {
+      if ([directItems containsObject:dragged[i]])
+        dragged[i].parentGroupID = parentGroupID;
       [paths insertObject:dragged[i] atIndex:insertAt + i];
+    }
 
     NSIndexSet *newSel = [NSIndexSet
         indexSetWithIndexesInRange:NSMakeRange(insertAt, dragged.count)];
@@ -670,14 +843,8 @@ static __weak KKLayerListContainer *sLayerListContainer;
   if (str.length > 0) {
     NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
     NSArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
-    if (clicked < paths.count && paths[clicked].isGroup) {
-      NSUInteger cc = paths[clicked].childCount;
-      for (NSUInteger c = 1; c <= cc && (clicked + c) < paths.count; c++) {
-        [sel addIndex:clicked + c];
-        if (paths[clicked + c].isGroup)
-          cc += paths[clicked + c].childCount;
-      }
-    }
+    if (clicked < paths.count && paths[clicked].isGroup)
+      [sel addIndexes:KKDescendantIndices(clicked, paths)];
   }
 
   NSIndexSet *frozen = [sel copy];
@@ -746,7 +913,9 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
       [NSMutableArray arrayWithCapacity:pathCount];
   NSMutableArray<NSNumber *> *groupFlags =
       [NSMutableArray arrayWithCapacity:pathCount];
-  NSMutableArray<NSNumber *> *childCounts =
+  NSMutableArray<NSString *> *groupIDs =
+      [NSMutableArray arrayWithCapacity:pathCount];
+  NSMutableArray<NSString *> *parentGroupIDs =
       [NSMutableArray arrayWithCapacity:pathCount];
   NSMutableArray<NSString *> *names =
       [NSMutableArray arrayWithCapacity:pathCount];
@@ -754,7 +923,8 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
     [hiddenStates addObject:@(paths[i].hidden)];
     [lockedStates addObject:@(paths[i].locked)];
     [groupFlags addObject:@(paths[i].isGroup)];
-    [childCounts addObject:@(paths[i].childCount)];
+    [groupIDs addObject:paths[i].groupID ?: @""];
+    [parentGroupIDs addObject:paths[i].parentGroupID ?: @""];
     [names addObject:paths[i].name
                          ?: [NSString stringWithFormat:@"Path %lu",
                                                        (unsigned long)(i + 1)]];
@@ -786,39 +956,55 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
         configurationWithPointSize:10.0
                             weight:NSFontWeightRegular];
 
+    // Build groupID→index map for collapse checking
+    NSMutableDictionary<NSString *, NSNumber *> *groupIndexMap =
+        [NSMutableDictionary dictionary];
+    for (NSUInteger i = 0; i < pathCount; i++) {
+      if (groupFlags[i].boolValue && groupIDs[i].length > 0)
+        groupIndexMap[groupIDs[i]] = @(i);
+    }
+
     NSUInteger visRow = 0;
-    NSUInteger skipUntil = 0;
 
     for (NSUInteger i = 0; i < pathCount; i++) {
       BOOL isGroup = groupFlags[i].boolValue;
-      NSUInteger cc = childCounts[i].unsignedIntegerValue;
 
-      if (i < skipUntil && !isGroup)
+      // Check if any ancestor is collapsed
+      BOOL ancestorCollapsed = NO;
+      NSString *pid = parentGroupIDs[i];
+      NSUInteger guard = 0;
+      while (pid.length > 0 && guard < 20) {
+        guard++;
+        NSNumber *parentIdx = groupIndexMap[pid];
+        if (parentIdx &&
+            [sCollapsedGroupIDs
+                containsObject:groupIDs[parentIdx.unsignedIntegerValue]]) {
+          ancestorCollapsed = YES;
+          break;
+        }
+        if (parentIdx)
+          pid = parentGroupIDs[parentIdx.unsignedIntegerValue];
+        else
+          break;
+      }
+      if (ancestorCollapsed)
         continue;
 
-      BOOL collapsed = isGroup && [sCollapsedGroups containsIndex:i];
-      if (collapsed)
-        skipUntil = i + 1 + cc;
-
+      BOOL collapsed = isGroup && groupIDs[i].length > 0 &&
+                       [sCollapsedGroupIDs containsObject:groupIDs[i]];
       BOOL isHidden = hiddenStates[i].boolValue;
       BOOL isLocked = lockedStates[i].boolValue;
       BOOL isSelected = [capturedSelection containsIndex:i];
+
+      // Calculate depth by walking parentGroupID chain
       NSUInteger depth = 0;
-      NSUInteger scan = i;
-      while (scan > 0) {
-        BOOL found = NO;
-        for (NSUInteger g = scan; g > 0; g--) {
-          if (groupFlags[g - 1].boolValue) {
-            NSUInteger parentCC = childCounts[g - 1].unsignedIntegerValue;
-            if (scan <= g - 1 + parentCC) {
-              depth++;
-              scan = g - 1;
-              found = YES;
-            }
-            break;
-          }
-        }
-        if (!found)
+      NSString *dpid = parentGroupIDs[i];
+      while (dpid.length > 0 && depth < 20) {
+        depth++;
+        NSNumber *pIdx = groupIndexMap[dpid];
+        if (pIdx)
+          dpid = parentGroupIDs[pIdx.unsignedIntegerValue];
+        else
           break;
       }
       CGFloat indent = depth * 18.0;
@@ -927,7 +1113,7 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
         [ctxMenu addItem:ungroupItem];
       }
 
-      if (multiSelect && !isGroup) {
+      if (!isGroup) {
         NSMenuItem *groupItem =
             [[NSMenuItem alloc] initWithTitle:@"Group"
                                        action:@selector(groupSelection:)
@@ -938,6 +1124,19 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
             [NSImage imageWithSystemSymbolName:@"folder.badge.plus"
                       accessibilityDescription:nil];
         [ctxMenu addItem:groupItem];
+      }
+
+      if (!isGroup && depth > 0) {
+        NSMenuItem *removeFromGroupItem =
+            [[NSMenuItem alloc] initWithTitle:@"Remove from Group"
+                                       action:@selector(removeFromGroup:)
+                                keyEquivalent:@""];
+        removeFromGroupItem.target = container.actionTarget;
+        removeFromGroupItem.tag = i;
+        removeFromGroupItem.image = [NSImage
+            imageWithSystemSymbolName:@"rectangle.portrait.and.arrow.right"
+             accessibilityDescription:nil];
+        [ctxMenu addItem:removeFromGroupItem];
       }
 
       if (!isGroup) {
@@ -972,6 +1171,9 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
 
       KKLayerRow *row = [KKLayerRow stackViewWithViews:rowViews];
       row.rowIndex = i;
+      row.groupID = isGroup ? groupIDs[i] : nil;
+      row.parentGroupID =
+          parentGroupIDs[i].length > 0 ? parentGroupIDs[i] : nil;
       rowButton.parentRow = row;
       row.menu = ctxMenu;
       row.orientation = NSUserInterfaceLayoutOrientationHorizontal;
@@ -1068,7 +1270,7 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
     [iconView.widthAnchor constraintEqualToConstant:12.0].active = YES;
     [iconView.heightAnchor constraintEqualToConstant:12.0].active = YES;
 
-    NSTextField *empty = [NSTextField labelWithString:@"No layers"];
+    NSTextField *empty = [NSTextField labelWithString:@"No shapes"];
     empty.font = [NSFont systemFontOfSize:11.0];
     empty.textColor = [NSColor secondaryLabelColor];
     empty.translatesAutoresizingMaskIntoConstraints = NO;
