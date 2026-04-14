@@ -171,8 +171,8 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
   NSString *pathStr = nil;
   [paramGetAPI getStringParameterValue:&pathStr fromParameter:kParamPathData];
 
-  // Patch selected path's stroke from current param values so the render
-  // reflects inspector edits immediately (before pathData is persisted).
+  // Patch selected path from current param values so the render reflects
+  // inspector edits immediately (before pathData is persisted).
   NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
   NSIndexSet *sel = uuid ? KKCanvasCurrentSelection(uuid) : nil;
   if (pathStr.length > 0 && sel.count > 0) {
@@ -181,8 +181,7 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
     NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
     KKBezierPath *selPath = KKSelectedPath(sel, paths);
     if (selPath) {
-      KKStrokeParamsToPath(params.strokeWidth, params.r, params.g, params.b,
-                           selPath);
+      KKParamsToPath(paramGetAPI, selPath);
       NSData *newBlob = [KKBezierPath blobFromPaths:paths];
       pathStr = [newBlob base64EncodedStringWithOptions:0];
     }
@@ -324,12 +323,110 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
   simd_uint2 viewportSize = {(unsigned int)outputWidth,
                              (unsigned int)outputHeight};
 
+  // Build fill pipeline on demand.
+  NSString *fillKey = [NSString
+      stringWithFormat:@"%@_fill_%lu", kPluginID, (unsigned long)pixelFormat];
+  id<MTLRenderPipelineState> fillPS =
+      [cache pipelineStateForPluginID:fillKey
+                           registryID:registryID
+                          pixelFormat:pixelFormat];
+  if (!fillPS) {
+    id<MTLLibrary> library = [device newDefaultLibrary];
+    MTLRenderPipelineDescriptor *desc =
+        [[MTLRenderPipelineDescriptor alloc] init];
+    desc.vertexFunction = [library newFunctionWithName:@"fillVertexShader"];
+    desc.fragmentFunction = [library newFunctionWithName:@"fillFragmentShader"];
+    desc.colorAttachments[0].pixelFormat = pixelFormat;
+    desc.colorAttachments[0].blendingEnabled = YES;
+    desc.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorOne;
+    desc.colorAttachments[0].destinationRGBBlendFactor =
+        MTLBlendFactorOneMinusSourceAlpha;
+    desc.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
+    desc.colorAttachments[0].destinationAlphaBlendFactor =
+        MTLBlendFactorOneMinusSourceAlpha;
+
+    NSError *error = nil;
+    fillPS = [device newRenderPipelineStateWithDescriptor:desc error:&error];
+    if (fillPS)
+      [cache registerPipelineState:fillPS
+                       forPluginID:fillKey
+                        registryID:registryID
+                       pixelFormat:pixelFormat];
+  }
+
   // Render in reverse: index 0 is drawn last (on top), matching layer list.
   for (NSUInteger pi = paths.count; pi > 0; pi--) {
     KKBezierPath *path = paths[pi - 1];
     if (path.count < 2 || path.hidden)
       continue;
 
+    // Fill (behind stroke): fan triangulation from centroid for closed paths.
+    if (path.fillEnabled && path.closed && path.count >= 3 && fillPS) {
+      NSUInteger segsPerCurve = 64;
+      NSUInteger curveCount = path.count;
+      NSUInteger outlineCount = curveCount * segsPerCurve;
+      simd_float2 *outline = malloc(outlineCount * sizeof(simd_float2));
+      NSUInteger oc = 0;
+      for (NSUInteger c = 0; c < curveCount; c++) {
+        NSUInteger nextIdx = (c + 1) % path.count;
+        for (NSUInteger s = 0; s < segsPerCurve; s++) {
+          float t = (float)s / (float)segsPerCurve;
+          simd_float2 pos = [path evaluatePointAtIndex:c
+                                             nextIndex:nextIdx
+                                                   atT:t];
+          simd_float2 px = {pos.x * outputWidth - outputWidth / 2.0f,
+                            (1.0f - pos.y) * outputHeight -
+                                outputHeight / 2.0f};
+          outline[oc++] = px;
+        }
+      }
+
+      // Centroid
+      simd_float2 center = {0, 0};
+      for (NSUInteger i = 0; i < oc; i++)
+        center += outline[i];
+      center /= (float)oc;
+
+      // Fan triangles from centroid
+      NSUInteger triCount = oc;
+      CanvasFillVertex *fillVerts =
+          malloc(triCount * 3 * sizeof(CanvasFillVertex));
+      for (NSUInteger i = 0; i < oc; i++) {
+        NSUInteger next = (i + 1) % oc;
+        fillVerts[i * 3 + 0].position = center;
+        fillVerts[i * 3 + 1].position = outline[i];
+        fillVerts[i * 3 + 2].position = outline[next];
+      }
+      free(outline);
+
+      simd_float4 fc = {path.fillR, path.fillG, path.fillB, 1.0f};
+
+      MTLRenderPassDescriptor *rpd =
+          [MTLRenderPassDescriptor renderPassDescriptor];
+      rpd.colorAttachments[0].texture = outputTexture;
+      rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+      rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+
+      id<MTLRenderCommandEncoder> enc =
+          [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+      [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1, 1}];
+      [enc setRenderPipelineState:fillPS];
+
+      id<MTLBuffer> fillBuf =
+          [device newBufferWithBytes:fillVerts
+                              length:triCount * 3 * sizeof(CanvasFillVertex)
+                             options:MTLResourceStorageModeShared];
+      [enc setVertexBuffer:fillBuf offset:0 atIndex:0];
+      [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+      [enc setFragmentBytes:&fc length:sizeof(fc) atIndex:0];
+      [enc drawPrimitives:MTLPrimitiveTypeTriangle
+              vertexStart:0
+              vertexCount:triCount * 3];
+      [enc endEncoding];
+      free(fillVerts);
+    }
+
+    // Stroke
     float sw = path.strokeWidth;
     simd_float4 color = {path.strokeR, path.strokeG, path.strokeB, 1.0f};
 

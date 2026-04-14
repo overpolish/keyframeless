@@ -17,3 +17,7 @@ typedef struct {
     float strokeWidth;
     float r, g, b;
 } CanvasStrokeParams;
+
+typedef struct {
+    vector_float2 position;
+} CanvasFillVertex;

@@ -42,3 +42,22 @@ fragment float4 strokeFragmentShader(StrokeRasterizerData in [[stage_in]], const
 
     return *strokeColor * edgeAlpha * capAlpha;
 }
+
+typedef struct {
+    float4 clipSpacePosition [[position]];
+} FillRasterizerData;
+
+vertex FillRasterizerData fillVertexShader(uint vertexID [[vertex_id]],
+                                           constant CanvasFillVertex *vertexArray [[buffer(0)]],
+                                           constant vector_uint2 *viewportSizePointer [[buffer(1)]]) {
+    FillRasterizerData out;
+    float2 viewportSize = float2(*viewportSizePointer);
+    out.clipSpacePosition.xy = vertexArray[vertexID].position / (viewportSize / 2.0);
+    out.clipSpacePosition.z = 0.0;
+    out.clipSpacePosition.w = 1.0;
+    return out;
+}
+
+fragment float4 fillFragmentShader(FillRasterizerData in [[stage_in]], constant float4 *fillColor [[buffer(0)]]) {
+    return *fillColor;
+}
