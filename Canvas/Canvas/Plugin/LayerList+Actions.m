@@ -343,16 +343,27 @@
       return;
     NSString *gid = paths[idx].groupID;
     NSString *parentGID = paths[idx].parentGroupID;
-    [paths removeObjectAtIndex:idx];
 
+    // Reparent children BEFORE removing the group so gid stays valid
+    // (this file is MRR — the path owns gid, removing it frees gid).
     NSMutableIndexSet *childSel = [NSMutableIndexSet indexSet];
     for (NSUInteger i = 0; i < paths.count; i++) {
+      if (i == idx)
+        continue;
       if ([paths[i].parentGroupID isEqualToString:gid ?: @""]) {
         paths[i].parentGroupID = parentGID;
+        // Track pre-removal index; adjust below after the remove.
         [childSel addIndex:i];
       }
     }
-    KKSetLayerSelection(_instanceUUID, [childSel copy]);
+    [paths removeObjectAtIndex:idx];
+
+    // Shift selection indices down for anything that was after the group row.
+    NSMutableIndexSet *adjusted = [NSMutableIndexSet indexSet];
+    [childSel enumerateIndexesUsingBlock:^(NSUInteger i, BOOL *stop) {
+      [adjusted addIndex:i > idx ? i - 1 : i];
+    }];
+    KKSetLayerSelection(_instanceUUID, [adjusted copy]);
   }];
 }
 
