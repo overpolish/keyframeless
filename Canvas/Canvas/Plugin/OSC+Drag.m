@@ -313,10 +313,10 @@
   [rect insertAtIndex:3 position:(simd_float2){minX, minY}];
   rect.closed = YES;
   rect.isRect = YES;
-  [self.paths addObject:rect];
-  self.activePathIndex = (NSInteger)self.paths.count - 1;
+  [self.paths insertObject:rect atIndex:0];
+  self.activePathIndex = 0;
   [self.selectedPathIndices removeAllIndexes];
-  [self.selectedPathIndices addIndex:self.activePathIndex];
+  [self.selectedPathIndices addIndex:0];
   [self writePaths:self.paths];
 }
 
@@ -357,10 +357,10 @@
   [ellipse setType:KKBezierPointBezier atIndex:3];
 
   ellipse.closed = YES;
-  [self.paths addObject:ellipse];
-  self.activePathIndex = (NSInteger)self.paths.count - 1;
+  [self.paths insertObject:ellipse atIndex:0];
+  self.activePathIndex = 0;
   [self.selectedPathIndices removeAllIndexes];
-  [self.selectedPathIndices addIndex:self.activePathIndex];
+  [self.selectedPathIndices addIndex:0];
   [self writePaths:self.paths];
 }
 
@@ -375,11 +375,10 @@
       stringWithFormat:@"Line %lu", (unsigned long)(self.paths.count + 1)];
   [line insertAtIndex:0 position:a];
   [line insertAtIndex:1 position:b];
-  [self.paths addObject:line];
-  NSInteger lineIdx = (NSInteger)self.paths.count - 1;
+  [self.paths insertObject:line atIndex:0];
   self.activePathIndex = -1;
   [self.selectedPathIndices removeAllIndexes];
-  [self.selectedPathIndices addIndex:lineIdx];
+  [self.selectedPathIndices addIndex:0];
   [self writePaths:self.paths];
 }
 

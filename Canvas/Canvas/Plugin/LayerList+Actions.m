@@ -525,9 +525,16 @@
         [expanded addIndexes:KKDescendantIndices(idx, paths)];
     }];
 
+    // Only top-level dragged items get reparented. Descendants of a
+    // dragged group keep their existing parentGroupID.
+    NSMutableIndexSet *descendantIndices = [NSMutableIndexSet indexSet];
+    [indices enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+      if (idx < paths.count && paths[idx].isGroup)
+        [descendantIndices addIndexes:KKDescendantIndices(idx, paths)];
+    }];
     NSMutableSet *directItems = [NSMutableSet set];
     [indices enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
-      if (idx < paths.count)
+      if (idx < paths.count && ![descendantIndices containsIndex:idx])
         [directItems addObject:paths[idx]];
     }];
 
