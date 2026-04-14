@@ -18,11 +18,15 @@ static const UInt32 kParamPathData = 100;
 static const UInt32 kParamStrokeWidth = 101;
 static const UInt32 kParamStrokeColor = 102;
 static const UInt32 kParamLayerList = 103;
+static const UInt32 kParamInstanceID = 104;
 
-void KKCanvasRefreshLayerList(NSUInteger pathCount,
+@protocol PROAPIAccessing;
+NSString *_Nullable KKLayerUUIDForAPI(id<PROAPIAccessing> _Nonnull api);
+
+void KKCanvasRefreshLayerList(NSString *_Nonnull uuid, NSUInteger pathCount,
                               NSArray<KKBezierPath *> *_Nullable paths);
-void KKCanvasUpdateSelection(NSIndexSet *indices);
-NSIndexSet *_Nullable KKCanvasConsumePendingSelection(void);
+void KKCanvasUpdateSelection(NSString *_Nonnull uuid, NSIndexSet *indices);
+NSIndexSet *_Nullable KKCanvasConsumePendingSelection(NSString *_Nonnull uuid);
 
 // OSC part IDs
 static const NSInteger kOSCCanvas = 1;

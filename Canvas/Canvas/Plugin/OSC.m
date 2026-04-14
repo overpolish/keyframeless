@@ -189,7 +189,9 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   NSData *blob = [KKBezierPath blobFromPaths:paths];
   NSString *str = [blob base64EncodedStringWithOptions:0];
   [paramSetAPI setStringParameterValue:str toParameter:kParamPathData];
-  KKCanvasRefreshLayerList(paths.count, paths);
+  NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+  if (uuid)
+    KKCanvasRefreshLayerList(uuid, paths.count, paths);
 }
 
 - (void)boundsOfPath:(KKBezierPath *)path

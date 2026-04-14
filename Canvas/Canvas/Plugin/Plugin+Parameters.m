@@ -59,6 +59,12 @@
                           defaultBlue:0.0
                        parameterFlags:kFxParameterFlag_DEFAULT];
 
+  [paramAPI addStringParameterWithName:@"InstanceID"
+                           parameterID:kParamInstanceID
+                          defaultValue:@""
+                        parameterFlags:kFxParameterFlag_HIDDEN |
+                                       kFxParameterFlag_NOT_ANIMATABLE];
+
   return YES;
 }
 
