@@ -22,6 +22,57 @@ static inline KKBezierPath *_Nullable KKSelectedPath(
   return result;
 }
 
+/// Show all per-object param rows (flags only, no values).
+/// Add new per-object properties here.
+static inline void
+KKShowObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
+  [paramSetAPI setParameterFlags:kFxParameterFlag_DEFAULT
+                     toParameter:kParamStrokeWidth];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_DEFAULT
+                     toParameter:kParamStrokeColor];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_NOT_ANIMATABLE
+                     toParameter:kParamFillEnabled];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_DEFAULT
+                     toParameter:kParamFillColor];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_DEFAULT
+                     toParameter:kParamOpacity];
+}
+
+/// Hide all per-object param rows and clear the saved selection.
+/// Add new per-object properties here.
+static inline void
+KKHideObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamStrokeWidth];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamStrokeColor];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamFillEnabled];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamFillColor];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamOpacity];
+}
+
+/// Save the index of the currently-selected path so it survives clip switches.
+static inline void
+KKSaveSelectedIndex(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
+                    NSInteger index) {
+  [paramSetAPI setFloatValue:(double)index
+                 toParameter:kParamLastSelectedIndex
+                      atTime:kCMTimeZero];
+}
+
+/// Read the last-selected path index (-1 if none).
+static inline NSInteger
+KKReadSelectedIndex(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI) {
+  double v = -1.0;
+  [paramGetAPI getFloatValue:&v
+               fromParameter:kParamLastSelectedIndex
+                      atTime:kCMTimeZero];
+  return (NSInteger)v;
+}
+
 /// Read per-object param values from FxPlug and apply to a path.
 /// Add new per-object properties here.
 static inline void
@@ -56,6 +107,12 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
   path.fillR = (float)fr;
   path.fillG = (float)fg;
   path.fillB = (float)fb;
+
+  double op = 100.0;
+  [paramGetAPI getFloatValue:&op
+               fromParameter:kParamOpacity
+                      atTime:kCMTimeZero];
+  path.opacity = (float)(op / 100.0);
 }
 
 /// Write a path's per-object values to FxPlug params and show the rows.
@@ -63,10 +120,7 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
 static inline void
 KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                KKBezierPath *_Nonnull path) {
-  [paramSetAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                     toParameter:kParamStrokeWidth];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                     toParameter:kParamStrokeColor];
+  KKShowObjectParams(paramSetAPI);
   [paramSetAPI setFloatValue:path.strokeWidth
                  toParameter:kParamStrokeWidth
                       atTime:kCMTimeZero];
@@ -75,11 +129,6 @@ KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                  blueValue:path.strokeB
                toParameter:kParamStrokeColor
                     atTime:kCMTimeZero];
-
-  [paramSetAPI setParameterFlags:kFxParameterFlag_NOT_ANIMATABLE
-                     toParameter:kParamFillEnabled];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                     toParameter:kParamFillColor];
   [paramSetAPI setBoolValue:path.fillEnabled
                 toParameter:kParamFillEnabled
                      atTime:kCMTimeZero];
@@ -88,18 +137,7 @@ KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                  blueValue:path.fillB
                toParameter:kParamFillColor
                     atTime:kCMTimeZero];
-}
-
-/// Hide all per-object param rows.
-/// Add new per-object properties here.
-static inline void
-KKHideObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamStrokeWidth];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamStrokeColor];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamFillEnabled];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamFillColor];
+  [paramSetAPI setFloatValue:path.opacity * 100.0f
+                 toParameter:kParamOpacity
+                      atTime:kCMTimeZero];
 }

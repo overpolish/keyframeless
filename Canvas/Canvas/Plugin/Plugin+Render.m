@@ -173,15 +173,13 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
 
   // Patch selected path from current param values so the render reflects
   // inspector edits immediately (before pathData is persisted).
-  NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
-  NSIndexSet *sel = uuid ? KKCanvasCurrentSelection(uuid) : nil;
-  if (pathStr.length > 0 && sel.count > 0) {
+  NSInteger selIdx = KKReadSelectedIndex(paramGetAPI);
+  if (pathStr.length > 0 && selIdx >= 0) {
     NSData *blob = [[NSData alloc] initWithBase64EncodedString:pathStr
                                                        options:0];
     NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
-    KKBezierPath *selPath = KKSelectedPath(sel, paths);
-    if (selPath) {
-      KKParamsToPath(paramGetAPI, selPath);
+    if ((NSUInteger)selIdx < paths.count && !paths[selIdx].isGroup) {
+      KKParamsToPath(paramGetAPI, paths[selIdx]);
       NSData *newBlob = [KKBezierPath blobFromPaths:paths];
       pathStr = [newBlob base64EncodedStringWithOptions:0];
     }
@@ -399,7 +397,8 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
       }
       free(outline);
 
-      simd_float4 fc = {path.fillR, path.fillG, path.fillB, 1.0f};
+      float a = path.opacity;
+      simd_float4 fc = {path.fillR * a, path.fillG * a, path.fillB * a, a};
 
       MTLRenderPassDescriptor *rpd =
           [MTLRenderPassDescriptor renderPassDescriptor];
@@ -428,7 +427,9 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
 
     // Stroke
     float sw = path.strokeWidth;
-    simd_float4 color = {path.strokeR, path.strokeG, path.strokeB, 1.0f};
+    float oa = path.opacity;
+    simd_float4 color = {path.strokeR * oa, path.strokeG * oa,
+                         path.strokeB * oa, oa};
 
     NSUInteger segsPerCurve = 128;
     NSUInteger curveCount = path.count - 1;

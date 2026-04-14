@@ -350,6 +350,7 @@
       KKParamsToPath(paramGetAPI, prev);
       [self writePaths:self.paths];
       KKHideObjectParams(paramSetAPI);
+      KKSaveSelectedIndex(paramSetAPI, -1);
     }
     [self.selectedPathIndices removeAllIndexes];
     self.activePathIndex = -1;

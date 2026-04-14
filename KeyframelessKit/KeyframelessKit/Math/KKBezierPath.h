@@ -68,6 +68,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, assign) float strokeG;
 @property(nonatomic, assign) float strokeB;
 
+/// Object opacity 0–1 (default 1.0). Multiplied into stroke and fill alpha.
+@property(nonatomic, assign) float opacity;
+
 /// Whether this path has a solid fill (default NO).
 @property(nonatomic, assign) BOOL fillEnabled;
 

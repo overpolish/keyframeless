@@ -4,6 +4,7 @@
  */
 
 #import "LayerList_Private.h"
+#import "ObjectParams.h"
 
 NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
                                 NSArray<KKBezierPath *> *paths) {
@@ -309,5 +310,33 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
         MAX(visRow * kLayerRowStride + kLayerListVerticalPad + kLayerRowHeight,
             kLayerListHeight);
     container.contentHeightConstraint.constant = totalHeight;
+
+    // Sync per-object param visibility using an action scope so it
+    // persists. This runs on main queue from drawOSC, same as the
+    // layer list UI update.
+    KKLayerActionTarget *at = container.actionTarget;
+    if (at.apiManager) {
+      id<FxCustomParameterActionAPI_v4> actAPI = [at.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      [actAPI startAction:at];
+      id<FxParameterSettingAPI_v5> setAPI =
+          [at.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      if (capturedSelection.count > 0) {
+        BOOL hasPath = NO;
+        for (NSUInteger i = 0; i < pathCount; i++) {
+          if ([capturedSelection containsIndex:i] && !groupFlags[i].boolValue) {
+            hasPath = YES;
+            break;
+          }
+        }
+        if (hasPath)
+          KKShowObjectParams(setAPI);
+        else
+          KKHideObjectParams(setAPI);
+      } else {
+        KKHideObjectParams(setAPI);
+      }
+      [actAPI endAction:at];
+    }
   });
 }

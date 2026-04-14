@@ -72,6 +72,27 @@
                           defaultBlue:1.0
                        parameterFlags:kFxParameterFlag_HIDDEN];
 
+  [paramAPI addFloatSliderWithName:@"Opacity"
+                       parameterID:kParamOpacity
+                      defaultValue:100.0
+                      parameterMin:0.0
+                      parameterMax:100.0
+                         sliderMin:0.0
+                         sliderMax:100.0
+                             delta:1.0
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addFloatSliderWithName:@"LastSelectedIndex"
+                       parameterID:kParamLastSelectedIndex
+                      defaultValue:-1.0
+                      parameterMin:-1.0
+                      parameterMax:10000.0
+                         sliderMin:-1.0
+                         sliderMax:10000.0
+                             delta:1.0
+                    parameterFlags:kFxParameterFlag_HIDDEN |
+                                   kFxParameterFlag_NOT_ANIMATABLE];
+
   [paramAPI addStringParameterWithName:@"InstanceID"
                            parameterID:kParamInstanceID
                           defaultValue:@""

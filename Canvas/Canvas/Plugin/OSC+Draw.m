@@ -330,13 +330,20 @@
 
   // Patch the selected path's in-memory stroke from current params so that
   // hit testing and OSC drawing use the live inspector values.
+  // Also keep param row visibility in sync — ensures the inspector shows
+  // per-object controls even if the panel wasn't visible during selection.
   {
     KKBezierPath *selPath =
         KKSelectedPath(self.selectedPathIndices, self.paths);
+    id<FxParameterSettingAPI_v5> paramSetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
     if (selPath) {
       id<FxParameterRetrievalAPI_v6> paramGetAPI = [self.apiManager
           apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
       KKParamsToPath(paramGetAPI, selPath);
+      KKShowObjectParams(paramSetAPI);
+    } else {
+      KKHideObjectParams(paramSetAPI);
     }
   }
 
