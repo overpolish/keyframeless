@@ -330,9 +330,26 @@
 - (void)removeFromGroup:(NSMenuItem *)sender {
   NSUInteger idx = sender.tag;
   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
-    if (idx >= paths.count)
+    if (idx >= paths.count || !paths[idx].parentGroupID)
       return;
-    paths[idx].parentGroupID = nil;
+    NSString *pgid = paths[idx].parentGroupID;
+    // Find the parent group row so we can move the path above it.
+    NSUInteger groupIdx = NSNotFound;
+    for (NSUInteger i = 0; i < paths.count; i++) {
+      if (paths[i].isGroup && [paths[i].groupID isEqualToString:pgid]) {
+        groupIdx = i;
+        break;
+      }
+    }
+    // Reparent to the group's parent (or top-level).
+    paths[idx].parentGroupID =
+        paths[groupIdx != NSNotFound ? groupIdx : idx].parentGroupID;
+    // Insert above the group first, then remove the old position.
+    NSUInteger insertAt = groupIdx != NSNotFound ? groupIdx : 0;
+    [paths insertObject:paths[idx] atIndex:insertAt];
+    // Original moved down by 1 since we inserted before it.
+    [paths removeObjectAtIndex:idx + 1];
+    KKSetLayerSelection(_instanceUUID, [NSIndexSet indexSetWithIndex:insertAt]);
   }];
 }
 
