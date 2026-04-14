@@ -29,6 +29,13 @@
     return NO;
   }
 
+  [paramAPI addCustomParameterWithName:@""
+                           parameterID:kParamLayerList
+                          defaultValue:@(kParamLayerList)
+                        parameterFlags:kFxParameterFlag_CUSTOM_UI |
+                                       kFxParameterFlag_NOT_ANIMATABLE |
+                                       kFxParameterFlag_USE_FULL_VIEW_WIDTH];
+
   [paramAPI addStringParameterWithName:@"PathData"
                            parameterID:kParamPathData
                           defaultValue:@""
@@ -51,6 +58,12 @@
                          defaultGreen:0.0
                           defaultBlue:0.0
                        parameterFlags:kFxParameterFlag_DEFAULT];
+
+  [paramAPI addStringParameterWithName:@"InstanceID"
+                           parameterID:kParamInstanceID
+                          defaultValue:@""
+                        parameterFlags:kFxParameterFlag_HIDDEN |
+                                       kFxParameterFlag_NOT_ANIMATABLE];
 
   return YES;
 }

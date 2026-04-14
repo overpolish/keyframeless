@@ -36,6 +36,24 @@ NS_ASSUME_NONNULL_BEGIN
 /// Whether the path was created as a rectangle (enables corner radius handles).
 @property(nonatomic, assign) BOOL isRect;
 
+/// Whether the path is hidden in the canvas.
+@property(nonatomic, assign) BOOL hidden;
+
+/// Whether the path is locked (visible but non-interactive).
+@property(nonatomic, assign) BOOL locked;
+
+/// Whether this entry is a group (contains no points, acts as a folder).
+@property(nonatomic, assign) BOOL isGroup;
+
+/// Unique identifier for this group (set on group entries only).
+@property(nonatomic, copy, nullable) NSString *groupID;
+
+/// The groupID of this item's parent group, or nil if top-level.
+@property(nonatomic, copy, nullable) NSString *parentGroupID;
+
+/// Display name for the layer list.
+@property(nonatomic, copy, nullable) NSString *name;
+
 /// Per-corner radius fractions 0–1 (TL, TR, BR, BL). 0 = sharp, 1 = max.
 @property(nonatomic, assign) float cornerRadiusTL;
 @property(nonatomic, assign) float cornerRadiusTR;

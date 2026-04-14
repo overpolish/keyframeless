@@ -355,6 +355,8 @@
                  activePart:(NSInteger)activePart {
   if (!active) {
     KKBezierPath *newPath = [[KKBezierPath alloc] init];
+    newPath.name = [NSString
+        stringWithFormat:@"Path %lu", (unsigned long)(self.paths.count + 1)];
     [self.paths addObject:newPath];
     self.activePathIndex = (NSInteger)self.paths.count - 1;
     active = newPath;
@@ -373,6 +375,8 @@
       return;
     }
     KKBezierPath *newPath = [[KKBezierPath alloc] init];
+    newPath.name = [NSString
+        stringWithFormat:@"Path %lu", (unsigned long)(self.paths.count + 1)];
     [self.paths addObject:newPath];
     self.activePathIndex = (NSInteger)self.paths.count - 1;
     active = newPath;

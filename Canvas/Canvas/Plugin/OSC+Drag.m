@@ -79,7 +79,7 @@
       NSMutableIndexSet *newIndices = [NSMutableIndexSet indexSet];
       [self.selectedPathIndices
           enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
-            if (idx >= self.paths.count)
+            if (idx >= self.paths.count || self.paths[idx].locked)
               return;
             KKBezierPath *orig = self.paths[idx];
             KKBezierPath *clone =
@@ -93,7 +93,7 @@
     }
     [self.selectedPathIndices
         enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
-          if (idx < self.paths.count)
+          if (idx < self.paths.count && !self.paths[idx].locked)
             [self.paths[idx] translateBy:delta];
         }];
   } else {
@@ -257,7 +257,7 @@
   if (isCursorMode) {
     for (NSUInteger p = 0; p < self.paths.count; p++) {
       KKBezierPath *path = self.paths[p];
-      if (path.count == 0)
+      if (path.count == 0 || path.hidden || path.locked)
         continue;
       simd_float2 bmin, bmax;
       [self boundsOfPath:path min:&bmin max:&bmax];
@@ -278,6 +278,8 @@
   BOOL optDown = (modifiers & kFxModifierKey_OPTION) != 0;
   for (NSUInteger p = 0; p < self.paths.count; p++) {
     KKBezierPath *path = self.paths[p];
+    if (path.hidden || path.locked)
+      continue;
     for (NSUInteger i = 0; i < path.count; i++) {
       KKBezierPoint pt = [path pointAtIndex:i];
       CGPoint canvas = [self canvasPointForBezierPoint:pt];
@@ -303,6 +305,8 @@
     return;
 
   KKBezierPath *rect = [[KKBezierPath alloc] init];
+  rect.name = [NSString
+      stringWithFormat:@"Rectangle %lu", (unsigned long)(self.paths.count + 1)];
   [rect insertAtIndex:0 position:(simd_float2){minX, maxY}];
   [rect insertAtIndex:1 position:(simd_float2){maxX, maxY}];
   [rect insertAtIndex:2 position:(simd_float2){maxX, minY}];
@@ -329,6 +333,8 @@
   float kx = rx * 0.5522847498f, ky = ry * 0.5522847498f;
 
   KKBezierPath *ellipse = [[KKBezierPath alloc] init];
+  ellipse.name = [NSString
+      stringWithFormat:@"Ellipse %lu", (unsigned long)(self.paths.count + 1)];
   [ellipse insertAtIndex:0 position:(simd_float2){cx, cy + ry}]; // top
   [ellipse insertAtIndex:1 position:(simd_float2){cx + rx, cy}]; // right
   [ellipse insertAtIndex:2 position:(simd_float2){cx, cy - ry}]; // bottom
@@ -365,6 +371,8 @@
     return;
 
   KKBezierPath *line = [[KKBezierPath alloc] init];
+  line.name = [NSString
+      stringWithFormat:@"Line %lu", (unsigned long)(self.paths.count + 1)];
   [line insertAtIndex:0 position:a];
   [line insertAtIndex:1 position:b];
   [self.paths addObject:line];
