@@ -33,16 +33,38 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     // Old format: 4 bytes count + points (no flags)
     size_t oldExpected = 4 + count * pointSize;
 
-    if (data.length >= newExpected && count > 0) {
+    BOOL maybeGroup = (data.length >= 5 && (bytes[4] & 128) != 0);
+    if (data.length >= newExpected && (count > 0 || maybeGroup)) {
       uint8_t flags = bytes[4];
       path->_closed = (flags & 1) != 0;
       path->_isRect = (flags & 8) != 0;
+      path->_hidden = (flags & 16) != 0;
+      path->_locked = (flags & 32) != 0;
+      path->_isGroup = (flags & 128) != 0;
+      size_t headerSize = 5;
+      if (path->_isGroup && data.length >= 7) {
+        uint16_t gidLen;
+        memcpy(&gidLen, bytes + 5, 2);
+        headerSize = 7;
+        if (gidLen > 0 && data.length >= headerSize + gidLen) {
+          path->_groupID =
+              [[NSString alloc] initWithBytes:bytes + headerSize
+                                       length:gidLen
+                                     encoding:NSUTF8StringEncoding];
+          headerSize += gidLen;
+        }
+      } else if (path->_isGroup && data.length >= 9) {
+        // Backwards compat: old format had uint32 childCount
+        headerSize = 9;
+      }
       path->_count = count;
       path->_capacity = count;
-      path->_points = malloc(count * pointSize);
-      memcpy(path->_points, bytes + 5, count * pointSize);
+      if (count > 0) {
+        path->_points = malloc(count * pointSize);
+        memcpy(path->_points, bytes + headerSize, count * pointSize);
+      }
       // Extended: corner radii after points
-      size_t extOffset = 5 + count * pointSize;
+      size_t extOffset = headerSize + count * pointSize;
       if ((flags & 4) && data.length >= extOffset + 4 * sizeof(float)) {
         // New: 4 per-corner radii
         float cr[4];
@@ -51,6 +73,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
         path->_cornerRadiusTR = cr[1];
         path->_cornerRadiusBR = cr[2];
         path->_cornerRadiusBL = cr[3];
+        extOffset += 4 * sizeof(float);
       } else if ((flags & 2) && data.length >= extOffset + sizeof(float)) {
         // Backwards compat: single radius applied to all corners
         float r;
@@ -59,6 +82,29 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
         path->_cornerRadiusTR = r;
         path->_cornerRadiusBR = r;
         path->_cornerRadiusBL = r;
+        extOffset += sizeof(float);
+      }
+      if ((flags & 64) && data.length >= extOffset + 2) {
+        uint16_t nameLen;
+        memcpy(&nameLen, bytes + extOffset, 2);
+        extOffset += 2;
+        if (nameLen > 0 && data.length >= extOffset + nameLen) {
+          path->_name = [[NSString alloc] initWithBytes:bytes + extOffset
+                                                 length:nameLen
+                                               encoding:NSUTF8StringEncoding];
+          extOffset += nameLen;
+        }
+      }
+      if (data.length >= extOffset + 2) {
+        uint16_t pgidLen;
+        memcpy(&pgidLen, bytes + extOffset, 2);
+        extOffset += 2;
+        if (pgidLen > 0 && data.length >= extOffset + pgidLen) {
+          path->_parentGroupID =
+              [[NSString alloc] initWithBytes:bytes + extOffset
+                                       length:pgidLen
+                                     encoding:NSUTF8StringEncoding];
+        }
       }
     } else if (data.length >= oldExpected && count > 0) {
       path->_count = count;
@@ -75,15 +121,33 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   uint8_t flags = _closed ? 1 : 0;
   if (_isRect)
     flags |= 8;
+  if (_hidden)
+    flags |= 16;
+  if (_locked)
+    flags |= 32;
+  if (_isGroup)
+    flags |= 128;
   BOOL hasRadius = (_cornerRadiusTL > 0 || _cornerRadiusTR > 0 ||
                     _cornerRadiusBR > 0 || _cornerRadiusBL > 0);
   if (hasRadius)
     flags |= 4;
+  NSData *nameData = [_name dataUsingEncoding:NSUTF8StringEncoding];
+  if (nameData.length > 0)
+    flags |= 64;
+  NSData *groupIDData = [_groupID dataUsingEncoding:NSUTF8StringEncoding];
+  NSData *parentGroupIDData =
+      [_parentGroupID dataUsingEncoding:NSUTF8StringEncoding];
   size_t pointSize = sizeof(KKBezierPoint);
-  NSMutableData *data = [NSMutableData
-      dataWithCapacity:4 + 1 + count * pointSize + 4 * sizeof(float)];
+  NSMutableData *data = [NSMutableData dataWithCapacity:128];
   [data appendBytes:&count length:4];
   [data appendBytes:&flags length:1];
+  if (_isGroup) {
+    // Write groupID length-prefixed (replaces old childCount)
+    uint16_t gidLen = (uint16_t)groupIDData.length;
+    [data appendBytes:&gidLen length:2];
+    if (gidLen > 0)
+      [data appendData:groupIDData];
+  }
   if (count > 0)
     [data appendBytes:_points length:count * pointSize];
   if (hasRadius) {
@@ -91,6 +155,16 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
                    _cornerRadiusBL};
     [data appendBytes:cr length:4 * sizeof(float)];
   }
+  if (nameData.length > 0) {
+    uint16_t nameLen = (uint16_t)nameData.length;
+    [data appendBytes:&nameLen length:2];
+    [data appendData:nameData];
+  }
+  // Always write parentGroupID (0 length = no parent)
+  uint16_t pgidLen = (uint16_t)parentGroupIDData.length;
+  [data appendBytes:&pgidLen length:2];
+  if (pgidLen > 0)
+    [data appendData:parentGroupIDData];
   return data;
 }
 

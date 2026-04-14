@@ -257,7 +257,7 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
 
   BOOL hasDrawablePaths = NO;
   for (KKBezierPath *p in paths) {
-    if (p.count >= 2) {
+    if (p.count >= 2 && !p.hidden) {
       hasDrawablePaths = YES;
       break;
     }
@@ -308,7 +308,7 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
                              (unsigned int)outputHeight};
 
   for (KKBezierPath *path in paths) {
-    if (path.count < 2)
+    if (path.count < 2 || path.hidden)
       continue;
 
     NSUInteger segsPerCurve = 128;
