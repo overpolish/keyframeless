@@ -78,8 +78,11 @@
   if (!row)
     return;
 
+  KKLayerActionTarget *at = (KKLayerActionTarget *)self.target;
+  KKLayerInstanceState *state = KKLayerStateForUUID(at.instanceUUID);
+
   BOOL optionHeld = (event.modifierFlags & NSEventModifierFlagOption) != 0;
-  NSIndexSet *dragIndices = sLayerUISelection;
+  NSIndexSet *dragIndices = state.uiSelection;
   if (!dragIndices || dragIndices.count == 0 ||
       ![dragIndices containsIndex:row.rowIndex])
     dragIndices = [NSIndexSet indexSetWithIndex:row.rowIndex];
@@ -95,7 +98,7 @@
       [[NSDraggingItem alloc] initWithPasteboardWriter:pbItem];
   [dragItem setDraggingFrame:row.bounds contents:[row snapshot]];
 
-  sLayerIsDragging = YES;
+  state.isDragging = YES;
   [row beginDraggingSessionWithItems:@[ dragItem ] event:event source:self];
 }
 
@@ -106,12 +109,10 @@
   if (event.clickCount >= 2) {
     KKLayerRow *row = self.parentRow;
     if (row) {
-      KKLayerListContainer *container = sLayerListContainer;
-      if (container) {
-        NSMenuItem *fake = [[NSMenuItem alloc] init];
-        fake.tag = row.rowIndex;
-        [(id<KKLayerReorder>)container.actionTarget renameRow:fake];
-      }
+      KKLayerActionTarget *renameAt = (KKLayerActionTarget *)self.target;
+      NSMenuItem *fake = [[NSMenuItem alloc] init];
+      fake.tag = row.rowIndex;
+      [renameAt renameRow:fake];
     }
   } else {
     [self performClick:self];
@@ -121,8 +122,10 @@
 - (void)draggingSession:(NSDraggingSession *)session
            endedAtPoint:(NSPoint)screenPoint
               operation:(NSDragOperation)operation {
-  sLayerIsDragging = NO;
-  sLayerForceRefresh = YES;
+  KKLayerActionTarget *endAt = (KKLayerActionTarget *)self.target;
+  KKLayerInstanceState *endState = KKLayerStateForUUID(endAt.instanceUUID);
+  endState.isDragging = NO;
+  endState.forceRefresh = YES;
 }
 
 @end

@@ -26,8 +26,8 @@
     [paramSetAPI
         setStringParameterValue:[newBlob base64EncodedStringWithOptions:0]
                     toParameter:kParamPathData];
-    sLayerForceRefresh = YES;
-    KKCanvasRefreshLayerList(paths.count, paths);
+    KKLayerStateForUUID(_instanceUUID).forceRefresh = YES;
+    KKCanvasRefreshLayerList(_instanceUUID, paths.count, paths);
   }
   [actionAPI endAction:self];
 }
@@ -48,8 +48,8 @@
   if (str.length > 0) {
     NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
     NSArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
-    sLayerForceRefresh = YES;
-    KKCanvasRefreshLayerList(paths.count, paths);
+    KKLayerStateForUUID(_instanceUUID).forceRefresh = YES;
+    KKCanvasRefreshLayerList(_instanceUUID, paths.count, paths);
   }
 }
 
@@ -121,8 +121,9 @@
 }
 
 - (void)_commitEditing {
-  KKLayerListContainer *container = sLayerListContainer;
-  if (!container || !sLayerIsEditing)
+  KKLayerListContainer *container =
+      KKLayerStateForUUID(_instanceUUID).container;
+  if (!container || !KKLayerStateForUUID(_instanceUUID).isEditing)
     return;
   [container.contentView.window makeFirstResponder:container.contentView];
 }
@@ -131,7 +132,8 @@
   [self _commitEditing];
 
   NSInteger index = sender.tag;
-  KKLayerListContainer *container = sLayerListContainer;
+  KKLayerListContainer *container =
+      KKLayerStateForUUID(_instanceUUID).container;
   if (!container)
     return;
 
@@ -162,7 +164,7 @@
         [btn removeFromSuperview];
         [row insertArrangedSubview:field atIndex:viewIndex];
 
-        sLayerIsEditing = YES;
+        KKLayerStateForUUID(_instanceUUID).isEditing = YES;
         [field.window makeFirstResponder:field];
         return;
       }
@@ -198,12 +200,12 @@
   }
   [actionAPI endAction:self];
 
-  sLayerIsEditing = NO;
-  sLayerForceRefresh = YES;
+  KKLayerStateForUUID(_instanceUUID).isEditing = NO;
+  KKLayerStateForUUID(_instanceUUID).forceRefresh = YES;
 }
 
 - (void)duplicateRow:(NSMenuItem *)sender {
-  NSIndexSet *sel = sLayerUISelection;
+  NSIndexSet *sel = KKLayerStateForUUID(_instanceUUID).uiSelection;
   if (!sel || sel.count <= 1 || ![sel containsIndex:sender.tag])
     sel = [NSIndexSet indexSetWithIndex:sender.tag];
   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
@@ -219,12 +221,12 @@
       [newSel addIndex:src + 1];
       offset++;
     }];
-    KKSetLayerSelection([newSel copy]);
+    KKSetLayerSelection(_instanceUUID, [newSel copy]);
   }];
 }
 
 - (void)deleteRow:(NSMenuItem *)sender {
-  NSIndexSet *sel = sLayerUISelection;
+  NSIndexSet *sel = KKLayerStateForUUID(_instanceUUID).uiSelection;
   if (!sel || sel.count <= 1 || ![sel containsIndex:sender.tag])
     sel = [NSIndexSet indexSetWithIndex:sender.tag];
   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
@@ -239,19 +241,20 @@
                                    [paths removeObjectAtIndex:idx];
                                }];
     NSMutableIndexSet *adjusted =
-        [sLayerUISelection mutableCopy] ?: [NSMutableIndexSet indexSet];
+        [KKLayerStateForUUID(_instanceUUID).uiSelection mutableCopy]
+            ?: [NSMutableIndexSet indexSet];
     [expanded enumerateIndexesWithOptions:NSEnumerationReverse
                                usingBlock:^(NSUInteger idx, BOOL *stop) {
                                  [adjusted removeIndex:idx];
                                  [adjusted shiftIndexesStartingAtIndex:idx + 1
                                                                     by:-1];
                                }];
-    KKSetLayerSelection([adjusted copy]);
+    KKSetLayerSelection(_instanceUUID, [adjusted copy]);
   }];
 }
 
 - (void)groupSelection:(NSMenuItem *)sender {
-  NSIndexSet *sel = sLayerUISelection;
+  NSIndexSet *sel = KKLayerStateForUUID(_instanceUUID).uiSelection;
   if (!sel || sel.count == 0)
     return;
   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
@@ -282,7 +285,7 @@
     for (NSUInteger i = 0; i < children.count; i++)
       [paths insertObject:children[i] atIndex:insertAt + 1 + i];
 
-    KKSetLayerSelection([NSIndexSet indexSetWithIndex:insertAt]);
+    KKSetLayerSelection(_instanceUUID, [NSIndexSet indexSetWithIndex:insertAt]);
   }];
 }
 
@@ -311,7 +314,7 @@
         [childSel addIndex:i];
       }
     }
-    KKSetLayerSelection([childSel copy]);
+    KKSetLayerSelection(_instanceUUID, [childSel copy]);
   }];
 }
 
@@ -336,16 +339,18 @@
     if (idx < paths.count && paths[idx].groupID) {
       NSString *gid = paths[idx].groupID;
       NSMutableSet<NSString *> *mut =
-          sLayerCollapsedGroupIDs ? [sLayerCollapsedGroupIDs mutableCopy]
-                                  : [NSMutableSet set];
+          KKLayerStateForUUID(_instanceUUID).collapsedGroupIDs
+              ? [KKLayerStateForUUID(_instanceUUID)
+                        .collapsedGroupIDs mutableCopy]
+              : [NSMutableSet set];
       if ([mut containsObject:gid])
         [mut removeObject:gid];
       else
         [mut addObject:gid];
-      sLayerCollapsedGroupIDs = [mut copy];
+      KKLayerStateForUUID(_instanceUUID).collapsedGroupIDs = [mut copy];
     }
-    sLayerForceRefresh = YES;
-    KKCanvasRefreshLayerList(paths.count, paths);
+    KKLayerStateForUUID(_instanceUUID).forceRefresh = YES;
+    KKCanvasRefreshLayerList(_instanceUUID, paths.count, paths);
   }
 }
 
@@ -354,7 +359,8 @@
   NSUInteger clicked = sender.tag;
   NSEventModifierFlags flags = NSEvent.modifierFlags;
   NSMutableIndexSet *sel =
-      [sLayerUISelection mutableCopy] ?: [NSMutableIndexSet indexSet];
+      [KKLayerStateForUUID(_instanceUUID).uiSelection mutableCopy]
+          ?: [NSMutableIndexSet indexSet];
 
   if (flags & NSEventModifierFlagCommand) {
     if ([sel containsIndex:clicked])
@@ -388,7 +394,7 @@
       [sel addIndexes:KKDescendantIndices(clicked, paths)];
   }
 
-  KKSetLayerSelection([sel copy]);
+  KKSetLayerSelection(_instanceUUID, [sel copy]);
 
   [paramSetAPI setStringParameterValue:str ?: @"" toParameter:kParamPathData];
   [actionAPI endAction:self];
@@ -396,8 +402,8 @@
   if (str.length > 0) {
     NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
     NSArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
-    sLayerForceRefresh = YES;
-    KKCanvasRefreshLayerList(paths.count, paths);
+    KKLayerStateForUUID(_instanceUUID).forceRefresh = YES;
+    KKCanvasRefreshLayerList(_instanceUUID, paths.count, paths);
   }
 }
 
@@ -440,8 +446,10 @@
       [paths insertObject:dragged[i] atIndex:insertAt + i];
     }
 
-    KKSetLayerSelection([NSIndexSet
-        indexSetWithIndexesInRange:NSMakeRange(insertAt, dragged.count)]);
+    KKSetLayerSelection(
+        _instanceUUID,
+        [NSIndexSet
+            indexSetWithIndexesInRange:NSMakeRange(insertAt, dragged.count)]);
   }];
 }
 
@@ -497,8 +505,10 @@
       [paths insertObject:clones[i] atIndex:insertAt + i];
     }
 
-    KKSetLayerSelection([NSIndexSet
-        indexSetWithIndexesInRange:NSMakeRange(insertAt, clones.count)]);
+    KKSetLayerSelection(
+        _instanceUUID,
+        [NSIndexSet
+            indexSetWithIndexesInRange:NSMakeRange(insertAt, clones.count)]);
   }];
 }
 

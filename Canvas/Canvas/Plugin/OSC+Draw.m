@@ -311,20 +311,22 @@
 
   self.paths = [self readPaths];
 
-  NSIndexSet *uiSelection = KKCanvasConsumePendingSelection();
-  if (uiSelection) {
-    KKLog *log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
-    [log info:@"drawOSC: consumed pending selection=%@", uiSelection];
-    [self.selectedPathIndices removeAllIndexes];
-    [self.selectedPathIndices addIndexes:uiSelection];
-    if (uiSelection.count > 0)
-      self.activePathIndex = (NSInteger)uiSelection.lastIndex;
-    else
-      self.activePathIndex = -1;
+  NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+  if (uuid) {
+    NSIndexSet *uiSelection = KKCanvasConsumePendingSelection(uuid);
+    if (uiSelection) {
+      KKLog *log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
+      [log info:@"drawOSC: consumed pending selection=%@", uiSelection];
+      [self.selectedPathIndices removeAllIndexes];
+      [self.selectedPathIndices addIndexes:uiSelection];
+      if (uiSelection.count > 0)
+        self.activePathIndex = (NSInteger)uiSelection.lastIndex;
+      else
+        self.activePathIndex = -1;
+    }
+    KKCanvasUpdateSelection(uuid, self.selectedPathIndices);
+    KKCanvasRefreshLayerList(uuid, self.paths.count, self.paths);
   }
-
-  KKCanvasUpdateSelection(self.selectedPathIndices);
-  KKCanvasRefreshLayerList(self.paths.count, self.paths);
 
   simd_float4 strokeColor = [[NSColor systemRedColor] simdFloat4];
   simd_float4 dimColor = strokeColor;

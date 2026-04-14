@@ -26,6 +26,22 @@ static NSString *const kLayerDuplicateDragType __attribute__((unused)) =
     @"com.overpolish.canvas.layerDuplicateDrag";
 
 @class KKLayerActionTarget;
+@class KKLayerListContainer;
+
+@interface KKLayerInstanceState : NSObject
+@property(nonatomic) BOOL forceRefresh;
+@property(nonatomic) BOOL isEditing;
+@property(nonatomic) BOOL isDragging;
+@property(nonatomic, copy) NSIndexSet *selectedIndices;
+@property(nonatomic, copy) NSIndexSet *uiSelection;
+@property(nonatomic, copy) NSIndexSet *pendingOSCSelection;
+@property(nonatomic, copy) NSSet<NSString *> *collapsedGroupIDs;
+@property(nonatomic, weak) KKLayerListContainer *container;
+@property(nonatomic) NSUInteger listHash;
+@end
+
+NSString *KKLayerUUIDForAPI(id<PROAPIAccessing> api);
+KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid);
 
 @protocol KKLayerReorder
 - (void)_reorderFromIndices:(NSIndexSet *)indices
@@ -70,6 +86,7 @@ static NSString *const kLayerDuplicateDragType __attribute__((unused)) =
 
 @interface KKLayerActionTarget : NSObject <NSTextFieldDelegate, KKLayerReorder>
 @property(nonatomic, weak) id<PROAPIAccessing> apiManager;
+@property(nonatomic, copy) NSString *instanceUUID;
 - (void)toggleVisibility:(NSButton *)sender;
 - (void)toggleLock:(NSButton *)sender;
 - (void)renameRow:(NSMenuItem *)sender;
@@ -88,26 +105,19 @@ static NSString *const kLayerDuplicateDragType __attribute__((unused)) =
                 parentGroupID:(NSString *)parentGroupID;
 @end
 
-extern BOOL sLayerForceRefresh;
-extern BOOL sLayerIsEditing;
-extern BOOL sLayerIsDragging;
-extern NSIndexSet *sLayerSelectedIndices;
-extern NSIndexSet *sLayerUISelection;
-extern NSIndexSet *sLayerPendingOSCSelection;
-extern NSSet<NSString *> *sLayerCollapsedGroupIDs;
-extern KKLayerListContainer *sLayerListContainer;
-extern NSUInteger sLayerListHash;
-
 NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
                                 NSArray<KKBezierPath *> *paths);
 
-void KKCanvasRefreshLayerList(NSUInteger pathCount,
+void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
                               NSArray<KKBezierPath *> *paths);
+void KKCanvasUpdateSelection(NSString *uuid, NSIndexSet *indices);
+NSIndexSet *_Nullable KKCanvasConsumePendingSelection(NSString *uuid);
 
-static inline void KKSetLayerSelection(NSIndexSet *sel) {
-  sLayerUISelection = sel;
-  sLayerSelectedIndices = sel;
-  sLayerPendingOSCSelection = sel;
+static inline void KKSetLayerSelection(NSString *uuid, NSIndexSet *sel) {
+  KKLayerInstanceState *s = KKLayerStateForUUID(uuid);
+  s.uiSelection = sel;
+  s.selectedIndices = sel;
+  s.pendingOSCSelection = sel;
 }
 
 static inline NSButton *KKIconButton(NSString *symbolName,

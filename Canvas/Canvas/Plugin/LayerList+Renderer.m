@@ -25,17 +25,19 @@ NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
   return result;
 }
 
-NSIndexSet *_Nullable KKCanvasConsumePendingSelection(void) {
-  NSIndexSet *pending = sLayerPendingOSCSelection;
-  sLayerPendingOSCSelection = nil;
+NSIndexSet *_Nullable KKCanvasConsumePendingSelection(NSString *uuid) {
+  KKLayerInstanceState *s = KKLayerStateForUUID(uuid);
+  NSIndexSet *pending = s.pendingOSCSelection;
+  s.pendingOSCSelection = nil;
   return pending;
 }
 
-void KKCanvasUpdateSelection(NSIndexSet *indices) {
+void KKCanvasUpdateSelection(NSString *uuid, NSIndexSet *indices) {
+  KKLayerInstanceState *s = KKLayerStateForUUID(uuid);
   NSIndexSet *copy = [indices copy];
-  sLayerSelectedIndices = copy;
+  s.selectedIndices = copy;
   dispatch_async(dispatch_get_main_queue(), ^{
-    sLayerUISelection = copy;
+    s.uiSelection = copy;
   });
 }
 
@@ -69,14 +71,15 @@ static BOOL
 isAncestorCollapsed(NSUInteger index, NSArray<NSString *> *parentGroupIDs,
                     NSArray<NSString *> *groupIDs,
                     NSArray<NSNumber *> *groupFlags,
-                    NSDictionary<NSString *, NSNumber *> *groupIndexMap) {
+                    NSDictionary<NSString *, NSNumber *> *groupIndexMap,
+                    NSSet<NSString *> *collapsedGroupIDs) {
   NSString *pid = parentGroupIDs[index];
   NSUInteger guard = 0;
   while (pid.length > 0 && guard < kGroupDepthGuard) {
     guard++;
     NSNumber *parentIdx = groupIndexMap[pid];
     if (parentIdx &&
-        [sLayerCollapsedGroupIDs
+        [collapsedGroupIDs
             containsObject:groupIDs[parentIdx.unsignedIntegerValue]])
       return YES;
     if (parentIdx)
@@ -207,14 +210,17 @@ buildRow(NSUInteger index, BOOL isGroup, BOOL isCollapsed, BOOL isHidden,
   return row;
 }
 
-void KKCanvasRefreshLayerList(NSUInteger pathCount,
+void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
                               NSArray<KKBezierPath *> *paths) {
-  NSIndexSet *selection = sLayerSelectedIndices ?: [NSIndexSet indexSet];
-  NSUInteger hash = layerListHash(pathCount, paths, selection);
-  if (hash == sLayerListHash && !sLayerForceRefresh)
+  KKLayerInstanceState *st = KKLayerStateForUUID(uuid);
+  if (!st)
     return;
-  sLayerListHash = hash;
-  sLayerForceRefresh = NO;
+  NSIndexSet *selection = st.selectedIndices ?: [NSIndexSet indexSet];
+  NSUInteger hash = layerListHash(pathCount, paths, selection);
+  if (hash == st.listHash && !st.forceRefresh)
+    return;
+  st.listHash = hash;
+  st.forceRefresh = NO;
 
   NSIndexSet *capturedSelection = [selection copy];
   NSMutableArray<NSNumber *> *hiddenStates =
@@ -241,10 +247,10 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
   }
 
   dispatch_async(dispatch_get_main_queue(), ^{
-    KKLayerListContainer *container = sLayerListContainer;
+    KKLayerListContainer *container = st.container;
     if (!container)
       return;
-    if (sLayerIsEditing || sLayerIsDragging)
+    if (st.isEditing || st.isDragging)
       return;
 
     NSView *content = container.contentView;
@@ -277,12 +283,12 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
 
     for (NSUInteger i = 0; i < pathCount; i++) {
       if (isAncestorCollapsed(i, parentGroupIDs, groupIDs, groupFlags,
-                              groupIndexMap))
+                              groupIndexMap, st.collapsedGroupIDs))
         continue;
 
       BOOL isGroup = groupFlags[i].boolValue;
       BOOL collapsed = isGroup && groupIDs[i].length > 0 &&
-                       [sLayerCollapsedGroupIDs containsObject:groupIDs[i]];
+                       [st.collapsedGroupIDs containsObject:groupIDs[i]];
       NSUInteger depth = groupDepth(i, parentGroupIDs, groupIndexMap);
       NSString *pgid = parentGroupIDs[i].length > 0 ? parentGroupIDs[i] : nil;
 

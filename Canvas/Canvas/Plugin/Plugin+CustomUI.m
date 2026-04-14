@@ -5,16 +5,46 @@
 
 #import "LayerList_Private.h"
 #import <objc/message.h>
+#import <objc/runtime.h>
 
-BOOL sLayerForceRefresh = NO;
-BOOL sLayerIsEditing = NO;
-BOOL sLayerIsDragging = NO;
-NSIndexSet *sLayerSelectedIndices;
-NSIndexSet *sLayerUISelection;
-NSIndexSet *sLayerPendingOSCSelection;
-NSSet<NSString *> *sLayerCollapsedGroupIDs;
-KKLayerListContainer *sLayerListContainer;
-NSUInteger sLayerListHash = NSUIntegerMax;
+@implementation KKLayerInstanceState
+- (instancetype)init {
+  self = [super init];
+  _listHash = NSUIntegerMax;
+  return self;
+}
+@end
+
+static NSDictionary<NSString *, KKLayerInstanceState *> *sLayerStates;
+
+NSString *KKLayerUUIDForAPI(id<PROAPIAccessing> api) {
+  NSString *cached =
+      objc_getAssociatedObject(api, @selector(KKLayerUUIDForAPI));
+  if (cached)
+    return cached;
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [api apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  NSString *uuid = nil;
+  [paramGetAPI getStringParameterValue:&uuid fromParameter:kParamInstanceID];
+  if (uuid.length > 0)
+    objc_setAssociatedObject(api, @selector(KKLayerUUIDForAPI), uuid,
+                             OBJC_ASSOCIATION_COPY_NONATOMIC);
+  return uuid;
+}
+
+KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
+  if (!uuid)
+    return nil;
+  KKLayerInstanceState *state = sLayerStates[uuid];
+  if (!state) {
+    state = [[KKLayerInstanceState alloc] init];
+    NSMutableDictionary *mut = sLayerStates ? [sLayerStates mutableCopy]
+                                            : [NSMutableDictionary dictionary];
+    mut[uuid] = state;
+    sLayerStates = [mut copy];
+  }
+  return state;
+}
 
 @implementation CanvasPlugin (CustomUI)
 
@@ -119,14 +149,29 @@ NSUInteger sLayerListHash = NSUIntegerMax;
     wrapper.contentHeightConstraint = heightConstraint;
     wrapper.actionTarget = actionTarget;
     content.actionTarget = actionTarget;
-    sLayerListContainer = wrapper;
-    sLayerListHash = NSUIntegerMax;
 
     id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
         apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
     [actionAPI startAction:self];
     id<FxParameterRetrievalAPI_v6> paramGetAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> paramSetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+
+    NSString *uuid = nil;
+    [paramGetAPI getStringParameterValue:&uuid fromParameter:kParamInstanceID];
+    if (uuid.length == 0) {
+      uuid = [[NSUUID UUID] UUIDString];
+      [paramSetAPI setStringParameterValue:uuid toParameter:kParamInstanceID];
+    }
+    objc_setAssociatedObject(self.apiManager, @selector(KKLayerUUIDForAPI),
+                             uuid, OBJC_ASSOCIATION_COPY_NONATOMIC);
+    actionTarget.instanceUUID = uuid;
+
+    KKLayerInstanceState *state = KKLayerStateForUUID(uuid);
+    state.container = wrapper;
+    state.listHash = NSUIntegerMax;
+
     NSString *str = nil;
     [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
     [actionAPI endAction:self];
@@ -135,7 +180,7 @@ NSUInteger sLayerListHash = NSUIntegerMax;
       NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
       NSArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
       if (paths.count > 0)
-        KKCanvasRefreshLayerList(paths.count, paths);
+        KKCanvasRefreshLayerList(uuid, paths.count, paths);
     }
 
     return wrapper;
