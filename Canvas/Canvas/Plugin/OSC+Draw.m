@@ -188,11 +188,12 @@
   if (ix1 - ix0 <= 0 || iy1 - iy0 <= 0)
     return;
 
-  CGPoint tl = {x0, y0}, tr = {x1, y0}, br = {x1, y1}, bl = {x0, y1};
-  [self drawLineFrom:tl to:tr color:color halfWidth:1.5f destinationImage:dest];
-  [self drawLineFrom:tr to:br color:color halfWidth:1.5f destinationImage:dest];
-  [self drawLineFrom:br to:bl color:color halfWidth:1.5f destinationImage:dest];
-  [self drawLineFrom:bl to:tl color:color halfWidth:1.5f destinationImage:dest];
+  CGPoint points[5] = {{x0, y0}, {x1, y0}, {x1, y1}, {x0, y1}, {x0, y0}};
+  [self drawLineStripWithPoints:points
+                          count:5
+                          color:color
+                      halfWidth:1.5f
+               destinationImage:dest];
 
   NSInteger pxW = ix1 - ix0, pxH = iy1 - iy0;
   self.sizeLabel.text =
@@ -214,17 +215,16 @@
     return;
 
   NSUInteger segments = 64;
-  CGPoint prev = {cx + rx, cy};
-  for (NSUInteger i = 1; i <= segments; i++) {
+  CGPoint points[segments + 1];
+  for (NSUInteger i = 0; i <= segments; i++) {
     float t = (float)i / (float)segments * 2.0f * M_PI;
-    CGPoint cur = {cx + rx * cosf(t), cy + ry * sinf(t)};
-    [self drawLineFrom:prev
-                      to:cur
-                   color:color
-               halfWidth:1.5f
-        destinationImage:dest];
-    prev = cur;
+    points[i] = (CGPoint){cx + rx * cosf(t), cy + ry * sinf(t)};
   }
+  [self drawLineStripWithPoints:points
+                          count:segments + 1
+                          color:color
+                      halfWidth:1.5f
+               destinationImage:dest];
 
   NSInteger pxW = (NSInteger)round(rx * 2.0), pxH = (NSInteger)round(ry * 2.0);
   self.sizeLabel.text =
@@ -240,7 +240,7 @@
           destinationImage:(FxImageTile *)dest {
   simd_float4 lightColor = {1.0f, 1.0f, 1.0f, 0.9f};
   simd_float4 darkColor = {0.0f, 0.0f, 0.0f, 0.6f};
-  CGFloat hw = 1.5f, dash = 8.0f, gap = 5.0f;
+  CGFloat dash = 8.0f, gap = 5.0f;
 
   CGFloat x0 = floor(MIN(a.x, b.x)) + 0.5f;
   CGFloat x1 = floor(MAX(a.x, b.x)) + 0.5f;
@@ -248,6 +248,12 @@
   CGFloat y1 = floor(MAX(a.y, b.y)) + 0.5f;
   CGPoint tl = {x0, y0}, tr = {x1, y0}, br = {x1, y1}, bl = {x0, y1};
   CGPoint edges[4][2] = {{tl, tr}, {tr, br}, {br, bl}, {bl, tl}};
+
+  CGFloat perimeter = 2.0 * (x1 - x0) + 2.0 * (y1 - y0);
+  NSUInteger maxSegs = (NSUInteger)(perimeter / MIN(dash, gap)) + 8;
+  CGPoint *lightPts = malloc(sizeof(CGPoint) * maxSegs * 2);
+  CGPoint *darkPts = malloc(sizeof(CGPoint) * maxSegs * 2);
+  NSUInteger lightCount = 0, darkCount = 0;
 
   for (int e = 0; e < 4; e++) {
     CGPoint from = edges[e][0], to = edges[e][1];
@@ -263,15 +269,30 @@
       CGFloat end = MIN(pos + seg, len);
       CGPoint dFrom = {from.x + nx * pos, from.y + ny * pos};
       CGPoint dTo = {from.x + nx * end, from.y + ny * end};
-      [self drawLineFrom:dFrom
-                        to:dTo
-                     color:on ? lightColor : darkColor
-                 halfWidth:hw
-          destinationImage:dest];
+      if (on) {
+        lightPts[lightCount++] = dFrom;
+        lightPts[lightCount++] = dTo;
+      } else {
+        darkPts[darkCount++] = dFrom;
+        darkPts[darkCount++] = dTo;
+      }
       pos = end;
       on = !on;
     }
   }
+
+  [self drawLineSegmentsWithPoints:lightPts
+                             count:lightCount
+                             color:lightColor
+                         halfWidth:1.5f
+                  destinationImage:dest];
+  [self drawLineSegmentsWithPoints:darkPts
+                             count:darkCount
+                             color:darkColor
+                         halfWidth:1.5f
+                  destinationImage:dest];
+  free(lightPts);
+  free(darkPts);
 }
 
 - (void)drawOSCWithWidth:(NSInteger)width
