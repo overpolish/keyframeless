@@ -324,7 +324,9 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
   simd_uint2 viewportSize = {(unsigned int)outputWidth,
                              (unsigned int)outputHeight};
 
-  for (KKBezierPath *path in paths) {
+  // Render in reverse: index 0 is drawn last (on top), matching layer list.
+  for (NSUInteger pi = paths.count; pi > 0; pi--) {
+    KKBezierPath *path = paths[pi - 1];
     if (path.count < 2 || path.hidden)
       continue;
 

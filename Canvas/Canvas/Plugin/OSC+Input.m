@@ -371,8 +371,8 @@
     KKBezierPath *newPath = [[KKBezierPath alloc] init];
     newPath.name = [NSString
         stringWithFormat:@"Path %lu", (unsigned long)(self.paths.count + 1)];
-    [self.paths addObject:newPath];
-    self.activePathIndex = (NSInteger)self.paths.count - 1;
+    [self.paths insertObject:newPath atIndex:0];
+    self.activePathIndex = 0;
     active = newPath;
   } else if (active.closed) {
     double hitRadiusStroke = [self strokeHitRadius];
@@ -391,8 +391,8 @@
     KKBezierPath *newPath = [[KKBezierPath alloc] init];
     newPath.name = [NSString
         stringWithFormat:@"Path %lu", (unsigned long)(self.paths.count + 1)];
-    [self.paths addObject:newPath];
-    self.activePathIndex = (NSInteger)self.paths.count - 1;
+    [self.paths insertObject:newPath atIndex:0];
+    self.activePathIndex = 0;
     active = newPath;
   }
 
