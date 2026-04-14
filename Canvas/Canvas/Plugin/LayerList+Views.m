@@ -54,7 +54,7 @@
 
 - (NSDragOperation)draggingSession:(NSDraggingSession *)session
     sourceOperationMaskForDraggingContext:(NSDraggingContext)context {
-  return NSDragOperationMove;
+  return NSDragOperationEvery;
 }
 
 - (void)mouseDown:(NSEvent *)event {
@@ -78,12 +78,18 @@
   if (!row)
     return;
 
-  NSIndexSet *dragIndices = [NSIndexSet indexSetWithIndex:row.rowIndex];
+  BOOL optionHeld = (event.modifierFlags & NSEventModifierFlagOption) != 0;
+  NSIndexSet *dragIndices = sLayerUISelection;
+  if (!dragIndices || dragIndices.count == 0 ||
+      ![dragIndices containsIndex:row.rowIndex])
+    dragIndices = [NSIndexSet indexSetWithIndex:row.rowIndex];
+
   NSData *data = [NSKeyedArchiver archivedDataWithRootObject:dragIndices
                                        requiringSecureCoding:YES
                                                        error:nil];
+  NSString *dragType = optionHeld ? kLayerDuplicateDragType : kLayerDragType;
   NSPasteboardItem *pbItem = [[NSPasteboardItem alloc] init];
-  [pbItem setData:data forType:kLayerDragType];
+  [pbItem setData:data forType:dragType];
 
   NSDraggingItem *dragItem =
       [[NSDraggingItem alloc] initWithPasteboardWriter:pbItem];
@@ -133,13 +139,14 @@
   self = [super initWithFrame:frame];
   if (self) {
     self.dropFlatIndex = -1;
-    [self registerForDraggedTypes:@[ kLayerDragType ]];
+    [self registerForDraggedTypes:@[ kLayerDragType, kLayerDuplicateDragType ]];
   }
   return self;
 }
 
 - (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
-  return NSDragOperationMove;
+  return [self _isDuplicateDrag:sender] ? NSDragOperationCopy
+                                        : NSDragOperationMove;
 }
 
 - (NSArray<KKLayerRow *> *)_sortedVisibleRows {
@@ -157,10 +164,16 @@
 - (NSIndexSet *)_dragIndicesFromPasteboard:(id<NSDraggingInfo>)sender {
   NSData *data = [sender.draggingPasteboard dataForType:kLayerDragType];
   if (!data)
+    data = [sender.draggingPasteboard dataForType:kLayerDuplicateDragType];
+  if (!data)
     return nil;
   return [NSKeyedUnarchiver unarchivedObjectOfClass:[NSIndexSet class]
                                            fromData:data
                                               error:nil];
+}
+
+- (BOOL)_isDuplicateDrag:(id<NSDraggingInfo>)sender {
+  return [sender.draggingPasteboard dataForType:kLayerDuplicateDragType] != nil;
 }
 
 - (NSString *)_resolveParentGID:(NSString *)parentGID
@@ -252,7 +265,8 @@
     self.dropParentGroupID = parentGID;
     [self _updateDropIndicatorAtVisRow:visIdx];
   }
-  return NSDragOperationMove;
+  return [self _isDuplicateDrag:sender] ? NSDragOperationCopy
+                                        : NSDragOperationMove;
 }
 
 - (void)draggingExited:(id<NSDraggingInfo>)sender {
@@ -277,9 +291,15 @@
 
   NSString *pgid = self.dropParentGroupID;
   self.dropParentGroupID = nil;
-  [self.actionTarget _reorderFromIndices:dragIndices
-                                 toIndex:(NSUInteger)targetIndex
-                           parentGroupID:pgid];
+  if ([self _isDuplicateDrag:sender]) {
+    [self.actionTarget _duplicateFromIndices:dragIndices
+                                     toIndex:(NSUInteger)targetIndex
+                               parentGroupID:pgid];
+  } else {
+    [self.actionTarget _reorderFromIndices:dragIndices
+                                   toIndex:(NSUInteger)targetIndex
+                             parentGroupID:pgid];
+  }
   return YES;
 }
 

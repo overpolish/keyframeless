@@ -69,15 +69,40 @@
 
 - (void)toggleVisibility:(NSButton *)sender {
   NSUInteger idx = sender.tag;
+  BOOL optionHeld = (NSEvent.modifierFlags & NSEventModifierFlagOption) != 0;
   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
     if (idx >= paths.count)
       return;
-    BOOL newVal = !paths[idx].hidden;
-    [self _toggleGroupProperty:idx
-                         paths:paths
-                         apply:^(KKBezierPath *p) {
-                           p.hidden = newVal;
-                         }];
+    if (optionHeld) {
+      NSIndexSet *soloSet = [NSIndexSet indexSetWithIndex:idx];
+      if (paths[idx].isGroup)
+        soloSet = ({
+          NSMutableIndexSet *s = [soloSet mutableCopy];
+          [s addIndexes:KKDescendantIndices(idx, paths)];
+          [s copy];
+        });
+      BOOL alreadySolo = YES;
+      for (NSUInteger i = 0; i < paths.count; i++) {
+        if ([soloSet containsIndex:i] && paths[i].hidden) {
+          alreadySolo = NO;
+          break;
+        }
+        if (![soloSet containsIndex:i] && !paths[i].hidden) {
+          alreadySolo = NO;
+          break;
+        }
+      }
+      BOOL hideOthers = !alreadySolo;
+      for (NSUInteger i = 0; i < paths.count; i++)
+        paths[i].hidden = hideOthers ? ![soloSet containsIndex:i] : NO;
+    } else {
+      BOOL newVal = !paths[idx].hidden;
+      [self _toggleGroupProperty:idx
+                           paths:paths
+                           apply:^(KKBezierPath *p) {
+                             p.hidden = newVal;
+                           }];
+    }
   }];
 }
 
@@ -417,6 +442,63 @@
 
     KKSetLayerSelection([NSIndexSet
         indexSetWithIndexesInRange:NSMakeRange(insertAt, dragged.count)]);
+  }];
+}
+
+- (void)_duplicateFromIndices:(NSIndexSet *)indices
+                      toIndex:(NSUInteger)target
+                parentGroupID:(NSString *)parentGroupID {
+  [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
+    NSMutableIndexSet *expanded = [indices mutableCopy];
+    [indices enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+      if (idx < paths.count && paths[idx].isGroup)
+        [expanded addIndexes:KKDescendantIndices(idx, paths)];
+    }];
+
+    NSMutableSet *directItems = [NSMutableSet set];
+    [indices enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+      if (idx < paths.count)
+        [directItems addObject:paths[idx]];
+    }];
+
+    NSMutableDictionary<NSString *, NSString *> *groupIDMap =
+        [NSMutableDictionary dictionary];
+    NSMutableArray<KKBezierPath *> *clones = [NSMutableArray array];
+    [expanded enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+      if (idx >= paths.count)
+        return;
+      KKBezierPath *clone =
+          [KKBezierPath pathWithData:[paths[idx] dataRepresentation]];
+      if (clone.isGroup && clone.groupID) {
+        NSString *newGID = [[NSUUID UUID] UUIDString];
+        groupIDMap[clone.groupID] = newGID;
+        clone.groupID = newGID;
+      }
+      [clones addObject:clone];
+    }];
+
+    for (KKBezierPath *clone in clones) {
+      if (clone.parentGroupID && groupIDMap[clone.parentGroupID])
+        clone.parentGroupID = groupIDMap[clone.parentGroupID];
+    }
+
+    NSMutableSet *directClones = [NSMutableSet set];
+    __block NSUInteger ci = 0;
+    [expanded enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+      if (idx < paths.count && [directItems containsObject:paths[idx]])
+        [directClones addObject:clones[ci]];
+      ci++;
+    }];
+
+    NSUInteger insertAt = MIN(target, paths.count);
+    for (NSUInteger i = 0; i < clones.count; i++) {
+      if ([directClones containsObject:clones[i]])
+        clones[i].parentGroupID = parentGroupID;
+      [paths insertObject:clones[i] atIndex:insertAt + i];
+    }
+
+    KKSetLayerSelection([NSIndexSet
+        indexSetWithIndexesInRange:NSMakeRange(insertAt, clones.count)]);
   }];
 }
 
