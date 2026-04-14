@@ -17,35 +17,30 @@
   if (path.closed && path.count >= 2)
     segCount = path.count;
 
-  CGPoint prev = CGPointZero;
-  BOOL hasPrev = NO;
+  NSUInteger maxPoints = segCount * 32 + 2;
+  CGPoint *points = malloc(sizeof(CGPoint) * maxPoints);
+  NSUInteger pointCount = 0;
+
   for (NSUInteger i = 0; i < segCount; i++) {
     NSUInteger nextIdx = (i + 1) % path.count;
-    NSUInteger startS = (hasPrev && i > 0) ? 1 : 0;
+    NSUInteger startS = (pointCount > 0 && i > 0) ? 1 : 0;
     for (NSUInteger s = startS; s <= 32; s++) {
       float t = (float)s / 32.0f;
       simd_float2 pos = [path evaluatePointAtIndex:i nextIndex:nextIdx atT:t];
-      CGPoint cur = [self canvasPointFromObjectPoint:pos];
-      if (hasPrev) {
-        [self drawLineFrom:prev
-                          to:cur
-                       color:color
-                   halfWidth:1.5f
-            destinationImage:dest];
-      }
-      prev = cur;
-      hasPrev = YES;
+      points[pointCount++] = [self canvasPointFromObjectPoint:pos];
     }
   }
-  if (path.closed && hasPrev) {
+  if (path.closed && pointCount > 0) {
     simd_float2 firstPos = [path evaluatePointAtIndex:0 nextIndex:1 atT:0.0f];
-    CGPoint first = [self canvasPointFromObjectPoint:firstPos];
-    [self drawLineFrom:prev
-                      to:first
-                   color:color
-               halfWidth:1.5f
-        destinationImage:dest];
+    points[pointCount++] = [self canvasPointFromObjectPoint:firstPos];
   }
+
+  [self drawLineStripWithPoints:points
+                          count:pointCount
+                          color:color
+                      halfWidth:1.5f
+               destinationImage:dest];
+  free(points);
 }
 
 - (BOOL)isPointVisuallySelected:(NSUInteger)pathIndex
