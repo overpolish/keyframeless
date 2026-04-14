@@ -173,11 +173,24 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
     state.container = wrapper;
     state.listHash = NSUIntegerMax;
 
-    // Force-hide per-object params on load — selection is always empty here.
-    KKHideObjectParams(paramSetAPI);
-
+    // Write back any pending per-object param edits (e.g. user edited
+    // params, then switched clips without changing selection).
     NSString *str = nil;
     [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
+    NSInteger lastIdx = KKReadSelectedIndex(paramGetAPI);
+    if (str.length > 0 && lastIdx >= 0) {
+      NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
+      NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+      if ((NSUInteger)lastIdx < paths.count && !paths[lastIdx].isGroup) {
+        KKParamsToPath(paramGetAPI, paths[lastIdx]);
+        NSData *newBlob = [KKBezierPath blobFromPaths:paths];
+        [paramSetAPI
+            setStringParameterValue:[newBlob base64EncodedStringWithOptions:0]
+                        toParameter:kParamPathData];
+      }
+    }
+    // Visibility is managed by drawOSC every frame — don't hide here
+    // as this method also fires when switching to the inspector panel.
     [actionAPI endAction:self];
 
     if (str.length > 0) {

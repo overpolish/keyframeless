@@ -249,10 +249,14 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
 
   // Set param values and visibility from the newly-selected path.
   KKBezierPath *selPath = KKSelectedPath(self.selectedPathIndices, self.paths);
-  if (selPath)
+  if (selPath) {
     KKPathToParams(paramSetAPI, selPath);
-  else
+    KKSaveSelectedIndex(
+        paramSetAPI, (NSInteger)[self.paths indexOfObjectIdenticalTo:selPath]);
+  } else {
     KKHideObjectParams(paramSetAPI);
+    KKSaveSelectedIndex(paramSetAPI, -1);
+  }
 }
 
 - (void)boundsOfPath:(KKBezierPath *)path

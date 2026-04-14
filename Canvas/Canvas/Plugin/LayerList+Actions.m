@@ -187,10 +187,14 @@
                           paramSetAPI:
                               (id<FxParameterSettingAPI_v5>)paramSetAPI {
   KKBezierPath *selected = KKSelectedPath(sel, paths ?: @[]);
-  if (selected)
+  if (selected) {
     KKPathToParams(paramSetAPI, selected);
-  else
+    KKSaveSelectedIndex(paramSetAPI,
+                        (NSInteger)[paths indexOfObjectIdenticalTo:selected]);
+  } else {
     KKHideObjectParams(paramSetAPI);
+    KKSaveSelectedIndex(paramSetAPI, -1);
+  }
 }
 
 - (void)renameRow:(NSMenuItem *)sender {
