@@ -16,10 +16,10 @@
 @end
 
 static NSDictionary<NSString *, KKLayerInstanceState *> *sLayerStates;
+static const char kKKLayerUUIDAssocKey;
 
 NSString *KKLayerUUIDForAPI(id<PROAPIAccessing> api) {
-  NSString *cached =
-      objc_getAssociatedObject(api, @selector(KKLayerUUIDForAPI));
+  NSString *cached = objc_getAssociatedObject(api, &kKKLayerUUIDAssocKey);
   if (cached)
     return cached;
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
@@ -27,7 +27,7 @@ NSString *KKLayerUUIDForAPI(id<PROAPIAccessing> api) {
   NSString *uuid = nil;
   [paramGetAPI getStringParameterValue:&uuid fromParameter:kParamInstanceID];
   if (uuid.length > 0)
-    objc_setAssociatedObject(api, @selector(KKLayerUUIDForAPI), uuid,
+    objc_setAssociatedObject(api, &kKKLayerUUIDAssocKey, uuid,
                              OBJC_ASSOCIATION_COPY_NONATOMIC);
   return uuid;
 }
@@ -164,8 +164,8 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
       uuid = [[NSUUID UUID] UUIDString];
       [paramSetAPI setStringParameterValue:uuid toParameter:kParamInstanceID];
     }
-    objc_setAssociatedObject(self.apiManager, @selector(KKLayerUUIDForAPI),
-                             uuid, OBJC_ASSOCIATION_COPY_NONATOMIC);
+    objc_setAssociatedObject(self.apiManager, &kKKLayerUUIDAssocKey, uuid,
+                             OBJC_ASSOCIATION_COPY_NONATOMIC);
     actionTarget.instanceUUID = uuid;
 
     KKLayerInstanceState *state = KKLayerStateForUUID(uuid);
