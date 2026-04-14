@@ -60,6 +60,14 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, assign) float cornerRadiusBR;
 @property(nonatomic, assign) float cornerRadiusBL;
 
+/// Stroke width for this path (default 8.0).
+@property(nonatomic, assign) float strokeWidth;
+
+/// Stroke color components (default red: 1, 0, 0).
+@property(nonatomic, assign) float strokeR;
+@property(nonatomic, assign) float strokeG;
+@property(nonatomic, assign) float strokeB;
+
 + (instancetype)pathWithData:(nullable NSData *)data;
 - (NSData *)dataRepresentation;
 

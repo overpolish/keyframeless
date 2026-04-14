@@ -32,6 +32,11 @@ NSIndexSet *_Nullable KKCanvasConsumePendingSelection(NSString *uuid) {
   return pending;
 }
 
+NSIndexSet *_Nullable KKCanvasCurrentSelection(NSString *uuid) {
+  KKLayerInstanceState *s = KKLayerStateForUUID(uuid);
+  return s.selectedIndices;
+}
+
 void KKCanvasUpdateSelection(NSString *uuid, NSIndexSet *indices) {
   KKLayerInstanceState *s = KKLayerStateForUUID(uuid);
   NSIndexSet *copy = [indices copy];

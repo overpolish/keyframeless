@@ -4,6 +4,7 @@
  */
 
 #import "LayerList_Private.h"
+#import "ObjectParams.h"
 #import <objc/message.h>
 #import <objc/runtime.h>
 
@@ -171,6 +172,9 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
     KKLayerInstanceState *state = KKLayerStateForUUID(uuid);
     state.container = wrapper;
     state.listHash = NSUIntegerMax;
+
+    // Force-hide per-object params on load — selection is always empty here.
+    KKHideObjectParams(paramSetAPI);
 
     NSString *str = nil;
     [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];

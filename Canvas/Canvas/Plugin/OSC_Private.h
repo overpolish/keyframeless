@@ -6,6 +6,7 @@
 #pragma once
 
 #import "OSC.h"
+#import "ObjectParams.h"
 #import <CoreGraphics/CGEventSource.h>
 #import <FxPlug/FxPlugSDK.h>
 

@@ -416,6 +416,7 @@
     [self finalizeLine];
 
   [self resetDragState];
+  [self syncStrokeParamsToSelection];
   *forceUpdate = YES;
   [super mouseUpAtPositionX:positionX
                   positionY:positionY
@@ -439,6 +440,7 @@
     [self.selectedPathIndices removeAllIndexes];
     self.activePathIndex = -1;
     self.toolbar.activeTag = kOSCToolbarCursor;
+    [self syncStrokeParamsToSelection];
     *forceUpdate = YES;
     *didHandle = YES;
     return;

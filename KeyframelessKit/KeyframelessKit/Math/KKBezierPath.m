@@ -104,7 +104,19 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
               [[NSString alloc] initWithBytes:bytes + extOffset
                                        length:pgidLen
                                      encoding:NSUTF8StringEncoding];
+          extOffset += pgidLen;
         }
+      }
+      // Stroke data: marker 0xAA + 4 floats (width, r, g, b)
+      if (data.length >= extOffset + 1 + 4 * sizeof(float) &&
+          bytes[extOffset] == 0xAA) {
+        extOffset += 1;
+        float strokeData[4];
+        memcpy(strokeData, bytes + extOffset, 4 * sizeof(float));
+        path->_strokeWidth = strokeData[0];
+        path->_strokeR = strokeData[1];
+        path->_strokeG = strokeData[2];
+        path->_strokeB = strokeData[3];
       }
     } else if (data.length >= oldExpected && count > 0) {
       path->_count = count;
@@ -165,6 +177,11 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   [data appendBytes:&pgidLen length:2];
   if (pgidLen > 0)
     [data appendData:parentGroupIDData];
+  // Stroke data: marker 0xAA + strokeWidth(float) + r,g,b(3 floats)
+  uint8_t strokeMarker = 0xAA;
+  [data appendBytes:&strokeMarker length:1];
+  float strokeData[4] = {_strokeWidth, _strokeR, _strokeG, _strokeB};
+  [data appendBytes:strokeData length:4 * sizeof(float)];
   return data;
 }
 
@@ -222,6 +239,10 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     _points = NULL;
     _count = 0;
     _capacity = 0;
+    _strokeWidth = 8.0f;
+    _strokeR = 1.0f;
+    _strokeG = 0.0f;
+    _strokeB = 0.0f;
   }
   return self;
 }

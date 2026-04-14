@@ -4,6 +4,7 @@
  */
 
 #import "Constants.h"
+#import "ObjectParams.h"
 #import "Plugin_Private.h"
 #import "ShaderTypes.h"
 #import <IOSurface/IOSurfaceObjC.h>
@@ -170,6 +171,23 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
   NSString *pathStr = nil;
   [paramGetAPI getStringParameterValue:&pathStr fromParameter:kParamPathData];
 
+  // Patch selected path's stroke from current param values so the render
+  // reflects inspector edits immediately (before pathData is persisted).
+  NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+  NSIndexSet *sel = uuid ? KKCanvasCurrentSelection(uuid) : nil;
+  if (pathStr.length > 0 && sel.count > 0) {
+    NSData *blob = [[NSData alloc] initWithBase64EncodedString:pathStr
+                                                       options:0];
+    NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+    KKBezierPath *selPath = KKSelectedPath(sel, paths);
+    if (selPath) {
+      KKStrokeParamsToPath(params.strokeWidth, params.r, params.g, params.b,
+                           selPath);
+      NSData *newBlob = [KKBezierPath blobFromPaths:paths];
+      pathStr = [newBlob base64EncodedStringWithOptions:0];
+    }
+  }
+
   NSMutableData *state = [NSMutableData dataWithBytes:&params
                                                length:sizeof(params)];
   if (pathStr.length > 0)
@@ -303,13 +321,15 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
                      pixelFormat:pixelFormat];
   }
 
-  simd_float4 color = {strokeParams.r, strokeParams.g, strokeParams.b, 1.0f};
   simd_uint2 viewportSize = {(unsigned int)outputWidth,
                              (unsigned int)outputHeight};
 
   for (KKBezierPath *path in paths) {
     if (path.count < 2 || path.hidden)
       continue;
+
+    float sw = path.strokeWidth;
+    simd_float4 color = {path.strokeR, path.strokeG, path.strokeB, 1.0f};
 
     NSUInteger segsPerCurve = 128;
     NSUInteger curveCount = path.count - 1;
@@ -318,8 +338,8 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
     NSUInteger maxVertices = curveCount * ((segsPerCurve + 1) * 2 + 2) + 2;
     CanvasVertex *vertices =
         (CanvasVertex *)malloc(maxVertices * sizeof(CanvasVertex));
-    NSUInteger vertexCount = tessellatePath(
-        path, strokeParams.strokeWidth, outputWidth, outputHeight, vertices);
+    NSUInteger vertexCount =
+        tessellatePath(path, sw, outputWidth, outputHeight, vertices);
 
     MTLRenderPassDescriptor *rpd =
         [MTLRenderPassDescriptor renderPassDescriptor];

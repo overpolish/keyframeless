@@ -27,6 +27,7 @@ void KKCanvasRefreshLayerList(NSString *_Nonnull uuid, NSUInteger pathCount,
                               NSArray<KKBezierPath *> *_Nullable paths);
 void KKCanvasUpdateSelection(NSString *_Nonnull uuid, NSIndexSet *indices);
 NSIndexSet *_Nullable KKCanvasConsumePendingSelection(NSString *_Nonnull uuid);
+NSIndexSet *_Nullable KKCanvasCurrentSelection(NSString *_Nonnull uuid);
 
 // OSC part IDs
 static const NSInteger kOSCCanvas = 1;

@@ -329,6 +329,7 @@
       [self.selectedPathIndices addIndex:nearPath];
     }
     self.activePathIndex = nearPath;
+    [self syncStrokeParamsToSelection];
     self.dragIsPath = YES;
     self.dragOrigin =
         [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
@@ -337,6 +338,19 @@
   }
 
   if (!shiftDown) {
+    // Write back per-object params before deselecting. Don't use
+    // syncStrokeParamsToSelection — it updates KKCanvasCurrentSelection
+    // which causes races with drawOSC.
+    KKBezierPath *prev = KKSelectedPath(self.selectedPathIndices, self.paths);
+    if (prev) {
+      id<FxParameterRetrievalAPI_v6> paramGetAPI = [self.apiManager
+          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      id<FxParameterSettingAPI_v5> paramSetAPI =
+          [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      KKParamsToPath(paramGetAPI, prev);
+      [self writePaths:self.paths];
+      KKHideObjectParams(paramSetAPI);
+    }
     [self.selectedPathIndices removeAllIndexes];
     self.activePathIndex = -1;
   }
