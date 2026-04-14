@@ -33,18 +33,29 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     // Old format: 4 bytes count + points (no flags)
     size_t oldExpected = 4 + count * pointSize;
 
-    if (data.length >= newExpected && count > 0) {
+    BOOL maybeGroup = (data.length >= 5 && (bytes[4] & 128) != 0);
+    if (data.length >= newExpected && (count > 0 || maybeGroup)) {
       uint8_t flags = bytes[4];
       path->_closed = (flags & 1) != 0;
       path->_isRect = (flags & 8) != 0;
       path->_hidden = (flags & 16) != 0;
       path->_locked = (flags & 32) != 0;
+      path->_isGroup = (flags & 128) != 0;
+      size_t headerSize = 5;
+      if (path->_isGroup && data.length >= 9) {
+        uint32_t cc;
+        memcpy(&cc, bytes + 5, 4);
+        path->_childCount = cc;
+        headerSize = 9;
+      }
       path->_count = count;
       path->_capacity = count;
-      path->_points = malloc(count * pointSize);
-      memcpy(path->_points, bytes + 5, count * pointSize);
+      if (count > 0) {
+        path->_points = malloc(count * pointSize);
+        memcpy(path->_points, bytes + headerSize, count * pointSize);
+      }
       // Extended: corner radii after points
-      size_t extOffset = 5 + count * pointSize;
+      size_t extOffset = headerSize + count * pointSize;
       if ((flags & 4) && data.length >= extOffset + 4 * sizeof(float)) {
         // New: 4 per-corner radii
         float cr[4];
@@ -93,6 +104,8 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     flags |= 16;
   if (_locked)
     flags |= 32;
+  if (_isGroup)
+    flags |= 128;
   BOOL hasRadius = (_cornerRadiusTL > 0 || _cornerRadiusTR > 0 ||
                     _cornerRadiusBR > 0 || _cornerRadiusBL > 0);
   if (hasRadius)
@@ -106,6 +119,10 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
                                       4 * sizeof(float) + 2 + nameData.length];
   [data appendBytes:&count length:4];
   [data appendBytes:&flags length:1];
+  if (_isGroup) {
+    uint32_t cc = (uint32_t)_childCount;
+    [data appendBytes:&cc length:4];
+  }
   if (count > 0)
     [data appendBytes:_points length:count * pointSize];
   if (hasRadius) {

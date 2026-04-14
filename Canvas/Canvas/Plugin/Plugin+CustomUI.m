@@ -128,6 +128,7 @@ static NSString *const kLayerDragType = @"com.overpolish.canvas.layerDrag";
 static NSIndexSet *sSelectedIndices;
 static NSIndexSet *sUISelection;
 static NSIndexSet *sPendingOSCSelection;
+static NSIndexSet *sCollapsedGroups;
 void KKCanvasRefreshLayerList(NSUInteger pathCount,
                               NSArray<KKBezierPath *> *paths);
 
@@ -280,6 +281,9 @@ static __weak KKLayerListContainer *sLayerListContainer;
 - (void)renameRow:(NSMenuItem *)sender;
 - (void)duplicateRow:(NSMenuItem *)sender;
 - (void)deleteRow:(NSMenuItem *)sender;
+- (void)groupSelection:(NSMenuItem *)sender;
+- (void)ungroupRow:(NSMenuItem *)sender;
+- (void)toggleGroupCollapse:(NSButton *)sender;
 - (void)_reorderFromIndices:(NSIndexSet *)indices toIndex:(NSUInteger)target;
 @end
 
@@ -321,17 +325,39 @@ static __weak KKLayerListContainer *sLayerListContainer;
 }
 
 - (void)toggleVisibility:(NSButton *)sender {
-  [self _toggleProperty:sender
-                  apply:^(KKBezierPath *p) {
-                    p.hidden = !p.hidden;
-                  }];
+  NSUInteger idx = sender.tag;
+  [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
+    if (idx >= paths.count)
+      return;
+    BOOL newVal = !paths[idx].hidden;
+    paths[idx].hidden = newVal;
+    if (paths[idx].isGroup) {
+      NSUInteger cc = paths[idx].childCount;
+      for (NSUInteger c = 1; c <= cc && (idx + c) < paths.count; c++) {
+        paths[idx + c].hidden = newVal;
+        if (paths[idx + c].isGroup)
+          cc += paths[idx + c].childCount;
+      }
+    }
+  }];
 }
 
 - (void)toggleLock:(NSButton *)sender {
-  [self _toggleProperty:sender
-                  apply:^(KKBezierPath *p) {
-                    p.locked = !p.locked;
-                  }];
+  NSUInteger idx = sender.tag;
+  [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
+    if (idx >= paths.count)
+      return;
+    BOOL newVal = !paths[idx].locked;
+    paths[idx].locked = newVal;
+    if (paths[idx].isGroup) {
+      NSUInteger cc = paths[idx].childCount;
+      for (NSUInteger c = 1; c <= cc && (idx + c) < paths.count; c++) {
+        paths[idx + c].locked = newVal;
+        if (paths[idx + c].isGroup)
+          cc += paths[idx + c].childCount;
+      }
+    }
+  }];
 }
 
 - (void)_commitEditing {
@@ -438,24 +464,113 @@ static __weak KKLayerListContainer *sLayerListContainer;
   if (!sel || sel.count <= 1 || ![sel containsIndex:sender.tag])
     sel = [NSIndexSet indexSetWithIndex:sender.tag];
   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
-    [sel enumerateIndexesWithOptions:NSEnumerationReverse
-                          usingBlock:^(NSUInteger idx, BOOL *stop) {
-                            if (idx < paths.count)
-                              [paths removeObjectAtIndex:idx];
-                          }];
+    NSMutableIndexSet *expanded = [sel mutableCopy];
+    [sel enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+      if (idx < paths.count && paths[idx].isGroup) {
+        NSUInteger cc = paths[idx].childCount;
+        for (NSUInteger c = 1; c <= cc && (idx + c) < paths.count; c++) {
+          [expanded addIndex:idx + c];
+          if (paths[idx + c].isGroup)
+            cc += paths[idx + c].childCount;
+        }
+      }
+    }];
+    [expanded enumerateIndexesWithOptions:NSEnumerationReverse
+                               usingBlock:^(NSUInteger idx, BOOL *stop) {
+                                 if (idx < paths.count)
+                                   [paths removeObjectAtIndex:idx];
+                               }];
     NSMutableIndexSet *adjusted =
         [sUISelection mutableCopy] ?: [NSMutableIndexSet indexSet];
-    [sel enumerateIndexesWithOptions:NSEnumerationReverse
-                          usingBlock:^(NSUInteger idx, BOOL *stop) {
-                            [adjusted removeIndex:idx];
-                            [adjusted shiftIndexesStartingAtIndex:idx + 1
-                                                               by:-1];
-                          }];
+    [expanded enumerateIndexesWithOptions:NSEnumerationReverse
+                               usingBlock:^(NSUInteger idx, BOOL *stop) {
+                                 [adjusted removeIndex:idx];
+                                 [adjusted shiftIndexesStartingAtIndex:idx + 1
+                                                                    by:-1];
+                               }];
     NSIndexSet *frozen = [adjusted copy];
     sUISelection = frozen;
     sSelectedIndices = frozen;
     sPendingOSCSelection = frozen;
   }];
+}
+
+- (void)groupSelection:(NSMenuItem *)sender {
+  NSIndexSet *sel = sUISelection;
+  if (!sel || sel.count == 0)
+    return;
+  [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
+    NSUInteger insertAt = sel.firstIndex;
+    NSMutableArray<KKBezierPath *> *children = [NSMutableArray array];
+    [sel enumerateIndexesWithOptions:NSEnumerationReverse
+                          usingBlock:^(NSUInteger idx, BOOL *stop) {
+                            if (idx < paths.count) {
+                              [children insertObject:paths[idx] atIndex:0];
+                              [paths removeObjectAtIndex:idx];
+                            }
+                          }];
+    KKBezierPath *group = [[KKBezierPath alloc] init];
+    group.isGroup = YES;
+    group.childCount = children.count;
+    group.name = @"Group";
+    insertAt = MIN(insertAt, paths.count);
+    [paths insertObject:group atIndex:insertAt];
+    for (NSUInteger i = 0; i < children.count; i++)
+      [paths insertObject:children[i] atIndex:insertAt + 1 + i];
+
+    NSIndexSet *groupSel = [NSIndexSet indexSetWithIndex:insertAt];
+    sUISelection = groupSel;
+    sSelectedIndices = groupSel;
+    sPendingOSCSelection = groupSel;
+  }];
+}
+
+- (void)ungroupRow:(NSMenuItem *)sender {
+  NSUInteger idx = sender.tag;
+  [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
+    if (idx >= paths.count || !paths[idx].isGroup)
+      return;
+    NSUInteger cc = paths[idx].childCount;
+    [paths removeObjectAtIndex:idx];
+
+    NSMutableIndexSet *childSel = [NSMutableIndexSet indexSet];
+    for (NSUInteger i = 0; i < cc && (idx + i) < paths.count; i++)
+      [childSel addIndex:idx + i];
+    NSIndexSet *frozen = [childSel copy];
+    sUISelection = frozen;
+    sSelectedIndices = frozen;
+    sPendingOSCSelection = frozen;
+  }];
+}
+
+- (void)toggleGroupCollapse:(id)sender {
+  NSUInteger idx = [(NSView *)sender tag];
+  NSMutableIndexSet *mut = sCollapsedGroups ? [sCollapsedGroups mutableCopy]
+                                            : [NSMutableIndexSet indexSet];
+  if ([mut containsIndex:idx])
+    [mut removeIndex:idx];
+  else
+    [mut addIndex:idx];
+  sCollapsedGroups = [mut copy];
+
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> paramSetAPI =
+      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  NSString *str = nil;
+  [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
+  [paramSetAPI setStringParameterValue:str ?: @"" toParameter:kParamPathData];
+  [actionAPI endAction:self];
+
+  if (str.length > 0) {
+    NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
+    NSArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+    sForceRefresh = YES;
+    KKCanvasRefreshLayerList(paths.count, paths);
+  }
 }
 
 - (void)_reorderFromIndices:(NSIndexSet *)indices toIndex:(NSUInteger)target {
@@ -542,11 +657,6 @@ static __weak KKLayerListContainer *sLayerListContainer;
     [sel addIndex:clicked];
   }
 
-  NSIndexSet *frozen = [sel copy];
-  sUISelection = frozen;
-  sSelectedIndices = frozen;
-  sPendingOSCSelection = frozen;
-
   id<FxCustomParameterActionAPI_v4> actionAPI =
       [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actionAPI startAction:self];
@@ -556,6 +666,25 @@ static __weak KKLayerListContainer *sLayerListContainer;
       [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   NSString *str = nil;
   [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
+
+  if (str.length > 0) {
+    NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
+    NSArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+    if (clicked < paths.count && paths[clicked].isGroup) {
+      NSUInteger cc = paths[clicked].childCount;
+      for (NSUInteger c = 1; c <= cc && (clicked + c) < paths.count; c++) {
+        [sel addIndex:clicked + c];
+        if (paths[clicked + c].isGroup)
+          cc += paths[clicked + c].childCount;
+      }
+    }
+  }
+
+  NSIndexSet *frozen = [sel copy];
+  sUISelection = frozen;
+  sSelectedIndices = frozen;
+  sPendingOSCSelection = frozen;
+
   [paramSetAPI setStringParameterValue:str ?: @"" toParameter:kParamPathData];
   [actionAPI endAction:self];
 
@@ -615,11 +744,17 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
       [NSMutableArray arrayWithCapacity:pathCount];
   NSMutableArray<NSNumber *> *lockedStates =
       [NSMutableArray arrayWithCapacity:pathCount];
+  NSMutableArray<NSNumber *> *groupFlags =
+      [NSMutableArray arrayWithCapacity:pathCount];
+  NSMutableArray<NSNumber *> *childCounts =
+      [NSMutableArray arrayWithCapacity:pathCount];
   NSMutableArray<NSString *> *names =
       [NSMutableArray arrayWithCapacity:pathCount];
   for (NSUInteger i = 0; i < pathCount; i++) {
     [hiddenStates addObject:@(paths[i].hidden)];
     [lockedStates addObject:@(paths[i].locked)];
+    [groupFlags addObject:@(paths[i].isGroup)];
+    [childCounts addObject:@(paths[i].childCount)];
     [names addObject:paths[i].name
                          ?: [NSString stringWithFormat:@"Path %lu",
                                                        (unsigned long)(i + 1)]];
@@ -646,16 +781,69 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
     container.emptyView.hidden = YES;
     CGFloat topPad = kVerticalPad;
     CGFloat stride = kRowHeight + kRowSpacing;
-    CGFloat totalHeight = MAX(pathCount * stride + topPad, kListHeight);
-    container.contentHeightConstraint.constant = totalHeight;
 
     NSImageSymbolConfiguration *symConfig = [NSImageSymbolConfiguration
         configurationWithPointSize:10.0
                             weight:NSFontWeightRegular];
 
+    NSUInteger visRow = 0;
+    NSUInteger skipUntil = 0;
+
     for (NSUInteger i = 0; i < pathCount; i++) {
+      BOOL isGroup = groupFlags[i].boolValue;
+      NSUInteger cc = childCounts[i].unsignedIntegerValue;
+
+      if (i < skipUntil && !isGroup)
+        continue;
+
+      BOOL collapsed = isGroup && [sCollapsedGroups containsIndex:i];
+      if (collapsed)
+        skipUntil = i + 1 + cc;
+
       BOOL isHidden = hiddenStates[i].boolValue;
       BOOL isLocked = lockedStates[i].boolValue;
+      BOOL isSelected = [capturedSelection containsIndex:i];
+      NSUInteger depth = 0;
+      NSUInteger scan = i;
+      while (scan > 0) {
+        BOOL found = NO;
+        for (NSUInteger g = scan; g > 0; g--) {
+          if (groupFlags[g - 1].boolValue) {
+            NSUInteger parentCC = childCounts[g - 1].unsignedIntegerValue;
+            if (scan <= g - 1 + parentCC) {
+              depth++;
+              scan = g - 1;
+              found = YES;
+            }
+            break;
+          }
+        }
+        if (!found)
+          break;
+      }
+      CGFloat indent = depth * 18.0;
+
+      // --- Build row views ---
+
+      NSMutableArray<NSView *> *rowViews = [NSMutableArray array];
+
+      if (isGroup) {
+        NSString *folderName = collapsed ? @"folder.fill" : @"folder";
+        NSButton *folderBtn = [NSButton
+            buttonWithImage:[[NSImage imageWithSystemSymbolName:folderName
+                                       accessibilityDescription:nil]
+                                imageWithSymbolConfiguration:symConfig]
+                     target:container.actionTarget
+                     action:@selector(toggleGroupCollapse:)];
+        folderBtn.bezelStyle = NSBezelStyleInline;
+        folderBtn.bordered = NO;
+        folderBtn.imagePosition = NSImageOnly;
+        folderBtn.tag = i;
+        folderBtn.contentTintColor = [NSColor secondaryLabelColor];
+        [folderBtn.widthAnchor constraintEqualToConstant:12.0].active = YES;
+        [folderBtn.heightAnchor constraintEqualToConstant:12.0].active = YES;
+        [rowViews addObject:folderBtn];
+      }
 
       NSString *eyeName = isHidden ? @"eye.slash" : @"eye.fill";
       NSButton *eyeButton =
@@ -672,8 +860,7 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
                                             : [NSColor secondaryLabelColor];
       [eyeButton.widthAnchor constraintEqualToConstant:12.0].active = YES;
       [eyeButton.heightAnchor constraintEqualToConstant:12.0].active = YES;
-
-      BOOL isSelected = [capturedSelection containsIndex:i];
+      [rowViews addObject:eyeButton];
 
       KKLayerButton *rowButton =
           [KKLayerButton buttonWithTitle:names[i]
@@ -683,13 +870,15 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
       rowButton.bordered = NO;
       rowButton.tag = i;
       rowButton.alignment = NSTextAlignmentLeft;
-      rowButton.font = [NSFont systemFontOfSize:11.0];
+      rowButton.font = isGroup ? [NSFont boldSystemFontOfSize:11.0]
+                               : [NSFont systemFontOfSize:11.0];
       rowButton.contentTintColor =
           isHidden ? [NSColor tertiaryLabelColor] : [NSColor labelColor];
       rowButton.cell.lineBreakMode = NSLineBreakByTruncatingTail;
       [rowButton
           setContentHuggingPriority:1
                      forOrientation:NSLayoutConstraintOrientationHorizontal];
+      [rowViews addObject:rowButton];
 
       NSString *lockName = isLocked ? @"lock.fill" : @"lock.open";
       NSButton *lockButton =
@@ -706,10 +895,13 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
                                              : [NSColor tertiaryLabelColor];
       [lockButton.widthAnchor constraintEqualToConstant:12.0].active = YES;
       [lockButton.heightAnchor constraintEqualToConstant:12.0].active = YES;
+      [rowViews addObject:lockButton];
+
+      // --- Context menu ---
 
       BOOL multiSelect = capturedSelection.count > 1;
-
       NSMenu *ctxMenu = [[NSMenu alloc] init];
+
       if (!multiSelect) {
         NSMenuItem *renameItem =
             [[NSMenuItem alloc] initWithTitle:@"Rename"
@@ -722,16 +914,44 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
         [ctxMenu addItem:renameItem];
       }
 
-      NSMenuItem *duplicateItem =
-          [[NSMenuItem alloc] initWithTitle:@"Duplicate"
-                                     action:@selector(duplicateRow:)
-                              keyEquivalent:@""];
-      duplicateItem.target = container.actionTarget;
-      duplicateItem.tag = i;
-      duplicateItem.image =
-          [NSImage imageWithSystemSymbolName:@"plus.rectangle.on.rectangle"
-                    accessibilityDescription:nil];
-      [ctxMenu addItem:duplicateItem];
+      if (isGroup) {
+        NSMenuItem *ungroupItem =
+            [[NSMenuItem alloc] initWithTitle:@"Ungroup"
+                                       action:@selector(ungroupRow:)
+                                keyEquivalent:@""];
+        ungroupItem.target = container.actionTarget;
+        ungroupItem.tag = i;
+        ungroupItem.image =
+            [NSImage imageWithSystemSymbolName:@"folder.badge.minus"
+                      accessibilityDescription:nil];
+        [ctxMenu addItem:ungroupItem];
+      }
+
+      if (multiSelect && !isGroup) {
+        NSMenuItem *groupItem =
+            [[NSMenuItem alloc] initWithTitle:@"Group"
+                                       action:@selector(groupSelection:)
+                                keyEquivalent:@""];
+        groupItem.target = container.actionTarget;
+        groupItem.tag = i;
+        groupItem.image =
+            [NSImage imageWithSystemSymbolName:@"folder.badge.plus"
+                      accessibilityDescription:nil];
+        [ctxMenu addItem:groupItem];
+      }
+
+      if (!isGroup) {
+        NSMenuItem *duplicateItem =
+            [[NSMenuItem alloc] initWithTitle:@"Duplicate"
+                                       action:@selector(duplicateRow:)
+                                keyEquivalent:@""];
+        duplicateItem.target = container.actionTarget;
+        duplicateItem.tag = i;
+        duplicateItem.image =
+            [NSImage imageWithSystemSymbolName:@"plus.rectangle.on.rectangle"
+                      accessibilityDescription:nil];
+        [ctxMenu addItem:duplicateItem];
+      }
 
       [ctxMenu addItem:[NSMenuItem separatorItem]];
 
@@ -743,17 +963,14 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
       deleteItem.tag = i;
       deleteItem.image = [NSImage imageWithSystemSymbolName:@"trash"
                                    accessibilityDescription:nil];
-      NSMutableAttributedString *deleteTitle =
-          [[NSMutableAttributedString alloc]
-              initWithString:@"Delete"
-                  attributes:@{
-                    NSForegroundColorAttributeName : [NSColor error]
-                  }];
-      deleteItem.attributedTitle = deleteTitle;
+      deleteItem.attributedTitle = [[NSMutableAttributedString alloc]
+          initWithString:@"Delete"
+              attributes:@{NSForegroundColorAttributeName : [NSColor error]}];
       [ctxMenu addItem:deleteItem];
 
-      KKLayerRow *row =
-          [KKLayerRow stackViewWithViews:@[ eyeButton, rowButton, lockButton ]];
+      // --- Build row ---
+
+      KKLayerRow *row = [KKLayerRow stackViewWithViews:rowViews];
       row.rowIndex = i;
       rowButton.parentRow = row;
       row.menu = ctxMenu;
@@ -761,7 +978,8 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
       row.alignment = NSLayoutAttributeCenterY;
       row.distribution = NSStackViewDistributionFill;
       row.spacing = 6.0;
-      row.edgeInsets = NSEdgeInsetsMake(0, KKPaddingMD, 0, KKPaddingMD);
+      row.edgeInsets =
+          NSEdgeInsetsMake(0, KKPaddingMD + indent, 0, KKPaddingMD);
       row.wantsLayer = YES;
       row.layer.cornerRadius = 4.0;
       row.layer.backgroundColor =
@@ -776,10 +994,14 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
                                          constant:-KKPaddingSM]
           .active = YES;
       [row.topAnchor constraintEqualToAnchor:content.topAnchor
-                                    constant:topPad + i * stride]
+                                    constant:topPad + visRow * stride]
           .active = YES;
       [row.heightAnchor constraintEqualToConstant:kRowHeight].active = YES;
+      visRow++;
     }
+
+    CGFloat totalHeight = MAX(visRow * stride + topPad, kListHeight);
+    container.contentHeightConstraint.constant = totalHeight;
   });
 }
 
