@@ -294,7 +294,8 @@ void KKCanvasRefreshLayerList(NSUInteger pathCount,
     }
 
     CGFloat totalHeight =
-        MAX(visRow * kLayerRowStride + kLayerListVerticalPad, kLayerListHeight);
+        MAX(visRow * kLayerRowStride + kLayerListVerticalPad + kLayerRowHeight,
+            kLayerListHeight);
     container.contentHeightConstraint.constant = totalHeight;
   });
 }

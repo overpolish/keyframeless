@@ -215,6 +215,7 @@
   CGFloat fractional = rowY / kLayerRowStride;
   NSInteger hoverIdx = (NSInteger)fractional;
   BOOL inTopHalf = (fractional - floor(fractional)) < 0.5;
+  BOOL belowAllRows = hoverIdx >= (NSInteger)rows.count;
   hoverIdx = MAX(0, MIN(hoverIdx, (NSInteger)rows.count - 1));
 
   NSInteger visIdx =
@@ -226,7 +227,10 @@
   NSInteger flatIdx = 0;
   NSString *parentGID = nil;
 
-  if (hoverRow) {
+  if (belowAllRows && rows.count > 0) {
+    flatIdx = (NSInteger)rows.lastObject.rowIndex + 1;
+    parentGID = nil;
+  } else if (hoverRow) {
     flatIdx = inTopHalf ? (NSInteger)hoverRow.rowIndex
                         : (NSInteger)hoverRow.rowIndex + 1;
     if (hoverRow.groupID && !inTopHalf)
