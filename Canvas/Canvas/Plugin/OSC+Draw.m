@@ -328,6 +328,18 @@
     KKCanvasRefreshLayerList(uuid, self.paths.count, self.paths);
   }
 
+  // Patch the selected path's in-memory stroke from current params so that
+  // hit testing and OSC drawing use the live inspector values.
+  {
+    KKBezierPath *selPath =
+        KKSelectedPath(self.selectedPathIndices, self.paths);
+    if (selPath) {
+      id<FxParameterRetrievalAPI_v6> paramGetAPI = [self.apiManager
+          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      KKParamsToPath(paramGetAPI, selPath);
+    }
+  }
+
   simd_float4 strokeColor = [[NSColor systemRedColor] simdFloat4];
   simd_float4 dimColor = strokeColor;
   dimColor.w = 0.3f;

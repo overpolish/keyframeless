@@ -50,14 +50,14 @@
                          sliderMin:0.5
                          sliderMax:100.0
                              delta:0.5
-                    parameterFlags:kFxParameterFlag_DEFAULT];
+                    parameterFlags:kFxParameterFlag_HIDDEN];
 
   [paramAPI addColorParameterWithName:@"Stroke Color"
                           parameterID:kParamStrokeColor
                            defaultRed:1.0
                          defaultGreen:0.0
                           defaultBlue:0.0
-                       parameterFlags:kFxParameterFlag_DEFAULT];
+                       parameterFlags:kFxParameterFlag_HIDDEN];
 
   [paramAPI addStringParameterWithName:@"InstanceID"
                            parameterID:kParamInstanceID

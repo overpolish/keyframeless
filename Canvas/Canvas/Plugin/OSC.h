@@ -56,6 +56,7 @@
 
 - (NSMutableArray<KKBezierPath *> *)readPaths;
 - (void)writePaths:(NSArray<KKBezierPath *> *)paths;
+- (void)syncStrokeParamsToSelection;
 - (KKBezierPath *)activePath;
 
 @end

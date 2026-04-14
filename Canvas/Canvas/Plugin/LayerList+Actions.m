@@ -4,6 +4,7 @@
  */
 
 #import "LayerList_Private.h"
+#import "ObjectParams.h"
 
 @implementation KKLayerActionTarget
 
@@ -21,11 +22,18 @@
   if (str.length > 0) {
     NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
     NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+    // Write back any pending stroke param edits before modifying paths.
+    NSIndexSet *prevSel = KKLayerStateForUUID(_instanceUUID).uiSelection;
+    [self _writeBackObjectParams:paramGetAPI toPaths:paths selection:prevSel];
     block(paths);
     NSData *newBlob = [KKBezierPath blobFromPaths:paths];
     [paramSetAPI
         setStringParameterValue:[newBlob base64EncodedStringWithOptions:0]
                     toParameter:kParamPathData];
+    NSIndexSet *sel = KKLayerStateForUUID(_instanceUUID).uiSelection;
+    [self _syncObjectParamsForSelection:sel
+                                  paths:paths
+                            paramSetAPI:paramSetAPI];
     KKLayerStateForUUID(_instanceUUID).forceRefresh = YES;
     KKCanvasRefreshLayerList(_instanceUUID, paths.count, paths);
   }
@@ -164,6 +172,25 @@
   if (!container || !KKLayerStateForUUID(_instanceUUID).isEditing)
     return;
   [container.contentView.window makeFirstResponder:container.contentView];
+}
+
+- (void)_writeBackObjectParams:(id<FxParameterRetrievalAPI_v6>)paramGetAPI
+                       toPaths:(NSMutableArray<KKBezierPath *> *)paths
+                     selection:(NSIndexSet *)sel {
+  KKBezierPath *prev = KKSelectedPath(sel, paths ?: @[]);
+  if (prev)
+    KKParamsToPath(paramGetAPI, prev);
+}
+
+- (void)_syncObjectParamsForSelection:(NSIndexSet *)sel
+                                paths:(NSArray<KKBezierPath *> *)paths
+                          paramSetAPI:
+                              (id<FxParameterSettingAPI_v5>)paramSetAPI {
+  KKBezierPath *selected = KKSelectedPath(sel, paths ?: @[]);
+  if (selected)
+    KKPathToParams(paramSetAPI, selected);
+  else
+    KKHideObjectParams(paramSetAPI);
 }
 
 - (void)renameRow:(NSMenuItem *)sender {
@@ -453,21 +480,36 @@
   NSString *str = nil;
   [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
 
+  NSMutableArray<KKBezierPath *> *paths = nil;
   if (str.length > 0) {
     NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
-    NSArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+    paths = [KKBezierPath pathsFromBlob:blob];
+
+    // Write back current param values to previously-selected path before
+    // switching selection.
+    NSIndexSet *oldSel = KKLayerStateForUUID(_instanceUUID).uiSelection;
+    [self _writeBackObjectParams:paramGetAPI toPaths:paths selection:oldSel];
+
     if (clicked < paths.count && paths[clicked].isGroup)
       [sel addIndexes:KKDescendantIndices(clicked, paths)];
   }
 
   KKSetLayerSelection(_instanceUUID, [sel copy]);
 
-  [paramSetAPI setStringParameterValue:str ?: @"" toParameter:kParamPathData];
+  [self _syncObjectParamsForSelection:sel
+                                paths:paths ?: @[]
+                          paramSetAPI:paramSetAPI];
+  if (paths) {
+    NSData *newBlob = [KKBezierPath blobFromPaths:paths];
+    [paramSetAPI
+        setStringParameterValue:[newBlob base64EncodedStringWithOptions:0]
+                    toParameter:kParamPathData];
+  } else {
+    [paramSetAPI setStringParameterValue:str ?: @"" toParameter:kParamPathData];
+  }
   [actionAPI endAction:self];
 
-  if (str.length > 0) {
-    NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
-    NSArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+  if (paths) {
     KKLayerStateForUUID(_instanceUUID).forceRefresh = YES;
     KKCanvasRefreshLayerList(_instanceUUID, paths.count, paths);
   }

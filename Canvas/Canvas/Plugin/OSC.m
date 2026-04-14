@@ -133,6 +133,7 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
     KKBezierPath *path = self.paths[p];
     if (path.hidden || path.locked || path.isGroup)
       continue;
+    double hitR = MAX(path.strokeWidth * 0.5 + 4.0, 12.0);
     NSUInteger segCount = path.count - 1;
     if (path.closed && path.count >= 2)
       segCount = path.count;
@@ -142,7 +143,7 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
         float t = (float)s / 64.0f;
         simd_float2 pos = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
         CGPoint cur = [self canvasPointFromObjectPoint:pos];
-        if (hypot(x - cur.x, y - cur.y) < radius)
+        if (hypot(x - cur.x, y - cur.y) < hitR)
           return (NSInteger)p;
       }
     }
@@ -192,6 +193,33 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
   if (uuid)
     KKCanvasRefreshLayerList(uuid, paths.count, paths);
+}
+
+- (void)syncStrokeParamsToSelection {
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> paramSetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+
+  // Write back current param values to the previously-selected path.
+  NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+  NSIndexSet *prevSel = uuid ? KKCanvasCurrentSelection(uuid) : nil;
+  KKBezierPath *prev = KKSelectedPath(prevSel, self.paths);
+  if (prev) {
+    KKParamsToPath(paramGetAPI, prev);
+    [self writePaths:self.paths];
+  }
+
+  // Update selection state so pluginState: patches the correct path.
+  if (uuid)
+    KKCanvasUpdateSelection(uuid, self.selectedPathIndices);
+
+  // Set param values and visibility from the newly-selected path.
+  KKBezierPath *selPath = KKSelectedPath(self.selectedPathIndices, self.paths);
+  if (selPath)
+    KKPathToParams(paramSetAPI, selPath);
+  else
+    KKHideObjectParams(paramSetAPI);
 }
 
 - (void)boundsOfPath:(KKBezierPath *)path
