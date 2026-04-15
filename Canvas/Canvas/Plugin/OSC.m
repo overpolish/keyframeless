@@ -160,8 +160,8 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
       }
     }
 
-    // Fill hit test: point-in-polygon ray casting for filled closed paths.
-    if (path.fillEnabled && path.closed && oc >= 3) {
+    // Fill hit test: point-in-polygon ray casting for filled paths.
+    if (path.fillEnabled && oc >= 3) {
       NSUInteger crossings = 0;
       for (NSUInteger i = 0; i < oc; i++) {
         NSUInteger j = (i + 1) % oc;
