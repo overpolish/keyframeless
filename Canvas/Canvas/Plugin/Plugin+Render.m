@@ -136,6 +136,484 @@ static simd_float2 rawNormalAtSegStart(KKBezierPath *path, NSUInteger c,
   return (simd_float2){-tangent.y, tangent.x};
 }
 
+/// A sampled point along a path with cumulative arc length.
+typedef struct {
+  simd_float2 position; // pixel-centered coords
+  simd_float2 normal;   // unit perpendicular
+  float arcLength;      // cumulative distance from path start
+} PathSample;
+
+/// Sample the entire path into a dense polyline with arc-length
+/// parameterization. Returns the number of samples written. Caller must free
+/// the returned array.
+static NSUInteger samplePathPolyline(KKBezierPath *path, float outputWidth,
+                                     float outputHeight,
+                                     PathSample **outSamples) {
+  NSUInteger segsPerCurve = 128;
+  NSUInteger curveCount = path.count - 1;
+  if (path.closed && path.count >= 2)
+    curveCount = path.count;
+  NSUInteger maxSamples = curveCount * (segsPerCurve + 1) + 1;
+  PathSample *samples = malloc(maxSamples * sizeof(PathSample));
+  NSUInteger count = 0;
+  float cumLen = 0.0f;
+
+  for (NSUInteger c = 0; c < curveCount; c++) {
+    NSUInteger startI = (c == 0) ? 0 : 1;
+    for (NSUInteger i = startI; i <= segsPerCurve; i++) {
+      float t = (float)i / (float)segsPerCurve;
+      NSUInteger nextIdx = (c + 1) % path.count;
+      simd_float2 pos = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
+      simd_float2 normal =
+          normalAtPoint(path, c, segsPerCurve, i, outputWidth, outputHeight);
+      simd_float2 px = {pos.x * outputWidth - outputWidth / 2.0f,
+                        (1.0f - pos.y) * outputHeight - outputHeight / 2.0f};
+      if (count > 0)
+        cumLen += simd_length(px - samples[count - 1].position);
+      samples[count].position = px;
+      samples[count].normal = normal;
+      samples[count].arcLength = cumLen;
+      count++;
+    }
+  }
+  *outSamples = samples;
+  return count;
+}
+
+/// Interpolate a PathSample between two samples at a given arc length.
+static PathSample lerpSample(const PathSample *a, const PathSample *b,
+                             float targetArc) {
+  float range = b->arcLength - a->arcLength;
+  float t = (range > 1e-6f) ? (targetArc - a->arcLength) / range : 0.0f;
+  t = fmaxf(0.0f, fminf(1.0f, t));
+  PathSample s;
+  s.position = a->position + (b->position - a->position) * t;
+  simd_float2 n = a->normal + (b->normal - a->normal) * t;
+  float nlen = simd_length(n);
+  s.normal = (nlen > 1e-6f) ? n / nlen : a->normal;
+  s.arcLength = targetArc;
+  return s;
+}
+
+/// Find the sample index just before or at a given arc length.
+static NSUInteger findSampleAtArc(const PathSample *samples, NSUInteger count,
+                                  float arc, NSUInteger hint) {
+  NSUInteger i = hint;
+  while (i + 1 < count && samples[i + 1].arcLength <= arc)
+    i++;
+  return i;
+}
+
+/// Get the interpolated sample at an arc-length position.
+static PathSample sampleAtArc(const PathSample *samples, NSUInteger count,
+                              float arc, NSUInteger *hint) {
+  NSUInteger si = findSampleAtArc(samples, count, arc, *hint);
+  *hint = si;
+  return lerpSample(&samples[si],
+                    (si + 1 < count) ? &samples[si + 1] : &samples[si], arc);
+}
+
+/// Emit a standalone round cap at a position. Does NOT bridge from previous
+/// geometry — caller must handle degenerate bridges between elements.
+static NSUInteger
+emitRoundCapStandalone(CanvasVertex *vertices, NSUInteger vertexCount,
+                       simd_float2 center, simd_float2 tangent,
+                       simd_float2 normal, float halfWidth, BOOL isStart) {
+  NSUInteger capSegs = 16;
+  simd_float2 capDir = isStart ? -tangent : tangent;
+
+  for (NSUInteger i = 0; i <= capSegs; i++) {
+    float angle = (float)i / (float)capSegs * M_PI;
+    float cosA = cosf(angle);
+    float sinA = sinf(angle);
+    simd_float2 dir = normal * cosA + capDir * sinA;
+    simd_float2 outer = center + dir * halfWidth;
+
+    vertices[vertexCount].position = outer;
+    vertices[vertexCount].edgeDistance = 0.0f;
+    vertices[vertexCount].capDistance = 1.0f;
+    vertexCount++;
+
+    vertices[vertexCount].position = center;
+    vertices[vertexCount].edgeDistance = 0.0f;
+    vertices[vertexCount].capDistance = 0.0f;
+    vertexCount++;
+  }
+  return vertexCount;
+}
+
+/// Emit a degenerate bridge that separates two pieces of triangle-strip
+/// geometry so they don't render visible triangles between them.
+/// prevLast = last vertex of previous strip.
+/// nextFirst = first vertex of next strip.
+static NSUInteger emitBridge(CanvasVertex *vertices, NSUInteger vertexCount,
+                             simd_float2 prevLast, simd_float2 nextFirst) {
+  vertices[vertexCount].position = prevLast;
+  vertices[vertexCount].edgeDistance = 0.0f;
+  vertices[vertexCount].capDistance = 0.0f;
+  vertexCount++;
+  vertices[vertexCount].position = nextFirst;
+  vertices[vertexCount].edgeDistance = 0.0f;
+  vertices[vertexCount].capDistance = 0.0f;
+  vertexCount++;
+  vertices[vertexCount].position = nextFirst;
+  vertices[vertexCount].edgeDistance = 0.0f;
+  vertices[vertexCount].capDistance = 0.0f;
+  vertexCount++;
+  return vertexCount;
+}
+
+/// Tessellate a dashed stroke by running the full solid tessellation with
+/// arc-length tracking and emitting only within dash-on regions.
+static NSUInteger tessellateDashedPath(KKBezierPath *path, float strokeWidth,
+                                       float outputWidth, float outputHeight,
+                                       float dashLength, float dashGap,
+                                       uint8_t lineJoin,
+                                       CanvasVertex *vertices) {
+  float aaPadding = 1.0f;
+  float halfWidth = (strokeWidth / 2.0f) + aaPadding;
+  NSUInteger segsPerCurve = 128;
+  NSUInteger curveCount = path.count - 1;
+  if (path.closed && path.count >= 2)
+    curveCount = path.count;
+
+  float cycle = dashLength + dashGap;
+  if (cycle < 1.0f)
+    cycle = 1.0f;
+
+  // Phase 1: sample positions to compute total arc length and per-sample
+  // cumulative distances. We need this to map tessellation points to the
+  // dash pattern.
+  NSUInteger totalSamples = curveCount * (segsPerCurve + 1);
+  float *arcLengths = calloc(totalSamples + 1, sizeof(float));
+  simd_float2 *positions = malloc((totalSamples + 1) * sizeof(simd_float2));
+  {
+    NSUInteger idx = 0;
+    for (NSUInteger c = 0; c < curveCount; c++) {
+      for (NSUInteger i = 0; i <= segsPerCurve; i++) {
+        float t = (float)i / (float)segsPerCurve;
+        NSUInteger nextIdx = (c + 1) % path.count;
+        simd_float2 pos = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
+        simd_float2 px = {pos.x * outputWidth - outputWidth / 2.0f,
+                          (1.0f - pos.y) * outputHeight - outputHeight / 2.0f};
+        positions[idx] = px;
+        if (idx > 0)
+          arcLengths[idx] =
+              arcLengths[idx - 1] + simd_length(px - positions[idx - 1]);
+        idx++;
+      }
+    }
+  }
+
+  // Phase 2: tessellate exactly like tessellatePath but track arc length
+  // and only emit vertices when inside a dash-on region. At dash/gap
+  // transitions, emit round caps.
+  NSUInteger vc = 0;
+  NSUInteger sampleIdx = 0;
+  BOOL wasInDash = NO;
+  simd_float2 lastEmittedCenter = {0, 0};
+  simd_float2 lastEmittedNormal = {0, 0};
+
+  for (NSUInteger c = 0; c < curveCount; c++) {
+    simd_float2 segEndCenter = {0, 0}, segEndNormal = {0, 0};
+
+    for (NSUInteger i = 0; i <= segsPerCurve; i++) {
+      float t = (float)i / (float)segsPerCurve;
+      NSUInteger nextIdx = (c + 1) % path.count;
+      simd_float2 pos = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
+      simd_float2 normal =
+          normalAtPoint(path, c, segsPerCurve, i, outputWidth, outputHeight);
+
+      simd_float2 centered = {pos.x * outputWidth - outputWidth / 2.0f,
+                              (1.0f - pos.y) * outputHeight -
+                                  outputHeight / 2.0f};
+
+      if (i == segsPerCurve) {
+        segEndCenter = centered;
+        segEndNormal = normal;
+      }
+
+      // Dash visibility based on arc length.
+      float arc = arcLengths[sampleIdx];
+      float phase = fmodf(arc, cycle);
+      BOOL inDash = (phase < dashLength);
+
+      // Miter join logic for dashes — clamped to 1x extension to avoid
+      // bulges at sharp corners.
+      BOOL atDashBoundary = (inDash != wasInDash);
+      if (lineJoin == 0 && !atDashBoundary) {
+        if (i == segsPerCurve &&
+            (c < curveCount - 1 || (path.closed && c == curveCount - 1))) {
+          float nextArc = (sampleIdx + 1 < totalSamples)
+                              ? arcLengths[sampleIdx + 1]
+                              : arcLengths[sampleIdx];
+          BOOL nextInDash = (fmodf(nextArc, cycle) < dashLength);
+          if (nextInDash) {
+            NSUInteger nextC = (c < curveCount - 1) ? (c + 1) % path.count : 0;
+            simd_float2 nextN =
+                rawNormalAtSegStart(path, nextC, outputWidth, outputHeight);
+            simd_float2 avg = normal + nextN;
+            float avgLen = simd_length(avg);
+            if (avgLen > 1e-6f) {
+              avg /= avgLen;
+              float d = simd_dot(avg, normal);
+              if (d > 1e-6f) {
+                float ext = fminf(1.0f / d, 1.0f);
+                normal = avg * ext;
+              }
+            }
+          }
+        } else if (i == 0 && (c > 0 || (path.closed && c == 0))) {
+          float prevArc =
+              (sampleIdx > 0) ? arcLengths[sampleIdx - 1] : arcLengths[0];
+          BOOL prevInDash = (fmodf(prevArc, cycle) < dashLength);
+          if (prevInDash) {
+            NSUInteger prevC = (c > 0) ? c - 1 : curveCount - 1;
+            simd_float2 prevN =
+                normalAtPoint(path, prevC, segsPerCurve, segsPerCurve,
+                              outputWidth, outputHeight);
+            simd_float2 avg = prevN + normal;
+            float avgLen = simd_length(avg);
+            if (avgLen > 1e-6f) {
+              avg /= avgLen;
+              float d = simd_dot(avg, prevN);
+              if (d > 1e-6f) {
+                float ext = fminf(1.0f / d, 1.0f);
+                normal = avg * ext;
+              }
+            }
+          }
+        }
+      }
+
+      // Transition: gap→dash — emit round start cap.
+      if (inDash && !wasInDash) {
+        simd_float2 tangent = {normal.y, -normal.x};
+        if (vc > 0) {
+          simd_float2 prevLast = vertices[vc - 1].position;
+          simd_float2 nextFirst = centered + normal * halfWidth;
+          vc = emitBridge(vertices, vc, prevLast, nextFirst);
+        }
+        vc = emitRoundCapStandalone(vertices, vc, centered, tangent, normal,
+                                    halfWidth, YES);
+        // Bridge from cap to strip.
+        simd_float2 prevLast = vertices[vc - 1].position;
+        simd_float2 nextFirst = centered + normal * halfWidth;
+        vc = emitBridge(vertices, vc, prevLast, nextFirst);
+      }
+
+      // Transition: dash→gap — emit round end cap.
+      if (!inDash && wasInDash) {
+        simd_float2 capTan = {lastEmittedNormal.y, -lastEmittedNormal.x};
+        simd_float2 prevLast = vertices[vc - 1].position;
+        simd_float2 capFirst =
+            lastEmittedCenter + lastEmittedNormal * halfWidth;
+        vc = emitBridge(vertices, vc, prevLast, capFirst);
+        vc = emitRoundCapStandalone(vertices, vc, lastEmittedCenter, capTan,
+                                    lastEmittedNormal, halfWidth, NO);
+      }
+
+      if (inDash) {
+        // Skip first point of non-first segments for bevel/round joins.
+        BOOL skipForJoin = (i == 0 && c > 0 && lineJoin != 0);
+        if (!skipForJoin) {
+          // Degenerate bridge between segments for miter.
+          if (i == 0 && c > 0 && lineJoin == 0 && vc > 0) {
+            vertices[vc] = vertices[vc - 1];
+            vc++;
+          }
+
+          vertices[vc].position = centered + normal * halfWidth;
+          vertices[vc].edgeDistance = 1.0f;
+          vertices[vc].capDistance = 0.0f;
+          vc++;
+          vertices[vc].position = centered - normal * halfWidth;
+          vertices[vc].edgeDistance = -1.0f;
+          vertices[vc].capDistance = 0.0f;
+          vc++;
+        }
+        lastEmittedCenter = centered;
+        lastEmittedNormal = normal;
+      }
+
+      wasInDash = inDash;
+      sampleIdx++;
+    }
+
+    // Emit join geometry at curve boundaries for bevel/round (same as solid).
+    BOOL atJoin = (c < curveCount - 1) || (path.closed && c == curveCount - 1);
+    // Check if the join point is inside a dash.
+    float joinArc = arcLengths[sampleIdx - 1];
+    BOOL joinInDash = (fmodf(joinArc, cycle) < dashLength);
+
+    if (atJoin && lineJoin != 0 && joinInDash) {
+      simd_float2 n1 = segEndNormal;
+      NSUInteger nextC = (c + 1) % curveCount;
+      if (path.closed && c == curveCount - 1)
+        nextC = 0;
+      simd_float2 n2 =
+          rawNormalAtSegStart(path, nextC, outputWidth, outputHeight);
+
+      float cross = n1.x * n2.y - n1.y * n2.x;
+      float side = (cross >= 0.0f) ? -1.0f : 1.0f;
+
+      simd_float2 jCenter = segEndCenter;
+      simd_float2 outerEnd = jCenter + n1 * halfWidth * side;
+      simd_float2 outerStart = jCenter + n2 * halfWidth * side;
+
+      if (vc > 0) {
+        vertices[vc] = vertices[vc - 1];
+        vc++;
+      }
+
+      if (lineJoin == 1) {
+        float dot = simd_dot(n1 * side, n2 * side);
+        dot = fmaxf(-1.0f, fminf(1.0f, dot));
+        float angle = acosf(dot);
+
+        if (angle > 1e-4f) {
+          simd_float2 on1 = n1 * side;
+          simd_float2 on2 = n2 * side;
+          float sweepCross = on1.x * on2.y - on1.y * on2.x;
+          float dir = (sweepCross >= 0.0f) ? 1.0f : -1.0f;
+          NSUInteger segs = (NSUInteger)fmaxf(4.0f, angle / (M_PI / 16.0f));
+
+          CanvasVertex first;
+          first.position = jCenter + on1 * halfWidth;
+          first.edgeDistance = 0.0f;
+          first.capDistance = 0.0f;
+          vertices[vc] = first;
+          vc++;
+          vertices[vc] = first;
+          vc++;
+
+          for (NSUInteger s = 0; s <= segs; s++) {
+            float st = (float)s / (float)segs;
+            float a = st * angle * dir;
+            float cosA = cosf(a);
+            float sinA = sinf(a);
+            simd_float2 rotated = {on1.x * cosA - on1.y * sinA,
+                                   on1.x * sinA + on1.y * cosA};
+            vertices[vc].position = jCenter + rotated * halfWidth;
+            vertices[vc].edgeDistance = 0.0f;
+            vertices[vc].capDistance = 1.0f;
+            vc++;
+            vertices[vc].position = jCenter;
+            vertices[vc].edgeDistance = 0.0f;
+            vertices[vc].capDistance = 0.0f;
+            vc++;
+          }
+        }
+      } else {
+        CanvasVertex first;
+        first.position = outerEnd;
+        first.edgeDistance = 0.0f;
+        first.capDistance = 0.0f;
+        vertices[vc] = first;
+        vc++;
+        vertices[vc] = first;
+        vc++;
+
+        vertices[vc].position = outerEnd;
+        vertices[vc].edgeDistance = 0.0f;
+        vertices[vc].capDistance = 1.0f;
+        vc++;
+        vertices[vc].position = jCenter;
+        vertices[vc].edgeDistance = 0.0f;
+        vertices[vc].capDistance = 0.0f;
+        vc++;
+        vertices[vc].position = outerStart;
+        vertices[vc].edgeDistance = 0.0f;
+        vertices[vc].capDistance = 1.0f;
+        vc++;
+      }
+
+      if (c < curveCount - 1) {
+        vertices[vc] = vertices[vc - 1];
+        vc++;
+        vertices[vc].position = jCenter + n2 * halfWidth;
+        vertices[vc].edgeDistance = 1.0f;
+        vertices[vc].capDistance = 0.0f;
+        vc++;
+        vertices[vc].position = jCenter - n2 * halfWidth;
+        vertices[vc].edgeDistance = -1.0f;
+        vertices[vc].capDistance = 0.0f;
+        vc++;
+      }
+    } else if (c < curveCount - 1 && lineJoin == 0 && joinInDash) {
+      vertices[vc] = vertices[vc - 1];
+      vc++;
+    }
+  }
+
+  // Final end cap if the path ends mid-dash.
+  if (wasInDash && vc > 0) {
+    simd_float2 capTan = {lastEmittedNormal.y, -lastEmittedNormal.x};
+    simd_float2 prevLast = vertices[vc - 1].position;
+    simd_float2 capFirst = lastEmittedCenter + lastEmittedNormal * halfWidth;
+    vc = emitBridge(vertices, vc, prevLast, capFirst);
+    vc = emitRoundCapStandalone(vertices, vc, lastEmittedCenter, capTan,
+                                lastEmittedNormal, halfWidth, NO);
+  }
+
+  free(arcLengths);
+  free(positions);
+  return vc;
+}
+
+/// Tessellate a dotted stroke. Each dot is an isolated filled circle.
+static NSUInteger tessellateDottedPath(KKBezierPath *path, float strokeWidth,
+                                       float outputWidth, float outputHeight,
+                                       float dotGap, CanvasVertex *vertices) {
+  PathSample *samples = NULL;
+  NSUInteger sampleCount =
+      samplePathPolyline(path, outputWidth, outputHeight, &samples);
+  if (sampleCount < 2) {
+    free(samples);
+    return 0;
+  }
+
+  float totalLength = samples[sampleCount - 1].arcLength;
+  float aaPadding = 1.0f;
+  float halfWidth = (strokeWidth / 2.0f) + aaPadding;
+  float spacing = strokeWidth + dotGap;
+  if (spacing < 1.0f)
+    spacing = 1.0f;
+
+  NSUInteger vc = 0;
+  NSUInteger hint = 0;
+  float pos = 0.0f;
+
+  while (pos <= totalLength) {
+    PathSample s = sampleAtArc(samples, sampleCount, pos, &hint);
+    simd_float2 tangent = {s.normal.y, -s.normal.x};
+
+    // Bridge from previous dot.
+    if (vc > 0) {
+      simd_float2 prevLast = vertices[vc - 1].position;
+      simd_float2 nextFirst = s.position + s.normal * halfWidth;
+      vc = emitBridge(vertices, vc, prevLast, nextFirst);
+    }
+
+    // Full circle: forward half-cap then backward half-cap.
+    vc = emitRoundCapStandalone(vertices, vc, s.position, tangent, s.normal,
+                                halfWidth, NO);
+    // Bridge between the two halves.
+    {
+      simd_float2 prevLast = vertices[vc - 1].position;
+      simd_float2 nextFirst = s.position + s.normal * halfWidth;
+      vc = emitBridge(vertices, vc, prevLast, nextFirst);
+    }
+    vc = emitRoundCapStandalone(vertices, vc, s.position, tangent, s.normal,
+                                halfWidth, YES);
+
+    pos += spacing;
+  }
+
+  free(samples);
+  return vc;
+}
+
 static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
                                  float outputWidth, float outputHeight,
                                  uint8_t lineCap, uint8_t lineJoin,
@@ -885,43 +1363,76 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
       simd_float4 color = {path.strokeR * oa, path.strokeG * oa,
                            path.strokeB * oa, oa};
 
-      NSUInteger segsPerCurve = 128;
-      NSUInteger curveCount = path.count - 1;
-      if (path.closed && path.count >= 2)
-        curveCount = path.count;
-      NSUInteger capExtra = (!path.closed && path.lineCap != 0) ? 256 : 0;
-      // Round joins can emit up to ~40 verts per join; budget 48 per join.
-      NSUInteger joinExtra = (path.lineJoin != 0) ? curveCount * 48 : 0;
-      NSUInteger maxVertices =
-          curveCount * ((segsPerCurve + 1) * 2 + 2) + 2 + capExtra + joinExtra;
-      CanvasVertex *vertices =
-          (CanvasVertex *)malloc(maxVertices * sizeof(CanvasVertex));
-      NSUInteger vertexCount =
-          tessellatePath(path, sw, outputWidth, outputHeight, path.lineCap,
-                         path.lineJoin, vertices);
+      CanvasVertex *vertices = NULL;
+      NSUInteger vertexCount = 0;
 
-      MTLRenderPassDescriptor *rpd =
-          [MTLRenderPassDescriptor renderPassDescriptor];
-      rpd.colorAttachments[0].texture = outputTexture;
-      rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
-      rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+      if (path.strokeStyle == 1) {
+        // Dashed stroke.
+        // Budget: each dash needs ~(130*2 + cap*2*34 + bridges) verts.
+        // Rough upper bound: totalSamples * 6 per dash cycle.
+        NSUInteger segsPerCurve = 128;
+        NSUInteger curveCount = path.count - 1;
+        if (path.closed && path.count >= 2)
+          curveCount = path.count;
+        NSUInteger totalSamples = curveCount * segsPerCurve;
+        NSUInteger maxVertices = totalSamples * 12 + 8192;
+        vertices = malloc(maxVertices * sizeof(CanvasVertex));
+        vertexCount = tessellateDashedPath(path, sw, outputWidth, outputHeight,
+                                           path.dashLength, path.dashGap,
+                                           path.lineJoin, vertices);
+      } else if (path.strokeStyle == 2) {
+        // Dotted stroke.
+        // Each dot: ~70 verts (two half-caps). Budget by estimated dot count.
+        NSUInteger segsPerCurve = 128;
+        NSUInteger curveCount = path.count - 1;
+        if (path.closed && path.count >= 2)
+          curveCount = path.count;
+        NSUInteger totalSamples = curveCount * segsPerCurve;
+        NSUInteger maxVertices = totalSamples * 4 + 4096;
+        vertices = malloc(maxVertices * sizeof(CanvasVertex));
+        vertexCount = tessellateDottedPath(path, sw, outputWidth, outputHeight,
+                                           path.dotGap, vertices);
+      } else {
+        // Solid stroke.
+        NSUInteger segsPerCurve = 128;
+        NSUInteger curveCount = path.count - 1;
+        if (path.closed && path.count >= 2)
+          curveCount = path.count;
+        NSUInteger capExtra = (!path.closed && path.lineCap != 0) ? 256 : 0;
+        NSUInteger joinExtra = (path.lineJoin != 0) ? curveCount * 48 : 0;
+        NSUInteger maxVertices = curveCount * ((segsPerCurve + 1) * 2 + 2) + 2 +
+                                 capExtra + joinExtra;
+        vertices = malloc(maxVertices * sizeof(CanvasVertex));
+        vertexCount = tessellatePath(path, sw, outputWidth, outputHeight,
+                                     path.lineCap, path.lineJoin, vertices);
+      }
 
-      id<MTLRenderCommandEncoder> enc =
-          [commandBuffer renderCommandEncoderWithDescriptor:rpd];
-      [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1, 1}];
-      [enc setRenderPipelineState:strokePS];
+      if (vertexCount > 0 && vertices) {
+        MTLRenderPassDescriptor *rpd =
+            [MTLRenderPassDescriptor renderPassDescriptor];
+        rpd.colorAttachments[0].texture = outputTexture;
+        rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+        rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
 
-      id<MTLBuffer> vertexBuffer =
-          [device newBufferWithBytes:vertices
-                              length:vertexCount * sizeof(CanvasVertex)
-                             options:MTLResourceStorageModeShared];
-      [enc setVertexBuffer:vertexBuffer offset:0 atIndex:0];
-      [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
-      [enc setFragmentBytes:&color length:sizeof(color) atIndex:0];
-      [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
-              vertexStart:0
-              vertexCount:vertexCount];
-      [enc endEncoding];
+        id<MTLRenderCommandEncoder> enc =
+            [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+        [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1, 1}];
+        [enc setRenderPipelineState:strokePS];
+
+        id<MTLBuffer> vertexBuffer =
+            [device newBufferWithBytes:vertices
+                                length:vertexCount * sizeof(CanvasVertex)
+                               options:MTLResourceStorageModeShared];
+        [enc setVertexBuffer:vertexBuffer offset:0 atIndex:0];
+        [enc setVertexBytes:&viewportSize
+                     length:sizeof(viewportSize)
+                    atIndex:1];
+        [enc setFragmentBytes:&color length:sizeof(color) atIndex:0];
+        [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                vertexStart:0
+                vertexCount:vertexCount];
+        [enc endEncoding];
+      }
       free(vertices);
     }
   }
