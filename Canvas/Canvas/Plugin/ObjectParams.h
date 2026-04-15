@@ -52,6 +52,18 @@ KKHideObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
                      toParameter:kParamFillColor];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamOpacity];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamLineCap];
+}
+
+/// Show/hide the Line Cap param row based on whether the path is open.
+static inline void
+KKSetLineCapVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
+                    BOOL visible) {
+  FxParameterFlags flags =
+      visible ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE)
+              : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:flags toParameter:kParamLineCap];
 }
 
 /// Save the index of the currently-selected path so it survives clip switches.

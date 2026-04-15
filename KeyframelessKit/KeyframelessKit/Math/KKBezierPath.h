@@ -71,6 +71,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Object opacity 0–1 (default 1.0). Multiplied into stroke and fill alpha.
 @property(nonatomic, assign) float opacity;
 
+/// Line cap style for open paths (0=butt, 1=round, 2=square). Default 0.
+@property(nonatomic, assign) uint8_t lineCap;
+
 /// Whether this path has a solid fill (default NO).
 @property(nonatomic, assign) BOOL fillEnabled;
 

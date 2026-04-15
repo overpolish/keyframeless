@@ -132,6 +132,10 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
         }
         if (ver >= 2 && data.length >= hdr + sizeof(float)) {
           memcpy(&path->_opacity, bytes + hdr, sizeof(float));
+          hdr += sizeof(float);
+        }
+        if (ver >= 3 && data.length >= hdr + 1) {
+          path->_lineCap = bytes[hdr];
         }
       }
     } else if (data.length >= oldExpected && count > 0) {
@@ -196,8 +200,9 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   // Per-object properties block: marker 0xAA + version + data.
   // v1: stroke (4 floats) + fill enabled (1 byte) + fill color (3 floats).
   // v2: + opacity (1 float).
+  // v3: + lineCap (1 byte).
   uint8_t propMarker = 0xAA;
-  uint8_t propVersion = 2;
+  uint8_t propVersion = 3;
   [data appendBytes:&propMarker length:1];
   [data appendBytes:&propVersion length:1];
   float strokeData[4] = {_strokeWidth, _strokeR, _strokeG, _strokeB};
@@ -207,6 +212,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   float fillData[3] = {_fillR, _fillG, _fillB};
   [data appendBytes:fillData length:3 * sizeof(float)];
   [data appendBytes:&_opacity length:sizeof(float)];
+  [data appendBytes:&_lineCap length:1];
   return data;
 }
 

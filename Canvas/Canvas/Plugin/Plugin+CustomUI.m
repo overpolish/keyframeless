@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#import "CapStyleView.h"
 #import "LayerList_Private.h"
 #import "ObjectParams.h"
 #import <objc/message.h>
@@ -201,6 +202,51 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
     }
 
     return wrapper;
+  }
+
+  if (parameterID == kParamLineCap) {
+    KKCapStyleView *capView = [[KKCapStyleView alloc]
+        initWithFrame:NSMakeRect(0, 0, 200, KKInspectorRowHeight)];
+    capView.autoresizingMask = NSViewWidthSizable;
+
+    // Write lineCap changes directly to pathData via action scope.
+    __weak id weakAPI = self.apiManager;
+    capView.onSelectionChanged = ^(NSInteger index) {
+      id api = weakAPI;
+      if (!api)
+        return;
+      id<FxCustomParameterActionAPI_v4> actAPI =
+          [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      [actAPI startAction:api];
+      id<FxParameterRetrievalAPI_v6> getAPI =
+          [api apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      id<FxParameterSettingAPI_v5> setAPI =
+          [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      NSString *str = nil;
+      [getAPI getStringParameterValue:&str fromParameter:kParamPathData];
+      NSInteger selIdx = KKReadSelectedIndex(getAPI);
+      if (str.length > 0 && selIdx >= 0) {
+        NSData *blob = [[NSData alloc] initWithBase64EncodedString:str
+                                                           options:0];
+        NSMutableArray<KKBezierPath *> *paths =
+            [KKBezierPath pathsFromBlob:blob];
+        if ((NSUInteger)selIdx < paths.count) {
+          paths[selIdx].lineCap = (uint8_t)index;
+          NSData *newBlob = [KKBezierPath blobFromPaths:paths];
+          [setAPI
+              setStringParameterValue:[newBlob base64EncodedStringWithOptions:0]
+                          toParameter:kParamPathData];
+        }
+      }
+      [actAPI endAction:api];
+    };
+
+    // Store weak ref so the layer list refresh can update selectedIndex.
+    NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+    if (uuid)
+      KKLayerStateForUUID(uuid).capStyleView = capView;
+
+    return capView;
   }
 
   struct objc_super sup = {self, [KKPlugin class]};
