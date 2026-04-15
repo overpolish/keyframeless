@@ -72,10 +72,22 @@ static NSUInteger scanlineIntersections(const simd_float2 *poly, NSUInteger n,
   return count;
 }
 
+// Seeded PRNG for scanline jitter (xorshift32). Returns float in [-1, 1).
+static uint32_t s_fillRNG;
+
+static void fillSeedRNG(uint32_t seed) { s_fillRNG = seed ? seed : 1; }
+
+static float fillRand(void) {
+  s_fillRNG ^= s_fillRNG << 13;
+  s_fillRNG ^= s_fillRNG >> 17;
+  s_fillRNG ^= s_fillRNG << 5;
+  return (float)(s_fillRNG & 0xFFFF) / 32768.0f - 1.0f; // [-1, 1)
+}
+
 NSUInteger KKGenerateHachureLines(KKBezierPath *path, float outputWidth,
                                   float outputHeight, uint8_t fillStyle,
-                                  float gap, float angle,
-                                  KKHachureLine **outLines) {
+                                  float gap, float angle, float roughness,
+                                  uint32_t seed, KKHachureLine **outLines) {
   if (path.count < 3 || gap < 1.0f) {
     *outLines = NULL;
     return 0;
@@ -90,9 +102,9 @@ NSUInteger KKGenerateHachureLines(KKBezierPath *path, float outputWidth,
     return 0;
   }
 
-  // Angle is already in radians from the FxPlug angle slider.
-  float cos_a = cosf(angle);
-  float sin_a = sinf(angle);
+  // Negate angle to correct for Y-down pixel space.
+  float cos_a = cosf(-angle);
+  float sin_a = sinf(-angle);
 
   // Compute center of polygon.
   simd_float2 center = {0, 0};
@@ -116,10 +128,16 @@ NSUInteger KKGenerateHachureLines(KKBezierPath *path, float outputWidth,
   KKHachureLine *lines = malloc(maxLines * sizeof(KKHachureLine));
   NSUInteger lineCount = 0;
 
+  // Seed the RNG for deterministic scanline jitter.
+  fillSeedRNG(seed ^ 0xABCD5678);
+  // Jitter magnitude: up to 40% of gap at roughness=1, scaled by roughness.
+  float jitterAmt = gap * 0.4f * fminf(roughness, 3.0f) / 3.0f;
+
   float *xs = malloc((polyCount + 2) * sizeof(float));
 
   for (float y = minY + gap; y < maxY; y += gap) {
-    NSUInteger xCount = scanlineIntersections(rotPoly, polyCount, y, xs);
+    float scanY = y + (roughness > 0.0001f ? fillRand() * jitterAmt : 0.0f);
+    NSUInteger xCount = scanlineIntersections(rotPoly, polyCount, scanY, xs);
     // Pair up intersections: each consecutive pair is a fill line.
     for (NSUInteger k = 0; k + 1 < xCount; k += 2) {
       if (lineCount >= maxLines) {
@@ -127,8 +145,8 @@ NSUInteger KKGenerateHachureLines(KKBezierPath *path, float outputWidth,
         lines = realloc(lines, maxLines * sizeof(KKHachureLine));
       }
       // Rotate the endpoints back to original space.
-      simd_float2 a = {xs[k], y};
-      simd_float2 b = {xs[k + 1], y};
+      simd_float2 a = {xs[k], scanY};
+      simd_float2 b = {xs[k + 1], scanY};
       lines[lineCount].a = rotatePoint(a, center, cos_a, -sin_a);
       lines[lineCount].b = rotatePoint(b, center, cos_a, -sin_a);
       lineCount++;
@@ -141,7 +159,7 @@ NSUInteger KKGenerateHachureLines(KKBezierPath *path, float outputWidth,
 
   // Cross-hatch: duplicate all lines at angle + 90 degrees.
   if (fillStyle == 2) {
-    float angle2 = angle + (float)(M_PI / 2.0);
+    float angle2 = -angle + (float)(M_PI / 2.0);
     float cos_b = cosf(angle2);
     float sin_b = sinf(angle2);
 
@@ -160,14 +178,16 @@ NSUInteger KKGenerateHachureLines(KKBezierPath *path, float outputWidth,
 
     float *xs2 = malloc((poly2Count + 2) * sizeof(float));
     for (float y = minY2 + gap; y < maxY2; y += gap) {
-      NSUInteger xCount = scanlineIntersections(rotPoly2, poly2Count, y, xs2);
+      float scanY2 = y + (roughness > 0.0001f ? fillRand() * jitterAmt : 0.0f);
+      NSUInteger xCount =
+          scanlineIntersections(rotPoly2, poly2Count, scanY2, xs2);
       for (NSUInteger k = 0; k + 1 < xCount; k += 2) {
         if (lineCount >= maxLines) {
           maxLines *= 2;
           lines = realloc(lines, maxLines * sizeof(KKHachureLine));
         }
-        simd_float2 a = {xs2[k], y};
-        simd_float2 b = {xs2[k + 1], y};
+        simd_float2 a = {xs2[k], scanY2};
+        simd_float2 b = {xs2[k + 1], scanY2};
         lines[lineCount].a = rotatePoint(a, center, cos_b, -sin_b);
         lines[lineCount].b = rotatePoint(b, center, cos_b, -sin_b);
         lineCount++;

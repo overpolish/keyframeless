@@ -204,6 +204,99 @@ static KKBezierPath *buildPass(KKBezierPath *path, float roughness,
   return pass;
 }
 
+/// Roughness gain dampening based on pixel length (rough.js _line scaling).
+/// Shorter lines get full roughness, longer lines get dampened.
+static float pixelRoughnessGain(float pixelLength) {
+  if (pixelLength < 200.0f)
+    return 1.0f;
+  if (pixelLength > 500.0f)
+    return 0.4f;
+  return (-0.0016668f) * pixelLength + 1.233334f;
+}
+
+void KKSketchifyHachureLines(KKHachureLine **lines, NSUInteger *count,
+                             float roughness, float bowing, uint32_t seed,
+                             float canvasWidth, float canvasHeight) {
+  if (!lines || !*lines || *count == 0 || roughness <= 0.0001f)
+    return;
+
+  NSUInteger inCount = *count;
+  KKHachureLine *inLines = *lines;
+
+  // Use a seed offset so fill jitter differs from stroke jitter.
+  seedRNG(seed ^ 0xBEEF1234);
+
+  // rough.js maxRandomnessOffset = roughness * 2 (default).
+  float maxOff = roughness * 2.0f;
+
+  // Tessellation: each input line becomes multiple small segments.
+  NSUInteger segsPerLine = 8;
+  NSUInteger outCapacity = inCount * segsPerLine;
+  KKHachureLine *out = malloc(outCapacity * sizeof(KKHachureLine));
+  NSUInteger oc = 0;
+
+  for (NSUInteger i = 0; i < inCount; i++) {
+    simd_float2 a = inLines[i].a;
+    simd_float2 b = inLines[i].b;
+
+    float dx = b.x - a.x;
+    float dy = b.y - a.y;
+    float lenSq = dx * dx + dy * dy;
+    float len = sqrtf(lenSq);
+    if (len < 0.5f) {
+      out[oc++] = inLines[i];
+      continue;
+    }
+
+    // rough.js: clamp offset so short lines don't explode.
+    float off = maxOff;
+    if (off * off * 100.0f > lenSq)
+      off = len / 10.0f;
+
+    float rGain = pixelRoughnessGain(len);
+
+    // Jitter end point only (rough.js _line moves the endpoint, start is
+    // the moveTo target from previous line or the original point).
+    float jbx = offsetOpt(off, roughness, rGain);
+    float jby = offsetOpt(off, roughness, rGain);
+    simd_float2 jb = {b.x + jbx, b.y + jby};
+
+    // Bowing: perpendicular midpoint displacement (rough.js divides by 200).
+    float midDispX = bowing * maxOff * (dy) / 200.0f;
+    float midDispY = bowing * maxOff * (a.x - b.x) / 200.0f;
+    midDispX = offsetOpt(midDispX, roughness, rGain);
+    midDispY = offsetOpt(midDispY, roughness, rGain);
+
+    float diverge = 0.2f + randUnit() * 0.2f;
+
+    // Bezier control points (rough.js style).
+    simd_float2 cp1 = {
+        midDispX + a.x + dx * diverge + offsetOpt(off, roughness, rGain),
+        midDispY + a.y + dy * diverge + offsetOpt(off, roughness, rGain)};
+    simd_float2 cp2 = {midDispX + a.x + dx * 2.0f * diverge +
+                           offsetOpt(off, roughness, rGain),
+                       midDispY + a.y + dy * 2.0f * diverge +
+                           offsetOpt(off, roughness, rGain)};
+
+    // Tessellate the cubic bezier into small segments.
+    simd_float2 prev = a;
+    for (NSUInteger s = 1; s <= segsPerLine; s++) {
+      float t = (float)s / (float)segsPerLine;
+      float u = 1.0f - t;
+      simd_float2 pt = {u * u * u * a.x + 3.0f * u * u * t * cp1.x +
+                            3.0f * u * t * t * cp2.x + t * t * t * jb.x,
+                        u * u * u * a.y + 3.0f * u * u * t * cp1.y +
+                            3.0f * u * t * t * cp2.y + t * t * t * jb.y};
+      out[oc++] = (KKHachureLine){prev, pt};
+      prev = pt;
+    }
+  }
+
+  free(inLines);
+  *lines = out;
+  *count = oc;
+}
+
 KKBezierPath *KKSketchPath(KKBezierPath *path, float roughness, float bowing,
                            uint32_t seed, uint8_t strokes, float canvasWidth,
                            float canvasHeight) {

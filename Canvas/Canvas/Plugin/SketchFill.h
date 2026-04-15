@@ -21,7 +21,8 @@ typedef struct {
 /// fillStyle: 1=hachure, 2=cross-hatch, 3=zigzag, 4=dots
 /// gap: spacing between scanlines in points
 /// angle: hachure angle in degrees
+/// roughness/seed: when roughness > 0, scanline spacing is randomised
 NSUInteger KKGenerateHachureLines(KKBezierPath *path, float outputWidth,
                                   float outputHeight, uint8_t fillStyle,
-                                  float gap, float angle,
-                                  KKHachureLine **outLines);
+                                  float gap, float angle, float roughness,
+                                  uint32_t seed, KKHachureLine **outLines);
