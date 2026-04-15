@@ -60,6 +60,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, assign) float cornerRadiusBR;
 @property(nonatomic, assign) float cornerRadiusBL;
 
+/// Whether this path renders a stroke (default YES).
+@property(nonatomic, assign) BOOL strokeEnabled;
+
 /// Stroke width for this path (default 8.0).
 @property(nonatomic, assign) float strokeWidth;
 
