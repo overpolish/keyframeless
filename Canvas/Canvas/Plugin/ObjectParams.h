@@ -38,6 +38,8 @@ KKShowObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
                      toParameter:kParamFillColor];
   [paramSetAPI setParameterFlags:kFxParameterFlag_DEFAULT
                      toParameter:kParamOpacity];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_NOT_ANIMATABLE
+                     toParameter:kParamClosedPath];
 }
 
 /// Hide all per-object param rows and clear the saved selection.
@@ -68,6 +70,8 @@ KKHideObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
                      toParameter:kParamDashGap];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamDotGap];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamClosedPath];
 }
 
 /// Show/hide the Line Cap param row based on whether the path is open.
@@ -201,6 +205,12 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                fromParameter:kParamDotGap
                       atTime:kCMTimeZero];
   path.dotGap = (float)dotg;
+
+  BOOL closedPath = YES;
+  [paramGetAPI getBoolValue:&closedPath
+              fromParameter:kParamClosedPath
+                     atTime:kCMTimeZero];
+  path.closed = closedPath;
 }
 
 /// Write a path's per-object values to FxPlug params and show the rows.
@@ -240,4 +250,7 @@ KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
   [paramSetAPI setFloatValue:path.dotGap
                  toParameter:kParamDotGap
                       atTime:kCMTimeZero];
+  [paramSetAPI setBoolValue:path.closed
+                toParameter:kParamClosedPath
+                     atTime:kCMTimeZero];
 }

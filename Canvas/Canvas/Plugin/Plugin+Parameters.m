@@ -139,6 +139,12 @@
                              delta:1.0
                     parameterFlags:kFxParameterFlag_HIDDEN];
 
+  [paramAPI addToggleButtonWithName:@"Closed Path"
+                        parameterID:kParamClosedPath
+                       defaultValue:YES
+                     parameterFlags:kFxParameterFlag_HIDDEN |
+                                    kFxParameterFlag_NOT_ANIMATABLE];
+
   [paramAPI addFloatSliderWithName:@"LastSelectedIndex"
                        parameterID:kParamLastSelectedIndex
                       defaultValue:-1.0
