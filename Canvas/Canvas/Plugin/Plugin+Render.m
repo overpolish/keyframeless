@@ -135,9 +135,52 @@ static simd_float2 normalAtPoint(KKBezierPath *path, NSUInteger c,
   return normal;
 }
 
+static NSUInteger addRoundCap(CanvasVertex *vertices, NSUInteger vertexCount,
+                              simd_float2 center, simd_float2 tangent,
+                              simd_float2 normal, float halfWidth,
+                              BOOL isStart) {
+  NSUInteger capSegs = 16;
+  simd_float2 capDir = isStart ? -tangent : tangent;
+
+  // Degenerate bridge from the stroke body.
+  if (vertexCount > 0) {
+    vertices[vertexCount] = vertices[vertexCount - 1];
+    vertexCount++;
+  }
+
+  for (NSUInteger i = 0; i <= capSegs; i++) {
+    float angle = (float)i / (float)capSegs * M_PI;
+    float cosA = cosf(angle);
+    float sinA = sinf(angle);
+    simd_float2 dir = normal * cosA + capDir * sinA;
+
+    simd_float2 outer = center + dir * halfWidth;
+    vertices[vertexCount].position = outer;
+    vertices[vertexCount].edgeDistance = 0.0f;
+    // Outer ring at capDistance=1 so the shader AA-trims it to match the
+    // stroke body visual width.
+    vertices[vertexCount].capDistance = 1.0f;
+    vertexCount++;
+
+    vertices[vertexCount].position = center;
+    vertices[vertexCount].edgeDistance = 0.0f;
+    vertices[vertexCount].capDistance = 0.0f;
+    vertexCount++;
+
+    // Degenerate bridge after first vertex pair.
+    if (i == 0 && vertexCount >= 4) {
+      vertices[vertexCount] = vertices[vertexCount - 2];
+      vertexCount++;
+      vertices[vertexCount] = vertices[vertexCount - 2];
+      vertexCount++;
+    }
+  }
+  return vertexCount;
+}
+
 static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
                                  float outputWidth, float outputHeight,
-                                 CanvasVertex *vertices) {
+                                 uint8_t lineCap, CanvasVertex *vertices) {
   float aaPadding = 1.0f;
   float halfWidth = (strokeWidth / 2.0f) + aaPadding;
   NSUInteger segsPerCurve = 128;
@@ -145,6 +188,13 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
   if (path.closed && path.count >= 2)
     curveCount = path.count;
   NSUInteger vertexCount = 0;
+  BOOL isOpen = !path.closed;
+
+  // Square cap: extend endpoints outward by halfWidth along the tangent.
+  // We track the first/last centered positions and tangents.
+  simd_float2 startCenter = {0, 0}, endCenter = {0, 0};
+  simd_float2 startTangent = {0, 0}, endTangent = {0, 0};
+  simd_float2 startNormal = {0, 0}, endNormal = {0, 0};
 
   for (NSUInteger c = 0; c < curveCount; c++) {
     if (c > 0 && vertexCount > 0) {
@@ -164,6 +214,21 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
       simd_float2 centered = {pixelPos.x - outputWidth / 2.0f,
                               pixelPos.y - outputHeight / 2.0f};
 
+      BOOL isFirstPoint = (c == 0 && i == 0);
+      BOOL isLastPoint = (c == curveCount - 1 && i == segsPerCurve);
+
+      if (isFirstPoint) {
+        startCenter = centered;
+        startNormal = normal;
+        // Derive tangent from the already-robust normal (rotated 90° CW).
+        startTangent = (simd_float2){normal.y, -normal.x};
+      }
+      if (isLastPoint) {
+        endCenter = centered;
+        endNormal = normal;
+        endTangent = (simd_float2){normal.y, -normal.x};
+      }
+
       vertices[vertexCount].position = centered + normal * halfWidth;
       vertices[vertexCount].edgeDistance = 1.0f;
       vertices[vertexCount].capDistance = 0.0f;
@@ -179,6 +244,100 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
       vertexCount++;
     }
   }
+
+  // Caps for open paths.
+  if (isOpen && lineCap != 0 && curveCount > 0) {
+    if (lineCap == 1) {
+      // Round caps.
+      vertexCount = addRoundCap(vertices, vertexCount, endCenter, endTangent,
+                                endNormal, halfWidth, NO);
+      if (vertexCount > 0) {
+        vertices[vertexCount] = vertices[vertexCount - 1];
+        vertexCount++;
+      }
+      CanvasVertex startFirst;
+      startFirst.position = startCenter + startNormal * halfWidth;
+      startFirst.edgeDistance = 0.0f;
+      startFirst.capDistance = 0.0f;
+      vertices[vertexCount] = startFirst;
+      vertexCount++;
+      vertices[vertexCount] = startFirst;
+      vertexCount++;
+      vertexCount = addRoundCap(vertices, vertexCount, startCenter,
+                                startTangent, startNormal, halfWidth, YES);
+    } else if (lineCap == 2) {
+      // Square caps: extend a rectangle of strokeWidth/2 beyond each endpoint.
+      float ext = strokeWidth / 2.0f;
+
+
+      // End cap.
+      simd_float2 eTop = endCenter + endNormal * halfWidth;
+      simd_float2 eBot = endCenter - endNormal * halfWidth;
+      simd_float2 eTopExt = eTop + endTangent * ext;
+      simd_float2 eBotExt = eBot + endTangent * ext;
+
+      // Degenerate bridge from stroke body.
+      vertices[vertexCount] = vertices[vertexCount - 1];
+      vertexCount++;
+      vertices[vertexCount].position = eTop;
+      vertices[vertexCount].edgeDistance = 1.0f;
+      vertices[vertexCount].capDistance = 0.0f;
+      vertexCount++;
+      vertices[vertexCount] = vertices[vertexCount - 1];
+      vertexCount++;
+      // Rectangle quad as triangle strip: eTop, eBot, eTopExt, eBotExt.
+      vertices[vertexCount].position = eTop;
+      vertices[vertexCount].edgeDistance = 1.0f;
+      vertices[vertexCount].capDistance = 0.0f;
+      vertexCount++;
+      vertices[vertexCount].position = eBot;
+      vertices[vertexCount].edgeDistance = -1.0f;
+      vertices[vertexCount].capDistance = 0.0f;
+      vertexCount++;
+      vertices[vertexCount].position = eTopExt;
+      vertices[vertexCount].edgeDistance = 1.0f;
+      vertices[vertexCount].capDistance = 0.0f;
+      vertexCount++;
+      vertices[vertexCount].position = eBotExt;
+      vertices[vertexCount].edgeDistance = -1.0f;
+      vertices[vertexCount].capDistance = 0.0f;
+      vertexCount++;
+
+      // Start cap (extends in -tangent direction).
+      simd_float2 sTop = startCenter + startNormal * halfWidth;
+      simd_float2 sBot = startCenter - startNormal * halfWidth;
+      simd_float2 sTopExt = sTop - startTangent * ext;
+      simd_float2 sBotExt = sBot - startTangent * ext;
+
+      // Degenerate bridge.
+      vertices[vertexCount] = vertices[vertexCount - 1];
+      vertexCount++;
+      vertices[vertexCount].position = sTopExt;
+      vertices[vertexCount].edgeDistance = 1.0f;
+      vertices[vertexCount].capDistance = 0.0f;
+      vertexCount++;
+      vertices[vertexCount] = vertices[vertexCount - 1];
+      vertexCount++;
+      // Rectangle quad.
+      vertices[vertexCount].position = sTopExt;
+      vertices[vertexCount].edgeDistance = 1.0f;
+      vertices[vertexCount].capDistance = 0.0f;
+      vertexCount++;
+      vertices[vertexCount].position = sBotExt;
+      vertices[vertexCount].edgeDistance = -1.0f;
+      vertices[vertexCount].capDistance = 0.0f;
+      vertexCount++;
+      vertices[vertexCount].position = sTop;
+      vertices[vertexCount].edgeDistance = 1.0f;
+      vertices[vertexCount].capDistance = 0.0f;
+      vertexCount++;
+      vertices[vertexCount].position = sBot;
+      vertices[vertexCount].edgeDistance = -1.0f;
+      vertices[vertexCount].capDistance = 0.0f;
+      vertexCount++;
+    }
+  }
+
   return vertexCount;
 }
 
@@ -475,11 +634,13 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
     NSUInteger curveCount = path.count - 1;
     if (path.closed && path.count >= 2)
       curveCount = path.count;
-    NSUInteger maxVertices = curveCount * ((segsPerCurve + 1) * 2 + 2) + 2;
+    NSUInteger capExtra = (!path.closed && path.lineCap != 0) ? 256 : 0;
+    NSUInteger maxVertices =
+        curveCount * ((segsPerCurve + 1) * 2 + 2) + 2 + capExtra;
     CanvasVertex *vertices =
         (CanvasVertex *)malloc(maxVertices * sizeof(CanvasVertex));
-    NSUInteger vertexCount =
-        tessellatePath(path, sw, outputWidth, outputHeight, vertices);
+    NSUInteger vertexCount = tessellatePath(path, sw, outputWidth, outputHeight,
+                                            path.lineCap, vertices);
 
     MTLRenderPassDescriptor *rpd =
         [MTLRenderPassDescriptor renderPassDescriptor];
