@@ -126,8 +126,12 @@
     KKSaveSelectedIndex(paramSetAPI,
                         (NSInteger)[paths indexOfObjectIdenticalTo:selected]);
   } else {
-    KKHideObjectParams(paramSetAPI);
-    KKSaveSelectedIndex(paramSetAPI, -1);
+    id<FxParameterRetrievalAPI_v6> getAPI =
+        [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    if (!KKIsForceShowEnabled(getAPI)) {
+      KKHideObjectParams(paramSetAPI);
+      KKSaveSelectedIndex(paramSetAPI, -1);
+    }
   }
 }
 

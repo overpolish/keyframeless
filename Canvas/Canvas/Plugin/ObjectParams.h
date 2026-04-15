@@ -22,6 +22,16 @@ static inline KKBezierPath *_Nullable KKSelectedPath(
   return result;
 }
 
+/// Returns YES when the "Force Show All Parameters" toggle is ON.
+static inline BOOL
+KKIsForceShowEnabled(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI) {
+  BOOL val = NO;
+  [paramGetAPI getBoolValue:&val
+              fromParameter:kParamForceShow
+                     atTime:kCMTimeZero];
+  return val;
+}
+
 /// Show all per-object param rows (flags only, no values).
 /// Add new per-object properties here.
 static inline void

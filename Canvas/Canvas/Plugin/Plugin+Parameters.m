@@ -29,6 +29,12 @@
     return NO;
   }
 
+  [paramAPI addToggleButtonWithName:@"Force Show All Parameters"
+                        parameterID:kParamForceShow
+                       defaultValue:NO
+                     parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
+                                    kFxParameterFlag_DONT_DISPLAY_IN_DASHBOARD];
+
   [paramAPI addCustomParameterWithName:@""
                            parameterID:kParamLayerList
                           defaultValue:@(kParamLayerList)

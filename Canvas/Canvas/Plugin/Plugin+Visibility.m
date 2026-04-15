@@ -3,4 +3,31 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#import "Constants.h"
 #import "Plugin_Private.h"
+
+@implementation CanvasPlugin (Visibility)
+
+- (void)updateParameterVisibilityAtTime:(CMTime)time {
+  NSArray<NSNumber *> *allParams = @[
+    @(kParamStrokeEnabled),    @(kParamStrokeWidth),
+    @(kParamStrokeColor),      @(kParamFillEnabled),
+    @(kParamFillColor),        @(kParamOpacity),
+    @(kParamLineCap),          @(kParamLineJoin),
+    @(kParamStrokeStyle),      @(kParamDashLength),
+    @(kParamDashGap),          @(kParamDotGap),
+    @(kParamClosedPath),       @(kParamCornerRadiusTL),
+    @(kParamCornerRadiusTR),   @(kParamCornerRadiusBR),
+    @(kParamCornerRadiusBL),   @(kParamSketchEnabled),
+    @(kParamSketchRoughness),  @(kParamSketchBowing),
+    @(kParamSketchStrokes),    @(kParamSketchFillStyle),
+    @(kParamSketchFillGap),    @(kParamSketchFillAngle),
+    @(kParamSketchFillWeight), @(kParamSketchSeed),
+  ];
+
+  [self forceShowAllParametersIfEnabled:kParamForceShow
+                               paramIDs:allParams
+                                 atTime:time];
+}
+
+@end

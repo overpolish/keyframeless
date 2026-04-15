@@ -251,6 +251,9 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
   __block NSInteger selectedStrokeStyle = -1;
   __block BOOL selectedHasJoins = NO;
   __block BOOL selectedIsRect = NO;
+  __block BOOL selectedSketchEnabled = NO;
+  __block BOOL selectedFillEnabled = NO;
+  __block NSInteger selectedFillStyle = 0;
   [selection enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
     if (idx < pathCount && !paths[idx].isGroup) {
       if (!paths[idx].closed)
@@ -261,6 +264,9 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
       }
       selectedStrokeStyle = paths[idx].strokeStyle;
       selectedIsRect = paths[idx].isRect;
+      selectedSketchEnabled = paths[idx].sketchEnabled;
+      selectedFillEnabled = paths[idx].fillEnabled;
+      selectedFillStyle = paths[idx].sketchFillStyle;
       *stop = YES;
     }
   }];
@@ -288,7 +294,10 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
         [actAPI startAction:at];
         id<FxParameterSettingAPI_v5> setAPI =
             [at.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-        KKHideObjectParams(setAPI);
+        id<FxParameterRetrievalAPI_v6> getAPI = [at.apiManager
+            apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+        if (!KKIsForceShowEnabled(getAPI))
+          KKHideObjectParams(setAPI);
         [actAPI endAction:at];
       }
       return;
@@ -358,6 +367,9 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
       [actAPI startAction:at];
       id<FxParameterSettingAPI_v5> setAPI =
           [at.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      id<FxParameterRetrievalAPI_v6> getAPI =
+          [at.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      BOOL forceShow = KKIsForceShowEnabled(getAPI);
       if (capturedSelection.count > 0) {
         BOOL hasPath = NO;
         BOOL isOpen = NO;
@@ -368,19 +380,33 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
             break;
           }
         }
-        if (hasPath) {
+        if (hasPath || forceShow) {
           KKShowObjectParams(setAPI);
-          KKSetLineCapVisible(setAPI, isOpen);
-          KKSetLineJoinVisible(setAPI, selectedHasJoins);
+          KKSetLineCapVisible(setAPI, isOpen || forceShow);
+          KKSetLineJoinVisible(setAPI, selectedHasJoins || forceShow);
           KKSetStrokeStyleVisible(setAPI, YES);
-          KKSetDashDotParamsForStyle(setAPI, selectedStrokeStyle >= 0
-                                                 ? (uint8_t)selectedStrokeStyle
-                                                 : 0);
-          KKSetCornerRadiiVisible(setAPI, selectedIsRect);
+          if (forceShow) {
+            [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
+                          toParameter:kParamDashLength];
+            [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
+                          toParameter:kParamDashGap];
+            [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
+                          toParameter:kParamDotGap];
+            KKSetSketchParamsVisible(setAPI, YES);
+            KKSetFillStyleParamsVisible(setAPI, YES, 1);
+          } else {
+            KKSetDashDotParamsForStyle(
+                setAPI,
+                selectedStrokeStyle >= 0 ? (uint8_t)selectedStrokeStyle : 0);
+            KKSetSketchParamsVisible(setAPI, selectedSketchEnabled);
+            KKSetFillStyleParamsVisible(setAPI, selectedFillEnabled,
+                                        (int)selectedFillStyle);
+          }
+          KKSetCornerRadiiVisible(setAPI, selectedIsRect || forceShow);
         } else {
           KKHideObjectParams(setAPI);
         }
-      } else {
+      } else if (!forceShow) {
         KKHideObjectParams(setAPI);
       }
       [actAPI endAction:at];

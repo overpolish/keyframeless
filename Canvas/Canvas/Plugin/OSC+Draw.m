@@ -358,7 +358,8 @@
                           canvasHeight:cH];
       }
       KKShowObjectParams(paramSetAPI);
-    } else {
+    } else if (!KKIsForceShowEnabled([self.apiManager
+                   apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)])) {
       KKHideObjectParams(paramSetAPI);
     }
   }

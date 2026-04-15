@@ -175,7 +175,7 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
     KKPathToParams(paramSetAPI, selPath);
     KKSaveSelectedIndex(
         paramSetAPI, (NSInteger)[self.paths indexOfObjectIdenticalTo:selPath]);
-  } else {
+  } else if (!KKIsForceShowEnabled(paramGetAPI)) {
     KKHideObjectParams(paramSetAPI);
     KKSaveSelectedIndex(paramSetAPI, -1);
   }
