@@ -280,6 +280,17 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
       container.emptyView.hidden = NO;
       [content addSubview:container.emptyView];
       container.contentHeightConstraint.constant = kLayerListHeight;
+
+      KKLayerActionTarget *at = container.actionTarget;
+      if (at.apiManager) {
+        id<FxCustomParameterActionAPI_v4> actAPI = [at.apiManager
+            apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+        [actAPI startAction:at];
+        id<FxParameterSettingAPI_v5> setAPI =
+            [at.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+        KKHideObjectParams(setAPI);
+        [actAPI endAction:at];
+      }
       return;
     }
 

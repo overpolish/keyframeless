@@ -69,6 +69,36 @@
     }
   }
 
+  if (parameterID == kParamSketchFillStyle) {
+    id<FxParameterRetrievalAPI_v6> getAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> setAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    int fillStyle = 0;
+    [getAPI getIntValue:&fillStyle
+          fromParameter:kParamSketchFillStyle
+                 atTime:kCMTimeZero];
+    KKSetSketchFillParamsVisible(setAPI, fillStyle > 0);
+  }
+
+  if (parameterID == kParamSketchEnabled) {
+    id<FxParameterRetrievalAPI_v6> getAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> setAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    BOOL sketchOn = NO;
+    [getAPI getBoolValue:&sketchOn
+           fromParameter:kParamSketchEnabled
+                  atTime:kCMTimeZero];
+    KKSetSketchParamsVisible(setAPI, sketchOn);
+    if (sketchOn) {
+      KKModifySelectedPathProperty(self.apiManager, ^(KKBezierPath *path) {
+        if (path.sketchSeed == 0)
+          path.sketchSeed = arc4random();
+      });
+    }
+  }
+
   return YES;
 }
 

@@ -7,6 +7,7 @@
 #import "JoinStyleView.h"
 #import "LayerList_Private.h"
 #import "ObjectParams.h"
+#import "SeedView.h"
 #import "StrokeStyleView.h"
 #import <objc/message.h>
 #import <objc/runtime.h>
@@ -274,6 +275,64 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
       KKLayerStateForUUID(uuid).strokeStyleView = styleView;
 
     return styleView;
+  }
+
+  if (parameterID == kParamSketchSeed) {
+    KKSeedView *seedView = [[KKSeedView alloc]
+        initWithFrame:NSMakeRect(0, 0, 200, KKInspectorRowHeight)];
+    seedView.autoresizingMask = NSViewWidthSizable;
+
+    // Read current seed from the selected path. If it's 0, generate one now.
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    NSString *pathStr = nil;
+    [paramGetAPI getStringParameterValue:&pathStr fromParameter:kParamPathData];
+    NSInteger selIdx = KKReadSelectedIndex(paramGetAPI);
+    if (pathStr.length > 0 && selIdx >= 0) {
+      NSData *blob = [[NSData alloc] initWithBase64EncodedString:pathStr
+                                                         options:0];
+      NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+      if ((NSUInteger)selIdx < paths.count) {
+        uint32_t seed = paths[selIdx].sketchSeed;
+        if (seed == 0) {
+          seed = arc4random();
+          paths[selIdx].sketchSeed = seed;
+          id<FxParameterSettingAPI_v5> setAPI = [self.apiManager
+              apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+          NSData *newBlob = [KKBezierPath blobFromPaths:paths];
+          [setAPI
+              setStringParameterValue:[newBlob base64EncodedStringWithOptions:0]
+                          toParameter:kParamPathData];
+        }
+        seedView.seed = seed;
+      }
+    }
+
+    __weak id weakAPI = self.apiManager;
+    __weak KKSeedView *weakSeedView = seedView;
+    seedView.onReroll = ^{
+      id api = weakAPI;
+      if (!api)
+        return;
+      __block uint32_t newSeed = 0;
+      KKModifySelectedPathProperty(api, ^(KKBezierPath *path) {
+        newSeed = arc4random();
+        path.sketchSeed = newSeed;
+      });
+      KKSeedView *sv = weakSeedView;
+      if (sv && newSeed != 0)
+        sv.seed = newSeed;
+    };
+    seedView.onSeedChanged = ^(uint32_t newSeed) {
+      id api = weakAPI;
+      if (!api)
+        return;
+      KKModifySelectedPathProperty(api, ^(KKBezierPath *path) {
+        path.sketchSeed = newSeed;
+      });
+    };
+
+    return seedView;
   }
 
   struct objc_super sup = {self, [KKPlugin class]};

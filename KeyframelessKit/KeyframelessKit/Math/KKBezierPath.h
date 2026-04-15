@@ -92,6 +92,35 @@ NS_ASSUME_NONNULL_BEGIN
 /// Dot gap in points (default 10.0). Only used when strokeStyle == 2.
 @property(nonatomic, assign) float dotGap;
 
+/// Whether this path uses sketch (hand-drawn) rendering (default NO).
+@property(nonatomic, assign) BOOL sketchEnabled;
+
+/// Sketch roughness 0–3 (default 1.0). Higher = more jitter.
+@property(nonatomic, assign) float sketchRoughness;
+
+/// Sketch bowing 0–3 (default 1.0). Higher = more line curvature.
+@property(nonatomic, assign) float sketchBowing;
+
+/// Number of sketch stroke passes (1 = single, 2 = double/overlay). Default 2.
+@property(nonatomic, assign) uint8_t sketchStrokes;
+
+/// Sketch fill style (0=solid, 1=hachure, 2=cross-hatch, 3=zigzag, 4=dots).
+/// Default 0 (solid). Only meaningful when sketchEnabled && fillEnabled.
+@property(nonatomic, assign) uint8_t sketchFillStyle;
+
+/// Gap between hachure lines in points (default 25). Larger = more spaced.
+@property(nonatomic, assign) float sketchFillGap;
+
+/// Angle of hachure lines in degrees (default -41, matching Rough.js).
+@property(nonatomic, assign) float sketchFillAngle;
+
+/// Stroke weight of hachure fill lines in points (default 3).
+@property(nonatomic, assign) float sketchFillWeight;
+
+/// Random seed for deterministic sketch rendering. Generated once when
+/// sketch is enabled, then stored so the jitter stays stable.
+@property(nonatomic, assign) uint32_t sketchSeed;
+
 /// Whether this path has a solid fill (default NO).
 @property(nonatomic, assign) BOOL fillEnabled;
 

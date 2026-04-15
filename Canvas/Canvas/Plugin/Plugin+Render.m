@@ -7,6 +7,8 @@
 #import "ObjectParams.h"
 #import "Plugin_Private.h"
 #import "ShaderTypes.h"
+#import "SketchFill.h"
+#import "SketchPath.h"
 #import "Tessellation.h"
 #import <IOSurface/IOSurfaceObjC.h>
 
@@ -170,6 +172,84 @@ static void renderFillForPath(KKBezierPath *path, float outputWidth,
   }
 }
 
+/// Write the shape stencil only (no color pass). Used to clip sketch fills.
+static void renderFillStencilOnly(KKBezierPath *path, float outputWidth,
+                                  float outputHeight, id<MTLDevice> device,
+                                  id<MTLCommandBuffer> commandBuffer,
+                                  id<MTLTexture> outputTexture,
+                                  id<MTLTexture> stencilTexture,
+                                  id<MTLRenderPipelineState> fillStencilPS,
+                                  id<MTLDepthStencilState> fillStencilDSState,
+                                  simd_uint2 viewportSize) {
+  NSUInteger segsPerCurve = 64;
+  BOOL isClosed = path.closed;
+  NSUInteger curveCount = isClosed ? path.count : (path.count - 1);
+  NSUInteger outlineCount = curveCount * segsPerCurve + (isClosed ? 0 : 1);
+  simd_float2 *outline = malloc(outlineCount * sizeof(simd_float2));
+  NSUInteger oc = 0;
+  for (NSUInteger c = 0; c < curveCount; c++) {
+    NSUInteger nextIdx = isClosed ? ((c + 1) % path.count) : (c + 1);
+    for (NSUInteger s = 0; s < segsPerCurve; s++) {
+      float t = (float)s / (float)segsPerCurve;
+      simd_float2 pos = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
+      simd_float2 px = {pos.x * outputWidth - outputWidth / 2.0f,
+                        (1.0f - pos.y) * outputHeight - outputHeight / 2.0f};
+      outline[oc++] = px;
+    }
+  }
+  if (!isClosed) {
+    simd_float2 pos = [path evaluatePointAtIndex:curveCount - 1
+                                       nextIndex:curveCount
+                                             atT:1.0f];
+    simd_float2 px = {pos.x * outputWidth - outputWidth / 2.0f,
+                      (1.0f - pos.y) * outputHeight - outputHeight / 2.0f};
+    outline[oc++] = px;
+  }
+
+  simd_float2 center = {0, 0};
+  for (NSUInteger i = 0; i < oc; i++)
+    center += outline[i];
+  center /= (float)oc;
+
+  NSUInteger triCount = oc;
+  CanvasFillVertex *fillVerts = malloc(triCount * 3 * sizeof(CanvasFillVertex));
+  for (NSUInteger i = 0; i < triCount; i++) {
+    NSUInteger next = (i + 1) % oc;
+    fillVerts[i * 3 + 0].position = center;
+    fillVerts[i * 3 + 1].position = outline[i];
+    fillVerts[i * 3 + 2].position = outline[next];
+  }
+  free(outline);
+
+  id<MTLBuffer> fillBuf =
+      [device newBufferWithBytes:fillVerts
+                          length:triCount * 3 * sizeof(CanvasFillVertex)
+                         options:MTLResourceStorageModeShared];
+  free(fillVerts);
+
+  MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
+  rpd.colorAttachments[0].texture = outputTexture;
+  rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+  rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+  rpd.stencilAttachment.texture = stencilTexture;
+  rpd.stencilAttachment.loadAction = MTLLoadActionClear;
+  rpd.stencilAttachment.storeAction = MTLStoreActionStore;
+  rpd.stencilAttachment.clearStencil = 0;
+
+  id<MTLRenderCommandEncoder> enc =
+      [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+  [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1, 1}];
+  [enc setRenderPipelineState:fillStencilPS];
+  [enc setDepthStencilState:fillStencilDSState];
+  [enc setStencilReferenceValue:0];
+  [enc setVertexBuffer:fillBuf offset:0 atIndex:0];
+  [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+  [enc drawPrimitives:MTLPrimitiveTypeTriangle
+          vertexStart:0
+          vertexCount:triCount * 3];
+  [enc endEncoding];
+}
+
 static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
                                 float outputHeight, id<MTLDevice> device,
                                 id<MTLCommandBuffer> commandBuffer,
@@ -231,6 +311,161 @@ static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
     [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
             vertexStart:0
             vertexCount:vertexCount];
+    [enc endEncoding];
+  }
+  free(vertices);
+}
+
+static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
+                                    float outputHeight, id<MTLDevice> device,
+                                    id<MTLCommandBuffer> commandBuffer,
+                                    id<MTLTexture> outputTexture,
+                                    id<MTLTexture> stencilTexture,
+                                    id<MTLRenderPipelineState> strokePS,
+                                    id<MTLDepthStencilState> fillColorDSState,
+                                    simd_uint2 viewportSize) {
+  uint8_t fillStyle = origPath.sketchFillStyle;
+  if (fillStyle == 0)
+    return;
+
+  KKHachureLine *lines = NULL;
+  NSUInteger lineCount = KKGenerateHachureLines(
+      origPath, outputWidth, outputHeight, fillStyle, origPath.sketchFillGap,
+      origPath.sketchFillAngle, &lines);
+  if (lineCount == 0 || !lines)
+    return;
+
+  float fw = origPath.sketchFillWeight;
+  float oa = origPath.opacity;
+  simd_float4 color = {origPath.fillR * oa, origPath.fillG * oa,
+                       origPath.fillB * oa, oa};
+  float halfW = fw / 2.0f;
+
+  // For dots mode: render small filled circles at regular intervals
+  // along each hachure line instead of strokes.
+  BOOL isDots = (fillStyle == 4);
+  float dotRadius = fw * 1.5f;
+  float dotSpacing = origPath.sketchFillGap;
+  if (dotSpacing < dotRadius * 2.0f)
+    dotSpacing = dotRadius * 2.0f;
+
+  // Estimate max vertices needed.
+  NSUInteger maxVerts;
+  if (isDots) {
+    // Each dot is a small circle fan: ~20 triangles * 3 verts.
+    NSUInteger dotsPerLine = 50;
+    maxVerts = lineCount * dotsPerLine * 60 + 256;
+  } else {
+    // Each line: 4 verts for a triangle strip + 2 degenerate bridge.
+    maxVerts = lineCount * 6 + 256;
+  }
+  CanvasVertex *vertices = malloc(maxVerts * sizeof(CanvasVertex));
+  NSUInteger vc = 0;
+
+  if (isDots) {
+    NSUInteger dotSegs = 16;
+    for (NSUInteger i = 0; i < lineCount; i++) {
+      simd_float2 a = lines[i].a;
+      simd_float2 b = lines[i].b;
+      // Convert to clip space.
+      simd_float2 pa = {a.x - outputWidth / 2.0f,
+                        (outputHeight - a.y) - outputHeight / 2.0f};
+      simd_float2 pb = {b.x - outputWidth / 2.0f,
+                        (outputHeight - b.y) - outputHeight / 2.0f};
+      float dx = pb.x - pa.x;
+      float dy = pb.y - pa.y;
+      float len = sqrtf(dx * dx + dy * dy);
+      if (len < 0.001f)
+        continue;
+      NSUInteger nDots = (NSUInteger)(len / dotSpacing) + 1;
+      for (NSUInteger d = 0; d < nDots; d++) {
+        float t = (nDots == 1) ? 0.5f : (float)d / (float)(nDots - 1);
+        simd_float2 center = {pa.x + dx * t, pa.y + dy * t};
+        // Emit triangle fan for a filled circle.
+        for (NSUInteger s = 0; s < dotSegs; s++) {
+          if (vc + 3 >= maxVerts) {
+            maxVerts *= 2;
+            vertices = realloc(vertices, maxVerts * sizeof(CanvasVertex));
+          }
+          float a1 = (float)s / (float)dotSegs * 2.0f * M_PI;
+          float a2 = (float)(s + 1) / (float)dotSegs * 2.0f * M_PI;
+          vertices[vc++] = (CanvasVertex){center, 1.0f, 0.0f};
+          vertices[vc++] = (CanvasVertex){{center.x + cosf(a1) * dotRadius,
+                                           center.y + sinf(a1) * dotRadius},
+                                          1.0f,
+                                          0.0f};
+          vertices[vc++] = (CanvasVertex){{center.x + cosf(a2) * dotRadius,
+                                           center.y + sinf(a2) * dotRadius},
+                                          1.0f,
+                                          0.0f};
+        }
+      }
+    }
+  } else {
+    for (NSUInteger i = 0; i < lineCount; i++) {
+      simd_float2 a = lines[i].a;
+      simd_float2 b = lines[i].b;
+      // Convert from pixel space to clip space (centered, Y-flipped).
+      simd_float2 pa = {a.x - outputWidth / 2.0f,
+                        (outputHeight - a.y) - outputHeight / 2.0f};
+      simd_float2 pb = {b.x - outputWidth / 2.0f,
+                        (outputHeight - b.y) - outputHeight / 2.0f};
+      float dx = pb.x - pa.x;
+      float dy = pb.y - pa.y;
+      float len = sqrtf(dx * dx + dy * dy);
+      if (len < 0.001f)
+        continue;
+      simd_float2 perp = {-dy / len * halfW, dx / len * halfW};
+
+      if (vc > 0) {
+        // Degenerate bridge.
+        vertices[vc] = vertices[vc - 1];
+        vc++;
+        vertices[vc++] =
+            (CanvasVertex){{pa.x + perp.x, pa.y + perp.y}, 1.0f, 0.0f};
+      }
+      vertices[vc++] =
+          (CanvasVertex){{pa.x + perp.x, pa.y + perp.y}, 1.0f, 0.0f};
+      vertices[vc++] =
+          (CanvasVertex){{pa.x - perp.x, pa.y - perp.y}, 1.0f, 0.0f};
+      vertices[vc++] =
+          (CanvasVertex){{pb.x + perp.x, pb.y + perp.y}, 1.0f, 0.0f};
+      vertices[vc++] =
+          (CanvasVertex){{pb.x - perp.x, pb.y - perp.y}, 1.0f, 0.0f};
+    }
+  }
+
+  free(lines);
+
+  if (vc > 0) {
+    MTLRenderPassDescriptor *rpd =
+        [MTLRenderPassDescriptor renderPassDescriptor];
+    rpd.colorAttachments[0].texture = outputTexture;
+    rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+    rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+    // Clip fill lines to the shape interior using the stencil written by
+    // renderFillStencilOnly. Load (don't clear) so we keep the stencil data.
+    rpd.stencilAttachment.texture = stencilTexture;
+    rpd.stencilAttachment.loadAction = MTLLoadActionLoad;
+    rpd.stencilAttachment.storeAction = MTLStoreActionDontCare;
+
+    id<MTLRenderCommandEncoder> enc =
+        [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+    [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1, 1}];
+    [enc setRenderPipelineState:strokePS];
+    [enc setDepthStencilState:fillColorDSState];
+    [enc setStencilReferenceValue:0];
+
+    id<MTLBuffer> vertexBuffer =
+        [device newBufferWithBytes:vertices
+                            length:vc * sizeof(CanvasVertex)
+                           options:MTLResourceStorageModeShared];
+    [enc setVertexBuffer:vertexBuffer offset:0 atIndex:0];
+    [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+    [enc setFragmentBytes:&color length:sizeof(color) atIndex:0];
+    MTLPrimitiveType prim =
+        isDots ? MTLPrimitiveTypeTriangle : MTLPrimitiveTypeTriangleStrip;
+    [enc drawPrimitives:prim vertexStart:0 vertexCount:vc];
     [enc endEncoding];
   }
   free(vertices);
@@ -386,6 +621,24 @@ static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
     [blit endEncoding];
   }
 
+  // Keep original paths for sketch fill generation (hachure needs clean
+  // geometry).
+  NSArray<KKBezierPath *> *origPaths = [paths copy];
+
+  // Apply sketch jitter to paths that have it enabled.
+  NSMutableArray<KKBezierPath *> *renderPaths =
+      [NSMutableArray arrayWithCapacity:paths.count];
+  for (KKBezierPath *p in paths) {
+    if (p.sketchEnabled && p.count >= 2 && !p.hidden) {
+      [renderPaths addObject:KKSketchPath(p, p.sketchRoughness, p.sketchBowing,
+                                          p.sketchSeed, p.sketchStrokes,
+                                          outputWidth, outputHeight)];
+    } else {
+      [renderPaths addObject:p];
+    }
+  }
+  paths = renderPaths;
+
   BOOL hasDrawablePaths = NO;
   for (KKBezierPath *p in paths) {
     if (p.count >= 2 && !p.hidden) {
@@ -428,6 +681,14 @@ static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
   id<MTLRenderPipelineState> fillColorPS = getOrCreatePipeline(
       fillColorKey, registryID, pixelFormat, cache, device, @"fillVertexShader",
       @"fillFragmentShader", YES, stencilFormat);
+
+  // Stroke pipeline with stencil support for clipped sketch fills.
+  NSString *strokeStencilKey =
+      [NSString stringWithFormat:@"%@_strokeStencil_%lu", kPluginID,
+                                 (unsigned long)pixelFormat];
+  id<MTLRenderPipelineState> strokeStencilPS = getOrCreatePipeline(
+      strokeStencilKey, registryID, pixelFormat, cache, device,
+      @"strokeVertexShader", @"strokeFragmentShader", YES, stencilFormat);
 
   MTLStencilDescriptor *stencilInvertDesc = [[MTLStencilDescriptor alloc] init];
   stencilInvertDesc.stencilCompareFunction = MTLCompareFunctionAlways;
@@ -474,15 +735,31 @@ static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
 
   for (NSUInteger pi = paths.count; pi > 0; pi--) {
     KKBezierPath *path = paths[pi - 1];
+    KKBezierPath *orig = origPaths[pi - 1];
     if (path.count < 2 || path.hidden)
       continue;
 
-    if (path.fillEnabled && path.count >= 3 && fillStencilPS && fillColorPS &&
+    if (path.fillEnabled && orig.count >= 3 && fillStencilPS && fillColorPS &&
         stencilTexture) {
-      renderFillForPath(path, outputWidth, outputHeight, device, commandBuffer,
-                        outputTexture, stencilTexture, fillStencilPS,
-                        fillColorPS, fillStencilDSState, fillColorDSState,
-                        viewportSize);
+      // Always use the original (un-jittered) path for fill geometry.
+      // The sketch double-stroke path has overlapping passes that would
+      // cause the stencil fill to fill between the two lines.
+      if (path.sketchEnabled && path.sketchFillStyle > 0) {
+        // Sketch fill: write stencil from original path, then render
+        // hachure/dots lines clipped by the stencil so they don't escape.
+        renderFillStencilOnly(orig, outputWidth, outputHeight, device,
+                              commandBuffer, outputTexture, stencilTexture,
+                              fillStencilPS, fillStencilDSState, viewportSize);
+        renderSketchFillForPath(orig, outputWidth, outputHeight, device,
+                                commandBuffer, outputTexture, stencilTexture,
+                                strokeStencilPS, fillColorDSState,
+                                viewportSize);
+      } else {
+        renderFillForPath(orig, outputWidth, outputHeight, device,
+                          commandBuffer, outputTexture, stencilTexture,
+                          fillStencilPS, fillColorPS, fillStencilDSState,
+                          fillColorDSState, viewportSize);
+      }
     }
 
     if (path.strokeEnabled) {
