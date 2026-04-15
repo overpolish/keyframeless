@@ -23,6 +23,7 @@ static const UInt32 kParamFillEnabled = 105;
 static const UInt32 kParamFillColor = 106;
 static const UInt32 kParamOpacity = 107;
 static const UInt32 kParamLastSelectedIndex = 108;
+static const UInt32 kParamLineCap = 109;
 
 @protocol PROAPIAccessing;
 NSString *_Nullable KKLayerUUIDForAPI(id<PROAPIAccessing> _Nonnull api);

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#import "CapStyleView.h"
 #import "LayerList_Private.h"
 #import "ObjectParams.h"
 
@@ -239,6 +240,15 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
                                                        (unsigned long)(i + 1)]];
   }
 
+  // Capture selected path's lineCap for the cap style view update.
+  __block NSInteger selectedLineCap = -1;
+  [selection enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+    if (idx < pathCount && !paths[idx].isGroup && !paths[idx].closed) {
+      selectedLineCap = paths[idx].lineCap;
+      *stop = YES;
+    }
+  }];
+
   dispatch_async(dispatch_get_main_queue(), ^{
     KKLayerListContainer *container = st.container;
     if (!container)
@@ -323,20 +333,31 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
           [at.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
       if (capturedSelection.count > 0) {
         BOOL hasPath = NO;
+        BOOL isOpen = NO;
         for (NSUInteger i = 0; i < pathCount; i++) {
           if ([capturedSelection containsIndex:i] && !groupFlags[i].boolValue) {
             hasPath = YES;
+            isOpen = (selectedLineCap >= 0); // open path had lineCap captured
             break;
           }
         }
-        if (hasPath)
+        if (hasPath) {
           KKShowObjectParams(setAPI);
-        else
+          KKSetLineCapVisible(setAPI, isOpen);
+        } else {
           KKHideObjectParams(setAPI);
+        }
       } else {
         KKHideObjectParams(setAPI);
       }
       [actAPI endAction:at];
+    }
+
+    // Sync cap style view selection.
+    KKCapStyleView *capView = st.capStyleView;
+    if (capView && selectedLineCap >= 0) {
+      capView.selectedIndex = selectedLineCap;
+      [capView setNeedsDisplay:YES];
     }
   });
 }

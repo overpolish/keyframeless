@@ -82,6 +82,12 @@
                              delta:1.0
                     parameterFlags:kFxParameterFlag_HIDDEN];
 
+  [paramAPI addCustomParameterWithName:@"Line Cap"
+                           parameterID:kParamLineCap
+                          defaultValue:@(0)
+                        parameterFlags:kFxParameterFlag_CUSTOM_UI |
+                                       kFxParameterFlag_NOT_ANIMATABLE];
+
   [paramAPI addFloatSliderWithName:@"LastSelectedIndex"
                        parameterID:kParamLastSelectedIndex
                       defaultValue:-1.0

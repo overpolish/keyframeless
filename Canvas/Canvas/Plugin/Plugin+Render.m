@@ -110,27 +110,13 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
       simd_float2 centered = {pixelPos.x - outputWidth / 2.0f,
                               pixelPos.y - outputHeight / 2.0f};
 
-      float capDist = 0.0f;
-      if (!path.closed) {
-        float globalT =
-            ((float)c + (float)i / (float)segsPerCurve) / (float)curveCount;
-        float capFade = 1.0f;
-        float startDist = globalT * (float)curveCount * (float)segsPerCurve;
-        float endDist =
-            (1.0f - globalT) * (float)curveCount * (float)segsPerCurve;
-        if (startDist < capFade)
-          capDist = 1.0f - startDist / capFade;
-        if (endDist < capFade)
-          capDist = 1.0f - endDist / capFade;
-      }
-
       vertices[vertexCount].position = centered + normal * halfWidth;
       vertices[vertexCount].edgeDistance = 1.0f;
-      vertices[vertexCount].capDistance = capDist;
+      vertices[vertexCount].capDistance = 0.0f;
       vertexCount++;
       vertices[vertexCount].position = centered - normal * halfWidth;
       vertices[vertexCount].edgeDistance = -1.0f;
-      vertices[vertexCount].capDistance = capDist;
+      vertices[vertexCount].capDistance = 0.0f;
       vertexCount++;
     }
 
