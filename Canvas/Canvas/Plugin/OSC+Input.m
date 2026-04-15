@@ -352,8 +352,10 @@
           [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
       KKParamsToPath(paramGetAPI, prev);
       [self writePaths:self.paths];
-      KKHideObjectParams(paramSetAPI);
-      KKSaveSelectedIndex(paramSetAPI, -1);
+      if (!KKIsForceShowEnabled(paramGetAPI)) {
+        KKHideObjectParams(paramSetAPI);
+        KKSaveSelectedIndex(paramSetAPI, -1);
+      }
     }
     [self.selectedPathIndices removeAllIndexes];
     self.activePathIndex = -1;

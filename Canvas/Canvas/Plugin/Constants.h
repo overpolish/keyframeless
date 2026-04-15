@@ -45,6 +45,8 @@ static const UInt32 kParamSketchFillAngle = 127;
 static const UInt32 kParamSketchFillWeight = 128;
 static const UInt32 kParamSketchSeed = 129;
 
+static const UInt32 kParamForceShow = 9000;
+
 @protocol PROAPIAccessing;
 NSString *_Nullable KKLayerUUIDForAPI(id<PROAPIAccessing> _Nonnull api);
 

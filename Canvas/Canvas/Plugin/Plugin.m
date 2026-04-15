@@ -4,6 +4,7 @@
  */
 
 #import "Constants.h"
+#import "LayerList_Private.h"
 #import "ObjectParams.h"
 #import "Plugin_Private.h"
 
@@ -101,6 +102,43 @@
         if (path.sketchSeed == 0)
           path.sketchSeed = arc4random();
       });
+    }
+  }
+
+  if (parameterID == kParamForceShow) {
+    id<FxParameterRetrievalAPI_v6> getAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> setAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    BOOL forceShow = NO;
+    [getAPI getBoolValue:&forceShow
+           fromParameter:kParamForceShow
+                  atTime:kCMTimeZero];
+    if (forceShow) {
+      KKShowObjectParams(setAPI);
+      KKSetLineCapVisible(setAPI, YES);
+      KKSetLineJoinVisible(setAPI, YES);
+      KKSetStrokeStyleVisible(setAPI, YES);
+      [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
+                    toParameter:kParamDashLength];
+      [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
+                    toParameter:kParamDashGap];
+      [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
+                    toParameter:kParamDotGap];
+      KKSetCornerRadiiVisible(setAPI, YES);
+      KKSetSketchParamsVisible(setAPI, YES);
+      KKSetFillStyleParamsVisible(setAPI, YES, 1);
+    } else {
+      NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+      if (uuid)
+        KKLayerStateForUUID(uuid).forceRefresh = YES;
+      id<FxCustomParameterActionAPI_v4> actAPI = [self.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      [actAPI startAction:self];
+      NSString *str = nil;
+      [getAPI getStringParameterValue:&str fromParameter:kParamPathData];
+      [setAPI setStringParameterValue:str ?: @"" toParameter:kParamPathData];
+      [actAPI endAction:self];
     }
   }
 
