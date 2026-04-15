@@ -31,6 +31,10 @@ static const UInt32 kParamDashLength = 113;
 static const UInt32 kParamDashGap = 114;
 static const UInt32 kParamDotGap = 115;
 static const UInt32 kParamClosedPath = 116;
+static const UInt32 kParamCornerRadiusTL = 117;
+static const UInt32 kParamCornerRadiusTR = 118;
+static const UInt32 kParamCornerRadiusBR = 119;
+static const UInt32 kParamCornerRadiusBL = 120;
 
 @protocol PROAPIAccessing;
 NSString *_Nullable KKLayerUUIDForAPI(id<PROAPIAccessing> _Nonnull api);

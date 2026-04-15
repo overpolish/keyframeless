@@ -341,6 +341,22 @@
       id<FxParameterRetrievalAPI_v6> paramGetAPI = [self.apiManager
           apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
       KKParamsToPath(paramGetAPI, selPath);
+      if (selPath.isRect && selPath.count >= 4) {
+        simd_float2 bmin, bmax;
+        [self boundsOfPath:selPath min:&bmin max:&bmax];
+        CGPoint cMin = [self canvasPointFromObjectPoint:bmin];
+        CGPoint cMax = [self canvasPointFromObjectPoint:bmax];
+        float cW = (float)fabs(cMax.x - cMin.x);
+        float cH = (float)fabs(cMax.y - cMin.y);
+        [selPath setRoundedRectWithMin:bmin
+                                   max:bmax
+                            fractionTL:selPath.cornerRadiusTL
+                            fractionTR:selPath.cornerRadiusTR
+                            fractionBR:selPath.cornerRadiusBR
+                            fractionBL:selPath.cornerRadiusBL
+                           canvasWidth:cW
+                          canvasHeight:cH];
+      }
       KKShowObjectParams(paramSetAPI);
     } else {
       KKHideObjectParams(paramSetAPI);

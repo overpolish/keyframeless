@@ -46,6 +46,29 @@
                   atTime:kCMTimeZero];
     KKSetLineCapVisible(setAPI, !closed);
   }
+
+  if (parameterID == kParamCornerRadiusTL ||
+      parameterID == kParamCornerRadiusTR ||
+      parameterID == kParamCornerRadiusBR ||
+      parameterID == kParamCornerRadiusBL) {
+    CGEventFlags flags =
+        CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+    if (flags & kCGEventFlagMaskCommand) {
+      id<FxParameterRetrievalAPI_v6> getAPI = [self.apiManager
+          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      id<FxParameterSettingAPI_v5> setAPI =
+          [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      double val = 0;
+      [getAPI getFloatValue:&val fromParameter:parameterID atTime:time];
+      const UInt32 allRadii[] = {kParamCornerRadiusTL, kParamCornerRadiusTR,
+                                 kParamCornerRadiusBR, kParamCornerRadiusBL};
+      for (int i = 0; i < 4; i++) {
+        if (allRadii[i] != parameterID)
+          [setAPI setFloatValue:val toParameter:allRadii[i] atTime:time];
+      }
+    }
+  }
+
   return YES;
 }
 
