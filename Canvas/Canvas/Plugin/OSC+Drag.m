@@ -459,6 +459,12 @@
                          }];
     [self.selectedPathIndices removeAllIndexes];
     self.activePathIndex = -1;
+    NSString *delUUID = KKLayerUUIDForAPI(self.apiManager);
+    if (delUUID)
+      KKCanvasUpdateSelection(delUUID, self.selectedPathIndices);
+    id<FxParameterSettingAPI_v5> delSetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    KKSaveSelectedIndex(delSetAPI, -1);
     [self writePaths:self.paths];
     *forceUpdate = YES;
     *didHandle = YES;
@@ -473,6 +479,12 @@
     [self.paths removeObjectAtIndex:self.activePathIndex];
     [self.selectedPathIndices removeAllIndexes];
     self.activePathIndex = -1;
+    NSString *delUUID = KKLayerUUIDForAPI(self.apiManager);
+    if (delUUID)
+      KKCanvasUpdateSelection(delUUID, self.selectedPathIndices);
+    id<FxParameterSettingAPI_v5> delSetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    KKSaveSelectedIndex(delSetAPI, -1);
     [self writePaths:self.paths];
     *forceUpdate = YES;
     *didHandle = YES;
