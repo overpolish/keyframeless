@@ -20,6 +20,13 @@ typedef struct {
   uint32_t type;
 } KKBezierPoint;
 
+#define kSketchRoughnessDefault 1.0f
+#define kSketchBowingDefault 1.0f
+#define kSketchStrokesDefault 2
+#define kSketchFillGapDefault 25.0f
+#define kSketchFillAngleDefault -41.0f
+#define kSketchFillWeightDefault 3.0f
+
 NS_ASSUME_NONNULL_BEGIN
 
 @interface KKBezierPath : NSObject

@@ -193,7 +193,7 @@
 
   [paramAPI addFloatSliderWithName:@"Roughness"
                        parameterID:kParamSketchRoughness
-                      defaultValue:1.0
+                      defaultValue:kSketchRoughnessDefault
                       parameterMin:0.0
                       parameterMax:3.0
                          sliderMin:0.0
@@ -203,7 +203,7 @@
 
   [paramAPI addFloatSliderWithName:@"Bowing"
                        parameterID:kParamSketchBowing
-                      defaultValue:1.0
+                      defaultValue:kSketchBowingDefault
                       parameterMin:0.0
                       parameterMax:3.0
                          sliderMin:0.0
@@ -213,7 +213,7 @@
 
   [paramAPI addFloatSliderWithName:@"Strokes"
                        parameterID:kParamSketchStrokes
-                      defaultValue:2.0
+                      defaultValue:kSketchStrokesDefault
                       parameterMin:1.0
                       parameterMax:2.0
                          sliderMin:1.0
@@ -232,7 +232,7 @@
 
   [paramAPI addFloatSliderWithName:@"Fill Gap"
                        parameterID:kParamSketchFillGap
-                      defaultValue:25.0
+                      defaultValue:kSketchFillGapDefault
                       parameterMin:1.0
                       parameterMax:100.0
                          sliderMin:1.0
@@ -242,14 +242,14 @@
 
   [paramAPI addAngleSliderWithName:@"Fill Angle"
                        parameterID:kParamSketchFillAngle
-                    defaultDegrees:-41.0
+                    defaultDegrees:kSketchFillAngleDefault
                parameterMinDegrees:-360.0
                parameterMaxDegrees:360.0
                     parameterFlags:kFxParameterFlag_HIDDEN];
 
   [paramAPI addFloatSliderWithName:@"Fill Weight"
                        parameterID:kParamSketchFillWeight
-                      defaultValue:3.0
+                      defaultValue:kSketchFillWeightDefault
                       parameterMin:0.5
                       parameterMax:20.0
                          sliderMin:0.5
