@@ -12,6 +12,8 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 
+static const float kMiterLimit = 4.0f;
+
 static simd_float2 miterNormal(simd_float2 n1, simd_float2 n2) {
   simd_float2 avg = n1 + n2;
   float avgLen = simd_length(avg);
@@ -19,9 +21,12 @@ static simd_float2 miterNormal(simd_float2 n1, simd_float2 n2) {
     return n1;
   avg /= avgLen;
   float d = simd_dot(avg, n1);
-  if (d > 0.5f)
-    avg /= d;
-  return avg;
+  if (d < 1e-6f)
+    return n1;
+  float extension = 1.0f / d;
+  if (extension > kMiterLimit)
+    extension = kMiterLimit;
+  return avg * extension;
 }
 
 static simd_float2 normalAtPoint(KKBezierPath *path, NSUInteger c,
