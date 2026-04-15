@@ -350,14 +350,14 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     _dashGap = 10.0f;
     _dotGap = 10.0f;
     _sketchEnabled = NO;
-    _sketchRoughness = 1.0f;
-    _sketchBowing = 1.0f;
+    _sketchRoughness = kSketchRoughnessDefault;
+    _sketchBowing = kSketchBowingDefault;
     _sketchSeed = 0;
-    _sketchStrokes = 2;
+    _sketchStrokes = kSketchStrokesDefault;
     _sketchFillStyle = 0;
-    _sketchFillGap = 25.0f;
-    _sketchFillAngle = -41.0f * (float)(M_PI / 180.0);
-    _sketchFillWeight = 3.0f;
+    _sketchFillGap = kSketchFillGapDefault;
+    _sketchFillAngle = kSketchFillAngleDefault * (float)(M_PI / 180.0);
+    _sketchFillWeight = kSketchFillWeightDefault;
   }
   return self;
 }

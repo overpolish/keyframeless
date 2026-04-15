@@ -117,6 +117,7 @@
 				"Plugin/Plugin+Parameters.m",
 				"Plugin/Plugin+Render.m",
 				"Plugin/Plugin+Visibility.m",
+				Plugin/SeedView.m,
 				Plugin/SketchFill.m,
 				Plugin/SketchPath.m,
 				Plugin/StrokeStyleView.m,

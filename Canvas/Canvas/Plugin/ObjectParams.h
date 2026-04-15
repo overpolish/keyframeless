@@ -319,19 +319,19 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                      atTime:kCMTimeZero];
   path.sketchEnabled = sketchOn;
 
-  double sRough = 1.0;
+  double sRough = kSketchRoughnessDefault;
   [paramGetAPI getFloatValue:&sRough
                fromParameter:kParamSketchRoughness
                       atTime:kCMTimeZero];
   path.sketchRoughness = (float)sRough;
 
-  double sBow = 1.0;
+  double sBow = kSketchBowingDefault;
   [paramGetAPI getFloatValue:&sBow
                fromParameter:kParamSketchBowing
                       atTime:kCMTimeZero];
   path.sketchBowing = (float)sBow;
 
-  double sStrokes = 2.0;
+  double sStrokes = kSketchStrokesDefault;
   [paramGetAPI getFloatValue:&sStrokes
                fromParameter:kParamSketchStrokes
                       atTime:kCMTimeZero];
@@ -343,19 +343,19 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                     atTime:kCMTimeZero];
   path.sketchFillStyle = (uint8_t)sFill;
 
-  double fGap = 25.0;
+  double fGap = kSketchFillGapDefault;
   [paramGetAPI getFloatValue:&fGap
                fromParameter:kParamSketchFillGap
                       atTime:kCMTimeZero];
   path.sketchFillGap = (float)fGap;
 
-  double fAngle = -41.0;
+  double fAngle = kSketchFillAngleDefault;
   [paramGetAPI getFloatValue:&fAngle
                fromParameter:kParamSketchFillAngle
                       atTime:kCMTimeZero];
   path.sketchFillAngle = (float)fAngle;
 
-  double fWeight = 3.0;
+  double fWeight = kSketchFillWeightDefault;
   [paramGetAPI getFloatValue:&fWeight
                fromParameter:kParamSketchFillWeight
                       atTime:kCMTimeZero];
