@@ -156,6 +156,32 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
           path->_dashLength = dd[0];
           path->_dashGap = dd[1];
           path->_dotGap = dd[2];
+          hdr += 3 * sizeof(float);
+        }
+        if (ver >= 8 &&
+            data.length >= hdr + 1 + 2 * sizeof(float) + sizeof(uint32_t) + 2) {
+          path->_sketchEnabled = bytes[hdr] != 0;
+          hdr += 1;
+          float sk[2];
+          memcpy(sk, bytes + hdr, 2 * sizeof(float));
+          path->_sketchRoughness = sk[0];
+          path->_sketchBowing = sk[1];
+          hdr += 2 * sizeof(float);
+          memcpy(&path->_sketchSeed, bytes + hdr, sizeof(uint32_t));
+          hdr += sizeof(uint32_t);
+          path->_sketchStrokes = bytes[hdr];
+          if (path->_sketchStrokes < 1)
+            path->_sketchStrokes = 2;
+          hdr += 1;
+          path->_sketchFillStyle = bytes[hdr];
+          hdr += 1;
+          if (data.length >= hdr + 3 * sizeof(float)) {
+            float fp[3];
+            memcpy(fp, bytes + hdr, 3 * sizeof(float));
+            path->_sketchFillGap = fp[0];
+            path->_sketchFillAngle = fp[1];
+            path->_sketchFillWeight = fp[2];
+          }
         }
       }
     } else if (data.length >= oldExpected && count > 0) {
@@ -225,8 +251,9 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   // v5: + lineJoin (1 byte).
   // v6: + strokeStyle (1 byte).
   // v7: + dashLength, dashGap, dotGap (3 floats).
+  // v8: + sketchEnabled (1 byte) + sketchRoughness, sketchBowing (2 floats).
   uint8_t propMarker = 0xAA;
-  uint8_t propVersion = 7;
+  uint8_t propVersion = 8;
   [data appendBytes:&propMarker length:1];
   [data appendBytes:&propVersion length:1];
   float strokeData[4] = {_strokeWidth, _strokeR, _strokeG, _strokeB};
@@ -243,6 +270,15 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   [data appendBytes:&_strokeStyle length:1];
   float dashData[3] = {_dashLength, _dashGap, _dotGap};
   [data appendBytes:dashData length:3 * sizeof(float)];
+  uint8_t sketchFlag = _sketchEnabled ? 1 : 0;
+  [data appendBytes:&sketchFlag length:1];
+  float sketchData[2] = {_sketchRoughness, _sketchBowing};
+  [data appendBytes:sketchData length:2 * sizeof(float)];
+  [data appendBytes:&_sketchSeed length:sizeof(uint32_t)];
+  [data appendBytes:&_sketchStrokes length:1];
+  [data appendBytes:&_sketchFillStyle length:1];
+  float fillParams[3] = {_sketchFillGap, _sketchFillAngle, _sketchFillWeight};
+  [data appendBytes:fillParams length:3 * sizeof(float)];
   return data;
 }
 
@@ -313,6 +349,15 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     _dashLength = 20.0f;
     _dashGap = 10.0f;
     _dotGap = 10.0f;
+    _sketchEnabled = NO;
+    _sketchRoughness = 1.0f;
+    _sketchBowing = 1.0f;
+    _sketchSeed = 0;
+    _sketchStrokes = 2;
+    _sketchFillStyle = 0;
+    _sketchFillGap = 25.0f;
+    _sketchFillAngle = -41.0f * (float)(M_PI / 180.0);
+    _sketchFillWeight = 3.0f;
   }
   return self;
 }

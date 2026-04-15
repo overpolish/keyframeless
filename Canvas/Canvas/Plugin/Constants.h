@@ -35,6 +35,15 @@ static const UInt32 kParamCornerRadiusTL = 117;
 static const UInt32 kParamCornerRadiusTR = 118;
 static const UInt32 kParamCornerRadiusBR = 119;
 static const UInt32 kParamCornerRadiusBL = 120;
+static const UInt32 kParamSketchEnabled = 121;
+static const UInt32 kParamSketchRoughness = 122;
+static const UInt32 kParamSketchBowing = 123;
+static const UInt32 kParamSketchStrokes = 124;
+static const UInt32 kParamSketchFillStyle = 125;
+static const UInt32 kParamSketchFillGap = 126;
+static const UInt32 kParamSketchFillAngle = 127;
+static const UInt32 kParamSketchFillWeight = 128;
+static const UInt32 kParamSketchSeed = 129;
 
 @protocol PROAPIAccessing;
 NSString *_Nullable KKLayerUUIDForAPI(id<PROAPIAccessing> _Nonnull api);

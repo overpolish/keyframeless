@@ -185,6 +185,85 @@
                                delta:0.01
                       parameterFlags:kFxParameterFlag_HIDDEN];
 
+  [paramAPI addToggleButtonWithName:@"Sketch"
+                        parameterID:kParamSketchEnabled
+                       defaultValue:NO
+                     parameterFlags:kFxParameterFlag_HIDDEN |
+                                    kFxParameterFlag_NOT_ANIMATABLE];
+
+  [paramAPI addFloatSliderWithName:@"Roughness"
+                       parameterID:kParamSketchRoughness
+                      defaultValue:1.0
+                      parameterMin:0.0
+                      parameterMax:3.0
+                         sliderMin:0.0
+                         sliderMax:3.0
+                             delta:0.1
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addFloatSliderWithName:@"Bowing"
+                       parameterID:kParamSketchBowing
+                      defaultValue:1.0
+                      parameterMin:0.0
+                      parameterMax:3.0
+                         sliderMin:0.0
+                         sliderMax:3.0
+                             delta:0.1
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addFloatSliderWithName:@"Strokes"
+                       parameterID:kParamSketchStrokes
+                      defaultValue:2.0
+                      parameterMin:1.0
+                      parameterMax:2.0
+                         sliderMin:1.0
+                         sliderMax:2.0
+                             delta:1.0
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addPopupMenuWithName:@"Fill Style"
+                     parameterID:kParamSketchFillStyle
+                    defaultValue:0
+                     menuEntries:@[
+                       @"Solid", @"Hachure", @"Cross-Hatch", @"Zigzag", @"Dots"
+                     ]
+                  parameterFlags:kFxParameterFlag_HIDDEN |
+                                 kFxParameterFlag_NOT_ANIMATABLE];
+
+  [paramAPI addFloatSliderWithName:@"Fill Gap"
+                       parameterID:kParamSketchFillGap
+                      defaultValue:25.0
+                      parameterMin:1.0
+                      parameterMax:100.0
+                         sliderMin:1.0
+                         sliderMax:100.0
+                             delta:1.0
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addAngleSliderWithName:@"Fill Angle"
+                       parameterID:kParamSketchFillAngle
+                    defaultDegrees:-41.0
+               parameterMinDegrees:-360.0
+               parameterMaxDegrees:360.0
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addFloatSliderWithName:@"Fill Weight"
+                       parameterID:kParamSketchFillWeight
+                      defaultValue:3.0
+                      parameterMin:0.5
+                      parameterMax:20.0
+                         sliderMin:0.5
+                         sliderMax:20.0
+                             delta:0.5
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addCustomParameterWithName:@"Seed"
+                           parameterID:kParamSketchSeed
+                          defaultValue:@(0)
+                        parameterFlags:kFxParameterFlag_CUSTOM_UI |
+                                       kFxParameterFlag_HIDDEN |
+                                       kFxParameterFlag_NOT_ANIMATABLE];
+
   [paramAPI addFloatSliderWithName:@"LastSelectedIndex"
                        parameterID:kParamLastSelectedIndex
                       defaultValue:-1.0

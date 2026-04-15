@@ -40,6 +40,8 @@ KKShowObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
                      toParameter:kParamOpacity];
   [paramSetAPI setParameterFlags:kFxParameterFlag_NOT_ANIMATABLE
                      toParameter:kParamClosedPath];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_NOT_ANIMATABLE
+                     toParameter:kParamSketchEnabled];
 }
 
 /// Hide all per-object param rows and clear the saved selection.
@@ -80,6 +82,24 @@ KKHideObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
                      toParameter:kParamCornerRadiusBR];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamCornerRadiusBL];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamSketchEnabled];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamSketchRoughness];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamSketchBowing];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamSketchStrokes];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamSketchFillStyle];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamSketchFillGap];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamSketchFillAngle];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamSketchFillWeight];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamSketchSeed];
 }
 
 /// Show/hide the Line Cap param row based on whether the path is open.
@@ -128,6 +148,43 @@ KKSetDashDotParamsForStyle(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
   [paramSetAPI setParameterFlags:showDot ? kFxParameterFlag_DEFAULT
                                          : kFxParameterFlag_HIDDEN
                      toParameter:kParamDotGap];
+}
+
+/// Show/hide the sketch roughness/bowing sliders based on sketch enabled state.
+static inline void
+KKSetSketchParamsVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
+                         BOOL visible) {
+  FxParameterFlags flags =
+      visible ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:flags toParameter:kParamSketchRoughness];
+  [paramSetAPI setParameterFlags:flags toParameter:kParamSketchBowing];
+  [paramSetAPI setParameterFlags:flags toParameter:kParamSketchStrokes];
+  [paramSetAPI setParameterFlags:flags toParameter:kParamSketchFillStyle];
+  FxParameterFlags seedFlags =
+      visible ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE)
+              : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:seedFlags toParameter:kParamSketchSeed];
+  // Fill sub-params hidden by default; shown via KKSetSketchFillParamsVisible.
+  if (!visible) {
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamSketchFillGap];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamSketchFillAngle];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamSketchFillWeight];
+  }
+}
+
+/// Show/hide the sketch fill sub-params (gap, angle, weight) based on
+/// whether the fill style is non-solid (hachure, cross-hatch, etc.).
+static inline void
+KKSetSketchFillParamsVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
+                             BOOL visible) {
+  FxParameterFlags flags =
+      visible ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:flags toParameter:kParamSketchFillGap];
+  [paramSetAPI setParameterFlags:flags toParameter:kParamSketchFillAngle];
+  [paramSetAPI setParameterFlags:flags toParameter:kParamSketchFillWeight];
 }
 
 /// Show/hide the corner radius param rows based on whether the path is a rect.
@@ -255,6 +312,54 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                fromParameter:kParamCornerRadiusBL
                       atTime:kCMTimeZero];
   path.cornerRadiusBL = (float)rbl;
+
+  BOOL sketchOn = NO;
+  [paramGetAPI getBoolValue:&sketchOn
+              fromParameter:kParamSketchEnabled
+                     atTime:kCMTimeZero];
+  path.sketchEnabled = sketchOn;
+
+  double sRough = 1.0;
+  [paramGetAPI getFloatValue:&sRough
+               fromParameter:kParamSketchRoughness
+                      atTime:kCMTimeZero];
+  path.sketchRoughness = (float)sRough;
+
+  double sBow = 1.0;
+  [paramGetAPI getFloatValue:&sBow
+               fromParameter:kParamSketchBowing
+                      atTime:kCMTimeZero];
+  path.sketchBowing = (float)sBow;
+
+  double sStrokes = 2.0;
+  [paramGetAPI getFloatValue:&sStrokes
+               fromParameter:kParamSketchStrokes
+                      atTime:kCMTimeZero];
+  path.sketchStrokes = (uint8_t)sStrokes;
+
+  int sFill = 0;
+  [paramGetAPI getIntValue:&sFill
+             fromParameter:kParamSketchFillStyle
+                    atTime:kCMTimeZero];
+  path.sketchFillStyle = (uint8_t)sFill;
+
+  double fGap = 25.0;
+  [paramGetAPI getFloatValue:&fGap
+               fromParameter:kParamSketchFillGap
+                      atTime:kCMTimeZero];
+  path.sketchFillGap = (float)fGap;
+
+  double fAngle = -41.0;
+  [paramGetAPI getFloatValue:&fAngle
+               fromParameter:kParamSketchFillAngle
+                      atTime:kCMTimeZero];
+  path.sketchFillAngle = (float)fAngle;
+
+  double fWeight = 3.0;
+  [paramGetAPI getFloatValue:&fWeight
+               fromParameter:kParamSketchFillWeight
+                      atTime:kCMTimeZero];
+  path.sketchFillWeight = (float)fWeight;
 }
 
 /// Modify a property of the currently-selected path inside an action scope.
@@ -337,4 +442,31 @@ KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
   [paramSetAPI setFloatValue:path.cornerRadiusBL
                  toParameter:kParamCornerRadiusBL
                       atTime:kCMTimeZero];
+  [paramSetAPI setBoolValue:path.sketchEnabled
+                toParameter:kParamSketchEnabled
+                     atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.sketchRoughness
+                 toParameter:kParamSketchRoughness
+                      atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.sketchBowing
+                 toParameter:kParamSketchBowing
+                      atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:(double)path.sketchStrokes
+                 toParameter:kParamSketchStrokes
+                      atTime:kCMTimeZero];
+  [paramSetAPI setIntValue:(int)path.sketchFillStyle
+               toParameter:kParamSketchFillStyle
+                    atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.sketchFillGap
+                 toParameter:kParamSketchFillGap
+                      atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.sketchFillAngle
+                 toParameter:kParamSketchFillAngle
+                      atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.sketchFillWeight
+                 toParameter:kParamSketchFillWeight
+                      atTime:kCMTimeZero];
+  KKSetSketchParamsVisible(paramSetAPI, path.sketchEnabled);
+  if (path.sketchEnabled)
+    KKSetSketchFillParamsVisible(paramSetAPI, path.sketchFillStyle > 0);
 }
