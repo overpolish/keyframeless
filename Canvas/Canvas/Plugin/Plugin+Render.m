@@ -136,102 +136,6 @@ static simd_float2 rawNormalAtSegStart(KKBezierPath *path, NSUInteger c,
   return (simd_float2){-tangent.y, tangent.x};
 }
 
-/// Emit a round join fan on the outside of the bend between two normals.
-static NSUInteger addRoundJoin(CanvasVertex *vertices, NSUInteger vertexCount,
-                               simd_float2 center, simd_float2 n1,
-                               simd_float2 n2, float halfWidth) {
-  // Cross product determines turn direction; join fills the outside.
-  float cross = n1.x * n2.y - n1.y * n2.x;
-  float side = (cross >= 0.0f) ? -1.0f : 1.0f;
-
-  simd_float2 on1 = n1 * side;
-  simd_float2 on2 = n2 * side;
-
-  float dot = simd_dot(on1, on2);
-  dot = fmaxf(-1.0f, fminf(1.0f, dot));
-  float angle = acosf(dot);
-  if (angle < 1e-4f)
-    return vertexCount;
-
-  // Sweep direction from on1 to on2 (shortest arc on the outside).
-  float sweepCross = on1.x * on2.y - on1.y * on2.x;
-  float dir = (sweepCross >= 0.0f) ? 1.0f : -1.0f;
-
-  NSUInteger segs = (NSUInteger)fmaxf(4.0f, angle / (M_PI / 16.0f));
-
-  // Degenerate bridge.
-  if (vertexCount > 0) {
-    vertices[vertexCount] = vertices[vertexCount - 1];
-    vertexCount++;
-  }
-  CanvasVertex first;
-  first.position = center + on1 * halfWidth;
-  first.edgeDistance = 0.0f;
-  first.capDistance = 0.0f;
-  vertices[vertexCount] = first;
-  vertexCount++;
-  vertices[vertexCount] = first;
-  vertexCount++;
-
-  for (NSUInteger i = 0; i <= segs; i++) {
-    float t = (float)i / (float)segs;
-    float a = t * angle * dir;
-    float cosA = cosf(a);
-    float sinA = sinf(a);
-    simd_float2 rotated = {on1.x * cosA - on1.y * sinA,
-                           on1.x * sinA + on1.y * cosA};
-    vertices[vertexCount].position = center + rotated * halfWidth;
-    vertices[vertexCount].edgeDistance = 0.0f;
-    vertices[vertexCount].capDistance = 1.0f;
-    vertexCount++;
-    vertices[vertexCount].position = center;
-    vertices[vertexCount].edgeDistance = 0.0f;
-    vertices[vertexCount].capDistance = 0.0f;
-    vertexCount++;
-  }
-  return vertexCount;
-}
-
-/// Emit a bevel join (single triangle) on the outside of the bend.
-static NSUInteger addBevelJoin(CanvasVertex *vertices, NSUInteger vertexCount,
-                               simd_float2 center, simd_float2 n1,
-                               simd_float2 n2, float halfWidth) {
-  // Cross product determines turn direction; join fills the outside.
-  float cross = n1.x * n2.y - n1.y * n2.x;
-  float side = (cross >= 0.0f) ? -1.0f : 1.0f;
-
-  simd_float2 outer1 = center + n1 * halfWidth * side;
-  simd_float2 outer2 = center + n2 * halfWidth * side;
-
-  // Degenerate bridge.
-  if (vertexCount > 0) {
-    vertices[vertexCount] = vertices[vertexCount - 1];
-    vertexCount++;
-  }
-  vertices[vertexCount].position = outer1;
-  vertices[vertexCount].edgeDistance = 0.0f;
-  vertices[vertexCount].capDistance = 0.0f;
-  vertexCount++;
-  vertices[vertexCount] = vertices[vertexCount - 1];
-  vertexCount++;
-
-  // Triangle: outer1, center, outer2.
-  vertices[vertexCount].position = outer1;
-  vertices[vertexCount].edgeDistance = 0.0f;
-  vertices[vertexCount].capDistance = 1.0f;
-  vertexCount++;
-  vertices[vertexCount].position = center;
-  vertices[vertexCount].edgeDistance = 0.0f;
-  vertices[vertexCount].capDistance = 0.0f;
-  vertexCount++;
-  vertices[vertexCount].position = outer2;
-  vertices[vertexCount].edgeDistance = 0.0f;
-  vertices[vertexCount].capDistance = 1.0f;
-  vertexCount++;
-
-  return vertexCount;
-}
-
 static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
                                  float outputWidth, float outputHeight,
                                  uint8_t lineCap, uint8_t lineJoin,
@@ -354,7 +258,6 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
       simd_float2 jCenter = segEndCenter;
       simd_float2 outerEnd = jCenter + n1 * halfWidth * side;
       simd_float2 outerStart = jCenter + n2 * halfWidth * side;
-      simd_float2 inner = jCenter - n1 * halfWidth * side;
 
       // End the current strip at the junction with raw normal.
       // (already done by the loop above)
@@ -729,35 +632,120 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
   simd_uint2 viewportSize = {(unsigned int)outputWidth,
                              (unsigned int)outputHeight};
 
-  // Build fill pipeline on demand.
-  NSString *fillKey = [NSString
-      stringWithFormat:@"%@_fill_%lu", kPluginID, (unsigned long)pixelFormat];
-  id<MTLRenderPipelineState> fillPS =
-      [cache pipelineStateForPluginID:fillKey
+  // Build fill pipeline states on demand (stencil + color passes).
+  MTLPixelFormat stencilFormat = MTLPixelFormatStencil8;
+
+  NSString *fillStencilKey =
+      [NSString stringWithFormat:@"%@_fillStencil_%lu", kPluginID,
+                                 (unsigned long)pixelFormat];
+  id<MTLRenderPipelineState> fillStencilPS =
+      [cache pipelineStateForPluginID:fillStencilKey
                            registryID:registryID
                           pixelFormat:pixelFormat];
-  if (!fillPS) {
-    id<MTLLibrary> library = [device newDefaultLibrary];
-    MTLRenderPipelineDescriptor *desc =
-        [[MTLRenderPipelineDescriptor alloc] init];
-    desc.vertexFunction = [library newFunctionWithName:@"fillVertexShader"];
-    desc.fragmentFunction = [library newFunctionWithName:@"fillFragmentShader"];
-    desc.colorAttachments[0].pixelFormat = pixelFormat;
-    desc.colorAttachments[0].blendingEnabled = YES;
-    desc.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorOne;
-    desc.colorAttachments[0].destinationRGBBlendFactor =
-        MTLBlendFactorOneMinusSourceAlpha;
-    desc.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
-    desc.colorAttachments[0].destinationAlphaBlendFactor =
-        MTLBlendFactorOneMinusSourceAlpha;
 
-    NSError *error = nil;
-    fillPS = [device newRenderPipelineStateWithDescriptor:desc error:&error];
-    if (fillPS)
-      [cache registerPipelineState:fillPS
-                       forPluginID:fillKey
-                        registryID:registryID
-                       pixelFormat:pixelFormat];
+  NSString *fillColorKey =
+      [NSString stringWithFormat:@"%@_fillColor_%lu", kPluginID,
+                                 (unsigned long)pixelFormat];
+  id<MTLRenderPipelineState> fillColorPS =
+      [cache pipelineStateForPluginID:fillColorKey
+                           registryID:registryID
+                          pixelFormat:pixelFormat];
+
+  if (!fillStencilPS || !fillColorPS) {
+    id<MTLLibrary> library = [device newDefaultLibrary];
+
+    // Stencil pass: no color writes, just stencil invert.
+    {
+      MTLRenderPipelineDescriptor *desc =
+          [[MTLRenderPipelineDescriptor alloc] init];
+      desc.vertexFunction = [library newFunctionWithName:@"fillVertexShader"];
+      desc.fragmentFunction =
+          [library newFunctionWithName:@"fillFragmentShader"];
+      desc.colorAttachments[0].pixelFormat = pixelFormat;
+      desc.colorAttachments[0].writeMask = MTLColorWriteMaskNone;
+      desc.stencilAttachmentPixelFormat = stencilFormat;
+
+      NSError *error = nil;
+      fillStencilPS = [device newRenderPipelineStateWithDescriptor:desc
+                                                             error:&error];
+      if (fillStencilPS)
+        [cache registerPipelineState:fillStencilPS
+                         forPluginID:fillStencilKey
+                          registryID:registryID
+                         pixelFormat:pixelFormat];
+    }
+
+    // Color pass: draw where stencil is non-zero.
+    {
+      MTLRenderPipelineDescriptor *desc =
+          [[MTLRenderPipelineDescriptor alloc] init];
+      desc.vertexFunction = [library newFunctionWithName:@"fillVertexShader"];
+      desc.fragmentFunction =
+          [library newFunctionWithName:@"fillFragmentShader"];
+      desc.colorAttachments[0].pixelFormat = pixelFormat;
+      desc.colorAttachments[0].blendingEnabled = YES;
+      desc.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorOne;
+      desc.colorAttachments[0].destinationRGBBlendFactor =
+          MTLBlendFactorOneMinusSourceAlpha;
+      desc.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
+      desc.colorAttachments[0].destinationAlphaBlendFactor =
+          MTLBlendFactorOneMinusSourceAlpha;
+      desc.stencilAttachmentPixelFormat = stencilFormat;
+
+      NSError *error = nil;
+      fillColorPS = [device newRenderPipelineStateWithDescriptor:desc
+                                                           error:&error];
+      if (fillColorPS)
+        [cache registerPipelineState:fillColorPS
+                         forPluginID:fillColorKey
+                          registryID:registryID
+                         pixelFormat:pixelFormat];
+    }
+  }
+
+  // Stencil depth state objects for fill.
+  MTLStencilDescriptor *stencilInvertDesc = [[MTLStencilDescriptor alloc] init];
+  stencilInvertDesc.stencilCompareFunction = MTLCompareFunctionAlways;
+  stencilInvertDesc.depthStencilPassOperation = MTLStencilOperationInvert;
+
+  MTLDepthStencilDescriptor *fillStencilDSDesc =
+      [[MTLDepthStencilDescriptor alloc] init];
+  fillStencilDSDesc.frontFaceStencil = stencilInvertDesc;
+  fillStencilDSDesc.backFaceStencil = stencilInvertDesc;
+  id<MTLDepthStencilState> fillStencilDSState =
+      [device newDepthStencilStateWithDescriptor:fillStencilDSDesc];
+
+  MTLStencilDescriptor *stencilTestDesc = [[MTLStencilDescriptor alloc] init];
+  stencilTestDesc.stencilCompareFunction = MTLCompareFunctionNotEqual;
+  stencilTestDesc.readMask = 0xFF;
+  stencilTestDesc.stencilFailureOperation = MTLStencilOperationKeep;
+  stencilTestDesc.depthStencilPassOperation = MTLStencilOperationZero;
+
+  MTLDepthStencilDescriptor *fillColorDSDesc =
+      [[MTLDepthStencilDescriptor alloc] init];
+  fillColorDSDesc.frontFaceStencil = stencilTestDesc;
+  fillColorDSDesc.backFaceStencil = stencilTestDesc;
+  id<MTLDepthStencilState> fillColorDSState =
+      [device newDepthStencilStateWithDescriptor:fillColorDSDesc];
+
+  // Create stencil texture matching output dimensions.
+  id<MTLTexture> stencilTexture = nil;
+  BOOL anyFill = NO;
+  for (NSUInteger pi = 0; pi < paths.count; pi++) {
+    if (paths[pi].fillEnabled && paths[pi].count >= 3 && !paths[pi].hidden) {
+      anyFill = YES;
+      break;
+    }
+  }
+  if (anyFill && fillStencilPS && fillColorPS) {
+    MTLTextureDescriptor *stencilTexDesc =
+        [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:stencilFormat
+                                                           width:outputWidth
+                                                          height:outputHeight
+                                                       mipmapped:NO];
+    stencilTexDesc.usage = MTLTextureUsageRenderTarget;
+    stencilTexDesc.storageMode = MTLStorageModePrivate;
+    stencilTexture = [device newTextureWithDescriptor:stencilTexDesc];
   }
 
   // Render in reverse: index 0 is drawn last (on top), matching layer list.
@@ -766,15 +754,17 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
     if (path.count < 2 || path.hidden)
       continue;
 
-    // Fill (behind stroke): fan triangulation from centroid for closed paths.
-    if (path.fillEnabled && path.closed && path.count >= 3 && fillPS) {
+    // Fill (behind stroke): stencil-based even-odd fill.
+    if (path.fillEnabled && path.count >= 3 && fillStencilPS && fillColorPS &&
+        stencilTexture) {
       NSUInteger segsPerCurve = 64;
-      NSUInteger curveCount = path.count;
-      NSUInteger outlineCount = curveCount * segsPerCurve;
+      BOOL isClosed = path.closed;
+      NSUInteger curveCount = isClosed ? path.count : (path.count - 1);
+      NSUInteger outlineCount = curveCount * segsPerCurve + (isClosed ? 0 : 1);
       simd_float2 *outline = malloc(outlineCount * sizeof(simd_float2));
       NSUInteger oc = 0;
       for (NSUInteger c = 0; c < curveCount; c++) {
-        NSUInteger nextIdx = (c + 1) % path.count;
+        NSUInteger nextIdx = isClosed ? ((c + 1) % path.count) : (c + 1);
         for (NSUInteger s = 0; s < segsPerCurve; s++) {
           float t = (float)s / (float)segsPerCurve;
           simd_float2 pos = [path evaluatePointAtIndex:c
@@ -785,6 +775,14 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
                                 outputHeight / 2.0f};
           outline[oc++] = px;
         }
+      }
+      if (!isClosed) {
+        simd_float2 pos = [path evaluatePointAtIndex:curveCount - 1
+                                           nextIndex:curveCount
+                                                 atT:1.0f];
+        simd_float2 px = {pos.x * outputWidth - outputWidth / 2.0f,
+                          (1.0f - pos.y) * outputHeight - outputHeight / 2.0f};
+        outline[oc++] = px;
       }
 
       // Centroid
@@ -797,7 +795,7 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
       NSUInteger triCount = oc;
       CanvasFillVertex *fillVerts =
           malloc(triCount * 3 * sizeof(CanvasFillVertex));
-      for (NSUInteger i = 0; i < oc; i++) {
+      for (NSUInteger i = 0; i < triCount; i++) {
         NSUInteger next = (i + 1) % oc;
         fillVerts[i * 3 + 0].position = center;
         fillVerts[i * 3 + 1].position = outline[i];
@@ -805,32 +803,79 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
       }
       free(outline);
 
-      float a = path.opacity;
-      simd_float4 fc = {path.fillR * a, path.fillG * a, path.fillB * a, a};
-
-      MTLRenderPassDescriptor *rpd =
-          [MTLRenderPassDescriptor renderPassDescriptor];
-      rpd.colorAttachments[0].texture = outputTexture;
-      rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
-      rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
-
-      id<MTLRenderCommandEncoder> enc =
-          [commandBuffer renderCommandEncoderWithDescriptor:rpd];
-      [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1, 1}];
-      [enc setRenderPipelineState:fillPS];
-
       id<MTLBuffer> fillBuf =
           [device newBufferWithBytes:fillVerts
                               length:triCount * 3 * sizeof(CanvasFillVertex)
                              options:MTLResourceStorageModeShared];
-      [enc setVertexBuffer:fillBuf offset:0 atIndex:0];
-      [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
-      [enc setFragmentBytes:&fc length:sizeof(fc) atIndex:0];
-      [enc drawPrimitives:MTLPrimitiveTypeTriangle
-              vertexStart:0
-              vertexCount:triCount * 3];
-      [enc endEncoding];
       free(fillVerts);
+
+      // Pass 1: Stencil — draw fan triangles, invert stencil bit, no color.
+      {
+        MTLRenderPassDescriptor *rpd =
+            [MTLRenderPassDescriptor renderPassDescriptor];
+        rpd.colorAttachments[0].texture = outputTexture;
+        rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+        rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+        rpd.stencilAttachment.texture = stencilTexture;
+        rpd.stencilAttachment.loadAction = MTLLoadActionClear;
+        rpd.stencilAttachment.storeAction = MTLStoreActionStore;
+        rpd.stencilAttachment.clearStencil = 0;
+
+        id<MTLRenderCommandEncoder> enc =
+            [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+        [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1, 1}];
+        [enc setRenderPipelineState:fillStencilPS];
+        [enc setDepthStencilState:fillStencilDSState];
+        [enc setStencilReferenceValue:0];
+        [enc setVertexBuffer:fillBuf offset:0 atIndex:0];
+        [enc setVertexBytes:&viewportSize
+                     length:sizeof(viewportSize)
+                    atIndex:1];
+        [enc drawPrimitives:MTLPrimitiveTypeTriangle
+                vertexStart:0
+                vertexCount:triCount * 3];
+        [enc endEncoding];
+      }
+
+      // Pass 2: Color — full-screen quad where stencil != 0.
+      {
+        float a = path.opacity;
+        simd_float4 fc = {path.fillR * a, path.fillG * a, path.fillB * a, a};
+
+        CanvasFillVertex quadVerts[6] = {
+            {{-(float)outputWidth, -(float)outputHeight}},
+            {{(float)outputWidth, -(float)outputHeight}},
+            {{-(float)outputWidth, (float)outputHeight}},
+            {{(float)outputWidth, -(float)outputHeight}},
+            {{(float)outputWidth, (float)outputHeight}},
+            {{-(float)outputWidth, (float)outputHeight}},
+        };
+
+        MTLRenderPassDescriptor *rpd =
+            [MTLRenderPassDescriptor renderPassDescriptor];
+        rpd.colorAttachments[0].texture = outputTexture;
+        rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+        rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+        rpd.stencilAttachment.texture = stencilTexture;
+        rpd.stencilAttachment.loadAction = MTLLoadActionLoad;
+        rpd.stencilAttachment.storeAction = MTLStoreActionDontCare;
+
+        id<MTLRenderCommandEncoder> enc =
+            [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+        [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1, 1}];
+        [enc setRenderPipelineState:fillColorPS];
+        [enc setDepthStencilState:fillColorDSState];
+        [enc setStencilReferenceValue:0];
+        [enc setVertexBytes:quadVerts length:sizeof(quadVerts) atIndex:0];
+        [enc setVertexBytes:&viewportSize
+                     length:sizeof(viewportSize)
+                    atIndex:1];
+        [enc setFragmentBytes:&fc length:sizeof(fc) atIndex:0];
+        [enc drawPrimitives:MTLPrimitiveTypeTriangle
+                vertexStart:0
+                vertexCount:6];
+        [enc endEncoding];
+      }
     }
 
     // Stroke
