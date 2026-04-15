@@ -60,6 +60,14 @@ KKHideObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
                      toParameter:kParamLineCap];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamLineJoin];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamStrokeStyle];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamDashLength];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamDashGap];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamDotGap];
 }
 
 /// Show/hide the Line Cap param row based on whether the path is open.
@@ -80,6 +88,34 @@ KKSetLineJoinVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
       visible ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE)
               : kFxParameterFlag_HIDDEN;
   [paramSetAPI setParameterFlags:flags toParameter:kParamLineJoin];
+}
+
+/// Show/hide the Stroke Style param row.
+static inline void
+KKSetStrokeStyleVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
+                        BOOL visible) {
+  FxParameterFlags flags =
+      visible ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE)
+              : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:flags toParameter:kParamStrokeStyle];
+}
+
+/// Show/hide the dash/dot sub-params based on the current stroke style.
+/// 0=solid (hide all), 1=dashed (show length+gap), 2=dotted (show gap only).
+static inline void
+KKSetDashDotParamsForStyle(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
+                           uint8_t strokeStyle) {
+  BOOL showDash = (strokeStyle == 1);
+  BOOL showDot = (strokeStyle == 2);
+  [paramSetAPI setParameterFlags:showDash ? kFxParameterFlag_DEFAULT
+                                          : kFxParameterFlag_HIDDEN
+                     toParameter:kParamDashLength];
+  [paramSetAPI setParameterFlags:showDash ? kFxParameterFlag_DEFAULT
+                                          : kFxParameterFlag_HIDDEN
+                     toParameter:kParamDashGap];
+  [paramSetAPI setParameterFlags:showDot ? kFxParameterFlag_DEFAULT
+                                         : kFxParameterFlag_HIDDEN
+                     toParameter:kParamDotGap];
 }
 
 /// Save the index of the currently-selected path so it survives clip switches.
@@ -147,6 +183,24 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                fromParameter:kParamOpacity
                       atTime:kCMTimeZero];
   path.opacity = (float)(op / 100.0);
+
+  double dl = 20.0;
+  [paramGetAPI getFloatValue:&dl
+               fromParameter:kParamDashLength
+                      atTime:kCMTimeZero];
+  path.dashLength = (float)dl;
+
+  double dg = 10.0;
+  [paramGetAPI getFloatValue:&dg
+               fromParameter:kParamDashGap
+                      atTime:kCMTimeZero];
+  path.dashGap = (float)dg;
+
+  double dotg = 10.0;
+  [paramGetAPI getFloatValue:&dotg
+               fromParameter:kParamDotGap
+                      atTime:kCMTimeZero];
+  path.dotGap = (float)dotg;
 }
 
 /// Write a path's per-object values to FxPlug params and show the rows.
@@ -176,5 +230,14 @@ KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                     atTime:kCMTimeZero];
   [paramSetAPI setFloatValue:path.opacity * 100.0f
                  toParameter:kParamOpacity
+                      atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.dashLength
+                 toParameter:kParamDashLength
+                      atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.dashGap
+                 toParameter:kParamDashGap
+                      atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.dotGap
+                 toParameter:kParamDotGap
                       atTime:kCMTimeZero];
 }

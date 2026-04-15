@@ -102,6 +102,43 @@
                                        kFxParameterFlag_HIDDEN |
                                        kFxParameterFlag_NOT_ANIMATABLE];
 
+  [paramAPI addCustomParameterWithName:@"Stroke Style"
+                           parameterID:kParamStrokeStyle
+                          defaultValue:@(0)
+                        parameterFlags:kFxParameterFlag_CUSTOM_UI |
+                                       kFxParameterFlag_HIDDEN |
+                                       kFxParameterFlag_NOT_ANIMATABLE];
+
+  [paramAPI addFloatSliderWithName:@"Dash Length"
+                       parameterID:kParamDashLength
+                      defaultValue:20.0
+                      parameterMin:1.0
+                      parameterMax:200.0
+                         sliderMin:1.0
+                         sliderMax:200.0
+                             delta:1.0
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addFloatSliderWithName:@"Dash Gap"
+                       parameterID:kParamDashGap
+                      defaultValue:10.0
+                      parameterMin:1.0
+                      parameterMax:200.0
+                         sliderMin:1.0
+                         sliderMax:200.0
+                             delta:1.0
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addFloatSliderWithName:@"Dot Gap"
+                       parameterID:kParamDotGap
+                      defaultValue:10.0
+                      parameterMin:1.0
+                      parameterMax:200.0
+                         sliderMin:1.0
+                         sliderMax:200.0
+                             delta:1.0
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+
   [paramAPI addFloatSliderWithName:@"LastSelectedIndex"
                        parameterID:kParamLastSelectedIndex
                       defaultValue:-1.0

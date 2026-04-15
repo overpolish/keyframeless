@@ -27,6 +27,7 @@ static NSString *const _Nonnull kLayerDuplicateDragType
 
 @class KKCapStyleView;
 @class KKJoinStyleView;
+@class KKStrokeStyleView;
 @class KKLayerActionTarget;
 @class KKLayerListContainer;
 
@@ -44,6 +45,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, weak, nullable) KKLayerListContainer *container;
 @property(nonatomic, weak, nullable) KKCapStyleView *capStyleView;
 @property(nonatomic, weak, nullable) KKJoinStyleView *joinStyleView;
+@property(nonatomic, weak, nullable) KKStrokeStyleView *strokeStyleView;
 @property(nonatomic) NSUInteger listHash;
 @end
 
