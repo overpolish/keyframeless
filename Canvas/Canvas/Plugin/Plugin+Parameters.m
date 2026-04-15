@@ -145,6 +145,46 @@
                      parameterFlags:kFxParameterFlag_HIDDEN |
                                     kFxParameterFlag_NOT_ANIMATABLE];
 
+  [paramAPI addPercentSliderWithName:@"Top Left Radius"
+                         parameterID:kParamCornerRadiusTL
+                        defaultValue:0.0
+                        parameterMin:0.0
+                        parameterMax:1.0
+                           sliderMin:0.0
+                           sliderMax:1.0
+                               delta:0.01
+                      parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addPercentSliderWithName:@"Top Right Radius"
+                         parameterID:kParamCornerRadiusTR
+                        defaultValue:0.0
+                        parameterMin:0.0
+                        parameterMax:1.0
+                           sliderMin:0.0
+                           sliderMax:1.0
+                               delta:0.01
+                      parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addPercentSliderWithName:@"Bottom Right Radius"
+                         parameterID:kParamCornerRadiusBR
+                        defaultValue:0.0
+                        parameterMin:0.0
+                        parameterMax:1.0
+                           sliderMin:0.0
+                           sliderMax:1.0
+                               delta:0.01
+                      parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addPercentSliderWithName:@"Bottom Left Radius"
+                         parameterID:kParamCornerRadiusBL
+                        defaultValue:0.0
+                        parameterMin:0.0
+                        parameterMax:1.0
+                           sliderMin:0.0
+                           sliderMax:1.0
+                               delta:0.01
+                      parameterFlags:kFxParameterFlag_HIDDEN];
+
   [paramAPI addFloatSliderWithName:@"LastSelectedIndex"
                        parameterID:kParamLastSelectedIndex
                       defaultValue:-1.0

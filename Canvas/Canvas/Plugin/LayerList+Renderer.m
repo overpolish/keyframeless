@@ -60,6 +60,7 @@ static NSUInteger layerListHash(NSUInteger count,
     h = h * 31 + paths[i].name.hash;
     h = h * 31 + paths[i].count;
     h = h * 31 + (paths[i].closed ? 1 : 0);
+    h = h * 31 + (paths[i].isRect ? 1 : 0);
   }
   h = h * 31 + selection.hash;
   return h;
@@ -249,6 +250,7 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
   __block NSInteger selectedLineJoin = -1;
   __block NSInteger selectedStrokeStyle = -1;
   __block BOOL selectedHasJoins = NO;
+  __block BOOL selectedIsRect = NO;
   [selection enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
     if (idx < pathCount && !paths[idx].isGroup) {
       if (!paths[idx].closed)
@@ -258,6 +260,7 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
         selectedHasJoins = YES;
       }
       selectedStrokeStyle = paths[idx].strokeStyle;
+      selectedIsRect = paths[idx].isRect;
       *stop = YES;
     }
   }];
@@ -362,6 +365,7 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
           KKSetDashDotParamsForStyle(setAPI, selectedStrokeStyle >= 0
                                                  ? (uint8_t)selectedStrokeStyle
                                                  : 0);
+          KKSetCornerRadiiVisible(setAPI, selectedIsRect);
         } else {
           KKHideObjectParams(setAPI);
         }

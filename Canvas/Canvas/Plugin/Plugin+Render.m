@@ -1039,6 +1039,29 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
     }
   }
 
+  // Rebuild rounded-rect geometry so slider edits produce correct render.
+  for (KKBezierPath *p in paths) {
+    if (p.isRect && p.count >= 4) {
+      simd_float2 pMin = {HUGE_VALF, HUGE_VALF};
+      simd_float2 pMax = {-HUGE_VALF, -HUGE_VALF};
+      for (NSUInteger i = 0; i < p.count; i++) {
+        KKBezierPoint pt = [p pointAtIndex:i];
+        pMin.x = fminf(pMin.x, pt.x);
+        pMin.y = fminf(pMin.y, pt.y);
+        pMax.x = fmaxf(pMax.x, pt.x);
+        pMax.y = fmaxf(pMax.y, pt.y);
+      }
+      [p setRoundedRectWithMin:pMin
+                           max:pMax
+                    fractionTL:p.cornerRadiusTL
+                    fractionTR:p.cornerRadiusTR
+                    fractionBR:p.cornerRadiusBR
+                    fractionBL:p.cornerRadiusBL
+                   canvasWidth:outputWidth
+                  canvasHeight:outputHeight];
+    }
+  }
+
   id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
   commandBuffer.label = @"Canvas Command Buffer";
   [commandBuffer enqueue];

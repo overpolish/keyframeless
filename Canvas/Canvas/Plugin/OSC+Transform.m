@@ -4,6 +4,7 @@
  */
 
 #import "OSC_Private.h"
+#import "ObjectParams.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
@@ -78,6 +79,20 @@
                      fractionBL:fbl
                     canvasWidth:canvasW
                    canvasHeight:canvasH];
+  id<FxParameterSettingAPI_v5> paramSetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  [paramSetAPI setFloatValue:active.cornerRadiusTL
+                 toParameter:kParamCornerRadiusTL
+                      atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:active.cornerRadiusTR
+                 toParameter:kParamCornerRadiusTR
+                      atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:active.cornerRadiusBR
+                 toParameter:kParamCornerRadiusBR
+                      atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:active.cornerRadiusBL
+                 toParameter:kParamCornerRadiusBL
+                      atTime:kCMTimeZero];
   [self writePaths:self.paths];
   *forceUpdate = YES;
 }
