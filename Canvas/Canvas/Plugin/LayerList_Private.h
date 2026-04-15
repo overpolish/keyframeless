@@ -26,6 +26,7 @@ static NSString *const _Nonnull kLayerDuplicateDragType
     __attribute__((unused)) = @"com.overpolish.canvas.layerDuplicateDrag";
 
 @class KKCapStyleView;
+@class KKJoinStyleView;
 @class KKLayerActionTarget;
 @class KKLayerListContainer;
 
@@ -42,6 +43,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) NSSet<NSString *> *collapsedGroupIDs;
 @property(nonatomic, weak, nullable) KKLayerListContainer *container;
 @property(nonatomic, weak, nullable) KKCapStyleView *capStyleView;
+@property(nonatomic, weak, nullable) KKJoinStyleView *joinStyleView;
 @property(nonatomic) NSUInteger listHash;
 @end
 

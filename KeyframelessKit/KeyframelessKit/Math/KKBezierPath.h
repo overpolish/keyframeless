@@ -77,6 +77,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Line cap style for open paths (0=butt, 1=round, 2=square). Default 0.
 @property(nonatomic, assign) uint8_t lineCap;
 
+/// Line join style (0=miter, 1=round, 2=bevel). Default 0.
+@property(nonatomic, assign) uint8_t lineJoin;
+
 /// Whether this path has a solid fill (default NO).
 @property(nonatomic, assign) BOOL fillEnabled;
 

@@ -92,6 +92,14 @@
                            parameterID:kParamLineCap
                           defaultValue:@(0)
                         parameterFlags:kFxParameterFlag_CUSTOM_UI |
+                                       kFxParameterFlag_HIDDEN |
+                                       kFxParameterFlag_NOT_ANIMATABLE];
+
+  [paramAPI addCustomParameterWithName:@"Line Join"
+                           parameterID:kParamLineJoin
+                          defaultValue:@(0)
+                        parameterFlags:kFxParameterFlag_CUSTOM_UI |
+                                       kFxParameterFlag_HIDDEN |
                                        kFxParameterFlag_NOT_ANIMATABLE];
 
   [paramAPI addFloatSliderWithName:@"LastSelectedIndex"

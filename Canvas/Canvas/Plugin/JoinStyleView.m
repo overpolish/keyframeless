@@ -3,17 +3,17 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-#import "CapStyleView.h"
+#import "JoinStyleView.h"
 #import <KeyframelessKit/KeyframelessKit.h>
 
 static const CGFloat kPillSpacing = 2.0;
 static const CGFloat kPillCorner = 3.0;
-static const NSInteger kCapCount = 3;
+static const NSInteger kJoinCount = 3;
 static const CGFloat kKappa = 0.5522847498f;
 static const CGFloat kPillSize = 22.0;
 static const CGFloat kTrailingSpacer = 75.0;
 
-@implementation KKCapStyleView {
+@implementation KKJoinStyleView {
   NSArray<NSButton *> *_buttons;
 }
 
@@ -30,74 +30,72 @@ static const CGFloat kTrailingSpacer = 75.0;
   return YES;
 }
 
-// All three SVG paths share a common left side:
-//   M 2,4 → V 11 → h 10.874 → arc(bump right) → arc(bump left) → H 2 → v 6.996
-// Then differ on the right edge closing back to (*, 4).
-// The arcs form a small rounded connector between the two bars.
+// Each SVG has two sub-paths:
+//   Outer: an L-shape whose top-left corner varies per join style.
+//   Inner: a smaller L-shape (same for all three).
+//
+// The corner region (from ~(2,2) area to ~(22,2) area) differs:
+//   Miter:  sharp corner at (2,2).
+//   Round:  quarter-circle from (2,8) to (8,2) curving through ~(2,2).
+//   Bevel:  diagonal line from (2,8) to (8,2).
 
-static void drawCapPath(CGFloat ox, CGFloat oy, CGFloat k, NSInteger cap) {
+static void drawJoinPath(CGFloat ox, CGFloat oy, CGFloat k, NSInteger join) {
   NSBezierPath *p = [NSBezierPath bezierPath];
 
-  // SVG: M 2,4
-  [p moveToPoint:NSMakePoint(ox + 2 * k, oy + 4 * k)];
-  // SVG: V 11
-  [p lineToPoint:NSMakePoint(ox + 2 * k, oy + 11 * k)];
-  // SVG: h 10.874 → (12.874, 11)
-  [p lineToPoint:NSMakePoint(ox + 12.874 * k, oy + 11 * k)];
-  // SVG: a 0.911,1.004 0 0 1 0.912,1.004 → quarter arc to (13.786, 12.004)
-  [p curveToPoint:NSMakePoint(ox + 13.786 * k, oy + 12.004 * k)
-      controlPoint1:NSMakePoint(ox + (12.874 + 0.911 * kKappa) * k, oy + 11 * k)
-      controlPoint2:NSMakePoint(ox + 13.786 * k,
-                                oy + (12.004 - 1.004 * kKappa) * k)];
-  // SVG: a 0.911,1.004 0 0 1 -0.912,1.004 → quarter arc to (12.874, 13.008)
-  [p curveToPoint:NSMakePoint(ox + 12.874 * k, oy + 13.008 * k)
-      controlPoint1:NSMakePoint(ox + 13.786 * k,
-                                oy + (12.004 + 1.004 * kKappa) * k)
-      controlPoint2:NSMakePoint(ox + (12.874 + 0.911 * kKappa) * k,
-                                oy + 13.008 * k)];
-  // SVG: H 2
-  [p lineToPoint:NSMakePoint(ox + 2 * k, oy + 13.008 * k)];
-  // SVG: v 6.996 → (2, 20.004)
-  [p lineToPoint:NSMakePoint(ox + 2 * k, oy + 20 * k)];
+  // --- Outer shape ---
+  // Start at bottom-left.
+  [p moveToPoint:NSMakePoint(ox + 2 * k, oy + 22 * k)];
 
-  // Right edge + close — differs per cap style.
-  switch (cap) {
-  case 0: // Butt: H 14 V 4 Z
-    [p lineToPoint:NSMakePoint(ox + 14 * k, oy + 20 * k)];
-    [p lineToPoint:NSMakePoint(ox + 14 * k, oy + 4 * k)];
+  // Up the left edge — destination depends on join style.
+  switch (join) {
+  case 0: // Miter: sharp corner at (2,2)
+    [p lineToPoint:NSMakePoint(ox + 2 * k, oy + 2 * k)];
+    [p lineToPoint:NSMakePoint(ox + 22 * k, oy + 2 * k)];
     break;
-  case 1: { // Round: h 11.805, arc(8.195,8) right-up, arc back to top
-    // SVG: h 11.805 → (13.805, 20)
-    // SVG: a 8.195,8 0 0 0 8.195,-8 → to (22, 12)
-    // SVG: a 8.195,8 0 0 0 -8.195,-8 → to (13.805, 4)
-    CGFloat cx = 13.805;
-    CGFloat ry = 8.0;
-    CGFloat rx = 8.195;
-    [p lineToPoint:NSMakePoint(ox + cx * k, oy + 20 * k)];
-    // Quarter ellipse: (cx,20) → (cx+rx,12), tangent starts right
-    [p curveToPoint:NSMakePoint(ox + (cx + rx) * k, oy + 12 * k)
-        controlPoint1:NSMakePoint(ox + (cx + rx * kKappa) * k, oy + 20 * k)
-        controlPoint2:NSMakePoint(ox + (cx + rx) * k,
-                                  oy + (12 + ry * kKappa) * k)];
-    // Quarter ellipse: (cx+rx,12) → (cx,4), tangent starts up
-    [p curveToPoint:NSMakePoint(ox + cx * k, oy + 4 * k)
-        controlPoint1:NSMakePoint(ox + (cx + rx) * k,
-                                  oy + (12 - ry * kKappa) * k)
-        controlPoint2:NSMakePoint(ox + (cx + rx * kKappa) * k, oy + 4 * k)];
+  case 1: { // Round: up to (2,8), quarter-circle to (8,2), right to (22,2)
+    [p lineToPoint:NSMakePoint(ox + 2 * k, oy + 8 * k)];
+    CGFloat r = 6.0;
+    [p curveToPoint:NSMakePoint(ox + 8 * k, oy + 2 * k)
+        controlPoint1:NSMakePoint(ox + 2 * k, oy + (8 - r * kKappa) * k)
+        controlPoint2:NSMakePoint(ox + (8 - r * kKappa) * k, oy + 2 * k)];
+    [p lineToPoint:NSMakePoint(ox + 22 * k, oy + 2 * k)];
     break;
   }
-  default: // Square: H 22 V 4 Z
-    [p lineToPoint:NSMakePoint(ox + 22 * k, oy + 20 * k)];
-    [p lineToPoint:NSMakePoint(ox + 22 * k, oy + 4 * k)];
+  default: // Bevel: up to (2,8), diagonal to (8,2), right to (22,2)
+    [p lineToPoint:NSMakePoint(ox + 2 * k, oy + 8 * k)];
+    [p lineToPoint:NSMakePoint(ox + 8 * k, oy + 2 * k)];
+    [p lineToPoint:NSMakePoint(ox + 22 * k, oy + 2 * k)];
     break;
   }
 
+  // Down to the connector.
+  [p lineToPoint:NSMakePoint(ox + 22 * k, oy + 7.055 * k)];
+  // Left to connector start.
+  [p lineToPoint:NSMakePoint(ox + 8 * k, oy + 7.055 * k)];
+  // Small arc connector (same as cap view's arc).
+  [p curveToPoint:NSMakePoint(ox + 7.055 * k, oy + 8 * k)
+      controlPoint1:NSMakePoint(ox + (8 - 0.945 * kKappa) * k, oy + 7.055 * k)
+      controlPoint2:NSMakePoint(ox + 7.055 * k, oy + (8 - 0.945 * kKappa) * k)];
+  // Down to bottom.
+  [p lineToPoint:NSMakePoint(ox + 7.055 * k, oy + 22 * k)];
   [p closePath];
+
+  // --- Inner L-shape (same for all three) ---
+  [p moveToPoint:NSMakePoint(ox + 8.945 * k, oy + 8.945 * k)];
+  [p lineToPoint:NSMakePoint(ox + 8.945 * k, oy + 22 * k)];
+  [p lineToPoint:NSMakePoint(ox + 14 * k, oy + 22 * k)];
+  [p lineToPoint:NSMakePoint(ox + 14 * k, oy + 14 * k)];
+  [p lineToPoint:NSMakePoint(ox + 22 * k, oy + 14 * k)];
+  [p lineToPoint:NSMakePoint(ox + 22 * k, oy + 8.945 * k)];
+  [p closePath];
+
+  [p setWindingRule:NSWindingRuleEvenOdd];
   [p fill];
 }
 
-- (NSImage *)capImageForIndex:(NSInteger)index active:(BOOL)active {
+- (NSImage *)joinImageForIndex:(NSInteger)index active:(BOOL)active {
   CGFloat imgSize = 24.0;
+  CGFloat inset = 2.0;
   NSImage *img = [NSImage
        imageWithSize:NSMakeSize(imgSize, imgSize)
              flipped:YES
@@ -106,10 +104,10 @@ static void drawCapPath(CGFloat ox, CGFloat oy, CGFloat k, NSInteger cap) {
             active ? [NSColor accentMatchingHost]
                    : [[NSColor inspectorLabel] colorWithAlphaComponent:0.35];
         [color setFill];
-        CGFloat s = fmin(rect.size.width, rect.size.height);
+        CGFloat s = fmin(rect.size.width, rect.size.height) - inset * 2;
         CGFloat ox = NSMinX(rect) + (rect.size.width - s) / 2.0;
         CGFloat oy = NSMinY(rect) + (rect.size.height - s) / 2.0;
-        drawCapPath(ox, oy, s / 24.0, index);
+        drawJoinPath(ox, oy, s / 24.0, index);
         return YES;
       }];
   img.template = NO;
@@ -124,10 +122,10 @@ static void drawCapPath(CGFloat ox, CGFloat oy, CGFloat k, NSInteger cap) {
   stack.spacing = kPillSpacing;
   stack.translatesAutoresizingMaskIntoConstraints = NO;
 
-  for (NSInteger i = 0; i < kCapCount; i++) {
+  for (NSInteger i = 0; i < kJoinCount; i++) {
     BOOL active = (i == _selectedIndex);
-    NSButton *btn = [NSButton buttonWithImage:[self capImageForIndex:i
-                                                              active:active]
+    NSButton *btn = [NSButton buttonWithImage:[self joinImageForIndex:i
+                                                               active:active]
                                        target:self
                                        action:@selector(pillClicked:)];
     btn.bezelStyle = NSBezelStyleSmallSquare;
@@ -160,7 +158,7 @@ static void drawCapPath(CGFloat ox, CGFloat oy, CGFloat k, NSInteger cap) {
   for (NSInteger i = 0; i < (NSInteger)_buttons.count; i++) {
     NSButton *btn = _buttons[i];
     BOOL active = (i == _selectedIndex);
-    btn.image = [self capImageForIndex:i active:active];
+    btn.image = [self joinImageForIndex:i active:active];
     btn.layer.cornerRadius = kPillCorner;
     if (active) {
       btn.layer.backgroundColor = [NSColor inspectorBackground].CGColor;
