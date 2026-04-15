@@ -26,6 +26,10 @@ static const UInt32 kParamLastSelectedIndex = 108;
 static const UInt32 kParamLineCap = 109;
 static const UInt32 kParamStrokeEnabled = 110;
 static const UInt32 kParamLineJoin = 111;
+static const UInt32 kParamStrokeStyle = 112;
+static const UInt32 kParamDashLength = 113;
+static const UInt32 kParamDashGap = 114;
+static const UInt32 kParamDotGap = 115;
 
 @protocol PROAPIAccessing;
 NSString *_Nullable KKLayerUUIDForAPI(id<PROAPIAccessing> _Nonnull api);

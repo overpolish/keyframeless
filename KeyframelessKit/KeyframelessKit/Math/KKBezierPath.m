@@ -144,6 +144,18 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
         }
         if (ver >= 5 && data.length >= hdr + 1) {
           path->_lineJoin = bytes[hdr];
+          hdr += 1;
+        }
+        if (ver >= 6 && data.length >= hdr + 1) {
+          path->_strokeStyle = bytes[hdr];
+          hdr += 1;
+        }
+        if (ver >= 7 && data.length >= hdr + 3 * sizeof(float)) {
+          float dd[3];
+          memcpy(dd, bytes + hdr, 3 * sizeof(float));
+          path->_dashLength = dd[0];
+          path->_dashGap = dd[1];
+          path->_dotGap = dd[2];
         }
       }
     } else if (data.length >= oldExpected && count > 0) {
@@ -211,8 +223,10 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   // v3: + lineCap (1 byte).
   // v4: + strokeEnabled (1 byte).
   // v5: + lineJoin (1 byte).
+  // v6: + strokeStyle (1 byte).
+  // v7: + dashLength, dashGap, dotGap (3 floats).
   uint8_t propMarker = 0xAA;
-  uint8_t propVersion = 5;
+  uint8_t propVersion = 7;
   [data appendBytes:&propMarker length:1];
   [data appendBytes:&propVersion length:1];
   float strokeData[4] = {_strokeWidth, _strokeR, _strokeG, _strokeB};
@@ -226,6 +240,9 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   uint8_t strokeFlag = _strokeEnabled ? 1 : 0;
   [data appendBytes:&strokeFlag length:1];
   [data appendBytes:&_lineJoin length:1];
+  [data appendBytes:&_strokeStyle length:1];
+  float dashData[3] = {_dashLength, _dashGap, _dotGap};
+  [data appendBytes:dashData length:3 * sizeof(float)];
   return data;
 }
 
@@ -293,6 +310,9 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     _fillR = 1.0f;
     _fillG = 1.0f;
     _fillB = 1.0f;
+    _dashLength = 20.0f;
+    _dashGap = 10.0f;
+    _dotGap = 10.0f;
   }
   return self;
 }

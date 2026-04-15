@@ -80,6 +80,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// Line join style (0=miter, 1=round, 2=bevel). Default 0.
 @property(nonatomic, assign) uint8_t lineJoin;
 
+/// Stroke style (0=solid, 1=dashed, 2=dotted). Default 0.
+@property(nonatomic, assign) uint8_t strokeStyle;
+
+/// Dash length in points (default 20.0). Only used when strokeStyle == 1.
+@property(nonatomic, assign) float dashLength;
+
+/// Dash gap in points (default 10.0). Only used when strokeStyle == 1.
+@property(nonatomic, assign) float dashGap;
+
+/// Dot gap in points (default 10.0). Only used when strokeStyle == 2.
+@property(nonatomic, assign) float dotGap;
+
 /// Whether this path has a solid fill (default NO).
 @property(nonatomic, assign) BOOL fillEnabled;
 

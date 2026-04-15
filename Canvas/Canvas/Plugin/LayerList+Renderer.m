@@ -7,6 +7,7 @@
 #import "JoinStyleView.h"
 #import "LayerList_Private.h"
 #import "ObjectParams.h"
+#import "StrokeStyleView.h"
 
 NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
                                 NSArray<KKBezierPath *> *paths) {
@@ -243,9 +244,10 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
                                                        (unsigned long)(i + 1)]];
   }
 
-  // Capture selected path's lineCap and lineJoin for the style view updates.
+  // Capture selected path's style properties for the style view updates.
   __block NSInteger selectedLineCap = -1;
   __block NSInteger selectedLineJoin = -1;
+  __block NSInteger selectedStrokeStyle = -1;
   __block BOOL selectedHasJoins = NO;
   [selection enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
     if (idx < pathCount && !paths[idx].isGroup) {
@@ -255,6 +257,7 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
         selectedLineJoin = paths[idx].lineJoin;
         selectedHasJoins = YES;
       }
+      selectedStrokeStyle = paths[idx].strokeStyle;
       *stop = YES;
     }
   }];
@@ -355,6 +358,10 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
           KKShowObjectParams(setAPI);
           KKSetLineCapVisible(setAPI, isOpen);
           KKSetLineJoinVisible(setAPI, selectedHasJoins);
+          KKSetStrokeStyleVisible(setAPI, YES);
+          KKSetDashDotParamsForStyle(setAPI, selectedStrokeStyle >= 0
+                                                 ? (uint8_t)selectedStrokeStyle
+                                                 : 0);
         } else {
           KKHideObjectParams(setAPI);
         }
@@ -380,6 +387,15 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
         joinView.selectedIndex = selectedLineJoin;
       [joinView setNeedsLayout:YES];
       [joinView setNeedsDisplay:YES];
+    }
+
+    // Sync stroke style view selection and layout.
+    KKStrokeStyleView *strokeStyleView = st.strokeStyleView;
+    if (strokeStyleView) {
+      if (selectedStrokeStyle >= 0)
+        strokeStyleView.selectedIndex = selectedStrokeStyle;
+      [strokeStyleView setNeedsLayout:YES];
+      [strokeStyleView setNeedsDisplay:YES];
     }
   });
 }
