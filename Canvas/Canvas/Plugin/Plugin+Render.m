@@ -323,17 +323,26 @@ static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
                                     id<MTLTexture> stencilTexture,
                                     id<MTLRenderPipelineState> strokePS,
                                     id<MTLDepthStencilState> fillColorDSState,
-                                    simd_uint2 viewportSize) {
+                                    simd_uint2 viewportSize,
+                                    BOOL useStencilClip) {
   uint8_t fillStyle = origPath.sketchFillStyle;
   if (fillStyle == 0)
     return;
 
   KKHachureLine *lines = NULL;
+  float sketchRough = origPath.sketchEnabled ? origPath.sketchRoughness : 0.0f;
+  uint32_t sketchSeed = origPath.sketchEnabled ? origPath.sketchSeed : 0;
   NSUInteger lineCount = KKGenerateHachureLines(
       origPath, outputWidth, outputHeight, fillStyle, origPath.sketchFillGap,
-      origPath.sketchFillAngle, &lines);
+      origPath.sketchFillAngle, sketchRough, sketchSeed, &lines);
   if (lineCount == 0 || !lines)
     return;
+
+  if (origPath.sketchEnabled) {
+    KKSketchifyHachureLines(&lines, &lineCount, origPath.sketchRoughness,
+                            origPath.sketchBowing, origPath.sketchSeed,
+                            outputWidth, outputHeight);
+  }
 
   float fw = origPath.sketchFillWeight;
   float oa = origPath.opacity;
@@ -443,18 +452,22 @@ static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
     rpd.colorAttachments[0].texture = outputTexture;
     rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
     rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
-    // Clip fill lines to the shape interior using the stencil written by
-    // renderFillStencilOnly. Load (don't clear) so we keep the stencil data.
-    rpd.stencilAttachment.texture = stencilTexture;
-    rpd.stencilAttachment.loadAction = MTLLoadActionLoad;
-    rpd.stencilAttachment.storeAction = MTLStoreActionDontCare;
+    if (useStencilClip) {
+      // Clip fill lines to the shape interior using the stencil written by
+      // renderFillStencilOnly. Load (don't clear) so we keep the stencil data.
+      rpd.stencilAttachment.texture = stencilTexture;
+      rpd.stencilAttachment.loadAction = MTLLoadActionLoad;
+      rpd.stencilAttachment.storeAction = MTLStoreActionDontCare;
+    }
 
     id<MTLRenderCommandEncoder> enc =
         [commandBuffer renderCommandEncoderWithDescriptor:rpd];
     [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1, 1}];
     [enc setRenderPipelineState:strokePS];
-    [enc setDepthStencilState:fillColorDSState];
-    [enc setStencilReferenceValue:0];
+    if (useStencilClip) {
+      [enc setDepthStencilState:fillColorDSState];
+      [enc setStencilReferenceValue:0];
+    }
 
     id<MTLBuffer> vertexBuffer =
         [device newBufferWithBytes:vertices
@@ -744,16 +757,20 @@ static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
       // Always use the original (un-jittered) path for fill geometry.
       // The sketch double-stroke path has overlapping passes that would
       // cause the stencil fill to fill between the two lines.
-      if (path.sketchEnabled && path.sketchFillStyle > 0) {
-        // Sketch fill: write stencil from original path, then render
-        // hachure/dots lines clipped by the stencil so they don't escape.
-        renderFillStencilOnly(orig, outputWidth, outputHeight, device,
-                              commandBuffer, outputTexture, stencilTexture,
-                              fillStencilPS, fillStencilDSState, viewportSize);
+      if (path.sketchFillStyle > 0) {
+        // When sketch is off, clip fill lines to the shape interior.
+        // When sketch is on, allow natural leaking (rough.js style).
+        BOOL clipFill = !path.sketchEnabled;
+        if (clipFill) {
+          renderFillStencilOnly(orig, outputWidth, outputHeight, device,
+                                commandBuffer, outputTexture, stencilTexture,
+                                fillStencilPS, fillStencilDSState,
+                                viewportSize);
+        }
         renderSketchFillForPath(orig, outputWidth, outputHeight, device,
                                 commandBuffer, outputTexture, stencilTexture,
-                                strokeStencilPS, fillColorDSState,
-                                viewportSize);
+                                strokeStencilPS, fillColorDSState, viewportSize,
+                                clipFill);
       } else {
         renderFillForPath(orig, outputWidth, outputHeight, device,
                           commandBuffer, outputTexture, stencilTexture,

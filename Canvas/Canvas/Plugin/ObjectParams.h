@@ -159,32 +159,25 @@ KKSetSketchParamsVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
   [paramSetAPI setParameterFlags:flags toParameter:kParamSketchRoughness];
   [paramSetAPI setParameterFlags:flags toParameter:kParamSketchBowing];
   [paramSetAPI setParameterFlags:flags toParameter:kParamSketchStrokes];
-  [paramSetAPI setParameterFlags:flags toParameter:kParamSketchFillStyle];
   FxParameterFlags seedFlags =
       visible ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE)
               : kFxParameterFlag_HIDDEN;
   [paramSetAPI setParameterFlags:seedFlags toParameter:kParamSketchSeed];
-  // Fill sub-params hidden by default; shown via KKSetSketchFillParamsVisible.
-  if (!visible) {
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamSketchFillGap];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamSketchFillAngle];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamSketchFillWeight];
-  }
 }
 
-/// Show/hide the sketch fill sub-params (gap, angle, weight) based on
-/// whether the fill style is non-solid (hachure, cross-hatch, etc.).
+/// Show/hide fill style and sub-params based on whether fill is enabled.
 static inline void
-KKSetSketchFillParamsVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
-                             BOOL visible) {
-  FxParameterFlags flags =
-      visible ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
-  [paramSetAPI setParameterFlags:flags toParameter:kParamSketchFillGap];
-  [paramSetAPI setParameterFlags:flags toParameter:kParamSketchFillAngle];
-  [paramSetAPI setParameterFlags:flags toParameter:kParamSketchFillWeight];
+KKSetFillStyleParamsVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
+                            BOOL fillEnabled, int fillStyle) {
+  FxParameterFlags styleFlags =
+      fillEnabled ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:styleFlags toParameter:kParamSketchFillStyle];
+  FxParameterFlags subFlags = (fillEnabled && fillStyle > 0)
+                                  ? kFxParameterFlag_DEFAULT
+                                  : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:subFlags toParameter:kParamSketchFillGap];
+  [paramSetAPI setParameterFlags:subFlags toParameter:kParamSketchFillAngle];
+  [paramSetAPI setParameterFlags:subFlags toParameter:kParamSketchFillWeight];
 }
 
 /// Show/hide the corner radius param rows based on whether the path is a rect.
@@ -467,6 +460,6 @@ KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                  toParameter:kParamSketchFillWeight
                       atTime:kCMTimeZero];
   KKSetSketchParamsVisible(paramSetAPI, path.sketchEnabled);
-  if (path.sketchEnabled)
-    KKSetSketchFillParamsVisible(paramSetAPI, path.sketchFillStyle > 0);
+  KKSetFillStyleParamsVisible(paramSetAPI, path.fillEnabled,
+                              (int)path.sketchFillStyle);
 }
