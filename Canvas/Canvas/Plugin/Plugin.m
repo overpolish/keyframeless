@@ -4,6 +4,7 @@
  */
 
 #import "Constants.h"
+#import "ObjectParams.h"
 #import "Plugin_Private.h"
 
 #pragma clang diagnostic push
@@ -34,6 +35,17 @@
 - (BOOL)parameterChanged:(UInt32)parameterID
                   atTime:(CMTime)time
                    error:(NSError **)error {
+  if (parameterID == kParamClosedPath) {
+    id<FxParameterRetrievalAPI_v6> getAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> setAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    BOOL closed = YES;
+    [getAPI getBoolValue:&closed
+           fromParameter:kParamClosedPath
+                  atTime:kCMTimeZero];
+    KKSetLineCapVisible(setAPI, !closed);
+  }
   return YES;
 }
 
