@@ -26,12 +26,41 @@ static simd_float2 miterNormal(simd_float2 n1, simd_float2 n2) {
 
 static simd_float2 normalAtPoint(KKBezierPath *path, NSUInteger c,
                                  NSUInteger segsPerCurve, NSUInteger i,
-                                 NSUInteger curveCount) {
+                                 NSUInteger curveCount, float outputWidth,
+                                 float outputHeight) {
   NSUInteger nextIdx = (c + 1) % path.count;
   float t = (float)i / (float)segsPerCurve;
   simd_float2 tangent = [path evaluateTangentAtIndex:c nextIndex:nextIdx atT:t];
-  tangent.y = -tangent.y;
+  // Convert to pixel-space tangent so the normal is perpendicular in
+  // screen coordinates, not object coordinates.
+  tangent.x *= outputWidth;
+  tangent.y *= -outputHeight;
   float len = simd_length(tangent);
+  if (len < 1e-2f) {
+    // Degenerate or near-zero tangent (e.g. near a linear endpoint of a
+    // bezier curve). Step inward along the curve to get a stable direction.
+    float step = 1.0f / (float)segsPerCurve;
+    float probeT = (t < 0.5f) ? t + step : t - step;
+    probeT = fmaxf(0.0f, fminf(1.0f, probeT));
+    simd_float2 probe = [path evaluateTangentAtIndex:c
+                                           nextIndex:nextIdx
+                                                 atT:probeT];
+    probe.x *= outputWidth;
+    probe.y *= -outputHeight;
+    float probeLen = simd_length(probe);
+    if (probeLen > len) {
+      tangent = probe;
+      len = probeLen;
+    }
+    if (len < 1e-6f) {
+      // Still degenerate — use chord direction.
+      simd_float2 p0 = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:0.0f];
+      simd_float2 p1 = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:1.0f];
+      tangent = (simd_float2){(p1.x - p0.x) * outputWidth,
+                              (p0.y - p1.y) * outputHeight};
+      len = simd_length(tangent);
+    }
+  }
   if (len < 1e-6f)
     tangent = (simd_float2){1.0f, 0.0f};
   else
@@ -52,8 +81,20 @@ static simd_float2 normalAtPoint(KKBezierPath *path, NSUInteger c,
       simd_float2 nextTangent = [path evaluateTangentAtIndex:nextC
                                                    nextIndex:nextNext
                                                          atT:0.0f];
-      nextTangent.y = -nextTangent.y;
+      nextTangent.x *= outputWidth;
+      nextTangent.y *= -outputHeight;
       float nLen = simd_length(nextTangent);
+      if (nLen < 1e-6f) {
+        simd_float2 a = [path evaluatePointAtIndex:nextC
+                                         nextIndex:nextNext
+                                               atT:0.0f];
+        simd_float2 b = [path evaluatePointAtIndex:nextC
+                                         nextIndex:nextNext
+                                               atT:1.0f];
+        nextTangent = (simd_float2){(b.x - a.x) * outputWidth,
+                                    (a.y - b.y) * outputHeight};
+        nLen = simd_length(nextTangent);
+      }
       if (nLen > 1e-6f) {
         nextTangent /= nLen;
         normal =
@@ -70,8 +111,20 @@ static simd_float2 normalAtPoint(KKBezierPath *path, NSUInteger c,
       simd_float2 prevTangent = [path evaluateTangentAtIndex:prevC
                                                    nextIndex:prevIdx
                                                          atT:1.0f];
-      prevTangent.y = -prevTangent.y;
+      prevTangent.x *= outputWidth;
+      prevTangent.y *= -outputHeight;
       float pLen = simd_length(prevTangent);
+      if (pLen < 1e-6f) {
+        simd_float2 a = [path evaluatePointAtIndex:prevC
+                                         nextIndex:prevIdx
+                                               atT:0.0f];
+        simd_float2 b = [path evaluatePointAtIndex:prevC
+                                         nextIndex:prevIdx
+                                               atT:1.0f];
+        prevTangent = (simd_float2){(b.x - a.x) * outputWidth,
+                                    (a.y - b.y) * outputHeight};
+        pLen = simd_length(prevTangent);
+      }
       if (pLen > 1e-6f) {
         prevTangent /= pLen;
         normal =
@@ -103,7 +156,8 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
       float t = (float)i / (float)segsPerCurve;
       NSUInteger nextIdx = (c + 1) % path.count;
       simd_float2 pos = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
-      simd_float2 normal = normalAtPoint(path, c, segsPerCurve, i, curveCount);
+      simd_float2 normal = normalAtPoint(path, c, segsPerCurve, i, curveCount,
+                                         outputWidth, outputHeight);
 
       simd_float2 pixelPos = {pos.x * outputWidth,
                               (1.0f - pos.y) * outputHeight};

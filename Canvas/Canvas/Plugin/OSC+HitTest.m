@@ -129,7 +129,7 @@
       KKBezierPoint pt = [active pointAtIndex:i];
       CGPoint ptCanvas = [self canvasPointForBezierPoint:pt];
       if (hypot(x - ptCanvas.x, y - ptCanvas.y) < hitRadius) {
-        if (i == 0 && !active.closed && active.count >= 2) {
+        if (i == 0 && !active.closed && active.count >= 2 && !cmdDown) {
           *activePart = kOSCClosePath;
           [oscAPI setCursor:self.penCloseCursor];
           return;
