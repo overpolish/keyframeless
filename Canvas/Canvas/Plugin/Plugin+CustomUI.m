@@ -211,36 +211,14 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
         initWithFrame:NSMakeRect(0, 0, 200, KKInspectorRowHeight)];
     capView.autoresizingMask = NSViewWidthSizable;
 
-    // Write lineCap changes directly to pathData via action scope.
     __weak id weakAPI = self.apiManager;
     capView.onSelectionChanged = ^(NSInteger index) {
       id api = weakAPI;
       if (!api)
         return;
-      id<FxCustomParameterActionAPI_v4> actAPI =
-          [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      [actAPI startAction:api];
-      id<FxParameterRetrievalAPI_v6> getAPI =
-          [api apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-      id<FxParameterSettingAPI_v5> setAPI =
-          [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      NSString *str = nil;
-      [getAPI getStringParameterValue:&str fromParameter:kParamPathData];
-      NSInteger selIdx = KKReadSelectedIndex(getAPI);
-      if (str.length > 0 && selIdx >= 0) {
-        NSData *blob = [[NSData alloc] initWithBase64EncodedString:str
-                                                           options:0];
-        NSMutableArray<KKBezierPath *> *paths =
-            [KKBezierPath pathsFromBlob:blob];
-        if ((NSUInteger)selIdx < paths.count) {
-          paths[selIdx].lineCap = (uint8_t)index;
-          NSData *newBlob = [KKBezierPath blobFromPaths:paths];
-          [setAPI
-              setStringParameterValue:[newBlob base64EncodedStringWithOptions:0]
-                          toParameter:kParamPathData];
-        }
-      }
-      [actAPI endAction:api];
+      KKModifySelectedPathProperty(api, ^(KKBezierPath *p) {
+        p.lineCap = (uint8_t)index;
+      });
     };
 
     // Store weak ref so the layer list refresh can update selectedIndex.
@@ -256,36 +234,14 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
         initWithFrame:NSMakeRect(0, 0, 200, KKInspectorRowHeight)];
     joinView.autoresizingMask = NSViewWidthSizable;
 
-    // Write lineJoin changes directly to pathData via action scope.
     __weak id weakAPI = self.apiManager;
     joinView.onSelectionChanged = ^(NSInteger index) {
       id api = weakAPI;
       if (!api)
         return;
-      id<FxCustomParameterActionAPI_v4> actAPI =
-          [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      [actAPI startAction:api];
-      id<FxParameterRetrievalAPI_v6> getAPI =
-          [api apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-      id<FxParameterSettingAPI_v5> setAPI =
-          [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      NSString *str = nil;
-      [getAPI getStringParameterValue:&str fromParameter:kParamPathData];
-      NSInteger selIdx = KKReadSelectedIndex(getAPI);
-      if (str.length > 0 && selIdx >= 0) {
-        NSData *blob = [[NSData alloc] initWithBase64EncodedString:str
-                                                           options:0];
-        NSMutableArray<KKBezierPath *> *paths =
-            [KKBezierPath pathsFromBlob:blob];
-        if ((NSUInteger)selIdx < paths.count) {
-          paths[selIdx].lineJoin = (uint8_t)index;
-          NSData *newBlob = [KKBezierPath blobFromPaths:paths];
-          [setAPI
-              setStringParameterValue:[newBlob base64EncodedStringWithOptions:0]
-                          toParameter:kParamPathData];
-        }
-      }
-      [actAPI endAction:api];
+      KKModifySelectedPathProperty(api, ^(KKBezierPath *p) {
+        p.lineJoin = (uint8_t)index;
+      });
     };
 
     NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
@@ -305,31 +261,12 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
       id api = weakAPI;
       if (!api)
         return;
-      id<FxCustomParameterActionAPI_v4> actAPI =
-          [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      [actAPI startAction:api];
-      id<FxParameterRetrievalAPI_v6> getAPI =
-          [api apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-      id<FxParameterSettingAPI_v5> setAPI =
-          [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      NSString *str = nil;
-      [getAPI getStringParameterValue:&str fromParameter:kParamPathData];
-      NSInteger selIdx = KKReadSelectedIndex(getAPI);
-      if (str.length > 0 && selIdx >= 0) {
-        NSData *blob = [[NSData alloc] initWithBase64EncodedString:str
-                                                           options:0];
-        NSMutableArray<KKBezierPath *> *paths =
-            [KKBezierPath pathsFromBlob:blob];
-        if ((NSUInteger)selIdx < paths.count) {
-          paths[selIdx].strokeStyle = (uint8_t)index;
-          NSData *newBlob = [KKBezierPath blobFromPaths:paths];
-          [setAPI
-              setStringParameterValue:[newBlob base64EncodedStringWithOptions:0]
-                          toParameter:kParamPathData];
-        }
-      }
-      KKSetDashDotParamsForStyle(setAPI, (uint8_t)index);
-      [actAPI endAction:api];
+      KKModifySelectedPathProperty(api, ^(KKBezierPath *p) {
+        p.strokeStyle = (uint8_t)index;
+        KKSetDashDotParamsForStyle(
+            [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)],
+            (uint8_t)index);
+      });
     };
 
     NSString *uuid = KKLayerUUIDForAPI(self.apiManager);

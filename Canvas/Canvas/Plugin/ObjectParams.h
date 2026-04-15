@@ -257,6 +257,34 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
   path.cornerRadiusBL = (float)rbl;
 }
 
+/// Modify a property of the currently-selected path inside an action scope.
+/// The block receives the selected path for mutation.
+static inline void
+KKModifySelectedPathProperty(id<PROAPIAccessing> _Nonnull api,
+                             void (^_Nonnull block)(KKBezierPath *_Nonnull)) {
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:api];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [api apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  NSString *str = nil;
+  [getAPI getStringParameterValue:&str fromParameter:kParamPathData];
+  NSInteger selIdx = KKReadSelectedIndex(getAPI);
+  if (str.length > 0 && selIdx >= 0) {
+    NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
+    NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+    if ((NSUInteger)selIdx < paths.count) {
+      block(paths[selIdx]);
+      NSData *newBlob = [KKBezierPath blobFromPaths:paths];
+      [setAPI setStringParameterValue:[newBlob base64EncodedStringWithOptions:0]
+                          toParameter:kParamPathData];
+    }
+  }
+  [actAPI endAction:api];
+}
+
 /// Write a path's per-object values to FxPlug params and show the rows.
 /// Add new per-object properties here.
 static inline void
