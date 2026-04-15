@@ -152,7 +152,20 @@
   } else {
     if (modifiers & kFxModifierKey_SHIFT)
       objPos = [self shiftConstrainedPosition:objPos];
-    [active moveAtIndex:self.dragIndex to:objPos];
+    if (self.selectedPoints.count > 1 &&
+        [self.selectedPoints containsIndex:(NSUInteger)self.dragIndex]) {
+      simd_float2 delta = {objPos.x - pt.x, objPos.y - pt.y};
+      [self.selectedPoints
+          enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+            if (idx < active.count) {
+              KKBezierPoint sp = [active pointAtIndex:idx];
+              simd_float2 newPos = {sp.x + delta.x, sp.y + delta.y};
+              [active moveAtIndex:idx to:newPos];
+            }
+          }];
+    } else {
+      [active moveAtIndex:self.dragIndex to:objPos];
+    }
   }
 
   [self writePaths:self.paths];

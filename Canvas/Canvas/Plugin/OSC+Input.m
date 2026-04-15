@@ -256,25 +256,23 @@
   }
 
   if (isPenMode && (modifiers & kFxModifierKey_COMMAND)) {
-    double hitRadiusStroke = [self strokeHitRadius];
-    NSInteger nearPath = [self pathIndexNearX:positionX
-                                            y:positionY
-                                       radius:hitRadiusStroke];
-    if (nearPath >= 0) {
-      [self handleCursorMouseDownX:positionX
-                                 y:positionY
-                         modifiers:modifiers
-                       forceUpdate:forceUpdate];
-    } else {
-      self.activePathIndex = -1;
-      [self handlePenMouseDownX:positionX
-                              y:positionY
-                         active:nil
-                      modifiers:modifiers
-                    forceUpdate:forceUpdate
-                         atTime:time
-                     activePart:activePart];
-    }
+    [self handleCursorMouseDownX:positionX
+                               y:positionY
+                       modifiers:modifiers
+                     forceUpdate:forceUpdate];
+    return;
+  }
+
+  if (isPenMode && (modifiers & kFxModifierKey_OPTION) &&
+      activePart == kOSCCanvas) {
+    self.activePathIndex = -1;
+    [self handlePenMouseDownX:positionX
+                            y:positionY
+                       active:nil
+                    modifiers:modifiers
+                  forceUpdate:forceUpdate
+                       atTime:time
+                   activePart:activePart];
     return;
   }
 
@@ -287,6 +285,11 @@
   }
 
   if (isPenMode) {
+    if (self.selectedPoints.count > 0 && activePart == kOSCCanvas) {
+      [self.selectedPoints removeAllIndexes];
+      *forceUpdate = YES;
+      return;
+    }
     [self handlePenMouseDownX:positionX
                             y:positionY
                        active:active

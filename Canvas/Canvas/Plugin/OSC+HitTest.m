@@ -129,7 +129,8 @@
       KKBezierPoint pt = [active pointAtIndex:i];
       CGPoint ptCanvas = [self canvasPointForBezierPoint:pt];
       if (hypot(x - ptCanvas.x, y - ptCanvas.y) < hitRadius) {
-        if (i == 0 && !active.closed && active.count >= 2 && !cmdDown) {
+        if (i == 0 && !active.closed && active.count >= 2 && !cmdDown &&
+            ![self isPointSelected:(NSUInteger)self.activePathIndex point:0]) {
           *activePart = kOSCClosePath;
           [oscAPI setCursor:self.penCloseCursor];
           return;
@@ -137,6 +138,22 @@
         *activePart = kOSCPathPointBase + (NSInteger)i;
         [oscAPI setCursor:optDown ? self.penDeleteCursor : self.moveCursor];
         return;
+      }
+    }
+  } else if (self.selectedPoints.count > 0) {
+    for (NSUInteger p = 0; p < self.paths.count; p++) {
+      KKBezierPath *path = self.paths[p];
+      for (NSUInteger i = 0; i < path.count; i++) {
+        if (![self isPointSelected:p point:i])
+          continue;
+        KKBezierPoint pt = [path pointAtIndex:i];
+        CGPoint ptCanvas = [self canvasPointForBezierPoint:pt];
+        if (hypot(x - ptCanvas.x, y - ptCanvas.y) < hitRadius) {
+          self.activePathIndex = (NSInteger)p;
+          *activePart = kOSCPathPointBase + (NSInteger)i;
+          [oscAPI setCursor:self.moveCursor];
+          return;
+        }
       }
     }
   }
