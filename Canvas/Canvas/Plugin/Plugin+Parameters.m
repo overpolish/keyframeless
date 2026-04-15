@@ -42,6 +42,12 @@
                         parameterFlags:kFxParameterFlag_HIDDEN |
                                        kFxParameterFlag_NOT_ANIMATABLE];
 
+  [paramAPI addToggleButtonWithName:@"Stroke"
+                        parameterID:kParamStrokeEnabled
+                       defaultValue:YES
+                     parameterFlags:kFxParameterFlag_HIDDEN |
+                                    kFxParameterFlag_NOT_ANIMATABLE];
+
   [paramAPI addFloatSliderWithName:@"Stroke Width"
                        parameterID:kParamStrokeWidth
                       defaultValue:8.0

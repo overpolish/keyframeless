@@ -26,6 +26,8 @@ static inline KKBezierPath *_Nullable KKSelectedPath(
 /// Add new per-object properties here.
 static inline void
 KKShowObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
+  [paramSetAPI setParameterFlags:kFxParameterFlag_NOT_ANIMATABLE
+                     toParameter:kParamStrokeEnabled];
   [paramSetAPI setParameterFlags:kFxParameterFlag_DEFAULT
                      toParameter:kParamStrokeWidth];
   [paramSetAPI setParameterFlags:kFxParameterFlag_DEFAULT
@@ -42,6 +44,8 @@ KKShowObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
 /// Add new per-object properties here.
 static inline void
 KKHideObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamStrokeEnabled];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamStrokeWidth];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
@@ -90,6 +94,12 @@ KKReadSelectedIndex(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI) {
 static inline void
 KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                KKBezierPath *_Nonnull path) {
+  BOOL strokeOn = YES;
+  [paramGetAPI getBoolValue:&strokeOn
+              fromParameter:kParamStrokeEnabled
+                     atTime:kCMTimeZero];
+  path.strokeEnabled = strokeOn;
+
   double w = 8.0;
   [paramGetAPI getFloatValue:&w
                fromParameter:kParamStrokeWidth
@@ -133,6 +143,9 @@ static inline void
 KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                KKBezierPath *_Nonnull path) {
   KKShowObjectParams(paramSetAPI);
+  [paramSetAPI setBoolValue:path.strokeEnabled
+                toParameter:kParamStrokeEnabled
+                     atTime:kCMTimeZero];
   [paramSetAPI setFloatValue:path.strokeWidth
                  toParameter:kParamStrokeWidth
                       atTime:kCMTimeZero];

@@ -269,7 +269,6 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
       // Square caps: extend a rectangle of strokeWidth/2 beyond each endpoint.
       float ext = strokeWidth / 2.0f;
 
-
       // End cap.
       simd_float2 eTop = endCenter + endNormal * halfWidth;
       simd_float2 eBot = endCenter - endNormal * halfWidth;
@@ -625,46 +624,48 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
     }
 
     // Stroke
-    float sw = path.strokeWidth;
-    float oa = path.opacity;
-    simd_float4 color = {path.strokeR * oa, path.strokeG * oa,
-                         path.strokeB * oa, oa};
+    if (path.strokeEnabled) {
+      float sw = path.strokeWidth;
+      float oa = path.opacity;
+      simd_float4 color = {path.strokeR * oa, path.strokeG * oa,
+                           path.strokeB * oa, oa};
 
-    NSUInteger segsPerCurve = 128;
-    NSUInteger curveCount = path.count - 1;
-    if (path.closed && path.count >= 2)
-      curveCount = path.count;
-    NSUInteger capExtra = (!path.closed && path.lineCap != 0) ? 256 : 0;
-    NSUInteger maxVertices =
-        curveCount * ((segsPerCurve + 1) * 2 + 2) + 2 + capExtra;
-    CanvasVertex *vertices =
-        (CanvasVertex *)malloc(maxVertices * sizeof(CanvasVertex));
-    NSUInteger vertexCount = tessellatePath(path, sw, outputWidth, outputHeight,
-                                            path.lineCap, vertices);
+      NSUInteger segsPerCurve = 128;
+      NSUInteger curveCount = path.count - 1;
+      if (path.closed && path.count >= 2)
+        curveCount = path.count;
+      NSUInteger capExtra = (!path.closed && path.lineCap != 0) ? 256 : 0;
+      NSUInteger maxVertices =
+          curveCount * ((segsPerCurve + 1) * 2 + 2) + 2 + capExtra;
+      CanvasVertex *vertices =
+          (CanvasVertex *)malloc(maxVertices * sizeof(CanvasVertex));
+      NSUInteger vertexCount = tessellatePath(
+          path, sw, outputWidth, outputHeight, path.lineCap, vertices);
 
-    MTLRenderPassDescriptor *rpd =
-        [MTLRenderPassDescriptor renderPassDescriptor];
-    rpd.colorAttachments[0].texture = outputTexture;
-    rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
-    rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+      MTLRenderPassDescriptor *rpd =
+          [MTLRenderPassDescriptor renderPassDescriptor];
+      rpd.colorAttachments[0].texture = outputTexture;
+      rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+      rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
 
-    id<MTLRenderCommandEncoder> enc =
-        [commandBuffer renderCommandEncoderWithDescriptor:rpd];
-    [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1, 1}];
-    [enc setRenderPipelineState:strokePS];
+      id<MTLRenderCommandEncoder> enc =
+          [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+      [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1, 1}];
+      [enc setRenderPipelineState:strokePS];
 
-    id<MTLBuffer> vertexBuffer =
-        [device newBufferWithBytes:vertices
-                            length:vertexCount * sizeof(CanvasVertex)
-                           options:MTLResourceStorageModeShared];
-    [enc setVertexBuffer:vertexBuffer offset:0 atIndex:0];
-    [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
-    [enc setFragmentBytes:&color length:sizeof(color) atIndex:0];
-    [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
-            vertexStart:0
-            vertexCount:vertexCount];
-    [enc endEncoding];
-    free(vertices);
+      id<MTLBuffer> vertexBuffer =
+          [device newBufferWithBytes:vertices
+                              length:vertexCount * sizeof(CanvasVertex)
+                             options:MTLResourceStorageModeShared];
+      [enc setVertexBuffer:vertexBuffer offset:0 atIndex:0];
+      [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+      [enc setFragmentBytes:&color length:sizeof(color) atIndex:0];
+      [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
+              vertexStart:0
+              vertexCount:vertexCount];
+      [enc endEncoding];
+      free(vertices);
+    }
   }
 
   [commandBuffer commit];
