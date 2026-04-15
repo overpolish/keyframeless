@@ -106,6 +106,14 @@ KKLayerInstanceState *_Nullable KKLayerStateForUUID(NSString *_Nullable uuid);
 - (void)removeFromGroup:(NSMenuItem *)sender;
 - (void)toggleGroupCollapse:(id)sender;
 - (void)selectRow:(NSButton *)sender;
+- (void)_modifyPaths:(void (^)(NSMutableArray<KKBezierPath *> *))block;
+- (void)_commitEditing;
+- (void)_writeBackObjectParams:(id<FxParameterRetrievalAPI_v6>)paramGetAPI
+                       toPaths:(NSMutableArray<KKBezierPath *> *)paths
+                     selection:(NSIndexSet *)sel;
+- (void)_syncObjectParamsForSelection:(NSIndexSet *)sel
+                                paths:(NSArray<KKBezierPath *> *)paths
+                          paramSetAPI:(id<FxParameterSettingAPI_v5>)paramSetAPI;
 - (void)_reorderFromIndices:(NSIndexSet *)indices
                     toIndex:(NSUInteger)target
               parentGroupID:(nullable NSString *)parentGroupID;

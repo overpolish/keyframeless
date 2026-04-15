@@ -21,6 +21,11 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx);
 - (BOOL)isPointSelected:(NSUInteger)pathIdx point:(NSUInteger)ptIdx;
 - (double)strokeWidth;
 - (double)strokeHitRadius;
+
+@end
+
+@interface CanvasOSC (Geometry)
+
 - (NSInteger)pathIndexNearX:(double)x y:(double)y radius:(double)radius;
 - (NSInteger)segmentIndexNearX:(double)x
                              y:(double)y
@@ -48,6 +53,18 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx);
                     y:(double)positionY
             modifiers:(NSUInteger)modifiers
           forceUpdate:(BOOL *)forceUpdate;
+
+@end
+
+@interface CanvasOSC (ShapeCreation)
+
+- (void)finalizeMarqueeAtX:(double)positionX
+                         y:(double)positionY
+                 modifiers:(NSUInteger)modifiers;
+- (void)finalizeRect;
+- (void)finalizeEllipse;
+- (void)finalizeLine;
+- (void)resetDragState;
 
 @end
 
