@@ -29,21 +29,19 @@ static simd_float2 miterNormal(simd_float2 n1, simd_float2 n2) {
   return avg * extension;
 }
 
+/// Compute the raw normal at a tessellation point. No join logic — each
+/// segment gets its own perpendicular offset. Joins are handled in the
+/// tessellator.
 static simd_float2 normalAtPoint(KKBezierPath *path, NSUInteger c,
                                  NSUInteger segsPerCurve, NSUInteger i,
-                                 NSUInteger curveCount, float outputWidth,
-                                 float outputHeight, uint8_t lineJoin) {
+                                 float outputWidth, float outputHeight) {
   NSUInteger nextIdx = (c + 1) % path.count;
   float t = (float)i / (float)segsPerCurve;
   simd_float2 tangent = [path evaluateTangentAtIndex:c nextIndex:nextIdx atT:t];
-  // Convert to pixel-space tangent so the normal is perpendicular in
-  // screen coordinates, not object coordinates.
   tangent.x *= outputWidth;
   tangent.y *= -outputHeight;
   float len = simd_length(tangent);
   if (len < 1e-2f) {
-    // Degenerate or near-zero tangent (e.g. near a linear endpoint of a
-    // bezier curve). Step inward along the curve to get a stable direction.
     float step = 1.0f / (float)segsPerCurve;
     float probeT = (t < 0.5f) ? t + step : t - step;
     probeT = fmaxf(0.0f, fminf(1.0f, probeT));
@@ -58,7 +56,6 @@ static simd_float2 normalAtPoint(KKBezierPath *path, NSUInteger c,
       len = probeLen;
     }
     if (len < 1e-6f) {
-      // Still degenerate — use chord direction.
       simd_float2 p0 = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:0.0f];
       simd_float2 p1 = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:1.0f];
       tangent = (simd_float2){(p1.x - p0.x) * outputWidth,
@@ -70,79 +67,7 @@ static simd_float2 normalAtPoint(KKBezierPath *path, NSUInteger c,
     tangent = (simd_float2){1.0f, 0.0f};
   else
     tangent /= len;
-
-  simd_float2 normal = {-tangent.y, tangent.x};
-  BOOL isEnd = (i == segsPerCurve);
-  BOOL isStart = (i == 0);
-
-  if (lineJoin == 0) {
-    // Miter join: average normals at segment boundaries.
-    if (isEnd && (c < curveCount - 1 || (path.closed && c == curveCount - 1))) {
-      NSUInteger nextC = (c < curveCount - 1) ? (c + 1) % path.count : 0;
-      NSUInteger nextNext =
-          (c < curveCount - 1) ? (c + 2) % path.count : 1 % path.count;
-      KKBezierPoint curPt = [path pointAtIndex:nextIdx];
-      KKBezierPoint nxtPt = [path pointAtIndex:nextC];
-      if (curPt.type == KKBezierPointLinear &&
-          nxtPt.type == KKBezierPointLinear) {
-        simd_float2 nextTangent = [path evaluateTangentAtIndex:nextC
-                                                     nextIndex:nextNext
-                                                           atT:0.0f];
-        nextTangent.x *= outputWidth;
-        nextTangent.y *= -outputHeight;
-        float nLen = simd_length(nextTangent);
-        if (nLen < 1e-6f) {
-          simd_float2 a = [path evaluatePointAtIndex:nextC
-                                           nextIndex:nextNext
-                                                 atT:0.0f];
-          simd_float2 b = [path evaluatePointAtIndex:nextC
-                                           nextIndex:nextNext
-                                                 atT:1.0f];
-          nextTangent = (simd_float2){(b.x - a.x) * outputWidth,
-                                      (a.y - b.y) * outputHeight};
-          nLen = simd_length(nextTangent);
-        }
-        if (nLen > 1e-6f) {
-          nextTangent /= nLen;
-          normal =
-              miterNormal(normal, (simd_float2){-nextTangent.y, nextTangent.x});
-        }
-      }
-    } else if (isStart && (c > 0 || (path.closed && c == 0))) {
-      NSUInteger prevC = (c > 0) ? c - 1 : curveCount - 1;
-      NSUInteger prevIdx = c;
-      KKBezierPoint curPt = [path pointAtIndex:prevIdx];
-      KKBezierPoint prvPt = [path pointAtIndex:prevC];
-      if (prvPt.type == KKBezierPointLinear &&
-          curPt.type == KKBezierPointLinear) {
-        simd_float2 prevTangent = [path evaluateTangentAtIndex:prevC
-                                                     nextIndex:prevIdx
-                                                           atT:1.0f];
-        prevTangent.x *= outputWidth;
-        prevTangent.y *= -outputHeight;
-        float pLen = simd_length(prevTangent);
-        if (pLen < 1e-6f) {
-          simd_float2 a = [path evaluatePointAtIndex:prevC
-                                           nextIndex:prevIdx
-                                                 atT:0.0f];
-          simd_float2 b = [path evaluatePointAtIndex:prevC
-                                           nextIndex:prevIdx
-                                                 atT:1.0f];
-          prevTangent = (simd_float2){(b.x - a.x) * outputWidth,
-                                      (a.y - b.y) * outputHeight};
-          pLen = simd_length(prevTangent);
-        }
-        if (pLen > 1e-6f) {
-          prevTangent /= pLen;
-          normal =
-              miterNormal((simd_float2){-prevTangent.y, prevTangent.x}, normal);
-        }
-      }
-    }
-  }
-  // For round/bevel (lineJoin != 0), return the raw per-segment normal;
-  // the join geometry is emitted separately in tessellatePath.
-  return normal;
+  return (simd_float2){-tangent.y, tangent.x};
 }
 
 static NSUInteger addRoundCap(CanvasVertex *vertices, NSUInteger vertexCount,
@@ -327,36 +252,79 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
   simd_float2 startNormal = {0, 0}, endNormal = {0, 0};
 
   for (NSUInteger c = 0; c < curveCount; c++) {
-    if (c > 0 && vertexCount > 0 && lineJoin == 0) {
-      vertices[vertexCount] = vertices[vertexCount - 1];
-      vertexCount++;
-    }
+    // Tessellate this segment with raw normals (no join logic).
+    simd_float2 segEndCenter = {0, 0}, segEndNormal = {0, 0};
+    simd_float2 segStartCenter = {0, 0}, segStartNormal = {0, 0};
 
     for (NSUInteger i = 0; i <= segsPerCurve; i++) {
       float t = (float)i / (float)segsPerCurve;
       NSUInteger nextIdx = (c + 1) % path.count;
       simd_float2 pos = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
-      simd_float2 normal = normalAtPoint(path, c, segsPerCurve, i, curveCount,
-                                         outputWidth, outputHeight, lineJoin);
+      simd_float2 normal =
+          normalAtPoint(path, c, segsPerCurve, i, outputWidth, outputHeight);
 
       simd_float2 pixelPos = {pos.x * outputWidth,
                               (1.0f - pos.y) * outputHeight};
       simd_float2 centered = {pixelPos.x - outputWidth / 2.0f,
                               pixelPos.y - outputHeight / 2.0f};
 
+      if (i == 0) {
+        segStartCenter = centered;
+        segStartNormal = normal;
+      }
+      if (i == segsPerCurve) {
+        segEndCenter = centered;
+        segEndNormal = normal;
+      }
+
       BOOL isFirstPoint = (c == 0 && i == 0);
       BOOL isLastPoint = (c == curveCount - 1 && i == segsPerCurve);
-
       if (isFirstPoint) {
         startCenter = centered;
         startNormal = normal;
-        // Derive tangent from the already-robust normal (rotated 90° CW).
         startTangent = (simd_float2){normal.y, -normal.x};
       }
       if (isLastPoint) {
         endCenter = centered;
         endNormal = normal;
         endTangent = (simd_float2){normal.y, -normal.x};
+      }
+
+      // For miter joins, override the boundary normals with the miter.
+      if (lineJoin == 0) {
+        if (i == segsPerCurve &&
+            (c < curveCount - 1 || (path.closed && c == curveCount - 1))) {
+          NSUInteger nextC = (c < curveCount - 1) ? (c + 1) % path.count : 0;
+          simd_float2 nextN =
+              rawNormalAtSegStart(path, nextC, outputWidth, outputHeight);
+          normal = miterNormal(normal, nextN);
+          // Update end tracking for caps.
+          if (isLastPoint) {
+            endNormal = normal;
+            endTangent = (simd_float2){normal.y, -normal.x};
+          }
+        } else if (i == 0 && (c > 0 || (path.closed && c == 0))) {
+          NSUInteger prevC = (c > 0) ? c - 1 : curveCount - 1;
+          simd_float2 prevN =
+              normalAtPoint(path, prevC, segsPerCurve, segsPerCurve,
+                            outputWidth, outputHeight);
+          normal = miterNormal(prevN, normal);
+          if (isFirstPoint) {
+            startNormal = normal;
+            startTangent = (simd_float2){normal.y, -normal.x};
+          }
+        }
+      }
+
+      // Skip the first point of non-first segments for bevel/round —
+      // the join geometry handles the transition.
+      if (i == 0 && c > 0 && lineJoin != 0)
+        continue;
+
+      // Degenerate bridge between segments for miter.
+      if (i == 0 && c > 0 && lineJoin == 0 && vertexCount > 0) {
+        vertices[vertexCount] = vertices[vertexCount - 1];
+        vertexCount++;
       }
 
       vertices[vertexCount].position = centered + normal * halfWidth;
@@ -369,38 +337,119 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
       vertexCount++;
     }
 
-    // Emit join geometry at curve boundaries.
+    // Emit join geometry at curve boundaries for bevel/round.
     BOOL atJoin = (c < curveCount - 1) || (path.closed && c == curveCount - 1);
-    if (atJoin && lineJoin != 0 && vertexCount >= 2) {
-      // Get the end normal of the current segment (raw, not mitered).
-      simd_float2 endN =
-          normalAtPoint(path, c, segsPerCurve, segsPerCurve, curveCount,
-                        outputWidth, outputHeight, lineJoin);
-      // Get the start normal of the next segment.
+    if (atJoin && lineJoin != 0) {
+      simd_float2 n1 = segEndNormal; // outgoing normal of this segment
       NSUInteger nextC = (c + 1) % curveCount;
       if (path.closed && c == curveCount - 1)
         nextC = 0;
-      simd_float2 startN =
+      simd_float2 n2 =
           rawNormalAtSegStart(path, nextC, outputWidth, outputHeight);
-      // Junction center point.
-      NSUInteger jIdx = (c + 1) % path.count;
-      simd_float2 jPos = [path evaluatePointAtIndex:c nextIndex:jIdx atT:1.0f];
-      simd_float2 jPx = {jPos.x * outputWidth - outputWidth / 2.0f,
-                         (1.0f - jPos.y) * outputHeight - outputHeight / 2.0f};
 
-      if (lineJoin == 1) {
-        vertexCount =
-            addRoundJoin(vertices, vertexCount, jPx, endN, startN, halfWidth);
-      } else {
-        vertexCount =
-            addBevelJoin(vertices, vertexCount, jPx, endN, startN, halfWidth);
-      }
-      // Bridge from join to next segment's first vertex.
-      if (c < curveCount - 1 && vertexCount > 0) {
+      // Determine which side is outside of the bend.
+      float cross = n1.x * n2.y - n1.y * n2.x;
+      float side = (cross >= 0.0f) ? -1.0f : 1.0f;
+
+      simd_float2 jCenter = segEndCenter;
+      simd_float2 outerEnd = jCenter + n1 * halfWidth * side;
+      simd_float2 outerStart = jCenter + n2 * halfWidth * side;
+      simd_float2 inner = jCenter - n1 * halfWidth * side;
+
+      // End the current strip at the junction with raw normal.
+      // (already done by the loop above)
+
+      // Degenerate bridge from strip to join geometry.
+      if (vertexCount > 0) {
         vertices[vertexCount] = vertices[vertexCount - 1];
         vertexCount++;
       }
-    } else if (c < curveCount - 1) {
+
+      if (lineJoin == 1) {
+        // Round join: fan from outerEnd to outerStart through center.
+        float dot = simd_dot(n1 * side, n2 * side);
+        dot = fmaxf(-1.0f, fminf(1.0f, dot));
+        float angle = acosf(dot);
+
+        if (angle > 1e-4f) {
+          simd_float2 on1 = n1 * side;
+          float sweepCross = on1.x * (n2.x * side) - on1.y * (n2.y * side);
+          // Actually recompute properly
+          simd_float2 on2 = n2 * side;
+          sweepCross = on1.x * on2.y - on1.y * on2.x;
+          float dir = (sweepCross >= 0.0f) ? 1.0f : -1.0f;
+
+          NSUInteger segs = (NSUInteger)fmaxf(4.0f, angle / (M_PI / 16.0f));
+
+          CanvasVertex first;
+          first.position = jCenter + on1 * halfWidth;
+          first.edgeDistance = 0.0f;
+          first.capDistance = 0.0f;
+          vertices[vertexCount] = first;
+          vertexCount++;
+          vertices[vertexCount] = first;
+          vertexCount++;
+
+          for (NSUInteger s = 0; s <= segs; s++) {
+            float st = (float)s / (float)segs;
+            float a = st * angle * dir;
+            float cosA = cosf(a);
+            float sinA = sinf(a);
+            simd_float2 rotated = {on1.x * cosA - on1.y * sinA,
+                                   on1.x * sinA + on1.y * cosA};
+            vertices[vertexCount].position = jCenter + rotated * halfWidth;
+            vertices[vertexCount].edgeDistance = 0.0f;
+            vertices[vertexCount].capDistance = 1.0f;
+            vertexCount++;
+            vertices[vertexCount].position = jCenter;
+            vertices[vertexCount].edgeDistance = 0.0f;
+            vertices[vertexCount].capDistance = 0.0f;
+            vertexCount++;
+          }
+        }
+      } else {
+        // Bevel join: single triangle on the outside.
+        CanvasVertex first;
+        first.position = outerEnd;
+        first.edgeDistance = 0.0f;
+        first.capDistance = 0.0f;
+        vertices[vertexCount] = first;
+        vertexCount++;
+        vertices[vertexCount] = first;
+        vertexCount++;
+
+        vertices[vertexCount].position = outerEnd;
+        vertices[vertexCount].edgeDistance = 0.0f;
+        vertices[vertexCount].capDistance = 1.0f;
+        vertexCount++;
+        vertices[vertexCount].position = jCenter;
+        vertices[vertexCount].edgeDistance = 0.0f;
+        vertices[vertexCount].capDistance = 0.0f;
+        vertexCount++;
+        vertices[vertexCount].position = outerStart;
+        vertices[vertexCount].edgeDistance = 0.0f;
+        vertices[vertexCount].capDistance = 1.0f;
+        vertexCount++;
+      }
+
+      // Bridge from join to next segment: emit the next segment's first
+      // point with its own normal to start the new strip cleanly.
+      if (c < curveCount - 1) {
+        vertices[vertexCount] = vertices[vertexCount - 1];
+        vertexCount++;
+
+        // Emit junction point with next segment's normal.
+        vertices[vertexCount].position = jCenter + n2 * halfWidth;
+        vertices[vertexCount].edgeDistance = 1.0f;
+        vertices[vertexCount].capDistance = 0.0f;
+        vertexCount++;
+        vertices[vertexCount].position = jCenter - n2 * halfWidth;
+        vertices[vertexCount].edgeDistance = -1.0f;
+        vertices[vertexCount].capDistance = 0.0f;
+        vertexCount++;
+      }
+    } else if (c < curveCount - 1 && lineJoin == 0) {
+      // Miter: strip is already continuous, just bridge.
       vertices[vertexCount] = vertices[vertexCount - 1];
       vertexCount++;
     }
