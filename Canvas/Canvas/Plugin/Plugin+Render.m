@@ -27,7 +27,7 @@ static simd_float2 miterNormal(simd_float2 n1, simd_float2 n2) {
 static simd_float2 normalAtPoint(KKBezierPath *path, NSUInteger c,
                                  NSUInteger segsPerCurve, NSUInteger i,
                                  NSUInteger curveCount, float outputWidth,
-                                 float outputHeight) {
+                                 float outputHeight, uint8_t lineJoin) {
   NSUInteger nextIdx = (c + 1) % path.count;
   float t = (float)i / (float)segsPerCurve;
   simd_float2 tangent = [path evaluateTangentAtIndex:c nextIndex:nextIdx atT:t];
@@ -70,68 +70,73 @@ static simd_float2 normalAtPoint(KKBezierPath *path, NSUInteger c,
   BOOL isEnd = (i == segsPerCurve);
   BOOL isStart = (i == 0);
 
-  if (isEnd && (c < curveCount - 1 || (path.closed && c == curveCount - 1))) {
-    NSUInteger nextC = (c < curveCount - 1) ? (c + 1) % path.count : 0;
-    NSUInteger nextNext =
-        (c < curveCount - 1) ? (c + 2) % path.count : 1 % path.count;
-    KKBezierPoint curPt = [path pointAtIndex:nextIdx];
-    KKBezierPoint nxtPt = [path pointAtIndex:nextC];
-    if (curPt.type == KKBezierPointLinear &&
-        nxtPt.type == KKBezierPointLinear) {
-      simd_float2 nextTangent = [path evaluateTangentAtIndex:nextC
-                                                   nextIndex:nextNext
-                                                         atT:0.0f];
-      nextTangent.x *= outputWidth;
-      nextTangent.y *= -outputHeight;
-      float nLen = simd_length(nextTangent);
-      if (nLen < 1e-6f) {
-        simd_float2 a = [path evaluatePointAtIndex:nextC
-                                         nextIndex:nextNext
-                                               atT:0.0f];
-        simd_float2 b = [path evaluatePointAtIndex:nextC
-                                         nextIndex:nextNext
-                                               atT:1.0f];
-        nextTangent = (simd_float2){(b.x - a.x) * outputWidth,
-                                    (a.y - b.y) * outputHeight};
-        nLen = simd_length(nextTangent);
+  if (lineJoin == 0) {
+    // Miter join: average normals at segment boundaries.
+    if (isEnd && (c < curveCount - 1 || (path.closed && c == curveCount - 1))) {
+      NSUInteger nextC = (c < curveCount - 1) ? (c + 1) % path.count : 0;
+      NSUInteger nextNext =
+          (c < curveCount - 1) ? (c + 2) % path.count : 1 % path.count;
+      KKBezierPoint curPt = [path pointAtIndex:nextIdx];
+      KKBezierPoint nxtPt = [path pointAtIndex:nextC];
+      if (curPt.type == KKBezierPointLinear &&
+          nxtPt.type == KKBezierPointLinear) {
+        simd_float2 nextTangent = [path evaluateTangentAtIndex:nextC
+                                                     nextIndex:nextNext
+                                                           atT:0.0f];
+        nextTangent.x *= outputWidth;
+        nextTangent.y *= -outputHeight;
+        float nLen = simd_length(nextTangent);
+        if (nLen < 1e-6f) {
+          simd_float2 a = [path evaluatePointAtIndex:nextC
+                                           nextIndex:nextNext
+                                                 atT:0.0f];
+          simd_float2 b = [path evaluatePointAtIndex:nextC
+                                           nextIndex:nextNext
+                                                 atT:1.0f];
+          nextTangent = (simd_float2){(b.x - a.x) * outputWidth,
+                                      (a.y - b.y) * outputHeight};
+          nLen = simd_length(nextTangent);
+        }
+        if (nLen > 1e-6f) {
+          nextTangent /= nLen;
+          normal =
+              miterNormal(normal, (simd_float2){-nextTangent.y, nextTangent.x});
+        }
       }
-      if (nLen > 1e-6f) {
-        nextTangent /= nLen;
-        normal =
-            miterNormal(normal, (simd_float2){-nextTangent.y, nextTangent.x});
-      }
-    }
-  } else if (isStart && (c > 0 || (path.closed && c == 0))) {
-    NSUInteger prevC = (c > 0) ? c - 1 : curveCount - 1;
-    NSUInteger prevIdx = c;
-    KKBezierPoint curPt = [path pointAtIndex:prevIdx];
-    KKBezierPoint prvPt = [path pointAtIndex:prevC];
-    if (prvPt.type == KKBezierPointLinear &&
-        curPt.type == KKBezierPointLinear) {
-      simd_float2 prevTangent = [path evaluateTangentAtIndex:prevC
-                                                   nextIndex:prevIdx
-                                                         atT:1.0f];
-      prevTangent.x *= outputWidth;
-      prevTangent.y *= -outputHeight;
-      float pLen = simd_length(prevTangent);
-      if (pLen < 1e-6f) {
-        simd_float2 a = [path evaluatePointAtIndex:prevC
-                                         nextIndex:prevIdx
-                                               atT:0.0f];
-        simd_float2 b = [path evaluatePointAtIndex:prevC
-                                         nextIndex:prevIdx
-                                               atT:1.0f];
-        prevTangent = (simd_float2){(b.x - a.x) * outputWidth,
-                                    (a.y - b.y) * outputHeight};
-        pLen = simd_length(prevTangent);
-      }
-      if (pLen > 1e-6f) {
-        prevTangent /= pLen;
-        normal =
-            miterNormal((simd_float2){-prevTangent.y, prevTangent.x}, normal);
+    } else if (isStart && (c > 0 || (path.closed && c == 0))) {
+      NSUInteger prevC = (c > 0) ? c - 1 : curveCount - 1;
+      NSUInteger prevIdx = c;
+      KKBezierPoint curPt = [path pointAtIndex:prevIdx];
+      KKBezierPoint prvPt = [path pointAtIndex:prevC];
+      if (prvPt.type == KKBezierPointLinear &&
+          curPt.type == KKBezierPointLinear) {
+        simd_float2 prevTangent = [path evaluateTangentAtIndex:prevC
+                                                     nextIndex:prevIdx
+                                                           atT:1.0f];
+        prevTangent.x *= outputWidth;
+        prevTangent.y *= -outputHeight;
+        float pLen = simd_length(prevTangent);
+        if (pLen < 1e-6f) {
+          simd_float2 a = [path evaluatePointAtIndex:prevC
+                                           nextIndex:prevIdx
+                                                 atT:0.0f];
+          simd_float2 b = [path evaluatePointAtIndex:prevC
+                                           nextIndex:prevIdx
+                                                 atT:1.0f];
+          prevTangent = (simd_float2){(b.x - a.x) * outputWidth,
+                                      (a.y - b.y) * outputHeight};
+          pLen = simd_length(prevTangent);
+        }
+        if (pLen > 1e-6f) {
+          prevTangent /= pLen;
+          normal =
+              miterNormal((simd_float2){-prevTangent.y, prevTangent.x}, normal);
+        }
       }
     }
   }
+  // For round/bevel (lineJoin != 0), return the raw per-segment normal;
+  // the join geometry is emitted separately in tessellatePath.
   return normal;
 }
 
@@ -178,9 +183,129 @@ static NSUInteger addRoundCap(CanvasVertex *vertices, NSUInteger vertexCount,
   return vertexCount;
 }
 
+/// Compute the raw (non-mitered) normal at the start of a curve segment.
+static simd_float2 rawNormalAtSegStart(KKBezierPath *path, NSUInteger c,
+                                       float outputWidth, float outputHeight) {
+  NSUInteger nextIdx = (c + 1) % path.count;
+  simd_float2 tangent = [path evaluateTangentAtIndex:c
+                                           nextIndex:nextIdx
+                                                 atT:0.0f];
+  tangent.x *= outputWidth;
+  tangent.y *= -outputHeight;
+  float len = simd_length(tangent);
+  if (len < 1e-6f) {
+    simd_float2 a = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:0.0f];
+    simd_float2 b = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:1.0f];
+    tangent =
+        (simd_float2){(b.x - a.x) * outputWidth, (a.y - b.y) * outputHeight};
+    len = simd_length(tangent);
+  }
+  if (len < 1e-6f)
+    return (simd_float2){-1.0f, 0.0f};
+  tangent /= len;
+  return (simd_float2){-tangent.y, tangent.x};
+}
+
+/// Emit a round join fan on the outside of the bend between two normals.
+static NSUInteger addRoundJoin(CanvasVertex *vertices, NSUInteger vertexCount,
+                               simd_float2 center, simd_float2 n1,
+                               simd_float2 n2, float halfWidth) {
+  // Cross product determines turn direction; join fills the outside.
+  float cross = n1.x * n2.y - n1.y * n2.x;
+  float side = (cross >= 0.0f) ? -1.0f : 1.0f;
+
+  simd_float2 on1 = n1 * side;
+  simd_float2 on2 = n2 * side;
+
+  float dot = simd_dot(on1, on2);
+  dot = fmaxf(-1.0f, fminf(1.0f, dot));
+  float angle = acosf(dot);
+  if (angle < 1e-4f)
+    return vertexCount;
+
+  // Sweep direction from on1 to on2 (shortest arc on the outside).
+  float sweepCross = on1.x * on2.y - on1.y * on2.x;
+  float dir = (sweepCross >= 0.0f) ? 1.0f : -1.0f;
+
+  NSUInteger segs = (NSUInteger)fmaxf(4.0f, angle / (M_PI / 16.0f));
+
+  // Degenerate bridge.
+  if (vertexCount > 0) {
+    vertices[vertexCount] = vertices[vertexCount - 1];
+    vertexCount++;
+  }
+  CanvasVertex first;
+  first.position = center + on1 * halfWidth;
+  first.edgeDistance = 0.0f;
+  first.capDistance = 0.0f;
+  vertices[vertexCount] = first;
+  vertexCount++;
+  vertices[vertexCount] = first;
+  vertexCount++;
+
+  for (NSUInteger i = 0; i <= segs; i++) {
+    float t = (float)i / (float)segs;
+    float a = t * angle * dir;
+    float cosA = cosf(a);
+    float sinA = sinf(a);
+    simd_float2 rotated = {on1.x * cosA - on1.y * sinA,
+                           on1.x * sinA + on1.y * cosA};
+    vertices[vertexCount].position = center + rotated * halfWidth;
+    vertices[vertexCount].edgeDistance = 0.0f;
+    vertices[vertexCount].capDistance = 1.0f;
+    vertexCount++;
+    vertices[vertexCount].position = center;
+    vertices[vertexCount].edgeDistance = 0.0f;
+    vertices[vertexCount].capDistance = 0.0f;
+    vertexCount++;
+  }
+  return vertexCount;
+}
+
+/// Emit a bevel join (single triangle) on the outside of the bend.
+static NSUInteger addBevelJoin(CanvasVertex *vertices, NSUInteger vertexCount,
+                               simd_float2 center, simd_float2 n1,
+                               simd_float2 n2, float halfWidth) {
+  // Cross product determines turn direction; join fills the outside.
+  float cross = n1.x * n2.y - n1.y * n2.x;
+  float side = (cross >= 0.0f) ? -1.0f : 1.0f;
+
+  simd_float2 outer1 = center + n1 * halfWidth * side;
+  simd_float2 outer2 = center + n2 * halfWidth * side;
+
+  // Degenerate bridge.
+  if (vertexCount > 0) {
+    vertices[vertexCount] = vertices[vertexCount - 1];
+    vertexCount++;
+  }
+  vertices[vertexCount].position = outer1;
+  vertices[vertexCount].edgeDistance = 0.0f;
+  vertices[vertexCount].capDistance = 0.0f;
+  vertexCount++;
+  vertices[vertexCount] = vertices[vertexCount - 1];
+  vertexCount++;
+
+  // Triangle: outer1, center, outer2.
+  vertices[vertexCount].position = outer1;
+  vertices[vertexCount].edgeDistance = 0.0f;
+  vertices[vertexCount].capDistance = 1.0f;
+  vertexCount++;
+  vertices[vertexCount].position = center;
+  vertices[vertexCount].edgeDistance = 0.0f;
+  vertices[vertexCount].capDistance = 0.0f;
+  vertexCount++;
+  vertices[vertexCount].position = outer2;
+  vertices[vertexCount].edgeDistance = 0.0f;
+  vertices[vertexCount].capDistance = 1.0f;
+  vertexCount++;
+
+  return vertexCount;
+}
+
 static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
                                  float outputWidth, float outputHeight,
-                                 uint8_t lineCap, CanvasVertex *vertices) {
+                                 uint8_t lineCap, uint8_t lineJoin,
+                                 CanvasVertex *vertices) {
   float aaPadding = 1.0f;
   float halfWidth = (strokeWidth / 2.0f) + aaPadding;
   NSUInteger segsPerCurve = 128;
@@ -197,7 +322,7 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
   simd_float2 startNormal = {0, 0}, endNormal = {0, 0};
 
   for (NSUInteger c = 0; c < curveCount; c++) {
-    if (c > 0 && vertexCount > 0) {
+    if (c > 0 && vertexCount > 0 && lineJoin == 0) {
       vertices[vertexCount] = vertices[vertexCount - 1];
       vertexCount++;
     }
@@ -207,7 +332,7 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
       NSUInteger nextIdx = (c + 1) % path.count;
       simd_float2 pos = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
       simd_float2 normal = normalAtPoint(path, c, segsPerCurve, i, curveCount,
-                                         outputWidth, outputHeight);
+                                         outputWidth, outputHeight, lineJoin);
 
       simd_float2 pixelPos = {pos.x * outputWidth,
                               (1.0f - pos.y) * outputHeight};
@@ -239,7 +364,38 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
       vertexCount++;
     }
 
-    if (c < curveCount - 1) {
+    // Emit join geometry at curve boundaries.
+    BOOL atJoin = (c < curveCount - 1) || (path.closed && c == curveCount - 1);
+    if (atJoin && lineJoin != 0 && vertexCount >= 2) {
+      // Get the end normal of the current segment (raw, not mitered).
+      simd_float2 endN =
+          normalAtPoint(path, c, segsPerCurve, segsPerCurve, curveCount,
+                        outputWidth, outputHeight, lineJoin);
+      // Get the start normal of the next segment.
+      NSUInteger nextC = (c + 1) % curveCount;
+      if (path.closed && c == curveCount - 1)
+        nextC = 0;
+      simd_float2 startN =
+          rawNormalAtSegStart(path, nextC, outputWidth, outputHeight);
+      // Junction center point.
+      NSUInteger jIdx = (c + 1) % path.count;
+      simd_float2 jPos = [path evaluatePointAtIndex:c nextIndex:jIdx atT:1.0f];
+      simd_float2 jPx = {jPos.x * outputWidth - outputWidth / 2.0f,
+                         (1.0f - jPos.y) * outputHeight - outputHeight / 2.0f};
+
+      if (lineJoin == 1) {
+        vertexCount =
+            addRoundJoin(vertices, vertexCount, jPx, endN, startN, halfWidth);
+      } else {
+        vertexCount =
+            addBevelJoin(vertices, vertexCount, jPx, endN, startN, halfWidth);
+      }
+      // Bridge from join to next segment's first vertex.
+      if (c < curveCount - 1 && vertexCount > 0) {
+        vertices[vertexCount] = vertices[vertexCount - 1];
+        vertexCount++;
+      }
+    } else if (c < curveCount - 1) {
       vertices[vertexCount] = vertices[vertexCount - 1];
       vertexCount++;
     }
@@ -635,12 +791,15 @@ static NSUInteger tessellatePath(KKBezierPath *path, float strokeWidth,
       if (path.closed && path.count >= 2)
         curveCount = path.count;
       NSUInteger capExtra = (!path.closed && path.lineCap != 0) ? 256 : 0;
+      // Round joins can emit up to ~40 verts per join; budget 48 per join.
+      NSUInteger joinExtra = (path.lineJoin != 0) ? curveCount * 48 : 0;
       NSUInteger maxVertices =
-          curveCount * ((segsPerCurve + 1) * 2 + 2) + 2 + capExtra;
+          curveCount * ((segsPerCurve + 1) * 2 + 2) + 2 + capExtra + joinExtra;
       CanvasVertex *vertices =
           (CanvasVertex *)malloc(maxVertices * sizeof(CanvasVertex));
-      NSUInteger vertexCount = tessellatePath(
-          path, sw, outputWidth, outputHeight, path.lineCap, vertices);
+      NSUInteger vertexCount =
+          tessellatePath(path, sw, outputWidth, outputHeight, path.lineCap,
+                         path.lineJoin, vertices);
 
       MTLRenderPassDescriptor *rpd =
           [MTLRenderPassDescriptor renderPassDescriptor];
