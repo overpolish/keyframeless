@@ -4,6 +4,7 @@
  */
 
 #import "CapStyleView.h"
+#import "JoinStyleView.h"
 #import "LayerList_Private.h"
 #import "ObjectParams.h"
 
@@ -56,6 +57,8 @@ static NSUInteger layerListHash(NSUInteger count,
     h = h * 31 + (paths[i].hidden ? 1 : 0);
     h = h * 31 + (paths[i].locked ? 2 : 0);
     h = h * 31 + paths[i].name.hash;
+    h = h * 31 + paths[i].count;
+    h = h * 31 + (paths[i].closed ? 1 : 0);
   }
   h = h * 31 + selection.hash;
   return h;
@@ -240,11 +243,18 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
                                                        (unsigned long)(i + 1)]];
   }
 
-  // Capture selected path's lineCap for the cap style view update.
+  // Capture selected path's lineCap and lineJoin for the style view updates.
   __block NSInteger selectedLineCap = -1;
+  __block NSInteger selectedLineJoin = -1;
+  __block BOOL selectedHasJoins = NO;
   [selection enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
-    if (idx < pathCount && !paths[idx].isGroup && !paths[idx].closed) {
-      selectedLineCap = paths[idx].lineCap;
+    if (idx < pathCount && !paths[idx].isGroup) {
+      if (!paths[idx].closed)
+        selectedLineCap = paths[idx].lineCap;
+      if (paths[idx].count > 2) {
+        selectedLineJoin = paths[idx].lineJoin;
+        selectedHasJoins = YES;
+      }
       *stop = YES;
     }
   }];
@@ -344,6 +354,7 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
         if (hasPath) {
           KKShowObjectParams(setAPI);
           KKSetLineCapVisible(setAPI, isOpen);
+          KKSetLineJoinVisible(setAPI, selectedHasJoins);
         } else {
           KKHideObjectParams(setAPI);
         }
@@ -353,11 +364,22 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
       [actAPI endAction:at];
     }
 
-    // Sync cap style view selection.
+    // Sync cap style view selection and layout.
     KKCapStyleView *capView = st.capStyleView;
-    if (capView && selectedLineCap >= 0) {
-      capView.selectedIndex = selectedLineCap;
+    if (capView) {
+      if (selectedLineCap >= 0)
+        capView.selectedIndex = selectedLineCap;
+      [capView setNeedsLayout:YES];
       [capView setNeedsDisplay:YES];
+    }
+
+    // Sync join style view selection and layout.
+    KKJoinStyleView *joinView = st.joinStyleView;
+    if (joinView) {
+      if (selectedLineJoin >= 0)
+        joinView.selectedIndex = selectedLineJoin;
+      [joinView setNeedsLayout:YES];
+      [joinView setNeedsDisplay:YES];
     }
   });
 }

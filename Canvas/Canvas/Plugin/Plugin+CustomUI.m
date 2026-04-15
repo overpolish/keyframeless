@@ -4,6 +4,7 @@
  */
 
 #import "CapStyleView.h"
+#import "JoinStyleView.h"
 #import "LayerList_Private.h"
 #import "ObjectParams.h"
 #import <objc/message.h>
@@ -247,6 +248,50 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
       KKLayerStateForUUID(uuid).capStyleView = capView;
 
     return capView;
+  }
+
+  if (parameterID == kParamLineJoin) {
+    KKJoinStyleView *joinView = [[KKJoinStyleView alloc]
+        initWithFrame:NSMakeRect(0, 0, 200, KKInspectorRowHeight)];
+    joinView.autoresizingMask = NSViewWidthSizable;
+
+    // Write lineJoin changes directly to pathData via action scope.
+    __weak id weakAPI = self.apiManager;
+    joinView.onSelectionChanged = ^(NSInteger index) {
+      id api = weakAPI;
+      if (!api)
+        return;
+      id<FxCustomParameterActionAPI_v4> actAPI =
+          [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      [actAPI startAction:api];
+      id<FxParameterRetrievalAPI_v6> getAPI =
+          [api apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      id<FxParameterSettingAPI_v5> setAPI =
+          [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      NSString *str = nil;
+      [getAPI getStringParameterValue:&str fromParameter:kParamPathData];
+      NSInteger selIdx = KKReadSelectedIndex(getAPI);
+      if (str.length > 0 && selIdx >= 0) {
+        NSData *blob = [[NSData alloc] initWithBase64EncodedString:str
+                                                           options:0];
+        NSMutableArray<KKBezierPath *> *paths =
+            [KKBezierPath pathsFromBlob:blob];
+        if ((NSUInteger)selIdx < paths.count) {
+          paths[selIdx].lineJoin = (uint8_t)index;
+          NSData *newBlob = [KKBezierPath blobFromPaths:paths];
+          [setAPI
+              setStringParameterValue:[newBlob base64EncodedStringWithOptions:0]
+                          toParameter:kParamPathData];
+        }
+      }
+      [actAPI endAction:api];
+    };
+
+    NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+    if (uuid)
+      KKLayerStateForUUID(uuid).joinStyleView = joinView;
+
+    return joinView;
   }
 
   struct objc_super sup = {self, [KKPlugin class]};

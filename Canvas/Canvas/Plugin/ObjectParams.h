@@ -58,6 +58,8 @@ KKHideObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
                      toParameter:kParamOpacity];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamLineCap];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamLineJoin];
 }
 
 /// Show/hide the Line Cap param row based on whether the path is open.
@@ -68,6 +70,16 @@ KKSetLineCapVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
       visible ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE)
               : kFxParameterFlag_HIDDEN;
   [paramSetAPI setParameterFlags:flags toParameter:kParamLineCap];
+}
+
+/// Show/hide the Line Join param row based on whether the path has >2 points.
+static inline void
+KKSetLineJoinVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
+                     BOOL visible) {
+  FxParameterFlags flags =
+      visible ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE)
+              : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:flags toParameter:kParamLineJoin];
 }
 
 /// Save the index of the currently-selected path so it survives clip switches.
