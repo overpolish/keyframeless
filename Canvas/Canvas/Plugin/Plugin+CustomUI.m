@@ -4,6 +4,7 @@
  */
 
 #import "CapStyleView.h"
+#import "FillStyleView.h"
 #import "JoinStyleView.h"
 #import "LayerList_Private.h"
 #import "ObjectParams.h"
@@ -390,10 +391,7 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
                     atTime:kCMTimeZero];
       KKSetFillChildrenVisible(setAPI, isEnabled, expanded);
       if (isEnabled && expanded) {
-        int fillStyle = 0;
-        [getAPI getIntValue:&fillStyle
-              fromParameter:kParamSketchFillStyle
-                     atTime:kCMTimeZero];
+        int fillStyle = KKReadSelectedFillStyle(getAPI);
         KKSetFillStyleParamsVisible(setAPI, YES, fillStyle);
       }
       [actAPI endAction:strongSelf];
@@ -422,10 +420,7 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
                     atTime:kCMTimeZero];
       KKSetFillChildrenVisible(setAPI, fillOn, isExpanded);
       if (fillOn && isExpanded) {
-        int fillStyle = 0;
-        [getAPI getIntValue:&fillStyle
-              fromParameter:kParamSketchFillStyle
-                     atTime:kCMTimeZero];
+        int fillStyle = KKReadSelectedFillStyle(getAPI);
         KKSetFillStyleParamsVisible(setAPI, YES, fillStyle);
       }
       [actAPI endAction:strongSelf];
@@ -599,6 +594,35 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
       KKLayerStateForUUID(uuid).strokeStyleView = styleView;
 
     return styleView;
+  }
+
+  if (parameterID == kParamSketchFillStyle) {
+    KKFillStyleView *fillStyleView = [[KKFillStyleView alloc]
+        initWithFrame:NSMakeRect(0, 0, 200, KKInspectorRowHeight)];
+    fillStyleView.autoresizingMask = NSViewWidthSizable;
+
+    __weak id weakAPI = self.apiManager;
+    fillStyleView.onSelectionChanged = ^(NSInteger index) {
+      id api = weakAPI;
+      if (!api)
+        return;
+      KKModifySelectedPathProperty(api, ^(KKBezierPath *p) {
+        p.sketchFillStyle = (uint8_t)index;
+      });
+      id<FxCustomParameterActionAPI_v4> actAPI =
+          [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      [actAPI startAction:api];
+      id<FxParameterSettingAPI_v5> setAPI =
+          [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      KKSetFillStyleParamsVisible(setAPI, YES, (int)index);
+      [actAPI endAction:api];
+    };
+
+    NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+    if (uuid)
+      KKLayerStateForUUID(uuid).fillStyleView = fillStyleView;
+
+    return fillStyleView;
   }
 
   if (parameterID == kParamSketchSeed) {

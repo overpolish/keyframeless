@@ -177,14 +177,12 @@
                           defaultBlue:1.0
                        parameterFlags:kFxParameterFlag_HIDDEN];
 
-  [paramAPI addPopupMenuWithName:@"Fill Style"
-                     parameterID:kParamSketchFillStyle
-                    defaultValue:0
-                     menuEntries:@[
-                       @"Solid", @"Hachure", @"Cross-Hatch", @"Zigzag", @"Dots"
-                     ]
-                  parameterFlags:kFxParameterFlag_HIDDEN |
-                                 kFxParameterFlag_NOT_ANIMATABLE];
+  [paramAPI addCustomParameterWithName:@"Fill Style"
+                           parameterID:kParamSketchFillStyle
+                          defaultValue:@(0)
+                        parameterFlags:kFxParameterFlag_CUSTOM_UI |
+                                       kFxParameterFlag_HIDDEN |
+                                       kFxParameterFlag_NOT_ANIMATABLE];
 
   [paramAPI addFloatSliderWithName:@"Fill Gap"
                        parameterID:kParamSketchFillGap

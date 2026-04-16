@@ -4,6 +4,7 @@
  */
 
 #import "CapStyleView.h"
+#import "FillStyleView.h"
 #import "JoinStyleView.h"
 #import "LayerList_Private.h"
 #import "ObjectParams.h"
@@ -464,6 +465,15 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
         strokeStyleView.selectedIndex = selectedStrokeStyle;
       [strokeStyleView setNeedsLayout:YES];
       [strokeStyleView setNeedsDisplay:YES];
+    }
+
+    // Sync fill style view selection and layout.
+    KKFillStyleView *fillStyleView = st.fillStyleView;
+    if (fillStyleView) {
+      if (selectedFillStyle >= 0)
+        fillStyleView.selectedIndex = selectedFillStyle;
+      [fillStyleView setNeedsLayout:YES];
+      [fillStyleView setNeedsDisplay:YES];
     }
 
     // Determine if there's a selected non-group path for header sync.

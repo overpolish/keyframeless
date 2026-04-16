@@ -27,6 +27,7 @@ static NSString *const _Nonnull kLayerDuplicateDragType
 
 @class KKCapStyleView;
 @class KKCustomGroupHeaderView;
+@class KKFillStyleView;
 @class KKJoinStyleView;
 @class KKStrokeStyleView;
 @class KKLayerActionTarget;
@@ -47,6 +48,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, weak, nullable) KKCapStyleView *capStyleView;
 @property(nonatomic, weak, nullable) KKJoinStyleView *joinStyleView;
 @property(nonatomic, weak, nullable) KKStrokeStyleView *strokeStyleView;
+@property(nonatomic, weak, nullable) KKFillStyleView *fillStyleView;
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *strokeGroupHeader;
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *fillGroupHeader;
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *sketchGroupHeader;

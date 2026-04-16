@@ -68,10 +68,7 @@
            fromParameter:kParamExpandedFill
                   atTime:kCMTimeZero];
     if (fillOn && fillExp) {
-      int fillStyle = 0;
-      [getAPI getIntValue:&fillStyle
-            fromParameter:kParamSketchFillStyle
-                   atTime:kCMTimeZero];
+      int fillStyle = KKReadSelectedFillStyle(getAPI);
       KKSetFillStyleParamsVisible(setAPI, YES, fillStyle);
     }
   }
