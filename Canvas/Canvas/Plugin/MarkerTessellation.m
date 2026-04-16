@@ -43,14 +43,13 @@ static NSUInteger tessellateArrow(simd_float2 endpoint, simd_float2 tangent,
 /// Triangle fan as strip: center, rim0, center, rim1, ...
 static NSUInteger tessellateCircle(simd_float2 endpoint, simd_float2 tangent,
                                    float radius, CanvasVertex *v) {
-  simd_float2 center = endpoint - tangent * radius;
   NSUInteger segments = 24;
   NSUInteger vc = 0;
   for (NSUInteger i = 0; i <= segments; i++) {
     float angle = (float)i / (float)segments * 2.0f * (float)M_PI;
     simd_float2 rim =
-        center + (simd_float2){cosf(angle) * radius, sinf(angle) * radius};
-    v[vc++] = markerVert(center);
+        endpoint + (simd_float2){cosf(angle) * radius, sinf(angle) * radius};
+    v[vc++] = markerVert(endpoint);
     v[vc++] = markerVert(rim);
   }
   return vc;
@@ -61,16 +60,15 @@ static NSUInteger tessellateCircle(simd_float2 endpoint, simd_float2 tangent,
 static NSUInteger tessellateSquare(simd_float2 endpoint, simd_float2 tangent,
                                    simd_float2 normal, float halfSide,
                                    CanvasVertex *v) {
-  simd_float2 center = endpoint - tangent * halfSide;
   simd_float2 fwd = tangent * halfSide;
   simd_float2 side = normal * halfSide;
 
   // Strip order: top-left, bottom-left, top-right, bottom-right.
   NSUInteger vc = 0;
-  v[vc++] = markerVert(center - fwd + side);
-  v[vc++] = markerVert(center - fwd - side);
-  v[vc++] = markerVert(center + fwd + side);
-  v[vc++] = markerVert(center + fwd - side);
+  v[vc++] = markerVert(endpoint - fwd + side);
+  v[vc++] = markerVert(endpoint - fwd - side);
+  v[vc++] = markerVert(endpoint + fwd + side);
+  v[vc++] = markerVert(endpoint + fwd - side);
   return vc;
 }
 
@@ -149,9 +147,9 @@ float KKMarkerPullback(uint8_t markerType, float markerSize) {
   case 1:
     return markerSize * 0.7f; // arrow: 30% inside from base
   case 2:
-    return markerSize * 0.3f; // circle: ~20% past center
+    return 0.0f; // circle: centered on endpoint
   case 3:
-    return markerSize * 0.3f; // square: ~20% past center
+    return 0.0f; // square: centered on endpoint
   case 4:
     return 0.0f; // arrowhead: open, stroke extends to tip
   case 5:
@@ -257,14 +255,13 @@ static NSUInteger tessellateSketchArrow(simd_float2 endpoint,
 static NSUInteger tessellateSketchCircle(simd_float2 endpoint,
                                          simd_float2 tangent, float radius,
                                          float roughness, CanvasVertex *v) {
-  simd_float2 center = endpoint - tangent * radius;
   NSUInteger segments = 24;
   float jitterAmp = radius * 0.07f;
   simd_float2 outline[24];
   for (NSUInteger i = 0; i < segments; i++) {
     float angle = (float)i / (float)segments * 2.0f * (float)M_PI;
     float r = radius + markerOffset(jitterAmp, roughness);
-    outline[i] = center + (simd_float2){cosf(angle) * r, sinf(angle) * r};
+    outline[i] = endpoint + (simd_float2){cosf(angle) * r, sinf(angle) * r};
   }
   return emitFan(outline, segments, v);
 }
@@ -273,11 +270,10 @@ static NSUInteger tessellateSketchSquare(simd_float2 endpoint,
                                          simd_float2 tangent,
                                          simd_float2 normal, float halfSide,
                                          float roughness, CanvasVertex *v) {
-  simd_float2 center = endpoint - tangent * halfSide;
   simd_float2 fwd = tangent * halfSide;
   simd_float2 side = normal * halfSide;
-  simd_float2 corners[4] = {center - fwd + side, center + fwd + side,
-                            center + fwd - side, center - fwd - side};
+  simd_float2 corners[4] = {endpoint - fwd + side, endpoint + fwd + side,
+                            endpoint + fwd - side, endpoint - fwd - side};
   float jitterAmp = halfSide * 0.06f;
   simd_float2 outline[24];
   NSUInteger oc =
