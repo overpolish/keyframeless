@@ -132,6 +132,8 @@
 
 @implementation KKLayerContentView {
   NSView *_dropIndicator;
+  BOOL _isExternalDrag;
+  BOOL _isUnsupportedDrag;
 }
 
 - (BOOL)isFlipped {
@@ -142,12 +144,60 @@
   self = [super initWithFrame:frame];
   if (self) {
     self.dropFlatIndex = -1;
-    [self registerForDraggedTypes:@[ kLayerDragType, kLayerDuplicateDragType ]];
+    [self registerForDraggedTypes:@[
+      kLayerDragType, kLayerDuplicateDragType, NSPasteboardTypeFileURL
+    ]];
   }
   return self;
 }
 
+- (BOOL)_hasExternalFileURLs:(id<NSDraggingInfo>)sender {
+  NSPasteboard *pb = sender.draggingPasteboard;
+  if ([pb dataForType:kLayerDragType] ||
+      [pb dataForType:kLayerDuplicateDragType])
+    return NO;
+  return [pb
+      canReadObjectForClasses:@[ [NSURL class] ]
+                      options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
+}
+
+- (BOOL)_allURLsSupported:(id<NSDraggingInfo>)sender {
+  NSArray<NSURL *> *urls = [sender.draggingPasteboard
+      readObjectsForClasses:@[ [NSURL class] ]
+                    options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
+  if (!urls.count)
+    return NO;
+  for (NSURL *url in urls) {
+    if (![url.pathExtension.lowercaseString isEqualToString:@"svg"])
+      return NO;
+  }
+  return YES;
+}
+
+- (void)_setDropHighlight:(NSInteger)state {
+  NSView *border = self.container.borderView;
+  if (!border)
+    return;
+  if (state > 0) {
+    border.layer.borderColor = [NSColor accent].CGColor;
+    border.layer.borderWidth = KKBorderWidthSM;
+  } else if (state < 0) {
+    border.layer.borderColor = [NSColor error].CGColor;
+    border.layer.borderWidth = KKBorderWidthSM;
+  } else {
+    border.layer.borderColor =
+        [NSColor colorWithWhite:1.0 alpha:kLayerBorderAlpha].CGColor;
+    border.layer.borderWidth = KKBorderWidthXS;
+  }
+}
+
 - (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
+  _isExternalDrag = [self _hasExternalFileURLs:sender];
+  if (_isExternalDrag) {
+    _isUnsupportedDrag = ![self _allURLsSupported:sender];
+    [self _setDropHighlight:_isUnsupportedDrag ? -1 : 1];
+    return _isUnsupportedDrag ? NSDragOperationNone : NSDragOperationCopy;
+  }
   return [self _isDuplicateDrag:sender] ? NSDragOperationCopy
                                         : NSDragOperationMove;
 }
@@ -225,6 +275,19 @@
 - (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)sender {
   NSPoint loc = [self convertPoint:sender.draggingLocation fromView:nil];
   NSArray<KKLayerRow *> *rows = [self _sortedVisibleRows];
+
+  NSInteger visIdx =
+      (NSInteger)round((loc.y - kLayerListVerticalPad) / kLayerRowStride);
+  visIdx = MAX(0, MIN(visIdx, (NSInteger)rows.count));
+
+  if (_isExternalDrag) {
+    if (_isUnsupportedDrag)
+      return NSDragOperationNone;
+    [self _updateDropIndicatorAtVisRow:visIdx];
+    self.dropFlatIndex = visIdx;
+    return NSDragOperationCopy;
+  }
+
   NSIndexSet *dragIndices = [self _dragIndicesFromPasteboard:sender];
 
   CGFloat rowY = loc.y - kLayerListVerticalPad;
@@ -233,10 +296,6 @@
   BOOL inTopHalf = (fractional - floor(fractional)) < 0.5;
   BOOL belowAllRows = hoverIdx >= (NSInteger)rows.count;
   hoverIdx = MAX(0, MIN(hoverIdx, (NSInteger)rows.count - 1));
-
-  NSInteger visIdx =
-      (NSInteger)round((loc.y - kLayerListVerticalPad) / kLayerRowStride);
-  visIdx = MAX(0, MIN(visIdx, (NSInteger)rows.count));
 
   KKLayerRow *hoverRow = (rows.count > 0) ? rows[(NSUInteger)hoverIdx] : nil;
 
@@ -274,7 +333,10 @@
 
 - (void)draggingExited:(id<NSDraggingInfo>)sender {
   self.dropFlatIndex = -1;
+  _isExternalDrag = NO;
+  _isUnsupportedDrag = NO;
   [self _removeDropIndicator];
+  [self _setDropHighlight:0];
 }
 
 - (BOOL)prepareForDragOperation:(id<NSDraggingInfo>)sender {
@@ -283,8 +345,24 @@
 
 - (BOOL)performDragOperation:(id<NSDraggingInfo>)sender {
   [self _removeDropIndicator];
+  [self _setDropHighlight:0];
+
   NSInteger targetIndex = self.dropFlatIndex;
   self.dropFlatIndex = -1;
+
+  if (_isExternalDrag) {
+    _isExternalDrag = NO;
+    NSArray<NSURL *> *urls = [sender.draggingPasteboard
+        readObjectsForClasses:@[ [NSURL class] ]
+                      options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
+    KKLog *log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
+    for (NSURL *url in urls) {
+      [log info:@"[LayerList] External file drop: %@ at index %ld", url.path,
+                (long)targetIndex];
+    }
+    return urls.count > 0;
+  }
+
   if (targetIndex < 0)
     return NO;
 
