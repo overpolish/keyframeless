@@ -254,7 +254,9 @@ static inline void
 KKSetFillStyleParamsVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                             BOOL fillEnabled, int fillStyle) {
   FxParameterFlags styleFlags =
-      fillEnabled ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+      fillEnabled
+          ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE)
+          : kFxParameterFlag_HIDDEN;
   [paramSetAPI setParameterFlags:styleFlags toParameter:kParamSketchFillStyle];
   FxParameterFlags subFlags = (fillEnabled && fillStyle > 0)
                                   ? kFxParameterFlag_DEFAULT
@@ -281,6 +283,21 @@ KKReadSelectedIndex(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI) {
                fromParameter:kParamLastSelectedIndex
                       atTime:kCMTimeZero];
   return (NSInteger)v;
+}
+
+/// Read the fill style of the currently-selected path (0 if none).
+static inline int
+KKReadSelectedFillStyle(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI) {
+  NSString *str = nil;
+  [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
+  NSInteger selIdx = KKReadSelectedIndex(paramGetAPI);
+  if (str.length > 0 && selIdx >= 0) {
+    NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
+    NSArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+    if ((NSUInteger)selIdx < paths.count)
+      return (int)paths[selIdx].sketchFillStyle;
+  }
+  return 0;
 }
 
 /// Read per-object param values from FxPlug and apply to a path.
@@ -377,12 +394,6 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                fromParameter:kParamSketchStrokes
                       atTime:kCMTimeZero];
   path.sketchStrokes = (uint8_t)sStrokes;
-
-  int sFill = 0;
-  [paramGetAPI getIntValue:&sFill
-             fromParameter:kParamSketchFillStyle
-                    atTime:kCMTimeZero];
-  path.sketchFillStyle = (uint8_t)sFill;
 
   double fGap = kSketchFillGapDefault;
   [paramGetAPI getFloatValue:&fGap
@@ -483,9 +494,6 @@ KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
   [paramSetAPI setFloatValue:(double)path.sketchStrokes
                  toParameter:kParamSketchStrokes
                       atTime:kCMTimeZero];
-  [paramSetAPI setIntValue:(int)path.sketchFillStyle
-               toParameter:kParamSketchFillStyle
-                    atTime:kCMTimeZero];
   [paramSetAPI setFloatValue:path.sketchFillGap
                  toParameter:kParamSketchFillGap
                       atTime:kCMTimeZero];
