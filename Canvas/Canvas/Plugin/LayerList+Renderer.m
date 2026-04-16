@@ -256,6 +256,7 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
   __block NSInteger selectedFillStyle = 0;
   __block BOOL selectedStrokeEnabled = NO;
   __block BOOL selectedStrokeExpanded = NO;
+  __block BOOL selectedFillExpanded = NO;
   [selection enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
     if (idx < pathCount && !paths[idx].isGroup) {
       if (!paths[idx].closed)
@@ -411,13 +412,24 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
                   selectedStrokeStyle >= 0 ? (uint8_t)selectedStrokeStyle : 0);
             }
           }
+          [getAPI getBoolValue:&selectedFillExpanded
+                 fromParameter:kParamExpandedFill
+                        atTime:kCMTimeZero];
+          BOOL fillOpen = (selectedFillEnabled || forceShow) &&
+                          (selectedFillExpanded || forceShow);
+          KKSetFillChildrenVisible(setAPI, selectedFillEnabled || forceShow,
+                                   selectedFillExpanded || forceShow);
+          if (fillOpen) {
+            if (forceShow) {
+              KKSetFillStyleParamsVisible(setAPI, YES, 1);
+            } else {
+              KKSetFillStyleParamsVisible(setAPI, YES, (int)selectedFillStyle);
+            }
+          }
           if (forceShow) {
             KKSetSketchParamsVisible(setAPI, YES);
-            KKSetFillStyleParamsVisible(setAPI, YES, 1);
           } else {
             KKSetSketchParamsVisible(setAPI, selectedSketchEnabled);
-            KKSetFillStyleParamsVisible(setAPI, selectedFillEnabled,
-                                        (int)selectedFillStyle);
           }
           KKSetCornerRadiiVisible(setAPI, selectedIsRect || forceShow);
         } else {
@@ -456,17 +468,18 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
       [strokeStyleView setNeedsDisplay:YES];
     }
 
+    // Determine if there's a selected non-group path for header sync.
+    BOOL hasPath = NO;
+    for (NSUInteger i = 0; i < pathCount; i++) {
+      if ([capturedSelection containsIndex:i] && !groupFlags[i].boolValue) {
+        hasPath = YES;
+        break;
+      }
+    }
+
     // Sync stroke group header enabled/expanded state.
     KKCustomGroupHeaderView *strokeHeader = st.strokeGroupHeader;
     if (strokeHeader) {
-      BOOL hasSelection = (capturedSelection.count > 0);
-      BOOL hasPath = NO;
-      for (NSUInteger i = 0; i < pathCount; i++) {
-        if ([capturedSelection containsIndex:i] && !groupFlags[i].boolValue) {
-          hasPath = YES;
-          break;
-        }
-      }
       strokeHeader.isInteractive = hasPath;
       if (hasPath) {
         strokeHeader.isEnabled = selectedStrokeEnabled;
@@ -474,6 +487,19 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
       } else {
         strokeHeader.isEnabled = NO;
         strokeHeader.isExpanded = NO;
+      }
+    }
+
+    // Sync fill group header enabled/expanded state.
+    KKCustomGroupHeaderView *fillHeader = st.fillGroupHeader;
+    if (fillHeader) {
+      fillHeader.isInteractive = hasPath;
+      if (hasPath) {
+        fillHeader.isEnabled = selectedFillEnabled;
+        fillHeader.isExpanded = selectedFillExpanded;
+      } else {
+        fillHeader.isEnabled = NO;
+        fillHeader.isExpanded = NO;
       }
     }
   });

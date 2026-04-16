@@ -132,6 +132,11 @@
                     atTime:kCMTimeZero];
       KKSetStrokeChildrenVisible(paramSetAPI, selected.strokeEnabled,
                                  strokeExpanded);
+      BOOL fillExpanded = NO;
+      [getAPI getBoolValue:&fillExpanded
+             fromParameter:kParamExpandedFill
+                    atTime:kCMTimeZero];
+      KKSetFillChildrenVisible(paramSetAPI, selected.fillEnabled, fillExpanded);
     }
     KKSaveSelectedIndex(paramSetAPI,
                         (NSInteger)[paths indexOfObjectIdenticalTo:selected]);

@@ -179,6 +179,11 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
                        atTime:kCMTimeZero];
     KKSetStrokeChildrenVisible(paramSetAPI, selPath.strokeEnabled,
                                strokeExpanded);
+    BOOL fillExpanded = NO;
+    [paramGetAPI getBoolValue:&fillExpanded
+                fromParameter:kParamExpandedFill
+                       atTime:kCMTimeZero];
+    KKSetFillChildrenVisible(paramSetAPI, selPath.fillEnabled, fillExpanded);
     KKSaveSelectedIndex(
         paramSetAPI, (NSInteger)[self.paths indexOfObjectIdenticalTo:selPath]);
   } else if (!KKIsForceShowEnabled(paramGetAPI)) {
