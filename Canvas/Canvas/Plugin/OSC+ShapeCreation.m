@@ -143,6 +143,7 @@
       stringWithFormat:@"Line %lu", (unsigned long)(self.paths.count + 1)];
   [line insertAtIndex:0 position:a];
   [line insertAtIndex:1 position:b];
+  line.closed = NO;
   [self.paths insertObject:line atIndex:0];
   self.activePathIndex = -1;
   [self.selectedPathIndices removeAllIndexes];
