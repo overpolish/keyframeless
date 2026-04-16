@@ -216,6 +216,11 @@
     return;
   }
 
+  if (self.toolbar.activeTag == 0) {
+    [oscAPI setCursor:[NSCursor arrowCursor]];
+    return;
+  }
+
   BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
   BOOL isRectMode = (self.toolbar.activeTag == kOSCToolbarRect);
   BOOL isEllipseMode = (self.toolbar.activeTag == kOSCToolbarEllipse);

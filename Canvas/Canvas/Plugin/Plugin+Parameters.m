@@ -35,6 +35,12 @@
                      parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
                                     kFxParameterFlag_DONT_DISPLAY_IN_DASHBOARD];
 
+  [paramAPI addToggleButtonWithName:@"Hide OSC"
+                        parameterID:kParamHideOSC
+                       defaultValue:NO
+                     parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
+                                    kFxParameterFlag_DONT_DISPLAY_IN_DASHBOARD];
+
   [paramAPI addCustomParameterWithName:@""
                            parameterID:kParamLayerList
                           defaultValue:@(kParamLayerList)

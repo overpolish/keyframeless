@@ -53,6 +53,7 @@ static const UInt32 kParamExpandedSketch = 135;
 static const UInt32 kParamEndWidth = 136;
 
 static const UInt32 kParamForceShow = 9000;
+static const UInt32 kParamHideOSC = 9001;
 
 @protocol PROAPIAccessing;
 NSString *_Nullable KKLayerUUIDForAPI(id<PROAPIAccessing> _Nonnull api);

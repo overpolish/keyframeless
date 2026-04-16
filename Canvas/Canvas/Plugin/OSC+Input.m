@@ -301,6 +301,21 @@
   if (activePart == kOSCToolbarCursor || activePart == kOSCToolbarPen ||
       activePart == kOSCToolbarRect || activePart == kOSCToolbarEllipse ||
       activePart == kOSCToolbarLine) {
+    // Turn off Hide OSC when user interacts with toolbar.
+    {
+      id<FxParameterRetrievalAPI_v6> getAPI = [self.apiManager
+          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      BOOL hideOSC = NO;
+      [getAPI getBoolValue:&hideOSC
+             fromParameter:kParamHideOSC
+                    atTime:kCMTimeZero];
+      if (hideOSC) {
+        id<FxParameterSettingAPI_v5> setAPI = [self.apiManager
+            apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+        [setAPI setBoolValue:NO toParameter:kParamHideOSC atTime:kCMTimeZero];
+        self.toolbar.activeTag = kOSCToolbarCursor;
+      }
+    }
     // Persist any pending inspector changes before leaving cursor or line
     // mode.  syncStrokeParamsToSelection checks isCursorMode internally,
     // so we call it while the toolbar still shows cursor.  For line modes

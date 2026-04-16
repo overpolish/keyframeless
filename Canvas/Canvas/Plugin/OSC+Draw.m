@@ -332,17 +332,27 @@
   // hit testing and OSC drawing use the live inspector values.
   // Also keep param row visibility in sync — ensures the inspector shows
   // per-object controls even if the panel wasn't visible during selection.
+  BOOL hideOSCPending = NO;
+  {
+    id<FxParameterRetrievalAPI_v6> hideGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    [hideGetAPI getBoolValue:&hideOSCPending
+               fromParameter:kParamHideOSC
+                      atTime:kCMTimeZero];
+  }
   {
     KKBezierPath *selPath =
         KKSelectedPath(self.selectedPathIndices, self.paths);
     id<FxParameterSettingAPI_v5> paramSetAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
     if (selPath) {
-      // Only patch the path from FxPlug params in cursor mode.  In pen mode
-      // the pen tool handlers keep path state correct — reading shared params
-      // here would overwrite the path with stale values from a previously-
-      // selected path (e.g. closed=NO from a line corrupting a rect).
-      BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
+      // Only patch the path from FxPlug params in cursor mode (or hideOSC,
+      // which acts like a paused cursor mode).  In pen mode the pen tool
+      // handlers keep path state correct — reading shared params here would
+      // overwrite the path with stale values from a previously-selected path
+      // (e.g. closed=NO from a line corrupting a rect).
+      BOOL isCursorMode =
+          (self.toolbar.activeTag == kOSCToolbarCursor) || hideOSCPending;
       if (isCursorMode) {
         id<FxParameterRetrievalAPI_v6> paramGetAPI = [self.apiManager
             apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
@@ -392,6 +402,13 @@
       KKHideObjectParams(paramSetAPI);
     }
   }
+
+  if (hideOSCPending) {
+    self.toolbar.activeTag = 0;
+    return;
+  }
+  if (self.toolbar.activeTag == 0)
+    self.toolbar.activeTag = kOSCToolbarCursor;
 
   simd_float4 strokeColor = [[NSColor systemRedColor] simdFloat4];
   simd_float4 dimColor = strokeColor;
