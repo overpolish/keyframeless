@@ -271,13 +271,12 @@ static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
   float startPullback =
       hasMarkers ? KKMarkerPullback(startMarker, startMarkerSz) : 0;
   float endPullback = hasMarkers ? KKMarkerPullback(endMarker, endMarkerSz) : 0;
-  // Markers with zero pullback (arrowhead, line) still need a positive trim
-  // so KKTessellateTrimmedPath suppresses caps at those endpoints.
+  // Any marker present at an endpoint needs a positive trim so
+  // KKTessellateTrimmedPath suppresses the cap at that end.
   if (startMarker != 0 && startPullback <= 0.0f)
     startPullback = 0.001f;
   if (endMarker != 0 && endPullback <= 0.0f)
     endPullback = 0.001f;
-  NSUInteger markerExtra = hasMarkers ? kMarkerMaxVertices * 2 + 4 : 0;
 
   CanvasVertex *vertices = NULL;
   NSUInteger vertexCount = 0;
@@ -287,20 +286,18 @@ static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
     curveCount = path.count;
 
   if (path.strokeStyle == 1) {
-    NSUInteger maxVertices =
-        curveCount * segsPerCurve * 12 + 8192 + markerExtra;
+    NSUInteger maxVertices = curveCount * segsPerCurve * 12 + 8192;
     vertices = malloc(maxVertices * sizeof(CanvasVertex));
     vertexCount = KKTessellateDashedPath(path, sw, ew, outputWidth,
                                          outputHeight, path.dashLength,
                                          path.dashGap, path.lineJoin, vertices);
   } else if (path.strokeStyle == 2) {
-    NSUInteger maxVertices = curveCount * segsPerCurve * 4 + 4096 + markerExtra;
+    NSUInteger maxVertices = curveCount * segsPerCurve * 4 + 4096;
     vertices = malloc(maxVertices * sizeof(CanvasVertex));
     vertexCount = KKTessellateDottedPath(path, sw, ew, outputWidth,
                                          outputHeight, path.dotGap, vertices);
   } else if (hasMarkers) {
-    NSUInteger maxVertices =
-        curveCount * ((segsPerCurve + 1) * 2 + 2) + 256 + markerExtra;
+    NSUInteger maxVertices = curveCount * ((segsPerCurve + 1) * 2 + 2) + 256;
     vertices = malloc(maxVertices * sizeof(CanvasVertex));
     vertexCount = KKTessellateTrimmedPath(
         path, sw, ew, outputWidth, outputHeight, path.lineCap, path.lineJoin,
@@ -315,90 +312,7 @@ static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
                                    path.lineCap, path.lineJoin, vertices);
   }
 
-  if (hasMarkers && vertices && path.count >= 2) {
-    // Use arc-length samples for marker placement — handles all point type
-    // combinations correctly (linear, bezier, mixed).
-    PathSample *samples = NULL;
-    NSUInteger sampleCount =
-        KKSamplePathPolyline(path, outputWidth, outputHeight, &samples);
-
-    if (sampleCount >= 2) {
-      float totalArc = samples[sampleCount - 1].arcLength;
-      NSUInteger hint = 0;
-
-      if (endMarker != 0) {
-        // Sample tangent slightly inside the curve so the marker direction
-        // follows the actual curve shape, not just the endpoint handle.
-        // Without this, bezier endpoint tangents ignore interior control
-        // points and the marker appears stuck when they move.
-        float minTangentPull = endMarkerSz * 0.3f;
-        float pullbackArc = totalArc - fmaxf(endPullback, minTangentPull);
-        if (pullbackArc < 0.0f)
-          pullbackArc = 0.0f;
-        PathSample pullbackSample =
-            KKSampleAtArc(samples, sampleCount, pullbackArc, &hint);
-        simd_float2 eNorm = pullbackSample.normal;
-        simd_float2 eTan = (simd_float2){eNorm.y, -eNorm.x};
-        simd_float2 endPos = samples[sampleCount - 1].position;
-        // Tessellate marker first so we can use its actual first vertex
-        // position in the bridge (avoids non-degenerate bridge triangles).
-        CanvasVertex markerTmp[256];
-        NSUInteger markerVerts = 0;
-        if (path.sketchEnabled && path.sketchRoughness > 0.0001f) {
-          markerVerts = KKTessellateSketchMarker(
-              endMarker, endPos, eTan, eNorm, endMarkerSz, ew,
-              path.sketchRoughness, path.sketchSeed, markerTmp);
-        } else {
-          markerVerts = KKTessellateMarker(endMarker, endPos, eTan, eNorm,
-                                           endMarkerSz, ew, markerTmp);
-        }
-        if (markerVerts > 0) {
-          vertexCount = KKEmitBridge(
-              vertices, vertexCount,
-              vertexCount > 0 ? vertices[vertexCount - 1].position : endPos,
-              markerTmp[0].position);
-          memcpy(vertices + vertexCount, markerTmp,
-                 markerVerts * sizeof(CanvasVertex));
-          vertexCount += markerVerts;
-        }
-      }
-
-      if (startMarker != 0) {
-        float minTangentPull = startMarkerSz * 0.3f;
-        float pullbackArc = fmaxf(startPullback, minTangentPull);
-        if (pullbackArc > totalArc)
-          pullbackArc = totalArc;
-        hint = 0;
-        PathSample pullbackSample =
-            KKSampleAtArc(samples, sampleCount, pullbackArc, &hint);
-        simd_float2 sNorm = pullbackSample.normal;
-        simd_float2 sTan =
-            (simd_float2){-sNorm.y, sNorm.x}; // outward = -path direction
-        simd_float2 startPos = samples[0].position;
-        CanvasVertex markerTmp[256];
-        NSUInteger markerVerts = 0;
-        if (path.sketchEnabled && path.sketchRoughness > 0.0001f) {
-          markerVerts = KKTessellateSketchMarker(
-              startMarker, startPos, sTan, sNorm, startMarkerSz, sw,
-              path.sketchRoughness, path.sketchSeed, markerTmp);
-        } else {
-          markerVerts = KKTessellateMarker(startMarker, startPos, sTan, sNorm,
-                                           startMarkerSz, sw, markerTmp);
-        }
-        if (markerVerts > 0) {
-          vertexCount = KKEmitBridge(
-              vertices, vertexCount,
-              vertexCount > 0 ? vertices[vertexCount - 1].position : startPos,
-              markerTmp[0].position);
-          memcpy(vertices + vertexCount, markerTmp,
-                 markerVerts * sizeof(CanvasVertex));
-          vertexCount += markerVerts;
-        }
-      }
-    }
-    free(samples);
-  }
-
+  // --- Draw the stroke ---
   if (vertexCount > 0 && vertices) {
     MTLRenderPassDescriptor *rpd =
         [MTLRenderPassDescriptor renderPassDescriptor];
@@ -424,6 +338,113 @@ static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
     [enc endEncoding];
   }
   free(vertices);
+
+  // --- Draw markers as separate draw calls ---
+  if (hasMarkers && path.count >= 2) {
+    PathSample *samples = NULL;
+    NSUInteger sampleCount =
+        KKSamplePathPolyline(path, outputWidth, outputHeight, &samples);
+
+    if (sampleCount >= 2) {
+      float totalArc = samples[sampleCount - 1].arcLength;
+      NSUInteger hint = 0;
+
+      if (endMarker != 0) {
+        float minTangentPull = endMarkerSz * 0.3f;
+        float pullbackArc = totalArc - fmaxf(endPullback, minTangentPull);
+        if (pullbackArc < 0.0f)
+          pullbackArc = 0.0f;
+        PathSample pullbackSample =
+            KKSampleAtArc(samples, sampleCount, pullbackArc, &hint);
+        simd_float2 eNorm = pullbackSample.normal;
+        simd_float2 eTan = (simd_float2){eNorm.y, -eNorm.x};
+        simd_float2 endPos = samples[sampleCount - 1].position;
+        CanvasVertex markerVerts[256];
+        MTLPrimitiveType markerPrim = MTLPrimitiveTypeTriangleStrip;
+        NSUInteger mc = 0;
+        if (path.sketchEnabled && path.sketchRoughness > 0.0001f) {
+          mc = KKTessellateSketchMarker(
+              endMarker, endPos, eTan, eNorm, endMarkerSz, ew,
+              path.sketchRoughness, path.sketchSeed, &markerPrim, markerVerts);
+        } else {
+          mc = KKTessellateMarker(endMarker, endPos, eTan, eNorm, endMarkerSz,
+                                  ew, &markerPrim, markerVerts);
+        }
+        if (mc > 0) {
+          MTLRenderPassDescriptor *rpd =
+              [MTLRenderPassDescriptor renderPassDescriptor];
+          rpd.colorAttachments[0].texture = outputTexture;
+          rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+          rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+          id<MTLRenderCommandEncoder> enc =
+              [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+          [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1,
+                                         1}];
+          [enc setRenderPipelineState:strokePS];
+          id<MTLBuffer> buf =
+              [device newBufferWithBytes:markerVerts
+                                  length:mc * sizeof(CanvasVertex)
+                                 options:MTLResourceStorageModeShared];
+          [enc setVertexBuffer:buf offset:0 atIndex:0];
+          [enc setVertexBytes:&viewportSize
+                       length:sizeof(viewportSize)
+                      atIndex:1];
+          [enc setFragmentBytes:&color length:sizeof(color) atIndex:0];
+          [enc drawPrimitives:markerPrim vertexStart:0 vertexCount:mc];
+          [enc endEncoding];
+        }
+      }
+
+      if (startMarker != 0) {
+        float minTangentPull = startMarkerSz * 0.3f;
+        float pullbackArc = fmaxf(startPullback, minTangentPull);
+        if (pullbackArc > totalArc)
+          pullbackArc = totalArc;
+        hint = 0;
+        PathSample pullbackSample =
+            KKSampleAtArc(samples, sampleCount, pullbackArc, &hint);
+        simd_float2 sNorm = pullbackSample.normal;
+        simd_float2 sTan =
+            (simd_float2){-sNorm.y, sNorm.x}; // outward = -path direction
+        simd_float2 startPos = samples[0].position;
+        CanvasVertex markerVerts[256];
+        MTLPrimitiveType markerPrim = MTLPrimitiveTypeTriangleStrip;
+        NSUInteger mc = 0;
+        if (path.sketchEnabled && path.sketchRoughness > 0.0001f) {
+          mc = KKTessellateSketchMarker(
+              startMarker, startPos, sTan, sNorm, startMarkerSz, sw,
+              path.sketchRoughness, path.sketchSeed, &markerPrim, markerVerts);
+        } else {
+          mc = KKTessellateMarker(startMarker, startPos, sTan, sNorm,
+                                  startMarkerSz, sw, &markerPrim, markerVerts);
+        }
+        if (mc > 0) {
+          MTLRenderPassDescriptor *rpd =
+              [MTLRenderPassDescriptor renderPassDescriptor];
+          rpd.colorAttachments[0].texture = outputTexture;
+          rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+          rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+          id<MTLRenderCommandEncoder> enc =
+              [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+          [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1,
+                                         1}];
+          [enc setRenderPipelineState:strokePS];
+          id<MTLBuffer> buf =
+              [device newBufferWithBytes:markerVerts
+                                  length:mc * sizeof(CanvasVertex)
+                                 options:MTLResourceStorageModeShared];
+          [enc setVertexBuffer:buf offset:0 atIndex:0];
+          [enc setVertexBytes:&viewportSize
+                       length:sizeof(viewportSize)
+                      atIndex:1];
+          [enc setFragmentBytes:&color length:sizeof(color) atIndex:0];
+          [enc drawPrimitives:markerPrim vertexStart:0 vertexCount:mc];
+          [enc endEncoding];
+        }
+      }
+    }
+    free(samples);
+  }
 }
 
 static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,

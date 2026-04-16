@@ -75,7 +75,7 @@ static NSUInteger tessellateSquare(simd_float2 endpoint, simd_float2 tangent,
 }
 
 /// Arrowhead marker (open chevron): two thick arms meeting at the tip.
-/// Emits two quads with a degenerate bridge between them (10 verts).
+/// Emits two quads as 12 triangle vertices (no strip, no internal bridge).
 static NSUInteger tessellateArrowhead(simd_float2 endpoint, simd_float2 tangent,
                                       simd_float2 normal, float size,
                                       float strokeWidth, CanvasVertex *v) {
@@ -95,21 +95,30 @@ static NSUInteger tessellateArrowhead(simd_float2 endpoint, simd_float2 tangent,
   simd_float2 rightDir = rightLen > 0.001f ? rightEdge / rightLen : tangent;
   simd_float2 rightPerp = (simd_float2){-rightDir.y, rightDir.x};
 
+  simd_float2 la = left + leftPerp * halfThick;
+  simd_float2 lb = left - leftPerp * halfThick;
+  simd_float2 lc = endpoint + leftPerp * halfThick;
+  simd_float2 ld = endpoint - leftPerp * halfThick;
+  simd_float2 ra = endpoint + rightPerp * halfThick;
+  simd_float2 rb = endpoint - rightPerp * halfThick;
+  simd_float2 rc = right + rightPerp * halfThick;
+  simd_float2 rd = right - rightPerp * halfThick;
+
   NSUInteger vc = 0;
-  // Left arm quad
-  v[vc++] = markerVert(left + leftPerp * halfThick);
-  v[vc++] = markerVert(left - leftPerp * halfThick);
-  v[vc++] = markerVert(endpoint + leftPerp * halfThick);
-  v[vc++] = markerVert(endpoint - leftPerp * halfThick);
-  // Degenerate bridge
-  v[vc] = v[vc - 1];
-  vc++;
-  v[vc++] = markerVert(endpoint + rightPerp * halfThick);
-  // Right arm quad
-  v[vc++] = markerVert(endpoint + rightPerp * halfThick);
-  v[vc++] = markerVert(endpoint - rightPerp * halfThick);
-  v[vc++] = markerVert(right + rightPerp * halfThick);
-  v[vc++] = markerVert(right - rightPerp * halfThick);
+  // Left arm: two triangles
+  v[vc++] = markerVert(la);
+  v[vc++] = markerVert(lb);
+  v[vc++] = markerVert(lc);
+  v[vc++] = markerVert(lb);
+  v[vc++] = markerVert(ld);
+  v[vc++] = markerVert(lc);
+  // Right arm: two triangles
+  v[vc++] = markerVert(ra);
+  v[vc++] = markerVert(rb);
+  v[vc++] = markerVert(rc);
+  v[vc++] = markerVert(rb);
+  v[vc++] = markerVert(rd);
+  v[vc++] = markerVert(rc);
   return vc;
 }
 
@@ -155,22 +164,28 @@ float KKMarkerPullback(uint8_t markerType, float markerSize) {
 NSUInteger KKTessellateMarker(uint8_t markerType, simd_float2 endpoint,
                               simd_float2 tangent, simd_float2 normal,
                               float markerSize, float strokeWidth,
+                              MTLPrimitiveType *primitiveType,
                               CanvasVertex *vertices) {
   if (markerType == 0)
     return 0;
 
   switch (markerType) {
   case 1: // Arrow
+    *primitiveType = MTLPrimitiveTypeTriangleStrip;
     return tessellateArrow(endpoint, tangent, normal, markerSize, vertices);
   case 2: // Circle
+    *primitiveType = MTLPrimitiveTypeTriangleStrip;
     return tessellateCircle(endpoint, tangent, markerSize * 0.5f, vertices);
   case 3: // Square
+    *primitiveType = MTLPrimitiveTypeTriangleStrip;
     return tessellateSquare(endpoint, tangent, normal, markerSize * 0.5f,
                             vertices);
   case 4: // Arrowhead
+    *primitiveType = MTLPrimitiveTypeTriangle;
     return tessellateArrowhead(endpoint, tangent, normal, markerSize,
                                strokeWidth, vertices);
   case 5: // Line
+    *primitiveType = MTLPrimitiveTypeTriangleStrip;
     return tessellateLine(endpoint, tangent, normal, markerSize, strokeWidth,
                           vertices);
   default:
@@ -298,26 +313,30 @@ static NSUInteger tessellateSketchArrowhead(simd_float2 endpoint,
   simd_float2 rightPerp = (simd_float2){-rightDir.y, rightDir.x};
 
   float amp = size * 0.035f;
+  simd_float2 la = jitterPt(left + leftPerp * halfThick, amp, roughness);
+  simd_float2 lb = jitterPt(left - leftPerp * halfThick, amp, roughness);
+  simd_float2 lc = jitterPt(endpoint + leftPerp * halfThick, amp, roughness);
+  simd_float2 ld = jitterPt(endpoint - leftPerp * halfThick, amp, roughness);
+  simd_float2 ra = jitterPt(endpoint + rightPerp * halfThick, amp, roughness);
+  simd_float2 rb = jitterPt(endpoint - rightPerp * halfThick, amp, roughness);
+  simd_float2 rc = jitterPt(right + rightPerp * halfThick, amp, roughness);
+  simd_float2 rd = jitterPt(right - rightPerp * halfThick, amp, roughness);
+
   NSUInteger vc = 0;
-  // Left arm quad with jittered corners
-  v[vc++] = markerVert(jitterPt(left + leftPerp * halfThick, amp, roughness));
-  v[vc++] = markerVert(jitterPt(left - leftPerp * halfThick, amp, roughness));
-  v[vc++] =
-      markerVert(jitterPt(endpoint + leftPerp * halfThick, amp, roughness));
-  v[vc++] =
-      markerVert(jitterPt(endpoint - leftPerp * halfThick, amp, roughness));
-  // Degenerate bridge
-  v[vc] = v[vc - 1];
-  vc++;
-  v[vc++] =
-      markerVert(jitterPt(endpoint + rightPerp * halfThick, amp, roughness));
-  // Right arm quad with jittered corners
-  v[vc++] =
-      markerVert(jitterPt(endpoint + rightPerp * halfThick, amp, roughness));
-  v[vc++] =
-      markerVert(jitterPt(endpoint - rightPerp * halfThick, amp, roughness));
-  v[vc++] = markerVert(jitterPt(right + rightPerp * halfThick, amp, roughness));
-  v[vc++] = markerVert(jitterPt(right - rightPerp * halfThick, amp, roughness));
+  // Left arm: two triangles
+  v[vc++] = markerVert(la);
+  v[vc++] = markerVert(lb);
+  v[vc++] = markerVert(lc);
+  v[vc++] = markerVert(lb);
+  v[vc++] = markerVert(ld);
+  v[vc++] = markerVert(lc);
+  // Right arm: two triangles
+  v[vc++] = markerVert(ra);
+  v[vc++] = markerVert(rb);
+  v[vc++] = markerVert(rc);
+  v[vc++] = markerVert(rb);
+  v[vc++] = markerVert(rd);
+  v[vc++] = markerVert(rc);
   return vc;
 }
 
@@ -342,24 +361,30 @@ NSUInteger KKTessellateSketchMarker(uint8_t markerType, simd_float2 endpoint,
                                     simd_float2 tangent, simd_float2 normal,
                                     float markerSize, float strokeWidth,
                                     float roughness, uint32_t seed,
+                                    MTLPrimitiveType *primitiveType,
                                     CanvasVertex *vertices) {
   if (markerType == 0)
     return 0;
   markerSeedRNG(seed ^ 0xA770A770);
   switch (markerType) {
   case 1:
+    *primitiveType = MTLPrimitiveTypeTriangleStrip;
     return tessellateSketchArrow(endpoint, tangent, normal, markerSize,
                                  roughness, vertices);
   case 2:
+    *primitiveType = MTLPrimitiveTypeTriangleStrip;
     return tessellateSketchCircle(endpoint, tangent, markerSize * 0.5f,
                                   roughness, vertices);
   case 3:
+    *primitiveType = MTLPrimitiveTypeTriangleStrip;
     return tessellateSketchSquare(endpoint, tangent, normal, markerSize * 0.5f,
                                   roughness, vertices);
   case 4:
+    *primitiveType = MTLPrimitiveTypeTriangle;
     return tessellateSketchArrowhead(endpoint, tangent, normal, markerSize,
                                      strokeWidth, roughness, vertices);
   case 5:
+    *primitiveType = MTLPrimitiveTypeTriangleStrip;
     return tessellateSketchLine(endpoint, tangent, normal, markerSize,
                                 strokeWidth, roughness, vertices);
   default:

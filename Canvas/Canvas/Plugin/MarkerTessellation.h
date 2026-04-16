@@ -7,6 +7,7 @@
 
 #import "ShaderTypes.h"
 #import <Foundation/Foundation.h>
+#import <Metal/MTLRenderCommandEncoder.h>
 #import <simd/simd.h>
 
 /// Maximum extra vertices a single marker can emit.
@@ -22,10 +23,12 @@ float KKMarkerPullback(uint8_t markerType, float markerSize);
 /// tangent: unit tangent pointing outward from the path at the endpoint.
 /// normal: unit normal perpendicular to the tangent.
 /// markerSize: size of the marker (typically strokeWidth * 3).
+/// primitiveType: set to the Metal primitive type to use for drawing.
 /// Returns the number of vertices written.
 NSUInteger KKTessellateMarker(uint8_t markerType, simd_float2 endpoint,
                               simd_float2 tangent, simd_float2 normal,
                               float markerSize, float strokeWidth,
+                              MTLPrimitiveType *primitiveType,
                               CanvasVertex *vertices);
 
 /// Sketch-style marker with jittered edges. Same fan tessellation as the
@@ -34,4 +37,5 @@ NSUInteger KKTessellateSketchMarker(uint8_t markerType, simd_float2 endpoint,
                                     simd_float2 tangent, simd_float2 normal,
                                     float markerSize, float strokeWidth,
                                     float roughness, uint32_t seed,
+                                    MTLPrimitiveType *primitiveType,
                                     CanvasVertex *vertices);
