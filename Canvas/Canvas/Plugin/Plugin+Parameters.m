@@ -185,7 +185,7 @@
                          parameterID:kParamStartMarkerSize
                         defaultValue:3.0
                         parameterMin:0.5
-                        parameterMax:5.0
+                        parameterMax:FLT_MAX
                            sliderMin:0.5
                            sliderMax:5.0
                                delta:0.1
@@ -195,7 +195,7 @@
                          parameterID:kParamEndMarkerSize
                         defaultValue:3.0
                         parameterMin:0.5
-                        parameterMax:5.0
+                        parameterMax:FLT_MAX
                            sliderMin:0.5
                            sliderMax:5.0
                                delta:0.1
