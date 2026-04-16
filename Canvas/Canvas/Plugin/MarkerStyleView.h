@@ -13,8 +13,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// Each pill renders a mini preview of the marker shape.
 @interface KKMarkerStyleView : NSView
 
-@property(nonatomic)
-    NSInteger selectedIndex;       // 0=none, 1=arrow, 2=circle, 3=square
+@property(nonatomic) NSInteger selectedIndex; // 0=none, 1=arrow, 2=circle,
+                                              // 3=square, 4=arrowhead, 5=line
 @property(nonatomic) BOOL isStart; // YES = start marker (arrow points left)
 @property(nonatomic, copy, nullable) void (^onSelectionChanged)(NSInteger index)
     ;
