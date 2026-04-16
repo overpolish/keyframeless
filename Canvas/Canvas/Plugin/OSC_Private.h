@@ -75,7 +75,7 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx);
              isIn:(BOOL)isIn
     breakSymmetry:(BOOL)breakSymmetry
            onPath:(KKBezierPath *)path;
-- (void)mouseDownOnSegment:(NSInteger)activePart
+- (void)penInsertOnSegment:(NSInteger)activePart
                  positionX:(double)positionX
                  positionY:(double)positionY
                     active:(KKBezierPath *)active

@@ -31,12 +31,12 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     // New format: 4 bytes count + 1 byte flags + points
     size_t newExpected = 5 + count * pointSize;
     // Old format: 4 bytes count + points (no flags)
-    size_t oldExpected = 4 + count * pointSize;
 
     BOOL maybeGroup = (data.length >= 5 && (bytes[4] & 128) != 0);
     if (data.length >= newExpected && (count > 0 || maybeGroup)) {
       uint8_t flags = bytes[4];
       path->_closed = (flags & 1) != 0;
+      path->_isLine = (flags & 2) != 0;
       path->_isRect = (flags & 8) != 0;
       path->_hidden = (flags & 16) != 0;
       path->_locked = (flags & 32) != 0;
@@ -53,9 +53,6 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
                                      encoding:NSUTF8StringEncoding];
           headerSize += gidLen;
         }
-      } else if (path->_isGroup && data.length >= 9) {
-        // Backwards compat: old format had uint32 childCount
-        headerSize = 9;
       }
       path->_count = count;
       path->_capacity = count;
@@ -66,7 +63,6 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
       // Extended: corner radii after points
       size_t extOffset = headerSize + count * pointSize;
       if ((flags & 4) && data.length >= extOffset + 4 * sizeof(float)) {
-        // New: 4 per-corner radii
         float cr[4];
         memcpy(cr, bytes + extOffset, 4 * sizeof(float));
         path->_cornerRadiusTL = cr[0];
@@ -74,15 +70,6 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
         path->_cornerRadiusBR = cr[2];
         path->_cornerRadiusBL = cr[3];
         extOffset += 4 * sizeof(float);
-      } else if ((flags & 2) && data.length >= extOffset + sizeof(float)) {
-        // Backwards compat: single radius applied to all corners
-        float r;
-        memcpy(&r, bytes + extOffset, sizeof(float));
-        path->_cornerRadiusTL = r;
-        path->_cornerRadiusTR = r;
-        path->_cornerRadiusBR = r;
-        path->_cornerRadiusBL = r;
-        extOffset += sizeof(float);
       }
       if ((flags & 64) && data.length >= extOffset + 2) {
         uint16_t nameLen;
@@ -184,11 +171,6 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
           }
         }
       }
-    } else if (data.length >= oldExpected && count > 0) {
-      path->_count = count;
-      path->_capacity = count;
-      path->_points = malloc(count * pointSize);
-      memcpy(path->_points, bytes + 4, count * pointSize);
     }
   }
   return path;
@@ -197,6 +179,8 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
 - (NSData *)dataRepresentation {
   uint32_t count = (uint32_t)_count;
   uint8_t flags = _closed ? 1 : 0;
+  if (_isLine)
+    flags |= 2;
   if (_isRect)
     flags |= 8;
   if (_hidden)

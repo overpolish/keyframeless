@@ -43,7 +43,10 @@
     return;
   }
 
+  BOOL shiftDown = (modifiers & kFxModifierKey_SHIFT) != 0;
   BOOL optDown = (modifiers & kFxModifierKey_OPTION) != 0;
+  if (!shiftDown && !optDown)
+    [self.selectedPoints removeAllIndexes];
   for (NSUInteger p = 0; p < self.paths.count; p++) {
     KKBezierPath *path = self.paths[p];
     if (path.hidden || path.locked)
@@ -144,8 +147,9 @@
   [line insertAtIndex:0 position:a];
   [line insertAtIndex:1 position:b];
   line.closed = NO;
+  line.isLine = YES;
   [self.paths insertObject:line atIndex:0];
-  self.activePathIndex = -1;
+  self.activePathIndex = 0;
   [self.selectedPathIndices removeAllIndexes];
   [self.selectedPathIndices addIndex:0];
   [self writePaths:self.paths];
@@ -235,6 +239,7 @@
     [active removeAtIndex:active.count - 1];
     if (active.count < 2) {
       [self.paths removeObjectAtIndex:self.activePathIndex];
+      [self.selectedPathIndices removeAllIndexes];
       self.activePathIndex = -1;
     }
     [self writePaths:self.paths];

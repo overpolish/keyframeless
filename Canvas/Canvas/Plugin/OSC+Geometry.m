@@ -37,7 +37,7 @@
       }
     }
 
-    if (path.fillEnabled && oc >= 3) {
+    if (path.fillEnabled && oc >= 2) {
       NSUInteger crossings = 0;
       for (NSUInteger i = 0; i < oc; i++) {
         NSUInteger j = (i + 1) % oc;

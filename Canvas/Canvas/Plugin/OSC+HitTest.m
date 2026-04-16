@@ -104,6 +104,7 @@
   BOOL shiftDown = (flags & kCGEventFlagMaskShift) != 0;
   BOOL cmdDown = (flags & kCGEventFlagMaskCommand) != 0;
 
+  // Check handles and points on the active path first.
   if (active) {
     for (NSUInteger i = 0; i < active.count; i++) {
       KKBezierPoint pt = [active pointAtIndex:i];
@@ -129,8 +130,8 @@
       KKBezierPoint pt = [active pointAtIndex:i];
       CGPoint ptCanvas = [self canvasPointForBezierPoint:pt];
       if (hypot(x - ptCanvas.x, y - ptCanvas.y) < hitRadius) {
-        if (i == 0 && !active.closed && active.count >= 2 && !cmdDown &&
-            ![self isPointSelected:(NSUInteger)self.activePathIndex point:0]) {
+        if (i == 0 && !active.closed && !active.isLine && active.count >= 2 &&
+            !cmdDown) {
           *activePart = kOSCClosePath;
           [oscAPI setCursor:self.penCloseCursor];
           return;
@@ -140,8 +141,15 @@
         return;
       }
     }
-  } else if (self.selectedPoints.count > 0) {
+  }
+
+  // Check selected points on any path (including non-active). This allows
+  // clicking marquee-selected points across multiple paths without needing
+  // CMD to switch the active path first.
+  if (self.selectedPoints.count > 0) {
     for (NSUInteger p = 0; p < self.paths.count; p++) {
+      if ((NSInteger)p == self.activePathIndex)
+        continue;
       KKBezierPath *path = self.paths[p];
       for (NSUInteger i = 0; i < path.count; i++) {
         if (![self isPointSelected:p point:i])
