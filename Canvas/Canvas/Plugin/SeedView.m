@@ -6,8 +6,6 @@
 #import "SeedView.h"
 #import <KeyframelessKit/KeyframelessKit.h>
 
-static const CGFloat kTrailingSpacer = 75.0;
-
 @interface KKSeedTextField : NSTextField
 @end
 
@@ -90,11 +88,6 @@ static const CGFloat kTrailingSpacer = 75.0;
   [_button.widthAnchor constraintEqualToConstant:22.0].active = YES;
   [_button.heightAnchor constraintEqualToConstant:22.0].active = YES;
   [stack addArrangedSubview:_button];
-
-  NSView *spacer = [[NSView alloc] init];
-  spacer.translatesAutoresizingMaskIntoConstraints = NO;
-  [spacer.widthAnchor constraintEqualToConstant:kTrailingSpacer].active = YES;
-  [stack addArrangedSubview:spacer];
 
   [self addSubview:stack];
   [stack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor].active =

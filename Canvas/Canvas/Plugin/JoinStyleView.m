@@ -11,7 +11,6 @@ static const CGFloat kPillCorner = 3.0;
 static const NSInteger kJoinCount = 3;
 static const CGFloat kKappa = 0.5522847498f;
 static const CGFloat kPillSize = 22.0;
-static const CGFloat kTrailingSpacer = 75.0;
 
 @implementation KKJoinStyleView {
   NSArray<NSButton *> *_buttons;
@@ -138,12 +137,6 @@ static void drawJoinPath(CGFloat ox, CGFloat oy, CGFloat k, NSInteger join) {
     [stack addArrangedSubview:btn];
     [btns addObject:btn];
   }
-
-  // Trailing spacer.
-  NSView *spacer = [[NSView alloc] init];
-  spacer.translatesAutoresizingMaskIntoConstraints = NO;
-  [spacer.widthAnchor constraintEqualToConstant:kTrailingSpacer].active = YES;
-  [stack addArrangedSubview:spacer];
 
   [self addSubview:stack];
   [stack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor].active =
