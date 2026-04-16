@@ -48,6 +48,22 @@
                         parameterFlags:kFxParameterFlag_HIDDEN |
                                        kFxParameterFlag_NOT_ANIMATABLE];
 
+  [paramAPI addFloatSliderWithName:@"Opacity"
+                       parameterID:kParamOpacity
+                      defaultValue:100.0
+                      parameterMin:0.0
+                      parameterMax:100.0
+                         sliderMin:0.0
+                         sliderMax:100.0
+                             delta:1.0
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addToggleButtonWithName:@"Closed Path"
+                        parameterID:kParamClosedPath
+                       defaultValue:YES
+                     parameterFlags:kFxParameterFlag_HIDDEN |
+                                    kFxParameterFlag_NOT_ANIMATABLE];
+
   [paramAPI addCustomParameterWithName:@""
                            parameterID:kParamGroupStroke
                           defaultValue:@(kParamGroupStroke)
@@ -196,22 +212,6 @@
                          sliderMax:20.0
                              delta:0.5
                     parameterFlags:kFxParameterFlag_HIDDEN];
-
-  [paramAPI addFloatSliderWithName:@"Opacity"
-                       parameterID:kParamOpacity
-                      defaultValue:100.0
-                      parameterMin:0.0
-                      parameterMax:100.0
-                         sliderMin:0.0
-                         sliderMax:100.0
-                             delta:1.0
-                    parameterFlags:kFxParameterFlag_HIDDEN];
-
-  [paramAPI addToggleButtonWithName:@"Closed Path"
-                        parameterID:kParamClosedPath
-                       defaultValue:YES
-                     parameterFlags:kFxParameterFlag_HIDDEN |
-                                    kFxParameterFlag_NOT_ANIMATABLE];
 
   [paramAPI addCustomParameterWithName:@""
                            parameterID:kParamGroupSketch
