@@ -81,3 +81,11 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float strokeWidth,
 NSUInteger KKTessellateDottedPath(KKBezierPath *path, float strokeWidth,
                                   float outputWidth, float outputHeight,
                                   float dotGap, CanvasVertex *vertices);
+
+/// Tessellate a solid stroke with arc-length trimming at start/end.
+/// Used when markers are present to pull the stroke back from the endpoints.
+NSUInteger KKTessellateTrimmedPath(KKBezierPath *path, float strokeWidth,
+                                   float outputWidth, float outputHeight,
+                                   uint8_t lineCap, uint8_t lineJoin,
+                                   float startTrim, float endTrim,
+                                   CanvasVertex *vertices);

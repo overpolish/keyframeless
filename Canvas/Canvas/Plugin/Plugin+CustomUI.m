@@ -7,6 +7,7 @@
 #import "FillStyleView.h"
 #import "JoinStyleView.h"
 #import "LayerList_Private.h"
+#import "MarkerStyleView.h"
 #import "ObjectParams.h"
 #import "SeedView.h"
 #import "StrokeStyleView.h"
@@ -275,6 +276,9 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
           if ((NSUInteger)selIdx < paths.count) {
             KKBezierPath *p = paths[selIdx];
             KKSetLineCapVisible(setAPI, !p.closed);
+            KKSetMarkersVisible(setAPI, !p.closed);
+            if (!p.closed)
+              KKSetMarkerSizeVisible(setAPI, p.startMarker, p.endMarker);
             KKSetLineJoinVisible(setAPI, p.count > 2);
             KKSetStrokeStyleVisible(setAPI, YES);
             KKSetDashDotParamsForStyle(setAPI, p.strokeStyle);
@@ -317,6 +321,9 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
           if ((NSUInteger)selIdx < paths.count) {
             KKBezierPath *p = paths[selIdx];
             KKSetLineCapVisible(setAPI, !p.closed);
+            KKSetMarkersVisible(setAPI, !p.closed);
+            if (!p.closed)
+              KKSetMarkerSizeVisible(setAPI, p.startMarker, p.endMarker);
             KKSetLineJoinVisible(setAPI, p.count > 2);
             KKSetStrokeStyleVisible(setAPI, YES);
             KKSetDashDotParamsForStyle(setAPI, p.strokeStyle);
@@ -594,6 +601,62 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
       KKLayerStateForUUID(uuid).strokeStyleView = styleView;
 
     return styleView;
+  }
+
+  if (parameterID == kParamStartMarker) {
+    KKMarkerStyleView *markerView = [[KKMarkerStyleView alloc]
+        initWithFrame:NSMakeRect(0, 0, 200, KKInspectorRowHeight)];
+    markerView.autoresizingMask = NSViewWidthSizable;
+    markerView.isStart = YES;
+
+    __weak id weakAPI = self.apiManager;
+    markerView.onSelectionChanged = ^(NSInteger index) {
+      id api = weakAPI;
+      if (!api)
+        return;
+      KKModifySelectedPathProperty(api, ^(KKBezierPath *p) {
+        p.startMarker = (uint8_t)index;
+        id<FxParameterSettingAPI_v5> setAPI =
+            [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+        [setAPI setParameterFlags:(index != 0) ? kFxParameterFlag_DEFAULT
+                                               : kFxParameterFlag_HIDDEN
+                      toParameter:kParamStartMarkerSize];
+      });
+    };
+
+    NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+    if (uuid)
+      KKLayerStateForUUID(uuid).startMarkerView = markerView;
+
+    return markerView;
+  }
+
+  if (parameterID == kParamEndMarker) {
+    KKMarkerStyleView *markerView = [[KKMarkerStyleView alloc]
+        initWithFrame:NSMakeRect(0, 0, 200, KKInspectorRowHeight)];
+    markerView.autoresizingMask = NSViewWidthSizable;
+    markerView.isStart = NO;
+
+    __weak id weakAPI = self.apiManager;
+    markerView.onSelectionChanged = ^(NSInteger index) {
+      id api = weakAPI;
+      if (!api)
+        return;
+      KKModifySelectedPathProperty(api, ^(KKBezierPath *p) {
+        p.endMarker = (uint8_t)index;
+        id<FxParameterSettingAPI_v5> setAPI =
+            [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+        [setAPI setParameterFlags:(index != 0) ? kFxParameterFlag_DEFAULT
+                                               : kFxParameterFlag_HIDDEN
+                      toParameter:kParamEndMarkerSize];
+      });
+    };
+
+    NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+    if (uuid)
+      KKLayerStateForUUID(uuid).endMarkerView = markerView;
+
+    return markerView;
   }
 
   if (parameterID == kParamSketchFillStyle) {

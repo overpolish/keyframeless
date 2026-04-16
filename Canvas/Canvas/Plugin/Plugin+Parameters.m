@@ -151,6 +151,40 @@
                              delta:1.0
                     parameterFlags:kFxParameterFlag_HIDDEN];
 
+  [paramAPI addCustomParameterWithName:@"Start Marker"
+                           parameterID:kParamStartMarker
+                          defaultValue:@(0)
+                        parameterFlags:kFxParameterFlag_CUSTOM_UI |
+                                       kFxParameterFlag_HIDDEN |
+                                       kFxParameterFlag_NOT_ANIMATABLE];
+
+  [paramAPI addCustomParameterWithName:@"End Marker"
+                           parameterID:kParamEndMarker
+                          defaultValue:@(0)
+                        parameterFlags:kFxParameterFlag_CUSTOM_UI |
+                                       kFxParameterFlag_HIDDEN |
+                                       kFxParameterFlag_NOT_ANIMATABLE];
+
+  [paramAPI addPercentSliderWithName:@"Start Size"
+                         parameterID:kParamStartMarkerSize
+                        defaultValue:3.0
+                        parameterMin:0.5
+                        parameterMax:5.0
+                           sliderMin:0.5
+                           sliderMax:5.0
+                               delta:0.1
+                      parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addPercentSliderWithName:@"End Size"
+                         parameterID:kParamEndMarkerSize
+                        defaultValue:3.0
+                        parameterMin:0.5
+                        parameterMax:5.0
+                           sliderMin:0.5
+                           sliderMax:5.0
+                               delta:0.1
+                      parameterFlags:kFxParameterFlag_HIDDEN];
+
   [paramAPI addCustomParameterWithName:@""
                            parameterID:kParamGroupFill
                           defaultValue:@(kParamGroupFill)

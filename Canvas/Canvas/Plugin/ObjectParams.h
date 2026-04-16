@@ -65,6 +65,14 @@ KKSetStrokeChildrenVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                        toParameter:kParamDashGap];
     [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                        toParameter:kParamDotGap];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamStartMarker];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamEndMarker];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamStartMarkerSize];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamEndMarkerSize];
   }
 }
 
@@ -167,6 +175,14 @@ KKHideObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamDotGap];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamStartMarker];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamEndMarker];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamStartMarkerSize];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamEndMarkerSize];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamClosedPath];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamSketchRoughness];
@@ -194,6 +210,36 @@ KKSetLineCapVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
       visible ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE)
               : kFxParameterFlag_HIDDEN;
   [paramSetAPI setParameterFlags:flags toParameter:kParamLineCap];
+}
+
+/// Show/hide the start/end marker param rows (only for open paths).
+/// Also shows/hides the size sliders based on whether the marker is active.
+static inline void
+KKSetMarkersVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
+                    BOOL visible) {
+  FxParameterFlags flags =
+      visible ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE)
+              : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:flags toParameter:kParamStartMarker];
+  [paramSetAPI setParameterFlags:flags toParameter:kParamEndMarker];
+  if (!visible) {
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamStartMarkerSize];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamEndMarkerSize];
+  }
+}
+
+/// Show/hide marker size sliders based on the marker type.
+static inline void
+KKSetMarkerSizeVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
+                       uint8_t startMarker, uint8_t endMarker) {
+  [paramSetAPI setParameterFlags:(startMarker != 0) ? kFxParameterFlag_DEFAULT
+                                                    : kFxParameterFlag_HIDDEN
+                     toParameter:kParamStartMarkerSize];
+  [paramSetAPI setParameterFlags:(endMarker != 0) ? kFxParameterFlag_DEFAULT
+                                                  : kFxParameterFlag_HIDDEN
+                     toParameter:kParamEndMarkerSize];
 }
 
 /// Show/hide the Line Join param row based on whether the path has >2 points.
@@ -371,6 +417,18 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                      atTime:kCMTimeZero];
   path.closed = closedPath;
 
+  double sms = 3.0;
+  [paramGetAPI getFloatValue:&sms
+               fromParameter:kParamStartMarkerSize
+                      atTime:kCMTimeZero];
+  path.startMarkerSize = (float)sms;
+
+  double ems = 3.0;
+  [paramGetAPI getFloatValue:&ems
+               fromParameter:kParamEndMarkerSize
+                      atTime:kCMTimeZero];
+  path.endMarkerSize = (float)ems;
+
   BOOL sketchOn = NO;
   [paramGetAPI getBoolValue:&sketchOn
               fromParameter:kParamSketchEnabled
@@ -502,5 +560,11 @@ KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                       atTime:kCMTimeZero];
   [paramSetAPI setFloatValue:path.sketchFillWeight
                  toParameter:kParamSketchFillWeight
+                      atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.startMarkerSize
+                 toParameter:kParamStartMarkerSize
+                      atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.endMarkerSize
+                 toParameter:kParamEndMarkerSize
                       atTime:kCMTimeZero];
 }

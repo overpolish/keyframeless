@@ -211,3 +211,109 @@ NSUInteger KKTessellatePath(KKBezierPath *path, float strokeWidth,
 
   return vertexCount;
 }
+
+NSUInteger KKTessellateTrimmedPath(KKBezierPath *path, float strokeWidth,
+                                   float outputWidth, float outputHeight,
+                                   uint8_t lineCap, uint8_t lineJoin,
+                                   float startTrim, float endTrim,
+                                   CanvasVertex *vertices) {
+  if (startTrim <= 0.0f && endTrim <= 0.0f) {
+    return KKTessellatePath(path, strokeWidth, outputWidth, outputHeight,
+                            lineCap, lineJoin, vertices);
+  }
+
+  float aaPadding = 1.0f;
+  float halfWidth = (strokeWidth / 2.0f) + aaPadding;
+
+  PathSample *samples = NULL;
+  NSUInteger count =
+      KKSamplePathPolyline(path, outputWidth, outputHeight, &samples);
+  if (count < 2) {
+    free(samples);
+    return 0;
+  }
+
+  float totalArc = samples[count - 1].arcLength;
+  float arcStart = startTrim;
+  float arcEnd = totalArc - endTrim;
+  if (arcStart >= arcEnd) {
+    free(samples);
+    return 0;
+  }
+
+  NSUInteger vc = 0;
+  NSUInteger hint = 0;
+
+  // Find the first and last sample indices within the trimmed range.
+  NSUInteger firstIdx = 0;
+  while (firstIdx < count && samples[firstIdx].arcLength < arcStart)
+    firstIdx++;
+  NSUInteger lastIdx = count - 1;
+  while (lastIdx > 0 && samples[lastIdx].arcLength > arcEnd)
+    lastIdx--;
+
+  // Emit the interpolated start point.
+  PathSample trimStart = KKSampleAtArc(samples, count, arcStart, &hint);
+  vertices[vc].position = trimStart.position + trimStart.normal * halfWidth;
+  vertices[vc].edgeDistance = 1.0f;
+  vertices[vc].capDistance = 0.0f;
+  vc++;
+  vertices[vc].position = trimStart.position - trimStart.normal * halfWidth;
+  vertices[vc].edgeDistance = -1.0f;
+  vertices[vc].capDistance = 0.0f;
+  vc++;
+
+  // Emit interior samples.
+  for (NSUInteger i = firstIdx; i <= lastIdx; i++) {
+    simd_float2 n = samples[i].normal;
+    if (lineJoin == 0 && i > 0 && i < count - 1) {
+      simd_float2 n2 = samples[i + 1].normal;
+      simd_float2 miter = KKMiterNormal(samples[i].normal, n2);
+      float miterLen = simd_length(miter);
+      if (miterLen > 0.0f && miterLen < kMiterLimit)
+        n = miter;
+    }
+    vertices[vc].position = samples[i].position + n * halfWidth;
+    vertices[vc].edgeDistance = 1.0f;
+    vertices[vc].capDistance = 0.0f;
+    vc++;
+    vertices[vc].position = samples[i].position - n * halfWidth;
+    vertices[vc].edgeDistance = -1.0f;
+    vertices[vc].capDistance = 0.0f;
+    vc++;
+  }
+
+  // Emit the interpolated end point.
+  PathSample trimEnd = KKSampleAtArc(samples, count, arcEnd, &hint);
+  vertices[vc].position = trimEnd.position + trimEnd.normal * halfWidth;
+  vertices[vc].edgeDistance = 1.0f;
+  vertices[vc].capDistance = 0.0f;
+  vc++;
+  vertices[vc].position = trimEnd.position - trimEnd.normal * halfWidth;
+  vertices[vc].edgeDistance = -1.0f;
+  vertices[vc].capDistance = 0.0f;
+  vc++;
+
+  // Add caps at trimmed endpoints if the original path is open and has caps,
+  // but only at ends that don't have markers (trim == 0 means no marker).
+  BOOL isOpen = !path.closed;
+  if (isOpen && lineCap != 0) {
+    if (startTrim <= 0.0f) {
+      simd_float2 sTan = (simd_float2){trimStart.normal.y, -trimStart.normal.x};
+      if (lineCap == 1) {
+        vc = KKAddRoundCap(vertices, vc, trimStart.position, -sTan,
+                           trimStart.normal, halfWidth, YES);
+      }
+    }
+    if (endTrim <= 0.0f) {
+      simd_float2 eTan = (simd_float2){trimEnd.normal.y, -trimEnd.normal.x};
+      if (lineCap == 1) {
+        vc = KKAddRoundCap(vertices, vc, trimEnd.position, eTan, trimEnd.normal,
+                           halfWidth, NO);
+      }
+    }
+  }
+
+  free(samples);
+  return vc;
+}
