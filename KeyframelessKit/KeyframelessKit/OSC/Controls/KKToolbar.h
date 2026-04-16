@@ -14,8 +14,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface KKToolbarItem : NSObject
 @property(nonatomic, copy) NSString *iconName;
+@property(nonatomic, copy, nullable) NSString *shortcutLabel;
 @property(nonatomic, assign) NSInteger tag;
-+ (instancetype)itemWithIcon:(NSString *)sfSymbolName tag:(NSInteger)tag;
++ (instancetype)itemWithIcon:(NSString *)sfSymbolName
+                         tag:(NSInteger)tag
+               shortcutLabel:(nullable NSString *)shortcutLabel;
 @end
 
 @interface KKToolbar : NSObject

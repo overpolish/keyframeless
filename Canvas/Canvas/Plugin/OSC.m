@@ -53,15 +53,20 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
         initWithAPIManager:apiManager
                      items:@[
                        [KKToolbarItem itemWithIcon:@"cursorarrow"
-                                               tag:kOSCToolbarCursor],
+                                               tag:kOSCToolbarCursor
+                                     shortcutLabel:@"^V"],
                        [KKToolbarItem itemWithIcon:@"pencil.and.outline"
-                                               tag:kOSCToolbarPen],
+                                               tag:kOSCToolbarPen
+                                     shortcutLabel:@"^X"],
                        [KKToolbarItem itemWithIcon:@"rectangle.fill"
-                                               tag:kOSCToolbarRect],
+                                               tag:kOSCToolbarRect
+                                     shortcutLabel:@"^B"],
                        [KKToolbarItem itemWithIcon:@"circle.fill"
-                                               tag:kOSCToolbarEllipse],
+                                               tag:kOSCToolbarEllipse
+                                     shortcutLabel:@"^G"],
                        [KKToolbarItem itemWithIcon:@"line.diagonal"
-                                               tag:kOSCToolbarLine],
+                                               tag:kOSCToolbarLine
+                                     shortcutLabel:@"^M"],
                      ]];
     self.toolbar.activeTag = kOSCToolbarCursor;
 
