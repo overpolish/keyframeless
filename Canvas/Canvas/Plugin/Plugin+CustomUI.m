@@ -275,6 +275,7 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
           NSArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
           if ((NSUInteger)selIdx < paths.count) {
             KKBezierPath *p = paths[selIdx];
+            KKSetEndWidthVisible(setAPI, !p.closed);
             KKSetLineCapVisible(setAPI, !p.closed);
             KKSetMarkersVisible(setAPI, !p.closed);
             if (!p.closed)
@@ -320,6 +321,7 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
           NSArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
           if ((NSUInteger)selIdx < paths.count) {
             KKBezierPath *p = paths[selIdx];
+            KKSetEndWidthVisible(setAPI, !p.closed);
             KKSetLineCapVisible(setAPI, !p.closed);
             KKSetMarkersVisible(setAPI, !p.closed);
             if (!p.closed)

@@ -5,16 +5,19 @@
 
 #import "Tessellation.h"
 
-NSUInteger KKTessellateDashedPath(KKBezierPath *path, float strokeWidth,
-                                  float outputWidth, float outputHeight,
-                                  float dashLength, float dashGap,
-                                  uint8_t lineJoin, CanvasVertex *vertices) {
+NSUInteger KKTessellateDashedPath(KKBezierPath *path, float startWidth,
+                                  float endWidth, float outputWidth,
+                                  float outputHeight, float dashLength,
+                                  float dashGap, uint8_t lineJoin,
+                                  CanvasVertex *vertices) {
   float aaPadding = 1.0f;
-  float halfWidth = (strokeWidth / 2.0f) + aaPadding;
   NSUInteger segsPerCurve = 128;
   NSUInteger curveCount = path.count - 1;
   if (path.closed && path.count >= 2)
     curveCount = path.count;
+
+  BOOL isOpen = !path.closed;
+  BOOL tapers = isOpen && fabsf(startWidth - endWidth) > 0.001f;
 
   float cycle = dashLength + dashGap;
   if (cycle < 1.0f)
@@ -41,11 +44,14 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float strokeWidth,
     }
   }
 
+  float totalArc = (totalSamples > 0) ? arcLengths[totalSamples - 1] : 0.0f;
+
   NSUInteger vc = 0;
   NSUInteger sampleIdx = 0;
   BOOL wasInDash = NO;
   simd_float2 lastEmittedCenter = {0, 0};
   simd_float2 lastEmittedNormal = {0, 0};
+  float lastEmittedHW = startWidth / 2.0f + aaPadding;
 
   for (NSUInteger c = 0; c < curveCount; c++) {
     simd_float2 segEndCenter = {0, 0}, segEndNormal = {0, 0};
@@ -69,6 +75,12 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float strokeWidth,
       float arc = arcLengths[sampleIdx];
       float phase = fmodf(arc, cycle);
       BOOL inDash = (phase < dashLength);
+
+      float arcT = (totalArc > 0) ? arc / totalArc : 0.0f;
+      float hw = tapers
+                     ? ((startWidth + (endWidth - startWidth) * arcT) / 2.0f +
+                        aaPadding)
+                     : (startWidth / 2.0f + aaPadding);
 
       BOOL atDashBoundary = (inDash != wasInDash);
       if (lineJoin == 0 && !atDashBoundary) {
@@ -120,13 +132,13 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float strokeWidth,
         simd_float2 tangent = {normal.y, -normal.x};
         if (vc > 0) {
           simd_float2 prevLast = vertices[vc - 1].position;
-          simd_float2 nextFirst = centered + normal * halfWidth;
+          simd_float2 nextFirst = centered + normal * hw;
           vc = KKEmitBridge(vertices, vc, prevLast, nextFirst);
         }
         vc = KKEmitRoundCapStandalone(vertices, vc, centered, tangent, normal,
-                                      halfWidth, YES);
+                                      hw, YES);
         simd_float2 prevLast = vertices[vc - 1].position;
-        simd_float2 nextFirst = centered + normal * halfWidth;
+        simd_float2 nextFirst = centered + normal * hw;
         vc = KKEmitBridge(vertices, vc, prevLast, nextFirst);
       }
 
@@ -134,10 +146,10 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float strokeWidth,
         simd_float2 capTan = {lastEmittedNormal.y, -lastEmittedNormal.x};
         simd_float2 prevLast = vertices[vc - 1].position;
         simd_float2 capFirst =
-            lastEmittedCenter + lastEmittedNormal * halfWidth;
+            lastEmittedCenter + lastEmittedNormal * lastEmittedHW;
         vc = KKEmitBridge(vertices, vc, prevLast, capFirst);
         vc = KKEmitRoundCapStandalone(vertices, vc, lastEmittedCenter, capTan,
-                                      lastEmittedNormal, halfWidth, NO);
+                                      lastEmittedNormal, lastEmittedHW, NO);
       }
 
       if (inDash) {
@@ -148,17 +160,18 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float strokeWidth,
             vc++;
           }
 
-          vertices[vc].position = centered + normal * halfWidth;
+          vertices[vc].position = centered + normal * hw;
           vertices[vc].edgeDistance = 1.0f;
           vertices[vc].capDistance = 0.0f;
           vc++;
-          vertices[vc].position = centered - normal * halfWidth;
+          vertices[vc].position = centered - normal * hw;
           vertices[vc].edgeDistance = -1.0f;
           vertices[vc].capDistance = 0.0f;
           vc++;
         }
         lastEmittedCenter = centered;
         lastEmittedNormal = normal;
+        lastEmittedHW = hw;
       }
 
       wasInDash = inDash;
@@ -168,6 +181,11 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float strokeWidth,
     BOOL atJoin = (c < curveCount - 1) || (path.closed && c == curveCount - 1);
     float joinArc = arcLengths[sampleIdx - 1];
     BOOL joinInDash = (fmodf(joinArc, cycle) < dashLength);
+    float joinT = (totalArc > 0) ? joinArc / totalArc : 0.0f;
+    float joinHW =
+        tapers ? ((startWidth + (endWidth - startWidth) * joinT) / 2.0f +
+                  aaPadding)
+               : (startWidth / 2.0f + aaPadding);
 
     if (atJoin && lineJoin != 0 && joinInDash) {
       NSUInteger nextC = (c + 1) % curveCount;
@@ -177,16 +195,16 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float strokeWidth,
           KKRawNormalAtSegStart(path, nextC, outputWidth, outputHeight);
 
       vc = KKEmitJoinGeometry(vertices, vc, segEndCenter, segEndNormal, n2,
-                              halfWidth, lineJoin);
+                              joinHW, lineJoin);
 
       if (c < curveCount - 1) {
         vertices[vc] = vertices[vc - 1];
         vc++;
-        vertices[vc].position = segEndCenter + n2 * halfWidth;
+        vertices[vc].position = segEndCenter + n2 * joinHW;
         vertices[vc].edgeDistance = 1.0f;
         vertices[vc].capDistance = 0.0f;
         vc++;
-        vertices[vc].position = segEndCenter - n2 * halfWidth;
+        vertices[vc].position = segEndCenter - n2 * joinHW;
         vertices[vc].edgeDistance = -1.0f;
         vertices[vc].capDistance = 0.0f;
         vc++;
@@ -200,10 +218,11 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float strokeWidth,
   if (wasInDash && vc > 0) {
     simd_float2 capTan = {lastEmittedNormal.y, -lastEmittedNormal.x};
     simd_float2 prevLast = vertices[vc - 1].position;
-    simd_float2 capFirst = lastEmittedCenter + lastEmittedNormal * halfWidth;
+    simd_float2 capFirst =
+        lastEmittedCenter + lastEmittedNormal * lastEmittedHW;
     vc = KKEmitBridge(vertices, vc, prevLast, capFirst);
     vc = KKEmitRoundCapStandalone(vertices, vc, lastEmittedCenter, capTan,
-                                  lastEmittedNormal, halfWidth, NO);
+                                  lastEmittedNormal, lastEmittedHW, NO);
   }
 
   free(arcLengths);
@@ -211,9 +230,10 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float strokeWidth,
   return vc;
 }
 
-NSUInteger KKTessellateDottedPath(KKBezierPath *path, float strokeWidth,
-                                  float outputWidth, float outputHeight,
-                                  float dotGap, CanvasVertex *vertices) {
+NSUInteger KKTessellateDottedPath(KKBezierPath *path, float startWidth,
+                                  float endWidth, float outputWidth,
+                                  float outputHeight, float dotGap,
+                                  CanvasVertex *vertices) {
   PathSample *samples = NULL;
   NSUInteger sampleCount =
       KKSamplePathPolyline(path, outputWidth, outputHeight, &samples);
@@ -224,8 +244,9 @@ NSUInteger KKTessellateDottedPath(KKBezierPath *path, float strokeWidth,
 
   float totalLength = samples[sampleCount - 1].arcLength;
   float aaPadding = 1.0f;
-  float halfWidth = (strokeWidth / 2.0f) + aaPadding;
-  float spacing = strokeWidth + dotGap;
+  BOOL isOpen = !path.closed;
+  BOOL tapers = isOpen && fabsf(startWidth - endWidth) > 0.001f;
+  float spacing = startWidth + dotGap;
   if (spacing < 1.0f)
     spacing = 1.0f;
 
@@ -237,21 +258,26 @@ NSUInteger KKTessellateDottedPath(KKBezierPath *path, float strokeWidth,
     PathSample s = KKSampleAtArc(samples, sampleCount, pos, &hint);
     simd_float2 tangent = {s.normal.y, -s.normal.x};
 
+    float arcT = (totalLength > 0) ? pos / totalLength : 0.0f;
+    float localW =
+        tapers ? (startWidth + (endWidth - startWidth) * arcT) : startWidth;
+    float hw = localW / 2.0f + aaPadding;
+
     if (vc > 0) {
       simd_float2 prevLast = vertices[vc - 1].position;
-      simd_float2 nextFirst = s.position + s.normal * halfWidth;
+      simd_float2 nextFirst = s.position + s.normal * hw;
       vc = KKEmitBridge(vertices, vc, prevLast, nextFirst);
     }
 
     vc = KKEmitRoundCapStandalone(vertices, vc, s.position, tangent, s.normal,
-                                  halfWidth, NO);
+                                  hw, NO);
     {
       simd_float2 prevLast = vertices[vc - 1].position;
-      simd_float2 nextFirst = s.position + s.normal * halfWidth;
+      simd_float2 nextFirst = s.position + s.normal * hw;
       vc = KKEmitBridge(vertices, vc, prevLast, nextFirst);
     }
     vc = KKEmitRoundCapStandalone(vertices, vc, s.position, tangent, s.normal,
-                                  halfWidth, YES);
+                                  hw, YES);
 
     pos += spacing;
   }

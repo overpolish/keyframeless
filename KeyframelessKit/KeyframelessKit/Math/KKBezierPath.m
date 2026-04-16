@@ -184,6 +184,10 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
           path->_endMarkerSize = ms[1];
           hdr += 2 * sizeof(float);
         }
+        if (ver >= 11 && data.length >= hdr + sizeof(float)) {
+          memcpy(&path->_endWidth, bytes + hdr, sizeof(float));
+          hdr += sizeof(float);
+        }
       }
     }
   }
@@ -252,8 +256,9 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   // v8: + sketchEnabled (1 byte) + sketchRoughness, sketchBowing (2 floats).
   // v9: + startMarker (1 byte) + endMarker (1 byte).
   // v10: + startMarkerSize, endMarkerSize (2 floats).
+  // v11: + endWidth (1 float).
   uint8_t propMarker = 0xAA;
-  uint8_t propVersion = 10;
+  uint8_t propVersion = 11;
   [data appendBytes:&propMarker length:1];
   [data appendBytes:&propVersion length:1];
   float strokeData[4] = {_strokeWidth, _strokeR, _strokeG, _strokeB};
@@ -283,6 +288,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   [data appendBytes:&_endMarker length:1];
   float markerSizes[2] = {_startMarkerSize, _endMarkerSize};
   [data appendBytes:markerSizes length:2 * sizeof(float)];
+  [data appendBytes:&_endWidth length:sizeof(float)];
   return data;
 }
 
@@ -364,6 +370,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     _sketchFillWeight = kSketchFillWeightDefault;
     _startMarkerSize = 3.0f;
     _endMarkerSize = 3.0f;
+    _endWidth = 0.0f;
   }
   return self;
 }

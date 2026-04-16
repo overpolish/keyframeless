@@ -65,27 +65,29 @@ PathSample KKLerpSample(const PathSample *a, const PathSample *b,
 PathSample KKSampleAtArc(const PathSample *samples, NSUInteger count, float arc,
                          NSUInteger *hint);
 
-/// Tessellate a solid stroke path.
-NSUInteger KKTessellatePath(KKBezierPath *path, float strokeWidth,
-                            float outputWidth, float outputHeight,
-                            uint8_t lineCap, uint8_t lineJoin,
-                            CanvasVertex *vertices);
+/// Tessellate a solid stroke path with tapering from startWidth to endWidth.
+NSUInteger KKTessellatePath(KKBezierPath *path, float startWidth,
+                            float endWidth, float outputWidth,
+                            float outputHeight, uint8_t lineCap,
+                            uint8_t lineJoin, CanvasVertex *vertices);
 
 /// Tessellate a dashed stroke path.
-NSUInteger KKTessellateDashedPath(KKBezierPath *path, float strokeWidth,
-                                  float outputWidth, float outputHeight,
-                                  float dashLength, float dashGap,
-                                  uint8_t lineJoin, CanvasVertex *vertices);
+NSUInteger KKTessellateDashedPath(KKBezierPath *path, float startWidth,
+                                  float endWidth, float outputWidth,
+                                  float outputHeight, float dashLength,
+                                  float dashGap, uint8_t lineJoin,
+                                  CanvasVertex *vertices);
 
 /// Tessellate a dotted stroke path (isolated filled circles).
-NSUInteger KKTessellateDottedPath(KKBezierPath *path, float strokeWidth,
-                                  float outputWidth, float outputHeight,
-                                  float dotGap, CanvasVertex *vertices);
+NSUInteger KKTessellateDottedPath(KKBezierPath *path, float startWidth,
+                                  float endWidth, float outputWidth,
+                                  float outputHeight, float dotGap,
+                                  CanvasVertex *vertices);
 
 /// Tessellate a solid stroke with arc-length trimming at start/end.
 /// Used when markers are present to pull the stroke back from the endpoints.
-NSUInteger KKTessellateTrimmedPath(KKBezierPath *path, float strokeWidth,
-                                   float outputWidth, float outputHeight,
-                                   uint8_t lineCap, uint8_t lineJoin,
-                                   float startTrim, float endTrim,
-                                   CanvasVertex *vertices);
+NSUInteger KKTessellateTrimmedPath(KKBezierPath *path, float startWidth,
+                                   float endWidth, float outputWidth,
+                                   float outputHeight, uint8_t lineCap,
+                                   uint8_t lineJoin, float startTrim,
+                                   float endTrim, CanvasVertex *vertices);

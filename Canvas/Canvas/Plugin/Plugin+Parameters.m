@@ -83,8 +83,18 @@
                      parameterFlags:kFxParameterFlag_HIDDEN |
                                     kFxParameterFlag_NOT_ANIMATABLE];
 
-  [paramAPI addFloatSliderWithName:@"Stroke Width"
+  [paramAPI addFloatSliderWithName:@"Start Width"
                        parameterID:kParamStrokeWidth
+                      defaultValue:8.0
+                      parameterMin:0.5
+                      parameterMax:10000.0
+                         sliderMin:0.5
+                         sliderMax:100.0
+                             delta:0.5
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addFloatSliderWithName:@"End Width"
+                       parameterID:kParamEndWidth
                       defaultValue:8.0
                       parameterMin:0.5
                       parameterMax:10000.0
@@ -317,6 +327,10 @@
                           defaultValue:@""
                         parameterFlags:kFxParameterFlag_HIDDEN |
                                        kFxParameterFlag_NOT_ANIMATABLE];
+
+  self.linkedParameterPairs = @[
+    @[ @(kParamStrokeWidth), @(kParamEndWidth) ],
+  ];
 
   return YES;
 }

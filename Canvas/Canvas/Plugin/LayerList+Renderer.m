@@ -405,6 +405,7 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
                                      selectedStrokeExpanded || forceShow);
 
           if (strokeOpen) {
+            KKSetEndWidthVisible(setAPI, isOpen || forceShow);
             KKSetLineCapVisible(setAPI, isOpen || forceShow);
             KKSetMarkersVisible(setAPI, isOpen || forceShow);
             if ((isOpen || forceShow) && selectedStartMarker >= 0)

@@ -41,6 +41,7 @@ static void copyPathProps(KKBezierPath *dst, KKBezierPath *src) {
   dst.parentGroupID = src.parentGroupID;
   dst.strokeEnabled = src.strokeEnabled;
   dst.strokeWidth = src.strokeWidth;
+  dst.endWidth = src.endWidth;
   dst.strokeR = src.strokeR;
   dst.strokeG = src.strokeG;
   dst.strokeB = src.strokeB;
@@ -312,7 +313,8 @@ KKBezierPath *KKSketchPath(KKBezierPath *path, float roughness, float bowing,
   float canvasSize = fmaxf(canvasWidth, canvasHeight);
   if (canvasSize < 1.0f)
     canvasSize = 1920.0f;
-  float strokeNorm = path.strokeWidth / canvasSize;
+  float ew = (path.endWidth > 0) ? path.endWidth : path.strokeWidth;
+  float strokeNorm = fmaxf(path.strokeWidth, ew) / canvasSize;
   float baseOffset = strokeNorm * 1.5f + 0.003f;
 
   // Pass 1: primary stroke — continuous path with full jitter.

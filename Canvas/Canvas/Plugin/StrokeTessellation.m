@@ -5,18 +5,19 @@
 
 #import "Tessellation.h"
 
-NSUInteger KKTessellatePath(KKBezierPath *path, float strokeWidth,
-                            float outputWidth, float outputHeight,
-                            uint8_t lineCap, uint8_t lineJoin,
-                            CanvasVertex *vertices) {
+NSUInteger KKTessellatePath(KKBezierPath *path, float startWidth,
+                            float endWidth, float outputWidth,
+                            float outputHeight, uint8_t lineCap,
+                            uint8_t lineJoin, CanvasVertex *vertices) {
   float aaPadding = 1.0f;
-  float halfWidth = (strokeWidth / 2.0f) + aaPadding;
   NSUInteger segsPerCurve = 128;
   NSUInteger curveCount = path.count - 1;
   if (path.closed && path.count >= 2)
     curveCount = path.count;
   NSUInteger vertexCount = 0;
   BOOL isOpen = !path.closed;
+  BOOL tapers = isOpen && fabsf(startWidth - endWidth) > 0.001f;
+  float totalSteps = (float)(curveCount * segsPerCurve);
 
   simd_float2 startCenter = {0, 0}, endCenter = {0, 0};
   simd_float2 startTangent = {0, 0}, endTangent = {0, 0};
@@ -87,17 +88,30 @@ NSUInteger KKTessellatePath(KKBezierPath *path, float strokeWidth,
         vertexCount++;
       }
 
-      vertices[vertexCount].position = centered + normal * halfWidth;
+      float globalT =
+          totalSteps > 0 ? (float)(c * segsPerCurve + i) / totalSteps : 0.0f;
+      float hw =
+          tapers ? ((startWidth + (endWidth - startWidth) * globalT) / 2.0f +
+                    aaPadding)
+                 : (startWidth / 2.0f + aaPadding);
+
+      vertices[vertexCount].position = centered + normal * hw;
       vertices[vertexCount].edgeDistance = 1.0f;
       vertices[vertexCount].capDistance = 0.0f;
       vertexCount++;
-      vertices[vertexCount].position = centered - normal * halfWidth;
+      vertices[vertexCount].position = centered - normal * hw;
       vertices[vertexCount].edgeDistance = -1.0f;
       vertices[vertexCount].capDistance = 0.0f;
       vertexCount++;
     }
 
     BOOL atJoin = (c < curveCount - 1) || (path.closed && c == curveCount - 1);
+    float joinT =
+        totalSteps > 0 ? (float)((c + 1) * segsPerCurve) / totalSteps : 0.0f;
+    float joinHW =
+        tapers ? ((startWidth + (endWidth - startWidth) * joinT) / 2.0f +
+                  aaPadding)
+               : (startWidth / 2.0f + aaPadding);
     if (atJoin && lineJoin != 0) {
       NSUInteger nextC = (c + 1) % curveCount;
       if (path.closed && c == curveCount - 1)
@@ -106,16 +120,16 @@ NSUInteger KKTessellatePath(KKBezierPath *path, float strokeWidth,
           KKRawNormalAtSegStart(path, nextC, outputWidth, outputHeight);
 
       vertexCount = KKEmitJoinGeometry(vertices, vertexCount, segEndCenter,
-                                       segEndNormal, n2, halfWidth, lineJoin);
+                                       segEndNormal, n2, joinHW, lineJoin);
 
       if (c < curveCount - 1) {
         vertices[vertexCount] = vertices[vertexCount - 1];
         vertexCount++;
-        vertices[vertexCount].position = segEndCenter + n2 * halfWidth;
+        vertices[vertexCount].position = segEndCenter + n2 * joinHW;
         vertices[vertexCount].edgeDistance = 1.0f;
         vertices[vertexCount].capDistance = 0.0f;
         vertexCount++;
-        vertices[vertexCount].position = segEndCenter - n2 * halfWidth;
+        vertices[vertexCount].position = segEndCenter - n2 * joinHW;
         vertices[vertexCount].edgeDistance = -1.0f;
         vertices[vertexCount].capDistance = 0.0f;
         vertexCount++;
@@ -127,15 +141,17 @@ NSUInteger KKTessellatePath(KKBezierPath *path, float strokeWidth,
   }
 
   if (isOpen && lineCap != 0 && curveCount > 0) {
+    float startHW = startWidth / 2.0f + aaPadding;
+    float endHW = endWidth / 2.0f + aaPadding;
     if (lineCap == 1) {
       vertexCount = KKAddRoundCap(vertices, vertexCount, endCenter, endTangent,
-                                  endNormal, halfWidth, NO);
+                                  endNormal, endHW, NO);
       if (vertexCount > 0) {
         vertices[vertexCount] = vertices[vertexCount - 1];
         vertexCount++;
       }
       CanvasVertex startFirst;
-      startFirst.position = startCenter + startNormal * halfWidth;
+      startFirst.position = startCenter + startNormal * startHW;
       startFirst.edgeDistance = 0.0f;
       startFirst.capDistance = 0.0f;
       vertices[vertexCount] = startFirst;
@@ -143,14 +159,14 @@ NSUInteger KKTessellatePath(KKBezierPath *path, float strokeWidth,
       vertices[vertexCount] = startFirst;
       vertexCount++;
       vertexCount = KKAddRoundCap(vertices, vertexCount, startCenter,
-                                  startTangent, startNormal, halfWidth, YES);
+                                  startTangent, startNormal, startHW, YES);
     } else if (lineCap == 2) {
-      float ext = strokeWidth / 2.0f;
+      float endExt = endWidth / 2.0f;
 
-      simd_float2 eTop = endCenter + endNormal * halfWidth;
-      simd_float2 eBot = endCenter - endNormal * halfWidth;
-      simd_float2 eTopExt = eTop + endTangent * ext;
-      simd_float2 eBotExt = eBot + endTangent * ext;
+      simd_float2 eTop = endCenter + endNormal * endHW;
+      simd_float2 eBot = endCenter - endNormal * endHW;
+      simd_float2 eTopExt = eTop + endTangent * endExt;
+      simd_float2 eBotExt = eBot + endTangent * endExt;
 
       vertices[vertexCount] = vertices[vertexCount - 1];
       vertexCount++;
@@ -177,10 +193,11 @@ NSUInteger KKTessellatePath(KKBezierPath *path, float strokeWidth,
       vertices[vertexCount].capDistance = 0.0f;
       vertexCount++;
 
-      simd_float2 sTop = startCenter + startNormal * halfWidth;
-      simd_float2 sBot = startCenter - startNormal * halfWidth;
-      simd_float2 sTopExt = sTop - startTangent * ext;
-      simd_float2 sBotExt = sBot - startTangent * ext;
+      float startExt = startWidth / 2.0f;
+      simd_float2 sTop = startCenter + startNormal * startHW;
+      simd_float2 sBot = startCenter - startNormal * startHW;
+      simd_float2 sTopExt = sTop - startTangent * startExt;
+      simd_float2 sBotExt = sBot - startTangent * startExt;
 
       vertices[vertexCount] = vertices[vertexCount - 1];
       vertexCount++;
@@ -212,18 +229,19 @@ NSUInteger KKTessellatePath(KKBezierPath *path, float strokeWidth,
   return vertexCount;
 }
 
-NSUInteger KKTessellateTrimmedPath(KKBezierPath *path, float strokeWidth,
-                                   float outputWidth, float outputHeight,
-                                   uint8_t lineCap, uint8_t lineJoin,
-                                   float startTrim, float endTrim,
-                                   CanvasVertex *vertices) {
+NSUInteger KKTessellateTrimmedPath(KKBezierPath *path, float startWidth,
+                                   float endWidth, float outputWidth,
+                                   float outputHeight, uint8_t lineCap,
+                                   uint8_t lineJoin, float startTrim,
+                                   float endTrim, CanvasVertex *vertices) {
   if (startTrim <= 0.0f && endTrim <= 0.0f) {
-    return KKTessellatePath(path, strokeWidth, outputWidth, outputHeight,
-                            lineCap, lineJoin, vertices);
+    return KKTessellatePath(path, startWidth, endWidth, outputWidth,
+                            outputHeight, lineCap, lineJoin, vertices);
   }
 
   float aaPadding = 1.0f;
-  float halfWidth = (strokeWidth / 2.0f) + aaPadding;
+  BOOL isOpen = !path.closed;
+  BOOL tapers = isOpen && fabsf(startWidth - endWidth) > 0.001f;
 
   PathSample *samples = NULL;
   NSUInteger count =
@@ -254,11 +272,15 @@ NSUInteger KKTessellateTrimmedPath(KKBezierPath *path, float strokeWidth,
 
   // Emit the interpolated start point.
   PathSample trimStart = KKSampleAtArc(samples, count, arcStart, &hint);
-  vertices[vc].position = trimStart.position + trimStart.normal * halfWidth;
+  float tsT = (totalArc > 0) ? arcStart / totalArc : 0.0f;
+  float tsHW =
+      tapers ? ((startWidth + (endWidth - startWidth) * tsT) / 2.0f + aaPadding)
+             : (startWidth / 2.0f + aaPadding);
+  vertices[vc].position = trimStart.position + trimStart.normal * tsHW;
   vertices[vc].edgeDistance = 1.0f;
   vertices[vc].capDistance = 0.0f;
   vc++;
-  vertices[vc].position = trimStart.position - trimStart.normal * halfWidth;
+  vertices[vc].position = trimStart.position - trimStart.normal * tsHW;
   vertices[vc].edgeDistance = -1.0f;
   vertices[vc].capDistance = 0.0f;
   vc++;
@@ -273,11 +295,16 @@ NSUInteger KKTessellateTrimmedPath(KKBezierPath *path, float strokeWidth,
       if (miterLen > 0.0f && miterLen < kMiterLimit)
         n = miter;
     }
-    vertices[vc].position = samples[i].position + n * halfWidth;
+    float iT = (totalArc > 0) ? samples[i].arcLength / totalArc : 0.0f;
+    float iHW =
+        tapers
+            ? ((startWidth + (endWidth - startWidth) * iT) / 2.0f + aaPadding)
+            : (startWidth / 2.0f + aaPadding);
+    vertices[vc].position = samples[i].position + n * iHW;
     vertices[vc].edgeDistance = 1.0f;
     vertices[vc].capDistance = 0.0f;
     vc++;
-    vertices[vc].position = samples[i].position - n * halfWidth;
+    vertices[vc].position = samples[i].position - n * iHW;
     vertices[vc].edgeDistance = -1.0f;
     vertices[vc].capDistance = 0.0f;
     vc++;
@@ -285,31 +312,36 @@ NSUInteger KKTessellateTrimmedPath(KKBezierPath *path, float strokeWidth,
 
   // Emit the interpolated end point.
   PathSample trimEnd = KKSampleAtArc(samples, count, arcEnd, &hint);
-  vertices[vc].position = trimEnd.position + trimEnd.normal * halfWidth;
+  float teT = (totalArc > 0) ? arcEnd / totalArc : 0.0f;
+  float teHW =
+      tapers ? ((startWidth + (endWidth - startWidth) * teT) / 2.0f + aaPadding)
+             : (startWidth / 2.0f + aaPadding);
+  vertices[vc].position = trimEnd.position + trimEnd.normal * teHW;
   vertices[vc].edgeDistance = 1.0f;
   vertices[vc].capDistance = 0.0f;
   vc++;
-  vertices[vc].position = trimEnd.position - trimEnd.normal * halfWidth;
+  vertices[vc].position = trimEnd.position - trimEnd.normal * teHW;
   vertices[vc].edgeDistance = -1.0f;
   vertices[vc].capDistance = 0.0f;
   vc++;
 
   // Add caps at trimmed endpoints if the original path is open and has caps,
   // but only at ends without a positive trim (markers use trim > 0).
-  BOOL isOpen = !path.closed;
+  float sCapHW = startWidth / 2.0f + aaPadding;
+  float eCapHW = endWidth / 2.0f + aaPadding;
   if (isOpen && lineCap != 0) {
     if (startTrim <= 0.0f) {
       simd_float2 sTan = (simd_float2){trimStart.normal.y, -trimStart.normal.x};
       if (lineCap == 1) {
         vc = KKAddRoundCap(vertices, vc, trimStart.position, -sTan,
-                           trimStart.normal, halfWidth, YES);
+                           trimStart.normal, sCapHW, YES);
       }
     }
     if (endTrim <= 0.0f) {
       simd_float2 eTan = (simd_float2){trimEnd.normal.y, -trimEnd.normal.x};
       if (lineCap == 1) {
         vc = KKAddRoundCap(vertices, vc, trimEnd.position, eTan, trimEnd.normal,
-                           halfWidth, NO);
+                           eCapHW, NO);
       }
     }
   }
