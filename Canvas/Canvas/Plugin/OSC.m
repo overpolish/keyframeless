@@ -80,6 +80,12 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
     }
     self.resizeHandleOSCs = handles;
     self.dragResizeHandle = -1;
+
+    self.rotateHandleOSC = [[KKPointOSC alloc] initWithAPIManager:apiManager];
+    self.rotateHandleOSC.clearsOnDraw = NO;
+    self.rotateHandleOSC.oscRadius = 5.0f;
+    self.rotateHandleOSC.outlineWidth = 1.5f;
+    self.rotateHandleOSC.fillColorOverride = [NSColor accent];
   }
   return self;
 }

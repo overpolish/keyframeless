@@ -53,6 +53,15 @@
 @property(nonatomic, assign) float resizeOrigAspect;
 @property(nonatomic, strong) NSArray<NSData *> *resizeOrigSnapshots;
 @property(nonatomic, strong) NSArray<NSNumber *> *resizeOrigIndices;
+@property(nonatomic, strong) KKPointOSC *rotateHandleOSC;
+@property(nonatomic, assign) BOOL dragIsRotation;
+@property(nonatomic, assign) simd_float2 rotateCenter;
+@property(nonatomic, assign) float rotateStartAngle;
+@property(nonatomic, assign) float rotateDeltaAngle;
+@property(nonatomic, assign) simd_float2 rotateOrigMin;
+@property(nonatomic, assign) simd_float2 rotateOrigMax;
+@property(nonatomic, strong) NSArray<NSData *> *rotateOrigSnapshots;
+@property(nonatomic, strong) NSArray<NSNumber *> *rotateOrigIndices;
 
 - (NSMutableArray<KKBezierPath *> *)readPaths;
 - (void)writePaths:(NSArray<KKBezierPath *> *)paths;

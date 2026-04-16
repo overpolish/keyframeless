@@ -34,6 +34,14 @@
       CGPoint bl = [self canvasPointFromObjectPoint:bmin];
       CGPoint tr = [self canvasPointFromObjectPoint:bmax];
 
+      CGPoint topMid = [self resizeHandlePosition:1 topRight:tr bottomLeft:bl];
+      CGPoint rotatePos = {topMid.x, topMid.y + 20.0};
+      if (hypot(x - rotatePos.x, y - rotatePos.y) < hitRadius) {
+        *activePart = kOSCRotateHandle;
+        [oscAPI setCursor:self.editPointsCursor];
+        return;
+      }
+
       for (NSInteger i = 0; i < 8; i++) {
         CGPoint pos = [self resizeHandlePosition:i topRight:tr bottomLeft:bl];
         if (hypot(x - pos.x, y - pos.y) < hitRadius) {

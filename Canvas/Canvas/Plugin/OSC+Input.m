@@ -255,6 +255,49 @@
   *forceUpdate = YES;
 }
 
+- (void)mouseDownOnRotateHandle:(double)positionX
+                              y:(double)positionY
+                    forceUpdate:(BOOL *)forceUpdate {
+  self.dragIsRotation = YES;
+  self.rotateDeltaAngle = 0.0f;
+
+  simd_float2 bmin, bmax;
+  [self boundsOfSelectedPaths:&bmin max:&bmax];
+  self.rotateCenter =
+      (simd_float2){(bmin.x + bmax.x) * 0.5f, (bmin.y + bmax.y) * 0.5f};
+  self.rotateOrigMin = bmin;
+  self.rotateOrigMax = bmax;
+
+  CGPoint centerCanvas = [self canvasPointFromObjectPoint:self.rotateCenter];
+  CGPoint bl = [self canvasPointFromObjectPoint:bmin];
+  CGPoint tr = [self canvasPointFromObjectPoint:bmax];
+  CGPoint topMid = [self resizeHandlePosition:1 topRight:tr bottomLeft:bl];
+  CGPoint handlePos = {topMid.x, topMid.y + 20.0};
+  self.rotateStartAngle = atan2f((float)(handlePos.y - centerCanvas.y),
+                                 (float)(handlePos.x - centerCanvas.x));
+
+  NSMutableArray<NSData *> *snapshots = [NSMutableArray array];
+  NSMutableArray<NSNumber *> *indices = [NSMutableArray array];
+  [self.selectedPathIndices
+      enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+        if (idx >= self.paths.count)
+          return;
+        KKBezierPath *path = self.paths[idx];
+        path.isRect = NO;
+        NSMutableData *snap =
+            [NSMutableData dataWithLength:path.count * sizeof(KKBezierPoint)];
+        KKBezierPoint *buf = snap.mutableBytes;
+        for (NSUInteger i = 0; i < path.count; i++)
+          buf[i] = [path pointAtIndex:i];
+        [snapshots addObject:snap];
+        [indices addObject:@(idx)];
+      }];
+  self.rotateOrigSnapshots = snapshots;
+  self.rotateOrigIndices = indices;
+  [self writePaths:self.paths];
+  *forceUpdate = YES;
+}
+
 - (void)mouseDownOnResizeHandle:(NSInteger)handleIndex
                          active:(KKBezierPath *)active
                     forceUpdate:(BOOL *)forceUpdate {
@@ -378,6 +421,12 @@
         [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
     self.dragAnchor = self.dragOrigin;
     *forceUpdate = YES;
+    return;
+  }
+  if (activePart == kOSCRotateHandle && self.selectedPathIndices.count > 0) {
+    [self mouseDownOnRotateHandle:positionX
+                                y:positionY
+                      forceUpdate:forceUpdate];
     return;
   }
   if (activePart >= kOSCCornerRadiusTL && activePart <= kOSCCornerRadiusBL &&

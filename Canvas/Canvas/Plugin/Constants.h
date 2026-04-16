@@ -77,6 +77,7 @@ static const NSInteger kOSCCornerRadiusTR = 7;
 static const NSInteger kOSCCornerRadiusBR = 8;
 static const NSInteger kOSCCornerRadiusBL = 9;
 static const NSInteger kOSCBoundingBox = 10;
+static const NSInteger kOSCRotateHandle = 12;
 static const NSInteger kOSCResizeHandleBase = 20000; // 20000 + index (0-7)
 static const NSInteger kOSCPathPointBase = 10000;    // 10000 + index
 static const NSInteger kOSCInHandleBase = 100000;    // 100000 + index

@@ -217,6 +217,13 @@
                   forceUpdate:forceUpdate];
     return;
   }
+  if (self.dragIsRotation) {
+    [self dragRotateAtX:positionX
+                      y:positionY
+              modifiers:modifiers
+            forceUpdate:forceUpdate];
+    return;
+  }
   if (self.dragResizeHandle >= 0) {
     [self dragResizeAtX:positionX
                       y:positionY

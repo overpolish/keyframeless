@@ -53,6 +53,10 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx);
                     y:(double)positionY
             modifiers:(NSUInteger)modifiers
           forceUpdate:(BOOL *)forceUpdate;
+- (void)dragRotateAtX:(double)positionX
+                    y:(double)positionY
+            modifiers:(NSUInteger)modifiers
+          forceUpdate:(BOOL *)forceUpdate;
 
 @end
 
@@ -82,6 +86,9 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx);
                forceUpdate:(BOOL *)forceUpdate;
 - (void)mouseDownOnResizeHandle:(NSInteger)handleIndex
                          active:(KKBezierPath *)active
+                    forceUpdate:(BOOL *)forceUpdate;
+- (void)mouseDownOnRotateHandle:(double)positionX
+                              y:(double)positionY
                     forceUpdate:(BOOL *)forceUpdate;
 
 @end

@@ -168,8 +168,11 @@
   self.dragIsEllipse = NO;
   self.dragIsLine = NO;
   self.dragDidDuplicate = NO;
+  self.dragIsRotation = NO;
   self.resizeOrigSnapshots = nil;
   self.resizeOrigIndices = nil;
+  self.rotateOrigSnapshots = nil;
+  self.rotateOrigIndices = nil;
 }
 
 - (void)keyDownAtPositionX:(double)positionX
