@@ -86,6 +86,8 @@
       KKShowObjectParams(setAPI);
       KKSetStrokeChildrenVisible(setAPI, YES, YES);
       KKSetLineCapVisible(setAPI, YES);
+      KKSetMarkersVisible(setAPI, YES);
+      KKSetMarkerSizeVisible(setAPI, 1, 1);
       KKSetLineJoinVisible(setAPI, YES);
       KKSetStrokeStyleVisible(setAPI, YES);
       [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
