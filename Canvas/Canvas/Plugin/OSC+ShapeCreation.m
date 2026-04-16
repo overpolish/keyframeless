@@ -195,6 +195,54 @@
     return;
   }
 
+  // Control+key toolbar shortcuts
+  // When Control is held, ASCII values are control characters (letter - 64).
+  if (modifiers & kFxModifierKey_CONTROL) {
+    NSInteger newTag = 0;
+    switch (asciiKey) {
+    case 22: // Ctrl+V
+      newTag = kOSCToolbarCursor;
+      break;
+    case 24: // Ctrl+X
+      newTag = kOSCToolbarPen;
+      break;
+    case 2: // Ctrl+B
+      newTag = kOSCToolbarRect;
+      break;
+    case 7: // Ctrl+G
+      newTag = kOSCToolbarEllipse;
+      break;
+    case 13: // Ctrl+M
+      newTag = kOSCToolbarLine;
+      break;
+    }
+    if (newTag != 0) {
+      NSInteger prevTag = self.toolbar.activeTag;
+      if (prevTag != newTag) {
+        if (prevTag == kOSCToolbarCursor) {
+          self.paths = [self readPaths];
+          [self syncStrokeParamsToSelection];
+        } else if (prevTag == kOSCToolbarPen || prevTag == kOSCToolbarRect ||
+                   prevTag == kOSCToolbarEllipse ||
+                   prevTag == kOSCToolbarLine) {
+          self.paths = [self readPaths];
+          KKBezierPath *sel =
+              KKSelectedPath(self.selectedPathIndices, self.paths);
+          if (sel) {
+            id<FxParameterRetrievalAPI_v6> paramGetAPI = [self.apiManager
+                apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+            KKParamsToPath(paramGetAPI, sel);
+            [self writePaths:self.paths];
+          }
+        }
+      }
+      self.toolbar.activeTag = newTag;
+      *forceUpdate = YES;
+      *didHandle = YES;
+      return;
+    }
+  }
+
   if (asciiKey != 127 && asciiKey != 8)
     return;
 
