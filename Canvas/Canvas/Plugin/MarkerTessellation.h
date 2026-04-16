@@ -17,7 +17,7 @@ static const NSUInteger kMarkerMaxVertices = 128;
 float KKMarkerPullback(uint8_t markerType, float markerSize);
 
 /// Tessellate a marker at a path endpoint.
-/// markerType: 0=none, 1=arrow, 2=circle, 3=square.
+/// markerType: 0=none, 1=arrow, 2=circle, 3=square, 4=arrowhead, 5=line.
 /// endpoint: pixel-space position of the path endpoint (centered coordinates).
 /// tangent: unit tangent pointing outward from the path at the endpoint.
 /// normal: unit normal perpendicular to the tangent.

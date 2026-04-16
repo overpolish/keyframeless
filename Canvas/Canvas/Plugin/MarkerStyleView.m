@@ -8,7 +8,7 @@
 
 static const CGFloat kPillSpacing = 2.0;
 static const CGFloat kPillCorner = 3.0;
-static const NSInteger kMarkerCount = 4;
+static const NSInteger kMarkerCount = 6;
 static const CGFloat kPillSize = 22.0;
 static const CGFloat kTrailingSpacer = 75.0;
 
@@ -100,6 +100,46 @@ static void drawMarkerSquare(CGFloat ox, CGFloat oy, CGFloat k, BOOL isStart) {
   [NSBezierPath fillRect:sqRect];
 }
 
+static void drawMarkerArrowhead(CGFloat ox, CGFloat oy, CGFloat k,
+                                BOOL isStart) {
+  NSBezierPath *line = [NSBezierPath bezierPath];
+  CGFloat y = oy + 12 * k;
+  [line moveToPoint:NSMakePoint(ox + 4 * k, y)];
+  [line lineToPoint:NSMakePoint(ox + 20 * k, y)];
+  [line setLineWidth:2.0 * k];
+  [line stroke];
+
+  NSBezierPath *chev = [NSBezierPath bezierPath];
+  [chev setLineWidth:2.0 * k];
+  [chev setLineCapStyle:NSLineCapStyleRound];
+  if (isStart) {
+    [chev moveToPoint:NSMakePoint(ox + 10 * k, oy + 7 * k)];
+    [chev lineToPoint:NSMakePoint(ox + 4 * k, y)];
+    [chev lineToPoint:NSMakePoint(ox + 10 * k, oy + 17 * k)];
+  } else {
+    [chev moveToPoint:NSMakePoint(ox + 14 * k, oy + 7 * k)];
+    [chev lineToPoint:NSMakePoint(ox + 20 * k, y)];
+    [chev lineToPoint:NSMakePoint(ox + 14 * k, oy + 17 * k)];
+  }
+  [chev stroke];
+}
+
+static void drawMarkerLine(CGFloat ox, CGFloat oy, CGFloat k, BOOL isStart) {
+  NSBezierPath *line = [NSBezierPath bezierPath];
+  CGFloat y = oy + 12 * k;
+  [line moveToPoint:NSMakePoint(ox + 4 * k, y)];
+  [line lineToPoint:NSMakePoint(ox + 20 * k, y)];
+  [line setLineWidth:2.0 * k];
+  [line stroke];
+
+  NSBezierPath *bar = [NSBezierPath bezierPath];
+  [bar setLineWidth:2.0 * k];
+  CGFloat bx = isStart ? (ox + 4 * k) : (ox + 20 * k);
+  [bar moveToPoint:NSMakePoint(bx, oy + 7 * k)];
+  [bar lineToPoint:NSMakePoint(bx, oy + 17 * k)];
+  [bar stroke];
+}
+
 - (NSImage *)markerImageForIndex:(NSInteger)index active:(BOOL)active {
   CGFloat imgSize = 24.0;
   BOOL start = _isStart;
@@ -126,8 +166,14 @@ static void drawMarkerSquare(CGFloat ox, CGFloat oy, CGFloat k, BOOL isStart) {
         case 2:
           drawMarkerCircle(ox, oy, k, start);
           break;
-        default:
+        case 3:
           drawMarkerSquare(ox, oy, k, start);
+          break;
+        case 4:
+          drawMarkerArrowhead(ox, oy, k, start);
+          break;
+        default:
+          drawMarkerLine(ox, oy, k, start);
           break;
         }
         return YES;

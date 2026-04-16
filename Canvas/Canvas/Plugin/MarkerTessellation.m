@@ -74,6 +74,63 @@ static NSUInteger tessellateSquare(simd_float2 endpoint, simd_float2 tangent,
   return vc;
 }
 
+/// Arrowhead marker (open chevron): two thick arms meeting at the tip.
+/// Emits two quads with a degenerate bridge between them (10 verts).
+static NSUInteger tessellateArrowhead(simd_float2 endpoint, simd_float2 tangent,
+                                      simd_float2 normal, float size,
+                                      float strokeWidth, CanvasVertex *v) {
+  float wingSpread = size * 0.5f;
+  float halfThick = strokeWidth * 0.5f;
+  simd_float2 base = endpoint - tangent * size;
+  simd_float2 left = base + normal * wingSpread;
+  simd_float2 right = base - normal * wingSpread;
+
+  simd_float2 leftEdge = endpoint - left;
+  float leftLen = simd_length(leftEdge);
+  simd_float2 leftDir = leftLen > 0.001f ? leftEdge / leftLen : tangent;
+  simd_float2 leftPerp = (simd_float2){-leftDir.y, leftDir.x};
+
+  simd_float2 rightEdge = endpoint - right;
+  float rightLen = simd_length(rightEdge);
+  simd_float2 rightDir = rightLen > 0.001f ? rightEdge / rightLen : tangent;
+  simd_float2 rightPerp = (simd_float2){-rightDir.y, rightDir.x};
+
+  NSUInteger vc = 0;
+  // Left arm quad
+  v[vc++] = markerVert(left + leftPerp * halfThick);
+  v[vc++] = markerVert(left - leftPerp * halfThick);
+  v[vc++] = markerVert(endpoint + leftPerp * halfThick);
+  v[vc++] = markerVert(endpoint - leftPerp * halfThick);
+  // Degenerate bridge
+  v[vc] = v[vc - 1];
+  vc++;
+  v[vc++] = markerVert(endpoint + rightPerp * halfThick);
+  // Right arm quad
+  v[vc++] = markerVert(endpoint + rightPerp * halfThick);
+  v[vc++] = markerVert(endpoint - rightPerp * halfThick);
+  v[vc++] = markerVert(right + rightPerp * halfThick);
+  v[vc++] = markerVert(right - rightPerp * halfThick);
+  return vc;
+}
+
+/// Line marker: perpendicular bar at the endpoint.
+/// Single quad (4 verts).
+static NSUInteger tessellateLine(simd_float2 endpoint, simd_float2 tangent,
+                                 simd_float2 normal, float size,
+                                 float strokeWidth, CanvasVertex *v) {
+  float halfSpread = size * 0.5f;
+  float halfThick = strokeWidth * 0.5f;
+  simd_float2 top = endpoint + normal * halfSpread;
+  simd_float2 bottom = endpoint - normal * halfSpread;
+
+  NSUInteger vc = 0;
+  v[vc++] = markerVert(top + tangent * halfThick);
+  v[vc++] = markerVert(top - tangent * halfThick);
+  v[vc++] = markerVert(bottom + tangent * halfThick);
+  v[vc++] = markerVert(bottom - tangent * halfThick);
+  return vc;
+}
+
 float KKMarkerPullback(uint8_t markerType, float markerSize) {
   // Stroke ends slightly inside the marker so it's fully covered by the fill.
   // The fraction is chosen so the stroke never pokes out the sides, even at
@@ -86,6 +143,10 @@ float KKMarkerPullback(uint8_t markerType, float markerSize) {
     return markerSize * 0.3f; // circle: ~20% past center
   case 3:
     return markerSize * 0.3f; // square: ~20% past center
+  case 4:
+    return 0.0f; // arrowhead: open, stroke extends to tip
+  case 5:
+    return 0.0f; // line: bar sits at endpoint
   default:
     return 0.0f;
   }
@@ -106,6 +167,12 @@ NSUInteger KKTessellateMarker(uint8_t markerType, simd_float2 endpoint,
   case 3: // Square
     return tessellateSquare(endpoint, tangent, normal, markerSize * 0.5f,
                             vertices);
+  case 4: // Arrowhead
+    return tessellateArrowhead(endpoint, tangent, normal, markerSize,
+                               strokeWidth, vertices);
+  case 5: // Line
+    return tessellateLine(endpoint, tangent, normal, markerSize, strokeWidth,
+                          vertices);
   default:
     return 0;
   }
@@ -203,6 +270,75 @@ static NSUInteger tessellateSketchSquare(simd_float2 endpoint,
   return emitFan(outline, oc, v);
 }
 
+static NSUInteger tessellateSketchArrowhead(simd_float2 endpoint,
+                                            simd_float2 tangent,
+                                            simd_float2 normal, float size,
+                                            float strokeWidth, float roughness,
+                                            CanvasVertex *v) {
+  float wingSpread = size * 0.5f;
+  float halfThick = strokeWidth * 0.5f;
+  simd_float2 base = endpoint - tangent * size;
+  simd_float2 left = base + normal * wingSpread;
+  simd_float2 right = base - normal * wingSpread;
+
+  simd_float2 leftEdge = endpoint - left;
+  float leftLen = simd_length(leftEdge);
+  simd_float2 leftDir = leftLen > 0.001f ? leftEdge / leftLen : tangent;
+  simd_float2 leftPerp = (simd_float2){-leftDir.y, leftDir.x};
+
+  simd_float2 rightEdge = endpoint - right;
+  float rightLen = simd_length(rightEdge);
+  simd_float2 rightDir = rightLen > 0.001f ? rightEdge / rightLen : tangent;
+  simd_float2 rightPerp = (simd_float2){-rightDir.y, rightDir.x};
+
+  float jitterAmp = size * 0.035f;
+  NSUInteger vc = 0;
+
+  // Left arm as jittered quad
+  simd_float2 lc[4] = {
+      left + leftPerp * halfThick, endpoint + leftPerp * halfThick,
+      endpoint - leftPerp * halfThick, left - leftPerp * halfThick};
+  simd_float2 lo[24];
+  NSUInteger loc = subdivideAndJitter(lc, 4, 6, jitterAmp, roughness, lo);
+  vc += emitFan(lo, loc, v + vc);
+
+  // Degenerate bridge to right arm
+  v[vc] = v[vc - 1];
+  vc++;
+
+  simd_float2 rc[4] = {
+      endpoint + rightPerp * halfThick, right + rightPerp * halfThick,
+      right - rightPerp * halfThick, endpoint - rightPerp * halfThick};
+  simd_float2 ro[24];
+  NSUInteger roc = subdivideAndJitter(rc, 4, 6, jitterAmp, roughness, ro);
+  simd_float2 rCenter = {0, 0};
+  for (NSUInteger i = 0; i < roc; i++)
+    rCenter += ro[i];
+  rCenter /= (float)roc;
+  v[vc++] = markerVert(rCenter);
+
+  vc += emitFan(ro, roc, v + vc);
+  return vc;
+}
+
+static NSUInteger tessellateSketchLine(simd_float2 endpoint,
+                                       simd_float2 tangent, simd_float2 normal,
+                                       float size, float strokeWidth,
+                                       float roughness, CanvasVertex *v) {
+  float halfSpread = size * 0.5f;
+  float halfThick = strokeWidth * 0.5f;
+  simd_float2 top = endpoint + normal * halfSpread;
+  simd_float2 bottom = endpoint - normal * halfSpread;
+  simd_float2 corners[4] = {
+      top + tangent * halfThick, top - tangent * halfThick,
+      bottom - tangent * halfThick, bottom + tangent * halfThick};
+  float jitterAmp = size * 0.035f;
+  simd_float2 outline[24];
+  NSUInteger oc =
+      subdivideAndJitter(corners, 4, 6, jitterAmp, roughness, outline);
+  return emitFan(outline, oc, v);
+}
+
 NSUInteger KKTessellateSketchMarker(uint8_t markerType, simd_float2 endpoint,
                                     simd_float2 tangent, simd_float2 normal,
                                     float markerSize, float strokeWidth,
@@ -221,6 +357,12 @@ NSUInteger KKTessellateSketchMarker(uint8_t markerType, simd_float2 endpoint,
   case 3:
     return tessellateSketchSquare(endpoint, tangent, normal, markerSize * 0.5f,
                                   roughness, vertices);
+  case 4:
+    return tessellateSketchArrowhead(endpoint, tangent, normal, markerSize,
+                                     strokeWidth, roughness, vertices);
+  case 5:
+    return tessellateSketchLine(endpoint, tangent, normal, markerSize,
+                                strokeWidth, roughness, vertices);
   default:
     return 0;
   }
