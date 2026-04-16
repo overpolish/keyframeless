@@ -10,14 +10,20 @@
 
 - (void)updateParameterVisibilityAtTime:(CMTime)time {
   NSArray<NSNumber *> *allParams = @[
-    @(kParamGroupStroke),   @(kParamStrokeEnabled),   @(kParamStrokeWidth),
-    @(kParamStrokeColor),   @(kParamGroupFill),       @(kParamFillEnabled),
-    @(kParamFillColor),     @(kParamOpacity),         @(kParamLineCap),
-    @(kParamLineJoin),      @(kParamStrokeStyle),     @(kParamDashLength),
-    @(kParamDashGap),       @(kParamDotGap),          @(kParamClosedPath),
-    @(kParamGroupSketch),   @(kParamSketchEnabled),   @(kParamSketchRoughness),
-    @(kParamSketchBowing),  @(kParamSketchStrokes),   @(kParamSketchFillStyle),
-    @(kParamSketchFillGap), @(kParamSketchFillAngle), @(kParamSketchFillWeight),
+    @(kParamGroupStroke),     @(kParamStrokeEnabled),
+    @(kParamStrokeWidth),     @(kParamStrokeColor),
+    @(kParamGroupFill),       @(kParamFillEnabled),
+    @(kParamFillColor),       @(kParamOpacity),
+    @(kParamLineCap),         @(kParamLineJoin),
+    @(kParamStrokeStyle),     @(kParamDashLength),
+    @(kParamDashGap),         @(kParamDotGap),
+    @(kParamStartMarker),     @(kParamEndMarker),
+    @(kParamStartMarkerSize), @(kParamEndMarkerSize),
+    @(kParamClosedPath),      @(kParamGroupSketch),
+    @(kParamSketchEnabled),   @(kParamSketchRoughness),
+    @(kParamSketchBowing),    @(kParamSketchStrokes),
+    @(kParamSketchFillStyle), @(kParamSketchFillGap),
+    @(kParamSketchFillAngle), @(kParamSketchFillWeight),
     @(kParamSketchSeed),
   ];
 

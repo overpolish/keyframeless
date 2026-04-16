@@ -105,6 +105,8 @@
 				"Plugin/LayerList+Selection.m",
 				"Plugin/LayerList+Views.m",
 				Plugin/main.m,
+				Plugin/MarkerStyleView.m,
+				Plugin/MarkerTessellation.m,
 				Plugin/OSC.m,
 				"Plugin/OSC+Drag.m",
 				"Plugin/OSC+Draw.m",

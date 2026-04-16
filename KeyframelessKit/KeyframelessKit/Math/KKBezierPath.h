@@ -102,6 +102,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// Dot gap in points (default 10.0). Only used when strokeStyle == 2.
 @property(nonatomic, assign) float dotGap;
 
+/// Start marker type (0=none, 1=arrow, 2=circle, 3=square). Default 0.
+@property(nonatomic, assign) uint8_t startMarker;
+
+/// End marker type (0=none, 1=arrow, 2=circle, 3=square). Default 0.
+@property(nonatomic, assign) uint8_t endMarker;
+
+/// Start marker size as percentage of stroke width (default 300).
+@property(nonatomic, assign) float startMarkerSize;
+
+/// End marker size as percentage of stroke width (default 300).
+@property(nonatomic, assign) float endMarkerSize;
+
 /// Whether this path uses sketch (hand-drawn) rendering (default NO).
 @property(nonatomic, assign) BOOL sketchEnabled;
 

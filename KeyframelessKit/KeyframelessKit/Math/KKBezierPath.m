@@ -168,7 +168,21 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
             path->_sketchFillGap = fp[0];
             path->_sketchFillAngle = fp[1];
             path->_sketchFillWeight = fp[2];
+            hdr += 3 * sizeof(float);
           }
+        }
+        if (ver >= 9 && data.length >= hdr + 2) {
+          path->_startMarker = bytes[hdr];
+          hdr += 1;
+          path->_endMarker = bytes[hdr];
+          hdr += 1;
+        }
+        if (ver >= 10 && data.length >= hdr + 2 * sizeof(float)) {
+          float ms[2];
+          memcpy(ms, bytes + hdr, 2 * sizeof(float));
+          path->_startMarkerSize = ms[0];
+          path->_endMarkerSize = ms[1];
+          hdr += 2 * sizeof(float);
         }
       }
     }
@@ -236,8 +250,10 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   // v6: + strokeStyle (1 byte).
   // v7: + dashLength, dashGap, dotGap (3 floats).
   // v8: + sketchEnabled (1 byte) + sketchRoughness, sketchBowing (2 floats).
+  // v9: + startMarker (1 byte) + endMarker (1 byte).
+  // v10: + startMarkerSize, endMarkerSize (2 floats).
   uint8_t propMarker = 0xAA;
-  uint8_t propVersion = 8;
+  uint8_t propVersion = 10;
   [data appendBytes:&propMarker length:1];
   [data appendBytes:&propVersion length:1];
   float strokeData[4] = {_strokeWidth, _strokeR, _strokeG, _strokeB};
@@ -263,6 +279,10 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   [data appendBytes:&_sketchFillStyle length:1];
   float fillParams[3] = {_sketchFillGap, _sketchFillAngle, _sketchFillWeight};
   [data appendBytes:fillParams length:3 * sizeof(float)];
+  [data appendBytes:&_startMarker length:1];
+  [data appendBytes:&_endMarker length:1];
+  float markerSizes[2] = {_startMarkerSize, _endMarkerSize};
+  [data appendBytes:markerSizes length:2 * sizeof(float)];
   return data;
 }
 
@@ -342,6 +362,8 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     _sketchFillGap = kSketchFillGapDefault;
     _sketchFillAngle = kSketchFillAngleDefault * (float)(M_PI / 180.0);
     _sketchFillWeight = kSketchFillWeightDefault;
+    _startMarkerSize = 3.0f;
+    _endMarkerSize = 3.0f;
   }
   return self;
 }

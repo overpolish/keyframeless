@@ -4,6 +4,7 @@
  */
 
 #import "Constants.h"
+#import "MarkerTessellation.h"
 #import "ObjectParams.h"
 #import "Plugin_Private.h"
 #import "ShaderTypes.h"
@@ -261,6 +262,16 @@ static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
   simd_float4 color = {path.strokeR * oa, path.strokeG * oa, path.strokeB * oa,
                        oa};
 
+  uint8_t startMarker = path.startMarker;
+  uint8_t endMarker = path.endMarker;
+  BOOL hasMarkers = !path.closed && (startMarker != 0 || endMarker != 0);
+  float startMarkerSz = sw * path.startMarkerSize;
+  float endMarkerSz = sw * path.endMarkerSize;
+  float startPullback =
+      hasMarkers ? KKMarkerPullback(startMarker, startMarkerSz) : 0;
+  float endPullback = hasMarkers ? KKMarkerPullback(endMarker, endMarkerSz) : 0;
+  NSUInteger markerExtra = hasMarkers ? kMarkerMaxVertices * 2 + 4 : 0;
+
   CanvasVertex *vertices = NULL;
   NSUInteger vertexCount = 0;
   NSUInteger segsPerCurve = 128;
@@ -269,16 +280,24 @@ static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
     curveCount = path.count;
 
   if (path.strokeStyle == 1) {
-    NSUInteger maxVertices = curveCount * segsPerCurve * 12 + 8192;
+    NSUInteger maxVertices =
+        curveCount * segsPerCurve * 12 + 8192 + markerExtra;
     vertices = malloc(maxVertices * sizeof(CanvasVertex));
     vertexCount = KKTessellateDashedPath(path, sw, outputWidth, outputHeight,
                                          path.dashLength, path.dashGap,
                                          path.lineJoin, vertices);
   } else if (path.strokeStyle == 2) {
-    NSUInteger maxVertices = curveCount * segsPerCurve * 4 + 4096;
+    NSUInteger maxVertices = curveCount * segsPerCurve * 4 + 4096 + markerExtra;
     vertices = malloc(maxVertices * sizeof(CanvasVertex));
     vertexCount = KKTessellateDottedPath(path, sw, outputWidth, outputHeight,
                                          path.dotGap, vertices);
+  } else if (hasMarkers) {
+    NSUInteger maxVertices =
+        curveCount * ((segsPerCurve + 1) * 2 + 2) + 256 + markerExtra;
+    vertices = malloc(maxVertices * sizeof(CanvasVertex));
+    vertexCount = KKTessellateTrimmedPath(path, sw, outputWidth, outputHeight,
+                                          path.lineCap, path.lineJoin,
+                                          startPullback, endPullback, vertices);
   } else {
     NSUInteger capExtra = (!path.closed && path.lineCap != 0) ? 256 : 0;
     NSUInteger joinExtra = (path.lineJoin != 0) ? curveCount * 48 : 0;
@@ -287,6 +306,60 @@ static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
     vertices = malloc(maxVertices * sizeof(CanvasVertex));
     vertexCount = KKTessellatePath(path, sw, outputWidth, outputHeight,
                                    path.lineCap, path.lineJoin, vertices);
+  }
+
+  if (hasMarkers && vertices && path.count >= 2) {
+    // Use arc-length samples for marker placement — handles all point type
+    // combinations correctly (linear, bezier, mixed).
+    PathSample *samples = NULL;
+    NSUInteger sampleCount =
+        KKSamplePathPolyline(path, outputWidth, outputHeight, &samples);
+
+    if (sampleCount >= 2) {
+      float totalArc = samples[sampleCount - 1].arcLength;
+      NSUInteger hint = 0;
+
+      if (endMarker != 0) {
+        // Use tangent at the pullback point so marker aligns with
+        // the visible stroke end, not the true endpoint direction.
+        float pullbackArc = totalArc - endPullback;
+        if (pullbackArc < 0.0f)
+          pullbackArc = 0.0f;
+        PathSample pullbackSample =
+            KKSampleAtArc(samples, sampleCount, pullbackArc, &hint);
+        simd_float2 eNorm = pullbackSample.normal;
+        simd_float2 eTan = (simd_float2){eNorm.y, -eNorm.x};
+        simd_float2 endPos = samples[sampleCount - 1].position;
+        vertexCount = KKEmitBridge(
+            vertices, vertexCount,
+            vertexCount > 0 ? vertices[vertexCount - 1].position : endPos,
+            endPos);
+        vertexCount +=
+            KKTessellateMarker(endMarker, endPos, eTan, eNorm, endMarkerSz, sw,
+                               vertices + vertexCount);
+      }
+
+      if (startMarker != 0) {
+        float pullbackArc = startPullback;
+        if (pullbackArc > totalArc)
+          pullbackArc = totalArc;
+        hint = 0;
+        PathSample pullbackSample =
+            KKSampleAtArc(samples, sampleCount, pullbackArc, &hint);
+        simd_float2 sNorm = pullbackSample.normal;
+        simd_float2 sTan =
+            (simd_float2){-sNorm.y, sNorm.x}; // outward = -path direction
+        simd_float2 startPos = samples[0].position;
+        vertexCount = KKEmitBridge(
+            vertices, vertexCount,
+            vertexCount > 0 ? vertices[vertexCount - 1].position : startPos,
+            startPos);
+        vertexCount +=
+            KKTessellateMarker(startMarker, startPos, sTan, sNorm,
+                               startMarkerSz, sw, vertices + vertexCount);
+      }
+    }
+    free(samples);
   }
 
   if (vertexCount > 0 && vertices) {

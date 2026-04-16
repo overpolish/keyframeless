@@ -7,6 +7,7 @@
 #import "FillStyleView.h"
 #import "JoinStyleView.h"
 #import "LayerList_Private.h"
+#import "MarkerStyleView.h"
 #import "ObjectParams.h"
 #import "StrokeStyleView.h"
 
@@ -250,6 +251,8 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
   __block NSInteger selectedLineCap = -1;
   __block NSInteger selectedLineJoin = -1;
   __block NSInteger selectedStrokeStyle = -1;
+  __block NSInteger selectedStartMarker = -1;
+  __block NSInteger selectedEndMarker = -1;
   __block BOOL selectedHasJoins = NO;
   __block BOOL selectedSketchEnabled = NO;
   __block BOOL selectedFillEnabled = NO;
@@ -260,8 +263,14 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
   __block BOOL selectedSketchExpanded = NO;
   [selection enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
     if (idx < pathCount && !paths[idx].isGroup) {
-      if (!paths[idx].closed)
+      if (!paths[idx].closed) {
         selectedLineCap = paths[idx].lineCap;
+        selectedStartMarker = paths[idx].startMarker;
+        selectedEndMarker = paths[idx].endMarker;
+      } else {
+        selectedStartMarker = -1;
+        selectedEndMarker = -1;
+      }
       if (paths[idx].count > 2) {
         selectedLineJoin = paths[idx].lineJoin;
         selectedHasJoins = YES;
@@ -397,6 +406,11 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
 
           if (strokeOpen) {
             KKSetLineCapVisible(setAPI, isOpen || forceShow);
+            KKSetMarkersVisible(setAPI, isOpen || forceShow);
+            if ((isOpen || forceShow) && selectedStartMarker >= 0)
+              KKSetMarkerSizeVisible(
+                  setAPI, (uint8_t)selectedStartMarker,
+                  selectedEndMarker >= 0 ? (uint8_t)selectedEndMarker : 0);
             KKSetLineJoinVisible(setAPI, selectedHasJoins || forceShow);
             KKSetStrokeStyleVisible(setAPI, YES);
             if (forceShow) {
@@ -465,6 +479,24 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
         strokeStyleView.selectedIndex = selectedStrokeStyle;
       [strokeStyleView setNeedsLayout:YES];
       [strokeStyleView setNeedsDisplay:YES];
+    }
+
+    // Sync start marker view selection and layout.
+    KKMarkerStyleView *startMarkerView = st.startMarkerView;
+    if (startMarkerView) {
+      if (selectedStartMarker >= 0)
+        startMarkerView.selectedIndex = selectedStartMarker;
+      [startMarkerView setNeedsLayout:YES];
+      [startMarkerView setNeedsDisplay:YES];
+    }
+
+    // Sync end marker view selection and layout.
+    KKMarkerStyleView *endMarkerView = st.endMarkerView;
+    if (endMarkerView) {
+      if (selectedEndMarker >= 0)
+        endMarkerView.selectedIndex = selectedEndMarker;
+      [endMarkerView setNeedsLayout:YES];
+      [endMarkerView setNeedsDisplay:YES];
     }
 
     // Sync fill style view selection and layout.
