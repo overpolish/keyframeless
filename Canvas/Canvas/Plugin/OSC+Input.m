@@ -311,8 +311,8 @@
       if (prevTag == kOSCToolbarCursor) {
         self.paths = [self readPaths];
         [self syncStrokeParamsToSelection];
-      } else if (prevTag == kOSCToolbarRect || prevTag == kOSCToolbarEllipse ||
-                 prevTag == kOSCToolbarLine) {
+      } else if (prevTag == kOSCToolbarPen || prevTag == kOSCToolbarRect ||
+                 prevTag == kOSCToolbarEllipse || prevTag == kOSCToolbarLine) {
         self.paths = [self readPaths];
         KKBezierPath *sel =
             KKSelectedPath(self.selectedPathIndices, self.paths);
@@ -336,6 +336,15 @@
   KKBezierPath *active = [self activePath];
   BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
   BOOL isPenMode = (self.toolbar.activeTag == kOSCToolbarPen);
+
+  // Persist any pending inspector changes for the active pen-mode path
+  // before the interaction overwrites them.
+  if (isPenMode && active) {
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    KKParamsToPath(paramGetAPI, active);
+    [self writePaths:self.paths];
+  }
 
   // --- Cursor-mode element interactions ---
   // Must be checked BEFORE pen-mode points because the activePart ranges

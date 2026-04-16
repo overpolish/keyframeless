@@ -270,6 +270,12 @@ static NSUInteger tessellateSketchSquare(simd_float2 endpoint,
   return emitFan(outline, oc, v);
 }
 
+static inline simd_float2 jitterPt(simd_float2 pt, float amp, float roughness) {
+  float dx = markerOffset(amp, roughness);
+  float dy = markerOffset(amp, roughness);
+  return pt + (simd_float2){dx, dy};
+}
+
 static NSUInteger tessellateSketchArrowhead(simd_float2 endpoint,
                                             simd_float2 tangent,
                                             simd_float2 normal, float size,
@@ -291,33 +297,27 @@ static NSUInteger tessellateSketchArrowhead(simd_float2 endpoint,
   simd_float2 rightDir = rightLen > 0.001f ? rightEdge / rightLen : tangent;
   simd_float2 rightPerp = (simd_float2){-rightDir.y, rightDir.x};
 
-  float jitterAmp = size * 0.035f;
+  float amp = size * 0.035f;
   NSUInteger vc = 0;
-
-  // Left arm as jittered quad
-  simd_float2 lc[4] = {
-      left + leftPerp * halfThick, endpoint + leftPerp * halfThick,
-      endpoint - leftPerp * halfThick, left - leftPerp * halfThick};
-  simd_float2 lo[24];
-  NSUInteger loc = subdivideAndJitter(lc, 4, 6, jitterAmp, roughness, lo);
-  vc += emitFan(lo, loc, v + vc);
-
-  // Degenerate bridge to right arm
+  // Left arm quad with jittered corners
+  v[vc++] = markerVert(jitterPt(left + leftPerp * halfThick, amp, roughness));
+  v[vc++] = markerVert(jitterPt(left - leftPerp * halfThick, amp, roughness));
+  v[vc++] =
+      markerVert(jitterPt(endpoint + leftPerp * halfThick, amp, roughness));
+  v[vc++] =
+      markerVert(jitterPt(endpoint - leftPerp * halfThick, amp, roughness));
+  // Degenerate bridge
   v[vc] = v[vc - 1];
   vc++;
-
-  simd_float2 rc[4] = {
-      endpoint + rightPerp * halfThick, right + rightPerp * halfThick,
-      right - rightPerp * halfThick, endpoint - rightPerp * halfThick};
-  simd_float2 ro[24];
-  NSUInteger roc = subdivideAndJitter(rc, 4, 6, jitterAmp, roughness, ro);
-  simd_float2 rCenter = {0, 0};
-  for (NSUInteger i = 0; i < roc; i++)
-    rCenter += ro[i];
-  rCenter /= (float)roc;
-  v[vc++] = markerVert(rCenter);
-
-  vc += emitFan(ro, roc, v + vc);
+  v[vc++] =
+      markerVert(jitterPt(endpoint + rightPerp * halfThick, amp, roughness));
+  // Right arm quad with jittered corners
+  v[vc++] =
+      markerVert(jitterPt(endpoint + rightPerp * halfThick, amp, roughness));
+  v[vc++] =
+      markerVert(jitterPt(endpoint - rightPerp * halfThick, amp, roughness));
+  v[vc++] = markerVert(jitterPt(right + rightPerp * halfThick, amp, roughness));
+  v[vc++] = markerVert(jitterPt(right - rightPerp * halfThick, amp, roughness));
   return vc;
 }
 
@@ -329,14 +329,13 @@ static NSUInteger tessellateSketchLine(simd_float2 endpoint,
   float halfThick = strokeWidth * 0.5f;
   simd_float2 top = endpoint + normal * halfSpread;
   simd_float2 bottom = endpoint - normal * halfSpread;
-  simd_float2 corners[4] = {
-      top + tangent * halfThick, top - tangent * halfThick,
-      bottom - tangent * halfThick, bottom + tangent * halfThick};
-  float jitterAmp = size * 0.035f;
-  simd_float2 outline[24];
-  NSUInteger oc =
-      subdivideAndJitter(corners, 4, 6, jitterAmp, roughness, outline);
-  return emitFan(outline, oc, v);
+  float amp = size * 0.035f;
+  NSUInteger vc = 0;
+  v[vc++] = markerVert(jitterPt(top + tangent * halfThick, amp, roughness));
+  v[vc++] = markerVert(jitterPt(top - tangent * halfThick, amp, roughness));
+  v[vc++] = markerVert(jitterPt(bottom + tangent * halfThick, amp, roughness));
+  v[vc++] = markerVert(jitterPt(bottom - tangent * halfThick, amp, roughness));
+  return vc;
 }
 
 NSUInteger KKTessellateSketchMarker(uint8_t markerType, simd_float2 endpoint,
