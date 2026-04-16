@@ -250,7 +250,6 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
   __block NSInteger selectedLineJoin = -1;
   __block NSInteger selectedStrokeStyle = -1;
   __block BOOL selectedHasJoins = NO;
-  __block BOOL selectedIsRect = NO;
   __block BOOL selectedSketchEnabled = NO;
   __block BOOL selectedFillEnabled = NO;
   __block NSInteger selectedFillStyle = 0;
@@ -267,7 +266,6 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
         selectedHasJoins = YES;
       }
       selectedStrokeStyle = paths[idx].strokeStyle;
-      selectedIsRect = paths[idx].isRect;
       selectedSketchEnabled = paths[idx].sketchEnabled;
       selectedFillEnabled = paths[idx].fillEnabled;
       selectedFillStyle = paths[idx].sketchFillStyle;
@@ -432,7 +430,6 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
                         atTime:kCMTimeZero];
           KKSetSketchChildrenVisible(setAPI, selectedSketchEnabled || forceShow,
                                      selectedSketchExpanded || forceShow);
-          KKSetCornerRadiiVisible(setAPI, selectedIsRect || forceShow);
         } else {
           KKHideObjectParams(setAPI);
         }

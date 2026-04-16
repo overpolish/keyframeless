@@ -169,14 +169,6 @@ KKHideObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamClosedPath];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamCornerRadiusTL];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamCornerRadiusTR];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamCornerRadiusBR];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamCornerRadiusBL];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamSketchRoughness];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamSketchBowing];
@@ -272,18 +264,6 @@ KKSetFillStyleParamsVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
   [paramSetAPI setParameterFlags:subFlags toParameter:kParamSketchFillWeight];
 }
 
-/// Show/hide the corner radius param rows based on whether the path is a rect.
-static inline void
-KKSetCornerRadiiVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
-                        BOOL visible) {
-  FxParameterFlags flags =
-      visible ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
-  [paramSetAPI setParameterFlags:flags toParameter:kParamCornerRadiusTL];
-  [paramSetAPI setParameterFlags:flags toParameter:kParamCornerRadiusTR];
-  [paramSetAPI setParameterFlags:flags toParameter:kParamCornerRadiusBR];
-  [paramSetAPI setParameterFlags:flags toParameter:kParamCornerRadiusBL];
-}
-
 /// Save the index of the currently-selected path so it survives clip switches.
 static inline void
 KKSaveSelectedIndex(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
@@ -373,30 +353,6 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
               fromParameter:kParamClosedPath
                      atTime:kCMTimeZero];
   path.closed = closedPath;
-
-  double rtl = 0.0;
-  [paramGetAPI getFloatValue:&rtl
-               fromParameter:kParamCornerRadiusTL
-                      atTime:kCMTimeZero];
-  path.cornerRadiusTL = (float)rtl;
-
-  double rtr = 0.0;
-  [paramGetAPI getFloatValue:&rtr
-               fromParameter:kParamCornerRadiusTR
-                      atTime:kCMTimeZero];
-  path.cornerRadiusTR = (float)rtr;
-
-  double rbr = 0.0;
-  [paramGetAPI getFloatValue:&rbr
-               fromParameter:kParamCornerRadiusBR
-                      atTime:kCMTimeZero];
-  path.cornerRadiusBR = (float)rbr;
-
-  double rbl = 0.0;
-  [paramGetAPI getFloatValue:&rbl
-               fromParameter:kParamCornerRadiusBL
-                      atTime:kCMTimeZero];
-  path.cornerRadiusBL = (float)rbl;
 
   BOOL sketchOn = NO;
   [paramGetAPI getBoolValue:&sketchOn
@@ -515,18 +471,6 @@ KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
   [paramSetAPI setBoolValue:path.closed
                 toParameter:kParamClosedPath
                      atTime:kCMTimeZero];
-  [paramSetAPI setFloatValue:path.cornerRadiusTL
-                 toParameter:kParamCornerRadiusTL
-                      atTime:kCMTimeZero];
-  [paramSetAPI setFloatValue:path.cornerRadiusTR
-                 toParameter:kParamCornerRadiusTR
-                      atTime:kCMTimeZero];
-  [paramSetAPI setFloatValue:path.cornerRadiusBR
-                 toParameter:kParamCornerRadiusBR
-                      atTime:kCMTimeZero];
-  [paramSetAPI setFloatValue:path.cornerRadiusBL
-                 toParameter:kParamCornerRadiusBL
-                      atTime:kCMTimeZero];
   [paramSetAPI setBoolValue:path.sketchEnabled
                 toParameter:kParamSketchEnabled
                      atTime:kCMTimeZero];
