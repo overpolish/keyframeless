@@ -98,24 +98,6 @@
     }
   }
 
-  if (parameterID == kParamSketchEnabled) {
-    id<FxParameterRetrievalAPI_v6> getAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    id<FxParameterSettingAPI_v5> setAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    BOOL sketchOn = NO;
-    [getAPI getBoolValue:&sketchOn
-           fromParameter:kParamSketchEnabled
-                  atTime:kCMTimeZero];
-    KKSetSketchParamsVisible(setAPI, sketchOn);
-    if (sketchOn) {
-      KKModifySelectedPathProperty(self.apiManager, ^(KKBezierPath *path) {
-        if (path.sketchSeed == 0)
-          path.sketchSeed = arc4random();
-      });
-    }
-  }
-
   if (parameterID == kParamForceShow) {
     id<FxParameterRetrievalAPI_v6> getAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
@@ -140,7 +122,7 @@
       KKSetFillChildrenVisible(setAPI, YES, YES);
       KKSetFillStyleParamsVisible(setAPI, YES, 1);
       KKSetCornerRadiiVisible(setAPI, YES);
-      KKSetSketchParamsVisible(setAPI, YES);
+      KKSetSketchChildrenVisible(setAPI, YES, YES);
     } else {
       NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
       if (uuid)

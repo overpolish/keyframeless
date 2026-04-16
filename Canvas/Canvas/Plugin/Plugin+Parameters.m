@@ -253,6 +253,19 @@
                                delta:0.01
                       parameterFlags:kFxParameterFlag_HIDDEN];
 
+  [paramAPI addCustomParameterWithName:@""
+                           parameterID:kParamGroupSketch
+                          defaultValue:@(kParamGroupSketch)
+                        parameterFlags:kFxParameterFlag_CUSTOM_UI |
+                                       kFxParameterFlag_NOT_ANIMATABLE |
+                                       kFxParameterFlag_USE_FULL_VIEW_WIDTH];
+
+  [paramAPI addToggleButtonWithName:@""
+                        parameterID:kParamExpandedSketch
+                       defaultValue:NO
+                     parameterFlags:kFxParameterFlag_HIDDEN |
+                                    kFxParameterFlag_NOT_ANIMATABLE];
+
   [paramAPI addToggleButtonWithName:@"Sketch"
                         parameterID:kParamSketchEnabled
                        defaultValue:NO

@@ -137,6 +137,12 @@
              fromParameter:kParamExpandedFill
                     atTime:kCMTimeZero];
       KKSetFillChildrenVisible(paramSetAPI, selected.fillEnabled, fillExpanded);
+      BOOL sketchExpanded = NO;
+      [getAPI getBoolValue:&sketchExpanded
+             fromParameter:kParamExpandedSketch
+                    atTime:kCMTimeZero];
+      KKSetSketchChildrenVisible(paramSetAPI, selected.sketchEnabled,
+                                 sketchExpanded);
     }
     KKSaveSelectedIndex(paramSetAPI,
                         (NSInteger)[paths indexOfObjectIdenticalTo:selected]);

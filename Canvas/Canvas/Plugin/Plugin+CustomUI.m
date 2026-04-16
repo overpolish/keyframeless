@@ -438,6 +438,99 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
     return header;
   }
 
+  if (parameterID == kParamGroupSketch) {
+    NSImage *icon = [NSImage imageWithSystemSymbolName:@"scribble"
+                              accessibilityDescription:nil];
+    KKCustomGroupHeaderView *header =
+        [[KKCustomGroupHeaderView alloc] initWithFrame:NSMakeRect(0, 0, 300, 26)
+                                            apiManager:self.apiManager
+                                           parameterId:parameterID
+                                                  text:@"Sketch"
+                                                  icon:icon
+                                         showsCheckbox:YES];
+
+    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actionAPI startAction:self];
+    CMTime currentTime = [actionAPI currentTime];
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+
+    NSInteger selIdx = KKReadSelectedIndex(paramGetAPI);
+    BOOL hasSelection = (selIdx >= 0);
+    header.isInteractive = hasSelection;
+    if (hasSelection) {
+      BOOL enabled = NO;
+      [paramGetAPI getBoolValue:&enabled
+                  fromParameter:kParamSketchEnabled
+                         atTime:currentTime];
+      header.isEnabled = enabled;
+
+      BOOL expanded = NO;
+      [paramGetAPI getBoolValue:&expanded
+                  fromParameter:kParamExpandedSketch
+                         atTime:currentTime];
+      header.isExpanded = expanded;
+    }
+    [actionAPI endAction:self];
+
+    __weak typeof(self) weakSelf = self;
+    header.onEnabledChanged = ^(BOOL isEnabled) {
+      __strong typeof(weakSelf) strongSelf = weakSelf;
+      if (!strongSelf)
+        return;
+      id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      [actAPI startAction:strongSelf];
+      id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      [setAPI setBoolValue:isEnabled
+               toParameter:kParamSketchEnabled
+                    atTime:[actAPI currentTime]];
+      id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      BOOL expanded = NO;
+      [getAPI getBoolValue:&expanded
+             fromParameter:kParamExpandedSketch
+                    atTime:kCMTimeZero];
+      KKSetSketchChildrenVisible(setAPI, isEnabled, expanded);
+      [actAPI endAction:strongSelf];
+      KKModifySelectedPathProperty(strongSelf.apiManager,
+                                   ^(KKBezierPath *path) {
+                                     path.sketchEnabled = isEnabled;
+                                     if (isEnabled && path.sketchSeed == 0)
+                                       path.sketchSeed = arc4random();
+                                   });
+    };
+    header.onExpandedChanged = ^(BOOL isExpanded) {
+      __strong typeof(weakSelf) strongSelf = weakSelf;
+      if (!strongSelf)
+        return;
+      id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      [actAPI startAction:strongSelf];
+      id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      [setAPI setBoolValue:isExpanded
+               toParameter:kParamExpandedSketch
+                    atTime:[actAPI currentTime]];
+      BOOL sketchOn = NO;
+      [getAPI getBoolValue:&sketchOn
+             fromParameter:kParamSketchEnabled
+                    atTime:kCMTimeZero];
+      KKSetSketchChildrenVisible(setAPI, sketchOn, isExpanded);
+      [actAPI endAction:strongSelf];
+    };
+
+    NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+    if (uuid)
+      KKLayerStateForUUID(uuid).sketchGroupHeader = header;
+
+    return header;
+  }
+
   if (parameterID == kParamLineCap) {
     KKCapStyleView *capView = [[KKCapStyleView alloc]
         initWithFrame:NSMakeRect(0, 0, 200, KKInspectorRowHeight)];
