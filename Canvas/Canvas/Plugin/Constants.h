@@ -48,6 +48,8 @@ static const UInt32 kParamGroupStroke = 130;
 static const UInt32 kParamExpandedStroke = 131;
 static const UInt32 kParamGroupFill = 132;
 static const UInt32 kParamExpandedFill = 133;
+static const UInt32 kParamGroupSketch = 134;
+static const UInt32 kParamExpandedSketch = 135;
 
 static const UInt32 kParamForceShow = 9000;
 

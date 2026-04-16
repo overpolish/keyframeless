@@ -184,6 +184,12 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
                 fromParameter:kParamExpandedFill
                        atTime:kCMTimeZero];
     KKSetFillChildrenVisible(paramSetAPI, selPath.fillEnabled, fillExpanded);
+    BOOL sketchExpanded = NO;
+    [paramGetAPI getBoolValue:&sketchExpanded
+                fromParameter:kParamExpandedSketch
+                       atTime:kCMTimeZero];
+    KKSetSketchChildrenVisible(paramSetAPI, selPath.sketchEnabled,
+                               sketchExpanded);
     KKSaveSelectedIndex(
         paramSetAPI, (NSInteger)[self.paths indexOfObjectIdenticalTo:selPath]);
   } else if (!KKIsForceShowEnabled(paramGetAPI)) {

@@ -257,6 +257,7 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
   __block BOOL selectedStrokeEnabled = NO;
   __block BOOL selectedStrokeExpanded = NO;
   __block BOOL selectedFillExpanded = NO;
+  __block BOOL selectedSketchExpanded = NO;
   [selection enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
     if (idx < pathCount && !paths[idx].isGroup) {
       if (!paths[idx].closed)
@@ -426,11 +427,11 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
               KKSetFillStyleParamsVisible(setAPI, YES, (int)selectedFillStyle);
             }
           }
-          if (forceShow) {
-            KKSetSketchParamsVisible(setAPI, YES);
-          } else {
-            KKSetSketchParamsVisible(setAPI, selectedSketchEnabled);
-          }
+          [getAPI getBoolValue:&selectedSketchExpanded
+                 fromParameter:kParamExpandedSketch
+                        atTime:kCMTimeZero];
+          KKSetSketchChildrenVisible(setAPI, selectedSketchEnabled || forceShow,
+                                     selectedSketchExpanded || forceShow);
           KKSetCornerRadiiVisible(setAPI, selectedIsRect || forceShow);
         } else {
           KKHideObjectParams(setAPI);
@@ -500,6 +501,19 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
       } else {
         fillHeader.isEnabled = NO;
         fillHeader.isExpanded = NO;
+      }
+    }
+
+    // Sync sketch group header enabled/expanded state.
+    KKCustomGroupHeaderView *sketchHeader = st.sketchGroupHeader;
+    if (sketchHeader) {
+      sketchHeader.isInteractive = hasPath;
+      if (hasPath) {
+        sketchHeader.isEnabled = selectedSketchEnabled;
+        sketchHeader.isExpanded = selectedSketchExpanded;
+      } else {
+        sketchHeader.isEnabled = NO;
+        sketchHeader.isExpanded = NO;
       }
     }
   });

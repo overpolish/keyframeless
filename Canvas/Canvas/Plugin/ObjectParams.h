@@ -99,18 +99,44 @@ KKSetFillChildrenVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
   }
 }
 
+/// Show/hide the sketch group header.
+static inline void
+KKSetSketchGroupVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
+                        BOOL visible) {
+  FxParameterFlags flags =
+      visible ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE |
+                 kFxParameterFlag_USE_FULL_VIEW_WIDTH)
+              : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:flags toParameter:kParamGroupSketch];
+}
+
+/// Show/hide the sketch group children based on enabled+expanded state.
+static inline void
+KKSetSketchChildrenVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
+                           BOOL sketchEnabled, BOOL sketchExpanded) {
+  BOOL show = sketchEnabled && sketchExpanded;
+  FxParameterFlags flags =
+      show ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:flags toParameter:kParamSketchRoughness];
+  [paramSetAPI setParameterFlags:flags toParameter:kParamSketchBowing];
+  [paramSetAPI setParameterFlags:flags toParameter:kParamSketchStrokes];
+  FxParameterFlags seedFlags =
+      show ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE)
+           : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:seedFlags toParameter:kParamSketchSeed];
+}
+
 /// Show all per-object param rows (flags only, no values).
 /// Add new per-object properties here.
 static inline void
 KKShowObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
   KKSetStrokeGroupVisible(paramSetAPI, YES);
   KKSetFillGroupVisible(paramSetAPI, YES);
+  KKSetSketchGroupVisible(paramSetAPI, YES);
   [paramSetAPI setParameterFlags:kFxParameterFlag_DEFAULT
                      toParameter:kParamOpacity];
   [paramSetAPI setParameterFlags:kFxParameterFlag_NOT_ANIMATABLE
                      toParameter:kParamClosedPath];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_NOT_ANIMATABLE
-                     toParameter:kParamSketchEnabled];
 }
 
 /// Hide all per-object param rows and clear the saved selection.
@@ -119,6 +145,7 @@ static inline void
 KKHideObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
   KKSetStrokeGroupVisible(paramSetAPI, YES);
   KKSetFillGroupVisible(paramSetAPI, YES);
+  KKSetSketchGroupVisible(paramSetAPI, YES);
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamStrokeWidth];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
@@ -149,8 +176,6 @@ KKHideObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
                      toParameter:kParamCornerRadiusBR];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamCornerRadiusBL];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamSketchEnabled];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamSketchRoughness];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
@@ -526,5 +551,4 @@ KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
   [paramSetAPI setFloatValue:path.sketchFillWeight
                  toParameter:kParamSketchFillWeight
                       atTime:kCMTimeZero];
-  KKSetSketchParamsVisible(paramSetAPI, path.sketchEnabled);
 }
