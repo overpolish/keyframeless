@@ -330,18 +330,33 @@ NSUInteger KKTessellateTrimmedPath(KKBezierPath *path, float startWidth,
   float sCapHW = startWidth / 2.0f + aaPadding;
   float eCapHW = endWidth / 2.0f + aaPadding;
   if (isOpen && lineCap != 0) {
-    if (startTrim <= 0.0f) {
-      simd_float2 sTan = (simd_float2){trimStart.normal.y, -trimStart.normal.x};
-      if (lineCap == 1) {
-        vc = KKAddRoundCap(vertices, vc, trimStart.position, -sTan,
-                           trimStart.normal, sCapHW, YES);
-      }
-    }
+    // End cap first (appended right after the stroke body — short bridge).
     if (endTrim <= 0.0f) {
       simd_float2 eTan = (simd_float2){trimEnd.normal.y, -trimEnd.normal.x};
       if (lineCap == 1) {
         vc = KKAddRoundCap(vertices, vc, trimEnd.position, eTan, trimEnd.normal,
                            eCapHW, NO);
+      }
+    }
+    // Start cap last — needs a full degenerate bridge back to the path start,
+    // matching the pattern in KKTessellatePath.
+    if (startTrim <= 0.0f) {
+      simd_float2 sTan = (simd_float2){trimStart.normal.y, -trimStart.normal.x};
+      if (lineCap == 1) {
+        if (vc > 0) {
+          vertices[vc] = vertices[vc - 1];
+          vc++;
+        }
+        CanvasVertex startFirst;
+        startFirst.position = trimStart.position + trimStart.normal * sCapHW;
+        startFirst.edgeDistance = 0.0f;
+        startFirst.capDistance = 0.0f;
+        vertices[vc] = startFirst;
+        vc++;
+        vertices[vc] = startFirst;
+        vc++;
+        vc = KKAddRoundCap(vertices, vc, trimStart.position, -sTan,
+                           trimStart.normal, sCapHW, YES);
       }
     }
   }
