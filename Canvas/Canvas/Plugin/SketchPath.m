@@ -63,6 +63,10 @@ static void copyPathProps(KKBezierPath *dst, KKBezierPath *src) {
   dst.sketchFillAngle = src.sketchFillAngle;
   dst.sketchFillWeight = src.sketchFillWeight;
   dst.sketchSeed = src.sketchSeed;
+  dst.startMarker = src.startMarker;
+  dst.endMarker = src.endMarker;
+  dst.startMarkerSize = src.startMarkerSize;
+  dst.endMarkerSize = src.endMarkerSize;
 }
 
 static BOOL isSegmentLinear(KKBezierPoint p0, KKBezierPoint p1) {
