@@ -90,13 +90,37 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
     [borderView addSubview:scrollView];
     [wrapper addSubview:borderView];
 
+    NSTextField *hintLabel =
+        [NSTextField labelWithString:@"Drop images into the layer list"];
+    hintLabel.font = [NSFont systemFontOfSize:KKFontSizeSM - 1.0];
+    hintLabel.textColor = [NSColor tertiaryLabelColor];
+    hintLabel.translatesAutoresizingMaskIntoConstraints = NO;
+
+    NSImageView *hintIcon = [NSImageView
+        imageViewWithImage:[NSImage imageWithSystemSymbolName:@"photo.fill"
+                                     accessibilityDescription:nil]];
+    hintIcon.translatesAutoresizingMaskIntoConstraints = NO;
+    hintIcon.contentTintColor = [NSColor tertiaryLabelColor];
+    [hintIcon.widthAnchor constraintEqualToConstant:KKFontSizeSM].active = YES;
+    [hintIcon.heightAnchor constraintEqualToConstant:KKFontSizeSM].active = YES;
+
+    NSStackView *hintStack =
+        [NSStackView stackViewWithViews:@[ hintIcon, hintLabel ]];
+    hintStack.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    hintStack.spacing = KKSpacingXS;
+    hintStack.translatesAutoresizingMaskIntoConstraints = NO;
+    [wrapper addSubview:hintStack];
+
     [NSLayoutConstraint activateConstraints:@[
+      [hintStack.leadingAnchor constraintEqualToAnchor:wrapper.leadingAnchor
+                                              constant:inset + KKPaddingSM],
+      [hintStack.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
+      [hintStack.heightAnchor constraintEqualToConstant:kLayerListHintHeight],
       [borderView.leadingAnchor constraintEqualToAnchor:wrapper.leadingAnchor
                                                constant:inset],
       [borderView.trailingAnchor constraintEqualToAnchor:wrapper.trailingAnchor
                                                 constant:-inset],
-      [borderView.topAnchor constraintEqualToAnchor:wrapper.topAnchor
-                                           constant:kLayerListVerticalPad],
+      [borderView.topAnchor constraintEqualToAnchor:hintStack.bottomAnchor],
       [borderView.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor
                                               constant:-kLayerListVerticalPad],
       [scrollView.leadingAnchor
@@ -153,6 +177,7 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
 
     wrapper.emptyView = emptyStack;
     wrapper.contentView = content;
+    content.container = wrapper;
     wrapper.contentHeightConstraint = heightConstraint;
     wrapper.actionTarget = actionTarget;
     content.actionTarget = actionTarget;

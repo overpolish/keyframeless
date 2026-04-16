@@ -9,8 +9,9 @@
 
 static const CGFloat kLayerListHeight __attribute__((unused)) = 100.0;
 static const CGFloat kLayerListVerticalPad __attribute__((unused)) = 4.0;
+static const CGFloat kLayerListHintHeight __attribute__((unused)) = 16.0;
 static const CGFloat kLayerListTotalHeight __attribute__((unused)) =
-    kLayerListHeight + kLayerListVerticalPad * 2;
+    kLayerListHintHeight + kLayerListHeight + kLayerListVerticalPad * 2;
 static const CGFloat kLayerRowHeight __attribute__((unused)) = 24.0;
 static const CGFloat kLayerRowSpacing __attribute__((unused)) = 1.0;
 static const CGFloat kLayerRowStride __attribute__((unused)) =
@@ -81,6 +82,7 @@ KKLayerInstanceState *_Nullable KKLayerStateForUUID(NSString *_Nullable uuid);
 
 @interface KKLayerContentView : NSView
 @property(nonatomic, weak, nullable) id<KKLayerReorder> actionTarget;
+@property(nonatomic, weak, nullable) KKLayerListContainer *container;
 @property(nonatomic) NSInteger dropFlatIndex;
 @property(nonatomic) CGFloat dropIndent;
 @property(nonatomic, copy, nullable) NSString *dropParentGroupID;
