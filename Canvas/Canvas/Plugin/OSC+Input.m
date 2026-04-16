@@ -301,6 +301,14 @@
   if (activePart == kOSCToolbarCursor || activePart == kOSCToolbarPen ||
       activePart == kOSCToolbarRect || activePart == kOSCToolbarEllipse ||
       activePart == kOSCToolbarLine) {
+    // Persist any pending inspector changes before leaving cursor mode.
+    // syncStrokeParamsToSelection checks isCursorMode internally, so it
+    // must run while the toolbar still shows cursor.
+    if (self.toolbar.activeTag == kOSCToolbarCursor &&
+        activePart != kOSCToolbarCursor) {
+      self.paths = [self readPaths];
+      [self syncStrokeParamsToSelection];
+    }
     self.toolbar.activeTag = activePart;
     *forceUpdate = YES;
     return;
