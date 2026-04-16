@@ -201,5 +201,71 @@
   *forceUpdate = YES;
 }
 
+- (void)dragRotateAtX:(double)positionX
+                    y:(double)positionY
+            modifiers:(NSUInteger)modifiers
+          forceUpdate:(BOOL *)forceUpdate {
+  if (!self.rotateOrigSnapshots || self.rotateOrigSnapshots.count == 0)
+    return;
+
+  CGPoint centerCanvas = [self canvasPointFromObjectPoint:self.rotateCenter];
+  float currentAngle = atan2f((float)(positionY - centerCanvas.y),
+                              (float)(positionX - centerCanvas.x));
+  float deltaAngle = currentAngle - self.rotateStartAngle;
+
+  if (modifiers & kFxModifierKey_SHIFT) {
+    float snap = (float)(M_PI / 12.0);
+    deltaAngle = roundf(deltaAngle / snap) * snap;
+  }
+
+  self.rotateDeltaAngle = deltaAngle;
+
+  float cosA = cosf(deltaAngle);
+  float sinA = sinf(deltaAngle);
+  simd_float2 center = self.rotateCenter;
+
+  CGPoint c0 = [self canvasPointFromObjectPoint:(simd_float2){0, 0}];
+  CGPoint c1 = [self canvasPointFromObjectPoint:(simd_float2){1, 0}];
+  CGPoint c2 = [self canvasPointFromObjectPoint:(simd_float2){0, 1}];
+  float sx = (float)(c1.x - c0.x);
+  float sy = (float)(c2.y - c0.y);
+  if (fabsf(sx) < 1e-6f || fabsf(sy) < 1e-6f)
+    return;
+
+  for (NSUInteger s = 0; s < self.rotateOrigSnapshots.count; s++) {
+    NSUInteger pathIdx = self.rotateOrigIndices[s].unsignedIntegerValue;
+    if (pathIdx >= self.paths.count)
+      continue;
+    KKBezierPath *path = self.paths[pathIdx];
+    NSData *snap = self.rotateOrigSnapshots[s];
+    const KKBezierPoint *orig = snap.bytes;
+    NSUInteger count = snap.length / sizeof(KKBezierPoint);
+
+    for (NSUInteger i = 0; i < count && i < path.count; i++) {
+      float dx = orig[i].x - center.x;
+      float dy = orig[i].y - center.y;
+      float cdx = dx * sx, cdy = dy * sy;
+      float rdx = cdx * cosA - cdy * sinA;
+      float rdy = cdx * sinA + cdy * cosA;
+      [path
+          moveAtIndex:i
+                   to:(simd_float2){center.x + rdx / sx, center.y + rdy / sy}];
+
+      float hcdx = orig[i].inX * sx, hcdy = orig[i].inY * sy;
+      float hirx = hcdx * cosA - hcdy * sinA;
+      float hiry = hcdx * sinA + hcdy * cosA;
+      [path setInHandle:(simd_float2){hirx / sx, hiry / sy} atIndex:i];
+
+      float ocdx = orig[i].outX * sx, ocdy = orig[i].outY * sy;
+      float horx = ocdx * cosA - ocdy * sinA;
+      float hory = ocdx * sinA + ocdy * cosA;
+      [path setOutHandle:(simd_float2){horx / sx, hory / sy} atIndex:i];
+    }
+  }
+
+  [self writePaths:self.paths];
+  *forceUpdate = YES;
+}
+
 @end
 #pragma clang diagnostic pop

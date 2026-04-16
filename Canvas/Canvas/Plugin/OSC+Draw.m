@@ -144,6 +144,26 @@
                                             atTime:time];
   }
 
+  CGPoint topMid = [self resizeHandlePosition:1 topRight:tr bottomLeft:bl];
+  CGFloat rotateOffset = 20.0;
+  CGPoint rotatePos = {topMid.x, topMid.y + rotateOffset};
+
+  simd_float4 armColor = {0.55f, 0.55f, 0.94f, 0.6f};
+  [self drawLineFrom:topMid
+                    to:rotatePos
+                 color:armColor
+             halfWidth:1.0f
+      destinationImage:dest];
+
+  BOOL rotateHovered = (activePart == kOSCRotateHandle);
+  BOOL rotateActive = self.dragIsRotation;
+  self.rotateHandleOSC.fillColorOverride = [NSColor accent];
+  [self.rotateHandleOSC drawAtCanvasPosition:rotatePos
+                                   isHovered:rotateHovered
+                                    isActive:rotateActive
+                            destinationImage:dest
+                                      atTime:time];
+
   NSInteger pxW = (NSInteger)round(fabs(tr.x - bl.x));
   NSInteger pxH = (NSInteger)round(fabs(tr.y - bl.y));
   self.sizeLabel.text =
@@ -172,6 +192,71 @@
                            destinationImage:dest
                                      atTime:time];
   }
+}
+
+- (void)drawRotatedBoundingBoxWithDestinationImage:(FxImageTile *)dest
+                                            atTime:(CMTime)time {
+  simd_float2 oMin = self.rotateOrigMin;
+  simd_float2 oMax = self.rotateOrigMax;
+  simd_float2 center = self.rotateCenter;
+  float a = self.rotateDeltaAngle;
+  float cosA = cosf(a), sinA = sinf(a);
+
+  CGPoint c0 = [self canvasPointFromObjectPoint:(simd_float2){0, 0}];
+  CGPoint c1 = [self canvasPointFromObjectPoint:(simd_float2){1, 0}];
+  CGPoint c2 = [self canvasPointFromObjectPoint:(simd_float2){0, 1}];
+  float sx = (float)(c1.x - c0.x);
+  float sy = (float)(c2.y - c0.y);
+
+  simd_float2 objCorners[4] = {
+      {oMin.x, oMax.y}, // TL
+      {oMax.x, oMax.y}, // TR
+      {oMax.x, oMin.y}, // BR
+      {oMin.x, oMin.y}, // BL
+  };
+
+  CGPoint canvasCorners[5];
+  for (int i = 0; i < 4; i++) {
+    float dx = objCorners[i].x - center.x;
+    float dy = objCorners[i].y - center.y;
+    float cdx = dx * sx, cdy = dy * sy;
+    float rx = cdx * cosA - cdy * sinA;
+    float ry = cdx * sinA + cdy * cosA;
+    simd_float2 rotObj = {center.x + rx / sx, center.y + ry / sy};
+    canvasCorners[i] = [self canvasPointFromObjectPoint:rotObj];
+  }
+  canvasCorners[4] = canvasCorners[0];
+
+  simd_float4 borderColor = {1.0f, 1.0f, 1.0f, 0.5f};
+  [self drawLineStripWithPoints:canvasCorners
+                          count:5
+                          color:borderColor
+                      halfWidth:1.0f
+               destinationImage:dest];
+
+  CGFloat topMidX = (canvasCorners[0].x + canvasCorners[1].x) * 0.5;
+  CGFloat topMidY = (canvasCorners[0].y + canvasCorners[1].y) * 0.5;
+  CGFloat edgeDx = canvasCorners[1].x - canvasCorners[0].x;
+  CGFloat edgeDy = canvasCorners[1].y - canvasCorners[0].y;
+  CGFloat edgeLen = hypot(edgeDx, edgeDy);
+  CGFloat nx = (edgeLen > 0) ? -edgeDy / edgeLen : 0.0;
+  CGFloat ny = (edgeLen > 0) ? edgeDx / edgeLen : 1.0;
+  CGPoint topMidCanvas = {topMidX, topMidY};
+  CGPoint handleCanvas = {topMidX + nx * 20.0, topMidY + ny * 20.0};
+
+  simd_float4 armColor = {0.55f, 0.55f, 0.94f, 0.6f};
+  [self drawLineFrom:topMidCanvas
+                    to:handleCanvas
+                 color:armColor
+             halfWidth:1.0f
+      destinationImage:dest];
+
+  self.rotateHandleOSC.fillColorOverride = [NSColor accent];
+  [self.rotateHandleOSC drawAtCanvasPosition:handleCanvas
+                                   isHovered:NO
+                                    isActive:YES
+                            destinationImage:dest
+                                      atTime:time];
 }
 
 - (void)drawRectPreview:(simd_float4)color
@@ -445,21 +530,26 @@
   }
 
   if (isCursorMode && self.selectedPathIndices.count > 0) {
-    simd_float2 bmin, bmax;
-    if ([self boundsOfSelectedPaths:&bmin max:&bmax]) {
-      [self drawBoundingBoxWithMin:bmin
-                               max:bmax
-                        activePart:activePart
-                  destinationImage:destinationImage
-                            atTime:time];
-    }
-    if (self.selectedPathIndices.count == 1) {
-      NSUInteger idx = self.selectedPathIndices.firstIndex;
-      if (idx < self.paths.count) {
-        [self drawCornerRadiusHandles:self.paths[idx]
-                           activePart:activePart
-                     destinationImage:destinationImage
-                               atTime:time];
+    if (self.dragIsRotation) {
+      [self drawRotatedBoundingBoxWithDestinationImage:destinationImage
+                                                atTime:time];
+    } else {
+      simd_float2 bmin, bmax;
+      if ([self boundsOfSelectedPaths:&bmin max:&bmax]) {
+        [self drawBoundingBoxWithMin:bmin
+                                 max:bmax
+                          activePart:activePart
+                    destinationImage:destinationImage
+                              atTime:time];
+      }
+      if (self.selectedPathIndices.count == 1) {
+        NSUInteger idx = self.selectedPathIndices.firstIndex;
+        if (idx < self.paths.count) {
+          [self drawCornerRadiusHandles:self.paths[idx]
+                             activePart:activePart
+                       destinationImage:destinationImage
+                                 atTime:time];
+        }
       }
     }
   }
