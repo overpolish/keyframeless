@@ -149,18 +149,27 @@
   } else {
     if (modifiers & kFxModifierKey_SHIFT)
       objPos = [self shiftConstrainedPosition:objPos];
+    NSUInteger dragKey =
+        selKey((NSUInteger)self.activePathIndex, (NSUInteger)self.dragIndex);
     if (self.selectedPoints.count > 1 &&
-        [self.selectedPoints containsIndex:(NSUInteger)self.dragIndex]) {
+        [self.selectedPoints containsIndex:dragKey]) {
       simd_float2 delta = {objPos.x - pt.x, objPos.y - pt.y};
       [self.selectedPoints
-          enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
-            if (idx < active.count) {
-              KKBezierPoint sp = [active pointAtIndex:idx];
-              simd_float2 newPos = {sp.x + delta.x, sp.y + delta.y};
-              [active moveAtIndex:idx to:newPos];
-            }
+          enumerateIndexesUsingBlock:^(NSUInteger sk, BOOL *stop) {
+            NSUInteger pi = sk / 100000;
+            NSUInteger pti = sk % 100000;
+            if (pi >= self.paths.count)
+              return;
+            KKBezierPath *p = self.paths[pi];
+            if (pti >= p.count)
+              return;
+            p.isRect = NO;
+            KKBezierPoint sp = [p pointAtIndex:pti];
+            simd_float2 newPos = {sp.x + delta.x, sp.y + delta.y};
+            [p moveAtIndex:pti to:newPos];
           }];
     } else {
+      active.isRect = NO;
       [active moveAtIndex:self.dragIndex to:objPos];
     }
   }

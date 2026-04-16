@@ -43,6 +43,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Whether the path was created as a rectangle (enables corner radius handles).
 @property(nonatomic, assign) BOOL isRect;
 
+/// Whether the path was created with the line tool.
+@property(nonatomic, assign) BOOL isLine;
+
 /// Whether the path is hidden in the canvas.
 @property(nonatomic, assign) BOOL hidden;
 

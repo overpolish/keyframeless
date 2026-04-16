@@ -730,7 +730,7 @@ static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
   id<MTLTexture> stencilTexture = nil;
   BOOL anyFill = NO;
   for (NSUInteger pi = 0; pi < paths.count; pi++) {
-    if (paths[pi].fillEnabled && paths[pi].count >= 3 && !paths[pi].hidden) {
+    if (paths[pi].fillEnabled && paths[pi].count >= 2 && !paths[pi].hidden) {
       anyFill = YES;
       break;
     }
@@ -752,7 +752,7 @@ static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
     if (path.count < 2 || path.hidden)
       continue;
 
-    if (path.fillEnabled && orig.count >= 3 && fillStencilPS && fillColorPS &&
+    if (path.fillEnabled && orig.count >= 2 && fillStencilPS && fillColorPS &&
         stencilTexture) {
       // Always use the original (un-jittered) path for fill geometry.
       // The sketch double-stroke path has overlapping passes that would

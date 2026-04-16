@@ -156,13 +156,19 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   id<FxParameterSettingAPI_v5> paramSetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
 
-  // Write back current param values to the previously-selected path.
+  // Write back current inspector param values to the previously-selected
+  // path.  Only safe in cursor mode where the user may have edited values
+  // in the inspector.  In pen mode, KKParamsToPath would read shared FxPlug
+  // params that may belong to a different path and corrupt the target.
   NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
-  NSIndexSet *prevSel = uuid ? KKCanvasCurrentSelection(uuid) : nil;
-  KKBezierPath *prev = KKSelectedPath(prevSel, self.paths);
-  if (prev) {
-    KKParamsToPath(paramGetAPI, prev);
-    [self writePaths:self.paths];
+  BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
+  if (isCursorMode) {
+    NSIndexSet *prevSel = uuid ? KKCanvasCurrentSelection(uuid) : nil;
+    KKBezierPath *prev = KKSelectedPath(prevSel, self.paths);
+    if (prev) {
+      KKParamsToPath(paramGetAPI, prev);
+      [self writePaths:self.paths];
+    }
   }
 
   // Update selection state so pluginState: patches the correct path.

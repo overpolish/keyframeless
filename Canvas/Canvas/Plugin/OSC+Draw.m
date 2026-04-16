@@ -338,10 +338,17 @@
     id<FxParameterSettingAPI_v5> paramSetAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
     if (selPath) {
-      id<FxParameterRetrievalAPI_v6> paramGetAPI = [self.apiManager
-          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-      KKParamsToPath(paramGetAPI, selPath);
-      if (selPath.isRect && selPath.count >= 4) {
+      // Only patch the path from FxPlug params in cursor mode.  In pen mode
+      // the pen tool handlers keep path state correct — reading shared params
+      // here would overwrite the path with stale values from a previously-
+      // selected path (e.g. closed=NO from a line corrupting a rect).
+      BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
+      if (isCursorMode) {
+        id<FxParameterRetrievalAPI_v6> paramGetAPI = [self.apiManager
+            apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+        KKParamsToPath(paramGetAPI, selPath);
+      }
+      if (isCursorMode && selPath.isRect && selPath.count >= 4) {
         simd_float2 bmin, bmax;
         [self boundsOfPath:selPath min:&bmin max:&bmax];
         CGPoint cMin = [self canvasPointFromObjectPoint:bmin];
