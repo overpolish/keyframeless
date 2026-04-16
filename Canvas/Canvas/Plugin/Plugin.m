@@ -77,21 +77,25 @@
     }
   }
 
-  if (parameterID == kParamSketchFillStyle ||
-      parameterID == kParamFillEnabled) {
+  if (parameterID == kParamSketchFillStyle) {
     id<FxParameterRetrievalAPI_v6> getAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
     id<FxParameterSettingAPI_v5> setAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    BOOL fillOn = NO;
+    BOOL fillOn = NO, fillExp = NO;
     [getAPI getBoolValue:&fillOn
            fromParameter:kParamFillEnabled
                   atTime:kCMTimeZero];
-    int fillStyle = 0;
-    [getAPI getIntValue:&fillStyle
-          fromParameter:kParamSketchFillStyle
-                 atTime:kCMTimeZero];
-    KKSetFillStyleParamsVisible(setAPI, fillOn, fillStyle);
+    [getAPI getBoolValue:&fillExp
+           fromParameter:kParamExpandedFill
+                  atTime:kCMTimeZero];
+    if (fillOn && fillExp) {
+      int fillStyle = 0;
+      [getAPI getIntValue:&fillStyle
+            fromParameter:kParamSketchFillStyle
+                   atTime:kCMTimeZero];
+      KKSetFillStyleParamsVisible(setAPI, YES, fillStyle);
+    }
   }
 
   if (parameterID == kParamSketchEnabled) {
@@ -133,9 +137,10 @@
                     toParameter:kParamDashGap];
       [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
                     toParameter:kParamDotGap];
+      KKSetFillChildrenVisible(setAPI, YES, YES);
+      KKSetFillStyleParamsVisible(setAPI, YES, 1);
       KKSetCornerRadiiVisible(setAPI, YES);
       KKSetSketchParamsVisible(setAPI, YES);
-      KKSetFillStyleParamsVisible(setAPI, YES, 1);
     } else {
       NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
       if (uuid)

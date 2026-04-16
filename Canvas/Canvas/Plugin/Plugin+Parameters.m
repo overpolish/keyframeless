@@ -135,6 +135,19 @@
                              delta:1.0
                     parameterFlags:kFxParameterFlag_HIDDEN];
 
+  [paramAPI addCustomParameterWithName:@""
+                           parameterID:kParamGroupFill
+                          defaultValue:@(kParamGroupFill)
+                        parameterFlags:kFxParameterFlag_CUSTOM_UI |
+                                       kFxParameterFlag_NOT_ANIMATABLE |
+                                       kFxParameterFlag_USE_FULL_VIEW_WIDTH];
+
+  [paramAPI addToggleButtonWithName:@""
+                        parameterID:kParamExpandedFill
+                       defaultValue:NO
+                     parameterFlags:kFxParameterFlag_HIDDEN |
+                                    kFxParameterFlag_NOT_ANIMATABLE];
+
   [paramAPI addToggleButtonWithName:@"Fill"
                         parameterID:kParamFillEnabled
                        defaultValue:NO
@@ -147,6 +160,42 @@
                          defaultGreen:1.0
                           defaultBlue:1.0
                        parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addPopupMenuWithName:@"Fill Style"
+                     parameterID:kParamSketchFillStyle
+                    defaultValue:0
+                     menuEntries:@[
+                       @"Solid", @"Hachure", @"Cross-Hatch", @"Zigzag", @"Dots"
+                     ]
+                  parameterFlags:kFxParameterFlag_HIDDEN |
+                                 kFxParameterFlag_NOT_ANIMATABLE];
+
+  [paramAPI addFloatSliderWithName:@"Fill Gap"
+                       parameterID:kParamSketchFillGap
+                      defaultValue:kSketchFillGapDefault
+                      parameterMin:1.0
+                      parameterMax:100.0
+                         sliderMin:1.0
+                         sliderMax:100.0
+                             delta:1.0
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addAngleSliderWithName:@"Fill Angle"
+                       parameterID:kParamSketchFillAngle
+                    defaultDegrees:kSketchFillAngleDefault
+               parameterMinDegrees:-360.0
+               parameterMaxDegrees:360.0
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addFloatSliderWithName:@"Fill Weight"
+                       parameterID:kParamSketchFillWeight
+                      defaultValue:kSketchFillWeightDefault
+                      parameterMin:0.5
+                      parameterMax:20.0
+                         sliderMin:0.5
+                         sliderMax:20.0
+                             delta:0.5
+                    parameterFlags:kFxParameterFlag_HIDDEN];
 
   [paramAPI addFloatSliderWithName:@"Opacity"
                        parameterID:kParamOpacity
@@ -238,42 +287,6 @@
                          sliderMin:1.0
                          sliderMax:2.0
                              delta:1.0
-                    parameterFlags:kFxParameterFlag_HIDDEN];
-
-  [paramAPI addPopupMenuWithName:@"Fill Style"
-                     parameterID:kParamSketchFillStyle
-                    defaultValue:0
-                     menuEntries:@[
-                       @"Solid", @"Hachure", @"Cross-Hatch", @"Zigzag", @"Dots"
-                     ]
-                  parameterFlags:kFxParameterFlag_HIDDEN |
-                                 kFxParameterFlag_NOT_ANIMATABLE];
-
-  [paramAPI addFloatSliderWithName:@"Fill Gap"
-                       parameterID:kParamSketchFillGap
-                      defaultValue:kSketchFillGapDefault
-                      parameterMin:1.0
-                      parameterMax:100.0
-                         sliderMin:1.0
-                         sliderMax:100.0
-                             delta:1.0
-                    parameterFlags:kFxParameterFlag_HIDDEN];
-
-  [paramAPI addAngleSliderWithName:@"Fill Angle"
-                       parameterID:kParamSketchFillAngle
-                    defaultDegrees:kSketchFillAngleDefault
-               parameterMinDegrees:-360.0
-               parameterMaxDegrees:360.0
-                    parameterFlags:kFxParameterFlag_HIDDEN];
-
-  [paramAPI addFloatSliderWithName:@"Fill Weight"
-                       parameterID:kParamSketchFillWeight
-                      defaultValue:kSketchFillWeightDefault
-                      parameterMin:0.5
-                      parameterMax:20.0
-                         sliderMin:0.5
-                         sliderMax:20.0
-                             delta:0.5
                     parameterFlags:kFxParameterFlag_HIDDEN];
 
   [paramAPI addCustomParameterWithName:@"Seed"

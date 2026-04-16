@@ -68,15 +68,43 @@ KKSetStrokeChildrenVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
   }
 }
 
+/// Show/hide the fill group header.
+static inline void
+KKSetFillGroupVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
+                      BOOL visible) {
+  FxParameterFlags flags =
+      visible ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE |
+                 kFxParameterFlag_USE_FULL_VIEW_WIDTH)
+              : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:flags toParameter:kParamGroupFill];
+}
+
+/// Show/hide the fill group children based on enabled+expanded state.
+static inline void
+KKSetFillChildrenVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
+                         BOOL fillEnabled, BOOL fillExpanded) {
+  BOOL show = fillEnabled && fillExpanded;
+  FxParameterFlags flags =
+      show ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:flags toParameter:kParamFillColor];
+  if (!show) {
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamSketchFillStyle];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamSketchFillGap];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamSketchFillAngle];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamSketchFillWeight];
+  }
+}
+
 /// Show all per-object param rows (flags only, no values).
 /// Add new per-object properties here.
 static inline void
 KKShowObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
   KKSetStrokeGroupVisible(paramSetAPI, YES);
-  [paramSetAPI setParameterFlags:kFxParameterFlag_NOT_ANIMATABLE
-                     toParameter:kParamFillEnabled];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                     toParameter:kParamFillColor];
+  KKSetFillGroupVisible(paramSetAPI, YES);
   [paramSetAPI setParameterFlags:kFxParameterFlag_DEFAULT
                      toParameter:kParamOpacity];
   [paramSetAPI setParameterFlags:kFxParameterFlag_NOT_ANIMATABLE
@@ -90,12 +118,11 @@ KKShowObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
 static inline void
 KKHideObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
   KKSetStrokeGroupVisible(paramSetAPI, YES);
+  KKSetFillGroupVisible(paramSetAPI, YES);
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamStrokeWidth];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamStrokeColor];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamFillEnabled];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamFillColor];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
@@ -500,6 +527,4 @@ KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                  toParameter:kParamSketchFillWeight
                       atTime:kCMTimeZero];
   KKSetSketchParamsVisible(paramSetAPI, path.sketchEnabled);
-  KKSetFillStyleParamsVisible(paramSetAPI, path.fillEnabled,
-                              (int)path.sketchFillStyle);
 }

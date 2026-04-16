@@ -367,6 +367,12 @@
                       atTime:kCMTimeZero];
         KKSetStrokeChildrenVisible(paramSetAPI, selPath.strokeEnabled,
                                    strokeExpanded);
+        BOOL fillExpanded = NO;
+        [getAPI getBoolValue:&fillExpanded
+               fromParameter:kParamExpandedFill
+                      atTime:kCMTimeZero];
+        KKSetFillChildrenVisible(paramSetAPI, selPath.fillEnabled,
+                                 fillExpanded);
       }
     } else if (!KKIsForceShowEnabled([self.apiManager
                    apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)])) {

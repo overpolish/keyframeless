@@ -48,6 +48,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, weak, nullable) KKJoinStyleView *joinStyleView;
 @property(nonatomic, weak, nullable) KKStrokeStyleView *strokeStyleView;
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *strokeGroupHeader;
+@property(nonatomic, weak, nullable) KKCustomGroupHeaderView *fillGroupHeader;
 @property(nonatomic) NSUInteger listHash;
 @end
 

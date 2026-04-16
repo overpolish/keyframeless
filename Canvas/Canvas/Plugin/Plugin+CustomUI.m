@@ -225,17 +225,22 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
     id<FxParameterRetrievalAPI_v6> paramGetAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
 
-    BOOL enabled = YES;
-    [paramGetAPI getBoolValue:&enabled
-                fromParameter:kParamStrokeEnabled
-                       atTime:currentTime];
-    header.isEnabled = enabled;
+    NSInteger selIdx = KKReadSelectedIndex(paramGetAPI);
+    BOOL hasSelection = (selIdx >= 0);
+    header.isInteractive = hasSelection;
+    if (hasSelection) {
+      BOOL enabled = YES;
+      [paramGetAPI getBoolValue:&enabled
+                  fromParameter:kParamStrokeEnabled
+                         atTime:currentTime];
+      header.isEnabled = enabled;
 
-    BOOL expanded = NO;
-    [paramGetAPI getBoolValue:&expanded
-                fromParameter:kParamExpandedStroke
-                       atTime:currentTime];
-    header.isExpanded = expanded;
+      BOOL expanded = NO;
+      [paramGetAPI getBoolValue:&expanded
+                  fromParameter:kParamExpandedStroke
+                         atTime:currentTime];
+      header.isExpanded = expanded;
+    }
     [actionAPI endAction:self];
 
     __weak typeof(self) weakSelf = self;
@@ -323,6 +328,112 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
     NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
     if (uuid)
       KKLayerStateForUUID(uuid).strokeGroupHeader = header;
+
+    return header;
+  }
+
+  if (parameterID == kParamGroupFill) {
+    NSImage *icon =
+        [NSImage imageWithSystemSymbolName:@"rectangle.trailinghalf.filled"
+                  accessibilityDescription:nil];
+    KKCustomGroupHeaderView *header =
+        [[KKCustomGroupHeaderView alloc] initWithFrame:NSMakeRect(0, 0, 300, 26)
+                                            apiManager:self.apiManager
+                                           parameterId:parameterID
+                                                  text:@"Fill"
+                                                  icon:icon
+                                         showsCheckbox:YES];
+
+    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actionAPI startAction:self];
+    CMTime currentTime = [actionAPI currentTime];
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+
+    NSInteger selIdx = KKReadSelectedIndex(paramGetAPI);
+    BOOL hasSelection = (selIdx >= 0);
+    header.isInteractive = hasSelection;
+    if (hasSelection) {
+      BOOL enabled = NO;
+      [paramGetAPI getBoolValue:&enabled
+                  fromParameter:kParamFillEnabled
+                         atTime:currentTime];
+      header.isEnabled = enabled;
+
+      BOOL expanded = NO;
+      [paramGetAPI getBoolValue:&expanded
+                  fromParameter:kParamExpandedFill
+                         atTime:currentTime];
+      header.isExpanded = expanded;
+    }
+    [actionAPI endAction:self];
+
+    __weak typeof(self) weakSelf = self;
+    header.onEnabledChanged = ^(BOOL isEnabled) {
+      __strong typeof(weakSelf) strongSelf = weakSelf;
+      if (!strongSelf)
+        return;
+      id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      [actAPI startAction:strongSelf];
+      id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      [setAPI setBoolValue:isEnabled
+               toParameter:kParamFillEnabled
+                    atTime:[actAPI currentTime]];
+      id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      BOOL expanded = NO;
+      [getAPI getBoolValue:&expanded
+             fromParameter:kParamExpandedFill
+                    atTime:kCMTimeZero];
+      KKSetFillChildrenVisible(setAPI, isEnabled, expanded);
+      if (isEnabled && expanded) {
+        int fillStyle = 0;
+        [getAPI getIntValue:&fillStyle
+              fromParameter:kParamSketchFillStyle
+                     atTime:kCMTimeZero];
+        KKSetFillStyleParamsVisible(setAPI, YES, fillStyle);
+      }
+      [actAPI endAction:strongSelf];
+      KKModifySelectedPathProperty(strongSelf.apiManager,
+                                   ^(KKBezierPath *path) {
+                                     path.fillEnabled = isEnabled;
+                                   });
+    };
+    header.onExpandedChanged = ^(BOOL isExpanded) {
+      __strong typeof(weakSelf) strongSelf = weakSelf;
+      if (!strongSelf)
+        return;
+      id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      [actAPI startAction:strongSelf];
+      id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
+          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      [setAPI setBoolValue:isExpanded
+               toParameter:kParamExpandedFill
+                    atTime:[actAPI currentTime]];
+      BOOL fillOn = NO;
+      [getAPI getBoolValue:&fillOn
+             fromParameter:kParamFillEnabled
+                    atTime:kCMTimeZero];
+      KKSetFillChildrenVisible(setAPI, fillOn, isExpanded);
+      if (fillOn && isExpanded) {
+        int fillStyle = 0;
+        [getAPI getIntValue:&fillStyle
+              fromParameter:kParamSketchFillStyle
+                     atTime:kCMTimeZero];
+        KKSetFillStyleParamsVisible(setAPI, YES, fillStyle);
+      }
+      [actAPI endAction:strongSelf];
+    };
+
+    NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+    if (uuid)
+      KKLayerStateForUUID(uuid).fillGroupHeader = header;
 
     return header;
   }
