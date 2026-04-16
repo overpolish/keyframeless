@@ -700,6 +700,16 @@ static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
   float outputHeight = (float)(destinationImage.tilePixelBounds.top -
                                destinationImage.tilePixelBounds.bottom);
 
+  FxRect srcBounds = sourceImages[0].imagePixelBounds;
+  FxMatrix44 *inv = sourceImages[0].inversePixelTransform;
+  FxPoint2D ll = {srcBounds.left, srcBounds.bottom};
+  FxPoint2D ur = {srcBounds.right, srcBounds.top};
+  ll = [inv transform2DPoint:ll];
+  ur = [inv transform2DPoint:ur];
+  float pxW = srcBounds.right - srcBounds.left;
+  float logicalW = ur.x - ll.x;
+  float renderScale = (logicalW > 0) ? (pxW / logicalW) : 1.0f;
+
   CanvasStrokeParams strokeParams = {8.0f, 1.0f, 0.0f, 0.0f};
   NSArray<KKBezierPath *> *paths = @[];
 
@@ -763,6 +773,20 @@ static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
          destinationLevel:0
         destinationOrigin:MTLOriginMake(0, 0, 0)];
     [blit endEncoding];
+  }
+
+  // Scale all pixel-space stroke properties by render quality so strokes
+  // appear the same proportional size at any quality level.
+  if (renderScale < 0.9999f) {
+    for (KKBezierPath *p in paths) {
+      p.strokeWidth *= renderScale;
+      p.endWidth *= renderScale;
+      p.dashLength *= renderScale;
+      p.dashGap *= renderScale;
+      p.dotGap *= renderScale;
+      p.sketchFillGap *= renderScale;
+      p.sketchFillWeight *= renderScale;
+    }
   }
 
   // Keep original paths for sketch fill generation (hachure needs clean
