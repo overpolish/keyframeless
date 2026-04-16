@@ -16,6 +16,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property(nonatomic, assign) BOOL isEnabled;
 @property(nonatomic, assign) BOOL isExpanded;
+@property(nonatomic, assign) BOOL isInteractive;
 @property(nonatomic, copy, nullable) NSString *statusText;
 @property(nonatomic, strong, nullable) NSColor *statusColor;
 

@@ -254,6 +254,8 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
   __block BOOL selectedSketchEnabled = NO;
   __block BOOL selectedFillEnabled = NO;
   __block NSInteger selectedFillStyle = 0;
+  __block BOOL selectedStrokeEnabled = NO;
+  __block BOOL selectedStrokeExpanded = NO;
   [selection enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
     if (idx < pathCount && !paths[idx].isGroup) {
       if (!paths[idx].closed)
@@ -267,6 +269,7 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
       selectedSketchEnabled = paths[idx].sketchEnabled;
       selectedFillEnabled = paths[idx].fillEnabled;
       selectedFillStyle = paths[idx].sketchFillStyle;
+      selectedStrokeEnabled = paths[idx].strokeEnabled;
       *stop = YES;
     }
   }];
@@ -382,22 +385,36 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
         }
         if (hasPath || forceShow) {
           KKShowObjectParams(setAPI);
-          KKSetLineCapVisible(setAPI, isOpen || forceShow);
-          KKSetLineJoinVisible(setAPI, selectedHasJoins || forceShow);
-          KKSetStrokeStyleVisible(setAPI, YES);
+
+          [getAPI getBoolValue:&selectedStrokeExpanded
+                 fromParameter:kParamExpandedStroke
+                        atTime:kCMTimeZero];
+          BOOL strokeOpen = (selectedStrokeEnabled || forceShow) &&
+                            (selectedStrokeExpanded || forceShow);
+          KKSetStrokeChildrenVisible(setAPI, selectedStrokeEnabled || forceShow,
+                                     selectedStrokeExpanded || forceShow);
+
+          if (strokeOpen) {
+            KKSetLineCapVisible(setAPI, isOpen || forceShow);
+            KKSetLineJoinVisible(setAPI, selectedHasJoins || forceShow);
+            KKSetStrokeStyleVisible(setAPI, YES);
+            if (forceShow) {
+              [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
+                            toParameter:kParamDashLength];
+              [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
+                            toParameter:kParamDashGap];
+              [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
+                            toParameter:kParamDotGap];
+            } else {
+              KKSetDashDotParamsForStyle(
+                  setAPI,
+                  selectedStrokeStyle >= 0 ? (uint8_t)selectedStrokeStyle : 0);
+            }
+          }
           if (forceShow) {
-            [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                          toParameter:kParamDashLength];
-            [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                          toParameter:kParamDashGap];
-            [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                          toParameter:kParamDotGap];
             KKSetSketchParamsVisible(setAPI, YES);
             KKSetFillStyleParamsVisible(setAPI, YES, 1);
           } else {
-            KKSetDashDotParamsForStyle(
-                setAPI,
-                selectedStrokeStyle >= 0 ? (uint8_t)selectedStrokeStyle : 0);
             KKSetSketchParamsVisible(setAPI, selectedSketchEnabled);
             KKSetFillStyleParamsVisible(setAPI, selectedFillEnabled,
                                         (int)selectedFillStyle);
@@ -437,6 +454,27 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
         strokeStyleView.selectedIndex = selectedStrokeStyle;
       [strokeStyleView setNeedsLayout:YES];
       [strokeStyleView setNeedsDisplay:YES];
+    }
+
+    // Sync stroke group header enabled/expanded state.
+    KKCustomGroupHeaderView *strokeHeader = st.strokeGroupHeader;
+    if (strokeHeader) {
+      BOOL hasSelection = (capturedSelection.count > 0);
+      BOOL hasPath = NO;
+      for (NSUInteger i = 0; i < pathCount; i++) {
+        if ([capturedSelection containsIndex:i] && !groupFlags[i].boolValue) {
+          hasPath = YES;
+          break;
+        }
+      }
+      strokeHeader.isInteractive = hasPath;
+      if (hasPath) {
+        strokeHeader.isEnabled = selectedStrokeEnabled;
+        strokeHeader.isExpanded = selectedStrokeExpanded;
+      } else {
+        strokeHeader.isEnabled = NO;
+        strokeHeader.isExpanded = NO;
+      }
     }
   });
 }

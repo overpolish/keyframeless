@@ -10,19 +10,20 @@
 
 - (void)updateParameterVisibilityAtTime:(CMTime)time {
   NSArray<NSNumber *> *allParams = @[
-    @(kParamStrokeEnabled),    @(kParamStrokeWidth),
-    @(kParamStrokeColor),      @(kParamFillEnabled),
-    @(kParamFillColor),        @(kParamOpacity),
-    @(kParamLineCap),          @(kParamLineJoin),
-    @(kParamStrokeStyle),      @(kParamDashLength),
-    @(kParamDashGap),          @(kParamDotGap),
-    @(kParamClosedPath),       @(kParamCornerRadiusTL),
-    @(kParamCornerRadiusTR),   @(kParamCornerRadiusBR),
-    @(kParamCornerRadiusBL),   @(kParamSketchEnabled),
-    @(kParamSketchRoughness),  @(kParamSketchBowing),
-    @(kParamSketchStrokes),    @(kParamSketchFillStyle),
-    @(kParamSketchFillGap),    @(kParamSketchFillAngle),
-    @(kParamSketchFillWeight), @(kParamSketchSeed),
+    @(kParamGroupStroke),     @(kParamStrokeEnabled),
+    @(kParamStrokeWidth),     @(kParamStrokeColor),
+    @(kParamFillEnabled),     @(kParamFillColor),
+    @(kParamOpacity),         @(kParamLineCap),
+    @(kParamLineJoin),        @(kParamStrokeStyle),
+    @(kParamDashLength),      @(kParamDashGap),
+    @(kParamDotGap),          @(kParamClosedPath),
+    @(kParamCornerRadiusTL),  @(kParamCornerRadiusTR),
+    @(kParamCornerRadiusBR),  @(kParamCornerRadiusBL),
+    @(kParamSketchEnabled),   @(kParamSketchRoughness),
+    @(kParamSketchBowing),    @(kParamSketchStrokes),
+    @(kParamSketchFillStyle), @(kParamSketchFillGap),
+    @(kParamSketchFillAngle), @(kParamSketchFillWeight),
+    @(kParamSketchSeed),
   ];
 
   [self forceShowAllParametersIfEnabled:kParamForceShow

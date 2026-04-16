@@ -34,6 +34,7 @@ static const CGFloat kStatusTrailingMargin = 23.0;
   if (self) {
     _isEnabled = NO;
     _isExpanded = NO;
+    _isInteractive = YES;
 
     _chevron = [[KKChevronView alloc] initWithFrame:NSZeroRect];
     _chevron.translatesAutoresizingMaskIntoConstraints = NO;
@@ -78,8 +79,12 @@ static const CGFloat kStatusTrailingMargin = 23.0;
       _checkbox.translatesAutoresizingMaskIntoConstraints = NO;
       _checkbox.onToggle = ^(BOOL isChecked) {
         __strong typeof(weakSelf) strongSelf = weakSelf;
-        if (!strongSelf)
+        if (!strongSelf || !strongSelf->_isInteractive) {
+          // Revert the visual state if not interactive.
+          if (strongSelf)
+            strongSelf->_checkbox.isChecked = strongSelf->_isEnabled;
           return;
+        }
         strongSelf->_isEnabled = isChecked;
         strongSelf->_chevron.isInteractive = isChecked;
         if (!isChecked && strongSelf->_isExpanded) {
@@ -122,11 +127,16 @@ static const CGFloat kStatusTrailingMargin = 23.0;
 - (void)setIsEnabled:(BOOL)isEnabled {
   _isEnabled = isEnabled;
   _checkbox.isChecked = isEnabled;
-  _chevron.isInteractive = isEnabled;
+  _chevron.isInteractive = isEnabled && _isInteractive;
   if (!isEnabled && _isExpanded) {
     _isExpanded = NO;
     [_chevron setExpanded:NO animated:YES];
   }
+}
+
+- (void)setIsInteractive:(BOOL)isInteractive {
+  _isInteractive = isInteractive;
+  _chevron.isInteractive = isInteractive && _isEnabled;
 }
 
 - (void)setIsExpanded:(BOOL)isExpanded {
