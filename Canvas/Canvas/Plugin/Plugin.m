@@ -52,6 +52,7 @@
     [getAPI getBoolValue:&strokeExp
            fromParameter:kParamExpandedStroke
                   atTime:kCMTimeZero];
+    KKSetEndWidthVisible(setAPI, !closed && strokeOn && strokeExp);
     KKSetLineCapVisible(setAPI, !closed && strokeOn && strokeExp);
   }
 
@@ -85,6 +86,7 @@
     if (forceShow) {
       KKShowObjectParams(setAPI);
       KKSetStrokeChildrenVisible(setAPI, YES, YES);
+      KKSetEndWidthVisible(setAPI, YES);
       KKSetLineCapVisible(setAPI, YES);
       KKSetMarkersVisible(setAPI, YES);
       KKSetMarkerSizeVisible(setAPI, 1, 1);
@@ -112,6 +114,8 @@
       [actAPI endAction:self];
     }
   }
+
+  [self handleLinkedParameterChanged:parameterID atTime:time];
 
   return YES;
 }

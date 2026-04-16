@@ -73,8 +73,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// Whether this path renders a stroke (default YES).
 @property(nonatomic, assign) BOOL strokeEnabled;
 
-/// Stroke width for this path (default 8.0).
+/// Stroke width at the start of this path (default 8.0).
 @property(nonatomic, assign) float strokeWidth;
+
+/// Stroke width at the end of this path. When different from strokeWidth,
+/// the stroke tapers linearly along the path. Only meaningful for open paths.
+/// Default 0 means "use strokeWidth" (no taper).
+@property(nonatomic, assign) float endWidth;
 
 /// Stroke color components (default red: 1, 0, 0).
 @property(nonatomic, assign) float strokeR;

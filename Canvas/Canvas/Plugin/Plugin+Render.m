@@ -258,6 +258,7 @@ static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
                                 id<MTLRenderPipelineState> strokePS,
                                 simd_uint2 viewportSize) {
   float sw = path.strokeWidth;
+  float ew = (path.endWidth > 0) ? path.endWidth : sw;
   float oa = path.opacity;
   simd_float4 color = {path.strokeR * oa, path.strokeG * oa, path.strokeB * oa,
                        oa};
@@ -266,7 +267,7 @@ static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
   uint8_t endMarker = path.endMarker;
   BOOL hasMarkers = !path.closed && (startMarker != 0 || endMarker != 0);
   float startMarkerSz = sw * path.startMarkerSize;
-  float endMarkerSz = sw * path.endMarkerSize;
+  float endMarkerSz = ew * path.endMarkerSize;
   float startPullback =
       hasMarkers ? KKMarkerPullback(startMarker, startMarkerSz) : 0;
   float endPullback = hasMarkers ? KKMarkerPullback(endMarker, endMarkerSz) : 0;
@@ -289,28 +290,28 @@ static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
     NSUInteger maxVertices =
         curveCount * segsPerCurve * 12 + 8192 + markerExtra;
     vertices = malloc(maxVertices * sizeof(CanvasVertex));
-    vertexCount = KKTessellateDashedPath(path, sw, outputWidth, outputHeight,
-                                         path.dashLength, path.dashGap,
-                                         path.lineJoin, vertices);
+    vertexCount = KKTessellateDashedPath(path, sw, ew, outputWidth,
+                                         outputHeight, path.dashLength,
+                                         path.dashGap, path.lineJoin, vertices);
   } else if (path.strokeStyle == 2) {
     NSUInteger maxVertices = curveCount * segsPerCurve * 4 + 4096 + markerExtra;
     vertices = malloc(maxVertices * sizeof(CanvasVertex));
-    vertexCount = KKTessellateDottedPath(path, sw, outputWidth, outputHeight,
-                                         path.dotGap, vertices);
+    vertexCount = KKTessellateDottedPath(path, sw, ew, outputWidth,
+                                         outputHeight, path.dotGap, vertices);
   } else if (hasMarkers) {
     NSUInteger maxVertices =
         curveCount * ((segsPerCurve + 1) * 2 + 2) + 256 + markerExtra;
     vertices = malloc(maxVertices * sizeof(CanvasVertex));
-    vertexCount = KKTessellateTrimmedPath(path, sw, outputWidth, outputHeight,
-                                          path.lineCap, path.lineJoin,
-                                          startPullback, endPullback, vertices);
+    vertexCount = KKTessellateTrimmedPath(
+        path, sw, ew, outputWidth, outputHeight, path.lineCap, path.lineJoin,
+        startPullback, endPullback, vertices);
   } else {
     NSUInteger capExtra = (!path.closed && path.lineCap != 0) ? 256 : 0;
     NSUInteger joinExtra = (path.lineJoin != 0) ? curveCount * 48 : 0;
     NSUInteger maxVertices =
         curveCount * ((segsPerCurve + 1) * 2 + 2) + 2 + capExtra + joinExtra;
     vertices = malloc(maxVertices * sizeof(CanvasVertex));
-    vertexCount = KKTessellatePath(path, sw, outputWidth, outputHeight,
+    vertexCount = KKTessellatePath(path, sw, ew, outputWidth, outputHeight,
                                    path.lineCap, path.lineJoin, vertices);
   }
 
@@ -345,11 +346,11 @@ static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
         NSUInteger markerVerts = 0;
         if (path.sketchEnabled && path.sketchRoughness > 0.0001f) {
           markerVerts = KKTessellateSketchMarker(
-              endMarker, endPos, eTan, eNorm, endMarkerSz, sw,
+              endMarker, endPos, eTan, eNorm, endMarkerSz, ew,
               path.sketchRoughness, path.sketchSeed, markerTmp);
         } else {
           markerVerts = KKTessellateMarker(endMarker, endPos, eTan, eNorm,
-                                           endMarkerSz, sw, markerTmp);
+                                           endMarkerSz, ew, markerTmp);
         }
         if (markerVerts > 0) {
           vertexCount = KKEmitBridge(

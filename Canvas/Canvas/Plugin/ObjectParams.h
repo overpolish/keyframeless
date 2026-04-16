@@ -54,6 +54,10 @@ KKSetStrokeChildrenVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
   [paramSetAPI setParameterFlags:flags toParameter:kParamStrokeColor];
   if (!show) {
     [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamEndWidth];
+  }
+  if (!show) {
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                        toParameter:kParamLineCap];
     [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                        toParameter:kParamLineJoin];
@@ -157,6 +161,8 @@ KKHideObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamStrokeWidth];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                     toParameter:kParamEndWidth];
+  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamStrokeColor];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamFillColor];
@@ -200,6 +206,15 @@ KKHideObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
                      toParameter:kParamSketchFillWeight];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamSketchSeed];
+}
+
+/// Show/hide the End Width param row based on whether the path is open.
+static inline void
+KKSetEndWidthVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
+                     BOOL visible) {
+  FxParameterFlags flags =
+      visible ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:flags toParameter:kParamEndWidth];
 }
 
 /// Show/hide the Line Cap param row based on whether the path is open.
@@ -367,7 +382,12 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                  blueValue:&b
              fromParameter:kParamStrokeColor
                     atTime:kCMTimeZero];
+  double ew = 8.0;
+  [paramGetAPI getFloatValue:&ew
+               fromParameter:kParamEndWidth
+                      atTime:kCMTimeZero];
   path.strokeWidth = (float)w;
+  path.endWidth = (float)ew;
   path.strokeR = (float)r;
   path.strokeG = (float)g;
   path.strokeB = (float)b;
@@ -512,6 +532,10 @@ KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
   [paramSetAPI setFloatValue:path.strokeWidth
                  toParameter:kParamStrokeWidth
                       atTime:kCMTimeZero];
+  [paramSetAPI
+      setFloatValue:(path.endWidth > 0 ? path.endWidth : path.strokeWidth)
+        toParameter:kParamEndWidth
+             atTime:kCMTimeZero];
   [paramSetAPI setRedValue:path.strokeR
                 greenValue:path.strokeG
                  blueValue:path.strokeB
