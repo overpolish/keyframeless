@@ -61,3 +61,30 @@ vertex FillRasterizerData fillVertexShader(uint vertexID [[vertex_id]],
 fragment float4 fillFragmentShader(FillRasterizerData in [[stage_in]], constant float4 *fillColor [[buffer(0)]]) {
     return *fillColor;
 }
+
+// Composite shader: draws a fullscreen quad sampling an intermediate texture,
+// multiplied by an opacity value.  Used so that per-object opacity is applied
+// once to the flattened fill+stroke instead of per-primitive.
+
+typedef struct {
+    float4 clipSpacePosition [[position]];
+    float2 texCoord;
+} CompositeRasterizerData;
+
+vertex CompositeRasterizerData compositeVertexShader(uint vertexID [[vertex_id]]) {
+    // Fullscreen triangle strip: 4 vertices → 2 triangles via triangle_strip
+    float2 positions[4] = {{-1, -1}, {1, -1}, {-1, 1}, {1, 1}};
+    float2 texCoords[4] = {{0, 1}, {1, 1}, {0, 0}, {1, 0}};
+
+    CompositeRasterizerData out;
+    out.clipSpacePosition = float4(positions[vertexID], 0.0, 1.0);
+    out.texCoord = texCoords[vertexID];
+    return out;
+}
+
+fragment float4 compositeFragmentShader(CompositeRasterizerData in [[stage_in]], texture2d<float> tex [[texture(0)]],
+                                        constant float *opacity [[buffer(0)]]) {
+    constexpr sampler s(mag_filter::nearest, min_filter::nearest);
+    float4 color = tex.sample(s, in.texCoord);
+    return color * *opacity;
+}

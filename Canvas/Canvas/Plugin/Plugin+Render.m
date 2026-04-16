@@ -745,6 +745,8 @@ static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
                                            p.sketchSeed ^ 0xFACE0042, 1,
                                            outputWidth, outputHeight);
         pass2.fillEnabled = NO;
+        pass2.startMarker = 0;
+        pass2.endMarker = 0;
         [renderPaths addObject:pass2];
         [origPathsMut addObject:p];
       } else {
@@ -856,11 +858,64 @@ static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
     stencilTexture = [device newTextureWithDescriptor:stencilTexDesc];
   }
 
+  // Composite pipeline: used to blit the intermediate texture onto the output
+  // with per-object opacity applied once to the flattened fill+stroke.
+  NSString *compositeKey =
+      [NSString stringWithFormat:@"%@_composite_%lu", kPluginID,
+                                 (unsigned long)pixelFormat];
+  id<MTLRenderPipelineState> compositePS =
+      getOrCreatePipeline(compositeKey, registryID, pixelFormat, cache, device,
+                          @"compositeVertexShader", @"compositeFragmentShader",
+                          YES, MTLPixelFormatInvalid);
+
+  // Intermediate texture for per-object opacity compositing.
+  // Reused across all paths that need it.
+  id<MTLTexture> intermediateTexture = nil;
+  if (compositePS) {
+    MTLTextureDescriptor *intDesc =
+        [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pixelFormat
+                                                           width:outputWidth
+                                                          height:outputHeight
+                                                       mipmapped:NO];
+    intDesc.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+    intDesc.storageMode = MTLStorageModePrivate;
+    intermediateTexture = [device newTextureWithDescriptor:intDesc];
+  }
+
   for (NSUInteger pi = paths.count; pi > 0; pi--) {
     KKBezierPath *path = paths[pi - 1];
     KKBezierPath *orig = origPaths[pi - 1];
     if (path.count < 2 || path.hidden)
       continue;
+
+    float pathOpacity = path.opacity;
+    BOOL needsIntermediate =
+        intermediateTexture && compositePS && pathOpacity < 0.9999f;
+
+    // When using intermediate compositing, render fill+stroke at full opacity
+    // into a clear intermediate texture, then composite onto output with the
+    // object's opacity.  This prevents overlapping primitives (fill vs stroke,
+    // dashed segments, sketch fills) from showing through each other.
+    id<MTLTexture> target =
+        needsIntermediate ? intermediateTexture : outputTexture;
+
+    if (needsIntermediate) {
+      // Temporarily force full opacity on the path objects so the render
+      // helpers emit fully opaque colors.
+      path.opacity = 1.0f;
+      orig.opacity = 1.0f;
+
+      // Clear the intermediate texture to transparent black.
+      MTLRenderPassDescriptor *clearRPD =
+          [MTLRenderPassDescriptor renderPassDescriptor];
+      clearRPD.colorAttachments[0].texture = intermediateTexture;
+      clearRPD.colorAttachments[0].loadAction = MTLLoadActionClear;
+      clearRPD.colorAttachments[0].storeAction = MTLStoreActionStore;
+      clearRPD.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+      id<MTLRenderCommandEncoder> clearEnc =
+          [commandBuffer renderCommandEncoderWithDescriptor:clearRPD];
+      [clearEnc endEncoding];
+    }
 
     if (path.fillEnabled && orig.count >= 2 && fillStencilPS && fillColorPS &&
         stencilTexture) {
@@ -872,26 +927,52 @@ static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
         // When sketch is on, allow natural leaking (rough.js style).
         BOOL clipFill = !path.sketchEnabled;
         if (clipFill) {
-          renderFillStencilOnly(orig, outputWidth, outputHeight, device,
-                                commandBuffer, outputTexture, stencilTexture,
-                                fillStencilPS, fillStencilDSState,
-                                viewportSize);
+          renderFillStencilOnly(
+              orig, outputWidth, outputHeight, device, commandBuffer, target,
+              stencilTexture, fillStencilPS, fillStencilDSState, viewportSize);
         }
         renderSketchFillForPath(orig, outputWidth, outputHeight, device,
-                                commandBuffer, outputTexture, stencilTexture,
+                                commandBuffer, target, stencilTexture,
                                 strokeStencilPS, fillColorDSState, viewportSize,
                                 clipFill);
       } else {
         renderFillForPath(orig, outputWidth, outputHeight, device,
-                          commandBuffer, outputTexture, stencilTexture,
-                          fillStencilPS, fillColorPS, fillStencilDSState,
-                          fillColorDSState, viewportSize);
+                          commandBuffer, target, stencilTexture, fillStencilPS,
+                          fillColorPS, fillStencilDSState, fillColorDSState,
+                          viewportSize);
       }
     }
 
     if (path.strokeEnabled) {
       renderStrokeForPath(path, outputWidth, outputHeight, device,
-                          commandBuffer, outputTexture, strokePS, viewportSize);
+                          commandBuffer, target, strokePS, viewportSize);
+    }
+
+    if (needsIntermediate) {
+      // Restore original opacity values.
+      path.opacity = pathOpacity;
+      orig.opacity = pathOpacity;
+
+      // Composite the intermediate texture onto the output with opacity.
+      MTLRenderPassDescriptor *compRPD =
+          [MTLRenderPassDescriptor renderPassDescriptor];
+      compRPD.colorAttachments[0].texture = outputTexture;
+      compRPD.colorAttachments[0].loadAction = MTLLoadActionLoad;
+      compRPD.colorAttachments[0].storeAction = MTLStoreActionStore;
+
+      id<MTLRenderCommandEncoder> compEnc =
+          [commandBuffer renderCommandEncoderWithDescriptor:compRPD];
+      [compEnc
+          setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1, 1}];
+      [compEnc setRenderPipelineState:compositePS];
+      [compEnc setFragmentTexture:intermediateTexture atIndex:0];
+      [compEnc setFragmentBytes:&pathOpacity
+                         length:sizeof(pathOpacity)
+                        atIndex:0];
+      [compEnc drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                  vertexStart:0
+                  vertexCount:4];
+      [compEnc endEncoding];
     }
   }
 
