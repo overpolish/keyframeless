@@ -270,6 +270,12 @@ static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
   float startPullback =
       hasMarkers ? KKMarkerPullback(startMarker, startMarkerSz) : 0;
   float endPullback = hasMarkers ? KKMarkerPullback(endMarker, endMarkerSz) : 0;
+  // Markers with zero pullback (arrowhead, line) still need a positive trim
+  // so KKTessellateTrimmedPath suppresses caps at those endpoints.
+  if (startMarker != 0 && startPullback <= 0.0f)
+    startPullback = 0.001f;
+  if (endMarker != 0 && endPullback <= 0.0f)
+    endPullback = 0.001f;
   NSUInteger markerExtra = hasMarkers ? kMarkerMaxVertices * 2 + 4 : 0;
 
   CanvasVertex *vertices = NULL;
@@ -320,9 +326,12 @@ static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
       NSUInteger hint = 0;
 
       if (endMarker != 0) {
-        // Use tangent at the pullback point so marker aligns with
-        // the visible stroke end, not the true endpoint direction.
-        float pullbackArc = totalArc - endPullback;
+        // Sample tangent slightly inside the curve so the marker direction
+        // follows the actual curve shape, not just the endpoint handle.
+        // Without this, bezier endpoint tangents ignore interior control
+        // points and the marker appears stuck when they move.
+        float minTangentPull = endMarkerSz * 0.3f;
+        float pullbackArc = totalArc - fmaxf(endPullback, minTangentPull);
         if (pullbackArc < 0.0f)
           pullbackArc = 0.0f;
         PathSample pullbackSample =
@@ -330,23 +339,32 @@ static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
         simd_float2 eNorm = pullbackSample.normal;
         simd_float2 eTan = (simd_float2){eNorm.y, -eNorm.x};
         simd_float2 endPos = samples[sampleCount - 1].position;
-        vertexCount = KKEmitBridge(
-            vertices, vertexCount,
-            vertexCount > 0 ? vertices[vertexCount - 1].position : endPos,
-            endPos);
+        // Tessellate marker first so we can use its actual first vertex
+        // position in the bridge (avoids non-degenerate bridge triangles).
+        CanvasVertex markerTmp[256];
+        NSUInteger markerVerts = 0;
         if (path.sketchEnabled && path.sketchRoughness > 0.0001f) {
-          vertexCount += KKTessellateSketchMarker(
+          markerVerts = KKTessellateSketchMarker(
               endMarker, endPos, eTan, eNorm, endMarkerSz, sw,
-              path.sketchRoughness, path.sketchSeed, vertices + vertexCount);
+              path.sketchRoughness, path.sketchSeed, markerTmp);
         } else {
-          vertexCount +=
-              KKTessellateMarker(endMarker, endPos, eTan, eNorm, endMarkerSz,
-                                 sw, vertices + vertexCount);
+          markerVerts = KKTessellateMarker(endMarker, endPos, eTan, eNorm,
+                                           endMarkerSz, sw, markerTmp);
+        }
+        if (markerVerts > 0) {
+          vertexCount = KKEmitBridge(
+              vertices, vertexCount,
+              vertexCount > 0 ? vertices[vertexCount - 1].position : endPos,
+              markerTmp[0].position);
+          memcpy(vertices + vertexCount, markerTmp,
+                 markerVerts * sizeof(CanvasVertex));
+          vertexCount += markerVerts;
         }
       }
 
       if (startMarker != 0) {
-        float pullbackArc = startPullback;
+        float minTangentPull = startMarkerSz * 0.3f;
+        float pullbackArc = fmaxf(startPullback, minTangentPull);
         if (pullbackArc > totalArc)
           pullbackArc = totalArc;
         hint = 0;
@@ -356,18 +374,24 @@ static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
         simd_float2 sTan =
             (simd_float2){-sNorm.y, sNorm.x}; // outward = -path direction
         simd_float2 startPos = samples[0].position;
-        vertexCount = KKEmitBridge(
-            vertices, vertexCount,
-            vertexCount > 0 ? vertices[vertexCount - 1].position : startPos,
-            startPos);
+        CanvasVertex markerTmp[256];
+        NSUInteger markerVerts = 0;
         if (path.sketchEnabled && path.sketchRoughness > 0.0001f) {
-          vertexCount += KKTessellateSketchMarker(
+          markerVerts = KKTessellateSketchMarker(
               startMarker, startPos, sTan, sNorm, startMarkerSz, sw,
-              path.sketchRoughness, path.sketchSeed, vertices + vertexCount);
+              path.sketchRoughness, path.sketchSeed, markerTmp);
         } else {
-          vertexCount +=
-              KKTessellateMarker(startMarker, startPos, sTan, sNorm,
-                                 startMarkerSz, sw, vertices + vertexCount);
+          markerVerts = KKTessellateMarker(startMarker, startPos, sTan, sNorm,
+                                           startMarkerSz, sw, markerTmp);
+        }
+        if (markerVerts > 0) {
+          vertexCount = KKEmitBridge(
+              vertices, vertexCount,
+              vertexCount > 0 ? vertices[vertexCount - 1].position : startPos,
+              markerTmp[0].position);
+          memcpy(vertices + vertexCount, markerTmp,
+                 markerVerts * sizeof(CanvasVertex));
+          vertexCount += markerVerts;
         }
       }
     }
@@ -727,13 +751,13 @@ static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
       [NSMutableArray arrayWithCapacity:paths.count];
 
   // Apply sketch jitter to paths that have it enabled.
-  // When a path has markers AND 2 strokes, split into two separate
-  // single-pass paths so the tessellator doesn't draw a connecting
-  // line between the merged passes.
+  // When an open path has 2 strokes, split into two separate single-pass
+  // paths so the tessellator doesn't draw a connecting line between the
+  // merged passes.
   for (KKBezierPath *p in paths) {
     if (p.sketchEnabled && p.count >= 2 && !p.hidden) {
-      BOOL hasMarkers = !p.closed && (p.startMarker != 0 || p.endMarker != 0);
-      if (hasMarkers && p.sketchStrokes >= 2) {
+      BOOL needsSplit = !p.closed && p.sketchStrokes >= 2;
+      if (needsSplit) {
         // Pass 1: primary stroke with markers.
         KKBezierPath *pass1 =
             KKSketchPath(p, p.sketchRoughness, p.sketchBowing, p.sketchSeed, 1,

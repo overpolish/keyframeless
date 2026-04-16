@@ -295,7 +295,7 @@ NSUInteger KKTessellateTrimmedPath(KKBezierPath *path, float strokeWidth,
   vc++;
 
   // Add caps at trimmed endpoints if the original path is open and has caps,
-  // but only at ends that don't have markers (trim == 0 means no marker).
+  // but only at ends without a positive trim (markers use trim > 0).
   BOOL isOpen = !path.closed;
   if (isOpen && lineCap != 0) {
     if (startTrim <= 0.0f) {
