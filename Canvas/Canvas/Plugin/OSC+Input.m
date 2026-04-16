@@ -301,13 +301,28 @@
   if (activePart == kOSCToolbarCursor || activePart == kOSCToolbarPen ||
       activePart == kOSCToolbarRect || activePart == kOSCToolbarEllipse ||
       activePart == kOSCToolbarLine) {
-    // Persist any pending inspector changes before leaving cursor mode.
-    // syncStrokeParamsToSelection checks isCursorMode internally, so it
-    // must run while the toolbar still shows cursor.
-    if (self.toolbar.activeTag == kOSCToolbarCursor &&
-        activePart != kOSCToolbarCursor) {
-      self.paths = [self readPaths];
-      [self syncStrokeParamsToSelection];
+    // Persist any pending inspector changes before leaving cursor or line
+    // mode.  syncStrokeParamsToSelection checks isCursorMode internally,
+    // so we call it while the toolbar still shows cursor.  For line modes
+    // (rect/ellipse/line) we write params directly since the sync helper
+    // is cursor-only.
+    NSInteger prevTag = self.toolbar.activeTag;
+    if (prevTag != activePart) {
+      if (prevTag == kOSCToolbarCursor) {
+        self.paths = [self readPaths];
+        [self syncStrokeParamsToSelection];
+      } else if (prevTag == kOSCToolbarRect || prevTag == kOSCToolbarEllipse ||
+                 prevTag == kOSCToolbarLine) {
+        self.paths = [self readPaths];
+        KKBezierPath *sel =
+            KKSelectedPath(self.selectedPathIndices, self.paths);
+        if (sel) {
+          id<FxParameterRetrievalAPI_v6> paramGetAPI = [self.apiManager
+              apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+          KKParamsToPath(paramGetAPI, sel);
+          [self writePaths:self.paths];
+        }
+      }
     }
     self.toolbar.activeTag = activePart;
     *forceUpdate = YES;
