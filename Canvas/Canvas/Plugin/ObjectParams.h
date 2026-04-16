@@ -32,16 +32,47 @@ KKIsForceShowEnabled(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI) {
   return val;
 }
 
+/// Show/hide the stroke group header.
+static inline void
+KKSetStrokeGroupVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
+                        BOOL visible) {
+  FxParameterFlags flags =
+      visible ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE |
+                 kFxParameterFlag_USE_FULL_VIEW_WIDTH)
+              : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:flags toParameter:kParamGroupStroke];
+}
+
+/// Show/hide the stroke group children based on enabled+expanded state.
+static inline void
+KKSetStrokeChildrenVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
+                           BOOL strokeEnabled, BOOL strokeExpanded) {
+  BOOL show = strokeEnabled && strokeExpanded;
+  FxParameterFlags flags =
+      show ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+  [paramSetAPI setParameterFlags:flags toParameter:kParamStrokeWidth];
+  [paramSetAPI setParameterFlags:flags toParameter:kParamStrokeColor];
+  if (!show) {
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamLineCap];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamLineJoin];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamStrokeStyle];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamDashLength];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamDashGap];
+    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
+                       toParameter:kParamDotGap];
+  }
+}
+
 /// Show all per-object param rows (flags only, no values).
 /// Add new per-object properties here.
 static inline void
 KKShowObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
-  [paramSetAPI setParameterFlags:kFxParameterFlag_NOT_ANIMATABLE
-                     toParameter:kParamStrokeEnabled];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                     toParameter:kParamStrokeWidth];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                     toParameter:kParamStrokeColor];
+  KKSetStrokeGroupVisible(paramSetAPI, YES);
   [paramSetAPI setParameterFlags:kFxParameterFlag_NOT_ANIMATABLE
                      toParameter:kParamFillEnabled];
   [paramSetAPI setParameterFlags:kFxParameterFlag_DEFAULT
@@ -58,8 +89,7 @@ KKShowObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
 /// Add new per-object properties here.
 static inline void
 KKHideObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamStrokeEnabled];
+  KKSetStrokeGroupVisible(paramSetAPI, YES);
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamStrokeWidth];
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN

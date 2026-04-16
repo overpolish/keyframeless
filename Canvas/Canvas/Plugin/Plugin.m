@@ -45,7 +45,14 @@
     [getAPI getBoolValue:&closed
            fromParameter:kParamClosedPath
                   atTime:kCMTimeZero];
-    KKSetLineCapVisible(setAPI, !closed);
+    BOOL strokeOn = NO, strokeExp = NO;
+    [getAPI getBoolValue:&strokeOn
+           fromParameter:kParamStrokeEnabled
+                  atTime:kCMTimeZero];
+    [getAPI getBoolValue:&strokeExp
+           fromParameter:kParamExpandedStroke
+                  atTime:kCMTimeZero];
+    KKSetLineCapVisible(setAPI, !closed && strokeOn && strokeExp);
   }
 
   if (parameterID == kParamCornerRadiusTL ||
@@ -116,6 +123,7 @@
                   atTime:kCMTimeZero];
     if (forceShow) {
       KKShowObjectParams(setAPI);
+      KKSetStrokeChildrenVisible(setAPI, YES, YES);
       KKSetLineCapVisible(setAPI, YES);
       KKSetLineJoinVisible(setAPI, YES);
       KKSetStrokeStyleVisible(setAPI, YES);

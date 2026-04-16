@@ -173,6 +173,12 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   KKBezierPath *selPath = KKSelectedPath(self.selectedPathIndices, self.paths);
   if (selPath) {
     KKPathToParams(paramSetAPI, selPath);
+    BOOL strokeExpanded = NO;
+    [paramGetAPI getBoolValue:&strokeExpanded
+                fromParameter:kParamExpandedStroke
+                       atTime:kCMTimeZero];
+    KKSetStrokeChildrenVisible(paramSetAPI, selPath.strokeEnabled,
+                               strokeExpanded);
     KKSaveSelectedIndex(
         paramSetAPI, (NSInteger)[self.paths indexOfObjectIdenticalTo:selPath]);
   } else if (!KKIsForceShowEnabled(paramGetAPI)) {

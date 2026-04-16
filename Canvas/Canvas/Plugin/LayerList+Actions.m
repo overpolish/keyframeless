@@ -123,6 +123,16 @@
   KKBezierPath *selected = KKSelectedPath(sel, paths ?: @[]);
   if (selected) {
     KKPathToParams(paramSetAPI, selected);
+    {
+      id<FxParameterRetrievalAPI_v6> getAPI =
+          [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      BOOL strokeExpanded = NO;
+      [getAPI getBoolValue:&strokeExpanded
+             fromParameter:kParamExpandedStroke
+                    atTime:kCMTimeZero];
+      KKSetStrokeChildrenVisible(paramSetAPI, selected.strokeEnabled,
+                                 strokeExpanded);
+    }
     KKSaveSelectedIndex(paramSetAPI,
                         (NSInteger)[paths indexOfObjectIdenticalTo:selected]);
   } else {

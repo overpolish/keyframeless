@@ -44,6 +44,8 @@ static const UInt32 kParamSketchFillGap = 126;
 static const UInt32 kParamSketchFillAngle = 127;
 static const UInt32 kParamSketchFillWeight = 128;
 static const UInt32 kParamSketchSeed = 129;
+static const UInt32 kParamGroupStroke = 130;
+static const UInt32 kParamExpandedStroke = 131;
 
 static const UInt32 kParamForceShow = 9000;
 

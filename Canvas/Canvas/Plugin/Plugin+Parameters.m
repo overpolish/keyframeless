@@ -48,6 +48,19 @@
                         parameterFlags:kFxParameterFlag_HIDDEN |
                                        kFxParameterFlag_NOT_ANIMATABLE];
 
+  [paramAPI addCustomParameterWithName:@""
+                           parameterID:kParamGroupStroke
+                          defaultValue:@(kParamGroupStroke)
+                        parameterFlags:kFxParameterFlag_CUSTOM_UI |
+                                       kFxParameterFlag_NOT_ANIMATABLE |
+                                       kFxParameterFlag_USE_FULL_VIEW_WIDTH];
+
+  [paramAPI addToggleButtonWithName:@""
+                        parameterID:kParamExpandedStroke
+                       defaultValue:NO
+                     parameterFlags:kFxParameterFlag_HIDDEN |
+                                    kFxParameterFlag_NOT_ANIMATABLE];
+
   [paramAPI addToggleButtonWithName:@"Stroke"
                         parameterID:kParamStrokeEnabled
                        defaultValue:YES
@@ -70,29 +83,6 @@
                          defaultGreen:0.0
                           defaultBlue:0.0
                        parameterFlags:kFxParameterFlag_HIDDEN];
-
-  [paramAPI addToggleButtonWithName:@"Fill"
-                        parameterID:kParamFillEnabled
-                       defaultValue:NO
-                     parameterFlags:kFxParameterFlag_HIDDEN |
-                                    kFxParameterFlag_NOT_ANIMATABLE];
-
-  [paramAPI addColorParameterWithName:@"Fill Color"
-                          parameterID:kParamFillColor
-                           defaultRed:1.0
-                         defaultGreen:1.0
-                          defaultBlue:1.0
-                       parameterFlags:kFxParameterFlag_HIDDEN];
-
-  [paramAPI addFloatSliderWithName:@"Opacity"
-                       parameterID:kParamOpacity
-                      defaultValue:100.0
-                      parameterMin:0.0
-                      parameterMax:100.0
-                         sliderMin:0.0
-                         sliderMax:100.0
-                             delta:1.0
-                    parameterFlags:kFxParameterFlag_HIDDEN];
 
   [paramAPI addCustomParameterWithName:@"Line Cap"
                            parameterID:kParamLineCap
@@ -142,6 +132,29 @@
                       parameterMax:200.0
                          sliderMin:1.0
                          sliderMax:200.0
+                             delta:1.0
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addToggleButtonWithName:@"Fill"
+                        parameterID:kParamFillEnabled
+                       defaultValue:NO
+                     parameterFlags:kFxParameterFlag_HIDDEN |
+                                    kFxParameterFlag_NOT_ANIMATABLE];
+
+  [paramAPI addColorParameterWithName:@"Fill Color"
+                          parameterID:kParamFillColor
+                           defaultRed:1.0
+                         defaultGreen:1.0
+                          defaultBlue:1.0
+                       parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addFloatSliderWithName:@"Opacity"
+                       parameterID:kParamOpacity
+                      defaultValue:100.0
+                      parameterMin:0.0
+                      parameterMax:100.0
+                         sliderMin:0.0
+                         sliderMax:100.0
                              delta:1.0
                     parameterFlags:kFxParameterFlag_HIDDEN];
 

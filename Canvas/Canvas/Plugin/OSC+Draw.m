@@ -358,6 +358,16 @@
                           canvasHeight:cH];
       }
       KKShowObjectParams(paramSetAPI);
+      {
+        id<FxParameterRetrievalAPI_v6> getAPI = [self.apiManager
+            apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+        BOOL strokeExpanded = NO;
+        [getAPI getBoolValue:&strokeExpanded
+               fromParameter:kParamExpandedStroke
+                      atTime:kCMTimeZero];
+        KKSetStrokeChildrenVisible(paramSetAPI, selPath.strokeEnabled,
+                                   strokeExpanded);
+      }
     } else if (!KKIsForceShowEnabled([self.apiManager
                    apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)])) {
       KKHideObjectParams(paramSetAPI);
