@@ -284,15 +284,15 @@
                              delta:0.1
                     parameterFlags:kFxParameterFlag_HIDDEN];
 
-  [paramAPI addFloatSliderWithName:@"Strokes"
-                       parameterID:kParamSketchStrokes
-                      defaultValue:kSketchStrokesDefault
-                      parameterMin:1.0
-                      parameterMax:2.0
-                         sliderMin:1.0
-                         sliderMax:2.0
-                             delta:1.0
-                    parameterFlags:kFxParameterFlag_HIDDEN];
+  [paramAPI addIntSliderWithName:@"Strokes"
+                     parameterID:kParamSketchStrokes
+                    defaultValue:kSketchStrokesDefault
+                    parameterMin:1
+                    parameterMax:2
+                       sliderMin:1
+                       sliderMax:2
+                           delta:1
+                  parameterFlags:kFxParameterFlag_HIDDEN];
 
   [paramAPI addCustomParameterWithName:@"Seed"
                            parameterID:kParamSketchSeed

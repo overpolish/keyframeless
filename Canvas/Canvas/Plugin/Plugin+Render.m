@@ -334,9 +334,15 @@ static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
             vertices, vertexCount,
             vertexCount > 0 ? vertices[vertexCount - 1].position : endPos,
             endPos);
-        vertexCount +=
-            KKTessellateMarker(endMarker, endPos, eTan, eNorm, endMarkerSz, sw,
-                               vertices + vertexCount);
+        if (path.sketchEnabled && path.sketchRoughness > 0.0001f) {
+          vertexCount += KKTessellateSketchMarker(
+              endMarker, endPos, eTan, eNorm, endMarkerSz, sw,
+              path.sketchRoughness, path.sketchSeed, vertices + vertexCount);
+        } else {
+          vertexCount +=
+              KKTessellateMarker(endMarker, endPos, eTan, eNorm, endMarkerSz,
+                                 sw, vertices + vertexCount);
+        }
       }
 
       if (startMarker != 0) {
@@ -354,9 +360,15 @@ static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
             vertices, vertexCount,
             vertexCount > 0 ? vertices[vertexCount - 1].position : startPos,
             startPos);
-        vertexCount +=
-            KKTessellateMarker(startMarker, startPos, sTan, sNorm,
-                               startMarkerSz, sw, vertices + vertexCount);
+        if (path.sketchEnabled && path.sketchRoughness > 0.0001f) {
+          vertexCount += KKTessellateSketchMarker(
+              startMarker, startPos, sTan, sNorm, startMarkerSz, sw,
+              path.sketchRoughness, path.sketchSeed, vertices + vertexCount);
+        } else {
+          vertexCount +=
+              KKTessellateMarker(startMarker, startPos, sTan, sNorm,
+                                 startMarkerSz, sw, vertices + vertexCount);
+        }
       }
     }
     free(samples);
@@ -709,21 +721,46 @@ static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
 
   // Keep original paths for sketch fill generation (hachure needs clean
   // geometry).
-  NSArray<KKBezierPath *> *origPaths = [paths copy];
-
-  // Apply sketch jitter to paths that have it enabled.
+  NSMutableArray<KKBezierPath *> *origPathsMut =
+      [NSMutableArray arrayWithCapacity:paths.count];
   NSMutableArray<KKBezierPath *> *renderPaths =
       [NSMutableArray arrayWithCapacity:paths.count];
+
+  // Apply sketch jitter to paths that have it enabled.
+  // When a path has markers AND 2 strokes, split into two separate
+  // single-pass paths so the tessellator doesn't draw a connecting
+  // line between the merged passes.
   for (KKBezierPath *p in paths) {
     if (p.sketchEnabled && p.count >= 2 && !p.hidden) {
-      [renderPaths addObject:KKSketchPath(p, p.sketchRoughness, p.sketchBowing,
-                                          p.sketchSeed, p.sketchStrokes,
-                                          outputWidth, outputHeight)];
+      BOOL hasMarkers = !p.closed && (p.startMarker != 0 || p.endMarker != 0);
+      if (hasMarkers && p.sketchStrokes >= 2) {
+        // Pass 1: primary stroke with markers.
+        KKBezierPath *pass1 =
+            KKSketchPath(p, p.sketchRoughness, p.sketchBowing, p.sketchSeed, 1,
+                         outputWidth, outputHeight);
+        [renderPaths addObject:pass1];
+        [origPathsMut addObject:p];
+        // Pass 2: overlay stroke, different seed, no markers, no fill.
+        KKBezierPath *pass2 = KKSketchPath(p, p.sketchRoughness, p.sketchBowing,
+                                           p.sketchSeed ^ 0xFACE0042, 1,
+                                           outputWidth, outputHeight);
+        pass2.fillEnabled = NO;
+        [renderPaths addObject:pass2];
+        [origPathsMut addObject:p];
+      } else {
+        [renderPaths
+            addObject:KKSketchPath(p, p.sketchRoughness, p.sketchBowing,
+                                   p.sketchSeed, p.sketchStrokes, outputWidth,
+                                   outputHeight)];
+        [origPathsMut addObject:p];
+      }
     } else {
       [renderPaths addObject:p];
+      [origPathsMut addObject:p];
     }
   }
   paths = renderPaths;
+  NSArray<KKBezierPath *> *origPaths = origPathsMut;
 
   BOOL hasDrawablePaths = NO;
   for (KKBezierPath *p in paths) {

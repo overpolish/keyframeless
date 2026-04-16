@@ -10,6 +10,18 @@ static inline CanvasVertex markerVert(simd_float2 pos) {
   return (CanvasVertex){pos, 0.0f, 0.0f};
 }
 
+static uint32_t s_markerRng;
+static void markerSeedRNG(uint32_t seed) { s_markerRng = seed ? seed : 1; }
+static float markerRandUnit(void) {
+  s_markerRng ^= s_markerRng << 13;
+  s_markerRng ^= s_markerRng >> 17;
+  s_markerRng ^= s_markerRng << 5;
+  return (float)(s_markerRng & 0xFFFF) / 65536.0f;
+}
+static float markerOffset(float amplitude, float roughness) {
+  return roughness * (markerRandUnit() * 2.0f * amplitude - amplitude);
+}
+
 /// Arrow marker: tip at endpoint, base pulled back by depth.
 /// Emits a triangle strip: left, tip, right (1 triangle, 3 verts).
 static NSUInteger tessellateArrow(simd_float2 endpoint, simd_float2 tangent,
@@ -94,6 +106,121 @@ NSUInteger KKTessellateMarker(uint8_t markerType, simd_float2 endpoint,
   case 3: // Square
     return tessellateSquare(endpoint, tangent, normal, markerSize * 0.5f,
                             vertices);
+  default:
+    return 0;
+  }
+}
+
+/// Triangle fan from outline points (center/rim alternating strip, same
+/// pattern as tessellateCircle).
+static NSUInteger emitFan(simd_float2 *outline, NSUInteger count,
+                          CanvasVertex *v) {
+  if (count < 3)
+    return 0;
+  simd_float2 center = {0, 0};
+  for (NSUInteger i = 0; i < count; i++)
+    center += outline[i];
+  center /= (float)count;
+
+  NSUInteger vc = 0;
+  for (NSUInteger i = 0; i <= count; i++) {
+    v[vc++] = markerVert(center);
+    v[vc++] = markerVert(outline[i % count]);
+  }
+  return vc;
+}
+
+/// Subdivide polygon edges and jitter each subdivision point.
+static NSUInteger subdivideAndJitter(simd_float2 *corners,
+                                     NSUInteger cornerCount,
+                                     NSUInteger subsPerEdge, float jitterAmp,
+                                     float roughness, simd_float2 *outline) {
+  NSUInteger oc = 0;
+  for (NSUInteger i = 0; i < cornerCount; i++) {
+    simd_float2 a = corners[i];
+    simd_float2 b = corners[(i + 1) % cornerCount];
+    simd_float2 edge = b - a;
+    float edgeLen = simd_length(edge);
+    simd_float2 edgeDir =
+        edgeLen > 0.0001f ? edge / edgeLen : (simd_float2){1, 0};
+    simd_float2 edgeNorm = {-edgeDir.y, edgeDir.x};
+
+    for (NSUInteger s = 0; s < subsPerEdge; s++) {
+      float t = (float)s / (float)subsPerEdge;
+      simd_float2 pt = a + edge * t;
+      float amp = (s == 0) ? jitterAmp * 0.3f : jitterAmp;
+      float perpOff = markerOffset(amp, roughness);
+      float tangOff = markerOffset(amp * 0.3f, roughness);
+      outline[oc++] = pt + edgeNorm * perpOff + edgeDir * tangOff;
+    }
+  }
+  return oc;
+}
+
+static NSUInteger tessellateSketchArrow(simd_float2 endpoint,
+                                        simd_float2 tangent, simd_float2 normal,
+                                        float size, float roughness,
+                                        CanvasVertex *v) {
+  float wingSpread = size * 0.5f;
+  simd_float2 base = endpoint - tangent * size;
+  simd_float2 corners[3] = {base + normal * wingSpread, endpoint,
+                            base - normal * wingSpread};
+  float jitterAmp = size * 0.035f;
+  simd_float2 outline[24];
+  NSUInteger oc =
+      subdivideAndJitter(corners, 3, 8, jitterAmp, roughness, outline);
+  return emitFan(outline, oc, v);
+}
+
+static NSUInteger tessellateSketchCircle(simd_float2 endpoint,
+                                         simd_float2 tangent, float radius,
+                                         float roughness, CanvasVertex *v) {
+  simd_float2 center = endpoint - tangent * radius;
+  NSUInteger segments = 24;
+  float jitterAmp = radius * 0.07f;
+  simd_float2 outline[24];
+  for (NSUInteger i = 0; i < segments; i++) {
+    float angle = (float)i / (float)segments * 2.0f * (float)M_PI;
+    float r = radius + markerOffset(jitterAmp, roughness);
+    outline[i] = center + (simd_float2){cosf(angle) * r, sinf(angle) * r};
+  }
+  return emitFan(outline, segments, v);
+}
+
+static NSUInteger tessellateSketchSquare(simd_float2 endpoint,
+                                         simd_float2 tangent,
+                                         simd_float2 normal, float halfSide,
+                                         float roughness, CanvasVertex *v) {
+  simd_float2 center = endpoint - tangent * halfSide;
+  simd_float2 fwd = tangent * halfSide;
+  simd_float2 side = normal * halfSide;
+  simd_float2 corners[4] = {center - fwd + side, center + fwd + side,
+                            center + fwd - side, center - fwd - side};
+  float jitterAmp = halfSide * 0.06f;
+  simd_float2 outline[24];
+  NSUInteger oc =
+      subdivideAndJitter(corners, 4, 6, jitterAmp, roughness, outline);
+  return emitFan(outline, oc, v);
+}
+
+NSUInteger KKTessellateSketchMarker(uint8_t markerType, simd_float2 endpoint,
+                                    simd_float2 tangent, simd_float2 normal,
+                                    float markerSize, float strokeWidth,
+                                    float roughness, uint32_t seed,
+                                    CanvasVertex *vertices) {
+  if (markerType == 0)
+    return 0;
+  markerSeedRNG(seed ^ 0xA770A770);
+  switch (markerType) {
+  case 1:
+    return tessellateSketchArrow(endpoint, tangent, normal, markerSize,
+                                 roughness, vertices);
+  case 2:
+    return tessellateSketchCircle(endpoint, tangent, markerSize * 0.5f,
+                                  roughness, vertices);
+  case 3:
+    return tessellateSketchSquare(endpoint, tangent, normal, markerSize * 0.5f,
+                                  roughness, vertices);
   default:
     return 0;
   }

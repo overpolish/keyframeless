@@ -447,10 +447,10 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                       atTime:kCMTimeZero];
   path.sketchBowing = (float)sBow;
 
-  double sStrokes = kSketchStrokesDefault;
-  [paramGetAPI getFloatValue:&sStrokes
-               fromParameter:kParamSketchStrokes
-                      atTime:kCMTimeZero];
+  int sStrokes = kSketchStrokesDefault;
+  [paramGetAPI getIntValue:&sStrokes
+             fromParameter:kParamSketchStrokes
+                    atTime:kCMTimeZero];
   path.sketchStrokes = (uint8_t)sStrokes;
 
   double fGap = kSketchFillGapDefault;
@@ -549,9 +549,9 @@ KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
   [paramSetAPI setFloatValue:path.sketchBowing
                  toParameter:kParamSketchBowing
                       atTime:kCMTimeZero];
-  [paramSetAPI setFloatValue:(double)path.sketchStrokes
-                 toParameter:kParamSketchStrokes
-                      atTime:kCMTimeZero];
+  [paramSetAPI setIntValue:(int)path.sketchStrokes
+               toParameter:kParamSketchStrokes
+                    atTime:kCMTimeZero];
   [paramSetAPI setFloatValue:path.sketchFillGap
                  toParameter:kParamSketchFillGap
                       atTime:kCMTimeZero];

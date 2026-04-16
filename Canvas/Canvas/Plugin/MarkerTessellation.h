@@ -10,7 +10,7 @@
 #import <simd/simd.h>
 
 /// Maximum extra vertices a single marker can emit.
-static const NSUInteger kMarkerMaxVertices = 72;
+static const NSUInteger kMarkerMaxVertices = 128;
 
 /// Returns the arc-length pullback distance for a marker type.
 /// The stroke should be shortened by this amount at the marked endpoint.
@@ -27,3 +27,11 @@ NSUInteger KKTessellateMarker(uint8_t markerType, simd_float2 endpoint,
                               simd_float2 tangent, simd_float2 normal,
                               float markerSize, float strokeWidth,
                               CanvasVertex *vertices);
+
+/// Sketch-style marker with jittered edges. Same fan tessellation as the
+/// clean marker but with subdivided, roughened outlines.
+NSUInteger KKTessellateSketchMarker(uint8_t markerType, simd_float2 endpoint,
+                                    simd_float2 tangent, simd_float2 normal,
+                                    float markerSize, float strokeWidth,
+                                    float roughness, uint32_t seed,
+                                    CanvasVertex *vertices);
