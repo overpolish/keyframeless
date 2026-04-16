@@ -10,7 +10,6 @@ static const CGFloat kPillSpacing = 2.0;
 static const CGFloat kPillCorner = 3.0;
 static const NSInteger kStyleCount = 5;
 static const CGFloat kPillSize = 22.0;
-static const CGFloat kTrailingSpacer = 75.0;
 
 @implementation KKFillStyleView {
   NSArray<NSButton *> *_buttons;
@@ -179,12 +178,6 @@ static void drawFillStyle(CGFloat ox, CGFloat oy, CGFloat k, NSInteger style) {
     [stack addArrangedSubview:btn];
     [btns addObject:btn];
   }
-
-  // Trailing spacer.
-  NSView *spacer = [[NSView alloc] init];
-  spacer.translatesAutoresizingMaskIntoConstraints = NO;
-  [spacer.widthAnchor constraintEqualToConstant:kTrailingSpacer].active = YES;
-  [stack addArrangedSubview:spacer];
 
   [self addSubview:stack];
   [stack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor].active =

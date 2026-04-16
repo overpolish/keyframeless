@@ -133,8 +133,7 @@ KKSetSketchChildrenVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
   [paramSetAPI setParameterFlags:flags toParameter:kParamSketchBowing];
   [paramSetAPI setParameterFlags:flags toParameter:kParamSketchStrokes];
   FxParameterFlags seedFlags =
-      show ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE)
-           : kFxParameterFlag_HIDDEN;
+      show ? kFxParameterFlag_CUSTOM_UI : kFxParameterFlag_HIDDEN;
   [paramSetAPI setParameterFlags:seedFlags toParameter:kParamSketchSeed];
 }
 
@@ -222,8 +221,7 @@ static inline void
 KKSetLineCapVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                     BOOL visible) {
   FxParameterFlags flags =
-      visible ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE)
-              : kFxParameterFlag_HIDDEN;
+      visible ? kFxParameterFlag_CUSTOM_UI : kFxParameterFlag_HIDDEN;
   [paramSetAPI setParameterFlags:flags toParameter:kParamLineCap];
 }
 
@@ -233,8 +231,7 @@ static inline void
 KKSetMarkersVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                     BOOL visible) {
   FxParameterFlags flags =
-      visible ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE)
-              : kFxParameterFlag_HIDDEN;
+      visible ? kFxParameterFlag_CUSTOM_UI : kFxParameterFlag_HIDDEN;
   [paramSetAPI setParameterFlags:flags toParameter:kParamStartMarker];
   [paramSetAPI setParameterFlags:flags toParameter:kParamEndMarker];
   if (!visible) {
@@ -262,8 +259,7 @@ static inline void
 KKSetLineJoinVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                      BOOL visible) {
   FxParameterFlags flags =
-      visible ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE)
-              : kFxParameterFlag_HIDDEN;
+      visible ? kFxParameterFlag_CUSTOM_UI : kFxParameterFlag_HIDDEN;
   [paramSetAPI setParameterFlags:flags toParameter:kParamLineJoin];
 }
 
@@ -272,8 +268,7 @@ static inline void
 KKSetStrokeStyleVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                         BOOL visible) {
   FxParameterFlags flags =
-      visible ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE)
-              : kFxParameterFlag_HIDDEN;
+      visible ? kFxParameterFlag_CUSTOM_UI : kFxParameterFlag_HIDDEN;
   [paramSetAPI setParameterFlags:flags toParameter:kParamStrokeStyle];
 }
 
@@ -305,8 +300,7 @@ KKSetSketchParamsVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
   [paramSetAPI setParameterFlags:flags toParameter:kParamSketchBowing];
   [paramSetAPI setParameterFlags:flags toParameter:kParamSketchStrokes];
   FxParameterFlags seedFlags =
-      visible ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE)
-              : kFxParameterFlag_HIDDEN;
+      visible ? kFxParameterFlag_CUSTOM_UI : kFxParameterFlag_HIDDEN;
   [paramSetAPI setParameterFlags:seedFlags toParameter:kParamSketchSeed];
 }
 
@@ -315,9 +309,7 @@ static inline void
 KKSetFillStyleParamsVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                             BOOL fillEnabled, int fillStyle) {
   FxParameterFlags styleFlags =
-      fillEnabled
-          ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE)
-          : kFxParameterFlag_HIDDEN;
+      fillEnabled ? kFxParameterFlag_CUSTOM_UI : kFxParameterFlag_HIDDEN;
   [paramSetAPI setParameterFlags:styleFlags toParameter:kParamSketchFillStyle];
   FxParameterFlags subFlags = (fillEnabled && fillStyle > 0)
                                   ? kFxParameterFlag_DEFAULT

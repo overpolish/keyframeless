@@ -120,22 +120,19 @@
                            parameterID:kParamLineCap
                           defaultValue:@(0)
                         parameterFlags:kFxParameterFlag_CUSTOM_UI |
-                                       kFxParameterFlag_HIDDEN |
-                                       kFxParameterFlag_NOT_ANIMATABLE];
+                                       kFxParameterFlag_HIDDEN];
 
   [paramAPI addCustomParameterWithName:@"Line Join"
                            parameterID:kParamLineJoin
                           defaultValue:@(0)
                         parameterFlags:kFxParameterFlag_CUSTOM_UI |
-                                       kFxParameterFlag_HIDDEN |
-                                       kFxParameterFlag_NOT_ANIMATABLE];
+                                       kFxParameterFlag_HIDDEN];
 
   [paramAPI addCustomParameterWithName:@"Stroke Style"
                            parameterID:kParamStrokeStyle
                           defaultValue:@(0)
                         parameterFlags:kFxParameterFlag_CUSTOM_UI |
-                                       kFxParameterFlag_HIDDEN |
-                                       kFxParameterFlag_NOT_ANIMATABLE];
+                                       kFxParameterFlag_HIDDEN];
 
   [paramAPI addFloatSliderWithName:@"Dash Length"
                        parameterID:kParamDashLength
@@ -171,15 +168,13 @@
                            parameterID:kParamStartMarker
                           defaultValue:@(0)
                         parameterFlags:kFxParameterFlag_CUSTOM_UI |
-                                       kFxParameterFlag_HIDDEN |
-                                       kFxParameterFlag_NOT_ANIMATABLE];
+                                       kFxParameterFlag_HIDDEN];
 
   [paramAPI addCustomParameterWithName:@"End Marker"
                            parameterID:kParamEndMarker
                           defaultValue:@(0)
                         parameterFlags:kFxParameterFlag_CUSTOM_UI |
-                                       kFxParameterFlag_HIDDEN |
-                                       kFxParameterFlag_NOT_ANIMATABLE];
+                                       kFxParameterFlag_HIDDEN];
 
   [paramAPI addPercentSliderWithName:@"Start Size"
                          parameterID:kParamStartMarkerSize
@@ -231,8 +226,7 @@
                            parameterID:kParamSketchFillStyle
                           defaultValue:@(0)
                         parameterFlags:kFxParameterFlag_CUSTOM_UI |
-                                       kFxParameterFlag_HIDDEN |
-                                       kFxParameterFlag_NOT_ANIMATABLE];
+                                       kFxParameterFlag_HIDDEN];
 
   [paramAPI addFloatSliderWithName:@"Fill Gap"
                        parameterID:kParamSketchFillGap
@@ -314,8 +308,7 @@
                            parameterID:kParamSketchSeed
                           defaultValue:@(0)
                         parameterFlags:kFxParameterFlag_CUSTOM_UI |
-                                       kFxParameterFlag_HIDDEN |
-                                       kFxParameterFlag_NOT_ANIMATABLE];
+                                       kFxParameterFlag_HIDDEN];
 
   [paramAPI addFloatSliderWithName:@"LastSelectedIndex"
                        parameterID:kParamLastSelectedIndex
