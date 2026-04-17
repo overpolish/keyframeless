@@ -177,8 +177,8 @@
                             destinationImage:dest
                                       atTime:time];
 
-  NSInteger pxW = (NSInteger)round(fabs(tr.x - bl.x));
-  NSInteger pxH = (NSInteger)round(fabs(tr.y - bl.y));
+  NSInteger pxW = (NSInteger)round(fabs(bmax.x - bmin.x) * self.imageWidth);
+  NSInteger pxH = (NSInteger)round(fabs(bmax.y - bmin.y) * self.imageHeight);
   self.sizeLabel.text =
       [NSString stringWithFormat:@"%ld × %ld", (long)pxW, (long)pxH];
   CGSize labelSize = self.sizeLabel.size;
@@ -293,7 +293,8 @@
                       halfWidth:1.5f
                destinationImage:dest];
 
-  NSInteger pxW = ix1 - ix0, pxH = iy1 - iy0;
+  NSInteger pxW = (NSInteger)round(fabs(b.x - a.x) * self.imageWidth);
+  NSInteger pxH = (NSInteger)round(fabs(b.y - a.y) * self.imageHeight);
   self.sizeLabel.text =
       [NSString stringWithFormat:@"%ld × %ld", (long)pxW, (long)pxH];
   CGSize labelSize = self.sizeLabel.size;
@@ -324,7 +325,8 @@
                       halfWidth:1.5f
                destinationImage:dest];
 
-  NSInteger pxW = (NSInteger)round(rx * 2.0), pxH = (NSInteger)round(ry * 2.0);
+  NSInteger pxW = (NSInteger)round(fabs(b.x - a.x) * self.imageWidth);
+  NSInteger pxH = (NSInteger)round(fabs(b.y - a.y) * self.imageHeight);
   self.sizeLabel.text =
       [NSString stringWithFormat:@"%ld × %ld", (long)pxW, (long)pxH];
   CGSize labelSize = self.sizeLabel.size;
@@ -398,6 +400,9 @@
               activePart:(NSInteger)activePart
         destinationImage:(FxImageTile *)destinationImage
                   atTime:(CMTime)time {
+  self.imageWidth = width;
+  self.imageHeight = height;
+
   [self encodeRenderCommandsForDestinationImage:destinationImage
                                  canvasPosition:CGPointZero
                                clearDestination:YES
