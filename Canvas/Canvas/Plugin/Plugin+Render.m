@@ -802,8 +802,7 @@ static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
       }
     }
 
-    id<MTLCommandBuffer> commandBuffer =
-        [commandQueue commandBufferWithUnretainedReferences];
+    id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
     commandBuffer.label = @"Canvas Command Buffer";
     [commandBuffer enqueue];
 

@@ -8,6 +8,7 @@
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wincomplete-implementation"
+#pragma clang diagnostic ignored "-Wimplicit-retain-self"
 #pragma clang diagnostic ignored "-Wprotocol"
 
 @implementation KKLayerActionTarget
