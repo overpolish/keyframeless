@@ -62,6 +62,8 @@
 @property(nonatomic, assign) simd_float2 rotateOrigMax;
 @property(nonatomic, strong) NSArray<NSData *> *rotateOrigSnapshots;
 @property(nonatomic, strong) NSArray<NSNumber *> *rotateOrigIndices;
+@property(nonatomic, assign) NSInteger imageWidth;
+@property(nonatomic, assign) NSInteger imageHeight;
 
 - (NSMutableArray<KKBezierPath *> *)readPaths;
 - (void)writePaths:(NSArray<KKBezierPath *> *)paths;
