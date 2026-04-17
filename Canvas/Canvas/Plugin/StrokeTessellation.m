@@ -24,6 +24,7 @@ NSUInteger KKTessellatePath(KKBezierPath *path, float startWidth,
   simd_float2 startNormal = {0, 0}, endNormal = {0, 0};
 
   for (NSUInteger c = 0; c < curveCount; c++) {
+
     simd_float2 segEndCenter = {0, 0}, segEndNormal = {0, 0};
 
     for (NSUInteger i = 0; i <= segsPerCurve; i++) {

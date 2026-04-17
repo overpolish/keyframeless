@@ -255,9 +255,9 @@ NSUInteger KKSamplePathPolyline(KKBezierPath *path, float outputWidth,
 
   for (NSUInteger c = 0; c < curveCount; c++) {
     NSUInteger startI = (c == 0) ? 0 : 1;
+    NSUInteger nextIdx = (c + 1) % path.count;
     for (NSUInteger i = startI; i <= segsPerCurve; i++) {
       float t = (float)i / (float)segsPerCurve;
-      NSUInteger nextIdx = (c + 1) % path.count;
       simd_float2 pos = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
       simd_float2 normal =
           KKNormalAtPoint(path, c, segsPerCurve, i, outputWidth, outputHeight);

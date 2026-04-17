@@ -148,6 +148,21 @@ NS_ASSUME_NONNULL_BEGIN
 /// sketch is enabled, then stored so the jitter stays stable.
 @property(nonatomic, assign) uint32_t sketchSeed;
 
+/// Number of contours (1 for simple paths, >1 for compound paths like SVG
+/// paths with multiple M...Z sequences). Each contour is independently closed.
+@property(nonatomic, readonly) NSUInteger contourCount;
+
+/// Returns the point index range for the given contour.
+- (NSRange)contourRangeAtIndex:(NSUInteger)contourIndex;
+
+/// Mark the start of a new contour at the current point count.
+/// Called by the SVG parser when encountering a new M after Z.
+- (void)beginContour;
+
+/// Split this compound path into separate closed paths for stroke rendering.
+/// Returns nil if the path has only one contour.
+- (nullable NSArray<KKBezierPath *> *)splitContours;
+
 /// Whether this path has a solid fill (default NO).
 @property(nonatomic, assign) BOOL fillEnabled;
 

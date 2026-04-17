@@ -13,34 +13,47 @@
 - (void)drawPathSegments:(KKBezierPath *)path
                    color:(simd_float4)color
         destinationImage:(FxImageTile *)dest {
-  NSUInteger segCount = path.count - 1;
-  if (path.closed && path.count >= 2)
-    segCount = path.count;
+  NSUInteger nc = path.contourCount;
 
-  NSUInteger maxPoints = segCount * 32 + 2;
-  CGPoint *points = malloc(sizeof(CGPoint) * maxPoints);
-  NSUInteger pointCount = 0;
+  for (NSUInteger ci = 0; ci < nc; ci++) {
+    NSRange r = [path contourRangeAtIndex:ci];
+    NSUInteger cStart = r.location;
+    NSUInteger cLen = r.length;
+    if (cLen < 2)
+      continue;
 
-  for (NSUInteger i = 0; i < segCount; i++) {
-    NSUInteger nextIdx = (i + 1) % path.count;
-    NSUInteger startS = (pointCount > 0 && i > 0) ? 1 : 0;
-    for (NSUInteger s = startS; s <= 32; s++) {
-      float t = (float)s / 32.0f;
-      simd_float2 pos = [path evaluatePointAtIndex:i nextIndex:nextIdx atT:t];
-      points[pointCount++] = [self canvasPointFromObjectPoint:pos];
+    BOOL contourClosed = path.closed;
+    NSUInteger segCount = contourClosed ? cLen : (cLen - 1);
+    NSUInteger maxPoints = segCount * 32 + 2;
+    CGPoint *points = malloc(sizeof(CGPoint) * maxPoints);
+    NSUInteger pointCount = 0;
+
+    for (NSUInteger i = 0; i < segCount; i++) {
+      NSUInteger idx = cStart + i;
+      NSUInteger nextIdx = cStart + ((i + 1) % cLen);
+      NSUInteger startS = (pointCount > 0 && i > 0) ? 1 : 0;
+      for (NSUInteger s = startS; s <= 32; s++) {
+        float t = (float)s / 32.0f;
+        simd_float2 pos = [path evaluatePointAtIndex:idx
+                                           nextIndex:nextIdx
+                                                 atT:t];
+        points[pointCount++] = [self canvasPointFromObjectPoint:pos];
+      }
     }
-  }
-  if (path.closed && pointCount > 0) {
-    simd_float2 firstPos = [path evaluatePointAtIndex:0 nextIndex:1 atT:0.0f];
-    points[pointCount++] = [self canvasPointFromObjectPoint:firstPos];
-  }
+    if (contourClosed && pointCount > 0) {
+      simd_float2 firstPos = [path evaluatePointAtIndex:cStart
+                                              nextIndex:cStart + 1
+                                                    atT:0.0f];
+      points[pointCount++] = [self canvasPointFromObjectPoint:firstPos];
+    }
 
-  [self drawLineStripWithPoints:points
-                          count:pointCount
-                          color:color
-                      halfWidth:1.5f
-               destinationImage:dest];
-  free(points);
+    [self drawLineStripWithPoints:points
+                            count:pointCount
+                            color:color
+                        halfWidth:1.5f
+                 destinationImage:dest];
+    free(points);
+  }
 }
 
 - (BOOL)isPointVisuallySelected:(NSUInteger)pathIndex

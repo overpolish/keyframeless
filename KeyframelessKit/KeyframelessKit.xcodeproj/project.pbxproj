@@ -29,6 +29,7 @@
 				KKLog.h,
 				Math/KKBezierPath.h,
 				Math/KKEasing.h,
+				Math/KKSVGParser.h,
 				Math/KKTiming.h,
 				Metal/KKMetalDeviceCache.h,
 				Metal/KKRenderPrimitives.h,

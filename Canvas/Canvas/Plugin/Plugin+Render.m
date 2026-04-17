@@ -4,6 +4,7 @@
  */
 
 #import "Constants.h"
+#import "LayerList_Private.h"
 #import "MarkerTessellation.h"
 #import "ObjectParams.h"
 #import "Plugin_Private.h"
@@ -56,6 +57,87 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
   return ps;
 }
 
+/// Build a stencil triangle fan for a path, one fan per contour.
+/// Each contour gets its own closed fan from its centroid so the stencil
+/// winding is correct for even-odd compound fills.
+/// Caller must free *outVerts.
+static NSUInteger buildFillFan(KKBezierPath *path, float outputWidth,
+                               float outputHeight,
+                               CanvasFillVertex **outVerts) {
+  NSUInteger segsPerCurve = 64;
+  NSUInteger nc = path.contourCount;
+
+  // First pass: compute total outline capacity.
+  NSUInteger totalMax = 0;
+  for (NSUInteger ci = 0; ci < nc; ci++) {
+    NSRange r = [path contourRangeAtIndex:ci];
+    // Each contour is closed, so curveCount = length.
+    totalMax += r.length * segsPerCurve + 1;
+  }
+
+  simd_float2 *outline = malloc(totalMax * sizeof(simd_float2));
+  NSUInteger *fanStarts = malloc((nc + 1) * sizeof(NSUInteger));
+  NSUInteger oc = 0;
+
+  for (NSUInteger ci = 0; ci < nc; ci++) {
+    fanStarts[ci] = oc;
+    NSRange r = [path contourRangeAtIndex:ci];
+    NSUInteger cStart = r.location;
+    NSUInteger cLen = r.length;
+    // Closed contour: curveCount = length (last point wraps to first).
+    for (NSUInteger c = 0; c < cLen; c++) {
+      NSUInteger idx = cStart + c;
+      NSUInteger nextIdx = cStart + ((c + 1) % cLen);
+      for (NSUInteger s = 0; s < segsPerCurve; s++) {
+        float t = (float)s / (float)segsPerCurve;
+        simd_float2 pos = [path evaluatePointAtIndex:idx
+                                           nextIndex:nextIdx
+                                                 atT:t];
+        outline[oc++] =
+            (simd_float2){pos.x * outputWidth - outputWidth / 2.0f,
+                          (1.0f - pos.y) * outputHeight - outputHeight / 2.0f};
+      }
+    }
+  }
+  fanStarts[nc] = oc; // sentinel
+
+  // Build triangle fans — one per contour, each with its own centroid.
+  CanvasFillVertex *fillVerts = malloc(oc * 3 * sizeof(CanvasFillVertex));
+  NSUInteger ti = 0;
+  for (NSUInteger ci = 0; ci < nc; ci++) {
+    NSUInteger start = fanStarts[ci];
+    NSUInteger end = fanStarts[ci + 1];
+    NSUInteger len = end - start;
+    if (len < 2)
+      continue;
+    // Remove near-duplicate endpoint (closed paths that trace back to start).
+    simd_float2 first = outline[start];
+    simd_float2 last = outline[end - 1];
+    float dx = first.x - last.x, dy = first.y - last.y;
+    if (dx * dx + dy * dy < 1.0f)
+      len--;
+    if (len < 2)
+      continue;
+    simd_float2 center = {0, 0};
+    for (NSUInteger i = 0; i < len; i++)
+      center += outline[start + i];
+    center /= (float)len;
+    for (NSUInteger i = 0; i < len; i++) {
+      NSUInteger cur = start + i;
+      NSUInteger next = start + ((i + 1) % len);
+      fillVerts[ti * 3 + 0].position = center;
+      fillVerts[ti * 3 + 1].position = outline[cur];
+      fillVerts[ti * 3 + 2].position = outline[next];
+      ti++;
+    }
+  }
+  free(outline);
+  free(fanStarts);
+
+  *outVerts = fillVerts;
+  return ti;
+}
+
 static void renderFillForPath(KKBezierPath *path, float outputWidth,
                               float outputHeight, id<MTLDevice> device,
                               id<MTLCommandBuffer> commandBuffer,
@@ -66,45 +148,9 @@ static void renderFillForPath(KKBezierPath *path, float outputWidth,
                               id<MTLDepthStencilState> fillStencilDSState,
                               id<MTLDepthStencilState> fillColorDSState,
                               simd_uint2 viewportSize) {
-  NSUInteger segsPerCurve = 64;
-  BOOL isClosed = path.closed;
-  NSUInteger curveCount = isClosed ? path.count : (path.count - 1);
-  NSUInteger outlineCount = curveCount * segsPerCurve + (isClosed ? 0 : 1);
-  simd_float2 *outline = malloc(outlineCount * sizeof(simd_float2));
-  NSUInteger oc = 0;
-  for (NSUInteger c = 0; c < curveCount; c++) {
-    NSUInteger nextIdx = isClosed ? ((c + 1) % path.count) : (c + 1);
-    for (NSUInteger s = 0; s < segsPerCurve; s++) {
-      float t = (float)s / (float)segsPerCurve;
-      simd_float2 pos = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
-      simd_float2 px = {pos.x * outputWidth - outputWidth / 2.0f,
-                        (1.0f - pos.y) * outputHeight - outputHeight / 2.0f};
-      outline[oc++] = px;
-    }
-  }
-  if (!isClosed) {
-    simd_float2 pos = [path evaluatePointAtIndex:curveCount - 1
-                                       nextIndex:curveCount
-                                             atT:1.0f];
-    simd_float2 px = {pos.x * outputWidth - outputWidth / 2.0f,
-                      (1.0f - pos.y) * outputHeight - outputHeight / 2.0f};
-    outline[oc++] = px;
-  }
-
-  simd_float2 center = {0, 0};
-  for (NSUInteger i = 0; i < oc; i++)
-    center += outline[i];
-  center /= (float)oc;
-
-  NSUInteger triCount = oc;
-  CanvasFillVertex *fillVerts = malloc(triCount * 3 * sizeof(CanvasFillVertex));
-  for (NSUInteger i = 0; i < triCount; i++) {
-    NSUInteger next = (i + 1) % oc;
-    fillVerts[i * 3 + 0].position = center;
-    fillVerts[i * 3 + 1].position = outline[i];
-    fillVerts[i * 3 + 2].position = outline[next];
-  }
-  free(outline);
+  CanvasFillVertex *fillVerts = NULL;
+  NSUInteger triCount =
+      buildFillFan(path, outputWidth, outputHeight, &fillVerts);
 
   id<MTLBuffer> fillBuf =
       [device newBufferWithBytes:fillVerts
@@ -182,45 +228,9 @@ static void renderFillStencilOnly(KKBezierPath *path, float outputWidth,
                                   id<MTLRenderPipelineState> fillStencilPS,
                                   id<MTLDepthStencilState> fillStencilDSState,
                                   simd_uint2 viewportSize) {
-  NSUInteger segsPerCurve = 64;
-  BOOL isClosed = path.closed;
-  NSUInteger curveCount = isClosed ? path.count : (path.count - 1);
-  NSUInteger outlineCount = curveCount * segsPerCurve + (isClosed ? 0 : 1);
-  simd_float2 *outline = malloc(outlineCount * sizeof(simd_float2));
-  NSUInteger oc = 0;
-  for (NSUInteger c = 0; c < curveCount; c++) {
-    NSUInteger nextIdx = isClosed ? ((c + 1) % path.count) : (c + 1);
-    for (NSUInteger s = 0; s < segsPerCurve; s++) {
-      float t = (float)s / (float)segsPerCurve;
-      simd_float2 pos = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
-      simd_float2 px = {pos.x * outputWidth - outputWidth / 2.0f,
-                        (1.0f - pos.y) * outputHeight - outputHeight / 2.0f};
-      outline[oc++] = px;
-    }
-  }
-  if (!isClosed) {
-    simd_float2 pos = [path evaluatePointAtIndex:curveCount - 1
-                                       nextIndex:curveCount
-                                             atT:1.0f];
-    simd_float2 px = {pos.x * outputWidth - outputWidth / 2.0f,
-                      (1.0f - pos.y) * outputHeight - outputHeight / 2.0f};
-    outline[oc++] = px;
-  }
-
-  simd_float2 center = {0, 0};
-  for (NSUInteger i = 0; i < oc; i++)
-    center += outline[i];
-  center /= (float)oc;
-
-  NSUInteger triCount = oc;
-  CanvasFillVertex *fillVerts = malloc(triCount * 3 * sizeof(CanvasFillVertex));
-  for (NSUInteger i = 0; i < triCount; i++) {
-    NSUInteger next = (i + 1) % oc;
-    fillVerts[i * 3 + 0].position = center;
-    fillVerts[i * 3 + 1].position = outline[i];
-    fillVerts[i * 3 + 2].position = outline[next];
-  }
-  free(outline);
+  CanvasFillVertex *fillVerts = NULL;
+  NSUInteger triCount =
+      buildFillFan(path, outputWidth, outputHeight, &fillVerts);
 
   id<MTLBuffer> fillBuf =
       [device newBufferWithBytes:fillVerts
@@ -251,12 +261,38 @@ static void renderFillStencilOnly(KKBezierPath *path, float outputWidth,
   [enc endEncoding];
 }
 
+static void renderStrokeForSinglePath(KKBezierPath *path, float outputWidth,
+                                      float outputHeight, id<MTLDevice> device,
+                                      id<MTLCommandBuffer> commandBuffer,
+                                      id<MTLTexture> outputTexture,
+                                      id<MTLRenderPipelineState> strokePS,
+                                      simd_uint2 viewportSize);
+
 static void renderStrokeForPath(KKBezierPath *path, float outputWidth,
                                 float outputHeight, id<MTLDevice> device,
                                 id<MTLCommandBuffer> commandBuffer,
                                 id<MTLTexture> outputTexture,
                                 id<MTLRenderPipelineState> strokePS,
                                 simd_uint2 viewportSize) {
+  NSArray<KKBezierPath *> *contours = [path splitContours];
+  if (contours) {
+    for (KKBezierPath *sub in contours)
+      renderStrokeForSinglePath(sub, outputWidth, outputHeight, device,
+                                commandBuffer, outputTexture, strokePS,
+                                viewportSize);
+    return;
+  }
+  renderStrokeForSinglePath(path, outputWidth, outputHeight, device,
+                            commandBuffer, outputTexture, strokePS,
+                            viewportSize);
+}
+
+static void renderStrokeForSinglePath(KKBezierPath *path, float outputWidth,
+                                      float outputHeight, id<MTLDevice> device,
+                                      id<MTLCommandBuffer> commandBuffer,
+                                      id<MTLTexture> outputTexture,
+                                      id<MTLRenderPipelineState> strokePS,
+                                      simd_uint2 viewportSize) {
   float sw = path.strokeWidth;
   float ew = (path.endWidth > 0) ? path.endWidth : sw;
   float oa = path.opacity;
@@ -690,364 +726,412 @@ static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
   if (!commandQueue)
     return NO;
 
-  id<MTLDevice> device = [cache deviceWithRegistryID:registryID];
-  id<MTLTexture> outputTexture =
-      [destinationImage metalTextureForDevice:device];
-  id<MTLTexture> inputTexture = [sourceImages[0] metalTextureForDevice:device];
+  @autoreleasepool {
 
-  float outputWidth = (float)(destinationImage.tilePixelBounds.right -
-                              destinationImage.tilePixelBounds.left);
-  float outputHeight = (float)(destinationImage.tilePixelBounds.top -
-                               destinationImage.tilePixelBounds.bottom);
+    id<MTLDevice> device = [cache deviceWithRegistryID:registryID];
+    id<MTLTexture> outputTexture =
+        [destinationImage metalTextureForDevice:device];
+    id<MTLTexture> inputTexture =
+        [sourceImages[0] metalTextureForDevice:device];
 
-  FxRect srcBounds = sourceImages[0].imagePixelBounds;
-  FxMatrix44 *inv = sourceImages[0].inversePixelTransform;
-  FxPoint2D ll = {srcBounds.left, srcBounds.bottom};
-  FxPoint2D ur = {srcBounds.right, srcBounds.top};
-  ll = [inv transform2DPoint:ll];
-  ur = [inv transform2DPoint:ur];
-  float pxW = srcBounds.right - srcBounds.left;
-  float logicalW = ur.x - ll.x;
-  float renderScale = (logicalW > 0) ? (pxW / logicalW) : 1.0f;
+    float outputWidth = (float)(destinationImage.tilePixelBounds.right -
+                                destinationImage.tilePixelBounds.left);
+    float outputHeight = (float)(destinationImage.tilePixelBounds.top -
+                                 destinationImage.tilePixelBounds.bottom);
 
-  CanvasStrokeParams strokeParams = {8.0f, 1.0f, 0.0f, 0.0f};
-  NSArray<KKBezierPath *> *paths = @[];
+    NSString *renderUUID = KKLayerUUIDForAPI(self.apiManager);
+    if (renderUUID) {
+      KKLayerInstanceState *renderState = KKLayerStateForUUID(renderUUID);
+      renderState.canvasWidth = outputWidth;
+      renderState.canvasHeight = outputHeight;
+    }
 
-  if (pluginState.length >= sizeof(CanvasStrokeParams)) {
-    memcpy(&strokeParams, pluginState.bytes, sizeof(CanvasStrokeParams));
-    if (pluginState.length > sizeof(CanvasStrokeParams)) {
-      NSData *blobData = [pluginState
-          subdataWithRange:NSMakeRange(sizeof(CanvasStrokeParams),
-                                       pluginState.length -
-                                           sizeof(CanvasStrokeParams))];
-      NSString *blobStr = [[NSString alloc] initWithData:blobData
-                                                encoding:NSUTF8StringEncoding];
-      if (blobStr.length > 0) {
-        NSData *decoded = [[NSData alloc] initWithBase64EncodedString:blobStr
-                                                              options:0];
-        if (decoded)
-          paths = [KKBezierPath pathsFromBlob:decoded];
+    FxRect srcBounds = sourceImages[0].imagePixelBounds;
+    FxMatrix44 *inv = sourceImages[0].inversePixelTransform;
+    FxPoint2D ll = {srcBounds.left, srcBounds.bottom};
+    FxPoint2D ur = {srcBounds.right, srcBounds.top};
+    ll = [inv transform2DPoint:ll];
+    ur = [inv transform2DPoint:ur];
+    float pxW = srcBounds.right - srcBounds.left;
+    float logicalW = ur.x - ll.x;
+    float renderScale = (logicalW > 0) ? (pxW / logicalW) : 1.0f;
+
+    CanvasStrokeParams strokeParams = {8.0f, 1.0f, 0.0f, 0.0f};
+    NSArray<KKBezierPath *> *paths = @[];
+
+    if (pluginState.length >= sizeof(CanvasStrokeParams)) {
+      memcpy(&strokeParams, pluginState.bytes, sizeof(CanvasStrokeParams));
+      if (pluginState.length > sizeof(CanvasStrokeParams)) {
+        NSData *blobData = [pluginState
+            subdataWithRange:NSMakeRange(sizeof(CanvasStrokeParams),
+                                         pluginState.length -
+                                             sizeof(CanvasStrokeParams))];
+        NSString *blobStr =
+            [[NSString alloc] initWithData:blobData
+                                  encoding:NSUTF8StringEncoding];
+        if (blobStr.length > 0) {
+          NSData *decoded = [[NSData alloc] initWithBase64EncodedString:blobStr
+                                                                options:0];
+          if (decoded)
+            paths = [KKBezierPath pathsFromBlob:decoded];
+        }
       }
     }
-  }
 
-  for (KKBezierPath *p in paths) {
-    if (p.isRect && p.count >= 4) {
-      simd_float2 pMin = {HUGE_VALF, HUGE_VALF};
-      simd_float2 pMax = {-HUGE_VALF, -HUGE_VALF};
-      for (NSUInteger i = 0; i < p.count; i++) {
-        KKBezierPoint pt = [p pointAtIndex:i];
-        pMin.x = fminf(pMin.x, pt.x);
-        pMin.y = fminf(pMin.y, pt.y);
-        pMax.x = fmaxf(pMax.x, pt.x);
-        pMax.y = fmaxf(pMax.y, pt.y);
-      }
-      float rW = (pMax.x - pMin.x) * outputWidth;
-      float rH = (pMax.y - pMin.y) * outputHeight;
-      [p setRoundedRectWithMin:pMin
-                           max:pMax
-                    fractionTL:p.cornerRadiusTL
-                    fractionTR:p.cornerRadiusTR
-                    fractionBR:p.cornerRadiusBR
-                    fractionBL:p.cornerRadiusBL
-                   canvasWidth:rW
-                  canvasHeight:rH];
-    }
-  }
-
-  id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
-  commandBuffer.label = @"Canvas Command Buffer";
-  [commandBuffer enqueue];
-
-  {
-    id<MTLBlitCommandEncoder> blit = [commandBuffer blitCommandEncoder];
-    NSUInteger copyW = MIN(inputTexture.width, outputTexture.width);
-    NSUInteger copyH = MIN(inputTexture.height, outputTexture.height);
-    [blit copyFromTexture:inputTexture
-              sourceSlice:0
-              sourceLevel:0
-             sourceOrigin:MTLOriginMake(0, 0, 0)
-               sourceSize:MTLSizeMake(copyW, copyH, 1)
-                toTexture:outputTexture
-         destinationSlice:0
-         destinationLevel:0
-        destinationOrigin:MTLOriginMake(0, 0, 0)];
-    [blit endEncoding];
-  }
-
-  // Scale all pixel-space stroke properties by render quality so strokes
-  // appear the same proportional size at any quality level.
-  if (renderScale < 0.9999f) {
     for (KKBezierPath *p in paths) {
-      p.strokeWidth *= renderScale;
-      p.endWidth *= renderScale;
-      p.dashLength *= renderScale;
-      p.dashGap *= renderScale;
-      p.dotGap *= renderScale;
-      p.sketchFillGap *= renderScale;
-      p.sketchFillWeight *= renderScale;
+      if (p.isRect && p.count >= 4) {
+        simd_float2 pMin = {HUGE_VALF, HUGE_VALF};
+        simd_float2 pMax = {-HUGE_VALF, -HUGE_VALF};
+        for (NSUInteger i = 0; i < p.count; i++) {
+          KKBezierPoint pt = [p pointAtIndex:i];
+          pMin.x = fminf(pMin.x, pt.x);
+          pMin.y = fminf(pMin.y, pt.y);
+          pMax.x = fmaxf(pMax.x, pt.x);
+          pMax.y = fmaxf(pMax.y, pt.y);
+        }
+        float rW = (pMax.x - pMin.x) * outputWidth;
+        float rH = (pMax.y - pMin.y) * outputHeight;
+        [p setRoundedRectWithMin:pMin
+                             max:pMax
+                      fractionTL:p.cornerRadiusTL
+                      fractionTR:p.cornerRadiusTR
+                      fractionBR:p.cornerRadiusBR
+                      fractionBL:p.cornerRadiusBL
+                     canvasWidth:rW
+                    canvasHeight:rH];
+      }
     }
-  }
 
-  // Keep original paths for sketch fill generation (hachure needs clean
-  // geometry).
-  NSMutableArray<KKBezierPath *> *origPathsMut =
-      [NSMutableArray arrayWithCapacity:paths.count];
-  NSMutableArray<KKBezierPath *> *renderPaths =
-      [NSMutableArray arrayWithCapacity:paths.count];
+    id<MTLCommandBuffer> commandBuffer =
+        [commandQueue commandBufferWithUnretainedReferences];
+    commandBuffer.label = @"Canvas Command Buffer";
+    [commandBuffer enqueue];
 
-  // Apply sketch jitter to paths that have it enabled.
-  // When an open path has 2 strokes, split into two separate single-pass
-  // paths so the tessellator doesn't draw a connecting line between the
-  // merged passes.
-  for (KKBezierPath *p in paths) {
-    if (p.sketchEnabled && p.count >= 2 && !p.hidden) {
-      BOOL needsSplit = !p.closed && p.sketchStrokes >= 2;
-      if (needsSplit) {
-        // Pass 1: primary stroke with markers.
-        KKBezierPath *pass1 =
-            KKSketchPath(p, p.sketchRoughness, p.sketchBowing, p.sketchSeed, 1,
-                         outputWidth, outputHeight);
-        [renderPaths addObject:pass1];
-        [origPathsMut addObject:p];
-        // Pass 2: overlay stroke, different seed, no markers, no fill.
-        KKBezierPath *pass2 = KKSketchPath(p, p.sketchRoughness, p.sketchBowing,
-                                           p.sketchSeed ^ 0xFACE0042, 1,
-                                           outputWidth, outputHeight);
-        pass2.fillEnabled = NO;
-        pass2.startMarker = 0;
-        pass2.endMarker = 0;
-        [renderPaths addObject:pass2];
-        [origPathsMut addObject:p];
+    {
+      id<MTLBlitCommandEncoder> blit = [commandBuffer blitCommandEncoder];
+      NSUInteger copyW = MIN(inputTexture.width, outputTexture.width);
+      NSUInteger copyH = MIN(inputTexture.height, outputTexture.height);
+      [blit copyFromTexture:inputTexture
+                sourceSlice:0
+                sourceLevel:0
+               sourceOrigin:MTLOriginMake(0, 0, 0)
+                 sourceSize:MTLSizeMake(copyW, copyH, 1)
+                  toTexture:outputTexture
+           destinationSlice:0
+           destinationLevel:0
+          destinationOrigin:MTLOriginMake(0, 0, 0)];
+      [blit endEncoding];
+    }
+
+    // Scale all pixel-space stroke properties by render quality so strokes
+    // appear the same proportional size at any quality level.
+    if (renderScale < 0.9999f) {
+      for (KKBezierPath *p in paths) {
+        p.strokeWidth *= renderScale;
+        p.endWidth *= renderScale;
+        p.dashLength *= renderScale;
+        p.dashGap *= renderScale;
+        p.dotGap *= renderScale;
+        p.sketchFillGap *= renderScale;
+        p.sketchFillWeight *= renderScale;
+      }
+    }
+
+    // Keep original paths for sketch fill generation (hachure needs clean
+    // geometry).
+    NSMutableArray<KKBezierPath *> *origPathsMut =
+        [NSMutableArray arrayWithCapacity:paths.count];
+    NSMutableArray<KKBezierPath *> *renderPaths =
+        [NSMutableArray arrayWithCapacity:paths.count];
+
+    // Apply sketch jitter to paths that have it enabled.
+    // When an open path has 2 strokes, split into two separate single-pass
+    // paths so the tessellator doesn't draw a connecting line between the
+    // merged passes.
+    for (KKBezierPath *p in paths) {
+      if (p.sketchEnabled && p.count >= 2 && !p.hidden) {
+        BOOL needsSplit = !p.closed && p.sketchStrokes >= 2;
+        if (needsSplit) {
+          // Pass 1: primary stroke with markers.
+          KKBezierPath *pass1 =
+              KKSketchPath(p, p.sketchRoughness, p.sketchBowing, p.sketchSeed,
+                           1, outputWidth, outputHeight);
+          [renderPaths addObject:pass1];
+          [origPathsMut addObject:p];
+          // Pass 2: overlay stroke, different seed, no markers, no fill.
+          KKBezierPath *pass2 = KKSketchPath(
+              p, p.sketchRoughness, p.sketchBowing, p.sketchSeed ^ 0xFACE0042,
+              1, outputWidth, outputHeight);
+          pass2.fillEnabled = NO;
+          pass2.startMarker = 0;
+          pass2.endMarker = 0;
+          [renderPaths addObject:pass2];
+          [origPathsMut addObject:p];
+        } else {
+          [renderPaths
+              addObject:KKSketchPath(p, p.sketchRoughness, p.sketchBowing,
+                                     p.sketchSeed, p.sketchStrokes, outputWidth,
+                                     outputHeight)];
+          [origPathsMut addObject:p];
+        }
       } else {
-        [renderPaths
-            addObject:KKSketchPath(p, p.sketchRoughness, p.sketchBowing,
-                                   p.sketchSeed, p.sketchStrokes, outputWidth,
-                                   outputHeight)];
+        [renderPaths addObject:p];
         [origPathsMut addObject:p];
       }
-    } else {
-      [renderPaths addObject:p];
-      [origPathsMut addObject:p];
     }
-  }
-  paths = renderPaths;
-  NSArray<KKBezierPath *> *origPaths = origPathsMut;
+    paths = renderPaths;
+    NSArray<KKBezierPath *> *origPaths = origPathsMut;
 
-  BOOL hasDrawablePaths = NO;
-  for (KKBezierPath *p in paths) {
-    if (p.count >= 2 && !p.hidden) {
-      hasDrawablePaths = YES;
-      break;
+    BOOL hasDrawablePaths = NO;
+    for (KKBezierPath *p in paths) {
+      if (p.count >= 2 && !p.hidden) {
+        hasDrawablePaths = YES;
+        break;
+      }
     }
-  }
-  if (!hasDrawablePaths) {
+    if (!hasDrawablePaths) {
+      [commandBuffer commit];
+      [commandBuffer waitUntilCompleted];
+      [cache returnCommandQueueToCache:commandQueue];
+      return YES;
+    }
+
+    NSString *strokeKey =
+        [NSString stringWithFormat:@"%@_stroke_%lu", kPluginID,
+                                   (unsigned long)pixelFormat];
+    id<MTLRenderPipelineState> strokePS =
+        getOrCreatePipeline(strokeKey, registryID, pixelFormat, cache, device,
+                            @"strokeVertexShader", @"strokeFragmentShader", YES,
+                            MTLPixelFormatInvalid);
+    if (!strokePS) {
+      [cache returnCommandQueueToCache:commandQueue];
+      return NO;
+    }
+
+    simd_uint2 viewportSize = {(unsigned int)outputWidth,
+                               (unsigned int)outputHeight};
+
+    MTLPixelFormat stencilFormat = MTLPixelFormatStencil8;
+
+    NSString *fillStencilKey =
+        [NSString stringWithFormat:@"%@_fillStencil_%lu", kPluginID,
+                                   (unsigned long)pixelFormat];
+    id<MTLRenderPipelineState> fillStencilPS = getOrCreatePipeline(
+        fillStencilKey, registryID, pixelFormat, cache, device,
+        @"fillVertexShader", @"fillFragmentShader", NO, stencilFormat);
+
+    NSString *fillColorKey =
+        [NSString stringWithFormat:@"%@_fillColor_%lu", kPluginID,
+                                   (unsigned long)pixelFormat];
+    id<MTLRenderPipelineState> fillColorPS = getOrCreatePipeline(
+        fillColorKey, registryID, pixelFormat, cache, device,
+        @"fillVertexShader", @"fillFragmentShader", YES, stencilFormat);
+
+    // Stroke pipeline with stencil support for clipped sketch fills.
+    NSString *strokeStencilKey =
+        [NSString stringWithFormat:@"%@_strokeStencil_%lu", kPluginID,
+                                   (unsigned long)pixelFormat];
+    id<MTLRenderPipelineState> strokeStencilPS = getOrCreatePipeline(
+        strokeStencilKey, registryID, pixelFormat, cache, device,
+        @"strokeVertexShader", @"strokeFragmentShader", YES, stencilFormat);
+
+    // Cache depth/stencil states — immutable, reusable across frames.
+    static id<MTLDepthStencilState> sFillStencilDSState = nil;
+    static id<MTLDepthStencilState> sFillColorDSState = nil;
+    if (!sFillStencilDSState) {
+      MTLStencilDescriptor *stencilInvertDesc =
+          [[MTLStencilDescriptor alloc] init];
+      stencilInvertDesc.stencilCompareFunction = MTLCompareFunctionAlways;
+      stencilInvertDesc.depthStencilPassOperation = MTLStencilOperationInvert;
+      MTLDepthStencilDescriptor *fillStencilDSDesc =
+          [[MTLDepthStencilDescriptor alloc] init];
+      fillStencilDSDesc.frontFaceStencil = stencilInvertDesc;
+      fillStencilDSDesc.backFaceStencil = stencilInvertDesc;
+      sFillStencilDSState =
+          [device newDepthStencilStateWithDescriptor:fillStencilDSDesc];
+
+      MTLStencilDescriptor *stencilTestDesc =
+          [[MTLStencilDescriptor alloc] init];
+      stencilTestDesc.stencilCompareFunction = MTLCompareFunctionNotEqual;
+      stencilTestDesc.readMask = 0xFF;
+      stencilTestDesc.stencilFailureOperation = MTLStencilOperationKeep;
+      stencilTestDesc.depthStencilPassOperation = MTLStencilOperationZero;
+      MTLDepthStencilDescriptor *fillColorDSDesc =
+          [[MTLDepthStencilDescriptor alloc] init];
+      fillColorDSDesc.frontFaceStencil = stencilTestDesc;
+      fillColorDSDesc.backFaceStencil = stencilTestDesc;
+      sFillColorDSState =
+          [device newDepthStencilStateWithDescriptor:fillColorDSDesc];
+    }
+    id<MTLDepthStencilState> fillStencilDSState = sFillStencilDSState;
+    id<MTLDepthStencilState> fillColorDSState = sFillColorDSState;
+
+    // Cache stencil and intermediate textures — reuse when dimensions match.
+    static id<MTLTexture> sCachedStencilTex = nil;
+    static id<MTLTexture> sCachedIntermediateTex = nil;
+    static NSUInteger sCachedTexW = 0, sCachedTexH = 0;
+    static MTLPixelFormat sCachedIntPixFmt = MTLPixelFormatInvalid;
+    NSUInteger texW = (NSUInteger)outputWidth;
+    NSUInteger texH = (NSUInteger)outputHeight;
+
+    if (sCachedTexW != texW || sCachedTexH != texH) {
+      sCachedStencilTex = nil;
+      sCachedIntermediateTex = nil;
+      sCachedTexW = texW;
+      sCachedTexH = texH;
+      sCachedIntPixFmt = MTLPixelFormatInvalid;
+    }
+
+    id<MTLTexture> stencilTexture = nil;
+    BOOL anyFill = NO;
+    for (NSUInteger pi = 0; pi < paths.count; pi++) {
+      if (paths[pi].fillEnabled && paths[pi].count >= 2 && !paths[pi].hidden) {
+        anyFill = YES;
+        break;
+      }
+    }
+    if (anyFill && fillStencilPS && fillColorPS) {
+      if (!sCachedStencilTex) {
+        MTLTextureDescriptor *stencilTexDesc = [MTLTextureDescriptor
+            texture2DDescriptorWithPixelFormat:stencilFormat
+                                         width:texW
+                                        height:texH
+                                     mipmapped:NO];
+        stencilTexDesc.usage = MTLTextureUsageRenderTarget;
+        stencilTexDesc.storageMode = MTLStorageModePrivate;
+        sCachedStencilTex = [device newTextureWithDescriptor:stencilTexDesc];
+      }
+      stencilTexture = sCachedStencilTex;
+    }
+
+    // Composite pipeline: used to blit the intermediate texture onto the output
+    // with per-object opacity applied once to the flattened fill+stroke.
+    NSString *compositeKey =
+        [NSString stringWithFormat:@"%@_composite_%lu", kPluginID,
+                                   (unsigned long)pixelFormat];
+    id<MTLRenderPipelineState> compositePS = getOrCreatePipeline(
+        compositeKey, registryID, pixelFormat, cache, device,
+        @"compositeVertexShader", @"compositeFragmentShader", YES,
+        MTLPixelFormatInvalid);
+
+    // Intermediate texture for per-object opacity compositing.
+    id<MTLTexture> intermediateTexture = nil;
+    if (compositePS) {
+      if (!sCachedIntermediateTex || sCachedIntPixFmt != pixelFormat) {
+        MTLTextureDescriptor *intDesc =
+            [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pixelFormat
+                                                               width:texW
+                                                              height:texH
+                                                           mipmapped:NO];
+        intDesc.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+        intDesc.storageMode = MTLStorageModePrivate;
+        sCachedIntermediateTex = [device newTextureWithDescriptor:intDesc];
+        sCachedIntPixFmt = pixelFormat;
+      }
+      intermediateTexture = sCachedIntermediateTex;
+    }
+
+    for (NSUInteger pi = paths.count; pi > 0; pi--) {
+      @autoreleasepool {
+        KKBezierPath *path = paths[pi - 1];
+        KKBezierPath *orig = origPaths[pi - 1];
+        if (path.count < 2 || path.hidden)
+          continue;
+
+        float pathOpacity = path.opacity;
+        BOOL needsIntermediate =
+            intermediateTexture && compositePS && pathOpacity < 0.9999f;
+
+        // When using intermediate compositing, render fill+stroke at full
+        // opacity into a clear intermediate texture, then composite onto output
+        // with the object's opacity.  This prevents overlapping primitives
+        // (fill vs stroke, dashed segments, sketch fills) from showing through
+        // each other.
+        id<MTLTexture> target =
+            needsIntermediate ? intermediateTexture : outputTexture;
+
+        if (needsIntermediate) {
+          // Temporarily force full opacity on the path objects so the render
+          // helpers emit fully opaque colors.
+          path.opacity = 1.0f;
+          orig.opacity = 1.0f;
+
+          // Clear the intermediate texture to transparent black.
+          MTLRenderPassDescriptor *clearRPD =
+              [MTLRenderPassDescriptor renderPassDescriptor];
+          clearRPD.colorAttachments[0].texture = intermediateTexture;
+          clearRPD.colorAttachments[0].loadAction = MTLLoadActionClear;
+          clearRPD.colorAttachments[0].storeAction = MTLStoreActionStore;
+          clearRPD.colorAttachments[0].clearColor =
+              MTLClearColorMake(0, 0, 0, 0);
+          id<MTLRenderCommandEncoder> clearEnc =
+              [commandBuffer renderCommandEncoderWithDescriptor:clearRPD];
+          [clearEnc endEncoding];
+        }
+
+        if (path.fillEnabled && orig.count >= 2 && fillStencilPS &&
+            fillColorPS && stencilTexture) {
+          // Always use the original (un-jittered) path for fill geometry.
+          // buildFillFan handles multiple contours (compound paths) internally.
+          if (path.sketchFillStyle > 0) {
+            BOOL clipFill = !path.sketchEnabled;
+            if (clipFill) {
+              renderFillStencilOnly(orig, outputWidth, outputHeight, device,
+                                    commandBuffer, target, stencilTexture,
+                                    fillStencilPS, fillStencilDSState,
+                                    viewportSize);
+            }
+            renderSketchFillForPath(orig, outputWidth, outputHeight, device,
+                                    commandBuffer, target, stencilTexture,
+                                    strokeStencilPS, fillColorDSState,
+                                    viewportSize, clipFill);
+          } else {
+            renderFillForPath(orig, outputWidth, outputHeight, device,
+                              commandBuffer, target, stencilTexture,
+                              fillStencilPS, fillColorPS, fillStencilDSState,
+                              fillColorDSState, viewportSize);
+          }
+        }
+
+        if (path.strokeEnabled) {
+          renderStrokeForPath(path, outputWidth, outputHeight, device,
+                              commandBuffer, target, strokePS, viewportSize);
+        }
+
+        if (needsIntermediate) {
+          // Restore original opacity values.
+          path.opacity = pathOpacity;
+          orig.opacity = pathOpacity;
+
+          // Composite the intermediate texture onto the output with opacity.
+          MTLRenderPassDescriptor *compRPD =
+              [MTLRenderPassDescriptor renderPassDescriptor];
+          compRPD.colorAttachments[0].texture = outputTexture;
+          compRPD.colorAttachments[0].loadAction = MTLLoadActionLoad;
+          compRPD.colorAttachments[0].storeAction = MTLStoreActionStore;
+
+          id<MTLRenderCommandEncoder> compEnc =
+              [commandBuffer renderCommandEncoderWithDescriptor:compRPD];
+          [compEnc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight,
+                                             -1, 1}];
+          [compEnc setRenderPipelineState:compositePS];
+          [compEnc setFragmentTexture:intermediateTexture atIndex:0];
+          [compEnc setFragmentBytes:&pathOpacity
+                             length:sizeof(pathOpacity)
+                            atIndex:0];
+          [compEnc drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                      vertexStart:0
+                      vertexCount:4];
+          [compEnc endEncoding];
+        }
+      } // per-path @autoreleasepool
+    }
+
     [commandBuffer commit];
     [commandBuffer waitUntilCompleted];
-    [cache returnCommandQueueToCache:commandQueue];
-    return YES;
-  }
 
-  NSString *strokeKey = [NSString
-      stringWithFormat:@"%@_stroke_%lu", kPluginID, (unsigned long)pixelFormat];
-  id<MTLRenderPipelineState> strokePS = getOrCreatePipeline(
-      strokeKey, registryID, pixelFormat, cache, device, @"strokeVertexShader",
-      @"strokeFragmentShader", YES, MTLPixelFormatInvalid);
-  if (!strokePS) {
-    [cache returnCommandQueueToCache:commandQueue];
-    return NO;
-  }
+  } // @autoreleasepool
 
-  simd_uint2 viewportSize = {(unsigned int)outputWidth,
-                             (unsigned int)outputHeight};
-
-  MTLPixelFormat stencilFormat = MTLPixelFormatStencil8;
-
-  NSString *fillStencilKey =
-      [NSString stringWithFormat:@"%@_fillStencil_%lu", kPluginID,
-                                 (unsigned long)pixelFormat];
-  id<MTLRenderPipelineState> fillStencilPS = getOrCreatePipeline(
-      fillStencilKey, registryID, pixelFormat, cache, device,
-      @"fillVertexShader", @"fillFragmentShader", NO, stencilFormat);
-
-  NSString *fillColorKey =
-      [NSString stringWithFormat:@"%@_fillColor_%lu", kPluginID,
-                                 (unsigned long)pixelFormat];
-  id<MTLRenderPipelineState> fillColorPS = getOrCreatePipeline(
-      fillColorKey, registryID, pixelFormat, cache, device, @"fillVertexShader",
-      @"fillFragmentShader", YES, stencilFormat);
-
-  // Stroke pipeline with stencil support for clipped sketch fills.
-  NSString *strokeStencilKey =
-      [NSString stringWithFormat:@"%@_strokeStencil_%lu", kPluginID,
-                                 (unsigned long)pixelFormat];
-  id<MTLRenderPipelineState> strokeStencilPS = getOrCreatePipeline(
-      strokeStencilKey, registryID, pixelFormat, cache, device,
-      @"strokeVertexShader", @"strokeFragmentShader", YES, stencilFormat);
-
-  MTLStencilDescriptor *stencilInvertDesc = [[MTLStencilDescriptor alloc] init];
-  stencilInvertDesc.stencilCompareFunction = MTLCompareFunctionAlways;
-  stencilInvertDesc.depthStencilPassOperation = MTLStencilOperationInvert;
-
-  MTLDepthStencilDescriptor *fillStencilDSDesc =
-      [[MTLDepthStencilDescriptor alloc] init];
-  fillStencilDSDesc.frontFaceStencil = stencilInvertDesc;
-  fillStencilDSDesc.backFaceStencil = stencilInvertDesc;
-  id<MTLDepthStencilState> fillStencilDSState =
-      [device newDepthStencilStateWithDescriptor:fillStencilDSDesc];
-
-  MTLStencilDescriptor *stencilTestDesc = [[MTLStencilDescriptor alloc] init];
-  stencilTestDesc.stencilCompareFunction = MTLCompareFunctionNotEqual;
-  stencilTestDesc.readMask = 0xFF;
-  stencilTestDesc.stencilFailureOperation = MTLStencilOperationKeep;
-  stencilTestDesc.depthStencilPassOperation = MTLStencilOperationZero;
-
-  MTLDepthStencilDescriptor *fillColorDSDesc =
-      [[MTLDepthStencilDescriptor alloc] init];
-  fillColorDSDesc.frontFaceStencil = stencilTestDesc;
-  fillColorDSDesc.backFaceStencil = stencilTestDesc;
-  id<MTLDepthStencilState> fillColorDSState =
-      [device newDepthStencilStateWithDescriptor:fillColorDSDesc];
-
-  id<MTLTexture> stencilTexture = nil;
-  BOOL anyFill = NO;
-  for (NSUInteger pi = 0; pi < paths.count; pi++) {
-    if (paths[pi].fillEnabled && paths[pi].count >= 2 && !paths[pi].hidden) {
-      anyFill = YES;
-      break;
-    }
-  }
-  if (anyFill && fillStencilPS && fillColorPS) {
-    MTLTextureDescriptor *stencilTexDesc =
-        [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:stencilFormat
-                                                           width:outputWidth
-                                                          height:outputHeight
-                                                       mipmapped:NO];
-    stencilTexDesc.usage = MTLTextureUsageRenderTarget;
-    stencilTexDesc.storageMode = MTLStorageModePrivate;
-    stencilTexture = [device newTextureWithDescriptor:stencilTexDesc];
-  }
-
-  // Composite pipeline: used to blit the intermediate texture onto the output
-  // with per-object opacity applied once to the flattened fill+stroke.
-  NSString *compositeKey =
-      [NSString stringWithFormat:@"%@_composite_%lu", kPluginID,
-                                 (unsigned long)pixelFormat];
-  id<MTLRenderPipelineState> compositePS =
-      getOrCreatePipeline(compositeKey, registryID, pixelFormat, cache, device,
-                          @"compositeVertexShader", @"compositeFragmentShader",
-                          YES, MTLPixelFormatInvalid);
-
-  // Intermediate texture for per-object opacity compositing.
-  // Reused across all paths that need it.
-  id<MTLTexture> intermediateTexture = nil;
-  if (compositePS) {
-    MTLTextureDescriptor *intDesc =
-        [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pixelFormat
-                                                           width:outputWidth
-                                                          height:outputHeight
-                                                       mipmapped:NO];
-    intDesc.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
-    intDesc.storageMode = MTLStorageModePrivate;
-    intermediateTexture = [device newTextureWithDescriptor:intDesc];
-  }
-
-  for (NSUInteger pi = paths.count; pi > 0; pi--) {
-    KKBezierPath *path = paths[pi - 1];
-    KKBezierPath *orig = origPaths[pi - 1];
-    if (path.count < 2 || path.hidden)
-      continue;
-
-    float pathOpacity = path.opacity;
-    BOOL needsIntermediate =
-        intermediateTexture && compositePS && pathOpacity < 0.9999f;
-
-    // When using intermediate compositing, render fill+stroke at full opacity
-    // into a clear intermediate texture, then composite onto output with the
-    // object's opacity.  This prevents overlapping primitives (fill vs stroke,
-    // dashed segments, sketch fills) from showing through each other.
-    id<MTLTexture> target =
-        needsIntermediate ? intermediateTexture : outputTexture;
-
-    if (needsIntermediate) {
-      // Temporarily force full opacity on the path objects so the render
-      // helpers emit fully opaque colors.
-      path.opacity = 1.0f;
-      orig.opacity = 1.0f;
-
-      // Clear the intermediate texture to transparent black.
-      MTLRenderPassDescriptor *clearRPD =
-          [MTLRenderPassDescriptor renderPassDescriptor];
-      clearRPD.colorAttachments[0].texture = intermediateTexture;
-      clearRPD.colorAttachments[0].loadAction = MTLLoadActionClear;
-      clearRPD.colorAttachments[0].storeAction = MTLStoreActionStore;
-      clearRPD.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
-      id<MTLRenderCommandEncoder> clearEnc =
-          [commandBuffer renderCommandEncoderWithDescriptor:clearRPD];
-      [clearEnc endEncoding];
-    }
-
-    if (path.fillEnabled && orig.count >= 2 && fillStencilPS && fillColorPS &&
-        stencilTexture) {
-      // Always use the original (un-jittered) path for fill geometry.
-      // The sketch double-stroke path has overlapping passes that would
-      // cause the stencil fill to fill between the two lines.
-      if (path.sketchFillStyle > 0) {
-        // When sketch is off, clip fill lines to the shape interior.
-        // When sketch is on, allow natural leaking (rough.js style).
-        BOOL clipFill = !path.sketchEnabled;
-        if (clipFill) {
-          renderFillStencilOnly(
-              orig, outputWidth, outputHeight, device, commandBuffer, target,
-              stencilTexture, fillStencilPS, fillStencilDSState, viewportSize);
-        }
-        renderSketchFillForPath(orig, outputWidth, outputHeight, device,
-                                commandBuffer, target, stencilTexture,
-                                strokeStencilPS, fillColorDSState, viewportSize,
-                                clipFill);
-      } else {
-        renderFillForPath(orig, outputWidth, outputHeight, device,
-                          commandBuffer, target, stencilTexture, fillStencilPS,
-                          fillColorPS, fillStencilDSState, fillColorDSState,
-                          viewportSize);
-      }
-    }
-
-    if (path.strokeEnabled) {
-      renderStrokeForPath(path, outputWidth, outputHeight, device,
-                          commandBuffer, target, strokePS, viewportSize);
-    }
-
-    if (needsIntermediate) {
-      // Restore original opacity values.
-      path.opacity = pathOpacity;
-      orig.opacity = pathOpacity;
-
-      // Composite the intermediate texture onto the output with opacity.
-      MTLRenderPassDescriptor *compRPD =
-          [MTLRenderPassDescriptor renderPassDescriptor];
-      compRPD.colorAttachments[0].texture = outputTexture;
-      compRPD.colorAttachments[0].loadAction = MTLLoadActionLoad;
-      compRPD.colorAttachments[0].storeAction = MTLStoreActionStore;
-
-      id<MTLRenderCommandEncoder> compEnc =
-          [commandBuffer renderCommandEncoderWithDescriptor:compRPD];
-      [compEnc
-          setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1, 1}];
-      [compEnc setRenderPipelineState:compositePS];
-      [compEnc setFragmentTexture:intermediateTexture atIndex:0];
-      [compEnc setFragmentBytes:&pathOpacity
-                         length:sizeof(pathOpacity)
-                        atIndex:0];
-      [compEnc drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                  vertexStart:0
-                  vertexCount:4];
-      [compEnc endEncoding];
-    }
-  }
-
-  [commandBuffer commit];
-  [commandBuffer waitUntilCompleted];
   [cache returnCommandQueueToCache:commandQueue];
   return YES;
 }
