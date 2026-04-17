@@ -355,10 +355,16 @@
     NSArray<NSURL *> *urls = [sender.draggingPasteboard
         readObjectsForClasses:@[ [NSURL class] ]
                       options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
-    KKLog *log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
+    NSUInteger insertIdx = (targetIndex >= 0) ? (NSUInteger)targetIndex : 0;
     for (NSURL *url in urls) {
-      [log info:@"[LayerList] External file drop: %@ at index %ld", url.path,
-                (long)targetIndex];
+      NSError *err = nil;
+      NSString *svg = [NSString stringWithContentsOfURL:url
+                                               encoding:NSUTF8StringEncoding
+                                                  error:&err];
+      if (!svg)
+        continue;
+      NSString *name = url.lastPathComponent.stringByDeletingPathExtension;
+      [self.actionTarget _importSVGString:svg name:name atIndex:insertIdx];
     }
     return urls.count > 0;
   }

@@ -57,6 +57,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *fillGroupHeader;
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *sketchGroupHeader;
 @property(nonatomic) NSUInteger listHash;
+@property(nonatomic) float canvasWidth;
+@property(nonatomic) float canvasHeight;
 @end
 
 NSString *_Nullable KKLayerUUIDForAPI(id<PROAPIAccessing> api);
@@ -69,6 +71,9 @@ KKLayerInstanceState *_Nullable KKLayerStateForUUID(NSString *_Nullable uuid);
 - (void)_duplicateFromIndices:(NSIndexSet *)indices
                       toIndex:(NSUInteger)target
                 parentGroupID:(nullable NSString *)parentGroupID;
+- (void)_importSVGString:(NSString *)svgString
+                    name:(NSString *)name
+                 atIndex:(NSUInteger)index;
 - (void)renameRow:(NSMenuItem *)sender;
 - (void)groupSelection:(NSMenuItem *)sender;
 @end
@@ -131,6 +136,9 @@ KKLayerInstanceState *_Nullable KKLayerStateForUUID(NSString *_Nullable uuid);
 - (void)_duplicateFromIndices:(NSIndexSet *)indices
                       toIndex:(NSUInteger)target
                 parentGroupID:(nullable NSString *)parentGroupID;
+- (void)_importSVGString:(NSString *)svgString
+                    name:(NSString *)name
+                 atIndex:(NSUInteger)index;
 @end
 
 NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
