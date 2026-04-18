@@ -436,6 +436,10 @@
     self.dragOrigin =
         [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
     self.dragAnchor = self.dragOrigin;
+    if (self.autoSelect) {
+      self.autoSelectPending = YES;
+      self.autoSelectClickOrigin = CGPointMake(positionX, positionY);
+    }
     *forceUpdate = YES;
     return;
   }
@@ -563,6 +567,10 @@
     }
     self.lastClickTime = now;
 
+    // Snapshot previous selection before modifying, to avoid race with
+    // drawOSC updating lst.selectedIndices on the render thread.
+    NSIndexSet *prevSel = [self.selectedPathIndices copy];
+
     if (shiftDown) {
       if ([self.selectedPathIndices containsIndex:nearPath])
         [self.selectedPathIndices removeIndex:nearPath];
@@ -573,7 +581,7 @@
       [self.selectedPathIndices addIndex:nearPath];
     }
     self.activePathIndex = nearPath;
-    [self syncStrokeParamsToSelection];
+    [self syncStrokeParamsToSelectionWithPrevious:prevSel];
     self.dragIsPath = YES;
     self.dragOrigin =
         [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];

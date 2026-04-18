@@ -41,6 +41,12 @@
                      parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
                                     kFxParameterFlag_DONT_DISPLAY_IN_DASHBOARD];
 
+  [paramAPI addToggleButtonWithName:@"Auto Select"
+                        parameterID:kParamAutoSelect
+                       defaultValue:YES
+                     parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
+                                    kFxParameterFlag_DONT_DISPLAY_IN_DASHBOARD];
+
   [paramAPI addCustomParameterWithName:@""
                            parameterID:kParamLayerList
                           defaultValue:@(kParamLayerList)
