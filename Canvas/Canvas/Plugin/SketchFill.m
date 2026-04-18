@@ -9,31 +9,59 @@
 static const NSUInteger kSegsPerCurve = 64;
 
 /// Sample the path outline into a dense polygon in pixel space.
-/// Caller must free the returned array.
+/// Multiple contours are stored sequentially; outContourStarts and
+/// outContourCount describe where each contour begins so that
+/// scanlineIntersections can avoid creating edges between contours.
+/// Caller must free outPoly and outContourStarts.
 static NSUInteger sampleOutline(KKBezierPath *path, float outputWidth,
-                                float outputHeight, simd_float2 **outPoly) {
-  BOOL isClosed = path.closed;
-  NSUInteger curveCount = isClosed ? path.count : (path.count - 1);
-  NSUInteger maxPts = curveCount * kSegsPerCurve + 1;
-  simd_float2 *poly = malloc(maxPts * sizeof(simd_float2));
+                                float outputHeight, simd_float2 **outPoly,
+                                NSUInteger **outContourStarts,
+                                NSUInteger *outContourCount) {
+  NSUInteger nc = path.contourCount;
+  NSUInteger totalMax = 0;
+  for (NSUInteger ci = 0; ci < nc; ci++) {
+    NSRange r = [path contourRangeAtIndex:ci];
+    totalMax += r.length * kSegsPerCurve + 1;
+  }
+
+  simd_float2 *poly = malloc(totalMax * sizeof(simd_float2));
+  NSUInteger *contourStarts = malloc((nc + 1) * sizeof(NSUInteger));
   NSUInteger n = 0;
 
-  for (NSUInteger c = 0; c < curveCount; c++) {
-    NSUInteger nextIdx = isClosed ? ((c + 1) % path.count) : (c + 1);
-    for (NSUInteger s = 0; s < kSegsPerCurve; s++) {
-      float t = (float)s / (float)kSegsPerCurve;
-      simd_float2 pos = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
+  for (NSUInteger ci = 0; ci < nc; ci++) {
+    contourStarts[ci] = n;
+    NSRange r = [path contourRangeAtIndex:ci];
+    NSUInteger cStart = r.location;
+    NSUInteger cLen = r.length;
+    BOOL isClosed = path.closed;
+    NSUInteger curveCount = isClosed ? cLen : (cLen > 0 ? cLen - 1 : 0);
+
+    for (NSUInteger c = 0; c < curveCount; c++) {
+      NSUInteger idx = cStart + c;
+      NSUInteger nextIdx =
+          isClosed ? cStart + ((c + 1) % cLen) : (cStart + c + 1);
+      for (NSUInteger s = 0; s < kSegsPerCurve; s++) {
+        float t = (float)s / (float)kSegsPerCurve;
+        simd_float2 pos = [path evaluatePointAtIndex:idx
+                                           nextIndex:nextIdx
+                                                 atT:t];
+        poly[n++] = (simd_float2){pos.x * outputWidth, pos.y * outputHeight};
+      }
+    }
+    if (!isClosed && curveCount > 0) {
+      NSUInteger lastIdx = cStart + curveCount - 1;
+      NSUInteger lastNext = cStart + curveCount;
+      simd_float2 pos = [path evaluatePointAtIndex:lastIdx
+                                         nextIndex:lastNext
+                                               atT:1.0f];
       poly[n++] = (simd_float2){pos.x * outputWidth, pos.y * outputHeight};
     }
   }
-  if (!isClosed) {
-    simd_float2 pos = [path evaluatePointAtIndex:curveCount - 1
-                                       nextIndex:curveCount
-                                             atT:1.0f];
-    poly[n++] = (simd_float2){pos.x * outputWidth, pos.y * outputHeight};
-  }
+  contourStarts[nc] = n; // sentinel
 
   *outPoly = poly;
+  *outContourStarts = contourStarts;
+  *outContourCount = nc;
   return n;
 }
 
@@ -47,16 +75,28 @@ static simd_float2 rotatePoint(simd_float2 p, simd_float2 center, float cos_a,
 }
 
 /// Compute intersections of a horizontal scanline at y with the polygon edges.
+/// Contour boundaries are respected so that edges are only formed within each
+/// closed contour, not between the last point of one and the first of the next.
 /// Returns the number of intersections found. xs must be large enough.
 static NSUInteger scanlineIntersections(const simd_float2 *poly, NSUInteger n,
-                                        float y, float *xs) {
+                                        float y, float *xs,
+                                        const NSUInteger *contourStarts,
+                                        NSUInteger contourCount) {
   NSUInteger count = 0;
-  for (NSUInteger i = 0; i < n; i++) {
-    NSUInteger j = (i + 1) % n;
-    float y0 = poly[i].y, y1 = poly[j].y;
-    if ((y0 <= y && y1 > y) || (y1 <= y && y0 > y)) {
-      float t = (y - y0) / (y1 - y0);
-      xs[count++] = poly[i].x + t * (poly[j].x - poly[i].x);
+  for (NSUInteger ci = 0; ci < contourCount; ci++) {
+    NSUInteger cStart = contourStarts[ci];
+    NSUInteger cEnd = contourStarts[ci + 1];
+    NSUInteger cLen = cEnd - cStart;
+    if (cLen < 2)
+      continue;
+    for (NSUInteger i = 0; i < cLen; i++) {
+      NSUInteger ai = cStart + i;
+      NSUInteger bi = cStart + ((i + 1) % cLen);
+      float y0 = poly[ai].y, y1 = poly[bi].y;
+      if ((y0 <= y && y1 > y) || (y1 <= y && y0 > y)) {
+        float t = (y - y0) / (y1 - y0);
+        xs[count++] = poly[ai].x + t * (poly[bi].x - poly[ai].x);
+      }
     }
   }
   // Sort intersections.
@@ -93,11 +133,15 @@ NSUInteger KKGenerateHachureLines(KKBezierPath *path, float outputWidth,
     return 0;
   }
 
-  // Sample the outline.
+  // Sample the outline (contour-aware).
   simd_float2 *poly = NULL;
-  NSUInteger polyCount = sampleOutline(path, outputWidth, outputHeight, &poly);
+  NSUInteger *contourStarts = NULL;
+  NSUInteger contourCount = 0;
+  NSUInteger polyCount = sampleOutline(path, outputWidth, outputHeight, &poly,
+                                       &contourStarts, &contourCount);
   if (polyCount < 3) {
     free(poly);
+    free(contourStarts);
     *outLines = NULL;
     return 0;
   }
@@ -137,7 +181,8 @@ NSUInteger KKGenerateHachureLines(KKBezierPath *path, float outputWidth,
 
   for (float y = minY + gap; y < maxY; y += gap) {
     float scanY = y + (roughness > 0.0001f ? fillRand() * jitterAmt : 0.0f);
-    NSUInteger xCount = scanlineIntersections(rotPoly, polyCount, scanY, xs);
+    NSUInteger xCount = scanlineIntersections(rotPoly, polyCount, scanY, xs,
+                                              contourStarts, contourCount);
     // Pair up intersections: each consecutive pair is a fill line.
     for (NSUInteger k = 0; k + 1 < xCount; k += 2) {
       if (lineCount >= maxLines) {
@@ -164,8 +209,11 @@ NSUInteger KKGenerateHachureLines(KKBezierPath *path, float outputWidth,
     float sin_b = sinf(angle2);
 
     simd_float2 *poly2 = NULL;
+    NSUInteger *contourStarts2 = NULL;
+    NSUInteger contourCount2 = 0;
     NSUInteger poly2Count =
-        sampleOutline(path, outputWidth, outputHeight, &poly2);
+        sampleOutline(path, outputWidth, outputHeight, &poly2, &contourStarts2,
+                      &contourCount2);
     simd_float2 *rotPoly2 = malloc(poly2Count * sizeof(simd_float2));
     float minY2 = HUGE_VALF, maxY2 = -HUGE_VALF;
     for (NSUInteger i = 0; i < poly2Count; i++) {
@@ -179,8 +227,8 @@ NSUInteger KKGenerateHachureLines(KKBezierPath *path, float outputWidth,
     float *xs2 = malloc((poly2Count + 2) * sizeof(float));
     for (float y = minY2 + gap; y < maxY2; y += gap) {
       float scanY2 = y + (roughness > 0.0001f ? fillRand() * jitterAmt : 0.0f);
-      NSUInteger xCount =
-          scanlineIntersections(rotPoly2, poly2Count, scanY2, xs2);
+      NSUInteger xCount = scanlineIntersections(
+          rotPoly2, poly2Count, scanY2, xs2, contourStarts2, contourCount2);
       for (NSUInteger k = 0; k + 1 < xCount; k += 2) {
         if (lineCount >= maxLines) {
           maxLines *= 2;
@@ -196,7 +244,10 @@ NSUInteger KKGenerateHachureLines(KKBezierPath *path, float outputWidth,
     free(xs2);
     free(rotPoly2);
     free(poly2);
+    free(contourStarts2);
   }
+
+  free(contourStarts);
 
   // Zigzag: connect consecutive line endpoints.
   if (fillStyle == 3 && lineCount > 1) {
