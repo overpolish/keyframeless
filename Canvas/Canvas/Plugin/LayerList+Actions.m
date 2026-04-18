@@ -119,6 +119,14 @@
     KKCacheCustomStyles(_instanceUUID, selected);
     KKSaveSelectedIndex(paramSetAPI,
                         (NSInteger)[paths indexOfObjectIdenticalTo:selected]);
+    // Sync the store's enabled flags so the inspector header toggles reflect
+    // the selected path's actual values (e.g. after SVG import).
+    KKCanvasStore *store = KKLayerStateForUUID(_instanceUUID).store;
+    if (store) {
+      [store setStrokeEnabled:selected.strokeEnabled];
+      [store setFillEnabled:selected.fillEnabled];
+      [store setSketchEnabled:selected.sketchEnabled];
+    }
   } else {
     KKSaveSelectedIndex(paramSetAPI, -1);
   }

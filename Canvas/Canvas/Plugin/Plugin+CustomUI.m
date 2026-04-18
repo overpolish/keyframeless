@@ -164,8 +164,7 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
     heightConstraint.active = YES;
     [emptyStack.centerXAnchor constraintEqualToAnchor:content.centerXAnchor]
         .active = YES;
-    [emptyStack.topAnchor constraintEqualToAnchor:content.topAnchor
-                                         constant:kLayerListHeight / 2 - 7]
+    [emptyStack.centerYAnchor constraintEqualToAnchor:content.centerYAnchor]
         .active = YES;
 
     KKLayerActionTarget *actionTarget = [[KKLayerActionTarget alloc] init];

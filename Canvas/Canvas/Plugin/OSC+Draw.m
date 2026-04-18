@@ -440,9 +440,18 @@
       id<FxParameterRetrievalAPI_v6> paramGetAPI = [self.apiManager
           apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
       NSInteger paramIdx = KKReadSelectedIndex(paramGetAPI);
-      NSInteger memIdx = (self.selectedPathIndices.count > 0)
-                             ? (NSInteger)self.selectedPathIndices.firstIndex
-                             : -1;
+      // Compare against the first non-group index in the selection, because
+      // KKSaveSelectedIndex stores the index from KKSelectedPath which skips
+      // groups.  Using firstIndex would mismatch when a group is selected,
+      // causing the undo detector to clobber the group selection.
+      __block NSInteger memIdx = -1;
+      [self.selectedPathIndices
+          enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+            if (idx < self.paths.count && !self.paths[idx].isGroup) {
+              memIdx = (NSInteger)idx;
+              *stop = YES;
+            }
+          }];
       if (paramIdx != memIdx) {
         [self.selectedPathIndices removeAllIndexes];
         if (paramIdx >= 0 && (NSUInteger)paramIdx < self.paths.count) {

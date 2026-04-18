@@ -306,6 +306,12 @@ void KKCanvasRefreshLayerListFromSnapshot(KKCanvasStoreSnapshot *snap,
         makeObjectsPerformSelector:@selector(removeFromSuperview)];
     container.emptyView.hidden = NO;
     [content addSubview:container.emptyView];
+    [container.emptyView.centerXAnchor
+        constraintEqualToAnchor:content.centerXAnchor]
+        .active = YES;
+    [container.emptyView.centerYAnchor
+        constraintEqualToAnchor:content.centerYAnchor]
+        .active = YES;
     container.contentHeightConstraint.constant = kLayerListHeight;
     KKParamSyncApplyFromSnapshot(snap, nil, st.store.uuid, api);
     return;
