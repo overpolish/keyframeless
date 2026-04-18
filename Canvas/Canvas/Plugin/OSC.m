@@ -161,6 +161,10 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
 }
 
 - (void)syncStrokeParamsToSelection {
+  [self syncStrokeParamsToSelectionWithPrevious:nil];
+}
+
+- (void)syncStrokeParamsToSelectionWithPrevious:(NSIndexSet *)explicitPrev {
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   id<FxParameterSettingAPI_v5> paramSetAPI =
@@ -173,7 +177,10 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
   BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
   if (isCursorMode) {
-    NSIndexSet *prevSel = uuid ? KKCanvasCurrentSelection(uuid) : nil;
+    // Use the explicit previous selection when provided to avoid a race
+    // with drawOSC updating lst.selectedIndices on the render thread.
+    NSIndexSet *prevSel =
+        explicitPrev ?: (uuid ? KKCanvasCurrentSelection(uuid) : nil);
     KKBezierPath *prev = KKSelectedPath(prevSel, self.paths);
     if (prev) {
       KKParamsToPath(paramGetAPI, prev);

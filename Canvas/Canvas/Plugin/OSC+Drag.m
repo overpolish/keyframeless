@@ -204,6 +204,13 @@
     return;
   }
   if (self.dragIsSelection) {
+    if (self.autoSelectPending) {
+      CGFloat dx = positionX - self.autoSelectClickOrigin.x;
+      CGFloat dy = positionY - self.autoSelectClickOrigin.y;
+      if (hypot(dx, dy) < 4.0)
+        return;
+      self.autoSelectPending = NO;
+    }
     [self dragSelectionToX:positionX
                          y:positionY
                  modifiers:modifiers
@@ -271,6 +278,30 @@
                  modifiers:(NSUInteger)modifiers
                forceUpdate:(BOOL *)forceUpdate
                     atTime:(CMTime)time {
+  if (self.autoSelectPending) {
+    self.autoSelectPending = NO;
+    double hitRadiusStroke = [self strokeHitRadius];
+    NSInteger frontPath = [self pathIndexNearX:positionX
+                                             y:positionY
+                                        radius:hitRadiusStroke];
+    if (frontPath >= 0 && ![self.selectedPathIndices containsIndex:frontPath]) {
+      NSIndexSet *prevSel = [self.selectedPathIndices copy];
+      [self.selectedPathIndices removeAllIndexes];
+      [self.selectedPathIndices addIndex:frontPath];
+      self.activePathIndex = frontPath;
+      [self resetDragState];
+      [self syncStrokeParamsToSelectionWithPrevious:prevSel];
+      *forceUpdate = YES;
+      [super mouseUpAtPositionX:positionX
+                      positionY:positionY
+                     activePart:activePart
+                      modifiers:modifiers
+                    forceUpdate:forceUpdate
+                         atTime:time];
+      return;
+    }
+  }
+
   if (self.dragIsMarquee)
     [self finalizeMarqueeAtX:positionX y:positionY modifiers:modifiers];
   if (self.dragIsRect)

@@ -195,6 +195,7 @@
   self.dragIsLine = NO;
   self.dragDidDuplicate = NO;
   self.dragIsRotation = NO;
+  self.autoSelectPending = NO;
   self.resizeOrigSnapshots = nil;
   self.resizeOrigIndices = nil;
   self.rotateOrigSnapshots = nil;

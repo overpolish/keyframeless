@@ -64,10 +64,14 @@
 @property(nonatomic, strong) NSArray<NSNumber *> *rotateOrigIndices;
 @property(nonatomic, assign) NSInteger imageWidth;
 @property(nonatomic, assign) NSInteger imageHeight;
+@property(nonatomic, assign) BOOL autoSelect;
+@property(nonatomic, assign) CGPoint autoSelectClickOrigin;
+@property(nonatomic, assign) BOOL autoSelectPending;
 
 - (NSMutableArray<KKBezierPath *> *)readPaths;
 - (void)writePaths:(NSArray<KKBezierPath *> *)paths;
 - (void)syncStrokeParamsToSelection;
+- (void)syncStrokeParamsToSelectionWithPrevious:(nullable NSIndexSet *)prevSel;
 - (KKBezierPath *)activePath;
 
 @end

@@ -13,49 +13,62 @@
     if (path.hidden || path.locked || path.isGroup)
       continue;
 
-    NSUInteger segCount = path.count - 1;
-    if (path.closed && path.count >= 2)
-      segCount = path.count;
-
-    NSUInteger totalSamples = segCount * 64 + segCount;
-    CGPoint *outline = malloc(totalSamples * sizeof(CGPoint));
-    NSUInteger oc = 0;
-    for (NSUInteger c = 0; c < segCount; c++) {
-      NSUInteger nextIdx = (c + 1) % path.count;
-      for (NSUInteger s = 0; s <= 64; s++) {
-        float t = (float)s / 64.0f;
-        simd_float2 pos = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
-        outline[oc++] = [self canvasPointFromObjectPoint:pos];
-      }
-    }
-
     double hitR = MAX(path.strokeWidth * 0.5 + 4.0, 12.0);
-    for (NSUInteger i = 0; i < oc; i++) {
-      if (hypot(x - outline[i].x, y - outline[i].y) < hitR) {
-        free(outline);
-        return (NSInteger)p;
-      }
-    }
+    NSUInteger contours = path.contourCount;
 
-    if (path.fillEnabled && oc >= 2) {
-      NSUInteger crossings = 0;
-      for (NSUInteger i = 0; i < oc; i++) {
-        NSUInteger j = (i + 1) % oc;
-        CGFloat yi = outline[i].y, yj = outline[j].y;
-        if ((yi <= y && yj > y) || (yj <= y && yi > y)) {
-          CGFloat xi = outline[i].x, xj = outline[j].x;
-          CGFloat intersectX = xi + (y - yi) / (yj - yi) * (xj - xi);
-          if (x < intersectX)
-            crossings++;
+    for (NSUInteger ci = 0; ci < contours; ci++) {
+      NSRange range = [path contourRangeAtIndex:ci];
+      NSUInteger start = range.location;
+      NSUInteger len = range.length;
+      if (len < 2)
+        continue;
+
+      NSUInteger segCount = len - 1;
+      if (path.closed && len >= 2)
+        segCount = len;
+
+      NSUInteger totalSamples = segCount * 65;
+      CGPoint *outline = malloc(totalSamples * sizeof(CGPoint));
+      NSUInteger oc = 0;
+      for (NSUInteger c = 0; c < segCount; c++) {
+        NSUInteger curIdx = start + c;
+        NSUInteger nextIdx = start + ((c + 1) % len);
+        for (NSUInteger s = 0; s <= 64; s++) {
+          float t = (float)s / 64.0f;
+          simd_float2 pos = [path evaluatePointAtIndex:curIdx
+                                             nextIndex:nextIdx
+                                                   atT:t];
+          outline[oc++] = [self canvasPointFromObjectPoint:pos];
         }
       }
-      if (crossings & 1) {
-        free(outline);
-        return (NSInteger)p;
-      }
-    }
 
-    free(outline);
+      for (NSUInteger i = 0; i < oc; i++) {
+        if (hypot(x - outline[i].x, y - outline[i].y) < hitR) {
+          free(outline);
+          return (NSInteger)p;
+        }
+      }
+
+      if (path.fillEnabled && oc >= 2) {
+        NSUInteger crossings = 0;
+        for (NSUInteger i = 0; i < oc; i++) {
+          NSUInteger j = (i + 1) % oc;
+          CGFloat yi = outline[i].y, yj = outline[j].y;
+          if ((yi <= y && yj > y) || (yj <= y && yi > y)) {
+            CGFloat xi = outline[i].x, xj = outline[j].x;
+            CGFloat intersectX = xi + (y - yi) / (yj - yi) * (xj - xi);
+            if (x < intersectX)
+              crossings++;
+          }
+        }
+        if (crossings & 1) {
+          free(outline);
+          return (NSInteger)p;
+        }
+      }
+
+      free(outline);
+    }
   }
   return -1;
 }

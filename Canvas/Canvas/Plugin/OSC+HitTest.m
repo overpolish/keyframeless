@@ -214,6 +214,16 @@
   *activePart = kOSCCanvas;
   self.paths = [self readPaths];
 
+  {
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    BOOL autoSel = YES;
+    [paramGetAPI getBoolValue:&autoSel
+                fromParameter:kParamAutoSelect
+                       atTime:kCMTimeZero];
+    self.autoSelect = autoSel;
+  }
+
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
 
