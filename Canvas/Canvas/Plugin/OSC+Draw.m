@@ -432,6 +432,28 @@
         self.activePathIndex = -1;
     }
 
+    // Detect undo/redo: if kParamLastSelectedIndex disagrees with the
+    // in-memory selection, undo restored a different selection state.
+    // Sync in-memory selection from the param so drawOSC applies the
+    // restored inspector params to the correct path.
+    {
+      id<FxParameterRetrievalAPI_v6> paramGetAPI = [self.apiManager
+          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      NSInteger paramIdx = KKReadSelectedIndex(paramGetAPI);
+      NSInteger memIdx = (self.selectedPathIndices.count > 0)
+                             ? (NSInteger)self.selectedPathIndices.firstIndex
+                             : -1;
+      if (paramIdx != memIdx) {
+        [self.selectedPathIndices removeAllIndexes];
+        if (paramIdx >= 0 && (NSUInteger)paramIdx < self.paths.count) {
+          [self.selectedPathIndices addIndex:(NSUInteger)paramIdx];
+          self.activePathIndex = paramIdx;
+        } else {
+          self.activePathIndex = -1;
+        }
+      }
+    }
+
     // Write path/selection/UI state to the store.
     // NOTE: expanded and enabled states are NOT set here — they are owned
     // by the UI callbacks (header toggles) and the initial seed. Reading
