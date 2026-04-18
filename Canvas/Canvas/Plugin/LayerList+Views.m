@@ -166,8 +166,10 @@
                     options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
   if (!urls.count)
     return NO;
+  NSSet *supported =
+      [NSSet setWithObjects:@"svg", @"png", @"jpg", @"jpeg", nil];
   for (NSURL *url in urls) {
-    if (![url.pathExtension.lowercaseString isEqualToString:@"svg"])
+    if (![supported containsObject:url.pathExtension.lowercaseString])
       return NO;
   }
   return YES;
@@ -355,15 +357,23 @@
         readObjectsForClasses:@[ [NSURL class] ]
                       options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
     NSUInteger insertIdx = (targetIndex >= 0) ? (NSUInteger)targetIndex : 0;
+    NSSet *imageExts = [NSSet setWithObjects:@"png", @"jpg", @"jpeg", nil];
     for (NSURL *url in urls) {
-      NSError *err = nil;
-      NSString *svg = [NSString stringWithContentsOfURL:url
-                                               encoding:NSUTF8StringEncoding
-                                                  error:&err];
-      if (!svg)
-        continue;
+      NSString *ext = url.pathExtension.lowercaseString;
       NSString *name = url.lastPathComponent.stringByDeletingPathExtension;
-      [self.actionTarget _importSVGString:svg name:name atIndex:insertIdx];
+      if ([imageExts containsObject:ext]) {
+        [self.actionTarget _importImageAtPath:url.path
+                                         name:name
+                                      atIndex:insertIdx];
+      } else {
+        NSError *err = nil;
+        NSString *svg = [NSString stringWithContentsOfURL:url
+                                                 encoding:NSUTF8StringEncoding
+                                                    error:&err];
+        if (!svg)
+          continue;
+        [self.actionTarget _importSVGString:svg name:name atIndex:insertIdx];
+      }
     }
     return urls.count > 0;
   }

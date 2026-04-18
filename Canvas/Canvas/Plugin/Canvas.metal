@@ -88,3 +88,34 @@ fragment float4 compositeFragmentShader(CompositeRasterizerData in [[stage_in]],
     float4 color = tex.sample(s, in.texCoord);
     return color * *opacity;
 }
+
+// Image shader: draws a positioned quad sampling an image texture with opacity.
+
+typedef struct {
+    float4 clipSpacePosition [[position]];
+    float2 texCoord;
+} ImageRasterizerData;
+
+vertex ImageRasterizerData imageVertexShader(uint vertexID [[vertex_id]],
+                                             constant CanvasFillVertex *vertexArray [[buffer(0)]],
+                                             constant vector_uint2 *viewportSizePointer [[buffer(1)]]) {
+    // Triangle strip: 4 vertices (BL, BR, TL, TR)
+    // Image data is top-down, so BL maps to bottom of texture (v=1),
+    // TL maps to top of texture (v=0).
+    float2 texCoords[4] = {{0, 0}, {1, 0}, {0, 1}, {1, 1}};
+
+    ImageRasterizerData out;
+    float2 viewportSize = float2(*viewportSizePointer);
+    out.clipSpacePosition.xy = vertexArray[vertexID].position / (viewportSize / 2.0);
+    out.clipSpacePosition.z = 0.0;
+    out.clipSpacePosition.w = 1.0;
+    out.texCoord = texCoords[vertexID];
+    return out;
+}
+
+fragment float4 imageFragmentShader(ImageRasterizerData in [[stage_in]], texture2d<float> tex [[texture(0)]],
+                                    constant float *opacity [[buffer(0)]]) {
+    constexpr sampler s(mag_filter::linear, min_filter::linear);
+    float4 color = tex.sample(s, in.texCoord);
+    return float4(color.rgb * color.a, color.a) * *opacity;
+}

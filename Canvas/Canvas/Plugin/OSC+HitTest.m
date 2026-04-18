@@ -61,7 +61,7 @@
         NSUInteger idx = self.selectedPathIndices.firstIndex;
         if (idx < self.paths.count) {
           KKBezierPath *active = self.paths[idx];
-          if (active.isRect) {
+          if (active.isRect && !active.isImage) {
             NSInteger crParts[4] = {kOSCCornerRadiusTL, kOSCCornerRadiusTR,
                                     kOSCCornerRadiusBR, kOSCCornerRadiusBL};
             for (int ci = 0; ci < 4; ci++) {

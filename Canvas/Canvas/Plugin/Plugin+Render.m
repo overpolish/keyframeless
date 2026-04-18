@@ -17,6 +17,59 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 
+static NSMutableDictionary<NSString *, id<MTLTexture>> *sImageTextureCache;
+
+static id<MTLTexture> getOrLoadImageTexture(NSString *path,
+                                            id<MTLDevice> device) {
+  if (!path)
+    return nil;
+  if (!sImageTextureCache)
+    sImageTextureCache = [NSMutableDictionary dictionary];
+  id<MTLTexture> cached = sImageTextureCache[path];
+  if (cached)
+    return cached;
+
+  NSImage *nsImage = [[NSImage alloc] initWithContentsOfFile:path];
+  if (!nsImage)
+    return nil;
+  CGImageRef cgImage = [nsImage CGImageForProposedRect:NULL
+                                               context:nil
+                                                 hints:nil];
+  if (!cgImage)
+    return nil;
+
+  NSUInteger width = CGImageGetWidth(cgImage);
+  NSUInteger height = CGImageGetHeight(cgImage);
+  MTLTextureDescriptor *desc = [MTLTextureDescriptor
+      texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm_sRGB
+                                   width:width
+                                  height:height
+                               mipmapped:NO];
+  desc.usage = MTLTextureUsageShaderRead;
+  id<MTLTexture> tex = [device newTextureWithDescriptor:desc];
+  if (!tex)
+    return nil;
+
+  NSUInteger bytesPerRow = 4 * width;
+  uint8_t *pixelData = calloc(height * bytesPerRow, 1);
+  CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+  CGContextRef ctx = CGBitmapContextCreate(
+      pixelData, width, height, 8, bytesPerRow, colorSpace,
+      (CGBitmapInfo)kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+  CGContextDrawImage(ctx, CGRectMake(0, 0, width, height), cgImage);
+  CGContextRelease(ctx);
+  CGColorSpaceRelease(colorSpace);
+
+  [tex replaceRegion:MTLRegionMake2D(0, 0, width, height)
+         mipmapLevel:0
+           withBytes:pixelData
+         bytesPerRow:bytesPerRow];
+  free(pixelData);
+
+  sImageTextureCache[path] = tex;
+  return tex;
+}
+
 static id<MTLRenderPipelineState> getOrCreatePipeline(
     NSString *key, uint64_t registryID, MTLPixelFormat pixelFormat,
     KKMetalDeviceCache *cache, id<MTLDevice> device, NSString *vertexName,
@@ -1022,6 +1075,13 @@ static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
         @"compositeVertexShader", @"compositeFragmentShader", YES,
         MTLPixelFormatInvalid);
 
+    // Image pipeline for raster image layers.
+    NSString *imageKey = [NSString stringWithFormat:@"%@_image_%lu", kPluginID,
+                                                    (unsigned long)pixelFormat];
+    id<MTLRenderPipelineState> imagePS = getOrCreatePipeline(
+        imageKey, registryID, pixelFormat, cache, device, @"imageVertexShader",
+        @"imageFragmentShader", YES, MTLPixelFormatInvalid);
+
     // Intermediate texture for per-object opacity compositing.
     id<MTLTexture> intermediateTexture = nil;
     if (compositePS) {
@@ -1077,8 +1137,49 @@ static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
           [clearEnc endEncoding];
         }
 
-        if (path.fillEnabled && orig.count >= 2 && fillStencilPS &&
-            fillColorPS && stencilTexture) {
+        if (path.isImage && path.imagePath && imagePS) {
+          id<MTLTexture> imgTex = getOrLoadImageTexture(path.imagePath, device);
+          if (imgTex) {
+            // Build a positioned quad from the path's 4 corners.
+            KKBezierPoint bl = [path pointAtIndex:0];
+            KKBezierPoint br = [path pointAtIndex:1];
+            KKBezierPoint tr = [path pointAtIndex:2];
+            KKBezierPoint tl = [path pointAtIndex:3];
+            // Convert object-space (0-1, Y=0 bottom) → pixel-space centered.
+            float hw = outputWidth / 2.0f;
+            float hh = outputHeight / 2.0f;
+            CanvasFillVertex quadVerts[4] = {
+                {{bl.x * outputWidth - hw, (1.0f - bl.y) * outputHeight - hh}},
+                {{br.x * outputWidth - hw, (1.0f - br.y) * outputHeight - hh}},
+                {{tl.x * outputWidth - hw, (1.0f - tl.y) * outputHeight - hh}},
+                {{tr.x * outputWidth - hw, (1.0f - tr.y) * outputHeight - hh}},
+            };
+
+            float opacity = path.opacity;
+            MTLRenderPassDescriptor *rpd =
+                [MTLRenderPassDescriptor renderPassDescriptor];
+            rpd.colorAttachments[0].texture = target;
+            rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+            rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+
+            id<MTLRenderCommandEncoder> enc =
+                [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+            [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1,
+                                           1}];
+            [enc setRenderPipelineState:imagePS];
+            [enc setVertexBytes:quadVerts length:sizeof(quadVerts) atIndex:0];
+            [enc setVertexBytes:&viewportSize
+                         length:sizeof(viewportSize)
+                        atIndex:1];
+            [enc setFragmentTexture:imgTex atIndex:0];
+            [enc setFragmentBytes:&opacity length:sizeof(opacity) atIndex:0];
+            [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                    vertexStart:0
+                    vertexCount:4];
+            [enc endEncoding];
+          }
+        } else if (path.fillEnabled && orig.count >= 2 && fillStencilPS &&
+                   fillColorPS && stencilTexture) {
           // Always use the original (un-jittered) path for fill geometry.
           // buildFillFan handles multiple contours (compound paths) internally.
           if (path.sketchFillStyle > 0) {
@@ -1107,7 +1208,7 @@ static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
           }
         }
 
-        if (path.strokeEnabled) {
+        if (!path.isImage && path.strokeEnabled) {
           renderStrokeForPath(path, outputWidth, outputHeight, device,
                               commandBuffer, target, strokePS, viewportSize);
         }
