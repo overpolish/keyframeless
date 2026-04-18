@@ -74,6 +74,31 @@ static simd_float2 rotatePoint(simd_float2 p, simd_float2 center, float cos_a,
                        center.y + dx * sin_a + dy * cos_a};
 }
 
+/// Even-odd point-in-polygon test via horizontal ray cast.
+static BOOL pointInsidePolygon(simd_float2 pt, const simd_float2 *poly,
+                               const NSUInteger *contourStarts,
+                               NSUInteger contourCount) {
+  NSUInteger crossings = 0;
+  for (NSUInteger ci = 0; ci < contourCount; ci++) {
+    NSUInteger cStart = contourStarts[ci];
+    NSUInteger cEnd = contourStarts[ci + 1];
+    NSUInteger cLen = cEnd - cStart;
+    if (cLen < 2)
+      continue;
+    for (NSUInteger i = 0; i < cLen; i++) {
+      NSUInteger ai = cStart + i;
+      NSUInteger bi = cStart + ((i + 1) % cLen);
+      float y0 = poly[ai].y, y1 = poly[bi].y;
+      if ((y0 <= pt.y && y1 > pt.y) || (y1 <= pt.y && y0 > pt.y)) {
+        float t = (pt.y - y0) / (y1 - y0);
+        if (pt.x < poly[ai].x + t * (poly[bi].x - poly[ai].x))
+          crossings++;
+      }
+    }
+  }
+  return (crossings & 1) != 0;
+}
+
 /// Compute intersections of a horizontal scanline at y with the polygon edges.
 /// Contour boundaries are respected so that edges are only formed within each
 /// closed contour, not between the last point of one and the first of the next.
@@ -200,7 +225,6 @@ NSUInteger KKGenerateHachureLines(KKBezierPath *path, float outputWidth,
 
   free(xs);
   free(rotPoly);
-  free(poly);
 
   // Cross-hatch: duplicate all lines at angle + 90 degrees.
   if (fillStyle == 2) {
@@ -248,19 +272,52 @@ NSUInteger KKGenerateHachureLines(KKBezierPath *path, float outputWidth,
   }
 
   free(contourStarts);
+  free(poly);
 
-  // Zigzag: connect consecutive line endpoints.
-  if (fillStyle == 3 && lineCount > 1) {
-    NSUInteger zigCount = lineCount + (lineCount - 1);
-    KKHachureLine *zigLines = malloc(zigCount * sizeof(KKHachureLine));
+  // Zigzag: replace each hachure line with a zigzag wave along its length.
+  if (fillStyle == 3 && lineCount > 0) {
+    float zigAmp = gap * 0.5f;
+    float zigPeriod = gap;
+    NSUInteger maxZigLines = 0;
+    for (NSUInteger i = 0; i < lineCount; i++) {
+      float dx = lines[i].b.x - lines[i].a.x;
+      float dy = lines[i].b.y - lines[i].a.y;
+      float len = sqrtf(dx * dx + dy * dy);
+      NSUInteger segs = (NSUInteger)(len / (zigPeriod * 0.5f)) + 1;
+      maxZigLines += segs;
+    }
+    KKHachureLine *zigLines = malloc(maxZigLines * sizeof(KKHachureLine));
     NSUInteger zi = 0;
     for (NSUInteger i = 0; i < lineCount; i++) {
-      zigLines[zi++] = lines[i];
-      if (i + 1 < lineCount) {
-        // Connect end of this line to start of next.
-        zigLines[zi].a = lines[i].b;
-        zigLines[zi].b = lines[i + 1].a;
+      simd_float2 a = lines[i].a;
+      simd_float2 b = lines[i].b;
+      float dx = b.x - a.x, dy = b.y - a.y;
+      float len = sqrtf(dx * dx + dy * dy);
+      if (len < 0.001f)
+        continue;
+      simd_float2 dir = {dx / len, dy / len};
+      simd_float2 perp = {-dir.y, dir.x};
+      float halfPeriod = zigPeriod * 0.5f;
+      NSUInteger segs = (NSUInteger)(len / halfPeriod);
+      if (segs < 1)
+        segs = 1;
+      float step = len / (float)segs;
+      simd_float2 prev = a;
+      for (NSUInteger s = 1; s <= segs; s++) {
+        float d = step * (float)s;
+        float side = (s % 2 == 1) ? zigAmp : -zigAmp;
+        simd_float2 pt = {a.x + dir.x * d + perp.x * side,
+                          a.y + dir.y * d + perp.y * side};
+        if (s == segs)
+          pt = b; // snap last point to endpoint
+        if (zi >= maxZigLines) {
+          maxZigLines *= 2;
+          zigLines = realloc(zigLines, maxZigLines * sizeof(KKHachureLine));
+        }
+        zigLines[zi].a = prev;
+        zigLines[zi].b = pt;
         zi++;
+        prev = pt;
       }
     }
     free(lines);
