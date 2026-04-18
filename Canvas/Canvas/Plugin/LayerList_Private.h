@@ -81,6 +81,9 @@ KKLayerInstanceState *_Nullable KKLayerStateForUUID(NSString *_Nullable uuid);
 - (void)_importSVGString:(NSString *)svgString
                     name:(NSString *)name
                  atIndex:(NSUInteger)index;
+- (void)_importImageAtPath:(NSString *)path
+                      name:(NSString *)name
+                   atIndex:(NSUInteger)index;
 - (void)renameRow:(NSMenuItem *)sender;
 - (void)groupSelection:(NSMenuItem *)sender;
 @end
@@ -92,6 +95,7 @@ KKLayerInstanceState *_Nullable KKLayerStateForUUID(NSString *_Nullable uuid);
 @property(nonatomic, copy, nullable) NSString *groupID;
 @property(nonatomic, copy, nullable) NSString *parentGroupID;
 @property(nonatomic) BOOL isGroupRow;
+@property(nonatomic) BOOL isImageRow;
 @property(nonatomic, weak, nullable) NSButton *folderButton;
 @property(nonatomic, weak, nullable) NSButton *visibilityButton;
 @property(nonatomic, weak, nullable) KKLayerButton *nameButton;
@@ -153,6 +157,9 @@ KKLayerInstanceState *_Nullable KKLayerStateForUUID(NSString *_Nullable uuid);
 - (void)_importSVGString:(NSString *)svgString
                     name:(NSString *)name
                  atIndex:(NSUInteger)index;
+- (void)_importImageAtPath:(NSString *)path
+                      name:(NSString *)name
+                   atIndex:(NSUInteger)index;
 @end
 
 NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,

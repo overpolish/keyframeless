@@ -5,6 +5,7 @@
 
 #import "LayerList_Private.h"
 #import "ObjectParams.h"
+#import <AppKit/AppKit.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wincomplete-implementation"
@@ -411,6 +412,55 @@
       KKSetLayerSelection(_instanceUUID,
                           [NSIndexSet indexSetWithIndex:insertAt]);
     }
+  }];
+}
+
+- (void)_importImageAtPath:(NSString *)path
+                      name:(NSString *)name
+                   atIndex:(NSUInteger)index {
+  KKLayerInstanceState *state = KKLayerStateForUUID(_instanceUUID);
+  float cw = state.canvasWidth > 0 ? state.canvasWidth : 1920.0f;
+  float ch = state.canvasHeight > 0 ? state.canvasHeight : 1080.0f;
+
+  NSImage *img = [[NSImage alloc] initWithContentsOfFile:path];
+  if (!img)
+    return;
+  NSSize imgSize = img.size;
+  if (imgSize.width <= 0 || imgSize.height <= 0)
+    return;
+
+  // Aspect-fit the image into the canvas, centered, at 50% canvas size.
+  float scale = fminf((cw * 0.5f) / (float)imgSize.width,
+                      (ch * 0.5f) / (float)imgSize.height);
+  float w = (float)imgSize.width * scale / cw;
+  float h = (float)imgSize.height * scale / ch;
+  float x0 = 0.5f - w / 2.0f;
+  float y0 = 0.5f - h / 2.0f;
+  float x1 = x0 + w;
+  float y1 = y0 + h;
+
+  KKBezierPath *p = [[KKBezierPath alloc] init];
+  p.isImage = YES;
+  p.isRect = YES;
+  p.closed = YES;
+  p.imagePath = path;
+  p.name = name;
+  p.strokeEnabled = NO;
+  p.fillEnabled = NO;
+  // 4-corner rect in object space (BL, BR, TR, TL)
+  [p insertAtIndex:0 position:(simd_float2){x0, y0}];
+  [p insertAtIndex:1 position:(simd_float2){x1, y0}];
+  [p insertAtIndex:2 position:(simd_float2){x1, y1}];
+  [p insertAtIndex:3 position:(simd_float2){x0, y1}];
+
+  KKLog *log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
+  [log info:@"[Image] Imported %@ (%.0fx%.0f) → rect (%.4f,%.4f)-(%.4f,%.4f)",
+            name, imgSize.width, imgSize.height, x0, y0, x1, y1];
+
+  [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
+    NSUInteger insertAt = MIN(index, paths.count);
+    [paths insertObject:p atIndex:insertAt];
+    KKSetLayerSelection(_instanceUUID, [NSIndexSet indexSetWithIndex:insertAt]);
   }];
 }
 

@@ -24,7 +24,8 @@ void KKParamSyncApplyFromSnapshot(KKCanvasStoreSnapshot *snap,
   BOOL fillEnabled = snap.fillEnabled;
   BOOL sketchEnabled = snap.sketchEnabled;
 
-  BOOL hasPath = (selectedPath != nil);
+  BOOL isImage = selectedPath.isImage;
+  BOOL hasPath = (selectedPath != nil && !isImage);
   BOOL isOpen = hasPath && !selectedPath.closed;
   BOOL hasJoins = hasPath && selectedPath.count > 2;
   uint8_t strokeStyle = hasPath ? selectedPath.strokeStyle : 0;
@@ -35,6 +36,7 @@ void KKParamSyncApplyFromSnapshot(KKCanvasStoreSnapshot *snap,
 
   // Compute visibility hash.
   NSUInteger vh = 1;
+  vh = vh * 31 + isImage;
   vh = vh * 31 + hasPath;
   vh = vh * 31 + isOpen;
   vh = vh * 31 + hasJoins;
@@ -59,6 +61,15 @@ void KKParamSyncApplyFromSnapshot(KKCanvasStoreSnapshot *snap,
   [actAPI startAction:api];
   id<FxParameterSettingAPI_v5> setAPI =
       [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+
+  if (isImage) {
+    KKHideObjectParams(setAPI);
+    // Show only opacity for image layers.
+    [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
+                  toParameter:kParamOpacity];
+    [actAPI endAction:api];
+    return;
+  }
 
   KKShowObjectParams(setAPI);
 

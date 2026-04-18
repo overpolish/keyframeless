@@ -152,11 +152,13 @@ static NSMenu *buildContextMenu(NSUInteger index, BOOL isGroup,
   return menu;
 }
 
-static KKLayerRow *
-buildRow(NSUInteger index, BOOL isGroup, BOOL isCollapsed, BOOL isHidden,
-         BOOL isLocked, BOOL isSelected, BOOL isSolo, NSString *name,
-         NSString *gid, NSString *parentGID, NSUInteger depth, BOOL multiSelect,
-         NSImageSymbolConfiguration *symConfig, KKLayerActionTarget *target) {
+static KKLayerRow *buildRow(NSUInteger index, BOOL isGroup, BOOL isImage,
+                            BOOL isCollapsed, BOOL isHidden, BOOL isLocked,
+                            BOOL isSelected, BOOL isSolo, NSString *name,
+                            NSString *gid, NSString *parentGID,
+                            NSUInteger depth, BOOL multiSelect,
+                            NSImageSymbolConfiguration *symConfig,
+                            KKLayerActionTarget *target) {
   NSMutableArray<NSView *> *views = [NSMutableArray array];
 
   NSButton *folderBtn = nil;
@@ -166,6 +168,13 @@ buildRow(NSUInteger index, BOOL isGroup, BOOL isCollapsed, BOOL isHidden,
                              @selector(toggleGroupCollapse:), index,
                              [NSColor secondaryLabelColor]);
     [views addObject:folderBtn];
+  } else if (isImage) {
+    NSImage *photoImg = [[NSImage imageWithSystemSymbolName:@"photo.fill"
+                                   accessibilityDescription:nil]
+        imageWithSymbolConfiguration:symConfig];
+    NSImageView *photoView = [NSImageView imageViewWithImage:photoImg];
+    photoView.contentTintColor = [NSColor secondaryLabelColor];
+    [views addObject:photoView];
   }
 
   NSString *eyeName = isHidden ? @"eye.slash" : @"eye.fill";
@@ -205,6 +214,7 @@ buildRow(NSUInteger index, BOOL isGroup, BOOL isCollapsed, BOOL isHidden,
   KKLayerRow *row = [KKLayerRow stackViewWithViews:views];
   row.rowIndex = index;
   row.isGroupRow = isGroup;
+  row.isImageRow = isImage;
   row.groupID = isGroup ? gid : nil;
   row.parentGroupID = parentGID;
   row.folderButton = folderBtn;
@@ -230,10 +240,11 @@ buildRow(NSUInteger index, BOOL isGroup, BOOL isCollapsed, BOOL isHidden,
 }
 
 static void updateRow(KKLayerRow *row, NSUInteger index, BOOL isGroup,
-                      BOOL isCollapsed, BOOL isHidden, BOOL isLocked,
-                      BOOL isSelected, BOOL isSolo, NSString *name,
-                      NSString *gid, NSString *parentGID, NSUInteger depth,
-                      BOOL multiSelect, NSImageSymbolConfiguration *symConfig,
+                      BOOL isImage, BOOL isCollapsed, BOOL isHidden,
+                      BOOL isLocked, BOOL isSelected, BOOL isSolo,
+                      NSString *name, NSString *gid, NSString *parentGID,
+                      NSUInteger depth, BOOL multiSelect,
+                      NSImageSymbolConfiguration *symConfig,
                       KKLayerActionTarget *target) {
   row.rowIndex = index;
   row.groupID = isGroup ? gid : nil;
@@ -335,10 +346,13 @@ void KKCanvasRefreshLayerListFromSnapshot(KKCanvasStoreSnapshot *snap,
       [NSMutableArray arrayWithCapacity:pathCount];
   NSMutableArray<NSString *> *names =
       [NSMutableArray arrayWithCapacity:pathCount];
+  NSMutableArray<NSNumber *> *imageFlags =
+      [NSMutableArray arrayWithCapacity:pathCount];
   for (NSUInteger i = 0; i < pathCount; i++) {
     [hiddenStates addObject:@(paths[i].hidden)];
     [lockedStates addObject:@(paths[i].locked)];
     [groupFlags addObject:@(paths[i].isGroup)];
+    [imageFlags addObject:@(paths[i].isImage)];
     [groupIDs addObject:paths[i].groupID ?: @""];
     [parentGroupIDs addObject:paths[i].parentGroupID ?: @""];
     [names addObject:paths[i].name
@@ -377,21 +391,23 @@ void KKCanvasRefreshLayerListFromSnapshot(KKCanvasStoreSnapshot *snap,
   for (NSUInteger v = 0; v < visCount; v++) {
     NSUInteger i = visibleIndices[v].unsignedIntegerValue;
     BOOL isGroup = groupFlags[i].boolValue;
+    BOOL isImage = imageFlags[i].boolValue;
     BOOL collapsed = isGroup && groupIDs[i].length > 0 &&
                      [snap.collapsedGroupIDs containsObject:groupIDs[i]];
     NSUInteger depth = groupDepth(i, parentGroupIDs, groupIndexMap);
     NSString *pgid = parentGroupIDs[i].length > 0 ? parentGroupIDs[i] : nil;
 
     KKLayerRow *row = nil;
-    if (v < oldRows.count && oldRows[v].isGroupRow == isGroup) {
+    if (v < oldRows.count && oldRows[v].isGroupRow == isGroup &&
+        oldRows[v].isImageRow == isImage) {
       row = oldRows[v];
-      updateRow(row, i, isGroup, collapsed, hiddenStates[i].boolValue,
+      updateRow(row, i, isGroup, isImage, collapsed, hiddenStates[i].boolValue,
                 lockedStates[i].boolValue, [capturedSelection containsIndex:i],
                 solo && !hiddenStates[i].boolValue, names[i], groupIDs[i], pgid,
                 depth, multiSelect, symConfig, container.actionTarget);
     } else {
       row = buildRow(
-          i, isGroup, collapsed, hiddenStates[i].boolValue,
+          i, isGroup, isImage, collapsed, hiddenStates[i].boolValue,
           lockedStates[i].boolValue, [capturedSelection containsIndex:i],
           solo && !hiddenStates[i].boolValue, names[i], groupIDs[i], pgid,
           depth, multiSelect, symConfig, container.actionTarget);
@@ -473,22 +489,28 @@ void KKCanvasRefreshLayerListFromSnapshot(KKCanvasStoreSnapshot *snap,
     [fillStyleView setNeedsDisplay:YES];
   }
 
+  BOOL selectedIsImage = syncPath.isImage;
+  NSString *imageStatus = selectedIsImage ? @"Not available for images" : nil;
+
   KKCustomGroupHeaderView *strokeHeader = st.strokeGroupHeader;
   if (strokeHeader) {
-    strokeHeader.isInteractive = YES;
-    strokeHeader.isEnabled = snap.strokeEnabled;
-    strokeHeader.isExpanded = snap.strokeExpanded;
+    strokeHeader.isInteractive = !selectedIsImage;
+    strokeHeader.isEnabled = selectedIsImage ? NO : snap.strokeEnabled;
+    strokeHeader.isExpanded = selectedIsImage ? NO : snap.strokeExpanded;
+    strokeHeader.statusText = imageStatus;
   }
   KKCustomGroupHeaderView *fillHeader = st.fillGroupHeader;
   if (fillHeader) {
-    fillHeader.isInteractive = YES;
-    fillHeader.isEnabled = snap.fillEnabled;
-    fillHeader.isExpanded = snap.fillExpanded;
+    fillHeader.isInteractive = !selectedIsImage;
+    fillHeader.isEnabled = selectedIsImage ? NO : snap.fillEnabled;
+    fillHeader.isExpanded = selectedIsImage ? NO : snap.fillExpanded;
+    fillHeader.statusText = imageStatus;
   }
   KKCustomGroupHeaderView *sketchHeader = st.sketchGroupHeader;
   if (sketchHeader) {
-    sketchHeader.isInteractive = YES;
-    sketchHeader.isEnabled = snap.sketchEnabled;
-    sketchHeader.isExpanded = snap.sketchExpanded;
+    sketchHeader.isInteractive = !selectedIsImage;
+    sketchHeader.isEnabled = selectedIsImage ? NO : snap.sketchEnabled;
+    sketchHeader.isExpanded = selectedIsImage ? NO : snap.sketchExpanded;
+    sketchHeader.statusText = imageStatus;
   }
 }

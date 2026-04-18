@@ -52,6 +52,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// Whether the path is locked (visible but non-interactive).
 @property(nonatomic, assign) BOOL locked;
 
+/// Whether this layer is a raster image (rendered as a textured quad).
+@property(nonatomic, assign) BOOL isImage;
+
+/// Absolute file path to the source image (PNG, JPEG, etc.).
+/// Only meaningful when isImage == YES.
+@property(nonatomic, copy, nullable) NSString *imagePath;
+
 /// Whether this entry is a group (contains no points, acts as a folder).
 @property(nonatomic, assign) BOOL isGroup;
 

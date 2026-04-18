@@ -207,6 +207,22 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
             }
           }
         }
+        if (ver >= 13 && data.length >= hdr + 1) {
+          path->_isImage = bytes[hdr] != 0;
+          hdr += 1;
+          if (path->_isImage && data.length >= hdr + 2) {
+            uint16_t ipLen;
+            memcpy(&ipLen, bytes + hdr, 2);
+            hdr += 2;
+            if (ipLen > 0 && data.length >= hdr + ipLen) {
+              path->_imagePath =
+                  [[NSString alloc] initWithBytes:bytes + hdr
+                                           length:ipLen
+                                         encoding:NSUTF8StringEncoding];
+              hdr += ipLen;
+            }
+          }
+        }
       }
     }
   }
@@ -278,7 +294,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   // v11: + endWidth (1 float).
   // v12: + contour starts (2-byte count + N × uint32 indices).
   uint8_t propMarker = 0xAA;
-  uint8_t propVersion = 12;
+  uint8_t propVersion = 13;
   [data appendBytes:&propMarker length:1];
   [data appendBytes:&propVersion length:1];
   float strokeData[4] = {_strokeWidth, _strokeR, _strokeG, _strokeB};
@@ -316,6 +332,16 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
       uint32_t idx = (uint32_t)_contourStarts[ci];
       [data appendBytes:&idx length:sizeof(uint32_t)];
     }
+  }
+  // v13: isImage + imagePath
+  uint8_t imageFlag = _isImage ? 1 : 0;
+  [data appendBytes:&imageFlag length:1];
+  if (_isImage) {
+    NSData *ipData = [_imagePath dataUsingEncoding:NSUTF8StringEncoding];
+    uint16_t ipLen = (uint16_t)ipData.length;
+    [data appendBytes:&ipLen length:2];
+    if (ipLen > 0)
+      [data appendData:ipData];
   }
   return data;
 }
