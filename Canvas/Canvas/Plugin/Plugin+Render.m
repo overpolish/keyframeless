@@ -1085,7 +1085,13 @@ static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
                                     strokeStencilPS, fillColorDSState,
                                     viewportSize, clipFill);
           } else {
-            renderFillForPath(orig, outputWidth, outputHeight, device,
+            KKBezierPath *fillPath = orig;
+            if (orig.sketchEnabled && orig.sketchRoughness > 0.0001f) {
+              fillPath =
+                  KKSketchPath(orig, orig.sketchRoughness, orig.sketchBowing,
+                               orig.sketchSeed, 1, outputWidth, outputHeight);
+            }
+            renderFillForPath(fillPath, outputWidth, outputHeight, device,
                               commandBuffer, target, stencilTexture,
                               fillStencilPS, fillColorPS, fillStencilDSState,
                               fillColorDSState, viewportSize);
