@@ -4,6 +4,7 @@
  */
 
 #import "Constants.h"
+#import "KKCanvasStore.h"
 #import "Plugin_Private.h"
 #include <KeyframelessKit/KeyframelessKit.h>
 
@@ -38,7 +39,7 @@ static NSString *const _Nonnull kLayerDuplicateDragType
 NS_ASSUME_NONNULL_BEGIN
 
 @interface KKLayerInstanceState : NSObject
-@property(nonatomic) BOOL forceRefresh;
+@property(nonatomic, strong, nullable) KKCanvasStore *store;
 @property(nonatomic) BOOL isEditing;
 @property(nonatomic) BOOL isDragging;
 @property(nonatomic) BOOL soloActive;
@@ -56,7 +57,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *strokeGroupHeader;
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *fillGroupHeader;
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *sketchGroupHeader;
-@property(nonatomic) NSUInteger listHash;
+@property(nonatomic) uint8_t cachedLineCap;
+@property(nonatomic) uint8_t cachedLineJoin;
+@property(nonatomic) uint8_t cachedStrokeStyle;
+@property(nonatomic) uint8_t cachedStartMarker;
+@property(nonatomic) uint8_t cachedEndMarker;
+@property(nonatomic) uint8_t cachedFillStyle;
+@property(nonatomic) NSUInteger visHash;
 @property(nonatomic) float canvasWidth;
 @property(nonatomic) float canvasHeight;
 @end
@@ -78,10 +85,17 @@ KKLayerInstanceState *_Nullable KKLayerStateForUUID(NSString *_Nullable uuid);
 - (void)groupSelection:(NSMenuItem *)sender;
 @end
 
+@class KKLayerButton;
+
 @interface KKLayerRow : NSStackView
 @property(nonatomic) NSUInteger rowIndex;
 @property(nonatomic, copy, nullable) NSString *groupID;
 @property(nonatomic, copy, nullable) NSString *parentGroupID;
+@property(nonatomic) BOOL isGroupRow;
+@property(nonatomic, weak, nullable) NSButton *folderButton;
+@property(nonatomic, weak, nullable) NSButton *visibilityButton;
+@property(nonatomic, weak, nullable) KKLayerButton *nameButton;
+@property(nonatomic, weak, nullable) NSButton *lockButton;
 - (NSImage *)snapshot;
 @end
 
@@ -144,8 +158,9 @@ KKLayerInstanceState *_Nullable KKLayerStateForUUID(NSString *_Nullable uuid);
 NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
                                 NSArray<KKBezierPath *> *paths);
 
-void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
-                              NSArray<KKBezierPath *> *_Nullable paths);
+void KKCanvasRefreshLayerListFromSnapshot(KKCanvasStoreSnapshot *snap,
+                                          KKLayerInstanceState *st,
+                                          id<PROAPIAccessing> api);
 void KKCanvasUpdateSelection(NSString *uuid, NSIndexSet *indices);
 NSIndexSet *_Nullable KKCanvasConsumePendingSelection(NSString *uuid);
 

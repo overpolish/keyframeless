@@ -125,7 +125,6 @@
   KKLayerActionTarget *endAt = (KKLayerActionTarget *)self.target;
   KKLayerInstanceState *endState = KKLayerStateForUUID(endAt.instanceUUID);
   endState.isDragging = NO;
-  endState.forceRefresh = YES;
 }
 
 @end

@@ -4,6 +4,7 @@
  */
 
 #import "Constants.h"
+#import "KKParamSync.h"
 #import "LayerList_Private.h"
 #import "ObjectParams.h"
 #import "Plugin_Private.h"
@@ -75,44 +76,33 @@
   }
 
   if (parameterID == kParamForceShow) {
+    // Invalidate the visibility hash so the sync engine re-applies flags
+    // on the next drawOSC cycle with the updated forceShow state.
+    NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+    if (uuid) {
+      BOOL fs = NO;
+      id<FxParameterRetrievalAPI_v6> fsGetAPI = [self.apiManager
+          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      [fsGetAPI getBoolValue:&fs
+               fromParameter:kParamForceShow
+                      atTime:kCMTimeZero];
+      KKCanvasStore *store = KKLayerStateForUUID(uuid).store;
+      [store performBatch:^{
+        [store setForceShow:fs];
+      }];
+    }
+    // Touch the blob to trigger a drawOSC redraw.
     id<FxParameterRetrievalAPI_v6> getAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
     id<FxParameterSettingAPI_v5> setAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    BOOL forceShow = NO;
-    [getAPI getBoolValue:&forceShow
-           fromParameter:kParamForceShow
-                  atTime:kCMTimeZero];
-    if (forceShow) {
-      KKShowObjectParams(setAPI);
-      KKSetStrokeChildrenVisible(setAPI, YES, YES);
-      KKSetEndWidthVisible(setAPI, YES);
-      KKSetLineCapVisible(setAPI, YES);
-      KKSetMarkersVisible(setAPI, YES);
-      KKSetMarkerSizeVisible(setAPI, 1, 1);
-      KKSetLineJoinVisible(setAPI, YES);
-      KKSetStrokeStyleVisible(setAPI, YES);
-      [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                    toParameter:kParamDashLength];
-      [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                    toParameter:kParamDashGap];
-      [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                    toParameter:kParamDotGap];
-      KKSetFillChildrenVisible(setAPI, YES, YES);
-      KKSetFillStyleParamsVisible(setAPI, YES, 1);
-      KKSetSketchChildrenVisible(setAPI, YES, YES);
-    } else {
-      NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
-      if (uuid)
-        KKLayerStateForUUID(uuid).forceRefresh = YES;
-      id<FxCustomParameterActionAPI_v4> actAPI = [self.apiManager
-          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      [actAPI startAction:self];
-      NSString *str = nil;
-      [getAPI getStringParameterValue:&str fromParameter:kParamPathData];
-      [setAPI setStringParameterValue:str ?: @"" toParameter:kParamPathData];
-      [actAPI endAction:self];
-    }
+    id<FxCustomParameterActionAPI_v4> actAPI = [self.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actAPI startAction:self];
+    NSString *str = nil;
+    [getAPI getStringParameterValue:&str fromParameter:kParamPathData];
+    [setAPI setStringParameterValue:str ?: @"" toParameter:kParamPathData];
+    [actAPI endAction:self];
   }
 
   [self handleLinkedParameterChanged:parameterID atTime:time];

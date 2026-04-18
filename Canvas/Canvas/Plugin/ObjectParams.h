@@ -512,12 +512,11 @@ KKModifySelectedPathProperty(id<PROAPIAccessing> _Nonnull api,
   [actAPI endAction:api];
 }
 
-/// Write a path's per-object values to FxPlug params and show the rows.
+/// Write a path's per-object values to FxPlug params (values only, no flags).
 /// Add new per-object properties here.
 static inline void
 KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                KKBezierPath *_Nonnull path) {
-  KKShowObjectParams(paramSetAPI);
   [paramSetAPI setBoolValue:path.strokeEnabled
                 toParameter:kParamStrokeEnabled
                      atTime:kCMTimeZero];

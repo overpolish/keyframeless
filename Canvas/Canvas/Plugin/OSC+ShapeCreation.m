@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#import "Constants.h"
 #import "OSC_Private.h"
+#import "ObjectParams.h"
 
 @implementation CanvasOSC (ShapeCreation)
 
@@ -84,6 +86,14 @@
   [rect insertAtIndex:3 position:(simd_float2){minX, minY}];
   rect.closed = YES;
   rect.isRect = YES;
+  // Inherit stroke/fill/opacity from current inspector values.
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  KKParamsToPath(paramGetAPI, rect);
+  NSString *shapeUUID = KKLayerUUIDForAPI(self.apiManager);
+  if (shapeUUID)
+    KKApplyCachedStyles(shapeUUID, rect);
+  rect.closed = YES; // Restore — KKParamsToPath reads closedPath param.
   [self.paths insertObject:rect atIndex:0];
   self.activePathIndex = 0;
   [self.selectedPathIndices removeAllIndexes];
@@ -128,6 +138,14 @@
   [ellipse setType:KKBezierPointBezier atIndex:3];
 
   ellipse.closed = YES;
+  // Inherit stroke/fill/opacity from current inspector values.
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  KKParamsToPath(paramGetAPI, ellipse);
+  NSString *ellipseUUID = KKLayerUUIDForAPI(self.apiManager);
+  if (ellipseUUID)
+    KKApplyCachedStyles(ellipseUUID, ellipse);
+  ellipse.closed = YES;
   [self.paths insertObject:ellipse atIndex:0];
   self.activePathIndex = 0;
   [self.selectedPathIndices removeAllIndexes];
@@ -148,6 +166,14 @@
   [line insertAtIndex:1 position:b];
   line.closed = NO;
   line.isLine = YES;
+  // Inherit stroke/fill/opacity from current inspector values.
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  KKParamsToPath(paramGetAPI, line);
+  NSString *lineUUID = KKLayerUUIDForAPI(self.apiManager);
+  if (lineUUID)
+    KKApplyCachedStyles(lineUUID, line);
+  line.closed = NO; // Restore — KKParamsToPath reads closedPath param.
   [self.paths insertObject:line atIndex:0];
   self.activePathIndex = 0;
   [self.selectedPathIndices removeAllIndexes];

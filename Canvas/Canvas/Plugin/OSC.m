@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#import "KKParamSync.h"
+#import "LayerList_Private.h"
 #import "OSC_Private.h"
 
 NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
@@ -156,9 +158,6 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   NSData *blob = [KKBezierPath blobFromPaths:paths];
   NSString *str = [blob base64EncodedStringWithOptions:0];
   [paramSetAPI setStringParameterValue:str toParameter:kParamPathData];
-  NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
-  if (uuid)
-    KKCanvasRefreshLayerList(uuid, paths.count, paths);
 }
 
 - (void)syncStrokeParamsToSelection {
@@ -186,32 +185,25 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   if (uuid)
     KKCanvasUpdateSelection(uuid, self.selectedPathIndices);
 
-  // Set param values and visibility from the newly-selected path.
+  // Write param values from the newly-selected path.
+  // Flag visibility is handled centrally by KKParamSyncApply via
+  // KKCanvasRefreshLayerList — do not set flags here.
   KKBezierPath *selPath = KKSelectedPath(self.selectedPathIndices, self.paths);
+  NSString *syncUUID = KKLayerUUIDForAPI(self.apiManager);
   if (selPath) {
     KKPathToParams(paramSetAPI, selPath);
-    BOOL strokeExpanded = NO;
-    [paramGetAPI getBoolValue:&strokeExpanded
-                fromParameter:kParamExpandedStroke
-                       atTime:kCMTimeZero];
-    KKSetStrokeChildrenVisible(paramSetAPI, selPath.strokeEnabled,
-                               strokeExpanded);
-    BOOL fillExpanded = NO;
-    [paramGetAPI getBoolValue:&fillExpanded
-                fromParameter:kParamExpandedFill
-                       atTime:kCMTimeZero];
-    KKSetFillChildrenVisible(paramSetAPI, selPath.fillEnabled, fillExpanded);
-    BOOL sketchExpanded = NO;
-    [paramGetAPI getBoolValue:&sketchExpanded
-                fromParameter:kParamExpandedSketch
-                       atTime:kCMTimeZero];
-    KKSetSketchChildrenVisible(paramSetAPI, selPath.sketchEnabled,
-                               sketchExpanded);
+    if (syncUUID)
+      KKCacheCustomStyles(syncUUID, selPath);
     KKSaveSelectedIndex(
         paramSetAPI, (NSInteger)[self.paths indexOfObjectIdenticalTo:selPath]);
-  } else if (!KKIsForceShowEnabled(paramGetAPI)) {
-    KKHideObjectParams(paramSetAPI);
+  } else {
     KKSaveSelectedIndex(paramSetAPI, -1);
+  }
+  if (syncUUID) {
+    KKCanvasStore *store = KKLayerStateForUUID(syncUUID).store;
+    [store performBatch:^{
+      [store syncSelectedPathProperties];
+    }];
   }
 }
 

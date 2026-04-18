@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#import "LayerList_Private.h"
 #import "OSC_Private.h"
+#import "ObjectParams.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
@@ -416,10 +418,12 @@
 
   NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
   if (uuid) {
+    KKLayerInstanceState *lst = KKLayerStateForUUID(uuid);
+    KKCanvasStore *store = lst.store;
+
+    // Consume pending selection from UI actions.
     NSIndexSet *uiSelection = KKCanvasConsumePendingSelection(uuid);
     if (uiSelection) {
-      KKLog *log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
-      [log info:@"drawOSC: consumed pending selection=%@", uiSelection];
       [self.selectedPathIndices removeAllIndexes];
       [self.selectedPathIndices addIndexes:uiSelection];
       if (uiSelection.count > 0)
@@ -427,8 +431,25 @@
       else
         self.activePathIndex = -1;
     }
-    KKCanvasUpdateSelection(uuid, self.selectedPathIndices);
-    KKCanvasRefreshLayerList(uuid, self.paths.count, self.paths);
+
+    // Write path/selection/UI state to the store.
+    // NOTE: expanded and enabled states are NOT set here — they are owned
+    // by the UI callbacks (header toggles) and the initial seed. Reading
+    // them from FxPlug params on the render thread races with callbacks
+    // that haven't committed yet.
+    [store performBatch:^{
+      [store setPaths:self.paths];
+      [store setSelectedIndices:self.selectedPathIndices];
+      [store setSoloActive:lst.soloActive];
+      [store setEditing:lst.isEditing];
+      [store setDragging:lst.isDragging];
+      [store setCollapsedGroupIDs:lst.collapsedGroupIDs ?: [NSSet set]];
+      [store syncSelectedPathProperties];
+    }];
+
+    // Keep old selectedIndices in sync for code that still reads it.
+    lst.selectedIndices = [self.selectedPathIndices copy];
+    lst.uiSelection = lst.selectedIndices;
   }
 
   // Patch the selected path's in-memory stroke from current params so that
@@ -443,17 +464,12 @@
                fromParameter:kParamHideOSC
                       atTime:kCMTimeZero];
   }
+  // Patch the selected path from inspector params for rendering.
+  // Param flag visibility is handled by KKCanvasRefreshLayerList above.
   {
     KKBezierPath *selPath =
         KKSelectedPath(self.selectedPathIndices, self.paths);
-    id<FxParameterSettingAPI_v5> paramSetAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
     if (selPath) {
-      // Only patch the path from FxPlug params in cursor mode (or hideOSC,
-      // which acts like a paused cursor mode).  In pen mode the pen tool
-      // handlers keep path state correct — reading shared params here would
-      // overwrite the path with stale values from a previously-selected path
-      // (e.g. closed=NO from a line corrupting a rect).
       BOOL isCursorMode =
           (self.toolbar.activeTag == kOSCToolbarCursor) || hideOSCPending;
       if (isCursorMode) {
@@ -477,32 +493,6 @@
                            canvasWidth:cW
                           canvasHeight:cH];
       }
-      KKShowObjectParams(paramSetAPI);
-      {
-        id<FxParameterRetrievalAPI_v6> getAPI = [self.apiManager
-            apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-        BOOL strokeExpanded = NO;
-        [getAPI getBoolValue:&strokeExpanded
-               fromParameter:kParamExpandedStroke
-                      atTime:kCMTimeZero];
-        KKSetStrokeChildrenVisible(paramSetAPI, selPath.strokeEnabled,
-                                   strokeExpanded);
-        BOOL fillExpanded = NO;
-        [getAPI getBoolValue:&fillExpanded
-               fromParameter:kParamExpandedFill
-                      atTime:kCMTimeZero];
-        KKSetFillChildrenVisible(paramSetAPI, selPath.fillEnabled,
-                                 fillExpanded);
-        BOOL sketchExpanded = NO;
-        [getAPI getBoolValue:&sketchExpanded
-               fromParameter:kParamExpandedSketch
-                      atTime:kCMTimeZero];
-        KKSetSketchChildrenVisible(paramSetAPI, selPath.sketchEnabled,
-                                   sketchExpanded);
-      }
-    } else if (!KKIsForceShowEnabled([self.apiManager
-                   apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)])) {
-      KKHideObjectParams(paramSetAPI);
     }
   }
 

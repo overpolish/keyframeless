@@ -6,6 +6,7 @@
 #import "CapStyleView.h"
 #import "FillStyleView.h"
 #import "JoinStyleView.h"
+#import "KKParamSync.h"
 #import "LayerList_Private.h"
 #import "MarkerStyleView.h"
 #import "ObjectParams.h"
@@ -38,6 +39,30 @@ NSIndexSet *_Nullable KKCanvasConsumePendingSelection(NSString *uuid) {
   return pending;
 }
 
+void KKCacheCustomStyles(NSString *uuid, KKBezierPath *path) {
+  KKLayerInstanceState *s = KKLayerStateForUUID(uuid);
+  if (!s)
+    return;
+  s.cachedLineCap = path.lineCap;
+  s.cachedLineJoin = path.lineJoin;
+  s.cachedStrokeStyle = path.strokeStyle;
+  s.cachedStartMarker = path.startMarker;
+  s.cachedEndMarker = path.endMarker;
+  s.cachedFillStyle = (uint8_t)path.sketchFillStyle;
+}
+
+void KKApplyCachedStyles(NSString *uuid, KKBezierPath *path) {
+  KKLayerInstanceState *s = KKLayerStateForUUID(uuid);
+  if (!s)
+    return;
+  path.lineCap = s.cachedLineCap;
+  path.lineJoin = s.cachedLineJoin;
+  path.strokeStyle = s.cachedStrokeStyle;
+  path.startMarker = s.cachedStartMarker;
+  path.endMarker = s.cachedEndMarker;
+  path.sketchFillStyle = s.cachedFillStyle;
+}
+
 NSIndexSet *_Nullable KKCanvasCurrentSelection(NSString *uuid) {
   KKLayerInstanceState *s = KKLayerStateForUUID(uuid);
   return s.selectedIndices;
@@ -50,22 +75,6 @@ void KKCanvasUpdateSelection(NSString *uuid, NSIndexSet *indices) {
   dispatch_async(dispatch_get_main_queue(), ^{
     s.uiSelection = copy;
   });
-}
-
-static NSUInteger layerListHash(NSUInteger count,
-                                NSArray<KKBezierPath *> *paths,
-                                NSIndexSet *selection) {
-  NSUInteger h = count;
-  for (NSUInteger i = 0; i < count; i++) {
-    h = h * 31 + (paths[i].hidden ? 1 : 0);
-    h = h * 31 + (paths[i].locked ? 2 : 0);
-    h = h * 31 + paths[i].name.hash;
-    h = h * 31 + paths[i].count;
-    h = h * 31 + (paths[i].closed ? 1 : 0);
-    h = h * 31 + (paths[i].isRect ? 1 : 0);
-  }
-  h = h * 31 + selection.hash;
-  return h;
 }
 
 static BOOL
@@ -151,19 +160,23 @@ buildRow(NSUInteger index, BOOL isGroup, BOOL isCollapsed, BOOL isHidden,
          NSImageSymbolConfiguration *symConfig, KKLayerActionTarget *target) {
   NSMutableArray<NSView *> *views = [NSMutableArray array];
 
+  NSButton *folderBtn = nil;
   if (isGroup) {
     NSString *folderName = isCollapsed ? @"folder.fill" : @"folder";
-    [views addObject:KKIconButton(folderName, symConfig, target,
-                                  @selector(toggleGroupCollapse:), index,
-                                  [NSColor secondaryLabelColor])];
+    folderBtn = KKIconButton(folderName, symConfig, target,
+                             @selector(toggleGroupCollapse:), index,
+                             [NSColor secondaryLabelColor]);
+    [views addObject:folderBtn];
   }
 
   NSString *eyeName = isHidden ? @"eye.slash" : @"eye.fill";
   NSColor *eyeColor =
       isHidden ? [NSColor tertiaryLabelColor]
                : (isSolo ? [NSColor warning] : [NSColor secondaryLabelColor]);
-  [views addObject:KKIconButton(eyeName, symConfig, target,
-                                @selector(toggleVisibility:), index, eyeColor)];
+  NSButton *eyeBtn =
+      KKIconButton(eyeName, symConfig, target, @selector(toggleVisibility:),
+                   index, eyeColor);
+  [views addObject:eyeBtn];
 
   KKLayerButton *nameBtn =
       [KKLayerButton buttonWithTitle:name
@@ -185,14 +198,20 @@ buildRow(NSUInteger index, BOOL isGroup, BOOL isCollapsed, BOOL isHidden,
   NSString *lockName = isLocked ? @"lock.fill" : @"lock.open";
   NSColor *lockColor =
       isLocked ? [NSColor secondaryLabelColor] : [NSColor tertiaryLabelColor];
-  [views addObject:KKIconButton(lockName, symConfig, target,
-                                @selector(toggleLock:), index, lockColor)];
+  NSButton *lockBtn = KKIconButton(lockName, symConfig, target,
+                                   @selector(toggleLock:), index, lockColor);
+  [views addObject:lockBtn];
 
   CGFloat indent = depth * kLayerGroupIndent;
   KKLayerRow *row = [KKLayerRow stackViewWithViews:views];
   row.rowIndex = index;
+  row.isGroupRow = isGroup;
   row.groupID = isGroup ? gid : nil;
   row.parentGroupID = parentGID;
+  row.folderButton = folderBtn;
+  row.visibilityButton = eyeBtn;
+  row.nameButton = nameBtn;
+  row.lockButton = lockBtn;
   nameBtn.parentRow = row;
   row.menu = buildContextMenu(index, isGroup, depth, multiSelect, target);
   row.orientation = NSUserInterfaceLayoutOrientationHorizontal;
@@ -211,19 +230,94 @@ buildRow(NSUInteger index, BOOL isGroup, BOOL isCollapsed, BOOL isHidden,
   return row;
 }
 
-void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
-                              NSArray<KKBezierPath *> *paths) {
-  KKLayerInstanceState *st = KKLayerStateForUUID(uuid);
+static void updateRow(KKLayerRow *row, NSUInteger index, BOOL isGroup,
+                      BOOL isCollapsed, BOOL isHidden, BOOL isLocked,
+                      BOOL isSelected, BOOL isSolo, NSString *name,
+                      NSString *gid, NSString *parentGID, NSUInteger depth,
+                      BOOL multiSelect, NSImageSymbolConfiguration *symConfig,
+                      KKLayerActionTarget *target) {
+  row.rowIndex = index;
+  row.groupID = isGroup ? gid : nil;
+  row.parentGroupID = parentGID;
+
+  if (isGroup && row.folderButton) {
+    NSString *folderName = isCollapsed ? @"folder.fill" : @"folder";
+    row.folderButton.image = [[NSImage imageWithSystemSymbolName:folderName
+                                        accessibilityDescription:nil]
+        imageWithSymbolConfiguration:symConfig];
+    row.folderButton.tag = index;
+  }
+
+  NSString *eyeName = isHidden ? @"eye.slash" : @"eye.fill";
+  NSColor *eyeColor =
+      isHidden ? [NSColor tertiaryLabelColor]
+               : (isSolo ? [NSColor warning] : [NSColor secondaryLabelColor]);
+  row.visibilityButton.image = [[NSImage imageWithSystemSymbolName:eyeName
+                                          accessibilityDescription:nil]
+      imageWithSymbolConfiguration:symConfig];
+  row.visibilityButton.contentTintColor = eyeColor;
+  row.visibilityButton.tag = index;
+
+  row.nameButton.title = name;
+  row.nameButton.tag = index;
+  row.nameButton.font = isGroup ? [NSFont boldSystemFontOfSize:KKFontSizeSM]
+                                : [NSFont systemFontOfSize:KKFontSizeSM];
+  row.nameButton.contentTintColor =
+      isHidden ? [NSColor tertiaryLabelColor] : [NSColor labelColor];
+
+  NSString *lockName = isLocked ? @"lock.fill" : @"lock.open";
+  NSColor *lockColor =
+      isLocked ? [NSColor secondaryLabelColor] : [NSColor tertiaryLabelColor];
+  row.lockButton.image = [[NSImage imageWithSystemSymbolName:lockName
+                                    accessibilityDescription:nil]
+      imageWithSymbolConfiguration:symConfig];
+  row.lockButton.contentTintColor = lockColor;
+  row.lockButton.tag = index;
+
+  CGFloat indent = depth * kLayerGroupIndent;
+  row.edgeInsets = NSEdgeInsetsMake(0, KKPaddingMD + indent, 0, KKPaddingMD);
+  row.layer.backgroundColor =
+      isSelected
+          ? [[NSColor accent] colorWithAlphaComponent:kLayerSelectionAlpha]
+                .CGColor
+          : [NSColor clearColor].CGColor;
+
+  row.menu = buildContextMenu(index, isGroup, depth, multiSelect, target);
+}
+
+void KKCanvasRefreshLayerListFromSnapshot(KKCanvasStoreSnapshot *snap,
+                                          KKLayerInstanceState *st,
+                                          id<PROAPIAccessing> api) {
   if (!st)
     return;
-  NSIndexSet *selection = st.selectedIndices ?: [NSIndexSet indexSet];
-  NSUInteger hash = layerListHash(pathCount, paths, selection);
-  if (hash == st.listHash && !st.forceRefresh)
+  KKLayerListContainer *container = st.container;
+  if (!container)
     return;
-  st.listHash = hash;
-  st.forceRefresh = NO;
+  if (snap.isEditing || snap.isDragging)
+    return;
 
-  NSIndexSet *capturedSelection = [selection copy];
+  NSArray<KKBezierPath *> *paths = snap.paths;
+  NSUInteger pathCount = paths.count;
+  NSIndexSet *capturedSelection = snap.selectedIndices;
+  NSView *content = container.contentView;
+
+  if (pathCount == 0) {
+    [content.subviews
+        makeObjectsPerformSelector:@selector(removeFromSuperview)];
+    container.emptyView.hidden = NO;
+    [content addSubview:container.emptyView];
+    container.contentHeightConstraint.constant = kLayerListHeight;
+    KKParamSyncApplyFromSnapshot(snap, nil, st.store.uuid, api);
+    return;
+  }
+
+  container.emptyView.hidden = YES;
+  [container.emptyView removeFromSuperview];
+
+  NSImageSymbolConfiguration *symConfig = [NSImageSymbolConfiguration
+      configurationWithPointSize:KKSymbolPointSize
+                          weight:NSFontWeightRegular];
+
   NSMutableArray<NSNumber *> *hiddenStates =
       [NSMutableArray arrayWithCapacity:pathCount];
   NSMutableArray<NSNumber *> *lockedStates =
@@ -247,314 +341,149 @@ void KKCanvasRefreshLayerList(NSString *uuid, NSUInteger pathCount,
                                                        (unsigned long)(i + 1)]];
   }
 
-  // Capture selected path's style properties for the style view updates.
-  __block NSInteger selectedLineCap = -1;
-  __block NSInteger selectedLineJoin = -1;
-  __block NSInteger selectedStrokeStyle = -1;
-  __block NSInteger selectedStartMarker = -1;
-  __block NSInteger selectedEndMarker = -1;
-  __block BOOL selectedHasJoins = NO;
-  __block BOOL selectedSketchEnabled = NO;
-  __block BOOL selectedFillEnabled = NO;
-  __block NSInteger selectedFillStyle = 0;
-  __block BOOL selectedStrokeEnabled = NO;
-  __block BOOL selectedStrokeExpanded = NO;
-  __block BOOL selectedFillExpanded = NO;
-  __block BOOL selectedSketchExpanded = NO;
-  [selection enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
-    if (idx < pathCount && !paths[idx].isGroup) {
-      if (!paths[idx].closed) {
-        selectedLineCap = paths[idx].lineCap;
-        selectedStartMarker = paths[idx].startMarker;
-        selectedEndMarker = paths[idx].endMarker;
-      } else {
-        selectedStartMarker = -1;
-        selectedEndMarker = -1;
-      }
-      if (paths[idx].count > 2) {
-        selectedLineJoin = paths[idx].lineJoin;
-        selectedHasJoins = YES;
-      }
-      selectedStrokeStyle = paths[idx].strokeStyle;
-      selectedSketchEnabled = paths[idx].sketchEnabled;
-      selectedFillEnabled = paths[idx].fillEnabled;
-      selectedFillStyle = paths[idx].sketchFillStyle;
-      selectedStrokeEnabled = paths[idx].strokeEnabled;
-      *stop = YES;
-    }
-  }];
+  NSMutableDictionary<NSString *, NSNumber *> *groupIndexMap =
+      [NSMutableDictionary dictionary];
+  for (NSUInteger i = 0; i < pathCount; i++) {
+    if (groupFlags[i].boolValue && groupIDs[i].length > 0)
+      groupIndexMap[groupIDs[i]] = @(i);
+  }
 
-  dispatch_async(dispatch_get_main_queue(), ^{
-    KKLayerListContainer *container = st.container;
-    if (!container)
-      return;
-    if (st.isEditing || st.isDragging)
-      return;
+  BOOL multiSelect = capturedSelection.count > 1;
+  BOOL solo = snap.soloActive;
 
-    NSView *content = container.contentView;
-    [content.subviews
-        makeObjectsPerformSelector:@selector(removeFromSuperview)];
+  NSMutableArray<NSNumber *> *visibleIndices =
+      [NSMutableArray arrayWithCapacity:pathCount];
+  for (NSUInteger i = 0; i < pathCount; i++) {
+    if (!isAncestorCollapsed(i, parentGroupIDs, groupIDs, groupFlags,
+                             groupIndexMap, snap.collapsedGroupIDs))
+      [visibleIndices addObject:@(i)];
+  }
 
-    if (pathCount == 0) {
-      container.emptyView.hidden = NO;
-      [content addSubview:container.emptyView];
-      container.contentHeightConstraint.constant = kLayerListHeight;
+  NSMutableArray<KKLayerRow *> *oldRows = [NSMutableArray array];
+  for (NSView *sub in content.subviews) {
+    if ([sub isKindOfClass:[KKLayerRow class]])
+      [oldRows addObject:(KKLayerRow *)sub];
+  }
 
-      KKLayerActionTarget *at = container.actionTarget;
-      if (at.apiManager) {
-        id<FxCustomParameterActionAPI_v4> actAPI = [at.apiManager
-            apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-        [actAPI startAction:at];
-        id<FxParameterSettingAPI_v5> setAPI =
-            [at.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-        id<FxParameterRetrievalAPI_v6> getAPI = [at.apiManager
-            apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-        if (!KKIsForceShowEnabled(getAPI))
-          KKHideObjectParams(setAPI);
-        [actAPI endAction:at];
-      }
-      return;
-    }
+  NSUInteger visCount = visibleIndices.count;
+  NSMutableArray<KKLayerRow *> *newRows =
+      [NSMutableArray arrayWithCapacity:visCount];
 
-    container.emptyView.hidden = YES;
+  for (NSUInteger v = 0; v < visCount; v++) {
+    NSUInteger i = visibleIndices[v].unsignedIntegerValue;
+    BOOL isGroup = groupFlags[i].boolValue;
+    BOOL collapsed = isGroup && groupIDs[i].length > 0 &&
+                     [snap.collapsedGroupIDs containsObject:groupIDs[i]];
+    NSUInteger depth = groupDepth(i, parentGroupIDs, groupIndexMap);
+    NSString *pgid = parentGroupIDs[i].length > 0 ? parentGroupIDs[i] : nil;
 
-    NSImageSymbolConfiguration *symConfig = [NSImageSymbolConfiguration
-        configurationWithPointSize:KKSymbolPointSize
-                            weight:NSFontWeightRegular];
-
-    NSMutableDictionary<NSString *, NSNumber *> *groupIndexMap =
-        [NSMutableDictionary dictionary];
-    for (NSUInteger i = 0; i < pathCount; i++) {
-      if (groupFlags[i].boolValue && groupIDs[i].length > 0)
-        groupIndexMap[groupIDs[i]] = @(i);
-    }
-
-    BOOL multiSelect = capturedSelection.count > 1;
-    BOOL solo = st.soloActive;
-    NSUInteger visRow = 0;
-
-    for (NSUInteger i = 0; i < pathCount; i++) {
-      if (isAncestorCollapsed(i, parentGroupIDs, groupIDs, groupFlags,
-                              groupIndexMap, st.collapsedGroupIDs))
-        continue;
-
-      BOOL isGroup = groupFlags[i].boolValue;
-      BOOL collapsed = isGroup && groupIDs[i].length > 0 &&
-                       [st.collapsedGroupIDs containsObject:groupIDs[i]];
-      NSUInteger depth = groupDepth(i, parentGroupIDs, groupIndexMap);
-      NSString *pgid = parentGroupIDs[i].length > 0 ? parentGroupIDs[i] : nil;
-
-      KKLayerRow *row = buildRow(
+    KKLayerRow *row = nil;
+    if (v < oldRows.count && oldRows[v].isGroupRow == isGroup) {
+      row = oldRows[v];
+      updateRow(row, i, isGroup, collapsed, hiddenStates[i].boolValue,
+                lockedStates[i].boolValue, [capturedSelection containsIndex:i],
+                solo && !hiddenStates[i].boolValue, names[i], groupIDs[i], pgid,
+                depth, multiSelect, symConfig, container.actionTarget);
+    } else {
+      row = buildRow(
           i, isGroup, collapsed, hiddenStates[i].boolValue,
           lockedStates[i].boolValue, [capturedSelection containsIndex:i],
           solo && !hiddenStates[i].boolValue, names[i], groupIDs[i], pgid,
           depth, multiSelect, symConfig, container.actionTarget);
-
-      [content addSubview:row];
-      [row.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
-                                        constant:KKPaddingSM]
-          .active = YES;
-      [row.trailingAnchor constraintEqualToAnchor:content.trailingAnchor
-                                         constant:-KKPaddingSM]
-          .active = YES;
-      [row.topAnchor constraintEqualToAnchor:content.topAnchor
-                                    constant:kLayerListVerticalPad +
-                                             visRow * kLayerRowStride]
-          .active = YES;
-      [row.heightAnchor constraintEqualToConstant:kLayerRowHeight].active = YES;
-      visRow++;
     }
+    [newRows addObject:row];
+  }
 
-    CGFloat totalHeight =
-        MAX(visRow * kLayerRowStride + kLayerListVerticalPad + kLayerRowHeight,
-            kLayerListHeight);
-    container.contentHeightConstraint.constant = totalHeight;
+  [content.subviews makeObjectsPerformSelector:@selector(removeFromSuperview)];
+  for (NSUInteger v = 0; v < newRows.count; v++) {
+    KKLayerRow *row = newRows[v];
+    [content addSubview:row];
+    [row.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
+                                      constant:KKPaddingSM]
+        .active = YES;
+    [row.trailingAnchor constraintEqualToAnchor:content.trailingAnchor
+                                       constant:-KKPaddingSM]
+        .active = YES;
+    [row.topAnchor
+        constraintEqualToAnchor:content.topAnchor
+                       constant:kLayerListVerticalPad + v * kLayerRowStride]
+        .active = YES;
+    [row.heightAnchor constraintEqualToConstant:kLayerRowHeight].active = YES;
+  }
 
-    // Sync per-object param visibility using an action scope so it
-    // persists. This runs on main queue from drawOSC, same as the
-    // layer list UI update.
-    KKLayerActionTarget *at = container.actionTarget;
-    if (at.apiManager) {
-      id<FxCustomParameterActionAPI_v4> actAPI = [at.apiManager
-          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      [actAPI startAction:at];
-      id<FxParameterSettingAPI_v5> setAPI =
-          [at.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      id<FxParameterRetrievalAPI_v6> getAPI =
-          [at.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-      BOOL forceShow = KKIsForceShowEnabled(getAPI);
-      if (capturedSelection.count > 0) {
-        BOOL hasPath = NO;
-        BOOL isOpen = NO;
-        for (NSUInteger i = 0; i < pathCount; i++) {
-          if ([capturedSelection containsIndex:i] && !groupFlags[i].boolValue) {
-            hasPath = YES;
-            isOpen = (selectedLineCap >= 0); // open path had lineCap captured
-            break;
-          }
-        }
-        if (hasPath || forceShow) {
-          KKShowObjectParams(setAPI);
+  CGFloat totalHeight =
+      MAX(visCount * kLayerRowStride + kLayerListVerticalPad + kLayerRowHeight,
+          kLayerListHeight);
+  container.contentHeightConstraint.constant = totalHeight;
 
-          [getAPI getBoolValue:&selectedStrokeExpanded
-                 fromParameter:kParamExpandedStroke
-                        atTime:kCMTimeZero];
-          BOOL strokeOpen = (selectedStrokeEnabled || forceShow) &&
-                            (selectedStrokeExpanded || forceShow);
-          KKSetStrokeChildrenVisible(setAPI, selectedStrokeEnabled || forceShow,
-                                     selectedStrokeExpanded || forceShow);
-
-          if (strokeOpen) {
-            KKSetEndWidthVisible(setAPI, isOpen || forceShow);
-            KKSetLineCapVisible(setAPI, isOpen || forceShow);
-            KKSetMarkersVisible(setAPI, isOpen || forceShow);
-            if ((isOpen || forceShow) && selectedStartMarker >= 0)
-              KKSetMarkerSizeVisible(
-                  setAPI, (uint8_t)selectedStartMarker,
-                  selectedEndMarker >= 0 ? (uint8_t)selectedEndMarker : 0);
-            KKSetLineJoinVisible(setAPI, selectedHasJoins || forceShow);
-            KKSetStrokeStyleVisible(setAPI, YES);
-            if (forceShow) {
-              [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                            toParameter:kParamDashLength];
-              [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                            toParameter:kParamDashGap];
-              [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                            toParameter:kParamDotGap];
-            } else {
-              KKSetDashDotParamsForStyle(
-                  setAPI,
-                  selectedStrokeStyle >= 0 ? (uint8_t)selectedStrokeStyle : 0);
-            }
-          }
-          [getAPI getBoolValue:&selectedFillExpanded
-                 fromParameter:kParamExpandedFill
-                        atTime:kCMTimeZero];
-          BOOL fillOpen = (selectedFillEnabled || forceShow) &&
-                          (selectedFillExpanded || forceShow);
-          KKSetFillChildrenVisible(setAPI, selectedFillEnabled || forceShow,
-                                   selectedFillExpanded || forceShow);
-          if (fillOpen) {
-            if (forceShow) {
-              KKSetFillStyleParamsVisible(setAPI, YES, 1);
-            } else {
-              KKSetFillStyleParamsVisible(setAPI, YES, (int)selectedFillStyle);
-            }
-          }
-          [getAPI getBoolValue:&selectedSketchExpanded
-                 fromParameter:kParamExpandedSketch
-                        atTime:kCMTimeZero];
-          KKSetSketchChildrenVisible(setAPI, selectedSketchEnabled || forceShow,
-                                     selectedSketchExpanded || forceShow);
-        } else {
-          KKHideObjectParams(setAPI);
-        }
-      } else if (!forceShow) {
-        KKHideObjectParams(setAPI);
-      }
-      [actAPI endAction:at];
+  KKBezierPath *syncPath = nil;
+  for (NSUInteger i = 0; i < pathCount; i++) {
+    if ([capturedSelection containsIndex:i] && !groupFlags[i].boolValue) {
+      syncPath = paths[i];
+      break;
     }
+  }
+  KKParamSyncApplyFromSnapshot(snap, syncPath, st.store.uuid, api);
 
-    // Sync cap style view selection and layout.
-    KKCapStyleView *capView = st.capStyleView;
-    if (capView) {
-      if (selectedLineCap >= 0)
-        capView.selectedIndex = selectedLineCap;
-      [capView setNeedsLayout:YES];
-      [capView setNeedsDisplay:YES];
-    }
+  KKCapStyleView *capView = st.capStyleView;
+  if (capView) {
+    if (snap.selectedLineCap >= 0)
+      capView.selectedIndex = snap.selectedLineCap;
+    [capView setNeedsLayout:YES];
+    [capView setNeedsDisplay:YES];
+  }
+  KKJoinStyleView *joinView = st.joinStyleView;
+  if (joinView) {
+    if (snap.selectedLineJoin >= 0)
+      joinView.selectedIndex = snap.selectedLineJoin;
+    [joinView setNeedsLayout:YES];
+    [joinView setNeedsDisplay:YES];
+  }
+  KKStrokeStyleView *strokeStyleView = st.strokeStyleView;
+  if (strokeStyleView) {
+    if (snap.selectedStrokeStyle >= 0)
+      strokeStyleView.selectedIndex = snap.selectedStrokeStyle;
+    [strokeStyleView setNeedsLayout:YES];
+    [strokeStyleView setNeedsDisplay:YES];
+  }
+  KKMarkerStyleView *startMarkerView = st.startMarkerView;
+  if (startMarkerView) {
+    if (snap.selectedStartMarker >= 0)
+      startMarkerView.selectedIndex = snap.selectedStartMarker;
+    [startMarkerView setNeedsLayout:YES];
+    [startMarkerView setNeedsDisplay:YES];
+  }
+  KKMarkerStyleView *endMarkerView = st.endMarkerView;
+  if (endMarkerView) {
+    if (snap.selectedEndMarker >= 0)
+      endMarkerView.selectedIndex = snap.selectedEndMarker;
+    [endMarkerView setNeedsLayout:YES];
+    [endMarkerView setNeedsDisplay:YES];
+  }
+  KKFillStyleView *fillStyleView = st.fillStyleView;
+  if (fillStyleView) {
+    if (snap.selectedFillStyle >= 0)
+      fillStyleView.selectedIndex = snap.selectedFillStyle;
+    [fillStyleView setNeedsLayout:YES];
+    [fillStyleView setNeedsDisplay:YES];
+  }
 
-    // Sync join style view selection and layout.
-    KKJoinStyleView *joinView = st.joinStyleView;
-    if (joinView) {
-      if (selectedLineJoin >= 0)
-        joinView.selectedIndex = selectedLineJoin;
-      [joinView setNeedsLayout:YES];
-      [joinView setNeedsDisplay:YES];
-    }
-
-    // Sync stroke style view selection and layout.
-    KKStrokeStyleView *strokeStyleView = st.strokeStyleView;
-    if (strokeStyleView) {
-      if (selectedStrokeStyle >= 0)
-        strokeStyleView.selectedIndex = selectedStrokeStyle;
-      [strokeStyleView setNeedsLayout:YES];
-      [strokeStyleView setNeedsDisplay:YES];
-    }
-
-    // Sync start marker view selection and layout.
-    KKMarkerStyleView *startMarkerView = st.startMarkerView;
-    if (startMarkerView) {
-      if (selectedStartMarker >= 0)
-        startMarkerView.selectedIndex = selectedStartMarker;
-      [startMarkerView setNeedsLayout:YES];
-      [startMarkerView setNeedsDisplay:YES];
-    }
-
-    // Sync end marker view selection and layout.
-    KKMarkerStyleView *endMarkerView = st.endMarkerView;
-    if (endMarkerView) {
-      if (selectedEndMarker >= 0)
-        endMarkerView.selectedIndex = selectedEndMarker;
-      [endMarkerView setNeedsLayout:YES];
-      [endMarkerView setNeedsDisplay:YES];
-    }
-
-    // Sync fill style view selection and layout.
-    KKFillStyleView *fillStyleView = st.fillStyleView;
-    if (fillStyleView) {
-      if (selectedFillStyle >= 0)
-        fillStyleView.selectedIndex = selectedFillStyle;
-      [fillStyleView setNeedsLayout:YES];
-      [fillStyleView setNeedsDisplay:YES];
-    }
-
-    // Determine if there's a selected non-group path for header sync.
-    BOOL hasPath = NO;
-    for (NSUInteger i = 0; i < pathCount; i++) {
-      if ([capturedSelection containsIndex:i] && !groupFlags[i].boolValue) {
-        hasPath = YES;
-        break;
-      }
-    }
-
-    // Sync stroke group header enabled/expanded state.
-    KKCustomGroupHeaderView *strokeHeader = st.strokeGroupHeader;
-    if (strokeHeader) {
-      strokeHeader.isInteractive = hasPath;
-      if (hasPath) {
-        strokeHeader.isEnabled = selectedStrokeEnabled;
-        strokeHeader.isExpanded = selectedStrokeExpanded;
-      } else {
-        strokeHeader.isEnabled = NO;
-        strokeHeader.isExpanded = NO;
-      }
-    }
-
-    // Sync fill group header enabled/expanded state.
-    KKCustomGroupHeaderView *fillHeader = st.fillGroupHeader;
-    if (fillHeader) {
-      fillHeader.isInteractive = hasPath;
-      if (hasPath) {
-        fillHeader.isEnabled = selectedFillEnabled;
-        fillHeader.isExpanded = selectedFillExpanded;
-      } else {
-        fillHeader.isEnabled = NO;
-        fillHeader.isExpanded = NO;
-      }
-    }
-
-    // Sync sketch group header enabled/expanded state.
-    KKCustomGroupHeaderView *sketchHeader = st.sketchGroupHeader;
-    if (sketchHeader) {
-      sketchHeader.isInteractive = hasPath;
-      if (hasPath) {
-        sketchHeader.isEnabled = selectedSketchEnabled;
-        sketchHeader.isExpanded = selectedSketchExpanded;
-      } else {
-        sketchHeader.isEnabled = NO;
-        sketchHeader.isExpanded = NO;
-      }
-    }
-  });
+  KKCustomGroupHeaderView *strokeHeader = st.strokeGroupHeader;
+  if (strokeHeader) {
+    strokeHeader.isInteractive = YES;
+    strokeHeader.isEnabled = snap.strokeEnabled;
+    strokeHeader.isExpanded = snap.strokeExpanded;
+  }
+  KKCustomGroupHeaderView *fillHeader = st.fillGroupHeader;
+  if (fillHeader) {
+    fillHeader.isInteractive = YES;
+    fillHeader.isEnabled = snap.fillEnabled;
+    fillHeader.isExpanded = snap.fillExpanded;
+  }
+  KKCustomGroupHeaderView *sketchHeader = st.sketchGroupHeader;
+  if (sketchHeader) {
+    sketchHeader.isInteractive = YES;
+    sketchHeader.isEnabled = snap.sketchEnabled;
+    sketchHeader.isExpanded = snap.sketchExpanded;
+  }
 }
