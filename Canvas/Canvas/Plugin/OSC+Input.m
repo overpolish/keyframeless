@@ -596,7 +596,8 @@
           apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
       id<FxParameterSettingAPI_v5> paramSetAPI =
           [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      KKParamsToPath(paramGetAPI, prev);
+      KKParamsToSelectedPaths(paramGetAPI, self.selectedPathIndices,
+                              self.paths);
       [self writePaths:self.paths];
       KKSaveSelectedIndex(paramSetAPI, -1);
     }
