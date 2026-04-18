@@ -171,7 +171,7 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
 
   // Write back current inspector param values to the previously-selected
-  // path.  Only safe in cursor mode where the user may have edited values
+  // paths.  Only safe in cursor mode where the user may have edited values
   // in the inspector.  In pen mode, KKParamsToPath would read shared FxPlug
   // params that may belong to a different path and corrupt the target.
   NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
@@ -183,7 +183,7 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
         explicitPrev ?: (uuid ? KKCanvasCurrentSelection(uuid) : nil);
     KKBezierPath *prev = KKSelectedPath(prevSel, self.paths);
     if (prev) {
-      KKParamsToPath(paramGetAPI, prev);
+      KKParamsToSelectedPaths(paramGetAPI, prevSel, self.paths);
       [self writePaths:self.paths];
     }
   }

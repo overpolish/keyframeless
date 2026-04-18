@@ -495,7 +495,7 @@
                fromParameter:kParamHideOSC
                       atTime:kCMTimeZero];
   }
-  // Patch the selected path from inspector params for rendering.
+  // Patch selected paths from inspector params for rendering.
   // Param flag visibility is handled by KKCanvasRefreshLayerList above.
   {
     KKBezierPath *selPath =
@@ -506,7 +506,8 @@
       if (isCursorMode) {
         id<FxParameterRetrievalAPI_v6> paramGetAPI = [self.apiManager
             apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-        KKParamsToPath(paramGetAPI, selPath);
+        KKParamsToSelectedPaths(paramGetAPI, self.selectedPathIndices,
+                                self.paths);
       }
       if (isCursorMode && selPath.isRect && selPath.count >= 4) {
         simd_float2 bmin, bmax;

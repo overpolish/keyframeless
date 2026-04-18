@@ -680,15 +680,24 @@ static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
   NSString *pathStr = nil;
   [paramGetAPI getStringParameterValue:&pathStr fromParameter:kParamPathData];
 
-  NSInteger selIdx = KKReadSelectedIndex(paramGetAPI);
-  if (pathStr.length > 0 && selIdx >= 0) {
+  if (pathStr.length > 0) {
     NSData *blob = [[NSData alloc] initWithBase64EncodedString:pathStr
                                                        options:0];
     NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
-    if ((NSUInteger)selIdx < paths.count && !paths[selIdx].isGroup) {
-      KKParamsToPath(paramGetAPI, paths[selIdx]);
+    NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+    NSIndexSet *sel = uuid ? KKCanvasCurrentSelection(uuid) : nil;
+    if (sel.count > 0) {
+      KKParamsToSelectedPaths(paramGetAPI, sel, paths);
       NSData *newBlob = [KKBezierPath blobFromPaths:paths];
       pathStr = [newBlob base64EncodedStringWithOptions:0];
+    } else {
+      NSInteger selIdx = KKReadSelectedIndex(paramGetAPI);
+      if (selIdx >= 0 && (NSUInteger)selIdx < paths.count &&
+          !paths[selIdx].isGroup) {
+        KKParamsToPath(paramGetAPI, paths[selIdx]);
+        NSData *newBlob = [KKBezierPath blobFromPaths:paths];
+        pathStr = [newBlob base64EncodedStringWithOptions:0];
+      }
     }
   }
 

@@ -106,7 +106,7 @@
                      selection:(NSIndexSet *)sel {
   KKBezierPath *prev = KKSelectedPath(sel, paths ?: @[]);
   if (prev)
-    KKParamsToPath(paramGetAPI, prev);
+    KKParamsToSelectedPaths(paramGetAPI, sel, paths);
 }
 
 - (void)_syncObjectParamsForSelection:(NSIndexSet *)sel

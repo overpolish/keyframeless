@@ -484,8 +484,8 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
   path.sketchFillWeight = (float)fWeight;
 }
 
-/// Modify a property of the currently-selected path inside an action scope.
-/// The block receives the selected path for mutation.
+/// Modify a property of all selected paths inside an action scope.
+/// The block receives each selected non-group path for mutation.
 static inline void
 KKModifySelectedPathProperty(id<PROAPIAccessing> _Nonnull api,
                              void (^_Nonnull block)(KKBezierPath *_Nonnull)) {
@@ -498,18 +498,139 @@ KKModifySelectedPathProperty(id<PROAPIAccessing> _Nonnull api,
       [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   NSString *str = nil;
   [getAPI getStringParameterValue:&str fromParameter:kParamPathData];
-  NSInteger selIdx = KKReadSelectedIndex(getAPI);
-  if (str.length > 0 && selIdx >= 0) {
+  if (str.length > 0) {
     NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
     NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
-    if ((NSUInteger)selIdx < paths.count) {
-      block(paths[selIdx]);
+    NSString *uuid = KKLayerUUIDForAPI(api);
+    NSIndexSet *sel = uuid ? KKCanvasCurrentSelection(uuid) : nil;
+    BOOL modified = NO;
+    if (sel.count > 0) {
+      [sel enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+        if (idx < paths.count && !paths[idx].isGroup)
+          block(paths[idx]);
+      }];
+      modified = YES;
+    } else {
+      NSInteger selIdx = KKReadSelectedIndex(getAPI);
+      if (selIdx >= 0 && (NSUInteger)selIdx < paths.count) {
+        block(paths[selIdx]);
+        modified = YES;
+      }
+    }
+    if (modified) {
       NSData *newBlob = [KKBezierPath blobFromPaths:paths];
       [setAPI setStringParameterValue:[newBlob base64EncodedStringWithOptions:0]
                           toParameter:kParamPathData];
     }
   }
   [actAPI endAction:api];
+}
+
+/// Read per-object param values from FxPlug and apply to all selected
+/// (non-group) paths.  Only properties that actually changed relative to
+/// the primary path's pre-existing values are cascaded to the other paths,
+/// so unchanged properties (e.g. fill colour) are preserved per-object.
+static inline void
+KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
+                        NSIndexSet *_Nullable sel,
+                        NSMutableArray<KKBezierPath *> *_Nonnull paths) {
+  KKBezierPath *primary = KKSelectedPath(sel, paths);
+  if (!primary)
+    return;
+
+  // Snapshot the primary path's values before applying params.
+  float oldStrokeWidth = primary.strokeWidth;
+  float oldEndWidth = primary.endWidth;
+  float oldStrokeR = primary.strokeR;
+  float oldStrokeG = primary.strokeG;
+  float oldStrokeB = primary.strokeB;
+  BOOL oldStrokeEnabled = primary.strokeEnabled;
+  BOOL oldFillEnabled = primary.fillEnabled;
+  float oldFillR = primary.fillR;
+  float oldFillG = primary.fillG;
+  float oldFillB = primary.fillB;
+  float oldOpacity = primary.opacity;
+  float oldDashLength = primary.dashLength;
+  float oldDashGap = primary.dashGap;
+  float oldDotGap = primary.dotGap;
+  float oldStartMarkerSize = primary.startMarkerSize;
+  float oldEndMarkerSize = primary.endMarkerSize;
+  BOOL oldSketchEnabled = primary.sketchEnabled;
+  float oldSketchRoughness = primary.sketchRoughness;
+  float oldSketchBowing = primary.sketchBowing;
+  uint8_t oldSketchStrokes = primary.sketchStrokes;
+  float oldSketchFillGap = primary.sketchFillGap;
+  float oldSketchFillAngle = primary.sketchFillAngle;
+  float oldSketchFillWeight = primary.sketchFillWeight;
+
+  // Apply all inspector params to the primary path.
+  KKParamsToPath(paramGetAPI, primary);
+
+  // Single selection — nothing else to cascade.
+  if (!sel || sel.count <= 1)
+    return;
+
+  // Detect which colour groups changed (treat RGB as atomic).
+  BOOL strokeColorChanged =
+      (primary.strokeR != oldStrokeR || primary.strokeG != oldStrokeG ||
+       primary.strokeB != oldStrokeB);
+  BOOL fillColorChanged =
+      (primary.fillR != oldFillR || primary.fillG != oldFillG ||
+       primary.fillB != oldFillB);
+
+  // Apply only the delta to every other selected non-group path.
+  [sel enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+    if (idx >= paths.count || paths[idx].isGroup)
+      return;
+    KKBezierPath *p = paths[idx];
+    if (p == primary)
+      return;
+
+    if (primary.strokeEnabled != oldStrokeEnabled)
+      p.strokeEnabled = primary.strokeEnabled;
+    if (primary.strokeWidth != oldStrokeWidth)
+      p.strokeWidth = primary.strokeWidth;
+    if (primary.endWidth != oldEndWidth)
+      p.endWidth = primary.endWidth;
+    if (strokeColorChanged) {
+      p.strokeR = primary.strokeR;
+      p.strokeG = primary.strokeG;
+      p.strokeB = primary.strokeB;
+    }
+    if (primary.fillEnabled != oldFillEnabled)
+      p.fillEnabled = primary.fillEnabled;
+    if (fillColorChanged) {
+      p.fillR = primary.fillR;
+      p.fillG = primary.fillG;
+      p.fillB = primary.fillB;
+    }
+    if (primary.opacity != oldOpacity)
+      p.opacity = primary.opacity;
+    if (primary.dashLength != oldDashLength)
+      p.dashLength = primary.dashLength;
+    if (primary.dashGap != oldDashGap)
+      p.dashGap = primary.dashGap;
+    if (primary.dotGap != oldDotGap)
+      p.dotGap = primary.dotGap;
+    if (primary.startMarkerSize != oldStartMarkerSize)
+      p.startMarkerSize = primary.startMarkerSize;
+    if (primary.endMarkerSize != oldEndMarkerSize)
+      p.endMarkerSize = primary.endMarkerSize;
+    if (primary.sketchEnabled != oldSketchEnabled)
+      p.sketchEnabled = primary.sketchEnabled;
+    if (primary.sketchRoughness != oldSketchRoughness)
+      p.sketchRoughness = primary.sketchRoughness;
+    if (primary.sketchBowing != oldSketchBowing)
+      p.sketchBowing = primary.sketchBowing;
+    if (primary.sketchStrokes != oldSketchStrokes)
+      p.sketchStrokes = primary.sketchStrokes;
+    if (primary.sketchFillGap != oldSketchFillGap)
+      p.sketchFillGap = primary.sketchFillGap;
+    if (primary.sketchFillAngle != oldSketchFillAngle)
+      p.sketchFillAngle = primary.sketchFillAngle;
+    if (primary.sketchFillWeight != oldSketchFillWeight)
+      p.sketchFillWeight = primary.sketchFillWeight;
+  }];
 }
 
 /// Write a path's per-object values to FxPlug params (values only, no flags).
