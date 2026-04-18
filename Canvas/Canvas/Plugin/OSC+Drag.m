@@ -73,17 +73,31 @@
   if (isCursorMode) {
     if ((modifiers & kFxModifierKey_OPTION) && !self.dragDidDuplicate) {
       self.dragDidDuplicate = YES;
-      NSMutableIndexSet *newIndices = [NSMutableIndexSet indexSet];
+      NSMutableIndexSet *expanded = [self.selectedPathIndices mutableCopy];
       [self.selectedPathIndices
           enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
-            if (idx >= self.paths.count || self.paths[idx].locked)
-              return;
-            KKBezierPath *orig = self.paths[idx];
-            KKBezierPath *clone =
-                [KKBezierPath pathWithData:[orig dataRepresentation]];
-            [self.paths addObject:clone];
-            [newIndices addIndex:self.paths.count - 1];
+            if (idx < self.paths.count && self.paths[idx].isGroup)
+              [expanded addIndexes:KKDescendantIndices(idx, self.paths)];
           }];
+      NSMutableIndexSet *newIndices = [NSMutableIndexSet indexSet];
+      NSMutableDictionary<NSString *, NSString *> *groupIDMap =
+          [NSMutableDictionary dictionary];
+      [expanded enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+        if (idx >= self.paths.count || self.paths[idx].locked)
+          return;
+        KKBezierPath *clone =
+            [KKBezierPath pathWithData:[self.paths[idx] dataRepresentation]];
+        if (clone.isGroup && clone.groupID) {
+          NSString *newID = [[NSUUID UUID] UUIDString];
+          groupIDMap[clone.groupID] = newID;
+          clone.groupID = newID;
+        }
+        if (clone.parentGroupID && groupIDMap[clone.parentGroupID])
+          clone.parentGroupID = groupIDMap[clone.parentGroupID];
+        [self.paths addObject:clone];
+        if ([self.selectedPathIndices containsIndex:idx])
+          [newIndices addIndex:self.paths.count - 1];
+      }];
       [self.selectedPathIndices removeAllIndexes];
       [self.selectedPathIndices addIndexes:newIndices];
       self.activePathIndex = (NSInteger)newIndices.lastIndex;
@@ -251,16 +265,40 @@
     if (isCursorMode && (modifiers & kFxModifierKey_OPTION) &&
         !self.dragDidDuplicate) {
       self.dragDidDuplicate = YES;
-      KKBezierPath *clone =
-          [KKBezierPath pathWithData:[active dataRepresentation]];
-      [self.paths addObject:clone];
-      NSInteger cloneIdx = (NSInteger)self.paths.count - 1;
+      NSMutableIndexSet *srcIndices =
+          [NSMutableIndexSet indexSetWithIndex:self.activePathIndex];
+      if (active.isGroup)
+        [srcIndices
+            addIndexes:KKDescendantIndices(self.activePathIndex, self.paths)];
+      NSMutableDictionary<NSString *, NSString *> *groupIDMap =
+          [NSMutableDictionary dictionary];
+      __block NSInteger cloneIdx = -1;
+      [srcIndices enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+        KKBezierPath *c =
+            [KKBezierPath pathWithData:[self.paths[idx] dataRepresentation]];
+        if (c.isGroup && c.groupID) {
+          NSString *newID = [[NSUUID UUID] UUIDString];
+          groupIDMap[c.groupID] = newID;
+          c.groupID = newID;
+        }
+        if (c.parentGroupID && groupIDMap[c.parentGroupID])
+          c.parentGroupID = groupIDMap[c.parentGroupID];
+        [self.paths addObject:c];
+        if ((NSUInteger)self.activePathIndex == idx)
+          cloneIdx = (NSInteger)self.paths.count - 1;
+      }];
       [self.selectedPathIndices removeAllIndexes];
       [self.selectedPathIndices addIndex:cloneIdx];
       self.activePathIndex = cloneIdx;
     }
     active = [self activePath];
     [active translateBy:delta];
+    if (active.isGroup) {
+      NSIndexSet *desc = KKDescendantIndices(self.activePathIndex, self.paths);
+      [desc enumerateIndexesUsingBlock:^(NSUInteger di, BOOL *stop) {
+        [self.paths[di] translateBy:delta];
+      }];
+    }
     self.dragOrigin = objPos;
     [self writePaths:self.paths];
     *forceUpdate = YES;
