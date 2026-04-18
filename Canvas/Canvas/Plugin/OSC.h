@@ -8,6 +8,8 @@
 #import "Constants.h"
 #import <KeyframelessKit/KeyframelessKit.h>
 
+NS_ASSUME_NONNULL_BEGIN
+
 @interface CanvasOSC : KKOnScreenControl
 
 @property(nonatomic, strong) NSMutableArray<KKBezierPath *> *paths;
@@ -51,8 +53,8 @@
 @property(nonatomic, assign) simd_float2 resizeOrigMin;
 @property(nonatomic, assign) simd_float2 resizeOrigMax;
 @property(nonatomic, assign) float resizeOrigAspect;
-@property(nonatomic, strong) NSArray<NSData *> *resizeOrigSnapshots;
-@property(nonatomic, strong) NSArray<NSNumber *> *resizeOrigIndices;
+@property(nonatomic, strong, nullable) NSArray<NSData *> *resizeOrigSnapshots;
+@property(nonatomic, strong, nullable) NSArray<NSNumber *> *resizeOrigIndices;
 @property(nonatomic, strong) KKPointOSC *rotateHandleOSC;
 @property(nonatomic, assign) BOOL dragIsRotation;
 @property(nonatomic, assign) simd_float2 rotateCenter;
@@ -60,8 +62,8 @@
 @property(nonatomic, assign) float rotateDeltaAngle;
 @property(nonatomic, assign) simd_float2 rotateOrigMin;
 @property(nonatomic, assign) simd_float2 rotateOrigMax;
-@property(nonatomic, strong) NSArray<NSData *> *rotateOrigSnapshots;
-@property(nonatomic, strong) NSArray<NSNumber *> *rotateOrigIndices;
+@property(nonatomic, strong, nullable) NSArray<NSData *> *rotateOrigSnapshots;
+@property(nonatomic, strong, nullable) NSArray<NSNumber *> *rotateOrigIndices;
 @property(nonatomic, assign) NSInteger imageWidth;
 @property(nonatomic, assign) NSInteger imageHeight;
 @property(nonatomic, assign) BOOL autoSelect;
@@ -72,6 +74,8 @@
 - (void)writePaths:(NSArray<KKBezierPath *> *)paths;
 - (void)syncStrokeParamsToSelection;
 - (void)syncStrokeParamsToSelectionWithPrevious:(nullable NSIndexSet *)prevSel;
-- (KKBezierPath *)activePath;
+- (nullable KKBezierPath *)activePath;
 
 @end
+
+NS_ASSUME_NONNULL_END
