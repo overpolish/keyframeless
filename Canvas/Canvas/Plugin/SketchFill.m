@@ -6,7 +6,7 @@
 #import "SketchFill.h"
 #import <simd/simd.h>
 
-static const NSUInteger kSegsPerCurve = 64;
+static const NSUInteger kSegsPerCurve = 16;
 
 /// Sample the path outline into a dense polygon in pixel space.
 /// Multiple contours are stored sequentially; outContourStarts and
@@ -74,29 +74,10 @@ static simd_float2 rotatePoint(simd_float2 p, simd_float2 center, float cos_a,
                        center.y + dx * sin_a + dy * cos_a};
 }
 
-/// Even-odd point-in-polygon test via horizontal ray cast.
-static BOOL pointInsidePolygon(simd_float2 pt, const simd_float2 *poly,
-                               const NSUInteger *contourStarts,
-                               NSUInteger contourCount) {
-  NSUInteger crossings = 0;
-  for (NSUInteger ci = 0; ci < contourCount; ci++) {
-    NSUInteger cStart = contourStarts[ci];
-    NSUInteger cEnd = contourStarts[ci + 1];
-    NSUInteger cLen = cEnd - cStart;
-    if (cLen < 2)
-      continue;
-    for (NSUInteger i = 0; i < cLen; i++) {
-      NSUInteger ai = cStart + i;
-      NSUInteger bi = cStart + ((i + 1) % cLen);
-      float y0 = poly[ai].y, y1 = poly[bi].y;
-      if ((y0 <= pt.y && y1 > pt.y) || (y1 <= pt.y && y0 > pt.y)) {
-        float t = (pt.y - y0) / (y1 - y0);
-        if (pt.x < poly[ai].x + t * (poly[bi].x - poly[ai].x))
-          crossings++;
-      }
-    }
-  }
-  return (crossings & 1) != 0;
+static int compareFloats(const void *a, const void *b) {
+  float fa = *(const float *)a;
+  float fb = *(const float *)b;
+  return (fa > fb) - (fa < fb);
 }
 
 /// Compute intersections of a horizontal scanline at y with the polygon edges.
@@ -124,16 +105,7 @@ static NSUInteger scanlineIntersections(const simd_float2 *poly, NSUInteger n,
       }
     }
   }
-  // Sort intersections.
-  for (NSUInteger a = 0; a < count; a++) {
-    for (NSUInteger b = a + 1; b < count; b++) {
-      if (xs[b] < xs[a]) {
-        float tmp = xs[a];
-        xs[a] = xs[b];
-        xs[b] = tmp;
-      }
-    }
-  }
+  qsort(xs, count, sizeof(float), compareFloats);
   return count;
 }
 
@@ -149,6 +121,61 @@ static float fillRand(void) {
   return (float)(s_fillRNG & 0xFFFF) / 32768.0f - 1.0f; // [-1, 1)
 }
 
+// --- Fill geometry cache ---
+// Direct-mapped cache keyed by a hash of path geometry + fill parameters.
+// Avoids regenerating hachure lines when inputs haven't changed.
+
+#define FILL_CACHE_SIZE 64
+
+typedef struct {
+  uint64_t key;
+  KKHachureLine *lines;
+  NSUInteger lineCount;
+} KKFillCacheEntry;
+
+static KKFillCacheEntry s_fillCache[FILL_CACHE_SIZE];
+
+static uint64_t fillCacheKey(KKBezierPath *path, float outputWidth,
+                             float outputHeight, uint8_t fillStyle, float gap,
+                             float angle, float roughness, uint32_t seed) {
+  // FNV-1a 64-bit hash over the distinguishing inputs.
+  uint64_t h = 14695981039346656037ULL;
+#define FNV_MIX(bytes, len)                                                    \
+  do {                                                                         \
+    const uint8_t *_p = (const uint8_t *)(bytes);                              \
+    for (NSUInteger _i = 0; _i < (len); _i++) {                                \
+      h ^= _p[_i];                                                             \
+      h *= 1099511628211ULL;                                                   \
+    }                                                                          \
+  } while (0)
+
+  // Path geometry fingerprint: point count, closed flag, contour count,
+  // and first/last point coordinates.
+  NSUInteger cnt = path.count;
+  BOOL closed = path.closed;
+  NSUInteger cc = path.contourCount;
+  FNV_MIX(&cnt, sizeof(cnt));
+  FNV_MIX(&closed, sizeof(closed));
+  FNV_MIX(&cc, sizeof(cc));
+  if (cnt > 0) {
+    KKBezierPoint first = [path pointAtIndex:0];
+    KKBezierPoint last = [path pointAtIndex:cnt - 1];
+    FNV_MIX(&first, sizeof(first));
+    FNV_MIX(&last, sizeof(last));
+  }
+  FNV_MIX(&outputWidth, sizeof(outputWidth));
+  FNV_MIX(&outputHeight, sizeof(outputHeight));
+  FNV_MIX(&fillStyle, sizeof(fillStyle));
+  FNV_MIX(&gap, sizeof(gap));
+  FNV_MIX(&angle, sizeof(angle));
+  FNV_MIX(&roughness, sizeof(roughness));
+  FNV_MIX(&seed, sizeof(seed));
+#undef FNV_MIX
+  if (h == 0)
+    h = 1; // reserve 0 as "empty slot"
+  return h;
+}
+
 NSUInteger KKGenerateHachureLines(KKBezierPath *path, float outputWidth,
                                   float outputHeight, uint8_t fillStyle,
                                   float gap, float angle, float roughness,
@@ -156,6 +183,20 @@ NSUInteger KKGenerateHachureLines(KKBezierPath *path, float outputWidth,
   if (path.count < 3 || gap < 1.0f) {
     *outLines = NULL;
     return 0;
+  }
+
+  // Check cache.
+  uint64_t key = fillCacheKey(path, outputWidth, outputHeight, fillStyle, gap,
+                              angle, roughness, seed);
+  NSUInteger slot = (NSUInteger)(key % FILL_CACHE_SIZE);
+  KKFillCacheEntry *ce = &s_fillCache[slot];
+  if (ce->key == key && ce->lines) {
+    // Cache hit — return a copy so caller can free independently.
+    NSUInteger bytes = ce->lineCount * sizeof(KKHachureLine);
+    KKHachureLine *copy = malloc(bytes);
+    memcpy(copy, ce->lines, bytes);
+    *outLines = copy;
+    return ce->lineCount;
   }
 
   // Sample the outline (contour-aware).
@@ -226,33 +267,27 @@ NSUInteger KKGenerateHachureLines(KKBezierPath *path, float outputWidth,
   free(xs);
   free(rotPoly);
 
-  // Cross-hatch: duplicate all lines at angle + 90 degrees.
+  // Cross-hatch: add lines at angle + 90 degrees, reusing the sampled polygon.
   if (fillStyle == 2) {
     float angle2 = -angle + (float)(M_PI / 2.0);
     float cos_b = cosf(angle2);
     float sin_b = sinf(angle2);
 
-    simd_float2 *poly2 = NULL;
-    NSUInteger *contourStarts2 = NULL;
-    NSUInteger contourCount2 = 0;
-    NSUInteger poly2Count =
-        sampleOutline(path, outputWidth, outputHeight, &poly2, &contourStarts2,
-                      &contourCount2);
-    simd_float2 *rotPoly2 = malloc(poly2Count * sizeof(simd_float2));
+    simd_float2 *rotPoly2 = malloc(polyCount * sizeof(simd_float2));
     float minY2 = HUGE_VALF, maxY2 = -HUGE_VALF;
-    for (NSUInteger i = 0; i < poly2Count; i++) {
-      rotPoly2[i] = rotatePoint(poly2[i], center, cos_b, sin_b);
+    for (NSUInteger i = 0; i < polyCount; i++) {
+      rotPoly2[i] = rotatePoint(poly[i], center, cos_b, sin_b);
       if (rotPoly2[i].y < minY2)
         minY2 = rotPoly2[i].y;
       if (rotPoly2[i].y > maxY2)
         maxY2 = rotPoly2[i].y;
     }
 
-    float *xs2 = malloc((poly2Count + 2) * sizeof(float));
+    float *xs2 = malloc((polyCount + 2) * sizeof(float));
     for (float y = minY2 + gap; y < maxY2; y += gap) {
       float scanY2 = y + (roughness > 0.0001f ? fillRand() * jitterAmt : 0.0f);
       NSUInteger xCount = scanlineIntersections(
-          rotPoly2, poly2Count, scanY2, xs2, contourStarts2, contourCount2);
+          rotPoly2, polyCount, scanY2, xs2, contourStarts, contourCount);
       for (NSUInteger k = 0; k + 1 < xCount; k += 2) {
         if (lineCount >= maxLines) {
           maxLines *= 2;
@@ -267,8 +302,6 @@ NSUInteger KKGenerateHachureLines(KKBezierPath *path, float outputWidth,
     }
     free(xs2);
     free(rotPoly2);
-    free(poly2);
-    free(contourStarts2);
   }
 
   free(contourStarts);
@@ -324,6 +357,14 @@ NSUInteger KKGenerateHachureLines(KKBezierPath *path, float outputWidth,
     lines = zigLines;
     lineCount = zi;
   }
+
+  // Store in cache.
+  free(ce->lines);
+  NSUInteger cacheBytes = lineCount * sizeof(KKHachureLine);
+  ce->lines = malloc(cacheBytes);
+  memcpy(ce->lines, lines, cacheBytes);
+  ce->lineCount = lineCount;
+  ce->key = key;
 
   *outLines = lines;
   return lineCount;
