@@ -12,6 +12,8 @@
 
 NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot);
 NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx);
+NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
+                                NSArray<KKBezierPath *> *paths);
 
 @interface CanvasOSC (Private)
 

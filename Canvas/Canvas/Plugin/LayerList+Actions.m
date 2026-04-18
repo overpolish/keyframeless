@@ -201,17 +201,32 @@
   NSIndexSet *sel = KKLayerStateForUUID(_instanceUUID).uiSelection;
   if (!sel || sel.count <= 1 || ![sel containsIndex:sender.tag])
     sel = [NSIndexSet indexSetWithIndex:sender.tag];
+  NSMutableIndexSet *expanded = [sel mutableCopy];
   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
-    NSMutableIndexSet *newSel = [NSMutableIndexSet indexSet];
-    __block NSUInteger offset = 0;
     [sel enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+      if (idx < paths.count && paths[idx].isGroup)
+        [expanded addIndexes:KKDescendantIndices(idx, paths)];
+    }];
+    NSMutableIndexSet *newSel = [NSMutableIndexSet indexSet];
+    NSMutableDictionary<NSString *, NSString *> *groupIDMap =
+        [NSMutableDictionary dictionary];
+    __block NSUInteger offset = 0;
+    [expanded enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
       NSUInteger src = idx + offset;
       if (src >= paths.count)
         return;
       KKBezierPath *clone =
           [KKBezierPath pathWithData:[paths[src] dataRepresentation]];
+      if (clone.isGroup && clone.groupID) {
+        NSString *newID = [[NSUUID UUID] UUIDString];
+        groupIDMap[clone.groupID] = newID;
+        clone.groupID = newID;
+      }
+      if (clone.parentGroupID && groupIDMap[clone.parentGroupID])
+        clone.parentGroupID = groupIDMap[clone.parentGroupID];
       [paths insertObject:clone atIndex:src + 1];
-      [newSel addIndex:src + 1];
+      if ([sel containsIndex:idx])
+        [newSel addIndex:src + 1];
       offset++;
     }];
     KKSetLayerSelection(_instanceUUID, [newSel copy]);

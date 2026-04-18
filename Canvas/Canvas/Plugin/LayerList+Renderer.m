@@ -137,9 +137,8 @@ static NSMenu *buildContextMenu(NSUInteger index, BOOL isGroup,
                              @"rectangle.portrait.and.arrow.right", target,
                              @selector(removeFromGroup:), index)];
 
-  if (!isGroup)
-    [menu addItem:KKMenuItem(@"Duplicate", @"plus.rectangle.on.rectangle",
-                             target, @selector(duplicateRow:), index)];
+  [menu addItem:KKMenuItem(@"Duplicate", @"plus.rectangle.on.rectangle", target,
+                           @selector(duplicateRow:), index)];
 
   [menu addItem:[NSMenuItem separatorItem]];
 
