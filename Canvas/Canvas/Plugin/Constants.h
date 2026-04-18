@@ -58,11 +58,11 @@ static const UInt32 kParamHideOSC = 9001;
 @protocol PROAPIAccessing;
 NSString *_Nullable KKLayerUUIDForAPI(id<PROAPIAccessing> _Nonnull api);
 
-void KKCanvasRefreshLayerList(NSString *_Nonnull uuid, NSUInteger pathCount,
-                              NSArray<KKBezierPath *> *_Nullable paths);
 void KKCanvasUpdateSelection(NSString *_Nonnull uuid, NSIndexSet *indices);
 NSIndexSet *_Nullable KKCanvasConsumePendingSelection(NSString *_Nonnull uuid);
 NSIndexSet *_Nullable KKCanvasCurrentSelection(NSString *_Nonnull uuid);
+void KKCacheCustomStyles(NSString *_Nonnull uuid, KKBezierPath *_Nonnull path);
+void KKApplyCachedStyles(NSString *_Nonnull uuid, KKBezierPath *_Nonnull path);
 
 // OSC part IDs
 static const NSInteger kOSCCanvas = 1;

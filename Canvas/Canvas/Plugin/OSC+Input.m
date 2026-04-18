@@ -4,6 +4,7 @@
  */
 
 #import "OSC_Private.h"
+#import "ObjectParams.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
@@ -199,6 +200,14 @@
     KKBezierPath *newPath = [[KKBezierPath alloc] init];
     newPath.name = [NSString
         stringWithFormat:@"Path %lu", (unsigned long)(self.paths.count + 1)];
+    // Inherit stroke/fill/opacity from current inspector values.
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    KKParamsToPath(paramGetAPI, newPath);
+    NSString *penUUID = KKLayerUUIDForAPI(self.apiManager);
+    if (penUUID)
+      KKApplyCachedStyles(penUUID, newPath);
+    newPath.closed = NO;
     [self.paths insertObject:newPath atIndex:0];
     self.activePathIndex = 0;
     active = newPath;
@@ -219,6 +228,13 @@
     KKBezierPath *newPath = [[KKBezierPath alloc] init];
     newPath.name = [NSString
         stringWithFormat:@"Path %lu", (unsigned long)(self.paths.count + 1)];
+    id<FxParameterRetrievalAPI_v6> penGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    KKParamsToPath(penGetAPI, newPath);
+    NSString *penUUID2 = KKLayerUUIDForAPI(self.apiManager);
+    if (penUUID2)
+      KKApplyCachedStyles(penUUID2, newPath);
+    newPath.closed = NO;
     [self.paths insertObject:newPath atIndex:0];
     self.activePathIndex = 0;
     active = newPath;
@@ -574,10 +590,7 @@
           [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
       KKParamsToPath(paramGetAPI, prev);
       [self writePaths:self.paths];
-      if (!KKIsForceShowEnabled(paramGetAPI)) {
-        KKHideObjectParams(paramSetAPI);
-        KKSaveSelectedIndex(paramSetAPI, -1);
-      }
+      KKSaveSelectedIndex(paramSetAPI, -1);
     }
     [self.selectedPathIndices removeAllIndexes];
     self.activePathIndex = -1;

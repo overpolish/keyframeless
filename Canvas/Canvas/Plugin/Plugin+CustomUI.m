@@ -15,11 +15,6 @@
 #import <objc/runtime.h>
 
 @implementation KKLayerInstanceState
-- (instancetype)init {
-  self = [super init];
-  _listHash = NSUIntegerMax;
-  return self;
-}
 @end
 
 static NSDictionary<NSString *, KKLayerInstanceState *> *sLayerStates;
@@ -45,6 +40,7 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
   KKLayerInstanceState *state = sLayerStates[uuid];
   if (!state) {
     state = [[KKLayerInstanceState alloc] init];
+    state.store = [[KKCanvasStore alloc] initWithUUID:uuid];
     NSMutableDictionary *mut = sLayerStates ? [sLayerStates mutableCopy]
                                             : [NSMutableDictionary dictionary];
     mut[uuid] = state;
@@ -202,7 +198,6 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
 
     KKLayerInstanceState *state = KKLayerStateForUUID(uuid);
     state.container = wrapper;
-    state.listHash = NSUIntegerMax;
 
     // Write back any pending per-object param edits (e.g. user edited
     // params, then switched clips without changing selection).
@@ -224,11 +219,52 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
     // as this method also fires when switching to the inspector panel.
     [actionAPI endAction:self];
 
-    if (str.length > 0) {
-      NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
-      NSArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
-      if (paths.count > 0)
-        KKCanvasRefreshLayerList(uuid, paths.count, paths);
+    // Register store observer — this is the single entry point for all
+    // layer list UI, param sync, style view, and header updates.
+    __weak KKLayerInstanceState *weakState = state;
+    __weak id weakAPI = self.apiManager;
+    [state.store
+        addObserverForChanges:(KKStoreChangePaths | KKStoreChangeSelection |
+                               KKStoreChangeVisibility | KKStoreChangeCollapse |
+                               KKStoreChangeSolo | KKStoreChangeEditing |
+                               KKStoreChangePathProps | KKStoreChangeExpanded)
+                        block:^(KKCanvasStoreSnapshot *snap,
+                                KKStoreChange changes) {
+                          KKLayerInstanceState *s = weakState;
+                          id api = weakAPI;
+                          if (!s || !api)
+                            return;
+                          KKCanvasRefreshLayerListFromSnapshot(snap, s, api);
+                        }];
+
+    // Seed the store so the observer fires on initial setup.
+    // drawOSC will take over as the producer on subsequent frames.
+    {
+      // Seed the store with paths and selection only.
+      // Do NOT read enabled/expanded states from params here — FxPlug
+      // params may not be initialized yet during createViewForParameterID.
+      // The store init has correct defaults (strokeEnabled=YES, rest NO).
+      // drawOSC and header callbacks will set the real values once ready.
+      NSArray<KKBezierPath *> *seedPaths = @[];
+      if (str.length > 0) {
+        NSData *blob = [[NSData alloc] initWithBase64EncodedString:str
+                                                           options:0];
+        seedPaths = [KKBezierPath pathsFromBlob:blob];
+      }
+      NSIndexSet *seedSel = [NSIndexSet indexSet];
+      if (lastIdx >= 0)
+        seedSel = [NSIndexSet indexSetWithIndex:(NSUInteger)lastIdx];
+      KKCanvasStore *initStore = state.store;
+      [initStore performBatch:^{
+        [initStore setPaths:seedPaths];
+        [initStore setSelectedIndices:seedSel];
+        [initStore syncSelectedPathProperties];
+      }];
+      // Apply immediately — don't wait for observer dispatch.
+      // On fresh instances the diff may find no changes (all defaults),
+      // but we still need KKShowObjectParams to run.
+      KKCanvasRefreshLayerListFromSnapshot([initStore snapshot], state,
+                                           self.apiManager);
     }
 
     return wrapper;
@@ -252,16 +288,13 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
     id<FxParameterRetrievalAPI_v6> paramGetAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
 
-    NSInteger selIdx = KKReadSelectedIndex(paramGetAPI);
-    BOOL hasSelection = (selIdx >= 0);
-    header.isInteractive = hasSelection;
-    if (hasSelection) {
+    header.isInteractive = YES;
+    {
       BOOL enabled = YES;
       [paramGetAPI getBoolValue:&enabled
                   fromParameter:kParamStrokeEnabled
                          atTime:currentTime];
       header.isEnabled = enabled;
-
       BOOL expanded = NO;
       [paramGetAPI getBoolValue:&expanded
                   fromParameter:kParamExpandedStroke
@@ -283,39 +316,18 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
       [setAPI setBoolValue:isEnabled
                toParameter:kParamStrokeEnabled
                     atTime:[actAPI currentTime]];
-      id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
-          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-      BOOL expanded = NO;
-      [getAPI getBoolValue:&expanded
-             fromParameter:kParamExpandedStroke
-                    atTime:kCMTimeZero];
-      KKSetStrokeChildrenVisible(setAPI, isEnabled, expanded);
-      if (isEnabled && expanded) {
-        NSString *str = nil;
-        [getAPI getStringParameterValue:&str fromParameter:kParamPathData];
-        NSInteger selIdx = KKReadSelectedIndex(getAPI);
-        if (str.length > 0 && selIdx >= 0) {
-          NSData *blob = [[NSData alloc] initWithBase64EncodedString:str
-                                                             options:0];
-          NSArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
-          if ((NSUInteger)selIdx < paths.count) {
-            KKBezierPath *p = paths[selIdx];
-            KKSetEndWidthVisible(setAPI, !p.closed);
-            KKSetLineCapVisible(setAPI, !p.closed);
-            KKSetMarkersVisible(setAPI, !p.closed);
-            if (!p.closed)
-              KKSetMarkerSizeVisible(setAPI, p.startMarker, p.endMarker);
-            KKSetLineJoinVisible(setAPI, p.count > 2);
-            KKSetStrokeStyleVisible(setAPI, YES);
-            KKSetDashDotParamsForStyle(setAPI, p.strokeStyle);
-          }
-        }
-      }
       [actAPI endAction:strongSelf];
       KKModifySelectedPathProperty(strongSelf.apiManager,
                                    ^(KKBezierPath *path) {
                                      path.strokeEnabled = isEnabled;
                                    });
+      NSString *sUUID = KKLayerUUIDForAPI(strongSelf.apiManager);
+      if (sUUID) {
+        KKCanvasStore *s = KKLayerStateForUUID(sUUID).store;
+        [s performBatch:^{
+          [s setStrokeEnabled:isEnabled];
+        }];
+      }
     };
     header.onExpandedChanged = ^(BOOL isExpanded) {
       __strong typeof(weakSelf) strongSelf = weakSelf;
@@ -326,38 +338,17 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
       [actAPI startAction:strongSelf];
       id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
           apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
-          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
       [setAPI setBoolValue:isExpanded
                toParameter:kParamExpandedStroke
                     atTime:[actAPI currentTime]];
-      BOOL strokeOn = NO;
-      [getAPI getBoolValue:&strokeOn
-             fromParameter:kParamStrokeEnabled
-                    atTime:kCMTimeZero];
-      KKSetStrokeChildrenVisible(setAPI, strokeOn, isExpanded);
-      if (strokeOn && isExpanded) {
-        NSString *str = nil;
-        [getAPI getStringParameterValue:&str fromParameter:kParamPathData];
-        NSInteger selIdx = KKReadSelectedIndex(getAPI);
-        if (str.length > 0 && selIdx >= 0) {
-          NSData *blob = [[NSData alloc] initWithBase64EncodedString:str
-                                                             options:0];
-          NSArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
-          if ((NSUInteger)selIdx < paths.count) {
-            KKBezierPath *p = paths[selIdx];
-            KKSetEndWidthVisible(setAPI, !p.closed);
-            KKSetLineCapVisible(setAPI, !p.closed);
-            KKSetMarkersVisible(setAPI, !p.closed);
-            if (!p.closed)
-              KKSetMarkerSizeVisible(setAPI, p.startMarker, p.endMarker);
-            KKSetLineJoinVisible(setAPI, p.count > 2);
-            KKSetStrokeStyleVisible(setAPI, YES);
-            KKSetDashDotParamsForStyle(setAPI, p.strokeStyle);
-          }
-        }
-      }
       [actAPI endAction:strongSelf];
+      NSString *sUUID2 = KKLayerUUIDForAPI(strongSelf.apiManager);
+      if (sUUID2) {
+        KKCanvasStore *s = KKLayerStateForUUID(sUUID2).store;
+        [s performBatch:^{
+          [s setStrokeExpanded:isExpanded];
+        }];
+      }
     };
 
     NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
@@ -386,16 +377,13 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
     id<FxParameterRetrievalAPI_v6> paramGetAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
 
-    NSInteger selIdx = KKReadSelectedIndex(paramGetAPI);
-    BOOL hasSelection = (selIdx >= 0);
-    header.isInteractive = hasSelection;
-    if (hasSelection) {
+    header.isInteractive = YES;
+    {
       BOOL enabled = NO;
       [paramGetAPI getBoolValue:&enabled
                   fromParameter:kParamFillEnabled
                          atTime:currentTime];
       header.isEnabled = enabled;
-
       BOOL expanded = NO;
       [paramGetAPI getBoolValue:&expanded
                   fromParameter:kParamExpandedFill
@@ -417,22 +405,18 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
       [setAPI setBoolValue:isEnabled
                toParameter:kParamFillEnabled
                     atTime:[actAPI currentTime]];
-      id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
-          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-      BOOL expanded = NO;
-      [getAPI getBoolValue:&expanded
-             fromParameter:kParamExpandedFill
-                    atTime:kCMTimeZero];
-      KKSetFillChildrenVisible(setAPI, isEnabled, expanded);
-      if (isEnabled && expanded) {
-        int fillStyle = KKReadSelectedFillStyle(getAPI);
-        KKSetFillStyleParamsVisible(setAPI, YES, fillStyle);
-      }
       [actAPI endAction:strongSelf];
       KKModifySelectedPathProperty(strongSelf.apiManager,
                                    ^(KKBezierPath *path) {
                                      path.fillEnabled = isEnabled;
                                    });
+      NSString *fUUID = KKLayerUUIDForAPI(strongSelf.apiManager);
+      if (fUUID) {
+        KKCanvasStore *fs = KKLayerStateForUUID(fUUID).store;
+        [fs performBatch:^{
+          [fs setFillEnabled:isEnabled];
+        }];
+      }
     };
     header.onExpandedChanged = ^(BOOL isExpanded) {
       __strong typeof(weakSelf) strongSelf = weakSelf;
@@ -443,21 +427,17 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
       [actAPI startAction:strongSelf];
       id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
           apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
-          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
       [setAPI setBoolValue:isExpanded
                toParameter:kParamExpandedFill
                     atTime:[actAPI currentTime]];
-      BOOL fillOn = NO;
-      [getAPI getBoolValue:&fillOn
-             fromParameter:kParamFillEnabled
-                    atTime:kCMTimeZero];
-      KKSetFillChildrenVisible(setAPI, fillOn, isExpanded);
-      if (fillOn && isExpanded) {
-        int fillStyle = KKReadSelectedFillStyle(getAPI);
-        KKSetFillStyleParamsVisible(setAPI, YES, fillStyle);
-      }
       [actAPI endAction:strongSelf];
+      NSString *fUUID2 = KKLayerUUIDForAPI(strongSelf.apiManager);
+      if (fUUID2) {
+        KKCanvasStore *fs = KKLayerStateForUUID(fUUID2).store;
+        [fs performBatch:^{
+          [fs setFillExpanded:isExpanded];
+        }];
+      }
     };
 
     NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
@@ -485,16 +465,13 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
     id<FxParameterRetrievalAPI_v6> paramGetAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
 
-    NSInteger selIdx = KKReadSelectedIndex(paramGetAPI);
-    BOOL hasSelection = (selIdx >= 0);
-    header.isInteractive = hasSelection;
-    if (hasSelection) {
+    header.isInteractive = YES;
+    {
       BOOL enabled = NO;
       [paramGetAPI getBoolValue:&enabled
                   fromParameter:kParamSketchEnabled
                          atTime:currentTime];
       header.isEnabled = enabled;
-
       BOOL expanded = NO;
       [paramGetAPI getBoolValue:&expanded
                   fromParameter:kParamExpandedSketch
@@ -516,13 +493,6 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
       [setAPI setBoolValue:isEnabled
                toParameter:kParamSketchEnabled
                     atTime:[actAPI currentTime]];
-      id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
-          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-      BOOL expanded = NO;
-      [getAPI getBoolValue:&expanded
-             fromParameter:kParamExpandedSketch
-                    atTime:kCMTimeZero];
-      KKSetSketchChildrenVisible(setAPI, isEnabled, expanded);
       [actAPI endAction:strongSelf];
       KKModifySelectedPathProperty(strongSelf.apiManager,
                                    ^(KKBezierPath *path) {
@@ -530,6 +500,13 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
                                      if (isEnabled && path.sketchSeed == 0)
                                        path.sketchSeed = arc4random();
                                    });
+      NSString *skUUID = KKLayerUUIDForAPI(strongSelf.apiManager);
+      if (skUUID) {
+        KKCanvasStore *sks = KKLayerStateForUUID(skUUID).store;
+        [sks performBatch:^{
+          [sks setSketchEnabled:isEnabled];
+        }];
+      }
     };
     header.onExpandedChanged = ^(BOOL isExpanded) {
       __strong typeof(weakSelf) strongSelf = weakSelf;
@@ -540,17 +517,17 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
       [actAPI startAction:strongSelf];
       id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
           apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
-          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
       [setAPI setBoolValue:isExpanded
                toParameter:kParamExpandedSketch
                     atTime:[actAPI currentTime]];
-      BOOL sketchOn = NO;
-      [getAPI getBoolValue:&sketchOn
-             fromParameter:kParamSketchEnabled
-                    atTime:kCMTimeZero];
-      KKSetSketchChildrenVisible(setAPI, sketchOn, isExpanded);
       [actAPI endAction:strongSelf];
+      NSString *skUUID2 = KKLayerUUIDForAPI(strongSelf.apiManager);
+      if (skUUID2) {
+        KKCanvasStore *sks = KKLayerStateForUUID(skUUID2).store;
+        [sks performBatch:^{
+          [sks setSketchExpanded:isExpanded];
+        }];
+      }
     };
 
     NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
@@ -566,6 +543,7 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
     capView.autoresizingMask = NSViewWidthSizable;
 
     __weak id weakAPI = self.apiManager;
+    NSString *capUUID = KKLayerUUIDForAPI(self.apiManager);
     capView.onSelectionChanged = ^(NSInteger index) {
       id api = weakAPI;
       if (!api)
@@ -573,12 +551,13 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
       KKModifySelectedPathProperty(api, ^(KKBezierPath *p) {
         p.lineCap = (uint8_t)index;
       });
+      if (capUUID)
+        KKLayerStateForUUID(capUUID).cachedLineCap = (uint8_t)index;
     };
 
     // Store weak ref so the layer list refresh can update selectedIndex.
-    NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
-    if (uuid)
-      KKLayerStateForUUID(uuid).capStyleView = capView;
+    if (capUUID)
+      KKLayerStateForUUID(capUUID).capStyleView = capView;
 
     return capView;
   }
@@ -589,6 +568,7 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
     joinView.autoresizingMask = NSViewWidthSizable;
 
     __weak id weakAPI = self.apiManager;
+    NSString *joinUUID = KKLayerUUIDForAPI(self.apiManager);
     joinView.onSelectionChanged = ^(NSInteger index) {
       id api = weakAPI;
       if (!api)
@@ -596,11 +576,12 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
       KKModifySelectedPathProperty(api, ^(KKBezierPath *p) {
         p.lineJoin = (uint8_t)index;
       });
+      if (joinUUID)
+        KKLayerStateForUUID(joinUUID).cachedLineJoin = (uint8_t)index;
     };
 
-    NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
-    if (uuid)
-      KKLayerStateForUUID(uuid).joinStyleView = joinView;
+    if (joinUUID)
+      KKLayerStateForUUID(joinUUID).joinStyleView = joinView;
 
     return joinView;
   }
@@ -611,6 +592,7 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
     styleView.autoresizingMask = NSViewWidthSizable;
 
     __weak id weakAPI = self.apiManager;
+    NSString *styleUUID = KKLayerUUIDForAPI(self.apiManager);
     styleView.onSelectionChanged = ^(NSInteger index) {
       id api = weakAPI;
       if (!api)
@@ -621,11 +603,12 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
             [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)],
             (uint8_t)index);
       });
+      if (styleUUID)
+        KKLayerStateForUUID(styleUUID).cachedStrokeStyle = (uint8_t)index;
     };
 
-    NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
-    if (uuid)
-      KKLayerStateForUUID(uuid).strokeStyleView = styleView;
+    if (styleUUID)
+      KKLayerStateForUUID(styleUUID).strokeStyleView = styleView;
 
     return styleView;
   }
@@ -637,6 +620,7 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
     markerView.isStart = YES;
 
     __weak id weakAPI = self.apiManager;
+    NSString *smUUID = KKLayerUUIDForAPI(self.apiManager);
     markerView.onSelectionChanged = ^(NSInteger index) {
       id api = weakAPI;
       if (!api)
@@ -649,11 +633,12 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
                                                : kFxParameterFlag_HIDDEN
                       toParameter:kParamStartMarkerSize];
       });
+      if (smUUID)
+        KKLayerStateForUUID(smUUID).cachedStartMarker = (uint8_t)index;
     };
 
-    NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
-    if (uuid)
-      KKLayerStateForUUID(uuid).startMarkerView = markerView;
+    if (smUUID)
+      KKLayerStateForUUID(smUUID).startMarkerView = markerView;
 
     return markerView;
   }
@@ -665,6 +650,7 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
     markerView.isStart = NO;
 
     __weak id weakAPI = self.apiManager;
+    NSString *emUUID = KKLayerUUIDForAPI(self.apiManager);
     markerView.onSelectionChanged = ^(NSInteger index) {
       id api = weakAPI;
       if (!api)
@@ -677,11 +663,12 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
                                                : kFxParameterFlag_HIDDEN
                       toParameter:kParamEndMarkerSize];
       });
+      if (emUUID)
+        KKLayerStateForUUID(emUUID).cachedEndMarker = (uint8_t)index;
     };
 
-    NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
-    if (uuid)
-      KKLayerStateForUUID(uuid).endMarkerView = markerView;
+    if (emUUID)
+      KKLayerStateForUUID(emUUID).endMarkerView = markerView;
 
     return markerView;
   }
@@ -692,6 +679,7 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
     fillStyleView.autoresizingMask = NSViewWidthSizable;
 
     __weak id weakAPI = self.apiManager;
+    NSString *fsUUID = KKLayerUUIDForAPI(self.apiManager);
     fillStyleView.onSelectionChanged = ^(NSInteger index) {
       id api = weakAPI;
       if (!api)
@@ -706,11 +694,12 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
           [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
       KKSetFillStyleParamsVisible(setAPI, YES, (int)index);
       [actAPI endAction:api];
+      if (fsUUID)
+        KKLayerStateForUUID(fsUUID).cachedFillStyle = (uint8_t)index;
     };
 
-    NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
-    if (uuid)
-      KKLayerStateForUUID(uuid).fillStyleView = fillStyleView;
+    if (fsUUID)
+      KKLayerStateForUUID(fsUUID).fillStyleView = fillStyleView;
 
     return fillStyleView;
   }

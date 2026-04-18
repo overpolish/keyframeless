@@ -84,7 +84,6 @@
   [actionAPI endAction:self];
 
   KKLayerStateForUUID(self.instanceUUID).isEditing = NO;
-  KKLayerStateForUUID(self.instanceUUID).forceRefresh = YES;
 }
 
 - (void)selectRow:(NSButton *)sender {
@@ -146,11 +145,6 @@
     [paramSetAPI setStringParameterValue:str ?: @"" toParameter:kParamPathData];
   }
   [actionAPI endAction:self];
-
-  if (paths) {
-    KKLayerStateForUUID(self.instanceUUID).forceRefresh = YES;
-    KKCanvasRefreshLayerList(self.instanceUUID, paths.count, paths);
-  }
 }
 
 - (void)toggleGroupCollapse:(id)sender {
@@ -184,8 +178,6 @@
         [mut addObject:gid];
       KKLayerStateForUUID(self.instanceUUID).collapsedGroupIDs = [mut copy];
     }
-    KKLayerStateForUUID(self.instanceUUID).forceRefresh = YES;
-    KKCanvasRefreshLayerList(self.instanceUUID, paths.count, paths);
   }
 }
 

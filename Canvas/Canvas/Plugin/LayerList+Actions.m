@@ -40,8 +40,6 @@
                   toParameter:kParamPathData];
   NSIndexSet *sel = KKLayerStateForUUID(_instanceUUID).uiSelection;
   [self _syncObjectParamsForSelection:sel paths:paths paramSetAPI:paramSetAPI];
-  KKLayerStateForUUID(_instanceUUID).forceRefresh = YES;
-  KKCanvasRefreshLayerList(_instanceUUID, paths.count, paths);
   [actionAPI endAction:self];
 }
 
@@ -57,13 +55,6 @@
   [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
   [paramSetAPI setStringParameterValue:str ?: @"" toParameter:kParamPathData];
   [actionAPI endAction:self];
-
-  if (str.length > 0) {
-    NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
-    NSArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
-    KKLayerStateForUUID(_instanceUUID).forceRefresh = YES;
-    KKCanvasRefreshLayerList(_instanceUUID, paths.count, paths);
-  }
 }
 
 - (NSIndexSet *)_ancestorIndicesForIndex:(NSUInteger)idx
@@ -125,36 +116,11 @@
   KKBezierPath *selected = KKSelectedPath(sel, paths ?: @[]);
   if (selected) {
     KKPathToParams(paramSetAPI, selected);
-    {
-      id<FxParameterRetrievalAPI_v6> getAPI =
-          [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-      BOOL strokeExpanded = NO;
-      [getAPI getBoolValue:&strokeExpanded
-             fromParameter:kParamExpandedStroke
-                    atTime:kCMTimeZero];
-      KKSetStrokeChildrenVisible(paramSetAPI, selected.strokeEnabled,
-                                 strokeExpanded);
-      BOOL fillExpanded = NO;
-      [getAPI getBoolValue:&fillExpanded
-             fromParameter:kParamExpandedFill
-                    atTime:kCMTimeZero];
-      KKSetFillChildrenVisible(paramSetAPI, selected.fillEnabled, fillExpanded);
-      BOOL sketchExpanded = NO;
-      [getAPI getBoolValue:&sketchExpanded
-             fromParameter:kParamExpandedSketch
-                    atTime:kCMTimeZero];
-      KKSetSketchChildrenVisible(paramSetAPI, selected.sketchEnabled,
-                                 sketchExpanded);
-    }
+    KKCacheCustomStyles(_instanceUUID, selected);
     KKSaveSelectedIndex(paramSetAPI,
                         (NSInteger)[paths indexOfObjectIdenticalTo:selected]);
   } else {
-    id<FxParameterRetrievalAPI_v6> getAPI =
-        [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    if (!KKIsForceShowEnabled(getAPI)) {
-      KKHideObjectParams(paramSetAPI);
-      KKSaveSelectedIndex(paramSetAPI, -1);
-    }
+    KKSaveSelectedIndex(paramSetAPI, -1);
   }
 }
 
