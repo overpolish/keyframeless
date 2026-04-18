@@ -209,6 +209,11 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   if (syncUUID) {
     KKCanvasStore *store = KKLayerStateForUUID(syncUUID).store;
     [store performBatch:^{
+      if (selPath) {
+        [store setStrokeEnabled:selPath.strokeEnabled];
+        [store setFillEnabled:selPath.fillEnabled];
+        [store setSketchEnabled:selPath.sketchEnabled];
+      }
       [store syncSelectedPathProperties];
     }];
   }
