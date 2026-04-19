@@ -598,10 +598,9 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
         return;
       KKModifySelectedPathProperty(api, ^(KKBezierPath *p) {
         p.strokeStyle = (uint8_t)index;
-        KKSetDashDotParamsForStyle(
-            [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)],
-            (uint8_t)index);
       });
+      if (styleUUID)
+        KKLayerStateForUUID(styleUUID).visHash = 0;
       if (styleUUID)
         KKLayerStateForUUID(styleUUID).cachedStrokeStyle = (uint8_t)index;
     };
@@ -686,15 +685,10 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
       KKModifySelectedPathProperty(api, ^(KKBezierPath *p) {
         p.sketchFillStyle = (uint8_t)index;
       });
-      id<FxCustomParameterActionAPI_v4> actAPI =
-          [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      [actAPI startAction:api];
-      id<FxParameterSettingAPI_v5> setAPI =
-          [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      KKSetFillStyleParamsVisible(setAPI, YES, (int)index);
-      [actAPI endAction:api];
-      if (fsUUID)
+      if (fsUUID) {
         KKLayerStateForUUID(fsUUID).cachedFillStyle = (uint8_t)index;
+        KKLayerStateForUUID(fsUUID).visHash = 0;
+      }
     };
 
     if (fsUUID)
