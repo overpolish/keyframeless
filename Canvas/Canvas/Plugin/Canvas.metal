@@ -119,3 +119,90 @@ fragment float4 imageFragmentShader(ImageRasterizerData in [[stage_in]], texture
     float4 color = tex.sample(s, in.texCoord);
     return float4(color.rgb * color.a, color.a) * *opacity;
 }
+
+// --- JFA (Jump Flooding Algorithm) for image stroke outlines ---
+
+kernel void jfaSeedInit(texture2d<float, access::read> src [[texture(0)]],
+                        texture2d<float, access::write> dst [[texture(1)]], uint2 gid [[thread_position_in_grid]]) {
+    uint w = src.get_width();
+    uint h = src.get_height();
+    if (gid.x >= w || gid.y >= h)
+        return;
+
+    float a = src.read(gid).a;
+    bool isEdge = false;
+    if (a > 0.5) {
+        float aL = (gid.x > 0) ? src.read(uint2(gid.x - 1, gid.y)).a : 0.0;
+        float aR = (gid.x < w - 1) ? src.read(uint2(gid.x + 1, gid.y)).a : 0.0;
+        float aU = (gid.y > 0) ? src.read(uint2(gid.x, gid.y - 1)).a : 0.0;
+        float aD = (gid.y < h - 1) ? src.read(uint2(gid.x, gid.y + 1)).a : 0.0;
+        isEdge = (aL <= 0.5 || aR <= 0.5 || aU <= 0.5 || aD <= 0.5);
+    }
+    if (isEdge) {
+        dst.write(float4(float(gid.x), float(gid.y), 0, 0), gid);
+    } else {
+        dst.write(float4(-1.0, -1.0, 0, 0), gid);
+    }
+}
+
+kernel void jfaFloodPass(texture2d<float, access::read> src [[texture(0)]],
+                         texture2d<float, access::write> dst [[texture(1)]], constant int &stepSize [[buffer(0)]],
+                         uint2 gid [[thread_position_in_grid]]) {
+    int w = src.get_width();
+    int h = src.get_height();
+    if (int(gid.x) >= w || int(gid.y) >= h)
+        return;
+
+    float2 bestSeed = src.read(gid).xy;
+    float bestDist = 1e20;
+    if (bestSeed.x >= 0.0) {
+        float2 diff = float2(gid) - bestSeed;
+        bestDist = dot(diff, diff);
+    }
+
+    for (int dy = -1; dy <= 1; dy++) {
+        for (int dx = -1; dx <= 1; dx++) {
+            int2 nb = int2(gid) + int2(dx, dy) * stepSize;
+            if (nb.x < 0 || nb.x >= w || nb.y < 0 || nb.y >= h)
+                continue;
+            float2 seed = src.read(uint2(nb)).xy;
+            if (seed.x < 0.0)
+                continue;
+            float2 diff = float2(gid) - seed;
+            float d = dot(diff, diff);
+            if (d < bestDist) {
+                bestDist = d;
+                bestSeed = seed;
+            }
+        }
+    }
+    dst.write(float4(bestSeed, 0, 0), gid);
+}
+
+kernel void jfaComposite(texture2d<float, access::read> srcTex [[texture(0)]],
+                         texture2d<float, access::read> jfaTex [[texture(1)]],
+                         texture2d<float, access::write> dstTex [[texture(2)]], constant float &radius [[buffer(0)]],
+                         constant float4 &strokeColor [[buffer(1)]], uint2 gid [[thread_position_in_grid]]) {
+    uint w = srcTex.get_width();
+    uint h = srcTex.get_height();
+    if (gid.x >= w || gid.y >= h)
+        return;
+
+    float4 src = srcTex.read(gid);
+    float2 seed = jfaTex.read(gid).xy;
+
+    if (seed.x < 0.0) {
+        dstTex.write(src, gid);
+        return;
+    }
+
+    float2 diff = float2(gid) - seed;
+    float dist = length(diff);
+
+    float outlineAlpha = 1.0 - smoothstep(radius - 1.0, radius, dist);
+    float4 outline = float4(strokeColor.rgb * outlineAlpha, outlineAlpha);
+
+    // Composite: source over outline (both premultiplied)
+    float4 result = src + outline * (1.0 - src.a);
+    dstTex.write(result, gid);
+}

@@ -490,27 +490,28 @@ void KKCanvasRefreshLayerListFromSnapshot(KKCanvasStoreSnapshot *snap,
   }
 
   BOOL selectedIsImage = syncPath.isImage;
-  NSString *imageStatus = selectedIsImage ? @"Not available for images" : nil;
+  NSString *sketchImageStatus =
+      selectedIsImage ? @"Not available for images" : nil;
 
   KKCustomGroupHeaderView *strokeHeader = st.strokeGroupHeader;
   if (strokeHeader) {
-    strokeHeader.isInteractive = !selectedIsImage;
-    strokeHeader.isEnabled = selectedIsImage ? NO : snap.strokeEnabled;
-    strokeHeader.isExpanded = selectedIsImage ? NO : snap.strokeExpanded;
-    strokeHeader.statusText = imageStatus;
+    strokeHeader.isInteractive = YES;
+    strokeHeader.isEnabled = snap.strokeEnabled;
+    strokeHeader.isExpanded = snap.strokeExpanded;
+    strokeHeader.statusText = nil;
   }
   KKCustomGroupHeaderView *fillHeader = st.fillGroupHeader;
   if (fillHeader) {
-    fillHeader.isInteractive = !selectedIsImage;
-    fillHeader.isEnabled = selectedIsImage ? NO : snap.fillEnabled;
-    fillHeader.isExpanded = selectedIsImage ? NO : snap.fillExpanded;
-    fillHeader.statusText = imageStatus;
+    fillHeader.isInteractive = YES;
+    fillHeader.isEnabled = snap.fillEnabled;
+    fillHeader.isExpanded = snap.fillExpanded;
+    fillHeader.statusText = nil;
   }
   KKCustomGroupHeaderView *sketchHeader = st.sketchGroupHeader;
   if (sketchHeader) {
     sketchHeader.isInteractive = !selectedIsImage;
     sketchHeader.isEnabled = selectedIsImage ? NO : snap.sketchEnabled;
     sketchHeader.isExpanded = selectedIsImage ? NO : snap.sketchExpanded;
-    sketchHeader.statusText = imageStatus;
+    sketchHeader.statusText = sketchImageStatus;
   }
 }
