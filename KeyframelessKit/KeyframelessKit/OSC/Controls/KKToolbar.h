@@ -23,8 +23,14 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface KKToolbar : NSObject
 
-/// Tag of the currently active item.
+/// Tag of the currently active item (0 = no highlight).
 @property(nonatomic, assign) NSInteger activeTag;
+
+/// Extra margin from the bottom edge in points (default 8).
+@property(nonatomic, assign) CGFloat bottomMargin;
+
+/// Frame of the toolbar after the last draw (ioSurface coords, Y-down).
+@property(nonatomic, readonly) NSRect toolbarFrame;
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager
                              items:(NSArray<KKToolbarItem *> *)items;
