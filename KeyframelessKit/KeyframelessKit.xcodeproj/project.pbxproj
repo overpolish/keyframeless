@@ -28,6 +28,7 @@
 				KeyframelessKit.h,
 				KKLog.h,
 				Math/KKBezierPath.h,
+				Math/KKPathBoolean.h,
 				Math/KKEasing.h,
 				Math/KKSVGParser.h,
 				Math/KKTiming.h,
