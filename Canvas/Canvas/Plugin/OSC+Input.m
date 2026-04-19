@@ -457,9 +457,56 @@
   if (activePart == -1)
     return;
 
-  // Path combine actions (no-op for now; operations added later).
+  // Path combine actions.
   if (activePart == kOSCPathUnion || activePart == kOSCPathSubtract ||
       activePart == kOSCPathIntersect || activePart == kOSCPathXOR) {
+    self.paths = [self readPaths];
+    if (self.selectedPathIndices.count >= 2) {
+      // Collect selected non-image, non-group paths in layer order.
+      NSMutableArray<KKBezierPath *> *operands = [NSMutableArray array];
+      NSMutableIndexSet *operandIndices = [NSMutableIndexSet indexSet];
+      [self.selectedPathIndices
+          enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+            if (idx < self.paths.count && !self.paths[idx].isImage &&
+                !self.paths[idx].isGroup) {
+              [operands addObject:self.paths[idx]];
+              [operandIndices addIndex:idx];
+            }
+          }];
+
+      if (operands.count >= 2) {
+        KKBooleanOp op;
+        if (activePart == kOSCPathUnion)
+          op = KKBooleanOpUnion;
+        else if (activePart == kOSCPathSubtract)
+          op = KKBooleanOpSubtract;
+        else if (activePart == kOSCPathIntersect)
+          op = KKBooleanOpIntersect;
+        else
+          op = KKBooleanOpXOR;
+
+        KKBezierPath *result = KKPathBooleanApply(operands, op);
+        if (result) {
+          // Replace the operand paths with the result.
+          // Insert at the position of the first operand, remove all operands.
+          NSUInteger insertIdx = operandIndices.firstIndex;
+
+          // Remove in reverse order to preserve indices.
+          [operandIndices
+              enumerateIndexesWithOptions:NSEnumerationReverse
+                               usingBlock:^(NSUInteger idx, BOOL *stop) {
+                                 [self.paths removeObjectAtIndex:idx];
+                               }];
+          [self.paths insertObject:result atIndex:insertIdx];
+          [self writePaths:self.paths];
+
+          [self.selectedPathIndices removeAllIndexes];
+          [self.selectedPathIndices addIndex:insertIdx];
+          self.activePathIndex = (NSInteger)insertIdx;
+          [self syncStrokeParamsToSelection];
+        }
+      }
+    }
     *forceUpdate = YES;
     return;
   }
