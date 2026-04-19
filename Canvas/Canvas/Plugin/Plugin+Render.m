@@ -1271,7 +1271,7 @@ static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
     }
 
     for (KKBezierPath *p in paths) {
-      if (p.isRect && p.count >= 4) {
+      if (p.isRect && !p.isImage && p.count >= 4) {
         simd_float2 pMin = {HUGE_VALF, HUGE_VALF};
         simd_float2 pMax = {-HUGE_VALF, -HUGE_VALF};
         for (NSUInteger i = 0; i < p.count; i++) {
