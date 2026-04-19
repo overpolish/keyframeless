@@ -167,7 +167,7 @@
   if (!urls.count)
     return NO;
   NSSet *supported =
-      [NSSet setWithObjects:@"svg", @"png", @"jpg", @"jpeg", nil];
+      [NSSet setWithObjects:@"svg", @"png", @"jpg", @"jpeg", @"webp", nil];
   for (NSURL *url in urls) {
     if (![supported containsObject:url.pathExtension.lowercaseString])
       return NO;
@@ -357,7 +357,8 @@
         readObjectsForClasses:@[ [NSURL class] ]
                       options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
     NSUInteger insertIdx = (targetIndex >= 0) ? (NSUInteger)targetIndex : 0;
-    NSSet *imageExts = [NSSet setWithObjects:@"png", @"jpg", @"jpeg", nil];
+    NSSet *imageExts =
+        [NSSet setWithObjects:@"png", @"jpg", @"jpeg", @"webp", nil];
     for (NSURL *url in urls) {
       NSString *ext = url.pathExtension.lowercaseString;
       NSString *name = url.lastPathComponent.stringByDeletingPathExtension;
