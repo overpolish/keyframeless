@@ -57,6 +57,53 @@
 }
 
 // ---------------------------------------------------------------------------
+// Image helper — restore original aspect ratio on double-click
+// ---------------------------------------------------------------------------
+
+- (void)restoreImageAspectRatio:(KKBezierPath *)path {
+  if (!path.isImage || path.imageAspect <= 0 || path.count < 4)
+    return;
+
+  float imgAspect = path.imageAspect;
+
+  // Current bounding box in object space.
+  simd_float2 bmin, bmax;
+  [self boundsOfPath:path min:&bmin max:&bmax];
+  float curW = bmax.x - bmin.x;
+  float curH = bmax.y - bmin.y;
+
+  // Keep the larger dimension, adjust the other.
+  // Object space uses non-square units (X / outputWidth, Y / outputHeight),
+  // so convert to pixels, apply aspect, then convert back.
+  float pxW = curW * self.imageWidth;
+  float pxH = curH * self.imageHeight;
+  float newPxW, newPxH;
+  if (pxW >= pxH) {
+    newPxW = pxW;
+    newPxH = pxW / imgAspect;
+  } else {
+    newPxH = pxH;
+    newPxW = pxH * imgAspect;
+  }
+  float newW = newPxW / self.imageWidth;
+  float newH = newPxH / self.imageHeight;
+
+  // Center the new rect around the old center.
+  float cx = (bmin.x + bmax.x) * 0.5f;
+  float cy = (bmin.y + bmax.y) * 0.5f;
+  float x0 = cx - newW * 0.5f;
+  float x1 = cx + newW * 0.5f;
+  float y0 = cy - newH * 0.5f;
+  float y1 = cy + newH * 0.5f;
+
+  // Point order: 0=TL, 1=TR, 2=BR, 3=BL (matching import).
+  [path moveAtIndex:0 to:(simd_float2){x0, y1}];
+  [path moveAtIndex:1 to:(simd_float2){x1, y1}];
+  [path moveAtIndex:2 to:(simd_float2){x1, y0}];
+  [path moveAtIndex:3 to:(simd_float2){x0, y0}];
+}
+
+// ---------------------------------------------------------------------------
 // Selection helper — keeps selectedPathIndices consistent with activePathIndex
 // ---------------------------------------------------------------------------
 
@@ -431,7 +478,22 @@
   // .. kOSCInHandleBase 100000).
   if (activePart >= kOSCResizeHandleBase &&
       activePart < kOSCResizeHandleBase + 8 && active) {
-    [self mouseDownOnResizeHandle:activePart - kOSCResizeHandleBase
+    NSInteger handleIndex = activePart - kOSCResizeHandleBase;
+    BOOL isCorner = (handleIndex % 2 == 0);
+    CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+    if (isCorner && active.isImage && active.imageAspect > 0 &&
+        self.lastClickIndex == activePart &&
+        (now - self.lastClickTime) < 0.35) {
+      [self restoreImageAspectRatio:active];
+      [self selectActivePath];
+      [self writePaths:self.paths];
+      self.lastClickIndex = -1;
+      *forceUpdate = YES;
+      return;
+    }
+    self.lastClickTime = now;
+    self.lastClickIndex = activePart;
+    [self mouseDownOnResizeHandle:handleIndex
                            active:active
                       forceUpdate:forceUpdate];
     return;

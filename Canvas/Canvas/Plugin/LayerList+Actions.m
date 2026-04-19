@@ -444,6 +444,7 @@
   p.isRect = YES;
   p.closed = YES;
   p.imagePath = path;
+  p.imageAspect = (float)imgSize.width / (float)imgSize.height;
   p.name = name;
   p.strokeEnabled = NO;
   p.fillEnabled = NO;

@@ -59,6 +59,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// Only meaningful when isImage == YES.
 @property(nonatomic, copy, nullable) NSString *imagePath;
 
+/// Original image aspect ratio (width / height). Set at import time.
+/// Only meaningful when isImage == YES.
+@property(nonatomic, assign) float imageAspect;
+
 /// Whether this entry is a group (contains no points, acts as a folder).
 @property(nonatomic, assign) BOOL isGroup;
 
