@@ -15,15 +15,6 @@ void KKParamSyncApplyFromSnapshot(KKCanvasStoreSnapshot *snap,
     return;
 
   BOOL forceShow = snap.forceShow;
-
-  // All visibility inputs come from the snapshot — no FxPlug param reads.
-  BOOL strokeExpanded = snap.strokeExpanded;
-  BOOL fillExpanded = snap.fillExpanded;
-  BOOL sketchExpanded = snap.sketchExpanded;
-  BOOL strokeEnabled = snap.strokeEnabled;
-  BOOL fillEnabled = snap.fillEnabled;
-  BOOL sketchEnabled = snap.sketchEnabled;
-
   BOOL isImage = selectedPath.isImage;
   BOOL hasPath = (selectedPath != nil && !isImage);
   BOOL isOpen = hasPath && !selectedPath.closed;
@@ -34,24 +25,18 @@ void KKParamSyncApplyFromSnapshot(KKCanvasStoreSnapshot *snap,
   int8_t endMarker = (hasPath && isOpen) ? (int8_t)selectedPath.endMarker : -1;
   int fillStyle = hasPath ? (int)selectedPath.sketchFillStyle : 0;
 
-  // Compute visibility hash.
-  NSUInteger vh = 1;
-  vh = vh * 31 + isImage;
-  vh = vh * 31 + hasPath;
-  vh = vh * 31 + isOpen;
-  vh = vh * 31 + hasJoins;
-  vh = vh * 31 + strokeEnabled;
-  vh = vh * 31 + strokeExpanded;
-  vh = vh * 31 + fillEnabled;
-  vh = vh * 31 + fillExpanded;
-  vh = vh * 31 + sketchEnabled;
-  vh = vh * 31 + sketchExpanded;
-  vh = vh * 31 + (NSUInteger)(strokeStyle + 1);
-  vh = vh * 31 + (NSUInteger)(startMarker + 2);
-  vh = vh * 31 + (NSUInteger)(endMarker + 2);
-  vh = vh * 31 + (NSUInteger)(fillStyle + 1);
-  vh = vh * 31 + forceShow;
+  BOOL strokeOpen =
+      (snap.strokeEnabled || forceShow) && (snap.strokeExpanded || forceShow);
+  BOOL fillOpen =
+      (snap.fillEnabled || forceShow) && (snap.fillExpanded || forceShow);
+  BOOL sketchOpen =
+      (snap.sketchEnabled || forceShow) && (snap.sketchExpanded || forceShow);
 
+  KKVisCondition active = KKBuildVisConditions(
+      isImage, isOpen, hasJoins, strokeOpen, fillOpen, sketchOpen, strokeStyle,
+      startMarker, endMarker, fillStyle);
+
+  NSUInteger vh = (NSUInteger)active * 31 + forceShow;
   if (vh == st.visHash)
     return;
   st.visHash = vh;
@@ -62,67 +47,7 @@ void KKParamSyncApplyFromSnapshot(KKCanvasStoreSnapshot *snap,
   id<FxParameterSettingAPI_v5> setAPI =
       [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
 
-  if (isImage) {
-    KKHideObjectParams(setAPI);
-    [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                  toParameter:kParamOpacity];
-    // Images support stroke (width + color) and fill (color only).
-    BOOL strokeOpen =
-        (strokeEnabled || forceShow) && (strokeExpanded || forceShow);
-    if (strokeOpen) {
-      [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                    toParameter:kParamStrokeWidth];
-      [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                    toParameter:kParamStrokeColor];
-    }
-    BOOL fillOpen = (fillEnabled || forceShow) && (fillExpanded || forceShow);
-    if (fillOpen) {
-      [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                    toParameter:kParamFillColor];
-    }
-    [actAPI endAction:api];
-    return;
-  }
-
-  KKShowObjectParams(setAPI);
-
-  BOOL strokeOpen =
-      (strokeEnabled || forceShow) && (strokeExpanded || forceShow);
-  KKSetStrokeChildrenVisible(setAPI, strokeEnabled || forceShow,
-                             strokeExpanded || forceShow);
-  if (strokeOpen) {
-    KKSetEndWidthVisible(setAPI, isOpen || forceShow);
-    KKSetLineCapVisible(setAPI, isOpen || forceShow);
-    KKSetMarkersVisible(setAPI, isOpen || forceShow);
-    if ((isOpen || forceShow) && startMarker >= 0)
-      KKSetMarkerSizeVisible(setAPI, (uint8_t)startMarker,
-                             endMarker >= 0 ? (uint8_t)endMarker : 0);
-    KKSetLineJoinVisible(setAPI, hasJoins || forceShow);
-    KKSetStrokeStyleVisible(setAPI, YES);
-    if (forceShow) {
-      [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                    toParameter:kParamDashLength];
-      [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                    toParameter:kParamDashGap];
-      [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                    toParameter:kParamDotGap];
-    } else {
-      KKSetDashDotParamsForStyle(setAPI, strokeStyle);
-    }
-  }
-
-  BOOL fillOpen = (fillEnabled || forceShow) && (fillExpanded || forceShow);
-  KKSetFillChildrenVisible(setAPI, fillEnabled || forceShow,
-                           fillExpanded || forceShow);
-  if (fillOpen) {
-    if (forceShow)
-      KKSetFillStyleParamsVisible(setAPI, YES, 1);
-    else
-      KKSetFillStyleParamsVisible(setAPI, YES, fillStyle);
-  }
-
-  KKSetSketchChildrenVisible(setAPI, sketchEnabled || forceShow,
-                             sketchExpanded || forceShow);
+  KKApplyParamVisibility(setAPI, active, forceShow);
 
   [actAPI endAction:api];
 }

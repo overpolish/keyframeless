@@ -32,291 +32,119 @@ KKIsForceShowEnabled(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI) {
   return val;
 }
 
-/// Show/hide the stroke group header.
-static inline void
-KKSetStrokeGroupVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
-                        BOOL visible) {
-  FxParameterFlags flags =
-      visible ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE |
-                 kFxParameterFlag_USE_FULL_VIEW_WIDTH)
-              : kFxParameterFlag_HIDDEN;
-  [paramSetAPI setParameterFlags:flags toParameter:kParamGroupStroke];
+// --- Parameter visibility matrix ---
+// Each parameter declares the conditions required for it to be visible.
+// A single loop evaluates all of them — no scattered if/else chains.
+
+typedef NS_OPTIONS(uint32_t, KKVisCondition) {
+  KKVisAlways = 0,
+  KKVisStrokeOpen = 1 << 0,    // stroke enabled + expanded
+  KKVisFillOpen = 1 << 1,      // fill enabled + expanded
+  KKVisSketchOpen = 1 << 2,    // sketch enabled + expanded
+  KKVisOpenPath = 1 << 3,      // path is open (not closed)
+  KKVisHasJoins = 1 << 4,      // path has >2 points
+  KKVisNotImage = 1 << 5,      // not an image layer
+  KKVisDashed = 1 << 6,        // strokeStyle == 1
+  KKVisDotted = 1 << 7,        // strokeStyle == 2
+  KKVisStartMarker = 1 << 8,   // startMarker != 0
+  KKVisEndMarker = 1 << 9,     // endMarker != 0
+  KKVisFillHasStyle = 1 << 10, // fillStyle > 0
+};
+
+typedef struct {
+  UInt32 paramID;
+  KKVisCondition required;
+  FxParameterFlags visibleFlags;
+} KKParamVisRule;
+
+// clang-format off
+static const KKParamVisRule kParamVisibility[] = {
+  // Param                    Required conditions                                          Flags when visible
+  // ─── Always ───
+  { kParamOpacity,            KKVisAlways,                                                 kFxParameterFlag_DEFAULT },
+  { kParamClosedPath,         KKVisNotImage,                                               kFxParameterFlag_NOT_ANIMATABLE },
+  // ─── Stroke group children ───
+  { kParamStrokeWidth,        KKVisStrokeOpen,                                             kFxParameterFlag_DEFAULT },
+  { kParamStrokeColor,        KKVisStrokeOpen,                                             kFxParameterFlag_DEFAULT },
+  { kParamEndWidth,           KKVisStrokeOpen | KKVisOpenPath,                             kFxParameterFlag_DEFAULT },
+  { kParamLineCap,            KKVisStrokeOpen | KKVisOpenPath,                             kFxParameterFlag_CUSTOM_UI },
+  { kParamLineJoin,           KKVisStrokeOpen | KKVisHasJoins,                             kFxParameterFlag_CUSTOM_UI },
+  { kParamStrokeStyle,        KKVisStrokeOpen | KKVisNotImage,                             kFxParameterFlag_CUSTOM_UI },
+  { kParamDashLength,         KKVisStrokeOpen | KKVisNotImage | KKVisDashed,               kFxParameterFlag_DEFAULT },
+  { kParamDashGap,            KKVisStrokeOpen | KKVisNotImage | KKVisDashed,               kFxParameterFlag_DEFAULT },
+  { kParamDotGap,             KKVisStrokeOpen | KKVisNotImage | KKVisDotted,               kFxParameterFlag_DEFAULT },
+  { kParamStartMarker,        KKVisStrokeOpen | KKVisOpenPath,                             kFxParameterFlag_CUSTOM_UI },
+  { kParamEndMarker,          KKVisStrokeOpen | KKVisOpenPath,                             kFxParameterFlag_CUSTOM_UI },
+  { kParamStartMarkerSize,    KKVisStrokeOpen | KKVisOpenPath | KKVisStartMarker,          kFxParameterFlag_DEFAULT },
+  { kParamEndMarkerSize,      KKVisStrokeOpen | KKVisOpenPath | KKVisEndMarker,            kFxParameterFlag_DEFAULT },
+  // ─── Fill group children ───
+  { kParamFillColor,          KKVisFillOpen,                                               kFxParameterFlag_DEFAULT },
+  { kParamSketchFillStyle,    KKVisFillOpen | KKVisNotImage,                               kFxParameterFlag_CUSTOM_UI },
+  { kParamSketchFillGap,      KKVisFillOpen | KKVisNotImage | KKVisFillHasStyle,           kFxParameterFlag_DEFAULT },
+  { kParamSketchFillAngle,    KKVisFillOpen | KKVisNotImage | KKVisFillHasStyle,           kFxParameterFlag_DEFAULT },
+  { kParamSketchFillWeight,   KKVisFillOpen | KKVisNotImage | KKVisFillHasStyle,           kFxParameterFlag_DEFAULT },
+  // ─── Sketch group children ───
+  { kParamSketchRoughness,    KKVisSketchOpen | KKVisNotImage,                             kFxParameterFlag_DEFAULT },
+  { kParamSketchBowing,       KKVisSketchOpen | KKVisNotImage,                             kFxParameterFlag_DEFAULT },
+  { kParamSketchStrokes,      KKVisSketchOpen | KKVisNotImage,                             kFxParameterFlag_DEFAULT },
+  { kParamSketchSeed,         KKVisSketchOpen | KKVisNotImage,                             kFxParameterFlag_CUSTOM_UI },
+};
+// clang-format on
+
+static const size_t kParamVisibilityCount =
+    sizeof(kParamVisibility) / sizeof(kParamVisibility[0]);
+
+/// Build the active-condition bitmask from the current selection state.
+static inline KKVisCondition
+KKBuildVisConditions(BOOL isImage, BOOL isOpen, BOOL hasJoins, BOOL strokeOpen,
+                     BOOL fillOpen, BOOL sketchOpen, uint8_t strokeStyle,
+                     int8_t startMarker, int8_t endMarker, int fillStyle) {
+  KKVisCondition c = KKVisAlways;
+  if (strokeOpen)
+    c |= KKVisStrokeOpen;
+  if (fillOpen)
+    c |= KKVisFillOpen;
+  if (sketchOpen)
+    c |= KKVisSketchOpen;
+  if (isOpen)
+    c |= KKVisOpenPath;
+  if (hasJoins)
+    c |= KKVisHasJoins;
+  if (!isImage)
+    c |= KKVisNotImage;
+  if (strokeStyle == 1)
+    c |= KKVisDashed;
+  if (strokeStyle == 2)
+    c |= KKVisDotted;
+  if (startMarker > 0)
+    c |= KKVisStartMarker;
+  if (endMarker > 0)
+    c |= KKVisEndMarker;
+  if (fillStyle > 0)
+    c |= KKVisFillHasStyle;
+  return c;
 }
 
-/// Show/hide the stroke group children based on enabled+expanded state.
+/// Evaluate the visibility table and set all parameter flags in one pass.
+/// When forceShow is YES, every parameter is made visible.
 static inline void
-KKSetStrokeChildrenVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
-                           BOOL strokeEnabled, BOOL strokeExpanded) {
-  BOOL show = strokeEnabled && strokeExpanded;
-  FxParameterFlags flags =
-      show ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
-  [paramSetAPI setParameterFlags:flags toParameter:kParamStrokeWidth];
-  [paramSetAPI setParameterFlags:flags toParameter:kParamStrokeColor];
-  if (!show) {
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamEndWidth];
+KKApplyParamVisibility(id<FxParameterSettingAPI_v5> _Nonnull setAPI,
+                       KKVisCondition active, BOOL forceShow) {
+  // Group headers are always visible (interactivity is handled separately).
+  FxParameterFlags groupFlags = kFxParameterFlag_CUSTOM_UI |
+                                kFxParameterFlag_NOT_ANIMATABLE |
+                                kFxParameterFlag_USE_FULL_VIEW_WIDTH;
+  [setAPI setParameterFlags:groupFlags toParameter:kParamGroupStroke];
+  [setAPI setParameterFlags:groupFlags toParameter:kParamGroupFill];
+  [setAPI setParameterFlags:groupFlags toParameter:kParamGroupSketch];
+
+  for (size_t i = 0; i < kParamVisibilityCount; i++) {
+    KKVisCondition req = kParamVisibility[i].required;
+    BOOL visible = forceShow || ((active & req) == req);
+    FxParameterFlags flags =
+        visible ? kParamVisibility[i].visibleFlags : kFxParameterFlag_HIDDEN;
+    [setAPI setParameterFlags:flags toParameter:kParamVisibility[i].paramID];
   }
-  if (!show) {
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamLineCap];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamLineJoin];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamStrokeStyle];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamDashLength];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamDashGap];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamDotGap];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamStartMarker];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamEndMarker];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamStartMarkerSize];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamEndMarkerSize];
-  }
-}
-
-/// Show/hide the fill group header.
-static inline void
-KKSetFillGroupVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
-                      BOOL visible) {
-  FxParameterFlags flags =
-      visible ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE |
-                 kFxParameterFlag_USE_FULL_VIEW_WIDTH)
-              : kFxParameterFlag_HIDDEN;
-  [paramSetAPI setParameterFlags:flags toParameter:kParamGroupFill];
-}
-
-/// Show/hide the fill group children based on enabled+expanded state.
-static inline void
-KKSetFillChildrenVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
-                         BOOL fillEnabled, BOOL fillExpanded) {
-  BOOL show = fillEnabled && fillExpanded;
-  FxParameterFlags flags =
-      show ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
-  [paramSetAPI setParameterFlags:flags toParameter:kParamFillColor];
-  if (!show) {
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamSketchFillStyle];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamSketchFillGap];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamSketchFillAngle];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamSketchFillWeight];
-  }
-}
-
-/// Show/hide the sketch group header.
-static inline void
-KKSetSketchGroupVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
-                        BOOL visible) {
-  FxParameterFlags flags =
-      visible ? (kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_NOT_ANIMATABLE |
-                 kFxParameterFlag_USE_FULL_VIEW_WIDTH)
-              : kFxParameterFlag_HIDDEN;
-  [paramSetAPI setParameterFlags:flags toParameter:kParamGroupSketch];
-}
-
-/// Show/hide the sketch group children based on enabled+expanded state.
-static inline void
-KKSetSketchChildrenVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
-                           BOOL sketchEnabled, BOOL sketchExpanded) {
-  BOOL show = sketchEnabled && sketchExpanded;
-  FxParameterFlags flags =
-      show ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
-  [paramSetAPI setParameterFlags:flags toParameter:kParamSketchRoughness];
-  [paramSetAPI setParameterFlags:flags toParameter:kParamSketchBowing];
-  [paramSetAPI setParameterFlags:flags toParameter:kParamSketchStrokes];
-  FxParameterFlags seedFlags =
-      show ? kFxParameterFlag_CUSTOM_UI : kFxParameterFlag_HIDDEN;
-  [paramSetAPI setParameterFlags:seedFlags toParameter:kParamSketchSeed];
-}
-
-/// Show all per-object param rows (flags only, no values).
-/// Add new per-object properties here.
-static inline void
-KKShowObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
-  KKSetStrokeGroupVisible(paramSetAPI, YES);
-  KKSetFillGroupVisible(paramSetAPI, YES);
-  KKSetSketchGroupVisible(paramSetAPI, YES);
-  [paramSetAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                     toParameter:kParamOpacity];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_NOT_ANIMATABLE
-                     toParameter:kParamClosedPath];
-}
-
-/// Hide all per-object param rows and clear the saved selection.
-/// Add new per-object properties here.
-static inline void
-KKHideObjectParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI) {
-  KKSetStrokeGroupVisible(paramSetAPI, YES);
-  KKSetFillGroupVisible(paramSetAPI, YES);
-  KKSetSketchGroupVisible(paramSetAPI, YES);
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamStrokeWidth];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamEndWidth];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamStrokeColor];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamFillColor];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamOpacity];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamLineCap];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamLineJoin];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamStrokeStyle];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamDashLength];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamDashGap];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamDotGap];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamStartMarker];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamEndMarker];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamStartMarkerSize];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamEndMarkerSize];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamClosedPath];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamSketchRoughness];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamSketchBowing];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamSketchStrokes];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamSketchFillStyle];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamSketchFillGap];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamSketchFillAngle];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamSketchFillWeight];
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamSketchSeed];
-}
-
-/// Show/hide the End Width param row based on whether the path is open.
-static inline void
-KKSetEndWidthVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
-                     BOOL visible) {
-  FxParameterFlags flags =
-      visible ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
-  [paramSetAPI setParameterFlags:flags toParameter:kParamEndWidth];
-}
-
-/// Show/hide the Line Cap param row based on whether the path is open.
-static inline void
-KKSetLineCapVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
-                    BOOL visible) {
-  FxParameterFlags flags =
-      visible ? kFxParameterFlag_CUSTOM_UI : kFxParameterFlag_HIDDEN;
-  [paramSetAPI setParameterFlags:flags toParameter:kParamLineCap];
-}
-
-/// Show/hide the start/end marker param rows (only for open paths).
-/// Also shows/hides the size sliders based on whether the marker is active.
-static inline void
-KKSetMarkersVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
-                    BOOL visible) {
-  FxParameterFlags flags =
-      visible ? kFxParameterFlag_CUSTOM_UI : kFxParameterFlag_HIDDEN;
-  [paramSetAPI setParameterFlags:flags toParameter:kParamStartMarker];
-  [paramSetAPI setParameterFlags:flags toParameter:kParamEndMarker];
-  if (!visible) {
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamStartMarkerSize];
-    [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                       toParameter:kParamEndMarkerSize];
-  }
-}
-
-/// Show/hide marker size sliders based on the marker type.
-static inline void
-KKSetMarkerSizeVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
-                       uint8_t startMarker, uint8_t endMarker) {
-  [paramSetAPI setParameterFlags:(startMarker != 0) ? kFxParameterFlag_DEFAULT
-                                                    : kFxParameterFlag_HIDDEN
-                     toParameter:kParamStartMarkerSize];
-  [paramSetAPI setParameterFlags:(endMarker != 0) ? kFxParameterFlag_DEFAULT
-                                                  : kFxParameterFlag_HIDDEN
-                     toParameter:kParamEndMarkerSize];
-}
-
-/// Show/hide the Line Join param row based on whether the path has >2 points.
-static inline void
-KKSetLineJoinVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
-                     BOOL visible) {
-  FxParameterFlags flags =
-      visible ? kFxParameterFlag_CUSTOM_UI : kFxParameterFlag_HIDDEN;
-  [paramSetAPI setParameterFlags:flags toParameter:kParamLineJoin];
-}
-
-/// Show/hide the Stroke Style param row.
-static inline void
-KKSetStrokeStyleVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
-                        BOOL visible) {
-  FxParameterFlags flags =
-      visible ? kFxParameterFlag_CUSTOM_UI : kFxParameterFlag_HIDDEN;
-  [paramSetAPI setParameterFlags:flags toParameter:kParamStrokeStyle];
-}
-
-/// Show/hide the dash/dot sub-params based on the current stroke style.
-/// 0=solid (hide all), 1=dashed (show length+gap), 2=dotted (show gap only).
-static inline void
-KKSetDashDotParamsForStyle(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
-                           uint8_t strokeStyle) {
-  BOOL showDash = (strokeStyle == 1);
-  BOOL showDot = (strokeStyle == 2);
-  [paramSetAPI setParameterFlags:showDash ? kFxParameterFlag_DEFAULT
-                                          : kFxParameterFlag_HIDDEN
-                     toParameter:kParamDashLength];
-  [paramSetAPI setParameterFlags:showDash ? kFxParameterFlag_DEFAULT
-                                          : kFxParameterFlag_HIDDEN
-                     toParameter:kParamDashGap];
-  [paramSetAPI setParameterFlags:showDot ? kFxParameterFlag_DEFAULT
-                                         : kFxParameterFlag_HIDDEN
-                     toParameter:kParamDotGap];
-}
-
-/// Show/hide the sketch roughness/bowing sliders based on sketch enabled state.
-static inline void
-KKSetSketchParamsVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
-                         BOOL visible) {
-  FxParameterFlags flags =
-      visible ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
-  [paramSetAPI setParameterFlags:flags toParameter:kParamSketchRoughness];
-  [paramSetAPI setParameterFlags:flags toParameter:kParamSketchBowing];
-  [paramSetAPI setParameterFlags:flags toParameter:kParamSketchStrokes];
-  FxParameterFlags seedFlags =
-      visible ? kFxParameterFlag_CUSTOM_UI : kFxParameterFlag_HIDDEN;
-  [paramSetAPI setParameterFlags:seedFlags toParameter:kParamSketchSeed];
-}
-
-/// Show/hide fill style and sub-params based on whether fill is enabled.
-static inline void
-KKSetFillStyleParamsVisible(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
-                            BOOL fillEnabled, int fillStyle) {
-  FxParameterFlags styleFlags =
-      fillEnabled ? kFxParameterFlag_CUSTOM_UI : kFxParameterFlag_HIDDEN;
-  [paramSetAPI setParameterFlags:styleFlags toParameter:kParamSketchFillStyle];
-  FxParameterFlags subFlags = (fillEnabled && fillStyle > 0)
-                                  ? kFxParameterFlag_DEFAULT
-                                  : kFxParameterFlag_HIDDEN;
-  [paramSetAPI setParameterFlags:subFlags toParameter:kParamSketchFillGap];
-  [paramSetAPI setParameterFlags:subFlags toParameter:kParamSketchFillAngle];
-  [paramSetAPI setParameterFlags:subFlags toParameter:kParamSketchFillWeight];
 }
 
 /// Save the index of the currently-selected path so it survives clip switches.

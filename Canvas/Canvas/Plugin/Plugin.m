@@ -37,42 +37,10 @@
 - (BOOL)parameterChanged:(UInt32)parameterID
                   atTime:(CMTime)time
                    error:(NSError **)error {
-  if (parameterID == kParamClosedPath) {
-    id<FxParameterRetrievalAPI_v6> getAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    id<FxParameterSettingAPI_v5> setAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    BOOL closed = YES;
-    [getAPI getBoolValue:&closed
-           fromParameter:kParamClosedPath
-                  atTime:kCMTimeZero];
-    BOOL strokeOn = NO, strokeExp = NO;
-    [getAPI getBoolValue:&strokeOn
-           fromParameter:kParamStrokeEnabled
-                  atTime:kCMTimeZero];
-    [getAPI getBoolValue:&strokeExp
-           fromParameter:kParamExpandedStroke
-                  atTime:kCMTimeZero];
-    KKSetEndWidthVisible(setAPI, !closed && strokeOn && strokeExp);
-    KKSetLineCapVisible(setAPI, !closed && strokeOn && strokeExp);
-  }
-
-  if (parameterID == kParamSketchFillStyle) {
-    id<FxParameterRetrievalAPI_v6> getAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    id<FxParameterSettingAPI_v5> setAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    BOOL fillOn = NO, fillExp = NO;
-    [getAPI getBoolValue:&fillOn
-           fromParameter:kParamFillEnabled
-                  atTime:kCMTimeZero];
-    [getAPI getBoolValue:&fillExp
-           fromParameter:kParamExpandedFill
-                  atTime:kCMTimeZero];
-    if (fillOn && fillExp) {
-      int fillStyle = KKReadSelectedFillStyle(getAPI);
-      KKSetFillStyleParamsVisible(setAPI, YES, fillStyle);
-    }
+  if (parameterID == kParamClosedPath || parameterID == kParamSketchFillStyle) {
+    NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+    if (uuid)
+      KKLayerStateForUUID(uuid).visHash = 0;
   }
 
   if (parameterID == kParamForceShow) {
