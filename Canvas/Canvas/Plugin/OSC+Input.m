@@ -186,6 +186,14 @@
   self.dragIsOutHandle = NO;
   [self selectActivePath];
 
+  // Persist the selected index so the undo detector in drawOSC doesn't
+  // reset activePathIndex between mouseDown and the first mouseDrag.
+  {
+    id<FxParameterSettingAPI_v5> setAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    KKSaveSelectedIndex(setAPI, self.activePathIndex);
+  }
+
   KKBezierPoint dragPt = [active pointAtIndex:idx];
   self.dragOrigin = (simd_float2){dragPt.x, dragPt.y};
   self.dragAnchor = self.dragOrigin;
@@ -208,6 +216,11 @@
   }
   self.dragIsNewPoint = NO;
   [self selectActivePath];
+  {
+    id<FxParameterSettingAPI_v5> setAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    KKSaveSelectedIndex(setAPI, self.activePathIndex);
+  }
   *forceUpdate = YES;
 }
 
