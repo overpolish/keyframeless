@@ -245,6 +245,11 @@
   [active insertAtIndex:active.count position:objPos];
   [self selectActivePath];
   [self writePaths:self.paths];
+  {
+    id<FxParameterSettingAPI_v5> setAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    KKSaveSelectedIndex(setAPI, self.activePathIndex);
+  }
 
   self.dragIndex = (NSInteger)active.count - 1;
   self.dragIsNewPoint = YES;
