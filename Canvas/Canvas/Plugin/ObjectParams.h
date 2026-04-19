@@ -79,10 +79,10 @@ static const KKParamVisRule kParamVisibility[] = {
   { kParamEndMarkerSize,      KKVisStrokeOpen | KKVisOpenPath | KKVisEndMarker,            kFxParameterFlag_DEFAULT },
   // ─── Fill group children ───
   { kParamFillColor,          KKVisFillOpen,                                               kFxParameterFlag_DEFAULT },
-  { kParamSketchFillStyle,    KKVisFillOpen | KKVisNotImage,                               kFxParameterFlag_CUSTOM_UI },
-  { kParamSketchFillGap,      KKVisFillOpen | KKVisNotImage | KKVisFillHasStyle,           kFxParameterFlag_DEFAULT },
-  { kParamSketchFillAngle,    KKVisFillOpen | KKVisNotImage | KKVisFillHasStyle,           kFxParameterFlag_DEFAULT },
-  { kParamSketchFillWeight,   KKVisFillOpen | KKVisNotImage | KKVisFillHasStyle,           kFxParameterFlag_DEFAULT },
+  { kParamSketchFillStyle,    KKVisFillOpen,                                               kFxParameterFlag_CUSTOM_UI },
+  { kParamSketchFillGap,      KKVisFillOpen | KKVisFillHasStyle,                           kFxParameterFlag_DEFAULT },
+  { kParamSketchFillAngle,    KKVisFillOpen | KKVisFillHasStyle,                           kFxParameterFlag_DEFAULT },
+  { kParamSketchFillWeight,   KKVisFillOpen | KKVisFillHasStyle,                           kFxParameterFlag_DEFAULT },
   // ─── Sketch group children ───
   { kParamSketchRoughness,    KKVisSketchOpen | KKVisNotImage,                             kFxParameterFlag_DEFAULT },
   { kParamSketchBowing,       KKVisSketchOpen | KKVisNotImage,                             kFxParameterFlag_DEFAULT },

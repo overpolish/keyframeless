@@ -23,7 +23,7 @@ void KKParamSyncApplyFromSnapshot(KKCanvasStoreSnapshot *snap,
   int8_t startMarker =
       (hasPath && isOpen) ? (int8_t)selectedPath.startMarker : -1;
   int8_t endMarker = (hasPath && isOpen) ? (int8_t)selectedPath.endMarker : -1;
-  int fillStyle = hasPath ? (int)selectedPath.sketchFillStyle : 0;
+  int fillStyle = selectedPath ? (int)selectedPath.sketchFillStyle : 0;
 
   BOOL strokeOpen =
       (snap.strokeEnabled || forceShow) && (snap.strokeExpanded || forceShow);
