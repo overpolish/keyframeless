@@ -51,6 +51,7 @@ static const UInt32 kParamExpandedFill = 133;
 static const UInt32 kParamGroupSketch = 134;
 static const UInt32 kParamExpandedSketch = 135;
 static const UInt32 kParamEndWidth = 136;
+static const UInt32 kParamFillTint = 137;
 
 static const UInt32 kParamForceShow = 9000;
 static const UInt32 kParamHideOSC = 9001;

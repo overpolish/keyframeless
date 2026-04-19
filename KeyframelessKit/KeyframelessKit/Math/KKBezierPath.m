@@ -227,6 +227,10 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
           memcpy(&path->_imageAspect, bytes + hdr, sizeof(float));
           hdr += sizeof(float);
         }
+        if (ver >= 15 && data.length >= hdr + sizeof(float)) {
+          memcpy(&path->_fillTint, bytes + hdr, sizeof(float));
+          hdr += sizeof(float);
+        }
       }
     }
   }
@@ -298,7 +302,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   // v11: + endWidth (1 float).
   // v12: + contour starts (2-byte count + N × uint32 indices).
   uint8_t propMarker = 0xAA;
-  uint8_t propVersion = 14;
+  uint8_t propVersion = 15;
   [data appendBytes:&propMarker length:1];
   [data appendBytes:&propVersion length:1];
   float strokeData[4] = {_strokeWidth, _strokeR, _strokeG, _strokeB};
@@ -350,6 +354,8 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   // v14: imageAspect
   float aspect = _imageAspect;
   [data appendBytes:&aspect length:sizeof(float)];
+  // v15: fillTint
+  [data appendBytes:&_fillTint length:sizeof(float)];
   return data;
 }
 
@@ -417,6 +423,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     _fillR = 1.0f;
     _fillG = 1.0f;
     _fillB = 1.0f;
+    _fillTint = 1.0f;
     _dashLength = 20.0f;
     _dashGap = 10.0f;
     _dotGap = 10.0f;
