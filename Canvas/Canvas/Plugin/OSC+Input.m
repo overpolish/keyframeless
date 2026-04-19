@@ -457,6 +457,13 @@
   if (activePart == -1)
     return;
 
+  // Path combine actions (no-op for now; operations added later).
+  if (activePart == kOSCPathUnion || activePart == kOSCPathSubtract ||
+      activePart == kOSCPathIntersect || activePart == kOSCPathXOR) {
+    *forceUpdate = YES;
+    return;
+  }
+
   // --- Read paths from storage ---
   self.paths = [self readPaths];
   KKBezierPath *active = [self activePath];

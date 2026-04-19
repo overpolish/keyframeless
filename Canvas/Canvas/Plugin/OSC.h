@@ -46,6 +46,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, strong) NSCursor *editPointsCursor;
 @property(nonatomic, strong) NSCursor *penDeleteCursor;
 @property(nonatomic, strong) KKToolbar *toolbar;
+@property(nonatomic, strong) KKToolbar *pathToolbar;
 @property(nonatomic, strong) KKOSCLabel *sizeLabel;
 @property(nonatomic, strong) KKRectBorderOSC *borderOSC;
 @property(nonatomic, strong) NSArray<KKPointOSC *> *resizeHandleOSCs;

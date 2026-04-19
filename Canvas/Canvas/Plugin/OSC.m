@@ -72,6 +72,25 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
                      ]];
     self.toolbar.activeTag = kOSCToolbarCursor;
 
+    self.pathToolbar = [[KKToolbar alloc]
+        initWithAPIManager:apiManager
+                     items:@[
+                       [KKToolbarItem itemWithIcon:@"square.on.square"
+                                               tag:kOSCPathUnion
+                                     shortcutLabel:@"Union"],
+                       [KKToolbarItem itemWithIcon:@"minus.square"
+                                               tag:kOSCPathSubtract
+                                     shortcutLabel:@"Diff"],
+                       [KKToolbarItem
+                            itemWithIcon:@"square.on.square.intersection.dashed"
+                                     tag:kOSCPathIntersect
+                           shortcutLabel:@"Intersect"],
+                       [KKToolbarItem itemWithIcon:@"xmark.square"
+                                               tag:kOSCPathXOR
+                                     shortcutLabel:@"XOR"],
+                     ]];
+    self.pathToolbar.activeTag = 0;
+
     self.sizeLabel = [[KKOSCLabel alloc] initWithAPIManager:apiManager];
     self.sizeLabel.monospaced = YES;
 

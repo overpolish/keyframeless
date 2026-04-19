@@ -7,6 +7,8 @@
 #import "OSC_Private.h"
 #import "ObjectParams.h"
 
+static const CGFloat kPathToolbarGap = 6.0;
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 
@@ -415,6 +417,30 @@
   [self.toolbar drawWithDestinationImage:destinationImage];
 
   self.paths = [self readPaths];
+
+  // Show path combine toolbar when 2+ non-image paths are selected in cursor
+  // mode.
+  {
+    BOOL showPathToolbar = NO;
+    if (self.toolbar.activeTag == kOSCToolbarCursor &&
+        self.selectedPathIndices.count >= 2) {
+      __block NSUInteger pathCount = 0;
+      [self.selectedPathIndices
+          enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+            if (idx < self.paths.count && !self.paths[idx].isImage &&
+                !self.paths[idx].isGroup) {
+              pathCount++;
+            }
+          }];
+      showPathToolbar = (pathCount >= 2);
+    }
+    if (showPathToolbar) {
+      NSRect mainFrame = self.toolbar.toolbarFrame;
+      self.pathToolbar.bottomMargin =
+          mainFrame.size.height + kPathToolbarGap + 8.0;
+      [self.pathToolbar drawWithDestinationImage:destinationImage];
+    }
+  }
 
   NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
   if (uuid) {

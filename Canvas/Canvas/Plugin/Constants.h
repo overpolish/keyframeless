@@ -86,4 +86,10 @@ static const NSInteger kOSCInHandleBase = 100000;    // 100000 + index
 static const NSInteger kOSCOutHandleBase = 200000;   // 200000 + index
 static const NSInteger kOSCPathSegmentBase = 300000; // 300000 + segment index
 
+// Path combine toolbar
+static const NSInteger kOSCPathUnion = 30001;
+static const NSInteger kOSCPathSubtract = 30002;
+static const NSInteger kOSCPathIntersect = 30003;
+static const NSInteger kOSCPathXOR = 30004;
+
 NS_ASSUME_NONNULL_END
