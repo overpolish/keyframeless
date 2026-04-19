@@ -64,9 +64,22 @@ void KKParamSyncApplyFromSnapshot(KKCanvasStoreSnapshot *snap,
 
   if (isImage) {
     KKHideObjectParams(setAPI);
-    // Show only opacity for image layers.
     [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
                   toParameter:kParamOpacity];
+    // Images support stroke (width + color) and fill (color only).
+    BOOL strokeOpen =
+        (strokeEnabled || forceShow) && (strokeExpanded || forceShow);
+    if (strokeOpen) {
+      [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
+                    toParameter:kParamStrokeWidth];
+      [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
+                    toParameter:kParamStrokeColor];
+    }
+    BOOL fillOpen = (fillEnabled || forceShow) && (fillExpanded || forceShow);
+    if (fillOpen) {
+      [setAPI setParameterFlags:kFxParameterFlag_DEFAULT
+                    toParameter:kParamFillColor];
+    }
     [actAPI endAction:api];
     return;
   }

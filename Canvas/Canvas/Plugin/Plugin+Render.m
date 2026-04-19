@@ -12,12 +12,18 @@
 #import "SketchFill.h"
 #import "SketchPath.h"
 #import "Tessellation.h"
+#import <CoreImage/CoreImage.h>
 #import <IOSurface/IOSurfaceObjC.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 
 static NSMutableDictionary<NSString *, id<MTLTexture>> *sImageTextureCache;
+static CIContext *sCIContext;
+static NSMutableDictionary<NSString *, id<MTLTexture>> *sProcessedImageCache;
+static id<MTLComputePipelineState> sJFASeedPS;
+static id<MTLComputePipelineState> sJFAFloodPS;
+static id<MTLComputePipelineState> sJFACompositePS;
 
 static id<MTLTexture> getOrLoadImageTexture(NSString *path,
                                             id<MTLDevice> device) {
@@ -68,6 +74,228 @@ static id<MTLTexture> getOrLoadImageTexture(NSString *path,
 
   sImageTextureCache[path] = tex;
   return tex;
+}
+
+static void ensureJFAPipelines(id<MTLDevice> device) {
+  if (sJFASeedPS)
+    return;
+  id<MTLLibrary> lib = [device newDefaultLibrary];
+  NSError *err = nil;
+  sJFASeedPS = [device newComputePipelineStateWithFunction:
+                           [lib newFunctionWithName:@"jfaSeedInit"]
+                                                     error:&err];
+  sJFAFloodPS = [device newComputePipelineStateWithFunction:
+                            [lib newFunctionWithName:@"jfaFloodPass"]
+                                                      error:&err];
+  sJFACompositePS = [device newComputePipelineStateWithFunction:
+                                [lib newFunctionWithName:@"jfaComposite"]
+                                                          error:&err];
+}
+
+/// Apply fill via Core Image (colorize non-transparent pixels).
+static id<MTLTexture> applyImageFill(id<MTLTexture> rawTexture,
+                                     KKBezierPath *path, id<MTLDevice> device,
+                                     id<MTLCommandBuffer> commandBuffer) {
+  if (!sCIContext)
+    sCIContext = [CIContext contextWithMTLDevice:device
+                                         options:@{
+                                           kCIContextCacheIntermediates : @NO
+                                         }];
+
+  CGColorSpaceRef srgb = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+  CIImage *image = [[CIImage alloc]
+      initWithMTLTexture:rawTexture
+                 options:@{kCIImageColorSpace : (__bridge id)srgb}];
+
+  CIColor *fillCI = [CIColor colorWithRed:path.fillR
+                                    green:path.fillG
+                                     blue:path.fillB
+                                    alpha:1.0
+                               colorSpace:srgb];
+  CIFilter *colorGen = [CIFilter filterWithName:@"CIConstantColorGenerator"];
+  [colorGen setValue:fillCI forKey:kCIInputColorKey];
+  CIImage *flatColor =
+      [colorGen.outputImage imageByCroppingToRect:image.extent];
+
+  CIImage *result =
+      [flatColor imageByApplyingFilter:@"CIBlendWithAlphaMask"
+                   withInputParameters:@{
+                     kCIInputBackgroundImageKey : [CIImage emptyImage],
+                     kCIInputMaskImageKey : image
+                   }];
+
+  MTLTextureDescriptor *desc = [MTLTextureDescriptor
+      texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm_sRGB
+                                   width:rawTexture.width
+                                  height:rawTexture.height
+                               mipmapped:NO];
+  desc.usage = MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
+  id<MTLTexture> outTex = [device newTextureWithDescriptor:desc];
+
+  [sCIContext render:result
+        toMTLTexture:outTex
+       commandBuffer:commandBuffer
+              bounds:image.extent
+          colorSpace:srgb];
+  CGColorSpaceRelease(srgb);
+  return outTex;
+}
+
+/// Apply stroke outline via JFA distance field. The returned texture is padded
+/// by strokeWidth on each side; callers use texture dimensions to size the
+/// quad.
+static id<MTLTexture> applyImageStroke(id<MTLTexture> srcTexture,
+                                       KKBezierPath *path, id<MTLDevice> device,
+                                       id<MTLCommandBuffer> commandBuffer) {
+  ensureJFAPipelines(device);
+  if (!sJFASeedPS || !sJFAFloodPS || !sJFACompositePS)
+    return srcTexture;
+
+  float radius = path.strokeWidth;
+  NSUInteger pad = (NSUInteger)ceilf(radius);
+  NSUInteger outW = srcTexture.width + pad * 2;
+  NSUInteger outH = srcTexture.height + pad * 2;
+
+  // Padded source: copy src into center of larger RGBA texture.
+  MTLTextureDescriptor *srcPadDesc = [MTLTextureDescriptor
+      texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm_sRGB
+                                   width:outW
+                                  height:outH
+                               mipmapped:NO];
+  srcPadDesc.usage = MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
+  id<MTLTexture> paddedSrc = [device newTextureWithDescriptor:srcPadDesc];
+
+  // Clear padded texture then blit source into center.
+  {
+    MTLRenderPassDescriptor *clearRPD =
+        [MTLRenderPassDescriptor renderPassDescriptor];
+    clearRPD.colorAttachments[0].texture = paddedSrc;
+    clearRPD.colorAttachments[0].loadAction = MTLLoadActionClear;
+    clearRPD.colorAttachments[0].storeAction = MTLStoreActionStore;
+    clearRPD.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+    id<MTLRenderCommandEncoder> enc =
+        [commandBuffer renderCommandEncoderWithDescriptor:clearRPD];
+    [enc endEncoding];
+  }
+  {
+    id<MTLBlitCommandEncoder> blit = [commandBuffer blitCommandEncoder];
+    [blit copyFromTexture:srcTexture
+              sourceSlice:0
+              sourceLevel:0
+             sourceOrigin:MTLOriginMake(0, 0, 0)
+               sourceSize:MTLSizeMake(srcTexture.width, srcTexture.height, 1)
+                toTexture:paddedSrc
+         destinationSlice:0
+         destinationLevel:0
+        destinationOrigin:MTLOriginMake(pad, pad, 0)];
+    [blit endEncoding];
+  }
+
+  // Two RG16Float textures for JFA ping-pong.
+  MTLTextureDescriptor *jfaDesc = [MTLTextureDescriptor
+      texture2DDescriptorWithPixelFormat:MTLPixelFormatRG16Float
+                                   width:outW
+                                  height:outH
+                               mipmapped:NO];
+  jfaDesc.usage = MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
+  id<MTLTexture> jfaA = [device newTextureWithDescriptor:jfaDesc];
+  id<MTLTexture> jfaB = [device newTextureWithDescriptor:jfaDesc];
+
+  MTLSize threadGroupSize = MTLSizeMake(16, 16, 1);
+  MTLSize gridSize = MTLSizeMake(outW, outH, 1);
+
+  // Seed pass.
+  {
+    id<MTLComputeCommandEncoder> enc = [commandBuffer computeCommandEncoder];
+    [enc setComputePipelineState:sJFASeedPS];
+    [enc setTexture:paddedSrc atIndex:0];
+    [enc setTexture:jfaA atIndex:1];
+    [enc dispatchThreads:gridSize threadsPerThreadgroup:threadGroupSize];
+    [enc endEncoding];
+  }
+
+  // Flood passes: step sizes from largest power-of-2 >= radius down to 1,
+  // plus a +1 cleanup pass.
+  int maxStep = 1;
+  while (maxStep < (int)pad)
+    maxStep *= 2;
+  id<MTLTexture> readTex = jfaA;
+  id<MTLTexture> writeTex = jfaB;
+  for (int step = maxStep; step >= 1; step /= 2) {
+    id<MTLComputeCommandEncoder> enc = [commandBuffer computeCommandEncoder];
+    [enc setComputePipelineState:sJFAFloodPS];
+    [enc setTexture:readTex atIndex:0];
+    [enc setTexture:writeTex atIndex:1];
+    [enc setBytes:&step length:sizeof(step) atIndex:0];
+    [enc dispatchThreads:gridSize threadsPerThreadgroup:threadGroupSize];
+    [enc endEncoding];
+    id<MTLTexture> tmp = readTex;
+    readTex = writeTex;
+    writeTex = tmp;
+  }
+  // +1 cleanup pass.
+  {
+    int step = 1;
+    id<MTLComputeCommandEncoder> enc = [commandBuffer computeCommandEncoder];
+    [enc setComputePipelineState:sJFAFloodPS];
+    [enc setTexture:readTex atIndex:0];
+    [enc setTexture:writeTex atIndex:1];
+    [enc setBytes:&step length:sizeof(step) atIndex:0];
+    [enc dispatchThreads:gridSize threadsPerThreadgroup:threadGroupSize];
+    [enc endEncoding];
+    readTex = writeTex;
+  }
+
+  // Composite pass: stroke outline behind source image.
+  id<MTLTexture> outTex = [device newTextureWithDescriptor:srcPadDesc];
+  {
+    simd_float4 strokeColor = {path.strokeR, path.strokeG, path.strokeB, 1.0f};
+    id<MTLComputeCommandEncoder> enc = [commandBuffer computeCommandEncoder];
+    [enc setComputePipelineState:sJFACompositePS];
+    [enc setTexture:paddedSrc atIndex:0];
+    [enc setTexture:readTex atIndex:1];
+    [enc setTexture:outTex atIndex:2];
+    [enc setBytes:&radius length:sizeof(radius) atIndex:0];
+    [enc setBytes:&strokeColor length:sizeof(strokeColor) atIndex:1];
+    [enc dispatchThreads:gridSize threadsPerThreadgroup:threadGroupSize];
+    [enc endEncoding];
+  }
+
+  return outTex;
+}
+
+/// Process a raw image texture to apply fill and/or stroke effects.
+/// Returns the raw texture unchanged when no effects are enabled.
+/// The result texture may be larger than the input when stroke is active;
+/// callers should use the returned texture dimensions to size the quad.
+static id<MTLTexture>
+processImageWithEffects(id<MTLTexture> rawTexture, KKBezierPath *path,
+                        id<MTLDevice> device,
+                        id<MTLCommandBuffer> commandBuffer) {
+  if (!path.strokeEnabled && !path.fillEnabled)
+    return rawTexture;
+
+  NSString *cacheKey = [NSString
+      stringWithFormat:@"%@_s%d_%.1f_%.2f_%.2f_%.2f_f%d_%.2f_%.2f_%.2f",
+                       path.imagePath, path.strokeEnabled, path.strokeWidth,
+                       path.strokeR, path.strokeG, path.strokeB,
+                       path.fillEnabled, path.fillR, path.fillG, path.fillB];
+  if (!sProcessedImageCache)
+    sProcessedImageCache = [NSMutableDictionary dictionary];
+  id<MTLTexture> cached = sProcessedImageCache[cacheKey];
+  if (cached)
+    return cached;
+
+  id<MTLTexture> result = rawTexture;
+
+  if (path.fillEnabled)
+    result = applyImageFill(result, path, device, commandBuffer);
+
+  if (path.strokeEnabled)
+    result = applyImageStroke(result, path, device, commandBuffer);
+
+  sProcessedImageCache[cacheKey] = result;
+  return result;
 }
 
 static id<MTLRenderPipelineState> getOrCreatePipeline(
@@ -1140,19 +1368,31 @@ static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
         if (path.isImage && path.imagePath && imagePS) {
           id<MTLTexture> imgTex = getOrLoadImageTexture(path.imagePath, device);
           if (imgTex) {
-            // Build a positioned quad from the path's 4 corners.
             KKBezierPoint bl = [path pointAtIndex:0];
             KKBezierPoint br = [path pointAtIndex:1];
             KKBezierPoint tr = [path pointAtIndex:2];
             KKBezierPoint tl = [path pointAtIndex:3];
-            // Convert object-space (0-1, Y=0 bottom) → pixel-space centered.
             float hw = outputWidth / 2.0f;
             float hh = outputHeight / 2.0f;
+
+            id<MTLTexture> drawTex =
+                processImageWithEffects(imgTex, path, device, commandBuffer);
+
+            // Scale quad from its center to match the processed texture size.
+            float scaleX = (float)drawTex.width / (float)imgTex.width;
+            float scaleY = (float)drawTex.height / (float)imgTex.height;
+            float cx = (bl.x + tr.x) * 0.5f;
+            float cy = (bl.y + tr.y) * 0.5f;
+
             CanvasFillVertex quadVerts[4] = {
-                {{bl.x * outputWidth - hw, (1.0f - bl.y) * outputHeight - hh}},
-                {{br.x * outputWidth - hw, (1.0f - br.y) * outputHeight - hh}},
-                {{tl.x * outputWidth - hw, (1.0f - tl.y) * outputHeight - hh}},
-                {{tr.x * outputWidth - hw, (1.0f - tr.y) * outputHeight - hh}},
+                {{(cx + (bl.x - cx) * scaleX) * outputWidth - hw,
+                  (1.0f - (cy + (bl.y - cy) * scaleY)) * outputHeight - hh}},
+                {{(cx + (br.x - cx) * scaleX) * outputWidth - hw,
+                  (1.0f - (cy + (br.y - cy) * scaleY)) * outputHeight - hh}},
+                {{(cx + (tl.x - cx) * scaleX) * outputWidth - hw,
+                  (1.0f - (cy + (tl.y - cy) * scaleY)) * outputHeight - hh}},
+                {{(cx + (tr.x - cx) * scaleX) * outputWidth - hw,
+                  (1.0f - (cy + (tr.y - cy) * scaleY)) * outputHeight - hh}},
             };
 
             float opacity = path.opacity;
@@ -1171,7 +1411,7 @@ static void renderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
             [enc setVertexBytes:&viewportSize
                          length:sizeof(viewportSize)
                         atIndex:1];
-            [enc setFragmentTexture:imgTex atIndex:0];
+            [enc setFragmentTexture:drawTex atIndex:0];
             [enc setFragmentBytes:&opacity length:sizeof(opacity) atIndex:0];
             [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
                     vertexStart:0
