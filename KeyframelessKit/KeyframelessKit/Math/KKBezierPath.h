@@ -182,6 +182,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, assign) float fillG;
 @property(nonatomic, assign) float fillB;
 
+/// Fill tint amount for image layers (0–1, default 1.0).
+/// 0 = original image, 1 = fully colorized by fill color.
+@property(nonatomic, assign) float fillTint;
+
 + (instancetype)pathWithData:(nullable NSData *)data;
 - (NSData *)dataRepresentation;
 

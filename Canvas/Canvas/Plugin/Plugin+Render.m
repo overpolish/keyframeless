@@ -117,12 +117,27 @@ static id<MTLTexture> applyImageFill(id<MTLTexture> rawTexture,
   CIImage *flatColor =
       [colorGen.outputImage imageByCroppingToRect:image.extent];
 
-  CIImage *result =
+  CIImage *tinted =
       [flatColor imageByApplyingFilter:@"CIBlendWithAlphaMask"
                    withInputParameters:@{
                      kCIInputBackgroundImageKey : [CIImage emptyImage],
                      kCIInputMaskImageKey : image
                    }];
+
+  // Mix original and tinted by fillTint (0 = original, 1 = fully tinted).
+  float t = fminf(fmaxf(path.fillTint, 0.0f), 1.0f);
+  CIImage *result;
+  if (t >= 0.9999f) {
+    result = tinted;
+  } else if (t <= 0.0001f) {
+    result = image;
+  } else {
+    result = [tinted imageByApplyingFilter:@"CIDissolveTransition"
+                       withInputParameters:@{
+                         kCIInputTargetImageKey : image,
+                         kCIInputTimeKey : @(1.0 - t)
+                       }];
+  }
 
   MTLTextureDescriptor *desc = [MTLTextureDescriptor
       texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm_sRGB
@@ -472,12 +487,14 @@ processImageWithEffects(id<MTLTexture> rawTexture, KKBezierPath *path,
     return rawTexture;
 
   NSString *cacheKey = [NSString
-      stringWithFormat:
-          @"%@_s%d_%.1f_%.2f_%.2f_%.2f_f%d_%d_%.1f_%.1f_%.1f_%.2f_%.2f_%.2f",
-          path.imagePath, path.strokeEnabled, path.strokeWidth, path.strokeR,
-          path.strokeG, path.strokeB, path.fillEnabled, path.sketchFillStyle,
-          path.sketchFillGap, path.sketchFillAngle, path.sketchFillWeight,
-          path.fillR, path.fillG, path.fillB];
+      stringWithFormat:@"%@_s%d_%.1f_%.2f_%.2f_%.2f_f%d_%d_%.1f_%.1f_%.1f_%.2f_"
+                       @"%.2f_%.2f_t%.2f",
+                       path.imagePath, path.strokeEnabled, path.strokeWidth,
+                       path.strokeR, path.strokeG, path.strokeB,
+                       path.fillEnabled, path.sketchFillStyle,
+                       path.sketchFillGap, path.sketchFillAngle,
+                       path.sketchFillWeight, path.fillR, path.fillG,
+                       path.fillB, path.fillTint];
   if (!sProcessedImageCache)
     sProcessedImageCache = [NSMutableDictionary dictionary];
   id<MTLTexture> cached = sProcessedImageCache[cacheKey];

@@ -49,6 +49,8 @@ typedef NS_OPTIONS(uint32_t, KKVisCondition) {
   KKVisStartMarker = 1 << 8,   // startMarker != 0
   KKVisEndMarker = 1 << 9,     // endMarker != 0
   KKVisFillHasStyle = 1 << 10, // fillStyle > 0
+  KKVisIsImage = 1 << 11,      // is an image layer
+  KKVisFillSolid = 1 << 12,    // fillStyle == 0 (solid)
 };
 
 typedef struct {
@@ -83,6 +85,7 @@ static const KKParamVisRule kParamVisibility[] = {
   { kParamSketchFillGap,      KKVisFillOpen | KKVisFillHasStyle,                           kFxParameterFlag_DEFAULT },
   { kParamSketchFillAngle,    KKVisFillOpen | KKVisFillHasStyle,                           kFxParameterFlag_DEFAULT },
   { kParamSketchFillWeight,   KKVisFillOpen | KKVisFillHasStyle,                           kFxParameterFlag_DEFAULT },
+  { kParamFillTint,           KKVisFillOpen | KKVisIsImage | KKVisFillSolid,               kFxParameterFlag_DEFAULT },
   // ─── Sketch group children ───
   { kParamSketchRoughness,    KKVisSketchOpen | KKVisNotImage,                             kFxParameterFlag_DEFAULT },
   { kParamSketchBowing,       KKVisSketchOpen | KKVisNotImage,                             kFxParameterFlag_DEFAULT },
@@ -112,6 +115,8 @@ KKBuildVisConditions(BOOL isImage, BOOL isOpen, BOOL hasJoins, BOOL strokeOpen,
     c |= KKVisHasJoins;
   if (!isImage)
     c |= KKVisNotImage;
+  if (isImage)
+    c |= KKVisIsImage;
   if (strokeStyle == 1)
     c |= KKVisDashed;
   if (strokeStyle == 2)
@@ -122,6 +127,8 @@ KKBuildVisConditions(BOOL isImage, BOOL isOpen, BOOL hasJoins, BOOL strokeOpen,
     c |= KKVisEndMarker;
   if (fillStyle > 0)
     c |= KKVisFillHasStyle;
+  if (fillStyle == 0)
+    c |= KKVisFillSolid;
   return c;
 }
 
@@ -226,6 +233,12 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
   path.fillR = (float)fr;
   path.fillG = (float)fg;
   path.fillB = (float)fb;
+
+  double ft = 100.0;
+  [paramGetAPI getFloatValue:&ft
+               fromParameter:kParamFillTint
+                      atTime:kCMTimeZero];
+  path.fillTint = (float)(ft / 100.0);
 
   double op = 100.0;
   [paramGetAPI getFloatValue:&op
@@ -377,6 +390,7 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
   float oldFillR = primary.fillR;
   float oldFillG = primary.fillG;
   float oldFillB = primary.fillB;
+  float oldFillTint = primary.fillTint;
   float oldOpacity = primary.opacity;
   float oldDashLength = primary.dashLength;
   float oldDashGap = primary.dashGap;
@@ -432,6 +446,8 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
       p.fillG = primary.fillG;
       p.fillB = primary.fillB;
     }
+    if (primary.fillTint != oldFillTint)
+      p.fillTint = primary.fillTint;
     if (primary.opacity != oldOpacity)
       p.opacity = primary.opacity;
     if (primary.dashLength != oldDashLength)
@@ -489,6 +505,9 @@ KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                  blueValue:path.fillB
                toParameter:kParamFillColor
                     atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.fillTint * 100.0f
+                 toParameter:kParamFillTint
+                      atTime:kCMTimeZero];
   [paramSetAPI setFloatValue:path.opacity * 100.0f
                  toParameter:kParamOpacity
                       atTime:kCMTimeZero];
