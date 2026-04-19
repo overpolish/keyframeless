@@ -58,8 +58,11 @@ static CGMutablePathRef CGPathFromKKBezierPath(KKBezierPath *path) {
 typedef struct {
   KKBezierPath *path;
   NSUInteger pointCount;
+  NSUInteger contourStartIdx;
   BOOL needsContour;
 } KKPathBuildContext;
+
+static const float kMergeEpsilon = 1e-5f;
 
 static void cgPathApplyCallback(void *info, const CGPathElement *element) {
   KKPathBuildContext *ctx = (KKPathBuildContext *)info;
@@ -74,6 +77,7 @@ static void cgPathApplyCallback(void *info, const CGPathElement *element) {
       [path beginContour];
       ctx->needsContour = NO;
     }
+    ctx->contourStartIdx = path.count;
     simd_float2 pos = {(float)element->points[0].x,
                        (float)element->points[0].y};
     [path insertAtIndex:path.count position:pos];
@@ -88,12 +92,10 @@ static void cgPathApplyCallback(void *info, const CGPathElement *element) {
     break;
   }
   case kCGPathElementAddCurveToPoint: {
-    // points[0] = cp1, points[1] = cp2, points[2] = end
     CGPoint cp1 = element->points[0];
     CGPoint cp2 = element->points[1];
     CGPoint end = element->points[2];
 
-    // Set outHandle on the previous point.
     if (path.count > 0) {
       NSUInteger prevIdx = path.count - 1;
       KKBezierPoint prev = [path pointAtIndex:prevIdx];
@@ -102,7 +104,6 @@ static void cgPathApplyCallback(void *info, const CGPathElement *element) {
       [path setType:KKBezierPointBezier atIndex:prevIdx];
     }
 
-    // Add the new endpoint with inHandle.
     simd_float2 pos = {(float)end.x, (float)end.y};
     [path insertAtIndex:path.count position:pos];
     NSUInteger newIdx = path.count - 1;
@@ -113,8 +114,6 @@ static void cgPathApplyCallback(void *info, const CGPathElement *element) {
     break;
   }
   case kCGPathElementAddQuadCurveToPoint: {
-    // Convert quad to cubic: cp1 = p0 + 2/3*(cpQ - p0), cp2 = p1 + 2/3*(cpQ -
-    // p1)
     CGPoint cpQ = element->points[0];
     CGPoint end = element->points[1];
 
@@ -139,15 +138,37 @@ static void cgPathApplyCallback(void *info, const CGPathElement *element) {
     }
     break;
   }
-  case kCGPathElementCloseSubpath:
+  case kCGPathElementCloseSubpath: {
+    // CGPath boolean results often end a subpath with a curve/line back to
+    // the move-to point, producing a duplicate at the contour start.
+    // Merge: transfer the last point's inHandle to the first point and
+    // remove the duplicate.
+    if (path.count > ctx->contourStartIdx + 1) {
+      KKBezierPoint last = [path pointAtIndex:path.count - 1];
+      KKBezierPoint first = [path pointAtIndex:ctx->contourStartIdx];
+      float dx = last.x - first.x;
+      float dy = last.y - first.y;
+      if (fabsf(dx) < kMergeEpsilon && fabsf(dy) < kMergeEpsilon) {
+        // Transfer inHandle from duplicate to contour start.
+        if (last.type == KKBezierPointBezier) {
+          [path setInHandle:(simd_float2){last.inX, last.inY}
+                    atIndex:ctx->contourStartIdx];
+          [path setType:KKBezierPointBezier atIndex:ctx->contourStartIdx];
+        }
+        [path removeAtIndex:path.count - 1];
+        ctx->pointCount--;
+      }
+    }
     break;
+  }
   }
 }
 
 static KKBezierPath *KKBezierPathFromCGPath(CGPathRef cgPath) {
   KKBezierPath *path = [[KKBezierPath alloc] init];
   path.closed = YES;
-  KKPathBuildContext ctx = {.path = path, .pointCount = 0, .needsContour = NO};
+  KKPathBuildContext ctx = {
+      .path = path, .pointCount = 0, .contourStartIdx = 0, .needsContour = NO};
   CGPathApply(cgPath, &ctx, cgPathApplyCallback);
   return path;
 }
