@@ -13,6 +13,17 @@
     if (path.hidden || path.locked || path.isGroup)
       continue;
 
+    if (path.isImage && path.count >= 4) {
+      KKBezierPoint bl = [path pointAtIndex:0];
+      KKBezierPoint tr = [path pointAtIndex:2];
+      CGPoint cBL = [self canvasPointFromObjectPoint:(simd_float2){bl.x, bl.y}];
+      CGPoint cTR = [self canvasPointFromObjectPoint:(simd_float2){tr.x, tr.y}];
+      if (x >= MIN(cBL.x, cTR.x) && x <= MAX(cBL.x, cTR.x) &&
+          y >= MIN(cBL.y, cTR.y) && y <= MAX(cBL.y, cTR.y))
+        return (NSInteger)p;
+      continue;
+    }
+
     double hitR = MAX(path.strokeWidth * 0.5 + 4.0, 12.0);
     NSUInteger contours = path.contourCount;
 
