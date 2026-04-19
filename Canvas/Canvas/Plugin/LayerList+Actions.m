@@ -447,11 +447,11 @@
   p.name = name;
   p.strokeEnabled = NO;
   p.fillEnabled = NO;
-  // 4-corner rect in object space (BL, BR, TR, TL)
-  [p insertAtIndex:0 position:(simd_float2){x0, y0}];
-  [p insertAtIndex:1 position:(simd_float2){x1, y0}];
-  [p insertAtIndex:2 position:(simd_float2){x1, y1}];
-  [p insertAtIndex:3 position:(simd_float2){x0, y1}];
+  // 4-corner rect matching setRoundedRectWithMin:max: order (TL, TR, BR, BL)
+  [p insertAtIndex:0 position:(simd_float2){x0, y1}];
+  [p insertAtIndex:1 position:(simd_float2){x1, y1}];
+  [p insertAtIndex:2 position:(simd_float2){x1, y0}];
+  [p insertAtIndex:3 position:(simd_float2){x0, y0}];
 
   KKLog *log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
   [log info:@"[Image] Imported %@ (%.0fx%.0f) → rect (%.4f,%.4f)-(%.4f,%.4f)",

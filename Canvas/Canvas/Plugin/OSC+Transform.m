@@ -93,7 +93,7 @@
   simd_float2 oMin = self.resizeOrigMin;
   simd_float2 oMax = self.resizeOrigMax;
   float oW = oMax.x - oMin.x, oH = oMax.y - oMin.y;
-  if (oW < 1e-6f || oH < 1e-6f)
+  if (fabs(oW) < 1e-6f || fabs(oH) < 1e-6f)
     return;
 
   simd_float2 mouseObj =

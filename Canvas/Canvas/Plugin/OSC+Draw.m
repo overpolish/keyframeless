@@ -509,7 +509,8 @@
         KKParamsToSelectedPaths(paramGetAPI, self.selectedPathIndices,
                                 self.paths);
       }
-      if (isCursorMode && selPath.isRect && selPath.count >= 4) {
+      if (isCursorMode && selPath.isRect && !selPath.isImage &&
+          selPath.count >= 4) {
         simd_float2 bmin, bmax;
         [self boundsOfPath:selPath min:&bmin max:&bmax];
         CGPoint cMin = [self canvasPointFromObjectPoint:bmin];
