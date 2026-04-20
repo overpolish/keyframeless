@@ -33,12 +33,11 @@ static const CGFloat kPathToolbarGap = 6.0;
 
   self.paths = [self readPaths];
 
-  // Show path toolbar when 1+ non-image paths are selected in cursor mode.
-  // Boolean ops guard count >= 2 at click time; Outline works on 1+.
+  // Show path toolbar when 2+ non-image paths are selected in cursor mode.
   {
     BOOL showPathToolbar = NO;
     if (self.toolbar.activeTag == kOSCToolbarCursor &&
-        self.selectedPathIndices.count >= 1) {
+        self.selectedPathIndices.count >= 2) {
       __block NSUInteger pathCount = 0;
       [self.selectedPathIndices
           enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
@@ -47,7 +46,7 @@ static const CGFloat kPathToolbarGap = 6.0;
               pathCount++;
             }
           }];
-      showPathToolbar = (pathCount >= 1);
+      showPathToolbar = (pathCount >= 2);
     }
     if (showPathToolbar) {
       NSRect mainFrame = self.toolbar.toolbarFrame;
