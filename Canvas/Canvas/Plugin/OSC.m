@@ -168,6 +168,7 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   NSString *str = nil;
   [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
+  self.lastReadBlobString = str;
   if (str.length == 0)
     return [NSMutableArray array];
   NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
@@ -180,6 +181,8 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   NSData *blob = [KKBezierPath blobFromPaths:paths];
   NSString *str = [blob base64EncodedStringWithOptions:0];
   [paramSetAPI setStringParameterValue:str toParameter:kParamPathData];
+  // Invalidate so the next readPaths detects the write as a change.
+  self.lastReadBlobString = nil;
 }
 
 - (void)syncStrokeParamsToSelection {
