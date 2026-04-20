@@ -474,6 +474,13 @@
   if (activePart == kOSCPathUnion || activePart == kOSCPathSubtract ||
       activePart == kOSCPathIntersect || activePart == kOSCPathXOR) {
     self.paths = [self readPaths];
+    // Flush pending inspector param edits into the in-memory paths so
+    // operations see the latest stroke/fill values, not stale blob data.
+    if (self.toolbar.activeTag == kOSCToolbarCursor) {
+      id<FxParameterRetrievalAPI_v6> pGetAPI = [self.apiManager
+          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      KKParamsToSelectedPaths(pGetAPI, self.selectedPathIndices, self.paths);
+    }
     if (self.selectedPathIndices.count >= 2) {
       // Collect selected non-image, non-group paths in bottom-to-top order
       // (highest index first). The bottom-most path is the "base" for
@@ -531,6 +538,13 @@
   // Stroke-to-path (outline) action.
   if (activePart == kOSCPathOutline) {
     self.paths = [self readPaths];
+    // Flush pending inspector param edits (e.g. stroke width) into the
+    // in-memory paths before converting, so the outline uses current values.
+    if (self.toolbar.activeTag == kOSCToolbarCursor) {
+      id<FxParameterRetrievalAPI_v6> pGetAPI = [self.apiManager
+          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      KKParamsToSelectedPaths(pGetAPI, self.selectedPathIndices, self.paths);
+    }
     NSMutableArray<KKBezierPath *> *operands = [NSMutableArray array];
     NSMutableIndexSet *operandIndices = [NSMutableIndexSet indexSet];
     [self.selectedPathIndices

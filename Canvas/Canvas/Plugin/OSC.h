@@ -77,6 +77,13 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (NSMutableArray<KKBezierPath *> *)readPaths;
 - (void)writePaths:(NSArray<KKBezierPath *> *)paths;
+
+/// The raw base64 blob string from the last readPaths call.
+@property(nonatomic, copy, nullable) NSString *lastReadBlobString;
+
+/// The blob string that was last written to the store via setPaths:.
+/// Compared against lastReadBlobString to skip no-op store writes.
+@property(nonatomic, copy, nullable) NSString *storeBlobString;
 - (void)syncStrokeParamsToSelection;
 - (void)syncStrokeParamsToSelectionWithPrevious:(nullable NSIndexSet *)prevSel;
 - (nullable KKBezierPath *)activePath;

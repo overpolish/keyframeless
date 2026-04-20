@@ -10,6 +10,13 @@
 void KKParamSyncApplyFromSnapshot(KKCanvasStoreSnapshot *snap,
                                   KKBezierPath *selectedPath, NSString *uuid,
                                   id<PROAPIAccessing> api) {
+  // Guard against re-entrancy: endAction below can trigger parameterChanged
+  // which may reset visHash and cause another sync attempt while we're still
+  // inside this function.
+  static BOOL sApplying = NO;
+  if (sApplying)
+    return;
+
   KKLayerInstanceState *st = KKLayerStateForUUID(uuid);
   if (!st)
     return;
@@ -41,6 +48,8 @@ void KKParamSyncApplyFromSnapshot(KKCanvasStoreSnapshot *snap,
     return;
   st.visHash = vh;
 
+  sApplying = YES;
+
   id<FxCustomParameterActionAPI_v4> actAPI =
       [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actAPI startAction:api];
@@ -50,4 +59,5 @@ void KKParamSyncApplyFromSnapshot(KKCanvasStoreSnapshot *snap,
   KKApplyParamVisibility(setAPI, active, forceShow);
 
   [actAPI endAction:api];
+  sApplying = NO;
 }

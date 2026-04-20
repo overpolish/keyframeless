@@ -670,8 +670,19 @@ static const CGFloat kPathToolbarGap = 6.0;
     // by the UI callbacks (header toggles) and the initial seed. Reading
     // them from FxPlug params on the render thread races with callbacks
     // that haven't committed yet.
+    //
+    // Only call setPaths when the blob actually changed to avoid firing
+    // KKStoreChangePaths every frame (freshly deserialized objects always
+    // fail identity comparison).
+    NSString *readBlob = self.lastReadBlobString;
+    NSString *storeBlob = self.storeBlobString;
+    BOOL blobChanged =
+        (readBlob != storeBlob && ![readBlob isEqualToString:storeBlob]);
     [store performBatch:^{
-      [store setPaths:self.paths];
+      if (blobChanged) {
+        [store setPaths:self.paths];
+        self.storeBlobString = self.lastReadBlobString;
+      }
       [store setSelectedIndices:self.selectedPathIndices];
       [store setSoloActive:lst.soloActive];
       [store setEditing:lst.isEditing];
