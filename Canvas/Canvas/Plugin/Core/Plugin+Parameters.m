@@ -70,6 +70,12 @@
                      parameterFlags:kFxParameterFlag_HIDDEN |
                                     kFxParameterFlag_NOT_ANIMATABLE];
 
+  [paramAPI addToggleButtonWithName:@"Snap to Grid"
+                        parameterID:kParamSnapToGrid
+                       defaultValue:NO
+                     parameterFlags:kFxParameterFlag_HIDDEN |
+                                    kFxParameterFlag_NOT_ANIMATABLE];
+
   [paramAPI addIntSliderWithName:@"Last Tool"
                      parameterID:kParamLastTool
                     defaultValue:kOSCToolbarCursor

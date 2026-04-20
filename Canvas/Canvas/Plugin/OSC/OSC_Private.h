@@ -15,6 +15,12 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx);
 NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
                                 NSArray<KKBezierPath *> *paths);
 
+@interface CanvasOSC (Drag)
+
+- (simd_float2)snapToGridPosition:(simd_float2)objPos;
+
+@end
+
 @interface CanvasOSC (Private)
 
 - (CGPoint)canvasPointForBezierPoint:(KKBezierPoint)pt;

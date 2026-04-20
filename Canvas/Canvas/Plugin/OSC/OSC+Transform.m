@@ -98,6 +98,7 @@
 
   simd_float2 mouseObj =
       [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+  mouseObj = [self snapToGridPosition:mouseObj];
 
   float nMinX = oMin.x, nMinY = oMin.y, nMaxX = oMax.x, nMaxY = oMax.y;
   NSInteger h = self.dragResizeHandle;

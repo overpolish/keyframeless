@@ -55,6 +55,12 @@ static const CGFloat kPathToolbarGap = 6.0;
                   atTime:kCMTimeZero];
     self.gridAdaptive = adaptiveVal;
 
+    BOOL snapVal = NO;
+    [getAPI getBoolValue:&snapVal
+           fromParameter:kParamSnapToGrid
+                  atTime:kCMTimeZero];
+    self.snapToGrid = snapVal;
+
     if (!self.restoredTool) {
       self.restoredTool = YES;
       int toolVal = (int)kOSCToolbarCursor;
@@ -68,19 +74,20 @@ static const CGFloat kPathToolbarGap = 6.0;
 
   [self.toolbar drawWithDestinationImage:destinationImage];
 
-  // Draw grid controls: [grid] [adaptive] [stepper] in one toolbar.
+  // Draw grid controls: [snap] [grid] [adaptive] [stepper] in one toolbar.
   {
     self.gridToolbar.activeTag = self.gridEnabled ? kOSCGridToggle : 0;
     self.gridToolbar.secondaryActiveTag =
         self.gridAdaptive ? kOSCGridAdaptive : 0;
-    self.gridToolbar.items[1].iconName = self.gridAdaptive
+    self.gridToolbar.tertiaryActiveTag = self.snapToGrid ? kOSCSnapToggle : 0;
+    self.gridToolbar.items[2].iconName = self.gridAdaptive
                                              ? @"squareshape.split.2x2.dotted"
                                              : @"squareshape.split.2x2";
-    self.gridToolbar.items[1].shortcutLabel =
+    self.gridToolbar.items[2].shortcutLabel =
         self.gridAdaptive ? @"Auto" : @"Static";
 
     // Set the stepper label to the current spacing value.
-    self.gridToolbar.items[2].shortcutLabel =
+    self.gridToolbar.items[3].shortcutLabel =
         [NSString stringWithFormat:@"%ld", (long)self.gridSpacing];
 
     [self.gridToolbar drawWithDestinationImage:destinationImage];
