@@ -3,7 +3,94 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#import "MarkerTessellation.h"
 #import "OSC_Private.h"
+
+static BOOL pointInTriangle(double px, double py, simd_float2 a, simd_float2 b,
+                            simd_float2 c) {
+  double d1 = (px - b.x) * (a.y - b.y) - (a.x - b.x) * (py - b.y);
+  double d2 = (px - c.x) * (b.y - c.y) - (b.x - c.x) * (py - c.y);
+  double d3 = (px - a.x) * (c.y - a.y) - (c.x - a.x) * (py - a.y);
+  BOOL hasNeg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+  BOOL hasPos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+  return !(hasNeg && hasPos);
+}
+
+static BOOL hitTestMarkerVerts(double px, double py, CanvasVertex *verts,
+                               NSUInteger count, MTLPrimitiveType prim) {
+  if (prim == MTLPrimitiveTypeTriangleStrip) {
+    for (NSUInteger i = 0; i + 2 < count; i++) {
+      if (pointInTriangle(px, py, verts[i].position, verts[i + 1].position,
+                          verts[i + 2].position))
+        return YES;
+    }
+  } else if (prim == MTLPrimitiveTypeTriangle) {
+    for (NSUInteger i = 0; i + 2 < count; i += 3) {
+      if (pointInTriangle(px, py, verts[i].position, verts[i + 1].position,
+                          verts[i + 2].position))
+        return YES;
+    }
+  }
+  return NO;
+}
+
+static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
+                          double py) {
+  float sw = path.strokeWidth;
+  float ew = (path.endWidth > 0) ? path.endWidth : sw;
+
+  if (path.endMarker != 0) {
+    NSUInteger lastSeg = path.count - 2;
+    NSUInteger lastIdx = path.count - 1;
+    simd_float2 endObj = [path evaluatePointAtIndex:lastSeg
+                                          nextIndex:lastIdx
+                                                atT:1.0f];
+    simd_float2 nearObj = [path evaluatePointAtIndex:lastSeg
+                                           nextIndex:lastIdx
+                                                 atT:0.98f];
+    CGPoint endC = [osc canvasPointFromObjectPoint:endObj];
+    CGPoint nearC = [osc canvasPointFromObjectPoint:nearObj];
+    simd_float2 endPt = {(float)endC.x, (float)endC.y};
+    simd_float2 nearPt = {(float)nearC.x, (float)nearC.y};
+    simd_float2 dir = endPt - nearPt;
+    float dirLen = simd_length(dir);
+    simd_float2 eTan =
+        dirLen > 0.001f ? dir / dirLen : (simd_float2){1.0f, 0.0f};
+    simd_float2 eNorm = (simd_float2){-eTan.y, eTan.x};
+    float eMsz = ew * path.endMarkerSize;
+
+    CanvasVertex markerVerts[128];
+    MTLPrimitiveType prim;
+    NSUInteger mc = KKTessellateMarker(path.endMarker, endPt, eTan, eNorm, eMsz,
+                                       ew, &prim, markerVerts);
+    if (mc > 0 && hitTestMarkerVerts(px, py, markerVerts, mc, prim))
+      return YES;
+  }
+
+  if (path.startMarker != 0) {
+    simd_float2 startObj = [path evaluatePointAtIndex:0 nextIndex:1 atT:0.0f];
+    simd_float2 nearObj = [path evaluatePointAtIndex:0 nextIndex:1 atT:0.02f];
+    CGPoint startC = [osc canvasPointFromObjectPoint:startObj];
+    CGPoint nearC = [osc canvasPointFromObjectPoint:nearObj];
+    simd_float2 startPt = {(float)startC.x, (float)startC.y};
+    simd_float2 nearPt = {(float)nearC.x, (float)nearC.y};
+    simd_float2 dir = startPt - nearPt;
+    float dirLen = simd_length(dir);
+    simd_float2 sTan =
+        dirLen > 0.001f ? dir / dirLen : (simd_float2){-1.0f, 0.0f};
+    simd_float2 sNorm = (simd_float2){-sTan.y, sTan.x};
+    float sMsz = sw * path.startMarkerSize;
+
+    CanvasVertex markerVerts[128];
+    MTLPrimitiveType prim;
+    NSUInteger mc = KKTessellateMarker(path.startMarker, startPt, sTan, sNorm,
+                                       sMsz, sw, &prim, markerVerts);
+    if (mc > 0 && hitTestMarkerVerts(px, py, markerVerts, mc, prim))
+      return YES;
+  }
+
+  return NO;
+}
 
 @implementation CanvasOSC (Geometry)
 
@@ -79,6 +166,12 @@
       }
 
       free(outline);
+    }
+
+    if (!path.closed && path.count >= 2 &&
+        (path.startMarker != 0 || path.endMarker != 0)) {
+      if (markerHitTest(self, path, x, y))
+        return (NSInteger)p;
     }
   }
   return -1;
