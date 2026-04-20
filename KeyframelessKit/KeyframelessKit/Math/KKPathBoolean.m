@@ -777,6 +777,176 @@ static CGPathRef createDottedOutline(KKBezierPath *src, CGFloat sw, CGFloat ew,
   return cleaned;
 }
 
+/// Create a CGPath outline for a marker shape in pixel space.
+/// markerType: 1=arrow, 2=circle, 3=square, 4=arrowhead, 5=line.
+/// endpoint: pixel-space position. tangent: unit vector pointing outward.
+/// normal: unit perpendicular to tangent.
+static CGPathRef createMarkerOutline(uint8_t markerType, simd_float2 endpoint,
+                                     simd_float2 tangent, simd_float2 normal,
+                                     float markerSize, float strokeWidth) {
+  if (markerType == 0)
+    return NULL;
+
+  CGMutablePathRef path = CGPathCreateMutable();
+
+  switch (markerType) {
+  case 1: { // Arrow — filled triangle.
+    float wingSpread = markerSize * 0.5f;
+    simd_float2 base = endpoint - tangent * markerSize;
+    simd_float2 left = base + normal * wingSpread;
+    simd_float2 right = base - normal * wingSpread;
+    CGPathMoveToPoint(path, NULL, left.x, left.y);
+    CGPathAddLineToPoint(path, NULL, endpoint.x, endpoint.y);
+    CGPathAddLineToPoint(path, NULL, right.x, right.y);
+    CGPathCloseSubpath(path);
+    break;
+  }
+  case 2: { // Circle.
+    float radius = markerSize * 0.5f;
+    CGRect rect = CGRectMake(endpoint.x - radius, endpoint.y - radius,
+                             radius * 2.0f, radius * 2.0f);
+    CGPathAddEllipseInRect(path, NULL, rect);
+    break;
+  }
+  case 3: { // Square.
+    float halfSide = markerSize * 0.5f;
+    simd_float2 fwd = tangent * halfSide;
+    simd_float2 side = normal * halfSide;
+    simd_float2 a = endpoint - fwd + side;
+    simd_float2 b = endpoint + fwd + side;
+    simd_float2 c = endpoint + fwd - side;
+    simd_float2 d = endpoint - fwd - side;
+    CGPathMoveToPoint(path, NULL, a.x, a.y);
+    CGPathAddLineToPoint(path, NULL, b.x, b.y);
+    CGPathAddLineToPoint(path, NULL, c.x, c.y);
+    CGPathAddLineToPoint(path, NULL, d.x, d.y);
+    CGPathCloseSubpath(path);
+    break;
+  }
+  case 4: { // Arrowhead — open chevron (two thick arms).
+    float wingSpread = markerSize * 0.5f;
+    float halfThick = strokeWidth * 0.5f;
+    simd_float2 base = endpoint - tangent * markerSize;
+    simd_float2 left = base + normal * wingSpread;
+    simd_float2 right = base - normal * wingSpread;
+
+    simd_float2 leftEdge = endpoint - left;
+    float leftLen = simd_length(leftEdge);
+    simd_float2 leftDir = leftLen > 0.001f ? leftEdge / leftLen : tangent;
+    simd_float2 leftPerp = (simd_float2){-leftDir.y, leftDir.x};
+
+    simd_float2 rightEdge = endpoint - right;
+    float rightLen = simd_length(rightEdge);
+    simd_float2 rightDir = rightLen > 0.001f ? rightEdge / rightLen : tangent;
+    simd_float2 rightPerp = (simd_float2){-rightDir.y, rightDir.x};
+
+    // Left arm quad.
+    simd_float2 la = left + leftPerp * halfThick;
+    simd_float2 lb = left - leftPerp * halfThick;
+    simd_float2 lc = endpoint + leftPerp * halfThick;
+    simd_float2 ld = endpoint - leftPerp * halfThick;
+    CGPathMoveToPoint(path, NULL, la.x, la.y);
+    CGPathAddLineToPoint(path, NULL, lc.x, lc.y);
+    CGPathAddLineToPoint(path, NULL, ld.x, ld.y);
+    CGPathAddLineToPoint(path, NULL, lb.x, lb.y);
+    CGPathCloseSubpath(path);
+
+    // Right arm quad.
+    simd_float2 ra = endpoint + rightPerp * halfThick;
+    simd_float2 rb = endpoint - rightPerp * halfThick;
+    simd_float2 rc = right + rightPerp * halfThick;
+    simd_float2 rd = right - rightPerp * halfThick;
+    CGPathMoveToPoint(path, NULL, ra.x, ra.y);
+    CGPathAddLineToPoint(path, NULL, rc.x, rc.y);
+    CGPathAddLineToPoint(path, NULL, rd.x, rd.y);
+    CGPathAddLineToPoint(path, NULL, rb.x, rb.y);
+    CGPathCloseSubpath(path);
+    break;
+  }
+  case 5: { // Line — perpendicular bar.
+    float halfSpread = markerSize * 0.5f;
+    float halfThick = strokeWidth * 0.5f;
+    simd_float2 top = endpoint + normal * halfSpread;
+    simd_float2 bottom = endpoint - normal * halfSpread;
+    CGPathMoveToPoint(path, NULL, top.x + tangent.x * halfThick,
+                      top.y + tangent.y * halfThick);
+    CGPathAddLineToPoint(path, NULL, top.x - tangent.x * halfThick,
+                         top.y - tangent.y * halfThick);
+    CGPathAddLineToPoint(path, NULL, bottom.x - tangent.x * halfThick,
+                         bottom.y - tangent.y * halfThick);
+    CGPathAddLineToPoint(path, NULL, bottom.x + tangent.x * halfThick,
+                         bottom.y + tangent.y * halfThick);
+    CGPathCloseSubpath(path);
+    break;
+  }
+  default:
+    CGPathRelease(path);
+    return NULL;
+  }
+
+  return path;
+}
+
+/// Stroke pullback distance for a marker type — matches KKMarkerPullback
+/// in MarkerTessellation. Duplicated here because KeyframelessKit cannot
+/// import Canvas plugin headers.
+static float outlineMarkerPullback(uint8_t markerType, float markerSize) {
+  switch (markerType) {
+  case 1:
+    return markerSize * 0.7f; // arrow
+  default:
+    return 0.0f; // circle, square, arrowhead, line
+  }
+}
+
+/// Compute marker tangent/normal by sampling the polyline at a pullback arc
+/// position — matches the rendering pipeline. The tangent points outward from
+/// the path at the endpoint.
+static void endpointFromPolyline(const simd_float2 *positions,
+                                 const float *arcLengths, NSUInteger count,
+                                 BOOL atEnd, float markerSize,
+                                 simd_float2 *outPosition,
+                                 simd_float2 *outTangent,
+                                 simd_float2 *outNormal) {
+  float totalArc = arcLengths[count - 1];
+  // Match rendering: sample tangent at max(pullback, markerSize * 0.3) from
+  // the endpoint, clamped to path length.
+  float minPull = markerSize * 0.3f;
+  if (minPull < 1.0f)
+    minPull = 1.0f;
+
+  NSUInteger hint = 0;
+  simd_float2 pullbackPos;
+  if (atEnd) {
+    float pullArc = totalArc - minPull;
+    if (pullArc < 0.0f)
+      pullArc = 0.0f;
+    pullbackPos = positionAtArc(positions, arcLengths, count, pullArc, &hint);
+  } else {
+    float pullArc = minPull;
+    if (pullArc > totalArc)
+      pullArc = totalArc;
+    pullbackPos = positionAtArc(positions, arcLengths, count, pullArc, &hint);
+  }
+
+  simd_float2 pos = atEnd ? positions[count - 1] : positions[0];
+  simd_float2 dir;
+  if (atEnd) {
+    dir = pos - pullbackPos; // outward = forward along path at end
+  } else {
+    dir = pos - pullbackPos; // outward = backward from path at start
+  }
+  float len = simd_length(dir);
+  if (len < 1e-6f)
+    dir = (simd_float2){1, 0};
+  else
+    dir /= len;
+
+  *outPosition = pos;
+  *outTangent = dir;
+  *outNormal = (simd_float2){-dir.y, dir.x};
+}
+
 NSArray<KKBezierPath *> *KKPathStrokeToOutline(NSArray<KKBezierPath *> *paths,
                                                CGFloat referenceWidth,
                                                CGFloat referenceHeight) {
@@ -836,6 +1006,142 @@ NSArray<KKBezierPath *> *KKPathStrokeToOutline(NSArray<KKBezierPath *> *paths,
 
     if (!cleaned)
       continue;
+
+    // Union markers with the stroke outline (open paths only).
+    if (!src.closed && (src.startMarker > 0 || src.endMarker > 0)) {
+      // Sample polyline in the same pixel space as the stroke outline.
+      simd_float2 *markerPositions = NULL;
+      float *markerArcLengths = NULL;
+      NSUInteger markerSampleCount =
+          samplePathForOutline(src, referenceWidth, referenceHeight,
+                               &markerPositions, &markerArcLengths);
+
+      if (markerSampleCount >= 2) {
+        float totalArc = markerArcLengths[markerSampleCount - 1];
+        float startMarkerSz = sw * src.startMarkerSize;
+        float endSw = tapers ? ew : sw;
+        float endMarkerSz = endSw * src.endMarkerSize;
+        float startPB = outlineMarkerPullback(src.startMarker, startMarkerSz);
+        float endPB = outlineMarkerPullback(src.endMarker, endMarkerSz);
+
+        // Re-generate the stroke outline from the trimmed polyline so
+        // the stroke doesn't extend past the marker base.
+        if (startPB > 0.0f || endPB > 0.0f) {
+          float trimStart = startPB;
+          float trimEnd = totalArc - endPB;
+          if (trimStart >= trimEnd)
+            trimStart = trimEnd = totalArc * 0.5f;
+
+          // Collect trimmed polyline points with per-point half-widths.
+          NSUInteger hint = 0;
+          NSUInteger maxPts = markerSampleCount + 2;
+          simd_float2 *trimPts = malloc(maxPts * sizeof(simd_float2));
+          float *trimHWs = malloc(maxPts * sizeof(float));
+          NSUInteger trimCount = 0;
+
+          trimPts[trimCount] =
+              positionAtArc(markerPositions, markerArcLengths,
+                            markerSampleCount, trimStart, &hint);
+          float arcT = (totalArc > 0) ? trimStart / totalArc : 0.0f;
+          trimHWs[trimCount] = (sw + (ew - sw) * arcT) / 2.0f;
+          trimCount++;
+
+          for (NSUInteger i = hint + 1; i < markerSampleCount; i++) {
+            if (markerArcLengths[i] > trimEnd)
+              break;
+            trimPts[trimCount] = markerPositions[i];
+            float t = (totalArc > 0) ? markerArcLengths[i] / totalArc : 0.0f;
+            trimHWs[trimCount] = (sw + (ew - sw) * t) / 2.0f;
+            trimCount++;
+          }
+
+          hint = 0;
+          trimPts[trimCount] = positionAtArc(markerPositions, markerArcLengths,
+                                             markerSampleCount, trimEnd, &hint);
+          arcT = (totalArc > 0) ? trimEnd / totalArc : 0.0f;
+          trimHWs[trimCount] = (sw + (ew - sw) * arcT) / 2.0f;
+          trimCount++;
+
+          if (trimCount >= 2) {
+            CGPathRef trimOutline = NULL;
+
+            if (tapers) {
+              // Variable width: build tapered outline with per-point widths.
+              trimOutline = createTaperedDashOutline(trimPts, trimHWs,
+                                                     trimCount, src.lineCap);
+            } else {
+              // Uniform width: simplify and stroke.
+              simd_float2 *simpPts = NULL;
+              NSUInteger simpCount =
+                  simplifyPolyline(trimPts, trimCount, 1.5f, &simpPts);
+              CGMutablePathRef trimPath = CGPathCreateMutable();
+              CGPathMoveToPoint(trimPath, NULL, simpPts[0].x, simpPts[0].y);
+              for (NSUInteger i = 1; i < simpCount; i++)
+                CGPathAddLineToPoint(trimPath, NULL, simpPts[i].x,
+                                     simpPts[i].y);
+              free(simpPts);
+
+              trimOutline = CGPathCreateCopyByStrokingPath(
+                  trimPath, NULL, sw, (CGLineCap)src.lineCap,
+                  (CGLineJoin)src.lineJoin, 4.0);
+              CGPathRelease(trimPath);
+            }
+
+            if (trimOutline) {
+              CGMutablePathRef empty = CGPathCreateMutable();
+              CGPathRef trimCleaned =
+                  CGPathCreateCopyByUnioningPath(trimOutline, empty, false);
+              CGPathRelease(empty);
+              CGPathRelease(trimOutline);
+              CGPathRelease(cleaned);
+              cleaned = trimCleaned;
+            }
+          }
+
+          free(trimPts);
+          free(trimHWs);
+        }
+
+        // Create and union marker outlines.
+        if (src.startMarker > 0) {
+          simd_float2 pos, tang, norm;
+          endpointFromPolyline(markerPositions, markerArcLengths,
+                               markerSampleCount, NO, startMarkerSz, &pos,
+                               &tang, &norm);
+          CGPathRef marker = createMarkerOutline(src.startMarker, pos, tang,
+                                                 norm, startMarkerSz, sw);
+          if (marker) {
+            CGPathRef merged =
+                CGPathCreateCopyByUnioningPath(cleaned, marker, false);
+            CGPathRelease(marker);
+            CGPathRelease(cleaned);
+            cleaned = merged;
+          }
+        }
+
+        if (src.endMarker > 0) {
+          simd_float2 pos, tang, norm;
+          endpointFromPolyline(markerPositions, markerArcLengths,
+                               markerSampleCount, YES, endMarkerSz, &pos, &tang,
+                               &norm);
+          CGPathRef marker = createMarkerOutline(src.endMarker, pos, tang, norm,
+                                                 endMarkerSz, endSw);
+          if (marker) {
+            CGPathRef merged =
+                CGPathCreateCopyByUnioningPath(cleaned, marker, false);
+            CGPathRelease(marker);
+            CGPathRelease(cleaned);
+            cleaned = merged;
+          }
+        }
+      }
+
+      free(markerPositions);
+      free(markerArcLengths);
+
+      if (!cleaned)
+        continue;
+    }
 
     // Scale back to object space.
     CGAffineTransform toObject = CGAffineTransformMake(
