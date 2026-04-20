@@ -88,6 +88,9 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
                        [KKToolbarItem itemWithIcon:@"xmark.square"
                                                tag:kOSCPathXOR
                                      shortcutLabel:@"XOR"],
+                       [KKToolbarItem itemWithIcon:@"square.dashed"
+                                               tag:kOSCPathOutline
+                                     shortcutLabel:@"Stroke\nto Path"],
                      ]];
     self.pathToolbar.activeTag = 0;
 

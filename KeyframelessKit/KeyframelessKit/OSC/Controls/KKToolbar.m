@@ -205,14 +205,19 @@ static id<MTLTexture> renderRoundedRect(id<MTLDevice> device, CGFloat w,
   if (!label.length)
     return nil;
 
+  NSMutableParagraphStyle *para = [[NSMutableParagraphStyle alloc] init];
+  para.alignment = NSTextAlignmentCenter;
+  para.maximumLineHeight = kLabelFontSize;
+  para.lineSpacing = 0;
   NSDictionary *attrs = @{
     NSFontAttributeName : [NSFont systemFontOfSize:kLabelFontSize
                                             weight:NSFontWeightMedium],
     NSForegroundColorAttributeName : [NSColor colorWithWhite:0.5 alpha:1.0],
+    NSParagraphStyleAttributeName : para,
   };
   NSSize textSize = [label sizeWithAttributes:attrs];
   CGFloat canvasW = ceil(textSize.width + 4.0);
-  CGFloat canvasH = ceil(kLabelHeight);
+  CGFloat canvasH = ceil(MAX(textSize.height, kLabelHeight));
   NSInteger pixelW = (NSInteger)(canvasW * kScale);
   NSInteger pixelH = (NSInteger)(canvasH * kScale);
 
@@ -231,9 +236,10 @@ static id<MTLTexture> renderRoundedRect(id<MTLDevice> device, CGFloat w,
   [NSGraphicsContext saveGraphicsState];
   [NSGraphicsContext setCurrentContext:gc];
 
-  CGFloat originX = (canvasW - textSize.width) / 2.0;
-  CGFloat originY = (canvasH - textSize.height) / 2.0;
-  [label drawAtPoint:NSMakePoint(originX, originY) withAttributes:attrs];
+  BOOL multiline = [label containsString:@"\n"];
+  CGFloat textY = multiline ? -3.0 : (canvasH - textSize.height) / 2.0;
+  NSRect drawRect = NSMakeRect(0, textY, canvasW, textSize.height);
+  [label drawInRect:drawRect withAttributes:attrs];
 
   [NSGraphicsContext restoreGraphicsState];
 
@@ -410,7 +416,7 @@ static void drawTexturedQuad(id<MTLRenderCommandEncoder> encoder,
       continue;
 
     CGPoint center = _buttonCenters[i].pointValue;
-    CGFloat labelY = center.y - kButtonHeight / 2.0 + kLabelHeight / 2.0 + 4.0;
+    CGFloat labelY = center.y - kButtonHeight / 2.0 + kLabelHeight / 2.0 + 2.0;
     CGPoint metalPos = {center.x - ioW / 2.0f, ioH / 2.0f - labelY};
     float halfW = labelTex.width / (2.0f * kScale);
     float halfH = labelTex.height / (2.0f * kScale);
