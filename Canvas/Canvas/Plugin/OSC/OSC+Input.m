@@ -93,6 +93,16 @@
     self.stepperShiftWasDown = (modifiers & kFxModifierKey_SHIFT) != 0;
     return;
   }
+  if (activePart == kOSCSnapToggle) {
+    self.snapToGrid = !self.snapToGrid;
+    id<FxParameterSettingAPI_v5> setAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [setAPI setBoolValue:self.snapToGrid
+             toParameter:kParamSnapToGrid
+                  atTime:kCMTimeZero];
+    *forceUpdate = YES;
+    return;
+  }
   if (activePart == kOSCGridAdaptive) {
     self.gridAdaptive = !self.gridAdaptive;
     id<FxParameterSettingAPI_v5> setAPI =
@@ -269,8 +279,10 @@
   }
   if (activePart == kOSCBoundingBox && self.selectedPathIndices.count > 0) {
     self.dragIsSelection = YES;
-    self.dragOrigin =
-        [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+    self.dragOrigin = [self
+        snapToGridPosition:[self objectPointFromCanvasPoint:CGPointMake(
+                                                                positionX,
+                                                                positionY)]];
     self.dragAnchor = self.dragOrigin;
     if (self.autoSelect) {
       self.autoSelectPending = YES;
@@ -366,6 +378,7 @@
   // --- Shape tools (rect, ellipse, line) — start drag preview ---
   simd_float2 objPos =
       [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+  objPos = [self snapToGridPosition:objPos];
   self.rectStart = objPos;
   self.dragOrigin = objPos;
   self.dragIsRect = (self.toolbar.activeTag == kOSCToolbarRect);

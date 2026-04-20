@@ -35,6 +35,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Optional second active tag for independent toggle highlights (0 = none).
 @property(nonatomic, assign) NSInteger secondaryActiveTag;
 
+/// Optional third active tag for independent toggle highlights (0 = none).
+@property(nonatomic, assign) NSInteger tertiaryActiveTag;
+
 /// Extra margin from the bottom edge in points (default 8).
 @property(nonatomic, assign) CGFloat bottomMargin;
 

@@ -95,6 +95,11 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
     self.pathToolbar.activeTag = 0;
 
     {
+      KKToolbarItem *snapItem =
+          [KKToolbarItem itemWithIcon:@"dot.squareshape.split.2x2"
+                                  tag:kOSCSnapToggle
+                        shortcutLabel:@"Snap"];
+
       KKToolbarItem *gridItem = [KKToolbarItem itemWithIcon:@"grid"
                                                         tag:kOSCGridToggle
                                               shortcutLabel:@"Grid"];
@@ -111,7 +116,9 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
 
       self.gridToolbar = [[KKToolbar alloc]
           initWithAPIManager:apiManager
-                       items:@[ gridItem, adaptiveItem, stepperItem ]];
+                       items:@[
+                         snapItem, gridItem, adaptiveItem, stepperItem
+                       ]];
       self.gridToolbar.activeTag = 0;
       self.gridToolbar.rightMargin = 16.0;
     }

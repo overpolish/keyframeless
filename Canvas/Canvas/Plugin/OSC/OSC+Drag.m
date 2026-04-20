@@ -7,6 +7,31 @@
 
 @implementation CanvasOSC (Drag)
 
+- (simd_float2)snapToGridPosition:(simd_float2)objPos {
+  if (!self.snapToGrid || !self.gridEnabled || self.imageWidth <= 0 ||
+      self.imageHeight <= 0)
+    return objPos;
+  CGFloat spacing = (CGFloat)self.gridSpacing;
+  if (self.gridAdaptive) {
+    CGPoint originCanvas =
+        [self canvasPointFromObjectPoint:(simd_float2){0, 0}];
+    CGPoint unitCanvas = [self
+        canvasPointFromObjectPoint:(simd_float2){1.0f / self.imageWidth, 0}];
+    CGFloat pxPerSourcePx = fabs(unitCanvas.x - originCanvas.x);
+    CGFloat screenSpacing = spacing * pxPerSourcePx;
+    static const CGFloat kMinScreenSpacing = 30.0;
+    while (screenSpacing < kMinScreenSpacing && spacing < 10000) {
+      spacing *= 2.0;
+      screenSpacing *= 2.0;
+    }
+  }
+  float spacingX = (float)(spacing / self.imageWidth);
+  float spacingY = (float)(spacing / self.imageHeight);
+  objPos.x = roundf(objPos.x / spacingX) * spacingX;
+  objPos.y = roundf(objPos.y / spacingY) * spacingY;
+  return objPos;
+}
+
 - (simd_float2)shiftConstrainedPosition:(simd_float2)objPos {
   simd_float2 totalDelta = objPos - self.dragAnchor;
   if (fabs(totalDelta.x) > fabs(totalDelta.y))
@@ -33,6 +58,7 @@
     float ey = sy + copysignf(side, dy);
     objPos = [self objectPointFromCanvasPoint:CGPointMake(ex, ey)];
   }
+  objPos = [self snapToGridPosition:objPos];
   self.dragOrigin = objPos;
   *forceUpdate = YES;
 }
@@ -54,6 +80,7 @@
     float ey = (float)sc.y + dist * sinf(snapped);
     objPos = [self objectPointFromCanvasPoint:CGPointMake(ex, ey)];
   }
+  objPos = [self snapToGridPosition:objPos];
   self.dragOrigin = objPos;
   *forceUpdate = YES;
 }
@@ -66,6 +93,7 @@
       [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
   if (modifiers & kFxModifierKey_SHIFT)
     objPos = [self shiftConstrainedPosition:objPos];
+  objPos = [self snapToGridPosition:objPos];
   simd_float2 delta = objPos - self.dragOrigin;
   self.dragOrigin = objPos;
 
@@ -163,6 +191,7 @@
   } else {
     if (modifiers & kFxModifierKey_SHIFT)
       objPos = [self shiftConstrainedPosition:objPos];
+    objPos = [self snapToGridPosition:objPos];
     NSUInteger dragKey =
         selKey((NSUInteger)self.activePathIndex, (NSUInteger)self.dragIndex);
     if (self.selectedPoints.count > 1 &&
@@ -297,6 +326,7 @@
         [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
     if (modifiers & kFxModifierKey_SHIFT)
       objPos = [self shiftConstrainedPosition:objPos];
+    objPos = [self snapToGridPosition:objPos];
     simd_float2 delta = objPos - self.dragOrigin;
     BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
     if (isCursorMode && (modifiers & kFxModifierKey_OPTION) &&

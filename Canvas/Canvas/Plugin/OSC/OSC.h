@@ -50,6 +50,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, strong) KKToolbar *gridToolbar;
 @property(nonatomic, assign) BOOL gridEnabled;
 @property(nonatomic, assign) BOOL gridAdaptive;
+@property(nonatomic, assign) BOOL snapToGrid;
 @property(nonatomic, assign) NSInteger gridSpacing;
 @property(nonatomic, assign) BOOL restoredTool;
 @property(nonatomic, assign) BOOL stepperDragging;

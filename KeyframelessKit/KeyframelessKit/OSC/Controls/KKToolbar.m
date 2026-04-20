@@ -393,7 +393,8 @@ static void drawTexturedQuad(id<MTLRenderCommandEncoder> encoder,
   // Highlight behind active items
   for (NSInteger i = 0; i < itemCount; i++) {
     if (_items[i].tag == _activeTag ||
-        (_secondaryActiveTag != 0 && _items[i].tag == _secondaryActiveTag)) {
+        (_secondaryActiveTag != 0 && _items[i].tag == _secondaryActiveTag) ||
+        (_tertiaryActiveTag != 0 && _items[i].tag == _tertiaryActiveTag)) {
       CGFloat iw =
           _items[i].customWidth > 0 ? _items[i].customWidth : kButtonSize;
       CGFloat ih =

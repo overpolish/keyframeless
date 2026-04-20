@@ -302,6 +302,7 @@
 
   simd_float2 objPos =
       [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+  objPos = [self snapToGridPosition:objPos];
   [active insertAtIndex:active.count position:objPos];
   [self selectActivePath];
   [self writePaths:self.paths];
@@ -455,8 +456,10 @@
     self.activePathIndex = nearPath;
     [self syncStrokeParamsToSelectionWithPrevious:prevSel];
     self.dragIsPath = YES;
-    self.dragOrigin =
-        [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+    self.dragOrigin = [self
+        snapToGridPosition:[self objectPointFromCanvasPoint:CGPointMake(
+                                                                positionX,
+                                                                positionY)]];
     *forceUpdate = YES;
     return;
   }
