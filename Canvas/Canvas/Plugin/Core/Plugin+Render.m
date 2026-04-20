@@ -528,17 +528,22 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
         } else if (path.fillEnabled && orig.count >= 2 && fillStencilPS &&
                    fillColorPS && stencilTexture) {
           if (path.sketchFillStyle > 0) {
-            BOOL clipFill = !path.sketchEnabled;
-            if (clipFill) {
-              KKRenderFillStencilOnly(orig, outputWidth, outputHeight, device,
-                                      commandBuffer, target, stencilTexture,
-                                      fillStencilPS, fillStencilDSState,
-                                      viewportSize);
+            // Always clip hachure fills — use the sketched outline when sketch
+            // is enabled so fill stays within the bowed/jittered shape.
+            KKBezierPath *clipPath = orig;
+            if (orig.sketchEnabled && orig.sketchRoughness > 0.0001f) {
+              clipPath =
+                  KKSketchPath(orig, orig.sketchRoughness, orig.sketchBowing,
+                               orig.sketchSeed, 1, outputWidth, outputHeight);
             }
+            KKRenderFillStencilOnly(clipPath, outputWidth, outputHeight, device,
+                                    commandBuffer, target, stencilTexture,
+                                    fillStencilPS, fillStencilDSState,
+                                    viewportSize);
             KKRenderSketchFillForPath(orig, outputWidth, outputHeight, device,
                                       commandBuffer, target, stencilTexture,
                                       strokeStencilPS, fillColorDSState,
-                                      viewportSize, clipFill);
+                                      viewportSize, YES);
           } else {
             KKBezierPath *fillPath = orig;
             if (orig.sketchEnabled && orig.sketchRoughness > 0.0001f) {
