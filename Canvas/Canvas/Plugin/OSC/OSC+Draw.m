@@ -627,6 +627,38 @@ static const CGFloat kPathToolbarGap = 6.0;
         destinationImage:destinationImage];
   }
 
+  // Draw alignment snap guides.
+  if (self.alignSnappedX || self.alignSnappedY) {
+    CGPoint canvasTL2 = [self canvasPointFromObjectPoint:(simd_float2){0, 0}];
+    CGPoint canvasBR2 = [self canvasPointFromObjectPoint:(simd_float2){1, 1}];
+    CGFloat guideLeft = fmin(canvasTL2.x, canvasBR2.x);
+    CGFloat guideRight = fmax(canvasTL2.x, canvasBR2.x);
+    CGFloat guideTop = fmin(canvasTL2.y, canvasBR2.y);
+    CGFloat guideBottom = fmax(canvasTL2.y, canvasBR2.y);
+    simd_float4 guideColor = {1.0f, 1.0f, 0.0f, 1.0f};
+
+    if (self.alignSnappedX) {
+      CGPoint c = [self
+          canvasPointFromObjectPoint:(simd_float2){self.alignSnapValueX, 0}];
+      CGFloat cx = floor(c.x) + 0.5;
+      [self drawLineFrom:(CGPoint){cx, guideTop}
+                        to:(CGPoint){cx, guideBottom}
+                     color:guideColor
+                 halfWidth:2.0f
+          destinationImage:destinationImage];
+    }
+    if (self.alignSnappedY) {
+      CGPoint c = [self
+          canvasPointFromObjectPoint:(simd_float2){0, self.alignSnapValueY}];
+      CGFloat cy = floor(c.y) + 0.5;
+      [self drawLineFrom:(CGPoint){guideLeft, cy}
+                        to:(CGPoint){guideRight, cy}
+                     color:guideColor
+                 halfWidth:2.0f
+          destinationImage:destinationImage];
+    }
+  }
+
   // Draw toolbars last so they appear on top of everything.
   [self.toolbar drawWithDestinationImage:destinationImage];
   [self.gridToolbar drawWithDestinationImage:destinationImage];
