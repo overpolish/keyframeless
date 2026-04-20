@@ -72,9 +72,7 @@ static const CGFloat kPathToolbarGap = 6.0;
     }
   }
 
-  [self.toolbar drawWithDestinationImage:destinationImage];
-
-  // Draw grid controls: [snap] [grid] [adaptive] [stepper] in one toolbar.
+  // Sync grid toolbar state (drawing deferred to end of method).
   {
     self.gridToolbar.activeTag = self.gridEnabled ? kOSCGridToggle : 0;
     self.gridToolbar.secondaryActiveTag =
@@ -89,15 +87,13 @@ static const CGFloat kPathToolbarGap = 6.0;
     // Set the stepper label to the current spacing value.
     self.gridToolbar.items[3].shortcutLabel =
         [NSString stringWithFormat:@"%ld", (long)self.gridSpacing];
-
-    [self.gridToolbar drawWithDestinationImage:destinationImage];
   }
 
   self.paths = [self readPaths];
 
-  // Show path toolbar when 2+ non-image paths are selected in cursor mode.
+  // Determine whether path toolbar should show (drawing deferred to end).
+  BOOL showPathToolbar = NO;
   {
-    BOOL showPathToolbar = NO;
     if (self.toolbar.activeTag == kOSCToolbarCursor &&
         self.selectedPathIndices.count >= 2) {
       __block NSUInteger pathCount = 0;
@@ -114,7 +110,6 @@ static const CGFloat kPathToolbarGap = 6.0;
       NSRect mainFrame = self.toolbar.toolbarFrame;
       self.pathToolbar.bottomMargin =
           mainFrame.size.height + kPathToolbarGap + 8.0;
-      [self.pathToolbar drawWithDestinationImage:destinationImage];
     }
   }
 
@@ -631,6 +626,12 @@ static const CGFloat kPathToolbarGap = 6.0;
                halfWidth:1.5f
         destinationImage:destinationImage];
   }
+
+  // Draw toolbars last so they appear on top of everything.
+  [self.toolbar drawWithDestinationImage:destinationImage];
+  [self.gridToolbar drawWithDestinationImage:destinationImage];
+  if (showPathToolbar)
+    [self.pathToolbar drawWithDestinationImage:destinationImage];
 }
 
 @end
