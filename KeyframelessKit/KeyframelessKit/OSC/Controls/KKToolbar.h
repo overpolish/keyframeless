@@ -29,6 +29,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// Extra margin from the bottom edge in points (default 8).
 @property(nonatomic, assign) CGFloat bottomMargin;
 
+/// When >= 0, align the toolbar to the right edge with this margin (default -1
+/// = centered).
+@property(nonatomic, assign) CGFloat rightMargin;
+
 /// Frame of the toolbar after the last draw (ioSurface coords, Y-down).
 @property(nonatomic, readonly) NSRect toolbarFrame;
 

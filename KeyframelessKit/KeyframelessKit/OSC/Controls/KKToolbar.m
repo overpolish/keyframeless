@@ -68,6 +68,7 @@ static const CGFloat kIconShiftY = 8.0;
     _cachedNames = [NSMutableArray arrayWithCapacity:items.count];
     _labelTextures = [NSMutableArray arrayWithCapacity:items.count];
     _bottomMargin = kToolbarMargin;
+    _rightMargin = -1;
     _buttonCenters = [NSMutableArray arrayWithCapacity:items.count];
     _buttonRects = [NSMutableArray arrayWithCapacity:items.count];
     for (NSUInteger i = 0; i < items.count; i++) {
@@ -311,7 +312,8 @@ static void drawTexturedQuad(id<MTLRenderCommandEncoder> encoder,
       itemCount * kButtonSize + (itemCount - 1) * kButtonSpacing;
   CGFloat toolbarW = totalButtonsW + kToolbarPadding * 2;
   CGFloat toolbarH = kButtonHeight + kToolbarPadding * 2;
-  CGFloat toolbarX = ioW / 2.0;
+  CGFloat toolbarX =
+      (_rightMargin >= 0) ? (ioW - _rightMargin - toolbarW / 2.0) : (ioW / 2.0);
   CGFloat toolbarY = ioH - _bottomMargin - toolbarH / 2.0;
 
   _toolbarFrame = NSMakeRect(toolbarX - toolbarW / 2.0,
