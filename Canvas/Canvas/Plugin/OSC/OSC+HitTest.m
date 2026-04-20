@@ -234,6 +234,13 @@
     return;
   }
 
+  NSInteger gridPart = [self.gridToolbar hitTestAtX:positionX y:positionY];
+  if (gridPart != 0) {
+    *activePart = gridPart;
+    [oscAPI setCursor:[NSCursor arrowCursor]];
+    return;
+  }
+
   // Path combine toolbar (only visible when 2+ non-image paths selected).
   NSInteger pathToolbarPart = [self.pathToolbar hitTestAtX:positionX
                                                          y:positionY];

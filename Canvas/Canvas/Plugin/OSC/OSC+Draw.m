@@ -31,6 +31,9 @@ static const CGFloat kPathToolbarGap = 6.0;
 
   [self.toolbar drawWithDestinationImage:destinationImage];
 
+  self.gridToolbar.activeTag = self.gridEnabled ? kOSCGridToggle : 0;
+  [self.gridToolbar drawWithDestinationImage:destinationImage];
+
   self.paths = [self readPaths];
 
   // Show path toolbar when 2+ non-image paths are selected in cursor mode.

@@ -94,6 +94,16 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
                      ]];
     self.pathToolbar.activeTag = 0;
 
+    self.gridToolbar = [[KKToolbar alloc]
+        initWithAPIManager:apiManager
+                     items:@[
+                       [KKToolbarItem itemWithIcon:@"grid"
+                                               tag:kOSCGridToggle
+                                     shortcutLabel:@"Grid"],
+                     ]];
+    self.gridToolbar.activeTag = 0;
+    self.gridToolbar.rightMargin = 16.0;
+
     self.sizeLabel = [[KKOSCLabel alloc] initWithAPIManager:apiManager];
     self.sizeLabel.monospaced = YES;
 

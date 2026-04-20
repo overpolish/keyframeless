@@ -86,6 +86,9 @@ static const NSInteger kOSCInHandleBase = 100000;    // 100000 + index
 static const NSInteger kOSCOutHandleBase = 200000;   // 200000 + index
 static const NSInteger kOSCPathSegmentBase = 300000; // 300000 + segment index
 
+// Grid toolbar
+static const NSInteger kOSCGridToggle = 40001;
+
 // Path combine toolbar
 static const NSInteger kOSCPathUnion = 30001;
 static const NSInteger kOSCPathSubtract = 30002;

@@ -68,6 +68,11 @@
     *forceUpdate = YES;
     return;
   }
+  if (activePart == kOSCGridToggle) {
+    self.gridEnabled = !self.gridEnabled;
+    *forceUpdate = YES;
+    return;
+  }
   if (activePart == -1)
     return;
 
