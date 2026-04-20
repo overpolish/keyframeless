@@ -85,6 +85,30 @@
     *forceUpdate = YES;
     return;
   }
+  if (activePart == kOSCGridMinus || activePart == kOSCGridPlus) {
+    NSInteger step = (modifiers & kFxModifierKey_SHIFT) ? 10 : 1;
+    if (activePart == kOSCGridMinus)
+      self.gridSpacing = MAX(1, self.gridSpacing - step);
+    else
+      self.gridSpacing = MIN(1000, self.gridSpacing + step);
+    id<FxParameterSettingAPI_v5> setAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [setAPI setIntValue:(int)self.gridSpacing
+            toParameter:kParamGridSpacing
+                 atTime:kCMTimeZero];
+    *forceUpdate = YES;
+    return;
+  }
+  if (activePart == kOSCGridAdaptive) {
+    self.gridAdaptive = !self.gridAdaptive;
+    id<FxParameterSettingAPI_v5> setAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [setAPI setBoolValue:self.gridAdaptive
+             toParameter:kParamGridAdaptive
+                  atTime:kCMTimeZero];
+    *forceUpdate = YES;
+    return;
+  }
   if (activePart == -1)
     return;
 

@@ -94,15 +94,41 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
                      ]];
     self.pathToolbar.activeTag = 0;
 
-    self.gridToolbar = [[KKToolbar alloc]
-        initWithAPIManager:apiManager
-                     items:@[
-                       [KKToolbarItem itemWithIcon:@"grid"
-                                               tag:kOSCGridToggle
-                                     shortcutLabel:@"Grid"],
-                     ]];
-    self.gridToolbar.activeTag = 0;
-    self.gridToolbar.rightMargin = 16.0;
+    {
+      KKToolbarItem *gridItem = [KKToolbarItem itemWithIcon:@"grid"
+                                                        tag:kOSCGridToggle
+                                              shortcutLabel:@"Grid"];
+
+      KKToolbarItem *minusItem = [KKToolbarItem itemWithIcon:@"minus"
+                                                         tag:kOSCGridMinus
+                                               shortcutLabel:nil];
+      minusItem.customWidth = 20.0;
+      minusItem.customHeight = 20.0;
+      minusItem.iconYOffset = -12.0;
+
+      KKToolbarItem *plusItem = [KKToolbarItem itemWithIcon:@"plus"
+                                                        tag:kOSCGridPlus
+                                              shortcutLabel:nil];
+      plusItem.customWidth = 20.0;
+      plusItem.customHeight = 20.0;
+      plusItem.iconYOffset = -12.0;
+
+      KKToolbarItem *adaptiveItem =
+          [KKToolbarItem itemWithIcon:@"squareshape.split.2x2.dotted"
+                                  tag:kOSCGridAdaptive
+                        shortcutLabel:@"Auto"];
+
+      self.gridToolbar = [[KKToolbar alloc]
+          initWithAPIManager:apiManager
+                       items:@[ gridItem, adaptiveItem, minusItem, plusItem ]];
+      self.gridToolbar.activeTag = 0;
+      self.gridToolbar.rightMargin = 16.0;
+    }
+
+    self.gridSpacingLabel = [[KKOSCLabel alloc] initWithAPIManager:apiManager];
+    self.gridSpacingLabel.monospaced = YES;
+    self.gridSpacing = 50;
+    self.gridAdaptive = YES;
 
     self.sizeLabel = [[KKOSCLabel alloc] initWithAPIManager:apiManager];
     self.sizeLabel.monospaced = YES;
