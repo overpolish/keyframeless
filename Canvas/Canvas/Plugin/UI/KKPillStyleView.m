@@ -3,15 +3,14 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-#import "StrokeStyleView.h"
+#import "KKPillStyleView.h"
 #import <KeyframelessKit/KeyframelessKit.h>
 
 static const CGFloat kPillSpacing = 2.0;
 static const CGFloat kPillCorner = 3.0;
-static const NSInteger kStyleCount = 3;
 static const CGFloat kPillSize = 22.0;
 
-@implementation KKStrokeStyleView {
+@implementation KKPillStyleView {
   NSArray<NSButton *> *_buttons;
 }
 
@@ -28,58 +27,12 @@ static const CGFloat kPillSize = 22.0;
   return YES;
 }
 
-static void drawStrokeStyle(CGFloat ox, CGFloat oy, CGFloat k,
-                            NSInteger style) {
-  NSBezierPath *p = [NSBezierPath bezierPath];
-
-  switch (style) {
-  case 0: {
-    // Solid: single rounded rect centered vertically.
-    NSRect r = NSMakeRect(ox + 4 * k, oy + 10.5 * k, 16 * k, 3 * k);
-    [p appendBezierPathWithRoundedRect:r xRadius:1.5 * k yRadius:1.5 * k];
-    break;
-  }
-  case 1: {
-    // Dashed: two rounded rects with a gap.
-    NSRect r1 = NSMakeRect(ox + 4 * k, oy + 10.5 * k, 7 * k, 3 * k);
-    [p appendBezierPathWithRoundedRect:r1 xRadius:1.5 * k yRadius:1.5 * k];
-    NSRect r2 = NSMakeRect(ox + 13 * k, oy + 10.5 * k, 7 * k, 3 * k);
-    [p appendBezierPathWithRoundedRect:r2 xRadius:1.5 * k yRadius:1.5 * k];
-    break;
-  }
-  default: {
-    // Dotted: four circles evenly spaced.
-    for (NSInteger i = 0; i < 4; i++) {
-      CGFloat cx = ox + (5.75 + i * 4.25) * k;
-      CGFloat cy = oy + 12 * k;
-      NSRect r = NSMakeRect(cx - 1.5 * k, cy - 1.5 * k, 3 * k, 3 * k);
-      [p appendBezierPathWithOvalInRect:r];
-    }
-    break;
-  }
-  }
-
-  [p fill];
+- (NSInteger)pillCount {
+  return 0;
 }
 
-- (NSImage *)styleImageForIndex:(NSInteger)index active:(BOOL)active {
-  CGFloat imgSize = 24.0;
-  NSImage *img = [NSImage
-       imageWithSize:NSMakeSize(imgSize, imgSize)
-             flipped:YES
-      drawingHandler:^BOOL(NSRect rect) {
-        NSColor *color =
-            active ? [NSColor accentMatchingHost]
-                   : [[NSColor inspectorLabel] colorWithAlphaComponent:0.35];
-        [color setFill];
-        CGFloat s = fmin(rect.size.width, rect.size.height);
-        CGFloat ox = NSMinX(rect) + (rect.size.width - s) / 2.0;
-        CGFloat oy = NSMinY(rect) + (rect.size.height - s) / 2.0;
-        drawStrokeStyle(ox, oy, s / 24.0, index);
-        return YES;
-      }];
-  img.template = NO;
-  return img;
+- (NSImage *)imageForIndex:(NSInteger)index active:(BOOL)active {
+  return [[NSImage alloc] initWithSize:NSMakeSize(kPillSize, kPillSize)];
 }
 
 - (void)buildButtons {
@@ -90,10 +43,10 @@ static void drawStrokeStyle(CGFloat ox, CGFloat oy, CGFloat k,
   stack.spacing = kPillSpacing;
   stack.translatesAutoresizingMaskIntoConstraints = NO;
 
-  for (NSInteger i = 0; i < kStyleCount; i++) {
+  for (NSInteger i = 0; i < [self pillCount]; i++) {
     BOOL active = (i == _selectedIndex);
-    NSButton *btn = [NSButton buttonWithImage:[self styleImageForIndex:i
-                                                                active:active]
+    NSButton *btn = [NSButton buttonWithImage:[self imageForIndex:i
+                                                           active:active]
                                        target:self
                                        action:@selector(pillClicked:)];
     btn.bezelStyle = NSBezelStyleSmallSquare;
@@ -120,7 +73,7 @@ static void drawStrokeStyle(CGFloat ox, CGFloat oy, CGFloat k,
   for (NSInteger i = 0; i < (NSInteger)_buttons.count; i++) {
     NSButton *btn = _buttons[i];
     BOOL active = (i == _selectedIndex);
-    btn.image = [self styleImageForIndex:i active:active];
+    btn.image = [self imageForIndex:i active:active];
     btn.layer.cornerRadius = kPillCorner;
     if (active) {
       btn.layer.backgroundColor = [NSColor inspectorBackground].CGColor;
@@ -133,6 +86,10 @@ static void drawStrokeStyle(CGFloat ox, CGFloat oy, CGFloat k,
       btn.layer.borderWidth = 0.0;
     }
   }
+}
+
+- (void)rebuildImages {
+  [self updateButtonAppearance];
 }
 
 - (void)pillClicked:(NSButton *)sender {
