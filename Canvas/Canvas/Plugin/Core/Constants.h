@@ -56,6 +56,8 @@ static const UInt32 kParamFillTint = 137;
 static const UInt32 kParamForceShow = 9000;
 static const UInt32 kParamHideOSC = 9001;
 static const UInt32 kParamAutoSelect = 9002;
+static const UInt32 kParamGridEnabled = 9003;
+static const UInt32 kParamLastTool = 9004;
 
 @protocol PROAPIAccessing;
 NSString *_Nullable KKLayerUUIDForAPI(id<PROAPIAccessing> _Nonnull api);

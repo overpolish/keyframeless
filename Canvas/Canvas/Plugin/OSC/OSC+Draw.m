@@ -29,6 +29,27 @@ static const CGFloat kPathToolbarGap = 6.0;
                                                   CGPoint p, simd_uint2 v){
                                        }];
 
+  // Restore persisted toolbar state from params.
+  {
+    id<FxParameterRetrievalAPI_v6> getAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    BOOL gridVal = NO;
+    [getAPI getBoolValue:&gridVal
+           fromParameter:kParamGridEnabled
+                  atTime:kCMTimeZero];
+    self.gridEnabled = gridVal;
+
+    if (!self.restoredTool) {
+      self.restoredTool = YES;
+      int toolVal = (int)kOSCToolbarCursor;
+      [getAPI getIntValue:&toolVal
+            fromParameter:kParamLastTool
+                   atTime:kCMTimeZero];
+      if (toolVal > 0)
+        self.toolbar.activeTag = toolVal;
+    }
+  }
+
   [self.toolbar drawWithDestinationImage:destinationImage];
 
   self.gridToolbar.activeTag = self.gridEnabled ? kOSCGridToggle : 0;
