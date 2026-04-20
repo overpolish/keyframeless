@@ -91,5 +91,6 @@ static const NSInteger kOSCPathUnion = 30001;
 static const NSInteger kOSCPathSubtract = 30002;
 static const NSInteger kOSCPathIntersect = 30003;
 static const NSInteger kOSCPathXOR = 30004;
+static const NSInteger kOSCPathOutline = 30005;
 
 NS_ASSUME_NONNULL_END

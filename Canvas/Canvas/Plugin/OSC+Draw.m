@@ -594,12 +594,12 @@ static const CGFloat kPathToolbarGap = 6.0;
 
   self.paths = [self readPaths];
 
-  // Show path combine toolbar when 2+ non-image paths are selected in cursor
-  // mode.
+  // Show path toolbar when 1+ non-image paths are selected in cursor mode.
+  // Boolean ops guard count >= 2 at click time; Outline works on 1+.
   {
     BOOL showPathToolbar = NO;
     if (self.toolbar.activeTag == kOSCToolbarCursor &&
-        self.selectedPathIndices.count >= 2) {
+        self.selectedPathIndices.count >= 1) {
       __block NSUInteger pathCount = 0;
       [self.selectedPathIndices
           enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
@@ -608,7 +608,7 @@ static const CGFloat kPathToolbarGap = 6.0;
               pathCount++;
             }
           }];
-      showPathToolbar = (pathCount >= 2);
+      showPathToolbar = (pathCount >= 1);
     }
     if (showPathToolbar) {
       NSRect mainFrame = self.toolbar.toolbarFrame;
@@ -772,9 +772,13 @@ static const CGFloat kPathToolbarGap = 6.0;
     }
   }
 
-  // Boolean operation preview overlay on hover.
-  if (isCursorMode && self.hoveredPathOp > 0 &&
-      self.selectedPathIndices.count >= 2) {
+  // Path operation preview overlay on hover.
+  BOOL showBooleanPreview = isCursorMode && self.hoveredPathOp > 0 &&
+                            ((self.hoveredPathOp == kOSCPathOutline &&
+                              self.selectedPathIndices.count >= 1) ||
+                             (self.hoveredPathOp != kOSCPathOutline &&
+                              self.selectedPathIndices.count >= 2));
+  if (showBooleanPreview) {
     // Compute preview result if not cached for this op.
     if (self.previewCachedOp != self.hoveredPathOp) {
       NSMutableArray<KKBezierPath *> *operands = [NSMutableArray array];
@@ -787,7 +791,12 @@ static const CGFloat kPathToolbarGap = 6.0;
                                [operands addObject:self.paths[idx]];
                              }
                            }];
-      if (operands.count >= 2) {
+      if (self.hoveredPathOp == kOSCPathOutline) {
+        // Preview the outline result (use first outline as preview).
+        NSArray<KKBezierPath *> *outlines = KKPathStrokeToOutline(
+            operands, (CGFloat)self.imageWidth, (CGFloat)self.imageHeight);
+        self.previewResultPath = outlines.firstObject;
+      } else if (operands.count >= 2) {
         KKBooleanOp op;
         if (self.hoveredPathOp == kOSCPathUnion)
           op = KKBooleanOpUnion;
@@ -883,7 +892,6 @@ static const CGFloat kPathToolbarGap = 6.0;
           NSUInteger firstIdx = self.selectedPathIndices.firstIndex;
           if (firstIdx < self.paths.count)
             sw = self.paths[firstIdx].strokeWidth;
-          BOOL hasFill = NO;
           [self.selectedPathIndices
               enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
                 if (idx < self.paths.count && self.paths[idx].fillEnabled) {

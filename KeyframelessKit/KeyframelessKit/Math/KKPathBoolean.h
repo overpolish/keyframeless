@@ -25,6 +25,14 @@ typedef NS_ENUM(NSInteger, KKBooleanOp) {
 KKBezierPath *_Nullable KKPathBooleanApply(NSArray<KKBezierPath *> *paths,
                                            KKBooleanOp op);
 
+/// Convert the stroke of each path into a filled outline path.
+/// Returns one outline path per input path, or nil entries on failure.
+/// referenceWidth/Height are pixel dimensions used to scale the stroke
+/// width into object space (path coords are 0-1 normalised).
+NSArray<KKBezierPath *> *_Nullable KKPathStrokeToOutline(
+    NSArray<KKBezierPath *> *paths, CGFloat referenceWidth,
+    CGFloat referenceHeight);
+
 /// Render a preview overlay texture showing which regions stay (green)
 /// and which are removed (red) by a boolean operation.
 /// width/height are ioSurface pixel dimensions.

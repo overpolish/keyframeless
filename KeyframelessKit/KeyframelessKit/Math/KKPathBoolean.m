@@ -208,6 +208,331 @@ static void copyStyleProperties(KKBezierPath *dst, KKBezierPath *src) {
   dst.endMarkerSize = src.endMarkerSize;
 }
 
+/// Douglas-Peucker polyline simplification.  Marks which indices to keep
+/// in the `keep` array.  Tolerance is in the same units as the points.
+static void douglasPeucker(const simd_float2 *pts, NSUInteger start,
+                           NSUInteger end, float epsilon, BOOL *keep) {
+  if (end <= start + 1)
+    return;
+
+  float maxDist = 0;
+  NSUInteger maxIdx = start;
+
+  simd_float2 a = pts[start];
+  simd_float2 b = pts[end];
+  simd_float2 ab = b - a;
+  float abLen = simd_length(ab);
+
+  for (NSUInteger i = start + 1; i < end; i++) {
+    float dist;
+    if (abLen < 1e-6f) {
+      dist = simd_length(pts[i] - a);
+    } else {
+      simd_float2 ap = pts[i] - a;
+      float cross = fabsf(ap.x * ab.y - ap.y * ab.x);
+      dist = cross / abLen;
+    }
+    if (dist > maxDist) {
+      maxDist = dist;
+      maxIdx = i;
+    }
+  }
+
+  if (maxDist > epsilon) {
+    keep[maxIdx] = YES;
+    douglasPeucker(pts, start, maxIdx, epsilon, keep);
+    douglasPeucker(pts, maxIdx, end, epsilon, keep);
+  }
+}
+
+/// Simplify a polyline using Douglas-Peucker, returning a new array of
+/// kept points.  Caller must free the result.
+static NSUInteger simplifyPolyline(const simd_float2 *pts, NSUInteger count,
+                                   float epsilon, simd_float2 **outPts) {
+  if (count < 3) {
+    *outPts = malloc(count * sizeof(simd_float2));
+    memcpy(*outPts, pts, count * sizeof(simd_float2));
+    return count;
+  }
+
+  BOOL *keep = calloc(count, sizeof(BOOL));
+  keep[0] = YES;
+  keep[count - 1] = YES;
+  douglasPeucker(pts, 0, count - 1, epsilon, keep);
+
+  NSUInteger kept = 0;
+  for (NSUInteger i = 0; i < count; i++) {
+    if (keep[i])
+      kept++;
+  }
+
+  simd_float2 *result = malloc(kept * sizeof(simd_float2));
+  NSUInteger idx = 0;
+  for (NSUInteger i = 0; i < count; i++) {
+    if (keep[i])
+      result[idx++] = pts[i];
+  }
+
+  free(keep);
+  *outPts = result;
+  return kept;
+}
+
+/// Build an outline CGPath for a tapered stroke by sampling normals and
+/// offsetting by the interpolated half-width.  Returns a closed path in
+/// pixel space (caller must transform back to object space).
+static CGPathRef createTaperedOutline(KKBezierPath *src, CGFloat sw, CGFloat ew,
+                                      CGFloat refW, CGFloat refH,
+                                      uint8_t lineCap) {
+  NSUInteger segs = 64;
+  NSUInteger curveCount = src.count - 1;
+  BOOL isClosed = src.closed;
+  if (isClosed && src.count >= 2)
+    curveCount = src.count;
+  NSUInteger totalSamples = curveCount * segs + 1;
+  float totalSteps = (float)(curveCount * segs);
+
+  // Sample centre positions and half-widths along the path.
+  simd_float2 *centres = malloc(totalSamples * sizeof(simd_float2));
+  float *halfWidths = malloc(totalSamples * sizeof(float));
+  NSUInteger sampleCount = 0;
+
+  for (NSUInteger c = 0; c < curveCount; c++) {
+    NSUInteger limit = (c == curveCount - 1) ? segs : segs - 1;
+    for (NSUInteger i = 0; i <= limit; i++) {
+      float t = (float)i / (float)segs;
+      NSUInteger nextIdx = (c + 1) % src.count;
+      simd_float2 pos = [src evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
+      simd_float2 pxPos = {pos.x * (float)refW, pos.y * (float)refH};
+
+      float globalT =
+          totalSteps > 0 ? (float)(c * segs + i) / totalSteps : 0.0f;
+      float hw = (float)(sw + (ew - sw) * globalT) / 2.0f;
+
+      centres[sampleCount] = pxPos;
+      halfWidths[sampleCount] = hw;
+      sampleCount++;
+    }
+  }
+
+  // Compute normals from position finite differences to avoid tangent
+  // discontinuities at segment boundaries.
+  simd_float2 *normals = malloc(sampleCount * sizeof(simd_float2));
+  for (NSUInteger i = 0; i < sampleCount; i++) {
+    simd_float2 delta;
+    if (i == 0)
+      delta = centres[1] - centres[0];
+    else if (i == sampleCount - 1)
+      delta = centres[sampleCount - 1] - centres[sampleCount - 2];
+    else
+      delta = centres[i + 1] - centres[i - 1];
+    float len = simd_length(delta);
+    if (len < 1e-6f)
+      delta = (simd_float2){1, 0};
+    else
+      delta /= len;
+    normals[i] = (simd_float2){-delta.y, delta.x};
+  }
+
+  // Build offset polylines for both sides, then simplify.
+  simd_float2 *plusSide = malloc(sampleCount * sizeof(simd_float2));
+  simd_float2 *minusSide = malloc(sampleCount * sizeof(simd_float2));
+  for (NSUInteger i = 0; i < sampleCount; i++) {
+    plusSide[i] = centres[i] + normals[i] * halfWidths[i];
+    minusSide[i] = centres[i] - normals[i] * halfWidths[i];
+  }
+
+  simd_float2 *simpPlus = NULL, *simpMinus = NULL;
+  float epsilon = 1.5f;
+  NSUInteger plusCount =
+      simplifyPolyline(plusSide, sampleCount, epsilon, &simpPlus);
+  NSUInteger minusCount =
+      simplifyPolyline(minusSide, sampleCount, epsilon, &simpMinus);
+  free(plusSide);
+  free(minusSide);
+
+  // Build CGPath: forward along +normal side, semicircular end cap,
+  // backward along -normal side, semicircular start cap.
+  CGMutablePathRef outline = CGPathCreateMutable();
+
+  if (plusCount > 0 && minusCount > 0) {
+    // Square cap extends the start outward by startHW along the tangent.
+    simd_float2 startN = normals[0];
+    simd_float2 startT = {startN.y, -startN.x}; // tangent (forward)
+    float startHW = halfWidths[0];
+    simd_float2 endN = normals[sampleCount - 1];
+    simd_float2 endT = {endN.y, -endN.x};
+    float endHW = halfWidths[sampleCount - 1];
+
+    if (lineCap == 2) {
+      // Square: extend start backward.
+      simd_float2 sp = simpPlus[0] - startT * startHW;
+      CGPathMoveToPoint(outline, NULL, sp.x, sp.y);
+      simd_float2 sm = simpMinus[0] - startT * startHW;
+      CGPathAddLineToPoint(outline, NULL, sm.x, sm.y);
+      // Go forward to first minus, but we'll trace minus backward later,
+      // so start with first plus instead. Restart approach:
+    }
+
+    // --- Start cap ---
+    if (lineCap == 2) {
+      // Square start: two corners extended backward.
+      simd_float2 extPlus = simpPlus[0] - startT * startHW;
+      simd_float2 extMinus = simpMinus[0] - startT * startHW;
+      CGPathMoveToPoint(outline, NULL, extPlus.x, extPlus.y);
+      CGPathAddLineToPoint(outline, NULL, simpPlus[0].x, simpPlus[0].y);
+    } else if (lineCap == 1) {
+      // Round start: semicircle from minus[0] to plus[0].
+      // We'll add this after tracing minus side backward. Start at plus[0].
+      CGPathMoveToPoint(outline, NULL, simpPlus[0].x, simpPlus[0].y);
+    } else {
+      // Butt: start at plus[0].
+      CGPathMoveToPoint(outline, NULL, simpPlus[0].x, simpPlus[0].y);
+    }
+
+    // --- Plus side (forward) ---
+    for (NSUInteger i = 1; i < plusCount; i++)
+      CGPathAddLineToPoint(outline, NULL, simpPlus[i].x, simpPlus[i].y);
+
+    // --- End cap ---
+    simd_float2 lastPlus = centres[sampleCount - 1] + endN * endHW;
+    simd_float2 lastMinus = centres[sampleCount - 1] - endN * endHW;
+
+    if (lineCap == 2) {
+      // Square end: extend forward.
+      simd_float2 extPlus = lastPlus + endT * endHW;
+      simd_float2 extMinus = lastMinus + endT * endHW;
+      CGPathAddLineToPoint(outline, NULL, extPlus.x, extPlus.y);
+      CGPathAddLineToPoint(outline, NULL, extMinus.x, extMinus.y);
+      CGPathAddLineToPoint(outline, NULL, lastMinus.x, lastMinus.y);
+    } else if (lineCap == 1) {
+      // Round end: semicircle from plus to minus.
+      NSUInteger capSegs = MAX(16, (NSUInteger)(endHW));
+      for (NSUInteger i = 1; i <= capSegs; i++) {
+        float a = (float)i / (float)capSegs * (float)M_PI;
+        simd_float2 p = centres[sampleCount - 1] +
+                        (endN * cosf(a) + endT * sinf(a)) * endHW;
+        CGPathAddLineToPoint(outline, NULL, p.x, p.y);
+      }
+    } else {
+      // Butt end: straight across.
+      CGPathAddLineToPoint(outline, NULL, lastMinus.x, lastMinus.y);
+    }
+
+    // --- Minus side (backward) ---
+    for (NSInteger i = (NSInteger)minusCount - 2; i >= 0; i--)
+      CGPathAddLineToPoint(outline, NULL, simpMinus[i].x, simpMinus[i].y);
+
+    // --- Start cap closing ---
+    if (lineCap == 2) {
+      // Square start: close via extended corners.
+      simd_float2 extMinus = simpMinus[0] - startT * startHW;
+      simd_float2 extPlus = simpPlus[0] - startT * startHW;
+      CGPathAddLineToPoint(outline, NULL, extMinus.x, extMinus.y);
+      CGPathAddLineToPoint(outline, NULL, extPlus.x, extPlus.y);
+    } else if (lineCap == 1) {
+      // Round start: semicircle from minus[0] back to plus[0].
+      simd_float2 firstMinus = centres[0] - startN * startHW;
+      NSUInteger capSegs = MAX(16, (NSUInteger)(startHW));
+      for (NSUInteger i = 1; i < capSegs; i++) {
+        float a = (float)i / (float)capSegs * (float)M_PI;
+        simd_float2 p =
+            centres[0] + (-startN * cosf(a) - startT * sinf(a)) * startHW;
+        CGPathAddLineToPoint(outline, NULL, p.x, p.y);
+      }
+    }
+
+    CGPathCloseSubpath(outline);
+  }
+
+  free(simpPlus);
+  free(simpMinus);
+
+  free(centres);
+  free(normals);
+  free(halfWidths);
+  return outline;
+}
+
+NSArray<KKBezierPath *> *KKPathStrokeToOutline(NSArray<KKBezierPath *> *paths,
+                                               CGFloat referenceWidth,
+                                               CGFloat referenceHeight) {
+  if (paths.count == 0 || referenceWidth <= 0 || referenceHeight <= 0)
+    return nil;
+
+  NSMutableArray<KKBezierPath *> *results = [NSMutableArray array];
+
+  for (KKBezierPath *src in paths) {
+    if (src.count < 2 || !src.strokeEnabled) {
+      continue;
+    }
+
+    float sw = src.strokeWidth;
+    float ew = (src.endWidth > 0) ? src.endWidth : sw;
+    BOOL tapers = !src.closed && fabsf(sw - ew) > 0.001f;
+
+    CGPathRef cleaned = NULL;
+
+    if (tapers) {
+      // Variable-width stroke: build outline manually.
+      CGPathRef tapered = createTaperedOutline(src, sw, ew, referenceWidth,
+                                               referenceHeight, src.lineCap);
+      CGMutablePathRef empty = CGPathCreateMutable();
+      cleaned = CGPathCreateCopyByUnioningPath(tapered, empty, false);
+      CGPathRelease(empty);
+      CGPathRelease(tapered);
+    } else {
+      // Uniform stroke: use CG stroking.
+      CGMutablePathRef cgPath = CGPathFromKKBezierPath(src);
+      CGAffineTransform toPixel =
+          CGAffineTransformMake(referenceWidth, 0, 0, referenceHeight, 0, 0);
+      CGPathRef scaled = CGPathCreateCopyByTransformingPath(cgPath, &toPixel);
+      CGPathRelease(cgPath);
+
+      CGPathRef stroked = CGPathCreateCopyByStrokingPath(
+          scaled, NULL, sw, (CGLineCap)src.lineCap, (CGLineJoin)src.lineJoin,
+          4.0);
+      CGPathRelease(scaled);
+
+      if (!stroked)
+        continue;
+
+      CGMutablePathRef empty = CGPathCreateMutable();
+      cleaned = CGPathCreateCopyByUnioningPath(stroked, empty, false);
+      CGPathRelease(empty);
+      CGPathRelease(stroked);
+    }
+
+    if (!cleaned)
+      continue;
+
+    // Scale back to object space.
+    CGAffineTransform toObject = CGAffineTransformMake(
+        1.0 / referenceWidth, 0, 0, 1.0 / referenceHeight, 0, 0);
+    CGPathRef unscaled = CGPathCreateCopyByTransformingPath(cleaned, &toObject);
+    CGPathRelease(cleaned);
+
+    KKBezierPath *outline = KKBezierPathFromCGPath(unscaled);
+    CGPathRelease(unscaled);
+
+    if (outline.count == 0)
+      continue;
+
+    // The outline becomes a filled path using the source stroke color.
+    outline.fillEnabled = YES;
+    outline.fillR = src.strokeR;
+    outline.fillG = src.strokeG;
+    outline.fillB = src.strokeB;
+    outline.strokeEnabled = NO;
+    outline.opacity = src.opacity;
+    outline.name = src.name;
+
+    [results addObject:outline];
+  }
+
+  return results.count > 0 ? results : nil;
+}
+
 KKBezierPath *KKPathBooleanApply(NSArray<KKBezierPath *> *paths,
                                  KKBooleanOp op) {
   if (paths.count < 2)

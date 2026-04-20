@@ -528,6 +528,54 @@
     return;
   }
 
+  // Stroke-to-path (outline) action.
+  if (activePart == kOSCPathOutline) {
+    self.paths = [self readPaths];
+    NSMutableArray<KKBezierPath *> *operands = [NSMutableArray array];
+    NSMutableIndexSet *operandIndices = [NSMutableIndexSet indexSet];
+    [self.selectedPathIndices
+        enumerateIndexesWithOptions:NSEnumerationReverse
+                         usingBlock:^(NSUInteger idx, BOOL *stop) {
+                           if (idx < self.paths.count &&
+                               !self.paths[idx].isImage &&
+                               !self.paths[idx].isGroup &&
+                               self.paths[idx].strokeEnabled) {
+                             [operands addObject:self.paths[idx]];
+                             [operandIndices addIndex:idx];
+                           }
+                         }];
+
+    if (operands.count > 0) {
+      NSArray<KKBezierPath *> *outlines = KKPathStrokeToOutline(
+          operands, (CGFloat)self.imageWidth, (CGFloat)self.imageHeight);
+      if (outlines.count > 0) {
+        // For each operand: disable stroke on original, insert outline above.
+        // Process in reverse index order so inserts don't shift earlier
+        // indices. outlines[0] corresponds to the highest index (operands
+        // collected in reverse), so enumerate in reverse to match.
+        __block NSUInteger outlineIdx = 0;
+        [operandIndices
+            enumerateIndexesWithOptions:NSEnumerationReverse
+                             usingBlock:^(NSUInteger idx, BOOL *stop) {
+                               self.paths[idx].strokeEnabled = NO;
+                               NSUInteger insertAt = idx + 1;
+                               [self.paths insertObject:outlines[outlineIdx]
+                                                atIndex:insertAt];
+                               outlineIdx++;
+                             }];
+
+        [self writePaths:self.paths];
+        [self.selectedPathIndices removeAllIndexes];
+        self.activePathIndex = -1;
+        // Pass empty previous selection so syncStroke doesn't overwrite
+        // the strokeEnabled=NO we just set on the originals.
+        [self syncStrokeParamsToSelectionWithPrevious:[NSIndexSet indexSet]];
+      }
+    }
+    *forceUpdate = YES;
+    return;
+  }
+
   // --- Read paths from storage ---
   self.paths = [self readPaths];
   KKBezierPath *active = [self activePath];
