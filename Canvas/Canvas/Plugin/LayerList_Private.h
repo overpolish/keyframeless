@@ -66,6 +66,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) NSUInteger visHash;
 @property(nonatomic) float canvasWidth;
 @property(nonatomic) float canvasHeight;
+@property(nonatomic, copy, nullable) NSIndexSet *previewSelectedIndices;
+@property(nonatomic, strong, nullable) KKBezierPath *previewResultPath;
+@property(nonatomic) BOOL previewActive;
 @end
 
 NSString *_Nullable KKLayerUUIDForAPI(id<PROAPIAccessing> api);

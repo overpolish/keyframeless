@@ -7,6 +7,9 @@
 
 #import <KeyframelessKit/KKBezierPath.h>
 
+@protocol MTLDevice;
+@protocol MTLTexture;
+
 NS_ASSUME_NONNULL_BEGIN
 
 typedef NS_ENUM(NSInteger, KKBooleanOp) {
@@ -21,5 +24,12 @@ typedef NS_ENUM(NSInteger, KKBooleanOp) {
 /// The result inherits style properties from the first path.
 KKBezierPath *_Nullable KKPathBooleanApply(NSArray<KKBezierPath *> *paths,
                                            KKBooleanOp op);
+
+/// Render a preview overlay texture showing which regions stay (green)
+/// and which are removed (red) by a boolean operation.
+/// width/height are ioSurface pixel dimensions.
+id<MTLTexture> _Nullable KKPathBooleanPreviewTexture(
+    NSArray<KKBezierPath *> *selectedPaths, KKBezierPath *_Nullable resultPath,
+    CGFloat width, CGFloat height, id<MTLDevice> device);
 
 NS_ASSUME_NONNULL_END

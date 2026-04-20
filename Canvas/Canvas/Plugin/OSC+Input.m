@@ -475,17 +475,21 @@
       activePart == kOSCPathIntersect || activePart == kOSCPathXOR) {
     self.paths = [self readPaths];
     if (self.selectedPathIndices.count >= 2) {
-      // Collect selected non-image, non-group paths in layer order.
+      // Collect selected non-image, non-group paths in bottom-to-top order
+      // (highest index first). The bottom-most path is the "base" for
+      // subtract/intersect, matching Inkscape's z-order convention.
       NSMutableArray<KKBezierPath *> *operands = [NSMutableArray array];
       NSMutableIndexSet *operandIndices = [NSMutableIndexSet indexSet];
       [self.selectedPathIndices
-          enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
-            if (idx < self.paths.count && !self.paths[idx].isImage &&
-                !self.paths[idx].isGroup) {
-              [operands addObject:self.paths[idx]];
-              [operandIndices addIndex:idx];
-            }
-          }];
+          enumerateIndexesWithOptions:NSEnumerationReverse
+                           usingBlock:^(NSUInteger idx, BOOL *stop) {
+                             if (idx < self.paths.count &&
+                                 !self.paths[idx].isImage &&
+                                 !self.paths[idx].isGroup) {
+                               [operands addObject:self.paths[idx]];
+                               [operandIndices addIndex:idx];
+                             }
+                           }];
 
       if (operands.count >= 2) {
         KKBooleanOp op;
