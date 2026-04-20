@@ -68,7 +68,7 @@ static const CGFloat kPathToolbarGap = 6.0;
 
   [self.toolbar drawWithDestinationImage:destinationImage];
 
-  // Draw grid controls: [grid] [−] [+] [adaptive] in one toolbar.
+  // Draw grid controls: [grid] [adaptive] [stepper] in one toolbar.
   {
     self.gridToolbar.activeTag = self.gridEnabled ? kOSCGridToggle : 0;
     self.gridToolbar.secondaryActiveTag =
@@ -78,24 +78,12 @@ static const CGFloat kPathToolbarGap = 6.0;
                                              : @"squareshape.split.2x2";
     self.gridToolbar.items[1].shortcutLabel =
         self.gridAdaptive ? @"Auto" : @"Static";
-    [self.gridToolbar drawWithDestinationImage:destinationImage];
 
-    // Overlay spacing label below the − and + buttons, centered in toolbar.
-    self.gridSpacingLabel.text =
+    // Set the stepper label to the current spacing value.
+    self.gridToolbar.items[2].shortcutLabel =
         [NSString stringWithFormat:@"%ld", (long)self.gridSpacing];
-    NSRect minusRect = [self.gridToolbar buttonRectAtIndex:2];
-    NSRect plusRect = [self.gridToolbar buttonRectAtIndex:3];
-    NSRect tbFrame = self.gridToolbar.toolbarFrame;
 
-    // Label below the ± buttons, centered between them.
-    CGFloat labelCX = (NSMidX(minusRect) + NSMidX(plusRect)) / 2.0;
-    CGFloat labelCY = NSMidY(tbFrame) + 6.0;
-    [self.gridSpacingLabel drawAtCanvasPosition:CGPointMake(labelCX, labelCY)
-                               destinationImage:destinationImage];
-
-    // Store stepper rects for hit testing.
-    self.gridMinusRect = minusRect;
-    self.gridPlusRect = plusRect;
+    [self.gridToolbar drawWithDestinationImage:destinationImage];
   }
 
   self.paths = [self readPaths];

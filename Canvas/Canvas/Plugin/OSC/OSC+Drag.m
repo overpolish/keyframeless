@@ -198,6 +198,43 @@
                       modifiers:(NSUInteger)modifiers
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
+  if (self.stepperDragging) {
+    // Accumulate delta from successive drags.
+    double moveDelta = positionY - self.stepperDragOriginY;
+    self.stepperDragOriginY = positionY;
+    self.stepperAccumulatedDelta += moveDelta;
+
+    BOOL shiftDown = (modifiers & kFxModifierKey_SHIFT) != 0;
+
+    // When shift is pressed/released, rebase so the multiplier change
+    // starts from the current value.
+    if (shiftDown != self.stepperShiftWasDown) {
+      self.stepperAccumulatedDelta = 0;
+      self.stepperDragStartValue = self.gridSpacing;
+      self.stepperShiftWasDown = shiftDown;
+    }
+
+    // 8px per unit normally, 2px per unit with shift.
+    // Positive delta (drag down / Y increases) = increase value.
+    double pxPerUnit = shiftDown ? 2.0 : 8.0;
+    // Canvas Y=0 is top, so drag up = negative delta = increase.
+    NSInteger newVal = self.stepperDragStartValue +
+                       (NSInteger)(self.stepperAccumulatedDelta / pxPerUnit);
+    if (newVal < 1)
+      newVal = 1;
+    if (newVal > 1000)
+      newVal = 1000;
+    if (newVal != self.gridSpacing) {
+      self.gridSpacing = newVal;
+      id<FxParameterSettingAPI_v5> setAPI =
+          [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      [setAPI setIntValue:(int)self.gridSpacing
+              toParameter:kParamGridSpacing
+                   atTime:kCMTimeZero];
+      *forceUpdate = YES;
+    }
+    return;
+  }
   if (self.dragIsMarquee) {
     self.marqueeEnd = CGPointMake(positionX, positionY);
     *forceUpdate = YES;
@@ -316,6 +353,10 @@
                  modifiers:(NSUInteger)modifiers
                forceUpdate:(BOOL *)forceUpdate
                     atTime:(CMTime)time {
+  if (self.stepperDragging) {
+    self.stepperDragging = NO;
+    self.stepperShiftWasDown = NO;
+  }
   if (self.autoSelectPending) {
     self.autoSelectPending = NO;
     double hitRadiusStroke = [self strokeHitRadius];
