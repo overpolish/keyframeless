@@ -18,6 +18,12 @@ NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
 @interface CanvasOSC (Drag)
 
 - (simd_float2)snapToGridPosition:(simd_float2)objPos;
+- (simd_float2)alignSnapDelta:(simd_float2)delta
+             forSelectedPaths:(NSIndexSet *)selected;
+- (simd_float2)alignSnapPoint:(simd_float2)point
+               excludingPaths:(NSIndexSet *)excluded
+              excludingPoints:(NSIndexSet *)excludedPoints;
+- (void)resetAlignSnap;
 
 @end
 

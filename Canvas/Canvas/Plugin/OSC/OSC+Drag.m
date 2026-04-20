@@ -32,6 +32,242 @@
   return objPos;
 }
 
+- (simd_float2)alignSnapDelta:(simd_float2)delta
+             forSelectedPaths:(NSIndexSet *)selected {
+  self.alignSnappedX = NO;
+  self.alignSnappedY = NO;
+
+  if (!self.snapToGrid || self.gridEnabled)
+    return delta;
+  if (self.imageWidth <= 0 || self.imageHeight <= 0)
+    return delta;
+  if (selected.count == 0)
+    return delta;
+
+  // Threshold in object space — convert 8 canvas pixels.
+  // pxPerSourcePx = canvas pixels per source pixel; multiply by imageWidth
+  // to get canvas pixels per full object-space unit (0..1).
+  CGPoint originC = [self canvasPointFromObjectPoint:(simd_float2){0, 0}];
+  CGPoint unitC = [self
+      canvasPointFromObjectPoint:(simd_float2){1.0f / self.imageWidth, 0}];
+  float pxPerSourcePx = (float)fabs(unitC.x - originC.x);
+  float pixelsPerUnit = pxPerSourcePx * self.imageWidth;
+  float thresh = (pixelsPerUnit > 0) ? 8.0f / pixelsPerUnit : 0.005f;
+
+  // Compute bounding box of selected paths after applying proposed delta.
+  __block BOOL found = NO;
+  __block float sMinX, sMinY, sMaxX, sMaxY;
+  [selected enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+    if (idx >= self.paths.count)
+      return;
+    KKBezierPath *p = self.paths[idx];
+    if (p.count == 0 || p.isGroup)
+      return;
+    simd_float2 pMin, pMax;
+    [self boundsOfPath:p min:&pMin max:&pMax];
+    pMin += delta;
+    pMax += delta;
+    if (!found) {
+      sMinX = pMin.x;
+      sMinY = pMin.y;
+      sMaxX = pMax.x;
+      sMaxY = pMax.y;
+      found = YES;
+    } else {
+      sMinX = fminf(sMinX, pMin.x);
+      sMinY = fminf(sMinY, pMin.y);
+      sMaxX = fmaxf(sMaxX, pMax.x);
+      sMaxY = fmaxf(sMaxY, pMax.y);
+    }
+  }];
+  if (!found)
+    return delta;
+
+  float sCenterX = (sMinX + sMaxX) * 0.5f;
+  float sCenterY = (sMinY + sMaxY) * 0.5f;
+
+  // Collect snap target X and Y values from non-selected visible paths.
+  // Each path contributes: left, center, right (X) and top, center, bottom (Y).
+  // Plus canvas center (0.5, 0.5).
+  NSUInteger maxTargets = (self.paths.count + 1) * 3;
+  float *targetXs = malloc(maxTargets * sizeof(float));
+  float *targetYs = malloc(maxTargets * sizeof(float));
+  NSUInteger txCount = 0, tyCount = 0;
+
+  // Canvas center.
+  targetXs[txCount++] = 0.5f;
+  targetYs[tyCount++] = 0.5f;
+
+  for (NSUInteger i = 0; i < self.paths.count; i++) {
+    if ([selected containsIndex:i])
+      continue;
+    KKBezierPath *p = self.paths[i];
+    if (p.hidden || p.isGroup || p.count == 0)
+      continue;
+    simd_float2 pMin, pMax;
+    [self boundsOfPath:p min:&pMin max:&pMax];
+    targetXs[txCount++] = pMin.x;
+    targetXs[txCount++] = (pMin.x + pMax.x) * 0.5f;
+    targetXs[txCount++] = pMax.x;
+    targetYs[tyCount++] = pMin.y;
+    targetYs[tyCount++] = (pMin.y + pMax.y) * 0.5f;
+    targetYs[tyCount++] = pMax.y;
+  }
+
+  // Check selection edges/center against targets — find best snap per axis.
+  float selXs[3] = {sMinX, sCenterX, sMaxX};
+  float selYs[3] = {sMinY, sCenterY, sMaxY};
+
+  float bestDistX = FLT_MAX, snapAdjX = 0, matchedTargetX = 0;
+  for (int si = 0; si < 3; si++) {
+    for (NSUInteger ti = 0; ti < txCount; ti++) {
+      float d = fabsf(selXs[si] - targetXs[ti]);
+      if (d < thresh && d < bestDistX) {
+        bestDistX = d;
+        snapAdjX = targetXs[ti] - selXs[si];
+        matchedTargetX = targetXs[ti];
+      }
+    }
+  }
+
+  float bestDistY = FLT_MAX, snapAdjY = 0, matchedTargetY = 0;
+  for (int si = 0; si < 3; si++) {
+    for (NSUInteger ti = 0; ti < tyCount; ti++) {
+      float d = fabsf(selYs[si] - targetYs[ti]);
+      if (d < thresh && d < bestDistY) {
+        bestDistY = d;
+        snapAdjY = targetYs[ti] - selYs[si];
+        matchedTargetY = targetYs[ti];
+      }
+    }
+  }
+
+  free(targetXs);
+  free(targetYs);
+
+  if (bestDistX < FLT_MAX) {
+    self.alignSnappedX = YES;
+    self.alignSnapValueX = matchedTargetX;
+    delta.x += snapAdjX;
+  }
+  if (bestDistY < FLT_MAX) {
+    self.alignSnappedY = YES;
+    self.alignSnapValueY = matchedTargetY;
+    delta.y += snapAdjY;
+  }
+
+  return delta;
+}
+
+- (simd_float2)alignSnapPoint:(simd_float2)point
+               excludingPaths:(NSIndexSet *)excluded
+              excludingPoints:(NSIndexSet *)excludedPoints {
+  self.alignSnappedX = NO;
+  self.alignSnappedY = NO;
+
+  if (!self.snapToGrid || self.gridEnabled)
+    return point;
+  if (self.imageWidth <= 0 || self.imageHeight <= 0)
+    return point;
+
+  CGPoint originC = [self canvasPointFromObjectPoint:(simd_float2){0, 0}];
+  CGPoint unitC = [self
+      canvasPointFromObjectPoint:(simd_float2){1.0f / self.imageWidth, 0}];
+  float pxPerSourcePx = (float)fabs(unitC.x - originC.x);
+  float pixelsPerUnit = pxPerSourcePx * self.imageWidth;
+  float thresh = (pixelsPerUnit > 0) ? 8.0f / pixelsPerUnit : 0.005f;
+
+  // Count total targets: 1 (canvas center) + per path (3 bbox + N points).
+  NSUInteger maxTargets = 1;
+  for (NSUInteger i = 0; i < self.paths.count; i++) {
+    if (excluded && [excluded containsIndex:i])
+      continue;
+    KKBezierPath *p = self.paths[i];
+    if (p.hidden || p.isGroup || p.count == 0)
+      continue;
+    maxTargets += 3 + p.count;
+  }
+  float *targetXs = malloc(maxTargets * sizeof(float));
+  float *targetYs = malloc(maxTargets * sizeof(float));
+  NSUInteger txCount = 0, tyCount = 0;
+
+  targetXs[txCount++] = 0.5f;
+  targetYs[tyCount++] = 0.5f;
+
+  for (NSUInteger i = 0; i < self.paths.count; i++) {
+    if (excluded && [excluded containsIndex:i])
+      continue;
+    KKBezierPath *p = self.paths[i];
+    if (p.hidden || p.isGroup || p.count == 0)
+      continue;
+    // Skip bounding box targets for paths that contain excluded points,
+    // since the bbox reflects those points' positions.
+    BOOL hasExcludedPt = NO;
+    if (excludedPoints) {
+      for (NSUInteger j = 0; j < p.count; j++) {
+        if ([excludedPoints containsIndex:selKey(i, j)]) {
+          hasExcludedPt = YES;
+          break;
+        }
+      }
+    }
+    if (!hasExcludedPt) {
+      simd_float2 pMin, pMax;
+      [self boundsOfPath:p min:&pMin max:&pMax];
+      targetXs[txCount++] = pMin.x;
+      targetXs[txCount++] = (pMin.x + pMax.x) * 0.5f;
+      targetXs[txCount++] = pMax.x;
+      targetYs[tyCount++] = pMin.y;
+      targetYs[tyCount++] = (pMin.y + pMax.y) * 0.5f;
+      targetYs[tyCount++] = pMax.y;
+    }
+    for (NSUInteger j = 0; j < p.count; j++) {
+      if (excludedPoints && [excludedPoints containsIndex:selKey(i, j)])
+        continue;
+      KKBezierPoint bp = [p pointAtIndex:j];
+      targetXs[txCount++] = bp.x;
+      targetYs[tyCount++] = bp.y;
+    }
+  }
+
+  float bestDistX = FLT_MAX, bestDistY = FLT_MAX;
+  float matchedX = point.x, matchedY = point.y;
+  for (NSUInteger ti = 0; ti < txCount; ti++) {
+    float d = fabsf(point.x - targetXs[ti]);
+    if (d < thresh && d < bestDistX) {
+      bestDistX = d;
+      matchedX = targetXs[ti];
+    }
+  }
+  for (NSUInteger ti = 0; ti < tyCount; ti++) {
+    float d = fabsf(point.y - targetYs[ti]);
+    if (d < thresh && d < bestDistY) {
+      bestDistY = d;
+      matchedY = targetYs[ti];
+    }
+  }
+
+  free(targetXs);
+  free(targetYs);
+
+  if (bestDistX < FLT_MAX) {
+    self.alignSnappedX = YES;
+    self.alignSnapValueX = matchedX;
+    point.x = matchedX;
+  }
+  if (bestDistY < FLT_MAX) {
+    self.alignSnappedY = YES;
+    self.alignSnapValueY = matchedY;
+    point.y = matchedY;
+  }
+  return point;
+}
+
+- (void)resetAlignSnap {
+  self.alignSnappedX = NO;
+  self.alignSnappedY = NO;
+}
+
 - (simd_float2)shiftConstrainedPosition:(simd_float2)objPos {
   simd_float2 totalDelta = objPos - self.dragAnchor;
   if (fabs(totalDelta.x) > fabs(totalDelta.y))
@@ -59,6 +295,7 @@
     objPos = [self objectPointFromCanvasPoint:CGPointMake(ex, ey)];
   }
   objPos = [self snapToGridPosition:objPos];
+  objPos = [self alignSnapPoint:objPos excludingPaths:nil excludingPoints:nil];
   self.dragOrigin = objPos;
   *forceUpdate = YES;
 }
@@ -81,6 +318,7 @@
     objPos = [self objectPointFromCanvasPoint:CGPointMake(ex, ey)];
   }
   objPos = [self snapToGridPosition:objPos];
+  objPos = [self alignSnapPoint:objPos excludingPaths:nil excludingPoints:nil];
   self.dragOrigin = objPos;
   *forceUpdate = YES;
 }
@@ -98,6 +336,9 @@
   self.dragOrigin = objPos;
 
   BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
+  if (isCursorMode)
+    delta = [self alignSnapDelta:delta
+                forSelectedPaths:self.selectedPathIndices];
   if (isCursorMode) {
     if ((modifiers & kFxModifierKey_OPTION) && !self.dragDidDuplicate) {
       self.dragDidDuplicate = YES;
@@ -192,6 +433,16 @@
     if (modifiers & kFxModifierKey_SHIFT)
       objPos = [self shiftConstrainedPosition:objPos];
     objPos = [self snapToGridPosition:objPos];
+    {
+      NSMutableIndexSet *exPts = [NSMutableIndexSet
+          indexSetWithIndex:selKey((NSUInteger)self.activePathIndex,
+                                   (NSUInteger)self.dragIndex)];
+      if (self.selectedPoints.count > 1)
+        [exPts addIndexes:self.selectedPoints];
+      objPos = [self alignSnapPoint:objPos
+                     excludingPaths:nil
+                    excludingPoints:exPts];
+    }
     NSUInteger dragKey =
         selKey((NSUInteger)self.activePathIndex, (NSUInteger)self.dragIndex);
     if (self.selectedPoints.count > 1 &&
@@ -329,6 +580,14 @@
     objPos = [self snapToGridPosition:objPos];
     simd_float2 delta = objPos - self.dragOrigin;
     BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
+    if (isCursorMode) {
+      NSMutableIndexSet *snapSet =
+          [NSMutableIndexSet indexSetWithIndex:self.activePathIndex];
+      if (active.isGroup)
+        [snapSet
+            addIndexes:KKDescendantIndices(self.activePathIndex, self.paths)];
+      delta = [self alignSnapDelta:delta forSelectedPaths:snapSet];
+    }
     if (isCursorMode && (modifiers & kFxModifierKey_OPTION) &&
         !self.dragDidDuplicate) {
       self.dragDidDuplicate = YES;
@@ -421,6 +680,7 @@
     [self finalizeLine];
 
   [self resetDragState];
+  [self resetAlignSnap];
   [self syncStrokeParamsToSelection];
   *forceUpdate = YES;
   [super mouseUpAtPositionX:positionX

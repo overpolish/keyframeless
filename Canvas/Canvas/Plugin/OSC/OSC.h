@@ -81,6 +81,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, assign) BOOL autoSelect;
 @property(nonatomic, assign) CGPoint autoSelectClickOrigin;
 @property(nonatomic, assign) BOOL autoSelectPending;
+@property(nonatomic, assign) BOOL alignSnappedX;
+@property(nonatomic, assign) BOOL alignSnappedY;
+@property(nonatomic, assign) float alignSnapValueX; // object-space X
+@property(nonatomic, assign) float alignSnapValueY; // object-space Y
+
 @property(nonatomic, assign) NSInteger hoveredPathOp;
 @property(nonatomic, strong, nullable) KKBezierPath *previewResultPath;
 @property(nonatomic, strong, nullable) id<MTLTexture> previewTexture;
