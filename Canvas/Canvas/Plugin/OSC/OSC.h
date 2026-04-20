@@ -52,9 +52,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, assign) BOOL gridAdaptive;
 @property(nonatomic, assign) NSInteger gridSpacing;
 @property(nonatomic, assign) BOOL restoredTool;
-@property(nonatomic, strong) KKOSCLabel *gridSpacingLabel;
-@property(nonatomic, assign) NSRect gridPlusRect;
-@property(nonatomic, assign) NSRect gridMinusRect;
+@property(nonatomic, assign) BOOL stepperDragging;
+@property(nonatomic, assign) BOOL stepperShiftWasDown;
+@property(nonatomic, assign) double stepperDragOriginY;
+@property(nonatomic, assign) double stepperAccumulatedDelta;
+@property(nonatomic, assign) NSInteger stepperDragStartValue;
 @property(nonatomic, strong) KKOSCLabel *sizeLabel;
 @property(nonatomic, strong) KKRectBorderOSC *borderOSC;
 @property(nonatomic, strong) NSArray<KKPointOSC *> *resizeHandleOSCs;

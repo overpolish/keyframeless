@@ -85,18 +85,12 @@
     *forceUpdate = YES;
     return;
   }
-  if (activePart == kOSCGridMinus || activePart == kOSCGridPlus) {
-    NSInteger step = (modifiers & kFxModifierKey_SHIFT) ? 10 : 1;
-    if (activePart == kOSCGridMinus)
-      self.gridSpacing = MAX(1, self.gridSpacing - step);
-    else
-      self.gridSpacing = MIN(1000, self.gridSpacing + step);
-    id<FxParameterSettingAPI_v5> setAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    [setAPI setIntValue:(int)self.gridSpacing
-            toParameter:kParamGridSpacing
-                 atTime:kCMTimeZero];
-    *forceUpdate = YES;
+  if (activePart == kOSCGridStepper) {
+    self.stepperDragging = YES;
+    self.stepperDragOriginY = positionY;
+    self.stepperAccumulatedDelta = 0;
+    self.stepperDragStartValue = self.gridSpacing;
+    self.stepperShiftWasDown = (modifiers & kFxModifierKey_SHIFT) != 0;
     return;
   }
   if (activePart == kOSCGridAdaptive) {
