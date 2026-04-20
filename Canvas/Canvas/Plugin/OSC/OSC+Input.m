@@ -65,11 +65,23 @@
       }
     }
     self.toolbar.activeTag = activePart;
+    {
+      id<FxParameterSettingAPI_v5> toolSetAPI =
+          [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      [toolSetAPI setIntValue:(int)activePart
+                  toParameter:kParamLastTool
+                       atTime:kCMTimeZero];
+    }
     *forceUpdate = YES;
     return;
   }
   if (activePart == kOSCGridToggle) {
     self.gridEnabled = !self.gridEnabled;
+    id<FxParameterSettingAPI_v5> setAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [setAPI setBoolValue:self.gridEnabled
+             toParameter:kParamGridEnabled
+                  atTime:kCMTimeZero];
     *forceUpdate = YES;
     return;
   }

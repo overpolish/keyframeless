@@ -47,6 +47,23 @@
                      parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
                                     kFxParameterFlag_DONT_DISPLAY_IN_DASHBOARD];
 
+  [paramAPI addToggleButtonWithName:@"Grid Enabled"
+                        parameterID:kParamGridEnabled
+                       defaultValue:NO
+                     parameterFlags:kFxParameterFlag_HIDDEN |
+                                    kFxParameterFlag_NOT_ANIMATABLE];
+
+  [paramAPI addIntSliderWithName:@"Last Tool"
+                     parameterID:kParamLastTool
+                    defaultValue:kOSCToolbarCursor
+                    parameterMin:0
+                    parameterMax:100
+                       sliderMin:0
+                       sliderMax:100
+                           delta:1
+                  parameterFlags:kFxParameterFlag_HIDDEN |
+                                 kFxParameterFlag_NOT_ANIMATABLE];
+
   [paramAPI addCustomParameterWithName:@""
                            parameterID:kParamLayerList
                           defaultValue:@(kParamLayerList)
