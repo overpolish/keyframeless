@@ -378,7 +378,6 @@ static CGPathRef createTaperedOutline(KKBezierPath *src, CGFloat sw, CGFloat ew,
     if (lineCap == 2) {
       // Square start: two corners extended backward.
       simd_float2 extPlus = simpPlus[0] - startT * startHW;
-      simd_float2 extMinus = simpMinus[0] - startT * startHW;
       CGPathMoveToPoint(outline, NULL, extPlus.x, extPlus.y);
       CGPathAddLineToPoint(outline, NULL, simpPlus[0].x, simpPlus[0].y);
     } else if (lineCap == 1) {
@@ -406,14 +405,12 @@ static CGPathRef createTaperedOutline(KKBezierPath *src, CGFloat sw, CGFloat ew,
       CGPathAddLineToPoint(outline, NULL, extMinus.x, extMinus.y);
       CGPathAddLineToPoint(outline, NULL, lastMinus.x, lastMinus.y);
     } else if (lineCap == 1) {
-      // Round end: semicircle from plus to minus.
-      NSUInteger capSegs = MAX(16, (NSUInteger)(endHW));
-      for (NSUInteger i = 1; i <= capSegs; i++) {
-        float a = (float)i / (float)capSegs * (float)M_PI;
-        simd_float2 p = centres[sampleCount - 1] +
-                        (endN * cosf(a) + endT * sinf(a)) * endHW;
-        CGPathAddLineToPoint(outline, NULL, p.x, p.y);
-      }
+      // Round end: semicircle from plus to minus via bezier arc.
+      // Sweep CW from plus-side angle through tangent direction.
+      float plusAngle = atan2f(endN.y, endN.x);
+      CGPathAddArc(outline, NULL, centres[sampleCount - 1].x,
+                   centres[sampleCount - 1].y, endHW, plusAngle,
+                   plusAngle - (float)M_PI, true);
     } else {
       // Butt end: straight across.
       CGPathAddLineToPoint(outline, NULL, lastMinus.x, lastMinus.y);
@@ -431,15 +428,11 @@ static CGPathRef createTaperedOutline(KKBezierPath *src, CGFloat sw, CGFloat ew,
       CGPathAddLineToPoint(outline, NULL, extMinus.x, extMinus.y);
       CGPathAddLineToPoint(outline, NULL, extPlus.x, extPlus.y);
     } else if (lineCap == 1) {
-      // Round start: semicircle from minus[0] back to plus[0].
-      simd_float2 firstMinus = centres[0] - startN * startHW;
-      NSUInteger capSegs = MAX(16, (NSUInteger)(startHW));
-      for (NSUInteger i = 1; i < capSegs; i++) {
-        float a = (float)i / (float)capSegs * (float)M_PI;
-        simd_float2 p =
-            centres[0] + (-startN * cosf(a) - startT * sinf(a)) * startHW;
-        CGPathAddLineToPoint(outline, NULL, p.x, p.y);
-      }
+      // Round start: semicircle from minus back to plus via bezier arc.
+      // Sweep CW from minus-side angle through -tangent direction.
+      float minusAngle = atan2f(-startN.y, -startN.x);
+      CGPathAddArc(outline, NULL, centres[0].x, centres[0].y, startHW,
+                   minusAngle, minusAngle - (float)M_PI, true);
     }
 
     CGPathCloseSubpath(outline);
@@ -452,6 +445,336 @@ static CGPathRef createTaperedOutline(KKBezierPath *src, CGFloat sw, CGFloat ew,
   free(normals);
   free(halfWidths);
   return outline;
+}
+
+/// Sample the path into a pixel-space polyline with arc-length data.
+/// Caller must free the returned arrays.
+static NSUInteger samplePathForOutline(KKBezierPath *src, CGFloat refW,
+                                       CGFloat refH, simd_float2 **outPositions,
+                                       float **outArcLengths) {
+  NSUInteger segsPerCurve = 128;
+  NSUInteger curveCount = src.count - 1;
+  if (src.closed && src.count >= 2)
+    curveCount = src.count;
+
+  NSUInteger totalSamples = curveCount * (segsPerCurve + 1);
+  simd_float2 *positions = malloc(totalSamples * sizeof(simd_float2));
+  float *arcLengths = calloc(totalSamples, sizeof(float));
+  NSUInteger idx = 0;
+
+  for (NSUInteger c = 0; c < curveCount; c++) {
+    for (NSUInteger i = 0; i <= segsPerCurve; i++) {
+      float t = (float)i / (float)segsPerCurve;
+      NSUInteger nextIdx = (c + 1) % src.count;
+      simd_float2 pos = [src evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
+      simd_float2 px = {(float)(pos.x * refW), (float)(pos.y * refH)};
+      positions[idx] = px;
+      if (idx > 0)
+        arcLengths[idx] =
+            arcLengths[idx - 1] + simd_length(px - positions[idx - 1]);
+      idx++;
+    }
+  }
+
+  *outPositions = positions;
+  *outArcLengths = arcLengths;
+  return idx;
+}
+
+/// Interpolate position in the sampled polyline at a given arc-length distance.
+static simd_float2 positionAtArc(const simd_float2 *positions,
+                                 const float *arcLengths, NSUInteger count,
+                                 float arc, NSUInteger *hint) {
+  NSUInteger lo = *hint;
+  while (lo < count - 1 && arcLengths[lo + 1] < arc)
+    lo++;
+  *hint = lo;
+  if (lo >= count - 1)
+    return positions[count - 1];
+  float segLen = arcLengths[lo + 1] - arcLengths[lo];
+  float localT = (segLen > 1e-6f) ? (arc - arcLengths[lo]) / segLen : 0.0f;
+  return simd_mix(positions[lo], positions[lo + 1],
+                  (simd_float2){localT, localT});
+}
+
+/// Build a tapered outline for a single dash segment given its polyline points
+/// and per-point half-widths. Returns a closed CGPath in pixel space.
+static CGPathRef createTaperedDashOutline(const simd_float2 *pts,
+                                          const float *halfWidths,
+                                          NSUInteger count, uint8_t lineCap) {
+  if (count < 2)
+    return NULL;
+
+  // Compute normals from finite differences.
+  simd_float2 *normals = malloc(count * sizeof(simd_float2));
+  for (NSUInteger i = 0; i < count; i++) {
+    simd_float2 delta;
+    if (i == 0)
+      delta = pts[1] - pts[0];
+    else if (i == count - 1)
+      delta = pts[count - 1] - pts[count - 2];
+    else
+      delta = pts[i + 1] - pts[i - 1];
+    float len = simd_length(delta);
+    if (len < 1e-6f)
+      delta = (simd_float2){1, 0};
+    else
+      delta /= len;
+    normals[i] = (simd_float2){-delta.y, delta.x};
+  }
+
+  // Build offset polylines and simplify with Douglas-Peucker.
+  simd_float2 *plusSide = malloc(count * sizeof(simd_float2));
+  simd_float2 *minusSide = malloc(count * sizeof(simd_float2));
+  for (NSUInteger i = 0; i < count; i++) {
+    plusSide[i] = pts[i] + normals[i] * halfWidths[i];
+    minusSide[i] = pts[i] - normals[i] * halfWidths[i];
+  }
+
+  float epsilon = 1.5f;
+  simd_float2 *simpPlus = NULL, *simpMinus = NULL;
+  NSUInteger plusCount = simplifyPolyline(plusSide, count, epsilon, &simpPlus);
+  NSUInteger minusCount =
+      simplifyPolyline(minusSide, count, epsilon, &simpMinus);
+  free(plusSide);
+  free(minusSide);
+
+  // Build outline path.
+  CGMutablePathRef outline = CGPathCreateMutable();
+
+  simd_float2 startN = normals[0];
+  simd_float2 startT = {startN.y, -startN.x};
+  float startHW = halfWidths[0];
+  simd_float2 endN = normals[count - 1];
+  simd_float2 endT = {endN.y, -endN.x};
+  float endHW = halfWidths[count - 1];
+
+  if (plusCount > 0 && minusCount > 0) {
+    // Start cap.
+    if (lineCap == 2) {
+      simd_float2 extPlus = simpPlus[0] - startT * startHW;
+      CGPathMoveToPoint(outline, NULL, extPlus.x, extPlus.y);
+      CGPathAddLineToPoint(outline, NULL, simpPlus[0].x, simpPlus[0].y);
+    } else {
+      CGPathMoveToPoint(outline, NULL, simpPlus[0].x, simpPlus[0].y);
+    }
+
+    // Plus side forward.
+    for (NSUInteger i = 1; i < plusCount; i++)
+      CGPathAddLineToPoint(outline, NULL, simpPlus[i].x, simpPlus[i].y);
+
+    // End cap.
+    if (lineCap == 2) {
+      simd_float2 extPlus = simpPlus[plusCount - 1] + endT * endHW;
+      simd_float2 extMinus = simpMinus[minusCount - 1] + endT * endHW;
+      CGPathAddLineToPoint(outline, NULL, extPlus.x, extPlus.y);
+      CGPathAddLineToPoint(outline, NULL, extMinus.x, extMinus.y);
+      CGPathAddLineToPoint(outline, NULL, simpMinus[minusCount - 1].x,
+                           simpMinus[minusCount - 1].y);
+    } else if (lineCap == 1) {
+      // Semicircle from plus to minus, sweep CW through tangent.
+      float plusAngle = atan2f(endN.y, endN.x);
+      CGPathAddArc(outline, NULL, pts[count - 1].x, pts[count - 1].y, endHW,
+                   plusAngle, plusAngle - (float)M_PI, true);
+    } else {
+      CGPathAddLineToPoint(outline, NULL, simpMinus[minusCount - 1].x,
+                           simpMinus[minusCount - 1].y);
+    }
+
+    // Minus side backward.
+    for (NSInteger i = (NSInteger)minusCount - 2; i >= 0; i--)
+      CGPathAddLineToPoint(outline, NULL, simpMinus[i].x, simpMinus[i].y);
+
+    // Start cap closing.
+    if (lineCap == 2) {
+      simd_float2 extMinus = simpMinus[0] - startT * startHW;
+      simd_float2 extPlus = simpPlus[0] - startT * startHW;
+      CGPathAddLineToPoint(outline, NULL, extMinus.x, extMinus.y);
+      CGPathAddLineToPoint(outline, NULL, extPlus.x, extPlus.y);
+    } else if (lineCap == 1) {
+      // Semicircle from minus back to plus, sweep CW through -tangent.
+      float minusAngle = atan2f(-startN.y, -startN.x);
+      CGPathAddArc(outline, NULL, pts[0].x, pts[0].y, startHW, minusAngle,
+                   minusAngle - (float)M_PI, true);
+    }
+
+    CGPathCloseSubpath(outline);
+  }
+
+  free(simpPlus);
+  free(simpMinus);
+  free(normals);
+  return outline;
+}
+
+/// Create a dashed stroke outline. For uniform width uses CG's native dashing;
+/// for tapered width manually splits into dash segments with arc-length
+/// interpolated widths.
+static CGPathRef createDashedOutline(KKBezierPath *src, CGFloat sw, CGFloat ew,
+                                     CGFloat refW, CGFloat refH,
+                                     uint8_t lineCap, uint8_t lineJoin) {
+  BOOL tapers = !src.closed && fabsf((float)sw - (float)ew) > 0.001f;
+
+  if (!tapers) {
+    // Uniform width: let CoreGraphics handle dashing natively.
+    // CG produces bezier arcs for round caps — minimal point count.
+    CGMutablePathRef cgPath = CGPathFromKKBezierPath(src);
+    CGAffineTransform toPixel = CGAffineTransformMake(refW, 0, 0, refH, 0, 0);
+    CGPathRef scaled = CGPathCreateCopyByTransformingPath(cgPath, &toPixel);
+    CGPathRelease(cgPath);
+
+    CGFloat lengths[] = {src.dashLength, src.dashGap};
+    CGPathRef dashed =
+        CGPathCreateCopyByDashingPath(scaled, NULL, 0, lengths, 2);
+    CGPathRelease(scaled);
+    if (!dashed)
+      return NULL;
+
+    CGPathRef stroked = CGPathCreateCopyByStrokingPath(
+        dashed, NULL, sw, (CGLineCap)lineCap, (CGLineJoin)lineJoin, 4.0);
+    CGPathRelease(dashed);
+    if (!stroked)
+      return NULL;
+
+    CGMutablePathRef empty = CGPathCreateMutable();
+    CGPathRef cleaned = CGPathCreateCopyByUnioningPath(stroked, empty, false);
+    CGPathRelease(empty);
+    CGPathRelease(stroked);
+    return cleaned;
+  }
+
+  // Tapered: manually split into dash segments with per-point widths.
+  simd_float2 *positions = NULL;
+  float *arcLengths = NULL;
+  NSUInteger count =
+      samplePathForOutline(src, refW, refH, &positions, &arcLengths);
+  if (count < 2) {
+    free(positions);
+    free(arcLengths);
+    return NULL;
+  }
+
+  float totalArc = arcLengths[count - 1];
+  float dashLen = src.dashLength;
+  float dashGap = src.dashGap;
+  float cycle = dashLen + dashGap;
+  if (cycle < 1.0f)
+    cycle = 1.0f;
+
+  CGMutablePathRef combined = CGPathCreateMutable();
+  NSUInteger hint = 0;
+  float arc = 0.0f;
+
+  while (arc < totalArc) {
+    float dashStart = arc;
+    float dashEnd = fminf(arc + dashLen, totalArc);
+
+    NSUInteger maxPts = (NSUInteger)((dashEnd - dashStart) * 2.0f) + 4;
+    simd_float2 *dashPts = malloc(maxPts * sizeof(simd_float2));
+    float *dashHWs = malloc(maxPts * sizeof(float));
+    NSUInteger dashPtCount = 0;
+
+    // First point.
+    dashPts[dashPtCount] =
+        positionAtArc(positions, arcLengths, count, dashStart, &hint);
+    float arcT = (totalArc > 0) ? dashStart / totalArc : 0.0f;
+    float w = (float)sw + ((float)ew - (float)sw) * arcT;
+    dashHWs[dashPtCount] = w / 2.0f;
+    dashPtCount++;
+
+    // Walk through polyline samples within this dash.
+    for (NSUInteger i = hint + 1; i < count && arcLengths[i] < dashEnd; i++) {
+      dashPts[dashPtCount] = positions[i];
+      float t = (totalArc > 0) ? arcLengths[i] / totalArc : 0.0f;
+      dashHWs[dashPtCount] = ((float)sw + ((float)ew - (float)sw) * t) / 2.0f;
+      dashPtCount++;
+      if (dashPtCount >= maxPts - 1) {
+        maxPts *= 2;
+        dashPts = realloc(dashPts, maxPts * sizeof(simd_float2));
+        dashHWs = realloc(dashHWs, maxPts * sizeof(float));
+      }
+    }
+
+    // Last point.
+    dashPts[dashPtCount] =
+        positionAtArc(positions, arcLengths, count, dashEnd, &hint);
+    arcT = (totalArc > 0) ? dashEnd / totalArc : 0.0f;
+    w = (float)sw + ((float)ew - (float)sw) * arcT;
+    dashHWs[dashPtCount] = w / 2.0f;
+    dashPtCount++;
+
+    if (dashPtCount >= 2) {
+      CGPathRef seg =
+          createTaperedDashOutline(dashPts, dashHWs, dashPtCount, lineCap);
+      if (seg) {
+        CGPathAddPath(combined, NULL, seg);
+        CGPathRelease(seg);
+      }
+    }
+
+    free(dashPts);
+    free(dashHWs);
+    arc += cycle;
+  }
+
+  free(positions);
+  free(arcLengths);
+
+  CGMutablePathRef empty = CGPathCreateMutable();
+  CGPathRef cleaned = CGPathCreateCopyByUnioningPath(combined, empty, false);
+  CGPathRelease(empty);
+  CGPathRelease(combined);
+  return cleaned;
+}
+
+/// Create a dotted stroke outline by placing circles at regular intervals.
+/// Supports tapering (start/end width).
+static CGPathRef createDottedOutline(KKBezierPath *src, CGFloat sw, CGFloat ew,
+                                     CGFloat refW, CGFloat refH) {
+  simd_float2 *positions = NULL;
+  float *arcLengths = NULL;
+  NSUInteger count =
+      samplePathForOutline(src, refW, refH, &positions, &arcLengths);
+  if (count < 2) {
+    free(positions);
+    free(arcLengths);
+    return NULL;
+  }
+
+  float totalArc = arcLengths[count - 1];
+  BOOL tapers = !src.closed && fabsf((float)sw - (float)ew) > 0.001f;
+  float spacing = (float)sw + src.dotGap;
+  if (spacing < 1.0f)
+    spacing = 1.0f;
+
+  CGMutablePathRef combined = CGPathCreateMutable();
+  NSUInteger hint = 0;
+  float arc = 0.0f;
+
+  while (arc <= totalArc) {
+    simd_float2 center =
+        positionAtArc(positions, arcLengths, count, arc, &hint);
+
+    float arcT = (totalArc > 0) ? arc / totalArc : 0.0f;
+    float localW =
+        tapers ? ((float)sw + ((float)ew - (float)sw) * arcT) : (float)sw;
+    float radius = localW / 2.0f;
+
+    CGRect circleRect = CGRectMake(center.x - radius, center.y - radius,
+                                   radius * 2.0f, radius * 2.0f);
+    CGPathAddEllipseInRect(combined, NULL, circleRect);
+    arc += spacing;
+  }
+
+  free(positions);
+  free(arcLengths);
+
+  // Union to merge touching dots.
+  CGMutablePathRef empty = CGPathCreateMutable();
+  CGPathRef cleaned = CGPathCreateCopyByUnioningPath(combined, empty, false);
+  CGPathRelease(empty);
+  CGPathRelease(combined);
+  return cleaned;
 }
 
 NSArray<KKBezierPath *> *KKPathStrokeToOutline(NSArray<KKBezierPath *> *paths,
@@ -473,7 +796,15 @@ NSArray<KKBezierPath *> *KKPathStrokeToOutline(NSArray<KKBezierPath *> *paths,
 
     CGPathRef cleaned = NULL;
 
-    if (tapers) {
+    if (src.strokeStyle == 1) {
+      // Dashed stroke.
+      cleaned = createDashedOutline(src, sw, ew, referenceWidth,
+                                    referenceHeight, src.lineCap, src.lineJoin);
+    } else if (src.strokeStyle == 2) {
+      // Dotted stroke.
+      cleaned =
+          createDottedOutline(src, sw, ew, referenceWidth, referenceHeight);
+    } else if (tapers) {
       // Variable-width stroke: build outline manually.
       CGPathRef tapered = createTaperedOutline(src, sw, ew, referenceWidth,
                                                referenceHeight, src.lineCap);
