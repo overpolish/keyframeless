@@ -52,6 +52,17 @@ NS_ASSUME_NONNULL_BEGIN
 /// Whether the path is locked (visible but non-interactive).
 @property(nonatomic, assign) BOOL locked;
 
+/// Whether this layer is a raster image (rendered as a textured quad).
+@property(nonatomic, assign) BOOL isImage;
+
+/// Absolute file path to the source image (PNG, JPEG, etc.).
+/// Only meaningful when isImage == YES.
+@property(nonatomic, copy, nullable) NSString *imagePath;
+
+/// Original image aspect ratio (width / height). Set at import time.
+/// Only meaningful when isImage == YES.
+@property(nonatomic, assign) float imageAspect;
+
 /// Whether this entry is a group (contains no points, acts as a folder).
 @property(nonatomic, assign) BOOL isGroup;
 
@@ -148,6 +159,21 @@ NS_ASSUME_NONNULL_BEGIN
 /// sketch is enabled, then stored so the jitter stays stable.
 @property(nonatomic, assign) uint32_t sketchSeed;
 
+/// Number of contours (1 for simple paths, >1 for compound paths like SVG
+/// paths with multiple M...Z sequences). Each contour is independently closed.
+@property(nonatomic, readonly) NSUInteger contourCount;
+
+/// Returns the point index range for the given contour.
+- (NSRange)contourRangeAtIndex:(NSUInteger)contourIndex;
+
+/// Mark the start of a new contour at the current point count.
+/// Called by the SVG parser when encountering a new M after Z.
+- (void)beginContour;
+
+/// Split this compound path into separate closed paths for stroke rendering.
+/// Returns nil if the path has only one contour.
+- (nullable NSArray<KKBezierPath *> *)splitContours;
+
 /// Whether this path has a solid fill (default NO).
 @property(nonatomic, assign) BOOL fillEnabled;
 
@@ -155,6 +181,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, assign) float fillR;
 @property(nonatomic, assign) float fillG;
 @property(nonatomic, assign) float fillB;
+
+/// Fill tint amount for image layers (0–1, default 1.0).
+/// 0 = original image, 1 = fully colorized by fill color.
+@property(nonatomic, assign) float fillTint;
 
 + (instancetype)pathWithData:(nullable NSData *)data;
 - (NSData *)dataRepresentation;
