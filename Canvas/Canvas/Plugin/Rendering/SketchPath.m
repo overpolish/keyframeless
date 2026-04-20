@@ -23,7 +23,13 @@ static float offsetOpt(float x, float roughness, float roughnessGain) {
 }
 
 // Roughness gain dampening based on segment length (normalized coords).
+// Short segments (dense curves) get reduced gain to avoid jagged zigzag.
+// Long segments also get dampened (rough.js behavior).
 static float roughnessGainForLength(float length) {
+  if (length < 0.005f)
+    return 0.15f;
+  if (length < 0.02f)
+    return 0.15f + (length - 0.005f) * ((1.0f - 0.15f) / (0.02f - 0.005f));
   if (length < 0.1f)
     return 1.0f;
   if (length > 0.25f)
@@ -191,17 +197,34 @@ static KKBezierPath *buildPass(KKBezierPath *path, float roughness,
       // Curve segment: jitter handles subtly (20% of base offset).
       float curveOff = baseOffset * 0.2f;
 
+      // Bowing on curves: add perpendicular displacement to control points.
+      float bowOutX = 0, bowOutY = 0, bowInX = 0, bowInY = 0;
+      if (bowing > 0.0001f && segLen > 0.0001f) {
+        float off = overlay ? baseOffset * 0.5f : baseOffset;
+        // Perpendicular to segment chord, scaled by bowing.
+        float perpX = -dy;
+        float perpY = dx;
+        float bowScale = bowing * off * 0.5f;
+        bowOutX = offsetOpt(bowScale * perpX, roughness, rGain);
+        bowOutY = offsetOpt(bowScale * perpY, roughness, rGain);
+        bowInX = offsetOpt(bowScale * perpX, roughness, rGain);
+        bowInY = offsetOpt(bowScale * perpY, roughness, rGain);
+      }
+
       [pass setType:KKBezierPointBezier atIndex:i];
-      [pass setOutHandle:(simd_float2){
-                             p0.outX + offsetOpt(curveOff, roughness, rGain),
-                             p0.outY + offsetOpt(curveOff, roughness, rGain)}
-                 atIndex:i];
+      [pass
+          setOutHandle:(simd_float2){p0.outX + bowOutX +
+                                         offsetOpt(curveOff, roughness, rGain),
+                                     p0.outY + bowOutY +
+                                         offsetOpt(curveOff, roughness, rGain)}
+               atIndex:i];
 
       NSUInteger targetIdx = ni < ptCount ? ni : 0;
       [pass setType:KKBezierPointBezier atIndex:targetIdx];
-      [pass setInHandle:(simd_float2){
-                            p1.inX + offsetOpt(curveOff, roughness, rGain),
-                            p1.inY + offsetOpt(curveOff, roughness, rGain)}
+      [pass setInHandle:(simd_float2){p1.inX + bowInX +
+                                          offsetOpt(curveOff, roughness, rGain),
+                                      p1.inY + bowInY +
+                                          offsetOpt(curveOff, roughness, rGain)}
                 atIndex:targetIdx];
     }
   }
