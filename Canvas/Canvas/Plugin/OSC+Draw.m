@@ -14,6 +14,182 @@ static const CGFloat kPathToolbarGap = 6.0;
 
 @implementation CanvasOSC (Draw)
 
+- (void)drawFilledPath:(KKBezierPath *)path
+                 color:(simd_float4)color
+      destinationImage:(FxImageTile *)dest {
+  NSUInteger nc = path.contourCount;
+
+  KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
+  uint64_t registryID = dest.deviceRegistryID;
+  MTLPixelFormat pixelFormat =
+      [KKMetalDeviceCache pixelFormatForImageTile:dest];
+  id<MTLRenderPipelineState> ps = [cache
+      buildAndRegisterPipelineStateForPluginID:
+          @"co.overpolish.keyframelesskit.FillPreview"
+                                    registryID:registryID
+                                   pixelFormat:pixelFormat
+                                      bundleID:@"co.overpolish"
+                                                ".keyframeless"
+                                                ".KeyframelessKit"
+                                  vertexShader:@"KKVertexShader"
+                                fragmentShader:@"KKLineFragment"
+                                     blendMode:KKBlendModePremultipliedAlpha];
+  if (!ps)
+    return;
+
+  for (NSUInteger ci = 0; ci < nc; ci++) {
+    NSRange r = [path contourRangeAtIndex:ci];
+    NSUInteger cStart = r.location;
+    NSUInteger cLen = r.length;
+    if (cLen < 3)
+      continue;
+
+    NSUInteger segCount = cLen;
+    NSUInteger maxPoints = segCount * 32 + 2;
+    CGPoint *points = malloc(sizeof(CGPoint) * maxPoints);
+    NSUInteger pointCount = 0;
+
+    for (NSUInteger i = 0; i < segCount; i++) {
+      NSUInteger idx = cStart + i;
+      NSUInteger nextIdx = cStart + ((i + 1) % cLen);
+      NSUInteger startS = (pointCount > 0 && i > 0) ? 1 : 0;
+      for (NSUInteger s = startS; s <= 32; s++) {
+        float t = (float)s / 32.0f;
+        simd_float2 pos = [path evaluatePointAtIndex:idx
+                                           nextIndex:nextIdx
+                                                 atT:t];
+        points[pointCount++] = [self canvasPointFromObjectPoint:pos];
+      }
+    }
+
+    if (pointCount < 3) {
+      free(points);
+      continue;
+    }
+
+    float ioW = [dest.ioSurface width];
+    float ioH = [dest.ioSurface height];
+
+    // Build triangle fan from centroid.
+    float cx = 0, cy = 0;
+    for (NSUInteger i = 0; i < pointCount; i++) {
+      cx += points[i].x;
+      cy += points[i].y;
+    }
+    cx /= pointCount;
+    cy /= pointCount;
+
+    simd_float2 center = {(float)(cx - ioW / 2.0), (float)(ioH / 2.0 - cy)};
+
+    NSUInteger triCount = pointCount;
+    NSUInteger vertCount = triCount * 3;
+    KKVertex2D *verts = malloc(sizeof(KKVertex2D) * vertCount);
+    for (NSUInteger i = 0; i < triCount; i++) {
+      NSUInteger next = (i + 1) % pointCount;
+      simd_float2 a = {(float)(points[i].x - ioW / 2.0),
+                       (float)(ioH / 2.0 - points[i].y)};
+      simd_float2 b = {(float)(points[next].x - ioW / 2.0),
+                       (float)(ioH / 2.0 - points[next].y)};
+      verts[i * 3 + 0] = (KKVertex2D){center, {0, 0}};
+      verts[i * 3 + 1] = (KKVertex2D){a, {0, 0}};
+      verts[i * 3 + 2] = (KKVertex2D){b, {0, 0}};
+    }
+
+    simd_float4 fillColor = color;
+    id<MTLRenderPipelineState> fillPS = ps;
+
+    [self
+        encodeRenderCommandsForDestinationImage:dest
+                                 canvasPosition:CGPointZero
+                               clearDestination:NO
+                                       commands:^(
+                                           id<MTLRenderCommandEncoder> encoder,
+                                           CGPoint metalPosition,
+                                           simd_uint2 viewportSize) {
+                                         [encoder
+                                             setRenderPipelineState:fillPS];
+                                         NSUInteger byteLen =
+                                             sizeof(KKVertex2D) * vertCount;
+                                         if (byteLen <= 4096) {
+                                           [encoder
+                                               setVertexBytes:verts
+                                                       length:byteLen
+                                                      atIndex:
+                                                          KKVertexInputIndex_Vertices];
+                                         } else {
+                                           id<MTLDevice> dev = encoder.device;
+                                           id<MTLBuffer> buf = [dev
+                                               newBufferWithBytes:verts
+                                                           length:byteLen
+                                                          options:
+                                                              MTLResourceStorageModeShared];
+                                           [encoder
+                                               setVertexBuffer:buf
+                                                        offset:0
+                                                       atIndex:
+                                                           KKVertexInputIndex_Vertices];
+                                         }
+                                         [encoder
+                                             setFragmentBytes:&fillColor
+                                                       length:sizeof(fillColor)
+                                                      atIndex:0];
+                                         [encoder drawPrimitives:
+                                                      MTLPrimitiveTypeTriangle
+                                                     vertexStart:0
+                                                     vertexCount:vertCount];
+                                       }];
+    free(verts);
+    free(points);
+  }
+}
+
+- (void)drawPathSegmentsWithWidth:(KKBezierPath *)path
+                            color:(simd_float4)color
+                        halfWidth:(float)halfWidth
+                 destinationImage:(FxImageTile *)dest {
+  NSUInteger nc = path.contourCount;
+
+  for (NSUInteger ci = 0; ci < nc; ci++) {
+    NSRange r = [path contourRangeAtIndex:ci];
+    NSUInteger cStart = r.location;
+    NSUInteger cLen = r.length;
+    if (cLen < 2)
+      continue;
+
+    BOOL contourClosed = path.closed;
+    NSUInteger segCount = contourClosed ? cLen : (cLen - 1);
+    NSUInteger maxPoints = segCount * 32 + 2;
+    CGPoint *points = malloc(sizeof(CGPoint) * maxPoints);
+    NSUInteger pointCount = 0;
+
+    for (NSUInteger i = 0; i < segCount; i++) {
+      NSUInteger idx = cStart + i;
+      NSUInteger nextIdx = cStart + ((i + 1) % cLen);
+      NSUInteger startS = (pointCount > 0 && i > 0) ? 1 : 0;
+      for (NSUInteger s = startS; s <= 32; s++) {
+        float t = (float)s / 32.0f;
+        simd_float2 pos = [path evaluatePointAtIndex:idx
+                                           nextIndex:nextIdx
+                                                 atT:t];
+        points[pointCount++] = [self canvasPointFromObjectPoint:pos];
+      }
+    }
+    if (contourClosed && pointCount > 0) {
+      simd_float2 firstPos = [path evaluatePointAtIndex:cStart
+                                              nextIndex:cStart + 1
+                                                    atT:0.0f];
+      points[pointCount++] = [self canvasPointFromObjectPoint:firstPos];
+    }
+
+    [self drawLineStripWithPoints:points
+                            count:pointCount
+                            color:color
+                        halfWidth:halfWidth
+                 destinationImage:dest];
+    free(points);
+  }
+}
+
 - (void)drawPathSegments:(KKBezierPath *)path
                    color:(simd_float4)color
         destinationImage:(FxImageTile *)dest {
@@ -592,6 +768,216 @@ static const CGFloat kPathToolbarGap = 6.0;
                          color:strokeColor
               destinationImage:destinationImage
                         atTime:time];
+      }
+    }
+  }
+
+  // Boolean operation preview overlay on hover.
+  if (isCursorMode && self.hoveredPathOp > 0 &&
+      self.selectedPathIndices.count >= 2) {
+    // Compute preview result if not cached for this op.
+    if (self.previewCachedOp != self.hoveredPathOp) {
+      NSMutableArray<KKBezierPath *> *operands = [NSMutableArray array];
+      [self.selectedPathIndices
+          enumerateIndexesWithOptions:NSEnumerationReverse
+                           usingBlock:^(NSUInteger idx, BOOL *stop) {
+                             if (idx < self.paths.count &&
+                                 !self.paths[idx].isImage &&
+                                 !self.paths[idx].isGroup) {
+                               [operands addObject:self.paths[idx]];
+                             }
+                           }];
+      if (operands.count >= 2) {
+        KKBooleanOp op;
+        if (self.hoveredPathOp == kOSCPathUnion)
+          op = KKBooleanOpUnion;
+        else if (self.hoveredPathOp == kOSCPathSubtract)
+          op = KKBooleanOpSubtract;
+        else if (self.hoveredPathOp == kOSCPathIntersect)
+          op = KKBooleanOpIntersect;
+        else
+          op = KKBooleanOpXOR;
+        self.previewResultPath = KKPathBooleanApply(operands, op);
+      } else {
+        self.previewResultPath = nil;
+      }
+      self.previewCachedOp = self.hoveredPathOp;
+      self.previewTexture = nil;
+    }
+
+    float ioW = [destinationImage.ioSurface width];
+    float ioH = [destinationImage.ioSurface height];
+
+    if (!self.previewTexture) {
+      NSInteger pixelW = (NSInteger)ioW;
+      NSInteger pixelH = (NSInteger)ioH;
+
+      CGColorSpaceRef cs = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+      CGContextRef ctx =
+          CGBitmapContextCreate(NULL, pixelW, pixelH, 8, pixelW * 4, cs,
+                                (CGBitmapInfo)kCGImageAlphaPremultipliedLast |
+                                    kCGBitmapByteOrder32Big);
+      CGColorSpaceRelease(cs);
+
+      if (ctx) {
+        CGContextSetLineJoin(ctx, kCGLineJoinRound);
+        CGContextSetLineCap(ctx, kCGLineCapRound);
+
+        // Helper block: flatten a KKBezierPath to a CGPath in canvas space.
+        // Canvas coords: X=0 left, Y=0 top. CGContext: Y=0 bottom.
+        CGMutablePathRef (^canvasCGPath)(KKBezierPath *) = ^(KKBezierPath *p) {
+          CGMutablePathRef cgp = CGPathCreateMutable();
+          NSUInteger nc = p.contourCount;
+          for (NSUInteger ci = 0; ci < nc; ci++) {
+            NSRange r = [p contourRangeAtIndex:ci];
+            NSUInteger cStart = r.location;
+            NSUInteger cLen = r.length;
+            if (cLen < 2)
+              continue;
+            NSUInteger segCount = p.closed ? cLen : (cLen - 1);
+            for (NSUInteger i = 0; i < segCount; i++) {
+              NSUInteger idx = cStart + i;
+              NSUInteger nextIdx = cStart + ((i + 1) % cLen);
+              for (NSUInteger s = 0; s <= 32; s++) {
+                float t = (float)s / 32.0f;
+                simd_float2 pos = [p evaluatePointAtIndex:idx
+                                                nextIndex:nextIdx
+                                                      atT:t];
+                CGPoint cp = [self canvasPointFromObjectPoint:pos];
+                // Flip Y for CGContext (Y=0 at bottom).
+                CGFloat cy = cp.y;
+                if (i == 0 && s == 0)
+                  CGPathMoveToPoint(cgp, NULL, cp.x, cy);
+                else
+                  CGPathAddLineToPoint(cgp, NULL, cp.x, cy);
+              }
+            }
+            if (p.closed)
+              CGPathCloseSubpath(cgp);
+          }
+          return cgp;
+        };
+
+        // Red tint: selected paths (will be removed).
+        [self.selectedPathIndices
+            enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+              if (idx >= self.paths.count)
+                return;
+              KKBezierPath *p = self.paths[idx];
+              if (p.isImage || p.isGroup || p.count < 2)
+                return;
+              CGMutablePathRef cgp = canvasCGPath(p);
+              if (p.closed) {
+                CGContextSetRGBFillColor(ctx, 1.0, 0.0, 0.0, 0.45);
+                CGContextAddPath(ctx, cgp);
+                CGContextFillPath(ctx);
+              }
+              CGPathRelease(cgp);
+            }];
+
+        // Green tint: result path (will remain).
+        if (self.previewResultPath && self.previewResultPath.count >= 2) {
+          KKBezierPath *rp = self.previewResultPath;
+          // Inherit stroke width from first selected path.
+          float sw = 8.0f;
+          NSUInteger firstIdx = self.selectedPathIndices.firstIndex;
+          if (firstIdx < self.paths.count)
+            sw = self.paths[firstIdx].strokeWidth;
+          BOOL hasFill = NO;
+          [self.selectedPathIndices
+              enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+                if (idx < self.paths.count && self.paths[idx].fillEnabled) {
+                  *stop = YES;
+                }
+              }];
+          CGMutablePathRef cgp = canvasCGPath(rp);
+          if (rp.closed) {
+            CGContextSetRGBFillColor(ctx, 0.0, 1.0, 0.0, 0.45);
+            CGContextAddPath(ctx, cgp);
+            CGContextFillPath(ctx);
+          }
+          CGPathRelease(cgp);
+        }
+
+        // Upload to texture.
+        KKMetalDeviceCache *pvCache = [KKMetalDeviceCache sharedCache];
+        id<MTLDevice> pvDevice =
+            [pvCache deviceWithRegistryID:destinationImage.deviceRegistryID];
+        MTLTextureDescriptor *desc = [MTLTextureDescriptor
+            texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm
+                                         width:pixelW
+                                        height:pixelH
+                                     mipmapped:NO];
+        desc.usage = MTLTextureUsageShaderRead;
+        self.previewTexture = [pvDevice newTextureWithDescriptor:desc];
+        [self.previewTexture replaceRegion:MTLRegionMake2D(0, 0, pixelW, pixelH)
+                               mipmapLevel:0
+                                 withBytes:CGBitmapContextGetData(ctx)
+                               bytesPerRow:pixelW * 4];
+        CGContextRelease(ctx);
+      }
+    }
+
+    // Draw the preview overlay texture as a full-screen quad.
+    if (self.previewTexture) {
+      KKMetalDeviceCache *pvCache = [KKMetalDeviceCache sharedCache];
+      uint64_t pvRegID = destinationImage.deviceRegistryID;
+      MTLPixelFormat pvFmt =
+          [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
+      id<MTLRenderPipelineState> pvPS = [pvCache
+          buildAndRegisterPipelineStateForPluginID:
+              @"co.overpolish.keyframeless.Canvas.Preview"
+                                        registryID:pvRegID
+                                       pixelFormat:pvFmt
+                                          bundleID:@"co.overpolish"
+                                                    ".keyframeless"
+                                                    ".KeyframelessKit"
+                                      vertexShader:@"KKVertexShader"
+                                    fragmentShader:@"KKLabelFragment"
+                                         blendMode:
+                                             KKBlendModePremultipliedAlpha];
+      if (pvPS) {
+        id<MTLCommandQueue> pvQueue =
+            [pvCache commandQueueWithRegistryID:pvRegID pixelFormat:pvFmt];
+        if (pvQueue) {
+          id<MTLTexture> outTex = [destinationImage
+              metalTextureForDevice:[pvCache deviceWithRegistryID:pvRegID]];
+          id<MTLCommandBuffer> pvBuf = [pvQueue commandBuffer];
+          [pvBuf enqueue];
+          MTLRenderPassDescriptor *pvRPD =
+              [MTLRenderPassDescriptor renderPassDescriptor];
+          pvRPD.colorAttachments[0].texture = outTex;
+          pvRPD.colorAttachments[0].loadAction = MTLLoadActionLoad;
+          pvRPD.colorAttachments[0].storeAction = MTLStoreActionStore;
+          id<MTLRenderCommandEncoder> pvEnc =
+              [pvBuf renderCommandEncoderWithDescriptor:pvRPD];
+          MTLViewport pvVP = {0, 0, ioW, ioH, -1.0, 1.0};
+          [pvEnc setViewport:pvVP];
+          [pvEnc setRenderPipelineState:pvPS];
+          simd_uint2 vpSize = {(unsigned int)ioW, (unsigned int)ioH};
+          [pvEnc setVertexBytes:&vpSize
+                         length:sizeof(vpSize)
+                        atIndex:KKVertexInputIndex_ViewportSize];
+
+          float halfW = ioW / 2.0f;
+          float halfH = ioH / 2.0f;
+          KKVertex2D verts[6] = {
+              {{-halfW, -halfH}, {0, 0}}, {{halfW, -halfH}, {1, 0}},
+              {{halfW, halfH}, {1, 1}},   {{-halfW, -halfH}, {0, 0}},
+              {{halfW, halfH}, {1, 1}},   {{-halfW, halfH}, {0, 1}},
+          };
+          [pvEnc setVertexBytes:verts
+                         length:sizeof(verts)
+                        atIndex:KKVertexInputIndex_Vertices];
+          [pvEnc setFragmentTexture:self.previewTexture atIndex:0];
+          [pvEnc drawPrimitives:MTLPrimitiveTypeTriangle
+                    vertexStart:0
+                    vertexCount:6];
+          [pvEnc endEncoding];
+          [pvBuf commit];
+          [pvBuf waitUntilScheduled];
+          [pvCache returnCommandQueueToCache:pvQueue];
+        }
       }
     }
   }

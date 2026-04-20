@@ -237,6 +237,16 @@
   // Path combine toolbar (only visible when 2+ non-image paths selected).
   NSInteger pathToolbarPart = [self.pathToolbar hitTestAtX:positionX
                                                          y:positionY];
+  if (pathToolbarPart > 0) {
+    self.hoveredPathOp = pathToolbarPart;
+  } else {
+    if (self.hoveredPathOp != 0) {
+      self.hoveredPathOp = 0;
+      self.previewResultPath = nil;
+      self.previewTexture = nil;
+      self.previewCachedOp = 0;
+    }
+  }
   if (pathToolbarPart != 0) {
     *activePart = pathToolbarPart;
     [oscAPI setCursor:[NSCursor arrowCursor]];
