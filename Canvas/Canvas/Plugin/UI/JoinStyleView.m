@@ -6,28 +6,7 @@
 #import "JoinStyleView.h"
 #import <KeyframelessKit/KeyframelessKit.h>
 
-static const CGFloat kPillSpacing = 2.0;
-static const CGFloat kPillCorner = 3.0;
-static const NSInteger kJoinCount = 3;
 static const CGFloat kKappa = 0.5522847498f;
-static const CGFloat kPillSize = 22.0;
-
-@implementation KKJoinStyleView {
-  NSArray<NSButton *> *_buttons;
-}
-
-- (instancetype)initWithFrame:(NSRect)frameRect {
-  self = [super initWithFrame:frameRect];
-  if (self) {
-    _selectedIndex = 0;
-    [self buildButtons];
-  }
-  return self;
-}
-
-- (BOOL)isFlipped {
-  return YES;
-}
 
 // Each SVG has two sub-paths:
 //   Outer: an L-shape whose top-left corner varies per join style.
@@ -42,10 +21,8 @@ static void drawJoinPath(CGFloat ox, CGFloat oy, CGFloat k, NSInteger join) {
   NSBezierPath *p = [NSBezierPath bezierPath];
 
   // --- Outer shape ---
-  // Start at bottom-left.
   [p moveToPoint:NSMakePoint(ox + 2 * k, oy + 22 * k)];
 
-  // Up the left edge — destination depends on join style.
   switch (join) {
   case 0: // Miter: sharp corner at (2,2)
     [p lineToPoint:NSMakePoint(ox + 2 * k, oy + 2 * k)];
@@ -69,13 +46,11 @@ static void drawJoinPath(CGFloat ox, CGFloat oy, CGFloat k, NSInteger join) {
 
   // Down to the connector.
   [p lineToPoint:NSMakePoint(ox + 22 * k, oy + 7.055 * k)];
-  // Left to connector start.
   [p lineToPoint:NSMakePoint(ox + 8 * k, oy + 7.055 * k)];
-  // Small arc connector (same as cap view's arc).
+  // Small arc connector.
   [p curveToPoint:NSMakePoint(ox + 7.055 * k, oy + 8 * k)
       controlPoint1:NSMakePoint(ox + (8 - 0.945 * kKappa) * k, oy + 7.055 * k)
       controlPoint2:NSMakePoint(ox + 7.055 * k, oy + (8 - 0.945 * kKappa) * k)];
-  // Down to bottom.
   [p lineToPoint:NSMakePoint(ox + 7.055 * k, oy + 22 * k)];
   [p closePath];
 
@@ -92,7 +67,13 @@ static void drawJoinPath(CGFloat ox, CGFloat oy, CGFloat k, NSInteger join) {
   [p fill];
 }
 
-- (NSImage *)joinImageForIndex:(NSInteger)index active:(BOOL)active {
+@implementation KKJoinStyleView
+
+- (NSInteger)pillCount {
+  return 3;
+}
+
+- (NSImage *)imageForIndex:(NSInteger)index active:(BOOL)active {
   CGFloat imgSize = 24.0;
   CGFloat inset = 2.0;
   NSImage *img = [NSImage
@@ -111,71 +92,6 @@ static void drawJoinPath(CGFloat ox, CGFloat oy, CGFloat k, NSInteger join) {
       }];
   img.template = NO;
   return img;
-}
-
-- (void)buildButtons {
-  NSMutableArray<NSButton *> *btns = [NSMutableArray array];
-
-  NSStackView *stack = [NSStackView stackViewWithViews:@[]];
-  stack.orientation = NSUserInterfaceLayoutOrientationHorizontal;
-  stack.spacing = kPillSpacing;
-  stack.translatesAutoresizingMaskIntoConstraints = NO;
-
-  for (NSInteger i = 0; i < kJoinCount; i++) {
-    BOOL active = (i == _selectedIndex);
-    NSButton *btn = [NSButton buttonWithImage:[self joinImageForIndex:i
-                                                               active:active]
-                                       target:self
-                                       action:@selector(pillClicked:)];
-    btn.bezelStyle = NSBezelStyleSmallSquare;
-    btn.bordered = NO;
-    btn.tag = i;
-    btn.wantsLayer = YES;
-    btn.translatesAutoresizingMaskIntoConstraints = NO;
-    [btn.widthAnchor constraintEqualToConstant:kPillSize].active = YES;
-    [btn.heightAnchor constraintEqualToConstant:kPillSize].active = YES;
-    [stack addArrangedSubview:btn];
-    [btns addObject:btn];
-  }
-
-  [self addSubview:stack];
-  [stack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor].active =
-      YES;
-  [stack.centerYAnchor constraintEqualToAnchor:self.centerYAnchor].active = YES;
-
-  _buttons = [btns copy];
-  [self updateButtonAppearance];
-}
-
-- (void)updateButtonAppearance {
-  for (NSInteger i = 0; i < (NSInteger)_buttons.count; i++) {
-    NSButton *btn = _buttons[i];
-    BOOL active = (i == _selectedIndex);
-    btn.image = [self joinImageForIndex:i active:active];
-    btn.layer.cornerRadius = kPillCorner;
-    if (active) {
-      btn.layer.backgroundColor = [NSColor inspectorBackground].CGColor;
-      btn.layer.borderColor = [NSColor accentMatchingHost].CGColor;
-      btn.layer.borderWidth = 1.0;
-    } else {
-      btn.layer.backgroundColor =
-          [[NSColor inspectorLabel] colorWithAlphaComponent:0.06].CGColor;
-      btn.layer.borderColor = [NSColor clearColor].CGColor;
-      btn.layer.borderWidth = 0.0;
-    }
-  }
-}
-
-- (void)pillClicked:(NSButton *)sender {
-  _selectedIndex = sender.tag;
-  [self updateButtonAppearance];
-  if (_onSelectionChanged)
-    _onSelectionChanged(_selectedIndex);
-}
-
-- (void)setSelectedIndex:(NSInteger)selectedIndex {
-  _selectedIndex = selectedIndex;
-  [self updateButtonAppearance];
 }
 
 @end

@@ -6,28 +6,6 @@
 #import "FillStyleView.h"
 #import <KeyframelessKit/KeyframelessKit.h>
 
-static const CGFloat kPillSpacing = 2.0;
-static const CGFloat kPillCorner = 3.0;
-static const NSInteger kStyleCount = 5;
-static const CGFloat kPillSize = 22.0;
-
-@implementation KKFillStyleView {
-  NSArray<NSButton *> *_buttons;
-}
-
-- (instancetype)initWithFrame:(NSRect)frameRect {
-  self = [super initWithFrame:frameRect];
-  if (self) {
-    _selectedIndex = 0;
-    [self buildButtons];
-  }
-  return self;
-}
-
-- (BOOL)isFlipped {
-  return YES;
-}
-
 static void drawFillStyle(CGFloat ox, CGFloat oy, CGFloat k, NSInteger style) {
   NSBezierPath *p = [NSBezierPath bezierPath];
 
@@ -133,7 +111,13 @@ static void drawFillStyle(CGFloat ox, CGFloat oy, CGFloat k, NSInteger style) {
   }
 }
 
-- (NSImage *)styleImageForIndex:(NSInteger)index active:(BOOL)active {
+@implementation KKFillStyleView
+
+- (NSInteger)pillCount {
+  return 5;
+}
+
+- (NSImage *)imageForIndex:(NSInteger)index active:(BOOL)active {
   CGFloat imgSize = 24.0;
   NSImage *img = [NSImage
        imageWithSize:NSMakeSize(imgSize, imgSize)
@@ -152,71 +136,6 @@ static void drawFillStyle(CGFloat ox, CGFloat oy, CGFloat k, NSInteger style) {
       }];
   img.template = NO;
   return img;
-}
-
-- (void)buildButtons {
-  NSMutableArray<NSButton *> *btns = [NSMutableArray array];
-
-  NSStackView *stack = [NSStackView stackViewWithViews:@[]];
-  stack.orientation = NSUserInterfaceLayoutOrientationHorizontal;
-  stack.spacing = kPillSpacing;
-  stack.translatesAutoresizingMaskIntoConstraints = NO;
-
-  for (NSInteger i = 0; i < kStyleCount; i++) {
-    BOOL active = (i == _selectedIndex);
-    NSButton *btn = [NSButton buttonWithImage:[self styleImageForIndex:i
-                                                                active:active]
-                                       target:self
-                                       action:@selector(pillClicked:)];
-    btn.bezelStyle = NSBezelStyleSmallSquare;
-    btn.bordered = NO;
-    btn.tag = i;
-    btn.wantsLayer = YES;
-    btn.translatesAutoresizingMaskIntoConstraints = NO;
-    [btn.widthAnchor constraintEqualToConstant:kPillSize].active = YES;
-    [btn.heightAnchor constraintEqualToConstant:kPillSize].active = YES;
-    [stack addArrangedSubview:btn];
-    [btns addObject:btn];
-  }
-
-  [self addSubview:stack];
-  [stack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor].active =
-      YES;
-  [stack.centerYAnchor constraintEqualToAnchor:self.centerYAnchor].active = YES;
-
-  _buttons = [btns copy];
-  [self updateButtonAppearance];
-}
-
-- (void)updateButtonAppearance {
-  for (NSInteger i = 0; i < (NSInteger)_buttons.count; i++) {
-    NSButton *btn = _buttons[i];
-    BOOL active = (i == _selectedIndex);
-    btn.image = [self styleImageForIndex:i active:active];
-    btn.layer.cornerRadius = kPillCorner;
-    if (active) {
-      btn.layer.backgroundColor = [NSColor inspectorBackground].CGColor;
-      btn.layer.borderColor = [NSColor accentMatchingHost].CGColor;
-      btn.layer.borderWidth = 1.0;
-    } else {
-      btn.layer.backgroundColor =
-          [[NSColor inspectorLabel] colorWithAlphaComponent:0.06].CGColor;
-      btn.layer.borderColor = [NSColor clearColor].CGColor;
-      btn.layer.borderWidth = 0.0;
-    }
-  }
-}
-
-- (void)pillClicked:(NSButton *)sender {
-  _selectedIndex = sender.tag;
-  [self updateButtonAppearance];
-  if (_onSelectionChanged)
-    _onSelectionChanged(_selectedIndex);
-}
-
-- (void)setSelectedIndex:(NSInteger)selectedIndex {
-  _selectedIndex = selectedIndex;
-  [self updateButtonAppearance];
 }
 
 @end
