@@ -38,6 +38,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKOSCLabel.h>
 #import <KeyframelessKit/KKOnScreenControl+CoordinateSpace.h>
 #import <KeyframelessKit/KKParameterRowView.h>
+#import <KeyframelessKit/KKPathBoolean.h>
 #import <KeyframelessKit/KKPillToggleRowView.h>
 #import <KeyframelessKit/KKPlugin+Color.h>
 #import <KeyframelessKit/KKPlugin+Crop.h>
@@ -48,6 +49,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKRenderPrimitives.h>
 #import <KeyframelessKit/KKRingOSC.h>
 #import <KeyframelessKit/KKRotationOSC.h>
+#import <KeyframelessKit/KKSVGParser.h>
 #import <KeyframelessKit/KKSeparatorView.h>
 #import <KeyframelessKit/KKShaderTypes.h>
 #import <KeyframelessKit/KKSnapEngine.h>

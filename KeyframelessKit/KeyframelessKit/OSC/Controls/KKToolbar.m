@@ -37,7 +37,7 @@ static const CGFloat kHighlightCorner = 8.0;
 
 @end
 
-static const CGFloat kLabelFontSize = 12.0;
+static const CGFloat kLabelFontSize = 15.0;
 static const CGFloat kLabelHeight = 16.0;
 static const CGFloat kIconShiftY = 8.0;
 
@@ -47,15 +47,15 @@ static const CGFloat kIconShiftY = 8.0;
   NSMutableArray *_iconTextures;
   NSMutableArray<NSString *> *_cachedNames;
   NSMutableArray *_labelTextures;
-  NSMutableArray<NSString *> *_cachedLabels;
   NSMutableArray<NSValue *> *_buttonCenters;
   NSMutableArray<NSValue *> *_buttonRects;
   id<MTLTexture> _bgTexture;
   id<MTLTexture> _highlightTexture;
   CGFloat _cachedToolbarW;
   CGFloat _cachedToolbarH;
-  NSRect _toolbarFrame;
 }
+
+@synthesize toolbarFrame = _toolbarFrame;
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager
                              items:(NSArray<KKToolbarItem *> *)items {
@@ -67,14 +67,13 @@ static const CGFloat kIconShiftY = 8.0;
     _iconTextures = [NSMutableArray arrayWithCapacity:items.count];
     _cachedNames = [NSMutableArray arrayWithCapacity:items.count];
     _labelTextures = [NSMutableArray arrayWithCapacity:items.count];
-    _cachedLabels = [NSMutableArray arrayWithCapacity:items.count];
+    _bottomMargin = kToolbarMargin;
     _buttonCenters = [NSMutableArray arrayWithCapacity:items.count];
     _buttonRects = [NSMutableArray arrayWithCapacity:items.count];
     for (NSUInteger i = 0; i < items.count; i++) {
       [_iconTextures addObject:[NSNull null]];
       [_cachedNames addObject:@""];
       [_labelTextures addObject:[NSNull null]];
-      [_cachedLabels addObject:@""];
       [_buttonCenters addObject:[NSValue valueWithPoint:NSZeroPoint]];
       [_buttonRects addObject:[NSValue valueWithRect:NSZeroRect]];
     }
@@ -205,18 +204,20 @@ static id<MTLTexture> renderRoundedRect(id<MTLDevice> device, CGFloat w,
                             index:(NSUInteger)idx {
   if (!label.length)
     return nil;
-  if (idx < _labelTextures.count && _labelTextures[idx] != (id)[NSNull null] &&
-      [_cachedLabels[idx] isEqualToString:label])
-    return _labelTextures[idx];
 
+  NSMutableParagraphStyle *para = [[NSMutableParagraphStyle alloc] init];
+  para.alignment = NSTextAlignmentCenter;
+  para.maximumLineHeight = kLabelFontSize;
+  para.lineSpacing = 0;
   NSDictionary *attrs = @{
     NSFontAttributeName : [NSFont systemFontOfSize:kLabelFontSize
                                             weight:NSFontWeightMedium],
     NSForegroundColorAttributeName : [NSColor colorWithWhite:0.5 alpha:1.0],
+    NSParagraphStyleAttributeName : para,
   };
   NSSize textSize = [label sizeWithAttributes:attrs];
   CGFloat canvasW = ceil(textSize.width + 4.0);
-  CGFloat canvasH = ceil(kLabelHeight);
+  CGFloat canvasH = ceil(MAX(textSize.height, kLabelHeight));
   NSInteger pixelW = (NSInteger)(canvasW * kScale);
   NSInteger pixelH = (NSInteger)(canvasH * kScale);
 
@@ -235,9 +236,10 @@ static id<MTLTexture> renderRoundedRect(id<MTLDevice> device, CGFloat w,
   [NSGraphicsContext saveGraphicsState];
   [NSGraphicsContext setCurrentContext:gc];
 
-  CGFloat originX = (canvasW - textSize.width) / 2.0;
-  CGFloat originY = (canvasH - textSize.height) / 2.0;
-  [label drawAtPoint:NSMakePoint(originX, originY) withAttributes:attrs];
+  BOOL multiline = [label containsString:@"\n"];
+  CGFloat textY = multiline ? -3.0 : (canvasH - textSize.height) / 2.0;
+  NSRect drawRect = NSMakeRect(0, textY, canvasW, textSize.height);
+  [label drawInRect:drawRect withAttributes:attrs];
 
   [NSGraphicsContext restoreGraphicsState];
 
@@ -255,7 +257,6 @@ static id<MTLTexture> renderRoundedRect(id<MTLDevice> device, CGFloat w,
 
   CGContextRelease(ctx);
   _labelTextures[idx] = texture;
-  _cachedLabels[idx] = [label copy];
   return texture;
 }
 
@@ -311,7 +312,7 @@ static void drawTexturedQuad(id<MTLRenderCommandEncoder> encoder,
   CGFloat toolbarW = totalButtonsW + kToolbarPadding * 2;
   CGFloat toolbarH = kButtonHeight + kToolbarPadding * 2;
   CGFloat toolbarX = ioW / 2.0;
-  CGFloat toolbarY = ioH - kToolbarMargin - toolbarH / 2.0;
+  CGFloat toolbarY = ioH - _bottomMargin - toolbarH / 2.0;
 
   _toolbarFrame = NSMakeRect(toolbarX - toolbarW / 2.0,
                              toolbarY - toolbarH / 2.0, toolbarW, toolbarH);
@@ -415,7 +416,7 @@ static void drawTexturedQuad(id<MTLRenderCommandEncoder> encoder,
       continue;
 
     CGPoint center = _buttonCenters[i].pointValue;
-    CGFloat labelY = center.y - kButtonHeight / 2.0 + kLabelHeight / 2.0 + 4.0;
+    CGFloat labelY = center.y - kButtonHeight / 2.0 + kLabelHeight / 2.0 + 2.0;
     CGPoint metalPos = {center.x - ioW / 2.0f, ioH / 2.0f - labelY};
     float halfW = labelTex.width / (2.0f * kScale);
     float halfH = labelTex.height / (2.0f * kScale);

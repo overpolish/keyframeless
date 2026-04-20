@@ -18,6 +18,9 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   KKBezierPoint *_points;
   NSUInteger _count;
   NSUInteger _capacity;
+  NSUInteger *_contourStarts;
+  NSUInteger _contourCount;
+  NSUInteger _contourCapacity;
 }
 
 + (instancetype)pathWithData:(NSData *)data {
@@ -188,6 +191,46 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
           memcpy(&path->_endWidth, bytes + hdr, sizeof(float));
           hdr += sizeof(float);
         }
+        if (ver >= 12 && data.length >= hdr + 2) {
+          uint16_t nc;
+          memcpy(&nc, bytes + hdr, 2);
+          hdr += 2;
+          if (nc > 1 && data.length >= hdr + nc * sizeof(uint32_t)) {
+            path->_contourCount = nc;
+            path->_contourCapacity = nc;
+            path->_contourStarts = malloc(nc * sizeof(NSUInteger));
+            for (uint16_t ci = 0; ci < nc; ci++) {
+              uint32_t idx;
+              memcpy(&idx, bytes + hdr, sizeof(uint32_t));
+              path->_contourStarts[ci] = idx;
+              hdr += sizeof(uint32_t);
+            }
+          }
+        }
+        if (ver >= 13 && data.length >= hdr + 1) {
+          path->_isImage = bytes[hdr] != 0;
+          hdr += 1;
+          if (path->_isImage && data.length >= hdr + 2) {
+            uint16_t ipLen;
+            memcpy(&ipLen, bytes + hdr, 2);
+            hdr += 2;
+            if (ipLen > 0 && data.length >= hdr + ipLen) {
+              path->_imagePath =
+                  [[NSString alloc] initWithBytes:bytes + hdr
+                                           length:ipLen
+                                         encoding:NSUTF8StringEncoding];
+              hdr += ipLen;
+            }
+          }
+        }
+        if (ver >= 14 && data.length >= hdr + sizeof(float)) {
+          memcpy(&path->_imageAspect, bytes + hdr, sizeof(float));
+          hdr += sizeof(float);
+        }
+        if (ver >= 15 && data.length >= hdr + sizeof(float)) {
+          memcpy(&path->_fillTint, bytes + hdr, sizeof(float));
+          hdr += sizeof(float);
+        }
       }
     }
   }
@@ -257,8 +300,9 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   // v9: + startMarker (1 byte) + endMarker (1 byte).
   // v10: + startMarkerSize, endMarkerSize (2 floats).
   // v11: + endWidth (1 float).
+  // v12: + contour starts (2-byte count + N × uint32 indices).
   uint8_t propMarker = 0xAA;
-  uint8_t propVersion = 11;
+  uint8_t propVersion = 15;
   [data appendBytes:&propMarker length:1];
   [data appendBytes:&propVersion length:1];
   float strokeData[4] = {_strokeWidth, _strokeR, _strokeG, _strokeB};
@@ -289,6 +333,29 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   float markerSizes[2] = {_startMarkerSize, _endMarkerSize};
   [data appendBytes:markerSizes length:2 * sizeof(float)];
   [data appendBytes:&_endWidth length:sizeof(float)];
+  uint16_t nc = (uint16_t)_contourCount;
+  [data appendBytes:&nc length:2];
+  if (nc > 1) {
+    for (NSUInteger ci = 0; ci < nc; ci++) {
+      uint32_t idx = (uint32_t)_contourStarts[ci];
+      [data appendBytes:&idx length:sizeof(uint32_t)];
+    }
+  }
+  // v13: isImage + imagePath
+  uint8_t imageFlag = _isImage ? 1 : 0;
+  [data appendBytes:&imageFlag length:1];
+  if (_isImage) {
+    NSData *ipData = [_imagePath dataUsingEncoding:NSUTF8StringEncoding];
+    uint16_t ipLen = (uint16_t)ipData.length;
+    [data appendBytes:&ipLen length:2];
+    if (ipLen > 0)
+      [data appendData:ipData];
+  }
+  // v14: imageAspect
+  float aspect = _imageAspect;
+  [data appendBytes:&aspect length:sizeof(float)];
+  // v15: fillTint
+  [data appendBytes:&_fillTint length:sizeof(float)];
   return data;
 }
 
@@ -356,6 +423,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     _fillR = 1.0f;
     _fillG = 1.0f;
     _fillB = 1.0f;
+    _fillTint = 1.0f;
     _dashLength = 20.0f;
     _dashGap = 10.0f;
     _dotGap = 10.0f;
@@ -377,6 +445,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
 
 - (void)dealloc {
   free(_points);
+  free(_contourStarts);
 }
 
 - (NSUInteger)segmentCount {
@@ -801,6 +870,79 @@ static void cornerRadii(float fraction, float maxRX, float maxRY, float objW,
 
   free(samplePos);
   free(cumulLen);
+  return result;
+}
+
+- (NSUInteger)contourCount {
+  return (_contourCount > 0) ? _contourCount : 1;
+}
+
+- (NSRange)contourRangeAtIndex:(NSUInteger)contourIndex {
+  if (_contourCount <= 1)
+    return NSMakeRange(0, _count);
+  NSUInteger start = _contourStarts[contourIndex];
+  NSUInteger end = (contourIndex + 1 < _contourCount)
+                       ? _contourStarts[contourIndex + 1]
+                       : _count;
+  return NSMakeRange(start, end - start);
+}
+
+- (void)beginContour {
+  if (_count == 0)
+    return; // first contour starts implicitly at 0
+  if (!_contourStarts) {
+    _contourCapacity = 4;
+    _contourStarts = malloc(_contourCapacity * sizeof(NSUInteger));
+    _contourStarts[0] = 0;
+    _contourCount = 1;
+  }
+  if (_contourCount >= _contourCapacity) {
+    _contourCapacity *= 2;
+    _contourStarts =
+        realloc(_contourStarts, _contourCapacity * sizeof(NSUInteger));
+  }
+  _contourStarts[_contourCount] = _count;
+  _contourCount++;
+}
+
+- (NSArray<KKBezierPath *> *)splitContours {
+  if (_contourCount <= 1)
+    return nil;
+
+  NSMutableArray<KKBezierPath *> *result = [NSMutableArray array];
+  for (NSUInteger c = 0; c < _contourCount; c++) {
+    NSRange range = [self contourRangeAtIndex:c];
+    if (range.length == 0)
+      continue;
+
+    KKBezierPath *sub = [[KKBezierPath alloc] init];
+    for (NSUInteger i = range.location; i < NSMaxRange(range); i++) {
+      KKBezierPoint pt = _points[i];
+      [sub insertAtIndex:sub.count position:(simd_float2){pt.x, pt.y}];
+      NSUInteger si = sub.count - 1;
+      if (pt.type == KKBezierPointBezier) {
+        [sub setInHandle:(simd_float2){pt.inX, pt.inY} atIndex:si];
+        [sub setOutHandle:(simd_float2){pt.outX, pt.outY} atIndex:si];
+        [sub setType:KKBezierPointBezier atIndex:si];
+      }
+    }
+    sub.closed = YES;
+    sub.strokeEnabled = self.strokeEnabled;
+    sub.strokeWidth = self.strokeWidth;
+    sub.strokeR = self.strokeR;
+    sub.strokeG = self.strokeG;
+    sub.strokeB = self.strokeB;
+    sub.fillEnabled = self.fillEnabled;
+    sub.fillR = self.fillR;
+    sub.fillG = self.fillG;
+    sub.fillB = self.fillB;
+    sub.opacity = self.opacity;
+    sub.lineCap = self.lineCap;
+    sub.lineJoin = self.lineJoin;
+    sub.strokeStyle = self.strokeStyle;
+    sub.endWidth = self.endWidth;
+    [result addObject:sub];
+  }
   return result;
 }
 
