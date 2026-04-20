@@ -232,6 +232,99 @@ static const CGFloat kPathToolbarGap = 6.0;
   BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
   BOOL isPenMode = (self.toolbar.activeTag == kOSCToolbarPen);
 
+  // Draw adaptive grid behind paths.
+  if (self.gridEnabled && self.imageWidth > 0 && self.imageHeight > 0) {
+    // Derive canvas-pixels-per-source-pixel from the coordinate transform.
+    CGPoint originCanvas =
+        [self canvasPointFromObjectPoint:(simd_float2){0, 0}];
+    CGPoint unitCanvas = [self
+        canvasPointFromObjectPoint:(simd_float2){1.0f / self.imageWidth, 0}];
+    CGFloat pxPerSourcePx = fabs(unitCanvas.x - originCanvas.x);
+
+    // Pick grid spacing: finest level where lines are >= 30 canvas px apart.
+    static const CGFloat kGridLevels[] = {1,  2,   5,   10,  25,
+                                          50, 100, 250, 500, 1000};
+    static const NSUInteger kGridLevelCount = 10;
+    static const CGFloat kMinScreenSpacing = 30.0;
+
+    NSUInteger minorIdx = kGridLevelCount - 1;
+    for (NSUInteger i = 0; i < kGridLevelCount; i++) {
+      if (kGridLevels[i] * pxPerSourcePx >= kMinScreenSpacing) {
+        minorIdx = i;
+        break;
+      }
+    }
+    NSUInteger majorIdx = MIN(minorIdx + 2, kGridLevelCount - 1);
+
+    CGFloat minorSpacing = kGridLevels[minorIdx];
+    CGFloat majorSpacing = kGridLevels[majorIdx];
+
+    // Object-space spacing.
+    float minorObjX = (float)(minorSpacing / self.imageWidth);
+    float minorObjY = (float)(minorSpacing / self.imageHeight);
+    float majorObjX = (float)(majorSpacing / self.imageWidth);
+    float majorObjY = (float)(majorSpacing / self.imageHeight);
+
+    // Clamp grid to the preview/source bounds (object space 0..1).
+    float objMinX = 0.0f;
+    float objMaxX = 1.0f;
+    float objMinY = 0.0f;
+    float objMaxY = 1.0f;
+
+    simd_float4 minorColor = {1.0f, 1.0f, 1.0f, 0.12f};
+    simd_float4 majorColor = {1.0f, 1.0f, 1.0f, 0.3f};
+
+    // Canvas-space bounds of the preview area for line endpoints.
+    CGPoint canvasTL = [self canvasPointFromObjectPoint:(simd_float2){0, 0}];
+    CGPoint canvasBR = [self canvasPointFromObjectPoint:(simd_float2){1, 1}];
+    CGFloat canvasLeft = fmin(canvasTL.x, canvasBR.x);
+    CGFloat canvasRight = fmax(canvasTL.x, canvasBR.x);
+    CGFloat canvasTop = fmin(canvasTL.y, canvasBR.y);
+    CGFloat canvasBottom = fmax(canvasTL.y, canvasBR.y);
+
+    NSInteger majorStep = (NSInteger)(majorSpacing / minorSpacing + 0.5);
+
+    // Vertical lines (constant X).
+    {
+      NSInteger iStart = (NSInteger)ceilf(objMinX / minorObjX);
+      NSInteger iEnd = (NSInteger)floorf(objMaxX / minorObjX);
+      for (NSInteger i = iStart; i <= iEnd; i++) {
+        float ox = i * minorObjX;
+        CGFloat rawX = [self canvasPointFromObjectPoint:(simd_float2){ox, 0}].x;
+        CGFloat cx = floor(rawX) + 0.5;
+        CGPoint top = {cx, canvasTop};
+        CGPoint bot = {cx, canvasBottom};
+
+        BOOL isMajor = (i % majorStep == 0);
+        [self drawLineFrom:top
+                          to:bot
+                       color:isMajor ? majorColor : minorColor
+                   halfWidth:1.0f
+            destinationImage:destinationImage];
+      }
+    }
+
+    // Horizontal lines (constant Y).
+    {
+      NSInteger iStart = (NSInteger)ceilf(objMinY / minorObjY);
+      NSInteger iEnd = (NSInteger)floorf(objMaxY / minorObjY);
+      for (NSInteger i = iStart; i <= iEnd; i++) {
+        float oy = i * minorObjY;
+        CGFloat rawY = [self canvasPointFromObjectPoint:(simd_float2){0, oy}].y;
+        CGFloat cy = floor(rawY) + 0.5;
+        CGPoint left = {canvasLeft, cy};
+        CGPoint right = {canvasRight, cy};
+
+        BOOL isMajor = (i % majorStep == 0);
+        [self drawLineFrom:left
+                          to:right
+                       color:isMajor ? majorColor : minorColor
+                   halfWidth:1.0f
+            destinationImage:destinationImage];
+      }
+    }
+  }
+
   for (NSUInteger p = 0; p < self.paths.count; p++) {
     KKBezierPath *path = self.paths[p];
     if (path.count == 0)
