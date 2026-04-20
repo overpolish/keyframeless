@@ -638,6 +638,7 @@ static const CGFloat kPathToolbarGap = 6.0;
     // in-memory selection, undo restored a different selection state.
     // Sync in-memory selection from the param so drawOSC applies the
     // restored inspector params to the correct path.
+    BOOL undoDetected = NO;
     {
       id<FxParameterRetrievalAPI_v6> paramGetAPI = [self.apiManager
           apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
@@ -655,6 +656,8 @@ static const CGFloat kPathToolbarGap = 6.0;
             }
           }];
       if (paramIdx != memIdx) {
+        undoDetected = YES;
+        lst.visHash = 0;
         [self.selectedPathIndices removeAllIndexes];
         if (paramIdx >= 0 && (NSUInteger)paramIdx < self.paths.count) {
           [self.selectedPathIndices addIndex:(NSUInteger)paramIdx];
@@ -666,10 +669,10 @@ static const CGFloat kPathToolbarGap = 6.0;
     }
 
     // Write path/selection/UI state to the store.
-    // NOTE: expanded and enabled states are NOT set here — they are owned
-    // by the UI callbacks (header toggles) and the initial seed. Reading
-    // them from FxPlug params on the render thread races with callbacks
-    // that haven't committed yet.
+    // NOTE: expanded and enabled states are generally NOT set here — they
+    // are owned by the UI callbacks (header toggles) and the initial seed.
+    // Exception: on undo/redo, enabled states are synced from the restored
+    // path since no UI callback fires to update them.
     //
     // Only call setPaths when the blob actually changed to avoid firing
     // KKStoreChangePaths every frame (freshly deserialized objects always
@@ -688,6 +691,17 @@ static const CGFloat kPathToolbarGap = 6.0;
       [store setEditing:lst.isEditing];
       [store setDragging:lst.isDragging];
       [store setCollapsedGroupIDs:lst.collapsedGroupIDs ?: [NSSet set]];
+      // On undo/redo, sync enabled flags from the restored path so
+      // KKParamSyncApplyFromSnapshot builds correct visibility conditions.
+      if (undoDetected && self.activePathIndex >= 0 &&
+          (NSUInteger)self.activePathIndex < self.paths.count) {
+        KKBezierPath *p = self.paths[self.activePathIndex];
+        if (!p.isGroup) {
+          [store setStrokeEnabled:p.strokeEnabled];
+          [store setFillEnabled:p.fillEnabled];
+          [store setSketchEnabled:p.sketchEnabled];
+        }
+      }
       [store syncSelectedPathProperties];
     }];
 
