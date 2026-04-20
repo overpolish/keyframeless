@@ -49,7 +49,12 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, strong) KKToolbar *pathToolbar;
 @property(nonatomic, strong) KKToolbar *gridToolbar;
 @property(nonatomic, assign) BOOL gridEnabled;
+@property(nonatomic, assign) BOOL gridAdaptive;
+@property(nonatomic, assign) NSInteger gridSpacing;
 @property(nonatomic, assign) BOOL restoredTool;
+@property(nonatomic, strong) KKOSCLabel *gridSpacingLabel;
+@property(nonatomic, assign) NSRect gridPlusRect;
+@property(nonatomic, assign) NSRect gridMinusRect;
 @property(nonatomic, strong) KKOSCLabel *sizeLabel;
 @property(nonatomic, strong) KKRectBorderOSC *borderOSC;
 @property(nonatomic, strong) NSArray<KKPointOSC *> *resizeHandleOSCs;

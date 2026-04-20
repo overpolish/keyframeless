@@ -53,6 +53,23 @@
                      parameterFlags:kFxParameterFlag_HIDDEN |
                                     kFxParameterFlag_NOT_ANIMATABLE];
 
+  [paramAPI addIntSliderWithName:@"Grid Spacing"
+                     parameterID:kParamGridSpacing
+                    defaultValue:50
+                    parameterMin:1
+                    parameterMax:1000
+                       sliderMin:1
+                       sliderMax:1000
+                           delta:1
+                  parameterFlags:kFxParameterFlag_HIDDEN |
+                                 kFxParameterFlag_NOT_ANIMATABLE];
+
+  [paramAPI addToggleButtonWithName:@"Grid Adaptive"
+                        parameterID:kParamGridAdaptive
+                       defaultValue:YES
+                     parameterFlags:kFxParameterFlag_HIDDEN |
+                                    kFxParameterFlag_NOT_ANIMATABLE];
+
   [paramAPI addIntSliderWithName:@"Last Tool"
                      parameterID:kParamLastTool
                     defaultValue:kOSCToolbarCursor

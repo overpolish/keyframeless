@@ -56,6 +56,7 @@ static const CGFloat kIconShiftY = 8.0;
 }
 
 @synthesize toolbarFrame = _toolbarFrame;
+@synthesize items = _items;
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager
                              items:(NSArray<KKToolbarItem *> *)items {
@@ -308,8 +309,13 @@ static void drawTexturedQuad(id<MTLRenderCommandEncoder> encoder,
   float ioH = [destinationImage.ioSurface height];
 
   NSInteger itemCount = (NSInteger)_items.count;
-  CGFloat totalButtonsW =
-      itemCount * kButtonSize + (itemCount - 1) * kButtonSpacing;
+  CGFloat totalButtonsW = 0;
+  for (NSInteger i = 0; i < itemCount; i++) {
+    CGFloat iw =
+        _items[i].customWidth > 0 ? _items[i].customWidth : kButtonSize;
+    totalButtonsW += iw;
+  }
+  totalButtonsW += (itemCount - 1) * kButtonSpacing;
   CGFloat toolbarW = totalButtonsW + kToolbarPadding * 2;
   CGFloat toolbarH = kButtonHeight + kToolbarPadding * 2;
   CGFloat toolbarX =
@@ -319,14 +325,18 @@ static void drawTexturedQuad(id<MTLRenderCommandEncoder> encoder,
   _toolbarFrame = NSMakeRect(toolbarX - toolbarW / 2.0,
                              toolbarY - toolbarH / 2.0, toolbarW, toolbarH);
 
-  CGFloat startX = toolbarX - totalButtonsW / 2.0 + kButtonSize / 2.0;
+  CGFloat curX = toolbarX - totalButtonsW / 2.0;
   for (NSInteger i = 0; i < itemCount; i++) {
-    CGFloat bx = startX + i * (kButtonSize + kButtonSpacing);
-    _buttonCenters[i] = [NSValue valueWithPoint:NSMakePoint(bx, toolbarY)];
-    _buttonRects[i] =
-        [NSValue valueWithRect:NSMakeRect(bx - kButtonSize / 2.0,
-                                          toolbarY - kButtonHeight / 2.0,
-                                          kButtonSize, kButtonHeight)];
+    CGFloat iw =
+        _items[i].customWidth > 0 ? _items[i].customWidth : kButtonSize;
+    CGFloat ih =
+        _items[i].customHeight > 0 ? _items[i].customHeight : kButtonHeight;
+    CGFloat bx = curX + iw / 2.0;
+    CGFloat by = toolbarY + _items[i].iconYOffset;
+    _buttonCenters[i] = [NSValue valueWithPoint:NSMakePoint(bx, by)];
+    _buttonRects[i] = [NSValue
+        valueWithRect:NSMakeRect(bx - iw / 2.0, by - ih / 2.0, iw, ih)];
+    curX += iw + kButtonSpacing;
   }
 
   id<MTLCommandQueue> queue = [cache commandQueueWithRegistryID:registryID
@@ -380,14 +390,18 @@ static void drawTexturedQuad(id<MTLRenderCommandEncoder> encoder,
   drawTexturedQuad(encoder, _bgTexture, bgMetal, toolbarW / 2.0f,
                    toolbarH / 2.0f, viewportSize);
 
-  // Highlight behind active item
+  // Highlight behind active items
   for (NSInteger i = 0; i < itemCount; i++) {
-    if (_items[i].tag == _activeTag) {
+    if (_items[i].tag == _activeTag ||
+        (_secondaryActiveTag != 0 && _items[i].tag == _secondaryActiveTag)) {
+      CGFloat iw =
+          _items[i].customWidth > 0 ? _items[i].customWidth : kButtonSize;
+      CGFloat ih =
+          _items[i].customHeight > 0 ? _items[i].customHeight : kButtonHeight;
       CGPoint center = _buttonCenters[i].pointValue;
       CGPoint hlMetal = {center.x - ioW / 2.0f, ioH / 2.0f - center.y};
-      drawTexturedQuad(encoder, _highlightTexture, hlMetal, kButtonSize / 2.0f,
-                       kButtonHeight / 2.0f, viewportSize);
-      break;
+      drawTexturedQuad(encoder, _highlightTexture, hlMetal, iw / 2.0f,
+                       ih / 2.0f, viewportSize);
     }
   }
 
@@ -399,11 +413,16 @@ static void drawTexturedQuad(id<MTLRenderCommandEncoder> encoder,
     if (!iconTex)
       continue;
 
+    CGFloat iw =
+        _items[i].customWidth > 0 ? _items[i].customWidth : kButtonSize;
+    CGFloat ih =
+        _items[i].customHeight > 0 ? _items[i].customHeight : kButtonSize;
     CGPoint center = _buttonCenters[i].pointValue;
-    CGFloat iconY = center.y + kIconShiftY;
+    BOOL hasLabel = _items[i].shortcutLabel.length > 0;
+    CGFloat iconY = hasLabel ? center.y + kIconShiftY : center.y;
     CGPoint metalPos = {center.x - ioW / 2.0f, ioH / 2.0f - iconY};
-    drawTexturedQuad(encoder, iconTex, metalPos, kButtonSize / 2.0f,
-                     kButtonSize / 2.0f, viewportSize);
+    drawTexturedQuad(encoder, iconTex, metalPos, iw / 2.0f, ih / 2.0f,
+                     viewportSize);
   }
 
   // Shortcut labels inside buttons, below icons
@@ -429,6 +448,12 @@ static void drawTexturedQuad(id<MTLRenderCommandEncoder> encoder,
   [cmdBuf commit];
   [cmdBuf waitUntilScheduled];
   [cache returnCommandQueueToCache:queue];
+}
+
+- (NSRect)buttonRectAtIndex:(NSUInteger)index {
+  if (index >= _buttonRects.count)
+    return NSZeroRect;
+  return _buttonRects[index].rectValue;
 }
 
 - (NSInteger)hitTestAtX:(double)x y:(double)y {

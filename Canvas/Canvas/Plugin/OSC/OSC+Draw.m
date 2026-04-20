@@ -39,6 +39,22 @@ static const CGFloat kPathToolbarGap = 6.0;
                   atTime:kCMTimeZero];
     self.gridEnabled = gridVal;
 
+    int spacingVal = 50;
+    [getAPI getIntValue:&spacingVal
+          fromParameter:kParamGridSpacing
+                 atTime:kCMTimeZero];
+    if (spacingVal < 1)
+      spacingVal = 1;
+    if (spacingVal > 1000)
+      spacingVal = 1000;
+    self.gridSpacing = spacingVal;
+
+    BOOL adaptiveVal = YES;
+    [getAPI getBoolValue:&adaptiveVal
+           fromParameter:kParamGridAdaptive
+                  atTime:kCMTimeZero];
+    self.gridAdaptive = adaptiveVal;
+
     if (!self.restoredTool) {
       self.restoredTool = YES;
       int toolVal = (int)kOSCToolbarCursor;
@@ -52,8 +68,35 @@ static const CGFloat kPathToolbarGap = 6.0;
 
   [self.toolbar drawWithDestinationImage:destinationImage];
 
-  self.gridToolbar.activeTag = self.gridEnabled ? kOSCGridToggle : 0;
-  [self.gridToolbar drawWithDestinationImage:destinationImage];
+  // Draw grid controls: [grid] [−] [+] [adaptive] in one toolbar.
+  {
+    self.gridToolbar.activeTag = self.gridEnabled ? kOSCGridToggle : 0;
+    self.gridToolbar.secondaryActiveTag =
+        self.gridAdaptive ? kOSCGridAdaptive : 0;
+    self.gridToolbar.items[1].iconName = self.gridAdaptive
+                                             ? @"squareshape.split.2x2.dotted"
+                                             : @"squareshape.split.2x2";
+    self.gridToolbar.items[1].shortcutLabel =
+        self.gridAdaptive ? @"Auto" : @"Static";
+    [self.gridToolbar drawWithDestinationImage:destinationImage];
+
+    // Overlay spacing label below the − and + buttons, centered in toolbar.
+    self.gridSpacingLabel.text =
+        [NSString stringWithFormat:@"%ld", (long)self.gridSpacing];
+    NSRect minusRect = [self.gridToolbar buttonRectAtIndex:2];
+    NSRect plusRect = [self.gridToolbar buttonRectAtIndex:3];
+    NSRect tbFrame = self.gridToolbar.toolbarFrame;
+
+    // Label below the ± buttons, centered between them.
+    CGFloat labelCX = (NSMidX(minusRect) + NSMidX(plusRect)) / 2.0;
+    CGFloat labelCY = NSMidY(tbFrame) + 6.0;
+    [self.gridSpacingLabel drawAtCanvasPosition:CGPointMake(labelCX, labelCY)
+                               destinationImage:destinationImage];
+
+    // Store stepper rects for hit testing.
+    self.gridMinusRect = minusRect;
+    self.gridPlusRect = plusRect;
+  }
 
   self.paths = [self readPaths];
 
@@ -232,47 +275,30 @@ static const CGFloat kPathToolbarGap = 6.0;
   BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
   BOOL isPenMode = (self.toolbar.activeTag == kOSCToolbarPen);
 
-  // Draw adaptive grid behind paths.
+  // Draw grid behind paths.
   if (self.gridEnabled && self.imageWidth > 0 && self.imageHeight > 0) {
-    // Derive canvas-pixels-per-source-pixel from the coordinate transform.
-    CGPoint originCanvas =
-        [self canvasPointFromObjectPoint:(simd_float2){0, 0}];
-    CGPoint unitCanvas = [self
-        canvasPointFromObjectPoint:(simd_float2){1.0f / self.imageWidth, 0}];
-    CGFloat pxPerSourcePx = fabs(unitCanvas.x - originCanvas.x);
+    CGFloat spacing = (CGFloat)self.gridSpacing;
 
-    // Pick grid spacing: finest level where lines are >= 30 canvas px apart.
-    static const CGFloat kGridLevels[] = {1,  2,   5,   10,  25,
-                                          50, 100, 250, 500, 1000};
-    static const NSUInteger kGridLevelCount = 10;
-    static const CGFloat kMinScreenSpacing = 30.0;
-
-    NSUInteger minorIdx = kGridLevelCount - 1;
-    for (NSUInteger i = 0; i < kGridLevelCount; i++) {
-      if (kGridLevels[i] * pxPerSourcePx >= kMinScreenSpacing) {
-        minorIdx = i;
-        break;
+    // In adaptive mode, scale spacing by zoom so lines stay ~the same screen
+    // distance apart regardless of zoom level.
+    if (self.gridAdaptive) {
+      CGPoint originCanvas =
+          [self canvasPointFromObjectPoint:(simd_float2){0, 0}];
+      CGPoint unitCanvas = [self
+          canvasPointFromObjectPoint:(simd_float2){1.0f / self.imageWidth, 0}];
+      CGFloat pxPerSourcePx = fabs(unitCanvas.x - originCanvas.x);
+      CGFloat screenSpacing = spacing * pxPerSourcePx;
+      static const CGFloat kMinScreenSpacing = 30.0;
+      while (screenSpacing < kMinScreenSpacing && spacing < 10000) {
+        spacing *= 2.0;
+        screenSpacing *= 2.0;
       }
     }
-    NSUInteger majorIdx = MIN(minorIdx + 2, kGridLevelCount - 1);
 
-    CGFloat minorSpacing = kGridLevels[minorIdx];
-    CGFloat majorSpacing = kGridLevels[majorIdx];
+    float objSpacingX = (float)(spacing / self.imageWidth);
+    float objSpacingY = (float)(spacing / self.imageHeight);
 
-    // Object-space spacing.
-    float minorObjX = (float)(minorSpacing / self.imageWidth);
-    float minorObjY = (float)(minorSpacing / self.imageHeight);
-    float majorObjX = (float)(majorSpacing / self.imageWidth);
-    float majorObjY = (float)(majorSpacing / self.imageHeight);
-
-    // Clamp grid to the preview/source bounds (object space 0..1).
-    float objMinX = 0.0f;
-    float objMaxX = 1.0f;
-    float objMinY = 0.0f;
-    float objMaxY = 1.0f;
-
-    simd_float4 minorColor = {1.0f, 1.0f, 1.0f, 0.12f};
-    simd_float4 majorColor = {1.0f, 1.0f, 1.0f, 0.3f};
+    simd_float4 gridColor = {1.0f, 1.0f, 1.0f, 0.15f};
 
     // Canvas-space bounds of the preview area for line endpoints.
     CGPoint canvasTL = [self canvasPointFromObjectPoint:(simd_float2){0, 0}];
@@ -282,23 +308,20 @@ static const CGFloat kPathToolbarGap = 6.0;
     CGFloat canvasTop = fmin(canvasTL.y, canvasBR.y);
     CGFloat canvasBottom = fmax(canvasTL.y, canvasBR.y);
 
-    NSInteger majorStep = (NSInteger)(majorSpacing / minorSpacing + 0.5);
-
     // Vertical lines (constant X).
     {
-      NSInteger iStart = (NSInteger)ceilf(objMinX / minorObjX);
-      NSInteger iEnd = (NSInteger)floorf(objMaxX / minorObjX);
+      NSInteger iStart = (NSInteger)ceilf(0.0f / objSpacingX);
+      NSInteger iEnd = (NSInteger)floorf(1.0f / objSpacingX);
       for (NSInteger i = iStart; i <= iEnd; i++) {
-        float ox = i * minorObjX;
+        float ox = i * objSpacingX;
         CGFloat rawX = [self canvasPointFromObjectPoint:(simd_float2){ox, 0}].x;
         CGFloat cx = floor(rawX) + 0.5;
         CGPoint top = {cx, canvasTop};
         CGPoint bot = {cx, canvasBottom};
 
-        BOOL isMajor = (i % majorStep == 0);
         [self drawLineFrom:top
                           to:bot
-                       color:isMajor ? majorColor : minorColor
+                       color:gridColor
                    halfWidth:1.0f
             destinationImage:destinationImage];
       }
@@ -306,19 +329,18 @@ static const CGFloat kPathToolbarGap = 6.0;
 
     // Horizontal lines (constant Y).
     {
-      NSInteger iStart = (NSInteger)ceilf(objMinY / minorObjY);
-      NSInteger iEnd = (NSInteger)floorf(objMaxY / minorObjY);
+      NSInteger iStart = (NSInteger)ceilf(0.0f / objSpacingY);
+      NSInteger iEnd = (NSInteger)floorf(1.0f / objSpacingY);
       for (NSInteger i = iStart; i <= iEnd; i++) {
-        float oy = i * minorObjY;
+        float oy = i * objSpacingY;
         CGFloat rawY = [self canvasPointFromObjectPoint:(simd_float2){0, oy}].y;
         CGFloat cy = floor(rawY) + 0.5;
         CGPoint left = {canvasLeft, cy};
         CGPoint right = {canvasRight, cy};
 
-        BOOL isMajor = (i % majorStep == 0);
         [self drawLineFrom:left
                           to:right
-                       color:isMajor ? majorColor : minorColor
+                       color:gridColor
                    halfWidth:1.0f
             destinationImage:destinationImage];
       }
