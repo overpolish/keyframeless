@@ -14,11 +14,16 @@
     [KKAnimatableProperty propertyWithLabel:@"Radius"
                                        inID:kParamInRadius
                                      holdID:kParamHoldRadius
-                                      outID:kParamOutRadius],
+                                      outID:kParamOutRadius
+                                    valueID:kParamRadius],
     [KKAnimatableProperty propertyWithLabel:@"Crop"
                                        inID:kParamInCrop
                                      holdID:kParamHoldCrop
-                                      outID:kParamOutCrop],
+                                      outID:kParamOutCrop
+                                   valueIDs:@[
+                                     @(kParamCropTop), @(kParamCropBottom),
+                                     @(kParamCropLeft), @(kParamCropRight)
+                                   ]],
   ];
 }
 

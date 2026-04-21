@@ -78,6 +78,8 @@ static float paddingForRadius(double radius, float minDim) {
               activePart:(NSInteger)activePart
         destinationImage:(FxImageTile *)destinationImage
                   atTime:(CMTime)time {
+  [KKPlugin multiStageFlushPendingLanes];
+
   [self encodeRenderCommandsForDestinationImage:destinationImage
                                  canvasPosition:CGPointZero
                                clearDestination:YES

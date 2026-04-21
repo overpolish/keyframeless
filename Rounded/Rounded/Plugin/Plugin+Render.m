@@ -44,7 +44,7 @@ typedef struct {
                fromParameter:kParamRadius
                       atTime:renderTime];
 
-  NSDictionary<NSString *, NSNumber *> *multiStage =
+  NSDictionary<NSString *, NSArray<NSNumber *> *> *multiStage =
       [self multiStageValuesAtTime:renderTime];
 
   double rF = 1.0, cF = 1.0;
@@ -81,31 +81,32 @@ typedef struct {
   }
 
   RoundedPluginState state;
-  state.radius =
-      multiStage[@"Radius"] ? multiStage[@"Radius"].doubleValue : radius * rF;
+  NSArray<NSNumber *> *msRadius = multiStage[@"Radius"];
+  state.radius = msRadius.count > 0 ? msRadius[0].doubleValue : radius * rF;
+
   state.cropTop = 0.0;
   state.cropBottom = 0.0;
   state.cropLeft = 0.0;
   state.cropRight = 0.0;
-  [paramGetAPI getFloatValue:&state.cropTop
-               fromParameter:kParamCropTop
-                      atTime:renderTime];
-  [paramGetAPI getFloatValue:&state.cropBottom
-               fromParameter:kParamCropBottom
-                      atTime:renderTime];
-  [paramGetAPI getFloatValue:&state.cropLeft
-               fromParameter:kParamCropLeft
-                      atTime:renderTime];
-  [paramGetAPI getFloatValue:&state.cropRight
-               fromParameter:kParamCropRight
-                      atTime:renderTime];
-  if (multiStage[@"Crop"]) {
-    double cropScale = multiStage[@"Crop"].doubleValue;
-    state.cropTop *= cropScale;
-    state.cropBottom *= cropScale;
-    state.cropLeft *= cropScale;
-    state.cropRight *= cropScale;
+  NSArray<NSNumber *> *msCrop = multiStage[@"Crop"];
+  if (msCrop.count >= 4) {
+    state.cropTop = msCrop[0].doubleValue;
+    state.cropBottom = msCrop[1].doubleValue;
+    state.cropLeft = msCrop[2].doubleValue;
+    state.cropRight = msCrop[3].doubleValue;
   } else {
+    [paramGetAPI getFloatValue:&state.cropTop
+                 fromParameter:kParamCropTop
+                        atTime:renderTime];
+    [paramGetAPI getFloatValue:&state.cropBottom
+                 fromParameter:kParamCropBottom
+                        atTime:renderTime];
+    [paramGetAPI getFloatValue:&state.cropLeft
+                 fromParameter:kParamCropLeft
+                        atTime:renderTime];
+    [paramGetAPI getFloatValue:&state.cropRight
+                 fromParameter:kParamCropRight
+                        atTime:renderTime];
     state.cropTop *= cF;
     state.cropBottom *= cF;
     state.cropLeft *= cF;
