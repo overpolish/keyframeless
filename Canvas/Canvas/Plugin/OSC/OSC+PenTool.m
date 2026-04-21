@@ -257,20 +257,7 @@
               active:(KKBezierPath *)active
          forceUpdate:(BOOL *)forceUpdate {
   if (!active) {
-    KKBezierPath *newPath = [[KKBezierPath alloc] init];
-    newPath.name = [NSString
-        stringWithFormat:@"Path %lu", (unsigned long)(self.paths.count + 1)];
-    // Inherit stroke/fill/opacity from current inspector values.
-    id<FxParameterRetrievalAPI_v6> paramGetAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    KKParamsToPath(paramGetAPI, newPath);
-    NSString *penUUID = KKLayerUUIDForAPI(self.apiManager);
-    if (penUUID)
-      KKApplyCachedStyles(penUUID, newPath);
-    newPath.closed = NO;
-    [self.paths insertObject:newPath atIndex:0];
-    self.activePathIndex = 0;
-    active = newPath;
+    active = [self createNewPathInheritingParams];
   } else if (active.closed) {
     double hitRadius = [self strokeHitRadius];
     NSInteger segIdx = [self segmentIndexNearX:positionX
@@ -285,19 +272,7 @@
                    forceUpdate:forceUpdate];
       return;
     }
-    KKBezierPath *newPath = [[KKBezierPath alloc] init];
-    newPath.name = [NSString
-        stringWithFormat:@"Path %lu", (unsigned long)(self.paths.count + 1)];
-    id<FxParameterRetrievalAPI_v6> penGetAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    KKParamsToPath(penGetAPI, newPath);
-    NSString *penUUID2 = KKLayerUUIDForAPI(self.apiManager);
-    if (penUUID2)
-      KKApplyCachedStyles(penUUID2, newPath);
-    newPath.closed = NO;
-    [self.paths insertObject:newPath atIndex:0];
-    self.activePathIndex = 0;
-    active = newPath;
+    active = [self createNewPathInheritingParams];
   }
 
   simd_float2 objPos =
@@ -322,6 +297,43 @@
 // ---------------------------------------------------------------------------
 // Cursor-mode helpers (unchanged, kept for resize / corner-radius)
 // ---------------------------------------------------------------------------
+
+- (void)snapshotSelectedPaths:(NSMutableArray<NSData *> **)outSnapshots
+                      indices:(NSMutableArray<NSNumber *> **)outIndices {
+  NSMutableArray<NSData *> *snapshots = [NSMutableArray array];
+  NSMutableArray<NSNumber *> *indices = [NSMutableArray array];
+  [self.selectedPathIndices
+      enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+        if (idx >= self.paths.count)
+          return;
+        KKBezierPath *path = self.paths[idx];
+        NSMutableData *snap =
+            [NSMutableData dataWithLength:path.count * sizeof(KKBezierPoint)];
+        KKBezierPoint *buf = snap.mutableBytes;
+        for (NSUInteger i = 0; i < path.count; i++)
+          buf[i] = [path pointAtIndex:i];
+        [snapshots addObject:snap];
+        [indices addObject:@(idx)];
+      }];
+  *outSnapshots = snapshots;
+  *outIndices = indices;
+}
+
+- (KKBezierPath *)createNewPathInheritingParams {
+  KKBezierPath *newPath = [[KKBezierPath alloc] init];
+  newPath.name = [NSString
+      stringWithFormat:@"Path %lu", (unsigned long)(self.paths.count + 1)];
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  KKParamsToPath(paramGetAPI, newPath);
+  NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+  if (uuid)
+    KKApplyCachedStyles(uuid, newPath);
+  newPath.closed = NO;
+  [self.paths insertObject:newPath atIndex:0];
+  self.activePathIndex = 0;
+  return newPath;
+}
 
 - (void)mouseDownOnCornerRadius:(NSInteger)activePart
                       positionX:(double)positionX
@@ -358,22 +370,14 @@
   self.rotateStartAngle = atan2f((float)(handlePos.y - centerCanvas.y),
                                  (float)(handlePos.x - centerCanvas.x));
 
-  NSMutableArray<NSData *> *snapshots = [NSMutableArray array];
-  NSMutableArray<NSNumber *> *indices = [NSMutableArray array];
   [self.selectedPathIndices
       enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
-        if (idx >= self.paths.count)
-          return;
-        KKBezierPath *path = self.paths[idx];
-        path.isRect = NO;
-        NSMutableData *snap =
-            [NSMutableData dataWithLength:path.count * sizeof(KKBezierPoint)];
-        KKBezierPoint *buf = snap.mutableBytes;
-        for (NSUInteger i = 0; i < path.count; i++)
-          buf[i] = [path pointAtIndex:i];
-        [snapshots addObject:snap];
-        [indices addObject:@(idx)];
+        if (idx < self.paths.count)
+          self.paths[idx].isRect = NO;
       }];
+  NSMutableArray<NSData *> *snapshots;
+  NSMutableArray<NSNumber *> *indices;
+  [self snapshotSelectedPaths:&snapshots indices:&indices];
   self.rotateOrigSnapshots = snapshots;
   self.rotateOrigIndices = indices;
   [self writePaths:self.paths];
@@ -391,23 +395,11 @@
   float w = bmax.x - bmin.x, h = bmax.y - bmin.y;
   self.resizeOrigAspect = (h > 1e-6f) ? (w / h) : 1.0f;
 
-  NSMutableArray<NSData *> *snapshots = [NSMutableArray array];
-  NSMutableArray<NSNumber *> *indices = [NSMutableArray array];
-  [self.selectedPathIndices
-      enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
-        if (idx >= self.paths.count)
-          return;
-        KKBezierPath *path = self.paths[idx];
-        NSMutableData *snap =
-            [NSMutableData dataWithLength:path.count * sizeof(KKBezierPoint)];
-        KKBezierPoint *buf = snap.mutableBytes;
-        for (NSUInteger i = 0; i < path.count; i++)
-          buf[i] = [path pointAtIndex:i];
-        [snapshots addObject:snap];
-        [indices addObject:@(idx)];
-      }];
-  self.resizeOrigSnapshots = snapshots;
-  self.resizeOrigIndices = indices;
+  NSMutableArray<NSData *> *rSnapshots;
+  NSMutableArray<NSNumber *> *rIndices;
+  [self snapshotSelectedPaths:&rSnapshots indices:&rIndices];
+  self.resizeOrigSnapshots = rSnapshots;
+  self.resizeOrigIndices = rIndices;
   *forceUpdate = YES;
 }
 

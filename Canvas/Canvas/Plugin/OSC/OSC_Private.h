@@ -15,8 +15,9 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx);
 NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
                                 NSArray<KKBezierPath *> *paths);
 
-@interface CanvasOSC (Drag)
+@interface CanvasOSC (Snap)
 
+- (float)snapThresholdForCanvasPixels:(float)pixels;
 - (simd_float2)snapToGridPosition:(simd_float2)objPos;
 - (simd_float2)alignSnapDelta:(simd_float2)delta
              forSelectedPaths:(NSIndexSet *)selected;
@@ -24,6 +25,10 @@ NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
                excludingPaths:(NSIndexSet *)excluded
               excludingPoints:(NSIndexSet *)excludedPoints;
 - (void)resetAlignSnap;
+
+@end
+
+@interface CanvasOSC (Drag)
 
 @end
 
@@ -174,6 +179,23 @@ NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
 - (void)mouseDownOnRotateHandle:(double)positionX
                               y:(double)positionY
                     forceUpdate:(BOOL *)forceUpdate;
+
+@end
+
+@interface CanvasOSC (DrawGuides)
+
+- (void)drawGridWithDestinationImage:(FxImageTile *)destinationImage;
+- (void)drawGridSnapIndicatorForCursorMode:(BOOL)isCursorMode
+                          destinationImage:(FxImageTile *)destinationImage;
+- (void)drawAlignmentGuidesWithDestinationImage:(FxImageTile *)destinationImage;
+- (void)drawSpacingGuidesWithDestinationImage:(FxImageTile *)destinationImage;
+
+@end
+
+@interface CanvasOSC (DrawPreview)
+
+- (BOOL)shouldShowBooleanPreview:(BOOL)isCursorMode;
+- (void)drawBooleanPreviewWithDestinationImage:(FxImageTile *)destinationImage;
 
 @end
 
