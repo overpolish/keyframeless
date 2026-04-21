@@ -298,10 +298,20 @@ static const CGFloat kPathToolbarGap = 6.0;
     CGFloat canvasTop = fmin(canvasTL.y, canvasBR.y);
     CGFloat canvasBottom = fmax(canvasTL.y, canvasBR.y);
 
-    // Vertical lines (constant X).
+    // Visible object-space range from viewport corners (with margin).
+    float ioW = [destinationImage.ioSurface width];
+    float ioH = [destinationImage.ioSurface height];
+    simd_float2 vpTL = [self objectPointFromCanvasPoint:CGPointMake(0, 0)];
+    simd_float2 vpBR = [self objectPointFromCanvasPoint:CGPointMake(ioW, ioH)];
+    float visMinX = fmaxf(0.0f, fminf(vpTL.x, vpBR.x) - objSpacingX);
+    float visMaxX = fminf(1.0f, fmaxf(vpTL.x, vpBR.x) + objSpacingX);
+    float visMinY = fmaxf(0.0f, fminf(vpTL.y, vpBR.y) - objSpacingY);
+    float visMaxY = fminf(1.0f, fmaxf(vpTL.y, vpBR.y) + objSpacingY);
+
+    // Vertical lines (constant X) — only visible range.
     {
-      NSInteger iStart = (NSInteger)ceilf(0.0f / objSpacingX);
-      NSInteger iEnd = (NSInteger)floorf(1.0f / objSpacingX);
+      NSInteger iStart = (NSInteger)ceilf(visMinX / objSpacingX);
+      NSInteger iEnd = (NSInteger)floorf(visMaxX / objSpacingX);
       for (NSInteger i = iStart; i <= iEnd; i++) {
         float ox = i * objSpacingX;
         CGFloat rawX = [self canvasPointFromObjectPoint:(simd_float2){ox, 0}].x;
@@ -317,10 +327,10 @@ static const CGFloat kPathToolbarGap = 6.0;
       }
     }
 
-    // Horizontal lines (constant Y).
+    // Horizontal lines (constant Y) — only visible range.
     {
-      NSInteger iStart = (NSInteger)ceilf(0.0f / objSpacingY);
-      NSInteger iEnd = (NSInteger)floorf(1.0f / objSpacingY);
+      NSInteger iStart = (NSInteger)ceilf(visMinY / objSpacingY);
+      NSInteger iEnd = (NSInteger)floorf(visMaxY / objSpacingY);
       for (NSInteger i = iStart; i <= iEnd; i++) {
         float oy = i * objSpacingY;
         CGFloat rawY = [self canvasPointFromObjectPoint:(simd_float2){0, oy}].y;
