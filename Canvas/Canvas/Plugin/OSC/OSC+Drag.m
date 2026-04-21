@@ -165,9 +165,8 @@
   simd_float2 offset = {objPos.x - pt.x, objPos.y - pt.y};
 
   if (self.dragIsNewPoint) {
-    CGPoint ptCanvas =
-        [self canvasPointFromObjectPoint:(simd_float2){pt.x, pt.y}];
-    CGFloat canvasDist = hypot(positionX - ptCanvas.x, positionY - ptCanvas.y);
+    CGFloat canvasDist = hypot(positionX - self.newPointCanvasOrigin.x,
+                               positionY - self.newPointCanvasOrigin.y);
     if (canvasDist > 10.0) {
       [self setHandle:offset
                 atIndex:self.dragIndex
