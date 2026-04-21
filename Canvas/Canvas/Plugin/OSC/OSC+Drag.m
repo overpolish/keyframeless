@@ -37,7 +37,8 @@
   self.alignSnappedX = NO;
   self.alignSnappedY = NO;
 
-  if (!self.snapToGrid || self.gridEnabled)
+  BOOL snapActive = self.cmdSnapOverride ? !self.snapToGrid : self.snapToGrid;
+  if (!snapActive || self.gridEnabled)
     return delta;
   if (self.imageWidth <= 0 || self.imageHeight <= 0)
     return delta;
@@ -89,14 +90,18 @@
   // Collect snap target X and Y values from non-selected visible paths.
   // Each path contributes: left, center, right (X) and top, center, bottom (Y).
   // Plus canvas center (0.5, 0.5).
-  NSUInteger maxTargets = (self.paths.count + 1) * 3;
+  NSUInteger maxTargets = (self.paths.count + 1) * 3 + 3;
   float *targetXs = malloc(maxTargets * sizeof(float));
   float *targetYs = malloc(maxTargets * sizeof(float));
   NSUInteger txCount = 0, tyCount = 0;
 
-  // Canvas center.
+  // Canvas edges and center.
+  targetXs[txCount++] = 0.0f;
   targetXs[txCount++] = 0.5f;
+  targetXs[txCount++] = 1.0f;
+  targetYs[tyCount++] = 0.0f;
   targetYs[tyCount++] = 0.5f;
+  targetYs[tyCount++] = 1.0f;
 
   for (NSUInteger i = 0; i < self.paths.count; i++) {
     if ([selected containsIndex:i])
@@ -156,6 +161,309 @@
     delta.y += snapAdjY;
   }
 
+  // Equal spacing snap.
+  self.spacingSnapX = NO;
+  self.spacingSnapY = NO;
+  self.spacingRefX = NO;
+  self.spacingRefY = NO;
+
+  float spThresh = (pixelsPerUnit > 0) ? 5.0f / pixelsPerUnit : 0.003f;
+
+  // Gather bboxes of non-selected visible paths.
+  NSUInteger otherCount = 0;
+  for (NSUInteger i = 0; i < self.paths.count; i++) {
+    if ([selected containsIndex:i])
+      continue;
+    KKBezierPath *p = self.paths[i];
+    if (p.hidden || p.isGroup || p.count == 0)
+      continue;
+    otherCount++;
+  }
+
+  if (otherCount >= 1) {
+    float *oMinXs = malloc(otherCount * sizeof(float));
+    float *oMaxXs = malloc(otherCount * sizeof(float));
+    float *oMinYs = malloc(otherCount * sizeof(float));
+    float *oMaxYs = malloc(otherCount * sizeof(float));
+    NSUInteger oi = 0;
+    for (NSUInteger i = 0; i < self.paths.count; i++) {
+      if ([selected containsIndex:i])
+        continue;
+      KKBezierPath *p = self.paths[i];
+      if (p.hidden || p.isGroup || p.count == 0)
+        continue;
+      simd_float2 pMin, pMax;
+      [self boundsOfPath:p min:&pMin max:&pMax];
+      oMinXs[oi] = pMin.x;
+      oMaxXs[oi] = pMax.x;
+      oMinYs[oi] = pMin.y;
+      oMaxYs[oi] = pMax.y;
+      oi++;
+    }
+
+    // Post-alignment-snap selection bounds.
+    float adjSMinX = sMinX + (bestDistX < FLT_MAX ? snapAdjX : 0);
+    float adjSMaxX = sMaxX + (bestDistX < FLT_MAX ? snapAdjX : 0);
+    float adjSMinY = sMinY + (bestDistY < FLT_MAX ? snapAdjY : 0);
+    float adjSMaxY = sMaxY + (bestDistY < FLT_MAX ? snapAdjY : 0);
+    float midY = (adjSMinY + adjSMaxY) * 0.5f;
+    float midX = (adjSMinX + adjSMaxX) * 0.5f;
+
+    // --- X axis ---
+    // Find nearest left/right neighbors. Canvas edges act as neighbors.
+    float nearLeftEdge = 0.0f;  // canvas left edge
+    float nearRightEdge = 1.0f; // canvas right edge
+    for (NSUInteger k = 0; k < otherCount; k++) {
+      if (oMaxXs[k] <= adjSMinX + spThresh && oMaxXs[k] > nearLeftEdge)
+        nearLeftEdge = oMaxXs[k];
+      if (oMinXs[k] >= adjSMaxX - spThresh && oMinXs[k] < nearRightEdge)
+        nearRightEdge = oMinXs[k];
+    }
+
+    // Case 1: between two neighbors — equalize gaps.
+    {
+      float gapLeft = adjSMinX - nearLeftEdge;
+      float gapRight = nearRightEdge - adjSMaxX;
+      float diff = gapLeft - gapRight;
+      if (fabsf(diff) < spThresh) {
+        float adj = -diff * 0.5f;
+        delta.x += adj;
+        self.spacingSnapX = YES;
+        self.spacingLeftEdge = nearLeftEdge;
+        self.spacingSelLeft = adjSMinX + adj;
+        self.spacingSelRight = adjSMaxX + adj;
+        self.spacingRightEdge = nearRightEdge;
+        self.spacingMidY = midY;
+      }
+    }
+
+    // Case 2: gap to one neighbor matches an existing gap elsewhere.
+    // Existing gaps include inter-object gaps AND object-to-canvas-edge gaps.
+    if (!self.spacingSnapX) {
+      // Collect existing gaps: (leftEdge, rightEdge, midY for drawing).
+      NSUInteger maxGaps = otherCount * 2 + otherCount;
+      float *gapLefts = malloc(maxGaps * sizeof(float));
+      float *gapRights = malloc(maxGaps * sizeof(float));
+      float *gapMidYs = malloc(maxGaps * sizeof(float));
+      NSUInteger gapCount = 0;
+
+      // Gaps from canvas edges to each object.
+      for (NSUInteger k = 0; k < otherCount; k++) {
+        float omy = (oMinYs[k] + oMaxYs[k]) * 0.5f;
+        float edgeGapL = oMinXs[k] - 0.0f;
+        if (edgeGapL > 0) {
+          gapLefts[gapCount] = 0.0f;
+          gapRights[gapCount] = oMinXs[k];
+          gapMidYs[gapCount] = omy;
+          gapCount++;
+        }
+        float edgeGapR = 1.0f - oMaxXs[k];
+        if (edgeGapR > 0) {
+          gapLefts[gapCount] = oMaxXs[k];
+          gapRights[gapCount] = 1.0f;
+          gapMidYs[gapCount] = omy;
+          gapCount++;
+        }
+      }
+
+      // Gaps between adjacent sorted objects.
+      if (otherCount >= 2) {
+        NSUInteger *sortedX = malloc(otherCount * sizeof(NSUInteger));
+        for (NSUInteger k = 0; k < otherCount; k++)
+          sortedX[k] = k;
+        for (NSUInteger a = 0; a < otherCount; a++) {
+          for (NSUInteger b = a + 1; b < otherCount; b++) {
+            if (oMinXs[sortedX[b]] < oMinXs[sortedX[a]]) {
+              NSUInteger tmp = sortedX[a];
+              sortedX[a] = sortedX[b];
+              sortedX[b] = tmp;
+            }
+          }
+        }
+        for (NSUInteger a = 0; a + 1 < otherCount; a++) {
+          NSUInteger ai = sortedX[a], bi = sortedX[a + 1];
+          float eg = oMinXs[bi] - oMaxXs[ai];
+          if (eg > 0) {
+            gapLefts[gapCount] = oMaxXs[ai];
+            gapRights[gapCount] = oMinXs[bi];
+            gapMidYs[gapCount] = ((oMinYs[ai] + oMaxYs[ai]) * 0.5f +
+                                  (oMinYs[bi] + oMaxYs[bi]) * 0.5f) *
+                                 0.5f;
+            gapCount++;
+          }
+        }
+        free(sortedX);
+      }
+
+      for (NSUInteger g = 0; g < gapCount; g++) {
+        float existingGap = gapRights[g] - gapLefts[g];
+        float refMY = gapMidYs[g];
+
+        float gapL = adjSMinX - nearLeftEdge;
+        float diffL = gapL - existingGap;
+        if (fabsf(diffL) < spThresh) {
+          delta.x -= diffL;
+          self.spacingSnapX = YES;
+          self.spacingLeftEdge = nearLeftEdge;
+          self.spacingSelLeft = adjSMinX - diffL;
+          self.spacingSelRight = adjSMaxX - diffL;
+          self.spacingRightEdge = self.spacingSelRight;
+          self.spacingMidY = midY;
+          self.spacingRefX = YES;
+          self.spacingRefLeftX = gapLefts[g];
+          self.spacingRefRightX = gapRights[g];
+          self.spacingRefMidYX = refMY;
+          break;
+        }
+        float gapR = nearRightEdge - adjSMaxX;
+        float diffR = gapR - existingGap;
+        if (fabsf(diffR) < spThresh) {
+          delta.x += diffR;
+          self.spacingSnapX = YES;
+          self.spacingSelLeft = adjSMinX + diffR;
+          self.spacingSelRight = adjSMaxX + diffR;
+          self.spacingLeftEdge = self.spacingSelLeft;
+          self.spacingRightEdge = nearRightEdge;
+          self.spacingMidY = midY;
+          self.spacingRefX = YES;
+          self.spacingRefLeftX = gapLefts[g];
+          self.spacingRefRightX = gapRights[g];
+          self.spacingRefMidYX = refMY;
+          break;
+        }
+      }
+      free(gapLefts);
+      free(gapRights);
+      free(gapMidYs);
+    }
+
+    // --- Y axis ---
+    float nearTopEdge = 0.0f;
+    float nearBottomEdge = 1.0f;
+    for (NSUInteger k = 0; k < otherCount; k++) {
+      if (oMaxYs[k] <= adjSMinY + spThresh && oMaxYs[k] > nearTopEdge)
+        nearTopEdge = oMaxYs[k];
+      if (oMinYs[k] >= adjSMaxY - spThresh && oMinYs[k] < nearBottomEdge)
+        nearBottomEdge = oMinYs[k];
+    }
+
+    {
+      float gapTop = adjSMinY - nearTopEdge;
+      float gapBottom = nearBottomEdge - adjSMaxY;
+      float diff = gapTop - gapBottom;
+      if (fabsf(diff) < spThresh) {
+        float adj = -diff * 0.5f;
+        delta.y += adj;
+        self.spacingSnapY = YES;
+        self.spacingTopEdge = nearTopEdge;
+        self.spacingSelTop = adjSMinY + adj;
+        self.spacingSelBottom = adjSMaxY + adj;
+        self.spacingBottomEdge = nearBottomEdge;
+        self.spacingMidX = midX;
+      }
+    }
+
+    if (!self.spacingSnapY) {
+      NSUInteger maxGapsY = otherCount * 2 + otherCount;
+      float *gapTops = malloc(maxGapsY * sizeof(float));
+      float *gapBottoms = malloc(maxGapsY * sizeof(float));
+      float *gapMidXs = malloc(maxGapsY * sizeof(float));
+      NSUInteger gapCountY = 0;
+
+      for (NSUInteger k = 0; k < otherCount; k++) {
+        float omx = (oMinXs[k] + oMaxXs[k]) * 0.5f;
+        float edgeGapT = oMinYs[k] - 0.0f;
+        if (edgeGapT > 0) {
+          gapTops[gapCountY] = 0.0f;
+          gapBottoms[gapCountY] = oMinYs[k];
+          gapMidXs[gapCountY] = omx;
+          gapCountY++;
+        }
+        float edgeGapB = 1.0f - oMaxYs[k];
+        if (edgeGapB > 0) {
+          gapTops[gapCountY] = oMaxYs[k];
+          gapBottoms[gapCountY] = 1.0f;
+          gapMidXs[gapCountY] = omx;
+          gapCountY++;
+        }
+      }
+
+      if (otherCount >= 2) {
+        NSUInteger *sortedY = malloc(otherCount * sizeof(NSUInteger));
+        for (NSUInteger k = 0; k < otherCount; k++)
+          sortedY[k] = k;
+        for (NSUInteger a = 0; a < otherCount; a++) {
+          for (NSUInteger b = a + 1; b < otherCount; b++) {
+            if (oMinYs[sortedY[b]] < oMinYs[sortedY[a]]) {
+              NSUInteger tmp = sortedY[a];
+              sortedY[a] = sortedY[b];
+              sortedY[b] = tmp;
+            }
+          }
+        }
+        for (NSUInteger a = 0; a + 1 < otherCount; a++) {
+          NSUInteger ai = sortedY[a], bi = sortedY[a + 1];
+          float eg = oMinYs[bi] - oMaxYs[ai];
+          if (eg > 0) {
+            gapTops[gapCountY] = oMaxYs[ai];
+            gapBottoms[gapCountY] = oMinYs[bi];
+            gapMidXs[gapCountY] = ((oMinXs[ai] + oMaxXs[ai]) * 0.5f +
+                                   (oMinXs[bi] + oMaxXs[bi]) * 0.5f) *
+                                  0.5f;
+            gapCountY++;
+          }
+        }
+        free(sortedY);
+      }
+
+      for (NSUInteger g = 0; g < gapCountY; g++) {
+        float existingGap = gapBottoms[g] - gapTops[g];
+        float refMX = gapMidXs[g];
+
+        float gapT = adjSMinY - nearTopEdge;
+        float diffT = gapT - existingGap;
+        if (fabsf(diffT) < spThresh) {
+          delta.y -= diffT;
+          self.spacingSnapY = YES;
+          self.spacingTopEdge = nearTopEdge;
+          self.spacingSelTop = adjSMinY - diffT;
+          self.spacingSelBottom = adjSMaxY - diffT;
+          self.spacingBottomEdge = self.spacingSelBottom;
+          self.spacingMidX = midX;
+          self.spacingRefY = YES;
+          self.spacingRefTopY = gapTops[g];
+          self.spacingRefBottomY = gapBottoms[g];
+          self.spacingRefMidXY = refMX;
+          break;
+        }
+        float gapB = nearBottomEdge - adjSMaxY;
+        float diffB = gapB - existingGap;
+        if (fabsf(diffB) < spThresh) {
+          delta.y += diffB;
+          self.spacingSnapY = YES;
+          self.spacingSelTop = adjSMinY + diffB;
+          self.spacingSelBottom = adjSMaxY + diffB;
+          self.spacingTopEdge = self.spacingSelTop;
+          self.spacingBottomEdge = nearBottomEdge;
+          self.spacingMidX = midX;
+          self.spacingRefY = YES;
+          self.spacingRefTopY = gapTops[g];
+          self.spacingRefBottomY = gapBottoms[g];
+          self.spacingRefMidXY = refMX;
+          break;
+        }
+      }
+      free(gapTops);
+      free(gapBottoms);
+      free(gapMidXs);
+    }
+
+    free(oMinXs);
+    free(oMaxXs);
+    free(oMinYs);
+    free(oMaxYs);
+  }
+
   return delta;
 }
 
@@ -165,7 +473,8 @@
   self.alignSnappedX = NO;
   self.alignSnappedY = NO;
 
-  if (!self.snapToGrid || self.gridEnabled)
+  BOOL snapActive = self.cmdSnapOverride ? !self.snapToGrid : self.snapToGrid;
+  if (!snapActive || self.gridEnabled)
     return point;
   if (self.imageWidth <= 0 || self.imageHeight <= 0)
     return point;
@@ -177,8 +486,8 @@
   float pixelsPerUnit = pxPerSourcePx * self.imageWidth;
   float thresh = (pixelsPerUnit > 0) ? 8.0f / pixelsPerUnit : 0.005f;
 
-  // Count total targets: 1 (canvas center) + per path (3 bbox + N points).
-  NSUInteger maxTargets = 1;
+  // Count total targets: 3 (canvas edges+center) + per path (3 bbox + N pts).
+  NSUInteger maxTargets = 3;
   for (NSUInteger i = 0; i < self.paths.count; i++) {
     if (excluded && [excluded containsIndex:i])
       continue;
@@ -191,8 +500,13 @@
   float *targetYs = malloc(maxTargets * sizeof(float));
   NSUInteger txCount = 0, tyCount = 0;
 
+  // Canvas edges and center.
+  targetXs[txCount++] = 0.0f;
   targetXs[txCount++] = 0.5f;
+  targetXs[txCount++] = 1.0f;
+  targetYs[tyCount++] = 0.0f;
   targetYs[tyCount++] = 0.5f;
+  targetYs[tyCount++] = 1.0f;
 
   for (NSUInteger i = 0; i < self.paths.count; i++) {
     if (excluded && [excluded containsIndex:i])
@@ -266,6 +580,10 @@
 - (void)resetAlignSnap {
   self.alignSnappedX = NO;
   self.alignSnappedY = NO;
+  self.spacingSnapX = NO;
+  self.spacingSnapY = NO;
+  self.spacingRefX = NO;
+  self.spacingRefY = NO;
 }
 
 - (simd_float2)shiftConstrainedPosition:(simd_float2)objPos {
@@ -295,6 +613,7 @@
     objPos = [self objectPointFromCanvasPoint:CGPointMake(ex, ey)];
   }
   objPos = [self snapToGridPosition:objPos];
+  self.cmdSnapOverride = (modifiers & kFxModifierKey_COMMAND) != 0;
   objPos = [self alignSnapPoint:objPos excludingPaths:nil excludingPoints:nil];
   self.dragOrigin = objPos;
   *forceUpdate = YES;
@@ -318,6 +637,7 @@
     objPos = [self objectPointFromCanvasPoint:CGPointMake(ex, ey)];
   }
   objPos = [self snapToGridPosition:objPos];
+  self.cmdSnapOverride = (modifiers & kFxModifierKey_COMMAND) != 0;
   objPos = [self alignSnapPoint:objPos excludingPaths:nil excludingPoints:nil];
   self.dragOrigin = objPos;
   *forceUpdate = YES;
@@ -333,12 +653,13 @@
     objPos = [self shiftConstrainedPosition:objPos];
   objPos = [self snapToGridPosition:objPos];
   simd_float2 delta = objPos - self.dragOrigin;
-  self.dragOrigin = objPos;
 
   BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
+  self.cmdSnapOverride = (modifiers & kFxModifierKey_COMMAND) != 0;
   if (isCursorMode)
     delta = [self alignSnapDelta:delta
                 forSelectedPaths:self.selectedPathIndices];
+  self.dragOrigin += delta;
   if (isCursorMode) {
     if ((modifiers & kFxModifierKey_OPTION) && !self.dragDidDuplicate) {
       self.dragDidDuplicate = YES;
@@ -433,6 +754,7 @@
     if (modifiers & kFxModifierKey_SHIFT)
       objPos = [self shiftConstrainedPosition:objPos];
     objPos = [self snapToGridPosition:objPos];
+    self.cmdSnapOverride = (modifiers & kFxModifierKey_COMMAND) != 0;
     {
       NSMutableIndexSet *exPts = [NSMutableIndexSet
           indexSetWithIndex:selKey((NSUInteger)self.activePathIndex,
@@ -580,6 +902,7 @@
     objPos = [self snapToGridPosition:objPos];
     simd_float2 delta = objPos - self.dragOrigin;
     BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
+    self.cmdSnapOverride = (modifiers & kFxModifierKey_COMMAND) != 0;
     if (isCursorMode) {
       NSMutableIndexSet *snapSet =
           [NSMutableIndexSet indexSetWithIndex:self.activePathIndex];
@@ -625,7 +948,7 @@
         [self.paths[di] translateBy:delta];
       }];
     }
-    self.dragOrigin = objPos;
+    self.dragOrigin += delta;
     [self writePaths:self.paths];
     *forceUpdate = YES;
     return;
