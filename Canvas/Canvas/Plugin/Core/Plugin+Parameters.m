@@ -55,7 +55,7 @@
 
   [paramAPI addIntSliderWithName:@"Grid Spacing"
                      parameterID:kParamGridSpacing
-                    defaultValue:50
+                    defaultValue:10
                     parameterMin:1
                     parameterMax:1000
                        sliderMin:1

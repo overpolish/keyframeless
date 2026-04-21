@@ -39,7 +39,7 @@ static const CGFloat kPathToolbarGap = 6.0;
                   atTime:kCMTimeZero];
     self.gridEnabled = gridVal;
 
-    int spacingVal = 50;
+    int spacingVal = 10;
     [getAPI getIntValue:&spacingVal
           fromParameter:kParamGridSpacing
                  atTime:kCMTimeZero];
