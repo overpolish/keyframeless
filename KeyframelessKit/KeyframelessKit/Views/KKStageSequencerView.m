@@ -23,13 +23,18 @@ static const NSInteger kCurveSegments = 40;
 
 @implementation KKStageSequencerView {
   NSImage *_lanesImage;
-  // Drag state.
+  // Drag state (edge resize).
   BOOL _dragging;
   NSInteger _dragLaneIdx;
   NSInteger _dragSegIdx;
   BOOL _dragLeadingEdge;
   CGFloat _dragTrackX;
   CGFloat _dragTrackWidth;
+  // Drag state (segment move).
+  BOOL _dragMoving;
+  CGFloat _dragMoveStartFrac;
+  double _dragMoveOrigStart;
+  double _dragMoveOrigEnd;
   // Hover state.
   NSInteger _hoverLaneIdx;
   NSInteger _hoverSegIdx;
@@ -67,7 +72,7 @@ static const NSInteger kCurveSegments = 40;
 
 - (void)setLanes:(NSArray<KKTimingLane *> *)lanes {
   _lanes = [lanes copy];
-  if (!_dragging)
+  if (!_dragging && !_dragMoving)
     [self renderLanes];
 }
 
@@ -558,9 +563,17 @@ static double _segAvgValue(KKTimingSegment *seg) {
             _onSegmentRemoved(laneIdx, segIdx);
           return;
         }
-        // Regular click — select.
+        // Select and set up move-drag.
         if (_onSegmentSelected)
           _onSegmentSelected(laneIdx, segIdx);
+        _dragMoving = YES;
+        _dragLaneIdx = laneIdx;
+        _dragSegIdx = segIdx;
+        _dragTrackX = trackX;
+        _dragTrackWidth = trackWidth;
+        _dragMoveStartFrac = (loc.x - trackX) / trackWidth;
+        _dragMoveOrigStart = seg.start;
+        _dragMoveOrigEnd = seg.end;
         return;
       }
     }
@@ -573,7 +586,7 @@ static double _segAvgValue(KKTimingSegment *seg) {
 }
 
 - (void)mouseDragged:(NSEvent *)event {
-  if (!_dragging)
+  if (!_dragging && !_dragMoving)
     return;
 
   NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
@@ -586,6 +599,67 @@ static double _segAvgValue(KKTimingSegment *seg) {
 
   KKTimingLane *lane = [lanes[_dragLaneIdx] copy];
   NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
+
+  if (_dragMoving) {
+    [[NSCursor closedHandCursor] set];
+    double delta = newFrac - _dragMoveStartFrac;
+    double newStart = _dragMoveOrigStart + delta;
+    double newEnd = _dragMoveOrigEnd + delta;
+    double segSize = _dragMoveOrigEnd - _dragMoveOrigStart;
+
+    double minPx = kMinSegmentPx / _dragTrackWidth;
+    double minFrac = MAX(kMinSegmentFrac, minPx);
+
+    // Clamp against previous neighbor's minimum size.
+    if (_dragSegIdx > 0) {
+      double prevStart = segs[_dragSegIdx - 1].start;
+      if (newStart < prevStart + minFrac) {
+        newStart = prevStart + minFrac;
+        newEnd = newStart + segSize;
+      }
+    } else {
+      if (newStart < 0) {
+        newStart = 0;
+        newEnd = newStart + segSize;
+      }
+    }
+    // Clamp against next neighbor's minimum size.
+    if ((NSUInteger)_dragSegIdx + 1 < segs.count) {
+      double nextEnd = segs[_dragSegIdx + 1].end;
+      if (newEnd > nextEnd - minFrac) {
+        newEnd = nextEnd - minFrac;
+        newStart = newEnd - segSize;
+      }
+    } else {
+      if (newEnd > 1.0) {
+        newEnd = 1.0;
+        newStart = newEnd - segSize;
+      }
+    }
+
+    KKTimingSegment *cur = [segs[_dragSegIdx] copy];
+    cur.start = newStart;
+    cur.end = newEnd;
+    segs[_dragSegIdx] = cur;
+
+    // Adjust neighbors to stay contiguous.
+    if (_dragSegIdx > 0) {
+      KKTimingSegment *prev = [segs[_dragSegIdx - 1] copy];
+      prev.end = newStart;
+      segs[_dragSegIdx - 1] = prev;
+    }
+    if ((NSUInteger)_dragSegIdx + 1 < segs.count) {
+      KKTimingSegment *next = [segs[_dragSegIdx + 1] copy];
+      next.start = newEnd;
+      segs[_dragSegIdx + 1] = next;
+    }
+
+    lane.segments = segs;
+    lanes[_dragLaneIdx] = lane;
+    _lanes = lanes;
+    [self renderLanes];
+    return;
+  }
 
   if (_dragLeadingEdge) {
     // Dragging the leading edge of _dragSegIdx.
@@ -631,6 +705,18 @@ static double _segAvgValue(KKTimingSegment *seg) {
 }
 
 - (void)mouseUp:(NSEvent *)event {
+  if (_dragMoving) {
+    BOOL moved = NO;
+    if ((NSUInteger)_dragLaneIdx < _lanes.count) {
+      KKTimingSegment *seg = _lanes[_dragLaneIdx].segments[_dragSegIdx];
+      moved = (fabs(seg.start - _dragMoveOrigStart) > 0.001);
+    }
+    _dragMoving = NO;
+    [[NSCursor arrowCursor] set];
+    if (moved && (NSUInteger)_dragLaneIdx < _lanes.count && _onLaneChanged)
+      _onLaneChanged(_dragLaneIdx, _lanes[_dragLaneIdx]);
+    return;
+  }
   if (_dragging) {
     _dragging = NO;
     [[NSCursor arrowCursor] set];
