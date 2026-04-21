@@ -81,6 +81,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, assign) BOOL autoSelect;
 @property(nonatomic, assign) CGPoint autoSelectClickOrigin;
 @property(nonatomic, assign) BOOL autoSelectPending;
+@property(nonatomic, assign)
+    CGPoint hoverCanvasPosition;                   // last hitTest mouse pos
 @property(nonatomic, assign) BOOL cmdSnapOverride; // cmd toggles snap on/off
 @property(nonatomic, assign) BOOL alignSnappedX;
 @property(nonatomic, assign) BOOL alignSnappedY;

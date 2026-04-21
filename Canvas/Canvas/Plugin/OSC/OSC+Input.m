@@ -385,5 +385,19 @@
   *forceUpdate = YES;
 }
 
+- (void)mouseMovedAtPositionX:(double)positionX
+                    positionY:(double)positionY
+                   activePart:(NSInteger)activePart
+                    modifiers:(FxModifierKeys)modifiers
+                  forceUpdate:(BOOL *)forceUpdate
+                       atTime:(CMTime)time {
+  self.hoverCanvasPosition = CGPointMake(positionX, positionY);
+  BOOL needsIndicator = self.toolbar.activeTag != kOSCToolbarCursor &&
+                        self.toolbar.activeTag != 0 && self.gridEnabled &&
+                        self.snapToGrid;
+  if (needsIndicator)
+    *forceUpdate = YES;
+}
+
 @end
 #pragma clang diagnostic pop
