@@ -227,6 +227,7 @@
                         activePart:(NSInteger *)activePart
                             atTime:(CMTime)time {
   *activePart = kOSCCanvas;
+  self.hoverCanvasPosition = CGPointMake(positionX, positionY);
   self.paths = [self readPaths];
 
   {

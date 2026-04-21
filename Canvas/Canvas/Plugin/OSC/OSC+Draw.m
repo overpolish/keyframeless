@@ -345,6 +345,38 @@ static const CGFloat kPathToolbarGap = 6.0;
             destinationImage:destinationImage];
       }
     }
+
+    // Grid snap indicator: filled circle at the nearest grid intersection.
+    // Shown in drawing tools (pen/rect/ellipse/line) before mouse-down.
+    BOOL isDrawingTool = !isCursorMode;
+    BOOL isDragging =
+        self.dragIsRect || self.dragIsEllipse || self.dragIsLine ||
+        self.dragIsNewPoint || self.dragIsPath || self.dragIsInHandle ||
+        self.dragIsOutHandle || self.dragIsSelection || self.dragIsMarquee ||
+        self.dragIsRotation || self.dragResizeHandle >= 0;
+    if (isDrawingTool && self.snapToGrid && !isDragging) {
+      simd_float2 hoverObj =
+          [self objectPointFromCanvasPoint:self.hoverCanvasPosition];
+      simd_float2 snapped = [self snapToGridPosition:hoverObj];
+      if (snapped.x >= 0.0f && snapped.x <= 1.0f && snapped.y >= 0.0f &&
+          snapped.y <= 1.0f) {
+        CGPoint raw = [self canvasPointFromObjectPoint:snapped];
+        CGPoint c = {floor(raw.x) + 0.5, floor(raw.y) + 0.5};
+        CGFloat sr = 6.0;
+        simd_float4 indicatorColor = {0.5f, 0.5f, 0.5f, 1.0f};
+        NSUInteger segs = 32;
+        CGPoint ring[segs + 1];
+        for (NSUInteger i = 0; i <= segs; i++) {
+          float t = (float)i / (float)segs * 2.0f * M_PI;
+          ring[i] = (CGPoint){c.x + sr * cosf(t), c.y + sr * sinf(t)};
+        }
+        [self drawLineStripWithPoints:ring
+                                count:segs + 1
+                                color:indicatorColor
+                            halfWidth:1.5f
+                     destinationImage:destinationImage];
+      }
+    }
   }
 
   for (NSUInteger p = 0; p < self.paths.count; p++) {
