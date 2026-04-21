@@ -630,6 +630,17 @@ static const FxParameterFlags kCustomUIDisabled =
   });
 }
 
++ (void)multiStageUpdatePlayhead:(double)fraction duration:(double)duration {
+  KKStageSequencerView *seq =
+      (__bridge KKStageSequencerView *)KKMultiStageSequencerView;
+  if (!seq)
+    return;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    seq.effectDuration = duration;
+    seq.playheadFraction = fraction;
+  });
+}
+
 - (BOOL)addInfoParameterWithText:(NSString *)text
                             icon:(nullable NSImage *)icon
                      parameterID:(UInt32)parameterID

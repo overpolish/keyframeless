@@ -9,6 +9,9 @@
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
 
+static const CGFloat kRulerHeight = 10.0;
+static const CGFloat kPlayheadSnapPx = 10.0;
+static const CGFloat kBoundaryLabelHeight = 10.0;
 static const CGFloat kLaneHeight = 30.0;
 static const CGFloat kLaneSpacing = KKSpacingXS;
 static const CGFloat kLabelWidth = 50.0;
@@ -76,6 +79,20 @@ static const NSInteger kCurveSegments = 40;
     [self renderLanes];
 }
 
+- (void)setEffectDuration:(double)effectDuration {
+  if (fabs(_effectDuration - effectDuration) < 0.001)
+    return;
+  _effectDuration = effectDuration;
+  [self renderLanes];
+}
+
+- (void)setPlayheadFraction:(double)playheadFraction {
+  if (fabs(_playheadFraction - playheadFraction) < 0.0001)
+    return;
+  _playheadFraction = playheadFraction;
+  [self renderLanes];
+}
+
 - (void)setFrameSize:(NSSize)newSize {
   [super setFrameSize:newSize];
   [self renderLanes];
@@ -91,13 +108,15 @@ static const NSInteger kCurveSegments = 40;
 }
 
 - (CGFloat)_laneYForIndex:(NSUInteger)laneIdx totalHeight:(CGFloat)totalHeight {
-  return totalHeight - kBorderInset - (laneIdx + 1) * kLaneHeight -
+  return totalHeight - kBorderInset - kRulerHeight -
+         (laneIdx + 1) * (kLaneHeight + kBoundaryLabelHeight) -
          laneIdx * kLaneSpacing;
 }
 
 - (CGFloat)_totalHeight {
-  return _lanes.count * kLaneHeight + (_lanes.count - 1) * kLaneSpacing +
-         2 * kBorderInset;
+  return kRulerHeight + kBoundaryLabelHeight +
+         _lanes.count * (kLaneHeight + kBoundaryLabelHeight) +
+         (_lanes.count - 1) * kLaneSpacing + 2 * kBorderInset;
 }
 
 #pragma mark - Rendering
@@ -187,6 +206,14 @@ static const NSInteger kCurveSegments = 40;
                   trackWidth:trackWidth
                        laneY:laneY];
 
+    // Boundary time labels below the lane.
+    if (lane.enabled && trackWidth > 10)
+      [self _renderBoundaryLabelsForLane:lane
+                               laneIndex:laneIdx
+                                  trackX:trackX
+                              trackWidth:trackWidth
+                                   laneY:laneY];
+
     // Hover indicator line on boundary.
     if (_hoveringEdge && _hoverLaneIdx == (NSInteger)laneIdx && lane.enabled) {
       CGFloat edgeX;
@@ -209,6 +236,13 @@ static const NSInteger kCurveSegments = 40;
       }
     }
   }
+
+  [self _renderRulerWithTrackX:trackX
+                    trackWidth:trackWidth
+                   totalHeight:totalHeight];
+  [self _renderPlayheadWithTrackX:trackX
+                       trackWidth:trackWidth
+                      totalHeight:totalHeight];
 
   [image unlockFocus];
   _lanesImage = image;
@@ -313,6 +347,251 @@ static double _segAvgValue(KKTimingSegment *seg) {
     [lineColor setStroke];
     [segPath stroke];
   }
+}
+
+static NSString *_boundaryTimeLabel(double fraction, double duration) {
+  double sec = fraction * duration;
+  if (sec < 0.01)
+    return @"0s";
+  if (sec < 10.0)
+    return [NSString stringWithFormat:@"%.1fs", sec];
+  int totalSec = (int)sec;
+  int m = totalSec / 60;
+  int s = totalSec % 60;
+  if (m > 0)
+    return [NSString stringWithFormat:@"%d:%02d", m, s];
+  return [NSString stringWithFormat:@"%ds", s];
+}
+
+- (void)_renderBoundaryLabelsForLane:(KKTimingLane *)lane
+                           laneIndex:(NSUInteger)laneIdx
+                              trackX:(CGFloat)trackX
+                          trackWidth:(CGFloat)trackWidth
+                               laneY:(CGFloat)laneY {
+  if (_effectDuration <= 0)
+    return;
+
+  CGFloat labelRowY = laneY - kBoundaryLabelHeight;
+
+  NSDictionary *dimAttrs = @{
+    NSFontAttributeName : [NSFont systemFontOfSize:8.0
+                                            weight:NSFontWeightMedium],
+    NSForegroundColorAttributeName :
+        [[NSColor inspectorLabel] colorWithAlphaComponent:0.35],
+  };
+
+  // Pre-compute duration label rect so boundary labels can avoid it.
+  CGFloat durLabelLeft = -999, durLabelRight = -999;
+  BOOL isHovered =
+      (_hoverSegLaneIdx == (NSInteger)laneIdx && _hoverSegSegIdx >= 0 &&
+       (NSUInteger)_hoverSegSegIdx < lane.segments.count);
+  NSString *durLabel = nil;
+  NSDictionary *durAttrs = nil;
+  CGFloat durX = 0, durY = 0;
+
+  if (isHovered) {
+    KKTimingSegment *hSeg = lane.segments[_hoverSegSegIdx];
+    double durSec = (hSeg.end - hSeg.start) * _effectDuration;
+    if (durSec < 10.0)
+      durLabel = [NSString stringWithFormat:@"%.1fs", durSec];
+    else
+      durLabel = [NSString stringWithFormat:@"%.0fs", durSec];
+
+    durAttrs = @{
+      NSFontAttributeName : [NSFont systemFontOfSize:8.0
+                                              weight:NSFontWeightMedium],
+      NSForegroundColorAttributeName : [NSColor accentMatchingHost],
+    };
+    NSSize durSize = [durLabel sizeWithAttributes:durAttrs];
+    CGFloat segMidX = trackX + ((hSeg.start + hSeg.end) / 2.0) * trackWidth;
+    durX = segMidX - durSize.width / 2.0;
+    durX = MAX(trackX, MIN(trackX + trackWidth - durSize.width, durX));
+    durY = labelRowY + (kBoundaryLabelHeight - durSize.height) / 2.0;
+    durLabelLeft = durX;
+    durLabelRight = durX + durSize.width;
+  }
+
+  // Collect boundary positions (unique, sorted).
+  NSMutableArray<NSNumber *> *boundaries = [NSMutableArray array];
+  for (KKTimingSegment *seg in lane.segments) {
+    [boundaries addObject:@(seg.start)];
+  }
+  KKTimingSegment *last = lane.segments.lastObject;
+  if (last)
+    [boundaries addObject:@(last.end)];
+
+  // Draw boundary labels, skipping overlaps with each other and duration label.
+  CGFloat lastLabelRight = -999;
+  static const CGFloat kLabelGap = 4.0;
+
+  for (NSNumber *bNum in boundaries) {
+    double frac = bNum.doubleValue;
+    CGFloat bx = trackX + frac * trackWidth;
+    NSString *label = _boundaryTimeLabel(frac, _effectDuration);
+    NSSize labelSize = [label sizeWithAttributes:dimAttrs];
+    CGFloat labelX = bx - labelSize.width / 2.0;
+    labelX = MAX(trackX, MIN(trackX + trackWidth - labelSize.width, labelX));
+
+    if (labelX < lastLabelRight + kLabelGap)
+      continue;
+
+    // Skip if this boundary label overlaps the hover duration label.
+    if (isHovered && labelX + labelSize.width + kLabelGap > durLabelLeft &&
+        labelX < durLabelRight + kLabelGap)
+      continue;
+
+    CGFloat labelY =
+        labelRowY + (kBoundaryLabelHeight - labelSize.height) / 2.0;
+    [label drawAtPoint:NSMakePoint(labelX, labelY) withAttributes:dimAttrs];
+    lastLabelRight = labelX + labelSize.width;
+  }
+
+  // Draw the hover duration label on top.
+  if (isHovered && durLabel)
+    [durLabel drawAtPoint:NSMakePoint(durX, durY) withAttributes:durAttrs];
+}
+
+- (double)_tickIntervalForPixelsPerSecond:(CGFloat)pps {
+  static const double candidates[] = {0.1,  0.25, 0.5,  1.0,  2.0,   5.0,
+                                      10.0, 15.0, 30.0, 60.0, 120.0, 300.0};
+  static const int count = sizeof(candidates) / sizeof(candidates[0]);
+  CGFloat minSpacing = 50.0;
+  for (int i = 0; i < count; i++) {
+    if (candidates[i] * pps >= minSpacing)
+      return candidates[i];
+  }
+  return candidates[count - 1];
+}
+
+static NSString *_timecodeLabel(double seconds) {
+  int totalSec = (int)seconds;
+  int m = totalSec / 60;
+  int s = totalSec % 60;
+  double frac = seconds - totalSec;
+  if (frac > 0.001 && seconds < 60)
+    return [NSString stringWithFormat:@"%d.%ds", s, (int)(frac * 10)];
+  if (m > 0)
+    return [NSString stringWithFormat:@"%d:%02d", m, s];
+  return [NSString stringWithFormat:@"%ds", s];
+}
+
+- (void)_renderRulerWithTrackX:(CGFloat)trackX
+                    trackWidth:(CGFloat)trackWidth
+                   totalHeight:(CGFloat)totalHeight {
+  if (_effectDuration <= 0 || trackWidth < 10)
+    return;
+
+  CGFloat rulerY = totalHeight - kBorderInset - kRulerHeight;
+
+  CGFloat pps = trackWidth / _effectDuration;
+  double interval = [self _tickIntervalForPixelsPerSecond:pps];
+
+  NSDictionary *attrs = @{
+    NSFontAttributeName : [NSFont systemFontOfSize:9.0
+                                            weight:NSFontWeightMedium],
+    NSForegroundColorAttributeName : [NSColor timelineLabel],
+  };
+
+  [[NSColor colorWithWhite:0.8 alpha:0.15] setStroke];
+  NSBezierPath *ticks = [NSBezierPath bezierPath];
+  ticks.lineWidth = 1.0;
+
+  double t = 0.0;
+  while (t <= _effectDuration + 0.001) {
+    CGFloat x = trackX + (t / _effectDuration) * trackWidth;
+    x = MAX(trackX, MIN(trackX + trackWidth, x));
+
+    [ticks moveToPoint:NSMakePoint(x, rulerY)];
+    [ticks lineToPoint:NSMakePoint(x, rulerY + kRulerHeight)];
+
+    NSString *label = _timecodeLabel(t);
+    NSSize labelSize = [label sizeWithAttributes:attrs];
+    CGFloat labelX = x + 3;
+    if (labelX + labelSize.width <= trackX + trackWidth) {
+      CGFloat labelY = rulerY + (kRulerHeight - labelSize.height) / 2.0;
+      [label drawAtPoint:NSMakePoint(labelX, labelY) withAttributes:attrs];
+    }
+
+    t += interval;
+  }
+
+  [ticks stroke];
+}
+
+/// Draws the slider-style knob (point down) at a given center-x and top-y.
+/// Flat edge at topY, point extends downward (lower Y = visually down in
+/// unflipped NSImage coords where Y=0 is bottom).
+static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
+  static const CGFloat w = 9.5;
+  static const CGFloat h = 10.0;
+  static const CGFloat cr = 1.5;
+  static const CGFloat pointRatio = 0.5;
+  static const CGFloat curveOff = 0.5;
+  static const CGFloat curveCtl = 1.0;
+  static const CGFloat sideRatio = 0.3;
+
+  CGFloat left = cx - w / 2.0;
+  CGFloat right = cx + w / 2.0;
+  CGFloat top = topY;
+  CGFloat bottom = topY - h;
+  CGFloat midX = cx;
+  CGFloat pointH = h * pointRatio;
+  CGFloat pointBaseY = top - (h - pointH);
+
+  NSBezierPath *path = [NSBezierPath bezierPath];
+
+  // Flat top edge with rounded corners.
+  [path moveToPoint:NSMakePoint(left + cr, top)];
+  [path lineToPoint:NSMakePoint(right - cr, top)];
+  [path appendBezierPathWithArcFromPoint:NSMakePoint(right, top)
+                                 toPoint:NSMakePoint(right, top - cr)
+                                  radius:cr];
+  // Right side down to point base.
+  [path lineToPoint:NSMakePoint(right, pointBaseY)];
+  // Curve to point (bottom center).
+  [path curveToPoint:NSMakePoint(midX, bottom)
+       controlPoint1:NSMakePoint(right - curveOff,
+                                 pointBaseY - pointH * sideRatio)
+       controlPoint2:NSMakePoint(midX + curveCtl, bottom + curveOff)];
+  // Curve back up left side.
+  [path curveToPoint:NSMakePoint(left, pointBaseY)
+       controlPoint1:NSMakePoint(midX - curveCtl, bottom + curveOff)
+       controlPoint2:NSMakePoint(left + curveOff,
+                                 pointBaseY - pointH * sideRatio)];
+  // Left side up to top-left corner.
+  [path lineToPoint:NSMakePoint(left, top - cr)];
+  [path appendBezierPathWithArcFromPoint:NSMakePoint(left, top)
+                                 toPoint:NSMakePoint(left + cr, top)
+                                  radius:cr];
+  [path closePath];
+
+  [color setFill];
+  [path fill];
+  [[NSColor colorWithWhite:0.08 alpha:1.0] setStroke];
+  path.lineWidth = 0.5;
+  [path stroke];
+}
+
+- (void)_renderPlayheadWithTrackX:(CGFloat)trackX
+                       trackWidth:(CGFloat)trackWidth
+                      totalHeight:(CGFloat)totalHeight {
+  if (_playheadFraction < 0 || _playheadFraction > 1 || trackWidth < 1)
+    return;
+
+  NSColor *playheadColor = [NSColor colorWithWhite:0.8 alpha:1.0];
+  CGFloat x = trackX + _playheadFraction * trackWidth;
+  CGFloat lanesBottom = kBorderInset;
+  CGFloat rulerTop = totalHeight - kBorderInset;
+
+  [playheadColor setStroke];
+  NSBezierPath *line = [NSBezierPath bezierPath];
+  line.lineWidth = 1.0;
+  [line moveToPoint:NSMakePoint(x, lanesBottom)];
+  [line lineToPoint:NSMakePoint(x, rulerTop)];
+  [line stroke];
+
+  // Knob in ruler area, flat edge at ruler top, point down into lanes.
+  _drawPlayheadKnob(x, rulerTop, playheadColor);
 }
 
 #pragma mark - Mouse interaction
@@ -541,10 +820,13 @@ static double _segAvgValue(KKTimingSegment *seg) {
       }
     }
 
-    // Double-click to add segment.
+    // Double-click to add segment (snap to playhead if close).
     if (event.clickCount == 2) {
       double clickFrac = (loc.x - trackX) / trackWidth;
       clickFrac = MAX(0.0, MIN(1.0, clickFrac));
+      CGFloat playheadX = trackX + _playheadFraction * trackWidth;
+      if (fabs(loc.x - playheadX) < kPlayheadSnapPx)
+        clickFrac = _playheadFraction;
       if (_onSegmentAdded)
         _onSegmentAdded(laneIdx, clickFrac);
       return;
@@ -563,9 +845,8 @@ static double _segAvgValue(KKTimingSegment *seg) {
             _onSegmentRemoved(laneIdx, segIdx);
           return;
         }
-        // Select and set up move-drag.
-        if (_onSegmentSelected)
-          _onSegmentSelected(laneIdx, segIdx);
+        // Set up move-drag state before firing callback (callback may
+        // replace _lanes via setLanes:, so _dragMoving must guard first).
         _dragMoving = YES;
         _dragLaneIdx = laneIdx;
         _dragSegIdx = segIdx;
@@ -574,6 +855,11 @@ static double _segAvgValue(KKTimingSegment *seg) {
         _dragMoveStartFrac = (loc.x - trackX) / trackWidth;
         _dragMoveOrigStart = seg.start;
         _dragMoveOrigEnd = seg.end;
+        _hoverSegLaneIdx = -1;
+        _hoverSegSegIdx = -1;
+        if (_onSegmentSelected)
+          _onSegmentSelected(laneIdx, segIdx);
+        [self renderLanes];
         return;
       }
     }

@@ -80,6 +80,21 @@ static float paddingForRadius(double radius, float minDim) {
                   atTime:(CMTime)time {
   [KKPlugin multiStageFlushPendingLanes];
 
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  if (timingAPI) {
+    CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
+    [timingAPI startTimeForEffect:&effectStart];
+    [timingAPI durationTimeForEffect:&effectDuration];
+    double durSec = CMTimeGetSeconds(effectDuration);
+    if (durSec > 0) {
+      double startSec = CMTimeGetSeconds(effectStart);
+      double nowSec = CMTimeGetSeconds(time);
+      double frac = (nowSec - startSec) / durSec;
+      [KKPlugin multiStageUpdatePlayhead:frac duration:durSec];
+    }
+  }
+
   [self encodeRenderCommandsForDestinationImage:destinationImage
                                  canvasPosition:CGPointZero
                                clearDestination:YES
