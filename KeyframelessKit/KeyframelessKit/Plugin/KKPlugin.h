@@ -158,6 +158,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// This is a class method since OSC objects don't hold a plugin reference.
 + (void)multiStageFlushPendingLanes;
 
+/// Call from drawOSC to update the sequencer playhead and duration.
+/// Fraction is 0–1 of clip duration, duration is in seconds.
++ (void)multiStageUpdatePlayhead:(double)fraction duration:(double)duration;
+
 /// Pairs of parameter IDs that maintain their aspect ratio when the user
 /// holds Cmd while dragging either slider. Set before first use (e.g. in
 /// addParametersWithError:). Each element is @[@(paramA), @(paramB)].

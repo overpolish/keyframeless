@@ -254,18 +254,7 @@ extern BOOL KKMultiStageSelectionInProgress;
   return header;
 }
 
-static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
-  CGFloat h = 0;
-  for (KKTimingSlot *s in slots)
-    h += s.height;
-  return h;
-}
-
 - (NSView *)_createTimingGraphView {
-  // pill(24) + ticks(16) + spacing(8) + graph(60) + labels(20) + slider(28) +
-  // ticks(16)
-  static const CGFloat kBaseHeight = 170.0;
-
   NSArray<KKTimingSlot *> *globalSlots = [self timingGlobalSlots];
   NSArray<KKTimingSlot *> *inSlots =
       [self timingSlotsForSection:KKTimingGraphSectionIn];
@@ -274,36 +263,13 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
   NSArray<KKTimingSlot *> *outSlots =
       [self timingSlotsForSection:KKTimingGraphSectionOut];
 
-  CGFloat globalHeight = KKTotalSlotHeight(globalSlots);
-  NSArray<KKAnimatableProperty *> *animPropsForHeight =
-      [self animatableProperties];
-  BOOL hasAnimProps = animPropsForHeight.count > 0;
-  CGFloat animPropH =
-      hasAnimProps
-          ? (animPropsForHeight.count > 5 ? 18.0 * 2 + KKSpacingXS : 18.0)
-          : 0;
-  CGFloat propHeight =
-      (hasAnimProps || [self holdPropertyView])
-          ? MAX(hasAnimProps ? animPropH : [self holdPropertyViewHeight],
-                14.0) +
-                KKSpacingSM
-          : 0;
-  CGFloat maxSectionHeight;
-  if (hasAnimProps) {
-    maxSectionHeight = MAX(KKTotalSlotHeight(inSlots) + propHeight,
-                           MAX(KKTotalSlotHeight(holdSlots) + propHeight,
-                               KKTotalSlotHeight(outSlots) + propHeight));
-  } else {
-    maxSectionHeight = MAX(KKTotalSlotHeight(inSlots),
-                           MAX(KKTotalSlotHeight(holdSlots) + propHeight,
-                               KKTotalSlotHeight(outSlots)));
-  }
-  CGFloat slotHeight = globalHeight + maxSectionHeight;
-  CGFloat totalHeight =
-      kBaseHeight + (slotHeight > 0 ? KKPaddingSM + slotHeight : 0);
+  NSArray<KKAnimatableProperty *> *seqProps = [self animatableProperties];
+  CGFloat seqHeight = 10.0 + 10.0 + seqProps.count * (30.0 + 10.0) +
+                      (seqProps.count - 1) * 2.0 + 2 * KKPaddingSM;
+  CGFloat wrapperHeight = seqHeight + KKPaddingLG;
 
   NSView *wrapper =
-      [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, totalHeight)];
+      [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, wrapperHeight)];
   wrapper.autoresizingMask = NSViewWidthSizable;
 
   KKTimingGraphView *graphView =
@@ -513,9 +479,6 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
   self.timingGraph = graphView;
 
   // Stage sequencer — sits below graph, hidden until multi-stage is enabled.
-  NSArray<KKAnimatableProperty *> *seqProps = [self animatableProperties];
-  CGFloat seqHeight =
-      seqProps.count * 30.0 + (seqProps.count - 1) * 2.0 + 2 * KKPaddingSM;
   KKStageSequencerView *seqView =
       [[KKStageSequencerView alloc] initWithFrame:NSZeroRect];
   seqView.translatesAutoresizingMaskIntoConstraints = NO;
@@ -855,6 +818,20 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
       KKMultiStageLanesSnapshot = [lanes copy];
       seqView.lanes = lanes;
     }
+
+    id<FxTimingAPI_v4> timingAPI =
+        [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+    if (timingAPI) {
+      CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
+      [timingAPI startTimeForEffect:&effectStart];
+      [timingAPI durationTimeForEffect:&effectDuration];
+      double durSec = CMTimeGetSeconds(effectDuration);
+      seqView.effectDuration = durSec;
+      double startSec = CMTimeGetSeconds(effectStart);
+      double nowSec = CMTimeGetSeconds([actionAPI currentTime]);
+      if (durSec > 0)
+        seqView.playheadFraction = (nowSec - startSec) / durSec;
+    }
   }
 
   CMTime t = [actionAPI currentTime];
@@ -903,6 +880,21 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
       if (lanes) {
         KKMultiStageLanesSnapshot = [lanes copy];
         seq.lanes = lanes;
+      }
+
+      id<FxTimingAPI_v4> timingAPI =
+          [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+      if (timingAPI) {
+        CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
+        [timingAPI startTimeForEffect:&effectStart];
+        [timingAPI durationTimeForEffect:&effectDuration];
+        double durSec = CMTimeGetSeconds(effectDuration);
+        seq.effectDuration = durSec;
+
+        double startSec = CMTimeGetSeconds(effectStart);
+        double nowSec = CMTimeGetSeconds(t);
+        if (durSec > 0)
+          seq.playheadFraction = (nowSec - startSec) / durSec;
       }
     }
   }

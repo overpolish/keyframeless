@@ -18,6 +18,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Per-lane selection is read from each lane's selectedSegment property.
 @property(nonatomic, copy) NSArray<KKTimingLane *> *lanes;
 
+/// Effect duration in seconds (for timecode ruler labels).
+@property(nonatomic, assign) double effectDuration;
+
+/// Current playhead position as a fraction of clip duration (0–1).
+@property(nonatomic, assign) double playheadFraction;
+
 /// Callbacks.
 @property(nonatomic, copy, nullable) void (^onSegmentSelected)
     (NSInteger laneIndex, NSInteger segmentIndex);
