@@ -38,6 +38,10 @@ static const NSInteger kCurveSegments = 40;
   CGFloat _dragMoveStartFrac;
   double _dragMoveOrigStart;
   double _dragMoveOrigEnd;
+  // Drag state (lane move — Option+drag).
+  BOOL _dragLaneMoving;
+  CGFloat _dragLaneMoveStartFrac;
+  NSArray<KKTimingSegment *> *_dragLaneMoveOrigSegs;
   // Hover state.
   NSInteger _hoverLaneIdx;
   NSInteger _hoverSegIdx;
@@ -77,7 +81,7 @@ static const NSInteger kCurveSegments = 40;
 
 - (void)setLanes:(NSArray<KKTimingLane *> *)lanes {
   _lanes = [lanes copy];
-  if (!_dragging && !_dragMoving)
+  if (!_dragging && !_dragMoving && !_dragLaneMoving)
     [self renderLanes];
 }
 
@@ -863,6 +867,22 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
             _onSegmentRemoved(laneIdx, segIdx);
           return;
         }
+        // Option+drag moves the entire lane.
+        if (event.modifierFlags & NSEventModifierFlagOption) {
+          _dragLaneMoving = YES;
+          _dragLaneIdx = laneIdx;
+          _dragTrackX = trackX;
+          _dragTrackWidth = trackWidth;
+          _dragLaneMoveStartFrac = (loc.x - trackX) / trackWidth;
+          NSMutableArray *origSegs =
+              [NSMutableArray arrayWithCapacity:lane.segments.count];
+          for (KKTimingSegment *s in lane.segments)
+            [origSegs addObject:[s copy]];
+          _dragLaneMoveOrigSegs = origSegs;
+          _hoverSegLaneIdx = -1;
+          _hoverSegSegIdx = -1;
+          return;
+        }
         // Set up move-drag state before firing callback (callback may
         // replace _lanes via setLanes:, so _dragMoving must guard first).
         _dragMoving = YES;
@@ -898,6 +918,38 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
     [self renderLanes];
     if (_onPlayheadScrub)
       _onPlayheadScrub(frac);
+    return;
+  }
+
+  if (_dragLaneMoving) {
+    [[NSCursor closedHandCursor] set];
+    NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+    double newFrac = (loc.x - _dragTrackX) / _dragTrackWidth;
+    newFrac = MAX(0.0, MIN(1.0, newFrac));
+    double delta = newFrac - _dragLaneMoveStartFrac;
+
+    // Clamp delta so no segment goes out of 0–1.
+    double firstStart = _dragLaneMoveOrigSegs.firstObject.start;
+    double lastEnd = _dragLaneMoveOrigSegs.lastObject.end;
+    if (firstStart + delta < 0)
+      delta = -firstStart;
+    if (lastEnd + delta > 1.0)
+      delta = 1.0 - lastEnd;
+
+    NSMutableArray<KKTimingLane *> *lanes = [_lanes mutableCopy];
+    KKTimingLane *lane = [lanes[_dragLaneIdx] copy];
+    NSMutableArray<KKTimingSegment *> *segs =
+        [NSMutableArray arrayWithCapacity:_dragLaneMoveOrigSegs.count];
+    for (KKTimingSegment *orig in _dragLaneMoveOrigSegs) {
+      KKTimingSegment *s = [orig copy];
+      s.start = orig.start + delta;
+      s.end = orig.end + delta;
+      [segs addObject:s];
+    }
+    lane.segments = segs;
+    lanes[_dragLaneIdx] = lane;
+    _lanes = lanes;
+    [self renderLanes];
     return;
   }
 
@@ -1022,6 +1074,14 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
 - (void)mouseUp:(NSEvent *)event {
   if (_scrubbingRuler) {
     _scrubbingRuler = NO;
+    return;
+  }
+  if (_dragLaneMoving) {
+    _dragLaneMoving = NO;
+    _dragLaneMoveOrigSegs = nil;
+    [[NSCursor arrowCursor] set];
+    if ((NSUInteger)_dragLaneIdx < _lanes.count && _onLaneChanged)
+      _onLaneChanged(_dragLaneIdx, _lanes[_dragLaneIdx]);
     return;
   }
   if (_dragMoving) {
