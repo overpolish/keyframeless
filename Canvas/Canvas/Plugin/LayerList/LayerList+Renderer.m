@@ -295,6 +295,52 @@ static void updateRow(KKLayerRow *row, NSUInteger index, BOOL isGroup,
   row.menu = buildContextMenu(index, isGroup, depth, multiSelect, target);
 }
 
+static void syncStyleView(NSView *view, NSInteger snapshotValue) {
+  if (!view)
+    return;
+  if (snapshotValue >= 0)
+    [(id)view setSelectedIndex:snapshotValue];
+  [view setNeedsLayout:YES];
+  [view setNeedsDisplay:YES];
+}
+
+static void syncStyleViews(KKLayerInstanceState *st,
+                           KKCanvasStoreSnapshot *snap) {
+  syncStyleView(st.capStyleView, snap.selectedLineCap);
+  syncStyleView(st.joinStyleView, snap.selectedLineJoin);
+  syncStyleView(st.strokeStyleView, snap.selectedStrokeStyle);
+  syncStyleView(st.startMarkerView, snap.selectedStartMarker);
+  syncStyleView(st.endMarkerView, snap.selectedEndMarker);
+  syncStyleView(st.fillStyleView, snap.selectedFillStyle);
+}
+
+static void syncGroupHeaders(KKLayerInstanceState *st,
+                             KKCanvasStoreSnapshot *snap,
+                             BOOL selectedIsImage) {
+  KKCustomGroupHeaderView *strokeHeader = st.strokeGroupHeader;
+  if (strokeHeader) {
+    strokeHeader.isInteractive = YES;
+    strokeHeader.isEnabled = snap.strokeEnabled;
+    strokeHeader.isExpanded = snap.strokeExpanded;
+    strokeHeader.statusText = nil;
+  }
+  KKCustomGroupHeaderView *fillHeader = st.fillGroupHeader;
+  if (fillHeader) {
+    fillHeader.isInteractive = YES;
+    fillHeader.isEnabled = snap.fillEnabled;
+    fillHeader.isExpanded = snap.fillExpanded;
+    fillHeader.statusText = nil;
+  }
+  KKCustomGroupHeaderView *sketchHeader = st.sketchGroupHeader;
+  if (sketchHeader) {
+    sketchHeader.isInteractive = !selectedIsImage;
+    sketchHeader.isEnabled = selectedIsImage ? NO : snap.sketchEnabled;
+    sketchHeader.isExpanded = selectedIsImage ? NO : snap.sketchExpanded;
+    sketchHeader.statusText =
+        selectedIsImage ? @"Not available for images" : nil;
+  }
+}
+
 void KKCanvasRefreshLayerListFromSnapshot(KKCanvasStoreSnapshot *snap,
                                           KKLayerInstanceState *st,
                                           id<PROAPIAccessing> api) {
@@ -446,72 +492,6 @@ void KKCanvasRefreshLayerListFromSnapshot(KKCanvasStoreSnapshot *snap,
   }
   KKParamSyncApplyFromSnapshot(snap, syncPath, st.store.uuid, api);
 
-  KKCapStyleView *capView = st.capStyleView;
-  if (capView) {
-    if (snap.selectedLineCap >= 0)
-      capView.selectedIndex = snap.selectedLineCap;
-    [capView setNeedsLayout:YES];
-    [capView setNeedsDisplay:YES];
-  }
-  KKJoinStyleView *joinView = st.joinStyleView;
-  if (joinView) {
-    if (snap.selectedLineJoin >= 0)
-      joinView.selectedIndex = snap.selectedLineJoin;
-    [joinView setNeedsLayout:YES];
-    [joinView setNeedsDisplay:YES];
-  }
-  KKStrokeStyleView *strokeStyleView = st.strokeStyleView;
-  if (strokeStyleView) {
-    if (snap.selectedStrokeStyle >= 0)
-      strokeStyleView.selectedIndex = snap.selectedStrokeStyle;
-    [strokeStyleView setNeedsLayout:YES];
-    [strokeStyleView setNeedsDisplay:YES];
-  }
-  KKMarkerStyleView *startMarkerView = st.startMarkerView;
-  if (startMarkerView) {
-    if (snap.selectedStartMarker >= 0)
-      startMarkerView.selectedIndex = snap.selectedStartMarker;
-    [startMarkerView setNeedsLayout:YES];
-    [startMarkerView setNeedsDisplay:YES];
-  }
-  KKMarkerStyleView *endMarkerView = st.endMarkerView;
-  if (endMarkerView) {
-    if (snap.selectedEndMarker >= 0)
-      endMarkerView.selectedIndex = snap.selectedEndMarker;
-    [endMarkerView setNeedsLayout:YES];
-    [endMarkerView setNeedsDisplay:YES];
-  }
-  KKFillStyleView *fillStyleView = st.fillStyleView;
-  if (fillStyleView) {
-    if (snap.selectedFillStyle >= 0)
-      fillStyleView.selectedIndex = snap.selectedFillStyle;
-    [fillStyleView setNeedsLayout:YES];
-    [fillStyleView setNeedsDisplay:YES];
-  }
-
-  BOOL selectedIsImage = syncPath.isImage;
-  NSString *sketchImageStatus =
-      selectedIsImage ? @"Not available for images" : nil;
-
-  KKCustomGroupHeaderView *strokeHeader = st.strokeGroupHeader;
-  if (strokeHeader) {
-    strokeHeader.isInteractive = YES;
-    strokeHeader.isEnabled = snap.strokeEnabled;
-    strokeHeader.isExpanded = snap.strokeExpanded;
-    strokeHeader.statusText = nil;
-  }
-  KKCustomGroupHeaderView *fillHeader = st.fillGroupHeader;
-  if (fillHeader) {
-    fillHeader.isInteractive = YES;
-    fillHeader.isEnabled = snap.fillEnabled;
-    fillHeader.isExpanded = snap.fillExpanded;
-    fillHeader.statusText = nil;
-  }
-  KKCustomGroupHeaderView *sketchHeader = st.sketchGroupHeader;
-  if (sketchHeader) {
-    sketchHeader.isInteractive = !selectedIsImage;
-    sketchHeader.isEnabled = selectedIsImage ? NO : snap.sketchEnabled;
-    sketchHeader.isExpanded = selectedIsImage ? NO : snap.sketchExpanded;
-    sketchHeader.statusText = sketchImageStatus;
-  }
+  syncStyleViews(st, snap);
+  syncGroupHeaders(st, snap, syncPath.isImage);
 }

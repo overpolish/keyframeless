@@ -115,6 +115,104 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
   return (*pluginState != nil);
 }
 
+- (void)renderPath:(KKBezierPath *)path
+          originalPath:(KKBezierPath *)orig
+                target:(id<MTLTexture>)target
+           outputWidth:(float)outputWidth
+          outputHeight:(float)outputHeight
+                device:(id<MTLDevice>)device
+         commandBuffer:(id<MTLCommandBuffer>)commandBuffer
+          viewportSize:(simd_uint2)viewportSize
+               imagePS:(id<MTLRenderPipelineState>)imagePS
+              strokePS:(id<MTLRenderPipelineState>)strokePS
+         fillStencilPS:(id<MTLRenderPipelineState>)fillStencilPS
+           fillColorPS:(id<MTLRenderPipelineState>)fillColorPS
+       strokeStencilPS:(id<MTLRenderPipelineState>)strokeStencilPS
+    fillStencilDSState:(id<MTLDepthStencilState>)fillStencilDSState
+      fillColorDSState:(id<MTLDepthStencilState>)fillColorDSState
+        stencilTexture:(id<MTLTexture>)stencilTexture {
+  if (path.isImage && path.imagePath && imagePS) {
+    id<MTLTexture> imgTex = KKGetOrLoadImageTexture(path.imagePath, device);
+    if (imgTex) {
+      KKBezierPoint bl = [path pointAtIndex:0];
+      KKBezierPoint br = [path pointAtIndex:1];
+      KKBezierPoint tr = [path pointAtIndex:2];
+      KKBezierPoint tl = [path pointAtIndex:3];
+      float hw = outputWidth / 2.0f;
+      float hh = outputHeight / 2.0f;
+
+      id<MTLTexture> drawTex =
+          KKProcessImageWithEffects(imgTex, path, device, commandBuffer);
+
+      float scaleX = (float)drawTex.width / (float)imgTex.width;
+      float scaleY = (float)drawTex.height / (float)imgTex.height;
+      float cx = (bl.x + tr.x) * 0.5f;
+      float cy = (bl.y + tr.y) * 0.5f;
+
+      CanvasFillVertex quadVerts[4] = {
+          {{(cx + (bl.x - cx) * scaleX) * outputWidth - hw,
+            (1.0f - (cy + (bl.y - cy) * scaleY)) * outputHeight - hh}},
+          {{(cx + (br.x - cx) * scaleX) * outputWidth - hw,
+            (1.0f - (cy + (br.y - cy) * scaleY)) * outputHeight - hh}},
+          {{(cx + (tl.x - cx) * scaleX) * outputWidth - hw,
+            (1.0f - (cy + (tl.y - cy) * scaleY)) * outputHeight - hh}},
+          {{(cx + (tr.x - cx) * scaleX) * outputWidth - hw,
+            (1.0f - (cy + (tr.y - cy) * scaleY)) * outputHeight - hh}},
+      };
+
+      float opacity = path.opacity;
+      MTLRenderPassDescriptor *rpd =
+          [MTLRenderPassDescriptor renderPassDescriptor];
+      rpd.colorAttachments[0].texture = target;
+      rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+      rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+
+      id<MTLRenderCommandEncoder> enc =
+          [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+      [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1, 1}];
+      [enc setRenderPipelineState:imagePS];
+      [enc setVertexBytes:quadVerts length:sizeof(quadVerts) atIndex:0];
+      [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+      [enc setFragmentTexture:drawTex atIndex:0];
+      [enc setFragmentBytes:&opacity length:sizeof(opacity) atIndex:0];
+      [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
+              vertexStart:0
+              vertexCount:4];
+      [enc endEncoding];
+    }
+  } else if (path.fillEnabled && orig.count >= 2 && fillStencilPS &&
+             fillColorPS && stencilTexture) {
+    if (path.sketchFillStyle > 0) {
+      KKBezierPath *clipPath = orig;
+      if (orig.sketchEnabled && orig.sketchRoughness > 0.0001f) {
+        clipPath = KKSketchPath(orig, orig.sketchRoughness, orig.sketchBowing,
+                                orig.sketchSeed, 1, outputWidth, outputHeight);
+      }
+      KKRenderFillStencilOnly(clipPath, outputWidth, outputHeight, device,
+                              commandBuffer, target, stencilTexture,
+                              fillStencilPS, fillStencilDSState, viewportSize);
+      KKRenderSketchFillForPath(
+          orig, outputWidth, outputHeight, device, commandBuffer, target,
+          stencilTexture, strokeStencilPS, fillColorDSState, viewportSize, YES);
+    } else {
+      KKBezierPath *fillPath = orig;
+      if (orig.sketchEnabled && orig.sketchRoughness > 0.0001f) {
+        fillPath = KKSketchPath(orig, orig.sketchRoughness, orig.sketchBowing,
+                                orig.sketchSeed, 1, outputWidth, outputHeight);
+      }
+      KKRenderFillForPath(fillPath, outputWidth, outputHeight, device,
+                          commandBuffer, target, stencilTexture, fillStencilPS,
+                          fillColorPS, fillStencilDSState, fillColorDSState,
+                          viewportSize);
+    }
+  }
+
+  if (!path.isImage && path.strokeEnabled) {
+    KKRenderStrokeForPath(path, outputWidth, outputHeight, device,
+                          commandBuffer, target, strokePS, viewportSize);
+  }
+}
+
 - (BOOL)renderDestinationImage:(FxImageTile *)destinationImage
                   sourceImages:(NSArray<FxImageTile *> *)sourceImages
                    pluginState:(NSData *)pluginState
@@ -472,96 +570,22 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
           [clearEnc endEncoding];
         }
 
-        if (path.isImage && path.imagePath && imagePS) {
-          id<MTLTexture> imgTex =
-              KKGetOrLoadImageTexture(path.imagePath, device);
-          if (imgTex) {
-            KKBezierPoint bl = [path pointAtIndex:0];
-            KKBezierPoint br = [path pointAtIndex:1];
-            KKBezierPoint tr = [path pointAtIndex:2];
-            KKBezierPoint tl = [path pointAtIndex:3];
-            float hw = outputWidth / 2.0f;
-            float hh = outputHeight / 2.0f;
-
-            id<MTLTexture> drawTex =
-                KKProcessImageWithEffects(imgTex, path, device, commandBuffer);
-
-            float scaleX = (float)drawTex.width / (float)imgTex.width;
-            float scaleY = (float)drawTex.height / (float)imgTex.height;
-            float cx = (bl.x + tr.x) * 0.5f;
-            float cy = (bl.y + tr.y) * 0.5f;
-
-            CanvasFillVertex quadVerts[4] = {
-                {{(cx + (bl.x - cx) * scaleX) * outputWidth - hw,
-                  (1.0f - (cy + (bl.y - cy) * scaleY)) * outputHeight - hh}},
-                {{(cx + (br.x - cx) * scaleX) * outputWidth - hw,
-                  (1.0f - (cy + (br.y - cy) * scaleY)) * outputHeight - hh}},
-                {{(cx + (tl.x - cx) * scaleX) * outputWidth - hw,
-                  (1.0f - (cy + (tl.y - cy) * scaleY)) * outputHeight - hh}},
-                {{(cx + (tr.x - cx) * scaleX) * outputWidth - hw,
-                  (1.0f - (cy + (tr.y - cy) * scaleY)) * outputHeight - hh}},
-            };
-
-            float opacity = path.opacity;
-            MTLRenderPassDescriptor *rpd =
-                [MTLRenderPassDescriptor renderPassDescriptor];
-            rpd.colorAttachments[0].texture = target;
-            rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
-            rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
-
-            id<MTLRenderCommandEncoder> enc =
-                [commandBuffer renderCommandEncoderWithDescriptor:rpd];
-            [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1,
-                                           1}];
-            [enc setRenderPipelineState:imagePS];
-            [enc setVertexBytes:quadVerts length:sizeof(quadVerts) atIndex:0];
-            [enc setVertexBytes:&viewportSize
-                         length:sizeof(viewportSize)
-                        atIndex:1];
-            [enc setFragmentTexture:drawTex atIndex:0];
-            [enc setFragmentBytes:&opacity length:sizeof(opacity) atIndex:0];
-            [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                    vertexStart:0
-                    vertexCount:4];
-            [enc endEncoding];
-          }
-        } else if (path.fillEnabled && orig.count >= 2 && fillStencilPS &&
-                   fillColorPS && stencilTexture) {
-          if (path.sketchFillStyle > 0) {
-            // Always clip hachure fills — use the sketched outline when sketch
-            // is enabled so fill stays within the bowed/jittered shape.
-            KKBezierPath *clipPath = orig;
-            if (orig.sketchEnabled && orig.sketchRoughness > 0.0001f) {
-              clipPath =
-                  KKSketchPath(orig, orig.sketchRoughness, orig.sketchBowing,
-                               orig.sketchSeed, 1, outputWidth, outputHeight);
-            }
-            KKRenderFillStencilOnly(clipPath, outputWidth, outputHeight, device,
-                                    commandBuffer, target, stencilTexture,
-                                    fillStencilPS, fillStencilDSState,
-                                    viewportSize);
-            KKRenderSketchFillForPath(orig, outputWidth, outputHeight, device,
-                                      commandBuffer, target, stencilTexture,
-                                      strokeStencilPS, fillColorDSState,
-                                      viewportSize, YES);
-          } else {
-            KKBezierPath *fillPath = orig;
-            if (orig.sketchEnabled && orig.sketchRoughness > 0.0001f) {
-              fillPath =
-                  KKSketchPath(orig, orig.sketchRoughness, orig.sketchBowing,
-                               orig.sketchSeed, 1, outputWidth, outputHeight);
-            }
-            KKRenderFillForPath(fillPath, outputWidth, outputHeight, device,
-                                commandBuffer, target, stencilTexture,
-                                fillStencilPS, fillColorPS, fillStencilDSState,
-                                fillColorDSState, viewportSize);
-          }
-        }
-
-        if (!path.isImage && path.strokeEnabled) {
-          KKRenderStrokeForPath(path, outputWidth, outputHeight, device,
-                                commandBuffer, target, strokePS, viewportSize);
-        }
+        [self renderPath:path
+                  originalPath:orig
+                        target:target
+                   outputWidth:outputWidth
+                  outputHeight:outputHeight
+                        device:device
+                 commandBuffer:commandBuffer
+                  viewportSize:viewportSize
+                       imagePS:imagePS
+                      strokePS:strokePS
+                 fillStencilPS:fillStencilPS
+                   fillColorPS:fillColorPS
+               strokeStencilPS:strokeStencilPS
+            fillStencilDSState:fillStencilDSState
+              fillColorDSState:fillColorDSState
+                stencilTexture:stencilTexture];
 
         if (needsIntermediate) {
           path.opacity = pathOpacity;
