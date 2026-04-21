@@ -507,6 +507,8 @@ static const FxParameterFlags kCustomUIDisabled =
     }
     if (!active && frac >= segments.lastObject.end)
       active = segments.lastObject;
+    if (!active && frac < segments.firstObject.start)
+      active = segments.firstObject;
 
     if (!active)
       continue;
