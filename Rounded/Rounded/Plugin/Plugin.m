@@ -39,6 +39,7 @@
                    error:(NSError **)error {
   [self updateTimingParameterVisibility];
   [self updateCropParameterVisibility];
+  [self multiStageHandleParameterChanged:parameterID atTime:time];
   return YES;
 }
 

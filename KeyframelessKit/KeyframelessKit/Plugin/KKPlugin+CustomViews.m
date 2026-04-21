@@ -3,14 +3,22 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#import "../KKLog.h"
 #import "../Math/KKEasing.h"
+#import "../Math/KKTimingStage.h"
 #import "../Style/KKTokens.h"
 #import "../Views/KKAlertView.h"
 #import "../Views/KKCustomGroupHeaderView.h"
 #import "../Views/KKSeparatorView.h"
-#import "../Views/KKTimingGraphView.h"
+#import "../Views/KKStageSequencerView.h"
+
+extern NSArray<KKTimingLane *> *KKMultiStageLanesSnapshot;
+extern NSArray<KKTimingLane *> *KKMultiStagePendingLanes;
+extern void *KKMultiStageSequencerView;
+extern BOOL KKMultiStageSelectionInProgress;
 #import "../Views/KKAnimatableProperty.h"
 #import "../Views/KKPillToggleRowView.h"
+#import "../Views/KKTimingGraphView.h"
 #import "../Views/KKTimingSlot.h"
 #import "../Views/KKUpdateBannerView.h"
 #import "KKConstants.h"
@@ -96,13 +104,12 @@
   if (parameterID == kKKParamUpdateBanner)
     return [[KKUpdateBannerView alloc] init];
 
-
   if (parameterID == kKKParamColorGroup)
     return [self
         createGroupHeaderWithTitle:@"Color Style"
                               icon:[NSImage
                                        imageWithSystemSymbolName:@"paintpalette"
-                                       accessibilityDescription:nil]
+                                        accessibilityDescription:nil]
                        parameterID:parameterID
                    expandedParamID:kKKParamColorExpanded];
 
@@ -152,8 +159,8 @@
                                                 icon:icon
                                        showsCheckbox:NO];
 
-  id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
-      apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actionAPI startAction:self];
 
   BOOL expanded = NO;
@@ -271,26 +278,25 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
   NSArray<KKAnimatableProperty *> *animPropsForHeight =
       [self animatableProperties];
   BOOL hasAnimProps = animPropsForHeight.count > 0;
-  CGFloat animPropH = hasAnimProps
-                          ? (animPropsForHeight.count > 5 ? 18.0 * 2 + KKSpacingXS
-                                                          : 18.0)
-                          : 0;
+  CGFloat animPropH =
+      hasAnimProps
+          ? (animPropsForHeight.count > 5 ? 18.0 * 2 + KKSpacingXS : 18.0)
+          : 0;
   CGFloat propHeight =
       (hasAnimProps || [self holdPropertyView])
-          ? MAX(hasAnimProps ? animPropH : [self holdPropertyViewHeight], 14.0) +
+          ? MAX(hasAnimProps ? animPropH : [self holdPropertyViewHeight],
+                14.0) +
                 KKSpacingSM
           : 0;
   CGFloat maxSectionHeight;
   if (hasAnimProps) {
-    maxSectionHeight =
-        MAX(KKTotalSlotHeight(inSlots) + propHeight,
-            MAX(KKTotalSlotHeight(holdSlots) + propHeight,
-                KKTotalSlotHeight(outSlots) + propHeight));
+    maxSectionHeight = MAX(KKTotalSlotHeight(inSlots) + propHeight,
+                           MAX(KKTotalSlotHeight(holdSlots) + propHeight,
+                               KKTotalSlotHeight(outSlots) + propHeight));
   } else {
-    maxSectionHeight =
-        MAX(KKTotalSlotHeight(inSlots),
-            MAX(KKTotalSlotHeight(holdSlots) + propHeight,
-                KKTotalSlotHeight(outSlots)));
+    maxSectionHeight = MAX(KKTotalSlotHeight(inSlots),
+                           MAX(KKTotalSlotHeight(holdSlots) + propHeight,
+                               KKTotalSlotHeight(outSlots)));
   }
   CGFloat slotHeight = globalHeight + maxSectionHeight;
   CGFloat totalHeight =
@@ -405,8 +411,8 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
 
     if (twoRows) {
       NSArray *labels1 = [labels subarrayWithRange:NSMakeRange(0, splitAt)];
-      NSArray *labels2 =
-          [labels subarrayWithRange:NSMakeRange(splitAt, animProps.count - splitAt)];
+      NSArray *labels2 = [labels
+          subarrayWithRange:NSMakeRange(splitAt, animProps.count - splitAt)];
       row1 = [[KKPillToggleRowView alloc] initWithLabels:labels1];
       row2 = [[KKPillToggleRowView alloc] initWithLabels:labels2];
       row1.autoresizingMask = NSViewWidthSizable;
@@ -452,7 +458,9 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
       [actAPI startAction:strongSelf];
       id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
           apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      [setAPI setBoolValue:isOn toParameter:paramID atTime:[actAPI currentTime]];
+      [setAPI setBoolValue:isOn
+               toParameter:paramID
+                    atTime:[actAPI currentTime]];
       [actAPI endAction:strongSelf];
     };
     row1.onToggled = ^(NSInteger index, BOOL isOn) {
@@ -504,7 +512,351 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
 
   self.timingGraph = graphView;
 
+  // Stage sequencer — sits below graph, hidden until multi-stage is enabled.
+  NSArray<KKAnimatableProperty *> *seqProps = [self animatableProperties];
+  CGFloat seqHeight =
+      seqProps.count * 30.0 + (seqProps.count - 1) * 2.0 + 2 * KKPaddingSM;
+  KKStageSequencerView *seqView =
+      [[KKStageSequencerView alloc] initWithFrame:NSZeroRect];
+  seqView.translatesAutoresizingMaskIntoConstraints = NO;
+  seqView.hidden = YES;
+  [wrapper addSubview:seqView];
+  [NSLayoutConstraint activateConstraints:@[
+    [seqView.leadingAnchor constraintEqualToAnchor:wrapper.leadingAnchor
+                                          constant:KKInspectorHorizontalInset],
+    [seqView.trailingAnchor
+        constraintEqualToAnchor:wrapper.trailingAnchor
+                       constant:-KKInspectorHorizontalInset],
+    [seqView.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
+    [seqView.heightAnchor constraintEqualToConstant:seqHeight],
+  ]];
+  self.stageSequencer = seqView;
+  KKMultiStageSequencerView = (__bridge void *)seqView;
+
+  seqView.onSegmentSelected = ^(NSInteger laneIndex, NSInteger segmentIndex) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf || laneIndex < 0)
+      return;
+    KKMultiStageSelectionInProgress = YES;
+    NSArray<KKAnimatableProperty *> *props = [strongSelf animatableProperties];
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actAPI startAction:strongSelf];
+    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    CMTime ct = [actAPI currentTime];
+
+    NSString *json = nil;
+    [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+    NSMutableArray<KKTimingLane *> *lanes =
+        [[KKTimingLane lanesFromJSON:json] mutableCopy];
+    if (!lanes || (NSUInteger)laneIndex >= lanes.count) {
+      [actAPI endAction:strongSelf];
+      return;
+    }
+
+    KKTimingLane *lane = lanes[laneIndex];
+    KKAnimatableProperty *prop = nil;
+    for (KKAnimatableProperty *p in props) {
+      if ([p.label isEqualToString:lane.propertyLabel]) {
+        prop = p;
+        break;
+      }
+    }
+
+    // 1. Write-back: save current native param values into this lane's
+    //    previously selected segment.
+    NSInteger prevSeg = lane.selectedSegment;
+    if (prop.valueParamIDs.count > 0 && prevSeg >= 0 &&
+        (NSUInteger)prevSeg < lane.segments.count) {
+      NSMutableArray<NSNumber *> *curVals =
+          [NSMutableArray arrayWithCapacity:prop.valueParamIDs.count];
+      for (NSNumber *pid in prop.valueParamIDs) {
+        double v = 0;
+        [getAPI getFloatValue:&v fromParameter:pid.unsignedIntValue atTime:ct];
+        [curVals addObject:@(v)];
+      }
+      KKTimingLane *mLane = [lane copy];
+      NSMutableArray *mSegs = [mLane.segments mutableCopy];
+      KKTimingSegment *mSeg = [mSegs[prevSeg] copy];
+      mSeg.values = curVals;
+      mSegs[prevSeg] = mSeg;
+      mLane.segments = mSegs;
+      mLane.selectedSegment = segmentIndex;
+      lanes[laneIndex] = mLane;
+      lane = mLane;
+    } else {
+      KKTimingLane *mLane = [lane copy];
+      mLane.selectedSegment = segmentIndex;
+      lanes[laneIndex] = mLane;
+      lane = mLane;
+    }
+
+    // 2. Save updated JSON with write-back + new selection.
+    NSString *updated = [KKTimingLane jsonFromLanes:lanes];
+    if (updated)
+      [setAPI setStringParameterValue:updated
+                          toParameter:kKKParamMultiStageData];
+
+    // 3. Update snapshot + clear pending BEFORE endAction (which triggers
+    //    parameterChanged: that would read stale snapshot).
+    KKMultiStageLanesSnapshot = [lanes copy];
+    KKMultiStagePendingLanes = nil;
+
+    // 4. Sync new selection: write segment values → native params.
+    if (prop.valueParamIDs.count > 0 && segmentIndex >= 0 &&
+        (NSUInteger)segmentIndex < lane.segments.count) {
+      NSArray<NSNumber *> *segValues = lane.segments[segmentIndex].values;
+      for (NSUInteger i = 0;
+           i < prop.valueParamIDs.count && i < segValues.count; i++) {
+        [setAPI setFloatValue:segValues[i].doubleValue
+                  toParameter:prop.valueParamIDs[i].unsignedIntValue
+                       atTime:ct];
+      }
+    }
+
+    [actAPI endAction:strongSelf];
+    KKMultiStageSelectionInProgress = NO;
+    [strongSelf timingGraphApplyState];
+  };
+
+  seqView.onLaneToggled = ^(NSInteger laneIndex, BOOL enabled) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actAPI startAction:strongSelf];
+    id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    NSString *json = nil;
+    [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+    NSArray<KKTimingLane *> *lanes = [KKTimingLane lanesFromJSON:json];
+    if (lanes && (NSUInteger)laneIndex < lanes.count) {
+      NSMutableArray *mutable = [lanes mutableCopy];
+      KKTimingLane *lane = [mutable[laneIndex] copy];
+      lane.enabled = enabled;
+      if (!enabled) {
+        lane.selectedSegment = -1;
+      } else {
+        lane.selectedSegment = -1;
+        for (NSUInteger i = 0; i < lane.segments.count; i++) {
+          if (lane.segments[i].type == KKSegmentTypeHold) {
+            lane.selectedSegment = (NSInteger)i;
+            break;
+          }
+        }
+      }
+      mutable[laneIndex] = lane;
+      NSString *updated = [KKTimingLane jsonFromLanes:mutable];
+      if (updated)
+        [setAPI setStringParameterValue:updated
+                            toParameter:kKKParamMultiStageData];
+    }
+    [actAPI endAction:strongSelf];
+    [strongSelf timingGraphApplyState];
+  };
+
+  seqView.onLaneChanged = ^(NSInteger laneIndex, KKTimingLane *updatedLane) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actAPI startAction:strongSelf];
+    id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    NSString *json = nil;
+    [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+    NSMutableArray<KKTimingLane *> *lanes =
+        [[KKTimingLane lanesFromJSON:json] mutableCopy];
+    if (lanes && (NSUInteger)laneIndex < lanes.count) {
+      lanes[laneIndex] = updatedLane;
+      NSString *updated = [KKTimingLane jsonFromLanes:lanes];
+      if (updated)
+        [setAPI setStringParameterValue:updated
+                            toParameter:kKKParamMultiStageData];
+    }
+    [actAPI endAction:strongSelf];
+    [strongSelf timingGraphApplyState];
+  };
+
+  seqView.onSegmentAdded = ^(NSInteger laneIndex, double position) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actAPI startAction:strongSelf];
+    id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    NSString *json = nil;
+    [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+    NSMutableArray<KKTimingLane *> *lanes =
+        [[KKTimingLane lanesFromJSON:json] mutableCopy];
+    if (!lanes || (NSUInteger)laneIndex >= lanes.count) {
+      [actAPI endAction:strongSelf];
+      return;
+    }
+    KKTimingLane *lane = [lanes[laneIndex] copy];
+    NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
+
+    // Find which segment the click landed in and split it.
+    NSInteger splitIdx = -1;
+    for (NSUInteger i = 0; i < segs.count; i++) {
+      if (position >= segs[i].start && position < segs[i].end) {
+        splitIdx = (NSInteger)i;
+        break;
+      }
+    }
+    if (splitIdx < 0) {
+      [actAPI endAction:strongSelf];
+      return;
+    }
+
+    KKTimingSegment *orig = segs[splitIdx];
+    double splitPoint = position;
+
+    // Create two segments from the split.
+    KKTimingSegment *left = [orig copy];
+    left.end = splitPoint;
+    KKTimingSegment *right = [orig copy];
+    right.start = splitPoint;
+
+    // If splitting a hold, the new right segment becomes a new hold with
+    // same values. If splitting a transition, both halves stay transitions.
+    [segs replaceObjectAtIndex:splitIdx withObject:left];
+    [segs insertObject:right atIndex:splitIdx + 1];
+
+    lane.segments = segs;
+    lane.selectedSegment = splitIdx + 1;
+    lanes[laneIndex] = lane;
+
+    NSString *updated = [KKTimingLane jsonFromLanes:lanes];
+    if (updated)
+      [setAPI setStringParameterValue:updated
+                          toParameter:kKKParamMultiStageData];
+    [actAPI endAction:strongSelf];
+    [strongSelf timingGraphApplyState];
+  };
+
+  seqView.onSegmentRemoved = ^(NSInteger laneIndex, NSInteger segmentIndex) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actAPI startAction:strongSelf];
+    id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    NSString *json = nil;
+    [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+    NSMutableArray<KKTimingLane *> *lanes =
+        [[KKTimingLane lanesFromJSON:json] mutableCopy];
+    if (!lanes || (NSUInteger)laneIndex >= lanes.count) {
+      [actAPI endAction:strongSelf];
+      return;
+    }
+    KKTimingLane *lane = [lanes[laneIndex] copy];
+    NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
+    if (segs.count <= 1 || (NSUInteger)segmentIndex >= segs.count) {
+      [actAPI endAction:strongSelf];
+      return;
+    }
+
+    KKTimingSegment *removed = segs[segmentIndex];
+    // Expand the neighbor to fill the gap.
+    if ((NSUInteger)segmentIndex + 1 < segs.count) {
+      KKTimingSegment *next = [segs[segmentIndex + 1] copy];
+      next.start = removed.start;
+      segs[segmentIndex + 1] = next;
+    } else if (segmentIndex > 0) {
+      KKTimingSegment *prev = [segs[segmentIndex - 1] copy];
+      prev.end = removed.end;
+      segs[segmentIndex - 1] = prev;
+    }
+    [segs removeObjectAtIndex:segmentIndex];
+
+    // Fix selection.
+    if (lane.selectedSegment == segmentIndex) {
+      lane.selectedSegment = -1;
+      for (NSUInteger i = 0; i < segs.count; i++) {
+        if (segs[i].type == KKSegmentTypeHold) {
+          lane.selectedSegment = (NSInteger)i;
+          break;
+        }
+      }
+    } else if (lane.selectedSegment > segmentIndex) {
+      lane.selectedSegment--;
+    }
+
+    lane.segments = segs;
+    lanes[laneIndex] = lane;
+
+    NSString *updated = [KKTimingLane jsonFromLanes:lanes];
+    if (updated)
+      [setAPI setStringParameterValue:updated
+                          toParameter:kKKParamMultiStageData];
+    [actAPI endAction:strongSelf];
+    [strongSelf timingGraphApplyState];
+  };
+
+  // Seed sequencer with lane data if multi-stage is enabled.
   [actionAPI startAction:self];
+  BOOL multiStageEnabled = NO;
+  [paramGetAPI getBoolValue:&multiStageEnabled
+              fromParameter:kKKParamMultiStageEnabled
+                     atTime:[actionAPI currentTime]];
+  if (multiStageEnabled) {
+    seqView.hidden = NO;
+    graphView.hidden = YES;
+    NSString *json = nil;
+    [paramGetAPI getStringParameterValue:&json
+                           fromParameter:kKKParamMultiStageData];
+    NSArray<KKTimingLane *> *lanes = [KKTimingLane lanesFromJSON:json];
+    if (!lanes && seqProps.count > 0) {
+      NSMutableArray<KKTimingLane *> *defaults =
+          [NSMutableArray arrayWithCapacity:seqProps.count];
+      for (KKAnimatableProperty *prop in seqProps) {
+        NSMutableArray<NSNumber *> *baseVals =
+            [NSMutableArray arrayWithCapacity:prop.valueParamIDs.count];
+        for (NSNumber *pid in prop.valueParamIDs) {
+          double v = 0;
+          [paramGetAPI getFloatValue:&v
+                       fromParameter:pid.unsignedIntValue
+                              atTime:[actionAPI currentTime]];
+          [baseVals addObject:@(v)];
+        }
+        if (!baseVals.count)
+          [baseVals addObject:@(1.0)];
+        [defaults addObject:[KKTimingLane defaultLaneForLabel:prop.label
+                                                   baseValues:baseVals]];
+      }
+      lanes = defaults;
+      NSString *seeded = [KKTimingLane jsonFromLanes:lanes];
+      if (seeded) {
+        id<FxParameterSettingAPI_v5> setAPI = [self.apiManager
+            apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+        [setAPI setStringParameterValue:seeded
+                            toParameter:kKKParamMultiStageData];
+      }
+    }
+    if (lanes) {
+      KKMultiStageLanesSnapshot = [lanes copy];
+      seqView.lanes = lanes;
+    }
+  }
+
   CMTime t = [actionAPI currentTime];
   [self _applySlotState:globalSlots withParamAPI:paramGetAPI atTime:t];
   [self _applySlotState:inSlots withParamAPI:paramGetAPI atTime:t];
@@ -533,6 +885,28 @@ static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   CMTime t = [actionAPI currentTime];
+
+  // Sync sequencer visibility and lane data.
+  BOOL multiStageEnabled = NO;
+  [paramGetAPI getBoolValue:&multiStageEnabled
+              fromParameter:kKKParamMultiStageEnabled
+                     atTime:t];
+  KKStageSequencerView *seq = self.stageSequencer;
+  if (seq) {
+    seq.hidden = !multiStageEnabled;
+    self.timingGraph.hidden = multiStageEnabled;
+    if (multiStageEnabled) {
+      NSString *json = nil;
+      [paramGetAPI getStringParameterValue:&json
+                             fromParameter:kKKParamMultiStageData];
+      NSArray<KKTimingLane *> *lanes = [KKTimingLane lanesFromJSON:json];
+      if (lanes) {
+        KKMultiStageLanesSnapshot = [lanes copy];
+        seq.lanes = lanes;
+      }
+    }
+  }
+
   [self _applyTimingParamsToGraph:self.timingGraph
                      withParamAPI:paramGetAPI
                            atTime:t];

@@ -10,12 +10,14 @@
 #import <objc/runtime.h>
 
 @class KKCustomGroupHeaderView;
+@class KKStageSequencerView;
 @class KKTimingGraphView;
 
 @interface KKPlugin () <FxCustomParameterViewHost_v2>
 
 @property(nonatomic, weak) KKCustomGroupHeaderView *timingHeader;
 @property(nonatomic, weak) KKTimingGraphView *timingGraph;
+@property(nonatomic, weak) KKStageSequencerView *stageSequencer;
 
 @end
 

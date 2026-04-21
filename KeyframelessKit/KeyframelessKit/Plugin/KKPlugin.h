@@ -138,11 +138,25 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)updateTimingParameterVisibility;
 
 /// Returns interpolated absolute values for each enabled multi-stage property
-/// at renderTime, keyed by property label (e.g. @"Radius" -> @(35.2)).
+/// at renderTime, keyed by property label. Each value is an array matching
+/// the property's valueParamIDs (e.g. @"Radius" -> @[@(35.2)],
+/// @"Crop" -> @[@(0.1), @(0.1), @(0.05), @(0.05)]).
 /// Returns nil when multi-stage is disabled — caller should fall back to
 /// timingAtTime: factor-based path.
-- (nullable NSDictionary<NSString *, NSNumber *> *)multiStageValuesAtTime:
-    (CMTime)renderTime;
+- (nullable NSDictionary<NSString *, NSArray<NSNumber *> *> *)
+    multiStageValuesAtTime:(CMTime)renderTime;
+
+/// Call from parameterChanged: to detect native param changes and stage
+/// pending lane updates. Returns YES if the parameter matched a staged
+/// property.
+- (BOOL)multiStageHandleParameterChanged:(UInt32)parameterID
+                                  atTime:(CMTime)time;
+
+/// Call from drawOSC to flush any pending sequencer lane updates to the
+/// custom view on the main queue. The OSC render cycle is the only reliable
+/// path for dispatching view updates in FxPlug XPC.
+/// This is a class method since OSC objects don't hold a plugin reference.
++ (void)multiStageFlushPendingLanes;
 
 /// Pairs of parameter IDs that maintain their aspect ratio when the user
 /// holds Cmd while dragging either slider. Set before first use (e.g. in

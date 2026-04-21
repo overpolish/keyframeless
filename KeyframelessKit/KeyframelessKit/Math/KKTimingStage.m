@@ -8,7 +8,7 @@
 static NSString *const kKeyType = @"type";
 static NSString *const kKeyStart = @"start";
 static NSString *const kKeyEnd = @"end";
-static NSString *const kKeyValue = @"val";
+static NSString *const kKeyValues = @"vals";
 static NSString *const kKeyEasing = @"ease";
 static NSString *const kKeyIntensity = @"int";
 static NSString *const kKeyFrequency = @"freq";
@@ -18,19 +18,20 @@ static NSString *const kKeyLanes = @"lanes";
 static NSString *const kKeyLabel = @"label";
 static NSString *const kKeySegments = @"segs";
 static NSString *const kKeyEnabled = @"on";
+static NSString *const kKeySelectedSeg = @"sel";
 
-static const NSInteger kCurrentVersion = 2;
+static const NSInteger kCurrentVersion = 3;
 
 @implementation KKTimingSegment
 
-+ (instancetype)holdWithValue:(double)value
-                        start:(double)start
-                          end:(double)end {
++ (instancetype)holdWithValues:(NSArray<NSNumber *> *)values
+                         start:(double)start
+                           end:(double)end {
   KKTimingSegment *s = [[KKTimingSegment alloc] init];
   s.type = KKSegmentTypeHold;
   s.start = start;
   s.end = end;
-  s.value = value;
+  s.values = values;
   s.easing = KKEasingCurveLinear;
   s.intensity = 0.5;
   s.frequency = 0.5;
@@ -41,16 +42,21 @@ static const NSInteger kCurrentVersion = 2;
                                 end:(double)end
                              easing:(KKEasingCurve)easing
                           intensity:(double)intensity
-                          frequency:(double)frequency {
+                          frequency:(double)frequency
+                             values:(NSArray<NSNumber *> *)values {
   KKTimingSegment *s = [[KKTimingSegment alloc] init];
   s.type = KKSegmentTypeTransition;
   s.start = start;
   s.end = end;
-  s.value = 0;
+  s.values = values;
   s.easing = easing;
   s.intensity = intensity;
   s.frequency = frequency;
   return s;
+}
+
+- (double)value {
+  return _values.count > 0 ? _values[0].doubleValue : 0;
 }
 
 - (NSDictionary *)toDictionary {
@@ -58,7 +64,7 @@ static const NSInteger kCurrentVersion = 2;
     kKeyType : @(_type),
     kKeyStart : @(_start),
     kKeyEnd : @(_end),
-    kKeyValue : @(_value),
+    kKeyValues : _values ?: @[],
     kKeyEasing : @(_easing),
     kKeyIntensity : @(_intensity),
     kKeyFrequency : @(_frequency),
@@ -75,7 +81,14 @@ static const NSInteger kCurrentVersion = 2;
   s.type = (KKSegmentType)typeNum.integerValue;
   s.start = [dict[kKeyStart] doubleValue];
   s.end = [dict[kKeyEnd] doubleValue];
-  s.value = [dict[kKeyValue] doubleValue];
+  // Support both v2 ("val": single) and v3 ("vals": array).
+  NSArray *vals = dict[kKeyValues];
+  if ([vals isKindOfClass:[NSArray class]]) {
+    s.values = vals;
+  } else {
+    NSNumber *singleVal = dict[@"val"];
+    s.values = singleVal ? @[ singleVal ] : @[ @(0) ];
+  }
   s.easing = (KKEasingCurve)[dict[kKeyEasing] integerValue];
   s.intensity = [dict[kKeyIntensity] doubleValue];
   s.frequency = [dict[kKeyFrequency] doubleValue];
@@ -87,7 +100,7 @@ static const NSInteger kCurrentVersion = 2;
   c.type = _type;
   c.start = _start;
   c.end = _end;
-  c.value = _value;
+  c.values = [_values copy];
   c.easing = _easing;
   c.intensity = _intensity;
   c.frequency = _frequency;
@@ -105,26 +118,41 @@ static const NSInteger kCurrentVersion = 2;
   l.propertyLabel = label;
   l.segments = segments;
   l.enabled = enabled;
+  // Default: select first hold segment.
+  l.selectedSegment = -1;
+  for (NSUInteger i = 0; i < segments.count; i++) {
+    if (segments[i].type == KKSegmentTypeHold) {
+      l.selectedSegment = (NSInteger)i;
+      break;
+    }
+  }
   return l;
 }
 
 + (instancetype)defaultLaneForLabel:(NSString *)label
-                          baseValue:(double)baseValue {
+                         baseValues:(NSArray<NSNumber *> *)baseValues {
+  NSMutableArray *zeroVals =
+      [NSMutableArray arrayWithCapacity:baseValues.count];
+  for (NSUInteger i = 0; i < baseValues.count; i++)
+    [zeroVals addObject:@(0)];
+
   KKTimingSegment *transIn =
       [KKTimingSegment transitionWithStart:0.0
                                        end:0.1
                                     easing:KKEasingCurveEaseOut
                                  intensity:0.5
-                                 frequency:0.5];
-  KKTimingSegment *hold = [KKTimingSegment holdWithValue:baseValue
-                                                   start:0.1
-                                                     end:0.9];
+                                 frequency:0.5
+                                    values:zeroVals];
+  KKTimingSegment *hold = [KKTimingSegment holdWithValues:baseValues
+                                                    start:0.1
+                                                      end:0.9];
   KKTimingSegment *transOut =
       [KKTimingSegment transitionWithStart:0.9
                                        end:1.0
                                     easing:KKEasingCurveEaseOut
                                  intensity:0.5
-                                 frequency:0.5];
+                                 frequency:0.5
+                                    values:zeroVals];
   return [self laneWithLabel:label
                     segments:@[ transIn, hold, transOut ]
                      enabled:YES];
@@ -146,24 +174,15 @@ static const NSInteger kCurrentVersion = 2;
   self.segments = [m copy];
 }
 
-- (double)resolvedValueAtIndex:(NSUInteger)index baseValue:(double)baseValue {
-  if (index >= _segments.count)
-    return baseValue;
-  KKTimingSegment *seg = _segments[index];
-  if (seg.type == KKSegmentTypeHold)
-    return seg.value;
-  // Transition: look at adjacent holds
-  // Not needed for render (render walks segments), but useful for UI display.
-  return baseValue;
-}
-
 - (id)copyWithZone:(NSZone *)zone {
   NSMutableArray *copied = [NSMutableArray arrayWithCapacity:_segments.count];
   for (KKTimingSegment *s in _segments)
     [copied addObject:[s copy]];
-  return [KKTimingLane laneWithLabel:_propertyLabel
-                            segments:copied
-                             enabled:_enabled];
+  KKTimingLane *c = [KKTimingLane laneWithLabel:_propertyLabel
+                                       segments:copied
+                                        enabled:_enabled];
+  c.selectedSegment = _selectedSegment;
+  return c;
 }
 
 @end
@@ -180,6 +199,7 @@ static const NSInteger kCurrentVersion = 2;
     [lanesArray addObject:@{
       kKeyLabel : lane.propertyLabel ?: @"",
       kKeyEnabled : @(lane.enabled),
+      kKeySelectedSeg : @(lane.selectedSegment),
       kKeySegments : segsArray,
     }];
   }
@@ -230,9 +250,13 @@ static const NSInteger kCurrentVersion = 2;
     }
     if (!segments.count)
       continue;
-    [result addObject:[KKTimingLane laneWithLabel:label
-                                         segments:segments
-                                          enabled:enabled]];
+    KKTimingLane *lane = [KKTimingLane laneWithLabel:label
+                                            segments:segments
+                                             enabled:enabled];
+    NSNumber *selNum = laneDict[kKeySelectedSeg];
+    if (selNum)
+      lane.selectedSegment = selNum.integerValue;
+    [result addObject:lane];
   }
   return result.count ? result : nil;
 }
