@@ -46,6 +46,8 @@ static const NSInteger kCurveSegments = 40;
   // Segment hover (for highlight).
   NSInteger _hoverSegLaneIdx;
   NSInteger _hoverSegSegIdx;
+  // Ruler scrub state.
+  BOOL _scrubbingRuler;
 }
 
 - (instancetype)initWithFrame:(NSRect)frame {
@@ -773,6 +775,22 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
                         trackX:&trackX
                     trackWidth:&trackWidth];
 
+  // Ruler click → scrub playhead.
+  CGFloat rulerY = totalHeight - kBorderInset - kRulerHeight;
+  if (loc.y >= rulerY && loc.y <= totalHeight - kBorderInset &&
+      loc.x >= trackX && loc.x <= trackX + trackWidth) {
+    double frac = (loc.x - trackX) / trackWidth;
+    frac = MAX(0.0, MIN(1.0, frac));
+    _scrubbingRuler = YES;
+    _dragTrackX = trackX;
+    _dragTrackWidth = trackWidth;
+    _playheadFraction = frac;
+    [self renderLanes];
+    if (_onPlayheadScrub)
+      _onPlayheadScrub(frac);
+    return;
+  }
+
   for (NSUInteger laneIdx = 0; laneIdx < _lanes.count; laneIdx++) {
     KKTimingLane *lane = _lanes[laneIdx];
     CGFloat laneY = [self _laneYForIndex:laneIdx totalHeight:totalHeight];
@@ -872,6 +890,17 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
 }
 
 - (void)mouseDragged:(NSEvent *)event {
+  if (_scrubbingRuler) {
+    NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+    double frac = (loc.x - _dragTrackX) / _dragTrackWidth;
+    frac = MAX(0.0, MIN(1.0, frac));
+    _playheadFraction = frac;
+    [self renderLanes];
+    if (_onPlayheadScrub)
+      _onPlayheadScrub(frac);
+    return;
+  }
+
   if (!_dragging && !_dragMoving)
     return;
 
@@ -991,6 +1020,10 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
 }
 
 - (void)mouseUp:(NSEvent *)event {
+  if (_scrubbingRuler) {
+    _scrubbingRuler = NO;
+    return;
+  }
   if (_dragMoving) {
     BOOL moved = NO;
     if ((NSUInteger)_dragLaneIdx < _lanes.count) {
