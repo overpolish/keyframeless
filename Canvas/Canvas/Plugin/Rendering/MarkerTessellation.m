@@ -72,71 +72,18 @@ static NSUInteger tessellateSquare(simd_float2 endpoint, simd_float2 tangent,
   return vc;
 }
 
-/// Arrowhead marker (open chevron): two thick arms meeting at the tip.
-/// Emits two quads as 12 triangle vertices (no strip, no internal bridge).
-static NSUInteger tessellateArrowhead(simd_float2 endpoint, simd_float2 tangent,
-                                      simd_float2 normal, float size,
-                                      float strokeWidth, CanvasVertex *v) {
-  float wingSpread = size * 0.5f;
-  float halfThick = strokeWidth * 0.5f;
-  simd_float2 base = endpoint - tangent * size;
-  simd_float2 left = base + normal * wingSpread;
-  simd_float2 right = base - normal * wingSpread;
-
-  simd_float2 leftEdge = endpoint - left;
-  float leftLen = simd_length(leftEdge);
-  simd_float2 leftDir = leftLen > 0.001f ? leftEdge / leftLen : tangent;
-  simd_float2 leftPerp = (simd_float2){-leftDir.y, leftDir.x};
-
-  simd_float2 rightEdge = endpoint - right;
-  float rightLen = simd_length(rightEdge);
-  simd_float2 rightDir = rightLen > 0.001f ? rightEdge / rightLen : tangent;
-  simd_float2 rightPerp = (simd_float2){-rightDir.y, rightDir.x};
-
-  simd_float2 la = left + leftPerp * halfThick;
-  simd_float2 lb = left - leftPerp * halfThick;
-  simd_float2 lc = endpoint + leftPerp * halfThick;
-  simd_float2 ld = endpoint - leftPerp * halfThick;
-  simd_float2 ra = endpoint + rightPerp * halfThick;
-  simd_float2 rb = endpoint - rightPerp * halfThick;
-  simd_float2 rc = right + rightPerp * halfThick;
-  simd_float2 rd = right - rightPerp * halfThick;
-
-  NSUInteger vc = 0;
-  // Left arm: two triangles
-  v[vc++] = markerVert(la);
-  v[vc++] = markerVert(lb);
-  v[vc++] = markerVert(lc);
-  v[vc++] = markerVert(lb);
-  v[vc++] = markerVert(ld);
-  v[vc++] = markerVert(lc);
-  // Right arm: two triangles
-  v[vc++] = markerVert(ra);
-  v[vc++] = markerVert(rb);
-  v[vc++] = markerVert(rc);
-  v[vc++] = markerVert(rb);
-  v[vc++] = markerVert(rd);
-  v[vc++] = markerVert(rc);
-  return vc;
-}
-
-/// Line marker: perpendicular bar at the endpoint.
-/// Single quad (4 verts).
-static NSUInteger tessellateLine(simd_float2 endpoint, simd_float2 tangent,
-                                 simd_float2 normal, float size,
-                                 float strokeWidth, CanvasVertex *v) {
-  float halfSpread = size * 0.5f;
-  float halfThick = strokeWidth * 0.5f;
-  simd_float2 top = endpoint + normal * halfSpread;
-  simd_float2 bottom = endpoint - normal * halfSpread;
-
-  NSUInteger vc = 0;
-  v[vc++] = markerVert(top + tangent * halfThick);
-  v[vc++] = markerVert(top - tangent * halfThick);
-  v[vc++] = markerVert(bottom + tangent * halfThick);
-  v[vc++] = markerVert(bottom - tangent * halfThick);
-  return vc;
-}
+// Forward declarations — sketch versions serve as the canonical implementation
+// for arrowhead and line markers; regular versions call with roughness=0.
+static inline simd_float2 jitterPt(simd_float2 pt, float amp, float roughness);
+static NSUInteger tessellateSketchArrowhead(simd_float2 endpoint,
+                                            simd_float2 tangent,
+                                            simd_float2 normal, float size,
+                                            float strokeWidth, float roughness,
+                                            CanvasVertex *v);
+static NSUInteger tessellateSketchLine(simd_float2 endpoint,
+                                       simd_float2 tangent, simd_float2 normal,
+                                       float size, float strokeWidth,
+                                       float roughness, CanvasVertex *v);
 
 float KKMarkerPullback(uint8_t markerType, float markerSize) {
   // Stroke ends slightly inside the marker so it's fully covered by the fill.
@@ -180,12 +127,12 @@ NSUInteger KKTessellateMarker(uint8_t markerType, simd_float2 endpoint,
                             vertices);
   case 4: // Arrowhead
     *primitiveType = MTLPrimitiveTypeTriangle;
-    return tessellateArrowhead(endpoint, tangent, normal, markerSize,
-                               strokeWidth, vertices);
+    return tessellateSketchArrowhead(endpoint, tangent, normal, markerSize,
+                                     strokeWidth, 0.0f, vertices);
   case 5: // Line
     *primitiveType = MTLPrimitiveTypeTriangleStrip;
-    return tessellateLine(endpoint, tangent, normal, markerSize, strokeWidth,
-                          vertices);
+    return tessellateSketchLine(endpoint, tangent, normal, markerSize,
+                                strokeWidth, 0.0f, vertices);
   default:
     return 0;
   }

@@ -94,6 +94,38 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
                      ]];
     self.pathToolbar.activeTag = 0;
 
+    {
+      KKToolbarItem *snapItem =
+          [KKToolbarItem itemWithIcon:@"dot.squareshape.split.2x2"
+                                  tag:kOSCSnapToggle
+                        shortcutLabel:@"Snap"];
+
+      KKToolbarItem *gridItem = [KKToolbarItem itemWithIcon:@"grid"
+                                                        tag:kOSCGridToggle
+                                              shortcutLabel:@"Grid"];
+
+      KKToolbarItem *stepperItem =
+          [KKToolbarItem itemWithIcon:@"digitalcrown.arrow.clockwise.fill"
+                                  tag:kOSCGridStepper
+                        shortcutLabel:nil];
+
+      KKToolbarItem *adaptiveItem =
+          [KKToolbarItem itemWithIcon:@"squareshape.split.2x2.dotted"
+                                  tag:kOSCGridAdaptive
+                        shortcutLabel:@"Auto"];
+
+      self.gridToolbar = [[KKToolbar alloc]
+          initWithAPIManager:apiManager
+                       items:@[
+                         snapItem, gridItem, adaptiveItem, stepperItem
+                       ]];
+      self.gridToolbar.activeTag = 0;
+      self.gridToolbar.rightMargin = 16.0;
+    }
+
+    self.gridSpacing = 10;
+    self.gridAdaptive = YES;
+
     self.sizeLabel = [[KKOSCLabel alloc] initWithAPIManager:apiManager];
     self.sizeLabel.monospaced = YES;
 

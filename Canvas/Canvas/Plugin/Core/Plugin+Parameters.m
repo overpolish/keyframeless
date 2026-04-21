@@ -47,6 +47,46 @@
                      parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
                                     kFxParameterFlag_DONT_DISPLAY_IN_DASHBOARD];
 
+  [paramAPI addToggleButtonWithName:@"Grid Enabled"
+                        parameterID:kParamGridEnabled
+                       defaultValue:NO
+                     parameterFlags:kFxParameterFlag_HIDDEN |
+                                    kFxParameterFlag_NOT_ANIMATABLE];
+
+  [paramAPI addIntSliderWithName:@"Grid Spacing"
+                     parameterID:kParamGridSpacing
+                    defaultValue:10
+                    parameterMin:1
+                    parameterMax:1000
+                       sliderMin:1
+                       sliderMax:1000
+                           delta:1
+                  parameterFlags:kFxParameterFlag_HIDDEN |
+                                 kFxParameterFlag_NOT_ANIMATABLE];
+
+  [paramAPI addToggleButtonWithName:@"Grid Adaptive"
+                        parameterID:kParamGridAdaptive
+                       defaultValue:YES
+                     parameterFlags:kFxParameterFlag_HIDDEN |
+                                    kFxParameterFlag_NOT_ANIMATABLE];
+
+  [paramAPI addToggleButtonWithName:@"Snap to Grid"
+                        parameterID:kParamSnapToGrid
+                       defaultValue:NO
+                     parameterFlags:kFxParameterFlag_HIDDEN |
+                                    kFxParameterFlag_NOT_ANIMATABLE];
+
+  [paramAPI addIntSliderWithName:@"Last Tool"
+                     parameterID:kParamLastTool
+                    defaultValue:kOSCToolbarCursor
+                    parameterMin:0
+                    parameterMax:100
+                       sliderMin:0
+                       sliderMax:100
+                           delta:1
+                  parameterFlags:kFxParameterFlag_HIDDEN |
+                                 kFxParameterFlag_NOT_ANIMATABLE];
+
   [paramAPI addCustomParameterWithName:@""
                            parameterID:kParamLayerList
                           defaultValue:@(kParamLayerList)

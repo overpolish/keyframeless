@@ -56,6 +56,11 @@ static const UInt32 kParamFillTint = 137;
 static const UInt32 kParamForceShow = 9000;
 static const UInt32 kParamHideOSC = 9001;
 static const UInt32 kParamAutoSelect = 9002;
+static const UInt32 kParamGridEnabled = 9003;
+static const UInt32 kParamLastTool = 9004;
+static const UInt32 kParamGridSpacing = 9005;
+static const UInt32 kParamGridAdaptive = 9006;
+static const UInt32 kParamSnapToGrid = 9007;
 
 @protocol PROAPIAccessing;
 NSString *_Nullable KKLayerUUIDForAPI(id<PROAPIAccessing> _Nonnull api);
@@ -85,6 +90,14 @@ static const NSInteger kOSCPathPointBase = 10000;    // 10000 + index
 static const NSInteger kOSCInHandleBase = 100000;    // 100000 + index
 static const NSInteger kOSCOutHandleBase = 200000;   // 200000 + index
 static const NSInteger kOSCPathSegmentBase = 300000; // 300000 + segment index
+
+// Grid toolbar
+static const NSInteger kOSCGridToggle = 40001;
+static const NSInteger kOSCGridMinus = 40002;
+static const NSInteger kOSCGridPlus = 40003;
+static const NSInteger kOSCGridAdaptive = 40004;
+static const NSInteger kOSCGridStepper = 40005;
+static const NSInteger kOSCSnapToggle = 40006;
 
 // Path combine toolbar
 static const NSInteger kOSCPathUnion = 30001;

@@ -36,22 +36,22 @@ static BOOL hitTestMarkerVerts(double px, double py, CanvasVertex *verts,
 
 static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
                           double py) {
-  float sw = path.strokeWidth;
-  float ew = (path.endWidth > 0) ? path.endWidth : sw;
+  simd_float2 mouseObj = [osc objectPointFromCanvasPoint:CGPointMake(px, py)];
+
+  // strokeWidth is in source pixels; convert to object space.
+  float imgW = (osc.imageWidth > 0) ? osc.imageWidth : 1920.0f;
+  float sw = path.strokeWidth / imgW;
+  float ew = (path.endWidth > 0) ? path.endWidth / imgW : sw;
 
   if (path.endMarker != 0) {
     NSUInteger lastSeg = path.count - 2;
     NSUInteger lastIdx = path.count - 1;
-    simd_float2 endObj = [path evaluatePointAtIndex:lastSeg
+    simd_float2 endPt = [path evaluatePointAtIndex:lastSeg
+                                         nextIndex:lastIdx
+                                               atT:1.0f];
+    simd_float2 nearPt = [path evaluatePointAtIndex:lastSeg
                                           nextIndex:lastIdx
-                                                atT:1.0f];
-    simd_float2 nearObj = [path evaluatePointAtIndex:lastSeg
-                                           nextIndex:lastIdx
-                                                 atT:0.98f];
-    CGPoint endC = [osc canvasPointFromObjectPoint:endObj];
-    CGPoint nearC = [osc canvasPointFromObjectPoint:nearObj];
-    simd_float2 endPt = {(float)endC.x, (float)endC.y};
-    simd_float2 nearPt = {(float)nearC.x, (float)nearC.y};
+                                                atT:0.98f];
     simd_float2 dir = endPt - nearPt;
     float dirLen = simd_length(dir);
     simd_float2 eTan =
@@ -63,17 +63,14 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
     MTLPrimitiveType prim;
     NSUInteger mc = KKTessellateMarker(path.endMarker, endPt, eTan, eNorm, eMsz,
                                        ew, &prim, markerVerts);
-    if (mc > 0 && hitTestMarkerVerts(px, py, markerVerts, mc, prim))
+    if (mc > 0 &&
+        hitTestMarkerVerts(mouseObj.x, mouseObj.y, markerVerts, mc, prim))
       return YES;
   }
 
   if (path.startMarker != 0) {
-    simd_float2 startObj = [path evaluatePointAtIndex:0 nextIndex:1 atT:0.0f];
-    simd_float2 nearObj = [path evaluatePointAtIndex:0 nextIndex:1 atT:0.02f];
-    CGPoint startC = [osc canvasPointFromObjectPoint:startObj];
-    CGPoint nearC = [osc canvasPointFromObjectPoint:nearObj];
-    simd_float2 startPt = {(float)startC.x, (float)startC.y};
-    simd_float2 nearPt = {(float)nearC.x, (float)nearC.y};
+    simd_float2 startPt = [path evaluatePointAtIndex:0 nextIndex:1 atT:0.0f];
+    simd_float2 nearPt = [path evaluatePointAtIndex:0 nextIndex:1 atT:0.02f];
     simd_float2 dir = startPt - nearPt;
     float dirLen = simd_length(dir);
     simd_float2 sTan =
@@ -85,7 +82,8 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
     MTLPrimitiveType prim;
     NSUInteger mc = KKTessellateMarker(path.startMarker, startPt, sTan, sNorm,
                                        sMsz, sw, &prim, markerVerts);
-    if (mc > 0 && hitTestMarkerVerts(px, py, markerVerts, mc, prim))
+    if (mc > 0 &&
+        hitTestMarkerVerts(mouseObj.x, mouseObj.y, markerVerts, mc, prim))
       return YES;
   }
 
@@ -95,6 +93,16 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
 @implementation CanvasOSC (Geometry)
 
 - (NSInteger)pathIndexNearX:(double)x y:(double)y radius:(double)radius {
+  // Convert mouse to object space for proximity checks.  Canvas-space
+  // coordinates diverge from mouse coordinates at high FCP viewer zoom,
+  // making distance checks unreliable.  Object space is stable.
+  simd_float2 mouseObj = [self objectPointFromCanvasPoint:CGPointMake(x, y)];
+
+  // Minimum hit padding in object space (convert screen-pixel padding).
+  simd_float2 padRef =
+      [self objectPointFromCanvasPoint:CGPointMake(x + 4.0, y)];
+  double objPad = fabs(padRef.x - mouseObj.x);
+
   for (NSUInteger p = 0; p < self.paths.count; p++) {
     KKBezierPath *path = self.paths[p];
     if (path.hidden || path.locked || path.isGroup)
@@ -103,15 +111,18 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
     if (path.isImage && path.count >= 4) {
       KKBezierPoint bl = [path pointAtIndex:0];
       KKBezierPoint tr = [path pointAtIndex:2];
-      CGPoint cBL = [self canvasPointFromObjectPoint:(simd_float2){bl.x, bl.y}];
-      CGPoint cTR = [self canvasPointFromObjectPoint:(simd_float2){tr.x, tr.y}];
-      if (x >= MIN(cBL.x, cTR.x) && x <= MAX(cBL.x, cTR.x) &&
-          y >= MIN(cBL.y, cTR.y) && y <= MAX(cBL.y, cTR.y))
+      if (mouseObj.x >= MIN(bl.x, tr.x) && mouseObj.x <= MAX(bl.x, tr.x) &&
+          mouseObj.y >= MIN(bl.y, tr.y) && mouseObj.y <= MAX(bl.y, tr.y))
         return (NSInteger)p;
       continue;
     }
 
-    double hitR = MAX(path.strokeWidth * 0.5 + 4.0, 12.0);
+    // strokeWidth is in source pixels; convert to object space.
+    double objStrokeHalf = (self.imageWidth > 0)
+                               ? (path.strokeWidth * 0.5 / self.imageWidth)
+                               : 0.0;
+    double objHitR = fmax(objStrokeHalf + objPad, objPad * 3.0);
+
     NSUInteger contours = path.contourCount;
 
     for (NSUInteger ci = 0; ci < contours; ci++) {
@@ -126,22 +137,23 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
         segCount = len;
 
       NSUInteger totalSamples = segCount * 65;
-      CGPoint *outline = malloc(totalSamples * sizeof(CGPoint));
+      simd_float2 *outline = malloc(totalSamples * sizeof(simd_float2));
       NSUInteger oc = 0;
       for (NSUInteger c = 0; c < segCount; c++) {
         NSUInteger curIdx = start + c;
         NSUInteger nextIdx = start + ((c + 1) % len);
         for (NSUInteger s = 0; s <= 64; s++) {
           float t = (float)s / 64.0f;
-          simd_float2 pos = [path evaluatePointAtIndex:curIdx
-                                             nextIndex:nextIdx
-                                                   atT:t];
-          outline[oc++] = [self canvasPointFromObjectPoint:pos];
+          outline[oc++] = [path evaluatePointAtIndex:curIdx
+                                           nextIndex:nextIdx
+                                                 atT:t];
         }
       }
 
       for (NSUInteger i = 0; i < oc; i++) {
-        if (hypot(x - outline[i].x, y - outline[i].y) < hitR) {
+        double dx = mouseObj.x - outline[i].x;
+        double dy = mouseObj.y - outline[i].y;
+        if (hypot(dx, dy) < objHitR) {
           free(outline);
           return (NSInteger)p;
         }
@@ -151,11 +163,12 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
         NSUInteger crossings = 0;
         for (NSUInteger i = 0; i < oc; i++) {
           NSUInteger j = (i + 1) % oc;
-          CGFloat yi = outline[i].y, yj = outline[j].y;
-          if ((yi <= y && yj > y) || (yj <= y && yi > y)) {
-            CGFloat xi = outline[i].x, xj = outline[j].x;
-            CGFloat intersectX = xi + (y - yi) / (yj - yi) * (xj - xi);
-            if (x < intersectX)
+          float yi = outline[i].y, yj = outline[j].y;
+          if ((yi <= mouseObj.y && yj > mouseObj.y) ||
+              (yj <= mouseObj.y && yi > mouseObj.y)) {
+            float xi = outline[i].x, xj = outline[j].x;
+            float intersectX = xi + (mouseObj.y - yi) / (yj - yi) * (xj - xi);
+            if (mouseObj.x < intersectX)
               crossings++;
           }
         }
@@ -183,6 +196,13 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
                         inPath:(KKBezierPath *)path {
   if (!path || path.count < 2)
     return -1;
+  simd_float2 mouseObj = [self objectPointFromCanvasPoint:CGPointMake(x, y)];
+  simd_float2 padRef =
+      [self objectPointFromCanvasPoint:CGPointMake(x + 4.0, y)];
+  double objPad = fabs(padRef.x - mouseObj.x);
+  double objStrokeHalf =
+      (self.imageWidth > 0) ? (path.strokeWidth * 0.5 / self.imageWidth) : 0.0;
+  double objRadius = fmax(objStrokeHalf + objPad, objPad * 3.0);
   NSUInteger segCount = path.count - 1;
   if (path.closed && path.count >= 2)
     segCount = path.count;
@@ -191,8 +211,7 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
     for (NSUInteger s = 0; s <= 64; s++) {
       float t = (float)s / 64.0f;
       simd_float2 pos = [path evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
-      CGPoint cur = [self canvasPointFromObjectPoint:pos];
-      if (hypot(x - cur.x, y - cur.y) < radius)
+      if (hypot(mouseObj.x - pos.x, mouseObj.y - pos.y) < objRadius)
         return (NSInteger)c;
     }
   }
