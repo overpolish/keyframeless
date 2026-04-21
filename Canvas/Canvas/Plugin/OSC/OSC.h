@@ -20,6 +20,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, assign) BOOL dragIsInHandle;
 @property(nonatomic, assign) BOOL dragIsOutHandle;
 @property(nonatomic, assign) BOOL dragIsNewPoint;
+@property(nonatomic, assign) CGPoint newPointCanvasOrigin;
 @property(nonatomic, assign) BOOL dragIsPath;
 @property(nonatomic, assign) BOOL dragIsMarquee;
 @property(nonatomic, assign) BOOL dragIsSelection;
@@ -47,6 +48,17 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, strong) NSCursor *penDeleteCursor;
 @property(nonatomic, strong) KKToolbar *toolbar;
 @property(nonatomic, strong) KKToolbar *pathToolbar;
+@property(nonatomic, strong) KKToolbar *gridToolbar;
+@property(nonatomic, assign) BOOL gridEnabled;
+@property(nonatomic, assign) BOOL gridAdaptive;
+@property(nonatomic, assign) BOOL snapToGrid;
+@property(nonatomic, assign) NSInteger gridSpacing;
+@property(nonatomic, assign) BOOL restoredTool;
+@property(nonatomic, assign) BOOL stepperDragging;
+@property(nonatomic, assign) BOOL stepperShiftWasDown;
+@property(nonatomic, assign) double stepperDragOriginY;
+@property(nonatomic, assign) double stepperAccumulatedDelta;
+@property(nonatomic, assign) NSInteger stepperDragStartValue;
 @property(nonatomic, strong) KKOSCLabel *sizeLabel;
 @property(nonatomic, strong) KKRectBorderOSC *borderOSC;
 @property(nonatomic, strong) NSArray<KKPointOSC *> *resizeHandleOSCs;
@@ -70,6 +82,37 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, assign) BOOL autoSelect;
 @property(nonatomic, assign) CGPoint autoSelectClickOrigin;
 @property(nonatomic, assign) BOOL autoSelectPending;
+@property(nonatomic, assign)
+    CGPoint hoverCanvasPosition;                   // last hitTest mouse pos
+@property(nonatomic, assign) BOOL cmdSnapOverride; // cmd toggles snap on/off
+@property(nonatomic, assign) BOOL alignSnappedX;
+@property(nonatomic, assign) BOOL alignSnappedY;
+@property(nonatomic, assign) float alignSnapValueX; // object-space X
+@property(nonatomic, assign) float alignSnapValueY; // object-space Y
+
+// Equal spacing guides (object-space edge coordinates).
+@property(nonatomic, assign) BOOL spacingSnapX;
+@property(nonatomic, assign) float spacingLeftEdge;
+@property(nonatomic, assign) float spacingSelLeft;
+@property(nonatomic, assign) float spacingSelRight;
+@property(nonatomic, assign) float spacingRightEdge;
+@property(nonatomic, assign) float spacingMidY;
+@property(nonatomic, assign) BOOL spacingRefX; // has a reference gap to draw
+@property(nonatomic, assign) float spacingRefLeftX;  // reference gap left edge
+@property(nonatomic, assign) float spacingRefRightX; // reference gap right edge
+@property(nonatomic, assign) float spacingRefMidYX;  // reference gap Y
+
+@property(nonatomic, assign) BOOL spacingSnapY;
+@property(nonatomic, assign) float spacingTopEdge;
+@property(nonatomic, assign) float spacingSelTop;
+@property(nonatomic, assign) float spacingSelBottom;
+@property(nonatomic, assign) float spacingBottomEdge;
+@property(nonatomic, assign) float spacingMidX;
+@property(nonatomic, assign) BOOL spacingRefY;
+@property(nonatomic, assign) float spacingRefTopY;
+@property(nonatomic, assign) float spacingRefBottomY;
+@property(nonatomic, assign) float spacingRefMidXY;
+
 @property(nonatomic, assign) NSInteger hoveredPathOp;
 @property(nonatomic, strong, nullable) KKBezierPath *previewResultPath;
 @property(nonatomic, strong, nullable) id<MTLTexture> previewTexture;

@@ -33,6 +33,9 @@
     float ey = sy + copysignf(side, dy);
     objPos = [self objectPointFromCanvasPoint:CGPointMake(ex, ey)];
   }
+  objPos = [self snapToGridPosition:objPos];
+  self.cmdSnapOverride = (modifiers & kFxModifierKey_COMMAND) != 0;
+  objPos = [self alignSnapPoint:objPos excludingPaths:nil excludingPoints:nil];
   self.dragOrigin = objPos;
   *forceUpdate = YES;
 }
@@ -54,8 +57,42 @@
     float ey = (float)sc.y + dist * sinf(snapped);
     objPos = [self objectPointFromCanvasPoint:CGPointMake(ex, ey)];
   }
+  objPos = [self snapToGridPosition:objPos];
+  self.cmdSnapOverride = (modifiers & kFxModifierKey_COMMAND) != 0;
+  objPos = [self alignSnapPoint:objPos excludingPaths:nil excludingPoints:nil];
   self.dragOrigin = objPos;
   *forceUpdate = YES;
+}
+
+- (void)duplicateSelectedPaths:(simd_float2)delta {
+  NSMutableIndexSet *expanded = [self.selectedPathIndices mutableCopy];
+  [self.selectedPathIndices
+      enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+        if (idx < self.paths.count && self.paths[idx].isGroup)
+          [expanded addIndexes:KKDescendantIndices(idx, self.paths)];
+      }];
+  NSMutableIndexSet *newIndices = [NSMutableIndexSet indexSet];
+  NSMutableDictionary<NSString *, NSString *> *groupIDMap =
+      [NSMutableDictionary dictionary];
+  [expanded enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+    if (idx >= self.paths.count || self.paths[idx].locked)
+      return;
+    KKBezierPath *clone =
+        [KKBezierPath pathWithData:[self.paths[idx] dataRepresentation]];
+    if (clone.isGroup && clone.groupID) {
+      NSString *newID = [[NSUUID UUID] UUIDString];
+      groupIDMap[clone.groupID] = newID;
+      clone.groupID = newID;
+    }
+    if (clone.parentGroupID && groupIDMap[clone.parentGroupID])
+      clone.parentGroupID = groupIDMap[clone.parentGroupID];
+    [self.paths addObject:clone];
+    if ([self.selectedPathIndices containsIndex:idx])
+      [newIndices addIndex:self.paths.count - 1];
+  }];
+  [self.selectedPathIndices removeAllIndexes];
+  [self.selectedPathIndices addIndexes:newIndices];
+  self.activePathIndex = (NSInteger)newIndices.lastIndex;
 }
 
 - (void)dragSelectionToX:(double)positionX
@@ -66,41 +103,31 @@
       [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
   if (modifiers & kFxModifierKey_SHIFT)
     objPos = [self shiftConstrainedPosition:objPos];
-  simd_float2 delta = objPos - self.dragOrigin;
-  self.dragOrigin = objPos;
 
   BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
+  self.cmdSnapOverride = (modifiers & kFxModifierKey_COMMAND) != 0;
+
+  // Snap the selection's bounding-box corner to grid, not the mouse position.
+  simd_float2 rawDelta = objPos - self.dragOrigin;
+  simd_float2 bmin, bmax;
+  if (self.snapToGrid && self.gridEnabled && isCursorMode &&
+      [self boundsOfSelectedPaths:&bmin max:&bmax]) {
+    simd_float2 targetMin = bmin + rawDelta;
+    simd_float2 snappedMin = [self snapToGridPosition:targetMin];
+    rawDelta += (snappedMin - targetMin);
+  } else {
+    objPos = [self snapToGridPosition:objPos];
+    rawDelta = objPos - self.dragOrigin;
+  }
+  simd_float2 delta = rawDelta;
+  if (isCursorMode)
+    delta = [self alignSnapDelta:delta
+                forSelectedPaths:self.selectedPathIndices];
+  self.dragOrigin += delta;
   if (isCursorMode) {
     if ((modifiers & kFxModifierKey_OPTION) && !self.dragDidDuplicate) {
       self.dragDidDuplicate = YES;
-      NSMutableIndexSet *expanded = [self.selectedPathIndices mutableCopy];
-      [self.selectedPathIndices
-          enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
-            if (idx < self.paths.count && self.paths[idx].isGroup)
-              [expanded addIndexes:KKDescendantIndices(idx, self.paths)];
-          }];
-      NSMutableIndexSet *newIndices = [NSMutableIndexSet indexSet];
-      NSMutableDictionary<NSString *, NSString *> *groupIDMap =
-          [NSMutableDictionary dictionary];
-      [expanded enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
-        if (idx >= self.paths.count || self.paths[idx].locked)
-          return;
-        KKBezierPath *clone =
-            [KKBezierPath pathWithData:[self.paths[idx] dataRepresentation]];
-        if (clone.isGroup && clone.groupID) {
-          NSString *newID = [[NSUUID UUID] UUIDString];
-          groupIDMap[clone.groupID] = newID;
-          clone.groupID = newID;
-        }
-        if (clone.parentGroupID && groupIDMap[clone.parentGroupID])
-          clone.parentGroupID = groupIDMap[clone.parentGroupID];
-        [self.paths addObject:clone];
-        if ([self.selectedPathIndices containsIndex:idx])
-          [newIndices addIndex:self.paths.count - 1];
-      }];
-      [self.selectedPathIndices removeAllIndexes];
-      [self.selectedPathIndices addIndexes:newIndices];
-      self.activePathIndex = (NSInteger)newIndices.lastIndex;
+      [self duplicateSelectedPaths:delta];
     }
     [self.selectedPathIndices
         enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
@@ -138,10 +165,9 @@
   simd_float2 offset = {objPos.x - pt.x, objPos.y - pt.y};
 
   if (self.dragIsNewPoint) {
-    CGPoint ptCanvas =
-        [self canvasPointFromObjectPoint:(simd_float2){pt.x, pt.y}];
-    CGFloat canvasDist = hypot(positionX - ptCanvas.x, positionY - ptCanvas.y);
-    if (canvasDist > 4.0) {
+    CGFloat canvasDist = hypot(positionX - self.newPointCanvasOrigin.x,
+                               positionY - self.newPointCanvasOrigin.y);
+    if (canvasDist > 10.0) {
       [self setHandle:offset
                 atIndex:self.dragIndex
                    isIn:NO
@@ -163,6 +189,18 @@
   } else {
     if (modifiers & kFxModifierKey_SHIFT)
       objPos = [self shiftConstrainedPosition:objPos];
+    objPos = [self snapToGridPosition:objPos];
+    self.cmdSnapOverride = (modifiers & kFxModifierKey_COMMAND) != 0;
+    {
+      NSMutableIndexSet *exPts = [NSMutableIndexSet
+          indexSetWithIndex:selKey((NSUInteger)self.activePathIndex,
+                                   (NSUInteger)self.dragIndex)];
+      if (self.selectedPoints.count > 1)
+        [exPts addIndexes:self.selectedPoints];
+      objPos = [self alignSnapPoint:objPos
+                     excludingPaths:nil
+                    excludingPoints:exPts];
+    }
     NSUInteger dragKey =
         selKey((NSUInteger)self.activePathIndex, (NSUInteger)self.dragIndex);
     if (self.selectedPoints.count > 1 &&
@@ -192,12 +230,119 @@
   *forceUpdate = YES;
 }
 
+- (void)dragPathToX:(double)positionX
+                  y:(double)positionY
+          modifiers:(NSUInteger)modifiers
+        forceUpdate:(BOOL *)forceUpdate {
+  KKBezierPath *active = [self activePath];
+  if (!active)
+    return;
+  simd_float2 objPos =
+      [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+  if (modifiers & kFxModifierKey_SHIFT)
+    objPos = [self shiftConstrainedPosition:objPos];
+  objPos = [self snapToGridPosition:objPos];
+  simd_float2 delta = objPos - self.dragOrigin;
+  BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
+  self.cmdSnapOverride = (modifiers & kFxModifierKey_COMMAND) != 0;
+  if (isCursorMode) {
+    NSMutableIndexSet *snapSet =
+        [NSMutableIndexSet indexSetWithIndex:self.activePathIndex];
+    if (active.isGroup)
+      [snapSet
+          addIndexes:KKDescendantIndices(self.activePathIndex, self.paths)];
+    delta = [self alignSnapDelta:delta forSelectedPaths:snapSet];
+  }
+  if (isCursorMode && (modifiers & kFxModifierKey_OPTION) &&
+      !self.dragDidDuplicate) {
+    self.dragDidDuplicate = YES;
+    NSMutableIndexSet *srcIndices =
+        [NSMutableIndexSet indexSetWithIndex:self.activePathIndex];
+    if (active.isGroup)
+      [srcIndices
+          addIndexes:KKDescendantIndices(self.activePathIndex, self.paths)];
+    NSMutableDictionary<NSString *, NSString *> *groupIDMap =
+        [NSMutableDictionary dictionary];
+    __block NSInteger cloneIdx = -1;
+    [srcIndices enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+      KKBezierPath *c =
+          [KKBezierPath pathWithData:[self.paths[idx] dataRepresentation]];
+      if (c.isGroup && c.groupID) {
+        NSString *newID = [[NSUUID UUID] UUIDString];
+        groupIDMap[c.groupID] = newID;
+        c.groupID = newID;
+      }
+      if (c.parentGroupID && groupIDMap[c.parentGroupID])
+        c.parentGroupID = groupIDMap[c.parentGroupID];
+      [self.paths addObject:c];
+      if ((NSUInteger)self.activePathIndex == idx)
+        cloneIdx = (NSInteger)self.paths.count - 1;
+    }];
+    [self.selectedPathIndices removeAllIndexes];
+    [self.selectedPathIndices addIndex:cloneIdx];
+    self.activePathIndex = cloneIdx;
+  }
+  active = [self activePath];
+  [active translateBy:delta];
+  if (active.isGroup) {
+    NSIndexSet *desc = KKDescendantIndices(self.activePathIndex, self.paths);
+    [desc enumerateIndexesUsingBlock:^(NSUInteger di, BOOL *stop) {
+      [self.paths[di] translateBy:delta];
+    }];
+  }
+  self.dragOrigin += delta;
+  [self writePaths:self.paths];
+  *forceUpdate = YES;
+}
+
+- (void)handleStepperDragAtY:(double)positionY
+                   modifiers:(NSUInteger)modifiers
+                 forceUpdate:(BOOL *)forceUpdate {
+  double moveDelta = positionY - self.stepperDragOriginY;
+  self.stepperDragOriginY = positionY;
+  self.stepperAccumulatedDelta += moveDelta;
+
+  BOOL shiftDown = (modifiers & kFxModifierKey_SHIFT) != 0;
+
+  // When shift is pressed/released, rebase so the multiplier change
+  // starts from the current value.
+  if (shiftDown != self.stepperShiftWasDown) {
+    self.stepperAccumulatedDelta = 0;
+    self.stepperDragStartValue = self.gridSpacing;
+    self.stepperShiftWasDown = shiftDown;
+  }
+
+  // 8px per unit normally, 2px per unit with shift.
+  double pxPerUnit = shiftDown ? 2.0 : 8.0;
+  NSInteger newVal = self.stepperDragStartValue +
+                     (NSInteger)(self.stepperAccumulatedDelta / pxPerUnit);
+  if (newVal < 1)
+    newVal = 1;
+  if (newVal > 1000)
+    newVal = 1000;
+  if (newVal != self.gridSpacing) {
+    self.gridSpacing = newVal;
+    id<FxParameterSettingAPI_v5> setAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [setAPI setIntValue:(int)self.gridSpacing
+            toParameter:kParamGridSpacing
+                 atTime:kCMTimeZero];
+    *forceUpdate = YES;
+  }
+}
+
 - (void)mouseDraggedAtPositionX:(double)positionX
                       positionY:(double)positionY
                      activePart:(NSInteger)activePart
                       modifiers:(NSUInteger)modifiers
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
+  if (self.stepperDragging) {
+    [self handleStepperDragAtY:positionY
+                     modifiers:modifiers
+                   forceUpdate:forceUpdate];
+    return;
+  }
   if (self.dragIsMarquee) {
     self.marqueeEnd = CGPointMake(positionX, positionY);
     *forceUpdate = YES;
@@ -253,55 +398,10 @@
     return;
   }
   if (self.dragIsPath) {
-    KKBezierPath *active = [self activePath];
-    if (!active)
-      return;
-    simd_float2 objPos =
-        [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
-    if (modifiers & kFxModifierKey_SHIFT)
-      objPos = [self shiftConstrainedPosition:objPos];
-    simd_float2 delta = objPos - self.dragOrigin;
-    BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
-    if (isCursorMode && (modifiers & kFxModifierKey_OPTION) &&
-        !self.dragDidDuplicate) {
-      self.dragDidDuplicate = YES;
-      NSMutableIndexSet *srcIndices =
-          [NSMutableIndexSet indexSetWithIndex:self.activePathIndex];
-      if (active.isGroup)
-        [srcIndices
-            addIndexes:KKDescendantIndices(self.activePathIndex, self.paths)];
-      NSMutableDictionary<NSString *, NSString *> *groupIDMap =
-          [NSMutableDictionary dictionary];
-      __block NSInteger cloneIdx = -1;
-      [srcIndices enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
-        KKBezierPath *c =
-            [KKBezierPath pathWithData:[self.paths[idx] dataRepresentation]];
-        if (c.isGroup && c.groupID) {
-          NSString *newID = [[NSUUID UUID] UUIDString];
-          groupIDMap[c.groupID] = newID;
-          c.groupID = newID;
-        }
-        if (c.parentGroupID && groupIDMap[c.parentGroupID])
-          c.parentGroupID = groupIDMap[c.parentGroupID];
-        [self.paths addObject:c];
-        if ((NSUInteger)self.activePathIndex == idx)
-          cloneIdx = (NSInteger)self.paths.count - 1;
-      }];
-      [self.selectedPathIndices removeAllIndexes];
-      [self.selectedPathIndices addIndex:cloneIdx];
-      self.activePathIndex = cloneIdx;
-    }
-    active = [self activePath];
-    [active translateBy:delta];
-    if (active.isGroup) {
-      NSIndexSet *desc = KKDescendantIndices(self.activePathIndex, self.paths);
-      [desc enumerateIndexesUsingBlock:^(NSUInteger di, BOOL *stop) {
-        [self.paths[di] translateBy:delta];
-      }];
-    }
-    self.dragOrigin = objPos;
-    [self writePaths:self.paths];
-    *forceUpdate = YES;
+    [self dragPathToX:positionX
+                    y:positionY
+            modifiers:modifiers
+          forceUpdate:forceUpdate];
     return;
   }
   [self dragPointOrHandleToX:positionX
@@ -316,6 +416,10 @@
                  modifiers:(NSUInteger)modifiers
                forceUpdate:(BOOL *)forceUpdate
                     atTime:(CMTime)time {
+  if (self.stepperDragging) {
+    self.stepperDragging = NO;
+    self.stepperShiftWasDown = NO;
+  }
   if (self.autoSelectPending) {
     self.autoSelectPending = NO;
     double hitRadiusStroke = [self strokeHitRadius];
@@ -350,6 +454,7 @@
     [self finalizeLine];
 
   [self resetDragState];
+  [self resetAlignSnap];
   [self syncStrokeParamsToSelection];
   *forceUpdate = YES;
   [super mouseUpAtPositionX:positionX

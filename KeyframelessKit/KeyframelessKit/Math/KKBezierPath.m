@@ -574,7 +574,7 @@ static void cornerRadii(float fraction, float maxRX, float maxRY, float objW,
                 &ry[i]);
 
   // Build points: 2 per rounded corner, 1 per sharp corner
-  KKBezierPoint tmp[12]; // max 8 rounded + potential
+  KKBezierPoint tmp[12];
   NSUInteger n = 0;
 
   // TL corner (left side, then top side)
@@ -621,30 +621,52 @@ static void cornerRadii(float fraction, float maxRX, float maxRY, float objW,
     tmp[n++] = (KKBezierPoint){min.x, min.y, 0, 0, 0, 0, KKBezierPointLinear};
   }
 
-  // Merge adjacent points that overlap (when a side fully collapses)
+  // Merge between-corner point pairs whose side has fully collapsed
+  // (adjacent corners' radii sum to the full side length). Use a very
+  // tight threshold so we only merge at/near 100% — the old 1e-4
+  // threshold was triggering at ~99% and warping the curve.
   KKBezierPoint merged[12];
   NSUInteger m = 0;
+  // Corner boundary indices: the first point index of each corner group
+  NSUInteger cStart[4] = {0, 0, 0, 0};
+  NSUInteger ci = 0;
+  for (NSUInteger i = 0; i < n && ci < 4; i++) {
+    // Each corner emits 1 or 2 points; boundaries are at 0 and after
+    // each corner's contribution
+    cStart[ci++] = i;
+    BOOL rounded = NO;
+    if (ci == 1)
+      rounded = (rx[0] > 0.0001f && ry[0] > 0.0001f);
+    else if (ci == 2)
+      rounded = (rx[1] > 0.0001f && ry[1] > 0.0001f);
+    else if (ci == 3)
+      rounded = (rx[2] > 0.0001f && ry[2] > 0.0001f);
+    else if (ci == 4)
+      rounded = (rx[3] > 0.0001f && ry[3] > 0.0001f);
+    if (rounded)
+      i++; // skip second point of this corner
+  }
   for (NSUInteger i = 0; i < n; i++) {
     NSUInteger next = (i + 1) % n;
+    BOOL isBoundary = (next == cStart[0] || next == cStart[1] ||
+                       next == cStart[2] || next == cStart[3]);
     float dx = tmp[next].x - tmp[i].x;
     float dy = tmp[next].y - tmp[i].y;
-    if (dx * dx + dy * dy < 0.0001f && i < n - 1) {
-      // Merge: take in-handle from first, out-handle from second
+    if (isBoundary && dx * dx + dy * dy < 1e-8f && i < n - 1) {
       merged[m] = tmp[i];
       merged[m].outX = tmp[next].outX;
       merged[m].outY = tmp[next].outY;
       merged[m].type = KKBezierPointBezier;
       m++;
-      i++; // skip next
+      i++;
     } else {
       merged[m++] = tmp[i];
     }
   }
-  // Also check wrap-around: last point and first point
   if (m >= 2) {
     float dx = merged[0].x - merged[m - 1].x;
     float dy = merged[0].y - merged[m - 1].y;
-    if (dx * dx + dy * dy < 0.0001f) {
+    if (dx * dx + dy * dy < 1e-8f) {
       merged[0].inX = merged[m - 1].inX;
       merged[0].inY = merged[m - 1].inY;
       merged[0].type = KKBezierPointBezier;
