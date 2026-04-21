@@ -79,6 +79,7 @@ static float paddingForRadius(double radius, float minDim) {
         destinationImage:(FxImageTile *)destinationImage
                   atTime:(CMTime)time {
   [KKPlugin multiStageFlushPendingLanes];
+  [KKPlugin multiStageSyncFromParams:self.apiManager];
 
   id<FxTimingAPI_v4> timingAPI =
       [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];

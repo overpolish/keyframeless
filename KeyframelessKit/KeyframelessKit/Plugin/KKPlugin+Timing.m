@@ -628,6 +628,33 @@ static const FxParameterFlags kCustomUIDisabled =
   return NO;
 }
 
++ (void)multiStageSyncFromParams:(id<PROAPIAccessing>)apiManager {
+  KKStageSequencerView *seq =
+      (__bridge KKStageSequencerView *)KKMultiStageSequencerView;
+  if (!seq)
+    return;
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!getAPI)
+    return;
+  NSString *json = nil;
+  [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+  if (!json)
+    return;
+  NSString *snapshotJSON =
+      [KKTimingLane jsonFromLanes:KKMultiStageLanesSnapshot];
+  if ([json isEqualToString:snapshotJSON ?: @""])
+    return;
+  NSArray<KKTimingLane *> *lanes = [KKTimingLane lanesFromJSON:json];
+  if (!lanes)
+    return;
+  KKMultiStageLanesSnapshot = lanes;
+  KKMultiStagePendingLanes = nil;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    seq.lanes = lanes;
+  });
+}
+
 + (void)multiStageFlushPendingLanes {
   NSArray<KKTimingLane *> *pending = KKMultiStagePendingLanes;
   if (!pending)
