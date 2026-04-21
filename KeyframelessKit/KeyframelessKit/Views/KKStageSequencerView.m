@@ -628,14 +628,13 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
       CGFloat segLeft = trackX + seg.start * trackWidth;
       CGFloat segRight = trackX + seg.end * trackWidth;
 
-      if (segIdx > 0 && fabs(loc.x - segLeft) < kEdgeHitZone) {
+      if (fabs(loc.x - segLeft) < kEdgeHitZone) {
         *outLane = laneIdx;
         *outSeg = segIdx;
         *outLeading = YES;
         return YES;
       }
-      if (segIdx < lane.segments.count - 1 &&
-          fabs(loc.x - segRight) < kEdgeHitZone) {
+      if (fabs(loc.x - segRight) < kEdgeHitZone) {
         *outLane = laneIdx;
         *outSeg = segIdx;
         *outLeading = NO;
@@ -817,8 +816,7 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
       CGFloat segLeft = trackX + seg.start * trackWidth;
       CGFloat segRight = trackX + seg.end * trackWidth;
 
-      // Leading edge (not for first segment).
-      if (segIdx > 0 && fabs(loc.x - segLeft) < kEdgeHitZone) {
+      if (fabs(loc.x - segLeft) < kEdgeHitZone) {
         _dragging = YES;
         _dragLaneIdx = laneIdx;
         _dragSegIdx = segIdx;
@@ -828,9 +826,7 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
         [[NSCursor resizeLeftRightCursor] set];
         return;
       }
-      // Trailing edge (not for last segment).
-      if (segIdx < lane.segments.count - 1 &&
-          fabs(loc.x - segRight) < kEdgeHitZone) {
+      if (fabs(loc.x - segRight) < kEdgeHitZone) {
         _dragging = YES;
         _dragLaneIdx = laneIdx;
         _dragSegIdx = segIdx;
@@ -1028,41 +1024,41 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
     return;
   }
 
+  double minPx = kMinSegmentPx / _dragTrackWidth;
+  double minFrac = MAX(kMinSegmentFrac, minPx);
+
   if (_dragLeadingEdge) {
-    // Dragging the leading edge of _dragSegIdx.
-    // This is the shared boundary between seg[_dragSegIdx-1] and
-    // seg[_dragSegIdx].
-    if (_dragSegIdx <= 0 || (NSUInteger)_dragSegIdx >= segs.count)
-      return;
-    KKTimingSegment *prev = [segs[_dragSegIdx - 1] copy];
     KKTimingSegment *cur = [segs[_dragSegIdx] copy];
-
-    double minPx = kMinSegmentPx / _dragTrackWidth;
-    double minFrac = MAX(kMinSegmentFrac, minPx);
-    double minPos = prev.start + minFrac;
-    double maxPos = cur.end - minFrac;
-    newFrac = MAX(minPos, MIN(maxPos, newFrac));
-
-    prev.end = newFrac;
-    cur.start = newFrac;
-    segs[_dragSegIdx - 1] = prev;
+    if (_dragSegIdx > 0) {
+      // Shared boundary between prev and cur.
+      KKTimingSegment *prev = [segs[_dragSegIdx - 1] copy];
+      double minPos = prev.start + minFrac;
+      double maxPos = cur.end - minFrac;
+      newFrac = MAX(minPos, MIN(maxPos, newFrac));
+      prev.end = newFrac;
+      cur.start = newFrac;
+      segs[_dragSegIdx - 1] = prev;
+    } else {
+      // Outer leading edge — resize first segment only.
+      newFrac = MAX(0.0, MIN(cur.end - minFrac, newFrac));
+      cur.start = newFrac;
+    }
     segs[_dragSegIdx] = cur;
   } else {
-    // Dragging the trailing edge of _dragSegIdx.
-    // Shared boundary between seg[_dragSegIdx] and seg[_dragSegIdx+1].
-    if ((NSUInteger)_dragSegIdx + 1 >= segs.count)
-      return;
     KKTimingSegment *cur = [segs[_dragSegIdx] copy];
-    KKTimingSegment *next = [segs[_dragSegIdx + 1] copy];
-
-    double minPx = kMinSegmentPx / _dragTrackWidth;
-    double minFrac = MAX(kMinSegmentFrac, minPx);
-    newFrac = MAX(cur.start + minFrac, MIN(next.end - minFrac, newFrac));
-
-    cur.end = newFrac;
-    next.start = newFrac;
+    if ((NSUInteger)_dragSegIdx + 1 < segs.count) {
+      // Shared boundary between cur and next.
+      KKTimingSegment *next = [segs[_dragSegIdx + 1] copy];
+      newFrac = MAX(cur.start + minFrac, MIN(next.end - minFrac, newFrac));
+      cur.end = newFrac;
+      next.start = newFrac;
+      segs[_dragSegIdx + 1] = next;
+    } else {
+      // Outer trailing edge — resize last segment only.
+      newFrac = MAX(cur.start + minFrac, MIN(1.0, newFrac));
+      cur.end = newFrac;
+    }
     segs[_dragSegIdx] = cur;
-    segs[_dragSegIdx + 1] = next;
   }
 
   lane.segments = segs;
