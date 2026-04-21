@@ -52,6 +52,9 @@ static const NSInteger kCurveSegments = 40;
   NSInteger _hoverSegSegIdx;
   // Ruler scrub state.
   BOOL _scrubbingRuler;
+  // Zoom/pan state.
+  CGFloat _zoom;      // 1.0 = fit all, higher = zoomed in.
+  CGFloat _panOffset; // Visible start as fraction 0–1.
 }
 
 - (instancetype)initWithFrame:(NSRect)frame {
@@ -62,6 +65,9 @@ static const NSInteger kCurveSegments = 40;
     self.layer.cornerRadius = KKSpacingMD;
     self.layer.borderWidth = KKBorderWidthXS;
     self.layer.borderColor = [NSColor colorWithWhite:1.0 alpha:0.05].CGColor;
+
+    _zoom = 1.0;
+    _panOffset = 0.0;
 
     _hoverLaneIdx = -1;
     _hoverSegIdx = -1;
@@ -111,6 +117,25 @@ static const NSInteger kCurveSegments = 40;
                     trackWidth:(CGFloat *)outTrackWidth {
   *outTrackX = kBorderInset + kLabelWidth;
   *outTrackWidth = viewWidth - 2 * kBorderInset - kLabelWidth - kLabelPadding;
+}
+
+/// Convert a 0–1 timeline fraction to pixel X (zoom/pan aware).
+- (CGFloat)_xForFrac:(double)frac
+              trackX:(CGFloat)trackX
+          trackWidth:(CGFloat)trackWidth {
+  return trackX + (frac - _panOffset) * _zoom * trackWidth;
+}
+
+/// Convert a pixel X back to 0–1 timeline fraction (zoom/pan aware).
+- (double)_fracForX:(CGFloat)x
+             trackX:(CGFloat)trackX
+         trackWidth:(CGFloat)trackWidth {
+  return _panOffset + (x - trackX) / (_zoom * trackWidth);
+}
+
+- (void)_clampPanOffset {
+  CGFloat visibleSpan = 1.0 / _zoom;
+  _panOffset = MAX(0.0, MIN(1.0 - visibleSpan, _panOffset));
 }
 
 - (CGFloat)_laneYForIndex:(NSUInteger)laneIdx totalHeight:(CGFloat)totalHeight {
@@ -174,8 +199,10 @@ static const NSInteger kCurveSegments = 40;
     // Selection fills per segment.
     for (NSUInteger segIdx = 0; segIdx < lane.segments.count; segIdx++) {
       KKTimingSegment *seg = lane.segments[segIdx];
-      CGFloat segX = trackX + seg.start * trackWidth;
-      CGFloat segW = (seg.end - seg.start) * trackWidth;
+      CGFloat segX = [self _xForFrac:seg.start
+                              trackX:trackX
+                          trackWidth:trackWidth];
+      CGFloat segW = (seg.end - seg.start) * trackWidth * _zoom;
       if (segW < 1)
         continue;
 
@@ -225,10 +252,14 @@ static const NSInteger kCurveSegments = 40;
       CGFloat edgeX;
       if (_hoverLeading && _hoverSegIdx >= 0 &&
           (NSUInteger)_hoverSegIdx < lane.segments.count) {
-        edgeX = trackX + lane.segments[_hoverSegIdx].start * trackWidth;
+        edgeX = [self _xForFrac:lane.segments[_hoverSegIdx].start
+                         trackX:trackX
+                     trackWidth:trackWidth];
       } else if (!_hoverLeading && _hoverSegIdx >= 0 &&
                  (NSUInteger)_hoverSegIdx < lane.segments.count) {
-        edgeX = trackX + lane.segments[_hoverSegIdx].end * trackWidth;
+        edgeX = [self _xForFrac:lane.segments[_hoverSegIdx].end
+                         trackX:trackX
+                     trackWidth:trackWidth];
       } else {
         edgeX = -1;
       }
@@ -295,8 +326,10 @@ static double _segAvgValue(KKTimingSegment *seg) {
 
   for (NSUInteger segIdx = 0; segIdx < lane.segments.count; segIdx++) {
     KKTimingSegment *seg = lane.segments[segIdx];
-    CGFloat segLeft = trackX + seg.start * trackWidth;
-    CGFloat segWidth = (seg.end - seg.start) * trackWidth;
+    CGFloat segLeft = [self _xForFrac:seg.start
+                               trackX:trackX
+                           trackWidth:trackWidth];
+    CGFloat segWidth = (seg.end - seg.start) * trackWidth * _zoom;
     if (segWidth < 1)
       continue;
 
@@ -406,10 +439,14 @@ static NSString *_boundaryTimeLabel(double fraction, double duration) {
     durAttrs = @{
       NSFontAttributeName : [NSFont systemFontOfSize:8.0
                                               weight:NSFontWeightMedium],
-      NSForegroundColorAttributeName : [NSColor accentMatchingHost],
+      NSForegroundColorAttributeName : (hSeg.type == KKSegmentTypeHold)
+          ? [NSColor accentMatchingHost]
+          : [NSColor warning],
     };
     NSSize durSize = [durLabel sizeWithAttributes:durAttrs];
-    CGFloat segMidX = trackX + ((hSeg.start + hSeg.end) / 2.0) * trackWidth;
+    CGFloat segMidX = [self _xForFrac:(hSeg.start + hSeg.end) / 2.0
+                               trackX:trackX
+                           trackWidth:trackWidth];
     durX = segMidX - durSize.width / 2.0;
     durX = MAX(trackX, MIN(trackX + trackWidth - durSize.width, durX));
     durY = labelRowY + (kBoundaryLabelHeight - durSize.height) / 2.0;
@@ -432,7 +469,7 @@ static NSString *_boundaryTimeLabel(double fraction, double duration) {
 
   for (NSNumber *bNum in boundaries) {
     double frac = bNum.doubleValue;
-    CGFloat bx = trackX + frac * trackWidth;
+    CGFloat bx = [self _xForFrac:frac trackX:trackX trackWidth:trackWidth];
     NSString *label = _boundaryTimeLabel(frac, _effectDuration);
     NSSize labelSize = [label sizeWithAttributes:dimAttrs];
     CGFloat labelX = bx - labelSize.width / 2.0;
@@ -489,7 +526,7 @@ static NSString *_timecodeLabel(double seconds) {
 
   CGFloat rulerY = totalHeight - kBorderInset - kRulerHeight;
 
-  CGFloat pps = trackWidth / _effectDuration;
+  CGFloat pps = trackWidth * _zoom / _effectDuration;
   double interval = [self _tickIntervalForPixelsPerSecond:pps];
 
   NSDictionary *attrs = @{
@@ -502,10 +539,18 @@ static NSString *_timecodeLabel(double seconds) {
   NSBezierPath *ticks = [NSBezierPath bezierPath];
   ticks.lineWidth = 1.0;
 
-  double t = 0.0;
-  while (t <= _effectDuration + 0.001) {
-    CGFloat x = trackX + (t / _effectDuration) * trackWidth;
-    x = MAX(trackX, MIN(trackX + trackWidth, x));
+  // Start from the first visible tick.
+  double visStart = _panOffset * _effectDuration;
+  double tStart = floor(visStart / interval) * interval;
+  double visEnd = (_panOffset + 1.0 / _zoom) * _effectDuration;
+
+  for (double t = tStart; t <= visEnd + 0.001; t += interval) {
+    if (t < 0)
+      continue;
+    double frac = (_effectDuration > 0) ? t / _effectDuration : 0;
+    CGFloat x = [self _xForFrac:frac trackX:trackX trackWidth:trackWidth];
+    if (x < trackX || x > trackX + trackWidth)
+      continue;
 
     [ticks moveToPoint:NSMakePoint(x, rulerY)];
     [ticks lineToPoint:NSMakePoint(x, rulerY + kRulerHeight)];
@@ -517,8 +562,6 @@ static NSString *_timecodeLabel(double seconds) {
       CGFloat labelY = rulerY + (kRulerHeight - labelSize.height) / 2.0;
       [label drawAtPoint:NSMakePoint(labelX, labelY) withAttributes:attrs];
     }
-
-    t += interval;
   }
 
   [ticks stroke];
@@ -585,7 +628,9 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
     return;
 
   NSColor *playheadColor = [NSColor colorWithWhite:0.8 alpha:1.0];
-  CGFloat x = trackX + _playheadFraction * trackWidth;
+  CGFloat x = [self _xForFrac:_playheadFraction
+                       trackX:trackX
+                   trackWidth:trackWidth];
   CGFloat lanesBottom = kBorderInset;
   CGFloat rulerTop = totalHeight - kBorderInset;
 
@@ -625,8 +670,12 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
 
     for (NSUInteger segIdx = 0; segIdx < lane.segments.count; segIdx++) {
       KKTimingSegment *seg = lane.segments[segIdx];
-      CGFloat segLeft = trackX + seg.start * trackWidth;
-      CGFloat segRight = trackX + seg.end * trackWidth;
+      CGFloat segLeft = [self _xForFrac:seg.start
+                                 trackX:trackX
+                             trackWidth:trackWidth];
+      CGFloat segRight = [self _xForFrac:seg.end
+                                  trackX:trackX
+                              trackWidth:trackWidth];
 
       if (fabs(loc.x - segLeft) < kEdgeHitZone) {
         *outLane = laneIdx;
@@ -671,8 +720,12 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
       if (loc.x < kBorderInset + kLabelWidth)
         break;
       for (NSUInteger si = 0; si < l.segments.count; si++) {
-        CGFloat sL = tX + l.segments[si].start * tW;
-        CGFloat sR = tX + l.segments[si].end * tW;
+        CGFloat sL = [self _xForFrac:l.segments[si].start
+                              trackX:tX
+                          trackWidth:tW];
+        CGFloat sR = [self _xForFrac:l.segments[si].end
+                              trackX:tX
+                          trackWidth:tW];
         if (loc.x >= sL && loc.x <= sR) {
           hovSegLane = li;
           hovSegSeg = si;
@@ -730,8 +783,12 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
 
     for (NSUInteger segIdx = 0; segIdx < lane.segments.count; segIdx++) {
       KKTimingSegment *seg = lane.segments[segIdx];
-      CGFloat segLeft = trackX + seg.start * trackWidth;
-      CGFloat segRight = trackX + seg.end * trackWidth;
+      CGFloat segLeft = [self _xForFrac:seg.start
+                                 trackX:trackX
+                             trackWidth:trackWidth];
+      CGFloat segRight = [self _xForFrac:seg.end
+                                  trackX:trackX
+                              trackWidth:trackWidth];
       if (loc.x >= segLeft && loc.x <= segRight)
         return YES;
     }
@@ -768,6 +825,61 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
     [self renderLanes];
 }
 
+- (void)magnifyWithEvent:(NSEvent *)event {
+  NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+  CGFloat trackX, trackWidth;
+  [self _trackGeometryForWidth:NSWidth(self.bounds)
+                        trackX:&trackX
+                    trackWidth:&trackWidth];
+
+  // Fraction under the cursor before zoom.
+  double fracUnderCursor = [self _fracForX:loc.x
+                                    trackX:trackX
+                                trackWidth:trackWidth];
+
+  CGFloat oldZoom = _zoom;
+  _zoom = MAX(1.0, MIN(20.0, _zoom * (1.0 + event.magnification)));
+
+  // Adjust pan so the fraction under the cursor stays put.
+  _panOffset = fracUnderCursor - (loc.x - trackX) / (_zoom * trackWidth);
+  [self _clampPanOffset];
+  [self mouseMoved:event];
+  [self renderLanes];
+}
+
+- (void)scrollWheel:(NSEvent *)event {
+  if (event.phase == NSEventPhaseNone &&
+      event.momentumPhase == NSEventPhaseNone)
+    return;
+  CGFloat trackX, trackWidth;
+  [self _trackGeometryForWidth:NSWidth(self.bounds)
+                        trackX:&trackX
+                    trackWidth:&trackWidth];
+  // Horizontal scroll → pan.
+  CGFloat dx = event.scrollingDeltaX;
+  if (event.hasPreciseScrollingDeltas)
+    _panOffset -= dx / (_zoom * trackWidth);
+  else
+    _panOffset -= dx * 0.01 / _zoom;
+  [self _clampPanOffset];
+
+  // Re-evaluate hover at current cursor position.
+  NSPoint loc = [self.window mouseLocationOutsideOfEventStream];
+  loc = [self convertPoint:loc fromView:nil];
+  if (NSPointInRect(loc, self.bounds)) {
+    NSEvent *fake = event;
+    [self mouseMoved:fake];
+  } else {
+    _hoveringEdge = NO;
+    _hoverLaneIdx = -1;
+    _hoverSegIdx = -1;
+    _hoverSegLaneIdx = -1;
+    _hoverSegSegIdx = -1;
+  }
+
+  [self renderLanes];
+}
+
 - (void)mouseDown:(NSEvent *)event {
   NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
 
@@ -782,7 +894,7 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
   CGFloat rulerY = totalHeight - kBorderInset - kRulerHeight;
   if (loc.y >= rulerY && loc.y <= totalHeight - kBorderInset &&
       loc.x >= trackX && loc.x <= trackX + trackWidth) {
-    double frac = (loc.x - trackX) / trackWidth;
+    double frac = [self _fracForX:loc.x trackX:trackX trackWidth:trackWidth];
     frac = MAX(0.0, MIN(1.0, frac));
     _scrubbingRuler = YES;
     _dragTrackX = trackX;
@@ -813,8 +925,12 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
     // Check for edge drag.
     for (NSUInteger segIdx = 0; segIdx < lane.segments.count; segIdx++) {
       KKTimingSegment *seg = lane.segments[segIdx];
-      CGFloat segLeft = trackX + seg.start * trackWidth;
-      CGFloat segRight = trackX + seg.end * trackWidth;
+      CGFloat segLeft = [self _xForFrac:seg.start
+                                 trackX:trackX
+                             trackWidth:trackWidth];
+      CGFloat segRight = [self _xForFrac:seg.end
+                                  trackX:trackX
+                              trackWidth:trackWidth];
 
       if (fabs(loc.x - segLeft) < kEdgeHitZone) {
         _dragging = YES;
@@ -840,9 +956,13 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
 
     // Double-click to add segment (snap to playhead if close).
     if (event.clickCount == 2) {
-      double clickFrac = (loc.x - trackX) / trackWidth;
+      double clickFrac = [self _fracForX:loc.x
+                                  trackX:trackX
+                              trackWidth:trackWidth];
       clickFrac = MAX(0.0, MIN(1.0, clickFrac));
-      CGFloat playheadX = trackX + _playheadFraction * trackWidth;
+      CGFloat playheadX = [self _xForFrac:_playheadFraction
+                                   trackX:trackX
+                               trackWidth:trackWidth];
       if (fabs(loc.x - playheadX) < kPlayheadSnapPx)
         clickFrac = _playheadFraction;
       if (_onSegmentAdded)
@@ -853,8 +973,12 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
     // Check which segment was clicked.
     for (NSUInteger segIdx = 0; segIdx < lane.segments.count; segIdx++) {
       KKTimingSegment *seg = lane.segments[segIdx];
-      CGFloat segLeft = trackX + seg.start * trackWidth;
-      CGFloat segRight = trackX + seg.end * trackWidth;
+      CGFloat segLeft = [self _xForFrac:seg.start
+                                 trackX:trackX
+                             trackWidth:trackWidth];
+      CGFloat segRight = [self _xForFrac:seg.end
+                                  trackX:trackX
+                              trackWidth:trackWidth];
       if (loc.x >= segLeft && loc.x <= segRight) {
         // Cmd-click removes the clicked segment.
         if ((event.modifierFlags & NSEventModifierFlagCommand) &&
@@ -869,7 +993,9 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
           _dragLaneIdx = laneIdx;
           _dragTrackX = trackX;
           _dragTrackWidth = trackWidth;
-          _dragLaneMoveStartFrac = (loc.x - trackX) / trackWidth;
+          _dragLaneMoveStartFrac = [self _fracForX:loc.x
+                                            trackX:trackX
+                                        trackWidth:trackWidth];
           NSMutableArray *origSegs =
               [NSMutableArray arrayWithCapacity:lane.segments.count];
           for (KKTimingSegment *s in lane.segments)
@@ -886,7 +1012,9 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
         _dragSegIdx = segIdx;
         _dragTrackX = trackX;
         _dragTrackWidth = trackWidth;
-        _dragMoveStartFrac = (loc.x - trackX) / trackWidth;
+        _dragMoveStartFrac = [self _fracForX:loc.x
+                                      trackX:trackX
+                                  trackWidth:trackWidth];
         _dragMoveOrigStart = seg.start;
         _dragMoveOrigEnd = seg.end;
         _hoverSegLaneIdx = -1;
@@ -908,7 +1036,9 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
 - (void)mouseDragged:(NSEvent *)event {
   if (_scrubbingRuler) {
     NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
-    double frac = (loc.x - _dragTrackX) / _dragTrackWidth;
+    double frac = [self _fracForX:loc.x
+                           trackX:_dragTrackX
+                       trackWidth:_dragTrackWidth];
     frac = MAX(0.0, MIN(1.0, frac));
     _playheadFraction = frac;
     [self renderLanes];
@@ -920,7 +1050,9 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
   if (_dragLaneMoving) {
     [[NSCursor closedHandCursor] set];
     NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
-    double newFrac = (loc.x - _dragTrackX) / _dragTrackWidth;
+    double newFrac = [self _fracForX:loc.x
+                              trackX:_dragTrackX
+                          trackWidth:_dragTrackWidth];
     newFrac = MAX(0.0, MIN(1.0, newFrac));
     double delta = newFrac - _dragLaneMoveStartFrac;
 
@@ -953,7 +1085,9 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
     return;
 
   NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
-  double newFrac = (loc.x - _dragTrackX) / _dragTrackWidth;
+  double newFrac = [self _fracForX:loc.x
+                            trackX:_dragTrackX
+                        trackWidth:_dragTrackWidth];
   newFrac = MAX(0.0, MIN(1.0, newFrac));
 
   NSMutableArray<KKTimingLane *> *lanes = [_lanes mutableCopy];
@@ -970,7 +1104,7 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
     double newEnd = _dragMoveOrigEnd + delta;
     double segSize = _dragMoveOrigEnd - _dragMoveOrigStart;
 
-    double minPx = kMinSegmentPx / _dragTrackWidth;
+    double minPx = kMinSegmentPx / (_dragTrackWidth * _zoom);
     double minFrac = MAX(kMinSegmentFrac, minPx);
 
     // Clamp against previous neighbor's minimum size.
@@ -1024,7 +1158,7 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
     return;
   }
 
-  double minPx = kMinSegmentPx / _dragTrackWidth;
+  double minPx = kMinSegmentPx / (_dragTrackWidth * _zoom);
   double minFrac = MAX(kMinSegmentFrac, minPx);
 
   if (_dragLeadingEdge) {
