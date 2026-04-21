@@ -32,6 +32,7 @@
 				Math/KKEasing.h,
 				Math/KKSVGParser.h,
 				Math/KKTiming.h,
+				Math/KKTimingStage.h,
 				Metal/KKMetalDeviceCache.h,
 				Metal/KKRenderPrimitives.h,
 				Metal/KKShaderTypes.h,

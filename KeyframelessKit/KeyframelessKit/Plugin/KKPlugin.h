@@ -9,6 +9,7 @@
 #import <Foundation/Foundation.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKTiming.h>
+#import <KeyframelessKit/KKTimingStage.h>
 #import <Metal/Metal.h>
 
 @class FxImageTile;
@@ -135,6 +136,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// state. Call from updateParameterVisibilityAtTime: in subclasses that use
 /// animation.
 - (void)updateTimingParameterVisibility;
+
+/// Returns interpolated absolute values for each enabled multi-stage property
+/// at renderTime, keyed by property label (e.g. @"Radius" -> @(35.2)).
+/// Returns nil when multi-stage is disabled — caller should fall back to
+/// timingAtTime: factor-based path.
+- (nullable NSDictionary<NSString *, NSNumber *> *)multiStageValuesAtTime:
+    (CMTime)renderTime;
 
 /// Pairs of parameter IDs that maintain their aspect ratio when the user
 /// holds Cmd while dragging either slider. Set before first use (e.g. in
