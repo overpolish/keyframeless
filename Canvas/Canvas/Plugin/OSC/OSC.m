@@ -123,7 +123,7 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
       self.gridToolbar.rightMargin = 16.0;
     }
 
-    self.gridSpacing = 50;
+    self.gridSpacing = 10;
     self.gridAdaptive = YES;
 
     self.sizeLabel = [[KKOSCLabel alloc] initWithAPIManager:apiManager];

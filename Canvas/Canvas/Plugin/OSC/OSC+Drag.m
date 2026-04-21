@@ -651,11 +651,25 @@
       [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
   if (modifiers & kFxModifierKey_SHIFT)
     objPos = [self shiftConstrainedPosition:objPos];
-  objPos = [self snapToGridPosition:objPos];
-  simd_float2 delta = objPos - self.dragOrigin;
 
   BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
   self.cmdSnapOverride = (modifiers & kFxModifierKey_COMMAND) != 0;
+
+  // Snap the selection's bounding-box corner to grid, not the mouse position.
+  // This ensures the object aligns to the actual grid lines regardless of
+  // where the drag started within the object.
+  simd_float2 rawDelta = objPos - self.dragOrigin;
+  simd_float2 bmin, bmax;
+  if (self.snapToGrid && self.gridEnabled && isCursorMode &&
+      [self boundsOfSelectedPaths:&bmin max:&bmax]) {
+    simd_float2 targetMin = bmin + rawDelta;
+    simd_float2 snappedMin = [self snapToGridPosition:targetMin];
+    rawDelta += (snappedMin - targetMin);
+  } else {
+    objPos = [self snapToGridPosition:objPos];
+    rawDelta = objPos - self.dragOrigin;
+  }
+  simd_float2 delta = rawDelta;
   if (isCursorMode)
     delta = [self alignSnapDelta:delta
                 forSelectedPaths:self.selectedPathIndices];

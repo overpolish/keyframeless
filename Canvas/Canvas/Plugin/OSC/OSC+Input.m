@@ -279,10 +279,8 @@
   }
   if (activePart == kOSCBoundingBox && self.selectedPathIndices.count > 0) {
     self.dragIsSelection = YES;
-    self.dragOrigin = [self
-        snapToGridPosition:[self objectPointFromCanvasPoint:CGPointMake(
-                                                                positionX,
-                                                                positionY)]];
+    self.dragOrigin =
+        [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
     self.dragAnchor = self.dragOrigin;
     if (self.autoSelect) {
       self.autoSelectPending = YES;
