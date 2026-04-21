@@ -659,6 +659,85 @@ static const CGFloat kPathToolbarGap = 6.0;
     }
   }
 
+  // Draw equal spacing indicators.
+  if (self.spacingSnapX || self.spacingSnapY) {
+    simd_float4 spColor = {1.0f, 1.0f, 0.0f, 1.0f};
+    float capLen = 6.0f;
+
+    // Helper: draw a horizontal gap indicator with end caps.
+    void (^drawHGap)(float, float, float) =
+        ^(float objLeft, float objRight, float objY) {
+          CGPoint cA =
+              [self canvasPointFromObjectPoint:(simd_float2){objLeft, objY}];
+          CGPoint cB =
+              [self canvasPointFromObjectPoint:(simd_float2){objRight, objY}];
+          float x0 = floorf((float)cA.x) + 0.5f;
+          float x1 = floorf((float)cB.x) + 0.5f;
+          float y = floorf((float)cA.y) + 0.5f;
+          if (x1 - x0 < 2.0f)
+            return;
+          [self drawLineFrom:(CGPoint){x0, y}
+                            to:(CGPoint){x1, y}
+                         color:spColor
+                     halfWidth:1.0f
+              destinationImage:destinationImage];
+          [self drawLineFrom:(CGPoint){x0, y - capLen}
+                            to:(CGPoint){x0, y + capLen}
+                         color:spColor
+                     halfWidth:1.0f
+              destinationImage:destinationImage];
+          [self drawLineFrom:(CGPoint){x1, y - capLen}
+                            to:(CGPoint){x1, y + capLen}
+                         color:spColor
+                     halfWidth:1.0f
+              destinationImage:destinationImage];
+        };
+
+    // Helper: draw a vertical gap indicator with end caps.
+    void (^drawVGap)(float, float, float) =
+        ^(float objTop, float objBottom, float objX) {
+          CGPoint cA =
+              [self canvasPointFromObjectPoint:(simd_float2){objX, objTop}];
+          CGPoint cB =
+              [self canvasPointFromObjectPoint:(simd_float2){objX, objBottom}];
+          float x = floorf((float)cA.x) + 0.5f;
+          float y0 = floorf((float)fmin(cA.y, cB.y)) + 0.5f;
+          float y1 = floorf((float)fmax(cA.y, cB.y)) + 0.5f;
+          if (y1 - y0 < 2.0f)
+            return;
+          [self drawLineFrom:(CGPoint){x, y0}
+                            to:(CGPoint){x, y1}
+                         color:spColor
+                     halfWidth:1.0f
+              destinationImage:destinationImage];
+          [self drawLineFrom:(CGPoint){x - capLen, y0}
+                            to:(CGPoint){x + capLen, y0}
+                         color:spColor
+                     halfWidth:1.0f
+              destinationImage:destinationImage];
+          [self drawLineFrom:(CGPoint){x - capLen, y1}
+                            to:(CGPoint){x + capLen, y1}
+                         color:spColor
+                     halfWidth:1.0f
+              destinationImage:destinationImage];
+        };
+
+    if (self.spacingSnapX) {
+      drawHGap(self.spacingLeftEdge, self.spacingSelLeft, self.spacingMidY);
+      drawHGap(self.spacingSelRight, self.spacingRightEdge, self.spacingMidY);
+      if (self.spacingRefX)
+        drawHGap(self.spacingRefLeftX, self.spacingRefRightX,
+                 self.spacingRefMidYX);
+    }
+    if (self.spacingSnapY) {
+      drawVGap(self.spacingTopEdge, self.spacingSelTop, self.spacingMidX);
+      drawVGap(self.spacingSelBottom, self.spacingBottomEdge, self.spacingMidX);
+      if (self.spacingRefY)
+        drawVGap(self.spacingRefTopY, self.spacingRefBottomY,
+                 self.spacingRefMidXY);
+    }
+  }
+
   // Draw toolbars last so they appear on top of everything.
   [self.toolbar drawWithDestinationImage:destinationImage];
   [self.gridToolbar drawWithDestinationImage:destinationImage];
