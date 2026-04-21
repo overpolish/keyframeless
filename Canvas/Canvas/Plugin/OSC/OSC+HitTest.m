@@ -31,12 +31,21 @@
   if (self.selectedPathIndices.count > 0 && !allLocked) {
     simd_float2 bmin, bmax;
     if ([self boundsOfSelectedPaths:&bmin max:&bmax]) {
-      CGPoint bl = [self canvasPointFromObjectPoint:bmin];
-      CGPoint tr = [self canvasPointFromObjectPoint:bmax];
+      simd_float2 mouseObj =
+          [self objectPointFromCanvasPoint:CGPointMake(x, y)];
+      simd_float2 hitRef =
+          [self objectPointFromCanvasPoint:CGPointMake(x + hitRadius, y)];
+      double objHitR = fabs(hitRef.x - mouseObj.x);
+
+      CGPoint bl = {bmin.x, bmin.y};
+      CGPoint tr = {bmax.x, bmax.y};
 
       CGPoint topMid = [self resizeHandlePosition:1 topRight:tr bottomLeft:bl];
-      CGPoint rotatePos = {topMid.x, topMid.y + 20.0};
-      if (hypot(x - rotatePos.x, y - rotatePos.y) < hitRadius) {
+      simd_float2 hitRefY =
+          [self objectPointFromCanvasPoint:CGPointMake(x, y + 20.0)];
+      double obj20 = fabs(hitRefY.y - mouseObj.y);
+      CGPoint rotatePos = {topMid.x, topMid.y + (float)obj20};
+      if (hypot(mouseObj.x - rotatePos.x, mouseObj.y - rotatePos.y) < objHitR) {
         *activePart = kOSCRotateHandle;
         [oscAPI setCursor:self.editPointsCursor];
         return;
@@ -44,7 +53,7 @@
 
       for (NSInteger i = 0; i < 8; i++) {
         CGPoint pos = [self resizeHandlePosition:i topRight:tr bottomLeft:bl];
-        if (hypot(x - pos.x, y - pos.y) < hitRadius) {
+        if (hypot(mouseObj.x - pos.x, mouseObj.y - pos.y) < objHitR) {
           *activePart = kOSCResizeHandleBase + i;
           BOOL isEdge = (i % 2 == 1);
           if (isEdge)
@@ -65,9 +74,10 @@
             NSInteger crParts[4] = {kOSCCornerRadiusTL, kOSCCornerRadiusTR,
                                     kOSCCornerRadiusBR, kOSCCornerRadiusBL};
             for (int ci = 0; ci < 4; ci++) {
-              CGPoint crPos = [self cornerRadiusHandlePosition:ci
-                                                       forPath:active];
-              if (hypot(x - crPos.x, y - crPos.y) < hitRadius) {
+              CGPoint crCanvas = [self cornerRadiusHandlePosition:ci
+                                                          forPath:active];
+              simd_float2 crObj = [self objectPointFromCanvasPoint:crCanvas];
+              if (hypot(mouseObj.x - crObj.x, mouseObj.y - crObj.y) < objHitR) {
                 *activePart = crParts[ci];
                 [oscAPI setCursor:self.editPointsCursor];
                 return;
@@ -77,8 +87,10 @@
         }
       }
 
-      BOOL insideBox = (x >= MIN(bl.x, tr.x) && x <= MAX(bl.x, tr.x) &&
-                        y >= MIN(bl.y, tr.y) && y <= MAX(bl.y, tr.y));
+      BOOL insideBox = (mouseObj.x >= fminf(bmin.x, bmax.x) &&
+                        mouseObj.x <= fmaxf(bmin.x, bmax.x) &&
+                        mouseObj.y >= fminf(bmin.y, bmax.y) &&
+                        mouseObj.y <= fmaxf(bmin.y, bmax.y));
       if (insideBox) {
         *activePart = kOSCBoundingBox;
         [oscAPI setCursor:self.moveCursor];
@@ -106,6 +118,11 @@
   double hitRadius = 12.0;
   KKBezierPath *active = [self activePath];
 
+  simd_float2 mouseObj = [self objectPointFromCanvasPoint:CGPointMake(x, y)];
+  simd_float2 hitRef =
+      [self objectPointFromCanvasPoint:CGPointMake(x + hitRadius, y)];
+  double objHitR = fabs(hitRef.x - mouseObj.x);
+
   CGEventFlags flags =
       CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
   BOOL optDown = (flags & kCGEventFlagMaskAlternate) != 0;
@@ -119,15 +136,15 @@
       if (pt.type != KKBezierPointBezier)
         continue;
 
-      CGPoint inCanvas = [self canvasPointForBezierPoint:pt inHandleOffset:YES];
-      if (hypot(x - inCanvas.x, y - inCanvas.y) < hitRadius) {
+      simd_float2 inObj = {pt.x + pt.inX, pt.y + pt.inY};
+      if (hypot(mouseObj.x - inObj.x, mouseObj.y - inObj.y) < objHitR) {
         *activePart = kOSCInHandleBase + (NSInteger)i;
         [oscAPI setCursor:self.editPointsCursor];
         return;
       }
 
-      CGPoint outCanvas = [self canvasPointForBezierPoint:pt inHandleOffset:NO];
-      if (hypot(x - outCanvas.x, y - outCanvas.y) < hitRadius) {
+      simd_float2 outObj = {pt.x + pt.outX, pt.y + pt.outY};
+      if (hypot(mouseObj.x - outObj.x, mouseObj.y - outObj.y) < objHitR) {
         *activePart = kOSCOutHandleBase + (NSInteger)i;
         [oscAPI setCursor:self.editPointsCursor];
         return;
@@ -136,8 +153,7 @@
 
     for (NSUInteger i = 0; i < active.count; i++) {
       KKBezierPoint pt = [active pointAtIndex:i];
-      CGPoint ptCanvas = [self canvasPointForBezierPoint:pt];
-      if (hypot(x - ptCanvas.x, y - ptCanvas.y) < hitRadius) {
+      if (hypot(mouseObj.x - pt.x, mouseObj.y - pt.y) < objHitR) {
         if (i == 0 && !active.closed && !active.isLine && active.count >= 2 &&
             !cmdDown) {
           *activePart = kOSCClosePath;
@@ -163,8 +179,7 @@
         if (![self isPointSelected:p point:i])
           continue;
         KKBezierPoint pt = [path pointAtIndex:i];
-        CGPoint ptCanvas = [self canvasPointForBezierPoint:pt];
-        if (hypot(x - ptCanvas.x, y - ptCanvas.y) < hitRadius) {
+        if (hypot(mouseObj.x - pt.x, mouseObj.y - pt.y) < objHitR) {
           self.activePathIndex = (NSInteger)p;
           *activePart = kOSCPathPointBase + (NSInteger)i;
           [oscAPI setCursor:self.moveCursor];
