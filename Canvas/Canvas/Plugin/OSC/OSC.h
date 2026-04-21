@@ -20,6 +20,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, assign) BOOL dragIsInHandle;
 @property(nonatomic, assign) BOOL dragIsOutHandle;
 @property(nonatomic, assign) BOOL dragIsNewPoint;
+@property(nonatomic, assign) CGPoint newPointCanvasOrigin;
 @property(nonatomic, assign) BOOL dragIsPath;
 @property(nonatomic, assign) BOOL dragIsMarquee;
 @property(nonatomic, assign) BOOL dragIsSelection;

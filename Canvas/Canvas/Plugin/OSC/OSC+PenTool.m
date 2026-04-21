@@ -289,6 +289,7 @@
 
   self.dragIndex = (NSInteger)active.count - 1;
   self.dragIsNewPoint = YES;
+  self.newPointCanvasOrigin = CGPointMake(positionX, positionY);
   self.dragIsInHandle = NO;
   self.dragIsOutHandle = NO;
   *forceUpdate = YES;
