@@ -131,6 +131,7 @@
     "MotionBlur",
     "Keyframeless X - Audio",
     "Glow",
-    "Canvas"
+    "Canvas",
+    "Timing"
   ]
 }
