@@ -745,7 +745,7 @@
     CGPoint ptCanvas =
         [self canvasPointFromObjectPoint:(simd_float2){pt.x, pt.y}];
     CGFloat canvasDist = hypot(positionX - ptCanvas.x, positionY - ptCanvas.y);
-    if (canvasDist > 4.0) {
+    if (canvasDist > 10.0) {
       [self setHandle:offset
                 atIndex:self.dragIndex
                    isIn:NO
