@@ -4,6 +4,7 @@
  */
 
 #import "../Math/KKEasing.h"
+#import "../Math/KKTimingStage.h"
 #import "../Update/KKUpdateChecker.h"
 #import "../Views/KKTimingGraphView.h"
 #import "KKConstants.h"
@@ -222,6 +223,52 @@ static const FxParameterFlags kCustomUIDisabled =
                   error, @"Unable to add Hold Seed slider"))
     return NO;
 
+  if (!KKAddParam([paramAPI
+                      addToggleButtonWithName:@""
+                                  parameterID:kKKParamMultiStageEnabled
+                                 defaultValue:NO
+                               parameterFlags:kFxParameterFlag_HIDDEN |
+                                              kFxParameterFlag_NOT_ANIMATABLE],
+                  error, @"Unable to add multi-stage enabled toggle"))
+    return NO;
+
+  if (!KKAddParam(
+          [paramAPI addStringParameterWithName:@""
+                                   parameterID:kKKParamMultiStageData
+                                  defaultValue:@""
+                                parameterFlags:kFxParameterFlag_HIDDEN |
+                                               kFxParameterFlag_NOT_ANIMATABLE],
+          error, @"Unable to add multi-stage data"))
+    return NO;
+
+  if (!KKAddParam([paramAPI
+                      addIntSliderWithName:@""
+                               parameterID:kKKParamMultiStageSelectedProperty
+                              defaultValue:0
+                              parameterMin:0
+                              parameterMax:64
+                                 sliderMin:0
+                                 sliderMax:64
+                                     delta:1
+                            parameterFlags:kFxParameterFlag_HIDDEN |
+                                           kFxParameterFlag_NOT_ANIMATABLE],
+                  error, @"Unable to add multi-stage selected property"))
+    return NO;
+
+  if (!KKAddParam([paramAPI
+                      addIntSliderWithName:@""
+                               parameterID:kKKParamMultiStageSelectedStage
+                              defaultValue:0
+                              parameterMin:0
+                              parameterMax:64
+                                 sliderMin:0
+                                 sliderMax:64
+                                     delta:1
+                            parameterFlags:kFxParameterFlag_HIDDEN |
+                                           kFxParameterFlag_NOT_ANIMATABLE],
+                  error, @"Unable to add multi-stage selected stage"))
+    return NO;
+
   return YES;
 }
 
@@ -357,6 +404,93 @@ static const FxParameterFlags kCustomUIDisabled =
                                                  interpolate:holdInterp];
 
   return [KKTimingResult resultWithIn:inPhase hold:holdPhase out:outPhase];
+}
+
+- (NSDictionary<NSString *, NSNumber *> *)multiStageValuesAtTime:
+    (CMTime)renderTime {
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  if (!paramGetAPI || !timingAPI)
+    return nil;
+
+  BOOL enabled = NO;
+  [paramGetAPI getBoolValue:&enabled
+              fromParameter:kKKParamMultiStageEnabled
+                     atTime:renderTime];
+  if (!enabled)
+    return nil;
+
+  NSString *json = nil;
+  [paramGetAPI getStringParameterValue:&json
+                         fromParameter:kKKParamMultiStageData];
+  NSArray<KKTimingLane *> *lanes = [KKTimingLane lanesFromJSON:json];
+  if (!lanes.count)
+    return nil;
+
+  CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
+  [timingAPI startTimeForEffect:&effectStart];
+  [timingAPI durationTimeForEffect:&effectDuration];
+  double startSec = CMTimeGetSeconds(effectStart);
+  double durSec = CMTimeGetSeconds(effectDuration);
+  double nowSec = CMTimeGetSeconds(renderTime);
+  double frac = (durSec > 0) ? (nowSec - startSec) / durSec : 0.0;
+  frac = MAX(0.0, MIN(1.0, frac));
+
+  NSMutableDictionary<NSString *, NSNumber *> *result =
+      [NSMutableDictionary dictionaryWithCapacity:lanes.count];
+
+  for (KKTimingLane *lane in lanes) {
+    if (!lane.enabled)
+      continue;
+    NSArray<KKTimingSegment *> *segments = lane.segments;
+    if (!segments.count)
+      continue;
+
+    KKTimingSegment *active = nil;
+    for (KKTimingSegment *seg in segments) {
+      if (frac >= seg.start && frac < seg.end) {
+        active = seg;
+        break;
+      }
+    }
+    if (!active && frac >= segments.lastObject.end)
+      active = segments.lastObject;
+
+    if (!active)
+      continue;
+
+    if (active.type == KKSegmentTypeHold) {
+      result[lane.propertyLabel] = @(active.value);
+    } else {
+      NSUInteger idx = [segments indexOfObjectIdenticalTo:active];
+      double fromValue = 0, toValue = 0;
+
+      for (NSInteger i = (NSInteger)idx - 1; i >= 0; i--) {
+        if (segments[i].type == KKSegmentTypeHold) {
+          fromValue = segments[i].value;
+          break;
+        }
+      }
+      for (NSUInteger i = idx + 1; i < segments.count; i++) {
+        if (segments[i].type == KKSegmentTypeHold) {
+          toValue = segments[i].value;
+          break;
+        }
+      }
+
+      double segDur = active.end - active.start;
+      double t = (segDur > 0) ? (frac - active.start) / segDur : 1.0;
+      t = MAX(0.0, MIN(1.0, t));
+      double easedT =
+          KKApplyEasing(t, active.easing, active.intensity, active.frequency);
+      double value = fromValue + (toValue - fromValue) * easedT;
+      result[lane.propertyLabel] = @(value);
+    }
+  }
+
+  return result.count ? result : nil;
 }
 
 - (BOOL)addInfoParameterWithText:(NSString *)text
@@ -496,6 +630,9 @@ static void _setFlagsIfNeeded(id<FxParameterSettingAPI_v5> setAPI,
       kKKParamAnimateOutFrequency,
       kKKParamHoldFrequency,
       kKKParamHoldSeed,
+      kKKParamMultiStageData,
+      kKKParamMultiStageSelectedProperty,
+      kKKParamMultiStageSelectedStage,
   };
   for (NSUInteger i = 0; i < sizeof(alwaysHidden) / sizeof(alwaysHidden[0]);
        i++) {

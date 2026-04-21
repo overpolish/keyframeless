@@ -44,36 +44,45 @@ typedef struct {
                fromParameter:kParamRadius
                       atTime:renderTime];
 
-  KKTimingResult *timing = [self timingAtTime:renderTime];
-  double inF = timing.inPhase.factor;
-  double holdF = timing.holdPhase.factor;
-  double outF = timing.outPhase.factor;
+  NSDictionary<NSString *, NSNumber *> *multiStage =
+      [self multiStageValuesAtTime:renderTime];
 
-  BOOL inR = YES, inC = YES;
-  [paramGetAPI getBoolValue:&inR
-              fromParameter:kParamInRadius
-                     atTime:renderTime];
-  [paramGetAPI getBoolValue:&inC fromParameter:kParamInCrop atTime:renderTime];
-  BOOL holdR = YES, holdC = YES;
-  [paramGetAPI getBoolValue:&holdR
-              fromParameter:kParamHoldRadius
-                     atTime:renderTime];
-  [paramGetAPI getBoolValue:&holdC
-              fromParameter:kParamHoldCrop
-                     atTime:renderTime];
-  BOOL outR = YES, outC = YES;
-  [paramGetAPI getBoolValue:&outR
-              fromParameter:kParamOutRadius
-                     atTime:renderTime];
-  [paramGetAPI getBoolValue:&outC
-              fromParameter:kParamOutCrop
-                     atTime:renderTime];
+  double rF = 1.0, cF = 1.0;
+  if (!multiStage) {
+    KKTimingResult *timing = [self timingAtTime:renderTime];
+    double inF = timing.inPhase.factor;
+    double holdF = timing.holdPhase.factor;
+    double outF = timing.outPhase.factor;
 
-  double rF = (inR ? inF : 1.0) * (holdR ? holdF : 1.0) * (outR ? outF : 1.0);
-  double cF = (inC ? inF : 1.0) * (holdC ? holdF : 1.0) * (outC ? outF : 1.0);
+    BOOL inR = YES, inC = YES;
+    [paramGetAPI getBoolValue:&inR
+                fromParameter:kParamInRadius
+                       atTime:renderTime];
+    [paramGetAPI getBoolValue:&inC
+                fromParameter:kParamInCrop
+                       atTime:renderTime];
+    BOOL holdR = YES, holdC = YES;
+    [paramGetAPI getBoolValue:&holdR
+                fromParameter:kParamHoldRadius
+                       atTime:renderTime];
+    [paramGetAPI getBoolValue:&holdC
+                fromParameter:kParamHoldCrop
+                       atTime:renderTime];
+    BOOL outR = YES, outC = YES;
+    [paramGetAPI getBoolValue:&outR
+                fromParameter:kParamOutRadius
+                       atTime:renderTime];
+    [paramGetAPI getBoolValue:&outC
+                fromParameter:kParamOutCrop
+                       atTime:renderTime];
+
+    rF = (inR ? inF : 1.0) * (holdR ? holdF : 1.0) * (outR ? outF : 1.0);
+    cF = (inC ? inF : 1.0) * (holdC ? holdF : 1.0) * (outC ? outF : 1.0);
+  }
 
   RoundedPluginState state;
-  state.radius = radius * rF;
+  state.radius =
+      multiStage[@"Radius"] ? multiStage[@"Radius"].doubleValue : radius * rF;
   state.cropTop = 0.0;
   state.cropBottom = 0.0;
   state.cropLeft = 0.0;
@@ -90,10 +99,18 @@ typedef struct {
   [paramGetAPI getFloatValue:&state.cropRight
                fromParameter:kParamCropRight
                       atTime:renderTime];
-  state.cropTop *= cF;
-  state.cropBottom *= cF;
-  state.cropLeft *= cF;
-  state.cropRight *= cF;
+  if (multiStage[@"Crop"]) {
+    double cropScale = multiStage[@"Crop"].doubleValue;
+    state.cropTop *= cropScale;
+    state.cropBottom *= cropScale;
+    state.cropLeft *= cropScale;
+    state.cropRight *= cropScale;
+  } else {
+    state.cropTop *= cF;
+    state.cropBottom *= cF;
+    state.cropLeft *= cF;
+    state.cropRight *= cF;
+  }
 
   *pluginState = [NSData dataWithBytes:&state length:sizeof(state)];
   return (*pluginState != nil);

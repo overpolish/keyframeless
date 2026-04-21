@@ -35,6 +35,14 @@ static const UInt32 kKKParamAnimateOutFrequency __attribute__((unused)) = 9915;
 static const UInt32 kKKParamHoldFrequency __attribute__((unused)) = 9916;
 static const UInt32 kKKParamHoldSeed __attribute__((unused)) = 9917;
 
+/// Multi-stage timing parameters (9918–9921)
+static const UInt32 kKKParamMultiStageEnabled __attribute__((unused)) = 9918;
+static const UInt32 kKKParamMultiStageData __attribute__((unused)) = 9919;
+static const UInt32 kKKParamMultiStageSelectedProperty __attribute__((unused)) =
+    9920;
+static const UInt32 kKKParamMultiStageSelectedStage __attribute__((unused)) =
+    9921;
+
 /// Color system parameters (9800–9810)
 static const UInt32 kKKParamColorGroup __attribute__((unused)) = 9800;
 static const UInt32 kKKParamColorMode __attribute__((unused)) = 9801;
