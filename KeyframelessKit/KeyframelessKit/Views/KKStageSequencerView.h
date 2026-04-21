@@ -39,6 +39,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Called when user requests segment removal (right-click / Cmd-click).
 @property(nonatomic, copy, nullable) void (^onSegmentRemoved)
     (NSInteger laneIndex, NSInteger segmentIndex);
+/// Called when user clicks/drags the ruler to scrub the playhead.
+/// Fraction is 0–1 of clip duration.
+@property(nonatomic, copy, nullable) void (^onPlayheadScrub)(double fraction);
 
 /// Re-render the lanes image.
 - (void)renderLanes;

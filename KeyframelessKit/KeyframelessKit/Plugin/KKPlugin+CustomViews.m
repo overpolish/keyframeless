@@ -774,6 +774,32 @@ extern BOOL KKMultiStageSelectionInProgress;
     [strongSelf timingGraphApplyState];
   };
 
+  seqView.onPlayheadScrub = ^(double fraction) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    if (!actAPI)
+      return;
+    [actAPI startAction:strongSelf];
+    id<FxTimingAPI_v4> timingAPI =
+        [strongSelf.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+    id<FxCommandAPI_v2> commandAPI =
+        [strongSelf.apiManager apiForProtocol:@protocol(FxCommandAPI_v2)];
+    if (timingAPI && commandAPI) {
+      CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
+      [timingAPI startTimeForEffect:&effectStart];
+      [timingAPI durationTimeForEffect:&effectDuration];
+      double startSec = CMTimeGetSeconds(effectStart);
+      double durSec = CMTimeGetSeconds(effectDuration);
+      double targetSec = startSec + fraction * durSec;
+      CMTime targetTime = CMTimeMakeWithSeconds(targetSec, 600);
+      [commandAPI movePlayheadToTime:targetTime error:nil];
+    }
+    [actAPI endAction:strongSelf];
+  };
+
   // Seed sequencer with lane data if multi-stage is enabled.
   [actionAPI startAction:self];
   BOOL multiStageEnabled = NO;

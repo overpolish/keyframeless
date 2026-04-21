@@ -610,7 +610,19 @@ static const FxParameterFlags kCustomUIDisabled =
     mLane.segments = mSegs;
     lanes[li] = mLane;
 
-    KKMultiStagePendingLanes = [lanes copy];
+    NSArray<KKTimingLane *> *updated = [lanes copy];
+    KKMultiStagePendingLanes = updated;
+    KKMultiStageLanesSnapshot = updated;
+
+    // Persist to JSON so values survive clip re-selection.
+    id<FxParameterSettingAPI_v5> paramSetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    if (paramSetAPI) {
+      NSString *json = [KKTimingLane jsonFromLanes:updated];
+      if (json)
+        [paramSetAPI setStringParameterValue:json
+                                 toParameter:kKKParamMultiStageData];
+    }
     return YES;
   }
   return NO;
@@ -630,14 +642,24 @@ static const FxParameterFlags kCustomUIDisabled =
   });
 }
 
+static double KKPendingPlayheadFraction = -1;
+static double KKPendingPlayheadDuration = -1;
+static BOOL KKPlayheadDispatchPending = NO;
+
 + (void)multiStageUpdatePlayhead:(double)fraction duration:(double)duration {
   KKStageSequencerView *seq =
       (__bridge KKStageSequencerView *)KKMultiStageSequencerView;
   if (!seq)
     return;
+  KKPendingPlayheadFraction = fraction;
+  KKPendingPlayheadDuration = duration;
+  if (KKPlayheadDispatchPending)
+    return;
+  KKPlayheadDispatchPending = YES;
   dispatch_async(dispatch_get_main_queue(), ^{
-    seq.effectDuration = duration;
-    seq.playheadFraction = fraction;
+    KKPlayheadDispatchPending = NO;
+    seq.effectDuration = KKPendingPlayheadDuration;
+    seq.playheadFraction = KKPendingPlayheadFraction;
   });
 }
 
