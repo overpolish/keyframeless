@@ -158,6 +158,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// This is a class method since OSC objects don't hold a plugin reference.
 + (void)multiStageFlushPendingLanes;
 
+/// Call from drawOSC to detect undo/redo: reads the JSON param and compares
+/// against the in-memory snapshot. If they differ, pushes fresh lanes to the
+/// sequencer view.
++ (void)multiStageSyncFromParams:(id<PROAPIAccessing>)apiManager;
+
 /// Call from drawOSC to update the sequencer playhead and duration.
 /// Fraction is 0–1 of clip duration, duration is in seconds.
 + (void)multiStageUpdatePlayhead:(double)fraction duration:(double)duration;
