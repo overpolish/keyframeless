@@ -119,19 +119,32 @@
 }
 
 - (CGFloat)_laneYForIndex:(NSUInteger)laneIdx totalHeight:(CGFloat)totalHeight {
-  return totalHeight - kKSSBoundaryLabelHeight -
-         (laneIdx + 1) * kKSSLaneHeight -
+  CGFloat laneH = [self _laneHeight];
+  return totalHeight - kKSSBoundaryLabelHeight - (laneIdx + 1) * laneH -
          laneIdx * (kKSSBoundaryLabelHeight + kKSSLaneSpacing);
 }
 
+- (CGFloat)_laneHeight {
+  NSUInteger count = _lanes.count;
+  if (count == 0)
+    return kKSSMinLaneHeight;
+  CGFloat fixedOverhead = (CGFloat)(count + 1) * kKSSBoundaryLabelHeight +
+                          (CGFloat)(count - 1) * kKSSLaneSpacing +
+                          kKSSBorderInset;
+  CGFloat available = [self _totalHeight] - fixedOverhead;
+  CGFloat laneH = available / (CGFloat)count;
+  return MAX(kKSSMinLaneHeight, laneH);
+}
+
 - (CGFloat)_totalHeight {
-  return [KKStageSequencerView heightForLaneCount:_lanes.count];
+  CGFloat minH = [KKStageSequencerView heightForLaneCount:_lanes.count];
+  return MAX(minH, NSHeight(self.bounds));
 }
 
 + (CGFloat)heightForLaneCount:(NSUInteger)laneCount {
   if (laneCount == 0)
     return 0;
-  CGFloat block = kKSSLaneHeight + kKSSBoundaryLabelHeight;
+  CGFloat block = kKSSMinLaneHeight + kKSSBoundaryLabelHeight;
   return kKSSBoundaryLabelHeight + laneCount * block +
          (laneCount - 1) * kKSSLaneSpacing + kKSSBorderInset;
 }

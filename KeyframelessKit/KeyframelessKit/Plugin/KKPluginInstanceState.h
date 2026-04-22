@@ -5,13 +5,26 @@
 
 #pragma once
 
-#import <Foundation/Foundation.h>
+#import <AppKit/AppKit.h>
 
 @class KKStagePlayheadView;
 @class KKStageSequencerRulerView;
 @class KKStageSequencerView;
+@class KKTimingGraphView;
 @class KKTimingLane;
 @protocol PROAPIAccessing;
+
+/// Weak references to a full set of timing views. Used to track secondary
+/// view sets (e.g. a detached window) so they can receive the same updates
+/// as the primary (inspector) views.
+@interface KKTimingViewRefs : NSObject
+@property(nonatomic, weak, nullable) KKTimingGraphView *graphView;
+@property(nonatomic, weak, nullable) KKStageSequencerView *seqView;
+@property(nonatomic, weak, nullable) NSView *seqContainer;
+@property(nonatomic, weak, nullable) KKStageSequencerRulerView *ruler;
+@property(nonatomic, weak, nullable) KKStagePlayheadView *playhead;
+- (BOOL)isAlive;
+@end
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -63,6 +76,12 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) double pendingPlayheadFraction;
 @property(nonatomic) double pendingPlayheadDuration;
 @property(nonatomic) BOOL playheadDispatchPending;
+
+/// Secondary timing-view sets for this instance (e.g. a detached window).
+/// Live pump updates (lanes, playhead) iterate this in addition to the
+/// primary sequencer/ruler/playhead properties above.
+@property(nonatomic, strong, nullable)
+    NSMutableArray<KKTimingViewRefs *> *additionalTimingViews;
 
 @end
 

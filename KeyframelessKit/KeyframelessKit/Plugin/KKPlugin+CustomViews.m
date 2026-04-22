@@ -152,7 +152,7 @@
     return [self _createTimingHeader:parameterID];
 
   if (parameterID == kKKParamTimingCurvePreview)
-    return [self _createTimingGraphView];
+    return [self _createTimingGraphViewUncapped:NO];
 
   NSString *separatorText =
       kkClassRegistry([self class], kKKSepTexts)[@(parameterID)];
@@ -285,11 +285,83 @@
   header.isExpanded = expanded;
   [actionAPI endAction:self];
 
+  NSImage *windowIcon =
+      [NSImage imageWithSystemSymbolName:@"macwindow.on.rectangle"
+                accessibilityDescription:@"Open in window"];
+  __weak typeof(self) weakSelfForWindow = self;
+  [header addTrailingButtonWithIcon:windowIcon
+                             action:^{
+                               [weakSelfForWindow _openTimingRemoteWindow];
+                             }];
+
   self.timingHeader = header;
   return header;
 }
 
-- (NSView *)_createTimingGraphView {
+- (void)_openTimingRemoteWindow {
+  static KKLog *sLog;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    sLog = [KKLog loggerForPlugin:@"co.overpolish.keyframeless.Timing"];
+  });
+
+  [sLog info:@"_openTimingRemoteWindow invoked"];
+
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+
+  id<FxRemoteWindowAPI> windowAPI =
+      [self.apiManager apiForProtocol:@protocol(FxRemoteWindowAPI)];
+  if (!windowAPI) {
+    [sLog error:@"FxRemoteWindowAPI unavailable (apiManager=%@)",
+                self.apiManager];
+    [actionAPI endAction:self];
+    return;
+  }
+  [sLog info:@"got windowAPI=%@", windowAPI];
+
+  NSArray<KKAnimatableProperty *> *seqProps = [self animatableProperties];
+  CGFloat lanesH = [KKStageSequencerView heightForLaneCount:seqProps.count];
+  CGFloat rulerH = [KKStageSequencerRulerView preferredHeight];
+  CGFloat contentH = KKPaddingSM + rulerH + lanesH + KKPaddingLG;
+  CGSize contentSize = CGSizeMake(300.0, contentH);
+
+  __weak typeof(self) weakSelf = self;
+  [windowAPI
+      remoteWindowOfSize:contentSize
+                   reply:^(FxXPView *parentView, NSError *error) {
+                     __strong typeof(weakSelf) strongSelf = weakSelf;
+                     if (!strongSelf || !parentView) {
+                       if (error)
+                         [sLog error:@"remoteWindow error: %@", error];
+                       return;
+                     }
+                     // The host hands us a parent view positioned at
+                     // a non-zero origin within its superview; adding
+                     // content to it causes right-clipping and a
+                     // first-render offset. Attach to the superview
+                     // (the XPC jail) which is correctly sized.
+                     NSView *host = parentView.superview ?: parentView;
+                     NSView *graph =
+                         [strongSelf _createTimingGraphViewUncapped:YES];
+                     graph.translatesAutoresizingMaskIntoConstraints = NO;
+                     [host addSubview:graph];
+                     [NSLayoutConstraint activateConstraints:@[
+                       [graph.leadingAnchor
+                           constraintEqualToAnchor:host.leadingAnchor],
+                       [graph.trailingAnchor
+                           constraintEqualToAnchor:host.trailingAnchor],
+                       [graph.topAnchor constraintEqualToAnchor:host.topAnchor],
+                       [graph.bottomAnchor
+                           constraintEqualToAnchor:host.bottomAnchor],
+                     ]];
+                   }];
+
+  [actionAPI endAction:self];
+}
+
+- (NSView *)_createTimingGraphViewUncapped:(BOOL)uncapped {
   NSArray<KKTimingSlot *> *globalSlots = [self timingGlobalSlots];
   NSArray<KKTimingSlot *> *inSlots =
       [self timingSlotsForSection:KKTimingGraphSectionIn];
@@ -300,17 +372,17 @@
 
   NSArray<KKAnimatableProperty *> *seqProps = [self animatableProperties];
   CGFloat fullLanesH = [KKStageSequencerView heightForLaneCount:seqProps.count];
-  CGFloat cappedLanesH;
-  if (seqProps.count <= 2) {
-    cappedLanesH = fullLanesH;
+  CGFloat lanesH;
+  if (uncapped || seqProps.count <= 2) {
+    lanesH = fullLanesH;
   } else {
     CGFloat h2 = [KKStageSequencerView heightForLaneCount:2];
     CGFloat h3 = [KKStageSequencerView heightForLaneCount:3];
-    cappedLanesH = h2 + (h3 - h2) * 0.5;
+    lanesH = h2 + (h3 - h2) * 0.5;
   }
   CGFloat rulerH = [KKStageSequencerRulerView preferredHeight];
   // Top inset + ruler + lanes area (which has its own bottom inset).
-  CGFloat seqContainerH = KKPaddingSM + rulerH + cappedLanesH;
+  CGFloat seqContainerH = KKPaddingSM + rulerH + lanesH;
   CGFloat wrapperHeight = seqContainerH + KKPaddingLG;
 
   NSView *wrapper =
@@ -521,7 +593,8 @@
     }
   }
 
-  self.timingGraph = graphView;
+  if (!uncapped)
+    self.timingGraph = graphView;
 
   // Stage sequencer container — sticky ruler + vertically-scrolled lanes
   // (capped at 2.5 lanes) with top/bottom shadow overlays. Hidden until
@@ -560,16 +633,35 @@
   [seqContainer addSubview:scrollView];
 
   // Pin the document view to the clip view's width so segments never overflow
-  // past the visible area; height stays fixed at the full lanes height.
-  [NSLayoutConstraint activateConstraints:@[
-    [seqView.widthAnchor
-        constraintEqualToAnchor:scrollView.contentView.widthAnchor],
-    [seqView.heightAnchor constraintEqualToConstant:fullLanesH],
-    [seqView.topAnchor
-        constraintEqualToAnchor:scrollView.contentView.topAnchor],
-    [seqView.leadingAnchor
-        constraintEqualToAnchor:scrollView.contentView.leadingAnchor],
-  ]];
+  // past the visible area. In uncapped (window) mode the document view grows
+  // with the clip view so lanes stretch vertically; in capped (inspector) mode
+  // the document view stays at full lanes height and scrolls.
+  NSMutableArray<NSLayoutConstraint *> *seqViewConstraints =
+      [NSMutableArray arrayWithArray:@[
+        [seqView.widthAnchor
+            constraintEqualToAnchor:scrollView.contentView.widthAnchor],
+        [seqView.topAnchor
+            constraintEqualToAnchor:scrollView.contentView.topAnchor],
+        [seqView.leadingAnchor
+            constraintEqualToAnchor:scrollView.contentView.leadingAnchor],
+      ]];
+  if (uncapped) {
+    // Grow with the clip view when there's extra space (low-priority bottom
+    // pin), but never shrink below the natural full-lanes height (required).
+    // When the window is smaller than natural, the bottom pin breaks and the
+    // scroll view takes over.
+    [seqViewConstraints
+        addObject:[seqView.heightAnchor
+                      constraintGreaterThanOrEqualToConstant:fullLanesH]];
+    NSLayoutConstraint *bottomFill = [seqView.bottomAnchor
+        constraintEqualToAnchor:scrollView.contentView.bottomAnchor];
+    bottomFill.priority = NSLayoutPriorityDefaultLow;
+    [seqViewConstraints addObject:bottomFill];
+  } else {
+    [seqViewConstraints
+        addObject:[seqView.heightAnchor constraintEqualToConstant:fullLanesH]];
+  }
+  [NSLayoutConstraint activateConstraints:seqViewConstraints];
 
   CGFloat shadowH = 16.0;
   KKScrollShadowView *topShadow =
@@ -609,15 +701,26 @@
   playheadView.topPadding = KKPaddingSM;
   [seqContainer addSubview:playheadView];
 
+  // Inspector mode: fixed height. Window mode: pin top+bottom and let the
+  // container shrink with the wrapper — scroll view inside picks up the
+  // overflow once the container is smaller than natural.
+  NSMutableArray<NSLayoutConstraint *> *containerAnchorConstraints =
+      [NSMutableArray arrayWithArray:@[
+        [seqContainer.leadingAnchor
+            constraintEqualToAnchor:wrapper.leadingAnchor
+                           constant:KKInspectorHorizontalInset],
+        [seqContainer.trailingAnchor
+            constraintEqualToAnchor:wrapper.trailingAnchor
+                           constant:-KKInspectorHorizontalInset],
+        [seqContainer.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
+      ]];
+  if (!uncapped) {
+    [containerAnchorConstraints
+        addObject:[seqContainer.heightAnchor
+                      constraintEqualToConstant:seqContainerH]];
+  }
+  [NSLayoutConstraint activateConstraints:containerAnchorConstraints];
   [NSLayoutConstraint activateConstraints:@[
-    [seqContainer.leadingAnchor
-        constraintEqualToAnchor:wrapper.leadingAnchor
-                       constant:KKInspectorHorizontalInset],
-    [seqContainer.trailingAnchor
-        constraintEqualToAnchor:wrapper.trailingAnchor
-                       constant:-KKInspectorHorizontalInset],
-    [seqContainer.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
-    [seqContainer.heightAnchor constraintEqualToConstant:seqContainerH],
 
     [rulerView.leadingAnchor
         constraintEqualToAnchor:seqContainer.leadingAnchor],
@@ -656,12 +759,38 @@
         constraintEqualToAnchor:seqContainer.bottomAnchor],
   ]];
 
-  self.stageSequencer = seqView;
-  self.stageSequencerContainer = seqContainer;
-  self.stageSequencerRuler = rulerView;
-  [self _registerMultiStageSequencerView:seqView
-                               rulerView:rulerView
-                            playheadView:playheadView];
+  if (uncapped) {
+    // Let the sequencer container stretch vertically with the wrapper so each
+    // lane grows once all lanes are visible.
+    [seqContainer.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor
+                                              constant:-KKPaddingLG]
+        .active = YES;
+  }
+
+  if (!uncapped) {
+    self.stageSequencer = seqView;
+    self.stageSequencerContainer = seqContainer;
+    self.stageSequencerRuler = rulerView;
+    [self _registerMultiStageSequencerView:seqView
+                                 rulerView:rulerView
+                              playheadView:playheadView];
+  } else {
+    KKTimingViewRefs *refs = [[KKTimingViewRefs alloc] init];
+    refs.graphView = graphView;
+    refs.seqView = seqView;
+    refs.seqContainer = seqContainer;
+    refs.ruler = rulerView;
+    refs.playhead = playheadView;
+    KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+    if (state) {
+      if (!state.additionalTimingViews)
+        state.additionalTimingViews = [NSMutableArray array];
+      [state.additionalTimingViews addObject:refs];
+    }
+    // Sync the newly-created secondary set with current state so it opens
+    // showing the right data rather than an empty view.
+    [self timingGraphApplyState];
+  }
 
   // Keep ruler, lanes, and playhead overlay in lockstep horizontally.
   __weak KKStageSequencerView *weakSeqForSync = seqView;
@@ -1078,6 +1207,7 @@
     [strongSelf timingGraphApplyState];
   };
 
+  __weak KKStageSequencerView *weakSeqForPopover = seqView;
   seqView.onSegmentEditRequested =
       ^(NSInteger laneIndex, NSInteger segmentIndex, NSRect anchorRect) {
         __strong typeof(weakSelf) strongSelf = weakSelf;
@@ -1085,7 +1215,8 @@
           return;
         [strongSelf _showSegmentEditPopoverForLane:laneIndex
                                         segmentIdx:segmentIndex
-                                        anchorRect:anchorRect];
+                                        anchorRect:anchorRect
+                                        sourceView:weakSeqForPopover];
       };
 
   rulerView.onPlayheadScrub = ^(double fraction) {
@@ -1197,8 +1328,53 @@
     slot.applyState(paramAPI, time);
 }
 
+- (void)_applyStateToTimingGraph:(KKTimingGraphView *)graph
+                         seqView:(KKStageSequencerView *)seq
+                    seqContainer:(NSView *)seqContainer
+                           ruler:(KKStageSequencerRulerView *)ruler
+                        playhead:(KKStagePlayheadView *)playhead
+                    multiEnabled:(BOOL)multiStageEnabled
+                           lanes:(NSArray<KKTimingLane *> *)lanes
+                    effectDurSec:(double)durSec
+                    playheadFrac:(double)frac
+                       hasTiming:(BOOL)hasTiming
+                    withParamAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI
+                          atTime:(CMTime)t {
+  if (!graph)
+    return;
+  if (seq) {
+    seqContainer.hidden = !multiStageEnabled;
+    graph.hidden = multiStageEnabled;
+    if (multiStageEnabled) {
+      if (lanes)
+        seq.lanes = lanes;
+      if (hasTiming) {
+        seq.effectDuration = durSec;
+        ruler.effectDuration = durSec;
+        if (durSec > 0) {
+          seq.playheadFraction = frac;
+          playhead.playheadFraction = frac;
+        }
+      }
+    }
+  }
+
+  [self _applyTimingParamsToGraph:graph withParamAPI:paramGetAPI atTime:t];
+  [self _applySlotState:graph.globalSlots withParamAPI:paramGetAPI atTime:t];
+  [self _applySlotState:graph.inSectionSlots withParamAPI:paramGetAPI atTime:t];
+  [self _applySlotState:graph.holdSectionSlots
+           withParamAPI:paramGetAPI
+                 atTime:t];
+  [self _applySlotState:graph.outSectionSlots
+           withParamAPI:paramGetAPI
+                 atTime:t];
+  if (graph.holdPropertyApplyState)
+    graph.holdPropertyApplyState(paramGetAPI, t);
+}
+
 - (void)timingGraphApplyState {
-  if (!self.timingGraph)
+  KKPluginInstanceState *instState = KKInstanceStateForAPI(self.apiManager);
+  if (!self.timingGraph && instState.additionalTimingViews.count == 0)
     return;
   id<FxCustomParameterActionAPI_v4> actionAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
@@ -1207,66 +1383,74 @@
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   CMTime t = [actionAPI currentTime];
 
-  // Sync sequencer visibility and lane data.
+  // Read the shared state once and broadcast to every registered view set.
   BOOL multiStageEnabled = NO;
   [paramGetAPI getBoolValue:&multiStageEnabled
               fromParameter:kKKParamMultiStageEnabled
                      atTime:t];
-  KKStageSequencerView *seq = self.stageSequencer;
-  NSView *seqContainer = self.stageSequencerContainer;
-  if (seq) {
-    seqContainer.hidden = !multiStageEnabled;
-    self.timingGraph.hidden = multiStageEnabled;
-    if (multiStageEnabled) {
-      NSString *json = nil;
-      [paramGetAPI getStringParameterValue:&json
-                             fromParameter:kKKParamMultiStageData];
-      NSArray<KKTimingLane *> *lanes = [KKTimingLane lanesFromJSON:json];
-      if (lanes) {
-        KKInstanceStateForAPI(self.apiManager).lanesSnapshot = [lanes copy];
-        seq.lanes = lanes;
-      }
 
-      id<FxTimingAPI_v4> timingAPI =
-          [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-      if (timingAPI) {
-        CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
-        [timingAPI startTimeForEffect:&effectStart];
-        [timingAPI durationTimeForEffect:&effectDuration];
-        double durSec = CMTimeGetSeconds(effectDuration);
-        seq.effectDuration = durSec;
-        self.stageSequencerRuler.effectDuration = durSec;
+  NSArray<KKTimingLane *> *lanes = nil;
+  if (multiStageEnabled) {
+    NSString *json = nil;
+    [paramGetAPI getStringParameterValue:&json
+                           fromParameter:kKKParamMultiStageData];
+    lanes = [KKTimingLane lanesFromJSON:json];
+    if (lanes)
+      KKInstanceStateForAPI(self.apiManager).lanesSnapshot = [lanes copy];
+  }
 
-        double startSec = CMTimeGetSeconds(effectStart);
-        double nowSec = CMTimeGetSeconds(t);
-        if (durSec > 0) {
-          double frac = (nowSec - startSec) / durSec;
-          seq.playheadFraction = frac;
-          KKStagePlayheadView *ph =
-              KKInstanceStateForAPI(self.apiManager).playheadView;
-          ph.playheadFraction = frac;
-        }
-      }
+  double durSec = 0, frac = 0;
+  BOOL hasTiming = NO;
+  if (multiStageEnabled) {
+    id<FxTimingAPI_v4> timingAPI =
+        [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+    if (timingAPI) {
+      CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
+      [timingAPI startTimeForEffect:&effectStart];
+      [timingAPI durationTimeForEffect:&effectDuration];
+      durSec = CMTimeGetSeconds(effectDuration);
+      if (durSec > 0)
+        frac = (CMTimeGetSeconds(t) - CMTimeGetSeconds(effectStart)) / durSec;
+      hasTiming = YES;
     }
   }
 
-  [self _applyTimingParamsToGraph:self.timingGraph
-                     withParamAPI:paramGetAPI
-                           atTime:t];
-  [self _applySlotState:self.timingGraph.globalSlots
-           withParamAPI:paramGetAPI
-                 atTime:t];
-  [self _applySlotState:self.timingGraph.inSectionSlots
-           withParamAPI:paramGetAPI
-                 atTime:t];
-  [self _applySlotState:self.timingGraph.holdSectionSlots
-           withParamAPI:paramGetAPI
-                 atTime:t];
-  [self _applySlotState:self.timingGraph.outSectionSlots
-           withParamAPI:paramGetAPI
-                 atTime:t];
-  if (self.timingGraph.holdPropertyApplyState)
-    self.timingGraph.holdPropertyApplyState(paramGetAPI, t);
+  // Primary (inspector) set.
+  [self _applyStateToTimingGraph:self.timingGraph
+                         seqView:self.stageSequencer
+                    seqContainer:self.stageSequencerContainer
+                           ruler:self.stageSequencerRuler
+                        playhead:KKInstanceStateForAPI(self.apiManager)
+                                     .playheadView
+                    multiEnabled:multiStageEnabled
+                           lanes:lanes
+                    effectDurSec:durSec
+                    playheadFrac:frac
+                       hasTiming:hasTiming
+                    withParamAPI:paramGetAPI
+                          atTime:t];
+
+  // Secondary (window) sets. Prune any dead (deallocated) entries.
+  NSMutableArray *pruned = [NSMutableArray array];
+  for (KKTimingViewRefs *refs in instState.additionalTimingViews) {
+    if (!refs.isAlive)
+      continue;
+    [pruned addObject:refs];
+    [self _applyStateToTimingGraph:refs.graphView
+                           seqView:refs.seqView
+                      seqContainer:refs.seqContainer
+                             ruler:refs.ruler
+                          playhead:refs.playhead
+                      multiEnabled:multiStageEnabled
+                             lanes:lanes
+                      effectDurSec:durSec
+                      playheadFrac:frac
+                         hasTiming:hasTiming
+                      withParamAPI:paramGetAPI
+                            atTime:t];
+  }
+  instState.additionalTimingViews = pruned;
+
   [actionAPI endAction:self];
 }
 
@@ -1375,8 +1559,9 @@
 
 - (void)_showSegmentEditPopoverForLane:(NSInteger)laneIndex
                             segmentIdx:(NSInteger)segmentIndex
-                            anchorRect:(NSRect)anchorRect {
-  KKStageSequencerView *seq = self.stageSequencer;
+                            anchorRect:(NSRect)anchorRect
+                            sourceView:(KKStageSequencerView *)sourceView {
+  KKStageSequencerView *seq = sourceView ?: self.stageSequencer;
   if (!seq)
     return;
 

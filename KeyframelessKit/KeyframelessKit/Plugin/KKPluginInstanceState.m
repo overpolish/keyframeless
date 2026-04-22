@@ -8,6 +8,12 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <objc/runtime.h>
 
+@implementation KKTimingViewRefs
+- (BOOL)isAlive {
+  return _graphView != nil && _seqView != nil;
+}
+@end
+
 @implementation KKPluginInstanceState
 
 - (instancetype)init {
