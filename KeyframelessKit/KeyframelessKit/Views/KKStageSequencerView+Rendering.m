@@ -31,7 +31,6 @@
     KKTimingLane *lane = self.lanes[laneIdx];
     CGFloat laneY = [self _laneYForIndex:laneIdx totalHeight:totalHeight];
 
-    [self _renderLaneBackground:lane laneY:laneY imageWidth:imageWidth];
     [self _renderLaneLabel:lane laneY:laneY];
 
     if (trackWidth < 1)
@@ -71,23 +70,15 @@
 
   [image unlockFocus];
   _lanesImage = image;
-  NSRect proposedRect = NSMakeRect(0, 0, image.size.width, image.size.height);
-  CGImageRef cgImage = [image CGImageForProposedRect:&proposedRect
-                                             context:nil
-                                               hints:nil];
-  self.layer.contents = (__bridge id)cgImage;
+  [self setNeedsDisplay:YES];
 }
 
-- (void)_renderLaneBackground:(KKTimingLane *)lane
-                        laneY:(CGFloat)laneY
-                   imageWidth:(CGFloat)imageWidth {
-  NSRect laneRect =
-      NSMakeRect(kKSSBorderInset, laneY, imageWidth - 2 * kKSSBorderInset,
-                 [self _laneHeight]);
-  [[NSColor inspectorBackground] setFill];
-  [[NSBezierPath bezierPathWithRoundedRect:laneRect
-                                   xRadius:KKRadiusMD
-                                   yRadius:KKRadiusMD] fill];
+- (void)drawRect:(NSRect)dirtyRect {
+  if (_lanesImage)
+    [_lanesImage drawInRect:self.bounds
+                   fromRect:NSZeroRect
+                  operation:NSCompositingOperationSourceOver
+                   fraction:1.0];
 }
 
 - (void)_renderLaneLabel:(KKTimingLane *)lane laneY:(CGFloat)laneY {

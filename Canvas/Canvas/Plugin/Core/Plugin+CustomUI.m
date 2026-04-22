@@ -16,6 +16,21 @@
 @implementation KKLayerInstanceState
 @end
 
+// FCP's OZViewCtrlRootScrollView claims forwarded scroll events from nested
+// scroll views, which scrolls the inspector when the user reaches the layer
+// list's top/bottom. Returning nil from this private method blocks the
+// forwarding-target search; native momentum/elasticity stay intact.
+@interface KKLayerListScrollView : NSScrollView
+@end
+@implementation KKLayerListScrollView
+- (NSResponder *)_recursiveResponderThatWantsForwardedScrollEventsForAxis:
+                     (NSEventGestureAxis)axis
+                                                         intendedForSwipe:
+                                                             (BOOL)forSwipe {
+  return nil;
+}
+@end
+
 static NSDictionary<NSString *, KKLayerInstanceState *> *sLayerStates;
 static const char kKKLayerUUIDAssocKey;
 
@@ -158,7 +173,8 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
       initWithFrame:NSMakeRect(0, 0, 300, kLayerListTotalHeight)];
   wrapper.autoresizingMask = NSViewWidthSizable;
 
-  NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSZeroRect];
+  NSScrollView *scrollView =
+      [[KKLayerListScrollView alloc] initWithFrame:NSZeroRect];
   scrollView.translatesAutoresizingMaskIntoConstraints = NO;
   scrollView.hasVerticalScroller = YES;
   scrollView.hasHorizontalScroller = NO;
