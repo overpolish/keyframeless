@@ -67,3 +67,7 @@ KKPluginInstanceState *KKInstanceStateForAPI(id<PROAPIAccessing> api) {
   NSString *uuid = KKInstanceUUIDForAPI(api);
   return uuid ? KKInstanceStateForUUID(uuid) : nil;
 }
+
+NSArray<KKPluginInstanceState *> *KKAllInstanceStates(void) {
+  return sInstanceStates.allValues ?: @[];
+}

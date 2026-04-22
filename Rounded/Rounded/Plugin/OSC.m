@@ -78,25 +78,7 @@ static float paddingForRadius(double radius, float minDim) {
               activePart:(NSInteger)activePart
         destinationImage:(FxImageTile *)destinationImage
                   atTime:(CMTime)time {
-  [KKPlugin multiStageFlushPendingLanesForAPI:self.apiManager];
-  [KKPlugin multiStageSyncFromParams:self.apiManager];
-
-  id<FxTimingAPI_v4> timingAPI =
-      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-  if (timingAPI) {
-    CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
-    [timingAPI startTimeForEffect:&effectStart];
-    [timingAPI durationTimeForEffect:&effectDuration];
-    double durSec = CMTimeGetSeconds(effectDuration);
-    if (durSec > 0) {
-      double startSec = CMTimeGetSeconds(effectStart);
-      double nowSec = CMTimeGetSeconds(time);
-      double frac = (nowSec - startSec) / durSec;
-      [KKPlugin multiStageUpdatePlayhead:frac
-                                duration:durSec
-                                  forAPI:self.apiManager];
-    }
-  }
+  [KKPlugin multiStageDrawOSCTickForAPI:self.apiManager atTime:time];
 
   [self encodeRenderCommandsForDestinationImage:destinationImage
                                  canvasPosition:CGPointZero

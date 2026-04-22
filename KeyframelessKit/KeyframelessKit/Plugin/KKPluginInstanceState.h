@@ -6,10 +6,10 @@
 #pragma once
 
 #import <Foundation/Foundation.h>
-#import <PluginManager/PluginManager.h>
 
 @class KKStageSequencerView;
 @class KKTimingLane;
+@protocol PROAPIAccessing;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -34,6 +34,15 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// The live sequencer view for this instance (weak — auto-nils on dealloc).
 @property(nonatomic, weak, nullable) KKStageSequencerView *sequencerView;
+
+/// Cached effect timing (seconds). Populated when the custom UI is created
+/// (inside an action scope where FxTimingAPI answers) and used by the
+/// playhead pump to broadcast updates across all instances. Cannot be
+/// refreshed from the OSC pump's drawOSC context — FxTimingAPI returns nil
+/// when queried through a non-active instance's apiManager, and wrapping
+/// in a fresh action scope inside drawOSC causes re-entrant redraws.
+@property(nonatomic) double cachedEffectStart;
+@property(nonatomic) double cachedEffectDuration;
 
 /// Re-entrancy guard: YES while a segment-selection callback is writing
 /// native params so `multiStageHandleParameterChanged:` skips its work.
@@ -60,5 +69,11 @@ KKPluginInstanceState *_Nullable KKInstanceStateForUUID(
 
 /// Convenience wrapper: UUID lookup + state lookup in one call.
 KKPluginInstanceState *_Nullable KKInstanceStateForAPI(id<PROAPIAccessing> api);
+
+/// Snapshot of all live per-instance states. Used by the OSC flush pump to
+/// broadcast view updates across every effect instance — any single running
+/// `drawOSC` (the OSC-selected effect) can deliver updates to every live
+/// sequencer view on the timeline, not just its own.
+NSArray<KKPluginInstanceState *> *KKAllInstanceStates(void);
 
 NS_ASSUME_NONNULL_END
