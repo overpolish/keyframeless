@@ -9,8 +9,6 @@
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 @implementation KKStageSequencerView (Interaction)
 
-#pragma mark - Hit-testing helpers
-
 - (BOOL)_hitTestEdgeAtPoint:(NSPoint)loc
                     laneIdx:(NSInteger *)outLane
                      segIdx:(NSInteger *)outSeg
@@ -127,8 +125,6 @@
   }
 }
 
-#pragma mark - Mouse tracking
-
 - (void)mouseMoved:(NSEvent *)event {
   NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
   NSInteger lane = -1, seg = -1;
@@ -196,8 +192,6 @@
     [self renderLanes];
 }
 
-#pragma mark - Zoom & pan
-
 - (void)magnifyWithEvent:(NSEvent *)event {
   NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
   CGFloat trackX, trackWidth;
@@ -247,8 +241,6 @@
 
   [self renderLanes];
 }
-
-#pragma mark - Mouse down/drag/up
 
 - (void)mouseDown:(NSEvent *)event {
   NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
