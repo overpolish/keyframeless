@@ -491,27 +491,7 @@
     [seqView.heightAnchor constraintEqualToConstant:seqHeight],
   ]];
   self.stageSequencer = seqView;
-
-  // Ensure this plugin instance has a UUID and register the view into
-  // per-instance state so two copies of the effect on one timeline don't
-  // share mutable state. UUID generation requires action scope since it
-  // writes a hidden param (see project_fxplug_param_persistence.md).
-  {
-    id<FxCustomParameterActionAPI_v4> uuidActAPI = [self.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [uuidActAPI startAction:self];
-    NSString *uuid = KKInstanceUUIDForAPI(self.apiManager);
-    if (!uuid.length) {
-      uuid = [[NSUUID UUID] UUIDString];
-      id<FxParameterSettingAPI_v5> uuidSetAPI =
-          [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      [uuidSetAPI setStringParameterValue:uuid toParameter:kKKParamInstanceID];
-      // Re-read via helper so it caches on the api manager.
-      uuid = KKInstanceUUIDForAPI(self.apiManager);
-    }
-    [uuidActAPI endAction:self];
-    KKInstanceStateForUUID(uuid).sequencerView = seqView;
-  }
+  [self _registerMultiStageSequencerView:seqView];
 
   seqView.onSegmentSelected = ^(NSInteger laneIndex, NSInteger segmentIndex) {
     __strong typeof(weakSelf) strongSelf = weakSelf;

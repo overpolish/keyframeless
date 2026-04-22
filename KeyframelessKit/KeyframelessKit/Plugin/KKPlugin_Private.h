@@ -29,6 +29,15 @@
 - (void)timingGraphApplyState;
 @end
 
+@interface KKPlugin (MultiStagePumpInternal)
+/// Wires a newly-created sequencer view into per-instance state. Generates
+/// a UUID if this instance doesn't yet have one (`kKKParamInstanceID`), and
+/// caches the effect's start/duration via `FxTimingAPI` — both inside an
+/// `startAction:/endAction:` scope where the needed APIs are live.
+/// Call from `createViewForParameterID:` right after building the view.
+- (void)_registerMultiStageSequencerView:(KKStageSequencerView *)view;
+@end
+
 // FxPlug calls createViewForParameterID: on a fresh plugin instance, not the
 // one that ran addParametersWithError:. Store parameter metadata at class level
 // (keyed by the concrete plugin class) so any instance can look it up.
