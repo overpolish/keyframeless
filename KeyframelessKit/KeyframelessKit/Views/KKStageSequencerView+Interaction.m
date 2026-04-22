@@ -145,6 +145,46 @@
   return NO;
 }
 
+/// Returns YES when `loc` falls on the edit button of the currently hovered
+/// segment. The button only exists on the hovered segment and only when that
+/// segment is wide enough to show it.
+- (BOOL)_editButtonUnderPoint:(NSPoint)loc
+                      outLane:(NSInteger *)outLane
+                       outSeg:(NSInteger *)outSeg
+                outAnchorRect:(NSRect *)outRect {
+  if (outLane)
+    *outLane = -1;
+  if (outSeg)
+    *outSeg = -1;
+  if (_hoverSegLaneIdx < 0 || _hoverSegSegIdx < 0)
+    return NO;
+  if ((NSUInteger)_hoverSegLaneIdx >= self.lanes.count)
+    return NO;
+  KKTimingLane *lane = self.lanes[_hoverSegLaneIdx];
+  if (!lane.enabled || (NSUInteger)_hoverSegSegIdx >= lane.segments.count)
+    return NO;
+  CGFloat totalWidth = NSWidth(self.bounds);
+  CGFloat totalHeight = [self _totalHeight];
+  CGFloat trackX, trackWidth;
+  [self _trackGeometryForWidth:totalWidth
+                        trackX:&trackX
+                    trackWidth:&trackWidth];
+  NSRect btn = [self _editButtonRectForLaneIndex:_hoverSegLaneIdx
+                                    segmentIndex:_hoverSegSegIdx
+                                          trackX:trackX
+                                      trackWidth:trackWidth
+                                     totalHeight:totalHeight];
+  if (NSIsEmptyRect(btn) || !NSPointInRect(loc, btn))
+    return NO;
+  if (outLane)
+    *outLane = _hoverSegLaneIdx;
+  if (outSeg)
+    *outSeg = _hoverSegSegIdx;
+  if (outRect)
+    *outRect = btn;
+  return YES;
+}
+
 /// Finds the (lane, segment) that a point sits inside, or (-1, -1).
 - (void)_segmentUnderPoint:(NSPoint)loc
                    outLane:(NSInteger *)outLane
@@ -202,7 +242,14 @@
   _hoverSegLaneIdx = hovSegLane;
   _hoverSegSegIdx = hovSegSeg;
 
-  if (onEdge) {
+  BOOL onEdit = [self _editButtonUnderPoint:loc
+                                    outLane:NULL
+                                     outSeg:NULL
+                              outAnchorRect:NULL];
+
+  if (onEdit) {
+    [[NSCursor pointingHandCursor] set];
+  } else if (onEdge) {
     [[NSCursor resizeLeftRightCursor] set];
   } else if (event.modifierFlags & NSEventModifierFlagCommand) {
     BOOL canDelete = [self _canDeleteAtPoint:loc];
@@ -309,6 +356,18 @@
 
 - (void)mouseDown:(NSEvent *)event {
   NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+
+  // Edit button takes priority over any other interaction.
+  NSInteger editLane = -1, editSeg = -1;
+  NSRect editRect = NSZeroRect;
+  if ([self _editButtonUnderPoint:loc
+                          outLane:&editLane
+                           outSeg:&editSeg
+                    outAnchorRect:&editRect]) {
+    if (self.onSegmentEditRequested)
+      self.onSegmentEditRequested(editLane, editSeg, editRect);
+    return;
+  }
 
   CGFloat totalWidth = NSWidth(self.bounds);
   CGFloat totalHeight = [self _totalHeight];

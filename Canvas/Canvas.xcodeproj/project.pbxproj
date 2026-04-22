@@ -136,7 +136,6 @@
 				Plugin/UI/JoinStyleView.m,
 				Plugin/UI/KKPillStyleView.m,
 				Plugin/UI/MarkerStyleView.m,
-				Plugin/UI/SeedView.m,
 				Plugin/UI/StrokeStyleView.m,
 				"Wrapper Application/Info.plist",
 			);

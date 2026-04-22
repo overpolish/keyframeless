@@ -94,9 +94,15 @@
 }
 
 - (CGFloat)_totalHeight {
-  return kKSSRulerHeight + kKSSBoundaryLabelHeight +
-         _lanes.count * (kKSSLaneHeight + kKSSBoundaryLabelHeight) +
-         (_lanes.count - 1) * kKSSLaneSpacing + 2 * kKSSBorderInset;
+  return [KKStageSequencerView heightForLaneCount:_lanes.count];
+}
+
++ (CGFloat)heightForLaneCount:(NSUInteger)laneCount {
+  if (laneCount == 0)
+    return 0;
+  CGFloat block = kKSSLaneHeight + kKSSBoundaryLabelHeight;
+  return kKSSRulerHeight + kKSSBoundaryLabelHeight + laneCount * block +
+         (laneCount - 1) * kKSSLaneSpacing + 2 * kKSSBorderInset;
 }
 
 @end

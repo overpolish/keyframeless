@@ -9,6 +9,7 @@
 #import "../Style/KKTokens.h"
 #import "../Views/KKAlertView.h"
 #import "../Views/KKCustomGroupHeaderView.h"
+#import "../Views/KKSegmentEditView.h"
 #import "../Views/KKSeparatorView.h"
 #import "../Views/KKStageSequencerView.h"
 
@@ -261,8 +262,7 @@
       [self timingSlotsForSection:KKTimingGraphSectionOut];
 
   NSArray<KKAnimatableProperty *> *seqProps = [self animatableProperties];
-  CGFloat seqHeight = 10.0 + 10.0 + seqProps.count * (30.0 + 10.0) +
-                      (seqProps.count - 1) * 2.0 + 2 * KKPaddingSM;
+  CGFloat seqHeight = [KKStageSequencerView heightForLaneCount:seqProps.count];
   CGFloat wrapperHeight = seqHeight + KKPaddingLG;
 
   NSView *wrapper =
@@ -815,6 +815,16 @@
     [strongSelf timingGraphApplyState];
   };
 
+  seqView.onSegmentEditRequested =
+      ^(NSInteger laneIndex, NSInteger segmentIndex, NSRect anchorRect) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf)
+          return;
+        [strongSelf _showSegmentEditPopoverForLane:laneIndex
+                                        segmentIdx:segmentIndex
+                                        anchorRect:anchorRect];
+      };
+
   seqView.onPlayheadScrub = ^(double fraction) {
     __strong typeof(weakSelf) strongSelf = weakSelf;
     if (!strongSelf)
@@ -1050,6 +1060,165 @@
   [setAPI setFloatValue:value toParameter:paramID atTime:[actAPI currentTime]];
   [actAPI endAction:self];
   [self timingGraphApplyState];
+}
+
+- (void)_mutateMultiStageSegmentAtLane:(NSInteger)laneIndex
+                            segmentIdx:(NSInteger)segmentIndex
+                                 using:(void (^)(KKTimingSegment *))mutator {
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  NSString *json = nil;
+  [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+  NSMutableArray<KKTimingLane *> *lanes =
+      [[KKTimingLane lanesFromJSON:json] mutableCopy];
+  if (!lanes || (NSUInteger)laneIndex >= lanes.count) {
+    [actAPI endAction:self];
+    return;
+  }
+  KKTimingLane *lane = [lanes[laneIndex] copy];
+  NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
+  if ((NSUInteger)segmentIndex >= segs.count) {
+    [actAPI endAction:self];
+    return;
+  }
+  KKTimingSegment *seg = [segs[segmentIndex] copy];
+  mutator(seg);
+  segs[segmentIndex] = seg;
+  lane.segments = segs;
+  lanes[laneIndex] = lane;
+
+  NSString *updated = [KKTimingLane jsonFromLanes:lanes];
+  if (updated)
+    [setAPI setStringParameterValue:updated toParameter:kKKParamMultiStageData];
+  [actAPI endAction:self];
+  [self timingGraphApplyState];
+}
+
+- (void)_showSegmentEditPopoverForLane:(NSInteger)laneIndex
+                            segmentIdx:(NSInteger)segmentIndex
+                            anchorRect:(NSRect)anchorRect {
+  KKStageSequencerView *seq = self.stageSequencer;
+  if (!seq)
+    return;
+
+  // Snapshot current segment state for the popover.
+  __block KKSegmentEditKind kind = KKSegmentEditKindTransition;
+  __block NSInteger curveType = 0;
+  __block double intensity = 0.5;
+  __block double frequency = 0.5;
+  __block uint32_t seed = 0;
+
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  NSString *json = nil;
+  [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+  [actAPI endAction:self];
+
+  NSArray<KKTimingLane *> *lanes = [KKTimingLane lanesFromJSON:json];
+  if (!lanes || (NSUInteger)laneIndex >= lanes.count)
+    return;
+  KKTimingLane *lane = lanes[laneIndex];
+  if ((NSUInteger)segmentIndex >= lane.segments.count)
+    return;
+  KKTimingSegment *seg = lane.segments[segmentIndex];
+
+  kind = (seg.type == KKSegmentTypeHold) ? KKSegmentEditKindHold
+                                         : KKSegmentEditKindTransition;
+  curveType = (kind == KKSegmentEditKindHold) ? (NSInteger)seg.holdEffect
+                                              : (NSInteger)seg.easing;
+  intensity = seg.intensity;
+  frequency = seg.frequency;
+  seed = seg.seed;
+
+  KKSegmentEditView *content = [[KKSegmentEditView alloc] initWithKind:kind];
+  content.curveType = curveType;
+  content.intensity = intensity;
+  content.frequency = frequency;
+  content.seed = seed;
+  content.animateOut = (kind == KKSegmentEditKindTransition) &&
+                       (segmentIndex == (NSInteger)lane.segments.count - 1);
+
+  __weak typeof(self) weakSelf = self;
+  content.onCurveTypeChanged = ^(NSInteger ct) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    [strongSelf _mutateMultiStageSegmentAtLane:laneIndex
+                                    segmentIdx:segmentIndex
+                                         using:^(KKTimingSegment *s) {
+                                           if (s.type == KKSegmentTypeHold)
+                                             s.holdEffect = (KKHoldEffect)ct;
+                                           else
+                                             s.easing = (KKEasingCurve)ct;
+                                         }];
+  };
+  content.onIntensityChanged = ^(double v) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    [strongSelf _mutateMultiStageSegmentAtLane:laneIndex
+                                    segmentIdx:segmentIndex
+                                         using:^(KKTimingSegment *s) {
+                                           s.intensity = v;
+                                         }];
+  };
+  content.onFrequencyChanged = ^(double v) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    [strongSelf _mutateMultiStageSegmentAtLane:laneIndex
+                                    segmentIdx:segmentIndex
+                                         using:^(KKTimingSegment *s) {
+                                           s.frequency = v;
+                                         }];
+  };
+  content.onSeedChanged = ^(uint32_t newSeed) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    [strongSelf _mutateMultiStageSegmentAtLane:laneIndex
+                                    segmentIdx:segmentIndex
+                                         using:^(KKTimingSegment *s) {
+                                           s.seed = newSeed;
+                                         }];
+  };
+  __weak KKSegmentEditView *weakContent = content;
+  content.onSeedReroll = ^{
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    uint32_t newSeed = arc4random();
+    [strongSelf _mutateMultiStageSegmentAtLane:laneIndex
+                                    segmentIdx:segmentIndex
+                                         using:^(KKTimingSegment *s) {
+                                           s.seed = newSeed;
+                                         }];
+    weakContent.seed = newSeed;
+  };
+
+  NSViewController *vc = [[NSViewController alloc] init];
+  vc.view = content;
+
+  NSPopover *popover = [[NSPopover alloc] init];
+  popover.behavior = NSPopoverBehaviorTransient;
+  popover.animates = YES;
+  popover.contentViewController = vc;
+  popover.contentSize = content.frame.size;
+
+  [self.segmentEditPopover close];
+  self.segmentEditPopover = popover;
+
+  [popover showRelativeToRect:anchorRect
+                       ofView:seq
+                preferredEdge:NSRectEdgeMaxY];
 }
 
 @end

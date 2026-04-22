@@ -38,9 +38,14 @@ typedef NS_ENUM(NSInteger, KKSegmentType) {
 /// Absolute parameter values. One per native param in the property's
 /// valueParamIDs array.
 @property(nonatomic, copy) NSArray<NSNumber *> *values;
+/// Easing curve used when `type == KKSegmentTypeTransition`.
 @property(nonatomic) KKEasingCurve easing;
+/// Hold effect used when `type == KKSegmentTypeHold`.
+@property(nonatomic) KKHoldEffect holdEffect;
 @property(nonatomic) double intensity;
 @property(nonatomic) double frequency;
+/// Hold-effect seed for randomising per-property variation.
+@property(nonatomic) uint32_t seed;
 
 /// Convenience: first value (for single-param properties).
 @property(nonatomic, readonly) double value;

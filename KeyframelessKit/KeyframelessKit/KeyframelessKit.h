@@ -51,6 +51,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKRingOSC.h>
 #import <KeyframelessKit/KKRotationOSC.h>
 #import <KeyframelessKit/KKSVGParser.h>
+#import <KeyframelessKit/KKSeedView.h>
 #import <KeyframelessKit/KKSeparatorView.h>
 #import <KeyframelessKit/KKShaderTypes.h>
 #import <KeyframelessKit/KKSnapEngine.h>

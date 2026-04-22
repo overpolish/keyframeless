@@ -14,6 +14,8 @@ NS_ASSUME_NONNULL_BEGIN
 static const CGFloat kKSSRulerHeight __attribute__((unused)) = 10.0;
 static const CGFloat kKSSPlayheadSnapPx __attribute__((unused)) = 10.0;
 static const CGFloat kKSSBoundaryLabelHeight __attribute__((unused)) = 10.0;
+static const CGFloat kKSSEditButtonSize __attribute__((unused)) = 16.0;
+static const CGFloat kKSSEditMinSegmentPx __attribute__((unused)) = 30.0;
 static const CGFloat kKSSLaneHeight __attribute__((unused)) = 30.0;
 static const CGFloat kKSSLaneSpacing __attribute__((unused)) = KKSpacingXS;
 static const CGFloat kKSSLabelWidth __attribute__((unused)) = 50.0;
@@ -77,6 +79,11 @@ static const NSInteger kKSSCurveSegments __attribute__((unused)) = 40;
 - (void)_clampPanOffset;
 - (CGFloat)_laneYForIndex:(NSUInteger)laneIdx totalHeight:(CGFloat)totalHeight;
 - (CGFloat)_totalHeight;
+- (NSRect)_editButtonRectForLaneIndex:(NSUInteger)laneIdx
+                         segmentIndex:(NSUInteger)segIdx
+                               trackX:(CGFloat)trackX
+                           trackWidth:(CGFloat)trackWidth
+                          totalHeight:(CGFloat)totalHeight;
 
 @end
 
