@@ -14,7 +14,8 @@
 
 extern NSArray<KKTimingLane *> *KKMultiStageLanesSnapshot;
 extern NSArray<KKTimingLane *> *KKMultiStagePendingLanes;
-extern void *KKMultiStageSequencerView;
+extern void KKSetMultiStageSequencerView(KKStageSequencerView *_Nullable view);
+extern KKStageSequencerView *_Nullable KKGetMultiStageSequencerView(void);
 extern BOOL KKMultiStageSelectionInProgress;
 #import "../Views/KKAnimatableProperty.h"
 #import "../Views/KKPillToggleRowView.h"
@@ -494,7 +495,7 @@ extern BOOL KKMultiStageSelectionInProgress;
     [seqView.heightAnchor constraintEqualToConstant:seqHeight],
   ]];
   self.stageSequencer = seqView;
-  KKMultiStageSequencerView = (__bridge void *)seqView;
+  KKSetMultiStageSequencerView(seqView);
 
   seqView.onSegmentSelected = ^(NSInteger laneIndex, NSInteger segmentIndex) {
     __strong typeof(weakSelf) strongSelf = weakSelf;

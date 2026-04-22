@@ -37,8 +37,6 @@
   return self;
 }
 
-#pragma mark - Public setters
-
 - (void)setLanes:(NSArray<KKTimingLane *> *)lanes {
   _lanes = [lanes copy];
   if (!_dragging && !_dragMoving && !_dragLaneMoving)
@@ -63,8 +61,6 @@
   [super setFrameSize:newSize];
   [self renderLanes];
 }
-
-#pragma mark - Coordinate helpers (shared with category files)
 
 - (void)_trackGeometryForWidth:(CGFloat)viewWidth
                         trackX:(CGFloat *)outTrackX

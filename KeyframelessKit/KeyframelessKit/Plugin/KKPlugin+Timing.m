@@ -21,8 +21,19 @@ NSArray<KKTimingLane *> *KKMultiStageLanesSnapshot = nil;
 /// Pending lanes for live graph updates. Written from parameterChanged:,
 /// consumed by multiStageFlushPendingLanes called from drawOSC.
 NSArray<KKTimingLane *> *KKMultiStagePendingLanes = nil;
-/// Reference to the sequencer view for the OSC flush path.
-void *KKMultiStageSequencerView = nil;
+/// Weak reference to the live sequencer view. ARC auto-nils on dealloc and
+/// the __weak read is thread-safe, so the OSC render queue can sample this
+/// without racing the main thread teardown.
+static __weak KKStageSequencerView *KKMultiStageSequencerViewRef = nil;
+
+void KKSetMultiStageSequencerView(KKStageSequencerView *_Nullable view) {
+  KKMultiStageSequencerViewRef = view;
+}
+
+KKStageSequencerView *_Nullable KKGetMultiStageSequencerView(void) {
+  return KKMultiStageSequencerViewRef;
+}
+
 /// Guard flag: skip parameterChanged staging while a segment selection
 /// callback is in progress (it writes native params which would re-enter).
 BOOL KKMultiStageSelectionInProgress = NO;
@@ -631,8 +642,7 @@ static const FxParameterFlags kCustomUIDisabled =
 }
 
 + (void)multiStageSyncFromParams:(id<PROAPIAccessing>)apiManager {
-  KKStageSequencerView *seq =
-      (__bridge KKStageSequencerView *)KKMultiStageSequencerView;
+  KKStageSequencerView *seq = KKGetMultiStageSequencerView();
   if (!seq)
     return;
   id<FxParameterRetrievalAPI_v6> getAPI =
@@ -662,8 +672,7 @@ static const FxParameterFlags kCustomUIDisabled =
   if (!pending)
     return;
   KKMultiStagePendingLanes = nil;
-  KKStageSequencerView *seq =
-      (__bridge KKStageSequencerView *)KKMultiStageSequencerView;
+  KKStageSequencerView *seq = KKGetMultiStageSequencerView();
   if (!seq)
     return;
   dispatch_async(dispatch_get_main_queue(), ^{
@@ -676,8 +685,7 @@ static double KKPendingPlayheadDuration = -1;
 static BOOL KKPlayheadDispatchPending = NO;
 
 + (void)multiStageUpdatePlayhead:(double)fraction duration:(double)duration {
-  KKStageSequencerView *seq =
-      (__bridge KKStageSequencerView *)KKMultiStageSequencerView;
+  KKStageSequencerView *seq = KKGetMultiStageSequencerView();
   if (!seq)
     return;
   KKPendingPlayheadFraction = fraction;

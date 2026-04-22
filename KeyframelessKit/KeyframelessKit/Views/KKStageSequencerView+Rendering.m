@@ -78,8 +78,6 @@
   self.layer.contents = (__bridge id)cgImage;
 }
 
-#pragma mark - Lane background & label
-
 - (void)_renderLaneBackground:(KKTimingLane *)lane
                         laneY:(CGFloat)laneY
                    imageWidth:(CGFloat)imageWidth {
@@ -106,8 +104,6 @@
                   laneY + (kKSSLaneHeight - labelSize.height) / 2.0);
   [lane.propertyLabel drawAtPoint:labelPoint withAttributes:labelAttrs];
 }
-
-#pragma mark - Segment fills
 
 - (void)_renderSegmentFillsForLane:(KKTimingLane *)lane
                          laneIndex:(NSUInteger)laneIdx
@@ -149,8 +145,6 @@
   }
 }
 
-#pragma mark - Edge hover indicator
-
 - (void)_renderEdgeHoverForLane:(KKTimingLane *)lane
                       laneIndex:(NSUInteger)laneIdx
                          trackX:(CGFloat)trackX
@@ -175,8 +169,6 @@
   line.lineWidth = 2.0;
   [line stroke];
 }
-
-#pragma mark - Graph line
 
 static double _segAvgValue(KKTimingSegment *seg) {
   if (!seg.values.count)
@@ -271,8 +263,6 @@ static double _segAvgValue(KKTimingSegment *seg) {
     [segPath stroke];
   }
 }
-
-#pragma mark - Boundary labels
 
 static NSString *_boundaryTimeLabel(double fraction, double duration) {
   double sec = fraction * duration;
@@ -375,8 +365,6 @@ static NSString *_boundaryTimeLabel(double fraction, double duration) {
     [durLabel drawAtPoint:NSMakePoint(durX, durY) withAttributes:durAttrs];
 }
 
-#pragma mark - Ruler
-
 static double _tickIntervalForPixelsPerSecond(CGFloat pps) {
   static const double candidates[] = {0.1,  0.25, 0.5,  1.0,  2.0,   5.0,
                                       10.0, 15.0, 30.0, 60.0, 120.0, 300.0};
@@ -448,8 +436,6 @@ static NSString *_timecodeLabel(double seconds) {
 
   [ticks stroke];
 }
-
-#pragma mark - Playhead
 
 /// Draws the slider-style knob (point down) at a given center-x and top-y.
 /// Flat edge at topY, point extends downward (lower Y = visually down in
