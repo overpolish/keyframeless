@@ -37,7 +37,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)timingGraphApplyState;
 - (void)_showSegmentEditPopoverForLane:(NSInteger)laneIndex
                             segmentIdx:(NSInteger)segmentIndex
-                            anchorRect:(NSRect)anchorRect;
+                            anchorRect:(NSRect)anchorRect
+                            sourceView:
+                                (nullable KKStageSequencerView *)sourceView;
 @end
 
 @interface KKPlugin (MultiStagePumpInternal)

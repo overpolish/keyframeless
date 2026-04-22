@@ -80,7 +80,7 @@
     if (!lane.enabled)
       continue;
     CGFloat laneY = [self _laneYForIndex:laneIdx totalHeight:totalHeight];
-    if (loc.y < laneY || loc.y > laneY + kKSSLaneHeight)
+    if (loc.y < laneY || loc.y > laneY + [self _laneHeight])
       continue;
     if (loc.x < kKSSBorderInset + kKSSLabelWidth)
       return NO;
@@ -125,7 +125,7 @@
     if (!lane.enabled || lane.segments.count <= 1)
       continue;
     CGFloat laneY = [self _laneYForIndex:laneIdx totalHeight:totalHeight];
-    if (loc.y < laneY || loc.y > laneY + kKSSLaneHeight)
+    if (loc.y < laneY || loc.y > laneY + [self _laneHeight])
       continue;
     if (loc.x < kKSSBorderInset + kKSSLabelWidth)
       return NO;
@@ -201,7 +201,7 @@
     if (!l.enabled)
       continue;
     CGFloat ly = [self _laneYForIndex:li totalHeight:totalHeight];
-    if (loc.y < ly || loc.y > ly + kKSSLaneHeight)
+    if (loc.y < ly || loc.y > ly + [self _laneHeight])
       continue;
     if (loc.x < kKSSBorderInset + kKSSLabelWidth)
       return;
@@ -392,7 +392,7 @@
     KKTimingLane *lane = self.lanes[laneIdx];
     CGFloat laneY = [self _laneYForIndex:laneIdx totalHeight:totalHeight];
 
-    if (loc.y < laneY || loc.y > laneY + kKSSLaneHeight)
+    if (loc.y < laneY || loc.y > laneY + [self _laneHeight])
       continue;
 
     if (loc.x < kKSSBorderInset + kKSSLabelWidth) {

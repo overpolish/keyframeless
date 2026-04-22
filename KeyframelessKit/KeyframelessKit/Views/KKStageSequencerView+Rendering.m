@@ -81,8 +81,9 @@
 - (void)_renderLaneBackground:(KKTimingLane *)lane
                         laneY:(CGFloat)laneY
                    imageWidth:(CGFloat)imageWidth {
-  NSRect laneRect = NSMakeRect(
-      kKSSBorderInset, laneY, imageWidth - 2 * kKSSBorderInset, kKSSLaneHeight);
+  NSRect laneRect =
+      NSMakeRect(kKSSBorderInset, laneY, imageWidth - 2 * kKSSBorderInset,
+                 [self _laneHeight]);
   [[NSColor inspectorBackground] setFill];
   [[NSBezierPath bezierPathWithRoundedRect:laneRect
                                    xRadius:KKRadiusMD
@@ -101,7 +102,7 @@
   NSSize labelSize = [lane.propertyLabel sizeWithAttributes:labelAttrs];
   NSPoint labelPoint =
       NSMakePoint(kKSSBorderInset + kKSSLabelPadding,
-                  laneY + (kKSSLaneHeight - labelSize.height) / 2.0);
+                  laneY + ([self _laneHeight] - labelSize.height) / 2.0);
   [lane.propertyLabel drawAtPoint:labelPoint withAttributes:labelAttrs];
 }
 
@@ -119,7 +120,7 @@
     if (segW < 1)
       continue;
 
-    NSRect segRect = NSMakeRect(segX, laneY + 2, segW, kKSSLaneHeight - 4);
+    NSRect segRect = NSMakeRect(segX, laneY + 2, segW, [self _laneHeight] - 4);
     BOOL isSelected =
         (lane.enabled && lane.selectedSegment == (NSInteger)segIdx);
     BOOL isHovered = (lane.enabled && _hoverSegLaneIdx == (NSInteger)laneIdx &&
@@ -165,7 +166,7 @@
   [[NSColor accentMatchingHost] setStroke];
   NSBezierPath *line = [NSBezierPath bezierPath];
   [line moveToPoint:NSMakePoint(edgeX, laneY + 2)];
-  [line lineToPoint:NSMakePoint(edgeX, laneY + kKSSLaneHeight - 2)];
+  [line lineToPoint:NSMakePoint(edgeX, laneY + [self _laneHeight] - 2)];
   line.lineWidth = 2.0;
   [line stroke];
 }
@@ -202,7 +203,7 @@ static void _laneGraphFromTo(NSArray<KKTimingSegment *> *segments,
                    laneY:(CGFloat)laneY {
   CGFloat pad = kKSSCurvePadding;
   CGFloat drawBottom = laneY + 2 + pad;
-  CGFloat drawHeight = kKSSLaneHeight - 4 - 2 * pad;
+  CGFloat drawHeight = [self _laneHeight] - 4 - 2 * pad;
   if (drawHeight < 2)
     return;
 
@@ -481,7 +482,7 @@ static NSString *_boundaryTimeLabel(double fraction, double duration) {
   CGFloat segVisLeft = MAX(segX, trackX);
   CGFloat segVisRight = MIN(segX + segW, trackX + trackWidth);
   btnLeft = MAX(segVisLeft, MIN(segVisRight - kKSSEditButtonSize, btnLeft));
-  CGFloat cy = laneY + kKSSLaneHeight / 2.0;
+  CGFloat cy = laneY + [self _laneHeight] / 2.0;
   return NSMakeRect(btnLeft, cy - kKSSEditButtonSize / 2.0, kKSSEditButtonSize,
                     kKSSEditButtonSize);
 }

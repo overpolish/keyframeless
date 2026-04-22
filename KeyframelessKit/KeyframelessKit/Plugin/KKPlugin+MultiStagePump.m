@@ -51,10 +51,14 @@ static void KKFlushPendingLanes(void) {
       continue;
     state.pendingLanes = nil;
     KKStageSequencerView *seq = state.sequencerView;
-    if (!seq)
+    NSArray<KKTimingViewRefs *> *extras =
+        [state.additionalTimingViews copy] ?: @[];
+    if (!seq && extras.count == 0)
       continue;
     dispatch_async(dispatch_get_main_queue(), ^{
       seq.lanes = pending;
+      for (KKTimingViewRefs *r in extras)
+        r.seqView.lanes = pending;
     });
   }
 }
@@ -62,7 +66,9 @@ static void KKFlushPendingLanes(void) {
 static void KKSyncFromParams(id<PROAPIAccessing> apiManager) {
   KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
   KKStageSequencerView *seq = state.sequencerView;
-  if (!seq)
+  NSArray<KKTimingViewRefs *> *extras =
+      [state.additionalTimingViews copy] ?: @[];
+  if (!seq && extras.count == 0)
     return;
   id<FxParameterRetrievalAPI_v6> getAPI =
       [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
@@ -82,6 +88,8 @@ static void KKSyncFromParams(id<PROAPIAccessing> apiManager) {
   state.pendingLanes = nil;
   dispatch_async(dispatch_get_main_queue(), ^{
     seq.lanes = lanes;
+    for (KKTimingViewRefs *r in extras)
+      r.seqView.lanes = lanes;
   });
 }
 
@@ -112,7 +120,7 @@ static void KKRefreshActiveTiming(id<PROAPIAccessing> apiManager) {
 static void KKBroadcastPlayheads(double nowSec) {
   for (KKPluginInstanceState *state in KKAllInstanceStates()) {
     KKStageSequencerView *seq = state.sequencerView;
-    if (!seq)
+    if (!seq && state.additionalTimingViews.count == 0)
       continue;
     double durSec = state.cachedEffectDuration;
     if (durSec <= 0)
@@ -130,12 +138,20 @@ static void KKBroadcastPlayheads(double nowSec) {
     state.playheadDispatchPending = YES;
     KKStageSequencerRulerView *ruler = state.rulerView;
     KKStagePlayheadView *ph = state.playheadView;
+    NSArray<KKTimingViewRefs *> *extras =
+        [state.additionalTimingViews copy] ?: @[];
     dispatch_async(dispatch_get_main_queue(), ^{
       state.playheadDispatchPending = NO;
       seq.effectDuration = state.pendingPlayheadDuration;
       seq.playheadFraction = state.pendingPlayheadFraction;
       ruler.effectDuration = state.pendingPlayheadDuration;
       ph.playheadFraction = state.pendingPlayheadFraction;
+      for (KKTimingViewRefs *r in extras) {
+        r.seqView.effectDuration = state.pendingPlayheadDuration;
+        r.seqView.playheadFraction = state.pendingPlayheadFraction;
+        r.ruler.effectDuration = state.pendingPlayheadDuration;
+        r.playhead.playheadFraction = state.pendingPlayheadFraction;
+      }
     });
   }
 }
