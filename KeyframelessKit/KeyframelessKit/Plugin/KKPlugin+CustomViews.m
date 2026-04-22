@@ -34,6 +34,21 @@
 }
 @end
 
+@interface KKSequencerScrollView : NSScrollView
+@end
+@implementation KKSequencerScrollView
+// AppKit calls this private method to find the ancestor scroll view that wants
+// forwarded at-boundary scroll events. Returning nil makes the search fail, so
+// FCP's OZViewCtrlRootScrollView never receives our overscroll and the
+// inspector stays put.
+- (NSResponder *)_recursiveResponderThatWantsForwardedScrollEventsForAxis:
+                     (NSEventGestureAxis)axis
+                                                         intendedForSwipe:
+                                                             (BOOL)forSwipe {
+  return nil;
+}
+@end
+
 @interface KKScrollShadowObserver : NSObject
 @end
 @implementation KKScrollShadowObserver {
@@ -604,6 +619,8 @@
   seqContainer.wantsLayer = YES;
   seqContainer.layer.masksToBounds = YES;
   seqContainer.layer.cornerRadius = KKSpacingMD;
+  seqContainer.layer.backgroundColor =
+      [NSColor colorWithWhite:0.15 alpha:1.0].CGColor;
   seqContainer.layer.borderWidth = KKBorderWidthXS;
   seqContainer.layer.borderColor =
       [NSColor colorWithWhite:1.0 alpha:0.05].CGColor;
@@ -615,14 +632,18 @@
   rulerView.translatesAutoresizingMaskIntoConstraints = NO;
   [seqContainer addSubview:rulerView];
 
-  NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSZeroRect];
+  NSScrollView *scrollView =
+      [[KKSequencerScrollView alloc] initWithFrame:NSZeroRect];
   scrollView.translatesAutoresizingMaskIntoConstraints = NO;
   scrollView.hasVerticalScroller = YES;
   scrollView.hasHorizontalScroller = NO;
-  scrollView.drawsBackground = NO;
   scrollView.autohidesScrollers = YES;
-  scrollView.scrollerStyle = NSScrollerStyleOverlay;
+  scrollView.drawsBackground = YES;
+  scrollView.backgroundColor = [NSColor colorWithWhite:0.15 alpha:1.0];
   scrollView.borderType = NSNoBorder;
+  scrollView.wantsLayer = YES;
+  scrollView.layer.cornerRadius = KKSpacingMD;
+  scrollView.layer.masksToBounds = YES;
 
   scrollView.contentView.postsBoundsChangedNotifications = YES;
 
@@ -646,10 +667,6 @@
             constraintEqualToAnchor:scrollView.contentView.leadingAnchor],
       ]];
   if (uncapped) {
-    // Grow with the clip view when there's extra space (low-priority bottom
-    // pin), but never shrink below the natural full-lanes height (required).
-    // When the window is smaller than natural, the bottom pin breaks and the
-    // scroll view takes over.
     [seqViewConstraints
         addObject:[seqView.heightAnchor
                       constraintGreaterThanOrEqualToConstant:fullLanesH]];
@@ -662,37 +679,6 @@
         addObject:[seqView.heightAnchor constraintEqualToConstant:fullLanesH]];
   }
   [NSLayoutConstraint activateConstraints:seqViewConstraints];
-
-  CGFloat shadowH = 16.0;
-  KKScrollShadowView *topShadow =
-      [[KKScrollShadowView alloc] initWithFrame:NSZeroRect];
-  topShadow.translatesAutoresizingMaskIntoConstraints = NO;
-  topShadow.wantsLayer = YES;
-  CAGradientLayer *topGrad = [CAGradientLayer layer];
-  topGrad.colors = @[
-    (__bridge id)[NSColor colorWithWhite:0 alpha:0.35].CGColor,
-    (__bridge id)[NSColor clearColor].CGColor,
-  ];
-  topGrad.startPoint = CGPointMake(0.5, 1.0);
-  topGrad.endPoint = CGPointMake(0.5, 0.0);
-  topShadow.layer = topGrad;
-  topShadow.alphaValue = 0.0;
-  [seqContainer addSubview:topShadow];
-
-  KKScrollShadowView *bottomShadow =
-      [[KKScrollShadowView alloc] initWithFrame:NSZeroRect];
-  bottomShadow.translatesAutoresizingMaskIntoConstraints = NO;
-  bottomShadow.wantsLayer = YES;
-  CAGradientLayer *botGrad = [CAGradientLayer layer];
-  botGrad.colors = @[
-    (__bridge id)[NSColor clearColor].CGColor,
-    (__bridge id)[NSColor colorWithWhite:0 alpha:0.35].CGColor,
-  ];
-  botGrad.startPoint = CGPointMake(0.5, 1.0);
-  botGrad.endPoint = CGPointMake(0.5, 0.0);
-  bottomShadow.layer = botGrad;
-  bottomShadow.alphaValue = 0.0;
-  [seqContainer addSubview:bottomShadow];
 
   KKStagePlayheadView *playheadView =
       [[KKStagePlayheadView alloc] initWithFrame:NSZeroRect];
@@ -736,19 +722,6 @@
         constraintEqualToAnchor:seqContainer.trailingAnchor],
     [scrollView.topAnchor constraintEqualToAnchor:rulerView.bottomAnchor],
     [scrollView.bottomAnchor constraintEqualToAnchor:seqContainer.bottomAnchor],
-
-    [topShadow.leadingAnchor constraintEqualToAnchor:scrollView.leadingAnchor],
-    [topShadow.trailingAnchor
-        constraintEqualToAnchor:scrollView.trailingAnchor],
-    [topShadow.topAnchor constraintEqualToAnchor:scrollView.topAnchor],
-    [topShadow.heightAnchor constraintEqualToConstant:shadowH],
-
-    [bottomShadow.leadingAnchor
-        constraintEqualToAnchor:scrollView.leadingAnchor],
-    [bottomShadow.trailingAnchor
-        constraintEqualToAnchor:scrollView.trailingAnchor],
-    [bottomShadow.bottomAnchor constraintEqualToAnchor:scrollView.bottomAnchor],
-    [bottomShadow.heightAnchor constraintEqualToConstant:shadowH],
 
     [playheadView.leadingAnchor
         constraintEqualToAnchor:seqContainer.leadingAnchor],
@@ -808,45 +781,6 @@
     weakPlayheadForSync.zoom = z;
     weakPlayheadForSync.panOffset = p;
   };
-
-  // Fade shadow overlays based on scroll position (fraction within the
-  // scrollable range, using unflipped document coords where higher Y is
-  // visual top).
-  __weak NSScrollView *weakScroll = scrollView;
-  __weak KKScrollShadowView *weakTopShadow = topShadow;
-  __weak KKScrollShadowView *weakBottomShadow = bottomShadow;
-  void (^updateShadows)(void) = ^{
-    NSScrollView *sv = weakScroll;
-    if (!sv)
-      return;
-    NSRect vr = sv.documentVisibleRect;
-    NSRect cr = [(NSView *)sv.documentView bounds];
-    CGFloat scrollable = cr.size.height - vr.size.height;
-    if (scrollable <= 0.5) {
-      weakTopShadow.alphaValue = 0.0;
-      weakBottomShadow.alphaValue = 0.0;
-      return;
-    }
-    CGFloat fromTop =
-        (cr.origin.y + cr.size.height) - (vr.origin.y + vr.size.height);
-    CGFloat percent = fromTop / scrollable;
-    percent = MAX(0.0, MIN(1.0, percent));
-    weakTopShadow.alphaValue = percent;
-    weakBottomShadow.alphaValue = 1.0 - percent;
-  };
-  KKScrollShadowObserver *shadowObs =
-      [[KKScrollShadowObserver alloc] initWithClipView:scrollView.contentView
-                                                 block:updateShadows];
-  // Keep the observer alive for the lifetime of the container.
-  static const void *const kShadowObsKey = &kShadowObsKey;
-  objc_setAssociatedObject(seqContainer, kShadowObsKey, shadowObs,
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-  // KKStageSequencerView's setFrameSize: scrolls the enclosing scroll view to
-  // the top on first real layout; run updateShadows once things settle.
-  dispatch_async(dispatch_get_main_queue(), ^{
-    updateShadows();
-  });
 
   seqView.onSegmentSelected = ^(NSInteger laneIndex, NSInteger segmentIndex) {
     __strong typeof(weakSelf) strongSelf = weakSelf;

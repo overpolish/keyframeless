@@ -12,8 +12,6 @@
 - (instancetype)initWithFrame:(NSRect)frame {
   self = [super initWithFrame:frame];
   if (self) {
-    self.wantsLayer = YES;
-
     _zoom = 1.0;
     _panOffset = 0.0;
 

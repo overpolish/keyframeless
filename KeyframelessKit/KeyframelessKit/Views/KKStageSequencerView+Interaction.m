@@ -317,18 +317,18 @@
 }
 
 - (void)scrollWheel:(NSEvent *)event {
-  if (event.phase == NSEventPhaseNone &&
-      event.momentumPhase == NSEventPhaseNone) {
-    [super scrollWheel:event];
-    return;
-  }
+  // Always forward to super so the enclosing NSScrollView gets a coherent
+  // event stream (including zero-delta phase markers) — necessary for native
+  // momentum to fire correctly on lift-off.
+  [super scrollWheel:event];
+
   CGFloat dx = event.scrollingDeltaX;
   CGFloat dy = event.scrollingDeltaY;
-  // Let the enclosing scroll view handle predominantly-vertical scrolls.
-  if (fabs(dy) > fabs(dx) * 1.2) {
-    [super scrollWheel:event];
+  // Apply horizontal pan only when dx clearly dominates and we have a real
+  // delta frame (not a phase marker).
+  if (fabs(dx) <= fabs(dy) * 1.2 || (dx == 0 && dy == 0))
     return;
-  }
+
   CGFloat trackX, trackWidth;
   [self _trackGeometryForWidth:NSWidth(self.bounds)
                         trackX:&trackX
