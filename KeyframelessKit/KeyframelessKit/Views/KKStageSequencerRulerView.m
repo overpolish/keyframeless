@@ -109,7 +109,6 @@ static NSString *_rulerTimecode(double seconds) {
   if (tw < 10)
     return;
 
-  CGFloat totalH = NSHeight(self.bounds);
   CGFloat rulerY = 0;
 
   if (_effectDuration > 0) {

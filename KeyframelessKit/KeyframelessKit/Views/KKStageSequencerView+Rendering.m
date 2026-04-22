@@ -430,6 +430,8 @@ static NSString *_boundaryTimeLabel(double fraction, double duration) {
   for (NSNumber *bNum in boundaries) {
     double frac = bNum.doubleValue;
     CGFloat bx = [self _xForFrac:frac trackX:trackX trackWidth:trackWidth];
+    if (bx < trackX - 0.5 || bx > trackX + trackWidth + 0.5)
+      continue;
     NSString *label = _boundaryTimeLabel(frac, self.effectDuration);
     NSSize labelSize = [label sizeWithAttributes:dimAttrs];
     CGFloat labelX = bx - labelSize.width / 2.0;
