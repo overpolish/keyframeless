@@ -75,6 +75,8 @@
               activePart:(NSInteger)activePart
         destinationImage:(FxImageTile *)destinationImage
                   atTime:(CMTime)time {
+  [KKPlugin multiStageDrawOSCTickForAPI:self.apiManager atTime:time];
+
   [self encodeRenderCommandsForDestinationImage:destinationImage
                                  canvasPosition:CGPointZero
                                clearDestination:YES
