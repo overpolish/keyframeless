@@ -56,6 +56,10 @@ typedef NS_ENUM(NSInteger, KKSegmentType) {
                           frequency:(double)frequency
                              values:(NSArray<NSNumber *> *)values;
 
+@end
+
+@interface KKTimingSegment (Serialization)
+
 - (NSDictionary *)toDictionary;
 + (nullable instancetype)segmentFromDictionary:(NSDictionary *)dict;
 

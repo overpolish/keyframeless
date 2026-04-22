@@ -5,23 +5,6 @@
 
 #import "KKTimingStage.h"
 
-static NSString *const kKeyType = @"type";
-static NSString *const kKeyStart = @"start";
-static NSString *const kKeyEnd = @"end";
-static NSString *const kKeyValues = @"vals";
-static NSString *const kKeyEasing = @"ease";
-static NSString *const kKeyIntensity = @"int";
-static NSString *const kKeyFrequency = @"freq";
-
-static NSString *const kKeyVersion = @"v";
-static NSString *const kKeyLanes = @"lanes";
-static NSString *const kKeyLabel = @"label";
-static NSString *const kKeySegments = @"segs";
-static NSString *const kKeyEnabled = @"on";
-static NSString *const kKeySelectedSeg = @"sel";
-
-static const NSInteger kCurrentVersion = 3;
-
 @implementation KKTimingSegment
 
 + (instancetype)holdWithValues:(NSArray<NSNumber *> *)values
@@ -57,42 +40,6 @@ static const NSInteger kCurrentVersion = 3;
 
 - (double)value {
   return _values.count > 0 ? _values[0].doubleValue : 0;
-}
-
-- (NSDictionary *)toDictionary {
-  return @{
-    kKeyType : @(_type),
-    kKeyStart : @(_start),
-    kKeyEnd : @(_end),
-    kKeyValues : _values ?: @[],
-    kKeyEasing : @(_easing),
-    kKeyIntensity : @(_intensity),
-    kKeyFrequency : @(_frequency),
-  };
-}
-
-+ (nullable instancetype)segmentFromDictionary:(NSDictionary *)dict {
-  if (![dict isKindOfClass:[NSDictionary class]])
-    return nil;
-  NSNumber *typeNum = dict[kKeyType];
-  if (!typeNum)
-    return nil;
-  KKTimingSegment *s = [[KKTimingSegment alloc] init];
-  s.type = (KKSegmentType)typeNum.integerValue;
-  s.start = [dict[kKeyStart] doubleValue];
-  s.end = [dict[kKeyEnd] doubleValue];
-  // Support both v2 ("val": single) and v3 ("vals": array).
-  NSArray *vals = dict[kKeyValues];
-  if ([vals isKindOfClass:[NSArray class]]) {
-    s.values = vals;
-  } else {
-    NSNumber *singleVal = dict[@"val"];
-    s.values = singleVal ? @[ singleVal ] : @[ @(0) ];
-  }
-  s.easing = (KKEasingCurve)[dict[kKeyEasing] integerValue];
-  s.intensity = [dict[kKeyIntensity] doubleValue];
-  s.frequency = [dict[kKeyFrequency] doubleValue];
-  return s;
 }
 
 - (id)copyWithZone:(NSZone *)zone {
@@ -183,82 +130,6 @@ static const NSInteger kCurrentVersion = 3;
                                         enabled:_enabled];
   c.selectedSegment = _selectedSegment;
   return c;
-}
-
-@end
-
-@implementation KKTimingLane (Serialization)
-
-+ (nullable NSString *)jsonFromLanes:(NSArray<KKTimingLane *> *)lanes {
-  NSMutableArray *lanesArray = [NSMutableArray arrayWithCapacity:lanes.count];
-  for (KKTimingLane *lane in lanes) {
-    NSMutableArray *segsArray =
-        [NSMutableArray arrayWithCapacity:lane.segments.count];
-    for (KKTimingSegment *seg in lane.segments)
-      [segsArray addObject:[seg toDictionary]];
-    [lanesArray addObject:@{
-      kKeyLabel : lane.propertyLabel ?: @"",
-      kKeyEnabled : @(lane.enabled),
-      kKeySelectedSeg : @(lane.selectedSegment),
-      kKeySegments : segsArray,
-    }];
-  }
-  NSDictionary *root = @{
-    kKeyVersion : @(kCurrentVersion),
-    kKeyLanes : lanesArray,
-  };
-  NSData *data = [NSJSONSerialization dataWithJSONObject:root
-                                                 options:0
-                                                   error:nil];
-  if (!data)
-    return nil;
-  return [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-}
-
-+ (nullable NSArray<KKTimingLane *> *)lanesFromJSON:(NSString *)json {
-  if (!json.length)
-    return nil;
-  NSData *data = [json dataUsingEncoding:NSUTF8StringEncoding];
-  if (!data)
-    return nil;
-  NSDictionary *root = [NSJSONSerialization JSONObjectWithData:data
-                                                       options:0
-                                                         error:nil];
-  if (![root isKindOfClass:[NSDictionary class]])
-    return nil;
-  NSArray *lanesArray = root[kKeyLanes];
-  if (![lanesArray isKindOfClass:[NSArray class]])
-    return nil;
-  NSMutableArray<KKTimingLane *> *result =
-      [NSMutableArray arrayWithCapacity:lanesArray.count];
-  for (NSDictionary *laneDict in lanesArray) {
-    if (![laneDict isKindOfClass:[NSDictionary class]])
-      continue;
-    NSString *label = laneDict[kKeyLabel];
-    if (![label isKindOfClass:[NSString class]])
-      continue;
-    BOOL enabled = [laneDict[kKeyEnabled] boolValue];
-    NSArray *segsArray = laneDict[kKeySegments];
-    if (![segsArray isKindOfClass:[NSArray class]])
-      continue;
-    NSMutableArray<KKTimingSegment *> *segments =
-        [NSMutableArray arrayWithCapacity:segsArray.count];
-    for (NSDictionary *segDict in segsArray) {
-      KKTimingSegment *seg = [KKTimingSegment segmentFromDictionary:segDict];
-      if (seg)
-        [segments addObject:seg];
-    }
-    if (!segments.count)
-      continue;
-    KKTimingLane *lane = [KKTimingLane laneWithLabel:label
-                                            segments:segments
-                                             enabled:enabled];
-    NSNumber *selNum = laneDict[kKeySelectedSeg];
-    if (selNum)
-      lane.selectedSegment = selNum.integerValue;
-    [result addObject:lane];
-  }
-  return result.count ? result : nil;
 }
 
 @end
