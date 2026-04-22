@@ -156,61 +156,74 @@ static void _texPairReturn(NSInteger idx) {
   double outF = timing.outPhase.factor;
   double holdF = timing.holdPhase.factor;
 
-  BOOL inR = YES, inI = YES, inFl = YES, inN = YES, inO = YES;
-  [api getBoolValue:&inR fromParameter:kParamInRadius atTime:renderTime];
-  [api getBoolValue:&inI fromParameter:kParamInIntensity atTime:renderTime];
-  [api getBoolValue:&inFl fromParameter:kParamInFalloff atTime:renderTime];
-  [api getBoolValue:&inN fromParameter:kParamInNoise atTime:renderTime];
-  [api getBoolValue:&inO fromParameter:kParamInOffset atTime:renderTime];
+  NSDictionary<NSString *, NSArray<NSNumber *> *> *multiStage =
+      [self multiStageValuesAtTime:renderTime];
 
-  BOOL holdR = YES, holdI = YES, holdFl = YES, holdN = YES, holdO = YES;
-  [api getBoolValue:&holdR fromParameter:kParamHoldRadius atTime:renderTime];
-  [api getBoolValue:&holdI fromParameter:kParamHoldIntensity atTime:renderTime];
-  [api getBoolValue:&holdFl fromParameter:kParamHoldFalloff atTime:renderTime];
-  [api getBoolValue:&holdN fromParameter:kParamHoldNoise atTime:renderTime];
-  [api getBoolValue:&holdO fromParameter:kParamHoldOffset atTime:renderTime];
-
-  BOOL outR = YES, outI = YES, outFl = YES, outN = YES, outO = YES;
-  [api getBoolValue:&outR fromParameter:kParamOutRadius atTime:renderTime];
-  [api getBoolValue:&outI fromParameter:kParamOutIntensity atTime:renderTime];
-  [api getBoolValue:&outFl fromParameter:kParamOutFalloff atTime:renderTime];
-  [api getBoolValue:&outN fromParameter:kParamOutNoise atTime:renderTime];
-  [api getBoolValue:&outO fromParameter:kParamOutOffset atTime:renderTime];
-
-  BOOL inC = YES, holdC = YES, outC = YES;
-  [api getBoolValue:&inC fromParameter:kParamInColor atTime:renderTime];
-  [api getBoolValue:&holdC fromParameter:kParamHoldColor atTime:renderTime];
-  [api getBoolValue:&outC fromParameter:kParamOutColor atTime:renderTime];
-
-  BOOL inNO = YES, holdNO = YES, outNO = YES;
-  [api getBoolValue:&inNO fromParameter:kParamInNoiseOffset atTime:renderTime];
-  [api getBoolValue:&holdNO
-      fromParameter:kParamHoldNoiseOffset
-             atTime:renderTime];
-  [api getBoolValue:&outNO
-      fromParameter:kParamOutNoiseOffset
-             atTime:renderTime];
-
-  int holdSeed = 0;
-  [api getIntValue:&holdSeed fromParameter:kKKParamHoldSeed atTime:renderTime];
-
+  double rF = 1.0, iF = 1.0, fF = 1.0, nF = 1.0, noF = 1.0, oF = 1.0;
+  double hOX = 0.0, hOY = 0.0;
   int holdEffectVal = 0;
   [api getIntValue:&holdEffectVal
       fromParameter:kKKParamHoldEffect
              atTime:renderTime];
   BOOL holdHasEffect = (holdEffectVal != 0);
 
-  double rF = (inR ? inF : 1.0) * (holdR ? holdF : 1.0) * (outR ? outF : 1.0);
-  double iF = (inI ? inF : 1.0) * (holdI ? holdF : 1.0) * (outI ? outF : 1.0);
-  double fF =
-      (inFl ? inF : 1.0) * (holdFl ? holdF : 1.0) * (outFl ? outF : 1.0);
-  double nF = (inN ? inF : 1.0) * (holdN ? holdF : 1.0) * (outN ? outF : 1.0);
-  double noF =
-      (inNO ? inF : 1.0) * (holdNO ? holdF : 1.0) * (outNO ? outF : 1.0);
-  double oF = (inO ? inF : 1.0) * (outO ? outF : 1.0);
-  double hD = holdF - 1.0;
-  double hOX = holdO ? hD * 0.03 * KKSeedSign(holdSeed, 0) : 0.0;
-  double hOY = holdO ? hD * 0.03 * KKSeedSign(holdSeed, 1) : 0.0;
+  if (!multiStage) {
+    BOOL inR = YES, inI = YES, inFl = YES, inN = YES, inO = YES;
+    [api getBoolValue:&inR fromParameter:kParamInRadius atTime:renderTime];
+    [api getBoolValue:&inI fromParameter:kParamInIntensity atTime:renderTime];
+    [api getBoolValue:&inFl fromParameter:kParamInFalloff atTime:renderTime];
+    [api getBoolValue:&inN fromParameter:kParamInNoise atTime:renderTime];
+    [api getBoolValue:&inO fromParameter:kParamInOffset atTime:renderTime];
+
+    BOOL holdR = YES, holdI = YES, holdFl = YES, holdN = YES, holdO = YES;
+    [api getBoolValue:&holdR fromParameter:kParamHoldRadius atTime:renderTime];
+    [api getBoolValue:&holdI
+        fromParameter:kParamHoldIntensity
+               atTime:renderTime];
+    [api getBoolValue:&holdFl
+        fromParameter:kParamHoldFalloff
+               atTime:renderTime];
+    [api getBoolValue:&holdN fromParameter:kParamHoldNoise atTime:renderTime];
+    [api getBoolValue:&holdO fromParameter:kParamHoldOffset atTime:renderTime];
+
+    BOOL outR = YES, outI = YES, outFl = YES, outN = YES, outO = YES;
+    [api getBoolValue:&outR fromParameter:kParamOutRadius atTime:renderTime];
+    [api getBoolValue:&outI fromParameter:kParamOutIntensity atTime:renderTime];
+    [api getBoolValue:&outFl fromParameter:kParamOutFalloff atTime:renderTime];
+    [api getBoolValue:&outN fromParameter:kParamOutNoise atTime:renderTime];
+    [api getBoolValue:&outO fromParameter:kParamOutOffset atTime:renderTime];
+
+    BOOL inNO = YES, holdNO = YES, outNO = YES;
+    [api getBoolValue:&inNO
+        fromParameter:kParamInNoiseOffset
+               atTime:renderTime];
+    [api getBoolValue:&holdNO
+        fromParameter:kParamHoldNoiseOffset
+               atTime:renderTime];
+    [api getBoolValue:&outNO
+        fromParameter:kParamOutNoiseOffset
+               atTime:renderTime];
+
+    int holdSeed = 0;
+    [api getIntValue:&holdSeed
+        fromParameter:kKKParamHoldSeed
+               atTime:renderTime];
+
+    rF = (inR ? inF : 1.0) * (holdR ? holdF : 1.0) * (outR ? outF : 1.0);
+    iF = (inI ? inF : 1.0) * (holdI ? holdF : 1.0) * (outI ? outF : 1.0);
+    fF = (inFl ? inF : 1.0) * (holdFl ? holdF : 1.0) * (outFl ? outF : 1.0);
+    nF = (inN ? inF : 1.0) * (holdN ? holdF : 1.0) * (outN ? outF : 1.0);
+    noF = (inNO ? inF : 1.0) * (holdNO ? holdF : 1.0) * (outNO ? outF : 1.0);
+    oF = (inO ? inF : 1.0) * (outO ? outF : 1.0);
+    double hD = holdF - 1.0;
+    hOX = holdO ? hD * 0.03 * KKSeedSign(holdSeed, 0) : 0.0;
+    hOY = holdO ? hD * 0.03 * KKSeedSign(holdSeed, 1) : 0.0;
+  }
+
+  BOOL inC = YES, holdC = YES, outC = YES;
+  [api getBoolValue:&inC fromParameter:kParamInColor atTime:renderTime];
+  [api getBoolValue:&holdC fromParameter:kParamHoldColor atTime:renderTime];
+  [api getBoolValue:&outC fromParameter:kParamOutColor atTime:renderTime];
 
   KKColorResult *color = [self colorAtTime:renderTime];
 
@@ -313,14 +326,38 @@ static void _texPairReturn(NSInteger idx) {
     }
   }
 
+  NSArray<NSNumber *> *msRadius = multiStage[@"Radius"];
+  NSArray<NSNumber *> *msIntensity = multiStage[@"Intensity"];
+  NSArray<NSNumber *> *msFalloff = multiStage[@"Falloff"];
+  NSArray<NSNumber *> *msNoise = multiStage[@"Noise"];
+  NSArray<NSNumber *> *msOffset = multiStage[@"Offset"];
+  NSArray<NSNumber *> *msNoiseOffset = multiStage[@"N. Offset"];
+
+  double outRadiusX =
+      msRadius.count >= 1 ? msRadius[0].doubleValue : radiusX * rF;
+  double outRadiusY =
+      msRadius.count >= 2 ? msRadius[1].doubleValue : radiusY * rF;
+  double outIntensity =
+      msIntensity.count >= 1 ? msIntensity[0].doubleValue : intensity * iF;
+  double outFalloff = msFalloff.count >= 1 ? (1.0 + msFalloff[0].doubleValue)
+                                           : (1.0 + falloff * fF);
+  double outNoise = msNoise.count >= 1 ? msNoise[0].doubleValue : noise * nF;
+  double outOffsetX =
+      msOffset.count >= 1 ? msOffset[0].doubleValue : (offX * oF + hOX);
+  double outOffsetY =
+      msOffset.count >= 2 ? msOffset[1].doubleValue : (offY * oF + hOY);
+  double outNoiseOffsetVal = msNoiseOffset.count >= 1
+                                 ? msNoiseOffset[0].doubleValue
+                                 : noiseOffset * noF;
+
   GlowPluginState state = {
-      .radiusX = (float)(radiusX * rF),
-      .radiusY = (float)(radiusY * rF),
-      .intensity = (float)(intensity * iF),
-      .falloff = (float)(1.0 + falloff * fF),
-      .noise = (float)(noise * nF),
-      .noiseOffset = (float)(noiseOffset * noF),
-      .offset = {(float)(offX * oF + hOX), (float)(offY * oF + hOY)},
+      .radiusX = (float)outRadiusX,
+      .radiusY = (float)outRadiusY,
+      .intensity = (float)outIntensity,
+      .falloff = (float)outFalloff,
+      .noise = (float)outNoise,
+      .noiseOffset = (float)outNoiseOffsetVal,
+      .offset = {(float)outOffsetX, (float)outOffsetY},
       .glowColor = finalColor,
       .colorMode = (int)color.mode,
       .gradientType = gradType,
@@ -411,6 +448,8 @@ static void _texPairReturn(NSInteger idx) {
                    pluginState:(NSData *)pluginState
                         atTime:(CMTime)renderTime
                          error:(NSError *_Nullable *)outError {
+  [KKPlugin multiStageRenderTickForAPI:self.apiManager atTime:renderTime];
+
   if (!pluginState || pluginState.length < sizeof(GlowPluginState) ||
       !sourceImages.count || !sourceImages[0].ioSurface ||
       !destinationImage.ioSurface) {

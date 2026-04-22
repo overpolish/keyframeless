@@ -36,6 +36,7 @@
 - (BOOL)parameterChanged:(UInt32)parameterID
                   atTime:(CMTime)time
                    error:(NSError **)error {
+  [self multiStageHandleParameterChanged:parameterID atTime:time];
   switch (parameterID) {
   case kKKParamColorMode:
   case kParamGradientType:

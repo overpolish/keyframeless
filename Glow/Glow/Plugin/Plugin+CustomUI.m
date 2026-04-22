@@ -20,26 +20,33 @@
 
 - (NSArray<KKAnimatableProperty *> *)animatableProperties {
   return @[
-    [KKAnimatableProperty propertyWithLabel:@"Radius"
-                                       inID:kParamInRadius
-                                     holdID:kParamHoldRadius
-                                      outID:kParamOutRadius],
+    [KKAnimatableProperty
+        propertyWithLabel:@"Radius"
+                     inID:kParamInRadius
+                   holdID:kParamHoldRadius
+                    outID:kParamOutRadius
+                 valueIDs:@[ @(kParamRadiusX), @(kParamRadiusY) ]],
     [KKAnimatableProperty propertyWithLabel:@"Intensity"
                                        inID:kParamInIntensity
                                      holdID:kParamHoldIntensity
-                                      outID:kParamOutIntensity],
+                                      outID:kParamOutIntensity
+                                    valueID:kParamIntensity],
     [KKAnimatableProperty propertyWithLabel:@"Falloff"
                                        inID:kParamInFalloff
                                      holdID:kParamHoldFalloff
-                                      outID:kParamOutFalloff],
+                                      outID:kParamOutFalloff
+                                    valueID:kParamFalloff],
     [KKAnimatableProperty propertyWithLabel:@"Noise"
                                        inID:kParamInNoise
                                      holdID:kParamHoldNoise
-                                      outID:kParamOutNoise],
-    [KKAnimatableProperty propertyWithLabel:@"Offset"
-                                       inID:kParamInOffset
-                                     holdID:kParamHoldOffset
-                                      outID:kParamOutOffset],
+                                      outID:kParamOutNoise
+                                    valueID:kParamNoise],
+    [KKAnimatableProperty
+        propertyWithLabel:@"Offset"
+                     inID:kParamInOffset
+                   holdID:kParamHoldOffset
+                    outID:kParamOutOffset
+                 valueIDs:@[ @(kParamOffsetX), @(kParamOffsetY) ]],
     [KKAnimatableProperty propertyWithLabel:@"Color"
                                        inID:kParamInColor
                                      holdID:kParamHoldColor
@@ -47,7 +54,8 @@
     [KKAnimatableProperty propertyWithLabel:@"N. Offset"
                                        inID:kParamInNoiseOffset
                                      holdID:kParamHoldNoiseOffset
-                                      outID:kParamOutNoiseOffset],
+                                      outID:kParamOutNoiseOffset
+                                    valueID:kParamNoiseOffset],
   ];
 }
 
