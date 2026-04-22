@@ -9,6 +9,61 @@
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 @implementation KKStageSequencerView (Interaction)
 
+/// Returns `frac` snapped to the nearest boundary in another lane, the
+/// playhead, or 0/1, within `kKSSSnapPx` screen pixels. When no snap
+/// applies (or `enabled` is NO), returns `frac` unchanged. On a successful
+/// snap, sets `*outSnapped` to YES and stores the target fraction.
+- (double)_snappedFrac:(double)frac
+               enabled:(BOOL)enabled
+           excludeLane:(NSInteger)excludeLaneIdx
+                trackX:(CGFloat)trackX
+            trackWidth:(CGFloat)trackWidth
+            outSnapped:(BOOL *)outSnapped
+               outFrac:(double *)outFrac {
+  if (outSnapped)
+    *outSnapped = NO;
+  if (!enabled)
+    return frac;
+
+  double threshFrac = kKSSSnapPx / (trackWidth * _zoom);
+  __block double bestDelta = threshFrac;
+  __block double best = frac;
+  __block BOOL found = NO;
+
+  void (^consider)(double) = ^(double target) {
+    double d = fabs(target - frac);
+    if (d < bestDelta) {
+      bestDelta = d;
+      best = target;
+      found = YES;
+    }
+  };
+
+  consider(0.0);
+  consider(1.0);
+  if (self.playheadFraction >= 0.0 && self.playheadFraction <= 1.0)
+    consider(self.playheadFraction);
+
+  for (NSUInteger li = 0; li < self.lanes.count; li++) {
+    if ((NSInteger)li == excludeLaneIdx)
+      continue;
+    KKTimingLane *lane = self.lanes[li];
+    for (KKTimingSegment *seg in lane.segments) {
+      consider(seg.start);
+      consider(seg.end);
+    }
+  }
+
+  if (found) {
+    if (outSnapped)
+      *outSnapped = YES;
+    if (outFrac)
+      *outFrac = best;
+    return best;
+  }
+  return frac;
+}
+
 - (BOOL)_hitTestEdgeAtPoint:(NSPoint)loc
                     laneIdx:(NSInteger *)outLane
                      segIdx:(NSInteger *)outSeg
@@ -443,10 +498,15 @@
   if ((NSUInteger)_dragLaneIdx >= lanes.count)
     return;
 
+  BOOL snapEnabled = !(event.modifierFlags & NSEventModifierFlagShift);
+  _snapActive = NO;
+
   if (_dragMoving) {
-    [self _applySegmentMoveWithFrac:newFrac lanes:lanes];
+    [self _applySegmentMoveWithFrac:newFrac
+                        snapEnabled:snapEnabled
+                              lanes:lanes];
   } else {
-    [self _applyEdgeDragWithFrac:newFrac lanes:lanes];
+    [self _applyEdgeDragWithFrac:newFrac snapEnabled:snapEnabled lanes:lanes];
   }
   self.lanes = lanes;
   [self renderLanes];
@@ -481,6 +541,51 @@
   if (lastEnd + delta > 1.0)
     delta = 1.0 - lastEnd;
 
+  // Snap: for each boundary of the shifted lane, find the best snap.
+  // Apply the smallest residual shift that lands any boundary on a target.
+  BOOL snapEnabled = !(event.modifierFlags & NSEventModifierFlagShift);
+  _snapActive = NO;
+  if (snapEnabled) {
+    double bestShift = 0;
+    double bestAbs = INFINITY;
+    double bestTarget = 0;
+    NSMutableArray<NSNumber *> *boundaries = [NSMutableArray array];
+    for (KKTimingSegment *s in _dragLaneMoveOrigSegs)
+      [boundaries addObject:@(s.start + delta)];
+    KKTimingSegment *lastSeg = _dragLaneMoveOrigSegs.lastObject;
+    if (lastSeg)
+      [boundaries addObject:@(lastSeg.end + delta)];
+
+    for (NSNumber *b in boundaries) {
+      BOOL snapped = NO;
+      double target = b.doubleValue;
+      [self _snappedFrac:b.doubleValue
+                 enabled:YES
+             excludeLane:_dragLaneIdx
+                  trackX:_dragTrackX
+              trackWidth:_dragTrackWidth
+              outSnapped:&snapped
+                 outFrac:&target];
+      if (snapped) {
+        double shift = target - b.doubleValue;
+        if (fabs(shift) < bestAbs) {
+          bestAbs = fabs(shift);
+          bestShift = shift;
+          bestTarget = target;
+        }
+      }
+    }
+    if (bestAbs < INFINITY) {
+      double proposed = delta + bestShift;
+      // Re-check the 0/1 bounds with the shift applied.
+      if (firstStart + proposed >= 0 && lastEnd + proposed <= 1.0) {
+        delta = proposed;
+        _snapActive = YES;
+        _snapFrac = bestTarget;
+      }
+    }
+  }
+
   NSMutableArray<KKTimingLane *> *lanes = [self.lanes mutableCopy];
   KKTimingLane *lane = [lanes[_dragLaneIdx] copy];
   NSMutableArray<KKTimingSegment *> *segs =
@@ -498,6 +603,7 @@
 }
 
 - (void)_applySegmentMoveWithFrac:(double)newFrac
+                      snapEnabled:(BOOL)snapEnabled
                             lanes:(NSMutableArray<KKTimingLane *> *)lanes {
   [[NSCursor closedHandCursor] set];
   KKTimingLane *lane = [lanes[_dragLaneIdx] copy];
@@ -507,6 +613,41 @@
   double newStart = _dragMoveOrigStart + delta;
   double newEnd = _dragMoveOrigEnd + delta;
   double segSize = _dragMoveOrigEnd - _dragMoveOrigStart;
+
+  // Snap: try start and end edges, pick whichever snaps with smaller shift.
+  {
+    BOOL snapStart = NO, snapEnd = NO;
+    double snapStartFrac = newStart, snapEndFrac = newEnd;
+    [self _snappedFrac:newStart
+               enabled:snapEnabled
+           excludeLane:_dragLaneIdx
+                trackX:_dragTrackX
+            trackWidth:_dragTrackWidth
+            outSnapped:&snapStart
+               outFrac:&snapStartFrac];
+    [self _snappedFrac:newEnd
+               enabled:snapEnabled
+           excludeLane:_dragLaneIdx
+                trackX:_dragTrackX
+            trackWidth:_dragTrackWidth
+            outSnapped:&snapEnd
+               outFrac:&snapEndFrac];
+    double dStart = snapStart ? fabs(snapStartFrac - newStart) : INFINITY;
+    double dEnd = snapEnd ? fabs(snapEndFrac - newEnd) : INFINITY;
+    if (dStart <= dEnd && snapStart) {
+      double shift = snapStartFrac - newStart;
+      newStart += shift;
+      newEnd += shift;
+      _snapActive = YES;
+      _snapFrac = snapStartFrac;
+    } else if (snapEnd) {
+      double shift = snapEndFrac - newEnd;
+      newStart += shift;
+      newEnd += shift;
+      _snapActive = YES;
+      _snapFrac = snapEndFrac;
+    }
+  }
 
   double minPx = kKSSMinSegmentPx / (_dragTrackWidth * _zoom);
   double minFrac = MAX(kKSSMinSegmentFrac, minPx);
@@ -554,15 +695,32 @@
 
   lane.segments = segs;
   lanes[_dragLaneIdx] = lane;
+
+  // If neighbor clamps displaced both edges away from the snap target, the
+  // snap no longer holds — drop the guide.
+  if (_snapActive && fabs(newStart - _snapFrac) > 1e-6 &&
+      fabs(newEnd - _snapFrac) > 1e-6)
+    _snapActive = NO;
 }
 
 - (void)_applyEdgeDragWithFrac:(double)newFrac
+                   snapEnabled:(BOOL)snapEnabled
                          lanes:(NSMutableArray<KKTimingLane *> *)lanes {
   KKTimingLane *lane = [lanes[_dragLaneIdx] copy];
   NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
 
   double minPx = kKSSMinSegmentPx / (_dragTrackWidth * _zoom);
   double minFrac = MAX(kKSSMinSegmentFrac, minPx);
+
+  BOOL didSnap = NO;
+  double snapTarget = newFrac;
+  newFrac = [self _snappedFrac:newFrac
+                       enabled:snapEnabled
+                   excludeLane:_dragLaneIdx
+                        trackX:_dragTrackX
+                    trackWidth:_dragTrackWidth
+                    outSnapped:&didSnap
+                       outFrac:&snapTarget];
 
   if (_dragLeadingEdge) {
     KKTimingSegment *cur = [segs[_dragSegIdx] copy];
@@ -596,6 +754,12 @@
 
   lane.segments = segs;
   lanes[_dragLaneIdx] = lane;
+
+  // Only show the snap guide if the snapped fraction survived clamping.
+  if (didSnap && fabs(newFrac - snapTarget) < 1e-6) {
+    _snapActive = YES;
+    _snapFrac = snapTarget;
+  }
 }
 
 - (void)mouseUp:(NSEvent *)event {
@@ -603,15 +767,15 @@
     _scrubbingRuler = NO;
     return;
   }
+  BOOL wasDragging = _dragLaneMoving || _dragMoving || _dragging;
   if (_dragLaneMoving) {
     _dragLaneMoving = NO;
     _dragLaneMoveOrigSegs = nil;
     [[NSCursor arrowCursor] set];
+    _snapActive = NO;
     if ((NSUInteger)_dragLaneIdx < self.lanes.count && self.onLaneChanged)
       self.onLaneChanged(_dragLaneIdx, self.lanes[_dragLaneIdx]);
-    return;
-  }
-  if (_dragMoving) {
+  } else if (_dragMoving) {
     BOOL moved = NO;
     if ((NSUInteger)_dragLaneIdx < self.lanes.count) {
       KKTimingSegment *seg = self.lanes[_dragLaneIdx].segments[_dragSegIdx];
@@ -619,18 +783,20 @@
     }
     _dragMoving = NO;
     [[NSCursor arrowCursor] set];
+    _snapActive = NO;
     if (moved && (NSUInteger)_dragLaneIdx < self.lanes.count &&
         self.onLaneChanged)
       self.onLaneChanged(_dragLaneIdx, self.lanes[_dragLaneIdx]);
-    return;
-  }
-  if (_dragging) {
+  } else if (_dragging) {
     _dragging = NO;
     [[NSCursor arrowCursor] set];
     _hoveringEdge = NO;
+    _snapActive = NO;
     if ((NSUInteger)_dragLaneIdx < self.lanes.count && self.onLaneChanged)
       self.onLaneChanged(_dragLaneIdx, self.lanes[_dragLaneIdx]);
   }
+  if (wasDragging)
+    [self renderLanes];
 }
 
 @end

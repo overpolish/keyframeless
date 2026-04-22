@@ -25,6 +25,7 @@ static const CGFloat kKSSBorderInset __attribute__((unused)) = KKPaddingSM;
 static const CGFloat kKSSEdgeHitZone __attribute__((unused)) = 5.0;
 static const CGFloat kKSSMinSegmentFrac __attribute__((unused)) = 0.04;
 static const CGFloat kKSSMinSegmentPx __attribute__((unused)) = 12.0;
+static const CGFloat kKSSSnapPx __attribute__((unused)) = 6.0;
 static const NSInteger kKSSCurveSegments __attribute__((unused)) = 40;
 
 @interface KKStageSequencerView () {
@@ -59,6 +60,9 @@ static const NSInteger kKSSCurveSegments __attribute__((unused)) = 40;
   // Zoom/pan state.
   CGFloat _zoom;      // 1.0 = fit all, higher = zoomed in.
   CGFloat _panOffset; // Visible start as fraction 0–1.
+  // Snap guide state (set during an active drag when a boundary snaps).
+  BOOL _snapActive;
+  double _snapFrac;
 }
 
 - (void)_trackGeometryForWidth:(CGFloat)viewWidth
