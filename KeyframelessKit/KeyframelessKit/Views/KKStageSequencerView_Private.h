@@ -18,7 +18,7 @@ static const CGFloat kKSSEditButtonSize __attribute__((unused)) = 16.0;
 static const CGFloat kKSSEditMinSegmentPx __attribute__((unused)) = 30.0;
 static const CGFloat kKSSLaneHeight __attribute__((unused)) = 30.0;
 static const CGFloat kKSSLaneSpacing __attribute__((unused)) = KKSpacingXS;
-static const CGFloat kKSSLabelWidth __attribute__((unused)) = 50.0;
+static const CGFloat kKSSLabelWidth __attribute__((unused)) = 60.0;
 static const CGFloat kKSSLabelPadding __attribute__((unused)) = KKSpacingSM;
 static const CGFloat kKSSSegmentCornerRadius __attribute__((unused)) =
     KKRadiusSM;
@@ -57,8 +57,6 @@ static const NSInteger kKSSCurveSegments __attribute__((unused)) = 40;
   // Segment hover (for highlight).
   NSInteger _hoverSegLaneIdx;
   NSInteger _hoverSegSegIdx;
-  // Ruler scrub state.
-  BOOL _scrubbingRuler;
   // Zoom/pan state.
   CGFloat _zoom;      // 1.0 = fit all, higher = zoomed in.
   CGFloat _panOffset; // Visible start as fraction 0–1.

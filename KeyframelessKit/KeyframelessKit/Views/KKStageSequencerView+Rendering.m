@@ -64,15 +64,10 @@
 
   [self _renderEditButtonForHoveredSegment];
 
-  [self _renderRulerWithTrackX:trackX
-                    trackWidth:trackWidth
-                   totalHeight:totalHeight];
   [self _renderSnapGuideWithTrackX:trackX
                         trackWidth:trackWidth
                        totalHeight:totalHeight];
-  [self _renderPlayheadWithTrackX:trackX
-                       trackWidth:trackWidth
-                      totalHeight:totalHeight];
+  // Playhead (line + knob) is rendered by KKStagePlayheadView overlay.
 
   [image unlockFocus];
   _lanesImage = image;
@@ -457,127 +452,6 @@ static NSString *_boundaryTimeLabel(double fraction, double duration) {
     [durLabel drawAtPoint:NSMakePoint(durX, durY) withAttributes:durAttrs];
 }
 
-static double _tickIntervalForPixelsPerSecond(CGFloat pps) {
-  static const double candidates[] = {0.1,  0.25, 0.5,  1.0,  2.0,   5.0,
-                                      10.0, 15.0, 30.0, 60.0, 120.0, 300.0};
-  static const int count = sizeof(candidates) / sizeof(candidates[0]);
-  CGFloat minSpacing = 50.0;
-  for (int i = 0; i < count; i++) {
-    if (candidates[i] * pps >= minSpacing)
-      return candidates[i];
-  }
-  return candidates[count - 1];
-}
-
-static NSString *_timecodeLabel(double seconds) {
-  int totalSec = (int)seconds;
-  int m = totalSec / 60;
-  int s = totalSec % 60;
-  double frac = seconds - totalSec;
-  if (frac > 0.001 && seconds < 60)
-    return [NSString stringWithFormat:@"%d.%ds", s, (int)(frac * 10)];
-  if (m > 0)
-    return [NSString stringWithFormat:@"%d:%02d", m, s];
-  return [NSString stringWithFormat:@"%ds", s];
-}
-
-- (void)_renderRulerWithTrackX:(CGFloat)trackX
-                    trackWidth:(CGFloat)trackWidth
-                   totalHeight:(CGFloat)totalHeight {
-  if (self.effectDuration <= 0 || trackWidth < 10)
-    return;
-
-  CGFloat rulerY = totalHeight - kKSSBorderInset - kKSSRulerHeight;
-
-  CGFloat pps = trackWidth * _zoom / self.effectDuration;
-  double interval = _tickIntervalForPixelsPerSecond(pps);
-
-  NSDictionary *attrs = @{
-    NSFontAttributeName : [NSFont systemFontOfSize:9.0
-                                            weight:NSFontWeightMedium],
-    NSForegroundColorAttributeName : [NSColor timelineLabel],
-  };
-
-  [[NSColor colorWithWhite:0.8 alpha:0.15] setStroke];
-  NSBezierPath *ticks = [NSBezierPath bezierPath];
-  ticks.lineWidth = 1.0;
-
-  double visStart = _panOffset * self.effectDuration;
-  double tStart = floor(visStart / interval) * interval;
-  double visEnd = (_panOffset + 1.0 / _zoom) * self.effectDuration;
-
-  for (double t = tStart; t <= visEnd + 0.001; t += interval) {
-    if (t < 0)
-      continue;
-    double frac = (self.effectDuration > 0) ? t / self.effectDuration : 0;
-    CGFloat x = [self _xForFrac:frac trackX:trackX trackWidth:trackWidth];
-    if (x < trackX || x > trackX + trackWidth)
-      continue;
-
-    [ticks moveToPoint:NSMakePoint(x, rulerY)];
-    [ticks lineToPoint:NSMakePoint(x, rulerY + kKSSRulerHeight)];
-
-    NSString *label = _timecodeLabel(t);
-    NSSize labelSize = [label sizeWithAttributes:attrs];
-    CGFloat labelX = x + 3;
-    if (labelX + labelSize.width <= trackX + trackWidth) {
-      CGFloat labelY = rulerY + (kKSSRulerHeight - labelSize.height) / 2.0;
-      [label drawAtPoint:NSMakePoint(labelX, labelY) withAttributes:attrs];
-    }
-  }
-
-  [ticks stroke];
-}
-
-/// Draws the slider-style knob (point down) at a given center-x and top-y.
-/// Flat edge at topY, point extends downward (lower Y = visually down in
-/// unflipped NSImage coords where Y=0 is bottom).
-static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
-  static const CGFloat w = 9.5;
-  static const CGFloat h = 10.0;
-  static const CGFloat cr = 1.5;
-  static const CGFloat pointRatio = 0.5;
-  static const CGFloat curveOff = 0.5;
-  static const CGFloat curveCtl = 1.0;
-  static const CGFloat sideRatio = 0.3;
-
-  CGFloat left = cx - w / 2.0;
-  CGFloat right = cx + w / 2.0;
-  CGFloat top = topY;
-  CGFloat bottom = topY - h;
-  CGFloat midX = cx;
-  CGFloat pointH = h * pointRatio;
-  CGFloat pointBaseY = top - (h - pointH);
-
-  NSBezierPath *path = [NSBezierPath bezierPath];
-
-  [path moveToPoint:NSMakePoint(left + cr, top)];
-  [path lineToPoint:NSMakePoint(right - cr, top)];
-  [path appendBezierPathWithArcFromPoint:NSMakePoint(right, top)
-                                 toPoint:NSMakePoint(right, top - cr)
-                                  radius:cr];
-  [path lineToPoint:NSMakePoint(right, pointBaseY)];
-  [path curveToPoint:NSMakePoint(midX, bottom)
-       controlPoint1:NSMakePoint(right - curveOff,
-                                 pointBaseY - pointH * sideRatio)
-       controlPoint2:NSMakePoint(midX + curveCtl, bottom + curveOff)];
-  [path curveToPoint:NSMakePoint(left, pointBaseY)
-       controlPoint1:NSMakePoint(midX - curveCtl, bottom + curveOff)
-       controlPoint2:NSMakePoint(left + curveOff,
-                                 pointBaseY - pointH * sideRatio)];
-  [path lineToPoint:NSMakePoint(left, top - cr)];
-  [path appendBezierPathWithArcFromPoint:NSMakePoint(left, top)
-                                 toPoint:NSMakePoint(left + cr, top)
-                                  radius:cr];
-  [path closePath];
-
-  [color setFill];
-  [path fill];
-  [[NSColor colorWithWhite:0.08 alpha:1.0] setStroke];
-  path.lineWidth = 0.5;
-  [path stroke];
-}
-
 - (NSRect)_editButtonRectForLaneIndex:(NSUInteger)laneIdx
                          segmentIndex:(NSUInteger)segIdx
                                trackX:(CGFloat)trackX
@@ -594,10 +468,19 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
   if (segW < kKSSEditMinSegmentPx)
     return NSZeroRect;
   CGFloat laneY = [self _laneYForIndex:laneIdx totalHeight:totalHeight];
-  CGFloat cx = segX + segW / 2.0;
+  // Center on the segment but clamp the button's X so it stays visible when
+  // the segment extends past the visible track (same pattern as the duration
+  // label below).
+  CGFloat btnLeft = segX + segW / 2.0 - kKSSEditButtonSize / 2.0;
+  btnLeft = MAX(trackX, MIN(trackX + trackWidth - kKSSEditButtonSize, btnLeft));
+  // Keep the button inside the segment's visible span so it doesn't stick
+  // past segment edges (otherwise a partially-visible segment could push
+  // the button into an adjacent segment).
+  CGFloat segVisLeft = MAX(segX, trackX);
+  CGFloat segVisRight = MIN(segX + segW, trackX + trackWidth);
+  btnLeft = MAX(segVisLeft, MIN(segVisRight - kKSSEditButtonSize, btnLeft));
   CGFloat cy = laneY + kKSSLaneHeight / 2.0;
-  return NSMakeRect(cx - kKSSEditButtonSize / 2.0,
-                    cy - kKSSEditButtonSize / 2.0, kKSSEditButtonSize,
+  return NSMakeRect(btnLeft, cy - kKSSEditButtonSize / 2.0, kKSSEditButtonSize,
                     kKSSEditButtonSize);
 }
 
@@ -666,7 +549,7 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
   if (x < trackX - 0.5 || x > trackX + trackWidth + 0.5)
     return;
   CGFloat cx = floor(x) + 0.5;
-  CGFloat top = totalHeight - kKSSBorderInset - kKSSRulerHeight;
+  CGFloat top = totalHeight;
   CGFloat bottom = kKSSBorderInset;
 
   [[NSColor colorWithRed:1.0 green:1.0 blue:0.0 alpha:1.0] setStroke];
@@ -675,29 +558,6 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
   [line moveToPoint:NSMakePoint(cx, bottom)];
   [line lineToPoint:NSMakePoint(cx, top)];
   [line stroke];
-}
-
-- (void)_renderPlayheadWithTrackX:(CGFloat)trackX
-                       trackWidth:(CGFloat)trackWidth
-                      totalHeight:(CGFloat)totalHeight {
-  if (self.playheadFraction < 0 || self.playheadFraction > 1 || trackWidth < 1)
-    return;
-
-  NSColor *playheadColor = [NSColor colorWithWhite:0.8 alpha:1.0];
-  CGFloat x = [self _xForFrac:self.playheadFraction
-                       trackX:trackX
-                   trackWidth:trackWidth];
-  CGFloat lanesBottom = kKSSBorderInset;
-  CGFloat rulerTop = totalHeight - kKSSBorderInset;
-
-  [playheadColor setStroke];
-  NSBezierPath *line = [NSBezierPath bezierPath];
-  line.lineWidth = 1.0;
-  [line moveToPoint:NSMakePoint(x, lanesBottom)];
-  [line lineToPoint:NSMakePoint(x, rulerTop)];
-  [line stroke];
-
-  _drawPlayheadKnob(x, rulerTop, playheadColor);
 }
 
 @end

@@ -13,10 +13,6 @@
   self = [super initWithFrame:frame];
   if (self) {
     self.wantsLayer = YES;
-    self.layer.masksToBounds = YES;
-    self.layer.cornerRadius = KKSpacingMD;
-    self.layer.borderWidth = KKBorderWidthXS;
-    self.layer.borderColor = [NSColor colorWithWhite:1.0 alpha:0.05].CGColor;
 
     _zoom = 1.0;
     _panOffset = 0.0;
@@ -57,9 +53,44 @@
   [self renderLanes];
 }
 
+- (CGFloat)zoom {
+  return _zoom;
+}
+
+- (void)setZoom:(CGFloat)zoom {
+  if (fabs(_zoom - zoom) < 0.0001)
+    return;
+  _zoom = zoom;
+  [self _clampPanOffset];
+  [self renderLanes];
+}
+
+- (CGFloat)panOffset {
+  return _panOffset;
+}
+
+- (void)setPanOffset:(CGFloat)panOffset {
+  if (fabs(_panOffset - panOffset) < 0.0001)
+    return;
+  _panOffset = panOffset;
+  [self _clampPanOffset];
+  [self renderLanes];
+}
+
 - (void)setFrameSize:(NSSize)newSize {
+  BOOL wasZero = self.bounds.size.width < 1.0 || self.bounds.size.height < 1.0;
   [super setFrameSize:newSize];
   [self renderLanes];
+  if (wasZero && newSize.width > 0.5 && newSize.height > 0.5) {
+    // First time we have a real size — scroll the enclosing scroll view to
+    // the visual top of the document (high Y in unflipped doc coords).
+    NSScrollView *sv = [self enclosingScrollView];
+    if (sv) {
+      CGFloat topY = newSize.height - sv.contentView.bounds.size.height;
+      [sv.contentView scrollToPoint:NSMakePoint(0, MAX(0, topY))];
+      [sv reflectScrolledClipView:sv.contentView];
+    }
+  }
 }
 
 - (void)_trackGeometryForWidth:(CGFloat)viewWidth
@@ -88,9 +119,9 @@
 }
 
 - (CGFloat)_laneYForIndex:(NSUInteger)laneIdx totalHeight:(CGFloat)totalHeight {
-  return totalHeight - kKSSBorderInset - kKSSRulerHeight -
-         (laneIdx + 1) * (kKSSLaneHeight + kKSSBoundaryLabelHeight) -
-         laneIdx * kKSSLaneSpacing;
+  return totalHeight - kKSSBoundaryLabelHeight -
+         (laneIdx + 1) * kKSSLaneHeight -
+         laneIdx * (kKSSBoundaryLabelHeight + kKSSLaneSpacing);
 }
 
 - (CGFloat)_totalHeight {
@@ -101,8 +132,8 @@
   if (laneCount == 0)
     return 0;
   CGFloat block = kKSSLaneHeight + kKSSBoundaryLabelHeight;
-  return kKSSRulerHeight + kKSSBoundaryLabelHeight + laneCount * block +
-         (laneCount - 1) * kKSSLaneSpacing + 2 * kKSSBorderInset;
+  return kKSSBoundaryLabelHeight + laneCount * block +
+         (laneCount - 1) * kKSSLaneSpacing + kKSSBorderInset;
 }
 
 @end

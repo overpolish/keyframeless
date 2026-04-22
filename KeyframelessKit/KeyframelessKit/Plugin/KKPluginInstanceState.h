@@ -7,6 +7,8 @@
 
 #import <Foundation/Foundation.h>
 
+@class KKStagePlayheadView;
+@class KKStageSequencerRulerView;
 @class KKStageSequencerView;
 @class KKTimingLane;
 @protocol PROAPIAccessing;
@@ -34,6 +36,14 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// The live sequencer view for this instance (weak — auto-nils on dealloc).
 @property(nonatomic, weak, nullable) KKStageSequencerView *sequencerView;
+
+/// The paired ruler view (weak). Mirrors effectDuration/playheadFraction
+/// updates pushed to the sequencer.
+@property(nonatomic, weak, nullable) KKStageSequencerRulerView *rulerView;
+
+/// Unified playhead overlay (weak). Receives playheadFraction updates from
+/// the broadcast pump so the line + knob track the timeline.
+@property(nonatomic, weak, nullable) KKStagePlayheadView *playheadView;
 
 /// Cached effect timing (seconds). Populated when the custom UI is created
 /// (inside an action scope where FxTimingAPI answers) and used by the

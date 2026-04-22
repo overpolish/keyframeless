@@ -105,31 +105,10 @@ KKTimingBoundaryAfter(NSUInteger idx, NSArray<KKTimingSegment *> *segments) {
 
 + (instancetype)defaultLaneForLabel:(NSString *)label
                          baseValues:(NSArray<NSNumber *> *)baseValues {
-  NSMutableArray *zeroVals =
-      [NSMutableArray arrayWithCapacity:baseValues.count];
-  for (NSUInteger i = 0; i < baseValues.count; i++)
-    [zeroVals addObject:@(0)];
-
-  KKTimingSegment *transIn =
-      [KKTimingSegment transitionWithStart:0.0
-                                       end:0.1
-                                    easing:KKEasingCurveEaseOut
-                                 intensity:0.5
-                                 frequency:0.5
-                                    values:zeroVals];
   KKTimingSegment *hold = [KKTimingSegment holdWithValues:baseValues
-                                                    start:0.1
-                                                      end:0.9];
-  KKTimingSegment *transOut =
-      [KKTimingSegment transitionWithStart:0.9
-                                       end:1.0
-                                    easing:KKEasingCurveEaseOut
-                                 intensity:0.5
-                                 frequency:0.5
-                                    values:zeroVals];
-  return [self laneWithLabel:label
-                    segments:@[ transIn, hold, transOut ]
-                     enabled:YES];
+                                                    start:0.0
+                                                      end:1.0];
+  return [self laneWithLabel:label segments:@[ hold ] enabled:YES];
 }
 
 - (void)insertSegment:(KKTimingSegment *)segment atIndex:(NSUInteger)index {

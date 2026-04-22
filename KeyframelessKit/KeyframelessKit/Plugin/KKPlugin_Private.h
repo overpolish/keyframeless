@@ -9,15 +9,22 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <objc/runtime.h>
 
+NS_ASSUME_NONNULL_BEGIN
+
 @class KKCustomGroupHeaderView;
+@class KKStagePlayheadView;
+@class KKStageSequencerRulerView;
 @class KKStageSequencerView;
 @class KKTimingGraphView;
 
 @interface KKPlugin () <FxCustomParameterViewHost_v2>
 
-@property(nonatomic, weak) KKCustomGroupHeaderView *timingHeader;
-@property(nonatomic, weak) KKTimingGraphView *timingGraph;
-@property(nonatomic, weak) KKStageSequencerView *stageSequencer;
+@property(nonatomic, weak, nullable) KKCustomGroupHeaderView *timingHeader;
+@property(nonatomic, weak, nullable) KKTimingGraphView *timingGraph;
+@property(nonatomic, weak, nullable) KKStageSequencerView *stageSequencer;
+@property(nonatomic, weak, nullable) NSView *stageSequencerContainer;
+@property(nonatomic, weak, nullable)
+    KKStageSequencerRulerView *stageSequencerRuler;
 @property(nonatomic, strong, nullable) NSPopover *segmentEditPopover;
 
 @end
@@ -39,25 +46,27 @@
 /// caches the effect's start/duration via `FxTimingAPI` — both inside an
 /// `startAction:/endAction:` scope where the needed APIs are live.
 /// Call from `createViewForParameterID:` right after building the view.
-- (void)_registerMultiStageSequencerView:(KKStageSequencerView *)view;
+- (void)_registerMultiStageSequencerView:(KKStageSequencerView *)view
+                               rulerView:(KKStageSequencerRulerView *)ruler
+                            playheadView:(KKStagePlayheadView *)playhead;
 @end
 
 // FxPlug calls createViewForParameterID: on a fresh plugin instance, not the
 // one that ran addParametersWithError:. Store parameter metadata at class level
 // (keyed by the concrete plugin class) so any instance can look it up.
-static const void *const kKKSepTexts = &kKKSepTexts;
-static const void *const kKKSepIcons = &kKKSepIcons;
-static const void *const kKKInfoTexts = &kKKInfoTexts;
-static const void *const kKKInfoAttrTexts = &kKKInfoAttrTexts;
-static const void *const kKKInfoIcons = &kKKInfoIcons;
-static const void *const kKKTimingExtraIDs = &kKKTimingExtraIDs;
-static const void *const kKKLinkedPairs = &kKKLinkedPairs;
-static const void *const kKKLinkedLocking = &kKKLinkedLocking;
-static const void *const kKKLinkedRatio = &kKKLinkedRatio;
-static const void *const kKKLinkedSource = &kKKLinkedSource;
+static const void *_Nonnull const kKKSepTexts = &kKKSepTexts;
+static const void *_Nonnull const kKKSepIcons = &kKKSepIcons;
+static const void *_Nonnull const kKKInfoTexts = &kKKInfoTexts;
+static const void *_Nonnull const kKKInfoAttrTexts = &kKKInfoAttrTexts;
+static const void *_Nonnull const kKKInfoIcons = &kKKInfoIcons;
+static const void *_Nonnull const kKKTimingExtraIDs = &kKKTimingExtraIDs;
+static const void *_Nonnull const kKKLinkedPairs = &kKKLinkedPairs;
+static const void *_Nonnull const kKKLinkedLocking = &kKKLinkedLocking;
+static const void *_Nonnull const kKKLinkedRatio = &kKKLinkedRatio;
+static const void *_Nonnull const kKKLinkedSource = &kKKLinkedSource;
 
 static inline NSMutableDictionary<NSNumber *, id> *
-kkClassRegistry(Class cls, const void *key) {
+kkClassRegistry(Class cls, const void *_Nonnull key) {
   NSMutableDictionary *dict = objc_getAssociatedObject(cls, key);
   if (!dict) {
     dict = [NSMutableDictionary new];
@@ -65,3 +74,5 @@ kkClassRegistry(Class cls, const void *key) {
   }
   return dict;
 }
+
+NS_ASSUME_NONNULL_END

@@ -312,17 +312,27 @@
   [self _clampPanOffset];
   [self mouseMoved:event];
   [self renderLanes];
+  if (self.onZoomPanChanged)
+    self.onZoomPanChanged(_zoom, _panOffset);
 }
 
 - (void)scrollWheel:(NSEvent *)event {
   if (event.phase == NSEventPhaseNone &&
-      event.momentumPhase == NSEventPhaseNone)
+      event.momentumPhase == NSEventPhaseNone) {
+    [super scrollWheel:event];
     return;
+  }
+  CGFloat dx = event.scrollingDeltaX;
+  CGFloat dy = event.scrollingDeltaY;
+  // Let the enclosing scroll view handle predominantly-vertical scrolls.
+  if (fabs(dy) > fabs(dx) * 1.2) {
+    [super scrollWheel:event];
+    return;
+  }
   CGFloat trackX, trackWidth;
   [self _trackGeometryForWidth:NSWidth(self.bounds)
                         trackX:&trackX
                     trackWidth:&trackWidth];
-  CGFloat dx = event.scrollingDeltaX;
   if (event.hasPreciseScrollingDeltas)
     _panOffset -= dx / (_zoom * trackWidth);
   else
@@ -342,6 +352,8 @@
   }
 
   [self renderLanes];
+  if (self.onZoomPanChanged)
+    self.onZoomPanChanged(_zoom, _panOffset);
 }
 
 - (void)rightMouseDown:(NSEvent *)event {
@@ -375,22 +387,6 @@
   [self _trackGeometryForWidth:totalWidth
                         trackX:&trackX
                     trackWidth:&trackWidth];
-
-  // Ruler click → scrub playhead.
-  CGFloat rulerY = totalHeight - kKSSBorderInset - kKSSRulerHeight;
-  if (loc.y >= rulerY && loc.y <= totalHeight - kKSSBorderInset &&
-      loc.x >= trackX && loc.x <= trackX + trackWidth) {
-    double frac = [self _fracForX:loc.x trackX:trackX trackWidth:trackWidth];
-    frac = MAX(0.0, MIN(1.0, frac));
-    _scrubbingRuler = YES;
-    _dragTrackX = trackX;
-    _dragTrackWidth = trackWidth;
-    self.playheadFraction = frac;
-    [self renderLanes];
-    if (self.onPlayheadScrub)
-      self.onPlayheadScrub(frac);
-    return;
-  }
 
   for (NSUInteger laneIdx = 0; laneIdx < self.lanes.count; laneIdx++) {
     KKTimingLane *lane = self.lanes[laneIdx];
@@ -546,10 +542,6 @@
 }
 
 - (void)mouseDragged:(NSEvent *)event {
-  if (_scrubbingRuler) {
-    [self _scrubPlayheadToEvent:event];
-    return;
-  }
   if (_dragLaneMoving) {
     [self _dragLaneMoveToEvent:event];
     return;
@@ -579,18 +571,6 @@
   }
   self.lanes = lanes;
   [self renderLanes];
-}
-
-- (void)_scrubPlayheadToEvent:(NSEvent *)event {
-  NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
-  double frac = [self _fracForX:loc.x
-                         trackX:_dragTrackX
-                     trackWidth:_dragTrackWidth];
-  frac = MAX(0.0, MIN(1.0, frac));
-  self.playheadFraction = frac;
-  [self renderLanes];
-  if (self.onPlayheadScrub)
-    self.onPlayheadScrub(frac);
 }
 
 - (void)_dragLaneMoveToEvent:(NSEvent *)event {
@@ -832,10 +812,6 @@
 }
 
 - (void)mouseUp:(NSEvent *)event {
-  if (_scrubbingRuler) {
-    _scrubbingRuler = NO;
-    return;
-  }
   BOOL wasDragging = _dragLaneMoving || _dragMoving || _dragging;
   if (_dragLaneMoving) {
     _dragLaneMoving = NO;
