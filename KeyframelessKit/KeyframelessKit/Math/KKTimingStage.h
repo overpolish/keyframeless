@@ -101,6 +101,14 @@ typedef NS_ENUM(NSInteger, KKSegmentType) {
 
 @end
 
+/// Boundary resolution: between each pair of segments there is a single
+/// shared value that both sides agree on. Holds dictate their own boundaries.
+/// When two transitions meet, the "right" segment's own value wins.
+FOUNDATION_EXPORT NSArray<NSNumber *> *
+KKTimingBoundaryBefore(NSUInteger idx, NSArray<KKTimingSegment *> *segments);
+FOUNDATION_EXPORT NSArray<NSNumber *> *
+KKTimingBoundaryAfter(NSUInteger idx, NSArray<KKTimingSegment *> *segments);
+
 /// Serialize / deserialize a full set of lanes as JSON.
 @interface KKTimingLane (Serialization)
 

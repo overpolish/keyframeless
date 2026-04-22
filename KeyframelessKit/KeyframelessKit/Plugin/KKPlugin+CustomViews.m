@@ -589,6 +589,7 @@
     __strong typeof(weakSelf) strongSelf = weakSelf;
     if (!strongSelf)
       return;
+    KKPluginInstanceState *state = KKInstanceStateForAPI(strongSelf.apiManager);
     id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
         apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
     [actAPI startAction:strongSelf];
@@ -596,6 +597,7 @@
         apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
     id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
         apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    CMTime ct = [actAPI currentTime];
     NSString *json = nil;
     [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
     NSArray<KKTimingLane *> *lanes = [KKTimingLane lanesFromJSON:json];
@@ -619,8 +621,43 @@
       if (updated)
         [setAPI setStringParameterValue:updated
                             toParameter:kKKParamMultiStageData];
+
+      // Enable-path: native params may have been edited while the lane was
+      // disabled. The lane's own segment values are the source of truth, so
+      // overwrite native params with the newly-selected segment's values.
+      // Without this, the live-param-override in multiStageValuesAtTime:
+      // would keep rendering the stale native-param values until the user
+      // clicks the segment (which triggers write-back and sync).
+      if (enabled && lane.selectedSegment >= 0 &&
+          (NSUInteger)lane.selectedSegment < lane.segments.count) {
+        NSArray<KKAnimatableProperty *> *props =
+            [strongSelf animatableProperties];
+        KKAnimatableProperty *prop = nil;
+        for (KKAnimatableProperty *p in props) {
+          if ([p.label isEqualToString:lane.propertyLabel]) {
+            prop = p;
+            break;
+          }
+        }
+        if (state)
+          state.selectionInProgress = YES;
+        NSArray<NSNumber *> *segValues =
+            lane.segments[lane.selectedSegment].values;
+        for (NSUInteger i = 0;
+             i < prop.valueParamIDs.count && i < segValues.count; i++) {
+          [setAPI setFloatValue:segValues[i].doubleValue
+                    toParameter:prop.valueParamIDs[i].unsignedIntValue
+                         atTime:ct];
+        }
+        if (state) {
+          state.lanesSnapshot = [mutable copy];
+          state.pendingLanes = nil;
+        }
+      }
     }
     [actAPI endAction:strongSelf];
+    if (state)
+      state.selectionInProgress = NO;
     [strongSelf timingGraphApplyState];
   };
 
