@@ -51,6 +51,19 @@ NS_ASSUME_NONNULL_BEGIN
 /// Fraction is 0–1 of clip duration.
 @property(nonatomic, copy, nullable) void (^onPlayheadScrub)(double fraction);
 
+/// Horizontal zoom factor (1.0 = fit all, higher = zoomed in). Exposed so a
+/// paired ruler view can mirror this value.
+@property(nonatomic, assign) CGFloat zoom;
+
+/// Visible start as a fraction 0–1. Exposed so a paired ruler view can mirror
+/// this value.
+@property(nonatomic, assign) CGFloat panOffset;
+
+/// Fires whenever the user zooms or pans the lane area. The container wires
+/// this to the paired ruler view so both stay in sync.
+@property(nonatomic, copy, nullable) void (^onZoomPanChanged)
+    (CGFloat zoom, CGFloat panOffset);
+
 /// Re-render the lanes image.
 - (void)renderLanes;
 

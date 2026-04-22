@@ -11,6 +11,8 @@
 #import "../Views/KKCustomGroupHeaderView.h"
 #import "../Views/KKSegmentEditView.h"
 #import "../Views/KKSeparatorView.h"
+#import "../Views/KKStagePlayheadView.h"
+#import "../Views/KKStageSequencerRulerView.h"
 #import "../Views/KKStageSequencerView.h"
 
 #import "../Views/KKAnimatableProperty.h"
@@ -22,6 +24,41 @@
 #import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
+#import <QuartzCore/QuartzCore.h>
+
+@interface KKScrollShadowView : NSView
+@end
+@implementation KKScrollShadowView
+- (NSView *)hitTest:(NSPoint)point {
+  return nil;
+}
+@end
+
+@interface KKScrollShadowObserver : NSObject
+@end
+@implementation KKScrollShadowObserver {
+  id _token;
+}
+- (instancetype)initWithClipView:(NSView *)clipView
+                           block:(void (^)(void))block {
+  self = [super init];
+  if (self) {
+    clipView.postsBoundsChangedNotifications = YES;
+    _token = [[NSNotificationCenter defaultCenter]
+        addObserverForName:NSViewBoundsDidChangeNotification
+                    object:clipView
+                     queue:nil
+                usingBlock:^(NSNotification *note) {
+                  block();
+                }];
+  }
+  return self;
+}
+- (void)dealloc {
+  if (_token)
+    [[NSNotificationCenter defaultCenter] removeObserver:_token];
+}
+@end
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
@@ -262,8 +299,19 @@
       [self timingSlotsForSection:KKTimingGraphSectionOut];
 
   NSArray<KKAnimatableProperty *> *seqProps = [self animatableProperties];
-  CGFloat seqHeight = [KKStageSequencerView heightForLaneCount:seqProps.count];
-  CGFloat wrapperHeight = seqHeight + KKPaddingLG;
+  CGFloat fullLanesH = [KKStageSequencerView heightForLaneCount:seqProps.count];
+  CGFloat cappedLanesH;
+  if (seqProps.count <= 2) {
+    cappedLanesH = fullLanesH;
+  } else {
+    CGFloat h2 = [KKStageSequencerView heightForLaneCount:2];
+    CGFloat h3 = [KKStageSequencerView heightForLaneCount:3];
+    cappedLanesH = h2 + (h3 - h2) * 0.5;
+  }
+  CGFloat rulerH = [KKStageSequencerRulerView preferredHeight];
+  // Top inset + ruler + lanes area (which has its own bottom inset).
+  CGFloat seqContainerH = KKPaddingSM + rulerH + cappedLanesH;
+  CGFloat wrapperHeight = seqContainerH + KKPaddingLG;
 
   NSView *wrapper =
       [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, wrapperHeight)];
@@ -475,23 +523,201 @@
 
   self.timingGraph = graphView;
 
-  // Stage sequencer — sits below graph, hidden until multi-stage is enabled.
-  KKStageSequencerView *seqView =
-      [[KKStageSequencerView alloc] initWithFrame:NSZeroRect];
+  // Stage sequencer container — sticky ruler + vertically-scrolled lanes
+  // (capped at 2.5 lanes) with top/bottom shadow overlays. Hidden until
+  // multi-stage is enabled.
+  NSView *seqContainer = [[NSView alloc] initWithFrame:NSZeroRect];
+  seqContainer.translatesAutoresizingMaskIntoConstraints = NO;
+  seqContainer.wantsLayer = YES;
+  seqContainer.layer.masksToBounds = YES;
+  seqContainer.layer.cornerRadius = KKSpacingMD;
+  seqContainer.layer.borderWidth = KKBorderWidthXS;
+  seqContainer.layer.borderColor =
+      [NSColor colorWithWhite:1.0 alpha:0.05].CGColor;
+  seqContainer.hidden = YES;
+  [wrapper addSubview:seqContainer];
+
+  KKStageSequencerRulerView *rulerView =
+      [[KKStageSequencerRulerView alloc] initWithFrame:NSZeroRect];
+  rulerView.translatesAutoresizingMaskIntoConstraints = NO;
+  [seqContainer addSubview:rulerView];
+
+  NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSZeroRect];
+  scrollView.translatesAutoresizingMaskIntoConstraints = NO;
+  scrollView.hasVerticalScroller = YES;
+  scrollView.hasHorizontalScroller = NO;
+  scrollView.drawsBackground = NO;
+  scrollView.autohidesScrollers = YES;
+  scrollView.scrollerStyle = NSScrollerStyleOverlay;
+  scrollView.borderType = NSNoBorder;
+
+  scrollView.contentView.postsBoundsChangedNotifications = YES;
+
+  KKStageSequencerView *seqView = [[KKStageSequencerView alloc]
+      initWithFrame:NSMakeRect(0, 0, 300, fullLanesH)];
   seqView.translatesAutoresizingMaskIntoConstraints = NO;
-  seqView.hidden = YES;
-  [wrapper addSubview:seqView];
+  scrollView.documentView = seqView;
+  [seqContainer addSubview:scrollView];
+
+  // Pin the document view to the clip view's width so segments never overflow
+  // past the visible area; height stays fixed at the full lanes height.
   [NSLayoutConstraint activateConstraints:@[
-    [seqView.leadingAnchor constraintEqualToAnchor:wrapper.leadingAnchor
-                                          constant:KKInspectorHorizontalInset],
-    [seqView.trailingAnchor
+    [seqView.widthAnchor
+        constraintEqualToAnchor:scrollView.contentView.widthAnchor],
+    [seqView.heightAnchor constraintEqualToConstant:fullLanesH],
+    [seqView.topAnchor
+        constraintEqualToAnchor:scrollView.contentView.topAnchor],
+    [seqView.leadingAnchor
+        constraintEqualToAnchor:scrollView.contentView.leadingAnchor],
+  ]];
+
+  CGFloat shadowH = 16.0;
+  KKScrollShadowView *topShadow =
+      [[KKScrollShadowView alloc] initWithFrame:NSZeroRect];
+  topShadow.translatesAutoresizingMaskIntoConstraints = NO;
+  topShadow.wantsLayer = YES;
+  CAGradientLayer *topGrad = [CAGradientLayer layer];
+  topGrad.colors = @[
+    (__bridge id)[NSColor colorWithWhite:0 alpha:0.35].CGColor,
+    (__bridge id)[NSColor clearColor].CGColor,
+  ];
+  topGrad.startPoint = CGPointMake(0.5, 1.0);
+  topGrad.endPoint = CGPointMake(0.5, 0.0);
+  topShadow.layer = topGrad;
+  topShadow.alphaValue = 0.0;
+  [seqContainer addSubview:topShadow];
+
+  KKScrollShadowView *bottomShadow =
+      [[KKScrollShadowView alloc] initWithFrame:NSZeroRect];
+  bottomShadow.translatesAutoresizingMaskIntoConstraints = NO;
+  bottomShadow.wantsLayer = YES;
+  CAGradientLayer *botGrad = [CAGradientLayer layer];
+  botGrad.colors = @[
+    (__bridge id)[NSColor clearColor].CGColor,
+    (__bridge id)[NSColor colorWithWhite:0 alpha:0.35].CGColor,
+  ];
+  botGrad.startPoint = CGPointMake(0.5, 1.0);
+  botGrad.endPoint = CGPointMake(0.5, 0.0);
+  bottomShadow.layer = botGrad;
+  bottomShadow.alphaValue = 0.0;
+  [seqContainer addSubview:bottomShadow];
+
+  KKStagePlayheadView *playheadView =
+      [[KKStagePlayheadView alloc] initWithFrame:NSZeroRect];
+  playheadView.translatesAutoresizingMaskIntoConstraints = NO;
+  playheadView.rulerHeight = rulerH;
+  playheadView.topPadding = KKPaddingSM;
+  [seqContainer addSubview:playheadView];
+
+  [NSLayoutConstraint activateConstraints:@[
+    [seqContainer.leadingAnchor
+        constraintEqualToAnchor:wrapper.leadingAnchor
+                       constant:KKInspectorHorizontalInset],
+    [seqContainer.trailingAnchor
         constraintEqualToAnchor:wrapper.trailingAnchor
                        constant:-KKInspectorHorizontalInset],
-    [seqView.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
-    [seqView.heightAnchor constraintEqualToConstant:seqHeight],
+    [seqContainer.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
+    [seqContainer.heightAnchor constraintEqualToConstant:seqContainerH],
+
+    [rulerView.leadingAnchor
+        constraintEqualToAnchor:seqContainer.leadingAnchor],
+    [rulerView.trailingAnchor
+        constraintEqualToAnchor:seqContainer.trailingAnchor],
+    [rulerView.topAnchor constraintEqualToAnchor:seqContainer.topAnchor
+                                        constant:KKPaddingSM],
+    [rulerView.heightAnchor constraintEqualToConstant:rulerH],
+
+    [scrollView.leadingAnchor
+        constraintEqualToAnchor:seqContainer.leadingAnchor],
+    [scrollView.trailingAnchor
+        constraintEqualToAnchor:seqContainer.trailingAnchor],
+    [scrollView.topAnchor constraintEqualToAnchor:rulerView.bottomAnchor],
+    [scrollView.bottomAnchor constraintEqualToAnchor:seqContainer.bottomAnchor],
+
+    [topShadow.leadingAnchor constraintEqualToAnchor:scrollView.leadingAnchor],
+    [topShadow.trailingAnchor
+        constraintEqualToAnchor:scrollView.trailingAnchor],
+    [topShadow.topAnchor constraintEqualToAnchor:scrollView.topAnchor],
+    [topShadow.heightAnchor constraintEqualToConstant:shadowH],
+
+    [bottomShadow.leadingAnchor
+        constraintEqualToAnchor:scrollView.leadingAnchor],
+    [bottomShadow.trailingAnchor
+        constraintEqualToAnchor:scrollView.trailingAnchor],
+    [bottomShadow.bottomAnchor constraintEqualToAnchor:scrollView.bottomAnchor],
+    [bottomShadow.heightAnchor constraintEqualToConstant:shadowH],
+
+    [playheadView.leadingAnchor
+        constraintEqualToAnchor:seqContainer.leadingAnchor],
+    [playheadView.trailingAnchor
+        constraintEqualToAnchor:seqContainer.trailingAnchor],
+    [playheadView.topAnchor constraintEqualToAnchor:seqContainer.topAnchor],
+    [playheadView.bottomAnchor
+        constraintEqualToAnchor:seqContainer.bottomAnchor],
   ]];
+
   self.stageSequencer = seqView;
-  [self _registerMultiStageSequencerView:seqView];
+  self.stageSequencerContainer = seqContainer;
+  self.stageSequencerRuler = rulerView;
+  [self _registerMultiStageSequencerView:seqView
+                               rulerView:rulerView
+                            playheadView:playheadView];
+
+  // Keep ruler, lanes, and playhead overlay in lockstep horizontally.
+  __weak KKStageSequencerView *weakSeqForSync = seqView;
+  __weak KKStageSequencerRulerView *weakRulerForSync = rulerView;
+  __weak KKStagePlayheadView *weakPlayheadForSync = playheadView;
+  seqView.onZoomPanChanged = ^(CGFloat z, CGFloat p) {
+    weakRulerForSync.zoom = z;
+    weakRulerForSync.panOffset = p;
+    weakPlayheadForSync.zoom = z;
+    weakPlayheadForSync.panOffset = p;
+  };
+  rulerView.onZoomPanChanged = ^(CGFloat z, CGFloat p) {
+    weakSeqForSync.zoom = z;
+    weakSeqForSync.panOffset = p;
+    weakPlayheadForSync.zoom = z;
+    weakPlayheadForSync.panOffset = p;
+  };
+
+  // Fade shadow overlays based on scroll position (fraction within the
+  // scrollable range, using unflipped document coords where higher Y is
+  // visual top).
+  __weak NSScrollView *weakScroll = scrollView;
+  __weak KKScrollShadowView *weakTopShadow = topShadow;
+  __weak KKScrollShadowView *weakBottomShadow = bottomShadow;
+  void (^updateShadows)(void) = ^{
+    NSScrollView *sv = weakScroll;
+    if (!sv)
+      return;
+    NSRect vr = sv.documentVisibleRect;
+    NSRect cr = [(NSView *)sv.documentView bounds];
+    CGFloat scrollable = cr.size.height - vr.size.height;
+    if (scrollable <= 0.5) {
+      weakTopShadow.alphaValue = 0.0;
+      weakBottomShadow.alphaValue = 0.0;
+      return;
+    }
+    CGFloat fromTop =
+        (cr.origin.y + cr.size.height) - (vr.origin.y + vr.size.height);
+    CGFloat percent = fromTop / scrollable;
+    percent = MAX(0.0, MIN(1.0, percent));
+    weakTopShadow.alphaValue = percent;
+    weakBottomShadow.alphaValue = 1.0 - percent;
+  };
+  KKScrollShadowObserver *shadowObs =
+      [[KKScrollShadowObserver alloc] initWithClipView:scrollView.contentView
+                                                 block:updateShadows];
+  // Keep the observer alive for the lifetime of the container.
+  static const void *const kShadowObsKey = &kShadowObsKey;
+  objc_setAssociatedObject(seqContainer, kShadowObsKey, shadowObs,
+                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+  // KKStageSequencerView's setFrameSize: scrolls the enclosing scroll view to
+  // the top on first real layout; run updateShadows once things settle.
+  dispatch_async(dispatch_get_main_queue(), ^{
+    updateShadows();
+  });
 
   seqView.onSegmentSelected = ^(NSInteger laneIndex, NSInteger segmentIndex) {
     __strong typeof(weakSelf) strongSelf = weakSelf;
@@ -862,7 +1088,7 @@
                                         anchorRect:anchorRect];
       };
 
-  seqView.onPlayheadScrub = ^(double fraction) {
+  rulerView.onPlayheadScrub = ^(double fraction) {
     __strong typeof(weakSelf) strongSelf = weakSelf;
     if (!strongSelf)
       return;
@@ -895,7 +1121,7 @@
               fromParameter:kKKParamMultiStageEnabled
                      atTime:[actionAPI currentTime]];
   if (multiStageEnabled) {
-    seqView.hidden = NO;
+    seqContainer.hidden = NO;
     graphView.hidden = YES;
     NSString *json = nil;
     [paramGetAPI getStringParameterValue:&json
@@ -941,10 +1167,14 @@
       [timingAPI durationTimeForEffect:&effectDuration];
       double durSec = CMTimeGetSeconds(effectDuration);
       seqView.effectDuration = durSec;
+      rulerView.effectDuration = durSec;
       double startSec = CMTimeGetSeconds(effectStart);
       double nowSec = CMTimeGetSeconds([actionAPI currentTime]);
-      if (durSec > 0)
-        seqView.playheadFraction = (nowSec - startSec) / durSec;
+      if (durSec > 0) {
+        double frac = (nowSec - startSec) / durSec;
+        seqView.playheadFraction = frac;
+        playheadView.playheadFraction = frac;
+      }
     }
   }
 
@@ -983,8 +1213,9 @@
               fromParameter:kKKParamMultiStageEnabled
                      atTime:t];
   KKStageSequencerView *seq = self.stageSequencer;
+  NSView *seqContainer = self.stageSequencerContainer;
   if (seq) {
-    seq.hidden = !multiStageEnabled;
+    seqContainer.hidden = !multiStageEnabled;
     self.timingGraph.hidden = multiStageEnabled;
     if (multiStageEnabled) {
       NSString *json = nil;
@@ -1004,11 +1235,17 @@
         [timingAPI durationTimeForEffect:&effectDuration];
         double durSec = CMTimeGetSeconds(effectDuration);
         seq.effectDuration = durSec;
+        self.stageSequencerRuler.effectDuration = durSec;
 
         double startSec = CMTimeGetSeconds(effectStart);
         double nowSec = CMTimeGetSeconds(t);
-        if (durSec > 0)
-          seq.playheadFraction = (nowSec - startSec) / durSec;
+        if (durSec > 0) {
+          double frac = (nowSec - startSec) / durSec;
+          seq.playheadFraction = frac;
+          KKStagePlayheadView *ph =
+              KKInstanceStateForAPI(self.apiManager).playheadView;
+          ph.playheadFraction = frac;
+        }
       }
     }
   }

@@ -12,6 +12,8 @@
 /// See project_fxplug_custom_view_live_update.md for the full architecture.
 
 #import "../Math/KKTimingStage.h"
+#import "../Views/KKStagePlayheadView.h"
+#import "../Views/KKStageSequencerRulerView.h"
 #import "../Views/KKStageSequencerView.h"
 #import "KKConstants.h"
 #import "KKPluginInstanceState.h"
@@ -126,10 +128,14 @@ static void KKBroadcastPlayheads(double nowSec) {
     if (state.playheadDispatchPending)
       continue;
     state.playheadDispatchPending = YES;
+    KKStageSequencerRulerView *ruler = state.rulerView;
+    KKStagePlayheadView *ph = state.playheadView;
     dispatch_async(dispatch_get_main_queue(), ^{
       state.playheadDispatchPending = NO;
       seq.effectDuration = state.pendingPlayheadDuration;
       seq.playheadFraction = state.pendingPlayheadFraction;
+      ruler.effectDuration = state.pendingPlayheadDuration;
+      ph.playheadFraction = state.pendingPlayheadFraction;
     });
   }
 }
@@ -189,7 +195,9 @@ static void KKBroadcastPlayheads(double nowSec) {
   KKBroadcastPlayheads(CMTimeGetSeconds(time));
 }
 
-- (void)_registerMultiStageSequencerView:(KKStageSequencerView *)view {
+- (void)_registerMultiStageSequencerView:(KKStageSequencerView *)view
+                               rulerView:(KKStageSequencerRulerView *)ruler
+                            playheadView:(KKStagePlayheadView *)playhead {
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actAPI startAction:self];
@@ -219,6 +227,8 @@ static void KKBroadcastPlayheads(double nowSec) {
 
   KKPluginInstanceState *state = KKInstanceStateForUUID(uuid);
   state.sequencerView = view;
+  state.rulerView = ruler;
+  state.playheadView = playhead;
   state.cachedEffectStart = CMTimeGetSeconds(cachedStart);
   state.cachedEffectDuration = CMTimeGetSeconds(cachedDur);
 }
