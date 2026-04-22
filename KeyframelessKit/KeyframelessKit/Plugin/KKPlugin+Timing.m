@@ -519,13 +519,26 @@ static const FxParameterFlags kCustomUIDisabled =
       result[lane.propertyLabel] = active.values;
     } else {
       NSUInteger idx = [segments indexOfObjectIdenticalTo:active];
-      NSArray<NSNumber *> *fromVals = active.values;
-      NSArray<NSNumber *> *toVals = active.values;
 
-      if (idx > 0)
-        fromVals = segments[idx - 1].values;
-      if (idx + 1 < segments.count)
+      // Exit (toValue) of the first transition points at the next segment —
+      // that's the animate-in behavior. Every other segment exits at its own
+      // value. fromValue is the preceding segment's exit value, so middles
+      // stay continuous with the first-transition's animate-in.
+      NSArray<NSNumber *> *toVals = active.values;
+      if (idx == 0 && idx + 1 < segments.count)
         toVals = segments[idx + 1].values;
+
+      NSArray<NSNumber *> *fromVals = active.values;
+      if (idx > 0) {
+        KKTimingSegment *prev = segments[idx - 1];
+        if (prev.type == KKSegmentTypeHold || idx - 1 > 0) {
+          fromVals = prev.values;
+        } else {
+          // Prev is the first-transition segment; its exit = this segment's
+          // value (animate-in target).
+          fromVals = active.values;
+        }
+      }
 
       double segDur = active.end - active.start;
       double t = (segDur > 0) ? (frac - active.start) / segDur : 1.0;

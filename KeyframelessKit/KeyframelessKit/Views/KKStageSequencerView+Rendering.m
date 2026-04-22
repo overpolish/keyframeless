@@ -234,12 +234,20 @@ static double _segAvgValue(KKTimingSegment *seg) {
       [segPath lineToPoint:NSMakePoint(x1, y)];
       lastPoint = NSMakePoint(x1, y);
     } else {
+      // Match the evaluator: first-transition eases own→next, every other
+      // transition eases from prev's exit value to own value.
       double fromVal = _segAvgValue(seg);
       double toVal = _segAvgValue(seg);
-      if (segIdx > 0)
-        fromVal = _segAvgValue(lane.segments[segIdx - 1]);
-      if (segIdx + 1 < lane.segments.count)
+      if (segIdx == 0 && segIdx + 1 < lane.segments.count)
         toVal = _segAvgValue(lane.segments[segIdx + 1]);
+      if (segIdx > 0) {
+        KKTimingSegment *prev = lane.segments[segIdx - 1];
+        if (prev.type == KKSegmentTypeHold || segIdx - 1 > 0) {
+          fromVal = _segAvgValue(prev);
+        } else {
+          fromVal = _segAvgValue(seg);
+        }
+      }
 
       double fromNorm = fromVal / maxVal;
       double toNorm = toVal / maxVal;
