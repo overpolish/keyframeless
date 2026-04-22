@@ -43,6 +43,10 @@ static const UInt32 kKKParamMultiStageSelectedProperty __attribute__((unused)) =
 static const UInt32 kKKParamMultiStageSelectedStage __attribute__((unused)) =
     9921;
 
+/// Hidden per-instance UUID — keys the static per-instance state map so
+/// multiple copies of a plugin on the same timeline don't share state.
+static const UInt32 kKKParamInstanceID __attribute__((unused)) = 9922;
+
 /// Color system parameters (9800–9810)
 static const UInt32 kKKParamColorGroup __attribute__((unused)) = 9800;
 static const UInt32 kKKParamColorMode __attribute__((unused)) = 9801;

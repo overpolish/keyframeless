@@ -155,8 +155,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Call from drawOSC to flush any pending sequencer lane updates to the
 /// custom view on the main queue. The OSC render cycle is the only reliable
 /// path for dispatching view updates in FxPlug XPC.
-/// This is a class method since OSC objects don't hold a plugin reference.
-+ (void)multiStageFlushPendingLanes;
+/// Pass `self.apiManager` so per-instance state is used (multiple copies of
+/// the same plugin on the timeline don't share state).
++ (void)multiStageFlushPendingLanesForAPI:(id<PROAPIAccessing>)apiManager;
 
 /// Call from drawOSC to detect undo/redo: reads the JSON param and compares
 /// against the in-memory snapshot. If they differ, pushes fresh lanes to the
@@ -165,7 +166,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Call from drawOSC to update the sequencer playhead and duration.
 /// Fraction is 0–1 of clip duration, duration is in seconds.
-+ (void)multiStageUpdatePlayhead:(double)fraction duration:(double)duration;
++ (void)multiStageUpdatePlayhead:(double)fraction
+                        duration:(double)duration
+                          forAPI:(id<PROAPIAccessing>)apiManager;
 
 /// Pairs of parameter IDs that maintain their aspect ratio when the user
 /// holds Cmd while dragging either slider. Set before first use (e.g. in
