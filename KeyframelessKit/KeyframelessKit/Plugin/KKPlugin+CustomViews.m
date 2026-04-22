@@ -12,17 +12,13 @@
 #import "../Views/KKSeparatorView.h"
 #import "../Views/KKStageSequencerView.h"
 
-extern NSArray<KKTimingLane *> *KKMultiStageLanesSnapshot;
-extern NSArray<KKTimingLane *> *KKMultiStagePendingLanes;
-extern void KKSetMultiStageSequencerView(KKStageSequencerView *_Nullable view);
-extern KKStageSequencerView *_Nullable KKGetMultiStageSequencerView(void);
-extern BOOL KKMultiStageSelectionInProgress;
 #import "../Views/KKAnimatableProperty.h"
 #import "../Views/KKPillToggleRowView.h"
 #import "../Views/KKTimingGraphView.h"
 #import "../Views/KKTimingSlot.h"
 #import "../Views/KKUpdateBannerView.h"
 #import "KKConstants.h"
+#import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
 
@@ -495,13 +491,36 @@ extern BOOL KKMultiStageSelectionInProgress;
     [seqView.heightAnchor constraintEqualToConstant:seqHeight],
   ]];
   self.stageSequencer = seqView;
-  KKSetMultiStageSequencerView(seqView);
+
+  // Ensure this plugin instance has a UUID and register the view into
+  // per-instance state so two copies of the effect on one timeline don't
+  // share mutable state. UUID generation requires action scope since it
+  // writes a hidden param (see project_fxplug_param_persistence.md).
+  {
+    id<FxCustomParameterActionAPI_v4> uuidActAPI = [self.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [uuidActAPI startAction:self];
+    NSString *uuid = KKInstanceUUIDForAPI(self.apiManager);
+    if (!uuid.length) {
+      uuid = [[NSUUID UUID] UUIDString];
+      id<FxParameterSettingAPI_v5> uuidSetAPI =
+          [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      [uuidSetAPI setStringParameterValue:uuid toParameter:kKKParamInstanceID];
+      // Re-read via helper so it caches on the api manager.
+      uuid = KKInstanceUUIDForAPI(self.apiManager);
+    }
+    [uuidActAPI endAction:self];
+    KKInstanceStateForUUID(uuid).sequencerView = seqView;
+  }
 
   seqView.onSegmentSelected = ^(NSInteger laneIndex, NSInteger segmentIndex) {
     __strong typeof(weakSelf) strongSelf = weakSelf;
     if (!strongSelf || laneIndex < 0)
       return;
-    KKMultiStageSelectionInProgress = YES;
+    KKPluginInstanceState *state = KKInstanceStateForAPI(strongSelf.apiManager);
+    if (!state)
+      return;
+    state.selectionInProgress = YES;
     NSArray<KKAnimatableProperty *> *props = [strongSelf animatableProperties];
     id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
         apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
@@ -566,8 +585,8 @@ extern BOOL KKMultiStageSelectionInProgress;
 
     // 3. Update snapshot + clear pending BEFORE endAction (which triggers
     //    parameterChanged: that would read stale snapshot).
-    KKMultiStageLanesSnapshot = [lanes copy];
-    KKMultiStagePendingLanes = nil;
+    state.lanesSnapshot = [lanes copy];
+    state.pendingLanes = nil;
 
     // 4. Sync new selection: write segment values → native params.
     if (prop.valueParamIDs.count > 0 && segmentIndex >= 0 &&
@@ -582,7 +601,7 @@ extern BOOL KKMultiStageSelectionInProgress;
     }
 
     [actAPI endAction:strongSelf];
-    KKMultiStageSelectionInProgress = NO;
+    state.selectionInProgress = NO;
     [strongSelf timingGraphApplyState];
   };
 
@@ -842,7 +861,7 @@ extern BOOL KKMultiStageSelectionInProgress;
       }
     }
     if (lanes) {
-      KKMultiStageLanesSnapshot = [lanes copy];
+      KKInstanceStateForAPI(self.apiManager).lanesSnapshot = [lanes copy];
       seqView.lanes = lanes;
     }
 
@@ -905,7 +924,7 @@ extern BOOL KKMultiStageSelectionInProgress;
                              fromParameter:kKKParamMultiStageData];
       NSArray<KKTimingLane *> *lanes = [KKTimingLane lanesFromJSON:json];
       if (lanes) {
-        KKMultiStageLanesSnapshot = [lanes copy];
+        KKInstanceStateForAPI(self.apiManager).lanesSnapshot = [lanes copy];
         seq.lanes = lanes;
       }
 

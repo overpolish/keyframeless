@@ -11,32 +11,9 @@
 #import "../Views/KKStageSequencerView.h"
 #import "../Views/KKTimingGraphView.h"
 #import "KKConstants.h"
+#import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
-
-/// Last-known lanes snapshot. Updated whenever the view writes lanes
-/// (segment selection, lane toggle, etc). Read by parameterChanged: to
-/// build live updates without touching the JSON param.
-NSArray<KKTimingLane *> *KKMultiStageLanesSnapshot = nil;
-/// Pending lanes for live graph updates. Written from parameterChanged:,
-/// consumed by multiStageFlushPendingLanes called from drawOSC.
-NSArray<KKTimingLane *> *KKMultiStagePendingLanes = nil;
-/// Weak reference to the live sequencer view. ARC auto-nils on dealloc and
-/// the __weak read is thread-safe, so the OSC render queue can sample this
-/// without racing the main thread teardown.
-static __weak KKStageSequencerView *KKMultiStageSequencerViewRef = nil;
-
-void KKSetMultiStageSequencerView(KKStageSequencerView *_Nullable view) {
-  KKMultiStageSequencerViewRef = view;
-}
-
-KKStageSequencerView *_Nullable KKGetMultiStageSequencerView(void) {
-  return KKMultiStageSequencerViewRef;
-}
-
-/// Guard flag: skip parameterChanged staging while a segment selection
-/// callback is in progress (it writes native params which would re-enter).
-BOOL KKMultiStageSelectionInProgress = NO;
 
 static BOOL KKAddParam(BOOL ok, NSError **err, NSString *desc) {
   if (ok)
@@ -294,6 +271,15 @@ static const FxParameterFlags kCustomUIDisabled =
                             parameterFlags:kFxParameterFlag_HIDDEN |
                                            kFxParameterFlag_NOT_ANIMATABLE],
                   error, @"Unable to add multi-stage selected stage"))
+    return NO;
+
+  if (!KKAddParam(
+          [paramAPI addStringParameterWithName:@""
+                                   parameterID:kKKParamInstanceID
+                                  defaultValue:@""
+                                parameterFlags:kFxParameterFlag_HIDDEN |
+                                               kFxParameterFlag_NOT_ANIMATABLE],
+          error, @"Unable to add instance ID"))
     return NO;
 
   return YES;
@@ -559,7 +545,8 @@ static const FxParameterFlags kCustomUIDisabled =
 
 - (BOOL)multiStageHandleParameterChanged:(UInt32)parameterID
                                   atTime:(CMTime)time {
-  if (KKMultiStageSelectionInProgress)
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  if (!state || state.selectionInProgress)
     return NO;
 
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
@@ -592,8 +579,7 @@ static const FxParameterFlags kCustomUIDisabled =
   if (!matchedProp)
     return NO;
 
-  NSMutableArray<KKTimingLane *> *lanes =
-      [KKMultiStageLanesSnapshot mutableCopy];
+  NSMutableArray<KKTimingLane *> *lanes = [state.lanesSnapshot mutableCopy];
   if (!lanes)
     return NO;
 
@@ -624,8 +610,8 @@ static const FxParameterFlags kCustomUIDisabled =
     lanes[li] = mLane;
 
     NSArray<KKTimingLane *> *updated = [lanes copy];
-    KKMultiStagePendingLanes = updated;
-    KKMultiStageLanesSnapshot = updated;
+    state.pendingLanes = updated;
+    state.lanesSnapshot = updated;
 
     // Persist to JSON so values survive clip re-selection.
     id<FxParameterSettingAPI_v5> paramSetAPI =
@@ -642,7 +628,8 @@ static const FxParameterFlags kCustomUIDisabled =
 }
 
 + (void)multiStageSyncFromParams:(id<PROAPIAccessing>)apiManager {
-  KKStageSequencerView *seq = KKGetMultiStageSequencerView();
+  KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
+  KKStageSequencerView *seq = state.sequencerView;
   if (!seq)
     return;
   id<FxParameterRetrievalAPI_v6> getAPI =
@@ -653,26 +640,26 @@ static const FxParameterFlags kCustomUIDisabled =
   [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
   if (!json)
     return;
-  NSString *snapshotJSON =
-      [KKTimingLane jsonFromLanes:KKMultiStageLanesSnapshot];
+  NSString *snapshotJSON = [KKTimingLane jsonFromLanes:state.lanesSnapshot];
   if ([json isEqualToString:snapshotJSON ?: @""])
     return;
   NSArray<KKTimingLane *> *lanes = [KKTimingLane lanesFromJSON:json];
   if (!lanes)
     return;
-  KKMultiStageLanesSnapshot = lanes;
-  KKMultiStagePendingLanes = nil;
+  state.lanesSnapshot = lanes;
+  state.pendingLanes = nil;
   dispatch_async(dispatch_get_main_queue(), ^{
     seq.lanes = lanes;
   });
 }
 
-+ (void)multiStageFlushPendingLanes {
-  NSArray<KKTimingLane *> *pending = KKMultiStagePendingLanes;
++ (void)multiStageFlushPendingLanesForAPI:(id<PROAPIAccessing>)apiManager {
+  KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
+  NSArray<KKTimingLane *> *pending = state.pendingLanes;
   if (!pending)
     return;
-  KKMultiStagePendingLanes = nil;
-  KKStageSequencerView *seq = KKGetMultiStageSequencerView();
+  state.pendingLanes = nil;
+  KKStageSequencerView *seq = state.sequencerView;
   if (!seq)
     return;
   dispatch_async(dispatch_get_main_queue(), ^{
@@ -680,23 +667,22 @@ static const FxParameterFlags kCustomUIDisabled =
   });
 }
 
-static double KKPendingPlayheadFraction = -1;
-static double KKPendingPlayheadDuration = -1;
-static BOOL KKPlayheadDispatchPending = NO;
-
-+ (void)multiStageUpdatePlayhead:(double)fraction duration:(double)duration {
-  KKStageSequencerView *seq = KKGetMultiStageSequencerView();
++ (void)multiStageUpdatePlayhead:(double)fraction
+                        duration:(double)duration
+                          forAPI:(id<PROAPIAccessing>)apiManager {
+  KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
+  KKStageSequencerView *seq = state.sequencerView;
   if (!seq)
     return;
-  KKPendingPlayheadFraction = fraction;
-  KKPendingPlayheadDuration = duration;
-  if (KKPlayheadDispatchPending)
+  state.pendingPlayheadFraction = fraction;
+  state.pendingPlayheadDuration = duration;
+  if (state.playheadDispatchPending)
     return;
-  KKPlayheadDispatchPending = YES;
+  state.playheadDispatchPending = YES;
   dispatch_async(dispatch_get_main_queue(), ^{
-    KKPlayheadDispatchPending = NO;
-    seq.effectDuration = KKPendingPlayheadDuration;
-    seq.playheadFraction = KKPendingPlayheadFraction;
+    state.playheadDispatchPending = NO;
+    seq.effectDuration = state.pendingPlayheadDuration;
+    seq.playheadFraction = state.pendingPlayheadFraction;
   });
 }
 
