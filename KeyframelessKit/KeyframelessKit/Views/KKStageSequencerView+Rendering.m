@@ -184,25 +184,21 @@ static double _segAvgValue(KKTimingSegment *seg) {
   return sum / seg.values.count;
 }
 
-/// Returns the fromVal/toVal for a transition segment, matching the evaluator:
-/// first-segment transitions ease own → next.value; others ease prev.exit →
-/// own.value.
+/// Returns average of a boundary's values (so the lane graph collapses
+/// multi-value properties to a single plotted series).
+static double _boundaryAvg(NSArray<NSNumber *> *values) {
+  if (!values.count)
+    return 0;
+  double sum = 0;
+  for (NSNumber *v in values)
+    sum += v.doubleValue;
+  return sum / values.count;
+}
+
 static void _laneGraphFromTo(NSArray<KKTimingSegment *> *segments,
                              NSUInteger idx, double *outFrom, double *outTo) {
-  KKTimingSegment *seg = segments[idx];
-  double from = _segAvgValue(seg);
-  double to = _segAvgValue(seg);
-  if (idx == 0 && idx + 1 < segments.count)
-    to = _segAvgValue(segments[idx + 1]);
-  if (idx > 0) {
-    KKTimingSegment *prev = segments[idx - 1];
-    if (prev.type == KKSegmentTypeHold || idx - 1 > 0)
-      from = _segAvgValue(prev);
-    else
-      from = _segAvgValue(seg);
-  }
-  *outFrom = from;
-  *outTo = to;
+  *outFrom = _boundaryAvg(KKTimingBoundaryBefore(idx, segments));
+  *outTo = _boundaryAvg(KKTimingBoundaryAfter(idx, segments));
 }
 
 - (void)_renderLaneGraph:(KKTimingLane *)lane

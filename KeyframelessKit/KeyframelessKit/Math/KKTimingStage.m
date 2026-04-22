@@ -5,6 +5,27 @@
 
 #import "KKTimingStage.h"
 
+NSArray<NSNumber *> *
+KKTimingBoundaryBefore(NSUInteger idx, NSArray<KKTimingSegment *> *segments) {
+  if (idx == 0 || segments.count == 0)
+    return segments.firstObject.values;
+  KKTimingSegment *current = segments[idx];
+  KKTimingSegment *prev = segments[idx - 1];
+  if (current.type == KKSegmentTypeHold)
+    return current.values;
+  if (prev.type == KKSegmentTypeHold)
+    return prev.values;
+  return current.values;
+}
+
+NSArray<NSNumber *> *
+KKTimingBoundaryAfter(NSUInteger idx, NSArray<KKTimingSegment *> *segments) {
+  NSUInteger next = idx + 1;
+  if (next >= segments.count)
+    return segments[idx].values;
+  return KKTimingBoundaryBefore(next, segments);
+}
+
 @implementation KKTimingSegment
 
 + (instancetype)holdWithValues:(NSArray<NSNumber *> *)values
