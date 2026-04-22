@@ -297,6 +297,16 @@
   [self renderLanes];
 }
 
+- (void)rightMouseDown:(NSEvent *)event {
+  NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+  NSInteger laneIdx = -1, segIdx = -1;
+  [self _segmentUnderPoint:loc outLane:&laneIdx outSeg:&segIdx];
+  if (laneIdx < 0 || segIdx < 0)
+    return;
+  if (self.onSegmentTypeToggled)
+    self.onSegmentTypeToggled(laneIdx, segIdx);
+}
+
 - (void)mouseDown:(NSEvent *)event {
   NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
 

@@ -774,6 +774,47 @@
     [strongSelf timingGraphApplyState];
   };
 
+  seqView.onSegmentTypeToggled = ^(NSInteger laneIndex,
+                                   NSInteger segmentIndex) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actAPI startAction:strongSelf];
+    id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    NSString *json = nil;
+    [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+    NSMutableArray<KKTimingLane *> *lanes =
+        [[KKTimingLane lanesFromJSON:json] mutableCopy];
+    if (!lanes || (NSUInteger)laneIndex >= lanes.count) {
+      [actAPI endAction:strongSelf];
+      return;
+    }
+    KKTimingLane *lane = [lanes[laneIndex] copy];
+    NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
+    if ((NSUInteger)segmentIndex >= segs.count) {
+      [actAPI endAction:strongSelf];
+      return;
+    }
+    KKTimingSegment *seg = [segs[segmentIndex] copy];
+    seg.type = (seg.type == KKSegmentTypeHold) ? KKSegmentTypeTransition
+                                               : KKSegmentTypeHold;
+    segs[segmentIndex] = seg;
+    lane.segments = segs;
+    lanes[laneIndex] = lane;
+
+    NSString *updated = [KKTimingLane jsonFromLanes:lanes];
+    if (updated)
+      [setAPI setStringParameterValue:updated
+                          toParameter:kKKParamMultiStageData];
+    [actAPI endAction:strongSelf];
+    [strongSelf timingGraphApplyState];
+  };
+
   seqView.onPlayheadScrub = ^(double fraction) {
     __strong typeof(weakSelf) strongSelf = weakSelf;
     if (!strongSelf)

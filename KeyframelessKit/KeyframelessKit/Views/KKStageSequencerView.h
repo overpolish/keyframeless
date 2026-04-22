@@ -36,8 +36,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Called when user double-clicks to add a segment.
 @property(nonatomic, copy, nullable) void (^onSegmentAdded)
     (NSInteger laneIndex, double position);
-/// Called when user requests segment removal (right-click / Cmd-click).
+/// Called when user requests segment removal (Cmd-click).
 @property(nonatomic, copy, nullable) void (^onSegmentRemoved)
+    (NSInteger laneIndex, NSInteger segmentIndex);
+/// Called when user right-clicks a segment to toggle its type
+/// (hold ↔ transition).
+@property(nonatomic, copy, nullable) void (^onSegmentTypeToggled)
     (NSInteger laneIndex, NSInteger segmentIndex);
 /// Called when user clicks/drags the ruler to scrub the playhead.
 /// Fraction is 0–1 of clip duration.
