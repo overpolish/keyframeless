@@ -65,6 +65,9 @@
   [self _renderRulerWithTrackX:trackX
                     trackWidth:trackWidth
                    totalHeight:totalHeight];
+  [self _renderSnapGuideWithTrackX:trackX
+                        trackWidth:trackWidth
+                       totalHeight:totalHeight];
   [self _renderPlayheadWithTrackX:trackX
                        trackWidth:trackWidth
                       totalHeight:totalHeight];
@@ -484,6 +487,26 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
   [[NSColor colorWithWhite:0.08 alpha:1.0] setStroke];
   path.lineWidth = 0.5;
   [path stroke];
+}
+
+- (void)_renderSnapGuideWithTrackX:(CGFloat)trackX
+                        trackWidth:(CGFloat)trackWidth
+                       totalHeight:(CGFloat)totalHeight {
+  if (!_snapActive || trackWidth < 1)
+    return;
+  CGFloat x = [self _xForFrac:_snapFrac trackX:trackX trackWidth:trackWidth];
+  if (x < trackX - 0.5 || x > trackX + trackWidth + 0.5)
+    return;
+  CGFloat cx = floor(x) + 0.5;
+  CGFloat top = totalHeight - kKSSBorderInset - kKSSRulerHeight;
+  CGFloat bottom = kKSSBorderInset;
+
+  [[NSColor colorWithRed:1.0 green:1.0 blue:0.0 alpha:1.0] setStroke];
+  NSBezierPath *line = [NSBezierPath bezierPath];
+  line.lineWidth = 1.0;
+  [line moveToPoint:NSMakePoint(cx, bottom)];
+  [line lineToPoint:NSMakePoint(cx, top)];
+  [line stroke];
 }
 
 - (void)_renderPlayheadWithTrackX:(CGFloat)trackX
