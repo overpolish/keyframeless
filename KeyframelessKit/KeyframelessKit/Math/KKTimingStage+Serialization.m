@@ -10,8 +10,10 @@ static NSString *const kKeyStart = @"start";
 static NSString *const kKeyEnd = @"end";
 static NSString *const kKeyValues = @"vals";
 static NSString *const kKeyEasing = @"ease";
+static NSString *const kKeyHoldEffect = @"he";
 static NSString *const kKeyIntensity = @"int";
 static NSString *const kKeyFrequency = @"freq";
+static NSString *const kKeySeed = @"seed";
 
 static NSString *const kKeyVersion = @"v";
 static NSString *const kKeyLanes = @"lanes";
@@ -31,8 +33,10 @@ static const NSInteger kCurrentVersion = 3;
     kKeyEnd : @(self.end),
     kKeyValues : self.values ?: @[],
     kKeyEasing : @(self.easing),
+    kKeyHoldEffect : @(self.holdEffect),
     kKeyIntensity : @(self.intensity),
     kKeyFrequency : @(self.frequency),
+    kKeySeed : @(self.seed),
   };
 }
 
@@ -55,8 +59,10 @@ static const NSInteger kCurrentVersion = 3;
     s.values = singleVal ? @[ singleVal ] : @[ @(0) ];
   }
   s.easing = (KKEasingCurve)[dict[kKeyEasing] integerValue];
+  s.holdEffect = (KKHoldEffect)[dict[kKeyHoldEffect] integerValue];
   s.intensity = [dict[kKeyIntensity] doubleValue];
   s.frequency = [dict[kKeyFrequency] doubleValue];
+  s.seed = (uint32_t)[dict[kKeySeed] unsignedIntegerValue];
   return s;
 }
 

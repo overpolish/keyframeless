@@ -43,12 +43,20 @@ NS_ASSUME_NONNULL_BEGIN
 /// (hold ↔ transition).
 @property(nonatomic, copy, nullable) void (^onSegmentTypeToggled)
     (NSInteger laneIndex, NSInteger segmentIndex);
+/// Called when the edit button above a segment is clicked. The anchor rect
+/// is in this view's coordinate space — use it to anchor a popover.
+@property(nonatomic, copy, nullable) void (^onSegmentEditRequested)
+    (NSInteger laneIndex, NSInteger segmentIndex, NSRect anchorRect);
 /// Called when user clicks/drags the ruler to scrub the playhead.
 /// Fraction is 0–1 of clip duration.
 @property(nonatomic, copy, nullable) void (^onPlayheadScrub)(double fraction);
 
 /// Re-render the lanes image.
 - (void)renderLanes;
+
+/// Computes the height the view needs in order to render `laneCount` lanes
+/// without squishing its content. Use this to size the parent container.
++ (CGFloat)heightForLaneCount:(NSUInteger)laneCount;
 
 @end
 

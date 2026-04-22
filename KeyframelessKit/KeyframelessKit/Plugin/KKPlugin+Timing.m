@@ -516,7 +516,23 @@ static const FxParameterFlags kCustomUIDisabled =
       continue;
 
     if (active.type == KKSegmentTypeHold) {
-      result[lane.propertyLabel] = active.values;
+      if (active.holdEffect == KKHoldEffectNone) {
+        result[lane.propertyLabel] = active.values;
+      } else {
+        double segDur = active.end - active.start;
+        double t = (segDur > 0) ? (frac - active.start) / segDur : 0.0;
+        t = MAX(0.0, MIN(1.0, t));
+        double factor =
+            KKApplyHoldEffect(t, active.holdEffect, active.intensity,
+                              active.frequency, (int)active.seed);
+        NSMutableArray<NSNumber *> *modulated =
+            [NSMutableArray arrayWithCapacity:active.values.count];
+        for (NSUInteger i = 0; i < active.values.count; i++) {
+          double base = active.values[i].doubleValue;
+          [modulated addObject:@(base * factor)];
+        }
+        result[lane.propertyLabel] = modulated;
+      }
     } else {
       NSUInteger idx = [segments indexOfObjectIdenticalTo:active];
 
@@ -543,8 +559,14 @@ static const FxParameterFlags kCustomUIDisabled =
       double segDur = active.end - active.start;
       double t = (segDur > 0) ? (frac - active.start) / segDur : 1.0;
       t = MAX(0.0, MIN(1.0, t));
+      // Last-segment transitions are animate-out — mirror time so the same
+      // easing curve looks distinct from animate-in (classic behaviour).
+      BOOL isAnimateOut = (idx == segments.count - 1);
+      double ti = isAnimateOut ? (1.0 - t) : t;
       double easedT =
-          KKApplyEasing(t, active.easing, active.intensity, active.frequency);
+          KKApplyEasing(ti, active.easing, active.intensity, active.frequency);
+      if (isAnimateOut)
+        easedT = 1.0 - easedT;
 
       NSUInteger valCount = MIN(fromVals.count, toVals.count);
       NSMutableArray<NSNumber *> *interpolated =

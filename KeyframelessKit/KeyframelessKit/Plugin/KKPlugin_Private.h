@@ -18,6 +18,7 @@
 @property(nonatomic, weak) KKCustomGroupHeaderView *timingHeader;
 @property(nonatomic, weak) KKTimingGraphView *timingGraph;
 @property(nonatomic, weak) KKStageSequencerView *stageSequencer;
+@property(nonatomic, strong, nullable) NSPopover *segmentEditPopover;
 
 @end
 
@@ -27,6 +28,9 @@
 
 @interface KKPlugin (TimingGraph)
 - (void)timingGraphApplyState;
+- (void)_showSegmentEditPopoverForLane:(NSInteger)laneIndex
+                            segmentIdx:(NSInteger)segmentIndex
+                            anchorRect:(NSRect)anchorRect;
 @end
 
 @interface KKPlugin (MultiStagePumpInternal)

@@ -62,6 +62,8 @@
                             laneY:laneY];
   }
 
+  [self _renderEditButtonForHoveredSegment];
+
   [self _renderRulerWithTrackX:trackX
                     trackWidth:trackWidth
                    totalHeight:totalHeight];
@@ -182,6 +184,27 @@ static double _segAvgValue(KKTimingSegment *seg) {
   return sum / seg.values.count;
 }
 
+/// Returns the fromVal/toVal for a transition segment, matching the evaluator:
+/// first-segment transitions ease own → next.value; others ease prev.exit →
+/// own.value.
+static void _laneGraphFromTo(NSArray<KKTimingSegment *> *segments,
+                             NSUInteger idx, double *outFrom, double *outTo) {
+  KKTimingSegment *seg = segments[idx];
+  double from = _segAvgValue(seg);
+  double to = _segAvgValue(seg);
+  if (idx == 0 && idx + 1 < segments.count)
+    to = _segAvgValue(segments[idx + 1]);
+  if (idx > 0) {
+    KKTimingSegment *prev = segments[idx - 1];
+    if (prev.type == KKSegmentTypeHold || idx - 1 > 0)
+      from = _segAvgValue(prev);
+    else
+      from = _segAvgValue(seg);
+  }
+  *outFrom = from;
+  *outTo = to;
+}
+
 - (void)_renderLaneGraph:(KKTimingLane *)lane
                   trackX:(CGFloat)trackX
               trackWidth:(CGFloat)trackWidth
@@ -192,14 +215,57 @@ static double _segAvgValue(KKTimingSegment *seg) {
   if (drawHeight < 2)
     return;
 
-  double maxVal = 0;
+  // Compute dynamic value range including transition overshoots (Elastic,
+  // Bounce etc. exceed [from, to]).
+  double minVal = 0, maxVal = 0;
   for (KKTimingSegment *seg in lane.segments) {
-    double v = fabs(_segAvgValue(seg));
+    double v = _segAvgValue(seg);
+    if (v < minVal)
+      minVal = v;
     if (v > maxVal)
       maxVal = v;
   }
-  if (maxVal < 0.001)
+  for (NSUInteger i = 0; i < lane.segments.count; i++) {
+    KKTimingSegment *s = lane.segments[i];
+    if (s.type == KKSegmentTypeTransition) {
+      double from = 0, to = 0;
+      _laneGraphFromTo(lane.segments, i, &from, &to);
+      BOOL mirror = (i == lane.segments.count - 1);
+      for (NSInteger j = 0; j <= 10; j++) {
+        double t = (double)j / 10.0;
+        double ti = mirror ? (1.0 - t) : t;
+        double eased = KKApplyEasing(ti, s.easing, s.intensity, s.frequency);
+        if (mirror)
+          eased = 1.0 - eased;
+        double val = from + (to - from) * eased;
+        if (val < minVal)
+          minVal = val;
+        if (val > maxVal)
+          maxVal = val;
+      }
+    } else if (s.holdEffect != KKHoldEffectNone) {
+      double base = _segAvgValue(s);
+      for (NSInteger j = 0; j <= 20; j++) {
+        double t = (double)j / 20.0;
+        double factor = KKApplyHoldEffect(t, s.holdEffect, s.intensity,
+                                          s.frequency, (int)s.seed);
+        double val = base * factor;
+        if (val < minVal)
+          minVal = val;
+        if (val > maxVal)
+          maxVal = val;
+      }
+    }
+  }
+  double valRange = maxVal - minVal;
+  if (valRange < 0.001) {
     maxVal = 1.0;
+    minVal = 0.0;
+    valRange = 1.0;
+  }
+  double (^normalize)(double) = ^(double v) {
+    return (v - minVal) / valRange;
+  };
 
   NSPoint lastPoint = NSZeroPoint;
   BOOL hasLast = NO;
@@ -222,44 +288,63 @@ static double _segAvgValue(KKTimingSegment *seg) {
     segPath.lineWidth = 1.5;
 
     if (seg.type == KKSegmentTypeHold) {
-      double normalized = _segAvgValue(seg) / maxVal;
-      CGFloat y = drawBottom + normalized * drawHeight;
       CGFloat x0 = segLeft;
       CGFloat x1 = segLeft + segWidth;
-      if (hasLast) {
-        [segPath moveToPoint:lastPoint];
-        [segPath lineToPoint:NSMakePoint(x0, y)];
-      }
-      [segPath moveToPoint:NSMakePoint(x0, y)];
-      [segPath lineToPoint:NSMakePoint(x1, y)];
-      lastPoint = NSMakePoint(x1, y);
-    } else {
-      // Match the evaluator: first-transition eases own→next, every other
-      // transition eases from prev's exit value to own value.
-      double fromVal = _segAvgValue(seg);
-      double toVal = _segAvgValue(seg);
-      if (segIdx == 0 && segIdx + 1 < lane.segments.count)
-        toVal = _segAvgValue(lane.segments[segIdx + 1]);
-      if (segIdx > 0) {
-        KKTimingSegment *prev = lane.segments[segIdx - 1];
-        if (prev.type == KKSegmentTypeHold || segIdx - 1 > 0) {
-          fromVal = _segAvgValue(prev);
-        } else {
-          fromVal = _segAvgValue(seg);
+      double base = _segAvgValue(seg);
+      if (seg.holdEffect == KKHoldEffectNone) {
+        double normalized = normalize(base);
+        CGFloat y = drawBottom + normalized * drawHeight;
+        if (hasLast) {
+          [segPath moveToPoint:lastPoint];
+          [segPath lineToPoint:NSMakePoint(x0, y)];
         }
+        [segPath moveToPoint:NSMakePoint(x0, y)];
+        [segPath lineToPoint:NSMakePoint(x1, y)];
+        lastPoint = NSMakePoint(x1, y);
+      } else {
+        NSPoint startPoint = NSZeroPoint;
+        NSPoint endPoint = NSZeroPoint;
+        for (NSInteger i = 0; i <= kKSSCurveSegments; i++) {
+          double t = (double)i / (double)kKSSCurveSegments;
+          double factor = KKApplyHoldEffect(t, seg.holdEffect, seg.intensity,
+                                            seg.frequency, (int)seg.seed);
+          double val = base * factor;
+          CGFloat x = segLeft + t * segWidth;
+          CGFloat y = drawBottom + normalize(val) * drawHeight;
+          if (i == 0) {
+            startPoint = NSMakePoint(x, y);
+            [segPath moveToPoint:startPoint];
+          } else {
+            [segPath lineToPoint:NSMakePoint(x, y)];
+          }
+          if (i == kKSSCurveSegments)
+            endPoint = NSMakePoint(x, y);
+        }
+        if (hasLast) {
+          NSBezierPath *bridge = [NSBezierPath bezierPath];
+          bridge.lineWidth = 1.5;
+          [bridge moveToPoint:lastPoint];
+          [bridge lineToPoint:startPoint];
+          [lineColor setStroke];
+          [bridge stroke];
+        }
+        lastPoint = endPoint;
       }
-
-      double fromNorm = fromVal / maxVal;
-      double toNorm = toVal / maxVal;
+    } else {
+      double fromVal = 0, toVal = 0;
+      _laneGraphFromTo(lane.segments, segIdx, &fromVal, &toVal);
+      BOOL isAnimateOut = (segIdx == lane.segments.count - 1);
 
       for (NSInteger i = 0; i <= kKSSCurveSegments; i++) {
         double t = (double)i / (double)kKSSCurveSegments;
+        double ti = isAnimateOut ? (1.0 - t) : t;
         double eased =
-            KKApplyEasing(t, seg.easing, seg.intensity, seg.frequency);
-        eased = MAX(0.0, MIN(1.0, eased));
-        double val = fromNorm + (toNorm - fromNorm) * eased;
+            KKApplyEasing(ti, seg.easing, seg.intensity, seg.frequency);
+        if (isAnimateOut)
+          eased = 1.0 - eased;
+        double val = fromVal + (toVal - fromVal) * eased;
         CGFloat x = segLeft + t * segWidth;
-        CGFloat y = drawBottom + val * drawHeight;
+        CGFloat y = drawBottom + normalize(val) * drawHeight;
         if (i == 0)
           [segPath moveToPoint:NSMakePoint(x, y)];
         else
@@ -495,6 +580,85 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
   [[NSColor colorWithWhite:0.08 alpha:1.0] setStroke];
   path.lineWidth = 0.5;
   [path stroke];
+}
+
+- (NSRect)_editButtonRectForLaneIndex:(NSUInteger)laneIdx
+                         segmentIndex:(NSUInteger)segIdx
+                               trackX:(CGFloat)trackX
+                           trackWidth:(CGFloat)trackWidth
+                          totalHeight:(CGFloat)totalHeight {
+  if (laneIdx >= self.lanes.count)
+    return NSZeroRect;
+  KKTimingLane *lane = self.lanes[laneIdx];
+  if (segIdx >= lane.segments.count)
+    return NSZeroRect;
+  KKTimingSegment *seg = lane.segments[segIdx];
+  CGFloat segX = [self _xForFrac:seg.start trackX:trackX trackWidth:trackWidth];
+  CGFloat segW = (seg.end - seg.start) * trackWidth * _zoom;
+  if (segW < kKSSEditMinSegmentPx)
+    return NSZeroRect;
+  CGFloat laneY = [self _laneYForIndex:laneIdx totalHeight:totalHeight];
+  CGFloat cx = segX + segW / 2.0;
+  CGFloat cy = laneY + kKSSLaneHeight / 2.0;
+  return NSMakeRect(cx - kKSSEditButtonSize / 2.0,
+                    cy - kKSSEditButtonSize / 2.0, kKSSEditButtonSize,
+                    kKSSEditButtonSize);
+}
+
+- (void)_renderEditButtonForHoveredSegment {
+  if (_hoverSegLaneIdx < 0 || _hoverSegSegIdx < 0)
+    return;
+  if ((NSUInteger)_hoverSegLaneIdx >= self.lanes.count)
+    return;
+  KKTimingLane *lane = self.lanes[_hoverSegLaneIdx];
+  if (!lane.enabled)
+    return;
+  if ((NSUInteger)_hoverSegSegIdx >= lane.segments.count)
+    return;
+  KKTimingSegment *seg = lane.segments[_hoverSegSegIdx];
+
+  CGFloat totalWidth = NSWidth(self.bounds);
+  CGFloat totalHeight = [self _totalHeight];
+  CGFloat trackX, trackWidth;
+  [self _trackGeometryForWidth:totalWidth
+                        trackX:&trackX
+                    trackWidth:&trackWidth];
+  NSRect btn = [self _editButtonRectForLaneIndex:_hoverSegLaneIdx
+                                    segmentIndex:_hoverSegSegIdx
+                                          trackX:trackX
+                                      trackWidth:trackWidth
+                                     totalHeight:totalHeight];
+  if (NSIsEmptyRect(btn))
+    return;
+
+  NSColor *segColor = (seg.type == KKSegmentTypeHold)
+                          ? [NSColor accentMatchingHost]
+                          : [NSColor warning];
+
+  [[segColor colorWithAlphaComponent:0.25] setFill];
+  [[NSBezierPath bezierPathWithRoundedRect:btn
+                                   xRadius:KKRadiusSM
+                                   yRadius:KKRadiusSM] fill];
+
+  NSImage *icon = [NSImage imageWithSystemSymbolName:@"graph.2d"
+                            accessibilityDescription:@"Edit curve"];
+  if (!icon)
+    return;
+  NSImageSymbolConfiguration *size = [NSImageSymbolConfiguration
+      configurationWithPointSize:11.0
+                          weight:NSFontWeightSemibold];
+  NSImageSymbolConfiguration *tinted =
+      [NSImageSymbolConfiguration configurationWithPaletteColors:@[ segColor ]];
+  icon = [icon imageWithSymbolConfiguration:
+                   [size configurationByApplyingConfiguration:tinted]];
+
+  NSRect iconRect = NSInsetRect(btn, 2.0, 2.0);
+  [icon drawInRect:iconRect
+            fromRect:NSZeroRect
+           operation:NSCompositingOperationSourceOver
+            fraction:1.0
+      respectFlipped:YES
+               hints:nil];
 }
 
 - (void)_renderSnapGuideWithTrackX:(CGFloat)trackX

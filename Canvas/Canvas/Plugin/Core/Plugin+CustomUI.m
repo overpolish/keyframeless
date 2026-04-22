@@ -9,7 +9,6 @@
 #import "LayerList_Private.h"
 #import "MarkerStyleView.h"
 #import "ObjectParams.h"
-#import "SeedView.h"
 #import "StrokeStyleView.h"
 #import <objc/message.h>
 #import <objc/runtime.h>

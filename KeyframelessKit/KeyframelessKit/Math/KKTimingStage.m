@@ -16,8 +16,10 @@
   s.end = end;
   s.values = values;
   s.easing = KKEasingCurveLinear;
+  s.holdEffect = KKHoldEffectNone;
   s.intensity = 0.5;
   s.frequency = 0.5;
+  s.seed = 0;
   return s;
 }
 
@@ -33,8 +35,10 @@
   s.end = end;
   s.values = values;
   s.easing = easing;
+  s.holdEffect = KKHoldEffectNone;
   s.intensity = intensity;
   s.frequency = frequency;
+  s.seed = 0;
   return s;
 }
 
@@ -49,8 +53,10 @@
   c.end = _end;
   c.values = [_values copy];
   c.easing = _easing;
+  c.holdEffect = _holdEffect;
   c.intensity = _intensity;
   c.frequency = _frequency;
+  c.seed = _seed;
   return c;
 }
 

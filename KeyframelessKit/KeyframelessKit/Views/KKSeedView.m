@@ -3,13 +3,28 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-#import "SeedView.h"
-#import <KeyframelessKit/KeyframelessKit.h>
+#import "KKSeedView.h"
+
+#import "../Style/NSColor+KKColors.h"
 
 @interface KKSeedTextField : NSTextField
 @end
 
-@implementation KKSeedTextField
+@implementation KKSeedTextField {
+  BOOL _userClickPending;
+}
+
+- (BOOL)acceptsFirstResponder {
+  // Only accept first responder when the user explicitly clicked us. Prevents
+  // the popover from stealing focus and swallowing keyboard shortcuts like
+  // spacebar (timeline playback) when it opens.
+  return _userClickPending;
+}
+
+- (void)mouseDown:(NSEvent *)event {
+  _userClickPending = YES;
+  [super mouseDown:event];
+}
 
 - (BOOL)performKeyEquivalent:(NSEvent *)event {
   if (self.currentEditor) {
@@ -31,6 +46,13 @@
     };
   }
   return ok;
+}
+
+- (void)textDidEndEditing:(NSNotification *)notification {
+  [super textDidEndEditing:notification];
+  _userClickPending = NO;
+  // Return focus to the window so keyboard shortcuts work again.
+  [self.window makeFirstResponder:nil];
 }
 
 @end

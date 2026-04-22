@@ -9,7 +9,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// Shows the current sketch seed with a re-roll button.
+/// Shows the current seed value with a re-roll button.
 @interface KKSeedView : NSView
 
 @property(nonatomic) uint32_t seed;
