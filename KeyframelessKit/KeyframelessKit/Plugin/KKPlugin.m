@@ -370,6 +370,10 @@
   return nil;
 }
 
+- (NSSet<NSString *> *)hiddenAnimatablePropertyLabels {
+  return [NSSet set];
+}
+
 - (NSView *)holdPropertyView {
   return nil;
 }

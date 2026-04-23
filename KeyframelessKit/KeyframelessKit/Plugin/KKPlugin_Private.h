@@ -16,6 +16,14 @@ NS_ASSUME_NONNULL_BEGIN
 @class KKStageSequencerRulerView;
 @class KKStageSequencerView;
 @class KKTimingGraphView;
+@class KKTimingLane;
+
+/// Returns `lanes` with every lane whose `propertyLabel` is in `hidden`
+/// removed. Shared between the custom-view setup and the multi-stage pump
+/// so every push to `seq.lanes` applies the same visibility filter.
+extern NSArray<KKTimingLane *> *
+KKFilterLanesForVisibility(NSArray<KKTimingLane *> *lanes,
+                           NSSet<NSString *> *_Nullable hidden);
 
 @interface KKPlugin () <FxCustomParameterViewHost_v2>
 

@@ -203,6 +203,19 @@ static void _sampleStopsIntoLUT(NSArray<KKGradientStop *> *stops,
   return YES;
 }
 
+- (KKColorMode)colorModeAtTime:(CMTime)time {
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  NSArray<NSNumber *> *modes = _colorModes(self);
+  if (!getAPI || modes.count <= 1)
+    return (KKColorMode)modes.firstObject.integerValue;
+  int idx = 0;
+  [getAPI getIntValue:&idx fromParameter:kKKParamColorMode atTime:time];
+  if (idx < 0 || idx >= (int)modes.count)
+    return (KKColorMode)modes.firstObject.integerValue;
+  return (KKColorMode)modes[idx].integerValue;
+}
+
 - (KKColorResult *)colorAtTime:(CMTime)renderTime {
   static KKLog *sLog;
   static dispatch_once_t once;

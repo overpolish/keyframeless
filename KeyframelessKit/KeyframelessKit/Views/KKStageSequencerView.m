@@ -32,9 +32,17 @@
 }
 
 - (void)setLanes:(NSArray<KKTimingLane *> *)lanes {
+  NSUInteger prevCount = _lanes.count;
   _lanes = [lanes copy];
+  if (_lanes.count != prevCount)
+    [self invalidateIntrinsicContentSize];
   if (!_dragging && !_dragMoving && !_dragLaneMoving)
     [self renderLanes];
+}
+
+- (NSSize)intrinsicContentSize {
+  return NSMakeSize(NSViewNoIntrinsicMetric,
+                    [KKStageSequencerView heightForLaneCount:_lanes.count]);
 }
 
 - (void)setEffectDuration:(double)effectDuration {

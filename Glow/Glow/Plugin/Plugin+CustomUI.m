@@ -50,13 +50,21 @@
     [KKAnimatableProperty propertyWithLabel:@"Color"
                                        inID:kParamInColor
                                      holdID:kParamHoldColor
-                                      outID:kParamOutColor],
+                                      outID:kParamOutColor
+                                    valueID:kKKParamColorSolid
+                                       kind:KKAnimatableParamKindColor],
     [KKAnimatableProperty propertyWithLabel:@"N. Offset"
                                        inID:kParamInNoiseOffset
                                      holdID:kParamHoldNoiseOffset
                                       outID:kParamOutNoiseOffset
                                     valueID:kParamNoiseOffset],
   ];
+}
+
+- (NSSet<NSString *> *)hiddenAnimatablePropertyLabels {
+  if ([self colorModeAtTime:kCMTimeZero] == KKColorModeDynamic)
+    return [NSSet setWithObject:@"Color"];
+  return [NSSet set];
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {

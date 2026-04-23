@@ -205,6 +205,19 @@ NS_ASSUME_NONNULL_BEGIN
 /// mechanism — do not override both.
 - (nullable NSArray<KKAnimatableProperty *> *)animatableProperties;
 
+/// Override to hide specific animatable-property lanes from the multi-stage
+/// sequencer based on current parameter state (e.g. a Color lane should
+/// disappear when the plugin is in gradient-only mode). Segment data stays
+/// in JSON — the lane reappears when the set no longer contains its label.
+/// Call `-multiStageRefreshLaneVisibility` after any param change that would
+/// affect the return value; the pump applies the filter on every push.
+- (NSSet<NSString *> *)hiddenAnimatablePropertyLabels;
+
+/// Recomputes `-hiddenAnimatablePropertyLabels`; if it differs from the last
+/// snapshot, re-pushes the filtered lanes to the sequencer view. Safe to
+/// over-call.
+- (void)multiStageRefreshLaneVisibility;
+
 /// Override to provide a view with hold property toggles. This view is added
 /// as a direct subview of the timing graph and shown when the hold section is
 /// selected and a non-static hold effect is active. Return nil for no toggles.

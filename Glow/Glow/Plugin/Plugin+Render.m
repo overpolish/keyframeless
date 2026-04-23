@@ -161,12 +161,6 @@ static void _texPairReturn(NSInteger idx) {
 
   double rF = 1.0, iF = 1.0, fF = 1.0, nF = 1.0, noF = 1.0, oF = 1.0;
   double hOX = 0.0, hOY = 0.0;
-  int holdEffectVal = 0;
-  [api getIntValue:&holdEffectVal
-      fromParameter:kKKParamHoldEffect
-             atTime:renderTime];
-  BOOL holdHasEffect = (holdEffectVal != 0);
-
   if (!multiStage) {
     BOOL inR = YES, inI = YES, inFl = YES, inN = YES, inO = YES;
     [api getBoolValue:&inR fromParameter:kParamInRadius atTime:renderTime];
@@ -220,14 +214,8 @@ static void _texPairReturn(NSInteger idx) {
     hOY = holdO ? hD * 0.03 * KKSeedSign(holdSeed, 1) : 0.0;
   }
 
-  BOOL inC = YES, holdC = YES, outC = YES;
-  [api getBoolValue:&inC fromParameter:kParamInColor atTime:renderTime];
-  [api getBoolValue:&holdC fromParameter:kParamHoldColor atTime:renderTime];
-  [api getBoolValue:&outC fromParameter:kParamOutColor atTime:renderTime];
-
   KKColorResult *color = [self colorAtTime:renderTime];
 
-  // --- Timing color blending ---
   simd_float3 finalColor = color.solidColor;
   simd_float3 finalLUT[KK_GRADIENT_LUT_SIZE];
 
@@ -240,90 +228,11 @@ static void _texPairReturn(NSInteger idx) {
         finalLUT[i] = (simd_float3){1, 1, 1};
   }
 
-  if (color.mode == KKColorModeSolid) {
-    if (inC && timing.inPhase.enabled) {
-      double r = 1, g = 1, b = 1;
-      [api getRedValue:&r
-             greenValue:&g
-              blueValue:&b
-          fromParameter:kParamTimingInColor
-                 atTime:renderTime];
-      float t = (float)inF;
-      simd_float3 ic = {(float)r, (float)g, (float)b};
-      finalColor = simd_mix(ic, finalColor, (simd_float3){t, t, t});
-    }
-    if (holdC && holdHasEffect) {
-      double r = 1, g = 1, b = 1;
-      [api getRedValue:&r
-             greenValue:&g
-              blueValue:&b
-          fromParameter:kParamTimingHoldColor
-                 atTime:renderTime];
-      float hBlend = (float)timing.holdPhase.progress;
-      simd_float3 hc = {(float)r, (float)g, (float)b};
-      finalColor =
-          simd_mix(finalColor, hc, (simd_float3){hBlend, hBlend, hBlend});
-    }
-    if (outC && timing.outPhase.enabled) {
-      double r = 1, g = 1, b = 1;
-      [api getRedValue:&r
-             greenValue:&g
-              blueValue:&b
-          fromParameter:kParamTimingOutColor
-                 atTime:renderTime];
-      float t = (float)outF;
-      simd_float3 oc = {(float)r, (float)g, (float)b};
-      finalColor = simd_mix(oc, finalColor, (simd_float3){t, t, t});
-    }
-  } else if (color.mode == KKColorModeGradient) {
-    if (inC && timing.inPhase.enabled) {
-      float samples[KK_GRADIENT_LUT_SIZE * 4];
-      if ([api getGradientSamples:samples
-                       numSamples:KK_GRADIENT_LUT_SIZE
-                            depth:kFxDepth_FLOAT32
-                    fromParameter:kParamTimingInGradient
-                           atTime:renderTime]) {
-        float t = (float)inF;
-        simd_float3 tv = {t, t, t};
-        for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++) {
-          simd_float3 ic = {samples[i * 4], samples[i * 4 + 1],
-                            samples[i * 4 + 2]};
-          finalLUT[i] = simd_mix(ic, finalLUT[i], tv);
-        }
-      }
-    }
-    if (holdC && holdHasEffect) {
-      float samples[KK_GRADIENT_LUT_SIZE * 4];
-      if ([api getGradientSamples:samples
-                       numSamples:KK_GRADIENT_LUT_SIZE
-                            depth:kFxDepth_FLOAT32
-                    fromParameter:kParamTimingHoldGradient
-                           atTime:renderTime]) {
-        float hBlend = (float)timing.holdPhase.progress;
-        simd_float3 hv = {hBlend, hBlend, hBlend};
-        for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++) {
-          simd_float3 hc = {samples[i * 4], samples[i * 4 + 1],
-                            samples[i * 4 + 2]};
-          finalLUT[i] = simd_mix(finalLUT[i], hc, hv);
-        }
-      }
-    }
-    if (outC && timing.outPhase.enabled) {
-      float samples[KK_GRADIENT_LUT_SIZE * 4];
-      if ([api getGradientSamples:samples
-                       numSamples:KK_GRADIENT_LUT_SIZE
-                            depth:kFxDepth_FLOAT32
-                    fromParameter:kParamTimingOutGradient
-                           atTime:renderTime]) {
-        float t = (float)outF;
-        simd_float3 tv = {t, t, t};
-        for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++) {
-          simd_float3 oc = {samples[i * 4], samples[i * 4 + 1],
-                            samples[i * 4 + 2]};
-          finalLUT[i] = simd_mix(oc, finalLUT[i], tv);
-        }
-      }
-    }
+  NSArray<NSNumber *> *msColor = multiStage[@"Color"];
+  if (color.mode == KKColorModeSolid && msColor.count >= 3) {
+    finalColor = (simd_float3){(float)msColor[0].doubleValue,
+                               (float)msColor[1].doubleValue,
+                               (float)msColor[2].doubleValue};
   }
 
   NSArray<NSNumber *> *msRadius = multiStage[@"Radius"];
