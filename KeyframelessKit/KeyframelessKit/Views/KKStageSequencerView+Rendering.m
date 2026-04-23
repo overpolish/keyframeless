@@ -162,30 +162,65 @@
   [line stroke];
 }
 
-static double _segAvgValue(KKTimingSegment *seg) {
-  if (!seg.values.count)
+static double _segValueAt(KKTimingSegment *seg, NSUInteger component) {
+  if (component >= seg.values.count)
     return 0;
-  double sum = 0;
-  for (NSNumber *v in seg.values)
-    sum += v.doubleValue;
-  return sum / seg.values.count;
+  return seg.values[component].doubleValue;
 }
 
-/// Returns average of a boundary's values (so the lane graph collapses
-/// multi-value properties to a single plotted series).
-static double _boundaryAvg(NSArray<NSNumber *> *values) {
-  if (!values.count)
+static double _boundaryValueAt(NSArray<NSNumber *> *values,
+                               NSUInteger component) {
+  if (component >= values.count)
     return 0;
-  double sum = 0;
-  for (NSNumber *v in values)
-    sum += v.doubleValue;
-  return sum / values.count;
+  return values[component].doubleValue;
 }
 
 static void _laneGraphFromTo(NSArray<KKTimingSegment *> *segments,
-                             NSUInteger idx, double *outFrom, double *outTo) {
-  *outFrom = _boundaryAvg(KKTimingBoundaryBefore(idx, segments));
-  *outTo = _boundaryAvg(KKTimingBoundaryAfter(idx, segments));
+                             NSUInteger idx, NSUInteger component,
+                             double *outFrom, double *outTo) {
+  *outFrom = _boundaryValueAt(KKTimingBoundaryBefore(idx, segments), component);
+  *outTo = _boundaryValueAt(KKTimingBoundaryAfter(idx, segments), component);
+}
+
+/// Per-component tint so each channel's curve is distinguishable on lanes
+/// that plot multiple components simultaneously (e.g. Color plots R/G/B).
+static NSColor *_componentTint(NSString *propertyLabel, NSUInteger component,
+                               NSUInteger componentCount, BOOL isHold) {
+  if ([propertyLabel isEqualToString:@"Color"] && componentCount == 3) {
+    CGFloat rgb[3][3] = {
+        {1.0, 0.35, 0.35},
+        {0.35, 0.9, 0.35},
+        {0.4, 0.55, 1.0},
+    };
+    return [NSColor colorWithSRGBRed:rgb[component][0]
+                               green:rgb[component][1]
+                                blue:rgb[component][2]
+                               alpha:0.55];
+  }
+
+  NSColor *base = isHold ? [NSColor accentMatchingHost] : [NSColor warning];
+
+  // Single-component lanes keep the original uniform alpha. Multi-component
+  // lanes fan the alpha so overlapping/linked values still show as one line
+  // while divergent values read as two (or four) distinct traces.
+  if (componentCount <= 1)
+    return [base colorWithAlphaComponent:0.55];
+
+  CGFloat alphas2[2] = {0.75, 0.4};
+  CGFloat alphas4[4] = {0.8, 0.6, 0.4, 0.25};
+  CGFloat alpha;
+  if (componentCount == 2) {
+    alpha = alphas2[component];
+  } else if (componentCount == 4) {
+    alpha = alphas4[component];
+  } else {
+    // Generic N-component fallback: linear ramp 0.8 → 0.3.
+    CGFloat t = (componentCount > 1)
+                    ? (CGFloat)component / (CGFloat)(componentCount - 1)
+                    : 0;
+    alpha = 0.8 - 0.5 * t;
+  }
+  return [base colorWithAlphaComponent:alpha];
 }
 
 - (void)_renderLaneGraph:(KKTimingLane *)lane
@@ -198,45 +233,51 @@ static void _laneGraphFromTo(NSArray<KKTimingSegment *> *segments,
   if (drawHeight < 2)
     return;
 
-  // Compute dynamic value range including transition overshoots (Elastic,
-  // Bounce etc. exceed [from, to]).
+  NSUInteger componentCount = 1;
+  for (KKTimingSegment *seg in lane.segments)
+    componentCount = MAX(componentCount, seg.values.count);
+
+  // Compute dynamic value range across all components (including transition
+  // overshoots from Elastic/Bounce) so every component shares the same Y scale.
   double minVal = 0, maxVal = 0;
-  for (KKTimingSegment *seg in lane.segments) {
-    double v = _segAvgValue(seg);
-    if (v < minVal)
-      minVal = v;
-    if (v > maxVal)
-      maxVal = v;
-  }
-  for (NSUInteger i = 0; i < lane.segments.count; i++) {
-    KKTimingSegment *s = lane.segments[i];
-    if (s.type == KKSegmentTypeTransition) {
-      double from = 0, to = 0;
-      _laneGraphFromTo(lane.segments, i, &from, &to);
-      BOOL mirror = (i == lane.segments.count - 1);
-      for (NSInteger j = 0; j <= 10; j++) {
-        double t = (double)j / 10.0;
-        double ti = mirror ? (1.0 - t) : t;
-        double eased = KKApplyEasing(ti, s.easing, s.intensity, s.frequency);
-        if (mirror)
-          eased = 1.0 - eased;
-        double val = from + (to - from) * eased;
-        if (val < minVal)
-          minVal = val;
-        if (val > maxVal)
-          maxVal = val;
-      }
-    } else if (s.holdEffect != KKHoldEffectNone) {
-      double base = _segAvgValue(s);
-      for (NSInteger j = 0; j <= 20; j++) {
-        double t = (double)j / 20.0;
-        double factor = KKApplyHoldEffect(t, s.holdEffect, s.intensity,
-                                          s.frequency, (int)s.seed);
-        double val = base * factor;
-        if (val < minVal)
-          minVal = val;
-        if (val > maxVal)
-          maxVal = val;
+  for (NSUInteger c = 0; c < componentCount; c++) {
+    for (KKTimingSegment *seg in lane.segments) {
+      double v = _segValueAt(seg, c);
+      if (v < minVal)
+        minVal = v;
+      if (v > maxVal)
+        maxVal = v;
+    }
+    for (NSUInteger i = 0; i < lane.segments.count; i++) {
+      KKTimingSegment *s = lane.segments[i];
+      if (s.type == KKSegmentTypeTransition) {
+        double from = 0, to = 0;
+        _laneGraphFromTo(lane.segments, i, c, &from, &to);
+        BOOL mirror = (i == lane.segments.count - 1);
+        for (NSInteger j = 0; j <= 10; j++) {
+          double t = (double)j / 10.0;
+          double ti = mirror ? (1.0 - t) : t;
+          double eased = KKApplyEasing(ti, s.easing, s.intensity, s.frequency);
+          if (mirror)
+            eased = 1.0 - eased;
+          double val = from + (to - from) * eased;
+          if (val < minVal)
+            minVal = val;
+          if (val > maxVal)
+            maxVal = val;
+        }
+      } else if (s.holdEffect != KKHoldEffectNone) {
+        double base = _segValueAt(s, c);
+        for (NSInteger j = 0; j <= 20; j++) {
+          double t = (double)j / 20.0;
+          double factor = KKApplyHoldEffect(t, s.holdEffect, s.intensity,
+                                            s.frequency, (int)s.seed);
+          double val = base * factor;
+          if (val < minVal)
+            minVal = val;
+          if (val > maxVal)
+            maxVal = val;
+        }
       }
     }
   }
@@ -250,96 +291,96 @@ static void _laneGraphFromTo(NSArray<KKTimingSegment *> *segments,
     return (v - minVal) / valRange;
   };
 
-  NSPoint lastPoint = NSZeroPoint;
-  BOOL hasLast = NO;
+  for (NSUInteger c = 0; c < componentCount; c++) {
+    NSPoint lastPoint = NSZeroPoint;
+    BOOL hasLast = NO;
 
-  for (NSUInteger segIdx = 0; segIdx < lane.segments.count; segIdx++) {
-    KKTimingSegment *seg = lane.segments[segIdx];
-    CGFloat segLeft = [self _xForFrac:seg.start
-                               trackX:trackX
-                           trackWidth:trackWidth];
-    CGFloat segWidth = (seg.end - seg.start) * trackWidth * _zoom;
-    if (segWidth < 1)
-      continue;
+    for (NSUInteger segIdx = 0; segIdx < lane.segments.count; segIdx++) {
+      KKTimingSegment *seg = lane.segments[segIdx];
+      CGFloat segLeft = [self _xForFrac:seg.start
+                                 trackX:trackX
+                             trackWidth:trackWidth];
+      CGFloat segWidth = (seg.end - seg.start) * trackWidth * _zoom;
+      if (segWidth < 1)
+        continue;
 
-    NSColor *lineColor =
-        (seg.type == KKSegmentTypeHold)
-            ? [[NSColor accentMatchingHost] colorWithAlphaComponent:0.5]
-            : [[NSColor warning] colorWithAlphaComponent:0.5];
+      NSColor *lineColor = _componentTint(lane.propertyLabel, c, componentCount,
+                                          seg.type == KKSegmentTypeHold);
 
-    NSBezierPath *segPath = [NSBezierPath bezierPath];
-    segPath.lineWidth = 1.5;
+      NSBezierPath *segPath = [NSBezierPath bezierPath];
+      segPath.lineWidth = 1.5;
 
-    if (seg.type == KKSegmentTypeHold) {
-      CGFloat x0 = segLeft;
-      CGFloat x1 = segLeft + segWidth;
-      double base = _segAvgValue(seg);
-      if (seg.holdEffect == KKHoldEffectNone) {
-        double normalized = normalize(base);
-        CGFloat y = drawBottom + normalized * drawHeight;
-        if (hasLast) {
-          [segPath moveToPoint:lastPoint];
-          [segPath lineToPoint:NSMakePoint(x0, y)];
+      if (seg.type == KKSegmentTypeHold) {
+        CGFloat x0 = segLeft;
+        CGFloat x1 = segLeft + segWidth;
+        double base = _segValueAt(seg, c);
+        if (seg.holdEffect == KKHoldEffectNone) {
+          double normalized = normalize(base);
+          CGFloat y = drawBottom + normalized * drawHeight;
+          if (hasLast) {
+            [segPath moveToPoint:lastPoint];
+            [segPath lineToPoint:NSMakePoint(x0, y)];
+          }
+          [segPath moveToPoint:NSMakePoint(x0, y)];
+          [segPath lineToPoint:NSMakePoint(x1, y)];
+          lastPoint = NSMakePoint(x1, y);
+        } else {
+          NSPoint startPoint = NSZeroPoint;
+          NSPoint endPoint = NSZeroPoint;
+          for (NSInteger i = 0; i <= kKSSCurveSegments; i++) {
+            double t = (double)i / (double)kKSSCurveSegments;
+            double factor = KKApplyHoldEffect(t, seg.holdEffect, seg.intensity,
+                                              seg.frequency, (int)seg.seed);
+            double val = base * factor;
+            CGFloat x = segLeft + t * segWidth;
+            CGFloat y = drawBottom + normalize(val) * drawHeight;
+            if (i == 0) {
+              startPoint = NSMakePoint(x, y);
+              [segPath moveToPoint:startPoint];
+            } else {
+              [segPath lineToPoint:NSMakePoint(x, y)];
+            }
+            if (i == kKSSCurveSegments)
+              endPoint = NSMakePoint(x, y);
+          }
+          if (hasLast) {
+            NSBezierPath *bridge = [NSBezierPath bezierPath];
+            bridge.lineWidth = 1.5;
+            [bridge moveToPoint:lastPoint];
+            [bridge lineToPoint:startPoint];
+            [lineColor setStroke];
+            [bridge stroke];
+          }
+          lastPoint = endPoint;
         }
-        [segPath moveToPoint:NSMakePoint(x0, y)];
-        [segPath lineToPoint:NSMakePoint(x1, y)];
-        lastPoint = NSMakePoint(x1, y);
       } else {
-        NSPoint startPoint = NSZeroPoint;
-        NSPoint endPoint = NSZeroPoint;
+        double fromVal = 0, toVal = 0;
+        _laneGraphFromTo(lane.segments, segIdx, c, &fromVal, &toVal);
+        BOOL isAnimateOut = (segIdx == lane.segments.count - 1);
+
         for (NSInteger i = 0; i <= kKSSCurveSegments; i++) {
           double t = (double)i / (double)kKSSCurveSegments;
-          double factor = KKApplyHoldEffect(t, seg.holdEffect, seg.intensity,
-                                            seg.frequency, (int)seg.seed);
-          double val = base * factor;
+          double ti = isAnimateOut ? (1.0 - t) : t;
+          double eased =
+              KKApplyEasing(ti, seg.easing, seg.intensity, seg.frequency);
+          if (isAnimateOut)
+            eased = 1.0 - eased;
+          double val = fromVal + (toVal - fromVal) * eased;
           CGFloat x = segLeft + t * segWidth;
           CGFloat y = drawBottom + normalize(val) * drawHeight;
-          if (i == 0) {
-            startPoint = NSMakePoint(x, y);
-            [segPath moveToPoint:startPoint];
-          } else {
+          if (i == 0)
+            [segPath moveToPoint:NSMakePoint(x, y)];
+          else
             [segPath lineToPoint:NSMakePoint(x, y)];
-          }
           if (i == kKSSCurveSegments)
-            endPoint = NSMakePoint(x, y);
+            lastPoint = NSMakePoint(x, y);
         }
-        if (hasLast) {
-          NSBezierPath *bridge = [NSBezierPath bezierPath];
-          bridge.lineWidth = 1.5;
-          [bridge moveToPoint:lastPoint];
-          [bridge lineToPoint:startPoint];
-          [lineColor setStroke];
-          [bridge stroke];
-        }
-        lastPoint = endPoint;
       }
-    } else {
-      double fromVal = 0, toVal = 0;
-      _laneGraphFromTo(lane.segments, segIdx, &fromVal, &toVal);
-      BOOL isAnimateOut = (segIdx == lane.segments.count - 1);
+      hasLast = YES;
 
-      for (NSInteger i = 0; i <= kKSSCurveSegments; i++) {
-        double t = (double)i / (double)kKSSCurveSegments;
-        double ti = isAnimateOut ? (1.0 - t) : t;
-        double eased =
-            KKApplyEasing(ti, seg.easing, seg.intensity, seg.frequency);
-        if (isAnimateOut)
-          eased = 1.0 - eased;
-        double val = fromVal + (toVal - fromVal) * eased;
-        CGFloat x = segLeft + t * segWidth;
-        CGFloat y = drawBottom + normalize(val) * drawHeight;
-        if (i == 0)
-          [segPath moveToPoint:NSMakePoint(x, y)];
-        else
-          [segPath lineToPoint:NSMakePoint(x, y)];
-        if (i == kKSSCurveSegments)
-          lastPoint = NSMakePoint(x, y);
-      }
+      [lineColor setStroke];
+      [segPath stroke];
     }
-    hasLast = YES;
-
-    [lineColor setStroke];
-    [segPath stroke];
   }
 }
 

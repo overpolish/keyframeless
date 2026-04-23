@@ -37,6 +37,7 @@
                   atTime:(CMTime)time
                    error:(NSError **)error {
   [self multiStageHandleParameterChanged:parameterID atTime:time];
+  [self multiStageRefreshLaneVisibility];
   switch (parameterID) {
   case kKKParamColorMode:
   case kParamGradientType:

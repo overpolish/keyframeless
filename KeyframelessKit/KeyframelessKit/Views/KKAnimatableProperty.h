@@ -5,9 +5,23 @@
 
 #pragma once
 
+#import <CoreMedia/CoreMedia.h>
 #import <Foundation/Foundation.h>
 
+@protocol FxParameterRetrievalAPI_v6;
+@protocol FxParameterSettingAPI_v5;
+
 NS_ASSUME_NONNULL_BEGIN
+
+/// How each native param in `valueParamIDs` maps to logical lane values.
+/// One native control per slot; kind governs how many scalar values that
+/// slot expands into and which FxPlug accessor reads/writes it.
+typedef NS_ENUM(NSInteger, KKAnimatableParamKind) {
+  /// Standard float slider: 1 native param → 1 scalar value.
+  KKAnimatableParamKindFloat = 0,
+  /// NSColor well: 1 native param → 3 scalar values [R, G, B].
+  KKAnimatableParamKindColor = 1,
+};
 
 @interface KKAnimatableProperty : NSObject
 
@@ -15,10 +29,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, readonly) UInt32 inParamID;
 @property(nonatomic, readonly) UInt32 holdParamID;
 @property(nonatomic, readonly) UInt32 outParamID;
-/// Native parameter IDs whose sliders show the absolute values for this
-/// property in multi-stage mode. Empty array = no sync.
-/// Each entry maps 1:1 to a value in the segment's values array.
+/// Native parameter IDs whose controls are the source of edit for this
+/// property in multi-stage mode. Empty array = no sync. One entry per
+/// native control, regardless of how many scalar values it unpacks into.
 @property(nonatomic, copy, readonly) NSArray<NSNumber *> *valueParamIDs;
+/// Kinds parallel to `valueParamIDs`; each entry is a `KKAnimatableParamKind`
+/// boxed as `NSNumber`. Defaults to all-Float when unspecified.
+@property(nonatomic, copy, readonly) NSArray<NSNumber *> *valueParamKinds;
 
 + (instancetype)propertyWithLabel:(NSString *)label
                              inID:(UInt32)inID
@@ -37,7 +54,36 @@ NS_ASSUME_NONNULL_BEGIN
                             outID:(UInt32)outID
                          valueIDs:(NSArray<NSNumber *> *)valueIDs;
 
++ (instancetype)propertyWithLabel:(NSString *)label
+                             inID:(UInt32)inID
+                           holdID:(UInt32)holdID
+                            outID:(UInt32)outID
+                          valueID:(UInt32)valueID
+                             kind:(KKAnimatableParamKind)kind;
+
++ (instancetype)propertyWithLabel:(NSString *)label
+                             inID:(UInt32)inID
+                           holdID:(UInt32)holdID
+                            outID:(UInt32)outID
+                         valueIDs:(NSArray<NSNumber *> *)valueIDs
+                            kinds:(NSArray<NSNumber *> *)kinds;
+
 - (instancetype)init NS_UNAVAILABLE;
+
+/// Total scalar value count across all native params (sum of per-kind sizes).
+@property(nonatomic, readonly) NSUInteger valueCount;
+
+/// Reads current native-control values into a flat scalar array matching
+/// segment `.values` shape. Returns nil only if the API is unavailable.
+- (nullable NSArray<NSNumber *> *)readValuesWithGetAPI:
+                                      (id<FxParameterRetrievalAPI_v6>)getAPI
+                                                atTime:(CMTime)time;
+
+/// Writes a flat scalar `values` array back to the native controls. Values
+/// beyond the declared count are ignored; missing values are left unchanged.
+- (void)writeValues:(NSArray<NSNumber *> *)values
+         withSetAPI:(id<FxParameterSettingAPI_v5>)setAPI
+             atTime:(CMTime)time;
 
 @end
 

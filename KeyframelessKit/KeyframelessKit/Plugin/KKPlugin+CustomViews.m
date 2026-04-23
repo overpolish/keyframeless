@@ -657,9 +657,11 @@
   [seqContainer addSubview:scrollView];
 
   // Pin the document view to the clip view's width so segments never overflow
-  // past the visible area. In uncapped (window) mode the document view grows
-  // with the clip view so lanes stretch vertically; in capped (inspector) mode
-  // the document view stays at full lanes height and scrolls.
+  // past the visible area. In inspector (capped) mode, height is driven by
+  // `-intrinsicContentSize` on the sequencer — lanes stay at min height and
+  // the content shrinks by exactly one slot when a property is hidden. In
+  // window (uncapped) mode, a low-priority bottom-pin lets the sequencer
+  // grow with the clip view so lanes stretch vertically.
   NSMutableArray<NSLayoutConstraint *> *seqViewConstraints =
       [NSMutableArray arrayWithArray:@[
         [seqView.widthAnchor
@@ -670,16 +672,14 @@
             constraintEqualToAnchor:scrollView.contentView.leadingAnchor],
       ]];
   if (uncapped) {
-    [seqViewConstraints
-        addObject:[seqView.heightAnchor
-                      constraintGreaterThanOrEqualToConstant:fullLanesH]];
+    // Lower hugging so the bottom-fill can stretch the view past its
+    // intrinsic height when the window is enlarged.
+    [seqView setContentHuggingPriority:NSLayoutPriorityDefaultLow - 1
+                        forOrientation:NSLayoutConstraintOrientationVertical];
     NSLayoutConstraint *bottomFill = [seqView.bottomAnchor
         constraintEqualToAnchor:scrollView.contentView.bottomAnchor];
     bottomFill.priority = NSLayoutPriorityDefaultLow;
     [seqViewConstraints addObject:bottomFill];
-  } else {
-    [seqViewConstraints
-        addObject:[seqView.heightAnchor constraintEqualToConstant:fullLanesH]];
   }
   [NSLayoutConstraint activateConstraints:seqViewConstraints];
 
@@ -826,13 +826,8 @@
     NSInteger prevSeg = lane.selectedSegment;
     if (prop.valueParamIDs.count > 0 && prevSeg >= 0 &&
         (NSUInteger)prevSeg < lane.segments.count) {
-      NSMutableArray<NSNumber *> *curVals =
-          [NSMutableArray arrayWithCapacity:prop.valueParamIDs.count];
-      for (NSNumber *pid in prop.valueParamIDs) {
-        double v = 0;
-        [getAPI getFloatValue:&v fromParameter:pid.unsignedIntValue atTime:ct];
-        [curVals addObject:@(v)];
-      }
+      NSArray<NSNumber *> *curVals = [prop readValuesWithGetAPI:getAPI
+                                                         atTime:ct];
       KKTimingLane *mLane = [lane copy];
       NSMutableArray *mSegs = [mLane.segments mutableCopy];
       KKTimingSegment *mSeg = [mSegs[prevSeg] copy];
@@ -863,13 +858,9 @@
     // 4. Sync new selection: write segment values → native params.
     if (prop.valueParamIDs.count > 0 && segmentIndex >= 0 &&
         (NSUInteger)segmentIndex < lane.segments.count) {
-      NSArray<NSNumber *> *segValues = lane.segments[segmentIndex].values;
-      for (NSUInteger i = 0;
-           i < prop.valueParamIDs.count && i < segValues.count; i++) {
-        [setAPI setFloatValue:segValues[i].doubleValue
-                  toParameter:prop.valueParamIDs[i].unsignedIntValue
-                       atTime:ct];
-      }
+      [prop writeValues:lane.segments[segmentIndex].values
+             withSetAPI:setAPI
+                 atTime:ct];
     }
 
     [actAPI endAction:strongSelf];
@@ -933,14 +924,9 @@
         }
         if (state)
           state.selectionInProgress = YES;
-        NSArray<NSNumber *> *segValues =
-            lane.segments[lane.selectedSegment].values;
-        for (NSUInteger i = 0;
-             i < prop.valueParamIDs.count && i < segValues.count; i++) {
-          [setAPI setFloatValue:segValues[i].doubleValue
-                    toParameter:prop.valueParamIDs[i].unsignedIntValue
-                         atTime:ct];
-        }
+        [prop writeValues:lane.segments[lane.selectedSegment].values
+               withSetAPI:setAPI
+                   atTime:ct];
         if (state) {
           state.lanesSnapshot = [mutable copy];
           state.pendingLanes = nil;
@@ -1199,17 +1185,11 @@
       NSMutableArray<KKTimingLane *> *defaults =
           [NSMutableArray arrayWithCapacity:seqProps.count];
       for (KKAnimatableProperty *prop in seqProps) {
-        NSMutableArray<NSNumber *> *baseVals =
-            [NSMutableArray arrayWithCapacity:prop.valueParamIDs.count];
-        for (NSNumber *pid in prop.valueParamIDs) {
-          double v = 0;
-          [paramGetAPI getFloatValue:&v
-                       fromParameter:pid.unsignedIntValue
-                              atTime:[actionAPI currentTime]];
-          [baseVals addObject:@(v)];
-        }
+        NSArray<NSNumber *> *baseVals =
+            [prop readValuesWithGetAPI:paramGetAPI
+                                atTime:[actionAPI currentTime]];
         if (!baseVals.count)
-          [baseVals addObject:@(1.0)];
+          baseVals = @[ @(1.0) ];
         [defaults addObject:[KKTimingLane defaultLaneForLabel:prop.label
                                                    baseValues:baseVals]];
       }
@@ -1223,8 +1203,12 @@
       }
     }
     if (lanes) {
-      KKInstanceStateForAPI(self.apiManager).lanesSnapshot = [lanes copy];
-      seqView.lanes = lanes;
+      KKPluginInstanceState *instState = KKInstanceStateForAPI(self.apiManager);
+      instState.lanesSnapshot = [lanes copy];
+      NSSet<NSString *> *hidden =
+          [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
+      instState.hiddenLaneLabels = hidden;
+      seqView.lanes = KKFilterLanesForVisibility(lanes, hidden);
     }
 
     id<FxTimingAPI_v4> timingAPI =
@@ -1283,8 +1267,11 @@
     seqContainer.hidden = !multiStageEnabled;
     graph.hidden = multiStageEnabled;
     if (multiStageEnabled) {
-      if (lanes)
-        seq.lanes = lanes;
+      if (lanes) {
+        NSSet<NSString *> *hidden =
+            [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
+        seq.lanes = KKFilterLanesForVisibility(lanes, hidden);
+      }
       if (hasTiming) {
         seq.effectDuration = durSec;
         ruler.effectDuration = durSec;

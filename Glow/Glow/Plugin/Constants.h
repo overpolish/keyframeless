@@ -62,12 +62,5 @@ static const UInt32 kParamOutNoise = 704;
 static const UInt32 kParamOutColor = 705;
 static const UInt32 kParamOutNoiseOffset = 706;
 
-static const UInt32 kParamTimingInColor = 800;
-static const UInt32 kParamTimingHoldColor = 801;
-static const UInt32 kParamTimingOutColor = 802;
-static const UInt32 kParamTimingInGradient = 803;
-static const UInt32 kParamTimingHoldGradient = 804;
-static const UInt32 kParamTimingOutGradient = 805;
-
 static const NSInteger kOSCOffsetPart = 1;
 static const NSInteger kOSCRadiusPart = 2;

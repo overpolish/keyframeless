@@ -259,45 +259,6 @@
       return NO;
   }
 
-  if (![paramAPI addColorParameterWithName:@"In Color"
-                               parameterID:kParamTimingInColor
-                                defaultRed:1.0
-                              defaultGreen:1.0
-                               defaultBlue:1.0
-                            parameterFlags:kFxParameterFlag_HIDDEN])
-    return NO;
-
-  if (![paramAPI addColorParameterWithName:@"Hold Color"
-                               parameterID:kParamTimingHoldColor
-                                defaultRed:1.0
-                              defaultGreen:1.0
-                               defaultBlue:1.0
-                            parameterFlags:kFxParameterFlag_HIDDEN])
-    return NO;
-
-  if (![paramAPI addColorParameterWithName:@"Out Color"
-                               parameterID:kParamTimingOutColor
-                                defaultRed:1.0
-                              defaultGreen:1.0
-                               defaultBlue:1.0
-                            parameterFlags:kFxParameterFlag_HIDDEN])
-    return NO;
-
-  if (![paramAPI addGradientWithName:@"In Gradient"
-                         parameterID:kParamTimingInGradient
-                      parameterFlags:kFxParameterFlag_HIDDEN])
-    return NO;
-
-  if (![paramAPI addGradientWithName:@"Hold Gradient"
-                         parameterID:kParamTimingHoldGradient
-                      parameterFlags:kFxParameterFlag_HIDDEN])
-    return NO;
-
-  if (![paramAPI addGradientWithName:@"Out Gradient"
-                         parameterID:kParamTimingOutGradient
-                      parameterFlags:kFxParameterFlag_HIDDEN])
-    return NO;
-
   self.linkedParameterPairs = @[ @[ @(kParamRadiusX), @(kParamRadiusY) ] ];
 
   return YES;

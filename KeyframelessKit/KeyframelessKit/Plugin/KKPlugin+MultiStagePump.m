@@ -40,6 +40,19 @@ void KKMultiStageMarkParameterChanged(void) {
   sLastParameterChangedTime = CACurrentMediaTime();
 }
 
+NSArray<KKTimingLane *> *
+KKFilterLanesForVisibility(NSArray<KKTimingLane *> *lanes,
+                           NSSet<NSString *> *hidden) {
+  if (!hidden.count || !lanes.count)
+    return lanes;
+  NSMutableArray<KKTimingLane *> *filtered =
+      [NSMutableArray arrayWithCapacity:lanes.count];
+  for (KKTimingLane *lane in lanes)
+    if (![hidden containsObject:lane.propertyLabel])
+      [filtered addObject:lane];
+  return [filtered copy];
+}
+
 static void KKFlushPendingLanes(void) {
   // Broadcast: any running callback flushes pending lanes for every live
   // instance, not just its own. FCP only runs `drawOSC` for the OSC-selected
@@ -55,10 +68,12 @@ static void KKFlushPendingLanes(void) {
         [state.additionalTimingViews copy] ?: @[];
     if (!seq && extras.count == 0)
       continue;
+    NSArray<KKTimingLane *> *visible =
+        KKFilterLanesForVisibility(pending, state.hiddenLaneLabels);
     dispatch_async(dispatch_get_main_queue(), ^{
-      seq.lanes = pending;
+      seq.lanes = visible;
       for (KKTimingViewRefs *r in extras)
-        r.seqView.lanes = pending;
+        r.seqView.lanes = visible;
     });
   }
 }
@@ -86,10 +101,12 @@ static void KKSyncFromParams(id<PROAPIAccessing> apiManager) {
     return;
   state.lanesSnapshot = lanes;
   state.pendingLanes = nil;
+  NSArray<KKTimingLane *> *visible =
+      KKFilterLanesForVisibility(lanes, state.hiddenLaneLabels);
   dispatch_async(dispatch_get_main_queue(), ^{
-    seq.lanes = lanes;
+    seq.lanes = visible;
     for (KKTimingViewRefs *r in extras)
-      r.seqView.lanes = lanes;
+      r.seqView.lanes = visible;
   });
 }
 
@@ -209,6 +226,29 @@ static void KKBroadcastPlayheads(double nowSec) {
     return;
   KKRefreshActiveTiming(apiManager);
   KKBroadcastPlayheads(CMTimeGetSeconds(time));
+}
+
+- (void)multiStageRefreshLaneVisibility {
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  if (!state)
+    return;
+  NSSet<NSString *> *next =
+      [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
+  if ([next isEqualToSet:state.hiddenLaneLabels ?: [NSSet set]])
+    return;
+  state.hiddenLaneLabels = next;
+  NSArray<KKTimingLane *> *lanes = state.lanesSnapshot;
+  KKStageSequencerView *seq = state.sequencerView;
+  NSArray<KKTimingViewRefs *> *extras =
+      [state.additionalTimingViews copy] ?: @[];
+  if (!lanes.count || (!seq && extras.count == 0))
+    return;
+  NSArray<KKTimingLane *> *visible = KKFilterLanesForVisibility(lanes, next);
+  dispatch_async(dispatch_get_main_queue(), ^{
+    seq.lanes = visible;
+    for (KKTimingViewRefs *r in extras)
+      r.seqView.lanes = visible;
+  });
 }
 
 - (void)_registerMultiStageSequencerView:(KKStageSequencerView *)view

@@ -180,8 +180,18 @@
     *outLane = _hoverSegLaneIdx;
   if (outSeg)
     *outSeg = _hoverSegSegIdx;
-  if (outRect)
-    *outRect = btn;
+  if (outRect) {
+    // Anchor the popover to the segment itself, not the tiny edit button —
+    // keeps the callout pointing at the thing being edited.
+    KKTimingSegment *seg = lane.segments[_hoverSegSegIdx];
+    CGFloat segX = [self _xForFrac:seg.start
+                            trackX:trackX
+                        trackWidth:trackWidth];
+    CGFloat segW = (seg.end - seg.start) * trackWidth * _zoom;
+    CGFloat laneY = [self _laneYForIndex:(NSUInteger)_hoverSegLaneIdx
+                             totalHeight:totalHeight];
+    *outRect = NSMakeRect(segX, laneY + 2, segW, [self _laneHeight] - 4);
+  }
   return YES;
 }
 

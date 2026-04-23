@@ -93,6 +93,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// writes are ignored and undo/redo changes are detected.
 @property(nonatomic, copy, nullable) NSString *gradientJSONSnapshot;
 
+/// Lane labels the plugin currently wants hidden from the sequencer view.
+/// Updated by `-multiStageRefreshLaneVisibility`; applied as a filter to
+/// every `seq.lanes =` push.
+@property(nonatomic, copy, nullable) NSSet<NSString *> *hiddenLaneLabels;
+
 @end
 
 /// Reads `kKKParamInstanceID` from the api, cached on the api via

@@ -460,15 +460,10 @@ static const FxParameterFlags kCustomUIDisabled =
     for (KKAnimatableProperty *prop in props) {
       if ([prop.label isEqualToString:lane.propertyLabel] &&
           prop.valueParamIDs.count > 0) {
-        NSMutableArray<NSNumber *> *liveVals =
-            [NSMutableArray arrayWithCapacity:prop.valueParamIDs.count];
-        for (NSNumber *pid in prop.valueParamIDs) {
-          double v = 0;
-          [paramGetAPI getFloatValue:&v
-                       fromParameter:pid.unsignedIntValue
-                              atTime:renderTime];
-          [liveVals addObject:@(v)];
-        }
+        NSArray<NSNumber *> *liveVals = [prop readValuesWithGetAPI:paramGetAPI
+                                                            atTime:renderTime];
+        if (!liveVals)
+          break;
         KKTimingLane *mLane = [lane copy];
         NSMutableArray *mSegs = [mLane.segments mutableCopy];
         KKTimingSegment *mSeg = [mSegs[selSeg] copy];
@@ -614,15 +609,10 @@ static const FxParameterFlags kCustomUIDisabled =
     if (selSeg < 0 || (NSUInteger)selSeg >= lane.segments.count)
       break;
 
-    NSMutableArray<NSNumber *> *liveVals =
-        [NSMutableArray arrayWithCapacity:matchedProp.valueParamIDs.count];
-    for (NSNumber *pid in matchedProp.valueParamIDs) {
-      double v = 0;
-      [paramGetAPI getFloatValue:&v
-                   fromParameter:pid.unsignedIntValue
-                          atTime:time];
-      [liveVals addObject:@(v)];
-    }
+    NSArray<NSNumber *> *liveVals =
+        [matchedProp readValuesWithGetAPI:paramGetAPI atTime:time];
+    if (!liveVals)
+      break;
 
     KKTimingLane *mLane = [lane copy];
     NSMutableArray *mSegs = [mLane.segments mutableCopy];

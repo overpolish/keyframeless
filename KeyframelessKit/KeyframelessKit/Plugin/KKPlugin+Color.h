@@ -21,6 +21,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Returns the current color state at renderTime.
 - (KKColorResult *)colorAtTime:(CMTime)renderTime;
 
+/// Resolves the popup-index value of `kKKParamColorMode` to the actual
+/// `KKColorMode` enum (different plugins order the popup differently, so
+/// raw index comparisons don't match the enum). Defaults to Solid when
+/// the plugin only supports a single mode.
+- (KKColorMode)colorModeAtTime:(CMTime)time;
+
 /// Updates color parameter visibility (hides params based on mode).
 - (void)updateColorParameterVisibility;
 
