@@ -163,6 +163,9 @@
                        parameterID:parameterID
                    expandedParamID:kKKParamColorExpanded];
 
+  if (parameterID == kKKParamColorCustomUI)
+    return [self _createColorCustomUI:parameterID];
+
   if (parameterID == kKKParamAnimationSeparator)
     return [self _createTimingHeader:parameterID];
 

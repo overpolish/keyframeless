@@ -449,6 +449,7 @@ static void _texPairReturn(NSInteger idx) {
                         atTime:(CMTime)renderTime
                          error:(NSError *_Nullable *)outError {
   [KKPlugin multiStageRenderTickForAPI:self.apiManager atTime:renderTime];
+  [KKPlugin colorSyncFromParams:self.apiManager];
 
   if (!pluginState || pluginState.length < sizeof(GlowPluginState) ||
       !sourceImages.count || !sourceImages[0].ioSurface ||

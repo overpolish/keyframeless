@@ -24,6 +24,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// Updates color parameter visibility (hides params based on mode).
 - (void)updateColorParameterVisibility;
 
+/// Diff-syncs the gradient bar UI from the persisted JSON param. Call from
+/// the plugin's drawOSC and render hooks so undo/redo (and cross-copy state
+/// changes) flow back into the inspector.
++ (void)colorSyncFromParams:(id<PROAPIAccessing>)apiManager;
+
 @end
 
 NS_ASSUME_NONNULL_END

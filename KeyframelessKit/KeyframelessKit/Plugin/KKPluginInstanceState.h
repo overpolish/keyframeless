@@ -7,6 +7,7 @@
 
 #import <AppKit/AppKit.h>
 
+@class KKGradientBarView;
 @class KKStagePlayheadView;
 @class KKStageSequencerRulerView;
 @class KKStageSequencerView;
@@ -82,6 +83,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// primary sequencer/ruler/playhead properties above.
 @property(nonatomic, strong, nullable)
     NSMutableArray<KKTimingViewRefs *> *additionalTimingViews;
+
+/// Live gradient bar for this instance (weak). Used by the color sync pump
+/// to push undo/redo-restored stops back into the UI.
+@property(nonatomic, weak, nullable) KKGradientBarView *gradientBar;
+
+/// Last-known gradient JSON. Set by the custom UI and by the color sync
+/// pump; used to diff against the persisted param on sync ticks so self-
+/// writes are ignored and undo/redo changes are detected.
+@property(nonatomic, copy, nullable) NSString *gradientJSONSnapshot;
 
 @end
 

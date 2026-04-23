@@ -132,6 +132,17 @@ static NSArray<KKGradientStop *> *_arrayToStops(NSArray<NSDictionary *> *arr) {
   }
 }
 
+- (void)updateFavoriteWithIdentifier:(NSString *)identifier
+                               stops:(NSArray<KKGradientStop *> *)stops {
+  for (KKGradientFavorite *f in _items) {
+    if ([f.identifier isEqualToString:identifier]) {
+      f.stops = [stops copy];
+      [self _save];
+      return;
+    }
+  }
+}
+
 - (void)_load {
   NSURL *url = _favoritesFileURL();
   if (!url)
