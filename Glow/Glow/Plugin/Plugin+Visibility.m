@@ -37,7 +37,7 @@ static void setFlagsIfChanged(id<FxParameterSettingAPI_v5> setAPI,
                                  @(kParamNoiseSpeed), @(kParamOffsetX),
                                  @(kParamOffsetY), @(kKKParamColorMode),
                                  @(kKKParamColorSolid),
-                                 @(kKKParamColorGradient),
+                                 @(kKKParamColorCustomUI),
                                  @(kParamGradientType), @(kParamGradientAngle),
                                  @(kParamTimingInColor),
                                  @(kParamTimingHoldColor),
@@ -108,8 +108,9 @@ static void setFlagsIfChanged(id<FxParameterSettingAPI_v5> setAPI,
                         kKKParamColorMode);
       setFlagsIfChanged(paramSetAPI, paramGetAPI, kFxParameterFlag_HIDDEN,
                         kKKParamColorSolid);
-      setFlagsIfChanged(paramSetAPI, paramGetAPI, kFxParameterFlag_HIDDEN,
-                        kKKParamColorGradient);
+      setFlagsIfChanged(paramSetAPI, paramGetAPI,
+                        kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_HIDDEN,
+                        kKKParamColorCustomUI);
       setFlagsIfChanged(paramSetAPI, paramGetAPI, kFxParameterFlag_HIDDEN,
                         kParamGradientType);
       setFlagsIfChanged(paramSetAPI, paramGetAPI, kFxParameterFlag_HIDDEN,

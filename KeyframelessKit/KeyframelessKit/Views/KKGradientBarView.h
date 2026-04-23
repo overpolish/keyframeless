@@ -34,6 +34,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setPosition:(CGFloat)position forStopAtIndex:(NSInteger)index;
 - (void)setMidpoint:(CGFloat)midpoint forStopAtIndex:(NSInteger)index;
 
+- (void)reverseStops;
+- (void)distributeStopsEvenly;
+
 @end
 
 NS_ASSUME_NONNULL_END

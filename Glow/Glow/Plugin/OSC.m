@@ -76,6 +76,7 @@
         destinationImage:(FxImageTile *)destinationImage
                   atTime:(CMTime)time {
   [KKPlugin multiStageDrawOSCTickForAPI:self.apiManager atTime:time];
+  [KKPlugin colorSyncFromParams:self.apiManager];
 
   [self encodeRenderCommandsForDestinationImage:destinationImage
                                  canvasPosition:CGPointZero

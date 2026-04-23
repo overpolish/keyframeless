@@ -588,6 +588,41 @@ void KKDrawCheckerboard(NSRect rect) {
     _onStopsChanged(_stops);
 }
 
+- (void)reverseStops {
+  if (_stops.count < 2)
+    return;
+  NSMutableArray<KKGradientStop *> *mutable = [NSMutableArray new];
+  for (KKGradientStop *s in _stops) {
+    [mutable addObject:[KKGradientStop stopWithPosition:1.0 - s.position
+                                                  color:s.color
+                                               midpoint:1.0 - s.midpoint]];
+  }
+  _stops = [mutable copy];
+  [self setNeedsDisplay:YES];
+  if (_onStopsChanged)
+    _onStopsChanged(_stops);
+}
+
+- (void)distributeStopsEvenly {
+  NSUInteger n = _stops.count;
+  if (n < 2)
+    return;
+  NSArray<KKGradientStop *> *sorted = [self _sortedStops];
+  NSMutableArray<KKGradientStop *> *mutable = [NSMutableArray new];
+  for (NSUInteger i = 0; i < n; i++) {
+    CGFloat pos = (CGFloat)i / (CGFloat)(n - 1);
+    [mutable addObject:[KKGradientStop stopWithPosition:pos
+                                                  color:sorted[i].color
+                                               midpoint:0.5]];
+  }
+  _stops = [mutable copy];
+  _selectedIndex = MIN(_selectedIndex, (NSInteger)n - 1);
+  _selectedMidpointIndex = -1;
+  [self setNeedsDisplay:YES];
+  if (_onStopsChanged)
+    _onStopsChanged(_stops);
+}
+
 - (void)setStops:(NSArray<KKGradientStop *> *)stops {
   _stops = [stops copy];
   if (_selectedIndex >= (NSInteger)_stops.count)
