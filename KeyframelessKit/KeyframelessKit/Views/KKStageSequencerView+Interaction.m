@@ -531,6 +531,18 @@
     }
 
     if (event.modifierFlags & NSEventModifierFlagOption) {
+      _dragValueCopying = YES;
+      _dragCopyLaneIdx = (NSInteger)laneIdx;
+      _dragCopySrcSegIdx = (NSInteger)segIdx;
+      _dragCopyDstSegIdx = -1;
+      _hoverSegLaneIdx = -1;
+      _hoverSegSegIdx = -1;
+      [[NSCursor dragCopyCursor] set];
+      [self renderLanes];
+      return YES;
+    }
+
+    if (event.modifierFlags & NSEventModifierFlagControl) {
       _dragLaneMoving = YES;
       _dragLaneIdx = laneIdx;
       _dragTrackX = trackX;
@@ -571,6 +583,10 @@
 }
 
 - (void)mouseDragged:(NSEvent *)event {
+  if (_dragValueCopying) {
+    [self _dragValueCopyToEvent:event];
+    return;
+  }
   if (_dragLaneMoving) {
     [self _dragLaneMoveToEvent:event];
     return;
@@ -600,6 +616,20 @@
   }
   self.lanes = lanes;
   [self renderLanes];
+}
+
+- (void)_dragValueCopyToEvent:(NSEvent *)event {
+  [[NSCursor dragCopyCursor] set];
+  NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+  NSInteger hoverLane = -1, hoverSeg = -1;
+  [self _segmentUnderPoint:loc outLane:&hoverLane outSeg:&hoverSeg];
+  // Only same-lane, non-source segments are valid drop targets.
+  if (hoverLane != _dragCopyLaneIdx || hoverSeg == _dragCopySrcSegIdx)
+    hoverSeg = -1;
+  if (hoverSeg != _dragCopyDstSegIdx) {
+    _dragCopyDstSegIdx = hoverSeg;
+    [self renderLanes];
+  }
 }
 
 - (void)_dragLaneMoveToEvent:(NSEvent *)event {
@@ -841,7 +871,22 @@
 }
 
 - (void)mouseUp:(NSEvent *)event {
-  BOOL wasDragging = _dragLaneMoving || _dragMoving || _dragging;
+  BOOL wasDragging =
+      _dragValueCopying || _dragLaneMoving || _dragMoving || _dragging;
+  if (_dragValueCopying) {
+    NSInteger src = _dragCopySrcSegIdx;
+    NSInteger dst = _dragCopyDstSegIdx;
+    NSInteger lane = _dragCopyLaneIdx;
+    _dragValueCopying = NO;
+    _dragCopyLaneIdx = -1;
+    _dragCopySrcSegIdx = -1;
+    _dragCopyDstSegIdx = -1;
+    [[NSCursor arrowCursor] set];
+    if (dst >= 0 && src != dst && self.onSegmentValuesCopied)
+      self.onSegmentValuesCopied(lane, src, dst);
+    [self renderLanes];
+    return;
+  }
   if (_dragLaneMoving) {
     _dragLaneMoving = NO;
     _dragLaneMoveOrigSegs = nil;

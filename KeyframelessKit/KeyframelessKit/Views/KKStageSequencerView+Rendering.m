@@ -79,6 +79,10 @@
 
   [self _renderEditButtonForHoveredSegment];
 
+  [self _renderValueCopyDropTargetWithTrackX:trackX
+                                  trackWidth:trackWidth
+                                 totalHeight:totalHeight];
+
   [self _renderSnapGuideWithTrackX:trackX
                         trackWidth:trackWidth
                        totalHeight:totalHeight];
@@ -589,6 +593,31 @@ static NSString *_boundaryTimeLabel(double fraction, double duration) {
             fraction:1.0
       respectFlipped:YES
                hints:nil];
+}
+
+- (void)_renderValueCopyDropTargetWithTrackX:(CGFloat)trackX
+                                  trackWidth:(CGFloat)trackWidth
+                                 totalHeight:(CGFloat)totalHeight {
+  if (!_dragValueCopying || _dragCopyDstSegIdx < 0 ||
+      (NSUInteger)_dragCopyLaneIdx >= self.lanes.count)
+    return;
+  KKTimingLane *lane = self.lanes[_dragCopyLaneIdx];
+  if ((NSUInteger)_dragCopyDstSegIdx >= lane.segments.count)
+    return;
+  KKTimingSegment *dst = lane.segments[_dragCopyDstSegIdx];
+  CGFloat laneY = [self _laneYForIndex:(NSUInteger)_dragCopyLaneIdx
+                           totalHeight:totalHeight];
+  CGFloat xL = [self _xForFrac:dst.start trackX:trackX trackWidth:trackWidth];
+  CGFloat xR = [self _xForFrac:dst.end trackX:trackX trackWidth:trackWidth];
+  NSRect r =
+      NSInsetRect(NSMakeRect(xL, laneY, xR - xL, [self _laneHeight]), 1.5, 1.5);
+  NSBezierPath *p =
+      [NSBezierPath bezierPathWithRoundedRect:r
+                                      xRadius:kKSSSegmentCornerRadius
+                                      yRadius:kKSSSegmentCornerRadius];
+  [[NSColor whiteColor] setStroke];
+  p.lineWidth = 2.0;
+  [p stroke];
 }
 
 - (void)_renderSnapGuideWithTrackX:(CGFloat)trackX
