@@ -62,6 +62,21 @@
   return CGPointMake(cx, cy);
 }
 
+- (CGPoint)canvasCenter {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  if (!oscAPI)
+    return CGPointZero;
+  double cx = 0, cy = 0;
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:0.5
+                          fromY:0.5
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&cx
+                            toY:&cy];
+  return CGPointMake(cx, cy);
+}
+
 - (void)updateRingAtTime:(CMTime)time {
   float minDim = [self canvasMinDimension];
   float sx = [self floatValueForParam:kParamRadiusX atTime:time];
@@ -85,25 +100,34 @@
                                                   CGPoint p, simd_uint2 v){
                                        }];
 
-  [_offsetSnap drawSnapGuidesWithOSC:self
-                       isObjectSpace:NO
-                    destinationImage:destinationImage];
+  BOOL offsetVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                                      label:@"Offset"];
+  BOOL radiusVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                                      label:@"Radius"];
 
-  CGPoint center = [self oscPositionAtTime:time];
+  if (offsetVisible)
+    [_offsetSnap drawSnapGuidesWithOSC:self
+                         isObjectSpace:NO
+                      destinationImage:destinationImage];
+
+  CGPoint offsetPos = [self oscPositionAtTime:time];
+  CGPoint ringCenter = [self canvasCenter];
   [self updateRingAtTime:time];
 
-  _radiusRing.center = center;
-  [_radiusRing drawAtCanvasPosition:center
-                          isHovered:_ringHovered
-                           isActive:_ringDragging
-                   destinationImage:destinationImage
-                             atTime:time];
+  _radiusRing.center = ringCenter;
+  if (radiusVisible)
+    [_radiusRing drawAtCanvasPosition:ringCenter
+                            isHovered:_ringHovered
+                             isActive:_ringDragging
+                     destinationImage:destinationImage
+                               atTime:time];
 
-  [self drawAtCanvasPosition:center
-                   isHovered:_arcHovered
-                    isActive:_arcDragging
-            destinationImage:destinationImage
-                      atTime:time];
+  if (offsetVisible)
+    [self drawAtCanvasPosition:offsetPos
+                     isHovered:_arcHovered
+                      isActive:_arcDragging
+              destinationImage:destinationImage
+                        atTime:time];
 }
 
 - (void)hitTestOSCAtMousePositionX:(double)positionX
@@ -114,22 +138,25 @@
   _arcHovered = NO;
   _ringHovered = NO;
 
-  CGPoint center = [self oscPositionAtTime:time];
-
-  double dx = positionX - center.x;
-  double dy = positionY - center.y;
-  if (sqrt(dx * dx + dy * dy) < self.hitRadius) {
-    _arcHovered = YES;
-    *activePart = kOSCOffsetPart;
+  if ([KKPlugin multiStageOSCVisibleForAPI:self.apiManager label:@"Offset"]) {
+    CGPoint offsetPos = [self oscPositionAtTime:time];
+    double dx = positionX - offsetPos.x;
+    double dy = positionY - offsetPos.y;
+    if (sqrt(dx * dx + dy * dy) < self.hitRadius) {
+      _arcHovered = YES;
+      *activePart = kOSCOffsetPart;
+    }
   }
 
-  [self updateRingAtTime:time];
-  _radiusRing.center = center;
-  if ([_radiusRing hitTestAtMousePositionX:positionX
-                                 positionY:positionY
-                                    atTime:time]) {
-    _ringHovered = YES;
-    *activePart = kOSCRadiusPart;
+  if ([KKPlugin multiStageOSCVisibleForAPI:self.apiManager label:@"Radius"]) {
+    [self updateRingAtTime:time];
+    _radiusRing.center = [self canvasCenter];
+    if ([_radiusRing hitTestAtMousePositionX:positionX
+                                   positionY:positionY
+                                      atTime:time]) {
+      _ringHovered = YES;
+      *activePart = kOSCRadiusPart;
+    }
   }
 }
 
@@ -171,7 +198,7 @@
     _ringLastClickTime = now;
 
     _ringDragging = YES;
-    CGPoint center = [self oscPositionAtTime:time];
+    CGPoint center = [self canvasCenter];
     double dx = positionX - center.x;
     double dy = positionY - center.y;
     _ringDragStartDist = sqrt(dx * dx + dy * dy);
@@ -254,7 +281,7 @@
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
   if (activePart == kOSCRadiusPart) {
-    CGPoint center = [self oscPositionAtTime:time];
+    CGPoint center = [self canvasCenter];
     double dx = positionX - center.x;
     double dy = positionY - center.y;
     double dist = sqrt(dx * dx + dy * dy);
