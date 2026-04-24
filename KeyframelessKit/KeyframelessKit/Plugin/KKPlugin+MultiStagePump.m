@@ -202,6 +202,16 @@ static void KKBroadcastPlayheads(double nowSec) {
   [self multiStageUpdatePlayheadsForAPI:apiManager atTime:time];
 }
 
++ (BOOL)multiStageOSCVisibleForAPI:(id<PROAPIAccessing>)apiManager
+                             label:(NSString *)label {
+  KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
+  for (KKTimingLane *lane in state.lanesSnapshot) {
+    if ([lane.propertyLabel isEqualToString:label])
+      return lane.oscVisible;
+  }
+  return YES;
+}
+
 + (void)multiStageRenderTickForAPI:(id<PROAPIAccessing>)apiManager
                             atTime:(CMTime)renderTime {
   // `renderTime` is filter-input time (effect-local) whereas the pump expects

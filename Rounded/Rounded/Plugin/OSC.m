@@ -87,14 +87,17 @@ static float paddingForRadius(double radius, float minDim) {
                                                   CGPoint p, simd_uint2 v){
                                        }];
 
-  [self.cropOSC drawWithDestinationImage:destinationImage atTime:time];
+  if ([KKPlugin multiStageOSCVisibleForAPI:self.apiManager label:@"Crop"])
+    [self.cropOSC drawWithDestinationImage:destinationImage atTime:time];
 
-  CGPoint radiusPos = [self oscPositionAtTime:time];
-  [self drawAtCanvasPosition:radiusPos
-                   isHovered:(activePart == kOSCRadiusPart)
-                    isActive:self.isDragging && (activePart == kOSCRadiusPart)
-            destinationImage:destinationImage
-                      atTime:time];
+  if ([KKPlugin multiStageOSCVisibleForAPI:self.apiManager label:@"Radius"]) {
+    CGPoint radiusPos = [self oscPositionAtTime:time];
+    [self drawAtCanvasPosition:radiusPos
+                     isHovered:(activePart == kOSCRadiusPart)
+                      isActive:self.isDragging && (activePart == kOSCRadiusPart)
+              destinationImage:destinationImage
+                        atTime:time];
+  }
 }
 
 - (void)hitTestOSCAtMousePositionX:(double)positionX
@@ -103,17 +106,21 @@ static float paddingForRadius(double radius, float minDim) {
                             atTime:(CMTime)time {
   *activePart = 0;
 
-  NSInteger cropPart = [self.cropOSC hitTestAtMousePositionX:positionX
-                                                   positionY:positionY
-                                                      atTime:time];
-  if (cropPart != KKCropPartNone) {
-    *activePart = cropPart;
+  if ([KKPlugin multiStageOSCVisibleForAPI:self.apiManager label:@"Crop"]) {
+    NSInteger cropPart = [self.cropOSC hitTestAtMousePositionX:positionX
+                                                     positionY:positionY
+                                                        atTime:time];
+    if (cropPart != KKCropPartNone) {
+      *activePart = cropPart;
+    }
   }
 
-  if ([self hitTestAtMousePositionX:positionX
-                          positionY:positionY
-                             atTime:time]) {
-    *activePart = kOSCRadiusPart;
+  if ([KKPlugin multiStageOSCVisibleForAPI:self.apiManager label:@"Radius"]) {
+    if ([self hitTestAtMousePositionX:positionX
+                            positionY:positionY
+                               atTime:time]) {
+      *activePart = kOSCRadiusPart;
+    }
   }
 }
 

@@ -177,6 +177,14 @@ NS_ASSUME_NONNULL_BEGIN
             (id<PROAPIAccessing>)apiManager
                                            atTime:(CMTime)time;
 
+/// Returns whether the OSC for the animatable property with `label` should
+/// be drawn. Returns NO only when the user has toggled that lane's OSC off
+/// in the sequencer. Returns YES otherwise (lane not found, classic mode,
+/// or OSC explicitly on). Plugins call this at the top of their drawOSC
+/// path to skip individual OSC parts.
++ (BOOL)multiStageOSCVisibleForAPI:(id<PROAPIAccessing>)apiManager
+                             label:(NSString *)label;
+
 /// Pairs of parameter IDs that maintain their aspect ratio when the user
 /// holds Cmd while dragging either slider. Set before first use (e.g. in
 /// addParametersWithError:). Each element is @[@(paramA), @(paramB)].
@@ -212,6 +220,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Call `-multiStageRefreshLaneVisibility` after any param change that would
 /// affect the return value; the pump applies the filter on every push.
 - (NSSet<NSString *> *)hiddenAnimatablePropertyLabels;
+
+/// Override to declare which animatable-property labels render an on-screen
+/// control (OSC) on canvas. Lanes in this set get a visibility-toggle icon
+/// in the sequencer row; their OSC code checks `lane.oscVisible` before
+/// drawing.
+- (NSSet<NSString *> *)animatablePropertyLabelsWithOSC;
 
 /// Recomputes `-hiddenAnimatablePropertyLabels`; if it differs from the last
 /// snapshot, re-pushes the filtered lanes to the sequencer view. Safe to

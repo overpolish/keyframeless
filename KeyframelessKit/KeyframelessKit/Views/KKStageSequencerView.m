@@ -33,11 +33,27 @@
 
 - (void)setLanes:(NSArray<KKTimingLane *> *)lanes {
   NSUInteger prevCount = _lanes.count;
-  _lanes = [lanes copy];
+  NSMutableArray<KKTimingLane *> *stamped =
+      [NSMutableArray arrayWithCapacity:lanes.count];
+  for (KKTimingLane *lane in lanes) {
+    KKTimingLane *c = [lane copy];
+    c.hasOSC = [_laneLabelsWithOSC containsObject:c.propertyLabel];
+    [stamped addObject:c];
+  }
+  _lanes = [stamped copy];
   if (_lanes.count != prevCount)
     [self invalidateIntrinsicContentSize];
   if (!_dragging && !_dragMoving && !_dragLaneMoving)
     [self renderLanes];
+}
+
+- (void)setLaneLabelsWithOSC:(NSSet<NSString *> *)labels {
+  if ([_laneLabelsWithOSC isEqualToSet:labels])
+    return;
+  _laneLabelsWithOSC = [labels copy];
+  // Re-stamp existing lanes so the icon appears/disappears as appropriate.
+  if (_lanes.count)
+    self.lanes = _lanes;
 }
 
 - (void)setLaneKindsByLabel:

@@ -18,8 +18,10 @@ static const CGFloat kKSSEditButtonSize __attribute__((unused)) = 16.0;
 static const CGFloat kKSSEditMinSegmentPx __attribute__((unused)) = 30.0;
 static const CGFloat kKSSMinLaneHeight __attribute__((unused)) = 30.0;
 static const CGFloat kKSSLaneSpacing __attribute__((unused)) = KKSpacingXS;
-static const CGFloat kKSSLabelWidth __attribute__((unused)) = 60.0;
-static const CGFloat kKSSLabelPadding __attribute__((unused)) = KKSpacingSM;
+static const CGFloat kKSSLabelWidth __attribute__((unused)) = 84.0;
+static const CGFloat kKSSLabelPadding __attribute__((unused)) = KKSpacingLG;
+static const CGFloat kKSSOSCIconSize __attribute__((unused)) = 12.0;
+static const CGFloat kKSSOSCIconGap __attribute__((unused)) = KKSpacingLG;
 static const CGFloat kKSSSegmentCornerRadius __attribute__((unused)) =
     KKRadiusSM;
 static const CGFloat kKSSCurvePadding __attribute__((unused)) = 3.0;
