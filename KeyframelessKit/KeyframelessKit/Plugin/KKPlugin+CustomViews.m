@@ -1042,8 +1042,19 @@
     KKTimingSegment *right = [orig copy];
     right.start = splitPoint;
 
-    // If splitting a hold, the new right segment becomes a new hold with
-    // same values. If splitting a transition, both halves stay transitions.
+    // Whichever side is closer to the click is treated as the "new" piece
+    // and gets the opposite type; the bulk half keeps the original type.
+    // Splitting a hold near its trailing edge grows a trailing transition;
+    // splitting near its leading edge grows a leading one.
+    double midpoint = (orig.start + orig.end) / 2.0;
+    KKSegmentType flipped = (orig.type == KKSegmentTypeHold)
+                                ? KKSegmentTypeTransition
+                                : KKSegmentTypeHold;
+    if (splitPoint < midpoint)
+      left.type = flipped;
+    else
+      right.type = flipped;
+
     [segs replaceObjectAtIndex:splitIdx withObject:left];
     [segs insertObject:right atIndex:splitIdx + 1];
 
