@@ -4,12 +4,16 @@
  */
 
 #import "KKAnimatableProperty.h"
+#import "../Math/KKGradientSampling.h"
+#import "KKGradientBarView.h"
 #import <FxPlug/FxPlugSDK.h>
 
-static NSUInteger KKKindValueCount(KKAnimatableParamKind kind) {
+static NSUInteger KKKindFixedValueCount(KKAnimatableParamKind kind) {
   switch (kind) {
   case KKAnimatableParamKindColor:
     return 3;
+  case KKAnimatableParamKindGradient:
+    return 0; // variable (5 * N)
   case KKAnimatableParamKindFloat:
   default:
     return 1;
@@ -98,8 +102,13 @@ static NSUInteger KKKindValueCount(KKAnimatableParamKind kind) {
 
 - (NSUInteger)valueCount {
   NSUInteger n = 0;
-  for (NSNumber *k in _valueParamKinds)
-    n += KKKindValueCount((KKAnimatableParamKind)k.integerValue);
+  for (NSNumber *k in _valueParamKinds) {
+    KKAnimatableParamKind kind = (KKAnimatableParamKind)k.integerValue;
+    NSUInteger fixed = KKKindFixedValueCount(kind);
+    // Gradient is variable; caller should not rely on valueCount for it.
+    if (fixed > 0)
+      n += fixed;
+  }
   return n;
 }
 
@@ -108,8 +117,7 @@ static NSUInteger KKKindValueCount(KKAnimatableParamKind kind) {
                                        atTime:(CMTime)time {
   if (!getAPI)
     return nil;
-  NSMutableArray<NSNumber *> *out =
-      [NSMutableArray arrayWithCapacity:self.valueCount];
+  NSMutableArray<NSNumber *> *out = [NSMutableArray array];
   for (NSUInteger i = 0; i < _valueParamIDs.count; i++) {
     UInt32 pid = _valueParamIDs[i].unsignedIntValue;
     KKAnimatableParamKind kind =
@@ -125,6 +133,14 @@ static NSUInteger KKKindValueCount(KKAnimatableParamKind kind) {
       [out addObject:@(r)];
       [out addObject:@(g)];
       [out addObject:@(b)];
+      break;
+    }
+    case KKAnimatableParamKindGradient: {
+      NSString *json = nil;
+      [getAPI getStringParameterValue:&json fromParameter:pid];
+      NSArray<KKGradientStop *> *stops = KKGradientStopsFromJSON(json);
+      if (stops)
+        [out addObjectsFromArray:KKGradientFlatFromStops(stops)];
       break;
     }
     case KKAnimatableParamKindFloat:
@@ -149,25 +165,44 @@ static NSUInteger KKKindValueCount(KKAnimatableParamKind kind) {
     UInt32 pid = _valueParamIDs[i].unsignedIntValue;
     KKAnimatableParamKind kind =
         (KKAnimatableParamKind)_valueParamKinds[i].integerValue;
-    NSUInteger need = KKKindValueCount(kind);
-    if (cursor + need > values.count)
-      return;
     switch (kind) {
-    case KKAnimatableParamKindColor:
+    case KKAnimatableParamKindColor: {
+      if (cursor + 3 > values.count)
+        return;
       [setAPI setRedValue:values[cursor].doubleValue
                greenValue:values[cursor + 1].doubleValue
                 blueValue:values[cursor + 2].doubleValue
               toParameter:pid
                    atTime:time];
+      cursor += 3;
       break;
+    }
+    case KKAnimatableParamKindGradient: {
+      // Gradient consumes ALL remaining values — it must be the only kind
+      // in the property's valueIDs list for this reason.
+      NSArray<NSNumber *> *flat =
+          (cursor == 0)
+              ? values
+              : [values subarrayWithRange:NSMakeRange(cursor,
+                                                      values.count - cursor)];
+      NSArray<KKGradientStop *> *stops = KKGradientStopsFromFlat(flat);
+      NSString *json = KKGradientJSONFromStops(stops ?: @[]);
+      if (json)
+        [setAPI setStringParameterValue:json toParameter:pid];
+      cursor = values.count;
+      break;
+    }
     case KKAnimatableParamKindFloat:
-    default:
+    default: {
+      if (cursor + 1 > values.count)
+        return;
       [setAPI setFloatValue:values[cursor].doubleValue
                 toParameter:pid
                      atTime:time];
+      cursor += 1;
       break;
     }
-    cursor += need;
+    }
   }
 }
 

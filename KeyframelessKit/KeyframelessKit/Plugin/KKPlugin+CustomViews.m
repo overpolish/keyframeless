@@ -14,6 +14,7 @@
 #import "../Views/KKStagePlayheadView.h"
 #import "../Views/KKStageSequencerRulerView.h"
 #import "../Views/KKStageSequencerView.h"
+#import "KKPlugin+Color.h"
 
 #import "../Views/KKAnimatableProperty.h"
 #import "../Views/KKPillToggleRowView.h"
@@ -653,6 +654,18 @@
   KKStageSequencerView *seqView = [[KKStageSequencerView alloc]
       initWithFrame:NSMakeRect(0, 0, 300, fullLanesH)];
   seqView.translatesAutoresizingMaskIntoConstraints = NO;
+  // Let the renderer differentiate color/gradient lanes (which should render
+  // as a value strip + single easing curve) from scalar lanes. Color and
+  // gradient props each have exactly one entry in `valueParamKinds`, so the
+  // first entry is representative.
+  NSMutableDictionary<NSString *, NSNumber *> *laneKinds =
+      [NSMutableDictionary dictionaryWithCapacity:seqProps.count];
+  for (KKAnimatableProperty *p in seqProps) {
+    NSNumber *kind = p.valueParamKinds.firstObject;
+    if (kind)
+      laneKinds[p.label] = kind;
+  }
+  seqView.laneKindsByLabel = laneKinds;
   scrollView.documentView = seqView;
   [seqContainer addSubview:scrollView];
 
@@ -807,12 +820,14 @@
     [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
     NSMutableArray<KKTimingLane *> *lanes =
         [[KKTimingLane lanesFromJSON:json] mutableCopy];
-    if (!lanes || (NSUInteger)laneIndex >= lanes.count) {
+    NSInteger jsonIdx =
+        KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
+    if (!lanes || jsonIdx < 0) {
       [actAPI endAction:strongSelf];
       return;
     }
 
-    KKTimingLane *lane = lanes[laneIndex];
+    KKTimingLane *lane = lanes[jsonIdx];
     KKAnimatableProperty *prop = nil;
     for (KKAnimatableProperty *p in props) {
       if ([p.label isEqualToString:lane.propertyLabel]) {
@@ -835,12 +850,12 @@
       mSegs[prevSeg] = mSeg;
       mLane.segments = mSegs;
       mLane.selectedSegment = segmentIndex;
-      lanes[laneIndex] = mLane;
+      lanes[jsonIdx] = mLane;
       lane = mLane;
     } else {
       KKTimingLane *mLane = [lane copy];
       mLane.selectedSegment = segmentIndex;
-      lanes[laneIndex] = mLane;
+      lanes[jsonIdx] = mLane;
       lane = mLane;
     }
 
@@ -856,15 +871,23 @@
     state.pendingLanes = nil;
 
     // 4. Sync new selection: write segment values → native params.
+    NSArray<NSNumber *> *newVals = nil;
     if (prop.valueParamIDs.count > 0 && segmentIndex >= 0 &&
         (NSUInteger)segmentIndex < lane.segments.count) {
-      [prop writeValues:lane.segments[segmentIndex].values
-             withSetAPI:setAPI
-                 atTime:ct];
+      newVals = lane.segments[segmentIndex].values;
+      [prop writeValues:newVals withSetAPI:setAPI atTime:ct];
     }
 
     [actAPI endAction:strongSelf];
     state.selectionInProgress = NO;
+    // The gradient bar isn't auto-bound to its param; the drawOSC/render
+    // sync is both too slow for interactive clicks AND prone to reading a
+    // stale string value right after a write. Push the known segment
+    // values directly instead. No-op for non-gradient properties.
+    if (newVals)
+      [KKPlugin colorPushGradientForProperty:prop
+                                      values:newVals
+                                  apiManager:strongSelf.apiManager];
     [strongSelf timingGraphApplyState];
   };
 
@@ -884,9 +907,11 @@
     NSString *json = nil;
     [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
     NSArray<KKTimingLane *> *lanes = [KKTimingLane lanesFromJSON:json];
-    if (lanes && (NSUInteger)laneIndex < lanes.count) {
+    NSInteger jsonIdx =
+        KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
+    if (lanes && jsonIdx >= 0) {
       NSMutableArray *mutable = [lanes mutableCopy];
-      KKTimingLane *lane = [mutable[laneIndex] copy];
+      KKTimingLane *lane = [mutable[jsonIdx] copy];
       lane.enabled = enabled;
       if (!enabled) {
         lane.selectedSegment = -1;
@@ -899,7 +924,7 @@
           }
         }
       }
-      mutable[laneIndex] = lane;
+      mutable[jsonIdx] = lane;
       NSString *updated = [KKTimingLane jsonFromLanes:mutable];
       if (updated)
         [setAPI setStringParameterValue:updated
@@ -954,8 +979,12 @@
     [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
     NSMutableArray<KKTimingLane *> *lanes =
         [[KKTimingLane lanesFromJSON:json] mutableCopy];
-    if (lanes && (NSUInteger)laneIndex < lanes.count) {
-      lanes[laneIndex] = updatedLane;
+    KKPluginInstanceState *_state =
+        KKInstanceStateForAPI(strongSelf.apiManager);
+    NSInteger jsonIdx =
+        KKLaneJSONIndexForViewIndex(laneIndex, lanes, _state.hiddenLaneLabels);
+    if (lanes && jsonIdx >= 0) {
+      lanes[jsonIdx] = updatedLane;
       NSString *updated = [KKTimingLane jsonFromLanes:lanes];
       if (updated)
         [setAPI setStringParameterValue:updated
@@ -980,11 +1009,15 @@
     [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
     NSMutableArray<KKTimingLane *> *lanes =
         [[KKTimingLane lanesFromJSON:json] mutableCopy];
-    if (!lanes || (NSUInteger)laneIndex >= lanes.count) {
+    KKPluginInstanceState *_state =
+        KKInstanceStateForAPI(strongSelf.apiManager);
+    NSInteger jsonIdx =
+        KKLaneJSONIndexForViewIndex(laneIndex, lanes, _state.hiddenLaneLabels);
+    if (!lanes || jsonIdx < 0) {
       [actAPI endAction:strongSelf];
       return;
     }
-    KKTimingLane *lane = [lanes[laneIndex] copy];
+    KKTimingLane *lane = [lanes[jsonIdx] copy];
     NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
 
     // Find which segment the click landed in and split it.
@@ -1016,7 +1049,7 @@
 
     lane.segments = segs;
     lane.selectedSegment = splitIdx + 1;
-    lanes[laneIndex] = lane;
+    lanes[jsonIdx] = lane;
 
     NSString *updated = [KKTimingLane jsonFromLanes:lanes];
     if (updated)
@@ -1041,11 +1074,15 @@
     [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
     NSMutableArray<KKTimingLane *> *lanes =
         [[KKTimingLane lanesFromJSON:json] mutableCopy];
-    if (!lanes || (NSUInteger)laneIndex >= lanes.count) {
+    KKPluginInstanceState *_state =
+        KKInstanceStateForAPI(strongSelf.apiManager);
+    NSInteger jsonIdx =
+        KKLaneJSONIndexForViewIndex(laneIndex, lanes, _state.hiddenLaneLabels);
+    if (!lanes || jsonIdx < 0) {
       [actAPI endAction:strongSelf];
       return;
     }
-    KKTimingLane *lane = [lanes[laneIndex] copy];
+    KKTimingLane *lane = [lanes[jsonIdx] copy];
     NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
     if (segs.count <= 1 || (NSUInteger)segmentIndex >= segs.count) {
       [actAPI endAction:strongSelf];
@@ -1079,7 +1116,7 @@
     }
 
     lane.segments = segs;
-    lanes[laneIndex] = lane;
+    lanes[jsonIdx] = lane;
 
     NSString *updated = [KKTimingLane jsonFromLanes:lanes];
     if (updated)
@@ -1105,11 +1142,15 @@
     [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
     NSMutableArray<KKTimingLane *> *lanes =
         [[KKTimingLane lanesFromJSON:json] mutableCopy];
-    if (!lanes || (NSUInteger)laneIndex >= lanes.count) {
+    KKPluginInstanceState *_state =
+        KKInstanceStateForAPI(strongSelf.apiManager);
+    NSInteger jsonIdx =
+        KKLaneJSONIndexForViewIndex(laneIndex, lanes, _state.hiddenLaneLabels);
+    if (!lanes || jsonIdx < 0) {
       [actAPI endAction:strongSelf];
       return;
     }
-    KKTimingLane *lane = [lanes[laneIndex] copy];
+    KKTimingLane *lane = [lanes[jsonIdx] copy];
     NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
     if ((NSUInteger)segmentIndex >= segs.count) {
       [actAPI endAction:strongSelf];
@@ -1120,7 +1161,7 @@
                                                : KKSegmentTypeHold;
     segs[segmentIndex] = seg;
     lane.segments = segs;
-    lanes[laneIndex] = lane;
+    lanes[jsonIdx] = lane;
 
     NSString *updated = [KKTimingLane jsonFromLanes:lanes];
     if (updated)
@@ -1506,8 +1547,14 @@
   [actAPI endAction:self];
 
   NSArray<KKTimingLane *> *lanes = [KKTimingLane lanesFromJSON:json];
-  if (!lanes || (NSUInteger)laneIndex >= lanes.count)
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  // Translate view index → JSON index up front; forward the JSON index to
+  // every callback below so they don't have to repeat the translation.
+  NSInteger jsonLaneIdx =
+      KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
+  if (!lanes || jsonLaneIdx < 0)
     return;
+  laneIndex = jsonLaneIdx;
   KKTimingLane *lane = lanes[laneIndex];
   if ((NSUInteger)segmentIndex >= lane.segments.count)
     return;

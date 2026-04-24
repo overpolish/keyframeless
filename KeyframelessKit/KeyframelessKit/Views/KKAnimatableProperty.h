@@ -21,6 +21,11 @@ typedef NS_ENUM(NSInteger, KKAnimatableParamKind) {
   KKAnimatableParamKindFloat = 0,
   /// NSColor well: 1 native param → 3 scalar values [R, G, B].
   KKAnimatableParamKindColor = 1,
+  /// Gradient JSON string param: 1 native param → `5 * N` scalar values,
+  /// flattened as `[pos, r, g, b, mid]` per stop. `N` can differ per
+  /// segment — the multi-stage interp path falls back to LUT-lerp when
+  /// stop counts don't match across a transition.
+  KKAnimatableParamKindGradient = 2,
 };
 
 @interface KKAnimatableProperty : NSObject

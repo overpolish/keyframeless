@@ -74,6 +74,19 @@ KKPluginInstanceState *KKInstanceStateForAPI(id<PROAPIAccessing> api) {
   return uuid ? KKInstanceStateForUUID(uuid) : nil;
 }
 
+KKPluginInstanceState *KKInstanceStateEnsureForAPI(id<PROAPIAccessing> api) {
+  NSString *uuid = KKInstanceUUIDForAPI(api);
+  if (!uuid.length) {
+    uuid = [[NSUUID UUID] UUIDString];
+    id<FxParameterSettingAPI_v5> setAPI =
+        [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [setAPI setStringParameterValue:uuid toParameter:kKKParamInstanceID];
+    // Re-read so the association cache is populated.
+    uuid = KKInstanceUUIDForAPI(api);
+  }
+  return uuid ? KKInstanceStateForUUID(uuid) : nil;
+}
+
 NSArray<KKPluginInstanceState *> *KKAllInstanceStates(void) {
   return sInstanceStates.allValues ?: @[];
 }
