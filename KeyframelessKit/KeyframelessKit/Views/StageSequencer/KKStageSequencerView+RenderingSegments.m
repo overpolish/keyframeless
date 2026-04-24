@@ -48,6 +48,18 @@
       [[[NSColor inspectorLabel] colorWithAlphaComponent:0.06] setFill];
       [segPath fill];
     }
+
+    if (seg.lockedDurationSeconds > 0 && lane.enabled) {
+      NSBezierPath *lockPath = [NSBezierPath
+          bezierPathWithRoundedRect:NSInsetRect(segRect, 0.75, 0.75)
+                            xRadius:kKSSSegmentCornerRadius
+                            yRadius:kKSSSegmentCornerRadius];
+      CGFloat dashPattern[2] = {3.0, 2.0};
+      [lockPath setLineDash:dashPattern count:2 phase:0];
+      lockPath.lineWidth = 1.5;
+      [[[NSColor inspectorLabel] colorWithAlphaComponent:0.7] setStroke];
+      [lockPath stroke];
+    }
   }
 }
 

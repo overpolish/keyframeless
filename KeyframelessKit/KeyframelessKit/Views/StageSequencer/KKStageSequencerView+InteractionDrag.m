@@ -116,6 +116,19 @@
     if (loc.x < segLeft || loc.x > segRight)
       continue;
 
+    if (event.modifierFlags & NSEventModifierFlagShift) {
+      // Shift+click a segment body → toggle duration lock. Fires on
+      // mouseDown rather than mouseUp so it doesn't compete with the
+      // in-drag "shift disables snap" behaviour on edge resize.
+      if (self.onSegmentLockToggled) {
+        double newLocked = (seg.lockedDurationSeconds > 0)
+                               ? 0.0
+                               : (seg.end - seg.start) * self.effectDuration;
+        self.onSegmentLockToggled(laneIdx, segIdx, newLocked);
+      }
+      return YES;
+    }
+
     if ((event.modifierFlags & NSEventModifierFlagCommand) &&
         lane.segments.count > 1) {
       if (self.onSegmentRemoved)

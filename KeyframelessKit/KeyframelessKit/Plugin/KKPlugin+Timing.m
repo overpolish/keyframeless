@@ -509,11 +509,8 @@ static const FxParameterFlags kCustomUIDisabled =
   if (!enabled)
     return nil;
 
-  NSString *json = nil;
-  [paramGetAPI getStringParameterValue:&json
-                         fromParameter:kKKParamMultiStageData];
   NSMutableArray<KKTimingLane *> *lanes =
-      [[KKTimingLane lanesFromJSON:json] mutableCopy];
+      KKReadLanesRebalanced(self.apiManager, paramGetAPI);
   if (!lanes.count)
     return nil;
 

@@ -54,6 +54,30 @@ KKFilterLanesForVisibility(NSArray<KKTimingLane *> *lanes,
   return [filtered copy];
 }
 
+double KKCurrentEffectDurationSeconds(id<PROAPIAccessing> apiManager) {
+  id<FxTimingAPI_v4> timingAPI =
+      [apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  if (!timingAPI)
+    return 0;
+  CMTime dur = kCMTimeZero;
+  [timingAPI durationTimeForEffect:&dur];
+  return CMTimeGetSeconds(dur);
+}
+
+NSMutableArray<KKTimingLane *> *
+KKReadLanesRebalanced(id<PROAPIAccessing> apiManager,
+                      id<FxParameterRetrievalAPI_v6> getAPI) {
+  NSString *json = nil;
+  [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+  NSArray<KKTimingLane *> *raw = [KKTimingLane lanesFromJSON:json];
+  if (!raw)
+    return nil;
+  double dur = KKCurrentEffectDurationSeconds(apiManager);
+  NSArray<KKTimingLane *> *balanced =
+      (dur > 0) ? KKTimingRebalancedLanes(raw, dur) : raw;
+  return [balanced mutableCopy];
+}
+
 NSInteger KKLaneJSONIndexForViewIndex(NSInteger viewIndex,
                                       NSArray<KKTimingLane *> *jsonLanes,
                                       NSSet<NSString *> *hidden) {
@@ -144,19 +168,42 @@ static void KKSyncFromParams(id<PROAPIAccessing> apiManager) {
   if (!json)
     return;
   NSString *snapshotJSON = [KKTimingLane jsonFromLanes:state.lanesSnapshot];
-  if ([json isEqualToString:snapshotJSON ?: @""])
+  BOOL jsonSame = [json isEqualToString:snapshotJSON ?: @""];
+  double dur = KKCurrentEffectDurationSeconds(apiManager);
+  BOOL durDrift = NO;
+  if (dur > 0) {
+    for (KKTimingLane *lane in state.lanesSnapshot) {
+      if (fabs(lane.lastKnownClipDuration - dur) > 1e-6) {
+        durDrift = YES;
+        break;
+      }
+    }
+  }
+  if (jsonSame && !durDrift)
     return;
-  NSArray<KKTimingLane *> *lanes = [KKTimingLane lanesFromJSON:json];
-  if (!lanes)
+  NSArray<KKTimingLane *> *raw = [KKTimingLane lanesFromJSON:json];
+  if (!raw)
     return;
+  NSArray<KKTimingLane *> *lanes =
+      (dur > 0) ? KKTimingRebalancedLanes(raw, dur) : raw;
   state.lanesSnapshot = lanes;
   state.pendingLanes = nil;
   NSArray<KKTimingLane *> *visible =
       KKFilterLanesForVisibility(lanes, state.hiddenLaneLabels);
+  KKStageSequencerRulerView *primaryRuler = state.rulerView;
   dispatch_async(dispatch_get_main_queue(), ^{
+    if (dur > 0) {
+      seq.effectDuration = dur;
+      primaryRuler.effectDuration = dur;
+    }
     seq.lanes = visible;
-    for (KKTimingViewRefs *r in extras)
+    for (KKTimingViewRefs *r in extras) {
+      if (dur > 0) {
+        r.seqView.effectDuration = dur;
+        r.ruler.effectDuration = dur;
+      }
       r.seqView.lanes = visible;
+    }
   });
 }
 

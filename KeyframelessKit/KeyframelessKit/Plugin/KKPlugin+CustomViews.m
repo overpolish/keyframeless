@@ -865,10 +865,8 @@
   if (multiStageEnabled) {
     seqContainer.hidden = NO;
     graphView.hidden = YES;
-    NSString *json = nil;
-    [paramGetAPI getStringParameterValue:&json
-                           fromParameter:kKKParamMultiStageData];
-    NSArray<KKTimingLane *> *lanes = [KKTimingLane lanesFromJSON:json];
+    NSArray<KKTimingLane *> *lanes =
+        KKReadLanesRebalanced(self.apiManager, paramGetAPI);
     if (!lanes && seqProps.count > 0) {
       NSMutableArray<KKTimingLane *> *defaults =
           [NSMutableArray arrayWithCapacity:seqProps.count];
@@ -1012,10 +1010,7 @@
 
   NSArray<KKTimingLane *> *lanes = nil;
   if (multiStageEnabled) {
-    NSString *json = nil;
-    [paramGetAPI getStringParameterValue:&json
-                           fromParameter:kKKParamMultiStageData];
-    lanes = [KKTimingLane lanesFromJSON:json];
+    lanes = KKReadLanesRebalanced(self.apiManager, paramGetAPI);
     if (lanes)
       KKInstanceStateForAPI(self.apiManager).lanesSnapshot = [lanes copy];
   }
@@ -1151,10 +1146,8 @@
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   id<FxParameterSettingAPI_v5> setAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  NSString *json = nil;
-  [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
   NSMutableArray<KKTimingLane *> *lanes =
-      [[KKTimingLane lanesFromJSON:json] mutableCopy];
+      KKReadLanesRebalanced(self.apiManager, getAPI);
   if (!lanes || (NSUInteger)laneIndex >= lanes.count) {
     [actAPI endAction:self];
     return;
@@ -1198,11 +1191,10 @@
   [actAPI startAction:self];
   id<FxParameterRetrievalAPI_v6> getAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  NSString *json = nil;
-  [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+  NSArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, getAPI);
   [actAPI endAction:self];
 
-  NSArray<KKTimingLane *> *lanes = [KKTimingLane lanesFromJSON:json];
   KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
   // Translate view index → JSON index up front; forward the JSON index to
   // every callback below so they don't have to repeat the translation.
