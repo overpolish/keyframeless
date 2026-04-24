@@ -67,6 +67,10 @@
   ];
 }
 
+- (NSSet<NSString *> *)animatablePropertyLabelsWithOSC {
+  return [NSSet setWithObjects:@"Radius", @"Offset", nil];
+}
+
 - (NSSet<NSString *> *)hiddenAnimatablePropertyLabels {
   KKColorMode mode = [self colorModeAtTime:kCMTimeZero];
   NSMutableSet<NSString *> *hidden = [NSMutableSet set];
