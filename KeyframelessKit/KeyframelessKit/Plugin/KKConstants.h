@@ -47,6 +47,12 @@ static const UInt32 kKKParamMultiStageSelectedStage __attribute__((unused)) =
 /// multiple copies of a plugin on the same timeline don't share state.
 static const UInt32 kKKParamInstanceID __attribute__((unused)) = 9922;
 
+/// Persisted toggle for sequencer loop-playback. The actual render-path loop
+/// check reads the mirror in KKPluginInstanceState.loopEnabled (populated
+/// from this param on apply-state ticks) to avoid touching FxParameter APIs
+/// from inside the render callback.
+static const UInt32 kKKParamTimingLoopEnabled __attribute__((unused)) = 9923;
+
 /// Color system parameters (9800–9810)
 static const UInt32 kKKParamColorGroup __attribute__((unused)) = 9800;
 static const UInt32 kKKParamColorMode __attribute__((unused)) = 9801;

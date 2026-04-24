@@ -68,6 +68,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) double cachedEffectStart;
 @property(nonatomic) double cachedEffectDuration;
 
+/// Cached native frame duration for the clip, in seconds. Populated from
+/// `FxTimingAPI_v4 frameDuration:`. Used by the loop pump to trigger
+/// loop-back at the last rendered frame regardless of frame rate.
+@property(nonatomic) double cachedFrameDuration;
+
 /// Re-entrancy guard: YES while a segment-selection callback is writing
 /// native params so `multiStageHandleParameterChanged:` skips its work.
 @property(nonatomic) BOOL selectionInProgress;
@@ -97,6 +102,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Updated by `-multiStageRefreshLaneVisibility`; applied as a filter to
 /// every `seq.lanes =` push.
 @property(nonatomic, copy, nullable) NSSet<NSString *> *hiddenLaneLabels;
+
+/// Whether the sequencer's loop-playback toggle is on. Session-scoped (not
+/// persisted across FCP restarts, not written to a param). Written from the
+/// ruler's loop button, consulted by the render pump to decide whether to
+/// wrap playback back to the effect start when the playhead passes the end.
+@property(nonatomic) BOOL loopEnabled;
 
 @end
 

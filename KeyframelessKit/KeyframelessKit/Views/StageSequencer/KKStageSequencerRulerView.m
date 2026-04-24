@@ -34,6 +34,7 @@ static NSString *_rulerTimecode(double seconds) {
 
 @implementation KKStageSequencerRulerView {
   BOOL _scrubbing;
+  NSButton *_loopButton;
 }
 
 + (CGFloat)preferredHeight {
@@ -46,8 +47,50 @@ static NSString *_rulerTimecode(double seconds) {
     self.wantsLayer = YES;
     _zoom = 1.0;
     _panOffset = 0.0;
+
+    NSImage *loopImage = [NSImage imageWithSystemSymbolName:@"repeat"
+                                   accessibilityDescription:@"Loop playback"];
+    NSImageSymbolConfiguration *cfg = [NSImageSymbolConfiguration
+        configurationWithPointSize:9.0
+                            weight:NSFontWeightMedium];
+    loopImage = [loopImage imageWithSymbolConfiguration:cfg];
+
+    _loopButton = [NSButton buttonWithImage:loopImage
+                                     target:self
+                                     action:@selector(_loopButtonClicked:)];
+    _loopButton.bordered = NO;
+    _loopButton.buttonType = NSButtonTypeToggle;
+    _loopButton.imagePosition = NSImageOnly;
+    _loopButton.toolTip = @"Loop clip playback";
+    _loopButton.contentTintColor = [NSColor timelineLabel];
+    [self addSubview:_loopButton];
   }
   return self;
+}
+
+- (void)layout {
+  [super layout];
+  CGFloat h = NSHeight(self.bounds);
+  _loopButton.frame = NSMakeRect(kKSSBorderInset, 0, 16, h);
+}
+
+- (void)setLoopEnabled:(BOOL)loopEnabled {
+  if (_loopEnabled == loopEnabled)
+    return;
+  _loopEnabled = loopEnabled;
+  _loopButton.state =
+      loopEnabled ? NSControlStateValueOn : NSControlStateValueOff;
+  _loopButton.contentTintColor =
+      loopEnabled ? [NSColor accentMatchingHost] : [NSColor timelineLabel];
+}
+
+- (void)_loopButtonClicked:(NSButton *)sender {
+  BOOL newState = (sender.state == NSControlStateValueOn);
+  _loopEnabled = newState;
+  _loopButton.contentTintColor =
+      newState ? [NSColor accentMatchingHost] : [NSColor timelineLabel];
+  if (self.onLoopToggled)
+    self.onLoopToggled(newState);
 }
 
 - (void)setEffectDuration:(double)effectDuration {

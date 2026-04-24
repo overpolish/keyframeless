@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#import "../KKLog.h"
 #import "../Math/KKTimingStage.h"
 #import "../Views/KKAnimatableProperty.h"
 #import "../Views/StageSequencer/KKStagePlayheadView.h"
@@ -546,6 +547,26 @@
                                         anchorRect:anchorRect
                                         sourceView:weakSeqForPopover];
       };
+
+  rulerView.onLoopToggled = ^(BOOL newState) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    // Write the param and stop. The loop-sync pump (runs on every drawOSC
+    // and render tick) picks up the change and pushes it back to every
+    // ruler (primary + additional). Inspector↔window sync is automatic.
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    if (!actAPI)
+      return;
+    [actAPI startAction:strongSelf];
+    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [setAPI setBoolValue:newState
+             toParameter:kKKParamTimingLoopEnabled
+                  atTime:kCMTimeZero];
+    [actAPI endAction:strongSelf];
+  };
 
   rulerView.onPlayheadScrub = ^(double fraction) {
     __strong typeof(weakSelf) strongSelf = weakSelf;

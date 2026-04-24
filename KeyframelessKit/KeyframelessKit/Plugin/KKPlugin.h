@@ -171,7 +171,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// after any `parameterChanged:` to avoid FCP's warm-up renders flickering
 /// the playhead to frame 0).
 + (void)multiStageRenderTickForAPI:(id<PROAPIAccessing>)apiManager
-                            atTime:(CMTime)renderTime;
+                            atTime:(CMTime)renderTime
+                            sender:(id)sender;
 
 /// Individual pump primitives beneath the consolidated ticks above. Most
 /// plugins should call the `*TickForAPI:atTime:` methods instead of these;
@@ -182,7 +183,8 @@ NS_ASSUME_NONNULL_BEGIN
                                  atTime:(CMTime)time;
 + (void)multiStageUpdatePlayheadsFromRenderForAPI:
             (id<PROAPIAccessing>)apiManager
-                                           atTime:(CMTime)time;
+                                           atTime:(CMTime)time
+                                           sender:(id)sender;
 
 /// Returns whether the OSC for the animatable property with `label` should
 /// be drawn. Returns NO only when the user has toggled that lane's OSC off
