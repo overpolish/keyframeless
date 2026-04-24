@@ -50,6 +50,41 @@
 }
 @end
 
+@interface KKRemoteWindowKeyHandlerView : NSView
+@property(nonatomic, copy, nullable) void (^onTogglePlayback)(void);
+@property(nonatomic, strong, nullable) id eventMonitor;
+@end
+@implementation KKRemoteWindowKeyHandlerView
+- (void)viewDidMoveToWindow {
+  [super viewDidMoveToWindow];
+  if (self.window && !self.eventMonitor) {
+    __weak typeof(self) weakSelf = self;
+    self.eventMonitor = [NSEvent
+        addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown
+                                     handler:^NSEvent *(NSEvent *evt) {
+                                       __strong typeof(weakSelf) s = weakSelf;
+                                       if (!s)
+                                         return evt;
+                                       if (evt.window == s.window &&
+                                           [evt.charactersIgnoringModifiers
+                                               isEqualToString:@" "] &&
+                                           s.onTogglePlayback) {
+                                         s.onTogglePlayback();
+                                         return nil;
+                                       }
+                                       return evt;
+                                     }];
+  } else if (!self.window && self.eventMonitor) {
+    [NSEvent removeMonitor:self.eventMonitor];
+    self.eventMonitor = nil;
+  }
+}
+- (void)dealloc {
+  if (_eventMonitor)
+    [NSEvent removeMonitor:_eventMonitor];
+}
+@end
+
 @interface KKScrollShadowObserver : NSObject
 @end
 @implementation KKScrollShadowObserver {
@@ -362,18 +397,53 @@
                      // first-render offset. Attach to the superview
                      // (the XPC jail) which is correctly sized.
                      NSView *host = parentView.superview ?: parentView;
+                     KKRemoteWindowKeyHandlerView *keyHandler =
+                         [[KKRemoteWindowKeyHandlerView alloc]
+                             initWithFrame:NSZeroRect];
+                     keyHandler.translatesAutoresizingMaskIntoConstraints = NO;
+                     __weak typeof(strongSelf) weakForKey = strongSelf;
+                     keyHandler.onTogglePlayback = ^{
+                       __strong typeof(weakForKey) s = weakForKey;
+                       if (!s)
+                         return;
+                       // FxCommandAPI resolves to nil outside an action scope.
+                       id<FxCustomParameterActionAPI_v4> actionAPI =
+                           [s.apiManager
+                               apiForProtocol:
+                                   @protocol(FxCustomParameterActionAPI_v4)];
+                       if (!actionAPI)
+                         return;
+                       [actionAPI startAction:s];
+                       id<FxCommandAPI_v2> cmd = [s.apiManager
+                           apiForProtocol:@protocol(FxCommandAPI_v2)];
+                       [cmd performCommand:kFxCommand_TogglePlayback error:nil];
+                       [actionAPI endAction:s];
+                     };
+                     [host addSubview:keyHandler];
+                     [NSLayoutConstraint activateConstraints:@[
+                       [keyHandler.leadingAnchor
+                           constraintEqualToAnchor:host.leadingAnchor],
+                       [keyHandler.trailingAnchor
+                           constraintEqualToAnchor:host.trailingAnchor],
+                       [keyHandler.topAnchor
+                           constraintEqualToAnchor:host.topAnchor],
+                       [keyHandler.bottomAnchor
+                           constraintEqualToAnchor:host.bottomAnchor],
+                     ]];
+
                      NSView *graph =
                          [strongSelf _createTimingGraphViewUncapped:YES];
                      graph.translatesAutoresizingMaskIntoConstraints = NO;
-                     [host addSubview:graph];
+                     [keyHandler addSubview:graph];
                      [NSLayoutConstraint activateConstraints:@[
                        [graph.leadingAnchor
-                           constraintEqualToAnchor:host.leadingAnchor],
+                           constraintEqualToAnchor:keyHandler.leadingAnchor],
                        [graph.trailingAnchor
-                           constraintEqualToAnchor:host.trailingAnchor],
-                       [graph.topAnchor constraintEqualToAnchor:host.topAnchor],
+                           constraintEqualToAnchor:keyHandler.trailingAnchor],
+                       [graph.topAnchor
+                           constraintEqualToAnchor:keyHandler.topAnchor],
                        [graph.bottomAnchor
-                           constraintEqualToAnchor:host.bottomAnchor],
+                           constraintEqualToAnchor:keyHandler.bottomAnchor],
                      ]];
                    }];
 
