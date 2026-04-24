@@ -40,12 +40,35 @@ static float paddingForRadius(double radius, float minDim) {
   return self;
 }
 
+- (BOOL)getCanvasTopRight:(CGPoint *)outTopRight
+               bottomLeft:(CGPoint *)outBottomLeft {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  if (!oscAPI)
+    return NO;
+  CGPoint tr = {0, 0}, bl = {0, 0};
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:1.0
+                          fromY:1.0
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&tr.x
+                            toY:&tr.y];
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:0.0
+                          fromY:0.0
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&bl.x
+                            toY:&bl.y];
+  if (outTopRight)
+    *outTopRight = tr;
+  if (outBottomLeft)
+    *outBottomLeft = bl;
+  return YES;
+}
+
 - (CGPoint)oscPositionAtTime:(CMTime)time {
   CGPoint topRight = {0, 0}, bottomLeft = {0, 0};
-  if (![self.cropOSC getTopRight:&topRight
-                      bottomLeft:&bottomLeft
-                 fullImageCanvas:NULL
-                          atTime:time])
+  if (![self getCanvasTopRight:&topRight bottomLeft:&bottomLeft])
     return CGPointZero;
 
   float canvasImageWidth = topRight.x - bottomLeft.x;
@@ -188,10 +211,7 @@ static float paddingForRadius(double radius, float minDim) {
     return;
 
   CGPoint topRight = {0, 0}, bottomLeft = {0, 0};
-  if (![self.cropOSC getTopRight:&topRight
-                      bottomLeft:&bottomLeft
-                 fullImageCanvas:NULL
-                          atTime:time])
+  if (![self getCanvasTopRight:&topRight bottomLeft:&bottomLeft])
     return;
 
   float canvasImageWidth = topRight.x - bottomLeft.x;
