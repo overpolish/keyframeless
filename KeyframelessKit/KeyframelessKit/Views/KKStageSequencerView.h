@@ -55,6 +55,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// is in this view's coordinate space — use it to anchor a popover.
 @property(nonatomic, copy, nullable) void (^onSegmentEditRequested)
     (NSInteger laneIndex, NSInteger segmentIndex, NSRect anchorRect);
+/// Called when the user opt-drags one segment onto another in the same lane.
+/// The handler should copy `values` from the source segment to the destination
+/// segment and leave everything else (type, easing, hold effect, intensity,
+/// frequency, seed, start, end) intact.
+@property(nonatomic, copy, nullable) void (^onSegmentValuesCopied)
+    (NSInteger laneIndex, NSInteger srcSegmentIndex, NSInteger dstSegmentIndex);
 /// Called when user clicks/drags the ruler to scrub the playhead.
 /// Fraction is 0–1 of clip duration.
 @property(nonatomic, copy, nullable) void (^onPlayheadScrub)(double fraction);

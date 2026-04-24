@@ -45,10 +45,15 @@ static const NSInteger kKSSCurveSegments __attribute__((unused)) = 40;
   CGFloat _dragMoveStartFrac;
   double _dragMoveOrigStart;
   double _dragMoveOrigEnd;
-  // Drag state (lane move — Option+drag).
+  // Drag state (lane move — Control+drag).
   BOOL _dragLaneMoving;
   CGFloat _dragLaneMoveStartFrac;
   NSArray<KKTimingSegment *> *_dragLaneMoveOrigSegs;
+  // Drag state (value copy — Option+drag).
+  BOOL _dragValueCopying;
+  NSInteger _dragCopyLaneIdx;
+  NSInteger _dragCopySrcSegIdx;
+  NSInteger _dragCopyDstSegIdx;
   // Hover state.
   NSInteger _hoverLaneIdx;
   NSInteger _hoverSegIdx;

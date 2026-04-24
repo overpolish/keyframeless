@@ -1182,6 +1182,84 @@
     [strongSelf timingGraphApplyState];
   };
 
+  seqView.onSegmentValuesCopied = ^(NSInteger laneIndex,
+                                    NSInteger srcSegmentIndex,
+                                    NSInteger dstSegmentIndex) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    KKPluginInstanceState *state = KKInstanceStateForAPI(strongSelf.apiManager);
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actAPI startAction:strongSelf];
+    id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    CMTime ct = [actAPI currentTime];
+    NSString *json = nil;
+    [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+    NSMutableArray<KKTimingLane *> *lanes =
+        [[KKTimingLane lanesFromJSON:json] mutableCopy];
+    NSInteger jsonIdx =
+        KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
+    if (!lanes || jsonIdx < 0) {
+      [actAPI endAction:strongSelf];
+      return;
+    }
+    KKTimingLane *lane = [lanes[jsonIdx] copy];
+    NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
+    if ((NSUInteger)srcSegmentIndex >= segs.count ||
+        (NSUInteger)dstSegmentIndex >= segs.count ||
+        srcSegmentIndex == dstSegmentIndex) {
+      [actAPI endAction:strongSelf];
+      return;
+    }
+    NSArray<NSNumber *> *newVals = [segs[srcSegmentIndex].values copy];
+    KKTimingSegment *dst = [segs[dstSegmentIndex] copy];
+    dst.values = newVals;
+    segs[dstSegmentIndex] = dst;
+    lane.segments = segs;
+    lanes[jsonIdx] = lane;
+
+    NSString *updated = [KKTimingLane jsonFromLanes:lanes];
+    if (updated)
+      [setAPI setStringParameterValue:updated
+                          toParameter:kKKParamMultiStageData];
+
+    // When the destination is the currently-selected segment, native params
+    // still hold its pre-copy values. Push the new values through so the next
+    // click on this segment doesn't write the stale native values back into
+    // it during onSegmentSelected's write-back step.
+    KKAnimatableProperty *prop = nil;
+    if (dstSegmentIndex == lane.selectedSegment) {
+      for (KKAnimatableProperty *p in [strongSelf animatableProperties]) {
+        if ([p.label isEqualToString:lane.propertyLabel]) {
+          prop = p;
+          break;
+        }
+      }
+      if (prop && prop.valueParamIDs.count > 0) {
+        if (state)
+          state.selectionInProgress = YES;
+        [prop writeValues:newVals withSetAPI:setAPI atTime:ct];
+        if (state) {
+          state.lanesSnapshot = [lanes copy];
+          state.pendingLanes = nil;
+        }
+      }
+    }
+
+    [actAPI endAction:strongSelf];
+    if (state)
+      state.selectionInProgress = NO;
+    if (prop)
+      [KKPlugin colorPushGradientForProperty:prop
+                                      values:newVals
+                                  apiManager:strongSelf.apiManager];
+    [strongSelf timingGraphApplyState];
+  };
+
   __weak KKStageSequencerView *weakSeqForPopover = seqView;
   seqView.onSegmentEditRequested =
       ^(NSInteger laneIndex, NSInteger segmentIndex, NSRect anchorRect) {
