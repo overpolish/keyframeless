@@ -5,11 +5,13 @@
 
 #import "../KKLog.h"
 #import "../Math/KKEasing.h"
+#import "../Math/KKGradientSampling.h"
 #import "../Math/KKTimingStage.h"
 #import "../Update/KKUpdateChecker.h"
 #import "../Views/KKAnimatableProperty.h"
 #import "../Views/KKStageSequencerView.h"
 #import "../Views/KKTimingGraphView.h"
+#import "KKColor.h"
 #import "KKConstants.h"
 #import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
@@ -19,6 +21,56 @@
 /// pump to suppress render-sourced playhead updates in the wake of a slider
 /// drag. Defined in KKPlugin+MultiStagePump.m.
 extern void KKMultiStageMarkParameterChanged(void);
+
+/// Whether a property's native param list is a single gradient (the kind
+/// consumes all segment values, so a gradient property has exactly one
+/// entry in valueParamIDs).
+static BOOL KKPropertyIsGradient(KKAnimatableProperty *prop) {
+  for (NSNumber *k in prop.valueParamKinds)
+    if (k.integerValue == KKAnimatableParamKindGradient)
+      return YES;
+  return NO;
+}
+
+/// Interpolate two flattened gradients at eased `t`. Falls through to LUT
+/// blending when stop counts differ — see conversation notes on why
+/// structural-when-possible preserves natural midpoint/position animation.
+/// Output is always flat LUT (`[r0, g0, b0, r1, ...]`, length `3 * size`).
+static NSArray<NSNumber *> *
+KKGradientInterpFlatLUT(NSArray<NSNumber *> *fromFlat,
+                        NSArray<NSNumber *> *toFlat, double t, int size) {
+  BOOL structural = fromFlat.count >= 10 && fromFlat.count == toFlat.count &&
+                    (fromFlat.count % 5) == 0;
+  NSArray<KKGradientStop *> *stops;
+  if (structural) {
+    NSMutableArray<NSNumber *> *blended =
+        [NSMutableArray arrayWithCapacity:fromFlat.count];
+    for (NSUInteger i = 0; i < fromFlat.count; i++) {
+      double a = fromFlat[i].doubleValue;
+      double b = toFlat[i].doubleValue;
+      [blended addObject:@(a + (b - a) * t)];
+    }
+    stops = KKGradientStopsFromFlat(blended);
+    return KKGradientFlatLUTFromStops(stops ?: @[], size);
+  }
+  simd_float3 *lutA = (simd_float3 *)malloc(sizeof(simd_float3) * (size_t)size);
+  simd_float3 *lutB = (simd_float3 *)malloc(sizeof(simd_float3) * (size_t)size);
+  KKGradientSampleStopsToLUT(KKGradientStopsFromFlat(fromFlat) ?: @[], lutA,
+                             size);
+  KKGradientSampleStopsToLUT(KKGradientStopsFromFlat(toFlat) ?: @[], lutB,
+                             size);
+  NSMutableArray<NSNumber *> *out =
+      [NSMutableArray arrayWithCapacity:(NSUInteger)size * 3];
+  for (int i = 0; i < size; i++) {
+    simd_float3 v = lutA[i] + (lutB[i] - lutA[i]) * (float)t;
+    [out addObject:@((double)v.x)];
+    [out addObject:@((double)v.y)];
+    [out addObject:@((double)v.z)];
+  }
+  free(lutA);
+  free(lutB);
+  return out;
+}
 
 static BOOL KKAddParam(BOOL ok, NSError **err, NSString *desc) {
   if (ok)
@@ -488,6 +540,11 @@ static const FxParameterFlags kCustomUIDisabled =
   NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *result =
       [NSMutableDictionary dictionaryWithCapacity:lanes.count];
 
+  NSMutableDictionary<NSString *, KKAnimatableProperty *> *propByLabel =
+      [NSMutableDictionary dictionaryWithCapacity:props.count];
+  for (KKAnimatableProperty *p in props)
+    propByLabel[p.label] = p;
+
   for (KKTimingLane *lane in lanes) {
     if (!lane.enabled)
       continue;
@@ -510,8 +567,17 @@ static const FxParameterFlags kCustomUIDisabled =
     if (!active)
       continue;
 
+    BOOL gradientLane = KKPropertyIsGradient(propByLabel[lane.propertyLabel]);
+
     if (active.type == KKSegmentTypeHold) {
-      if (active.holdEffect == KKHoldEffectNone) {
+      if (gradientLane) {
+        // Hold segment → just rasterize this segment's stops into a LUT.
+        // Hold-effect modulation (intensity/frequency) isn't meaningful for
+        // a gradient, so it's skipped here intentionally.
+        result[lane.propertyLabel] = KKGradientFlatLUTFromStops(
+            KKGradientStopsFromFlat(active.values) ?: @[],
+            KK_GRADIENT_LUT_SIZE);
+      } else if (active.holdEffect == KKHoldEffectNone) {
         result[lane.propertyLabel] = active.values;
       } else {
         double segDur = active.end - active.start;
@@ -545,15 +611,20 @@ static const FxParameterFlags kCustomUIDisabled =
       if (isAnimateOut)
         easedT = 1.0 - easedT;
 
-      NSUInteger valCount = MIN(fromVals.count, toVals.count);
-      NSMutableArray<NSNumber *> *interpolated =
-          [NSMutableArray arrayWithCapacity:valCount];
-      for (NSUInteger i = 0; i < valCount; i++) {
-        double fv = fromVals[i].doubleValue;
-        double tv = toVals[i].doubleValue;
-        [interpolated addObject:@(fv + (tv - fv) * easedT)];
+      if (gradientLane) {
+        result[lane.propertyLabel] = KKGradientInterpFlatLUT(
+            fromVals, toVals, easedT, KK_GRADIENT_LUT_SIZE);
+      } else {
+        NSUInteger valCount = MIN(fromVals.count, toVals.count);
+        NSMutableArray<NSNumber *> *interpolated =
+            [NSMutableArray arrayWithCapacity:valCount];
+        for (NSUInteger i = 0; i < valCount; i++) {
+          double fv = fromVals[i].doubleValue;
+          double tv = toVals[i].doubleValue;
+          [interpolated addObject:@(fv + (tv - fv) * easedT)];
+        }
+        result[lane.propertyLabel] = interpolated;
       }
-      result[lane.propertyLabel] = interpolated;
     }
   }
 
@@ -634,6 +705,21 @@ static const FxParameterFlags kCustomUIDisabled =
       if (json)
         [paramSetAPI setStringParameterValue:json
                                  toParameter:kKKParamMultiStageData];
+    }
+
+    // Push to the view immediately — pendingLanes flush only runs on the
+    // next drawOSC/render tick, which is too slow for live picker edits.
+    KKStageSequencerView *seq = state.sequencerView;
+    NSArray<KKTimingViewRefs *> *extras =
+        [state.additionalTimingViews copy] ?: @[];
+    if (seq || extras.count) {
+      NSArray<KKTimingLane *> *visible =
+          KKFilterLanesForVisibility(updated, state.hiddenLaneLabels);
+      dispatch_async(dispatch_get_main_queue(), ^{
+        seq.lanes = visible;
+        for (KKTimingViewRefs *r in extras)
+          r.seqView.lanes = visible;
+      });
     }
     return YES;
   }

@@ -235,6 +235,20 @@ static void _texPairReturn(NSInteger idx) {
                                (float)msColor[2].doubleValue};
   }
 
+  // Multi-stage gradient LUT: `[r0, g0, b0, r1, g1, b1, ...]` of length
+  // `3 * KK_GRADIENT_LUT_SIZE` — wins over the static gradient when present.
+  NSArray<NSNumber *> *msGradient = multiStage[@"Gradient"];
+  if (color.mode == KKColorModeGradient &&
+      msGradient.count == (NSUInteger)(KK_GRADIENT_LUT_SIZE * 3)) {
+    for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++) {
+      finalLUT[i] = (simd_float3){
+          (float)msGradient[i * 3 + 0].doubleValue,
+          (float)msGradient[i * 3 + 1].doubleValue,
+          (float)msGradient[i * 3 + 2].doubleValue,
+      };
+    }
+  }
+
   NSArray<NSNumber *> *msRadius = multiStage[@"Radius"];
   NSArray<NSNumber *> *msIntensity = multiStage[@"Intensity"];
   NSArray<NSNumber *> *msFalloff = multiStage[@"Falloff"];

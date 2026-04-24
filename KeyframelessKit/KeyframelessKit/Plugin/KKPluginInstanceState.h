@@ -114,6 +114,17 @@ KKPluginInstanceState *_Nullable KKInstanceStateForUUID(
 /// Convenience wrapper: UUID lookup + state lookup in one call.
 KKPluginInstanceState *_Nullable KKInstanceStateForAPI(id<PROAPIAccessing> api);
 
+/// Like `KKInstanceStateForAPI` but generates and persists a UUID to
+/// `kKKParamInstanceID` if one is not yet set, so subsequent lookups across
+/// fresh FxPlug plugin instances resolve to the same state entry. Must be
+/// called inside an `startAction:/endAction:` scope (required for the
+/// string-param write). Any custom-UI creation that stores per-instance
+/// state (e.g. gradient bar) should use this — otherwise, if the custom UI
+/// runs before the first sequencer is registered, the state assignment
+/// silently no-ops on nil and the UI stays disconnected until a remount.
+KKPluginInstanceState *_Nullable KKInstanceStateEnsureForAPI(
+    id<PROAPIAccessing> api);
+
 /// Snapshot of all live per-instance states. Used by the OSC flush pump to
 /// broadcast view updates across every effect instance — any single running
 /// `drawOSC` (the OSC-selected effect) can deliver updates to every live

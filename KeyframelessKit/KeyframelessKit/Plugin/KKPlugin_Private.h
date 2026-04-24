@@ -25,6 +25,16 @@ extern NSArray<KKTimingLane *> *
 KKFilterLanesForVisibility(NSArray<KKTimingLane *> *lanes,
                            NSSet<NSString *> *_Nullable hidden);
 
+/// Translates a viewIndex (index into the filtered, view-visible lane list)
+/// to the JSON index (index into the full unfiltered lane array). Returns
+/// -1 if `viewIndex` is out of range. Sequencer callbacks receive view
+/// indices but persist via the unfiltered JSON, so every callback that
+/// mutates `lanes` must translate first or it will edit the wrong lane.
+extern NSInteger
+KKLaneJSONIndexForViewIndex(NSInteger viewIndex,
+                            NSArray<KKTimingLane *> *jsonLanes,
+                            NSSet<NSString *> *_Nullable hidden);
+
 @interface KKPlugin () <FxCustomParameterViewHost_v2>
 
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *timingHeader;

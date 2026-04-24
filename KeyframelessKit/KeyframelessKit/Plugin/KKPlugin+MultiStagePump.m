@@ -53,6 +53,24 @@ KKFilterLanesForVisibility(NSArray<KKTimingLane *> *lanes,
   return [filtered copy];
 }
 
+NSInteger KKLaneJSONIndexForViewIndex(NSInteger viewIndex,
+                                      NSArray<KKTimingLane *> *jsonLanes,
+                                      NSSet<NSString *> *hidden) {
+  if (viewIndex < 0)
+    return -1;
+  if (!hidden.count)
+    return viewIndex < (NSInteger)jsonLanes.count ? viewIndex : -1;
+  NSInteger seen = 0;
+  for (NSInteger i = 0; i < (NSInteger)jsonLanes.count; i++) {
+    if ([hidden containsObject:jsonLanes[i].propertyLabel])
+      continue;
+    if (seen == viewIndex)
+      return i;
+    seen++;
+  }
+  return -1;
+}
+
 static void KKFlushPendingLanes(void) {
   // Broadcast: any running callback flushes pending lanes for every live
   // instance, not just its own. FCP only runs `drawOSC` for the OSC-selected
@@ -258,15 +276,7 @@ static void KKBroadcastPlayheads(double nowSec) {
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actAPI startAction:self];
 
-  NSString *uuid = KKInstanceUUIDForAPI(self.apiManager);
-  if (!uuid.length) {
-    uuid = [[NSUUID UUID] UUIDString];
-    id<FxParameterSettingAPI_v5> setAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    [setAPI setStringParameterValue:uuid toParameter:kKKParamInstanceID];
-    // Re-read via helper so it caches on the api manager.
-    uuid = KKInstanceUUIDForAPI(self.apiManager);
-  }
+  KKPluginInstanceState *state = KKInstanceStateEnsureForAPI(self.apiManager);
 
   // Cache timing while still in action scope — FxTimingAPI is only reliably
   // queryable here. The playhead pump reads this cache for non-active
@@ -281,7 +291,6 @@ static void KKBroadcastPlayheads(double nowSec) {
   }
   [actAPI endAction:self];
 
-  KKPluginInstanceState *state = KKInstanceStateForUUID(uuid);
   state.sequencerView = view;
   state.rulerView = ruler;
   state.playheadView = playhead;

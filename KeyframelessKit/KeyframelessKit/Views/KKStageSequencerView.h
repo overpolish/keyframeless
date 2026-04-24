@@ -18,6 +18,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// Per-lane selection is read from each lane's selectedSegment property.
 @property(nonatomic, copy) NSArray<KKTimingLane *> *lanes;
 
+/// Optional mapping from `propertyLabel` to a `KKAnimatableParamKind` boxed
+/// as `NSNumber`. Lets the renderer draw color/gradient lanes as a color
+/// strip + single easing curve instead of plotting flat NSNumber values as
+/// a multi-component line graph (which is meaningless for RGB/stop data).
+/// Labels missing from the dict fall back to the scalar line rendering.
+@property(nonatomic, copy, nullable)
+    NSDictionary<NSString *, NSNumber *> *laneKindsByLabel;
+
 /// Effect duration in seconds (for timecode ruler labels).
 @property(nonatomic, assign) double effectDuration;
 

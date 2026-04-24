@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#import "../Math/KKGradientSampling.h"
+#import "../Views/KKAnimatableProperty.h"
 #import "KKPlugin+Color.h"
 #import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
@@ -27,99 +29,6 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
   return objc_getAssociatedObject([self class], kColorModesKey) ?: @[
     @(KKColorModeSolid), @(KKColorModeGradient), @(KKColorModeDynamic)
   ];
-}
-
-static NSArray<KKGradientStop *> *_parseStops(NSString *json) {
-  if (!json.length)
-    return nil;
-  NSData *data = [json dataUsingEncoding:NSUTF8StringEncoding];
-  if (!data)
-    return nil;
-  NSArray *arr = [NSJSONSerialization JSONObjectWithData:data
-                                                 options:0
-                                                   error:nil];
-  if (![arr isKindOfClass:[NSArray class]])
-    return nil;
-  NSMutableArray<KKGradientStop *> *stops = [NSMutableArray new];
-  for (NSDictionary *d in arr) {
-    if (![d isKindOfClass:[NSDictionary class]])
-      continue;
-    CGFloat midpoint = d[@"m"] ? [d[@"m"] doubleValue] : 0.5;
-    [stops addObject:[KKGradientStop
-                         stopWithPosition:[d[@"p"] doubleValue]
-                                    color:[NSColor
-                                              colorWithRed:[d[@"r"] doubleValue]
-                                                     green:[d[@"g"] doubleValue]
-                                                      blue:[d[@"b"] doubleValue]
-                                                     alpha:1.0]
-                                 midpoint:midpoint]];
-  }
-  return stops.count >= 2 ? stops : nil;
-}
-
-static NSString *_stopsToJSON(NSArray<KKGradientStop *> *stops) {
-  NSMutableArray *arr = [NSMutableArray new];
-  for (KKGradientStop *s in stops) {
-    CGFloat r = 0, g = 0, b = 0, a = 0;
-    NSColor *c = [s.color colorUsingColorSpace:[NSColorSpace sRGBColorSpace]];
-    if (c)
-      [c getRed:&r green:&g blue:&b alpha:&a];
-    else
-      [s.color getRed:&r green:&g blue:&b alpha:&a];
-    [arr addObject:@{
-      @"p" : @((double)s.position),
-      @"r" : @((double)r),
-      @"g" : @((double)g),
-      @"b" : @((double)b),
-      @"m" : @((double)s.midpoint)
-    }];
-  }
-  NSData *data = [NSJSONSerialization dataWithJSONObject:arr
-                                                 options:0
-                                                   error:nil];
-  if (!data)
-    return nil;
-  return [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-}
-
-static void _sampleStopsIntoLUT(NSArray<KKGradientStop *> *stops,
-                                simd_float3 *lut) {
-  NSArray<KKGradientStop *> *sorted = [stops
-      sortedArrayUsingComparator:^(KKGradientStop *a, KKGradientStop *b) {
-        if (a.position < b.position)
-          return NSOrderedAscending;
-        if (a.position > b.position)
-          return NSOrderedDescending;
-        return NSOrderedSame;
-      }];
-  for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++) {
-    CGFloat t = (CGFloat)i / (CGFloat)(KK_GRADIENT_LUT_SIZE - 1);
-    KKGradientStop *lo = sorted.firstObject;
-    KKGradientStop *hi = sorted.lastObject;
-    for (NSUInteger j = 0; j < sorted.count - 1; j++) {
-      if (t >= sorted[j].position && t <= sorted[j + 1].position) {
-        lo = sorted[j];
-        hi = sorted[j + 1];
-        break;
-      }
-    }
-    CGFloat f = (hi.position > lo.position)
-                    ? (t - lo.position) / (hi.position - lo.position)
-                    : 0.0;
-    f = fmax(0.0, fmin(1.0, f));
-    CGFloat m = lo.midpoint;
-    if (m > 0.0 && m < 1.0) {
-      if (f <= m)
-        f = 0.5 * (f / m);
-      else
-        f = 0.5 + 0.5 * ((f - m) / (1.0 - m));
-    }
-    NSColor *blended = [lo.color blendedColorWithFraction:f ofColor:hi.color];
-    NSColor *rgb = [blended colorUsingColorSpace:[NSColorSpace sRGBColorSpace]];
-    lut[i] =
-        (simd_float3){(float)[rgb redComponent], (float)[rgb greenComponent],
-                      (float)[rgb blueComponent]};
-  }
 }
 
 @implementation KKPlugin (Color)
@@ -245,10 +154,10 @@ static void _sampleStopsIntoLUT(NSArray<KKGradientStop *> *stops,
     NSString *json = nil;
     [paramGetAPI getStringParameterValue:&json
                            fromParameter:kKKParamGradientData];
-    NSArray<KKGradientStop *> *stops = _parseStops(json);
+    NSArray<KKGradientStop *> *stops = KKGradientStopsFromJSON(json);
     simd_float3 lut[KK_GRADIENT_LUT_SIZE];
     if (stops.count >= 2) {
-      _sampleStopsIntoLUT(stops, lut);
+      KKGradientSampleStopsToLUT(stops, lut, KK_GRADIENT_LUT_SIZE);
     } else {
       for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++)
         lut[i] = (simd_float3){1, 1, 1};
@@ -336,13 +245,22 @@ static void _sampleStopsIntoLUT(NSArray<KKGradientStop *> *stops,
 
   KKGradientBarView *bar = [[KKGradientBarView alloc] initWithFrame:NSZeroRect];
   bar.translatesAutoresizingMaskIntoConstraints = NO;
-  NSArray<KKGradientStop *> *stops = _parseStops(gradientJson);
+  NSArray<KKGradientStop *> *stops = KKGradientStopsFromJSON(gradientJson);
   if (stops)
     bar.stops = stops;
   objc_setAssociatedObject([self class], kGradientBarKey, bar,
                            OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-  KKPluginInstanceState *instanceState = KKInstanceStateForAPI(self.apiManager);
+  // Ensure the UUID exists — the timing-UI creation path normally generates
+  // it, but the color custom UI can be mounted first on some inspector
+  // layouts. Without a UUID, `state` would be nil and the bar would never
+  // register, causing live updates to silently fail until a remount.
+  id<FxCustomParameterActionAPI_v4> registerAction =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [registerAction startAction:self];
+  KKPluginInstanceState *instanceState =
+      KKInstanceStateEnsureForAPI(self.apiManager);
+  [registerAction endAction:self];
   instanceState.gradientBar = bar;
   instanceState.gradientJSONSnapshot = gradientJson;
 
@@ -430,7 +348,7 @@ static void _sampleStopsIntoLUT(NSArray<KKGradientStop *> *stops,
     __strong typeof(weakSelf) strongSelf = weakSelf;
     if (!strongSelf)
       return;
-    NSString *json = _stopsToJSON(newStops);
+    NSString *json = KKGradientJSONFromStops(newStops);
     if (!json)
       return;
     KKGradientFavoritesPopover *fp =
@@ -457,7 +375,7 @@ static void _sampleStopsIntoLUT(NSArray<KKGradientStop *> *stops,
     KKGradientFavoritesPopover *fp =
         objc_getAssociatedObject([strongSelf class], kGradientFavPopoverKey);
     fp.currentStops = newStops;
-    NSString *json = _stopsToJSON(newStops);
+    NSString *json = KKGradientJSONFromStops(newStops);
     if (!json)
       return;
     KKPluginInstanceState *s = KKInstanceStateForAPI(strongSelf.apiManager);
@@ -494,6 +412,35 @@ static void _sampleStopsIntoLUT(NSArray<KKGradientStop *> *stops,
   [bar distributeStopsEvenly];
 }
 
++ (void)colorPushGradientForProperty:(KKAnimatableProperty *)prop
+                              values:(NSArray<NSNumber *> *)flatValues
+                          apiManager:(id<PROAPIAccessing>)apiManager {
+  BOOL isGradient = NO;
+  for (NSNumber *k in prop.valueParamKinds) {
+    if (k.integerValue == KKAnimatableParamKindGradient) {
+      isGradient = YES;
+      break;
+    }
+  }
+  if (!isGradient)
+    return;
+  KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
+  KKGradientBarView *bar = state.gradientBar;
+  if (!bar)
+    return;
+  NSArray<KKGradientStop *> *stops = KKGradientStopsFromFlat(flatValues);
+  if (!stops)
+    return;
+  state.gradientJSONSnapshot = KKGradientJSONFromStops(stops);
+  Class klass = [self class];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    bar.stops = stops;
+    KKGradientFavoritesPopover *fp =
+        objc_getAssociatedObject(klass, kGradientFavPopoverKey);
+    fp.currentStops = stops;
+  });
+}
+
 + (void)colorSyncFromParams:(id<PROAPIAccessing>)apiManager {
   KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
   KKGradientBarView *bar = state.gradientBar;
@@ -509,7 +456,7 @@ static void _sampleStopsIntoLUT(NSArray<KKGradientStop *> *stops,
     return;
   if ([json isEqualToString:state.gradientJSONSnapshot])
     return;
-  NSArray<KKGradientStop *> *stops = _parseStops(json);
+  NSArray<KKGradientStop *> *stops = KKGradientStopsFromJSON(json);
   if (!stops)
     return;
   state.gradientJSONSnapshot = json;

@@ -53,6 +53,12 @@
                                       outID:kParamOutColor
                                     valueID:kKKParamColorSolid
                                        kind:KKAnimatableParamKindColor],
+    [KKAnimatableProperty propertyWithLabel:@"Gradient"
+                                       inID:kParamInColor
+                                     holdID:kParamHoldColor
+                                      outID:kParamOutColor
+                                    valueID:kKKParamGradientData
+                                       kind:KKAnimatableParamKindGradient],
     [KKAnimatableProperty propertyWithLabel:@"N. Offset"
                                        inID:kParamInNoiseOffset
                                      holdID:kParamHoldNoiseOffset
@@ -62,9 +68,15 @@
 }
 
 - (NSSet<NSString *> *)hiddenAnimatablePropertyLabels {
-  if ([self colorModeAtTime:kCMTimeZero] == KKColorModeDynamic)
-    return [NSSet setWithObject:@"Color"];
-  return [NSSet set];
+  KKColorMode mode = [self colorModeAtTime:kCMTimeZero];
+  NSMutableSet<NSString *> *hidden = [NSMutableSet set];
+  // Color lane only makes sense in Solid mode; Gradient lane only in
+  // Gradient mode. Dynamic mode hides both.
+  if (mode != KKColorModeSolid)
+    [hidden addObject:@"Color"];
+  if (mode != KKColorModeGradient)
+    [hidden addObject:@"Gradient"];
+  return hidden;
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
