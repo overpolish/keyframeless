@@ -432,6 +432,25 @@
                                trackWidth:trackWidth];
       if (fabs(loc.x - playheadX) < kKSSPlayheadSnapPx)
         clickFrac = self.playheadFraction;
+
+      // Reject splits that would produce a slither too thin to grab.
+      NSUInteger splitIdx = NSNotFound;
+      for (NSUInteger si = 0; si < lane.segments.count; si++) {
+        KKTimingSegment *s = lane.segments[si];
+        if (clickFrac >= s.start && clickFrac < s.end) {
+          splitIdx = si;
+          break;
+        }
+      }
+      if (splitIdx == NSNotFound)
+        return;
+      double minPx = kKSSMinSegmentPx / (trackWidth * _zoom);
+      double minFrac = MAX(kKSSMinSegmentFrac, minPx);
+      KKTimingSegment *target = lane.segments[splitIdx];
+      if (clickFrac - target.start < minFrac ||
+          target.end - clickFrac < minFrac)
+        return;
+
       if (self.onSegmentAdded)
         self.onSegmentAdded(laneIdx, clickFrac);
       return;
