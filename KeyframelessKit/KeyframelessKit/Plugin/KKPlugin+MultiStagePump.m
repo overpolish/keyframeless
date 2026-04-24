@@ -12,9 +12,9 @@
 /// See project_fxplug_custom_view_live_update.md for the full architecture.
 
 #import "../Math/KKTimingStage.h"
-#import "../Views/KKStagePlayheadView.h"
-#import "../Views/KKStageSequencerRulerView.h"
-#import "../Views/KKStageSequencerView.h"
+#import "../Views/StageSequencer/KKStagePlayheadView.h"
+#import "../Views/StageSequencer/KKStageSequencerRulerView.h"
+#import "../Views/StageSequencer/KKStageSequencerView.h"
 #import "KKConstants.h"
 #import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"

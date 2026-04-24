@@ -86,11 +86,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// main().
 + (id)servicePrincipalDelegate;
 
-/// Adds a "Timing" separator, "Animate In" (toggle), "Animate Out" (toggle),
-/// "Duration" (float slider, seconds), and "Interpolation" (popup) at the
-/// fixed IDs defined in KKConstants.h (kKKParamAnimationSeparator … 9904).
-/// Call from addParametersWithError: to opt a plugin into auto animation.
-/// Plugins that don't need it (e.g. motion blur) simply don't call this.
+/// Registers only the multi-stage timing params — Timing separator, curve
+/// preview, enabled toggle (always YES, hidden), JSON data, selected
+/// property/stage, and instance ID. Call this from
+/// `addParametersWithError:` in plugins that are fully multi-stage (no
+/// classic ease-in/hold/ease-out UI).
+- (BOOL)addMultiStageParametersWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
+                                 error:(NSError **)error;
+
+/// Registers multi-stage params (via `addMultiStageParametersWithAPI:`)
+/// plus the classic animate-in / hold / animate-out toggles, durations,
+/// intensities, frequencies, and interpolation popups. Use for plugins
+/// that still expose classic-timing UI.
 - (BOOL)addAnimationParametersWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                                 error:(NSError **)error;
 

@@ -11,15 +11,8 @@
 
 - (NSArray<KKAnimatableProperty *> *)animatableProperties {
   return @[
-    [KKAnimatableProperty propertyWithLabel:@"Radius"
-                                       inID:kParamInRadius
-                                     holdID:kParamHoldRadius
-                                      outID:kParamOutRadius
-                                    valueID:kParamRadius],
+    [KKAnimatableProperty propertyWithLabel:@"Radius" valueID:kParamRadius],
     [KKAnimatableProperty propertyWithLabel:@"Crop"
-                                       inID:kParamInCrop
-                                     holdID:kParamHoldCrop
-                                      outID:kParamOutCrop
                                    valueIDs:@[
                                      @(kParamCropTop), @(kParamCropBottom),
                                      @(kParamCropLeft), @(kParamCropRight)

@@ -60,6 +60,16 @@ KKLaneJSONIndexForViewIndex(NSInteger viewIndex,
                                 (nullable KKStageSequencerView *)sourceView;
 @end
 
+@interface KKPlugin (StageSequencerCallbacks)
+/// Wires the sequencer view's `onX` block callbacks (segment selection,
+/// lane toggles, segment add/remove/move/copy, playhead scrub, zoom/pan
+/// sync). Called once during sequencer setup. The sequencer view retains
+/// the callbacks, which in turn keep a weak ref to `self`.
+- (void)_wireStageSequencerCallbacksFor:(KKStageSequencerView *)seqView
+                              rulerView:(KKStageSequencerRulerView *)rulerView
+                           playheadView:(KKStagePlayheadView *)playheadView;
+@end
+
 @interface KKPlugin (MultiStagePumpInternal)
 /// Wires a newly-created sequencer view into per-instance state. Generates
 /// a UUID if this instance doesn't yet have one (`kKKParamInstanceID`), and

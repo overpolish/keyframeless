@@ -73,6 +73,21 @@ typedef NS_ENUM(NSInteger, KKAnimatableParamKind) {
                          valueIDs:(NSArray<NSNumber *> *)valueIDs
                             kinds:(NSArray<NSNumber *> *)kinds;
 
+/// Multi-stage-only factories. Use these when the plugin has no classic
+/// ease-in/hold/ease-out params — `inParamID`, `holdParamID`, `outParamID`
+/// default to 0 and the classic timing UI does not render for this
+/// property. Plugins that set `kKKParamMultiStageEnabled = YES` and never
+/// expose a toggle should always use these.
++ (instancetype)propertyWithLabel:(NSString *)label valueID:(UInt32)valueID;
++ (instancetype)propertyWithLabel:(NSString *)label
+                          valueID:(UInt32)valueID
+                             kind:(KKAnimatableParamKind)kind;
++ (instancetype)propertyWithLabel:(NSString *)label
+                         valueIDs:(NSArray<NSNumber *> *)valueIDs;
++ (instancetype)propertyWithLabel:(NSString *)label
+                         valueIDs:(NSArray<NSNumber *> *)valueIDs
+                            kinds:(NSArray<NSNumber *> *)kinds;
+
 - (instancetype)init NS_UNAVAILABLE;
 
 /// Total scalar value count across all native params (sum of per-kind sizes).

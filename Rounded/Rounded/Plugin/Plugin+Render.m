@@ -39,50 +39,20 @@ typedef struct {
     }
     return NO;
   }
-  double radius = 20.0;
-  [paramGetAPI getFloatValue:&radius
-               fromParameter:kParamRadius
-                      atTime:renderTime];
-
   NSDictionary<NSString *, NSArray<NSNumber *> *> *multiStage =
       [self multiStageValuesAtTime:renderTime];
 
-  double rF = 1.0, cF = 1.0;
-  if (!multiStage) {
-    KKTimingResult *timing = [self timingAtTime:renderTime];
-    double inF = timing.inPhase.factor;
-    double holdF = timing.holdPhase.factor;
-    double outF = timing.outPhase.factor;
-
-    BOOL inR = YES, inC = YES;
-    [paramGetAPI getBoolValue:&inR
-                fromParameter:kParamInRadius
-                       atTime:renderTime];
-    [paramGetAPI getBoolValue:&inC
-                fromParameter:kParamInCrop
-                       atTime:renderTime];
-    BOOL holdR = YES, holdC = YES;
-    [paramGetAPI getBoolValue:&holdR
-                fromParameter:kParamHoldRadius
-                       atTime:renderTime];
-    [paramGetAPI getBoolValue:&holdC
-                fromParameter:kParamHoldCrop
-                       atTime:renderTime];
-    BOOL outR = YES, outC = YES;
-    [paramGetAPI getBoolValue:&outR
-                fromParameter:kParamOutRadius
-                       atTime:renderTime];
-    [paramGetAPI getBoolValue:&outC
-                fromParameter:kParamOutCrop
-                       atTime:renderTime];
-
-    rF = (inR ? inF : 1.0) * (holdR ? holdF : 1.0) * (outR ? outF : 1.0);
-    cF = (inC ? inF : 1.0) * (holdC ? holdF : 1.0) * (outC ? outF : 1.0);
-  }
-
   RoundedPluginState state;
   NSArray<NSNumber *> *msRadius = multiStage[@"Radius"];
-  state.radius = msRadius.count > 0 ? msRadius[0].doubleValue : radius * rF;
+  if (msRadius.count > 0) {
+    state.radius = msRadius[0].doubleValue;
+  } else {
+    double radius = 20.0;
+    [paramGetAPI getFloatValue:&radius
+                 fromParameter:kParamRadius
+                        atTime:renderTime];
+    state.radius = radius;
+  }
 
   state.cropTop = 0.0;
   state.cropBottom = 0.0;
@@ -107,10 +77,6 @@ typedef struct {
     [paramGetAPI getFloatValue:&state.cropRight
                  fromParameter:kParamCropRight
                         atTime:renderTime];
-    state.cropTop *= cF;
-    state.cropBottom *= cF;
-    state.cropLeft *= cF;
-    state.cropRight *= cF;
   }
 
   *pluginState = [NSData dataWithBytes:&state length:sizeof(state)];
