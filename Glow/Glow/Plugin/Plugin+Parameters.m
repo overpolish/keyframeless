@@ -230,34 +230,8 @@
                            parameterFlags:kFxParameterFlag_HIDDEN])
     return NO;
 
-  if (![self addAnimationParametersWithAPI:paramAPI error:error])
+  if (![self addMultiStageParametersWithAPI:paramAPI error:error])
     return NO;
-
-  UInt32 animParams[] = {
-      kParamInRadius,      kParamInIntensity,     kParamInFalloff,
-      kParamInNoise,       kParamInOffset,        kParamInColor,
-      kParamInNoiseOffset, kParamHoldRadius,      kParamHoldIntensity,
-      kParamHoldFalloff,   kParamHoldNoise,       kParamHoldOffset,
-      kParamHoldColor,     kParamHoldNoiseOffset, kParamOutRadius,
-      kParamOutIntensity,  kParamOutFalloff,      kParamOutNoise,
-      kParamOutOffset,     kParamOutColor,        kParamOutNoiseOffset,
-  };
-  NSString *animNames[] = {
-      @"In Radius",       @"In Intensity",      @"In Falloff",
-      @"In Noise",        @"In Offset",         @"In Color",
-      @"In Noise Offset", @"Hold Radius",       @"Hold Intensity",
-      @"Hold Falloff",    @"Hold Noise",        @"Hold Offset",
-      @"Hold Color",      @"Hold Noise Offset", @"Out Radius",
-      @"Out Intensity",   @"Out Falloff",       @"Out Noise",
-      @"Out Offset",      @"Out Color",         @"Out Noise Offset",
-  };
-  for (int i = 0; i < 21; i++) {
-    if (![paramAPI addToggleButtonWithName:animNames[i]
-                               parameterID:animParams[i]
-                              defaultValue:YES
-                            parameterFlags:kFxParameterFlag_HIDDEN])
-      return NO;
-  }
 
   self.linkedParameterPairs = @[ @[ @(kParamRadiusX), @(kParamRadiusY) ] ];
 

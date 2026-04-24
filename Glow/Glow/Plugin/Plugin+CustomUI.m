@@ -22,47 +22,21 @@
   return @[
     [KKAnimatableProperty
         propertyWithLabel:@"Radius"
-                     inID:kParamInRadius
-                   holdID:kParamHoldRadius
-                    outID:kParamOutRadius
                  valueIDs:@[ @(kParamRadiusX), @(kParamRadiusY) ]],
     [KKAnimatableProperty propertyWithLabel:@"Intensity"
-                                       inID:kParamInIntensity
-                                     holdID:kParamHoldIntensity
-                                      outID:kParamOutIntensity
                                     valueID:kParamIntensity],
-    [KKAnimatableProperty propertyWithLabel:@"Falloff"
-                                       inID:kParamInFalloff
-                                     holdID:kParamHoldFalloff
-                                      outID:kParamOutFalloff
-                                    valueID:kParamFalloff],
-    [KKAnimatableProperty propertyWithLabel:@"Noise"
-                                       inID:kParamInNoise
-                                     holdID:kParamHoldNoise
-                                      outID:kParamOutNoise
-                                    valueID:kParamNoise],
+    [KKAnimatableProperty propertyWithLabel:@"Falloff" valueID:kParamFalloff],
+    [KKAnimatableProperty propertyWithLabel:@"Noise" valueID:kParamNoise],
     [KKAnimatableProperty
         propertyWithLabel:@"Offset"
-                     inID:kParamInOffset
-                   holdID:kParamHoldOffset
-                    outID:kParamOutOffset
                  valueIDs:@[ @(kParamOffsetX), @(kParamOffsetY) ]],
     [KKAnimatableProperty propertyWithLabel:@"Color"
-                                       inID:kParamInColor
-                                     holdID:kParamHoldColor
-                                      outID:kParamOutColor
                                     valueID:kKKParamColorSolid
                                        kind:KKAnimatableParamKindColor],
     [KKAnimatableProperty propertyWithLabel:@"Gradient"
-                                       inID:kParamInColor
-                                     holdID:kParamHoldColor
-                                      outID:kParamOutColor
                                     valueID:kKKParamGradientData
                                        kind:KKAnimatableParamKindGradient],
     [KKAnimatableProperty propertyWithLabel:@"N. Offset"
-                                       inID:kParamInNoiseOffset
-                                     holdID:kParamHoldNoiseOffset
-                                      outID:kParamOutNoiseOffset
                                     valueID:kParamNoiseOffset],
   ];
 }

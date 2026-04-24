@@ -9,8 +9,8 @@
 #import "../Math/KKTimingStage.h"
 #import "../Update/KKUpdateChecker.h"
 #import "../Views/KKAnimatableProperty.h"
-#import "../Views/KKStageSequencerView.h"
 #import "../Views/KKTimingGraphView.h"
+#import "../Views/StageSequencer/KKStageSequencerView.h"
 #import "KKColor.h"
 #import "KKConstants.h"
 #import "KKPluginInstanceState.h"
@@ -94,8 +94,8 @@ static const FxParameterFlags kCustomUIDisabled =
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 @implementation KKPlugin (Timing)
 
-- (BOOL)addAnimationParametersWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
-                                error:(NSError **)error {
+- (BOOL)addMultiStageParametersWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
+                                 error:(NSError **)error {
   if (!KKAddParam([paramAPI
                       addCustomParameterWithName:@""
                                      parameterID:kKKParamAnimationSeparator
@@ -110,6 +110,78 @@ static const FxParameterFlags kCustomUIDisabled =
                                     defaultValue:@(kKKParamTimingCurvePreview)
                                   parameterFlags:kCustomUIDisabled],
                   error, @"Unable to add Curve Preview"))
+    return NO;
+
+  if (!KKAddParam([paramAPI
+                      addToggleButtonWithName:@""
+                                  parameterID:kKKParamTimingExpanded
+                                 defaultValue:YES
+                               parameterFlags:kFxParameterFlag_HIDDEN |
+                                              kFxParameterFlag_NOT_ANIMATABLE],
+                  error, @"Unable to add Timing expanded toggle"))
+    return NO;
+
+  if (!KKAddParam([paramAPI
+                      addToggleButtonWithName:@""
+                                  parameterID:kKKParamMultiStageEnabled
+                                 defaultValue:YES
+                               parameterFlags:kFxParameterFlag_HIDDEN |
+                                              kFxParameterFlag_NOT_ANIMATABLE],
+                  error, @"Unable to add multi-stage enabled toggle"))
+    return NO;
+
+  if (!KKAddParam(
+          [paramAPI addStringParameterWithName:@""
+                                   parameterID:kKKParamMultiStageData
+                                  defaultValue:@""
+                                parameterFlags:kFxParameterFlag_HIDDEN |
+                                               kFxParameterFlag_NOT_ANIMATABLE],
+          error, @"Unable to add multi-stage data"))
+    return NO;
+
+  if (!KKAddParam([paramAPI
+                      addIntSliderWithName:@""
+                               parameterID:kKKParamMultiStageSelectedProperty
+                              defaultValue:0
+                              parameterMin:0
+                              parameterMax:64
+                                 sliderMin:0
+                                 sliderMax:64
+                                     delta:1
+                            parameterFlags:kFxParameterFlag_HIDDEN |
+                                           kFxParameterFlag_NOT_ANIMATABLE],
+                  error, @"Unable to add multi-stage selected property"))
+    return NO;
+
+  if (!KKAddParam([paramAPI
+                      addIntSliderWithName:@""
+                               parameterID:kKKParamMultiStageSelectedStage
+                              defaultValue:0
+                              parameterMin:0
+                              parameterMax:64
+                                 sliderMin:0
+                                 sliderMax:64
+                                     delta:1
+                            parameterFlags:kFxParameterFlag_HIDDEN |
+                                           kFxParameterFlag_NOT_ANIMATABLE],
+                  error, @"Unable to add multi-stage selected stage"))
+    return NO;
+
+  if (!KKAddParam(
+          [paramAPI addStringParameterWithName:@""
+                                   parameterID:kKKParamInstanceID
+                                  defaultValue:@""
+                                parameterFlags:kFxParameterFlag_HIDDEN |
+                                               kFxParameterFlag_NOT_ANIMATABLE],
+          error, @"Unable to add instance ID"))
+    return NO;
+
+  return YES;
+}
+
+- (BOOL)addAnimationParametersWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
+                                error:(NSError **)error {
+  if (![self addMultiStageParametersWithAPI:paramAPI error:error])
     return NO;
 
   if (!KKAddParam([paramAPI addToggleButtonWithName:@"Animate In"
@@ -197,15 +269,6 @@ static const FxParameterFlags kCustomUIDisabled =
     return NO;
 
   if (!KKAddParam([paramAPI
-                      addToggleButtonWithName:@""
-                                  parameterID:kKKParamTimingExpanded
-                                 defaultValue:YES
-                               parameterFlags:kFxParameterFlag_HIDDEN |
-                                              kFxParameterFlag_NOT_ANIMATABLE],
-                  error, @"Unable to add Timing expanded toggle"))
-    return NO;
-
-  if (!KKAddParam([paramAPI
                       addPopupMenuWithName:@""
                                parameterID:kKKParamTimingSelectedSection
                               defaultValue:KKTimingGraphSectionHold
@@ -282,61 +345,6 @@ static const FxParameterFlags kCustomUIDisabled =
                                            delta:1
                                   parameterFlags:kFxParameterFlag_HIDDEN],
                   error, @"Unable to add Hold Seed slider"))
-    return NO;
-
-  if (!KKAddParam([paramAPI
-                      addToggleButtonWithName:@""
-                                  parameterID:kKKParamMultiStageEnabled
-                                 defaultValue:YES // TODO: revert to NO
-                               parameterFlags:kFxParameterFlag_HIDDEN |
-                                              kFxParameterFlag_NOT_ANIMATABLE],
-                  error, @"Unable to add multi-stage enabled toggle"))
-    return NO;
-
-  if (!KKAddParam(
-          [paramAPI addStringParameterWithName:@""
-                                   parameterID:kKKParamMultiStageData
-                                  defaultValue:@""
-                                parameterFlags:kFxParameterFlag_HIDDEN |
-                                               kFxParameterFlag_NOT_ANIMATABLE],
-          error, @"Unable to add multi-stage data"))
-    return NO;
-
-  if (!KKAddParam([paramAPI
-                      addIntSliderWithName:@""
-                               parameterID:kKKParamMultiStageSelectedProperty
-                              defaultValue:0
-                              parameterMin:0
-                              parameterMax:64
-                                 sliderMin:0
-                                 sliderMax:64
-                                     delta:1
-                            parameterFlags:kFxParameterFlag_HIDDEN |
-                                           kFxParameterFlag_NOT_ANIMATABLE],
-                  error, @"Unable to add multi-stage selected property"))
-    return NO;
-
-  if (!KKAddParam([paramAPI
-                      addIntSliderWithName:@""
-                               parameterID:kKKParamMultiStageSelectedStage
-                              defaultValue:0
-                              parameterMin:0
-                              parameterMax:64
-                                 sliderMin:0
-                                 sliderMax:64
-                                     delta:1
-                            parameterFlags:kFxParameterFlag_HIDDEN |
-                                           kFxParameterFlag_NOT_ANIMATABLE],
-                  error, @"Unable to add multi-stage selected stage"))
-    return NO;
-
-  if (!KKAddParam(
-          [paramAPI addStringParameterWithName:@""
-                                   parameterID:kKKParamInstanceID
-                                  defaultValue:@""
-                                parameterFlags:kFxParameterFlag_HIDDEN |
-                                               kFxParameterFlag_NOT_ANIMATABLE],
-          error, @"Unable to add instance ID"))
     return NO;
 
   return YES;

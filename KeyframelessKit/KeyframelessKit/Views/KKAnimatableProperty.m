@@ -96,6 +96,41 @@ static NSUInteger KKKindFixedValueCount(KKAnimatableParamKind kind) {
   return p;
 }
 
++ (instancetype)propertyWithLabel:(NSString *)label valueID:(UInt32)valueID {
+  return [self propertyWithLabel:label inID:0 holdID:0 outID:0 valueID:valueID];
+}
+
++ (instancetype)propertyWithLabel:(NSString *)label
+                          valueID:(UInt32)valueID
+                             kind:(KKAnimatableParamKind)kind {
+  return [self propertyWithLabel:label
+                            inID:0
+                          holdID:0
+                           outID:0
+                         valueID:valueID
+                            kind:kind];
+}
+
++ (instancetype)propertyWithLabel:(NSString *)label
+                         valueIDs:(NSArray<NSNumber *> *)valueIDs {
+  return [self propertyWithLabel:label
+                            inID:0
+                          holdID:0
+                           outID:0
+                        valueIDs:valueIDs];
+}
+
++ (instancetype)propertyWithLabel:(NSString *)label
+                         valueIDs:(NSArray<NSNumber *> *)valueIDs
+                            kinds:(NSArray<NSNumber *> *)kinds {
+  return [self propertyWithLabel:label
+                            inID:0
+                          holdID:0
+                           outID:0
+                        valueIDs:valueIDs
+                           kinds:kinds];
+}
+
 - (instancetype)initInternal {
   return [super init];
 }

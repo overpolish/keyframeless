@@ -4,7 +4,7 @@
  */
 
 #import "KKStagePlayheadView.h"
-#import "../Style/KKTokens.h"
+#import "../../Style/KKTokens.h"
 #import "KKStageSequencerView_Private.h"
 
 static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {

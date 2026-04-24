@@ -4,8 +4,8 @@
  */
 
 #import "KKStageSequencerRulerView.h"
-#import "../Style/KKTokens.h"
-#import "../Style/NSColor+KKColors.h"
+#import "../../Style/KKTokens.h"
+#import "../../Style/NSColor+KKColors.h"
 #import "KKStageSequencerView_Private.h"
 
 static double _rulerTickInterval(CGFloat pps) {
