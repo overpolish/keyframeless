@@ -8,6 +8,8 @@
 #import "../Style/KKTokens.h"
 #import "KKTimingGraphView.h"
 
+@class KKAlertView;
+@class KKCheckboxView;
 @class KKCurvePillView;
 @class KKSliderView;
 
@@ -25,7 +27,21 @@ static const double kDurationTickValues[]
 static const NSInteger kIntensityTickCount __attribute__((unused)) = 3;
 static const NSInteger kFrequencyTickCount __attribute__((unused)) = 3;
 
-@interface KKTimingGraphView ()
+@interface KKTimingGraphView () {
+@package
+  KKCheckboxView *_inCheckbox;
+  KKCheckboxView *_outCheckbox;
+  KKSliderView *_intensitySlider;
+  KKSliderView *_frequencySlider;
+  NSButton *_seedButton;
+  NSMutableArray<NSView *> *_globalSlotViews;
+  NSMutableArray<NSView *> *_sectionSlotViews;
+  NSLayoutConstraint *_intensityTrailingHalf;
+  NSLayoutConstraint *_intensityTrailingFull;
+  KKAlertView *_emptyPlaceholder;
+  KKAlertView *_holdStaticAlert;
+  NSTextField *_holdPropertyLabel;
+}
 
 @property(nonatomic, readonly) KKCurvePillView *curvePillView;
 @property(nonatomic, readonly) KKSliderView *durationSlider;
@@ -44,5 +60,15 @@ static const NSInteger kFrequencyTickCount __attribute__((unused)) = 3;
 
 - (NSRect)sectionRectForSection:(KKTimingGraphSection)section
                           width:(CGFloat)totalWidth;
+- (NSRect)graphRectForSection:(KKTimingGraphSection)section;
+
+// Internal action handlers (called from setup callbacks and the
+// `+Layout` category's mouseDown: after tick-hit snapping).
+- (void)durationSliderChanged:(id)sender;
+- (void)pillSelectionChanged:(NSInteger)index;
+- (void)intensitySliderChanged:(id)sender;
+- (void)frequencySliderChanged:(id)sender;
+- (void)seedButtonPressed:(id)sender;
+- (void)updateControls;
 
 @end

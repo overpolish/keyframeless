@@ -11,6 +11,8 @@
 #import "../Views/KKCustomGroupHeaderView.h"
 #import "../Views/KKSegmentEditView.h"
 #import "../Views/KKSeparatorView.h"
+#import "../Views/StageSequencer/KKRemoteWindowKeyHandlerView.h"
+#import "../Views/StageSequencer/KKSequencerScrollView.h"
 #import "../Views/StageSequencer/KKStagePlayheadView.h"
 #import "../Views/StageSequencer/KKStageSequencerRulerView.h"
 #import "../Views/StageSequencer/KKStageSequencerView.h"
@@ -27,164 +29,9 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <QuartzCore/QuartzCore.h>
 
-@interface KKScrollShadowView : NSView
-@end
-@implementation KKScrollShadowView
-- (NSView *)hitTest:(NSPoint)point {
-  return nil;
-}
-@end
-
-@interface KKSequencerScrollView : NSScrollView
-@end
-@implementation KKSequencerScrollView
-// AppKit calls this private method to find the ancestor scroll view that wants
-// forwarded at-boundary scroll events. Returning nil makes the search fail, so
-// FCP's OZViewCtrlRootScrollView never receives our overscroll and the
-// inspector stays put.
-- (NSResponder *)_recursiveResponderThatWantsForwardedScrollEventsForAxis:
-                     (NSEventGestureAxis)axis
-                                                         intendedForSwipe:
-                                                             (BOOL)forSwipe {
-  return nil;
-}
-@end
-
-@interface KKRemoteWindowKeyHandlerView : NSView
-@property(nonatomic, copy, nullable) void (^onTogglePlayback)(void);
-@property(nonatomic, strong, nullable) id eventMonitor;
-@end
-@implementation KKRemoteWindowKeyHandlerView
-- (void)viewDidMoveToWindow {
-  [super viewDidMoveToWindow];
-  if (self.window && !self.eventMonitor) {
-    __weak typeof(self) weakSelf = self;
-    self.eventMonitor = [NSEvent
-        addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown
-                                     handler:^NSEvent *(NSEvent *evt) {
-                                       __strong typeof(weakSelf) s = weakSelf;
-                                       if (!s)
-                                         return evt;
-                                       if (evt.window == s.window &&
-                                           [evt.charactersIgnoringModifiers
-                                               isEqualToString:@" "] &&
-                                           s.onTogglePlayback) {
-                                         s.onTogglePlayback();
-                                         return nil;
-                                       }
-                                       return evt;
-                                     }];
-  } else if (!self.window && self.eventMonitor) {
-    [NSEvent removeMonitor:self.eventMonitor];
-    self.eventMonitor = nil;
-  }
-}
-- (void)dealloc {
-  if (_eventMonitor)
-    [NSEvent removeMonitor:_eventMonitor];
-}
-@end
-
-@interface KKScrollShadowObserver : NSObject
-@end
-@implementation KKScrollShadowObserver {
-  id _token;
-}
-- (instancetype)initWithClipView:(NSView *)clipView
-                           block:(void (^)(void))block {
-  self = [super init];
-  if (self) {
-    clipView.postsBoundsChangedNotifications = YES;
-    _token = [[NSNotificationCenter defaultCenter]
-        addObserverForName:NSViewBoundsDidChangeNotification
-                    object:clipView
-                     queue:nil
-                usingBlock:^(NSNotification *note) {
-                  block();
-                }];
-  }
-  return self;
-}
-- (void)dealloc {
-  if (_token)
-    [[NSNotificationCenter defaultCenter] removeObserver:_token];
-}
-@end
-
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 @implementation KKPlugin (CustomViews)
-
-- (void)_applyTimingParamsToGraph:(KKTimingGraphView *)graph
-                     withParamAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI
-                           atTime:(CMTime)t {
-  BOOL animIn = NO, animOut = NO;
-  int inCurve = KKEasingCurveEaseOut, outCurve = KKEasingCurveEaseOut;
-  int sel = KKTimingGraphSectionHold, holdEffectVal = KKHoldEffectNone;
-  [paramGetAPI getBoolValue:&animIn fromParameter:kKKParamAnimateIn atTime:t];
-  [paramGetAPI getBoolValue:&animOut fromParameter:kKKParamAnimateOut atTime:t];
-  [paramGetAPI getIntValue:&inCurve
-             fromParameter:kKKParamAnimateInInterpolation
-                    atTime:t];
-  [paramGetAPI getIntValue:&outCurve
-             fromParameter:kKKParamAnimateOutInterpolation
-                    atTime:t];
-  [paramGetAPI getIntValue:&sel
-             fromParameter:kKKParamTimingSelectedSection
-                    atTime:t];
-  [paramGetAPI getIntValue:&holdEffectVal
-             fromParameter:kKKParamHoldEffect
-                    atTime:t];
-
-  double inIntensity = 0.5, outIntensity = 0.5, holdIntensity = 0.5;
-  [paramGetAPI getFloatValue:&inIntensity
-               fromParameter:kKKParamAnimateInIntensity
-                      atTime:t];
-  [paramGetAPI getFloatValue:&outIntensity
-               fromParameter:kKKParamAnimateOutIntensity
-                      atTime:t];
-  [paramGetAPI getFloatValue:&holdIntensity
-               fromParameter:kKKParamHoldIntensity
-                      atTime:t];
-
-  double inFrequency = 0.5, outFrequency = 0.5, holdFrequency = 0.5;
-  [paramGetAPI getFloatValue:&inFrequency
-               fromParameter:kKKParamAnimateInFrequency
-                      atTime:t];
-  [paramGetAPI getFloatValue:&outFrequency
-               fromParameter:kKKParamAnimateOutFrequency
-                      atTime:t];
-  [paramGetAPI getFloatValue:&holdFrequency
-               fromParameter:kKKParamHoldFrequency
-                      atTime:t];
-
-  int holdSeed = 0;
-  [paramGetAPI getIntValue:&holdSeed fromParameter:kKKParamHoldSeed atTime:t];
-
-  double inDuration = 0.5, outDuration = 0.5;
-  [paramGetAPI getFloatValue:&inDuration
-               fromParameter:kKKParamAnimateInDuration
-                      atTime:t];
-  [paramGetAPI getFloatValue:&outDuration
-               fromParameter:kKKParamAnimateOutDuration
-                      atTime:t];
-
-  graph.inEnabled = animIn;
-  graph.outEnabled = animOut;
-  graph.inDuration = inDuration;
-  graph.outDuration = outDuration;
-  graph.inCurve = (KKEasingCurve)inCurve;
-  graph.outCurve = (KKEasingCurve)outCurve;
-  graph.holdEffect = (KKHoldEffect)holdEffectVal;
-  graph.inIntensity = inIntensity;
-  graph.outIntensity = outIntensity;
-  graph.holdIntensity = holdIntensity;
-  graph.inFrequency = inFrequency;
-  graph.outFrequency = outFrequency;
-  graph.holdFrequency = holdFrequency;
-  graph.holdSeed = holdSeed;
-  graph.selectedSection = (KKTimingGraphSection)sel;
-}
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
   if (parameterID == kKKParamUpdateBanner)
@@ -450,56 +297,146 @@
   [actionAPI endAction:self];
 }
 
-- (NSView *)_createTimingGraphViewUncapped:(BOOL)uncapped {
-  NSArray<KKTimingSlot *> *globalSlots = [self timingGlobalSlots];
-  NSArray<KKTimingSlot *> *inSlots =
-      [self timingSlotsForSection:KKTimingGraphSectionIn];
-  NSArray<KKTimingSlot *> *holdSlots =
-      [self timingSlotsForSection:KKTimingGraphSectionHold];
-  NSArray<KKTimingSlot *> *outSlots =
-      [self timingSlotsForSection:KKTimingGraphSectionOut];
-
-  NSArray<KKAnimatableProperty *> *seqProps = [self animatableProperties];
-  CGFloat fullLanesH = [KKStageSequencerView heightForLaneCount:seqProps.count];
-  CGFloat lanesH;
-  if (uncapped || seqProps.count <= 2) {
-    lanesH = fullLanesH;
-  } else {
-    CGFloat h2 = [KKStageSequencerView heightForLaneCount:2];
-    CGFloat h3 = [KKStageSequencerView heightForLaneCount:3];
-    lanesH = h2 + (h3 - h2) * 0.5;
+/// Returns the per-section param ID for a property given the graph's
+/// selected section (In/Out/Hold).
+static UInt32 KKHoldPropertyParamID(KKAnimatableProperty *prop,
+                                    KKTimingGraphSection section) {
+  switch (section) {
+  case KKTimingGraphSectionIn:
+    return prop.inParamID;
+  case KKTimingGraphSectionOut:
+    return prop.outParamID;
+  default:
+    return prop.holdParamID;
   }
-  CGFloat rulerH = [KKStageSequencerRulerView preferredHeight];
-  // Top inset + ruler + lanes area (which has its own bottom inset).
-  CGFloat seqContainerH = KKPaddingSM + rulerH + lanesH;
-  CGFloat wrapperHeight = seqContainerH + KKPaddingLG;
+}
 
-  NSView *wrapper =
-      [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, wrapperHeight)];
-  wrapper.autoresizingMask = NSViewWidthSizable;
+- (void)_installHoldPropertyViewOnGraph:(KKTimingGraphView *)graphView {
+  NSArray<KKAnimatableProperty *> *animProps = [self animatableProperties];
+  if (animProps.count == 0) {
+    NSView *holdPropView = [self holdPropertyView];
+    if (holdPropView) {
+      graphView.holdPropertyView = holdPropView;
+      graphView.holdPropertyViewHeight = [self holdPropertyViewHeight];
+      graphView.holdPropertyApplyState = [self holdPropertyApplyState];
+    }
+    return;
+  }
 
-  KKTimingGraphView *graphView =
-      [[KKTimingGraphView alloc] initWithFrame:NSZeroRect];
-  graphView.translatesAutoresizingMaskIntoConstraints = NO;
-  [wrapper addSubview:graphView];
+  static const CGFloat kRowH = 18.0;
+  BOOL twoRows = animProps.count > 5;
+  NSUInteger splitAt = twoRows ? (animProps.count + 1) / 2 : animProps.count;
 
-  [NSLayoutConstraint activateConstraints:@[
-    [graphView.leadingAnchor constraintEqualToAnchor:wrapper.leadingAnchor],
-    [graphView.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
-    [graphView.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor],
-    [graphView.trailingAnchor constraintEqualToAnchor:wrapper.trailingAnchor],
-  ]];
+  KKPillToggleRowView *row1 = nil;
+  KKPillToggleRowView *row2 = nil;
+  CGFloat totalH = 0;
+  NSView *propView = [self _buildHoldPropertyRowsForProps:animProps
+                                                  splitAt:splitAt
+                                                  twoRows:twoRows
+                                                     rowH:kRowH
+                                                  outRow1:&row1
+                                                  outRow2:&row2
+                                                outTotalH:&totalH];
 
-  id<FxCustomParameterActionAPI_v4> actionAPI =
+  __weak typeof(self) weakSelf = self;
+  __weak KKTimingGraphView *weakGraph = graphView;
+
+  void (^handleToggle)(NSInteger, BOOL) = ^(NSInteger index, BOOL isOn) {
+    [weakSelf _handleHoldPropertyToggleAtIndex:index
+                                          isOn:isOn
+                                         props:animProps
+                                         graph:weakGraph];
+  };
+  row1.onToggled = ^(NSInteger index, BOOL isOn) {
+    handleToggle(index, isOn);
+  };
+  if (row2) {
+    row2.onToggled = ^(NSInteger index, BOOL isOn) {
+      handleToggle(index + (NSInteger)splitAt, isOn);
+    };
+  }
+
+  graphView.holdPropertyView = propView;
+  graphView.holdPropertyViewHeight = totalH;
+  graphView.showPropertyViewForAllSections = YES;
+  graphView.holdPropertyApplyState = ^(id paramAPI, CMTime time) {
+    KKTimingGraphView *graph = weakGraph;
+    if (!graph)
+      return;
+    for (NSUInteger i = 0; i < animProps.count; i++) {
+      UInt32 paramID =
+          KKHoldPropertyParamID(animProps[i], graph.selectedSection);
+      BOOL val = YES;
+      [paramAPI getBoolValue:&val fromParameter:paramID atTime:time];
+      if (i < splitAt)
+        [row1 setState:val atIndex:i];
+      else
+        [row2 setState:val atIndex:i - splitAt];
+    }
+  };
+}
+
+- (NSView *)_buildHoldPropertyRowsForProps:
+                (NSArray<KKAnimatableProperty *> *)animProps
+                                   splitAt:(NSUInteger)splitAt
+                                   twoRows:(BOOL)twoRows
+                                      rowH:(CGFloat)kRowH
+                                   outRow1:(KKPillToggleRowView **)outRow1
+                                   outRow2:(KKPillToggleRowView **)outRow2
+                                 outTotalH:(CGFloat *)outTotalH {
+  NSMutableArray<NSString *> *labels = [NSMutableArray new];
+  for (KKAnimatableProperty *p in animProps)
+    [labels addObject:p.label];
+
+  if (!twoRows) {
+    KKPillToggleRowView *row =
+        [[KKPillToggleRowView alloc] initWithLabels:labels];
+    *outRow1 = row;
+    *outRow2 = nil;
+    *outTotalH = kRowH;
+    return row;
+  }
+
+  NSArray *labels1 = [labels subarrayWithRange:NSMakeRange(0, splitAt)];
+  NSArray *labels2 = [labels
+      subarrayWithRange:NSMakeRange(splitAt, animProps.count - splitAt)];
+  KKPillToggleRowView *row1 =
+      [[KKPillToggleRowView alloc] initWithLabels:labels1];
+  KKPillToggleRowView *row2 =
+      [[KKPillToggleRowView alloc] initWithLabels:labels2];
+  row1.autoresizingMask = NSViewWidthSizable;
+  row2.autoresizingMask = NSViewWidthSizable;
+  CGFloat totalH = kRowH * 2 + KKSpacingXS;
+  NSView *container =
+      [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, totalH)];
+  row1.frame = NSMakeRect(0, 0, 300, kRowH);
+  row2.frame = NSMakeRect(0, kRowH + KKSpacingXS, 300, kRowH);
+  [container addSubview:row1];
+  [container addSubview:row2];
+  *outRow1 = row1;
+  *outRow2 = row2;
+  *outTotalH = totalH;
+  return container;
+}
+
+- (void)_handleHoldPropertyToggleAtIndex:(NSInteger)index
+                                    isOn:(BOOL)isOn
+                                   props:
+                                       (NSArray<KKAnimatableProperty *> *)props
+                                   graph:(KKTimingGraphView *)graph {
+  if (!graph || (NSUInteger)index >= props.count)
+    return;
+  UInt32 paramID = KKHoldPropertyParamID(props[index], graph.selectedSection);
+  id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actionAPI startAction:self];
-  id<FxParameterRetrievalAPI_v6> paramGetAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  [self _applyTimingParamsToGraph:graphView
-                     withParamAPI:paramGetAPI
-                           atTime:[actionAPI currentTime]];
-  [actionAPI endAction:self];
+  [actAPI startAction:self];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  [setAPI setBoolValue:isOn toParameter:paramID atTime:[actAPI currentTime]];
+  [actAPI endAction:self];
+}
 
+- (void)_wireTimingGraphCallbacks:(KKTimingGraphView *)graphView {
   __weak typeof(self) weakSelf = self;
   graphView.onInToggled = ^(BOOL enabled) {
     [weakSelf _timingGraphSetAnimateEnabled:enabled
@@ -561,133 +498,15 @@
   graphView.onHoldSeedChanged = ^(int seed) {
     [weakSelf timingGraphSetIntValue:seed forParameter:kKKParamHoldSeed];
   };
+}
 
-  graphView.globalSlots = globalSlots;
-  graphView.inSectionSlots = inSlots;
-  graphView.holdSectionSlots = holdSlots;
-  graphView.outSectionSlots = outSlots;
-
-  NSArray<KKAnimatableProperty *> *animProps = [self animatableProperties];
-  if (animProps.count > 0) {
-    static const CGFloat kRowH = 18.0;
-    NSMutableArray<NSString *> *labels = [NSMutableArray new];
-    for (KKAnimatableProperty *p in animProps)
-      [labels addObject:p.label];
-
-    // Split into 2 rows when >5 properties.
-    BOOL twoRows = animProps.count > 5;
-    NSView *propView;
-    KKPillToggleRowView *row1, *row2;
-    NSUInteger splitAt = twoRows ? (animProps.count + 1) / 2 : animProps.count;
-    CGFloat totalH;
-
-    if (twoRows) {
-      NSArray *labels1 = [labels subarrayWithRange:NSMakeRange(0, splitAt)];
-      NSArray *labels2 = [labels
-          subarrayWithRange:NSMakeRange(splitAt, animProps.count - splitAt)];
-      row1 = [[KKPillToggleRowView alloc] initWithLabels:labels1];
-      row2 = [[KKPillToggleRowView alloc] initWithLabels:labels2];
-      row1.autoresizingMask = NSViewWidthSizable;
-      row2.autoresizingMask = NSViewWidthSizable;
-      totalH = kRowH * 2 + KKSpacingXS;
-      NSView *container =
-          [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, totalH)];
-      row1.frame = NSMakeRect(0, 0, 300, kRowH);
-      row2.frame = NSMakeRect(0, kRowH + KKSpacingXS, 300, kRowH);
-      [container addSubview:row1];
-      [container addSubview:row2];
-      propView = container;
-    } else {
-      row1 = [[KKPillToggleRowView alloc] initWithLabels:labels];
-      row2 = nil;
-      totalH = kRowH;
-      propView = row1;
-    }
-
-    __weak typeof(self) weakSelf = self;
-    __weak KKTimingGraphView *weakGraph = graphView;
-
-    void (^handleToggle)(NSInteger, BOOL) = ^(NSInteger index, BOOL isOn) {
-      __strong typeof(weakSelf) strongSelf = weakSelf;
-      KKTimingGraphView *graph = weakGraph;
-      if (!strongSelf || !graph || (NSUInteger)index >= animProps.count)
-        return;
-      KKAnimatableProperty *prop = animProps[index];
-      UInt32 paramID;
-      switch (graph.selectedSection) {
-      case KKTimingGraphSectionIn:
-        paramID = prop.inParamID;
-        break;
-      case KKTimingGraphSectionOut:
-        paramID = prop.outParamID;
-        break;
-      default:
-        paramID = prop.holdParamID;
-        break;
-      }
-      id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      [actAPI startAction:strongSelf];
-      id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      [setAPI setBoolValue:isOn
-               toParameter:paramID
-                    atTime:[actAPI currentTime]];
-      [actAPI endAction:strongSelf];
-    };
-    row1.onToggled = ^(NSInteger index, BOOL isOn) {
-      handleToggle(index, isOn);
-    };
-    if (row2) {
-      row2.onToggled = ^(NSInteger index, BOOL isOn) {
-        handleToggle(index + (NSInteger)splitAt, isOn);
-      };
-    }
-
-    graphView.holdPropertyView = propView;
-    graphView.holdPropertyViewHeight = totalH;
-    graphView.showPropertyViewForAllSections = YES;
-    graphView.holdPropertyApplyState = ^(id paramAPI, CMTime time) {
-      KKTimingGraphView *graph = weakGraph;
-      if (!graph)
-        return;
-      for (NSUInteger i = 0; i < animProps.count; i++) {
-        KKAnimatableProperty *prop = animProps[i];
-        UInt32 paramID;
-        switch (graph.selectedSection) {
-        case KKTimingGraphSectionIn:
-          paramID = prop.inParamID;
-          break;
-        case KKTimingGraphSectionOut:
-          paramID = prop.outParamID;
-          break;
-        default:
-          paramID = prop.holdParamID;
-          break;
-        }
-        BOOL val = YES;
-        [paramAPI getBoolValue:&val fromParameter:paramID atTime:time];
-        if (i < splitAt)
-          [row1 setState:val atIndex:i];
-        else
-          [row2 setState:val atIndex:i - splitAt];
-      }
-    };
-  } else {
-    NSView *holdPropView = [self holdPropertyView];
-    if (holdPropView) {
-      graphView.holdPropertyView = holdPropView;
-      graphView.holdPropertyViewHeight = [self holdPropertyViewHeight];
-      graphView.holdPropertyApplyState = [self holdPropertyApplyState];
-    }
-  }
-
-  if (!uncapped)
-    self.timingGraph = graphView;
-
-  // Stage sequencer container — sticky ruler + vertically-scrolled lanes
-  // (capped at 2.5 lanes) with top/bottom shadow overlays. Hidden until
-  // multi-stage is enabled.
+/// Stage sequencer container — sticky ruler + vertically-scrolled lanes
+/// (capped at 2.5 lanes) with top/bottom shadow overlays. Hidden until
+/// multi-stage is enabled. Inspector mode uses fixed height; window (uncapped)
+/// mode pins top+bottom so the container stretches with the wrapper.
+- (NSView *)_buildSeqContainerInWrapper:(NSView *)wrapper
+                               uncapped:(BOOL)uncapped
+                          seqContainerH:(CGFloat)seqContainerH {
   NSView *seqContainer = [[NSView alloc] initWithFrame:NSZeroRect];
   seqContainer.translatesAutoresizingMaskIntoConstraints = NO;
   seqContainer.wantsLayer = YES;
@@ -701,11 +520,53 @@
   seqContainer.hidden = YES;
   [wrapper addSubview:seqContainer];
 
+  NSMutableArray<NSLayoutConstraint *> *anchors =
+      [NSMutableArray arrayWithArray:@[
+        [seqContainer.leadingAnchor
+            constraintEqualToAnchor:wrapper.leadingAnchor
+                           constant:KKInspectorHorizontalInset],
+        [seqContainer.trailingAnchor
+            constraintEqualToAnchor:wrapper.trailingAnchor
+                           constant:-KKInspectorHorizontalInset],
+        [seqContainer.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
+      ]];
+  if (uncapped) {
+    [anchors addObject:[seqContainer.bottomAnchor
+                           constraintEqualToAnchor:wrapper.bottomAnchor
+                                          constant:-KKPaddingLG]];
+  } else {
+    [anchors addObject:[seqContainer.heightAnchor
+                           constraintEqualToConstant:seqContainerH]];
+  }
+  [NSLayoutConstraint activateConstraints:anchors];
+  return seqContainer;
+}
+
+- (KKStageSequencerRulerView *)_buildSeqRulerInContainer:(NSView *)seqContainer
+                                             rulerHeight:(CGFloat)rulerH {
   KKStageSequencerRulerView *rulerView =
       [[KKStageSequencerRulerView alloc] initWithFrame:NSZeroRect];
   rulerView.translatesAutoresizingMaskIntoConstraints = NO;
   [seqContainer addSubview:rulerView];
+  [NSLayoutConstraint activateConstraints:@[
+    [rulerView.leadingAnchor
+        constraintEqualToAnchor:seqContainer.leadingAnchor],
+    [rulerView.trailingAnchor
+        constraintEqualToAnchor:seqContainer.trailingAnchor],
+    [rulerView.topAnchor constraintEqualToAnchor:seqContainer.topAnchor
+                                        constant:KKPaddingSM],
+    [rulerView.heightAnchor constraintEqualToConstant:rulerH],
+  ]];
+  return rulerView;
+}
 
+- (void)_buildSeqScrollViewInContainer:(NSView *)seqContainer
+                            underRuler:(KKStageSequencerRulerView *)rulerView
+                              uncapped:(BOOL)uncapped
+                              seqProps:
+                                  (NSArray<KKAnimatableProperty *> *)seqProps
+                            fullLanesH:(CGFloat)fullLanesH
+                            outSeqView:(KKStageSequencerView **)outSeqView {
   NSScrollView *scrollView =
       [[KKSequencerScrollView alloc] initWithFrame:NSZeroRect];
   scrollView.translatesAutoresizingMaskIntoConstraints = NO;
@@ -718,7 +579,6 @@
   scrollView.wantsLayer = YES;
   scrollView.layer.cornerRadius = KKSpacingMD;
   scrollView.layer.masksToBounds = YES;
-
   scrollView.contentView.postsBoundsChangedNotifications = YES;
 
   KKStageSequencerView *seqView = [[KKStageSequencerView alloc]
@@ -767,49 +627,27 @@
   }
   [NSLayoutConstraint activateConstraints:seqViewConstraints];
 
-  KKStagePlayheadView *playheadView =
-      [[KKStagePlayheadView alloc] initWithFrame:NSZeroRect];
-  playheadView.translatesAutoresizingMaskIntoConstraints = NO;
-  playheadView.rulerHeight = rulerH;
-  playheadView.topPadding = KKPaddingSM;
-  [seqContainer addSubview:playheadView];
-
-  // Inspector mode: fixed height. Window mode: pin top+bottom and let the
-  // container shrink with the wrapper — scroll view inside picks up the
-  // overflow once the container is smaller than natural.
-  NSMutableArray<NSLayoutConstraint *> *containerAnchorConstraints =
-      [NSMutableArray arrayWithArray:@[
-        [seqContainer.leadingAnchor
-            constraintEqualToAnchor:wrapper.leadingAnchor
-                           constant:KKInspectorHorizontalInset],
-        [seqContainer.trailingAnchor
-            constraintEqualToAnchor:wrapper.trailingAnchor
-                           constant:-KKInspectorHorizontalInset],
-        [seqContainer.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
-      ]];
-  if (!uncapped) {
-    [containerAnchorConstraints
-        addObject:[seqContainer.heightAnchor
-                      constraintEqualToConstant:seqContainerH]];
-  }
-  [NSLayoutConstraint activateConstraints:containerAnchorConstraints];
   [NSLayoutConstraint activateConstraints:@[
-
-    [rulerView.leadingAnchor
-        constraintEqualToAnchor:seqContainer.leadingAnchor],
-    [rulerView.trailingAnchor
-        constraintEqualToAnchor:seqContainer.trailingAnchor],
-    [rulerView.topAnchor constraintEqualToAnchor:seqContainer.topAnchor
-                                        constant:KKPaddingSM],
-    [rulerView.heightAnchor constraintEqualToConstant:rulerH],
-
     [scrollView.leadingAnchor
         constraintEqualToAnchor:seqContainer.leadingAnchor],
     [scrollView.trailingAnchor
         constraintEqualToAnchor:seqContainer.trailingAnchor],
     [scrollView.topAnchor constraintEqualToAnchor:rulerView.bottomAnchor],
     [scrollView.bottomAnchor constraintEqualToAnchor:seqContainer.bottomAnchor],
+  ]];
 
+  *outSeqView = seqView;
+}
+
+- (KKStagePlayheadView *)_buildSeqPlayheadInContainer:(NSView *)seqContainer
+                                          rulerHeight:(CGFloat)rulerH {
+  KKStagePlayheadView *playheadView =
+      [[KKStagePlayheadView alloc] initWithFrame:NSZeroRect];
+  playheadView.translatesAutoresizingMaskIntoConstraints = NO;
+  playheadView.rulerHeight = rulerH;
+  playheadView.topPadding = KKPaddingSM;
+  [seqContainer addSubview:playheadView];
+  [NSLayoutConstraint activateConstraints:@[
     [playheadView.leadingAnchor
         constraintEqualToAnchor:seqContainer.leadingAnchor],
     [playheadView.trailingAnchor
@@ -818,15 +656,160 @@
     [playheadView.bottomAnchor
         constraintEqualToAnchor:seqContainer.bottomAnchor],
   ]];
+  return playheadView;
+}
 
-  if (uncapped) {
-    // Let the sequencer container stretch vertically with the wrapper so each
-    // lane grows once all lanes are visible.
-    [seqContainer.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor
-                                              constant:-KKPaddingLG]
-        .active = YES;
+/// Reads persisted lanes; if none, seeds defaults from each property's
+/// current value and writes them back. Returns rebalanced lanes or nil.
+- (NSArray<KKTimingLane *> *)
+    _readOrSeedLanesForProps:(NSArray<KKAnimatableProperty *> *)seqProps
+                 paramGetAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI
+                      atTime:(CMTime)time {
+  NSArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, paramGetAPI);
+  if (lanes || seqProps.count == 0)
+    return lanes;
+
+  NSMutableArray<KKTimingLane *> *defaults =
+      [NSMutableArray arrayWithCapacity:seqProps.count];
+  for (KKAnimatableProperty *prop in seqProps) {
+    NSArray<NSNumber *> *baseVals = [prop readValuesWithGetAPI:paramGetAPI
+                                                        atTime:time];
+    if (!baseVals.count)
+      baseVals = @[ @(1.0) ];
+    [defaults addObject:[KKTimingLane defaultLaneForLabel:prop.label
+                                               baseValues:baseVals]];
+  }
+  NSString *seeded = [KKTimingLane jsonFromLanes:defaults];
+  if (seeded) {
+    id<FxParameterSettingAPI_v5> setAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [setAPI setStringParameterValue:seeded toParameter:kKKParamMultiStageData];
+  }
+  return defaults;
+}
+
+- (void)_seedPlayheadForSeqView:(KKStageSequencerView *)seqView
+                      rulerView:(KKStageSequencerRulerView *)rulerView
+                   playheadView:(KKStagePlayheadView *)playheadView
+                         atTime:(CMTime)nowTime {
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  if (!timingAPI)
+    return;
+  CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
+  [timingAPI startTimeForEffect:&effectStart];
+  [timingAPI durationTimeForEffect:&effectDuration];
+  double durSec = CMTimeGetSeconds(effectDuration);
+  seqView.effectDuration = durSec;
+  rulerView.effectDuration = durSec;
+  if (durSec > 0) {
+    double startSec = CMTimeGetSeconds(effectStart);
+    double nowSec = CMTimeGetSeconds(nowTime);
+    double frac = (nowSec - startSec) / durSec;
+    seqView.playheadFraction = frac;
+    playheadView.playheadFraction = frac;
+  }
+}
+
+/// When multi-stage is enabled, swaps the graph for the sequencer container,
+/// seeds lane data (creating defaults if missing), and syncs the playhead.
+- (void)
+    _seedSequencerIfEnabledWithSeqContainer:(NSView *)seqContainer
+                                  graphView:(KKTimingGraphView *)graphView
+                                    seqView:(KKStageSequencerView *)seqView
+                                  rulerView:
+                                      (KKStageSequencerRulerView *)rulerView
+                               playheadView:(KKStagePlayheadView *)playheadView
+                                   seqProps:(NSArray<KKAnimatableProperty *> *)
+                                                seqProps
+                                paramGetAPI:
+                                    (id<FxParameterRetrievalAPI_v6>)paramGetAPI
+                                  actionAPI:(id<FxCustomParameterActionAPI_v4>)
+                                                actionAPI {
+  BOOL multiStageEnabled = NO;
+  [paramGetAPI getBoolValue:&multiStageEnabled
+              fromParameter:kKKParamMultiStageEnabled
+                     atTime:[actionAPI currentTime]];
+  if (!multiStageEnabled)
+    return;
+
+  seqContainer.hidden = NO;
+  graphView.hidden = YES;
+
+  NSArray<KKTimingLane *> *lanes =
+      [self _readOrSeedLanesForProps:seqProps
+                         paramGetAPI:paramGetAPI
+                              atTime:[actionAPI currentTime]];
+  if (lanes) {
+    KKPluginInstanceState *instState = KKInstanceStateForAPI(self.apiManager);
+    instState.lanesSnapshot = [lanes copy];
+    NSSet<NSString *> *hidden =
+        [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
+    instState.hiddenLaneLabels = hidden;
+    seqView.lanes = KKFilterLanesForVisibility(lanes, hidden);
   }
 
+  [self _seedPlayheadForSeqView:seqView
+                      rulerView:rulerView
+                   playheadView:playheadView
+                         atTime:[actionAPI currentTime]];
+}
+
+typedef struct {
+  CGFloat fullLanesH;
+  CGFloat rulerH;
+  CGFloat seqContainerH;
+  CGFloat wrapperHeight;
+} KKTimingGraphMetrics;
+
+static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
+                                                        NSUInteger propsCount) {
+  CGFloat fullLanesH = [KKStageSequencerView heightForLaneCount:propsCount];
+  CGFloat lanesH;
+  if (uncapped || propsCount <= 2) {
+    lanesH = fullLanesH;
+  } else {
+    CGFloat h2 = [KKStageSequencerView heightForLaneCount:2];
+    CGFloat h3 = [KKStageSequencerView heightForLaneCount:3];
+    lanesH = h2 + (h3 - h2) * 0.5;
+  }
+  CGFloat rulerH = [KKStageSequencerRulerView preferredHeight];
+  // Top inset + ruler + lanes area (which has its own bottom inset).
+  CGFloat seqContainerH = KKPaddingSM + rulerH + lanesH;
+  return (KKTimingGraphMetrics){
+      .fullLanesH = fullLanesH,
+      .rulerH = rulerH,
+      .seqContainerH = seqContainerH,
+      .wrapperHeight = seqContainerH + KKPaddingLG,
+  };
+}
+
+- (KKTimingGraphView *)_buildTimingGraphInWrapper:(NSView *)wrapper {
+  KKTimingGraphView *graphView =
+      [[KKTimingGraphView alloc] initWithFrame:NSZeroRect];
+  graphView.translatesAutoresizingMaskIntoConstraints = NO;
+  [wrapper addSubview:graphView];
+  [NSLayoutConstraint activateConstraints:@[
+    [graphView.leadingAnchor constraintEqualToAnchor:wrapper.leadingAnchor],
+    [graphView.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
+    [graphView.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor],
+    [graphView.trailingAnchor constraintEqualToAnchor:wrapper.trailingAnchor],
+  ]];
+  return graphView;
+}
+
+/// In inspector (capped) mode, the primary views are stored on the plugin
+/// so callbacks can find them. In uncapped (window) mode they're added to
+/// per-instance state as an additional ref set, and we push current state
+/// through so the window opens already in sync.
+- (void)_registerSequencerViewsForUncapped:(BOOL)uncapped
+                                 graphView:(KKTimingGraphView *)graphView
+                              seqContainer:(NSView *)seqContainer
+                                   seqView:(KKStageSequencerView *)seqView
+                                 rulerView:
+                                     (KKStageSequencerRulerView *)rulerView
+                              playheadView:(KKStagePlayheadView *)playheadView {
   if (!uncapped) {
     self.stageSequencer = seqView;
     self.stageSequencerContainer = seqContainer;
@@ -834,87 +817,101 @@
     [self _registerMultiStageSequencerView:seqView
                                  rulerView:rulerView
                               playheadView:playheadView];
-  } else {
-    KKTimingViewRefs *refs = [[KKTimingViewRefs alloc] init];
-    refs.graphView = graphView;
-    refs.seqView = seqView;
-    refs.seqContainer = seqContainer;
-    refs.ruler = rulerView;
-    refs.playhead = playheadView;
-    KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
-    if (state) {
-      if (!state.additionalTimingViews)
-        state.additionalTimingViews = [NSMutableArray array];
-      [state.additionalTimingViews addObject:refs];
-    }
-    // Sync the newly-created secondary set with current state so it opens
-    // showing the right data rather than an empty view.
-    [self timingGraphApplyState];
+    return;
   }
+  KKTimingViewRefs *refs = [[KKTimingViewRefs alloc] init];
+  refs.graphView = graphView;
+  refs.seqView = seqView;
+  refs.seqContainer = seqContainer;
+  refs.ruler = rulerView;
+  refs.playhead = playheadView;
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  if (state) {
+    if (!state.additionalTimingViews)
+      state.additionalTimingViews = [NSMutableArray array];
+    [state.additionalTimingViews addObject:refs];
+  }
+  [self timingGraphApplyState];
+}
+
+- (NSView *)_createTimingGraphViewUncapped:(BOOL)uncapped {
+  NSArray<KKTimingSlot *> *globalSlots = [self timingGlobalSlots];
+  NSArray<KKTimingSlot *> *inSlots =
+      [self timingSlotsForSection:KKTimingGraphSectionIn];
+  NSArray<KKTimingSlot *> *holdSlots =
+      [self timingSlotsForSection:KKTimingGraphSectionHold];
+  NSArray<KKTimingSlot *> *outSlots =
+      [self timingSlotsForSection:KKTimingGraphSectionOut];
+
+  NSArray<KKAnimatableProperty *> *seqProps = [self animatableProperties];
+  KKTimingGraphMetrics metrics =
+      KKTimingGraphMetricsCompute(uncapped, seqProps.count);
+
+  NSView *wrapper = [[NSView alloc]
+      initWithFrame:NSMakeRect(0, 0, 300, metrics.wrapperHeight)];
+  wrapper.autoresizingMask = NSViewWidthSizable;
+
+  KKTimingGraphView *graphView = [self _buildTimingGraphInWrapper:wrapper];
+
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  [self _applyTimingParamsToGraph:graphView
+                     withParamAPI:paramGetAPI
+                           atTime:[actionAPI currentTime]];
+  [actionAPI endAction:self];
+
+  [self _wireTimingGraphCallbacks:graphView];
+
+  graphView.globalSlots = globalSlots;
+  graphView.inSectionSlots = inSlots;
+  graphView.holdSectionSlots = holdSlots;
+  graphView.outSectionSlots = outSlots;
+
+  [self _installHoldPropertyViewOnGraph:graphView];
+
+  if (!uncapped)
+    self.timingGraph = graphView;
+
+  NSView *seqContainer =
+      [self _buildSeqContainerInWrapper:wrapper
+                               uncapped:uncapped
+                          seqContainerH:metrics.seqContainerH];
+  KKStageSequencerRulerView *rulerView =
+      [self _buildSeqRulerInContainer:seqContainer rulerHeight:metrics.rulerH];
+  KKStageSequencerView *seqView = nil;
+  [self _buildSeqScrollViewInContainer:seqContainer
+                            underRuler:rulerView
+                              uncapped:uncapped
+                              seqProps:seqProps
+                            fullLanesH:metrics.fullLanesH
+                            outSeqView:&seqView];
+  KKStagePlayheadView *playheadView =
+      [self _buildSeqPlayheadInContainer:seqContainer
+                             rulerHeight:metrics.rulerH];
+
+  [self _registerSequencerViewsForUncapped:uncapped
+                                 graphView:graphView
+                              seqContainer:seqContainer
+                                   seqView:seqView
+                                 rulerView:rulerView
+                              playheadView:playheadView];
 
   [self _wireStageSequencerCallbacksFor:seqView
                               rulerView:rulerView
                            playheadView:playheadView];
 
-  // Seed sequencer with lane data if multi-stage is enabled.
   [actionAPI startAction:self];
-  BOOL multiStageEnabled = NO;
-  [paramGetAPI getBoolValue:&multiStageEnabled
-              fromParameter:kKKParamMultiStageEnabled
-                     atTime:[actionAPI currentTime]];
-  if (multiStageEnabled) {
-    seqContainer.hidden = NO;
-    graphView.hidden = YES;
-    NSArray<KKTimingLane *> *lanes =
-        KKReadLanesRebalanced(self.apiManager, paramGetAPI);
-    if (!lanes && seqProps.count > 0) {
-      NSMutableArray<KKTimingLane *> *defaults =
-          [NSMutableArray arrayWithCapacity:seqProps.count];
-      for (KKAnimatableProperty *prop in seqProps) {
-        NSArray<NSNumber *> *baseVals =
-            [prop readValuesWithGetAPI:paramGetAPI
-                                atTime:[actionAPI currentTime]];
-        if (!baseVals.count)
-          baseVals = @[ @(1.0) ];
-        [defaults addObject:[KKTimingLane defaultLaneForLabel:prop.label
-                                                   baseValues:baseVals]];
-      }
-      lanes = defaults;
-      NSString *seeded = [KKTimingLane jsonFromLanes:lanes];
-      if (seeded) {
-        id<FxParameterSettingAPI_v5> setAPI = [self.apiManager
-            apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-        [setAPI setStringParameterValue:seeded
-                            toParameter:kKKParamMultiStageData];
-      }
-    }
-    if (lanes) {
-      KKPluginInstanceState *instState = KKInstanceStateForAPI(self.apiManager);
-      instState.lanesSnapshot = [lanes copy];
-      NSSet<NSString *> *hidden =
-          [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
-      instState.hiddenLaneLabels = hidden;
-      seqView.lanes = KKFilterLanesForVisibility(lanes, hidden);
-    }
-
-    id<FxTimingAPI_v4> timingAPI =
-        [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-    if (timingAPI) {
-      CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
-      [timingAPI startTimeForEffect:&effectStart];
-      [timingAPI durationTimeForEffect:&effectDuration];
-      double durSec = CMTimeGetSeconds(effectDuration);
-      seqView.effectDuration = durSec;
-      rulerView.effectDuration = durSec;
-      double startSec = CMTimeGetSeconds(effectStart);
-      double nowSec = CMTimeGetSeconds([actionAPI currentTime]);
-      if (durSec > 0) {
-        double frac = (nowSec - startSec) / durSec;
-        seqView.playheadFraction = frac;
-        playheadView.playheadFraction = frac;
-      }
-    }
-  }
+  [self _seedSequencerIfEnabledWithSeqContainer:seqContainer
+                                      graphView:graphView
+                                        seqView:seqView
+                                      rulerView:rulerView
+                                   playheadView:playheadView
+                                       seqProps:seqProps
+                                    paramGetAPI:paramGetAPI
+                                      actionAPI:actionAPI];
 
   CMTime t = [actionAPI currentTime];
   [self _applySlotState:globalSlots withParamAPI:paramGetAPI atTime:t];
@@ -926,377 +923,6 @@
   [actionAPI endAction:self];
 
   return wrapper;
-}
-
-- (void)_applySlotState:(NSArray<KKTimingSlot *> *)slots
-           withParamAPI:(id<FxParameterRetrievalAPI_v6>)paramAPI
-                 atTime:(CMTime)time {
-  for (KKTimingSlot *slot in slots)
-    slot.applyState(paramAPI, time);
-}
-
-- (void)_applyStateToTimingGraph:(KKTimingGraphView *)graph
-                         seqView:(KKStageSequencerView *)seq
-                    seqContainer:(NSView *)seqContainer
-                           ruler:(KKStageSequencerRulerView *)ruler
-                        playhead:(KKStagePlayheadView *)playhead
-                    multiEnabled:(BOOL)multiStageEnabled
-                           lanes:(NSArray<KKTimingLane *> *)lanes
-                    effectDurSec:(double)durSec
-                    playheadFrac:(double)frac
-                       hasTiming:(BOOL)hasTiming
-                    withParamAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI
-                          atTime:(CMTime)t {
-  if (!graph)
-    return;
-  if (seq) {
-    seqContainer.hidden = !multiStageEnabled;
-    graph.hidden = multiStageEnabled;
-    if (multiStageEnabled) {
-      if (lanes) {
-        NSSet<NSString *> *hidden =
-            [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
-        seq.lanes = KKFilterLanesForVisibility(lanes, hidden);
-      }
-      if (hasTiming) {
-        seq.effectDuration = durSec;
-        ruler.effectDuration = durSec;
-        if (durSec > 0) {
-          seq.playheadFraction = frac;
-          playhead.playheadFraction = frac;
-        }
-      }
-    }
-  }
-
-  [self _applyTimingParamsToGraph:graph withParamAPI:paramGetAPI atTime:t];
-  [self _applySlotState:graph.globalSlots withParamAPI:paramGetAPI atTime:t];
-  [self _applySlotState:graph.inSectionSlots withParamAPI:paramGetAPI atTime:t];
-  [self _applySlotState:graph.holdSectionSlots
-           withParamAPI:paramGetAPI
-                 atTime:t];
-  [self _applySlotState:graph.outSectionSlots
-           withParamAPI:paramGetAPI
-                 atTime:t];
-  if (graph.holdPropertyApplyState)
-    graph.holdPropertyApplyState(paramGetAPI, t);
-}
-
-- (void)timingGraphApplyState {
-  KKPluginInstanceState *instState = KKInstanceStateForAPI(self.apiManager);
-  if (!self.timingGraph && instState.additionalTimingViews.count == 0)
-    return;
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actionAPI startAction:self];
-  id<FxParameterRetrievalAPI_v6> paramGetAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  CMTime t = [actionAPI currentTime];
-
-  // Read the shared state once and broadcast to every registered view set.
-  BOOL multiStageEnabled = NO;
-  [paramGetAPI getBoolValue:&multiStageEnabled
-              fromParameter:kKKParamMultiStageEnabled
-                     atTime:t];
-
-  // Push loop state to every ruler unconditionally. The sync pump's early-
-  // out skips pushing when state.loopEnabled is already correct, which
-  // leaves freshly-opened window rulers out of date. Doing it here matches
-  // how lane data is pushed — once per view set, every apply tick.
-  BOOL loopEnabled = instState.loopEnabled;
-  self.stageSequencerRuler.loopEnabled = loopEnabled;
-  for (KKTimingViewRefs *refs in instState.additionalTimingViews)
-    refs.ruler.loopEnabled = loopEnabled;
-
-  NSArray<KKTimingLane *> *lanes = nil;
-  if (multiStageEnabled) {
-    lanes = KKReadLanesRebalanced(self.apiManager, paramGetAPI);
-    if (lanes)
-      KKInstanceStateForAPI(self.apiManager).lanesSnapshot = [lanes copy];
-  }
-
-  double durSec = 0, frac = 0;
-  BOOL hasTiming = NO;
-  if (multiStageEnabled) {
-    id<FxTimingAPI_v4> timingAPI =
-        [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-    if (timingAPI) {
-      CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
-      [timingAPI startTimeForEffect:&effectStart];
-      [timingAPI durationTimeForEffect:&effectDuration];
-      durSec = CMTimeGetSeconds(effectDuration);
-      if (durSec > 0)
-        frac = (CMTimeGetSeconds(t) - CMTimeGetSeconds(effectStart)) / durSec;
-      hasTiming = YES;
-    }
-  }
-
-  // Primary (inspector) set.
-  [self _applyStateToTimingGraph:self.timingGraph
-                         seqView:self.stageSequencer
-                    seqContainer:self.stageSequencerContainer
-                           ruler:self.stageSequencerRuler
-                        playhead:KKInstanceStateForAPI(self.apiManager)
-                                     .playheadView
-                    multiEnabled:multiStageEnabled
-                           lanes:lanes
-                    effectDurSec:durSec
-                    playheadFrac:frac
-                       hasTiming:hasTiming
-                    withParamAPI:paramGetAPI
-                          atTime:t];
-
-  // Secondary (window) sets. Prune any dead (deallocated) entries.
-  NSMutableArray *pruned = [NSMutableArray array];
-  for (KKTimingViewRefs *refs in instState.additionalTimingViews) {
-    if (!refs.isAlive)
-      continue;
-    [pruned addObject:refs];
-    [self _applyStateToTimingGraph:refs.graphView
-                           seqView:refs.seqView
-                      seqContainer:refs.seqContainer
-                             ruler:refs.ruler
-                          playhead:refs.playhead
-                      multiEnabled:multiStageEnabled
-                             lanes:lanes
-                      effectDurSec:durSec
-                      playheadFrac:frac
-                         hasTiming:hasTiming
-                      withParamAPI:paramGetAPI
-                            atTime:t];
-  }
-  instState.additionalTimingViews = pruned;
-
-  [actionAPI endAction:self];
-}
-
-- (void)_timingGraphSetAnimateEnabled:(BOOL)enabled
-                         forParameter:(UInt32)paramID
-                      disabledSection:(KKTimingGraphSection)section {
-  id<FxCustomParameterActionAPI_v4> actAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actAPI startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  CMTime t = [actAPI currentTime];
-  [setAPI setBoolValue:enabled toParameter:paramID atTime:t];
-  if (!enabled) {
-    int sel = KKTimingGraphSectionHold;
-    id<FxParameterRetrievalAPI_v6> getAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    [getAPI getIntValue:&sel
-          fromParameter:kKKParamTimingSelectedSection
-                 atTime:t];
-    if (sel == (int)section)
-      [setAPI setIntValue:KKTimingGraphSectionHold
-              toParameter:kKKParamTimingSelectedSection
-                   atTime:t];
-  }
-  [actAPI endAction:self];
-  [self timingGraphApplyState];
-}
-
-- (void)timingGraphSelectSection:(KKTimingGraphSection)section {
-  if (section == KKTimingGraphSectionIn && !self.timingGraph.inEnabled)
-    return;
-  if (section == KKTimingGraphSectionOut && !self.timingGraph.outEnabled)
-    return;
-
-  id<FxCustomParameterActionAPI_v4> actAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actAPI startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  [setAPI setIntValue:(int)section
-          toParameter:kKKParamTimingSelectedSection
-               atTime:[actAPI currentTime]];
-  [actAPI endAction:self];
-  [self timingGraphApplyState];
-}
-
-- (void)timingGraphSetIntValue:(int)value forParameter:(UInt32)paramID {
-  id<FxCustomParameterActionAPI_v4> actAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actAPI startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  [setAPI setIntValue:value toParameter:paramID atTime:[actAPI currentTime]];
-  [actAPI endAction:self];
-  [self timingGraphApplyState];
-}
-
-- (void)timingGraphSetFloatValue:(double)value forParameter:(UInt32)paramID {
-  id<FxCustomParameterActionAPI_v4> actAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actAPI startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  [setAPI setFloatValue:value toParameter:paramID atTime:[actAPI currentTime]];
-  [actAPI endAction:self];
-  [self timingGraphApplyState];
-}
-
-- (void)_mutateMultiStageSegmentAtLane:(NSInteger)laneIndex
-                            segmentIdx:(NSInteger)segmentIndex
-                                 using:(void (^)(KKTimingSegment *))mutator {
-  id<FxCustomParameterActionAPI_v4> actAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actAPI startAction:self];
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  NSMutableArray<KKTimingLane *> *lanes =
-      KKReadLanesRebalanced(self.apiManager, getAPI);
-  if (!lanes || (NSUInteger)laneIndex >= lanes.count) {
-    [actAPI endAction:self];
-    return;
-  }
-  KKTimingLane *lane = [lanes[laneIndex] copy];
-  NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
-  if ((NSUInteger)segmentIndex >= segs.count) {
-    [actAPI endAction:self];
-    return;
-  }
-  KKTimingSegment *seg = [segs[segmentIndex] copy];
-  mutator(seg);
-  segs[segmentIndex] = seg;
-  lane.segments = segs;
-  lanes[laneIndex] = lane;
-
-  NSString *updated = [KKTimingLane jsonFromLanes:lanes];
-  if (updated)
-    [setAPI setStringParameterValue:updated toParameter:kKKParamMultiStageData];
-  [actAPI endAction:self];
-  [self timingGraphApplyState];
-}
-
-- (void)_showSegmentEditPopoverForLane:(NSInteger)laneIndex
-                            segmentIdx:(NSInteger)segmentIndex
-                            anchorRect:(NSRect)anchorRect
-                            sourceView:(KKStageSequencerView *)sourceView {
-  KKStageSequencerView *seq = sourceView ?: self.stageSequencer;
-  if (!seq)
-    return;
-
-  // Snapshot current segment state for the popover.
-  __block KKSegmentEditKind kind = KKSegmentEditKindTransition;
-  __block NSInteger curveType = 0;
-  __block double intensity = 0.5;
-  __block double frequency = 0.5;
-  __block uint32_t seed = 0;
-
-  id<FxCustomParameterActionAPI_v4> actAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actAPI startAction:self];
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  NSArray<KKTimingLane *> *lanes =
-      KKReadLanesRebalanced(self.apiManager, getAPI);
-  [actAPI endAction:self];
-
-  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
-  // Translate view index → JSON index up front; forward the JSON index to
-  // every callback below so they don't have to repeat the translation.
-  NSInteger jsonLaneIdx =
-      KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
-  if (!lanes || jsonLaneIdx < 0)
-    return;
-  laneIndex = jsonLaneIdx;
-  KKTimingLane *lane = lanes[laneIndex];
-  if ((NSUInteger)segmentIndex >= lane.segments.count)
-    return;
-  KKTimingSegment *seg = lane.segments[segmentIndex];
-
-  kind = (seg.type == KKSegmentTypeHold) ? KKSegmentEditKindHold
-                                         : KKSegmentEditKindTransition;
-  curveType = (kind == KKSegmentEditKindHold) ? (NSInteger)seg.holdEffect
-                                              : (NSInteger)seg.easing;
-  intensity = seg.intensity;
-  frequency = seg.frequency;
-  seed = seg.seed;
-
-  KKSegmentEditView *content = [[KKSegmentEditView alloc] initWithKind:kind];
-  content.curveType = curveType;
-  content.intensity = intensity;
-  content.frequency = frequency;
-  content.seed = seed;
-  content.animateOut = (kind == KKSegmentEditKindTransition) &&
-                       (segmentIndex == (NSInteger)lane.segments.count - 1);
-
-  __weak typeof(self) weakSelf = self;
-  content.onCurveTypeChanged = ^(NSInteger ct) {
-    __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf)
-      return;
-    [strongSelf _mutateMultiStageSegmentAtLane:laneIndex
-                                    segmentIdx:segmentIndex
-                                         using:^(KKTimingSegment *s) {
-                                           if (s.type == KKSegmentTypeHold)
-                                             s.holdEffect = (KKHoldEffect)ct;
-                                           else
-                                             s.easing = (KKEasingCurve)ct;
-                                         }];
-  };
-  content.onIntensityChanged = ^(double v) {
-    __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf)
-      return;
-    [strongSelf _mutateMultiStageSegmentAtLane:laneIndex
-                                    segmentIdx:segmentIndex
-                                         using:^(KKTimingSegment *s) {
-                                           s.intensity = v;
-                                         }];
-  };
-  content.onFrequencyChanged = ^(double v) {
-    __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf)
-      return;
-    [strongSelf _mutateMultiStageSegmentAtLane:laneIndex
-                                    segmentIdx:segmentIndex
-                                         using:^(KKTimingSegment *s) {
-                                           s.frequency = v;
-                                         }];
-  };
-  content.onSeedChanged = ^(uint32_t newSeed) {
-    __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf)
-      return;
-    [strongSelf _mutateMultiStageSegmentAtLane:laneIndex
-                                    segmentIdx:segmentIndex
-                                         using:^(KKTimingSegment *s) {
-                                           s.seed = newSeed;
-                                         }];
-  };
-  __weak KKSegmentEditView *weakContent = content;
-  content.onSeedReroll = ^{
-    __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf)
-      return;
-    uint32_t newSeed = arc4random();
-    [strongSelf _mutateMultiStageSegmentAtLane:laneIndex
-                                    segmentIdx:segmentIndex
-                                         using:^(KKTimingSegment *s) {
-                                           s.seed = newSeed;
-                                         }];
-    weakContent.seed = newSeed;
-  };
-
-  NSViewController *vc = [[NSViewController alloc] init];
-  vc.view = content;
-
-  NSPopover *popover = [[NSPopover alloc] init];
-  popover.behavior = NSPopoverBehaviorTransient;
-  popover.animates = YES;
-  popover.contentViewController = vc;
-  popover.contentSize = content.frame.size;
-
-  [self.segmentEditPopover close];
-  self.segmentEditPopover = popover;
-
-  [popover showRelativeToRect:anchorRect
-                       ofView:seq
-                preferredEdge:NSRectEdgeMaxY];
 }
 
 @end
