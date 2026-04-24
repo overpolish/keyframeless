@@ -571,12 +571,24 @@ static const FxParameterFlags kCustomUIDisabled =
 
     if (active.type == KKSegmentTypeHold) {
       if (gradientLane) {
-        // Hold segment → just rasterize this segment's stops into a LUT.
-        // Hold-effect modulation (intensity/frequency) isn't meaningful for
-        // a gradient, so it's skipped here intentionally.
-        result[lane.propertyLabel] = KKGradientFlatLUTFromStops(
+        NSArray<NSNumber *> *baseLut = KKGradientFlatLUTFromStops(
             KKGradientStopsFromFlat(active.values) ?: @[],
             KK_GRADIENT_LUT_SIZE);
+        if (active.holdEffect == KKHoldEffectNone) {
+          result[lane.propertyLabel] = baseLut;
+        } else {
+          double segDur = active.end - active.start;
+          double t = (segDur > 0) ? (frac - active.start) / segDur : 0.0;
+          t = MAX(0.0, MIN(1.0, t));
+          double factor =
+              KKApplyHoldEffect(t, active.holdEffect, active.intensity,
+                                active.frequency, (int)active.seed);
+          NSMutableArray<NSNumber *> *modulated =
+              [NSMutableArray arrayWithCapacity:baseLut.count];
+          for (NSNumber *v in baseLut)
+            [modulated addObject:@(v.doubleValue * factor)];
+          result[lane.propertyLabel] = modulated;
+        }
       } else if (active.holdEffect == KKHoldEffectNone) {
         result[lane.propertyLabel] = active.values;
       } else {

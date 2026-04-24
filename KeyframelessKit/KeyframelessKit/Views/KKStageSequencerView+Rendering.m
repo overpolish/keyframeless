@@ -649,6 +649,40 @@ static NSArray<KKGradientStop *> *_stopsFromValues(NSArray<NSNumber *> *values,
     curveTop = curveBottom; // degenerate — lane too short for curve.
 
   NSArray<KKTimingSegment *> *segments = lane.segments;
+
+  // Precompute the abstract value range across every segment so transition
+  // overshoots (Elastic/Bounce) and hold-effect oscillations get headroom —
+  // same approach scalar lanes use in `_renderLaneGraph`. Baseline includes
+  // 0 (transition starts) and 1 (rest / transition ends) so the curve area
+  // never collapses when the lane is all-no-effect holds.
+  double minVal = 0.0, maxVal = 1.0;
+  static const NSInteger kSampleCount = 32;
+  for (NSUInteger sIdx = 0; sIdx < segments.count; sIdx++) {
+    KKTimingSegment *s = segments[sIdx];
+    BOOL animateOut = (sIdx == segments.count - 1);
+    if (s.type == KKSegmentTypeHold && s.holdEffect == KKHoldEffectNone)
+      continue;
+    for (NSInteger i = 0; i <= kSampleCount; i++) {
+      double t = (double)i / (double)kSampleCount;
+      double v;
+      if (s.type == KKSegmentTypeHold) {
+        v = KKApplyHoldEffect(t, s.holdEffect, s.intensity, s.frequency,
+                              (int)s.seed);
+      } else {
+        double ti = animateOut ? (1.0 - t) : t;
+        double e = KKApplyEasing(ti, s.easing, s.intensity, s.frequency);
+        v = animateOut ? (1.0 - e) : e;
+      }
+      if (v < minVal)
+        minVal = v;
+      if (v > maxVal)
+        maxVal = v;
+    }
+  }
+  double valRange = maxVal - minVal;
+  if (valRange < 0.001)
+    valRange = 1.0;
+
   for (NSUInteger segIdx = 0; segIdx < segments.count; segIdx++) {
     KKTimingSegment *seg = segments[segIdx];
     CGFloat segX = [self _xForFrac:seg.start
@@ -698,16 +732,22 @@ static NSArray<KKGradientStop *> *_stopsFromValues(NSArray<NSNumber *> *values,
       BOOL isAnimateOut = (segIdx == segments.count - 1);
       for (NSInteger i = 0; i <= steps; i++) {
         double t = (double)i / (double)steps;
-        double y01;
+        double v;
         if (seg.type == KKSegmentTypeHold) {
-          y01 = 1.0; // flat at top
+          if (seg.holdEffect == KKHoldEffectNone) {
+            v = 1.0; // rest
+          } else {
+            v = KKApplyHoldEffect(t, seg.holdEffect, seg.intensity,
+                                  seg.frequency, (int)seg.seed);
+          }
         } else {
           double e = KKApplyEasing(t, seg.easing, seg.intensity, seg.frequency);
           // Animate-out descends (top → bottom), animate-in/mid rises
-          // (bottom → top). This gives a visually distinct silhouette for
-          // the last-segment case instead of mirroring to the same shape.
-          y01 = isAnimateOut ? (1.0 - e) : e;
+          // (bottom → top). Gives a visually distinct silhouette for the
+          // last-segment case instead of mirroring to the same shape.
+          v = isAnimateOut ? (1.0 - e) : e;
         }
+        double y01 = (v - minVal) / valRange;
         CGFloat x = stripX + (CGFloat)t * innerW;
         CGFloat y = curveBottom + (CGFloat)y01 * (curveTop - curveBottom);
         if (i == 0)
