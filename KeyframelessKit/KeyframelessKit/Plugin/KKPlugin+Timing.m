@@ -130,6 +130,15 @@ static const FxParameterFlags kCustomUIDisabled =
                   error, @"Unable to add multi-stage enabled toggle"))
     return NO;
 
+  if (!KKAddParam([paramAPI
+                      addToggleButtonWithName:@""
+                                  parameterID:kKKParamTimingLoopEnabled
+                                 defaultValue:NO
+                               parameterFlags:kFxParameterFlag_HIDDEN |
+                                              kFxParameterFlag_NOT_ANIMATABLE],
+                  error, @"Unable to add timing loop toggle"))
+    return NO;
+
   if (!KKAddParam(
           [paramAPI addStringParameterWithName:@""
                                    parameterID:kKKParamMultiStageData

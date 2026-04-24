@@ -11,6 +11,7 @@
 ///
 /// See project_fxplug_custom_view_live_update.md for the full architecture.
 
+#import "../KKLog.h"
 #import "../Math/KKTimingStage.h"
 #import "../Views/StageSequencer/KKStagePlayheadView.h"
 #import "../Views/StageSequencer/KKStageSequencerRulerView.h"
@@ -96,6 +97,37 @@ static void KKFlushPendingLanes(void) {
   }
 }
 
+/// Read the loop-enabled param and broadcast it to every ruler for the
+/// instance (primary + additional). Follows the same pattern as
+/// `KKSyncFromParams` — called from both pump ticks so inspector↔window
+/// sync is automatic regardless of which ruler the user toggled.
+static void KKSyncLoopFromParams(id<PROAPIAccessing> apiManager) {
+  KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
+  if (!state)
+    return;
+  KKStageSequencerRulerView *primaryRuler = state.rulerView;
+  NSArray<KKTimingViewRefs *> *extras =
+      [state.additionalTimingViews copy] ?: @[];
+  if (!primaryRuler && extras.count == 0)
+    return;
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!getAPI)
+    return;
+  BOOL loopEnabled = NO;
+  [getAPI getBoolValue:&loopEnabled
+         fromParameter:kKKParamTimingLoopEnabled
+                atTime:kCMTimeZero];
+  if (loopEnabled == state.loopEnabled)
+    return;
+  state.loopEnabled = loopEnabled;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    primaryRuler.loopEnabled = loopEnabled;
+    for (KKTimingViewRefs *r in extras)
+      r.ruler.loopEnabled = loopEnabled;
+  });
+}
+
 static void KKSyncFromParams(id<PROAPIAccessing> apiManager) {
   KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
   KKStageSequencerView *seq = state.sequencerView;
@@ -142,10 +174,120 @@ static void KKRefreshActiveTiming(id<PROAPIAccessing> apiManager) {
   if (!activeState)
     return;
   CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
+  CMTime frameDuration = kCMTimeZero;
   [timingAPI startTimeForEffect:&effectStart];
   [timingAPI durationTimeForEffect:&effectDuration];
+  [timingAPI frameDuration:&frameDuration];
   activeState.cachedEffectStart = CMTimeGetSeconds(effectStart);
   activeState.cachedEffectDuration = CMTimeGetSeconds(effectDuration);
+  activeState.cachedFrameDuration = CMTimeGetSeconds(frameDuration);
+}
+
+/// Last time we fired a loop-back `movePlayheadToTime:` for the active
+/// instance — gates re-triggers while FCP catches up to the new position.
+static NSTimeInterval sLastLoopWrapTime = 0;
+
+/// If the active instance has loop enabled and the playhead has reached the
+/// end of the effect, jump it back to the effect start. Called from the
+/// render tick where the caller's `apiManager` is live and can answer
+/// `FxCommandAPI_v2` inside an action scope. The short cooldown avoids
+/// spamming `movePlayheadToTime:` while FCP catches up to the new position.
+static void KKMaybeLoopPlayback(id<PROAPIAccessing> apiManager,
+                                double pumpTimeSec, id sender) {
+  static KKLog *sLog;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    sLog = [KKLog loggerForPlugin:@"co.overpolish.keyframeless.Timing"];
+  });
+
+  KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
+  double durSec = state.cachedEffectDuration;
+  if (durSec <= 0)
+    return;
+  if (!state.loopEnabled || !sender)
+    return;
+  // FCP stops rendering roughly one frame before the effect end, so the
+  // max observed frac varies with clip length (0.97 on a short clip, 0.99
+  // on a long one) and with frame rate. Compare seconds-remaining to the
+  // clip's native frame duration so we fire on the last rendered frame
+  // at any frame rate. Fallback threshold for clips we haven't cached
+  // timing for yet is 60ms (a frame at 16.7fps — permissive).
+  double secondsRemaining = (state.cachedEffectStart + durSec) - pumpTimeSec;
+  double triggerWindow =
+      state.cachedFrameDuration > 0 ? state.cachedFrameDuration + 0.005 : 0.06;
+  if (secondsRemaining > triggerWindow)
+    return;
+  NSTimeInterval now = CACurrentMediaTime();
+  double frameDur =
+      state.cachedFrameDuration > 0 ? state.cachedFrameDuration : 0.033;
+  // Cooldown ~10 frames so subsequent render ticks during the buffered
+  // tail don't stack up additional poll chains.
+  if (now - sLastLoopWrapTime < 10.0 * frameDur)
+    return;
+  sLastLoopWrapTime = now;
+
+  // During playback, the render callback runs 3–5 frames AHEAD of what the
+  // user sees (FCP pre-renders for smooth playback). So when renderTime
+  // reaches the effect end, the display is still 3–5 frames behind. We
+  // poll `currentTime` on the main queue — which reports the actual
+  // displayed playhead position, not the render-prep position — and fire
+  // loop-back when it reaches the end. This is robust across machines,
+  // since buffer depth varies with hardware/clip complexity, while
+  // `currentTime` always reflects what the user is watching.
+  double effectEndSec = state.cachedEffectStart + durSec;
+  double targetSec = state.cachedEffectStart;
+  id<PROAPIAccessing> strongAPI = apiManager;
+  id strongSender = sender;
+  __block NSInteger attemptsLeft = 20;
+  __block double lastSeenSec = -1.0;
+  __block BOOL sawForwardAdvance = NO;
+  __block __weak void (^weakPoll)(void);
+  void (^poll)(void) = ^{
+    id<FxCustomParameterActionAPI_v4> actAPI =
+        [strongAPI apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    if (!actAPI)
+      return;
+    [actAPI startAction:strongSender];
+    double nowSec = CMTimeGetSeconds([actAPI currentTime]);
+    double secondsRemaining = effectEndSec - nowSec;
+
+    BOOL firstPoll = lastSeenSec < 0;
+    double delta = firstPoll ? 0 : (nowSec - lastSeenSec);
+    BOOL advancing = !firstPoll && delta >= frameDur * 0.5;
+    if (advancing)
+      sawForwardAdvance = YES;
+    lastSeenSec = nowSec;
+
+    // Only fire if we've observed at least one forward advance — otherwise
+    // single-frame scrubs (arrow keys) would trigger a loop-back from a
+    // single render tick at the end of the clip.
+    BOOL atEnd = secondsRemaining <= frameDur + 0.005;
+    BOOL paused = !firstPoll && !advancing;
+
+    if (atEnd && sawForwardAdvance) {
+      id<FxCommandAPI_v2> cmd =
+          [strongAPI apiForProtocol:@protocol(FxCommandAPI_v2)];
+      [cmd performCommand:kFxCommand_TogglePlayback error:nil];
+      CMTime target = CMTimeMakeWithSeconds(targetSec, 600);
+      [cmd movePlayheadToTime:target error:nil];
+      [cmd performCommand:kFxCommand_TogglePlayback error:nil];
+      [actAPI endAction:strongSender];
+      return;
+    }
+    if (paused) {
+      [actAPI endAction:strongSender];
+      return;
+    }
+    [actAPI endAction:strongSender];
+
+    if (--attemptsLeft <= 0)
+      return;
+    dispatch_after(
+        dispatch_time(DISPATCH_TIME_NOW, (int64_t)(frameDur * NSEC_PER_SEC)),
+        dispatch_get_main_queue(), weakPoll);
+  };
+  weakPoll = poll;
+  dispatch_async(dispatch_get_main_queue(), poll);
 }
 
 /// Compute each live instance's playhead fraction from its cached timing
@@ -199,6 +341,7 @@ static void KKBroadcastPlayheads(double nowSec) {
                              atTime:(CMTime)time {
   KKFlushPendingLanes();
   KKSyncFromParams(apiManager);
+  KKSyncLoopFromParams(apiManager);
   [self multiStageUpdatePlayheadsForAPI:apiManager atTime:time];
 }
 
@@ -213,7 +356,8 @@ static void KKBroadcastPlayheads(double nowSec) {
 }
 
 + (void)multiStageRenderTickForAPI:(id<PROAPIAccessing>)apiManager
-                            atTime:(CMTime)renderTime {
+                            atTime:(CMTime)renderTime
+                            sender:(id)sender {
   // `renderTime` is filter-input time (effect-local) whereas the pump expects
   // timeline time. Convert first, otherwise playhead fractions are wrong.
   CMTime pumpTime = renderTime;
@@ -223,7 +367,10 @@ static void KKBroadcastPlayheads(double nowSec) {
     [timingAPI timelineTime:&pumpTime fromInputTime:renderTime];
 
   KKFlushPendingLanes();
-  [self multiStageUpdatePlayheadsFromRenderForAPI:apiManager atTime:pumpTime];
+  KKSyncLoopFromParams(apiManager);
+  [self multiStageUpdatePlayheadsFromRenderForAPI:apiManager
+                                           atTime:pumpTime
+                                           sender:sender];
 }
 
 + (void)multiStageFlushPendingLanes {
@@ -243,16 +390,22 @@ static void KKBroadcastPlayheads(double nowSec) {
 
 + (void)multiStageUpdatePlayheadsFromRenderForAPI:
             (id<PROAPIAccessing>)apiManager
-                                           atTime:(CMTime)time {
+                                           atTime:(CMTime)time
+                                           sender:(id)sender {
+  // Loop-back runs regardless of the view-broadcast suppression gates: those
+  // gates protect against playhead flicker, while the loop check needs to
+  // fire during playback even when drawOSC is authoritative for view updates.
+  KKRefreshActiveTiming(apiManager);
+  KKMaybeLoopPlayback(apiManager, CMTimeGetSeconds(time), sender);
+
   // drawOSC is authoritative when running; recent parameterChanged means
-  // warm-up renders are imminent. Either gate closed → skip to avoid
-  // flickering the playhead to frame 0.
+  // warm-up renders are imminent. Either gate closed → skip the broadcast
+  // to avoid flickering the playhead to frame 0.
   NSTimeInterval now = CACurrentMediaTime();
   if (now - sLastDrawOSCPumpTime < kRenderSuppressionWindow)
     return;
   if (now - sLastParameterChangedTime < kRenderSuppressionWindow)
     return;
-  KKRefreshActiveTiming(apiManager);
   KKBroadcastPlayheads(CMTimeGetSeconds(time));
 }
 

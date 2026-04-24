@@ -20,6 +20,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, assign) CGFloat zoom;
 @property(nonatomic, assign) CGFloat panOffset;
 
+/// Reflects the current loop-playback param state. Updates the loop button's
+/// visual state only — does not trigger `onLoopToggled`.
+@property(nonatomic, assign) BOOL loopEnabled;
+
 /// Called when user clicks/drags the ruler. Fraction is 0–1.
 @property(nonatomic, copy, nullable) void (^onPlayheadScrub)(double fraction);
 
@@ -27,6 +31,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// the paired sequencer view so both stay in sync.
 @property(nonatomic, copy, nullable) void (^onZoomPanChanged)
     (CGFloat zoom, CGFloat panOffset);
+
+/// Called when the user clicks the loop toggle button. Receives the desired
+/// new state. Container writes the loop param and refreshes all paired views.
+@property(nonatomic, copy, nullable) void (^onLoopToggled)(BOOL newState);
 
 /// Fixed height the ruler wants in a parent layout.
 + (CGFloat)preferredHeight;

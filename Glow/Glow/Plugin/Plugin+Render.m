@@ -306,7 +306,9 @@ static void _texPairReturn(NSInteger idx) {
                    pluginState:(NSData *)pluginState
                         atTime:(CMTime)renderTime
                          error:(NSError *_Nullable *)outError {
-  [KKPlugin multiStageRenderTickForAPI:self.apiManager atTime:renderTime];
+  [KKPlugin multiStageRenderTickForAPI:self.apiManager
+                                atTime:renderTime
+                                sender:self];
   [KKPlugin colorSyncFromParams:self.apiManager];
 
   if (!pluginState || pluginState.length < sizeof(GlowPluginState) ||

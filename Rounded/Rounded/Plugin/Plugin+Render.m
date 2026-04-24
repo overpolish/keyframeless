@@ -91,7 +91,9 @@ typedef struct {
   // Drive the multi-stage pump from render so sequencer graph + playhead
   // updates still fire when a completely unrelated effect is OSC-selected.
   // Render fires on every effect per frame regardless of OSC focus.
-  [KKPlugin multiStageRenderTickForAPI:self.apiManager atTime:renderTime];
+  [KKPlugin multiStageRenderTickForAPI:self.apiManager
+                                atTime:renderTime
+                                sender:self];
 
   if (!pluginState || !sourceImages[0].ioSurface ||
       !destinationImage.ioSurface) {

@@ -1001,6 +1001,15 @@
               fromParameter:kKKParamMultiStageEnabled
                      atTime:t];
 
+  // Push loop state to every ruler unconditionally. The sync pump's early-
+  // out skips pushing when state.loopEnabled is already correct, which
+  // leaves freshly-opened window rulers out of date. Doing it here matches
+  // how lane data is pushed — once per view set, every apply tick.
+  BOOL loopEnabled = instState.loopEnabled;
+  self.stageSequencerRuler.loopEnabled = loopEnabled;
+  for (KKTimingViewRefs *refs in instState.additionalTimingViews)
+    refs.ruler.loopEnabled = loopEnabled;
+
   NSArray<KKTimingLane *> *lanes = nil;
   if (multiStageEnabled) {
     NSString *json = nil;
