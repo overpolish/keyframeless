@@ -666,6 +666,7 @@
       laneKinds[p.label] = kind;
   }
   seqView.laneKindsByLabel = laneKinds;
+  seqView.laneLabelsWithOSC = [self animatablePropertyLabelsWithOSC];
   scrollView.documentView = seqView;
   [seqContainer addSubview:scrollView];
 
@@ -961,6 +962,39 @@
     [actAPI endAction:strongSelf];
     if (state)
       state.selectionInProgress = NO;
+    [strongSelf timingGraphApplyState];
+  };
+
+  seqView.onLaneOSCVisibilityToggled = ^(NSInteger laneIndex, BOOL visible) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    KKPluginInstanceState *state = KKInstanceStateForAPI(strongSelf.apiManager);
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actAPI startAction:strongSelf];
+    id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    NSString *json = nil;
+    [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+    NSMutableArray<KKTimingLane *> *lanes =
+        [[KKTimingLane lanesFromJSON:json] mutableCopy];
+    NSInteger jsonIdx =
+        KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
+    if (lanes && jsonIdx >= 0) {
+      KKTimingLane *lane = [lanes[jsonIdx] copy];
+      lane.oscVisible = visible;
+      lanes[jsonIdx] = lane;
+      NSString *updated = [KKTimingLane jsonFromLanes:lanes];
+      if (updated)
+        [setAPI setStringParameterValue:updated
+                            toParameter:kKKParamMultiStageData];
+      if (state)
+        state.lanesSnapshot = [lanes copy];
+    }
+    [actAPI endAction:strongSelf];
     [strongSelf timingGraphApplyState];
   };
 

@@ -406,6 +406,15 @@
       continue;
 
     if (loc.x < kKSSBorderInset + kKSSLabelWidth) {
+      CGFloat iconSlotLeft = kKSSBorderInset + kKSSLabelPadding;
+      NSRect iconRect = NSMakeRect(
+          iconSlotLeft, laneY + ([self _laneHeight] - kKSSOSCIconSize) / 2.0,
+          kKSSOSCIconSize, kKSSOSCIconSize);
+      if (lane.hasOSC && NSPointInRect(loc, iconRect)) {
+        if (self.onLaneOSCVisibilityToggled)
+          self.onLaneOSCVisibilityToggled(laneIdx, !lane.oscVisible);
+        return;
+      }
       if (self.onLaneToggled)
         self.onLaneToggled(laneIdx, !lane.enabled);
       return;

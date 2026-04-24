@@ -21,6 +21,7 @@ static NSString *const kKeyLabel = @"label";
 static NSString *const kKeySegments = @"segs";
 static NSString *const kKeyEnabled = @"on";
 static NSString *const kKeySelectedSeg = @"sel";
+static NSString *const kKeyOscVisible = @"osc";
 
 static const NSInteger kCurrentVersion = 3;
 
@@ -81,6 +82,7 @@ static const NSInteger kCurrentVersion = 3;
       kKeyLabel : lane.propertyLabel ?: @"",
       kKeyEnabled : @(lane.enabled),
       kKeySelectedSeg : @(lane.selectedSegment),
+      kKeyOscVisible : @(lane.oscVisible),
       kKeySegments : segsArray,
     }];
   }
@@ -137,6 +139,8 @@ static const NSInteger kCurrentVersion = 3;
     NSNumber *selNum = laneDict[kKeySelectedSeg];
     if (selNum)
       lane.selectedSegment = selNum.integerValue;
+    NSNumber *oscNum = laneDict[kKeyOscVisible];
+    lane.oscVisible = oscNum ? oscNum.boolValue : YES;
     [result addObject:lane];
   }
   return result.count ? result : nil;

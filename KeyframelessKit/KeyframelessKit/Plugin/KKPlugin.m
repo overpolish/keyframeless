@@ -374,6 +374,10 @@
   return [NSSet set];
 }
 
+- (NSSet<NSString *> *)animatablePropertyLabelsWithOSC {
+  return [NSSet set];
+}
+
 - (NSView *)holdPropertyView {
   return nil;
 }

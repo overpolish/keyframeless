@@ -83,6 +83,12 @@ typedef NS_ENUM(NSInteger, KKSegmentType) {
 /// Index of the currently selected segment in this lane (-1 for none).
 /// Persisted in JSON so selection survives view rebuilds.
 @property(nonatomic) NSInteger selectedSegment;
+/// Whether this lane has an associated on-screen control (OSC). Set by the
+/// plugin at lane build time; not serialized.
+@property(nonatomic) BOOL hasOSC;
+/// Whether the lane's OSC should be rendered on canvas. Persisted in JSON
+/// so visibility survives view rebuilds. Defaults to YES.
+@property(nonatomic) BOOL oscVisible;
 
 + (instancetype)laneWithLabel:(NSString *)label
                      segments:(NSArray<KKTimingSegment *> *)segments

@@ -26,6 +26,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable)
     NSDictionary<NSString *, NSNumber *> *laneKindsByLabel;
 
+/// Property labels whose lanes have an associated on-screen control.
+/// The sequencer stamps `lane.hasOSC` automatically whenever lanes are
+/// assigned; plugins set this once at setup and never again.
+@property(nonatomic, copy, nullable) NSSet<NSString *> *laneLabelsWithOSC;
+
 /// Effect duration in seconds (for timecode ruler labels).
 @property(nonatomic, assign) double effectDuration;
 
@@ -37,6 +42,10 @@ NS_ASSUME_NONNULL_BEGIN
     (NSInteger laneIndex, NSInteger segmentIndex);
 @property(nonatomic, copy, nullable) void (^onLaneToggled)
     (NSInteger laneIndex, BOOL enabled);
+/// Fired when the user clicks the lane's OSC visibility icon. Only fires
+/// for lanes with `hasOSC = YES`.
+@property(nonatomic, copy, nullable) void (^onLaneOSCVisibilityToggled)
+    (NSInteger laneIndex, BOOL visible);
 /// Called when boundary drag changes segment positions.
 /// The callback receives the full updated lane (caller should persist).
 @property(nonatomic, copy, nullable) void (^onLaneChanged)

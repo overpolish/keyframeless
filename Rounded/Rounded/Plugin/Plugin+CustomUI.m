@@ -27,6 +27,10 @@
   ];
 }
 
+- (NSSet<NSString *> *)animatablePropertyLabelsWithOSC {
+  return [NSSet setWithObjects:@"Radius", @"Crop", nil];
+}
+
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
   if (parameterID == kParamCropGroup) {
     return [self

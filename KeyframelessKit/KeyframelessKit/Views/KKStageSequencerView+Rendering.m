@@ -102,18 +102,43 @@
 }
 
 - (void)_renderLaneLabel:(KKTimingLane *)lane laneY:(CGFloat)laneY {
-  NSColor *labelColor =
+  NSColor *contentColor =
       lane.enabled ? [NSColor inspectorLabel]
                    : [[NSColor inspectorLabel] colorWithAlphaComponent:0.35];
+  CGFloat laneH = [self _laneHeight];
+  CGFloat iconSlotLeft = kKSSBorderInset + kKSSLabelPadding;
+
+  if (lane.hasOSC) {
+    NSString *name = lane.oscVisible ? @"arcade.stick.console.fill"
+                                     : @"arcade.stick.console";
+    NSImage *symbol = [NSImage imageWithSystemSymbolName:name
+                                accessibilityDescription:nil];
+    if (symbol) {
+      NSImageSymbolConfiguration *sizeCfg = [NSImageSymbolConfiguration
+          configurationWithPointSize:kKSSOSCIconSize
+                              weight:NSFontWeightRegular];
+      NSImageSymbolConfiguration *colorCfg = [NSImageSymbolConfiguration
+          configurationWithPaletteColors:@[ contentColor ]];
+      NSImage *icon =
+          [symbol imageWithSymbolConfiguration:
+                      [sizeCfg configurationByApplyingConfiguration:colorCfg]];
+      NSRect iconRect =
+          NSMakeRect(iconSlotLeft + (kKSSOSCIconSize - icon.size.width) / 2.0,
+                     laneY + (laneH - icon.size.height) / 2.0, icon.size.width,
+                     icon.size.height);
+      [icon drawInRect:iconRect];
+    }
+  }
+
+  CGFloat labelLeft = iconSlotLeft + kKSSOSCIconSize + kKSSOSCIconGap;
   NSDictionary *labelAttrs = @{
     NSFontAttributeName : [NSFont systemFontOfSize:KKFontSizeSM
                                             weight:NSFontWeightMedium],
-    NSForegroundColorAttributeName : labelColor,
+    NSForegroundColorAttributeName : contentColor,
   };
   NSSize labelSize = [lane.propertyLabel sizeWithAttributes:labelAttrs];
   NSPoint labelPoint =
-      NSMakePoint(kKSSBorderInset + kKSSLabelPadding,
-                  laneY + ([self _laneHeight] - labelSize.height) / 2.0);
+      NSMakePoint(labelLeft, laneY + (laneH - labelSize.height) / 2.0);
   [lane.propertyLabel drawAtPoint:labelPoint withAttributes:labelAttrs];
 }
 

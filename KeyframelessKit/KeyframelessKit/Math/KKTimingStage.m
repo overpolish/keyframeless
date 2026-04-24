@@ -92,6 +92,7 @@ KKTimingBoundaryAfter(NSUInteger idx, NSArray<KKTimingSegment *> *segments) {
   l.propertyLabel = label;
   l.segments = segments;
   l.enabled = enabled;
+  l.oscVisible = YES;
   // Default: select first hold segment.
   l.selectedSegment = -1;
   for (NSUInteger i = 0; i < segments.count; i++) {
@@ -135,6 +136,8 @@ KKTimingBoundaryAfter(NSUInteger idx, NSArray<KKTimingSegment *> *segments) {
                                        segments:copied
                                         enabled:_enabled];
   c.selectedSegment = _selectedSegment;
+  c.hasOSC = _hasOSC;
+  c.oscVisible = _oscVisible;
   return c;
 }
 
