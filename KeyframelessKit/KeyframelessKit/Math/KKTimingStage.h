@@ -46,6 +46,9 @@ typedef NS_ENUM(NSInteger, KKSegmentType) {
 @property(nonatomic) double frequency;
 /// Hold-effect seed for randomising per-property variation.
 @property(nonatomic) uint32_t seed;
+/// When > 0, this segment holds an absolute duration in seconds across clip
+/// length changes. Unlocked (= 0) segments scale proportionally with the clip.
+@property(nonatomic) double lockedDurationSeconds;
 
 /// Convenience: first value (for single-param properties).
 @property(nonatomic, readonly) double value;
@@ -89,6 +92,11 @@ typedef NS_ENUM(NSInteger, KKSegmentType) {
 /// Whether the lane's OSC should be rendered on canvas. Persisted in JSON
 /// so visibility survives view rebuilds. Defaults to YES.
 @property(nonatomic) BOOL oscVisible;
+/// Clip duration (seconds) this lane's segment fractions were last authored
+/// against. Used to decide when locked segments need rebalancing. Zero means
+/// "not yet established" — the next read initialises it to the current clip
+/// duration and persists it on the following write.
+@property(nonatomic) double lastKnownClipDuration;
 
 + (instancetype)laneWithLabel:(NSString *)label
                      segments:(NSArray<KKTimingSegment *> *)segments
@@ -114,6 +122,31 @@ FOUNDATION_EXPORT NSArray<NSNumber *> *
 KKTimingBoundaryBefore(NSUInteger idx, NSArray<KKTimingSegment *> *segments);
 FOUNDATION_EXPORT NSArray<NSNumber *> *
 KKTimingBoundaryAfter(NSUInteger idx, NSArray<KKTimingSegment *> *segments);
+
+/// Rewrites segment start/end fractions for a new clip duration, preserving
+/// locked segments' absolute durations where possible.
+///
+/// - Locked segments retain `lockedDurationSeconds` when there's room.
+/// - Unlocked segments absorb the clip-duration delta proportionally to
+///   their current seconds.
+/// - If locked segments can't all fit in the new range, every segment
+///   shrinks proportionally to current seconds. `lockedDurationSeconds` is
+///   not mutated, so the lock restores if the clip grows back.
+///
+/// The first segment's start and last segment's end stay invariant — empty
+/// head/tail space keeps its fraction of the clip.
+FOUNDATION_EXPORT NSArray<KKTimingSegment *> *
+KKTimingRebalancedSegments(NSArray<KKTimingSegment *> *segments,
+                           double oldDuration, double newDuration);
+
+/// Returns a new lanes array rebalanced for the current clip duration. Each
+/// lane's segments are rewritten through `KKTimingRebalancedSegments` and
+/// `lastKnownClipDuration` is updated. Lanes with a lastKnownClipDuration of
+/// zero (never established) are implicitly initialised to `currentDuration`.
+/// Safe to call unconditionally — returns equivalent data when no rebalance
+/// is required.
+FOUNDATION_EXPORT NSArray<KKTimingLane *> *
+KKTimingRebalancedLanes(NSArray<KKTimingLane *> *lanes, double currentDuration);
 
 /// Serialize / deserialize a full set of lanes as JSON.
 @interface KKTimingLane (Serialization)

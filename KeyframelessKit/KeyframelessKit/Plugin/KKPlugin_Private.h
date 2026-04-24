@@ -35,6 +35,17 @@ KKLaneJSONIndexForViewIndex(NSInteger viewIndex,
                             NSArray<KKTimingLane *> *jsonLanes,
                             NSSet<NSString *> *_Nullable hidden);
 
+/// Current clip duration in seconds for the plugin instance behind
+/// `apiManager`, or 0 when `FxTimingAPI_v4` is unavailable.
+extern double KKCurrentEffectDurationSeconds(id<PROAPIAccessing> apiManager);
+
+/// Reads the `kKKParamMultiStageData` lanes JSON and rebalances each lane
+/// for the current clip duration so locked segments retain their absolute
+/// seconds when the clip length has changed since the last write. Returns
+/// `nil` when the param is empty or contains no valid lanes.
+extern NSMutableArray<KKTimingLane *> *_Nullable KKReadLanesRebalanced(
+    id<PROAPIAccessing> apiManager, id<FxParameterRetrievalAPI_v6> getAPI);
+
 @interface KKPlugin () <FxCustomParameterViewHost_v2>
 
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *timingHeader;

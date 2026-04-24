@@ -26,6 +26,142 @@ KKTimingBoundaryAfter(NSUInteger idx, NSArray<KKTimingSegment *> *segments) {
   return KKTimingBoundaryBefore(next, segments);
 }
 
+/// Minimum segment width as a fraction of the clip. Matches the sequencer's
+/// interactive-drag floor (`kKSSMinSegmentFrac`) so auto-rebalanced segments
+/// stay grabbable at default zoom.
+static const double kKKTimingMinSegmentFrac = 0.04;
+
+NSArray<KKTimingSegment *> *
+KKTimingRebalancedSegments(NSArray<KKTimingSegment *> *segments,
+                           double oldDuration, double newDuration) {
+  if (segments.count == 0 || oldDuration <= 0 || newDuration <= 0 ||
+      fabs(oldDuration - newDuration) < 1e-9)
+    return segments;
+
+  double rangeStart = segments.firstObject.start;
+  double rangeEnd = segments.lastObject.end;
+  double rangeFrac = rangeEnd - rangeStart;
+  if (rangeFrac <= 0)
+    return segments;
+  double rangeSecNew = rangeFrac * newDuration;
+
+  double totalLockedSec = 0;
+  double totalUnlockedSec = 0;
+  for (KKTimingSegment *s in segments) {
+    double secOld = (s.end - s.start) * oldDuration;
+    if (s.lockedDurationSeconds > 0)
+      totalLockedSec += s.lockedDurationSeconds;
+    else
+      totalUnlockedSec += secOld;
+  }
+
+  BOOL lockedFit = totalLockedSec <= rangeSecNew;
+  double unlockedScale = 1.0;
+  double globalScale = 1.0;
+  if (lockedFit) {
+    double unlockedSecNew = rangeSecNew - totalLockedSec;
+    if (totalUnlockedSec > 0)
+      unlockedScale = unlockedSecNew / totalUnlockedSec;
+  } else {
+    double totalCurrentSec = totalLockedSec + totalUnlockedSec;
+    if (totalCurrentSec > 0)
+      globalScale = rangeSecNew / totalCurrentSec;
+  }
+
+  NSUInteger n = segments.count;
+  double *fracs = (double *)malloc(sizeof(double) * n);
+  for (NSUInteger i = 0; i < n; i++) {
+    KKTimingSegment *orig = segments[i];
+    double secNew;
+    if (lockedFit) {
+      secNew = (orig.lockedDurationSeconds > 0)
+                   ? orig.lockedDurationSeconds
+                   : (orig.end - orig.start) * oldDuration * unlockedScale;
+    } else {
+      double secOld = (orig.lockedDurationSeconds > 0)
+                          ? orig.lockedDurationSeconds
+                          : (orig.end - orig.start) * oldDuration;
+      secNew = secOld * globalScale;
+    }
+    fracs[i] = secNew / newDuration;
+  }
+
+  // Enforce per-segment minimum width. When any segment falls below the
+  // floor, bump it up and steal the deficit from above-floor segments
+  // proportional to their excess. If the clip is too small to honour the
+  // floor for every segment, fall back to uniform distribution.
+  double minFrac = kKKTimingMinSegmentFrac;
+  if ((double)n * minFrac >= rangeFrac - 1e-9) {
+    double uniform = rangeFrac / (double)n;
+    for (NSUInteger i = 0; i < n; i++)
+      fracs[i] = uniform;
+  } else {
+    for (int iter = 0; iter < 8; iter++) {
+      double deficit = 0;
+      for (NSUInteger i = 0; i < n; i++) {
+        if (fracs[i] < minFrac) {
+          deficit += (minFrac - fracs[i]);
+          fracs[i] = minFrac;
+        }
+      }
+      if (deficit < 1e-9)
+        break;
+      double excess = 0;
+      for (NSUInteger i = 0; i < n; i++)
+        if (fracs[i] > minFrac)
+          excess += (fracs[i] - minFrac);
+      if (excess < 1e-9)
+        break;
+      double ratio = MIN(deficit, excess) / excess;
+      for (NSUInteger i = 0; i < n; i++)
+        if (fracs[i] > minFrac)
+          fracs[i] -= (fracs[i] - minFrac) * ratio;
+    }
+  }
+
+  NSMutableArray<KKTimingSegment *> *result =
+      [NSMutableArray arrayWithCapacity:n];
+  double pos = rangeStart;
+  for (NSUInteger i = 0; i < n; i++) {
+    KKTimingSegment *copy = [segments[i] copy];
+    copy.start = pos;
+    pos += fracs[i];
+    // Last segment pins to rangeEnd to absorb floating-point drift.
+    copy.end = (i == n - 1) ? rangeEnd : pos;
+    [result addObject:copy];
+  }
+  free(fracs);
+  return result;
+}
+
+NSArray<KKTimingLane *> *KKTimingRebalancedLanes(NSArray<KKTimingLane *> *lanes,
+                                                 double currentDuration) {
+  if (currentDuration <= 0 || lanes.count == 0)
+    return lanes;
+  NSMutableArray<KKTimingLane *> *out =
+      [NSMutableArray arrayWithCapacity:lanes.count];
+  for (KKTimingLane *lane in lanes) {
+    double last = lane.lastKnownClipDuration;
+    if (last <= 0) {
+      // First read: baseline at current duration without mutating segments.
+      KKTimingLane *copy = [lane copy];
+      copy.lastKnownClipDuration = currentDuration;
+      [out addObject:copy];
+      continue;
+    }
+    if (fabs(last - currentDuration) < 1e-9) {
+      [out addObject:lane];
+      continue;
+    }
+    KKTimingLane *copy = [lane copy];
+    copy.segments =
+        KKTimingRebalancedSegments(lane.segments, last, currentDuration);
+    copy.lastKnownClipDuration = currentDuration;
+    [out addObject:copy];
+  }
+  return out;
+}
+
 @implementation KKTimingSegment
 
 + (instancetype)holdWithValues:(NSArray<NSNumber *> *)values
@@ -78,6 +214,7 @@ KKTimingBoundaryAfter(NSUInteger idx, NSArray<KKTimingSegment *> *segments) {
   c.intensity = _intensity;
   c.frequency = _frequency;
   c.seed = _seed;
+  c.lockedDurationSeconds = _lockedDurationSeconds;
   return c;
 }
 
@@ -138,6 +275,7 @@ KKTimingBoundaryAfter(NSUInteger idx, NSArray<KKTimingSegment *> *segments) {
   c.selectedSegment = _selectedSegment;
   c.hasOSC = _hasOSC;
   c.oscVisible = _oscVisible;
+  c.lastKnownClipDuration = _lastKnownClipDuration;
   return c;
 }
 

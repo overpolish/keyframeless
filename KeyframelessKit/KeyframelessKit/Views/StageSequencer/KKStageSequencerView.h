@@ -60,6 +60,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// (hold ↔ transition).
 @property(nonatomic, copy, nullable) void (^onSegmentTypeToggled)
     (NSInteger laneIndex, NSInteger segmentIndex);
+/// Called when user control-clicks a segment to toggle its duration lock.
+/// `newLockedSeconds` is 0 to unlock, or the segment's current duration in
+/// seconds to lock. The sequencer computes this from `effectDuration`, so the
+/// plugin only has to persist the value.
+@property(nonatomic, copy, nullable) void (^onSegmentLockToggled)
+    (NSInteger laneIndex, NSInteger segmentIndex, double newLockedSeconds);
 /// Called when the edit button above a segment is clicked. The anchor rect
 /// is in this view's coordinate space — use it to anchor a popover.
 @property(nonatomic, copy, nullable) void (^onSegmentEditRequested)
