@@ -15,6 +15,24 @@
 #import "KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
 
+/// Writes `lanes` to the shared `kKKParamMultiStageData` JSON param.
+static void KKWriteLanesJSON(NSArray<KKTimingLane *> *lanes,
+                             id<FxParameterSettingAPI_v5> setAPI) {
+  NSString *updated = [KKTimingLane jsonFromLanes:lanes];
+  if (updated)
+    [setAPI setStringParameterValue:updated toParameter:kKKParamMultiStageData];
+}
+
+/// Looks up the animatable property by `label`, or nil when no match.
+static KKAnimatableProperty *
+KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
+  for (KKAnimatableProperty *p in props) {
+    if ([p.label isEqualToString:label])
+      return p;
+  }
+  return nil;
+}
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 @implementation KKPlugin (StageSequencerCallbacks)
@@ -23,631 +41,595 @@
                               rulerView:(KKStageSequencerRulerView *)rulerView
                            playheadView:(KKStagePlayheadView *)playheadView {
   __weak typeof(self) weakSelf = self;
+  __weak KKStageSequencerView *weakSeq = seqView;
+  __weak KKStageSequencerRulerView *weakRuler = rulerView;
+  __weak KKStagePlayheadView *weakPlayhead = playheadView;
 
   // Keep ruler, lanes, and playhead overlay in lockstep horizontally.
-  __weak KKStageSequencerView *weakSeqForSync = seqView;
-  __weak KKStageSequencerRulerView *weakRulerForSync = rulerView;
-  __weak KKStagePlayheadView *weakPlayheadForSync = playheadView;
   seqView.onZoomPanChanged = ^(CGFloat z, CGFloat p) {
-    weakRulerForSync.zoom = z;
-    weakRulerForSync.panOffset = p;
-    weakPlayheadForSync.zoom = z;
-    weakPlayheadForSync.panOffset = p;
+    weakRuler.zoom = z;
+    weakRuler.panOffset = p;
+    weakPlayhead.zoom = z;
+    weakPlayhead.panOffset = p;
   };
   rulerView.onZoomPanChanged = ^(CGFloat z, CGFloat p) {
-    weakSeqForSync.zoom = z;
-    weakSeqForSync.panOffset = p;
-    weakPlayheadForSync.zoom = z;
-    weakPlayheadForSync.panOffset = p;
+    weakSeq.zoom = z;
+    weakSeq.panOffset = p;
+    weakPlayhead.zoom = z;
+    weakPlayhead.panOffset = p;
   };
 
   seqView.onSegmentSelected = ^(NSInteger laneIndex, NSInteger segmentIndex) {
-    __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf || laneIndex < 0)
-      return;
-    KKPluginInstanceState *state = KKInstanceStateForAPI(strongSelf.apiManager);
-    if (!state)
-      return;
-    state.selectionInProgress = YES;
-    NSArray<KKAnimatableProperty *> *props = [strongSelf animatableProperties];
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actAPI startAction:strongSelf];
-    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    CMTime ct = [actAPI currentTime];
-
-    NSMutableArray<KKTimingLane *> *lanes =
-        KKReadLanesRebalanced(strongSelf.apiManager, getAPI);
-    NSInteger jsonIdx =
-        KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
-    if (!lanes || jsonIdx < 0) {
-      [actAPI endAction:strongSelf];
-      return;
-    }
-
-    KKTimingLane *lane = lanes[jsonIdx];
-    KKAnimatableProperty *prop = nil;
-    for (KKAnimatableProperty *p in props) {
-      if ([p.label isEqualToString:lane.propertyLabel]) {
-        prop = p;
-        break;
-      }
-    }
-
-    // 1. Write-back: save current native param values into this lane's
-    //    previously selected segment.
-    NSInteger prevSeg = lane.selectedSegment;
-    if (prop.valueParamIDs.count > 0 && prevSeg >= 0 &&
-        (NSUInteger)prevSeg < lane.segments.count) {
-      NSArray<NSNumber *> *curVals = [prop readValuesWithGetAPI:getAPI
-                                                         atTime:ct];
-      KKTimingLane *mLane = [lane copy];
-      NSMutableArray *mSegs = [mLane.segments mutableCopy];
-      KKTimingSegment *mSeg = [mSegs[prevSeg] copy];
-      mSeg.values = curVals;
-      mSegs[prevSeg] = mSeg;
-      mLane.segments = mSegs;
-      mLane.selectedSegment = segmentIndex;
-      lanes[jsonIdx] = mLane;
-      lane = mLane;
-    } else {
-      KKTimingLane *mLane = [lane copy];
-      mLane.selectedSegment = segmentIndex;
-      lanes[jsonIdx] = mLane;
-      lane = mLane;
-    }
-
-    // 2. Save updated JSON with write-back + new selection.
-    NSString *updated = [KKTimingLane jsonFromLanes:lanes];
-    if (updated)
-      [setAPI setStringParameterValue:updated
-                          toParameter:kKKParamMultiStageData];
-
-    // 3. Update snapshot + clear pending BEFORE endAction (which triggers
-    //    parameterChanged: that would read stale snapshot).
-    state.lanesSnapshot = [lanes copy];
-    state.pendingLanes = nil;
-
-    // 4. Sync new selection: write segment values → native params.
-    NSArray<NSNumber *> *newVals = nil;
-    if (prop.valueParamIDs.count > 0 && segmentIndex >= 0 &&
-        (NSUInteger)segmentIndex < lane.segments.count) {
-      newVals = lane.segments[segmentIndex].values;
-      [prop writeValues:newVals withSetAPI:setAPI atTime:ct];
-    }
-
-    [actAPI endAction:strongSelf];
-    state.selectionInProgress = NO;
-    // The gradient bar isn't auto-bound to its param; the drawOSC/render
-    // sync is both too slow for interactive clicks AND prone to reading a
-    // stale string value right after a write. Push the known segment
-    // values directly instead. No-op for non-gradient properties.
-    if (newVals)
-      [KKPlugin colorPushGradientForProperty:prop
-                                      values:newVals
-                                  apiManager:strongSelf.apiManager];
-    [strongSelf timingGraphApplyState];
+    [weakSelf _handleSegmentSelectedAtLane:laneIndex segment:segmentIndex];
   };
-
   seqView.onLaneToggled = ^(NSInteger laneIndex, BOOL enabled) {
-    __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf)
-      return;
-    KKPluginInstanceState *state = KKInstanceStateForAPI(strongSelf.apiManager);
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actAPI startAction:strongSelf];
-    id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    CMTime ct = [actAPI currentTime];
-    NSMutableArray<KKTimingLane *> *lanes =
-        KKReadLanesRebalanced(strongSelf.apiManager, getAPI);
-    NSInteger jsonIdx =
-        KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
-    if (lanes && jsonIdx >= 0) {
-      NSMutableArray *mutable = [lanes mutableCopy];
-      KKTimingLane *lane = [mutable[jsonIdx] copy];
-      lane.enabled = enabled;
-      if (!enabled) {
-        lane.selectedSegment = -1;
-      } else {
-        lane.selectedSegment = -1;
-        for (NSUInteger i = 0; i < lane.segments.count; i++) {
-          if (lane.segments[i].type == KKSegmentTypeHold) {
-            lane.selectedSegment = (NSInteger)i;
-            break;
-          }
-        }
-      }
-      mutable[jsonIdx] = lane;
-      NSString *updated = [KKTimingLane jsonFromLanes:mutable];
-      if (updated)
-        [setAPI setStringParameterValue:updated
-                            toParameter:kKKParamMultiStageData];
-
-      // Enable-path: native params may have been edited while the lane was
-      // disabled. The lane's own segment values are the source of truth, so
-      // overwrite native params with the newly-selected segment's values.
-      // Without this, the live-param-override in multiStageValuesAtTime:
-      // would keep rendering the stale native-param values until the user
-      // clicks the segment (which triggers write-back and sync).
-      if (enabled && lane.selectedSegment >= 0 &&
-          (NSUInteger)lane.selectedSegment < lane.segments.count) {
-        NSArray<KKAnimatableProperty *> *props =
-            [strongSelf animatableProperties];
-        KKAnimatableProperty *prop = nil;
-        for (KKAnimatableProperty *p in props) {
-          if ([p.label isEqualToString:lane.propertyLabel]) {
-            prop = p;
-            break;
-          }
-        }
-        if (state)
-          state.selectionInProgress = YES;
-        [prop writeValues:lane.segments[lane.selectedSegment].values
-               withSetAPI:setAPI
-                   atTime:ct];
-        if (state) {
-          state.lanesSnapshot = [mutable copy];
-          state.pendingLanes = nil;
-        }
-      }
-    }
-    [actAPI endAction:strongSelf];
-    if (state)
-      state.selectionInProgress = NO;
-    [strongSelf timingGraphApplyState];
+    [weakSelf _handleLaneToggledAtIndex:laneIndex enabled:enabled];
   };
-
   seqView.onLaneOSCVisibilityToggled = ^(NSInteger laneIndex, BOOL visible) {
-    __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf)
-      return;
-    KKPluginInstanceState *state = KKInstanceStateForAPI(strongSelf.apiManager);
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actAPI startAction:strongSelf];
-    id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    NSMutableArray<KKTimingLane *> *lanes =
-        KKReadLanesRebalanced(strongSelf.apiManager, getAPI);
-    NSInteger jsonIdx =
-        KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
-    if (lanes && jsonIdx >= 0) {
-      KKTimingLane *lane = [lanes[jsonIdx] copy];
-      lane.oscVisible = visible;
-      lanes[jsonIdx] = lane;
-      NSString *updated = [KKTimingLane jsonFromLanes:lanes];
-      if (updated)
-        [setAPI setStringParameterValue:updated
-                            toParameter:kKKParamMultiStageData];
-      if (state)
-        state.lanesSnapshot = [lanes copy];
-    }
-    [actAPI endAction:strongSelf];
-    [strongSelf timingGraphApplyState];
+    [weakSelf _handleLaneOSCVisibilityAtIndex:laneIndex visible:visible];
   };
-
   seqView.onLaneChanged = ^(NSInteger laneIndex, KKTimingLane *updatedLane) {
-    __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf)
-      return;
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actAPI startAction:strongSelf];
-    id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    NSMutableArray<KKTimingLane *> *lanes =
-        KKReadLanesRebalanced(strongSelf.apiManager, getAPI);
-    KKPluginInstanceState *_state =
-        KKInstanceStateForAPI(strongSelf.apiManager);
-    NSInteger jsonIdx =
-        KKLaneJSONIndexForViewIndex(laneIndex, lanes, _state.hiddenLaneLabels);
-    if (lanes && jsonIdx >= 0) {
-      // Edge/move drag can change a locked segment's visual width. Restamp
-      // `lockedDurationSeconds` to the new width so the lock target matches
-      // what the user just authored — otherwise the next clip resize would
-      // snap the segment back to its previous target.
-      double curDur = KKCurrentEffectDurationSeconds(strongSelf.apiManager);
-      if (curDur > 0) {
-        KKTimingLane *relocked = [updatedLane copy];
-        NSMutableArray<KKTimingSegment *> *segs =
-            [relocked.segments mutableCopy];
-        for (NSUInteger i = 0; i < segs.count; i++) {
-          KKTimingSegment *s = segs[i];
-          if (s.lockedDurationSeconds <= 0)
-            continue;
-          KKTimingSegment *m = [s copy];
-          m.lockedDurationSeconds = (s.end - s.start) * curDur;
-          segs[i] = m;
-        }
-        relocked.segments = segs;
-        updatedLane = relocked;
-      }
-      lanes[jsonIdx] = updatedLane;
-      NSString *updated = [KKTimingLane jsonFromLanes:lanes];
-      if (updated)
-        [setAPI setStringParameterValue:updated
-                            toParameter:kKKParamMultiStageData];
-    }
-    [actAPI endAction:strongSelf];
-    [strongSelf timingGraphApplyState];
+    [weakSelf _handleLaneChangedAtIndex:laneIndex lane:updatedLane];
   };
-
   seqView.onSegmentAdded = ^(NSInteger laneIndex, double position) {
-    __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf)
-      return;
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actAPI startAction:strongSelf];
-    id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    NSMutableArray<KKTimingLane *> *lanes =
-        KKReadLanesRebalanced(strongSelf.apiManager, getAPI);
-    KKPluginInstanceState *_state =
-        KKInstanceStateForAPI(strongSelf.apiManager);
-    NSInteger jsonIdx =
-        KKLaneJSONIndexForViewIndex(laneIndex, lanes, _state.hiddenLaneLabels);
-    if (!lanes || jsonIdx < 0) {
-      [actAPI endAction:strongSelf];
-      return;
-    }
-    KKTimingLane *lane = [lanes[jsonIdx] copy];
-    NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
-
-    // Find which segment the click landed in and split it.
-    NSInteger splitIdx = -1;
-    for (NSUInteger i = 0; i < segs.count; i++) {
-      if (position >= segs[i].start && position < segs[i].end) {
-        splitIdx = (NSInteger)i;
-        break;
-      }
-    }
-    if (splitIdx < 0) {
-      [actAPI endAction:strongSelf];
-      return;
-    }
-
-    KKTimingSegment *orig = segs[splitIdx];
-    double splitPoint = position;
-
-    // Create two segments from the split. Clear any duration lock — the
-    // original's `lockedDurationSeconds` targeted the whole width, so
-    // inheriting it on both halves would double the intended total.
-    KKTimingSegment *left = [orig copy];
-    left.end = splitPoint;
-    left.lockedDurationSeconds = 0;
-    KKTimingSegment *right = [orig copy];
-    right.start = splitPoint;
-    right.lockedDurationSeconds = 0;
-
-    // Whichever side is closer to the click is treated as the "new" piece
-    // and gets the opposite type; the bulk half keeps the original type.
-    // Splitting a hold near its trailing edge grows a trailing transition;
-    // splitting near its leading edge grows a leading one.
-    double midpoint = (orig.start + orig.end) / 2.0;
-    KKSegmentType flipped = (orig.type == KKSegmentTypeHold)
-                                ? KKSegmentTypeTransition
-                                : KKSegmentTypeHold;
-    if (splitPoint < midpoint)
-      left.type = flipped;
-    else
-      right.type = flipped;
-
-    [segs replaceObjectAtIndex:splitIdx withObject:left];
-    [segs insertObject:right atIndex:splitIdx + 1];
-
-    lane.segments = segs;
-    lane.selectedSegment = splitIdx + 1;
-    lanes[jsonIdx] = lane;
-
-    NSString *updated = [KKTimingLane jsonFromLanes:lanes];
-    if (updated)
-      [setAPI setStringParameterValue:updated
-                          toParameter:kKKParamMultiStageData];
-    [actAPI endAction:strongSelf];
-    [strongSelf timingGraphApplyState];
+    [weakSelf _handleSegmentAddedAtLane:laneIndex position:position];
   };
-
   seqView.onSegmentRemoved = ^(NSInteger laneIndex, NSInteger segmentIndex) {
-    __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf)
-      return;
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actAPI startAction:strongSelf];
-    id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    NSMutableArray<KKTimingLane *> *lanes =
-        KKReadLanesRebalanced(strongSelf.apiManager, getAPI);
-    KKPluginInstanceState *_state =
-        KKInstanceStateForAPI(strongSelf.apiManager);
-    NSInteger jsonIdx =
-        KKLaneJSONIndexForViewIndex(laneIndex, lanes, _state.hiddenLaneLabels);
-    if (!lanes || jsonIdx < 0) {
-      [actAPI endAction:strongSelf];
-      return;
-    }
-    KKTimingLane *lane = [lanes[jsonIdx] copy];
-    NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
-    if (segs.count <= 1 || (NSUInteger)segmentIndex >= segs.count) {
-      [actAPI endAction:strongSelf];
-      return;
-    }
-
-    KKTimingSegment *removed = segs[segmentIndex];
-    // Expand the neighbor to fill the gap. Clear its lock too — the
-    // neighbor's stored `lockedDurationSeconds` reflects its old width,
-    // which no longer matches after absorbing the removed segment's span.
-    if ((NSUInteger)segmentIndex + 1 < segs.count) {
-      KKTimingSegment *next = [segs[segmentIndex + 1] copy];
-      next.start = removed.start;
-      next.lockedDurationSeconds = 0;
-      segs[segmentIndex + 1] = next;
-    } else if (segmentIndex > 0) {
-      KKTimingSegment *prev = [segs[segmentIndex - 1] copy];
-      prev.end = removed.end;
-      prev.lockedDurationSeconds = 0;
-      segs[segmentIndex - 1] = prev;
-    }
-    [segs removeObjectAtIndex:segmentIndex];
-
-    // Fix selection.
-    if (lane.selectedSegment == segmentIndex) {
-      lane.selectedSegment = -1;
-      for (NSUInteger i = 0; i < segs.count; i++) {
-        if (segs[i].type == KKSegmentTypeHold) {
-          lane.selectedSegment = (NSInteger)i;
-          break;
-        }
-      }
-    } else if (lane.selectedSegment > segmentIndex) {
-      lane.selectedSegment--;
-    }
-
-    lane.segments = segs;
-    lanes[jsonIdx] = lane;
-
-    NSString *updated = [KKTimingLane jsonFromLanes:lanes];
-    if (updated)
-      [setAPI setStringParameterValue:updated
-                          toParameter:kKKParamMultiStageData];
-    [actAPI endAction:strongSelf];
-    [strongSelf timingGraphApplyState];
+    [weakSelf _handleSegmentRemovedAtLane:laneIndex segment:segmentIndex];
   };
-
   seqView.onSegmentTypeToggled = ^(NSInteger laneIndex,
                                    NSInteger segmentIndex) {
-    __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf)
-      return;
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actAPI startAction:strongSelf];
-    id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    NSMutableArray<KKTimingLane *> *lanes =
-        KKReadLanesRebalanced(strongSelf.apiManager, getAPI);
-    KKPluginInstanceState *_state =
-        KKInstanceStateForAPI(strongSelf.apiManager);
-    NSInteger jsonIdx =
-        KKLaneJSONIndexForViewIndex(laneIndex, lanes, _state.hiddenLaneLabels);
-    if (!lanes || jsonIdx < 0) {
-      [actAPI endAction:strongSelf];
-      return;
-    }
-    KKTimingLane *lane = [lanes[jsonIdx] copy];
-    NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
-    if ((NSUInteger)segmentIndex >= segs.count) {
-      [actAPI endAction:strongSelf];
-      return;
-    }
-    KKTimingSegment *seg = [segs[segmentIndex] copy];
-    seg.type = (seg.type == KKSegmentTypeHold) ? KKSegmentTypeTransition
-                                               : KKSegmentTypeHold;
-    segs[segmentIndex] = seg;
-    lane.segments = segs;
-    lanes[jsonIdx] = lane;
-
-    NSString *updated = [KKTimingLane jsonFromLanes:lanes];
-    if (updated)
-      [setAPI setStringParameterValue:updated
-                          toParameter:kKKParamMultiStageData];
-    [actAPI endAction:strongSelf];
-    [strongSelf timingGraphApplyState];
+    [weakSelf _handleSegmentTypeToggledAtLane:laneIndex segment:segmentIndex];
   };
-
-  seqView.onSegmentLockToggled = ^(NSInteger laneIndex, NSInteger segmentIndex,
-                                   double newLockedSeconds) {
-    __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf)
-      return;
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actAPI startAction:strongSelf];
-    id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    NSMutableArray<KKTimingLane *> *lanes =
-        KKReadLanesRebalanced(strongSelf.apiManager, getAPI);
-    KKPluginInstanceState *_state =
-        KKInstanceStateForAPI(strongSelf.apiManager);
-    NSInteger jsonIdx =
-        KKLaneJSONIndexForViewIndex(laneIndex, lanes, _state.hiddenLaneLabels);
-    if (!lanes || jsonIdx < 0) {
-      [actAPI endAction:strongSelf];
-      return;
-    }
-    KKTimingLane *lane = [lanes[jsonIdx] copy];
-    NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
-    if ((NSUInteger)segmentIndex >= segs.count) {
-      [actAPI endAction:strongSelf];
-      return;
-    }
-    KKTimingSegment *seg = [segs[segmentIndex] copy];
-    seg.lockedDurationSeconds = MAX(0.0, newLockedSeconds);
-    segs[segmentIndex] = seg;
-    lane.segments = segs;
-    lanes[jsonIdx] = lane;
-
-    NSString *updated = [KKTimingLane jsonFromLanes:lanes];
-    if (updated)
-      [setAPI setStringParameterValue:updated
-                          toParameter:kKKParamMultiStageData];
-    [actAPI endAction:strongSelf];
-    [strongSelf timingGraphApplyState];
-  };
-
-  seqView.onSegmentValuesCopied = ^(NSInteger laneIndex,
-                                    NSInteger srcSegmentIndex,
-                                    NSInteger dstSegmentIndex) {
-    __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf)
-      return;
-    KKPluginInstanceState *state = KKInstanceStateForAPI(strongSelf.apiManager);
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actAPI startAction:strongSelf];
-    id<FxParameterRetrievalAPI_v6> getAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    CMTime ct = [actAPI currentTime];
-    NSMutableArray<KKTimingLane *> *lanes =
-        KKReadLanesRebalanced(strongSelf.apiManager, getAPI);
-    NSInteger jsonIdx =
-        KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
-    if (!lanes || jsonIdx < 0) {
-      [actAPI endAction:strongSelf];
-      return;
-    }
-    KKTimingLane *lane = [lanes[jsonIdx] copy];
-    NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
-    if ((NSUInteger)srcSegmentIndex >= segs.count ||
-        (NSUInteger)dstSegmentIndex >= segs.count ||
-        srcSegmentIndex == dstSegmentIndex) {
-      [actAPI endAction:strongSelf];
-      return;
-    }
-    NSArray<NSNumber *> *newVals = [segs[srcSegmentIndex].values copy];
-    KKTimingSegment *dst = [segs[dstSegmentIndex] copy];
-    dst.values = newVals;
-    segs[dstSegmentIndex] = dst;
-    lane.segments = segs;
-    lanes[jsonIdx] = lane;
-
-    NSString *updated = [KKTimingLane jsonFromLanes:lanes];
-    if (updated)
-      [setAPI setStringParameterValue:updated
-                          toParameter:kKKParamMultiStageData];
-
-    // When the destination is the currently-selected segment, native params
-    // still hold its pre-copy values. Push the new values through so the next
-    // click on this segment doesn't write the stale native values back into
-    // it during onSegmentSelected's write-back step.
-    KKAnimatableProperty *prop = nil;
-    if (dstSegmentIndex == lane.selectedSegment) {
-      for (KKAnimatableProperty *p in [strongSelf animatableProperties]) {
-        if ([p.label isEqualToString:lane.propertyLabel]) {
-          prop = p;
-          break;
-        }
-      }
-      if (prop && prop.valueParamIDs.count > 0) {
-        if (state)
-          state.selectionInProgress = YES;
-        [prop writeValues:newVals withSetAPI:setAPI atTime:ct];
-        if (state) {
-          state.lanesSnapshot = [lanes copy];
-          state.pendingLanes = nil;
-        }
-      }
-    }
-
-    [actAPI endAction:strongSelf];
-    if (state)
-      state.selectionInProgress = NO;
-    if (prop)
-      [KKPlugin colorPushGradientForProperty:prop
-                                      values:newVals
-                                  apiManager:strongSelf.apiManager];
-    [strongSelf timingGraphApplyState];
-  };
-
-  __weak KKStageSequencerView *weakSeqForPopover = seqView;
+  seqView.onSegmentLockToggled =
+      ^(NSInteger laneIndex, NSInteger segmentIndex, double newLockedSeconds) {
+        [weakSelf _handleSegmentLockToggledAtLane:laneIndex
+                                          segment:segmentIndex
+                                         duration:newLockedSeconds];
+      };
+  seqView.onSegmentValuesCopied =
+      ^(NSInteger laneIndex, NSInteger srcSegmentIndex,
+        NSInteger dstSegmentIndex) {
+        [weakSelf _handleSegmentValuesCopiedAtLane:laneIndex
+                                               src:srcSegmentIndex
+                                               dst:dstSegmentIndex];
+      };
   seqView.onSegmentEditRequested =
       ^(NSInteger laneIndex, NSInteger segmentIndex, NSRect anchorRect) {
         __strong typeof(weakSelf) strongSelf = weakSelf;
-        if (!strongSelf)
-          return;
         [strongSelf _showSegmentEditPopoverForLane:laneIndex
                                         segmentIdx:segmentIndex
                                         anchorRect:anchorRect
-                                        sourceView:weakSeqForPopover];
+                                        sourceView:weakSeq];
       };
-
   rulerView.onLoopToggled = ^(BOOL newState) {
-    __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf)
-      return;
-    // Write the param and stop. The loop-sync pump (runs on every drawOSC
-    // and render tick) picks up the change and pushes it back to every
-    // ruler (primary + additional). Inspector↔window sync is automatic.
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    if (!actAPI)
-      return;
-    [actAPI startAction:strongSelf];
-    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    [setAPI setBoolValue:newState
-             toParameter:kKKParamTimingLoopEnabled
-                  atTime:kCMTimeZero];
-    [actAPI endAction:strongSelf];
+    [weakSelf _handleRulerLoopToggled:newState];
   };
-
   rulerView.onPlayheadScrub = ^(double fraction) {
-    __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf)
-      return;
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    if (!actAPI)
-      return;
-    [actAPI startAction:strongSelf];
-    id<FxTimingAPI_v4> timingAPI =
-        [strongSelf.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-    id<FxCommandAPI_v2> commandAPI =
-        [strongSelf.apiManager apiForProtocol:@protocol(FxCommandAPI_v2)];
-    if (timingAPI && commandAPI) {
-      CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
-      [timingAPI startTimeForEffect:&effectStart];
-      [timingAPI durationTimeForEffect:&effectDuration];
-      double startSec = CMTimeGetSeconds(effectStart);
-      double durSec = CMTimeGetSeconds(effectDuration);
-      double targetSec = startSec + fraction * durSec;
-      CMTime targetTime = CMTimeMakeWithSeconds(targetSec, 600);
-      [commandAPI movePlayheadToTime:targetTime error:nil];
-    }
-    [actAPI endAction:strongSelf];
+    [weakSelf _handleRulerPlayheadScrubToFraction:fraction];
   };
+}
+
+#pragma mark - Handlers
+
+- (void)_handleSegmentSelectedAtLane:(NSInteger)laneIndex
+                             segment:(NSInteger)segmentIndex {
+  if (laneIndex < 0)
+    return;
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  if (!state)
+    return;
+  state.selectionInProgress = YES;
+  NSArray<KKAnimatableProperty *> *props = [self animatableProperties];
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  CMTime ct = [actAPI currentTime];
+
+  NSMutableArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, getAPI);
+  NSInteger jsonIdx =
+      KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
+  if (!lanes || jsonIdx < 0) {
+    [actAPI endAction:self];
+    return;
+  }
+
+  KKTimingLane *lane = lanes[jsonIdx];
+  KKAnimatableProperty *prop = KKPropertyByLabel(props, lane.propertyLabel);
+
+  // 1. Write-back: save current native param values into this lane's
+  //    previously selected segment.
+  NSInteger prevSeg = lane.selectedSegment;
+  if (prop.valueParamIDs.count > 0 && prevSeg >= 0 &&
+      (NSUInteger)prevSeg < lane.segments.count) {
+    NSArray<NSNumber *> *curVals = [prop readValuesWithGetAPI:getAPI atTime:ct];
+    KKTimingLane *mLane = [lane copy];
+    NSMutableArray *mSegs = [mLane.segments mutableCopy];
+    KKTimingSegment *mSeg = [mSegs[prevSeg] copy];
+    mSeg.values = curVals;
+    mSegs[prevSeg] = mSeg;
+    mLane.segments = mSegs;
+    mLane.selectedSegment = segmentIndex;
+    lanes[jsonIdx] = mLane;
+    lane = mLane;
+  } else {
+    KKTimingLane *mLane = [lane copy];
+    mLane.selectedSegment = segmentIndex;
+    lanes[jsonIdx] = mLane;
+    lane = mLane;
+  }
+
+  KKWriteLanesJSON(lanes, setAPI);
+  // Update snapshot + clear pending BEFORE endAction (which triggers
+  // parameterChanged: that would read stale snapshot).
+  state.lanesSnapshot = [lanes copy];
+  state.pendingLanes = nil;
+
+  // Sync new selection: write segment values → native params.
+  NSArray<NSNumber *> *newVals = nil;
+  if (prop.valueParamIDs.count > 0 && segmentIndex >= 0 &&
+      (NSUInteger)segmentIndex < lane.segments.count) {
+    newVals = lane.segments[segmentIndex].values;
+    [prop writeValues:newVals withSetAPI:setAPI atTime:ct];
+  }
+
+  [actAPI endAction:self];
+  state.selectionInProgress = NO;
+  // The gradient bar isn't auto-bound to its param; the drawOSC/render
+  // sync is both too slow for interactive clicks AND prone to reading a
+  // stale string value right after a write. Push the known segment values
+  // directly instead. No-op for non-gradient properties.
+  if (newVals)
+    [KKPlugin colorPushGradientForProperty:prop
+                                    values:newVals
+                                apiManager:self.apiManager];
+  [self timingGraphApplyState];
+}
+
+- (void)_handleLaneToggledAtIndex:(NSInteger)laneIndex enabled:(BOOL)enabled {
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  CMTime ct = [actAPI currentTime];
+  NSMutableArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, getAPI);
+  NSInteger jsonIdx =
+      KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
+  if (!lanes || jsonIdx < 0) {
+    [actAPI endAction:self];
+    if (state)
+      state.selectionInProgress = NO;
+    return;
+  }
+
+  NSMutableArray *mutable = [lanes mutableCopy];
+  KKTimingLane *lane = [mutable[jsonIdx] copy];
+  lane.enabled = enabled;
+  lane.selectedSegment = -1;
+  if (enabled) {
+    for (NSUInteger i = 0; i < lane.segments.count; i++) {
+      if (lane.segments[i].type == KKSegmentTypeHold) {
+        lane.selectedSegment = (NSInteger)i;
+        break;
+      }
+    }
+  }
+  mutable[jsonIdx] = lane;
+  KKWriteLanesJSON(mutable, setAPI);
+
+  // Enable-path: native params may have been edited while the lane was
+  // disabled. The lane's own segment values are the source of truth, so
+  // overwrite native params with the newly-selected segment's values.
+  // Without this, the live-param-override in multiStageValuesAtTime: would
+  // keep rendering the stale native-param values until the user clicks the
+  // segment (which triggers write-back and sync).
+  if (enabled && lane.selectedSegment >= 0 &&
+      (NSUInteger)lane.selectedSegment < lane.segments.count) {
+    KKAnimatableProperty *prop =
+        KKPropertyByLabel([self animatableProperties], lane.propertyLabel);
+    if (state)
+      state.selectionInProgress = YES;
+    [prop writeValues:lane.segments[lane.selectedSegment].values
+           withSetAPI:setAPI
+               atTime:ct];
+    if (state) {
+      state.lanesSnapshot = [mutable copy];
+      state.pendingLanes = nil;
+    }
+  }
+  [actAPI endAction:self];
+  if (state)
+    state.selectionInProgress = NO;
+  [self timingGraphApplyState];
+}
+
+- (void)_handleLaneOSCVisibilityAtIndex:(NSInteger)laneIndex
+                                visible:(BOOL)visible {
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  NSMutableArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, getAPI);
+  NSInteger jsonIdx =
+      KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
+  if (lanes && jsonIdx >= 0) {
+    KKTimingLane *lane = [lanes[jsonIdx] copy];
+    lane.oscVisible = visible;
+    lanes[jsonIdx] = lane;
+    KKWriteLanesJSON(lanes, setAPI);
+    if (state)
+      state.lanesSnapshot = [lanes copy];
+  }
+  [actAPI endAction:self];
+  [self timingGraphApplyState];
+}
+
+- (void)_handleLaneChangedAtIndex:(NSInteger)laneIndex
+                             lane:(KKTimingLane *)updatedLane {
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  NSMutableArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, getAPI);
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  NSInteger jsonIdx =
+      KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
+  if (lanes && jsonIdx >= 0) {
+    // Edge/move drag can change a locked segment's visual width. Restamp
+    // `lockedDurationSeconds` to the new width so the lock target matches
+    // what the user just authored — otherwise the next clip resize would
+    // snap the segment back to its previous target.
+    double curDur = KKCurrentEffectDurationSeconds(self.apiManager);
+    if (curDur > 0) {
+      KKTimingLane *relocked = [updatedLane copy];
+      NSMutableArray<KKTimingSegment *> *segs = [relocked.segments mutableCopy];
+      for (NSUInteger i = 0; i < segs.count; i++) {
+        KKTimingSegment *s = segs[i];
+        if (s.lockedDurationSeconds <= 0)
+          continue;
+        KKTimingSegment *m = [s copy];
+        m.lockedDurationSeconds = (s.end - s.start) * curDur;
+        segs[i] = m;
+      }
+      relocked.segments = segs;
+      updatedLane = relocked;
+    }
+    lanes[jsonIdx] = updatedLane;
+    KKWriteLanesJSON(lanes, setAPI);
+  }
+  [actAPI endAction:self];
+  [self timingGraphApplyState];
+}
+
+- (void)_handleSegmentAddedAtLane:(NSInteger)laneIndex
+                         position:(double)position {
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  NSMutableArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, getAPI);
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  NSInteger jsonIdx =
+      KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
+  if (!lanes || jsonIdx < 0) {
+    [actAPI endAction:self];
+    return;
+  }
+  KKTimingLane *lane = [lanes[jsonIdx] copy];
+  NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
+
+  // Find which segment the click landed in and split it.
+  NSInteger splitIdx = -1;
+  for (NSUInteger i = 0; i < segs.count; i++) {
+    if (position >= segs[i].start && position < segs[i].end) {
+      splitIdx = (NSInteger)i;
+      break;
+    }
+  }
+  if (splitIdx < 0) {
+    [actAPI endAction:self];
+    return;
+  }
+
+  KKTimingSegment *orig = segs[splitIdx];
+  double splitPoint = position;
+
+  // Create two segments from the split. Clear any duration lock — the
+  // original's `lockedDurationSeconds` targeted the whole width, so
+  // inheriting it on both halves would double the intended total.
+  KKTimingSegment *left = [orig copy];
+  left.end = splitPoint;
+  left.lockedDurationSeconds = 0;
+  KKTimingSegment *right = [orig copy];
+  right.start = splitPoint;
+  right.lockedDurationSeconds = 0;
+
+  // Whichever side is closer to the click is treated as the "new" piece
+  // and gets the opposite type; the bulk half keeps the original type.
+  // Splitting a hold near its trailing edge grows a trailing transition;
+  // splitting near its leading edge grows a leading one.
+  double midpoint = (orig.start + orig.end) / 2.0;
+  KKSegmentType flipped = (orig.type == KKSegmentTypeHold)
+                              ? KKSegmentTypeTransition
+                              : KKSegmentTypeHold;
+  if (splitPoint < midpoint)
+    left.type = flipped;
+  else
+    right.type = flipped;
+
+  [segs replaceObjectAtIndex:splitIdx withObject:left];
+  [segs insertObject:right atIndex:splitIdx + 1];
+
+  lane.segments = segs;
+  lane.selectedSegment = splitIdx + 1;
+  lanes[jsonIdx] = lane;
+
+  KKWriteLanesJSON(lanes, setAPI);
+  [actAPI endAction:self];
+  [self timingGraphApplyState];
+}
+
+- (void)_handleSegmentRemovedAtLane:(NSInteger)laneIndex
+                            segment:(NSInteger)segmentIndex {
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  NSMutableArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, getAPI);
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  NSInteger jsonIdx =
+      KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
+  if (!lanes || jsonIdx < 0) {
+    [actAPI endAction:self];
+    return;
+  }
+  KKTimingLane *lane = [lanes[jsonIdx] copy];
+  NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
+  if (segs.count <= 1 || (NSUInteger)segmentIndex >= segs.count) {
+    [actAPI endAction:self];
+    return;
+  }
+
+  KKTimingSegment *removed = segs[segmentIndex];
+  // Expand the neighbor to fill the gap. Clear its lock too — the
+  // neighbor's stored `lockedDurationSeconds` reflects its old width,
+  // which no longer matches after absorbing the removed segment's span.
+  if ((NSUInteger)segmentIndex + 1 < segs.count) {
+    KKTimingSegment *next = [segs[segmentIndex + 1] copy];
+    next.start = removed.start;
+    next.lockedDurationSeconds = 0;
+    segs[segmentIndex + 1] = next;
+  } else if (segmentIndex > 0) {
+    KKTimingSegment *prev = [segs[segmentIndex - 1] copy];
+    prev.end = removed.end;
+    prev.lockedDurationSeconds = 0;
+    segs[segmentIndex - 1] = prev;
+  }
+  [segs removeObjectAtIndex:segmentIndex];
+
+  // Fix selection.
+  if (lane.selectedSegment == segmentIndex) {
+    lane.selectedSegment = -1;
+    for (NSUInteger i = 0; i < segs.count; i++) {
+      if (segs[i].type == KKSegmentTypeHold) {
+        lane.selectedSegment = (NSInteger)i;
+        break;
+      }
+    }
+  } else if (lane.selectedSegment > segmentIndex) {
+    lane.selectedSegment--;
+  }
+
+  lane.segments = segs;
+  lanes[jsonIdx] = lane;
+
+  KKWriteLanesJSON(lanes, setAPI);
+  [actAPI endAction:self];
+  [self timingGraphApplyState];
+}
+
+- (void)_handleSegmentTypeToggledAtLane:(NSInteger)laneIndex
+                                segment:(NSInteger)segmentIndex {
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  NSMutableArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, getAPI);
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  NSInteger jsonIdx =
+      KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
+  if (!lanes || jsonIdx < 0) {
+    [actAPI endAction:self];
+    return;
+  }
+  KKTimingLane *lane = [lanes[jsonIdx] copy];
+  NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
+  if ((NSUInteger)segmentIndex >= segs.count) {
+    [actAPI endAction:self];
+    return;
+  }
+  KKTimingSegment *seg = [segs[segmentIndex] copy];
+  seg.type = (seg.type == KKSegmentTypeHold) ? KKSegmentTypeTransition
+                                             : KKSegmentTypeHold;
+  segs[segmentIndex] = seg;
+  lane.segments = segs;
+  lanes[jsonIdx] = lane;
+
+  KKWriteLanesJSON(lanes, setAPI);
+  [actAPI endAction:self];
+  [self timingGraphApplyState];
+}
+
+- (void)_handleSegmentLockToggledAtLane:(NSInteger)laneIndex
+                                segment:(NSInteger)segmentIndex
+                               duration:(double)newLockedSeconds {
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  NSMutableArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, getAPI);
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  NSInteger jsonIdx =
+      KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
+  if (!lanes || jsonIdx < 0) {
+    [actAPI endAction:self];
+    return;
+  }
+  KKTimingLane *lane = [lanes[jsonIdx] copy];
+  NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
+  if ((NSUInteger)segmentIndex >= segs.count) {
+    [actAPI endAction:self];
+    return;
+  }
+  KKTimingSegment *seg = [segs[segmentIndex] copy];
+  seg.lockedDurationSeconds = MAX(0.0, newLockedSeconds);
+  segs[segmentIndex] = seg;
+  lane.segments = segs;
+  lanes[jsonIdx] = lane;
+
+  KKWriteLanesJSON(lanes, setAPI);
+  [actAPI endAction:self];
+  [self timingGraphApplyState];
+}
+
+- (void)_handleSegmentValuesCopiedAtLane:(NSInteger)laneIndex
+                                     src:(NSInteger)srcSegmentIndex
+                                     dst:(NSInteger)dstSegmentIndex {
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  CMTime ct = [actAPI currentTime];
+  NSMutableArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, getAPI);
+  NSInteger jsonIdx =
+      KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
+  if (!lanes || jsonIdx < 0) {
+    [actAPI endAction:self];
+    return;
+  }
+  KKTimingLane *lane = [lanes[jsonIdx] copy];
+  NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
+  if ((NSUInteger)srcSegmentIndex >= segs.count ||
+      (NSUInteger)dstSegmentIndex >= segs.count ||
+      srcSegmentIndex == dstSegmentIndex) {
+    [actAPI endAction:self];
+    return;
+  }
+  NSArray<NSNumber *> *newVals = [segs[srcSegmentIndex].values copy];
+  KKTimingSegment *dst = [segs[dstSegmentIndex] copy];
+  dst.values = newVals;
+  segs[dstSegmentIndex] = dst;
+  lane.segments = segs;
+  lanes[jsonIdx] = lane;
+
+  KKWriteLanesJSON(lanes, setAPI);
+
+  // When the destination is the currently-selected segment, native params
+  // still hold its pre-copy values. Push the new values through so the next
+  // click on this segment doesn't write the stale native values back into
+  // it during onSegmentSelected's write-back step.
+  KKAnimatableProperty *prop = nil;
+  if (dstSegmentIndex == lane.selectedSegment) {
+    prop = KKPropertyByLabel([self animatableProperties], lane.propertyLabel);
+    if (prop && prop.valueParamIDs.count > 0) {
+      if (state)
+        state.selectionInProgress = YES;
+      [prop writeValues:newVals withSetAPI:setAPI atTime:ct];
+      if (state) {
+        state.lanesSnapshot = [lanes copy];
+        state.pendingLanes = nil;
+      }
+    }
+  }
+
+  [actAPI endAction:self];
+  if (state)
+    state.selectionInProgress = NO;
+  if (prop)
+    [KKPlugin colorPushGradientForProperty:prop
+                                    values:newVals
+                                apiManager:self.apiManager];
+  [self timingGraphApplyState];
+}
+
+- (void)_handleRulerLoopToggled:(BOOL)newState {
+  // Write the param and stop. The loop-sync pump (runs on every drawOSC and
+  // render tick) picks up the change and pushes it back to every ruler
+  // (primary + additional). Inspector↔window sync is automatic.
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!actAPI)
+    return;
+  [actAPI startAction:self];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  [setAPI setBoolValue:newState
+           toParameter:kKKParamTimingLoopEnabled
+                atTime:kCMTimeZero];
+  [actAPI endAction:self];
+}
+
+- (void)_handleRulerPlayheadScrubToFraction:(double)fraction {
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!actAPI)
+    return;
+  [actAPI startAction:self];
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  id<FxCommandAPI_v2> commandAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCommandAPI_v2)];
+  if (timingAPI && commandAPI) {
+    CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
+    [timingAPI startTimeForEffect:&effectStart];
+    [timingAPI durationTimeForEffect:&effectDuration];
+    double startSec = CMTimeGetSeconds(effectStart);
+    double durSec = CMTimeGetSeconds(effectDuration);
+    double targetSec = startSec + fraction * durSec;
+    CMTime targetTime = CMTimeMakeWithSeconds(targetSec, 600);
+    [commandAPI movePlayheadToTime:targetTime error:nil];
+  }
+  [actAPI endAction:self];
 }
 
 @end

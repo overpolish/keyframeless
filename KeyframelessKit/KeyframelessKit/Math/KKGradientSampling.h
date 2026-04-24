@@ -40,4 +40,12 @@ NSArray<KKGradientStop *> *_Nullable KKGradientStopsFromFlat(
 NSArray<NSNumber *> *
 KKGradientFlatLUTFromStops(NSArray<KKGradientStop *> *stops, int size);
 
+/// Interpolate two flattened gradients at eased `t` and return a flat LUT
+/// (`[r0, g0, b0, r1, ...]`, length `3 * size`). Falls back to LUT blending
+/// when stop counts differ; otherwise preserves natural midpoint/position
+/// animation by blending stops structurally.
+NSArray<NSNumber *> *KKGradientInterpFlatLUT(NSArray<NSNumber *> *fromFlat,
+                                             NSArray<NSNumber *> *toFlat,
+                                             double t, int size);
+
 NS_ASSUME_NONNULL_END

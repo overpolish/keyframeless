@@ -1,0 +1,316 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+#import "../Math/KKEasing.h"
+#import "../Math/KKGradientSampling.h"
+#import "../Math/KKTimingStage.h"
+#import "../Views/KKAnimatableProperty.h"
+#import "../Views/StageSequencer/KKStageSequencerView.h"
+#import "KKColor.h"
+#import "KKConstants.h"
+#import "KKPluginInstanceState.h"
+#import "KKPlugin_Private.h"
+#import <FxPlug/FxPlugSDK.h>
+
+/// Stamps the "recent parameter change" timestamp used by the multi-stage
+/// pump to suppress render-sourced playhead updates in the wake of a slider
+/// drag. Defined in KKPlugin+MultiStagePump.m.
+extern void KKMultiStageMarkParameterChanged(void);
+
+/// Whether a property's native param list is a single gradient (the kind
+/// consumes all segment values, so a gradient property has exactly one
+/// entry in valueParamIDs).
+static BOOL KKPropertyIsGradient(KKAnimatableProperty *prop) {
+  for (NSNumber *k in prop.valueParamKinds)
+    if (k.integerValue == KKAnimatableParamKindGradient)
+      return YES;
+  return NO;
+}
+
+/// Resolves the segment covering `frac` (or clamps to first/last).
+static KKTimingSegment *
+KKMultiStageSegmentForFraction(NSArray<KKTimingSegment *> *segments,
+                               double frac) {
+  for (KKTimingSegment *seg in segments) {
+    if (frac >= seg.start && frac < seg.end)
+      return seg;
+  }
+  if (frac >= segments.lastObject.end)
+    return segments.lastObject;
+  if (frac < segments.firstObject.start)
+    return segments.firstObject;
+  return nil;
+}
+
+/// Evaluates a hold-type segment at `frac`, returning either the raw
+/// segment values or a per-component modulation when a hold effect is set.
+static NSArray<NSNumber *> *KKMultiStageHoldValues(KKTimingSegment *active,
+                                                   double frac,
+                                                   BOOL gradientLane) {
+  double segDur = active.end - active.start;
+  double t = (segDur > 0) ? (frac - active.start) / segDur : 0.0;
+  t = MAX(0.0, MIN(1.0, t));
+
+  if (gradientLane) {
+    NSArray<NSNumber *> *baseLut = KKGradientFlatLUTFromStops(
+        KKGradientStopsFromFlat(active.values) ?: @[], KK_GRADIENT_LUT_SIZE);
+    if (active.holdEffect == KKHoldEffectNone)
+      return baseLut;
+    double factor = KKApplyHoldEffect(t, active.holdEffect, active.intensity,
+                                      active.frequency, (int)active.seed);
+    NSMutableArray<NSNumber *> *modulated =
+        [NSMutableArray arrayWithCapacity:baseLut.count];
+    for (NSNumber *v in baseLut)
+      [modulated addObject:@(v.doubleValue * factor)];
+    return modulated;
+  }
+
+  if (active.holdEffect == KKHoldEffectNone)
+    return active.values;
+
+  double factor = KKApplyHoldEffect(t, active.holdEffect, active.intensity,
+                                    active.frequency, (int)active.seed);
+  NSMutableArray<NSNumber *> *modulated =
+      [NSMutableArray arrayWithCapacity:active.values.count];
+  for (NSNumber *v in active.values)
+    [modulated addObject:@(v.doubleValue * factor)];
+  return modulated;
+}
+
+/// Evaluates a transition segment between `fromVals` and `toVals` using
+/// the segment's easing. Last-segment transitions are treated as animate-out
+/// by mirroring time, matching the classic single-stage behaviour.
+static NSArray<NSNumber *> *
+KKMultiStageTransitionValues(NSArray<KKTimingSegment *> *segments,
+                             NSUInteger idx, double frac, BOOL gradientLane) {
+  KKTimingSegment *active = segments[idx];
+  NSArray<NSNumber *> *fromVals = KKTimingBoundaryBefore(idx, segments);
+  NSArray<NSNumber *> *toVals = KKTimingBoundaryAfter(idx, segments);
+
+  double segDur = active.end - active.start;
+  double t = (segDur > 0) ? (frac - active.start) / segDur : 1.0;
+  t = MAX(0.0, MIN(1.0, t));
+  BOOL isAnimateOut = (idx == segments.count - 1);
+  double ti = isAnimateOut ? (1.0 - t) : t;
+  double easedT =
+      KKApplyEasing(ti, active.easing, active.intensity, active.frequency);
+  if (isAnimateOut)
+    easedT = 1.0 - easedT;
+
+  if (gradientLane)
+    return KKGradientInterpFlatLUT(fromVals, toVals, easedT,
+                                   KK_GRADIENT_LUT_SIZE);
+  NSUInteger valCount = MIN(fromVals.count, toVals.count);
+  NSMutableArray<NSNumber *> *interpolated =
+      [NSMutableArray arrayWithCapacity:valCount];
+  for (NSUInteger i = 0; i < valCount; i++) {
+    double fv = fromVals[i].doubleValue;
+    double tv = toVals[i].doubleValue;
+    [interpolated addObject:@(fv + (tv - fv) * easedT)];
+  }
+  return interpolated;
+}
+
+/// Returns a mutated copy of `lanes` where any lane with an active selected
+/// segment gets its values replaced with the property's current native
+/// param values. This lets the preview track slider drags in real time
+/// (Canvas pattern: KKParamsToPath at render time).
+static NSMutableArray<KKTimingLane *> *
+KKMultiStageApplyLiveOverrides(NSMutableArray<KKTimingLane *> *lanes,
+                               NSArray<KKAnimatableProperty *> *props,
+                               id<FxParameterRetrievalAPI_v6> paramGetAPI,
+                               CMTime renderTime) {
+  for (NSUInteger li = 0; li < lanes.count; li++) {
+    KKTimingLane *lane = lanes[li];
+    NSInteger selSeg = lane.selectedSegment;
+    if (selSeg < 0 || (NSUInteger)selSeg >= lane.segments.count)
+      continue;
+    for (KKAnimatableProperty *prop in props) {
+      if (![prop.label isEqualToString:lane.propertyLabel] ||
+          prop.valueParamIDs.count == 0)
+        continue;
+      NSArray<NSNumber *> *liveVals = [prop readValuesWithGetAPI:paramGetAPI
+                                                          atTime:renderTime];
+      if (!liveVals)
+        break;
+      KKTimingLane *mLane = [lane copy];
+      NSMutableArray *mSegs = [mLane.segments mutableCopy];
+      KKTimingSegment *mSeg = [mSegs[selSeg] copy];
+      mSeg.values = liveVals;
+      mSegs[selSeg] = mSeg;
+      mLane.segments = mSegs;
+      lanes[li] = mLane;
+      break;
+    }
+  }
+  return lanes;
+}
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
+@implementation KKPlugin (MultiStage)
+
+- (NSDictionary<NSString *, NSArray<NSNumber *> *> *)multiStageValuesAtTime:
+    (CMTime)renderTime {
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  if (!paramGetAPI || !timingAPI)
+    return nil;
+
+  BOOL enabled = NO;
+  [paramGetAPI getBoolValue:&enabled
+              fromParameter:kKKParamMultiStageEnabled
+                     atTime:renderTime];
+  if (!enabled)
+    return nil;
+
+  NSMutableArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, paramGetAPI);
+  if (!lanes.count)
+    return nil;
+
+  NSArray<KKAnimatableProperty *> *props = [self animatableProperties];
+  lanes = KKMultiStageApplyLiveOverrides(lanes, props, paramGetAPI, renderTime);
+
+  CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
+  [timingAPI startTimeForEffect:&effectStart];
+  [timingAPI durationTimeForEffect:&effectDuration];
+  double startSec = CMTimeGetSeconds(effectStart);
+  double durSec = CMTimeGetSeconds(effectDuration);
+  double nowSec = CMTimeGetSeconds(renderTime);
+  double frac = (durSec > 0) ? (nowSec - startSec) / durSec : 0.0;
+  frac = MAX(0.0, MIN(1.0, frac));
+
+  NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *result =
+      [NSMutableDictionary dictionaryWithCapacity:lanes.count];
+
+  NSMutableDictionary<NSString *, KKAnimatableProperty *> *propByLabel =
+      [NSMutableDictionary dictionaryWithCapacity:props.count];
+  for (KKAnimatableProperty *p in props)
+    propByLabel[p.label] = p;
+
+  for (KKTimingLane *lane in lanes) {
+    if (!lane.enabled)
+      continue;
+    NSArray<KKTimingSegment *> *segments = lane.segments;
+    if (!segments.count)
+      continue;
+    KKTimingSegment *active = KKMultiStageSegmentForFraction(segments, frac);
+    if (!active)
+      continue;
+
+    BOOL gradientLane = KKPropertyIsGradient(propByLabel[lane.propertyLabel]);
+    if (active.type == KKSegmentTypeHold) {
+      result[lane.propertyLabel] =
+          KKMultiStageHoldValues(active, frac, gradientLane);
+    } else {
+      NSUInteger idx = [segments indexOfObjectIdenticalTo:active];
+      result[lane.propertyLabel] =
+          KKMultiStageTransitionValues(segments, idx, frac, gradientLane);
+    }
+  }
+
+  return result.count ? result : nil;
+}
+
+- (BOOL)multiStageHandleParameterChanged:(UInt32)parameterID
+                                  atTime:(CMTime)time {
+  KKMultiStageMarkParameterChanged();
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  if (!state || state.selectionInProgress)
+    return NO;
+
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!paramGetAPI)
+    return NO;
+
+  BOOL enabled = NO;
+  [paramGetAPI getBoolValue:&enabled
+              fromParameter:kKKParamMultiStageEnabled
+                     atTime:time];
+  if (!enabled)
+    return NO;
+
+  NSArray<KKAnimatableProperty *> *props = [self animatableProperties];
+  if (!props.count)
+    return NO;
+
+  KKAnimatableProperty *matchedProp = nil;
+  for (KKAnimatableProperty *prop in props) {
+    for (NSNumber *pid in prop.valueParamIDs) {
+      if (pid.unsignedIntValue == parameterID) {
+        matchedProp = prop;
+        break;
+      }
+    }
+    if (matchedProp)
+      break;
+  }
+  if (!matchedProp)
+    return NO;
+
+  NSMutableArray<KKTimingLane *> *lanes = [state.lanesSnapshot mutableCopy];
+  if (!lanes)
+    return NO;
+
+  for (NSUInteger li = 0; li < lanes.count; li++) {
+    KKTimingLane *lane = lanes[li];
+    if (![lane.propertyLabel isEqualToString:matchedProp.label])
+      continue;
+    NSInteger selSeg = lane.selectedSegment;
+    if (selSeg < 0 || (NSUInteger)selSeg >= lane.segments.count)
+      break;
+
+    NSArray<NSNumber *> *liveVals =
+        [matchedProp readValuesWithGetAPI:paramGetAPI atTime:time];
+    if (!liveVals)
+      break;
+
+    KKTimingLane *mLane = [lane copy];
+    NSMutableArray *mSegs = [mLane.segments mutableCopy];
+    KKTimingSegment *mSeg = [mSegs[selSeg] copy];
+    mSeg.values = liveVals;
+    mSegs[selSeg] = mSeg;
+    mLane.segments = mSegs;
+    lanes[li] = mLane;
+
+    NSArray<KKTimingLane *> *updated = [lanes copy];
+    state.pendingLanes = updated;
+    state.lanesSnapshot = updated;
+
+    // Persist to JSON so values survive clip re-selection.
+    id<FxParameterSettingAPI_v5> paramSetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    if (paramSetAPI) {
+      NSString *json = [KKTimingLane jsonFromLanes:updated];
+      if (json)
+        [paramSetAPI setStringParameterValue:json
+                                 toParameter:kKKParamMultiStageData];
+    }
+
+    // Push to the view immediately — pendingLanes flush only runs on the
+    // next drawOSC/render tick, which is too slow for live picker edits.
+    KKStageSequencerView *seq = state.sequencerView;
+    NSArray<KKTimingViewRefs *> *extras =
+        [state.additionalTimingViews copy] ?: @[];
+    if (seq || extras.count) {
+      NSArray<KKTimingLane *> *visible =
+          KKFilterLanesForVisibility(updated, state.hiddenLaneLabels);
+      dispatch_async(dispatch_get_main_queue(), ^{
+        seq.lanes = visible;
+        for (KKTimingViewRefs *r in extras)
+          r.seqView.lanes = visible;
+      });
+    }
+    return YES;
+  }
+  return NO;
+}
+
+@end
+#pragma clang diagnostic pop

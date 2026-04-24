@@ -164,3 +164,38 @@ NSArray<KKGradientStop *> *KKGradientStopsFromFlat(NSArray<NSNumber *> *flat) {
   }
   return stops;
 }
+
+NSArray<NSNumber *> *KKGradientInterpFlatLUT(NSArray<NSNumber *> *fromFlat,
+                                             NSArray<NSNumber *> *toFlat,
+                                             double t, int size) {
+  BOOL structural = fromFlat.count >= 10 && fromFlat.count == toFlat.count &&
+                    (fromFlat.count % 5) == 0;
+  if (structural) {
+    NSMutableArray<NSNumber *> *blended =
+        [NSMutableArray arrayWithCapacity:fromFlat.count];
+    for (NSUInteger i = 0; i < fromFlat.count; i++) {
+      double a = fromFlat[i].doubleValue;
+      double b = toFlat[i].doubleValue;
+      [blended addObject:@(a + (b - a) * t)];
+    }
+    NSArray<KKGradientStop *> *stops = KKGradientStopsFromFlat(blended);
+    return KKGradientFlatLUTFromStops(stops ?: @[], size);
+  }
+  simd_float3 *lutA = (simd_float3 *)malloc(sizeof(simd_float3) * (size_t)size);
+  simd_float3 *lutB = (simd_float3 *)malloc(sizeof(simd_float3) * (size_t)size);
+  KKGradientSampleStopsToLUT(KKGradientStopsFromFlat(fromFlat) ?: @[], lutA,
+                             size);
+  KKGradientSampleStopsToLUT(KKGradientStopsFromFlat(toFlat) ?: @[], lutB,
+                             size);
+  NSMutableArray<NSNumber *> *out =
+      [NSMutableArray arrayWithCapacity:(NSUInteger)size * 3];
+  for (int i = 0; i < size; i++) {
+    simd_float3 v = lutA[i] + (lutB[i] - lutA[i]) * (float)t;
+    [out addObject:@((double)v.x)];
+    [out addObject:@((double)v.y)];
+    [out addObject:@((double)v.z)];
+  }
+  free(lutA);
+  free(lutB);
+  return out;
+}
