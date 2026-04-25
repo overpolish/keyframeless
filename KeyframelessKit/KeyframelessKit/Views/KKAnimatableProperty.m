@@ -12,6 +12,8 @@ static NSUInteger KKKindFixedValueCount(KKAnimatableParamKind kind) {
   switch (kind) {
   case KKAnimatableParamKindColor:
     return 3;
+  case KKAnimatableParamKindPoint:
+    return 2;
   case KKAnimatableParamKindGradient:
     return 0; // variable (5 * N)
   case KKAnimatableParamKindFloat:
@@ -178,6 +180,13 @@ static NSUInteger KKKindFixedValueCount(KKAnimatableParamKind kind) {
         [out addObjectsFromArray:KKGradientFlatFromStops(stops)];
       break;
     }
+    case KKAnimatableParamKindPoint: {
+      double x = 0, y = 0;
+      [getAPI getXValue:&x YValue:&y fromParameter:pid atTime:time];
+      [out addObject:@(x)];
+      [out addObject:@(y)];
+      break;
+    }
     case KKAnimatableParamKindFloat:
     default: {
       double v = 0;
@@ -210,6 +219,16 @@ static NSUInteger KKKindFixedValueCount(KKAnimatableParamKind kind) {
               toParameter:pid
                    atTime:time];
       cursor += 3;
+      break;
+    }
+    case KKAnimatableParamKindPoint: {
+      if (cursor + 2 > values.count)
+        return;
+      [setAPI setXValue:values[cursor].doubleValue
+                 YValue:values[cursor + 1].doubleValue
+            toParameter:pid
+                 atTime:time];
+      cursor += 2;
       break;
     }
     case KKAnimatableParamKindGradient: {

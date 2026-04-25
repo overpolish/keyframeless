@@ -33,10 +33,7 @@ static const UInt32 kParamThreshold = 110;
 static const UInt32 kParamNoiseGroup = 150;
 static const UInt32 kParamNoiseExpanded = 151;
 
-static const UInt32 kParamOffsetGroup = 200;
-static const UInt32 kParamOffsetExpanded = 201;
-static const UInt32 kParamOffsetX = 210;
-static const UInt32 kParamOffsetY = 211;
+static const UInt32 kParamPosition = 200;
 
-static const NSInteger kOSCOffsetPart = 1;
+static const NSInteger kOSCPositionPart = 1;
 static const NSInteger kOSCRadiusPart = 2;

@@ -190,3 +190,18 @@ double KKApplyHoldEffect(double t, KKHoldEffect effect, double intensity,
     return 1.0;
   }
 }
+
+double KKApplyHoldEffectForComponent(double t, KKHoldEffect effect,
+                                     double intensity, double frequency,
+                                     int seed, int component) {
+  if (component == 0)
+    return KKApplyHoldEffect(t, effect, intensity, frequency, seed);
+  // Mix the component index into the seed with a large odd multiplier so
+  // each component gets an independent phase/frequency set. A non-zero
+  // seed is guaranteed so the per-component randomised path runs even
+  // when the caller passes seed == 0.
+  int mixed = seed ^ (int)((unsigned)component * 0x9E3779B9u);
+  if (mixed == 0)
+    mixed = component + 1;
+  return KKApplyHoldEffect(t, effect, intensity, frequency, mixed);
+}

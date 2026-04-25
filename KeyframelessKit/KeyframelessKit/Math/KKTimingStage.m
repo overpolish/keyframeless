@@ -177,6 +177,7 @@ NSArray<KKTimingLane *> *KKTimingRebalancedLanes(NSArray<KKTimingLane *> *lanes,
   s.intensity = 0.5;
   s.frequency = 0.5;
   s.seed = 0;
+  s.linked = YES;
   return s;
 }
 
@@ -196,6 +197,7 @@ NSArray<KKTimingLane *> *KKTimingRebalancedLanes(NSArray<KKTimingLane *> *lanes,
   s.intensity = intensity;
   s.frequency = frequency;
   s.seed = 0;
+  s.linked = YES;
   return s;
 }
 
@@ -214,6 +216,7 @@ NSArray<KKTimingLane *> *KKTimingRebalancedLanes(NSArray<KKTimingLane *> *lanes,
   c.intensity = _intensity;
   c.frequency = _frequency;
   c.seed = _seed;
+  c.linked = _linked;
   c.lockedDurationSeconds = _lockedDurationSeconds;
   return c;
 }

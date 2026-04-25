@@ -44,3 +44,11 @@ double KKSeedSign(int seed, int index);
 /// Returns a value centred around 1.0.
 double KKApplyHoldEffect(double t, KKHoldEffect effect, double intensity,
                          double frequency, int seed);
+
+/// Same as KKApplyHoldEffect but generates an independent factor per
+/// component index. Used by multi-component lanes (e.g. Position) so X
+/// and Y modulate independently instead of moving in lockstep along a
+/// single vector. component == 0 matches KKApplyHoldEffect exactly.
+double KKApplyHoldEffectForComponent(double t, KKHoldEffect effect,
+                                     double intensity, double frequency,
+                                     int seed, int component);

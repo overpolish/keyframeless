@@ -46,6 +46,13 @@ typedef NS_ENUM(NSInteger, KKSegmentType) {
 @property(nonatomic) double frequency;
 /// Hold-effect seed for randomising per-property variation.
 @property(nonatomic) uint32_t seed;
+/// For hold segments on multi-component lanes (e.g. Position, Radius X/Y):
+/// when YES, the hold effect uses a single shared factor across components
+/// so they modulate in lockstep (e.g. Radius maintains aspect). When NO,
+/// each component gets an independent factor for more organic motion.
+/// Has no effect on single-scalar lanes. Defaults to YES for back-compat
+/// with single-factor behaviour.
+@property(nonatomic) BOOL linked;
 /// When > 0, this segment holds an absolute duration in seconds across clip
 /// length changes. Unlocked (= 0) segments scale proportionally with the clip.
 @property(nonatomic) double lockedDurationSeconds;

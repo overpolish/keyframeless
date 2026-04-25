@@ -27,9 +27,9 @@
                                     valueID:kParamIntensity],
     [KKAnimatableProperty propertyWithLabel:@"Falloff" valueID:kParamFalloff],
     [KKAnimatableProperty propertyWithLabel:@"Noise" valueID:kParamNoise],
-    [KKAnimatableProperty
-        propertyWithLabel:@"Offset"
-                 valueIDs:@[ @(kParamOffsetX), @(kParamOffsetY) ]],
+    [KKAnimatableProperty propertyWithLabel:@"Position"
+                                    valueID:kParamPosition
+                                       kind:KKAnimatableParamKindPoint],
     [KKAnimatableProperty propertyWithLabel:@"Color"
                                     valueID:kKKParamColorSolid
                                        kind:KKAnimatableParamKindColor],
@@ -42,7 +42,7 @@
 }
 
 - (NSSet<NSString *> *)animatablePropertyLabelsWithOSC {
-  return [NSSet setWithObjects:@"Radius", @"Offset", nil];
+  return [NSSet setWithObjects:@"Radius", @"Position", nil];
 }
 
 - (NSSet<NSString *> *)hiddenAnimatablePropertyLabels {
@@ -79,17 +79,6 @@
                                         accessibilityDescription:nil]
                        parameterID:parameterID
                    expandedParamID:kParamNoiseExpanded];
-
-  if (parameterID == kParamOffsetGroup)
-    return [self
-        createGroupHeaderWithTitle:@"Offset"
-                              icon:[NSImage
-                                       imageWithSystemSymbolName:
-                                           @"arrow.down.left.arrow.up.right"
-                                           @".circle"
-                                        accessibilityDescription:nil]
-                       parameterID:parameterID
-                   expandedParamID:kParamOffsetExpanded];
 
   struct objc_super sup = {self, [KKPlugin class]};
   return ((NSView * (*)(struct objc_super *, SEL, UInt32)) objc_msgSendSuper)(

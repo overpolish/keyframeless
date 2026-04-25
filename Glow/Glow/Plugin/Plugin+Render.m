@@ -138,9 +138,11 @@ static void _texPairReturn(NSInteger idx) {
               atTime:renderTime];
   double noiseSeedVal = CMTimeGetSeconds(renderTime) * noiseSpeed * 5.0;
 
-  double offX = 0, offY = 0;
-  [api getFloatValue:&offX fromParameter:kParamOffsetX atTime:renderTime];
-  [api getFloatValue:&offY fromParameter:kParamOffsetY atTime:renderTime];
+  double posX = 0.5, posY = 0.5;
+  [api getXValue:&posX
+             YValue:&posY
+      fromParameter:kParamPosition
+             atTime:renderTime];
 
   int gradType = 0;
   double gradAngle = 0;
@@ -193,7 +195,7 @@ static void _texPairReturn(NSInteger idx) {
   NSArray<NSNumber *> *msIntensity = multiStage[@"Intensity"];
   NSArray<NSNumber *> *msFalloff = multiStage[@"Falloff"];
   NSArray<NSNumber *> *msNoise = multiStage[@"Noise"];
-  NSArray<NSNumber *> *msOffset = multiStage[@"Offset"];
+  NSArray<NSNumber *> *msPosition = multiStage[@"Position"];
   NSArray<NSNumber *> *msNoiseOffset = multiStage[@"N. Offset"];
 
   double outRadiusX = msRadius.count >= 1 ? msRadius[0].doubleValue : radiusX;
@@ -203,8 +205,10 @@ static void _texPairReturn(NSInteger idx) {
   double outFalloff =
       msFalloff.count >= 1 ? (1.0 + msFalloff[0].doubleValue) : (1.0 + falloff);
   double outNoise = msNoise.count >= 1 ? msNoise[0].doubleValue : noise;
-  double outOffsetX = msOffset.count >= 1 ? msOffset[0].doubleValue : offX;
-  double outOffsetY = msOffset.count >= 2 ? msOffset[1].doubleValue : offY;
+  double outOffsetX =
+      (msPosition.count >= 1 ? msPosition[0].doubleValue : posX) - 0.5;
+  double outOffsetY =
+      (msPosition.count >= 2 ? msPosition[1].doubleValue : posY) - 0.5;
   double outNoiseOffsetVal =
       msNoiseOffset.count >= 1 ? msNoiseOffset[0].doubleValue : noiseOffset;
 

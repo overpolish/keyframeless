@@ -58,6 +58,8 @@ static NSArray<NSNumber *> *KKMultiStageHoldValues(KKTimingSegment *active,
         KKGradientStopsFromFlat(active.values) ?: @[], KK_GRADIENT_LUT_SIZE);
     if (active.holdEffect == KKHoldEffectNone)
       return baseLut;
+    // Gradient LUTs share a single factor so colour stops scale together
+    // (independent per-channel modulation would rainbow-shift the gradient).
     double factor = KKApplyHoldEffect(t, active.holdEffect, active.intensity,
                                       active.frequency, (int)active.seed);
     NSMutableArray<NSNumber *> *modulated =
@@ -70,12 +72,25 @@ static NSArray<NSNumber *> *KKMultiStageHoldValues(KKTimingSegment *active,
   if (active.holdEffect == KKHoldEffectNone)
     return active.values;
 
-  double factor = KKApplyHoldEffect(t, active.holdEffect, active.intensity,
-                                    active.frequency, (int)active.seed);
   NSMutableArray<NSNumber *> *modulated =
       [NSMutableArray arrayWithCapacity:active.values.count];
-  for (NSNumber *v in active.values)
-    [modulated addObject:@(v.doubleValue * factor)];
+  if (active.linked) {
+    // Single shared factor: components modulate in lockstep (e.g. Radius
+    // X/Y stays aspect-locked through a Bounce).
+    double factor = KKApplyHoldEffect(t, active.holdEffect, active.intensity,
+                                      active.frequency, (int)active.seed);
+    for (NSNumber *v in active.values)
+      [modulated addObject:@(v.doubleValue * factor)];
+  } else {
+    // Independent factor per component (e.g. Position wobbling randomly
+    // in 2D instead of along a single diagonal).
+    for (NSUInteger i = 0; i < active.values.count; i++) {
+      double factor = KKApplyHoldEffectForComponent(
+          t, active.holdEffect, active.intensity, active.frequency,
+          (int)active.seed, (int)i);
+      [modulated addObject:@(active.values[i].doubleValue * factor)];
+    }
+  }
   return modulated;
 }
 

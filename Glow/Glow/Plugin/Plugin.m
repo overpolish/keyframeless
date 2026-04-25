@@ -48,7 +48,6 @@
   case kKKParamAnimateOut:
   case kKKParamHoldEffect:
   case kParamNoiseExpanded:
-  case kParamOffsetExpanded:
   case kKKParamColorExpanded:
     [self updateParameterVisibilityAtTime:time];
     break;
