@@ -23,7 +23,6 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) UInt32 rotYParam;
 @property(nonatomic) UInt32 scaleXParam;
 @property(nonatomic) UInt32 scaleYParam;
-@property(nonatomic) UInt32 previewParam;
 @property(nonatomic) UInt32 opacityParam;
 
 /// Part IDs for hit testing dispatch.
@@ -32,7 +31,6 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) NSInteger rotPart;
 @property(nonatomic) NSInteger rotXRingPart;
 @property(nonatomic) NSInteger rotYRingPart;
-@property(nonatomic) NSInteger iconPart;
 @property(nonatomic) NSInteger opacityIconPart;
 @property(nonatomic) NSInteger scaleIconPart;
 
@@ -43,7 +41,6 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, readonly) KKRotationOSC *rot;
 @property(nonatomic, readonly) KKRingOSC *rotXRing;
 @property(nonatomic, readonly) KKRingOSC *rotYRing;
-@property(nonatomic, readonly) KKIconButtonOSC *previewIcon;
 @property(nonatomic, readonly) KKIconButtonOSC *opacityIcon;
 @property(nonatomic, readonly) KKIconButtonOSC *scaleIcon;
 

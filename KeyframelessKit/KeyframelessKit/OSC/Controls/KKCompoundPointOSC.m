@@ -68,8 +68,6 @@
     _rotYRing.fillWidth = 3.0f;
     _rotYRing.hoverCursor = [NSCursor resizeUpDownCursor];
 
-    _previewIcon = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
-    _previewIcon.iconName = @"eye";
     _opacityIcon = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
     _opacityIcon.iconName = @"circle.fill";
     _scaleIcon = [[KKIconButtonOSC alloc] initWithAPIManager:apiManager];
@@ -150,10 +148,6 @@
 
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  BOOL previewOn = NO;
-  [paramGetAPI getBoolValue:&previewOn fromParameter:_previewParam atTime:time];
-  _previewIcon.iconName = previewOn ? @"eye.fill" : @"eye";
-
   double opacity = 1.0;
   [paramGetAPI getFloatValue:&opacity fromParameter:_opacityParam atTime:time];
   if (opacity >= 1.0)
@@ -178,20 +172,14 @@
     _scaleIcon.iconName = @"squareshape.squareshape.dotted";
 
   float gap = 6.0f;
-  float totalWidth = _previewIcon.size.width + gap + _opacityIcon.size.width +
-                     gap + _scaleIcon.size.width;
-  float iconY = pos.y + arcOuter + 4.0f + _previewIcon.size.height / 2.0f;
+  float totalWidth = _opacityIcon.size.width + gap + _scaleIcon.size.width;
+  float iconY = pos.y + arcOuter + 4.0f + _opacityIcon.size.height / 2.0f;
   float iconX = pos.x - totalWidth / 2.0f;
-  CGPoint previewPos =
-      CGPointMake(iconX + _previewIcon.size.width / 2.0f, iconY);
-  CGPoint opacityPos = CGPointMake(iconX + _previewIcon.size.width + gap +
-                                       _opacityIcon.size.width / 2.0f,
-                                   iconY);
-  CGPoint scalePos = CGPointMake(iconX + _previewIcon.size.width + gap +
-                                     _opacityIcon.size.width + gap +
+  CGPoint opacityPos =
+      CGPointMake(iconX + _opacityIcon.size.width / 2.0f, iconY);
+  CGPoint scalePos = CGPointMake(iconX + _opacityIcon.size.width + gap +
                                      _scaleIcon.size.width / 2.0f,
                                  iconY);
-  [_previewIcon drawAtCanvasPosition:previewPos destinationImage:dest];
   [_opacityIcon drawAtCanvasPosition:opacityPos destinationImage:dest];
   [_scaleIcon drawAtCanvasPosition:scalePos destinationImage:dest];
 
@@ -215,26 +203,15 @@
 
   float arcOuter = _arc.oscRadius + _arc.outlineWidth;
   float gap = 6.0f;
-  float totalWidth = _previewIcon.size.width + gap + _opacityIcon.size.width +
-                     gap + _scaleIcon.size.width;
-  float iconY = pos.y + arcOuter + 4.0f + _previewIcon.size.height / 2.0f;
+  float totalWidth = _opacityIcon.size.width + gap + _scaleIcon.size.width;
+  float iconY = pos.y + arcOuter + 4.0f + _opacityIcon.size.height / 2.0f;
   float iconX = pos.x - totalWidth / 2.0f;
-  CGPoint previewCenter =
-      CGPointMake(iconX + _previewIcon.size.width / 2.0f, iconY);
-  CGPoint opacityCenter = CGPointMake(iconX + _previewIcon.size.width + gap +
-                                          _opacityIcon.size.width / 2.0f,
-                                      iconY);
-  CGPoint scaleCenter = CGPointMake(iconX + _previewIcon.size.width + gap +
-                                        _opacityIcon.size.width + gap +
+  CGPoint opacityCenter =
+      CGPointMake(iconX + _opacityIcon.size.width / 2.0f, iconY);
+  CGPoint scaleCenter = CGPointMake(iconX + _opacityIcon.size.width + gap +
                                         _scaleIcon.size.width / 2.0f,
                                     iconY);
 
-  if ([_previewIcon hitTestAtMousePositionX:positionX
-                                  positionY:positionY
-                                     center:previewCenter]) {
-    *activePart = _iconPart;
-    return;
-  }
   if ([_opacityIcon hitTestAtMousePositionX:positionX
                                   positionY:positionY
                                      center:opacityCenter]) {
@@ -306,20 +283,6 @@
                         atTime:(CMTime)time {
   id<FxOnScreenControlAPI_v4> oscAPI =
       [_apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-
-  if (activePart == _iconPart) {
-    id<FxParameterRetrievalAPI_v6> paramGetAPI =
-        [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    id<FxParameterSettingAPI_v5> paramSetAPI =
-        [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    BOOL previewOn = NO;
-    [paramGetAPI getBoolValue:&previewOn
-                fromParameter:_previewParam
-                       atTime:time];
-    [paramSetAPI setBoolValue:!previewOn toParameter:_previewParam atTime:time];
-    *forceUpdate = YES;
-    return YES;
-  }
 
   if (activePart == _opacityIconPart) {
     id<FxParameterRetrievalAPI_v6> paramGetAPI =
