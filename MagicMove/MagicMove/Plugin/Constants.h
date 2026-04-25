@@ -27,8 +27,8 @@ static const UInt32 kParamInfoCompound = 9001;
 static const UInt32 kParamAlertStackSelected = 9004;
 
 // OSC part IDs
-static const NSInteger kOSCArcPart = 1;
-static const NSInteger kOSCRingPart = 2;
+static const NSInteger kOSCPositionPart = 1;
+static const NSInteger kOSCScaleRingPart = 2;
 static const NSInteger kOSCRotPart = 3;
 static const NSInteger kOSCRotXRingPart = 4;
 static const NSInteger kOSCRotYRingPart = 5;
