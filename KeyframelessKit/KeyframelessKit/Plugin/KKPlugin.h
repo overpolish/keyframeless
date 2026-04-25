@@ -14,6 +14,8 @@
 
 @class FxImageTile;
 @class KKAnimatableProperty;
+@class KKTimingLane;
+@class KKTimingSegment;
 @class KKTimingSlot;
 @class NSBezierPath;
 @protocol PROAPIAccessing;
@@ -158,6 +160,40 @@ NS_ASSUME_NONNULL_BEGIN
 /// property.
 - (BOOL)multiStageHandleParameterChanged:(UInt32)parameterID
                                   atTime:(CMTime)time;
+
+/// Returns the active segment of the lane matching `label` at `time`. Lets
+/// plugins reach per-segment data (e.g. `pathData`) beyond the values dict
+/// returned by `multiStageValuesAtTime:`.
+///
+/// `outSegments` (optional) is the lane's segments array — useful for
+/// `KKTimingBoundaryBefore/After` when interpreting transitions.
+/// `outLocalT` (optional) is the un-eased `t` inside the segment's range
+/// (0 at segment start, 1 at end). Plugins typically pass it through
+/// `KKApplyEasing(...)` to get the eased t for interpolation.
+///
+/// Returns nil when multi-stage is disabled, no lanes are loaded, or the
+/// label doesn't match any lane.
+- (nullable KKTimingSegment *)
+    multiStageActiveSegmentForLabel:(NSString *)label
+                             atTime:(CMTime)time
+                           segments:(NSArray<KKTimingSegment *> *_Nullable
+                                         *_Nullable)outSegments
+                             localT:(double *_Nullable)outLocalT;
+
+/// Returns the lane (rebalanced + live-overridden) matching `label`, or nil
+/// when multi-stage is disabled or the lane doesn't exist. Intended for OSC
+/// code that needs to enumerate every segment (e.g. to draw path overlays
+/// across an entire Position lane).
+- (nullable KKTimingLane *)multiStageLaneForLabel:(NSString *)label
+                                           atTime:(CMTime)time;
+
+/// Persists `pathData` (or nil to clear) onto the segment at `segmentIndex`
+/// inside the lane matching `label`. Pushes the updated lanes through the
+/// same path as user edits — re-renders the sequencer view, broadcasts to
+/// other instances, persists the JSON. Returns YES on success.
+- (BOOL)multiStageSetPathData:(nullable NSData *)pathData
+                     forLabel:(NSString *)label
+                 segmentIndex:(NSInteger)segmentIndex;
 
 /// Call once per `drawOSC` tick. Flushes pending lanes, syncs from params
 /// (undo/redo detection), and pumps playheads — all broadcast across every

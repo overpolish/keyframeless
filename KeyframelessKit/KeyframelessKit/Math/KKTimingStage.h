@@ -57,6 +57,12 @@ typedef NS_ENUM(NSInteger, KKSegmentType) {
 /// length changes. Unlocked (= 0) segments scale proportionally with the clip.
 @property(nonatomic) double lockedDurationSeconds;
 
+/// Optional plugin-specific binary blob persisted alongside the segment in
+/// JSON (base64-encoded). Used by MagicMove to store the bezier path between
+/// a transition's boundary endpoints; nil/empty means default behaviour
+/// (linear interpolation). The timing engine itself does not interpret this.
+@property(nonatomic, copy, nullable) NSData *pathData;
+
 /// Convenience: first value (for single-param properties).
 @property(nonatomic, readonly) double value;
 
