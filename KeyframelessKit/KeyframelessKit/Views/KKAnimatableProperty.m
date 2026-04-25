@@ -16,6 +16,8 @@ static NSUInteger KKKindFixedValueCount(KKAnimatableParamKind kind) {
     return 2;
   case KKAnimatableParamKindGradient:
     return 0; // variable (5 * N)
+  case KKAnimatableParamKindBool:
+    return 1;
   case KKAnimatableParamKindFloat:
   default:
     return 1;
@@ -187,6 +189,12 @@ static NSUInteger KKKindFixedValueCount(KKAnimatableParamKind kind) {
       [out addObject:@(y)];
       break;
     }
+    case KKAnimatableParamKindBool: {
+      BOOL b = NO;
+      [getAPI getBoolValue:&b fromParameter:pid atTime:time];
+      [out addObject:@(b ? 1.0 : 0.0)];
+      break;
+    }
     case KKAnimatableParamKindFloat:
     default: {
       double v = 0;
@@ -229,6 +237,14 @@ static NSUInteger KKKindFixedValueCount(KKAnimatableParamKind kind) {
             toParameter:pid
                  atTime:time];
       cursor += 2;
+      break;
+    }
+    case KKAnimatableParamKindBool: {
+      if (cursor + 1 > values.count)
+        return;
+      BOOL b = values[cursor].doubleValue >= 0.5;
+      [setAPI setBoolValue:b toParameter:pid atTime:time];
+      cursor += 1;
       break;
     }
     case KKAnimatableParamKindGradient: {

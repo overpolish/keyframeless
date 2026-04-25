@@ -10,6 +10,37 @@
 
 @implementation MagicMovePlugin (CustomUI)
 
+- (NSArray<KKAnimatableProperty *> *)animatableProperties {
+  return @[
+    [KKAnimatableProperty
+        propertyWithLabel:@"Position"
+                 valueIDs:@[ @(kParamPoint), @(kParamRotateWithMotion) ]
+                    kinds:@[
+                      @(KKAnimatableParamKindPoint),
+                      @(KKAnimatableParamKindBool)
+                    ]],
+    [KKAnimatableProperty
+        propertyWithLabel:@"Scale"
+                 valueIDs:@[ @(kParamScale), @(kParamScaleY) ]],
+    [KKAnimatableProperty propertyWithLabel:@"Rotation Z"
+                                    valueID:kParamRotation],
+    [KKAnimatableProperty propertyWithLabel:@"Rotation X"
+                                    valueID:kParamRotationX],
+    [KKAnimatableProperty propertyWithLabel:@"Rotation Y"
+                                    valueID:kParamRotationY],
+    [KKAnimatableProperty propertyWithLabel:@"Opacity" valueID:kParamOpacity],
+  ];
+}
+
+- (NSSet<NSString *> *)animatablePropertyLabelsWithOSC {
+  return [NSSet setWithObjects:@"Position", @"Scale", @"Rotation Z",
+                               @"Rotation X", @"Rotation Y", @"Opacity", nil];
+}
+
+- (NSSet<NSString *> *)animatablePropertyLabelsWithOSCDefaultOff {
+  return [NSSet setWithObjects:@"Rotation X", @"Rotation Y", nil];
+}
+
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
   if (parameterID == kParamInfoCompound) {
     NSArray<NSAttributedString *> *pages = @[

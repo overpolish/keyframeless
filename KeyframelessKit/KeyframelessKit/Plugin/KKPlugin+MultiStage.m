@@ -99,7 +99,8 @@ static NSArray<NSNumber *> *KKMultiStageHoldValues(KKTimingSegment *active,
 /// by mirroring time, matching the classic single-stage behaviour.
 static NSArray<NSNumber *> *
 KKMultiStageTransitionValues(NSArray<KKTimingSegment *> *segments,
-                             NSUInteger idx, double frac, BOOL gradientLane) {
+                             NSUInteger idx, double frac, BOOL gradientLane,
+                             NSArray<NSNumber *> *componentKinds) {
   KKTimingSegment *active = segments[idx];
   NSArray<NSNumber *> *fromVals = KKTimingBoundaryBefore(idx, segments);
   NSArray<NSNumber *> *toVals = KKTimingBoundaryAfter(idx, segments);
@@ -123,7 +124,15 @@ KKMultiStageTransitionValues(NSArray<KKTimingSegment *> *segments,
   for (NSUInteger i = 0; i < valCount; i++) {
     double fv = fromVals[i].doubleValue;
     double tv = toVals[i].doubleValue;
-    [interpolated addObject:@(fv + (tv - fv) * easedT)];
+    BOOL isBool = i < componentKinds.count &&
+                  componentKinds[i].integerValue == KKAnimatableParamKindBool;
+    if (isBool) {
+      // Bool components stay at the prior hold's value through the entire
+      // transition and only flip at the boundary into the next hold.
+      [interpolated addObject:@(fv)];
+    } else {
+      [interpolated addObject:@(fv + (tv - fv) * easedT)];
+    }
   }
   return interpolated;
 }
@@ -218,14 +227,39 @@ KKMultiStageApplyLiveOverrides(NSMutableArray<KKTimingLane *> *lanes,
     if (!active)
       continue;
 
-    BOOL gradientLane = KKPropertyIsGradient(propByLabel[lane.propertyLabel]);
+    KKAnimatableProperty *prop = propByLabel[lane.propertyLabel];
+    BOOL gradientLane = KKPropertyIsGradient(prop);
     if (active.type == KKSegmentTypeHold) {
       result[lane.propertyLabel] =
           KKMultiStageHoldValues(active, frac, gradientLane);
     } else {
       NSUInteger idx = [segments indexOfObjectIdenticalTo:active];
-      result[lane.propertyLabel] =
-          KKMultiStageTransitionValues(segments, idx, frac, gradientLane);
+      NSMutableArray<NSNumber *> *componentKinds = nil;
+      if (prop) {
+        componentKinds = [NSMutableArray array];
+        for (NSNumber *k in prop.valueParamKinds) {
+          KKAnimatableParamKind kk = (KKAnimatableParamKind)k.integerValue;
+          NSUInteger n = 1;
+          switch (kk) {
+          case KKAnimatableParamKindColor:
+            n = 3;
+            break;
+          case KKAnimatableParamKindPoint:
+            n = 2;
+            break;
+          case KKAnimatableParamKindGradient:
+            n = 0;
+            break;
+          default:
+            n = 1;
+            break;
+          }
+          for (NSUInteger i = 0; i < n; i++)
+            [componentKinds addObject:k];
+        }
+      }
+      result[lane.propertyLabel] = KKMultiStageTransitionValues(
+          segments, idx, frac, gradientLane, componentKinds);
     }
   }
 

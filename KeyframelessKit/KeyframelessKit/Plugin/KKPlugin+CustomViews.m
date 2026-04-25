@@ -590,12 +590,38 @@ static UInt32 KKHoldPropertyParamID(KKAnimatableProperty *prop,
   // first entry is representative.
   NSMutableDictionary<NSString *, NSNumber *> *laneKinds =
       [NSMutableDictionary dictionaryWithCapacity:seqProps.count];
+  NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *laneCompKinds =
+      [NSMutableDictionary dictionaryWithCapacity:seqProps.count];
   for (KKAnimatableProperty *p in seqProps) {
     NSNumber *kind = p.valueParamKinds.firstObject;
     if (kind)
       laneKinds[p.label] = kind;
+    NSMutableArray<NSNumber *> *expanded = [NSMutableArray array];
+    for (NSNumber *k in p.valueParamKinds) {
+      KKAnimatableParamKind kk = (KKAnimatableParamKind)k.integerValue;
+      NSUInteger n = 1;
+      switch (kk) {
+      case KKAnimatableParamKindColor:
+        n = 3;
+        break;
+      case KKAnimatableParamKindPoint:
+        n = 2;
+        break;
+      case KKAnimatableParamKindGradient:
+        n = 0;
+        break;
+      default:
+        n = 1;
+        break;
+      }
+      for (NSUInteger i = 0; i < n; i++)
+        [expanded addObject:k];
+    }
+    if (expanded.count)
+      laneCompKinds[p.label] = expanded;
   }
   seqView.laneKindsByLabel = laneKinds;
+  seqView.laneComponentKindsByLabel = laneCompKinds;
   seqView.laneLabelsWithOSC = [self animatablePropertyLabelsWithOSC];
   scrollView.documentView = seqView;
   [seqContainer addSubview:scrollView];
@@ -670,6 +696,8 @@ static UInt32 KKHoldPropertyParamID(KKAnimatableProperty *prop,
   if (lanes || seqProps.count == 0)
     return lanes;
 
+  NSSet<NSString *> *oscOffByDefault =
+      [self animatablePropertyLabelsWithOSCDefaultOff];
   NSMutableArray<KKTimingLane *> *defaults =
       [NSMutableArray arrayWithCapacity:seqProps.count];
   for (KKAnimatableProperty *prop in seqProps) {
@@ -677,8 +705,11 @@ static UInt32 KKHoldPropertyParamID(KKAnimatableProperty *prop,
                                                         atTime:time];
     if (!baseVals.count)
       baseVals = @[ @(1.0) ];
-    [defaults addObject:[KKTimingLane defaultLaneForLabel:prop.label
-                                               baseValues:baseVals]];
+    KKTimingLane *lane = [KKTimingLane defaultLaneForLabel:prop.label
+                                                baseValues:baseVals];
+    if ([oscOffByDefault containsObject:prop.label])
+      lane.oscVisible = NO;
+    [defaults addObject:lane];
   }
   NSString *seeded = [KKTimingLane jsonFromLanes:defaults];
   if (seeded) {

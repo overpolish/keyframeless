@@ -236,6 +236,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// drawing.
 - (NSSet<NSString *> *)animatablePropertyLabelsWithOSC;
 
+/// Override to declare labels whose lane should seed with `oscVisible = NO`.
+/// Used for OSC parts that are only shown via a modifier (e.g. rotation X/Y
+/// rings revealed by holding Opt) and shouldn't appear by default. Returns an
+/// empty set by default.
+- (NSSet<NSString *> *)animatablePropertyLabelsWithOSCDefaultOff;
+
 /// Recomputes `-hiddenAnimatablePropertyLabels`; if it differs from the last
 /// snapshot, re-pushes the filtered lanes to the sequencer view. Safe to
 /// over-call.

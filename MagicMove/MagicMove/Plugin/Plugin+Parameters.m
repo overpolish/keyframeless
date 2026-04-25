@@ -62,6 +62,9 @@
                                             kFxParameterFlag_NOT_ANIMATABLE])
     return NO;
 
+  if (![self addMultiStageParametersWithAPI:paramAPI error:error])
+    return NO;
+
   if (![paramAPI addPointParameterWithName:@"Anchor Point"
                                parameterID:kParamAnchorPoint
                                   defaultX:0.5
@@ -74,6 +77,12 @@
                                   defaultX:0.5
                                   defaultY:0.5
                             parameterFlags:kFxParameterFlag_DEFAULT])
+    return NO;
+
+  if (![paramAPI addToggleButtonWithName:@"Rotate with Motion"
+                             parameterID:kParamRotateWithMotion
+                            defaultValue:NO
+                          parameterFlags:kFxParameterFlag_DEFAULT])
     return NO;
 
   if (![paramAPI addAngleSliderWithName:@"Rotation Z"

@@ -28,6 +28,10 @@ typedef NS_ENUM(NSInteger, KKAnimatableParamKind) {
   KKAnimatableParamKindGradient = 2,
   /// FxPlug point parameter: 1 native param → 2 scalar values [X, Y].
   KKAnimatableParamKindPoint = 3,
+  /// Bool toggle: 1 native param → 1 scalar value (0 or 1). Interpolation
+  /// across a transition is float-lerp; render-time consumers should
+  /// threshold at >= 0.5 to recover step semantics.
+  KKAnimatableParamKindBool = 4,
 };
 
 @interface KKAnimatableProperty : NSObject

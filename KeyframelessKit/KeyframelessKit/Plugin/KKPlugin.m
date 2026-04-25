@@ -378,6 +378,10 @@
   return [NSSet set];
 }
 
+- (NSSet<NSString *> *)animatablePropertyLabelsWithOSCDefaultOff {
+  return [NSSet set];
+}
+
 - (NSView *)holdPropertyView {
   return nil;
 }
