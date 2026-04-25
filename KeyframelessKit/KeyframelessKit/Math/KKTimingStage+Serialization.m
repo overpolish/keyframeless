@@ -16,6 +16,7 @@ static NSString *const kKeyFrequency = @"freq";
 static NSString *const kKeySeed = @"seed";
 static NSString *const kKeyLinked = @"link";
 static NSString *const kKeyLockedSec = @"lock";
+static NSString *const kKeyPathData = @"path";
 
 static NSString *const kKeyVersion = @"v";
 static NSString *const kKeyLanes = @"lanes";
@@ -31,7 +32,7 @@ static const NSInteger kCurrentVersion = 3;
 @implementation KKTimingSegment (Serialization)
 
 - (NSDictionary *)toDictionary {
-  return @{
+  NSMutableDictionary *d = [NSMutableDictionary dictionaryWithDictionary:@{
     kKeyType : @(self.type),
     kKeyStart : @(self.start),
     kKeyEnd : @(self.end),
@@ -43,7 +44,10 @@ static const NSInteger kCurrentVersion = 3;
     kKeySeed : @(self.seed),
     kKeyLinked : @(self.linked),
     kKeyLockedSec : @(self.lockedDurationSeconds),
-  };
+  }];
+  if (self.pathData.length > 0)
+    d[kKeyPathData] = [self.pathData base64EncodedStringWithOptions:0];
+  return d;
 }
 
 + (nullable instancetype)segmentFromDictionary:(NSDictionary *)dict {
@@ -72,6 +76,13 @@ static const NSInteger kCurrentVersion = 3;
   NSNumber *linkedNum = dict[kKeyLinked];
   s.linked = linkedNum ? linkedNum.boolValue : YES;
   s.lockedDurationSeconds = [dict[kKeyLockedSec] doubleValue];
+  NSString *pathStr = dict[kKeyPathData];
+  if ([pathStr isKindOfClass:[NSString class]] && pathStr.length > 0) {
+    NSData *data = [[NSData alloc] initWithBase64EncodedString:pathStr
+                                                       options:0];
+    if (data.length > 0)
+      s.pathData = data;
+  }
   return s;
 }
 

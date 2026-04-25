@@ -266,6 +266,156 @@ KKMultiStageApplyLiveOverrides(NSMutableArray<KKTimingLane *> *lanes,
   return result.count ? result : nil;
 }
 
+- (KKTimingSegment *)
+    multiStageActiveSegmentForLabel:(NSString *)label
+                             atTime:(CMTime)time
+                           segments:(NSArray<KKTimingSegment *> **)outSegments
+                             localT:(double *)outLocalT {
+  if (outSegments)
+    *outSegments = nil;
+  if (outLocalT)
+    *outLocalT = 0;
+
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  if (!paramGetAPI || !timingAPI || !label.length)
+    return nil;
+
+  BOOL enabled = NO;
+  [paramGetAPI getBoolValue:&enabled
+              fromParameter:kKKParamMultiStageEnabled
+                     atTime:time];
+  if (!enabled)
+    return nil;
+
+  NSMutableArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, paramGetAPI);
+  if (!lanes.count)
+    return nil;
+
+  NSArray<KKAnimatableProperty *> *props = [self animatableProperties];
+  lanes = KKMultiStageApplyLiveOverrides(lanes, props, paramGetAPI, time);
+
+  CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
+  [timingAPI startTimeForEffect:&effectStart];
+  [timingAPI durationTimeForEffect:&effectDuration];
+  double startSec = CMTimeGetSeconds(effectStart);
+  double durSec = CMTimeGetSeconds(effectDuration);
+  double nowSec = CMTimeGetSeconds(time);
+  double frac = (durSec > 0) ? (nowSec - startSec) / durSec : 0.0;
+  frac = MAX(0.0, MIN(1.0, frac));
+
+  for (KKTimingLane *lane in lanes) {
+    if (![lane.propertyLabel isEqualToString:label])
+      continue;
+    if (!lane.enabled || !lane.segments.count)
+      return nil;
+    KKTimingSegment *active =
+        KKMultiStageSegmentForFraction(lane.segments, frac);
+    if (!active)
+      return nil;
+    if (outSegments)
+      *outSegments = lane.segments;
+    if (outLocalT) {
+      double segDur = active.end - active.start;
+      double t = (segDur > 0) ? (frac - active.start) / segDur : 0.0;
+      *outLocalT = MAX(0.0, MIN(1.0, t));
+    }
+    return active;
+  }
+  return nil;
+}
+
+- (KKTimingLane *)multiStageLaneForLabel:(NSString *)label atTime:(CMTime)time {
+  if (!label.length)
+    return nil;
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!paramGetAPI)
+    return nil;
+  BOOL enabled = NO;
+  [paramGetAPI getBoolValue:&enabled
+              fromParameter:kKKParamMultiStageEnabled
+                     atTime:time];
+  if (!enabled)
+    return nil;
+  NSMutableArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, paramGetAPI);
+  if (!lanes.count)
+    return nil;
+  NSArray<KKAnimatableProperty *> *props = [self animatableProperties];
+  lanes = KKMultiStageApplyLiveOverrides(lanes, props, paramGetAPI, time);
+  for (KKTimingLane *lane in lanes)
+    if ([lane.propertyLabel isEqualToString:label])
+      return lane;
+  return nil;
+}
+
+- (BOOL)multiStageSetPathData:(NSData *)pathData
+                     forLabel:(NSString *)label
+                 segmentIndex:(NSInteger)segmentIndex {
+  if (!label.length || segmentIndex < 0)
+    return NO;
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  if (!state)
+    return NO;
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!paramGetAPI)
+    return NO;
+
+  NSMutableArray<KKTimingLane *> *lanes =
+      [state.lanesSnapshot mutableCopy]
+          ?: KKReadLanesRebalanced(self.apiManager, paramGetAPI);
+  if (!lanes.count)
+    return NO;
+
+  for (NSUInteger li = 0; li < lanes.count; li++) {
+    KKTimingLane *lane = lanes[li];
+    if (![lane.propertyLabel isEqualToString:label])
+      continue;
+    if ((NSUInteger)segmentIndex >= lane.segments.count)
+      return NO;
+    KKTimingLane *mLane = [lane copy];
+    NSMutableArray *mSegs = [mLane.segments mutableCopy];
+    KKTimingSegment *mSeg = [mSegs[segmentIndex] copy];
+    mSeg.pathData = pathData.length > 0 ? [pathData copy] : nil;
+    mSegs[segmentIndex] = mSeg;
+    mLane.segments = mSegs;
+    lanes[li] = mLane;
+
+    NSArray<KKTimingLane *> *updated = [lanes copy];
+    state.pendingLanes = updated;
+    state.lanesSnapshot = updated;
+
+    id<FxParameterSettingAPI_v5> paramSetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    if (paramSetAPI) {
+      NSString *json = [KKTimingLane jsonFromLanes:updated];
+      if (json)
+        [paramSetAPI setStringParameterValue:json
+                                 toParameter:kKKParamMultiStageData];
+    }
+
+    KKStageSequencerView *seq = state.sequencerView;
+    NSArray<KKTimingViewRefs *> *extras =
+        [state.additionalTimingViews copy] ?: @[];
+    if (seq || extras.count) {
+      NSArray<KKTimingLane *> *visible =
+          KKFilterLanesForVisibility(updated, state.hiddenLaneLabels);
+      dispatch_async(dispatch_get_main_queue(), ^{
+        seq.lanes = visible;
+        for (KKTimingViewRefs *r in extras)
+          r.seqView.lanes = visible;
+      });
+    }
+    return YES;
+  }
+  return NO;
+}
+
 - (BOOL)multiStageHandleParameterChanged:(UInt32)parameterID
                                   atTime:(CMTime)time {
   KKMultiStageMarkParameterChanged();

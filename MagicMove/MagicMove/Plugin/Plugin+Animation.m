@@ -77,6 +77,41 @@
                 fromParameter:kParamRotateWithMotion
                        atTime:renderTime];
   }
+
+  // Bezier path override: when the active Position transition has pathData,
+  // evaluate position along the curve instead of taking the engine's
+  // linearly-interpolated x/y.
+  NSArray<KKTimingSegment *> *posSegs = nil;
+  double localT = 0.0;
+  KKTimingSegment *activePos = [self multiStageActiveSegmentForLabel:@"Position"
+                                                              atTime:renderTime
+                                                            segments:&posSegs
+                                                              localT:&localT];
+  if (activePos && activePos.type == KKSegmentTypeTransition &&
+      activePos.pathData.length > 0) {
+    KKBezierPath *path = [KKBezierPath pathWithData:activePos.pathData];
+    if (path) {
+      NSUInteger idx = [posSegs indexOfObjectIdenticalTo:activePos];
+      NSArray<NSNumber *> *fromVals = KKTimingBoundaryBefore(idx, posSegs);
+      NSArray<NSNumber *> *toVals = KKTimingBoundaryAfter(idx, posSegs);
+      double fromX = fromVals.count >= 1 ? fromVals[0].doubleValue : posX;
+      double fromY = fromVals.count >= 2 ? fromVals[1].doubleValue : posY;
+      double toX = toVals.count >= 1 ? toVals[0].doubleValue : posX;
+      double toY = toVals.count >= 2 ? toVals[1].doubleValue : posY;
+      BOOL isAnimateOut = (idx == posSegs.count - 1);
+      double ti = isAnimateOut ? (1.0 - localT) : localT;
+      double easedT = KKApplyEasing(ti, activePos.easing, activePos.intensity,
+                                    activePos.frequency);
+      if (isAnimateOut)
+        easedT = 1.0 - easedT;
+      simd_float2 p =
+          [path positionAtT:(float)easedT
+                      start:(simd_float2){(float)fromX, (float)fromY}
+                        end:(simd_float2){(float)toX, (float)toY}];
+      posX = p.x;
+      posY = p.y;
+    }
+  }
   double scaleX = msScale.count >= 1 ? msScale[0].doubleValue : v.scaleX;
   double scaleY = msScale.count >= 2 ? msScale[1].doubleValue : v.scaleY;
   double rotZ = msRotZ.count >= 1 ? msRotZ[0].doubleValue : v.rotation;

@@ -12,6 +12,27 @@
 
 #define CLAMP(x, lo, hi) MAX((lo), MIN((hi), (x)))
 
+static const float kPathHitThreshold = 10.0f;
+static const float kPathPointHitRadius = 8.0f;
+static const float kPathSnapThreshold = 8.0f;
+static const NSUInteger kPathHitResolution = 24;
+
+// Path-part encoding: segmentIndex * 1000 + role-offset.
+//   curve = 50, point[i] = 100+i, inHandle[i] = 200+i, outHandle[i] = 300+i
+static inline NSInteger pathPartCurve(NSInteger seg) { return seg * 1000 + 50; }
+static inline NSInteger pathPartPoint(NSInteger seg, NSUInteger i) {
+  return seg * 1000 + 100 + (NSInteger)i;
+}
+static inline NSInteger pathPartInHandle(NSInteger seg, NSUInteger i) {
+  return seg * 1000 + 200 + (NSInteger)i;
+}
+static inline NSInteger pathPartOutHandle(NSInteger seg, NSUInteger i) {
+  return seg * 1000 + 300 + (NSInteger)i;
+}
+static inline BOOL isPathPart(NSInteger part) { return part >= 50; }
+static inline NSInteger pathSegFromPart(NSInteger part) { return part / 1000; }
+static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
+
 @interface KKArcOSC (FxOSC) <FxOnScreenControl_v4>
 @end
 
@@ -23,8 +44,22 @@
   KKIconButtonOSC *_opacityIcon;
   KKIconButtonOSC *_scaleIcon;
   KKSquarePointOSC *_anchorOSC;
+  KKPointOSC *_pathPointOSC;
+  KKPointOSC *_pathHandleOSC;
   KKSnapEngine *_positionSnap;
   KKSnapEngine *_anchorSnap;
+  KKSnapEngine *_pathSnap;
+
+  // Path interaction state (step 4 will populate; declared early so the
+  // draw path can read it for active highlighting).
+  NSInteger _pathDragSegIndex;
+  NSInteger _pathDragPointIndex;
+  BOOL _pathDragIsInHandle;
+  BOOL _pathDragIsOutHandle;
+  simd_float2 _pathDragStartObj;
+  NSTimeInterval _pathLastClickTime;
+  NSInteger _pathLastClickSegIdx;
+  NSInteger _pathLastClickPointIdx;
 
   BOOL _arcHovered, _arcDragging;
   double _arcDragStartX, _arcDragStartY;
@@ -77,8 +112,22 @@
     _anchorOSC = [[KKSquarePointOSC alloc] initWithAPIManager:apiManager];
     _anchorOSC.clearsOnDraw = NO;
 
+    _pathPointOSC = [[KKPointOSC alloc] initWithAPIManager:apiManager];
+    _pathPointOSC.clearsOnDraw = NO;
+    _pathPointOSC.oscRadius = 5.0f;
+    _pathPointOSC.outlineWidth = 1.5f;
+    _pathHandleOSC = [[KKPointOSC alloc] initWithAPIManager:apiManager];
+    _pathHandleOSC.clearsOnDraw = NO;
+    _pathHandleOSC.oscRadius = 3.0f;
+    _pathHandleOSC.outlineWidth = 1.0f;
+
     _positionSnap = [[KKSnapEngine alloc] init];
     _anchorSnap = [[KKSnapEngine alloc] init];
+    _pathSnap = [[KKSnapEngine alloc] init];
+    _pathDragSegIndex = -1;
+    _pathDragPointIndex = -1;
+    _pathLastClickSegIdx = -1;
+    _pathLastClickPointIdx = -1;
   }
   return self;
 }
@@ -127,6 +176,186 @@
                           iconY);
 }
 
+- (KKTimingLane *)_positionLaneAtTime:(CMTime)time {
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!getAPI)
+    return nil;
+  BOOL enabled = NO;
+  [getAPI getBoolValue:&enabled
+         fromParameter:kKKParamMultiStageEnabled
+                atTime:time];
+  if (!enabled)
+    return nil;
+  NSString *json = nil;
+  [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+  for (KKTimingLane *lane in [KKTimingLane lanesFromJSON:json]) {
+    if ([lane.propertyLabel isEqualToString:@"Position"])
+      return lane;
+  }
+  return nil;
+}
+
+- (KKBezierPath *)_pathForSegment:(KKTimingSegment *)seg {
+  if (seg.pathData.length > 0)
+    return [KKBezierPath pathWithData:seg.pathData];
+  return [[KKBezierPath alloc] init];
+}
+
+- (void)_writePath:(KKBezierPath *)path forSegmentIndex:(NSInteger)segIdx {
+  NSData *data = [path dataRepresentation];
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  if (!setAPI || !getAPI)
+    return;
+  [actAPI startAction:self];
+  NSString *json = nil;
+  [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+  NSMutableArray<KKTimingLane *> *lanes =
+      [[KKTimingLane lanesFromJSON:json] mutableCopy];
+  if (lanes) {
+    for (NSUInteger li = 0; li < lanes.count; li++) {
+      KKTimingLane *lane = lanes[li];
+      if (![lane.propertyLabel isEqualToString:@"Position"])
+        continue;
+      if (segIdx < 0 || (NSUInteger)segIdx >= lane.segments.count)
+        break;
+      KKTimingLane *mLane = [lane copy];
+      NSMutableArray *mSegs = [mLane.segments mutableCopy];
+      KKTimingSegment *mSeg = [mSegs[segIdx] copy];
+      mSeg.pathData = data.length > 0 ? data : nil;
+      mSegs[segIdx] = mSeg;
+      mLane.segments = mSegs;
+      lanes[li] = mLane;
+      NSString *outJSON = [KKTimingLane jsonFromLanes:lanes];
+      if (outJSON)
+        [setAPI setStringParameterValue:outJSON
+                            toParameter:kKKParamMultiStageData];
+      break;
+    }
+  }
+  [actAPI endAction:self];
+}
+
+- (void)_drawPositionPathsAtTime:(CMTime)time
+                destinationImage:(FxImageTile *)dest {
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!getAPI)
+    return;
+  BOOL enabled = NO;
+  [getAPI getBoolValue:&enabled
+         fromParameter:kKKParamMultiStageEnabled
+                atTime:time];
+  if (!enabled)
+    return;
+  NSString *json = nil;
+  [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+  NSArray<KKTimingLane *> *lanes = [KKTimingLane lanesFromJSON:json];
+  KKTimingLane *posLane = nil;
+  for (KKTimingLane *lane in lanes) {
+    if ([lane.propertyLabel isEqualToString:@"Position"]) {
+      posLane = lane;
+      break;
+    }
+  }
+  if (!posLane.enabled || !posLane.segments.count)
+    return;
+
+  simd_float4 pathColor = (simd_float4){1.0f, 0.2f, 0.2f, 1.0f};
+  static const NSUInteger kRes = 24;
+
+  for (NSUInteger idx = 0; idx < posLane.segments.count; idx++) {
+    KKTimingSegment *seg = posLane.segments[idx];
+    if (seg.type != KKSegmentTypeTransition)
+      continue;
+
+    NSArray<NSNumber *> *fromVals =
+        KKTimingBoundaryBefore(idx, posLane.segments);
+    NSArray<NSNumber *> *toVals = KKTimingBoundaryAfter(idx, posLane.segments);
+    if (fromVals.count < 2 || toVals.count < 2)
+      continue;
+    simd_float2 startObj = {(float)fromVals[0].doubleValue,
+                            (float)fromVals[1].doubleValue};
+    simd_float2 endObj = {(float)toVals[0].doubleValue,
+                          (float)toVals[1].doubleValue};
+
+    KKBezierPath *path = seg.pathData.length > 0
+                             ? [KKBezierPath pathWithData:seg.pathData]
+                             : [[KKBezierPath alloc] init];
+    NSUInteger segCount = path.segmentCount;
+
+    for (NSUInteger s = 0; s < segCount; s++) {
+      CGPoint prev = CGPointZero;
+      for (NSUInteger i = 0; i <= kRes; i++) {
+        float localT = (float)i / (float)kRes;
+        simd_float2 objPt = [path evaluateSegment:s
+                                              atT:localT
+                                            start:startObj
+                                              end:endObj];
+        CGPoint cur = [self canvasPointFromObjectPoint:objPt];
+        if (i > 0)
+          [self drawLineFrom:prev
+                            to:cur
+                         color:pathColor
+                     halfWidth:2.0f
+              destinationImage:dest];
+        prev = cur;
+      }
+    }
+
+    for (NSUInteger i = 0; i < path.count; i++) {
+      KKBezierPoint pt = [path pointAtIndex:i];
+      CGPoint ptCanvas =
+          [self canvasPointFromObjectPoint:(simd_float2){pt.x, pt.y}];
+
+      if (pt.type == KKBezierPointBezier) {
+        CGPoint inC =
+            [self canvasPointFromObjectPoint:(simd_float2){pt.x + pt.inX,
+                                                           pt.y + pt.inY}];
+        CGPoint outC =
+            [self canvasPointFromObjectPoint:(simd_float2){pt.x + pt.outX,
+                                                           pt.y + pt.outY}];
+        simd_float4 handleColor = pathColor;
+        handleColor.w = 0.33f;
+        [self drawLineFrom:ptCanvas
+                          to:inC
+                       color:handleColor
+                   halfWidth:2.0f
+            destinationImage:dest];
+        [self drawLineFrom:ptCanvas
+                          to:outC
+                       color:handleColor
+                   halfWidth:2.0f
+            destinationImage:dest];
+        [_pathHandleOSC drawAtCanvasPosition:inC
+                                   isHovered:NO
+                                    isActive:NO
+                            destinationImage:dest
+                                      atTime:time];
+        [_pathHandleOSC drawAtCanvasPosition:outC
+                                   isHovered:NO
+                                    isActive:NO
+                            destinationImage:dest
+                                      atTime:time];
+      }
+
+      BOOL active = (_pathDragSegIndex == (NSInteger)idx &&
+                     _pathDragPointIndex == (NSInteger)i &&
+                     !_pathDragIsInHandle && !_pathDragIsOutHandle);
+      [_pathPointOSC drawAtCanvasPosition:ptCanvas
+                                isHovered:NO
+                                 isActive:active
+                         destinationImage:dest
+                                   atTime:time];
+    }
+  }
+}
+
 - (void)drawOSCWithWidth:(NSInteger)width
                   height:(NSInteger)height
               activePart:(NSInteger)activePart
@@ -147,6 +376,9 @@
   [_anchorSnap drawSnapGuidesWithOSC:self
                        isObjectSpace:YES
                     destinationImage:destinationImage];
+  [_pathSnap drawSnapGuidesWithOSC:self
+                     isObjectSpace:YES
+                  destinationImage:destinationImage];
 
   CGPoint center = [self canvasCenter];
   CGPoint posPos = [self oscPositionAtTime:time];
@@ -252,6 +484,9 @@
   if (scaleVisible)
     [_scaleIcon drawAtCanvasPosition:scaleCenter
                     destinationImage:destinationImage];
+
+  if (positionVisible)
+    [self _drawPositionPathsAtTime:time destinationImage:destinationImage];
 
   // Position handle follows the position param.
   if (positionVisible) {
@@ -387,8 +622,334 @@
     if (sqrt(dx * dx + dy * dy) < self.hitRadius) {
       _arcHovered = YES;
       *activePart = kOSCPositionPart;
+      return;
     }
   }
+
+  // Position path (transition segments).
+  if (positionVisible) {
+    KKTimingLane *posLane = [self _positionLaneAtTime:time];
+    if (posLane.enabled) {
+      CGEventFlags hflags =
+          CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+      BOOL hOpt = (hflags & kCGEventFlagMaskAlternate) != 0;
+      id<FxOnScreenControlAPI_v4> oscAPI =
+          [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+      for (NSUInteger idx = 0; idx < posLane.segments.count; idx++) {
+        KKTimingSegment *seg = posLane.segments[idx];
+        if (seg.type != KKSegmentTypeTransition)
+          continue;
+        NSArray<NSNumber *> *fromVals =
+            KKTimingBoundaryBefore(idx, posLane.segments);
+        NSArray<NSNumber *> *toVals =
+            KKTimingBoundaryAfter(idx, posLane.segments);
+        if (fromVals.count < 2 || toVals.count < 2)
+          continue;
+        simd_float2 startObj = {(float)fromVals[0].doubleValue,
+                                (float)fromVals[1].doubleValue};
+        simd_float2 endObj = {(float)toVals[0].doubleValue,
+                              (float)toVals[1].doubleValue};
+        KKBezierPath *path = [self _pathForSegment:seg];
+
+        // Handles first (smaller, top-most).
+        BOOL hit = NO;
+        for (NSUInteger i = 0; i < path.count && !hit; i++) {
+          KKBezierPoint pt = [path pointAtIndex:i];
+          if (pt.type != KKBezierPointBezier)
+            continue;
+          CGPoint inC =
+              [self canvasPointFromObjectPoint:(simd_float2){pt.x + pt.inX,
+                                                             pt.y + pt.inY}];
+          CGPoint outC =
+              [self canvasPointFromObjectPoint:(simd_float2){pt.x + pt.outX,
+                                                             pt.y + pt.outY}];
+          if (hypot(positionX - inC.x, positionY - inC.y) <
+              kPathPointHitRadius) {
+            *activePart = pathPartInHandle(idx, i);
+            hit = YES;
+            break;
+          }
+          if (hypot(positionX - outC.x, positionY - outC.y) <
+              kPathPointHitRadius) {
+            *activePart = pathPartOutHandle(idx, i);
+            hit = YES;
+            break;
+          }
+        }
+        if (hit)
+          return;
+
+        // Path control points.
+        for (NSUInteger i = 0; i < path.count; i++) {
+          KKBezierPoint pt = [path pointAtIndex:i];
+          CGPoint ptC =
+              [self canvasPointFromObjectPoint:(simd_float2){pt.x, pt.y}];
+          if (hypot(positionX - ptC.x, positionY - ptC.y) <
+              kPathPointHitRadius) {
+            *activePart = pathPartPoint(idx, i);
+            [oscAPI setCursor:hOpt ? [NSCursor disappearingItemCursor]
+                                   : [NSCursor arrowCursor]];
+            return;
+          }
+        }
+
+        // Path curve.
+        NSUInteger segCount = path.segmentCount;
+        float bestDist = FLT_MAX;
+        for (NSUInteger s = 0; s < segCount; s++) {
+          CGPoint prev = CGPointZero;
+          for (NSUInteger i = 0; i <= kPathHitResolution; i++) {
+            float localT = (float)i / (float)kPathHitResolution;
+            simd_float2 objPt = [path evaluateSegment:s
+                                                  atT:localT
+                                                start:startObj
+                                                  end:endObj];
+            CGPoint cur = [self canvasPointFromObjectPoint:objPt];
+            if (i > 0) {
+              double dxC = cur.x - prev.x, dyC = cur.y - prev.y;
+              double lenSq = dxC * dxC + dyC * dyC;
+              double t2 = (lenSq > 0) ? CLAMP(((positionX - prev.x) * dxC +
+                                               (positionY - prev.y) * dyC) /
+                                                  lenSq,
+                                              0, 1)
+                                      : 0;
+              double cx = prev.x + t2 * dxC, cy = prev.y + t2 * dyC;
+              float d = (float)hypot(positionX - cx, positionY - cy);
+              if (d < bestDist)
+                bestDist = d;
+            }
+            prev = cur;
+          }
+        }
+        if (bestDist < kPathHitThreshold) {
+          *activePart = pathPartCurve(idx);
+          [oscAPI setCursor:hOpt ? [NSCursor crosshairCursor]
+                                 : [NSCursor arrowCursor]];
+          return;
+        }
+      }
+    }
+  }
+}
+
+- (void)_pathMouseDownAtPart:(NSInteger)activePart
+                   positionX:(double)positionX
+                   positionY:(double)positionY
+                   modifiers:(NSUInteger)modifiers
+                 forceUpdate:(BOOL *)forceUpdate
+                      atTime:(CMTime)time {
+  BOOL optHeld = (modifiers & kFxModifierKey_OPTION) != 0;
+  NSInteger segIdx = pathSegFromPart(activePart);
+  NSInteger offset = pathRoleOffset(activePart);
+
+  KKTimingLane *lane = [self _positionLaneAtTime:time];
+  if (segIdx < 0 || (NSUInteger)segIdx >= lane.segments.count)
+    return;
+  KKTimingSegment *seg = lane.segments[segIdx];
+  if (seg.type != KKSegmentTypeTransition)
+    return;
+
+  NSArray<NSNumber *> *fromVals = KKTimingBoundaryBefore(segIdx, lane.segments);
+  NSArray<NSNumber *> *toVals = KKTimingBoundaryAfter(segIdx, lane.segments);
+  if (fromVals.count < 2 || toVals.count < 2)
+    return;
+  simd_float2 startObj = {(float)fromVals[0].doubleValue,
+                          (float)fromVals[1].doubleValue};
+  simd_float2 endObj = {(float)toVals[0].doubleValue,
+                        (float)toVals[1].doubleValue};
+
+  KKBezierPath *path = [self _pathForSegment:seg];
+
+  // Path control point.
+  if (offset >= 100 && offset < 200) {
+    NSUInteger idx = (NSUInteger)(offset - 100);
+    if (idx >= path.count)
+      return;
+    if (optHeld) {
+      [path removeAtIndex:idx];
+      [self _writePath:path forSegmentIndex:segIdx];
+      *forceUpdate = YES;
+      return;
+    }
+    NSTimeInterval now = CACurrentMediaTime();
+    if (_pathLastClickSegIdx == segIdx &&
+        _pathLastClickPointIdx == (NSInteger)idx &&
+        (now - _pathLastClickTime) < 0.35) {
+      [path toggleTypeAtIndex:idx start:startObj end:endObj];
+      [self _writePath:path forSegmentIndex:segIdx];
+      _pathLastClickSegIdx = -1;
+      _pathLastClickPointIdx = -1;
+      *forceUpdate = YES;
+      return;
+    }
+    _pathLastClickTime = now;
+    _pathLastClickSegIdx = segIdx;
+    _pathLastClickPointIdx = (NSInteger)idx;
+    KKBezierPoint dragPt = [path pointAtIndex:idx];
+    _pathDragStartObj = (simd_float2){dragPt.x, dragPt.y};
+    _pathDragSegIndex = segIdx;
+    _pathDragPointIndex = (NSInteger)idx;
+    _pathDragIsInHandle = NO;
+    _pathDragIsOutHandle = NO;
+    *forceUpdate = YES;
+    return;
+  }
+
+  // In handle.
+  if (offset >= 200 && offset < 300) {
+    NSUInteger idx = (NSUInteger)(offset - 200);
+    if (idx < path.count) {
+      KKBezierPoint pt = [path pointAtIndex:idx];
+      _pathDragStartObj = (simd_float2){pt.x + pt.inX, pt.y + pt.inY};
+    }
+    _pathDragSegIndex = segIdx;
+    _pathDragPointIndex = (NSInteger)idx;
+    _pathDragIsInHandle = YES;
+    _pathDragIsOutHandle = NO;
+    *forceUpdate = YES;
+    return;
+  }
+
+  // Out handle.
+  if (offset >= 300 && offset < 400) {
+    NSUInteger idx = (NSUInteger)(offset - 300);
+    if (idx < path.count) {
+      KKBezierPoint pt = [path pointAtIndex:idx];
+      _pathDragStartObj = (simd_float2){pt.x + pt.outX, pt.y + pt.outY};
+    }
+    _pathDragSegIndex = segIdx;
+    _pathDragPointIndex = (NSInteger)idx;
+    _pathDragIsInHandle = NO;
+    _pathDragIsOutHandle = YES;
+    *forceUpdate = YES;
+    return;
+  }
+
+  // Curve: alt-click inserts a new point at the closest segment.
+  if (offset == 50 && optHeld) {
+    simd_float2 mouseObj =
+        [self objectPointFromCanvasPoint:(CGPoint){positionX, positionY}];
+    NSUInteger bestSeg = 0;
+    float bestDist = FLT_MAX;
+    for (NSUInteger s = 0; s < path.segmentCount; s++) {
+      for (NSUInteger i = 1; i <= kPathHitResolution; i++) {
+        float localT = (float)i / (float)kPathHitResolution;
+        simd_float2 objPt = [path evaluateSegment:s
+                                              atT:localT
+                                            start:startObj
+                                              end:endObj];
+        float d = simd_length(objPt - mouseObj);
+        if (d < bestDist) {
+          bestDist = d;
+          bestSeg = s;
+        }
+      }
+    }
+    [path insertAtIndex:bestSeg position:mouseObj];
+    [self _writePath:path forSegmentIndex:segIdx];
+    _pathDragSegIndex = segIdx;
+    _pathDragPointIndex = (NSInteger)bestSeg;
+    _pathDragIsInHandle = NO;
+    _pathDragIsOutHandle = NO;
+    *forceUpdate = YES;
+    return;
+  }
+}
+
+- (BOOL)_pathMouseDraggedAtPositionX:(double)positionX
+                           positionY:(double)positionY
+                              atTime:(CMTime)time {
+  if (_pathDragSegIndex < 0 || _pathDragPointIndex < 0)
+    return NO;
+  KKTimingLane *lane = [self _positionLaneAtTime:time];
+  if ((NSUInteger)_pathDragSegIndex >= lane.segments.count)
+    return NO;
+  KKTimingSegment *seg = lane.segments[_pathDragSegIndex];
+  KKBezierPath *path = [self _pathForSegment:seg];
+  if ((NSUInteger)_pathDragPointIndex >= path.count)
+    return NO;
+
+  simd_float2 mouseObj =
+      [self objectPointFromCanvasPoint:(CGPoint){positionX, positionY}];
+  CGEventFlags flags =
+      CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+  BOOL optHeld = (flags & kCGEventFlagMaskAlternate) != 0;
+  BOOL shiftHeld = (flags & kCGEventFlagMaskShift) != 0;
+  BOOL ctrlHeld = (flags & kCGEventFlagMaskControl) != 0;
+  [_pathSnap reset];
+
+  if (shiftHeld) {
+    float dx = fabsf(mouseObj.x - _pathDragStartObj.x);
+    float dy = fabsf(mouseObj.y - _pathDragStartObj.y);
+    if (dx > dy)
+      mouseObj.y = _pathDragStartObj.y;
+    else
+      mouseObj.x = _pathDragStartObj.x;
+  }
+
+  if (_pathDragIsInHandle || _pathDragIsOutHandle) {
+    KKBezierPoint pt = [path pointAtIndex:(NSUInteger)_pathDragPointIndex];
+    simd_float2 handlePos = mouseObj;
+    if (!shiftHeld && !ctrlHeld) {
+      CGPoint ptC = [self canvasPointFromObjectPoint:(simd_float2){pt.x, pt.y}];
+      CGPoint hC = [self canvasPointFromObjectPoint:handlePos];
+      if (fabs(hC.y - ptC.y) < kPathSnapThreshold) {
+        handlePos.y = pt.y;
+        _pathSnap.snappedY = YES;
+        _pathSnap.snapValueY = pt.y;
+      }
+      if (fabs(hC.x - ptC.x) < kPathSnapThreshold) {
+        handlePos.x = pt.x;
+        _pathSnap.snappedX = YES;
+        _pathSnap.snapValueX = pt.x;
+      }
+    }
+    simd_float2 offset = {handlePos.x - pt.x, handlePos.y - pt.y};
+    simd_float2 mirror = {-offset.x, -offset.y};
+    if (_pathDragIsInHandle) {
+      [path setInHandle:offset atIndex:(NSUInteger)_pathDragPointIndex];
+      if (!optHeld)
+        [path setOutHandle:mirror atIndex:(NSUInteger)_pathDragPointIndex];
+    } else {
+      [path setOutHandle:offset atIndex:(NSUInteger)_pathDragPointIndex];
+      if (!optHeld)
+        [path setInHandle:mirror atIndex:(NSUInteger)_pathDragPointIndex];
+    }
+  } else {
+    if (!ctrlHeld) {
+      // Snap to other points in this path + boundary endpoints.
+      NSUInteger n = path.count + 2;
+      simd_float2 targets[n];
+      NSUInteger nc = 0;
+      NSArray<NSNumber *> *fromVals =
+          KKTimingBoundaryBefore(_pathDragSegIndex, lane.segments);
+      NSArray<NSNumber *> *toVals =
+          KKTimingBoundaryAfter(_pathDragSegIndex, lane.segments);
+      if (fromVals.count >= 2)
+        targets[nc++] = (simd_float2){(float)fromVals[0].doubleValue,
+                                      (float)fromVals[1].doubleValue};
+      if (toVals.count >= 2)
+        targets[nc++] = (simd_float2){(float)toVals[0].doubleValue,
+                                      (float)toVals[1].doubleValue};
+      for (NSUInteger i = 0; i < path.count; i++) {
+        if ((NSInteger)i == _pathDragPointIndex)
+          continue;
+        KKBezierPoint p = [path pointAtIndex:i];
+        targets[nc++] = (simd_float2){p.x, p.y};
+      }
+      CGPoint c0 = [self canvasPointFromObjectPoint:(simd_float2){0, 0}];
+      CGPoint c1 = [self canvasPointFromObjectPoint:(simd_float2){1, 0}];
+      float pixPerUnit = (float)fabs(c1.x - c0.x);
+      mouseObj = [_pathSnap snapObjectPoint:mouseObj
+                                  toTargets:targets
+                                      count:nc
+                              pixelsPerUnit:pixPerUnit];
+    }
+    [path moveAtIndex:(NSUInteger)_pathDragPointIndex to:mouseObj];
+  }
+
+  [self _writePath:path forSegmentIndex:_pathDragSegIndex];
+  return YES;
 }
 
 - (void)mouseDownAtPositionX:(double)positionX
@@ -504,6 +1065,16 @@
     _arcDragStartY = positionY;
     [oscAPI setCursor:[NSCursor openHandCursor]];
     *forceUpdate = YES;
+    return;
+  }
+
+  if (isPathPart(activePart)) {
+    [self _pathMouseDownAtPart:activePart
+                     positionX:positionX
+                     positionY:positionY
+                     modifiers:modifiers
+                   forceUpdate:forceUpdate
+                        atTime:time];
     return;
   }
 
@@ -720,6 +1291,15 @@
     return;
   }
 
+  if (isPathPart(activePart) || _pathDragSegIndex >= 0) {
+    if ([self _pathMouseDraggedAtPositionX:positionX
+                                 positionY:positionY
+                                    atTime:time]) {
+      *forceUpdate = YES;
+      return;
+    }
+  }
+
   [super mouseDraggedAtPositionX:positionX
                        positionY:positionY
                       activePart:activePart
@@ -746,8 +1326,13 @@
   _rotYRingHovered = NO;
   _anchorDragging = NO;
   _anchorHovered = NO;
+  _pathDragSegIndex = -1;
+  _pathDragPointIndex = -1;
+  _pathDragIsInHandle = NO;
+  _pathDragIsOutHandle = NO;
   [_positionSnap reset];
   [_anchorSnap reset];
+  [_pathSnap reset];
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
   [oscAPI setCursor:[NSCursor arrowCursor]];

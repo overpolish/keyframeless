@@ -218,6 +218,7 @@ NSArray<KKTimingLane *> *KKTimingRebalancedLanes(NSArray<KKTimingLane *> *lanes,
   c.seed = _seed;
   c.linked = _linked;
   c.lockedDurationSeconds = _lockedDurationSeconds;
+  c.pathData = [_pathData copy];
   return c;
 }
 
