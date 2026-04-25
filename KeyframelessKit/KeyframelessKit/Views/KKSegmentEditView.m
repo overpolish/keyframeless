@@ -9,6 +9,7 @@
 #import "../Math/KKEasing.h"
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
+#import "KKCheckboxView.h"
 #import "KKCurvePillView.h"
 #import "KKSeedView.h"
 #import "KKSliderView.h"
@@ -20,6 +21,7 @@ static const CGFloat kPillHeight = 28.0;
 static const CGFloat kSliderHeight = 20.0;
 static const CGFloat kTickHeight = 10.0;
 static const CGFloat kSeedHeight = 26.0;
+static const CGFloat kLinkedHeight = 20.0;
 static const CGFloat kRowGap = 8.0;
 static const NSInteger kIntensityTickCount = 3;
 static const NSInteger kFrequencyTickCount = 3;
@@ -67,6 +69,7 @@ static void _clearPopoverBackground(NSView *view) {
   NSImageView *_intensityTicks;
   NSImageView *_frequencyTicks;
   KKSeedView *_seedView;
+  KKCheckboxView *_linkedToggle;
   NSLayoutConstraint *_intensityTrailingHalf;
   NSLayoutConstraint *_intensityTrailingFull;
 }
@@ -78,10 +81,19 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
 }
 
 - (instancetype)initWithKind:(KKSegmentEditKind)kind {
-  CGFloat h = [KKSegmentEditView contentHeightForKind:kind];
+  return [self initWithKind:kind showsLinked:NO];
+}
+
+- (instancetype)initWithKind:(KKSegmentEditKind)kind
+                 showsLinked:(BOOL)showsLinked {
+  BOOL actuallyShows = showsLinked && kind == KKSegmentEditKindHold;
+  CGFloat h = [KKSegmentEditView contentHeightForKind:kind
+                                          showsLinked:actuallyShows];
   self = [super initWithFrame:NSMakeRect(0, 0, kWidth, h)];
   if (self) {
     _kind = kind;
+    _showsLinked = actuallyShows;
+    _linked = YES;
     _intensity = 0.5;
     _frequency = 0.5;
     self.wantsLayer = YES;
@@ -94,11 +106,15 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
   return kWidth;
 }
 
-+ (CGFloat)contentHeightForKind:(KKSegmentEditKind)kind {
++ (CGFloat)contentHeightForKind:(KKSegmentEditKind)kind
+                    showsLinked:(BOOL)showsLinked {
   CGFloat h =
       2 * kVPadding + kPillHeight + kRowGap + kSliderHeight + kTickHeight;
-  if (kind == KKSegmentEditKindHold)
+  if (kind == KKSegmentEditKindHold) {
+    if (showsLinked)
+      h += kRowGap + kLinkedHeight;
     h += kRowGap + kSeedHeight;
+  }
   return h;
 }
 
@@ -228,6 +244,51 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
   ]];
 
   if (_kind == KKSegmentEditKindHold) {
+    NSView *seedTopAnchorView = (NSView *)_intensityTicks;
+
+    if (_showsLinked) {
+      NSTextField *linkedLabel = [NSTextField labelWithString:@"Linked"];
+      linkedLabel.font = [NSFont systemFontOfSize:11.0
+                                           weight:NSFontWeightMedium];
+      linkedLabel.textColor = [NSColor inspectorLabel];
+      linkedLabel.translatesAutoresizingMaskIntoConstraints = NO;
+      linkedLabel.toolTip = @"Maintain proportions across components (e.g. "
+                            @"keep Radius X/Y aspect-locked through wobble)";
+      [self addSubview:linkedLabel];
+
+      _linkedToggle = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
+      _linkedToggle.translatesAutoresizingMaskIntoConstraints = NO;
+      _linkedToggle.isChecked = _linked;
+      _linkedToggle.toolTip = linkedLabel.toolTip;
+      _linkedToggle.onToggle = ^(BOOL isOn) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self)
+          return;
+        self->_linked = isOn;
+        if (self.onLinkedChanged)
+          self.onLinkedChanged(isOn);
+      };
+      [self addSubview:_linkedToggle];
+
+      [NSLayoutConstraint activateConstraints:@[
+        [linkedLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                                  constant:kHPadding],
+        [linkedLabel.centerYAnchor
+            constraintEqualToAnchor:_linkedToggle.centerYAnchor],
+
+        [_linkedToggle.trailingAnchor
+            constraintEqualToAnchor:self.trailingAnchor
+                           constant:-kHPadding],
+        [_linkedToggle.topAnchor
+            constraintEqualToAnchor:_intensityTicks.bottomAnchor
+                           constant:kRowGap],
+        [_linkedToggle.widthAnchor constraintEqualToConstant:kLinkedHeight],
+        [_linkedToggle.heightAnchor constraintEqualToConstant:kLinkedHeight],
+      ]];
+
+      seedTopAnchorView = _linkedToggle;
+    }
+
     NSTextField *seedLabel = [NSTextField labelWithString:@"Seed"];
     seedLabel.font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightMedium];
     seedLabel.textColor = [NSColor inspectorLabel];
@@ -260,12 +321,18 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
 
       [_seedView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
                                                constant:-kHPadding],
-      [_seedView.topAnchor constraintEqualToAnchor:_intensityTicks.bottomAnchor
-                                          constant:kRowGap],
+      [_seedView.topAnchor
+          constraintEqualToAnchor:seedTopAnchorView.bottomAnchor
+                         constant:kRowGap],
       [_seedView.heightAnchor constraintEqualToConstant:kSeedHeight],
       [_seedView.widthAnchor constraintEqualToConstant:120.0],
     ]];
   }
+}
+
+- (void)setLinked:(BOOL)linked {
+  _linked = linked;
+  _linkedToggle.isChecked = linked;
 }
 
 - (void)setCurveType:(NSInteger)curveType {

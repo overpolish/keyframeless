@@ -14,6 +14,7 @@ static NSString *const kKeyHoldEffect = @"he";
 static NSString *const kKeyIntensity = @"int";
 static NSString *const kKeyFrequency = @"freq";
 static NSString *const kKeySeed = @"seed";
+static NSString *const kKeyLinked = @"link";
 static NSString *const kKeyLockedSec = @"lock";
 
 static NSString *const kKeyVersion = @"v";
@@ -40,6 +41,7 @@ static const NSInteger kCurrentVersion = 3;
     kKeyIntensity : @(self.intensity),
     kKeyFrequency : @(self.frequency),
     kKeySeed : @(self.seed),
+    kKeyLinked : @(self.linked),
     kKeyLockedSec : @(self.lockedDurationSeconds),
   };
 }
@@ -67,6 +69,8 @@ static const NSInteger kCurrentVersion = 3;
   s.intensity = [dict[kKeyIntensity] doubleValue];
   s.frequency = [dict[kKeyFrequency] doubleValue];
   s.seed = (uint32_t)[dict[kKeySeed] unsignedIntegerValue];
+  NSNumber *linkedNum = dict[kKeyLinked];
+  s.linked = linkedNum ? linkedNum.boolValue : YES;
   s.lockedDurationSeconds = [dict[kKeyLockedSec] doubleValue];
   return s;
 }

@@ -5,6 +5,7 @@
 
 #import "../Math/KKEasing.h"
 #import "../Math/KKTimingStage.h"
+#import "../Views/KKAnimatableProperty.h"
 #import "../Views/KKSegmentEditView.h"
 #import "../Views/StageSequencer/KKStageSequencerView.h"
 #import "KKConstants.h"
@@ -96,6 +97,13 @@
                                        }];
     weakContent.seed = newSeed;
   };
+  content.onLinkedChanged = ^(BOOL linked) {
+    [weakSelf _mutateMultiStageSegmentAtLane:laneIndex
+                                  segmentIdx:segmentIndex
+                                       using:^(KKTimingSegment *s) {
+                                         s.linked = linked;
+                                       }];
+  };
 }
 
 - (KKSegmentEditView *)_segmentEditViewForSegment:(KKTimingSegment *)seg
@@ -108,11 +116,25 @@
                             ? (NSInteger)seg.holdEffect
                             : (NSInteger)seg.easing;
 
-  KKSegmentEditView *content = [[KKSegmentEditView alloc] initWithKind:kind];
+  // Linked toggle is only meaningful on hold segments whose lane has more
+  // than one scalar component (e.g. Position, Radius X/Y).
+  BOOL showsLinked = NO;
+  if (kind == KKSegmentEditKindHold) {
+    for (KKAnimatableProperty *p in [self animatableProperties]) {
+      if ([p.label isEqualToString:lane.propertyLabel]) {
+        showsLinked = p.valueCount > 1;
+        break;
+      }
+    }
+  }
+
+  KKSegmentEditView *content =
+      [[KKSegmentEditView alloc] initWithKind:kind showsLinked:showsLinked];
   content.curveType = curveType;
   content.intensity = seg.intensity;
   content.frequency = seg.frequency;
   content.seed = seg.seed;
+  content.linked = seg.linked;
   content.animateOut = (kind == KKSegmentEditKindTransition) &&
                        (segmentIndex == (NSInteger)lane.segments.count - 1);
   return content;

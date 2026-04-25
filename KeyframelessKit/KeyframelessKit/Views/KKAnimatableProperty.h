@@ -26,6 +26,8 @@ typedef NS_ENUM(NSInteger, KKAnimatableParamKind) {
   /// segment — the multi-stage interp path falls back to LUT-lerp when
   /// stop counts don't match across a transition.
   KKAnimatableParamKindGradient = 2,
+  /// FxPlug point parameter: 1 native param → 2 scalar values [X, Y].
+  KKAnimatableParamKindPoint = 3,
 };
 
 @interface KKAnimatableProperty : NSObject

@@ -23,6 +23,10 @@ typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
 @property(nonatomic) double intensity;
 @property(nonatomic) double frequency;
 @property(nonatomic) uint32_t seed;
+/// Whether the linked toggle row is shown (hold segments on multi-component
+/// lanes only). When hidden the control has no effect on layout.
+@property(nonatomic, readonly) BOOL showsLinked;
+@property(nonatomic) BOOL linked;
 /// When YES, pills render easing curves with time mirrored — matches the
 /// animate-out rendering convention.
 @property(nonatomic) BOOL animateOut;
@@ -33,12 +37,16 @@ typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
 @property(nonatomic, copy, nullable) void (^onFrequencyChanged)(double value);
 @property(nonatomic, copy, nullable) void (^onSeedChanged)(uint32_t newSeed);
 @property(nonatomic, copy, nullable) void (^onSeedReroll)(void);
+@property(nonatomic, copy, nullable) void (^onLinkedChanged)(BOOL linked);
 
 - (instancetype)initWithKind:(KKSegmentEditKind)kind;
+- (instancetype)initWithKind:(KKSegmentEditKind)kind
+                 showsLinked:(BOOL)showsLinked;
 
 /// Computed height required for the view's content. Caller sizes the
 /// containing popover accordingly.
-+ (CGFloat)contentHeightForKind:(KKSegmentEditKind)kind;
++ (CGFloat)contentHeightForKind:(KKSegmentEditKind)kind
+                    showsLinked:(BOOL)showsLinked;
 + (CGFloat)contentWidth;
 
 @end
