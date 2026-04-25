@@ -14,31 +14,14 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface MagicMovePlugin ()
 @property(nonatomic, strong) KKLog *log;
-@property(nonatomic, weak, nullable) KKCustomGroupHeaderView *pointAHeader;
-@property(nonatomic, weak, nullable) KKCustomGroupHeaderView *pointBHeader;
-@property(nonatomic, weak, nullable) KKCustomGroupHeaderView *driftHeader;
-@property(nonatomic, weak, nullable) KKCustomGroupHeaderView *exitHeader;
 @property(nonatomic, weak, nullable) KKAlertStackView *alertStackView;
-@property(nonatomic, weak, nullable) KKAlertView *previewAlertView;
-@property(nonatomic, weak, nullable) KKAlertView *hideOSCAlertView;
 @end
 
 @interface MagicMovePlugin (Parameters)
-- (BOOL)addPointSectionWithName:(NSString *)name
-                          group:(MagicMoveGroupIDs)group
-                       defaultX:(double)defaultX
-                       defaultY:(double)defaultY
-                  defaultHidden:(BOOL)defaultHidden
-                    customGroup:(BOOL)customGroup
-                        withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
-                          error:(NSError **)error;
 - (BOOL)addParametersWithError:(NSError **)error;
 @end
 
 @interface MagicMovePlugin (Visibility)
-- (void)setFlags:(FxParameterFlags)flags
-        forGroup:(MagicMoveGroupIDs)group
-         withAPI:(id<FxParameterSettingAPI_v5>)api;
 - (void)updateParameterVisibilityAtTime:(CMTime)time;
 @end
 
@@ -47,11 +30,9 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 @interface MagicMovePlugin (Animation)
-- (MagicMovePointValues)readPointValues:(MagicMovePointParamIDs)ids
-                                 atTime:(CMTime)time
-                                withAPI:(id<FxParameterRetrievalAPI_v6>)api;
-- (KKBezierPath *)readPath:(UInt32)paramID
-                   withAPI:(id<FxParameterRetrievalAPI_v6>)api;
+- (MagicMovePointValues)readPointValuesAtTime:(CMTime)time
+                                      withAPI:
+                                          (id<FxParameterRetrievalAPI_v6>)api;
 - (BOOL)pluginState:(NSData *_Nullable *_Nonnull)pluginState
              atTime:(CMTime)renderTime
             quality:(FxQuality)qualityLevel
