@@ -132,6 +132,8 @@
               activePart:(NSInteger)activePart
         destinationImage:(FxImageTile *)destinationImage
                   atTime:(CMTime)time {
+  [KKPlugin multiStageDrawOSCTickForAPI:self.apiManager atTime:time];
+
   [self encodeRenderCommandsForDestinationImage:destinationImage
                                  canvasPosition:CGPointZero
                                clearDestination:YES
@@ -152,23 +154,28 @@
   CGEventFlags flags =
       CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
   BOOL optHeld = (flags & kCGEventFlagMaskAlternate) != 0;
-  BOOL showRotXY = optHeld || _rotXRingDragging || _rotYRingDragging ||
-                   _rotXRingHovered || _rotYRingHovered;
 
-  if (showRotXY) {
-    _rotXRing.center = center;
-    [_rotXRing drawAtCanvasPosition:center
-                          isHovered:_rotXRingHovered
-                           isActive:_rotXRingDragging
-                   destinationImage:destinationImage
-                             atTime:time];
-    _rotYRing.center = center;
-    [_rotYRing drawAtCanvasPosition:center
-                          isHovered:_rotYRingHovered
-                           isActive:_rotYRingDragging
-                   destinationImage:destinationImage
-                             atTime:time];
-  } else {
+  BOOL positionVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                                        label:@"Position"];
+  BOOL scaleVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                                     label:@"Scale"];
+  BOOL rotZVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                                    label:@"Rotation Z"];
+  BOOL rotXVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                                    label:@"Rotation X"];
+  BOOL rotYVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                                    label:@"Rotation Y"];
+  BOOL opacityVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                                       label:@"Opacity"];
+
+  BOOL rotXEnabled =
+      rotXVisible || optHeld || _rotXRingDragging || _rotXRingHovered;
+  BOOL rotYEnabled =
+      rotYVisible || optHeld || _rotYRingDragging || _rotYRingHovered;
+  BOOL showRotX = rotXEnabled;
+  BOOL showRotY = rotYEnabled;
+
+  if (scaleVisible) {
     [self updateScaleRingAtTime:time];
     _scaleRing.center = center;
     [_scaleRing drawAtCanvasPosition:center
@@ -176,7 +183,9 @@
                             isActive:_scaleRingDragging
                     destinationImage:destinationImage
                               atTime:time];
+  }
 
+  if (rotZVisible) {
     float rotAngle = [self floatValueForParam:kParamRotation atTime:time];
     _rot.center = center;
     _rot.angle = rotAngle;
@@ -185,6 +194,24 @@
                       isActive:_rotDragging
               destinationImage:destinationImage
                         atTime:time];
+  }
+
+  if (showRotX) {
+    _rotXRing.center = center;
+    [_rotXRing drawAtCanvasPosition:center
+                          isHovered:_rotXRingHovered
+                           isActive:_rotXRingDragging
+                   destinationImage:destinationImage
+                             atTime:time];
+  }
+
+  if (showRotY) {
+    _rotYRing.center = center;
+    [_rotYRing drawAtCanvasPosition:center
+                          isHovered:_rotYRingHovered
+                           isActive:_rotYRingDragging
+                   destinationImage:destinationImage
+                             atTime:time];
   }
 
   // Update icon glyphs based on opacity / scale.
@@ -219,18 +246,22 @@
                  arcOuter:arcOuter
                 opacityAt:&opacityCenter
                   scaleAt:&scaleCenter];
-  [_opacityIcon drawAtCanvasPosition:opacityCenter
+  if (opacityVisible)
+    [_opacityIcon drawAtCanvasPosition:opacityCenter
+                      destinationImage:destinationImage];
+  if (scaleVisible)
+    [_scaleIcon drawAtCanvasPosition:scaleCenter
                     destinationImage:destinationImage];
-  [_scaleIcon drawAtCanvasPosition:scaleCenter
-                  destinationImage:destinationImage];
 
-  // Position handle (arc + label) follows the position param.
-  self.fillAlpha = (opacity < 1.0) ? 0.25f : 1.0f;
-  [self drawAtCanvasPosition:posPos
-                   isHovered:_arcHovered
-                    isActive:_arcDragging
-            destinationImage:destinationImage
-                      atTime:time];
+  // Position handle follows the position param.
+  if (positionVisible) {
+    self.fillAlpha = (opacity < 1.0) ? 0.25f : 1.0f;
+    [self drawAtCanvasPosition:posPos
+                     isHovered:_arcHovered
+                      isActive:_arcDragging
+              destinationImage:destinationImage
+                        atTime:time];
+  }
 
   // Anchor square is independent.
   CGPoint anchorCanvas = [self canvasPositionForParam:kParamAnchorPoint
@@ -262,15 +293,32 @@
                 opacityAt:&opacityCenter
                   scaleAt:&scaleCenter];
 
-  if ([_opacityIcon hitTestAtMousePositionX:positionX
-                                  positionY:positionY
-                                     center:opacityCenter]) {
+  BOOL positionVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                                        label:@"Position"];
+  BOOL scaleVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                                     label:@"Scale"];
+  BOOL rotZVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                                    label:@"Rotation Z"];
+  BOOL rotXVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                                    label:@"Rotation X"];
+  BOOL rotYVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                                    label:@"Rotation Y"];
+  BOOL opacityVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                                       label:@"Opacity"];
+
+  CGEventFlags flags =
+      CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+  BOOL optHeld = (flags & kCGEventFlagMaskAlternate) != 0;
+
+  if (opacityVisible && [_opacityIcon hitTestAtMousePositionX:positionX
+                                                    positionY:positionY
+                                                       center:opacityCenter]) {
     *activePart = kOSCOpacityIconPart;
     return;
   }
-  if ([_scaleIcon hitTestAtMousePositionX:positionX
-                                positionY:positionY
-                                   center:scaleCenter]) {
+  if (scaleVisible && [_scaleIcon hitTestAtMousePositionX:positionX
+                                                positionY:positionY
+                                                   center:scaleCenter]) {
     *activePart = kOSCScaleIconPart;
     return;
   }
@@ -285,12 +333,8 @@
     return;
   }
 
-  // Centered rotation / scale ring cluster.
-  CGEventFlags flags =
-      CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
-  BOOL optHeld = (flags & kCGEventFlagMaskAlternate) != 0;
-
-  if (optHeld) {
+  // Rotation X/Y rings — interactive when their lane is on, or Opt held.
+  if (rotXVisible || optHeld) {
     _rotXRing.center = center;
     if ([_rotXRing hitTestAtMousePositionX:positionX
                                  positionY:positionY
@@ -299,6 +343,8 @@
       *activePart = kOSCRotXRingPart;
       return;
     }
+  }
+  if (rotYVisible || optHeld) {
     _rotYRing.center = center;
     if ([_rotYRing hitTestAtMousePositionX:positionX
                                  positionY:positionY
@@ -307,7 +353,9 @@
       *activePart = kOSCRotYRingPart;
       return;
     }
-  } else {
+  }
+
+  if (scaleVisible) {
     [self updateScaleRingAtTime:time];
     _scaleRing.center = center;
     if ([_scaleRing hitTestAtMousePositionX:positionX
@@ -317,7 +365,9 @@
       *activePart = kOSCScaleRingPart;
       return;
     }
+  }
 
+  if (rotZVisible) {
     _rot.center = center;
     _rot.angle = [self floatValueForParam:kParamRotation atTime:time];
     if ([_rot hitTestAtMousePositionX:positionX
@@ -330,12 +380,14 @@
   }
 
   // Position arc.
-  CGPoint posPos = [self oscPositionAtTime:time];
-  double dx = positionX - posPos.x;
-  double dy = positionY - posPos.y;
-  if (sqrt(dx * dx + dy * dy) < self.hitRadius) {
-    _arcHovered = YES;
-    *activePart = kOSCPositionPart;
+  if (positionVisible) {
+    CGPoint posPos = [self oscPositionAtTime:time];
+    double dx = positionX - posPos.x;
+    double dy = positionY - posPos.y;
+    if (sqrt(dx * dx + dy * dy) < self.hitRadius) {
+      _arcHovered = YES;
+      *activePart = kOSCPositionPart;
+    }
   }
 }
 

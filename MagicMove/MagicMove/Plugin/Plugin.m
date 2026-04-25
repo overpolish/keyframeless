@@ -38,7 +38,9 @@
                   atTime:(CMTime)time
                    error:(NSError **)error {
   [self handleLinkedParameterChanged:parameterID atTime:time];
+  [self updateTimingParameterVisibility];
   [self updateParameterVisibilityAtTime:time];
+  [self multiStageHandleParameterChanged:parameterID atTime:time];
   return YES;
 }
 

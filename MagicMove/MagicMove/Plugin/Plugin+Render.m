@@ -17,6 +17,10 @@
                    pluginState:(NSData *)pluginState
                         atTime:(CMTime)renderTime
                          error:(NSError *_Nullable *)outError {
+  [KKPlugin multiStageRenderTickForAPI:self.apiManager
+                                atTime:renderTime
+                                sender:self];
+
   if (!pluginState)
     return NO;
 

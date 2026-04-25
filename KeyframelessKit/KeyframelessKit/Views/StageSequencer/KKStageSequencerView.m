@@ -65,6 +65,17 @@
     [self renderLanes];
 }
 
+- (void)setLaneComponentKindsByLabel:
+    (NSDictionary<NSString *, NSArray<NSNumber *> *> *)
+        laneComponentKindsByLabel {
+  if ([_laneComponentKindsByLabel
+          isEqualToDictionary:laneComponentKindsByLabel])
+    return;
+  _laneComponentKindsByLabel = [laneComponentKindsByLabel copy];
+  if (!_dragging && !_dragMoving && !_dragLaneMoving)
+    [self renderLanes];
+}
+
 - (NSSize)intrinsicContentSize {
   return NSMakeSize(NSViewNoIntrinsicMetric,
                     [KKStageSequencerView heightForLaneCount:_lanes.count]);

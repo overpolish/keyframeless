@@ -26,6 +26,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable)
     NSDictionary<NSString *, NSNumber *> *laneKindsByLabel;
 
+/// Per-component value kinds, expanded so each entry corresponds to one
+/// scalar in the segment's `values` array (e.g. a Point kind contributes
+/// two `KKAnimatableParamKindPoint` entries). Used by the graph renderer
+/// to skip non-numeric components like Bool.
+@property(nonatomic, copy, nullable)
+    NSDictionary<NSString *, NSArray<NSNumber *> *> *laneComponentKindsByLabel;
+
 /// Property labels whose lanes have an associated on-screen control.
 /// The sequencer stamps `lane.hasOSC` automatically whenever lanes are
 /// assigned; plugins set this once at setup and never again.

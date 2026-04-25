@@ -5,6 +5,7 @@
 
 #import "../../Math/KKEasing.h"
 #import "../../Style/NSColor+KKColors.h"
+#import "../KKAnimatableProperty.h"
 #import "KKStageSequencerView_Private.h"
 
 #pragma clang diagnostic push
@@ -137,10 +138,16 @@ static NSColor *_componentTint(NSString *propertyLabel, NSUInteger component,
   for (KKTimingSegment *seg in lane.segments)
     componentCount = MAX(componentCount, seg.values.count);
 
+  NSArray<NSNumber *> *rangeKinds =
+      self.laneComponentKindsByLabel[lane.propertyLabel];
+
   // Compute dynamic value range across all components (including transition
   // overshoots from Elastic/Bounce) so every component shares the same Y scale.
   double minVal = 0, maxVal = 0;
   for (NSUInteger c = 0; c < componentCount; c++) {
+    if (c < rangeKinds.count &&
+        rangeKinds[c].integerValue == KKAnimatableParamKindBool)
+      continue;
     for (KKTimingSegment *seg in lane.segments) {
       double v = _segValueAt(seg, c);
       if (v < minVal)
@@ -191,7 +198,14 @@ static NSColor *_componentTint(NSString *propertyLabel, NSUInteger component,
     return (v - minVal) / valRange;
   };
 
+  NSArray<NSNumber *> *componentKinds =
+      self.laneComponentKindsByLabel[lane.propertyLabel];
+
   for (NSUInteger c = 0; c < componentCount; c++) {
+    if (c < componentKinds.count &&
+        componentKinds[c].integerValue == KKAnimatableParamKindBool)
+      continue;
+
     NSPoint lastPoint = NSZeroPoint;
     BOOL hasLast = NO;
 

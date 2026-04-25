@@ -17,6 +17,7 @@ static const UInt32 kParamScaleY = 5;
 static const UInt32 kParamOpacity = 6;
 static const UInt32 kParamRotationX = 8;
 static const UInt32 kParamRotationY = 9;
+static const UInt32 kParamRotateWithMotion = 10;
 
 // Anchor (601)
 static const UInt32 kParamAnchorPoint = 601;
