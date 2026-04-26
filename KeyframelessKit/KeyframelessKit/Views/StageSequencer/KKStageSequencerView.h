@@ -47,6 +47,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// Callbacks.
 @property(nonatomic, copy, nullable) void (^onSegmentSelected)
     (NSInteger laneIndex, NSInteger segmentIndex);
+/// Called when user shift-clicks a lane body. Selects one segment per lane —
+/// the one containing the click fraction — so subsequent inspector edits
+/// apply to the whole vertical slice.
+@property(nonatomic, copy, nullable) void (^onAllLanesSegmentSelected)
+    (double position);
 @property(nonatomic, copy, nullable) void (^onLaneToggled)
     (NSInteger laneIndex, BOOL enabled);
 /// Fired when the user clicks the lane's OSC visibility icon. Only fires
@@ -57,9 +62,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// The callback receives the full updated lane (caller should persist).
 @property(nonatomic, copy, nullable) void (^onLaneChanged)
     (NSInteger laneIndex, KKTimingLane *updatedLane);
+/// Called after a bulk drag finishes. Provides every affected lane in one
+/// shot so the plugin can persist the whole change in a single action —
+/// avoids stale-read races between back-to-back `onLaneChanged` calls.
+@property(nonatomic, copy, nullable) void (^onLanesChanged)
+    (NSArray<NSNumber *> *laneIndexes, NSArray<KKTimingLane *> *updatedLanes);
 /// Called when user double-clicks to add a segment.
 @property(nonatomic, copy, nullable) void (^onSegmentAdded)
     (NSInteger laneIndex, double position);
+/// Called when user shift+double-clicks to add a split across every lane at
+/// the same fraction (snapped to the playhead when close).
+@property(nonatomic, copy, nullable) void (^onAllLanesSegmentAdded)
+    (double position);
 /// Called when user requests segment removal (Cmd-click).
 @property(nonatomic, copy, nullable) void (^onSegmentRemoved)
     (NSInteger laneIndex, NSInteger segmentIndex);
@@ -67,15 +81,32 @@ NS_ASSUME_NONNULL_BEGIN
 /// (hold ↔ transition).
 @property(nonatomic, copy, nullable) void (^onSegmentTypeToggled)
     (NSInteger laneIndex, NSInteger segmentIndex);
+/// Called when user shift+right-clicks. Toggles the type (hold ↔ transition)
+/// of the segment containing the click fraction in every lane, so each
+/// segment flips independently rather than collapsing to one type.
+@property(nonatomic, copy, nullable) void (^onAllLanesSegmentTypesToggled)
+    (double position);
 /// Called when user control-clicks a segment to toggle its duration lock.
 /// `newLockedSeconds` is 0 to unlock, or the segment's current duration in
 /// seconds to lock. The sequencer computes this from `effectDuration`, so the
 /// plugin only has to persist the value.
 @property(nonatomic, copy, nullable) void (^onSegmentLockToggled)
     (NSInteger laneIndex, NSInteger segmentIndex, double newLockedSeconds);
+/// Called when user shift+control-clicks a segment to bulk-toggle locks
+/// across every lane. `position` is the click fraction; `lock` is the
+/// target state (YES = lock all lanes' segments under the fraction, NO =
+/// unlock). Plugin computes per-lane locked duration from each segment's
+/// own width × `effectDuration`.
+@property(nonatomic, copy, nullable) void (^onAllLanesSegmentLockToggled)
+    (double position, BOOL lock);
 /// Called when the edit button above a segment is clicked. The anchor rect
 /// is in this view's coordinate space — use it to anchor a popover.
 @property(nonatomic, copy, nullable) void (^onSegmentEditRequested)
+    (NSInteger laneIndex, NSInteger segmentIndex, NSRect anchorRect);
+/// Called when the user shift+clicks an edit button. The popover should
+/// apply changes to every same-type segment under the playhead (snapshot at
+/// open time).
+@property(nonatomic, copy, nullable) void (^onAllLanesSegmentEditRequested)
     (NSInteger laneIndex, NSInteger segmentIndex, NSRect anchorRect);
 /// Called when the user opt-drags one segment onto another in the same lane.
 /// The handler should copy `values` from the source segment to the destination

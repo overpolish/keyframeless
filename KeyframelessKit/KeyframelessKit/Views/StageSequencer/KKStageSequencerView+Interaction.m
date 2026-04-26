@@ -89,6 +89,19 @@
   [self _segmentUnderPoint:loc outLane:&laneIdx outSeg:&segIdx];
   if (laneIdx < 0 || segIdx < 0)
     return;
+
+  if (event.modifierFlags & NSEventModifierFlagShift) {
+    if (self.onAllLanesSegmentTypesToggled) {
+      CGFloat trackX, trackWidth;
+      [self _trackGeometryForWidth:NSWidth(self.bounds)
+                            trackX:&trackX
+                        trackWidth:&trackWidth];
+      double frac = [self _fracForX:loc.x trackX:trackX trackWidth:trackWidth];
+      self.onAllLanesSegmentTypesToggled(frac);
+    }
+    return;
+  }
+
   if (self.onSegmentTypeToggled)
     self.onSegmentTypeToggled(laneIdx, segIdx);
 }
@@ -103,8 +116,12 @@
                           outLane:&editLane
                            outSeg:&editSeg
                     outAnchorRect:&editRect]) {
-    if (self.onSegmentEditRequested)
+    if (event.modifierFlags & NSEventModifierFlagShift) {
+      if (self.onAllLanesSegmentEditRequested)
+        self.onAllLanesSegmentEditRequested(editLane, editSeg, editRect);
+    } else if (self.onSegmentEditRequested) {
       self.onSegmentEditRequested(editLane, editSeg, editRect);
+    }
     return;
   }
 
@@ -114,6 +131,26 @@
   [self _trackGeometryForWidth:totalWidth
                         trackX:&trackX
                     trackWidth:&trackWidth];
+
+  // Shift+double-click anywhere in the track area splits every lane at the
+  // same fraction. Handled before the per-lane loop so it works regardless of
+  // which row the click landed on.
+  if (event.clickCount == 2 &&
+      (event.modifierFlags & NSEventModifierFlagShift) && loc.x >= trackX &&
+      loc.x <= trackX + trackWidth) {
+    double clickFrac = [self _fracForX:loc.x
+                                trackX:trackX
+                            trackWidth:trackWidth];
+    clickFrac = MAX(0.0, MIN(1.0, clickFrac));
+    CGFloat playheadX = [self _xForFrac:self.playheadFraction
+                                 trackX:trackX
+                             trackWidth:trackWidth];
+    if (fabs(loc.x - playheadX) < kKSSPlayheadSnapPx)
+      clickFrac = self.playheadFraction;
+    if (self.onAllLanesSegmentAdded)
+      self.onAllLanesSegmentAdded(clickFrac);
+    return;
+  }
 
   for (NSUInteger laneIdx = 0; laneIdx < self.lanes.count; laneIdx++) {
     KKTimingLane *lane = self.lanes[laneIdx];
@@ -198,6 +235,25 @@
 }
 
 - (void)mouseDragged:(NSEvent *)event {
+  if (_pendingCtrlClick) {
+    NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+    if (fabs(loc.x - _pendingCtrlStartLoc.x) >= kKSSDragThresholdPx ||
+        fabs(loc.y - _pendingCtrlStartLoc.y) >= kKSSDragThresholdPx) {
+      KKTimingLane *lane = self.lanes[_pendingCtrlLaneIdx];
+      _dragLaneMoving = YES;
+      _dragLaneMoveStartFrac = [self _fracForX:_pendingCtrlStartLoc.x
+                                        trackX:_dragTrackX
+                                    trackWidth:_dragTrackWidth];
+      NSMutableArray *origSegs =
+          [NSMutableArray arrayWithCapacity:lane.segments.count];
+      for (KKTimingSegment *s in lane.segments)
+        [origSegs addObject:[s copy]];
+      _dragLaneMoveOrigSegs = origSegs;
+      _pendingCtrlClick = NO;
+    } else {
+      return;
+    }
+  }
   if (_dragValueCopying) {
     [self _dragValueCopyToEvent:event];
     return;
@@ -226,6 +282,8 @@
     [self _applySegmentMoveWithFrac:newFrac
                         snapEnabled:snapEnabled
                               lanes:lanes];
+  } else if (_bulkEdgeDrag) {
+    [self _applyBulkEdgeDragWithFrac:newFrac lanes:lanes];
   } else {
     [self _applyEdgeDragWithFrac:newFrac snapEnabled:snapEnabled lanes:lanes];
   }
@@ -234,6 +292,23 @@
 }
 
 - (void)mouseUp:(NSEvent *)event {
+  if (_pendingCtrlClick) {
+    NSInteger laneIdx = _pendingCtrlLaneIdx;
+    NSInteger segIdx = _pendingCtrlSegIdx;
+    _pendingCtrlClick = NO;
+    if ((NSUInteger)laneIdx < self.lanes.count) {
+      KKTimingLane *lane = self.lanes[laneIdx];
+      if ((NSUInteger)segIdx < lane.segments.count &&
+          self.onSegmentLockToggled) {
+        KKTimingSegment *seg = lane.segments[segIdx];
+        double newLocked = (seg.lockedDurationSeconds > 0)
+                               ? 0.0
+                               : (seg.end - seg.start) * self.effectDuration;
+        self.onSegmentLockToggled(laneIdx, segIdx, newLocked);
+      }
+    }
+    return;
+  }
   BOOL wasDragging =
       _dragValueCopying || _dragLaneMoving || _dragMoving || _dragging;
   if (_dragValueCopying) {
@@ -270,12 +345,31 @@
         self.onLaneChanged)
       self.onLaneChanged(_dragLaneIdx, self.lanes[_dragLaneIdx]);
   } else if (_dragging) {
+    BOOL wasBulkEdge = _bulkEdgeDrag;
+    NSArray<NSValue *> *bulkTargets = _bulkEdgeTargets;
     _dragging = NO;
+    _bulkEdgeDrag = NO;
+    _bulkEdgeAlign = NO;
+    _bulkEdgeTargets = nil;
     [[NSCursor arrowCursor] set];
     _hoveringEdge = NO;
     _snapActive = NO;
-    if ((NSUInteger)_dragLaneIdx < self.lanes.count && self.onLaneChanged)
+    if (wasBulkEdge) {
+      NSMutableArray<NSNumber *> *idxs = [NSMutableArray array];
+      NSMutableArray<KKTimingLane *> *updated = [NSMutableArray array];
+      for (NSValue *v in bulkTargets) {
+        NSInteger li = (NSInteger)v.rectValue.origin.x;
+        if ((NSUInteger)li < self.lanes.count) {
+          [idxs addObject:@(li)];
+          [updated addObject:self.lanes[li]];
+        }
+      }
+      if (self.onLanesChanged && idxs.count > 0)
+        self.onLanesChanged(idxs, updated);
+    } else if ((NSUInteger)_dragLaneIdx < self.lanes.count &&
+               self.onLaneChanged) {
       self.onLaneChanged(_dragLaneIdx, self.lanes[_dragLaneIdx]);
+    }
   }
   if (wasDragging)
     [self renderLanes];

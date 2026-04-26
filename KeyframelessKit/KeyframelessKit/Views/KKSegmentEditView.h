@@ -30,6 +30,9 @@ typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
 /// When YES, pills render easing curves with time mirrored — matches the
 /// animate-out rendering convention.
 @property(nonatomic) BOOL animateOut;
+/// Whether the view was constructed in bulk mode (shows a "Bulk Edit"
+/// header row).
+@property(nonatomic, readonly) BOOL bulkHeader;
 
 @property(nonatomic, copy, nullable) void (^onCurveTypeChanged)
     (NSInteger curveType);
@@ -42,11 +45,15 @@ typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
 - (instancetype)initWithKind:(KKSegmentEditKind)kind;
 - (instancetype)initWithKind:(KKSegmentEditKind)kind
                  showsLinked:(BOOL)showsLinked;
+- (instancetype)initWithKind:(KKSegmentEditKind)kind
+                 showsLinked:(BOOL)showsLinked
+                  bulkHeader:(BOOL)bulkHeader;
 
 /// Computed height required for the view's content. Caller sizes the
 /// containing popover accordingly.
 + (CGFloat)contentHeightForKind:(KKSegmentEditKind)kind
-                    showsLinked:(BOOL)showsLinked;
+                    showsLinked:(BOOL)showsLinked
+                     bulkHeader:(BOOL)bulkHeader;
 + (CGFloat)contentWidth;
 
 @end

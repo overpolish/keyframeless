@@ -92,9 +92,64 @@
     _dragTrackX = trackX;
     _dragTrackWidth = trackWidth;
     [[NSCursor resizeLeftRightCursor] set];
+
+    NSEvent *cur = [NSApp currentEvent];
+    if ((cur.modifierFlags & NSEventModifierFlagShift)) {
+      [self _captureBulkEdgeTargetsForOrigFrac:(onLeft ? seg.start : seg.end)
+                                   leadingEdge:onLeft];
+      _bulkEdgeAlign = (cur.modifierFlags & NSEventModifierFlagOption) != 0;
+    }
     return YES;
   }
   return NO;
+}
+
+/// Walk every lane and pick the boundary closest to `origFrac` (interior
+/// boundaries only — frac 0 and 1 don't count). Stored alongside the dragged
+/// boundary so a Shift+edge-drag moves the corresponding boundary in each
+/// lane by the same offset.
+- (void)_captureBulkEdgeTargetsForOrigFrac:(double)origFrac
+                               leadingEdge:(BOOL)leadingEdge {
+  NSMutableArray<NSValue *> *targets = [NSMutableArray array];
+  for (NSUInteger li = 0; li < self.lanes.count; li++) {
+    KKTimingLane *lane = self.lanes[li];
+    if (lane.segments.count < 2)
+      continue;
+    NSInteger bestB = -1;
+    double bestDelta = INFINITY;
+    BOOL bestIsLeftSide = NO;
+    for (NSUInteger b = 1; b < lane.segments.count; b++) {
+      double frac = lane.segments[b].start;
+      double d = fabs(frac - origFrac);
+      BOOL isLeftSide = (frac <= origFrac);
+      if (d + 1e-9 < bestDelta) {
+        bestDelta = d;
+        bestB = (NSInteger)b;
+        bestIsLeftSide = isLeftSide;
+      } else if (fabs(d - bestDelta) < 1e-9) {
+        // Tiebreak: prefer the side matching the dragged edge type.
+        BOOL prefersLeft = leadingEdge;
+        if (prefersLeft && isLeftSide && !bestIsLeftSide) {
+          bestB = (NSInteger)b;
+          bestIsLeftSide = isLeftSide;
+        } else if (!prefersLeft && !isLeftSide && bestIsLeftSide) {
+          bestB = (NSInteger)b;
+          bestIsLeftSide = isLeftSide;
+        }
+      }
+    }
+    if (bestB < 0)
+      continue;
+    double frac = lane.segments[bestB].start;
+    [targets
+        addObject:[NSValue valueWithRect:NSMakeRect((CGFloat)li, (CGFloat)bestB,
+                                                    frac, 0)]];
+  }
+  if (targets.count == 0)
+    return;
+  _bulkEdgeDrag = YES;
+  _bulkEdgeOrigFrac = origFrac;
+  _bulkEdgeTargets = targets;
 }
 
 /// Handle click inside a segment body: Cmd-click delete, Option-drag lane,
@@ -116,15 +171,31 @@
     if (loc.x < segLeft || loc.x > segRight)
       continue;
 
-    if (event.modifierFlags & NSEventModifierFlagShift) {
-      // Shift+click a segment body → toggle duration lock. Fires on
-      // mouseDown rather than mouseUp so it doesn't compete with the
-      // in-drag "shift disables snap" behaviour on edge resize.
-      if (self.onSegmentLockToggled) {
-        double newLocked = (seg.lockedDurationSeconds > 0)
-                               ? 0.0
-                               : (seg.end - seg.start) * self.effectDuration;
-        self.onSegmentLockToggled(laneIdx, segIdx, newLocked);
+    NSEventModifierFlags shiftCtrl =
+        NSEventModifierFlagShift | NSEventModifierFlagControl;
+    if ((event.modifierFlags & shiftCtrl) == shiftCtrl) {
+      if (self.onAllLanesSegmentLockToggled) {
+        double frac = [self _fracForX:loc.x
+                               trackX:trackX
+                           trackWidth:trackWidth];
+        BOOL lock = (seg.lockedDurationSeconds == 0);
+        self.onAllLanesSegmentLockToggled(frac, lock);
+      }
+      return YES;
+    }
+
+    // Plain shift+click (no other modifiers) → bulk-select one segment per
+    // lane at the click fraction. Must check after shift+ctrl so the lock
+    // gesture wins.
+    if ((event.modifierFlags & NSEventModifierFlagShift) &&
+        !(event.modifierFlags &
+          (NSEventModifierFlagCommand | NSEventModifierFlagOption |
+           NSEventModifierFlagControl))) {
+      if (self.onAllLanesSegmentSelected) {
+        double frac = [self _fracForX:loc.x
+                               trackX:trackX
+                           trackWidth:trackWidth];
+        self.onAllLanesSegmentSelected(frac);
       }
       return YES;
     }
@@ -149,18 +220,15 @@
     }
 
     if (event.modifierFlags & NSEventModifierFlagControl) {
-      _dragLaneMoving = YES;
+      // Defer the lane-move until the cursor passes the drag threshold.
+      // A pure click (mouseUp before threshold) becomes a lock toggle.
+      _pendingCtrlClick = YES;
+      _pendingCtrlLaneIdx = (NSInteger)laneIdx;
+      _pendingCtrlSegIdx = (NSInteger)segIdx;
+      _pendingCtrlStartLoc = loc;
       _dragLaneIdx = laneIdx;
       _dragTrackX = trackX;
       _dragTrackWidth = trackWidth;
-      _dragLaneMoveStartFrac = [self _fracForX:loc.x
-                                        trackX:trackX
-                                    trackWidth:trackWidth];
-      NSMutableArray *origSegs =
-          [NSMutableArray arrayWithCapacity:lane.segments.count];
-      for (KKTimingSegment *s in lane.segments)
-        [origSegs addObject:[s copy]];
-      _dragLaneMoveOrigSegs = origSegs;
       _hoverSegLaneIdx = -1;
       _hoverSegSegIdx = -1;
       return YES;
@@ -437,6 +505,72 @@
   if (didSnap && fabs(newFrac - snapTarget) < 1e-6) {
     _snapActive = YES;
     _snapFrac = snapTarget;
+  }
+}
+
+- (void)_applyBulkEdgeDragWithFrac:(double)newFrac
+                             lanes:(NSMutableArray<KKTimingLane *> *)lanes {
+  double minPx = kKSSMinSegmentPx / (_dragTrackWidth * _zoom);
+  double minFrac = MAX(kKSSMinSegmentFrac, minPx);
+
+  // Offset mode: group stops when any lane hits min-length, so per-lane
+  // offsets stay locked. Align mode: each lane independently clamps to its
+  // own [leftStart+minFrac, rightEnd-minFrac] window so the dragged frac
+  // becomes a target rather than a uniform offset.
+  double offset = 0;
+  if (!_bulkEdgeAlign) {
+    double desiredOffset = newFrac - _bulkEdgeOrigFrac;
+    double offsetMin = -INFINITY;
+    double offsetMax = INFINITY;
+    for (NSValue *v in _bulkEdgeTargets) {
+      NSRect r = v.rectValue;
+      NSInteger li = (NSInteger)r.origin.x;
+      NSInteger b = (NSInteger)r.origin.y;
+      double origFrac = (double)r.size.width;
+      if ((NSUInteger)li >= lanes.count)
+        continue;
+      KKTimingLane *lane = lanes[li];
+      if ((NSUInteger)b >= lane.segments.count || b < 1)
+        continue;
+      double leftStart = lane.segments[b - 1].start;
+      double rightEnd = lane.segments[b].end;
+      double laneOffsetMin = (leftStart + minFrac) - origFrac;
+      double laneOffsetMax = (rightEnd - minFrac) - origFrac;
+      if (laneOffsetMin > offsetMin)
+        offsetMin = laneOffsetMin;
+      if (laneOffsetMax < offsetMax)
+        offsetMax = laneOffsetMax;
+    }
+    offset = MAX(offsetMin, MIN(offsetMax, desiredOffset));
+  }
+
+  for (NSValue *v in _bulkEdgeTargets) {
+    NSRect r = v.rectValue;
+    NSInteger li = (NSInteger)r.origin.x;
+    NSInteger b = (NSInteger)r.origin.y;
+    double origFrac = (double)r.size.width;
+    if ((NSUInteger)li >= lanes.count)
+      continue;
+    KKTimingLane *lane = [lanes[li] copy];
+    NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
+    if ((NSUInteger)b >= segs.count || b < 1)
+      continue;
+    double newBoundary;
+    if (_bulkEdgeAlign) {
+      double leftStart = segs[b - 1].start;
+      double rightEnd = segs[b].end;
+      newBoundary = MAX(leftStart + minFrac, MIN(rightEnd - minFrac, newFrac));
+    } else {
+      newBoundary = origFrac + offset;
+    }
+    KKTimingSegment *left = [segs[b - 1] copy];
+    KKTimingSegment *right = [segs[b] copy];
+    left.end = newBoundary;
+    right.start = newBoundary;
+    segs[b - 1] = left;
+    segs[b] = right;
+    lane.segments = segs;
+    lanes[li] = lane;
   }
 }
 
