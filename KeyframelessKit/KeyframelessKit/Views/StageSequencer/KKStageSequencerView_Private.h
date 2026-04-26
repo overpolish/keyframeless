@@ -31,6 +31,7 @@ static const CGFloat kKSSEdgeHitZone __attribute__((unused)) = 5.0;
 static const CGFloat kKSSMinSegmentFrac __attribute__((unused)) = 0.04;
 static const CGFloat kKSSMinSegmentPx __attribute__((unused)) = 12.0;
 static const CGFloat kKSSSnapPx __attribute__((unused)) = 6.0;
+static const CGFloat kKSSDragThresholdPx __attribute__((unused)) = 4.0;
 static const NSInteger kKSSCurveSegments __attribute__((unused)) = 40;
 
 @interface KKStageSequencerView () {
@@ -52,6 +53,20 @@ static const NSInteger kKSSCurveSegments __attribute__((unused)) = 40;
   BOOL _dragLaneMoving;
   CGFloat _dragLaneMoveStartFrac;
   NSArray<KKTimingSegment *> *_dragLaneMoveOrigSegs;
+  // Drag state (bulk edge drag — Shift+edge-drag for offset, Opt+Shift for
+  // align). Each entry in `_bulkEdgeTargets` wraps {laneIdx, boundaryIdx,
+  // origFrac} via NSValue/CGRect: x=laneIdx, y=boundaryIdx, width=origFrac.
+  BOOL _bulkEdgeDrag;
+  BOOL _bulkEdgeAlign;
+  double _bulkEdgeOrigFrac;
+  NSArray<NSValue *> *_bulkEdgeTargets;
+  // Pending Control+click — promotes to lane-move once the cursor moves
+  // past `kKSSDragThresholdPx`; otherwise resolves to a lock toggle on
+  // mouseUp.
+  BOOL _pendingCtrlClick;
+  NSInteger _pendingCtrlLaneIdx;
+  NSInteger _pendingCtrlSegIdx;
+  NSPoint _pendingCtrlStartLoc;
   // Drag state (value copy — Option+drag).
   BOOL _dragValueCopying;
   NSInteger _dragCopyLaneIdx;
@@ -169,6 +184,8 @@ static const NSInteger kKSSCurveSegments __attribute__((unused)) = 40;
 - (void)_applyEdgeDragWithFrac:(double)newFrac
                    snapEnabled:(BOOL)snapEnabled
                          lanes:(NSMutableArray<KKTimingLane *> *)lanes;
+- (void)_applyBulkEdgeDragWithFrac:(double)newFrac
+                             lanes:(NSMutableArray<KKTimingLane *> *)lanes;
 
 @end
 

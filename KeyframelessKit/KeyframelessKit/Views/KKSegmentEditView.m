@@ -62,6 +62,8 @@ static void _clearPopoverBackground(NSView *view) {
       });
 }
 
+static const CGFloat kBulkHeaderHeight = 18.0;
+
 @implementation KKSegmentEditView {
   KKCurvePillView *_pills;
   KKSliderView *_intensitySlider;
@@ -81,18 +83,26 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
 }
 
 - (instancetype)initWithKind:(KKSegmentEditKind)kind {
-  return [self initWithKind:kind showsLinked:NO];
+  return [self initWithKind:kind showsLinked:NO bulkHeader:NO];
 }
 
 - (instancetype)initWithKind:(KKSegmentEditKind)kind
                  showsLinked:(BOOL)showsLinked {
+  return [self initWithKind:kind showsLinked:showsLinked bulkHeader:NO];
+}
+
+- (instancetype)initWithKind:(KKSegmentEditKind)kind
+                 showsLinked:(BOOL)showsLinked
+                  bulkHeader:(BOOL)bulkHeader {
   BOOL actuallyShows = showsLinked && kind == KKSegmentEditKindHold;
   CGFloat h = [KKSegmentEditView contentHeightForKind:kind
-                                          showsLinked:actuallyShows];
+                                          showsLinked:actuallyShows
+                                           bulkHeader:bulkHeader];
   self = [super initWithFrame:NSMakeRect(0, 0, kWidth, h)];
   if (self) {
     _kind = kind;
     _showsLinked = actuallyShows;
+    _bulkHeader = bulkHeader;
     _linked = YES;
     _intensity = 0.5;
     _frequency = 0.5;
@@ -107,7 +117,8 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
 }
 
 + (CGFloat)contentHeightForKind:(KKSegmentEditKind)kind
-                    showsLinked:(BOOL)showsLinked {
+                    showsLinked:(BOOL)showsLinked
+                     bulkHeader:(BOOL)bulkHeader {
   CGFloat h =
       2 * kVPadding + kPillHeight + kRowGap + kSliderHeight + kTickHeight;
   if (kind == KKSegmentEditKindHold) {
@@ -115,6 +126,8 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
       h += kRowGap + kLinkedHeight;
     h += kRowGap + kSeedHeight;
   }
+  if (bulkHeader)
+    h += kBulkHeaderHeight + kRowGap;
   return h;
 }
 
@@ -124,6 +137,42 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
 
 - (void)buildUI {
   __weak typeof(self) weakSelf = self;
+
+  NSView *pillTopReference = self;
+  CGFloat pillTopConstant = kVPadding;
+  if (_bulkHeader) {
+    NSImageView *icon = [[NSImageView alloc] initWithFrame:NSZeroRect];
+    NSImage *img =
+        [NSImage imageWithSystemSymbolName:@"rectangle.on.rectangle.angled"
+                  accessibilityDescription:@"Bulk edit"];
+    NSImageSymbolConfiguration *cfg = [NSImageSymbolConfiguration
+        configurationWithPointSize:11.0
+                            weight:NSFontWeightMedium];
+    icon.image = [img imageWithSymbolConfiguration:cfg];
+    icon.contentTintColor = [NSColor inspectorLabel];
+    icon.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:icon];
+
+    NSTextField *label = [NSTextField labelWithString:@"Bulk Edit"];
+    label.font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightMedium];
+    label.textColor = [NSColor inspectorLabel];
+    label.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:label];
+
+    [NSLayoutConstraint activateConstraints:@[
+      [icon.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                         constant:kHPadding],
+      [icon.topAnchor constraintEqualToAnchor:self.topAnchor
+                                     constant:kVPadding / 2.0],
+      [icon.widthAnchor constraintEqualToConstant:14.0],
+      [icon.heightAnchor constraintEqualToConstant:kBulkHeaderHeight],
+      [label.leadingAnchor constraintEqualToAnchor:icon.trailingAnchor
+                                          constant:5.0],
+      [label.centerYAnchor constraintEqualToAnchor:icon.centerYAnchor],
+    ]];
+    pillTopReference = icon;
+    pillTopConstant = kRowGap;
+  }
 
   _pills = [[KKCurvePillView alloc] initWithFrame:NSZeroRect];
   _pills.translatesAutoresizingMaskIntoConstraints = NO;
@@ -207,8 +256,10 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
                                          constant:kHPadding],
     [_pills.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
                                           constant:-kHPadding],
-    [_pills.topAnchor constraintEqualToAnchor:self.topAnchor
-                                     constant:kVPadding],
+    [_pills.topAnchor
+        constraintEqualToAnchor:(_bulkHeader ? pillTopReference.bottomAnchor
+                                             : self.topAnchor)
+                       constant:pillTopConstant],
     [_pills.heightAnchor constraintEqualToConstant:kPillHeight],
 
     [_intensitySlider.leadingAnchor constraintEqualToAnchor:self.leadingAnchor

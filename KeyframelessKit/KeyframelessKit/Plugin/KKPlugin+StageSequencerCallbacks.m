@@ -71,8 +71,24 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
   seqView.onLaneChanged = ^(NSInteger laneIndex, KKTimingLane *updatedLane) {
     [weakSelf _handleLaneChangedAtIndex:laneIndex lane:updatedLane];
   };
+  seqView.onLanesChanged = ^(NSArray<NSNumber *> *laneIndexes,
+                             NSArray<KKTimingLane *> *updatedLanes) {
+    [weakSelf _handleLanesChangedAtIndexes:laneIndexes lanes:updatedLanes];
+  };
   seqView.onSegmentAdded = ^(NSInteger laneIndex, double position) {
     [weakSelf _handleSegmentAddedAtLane:laneIndex position:position];
+  };
+  seqView.onAllLanesSegmentAdded = ^(double position) {
+    [weakSelf _handleAllLanesSegmentAddedAtPosition:position];
+  };
+  seqView.onAllLanesSegmentLockToggled = ^(double position, BOOL lock) {
+    [weakSelf _handleAllLanesSegmentLockToggledAtPosition:position lock:lock];
+  };
+  seqView.onAllLanesSegmentSelected = ^(double position) {
+    [weakSelf _handleAllLanesSegmentSelectedAtPosition:position];
+  };
+  seqView.onAllLanesSegmentTypesToggled = ^(double position) {
+    [weakSelf _handleAllLanesSegmentTypesToggledAtPosition:position];
   };
   seqView.onSegmentRemoved = ^(NSInteger laneIndex, NSInteger segmentIndex) {
     [weakSelf _handleSegmentRemovedAtLane:laneIndex segment:segmentIndex];
@@ -101,6 +117,14 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
                                         segmentIdx:segmentIndex
                                         anchorRect:anchorRect
                                         sourceView:weakSeq];
+      };
+  seqView.onAllLanesSegmentEditRequested =
+      ^(NSInteger laneIndex, NSInteger segmentIndex, NSRect anchorRect) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        [strongSelf _showAllLanesSegmentEditPopoverForLane:laneIndex
+                                                segmentIdx:segmentIndex
+                                                anchorRect:anchorRect
+                                                sourceView:weakSeq];
       };
   rulerView.onLoopToggled = ^(BOOL newState) {
     [weakSelf _handleRulerLoopToggled:newState];
@@ -188,6 +212,89 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
     [KKPlugin colorPushGradientForProperty:prop
                                     values:newVals
                                 apiManager:self.apiManager];
+  [self timingGraphApplyState];
+}
+
+- (void)_handleAllLanesSegmentSelectedAtPosition:(double)position {
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  if (!state)
+    return;
+  state.selectionInProgress = YES;
+  NSArray<KKAnimatableProperty *> *props = [self animatableProperties];
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  CMTime ct = [actAPI currentTime];
+  NSMutableArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, getAPI);
+  if (!lanes) {
+    [actAPI endAction:self];
+    state.selectionInProgress = NO;
+    return;
+  }
+
+  // Capture each lane's new (segIdx, values) before writing, so we can push
+  // them to native params after the JSON write.
+  NSMutableArray<NSNumber *> *newSegPerLane = [NSMutableArray array];
+  for (NSUInteger li = 0; li < lanes.count; li++) {
+    KKTimingLane *lane = lanes[li];
+    NSInteger newIdx = -1;
+    for (NSUInteger si = 0; si < lane.segments.count; si++) {
+      KKTimingSegment *s = lane.segments[si];
+      if (position >= s.start && position < s.end) {
+        newIdx = (NSInteger)si;
+        break;
+      }
+    }
+    // Edge: position == 1.0 lands past the last segment's [start, end).
+    if (newIdx < 0 && lane.segments.count > 0)
+      newIdx = (NSInteger)lane.segments.count - 1;
+
+    KKAnimatableProperty *prop = KKPropertyByLabel(props, lane.propertyLabel);
+    KKTimingLane *mLane = [lane copy];
+    NSMutableArray *mSegs = [mLane.segments mutableCopy];
+
+    // Write-back native values to the previously selected segment.
+    NSInteger prevSeg = lane.selectedSegment;
+    if (prop.valueParamIDs.count > 0 && prevSeg >= 0 &&
+        (NSUInteger)prevSeg < mSegs.count) {
+      NSArray<NSNumber *> *curVals = [prop readValuesWithGetAPI:getAPI
+                                                         atTime:ct];
+      KKTimingSegment *mSeg = [mSegs[prevSeg] copy];
+      mSeg.values = curVals;
+      mSegs[prevSeg] = mSeg;
+    }
+    mLane.segments = mSegs;
+    mLane.selectedSegment = newIdx;
+    lanes[li] = mLane;
+    [newSegPerLane addObject:@(newIdx)];
+  }
+
+  KKWriteLanesJSON(lanes, setAPI);
+  state.lanesSnapshot = [lanes copy];
+  state.pendingLanes = nil;
+
+  // Push each lane's newly-selected segment values into native params.
+  for (NSUInteger li = 0; li < lanes.count; li++) {
+    KKTimingLane *lane = lanes[li];
+    NSInteger newIdx = newSegPerLane[li].integerValue;
+    KKAnimatableProperty *prop = KKPropertyByLabel(props, lane.propertyLabel);
+    if (prop.valueParamIDs.count == 0 || newIdx < 0 ||
+        (NSUInteger)newIdx >= lane.segments.count)
+      continue;
+    NSArray<NSNumber *> *newVals = lane.segments[newIdx].values;
+    [prop writeValues:newVals withSetAPI:setAPI atTime:ct];
+    [KKPlugin colorPushGradientForProperty:prop
+                                    values:newVals
+                                apiManager:self.apiManager];
+  }
+
+  [actAPI endAction:self];
+  state.selectionInProgress = NO;
   [self timingGraphApplyState];
 }
 
@@ -320,6 +427,54 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
   [self timingGraphApplyState];
 }
 
+- (void)_handleLanesChangedAtIndexes:(NSArray<NSNumber *> *)laneIndexes
+                               lanes:(NSArray<KKTimingLane *> *)updatedLanes {
+  if (laneIndexes.count == 0 || laneIndexes.count != updatedLanes.count)
+    return;
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  NSMutableArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, getAPI);
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  if (!lanes) {
+    [actAPI endAction:self];
+    return;
+  }
+
+  double curDur = KKCurrentEffectDurationSeconds(self.apiManager);
+  for (NSUInteger i = 0; i < laneIndexes.count; i++) {
+    NSInteger viewIdx = laneIndexes[i].integerValue;
+    NSInteger jsonIdx =
+        KKLaneJSONIndexForViewIndex(viewIdx, lanes, state.hiddenLaneLabels);
+    if (jsonIdx < 0)
+      continue;
+    KKTimingLane *updatedLane = updatedLanes[i];
+    if (curDur > 0) {
+      KKTimingLane *relocked = [updatedLane copy];
+      NSMutableArray<KKTimingSegment *> *segs = [relocked.segments mutableCopy];
+      for (NSUInteger si = 0; si < segs.count; si++) {
+        KKTimingSegment *s = segs[si];
+        if (s.lockedDurationSeconds <= 0)
+          continue;
+        KKTimingSegment *m = [s copy];
+        m.lockedDurationSeconds = (s.end - s.start) * curDur;
+        segs[si] = m;
+      }
+      relocked.segments = segs;
+      updatedLane = relocked;
+    }
+    lanes[jsonIdx] = updatedLane;
+  }
+  KKWriteLanesJSON(lanes, setAPI);
+  [actAPI endAction:self];
+  [self timingGraphApplyState];
+}
+
 - (void)_handleSegmentAddedAtLane:(NSInteger)laneIndex
                          position:(double)position {
   id<FxCustomParameterActionAPI_v4> actAPI =
@@ -390,6 +545,73 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
   KKWriteLanesJSON(lanes, setAPI);
   [actAPI endAction:self];
   [self timingGraphApplyState];
+}
+
+- (void)_handleAllLanesSegmentAddedAtPosition:(double)position {
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  NSMutableArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, getAPI);
+  if (!lanes) {
+    [actAPI endAction:self];
+    return;
+  }
+
+  static const double kMinSegmentFrac = 0.04;
+  BOOL anyChanged = NO;
+  for (NSUInteger li = 0; li < lanes.count; li++) {
+    KKTimingLane *lane = [lanes[li] copy];
+    NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
+
+    NSInteger splitIdx = -1;
+    for (NSUInteger i = 0; i < segs.count; i++) {
+      if (position >= segs[i].start && position < segs[i].end) {
+        splitIdx = (NSInteger)i;
+        break;
+      }
+    }
+    if (splitIdx < 0)
+      continue;
+    KKTimingSegment *orig = segs[splitIdx];
+    if (position - orig.start < kMinSegmentFrac ||
+        orig.end - position < kMinSegmentFrac)
+      continue;
+
+    KKTimingSegment *left = [orig copy];
+    left.end = position;
+    left.lockedDurationSeconds = 0;
+    KKTimingSegment *right = [orig copy];
+    right.start = position;
+    right.lockedDurationSeconds = 0;
+
+    double midpoint = (orig.start + orig.end) / 2.0;
+    KKSegmentType flipped = (orig.type == KKSegmentTypeHold)
+                                ? KKSegmentTypeTransition
+                                : KKSegmentTypeHold;
+    if (position < midpoint)
+      left.type = flipped;
+    else
+      right.type = flipped;
+
+    [segs replaceObjectAtIndex:splitIdx withObject:left];
+    [segs insertObject:right atIndex:splitIdx + 1];
+    lane.segments = segs;
+    if (lane.selectedSegment > splitIdx)
+      lane.selectedSegment++;
+    lanes[li] = lane;
+    anyChanged = YES;
+  }
+
+  if (anyChanged)
+    KKWriteLanesJSON(lanes, setAPI);
+  [actAPI endAction:self];
+  if (anyChanged)
+    [self timingGraphApplyState];
 }
 
 - (void)_handleSegmentRemovedAtLane:(NSInteger)laneIndex
@@ -525,6 +747,107 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
   KKWriteLanesJSON(lanes, setAPI);
   [actAPI endAction:self];
   [self timingGraphApplyState];
+}
+
+- (void)_handleAllLanesSegmentTypesToggledAtPosition:(double)position {
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  NSMutableArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, getAPI);
+  if (!lanes) {
+    [actAPI endAction:self];
+    return;
+  }
+
+  BOOL anyChanged = NO;
+  for (NSUInteger li = 0; li < lanes.count; li++) {
+    KKTimingLane *lane = [lanes[li] copy];
+    NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
+    NSInteger hitIdx = -1;
+    for (NSUInteger i = 0; i < segs.count; i++) {
+      if (position >= segs[i].start && position < segs[i].end) {
+        hitIdx = (NSInteger)i;
+        break;
+      }
+    }
+    if (hitIdx < 0)
+      continue;
+    KKTimingSegment *seg = [segs[hitIdx] copy];
+    seg.type = (seg.type == KKSegmentTypeHold) ? KKSegmentTypeTransition
+                                               : KKSegmentTypeHold;
+    segs[hitIdx] = seg;
+    lane.segments = segs;
+    lanes[li] = lane;
+    anyChanged = YES;
+  }
+
+  if (anyChanged) {
+    NSString *updated = [KKTimingLane jsonFromLanes:lanes];
+    if (updated)
+      [setAPI setStringParameterValue:updated
+                          toParameter:kKKParamMultiStageData];
+  }
+  [actAPI endAction:self];
+  if (anyChanged)
+    [self timingGraphApplyState];
+}
+
+- (void)_handleAllLanesSegmentLockToggledAtPosition:(double)position
+                                               lock:(BOOL)lock {
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  NSMutableArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, getAPI);
+  if (!lanes) {
+    [actAPI endAction:self];
+    return;
+  }
+  CMTime effectDuration = kCMTimeZero;
+  if (timingAPI)
+    [timingAPI durationTimeForEffect:&effectDuration];
+  double durSec = CMTimeGetSeconds(effectDuration);
+
+  BOOL anyChanged = NO;
+  for (NSUInteger li = 0; li < lanes.count; li++) {
+    KKTimingLane *lane = [lanes[li] copy];
+    NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
+    NSInteger hitIdx = -1;
+    for (NSUInteger i = 0; i < segs.count; i++) {
+      if (position >= segs[i].start && position < segs[i].end) {
+        hitIdx = (NSInteger)i;
+        break;
+      }
+    }
+    if (hitIdx < 0)
+      continue;
+    KKTimingSegment *seg = [segs[hitIdx] copy];
+    double newLocked = lock ? (seg.end - seg.start) * durSec : 0.0;
+    if (fabs(seg.lockedDurationSeconds - newLocked) < 1e-6)
+      continue;
+    seg.lockedDurationSeconds = MAX(0.0, newLocked);
+    segs[hitIdx] = seg;
+    lane.segments = segs;
+    lanes[li] = lane;
+    anyChanged = YES;
+  }
+
+  if (anyChanged)
+    KKWriteLanesJSON(lanes, setAPI);
+  [actAPI endAction:self];
+  if (anyChanged)
+    [self timingGraphApplyState];
 }
 
 - (void)_handleSegmentValuesCopiedAtLane:(NSInteger)laneIndex

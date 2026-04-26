@@ -70,6 +70,11 @@ extern NSMutableArray<KKTimingLane *> *_Nullable KKReadLanesRebalanced(
                             anchorRect:(NSRect)anchorRect
                             sourceView:
                                 (nullable KKStageSequencerView *)sourceView;
+- (void)_showAllLanesSegmentEditPopoverForLane:(NSInteger)laneIndex
+                                    segmentIdx:(NSInteger)segmentIndex
+                                    anchorRect:(NSRect)anchorRect
+                                    sourceView:(nullable KKStageSequencerView *)
+                                                   sourceView;
 @end
 
 @interface KKPlugin (TimingGraphState)
