@@ -70,6 +70,11 @@ static NSArray<KKGradientStop *> *_stopsFromValues(NSArray<NSNumber *> *values,
       if (s.type == KKSegmentTypeHold) {
         v = KKApplyHoldEffect(t, s.holdEffect, s.intensity, s.frequency,
                               (int)s.seed);
+      } else if (KKIsHTHTransition(lane, (NSInteger)sIdx)) {
+        // HTH curve plots `1 + (e(t) - t)` so endpoints meet the rest line
+        // (v=1) and the deviation lifts/dips into the lane interior.
+        double e = KKApplyEasing(t, s.easing, s.intensity, s.frequency);
+        v = 1.0 + (e - t);
       } else {
         double ti = animateOut ? (1.0 - t) : t;
         double e = KKApplyEasing(ti, s.easing, s.intensity, s.frequency);
@@ -137,22 +142,26 @@ static NSArray<KKGradientStop *> *_stopsFromValues(NSArray<NSNumber *> *values,
       path.lineWidth = 1.5;
       NSInteger steps = MAX(8, (NSInteger)floor(segW / 3.0));
       BOOL isAnimateOut = (segIdx == segments.count - 1);
-      // HTH transitions are derived: prev-hold and next-hold share the same
-      // color, so nothing actually morphs across the segment. Draw a flat
-      // line so the curve doesn't misrepresent a 0→1 easing for what is in
-      // practice a constant.
       for (NSInteger i = 0; i <= steps; i++) {
         double t = (double)i / (double)steps;
+        CGFloat x = stripX + (CGFloat)t * innerW;
+        CGFloat y;
         double v;
-        if (seg.type == KKSegmentTypeHold) {
+        if (isHTH) {
+          // HTH transitions morph between equal boundaries (rest value 1).
+          // Plot the easing deviation from linear lifted to the rest line so
+          // endpoints meet the adjacent hold lines and the interior shape
+          // reads as the curve's personality. Range scan above includes
+          // these samples so the lane scales to fit any overshoot.
+          double e = KKApplyEasing(t, seg.easing, seg.intensity, seg.frequency);
+          v = 1.0 + (e - t);
+        } else if (seg.type == KKSegmentTypeHold) {
           if (seg.holdEffect == KKHoldEffectNone) {
             v = 1.0; // rest
           } else {
             v = KKApplyHoldEffect(t, seg.holdEffect, seg.intensity,
                                   seg.frequency, (int)seg.seed);
           }
-        } else if (isHTH) {
-          v = 1.0;
         } else {
           double e = KKApplyEasing(t, seg.easing, seg.intensity, seg.frequency);
           // Animate-out descends, animate-in/mid rises — distinct silhouette
@@ -160,8 +169,7 @@ static NSArray<KKGradientStop *> *_stopsFromValues(NSArray<NSNumber *> *values,
           v = isAnimateOut ? (1.0 - e) : e;
         }
         double y01 = (v - minVal) / valRange;
-        CGFloat x = stripX + (CGFloat)t * innerW;
-        CGFloat y = curveBottom + (CGFloat)y01 * (curveTop - curveBottom);
+        y = curveBottom + (CGFloat)y01 * (curveTop - curveBottom);
         if (i == 0)
           [path moveToPoint:NSMakePoint(x, y)];
         else
