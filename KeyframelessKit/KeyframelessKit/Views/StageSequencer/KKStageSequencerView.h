@@ -77,6 +77,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// Called when user requests segment removal (Cmd-click).
 @property(nonatomic, copy, nullable) void (^onSegmentRemoved)
     (NSInteger laneIndex, NSInteger segmentIndex);
+/// Called when user shift+cmd-clicks. Removes the segment containing the
+/// click fraction in every lane (lanes with a single segment are skipped).
+@property(nonatomic, copy, nullable) void (^onAllLanesSegmentRemoved)
+    (double position);
 /// Called when user right-clicks a segment to toggle its type
 /// (hold ↔ transition).
 @property(nonatomic, copy, nullable) void (^onSegmentTypeToggled)
