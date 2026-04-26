@@ -127,9 +127,12 @@ KKMultiStageTransitionValues(NSArray<KKTimingSegment *> *segments,
     BOOL isBool = i < componentKinds.count &&
                   componentKinds[i].integerValue == KKAnimatableParamKindBool;
     if (isBool) {
-      // Bool components stay at the prior hold's value through the entire
-      // transition and only flip at the boundary into the next hold.
-      [interpolated addObject:@(fv)];
+      // Bool components are step values authored per-segment. Respect the
+      // transition's own stored value across its whole duration so HTH
+      // overrides (e.g. MagicMove "rotate with motion" toggled on the
+      // transition only) take effect at render time.
+      NSNumber *own = (i < active.values.count) ? active.values[i] : @(fv);
+      [interpolated addObject:own];
     } else {
       [interpolated addObject:@(fv + (tv - fv) * easedT)];
     }
@@ -386,7 +389,9 @@ KKMultiStageApplyLiveOverrides(NSMutableArray<KKTimingLane *> *lanes,
     mLane.segments = mSegs;
     lanes[li] = mLane;
 
-    NSArray<KKTimingLane *> *updated = [lanes copy];
+    NSMutableArray<KKTimingLane *> *normalized = [lanes mutableCopy];
+    KKApplyHTHNormalizationInPlace(normalized, [self _kindsByLaneLabel]);
+    NSArray<KKTimingLane *> *updated = [normalized copy];
     state.pendingLanes = updated;
     state.lanesSnapshot = updated;
 
@@ -478,6 +483,7 @@ KKMultiStageApplyLiveOverrides(NSMutableArray<KKTimingLane *> *lanes,
     mLane.segments = mSegs;
     lanes[li] = mLane;
 
+    KKApplyHTHNormalizationInPlace(lanes, [self _kindsByLaneLabel]);
     NSArray<KKTimingLane *> *updated = [lanes copy];
     state.pendingLanes = updated;
     state.lanesSnapshot = updated;

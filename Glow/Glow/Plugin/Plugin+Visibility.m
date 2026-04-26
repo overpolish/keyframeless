@@ -11,8 +11,12 @@ static void setFlagsIfChanged(id<FxParameterSettingAPI_v5> setAPI,
                               FxParameterFlags newFlags, UInt32 paramID) {
   FxParameterFlags current = 0;
   [getAPI getParameterFlags:&current fromParameter:paramID];
-  if (current != newFlags)
-    [setAPI setParameterFlags:newFlags toParameter:paramID];
+  // Preserve any DISABLED bit set externally (e.g. HTH transition selection
+  // on a sequencer lane that drives this param). Wholesale-overwriting flags
+  // would wipe it.
+  FxParameterFlags want = newFlags | (current & kFxParameterFlag_DISABLED);
+  if (current != want)
+    [setAPI setParameterFlags:want toParameter:paramID];
 }
 
 @implementation GlowPlugin (Visibility)

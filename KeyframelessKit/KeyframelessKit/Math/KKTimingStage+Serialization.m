@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#import "../Views/KKAnimatableProperty.h"
 #import "KKTimingStage.h"
 
 static NSString *const kKeyType = @"type";
@@ -168,3 +169,63 @@ static const NSInteger kCurrentVersion = 3;
 }
 
 @end
+
+BOOL KKIsHTHTransition(KKTimingLane *lane, NSInteger segIdx) {
+  if (!lane || segIdx <= 0 || segIdx >= (NSInteger)lane.segments.count - 1)
+    return NO;
+  KKTimingSegment *seg = lane.segments[segIdx];
+  if (seg.type != KKSegmentTypeTransition)
+    return NO;
+  return lane.segments[segIdx - 1].type == KKSegmentTypeHold &&
+         lane.segments[segIdx + 1].type == KKSegmentTypeHold;
+}
+
+void KKApplyHTHNormalizationInPlace(
+    NSMutableArray<KKTimingLane *> *lanes,
+    NSDictionary<NSString *, NSArray<NSNumber *> *> *kindsByLabel) {
+  for (NSUInteger li = 0; li < lanes.count; li++) {
+    KKTimingLane *lane = lanes[li];
+    NSArray<NSNumber *> *kinds = kindsByLabel[lane.propertyLabel];
+    NSMutableArray<KKTimingSegment *> *mSegs = nil;
+    for (NSUInteger si = 1; si + 1 < lane.segments.count; si++) {
+      if (!KKIsHTHTransition(lane, (NSInteger)si))
+        continue;
+      KKTimingSegment *prev = lane.segments[si - 1];
+      KKTimingSegment *t = lane.segments[si];
+
+      // Build the merged values array: prev.values for non-Bool scalars,
+      // t.values for Bool scalars (so per-segment step toggles persist).
+      NSUInteger valCount = MIN(prev.values.count, t.values.count);
+      NSMutableArray<NSNumber *> *merged =
+          [NSMutableArray arrayWithCapacity:valCount];
+      BOOL anyDifferent = NO;
+      for (NSUInteger i = 0; i < valCount; i++) {
+        BOOL keepOwn = (i < kinds.count &&
+                        kinds[i].integerValue == KKAnimatableParamKindBool);
+        NSNumber *src = keepOwn ? t.values[i] : prev.values[i];
+        [merged addObject:src];
+        if (![src isEqualToNumber:t.values[i]])
+          anyDifferent = YES;
+      }
+      // Carry over any extra trailing values from prev (length mismatch
+      // shouldn't happen in practice but stay defensive).
+      for (NSUInteger i = valCount; i < prev.values.count; i++) {
+        [merged addObject:prev.values[i]];
+        anyDifferent = YES;
+      }
+      if (!anyDifferent && t.values.count == prev.values.count)
+        continue;
+
+      if (!mSegs)
+        mSegs = [lane.segments mutableCopy];
+      KKTimingSegment *m = [mSegs[si] copy];
+      m.values = [merged copy];
+      mSegs[si] = m;
+    }
+    if (mSegs) {
+      KKTimingLane *mLane = [lane copy];
+      mLane.segments = mSegs;
+      lanes[li] = mLane;
+    }
+  }
+}

@@ -65,6 +65,8 @@ extern NSMutableArray<KKTimingLane *> *_Nullable KKReadLanesRebalanced(
 
 @interface KKPlugin (TimingGraph)
 - (void)timingGraphApplyState;
+- (void)_applyHTHParameterFlagsForLanes:(NSArray<KKTimingLane *> *)lanes;
+- (NSDictionary<NSString *, NSArray<NSNumber *> *> *)_kindsByLaneLabel;
 - (void)_showSegmentEditPopoverForLane:(NSInteger)laneIndex
                             segmentIdx:(NSInteger)segmentIndex
                             anchorRect:(NSRect)anchorRect

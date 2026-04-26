@@ -392,11 +392,11 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
   BOOL scaleVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
                                                      label:@"Scale"];
   BOOL rotZVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
-                                                    label:@"Rotation Z"];
+                                                    label:@"Rot Z"];
   BOOL rotXVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
-                                                    label:@"Rotation X"];
+                                                    label:@"Rot X"];
   BOOL rotYVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
-                                                    label:@"Rotation Y"];
+                                                    label:@"Rot Y"];
   BOOL opacityVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
                                                        label:@"Opacity"];
 
@@ -533,11 +533,11 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
   BOOL scaleVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
                                                      label:@"Scale"];
   BOOL rotZVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
-                                                    label:@"Rotation Z"];
+                                                    label:@"Rot Z"];
   BOOL rotXVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
-                                                    label:@"Rotation X"];
+                                                    label:@"Rot X"];
   BOOL rotYVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
-                                                    label:@"Rotation Y"];
+                                                    label:@"Rot Y"];
   BOOL opacityVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
                                                        label:@"Opacity"];
 

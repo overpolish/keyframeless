@@ -62,9 +62,9 @@
 
   NSArray<NSNumber *> *msPosition = multiStage[@"Position"];
   NSArray<NSNumber *> *msScale = multiStage[@"Scale"];
-  NSArray<NSNumber *> *msRotZ = multiStage[@"Rotation Z"];
-  NSArray<NSNumber *> *msRotX = multiStage[@"Rotation X"];
-  NSArray<NSNumber *> *msRotY = multiStage[@"Rotation Y"];
+  NSArray<NSNumber *> *msRotZ = multiStage[@"Rot Z"];
+  NSArray<NSNumber *> *msRotX = multiStage[@"Rot X"];
+  NSArray<NSNumber *> *msRotY = multiStage[@"Rot Y"];
   NSArray<NSNumber *> *msOpacity = multiStage[@"Opacity"];
 
   double posX = msPosition.count >= 1 ? msPosition[0].doubleValue : v.x;
