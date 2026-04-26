@@ -169,4 +169,21 @@ KKTimingRebalancedLanes(NSArray<KKTimingLane *> *lanes, double currentDuration);
 
 @end
 
+/// Returns YES when `segIdx` is a transition segment that has a hold on both
+/// sides (Hold-Transition-Hold). Edge transitions (TH, HT, THT) don't count.
+FOUNDATION_EXPORT BOOL KKIsHTHTransition(KKTimingLane *lane, NSInteger segIdx);
+
+/// In-place normalization: every HTH transition has its `values` array
+/// rewritten to match the preceding hold's values. Call before serializing so
+/// transitions sandwiched between holds keep stable, derivable state.
+///
+/// `kindsByLabel` maps lane.propertyLabel → an array of per-scalar
+/// `KKAnimatableParamKind` values (boxed as NSNumber, length matching
+/// segment.values). Bool scalars are preserved (not normalized) so per-segment
+/// step toggles like "rotate with motion" survive across writes. Pass nil to
+/// normalize every scalar.
+FOUNDATION_EXPORT void KKApplyHTHNormalizationInPlace(
+    NSMutableArray<KKTimingLane *> *lanes,
+    NSDictionary<NSString *, NSArray<NSNumber *> *> *_Nullable kindsByLabel);
+
 NS_ASSUME_NONNULL_END

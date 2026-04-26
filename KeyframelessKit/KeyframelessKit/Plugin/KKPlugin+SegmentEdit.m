@@ -45,6 +45,7 @@
   lane.segments = segs;
   lanes[laneIndex] = lane;
 
+  KKApplyHTHNormalizationInPlace(lanes, [self _kindsByLaneLabel]);
   NSString *updated = [KKTimingLane jsonFromLanes:lanes];
   if (updated)
     [setAPI setStringParameterValue:updated toParameter:kKKParamMultiStageData];
@@ -89,6 +90,7 @@
     lane.segments = segs;
     lanes[li] = lane;
   }
+  KKApplyHTHNormalizationInPlace(lanes, [self _kindsByLaneLabel]);
   NSString *updated = [KKTimingLane jsonFromLanes:lanes];
   if (updated)
     [setAPI setStringParameterValue:updated toParameter:kKKParamMultiStageData];

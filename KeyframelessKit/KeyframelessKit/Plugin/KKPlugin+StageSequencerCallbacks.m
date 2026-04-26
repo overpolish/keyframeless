@@ -15,10 +15,18 @@
 #import "KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
 
-/// Writes `lanes` to the shared `kKKParamMultiStageData` JSON param.
-static void KKWriteLanesJSON(NSArray<KKTimingLane *> *lanes,
-                             id<FxParameterSettingAPI_v5> setAPI) {
-  NSString *updated = [KKTimingLane jsonFromLanes:lanes];
+/// Writes `lanes` to the shared `kKKParamMultiStageData` JSON param. HTH
+/// transitions are normalized in-place before serialization so their
+/// `values` array always mirrors the preceding hold for non-Bool scalars.
+/// Bool scalars are preserved (per-segment step toggles like "rotate with
+/// motion" survive normalization). Pass `[self _kindsByLaneLabel]` for
+/// `kindsByLabel`; nil falls back to normalize-everything.
+static void KKWriteLanesJSON(
+    NSArray<KKTimingLane *> *lanes, id<FxParameterSettingAPI_v5> setAPI,
+    NSDictionary<NSString *, NSArray<NSNumber *> *> *kindsByLabel) {
+  NSMutableArray<KKTimingLane *> *mutableLanes = [lanes mutableCopy];
+  KKApplyHTHNormalizationInPlace(mutableLanes, kindsByLabel);
+  NSString *updated = [KKTimingLane jsonFromLanes:mutableLanes];
   if (updated)
     [setAPI setStringParameterValue:updated toParameter:kKKParamMultiStageData];
 }
@@ -188,11 +196,24 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
     lane = mLane;
   }
 
-  KKWriteLanesJSON(lanes, setAPI);
+  KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
   // Update snapshot + clear pending BEFORE endAction (which triggers
   // parameterChanged: that would read stale snapshot).
   state.lanesSnapshot = [lanes copy];
   state.pendingLanes = nil;
+
+  // FxPlug silently drops writes to DISABLED params, so make sure the value
+  // params for this lane are enabled while we push the new segment's values.
+  // If the new selection is itself HTH, the trailing
+  // `_applyHTHParameterFlagsForLanes:` call re-applies the disable.
+  for (NSNumber *pidNum in prop.valueParamIDs) {
+    UInt32 pid = pidNum.unsignedIntValue;
+    FxParameterFlags cur = 0;
+    [getAPI getParameterFlags:&cur fromParameter:pid];
+    FxParameterFlags want = cur & ~kFxParameterFlag_DISABLED;
+    if (cur != want)
+      [setAPI setParameterFlags:want toParameter:pid];
+  }
 
   // Sync new selection: write segment values → native params.
   NSArray<NSNumber *> *newVals = nil;
@@ -201,6 +222,7 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
     newVals = lane.segments[segmentIndex].values;
     [prop writeValues:newVals withSetAPI:setAPI atTime:ct];
   }
+  [self _applyHTHParameterFlagsForLanes:lanes];
 
   [actAPI endAction:self];
   state.selectionInProgress = NO;
@@ -274,11 +296,13 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
     [newSegPerLane addObject:@(newIdx)];
   }
 
-  KKWriteLanesJSON(lanes, setAPI);
+  KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
   state.lanesSnapshot = [lanes copy];
   state.pendingLanes = nil;
 
-  // Push each lane's newly-selected segment values into native params.
+  // Push each lane's newly-selected segment values into native params. Clear
+  // DISABLED on every value param first so writes aren't silently dropped
+  // (HTH-selected lanes get the flag re-applied at the end).
   for (NSUInteger li = 0; li < lanes.count; li++) {
     KKTimingLane *lane = lanes[li];
     NSInteger newIdx = newSegPerLane[li].integerValue;
@@ -286,12 +310,22 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
     if (prop.valueParamIDs.count == 0 || newIdx < 0 ||
         (NSUInteger)newIdx >= lane.segments.count)
       continue;
+    for (NSNumber *pidNum in prop.valueParamIDs) {
+      UInt32 pid = pidNum.unsignedIntValue;
+      FxParameterFlags cur = 0;
+      [getAPI getParameterFlags:&cur fromParameter:pid];
+      FxParameterFlags want = cur & ~kFxParameterFlag_DISABLED;
+      if (cur != want)
+        [setAPI setParameterFlags:want toParameter:pid];
+    }
     NSArray<NSNumber *> *newVals = lane.segments[newIdx].values;
     [prop writeValues:newVals withSetAPI:setAPI atTime:ct];
     [KKPlugin colorPushGradientForProperty:prop
                                     values:newVals
                                 apiManager:self.apiManager];
   }
+
+  [self _applyHTHParameterFlagsForLanes:lanes];
 
   [actAPI endAction:self];
   state.selectionInProgress = NO;
@@ -332,7 +366,7 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
     }
   }
   mutable[jsonIdx] = lane;
-  KKWriteLanesJSON(mutable, setAPI);
+  KKWriteLanesJSON(mutable, setAPI, [self _kindsByLaneLabel]);
 
   // Enable-path: native params may have been edited while the lane was
   // disabled. The lane's own segment values are the source of truth, so
@@ -378,7 +412,7 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
     KKTimingLane *lane = [lanes[jsonIdx] copy];
     lane.oscVisible = visible;
     lanes[jsonIdx] = lane;
-    KKWriteLanesJSON(lanes, setAPI);
+    KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
     if (state)
       state.lanesSnapshot = [lanes copy];
   }
@@ -421,7 +455,7 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
       updatedLane = relocked;
     }
     lanes[jsonIdx] = updatedLane;
-    KKWriteLanesJSON(lanes, setAPI);
+    KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
   }
   [actAPI endAction:self];
   [self timingGraphApplyState];
@@ -470,7 +504,7 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
     }
     lanes[jsonIdx] = updatedLane;
   }
-  KKWriteLanesJSON(lanes, setAPI);
+  KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
   [actAPI endAction:self];
   [self timingGraphApplyState];
 }
@@ -542,7 +576,7 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
   lane.selectedSegment = splitIdx + 1;
   lanes[jsonIdx] = lane;
 
-  KKWriteLanesJSON(lanes, setAPI);
+  KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
   [actAPI endAction:self];
   [self timingGraphApplyState];
 }
@@ -608,7 +642,7 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
   }
 
   if (anyChanged)
-    KKWriteLanesJSON(lanes, setAPI);
+    KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
   [actAPI endAction:self];
   if (anyChanged)
     [self timingGraphApplyState];
@@ -672,7 +706,7 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
   lane.segments = segs;
   lanes[jsonIdx] = lane;
 
-  KKWriteLanesJSON(lanes, setAPI);
+  KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
   [actAPI endAction:self];
   [self timingGraphApplyState];
 }
@@ -708,7 +742,7 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
   lane.segments = segs;
   lanes[jsonIdx] = lane;
 
-  KKWriteLanesJSON(lanes, setAPI);
+  KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
   [actAPI endAction:self];
   [self timingGraphApplyState];
 }
@@ -744,7 +778,7 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
   lane.segments = segs;
   lanes[jsonIdx] = lane;
 
-  KKWriteLanesJSON(lanes, setAPI);
+  KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
   [actAPI endAction:self];
   [self timingGraphApplyState];
 }
@@ -787,6 +821,7 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
   }
 
   if (anyChanged) {
+    KKApplyHTHNormalizationInPlace(lanes, [self _kindsByLaneLabel]);
     NSString *updated = [KKTimingLane jsonFromLanes:lanes];
     if (updated)
       [setAPI setStringParameterValue:updated
@@ -844,7 +879,7 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
   }
 
   if (anyChanged)
-    KKWriteLanesJSON(lanes, setAPI);
+    KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
   [actAPI endAction:self];
   if (anyChanged)
     [self timingGraphApplyState];
@@ -885,7 +920,7 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
   lane.segments = segs;
   lanes[jsonIdx] = lane;
 
-  KKWriteLanesJSON(lanes, setAPI);
+  KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
 
   // When the destination is the currently-selected segment, native params
   // still hold its pre-copy values. Push the new values through so the next
