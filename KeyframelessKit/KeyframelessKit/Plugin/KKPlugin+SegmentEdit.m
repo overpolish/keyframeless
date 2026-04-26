@@ -319,23 +319,20 @@
     return;
   KKTimingSegment *srcSeg = srcLane.segments[segmentIndex];
 
-  // Snapshot the bulk target set: every same-type segment under the playhead.
-  // The source segment is included only if it satisfies the predicate.
-  double playhead = seq.playheadFraction;
+  // Snapshot the bulk target set: every lane whose currently-selected
+  // segment matches the source segment's type. The source itself is always
+  // included even if not pre-selected, so a shift+click on an unselected
+  // segment still does something predictable.
   NSMutableArray<NSValue *> *targets = [NSMutableArray array];
   for (NSUInteger li = 0; li < lanes.count; li++) {
     KKTimingLane *lane = lanes[li];
-    for (NSUInteger si = 0; si < lane.segments.count; si++) {
-      KKTimingSegment *s = lane.segments[si];
-      if (s.type != srcSeg.type)
-        continue;
-      if (playhead < s.start || playhead >= s.end)
-        continue;
-      [targets addObject:[NSValue valueWithPoint:NSMakePoint(li, si)]];
-    }
+    NSInteger sel = lane.selectedSegment;
+    if (sel < 0 || (NSUInteger)sel >= lane.segments.count)
+      continue;
+    if (lane.segments[sel].type != srcSeg.type)
+      continue;
+    [targets addObject:[NSValue valueWithPoint:NSMakePoint(li, sel)]];
   }
-  // Make sure the source is included so a shift+click on a segment outside
-  // the playhead range still affects something.
   NSValue *srcVal =
       [NSValue valueWithPoint:NSMakePoint(jsonLaneIdx, segmentIndex)];
   if (![targets containsObject:srcVal])

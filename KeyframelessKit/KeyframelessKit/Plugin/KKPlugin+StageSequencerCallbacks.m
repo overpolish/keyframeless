@@ -101,6 +101,9 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
   seqView.onSegmentRemoved = ^(NSInteger laneIndex, NSInteger segmentIndex) {
     [weakSelf _handleSegmentRemovedAtLane:laneIndex segment:segmentIndex];
   };
+  seqView.onAllLanesSegmentRemoved = ^(double position) {
+    [weakSelf _handleAllLanesSegmentRemovedAtPosition:position];
+  };
   seqView.onSegmentTypeToggled = ^(NSInteger laneIndex,
                                    NSInteger segmentIndex) {
     [weakSelf _handleSegmentTypeToggledAtLane:laneIndex segment:segmentIndex];
@@ -709,6 +712,75 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
   KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
   [actAPI endAction:self];
   [self timingGraphApplyState];
+}
+
+- (void)_handleAllLanesSegmentRemovedAtPosition:(double)position {
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  NSMutableArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, getAPI);
+  if (!lanes) {
+    [actAPI endAction:self];
+    return;
+  }
+
+  BOOL anyChanged = NO;
+  for (NSUInteger li = 0; li < lanes.count; li++) {
+    KKTimingLane *lane = [lanes[li] copy];
+    NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
+    if (segs.count <= 1)
+      continue;
+    NSInteger hitIdx = -1;
+    for (NSUInteger i = 0; i < segs.count; i++) {
+      if (position >= segs[i].start && position < segs[i].end) {
+        hitIdx = (NSInteger)i;
+        break;
+      }
+    }
+    if (hitIdx < 0)
+      continue;
+
+    KKTimingSegment *removed = segs[hitIdx];
+    if ((NSUInteger)hitIdx + 1 < segs.count) {
+      KKTimingSegment *next = [segs[hitIdx + 1] copy];
+      next.start = removed.start;
+      next.lockedDurationSeconds = 0;
+      segs[hitIdx + 1] = next;
+    } else if (hitIdx > 0) {
+      KKTimingSegment *prev = [segs[hitIdx - 1] copy];
+      prev.end = removed.end;
+      prev.lockedDurationSeconds = 0;
+      segs[hitIdx - 1] = prev;
+    }
+    [segs removeObjectAtIndex:hitIdx];
+
+    if (lane.selectedSegment == hitIdx) {
+      lane.selectedSegment = -1;
+      for (NSUInteger i = 0; i < segs.count; i++) {
+        if (segs[i].type == KKSegmentTypeHold) {
+          lane.selectedSegment = (NSInteger)i;
+          break;
+        }
+      }
+    } else if (lane.selectedSegment > hitIdx) {
+      lane.selectedSegment--;
+    }
+
+    lane.segments = segs;
+    lanes[li] = lane;
+    anyChanged = YES;
+  }
+
+  if (anyChanged)
+    KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
+  [actAPI endAction:self];
+  if (anyChanged)
+    [self timingGraphApplyState];
 }
 
 - (void)_handleSegmentTypeToggledAtLane:(NSInteger)laneIndex

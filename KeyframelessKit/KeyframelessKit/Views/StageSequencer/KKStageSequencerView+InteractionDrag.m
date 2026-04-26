@@ -200,6 +200,18 @@
       return YES;
     }
 
+    NSEventModifierFlags shiftCmd =
+        NSEventModifierFlagShift | NSEventModifierFlagCommand;
+    if ((event.modifierFlags & shiftCmd) == shiftCmd) {
+      if (self.onAllLanesSegmentRemoved) {
+        double frac = [self _fracForX:loc.x
+                               trackX:trackX
+                           trackWidth:trackWidth];
+        self.onAllLanesSegmentRemoved(frac);
+      }
+      return YES;
+    }
+
     if ((event.modifierFlags & NSEventModifierFlagCommand) &&
         lane.segments.count > 1) {
       if (self.onSegmentRemoved)
