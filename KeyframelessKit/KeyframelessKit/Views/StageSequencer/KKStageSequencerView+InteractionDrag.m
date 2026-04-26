@@ -525,6 +525,30 @@
   double minPx = kKSSMinSegmentPx / (_dragTrackWidth * _zoom);
   double minFrac = MAX(kKSSMinSegmentFrac, minPx);
 
+  // Snap the dragged anchor to playhead / 0 / 1 only. Other-lane boundaries
+  // are themselves moving with the bulk drag, so snapping to them would be
+  // sticky and self-referential. Shift is already consumed for bulk mode so
+  // snap is always enabled here.
+  BOOL didSnap = NO;
+  double snapTarget = newFrac;
+  double snapPxFrac = kKSSSnapPx / (_dragTrackWidth * _zoom);
+  double bestDelta = snapPxFrac;
+  double snapCandidates[] = {0.0, 1.0, self.playheadFraction};
+  for (NSUInteger i = 0; i < sizeof(snapCandidates) / sizeof(snapCandidates[0]);
+       i++) {
+    double cand = snapCandidates[i];
+    if (cand < 0.0 || cand > 1.0)
+      continue;
+    double d = fabs(cand - newFrac);
+    if (d < bestDelta) {
+      bestDelta = d;
+      snapTarget = cand;
+      didSnap = YES;
+    }
+  }
+  if (didSnap)
+    newFrac = snapTarget;
+
   // Offset mode: group stops when any lane hits min-length, so per-lane
   // offsets stay locked. Align mode: each lane independently clamps to its
   // own [leftStart+minFrac, rightEnd-minFrac] window so the dragged frac
@@ -583,6 +607,22 @@
     segs[b] = right;
     lane.segments = segs;
     lanes[li] = lane;
+  }
+
+  // Drive the snap guide overlay. In offset mode the dragged anchor lands at
+  // origFrac+offset; the snap holds only if that matches the snap target.
+  // In align mode every target is clamped to newFrac, so the guide just
+  // mirrors the snapped frac.
+  if (didSnap) {
+    double anchor = _bulkEdgeAlign ? newFrac : (_bulkEdgeOrigFrac + offset);
+    if (fabs(anchor - snapTarget) < 1e-6) {
+      _snapActive = YES;
+      _snapFrac = snapTarget;
+    } else {
+      _snapActive = NO;
+    }
+  } else {
+    _snapActive = NO;
   }
 }
 
