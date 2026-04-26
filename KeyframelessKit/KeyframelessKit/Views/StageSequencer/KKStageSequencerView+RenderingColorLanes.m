@@ -96,10 +96,17 @@ static NSArray<KKGradientStop *> *_stopsFromValues(NSArray<NSNumber *> *values,
     CGFloat innerW = MAX(0, segW - 2 * inset);
     CGFloat stripX = segX + inset;
 
+    // HTH transitions don't represent any morph (both surrounding holds
+    // share the same value), so suppress the color strip entirely. The curve
+    // band still occupies its space below, keeping vertical alignment with
+    // adjacent segments.
+    BOOL isHTH = KKIsHTHTransition(lane, (NSInteger)segIdx);
+
     // Both hold and transition draw the segment's own stored values, so a
     // transition shows the *target* color/gradient assigned to it (what the
     // segment represents) rather than the morph between its boundaries.
-    NSArray<KKGradientStop *> *stops = _stopsFromValues(seg.values, kind);
+    NSArray<KKGradientStop *> *stops =
+        isHTH ? nil : _stopsFromValues(seg.values, kind);
     if (stops.count >= 2) {
       int lutN = 64;
       simd_float3 *lut =
@@ -130,6 +137,10 @@ static NSArray<KKGradientStop *> *_stopsFromValues(NSArray<NSNumber *> *values,
       path.lineWidth = 1.5;
       NSInteger steps = MAX(8, (NSInteger)floor(segW / 3.0));
       BOOL isAnimateOut = (segIdx == segments.count - 1);
+      // HTH transitions are derived: prev-hold and next-hold share the same
+      // color, so nothing actually morphs across the segment. Draw a flat
+      // line so the curve doesn't misrepresent a 0→1 easing for what is in
+      // practice a constant.
       for (NSInteger i = 0; i <= steps; i++) {
         double t = (double)i / (double)steps;
         double v;
@@ -140,6 +151,8 @@ static NSArray<KKGradientStop *> *_stopsFromValues(NSArray<NSNumber *> *values,
             v = KKApplyHoldEffect(t, seg.holdEffect, seg.intensity,
                                   seg.frequency, (int)seg.seed);
           }
+        } else if (isHTH) {
+          v = 1.0;
         } else {
           double e = KKApplyEasing(t, seg.easing, seg.intensity, seg.frequency);
           // Animate-out descends, animate-in/mid rises — distinct silhouette
