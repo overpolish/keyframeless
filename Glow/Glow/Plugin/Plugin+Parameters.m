@@ -185,6 +185,9 @@
   if (![self addMultiStageParametersWithAPI:paramAPI error:error])
     return NO;
 
+  if (![self addMotionBlurParametersWithAPI:paramAPI error:error])
+    return NO;
+
   self.linkedParameterPairs = @[ @[ @(kParamRadiusX), @(kParamRadiusY) ] ];
 
   return YES;

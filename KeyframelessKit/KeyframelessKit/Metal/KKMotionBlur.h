@@ -50,6 +50,32 @@ typedef struct {
                                          timingAPI:(id<FxTimingAPI_v4>)timingAPI
                                             atTime:(CMTime)time;
 
+/// Acquires a pooled intermediate ("scratch") texture inside a render
+/// block. Use for any plugin-private textures the render block needs as
+/// passes feed each other (Glow's blur pyramid, etc.) so they survive the
+/// life of the shared command buffer without per-frame allocation churn.
+///
+/// Pool entries are keyed by (`key`, `sampleIndex`, `registryID`,
+/// `width`, `height`, `format`) — pick a key unique to the texture's
+/// purpose within the plugin (e.g. `@"glow.prep"`). Distinct sample
+/// indices return distinct textures, which is what you want when all N
+/// samples are queued on the same command buffer.
+///
+/// Lifetime: the texture is held until `applyToDestinationImage:`
+/// completes its `commit + waitUntilCompleted`, then returned to a
+/// shared pool. Reused on the next frame's render. Caller must NOT
+/// store strong refs beyond the render block.
+///
+/// Returns nil when called outside an `applyToDestinationImage:`
+/// invocation, or if texture allocation fails.
++ (nullable id<MTLTexture>)scratchTextureForKey:(NSString *)key
+                                    sampleIndex:(int)sampleIndex
+                                          width:(NSUInteger)width
+                                         height:(NSUInteger)height
+                                         format:(MTLPixelFormat)format
+                                          usage:(MTLTextureUsage)usage
+                                         device:(id<MTLDevice>)device;
+
 /// Returns the N CMTimes (wrapped as NSValue) that `applyToDestinationImage:`
 /// will request from the render block, given the snapshotted state and the
 /// frame's render time. Plugins use this from `pluginState:atTime:` to

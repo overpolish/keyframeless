@@ -22,13 +22,111 @@ static NSMutableDictionary<NSString *, NSMutableArray<id<MTLTexture>> *>
     *sKKMotionBlurPool;
 static dispatch_semaphore_t sKKMotionBlurPoolLock;
 
+/// Pool of plugin-private "scratch" textures used inside renderBlocks
+/// (e.g. Glow's blur intermediates). Same key/lock conventions as the
+/// sample-dest pool, but acquisitions are tracked per apply-call via a
+/// thread-local context so we can return everything to the pool after
+/// `waitUntilCompleted`. Reuse across frames keeps memory bounded.
+static NSMutableDictionary<NSString *, NSMutableArray<id<MTLTexture>> *>
+    *sKKMotionBlurScratchPool;
+static dispatch_semaphore_t sKKMotionBlurScratchPoolLock;
+static NSString *const kKKMotionBlurScratchContextThreadKey =
+    @"co.overpolish.keyframeless.kit.motionblur.scratchContext";
+
+/// Caps concurrent in-flight `applyToDestinationImage:` calls to one.
+/// FCP look-ahead can otherwise queue 3-5 frames in parallel, multiplying
+/// peak GPU memory by that factor. Serializing keeps total working set
+/// bounded to a single render's peak.
+static dispatch_semaphore_t sKKMotionBlurInFlightSema;
+
 @implementation KKMotionBlur
 
 + (void)initialize {
   if (self == [KKMotionBlur class]) {
     sKKMotionBlurPool = [NSMutableDictionary dictionary];
     sKKMotionBlurPoolLock = dispatch_semaphore_create(1);
+    sKKMotionBlurScratchPool = [NSMutableDictionary dictionary];
+    sKKMotionBlurScratchPoolLock = dispatch_semaphore_create(1);
+    sKKMotionBlurInFlightSema = dispatch_semaphore_create(1);
   }
+}
+
+static NSString *KKMBScratchKey(NSString *key, NSUInteger width,
+                                NSUInteger height, MTLPixelFormat format) {
+  // sampleIndex deliberately omitted: per-sample commit means sample N's
+  // scratch is fully released back to the pool before sample N+1 starts,
+  // so all samples reuse the same physical texture for the same purpose.
+  return
+      [NSString stringWithFormat:@"%@/%lu/%lu/%lu", key, (unsigned long)width,
+                                 (unsigned long)height, (unsigned long)format];
+}
+
++ (id<MTLTexture>)scratchTextureForKey:(NSString *)key
+                           sampleIndex:(int)sampleIndex
+                                 width:(NSUInteger)width
+                                height:(NSUInteger)height
+                                format:(MTLPixelFormat)format
+                                 usage:(MTLTextureUsage)usage
+                                device:(id<MTLDevice>)device {
+  NSMutableDictionary<NSString *, id<MTLTexture>> *ctx =
+      [NSThread currentThread]
+          .threadDictionary[kKKMotionBlurScratchContextThreadKey];
+  if (!ctx || !device)
+    return nil;
+
+  (void)sampleIndex; // Reserved in API; not part of pool key under
+                     // per-sample commit (samples reuse the same scratch).
+  NSString *poolKey = KKMBScratchKey(key, width, height, format);
+  // Idempotent within a single apply call.
+  id<MTLTexture> existing = ctx[poolKey];
+  if (existing)
+    return existing;
+
+  // Try the shared pool first.
+  id<MTLTexture> reused = nil;
+  dispatch_semaphore_wait(sKKMotionBlurScratchPoolLock, DISPATCH_TIME_FOREVER);
+  NSMutableArray<id<MTLTexture>> *available = sKKMotionBlurScratchPool[poolKey];
+  if (available.count > 0) {
+    reused = available.lastObject;
+    [available removeLastObject];
+  }
+  dispatch_semaphore_signal(sKKMotionBlurScratchPoolLock);
+
+  if (reused) {
+    ctx[poolKey] = reused;
+    return reused;
+  }
+
+  // Allocate fresh. Caller specifies usage so this works for any
+  // intermediate (render targets, MPS sources, etc.).
+  MTLTextureDescriptor *desc =
+      [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:format
+                                                         width:width
+                                                        height:height
+                                                     mipmapped:NO];
+  desc.usage = usage;
+  desc.storageMode = MTLStorageModePrivate;
+  id<MTLTexture> tex = [device newTextureWithDescriptor:desc];
+  if (tex)
+    ctx[poolKey] = tex;
+  return tex;
+}
+
++ (void)_returnScratchContextToPool:
+    (NSMutableDictionary<NSString *, id<MTLTexture>> *)ctx {
+  if (ctx.count == 0)
+    return;
+  dispatch_semaphore_wait(sKKMotionBlurScratchPoolLock, DISPATCH_TIME_FOREVER);
+  for (NSString *poolKey in ctx) {
+    NSMutableArray<id<MTLTexture>> *available =
+        sKKMotionBlurScratchPool[poolKey];
+    if (!available) {
+      available = [NSMutableArray array];
+      sKKMotionBlurScratchPool[poolKey] = available;
+    }
+    [available addObject:ctx[poolKey]];
+  }
+  dispatch_semaphore_signal(sKKMotionBlurScratchPoolLock);
 }
 
 + (KKMotionBlurState)snapshotStateWithParameterAPI:
@@ -186,6 +284,11 @@ static dispatch_semaphore_t sKKMotionBlurPoolLock;
   if (!dest || !renderBlock)
     return NO;
 
+  // Cap concurrent in-flight motion-blur renders to one. FCP look-ahead
+  // can otherwise multiply peak GPU memory by the number of pre-rendered
+  // frames in flight. Released at every subsequent return path below.
+  dispatch_semaphore_wait(sKKMotionBlurInFlightSema, DISPATCH_TIME_FOREVER);
+
   int sampleCount = state.sampleCount;
   if (sampleCount < 2)
     sampleCount = 2;
@@ -199,12 +302,15 @@ static dispatch_semaphore_t sKKMotionBlurPoolLock;
 
   id<MTLCommandQueue> queue = [cache commandQueueWithRegistryID:registryID
                                                     pixelFormat:pixelFormat];
-  if (!queue)
+  if (!queue) {
+    dispatch_semaphore_signal(sKKMotionBlurInFlightSema);
     return NO;
+  }
   id<MTLDevice> device = [cache deviceWithRegistryID:registryID];
   id<MTLTexture> destTexture = [dest metalTextureForDevice:device];
   if (!device || !destTexture) {
     [cache returnCommandQueueToCache:queue];
+    dispatch_semaphore_signal(sKKMotionBlurInFlightSema);
     return NO;
   }
 
@@ -227,6 +333,7 @@ static dispatch_semaphore_t sKKMotionBlurPoolLock;
                         height:h
                         format:pixelFormat];
     [cache returnCommandQueueToCache:queue];
+    dispatch_semaphore_signal(sKKMotionBlurInFlightSema);
     return NO;
   }
 
@@ -238,16 +345,38 @@ static dispatch_semaphore_t sKKMotionBlurPoolLock;
       [inputTextures addObject:tex];
   }
 
-  id<MTLCommandBuffer> commandBuffer = [queue commandBuffer];
-  commandBuffer.label = @"KKMotionBlur";
-  [commandBuffer enqueue];
-
+  // Per-sample commit + wait keeps peak intermediate-texture working set
+  // bounded to one sample's worth (instead of all N alive simultaneously
+  // on a shared command buffer). Sample-dest textures stay alive across
+  // samples because the accumulation pass reads them all at the end.
   BOOL allOk = YES;
   for (int i = 0; i < sampleCount; i++) {
-    if (!renderBlock(i, samples[i], commandBuffer, inputTextures)) {
-      KKLogWarn(@"KKMotionBlur: renderBlock returned NO at sample %d", i);
-      allOk = NO;
-      break;
+    @autoreleasepool {
+      id<MTLCommandBuffer> sampleBuffer = [queue commandBuffer];
+      sampleBuffer.label =
+          [NSString stringWithFormat:@"KKMotionBlur sample %d", i];
+
+      NSMutableDictionary<NSString *, id<MTLTexture>> *scratchCtx =
+          [NSMutableDictionary dictionary];
+      [NSThread currentThread]
+          .threadDictionary[kKKMotionBlurScratchContextThreadKey] = scratchCtx;
+
+      BOOL ok = renderBlock(i, samples[i], sampleBuffer, inputTextures);
+
+      if (ok) {
+        [sampleBuffer commit];
+        [sampleBuffer waitUntilCompleted];
+      } else {
+        KKLogWarn(@"KKMotionBlur: renderBlock returned NO at sample %d", i);
+        allOk = NO;
+      }
+
+      [self _returnScratchContextToPool:scratchCtx];
+      [[NSThread currentThread].threadDictionary
+          removeObjectForKey:kKKMotionBlurScratchContextThreadKey];
+
+      if (!ok)
+        break;
     }
   }
 
@@ -258,6 +387,7 @@ static dispatch_semaphore_t sKKMotionBlurPoolLock;
                         height:h
                         format:pixelFormat];
     [cache returnCommandQueueToCache:queue];
+    dispatch_semaphore_signal(sKKMotionBlurInFlightSema);
     return NO;
   }
 
@@ -277,8 +407,14 @@ static dispatch_semaphore_t sKKMotionBlurPoolLock;
                         height:h
                         format:pixelFormat];
     [cache returnCommandQueueToCache:queue];
+    dispatch_semaphore_signal(sKKMotionBlurInFlightSema);
     return NO;
   }
+
+  // Accumulation runs on its own command buffer after all sample passes
+  // have committed and completed.
+  id<MTLCommandBuffer> accBuffer = [queue commandBuffer];
+  accBuffer.label = @"KKMotionBlur accumulate";
 
   MTLRenderPassColorAttachmentDescriptor *colorAttachment =
       [[MTLRenderPassColorAttachmentDescriptor alloc] init];
@@ -290,7 +426,7 @@ static dispatch_semaphore_t sKKMotionBlurPoolLock;
   rpd.colorAttachments[0] = colorAttachment;
 
   id<MTLRenderCommandEncoder> encoder =
-      [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+      [accBuffer renderCommandEncoderWithDescriptor:rpd];
 
   float dw = (float)w, dh = (float)h;
   MTLViewport viewport = {0, 0, dw, dh, -1.0, 1.0};
@@ -321,8 +457,8 @@ static dispatch_semaphore_t sKKMotionBlurPoolLock;
               vertexCount:4];
   [encoder endEncoding];
 
-  [commandBuffer commit];
-  [commandBuffer waitUntilCompleted];
+  [accBuffer commit];
+  [accBuffer waitUntilCompleted];
 
   [self returnSampleTextures:samples
                   registryID:registryID
@@ -330,6 +466,7 @@ static dispatch_semaphore_t sKKMotionBlurPoolLock;
                       height:h
                       format:pixelFormat];
   [cache returnCommandQueueToCache:queue];
+  dispatch_semaphore_signal(sKKMotionBlurInFlightSema);
   return YES;
 }
 
