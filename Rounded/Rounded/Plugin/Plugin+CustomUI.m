@@ -9,6 +9,10 @@
 
 @implementation RoundedPlugin (CustomUI)
 
+- (BOOL)usesMotionBlur {
+  return YES;
+}
+
 - (NSArray<KKAnimatableProperty *> *)animatableProperties {
   return @[
     [KKAnimatableProperty propertyWithLabel:@"Radius" valueID:kParamRadius],
