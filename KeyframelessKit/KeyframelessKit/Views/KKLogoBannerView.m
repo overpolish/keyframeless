@@ -85,6 +85,7 @@ static const CGFloat KKHelpButtonSize = 18.0;
     _helpButton.bezelStyle = NSBezelStyleAccessoryBarAction;
     _helpButton.bordered = NO;
     _helpButton.contentTintColor = [NSColor inspectorLabel];
+    _helpButton.toolTip = @"Open help";
     _helpButton.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:_helpButton];
     [NSLayoutConstraint activateConstraints:@[

@@ -300,6 +300,24 @@ NS_ASSUME_NONNULL_BEGIN
                                paramIDs:(NSArray<NSNumber *> *)paramIDs
                                  atTime:(CMTime)time;
 
+/// Indicates whether this effect requires the user to wrap their footage
+/// in an Adjustment Clip or a Compound Clip before applying. The help
+/// window auto-prepends a matching tip when this is non-`None`.
+typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
+  /// No wrapping required — clips can take the effect directly.
+  KKClipWrappingModeNone = 0,
+  /// Effect samples underlying frames (Glow, Motion Blur, etc.) — needs
+  /// an Adjustment Clip or Compound Clip so it sees moving content.
+  KKClipWrappingModeAdjustmentOrCompound,
+  /// Effect transforms a single clip past its natural bounds (Magic Move)
+  /// — needs a Compound Clip to avoid being clipped.
+  KKClipWrappingModeCompound,
+};
+
+/// Override to declare how this effect needs to be wrapped before use.
+/// Default: `KKClipWrappingModeNone`.
+- (KKClipWrappingMode)clipWrappingMode;
+
 /// Override to provide help/keyboard-shortcut sections. Each section is
 /// rendered as a titled block with a tips bullet list and/or a 2-column
 /// shortcuts table. Returning a non-empty array makes the logo-banner

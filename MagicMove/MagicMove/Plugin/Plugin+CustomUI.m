@@ -48,31 +48,61 @@
   KKHelpSection *magicMove = [KKHelpSection
       sectionWithTitle:@"Magic Move"
              tipMarkup:@[
-               (@"Create a Compound Clip <kbd>⌥ G</kbd> before applying to "
-                @"avoid clipping"),
-               (@"<symbol squareshape.fill color=white /> toggles scale "
-                @"between 0\% and 100\%"),
-               (@"<symbol circle.fill color=white /> toggles opacity "
-                @"between 0\% and 100\%"),
+               (@"<accent>Position</accent>, <accent>Scale</accent>, "
+                @"<accent>Rotation</accent>, and <accent>Opacity</accent> "
+                @"all animate from the clip's natural state to the values "
+                @"set here - drive each one on canvas via the "
+                @"<symbol arcade.stick.console.fill /> on-screen control."),
+               (@"<accent>Anchor Point</accent> sets the pivot rotations "
+                @"and scale swing around."),
+               (@"Toggle <accent>Rotate with Motion</accent> to align the "
+                @"clip's heading with its motion path."),
+               (@"<symbol squareshape.fill color=white /> on the canvas "
+                @"toggles Scale between 0% and 100%; "
+                @"<symbol circle.fill color=white /> on the canvas "
+                @"toggles Opacity between 0% and 100%."),
+               (@"When the Position lane has multiple segments a bezier "
+                @"<accent>path</accent> draws between them on canvas - "
+                @"reshape it by dragging anchors or their handles."),
              ]
              shortcuts:@[
                [KKHelpShortcut
                    shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + drag"
                                descMarkup:@"Constrain motion to X or Y axis"],
-               [KKHelpShortcut
-                   shortcutWithKeysMarkup:@"<kbd>⌃</kbd> + drag"
-                               descMarkup:@"Disable snapping while dragging"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌃</kbd> + drag"
+                                           descMarkup:@"Disable snapping"],
                [KKHelpShortcut
                    shortcutWithKeysMarkup:@"<kbd>⌥</kbd>"
-                               descMarkup:@"Show X and Y rotation rings"],
+                               descMarkup:@"Reveal X and Y rotation rings"],
                [KKHelpShortcut
                    shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + scale"
-                               descMarkup:@"Lock scaling to X or Y axis"],
+                               descMarkup:@"Lock scale to X or Y axis"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"Double-click scale ring"
+                                           descMarkup:@"Reset to 1:1"],
                [KKHelpShortcut
-                   shortcutWithKeysMarkup:@"Double-click scale ring"
-                               descMarkup:@"Reset scale to 1:1 ratio"],
+                   shortcutWithKeysMarkup:@"Double-click path anchor"
+                               descMarkup:@"Toggle between smooth and corner"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + click "
+                                                      @"path anchor"
+                                           descMarkup:@"Delete the anchor"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + click "
+                                                      @"path curve"
+                                           descMarkup:@"Insert a new anchor "
+                                                      @"at the nearest spot"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + drag "
+                                                      @"handle"
+                                           descMarkup:@"Break handle "
+                                                      @"symmetry (move "
+                                                      @"independently)"],
              ]];
+  magicMove.icon =
+      [NSImage imageWithSystemSymbolName:@"circle.dotted.and.circle"
+                accessibilityDescription:nil];
   return @[ magicMove ];
+}
+
+- (KKClipWrappingMode)clipWrappingMode {
+  return KKClipWrappingModeCompound;
 }
 
 @end

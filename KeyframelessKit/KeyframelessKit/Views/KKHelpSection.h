@@ -33,7 +33,7 @@ NS_ASSUME_NONNULL_BEGIN
                            (nullable NSArray<KKHelpShortcut *> *)shortcuts;
 
 @property(nonatomic, readonly) NSString *title;
-@property(nonatomic, readonly) NSArray<NSAttributedString *> *tips;
+@property(nonatomic, copy) NSArray<NSAttributedString *> *tips;
 @property(nonatomic, readonly) NSArray<KKHelpShortcut *> *shortcuts;
 
 /// Optional SF Symbol or other image rendered to the left of the title.
