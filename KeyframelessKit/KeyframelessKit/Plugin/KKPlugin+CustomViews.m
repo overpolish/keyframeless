@@ -69,6 +69,9 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
   if (parameterID == kKKParamAnimationSeparator)
     return [self _createTimingHeader:parameterID];
 
+  if (parameterID == kKKParamMotionBlurSeparator)
+    return [self _createMotionBlurHeader:parameterID];
+
   if (parameterID == kKKParamTimingCurvePreview)
     return [self _createTimingGraphViewUncapped:NO];
 
@@ -213,6 +216,70 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
                              }];
 
   self.timingHeader = header;
+  return header;
+}
+
+- (NSView *)_createMotionBlurHeader:(UInt32)parameterID {
+  NSImage *icon = [NSImage imageWithSystemSymbolName:@"figure.walk.motion"
+                            accessibilityDescription:nil];
+  KKCustomGroupHeaderView *header =
+      [[KKCustomGroupHeaderView alloc] initWithFrame:NSMakeRect(0, 0, 300, 26)
+                                          apiManager:self.apiManager
+                                         parameterId:parameterID
+                                                text:@"Motion Blur"
+                                                icon:icon
+                                       showsCheckbox:YES];
+
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  BOOL enabled = NO;
+  [paramGetAPI getBoolValue:&enabled
+              fromParameter:kKKParamMotionBlurEnabled
+                     atTime:[actionAPI currentTime]];
+  header.isEnabled = enabled;
+
+  BOOL expanded = NO;
+  [paramGetAPI getBoolValue:&expanded
+              fromParameter:kKKParamMotionBlurExpanded
+                     atTime:[actionAPI currentTime]];
+  header.isExpanded = expanded;
+  [actionAPI endAction:self];
+
+  __weak typeof(self) weakSelf = self;
+  header.onEnabledChanged = ^(BOOL isEnabled) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actAPI startAction:strongSelf];
+    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [setAPI setBoolValue:isEnabled
+             toParameter:kKKParamMotionBlurEnabled
+                  atTime:[actAPI currentTime]];
+    [actAPI endAction:strongSelf];
+  };
+
+  header.onExpandedChanged = ^(BOOL isExpanded) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actAPI startAction:strongSelf];
+    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [setAPI setBoolValue:isExpanded
+             toParameter:kKKParamMotionBlurExpanded
+                  atTime:[actAPI currentTime]];
+    [actAPI endAction:strongSelf];
+  };
+
   return header;
 }
 
@@ -428,6 +495,29 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
   return timing;
 }
 
++ (KKHelpSection *)_builtInMotionBlurHelpSection {
+  NSArray<NSString *> *tips = @[
+    (@"<accent>Length</accent> is the shutter angle: 0% freezes each "
+     @"frame, 50% (default) is a 180° shutter (half a frame of trail), "
+     @"100% smears across the full frame."),
+    (@"<accent>Quality</accent> controls the sample count - more samples "
+     @"means smoother blur but slower renders. Default ~16 samples; the "
+     @"slider scales exponentially up to 128."),
+    (@"<accent>Transitions only?</accent> skips the blur work on "
+     @"<accent>hold</accent> segments, where nothing is moving anyway. "
+     @"Big performance win on segments which don't need motion blur."),
+    (@"<warn>Tip:</warn> high Length with low Quality will band visibly. "
+     @"If you increase Length, its recommended to increase Quality too."),
+  ];
+
+  KKHelpSection *mb = [KKHelpSection sectionWithTitle:@"Motion Blur"
+                                            tipMarkup:tips
+                                            shortcuts:nil];
+  mb.icon = [NSImage imageWithSystemSymbolName:@"figure.walk.motion"
+                      accessibilityDescription:nil];
+  return mb;
+}
+
 - (void)openHelpRemoteWindow {
   id<FxCustomParameterActionAPI_v4> actionAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
@@ -453,6 +543,8 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
     [KKPlugin _prependClipWrappingTip:wrapTip toSection:sections.firstObject];
   if ([self animatableProperties].count > 0)
     [sections addObject:[KKPlugin _builtInTimingHelpSection]];
+  if ([self usesMotionBlur])
+    [sections addObject:[KKPlugin _builtInMotionBlurHelpSection]];
   CGSize contentSize = CGSizeMake(500.0, 420.0);
   [windowAPI remoteWindowOfSize:contentSize
                           reply:^(FxXPView *parentView, NSError *error) {

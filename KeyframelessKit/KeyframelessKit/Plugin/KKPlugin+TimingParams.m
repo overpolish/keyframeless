@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#import "../KKLog.h"
 #import "../Math/KKEasing.h"
 #import "../Math/KKTimingStage.h"
 #import "../Views/KKTimingGraphView.h"
@@ -259,6 +260,73 @@ static BOOL KKAddEasingCurvePopup(id<FxParameterCreationAPI_v5> paramAPI,
                                            delta:1
                                   parameterFlags:kFxParameterFlag_HIDDEN],
                   error, @"Unable to add Hold Seed slider"))
+    return NO;
+
+  return YES;
+}
+
+- (BOOL)addMotionBlurParametersWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
+                                 error:(NSError **)error {
+
+  if (!KKAddParam([paramAPI
+                      addCustomParameterWithName:@""
+                                     parameterID:kKKParamMotionBlurSeparator
+                                    defaultValue:@(kKKParamMotionBlurSeparator)
+                                  parameterFlags:kCustomUI],
+                  error, @"Unable to add Motion Blur group"))
+    return NO;
+
+  // Hidden — driven by the checkbox in the group header view.
+  if (!KKAddParam([paramAPI addToggleButtonWithName:@""
+                                        parameterID:kKKParamMotionBlurEnabled
+                                       defaultValue:NO
+                                     parameterFlags:kHiddenNotAnim],
+                  error, @"Unable to add Motion Blur enabled toggle"))
+    return NO;
+
+  // UI-only: header chevron state. Hidden, persisted, starts collapsed.
+  if (!KKAddParam([paramAPI addToggleButtonWithName:@""
+                                        parameterID:kKKParamMotionBlurExpanded
+                                       defaultValue:NO
+                                     parameterFlags:kHiddenNotAnim],
+                  error, @"Unable to add Motion Blur expanded toggle"))
+    return NO;
+
+  // Length: 0–100% maps to 0–360° shutter angle. Default 50% = 180°.
+  // Starts hidden (group collapsed by default); shown by
+  // updateMotionBlurParameterVisibility when expanded.
+  if (!KKAddParam([paramAPI addPercentSliderWithName:@"Length"
+                                         parameterID:kKKParamMotionBlurShutter
+                                        defaultValue:0.5
+                                        parameterMin:0.0
+                                        parameterMax:1.0
+                                           sliderMin:0.0
+                                           sliderMax:1.0
+                                               delta:0.01
+                                      parameterFlags:kFxParameterFlag_HIDDEN],
+                  error, @"Unable to add Motion Blur Length slider"))
+    return NO;
+
+  // Quality: 0–100% maps exponentially to 2–128 samples. Default 50% ≈ 16.
+  if (!KKAddParam([paramAPI addPercentSliderWithName:@"Quality"
+                                         parameterID:kKKParamMotionBlurQuality
+                                        defaultValue:0.5
+                                        parameterMin:0.0
+                                        parameterMax:1.0
+                                           sliderMin:0.0
+                                           sliderMax:1.0
+                                               delta:0.01
+                                      parameterFlags:kFxParameterFlag_HIDDEN],
+                  error, @"Unable to add Motion Blur Quality slider"))
+    return NO;
+
+  if (!KKAddParam([paramAPI
+                      addToggleButtonWithName:@"Transitions only?"
+                                  parameterID:kKKParamMotionBlurTransitionsOnly
+                                 defaultValue:NO
+                               parameterFlags:kFxParameterFlag_HIDDEN |
+                                              kFxParameterFlag_NOT_ANIMATABLE],
+                  error, @"Unable to add Motion Blur transitions-only toggle"))
     return NO;
 
   return YES;

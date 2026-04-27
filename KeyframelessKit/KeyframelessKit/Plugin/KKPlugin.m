@@ -258,6 +258,51 @@
   return YES;
 }
 
+- (BOOL)
+    encodeFullScreenQuadIntoTexture:(id<MTLTexture>)destTexture
+                      commandBuffer:(id<MTLCommandBuffer>)commandBuffer
+                     sourceTextures:(NSArray<id<MTLTexture>> *)sourceTextures
+                           commands:
+                               (void (^)(id<MTLRenderCommandEncoder>,
+                                         NSArray<id<MTLTexture>> *))commands {
+  MTLRenderPassColorAttachmentDescriptor *colorAttachment =
+      [[MTLRenderPassColorAttachmentDescriptor alloc] init];
+  colorAttachment.texture = destTexture;
+  colorAttachment.clearColor = MTLClearColorMake(0, 0, 0, 0);
+  colorAttachment.loadAction = MTLLoadActionClear;
+
+  MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
+  rpd.colorAttachments[0] = colorAttachment;
+
+  id<MTLRenderCommandEncoder> encoder =
+      [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+
+  float w = (float)destTexture.width;
+  float h = (float)destTexture.height;
+  MTLViewport viewport = {0, 0, w, h, -1.0, 1.0};
+  [encoder setViewport:viewport];
+
+  KKVertex2D vertices[] = {
+      {{w / 2.0f, -h / 2.0f}, {1.0, 1.0}},
+      {{-w / 2.0f, -h / 2.0f}, {0.0, 1.0}},
+      {{w / 2.0f, h / 2.0f}, {1.0, 0.0}},
+      {{-w / 2.0f, h / 2.0f}, {0.0, 0.0}},
+  };
+  simd_uint2 viewportSize = {(unsigned int)w, (unsigned int)h};
+
+  [encoder setVertexBytes:vertices
+                   length:sizeof(vertices)
+                  atIndex:KKVertexInputIndex_Vertices];
+  [encoder setVertexBytes:&viewportSize
+                   length:sizeof(viewportSize)
+                  atIndex:KKVertexInputIndex_ViewportSize];
+
+  commands(encoder, sourceTextures);
+
+  [encoder endEncoding];
+  return YES;
+}
+
 - (BOOL)destinationImageRect:(FxRect *)destinationImageRect
                 sourceImages:(NSArray<FxImageTile *> *)sourceImages
             destinationImage:(FxImageTile *)destinationImage
@@ -368,6 +413,10 @@
 
 - (NSArray<KKAnimatableProperty *> *)animatableProperties {
   return nil;
+}
+
+- (BOOL)usesMotionBlur {
+  return NO;
 }
 
 - (NSSet<NSString *> *)hiddenAnimatablePropertyLabels {

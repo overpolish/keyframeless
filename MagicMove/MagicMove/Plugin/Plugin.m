@@ -34,6 +34,7 @@
                    error:(NSError **)error {
   [self handleLinkedParameterChanged:parameterID atTime:time];
   [self updateTimingParameterVisibility];
+  [self updateMotionBlurParameterVisibility];
   [self updateParameterVisibilityAtTime:time];
   [self multiStageHandleParameterChanged:parameterID atTime:time];
   return YES;

@@ -1,0 +1,83 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+#pragma once
+
+#import <CoreMedia/CoreMedia.h>
+#import <Foundation/Foundation.h>
+#import <Metal/Metal.h>
+
+@protocol FxParameterRetrievalAPI_v6;
+@protocol FxTimingAPI_v4;
+@class FxImageTile;
+
+NS_ASSUME_NONNULL_BEGIN
+
+/// Snapshot of motion-blur params resolved during `pluginState:atTime:`,
+/// where FxParameterRetrievalAPI_v6 is available. Plugins concatenate this
+/// into their own pluginState NSData so render — which has no paramAPI —
+/// can use the values.
+typedef struct {
+  bool enabled;
+  bool transitionsOnly; // when true, plugin should clear `enabled` for
+                        // frames where no timing lane is in a Transition
+                        // segment, so hold portions skip the blur path
+  int sampleCount; // 2..KK_MOTION_BLUR_MAX_SAMPLES, undefined when disabled
+  double shutterSec;
+} KKMotionBlurState;
+
+/// Sample-and-accumulate motion blur shared across plugins.
+///
+/// Unlike the standalone MotionBlur effect (which post-processes the
+/// upstream input via FCP's scheduleInputs), this variant blurs the
+/// *plugin's own* render: the host plugin hands `renderBlock` over and
+/// KKMotionBlur invokes it N times at staggered sub-frame times, each
+/// into a pooled offscreen texture, then averages them into `dest`.
+///
+/// The plugin is responsible for re-evaluating its own time-dependent
+/// state (KKTiming queries, transforms, etc.) at the `subTime` it is
+/// handed — KKMotionBlur knows nothing about what is being drawn.
+@interface KKMotionBlur : NSObject
+
+/// Snapshots the motion-blur params at `time`. Call from
+/// `pluginState:atTime:` (where paramAPI is available) and embed the
+/// returned struct in your pluginState NSData; pass it back to
+/// `applyToDestinationImage:state:...` from your render path.
++ (KKMotionBlurState)snapshotStateWithParameterAPI:
+                         (id<FxParameterRetrievalAPI_v6>)paramAPI
+                                         timingAPI:(id<FxTimingAPI_v4>)timingAPI
+                                            atTime:(CMTime)time;
+
+/// Returns the N CMTimes (wrapped as NSValue) that `applyToDestinationImage:`
+/// will request from the render block, given the snapshotted state and the
+/// frame's render time. Plugins use this from `pluginState:atTime:` to
+/// pre-compute their per-sample render parameters (paramAPI is unavailable
+/// at render time, so all sample-time evaluation must happen up-front).
++ (NSArray<NSValue *> *)sampleTimesForState:(KKMotionBlurState)state
+                                 renderTime:(CMTime)renderTime;
+
+/// Renders one frame with motion blur applied. Owns its own command queue
+/// and command buffer; commits and waits before returning.
+///
+/// The render block is invoked N times (once per sample) with `sampleIndex`
+/// matching the index into the array returned by `sampleTimesForState:`.
+/// The plugin uses `sampleIndex` to look up its precomputed per-sample
+/// render data and encode a draw into `sampleDest` on `commandBuffer`.
+///
+/// Returns NO if `state.enabled` is false (caller should fall back to
+/// its normal render path) or on error.
++ (BOOL)applyToDestinationImage:(FxImageTile *)destinationImage
+                   sourceImages:(NSArray<FxImageTile *> *)sourceImages
+                          state:(KKMotionBlurState)state
+                     renderTime:(CMTime)renderTime
+                    renderBlock:
+                        (BOOL (^)(int sampleIndex, id<MTLTexture> sampleDest,
+                                  id<MTLCommandBuffer> commandBuffer,
+                                  NSArray<id<MTLTexture>> *inputTextures))
+                            renderBlock;
+
+@end
+
+NS_ASSUME_NONNULL_END

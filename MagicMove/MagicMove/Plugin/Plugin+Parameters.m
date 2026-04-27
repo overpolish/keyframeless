@@ -40,6 +40,9 @@
   if (![self addMultiStageParametersWithAPI:paramAPI error:error])
     return NO;
 
+  if (![self addMotionBlurParametersWithAPI:paramAPI error:error])
+    return NO;
+
   if (![paramAPI addPointParameterWithName:@"Anchor Point"
                                parameterID:kParamAnchorPoint
                                   defaultX:0.5

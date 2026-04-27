@@ -10,6 +10,10 @@
 
 @implementation MagicMovePlugin (CustomUI)
 
+- (BOOL)usesMotionBlur {
+  return YES;
+}
+
 - (NSArray<KKAnimatableProperty *> *)animatableProperties {
   return @[
     [KKAnimatableProperty
