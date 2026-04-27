@@ -8,15 +8,7 @@
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
 #import "KKHelpSection.h"
-
-@interface KKFlippedClipView : NSClipView
-@end
-
-@implementation KKFlippedClipView
-- (BOOL)isFlipped {
-  return YES;
-}
-@end
+#import "KKPaddedScrollView.h"
 
 @interface KKHelpShortcutsGrid : NSGridView
 @end
@@ -109,39 +101,38 @@ static const CGFloat KKHelpKeyColumnMin = 170.0;
   bg.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
   [self addSubview:bg];
 
-  NSScrollView *scroll = [[NSScrollView alloc] initWithFrame:self.bounds];
-  scroll.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-  scroll.hasVerticalScroller = YES;
-  scroll.hasHorizontalScroller = NO;
-  scroll.drawsBackground = NO;
-  scroll.borderType = NSNoBorder;
-  scroll.automaticallyAdjustsContentInsets = NO;
-  scroll.contentInsets = NSEdgeInsetsMake(KKHelpPagePadding, KKHelpPagePadding,
-                                          KKHelpPagePadding, KKHelpPagePadding);
-  KKFlippedClipView *clip = [[KKFlippedClipView alloc] init];
-  clip.drawsBackground = NO;
-  scroll.contentView = clip;
-  [self addSubview:scroll];
-
   NSStackView *page = [[NSStackView alloc] initWithFrame:NSZeroRect];
   page.orientation = NSUserInterfaceLayoutOrientationVertical;
   page.alignment = NSLayoutAttributeLeading;
   page.spacing = KKHelpSectionGap;
-  page.translatesAutoresizingMaskIntoConstraints = NO;
 
-  for (KKHelpSection *section in sections)
-    [page addArrangedSubview:[self _viewForSection:section]];
+  for (NSUInteger i = 0; i < sections.count; i++) {
+    if (i > 0) {
+      NSView *divider = [[NSView alloc] init];
+      divider.wantsLayer = YES;
+      divider.layer.backgroundColor =
+          [[[NSColor inspectorLabel] colorWithAlphaComponent:0.10] CGColor];
+      divider.translatesAutoresizingMaskIntoConstraints = NO;
+      [divider.heightAnchor constraintEqualToConstant:1.0].active = YES;
+      [page addArrangedSubview:divider];
+      [divider.widthAnchor constraintEqualToAnchor:page.widthAnchor].active =
+          YES;
+    }
+    NSView *sv = [self _viewForSection:sections[i]];
+    [page addArrangedSubview:sv];
+    [sv.widthAnchor constraintEqualToAnchor:page.widthAnchor].active = YES;
+  }
 
-  scroll.documentView = page;
-  // Pin width so the document view tracks the scroll view (vertical scroll
-  // only). Otherwise NSStackView default-sizes to its content.
+  KKPaddedScrollView *scroll =
+      [[KKPaddedScrollView alloc] initWithDocumentView:page
+                                               padding:KKHelpPagePadding];
+  scroll.translatesAutoresizingMaskIntoConstraints = NO;
+  [self addSubview:scroll];
   [NSLayoutConstraint activateConstraints:@[
-    [page.leadingAnchor
-        constraintEqualToAnchor:scroll.contentView.leadingAnchor],
-    [page.trailingAnchor
-        constraintEqualToAnchor:scroll.contentView.trailingAnchor],
-    [page.topAnchor constraintEqualToAnchor:scroll.contentView.topAnchor],
-    [page.widthAnchor constraintEqualToAnchor:scroll.contentView.widthAnchor],
+    [scroll.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+    [scroll.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+    [scroll.topAnchor constraintEqualToAnchor:self.topAnchor],
+    [scroll.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
   ]];
 
   return self;
@@ -156,14 +147,36 @@ static const CGFloat KKHelpKeyColumnMin = 170.0;
   NSTextField *title = [NSTextField labelWithString:section.title];
   title.font = [NSFont systemFontOfSize:18.0 weight:NSFontWeightSemibold];
   title.textColor = [NSColor inspectorLabel];
-  [stack addArrangedSubview:title];
 
-  if (section.tips.count > 0)
-    [stack addArrangedSubview:[self _bulletListForTips:section.tips]];
+  if (section.icon) {
+    NSStackView *titleRow = [[NSStackView alloc] initWithFrame:NSZeroRect];
+    titleRow.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    titleRow.alignment = NSLayoutAttributeCenterY;
+    titleRow.spacing = 8.0;
+    NSImageView *iconView = [NSImageView imageViewWithImage:section.icon];
+    iconView.symbolConfiguration = [NSImageSymbolConfiguration
+        configurationWithPointSize:18.0
+                            weight:NSFontWeightSemibold];
+    iconView.contentTintColor = [NSColor inspectorLabel];
+    [titleRow addArrangedSubview:iconView];
+    [titleRow addArrangedSubview:title];
+    [stack addArrangedSubview:titleRow];
+  } else {
+    [stack addArrangedSubview:title];
+  }
+
+  if (section.tips.count > 0) {
+    NSView *bullets = [self _bulletListForTips:section.tips];
+    [stack addArrangedSubview:bullets];
+    [bullets.widthAnchor constraintEqualToAnchor:stack.widthAnchor].active =
+        YES;
+  }
 
   if (section.shortcuts.count > 0) {
     [stack addArrangedSubview:[self _subheading:@"Shortcuts"]];
-    [stack addArrangedSubview:[self _gridForShortcuts:section.shortcuts]];
+    NSView *grid = [self _gridForShortcuts:section.shortcuts];
+    [stack addArrangedSubview:grid];
+    [grid.widthAnchor constraintEqualToAnchor:stack.widthAnchor].active = YES;
   }
 
   return stack;
@@ -183,6 +196,16 @@ static const CGFloat KKHelpKeyColumnMin = 170.0;
   list.spacing = 6.0;
 
   for (NSAttributedString *tip in tips) {
+    if ([tip.string isEqualToString:@"---"]) {
+      NSView *line = [[NSView alloc] init];
+      line.wantsLayer = YES;
+      line.layer.backgroundColor =
+          [[[NSColor inspectorLabel] colorWithAlphaComponent:0.10] CGColor];
+      line.translatesAutoresizingMaskIntoConstraints = NO;
+      [line.heightAnchor constraintEqualToConstant:1.0].active = YES;
+      [list addArrangedSubview:line];
+      continue;
+    }
     NSStackView *row = [[NSStackView alloc] initWithFrame:NSZeroRect];
     row.orientation = NSUserInterfaceLayoutOrientationHorizontal;
     row.alignment = NSLayoutAttributeFirstBaseline;
@@ -196,10 +219,12 @@ static const CGFloat KKHelpKeyColumnMin = 170.0;
     NSTextField *body = [NSTextField labelWithAttributedString:tip];
     body.lineBreakMode = NSLineBreakByWordWrapping;
     body.maximumNumberOfLines = 0;
-    body.preferredMaxLayoutWidth = 380.0;
     body.textColor = [NSColor inspectorLabel];
     [body setContentHuggingPriority:NSLayoutPriorityDefaultLow
                      forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [body setContentCompressionResistancePriority:NSLayoutPriorityDefaultLow
+                                   forOrientation:
+                                       NSLayoutConstraintOrientationHorizontal];
     [row addArrangedSubview:body];
 
     [list addArrangedSubview:row];
@@ -219,8 +244,12 @@ static const CGFloat KKHelpKeyColumnMin = 170.0;
     NSTextField *desc = [NSTextField labelWithAttributedString:sc.desc];
     desc.lineBreakMode = NSLineBreakByWordWrapping;
     desc.maximumNumberOfLines = 0;
-    desc.preferredMaxLayoutWidth = 320.0;
     desc.textColor = [NSColor inspectorLabel];
+    [desc setContentCompressionResistancePriority:NSLayoutPriorityDefaultLow
+                                   forOrientation:
+                                       NSLayoutConstraintOrientationHorizontal];
+    [desc setContentHuggingPriority:NSLayoutPriorityDefaultLow
+                     forOrientation:NSLayoutConstraintOrientationHorizontal];
     [grid addRowWithViews:@[ keys, desc ]];
   }
   if (grid.numberOfColumns >= 1) {

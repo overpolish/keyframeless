@@ -36,6 +36,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, readonly) NSArray<NSAttributedString *> *tips;
 @property(nonatomic, readonly) NSArray<KKHelpShortcut *> *shortcuts;
 
+/// Optional SF Symbol or other image rendered to the left of the title.
+@property(nonatomic, nullable, strong) NSImage *icon;
+
 @end
 
 NS_ASSUME_NONNULL_END
