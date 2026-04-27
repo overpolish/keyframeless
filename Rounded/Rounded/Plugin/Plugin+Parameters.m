@@ -65,6 +65,10 @@
     return NO;
   }
 
+  if (![self addMotionBlurParametersWithAPI:paramAPI error:error]) {
+    return NO;
+  }
+
   return YES;
 }
 
