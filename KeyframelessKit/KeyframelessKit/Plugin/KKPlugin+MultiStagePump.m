@@ -99,11 +99,11 @@ static void KKSyncLoopFromParams(id<PROAPIAccessing> apiManager) {
 
 static void KKSyncFromParams(id<PROAPIAccessing> apiManager) {
   KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
+  if (!state)
+    return;
   KKStageSequencerView *seq = state.sequencerView;
   NSArray<KKTimingViewRefs *> *extras =
       [state.additionalTimingViews copy] ?: @[];
-  if (!seq && extras.count == 0)
-    return;
   id<FxParameterRetrievalAPI_v6> getAPI =
       [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   if (!getAPI)
@@ -133,6 +133,8 @@ static void KKSyncFromParams(id<PROAPIAccessing> apiManager) {
       (dur > 0) ? KKTimingRebalancedLanes(raw, dur) : raw;
   state.lanesSnapshot = lanes;
   state.pendingLanes = nil;
+  if (!seq && extras.count == 0)
+    return;
   NSArray<KKTimingLane *> *visible =
       KKFilterLanesForVisibility(lanes, state.hiddenLaneLabels);
   KKStageSequencerRulerView *primaryRuler = state.rulerView;
