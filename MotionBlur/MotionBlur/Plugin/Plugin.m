@@ -65,22 +65,6 @@ typedef struct {
     return NO;
   }
 
-  NSAttributedString *infoText = [KKMarkup
-      attributedStringFromMarkup:
-          @"Use on an Adjustment Clip <kbd>⌥ A</kbd> or a Compound Clip "
-          @"<kbd>⌥ G</kbd>"];
-  if (![self
-          addInfoParameterWithAttributedText:infoText
-                                        icon:[NSImage
-                                                 imageWithSystemSymbolName:
-                                                     @"info.circle"
-                                                  accessibilityDescription:nil]
-                                 parameterID:kParamInfoUsage
-                                     withAPI:paramAPI
-                                       error:error]) {
-    return NO;
-  }
-
   // Length: 0-100% maps to 0-360 degree shutter angle.
   // Default 50% = 180 degrees (half frame duration).
   if (![paramAPI addPercentSliderWithName:@"Length"
@@ -253,19 +237,33 @@ typedef struct {
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
-  if (parameterID == kParamInfoUsage) {
-    NSAttributedString *text = [KKMarkup
-        attributedStringFromMarkup:
-            @"Use on an Adjustment Clip <kbd>⌥ A</kbd> or a Compound Clip "
-            @"<kbd>⌥ G</kbd>"];
-    KKAlertView *alert = [[KKAlertView alloc] initWithAttributedText:text];
-    alert.icon = [NSImage imageWithSystemSymbolName:@"info.circle"
-                           accessibilityDescription:nil];
-    return alert;
-  }
   struct objc_super sup = {self, [KKPlugin class]};
   return ((NSView * (*)(struct objc_super *, SEL, UInt32)) objc_msgSendSuper)(
       &sup, @selector(createViewForParameterID:), parameterID);
+}
+
+- (NSArray<KKHelpSection *> *)helpSections {
+  KKHelpSection *mb = [KKHelpSection
+      sectionWithTitle:@"Motion Blur"
+             tipMarkup:@[
+               (@"<accent>Length</accent> is the shutter angle: 0% freezes "
+                @"each frame, 50% (default) is a 180° shutter (half a frame "
+                @"of trail), 100% smears across the full frame."),
+               (@"<accent>Quality</accent> controls the sample count - more "
+                @"samples means smoother blur but slower renders. Default "
+                @"~16 samples; the slider scales exponentially up to 128."),
+               (@"<warn>Tip:</warn> high Length with low Quality will band "
+                @"visibly. If you increase Length, its recommended to increase "
+                @"Quality too."),
+             ]
+             shortcuts:nil];
+  mb.icon = [NSImage imageWithSystemSymbolName:@"figure.walk.motion"
+                      accessibilityDescription:nil];
+  return @[ mb ];
+}
+
+- (KKClipWrappingMode)clipWrappingMode {
+  return KKClipWrappingModeAdjustmentOrCompound;
 }
 
 @end

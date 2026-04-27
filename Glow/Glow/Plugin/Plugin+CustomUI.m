@@ -58,17 +58,6 @@
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
-  if (parameterID == kParamInfoUsage) {
-    NSAttributedString *text = [KKMarkup
-        attributedStringFromMarkup:
-            @"Use on an Adjustment Clip <kbd>⌥ A</kbd> or a Compound Clip "
-            @"<kbd>⌥ G</kbd>"];
-    KKAlertView *alert = [[KKAlertView alloc] initWithAttributedText:text];
-    alert.icon = [NSImage imageWithSystemSymbolName:@"info.circle"
-                           accessibilityDescription:nil];
-    return alert;
-  }
-
   if (parameterID == kParamNoiseGroup)
     return [self
         createGroupHeaderWithTitle:@"Noise"
@@ -83,6 +72,39 @@
   struct objc_super sup = {self, [KKPlugin class]};
   return ((NSView * (*)(struct objc_super *, SEL, UInt32)) objc_msgSendSuper)(
       &sup, @selector(createViewForParameterID:), parameterID);
+}
+
+- (NSArray<KKHelpSection *> *)helpSections {
+  KKHelpSection *glow = [KKHelpSection
+      sectionWithTitle:@"Glow"
+             tipMarkup:@[
+               (@"<accent>Radius X / Y</accent> control how far the glow "
+                @"spreads. Hold <kbd>⌘</kbd> while dragging inspector slider "
+                @"to keep "
+                @"X and Y in sync."),
+               (@"<accent>Position</accent> moves where the glow appears - "
+                @"move it via the "
+                @"<symbol arcade.stick.console.fill /> on-screen control."),
+               (@"<accent>Intensity</accent> is overall brightness; "
+                @"<accent>Falloff</accent> shapes how sharply it fades to "
+                @"the edge; <accent>Threshold</accent> makes the underlying "
+                @"objects brighter."),
+               (@"<accent>Color</accent> mode tints the glow: supports "
+                @"Dynamic, Solid, and Gradient."),
+               (@"The <accent>Noise</accent> group adds a flickering, "
+                @"organic shimmer. <accent>Amount</accent> controls "
+                @"strength; <accent>Speed</accent> animates it over time; "
+                @"<accent>Offset</accent> shifts the noise field "
+                @"(animatable for parallax-like motion)."),
+             ]
+             shortcuts:nil];
+  glow.icon = [NSImage imageWithSystemSymbolName:@"app.background.dotted"
+                        accessibilityDescription:nil];
+  return @[ glow ];
+}
+
+- (KKClipWrappingMode)clipWrappingMode {
+  return KKClipWrappingModeAdjustmentOrCompound;
 }
 
 @end

@@ -11,6 +11,7 @@
 #import "../Views/KKCustomGroupHeaderView.h"
 #import "../Views/KKHelpSection.h"
 #import "../Views/KKHelpView.h"
+#import "../Views/KKMarkup.h"
 #import "../Views/KKSegmentEditView.h"
 #import "../Views/KKSeparatorView.h"
 #import "../Views/StageSequencer/KKRemoteWindowKeyHandlerView.h"
@@ -322,6 +323,32 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
   return @[];
 }
 
+- (KKClipWrappingMode)clipWrappingMode {
+  return KKClipWrappingModeNone;
+}
+
++ (nullable NSString *)_clipWrappingTipForMode:(KKClipWrappingMode)mode {
+  switch (mode) {
+  case KKClipWrappingModeAdjustmentOrCompound:
+    return @"Apply on an Adjustment Clip <kbd>⌥ A</kbd> or a Compound Clip "
+           @"<kbd>⌥ G</kbd> to avoid unexpected behavior and clipping.";
+  case KKClipWrappingModeCompound:
+    return @"Wrap your clip in a Compound Clip <kbd>⌥ G</kbd> before applying "
+           @"to avoid the animation being clipped at the edges.";
+  case KKClipWrappingModeNone:
+    return nil;
+  }
+}
+
++ (void)_prependClipWrappingTip:(NSString *)tipMarkup
+                      toSection:(KKHelpSection *)section {
+  NSAttributedString *wrap = [KKMarkup attributedStringFromMarkup:tipMarkup];
+  NSMutableArray<NSAttributedString *> *tips = [NSMutableArray array];
+  [tips addObject:wrap];
+  [tips addObjectsFromArray:section.tips];
+  section.tips = tips;
+}
+
 + (KKHelpSection *)_builtInTimingHelpSection {
   NSArray<NSString *> *tips = @[
     (@"Think in <accent>sections</accent>, not keyframes - each lane is a "
@@ -437,6 +464,10 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
 
   NSMutableArray<KKHelpSection *> *sections =
       [[self helpSections] mutableCopy] ?: [NSMutableArray array];
+  NSString *wrapTip =
+      [KKPlugin _clipWrappingTipForMode:[self clipWrappingMode]];
+  if (wrapTip.length > 0 && sections.count > 0)
+    [KKPlugin _prependClipWrappingTip:wrapTip toSection:sections.firstObject];
   if ([self animatableProperties].count > 0)
     [sections addObject:[KKPlugin _builtInTimingHelpSection]];
   CGSize contentSize = CGSizeMake(500.0, 420.0);
