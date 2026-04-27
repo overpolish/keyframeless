@@ -38,6 +38,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKOSCLabel.h>
 #import <KeyframelessKit/KKOnScreenControl+CoordinateSpace.h>
+#import <KeyframelessKit/KKPaddedScrollView.h>
 #import <KeyframelessKit/KKParameterRowView.h>
 #import <KeyframelessKit/KKPathBoolean.h>
 #import <KeyframelessKit/KKPillToggleRowView.h>

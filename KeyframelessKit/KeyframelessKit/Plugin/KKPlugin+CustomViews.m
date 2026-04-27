@@ -322,6 +322,94 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
   return @[];
 }
 
++ (KKHelpSection *)_builtInTimingHelpSection {
+  NSArray<NSString *> *tips = @[
+    (@"Think in <accent>sections</accent>, not keyframes - each lane is a "
+     @"chain of <accent>holds</accent> (locked values) and "
+     @"<warn>transitions</warn> (interpolations between adjacent holds)."),
+    (@"<symbol arcade.stick.console.fill /> on a lane label toggles that "
+     @"lane's on-screen control on the canvas."),
+    (@"Click <symbol macwindow.on.rectangle /> on the Timing header to pop "
+     @"the sequencer out into its own window for more room."),
+    (@"Drag the timeline ruler to scrub the playhead; press "
+     @"<kbd>Space</kbd> to play and pause. Toggle "
+     @"<symbol repeat color=accent /> on the ruler to loop playback."),
+    (@"A transition between two holds with the "
+     @"same value won't visibly animate - change one side first."),
+    (@"Hover a segment to reveal a <symbol graph.2d /> button. Click it "
+     @"to change the easing curve (or hold effect) - or "
+     @"<kbd>Shift</kbd> + click to apply the same curve to every selected "
+     @"segment in all lane."),
+    (@"On a multi-component hold (like Radius X/Y), the edit popover has "
+     @"a <accent>Linked</accent> toggle - keeps the components' "
+     @"proportions locked through the effect, so X/Y stay aspect-locked "
+     @"through a wobble."),
+  ];
+
+  NSArray<KKHelpShortcut *> *shortcuts = @[
+    [KKHelpShortcut shortcutWithKeysMarkup:@"Click lane label"
+                                descMarkup:@"Disable / enable that lane's "
+                                           @"animation"],
+    [KKHelpShortcut shortcutWithKeysMarkup:@"Click"
+                                descMarkup:@"Select a segment"],
+    [KKHelpShortcut shortcutWithKeysMarkup:@"Double-click"
+                                descMarkup:@"Split a segment at the cursor"],
+    [KKHelpShortcut
+        shortcutWithKeysMarkup:@"Right-click"
+                    descMarkup:@"Convert between <accent>hold</accent> "
+                               @"and <warn>transition</warn>"],
+    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌘</kbd> + click"
+                                descMarkup:@"Delete the segment"],
+    [KKHelpShortcut
+        shortcutWithKeysMarkup:@"Drag edge"
+                    descMarkup:@"Resize a segment (snaps to other edges, "
+                               @"playhead, and ends)"],
+    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>Shift</kbd> while dragging"
+                                descMarkup:@"Disable snapping"],
+    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + drag segment"
+                                descMarkup:@"Copy this segment's value onto "
+                                           @"another segment"],
+    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌃</kbd> + click"
+                                descMarkup:@"Lock / unlock the segment's "
+                                           @"duration"],
+    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌃</kbd> + drag"
+                                descMarkup:@"Slide the entire lane in time"],
+    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + click"
+                                descMarkup:@"Select segments in "
+                                           @"every lane"],
+    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + double-click"
+                                descMarkup:@"Split every lane at this point"],
+    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + right-click"
+                                descMarkup:@"Toggle hold/transition across "
+                                           @"every lane"],
+    [KKHelpShortcut
+        shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + drag edge"
+                    descMarkup:@"Move the matching boundary in every lane"],
+    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>Shift ⌘</kbd> + click"
+                                descMarkup:@"Delete the segment in every lane"],
+    [KKHelpShortcut
+        shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + <symbol graph.2d />"
+                    descMarkup:@"Open curve editor for every lane at once"],
+    [KKHelpShortcut
+        shortcutWithKeysMarkup:@"<kbd>Shift ⌃</kbd> + click"
+                    descMarkup:@"Toggle duration lock across every lane"],
+    [KKHelpShortcut shortcutWithKeysMarkup:@"Pinch"
+                                descMarkup:@"Zoom the timeline horizontally"],
+    [KKHelpShortcut shortcutWithKeysMarkup:@"Two-finger scroll"
+                                descMarkup:@"Pan the timeline horizontally"],
+    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>Space</kbd>"
+                                descMarkup:@"Play / pause (in the popped-out "
+                                           @"window)"],
+  ];
+
+  KKHelpSection *timing = [KKHelpSection sectionWithTitle:@"Timing"
+                                                tipMarkup:tips
+                                                shortcuts:shortcuts];
+  timing.icon = [NSImage imageWithSystemSymbolName:@"timer"
+                          accessibilityDescription:nil];
+  return timing;
+}
+
 - (void)openHelpRemoteWindow {
   static KKLog *sLog;
   static dispatch_once_t once;
@@ -347,7 +435,10 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
     return;
   }
 
-  NSArray<KKHelpSection *> *sections = [self helpSections];
+  NSMutableArray<KKHelpSection *> *sections =
+      [[self helpSections] mutableCopy] ?: [NSMutableArray array];
+  if ([self animatableProperties].count > 0)
+    [sections addObject:[KKPlugin _builtInTimingHelpSection]];
   CGSize contentSize = CGSizeMake(500.0, 420.0);
   [windowAPI remoteWindowOfSize:contentSize
                           reply:^(FxXPView *parentView, NSError *error) {

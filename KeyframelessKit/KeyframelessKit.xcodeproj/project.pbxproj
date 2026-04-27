@@ -74,6 +74,7 @@
 				Views/KKKbd.h,
 				Views/KKLabelView.h,
 				Views/KKMarkup.h,
+				Views/KKPaddedScrollView.h,
 				Views/KKParameterRowView.h,
 				Views/KKPillToggleRowView.h,
 				Views/KKPopupSelectView.h,
