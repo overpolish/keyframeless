@@ -1,0 +1,50 @@
+#!/bin/bash
+
+echo "Keyframeless Motion Blur Uninstaller"
+echo "===================================="
+echo ""
+echo "Motion Blur is now built into the individual Keyframeless plugins"
+echo "(Magic Move, etc.) - enable it in their inspector. The standalone"
+echo "Motion Blur effect has been removed."
+echo ""
+echo "This script removes the standalone Motion Blur app and its template."
+echo "Your other Keyframeless plugins are untouched."
+echo ""
+
+APP="/Applications/Keyframeless/MotionBlur.app"
+TEMPLATE="$HOME/Movies/Motion Templates.localized/Effects.localized/Keyframeless/Motion Blur • KF"
+
+echo "The following will be deleted:"
+[ -e "$APP" ] && echo "  $APP"
+[ -e "$TEMPLATE" ] && echo "  $TEMPLATE"
+if [ ! -e "$APP" ] && [ ! -e "$TEMPLATE" ]; then
+    echo "  (nothing — already uninstalled)"
+    sleep 2
+    osascript -e 'tell application "Terminal" to close front window' &
+    exit 0
+fi
+echo ""
+
+read -p "Continue? (y/n) " -n 1 -r
+echo ""
+
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Uninstall cancelled."
+    exit 0
+fi
+
+if [ -e "$TEMPLATE" ]; then
+    rm -rf "$TEMPLATE"
+    echo "Removed Motion Blur template."
+fi
+
+if [ -e "$APP" ]; then
+    sudo rm -rf "$APP"
+    echo "Removed Motion Blur app."
+fi
+
+echo ""
+echo "Standalone Motion Blur uninstalled. Restart Motion / Final Cut Pro"
+echo "for the change to take effect."
+sleep 2
+osascript -e 'tell application "Terminal" to close front window' &

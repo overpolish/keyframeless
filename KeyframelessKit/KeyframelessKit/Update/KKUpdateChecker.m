@@ -20,7 +20,6 @@ static NSDictionary<NSString *, NSString *> *KKKnownComponents(void) {
   return @{
     @"keyframelessx" : @"Keyframeless X",
     @"rounded" : @"Rounded",
-    @"motionblur" : @"MotionBlur",
     @"magicmove" : @"MagicMove",
     @"canvas" : @"Canvas",
     @"glow" : @"Glow"
@@ -32,8 +31,6 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
     @"co.overpolish.keyframeless.Keyframeless-X" : @"keyframelessx",
     @"co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP" :
         @"keyframelessx",
-    @"MotionBlur" : @"motionblur",
-    @"MotionBlur-XPC-Service" : @"motionblur",
     @"Rounded" : @"rounded",
     @"Rounded-XPC-Service" : @"rounded",
     @"MagicMove" : @"magicmove",

@@ -344,8 +344,8 @@ NS_ASSUME_NONNULL_BEGIN
 typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
   /// No wrapping required — clips can take the effect directly.
   KKClipWrappingModeNone = 0,
-  /// Effect samples underlying frames (Glow, Motion Blur, etc.) — needs
-  /// an Adjustment Clip or Compound Clip so it sees moving content.
+  /// Effect samples underlying frames (Glow, etc.) — needs an Adjustment
+  /// Clip or Compound Clip so it sees moving content.
   KKClipWrappingModeAdjustmentOrCompound,
   /// Effect transforms a single clip past its natural bounds (Magic Move)
   /// — needs a Compound Clip to avoid being clipped.
