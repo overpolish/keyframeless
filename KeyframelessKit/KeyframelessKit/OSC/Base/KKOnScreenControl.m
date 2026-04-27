@@ -16,14 +16,12 @@
 @end
 
 @implementation KKOnScreenControl {
-  KKLog *_log;
   BOOL _isHovered;
   BOOL _isDragging;
 }
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
   self = [super init];
-  _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
   if (self) {
     _apiManager = apiManager;
     _isHovered = NO;
@@ -104,8 +102,8 @@
 
   id<MTLLibrary> lib = [device newDefaultLibraryWithBundle:bundle error:&error];
   if (!lib || error) {
-    [_log error:@"%@: Failed to load Metal library: %@",
-                NSStringFromClass([self class]), error];
+    KKLogError(@"%@: Failed to load Metal library: %@",
+               NSStringFromClass([self class]), error);
     return nil;
   }
 
@@ -114,8 +112,8 @@
       [lib newFunctionWithName:[self fragmentFunctionName]];
 
   if (!vertFn || !fragFn) {
-    [_log error:@"%@: Required shaders not found.",
-                NSStringFromClass([self class])];
+    KKLogError(@"%@: Required shaders not found.",
+               NSStringFromClass([self class]));
     return nil;
   }
 
@@ -127,8 +125,8 @@
 
   ps = [device newRenderPipelineStateWithDescriptor:desc error:&error];
   if (!ps || error) {
-    [_log error:@"%@: Failed to create pipeline state: %@",
-                NSStringFromClass([self class]), error];
+    KKLogError(@"%@: Failed to create pipeline state: %@",
+               NSStringFromClass([self class]), error);
     return nil;
   }
 

@@ -13,13 +13,8 @@
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager;
 {
-  self.log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
-  [self.log
-      info:@"MagicMovePlugin: initWithAPIManager called - plugin is loading"];
+  KKLogInfo(@"MagicMovePlugin: initialized");
   self = [super initWithAPIManager:newApiManager];
-  if (self != nil) {
-    [self.log info:@"MagicMovePlugin: Successfully initialized"];
-  }
   return self;
 }
 

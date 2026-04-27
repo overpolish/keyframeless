@@ -126,16 +126,10 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
 }
 
 - (KKColorResult *)colorAtTime:(CMTime)renderTime {
-  static KKLog *sLog;
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    sLog = [KKLog loggerForPlugin:@"co.overpolish.keyframeless.Color"];
-  });
-
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   if (!paramGetAPI) {
-    [sLog warn:@"colorAtTime: paramGetAPI is nil"];
+    KKLogWarn(@"colorAtTime: paramGetAPI is nil");
     return [KKColorResult resultWithMode:KKColorModeSolid
                               solidColor:(simd_float3){1, 1, 1}];
   }

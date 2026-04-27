@@ -9,13 +9,11 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wprotocol"
 
-@implementation GlowPlugin {
-  KKLog *_log;
-}
+@implementation GlowPlugin
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager;
 {
-  _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
+  KKLogInfo(@"GlowPlugin: initialized");
   self = [super initWithAPIManager:newApiManager];
   return self;
 }

@@ -8,13 +8,11 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wprotocol"
 
-@implementation TemplatePlugin {
-  KKLog *_log;
-}
+@implementation TemplatePlugin
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager;
 {
-  _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
+  KKLogInfo(@"TemplatePlugin: initialized");
   self = [super initWithAPIManager:newApiManager];
   return self;
 }

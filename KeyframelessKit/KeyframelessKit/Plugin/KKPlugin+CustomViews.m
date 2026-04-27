@@ -217,14 +217,6 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
 }
 
 - (void)_openTimingRemoteWindow {
-  static KKLog *sLog;
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    sLog = [KKLog loggerForPlugin:@"co.overpolish.keyframeless.Timing"];
-  });
-
-  [sLog info:@"_openTimingRemoteWindow invoked"];
-
   id<FxCustomParameterActionAPI_v4> actionAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actionAPI startAction:self];
@@ -232,12 +224,11 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
   id<FxRemoteWindowAPI> windowAPI =
       [self.apiManager apiForProtocol:@protocol(FxRemoteWindowAPI)];
   if (!windowAPI) {
-    [sLog error:@"FxRemoteWindowAPI unavailable (apiManager=%@)",
-                self.apiManager];
+    KKLogError(@"FxRemoteWindowAPI unavailable (apiManager=%@)",
+               self.apiManager);
     [actionAPI endAction:self];
     return;
   }
-  [sLog info:@"got windowAPI=%@", windowAPI];
 
   NSArray<KKAnimatableProperty *> *seqProps = [self animatableProperties];
   CGFloat lanesH = [KKStageSequencerView heightForLaneCount:seqProps.count];
@@ -252,7 +243,7 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
                      __strong typeof(weakSelf) strongSelf = weakSelf;
                      if (!strongSelf || !parentView) {
                        if (error)
-                         [sLog error:@"remoteWindow error: %@", error];
+                         KKLogError(@"remoteWindow error: %@", error);
                        return;
                      }
                      // The host hands us a parent view positioned at
@@ -438,18 +429,10 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
 }
 
 - (void)openHelpRemoteWindow {
-  static KKLog *sLog;
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    sLog = [KKLog loggerForPlugin:@"co.overpolish.keyframeless.Help"];
-  });
-
-  [sLog info:@"openHelpRemoteWindow invoked"];
-
   id<FxCustomParameterActionAPI_v4> actionAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (!actionAPI) {
-    [sLog error:@"FxCustomParameterActionAPI_v4 unavailable"];
+    KKLogError(@"FxCustomParameterActionAPI_v4 unavailable");
     return;
   }
   [actionAPI startAction:self];
@@ -457,7 +440,7 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
   id<FxRemoteWindowAPI> windowAPI =
       [self.apiManager apiForProtocol:@protocol(FxRemoteWindowAPI)];
   if (!windowAPI) {
-    [sLog error:@"FxRemoteWindowAPI unavailable"];
+    KKLogError(@"FxRemoteWindowAPI unavailable");
     [actionAPI endAction:self];
     return;
   }
@@ -475,7 +458,7 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
                           reply:^(FxXPView *parentView, NSError *error) {
                             if (!parentView) {
                               if (error)
-                                [sLog error:@"remoteWindow error: %@", error];
+                                KKLogError(@"remoteWindow error: %@", error);
                               return;
                             }
                             NSView *host = parentView.superview ?: parentView;
