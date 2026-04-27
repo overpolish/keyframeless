@@ -9,6 +9,7 @@
 #import <KeyframelessKit/KeyframelessKit.h>
 
 #import "Constants.h"
+#import "ShaderTypes.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -28,6 +29,12 @@ NS_ASSUME_NONNULL_BEGIN
 - (MagicMovePointValues)readPointValuesAtTime:(CMTime)time
                                       withAPI:
                                           (id<FxParameterRetrievalAPI_v6>)api;
+/// Computes the per-frame transform/opacity parameters at `time`. Used by
+/// both the normal render path (via pluginState:atTime:) and the motion
+/// blur sub-frame sample loop.
+- (BOOL)magicMoveParams:(MagicMoveParams *)outParams
+                 atTime:(CMTime)time
+                  error:(NSError **)error;
 - (BOOL)pluginState:(NSData *_Nullable *_Nonnull)pluginState
              atTime:(CMTime)renderTime
             quality:(FxQuality)qualityLevel

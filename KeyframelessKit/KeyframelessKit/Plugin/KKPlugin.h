@@ -71,6 +71,21 @@ NS_ASSUME_NONNULL_BEGIN
                                            NSArray<id<MTLTexture>>
                                                *inputTextures))commands;
 
+/// Like `encodeRenderCommandsForDestinationImage:...` but targets an
+/// arbitrary MTLTexture and uses a caller-owned command buffer (no commit).
+/// Used by KKMotionBlur to draw plugin samples into pool textures, sharing
+/// one command buffer across all sub-frame passes plus the accumulation
+/// pass. Sets up the render pass with clear-to-zero, full-screen quad
+/// vertices, and viewport matching `destTexture` dimensions, then invokes
+/// `commands` with the encoder.
+- (BOOL)
+    encodeFullScreenQuadIntoTexture:(id<MTLTexture>)destTexture
+                      commandBuffer:(id<MTLCommandBuffer>)commandBuffer
+                     sourceTextures:(NSArray<id<MTLTexture>> *)sourceTextures
+                           commands:
+                               (void (^)(id<MTLRenderCommandEncoder>,
+                                         NSArray<id<MTLTexture>> *))commands;
+
 /// Simple single-pass render: validates inputs, gets pipeline state, encodes
 /// a fullscreen quad with one source texture and your fragment bytes.
 /// Covers the common case where you just need to pass a state struct to
@@ -103,6 +118,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// that still expose classic-timing UI.
 - (BOOL)addAnimationParametersWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                                 error:(NSError **)error;
+
+/// Registers the shared motion-blur param group (Enabled toggle + Shutter
+/// and Quality sliders) at IDs 9924–9926. Add to `addParametersWithError:`
+/// in any plugin that wants opt-in motion blur. The plugin then wraps its
+/// render body in `[KKMotionBlur renderWithAPI:...]` to apply it.
+- (BOOL)addMotionBlurParametersWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
+                                 error:(NSError **)error;
+
+/// Hides/reveals the Motion Blur Length and Quality rows based on the
+/// header's expanded state. Call from `parameterChanged:atTime:error:`
+/// alongside `updateTimingParameterVisibility`.
+- (void)updateMotionBlurParameterVisibility;
 
 /// Returns per-phase timing at renderTime using the animation parameter IDs
 /// in KKConstants.h.  Each phase carries enabled, duration, progress, an
@@ -189,6 +216,12 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable KKTimingLane *)multiStageLaneForLabel:(NSString *)label
                                            atTime:(CMTime)time;
 
+/// Whether any enabled multi-stage lane is currently inside a Transition
+/// segment at `time`. Used by motion blur (and similar features) to skip
+/// expensive per-frame work during pure Hold portions where nothing is
+/// actually moving. Returns NO when multi-stage is disabled.
+- (BOOL)multiStageAnyLaneInTransitionAtTime:(CMTime)time;
+
 /// Persists `pathData` (or nil to clear) onto the segment at `segmentIndex`
 /// inside the lane matching `label`. Pushes the updated lanes through the
 /// same path as user edits — re-renders the sequencer view, broadcasts to
@@ -259,6 +292,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// from each KKAnimatableProperty. This replaces the manual holdPropertyView
 /// mechanism — do not override both.
 - (nullable NSArray<KKAnimatableProperty *> *)animatableProperties;
+
+/// Override to return YES when the plugin registers motion blur params
+/// via `addMotionBlurParametersWithAPI:`. Default NO. Used to auto-include
+/// the Motion Blur section in the help window.
+- (BOOL)usesMotionBlur;
 
 /// Override to hide specific animatable-property lanes from the multi-stage
 /// sequencer based on current parameter state (e.g. a Color lane should

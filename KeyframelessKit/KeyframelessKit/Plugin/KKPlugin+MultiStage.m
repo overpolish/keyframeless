@@ -331,6 +331,46 @@ KKMultiStageApplyLiveOverrides(NSMutableArray<KKTimingLane *> *lanes,
   return nil;
 }
 
+- (BOOL)multiStageAnyLaneInTransitionAtTime:(CMTime)time {
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  if (!paramGetAPI || !timingAPI)
+    return NO;
+
+  BOOL enabled = NO;
+  [paramGetAPI getBoolValue:&enabled
+              fromParameter:kKKParamMultiStageEnabled
+                     atTime:time];
+  if (!enabled)
+    return NO;
+
+  NSMutableArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, paramGetAPI);
+  if (!lanes.count)
+    return NO;
+
+  CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
+  [timingAPI startTimeForEffect:&effectStart];
+  [timingAPI durationTimeForEffect:&effectDuration];
+  double startSec = CMTimeGetSeconds(effectStart);
+  double durSec = CMTimeGetSeconds(effectDuration);
+  double nowSec = CMTimeGetSeconds(time);
+  double frac = (durSec > 0) ? (nowSec - startSec) / durSec : 0.0;
+  frac = MAX(0.0, MIN(1.0, frac));
+
+  for (KKTimingLane *lane in lanes) {
+    if (!lane.enabled || !lane.segments.count)
+      continue;
+    KKTimingSegment *active =
+        KKMultiStageSegmentForFraction(lane.segments, frac);
+    if (active && active.type == KKSegmentTypeTransition)
+      return YES;
+  }
+  return NO;
+}
+
 - (KKTimingLane *)multiStageLaneForLabel:(NSString *)label atTime:(CMTime)time {
   if (!label.length)
     return nil;

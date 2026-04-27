@@ -33,6 +33,55 @@
               error:(NSError **)error {
   [self updateParameterVisibilityAtTime:renderTime];
 
+  MagicMoveParams params;
+  if (![self magicMoveParams:&params atTime:renderTime error:error])
+    return NO;
+
+  id<FxParameterRetrievalAPI_v6> paramAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  KKMotionBlurState mbState =
+      [KKMotionBlur snapshotStateWithParameterAPI:paramAPI
+                                        timingAPI:timingAPI
+                                           atTime:renderTime];
+
+  // Skip the blur path during Hold portions when the user opted in —
+  // single-pass render is dramatically cheaper.
+  if (mbState.enabled && mbState.transitionsOnly &&
+      ![self multiStageAnyLaneInTransitionAtTime:renderTime]) {
+    mbState.enabled = false;
+  }
+
+  // Layout: [KKMotionBlurState | N × MagicMoveParams]. When blur is off,
+  // N=1 and `params` (computed at renderTime) is the only entry — used
+  // both as the fallback render input and as sample 0 if blur turns on
+  // mid-frame. When blur is on, sample 0 is at renderTime and samples
+  // 1..N-1 are evaluated backwards in time across the shutter window.
+  NSMutableData *data = [NSMutableData data];
+  [data appendBytes:&mbState length:sizeof(mbState)];
+  [data appendBytes:&params length:sizeof(params)];
+
+  if (mbState.enabled) {
+    NSArray<NSValue *> *times = [KKMotionBlur sampleTimesForState:mbState
+                                                       renderTime:renderTime];
+    for (NSUInteger i = 1; i < times.count; i++) {
+      CMTime t = kCMTimeZero;
+      [times[i] getValue:&t];
+      MagicMoveParams p;
+      if (![self magicMoveParams:&p atTime:t error:error])
+        return NO;
+      [data appendBytes:&p length:sizeof(p)];
+    }
+  }
+
+  *pluginState = data;
+  return (*pluginState != nil);
+}
+
+- (BOOL)magicMoveParams:(MagicMoveParams *)outParams
+                 atTime:(CMTime)renderTime
+                  error:(NSError **)error {
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   if (paramGetAPI == nil) {
@@ -131,19 +180,17 @@
     rotZ -= vx * 5.0 * (M_PI / 180.0);
   }
 
-  MagicMoveParams params;
-  params.translate = (simd_float2){(float)(posX - 0.5), (float)(posY - 0.5)};
-  params.anchorOffset =
+  outParams->translate =
+      (simd_float2){(float)(posX - 0.5), (float)(posY - 0.5)};
+  outParams->anchorOffset =
       (simd_float2){(float)(anchorX - 0.5), (float)(anchorY - 0.5)};
-  params.rotation = (float)rotZ;
-  params.rotationX = (float)rotX;
-  params.rotationY = (float)rotY;
-  params.scaleX = (float)scaleX;
-  params.scaleY = (float)scaleY;
-  params.opacity = (float)opacity;
-
-  *pluginState = [NSData dataWithBytes:&params length:sizeof(params)];
-  return (*pluginState != nil);
+  outParams->rotation = (float)rotZ;
+  outParams->rotationX = (float)rotX;
+  outParams->rotationY = (float)rotY;
+  outParams->scaleX = (float)scaleX;
+  outParams->scaleY = (float)scaleY;
+  outParams->opacity = (float)opacity;
+  return YES;
 }
 
 @end

@@ -236,4 +236,28 @@ static void _setFlagsIfNeeded(id<FxParameterSettingAPI_v5> setAPI,
   }
 }
 
+- (void)updateMotionBlurParameterVisibility {
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> paramSetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  if (!paramGetAPI || !paramSetAPI)
+    return;
+
+  BOOL expanded = NO;
+  [paramGetAPI getBoolValue:&expanded
+              fromParameter:kKKParamMotionBlurExpanded
+                     atTime:kCMTimeZero];
+
+  FxParameterFlags flag =
+      expanded ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+  FxParameterFlags toggleFlag =
+      expanded ? kFxParameterFlag_NOT_ANIMATABLE
+               : (kFxParameterFlag_HIDDEN | kFxParameterFlag_NOT_ANIMATABLE);
+  _setFlagsIfNeeded(paramSetAPI, paramGetAPI, flag, kKKParamMotionBlurShutter);
+  _setFlagsIfNeeded(paramSetAPI, paramGetAPI, flag, kKKParamMotionBlurQuality);
+  _setFlagsIfNeeded(paramSetAPI, paramGetAPI, toggleFlag,
+                    kKKParamMotionBlurTransitionsOnly);
+}
+
 @end
