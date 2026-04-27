@@ -10,24 +10,221 @@
 #import <KeyframelessKit/KKEasing.h>
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 
-typedef struct {
-  float radiusX;
-  float radiusY;
-  float intensity;
-  float falloff;
-  float noise;
-  float noiseOffset;
-  simd_float2 offset;
-  simd_float3 glowColor;
-  int colorMode;
-  int gradientType;
-  float gradientAngle;
-  simd_float3 gradientLUT[KK_GRADIENT_LUT_SIZE];
-  float noiseSeed;
-  float threshold;
-} GlowPluginState;
-
 static const float kMaxBlurDimension = 2048.0f;
+
+/// Encodes Glow's 4-stage pipeline (prep → MPS Gaussian blur → optional
+/// bloom prep+blur → composite) onto a caller-owned command buffer,
+/// writing the final composite into `outTex`. Caller is responsible for
+/// allocating `prepTex`/`blurTex` (and `bloomPrep`/`bloomBlur` when
+/// `state.threshold > 0`), committing the buffer, and managing texture
+/// lifetime.
+static void _encodeGlowPipeline(
+    KKMetalDeviceCache *cache, uint64_t regID, MTLPixelFormat pf,
+    id<MTLDevice> device, id<MTLCommandBuffer> cb, GlowPluginState state,
+    id<MTLTexture> outTex, id<MTLTexture> inTex, id<MTLTexture> prepTex,
+    id<MTLTexture> blurTex, id<MTLTexture> _Nullable bloomPrepTex,
+    id<MTLTexture> _Nullable bloomBlurTex, FxImageTile *destinationImage,
+    NSArray<FxImageTile *> *sourceImages, NSUInteger bW, NSUInteger bH,
+    float bs, float outW, float outH, MTLViewport ovp) {
+  BOOL hasBloom =
+      (state.threshold > 0.0f) && bloomPrepTex != nil && bloomBlurTex != nil;
+
+  id<MTLRenderPipelineState> prepPS = [cache
+      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+                                               @".Glow.prep"
+                                    registryID:regID
+                                   pixelFormat:pf
+                                      bundleID:nil
+                                  vertexShader:@"vertexShader"
+                                fragmentShader:@"glowPrep"
+                                     blendMode:KKBlendModeNone];
+  id<MTLRenderPipelineState> compPS = [cache
+      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+                                               @".Glow.comp"
+                                    registryID:regID
+                                   pixelFormat:pf
+                                      bundleID:nil
+                                  vertexShader:@"vertexShader"
+                                fragmentShader:@"glowComposite"
+                                     blendMode:KKBlendModeNone];
+  id<MTLRenderPipelineState> bloomPrepPS = nil;
+  if (hasBloom) {
+    bloomPrepPS = [cache
+        buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+                                                 @".Glow.bloomPrep"
+                                      registryID:regID
+                                     pixelFormat:pf
+                                        bundleID:nil
+                                    vertexShader:@"vertexShader"
+                                  fragmentShader:@"glowBloomPrep"
+                                       blendMode:KKBlendModeNone];
+  }
+  if (!prepPS || !compPS)
+    return;
+
+  FxRect st = sourceImages[0].tilePixelBounds;
+  FxRect dt = destinationImage.tilePixelBounds;
+  float cx = (dt.left + dt.right) / 2.0f;
+  float cy = (dt.bottom + dt.top) / 2.0f;
+
+  KKVertex2D srcV[] = {
+      {{((float)st.right - cx) * bs, -((float)st.top - cy) * bs}, {1, 1}},
+      {{((float)st.left - cx) * bs, -((float)st.top - cy) * bs}, {0, 1}},
+      {{((float)st.right - cx) * bs, -((float)st.bottom - cy) * bs}, {1, 0}},
+      {{((float)st.left - cx) * bs, -((float)st.bottom - cy) * bs}, {0, 0}},
+  };
+  KKVertex2D dstV[] = {
+      {{outW / 2, -outH / 2}, {1, 1}},
+      {{-outW / 2, -outH / 2}, {0, 1}},
+      {{outW / 2, outH / 2}, {1, 0}},
+      {{-outW / 2, outH / 2}, {0, 0}},
+  };
+  simd_uint2 bvs = {(uint)bW, (uint)bH};
+  simd_uint2 fvs = {(uint)outW, (uint)outH};
+  MTLViewport bvp = {0, 0, (double)bW, (double)bH, -1, 1};
+  float sigma = fmaxf(fmaxf(state.radiusX, state.radiusY) * 0.5f * bs, 0.5f);
+
+  // 1) Prep: draw source into blur-sized texture
+  {
+    MTLRenderPassDescriptor *rpd =
+        [MTLRenderPassDescriptor renderPassDescriptor];
+    rpd.colorAttachments[0].texture = prepTex;
+    rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+    rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
+    id<MTLRenderCommandEncoder> e = [cb renderCommandEncoderWithDescriptor:rpd];
+    [e setViewport:bvp];
+    [e setVertexBytes:srcV
+               length:sizeof(srcV)
+              atIndex:KKVertexInputIndex_Vertices];
+    [e setVertexBytes:&bvs
+               length:sizeof(bvs)
+              atIndex:KKVertexInputIndex_ViewportSize];
+    [e setRenderPipelineState:prepPS];
+    [e setFragmentTexture:inTex atIndex:KKTextureIndex_InputImage];
+    int cm = state.colorMode;
+    [e setFragmentBytes:&cm length:sizeof(cm) atIndex:0];
+    [e drawPrimitives:MTLPrimitiveTypeTriangleStrip
+          vertexStart:0
+          vertexCount:4];
+    [e endEncoding];
+  }
+
+  // 2) MPS Gaussian blur: prepTex → blurTex
+  {
+    MPSImageGaussianBlur *mps =
+        [[MPSImageGaussianBlur alloc] initWithDevice:device sigma:sigma];
+    mps.edgeMode = MPSImageEdgeModeClamp;
+    [mps encodeToCommandBuffer:cb
+                 sourceTexture:prepTex
+            destinationTexture:blurTex];
+  }
+
+  // 2b) Bloom lane: bright-pass extraction → blur (separate textures)
+  if (hasBloom && bloomPrepPS) {
+    {
+      MTLRenderPassDescriptor *rpd =
+          [MTLRenderPassDescriptor renderPassDescriptor];
+      rpd.colorAttachments[0].texture = bloomPrepTex;
+      rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+      rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
+      id<MTLRenderCommandEncoder> e =
+          [cb renderCommandEncoderWithDescriptor:rpd];
+      [e setViewport:bvp];
+      [e setVertexBytes:srcV
+                 length:sizeof(srcV)
+                atIndex:KKVertexInputIndex_Vertices];
+      [e setVertexBytes:&bvs
+                 length:sizeof(bvs)
+                atIndex:KKVertexInputIndex_ViewportSize];
+      [e setRenderPipelineState:bloomPrepPS];
+      [e setFragmentTexture:inTex atIndex:KKTextureIndex_InputImage];
+      float thr = state.threshold;
+      [e setFragmentBytes:&thr length:sizeof(thr) atIndex:0];
+      [e drawPrimitives:MTLPrimitiveTypeTriangleStrip
+            vertexStart:0
+            vertexCount:4];
+      [e endEncoding];
+    }
+    {
+      MPSImageGaussianBlur *mps =
+          [[MPSImageGaussianBlur alloc] initWithDevice:device sigma:sigma];
+      mps.edgeMode = MPSImageEdgeModeClamp;
+      [mps encodeToCommandBuffer:cb
+                   sourceTexture:bloomPrepTex
+              destinationTexture:bloomBlurTex];
+    }
+  }
+
+  // 3) Composite into outTex
+  {
+    MTLRenderPassDescriptor *rpd =
+        [MTLRenderPassDescriptor renderPassDescriptor];
+    rpd.colorAttachments[0].texture = outTex;
+    rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+    rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
+    id<MTLRenderCommandEncoder> e = [cb renderCommandEncoderWithDescriptor:rpd];
+    [e setViewport:ovp];
+    [e setVertexBytes:dstV
+               length:sizeof(dstV)
+              atIndex:KKVertexInputIndex_Vertices];
+    [e setVertexBytes:&fvs
+               length:sizeof(fvs)
+              atIndex:KKVertexInputIndex_ViewportSize];
+    [e setRenderPipelineState:compPS];
+    [e setFragmentTexture:inTex atIndex:KKTextureIndex_InputImage];
+    [e setFragmentTexture:blurTex atIndex:1];
+    [e setFragmentTexture:(hasBloom ? bloomBlurTex : blurTex) atIndex:2];
+    float rx = state.radiusX, ry = state.radiusY;
+    float i = state.intensity, f = state.falloff, n = state.noise;
+    FxRect sp = sourceImages[0].imagePixelBounds;
+    float srcW = sp.right - sp.left;
+    float srcH = sp.top - sp.bottom;
+    simd_float2 off = {-state.offset.x * srcW / outW,
+                       -state.offset.y * srcH / outH};
+    int cm = state.colorMode, gt = state.gradientType;
+    float ga = state.gradientAngle;
+    [e setFragmentBytes:&rx length:sizeof(rx) atIndex:FragmentIndex_RadiusX];
+    [e setFragmentBytes:&ry length:sizeof(ry) atIndex:FragmentIndex_RadiusY];
+    [e setFragmentBytes:&i length:sizeof(i) atIndex:FragmentIndex_Intensity];
+    [e setFragmentBytes:&f length:sizeof(f) atIndex:FragmentIndex_Falloff];
+    [e setFragmentBytes:&off length:sizeof(off) atIndex:FragmentIndex_Offset];
+    [e setFragmentBytes:&state.glowColor
+                 length:sizeof(state.glowColor)
+                atIndex:FragmentIndex_GlowColor];
+    [e setFragmentBytes:&cm length:sizeof(cm) atIndex:FragmentIndex_ColorMode];
+    [e setFragmentBytes:state.gradientLUT
+                 length:sizeof(state.gradientLUT)
+                atIndex:FragmentIndex_GradientLUT];
+    [e setFragmentBytes:&gt
+                 length:sizeof(gt)
+                atIndex:FragmentIndex_GradientType];
+    [e setFragmentBytes:&ga
+                 length:sizeof(ga)
+                atIndex:FragmentIndex_GradientAngle];
+    [e setFragmentBytes:&n length:sizeof(n) atIndex:FragmentIndex_Noise];
+    float noff = state.noiseOffset;
+    [e setFragmentBytes:&noff
+                 length:sizeof(noff)
+                atIndex:FragmentIndex_NoiseOffset];
+    float nseed = state.noiseSeed;
+    [e setFragmentBytes:&nseed
+                 length:sizeof(nseed)
+                atIndex:FragmentIndex_NoiseSeed];
+    simd_float2 blurUVScale = {(float)bW / (float)prepTex.width,
+                               (float)bH / (float)prepTex.height};
+    [e setFragmentBytes:&blurUVScale
+                 length:sizeof(blurUVScale)
+                atIndex:FragmentIndex_BlurUVScale];
+    float thr = state.threshold;
+    [e setFragmentBytes:&thr
+                 length:sizeof(thr)
+                atIndex:FragmentIndex_Threshold];
+    [e drawPrimitives:MTLPrimitiveTypeTriangleStrip
+          vertexStart:0
+          vertexCount:4];
+    [e endEncoding];
+  }
+}
 
 // Pool of texture pairs for blur intermediates. All allocated at max cap size.
 // Concurrency limited by semaphore — at most kTexPairPoolSize renders
@@ -96,6 +293,51 @@ static void _texPairReturn(NSInteger idx) {
               error:(NSError **)error {
   [self updateParameterVisibilityAtTime:renderTime];
 
+  GlowPluginState params;
+  if (![self glowParams:&params atTime:renderTime error:error])
+    return NO;
+
+  id<FxParameterRetrievalAPI_v6> paramAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  KKMotionBlurState mbState =
+      [KKMotionBlur snapshotStateWithParameterAPI:paramAPI
+                                        timingAPI:timingAPI
+                                           atTime:renderTime];
+
+  if (mbState.enabled && mbState.transitionsOnly &&
+      ![self multiStageAnyLaneInTransitionAtTime:renderTime]) {
+    mbState.enabled = false;
+  }
+
+  // Layout: [KKMotionBlurState | N × GlowPluginState]. Sample 0 is at
+  // renderTime; samples 1..N-1 are evaluated backwards across the shutter
+  // window when blur is enabled.
+  NSMutableData *data = [NSMutableData data];
+  [data appendBytes:&mbState length:sizeof(mbState)];
+  [data appendBytes:&params length:sizeof(params)];
+
+  if (mbState.enabled) {
+    NSArray<NSValue *> *times = [KKMotionBlur sampleTimesForState:mbState
+                                                       renderTime:renderTime];
+    for (NSUInteger i = 1; i < times.count; i++) {
+      CMTime t = kCMTimeZero;
+      [times[i] getValue:&t];
+      GlowPluginState p;
+      if (![self glowParams:&p atTime:t error:error])
+        return NO;
+      [data appendBytes:&p length:sizeof(p)];
+    }
+  }
+
+  *pluginState = data;
+  return (*pluginState != nil);
+}
+
+- (BOOL)glowParams:(GlowPluginState *)outParams
+            atTime:(CMTime)renderTime
+             error:(NSError **)error {
   id<FxParameterRetrievalAPI_v6> api =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   if (!api) {
@@ -226,8 +468,8 @@ static void _texPairReturn(NSInteger idx) {
       state.gradientLUT[i] = state.glowColor;
   }
 
-  *pluginState = [NSData dataWithBytes:&state length:sizeof(state)];
-  return (*pluginState != nil);
+  *outParams = state;
+  return YES;
 }
 
 - (BOOL)destinationImageRect:(FxRect *)destinationImageRect
@@ -236,12 +478,14 @@ static void _texPairReturn(NSInteger idx) {
                  pluginState:(NSData *)pluginState
                       atTime:(CMTime)renderTime
                        error:(NSError **)outError {
-  if (!pluginState || pluginState.length < sizeof(GlowPluginState)) {
+  if (!pluginState || pluginState.length <
+                          sizeof(KKMotionBlurState) + sizeof(GlowPluginState)) {
     *destinationImageRect = sourceImages[0].imagePixelBounds;
     return YES;
   }
   GlowPluginState state;
-  [pluginState getBytes:&state length:sizeof(state)];
+  [pluginState getBytes:&state
+                  range:NSMakeRange(sizeof(KKMotionBlurState), sizeof(state))];
 
   FxRect src = sourceImages[0].imagePixelBounds;
   FxMatrix44 *inv = sourceImages[0].inversePixelTransform;
@@ -301,7 +545,9 @@ static void _texPairReturn(NSInteger idx) {
                                 sender:self];
   [KKPlugin colorSyncFromParams:self.apiManager];
 
-  if (!pluginState || pluginState.length < sizeof(GlowPluginState) ||
+  if (!pluginState ||
+      pluginState.length <
+          sizeof(KKMotionBlurState) + sizeof(GlowPluginState) ||
       !sourceImages.count || !sourceImages[0].ioSurface ||
       !destinationImage.ioSurface) {
     KKLogError(@"render bail: state=%p len=%lu src=%lu", pluginState,
@@ -316,33 +562,120 @@ static void _texPairReturn(NSInteger idx) {
 
   @autoreleasepool {
 
-    GlowPluginState state;
-    [pluginState getBytes:&state length:sizeof(state)];
+    KKMotionBlurState mbState;
+    [pluginState getBytes:&mbState length:sizeof(mbState)];
 
     KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
     uint64_t regID = destinationImage.deviceRegistryID;
     MTLPixelFormat pf =
         [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
     id<MTLDevice> device = [cache deviceWithRegistryID:regID];
-    id<MTLCommandQueue> queue = [cache commandQueueWithRegistryID:regID
-                                                      pixelFormat:pf];
-    if (!device || !queue)
+    if (!device)
       return NO;
-
-    id<MTLTexture> outTex = [destinationImage metalTextureForDevice:device];
-    id<MTLTexture> inTex = [sourceImages[0] metalTextureForDevice:device];
 
     float outW = (float)(destinationImage.tilePixelBounds.right -
                          destinationImage.tilePixelBounds.left);
     float outH = (float)(destinationImage.tilePixelBounds.top -
                          destinationImage.tilePixelBounds.bottom);
-
-    // Blur textures capped for memory/perf
     float bs = 1.0f;
     if (outW > kMaxBlurDimension || outH > kMaxBlurDimension)
       bs = fminf(kMaxBlurDimension / outW, kMaxBlurDimension / outH);
     NSUInteger bW = MAX(1, (NSUInteger)(outW * bs));
     NSUInteger bH = MAX(1, (NSUInteger)(outH * bs));
+
+    if (mbState.enabled) {
+      NSData *capturedState = pluginState;
+      // Sample passes target fresh textures sized to the output, so the
+      // composite viewport has no IOSurface Y offset.
+      MTLViewport sampleVP = {0, 0, outW, outH, -1, 1};
+      MTLTextureUsage scratchUsage = MTLTextureUsageRenderTarget |
+                                     MTLTextureUsageShaderRead |
+                                     MTLTextureUsageShaderWrite;
+
+      BOOL applied = [KKMotionBlur
+          applyToDestinationImage:destinationImage
+                     sourceImages:sourceImages
+                            state:mbState
+                       renderTime:renderTime
+                      renderBlock:^BOOL(int sampleIndex,
+                                        id<MTLTexture> sampleDest,
+                                        id<MTLCommandBuffer> commandBuffer,
+                                        NSArray<id<MTLTexture>> *inputs) {
+                        if (inputs.count == 0)
+                          return NO;
+                        NSUInteger off =
+                            sizeof(KKMotionBlurState) +
+                            (NSUInteger)sampleIndex * sizeof(GlowPluginState);
+                        if (off + sizeof(GlowPluginState) >
+                            capturedState.length)
+                          return NO;
+                        GlowPluginState s;
+                        [capturedState
+                            getBytes:&s
+                               range:NSMakeRange(off, sizeof(GlowPluginState))];
+                        // Pooled scratch textures — reused across frames so
+                        // memory stays bounded under FCP look-ahead playback.
+                        id<MTLTexture> prepTex =
+                            [KKMotionBlur scratchTextureForKey:@"glow.prep"
+                                                   sampleIndex:sampleIndex
+                                                         width:bW
+                                                        height:bH
+                                                        format:pf
+                                                         usage:scratchUsage
+                                                        device:device];
+                        id<MTLTexture> blurTex =
+                            [KKMotionBlur scratchTextureForKey:@"glow.blur"
+                                                   sampleIndex:sampleIndex
+                                                         width:bW
+                                                        height:bH
+                                                        format:pf
+                                                         usage:scratchUsage
+                                                        device:device];
+                        id<MTLTexture> bloomPrepTex = nil, bloomBlurTex = nil;
+                        if (s.threshold > 0.0f) {
+                          bloomPrepTex = [KKMotionBlur
+                              scratchTextureForKey:@"glow.bloomPrep"
+                                       sampleIndex:sampleIndex
+                                             width:bW
+                                            height:bH
+                                            format:pf
+                                             usage:scratchUsage
+                                            device:device];
+                          bloomBlurTex = [KKMotionBlur
+                              scratchTextureForKey:@"glow.bloomBlur"
+                                       sampleIndex:sampleIndex
+                                             width:bW
+                                            height:bH
+                                            format:pf
+                                             usage:scratchUsage
+                                            device:device];
+                        }
+                        if (!prepTex || !blurTex)
+                          return NO;
+                        _encodeGlowPipeline(
+                            cache, regID, pf, device, commandBuffer, s,
+                            sampleDest, inputs[0], prepTex, blurTex,
+                            bloomPrepTex, bloomBlurTex, destinationImage,
+                            sourceImages, bW, bH, bs, outW, outH, sampleVP);
+                        return YES;
+                      }];
+      if (applied)
+        return YES;
+      // Fall through on failure so the user sees the un-blurred frame.
+    }
+
+    GlowPluginState state;
+    [pluginState
+        getBytes:&state
+           range:NSMakeRange(sizeof(KKMotionBlurState), sizeof(state))];
+
+    id<MTLCommandQueue> queue = [cache commandQueueWithRegistryID:regID
+                                                      pixelFormat:pf];
+    if (!queue)
+      return NO;
+
+    id<MTLTexture> outTex = [destinationImage metalTextureForDevice:device];
+    id<MTLTexture> inTex = [sourceImages[0] metalTextureForDevice:device];
 
     NSInteger texIdx = _texPairCheckout(device, pf);
     if (texIdx < 0) {
@@ -352,7 +685,6 @@ static void _texPairReturn(NSInteger idx) {
     id<MTLTexture> prepTex = _texPairPool[texIdx].a;
     id<MTLTexture> blurTex = _texPairPool[texIdx].b;
 
-    // Lane 2: bloom (separate texture pair when threshold > 0)
     BOOL hasBloom = state.threshold > 0.0f;
     NSInteger bloomTexIdx = -1;
     id<MTLTexture> bloomPrepTex = nil;
@@ -367,220 +699,17 @@ static void _texPairReturn(NSInteger idx) {
       }
     }
 
-    // Pipeline states
-    id<MTLRenderPipelineState> prepPS =
-        [cache buildAndRegisterPipelineStateForPluginID:
-                   @"co.overpolish.keyframeless.Glow.prep"
-                                             registryID:regID
-                                            pixelFormat:pf
-                                               bundleID:nil
-                                           vertexShader:@"vertexShader"
-                                         fragmentShader:@"glowPrep"
-                                              blendMode:KKBlendModeNone];
-    id<MTLRenderPipelineState> compPS =
-        [cache buildAndRegisterPipelineStateForPluginID:
-                   @"co.overpolish.keyframeless.Glow.comp"
-                                             registryID:regID
-                                            pixelFormat:pf
-                                               bundleID:nil
-                                           vertexShader:@"vertexShader"
-                                         fragmentShader:@"glowComposite"
-                                              blendMode:KKBlendModeNone];
-    id<MTLRenderPipelineState> bloomPrepPS = nil;
-    if (hasBloom) {
-      bloomPrepPS =
-          [cache buildAndRegisterPipelineStateForPluginID:
-                     @"co.overpolish.keyframeless.Glow.bloomPrep"
-                                               registryID:regID
-                                              pixelFormat:pf
-                                                 bundleID:nil
-                                             vertexShader:@"vertexShader"
-                                           fragmentShader:@"glowBloomPrep"
-                                                blendMode:KKBlendModeNone];
-    }
-    if (!prepPS || !compPS) {
-      _texPairReturn(bloomTexIdx);
-      [cache returnCommandQueueToCache:queue];
-      return NO;
-    }
-
-    // Vertex geometry
-    FxRect st = sourceImages[0].tilePixelBounds;
-    FxRect dt = destinationImage.tilePixelBounds;
-    float cx = (dt.left + dt.right) / 2.0f;
-    float cy = (dt.bottom + dt.top) / 2.0f;
-
-    KKVertex2D srcV[] = {
-        {{((float)st.right - cx) * bs, -((float)st.top - cy) * bs}, {1, 1}},
-        {{((float)st.left - cx) * bs, -((float)st.top - cy) * bs}, {0, 1}},
-        {{((float)st.right - cx) * bs, -((float)st.bottom - cy) * bs}, {1, 0}},
-        {{((float)st.left - cx) * bs, -((float)st.bottom - cy) * bs}, {0, 0}},
-    };
-    KKVertex2D dstV[] = {
-        {{outW / 2, -outH / 2}, {1, 1}},
-        {{-outW / 2, -outH / 2}, {0, 1}},
-        {{outW / 2, outH / 2}, {1, 0}},
-        {{-outW / 2, outH / 2}, {0, 0}},
-    };
-
-    simd_uint2 bvs = {(uint)bW, (uint)bH};
-    simd_uint2 fvs = {(uint)outW, (uint)outH};
-    MTLViewport bvp = {0, 0, (double)bW, (double)bH, -1, 1};
     float ioH = (float)[destinationImage.ioSurface height];
     MTLViewport ovp = {0, ioH - outH, outW, outH, -1, 1};
-
-    float sigma = fmaxf(fmaxf(state.radiusX, state.radiusY) * 0.5f * bs, 0.5f);
 
     id<MTLCommandBuffer> cb = [queue commandBufferWithUnretainedReferences];
     cb.label = @"Glow";
     [cb enqueue];
 
-    // 1) Prep: draw source into blur-sized texture
-    {
-      MTLRenderPassDescriptor *rpd =
-          [MTLRenderPassDescriptor renderPassDescriptor];
-      rpd.colorAttachments[0].texture = prepTex;
-      rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
-      rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
-      id<MTLRenderCommandEncoder> e =
-          [cb renderCommandEncoderWithDescriptor:rpd];
-      [e setViewport:bvp];
-      [e setVertexBytes:srcV
-                 length:sizeof(srcV)
-                atIndex:KKVertexInputIndex_Vertices];
-      [e setVertexBytes:&bvs
-                 length:sizeof(bvs)
-                atIndex:KKVertexInputIndex_ViewportSize];
-      [e setRenderPipelineState:prepPS];
-      [e setFragmentTexture:inTex atIndex:KKTextureIndex_InputImage];
-      int cm = state.colorMode;
-      [e setFragmentBytes:&cm length:sizeof(cm) atIndex:0];
-      [e drawPrimitives:MTLPrimitiveTypeTriangleStrip
-            vertexStart:0
-            vertexCount:4];
-      [e endEncoding];
-    }
-
-    // 2) MPS Gaussian blur: prepTex → blurTex
-    {
-      MPSImageGaussianBlur *mps =
-          [[MPSImageGaussianBlur alloc] initWithDevice:device sigma:sigma];
-      mps.edgeMode = MPSImageEdgeModeClamp;
-      [mps encodeToCommandBuffer:cb
-                   sourceTexture:prepTex
-              destinationTexture:blurTex];
-    }
-
-    // 2b) Bloom lane: bright-pass extraction → blur (separate textures)
-    if (hasBloom && bloomPrepPS) {
-      {
-        MTLRenderPassDescriptor *rpd =
-            [MTLRenderPassDescriptor renderPassDescriptor];
-        rpd.colorAttachments[0].texture = bloomPrepTex;
-        rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
-        rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
-        id<MTLRenderCommandEncoder> e =
-            [cb renderCommandEncoderWithDescriptor:rpd];
-        [e setViewport:bvp];
-        [e setVertexBytes:srcV
-                   length:sizeof(srcV)
-                  atIndex:KKVertexInputIndex_Vertices];
-        [e setVertexBytes:&bvs
-                   length:sizeof(bvs)
-                  atIndex:KKVertexInputIndex_ViewportSize];
-        [e setRenderPipelineState:bloomPrepPS];
-        [e setFragmentTexture:inTex atIndex:KKTextureIndex_InputImage];
-        float thr = state.threshold;
-        [e setFragmentBytes:&thr length:sizeof(thr) atIndex:0];
-        [e drawPrimitives:MTLPrimitiveTypeTriangleStrip
-              vertexStart:0
-              vertexCount:4];
-        [e endEncoding];
-      }
-      {
-        MPSImageGaussianBlur *mps =
-            [[MPSImageGaussianBlur alloc] initWithDevice:device sigma:sigma];
-        mps.edgeMode = MPSImageEdgeModeClamp;
-        [mps encodeToCommandBuffer:cb
-                     sourceTexture:bloomPrepTex
-                destinationTexture:bloomBlurTex];
-      }
-    }
-
-    // 3) Composite: glow behind original + bloom → output
-    //    Edge blur in blurTex, bloom blur in bloomBlurTex.
-    {
-      MTLRenderPassDescriptor *rpd =
-          [MTLRenderPassDescriptor renderPassDescriptor];
-      rpd.colorAttachments[0].texture = outTex;
-      rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
-      rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
-      id<MTLRenderCommandEncoder> e =
-          [cb renderCommandEncoderWithDescriptor:rpd];
-      [e setViewport:ovp];
-      [e setVertexBytes:dstV
-                 length:sizeof(dstV)
-                atIndex:KKVertexInputIndex_Vertices];
-      [e setVertexBytes:&fvs
-                 length:sizeof(fvs)
-                atIndex:KKVertexInputIndex_ViewportSize];
-      [e setRenderPipelineState:compPS];
-      [e setFragmentTexture:inTex atIndex:KKTextureIndex_InputImage];
-      [e setFragmentTexture:blurTex atIndex:1];
-      [e setFragmentTexture:(hasBloom ? bloomBlurTex : blurTex) atIndex:2];
-      float rx = state.radiusX, ry = state.radiusY;
-      float i = state.intensity, f = state.falloff, n = state.noise;
-      // Offset is in object-space fractions → convert to UV.
-      FxRect sp = sourceImages[0].imagePixelBounds;
-      float srcW = sp.right - sp.left;
-      float srcH = sp.top - sp.bottom;
-      simd_float2 off = {-state.offset.x * srcW / outW,
-                         -state.offset.y * srcH / outH};
-      int cm = state.colorMode, gt = state.gradientType;
-      float ga = state.gradientAngle;
-      [e setFragmentBytes:&rx length:sizeof(rx) atIndex:FragmentIndex_RadiusX];
-      [e setFragmentBytes:&ry length:sizeof(ry) atIndex:FragmentIndex_RadiusY];
-      [e setFragmentBytes:&i length:sizeof(i) atIndex:FragmentIndex_Intensity];
-      [e setFragmentBytes:&f length:sizeof(f) atIndex:FragmentIndex_Falloff];
-      [e setFragmentBytes:&off length:sizeof(off) atIndex:FragmentIndex_Offset];
-      [e setFragmentBytes:&state.glowColor
-                   length:sizeof(state.glowColor)
-                  atIndex:FragmentIndex_GlowColor];
-      [e setFragmentBytes:&cm
-                   length:sizeof(cm)
-                  atIndex:FragmentIndex_ColorMode];
-      [e setFragmentBytes:state.gradientLUT
-                   length:sizeof(state.gradientLUT)
-                  atIndex:FragmentIndex_GradientLUT];
-      [e setFragmentBytes:&gt
-                   length:sizeof(gt)
-                  atIndex:FragmentIndex_GradientType];
-      [e setFragmentBytes:&ga
-                   length:sizeof(ga)
-                  atIndex:FragmentIndex_GradientAngle];
-      [e setFragmentBytes:&n length:sizeof(n) atIndex:FragmentIndex_Noise];
-      float noff = state.noiseOffset;
-      [e setFragmentBytes:&noff
-                   length:sizeof(noff)
-                  atIndex:FragmentIndex_NoiseOffset];
-      float nseed = state.noiseSeed;
-      [e setFragmentBytes:&nseed
-                   length:sizeof(nseed)
-                  atIndex:FragmentIndex_NoiseSeed];
-      simd_float2 blurUVScale = {(float)bW / (float)prepTex.width,
-                                 (float)bH / (float)prepTex.height};
-      [e setFragmentBytes:&blurUVScale
-                   length:sizeof(blurUVScale)
-                  atIndex:FragmentIndex_BlurUVScale];
-      float thr = state.threshold;
-      [e setFragmentBytes:&thr
-                   length:sizeof(thr)
-                  atIndex:FragmentIndex_Threshold];
-      [e drawPrimitives:MTLPrimitiveTypeTriangleStrip
-            vertexStart:0
-            vertexCount:4];
-      [e endEncoding];
-    }
+    _encodeGlowPipeline(cache, regID, pf, device, cb, state, outTex, inTex,
+                        prepTex, blurTex, bloomPrepTex, bloomBlurTex,
+                        destinationImage, sourceImages, bW, bH, bs, outW, outH,
+                        ovp);
 
     [cb commit];
     [cb waitUntilCompleted];

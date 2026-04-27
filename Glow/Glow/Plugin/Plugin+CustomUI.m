@@ -14,6 +14,10 @@
 
 @implementation GlowPlugin (CustomUI)
 
+- (BOOL)usesMotionBlur {
+  return YES;
+}
+
 - (NSArray<KKTimingSlot *> *)timingSlotsForSection:(NSInteger)section {
   return @[];
 }

@@ -47,6 +47,8 @@
   case kKKParamHoldEffect:
   case kParamNoiseExpanded:
   case kKKParamColorExpanded:
+  case kKKParamMotionBlurExpanded:
+    [self updateMotionBlurParameterVisibility];
     [self updateParameterVisibilityAtTime:time];
     break;
   case kParamPreset:
