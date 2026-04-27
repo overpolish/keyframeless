@@ -9,6 +9,8 @@
 #import "../Style/KKTokens.h"
 #import "../Views/KKAlertView.h"
 #import "../Views/KKCustomGroupHeaderView.h"
+#import "../Views/KKHelpSection.h"
+#import "../Views/KKHelpView.h"
 #import "../Views/KKSegmentEditView.h"
 #import "../Views/KKSeparatorView.h"
 #import "../Views/StageSequencer/KKRemoteWindowKeyHandlerView.h"
@@ -19,10 +21,10 @@
 #import "KKPlugin+Color.h"
 
 #import "../Views/KKAnimatableProperty.h"
+#import "../Views/KKLogoBannerView.h"
 #import "../Views/KKPillToggleRowView.h"
 #import "../Views/KKTimingGraphView.h"
 #import "../Views/KKTimingSlot.h"
-#import "../Views/KKUpdateBannerView.h"
 #import "KKConstants.h"
 #import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
@@ -31,11 +33,25 @@
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
+// Identifier stamped on the single root subview we add into the remote
+// window's host. Lets a subsequent open (help or sequencer) cleanly replace
+// prior content without disturbing the host-managed `parentView`.
+static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
+    @"KKRemoteWindowContent";
+
 @implementation KKPlugin (CustomViews)
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
-  if (parameterID == kKKParamUpdateBanner)
-    return [[KKUpdateBannerView alloc] init];
+  if (parameterID == kKKParamLogoBanner) {
+    KKLogoBannerView *banner = [[KKLogoBannerView alloc] init];
+    if ([self helpSections].count > 0) {
+      __weak typeof(self) weakSelf = self;
+      banner.onHelpTap = ^{
+        [weakSelf openHelpRemoteWindow];
+      };
+    }
+    return banner;
+  }
 
   if (parameterID == kKKParamColorGroup)
     return [self
@@ -244,9 +260,14 @@
                      // first-render offset. Attach to the superview
                      // (the XPC jail) which is correctly sized.
                      NSView *host = parentView.superview ?: parentView;
+                     for (NSView *sub in [host.subviews copy])
+                       if ([sub.identifier
+                               isEqualToString:KKRemoteWindowContentID])
+                         [sub removeFromSuperview];
                      KKRemoteWindowKeyHandlerView *keyHandler =
                          [[KKRemoteWindowKeyHandlerView alloc]
                              initWithFrame:NSZeroRect];
+                     keyHandler.identifier = KKRemoteWindowContentID;
                      keyHandler.translatesAutoresizingMaskIntoConstraints = NO;
                      __weak typeof(strongSelf) weakForKey = strongSelf;
                      keyHandler.onTogglePlayback = ^{
@@ -293,6 +314,70 @@
                            constraintEqualToAnchor:keyHandler.bottomAnchor],
                      ]];
                    }];
+
+  [actionAPI endAction:self];
+}
+
+- (NSArray<KKHelpSection *> *)helpSections {
+  return @[];
+}
+
+- (void)openHelpRemoteWindow {
+  static KKLog *sLog;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    sLog = [KKLog loggerForPlugin:@"co.overpolish.keyframeless.Help"];
+  });
+
+  [sLog info:@"openHelpRemoteWindow invoked"];
+
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!actionAPI) {
+    [sLog error:@"FxCustomParameterActionAPI_v4 unavailable"];
+    return;
+  }
+  [actionAPI startAction:self];
+
+  id<FxRemoteWindowAPI> windowAPI =
+      [self.apiManager apiForProtocol:@protocol(FxRemoteWindowAPI)];
+  if (!windowAPI) {
+    [sLog error:@"FxRemoteWindowAPI unavailable"];
+    [actionAPI endAction:self];
+    return;
+  }
+
+  NSArray<KKHelpSection *> *sections = [self helpSections];
+  CGSize contentSize = CGSizeMake(500.0, 420.0);
+  [windowAPI remoteWindowOfSize:contentSize
+                          reply:^(FxXPView *parentView, NSError *error) {
+                            if (!parentView) {
+                              if (error)
+                                [sLog error:@"remoteWindow error: %@", error];
+                              return;
+                            }
+                            NSView *host = parentView.superview ?: parentView;
+                            for (NSView *sub in [host.subviews copy])
+                              if ([sub.identifier
+                                      isEqualToString:KKRemoteWindowContentID])
+                                [sub removeFromSuperview];
+                            KKHelpView *helpView =
+                                [[KKHelpView alloc] initWithSections:sections];
+                            helpView.identifier = KKRemoteWindowContentID;
+                            helpView.translatesAutoresizingMaskIntoConstraints =
+                                NO;
+                            [host addSubview:helpView];
+                            [NSLayoutConstraint activateConstraints:@[
+                              [helpView.leadingAnchor
+                                  constraintEqualToAnchor:host.leadingAnchor],
+                              [helpView.trailingAnchor
+                                  constraintEqualToAnchor:host.trailingAnchor],
+                              [helpView.topAnchor
+                                  constraintEqualToAnchor:host.topAnchor],
+                              [helpView.bottomAnchor
+                                  constraintEqualToAnchor:host.bottomAnchor],
+                            ]];
+                          }];
 
   [actionAPI endAction:self];
 }

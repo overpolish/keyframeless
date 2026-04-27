@@ -14,6 +14,7 @@
 
 @class FxImageTile;
 @class KKAnimatableProperty;
+@class KKHelpSection;
 @class KKTimingLane;
 @class KKTimingSegment;
 @class KKTimingSlot;
@@ -109,10 +110,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// Plugins apply phases selectively to whichever properties they animate.
 - (KKTimingResult *)timingAtTime:(CMTime)renderTime;
 
-/// Adds an update banner at parameter ID 9990 that shows when a newer version
-/// is available. Call at the end of addParametersWithError:.
-- (BOOL)addUpdateBannerParameterWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
-                                  error:(NSError **)error;
+/// Adds the inspector chrome banner at parameter ID 9990: Keyframeless logo
+/// plus optional accessories (help button, update CTA when available).
+/// Call at the end of addParametersWithError:.
+- (BOOL)addLogoBannerParameterWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
+                                error:(NSError **)error;
 
 /// Adds a full-width informational text display occupying one parameter ID.
 /// The parameter is not animatable and stores no meaningful value — it is
@@ -297,6 +299,15 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)forceShowAllParametersIfEnabled:(UInt32)forceShowParamID
                                paramIDs:(NSArray<NSNumber *> *)paramIDs
                                  atTime:(CMTime)time;
+
+/// Override to provide help/keyboard-shortcut sections. Each section is
+/// rendered as a titled block with a tips bullet list and/or a 2-column
+/// shortcuts table. Returning a non-empty array makes the logo-banner
+/// help button visible. Default: empty array.
+- (NSArray<KKHelpSection *> *)helpSections;
+
+/// Opens the host's remote window with the rendered `helpSections`.
+- (void)openHelpRemoteWindow;
 
 /// Creates a collapsible group header view wired to a hidden bool toggle.
 /// Use from createViewForParameterID: — the returned view reads/writes

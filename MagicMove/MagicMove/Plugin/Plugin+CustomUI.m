@@ -39,47 +39,40 @@
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
-  if (parameterID == kParamInfoCompound) {
-    NSArray<NSAttributedString *> *pages = @[
-      [KKMarkup attributedStringFromMarkup:
-                    @"Create a Compound Clip <kbd>⌥ G</kbd> before applying "
-                    @"to avoid clipping"],
-      [KKMarkup attributedStringFromMarkup:
-                    @"Hold <kbd>Shift</kbd> while dragging to constrain to "
-                    @"X or Y axis"],
-      [KKMarkup attributedStringFromMarkup:
-                    @"Hold <kbd>⌃</kbd> while dragging to disable snapping"],
-      [KKMarkup attributedStringFromMarkup:
-                    @"Hold <kbd>⌥</kbd> to show X and Y rotation rings"],
-      [KKMarkup attributedStringFromMarkup:
-                    @"Hold <kbd>Shift</kbd> while scaling to lock to X or Y"],
-      [KKMarkup attributedStringFromMarkup:
-                    @"Double-click the scale ring to reset to 1:1 ratio"],
-      [KKMarkup attributedStringFromMarkup:
-                    @"<symbol squareshape.fill color=white /> toggles scale "
-                    @"between 0\% and 100\%"],
-      [KKMarkup attributedStringFromMarkup:
-                    @"<symbol circle.fill color=white /> toggles opacity "
-                    @"between 0\% and 100\%"],
-    ];
-    KKAlertView *infoAlert =
-        [[KKAlertView alloc] initWithAttributedText:pages.firstObject];
-    infoAlert.icon = [NSImage imageWithSystemSymbolName:@"info.circle"
-                               accessibilityDescription:nil];
-    infoAlert.attributedPages = pages;
-
-    KKAlertStackView *stack = [[KKAlertStackView alloc]
-        initWithDefaultAlert:infoAlert
-                  apiManager:self.apiManager
-          persistParameterID:kParamAlertStackSelected];
-
-    self.alertStackView = stack;
-    return stack;
-  }
-
   typedef NSView *(*ViewIMP)(id, SEL, UInt32);
   ViewIMP imp = (ViewIMP)[KKPlugin instanceMethodForSelector:_cmd];
   return imp(self, _cmd, parameterID);
+}
+
+- (NSArray<KKHelpSection *> *)helpSections {
+  KKHelpSection *magicMove = [KKHelpSection
+      sectionWithTitle:@"Magic Move"
+             tipMarkup:@[
+               (@"Create a Compound Clip <kbd>⌥ G</kbd> before applying to "
+                @"avoid clipping"),
+               (@"<symbol squareshape.fill color=white /> toggles scale "
+                @"between 0\% and 100\%"),
+               (@"<symbol circle.fill color=white /> toggles opacity "
+                @"between 0\% and 100\%"),
+             ]
+             shortcuts:@[
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + drag"
+                               descMarkup:@"Constrain motion to X or Y axis"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>⌃</kbd> + drag"
+                               descMarkup:@"Disable snapping while dragging"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>⌥</kbd>"
+                               descMarkup:@"Show X and Y rotation rings"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + scale"
+                               descMarkup:@"Lock scaling to X or Y axis"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"Double-click scale ring"
+                               descMarkup:@"Reset scale to 1:1 ratio"],
+             ]];
+  return @[ magicMove ];
 }
 
 @end

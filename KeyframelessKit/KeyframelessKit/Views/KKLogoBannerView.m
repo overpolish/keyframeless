@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-#import "KKUpdateBannerView.h"
+#import "KKLogoBannerView.h"
 #import "../Style/KKFonts.h"
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
@@ -11,8 +11,11 @@
 #import <AppKit/AppKit.h>
 
 static const CGFloat KKLogoSize = 28.0;
+static const CGFloat KKHelpButtonSize = 18.0;
 
-@implementation KKUpdateBannerView
+@implementation KKLogoBannerView {
+  NSButton *_helpButton;
+}
 
 - (instancetype)init {
   self = [super initWithFrame:NSMakeRect(0, 0, 0, KKInspectorRowHeight * 2)];
@@ -21,7 +24,7 @@ static const CGFloat KKLogoSize = 28.0;
         NSViewWidthSizable | NSViewHeightSizable | NSViewMinYMargin;
 
     NSBundle *frameworkBundle =
-        [NSBundle bundleForClass:[KKUpdateBannerView class]];
+        [NSBundle bundleForClass:[KKLogoBannerView class]];
     NSImage *logo = [[NSImage alloc]
         initByReferencingFile:[frameworkBundle
                                   pathForResource:@"keyframeless-logo"
@@ -68,6 +71,39 @@ static const CGFloat KKLogoSize = 28.0;
     }
   }
   return self;
+}
+
+- (void)setOnHelpTap:(void (^)(void))onHelpTap {
+  _onHelpTap = [onHelpTap copy];
+
+  if (_onHelpTap && !_helpButton) {
+    NSImage *icon = [NSImage imageWithSystemSymbolName:@"questionmark.circle"
+                              accessibilityDescription:@"Help"];
+    _helpButton = [NSButton buttonWithImage:icon
+                                     target:self
+                                     action:@selector(_helpClicked:)];
+    _helpButton.bezelStyle = NSBezelStyleAccessoryBarAction;
+    _helpButton.bordered = NO;
+    _helpButton.contentTintColor = [NSColor inspectorLabel];
+    _helpButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:_helpButton];
+    [NSLayoutConstraint activateConstraints:@[
+      [_helpButton.leadingAnchor
+          constraintEqualToAnchor:self.leadingAnchor
+                         constant:KKInspectorHorizontalInset],
+      [_helpButton.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [_helpButton.widthAnchor constraintEqualToConstant:KKHelpButtonSize],
+      [_helpButton.heightAnchor constraintEqualToConstant:KKHelpButtonSize],
+    ]];
+  } else if (!_onHelpTap && _helpButton) {
+    [_helpButton removeFromSuperview];
+    _helpButton = nil;
+  }
+}
+
+- (void)_helpClicked:(id)sender {
+  if (_onHelpTap)
+    _onHelpTap();
 }
 
 - (void)openDownloadURL:(id)sender {

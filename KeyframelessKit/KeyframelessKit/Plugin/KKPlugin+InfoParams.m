@@ -88,10 +88,10 @@ static BOOL KKAddCustomUIDisabledParam(id<FxParameterCreationAPI_v5> paramAPI,
   return YES;
 }
 
-- (BOOL)addUpdateBannerParameterWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
-                                  error:(NSError **)error {
-  return KKAddCustomUIDisabledParam(paramAPI, kKKParamUpdateBanner, error,
-                                    @"Unable to add update banner parameter");
+- (BOOL)addLogoBannerParameterWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
+                                error:(NSError **)error {
+  return KKAddCustomUIDisabledParam(paramAPI, kKKParamLogoBanner, error,
+                                    @"Unable to add logo banner parameter");
 }
 
 @end

@@ -26,7 +26,7 @@
     return NO;
   }
 
-  if (![self addUpdateBannerParameterWithAPI:paramAPI error:error])
+  if (![self addLogoBannerParameterWithAPI:paramAPI error:error])
     return NO;
 
   if (![paramAPI
@@ -35,31 +35,6 @@
                      defaultValue:NO
                    parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
                                   kFxParameterFlag_DONT_DISPLAY_IN_DASHBOARD])
-    return NO;
-
-  NSMutableAttributedString *compoundText = [[NSMutableAttributedString alloc]
-      initWithString:@"Create a Compound Clip "];
-  [compoundText appendAttributedString:[KKKbd attributedStringWithKey:@"⌥ G"]];
-  [compoundText
-      appendAttributedString:[[NSAttributedString alloc]
-                                 initWithString:@" before applying "
-                                                @"to avoid clipping"]];
-  if (![self
-          addInfoParameterWithAttributedText:compoundText
-                                        icon:[NSImage
-                                                 imageWithSystemSymbolName:
-                                                     @"info.circle"
-                                                  accessibilityDescription:nil]
-                                 parameterID:kParamInfoCompound
-                                     withAPI:paramAPI
-                                       error:error])
-    return NO;
-
-  if (![paramAPI addStringParameterWithName:@"Alert Selection"
-                                parameterID:kParamAlertStackSelected
-                               defaultValue:@""
-                             parameterFlags:kFxParameterFlag_HIDDEN |
-                                            kFxParameterFlag_NOT_ANIMATABLE])
     return NO;
 
   if (![self addMultiStageParametersWithAPI:paramAPI error:error])

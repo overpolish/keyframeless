@@ -24,8 +24,6 @@ static const UInt32 kParamAnchorPoint = 601;
 
 // Alerts & Info (9000+)
 static const UInt32 kParamForceShowAlerts = 9000;
-static const UInt32 kParamInfoCompound = 9001;
-static const UInt32 kParamAlertStackSelected = 9004;
 
 // OSC part IDs
 static const NSInteger kOSCPositionPart = 1;
