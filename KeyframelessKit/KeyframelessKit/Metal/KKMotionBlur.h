@@ -26,6 +26,13 @@ typedef struct {
                         // segment, so hold portions skip the blur path
   int sampleCount; // 2..KK_MOTION_BLUR_MAX_SAMPLES, undefined when disabled
   double shutterSec;
+  // Per-sample render-target downscale. Sample textures are allocated at
+  // (destW * subframeScale, destH * subframeScale); the accumulation pass
+  // bilinear-upsamples back to full dest. Default 0.5 — invisible on
+  // motion-blurred output and ~4× cheaper per sample. Plugins whose render
+  // pipeline assumes full-res sampleDest dims (Glow's composite viewport,
+  // etc.) can set this to 1.0 to opt out.
+  float subframeScale;
 } KKMotionBlurState;
 
 /// Sample-and-accumulate motion blur shared across plugins.

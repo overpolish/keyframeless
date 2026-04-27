@@ -585,9 +585,6 @@ static void _texPairReturn(NSInteger idx) {
 
     if (mbState.enabled) {
       NSData *capturedState = pluginState;
-      // Sample passes target fresh textures sized to the output, so the
-      // composite viewport has no IOSurface Y offset.
-      MTLViewport sampleVP = {0, 0, outW, outH, -1, 1};
       MTLTextureUsage scratchUsage = MTLTextureUsageRenderTarget |
                                      MTLTextureUsageShaderRead |
                                      MTLTextureUsageShaderWrite;
@@ -613,21 +610,38 @@ static void _texPairReturn(NSInteger idx) {
                         [capturedState
                             getBytes:&s
                                range:NSMakeRange(off, sizeof(GlowPluginState))];
+                        // Per-sample render target may be downscaled
+                        // (KKMotionBlur subframeScale). Fold that ratio into
+                        // `bs` so blur intermediate, sigma, and viewport all
+                        // halve together while the offset formula keeps its
+                        // full-res `outW/outH` reference.
+                        float effRatio = (float)sampleDest.width / outW;
+                        float bsEff = bs * effRatio;
+                        NSUInteger bWEff =
+                            MAX((NSUInteger)1, (NSUInteger)(outW * bsEff));
+                        NSUInteger bHEff =
+                            MAX((NSUInteger)1, (NSUInteger)(outH * bsEff));
+                        MTLViewport sampleVP = {0,
+                                                0,
+                                                (double)sampleDest.width,
+                                                (double)sampleDest.height,
+                                                -1,
+                                                1};
                         // Pooled scratch textures — reused across frames so
                         // memory stays bounded under FCP look-ahead playback.
                         id<MTLTexture> prepTex =
                             [KKMotionBlur scratchTextureForKey:@"glow.prep"
                                                    sampleIndex:sampleIndex
-                                                         width:bW
-                                                        height:bH
+                                                         width:bWEff
+                                                        height:bHEff
                                                         format:pf
                                                          usage:scratchUsage
                                                         device:device];
                         id<MTLTexture> blurTex =
                             [KKMotionBlur scratchTextureForKey:@"glow.blur"
                                                    sampleIndex:sampleIndex
-                                                         width:bW
-                                                        height:bH
+                                                         width:bWEff
+                                                        height:bHEff
                                                         format:pf
                                                          usage:scratchUsage
                                                         device:device];
@@ -636,16 +650,16 @@ static void _texPairReturn(NSInteger idx) {
                           bloomPrepTex = [KKMotionBlur
                               scratchTextureForKey:@"glow.bloomPrep"
                                        sampleIndex:sampleIndex
-                                             width:bW
-                                            height:bH
+                                             width:bWEff
+                                            height:bHEff
                                             format:pf
                                              usage:scratchUsage
                                             device:device];
                           bloomBlurTex = [KKMotionBlur
                               scratchTextureForKey:@"glow.bloomBlur"
                                        sampleIndex:sampleIndex
-                                             width:bW
-                                            height:bH
+                                             width:bWEff
+                                            height:bHEff
                                             format:pf
                                              usage:scratchUsage
                                             device:device];
@@ -656,7 +670,8 @@ static void _texPairReturn(NSInteger idx) {
                             cache, regID, pf, device, commandBuffer, s,
                             sampleDest, inputs[0], prepTex, blurTex,
                             bloomPrepTex, bloomBlurTex, destinationImage,
-                            sourceImages, bW, bH, bs, outW, outH, sampleVP);
+                            sourceImages, bWEff, bHEff, bsEff, outW, outH,
+                            sampleVP);
                         return YES;
                       }];
       if (applied)

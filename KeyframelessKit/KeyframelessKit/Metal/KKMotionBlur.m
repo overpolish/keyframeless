@@ -14,22 +14,25 @@ static NSString *const KKMotionBlurPipelineID =
     @"co.overpolish.keyframeless.kit.motionblur";
 
 /// Reusable sample-texture pool. Keyed by (registryID, width, height,
-/// pixelFormat) — re-allocates if any dimension changes. A single FxPlug
-/// instance renders one tile size per render call so the cache stays warm
-/// across frames; multi-instance with differing sizes will re-allocate
-/// the first time each new size is seen.
+/// pixelFormat). FCP renders the same effect at many tile sizes
+/// (full-canvas, scopes, thumbnails, etc.), so distinct keys accumulate.
+/// LRU-capped: when more than `kKKMotionBlurPoolMaxKeys` keys are seen,
+/// the oldest key (and all its textures) is dropped — bounding memory
+/// regardless of how many sizes FCP throws at us.
 static NSMutableDictionary<NSString *, NSMutableArray<id<MTLTexture>> *>
     *sKKMotionBlurPool;
+static NSMutableArray<NSString *> *sKKMotionBlurPoolLRU; // tail = most recent
 static dispatch_semaphore_t sKKMotionBlurPoolLock;
 
 /// Pool of plugin-private "scratch" textures used inside renderBlocks
 /// (e.g. Glow's blur intermediates). Same key/lock conventions as the
-/// sample-dest pool, but acquisitions are tracked per apply-call via a
-/// thread-local context so we can return everything to the pool after
-/// `waitUntilCompleted`. Reuse across frames keeps memory bounded.
+/// sample-dest pool, including LRU cap.
 static NSMutableDictionary<NSString *, NSMutableArray<id<MTLTexture>> *>
     *sKKMotionBlurScratchPool;
+static NSMutableArray<NSString *> *sKKMotionBlurScratchPoolLRU;
 static dispatch_semaphore_t sKKMotionBlurScratchPoolLock;
+
+static const NSUInteger kKKMotionBlurPoolMaxKeys = 4;
 static NSString *const kKKMotionBlurScratchContextThreadKey =
     @"co.overpolish.keyframeless.kit.motionblur.scratchContext";
 
@@ -44,10 +47,27 @@ static dispatch_semaphore_t sKKMotionBlurInFlightSema;
 + (void)initialize {
   if (self == [KKMotionBlur class]) {
     sKKMotionBlurPool = [NSMutableDictionary dictionary];
+    sKKMotionBlurPoolLRU = [NSMutableArray array];
     sKKMotionBlurPoolLock = dispatch_semaphore_create(1);
     sKKMotionBlurScratchPool = [NSMutableDictionary dictionary];
+    sKKMotionBlurScratchPoolLRU = [NSMutableArray array];
     sKKMotionBlurScratchPoolLock = dispatch_semaphore_create(1);
     sKKMotionBlurInFlightSema = dispatch_semaphore_create(1);
+  }
+}
+
+/// Move `key` to the most-recent end of `lru`. If adding the key pushes
+/// `dict.count` past the cap, evict the oldest key — its textures are
+/// released by ARC when the array goes out of scope. Caller holds the
+/// pool lock.
+static void KKMBPoolTouchAndEvict(NSString *key, NSMutableDictionary *dict,
+                                  NSMutableArray<NSString *> *lru) {
+  [lru removeObject:key];
+  [lru addObject:key];
+  while (lru.count > kKKMotionBlurPoolMaxKeys) {
+    NSString *oldest = lru.firstObject;
+    [lru removeObjectAtIndex:0];
+    [dict removeObjectForKey:oldest];
   }
 }
 
@@ -89,6 +109,8 @@ static NSString *KKMBScratchKey(NSString *key, NSUInteger width,
   if (available.count > 0) {
     reused = available.lastObject;
     [available removeLastObject];
+    KKMBPoolTouchAndEvict(poolKey, sKKMotionBlurScratchPool,
+                          sKKMotionBlurScratchPoolLRU);
   }
   dispatch_semaphore_signal(sKKMotionBlurScratchPoolLock);
 
@@ -125,6 +147,8 @@ static NSString *KKMBScratchKey(NSString *key, NSUInteger width,
       sKKMotionBlurScratchPool[poolKey] = available;
     }
     [available addObject:ctx[poolKey]];
+    KKMBPoolTouchAndEvict(poolKey, sKKMotionBlurScratchPool,
+                          sKKMotionBlurScratchPoolLRU);
   }
   dispatch_semaphore_signal(sKKMotionBlurScratchPoolLock);
 }
@@ -136,7 +160,8 @@ static NSString *KKMBScratchKey(NSString *key, NSUInteger width,
   KKMotionBlurState state = {.enabled = false,
                              .transitionsOnly = false,
                              .sampleCount = 0,
-                             .shutterSec = 0.0};
+                             .shutterSec = 0.0,
+                             .subframeScale = 0.5f};
   if (!paramAPI)
     return state;
 
@@ -212,6 +237,7 @@ static NSString *KKMBScratchKey(NSString *key, NSUInteger width,
     [result addObject:available.lastObject];
     [available removeLastObject];
   }
+  KKMBPoolTouchAndEvict(key, sKKMotionBlurPool, sKKMotionBlurPoolLRU);
   dispatch_semaphore_signal(sKKMotionBlurPoolLock);
 
   while (result.count < count) {
@@ -248,6 +274,7 @@ static NSString *KKMBScratchKey(NSString *key, NSUInteger width,
     sKKMotionBlurPool[key] = available;
   }
   [available addObjectsFromArray:textures];
+  KKMBPoolTouchAndEvict(key, sKKMotionBlurPool, sKKMotionBlurPoolLRU);
   dispatch_semaphore_signal(sKKMotionBlurPoolLock);
 }
 
@@ -317,20 +344,26 @@ static NSString *KKMBScratchKey(NSString *key, NSUInteger width,
   NSUInteger w = destTexture.width;
   NSUInteger h = destTexture.height;
 
+  float scale = state.subframeScale;
+  if (!(scale > 0.0f && scale <= 1.0f))
+    scale = 0.5f;
+  NSUInteger sampleW = MAX((NSUInteger)1, (NSUInteger)((float)w * scale));
+  NSUInteger sampleH = MAX((NSUInteger)1, (NSUInteger)((float)h * scale));
+
   NSArray<id<MTLTexture>> *samples =
       [self acquireSampleTextures:(NSUInteger)sampleCount
                            device:device
                        registryID:registryID
-                            width:w
-                           height:h
+                            width:sampleW
+                           height:sampleH
                            format:pixelFormat];
   if (samples.count != (NSUInteger)sampleCount) {
     KKLogError(@"KKMotionBlur: failed to acquire %d sample textures",
                sampleCount);
     [self returnSampleTextures:samples
                     registryID:registryID
-                         width:w
-                        height:h
+                         width:sampleW
+                        height:sampleH
                         format:pixelFormat];
     [cache returnCommandQueueToCache:queue];
     dispatch_semaphore_signal(sKKMotionBlurInFlightSema);
@@ -383,8 +416,8 @@ static NSString *KKMBScratchKey(NSString *key, NSUInteger width,
   if (!allOk) {
     [self returnSampleTextures:samples
                     registryID:registryID
-                         width:w
-                        height:h
+                         width:sampleW
+                        height:sampleH
                         format:pixelFormat];
     [cache returnCommandQueueToCache:queue];
     dispatch_semaphore_signal(sKKMotionBlurInFlightSema);
@@ -403,8 +436,8 @@ static NSString *KKMBScratchKey(NSString *key, NSUInteger width,
   if (!accPipeline) {
     [self returnSampleTextures:samples
                     registryID:registryID
-                         width:w
-                        height:h
+                         width:sampleW
+                        height:sampleH
                         format:pixelFormat];
     [cache returnCommandQueueToCache:queue];
     dispatch_semaphore_signal(sKKMotionBlurInFlightSema);
@@ -462,8 +495,8 @@ static NSString *KKMBScratchKey(NSString *key, NSUInteger width,
 
   [self returnSampleTextures:samples
                   registryID:registryID
-                       width:w
-                      height:h
+                       width:sampleW
+                      height:sampleH
                       format:pixelFormat];
   [cache returnCommandQueueToCache:queue];
   dispatch_semaphore_signal(sKKMotionBlurInFlightSema);
