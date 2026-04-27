@@ -133,10 +133,6 @@ static const void *_Nonnull const kKKLinkedPairs = &kKKLinkedPairs;
 static const void *_Nonnull const kKKLinkedLocking = &kKKLinkedLocking;
 static const void *_Nonnull const kKKLinkedRatio = &kKKLinkedRatio;
 static const void *_Nonnull const kKKLinkedSource = &kKKLinkedSource;
-/// Marker set to @YES on the plugin's class when
-/// `addMotionBlurParametersWithAPI:` runs, so the help window builder can
-/// auto-include the Motion Blur help section without each plugin opting in.
-static const void *_Nonnull const kKKHasMotionBlur = &kKKHasMotionBlur;
 
 static inline NSMutableDictionary<NSNumber *, id> *
 kkClassRegistry(Class cls, const void *_Nonnull key) {

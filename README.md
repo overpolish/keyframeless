@@ -34,7 +34,6 @@
   - [Magic Move](#magic-move)
   - [Glow](#glow)
   - [AI Captions](#ai-captions)
-  - [Motion Blur](#motion-blur)
   - [Rounded](#rounded)
 
 </details>
@@ -101,14 +100,6 @@ There's also community captions — download and use existing ones, or make your
 
 > [!WARNING]
 > Intel performance is limited by CPU. For best performance, and better models, Silicon is recommended.
-
-## Motion Blur
-
-Use Motion Blur on an Adjustment/Compound Clip to allow quick enable/disable Motion Blur across your project. Now, you can disable it whilst working and enable it on render.
-
-<div align="center">
-	<img alt="Motion Blur demo" src="./.github/images/motion-blur-demo.gif" />
-</div>
 
 ## Rounded
 
