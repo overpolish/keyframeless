@@ -13,7 +13,7 @@ static const DDLogLevel ddLogLevel = DDLogLevelDebug;
 static const DDLogLevel ddLogLevel = DDLogLevelWarning;
 #endif
 
-static NSString *const KKLogBaseIdentifier = @"co.overpolish.keyframeless";
+static NSString *const KKLogFolderName = @"co.overpolish.keyframeless";
 
 @interface KKLog ()
 @property(nonatomic, strong) DDLog *ddLog;
@@ -21,7 +21,20 @@ static NSString *const KKLogBaseIdentifier = @"co.overpolish.keyframeless";
 
 @implementation KKLog
 
++ (instancetype)shared {
+  static KKLog *shared;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    shared = [[KKLog alloc] initShared];
+  });
+  return shared;
+}
+
 + (instancetype)loggerForPlugin:(NSString *)pluginID {
+  // Legacy entry point. All loggers now write to the same unified folder;
+  // per-process file separation is handled by DDFileLogger's process-name
+  // based filenames. The pluginID is retained only as a cache key so repeated
+  // callers don't allocate redundant DDLog stacks.
   static NSMutableDictionary<NSString *, KKLog *> *cache;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
@@ -33,13 +46,13 @@ static NSString *const KKLogBaseIdentifier = @"co.overpolish.keyframeless";
     if (existing)
       return existing;
 
-    KKLog *logger = [[KKLog alloc] initWithPluginID:pluginID];
+    KKLog *logger = [[KKLog alloc] initShared];
     cache[pluginID] = logger;
     return logger;
   }
 }
 
-- (instancetype)initWithPluginID:(NSString *)pluginID {
+- (instancetype)initShared {
   self = [super init];
   if (!self)
     return nil;
@@ -50,7 +63,7 @@ static NSString *const KKLogBaseIdentifier = @"co.overpolish.keyframeless";
   NSArray *dirs = NSSearchPathForDirectoriesInDomains(NSLibraryDirectory,
                                                       NSUserDomainMask, YES);
   NSString *logDir = [[dirs[0] stringByAppendingPathComponent:@"Logs"]
-      stringByAppendingPathComponent:pluginID];
+      stringByAppendingPathComponent:KKLogFolderName];
 
   DDLogFileManagerDefault *fileManager =
       [[DDLogFileManagerDefault alloc] initWithLogsDirectory:logDir];
@@ -61,57 +74,101 @@ static NSString *const KKLogBaseIdentifier = @"co.overpolish.keyframeless";
   fileLogger.maximumFileSize = 1024 * 1024 * 10; // 10 MB
   [_ddLog addLogger:fileLogger withLevel:DDLogLevelDebug];
 
-  [self info:@"Logging initialized. Log dir: %@", logDir];
-
   return self;
 }
 
-- (void)logFlag:(DDLogFlag)flag format:(NSString *)format args:(va_list)args {
+- (void)logFlag:(DDLogFlag)flag
+           file:(const char *)file
+       function:(const char *)function
+           line:(NSUInteger)line
+         format:(NSString *)format
+           args:(va_list)args {
   BOOL async = !(flag & DDLogFlagError);
   [_ddLog log:async
          level:ddLogLevel
           flag:flag
        context:0
-          file:__FILE__
-      function:__FUNCTION__
-          line:__LINE__
+          file:file
+      function:function
+          line:line
            tag:nil
         format:format
           args:args];
 }
 
+- (void)logFlagValue:(NSUInteger)flag
+                file:(const char *)file
+            function:(const char *)function
+                line:(NSUInteger)line
+              format:(NSString *)format, ... {
+  va_list args;
+  va_start(args, format);
+  [self logFlag:(DDLogFlag)flag
+           file:file
+       function:function
+           line:line
+         format:format
+           args:args];
+  va_end(args);
+}
+
 - (void)verbose:(NSString *)format, ... {
   va_list args;
   va_start(args, format);
-  [self logFlag:DDLogFlagVerbose format:format args:args];
+  [self logFlag:DDLogFlagVerbose
+           file:__FILE__
+       function:__FUNCTION__
+           line:__LINE__
+         format:format
+           args:args];
   va_end(args);
 }
 
 - (void)debug:(NSString *)format, ... {
   va_list args;
   va_start(args, format);
-  [self logFlag:DDLogFlagDebug format:format args:args];
+  [self logFlag:DDLogFlagDebug
+           file:__FILE__
+       function:__FUNCTION__
+           line:__LINE__
+         format:format
+           args:args];
   va_end(args);
 }
 
 - (void)info:(NSString *)format, ... {
   va_list args;
   va_start(args, format);
-  [self logFlag:DDLogFlagInfo format:format args:args];
+  [self logFlag:DDLogFlagInfo
+           file:__FILE__
+       function:__FUNCTION__
+           line:__LINE__
+         format:format
+           args:args];
   va_end(args);
 }
 
 - (void)warn:(NSString *)format, ... {
   va_list args;
   va_start(args, format);
-  [self logFlag:DDLogFlagWarning format:format args:args];
+  [self logFlag:DDLogFlagWarning
+           file:__FILE__
+       function:__FUNCTION__
+           line:__LINE__
+         format:format
+           args:args];
   va_end(args);
 }
 
 - (void)error:(NSString *)format, ... {
   va_list args;
   va_start(args, format);
-  [self logFlag:DDLogFlagError format:format args:args];
+  [self logFlag:DDLogFlagError
+           file:__FILE__
+       function:__FUNCTION__
+           line:__LINE__
+         format:format
+           args:args];
   va_end(args);
 }
 

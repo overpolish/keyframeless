@@ -12,10 +12,6 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface MagicMovePlugin ()
-@property(nonatomic, strong) KKLog *log;
-@end
-
 @interface MagicMovePlugin (Parameters)
 - (BOOL)addParametersWithError:(NSError **)error;
 @end

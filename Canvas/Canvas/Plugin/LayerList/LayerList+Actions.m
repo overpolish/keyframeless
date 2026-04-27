@@ -359,28 +359,6 @@
   if (imported.count == 0)
     return;
 
-  KKLog *log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
-  [log info:@"[SVG] Imported %lu paths (canvas %.0fx%.0f)",
-            (unsigned long)imported.count, cw, ch];
-  for (NSUInteger p = 0; p < imported.count; p++) {
-    KKBezierPath *ip = imported[p];
-    [log
-        info:
-            @"[SVG] Path %lu: %lu points, closed=%d, fill=%d (%.3f,%.3f,%.3f), "
-            @"stroke=%d (%.3f,%.3f,%.3f w=%.2f), contours=%lu",
-            (unsigned long)p, (unsigned long)ip.count, ip.closed,
-            ip.fillEnabled, ip.fillR, ip.fillG, ip.fillB, ip.strokeEnabled,
-            ip.strokeR, ip.strokeG, ip.strokeB, ip.strokeWidth,
-            (unsigned long)ip.contourCount];
-    for (NSUInteger i = 0; i < ip.count; i++) {
-      KKBezierPoint pt = [ip pointAtIndex:i];
-      [log info:@"[SVG]   [%lu] pos=(%.4f,%.4f) in=(%.4f,%.4f) out=(%.4f,%.4f) "
-                @"type=%u",
-                (unsigned long)i, pt.x, pt.y, pt.inX, pt.inY, pt.outX, pt.outY,
-                pt.type];
-    }
-  }
-
   // SVG paints first-to-last (back-to-front), layer list is top-to-bottom
   imported = [[imported reverseObjectEnumerator] allObjects];
 
@@ -453,10 +431,6 @@
   [p insertAtIndex:1 position:(simd_float2){x1, y1}];
   [p insertAtIndex:2 position:(simd_float2){x1, y0}];
   [p insertAtIndex:3 position:(simd_float2){x0, y0}];
-
-  KKLog *log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
-  [log info:@"[Image] Imported %@ (%.0fx%.0f) → rect (%.4f,%.4f)-(%.4f,%.4f)",
-            name, imgSize.width, imgSize.height, x0, y0, x1, y1];
 
   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
     NSUInteger insertAt = MIN(index, paths.count);

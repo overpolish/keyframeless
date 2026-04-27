@@ -24,13 +24,10 @@ typedef struct {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wprotocol"
 
-@implementation MotionBlurPlugin {
-  KKLog *_log;
-}
+@implementation MotionBlurPlugin
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager {
-  _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
-  [_log info:@"MotionBlurPlugin: loading"];
+  KKLogInfo(@"MotionBlurPlugin: initialized");
   self = [super initWithAPIManager:newApiManager];
   return self;
 }

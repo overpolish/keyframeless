@@ -12,13 +12,11 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wprotocol"
 
-@implementation CanvasPlugin {
-  KKLog *_log;
-}
+@implementation CanvasPlugin
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager;
 {
-  _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
+  KKLogInfo(@"CanvasPlugin: initialized");
   self = [super initWithAPIManager:newApiManager];
   return self;
 }

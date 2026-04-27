@@ -10,15 +10,6 @@
 #import <KeyframelessKit/KKEasing.h>
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 
-static KKLog *_renderLog(void) {
-  static KKLog *log;
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless.Glow"];
-  });
-  return log;
-}
-
 typedef struct {
   float radiusX;
   float radiusY;
@@ -235,11 +226,6 @@ static void _texPairReturn(NSInteger idx) {
       state.gradientLUT[i] = state.glowColor;
   }
 
-  [_renderLog()
-      verbose:@"state: rx=%.1f ry=%.1f i=%.2f mode=%d off=(%.3f,%.3f)",
-              state.radiusX, state.radiusY, state.intensity, state.colorMode,
-              state.offset.x, state.offset.y];
-
   *pluginState = [NSData dataWithBytes:&state length:sizeof(state)];
   return (*pluginState != nil);
 }
@@ -318,9 +304,9 @@ static void _texPairReturn(NSInteger idx) {
   if (!pluginState || pluginState.length < sizeof(GlowPluginState) ||
       !sourceImages.count || !sourceImages[0].ioSurface ||
       !destinationImage.ioSurface) {
-    [_renderLog() error:@"render bail: state=%p len=%lu src=%lu", pluginState,
-                        (unsigned long)pluginState.length,
-                        (unsigned long)sourceImages.count];
+    KKLogError(@"render bail: state=%p len=%lu src=%lu", pluginState,
+               (unsigned long)pluginState.length,
+               (unsigned long)sourceImages.count);
     if (outError)
       *outError = [NSError errorWithDomain:FxPlugErrorDomain
                                       code:kFxError_InvalidParameter

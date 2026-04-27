@@ -188,12 +188,6 @@ static NSTimeInterval sLastLoopWrapTime = 0;
 /// spamming `movePlayheadToTime:` while FCP catches up to the new position.
 static void KKMaybeLoopPlayback(id<PROAPIAccessing> apiManager,
                                 double pumpTimeSec, id sender) {
-  static KKLog *sLog;
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    sLog = [KKLog loggerForPlugin:@"co.overpolish.keyframeless.Timing"];
-  });
-
   KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
   double durSec = state.cachedEffectDuration;
   if (durSec <= 0)

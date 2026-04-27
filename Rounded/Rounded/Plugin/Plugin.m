@@ -8,18 +8,12 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wprotocol"
 
-@implementation RoundedPlugin {
-  KKLog *_log;
-}
+@implementation RoundedPlugin
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager;
 {
-  _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
-  [_log info:@"RoundedPlugin: initWithAPIManager called - plugin is loading"];
+  KKLogInfo(@"RoundedPlugin: initialized");
   self = [super initWithAPIManager:newApiManager];
-  if (self != nil) {
-    [_log info:@"RoundedPlugin: Successfully initialized"];
-  }
   return self;
 }
 
