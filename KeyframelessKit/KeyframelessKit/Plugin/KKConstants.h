@@ -67,4 +67,4 @@ typedef NS_ENUM(NSInteger, KKColorMode) {
   KKColorModeDynamic = 2,
 };
 
-static const UInt32 kKKParamUpdateBanner __attribute__((unused)) = 9990;
+static const UInt32 kKKParamLogoBanner __attribute__((unused)) = 9990;

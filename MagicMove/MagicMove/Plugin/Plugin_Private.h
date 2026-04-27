@@ -14,7 +14,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface MagicMovePlugin ()
 @property(nonatomic, strong) KKLog *log;
-@property(nonatomic, weak, nullable) KKAlertStackView *alertStackView;
 @end
 
 @interface MagicMovePlugin (Parameters)

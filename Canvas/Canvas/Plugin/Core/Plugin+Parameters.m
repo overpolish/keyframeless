@@ -25,7 +25,7 @@
     return NO;
   }
 
-  if (![self addUpdateBannerParameterWithAPI:paramAPI error:error]) {
+  if (![self addLogoBannerParameterWithAPI:paramAPI error:error]) {
     return NO;
   }
 
