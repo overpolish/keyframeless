@@ -107,6 +107,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// wrap playback back to the effect start when the playhead passes the end.
 @property(nonatomic) BOOL loopEnabled;
 
+/// Pointer of the api manager that "owns" this state. Used by
+/// `KKInstanceStateEnsureForAPI` to detect duplicate-UUID clones (FCP
+/// copy/paste/cut clones the `kKKParamInstanceID` value) and mint a fresh
+/// UUID for the second instance. Stored unsafe-unretained: only ever
+/// pointer-compared, never dereferenced.
+@property(nonatomic, assign, nullable) void *ownerAPIPointer;
+
 @end
 
 /// Reads `kKKParamInstanceID` from the api, cached on the api via

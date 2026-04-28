@@ -303,9 +303,24 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
   }
   objc_setAssociatedObject(self.apiManager, &kKKLayerUUIDAssocKey, uuid,
                            OBJC_ASSOCIATION_COPY_NONATOMIC);
-  actionTarget.instanceUUID = uuid;
 
   KKLayerInstanceState *state = KKLayerStateForUUID(uuid);
+  // Duplicate-UUID detection: FCP copy/paste/cut clones `kParamInstanceID`
+  // along with the rest of the params, so two distinct plugin instances
+  // can resolve to the same state and clobber each other's view refs. If
+  // this state is already owned by a different api, mint a fresh UUID for
+  // the new instance and rebind to a new state entry.
+  void *apiPtr = (__bridge void *)self.apiManager;
+  if (state.ownerAPIPointer && state.ownerAPIPointer != apiPtr) {
+    uuid = [[NSUUID UUID] UUIDString];
+    [paramSetAPI setStringParameterValue:uuid toParameter:kParamInstanceID];
+    objc_setAssociatedObject(self.apiManager, &kKKLayerUUIDAssocKey, uuid,
+                             OBJC_ASSOCIATION_COPY_NONATOMIC);
+    state = KKLayerStateForUUID(uuid);
+  }
+  state.ownerAPIPointer = apiPtr;
+  actionTarget.instanceUUID = uuid;
+
   state.container = wrapper;
 
   // Write back any pending per-object param edits.
