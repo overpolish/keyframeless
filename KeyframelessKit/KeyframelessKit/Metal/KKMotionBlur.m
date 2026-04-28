@@ -49,6 +49,12 @@ static dispatch_semaphore_t sKKMotionBlurInFlightSema;
 /// runs at a time, so no separate lock is needed).
 static CFAbsoluteTime sKKMotionBlurLastApplyEnd = 0.0;
 
+/// renderTime of the previous apply. Combined with the wall-clock gap to
+/// distinguish actual playback (renderTime advancing frame-by-frame) from
+/// a paused viewer (FCP keeps re-issuing renders at the same time).
+static CMTime sKKMotionBlurLastRenderTime;
+static BOOL sKKMotionBlurHasLastRenderTime = NO;
+
 /// Adaptive-quality state machine. Independent of cadence detection —
 /// this layer asks "given that we *are* in playback, can the machine
 /// keep up at full sub-frame resolution?"
@@ -395,29 +401,41 @@ static NSString *KKMBScratchKey(NSString *key, NSUInteger width,
   NSUInteger w = destTexture.width;
   NSUInteger h = destTexture.height;
 
-  float scale = state.subframeScale;
-  if (!(scale > 0.0f && scale <= 1.0f))
-    scale = 0.5f;
+  // Default to full resolution. The half-res downscale (state.subframeScale)
+  // softened static frames noticeably and — worse — FCP doesn't re-render on
+  // pause, so the last playback frame at 0.5× would stay stuck on screen
+  // until the user touched the effect. Only the adaptive 0.1× path
+  // downscales now, and only while the perf machine is actually tripped.
+  float scale = 1.0f;
+  // Cadence gate: previous apply ended within ~3× frame duration
+  // (frame-rate aware: 30fps ≈ 100ms, 60fps ≈ 50ms, 120fps ≈ 25ms).
+  // Used only to gate the adaptive state machine — we render full-res
+  // outside cadence regardless.
+  BOOL inPlaybackCadence = NO;
+  if (state.frameDurationSec > 0.0) {
+    CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+    double gap = now - sKKMotionBlurLastApplyEnd;
+    BOOL gapOk = (gap > 0.0 && gap < state.frameDurationSec * 3.0);
+    // Paused FCP keeps issuing renders at playback cadence but at the
+    // same renderTime — exclude that case so the viewer goes sharp on
+    // pause without the user touching anything.
+    BOOL renderTimeAdvanced =
+        sKKMotionBlurHasLastRenderTime &&
+        CMTimeCompare(renderTime, sKKMotionBlurLastRenderTime) != 0;
+    inPlaybackCadence = (gapOk && renderTimeAdvanced);
+  }
   // Adaptive quality decision for THIS frame. Three layers:
   //   1. Param + export filter: param on, FxQuality != HIGH.
-  //   2. Cadence gate: previous apply ended within ~3× frame duration
-  //      (frame-rate aware: 30fps ≈ 100ms, 60fps ≈ 50ms, 120fps ≈ 25ms).
-  //      Outside that window we're paused/scrubbing — reset state to
-  //      FULL so the next playback session starts optimistic.
+  //   2. Cadence gate (above): only adapt during playback cadence; reset
+  //      state to FULL outside it so the next session starts optimistic.
   //   3. Perf state machine: in FULL we render at the user's scale and
   //      classify the resulting wall-clock duration; in ADAPTIVE we
   //      render at 0.1× and probe FULL once per second to recover.
-  BOOL inPlaybackCadence = NO;
-  if (state.adaptiveQuality && !state.qualityIsHigh &&
-      state.frameDurationSec > 0.0) {
-    CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
-    double gap = now - sKKMotionBlurLastApplyEnd;
-    inPlaybackCadence = (gap > 0.0 && gap < state.frameDurationSec * 3.0);
-  }
   if (!inPlaybackCadence) {
     sKKMotionBlurAdaptiveMode = KKMotionBlurAdaptiveModeFull;
     sKKMotionBlurAdaptiveFrameCount = 0;
-  } else if (sKKMotionBlurAdaptiveMode == KKMotionBlurAdaptiveModeAdaptive) {
+  } else if (state.adaptiveQuality && !state.qualityIsHigh &&
+             sKKMotionBlurAdaptiveMode == KKMotionBlurAdaptiveModeAdaptive) {
     sKKMotionBlurAdaptiveFrameCount++;
     // Periodic full-quality probe. Letting one frame slip back to FULL
     // tests whether we can sustain it now; classify below decides
@@ -603,6 +621,8 @@ static NSString *KKMBScratchKey(NSString *key, NSUInteger width,
   // be waiting on the sema) sees an up-to-date "previous frame ended at"
   // timestamp for its cadence check.
   sKKMotionBlurLastApplyEnd = applyEnd;
+  sKKMotionBlurLastRenderTime = renderTime;
+  sKKMotionBlurHasLastRenderTime = YES;
   dispatch_semaphore_signal(sKKMotionBlurInFlightSema);
   return YES;
 }
