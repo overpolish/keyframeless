@@ -506,6 +506,11 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
     (@"<accent>Transitions only?</accent> skips the blur work on "
      @"<accent>hold</accent> segments, where nothing is moving anyway. "
      @"Big performance win on segments which don't need motion blur."),
+    (@"<accent>Adaptive Quality</accent> drops sub-frame resolution "
+     @"automatically when playback can't keep up, then restores full "
+     @"quality the moment you pause. Probes back to full once a second "
+     @"so you don't get stuck in low quality if performance recovers. "
+     @"Off during export. Recommended to leave this option on."),
     (@"<warn>Tip:</warn> high Length with low Quality will band visibly. "
      @"If you increase Length, its recommended to increase Quality too."),
   ];

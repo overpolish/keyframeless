@@ -42,6 +42,46 @@ static NSString *const kKKMotionBlurScratchContextThreadKey =
 /// bounded to a single render's peak.
 static dispatch_semaphore_t sKKMotionBlurInFlightSema;
 
+/// Wall-clock timestamp of the previous `applyToDestinationImage:` exit.
+/// Used to detect "FCP is currently producing frames in a tight cadence"
+/// (playback or pre-render lookahead) — the cadence gate for adaptive
+/// quality. Protected by `sKKMotionBlurInFlightSema` (only one apply
+/// runs at a time, so no separate lock is needed).
+static CFAbsoluteTime sKKMotionBlurLastApplyEnd = 0.0;
+
+/// Adaptive-quality state machine. Independent of cadence detection —
+/// this layer asks "given that we *are* in playback, can the machine
+/// keep up at full sub-frame resolution?"
+///
+/// Mode FULL: render at user's `subframeScale`. If a frame takes longer
+/// than ~80% of the frame budget, drop to ADAPTIVE on the next frame.
+///
+/// Mode ADAPTIVE: render at 0.1× sub-frame scale. Every
+/// `kKKMotionBlurAdaptiveProbeFrames` apply calls, render one full
+/// "probe" frame to test whether the machine can now sustain full
+/// quality. If the probe was fast, stay FULL; otherwise the next
+/// classify will flip back to ADAPTIVE.
+///
+/// Reset to FULL whenever cadence detection says we're no longer in
+/// playback (a gap longer than the playback window). That way each new
+/// playback session starts optimistic and only degrades if needed.
+typedef enum : int {
+  KKMotionBlurAdaptiveModeFull = 0,
+  KKMotionBlurAdaptiveModeAdaptive = 1,
+} KKMotionBlurAdaptiveMode;
+
+static KKMotionBlurAdaptiveMode sKKMotionBlurAdaptiveMode =
+    KKMotionBlurAdaptiveModeFull;
+/// Counter of consecutive adaptive frames since last probe. Wraps when
+/// `>= kKKMotionBlurAdaptiveProbeFrames` and forces a one-frame probe.
+static int sKKMotionBlurAdaptiveFrameCount = 0;
+
+/// 1.0 second of probing cadence at 30fps; finer at higher rates.
+static const int kKKMotionBlurAdaptiveProbeFrames = 30;
+/// Frame is "slow" if it consumed more than this fraction of its budget.
+/// 0.8 leaves headroom so we react before drops actually start.
+static const double kKKMotionBlurSlowFrameRatio = 0.8;
+
 @implementation KKMotionBlur
 
 + (void)initialize {
@@ -156,12 +196,16 @@ static NSString *KKMBScratchKey(NSString *key, NSUInteger width,
 + (KKMotionBlurState)snapshotStateWithParameterAPI:
                          (id<FxParameterRetrievalAPI_v6>)paramAPI
                                          timingAPI:(id<FxTimingAPI_v4>)timingAPI
-                                            atTime:(CMTime)time {
+                                            atTime:(CMTime)time
+                                           quality:(NSUInteger)quality {
   KKMotionBlurState state = {.enabled = false,
                              .transitionsOnly = false,
                              .sampleCount = 0,
                              .shutterSec = 0.0,
-                             .subframeScale = 0.5f};
+                             .subframeScale = 0.5f,
+                             .adaptiveQuality = false,
+                             .qualityIsHigh = (quality == kFxQuality_HIGH),
+                             .frameDurationSec = 0.0};
   if (!paramAPI)
     return state;
 
@@ -178,17 +222,23 @@ static NSString *KKMBScratchKey(NSString *key, NSUInteger width,
                   atTime:time];
   state.transitionsOnly = transitionsOnly;
 
-  double shutter = 0.5, quality = 0.5;
+  double shutter = 0.5, qualitySlider = 0.5;
   [paramAPI getFloatValue:&shutter
             fromParameter:kKKParamMotionBlurShutter
                    atTime:time];
-  [paramAPI getFloatValue:&quality
+  [paramAPI getFloatValue:&qualitySlider
             fromParameter:kKKParamMotionBlurQuality
                    atTime:time];
 
+  BOOL adaptive = NO;
+  [paramAPI getBoolValue:&adaptive
+           fromParameter:kKKParamMotionBlurAdaptiveQuality
+                  atTime:time];
+  state.adaptiveQuality = adaptive;
+
   // Exponential mapping mirrors standalone MotionBlur: 0%→2, 50%→16,
   // 100%→128.
-  int samples = MAX(2, (int)(2.0 * pow(64.0, quality)));
+  int samples = MAX(2, (int)(2.0 * pow(64.0, qualitySlider)));
   if (samples > KK_MOTION_BLUR_MAX_SAMPLES)
     samples = KK_MOTION_BLUR_MAX_SAMPLES;
 
@@ -201,6 +251,7 @@ static NSString *KKMBScratchKey(NSString *key, NSUInteger width,
   state.enabled = true;
   state.sampleCount = samples;
   state.shutterSec = frameSec * (shutterAngle / 360.0);
+  state.frameDurationSec = frameSec;
   return state;
 }
 
@@ -347,6 +398,42 @@ static NSString *KKMBScratchKey(NSString *key, NSUInteger width,
   float scale = state.subframeScale;
   if (!(scale > 0.0f && scale <= 1.0f))
     scale = 0.5f;
+  // Adaptive quality decision for THIS frame. Three layers:
+  //   1. Param + export filter: param on, FxQuality != HIGH.
+  //   2. Cadence gate: previous apply ended within ~3× frame duration
+  //      (frame-rate aware: 30fps ≈ 100ms, 60fps ≈ 50ms, 120fps ≈ 25ms).
+  //      Outside that window we're paused/scrubbing — reset state to
+  //      FULL so the next playback session starts optimistic.
+  //   3. Perf state machine: in FULL we render at the user's scale and
+  //      classify the resulting wall-clock duration; in ADAPTIVE we
+  //      render at 0.1× and probe FULL once per second to recover.
+  BOOL inPlaybackCadence = NO;
+  if (state.adaptiveQuality && !state.qualityIsHigh &&
+      state.frameDurationSec > 0.0) {
+    CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+    double gap = now - sKKMotionBlurLastApplyEnd;
+    inPlaybackCadence = (gap > 0.0 && gap < state.frameDurationSec * 3.0);
+  }
+  if (!inPlaybackCadence) {
+    sKKMotionBlurAdaptiveMode = KKMotionBlurAdaptiveModeFull;
+    sKKMotionBlurAdaptiveFrameCount = 0;
+  } else if (sKKMotionBlurAdaptiveMode == KKMotionBlurAdaptiveModeAdaptive) {
+    sKKMotionBlurAdaptiveFrameCount++;
+    // Periodic full-quality probe. Letting one frame slip back to FULL
+    // tests whether we can sustain it now; classify below decides
+    // whether to stay or fall back to ADAPTIVE.
+    if (sKKMotionBlurAdaptiveFrameCount >= kKKMotionBlurAdaptiveProbeFrames) {
+      sKKMotionBlurAdaptiveMode = KKMotionBlurAdaptiveModeFull;
+      sKKMotionBlurAdaptiveFrameCount = 0;
+    } else {
+      scale = 0.1f;
+    }
+  }
+  // Captured for the post-render classification below; the state machine
+  // only flips on durations measured at the *current* effective scale.
+  BOOL ranAtAdaptiveScale =
+      (sKKMotionBlurAdaptiveMode == KKMotionBlurAdaptiveModeAdaptive);
+  CFAbsoluteTime applyStart = CFAbsoluteTimeGetCurrent();
   NSUInteger sampleW = MAX((NSUInteger)1, (NSUInteger)((float)w * scale));
   NSUInteger sampleH = MAX((NSUInteger)1, (NSUInteger)((float)h * scale));
 
@@ -499,6 +586,23 @@ static NSString *KKMBScratchKey(NSString *key, NSUInteger width,
                       height:sampleH
                       format:pixelFormat];
   [cache returnCommandQueueToCache:queue];
+  CFAbsoluteTime applyEnd = CFAbsoluteTimeGetCurrent();
+  // Classify the just-rendered frame. Only FULL-mode durations move the
+  // state machine — adaptive frames are fast by construction and would
+  // otherwise create a feedback loop that pins us to ADAPTIVE forever.
+  if (state.adaptiveQuality && !state.qualityIsHigh &&
+      state.frameDurationSec > 0.0 && !ranAtAdaptiveScale) {
+    double duration = applyEnd - applyStart;
+    double budget = state.frameDurationSec * kKKMotionBlurSlowFrameRatio;
+    if (duration > budget) {
+      sKKMotionBlurAdaptiveMode = KKMotionBlurAdaptiveModeAdaptive;
+      sKKMotionBlurAdaptiveFrameCount = 0;
+    }
+  }
+  // Stamped just before signalling so the next apply (which may already
+  // be waiting on the sema) sees an up-to-date "previous frame ended at"
+  // timestamp for its cadence check.
+  sKKMotionBlurLastApplyEnd = applyEnd;
   dispatch_semaphore_signal(sKKMotionBlurInFlightSema);
   return YES;
 }

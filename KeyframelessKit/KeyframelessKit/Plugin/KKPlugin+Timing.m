@@ -258,6 +258,8 @@ static void _setFlagsIfNeeded(id<FxParameterSettingAPI_v5> setAPI,
   _setFlagsIfNeeded(paramSetAPI, paramGetAPI, flag, kKKParamMotionBlurQuality);
   _setFlagsIfNeeded(paramSetAPI, paramGetAPI, toggleFlag,
                     kKKParamMotionBlurTransitionsOnly);
+  _setFlagsIfNeeded(paramSetAPI, paramGetAPI, toggleFlag,
+                    kKKParamMotionBlurAdaptiveQuality);
 }
 
 @end
