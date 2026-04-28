@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+#import "Constants.h"
 #import "Plugin_Private.h"
 
 #pragma clang diagnostic push
@@ -28,10 +29,30 @@
   return YES;
 }
 
+- (BOOL)forceShowAllParameters {
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!paramGetAPI)
+    return NO;
+  BOOL on = NO;
+  [paramGetAPI getBoolValue:&on
+              fromParameter:kParamForceShow
+                     atTime:kCMTimeZero];
+  return on;
+}
+
 - (BOOL)parameterChanged:(UInt32)parameterID
                   atTime:(CMTime)time
                    error:(NSError **)error {
-  [self updateTimingParameterVisibility];
+  // `updateTimingParameterVisibility` is gated to specific params — its
+  // deferred body has been pruned to just the curve-preview flag write so it
+  // no longer triggers the cascade documented in
+  // project_published_custom_ui_cascade.md, but firing it on every
+  // `parameterChanged:` (incl. initial-render param hydration) was the
+  // historical crash trigger. Only call it when the input would change the
+  // outcome.
+  if (parameterID == kParamForceShow || parameterID == kKKParamTimingExpanded)
+    [self updateTimingParameterVisibility];
   [self updateMotionBlurParameterVisibility];
   [self updateCropParameterVisibility];
   [self multiStageHandleParameterChanged:parameterID atTime:time];

@@ -403,6 +403,10 @@
   return YES;
 }
 
+- (BOOL)forceShowAllParameters {
+  return NO;
+}
+
 - (NSArray<KKTimingSlot *> *)timingGlobalSlots {
   return @[];
 }

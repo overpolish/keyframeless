@@ -175,6 +175,7 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
              toParameter:kKKParamTimingExpanded
                   atTime:[actAPI currentTime]];
     [actAPI endAction:strongSelf];
+    [strongSelf updateTimingParameterVisibility];
   };
 
   id<FxCustomParameterActionAPI_v4> actionAPI =
@@ -188,10 +189,10 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
     sInitializedPID = currentPID;
 
   BOOL expanded;
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   if (isNewProcess) {
     expanded = YES;
-    id<FxParameterSettingAPI_v5> setAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
     [setAPI setBoolValue:YES
              toParameter:kKKParamTimingExpanded
                   atTime:[actionAPI currentTime]];
@@ -204,6 +205,17 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
                        atTime:[actionAPI currentTime]];
   }
   header.isExpanded = expanded;
+  // Apply the curve-preview row's flag SYNCHRONOUSLY here (still inside the
+  // createView action scope, outside any FCP host action so no cascade).
+  // The deferred `updateTimingParameterVisibility` would run after FCP has
+  // already laid out the inspector with the persisted (possibly HIDDEN) flag,
+  // leaving the row collapsed until the next chevron toggle.
+  BOOL show = expanded || [self forceShowAllParameters];
+  FxParameterFlags wantFlags =
+      show ? (kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_CUSTOM_UI |
+              kFxParameterFlag_USE_FULL_VIEW_WIDTH)
+           : kFxParameterFlag_HIDDEN;
+  [setAPI setParameterFlags:wantFlags toParameter:kKKParamTimingCurvePreview];
   [actionAPI endAction:self];
 
   NSImage *windowIcon =

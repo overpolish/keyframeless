@@ -30,6 +30,14 @@
     return NO;
   }
 
+  if (![paramAPI
+          addToggleButtonWithName:@"Force Show All Parameters"
+                      parameterID:kParamForceShow
+                     defaultValue:NO
+                   parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
+                                  kFxParameterFlag_DONT_DISPLAY_IN_DASHBOARD])
+    return NO;
+
   if (![paramAPI addFloatSliderWithName:@"Radius"
                             parameterID:kParamRadius
                            defaultValue:20.0
