@@ -18,10 +18,6 @@
   return YES;
 }
 
-- (NSArray<KKTimingSlot *> *)timingSlotsForSection:(NSInteger)section {
-  return @[];
-}
-
 - (NSArray<KKAnimatableProperty *> *)animatableProperties {
   return @[
     [KKAnimatableProperty

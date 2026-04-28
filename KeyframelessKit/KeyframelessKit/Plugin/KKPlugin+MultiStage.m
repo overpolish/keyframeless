@@ -188,13 +188,6 @@ KKMultiStageApplyLiveOverrides(NSMutableArray<KKTimingLane *> *lanes,
   if (!paramGetAPI || !timingAPI)
     return nil;
 
-  BOOL enabled = NO;
-  [paramGetAPI getBoolValue:&enabled
-              fromParameter:kKKParamMultiStageEnabled
-                     atTime:renderTime];
-  if (!enabled)
-    return nil;
-
   NSMutableArray<KKTimingLane *> *lanes =
       KKReadLanesRebalanced(self.apiManager, paramGetAPI);
   if (!lanes.count)
@@ -286,13 +279,6 @@ KKMultiStageApplyLiveOverrides(NSMutableArray<KKTimingLane *> *lanes,
   if (!paramGetAPI || !timingAPI || !label.length)
     return nil;
 
-  BOOL enabled = NO;
-  [paramGetAPI getBoolValue:&enabled
-              fromParameter:kKKParamMultiStageEnabled
-                     atTime:time];
-  if (!enabled)
-    return nil;
-
   NSMutableArray<KKTimingLane *> *lanes =
       KKReadLanesRebalanced(self.apiManager, paramGetAPI);
   if (!lanes.count)
@@ -339,13 +325,6 @@ KKMultiStageApplyLiveOverrides(NSMutableArray<KKTimingLane *> *lanes,
   if (!paramGetAPI || !timingAPI)
     return NO;
 
-  BOOL enabled = NO;
-  [paramGetAPI getBoolValue:&enabled
-              fromParameter:kKKParamMultiStageEnabled
-                     atTime:time];
-  if (!enabled)
-    return NO;
-
   NSMutableArray<KKTimingLane *> *lanes =
       KKReadLanesRebalanced(self.apiManager, paramGetAPI);
   if (!lanes.count)
@@ -377,12 +356,6 @@ KKMultiStageApplyLiveOverrides(NSMutableArray<KKTimingLane *> *lanes,
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   if (!paramGetAPI)
-    return nil;
-  BOOL enabled = NO;
-  [paramGetAPI getBoolValue:&enabled
-              fromParameter:kKKParamMultiStageEnabled
-                     atTime:time];
-  if (!enabled)
     return nil;
   NSMutableArray<KKTimingLane *> *lanes =
       KKReadLanesRebalanced(self.apiManager, paramGetAPI);
@@ -471,13 +444,6 @@ KKMultiStageApplyLiveOverrides(NSMutableArray<KKTimingLane *> *lanes,
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   if (!paramGetAPI)
-    return NO;
-
-  BOOL enabled = NO;
-  [paramGetAPI getBoolValue:&enabled
-              fromParameter:kKKParamMultiStageEnabled
-                     atTime:time];
-  if (!enabled)
     return NO;
 
   NSArray<KKAnimatableProperty *> *props = [self animatableProperties];

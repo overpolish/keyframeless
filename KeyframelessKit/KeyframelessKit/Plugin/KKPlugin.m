@@ -4,7 +4,6 @@
  */
 
 #import "../Update/KKUpdateChecker.h"
-#import "../Views/KKTimingSlot.h"
 #import "KKHostInfo.h"
 #import "KKPlugin_Private.h"
 #import <AppKit/AppKit.h>
@@ -44,7 +43,6 @@
 #pragma clang diagnostic pop
 
 @synthesize timingHeader = _timingHeader;
-@synthesize timingGraph = _timingGraph;
 
 + (id)servicePrincipalDelegate {
   return [KKPrincipalDelegate shared];
@@ -407,14 +405,6 @@
   return NO;
 }
 
-- (NSArray<KKTimingSlot *> *)timingGlobalSlots {
-  return @[];
-}
-
-- (NSArray<KKTimingSlot *> *)timingSlotsForSection:(NSInteger)section {
-  return @[];
-}
-
 - (NSArray<KKAnimatableProperty *> *)animatableProperties {
   return nil;
 }
@@ -433,18 +423,6 @@
 
 - (NSSet<NSString *> *)animatablePropertyLabelsWithOSCDefaultOff {
   return [NSSet set];
-}
-
-- (NSView *)holdPropertyView {
-  return nil;
-}
-
-- (CGFloat)holdPropertyViewHeight {
-  return 23.0;
-}
-
-- (void (^)(id, CMTime))holdPropertyApplyState {
-  return nil;
 }
 
 @end

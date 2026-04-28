@@ -11,7 +11,6 @@
 @class KKStagePlayheadView;
 @class KKStageSequencerRulerView;
 @class KKStageSequencerView;
-@class KKTimingGraphView;
 @class KKTimingLane;
 @protocol PROAPIAccessing;
 
@@ -19,7 +18,6 @@
 /// view sets (e.g. a detached window) so they can receive the same updates
 /// as the primary (inspector) views.
 @interface KKTimingViewRefs : NSObject
-@property(nonatomic, weak, nullable) KKTimingGraphView *graphView;
 @property(nonatomic, weak, nullable) KKStageSequencerView *seqView;
 @property(nonatomic, weak, nullable) NSView *seqContainer;
 @property(nonatomic, weak, nullable) KKStageSequencerRulerView *ruler;

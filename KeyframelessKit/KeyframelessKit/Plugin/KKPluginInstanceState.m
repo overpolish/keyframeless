@@ -10,7 +10,7 @@
 
 @implementation KKTimingViewRefs
 - (BOOL)isAlive {
-  return _graphView != nil && _seqView != nil;
+  return _seqView != nil;
 }
 @end
 

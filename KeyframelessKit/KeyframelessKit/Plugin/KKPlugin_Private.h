@@ -5,7 +5,6 @@
 
 #pragma once
 
-#import "../Views/KKTimingGraphView.h"
 #import "KKPlugin.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <objc/runtime.h>
@@ -16,7 +15,6 @@ NS_ASSUME_NONNULL_BEGIN
 @class KKStagePlayheadView;
 @class KKStageSequencerRulerView;
 @class KKStageSequencerView;
-@class KKTimingGraphView;
 @class KKTimingLane;
 
 /// Returns `lanes` with every lane whose `propertyLabel` is in `hidden`
@@ -50,7 +48,6 @@ extern NSMutableArray<KKTimingLane *> *_Nullable KKReadLanesRebalanced(
 @interface KKPlugin () <FxCustomParameterViewHost_v2>
 
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *timingHeader;
-@property(nonatomic, weak, nullable) KKTimingGraphView *timingGraph;
 @property(nonatomic, weak, nullable) KKStageSequencerView *stageSequencer;
 @property(nonatomic, weak, nullable) NSView *stageSequencerContainer;
 @property(nonatomic, weak, nullable)
@@ -77,26 +74,6 @@ extern NSMutableArray<KKTimingLane *> *_Nullable KKReadLanesRebalanced(
                                     anchorRect:(NSRect)anchorRect
                                     sourceView:(nullable KKStageSequencerView *)
                                                    sourceView;
-@end
-
-@interface KKPlugin (TimingGraphState)
-/// Reads all timing params at `t` and writes them onto `graph`.
-- (void)_applyTimingParamsToGraph:(KKTimingGraphView *)graph
-                     withParamAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI
-                           atTime:(CMTime)t;
-/// Invokes `applyState` on each slot, forwarding the read API and current
-/// render time so the slot can refresh its sub-view bindings.
-- (void)_applySlotState:(NSArray *)slots
-           withParamAPI:(id<FxParameterRetrievalAPI_v6>)paramAPI
-                 atTime:(CMTime)time;
-/// Writes `enabled` to `paramID`, and when disabling, snaps the selected
-/// section away from `section` so the graph doesn't render a disabled side.
-- (void)_timingGraphSetAnimateEnabled:(BOOL)enabled
-                         forParameter:(UInt32)paramID
-                      disabledSection:(KKTimingGraphSection)section;
-- (void)timingGraphSelectSection:(KKTimingGraphSection)section;
-- (void)timingGraphSetIntValue:(int)value forParameter:(UInt32)paramID;
-- (void)timingGraphSetFloatValue:(double)value forParameter:(UInt32)paramID;
 @end
 
 @interface KKPlugin (StageSequencerCallbacks)

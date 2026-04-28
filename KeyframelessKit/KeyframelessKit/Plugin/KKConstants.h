@@ -14,29 +14,14 @@
 /// 9900–9998  animation system parameters (added by KKPlugin)
 
 static const UInt32 kKKParamAnimationSeparator __attribute__((unused)) = 9900;
-static const UInt32 kKKParamAnimateIn __attribute__((unused)) = 9901;
-static const UInt32 kKKParamAnimateOut __attribute__((unused)) = 9902;
-static const UInt32 kKKParamAnimateInDuration __attribute__((unused)) = 9903;
-static const UInt32 kKKParamAnimateInInterpolation __attribute__((unused)) =
-    9904;
 static const UInt32 kKKParamTimingCurvePreview __attribute__((unused)) = 9905;
-static const UInt32 kKKParamAnimateOutDuration __attribute__((unused)) = 9906;
-static const UInt32 kKKParamAnimateOutInterpolation __attribute__((unused)) =
-    9907;
 static const UInt32 kKKParamTimingExpanded __attribute__((unused)) = 9908;
-static const UInt32 kKKParamTimingSelectedSection __attribute__((unused)) =
-    9909;
-static const UInt32 kKKParamHoldEffect __attribute__((unused)) = 9910;
-static const UInt32 kKKParamAnimateInIntensity __attribute__((unused)) = 9911;
-static const UInt32 kKKParamAnimateOutIntensity __attribute__((unused)) = 9912;
-static const UInt32 kKKParamHoldIntensity __attribute__((unused)) = 9913;
-static const UInt32 kKKParamAnimateInFrequency __attribute__((unused)) = 9914;
-static const UInt32 kKKParamAnimateOutFrequency __attribute__((unused)) = 9915;
-static const UInt32 kKKParamHoldFrequency __attribute__((unused)) = 9916;
-static const UInt32 kKKParamHoldSeed __attribute__((unused)) = 9917;
 
-/// Multi-stage timing parameters (9918–9921)
-static const UInt32 kKKParamMultiStageEnabled __attribute__((unused)) = 9918;
+/// Retired animation IDs — old saved projects may still carry values for
+/// these but no current code reads or registers them. Do not reuse:
+///   9901–9904, 9906, 9907, 9909–9917 (legacy 3-phase factor engine)
+///   9918 (legacy always-on multi-stage gate)
+/// Multi-stage timing parameters (9919–9921):
 static const UInt32 kKKParamMultiStageData __attribute__((unused)) = 9919;
 static const UInt32 kKKParamMultiStageSelectedProperty __attribute__((unused)) =
     9920;
