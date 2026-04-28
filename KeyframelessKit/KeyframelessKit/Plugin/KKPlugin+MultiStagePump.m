@@ -394,7 +394,27 @@ static void KKBroadcastPlayheads(double nowSec) {
     return;
   if (now - sLastParameterChangedTime < kRenderSuppressionWindow)
     return;
-  KKBroadcastPlayheads(CMTimeGetSeconds(time));
+
+  // `time` here is renderTime → timelineTime, which during playback runs 3–5
+  // frames ahead of the displayed playhead (FCP pre-renders for smooth
+  // playback). Hop to main and read `currentTime` via the action API, which
+  // reports the actually-displayed position. Coalescing in KKBroadcastPlayheads
+  // absorbs the 3–5 redundant render ticks per displayed frame.
+  id strongSender = sender;
+  __weak id<PROAPIAccessing> weakAPI = apiManager;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    id<PROAPIAccessing> strongAPI = weakAPI;
+    if (!strongAPI)
+      return;
+    id<FxCustomParameterActionAPI_v4> actAPI =
+        [strongAPI apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    if (!actAPI)
+      return;
+    [actAPI startAction:strongSender];
+    double nowSec = CMTimeGetSeconds([actAPI currentTime]);
+    [actAPI endAction:strongSender];
+    KKBroadcastPlayheads(nowSec);
+  });
 }
 
 - (void)multiStageRefreshLaneVisibility {
