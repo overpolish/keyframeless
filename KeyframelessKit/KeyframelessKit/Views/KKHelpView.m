@@ -88,6 +88,45 @@ static const CGFloat KKHelpSectionGap = 24.0;
 static const CGFloat KKHelpAfterTitleGap = 10.0;
 static const CGFloat KKHelpKeyColumnMin = 170.0;
 
+/// Borderless link button used in the help-page table of contents.
+/// Holds weak refs to its target section view and the scroll view, so a
+/// click can scroll that section's title to the top of the visible
+/// area. Confluence-style "On this page" jumplist.
+@interface KKHelpTOCLink : NSButton
+@property(weak) NSView *anchorView;
+/// Document view of the surrounding scroll view (the page stack). Used
+/// as the coordinate space for the scroll target and as the receiver of
+/// `scrollPoint:`, which walks up to the nearest clip view automatically.
+@property(weak) NSView *documentHost;
+@end
+
+@implementation KKHelpTOCLink
+- (void)mouseDown:(NSEvent *)event {
+  NSView *doc = self.documentHost;
+  NSView *anchor = self.anchorView;
+  NSScrollView *sv = doc.enclosingScrollView;
+  NSClipView *clip = sv.contentView;
+  if (!doc || !anchor || !sv || !clip)
+    return;
+  // Compute the anchor's top edge in clip-view coordinates (the clip is
+  // flipped, so smaller y = visually higher), then translate to a new
+  // bounds origin. Doing it via the clip rather than `scrollPoint:`
+  // sidesteps the doc-flipped vs. clip-flipped mismatch (page stack is
+  // non-flipped, so NSMinY of a section frame in doc coords is the
+  // section's *bottom*, which is why scrollPoint was landing wrong).
+  NSRect inClip = [clip convertRect:anchor.bounds fromView:anchor];
+  CGFloat newY =
+      clip.bounds.origin.y + NSMinY(inClip) - KKHelpPagePadding * 0.5;
+  if (newY < 0)
+    newY = 0;
+  [clip setBoundsOrigin:NSMakePoint(clip.bounds.origin.x, newY)];
+  [sv reflectScrolledClipView:clip];
+}
+- (void)resetCursorRects {
+  [self addCursorRect:self.bounds cursor:[NSCursor pointingHandCursor]];
+}
+@end
+
 @implementation KKHelpView
 
 - (instancetype)initWithSections:(NSArray<KKHelpSection *> *)sections {
@@ -106,8 +145,30 @@ static const CGFloat KKHelpKeyColumnMin = 170.0;
   page.alignment = NSLayoutAttributeLeading;
   page.spacing = KKHelpSectionGap;
 
-  for (NSUInteger i = 0; i < sections.count; i++) {
-    if (i > 0) {
+  KKPaddedScrollView *scroll =
+      [[KKPaddedScrollView alloc] initWithDocumentView:page
+                                               padding:KKHelpPagePadding];
+
+  // Two-pass build: first materialise each section view (so we have a
+  // stable anchor to scroll to), then build the TOC linking to those
+  // anchors. TOC sits at the top of the page, separated from the first
+  // section by the same divider style used between sections.
+  NSMutableArray<NSView *> *sectionViews =
+      [NSMutableArray arrayWithCapacity:sections.count];
+  for (KKHelpSection *section in sections) {
+    [sectionViews addObject:[self _viewForSection:section]];
+  }
+
+  if (sections.count > 1) {
+    NSView *toc = [self _tocViewForSections:sections
+                                    anchors:sectionViews
+                               documentHost:page];
+    [page addArrangedSubview:toc];
+    [toc.widthAnchor constraintEqualToAnchor:page.widthAnchor].active = YES;
+  }
+
+  for (NSUInteger i = 0; i < sectionViews.count; i++) {
+    if (page.arrangedSubviews.count > 0) {
       NSView *divider = [[NSView alloc] init];
       divider.wantsLayer = YES;
       divider.layer.backgroundColor =
@@ -118,14 +179,11 @@ static const CGFloat KKHelpKeyColumnMin = 170.0;
       [divider.widthAnchor constraintEqualToAnchor:page.widthAnchor].active =
           YES;
     }
-    NSView *sv = [self _viewForSection:sections[i]];
+    NSView *sv = sectionViews[i];
     [page addArrangedSubview:sv];
     [sv.widthAnchor constraintEqualToAnchor:page.widthAnchor].active = YES;
   }
 
-  KKPaddedScrollView *scroll =
-      [[KKPaddedScrollView alloc] initWithDocumentView:page
-                                               padding:KKHelpPagePadding];
   scroll.translatesAutoresizingMaskIntoConstraints = NO;
   [self addSubview:scroll];
   [NSLayoutConstraint activateConstraints:@[
@@ -180,6 +238,74 @@ static const CGFloat KKHelpKeyColumnMin = 170.0;
   }
 
   return stack;
+}
+
+- (NSView *)_tocViewForSections:(NSArray<KKHelpSection *> *)sections
+                        anchors:(NSArray<NSView *> *)anchors
+                   documentHost:(NSView *)documentHost {
+  NSStackView *toc = [[NSStackView alloc] initWithFrame:NSZeroRect];
+  toc.orientation = NSUserInterfaceLayoutOrientationVertical;
+  toc.alignment = NSLayoutAttributeLeading;
+  toc.spacing = KKHelpAfterTitleGap;
+
+  [toc addArrangedSubview:[self _subheading:@"On this page"]];
+
+  NSStackView *links = [[NSStackView alloc] initWithFrame:NSZeroRect];
+  links.orientation = NSUserInterfaceLayoutOrientationVertical;
+  links.alignment = NSLayoutAttributeLeading;
+  links.spacing = 6.0;
+  // Indent the link block from the left edge so the TOC reads as a
+  // sub-list under "On this page", not a sibling header.
+  links.edgeInsets = NSEdgeInsetsMake(0, 12.0, 0, 0);
+
+  NSColor *linkColor = [NSColor accentMatchingHost];
+  NSFont *linkFont = [NSFont systemFontOfSize:13.0 weight:NSFontWeightSemibold];
+  for (NSUInteger i = 0; i < sections.count; i++) {
+    NSStackView *row = [[NSStackView alloc] initWithFrame:NSZeroRect];
+    row.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    row.alignment = NSLayoutAttributeCenterY;
+    row.spacing = 8.0;
+
+    // Always reserve a fixed-width slot so titles line up vertically
+    // even when a section happens to lack an icon. 18pt matches the
+    // section-header icon size used in `_viewForSection:`.
+    NSImageView *iconView =
+        sections[i].icon ? [NSImageView imageViewWithImage:sections[i].icon]
+                         : [[NSImageView alloc] init];
+    iconView.symbolConfiguration = [NSImageSymbolConfiguration
+        configurationWithPointSize:13.0
+                            weight:NSFontWeightSemibold];
+    iconView.contentTintColor = linkColor;
+    iconView.imageScaling = NSImageScaleProportionallyDown;
+    iconView.translatesAutoresizingMaskIntoConstraints = NO;
+    [iconView.widthAnchor constraintEqualToConstant:18.0].active = YES;
+    [iconView.heightAnchor constraintEqualToConstant:18.0].active = YES;
+    [row addArrangedSubview:iconView];
+
+    NSAttributedString *title = [[NSAttributedString alloc]
+        initWithString:sections[i].title
+            attributes:@{
+              NSFontAttributeName : linkFont,
+              NSForegroundColorAttributeName : linkColor,
+            }];
+
+    KKHelpTOCLink *link = [[KKHelpTOCLink alloc] init];
+    link.bordered = NO;
+    link.bezelStyle = NSBezelStyleInline;
+    [link setButtonType:NSButtonTypeMomentaryChange];
+    link.attributedTitle = title;
+    link.contentTintColor = linkColor;
+    link.alignment = NSTextAlignmentLeft;
+    link.anchorView = anchors[i];
+    link.documentHost = documentHost;
+    [row addArrangedSubview:link];
+
+    [links addArrangedSubview:row];
+  }
+
+  [toc addArrangedSubview:links];
+  [links.widthAnchor constraintEqualToAnchor:toc.widthAnchor].active = YES;
+  return toc;
 }
 
 - (NSView *)_subheading:(NSString *)text {
