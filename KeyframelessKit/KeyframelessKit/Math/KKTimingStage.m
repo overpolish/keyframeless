@@ -26,10 +26,9 @@ KKTimingBoundaryAfter(NSUInteger idx, NSArray<KKTimingSegment *> *segments) {
   return KKTimingBoundaryBefore(next, segments);
 }
 
-/// Minimum segment width as a fraction of the clip. Matches the sequencer's
-/// interactive-drag floor (`kKSSMinSegmentFrac`) so auto-rebalanced segments
-/// stay grabbable at default zoom.
-static const double kKKTimingMinSegmentFrac = 0.04;
+/// Minimum segment width in seconds. Matches the sequencer's
+/// interactive-drag floor (`kKSSMinSegmentSec`).
+static const double kKKTimingMinSegmentSec = 0.1;
 
 NSArray<KKTimingSegment *> *
 KKTimingRebalancedSegments(NSArray<KKTimingSegment *> *segments,
@@ -90,7 +89,7 @@ KKTimingRebalancedSegments(NSArray<KKTimingSegment *> *segments,
   // floor, bump it up and steal the deficit from above-floor segments
   // proportional to their excess. If the clip is too small to honour the
   // floor for every segment, fall back to uniform distribution.
-  double minFrac = kKKTimingMinSegmentFrac;
+  double minFrac = kKKTimingMinSegmentSec / newDuration;
   if ((double)n * minFrac >= rangeFrac - 1e-9) {
     double uniform = rangeFrac / (double)n;
     for (NSUInteger i = 0; i < n; i++)

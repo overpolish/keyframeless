@@ -208,7 +208,10 @@
       if (splitIdx == NSNotFound)
         return;
       double minPx = kKSSMinSegmentPx / (trackWidth * _zoom);
-      double minFrac = MAX(kKSSMinSegmentFrac, minPx);
+      double minSecFrac = self.effectDuration > 0
+                              ? kKSSMinSegmentSec / self.effectDuration
+                              : 0.0;
+      double minFrac = MAX(minSecFrac, minPx);
       KKTimingSegment *target = lane.segments[splitIdx];
       if (clickFrac - target.start < minFrac ||
           target.end - clickFrac < minFrac)
