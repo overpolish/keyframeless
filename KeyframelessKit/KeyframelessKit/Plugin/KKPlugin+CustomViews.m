@@ -789,6 +789,24 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
   if (lanes || seqProps.count == 0)
     return lanes;
 
+  // FxPlug's `getStringParameterValue` returns nil when read from a freshly
+  // re-created custom view before the host has fully wired the action scope
+  // — even though the param has persisted data. Distinguish that transient
+  // failure from a genuine first-time view (where the host returns a
+  // non-nil empty/invalid string) so we don't reseed defaults over real
+  // user data on inspector re-mounts.
+  NSString *rawJSON = nil;
+  [paramGetAPI getStringParameterValue:&rawJSON
+                         fromParameter:kKKParamMultiStageData];
+  if (rawJSON == nil) {
+    // XPC read failure. Recover from in-memory snapshot if we have one;
+    // otherwise return nil and let the next pump tick re-read. Never seed
+    // defaults on a nil read — that destroys persisted data.
+    KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+    NSArray<KKTimingLane *> *snapshot = state.lanesSnapshot;
+    return snapshot.count > 0 ? snapshot : nil;
+  }
+
   NSSet<NSString *> *oscOffByDefault =
       [self animatablePropertyLabelsWithOSCDefaultOff];
   NSMutableArray<KKTimingLane *> *defaults =
