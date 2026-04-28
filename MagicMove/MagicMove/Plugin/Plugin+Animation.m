@@ -44,7 +44,8 @@
   KKMotionBlurState mbState =
       [KKMotionBlur snapshotStateWithParameterAPI:paramAPI
                                         timingAPI:timingAPI
-                                           atTime:renderTime];
+                                           atTime:renderTime
+                                          quality:qualityLevel];
 
   // Skip the blur path during Hold portions when the user opted in —
   // single-pass render is dramatically cheaper.

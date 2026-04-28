@@ -53,7 +53,7 @@ static const UInt32 kKKParamInstanceID __attribute__((unused)) = 9922;
 /// from inside the render callback.
 static const UInt32 kKKParamTimingLoopEnabled __attribute__((unused)) = 9923;
 
-/// Motion blur parameters (9924–9926). Registered by
+/// Motion blur parameters (9924–9930). Registered by
 /// `addMotionBlurParametersWithAPI:` as a custom group with an Enabled
 /// checkbox; shutter/quality reveal when enabled.
 static const UInt32 kKKParamMotionBlurSeparator __attribute__((unused)) = 9924;
@@ -63,6 +63,8 @@ static const UInt32 kKKParamMotionBlurQuality __attribute__((unused)) = 9927;
 static const UInt32 kKKParamMotionBlurExpanded __attribute__((unused)) = 9928;
 static const UInt32 kKKParamMotionBlurTransitionsOnly __attribute__((unused)) =
     9929;
+static const UInt32 kKKParamMotionBlurAdaptiveQuality __attribute__((unused)) =
+    9930;
 
 /// Color system parameters (9800–9810)
 static const UInt32 kKKParamColorGroup __attribute__((unused)) = 9800;
