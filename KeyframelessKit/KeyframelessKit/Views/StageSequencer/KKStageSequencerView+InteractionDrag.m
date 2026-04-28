@@ -408,7 +408,9 @@
   }
 
   double minPx = kKSSMinSegmentPx / (_dragTrackWidth * _zoom);
-  double minFrac = MAX(kKSSMinSegmentFrac, minPx);
+  double minSecFrac =
+      self.effectDuration > 0 ? kKSSMinSegmentSec / self.effectDuration : 0.0;
+  double minFrac = MAX(minSecFrac, minPx);
 
   if (_dragSegIdx > 0) {
     double prevStart = segs[_dragSegIdx - 1].start;
@@ -468,7 +470,9 @@
   NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
 
   double minPx = kKSSMinSegmentPx / (_dragTrackWidth * _zoom);
-  double minFrac = MAX(kKSSMinSegmentFrac, minPx);
+  double minSecFrac =
+      self.effectDuration > 0 ? kKSSMinSegmentSec / self.effectDuration : 0.0;
+  double minFrac = MAX(minSecFrac, minPx);
 
   BOOL didSnap = NO;
   double snapTarget = newFrac;
@@ -523,7 +527,9 @@
 - (void)_applyBulkEdgeDragWithFrac:(double)newFrac
                              lanes:(NSMutableArray<KKTimingLane *> *)lanes {
   double minPx = kKSSMinSegmentPx / (_dragTrackWidth * _zoom);
-  double minFrac = MAX(kKSSMinSegmentFrac, minPx);
+  double minSecFrac =
+      self.effectDuration > 0 ? kKSSMinSegmentSec / self.effectDuration : 0.0;
+  double minFrac = MAX(minSecFrac, minPx);
 
   // Snap the dragged anchor to playhead / 0 / 1 only. Other-lane boundaries
   // are themselves moving with the bulk drag, so snapping to them would be

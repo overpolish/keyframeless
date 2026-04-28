@@ -592,14 +592,20 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   id<FxParameterSettingAPI_v5> setAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
   NSMutableArray<KKTimingLane *> *lanes =
       KKReadLanesRebalanced(self.apiManager, getAPI);
   if (!lanes) {
     [actAPI endAction:self];
     return;
   }
+  CMTime effectDuration = kCMTimeZero;
+  if (timingAPI)
+    [timingAPI durationTimeForEffect:&effectDuration];
+  double durSec = CMTimeGetSeconds(effectDuration);
+  double minFrac = (durSec > 0) ? (0.1 / durSec) : 0.0;
 
-  static const double kMinSegmentFrac = 0.04;
   BOOL anyChanged = NO;
   for (NSUInteger li = 0; li < lanes.count; li++) {
     KKTimingLane *lane = [lanes[li] copy];
@@ -615,8 +621,7 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
     if (splitIdx < 0)
       continue;
     KKTimingSegment *orig = segs[splitIdx];
-    if (position - orig.start < kMinSegmentFrac ||
-        orig.end - position < kMinSegmentFrac)
+    if (position - orig.start < minFrac || orig.end - position < minFrac)
       continue;
 
     KKTimingSegment *left = [orig copy];
