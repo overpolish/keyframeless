@@ -8,7 +8,6 @@
 #import <CoreMedia/CoreMedia.h>
 #import <Foundation/Foundation.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
-#import <KeyframelessKit/KKTiming.h>
 #import <KeyframelessKit/KKTimingStage.h>
 #import <Metal/Metal.h>
 
@@ -17,7 +16,6 @@
 @class KKHelpSection;
 @class KKTimingLane;
 @class KKTimingSegment;
-@class KKTimingSlot;
 @class NSBezierPath;
 @protocol PROAPIAccessing;
 @protocol FxParameterCreationAPI_v5;
@@ -131,12 +129,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// alongside `updateTimingParameterVisibility`.
 - (void)updateMotionBlurParameterVisibility;
 
-/// Returns per-phase timing at renderTime using the animation parameter IDs
-/// in KKConstants.h.  Each phase carries enabled, duration, progress, an
-/// interpolation block, and a convenience factor (= interpolate(progress)).
-/// Plugins apply phases selectively to whichever properties they animate.
-- (KKTimingResult *)timingAtTime:(CMTime)renderTime;
-
 /// Adds the inspector chrome banner at parameter ID 9990: Keyframeless logo
 /// plus optional accessories (help button, update CTA when available).
 /// Call at the end of addParametersWithError:.
@@ -179,8 +171,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// at renderTime, keyed by property label. Each value is an array matching
 /// the property's valueParamIDs (e.g. @"Radius" -> @[@(35.2)],
 /// @"Crop" -> @[@(0.1), @(0.1), @(0.05), @(0.05)]).
-/// Returns nil when multi-stage is disabled — caller should fall back to
-/// timingAtTime: factor-based path.
+/// Returns nil when no lanes are enabled — caller should fall back to
+/// reading the static native param values.
 - (nullable NSDictionary<NSString *, NSArray<NSNumber *> *> *)
     multiStageValuesAtTime:(CMTime)renderTime;
 
@@ -277,20 +269,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// parameter is not part of a pair or Cmd is not held.
 - (BOOL)handleLinkedParameterChanged:(UInt32)parameterID atTime:(CMTime)time;
 
-/// Override in subclasses to provide custom views that appear above the
-/// duration slider, always visible when the timing group is expanded.
-/// Build views using KK components (KKCheckboxView, KKSliderView, etc.)
-/// and return them wrapped in KKTimingSlot objects with applyState blocks.
-- (NSArray<KKTimingSlot *> *)timingGlobalSlots;
-
-/// Override in subclasses to provide custom views that appear below the
-/// graph, changing based on the selected section (0=In, 1=Hold, 2=Out).
-- (NSArray<KKTimingSlot *> *)timingSlotsForSection:(NSInteger)section;
-
-/// Override to declare animatable properties. When non-nil, the timing graph
-/// auto-generates pill toggles for In/Hold/Out sections using the param IDs
-/// from each KKAnimatableProperty. This replaces the manual holdPropertyView
-/// mechanism — do not override both.
+/// Override to declare animatable properties. The multi-stage sequencer
+/// auto-generates one lane per property; the property's `valueParamIDs`
+/// receive the per-frame interpolated values during render.
 - (nullable NSArray<KKAnimatableProperty *> *)animatableProperties;
 
 /// Override to return YES when the plugin registers motion blur params
@@ -322,14 +303,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// snapshot, re-pushes the filtered lanes to the sequencer view. Safe to
 /// over-call.
 - (void)multiStageRefreshLaneVisibility;
-
-/// Override to provide a view with hold property toggles. This view is added
-/// as a direct subview of the timing graph and shown when the hold section is
-/// selected and a non-static hold effect is active. Return nil for no toggles.
-/// Ignored when animatableProperties returns non-nil.
-- (nullable NSView *)holdPropertyView;
-- (CGFloat)holdPropertyViewHeight;
-- (nullable void (^)(id, CMTime))holdPropertyApplyState;
 
 /// Reads the bool at forceShowParamID; if YES, sets every param in paramIDs
 /// to kFxParameterFlag_DEFAULT and returns YES.  Caller should early-return

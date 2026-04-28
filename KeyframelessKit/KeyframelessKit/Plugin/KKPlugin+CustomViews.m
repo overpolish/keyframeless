@@ -23,9 +23,6 @@
 
 #import "../Views/KKAnimatableProperty.h"
 #import "../Views/KKLogoBannerView.h"
-#import "../Views/KKPillToggleRowView.h"
-#import "../Views/KKTimingGraphView.h"
-#import "../Views/KKTimingSlot.h"
 #import "KKConstants.h"
 #import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
@@ -596,209 +593,6 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
   [actionAPI endAction:self];
 }
 
-/// Returns the per-section param ID for a property given the graph's
-/// selected section (In/Out/Hold).
-static UInt32 KKHoldPropertyParamID(KKAnimatableProperty *prop,
-                                    KKTimingGraphSection section) {
-  switch (section) {
-  case KKTimingGraphSectionIn:
-    return prop.inParamID;
-  case KKTimingGraphSectionOut:
-    return prop.outParamID;
-  default:
-    return prop.holdParamID;
-  }
-}
-
-- (void)_installHoldPropertyViewOnGraph:(KKTimingGraphView *)graphView {
-  NSArray<KKAnimatableProperty *> *animProps = [self animatableProperties];
-  if (animProps.count == 0) {
-    NSView *holdPropView = [self holdPropertyView];
-    if (holdPropView) {
-      graphView.holdPropertyView = holdPropView;
-      graphView.holdPropertyViewHeight = [self holdPropertyViewHeight];
-      graphView.holdPropertyApplyState = [self holdPropertyApplyState];
-    }
-    return;
-  }
-
-  static const CGFloat kRowH = 18.0;
-  BOOL twoRows = animProps.count > 5;
-  NSUInteger splitAt = twoRows ? (animProps.count + 1) / 2 : animProps.count;
-
-  KKPillToggleRowView *row1 = nil;
-  KKPillToggleRowView *row2 = nil;
-  CGFloat totalH = 0;
-  NSView *propView = [self _buildHoldPropertyRowsForProps:animProps
-                                                  splitAt:splitAt
-                                                  twoRows:twoRows
-                                                     rowH:kRowH
-                                                  outRow1:&row1
-                                                  outRow2:&row2
-                                                outTotalH:&totalH];
-
-  __weak typeof(self) weakSelf = self;
-  __weak KKTimingGraphView *weakGraph = graphView;
-
-  void (^handleToggle)(NSInteger, BOOL) = ^(NSInteger index, BOOL isOn) {
-    [weakSelf _handleHoldPropertyToggleAtIndex:index
-                                          isOn:isOn
-                                         props:animProps
-                                         graph:weakGraph];
-  };
-  row1.onToggled = ^(NSInteger index, BOOL isOn) {
-    handleToggle(index, isOn);
-  };
-  if (row2) {
-    row2.onToggled = ^(NSInteger index, BOOL isOn) {
-      handleToggle(index + (NSInteger)splitAt, isOn);
-    };
-  }
-
-  graphView.holdPropertyView = propView;
-  graphView.holdPropertyViewHeight = totalH;
-  graphView.showPropertyViewForAllSections = YES;
-  graphView.holdPropertyApplyState = ^(id paramAPI, CMTime time) {
-    KKTimingGraphView *graph = weakGraph;
-    if (!graph)
-      return;
-    for (NSUInteger i = 0; i < animProps.count; i++) {
-      UInt32 paramID =
-          KKHoldPropertyParamID(animProps[i], graph.selectedSection);
-      BOOL val = YES;
-      [paramAPI getBoolValue:&val fromParameter:paramID atTime:time];
-      if (i < splitAt)
-        [row1 setState:val atIndex:i];
-      else
-        [row2 setState:val atIndex:i - splitAt];
-    }
-  };
-}
-
-- (NSView *)_buildHoldPropertyRowsForProps:
-                (NSArray<KKAnimatableProperty *> *)animProps
-                                   splitAt:(NSUInteger)splitAt
-                                   twoRows:(BOOL)twoRows
-                                      rowH:(CGFloat)kRowH
-                                   outRow1:(KKPillToggleRowView **)outRow1
-                                   outRow2:(KKPillToggleRowView **)outRow2
-                                 outTotalH:(CGFloat *)outTotalH {
-  NSMutableArray<NSString *> *labels = [NSMutableArray new];
-  for (KKAnimatableProperty *p in animProps)
-    [labels addObject:p.label];
-
-  if (!twoRows) {
-    KKPillToggleRowView *row =
-        [[KKPillToggleRowView alloc] initWithLabels:labels];
-    *outRow1 = row;
-    *outRow2 = nil;
-    *outTotalH = kRowH;
-    return row;
-  }
-
-  NSArray *labels1 = [labels subarrayWithRange:NSMakeRange(0, splitAt)];
-  NSArray *labels2 = [labels
-      subarrayWithRange:NSMakeRange(splitAt, animProps.count - splitAt)];
-  KKPillToggleRowView *row1 =
-      [[KKPillToggleRowView alloc] initWithLabels:labels1];
-  KKPillToggleRowView *row2 =
-      [[KKPillToggleRowView alloc] initWithLabels:labels2];
-  row1.autoresizingMask = NSViewWidthSizable;
-  row2.autoresizingMask = NSViewWidthSizable;
-  CGFloat totalH = kRowH * 2 + KKSpacingXS;
-  NSView *container =
-      [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, totalH)];
-  row1.frame = NSMakeRect(0, 0, 300, kRowH);
-  row2.frame = NSMakeRect(0, kRowH + KKSpacingXS, 300, kRowH);
-  [container addSubview:row1];
-  [container addSubview:row2];
-  *outRow1 = row1;
-  *outRow2 = row2;
-  *outTotalH = totalH;
-  return container;
-}
-
-- (void)_handleHoldPropertyToggleAtIndex:(NSInteger)index
-                                    isOn:(BOOL)isOn
-                                   props:
-                                       (NSArray<KKAnimatableProperty *> *)props
-                                   graph:(KKTimingGraphView *)graph {
-  if (!graph || (NSUInteger)index >= props.count)
-    return;
-  UInt32 paramID = KKHoldPropertyParamID(props[index], graph.selectedSection);
-  id<FxCustomParameterActionAPI_v4> actAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actAPI startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  [setAPI setBoolValue:isOn toParameter:paramID atTime:[actAPI currentTime]];
-  [actAPI endAction:self];
-}
-
-- (void)_wireTimingGraphCallbacks:(KKTimingGraphView *)graphView {
-  __weak typeof(self) weakSelf = self;
-  graphView.onInToggled = ^(BOOL enabled) {
-    [weakSelf _timingGraphSetAnimateEnabled:enabled
-                               forParameter:kKKParamAnimateIn
-                            disabledSection:KKTimingGraphSectionIn];
-  };
-  graphView.onOutToggled = ^(BOOL enabled) {
-    [weakSelf _timingGraphSetAnimateEnabled:enabled
-                               forParameter:kKKParamAnimateOut
-                            disabledSection:KKTimingGraphSectionOut];
-  };
-  graphView.onSectionSelected = ^(KKTimingGraphSection section) {
-    [weakSelf timingGraphSelectSection:section];
-  };
-  graphView.onInDurationChanged = ^(double duration) {
-    [weakSelf timingGraphSetFloatValue:duration
-                          forParameter:kKKParamAnimateInDuration];
-  };
-  graphView.onOutDurationChanged = ^(double duration) {
-    [weakSelf timingGraphSetFloatValue:duration
-                          forParameter:kKKParamAnimateOutDuration];
-  };
-  graphView.onInCurveChanged = ^(KKEasingCurve curve) {
-    [weakSelf timingGraphSetIntValue:(int)curve
-                        forParameter:kKKParamAnimateInInterpolation];
-  };
-  graphView.onOutCurveChanged = ^(KKEasingCurve curve) {
-    [weakSelf timingGraphSetIntValue:(int)curve
-                        forParameter:kKKParamAnimateOutInterpolation];
-  };
-  graphView.onHoldEffectChanged = ^(KKHoldEffect effect) {
-    [weakSelf timingGraphSetIntValue:(int)effect
-                        forParameter:kKKParamHoldEffect];
-  };
-  graphView.onInIntensityChanged = ^(double intensity) {
-    [weakSelf timingGraphSetFloatValue:intensity
-                          forParameter:kKKParamAnimateInIntensity];
-  };
-  graphView.onOutIntensityChanged = ^(double intensity) {
-    [weakSelf timingGraphSetFloatValue:intensity
-                          forParameter:kKKParamAnimateOutIntensity];
-  };
-  graphView.onHoldIntensityChanged = ^(double intensity) {
-    [weakSelf timingGraphSetFloatValue:intensity
-                          forParameter:kKKParamHoldIntensity];
-  };
-  graphView.onInFrequencyChanged = ^(double frequency) {
-    [weakSelf timingGraphSetFloatValue:frequency
-                          forParameter:kKKParamAnimateInFrequency];
-  };
-  graphView.onOutFrequencyChanged = ^(double frequency) {
-    [weakSelf timingGraphSetFloatValue:frequency
-                          forParameter:kKKParamAnimateOutFrequency];
-  };
-  graphView.onHoldFrequencyChanged = ^(double frequency) {
-    [weakSelf timingGraphSetFloatValue:frequency
-                          forParameter:kKKParamHoldFrequency];
-  };
-  graphView.onHoldSeedChanged = ^(int seed) {
-    [weakSelf timingGraphSetIntValue:seed forParameter:kKKParamHoldSeed];
-  };
-}
-
 /// Stage sequencer container — sticky ruler + vertically-scrolled lanes
 /// (capped at 2.5 lanes) with top/bottom shadow overlays. Hidden until
 /// multi-stage is enabled. Inspector mode uses fixed height; window (uncapped)
@@ -1042,30 +836,17 @@ static UInt32 KKHoldPropertyParamID(KKAnimatableProperty *prop,
   }
 }
 
-/// When multi-stage is enabled, swaps the graph for the sequencer container,
-/// seeds lane data (creating defaults if missing), and syncs the playhead.
+/// Seeds lane data (creating defaults if missing) and syncs the playhead.
 - (void)
-    _seedSequencerIfEnabledWithSeqContainer:(NSView *)seqContainer
-                                  graphView:(KKTimingGraphView *)graphView
-                                    seqView:(KKStageSequencerView *)seqView
-                                  rulerView:
-                                      (KKStageSequencerRulerView *)rulerView
-                               playheadView:(KKStagePlayheadView *)playheadView
-                                   seqProps:(NSArray<KKAnimatableProperty *> *)
-                                                seqProps
-                                paramGetAPI:
-                                    (id<FxParameterRetrievalAPI_v6>)paramGetAPI
-                                  actionAPI:(id<FxCustomParameterActionAPI_v4>)
-                                                actionAPI {
-  BOOL multiStageEnabled = NO;
-  [paramGetAPI getBoolValue:&multiStageEnabled
-              fromParameter:kKKParamMultiStageEnabled
-                     atTime:[actionAPI currentTime]];
-  if (!multiStageEnabled)
-    return;
-
+    _seedSequencerWithSeqContainer:(NSView *)seqContainer
+                           seqView:(KKStageSequencerView *)seqView
+                         rulerView:(KKStageSequencerRulerView *)rulerView
+                      playheadView:(KKStagePlayheadView *)playheadView
+                          seqProps:(NSArray<KKAnimatableProperty *> *)seqProps
+                       paramGetAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI
+                         actionAPI:
+                             (id<FxCustomParameterActionAPI_v4>)actionAPI {
   seqContainer.hidden = NO;
-  graphView.hidden = YES;
 
   NSArray<KKTimingLane *> *lanes =
       [self _readOrSeedLanesForProps:seqProps
@@ -1115,26 +896,11 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
   };
 }
 
-- (KKTimingGraphView *)_buildTimingGraphInWrapper:(NSView *)wrapper {
-  KKTimingGraphView *graphView =
-      [[KKTimingGraphView alloc] initWithFrame:NSZeroRect];
-  graphView.translatesAutoresizingMaskIntoConstraints = NO;
-  [wrapper addSubview:graphView];
-  [NSLayoutConstraint activateConstraints:@[
-    [graphView.leadingAnchor constraintEqualToAnchor:wrapper.leadingAnchor],
-    [graphView.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
-    [graphView.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor],
-    [graphView.trailingAnchor constraintEqualToAnchor:wrapper.trailingAnchor],
-  ]];
-  return graphView;
-}
-
 /// In inspector (capped) mode, the primary views are stored on the plugin
 /// so callbacks can find them. In uncapped (window) mode they're added to
 /// per-instance state as an additional ref set, and we push current state
 /// through so the window opens already in sync.
 - (void)_registerSequencerViewsForUncapped:(BOOL)uncapped
-                                 graphView:(KKTimingGraphView *)graphView
                               seqContainer:(NSView *)seqContainer
                                    seqView:(KKStageSequencerView *)seqView
                                  rulerView:
@@ -1150,7 +916,6 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
     return;
   }
   KKTimingViewRefs *refs = [[KKTimingViewRefs alloc] init];
-  refs.graphView = graphView;
   refs.seqView = seqView;
   refs.seqContainer = seqContainer;
   refs.ruler = rulerView;
@@ -1165,14 +930,6 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
 }
 
 - (NSView *)_createTimingGraphViewUncapped:(BOOL)uncapped {
-  NSArray<KKTimingSlot *> *globalSlots = [self timingGlobalSlots];
-  NSArray<KKTimingSlot *> *inSlots =
-      [self timingSlotsForSection:KKTimingGraphSectionIn];
-  NSArray<KKTimingSlot *> *holdSlots =
-      [self timingSlotsForSection:KKTimingGraphSectionHold];
-  NSArray<KKTimingSlot *> *outSlots =
-      [self timingSlotsForSection:KKTimingGraphSectionOut];
-
   NSArray<KKAnimatableProperty *> *seqProps = [self animatableProperties];
   KKTimingGraphMetrics metrics =
       KKTimingGraphMetricsCompute(uncapped, seqProps.count);
@@ -1181,29 +938,10 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
       initWithFrame:NSMakeRect(0, 0, 300, metrics.wrapperHeight)];
   wrapper.autoresizingMask = NSViewWidthSizable;
 
-  KKTimingGraphView *graphView = [self _buildTimingGraphInWrapper:wrapper];
-
   id<FxCustomParameterActionAPI_v4> actionAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actionAPI startAction:self];
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  [self _applyTimingParamsToGraph:graphView
-                     withParamAPI:paramGetAPI
-                           atTime:[actionAPI currentTime]];
-  [actionAPI endAction:self];
-
-  [self _wireTimingGraphCallbacks:graphView];
-
-  graphView.globalSlots = globalSlots;
-  graphView.inSectionSlots = inSlots;
-  graphView.holdSectionSlots = holdSlots;
-  graphView.outSectionSlots = outSlots;
-
-  [self _installHoldPropertyViewOnGraph:graphView];
-
-  if (!uncapped)
-    self.timingGraph = graphView;
 
   NSView *seqContainer =
       [self _buildSeqContainerInWrapper:wrapper
@@ -1223,7 +961,6 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
                              rulerHeight:metrics.rulerH];
 
   [self _registerSequencerViewsForUncapped:uncapped
-                                 graphView:graphView
                               seqContainer:seqContainer
                                    seqView:seqView
                                  rulerView:rulerView
@@ -1234,22 +971,13 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
                            playheadView:playheadView];
 
   [actionAPI startAction:self];
-  [self _seedSequencerIfEnabledWithSeqContainer:seqContainer
-                                      graphView:graphView
-                                        seqView:seqView
-                                      rulerView:rulerView
-                                   playheadView:playheadView
-                                       seqProps:seqProps
-                                    paramGetAPI:paramGetAPI
-                                      actionAPI:actionAPI];
-
-  CMTime t = [actionAPI currentTime];
-  [self _applySlotState:globalSlots withParamAPI:paramGetAPI atTime:t];
-  [self _applySlotState:inSlots withParamAPI:paramGetAPI atTime:t];
-  [self _applySlotState:holdSlots withParamAPI:paramGetAPI atTime:t];
-  [self _applySlotState:outSlots withParamAPI:paramGetAPI atTime:t];
-  if (graphView.holdPropertyApplyState)
-    graphView.holdPropertyApplyState(paramGetAPI, t);
+  [self _seedSequencerWithSeqContainer:seqContainer
+                               seqView:seqView
+                             rulerView:rulerView
+                          playheadView:playheadView
+                              seqProps:seqProps
+                           paramGetAPI:paramGetAPI
+                             actionAPI:actionAPI];
   [actionAPI endAction:self];
 
   return wrapper;

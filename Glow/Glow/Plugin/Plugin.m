@@ -53,10 +53,6 @@
   case kParamGradientType:
   case kParamForceShow:
   case kKKParamTimingExpanded:
-  case kKKParamTimingSelectedSection:
-  case kKKParamAnimateIn:
-  case kKKParamAnimateOut:
-  case kKKParamHoldEffect:
   case kParamNoiseExpanded:
   case kKKParamColorExpanded:
   case kKKParamMotionBlurExpanded:

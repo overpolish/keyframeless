@@ -181,12 +181,6 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   if (!getAPI)
     return nil;
-  BOOL enabled = NO;
-  [getAPI getBoolValue:&enabled
-         fromParameter:kKKParamMultiStageEnabled
-                atTime:time];
-  if (!enabled)
-    return nil;
   NSString *json = nil;
   [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
   for (KKTimingLane *lane in [KKTimingLane lanesFromJSON:json]) {
@@ -246,12 +240,6 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
   id<FxParameterRetrievalAPI_v6> getAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   if (!getAPI)
-    return;
-  BOOL enabled = NO;
-  [getAPI getBoolValue:&enabled
-         fromParameter:kKKParamMultiStageEnabled
-                atTime:time];
-  if (!enabled)
     return;
   NSString *json = nil;
   [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
