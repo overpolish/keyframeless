@@ -338,6 +338,13 @@ NS_ASSUME_NONNULL_BEGIN
                                paramIDs:(NSArray<NSNumber *> *)paramIDs
                                  atTime:(CMTime)time;
 
+/// Subclass hook: return YES when the plugin's "Force Show All Parameters"
+/// toggle is on. `updateTimingParameterVisibility` and
+/// `updateMotionBlurParameterVisibility` treat their group as expanded when
+/// this returns YES, mirroring Canvas's `(expanded || forceShow)` pattern.
+/// Default NO.
+- (BOOL)forceShowAllParameters;
+
 /// Indicates whether this effect requires the user to wrap their footage
 /// in an Adjustment Clip or a Compound Clip before applying. The help
 /// window auto-prepends a matching tip when this is non-`None`.

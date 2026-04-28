@@ -29,6 +29,18 @@
   return YES;
 }
 
+- (BOOL)forceShowAllParameters {
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!paramGetAPI)
+    return NO;
+  BOOL on = NO;
+  [paramGetAPI getBoolValue:&on
+              fromParameter:kParamForceShowAlerts
+                     atTime:kCMTimeZero];
+  return on;
+}
+
 - (BOOL)parameterChanged:(UInt32)parameterID
                   atTime:(CMTime)time
                    error:(NSError **)error {

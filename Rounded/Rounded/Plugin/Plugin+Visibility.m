@@ -20,6 +20,8 @@
   [paramGetAPI getBoolValue:&expanded
               fromParameter:kParamCropExpanded
                      atTime:kCMTimeZero];
+  if ([self forceShowAllParameters])
+    expanded = YES;
 
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamCropExpanded];
