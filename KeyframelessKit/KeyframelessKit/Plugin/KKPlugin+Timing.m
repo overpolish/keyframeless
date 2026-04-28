@@ -162,78 +162,67 @@ static void _setFlagsIfNeeded(id<FxParameterSettingAPI_v5> setAPI,
 }
 
 - (void)updateTimingParameterVisibility {
-  id<FxParameterRetrievalAPI_v6> paramGetAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  id<FxParameterSettingAPI_v5> paramSetAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!paramGetAPI || !paramSetAPI)
-    return;
+  // setParameterFlags on params in the kKKParam range (9000s) crashes FCP
+  // when called synchronously from `parameterChanged:` — the host action
+  // wrapping the user's interaction (group toggle, OSC drag) ends with our
+  // flag-writes in the bulk-change list and FCP's transaction processor
+  // null-derefs walking the channel tree. Defer onto the main queue inside
+  // a fresh action scope so the writes land outside FCP's host action.
+  // See project_published_custom_ui_cascade.md.
+  __weak typeof(self) weakSelf = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    id<FxParameterRetrievalAPI_v6> paramGetAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> paramSetAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    if (!actAPI || !paramGetAPI || !paramSetAPI)
+      return;
+    [actAPI startAction:strongSelf];
 
-  BOOL expandedTiming = NO;
-  [paramGetAPI getBoolValue:&expandedTiming
-              fromParameter:kKKParamTimingExpanded
-                     atTime:kCMTimeZero];
-
-  _setFlagsIfNeeded(paramSetAPI, paramGetAPI,
-                    expandedTiming ? kCustomUI : kFxParameterFlag_HIDDEN,
-                    kKKParamTimingCurvePreview);
-
-  _setFlagsIfNeeded(paramSetAPI, paramGetAPI, kFxParameterFlag_HIDDEN,
-                    kKKParamAnimateIn);
-  _setFlagsIfNeeded(paramSetAPI, paramGetAPI, kFxParameterFlag_HIDDEN,
-                    kKKParamAnimateOut);
-
-  BOOL animateIn = NO, animateOut = NO;
-  int inCurve = KKEasingCurveEaseOut, outCurve = KKEasingCurveEaseOut;
-  if (expandedTiming) {
-    [paramGetAPI getBoolValue:&animateIn
-                fromParameter:kKKParamAnimateIn
+    BOOL expandedTiming = NO;
+    [paramGetAPI getBoolValue:&expandedTiming
+                fromParameter:kKKParamTimingExpanded
                        atTime:kCMTimeZero];
-    [paramGetAPI getBoolValue:&animateOut
-                fromParameter:kKKParamAnimateOut
-                       atTime:kCMTimeZero];
-    [paramGetAPI getIntValue:&inCurve
-               fromParameter:kKKParamAnimateInInterpolation
-                      atTime:kCMTimeZero];
-    [paramGetAPI getIntValue:&outCurve
-               fromParameter:kKKParamAnimateOutInterpolation
-                      atTime:kCMTimeZero];
-  }
 
-  int sel = KKTimingGraphSectionHold;
-  [paramGetAPI getIntValue:&sel
-             fromParameter:kKKParamTimingSelectedSection
-                    atTime:kCMTimeZero];
+    _setFlagsIfNeeded(paramSetAPI, paramGetAPI,
+                      expandedTiming ? kCustomUI : kFxParameterFlag_HIDDEN,
+                      kKKParamTimingCurvePreview);
 
-  UInt32 alwaysHidden[] = {
-      kKKParamAnimateInDuration,
-      kKKParamAnimateOutDuration,
-      kKKParamAnimateInInterpolation,
-      kKKParamAnimateInIntensity,
-      kKKParamAnimateOutInterpolation,
-      kKKParamAnimateOutIntensity,
-      kKKParamHoldEffect,
-      kKKParamHoldIntensity,
-      kKKParamAnimateInFrequency,
-      kKKParamAnimateOutFrequency,
-      kKKParamHoldFrequency,
-      kKKParamHoldSeed,
-      kKKParamMultiStageData,
-      kKKParamMultiStageSelectedProperty,
-      kKKParamMultiStageSelectedStage,
-  };
-  for (NSUInteger i = 0; i < sizeof(alwaysHidden) / sizeof(alwaysHidden[0]);
-       i++) {
     _setFlagsIfNeeded(paramSetAPI, paramGetAPI, kFxParameterFlag_HIDDEN,
-                      alwaysHidden[i]);
-  }
+                      kKKParamAnimateIn);
+    _setFlagsIfNeeded(paramSetAPI, paramGetAPI, kFxParameterFlag_HIDDEN,
+                      kKKParamAnimateOut);
 
-  for (NSNumber *paramID in self.timingGroupExtraParamIDs) {
-    FxParameterFlags flagTiming =
-        expandedTiming ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
-    _setFlagsIfNeeded(paramSetAPI, paramGetAPI, flagTiming,
-                      paramID.unsignedIntValue);
-  }
+    UInt32 alwaysHidden[] = {
+        kKKParamAnimateInDuration,       kKKParamAnimateOutDuration,
+        kKKParamAnimateInInterpolation,  kKKParamAnimateInIntensity,
+        kKKParamAnimateOutInterpolation, kKKParamAnimateOutIntensity,
+        kKKParamHoldEffect,              kKKParamHoldIntensity,
+        kKKParamAnimateInFrequency,      kKKParamAnimateOutFrequency,
+        kKKParamHoldFrequency,           kKKParamHoldSeed,
+        kKKParamMultiStageData,          kKKParamMultiStageSelectedProperty,
+        kKKParamMultiStageSelectedStage,
+    };
+    for (NSUInteger i = 0; i < sizeof(alwaysHidden) / sizeof(alwaysHidden[0]);
+         i++) {
+      _setFlagsIfNeeded(paramSetAPI, paramGetAPI, kFxParameterFlag_HIDDEN,
+                        alwaysHidden[i]);
+    }
+
+    for (NSNumber *paramID in strongSelf.timingGroupExtraParamIDs) {
+      FxParameterFlags flagTiming =
+          expandedTiming ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
+      _setFlagsIfNeeded(paramSetAPI, paramGetAPI, flagTiming,
+                        paramID.unsignedIntValue);
+    }
+
+    [actAPI endAction:strongSelf];
+  });
 }
 
 - (void)updateMotionBlurParameterVisibility {
