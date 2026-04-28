@@ -400,6 +400,22 @@ static void KKBroadcastPlayheads(double nowSec) {
   // playback). Hop to main and read `currentTime` via the action API, which
   // reports the actually-displayed position. Coalescing in KKBroadcastPlayheads
   // absorbs the 3–5 redundant render ticks per displayed frame.
+  //
+  // Exception: once `pumpTime` reaches the clip end, render stops firing —
+  // but `currentTime` is still 3–5 frames behind at that moment, so the last
+  // broadcast lands short of the visual end. Commit to the clip end directly,
+  // since no further ticks will arrive to catch up.
+  KKPluginInstanceState *endState = KKInstanceStateForAPI(apiManager);
+  double endDur = endState.cachedEffectDuration;
+  if (endDur > 0) {
+    double clipEnd = endState.cachedEffectStart + endDur;
+    double frameDur =
+        endState.cachedFrameDuration > 0 ? endState.cachedFrameDuration : 0.033;
+    if (CMTimeGetSeconds(time) >= clipEnd - frameDur * 0.5) {
+      KKBroadcastPlayheads(clipEnd);
+      return;
+    }
+  }
   id strongSender = sender;
   __weak id<PROAPIAccessing> weakAPI = apiManager;
   dispatch_async(dispatch_get_main_queue(), ^{
