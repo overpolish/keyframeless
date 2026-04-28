@@ -84,7 +84,26 @@ KKPluginInstanceState *KKInstanceStateEnsureForAPI(id<PROAPIAccessing> api) {
     // Re-read so the association cache is populated.
     uuid = KKInstanceUUIDForAPI(api);
   }
-  return uuid ? KKInstanceStateForUUID(uuid) : nil;
+  KKPluginInstanceState *state = uuid ? KKInstanceStateForUUID(uuid) : nil;
+  if (!state)
+    return nil;
+  // Duplicate-UUID detection: FCP copy/paste/cut clones `kKKParamInstanceID`
+  // along with the rest of the params, so two distinct plugin instances can
+  // both resolve to the same state and clobber each other's view refs. If
+  // this state is already owned by a different api, mint a fresh UUID for
+  // the new instance and rebind to a new state entry.
+  void *apiPtr = (__bridge void *)api;
+  if (state.ownerAPIPointer && state.ownerAPIPointer != apiPtr) {
+    NSString *newUUID = [[NSUUID UUID] UUIDString];
+    id<FxParameterSettingAPI_v5> setAPI =
+        [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [setAPI setStringParameterValue:newUUID toParameter:kKKParamInstanceID];
+    objc_setAssociatedObject(api, &kKKInstanceUUIDAssocKey, newUUID,
+                             OBJC_ASSOCIATION_COPY_NONATOMIC);
+    state = KKInstanceStateForUUID(newUUID);
+  }
+  state.ownerAPIPointer = apiPtr;
+  return state;
 }
 
 NSArray<KKPluginInstanceState *> *KKAllInstanceStates(void) {
