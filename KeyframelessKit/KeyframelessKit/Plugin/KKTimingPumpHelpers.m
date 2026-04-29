@@ -8,6 +8,8 @@
 /// Declared in KKPlugin_Private.h.
 
 #import "../Math/KKTimingStage.h"
+#import "../Views/StageSequencer/KKEmptyLanesView.h"
+#import "../Views/StageSequencer/KKLaneVisibilityBar.h"
 #import "KKConstants.h"
 #import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
@@ -57,6 +59,62 @@ KKReadLanesRebalanced(id<PROAPIAccessing> apiManager,
   NSArray<KKTimingLane *> *balanced =
       (dur > 0) ? KKTimingRebalancedLanes(raw, dur) : raw;
   return [balanced mutableCopy];
+}
+
+NSSet<NSString *> *KKEffectiveHiddenLaneLabels(NSSet<NSString *> *pluginHidden,
+                                               NSArray<KKTimingLane *> *lanes) {
+  NSMutableSet<NSString *> *out = [NSMutableSet set];
+  if (pluginHidden.count)
+    [out unionSet:pluginHidden];
+  for (KKTimingLane *lane in lanes) {
+    if (!lane.visibleInSequencer && lane.propertyLabel.length)
+      [out addObject:lane.propertyLabel];
+  }
+  return out.count ? [out copy] : nil;
+}
+
+void KKApplyEmptyLanesVisibility(KKEmptyLanesView *emptyView,
+                                 NSArray<KKTimingLane *> *lanes) {
+  if (!emptyView)
+    return;
+  BOOL anyVisible = NO;
+  for (KKTimingLane *lane in lanes) {
+    if (lane.visibleInSequencer) {
+      anyVisible = YES;
+      break;
+    }
+  }
+  BOOL shouldHide = anyVisible || lanes.count == 0;
+  dispatch_block_t apply = ^{
+    if (emptyView.hidden != shouldHide)
+      emptyView.hidden = shouldHide;
+  };
+  if (NSThread.isMainThread)
+    apply();
+  else
+    dispatch_async(dispatch_get_main_queue(), apply);
+}
+
+void KKPushLanesToVisibilityBar(KKLaneVisibilityBar *bar,
+                                NSArray<KKTimingLane *> *lanes) {
+  if (!bar)
+    return;
+  NSMutableArray<NSString *> *labels =
+      [NSMutableArray arrayWithCapacity:lanes.count];
+  NSMutableArray<NSNumber *> *states =
+      [NSMutableArray arrayWithCapacity:lanes.count];
+  for (KKTimingLane *lane in lanes) {
+    [labels addObject:lane.propertyLabel ?: @""];
+    [states addObject:@(lane.visibleInSequencer)];
+  }
+  dispatch_block_t apply = ^{
+    bar.labels = labels;
+    bar.visibleStates = states;
+  };
+  if (NSThread.isMainThread)
+    apply();
+  else
+    dispatch_async(dispatch_get_main_queue(), apply);
 }
 
 NSInteger KKLaneJSONIndexForViewIndex(NSInteger viewIndex,

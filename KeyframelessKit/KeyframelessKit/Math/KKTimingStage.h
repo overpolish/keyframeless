@@ -105,6 +105,10 @@ typedef NS_ENUM(NSInteger, KKSegmentType) {
 /// Whether the lane's OSC should be rendered on canvas. Persisted in JSON
 /// so visibility survives view rebuilds. Defaults to YES.
 @property(nonatomic) BOOL oscVisible;
+/// UI filter: whether this lane is shown in the sequencer and included in
+/// bulk operations. Does not affect render-time evaluation. Persisted in
+/// JSON. Defaults to YES.
+@property(nonatomic) BOOL visibleInSequencer;
 /// Clip duration (seconds) this lane's segment fractions were last authored
 /// against. Used to decide when locked segments need rebalancing. Zero means
 /// "not yet established" — the next read initialises it to the current clip

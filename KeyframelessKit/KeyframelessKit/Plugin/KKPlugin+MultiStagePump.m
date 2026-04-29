@@ -13,6 +13,7 @@
 
 #import "../KKLog.h"
 #import "../Math/KKTimingStage.h"
+#import "../Views/StageSequencer/KKLaneVisibilityBar.h"
 #import "../Views/StageSequencer/KKStagePlayheadView.h"
 #import "../Views/StageSequencer/KKStageSequencerRulerView.h"
 #import "../Views/StageSequencer/KKStageSequencerView.h"
@@ -133,6 +134,29 @@ static void KKSyncFromParams(id<PROAPIAccessing> apiManager) {
       (dur > 0) ? KKTimingRebalancedLanes(raw, dur) : raw;
   state.lanesSnapshot = lanes;
   state.pendingLanes = nil;
+  // Recompute effective hidden set so user-toggled visibility (persisted in
+  // each lane's `visibleInSequencer`) is honoured after undo/redo or any
+  // external param edit.
+  NSMutableSet<NSString *> *pluginHidden = [NSMutableSet set];
+  for (NSString *label in state.hiddenLaneLabels) {
+    BOOL inLanes = NO;
+    for (KKTimingLane *lane in lanes) {
+      if ([lane.propertyLabel isEqualToString:label] &&
+          lane.visibleInSequencer) {
+        inLanes = YES;
+        break;
+      }
+    }
+    if (!inLanes)
+      [pluginHidden addObject:label];
+  }
+  state.hiddenLaneLabels = KKEffectiveHiddenLaneLabels(pluginHidden, lanes);
+  KKPushLanesToVisibilityBar(state.visibilityBar, lanes);
+  KKApplyEmptyLanesVisibility(state.emptyLanesView, lanes);
+  for (KKTimingViewRefs *r in extras) {
+    KKPushLanesToVisibilityBar(r.visibilityBar, lanes);
+    KKApplyEmptyLanesVisibility(r.emptyLanesView, lanes);
+  }
   if (!seq && extras.count == 0)
     return;
   NSArray<KKTimingLane *> *visible =
@@ -437,12 +461,14 @@ static void KKBroadcastPlayheads(double nowSec) {
   KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
   if (!state)
     return;
-  NSSet<NSString *> *next =
+  NSSet<NSString *> *pluginHidden =
       [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
-  if ([next isEqualToSet:state.hiddenLaneLabels ?: [NSSet set]])
+  NSArray<KKTimingLane *> *lanes = state.lanesSnapshot;
+  NSSet<NSString *> *next = KKEffectiveHiddenLaneLabels(pluginHidden, lanes);
+  if ([next isEqualToSet:state.hiddenLaneLabels ?: [NSSet set]] ||
+      (!next && !state.hiddenLaneLabels))
     return;
   state.hiddenLaneLabels = next;
-  NSArray<KKTimingLane *> *lanes = state.lanesSnapshot;
   KKStageSequencerView *seq = state.sequencerView;
   NSArray<KKTimingViewRefs *> *extras =
       [state.additionalTimingViews copy] ?: @[];

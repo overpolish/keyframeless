@@ -12,6 +12,8 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @class KKCustomGroupHeaderView;
+@class KKEmptyLanesView;
+@class KKLaneVisibilityBar;
 @class KKStagePlayheadView;
 @class KKStageSequencerRulerView;
 @class KKStageSequencerView;
@@ -23,6 +25,26 @@ NS_ASSUME_NONNULL_BEGIN
 extern NSArray<KKTimingLane *> *
 KKFilterLanesForVisibility(NSArray<KKTimingLane *> *lanes,
                            NSSet<NSString *> *_Nullable hidden);
+
+/// Effective hidden lane labels: union of the plugin-suppressed set
+/// (`pluginHidden`) and the user-toggled set (lanes whose
+/// `visibleInSequencer == NO`). Returns nil when both sources are empty.
+extern NSSet<NSString *> *_Nullable KKEffectiveHiddenLaneLabels(
+    NSSet<NSString *> *_Nullable pluginHidden,
+    NSArray<KKTimingLane *> *_Nullable lanes);
+
+/// Pushes `lanes`' labels and per-lane visibility states to the bar on the
+/// main queue. Pass the full unfiltered lane list — the bar shows every
+/// lane regardless of visibility.
+extern void
+KKPushLanesToVisibilityBar(KKLaneVisibilityBar *_Nullable bar,
+                           NSArray<KKTimingLane *> *_Nullable lanes);
+
+/// Shows the empty-lanes overlay when every lane in `lanes` is hidden.
+/// Marshals to the main queue.
+extern void
+KKApplyEmptyLanesVisibility(KKEmptyLanesView *_Nullable emptyView,
+                            NSArray<KKTimingLane *> *_Nullable lanes);
 
 /// Translates a viewIndex (index into the filtered, view-visible lane list)
 /// to the JSON index (index into the full unfiltered lane array). Returns
@@ -84,6 +106,11 @@ extern NSMutableArray<KKTimingLane *> *_Nullable KKReadLanesRebalanced(
 - (void)_wireStageSequencerCallbacksFor:(KKStageSequencerView *)seqView
                               rulerView:(KKStageSequencerRulerView *)rulerView
                            playheadView:(KKStagePlayheadView *)playheadView;
+/// Handles a click on a lane-visibility-bar pill: toggles or solos the
+/// lane (option-click solos / unsolos when already only-visible), persists
+/// the new visibility state, and refreshes the sequencer + bar.
+- (void)_handleLaneVisibilityClickedAtIndex:(NSInteger)laneIndex
+                                 optionDown:(BOOL)optionDown;
 @end
 
 @interface KKPlugin (MultiStagePumpInternal)

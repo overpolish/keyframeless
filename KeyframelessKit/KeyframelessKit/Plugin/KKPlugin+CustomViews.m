@@ -14,6 +14,8 @@
 #import "../Views/KKMarkup.h"
 #import "../Views/KKSegmentEditView.h"
 #import "../Views/KKSeparatorView.h"
+#import "../Views/StageSequencer/KKEmptyLanesView.h"
+#import "../Views/StageSequencer/KKLaneVisibilityBar.h"
 #import "../Views/StageSequencer/KKRemoteWindowKeyHandlerView.h"
 #import "../Views/StageSequencer/KKSequencerScrollView.h"
 #import "../Views/StageSequencer/KKStagePlayheadView.h"
@@ -438,12 +440,16 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
      @"a <accent>Linked</accent> toggle - keeps the components' "
      @"proportions locked through the effect, so X/Y stay aspect-locked "
      @"through a wobble."),
+    (@"The pill row above the sequencer filters which lanes are visible."),
   ];
 
   NSArray<KKHelpShortcut *> *shortcuts = @[
     [KKHelpShortcut shortcutWithKeysMarkup:@"Click lane label"
                                 descMarkup:@"Disable / enable that lane's "
                                            @"animation"],
+    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + click pill"
+                                descMarkup:@"Solo a lane (or unsolo when "
+                                           @"already the only visible lane)"],
     [KKHelpShortcut shortcutWithKeysMarkup:@"Click"
                                 descMarkup:@"Select a segment"],
     [KKHelpShortcut shortcutWithKeysMarkup:@"Double-click"
@@ -598,6 +604,8 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
 /// multi-stage is enabled. Inspector mode uses fixed height; window (uncapped)
 /// mode pins top+bottom so the container stretches with the wrapper.
 - (NSView *)_buildSeqContainerInWrapper:(NSView *)wrapper
+                              topAnchor:(NSLayoutYAxisAnchor *)topAnchor
+                               topInset:(CGFloat)topInset
                                uncapped:(BOOL)uncapped
                           seqContainerH:(CGFloat)seqContainerH {
   NSView *seqContainer = [[NSView alloc] initWithFrame:NSZeroRect];
@@ -621,7 +629,8 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
         [seqContainer.trailingAnchor
             constraintEqualToAnchor:wrapper.trailingAnchor
                            constant:-KKInspectorHorizontalInset],
-        [seqContainer.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
+        [seqContainer.topAnchor constraintEqualToAnchor:topAnchor
+                                               constant:topInset],
       ]];
   if (uncapped) {
     [anchors addObject:[seqContainer.bottomAnchor
@@ -659,7 +668,8 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
                               seqProps:
                                   (NSArray<KKAnimatableProperty *> *)seqProps
                             fullLanesH:(CGFloat)fullLanesH
-                            outSeqView:(KKStageSequencerView **)outSeqView {
+                            outSeqView:(KKStageSequencerView **)outSeqView
+                          outEmptyView:(KKEmptyLanesView **)outEmptyView {
   NSScrollView *scrollView =
       [[KKSequencerScrollView alloc] initWithFrame:NSZeroRect];
   scrollView.translatesAutoresizingMaskIntoConstraints = NO;
@@ -720,11 +730,10 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
   [seqContainer addSubview:scrollView];
 
   // Pin the document view to the clip view's width so segments never overflow
-  // past the visible area. In inspector (capped) mode, height is driven by
-  // `-intrinsicContentSize` on the sequencer — lanes stay at min height and
-  // the content shrinks by exactly one slot when a property is hidden. In
-  // window (uncapped) mode, a low-priority bottom-pin lets the sequencer
-  // grow with the clip view so lanes stretch vertically.
+  // past the visible area. A low-priority bottom-pin lets the sequencer grow
+  // with the clip view so lanes stretch vertically when there's spare room
+  // (few visible lanes), while still allowing intrinsic-content-size to push
+  // past the clip view and scroll when there are too many.
   NSMutableArray<NSLayoutConstraint *> *seqViewConstraints =
       [NSMutableArray arrayWithArray:@[
         [seqView.widthAnchor
@@ -734,16 +743,12 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
         [seqView.leadingAnchor
             constraintEqualToAnchor:scrollView.contentView.leadingAnchor],
       ]];
-  if (uncapped) {
-    // Lower hugging so the bottom-fill can stretch the view past its
-    // intrinsic height when the window is enlarged.
-    [seqView setContentHuggingPriority:NSLayoutPriorityDefaultLow - 1
-                        forOrientation:NSLayoutConstraintOrientationVertical];
-    NSLayoutConstraint *bottomFill = [seqView.bottomAnchor
-        constraintEqualToAnchor:scrollView.contentView.bottomAnchor];
-    bottomFill.priority = NSLayoutPriorityDefaultLow;
-    [seqViewConstraints addObject:bottomFill];
-  }
+  [seqView setContentHuggingPriority:NSLayoutPriorityDefaultLow - 1
+                      forOrientation:NSLayoutConstraintOrientationVertical];
+  NSLayoutConstraint *bottomFill = [seqView.bottomAnchor
+      constraintEqualToAnchor:scrollView.contentView.bottomAnchor];
+  bottomFill.priority = NSLayoutPriorityDefaultLow;
+  [seqViewConstraints addObject:bottomFill];
   [NSLayoutConstraint activateConstraints:seqViewConstraints];
 
   [NSLayoutConstraint activateConstraints:@[
@@ -755,7 +760,22 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
     [scrollView.bottomAnchor constraintEqualToAnchor:seqContainer.bottomAnchor],
   ]];
 
+  KKEmptyLanesView *emptyView = [[KKEmptyLanesView alloc] init];
+  emptyView.hidden = YES;
+  [seqContainer addSubview:emptyView
+                positioned:NSWindowAbove
+                relativeTo:scrollView];
+  [NSLayoutConstraint activateConstraints:@[
+    [emptyView.leadingAnchor constraintEqualToAnchor:scrollView.leadingAnchor],
+    [emptyView.trailingAnchor
+        constraintEqualToAnchor:scrollView.trailingAnchor],
+    [emptyView.topAnchor constraintEqualToAnchor:scrollView.topAnchor],
+    [emptyView.bottomAnchor constraintEqualToAnchor:scrollView.bottomAnchor],
+  ]];
+
   *outSeqView = seqView;
+  if (outEmptyView)
+    *outEmptyView = emptyView;
 }
 
 - (KKStagePlayheadView *)_buildSeqPlayheadInContainer:(NSView *)seqContainer
@@ -859,10 +879,18 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
   if (lanes) {
     KKPluginInstanceState *instState = KKInstanceStateForAPI(self.apiManager);
     instState.lanesSnapshot = [lanes copy];
-    NSSet<NSString *> *hidden =
+    NSSet<NSString *> *pluginHidden =
         [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
+    NSSet<NSString *> *hidden =
+        KKEffectiveHiddenLaneLabels(pluginHidden, lanes);
     instState.hiddenLaneLabels = hidden;
     seqView.lanes = KKFilterLanesForVisibility(lanes, hidden);
+    KKPushLanesToVisibilityBar(instState.visibilityBar, lanes);
+    KKApplyEmptyLanesVisibility(instState.emptyLanesView, lanes);
+    for (KKTimingViewRefs *r in instState.additionalTimingViews) {
+      KKPushLanesToVisibilityBar(r.visibilityBar, lanes);
+      KKApplyEmptyLanesVisibility(r.emptyLanesView, lanes);
+    }
   }
 
   // FCP often can't deliver the real persisted JSON during the initial
@@ -886,28 +914,42 @@ typedef struct {
   CGFloat fullLanesH;
   CGFloat rulerH;
   CGFloat seqContainerH;
+  CGFloat barH;
   CGFloat wrapperHeight;
 } KKTimingGraphMetrics;
 
-static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
-                                                        NSUInteger propsCount) {
-  CGFloat fullLanesH = [KKStageSequencerView heightForLaneCount:propsCount];
+/// Sequencer container height for the given visible-lane count. In capped
+/// (inspector) mode, the container caps at 2.5 lanes worth and scrolls
+/// past that. In uncapped (window) mode, lanes always fit (no scroll).
+static CGFloat KKSeqContainerHeightForVisible(BOOL uncapped,
+                                              NSUInteger visibleCount) {
+  // Treat zero-visible as one lane's worth so the empty container has
+  // some presence rather than collapsing to ruler-only.
+  NSUInteger laneCountForHeight = MAX((NSUInteger)1, visibleCount);
   CGFloat lanesH;
-  if (uncapped || propsCount <= 2) {
-    lanesH = fullLanesH;
+  if (uncapped || visibleCount <= 2) {
+    lanesH = [KKStageSequencerView heightForLaneCount:laneCountForHeight];
   } else {
     CGFloat h2 = [KKStageSequencerView heightForLaneCount:2];
     CGFloat h3 = [KKStageSequencerView heightForLaneCount:3];
     lanesH = h2 + (h3 - h2) * 0.5;
   }
   CGFloat rulerH = [KKStageSequencerRulerView preferredHeight];
-  // Top inset + ruler + lanes area (which has its own bottom inset).
-  CGFloat seqContainerH = KKPaddingSM + rulerH + lanesH;
+  return KKPaddingSM + rulerH + lanesH;
+}
+
+static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
+                                                        NSUInteger propsCount) {
+  CGFloat fullLanesH = [KKStageSequencerView heightForLaneCount:propsCount];
+  CGFloat rulerH = [KKStageSequencerRulerView preferredHeight];
+  CGFloat seqContainerH = KKSeqContainerHeightForVisible(uncapped, propsCount);
+  CGFloat barH = [KKLaneVisibilityBar preferredHeight];
   return (KKTimingGraphMetrics){
       .fullLanesH = fullLanesH,
       .rulerH = rulerH,
       .seqContainerH = seqContainerH,
-      .wrapperHeight = seqContainerH + KKPaddingLG,
+      .barH = barH,
+      .wrapperHeight = barH + KKPaddingSM + seqContainerH + KKPaddingLG,
   };
 }
 
@@ -920,7 +962,9 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
                                    seqView:(KKStageSequencerView *)seqView
                                  rulerView:
                                      (KKStageSequencerRulerView *)rulerView
-                              playheadView:(KKStagePlayheadView *)playheadView {
+                              playheadView:(KKStagePlayheadView *)playheadView
+                             visibilityBar:(KKLaneVisibilityBar *)visibilityBar
+                                 emptyView:(KKEmptyLanesView *)emptyView {
   if (!uncapped) {
     self.stageSequencer = seqView;
     self.stageSequencerContainer = seqContainer;
@@ -928,6 +972,9 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
     [self _registerMultiStageSequencerView:seqView
                                  rulerView:rulerView
                               playheadView:playheadView];
+    KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+    state.visibilityBar = visibilityBar;
+    state.emptyLanesView = emptyView;
     return;
   }
   KKTimingViewRefs *refs = [[KKTimingViewRefs alloc] init];
@@ -935,6 +982,8 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
   refs.seqContainer = seqContainer;
   refs.ruler = rulerView;
   refs.playhead = playheadView;
+  refs.visibilityBar = visibilityBar;
+  refs.emptyLanesView = emptyView;
   KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
   if (state) {
     if (!state.additionalTimingViews)
@@ -958,19 +1007,37 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
 
+  KKLaneVisibilityBar *visibilityBar = [[KKLaneVisibilityBar alloc] init];
+  visibilityBar.translatesAutoresizingMaskIntoConstraints = NO;
+  [wrapper addSubview:visibilityBar];
+  [NSLayoutConstraint activateConstraints:@[
+    [visibilityBar.leadingAnchor
+        constraintEqualToAnchor:wrapper.leadingAnchor
+                       constant:KKInspectorHorizontalInset],
+    [visibilityBar.trailingAnchor
+        constraintEqualToAnchor:wrapper.trailingAnchor
+                       constant:-KKInspectorHorizontalInset],
+    [visibilityBar.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
+    [visibilityBar.heightAnchor constraintEqualToConstant:metrics.barH],
+  ]];
+
   NSView *seqContainer =
       [self _buildSeqContainerInWrapper:wrapper
+                              topAnchor:visibilityBar.bottomAnchor
+                               topInset:KKPaddingSM
                                uncapped:uncapped
                           seqContainerH:metrics.seqContainerH];
   KKStageSequencerRulerView *rulerView =
       [self _buildSeqRulerInContainer:seqContainer rulerHeight:metrics.rulerH];
   KKStageSequencerView *seqView = nil;
+  KKEmptyLanesView *emptyView = nil;
   [self _buildSeqScrollViewInContainer:seqContainer
                             underRuler:rulerView
                               uncapped:uncapped
                               seqProps:seqProps
                             fullLanesH:metrics.fullLanesH
-                            outSeqView:&seqView];
+                            outSeqView:&seqView
+                          outEmptyView:&emptyView];
   KKStagePlayheadView *playheadView =
       [self _buildSeqPlayheadInContainer:seqContainer
                              rulerHeight:metrics.rulerH];
@@ -979,7 +1046,15 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
                               seqContainer:seqContainer
                                    seqView:seqView
                                  rulerView:rulerView
-                              playheadView:playheadView];
+                              playheadView:playheadView
+                             visibilityBar:visibilityBar
+                                 emptyView:emptyView];
+
+  __weak typeof(self) weakSelf = self;
+  visibilityBar.onPillClicked = ^(NSInteger laneIndex, BOOL optionDown) {
+    [weakSelf _handleLaneVisibilityClickedAtIndex:laneIndex
+                                       optionDown:optionDown];
+  };
 
   [self _wireStageSequencerCallbacksFor:seqView
                               rulerView:rulerView

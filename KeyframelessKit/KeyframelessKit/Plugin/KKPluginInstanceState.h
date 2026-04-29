@@ -7,7 +7,9 @@
 
 #import <AppKit/AppKit.h>
 
+@class KKEmptyLanesView;
 @class KKGradientBarView;
+@class KKLaneVisibilityBar;
 @class KKStagePlayheadView;
 @class KKStageSequencerRulerView;
 @class KKStageSequencerView;
@@ -22,6 +24,8 @@
 @property(nonatomic, weak, nullable) NSView *seqContainer;
 @property(nonatomic, weak, nullable) KKStageSequencerRulerView *ruler;
 @property(nonatomic, weak, nullable) KKStagePlayheadView *playhead;
+@property(nonatomic, weak, nullable) KKLaneVisibilityBar *visibilityBar;
+@property(nonatomic, weak, nullable) KKEmptyLanesView *emptyLanesView;
 - (BOOL)isAlive;
 @end
 
@@ -96,10 +100,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// writes are ignored and undo/redo changes are detected.
 @property(nonatomic, copy, nullable) NSString *gradientJSONSnapshot;
 
-/// Lane labels the plugin currently wants hidden from the sequencer view.
-/// Updated by `-multiStageRefreshLaneVisibility`; applied as a filter to
-/// every `seq.lanes =` push.
+/// Lane labels currently hidden from the sequencer view. Combines the
+/// plugin-suppressed set (from `-hiddenAnimatablePropertyLabels`) with the
+/// user-toggled set (lanes whose `visibleInSequencer == NO` in JSON).
+/// Applied as a filter to every `seq.lanes =` push.
 @property(nonatomic, copy, nullable) NSSet<NSString *> *hiddenLaneLabels;
+
+/// The live lane-visibility-bar view for this instance (weak — auto-nils on
+/// dealloc). Sync pump pushes lane label/state updates here on JSON change.
+@property(nonatomic, weak, nullable) KKLaneVisibilityBar *visibilityBar;
+
+/// Empty-state overlay shown when every lane is user-hidden (weak).
+@property(nonatomic, weak, nullable) KKEmptyLanesView *emptyLanesView;
 
 /// Whether the sequencer's loop-playback toggle is on. Session-scoped (not
 /// persisted across FCP restarts, not written to a param). Written from the

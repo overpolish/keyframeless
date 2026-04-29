@@ -233,6 +233,7 @@ NSArray<KKTimingLane *> *KKTimingRebalancedLanes(NSArray<KKTimingLane *> *lanes,
   l.segments = segments;
   l.enabled = enabled;
   l.oscVisible = YES;
+  l.visibleInSequencer = YES;
   // Default: select first hold segment.
   l.selectedSegment = -1;
   for (NSUInteger i = 0; i < segments.count; i++) {
@@ -278,6 +279,7 @@ NSArray<KKTimingLane *> *KKTimingRebalancedLanes(NSArray<KKTimingLane *> *lanes,
   c.selectedSegment = _selectedSegment;
   c.hasOSC = _hasOSC;
   c.oscVisible = _oscVisible;
+  c.visibleInSequencer = _visibleInSequencer;
   c.lastKnownClipDuration = _lastKnownClipDuration;
   return c;
 }

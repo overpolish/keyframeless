@@ -29,8 +29,10 @@ static void KKApplySequencerState(KKPlugin *plugin, KKStageSequencerView *seq,
     return;
   seqContainer.hidden = NO;
   if (lanes) {
-    NSSet<NSString *> *hidden =
+    NSSet<NSString *> *pluginHidden =
         [plugin hiddenAnimatablePropertyLabels] ?: [NSSet set];
+    NSSet<NSString *> *hidden =
+        KKEffectiveHiddenLaneLabels(pluginHidden, lanes);
     seq.lanes = KKFilterLanesForVisibility(lanes, hidden);
   }
   if (hasTiming) {
