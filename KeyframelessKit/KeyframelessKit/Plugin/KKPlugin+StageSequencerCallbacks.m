@@ -6,6 +6,7 @@
 #import "../KKLog.h"
 #import "../Math/KKTimingStage.h"
 #import "../Views/KKAnimatableProperty.h"
+#import "../Views/StageSequencer/KKLaneVisibilityBar.h"
 #import "../Views/StageSequencer/KKStagePlayheadView.h"
 #import "../Views/StageSequencer/KKStageSequencerRulerView.h"
 #import "../Views/StageSequencer/KKStageSequencerView.h"
@@ -267,6 +268,10 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
   NSMutableArray<NSNumber *> *newSegPerLane = [NSMutableArray array];
   for (NSUInteger li = 0; li < lanes.count; li++) {
     KKTimingLane *lane = lanes[li];
+    if (!lane.visibleInSequencer) {
+      [newSegPerLane addObject:@(-1)];
+      continue;
+    }
     NSInteger newIdx = -1;
     for (NSUInteger si = 0; si < lane.segments.count; si++) {
       KKTimingSegment *s = lane.segments[si];
@@ -394,6 +399,76 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
   [actAPI endAction:self];
   if (state)
     state.selectionInProgress = NO;
+  [self timingGraphApplyState];
+}
+
+- (void)_handleLaneVisibilityClickedAtIndex:(NSInteger)laneIndex
+                                 optionDown:(BOOL)optionDown {
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  NSMutableArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, getAPI);
+  if (!lanes || laneIndex < 0 || (NSUInteger)laneIndex >= lanes.count) {
+    [actAPI endAction:self];
+    return;
+  }
+
+  // Solo logic: option-click on a lane that's already the only-visible one
+  // unsolos (all visible). Otherwise option-click solos the clicked lane.
+  // Plain click toggles the clicked lane.
+  BOOL clickedCurrentlyVisible = lanes[laneIndex].visibleInSequencer;
+  NSInteger visibleCount = 0;
+  for (KKTimingLane *lane in lanes)
+    if (lane.visibleInSequencer)
+      visibleCount++;
+  BOOL clickedIsOnlyVisible = clickedCurrentlyVisible && visibleCount == 1;
+
+  for (NSUInteger i = 0; i < lanes.count; i++) {
+    KKTimingLane *lane = [lanes[i] copy];
+    BOOL want;
+    if (optionDown) {
+      want = clickedIsOnlyVisible ? YES : ((NSInteger)i == laneIndex);
+    } else {
+      want = ((NSInteger)i == laneIndex) ? !clickedCurrentlyVisible
+                                         : lane.visibleInSequencer;
+    }
+    lane.visibleInSequencer = want;
+    lanes[i] = lane;
+  }
+
+  KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
+
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  if (state) {
+    state.lanesSnapshot = [lanes copy];
+    state.pendingLanes = nil;
+    NSSet<NSString *> *pluginHidden =
+        [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
+    state.hiddenLaneLabels = KKEffectiveHiddenLaneLabels(pluginHidden, lanes);
+    NSArray<KKTimingLane *> *visible =
+        KKFilterLanesForVisibility(lanes, state.hiddenLaneLabels);
+    KKStageSequencerView *seq = state.sequencerView;
+    NSArray<KKTimingViewRefs *> *extras =
+        [state.additionalTimingViews copy] ?: @[];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      seq.lanes = visible;
+      for (KKTimingViewRefs *r in extras)
+        r.seqView.lanes = visible;
+    });
+    KKPushLanesToVisibilityBar(state.visibilityBar, lanes);
+    KKApplyEmptyLanesVisibility(state.emptyLanesView, lanes);
+    for (KKTimingViewRefs *r in extras) {
+      KKPushLanesToVisibilityBar(r.visibilityBar, lanes);
+      KKApplyEmptyLanesVisibility(r.emptyLanesView, lanes);
+    }
+  }
+
+  [actAPI endAction:self];
   [self timingGraphApplyState];
 }
 
@@ -608,6 +683,8 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
 
   BOOL anyChanged = NO;
   for (NSUInteger li = 0; li < lanes.count; li++) {
+    if (!lanes[li].visibleInSequencer)
+      continue;
     KKTimingLane *lane = [lanes[li] copy];
     NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
 
@@ -736,6 +813,8 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
 
   BOOL anyChanged = NO;
   for (NSUInteger li = 0; li < lanes.count; li++) {
+    if (!lanes[li].visibleInSequencer)
+      continue;
     KKTimingLane *lane = [lanes[li] copy];
     NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
     if (segs.count <= 1)
@@ -877,6 +956,8 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
 
   BOOL anyChanged = NO;
   for (NSUInteger li = 0; li < lanes.count; li++) {
+    if (!lanes[li].visibleInSequencer)
+      continue;
     KKTimingLane *lane = [lanes[li] copy];
     NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
     NSInteger hitIdx = -1;
@@ -933,6 +1014,8 @@ KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props, NSString *label) {
 
   BOOL anyChanged = NO;
   for (NSUInteger li = 0; li < lanes.count; li++) {
+    if (!lanes[li].visibleInSequencer)
+      continue;
     KKTimingLane *lane = [lanes[li] copy];
     NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
     NSInteger hitIdx = -1;

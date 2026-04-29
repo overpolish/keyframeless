@@ -26,6 +26,7 @@ static NSString *const kKeySegments = @"segs";
 static NSString *const kKeyEnabled = @"on";
 static NSString *const kKeySelectedSeg = @"sel";
 static NSString *const kKeyOscVisible = @"osc";
+static NSString *const kKeyVisibleInSeq = @"vis";
 static NSString *const kKeyLastKnownDur = @"lkd";
 
 static const NSInteger kCurrentVersion = 3;
@@ -103,6 +104,7 @@ static const NSInteger kCurrentVersion = 3;
       kKeyEnabled : @(lane.enabled),
       kKeySelectedSeg : @(lane.selectedSegment),
       kKeyOscVisible : @(lane.oscVisible),
+      kKeyVisibleInSeq : @(lane.visibleInSequencer),
       kKeyLastKnownDur : @(lane.lastKnownClipDuration),
       kKeySegments : segsArray,
     }];
@@ -162,6 +164,8 @@ static const NSInteger kCurrentVersion = 3;
       lane.selectedSegment = selNum.integerValue;
     NSNumber *oscNum = laneDict[kKeyOscVisible];
     lane.oscVisible = oscNum ? oscNum.boolValue : YES;
+    NSNumber *visNum = laneDict[kKeyVisibleInSeq];
+    lane.visibleInSequencer = visNum ? visNum.boolValue : YES;
     lane.lastKnownClipDuration = [laneDict[kKeyLastKnownDur] doubleValue];
     [result addObject:lane];
   }
