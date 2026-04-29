@@ -789,23 +789,15 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
   if (lanes || seqProps.count == 0)
     return lanes;
 
-  // FxPlug's `getStringParameterValue` returns nil when read from a freshly
-  // re-created custom view before the host has fully wired the action scope
-  // — even though the param has persisted data. Distinguish that transient
-  // failure from a genuine first-time view (where the host returns a
-  // non-nil empty/invalid string) so we don't reseed defaults over real
-  // user data on inspector re-mounts.
-  NSString *rawJSON = nil;
-  [paramGetAPI getStringParameterValue:&rawJSON
-                         fromParameter:kKKParamMultiStageData];
-  if (rawJSON == nil) {
-    // XPC read failure. Recover from in-memory snapshot if we have one;
-    // otherwise return nil and let the next pump tick re-read. Never seed
-    // defaults on a nil read — that destroys persisted data.
-    KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
-    NSArray<KKTimingLane *> *snapshot = state.lanesSnapshot;
-    return snapshot.count > 0 ? snapshot : nil;
-  }
+  // Real read failed. Prefer in-memory snapshot if we have one (re-mount
+  // recovery). Otherwise fall through and build display-only defaults so
+  // the sequencer isn't visually empty — but never persist them, since a
+  // nil read can mean "scope not wired yet" rather than "no data". A
+  // first user edit will eventually persist real JSON.
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  NSArray<KKTimingLane *> *snapshot = state.lanesSnapshot;
+  if (snapshot.count > 0)
+    return snapshot;
 
   NSSet<NSString *> *oscOffByDefault =
       [self animatablePropertyLabelsWithOSCDefaultOff];
@@ -821,12 +813,6 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
     if ([oscOffByDefault containsObject:prop.label])
       lane.oscVisible = NO;
     [defaults addObject:lane];
-  }
-  NSString *seeded = [KKTimingLane jsonFromLanes:defaults];
-  if (seeded) {
-    id<FxParameterSettingAPI_v5> setAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    [setAPI setStringParameterValue:seeded toParameter:kKKParamMultiStageData];
   }
   return defaults;
 }
@@ -878,6 +864,17 @@ static NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
     instState.hiddenLaneLabels = hidden;
     seqView.lanes = KKFilterLanesForVisibility(lanes, hidden);
   }
+
+  // FCP often can't deliver the real persisted JSON during the initial
+  // create-view scope. Schedule a deferred re-apply on the next runloop
+  // tick — by then FCP has wired the action scope and the read returns
+  // the actual data, replacing the displayed defaults without needing
+  // user interaction. Safe in Motion: if the read still fails, the
+  // snapshot fallback inside KKReadLanesRebalanced makes it a no-op.
+  __weak typeof(self) weakSelf = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [weakSelf timingGraphApplyState];
+  });
 
   [self _seedPlayheadForSeqView:seqView
                       rulerView:rulerView

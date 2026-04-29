@@ -9,6 +9,7 @@
 
 #import "../Math/KKTimingStage.h"
 #import "KKConstants.h"
+#import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
 
@@ -41,8 +42,17 @@ KKReadLanesRebalanced(id<PROAPIAccessing> apiManager,
   NSString *json = nil;
   [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
   NSArray<KKTimingLane *> *raw = [KKTimingLane lanesFromJSON:json];
-  if (!raw)
-    return nil;
+  if (!raw) {
+    // Param read failed (FxPlug XPC scope often isn't wired in custom-view
+    // callbacks even inside startAction/endAction). Fall back to the
+    // last-known in-memory snapshot so click handlers and the pump can
+    // keep operating on the same data the sequencer is displaying.
+    KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
+    if (state.lanesSnapshot.count > 0)
+      raw = state.lanesSnapshot;
+    else
+      return nil;
+  }
   double dur = KKCurrentEffectDurationSeconds(apiManager);
   NSArray<KKTimingLane *> *balanced =
       (dur > 0) ? KKTimingRebalancedLanes(raw, dur) : raw;
