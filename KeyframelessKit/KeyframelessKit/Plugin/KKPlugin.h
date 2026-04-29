@@ -299,11 +299,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// empty set by default.
 - (NSSet<NSString *> *)animatablePropertyLabelsWithOSCDefaultOff;
 
-/// Recomputes `-hiddenAnimatablePropertyLabels`; if it differs from the last
-/// snapshot, re-pushes the filtered lanes to the sequencer view. Safe to
-/// over-call.
-- (void)multiStageRefreshLaneVisibility;
-
 /// Reads the bool at forceShowParamID; if YES, sets every param in paramIDs
 /// to kFxParameterFlag_DEFAULT and returns YES.  Caller should early-return
 /// from updateParameterVisibilityAtTime: when this returns YES.
@@ -354,6 +349,13 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
                        expandedParamID:(UInt32)expandedParamID
     NS_RETURNS_RETAINED;
 
+@end
+
+@interface KKPlugin (MultiStageInstance)
+/// Recomputes `-hiddenAnimatablePropertyLabels`; if it differs from the last
+/// snapshot, re-pushes the filtered lanes to the sequencer view. Safe to
+/// over-call.
+- (void)multiStageRefreshLaneVisibility;
 @end
 
 NS_ASSUME_NONNULL_END

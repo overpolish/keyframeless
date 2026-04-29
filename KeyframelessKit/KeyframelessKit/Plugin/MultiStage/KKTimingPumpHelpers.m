@@ -7,12 +7,12 @@
 /// stage-sequencer callbacks, and the custom-view state-apply path.
 /// Declared in KKPlugin_Private.h.
 
-#import "../Math/KKTimingStage.h"
-#import "../Views/StageSequencer/KKEmptyLanesView.h"
-#import "../Views/StageSequencer/KKLaneVisibilityBar.h"
-#import "KKConstants.h"
-#import "KKPluginInstanceState.h"
-#import "KKPlugin_Private.h"
+#import "../../Math/KKTimingStage.h"
+#import "../../Views/StageSequencer/KKEmptyLanesView.h"
+#import "../../Views/StageSequencer/KKLaneVisibilityBar.h"
+#import "../KKConstants.h"
+#import "../KKPluginInstanceState.h"
+#import "../KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
 
 NSArray<KKTimingLane *> *
