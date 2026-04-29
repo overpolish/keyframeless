@@ -135,42 +135,127 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
   return YES;
 }
 
+- (NSView *)_buildBulkHeaderRow {
+  NSImageView *icon = [[NSImageView alloc] initWithFrame:NSZeroRect];
+  NSImage *img =
+      [NSImage imageWithSystemSymbolName:@"rectangle.on.rectangle.angled"
+                accessibilityDescription:@"Bulk edit"];
+  NSImageSymbolConfiguration *cfg = [NSImageSymbolConfiguration
+      configurationWithPointSize:11.0
+                          weight:NSFontWeightMedium];
+  icon.image = [img imageWithSymbolConfiguration:cfg];
+  icon.contentTintColor = [NSColor inspectorLabel];
+  icon.translatesAutoresizingMaskIntoConstraints = NO;
+  [self addSubview:icon];
+
+  NSTextField *label = [NSTextField labelWithString:@"Bulk Edit"];
+  label.font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightMedium];
+  label.textColor = [NSColor inspectorLabel];
+  label.translatesAutoresizingMaskIntoConstraints = NO;
+  [self addSubview:label];
+
+  [NSLayoutConstraint activateConstraints:@[
+    [icon.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                       constant:kHPadding],
+    [icon.topAnchor constraintEqualToAnchor:self.topAnchor
+                                   constant:kVPadding / 2.0],
+    [icon.widthAnchor constraintEqualToConstant:14.0],
+    [icon.heightAnchor constraintEqualToConstant:kBulkHeaderHeight],
+    [label.leadingAnchor constraintEqualToAnchor:icon.trailingAnchor
+                                        constant:5.0],
+    [label.centerYAnchor constraintEqualToAnchor:icon.centerYAnchor],
+  ]];
+  return icon;
+}
+
+- (NSView *)_buildLinkedRowBelow:(NSView *)anchorView {
+  __weak typeof(self) weakSelf = self;
+  NSTextField *linkedLabel = [NSTextField labelWithString:@"Linked"];
+  linkedLabel.font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightMedium];
+  linkedLabel.textColor = [NSColor inspectorLabel];
+  linkedLabel.translatesAutoresizingMaskIntoConstraints = NO;
+  linkedLabel.toolTip = @"Maintain proportions across components (e.g. "
+                        @"keep Radius X/Y aspect-locked through wobble)";
+  [self addSubview:linkedLabel];
+
+  _linkedToggle = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
+  _linkedToggle.translatesAutoresizingMaskIntoConstraints = NO;
+  _linkedToggle.isChecked = _linked;
+  _linkedToggle.toolTip = linkedLabel.toolTip;
+  _linkedToggle.onToggle = ^(BOOL isOn) {
+    __strong typeof(weakSelf) self = weakSelf;
+    if (!self)
+      return;
+    self->_linked = isOn;
+    if (self.onLinkedChanged)
+      self.onLinkedChanged(isOn);
+  };
+  [self addSubview:_linkedToggle];
+
+  [NSLayoutConstraint activateConstraints:@[
+    [linkedLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                              constant:kHPadding],
+    [linkedLabel.centerYAnchor
+        constraintEqualToAnchor:_linkedToggle.centerYAnchor],
+
+    [_linkedToggle.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                                 constant:-kHPadding],
+    [_linkedToggle.topAnchor constraintEqualToAnchor:anchorView.bottomAnchor
+                                            constant:kRowGap],
+    [_linkedToggle.widthAnchor constraintEqualToConstant:kLinkedHeight],
+    [_linkedToggle.heightAnchor constraintEqualToConstant:kLinkedHeight],
+  ]];
+  return _linkedToggle;
+}
+
+- (void)_buildSeedRowBelow:(NSView *)anchorView {
+  __weak typeof(self) weakSelf = self;
+  NSTextField *seedLabel = [NSTextField labelWithString:@"Seed"];
+  seedLabel.font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightMedium];
+  seedLabel.textColor = [NSColor inspectorLabel];
+  seedLabel.translatesAutoresizingMaskIntoConstraints = NO;
+  [self addSubview:seedLabel];
+
+  _seedView = [[KKSeedView alloc] initWithFrame:NSZeroRect];
+  _seedView.translatesAutoresizingMaskIntoConstraints = NO;
+  _seedView.onSeedChanged = ^(uint32_t newSeed) {
+    __strong typeof(weakSelf) self = weakSelf;
+    if (!self)
+      return;
+    self->_seed = newSeed;
+    if (self.onSeedChanged)
+      self.onSeedChanged(newSeed);
+  };
+  _seedView.onReroll = ^{
+    __strong typeof(weakSelf) self = weakSelf;
+    if (!self)
+      return;
+    if (self.onSeedReroll)
+      self.onSeedReroll();
+  };
+  [self addSubview:_seedView];
+
+  [NSLayoutConstraint activateConstraints:@[
+    [seedLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                            constant:kHPadding],
+    [seedLabel.centerYAnchor constraintEqualToAnchor:_seedView.centerYAnchor],
+
+    [_seedView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                             constant:-kHPadding],
+    [_seedView.topAnchor constraintEqualToAnchor:anchorView.bottomAnchor
+                                        constant:kRowGap],
+    [_seedView.heightAnchor constraintEqualToConstant:kSeedHeight],
+    [_seedView.widthAnchor constraintEqualToConstant:120.0],
+  ]];
+}
+
 - (void)buildUI {
   __weak typeof(self) weakSelf = self;
 
   NSView *pillTopReference = self;
   CGFloat pillTopConstant = kVPadding;
   if (_bulkHeader) {
-    NSImageView *icon = [[NSImageView alloc] initWithFrame:NSZeroRect];
-    NSImage *img =
-        [NSImage imageWithSystemSymbolName:@"rectangle.on.rectangle.angled"
-                  accessibilityDescription:@"Bulk edit"];
-    NSImageSymbolConfiguration *cfg = [NSImageSymbolConfiguration
-        configurationWithPointSize:11.0
-                            weight:NSFontWeightMedium];
-    icon.image = [img imageWithSymbolConfiguration:cfg];
-    icon.contentTintColor = [NSColor inspectorLabel];
-    icon.translatesAutoresizingMaskIntoConstraints = NO;
-    [self addSubview:icon];
-
-    NSTextField *label = [NSTextField labelWithString:@"Bulk Edit"];
-    label.font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightMedium];
-    label.textColor = [NSColor inspectorLabel];
-    label.translatesAutoresizingMaskIntoConstraints = NO;
-    [self addSubview:label];
-
-    [NSLayoutConstraint activateConstraints:@[
-      [icon.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
-                                         constant:kHPadding],
-      [icon.topAnchor constraintEqualToAnchor:self.topAnchor
-                                     constant:kVPadding / 2.0],
-      [icon.widthAnchor constraintEqualToConstant:14.0],
-      [icon.heightAnchor constraintEqualToConstant:kBulkHeaderHeight],
-      [label.leadingAnchor constraintEqualToAnchor:icon.trailingAnchor
-                                          constant:5.0],
-      [label.centerYAnchor constraintEqualToAnchor:icon.centerYAnchor],
-    ]];
-    pillTopReference = icon;
+    pillTopReference = [self _buildBulkHeaderRow];
     pillTopConstant = kRowGap;
   }
 
@@ -295,89 +380,10 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
   ]];
 
   if (_kind == KKSegmentEditKindHold) {
-    NSView *seedTopAnchorView = (NSView *)_intensityTicks;
-
-    if (_showsLinked) {
-      NSTextField *linkedLabel = [NSTextField labelWithString:@"Linked"];
-      linkedLabel.font = [NSFont systemFontOfSize:11.0
-                                           weight:NSFontWeightMedium];
-      linkedLabel.textColor = [NSColor inspectorLabel];
-      linkedLabel.translatesAutoresizingMaskIntoConstraints = NO;
-      linkedLabel.toolTip = @"Maintain proportions across components (e.g. "
-                            @"keep Radius X/Y aspect-locked through wobble)";
-      [self addSubview:linkedLabel];
-
-      _linkedToggle = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
-      _linkedToggle.translatesAutoresizingMaskIntoConstraints = NO;
-      _linkedToggle.isChecked = _linked;
-      _linkedToggle.toolTip = linkedLabel.toolTip;
-      _linkedToggle.onToggle = ^(BOOL isOn) {
-        __strong typeof(weakSelf) self = weakSelf;
-        if (!self)
-          return;
-        self->_linked = isOn;
-        if (self.onLinkedChanged)
-          self.onLinkedChanged(isOn);
-      };
-      [self addSubview:_linkedToggle];
-
-      [NSLayoutConstraint activateConstraints:@[
-        [linkedLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
-                                                  constant:kHPadding],
-        [linkedLabel.centerYAnchor
-            constraintEqualToAnchor:_linkedToggle.centerYAnchor],
-
-        [_linkedToggle.trailingAnchor
-            constraintEqualToAnchor:self.trailingAnchor
-                           constant:-kHPadding],
-        [_linkedToggle.topAnchor
-            constraintEqualToAnchor:_intensityTicks.bottomAnchor
-                           constant:kRowGap],
-        [_linkedToggle.widthAnchor constraintEqualToConstant:kLinkedHeight],
-        [_linkedToggle.heightAnchor constraintEqualToConstant:kLinkedHeight],
-      ]];
-
-      seedTopAnchorView = _linkedToggle;
-    }
-
-    NSTextField *seedLabel = [NSTextField labelWithString:@"Seed"];
-    seedLabel.font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightMedium];
-    seedLabel.textColor = [NSColor inspectorLabel];
-    seedLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    [self addSubview:seedLabel];
-
-    _seedView = [[KKSeedView alloc] initWithFrame:NSZeroRect];
-    _seedView.translatesAutoresizingMaskIntoConstraints = NO;
-    _seedView.onSeedChanged = ^(uint32_t newSeed) {
-      __strong typeof(weakSelf) self = weakSelf;
-      if (!self)
-        return;
-      self->_seed = newSeed;
-      if (self.onSeedChanged)
-        self.onSeedChanged(newSeed);
-    };
-    _seedView.onReroll = ^{
-      __strong typeof(weakSelf) self = weakSelf;
-      if (!self)
-        return;
-      if (self.onSeedReroll)
-        self.onSeedReroll();
-    };
-    [self addSubview:_seedView];
-
-    [NSLayoutConstraint activateConstraints:@[
-      [seedLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
-                                              constant:kHPadding],
-      [seedLabel.centerYAnchor constraintEqualToAnchor:_seedView.centerYAnchor],
-
-      [_seedView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
-                                               constant:-kHPadding],
-      [_seedView.topAnchor
-          constraintEqualToAnchor:seedTopAnchorView.bottomAnchor
-                         constant:kRowGap],
-      [_seedView.heightAnchor constraintEqualToConstant:kSeedHeight],
-      [_seedView.widthAnchor constraintEqualToConstant:120.0],
-    ]];
+    NSView *seedTopAnchor = _showsLinked
+                                ? [self _buildLinkedRowBelow:_intensityTicks]
+                                : (NSView *)_intensityTicks;
+    [self _buildSeedRowBelow:seedTopAnchor];
   }
 }
 

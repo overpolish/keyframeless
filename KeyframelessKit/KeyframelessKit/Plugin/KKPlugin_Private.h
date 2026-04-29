@@ -56,6 +56,11 @@ KKLaneJSONIndexForViewIndex(NSInteger viewIndex,
                             NSArray<KKTimingLane *> *jsonLanes,
                             NSSet<NSString *> *_Nullable hidden);
 
+/// Identifier stamped on the single root subview added into a remote window's
+/// host. Lets a subsequent open (help or sequencer) cleanly replace prior
+/// content without disturbing the host-managed `parentView`.
+extern NSUserInterfaceItemIdentifier const KKRemoteWindowContentID;
+
 /// Current clip duration in seconds for the plugin instance behind
 /// `apiManager`, or 0 when `FxTimingAPI_v4` is unavailable.
 extern double KKCurrentEffectDurationSeconds(id<PROAPIAccessing> apiManager);
@@ -82,6 +87,16 @@ extern NSMutableArray<KKTimingLane *> *_Nullable KKReadLanesRebalanced(
 - (NSView *)_createColorCustomUI:(UInt32)parameterID;
 @end
 
+@interface KKPlugin (TimingHeader)
+- (NSView *)_createTimingHeader:(UInt32)parameterID;
+- (NSView *)_createMotionBlurHeader:(UInt32)parameterID;
+- (void)_openTimingRemoteWindow;
+@end
+
+@interface KKPlugin (SequencerBuilder)
+- (NSView *)_createTimingGraphViewUncapped:(BOOL)uncapped;
+@end
+
 @interface KKPlugin (TimingGraph)
 - (void)timingGraphApplyState;
 - (void)_applyHTHParameterFlagsForLanes:(NSArray<KKTimingLane *> *)lanes;
@@ -98,6 +113,20 @@ extern NSMutableArray<KKTimingLane *> *_Nullable KKReadLanesRebalanced(
                                                    sourceView;
 @end
 
+@class KKAnimatableProperty;
+
+/// Writes `lanes` to the shared `kKKParamMultiStageData` JSON param. HTH
+/// transitions are normalized in-place before serialization. Pass
+/// `[self _kindsByLaneLabel]` for `kindsByLabel`; nil falls back to
+/// normalize-everything.
+extern void KKWriteLanesJSON(
+    NSArray<KKTimingLane *> *lanes, id<FxParameterSettingAPI_v5> setAPI,
+    NSDictionary<NSString *, NSArray<NSNumber *> *> *_Nullable kindsByLabel);
+
+/// Looks up the animatable property by `label`, or nil when no match.
+extern KKAnimatableProperty *_Nullable KKPropertyByLabel(
+    NSArray<KKAnimatableProperty *> *props, NSString *label);
+
 @interface KKPlugin (StageSequencerCallbacks)
 /// Wires the sequencer view's `onX` block callbacks (segment selection,
 /// lane toggles, segment add/remove/move/copy, playhead scrub, zoom/pan
@@ -106,11 +135,51 @@ extern NSMutableArray<KKTimingLane *> *_Nullable KKReadLanesRebalanced(
 - (void)_wireStageSequencerCallbacksFor:(KKStageSequencerView *)seqView
                               rulerView:(KKStageSequencerRulerView *)rulerView
                            playheadView:(KKStagePlayheadView *)playheadView;
+@end
+
+@class KKTimingLane;
+
+@interface KKPlugin (HandlersSelection)
+- (void)_handleSegmentSelectedAtLane:(NSInteger)laneIndex
+                             segment:(NSInteger)segmentIndex;
+- (void)_handleAllLanesSegmentSelectedAtPosition:(double)position;
+- (void)_handleLaneToggledAtIndex:(NSInteger)laneIndex enabled:(BOOL)enabled;
 /// Handles a click on a lane-visibility-bar pill: toggles or solos the
 /// lane (option-click solos / unsolos when already only-visible), persists
 /// the new visibility state, and refreshes the sequencer + bar.
 - (void)_handleLaneVisibilityClickedAtIndex:(NSInteger)laneIndex
                                  optionDown:(BOOL)optionDown;
+- (void)_handleLaneOSCVisibilityAtIndex:(NSInteger)laneIndex
+                                visible:(BOOL)visible;
+- (void)_handleLaneChangedAtIndex:(NSInteger)laneIndex
+                             lane:(KKTimingLane *)updatedLane;
+- (void)_handleLanesChangedAtIndexes:(NSArray<NSNumber *> *)laneIndexes
+                               lanes:(NSArray<KKTimingLane *> *)updatedLanes;
+- (void)_handleSegmentValuesCopiedAtLane:(NSInteger)laneIndex
+                                     src:(NSInteger)srcSegmentIndex
+                                     dst:(NSInteger)dstSegmentIndex;
+@end
+
+@interface KKPlugin (HandlersStructure)
+- (void)_handleSegmentAddedAtLane:(NSInteger)laneIndex
+                         position:(double)position;
+- (void)_handleAllLanesSegmentAddedAtPosition:(double)position;
+- (void)_handleSegmentRemovedAtLane:(NSInteger)laneIndex
+                            segment:(NSInteger)segmentIndex;
+- (void)_handleAllLanesSegmentRemovedAtPosition:(double)position;
+@end
+
+@interface KKPlugin (HandlersModifiers)
+- (void)_handleSegmentTypeToggledAtLane:(NSInteger)laneIndex
+                                segment:(NSInteger)segmentIndex;
+- (void)_handleSegmentLockToggledAtLane:(NSInteger)laneIndex
+                                segment:(NSInteger)segmentIndex
+                               duration:(double)newLockedSeconds;
+- (void)_handleAllLanesSegmentTypesToggledAtPosition:(double)position;
+- (void)_handleAllLanesSegmentLockToggledAtPosition:(double)position
+                                               lock:(BOOL)lock;
+- (void)_handleRulerLoopToggled:(BOOL)newState;
+- (void)_handleRulerPlayheadScrubToFraction:(double)fraction;
 @end
 
 @interface KKPlugin (MultiStagePumpInternal)

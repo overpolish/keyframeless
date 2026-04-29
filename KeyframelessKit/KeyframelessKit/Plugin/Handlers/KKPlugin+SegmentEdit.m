@@ -3,14 +3,14 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-#import "../Math/KKEasing.h"
-#import "../Math/KKTimingStage.h"
-#import "../Views/KKAnimatableProperty.h"
-#import "../Views/KKSegmentEditView.h"
-#import "../Views/StageSequencer/KKStageSequencerView.h"
-#import "KKConstants.h"
-#import "KKPluginInstanceState.h"
-#import "KKPlugin_Private.h"
+#import "../../Math/KKEasing.h"
+#import "../../Math/KKTimingStage.h"
+#import "../../Views/KKAnimatableProperty.h"
+#import "../../Views/KKSegmentEditView.h"
+#import "../../Views/StageSequencer/KKStageSequencerView.h"
+#import "../KKConstants.h"
+#import "../KKPluginInstanceState.h"
+#import "../KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
 
 #pragma clang diagnostic push

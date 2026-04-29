@@ -28,8 +28,7 @@
     iconView.contentTintColor =
         [[NSColor inspectorLabel] colorWithAlphaComponent:0.45];
 
-    NSTextField *label =
-        [NSTextField labelWithString:@"All lanes hidden — click a pill above"];
+    NSTextField *label = [NSTextField labelWithString:@"All lanes hidden"];
     label.font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightMedium];
     label.textColor = [[NSColor inspectorLabel] colorWithAlphaComponent:0.45];
     label.backgroundColor = [NSColor clearColor];
