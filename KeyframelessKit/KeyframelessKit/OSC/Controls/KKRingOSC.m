@@ -113,6 +113,15 @@ static NSColor *ringActiveStrokeColor(void) {
          _ringOutlineWidth;
 }
 
+- (void)clearCursorIfSet {
+  if (!_cursorSet)
+    return;
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  [oscAPI setCursor:[NSCursor arrowCursor]];
+  _cursorSet = NO;
+}
+
 - (void)updateCursorForMouseX:(double)positionX positionY:(double)positionY {
   double dx = positionX - _center.x;
   double dy = positionY - _center.y;

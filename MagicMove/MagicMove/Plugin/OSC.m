@@ -78,6 +78,8 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
   double _rotRingDragPrevPos;
 
   BOOL _anchorHovered, _anchorDragging;
+
+  CFTimeInterval _lastHitTestTimestamp;
 }
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
@@ -373,7 +375,14 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
 
   CGEventFlags flags =
       CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
-  BOOL optHeld = (flags & kCGEventFlagMaskAlternate) != 0;
+  // Only treat Opt as a canvas "peek" modifier if the mouse has recently
+  // moved over the canvas viewer (hit-test is the only signal we get for
+  // canvas hover). Otherwise an Opt-click in the inspector would force-show
+  // the rot X/Y rings until the next mouse move clears them.
+  BOOL canvasActive = (CACurrentMediaTime() - _lastHitTestTimestamp) < 0.5 ||
+                      _arcDragging || _scaleRingDragging || _rotDragging ||
+                      _rotXRingDragging || _rotYRingDragging || _anchorDragging;
+  BOOL optHeld = ((flags & kCGEventFlagMaskAlternate) != 0) && canvasActive;
 
   BOOL positionVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
                                                         label:@"Position"];
@@ -507,6 +516,7 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
   _rotXRingHovered = NO;
   _rotYRingHovered = NO;
   _anchorHovered = NO;
+  _lastHitTestTimestamp = CACurrentMediaTime();
 
   CGPoint center = [self canvasCenter];
   float arcOuter = self.oscRadius + self.outlineWidth;
@@ -566,6 +576,8 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
       *activePart = kOSCRotXRingPart;
       return;
     }
+  } else {
+    [_rotXRing clearCursorIfSet];
   }
   if (rotYVisible || optHeld) {
     _rotYRing.center = center;
@@ -576,6 +588,8 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
       *activePart = kOSCRotYRingPart;
       return;
     }
+  } else {
+    [_rotYRing clearCursorIfSet];
   }
 
   if (scaleVisible) {

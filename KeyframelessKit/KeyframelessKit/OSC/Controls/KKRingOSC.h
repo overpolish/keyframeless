@@ -43,6 +43,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// center. Call during drag to keep the cursor aligned with drag direction.
 - (void)updateCursorForMouseX:(double)positionX positionY:(double)positionY;
 
+/// Resets cursor to arrow if this ring previously set a hover cursor. Call
+/// when skipping hit-test on a ring that may have been hovered, to avoid a
+/// stale cursor.
+- (void)clearCursorIfSet;
+
 @end
 
 NS_ASSUME_NONNULL_END
