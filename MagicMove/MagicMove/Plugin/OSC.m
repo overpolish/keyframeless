@@ -360,6 +360,15 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
                                                   CGPoint p, simd_uint2 v){
                                        }];
 
+  // Anchor square is independent; draw first so it sits under all other OSCs.
+  CGPoint anchorCanvas = [self canvasPositionForParam:kParamAnchorPoint
+                                               atTime:time];
+  [_anchorOSC drawAtCanvasPosition:anchorCanvas
+                         isHovered:_anchorHovered
+                          isActive:_anchorDragging
+                  destinationImage:destinationImage
+                            atTime:time];
+
   [_positionSnap drawSnapGuidesWithOSC:self
                          isObjectSpace:NO
                       destinationImage:destinationImage];
@@ -494,15 +503,6 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
               destinationImage:destinationImage
                         atTime:time];
   }
-
-  // Anchor square is independent.
-  CGPoint anchorCanvas = [self canvasPositionForParam:kParamAnchorPoint
-                                               atTime:time];
-  [_anchorOSC drawAtCanvasPosition:anchorCanvas
-                         isHovered:_anchorHovered
-                          isActive:_anchorDragging
-                  destinationImage:destinationImage
-                            atTime:time];
 }
 
 - (void)hitTestOSCAtMousePositionX:(double)positionX
