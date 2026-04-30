@@ -225,12 +225,29 @@
   id<FxCommandAPI_v2> commandAPI =
       [self.apiManager apiForProtocol:@protocol(FxCommandAPI_v2)];
   if (timingAPI && commandAPI) {
-    CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
-    [timingAPI startTimeForEffect:&effectStart];
-    [timingAPI durationTimeForEffect:&effectDuration];
-    double startSec = CMTimeGetSeconds(effectStart);
-    double durSec = CMTimeGetSeconds(effectDuration);
-    double targetSec = startSec + fraction * durSec;
+    // Timeline in/out are the only timing-API values that return true
+    // timeline time across all clip kinds. -startTimeForEffect: and
+    // -startTimeOfInputToFilter: are source-relative in FCP and on still
+    // images return a stock ~1h offset, so movePlayheadToTime: (which
+    // expects timeline time) silently rejects the out-of-range value.
+    CMTime inPoint = kCMTimeZero, outPoint = kCMTimeZero;
+    [timingAPI inPointTimeOfTimelineForEffect:&inPoint];
+    [timingAPI outPointTimeOfTimelineForEffect:&outPoint];
+    double startSec = CMTimeGetSeconds(inPoint);
+    double endSec = CMTimeGetSeconds(outPoint);
+    double targetSec = startSec + fraction * (endSec - startSec);
+    // Nudge half a frame inside the clip at the boundaries so the playhead
+    // never lands exactly on the seam with the neighbouring clip (FCP
+    // resolves t==inPoint to the previous clip's last frame).
+    CMTime frameDur = kCMTimeZero;
+    [timingAPI frameDuration:&frameDur];
+    double half = CMTimeGetSeconds(frameDur) * 0.5;
+    if (half > 0) {
+      double lo = startSec + half;
+      double hi = endSec - half;
+      if (hi > lo)
+        targetSec = MAX(lo, MIN(hi, targetSec));
+    }
     CMTime targetTime = CMTimeMakeWithSeconds(targetSec, 600);
     [commandAPI movePlayheadToTime:targetTime error:nil];
   }
