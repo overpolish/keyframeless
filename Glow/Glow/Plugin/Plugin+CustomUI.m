@@ -79,9 +79,7 @@
       sectionWithTitle:@"Glow"
              tipMarkup:@[
                (@"<accent>Radius X / Y</accent> control how far the glow "
-                @"spreads. Hold <kbd>⌘</kbd> while dragging inspector slider "
-                @"to keep "
-                @"X and Y in sync."),
+                @"spreads."),
                (@"<accent>Position</accent> moves where the glow appears - "
                 @"move it via the "
                 @"<symbol arcade.stick.console.fill /> on-screen control."),
@@ -97,7 +95,14 @@
                 @"<accent>Offset</accent> shifts the noise field "
                 @"(animatable for parallax-like motion)."),
              ]
-             shortcuts:nil];
+             shortcuts:@[
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + click Radius slider"
+                               descMarkup:@"Match Radius X and Y values"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>⌘</kbd> + drag Radius slider"
+                               descMarkup:@"Maintain Radius X:Y ratio"],
+             ]];
   glow.icon = [NSImage imageWithSystemSymbolName:@"app.background.dotted"
                         accessibilityDescription:nil];
   return @[ glow ];
