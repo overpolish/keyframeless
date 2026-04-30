@@ -81,28 +81,29 @@ static double KKEaseOutBounce(double t, double intensity, double frequency) {
   double restitution = 0.15 + intensity * 0.75;
   int numBounces = 2 + (int)round(frequency * 5.0);
 
-  // Compute segment durations proportional to air time per bounce
+  // Segment durations proportional to physical air time.
+  // Initial drop from height H: t0 ∝ √H. Each subsequent bounce reaches
+  // height e²ʲ·H and spends 2eʲ·t0 in the air (up + down).
   double durations[9];
   durations[0] = 1.0;
   double total = 1.0;
   for (int i = 1; i <= numBounces; i++) {
-    durations[i] = pow(restitution, i);
+    durations[i] = 2.0 * pow(restitution, i);
     total += durations[i];
   }
   for (int i = 0; i <= numBounces; i++)
     durations[i] /= total;
 
-  // Find which segment t falls into
   double cumul = 0;
   for (int i = 0; i <= numBounces; i++) {
     double d = durations[i];
     if (t <= cumul + d || i == numBounces) {
       double local = (t - cumul) / d;
       if (i == 0) {
-        // First arc: ease-out parabola from 0 to 1
-        return 1.0 - (1.0 - local) * (1.0 - local);
+        // Initial fall: gravity accelerates the ball (ease-in parabola).
+        return local * local;
       }
-      // Bounce arc: starts at 1, dips to 1-depth, returns to 1
+      // Bounce arc: projectile under gravity, peak at local=0.5.
       double depth = pow(restitution, 2.0 * i);
       return 1.0 - depth * 4.0 * local * (1.0 - local);
     }
