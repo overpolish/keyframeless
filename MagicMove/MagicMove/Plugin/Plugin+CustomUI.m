@@ -98,6 +98,12 @@
                                            descMarkup:@"Break handle "
                                                       @"symmetry (move "
                                                       @"independently)"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + click Scale slider"
+                               descMarkup:@"Match X and Y scale values"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>⌘</kbd> + drag Scale slider"
+                               descMarkup:@"Maintain X:Y aspect ratio"],
              ]];
   magicMove.icon =
       [NSImage imageWithSystemSymbolName:@"circle.dotted.and.circle"
