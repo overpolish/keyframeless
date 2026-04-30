@@ -1236,16 +1236,17 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
 
     if (!ctrlHeld) {
       CGPoint thirds[4];
+      CGPoint edges[4];
       double tx, ty;
       [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
-                              fromX:1.0 / 3.0
+                              fromX:0.25
                               fromY:0.5
                             toSpace:kFxDrawingCoordinates_CANVAS
                                 toX:&tx
                                 toY:&ty];
       thirds[0] = (CGPoint){tx, ty};
       [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
-                              fromX:2.0 / 3.0
+                              fromX:0.75
                               fromY:0.5
                             toSpace:kFxDrawingCoordinates_CANVAS
                                 toX:&tx
@@ -1253,25 +1254,55 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
       thirds[1] = (CGPoint){tx, ty};
       [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
                               fromX:0.5
-                              fromY:1.0 / 3.0
+                              fromY:0.25
                             toSpace:kFxDrawingCoordinates_CANVAS
                                 toX:&tx
                                 toY:&ty];
       thirds[2] = (CGPoint){tx, ty};
       [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
                               fromX:0.5
-                              fromY:2.0 / 3.0
+                              fromY:0.75
                             toSpace:kFxDrawingCoordinates_CANVAS
                                 toX:&tx
                                 toY:&ty];
       thirds[3] = (CGPoint){tx, ty};
 
-      CGPoint targets[5] = {canvasCenter, thirds[0], thirds[1], thirds[2],
-                            thirds[3]};
+      [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                              fromX:0.0
+                              fromY:0.0
+                            toSpace:kFxDrawingCoordinates_CANVAS
+                                toX:&tx
+                                toY:&ty];
+      edges[0] = (CGPoint){tx, ty};
+      [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                              fromX:1.0
+                              fromY:0.0
+                            toSpace:kFxDrawingCoordinates_CANVAS
+                                toX:&tx
+                                toY:&ty];
+      edges[1] = (CGPoint){tx, ty};
+      [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                              fromX:0.0
+                              fromY:1.0
+                            toSpace:kFxDrawingCoordinates_CANVAS
+                                toX:&tx
+                                toY:&ty];
+      edges[2] = (CGPoint){tx, ty};
+      [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                              fromX:1.0
+                              fromY:1.0
+                            toSpace:kFxDrawingCoordinates_CANVAS
+                                toX:&tx
+                                toY:&ty];
+      edges[3] = (CGPoint){tx, ty};
+
+      CGPoint targets[9] = {canvasCenter, thirds[0], thirds[1],
+                            thirds[2],    thirds[3], edges[0],
+                            edges[1],     edges[2],  edges[3]};
       CGPoint snapped =
           [_positionSnap snapCanvasPoint:(CGPoint){positionX, positionY}
                                toTargets:targets
-                                   count:5];
+                                   count:9];
       positionX = snapped.x;
       positionY = snapped.y;
     } else {
