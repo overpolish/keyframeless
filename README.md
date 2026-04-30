@@ -5,11 +5,10 @@
 <h1 align="center">Keyframeless</h1>
 
 <div align="center">
-	<img alt="Downloads" src="https://img.shields.io/github/downloads/overpolish/keyframeless/Keyframeless.pkg?displayAssetName=false&color=ff5000" />
 	<img alt="Release" src="https://img.shields.io/github/v/release/overpolish/keyframeless?color=ff5000" />
-	<img alt="License GPL-3.0" src="https://img.shields.io/github/license/overpolish/keyframeless?color=ff5000" />
-	<img alt="macOS 15+" src="https://img.shields.io/badge/15%2B-macOS?logo=apple&label=macOS&labelColor=5C5C5C&color=ff5000">
-	<img alt="Architectures - Silicon and Intel" src="https://img.shields.io/badge/Silicon_%7C_Intel-architectures?logo=apple&label=Compatible%20with&labelColor=5C5C5C&color=ff5000">
+    <img alt="License PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/license-PolyForm_Noncommercial_1.0.0-ff5000" />
+    <img alt="macOS 15+" src="https://img.shields.io/badge/15%2B-macOS?logo=apple&label=macOS&labelColor=5C5C5C&color=ff5000">
+    <img alt="Architectures - Silicon and Intel" src="https://img.shields.io/badge/Silicon_%7C_Intel-architectures?logo=apple&label=Compatible%20with&labelColor=5C5C5C&color=ff5000">
 </div>
 
 <br />
@@ -42,7 +41,13 @@
 
 # 🤝 Install
 
-Download the latest version from the [Releases](https://github.com/overpolish/keyframeless/releases) page. Pick and choose which features you want to install.
+Keyframeless is a paid product. Grab the installer from Gumroad — your purchase covers all future updates.
+
+<div align="center">
+	<a href="https://overpolish.gumroad.com/l/keyframeless"><b>Buy on Gumroad →</b></a>
+</div>
+
+<br />
 
 <div align="center">
 	<img width="500" alt="Installation window showcasing the various tools available for install." src="./.github/images/installer.png" />
@@ -108,3 +113,9 @@ Easily crop and round your videos corners,
 <div align="center">
 	<img alt="Rounded demo" src="./.github/images/rounded-demo.gif" />
 </div>
+
+<br />
+
+# 📜 License
+
+Keyframeless is licensed under the [PolyForm Noncommercial License 1.0.0](./LICENSE). The source is public so others can read, study, and learn from it; the shipping installer is paid. Older releases were distributed under GPLv3 and remain available on the [Releases](https://github.com/overpolish/keyframeless/releases) page under that license.
