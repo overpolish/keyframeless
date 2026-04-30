@@ -7,30 +7,30 @@
 #import <math.h>
 
 static double KKEaseIn(double t, double intensity) {
-  double exponent = 2.0 + intensity * 4.0;
+  double exponent = 1.0 + intensity * 7.0;
   double power = pow(t, exponent);
   if (intensity <= 0.5)
     return power;
-  double overshoot = (intensity - 0.5) * 2.0 * 1.7;
+  double overshoot = (intensity - 0.5) * 2.0 * 2.5;
   double back = t * t * ((overshoot + 1.0) * t - overshoot);
   double blend = (intensity - 0.5) * 2.0;
   return power * (1.0 - blend) + back * blend;
 }
 
 static double KKEaseOut(double t, double intensity) {
-  double exponent = 2.0 + intensity * 4.0;
+  double exponent = 1.0 + intensity * 7.0;
   double u = 1.0 - t;
   double power = 1.0 - pow(u, exponent);
   if (intensity <= 0.5)
     return power;
-  double overshoot = (intensity - 0.5) * 2.0 * 1.7;
+  double overshoot = (intensity - 0.5) * 2.0 * 2.5;
   double back = 1.0 - u * u * ((overshoot + 1.0) * u - overshoot);
   double blend = (intensity - 0.5) * 2.0;
   return power * (1.0 - blend) + back * blend;
 }
 
 static double KKEaseInOut(double t, double intensity) {
-  double exponent = 2.0 + intensity * 4.0;
+  double exponent = 1.0 + intensity * 7.0;
   double power;
   if (t < 0.5)
     power = pow(2.0, exponent - 1.0) * pow(t, exponent);
@@ -40,7 +40,7 @@ static double KKEaseInOut(double t, double intensity) {
   }
   if (intensity <= 0.5)
     return power;
-  double overshoot = (intensity - 0.5) * 2.0 * 1.7 * 1.525;
+  double overshoot = (intensity - 0.5) * 2.0 * 2.5 * 1.525;
   double back;
   if (t < 0.5)
     back = (4.0 * t * t * ((overshoot + 1.0) * 2.0 * t - overshoot)) / 2.0;
@@ -59,11 +59,11 @@ static double KKEaseOutElastic(double t, double intensity, double frequency) {
     return 1.0;
 
   // Amplitude always 1 so the curve naturally starts at 0
-  double period = 0.45 * (1.5 - frequency);
+  double period = 0.5 * (1.7 - frequency * 1.4);
   if (period < 0.05)
     period = 0.05;
   // Low intensity = fast decay (subtle), high intensity = slow decay (dramatic)
-  double decay = 12.0 - intensity * 7.0;
+  double decay = 15.0 - intensity * 13.0;
 
   return pow(2.0, -decay * t) *
              sin((t - period / 4.0) * (2.0 * M_PI) / period) +
@@ -77,12 +77,12 @@ static double KKEaseOutBounce(double t, double intensity, double frequency) {
     return 1.0;
 
   // intensity: restitution (how much speed is retained per bounce)
-  // frequency: number of bounces (2-5)
-  double restitution = 0.3 + intensity * 0.4;
-  int numBounces = 2 + (int)round(frequency * 3.0);
+  // frequency: number of bounces (2-7)
+  double restitution = 0.15 + intensity * 0.75;
+  int numBounces = 2 + (int)round(frequency * 5.0);
 
   // Compute segment durations proportional to air time per bounce
-  double durations[8];
+  double durations[9];
   durations[0] = 1.0;
   double total = 1.0;
   for (int i = 1; i <= numBounces; i++) {
@@ -147,13 +147,13 @@ double KKSeedSign(int seed, int index) {
 }
 
 static double KKHoldBounce(double t, double frequency, int seed) {
-  double freq = 2.0 + frequency * 6.0;
+  double freq = 1.0 + frequency * 11.0;
   double phase = (seed != 0) ? KKSeedHash(seed, 0) * M_PI * 2.0 : 0.0;
   return 1.0 + 0.15 * sin(t * M_PI * freq + phase) * sin(t * M_PI);
 }
 
 static double KKHoldWiggle(double t, double frequency, int seed) {
-  double fScale = 0.5 + frequency * 1.5;
+  double fScale = 0.25 + frequency * 2.75;
   double envelope = sin(t * M_PI);
   double f0 = 17.0, f1 = 31.0, f2 = 59.0, f3 = 97.0;
   double p0 = 0, p1 = 0, p2 = 0, p3 = 0;
@@ -175,7 +175,7 @@ static double KKHoldWiggle(double t, double frequency, int seed) {
 
 double KKApplyHoldEffect(double t, KKHoldEffect effect, double intensity,
                          double frequency, int seed) {
-  double scale = 0.5 + intensity * 1.5; // 0.5 at min, 2.0 at max
+  double scale = 0.2 + intensity * 2.8; // 0.2 at min, 3.0 at max
   switch (effect) {
   case KKHoldEffectBounce: {
     double raw = KKHoldBounce(t, frequency, seed);
