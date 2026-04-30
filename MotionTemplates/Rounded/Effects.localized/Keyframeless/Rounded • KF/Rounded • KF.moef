@@ -2,7 +2,7 @@
 <!DOCTYPE ozxmlscene>
 <ozml version="5.14">
 
-<displayversion>6.0</displayversion>
+<displayversion>6.2</displayversion>
 
 <factory id="1" uuid="46c844a813d311d8a438000a95af9f7e">
 	<description>Channel</description>
@@ -171,22 +171,23 @@
 	</sceneSettings>
 	<publishSettings>
 		<version>2</version>
-		<target object="3001886296" channel="./9990" name=""/>
-		<target object="3001886296" channel="./9901" name="Animate In"/>
-		<target object="3001886296" channel="./9902" name="Animate Out"/>
-		<target object="3001886296" channel="./9903" name="Duration"/>
-		<target object="3001886296" channel="./9904" name="Interpolation"/>
-		<target object="3001886296" channel="./1" name="Radius"/>
-		<target object="3001886296" channel="./10" name=""/>
-		<target object="3001886296" channel="./12" name="Top"/>
-		<target object="3001886296" channel="./13" name="Bottom"/>
-		<target object="3001886296" channel="./14" name="Left"/>
-		<target object="3001886296" channel="./15" name="Right"/>
-		<target object="3001886296" channel="./9900" name=""/>
-		<target object="3001886296" channel="./9905" name=""/>
+		<target object="3001886369" channel="./9990" name=""/>
+		<target object="3001886369" channel="./1" name="Radius"/>
+		<target object="3001886369" channel="./10" name=""/>
+		<target object="3001886369" channel="./12" name="Top"/>
+		<target object="3001886369" channel="./13" name="Bottom"/>
+		<target object="3001886369" channel="./14" name="Left"/>
+		<target object="3001886369" channel="./15" name="Right"/>
+		<target object="3001886369" channel="./9900" name=""/>
+		<target object="3001886369" channel="./9905" name=""/>
+		<target object="3001886369" channel="./9924" name=""/>
+		<target object="3001886369" channel="./9926" name="Length"/>
+		<target object="3001886369" channel="./9927" name="Quality"/>
+		<target object="3001886369" channel="./9929" name="Transitions only?"/>
+		<target object="3001886369" channel="./9930" name="Adaptive Quality"/>
 	</publishSettings>
-	<currentFrame>15360 153600 1 0</currentFrame>
-	<currentObject>3001886277</currentObject>
+	<currentFrame>470 600 3 0</currentFrame>
+	<currentObject>3001886282</currentObject>
 	<activeLayer>3001886279</activeLayer>
 	<timeRange offset="0 1 1 0" duration="307200 153600 1 0"/>
 	<playRange offset="0 1 1 0" duration="307200 153600 1 0"/>
@@ -212,7 +213,7 @@
 		<flags>0</flags>
 		<timing in="0 1 1 0" out="-2560 153600 1 0" offset="0 1 1 0"/>
 		<foldFlags>0</foldFlags>
-		<baseFlags>268435473</baseFlags>
+		<baseFlags>16</baseFlags>
 		<parameter name="Properties" id="1" flags="8589938704">
 			<parameter name="HDR White Level" id="103" flags="8606744592" default="0.75" value="0.75"/>
 		</parameter>
@@ -224,7 +225,7 @@
 			<aspectRatio>1</aspectRatio>
 			<flags>0</flags>
 			<timing in="0 1 1 0" out="304640 153600 1 0" offset="0 1 1 0"/>
-			<foldFlags>16384</foldFlags>
+			<foldFlags>24576</foldFlags>
 			<baseFlags>524368</baseFlags>
 			<parameter name="Properties" id="1" flags="8589938704">
 				<parameter name="Cinematic" id="344" flags="8589938706">
@@ -283,14 +284,15 @@
 				</parameter>
 				<parameter name="Height" id="314" flags="8589934610" default="1" value="1080"/>
 			</parameter>
-			<filter name="Rounded · KF" id="3001886296" factoryID="6" pluginUUID="A5D350B8-198F-499E-A35A-A6CE420473E4" pluginVersion="1" pluginName="Rounded · KF" pluginDynamicParams="0">
+			<filter name="Rounded · KF" id="3001886369" factoryID="6" pluginUUID="A5D350B8-198F-499E-A35A-A6CE420473E4" pluginVersion="1" pluginName="Rounded · KF" pluginDynamicParams="0">
 				<timing in="0 1 1 0" out="304640 153600 1 0" offset="0 1 1 0"/>
-				<baseFlags>8589934608</baseFlags>
+				<baseFlags>8589934609</baseFlags>
 				<parameter name="" id="9990" flags="12901679124">
 					<numberOfKeypoints>0</numberOfKeypoints>
 					<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GQ40-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
 					<dataValue>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GQ40-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</dataValue>
 				</parameter>
+				<parameter name="Force Show All Parameters" id="9000" flags="12901679104" default="0" value="0"/>
 				<parameter name="Radius" id="1" flags="12901679120" default="20" value="20"/>
 				<parameter name="" id="10" flags="12901679120">
 					<numberOfKeypoints>0</numberOfKeypoints>
@@ -302,32 +304,35 @@
 				<parameter name="Bottom" id="13" flags="12905938992" default="0" value="0"/>
 				<parameter name="Left" id="14" flags="12905938992" default="0" value="0"/>
 				<parameter name="Right" id="15" flags="12905938992" default="0" value="0"/>
-				<parameter name="" id="9900" flags="12901679124">
+				<parameter name="" id="9900" flags="12901679120">
 					<numberOfKeypoints>0</numberOfKeypoints>
-					<defaultVal>*********IoeMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0CMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM**cEhJ74tpP4k62FcY8H6rGIlMKZk********-*E*********A********************MUU*0**F*-c*7**d*16*Bk-7*2s*Kk-h*4w*QE-p*5g-1*********6-*********-********************2B</defaultVal>
-					<dataValue>*********IoeMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0CMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM**cEhJ74tpP4k62FcY8H6rGIlMKZk********-*E*********A********************MUU*0**F*-c*7**d*16*Bk-7*2s*Kk-h*4w*QE-p*5g-1*********6-*********-********************2B</dataValue>
+					<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GOg0-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
+					<dataValue>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GOg0-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</dataValue>
 				</parameter>
 				<parameter name="" id="9905" flags="12901679120">
 					<numberOfKeypoints>0</numberOfKeypoints>
 					<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GOl0-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
 					<dataValue>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GOl0-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</dataValue>
 				</parameter>
-				<parameter name="Animate In" id="9901" flags="12905938992" default="0" value="0"/>
-				<parameter name="In Duration" id="9903" flags="12905938992" default="0.5" value="0.5"/>
-				<parameter name="In Curve" id="9904" flags="12905938992" default="2" value="2"/>
-				<parameter name="In Intensity" id="9911" flags="12905938992" default="0.5" value="0.5"/>
-				<parameter name="Animate Out" id="9902" flags="12905938992" default="0" value="0"/>
-				<parameter name="Out Duration" id="9906" flags="12905938992" default="0.5" value="0.5"/>
-				<parameter name="Out Curve" id="9907" flags="12905938992" default="2" value="2"/>
-				<parameter name="Out Intensity" id="9912" flags="12905938992" default="0.5" value="0.5"/>
 				<parameter name="" id="9908" flags="12905938992" default="1" value="1"/>
-				<parameter name="" id="9909" flags="12905938992" default="1" value="1"/>
-				<parameter name="Hold Effect" id="9910" flags="12905938992" default="0" value="0"/>
-				<parameter name="Hold Intensity" id="9913" flags="12905938992" default="0.5" value="0.5"/>
-				<parameter name="In Frequency" id="9914" flags="12905938992" default="0.5" value="0.5"/>
-				<parameter name="Out Frequency" id="9915" flags="12905938992" default="0.5" value="0.5"/>
-				<parameter name="Hold Frequency" id="9916" flags="12905938992" default="0.5" value="0.5"/>
-				<parameter name="Hold Seed" id="9917" flags="12905938992" default="0" value="0"/>
+				<parameter name="" id="9923" flags="12905938992" default="0" value="0"/>
+				<parameter name="" id="9919" flags="12905938976"/>
+				<parameter name="" id="9920" flags="12905938992" default="0" value="0"/>
+				<parameter name="" id="9921" flags="12905938992" default="0" value="0"/>
+				<parameter name="" id="9922" flags="12905938976">
+					<text>47B83389-D825-4067-974E-FA55BDAB2198</text>
+				</parameter>
+				<parameter name="" id="9924" flags="12901679120">
+					<numberOfKeypoints>0</numberOfKeypoints>
+					<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GP20-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
+					<dataValue>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GP20-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</dataValue>
+				</parameter>
+				<parameter name="" id="9925" flags="12905938992" default="0" value="0"/>
+				<parameter name="" id="9928" flags="12905938992" default="0" value="0"/>
+				<parameter name="Length" id="9926" flags="12905938992" default="0.5" value="0.5"/>
+				<parameter name="Quality" id="9927" flags="12905938992" default="0.5" value="0.5"/>
+				<parameter name="Transitions only?" id="9929" flags="12905938992" default="0" value="0"/>
+				<parameter name="Adaptive Quality" id="9930" flags="12905938992" default="1" value="1"/>
 				<parameter name="Mix" id="10001" flags="12901679104" default="1" value="1"/>
 				<parameter name="Flip" id="10002" flags="12905938976" default="0" value="0"/>
 				<parameter name="Input Points" id="10003" flags="12905938976" default="1" value="1"/>
