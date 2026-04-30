@@ -146,11 +146,34 @@ static void KKApplySequencerState(KKPlugin *plugin, KKStageSequencerView *seq,
   for (KKTimingViewRefs *refs in instState.additionalTimingViews)
     refs.ruler.loopEnabled = loopEnabled;
 
-  NSArray<KKTimingLane *> *lanes =
-      KKReadLanesRebalanced(self.apiManager, paramGetAPI);
-  if (lanes) {
-    instState.lanesSnapshot = [lanes copy];
-    [self _applyHTHParameterFlagsForLanes:lanes];
+  // Direct JSON probe: KKReadLanesRebalanced has a snapshot fallback that
+  // hides the "no JSON yet" case behind the stale build-time seed
+  // (placeholder `[1]` values written when readValuesWithGetAPI fails in
+  // create-view scope). Probe the param directly to know whether to
+  // re-seed.
+  NSString *probeJSON = nil;
+  [paramGetAPI getStringParameterValue:&probeJSON
+                         fromParameter:kKKParamMultiStageData];
+  NSArray<KKTimingLane *> *lanes = nil;
+  if (probeJSON.length) {
+    lanes = KKReadLanesRebalanced(self.apiManager, paramGetAPI);
+    if (lanes) {
+      instState.lanesSnapshot = [lanes copy];
+      [self _applyHTHParameterFlagsForLanes:lanes];
+    }
+  } else {
+    // Fresh instance: no persisted JSON. Re-seed from live param values
+    // inside this action scope (where reads actually succeed) and
+    // overwrite the bad build-time snapshot.
+    NSArray<KKAnimatableProperty *> *seqProps = [self animatableProperties];
+    NSArray<KKTimingLane *> *seeded =
+        [self _buildDefaultLanesForProps:seqProps
+                             paramGetAPI:paramGetAPI
+                                  atTime:t];
+    if (seeded.count) {
+      instState.lanesSnapshot = [seeded copy];
+      lanes = seeded;
+    }
   }
 
   double durSec = 0, frac = 0;

@@ -11,6 +11,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+@class KKAnimatableProperty;
 @class KKCustomGroupHeaderView;
 @class KKEmptyLanesView;
 @class KKLaneVisibilityBar;
@@ -34,11 +35,16 @@ extern NSSet<NSString *> *_Nullable KKEffectiveHiddenLaneLabels(
     NSArray<KKTimingLane *> *_Nullable lanes);
 
 /// Pushes `lanes`' labels and per-lane visibility states to the bar on the
-/// main queue. Pass the full unfiltered lane list — the bar shows every
-/// lane regardless of visibility.
+/// main queue. Pass the full unfiltered JSON lane list and the **plugin
+/// (system) hidden-label set** — i.e. `-hiddenAnimatablePropertyLabels`,
+/// NOT the effective set. The bar omits lanes whose label is in
+/// `pluginHidden` (so e.g. Glow's color/gradient lanes are absent in the
+/// wrong colour mode), but still shows user-hidden pills so the user can
+/// click to unhide them.
 extern void
 KKPushLanesToVisibilityBar(KKLaneVisibilityBar *_Nullable bar,
-                           NSArray<KKTimingLane *> *_Nullable lanes);
+                           NSArray<KKTimingLane *> *_Nullable lanes,
+                           NSSet<NSString *> *_Nullable pluginHidden);
 
 /// Shows the empty-lanes overlay when every lane in `lanes` is hidden.
 /// Marshals to the main queue.
@@ -95,6 +101,18 @@ extern NSMutableArray<KKTimingLane *> *_Nullable KKReadLanesRebalanced(
 
 @interface KKPlugin (SequencerBuilder)
 - (NSView *)_createTimingGraphViewUncapped:(BOOL)uncapped;
+- (NSArray<KKTimingLane *> *)
+    _readOrSeedLanesForProps:(NSArray<KKAnimatableProperty *> *)seqProps
+                 paramGetAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI
+                      atTime:(CMTime)time;
+/// Builds display-only default lanes purely from current param values —
+/// no snapshot cache, no JSON fallback. Use from inside an action scope
+/// to recover from a stale build-time seed (e.g. when Gradient
+/// `getStringParameterValue` came back nil during create-view).
+- (NSArray<KKTimingLane *> *)
+    _buildDefaultLanesForProps:(NSArray<KKAnimatableProperty *> *)seqProps
+                   paramGetAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI
+                        atTime:(CMTime)time;
 @end
 
 @interface KKPlugin (TimingGraph)
@@ -149,6 +167,10 @@ extern KKAnimatableProperty *_Nullable KKPropertyByLabel(
 /// the new visibility state, and refreshes the sequencer + bar.
 - (void)_handleLaneVisibilityClickedAtIndex:(NSInteger)laneIndex
                                  optionDown:(BOOL)optionDown;
+/// Sets a single lane's visibility to a specific value (no toggle, no solo
+/// semantics). Used by drag-paint on the visibility pill bar.
+- (void)_handleLaneVisibilitySetAtIndex:(NSInteger)laneIndex
+                                visible:(BOOL)visible;
 - (void)_handleLaneOSCVisibilityAtIndex:(NSInteger)laneIndex
                                 visible:(BOOL)visible;
 - (void)_handleLaneChangedAtIndex:(NSInteger)laneIndex

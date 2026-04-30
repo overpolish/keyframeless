@@ -134,27 +134,19 @@ static void KKSyncFromParams(id<PROAPIAccessing> apiManager) {
       (dur > 0) ? KKTimingRebalancedLanes(raw, dur) : raw;
   state.lanesSnapshot = lanes;
   state.pendingLanes = nil;
-  // Recompute effective hidden set so user-toggled visibility (persisted in
-  // each lane's `visibleInSequencer`) is honoured after undo/redo or any
-  // external param edit.
-  NSMutableSet<NSString *> *pluginHidden = [NSMutableSet set];
-  for (NSString *label in state.hiddenLaneLabels) {
-    BOOL inLanes = NO;
-    for (KKTimingLane *lane in lanes) {
-      if ([lane.propertyLabel isEqualToString:label] &&
-          lane.visibleInSequencer) {
-        inLanes = YES;
-        break;
-      }
-    }
-    if (!inLanes)
-      [pluginHidden addObject:label];
-  }
+  // Use the cached plugin-hidden snapshot maintained by the
+  // mode-change refresh path. Reverse-deriving it from the previous
+  // `hiddenLaneLabels` raced with mode toggles — a freshly-hidden lane
+  // wouldn't appear in the old set, so the pump would un-hide it
+  // until the next refresh tick. Recompute the effective set fresh
+  // against the live JSON so user-toggled visibility (undo/redo or
+  // external edits) still applies.
+  NSSet<NSString *> *pluginHidden = state.pluginHiddenLaneLabels ?: [NSSet set];
   state.hiddenLaneLabels = KKEffectiveHiddenLaneLabels(pluginHidden, lanes);
-  KKPushLanesToVisibilityBar(state.visibilityBar, lanes);
+  KKPushLanesToVisibilityBar(state.visibilityBar, lanes, pluginHidden);
   KKApplyEmptyLanesVisibility(state.emptyLanesView, lanes);
   for (KKTimingViewRefs *r in extras) {
-    KKPushLanesToVisibilityBar(r.visibilityBar, lanes);
+    KKPushLanesToVisibilityBar(r.visibilityBar, lanes, pluginHidden);
     KKApplyEmptyLanesVisibility(r.emptyLanesView, lanes);
   }
   if (!seq && extras.count == 0)

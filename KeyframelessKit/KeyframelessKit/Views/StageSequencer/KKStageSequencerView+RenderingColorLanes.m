@@ -20,10 +20,10 @@ static NSArray<KKGradientStop *> *_stopsFromValues(NSArray<NSNumber *> *values,
   if (kind == KKAnimatableParamKindGradient)
     return KKGradientStopsFromFlat(values);
   if (kind == KKAnimatableParamKindColor && values.count >= 3) {
-    NSColor *c = [NSColor colorWithRed:values[0].doubleValue
-                                 green:values[1].doubleValue
-                                  blue:values[2].doubleValue
-                                 alpha:1.0];
+    NSColor *c = [NSColor colorWithSRGBRed:values[0].doubleValue
+                                     green:values[1].doubleValue
+                                      blue:values[2].doubleValue
+                                     alpha:1.0];
     return @[
       [KKGradientStop stopWithPosition:0 color:c],
       [KKGradientStop stopWithPosition:1 color:c],
@@ -126,7 +126,7 @@ static NSArray<KKGradientStop *> *_stopsFromValues(NSArray<NSNumber *> *values,
         if (x1 <= x0)
           continue;
         simd_float3 c = lut[i];
-        [[NSColor colorWithRed:c.x green:c.y blue:c.z alpha:1.0] setFill];
+        [[NSColor colorWithSRGBRed:c.x green:c.y blue:c.z alpha:1.0] setFill];
         NSRectFill(NSMakeRect(x0, stripY, x1 - x0, stripH));
       }
       free(lut);

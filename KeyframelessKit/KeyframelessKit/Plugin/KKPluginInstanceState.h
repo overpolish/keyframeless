@@ -106,6 +106,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Applied as a filter to every `seq.lanes =` push.
 @property(nonatomic, copy, nullable) NSSet<NSString *> *hiddenLaneLabels;
 
+/// Plugin-suppressed lanes only — i.e. the latest snapshot of
+/// `-hiddenAnimatablePropertyLabels`. Maintained alongside
+/// `hiddenLaneLabels` so the JSON-drift pump can filter without having to
+/// reverse-derive plugin-hidden from the (possibly stale) effective set.
+@property(nonatomic, copy, nullable) NSSet<NSString *> *pluginHiddenLaneLabels;
+
 /// The live lane-visibility-bar view for this instance (weak — auto-nils on
 /// dealloc). Sync pump pushes lane label/state updates here on JSON change.
 @property(nonatomic, weak, nullable) KKLaneVisibilityBar *visibilityBar;

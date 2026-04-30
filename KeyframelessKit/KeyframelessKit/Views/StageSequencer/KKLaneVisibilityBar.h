@@ -27,6 +27,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) void (^onPillClicked)
     (NSInteger laneIndex, BOOL optionDown);
 
+/// Fired while the user drags across pills after a non-option mouseDown.
+/// `visible` is the target state (= new state of the pill the drag started
+/// on) — handler should set that lane's visibility to `visible` directly,
+/// without solo semantics. Fires once per pill the cursor enters.
+@property(nonatomic, copy, nullable) void (^onPillDraggedToVisible)
+    (NSInteger laneIndex, BOOL visible);
+
 @end
 
 NS_ASSUME_NONNULL_END

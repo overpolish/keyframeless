@@ -21,13 +21,22 @@
       [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
   NSArray<KKTimingLane *> *lanes = state.lanesSnapshot;
   NSSet<NSString *> *next = KKEffectiveHiddenLaneLabels(pluginHidden, lanes);
-  if ([next isEqualToSet:state.hiddenLaneLabels ?: [NSSet set]] ||
-      (!next && !state.hiddenLaneLabels))
-    return;
+  BOOL effectiveSame =
+      ([next isEqualToSet:state.hiddenLaneLabels ?: [NSSet set]] ||
+       (!next && !state.hiddenLaneLabels));
   state.hiddenLaneLabels = next;
+  state.pluginHiddenLaneLabels = pluginHidden;
   KKStageSequencerView *seq = state.sequencerView;
   NSArray<KKTimingViewRefs *> *extras =
       [state.additionalTimingViews copy] ?: @[];
+  // Always re-push the pill bar — its filter is plugin-hidden only, which
+  // can change (e.g. Glow color-mode swap) even when the effective set is
+  // unchanged because user-hidden lanes are different too.
+  KKPushLanesToVisibilityBar(state.visibilityBar, lanes, pluginHidden);
+  for (KKTimingViewRefs *r in extras)
+    KKPushLanesToVisibilityBar(r.visibilityBar, lanes, pluginHidden);
+  if (effectiveSame)
+    return;
   if (!lanes.count || (!seq && extras.count == 0))
     return;
   NSArray<KKTimingLane *> *visible = KKFilterLanesForVisibility(lanes, next);
