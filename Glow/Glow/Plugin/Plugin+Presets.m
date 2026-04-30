@@ -9,7 +9,7 @@
 typedef struct {
   double radiusX, radiusY;
   double intensity, falloff;
-  double offsetX, offsetY;
+  double positionX, positionY;
   double threshold;
   double noise, noiseOffset, noiseSpeed;
   double colorR, colorG, colorB;
@@ -24,8 +24,8 @@ static const GlowPresetValues kPresets[] = {
             .radiusY = 100,
             .intensity = 1.0,
             .falloff = 0.0,
-            .offsetX = 0,
-            .offsetY = 0,
+            .positionX = 0.5,
+            .positionY = 0.5,
             .noise = 0,
             .noiseOffset = 0,
             .noiseSpeed = 0,
@@ -40,8 +40,8 @@ static const GlowPresetValues kPresets[] = {
             .radiusY = 20,
             .intensity = 0.5,
             .falloff = 0.5,
-            .offsetX = 0.00,
-            .offsetY = -0.06,
+            .positionX = 0.50,
+            .positionY = 0.44,
             .noise = 0,
             .noiseOffset = 0,
             .noiseSpeed = 0,
@@ -56,8 +56,8 @@ static const GlowPresetValues kPresets[] = {
             .radiusY = 100,
             .intensity = 1.0,
             .falloff = 0.0,
-            .offsetX = 0,
-            .offsetY = 0,
+            .positionX = 0.5,
+            .positionY = 0.5,
             .noise = 2.0,
             .noiseOffset = 0.3,
             .noiseSpeed = 1.0,
@@ -94,8 +94,10 @@ static const GlowPresetValues kPresets[] = {
   [setAPI setFloatValue:p.intensity toParameter:kParamIntensity atTime:time];
   [setAPI setFloatValue:p.falloff toParameter:kParamFalloff atTime:time];
   [setAPI setFloatValue:p.threshold toParameter:kParamThreshold atTime:time];
-  [setAPI setFloatValue:p.offsetX toParameter:kParamOffsetX atTime:time];
-  [setAPI setFloatValue:p.offsetY toParameter:kParamOffsetY atTime:time];
+  [setAPI setXValue:p.positionX
+             YValue:p.positionY
+        toParameter:kParamPosition
+             atTime:time];
   [setAPI setFloatValue:p.noise toParameter:kParamNoise atTime:time];
   [setAPI setFloatValue:p.noiseOffset
             toParameter:kParamNoiseOffset

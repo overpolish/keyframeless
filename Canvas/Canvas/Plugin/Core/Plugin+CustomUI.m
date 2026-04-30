@@ -9,12 +9,26 @@
 #import "LayerList_Private.h"
 #import "MarkerStyleView.h"
 #import "ObjectParams.h"
-#import "SeedView.h"
 #import "StrokeStyleView.h"
 #import <objc/message.h>
 #import <objc/runtime.h>
 
 @implementation KKLayerInstanceState
+@end
+
+// FCP's OZViewCtrlRootScrollView claims forwarded scroll events from nested
+// scroll views, which scrolls the inspector when the user reaches the layer
+// list's top/bottom. Returning nil from this private method blocks the
+// forwarding-target search; native momentum/elasticity stay intact.
+@interface KKLayerListScrollView : NSScrollView
+@end
+@implementation KKLayerListScrollView
+- (NSResponder *)_recursiveResponderThatWantsForwardedScrollEventsForAxis:
+                     (NSEventGestureAxis)axis
+                                                         intendedForSwipe:
+                                                             (BOOL)forSwipe {
+  return nil;
+}
 @end
 
 static NSDictionary<NSString *, KKLayerInstanceState *> *sLayerStates;
@@ -159,7 +173,8 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
       initWithFrame:NSMakeRect(0, 0, 300, kLayerListTotalHeight)];
   wrapper.autoresizingMask = NSViewWidthSizable;
 
-  NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSZeroRect];
+  NSScrollView *scrollView =
+      [[KKLayerListScrollView alloc] initWithFrame:NSZeroRect];
   scrollView.translatesAutoresizingMaskIntoConstraints = NO;
   scrollView.hasVerticalScroller = YES;
   scrollView.hasHorizontalScroller = NO;
@@ -288,9 +303,24 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
   }
   objc_setAssociatedObject(self.apiManager, &kKKLayerUUIDAssocKey, uuid,
                            OBJC_ASSOCIATION_COPY_NONATOMIC);
-  actionTarget.instanceUUID = uuid;
 
   KKLayerInstanceState *state = KKLayerStateForUUID(uuid);
+  // Duplicate-UUID detection: FCP copy/paste/cut clones `kParamInstanceID`
+  // along with the rest of the params, so two distinct plugin instances
+  // can resolve to the same state and clobber each other's view refs. If
+  // this state is already owned by a different api, mint a fresh UUID for
+  // the new instance and rebind to a new state entry.
+  void *apiPtr = (__bridge void *)self.apiManager;
+  if (state.ownerAPIPointer && state.ownerAPIPointer != apiPtr) {
+    uuid = [[NSUUID UUID] UUIDString];
+    [paramSetAPI setStringParameterValue:uuid toParameter:kParamInstanceID];
+    objc_setAssociatedObject(self.apiManager, &kKKLayerUUIDAssocKey, uuid,
+                             OBJC_ASSOCIATION_COPY_NONATOMIC);
+    state = KKLayerStateForUUID(uuid);
+  }
+  state.ownerAPIPointer = apiPtr;
+  actionTarget.instanceUUID = uuid;
+
   state.container = wrapper;
 
   // Write back any pending per-object param edits.

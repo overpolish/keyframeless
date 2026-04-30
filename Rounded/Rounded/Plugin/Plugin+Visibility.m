@@ -20,16 +20,24 @@
   [paramGetAPI getBoolValue:&expanded
               fromParameter:kParamCropExpanded
                      atTime:kCMTimeZero];
+  if ([self forceShowAllParameters])
+    expanded = YES;
 
   [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
                      toParameter:kParamCropExpanded];
 
-  FxParameterFlags flags =
+  FxParameterFlags base =
       expanded ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
-  [paramSetAPI setParameterFlags:flags toParameter:kParamCropTop];
-  [paramSetAPI setParameterFlags:flags toParameter:kParamCropBottom];
-  [paramSetAPI setParameterFlags:flags toParameter:kParamCropLeft];
-  [paramSetAPI setParameterFlags:flags toParameter:kParamCropRight];
+  // Preserve any DISABLED bit set externally (e.g. HTH transition selection
+  // on the Crop lane) — overwriting flags wholesale would wipe it.
+  UInt32 leafIDs[] = {kParamCropTop, kParamCropBottom, kParamCropLeft,
+                      kParamCropRight};
+  for (NSUInteger i = 0; i < sizeof(leafIDs) / sizeof(leafIDs[0]); i++) {
+    FxParameterFlags cur = 0;
+    [paramGetAPI getParameterFlags:&cur fromParameter:leafIDs[i]];
+    FxParameterFlags want = base | (cur & kFxParameterFlag_DISABLED);
+    [paramSetAPI setParameterFlags:want toParameter:leafIDs[i]];
+  }
 }
 
 @end

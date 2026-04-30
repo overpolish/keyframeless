@@ -14,6 +14,8 @@ typedef enum KKVertexInputIndex {
 
 typedef enum KKTextureIndex { KKTextureIndex_InputImage = 0 } KKTextureIndex;
 
+#define KK_MOTION_BLUR_MAX_SAMPLES 128
+
 typedef struct KKVertex2D {
     vector_float2 position;
     vector_float2 textureCoordinate;

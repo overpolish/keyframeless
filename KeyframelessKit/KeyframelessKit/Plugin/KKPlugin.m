@@ -4,7 +4,6 @@
  */
 
 #import "../Update/KKUpdateChecker.h"
-#import "../Views/KKTimingSlot.h"
 #import "KKHostInfo.h"
 #import "KKPlugin_Private.h"
 #import <AppKit/AppKit.h>
@@ -44,7 +43,6 @@
 #pragma clang diagnostic pop
 
 @synthesize timingHeader = _timingHeader;
-@synthesize timingGraph = _timingGraph;
 
 + (id)servicePrincipalDelegate {
   return [KKPrincipalDelegate shared];
@@ -230,11 +228,29 @@
   MTLViewport viewport = {0, 0, outputWidth, outputHeight, -1.0, 1.0};
   [encoder setViewport:viewport];
 
+  // When parent Scale > 100%, FCP renders only a sub-tile of the destination
+  // image (tilePixelBounds ⊂ imagePixelBounds). UVs map [0,1] across the full
+  // source image, so the shader sees the tile as the corresponding sub-region
+  // of the source — not the whole image — which prevents the entire source
+  // from being squashed into the sub-tile.
+  FxRect dTile = destinationImage.tilePixelBounds;
+  FxRect dImg = destinationImage.imagePixelBounds;
+  float imgW = (float)(dImg.right - dImg.left);
+  float imgH = (float)(dImg.top - dImg.bottom);
+  if (imgW <= 0)
+    imgW = 1;
+  if (imgH <= 0)
+    imgH = 1;
+  float uvL = (float)(dTile.left - dImg.left) / imgW;
+  float uvR = (float)(dTile.right - dImg.left) / imgW;
+  float uvT = (float)(dImg.top - dTile.top) / imgH;
+  float uvB = (float)(dImg.top - dTile.bottom) / imgH;
+
   KKVertex2D vertices[] = {
-      {{outputWidth / 2.0f, -outputHeight / 2.0f}, {1.0, 1.0}},
-      {{-outputWidth / 2.0f, -outputHeight / 2.0f}, {0.0, 1.0}},
-      {{outputWidth / 2.0f, outputHeight / 2.0f}, {1.0, 0.0}},
-      {{-outputWidth / 2.0f, outputHeight / 2.0f}, {0.0, 0.0}},
+      {{outputWidth / 2.0f, -outputHeight / 2.0f}, {uvR, uvB}},
+      {{-outputWidth / 2.0f, -outputHeight / 2.0f}, {uvL, uvB}},
+      {{outputWidth / 2.0f, outputHeight / 2.0f}, {uvR, uvT}},
+      {{-outputWidth / 2.0f, outputHeight / 2.0f}, {uvL, uvT}},
   };
 
   simd_uint2 viewportSize = {(unsigned int)outputWidth,
@@ -255,6 +271,71 @@
 
   [cache returnCommandQueueToCache:commandQueue];
 
+  return YES;
+}
+
+- (BOOL)
+    encodeFullScreenQuadIntoTexture:(id<MTLTexture>)destTexture
+                   destinationImage:(FxImageTile *)destinationImage
+                      commandBuffer:(id<MTLCommandBuffer>)commandBuffer
+                     sourceTextures:(NSArray<id<MTLTexture>> *)sourceTextures
+                           commands:
+                               (void (^)(id<MTLRenderCommandEncoder>,
+                                         NSArray<id<MTLTexture>> *))commands {
+  MTLRenderPassColorAttachmentDescriptor *colorAttachment =
+      [[MTLRenderPassColorAttachmentDescriptor alloc] init];
+  colorAttachment.texture = destTexture;
+  colorAttachment.clearColor = MTLClearColorMake(0, 0, 0, 0);
+  colorAttachment.loadAction = MTLLoadActionClear;
+
+  MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
+  rpd.colorAttachments[0] = colorAttachment;
+
+  id<MTLRenderCommandEncoder> encoder =
+      [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+
+  float w = (float)destTexture.width;
+  float h = (float)destTexture.height;
+  MTLViewport viewport = {0, 0, w, h, -1.0, 1.0};
+  [encoder setViewport:viewport];
+
+  // See encodeRenderCommandsForDestinationImage: — UVs are mapped to the
+  // sub-region of source addressed by the destination tile, so >100% parent
+  // Scale (which makes FCP request only a sub-tile) renders sharply.
+  float uvL = 0, uvR = 1, uvT = 0, uvB = 1;
+  if (destinationImage) {
+    FxRect dTile = destinationImage.tilePixelBounds;
+    FxRect dImg = destinationImage.imagePixelBounds;
+    float imgW = (float)(dImg.right - dImg.left);
+    float imgH = (float)(dImg.top - dImg.bottom);
+    if (imgW <= 0)
+      imgW = 1;
+    if (imgH <= 0)
+      imgH = 1;
+    uvL = (float)(dTile.left - dImg.left) / imgW;
+    uvR = (float)(dTile.right - dImg.left) / imgW;
+    uvT = (float)(dImg.top - dTile.top) / imgH;
+    uvB = (float)(dImg.top - dTile.bottom) / imgH;
+  }
+
+  KKVertex2D vertices[] = {
+      {{w / 2.0f, -h / 2.0f}, {uvR, uvB}},
+      {{-w / 2.0f, -h / 2.0f}, {uvL, uvB}},
+      {{w / 2.0f, h / 2.0f}, {uvR, uvT}},
+      {{-w / 2.0f, h / 2.0f}, {uvL, uvT}},
+  };
+  simd_uint2 viewportSize = {(unsigned int)w, (unsigned int)h};
+
+  [encoder setVertexBytes:vertices
+                   length:sizeof(vertices)
+                  atIndex:KKVertexInputIndex_Vertices];
+  [encoder setVertexBytes:&viewportSize
+                   length:sizeof(viewportSize)
+                  atIndex:KKVertexInputIndex_ViewportSize];
+
+  commands(encoder, sourceTextures);
+
+  [encoder endEncoding];
   return YES;
 }
 
@@ -358,28 +439,28 @@
   return YES;
 }
 
-- (NSArray<KKTimingSlot *> *)timingGlobalSlots {
-  return @[];
-}
-
-- (NSArray<KKTimingSlot *> *)timingSlotsForSection:(NSInteger)section {
-  return @[];
+- (BOOL)forceShowAllParameters {
+  return NO;
 }
 
 - (NSArray<KKAnimatableProperty *> *)animatableProperties {
   return nil;
 }
 
-- (NSView *)holdPropertyView {
-  return nil;
+- (BOOL)usesMotionBlur {
+  return NO;
 }
 
-- (CGFloat)holdPropertyViewHeight {
-  return 23.0;
+- (NSSet<NSString *> *)hiddenAnimatablePropertyLabels {
+  return [NSSet set];
 }
 
-- (void (^)(id, CMTime))holdPropertyApplyState {
-  return nil;
+- (NSSet<NSString *> *)animatablePropertyLabelsWithOSC {
+  return [NSSet set];
+}
+
+- (NSSet<NSString *> *)animatablePropertyLabelsWithOSCDefaultOff {
+  return [NSSet set];
 }
 
 @end

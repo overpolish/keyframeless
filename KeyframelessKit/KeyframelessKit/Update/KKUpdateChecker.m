@@ -20,7 +20,6 @@ static NSDictionary<NSString *, NSString *> *KKKnownComponents(void) {
   return @{
     @"keyframelessx" : @"Keyframeless X",
     @"rounded" : @"Rounded",
-    @"motionblur" : @"MotionBlur",
     @"magicmove" : @"MagicMove",
     @"canvas" : @"Canvas",
     @"glow" : @"Glow"
@@ -32,8 +31,6 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
     @"co.overpolish.keyframeless.Keyframeless-X" : @"keyframelessx",
     @"co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP" :
         @"keyframelessx",
-    @"MotionBlur" : @"motionblur",
-    @"MotionBlur-XPC-Service" : @"motionblur",
     @"Rounded" : @"rounded",
     @"Rounded-XPC-Service" : @"rounded",
     @"MagicMove" : @"magicmove",
@@ -46,7 +43,6 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
 }
 
 @implementation KKUpdateChecker {
-  KKLog *_log;
   NSString *_componentKey;
   BOOL _checkedThisSession;
 }
@@ -67,12 +63,10 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
 - (instancetype)init {
   self = [super init];
   if (self) {
-    _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless.updateChecker"];
-
     NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier] ?: @"";
     _componentKey = KKBundleIDToComponent()[bundleID];
     if (!_componentKey) {
-      [_log warn:@"Unknown bundle identifier: %@", bundleID];
+      KKLogWarn(@"Unknown bundle identifier: %@", bundleID);
     }
 
     _currentVersion =
@@ -107,7 +101,7 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
 
 - (void)checkWithCompletion:(void (^)(BOOL))completion {
   if (_checkedThisSession) {
-    [_log debug:@"Skipping update check — already checked this session"];
+    KKLogDebug(@"Skipping update check — already checked this session");
     if (completion) {
       dispatch_async(dispatch_get_main_queue(), ^{
         completion(self.updateAvailable);
@@ -134,23 +128,21 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
       forHTTPHeaderField:@"Accept"];
   [request setValue:@"2022-11-28" forHTTPHeaderField:@"X-GitHub-Api-Version"];
 
-  [_log info:@"Checking for updates…"];
+  KKLogInfo(@"Checking for updates…");
 
   NSURLSessionDataTask *task = [[NSURLSession sharedSession]
       dataTaskWithRequest:request
         completionHandler:^(NSData *data, NSURLResponse *response,
                             NSError *error) {
           if (error) {
-            [self->_log
-                warn:@"Update check failed: %@", error.localizedDescription];
+            KKLogWarn(@"Update check failed: %@", error.localizedDescription);
             [self callCompletion:completion];
             return;
           }
 
           NSHTTPURLResponse *http = (NSHTTPURLResponse *)response;
           if (http.statusCode != 200) {
-            [self->_log
-                warn:@"Update check got HTTP %ld", (long)http.statusCode];
+            KKLogWarn(@"Update check got HTTP %ld", (long)http.statusCode);
             [self clearCacheAndComplete:completion];
             return;
           }
@@ -160,7 +152,7 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
                                                                  error:nil];
           NSArray *assets = json[@"assets"];
           if (![assets isKindOfClass:[NSArray class]]) {
-            [self->_log warn:@"No assets array in release response"];
+            KKLogWarn(@"No assets array in release response");
             [self clearCacheAndComplete:completion];
             return;
           }
@@ -179,7 +171,7 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
           }
 
           if (!manifestURL) {
-            [self->_log warn:@"No manifest.json asset found in release"];
+            KKLogWarn(@"No manifest.json asset found in release");
             [self clearCacheAndComplete:completion];
             return;
           }
@@ -202,16 +194,15 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
         completionHandler:^(NSData *data, NSURLResponse *response,
                             NSError *error) {
           if (error) {
-            [self->_log warn:@"Manifest download failed: %@",
-                             error.localizedDescription];
+            KKLogWarn(@"Manifest download failed: %@",
+                      error.localizedDescription);
             [self callCompletion:completion];
             return;
           }
 
           NSHTTPURLResponse *http = (NSHTTPURLResponse *)response;
           if (http.statusCode != 200) {
-            [self->_log
-                warn:@"Manifest download got HTTP %ld", (long)http.statusCode];
+            KKLogWarn(@"Manifest download got HTTP %ld", (long)http.statusCode);
             [self clearCacheAndComplete:completion];
             return;
           }
@@ -220,7 +211,7 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
                                                                    options:0
                                                                      error:nil];
           if (![manifest isKindOfClass:[NSDictionary class]]) {
-            [self->_log warn:@"Failed to parse manifest.json"];
+            KKLogWarn(@"Failed to parse manifest.json");
             [self clearCacheAndComplete:completion];
             return;
           }
@@ -242,11 +233,11 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
     NSString *manifestVersion = manifest[_componentKey];
     if ([manifestVersion isKindOfClass:[NSString class]] &&
         [self isVersion:manifestVersion newerThan:_currentVersion]) {
-      [_log info:@"Update available for %@: %@ -> %@", _componentKey,
-                 _currentVersion, manifestVersion];
+      KKLogInfo(@"Update available for %@: %@ -> %@", _componentKey,
+                _currentVersion, manifestVersion);
       newerVersion = manifestVersion;
     } else {
-      [_log debug:@"%@ is up to date (%@)", _componentKey, _currentVersion];
+      KKLogDebug(@"%@ is up to date (%@)", _componentKey, _currentVersion);
     }
   }
 
@@ -255,7 +246,7 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
     if (![manifest[key] isKindOfClass:[NSString class]])
       continue;
     if (!known[key]) {
-      [_log info:@"New component in manifest: %@", key];
+      KKLogInfo(@"New component in manifest: %@", key);
       [newKeys addObject:key];
     }
   }

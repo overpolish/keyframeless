@@ -26,6 +26,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)removeFavoriteWithIdentifier:(NSString *)identifier;
 - (void)renameFavoriteWithIdentifier:(NSString *)identifier
                               toName:(NSString *)name;
+- (void)updateFavoriteWithIdentifier:(NSString *)identifier
+                               stops:(NSArray<KKGradientStop *> *)stops;
 @end
 
 NS_ASSUME_NONNULL_END

@@ -7,7 +7,7 @@
 
 ## Version Management
 
-Each component (`motionblur`, `rounded`, `magicmove`, `keyframelessx`) is versioned independently.
+Each component (`rounded`, `magicmove`, `keyframelessx`, `glow`, `canvas`) is versioned independently.
 
 ### Bumping a version
 
@@ -45,7 +45,7 @@ GitHub releases are tagged by date (e.g. `2026-03-24`) rather than a component v
 
 ### Adding a new component
 
-The manifest key is the project name lowercased with no spaces or separators (e.g. `MotionBlur` → `motionblur`, `Keyframeless X` → `keyframelessx`).
+The manifest key is the project name lowercased with no spaces or separators (e.g. `MagicMove` → `magicmove`, `Keyframeless X` → `keyframelessx`).
 
 1. Add an entry to `manifest.json` with the key and initial version (e.g. `"newplugin": "1.0.0"`).
 2. Add the key to `KKKnownComponents()` and `KKBundleIDToComponent()` in `KKUpdateChecker.m` — map both the wrapper app and XPC service bundle IDs.

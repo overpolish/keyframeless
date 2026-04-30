@@ -11,8 +11,12 @@ static void setFlagsIfChanged(id<FxParameterSettingAPI_v5> setAPI,
                               FxParameterFlags newFlags, UInt32 paramID) {
   FxParameterFlags current = 0;
   [getAPI getParameterFlags:&current fromParameter:paramID];
-  if (current != newFlags)
-    [setAPI setParameterFlags:newFlags toParameter:paramID];
+  // Preserve any DISABLED bit set externally (e.g. HTH transition selection
+  // on a sequencer lane that drives this param). Wholesale-overwriting flags
+  // would wipe it.
+  FxParameterFlags want = newFlags | (current & kFxParameterFlag_DISABLED);
+  if (current != want)
+    [setAPI setParameterFlags:want toParameter:paramID];
 }
 
 @implementation GlowPlugin (Visibility)
@@ -34,17 +38,10 @@ static void setFlagsIfChanged(id<FxParameterSettingAPI_v5> setAPI,
         forceShowAllParametersIfEnabled:kParamForceShow
                                paramIDs:@[
                                  @(kParamNoise), @(kParamNoiseOffset),
-                                 @(kParamNoiseSpeed), @(kParamOffsetX),
-                                 @(kParamOffsetY), @(kKKParamColorMode),
+                                 @(kParamNoiseSpeed), @(kKKParamColorMode),
                                  @(kKKParamColorSolid),
-                                 @(kKKParamColorGradient),
-                                 @(kParamGradientType), @(kParamGradientAngle),
-                                 @(kParamTimingInColor),
-                                 @(kParamTimingHoldColor),
-                                 @(kParamTimingOutColor),
-                                 @(kParamTimingInGradient),
-                                 @(kParamTimingHoldGradient),
-                                 @(kParamTimingOutGradient)
+                                 @(kKKParamColorCustomUI),
+                                 @(kParamGradientType), @(kParamGradientAngle)
                                ]
                                  atTime:time];
     if (forceShow)
@@ -61,17 +58,6 @@ static void setFlagsIfChanged(id<FxParameterSettingAPI_v5> setAPI,
     setFlagsIfChanged(paramSetAPI, paramGetAPI, noiseFlags, kParamNoise);
     setFlagsIfChanged(paramSetAPI, paramGetAPI, noiseFlags, kParamNoiseOffset);
     setFlagsIfChanged(paramSetAPI, paramGetAPI, noiseFlags, kParamNoiseSpeed);
-
-    // --- Offset group ---
-    BOOL offsetExpanded = NO;
-    [paramGetAPI getBoolValue:&offsetExpanded
-                fromParameter:kParamOffsetExpanded
-                       atTime:kCMTimeZero];
-
-    FxParameterFlags offsetFlags =
-        offsetExpanded ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
-    setFlagsIfChanged(paramSetAPI, paramGetAPI, offsetFlags, kParamOffsetX);
-    setFlagsIfChanged(paramSetAPI, paramGetAPI, offsetFlags, kParamOffsetY);
 
     // --- Color group ---
     BOOL colorExpanded = NO;
@@ -108,92 +94,15 @@ static void setFlagsIfChanged(id<FxParameterSettingAPI_v5> setAPI,
                         kKKParamColorMode);
       setFlagsIfChanged(paramSetAPI, paramGetAPI, kFxParameterFlag_HIDDEN,
                         kKKParamColorSolid);
-      setFlagsIfChanged(paramSetAPI, paramGetAPI, kFxParameterFlag_HIDDEN,
-                        kKKParamColorGradient);
+      setFlagsIfChanged(paramSetAPI, paramGetAPI,
+                        kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_HIDDEN,
+                        kKKParamColorCustomUI);
       setFlagsIfChanged(paramSetAPI, paramGetAPI, kFxParameterFlag_HIDDEN,
                         kParamGradientType);
       setFlagsIfChanged(paramSetAPI, paramGetAPI, kFxParameterFlag_HIDDEN,
                         kParamGradientAngle);
     }
 
-    // --- Timing color params ---
-    BOOL timingExpanded = NO;
-    [paramGetAPI getBoolValue:&timingExpanded
-                fromParameter:kKKParamTimingExpanded
-                       atTime:kCMTimeZero];
-
-    int colorModeIdx = 0;
-    [paramGetAPI getIntValue:&colorModeIdx
-               fromParameter:kKKParamColorMode
-                      atTime:time];
-    // modes array order: Dynamic(0), Solid(1), Gradient(2)
-    BOOL isSolid = (colorModeIdx == 1);
-    BOOL isGradient = (colorModeIdx == 2);
-
-    BOOL animateIn = NO, animateOut = NO;
-    [paramGetAPI getBoolValue:&animateIn
-                fromParameter:kKKParamAnimateIn
-                       atTime:time];
-    [paramGetAPI getBoolValue:&animateOut
-                fromParameter:kKKParamAnimateOut
-                       atTime:time];
-
-    BOOL inColorToggle = NO, holdColorToggle = NO, outColorToggle = NO;
-    [paramGetAPI getBoolValue:&inColorToggle
-                fromParameter:kParamInColor
-                       atTime:time];
-    [paramGetAPI getBoolValue:&holdColorToggle
-                fromParameter:kParamHoldColor
-                       atTime:time];
-    [paramGetAPI getBoolValue:&outColorToggle
-                fromParameter:kParamOutColor
-                       atTime:time];
-
-    int selectedSection = 1; // Hold
-    [paramGetAPI getIntValue:&selectedSection
-               fromParameter:kKKParamTimingSelectedSection
-                      atTime:kCMTimeZero];
-
-    BOOL sectionIsIn = (selectedSection == 0);
-    BOOL sectionIsHold = (selectedSection == 1);
-    BOOL sectionIsOut = (selectedSection == 2);
-
-    int holdEffect = 0;
-    [paramGetAPI getIntValue:&holdEffect
-               fromParameter:kKKParamHoldEffect
-                      atTime:time];
-    BOOL holdHasEffect = (holdEffect != 0);
-
-    BOOL inActive = timingExpanded && animateIn && inColorToggle && sectionIsIn;
-    BOOL holdActive =
-        timingExpanded && holdColorToggle && holdHasEffect && sectionIsHold;
-    BOOL outActive =
-        timingExpanded && animateOut && outColorToggle && sectionIsOut;
-
-    setFlagsIfChanged(paramSetAPI, paramGetAPI,
-                      (inActive && isSolid) ? kFxParameterFlag_DEFAULT
-                                            : kFxParameterFlag_HIDDEN,
-                      kParamTimingInColor);
-    setFlagsIfChanged(paramSetAPI, paramGetAPI,
-                      (holdActive && isSolid) ? kFxParameterFlag_DEFAULT
-                                              : kFxParameterFlag_HIDDEN,
-                      kParamTimingHoldColor);
-    setFlagsIfChanged(paramSetAPI, paramGetAPI,
-                      (outActive && isSolid) ? kFxParameterFlag_DEFAULT
-                                             : kFxParameterFlag_HIDDEN,
-                      kParamTimingOutColor);
-    setFlagsIfChanged(paramSetAPI, paramGetAPI,
-                      (inActive && isGradient) ? kFxParameterFlag_DEFAULT
-                                               : kFxParameterFlag_HIDDEN,
-                      kParamTimingInGradient);
-    setFlagsIfChanged(paramSetAPI, paramGetAPI,
-                      (holdActive && isGradient) ? kFxParameterFlag_DEFAULT
-                                                 : kFxParameterFlag_HIDDEN,
-                      kParamTimingHoldGradient);
-    setFlagsIfChanged(paramSetAPI, paramGetAPI,
-                      (outActive && isGradient) ? kFxParameterFlag_DEFAULT
-                                                : kFxParameterFlag_HIDDEN,
-                      kParamTimingOutGradient);
   } @finally {
     sUpdating = NO;
   }

@@ -9,13 +9,11 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wprotocol"
 
-@implementation GlowPlugin {
-  KKLog *_log;
-}
+@implementation GlowPlugin
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager;
 {
-  _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
+  KKLogInfo(@"GlowPlugin: initialized");
   self = [super initWithAPIManager:newApiManager];
   return self;
 }
@@ -33,24 +31,32 @@
   return YES;
 }
 
+- (BOOL)forceShowAllParameters {
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!paramGetAPI)
+    return NO;
+  BOOL on = NO;
+  [paramGetAPI getBoolValue:&on
+              fromParameter:kParamForceShow
+                     atTime:kCMTimeZero];
+  return on;
+}
+
 - (BOOL)parameterChanged:(UInt32)parameterID
                   atTime:(CMTime)time
                    error:(NSError **)error {
+  [self multiStageHandleParameterChanged:parameterID atTime:time];
+  [self multiStageRefreshLaneVisibility];
   switch (parameterID) {
   case kKKParamColorMode:
   case kParamGradientType:
   case kParamForceShow:
   case kKKParamTimingExpanded:
-  case kKKParamTimingSelectedSection:
-  case kKKParamAnimateIn:
-  case kKKParamAnimateOut:
-  case kKKParamHoldEffect:
-  case kParamInColor:
-  case kParamHoldColor:
-  case kParamOutColor:
   case kParamNoiseExpanded:
-  case kParamOffsetExpanded:
   case kKKParamColorExpanded:
+  case kKKParamMotionBlurExpanded:
+    [self updateMotionBlurParameterVisibility];
     [self updateParameterVisibilityAtTime:time];
     break;
   case kParamPreset:

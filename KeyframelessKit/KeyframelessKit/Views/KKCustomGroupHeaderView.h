@@ -30,6 +30,10 @@ NS_ASSUME_NONNULL_BEGIN
                          icon:(nullable NSImage *)icon
                 showsCheckbox:(BOOL)showsCheckbox;
 
+/// Adds an icon button to the trailing edge. Only supported on headers created
+/// with showsCheckbox:NO.
+- (void)addTrailingButtonWithIcon:(NSImage *)icon action:(void (^)(void))action;
+
 @end
 
 NS_ASSUME_NONNULL_END

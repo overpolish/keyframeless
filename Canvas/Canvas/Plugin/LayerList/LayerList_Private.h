@@ -69,6 +69,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) NSIndexSet *previewSelectedIndices;
 @property(nonatomic, strong, nullable) KKBezierPath *previewResultPath;
 @property(nonatomic) BOOL previewActive;
+/// Pointer of the api manager that owns this state. Used to detect
+/// duplicate-UUID clones (FCP copy/paste/cut clones `kParamInstanceID`)
+/// and mint a fresh UUID for the second instance. Stored unsafe-unretained:
+/// only ever pointer-compared, never dereferenced.
+@property(nonatomic, assign, nullable) void *ownerAPIPointer;
 @end
 
 NSString *_Nullable KKLayerUUIDForAPI(id<PROAPIAccessing> api);

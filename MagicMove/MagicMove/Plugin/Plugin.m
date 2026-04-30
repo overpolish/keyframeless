@@ -13,13 +13,8 @@
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager;
 {
-  self.log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
-  [self.log
-      info:@"MagicMovePlugin: initWithAPIManager called - plugin is loading"];
+  KKLogInfo(@"MagicMovePlugin: initialized");
   self = [super initWithAPIManager:newApiManager];
-  if (self != nil) {
-    [self.log info:@"MagicMovePlugin: Successfully initialized"];
-  }
   return self;
 }
 
@@ -34,28 +29,26 @@
   return YES;
 }
 
+- (BOOL)forceShowAllParameters {
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!paramGetAPI)
+    return NO;
+  BOOL on = NO;
+  [paramGetAPI getBoolValue:&on
+              fromParameter:kParamForceShowAlerts
+                     atTime:kCMTimeZero];
+  return on;
+}
+
 - (BOOL)parameterChanged:(UInt32)parameterID
                   atTime:(CMTime)time
                    error:(NSError **)error {
-  if (parameterID == kParamPreviewA || parameterID == kParamPreviewB ||
-      parameterID == kParamPreviewDrift || parameterID == kParamPreviewExit) {
-    id<FxParameterRetrievalAPI_v6> paramGetAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    id<FxParameterSettingAPI_v5> paramSetAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    BOOL isOn = NO;
-    [paramGetAPI getBoolValue:&isOn fromParameter:parameterID atTime:time];
-    if (isOn) {
-      const UInt32 allPreviews[] = {kParamPreviewA, kParamPreviewB,
-                                    kParamPreviewDrift, kParamPreviewExit};
-      for (int i = 0; i < 4; i++) {
-        if (allPreviews[i] != parameterID)
-          [paramSetAPI setBoolValue:NO toParameter:allPreviews[i] atTime:time];
-      }
-    }
-  }
   [self handleLinkedParameterChanged:parameterID atTime:time];
+  [self updateTimingParameterVisibility];
+  [self updateMotionBlurParameterVisibility];
   [self updateParameterVisibilityAtTime:time];
+  [self multiStageHandleParameterChanged:parameterID atTime:time];
   return YES;
 }
 

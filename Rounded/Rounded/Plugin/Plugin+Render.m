@@ -11,20 +11,58 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 
-typedef struct {
-  double radius;
-  double cropTop;
-  double cropBottom;
-  double cropLeft;
-  double cropRight;
-} RoundedPluginState;
-
 @implementation RoundedPlugin (Render)
 
 - (BOOL)pluginState:(NSData **)pluginState
              atTime:(CMTime)renderTime
             quality:(FxQuality)qualityLevel
               error:(NSError **)error {
+  RoundedPluginState params;
+  if (![self roundedParams:&params atTime:renderTime error:error])
+    return NO;
+
+  id<FxParameterRetrievalAPI_v6> paramAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  KKMotionBlurState mbState =
+      [KKMotionBlur snapshotStateWithParameterAPI:paramAPI
+                                        timingAPI:timingAPI
+                                           atTime:renderTime
+                                          quality:qualityLevel];
+
+  if (mbState.enabled && mbState.transitionsOnly &&
+      ![self multiStageAnyLaneInTransitionAtTime:renderTime]) {
+    mbState.enabled = false;
+  }
+
+  // Layout: [KKMotionBlurState | N × RoundedPluginState]. Sample 0 is at
+  // renderTime; samples 1..N-1 are evaluated backwards across the shutter
+  // window when blur is enabled.
+  NSMutableData *data = [NSMutableData data];
+  [data appendBytes:&mbState length:sizeof(mbState)];
+  [data appendBytes:&params length:sizeof(params)];
+
+  if (mbState.enabled) {
+    NSArray<NSValue *> *times = [KKMotionBlur sampleTimesForState:mbState
+                                                       renderTime:renderTime];
+    for (NSUInteger i = 1; i < times.count; i++) {
+      CMTime t = kCMTimeZero;
+      [times[i] getValue:&t];
+      RoundedPluginState p;
+      if (![self roundedParams:&p atTime:t error:error])
+        return NO;
+      [data appendBytes:&p length:sizeof(p)];
+    }
+  }
+
+  *pluginState = data;
+  return (*pluginState != nil);
+}
+
+- (BOOL)roundedParams:(RoundedPluginState *)outParams
+               atTime:(CMTime)renderTime
+                error:(NSError **)error {
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   if (paramGetAPI == nil) {
@@ -39,64 +77,45 @@ typedef struct {
     }
     return NO;
   }
-  double radius = 20.0;
-  [paramGetAPI getFloatValue:&radius
-               fromParameter:kParamRadius
-                      atTime:renderTime];
+  NSDictionary<NSString *, NSArray<NSNumber *> *> *multiStage =
+      [self multiStageValuesAtTime:renderTime];
 
-  KKTimingResult *timing = [self timingAtTime:renderTime];
-  double inF = timing.inPhase.factor;
-  double holdF = timing.holdPhase.factor;
-  double outF = timing.outPhase.factor;
+  NSArray<NSNumber *> *msRadius = multiStage[@"Radius"];
+  if (msRadius.count > 0) {
+    outParams->radius = msRadius[0].doubleValue;
+  } else {
+    double radius = 20.0;
+    [paramGetAPI getFloatValue:&radius
+                 fromParameter:kParamRadius
+                        atTime:renderTime];
+    outParams->radius = radius;
+  }
 
-  BOOL inR = YES, inC = YES;
-  [paramGetAPI getBoolValue:&inR
-              fromParameter:kParamInRadius
-                     atTime:renderTime];
-  [paramGetAPI getBoolValue:&inC fromParameter:kParamInCrop atTime:renderTime];
-  BOOL holdR = YES, holdC = YES;
-  [paramGetAPI getBoolValue:&holdR
-              fromParameter:kParamHoldRadius
-                     atTime:renderTime];
-  [paramGetAPI getBoolValue:&holdC
-              fromParameter:kParamHoldCrop
-                     atTime:renderTime];
-  BOOL outR = YES, outC = YES;
-  [paramGetAPI getBoolValue:&outR
-              fromParameter:kParamOutRadius
-                     atTime:renderTime];
-  [paramGetAPI getBoolValue:&outC
-              fromParameter:kParamOutCrop
-                     atTime:renderTime];
-
-  double rF = (inR ? inF : 1.0) * (holdR ? holdF : 1.0) * (outR ? outF : 1.0);
-  double cF = (inC ? inF : 1.0) * (holdC ? holdF : 1.0) * (outC ? outF : 1.0);
-
-  RoundedPluginState state;
-  state.radius = radius * rF;
-  state.cropTop = 0.0;
-  state.cropBottom = 0.0;
-  state.cropLeft = 0.0;
-  state.cropRight = 0.0;
-  [paramGetAPI getFloatValue:&state.cropTop
-               fromParameter:kParamCropTop
-                      atTime:renderTime];
-  [paramGetAPI getFloatValue:&state.cropBottom
-               fromParameter:kParamCropBottom
-                      atTime:renderTime];
-  [paramGetAPI getFloatValue:&state.cropLeft
-               fromParameter:kParamCropLeft
-                      atTime:renderTime];
-  [paramGetAPI getFloatValue:&state.cropRight
-               fromParameter:kParamCropRight
-                      atTime:renderTime];
-  state.cropTop *= cF;
-  state.cropBottom *= cF;
-  state.cropLeft *= cF;
-  state.cropRight *= cF;
-
-  *pluginState = [NSData dataWithBytes:&state length:sizeof(state)];
-  return (*pluginState != nil);
+  outParams->cropTop = 0.0;
+  outParams->cropBottom = 0.0;
+  outParams->cropLeft = 0.0;
+  outParams->cropRight = 0.0;
+  NSArray<NSNumber *> *msCrop = multiStage[@"Crop"];
+  if (msCrop.count >= 4) {
+    outParams->cropTop = msCrop[0].doubleValue;
+    outParams->cropBottom = msCrop[1].doubleValue;
+    outParams->cropLeft = msCrop[2].doubleValue;
+    outParams->cropRight = msCrop[3].doubleValue;
+  } else {
+    [paramGetAPI getFloatValue:&outParams->cropTop
+                 fromParameter:kParamCropTop
+                        atTime:renderTime];
+    [paramGetAPI getFloatValue:&outParams->cropBottom
+                 fromParameter:kParamCropBottom
+                        atTime:renderTime];
+    [paramGetAPI getFloatValue:&outParams->cropLeft
+                 fromParameter:kParamCropLeft
+                        atTime:renderTime];
+    [paramGetAPI getFloatValue:&outParams->cropRight
+                 fromParameter:kParamCropRight
+                        atTime:renderTime];
+  }
+  return YES;
 }
 
 - (BOOL)renderDestinationImage:(FxImageTile *)destinationImage
@@ -104,8 +123,17 @@ typedef struct {
                    pluginState:(NSData *)pluginState
                         atTime:(CMTime)renderTime
                          error:(NSError *_Nullable *)outError {
+  // Drive the multi-stage pump from render so sequencer graph + playhead
+  // updates still fire when a completely unrelated effect is OSC-selected.
+  // Render fires on every effect per frame regardless of OSC focus.
+  [KKPlugin multiStageRenderTickForAPI:self.apiManager
+                                atTime:renderTime
+                                sender:self];
+
   if (!pluginState || !sourceImages[0].ioSurface ||
-      !destinationImage.ioSurface) {
+      !destinationImage.ioSurface ||
+      pluginState.length <
+          sizeof(KKMotionBlurState) + sizeof(RoundedPluginState)) {
     if (outError != NULL) {
       *outError =
           [NSError errorWithDomain:FxPlugErrorDomain
@@ -119,8 +147,8 @@ typedef struct {
     return NO;
   }
 
-  RoundedPluginState state;
-  [pluginState getBytes:&state length:sizeof(state)];
+  KKMotionBlurState mbState;
+  [pluginState getBytes:&mbState length:sizeof(mbState)];
 
   id<MTLRenderPipelineState> pipelineState =
       [self pipelineStateForPluginID:kPluginID
@@ -132,25 +160,99 @@ typedef struct {
   if (!pipelineState)
     return NO;
 
-  float fragmentRadius = (float)state.radius;
+  // Per-tile constants that don't vary across motion-blur samples.
   simd_float2 imageSize = {(float)(destinationImage.imagePixelBounds.right -
                                    destinationImage.imagePixelBounds.left),
                            (float)(destinationImage.imagePixelBounds.top -
                                    destinationImage.imagePixelBounds.bottom)};
-
   simd_float2 tileOffset = {
       roundf((float)(destinationImage.tilePixelBounds.left -
                      destinationImage.imagePixelBounds.left)),
       roundf((float)(destinationImage.tilePixelBounds.bottom -
                      destinationImage.imagePixelBounds.bottom))};
 
-  float cropL = (float)state.cropLeft * imageSize.x;
-  float cropR = (float)state.cropRight * imageSize.x;
-  float cropB = (float)state.cropBottom * imageSize.y;
-  float cropT = (float)state.cropTop * imageSize.y;
-  simd_float2 cropCenter = {(cropL - cropR) * 0.5f, (cropB - cropT) * 0.5f};
-  simd_float2 cropSize = {imageSize.x - cropL - cropR,
-                          imageSize.y - cropB - cropT};
+  void (^encodeDraw)(id<MTLRenderCommandEncoder>, NSArray<id<MTLTexture>> *,
+                     RoundedPluginState) = ^(id<MTLRenderCommandEncoder> enc,
+                                             NSArray<id<MTLTexture>> *texs,
+                                             RoundedPluginState s) {
+    float fragmentRadius = (float)s.radius;
+    float cropL = (float)s.cropLeft * imageSize.x;
+    float cropR = (float)s.cropRight * imageSize.x;
+    float cropB = (float)s.cropBottom * imageSize.y;
+    float cropT = (float)s.cropTop * imageSize.y;
+    simd_float2 cropCenter = {(cropL - cropR) * 0.5f, (cropB - cropT) * 0.5f};
+    simd_float2 cropSize = {imageSize.x - cropL - cropR,
+                            imageSize.y - cropB - cropT};
+    [enc setRenderPipelineState:pipelineState];
+    [enc setFragmentTexture:texs[0] atIndex:KKTextureIndex_InputImage];
+    [enc setFragmentBytes:&fragmentRadius
+                   length:sizeof(fragmentRadius)
+                  atIndex:FragmentIndex_Radius];
+    [enc setFragmentBytes:&imageSize
+                   length:sizeof(imageSize)
+                  atIndex:FragmentIndex_ImageSize];
+    [enc setFragmentBytes:&tileOffset
+                   length:sizeof(tileOffset)
+                  atIndex:FragmentIndex_TileOffset];
+    [enc setFragmentBytes:&cropCenter
+                   length:sizeof(cropCenter)
+                  atIndex:FragmentIndex_CropCenter];
+    [enc setFragmentBytes:&cropSize
+                   length:sizeof(cropSize)
+                  atIndex:FragmentIndex_CropSize];
+    [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
+            vertexStart:0
+            vertexCount:4];
+  };
+
+  if (mbState.enabled) {
+    __weak typeof(self) weakSelf = self;
+    NSData *capturedState = pluginState;
+    BOOL applied = [KKMotionBlur
+        applyToDestinationImage:destinationImage
+                   sourceImages:sourceImages
+                          state:mbState
+                     renderTime:renderTime
+                    renderBlock:^BOOL(int sampleIndex,
+                                      id<MTLTexture> sampleDest,
+                                      id<MTLCommandBuffer> commandBuffer,
+                                      NSArray<id<MTLTexture>> *inputTextures) {
+                      __strong typeof(weakSelf) strongSelf = weakSelf;
+                      if (!strongSelf || inputTextures.count == 0)
+                        return NO;
+                      NSUInteger offset =
+                          sizeof(KKMotionBlurState) +
+                          (NSUInteger)sampleIndex * sizeof(RoundedPluginState);
+                      if (offset + sizeof(RoundedPluginState) >
+                          capturedState.length)
+                        return NO;
+                      RoundedPluginState s;
+                      [capturedState
+                          getBytes:&s
+                             range:NSMakeRange(offset,
+                                               sizeof(RoundedPluginState))];
+                      return [strongSelf
+                          encodeFullScreenQuadIntoTexture:sampleDest
+                                         destinationImage:destinationImage
+                                            commandBuffer:commandBuffer
+                                           sourceTextures:inputTextures
+                                                 commands:^(
+                                                     id<MTLRenderCommandEncoder>
+                                                         enc,
+                                                     NSArray<id<MTLTexture>>
+                                                         *texs) {
+                                                   encodeDraw(enc, texs, s);
+                                                 }];
+                    }];
+    if (applied)
+      return YES;
+    // Fall through on failure so the user sees the un-blurred frame.
+  }
+
+  RoundedPluginState state;
+  [pluginState getBytes:&state
+                  range:NSMakeRange(sizeof(KKMotionBlurState),
+                                    sizeof(RoundedPluginState))];
 
   return [self
       encodeRenderCommandsForDestinationImage:destinationImage
@@ -159,43 +261,8 @@ typedef struct {
                                          id<MTLRenderCommandEncoder> encoder,
                                          NSArray<id<MTLTexture>>
                                              *inputTextures) {
-                                       [encoder setRenderPipelineState:
-                                                    pipelineState];
-                                       [encoder
-                                           setFragmentTexture:inputTextures[0]
-                                                      atIndex:
-                                                          KKTextureIndex_InputImage];
-                                       [encoder
-                                           setFragmentBytes:&fragmentRadius
-                                                     length:sizeof(
-                                                                fragmentRadius)
-                                                    atIndex:
-                                                        FragmentIndex_Radius];
-                                       [encoder
-                                           setFragmentBytes:&imageSize
-                                                     length:sizeof(imageSize)
-                                                    atIndex:
-                                                        FragmentIndex_ImageSize];
-                                       [encoder
-                                           setFragmentBytes:&tileOffset
-                                                     length:sizeof(tileOffset)
-                                                    atIndex:
-                                                        FragmentIndex_TileOffset];
-                                       [encoder
-                                           setFragmentBytes:&cropCenter
-                                                     length:sizeof(cropCenter)
-                                                    atIndex:
-                                                        FragmentIndex_CropCenter];
-                                       [encoder
-                                           setFragmentBytes:&cropSize
-                                                     length:sizeof(cropSize)
-                                                    atIndex:
-                                                        FragmentIndex_CropSize];
-                                       [encoder
-                                           drawPrimitives:
-                                               MTLPrimitiveTypeTriangleStrip
-                                              vertexStart:0
-                                              vertexCount:4];
+                                       encodeDraw(encoder, inputTextures,
+                                                  state);
                                      }];
 }
 

@@ -63,7 +63,6 @@
     "memmove",
     "moef",
     "moti",
-    "motionblur",
     "motionlines",
     "noescape",
     "nonatomic",
@@ -128,9 +127,10 @@
     "KeyframelessKit",
     "FxPlug",
     "Rounded",
-    "MotionBlur",
     "Keyframeless X - Audio",
     "Glow",
-    "Canvas"
+    "Canvas",
+    "Timing",
+    "MotionBlur"
   ]
 }

@@ -45,17 +45,31 @@
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
 
-  double offX = 0, offY = 0;
-  [api getFloatValue:&offX fromParameter:kParamOffsetX atTime:time];
-  [api getFloatValue:&offY fromParameter:kParamOffsetY atTime:time];
+  double posX = 0.5, posY = 0.5;
+  [api getXValue:&posX YValue:&posY fromParameter:kParamPosition atTime:time];
 
   if (!oscAPI)
     return CGPointZero;
 
   double cx = 0, cy = 0;
   [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
-                          fromX:0.5 + offX
-                          fromY:0.5 + offY
+                          fromX:posX
+                          fromY:posY
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&cx
+                            toY:&cy];
+  return CGPointMake(cx, cy);
+}
+
+- (CGPoint)canvasCenter {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  if (!oscAPI)
+    return CGPointZero;
+  double cx = 0, cy = 0;
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:0.5
+                          fromY:0.5
                         toSpace:kFxDrawingCoordinates_CANVAS
                             toX:&cx
                             toY:&cy];
@@ -75,6 +89,9 @@
               activePart:(NSInteger)activePart
         destinationImage:(FxImageTile *)destinationImage
                   atTime:(CMTime)time {
+  [KKPlugin multiStageDrawOSCTickForAPI:self.apiManager atTime:time];
+  [KKPlugin colorSyncFromParams:self.apiManager];
+
   [self encodeRenderCommandsForDestinationImage:destinationImage
                                  canvasPosition:CGPointZero
                                clearDestination:YES
@@ -82,25 +99,34 @@
                                                   CGPoint p, simd_uint2 v){
                                        }];
 
-  [_offsetSnap drawSnapGuidesWithOSC:self
-                       isObjectSpace:NO
-                    destinationImage:destinationImage];
+  BOOL offsetVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                                      label:@"Position"];
+  BOOL radiusVisible = [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                                      label:@"Radius"];
 
-  CGPoint center = [self oscPositionAtTime:time];
+  if (offsetVisible)
+    [_offsetSnap drawSnapGuidesWithOSC:self
+                         isObjectSpace:NO
+                      destinationImage:destinationImage];
+
+  CGPoint offsetPos = [self oscPositionAtTime:time];
+  CGPoint ringCenter = [self canvasCenter];
   [self updateRingAtTime:time];
 
-  _radiusRing.center = center;
-  [_radiusRing drawAtCanvasPosition:center
-                          isHovered:_ringHovered
-                           isActive:_ringDragging
-                   destinationImage:destinationImage
-                             atTime:time];
+  _radiusRing.center = ringCenter;
+  if (radiusVisible)
+    [_radiusRing drawAtCanvasPosition:ringCenter
+                            isHovered:_ringHovered
+                             isActive:_ringDragging
+                     destinationImage:destinationImage
+                               atTime:time];
 
-  [self drawAtCanvasPosition:center
-                   isHovered:_arcHovered
-                    isActive:_arcDragging
-            destinationImage:destinationImage
-                      atTime:time];
+  if (offsetVisible)
+    [self drawAtCanvasPosition:offsetPos
+                     isHovered:_arcHovered
+                      isActive:_arcDragging
+              destinationImage:destinationImage
+                        atTime:time];
 }
 
 - (void)hitTestOSCAtMousePositionX:(double)positionX
@@ -111,22 +137,25 @@
   _arcHovered = NO;
   _ringHovered = NO;
 
-  CGPoint center = [self oscPositionAtTime:time];
-
-  double dx = positionX - center.x;
-  double dy = positionY - center.y;
-  if (sqrt(dx * dx + dy * dy) < self.hitRadius) {
-    _arcHovered = YES;
-    *activePart = kOSCOffsetPart;
+  if ([KKPlugin multiStageOSCVisibleForAPI:self.apiManager label:@"Position"]) {
+    CGPoint offsetPos = [self oscPositionAtTime:time];
+    double dx = positionX - offsetPos.x;
+    double dy = positionY - offsetPos.y;
+    if (sqrt(dx * dx + dy * dy) < self.hitRadius) {
+      _arcHovered = YES;
+      *activePart = kOSCPositionPart;
+    }
   }
 
-  [self updateRingAtTime:time];
-  _radiusRing.center = center;
-  if ([_radiusRing hitTestAtMousePositionX:positionX
-                                 positionY:positionY
-                                    atTime:time]) {
-    _ringHovered = YES;
-    *activePart = kOSCRadiusPart;
+  if ([KKPlugin multiStageOSCVisibleForAPI:self.apiManager label:@"Radius"]) {
+    [self updateRingAtTime:time];
+    _radiusRing.center = [self canvasCenter];
+    if ([_radiusRing hitTestAtMousePositionX:positionX
+                                   positionY:positionY
+                                      atTime:time]) {
+      _ringHovered = YES;
+      *activePart = kOSCRadiusPart;
+    }
   }
 }
 
@@ -168,7 +197,7 @@
     _ringLastClickTime = now;
 
     _ringDragging = YES;
-    CGPoint center = [self oscPositionAtTime:time];
+    CGPoint center = [self canvasCenter];
     double dx = positionX - center.x;
     double dy = positionY - center.y;
     _ringDragStartDist = sqrt(dx * dx + dy * dy);
@@ -187,7 +216,7 @@
     return;
   }
 
-  if (activePart == kOSCOffsetPart) {
+  if (activePart == kOSCPositionPart) {
     _arcDragging = YES;
     _arcDragStartX = positionX;
     _arcDragStartY = positionY;
@@ -209,26 +238,17 @@
     _arcCanvasToParamX = (c1x - c0x) / 100.0;
     _arcCanvasToParamY = (c1y - c0y) / 100.0;
 
-    // Jump glow center to mouse position on click.
-    double centerX, centerY;
-    [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
-                            fromX:0.5
-                            fromY:0.5
-                          toSpace:kFxDrawingCoordinates_CANVAS
-                              toX:&centerX
-                              toY:&centerY];
-    _arcDragStartParamX = (positionX - centerX) * _arcCanvasToParamX;
-    _arcDragStartParamY = (positionY - centerY) * _arcCanvasToParamY;
+    // Jump glow to mouse position on click (absolute object-space).
+    _arcDragStartParamX = c0x;
+    _arcDragStartParamY = c0y;
 
     id<FxParameterSettingAPI_v5> paramSetAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
     if (paramSetAPI) {
-      [paramSetAPI setFloatValue:_arcDragStartParamX
-                     toParameter:kParamOffsetX
-                          atTime:time];
-      [paramSetAPI setFloatValue:_arcDragStartParamY
-                     toParameter:kParamOffsetY
-                          atTime:time];
+      [paramSetAPI setXValue:_arcDragStartParamX
+                      YValue:_arcDragStartParamY
+                 toParameter:kParamPosition
+                      atTime:time];
     }
 
     [oscAPI setCursor:[NSCursor openHandCursor]];
@@ -251,7 +271,7 @@
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
   if (activePart == kOSCRadiusPart) {
-    CGPoint center = [self oscPositionAtTime:time];
+    CGPoint center = [self canvasCenter];
     double dx = positionX - center.x;
     double dy = positionY - center.y;
     double dist = sqrt(dx * dx + dy * dy);
@@ -294,7 +314,7 @@
     return;
   }
 
-  if (activePart == kOSCOffsetPart) {
+  if (activePart == kOSCPositionPart) {
     id<FxOnScreenControlAPI_v4> oscAPI =
         [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
     if (!oscAPI)
@@ -316,14 +336,16 @@
 
     double deltaX = snapped.x - _arcDragStartX;
     double deltaY = snapped.y - _arcDragStartY;
-    double newOffX = _arcDragStartParamX + deltaX * _arcCanvasToParamX;
-    double newOffY = _arcDragStartParamY + deltaY * _arcCanvasToParamY;
+    double newPosX = _arcDragStartParamX + deltaX * _arcCanvasToParamX;
+    double newPosY = _arcDragStartParamY + deltaY * _arcCanvasToParamY;
 
     id<FxParameterSettingAPI_v5> paramSetAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
     if (paramSetAPI) {
-      [paramSetAPI setFloatValue:newOffX toParameter:kParamOffsetX atTime:time];
-      [paramSetAPI setFloatValue:newOffY toParameter:kParamOffsetY atTime:time];
+      [paramSetAPI setXValue:newPosX
+                      YValue:newPosY
+                 toParameter:kParamPosition
+                      atTime:time];
     }
     *forceUpdate = YES;
     return;
