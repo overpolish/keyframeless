@@ -33,6 +33,7 @@ struct AudioSetupView: View {
 			.layoutPriority(1)
 			HStack(alignment: .top, spacing: KKSpacingLG) {
 				WhisperModelPickerView(manager: whisperManager)
+					.frame(maxHeight: .infinity)
 				WhisperLanguagePickerView(manager: whisperManager)
 					.frame(maxHeight: .infinity)
 				WhisperTermsView(manager: whisperManager)

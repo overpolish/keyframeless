@@ -37,6 +37,10 @@ class WhisperModelManager: ObservableObject {
 			id: "openai_whisper-small", displayName: "Small", sizeDescription: "~1.4 GB",
 			hint: "Handles accents and noise"),
 		ModelInfo(
+			id: "openai_whisper-large-v3_turbo", displayName: "Large v3 Turbo",
+			sizeDescription: "~1.6 GB",
+			hint: "Near-large accuracy at speed"),
+		ModelInfo(
 			id: "openai_whisper-large-v3", displayName: "Large v3", sizeDescription: "~6 GB",
 			hint: "Best accuracy, final exports"),
 	]

@@ -20,17 +20,19 @@ struct WhisperModelPickerView: View {
 			}
 			.frame(height: 20)
 
-			VStack(spacing: KKSpacingXS) {
-				ForEach(WhisperModelManager.models) { model in
-					WhisperModelRow(model: model, manager: manager)
+			ScrollShadowView {
+				LazyVStack(spacing: KKSpacingXS) {
+					ForEach(WhisperModelManager.models) { model in
+						WhisperModelRow(model: model, manager: manager)
+					}
+					if !WhisperModelManager.isAppleSilicon {
+						IntelModelNote()
+					}
 				}
-				if !WhisperModelManager.isAppleSilicon {
-					IntelModelNote()
-				}
+				.padding(KKPaddingMD)
 			}
-			.padding(KKPaddingMD)
 			.kkPanel()
-			.frame(maxWidth: .infinity)
+			.frame(maxWidth: .infinity, minHeight: 200, maxHeight: .infinity)
 		}
 	}
 }
