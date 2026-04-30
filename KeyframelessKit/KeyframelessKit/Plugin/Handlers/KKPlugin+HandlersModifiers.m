@@ -98,9 +98,13 @@
     return;
   }
 
+  NSSet<NSString *> *pluginHidden =
+      [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
+
   BOOL anyChanged = NO;
   for (NSUInteger li = 0; li < lanes.count; li++) {
-    if (!lanes[li].visibleInSequencer)
+    if (!lanes[li].visibleInSequencer ||
+        [pluginHidden containsObject:lanes[li].propertyLabel])
       continue;
     KKTimingLane *lane = [lanes[li] copy];
     NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
@@ -156,9 +160,13 @@
     [timingAPI durationTimeForEffect:&effectDuration];
   double durSec = CMTimeGetSeconds(effectDuration);
 
+  NSSet<NSString *> *pluginHidden =
+      [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
+
   BOOL anyChanged = NO;
   for (NSUInteger li = 0; li < lanes.count; li++) {
-    if (!lanes[li].visibleInSequencer)
+    if (!lanes[li].visibleInSequencer ||
+        [pluginHidden containsObject:lanes[li].propertyLabel])
       continue;
     KKTimingLane *lane = [lanes[li] copy];
     NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];

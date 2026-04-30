@@ -281,6 +281,15 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
   if (snapshot.count > 0)
     return snapshot;
 
+  return [self _buildDefaultLanesForProps:seqProps
+                              paramGetAPI:paramGetAPI
+                                   atTime:time];
+}
+
+- (NSArray<KKTimingLane *> *)
+    _buildDefaultLanesForProps:(NSArray<KKAnimatableProperty *> *)seqProps
+                   paramGetAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI
+                        atTime:(CMTime)time {
   NSSet<NSString *> *oscOffByDefault =
       [self animatablePropertyLabelsWithOSCDefaultOff];
   NSMutableArray<KKTimingLane *> *defaults =
@@ -346,11 +355,12 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
     NSSet<NSString *> *hidden =
         KKEffectiveHiddenLaneLabels(pluginHidden, lanes);
     instState.hiddenLaneLabels = hidden;
+    instState.pluginHiddenLaneLabels = pluginHidden;
     seqView.lanes = KKFilterLanesForVisibility(lanes, hidden);
-    KKPushLanesToVisibilityBar(instState.visibilityBar, lanes);
+    KKPushLanesToVisibilityBar(instState.visibilityBar, lanes, pluginHidden);
     KKApplyEmptyLanesVisibility(instState.emptyLanesView, lanes);
     for (KKTimingViewRefs *r in instState.additionalTimingViews) {
-      KKPushLanesToVisibilityBar(r.visibilityBar, lanes);
+      KKPushLanesToVisibilityBar(r.visibilityBar, lanes, pluginHidden);
       KKApplyEmptyLanesVisibility(r.emptyLanesView, lanes);
     }
   }
@@ -473,6 +483,9 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
   visibilityBar.onPillClicked = ^(NSInteger laneIndex, BOOL optionDown) {
     [weakSelf _handleLaneVisibilityClickedAtIndex:laneIndex
                                        optionDown:optionDown];
+  };
+  visibilityBar.onPillDraggedToVisible = ^(NSInteger laneIndex, BOOL visible) {
+    [weakSelf _handleLaneVisibilitySetAtIndex:laneIndex visible:visible];
   };
 
   [self _wireStageSequencerCallbacksFor:seqView

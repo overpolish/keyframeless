@@ -129,12 +129,16 @@
     return;
   }
 
+  NSSet<NSString *> *pluginHidden =
+      [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
+
   // Capture each lane's new (segIdx, values) before writing, so we can push
   // them to native params after the JSON write.
   NSMutableArray<NSNumber *> *newSegPerLane = [NSMutableArray array];
   for (NSUInteger li = 0; li < lanes.count; li++) {
     KKTimingLane *lane = lanes[li];
-    if (!lane.visibleInSequencer) {
+    if (!lane.visibleInSequencer ||
+        [pluginHidden containsObject:lane.propertyLabel]) {
       [newSegPerLane addObject:@(-1)];
       continue;
     }
@@ -277,7 +281,17 @@
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   NSMutableArray<KKTimingLane *> *lanes =
       KKReadLanesRebalanced(self.apiManager, getAPI);
-  if (!lanes || laneIndex < 0 || (NSUInteger)laneIndex >= lanes.count) {
+  if (!lanes) {
+    [actAPI endAction:self];
+    return;
+  }
+  // Pill bar shows lanes filtered only by the plugin (system) hidden set —
+  // not by user-hidden — so translate via that same set.
+  NSSet<NSString *> *pluginHiddenForIndex =
+      [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
+  laneIndex =
+      KKLaneJSONIndexForViewIndex(laneIndex, lanes, pluginHiddenForIndex);
+  if (laneIndex < 0 || (NSUInteger)laneIndex >= lanes.count) {
     [actAPI endAction:self];
     return;
   }
@@ -314,6 +328,7 @@
     NSSet<NSString *> *pluginHidden =
         [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
     state.hiddenLaneLabels = KKEffectiveHiddenLaneLabels(pluginHidden, lanes);
+    state.pluginHiddenLaneLabels = pluginHidden;
     NSArray<KKTimingLane *> *visible =
         KKFilterLanesForVisibility(lanes, state.hiddenLaneLabels);
     KKStageSequencerView *seq = state.sequencerView;
@@ -324,10 +339,73 @@
       for (KKTimingViewRefs *r in extras)
         r.seqView.lanes = visible;
     });
-    KKPushLanesToVisibilityBar(state.visibilityBar, lanes);
+    KKPushLanesToVisibilityBar(state.visibilityBar, lanes, pluginHidden);
     KKApplyEmptyLanesVisibility(state.emptyLanesView, lanes);
     for (KKTimingViewRefs *r in extras) {
-      KKPushLanesToVisibilityBar(r.visibilityBar, lanes);
+      KKPushLanesToVisibilityBar(r.visibilityBar, lanes, pluginHidden);
+      KKApplyEmptyLanesVisibility(r.emptyLanesView, lanes);
+    }
+  }
+
+  [actAPI endAction:self];
+  [self timingGraphApplyState];
+}
+
+- (void)_handleLaneVisibilitySetAtIndex:(NSInteger)laneIndex
+                                visible:(BOOL)visible {
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  NSMutableArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, getAPI);
+  if (!lanes) {
+    [actAPI endAction:self];
+    return;
+  }
+  NSSet<NSString *> *pluginHiddenForIndex =
+      [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
+  laneIndex =
+      KKLaneJSONIndexForViewIndex(laneIndex, lanes, pluginHiddenForIndex);
+  if (laneIndex < 0 || (NSUInteger)laneIndex >= lanes.count) {
+    [actAPI endAction:self];
+    return;
+  }
+  if (lanes[laneIndex].visibleInSequencer == visible) {
+    [actAPI endAction:self];
+    return;
+  }
+  KKTimingLane *lane = [lanes[laneIndex] copy];
+  lane.visibleInSequencer = visible;
+  lanes[laneIndex] = lane;
+
+  KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
+
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  if (state) {
+    state.lanesSnapshot = [lanes copy];
+    state.pendingLanes = nil;
+    NSSet<NSString *> *pluginHidden =
+        [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
+    state.hiddenLaneLabels = KKEffectiveHiddenLaneLabels(pluginHidden, lanes);
+    state.pluginHiddenLaneLabels = pluginHidden;
+    NSArray<KKTimingLane *> *visibleLanes =
+        KKFilterLanesForVisibility(lanes, state.hiddenLaneLabels);
+    KKStageSequencerView *seq = state.sequencerView;
+    NSArray<KKTimingViewRefs *> *extras =
+        [state.additionalTimingViews copy] ?: @[];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      seq.lanes = visibleLanes;
+      for (KKTimingViewRefs *r in extras)
+        r.seqView.lanes = visibleLanes;
+    });
+    KKPushLanesToVisibilityBar(state.visibilityBar, lanes, pluginHidden);
+    KKApplyEmptyLanesVisibility(state.emptyLanesView, lanes);
+    for (KKTimingViewRefs *r in extras) {
+      KKPushLanesToVisibilityBar(r.visibilityBar, lanes, pluginHidden);
       KKApplyEmptyLanesVisibility(r.emptyLanesView, lanes);
     }
   }

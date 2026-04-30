@@ -96,7 +96,8 @@ void KKApplyEmptyLanesVisibility(KKEmptyLanesView *emptyView,
 }
 
 void KKPushLanesToVisibilityBar(KKLaneVisibilityBar *bar,
-                                NSArray<KKTimingLane *> *lanes) {
+                                NSArray<KKTimingLane *> *lanes,
+                                NSSet<NSString *> *hidden) {
   if (!bar)
     return;
   NSMutableArray<NSString *> *labels =
@@ -104,7 +105,10 @@ void KKPushLanesToVisibilityBar(KKLaneVisibilityBar *bar,
   NSMutableArray<NSNumber *> *states =
       [NSMutableArray arrayWithCapacity:lanes.count];
   for (KKTimingLane *lane in lanes) {
-    [labels addObject:lane.propertyLabel ?: @""];
+    NSString *label = lane.propertyLabel ?: @"";
+    if (hidden && [hidden containsObject:label])
+      continue;
+    [labels addObject:label];
     [states addObject:@(lane.visibleInSequencer)];
   }
   dispatch_block_t apply = ^{

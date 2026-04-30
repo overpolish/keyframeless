@@ -26,10 +26,13 @@ NSArray<KKGradientStop *> *KKGradientStopsFromJSON(NSString *json) {
     [stops addObject:[KKGradientStop
                          stopWithPosition:[d[@"p"] doubleValue]
                                     color:[NSColor
-                                              colorWithRed:[d[@"r"] doubleValue]
-                                                     green:[d[@"g"] doubleValue]
-                                                      blue:[d[@"b"] doubleValue]
-                                                     alpha:1.0]
+                                              colorWithSRGBRed:[d[@"r"]
+                                                                   doubleValue]
+                                                         green:[d[@"g"]
+                                                                   doubleValue]
+                                                          blue:[d[@"b"]
+                                                                   doubleValue]
+                                                         alpha:1.0]
                                  midpoint:midpoint]];
   }
   return stops.count >= 2 ? stops : nil;
@@ -159,7 +162,7 @@ NSArray<KKGradientStop *> *KKGradientStopsFromFlat(NSArray<NSNumber *> *flat) {
     double g = flat[i + 2].doubleValue;
     double b = flat[i + 3].doubleValue;
     double m = flat[i + 4].doubleValue;
-    NSColor *c = [NSColor colorWithRed:r green:g blue:b alpha:1.0];
+    NSColor *c = [NSColor colorWithSRGBRed:r green:g blue:b alpha:1.0];
     [stops addObject:[KKGradientStop stopWithPosition:p color:c midpoint:m]];
   }
   return stops;
