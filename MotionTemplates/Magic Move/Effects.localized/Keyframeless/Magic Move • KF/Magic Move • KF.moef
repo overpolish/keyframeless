@@ -2,7 +2,7 @@
 <!DOCTYPE ozxmlscene>
 <ozml version="5.14">
 
-<displayversion>6.0</displayversion>
+<displayversion>6.2</displayversion>
 
 <factory id="1" uuid="46c844a813d311d8a438000a95af9f7e">
 	<description>Channel</description>
@@ -163,55 +163,25 @@
 	</sceneSettings>
 	<publishSettings>
 		<version>2</version>
-		<target object="3001886899" channel="./9990" name=""/>
-		<target object="3001886899" channel="./9001" name=""/>
-		<target object="3001886899" channel="./9900" name=""/>
-		<target object="3001886899" channel="./9905" name=""/>
-		<target object="3001886899" channel="./601" name="Anchor Point"/>
-		<target object="3001886899" channel="./1" name=""/>
-		<target object="3001886899" channel="./7" name="Preview"/>
-		<target object="3001886899" channel="./8" name="Hide Controls"/>
-		<target object="3001886899" channel="./2" name="Position"/>
-		<target object="3001886899" channel="./3" name="Rotation Z"/>
-		<target object="3001886899" channel="./9" name="Rotation X"/>
-		<target object="3001886899" channel="./10" name="Rotation Y"/>
-		<target object="3001886899" channel="./4" name="Scale X"/>
-		<target object="3001886899" channel="./5" name="Scale Y"/>
-		<target object="3001886899" channel="./6" name="Opacity"/>
-		<target object="3001886899" channel="./101" name=""/>
-		<target object="3001886899" channel="./107" name="Preview"/>
-		<target object="3001886899" channel="./108" name="Hide Controls"/>
-		<target object="3001886899" channel="./102" name="Position"/>
-		<target object="3001886899" channel="./103" name="Rotation Z"/>
-		<target object="3001886899" channel="./109" name="Rotation X"/>
-		<target object="3001886899" channel="./110" name="Rotation Y"/>
-		<target object="3001886899" channel="./104" name="Scale X"/>
-		<target object="3001886899" channel="./105" name="Scale Y"/>
-		<target object="3001886899" channel="./106" name="Opacity"/>
-		<target object="3001886899" channel="./201" name=""/>
-		<target object="3001886899" channel="./202" name="Enable"/>
-		<target object="3001886899" channel="./208" name="Preview"/>
-		<target object="3001886899" channel="./209" name="Hide Controls"/>
-		<target object="3001886899" channel="./203" name="Position"/>
-		<target object="3001886899" channel="./204" name="Rotation Z"/>
-		<target object="3001886899" channel="./210" name="Rotation X"/>
-		<target object="3001886899" channel="./211" name="Rotation Y"/>
-		<target object="3001886899" channel="./205" name="Scale X"/>
-		<target object="3001886899" channel="./206" name="Scale Y"/>
-		<target object="3001886899" channel="./207" name="Opacity"/>
-		<target object="3001886899" channel="./301" name=""/>
-		<target object="3001886899" channel="./302" name="Enable"/>
-		<target object="3001886899" channel="./308" name="Preview"/>
-		<target object="3001886899" channel="./309" name="Hide Controls"/>
-		<target object="3001886899" channel="./303" name="Position"/>
-		<target object="3001886899" channel="./304" name="Rotation Z"/>
-		<target object="3001886899" channel="./310" name="Rotation X"/>
-		<target object="3001886899" channel="./311" name="Rotation Y"/>
-		<target object="3001886899" channel="./305" name="Scale X"/>
-		<target object="3001886899" channel="./306" name="Scale Y"/>
-		<target object="3001886899" channel="./307" name="Opacity"/>
+		<target object="3001886901" channel="./9990" name=""/>
+		<target object="3001886901" channel="./9900" name=""/>
+		<target object="3001886901" channel="./9905" name=""/>
+		<target object="3001886901" channel="./9924" name=""/>
+		<target object="3001886901" channel="./9926" name="Length"/>
+		<target object="3001886901" channel="./9927" name="Quality"/>
+		<target object="3001886901" channel="./9929" name="Transitions only?"/>
+		<target object="3001886901" channel="./9930" name="Adaptive Quality"/>
+		<target object="3001886901" channel="./601" name="Anchor Point"/>
+		<target object="3001886901" channel="./2" name="Position"/>
+		<target object="3001886901" channel="./10" name="Rotate with Motion"/>
+		<target object="3001886901" channel="./3" name="Rotation Z"/>
+		<target object="3001886901" channel="./8" name="Rotation X"/>
+		<target object="3001886901" channel="./9" name="Rotation Y"/>
+		<target object="3001886901" channel="./4" name="Scale X"/>
+		<target object="3001886901" channel="./5" name="Scale Y"/>
+		<target object="3001886901" channel="./6" name="Opacity"/>
 	</publishSettings>
-	<currentFrame>112640 153600 1 0</currentFrame>
+	<currentFrame>225280 153600 1 0</currentFrame>
 	<currentObject>3001886884</currentObject>
 	<activeLayer>3001886881</activeLayer>
 	<timeRange offset="0 1 1 0" duration="307200 153600 1 0"/>
@@ -300,21 +270,15 @@
 				<parameter name="Width" id="313" flags="8589934610" default="1" value="1920"/>
 				<parameter name="Height" id="314" flags="8589934610" default="1" value="1080"/>
 			</parameter>
-			<filter name="Magic Move · KF" id="3001886899" factoryID="6" pluginUUID="3A0B09C3-0F33-49C3-B58E-730D9D913BF9" pluginVersion="1" pluginName="Magic Move · KF" pluginDynamicParams="0">
+			<filter name="Magic Move · KF" id="3001886901" factoryID="6" pluginUUID="3A0B09C3-0F33-49C3-B58E-730D9D913BF9" pluginVersion="1" pluginName="Magic Move · KF" pluginDynamicParams="0">
 				<timing in="0 1 1 0" out="304640 153600 1 0" offset="0 1 1 0"/>
-				<baseFlags>8858370065</baseFlags>
+				<baseFlags>8589934609</baseFlags>
 				<parameter name="" id="9990" flags="12901679124">
 					<numberOfKeypoints>0</numberOfKeypoints>
 					<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GQ40-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
 					<dataValue>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GQ40-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</dataValue>
 				</parameter>
 				<parameter name="Force Show All Parameters" id="9000" flags="12901679104" default="0" value="0"/>
-				<parameter name="" id="9001" flags="12901679124">
-					<numberOfKeypoints>0</numberOfKeypoints>
-					<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GAd0-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
-					<dataValue>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GAd0-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</dataValue>
-				</parameter>
-				<parameter name="Alert Selection" id="9004" flags="12905938976"/>
 				<parameter name="" id="9900" flags="12901679120">
 					<numberOfKeypoints>0</numberOfKeypoints>
 					<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GOg0-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
@@ -325,112 +289,38 @@
 					<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GOl0-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
 					<dataValue>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GOl0-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</dataValue>
 				</parameter>
-				<parameter name="Animate In" id="9901" flags="12905938992" default="0" value="0"/>
-				<parameter name="In Duration" id="9903" flags="12905938992" default="0.5" value="0.5"/>
-				<parameter name="In Curve" id="9904" flags="12905938992" default="2" value="2"/>
-				<parameter name="In Intensity" id="9911" flags="12905938992" default="0.5" value="0.5"/>
-				<parameter name="Animate Out" id="9902" flags="12905938992" default="0" value="0"/>
-				<parameter name="Out Duration" id="9906" flags="12905938992" default="0.5" value="0.5"/>
-				<parameter name="Out Curve" id="9907" flags="12905938992" default="2" value="2"/>
-				<parameter name="Out Intensity" id="9912" flags="12905938992" default="0.5" value="0.5"/>
 				<parameter name="" id="9908" flags="12905938992" default="1" value="1"/>
-				<parameter name="" id="9909" flags="12905938992" default="1" value="1"/>
-				<parameter name="Hold Effect" id="9910" flags="12905938992" default="0" value="0"/>
-				<parameter name="Hold Intensity" id="9913" flags="12905938992" default="0.5" value="0.5"/>
-				<parameter name="In Frequency" id="9914" flags="12905938992" default="0.5" value="0.5"/>
-				<parameter name="Out Frequency" id="9915" flags="12905938992" default="0.5" value="0.5"/>
-				<parameter name="Hold Frequency" id="9916" flags="12905938992" default="0.5" value="0.5"/>
-				<parameter name="Hold Seed" id="9917" flags="12905938992" default="0" value="0"/>
-				<parameter name="Rotate with Motion (In)" id="501" flags="12905938992" default="0" value="0"/>
-				<parameter name="Rotate with Motion (Hold)" id="510" flags="12905938992" default="0" value="0"/>
-				<parameter name="Rotate with Motion (Out)" id="511" flags="12905938992" default="0" value="0"/>
-				<parameter name="Hold Pos X" id="502" flags="12905938992" default="1" value="1"/>
-				<parameter name="Hold Pos Y" id="503" flags="12905938992" default="1" value="1"/>
-				<parameter name="Hold Scale X" id="504" flags="12905938992" default="1" value="1"/>
-				<parameter name="Hold Scale Y" id="505" flags="12905938992" default="1" value="1"/>
-				<parameter name="Hold Rotation" id="506" flags="12905938992" default="1" value="1"/>
-				<parameter name="Hold Rotation X" id="507" flags="12905938992" default="0" value="0"/>
-				<parameter name="Hold Rotation Y" id="508" flags="12905938992" default="0" value="0"/>
-				<parameter name="Hold Opacity" id="509" flags="12905938992" default="0" value="0"/>
+				<parameter name="" id="9923" flags="12905938992" default="0" value="0"/>
+				<parameter name="" id="9919" flags="12905938976"/>
+				<parameter name="" id="9920" flags="12905938992" default="0" value="0"/>
+				<parameter name="" id="9921" flags="12905938992" default="0" value="0"/>
+				<parameter name="" id="9922" flags="12905938976">
+					<text>92704467-2555-4A98-9C5B-63D9DD07F7B5</text>
+				</parameter>
+				<parameter name="" id="9924" flags="12901679120">
+					<numberOfKeypoints>0</numberOfKeypoints>
+					<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GP20-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
+					<dataValue>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GP20-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</dataValue>
+				</parameter>
+				<parameter name="" id="9925" flags="12905938992" default="0" value="0"/>
+				<parameter name="" id="9928" flags="12905938992" default="0" value="0"/>
+				<parameter name="Length" id="9926" flags="12905938992" default="0.5" value="0.5"/>
+				<parameter name="Quality" id="9927" flags="12905938992" default="0.5" value="0.5"/>
+				<parameter name="Transitions only?" id="9929" flags="12905938992" default="0" value="0"/>
+				<parameter name="Adaptive Quality" id="9930" flags="12905938992" default="1" value="1"/>
 				<parameter name="Anchor Point" id="601" flags="12884905984">
 					<foldFlags>15</foldFlags>
 				</parameter>
-				<parameter name="" id="1" flags="12901679120">
-					<numberOfKeypoints>0</numberOfKeypoints>
-					<defaultVal>*********J2eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0GMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2*262FcY8H6rGIlMKZpX*********E2*********1E*******************4I6**U*2E*O*0E*8E*m*1Q*GE-C*3g*PE-j*52*RE-v*F*********0*E*********E*******************-2E**</defaultVal>
-					<dataValue>*********J2eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0GMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2*262FcY8H6rGIlMKZpX*********E2*********1E*******************4I6**U*2E*O*0E*8E*m*1Q*GE-C*3g*PE-j*52*RE-v*F*********0*E*********E*******************-2E**</dataValue>
-				</parameter>
-				<parameter name="" id="11" flags="12905938992" default="0" value="0"/>
-				<parameter name="Preview" id="7" flags="12905938992" default="0" value="0"/>
-				<parameter name="Hide Controls" id="8" flags="12905938992" default="0" value="0"/>
-				<parameter name="Position" id="2" flags="12889165872">
+				<parameter name="Position" id="2" flags="12884905984">
 					<foldFlags>15</foldFlags>
 				</parameter>
-				<parameter name="Rotation Z" id="3" flags="12905938992" default="0" value="0"/>
-				<parameter name="Rotation X" id="9" flags="12905938992" default="0" value="0"/>
-				<parameter name="Rotation Y" id="10" flags="12905938992" default="0" value="0"/>
-				<parameter name="Scale X" id="4" flags="12905938992" default="1" value="1"/>
-				<parameter name="Scale Y" id="5" flags="12905938992" default="1" value="1"/>
-				<parameter name="Opacity" id="6" flags="12905938992" default="1" value="1"/>
-				<parameter name="" id="101" flags="12901679120">
-					<numberOfKeypoints>0</numberOfKeypoints>
-					<defaultVal>*********J2eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0GMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg24I62FcY8H6rGIlMKZpX*********E2*********1E*******************4I6**U*2E*O*0E*8E*m*1Q*GE-C*3g*PE-j*52*RE-v*F*********0*E*********E*******************-2E**</defaultVal>
-					<dataValue>*********J2eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0GMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg24I62FcY8H6rGIlMKZpX*********E2*********1E*******************4I6**U*2E*O*0E*8E*m*1Q*GE-C*3g*PE-j*52*RE-v*F*********0*E*********E*******************-2E**</dataValue>
-				</parameter>
-				<parameter name="" id="111" flags="12905938992" default="0" value="0"/>
-				<parameter name="Preview" id="107" flags="12905938992" default="0" value="0"/>
-				<parameter name="Hide Controls" id="108" flags="12905938992" default="0" value="0"/>
-				<parameter name="Position" id="102" flags="12889165872">
-					<foldFlags>15</foldFlags>
-				</parameter>
-				<parameter name="Rotation Z" id="103" flags="12905938992" default="0" value="0"/>
-				<parameter name="Rotation X" id="109" flags="12905938992" default="0" value="0"/>
-				<parameter name="Rotation Y" id="110" flags="12905938992" default="0" value="0"/>
-				<parameter name="Scale X" id="104" flags="12905938992" default="1" value="1"/>
-				<parameter name="Scale Y" id="105" flags="12905938992" default="1" value="1"/>
-				<parameter name="Opacity" id="106" flags="12905938992" default="1" value="1"/>
-				<parameter name="" id="201" flags="12901679120">
-					<numberOfKeypoints>0</numberOfKeypoints>
-					<defaultVal>*********J2eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0GMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2AY62FcY8H6rGIlMKZpX*********E2*********1E*******************4I6**U*2E*O*0E*8E*m*1Q*GE-C*3g*PE-j*52*RE-v*F*********0*E*********E*******************-2E**</defaultVal>
-					<dataValue>*********J2eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0GMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2AY62FcY8H6rGIlMKZpX*********E2*********1E*******************4I6**U*2E*O*0E*8E*m*1Q*GE-C*3g*PE-j*52*RE-v*F*********0*E*********E*******************-2E**</dataValue>
-				</parameter>
-				<parameter name="" id="212" flags="12905938992" default="0" value="0"/>
-				<parameter name="Enable" id="202" flags="12905938992" default="0" value="0"/>
-				<parameter name="Preview" id="208" flags="12905938992" default="0" value="0"/>
-				<parameter name="Hide Controls" id="209" flags="12905938992" default="0" value="0"/>
-				<parameter name="Position" id="203" flags="12889165872">
-					<foldFlags>15</foldFlags>
-				</parameter>
-				<parameter name="Rotation Z" id="204" flags="12905938992" default="0" value="0"/>
-				<parameter name="Rotation X" id="210" flags="12905938992" default="0" value="0"/>
-				<parameter name="Rotation Y" id="211" flags="12905938992" default="0" value="0"/>
-				<parameter name="Scale X" id="205" flags="12905938992" default="1" value="1"/>
-				<parameter name="Scale Y" id="206" flags="12905938992" default="1" value="1"/>
-				<parameter name="Opacity" id="207" flags="12905938992" default="1" value="1"/>
-				<parameter name="" id="301" flags="12901679120">
-					<numberOfKeypoints>0</numberOfKeypoints>
-					<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2E2h0-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
-					<dataValue>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2E2h0-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</dataValue>
-				</parameter>
-				<parameter name="" id="312" flags="12905938992" default="0" value="0"/>
-				<parameter name="Enable" id="302" flags="12905938992" default="0" value="0"/>
-				<parameter name="Preview" id="308" flags="12905938992" default="0" value="0"/>
-				<parameter name="Hide Controls" id="309" flags="12905938992" default="0" value="0"/>
-				<parameter name="Position" id="303" flags="12889165872">
-					<foldFlags>15</foldFlags>
-				</parameter>
-				<parameter name="Rotation Z" id="304" flags="12905938992" default="0" value="0"/>
-				<parameter name="Rotation X" id="310" flags="12905938992" default="0" value="0"/>
-				<parameter name="Rotation Y" id="311" flags="12905938992" default="0" value="0"/>
-				<parameter name="Scale X" id="305" flags="12905938992" default="1" value="1"/>
-				<parameter name="Scale Y" id="306" flags="12905938992" default="1" value="1"/>
-				<parameter name="Opacity" id="307" flags="12905938992" default="1" value="1"/>
-				<parameter name="PathAB" id="401" flags="12905938976"/>
-				<parameter name="PathBDrift" id="402" flags="12905938976"/>
-				<parameter name="PathDriftExit" id="403" flags="12905938976"/>
-				<parameter name="PathBExit" id="404" flags="12905938976"/>
-				<parameter name="PathDriftA" id="405" flags="12905938976"/>
-				<parameter name="PathBA" id="406" flags="12905938976"/>
+				<parameter name="Rotate with Motion" id="10" flags="12901679120" default="0" value="0"/>
+				<parameter name="Rotation Z" id="3" flags="12901679120" default="0" value="0"/>
+				<parameter name="Rotation X" id="8" flags="12901679120" default="0" value="0"/>
+				<parameter name="Rotation Y" id="9" flags="12901679120" default="0" value="0"/>
+				<parameter name="Scale X" id="4" flags="12901679120" default="1" value="1"/>
+				<parameter name="Scale Y" id="5" flags="12901679120" default="1" value="1"/>
+				<parameter name="Opacity" id="6" flags="12901679120" default="1" value="1"/>
 				<parameter name="Mix" id="10001" flags="12901679104" default="1" value="1"/>
 				<parameter name="Flip" id="10002" flags="12905938976" default="0" value="0"/>
 				<parameter name="Input Points" id="10003" flags="12905938976" default="1" value="1"/>
