@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #import "KKUpdateChecker.h"
@@ -9,6 +9,8 @@
 
 static NSString *const kOwner = @"overpolish";
 static NSString *const kRepo = @"keyframeless";
+static NSString *const kGumroadProductURL =
+    @"https://overpolish.gumroad.com/l/keyframeless";
 static NSString *const kCachedVersionKey =
     @"co.overpolish.keyframeless.cachedAvailableVersion";
 static NSString *const kCachedNewKeysKey =
@@ -157,7 +159,7 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
             return;
           }
 
-          NSString *htmlURL = json[@"html_url"];
+          NSString *htmlURL = kGumroadProductURL;
 
           NSURL *manifestURL = nil;
           for (NSDictionary *asset in assets) {
