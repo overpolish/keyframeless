@@ -233,6 +233,7 @@
                                                sizeof(RoundedPluginState))];
                       return [strongSelf
                           encodeFullScreenQuadIntoTexture:sampleDest
+                                         destinationImage:destinationImage
                                             commandBuffer:commandBuffer
                                            sourceTextures:inputTextures
                                                  commands:^(

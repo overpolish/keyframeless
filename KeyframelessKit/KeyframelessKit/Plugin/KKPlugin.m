@@ -228,11 +228,29 @@
   MTLViewport viewport = {0, 0, outputWidth, outputHeight, -1.0, 1.0};
   [encoder setViewport:viewport];
 
+  // When parent Scale > 100%, FCP renders only a sub-tile of the destination
+  // image (tilePixelBounds ⊂ imagePixelBounds). UVs map [0,1] across the full
+  // source image, so the shader sees the tile as the corresponding sub-region
+  // of the source — not the whole image — which prevents the entire source
+  // from being squashed into the sub-tile.
+  FxRect dTile = destinationImage.tilePixelBounds;
+  FxRect dImg = destinationImage.imagePixelBounds;
+  float imgW = (float)(dImg.right - dImg.left);
+  float imgH = (float)(dImg.top - dImg.bottom);
+  if (imgW <= 0)
+    imgW = 1;
+  if (imgH <= 0)
+    imgH = 1;
+  float uvL = (float)(dTile.left - dImg.left) / imgW;
+  float uvR = (float)(dTile.right - dImg.left) / imgW;
+  float uvT = (float)(dImg.top - dTile.top) / imgH;
+  float uvB = (float)(dImg.top - dTile.bottom) / imgH;
+
   KKVertex2D vertices[] = {
-      {{outputWidth / 2.0f, -outputHeight / 2.0f}, {1.0, 1.0}},
-      {{-outputWidth / 2.0f, -outputHeight / 2.0f}, {0.0, 1.0}},
-      {{outputWidth / 2.0f, outputHeight / 2.0f}, {1.0, 0.0}},
-      {{-outputWidth / 2.0f, outputHeight / 2.0f}, {0.0, 0.0}},
+      {{outputWidth / 2.0f, -outputHeight / 2.0f}, {uvR, uvB}},
+      {{-outputWidth / 2.0f, -outputHeight / 2.0f}, {uvL, uvB}},
+      {{outputWidth / 2.0f, outputHeight / 2.0f}, {uvR, uvT}},
+      {{-outputWidth / 2.0f, outputHeight / 2.0f}, {uvL, uvT}},
   };
 
   simd_uint2 viewportSize = {(unsigned int)outputWidth,
@@ -258,6 +276,7 @@
 
 - (BOOL)
     encodeFullScreenQuadIntoTexture:(id<MTLTexture>)destTexture
+                   destinationImage:(FxImageTile *)destinationImage
                       commandBuffer:(id<MTLCommandBuffer>)commandBuffer
                      sourceTextures:(NSArray<id<MTLTexture>> *)sourceTextures
                            commands:
@@ -280,11 +299,30 @@
   MTLViewport viewport = {0, 0, w, h, -1.0, 1.0};
   [encoder setViewport:viewport];
 
+  // See encodeRenderCommandsForDestinationImage: — UVs are mapped to the
+  // sub-region of source addressed by the destination tile, so >100% parent
+  // Scale (which makes FCP request only a sub-tile) renders sharply.
+  float uvL = 0, uvR = 1, uvT = 0, uvB = 1;
+  if (destinationImage) {
+    FxRect dTile = destinationImage.tilePixelBounds;
+    FxRect dImg = destinationImage.imagePixelBounds;
+    float imgW = (float)(dImg.right - dImg.left);
+    float imgH = (float)(dImg.top - dImg.bottom);
+    if (imgW <= 0)
+      imgW = 1;
+    if (imgH <= 0)
+      imgH = 1;
+    uvL = (float)(dTile.left - dImg.left) / imgW;
+    uvR = (float)(dTile.right - dImg.left) / imgW;
+    uvT = (float)(dImg.top - dTile.top) / imgH;
+    uvB = (float)(dImg.top - dTile.bottom) / imgH;
+  }
+
   KKVertex2D vertices[] = {
-      {{w / 2.0f, -h / 2.0f}, {1.0, 1.0}},
-      {{-w / 2.0f, -h / 2.0f}, {0.0, 1.0}},
-      {{w / 2.0f, h / 2.0f}, {1.0, 0.0}},
-      {{-w / 2.0f, h / 2.0f}, {0.0, 0.0}},
+      {{w / 2.0f, -h / 2.0f}, {uvR, uvB}},
+      {{-w / 2.0f, -h / 2.0f}, {uvL, uvB}},
+      {{w / 2.0f, h / 2.0f}, {uvR, uvT}},
+      {{-w / 2.0f, h / 2.0f}, {uvL, uvT}},
   };
   simd_uint2 viewportSize = {(unsigned int)w, (unsigned int)h};
 
