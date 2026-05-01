@@ -12,6 +12,14 @@
 
 #define CLAMP(x, lo, hi) MAX((lo), MIN((hi), (x)))
 
+static NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot) {
+  NSImage *image =
+      [[NSBundle bundleForClass:[MagicMoveOSC class]] imageForResource:name];
+  if (!image)
+    return [NSCursor crosshairCursor];
+  return [[NSCursor alloc] initWithImage:image hotSpot:hotSpot];
+}
+
 static const float kPathHitThreshold = 10.0f;
 static const float kPathPointHitRadius = 8.0f;
 static const float kPathSnapThreshold = 8.0f;
@@ -80,6 +88,10 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
   BOOL _anchorHovered, _anchorDragging;
 
   CFTimeInterval _lastHitTestTimestamp;
+
+  NSCursor *_editPointsCursor;
+  NSCursor *_penAddCursor;
+  NSCursor *_penDeleteCursor;
 }
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
@@ -130,6 +142,10 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
     _pathDragPointIndex = -1;
     _pathLastClickSegIdx = -1;
     _pathLastClickPointIdx = -1;
+
+    _editPointsCursor = cursorFromBundle(@"EditPoints", NSMakePoint(11, 8));
+    _penAddCursor = cursorFromBundle(@"PenAddControlPoint", NSMakePoint(10, 5));
+    _penDeleteCursor = cursorFromBundle(@"PenX", NSMakePoint(15, 5));
   }
   return self;
 }
@@ -678,8 +694,10 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
             break;
           }
         }
-        if (hit)
+        if (hit) {
+          [oscAPI setCursor:_editPointsCursor];
           return;
+        }
 
         // Path control points.
         for (NSUInteger i = 0; i < path.count; i++) {
@@ -689,8 +707,7 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
           if (hypot(positionX - ptC.x, positionY - ptC.y) <
               kPathPointHitRadius) {
             *activePart = pathPartPoint(idx, i);
-            [oscAPI setCursor:hOpt ? [NSCursor disappearingItemCursor]
-                                   : [NSCursor arrowCursor]];
+            [oscAPI setCursor:hOpt ? _penDeleteCursor : _editPointsCursor];
             return;
           }
         }
@@ -725,8 +742,7 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
         }
         if (bestDist < kPathHitThreshold) {
           *activePart = pathPartCurve(idx);
-          [oscAPI setCursor:hOpt ? [NSCursor crosshairCursor]
-                                 : [NSCursor arrowCursor]];
+          [oscAPI setCursor:hOpt ? _penAddCursor : [NSCursor arrowCursor]];
           return;
         }
       }
