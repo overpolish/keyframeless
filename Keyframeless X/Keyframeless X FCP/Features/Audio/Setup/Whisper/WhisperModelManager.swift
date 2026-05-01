@@ -5,17 +5,25 @@
 
 import Combine
 import Darwin
+import FluidAudio
 import Foundation
 import WhisperKit
 
 @MainActor
 class WhisperModelManager: ObservableObject {
 
+	enum Engine {
+		case whisperKit
+		case whisperCpp
+		case parakeet
+	}
+
 	struct ModelInfo: Identifiable {
 		let id: String
 		let displayName: String
 		let sizeDescription: String
 		let hint: String
+		let engine: Engine
 	}
 
 	nonisolated static let simulateIntel = false
@@ -29,33 +37,77 @@ class WhisperModelManager: ObservableObject {
 	private nonisolated static let siliconModels: [ModelInfo] = [
 		ModelInfo(
 			id: "openai_whisper-tiny", displayName: "Tiny", sizeDescription: "~390 MB",
-			hint: "Fastest, best for rough drafts"),
+			hint: "Fastest, best for rough drafts", engine: .whisperKit),
 		ModelInfo(
 			id: "openai_whisper-base", displayName: "Base", sizeDescription: "~670 MB",
-			hint: "Good speed and accuracy"),
+			hint: "Good speed and accuracy", engine: .whisperKit),
 		ModelInfo(
 			id: "openai_whisper-small", displayName: "Small", sizeDescription: "~1.4 GB",
-			hint: "Handles accents and noise"),
+			hint: "Handles accents and noise", engine: .whisperKit),
 		ModelInfo(
 			id: "openai_whisper-large-v3_turbo", displayName: "Large v3 Turbo",
 			sizeDescription: "~1.6 GB",
-			hint: "Near-large accuracy at speed"),
+			hint: "Near-large accuracy at speed", engine: .whisperKit),
 		ModelInfo(
 			id: "openai_whisper-large-v3", displayName: "Large v3", sizeDescription: "~6 GB",
-			hint: "Best accuracy, final exports"),
+			hint: "Best accuracy, final exports", engine: .whisperKit),
+		ModelInfo(
+			id: "parakeet-tdt-0.6b-v2", displayName: "Parakeet 0.6B v2",
+			sizeDescription: "~600 MB",
+			hint: "English only, fastest", engine: .parakeet),
+		ModelInfo(
+			id: "parakeet-tdt-0.6b-v3", displayName: "Parakeet 0.6B v3",
+			sizeDescription: "~600 MB",
+			hint: "25 European languages, fast", engine: .parakeet),
 	]
 
 	private nonisolated static let intelModels: [ModelInfo] = [
 		ModelInfo(
 			id: "ggml-tiny-q5_1", displayName: "Tiny", sizeDescription: "~200 MB",
-			hint: "Fastest, best for rough drafts"),
+			hint: "Fastest, best for rough drafts", engine: .whisperCpp),
 		ModelInfo(
 			id: "ggml-base-q5_1", displayName: "Base", sizeDescription: "~300 MB",
-			hint: "Good speed and accuracy"),
+			hint: "Good speed and accuracy", engine: .whisperCpp),
 		ModelInfo(
 			id: "ggml-small-q5_1", displayName: "Small", sizeDescription: "~600 MB",
-			hint: "Best accuracy for Intel"),
+			hint: "Best accuracy for Intel", engine: .whisperCpp),
 	]
+
+	nonisolated static func engine(for variantId: String) -> Engine? {
+		models.first(where: { $0.id == variantId })?.engine
+	}
+
+	nonisolated static func parakeetVersion(for variantId: String) -> AsrModelVersion? {
+		switch variantId {
+		case "parakeet-tdt-0.6b-v2": return .v2
+		case "parakeet-tdt-0.6b-v3": return .v3
+		default: return nil
+		}
+	}
+
+	nonisolated static let parakeetV3Languages: Set<String> = [
+		"bg", "hr", "cs", "da", "nl", "en", "et", "fi", "fr", "de",
+		"el", "hu", "it", "lv", "lt", "mt", "pl", "pt", "ro", "sk",
+		"sl", "es", "sv", "ru", "uk",
+	]
+
+	var currentEngine: Engine? {
+		guard let id = selectedModel else { return nil }
+		return Self.engine(for: id)
+	}
+
+	var currentParakeetVersion: AsrModelVersion? {
+		guard let id = selectedModel else { return nil }
+		return Self.parakeetVersion(for: id)
+	}
+
+	static func parakeetSupports(language code: String?, version: AsrModelVersion) -> Bool {
+		switch version {
+		case .v2: return code == "en"
+		case .v3: return code.map { parakeetV3Languages.contains($0) } ?? false
+		default: return false
+		}
+	}
 
 	nonisolated static let models: [ModelInfo] = isAppleSilicon ? siliconModels : intelModels
 
@@ -76,7 +128,16 @@ class WhisperModelManager: ObservableObject {
 		didSet {
 			AudioSetupSettings.shared.selectedModel = selectedModel
 			AudioSetupSettings.shared.save()
+			normalizeLanguageForSelectedModel()
 		}
+	}
+
+	private func normalizeLanguageForSelectedModel() {
+		guard let version = currentParakeetVersion else { return }
+		if !Self.parakeetSupports(language: selectedLanguage, version: version) {
+			selectedLanguage = "en"
+		}
+		if translateToEnglish { translateToEnglish = false }
 	}
 
 	@Published var selectedLanguage: String? {
@@ -129,20 +190,30 @@ class WhisperModelManager: ObservableObject {
 		downloadingModel = variant
 		downloadProgress = 0
 
-		if Self.isAppleSilicon {
+		switch Self.engine(for: variant) {
+		case .whisperKit:
 			await downloadWhisperKit(variant)
-		} else {
+		case .whisperCpp:
 			await downloadGGML(variant)
+		case .parakeet:
+			await downloadParakeet(variant)
+		case nil:
+			break
 		}
 
 		downloadingModel = nil
 	}
 
 	func uninstall(_ variant: String) {
-		if Self.isAppleSilicon {
+		switch Self.engine(for: variant) {
+		case .whisperKit:
 			uninstallWhisperKit(variant)
-		} else {
+		case .whisperCpp:
 			uninstallGGML(variant)
+		case .parakeet:
+			uninstallParakeet(variant)
+		case nil:
+			break
 		}
 		downloadedModels.remove(variant)
 		if selectedModel == variant {
@@ -151,16 +222,27 @@ class WhisperModelManager: ObservableObject {
 	}
 
 	nonisolated static func modelFileURL(for variant: String) -> URL {
-		if isAppleSilicon {
+		switch engine(for: variant) {
+		case .whisperKit:
 			return whisperKitModelDirectory(for: variant)
-		} else {
+		case .parakeet:
+			let version = parakeetVersion(for: variant) ?? .v3
+			return AsrModels.defaultCacheDirectory(for: version)
+		case .whisperCpp, nil:
 			return ggmlModelsDirectory.appendingPathComponent("\(variant).bin")
 		}
 	}
 
 	private func isDownloaded(_ variant: String) -> Bool {
-		let path = Self.modelFileURL(for: variant).path
-		return FileManager.default.fileExists(atPath: path)
+		switch Self.engine(for: variant) {
+		case .parakeet:
+			guard let version = Self.parakeetVersion(for: variant) else { return false }
+			let dir = AsrModels.defaultCacheDirectory(for: version)
+			return AsrModels.modelsExist(at: dir, version: version)
+		case .whisperKit, .whisperCpp, nil:
+			let path = Self.modelFileURL(for: variant).path
+			return FileManager.default.fileExists(atPath: path)
+		}
 	}
 
 	// Silicon — WhisperKit
@@ -190,6 +272,25 @@ class WhisperModelManager: ObservableObject {
 	private func uninstallWhisperKit(_ variant: String) {
 		let modelPath = Self.whisperKitModelDirectory(for: variant)
 		try? FileManager.default.removeItem(at: modelPath)
+	}
+
+	// Parakeet — FluidAudio
+
+	private func downloadParakeet(_ variant: String) async {
+		guard let version = Self.parakeetVersion(for: variant) else { return }
+		do {
+			_ = try await AsrModels.download(version: version)
+			downloadedModels.insert(variant)
+			if selectedModel == nil { selectedModel = variant }
+		} catch {
+			print("[WhisperModelManager] Parakeet download failed: \(error)")
+		}
+	}
+
+	private func uninstallParakeet(_ variant: String) {
+		guard let version = Self.parakeetVersion(for: variant) else { return }
+		let dir = AsrModels.defaultCacheDirectory(for: version)
+		try? FileManager.default.removeItem(at: dir)
 	}
 
 	// Intel — whisper.cpp (GGML)
@@ -250,6 +351,7 @@ class WhisperModelManager: ObservableObject {
 	private static func migrateModelId(_ old: String) -> String {
 		if isAppleSilicon {
 			if old.hasPrefix("openai_whisper-") { return old }
+			if old.hasPrefix("parakeet-") { return old }
 			if old.hasPrefix("ggml-") { return "openai_whisper-base" }
 			return "openai_whisper-base"
 		} else {

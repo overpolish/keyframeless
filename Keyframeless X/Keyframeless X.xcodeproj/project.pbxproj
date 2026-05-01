@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F207778B2FA3FD7B00AA4E71 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = F207778A2FA3FD7B00AA4E71 /* FluidAudio */; };
 		F274D93A2F6E7AC2001FE373 /* Profanity in Resources */ = {isa = PBXBuildFile; fileRef = F274D9392F6E7AC2001FE373 /* Profanity */; };
 		F28BD2302F68595000C5F6B7 /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F28BD22F2F68595000C5F6B7 /* KeyframelessKit.framework */; };
 		F28BD2312F68595000C5F6B7 /* KeyframelessKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F28BD22F2F68595000C5F6B7 /* KeyframelessKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -121,6 +122,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F207778B2FA3FD7B00AA4E71 /* FluidAudio in Frameworks */,
 				F2A8FB212F6C52C2007989B9 /* SwiftWhisper in Frameworks */,
 				F2B9DC012F7452A0007989B9 /* WhisperKit in Frameworks */,
 				F28BD2302F68595000C5F6B7 /* KeyframelessKit.framework in Frameworks */,
@@ -205,6 +207,7 @@
 			packageProductDependencies = (
 				F2A8FB202F6C52C2007989B9 /* SwiftWhisper */,
 				F2B9DC002F7452A0007989B9 /* WhisperKit */,
+				F207778A2FA3FD7B00AA4E71 /* FluidAudio */,
 			);
 			productName = "Keyframeless X FCP";
 			productReference = F29C84E02F6820750073B1A9 /* Keyframeless X FCP.appex */;
@@ -240,6 +243,7 @@
 			packageReferences = (
 				F2A8FB1F2F6C52C2007989B9 /* XCRemoteSwiftPackageReference "SwiftWhisper" */,
 				F2B9DBFF2F7452A0007989B9 /* XCRemoteSwiftPackageReference "WhisperKit" */,
+				F20777892FA3FD7B00AA4E71 /* XCRemoteSwiftPackageReference "FluidAudio" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F29C84C72F68205E0073B1A9 /* Products */;
@@ -675,6 +679,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		F20777892FA3FD7B00AA4E71 /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/FluidInference/FluidAudio";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 		F2A8FB1F2F6C52C2007989B9 /* XCRemoteSwiftPackageReference "SwiftWhisper" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/exPHAT/SwiftWhisper";
@@ -694,6 +706,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		F207778A2FA3FD7B00AA4E71 /* FluidAudio */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F20777892FA3FD7B00AA4E71 /* XCRemoteSwiftPackageReference "FluidAudio" */;
+			productName = FluidAudio;
+		};
 		F2A8FB202F6C52C2007989B9 /* SwiftWhisper */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = F2A8FB1F2F6C52C2007989B9 /* XCRemoteSwiftPackageReference "SwiftWhisper" */;

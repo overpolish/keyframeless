@@ -21,9 +21,18 @@ struct WhisperModelPickerView: View {
 			.frame(height: 20)
 
 			ScrollShadowView {
-				LazyVStack(spacing: KKSpacingXS) {
-					ForEach(WhisperModelManager.models) { model in
-						WhisperModelRow(model: model, manager: manager)
+				LazyVStack(alignment: .leading, spacing: KKSpacingXS) {
+					let groups = ModelGroup.grouped(WhisperModelManager.models)
+					ForEach(Array(groups.enumerated()), id: \.element.title) { index, group in
+						if index > 0 {
+							ModelGroupHeader(title: group.title)
+								.padding(.top, KKSpacingMD)
+						} else {
+							ModelGroupHeader(title: group.title)
+						}
+						ForEach(group.models) { model in
+							WhisperModelRow(model: model, manager: manager)
+						}
 					}
 					if !WhisperModelManager.isAppleSilicon {
 						IntelModelNote()
@@ -76,7 +85,11 @@ private struct WhisperModelRow: View {
 			Spacer()
 
 			if isDownloading {
-				ModelDownloadProgress(progress: manager.downloadProgress, accent: accent)
+				ModelDownloadProgress(
+					progress: manager.downloadProgress,
+					accent: accent,
+					indeterminate: model.engine == .parakeet
+				)
 			} else if !isDownloaded {
 				ModelDownloadButton(accent: accent, disabled: manager.downloadingModel != nil) {
 					Task { await manager.download(model.id) }
@@ -102,6 +115,46 @@ private struct WhisperModelRow: View {
 	}
 }
 
+private struct ModelGroup {
+	let title: String
+	let models: [WhisperModelManager.ModelInfo]
+
+	static func grouped(_ all: [WhisperModelManager.ModelInfo]) -> [ModelGroup] {
+		var groups: [ModelGroup] = []
+		var current: (title: String, models: [WhisperModelManager.ModelInfo])?
+		for model in all {
+			let title = title(for: model.engine)
+			if current?.title == title {
+				current?.models.append(model)
+			} else {
+				if let c = current { groups.append(ModelGroup(title: c.title, models: c.models)) }
+				current = (title, [model])
+			}
+		}
+		if let c = current { groups.append(ModelGroup(title: c.title, models: c.models)) }
+		return groups
+	}
+
+	private static func title(for engine: WhisperModelManager.Engine) -> String {
+		switch engine {
+		case .whisperKit, .whisperCpp: return "Whisper"
+		case .parakeet: return "Parakeet"
+		}
+	}
+}
+
+private struct ModelGroupHeader: View {
+	let title: String
+
+	var body: some View {
+		Text(title)
+			.font(.system(size: 10, weight: .semibold))
+			.foregroundStyle(.tertiary)
+			.padding(.horizontal, KKPaddingLG)
+			.padding(.bottom, 2)
+	}
+}
+
 private struct IntelModelNote: View {
 	var body: some View {
 		HStack(spacing: KKSpacingSM) {
@@ -119,17 +172,25 @@ private struct IntelModelNote: View {
 private struct ModelDownloadProgress: View {
 	let progress: Double
 	let accent: Color
+	var indeterminate: Bool = false
 
 	var body: some View {
 		HStack(spacing: KKSpacingSM) {
-			ProgressView(value: progress)
-				.progressViewStyle(.linear)
-				.tint(accent)
-				.frame(width: 60)
-			Text("\(Int(progress * 100))%")
-				.font(.system(size: 9))
-				.foregroundStyle(.secondary)
-				.monospacedDigit()
+			if indeterminate {
+				ProgressView()
+					.progressViewStyle(.linear)
+					.tint(accent)
+					.frame(width: 60)
+			} else {
+				ProgressView(value: progress)
+					.progressViewStyle(.linear)
+					.tint(accent)
+					.frame(width: 60)
+				Text("\(Int(progress * 100))%")
+					.font(.system(size: 9))
+					.foregroundStyle(.secondary)
+					.monospacedDigit()
+			}
 		}
 	}
 }

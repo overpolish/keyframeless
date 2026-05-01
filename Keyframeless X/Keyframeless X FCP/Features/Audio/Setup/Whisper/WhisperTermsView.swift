@@ -125,7 +125,32 @@ struct WhisperTermsView: View {
 			}
 			.frame(maxHeight: .infinity)
 			.kkPanel()
+			.overlay {
+				if manager.currentEngine == .parakeet {
+					ParakeetTermsLockOverlay()
+				}
+			}
 		}
+	}
+}
+
+private struct ParakeetTermsLockOverlay: View {
+	var body: some View {
+		ZStack {
+			Rectangle()
+				.fill(.ultraThinMaterial)
+			VStack(spacing: KKSpacingSM) {
+				Image(systemName: "lock.fill")
+					.font(.system(size: 16))
+					.foregroundStyle(.secondary)
+				Text("Parakeet doesn't support custom terms.")
+					.font(.system(size: 12, weight: .medium))
+					.foregroundStyle(.secondary)
+					.multilineTextAlignment(.center)
+			}
+			.padding(KKPaddingLG)
+		}
+		.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD + 4))
 	}
 }
 

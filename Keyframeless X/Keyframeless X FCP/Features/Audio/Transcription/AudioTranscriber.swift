@@ -5,6 +5,7 @@
 
 import AVFoundation
 import CoreML
+import FluidAudio
 import Foundation
 import SwiftWhisper
 import WhisperKit
@@ -68,6 +69,10 @@ actor AudioTranscriber {
 	private var promptCString: UnsafeMutablePointer<CChar>?
 	private nonisolated(unsafe) var progressDelegate: WhisperProgressDelegate?
 
+	// FluidAudio Parakeet (Silicon)
+	private nonisolated(unsafe) var parakeetManager: AsrManager?
+	private var loadedParakeetVariant: String?
+
 	func transcribe(
 		segments: [AudioPreparer.PreparedSegment],
 		modelVariant: String,
@@ -77,16 +82,25 @@ actor AudioTranscriber {
 		onProgress: @escaping @Sendable (Progress) -> Void
 	) async throws -> [ClipResult] {
 		defer { unloadModel() }
-		if WhisperModelManager.isAppleSilicon {
+		switch WhisperModelManager.engine(for: modelVariant) {
+		case .whisperKit:
 			return try await transcribeWithWhisperKit(
 				segments: segments, modelVariant: modelVariant,
 				language: language, translateToEnglish: translateToEnglish,
 				terms: terms, onProgress: onProgress)
-		} else {
+		case .whisperCpp:
 			return try await transcribeWithWhisperCpp(
 				segments: segments, modelVariant: modelVariant,
 				language: language, translateToEnglish: translateToEnglish,
 				terms: terms, onProgress: onProgress)
+		case .parakeet:
+			return try await transcribeWithParakeet(
+				segments: segments, modelVariant: modelVariant,
+				language: language, onProgress: onProgress)
+		case nil:
+			throw NSError(
+				domain: "AudioTranscriber", code: 3,
+				userInfo: [NSLocalizedDescriptionKey: "Unknown model variant: \(modelVariant)"])
 		}
 	}
 
@@ -103,6 +117,11 @@ actor AudioTranscriber {
 		progressDelegate = nil
 		promptCString?.deallocate()
 		promptCString = nil
+		if let m = parakeetManager {
+			Task { await m.cleanup() }
+		}
+		parakeetManager = nil
+		loadedParakeetVariant = nil
 	}
 
 	// WhisperKit engine (Silicon)
@@ -282,6 +301,172 @@ actor AudioTranscriber {
 			result.append((word, cleaned))
 		}
 
+		return result
+	}
+
+	// FluidAudio Parakeet engine (Silicon)
+
+	private func transcribeWithParakeet(
+		segments: [AudioPreparer.PreparedSegment],
+		modelVariant: String,
+		language: String?,
+		onProgress: @escaping @Sendable (Progress) -> Void
+	) async throws -> [ClipResult] {
+		onProgress(
+			Progress(phase: .loadingModel, completedSegments: 0, totalSegments: segments.count))
+
+		let manager: AsrManager
+		if let existing = parakeetManager, loadedParakeetVariant == modelVariant {
+			manager = existing
+		} else {
+			parakeetManager = nil
+			loadedParakeetVariant = nil
+
+			guard let version = WhisperModelManager.parakeetVersion(for: modelVariant) else {
+				throw NSError(
+					domain: "AudioTranscriber", code: 4,
+					userInfo: [
+						NSLocalizedDescriptionKey:
+							"Unknown Parakeet variant: \(modelVariant)"
+					])
+			}
+			let cacheDir = AsrModels.defaultCacheDirectory(for: version)
+			let models = try await AsrModels.load(from: cacheDir, version: version)
+			try Task.checkCancellation()
+			let m = AsrManager(config: .default)
+			try await m.loadModels(models)
+			parakeetManager = m
+			loadedParakeetVariant = modelVariant
+			manager = m
+		}
+
+		let parakeetLanguage = language.flatMap { Language(rawValue: $0) }
+
+		var allClipResults: [ClipResult] = []
+
+		for (i, segment) in segments.enumerated() {
+			try Task.checkCancellation()
+
+			onProgress(
+				Progress(
+					phase: .transcribing, completedSegments: i,
+					totalSegments: segments.count))
+
+			var decoderState = TdtDecoderState.make()
+			let result = try await manager.transcribe(
+				segment.tempFileURL,
+				decoderState: &decoderState,
+				language: parakeetLanguage
+			)
+
+			let allWords = Self.wordsFromTokenTimings(result.tokenTimings ?? [])
+			let cleanedWords = Self.cleanParakeetWords(allWords, language: language)
+
+			print(
+				"[Transcriber] segment \(i): \(allWords.count) raw words, \(cleanedWords.count) cleaned, range \(segment.range.start)–\(segment.range.end)"
+			)
+
+			for mapping in segment.clipMappings {
+				let clipEnd = mapping.clipSourceStart + mapping.clipSourceDuration
+				let clipWords = cleanedWords.compactMap {
+					word, cleaned -> WordResult? in
+					let sourceTime =
+						word.start - segment.paddingDuration + segment.range.start
+					let sourceEnd =
+						min(
+							word.end - segment.paddingDuration + segment.range.start + 0.05,
+							clipEnd)
+					guard sourceTime >= mapping.clipSourceStart - 0.05,
+						sourceTime < clipEnd + 0.05
+					else { return nil }
+					return WordResult(
+						word: cleaned,
+						start: Float(sourceTime),
+						end: Float(sourceEnd)
+					)
+				}
+				let fixedWords = Self.fixOverlappingTimestamps(clipWords)
+				if fixedWords.isEmpty {
+					print(
+						"[Transcriber] clip \(mapping.clipIndex): 0 words matched (source \(mapping.clipSourceStart)–\(mapping.clipSourceStart + mapping.clipSourceDuration))"
+					)
+				}
+				allClipResults.append(
+					ClipResult(clipIndex: mapping.clipIndex, words: fixedWords)
+				)
+			}
+
+			onProgress(
+				Progress(
+					phase: .transcribing, completedSegments: i + 1,
+					totalSegments: segments.count))
+		}
+
+		return allClipResults
+	}
+
+	private struct ParakeetWord {
+		let text: String
+		let start: TimeInterval
+		let end: TimeInterval
+	}
+
+	private static func wordsFromTokenTimings(_ tokens: [TokenTiming]) -> [ParakeetWord] {
+		// FluidAudio normalises SentencePiece's ▁ to a leading space before
+		// exposing tokens, so a token starting with " " marks a new word.
+		var words: [ParakeetWord] = []
+		var currentText = ""
+		var currentStart: TimeInterval = 0
+		var currentEnd: TimeInterval = 0
+
+		func flush() {
+			let trimmed = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+			if !trimmed.isEmpty {
+				words.append(ParakeetWord(text: trimmed, start: currentStart, end: currentEnd))
+			}
+			currentText = ""
+		}
+
+		for token in tokens {
+			if token.token.first == " " {
+				flush()
+				currentText = String(token.token.dropFirst())
+				currentStart = token.startTime
+				currentEnd = token.endTime
+			} else {
+				if currentText.isEmpty { currentStart = token.startTime }
+				currentText += token.token
+				currentEnd = token.endTime
+			}
+		}
+		flush()
+		return words
+	}
+
+	private static func cleanParakeetWords(
+		_ words: [ParakeetWord], language: String?
+	) -> [(ParakeetWord, String)] {
+		var result: [(ParakeetWord, String)] = []
+		for word in words {
+			let text = word.text.trimmingCharacters(in: .whitespacesAndNewlines)
+			if text.isEmpty { continue }
+			if isHallucination(text, language: language) { continue }
+
+			var cleaned =
+				text
+				.replacingOccurrences(of: "...", with: "")
+				.replacingOccurrences(of: "…", with: "")
+				.trimmingCharacters(in: .whitespacesAndNewlines)
+			cleaned = Self.stripDashes(cleaned)
+			guard !cleaned.isEmpty else { continue }
+
+			let lower = cleaned.lowercased()
+			if let digit = numberWords[lower] {
+				cleaned = digit
+			}
+
+			result.append((word, cleaned))
+		}
 		return result
 	}
 
