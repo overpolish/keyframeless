@@ -8,7 +8,7 @@ import SwiftUI
 
 struct AudioSetupView: View {
 	@ObservedObject var model: AudioModel
-	@ObservedObject var whisperManager: WhisperModelManager
+	@ObservedObject var audioModelManager: AudioModelManager
 	var onProcess: (_ replaceAll: Bool) -> Void
 	@StateObject private var audioPlayer = AudioPlayer()
 	@State private var dropState: DropState = .idle
@@ -32,10 +32,11 @@ struct AudioSetupView: View {
 			.frame(maxHeight: .infinity)
 			.layoutPriority(1)
 			HStack(alignment: .top, spacing: KKSpacingLG) {
-				WhisperModelPickerView(manager: whisperManager)
-				WhisperLanguagePickerView(manager: whisperManager)
+				AudioModelPickerView(manager: audioModelManager)
 					.frame(maxHeight: .infinity)
-				WhisperTermsView(manager: whisperManager)
+				AudioLanguagePickerView(manager: audioModelManager)
+					.frame(maxHeight: .infinity)
+				AudioTermsView(manager: audioModelManager)
 					.frame(maxHeight: .infinity)
 			}
 			.frame(maxHeight: .infinity)
@@ -56,8 +57,8 @@ struct AudioSetupView: View {
 
 	private var processDisabled: Bool {
 		model.selectedClips.isEmpty
-			|| whisperManager.selectedModel == nil
-			|| whisperManager.downloadingModel != nil
+			|| audioModelManager.selectedModel == nil
+			|| audioModelManager.downloadingModel != nil
 	}
 
 	private var topRow: some View {

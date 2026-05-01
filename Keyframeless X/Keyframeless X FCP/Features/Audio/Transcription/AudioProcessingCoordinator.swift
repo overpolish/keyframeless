@@ -20,15 +20,15 @@ class AudioProcessingCoordinator: ObservableObject {
 
 	func process(
 		model: AudioModel,
-		whisperManager: WhisperModelManager,
+		audioModelManager: AudioModelManager,
 		replaceAll: Bool
 	) {
-		guard let modelVariant = whisperManager.selectedModel else { return }
+		guard let modelVariant = audioModelManager.selectedModel else { return }
 		let clips = model.audioClips
 		let selected = model.selectedClips
-		let language = whisperManager.selectedLanguage
-		let translateToEnglish = whisperManager.translateToEnglish
-		let terms = whisperManager.terms
+		let language = audioModelManager.selectedLanguage
+		let translateToEnglish = audioModelManager.translateToEnglish
+		let terms = audioModelManager.terms
 
 		guard !selected.isEmpty else {
 			withAnimation(.easeOut(duration: 0.25)) {

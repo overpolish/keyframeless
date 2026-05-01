@@ -6,8 +6,8 @@
 import KeyframelessKit
 import SwiftUI
 
-struct WhisperTermsView: View {
-	@ObservedObject var manager: WhisperModelManager
+struct AudioTermsView: View {
+	@ObservedObject var manager: AudioModelManager
 	@State private var input: String = ""
 	@FocusState private var focused: Bool
 
@@ -125,7 +125,53 @@ struct WhisperTermsView: View {
 			}
 			.frame(maxHeight: .infinity)
 			.kkPanel()
+			.overlay {
+				if manager.currentEngine == .parakeet && !manager.hasCtcModel {
+					ParakeetTermsLockOverlay(manager: manager)
+				}
+			}
 		}
+	}
+}
+
+private struct ParakeetTermsLockOverlay: View {
+	@ObservedObject var manager: AudioModelManager
+
+	var body: some View {
+		let isDownloading = manager.downloadingModel != nil
+		ZStack {
+			Rectangle()
+				.fill(.ultraThinMaterial)
+			VStack(spacing: KKSpacingMD) {
+				Image(systemName: "lock.fill")
+					.font(.system(size: 16))
+					.foregroundStyle(.secondary)
+				Text("Terms engine not installed.")
+					.font(.system(size: 12, weight: .medium))
+					.foregroundStyle(.secondary)
+					.multilineTextAlignment(.center)
+				Button {
+					guard let id = manager.selectedModel else { return }
+					Task { await manager.retryDownloadCtcEngine(triggeredBy: id) }
+				} label: {
+					HStack(spacing: 3) {
+						if isDownloading {
+							ProgressView()
+								.controlSize(.small)
+						} else {
+							Image(systemName: "arrow.down.circle")
+						}
+						Text(isDownloading ? "Downloading…" : "Download")
+					}
+					.font(.system(size: 11))
+					.foregroundStyle(Color.kkAccent)
+				}
+				.buttonStyle(.plain)
+				.disabled(isDownloading)
+			}
+			.padding(KKPaddingLG)
+		}
+		.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD + 4))
 	}
 }
 

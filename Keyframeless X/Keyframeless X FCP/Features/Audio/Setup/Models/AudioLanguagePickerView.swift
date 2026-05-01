@@ -3,11 +3,12 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+import FluidAudio
 import KeyframelessKit
 import SwiftUI
 
-struct WhisperLanguagePickerView: View {
-	@ObservedObject var manager: WhisperModelManager
+struct AudioLanguagePickerView: View {
+	@ObservedObject var manager: AudioModelManager
 	@State private var search: String = ""
 
 	private static let profanityLanguages = ProfanityFilter.availableLanguages
@@ -57,6 +58,19 @@ struct WhisperLanguagePickerView: View {
 		manager.selectedLanguage == "en"
 	}
 
+	private var isParakeet: Bool {
+		manager.currentEngine == .parakeet
+	}
+
+	private var lockToEnglish: Bool {
+		manager.currentParakeetVersion == .v2
+	}
+
+	private func isLanguageDisabled(_ code: String) -> Bool {
+		guard let version = manager.currentParakeetVersion else { return false }
+		return !AudioModelManager.parakeetSupports(language: code, version: version)
+	}
+
 	var body: some View {
 		VStack(alignment: .leading, spacing: KKSpacingMD) {
 			HStack {
@@ -64,10 +78,12 @@ struct WhisperLanguagePickerView: View {
 					.font(.title3)
 					.foregroundStyle(.secondary)
 				Spacer()
-				TranslateToggle(
-					isOn: $manager.translateToEnglish,
-					disabled: isEnglish
-				)
+				if !isParakeet {
+					TranslateToggle(
+						isOn: $manager.translateToEnglish,
+						disabled: isEnglish
+					)
+				}
 			}
 			.frame(height: 20)
 
@@ -83,6 +99,7 @@ struct WhisperLanguagePickerView: View {
 							.foregroundStyle(Color.secondary.opacity(0.15)),
 						alignment: .bottom
 					)
+					.disabled(lockToEnglish)
 
 				ScrollShadowView {
 					ScrollViewReader { proxy in
@@ -90,7 +107,8 @@ struct WhisperLanguagePickerView: View {
 							LanguageRow(
 								name: "Auto-detect", code: nil,
 								selected: manager.selectedLanguage == nil,
-								hasProfanityList: false
+								hasProfanityList: false,
+								disabled: isParakeet
 							) {
 								manager.selectedLanguage = nil
 							}
@@ -99,7 +117,8 @@ struct WhisperLanguagePickerView: View {
 								LanguageRow(
 									name: lang.name, code: lang.code,
 									selected: manager.selectedLanguage == lang.code,
-									hasProfanityList: Self.profanityLanguages.contains(lang.code)
+									hasProfanityList: Self.profanityLanguages.contains(lang.code),
+									disabled: isLanguageDisabled(lang.code)
 								) {
 									manager.selectedLanguage = lang.code
 								}
@@ -122,7 +141,35 @@ struct WhisperLanguagePickerView: View {
 			}
 			.frame(maxHeight: .infinity)
 			.kkPanel()
+			.overlay {
+				if lockToEnglish {
+					ParakeetLockOverlay(message: "Parakeet 0.6B v2 is English only.")
+				}
+			}
 		}
+	}
+}
+
+private struct ParakeetLockOverlay: View {
+	let message: String
+
+	var body: some View {
+		ZStack {
+			Rectangle()
+				.fill(.ultraThinMaterial)
+			VStack(spacing: KKSpacingSM) {
+				Image(systemName: "lock.fill")
+					.font(.system(size: 16))
+					.foregroundStyle(.secondary)
+				Text(message)
+					.font(.system(size: 12, weight: .medium))
+					.foregroundStyle(.secondary)
+					.multilineTextAlignment(.center)
+			}
+			.padding(KKPaddingLG)
+		}
+		.clipShape(RoundedRectangle(cornerRadius: KKRadiusMD + 4))
+		.allowsHitTesting(true)
 	}
 }
 
@@ -145,6 +192,7 @@ private struct LanguageRow: View {
 	let code: String?
 	let selected: Bool
 	let hasProfanityList: Bool
+	var disabled: Bool = false
 	let action: () -> Void
 
 	var body: some View {
@@ -176,6 +224,10 @@ private struct LanguageRow: View {
 		.padding(.vertical, KKSpacingMD)
 		.kkSelectableBackground(selected)
 		.contentShape(Rectangle())
-		.onTapGesture { action() }
+		.opacity(disabled ? 0.35 : 1)
+		.onTapGesture {
+			guard !disabled else { return }
+			action()
+		}
 	}
 }

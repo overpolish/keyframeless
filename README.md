@@ -41,7 +41,7 @@
 
 # 🤝 Install
 
-Keyframeless is a paid product. Grab the installer from Gumroad — your purchase covers all future updates.
+Grab the installer from Gumroad - one payment to help support continued development, all future updates included.
 
 <div align="center">
 	<a href="https://overpolish.gumroad.com/l/keyframeless"><b>Buy on Gumroad →</b></a>
@@ -49,9 +49,15 @@ Keyframeless is a paid product. Grab the installer from Gumroad — your purchas
 
 <br />
 
+<br />
+
 <div align="center">
 	<img width="500" alt="Installation window showcasing the various tools available for install." src="./.github/images/installer.png" />
 </div>
+
+<br />
+
+If you'd rather build Keyframeless yourself than pay for the installer, you can - clone the repo, open it in Xcode, and go. Paying saves you the signing/notarization process and helps fund continued development.
 
 <br />
 
@@ -85,7 +91,7 @@ Add glow effects with solid, gradient, and dynamic colour support. Also doubles 
 
 Ever felt like AI caption tools are too basic? No way to edit captions before pulling them into Final Cut Pro, leaving you to fix things title-by-title? This is the first clip-based caption workflow - see your Final Cut Pro audio timeline, pick which clips to transcribe, and use different models for different clips.
 
-There's also community captions — download and use existing ones, or make your own Motion Templates, drag them in, and you're good to go. Customize published parameters **BEFORE** dragging them into Final Cut Pro so you don't have to touch titles once they're on the timeline.
+There's also community captions - download and use existing ones, or make your own Motion Templates, drag them in, and you're good to go. Customize published parameters **BEFORE** dragging them into Final Cut Pro so you don't have to touch titles once they're on the timeline.
 
 <div align="center">
 	<img alt="AI Captions demo" src="./.github/images/ai-captions-demo.gif" />
@@ -116,6 +122,8 @@ Easily crop and round your videos corners,
 
 <br />
 
-# 📜 License
+# 📜 Source & License
 
-Keyframeless is licensed under the [PolyForm Noncommercial License 1.0.0](./LICENSE). The source is public so others can read, study, and learn from it; the shipping installer is paid. Older releases were distributed under GPLv3 and remain available on the [Releases](https://github.com/overpolish/keyframeless/releases) page under that license.
+Keyframeless is source-available under the [PolyForm Noncommercial License 1.0.0](./LICENSE) - read it, learn from it, and build it for personal use. The signed installer is paid, sold on Gumroad.
+
+Older releases were distributed under GPLv3 and stay that way - [Final GPLv3 release](https://github.com/overpolish/keyframeless/releases/tag/2026-04-11)

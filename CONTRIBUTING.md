@@ -13,16 +13,22 @@
 >
 > Unregister stale paths and re-register the debug build:
 >
+> Note: the `[ ! -e "$p" ]` guard isn't enough - building the `KeyframelessKit` scheme directly produces its own host app + appex in a separate DerivedData folder that still exists on disk, so two copies share a bundle ID and Launch Services keeps preferring the older one. Unregister by path mismatch instead:
+>
 > ```sh
 > LS=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+> KEEP="$(pwd)/DerivedData/Keyframeless/Build/Products/Debug/Keyframeless X.app"
 >
-> # find and unregister stale entries
-> $LS -dump | grep -B20 'identifier:.*co.overpolish.keyframeless.Keyframeless-X$' | grep "path:" | sed 's/.*path: *//' | sed 's/ (0x.*//' | while read -r p; do [ ! -e "$p" ] && $LS -u "$p" && echo "Unregistered: $p"; done
+> # unregister every copy except the debug build
+> $LS -dump | grep -B20 'identifier:.*co.overpolish.keyframeless.Keyframeless-X$' \
+>   | grep "path:" | sed 's/.*path: *//; s/ (0x.*//' \
+>   | while read -r p; do
+>       [ "$p" != "$KEEP" ] && $LS -u "$p" && echo "Unregistered: $p"
+>     done
 >
 > # re-register the debug build
-> $LS -f -R -trusted "$(pwd)/DerivedData/Keyframeless/Build/Products/Debug/Keyframeless X.app"
->
-> pluginkit -a "$(pwd)/DerivedData/Keyframeless/Build/Products/Debug/Keyframeless X.app/Contents/PlugIns/Keyframeless X FCP.appex"
+> $LS -f -R -trusted "$KEEP"
+> pluginkit -a "$KEEP/Contents/PlugIns/Keyframeless X FCP.appex"
 > pluginkit -e use -i co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP
 > ```
 >
@@ -31,7 +37,6 @@
 ## VSCode
 
 If you're using VSCode with clangd, run the following after building the project to generate the language server config:
-
 
 ```sh
 # List available schemes
