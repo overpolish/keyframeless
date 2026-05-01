@@ -6,8 +6,8 @@
 import KeyframelessKit
 import SwiftUI
 
-struct WhisperTermsView: View {
-	@ObservedObject var manager: WhisperModelManager
+struct AudioTermsView: View {
+	@ObservedObject var manager: AudioModelManager
 	@State private var input: String = ""
 	@FocusState private var focused: Bool
 

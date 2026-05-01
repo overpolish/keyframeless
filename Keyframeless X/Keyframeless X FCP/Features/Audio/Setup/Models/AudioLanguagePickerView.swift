@@ -7,8 +7,8 @@ import FluidAudio
 import KeyframelessKit
 import SwiftUI
 
-struct WhisperLanguagePickerView: View {
-	@ObservedObject var manager: WhisperModelManager
+struct AudioLanguagePickerView: View {
+	@ObservedObject var manager: AudioModelManager
 	@State private var search: String = ""
 
 	private static let profanityLanguages = ProfanityFilter.availableLanguages
@@ -68,7 +68,7 @@ struct WhisperLanguagePickerView: View {
 
 	private func isLanguageDisabled(_ code: String) -> Bool {
 		guard let version = manager.currentParakeetVersion else { return false }
-		return !WhisperModelManager.parakeetSupports(language: code, version: version)
+		return !AudioModelManager.parakeetSupports(language: code, version: version)
 	}
 
 	var body: some View {

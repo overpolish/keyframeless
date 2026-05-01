@@ -10,7 +10,7 @@ import Foundation
 import WhisperKit
 
 @MainActor
-class WhisperModelManager: ObservableObject {
+class AudioModelManager: ObservableObject {
 
 	enum Engine {
 		case whisperKit
@@ -265,7 +265,7 @@ class WhisperModelManager: ObservableObject {
 			downloadedModels.insert(variant)
 			if selectedModel == nil { selectedModel = variant }
 		} catch {
-			print("[WhisperModelManager] WhisperKit download failed: \(error)")
+			print("[AudioModelManager] WhisperKit download failed: \(error)")
 		}
 	}
 
@@ -283,7 +283,7 @@ class WhisperModelManager: ObservableObject {
 			downloadedModels.insert(variant)
 			if selectedModel == nil { selectedModel = variant }
 		} catch {
-			print("[WhisperModelManager] Parakeet download failed: \(error)")
+			print("[AudioModelManager] Parakeet download failed: \(error)")
 		}
 	}
 
@@ -329,7 +329,7 @@ class WhisperModelManager: ObservableObject {
 			downloadedModels.insert(variant)
 			if selectedModel == nil { selectedModel = variant }
 		} catch {
-			print("[WhisperModelManager] GGML download failed: \(error)")
+			print("[AudioModelManager] GGML download failed: \(error)")
 		}
 	}
 

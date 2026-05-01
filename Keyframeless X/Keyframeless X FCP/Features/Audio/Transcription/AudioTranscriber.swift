@@ -82,7 +82,7 @@ actor AudioTranscriber {
 		onProgress: @escaping @Sendable (Progress) -> Void
 	) async throws -> [ClipResult] {
 		defer { unloadModel() }
-		switch WhisperModelManager.engine(for: modelVariant) {
+		switch AudioModelManager.engine(for: modelVariant) {
 		case .whisperKit:
 			return try await transcribeWithWhisperKit(
 				segments: segments, modelVariant: modelVariant,
@@ -322,7 +322,7 @@ actor AudioTranscriber {
 			parakeetManager = nil
 			loadedParakeetVariant = nil
 
-			guard let version = WhisperModelManager.parakeetVersion(for: modelVariant) else {
+			guard let version = AudioModelManager.parakeetVersion(for: modelVariant) else {
 				throw NSError(
 					domain: "AudioTranscriber", code: 4,
 					userInfo: [
@@ -490,7 +490,7 @@ actor AudioTranscriber {
 			whisperCpp = nil
 			loadedWhisperCppVariant = nil
 
-			let modelURL = WhisperModelManager.modelFileURL(for: modelVariant)
+			let modelURL = AudioModelManager.modelFileURL(for: modelVariant)
 			w = Whisper(fromFileURL: modelURL)
 			try Task.checkCancellation()
 			whisperCpp = w

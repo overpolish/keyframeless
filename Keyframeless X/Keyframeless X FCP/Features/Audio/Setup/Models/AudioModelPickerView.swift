@@ -6,8 +6,8 @@
 import KeyframelessKit
 import SwiftUI
 
-struct WhisperModelPickerView: View {
-	@ObservedObject var manager: WhisperModelManager
+struct AudioModelPickerView: View {
+	@ObservedObject var manager: AudioModelManager
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: KKSpacingMD) {
@@ -22,7 +22,7 @@ struct WhisperModelPickerView: View {
 
 			ScrollShadowView {
 				LazyVStack(alignment: .leading, spacing: KKSpacingXS) {
-					let groups = ModelGroup.grouped(WhisperModelManager.models)
+					let groups = ModelGroup.grouped(AudioModelManager.models)
 					ForEach(Array(groups.enumerated()), id: \.element.title) { index, group in
 						if index > 0 {
 							ModelGroupHeader(title: group.title)
@@ -31,10 +31,10 @@ struct WhisperModelPickerView: View {
 							ModelGroupHeader(title: group.title)
 						}
 						ForEach(group.models) { model in
-							WhisperModelRow(model: model, manager: manager)
+							AudioModelRow(model: model, manager: manager)
 						}
 					}
-					if !WhisperModelManager.isAppleSilicon {
+					if !AudioModelManager.isAppleSilicon {
 						IntelModelNote()
 					}
 				}
@@ -46,9 +46,9 @@ struct WhisperModelPickerView: View {
 	}
 }
 
-private struct WhisperModelRow: View {
-	let model: WhisperModelManager.ModelInfo
-	@ObservedObject var manager: WhisperModelManager
+private struct AudioModelRow: View {
+	let model: AudioModelManager.ModelInfo
+	@ObservedObject var manager: AudioModelManager
 
 	var body: some View {
 		let isDownloaded = manager.downloadedModels.contains(model.id)
@@ -66,7 +66,7 @@ private struct WhisperModelRow: View {
 					Text(model.displayName)
 						.font(.system(size: 12, weight: isSelected ? .medium : .regular))
 						.foregroundStyle(isDownloaded ? .primary : .secondary)
-					if model.id == WhisperModelManager.recommendedModelId {
+					if model.id == AudioModelManager.recommendedModelId {
 						InfoBadge(
 							label: "Recommended",
 							systemImage: "desktopcomputer.and.macbook",
@@ -117,11 +117,11 @@ private struct WhisperModelRow: View {
 
 private struct ModelGroup {
 	let title: String
-	let models: [WhisperModelManager.ModelInfo]
+	let models: [AudioModelManager.ModelInfo]
 
-	static func grouped(_ all: [WhisperModelManager.ModelInfo]) -> [ModelGroup] {
+	static func grouped(_ all: [AudioModelManager.ModelInfo]) -> [ModelGroup] {
 		var groups: [ModelGroup] = []
-		var current: (title: String, models: [WhisperModelManager.ModelInfo])?
+		var current: (title: String, models: [AudioModelManager.ModelInfo])?
 		for model in all {
 			let title = title(for: model.engine)
 			if current?.title == title {
@@ -135,7 +135,7 @@ private struct ModelGroup {
 		return groups
 	}
 
-	private static func title(for engine: WhisperModelManager.Engine) -> String {
+	private static func title(for engine: AudioModelManager.Engine) -> String {
 		switch engine {
 		case .whisperKit, .whisperCpp: return "Whisper"
 		case .parakeet: return "Parakeet"
