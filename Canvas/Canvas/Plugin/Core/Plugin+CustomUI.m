@@ -637,4 +637,94 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
       &sup, @selector(createViewForParameterID:), parameterID);
 }
 
+- (NSArray<KKHelpSection *> *)helpSections {
+  KKHelpSection *tools = [KKHelpSection
+      sectionWithTitle:@"Tools"
+             tipMarkup:@[
+               (@"Pick a tool from the on-canvas toolbar - "
+                @"<accent>Cursor</accent> selects and reshapes paths, "
+                @"<accent>Pen</accent> draws bezier paths anchor by anchor, "
+                @"and <accent>Rectangle</accent>, <accent>Ellipse</accent>, "
+                @"and <accent>Line</accent> drag out primitive shapes."),
+               (@"Each path becomes a <accent>layer</accent> in the inspector "
+                @"with its own Stroke, Fill, and Sketch styling."),
+               (@"With the Pen tool, click to add corner anchors or drag to "
+                @"pull out smooth handles. Close a path by clicking its first "
+                @"anchor."),
+             ]
+             shortcuts:@[
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>⌃</kbd><kbd>V</kbd>"
+                               descMarkup:@"Cursor tool"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>⌃</kbd><kbd>X</kbd>"
+                               descMarkup:@"Pen tool"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>⌃</kbd><kbd>B</kbd>"
+                               descMarkup:@"Rectangle tool"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>⌃</kbd><kbd>G</kbd>"
+                               descMarkup:@"Ellipse tool"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>⌃</kbd><kbd>M</kbd>"
+                               descMarkup:@"Line tool"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>esc</kbd>"
+                                           descMarkup:@"Return to Cursor and "
+                                                      @"clear selection"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌫</kbd>"
+                                           descMarkup:@"Delete the selected "
+                                                      @"path or anchor"],
+             ]];
+  tools.icon = [NSImage imageWithSystemSymbolName:@"scribble.variable"
+                         accessibilityDescription:nil];
+
+  KKHelpSection *editing = [KKHelpSection
+      sectionWithTitle:@"Editing"
+             tipMarkup:@[
+               (@"Drag an anchor or handle to reshape a path. Drag empty "
+                @"canvas to marquee-select multiple anchors or paths."),
+               (@"Resize and rotate handles wrap any selection so you can "
+                @"transform several paths at once."),
+             ]
+             shortcuts:@[
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + drag"
+                               descMarkup:@"Constrain motion to X or Y axis"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌘</kbd> + drag"
+                                           descMarkup:@"Disable snapping"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + drag "
+                                                      @"path"
+                                           descMarkup:@"Duplicate the "
+                                                      @"selected path"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + corner resize"
+                               descMarkup:@"Lock to aspect ratio"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + corner resize"
+                               descMarkup:@"Scale symmetrically from center"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + "
+                                                      @"rotate"
+                                           descMarkup:@"Snap rotation to 15° "
+                                                      @"increments"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + "
+                                                      @"marquee"
+                                           descMarkup:@"Add to selection"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + marquee"
+                                           descMarkup:@"Remove from selection"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + click "
+                                                      @"anchor"
+                                           descMarkup:@"Delete the anchor "
+                                                      @"(Pen tool)"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + drag "
+                                                      @"handle"
+                                           descMarkup:@"Break handle "
+                                                      @"symmetry (move "
+                                                      @"independently)"],
+             ]];
+  editing.icon = [NSImage imageWithSystemSymbolName:@"hand.draw"
+                           accessibilityDescription:nil];
+
+  return @[ tools, editing ];
+}
+
 @end
