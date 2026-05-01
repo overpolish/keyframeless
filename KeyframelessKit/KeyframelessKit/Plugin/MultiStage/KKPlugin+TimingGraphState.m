@@ -159,8 +159,15 @@ static void KKApplySequencerState(KKPlugin *plugin, KKStageSequencerView *seq,
     lanes = KKReadLanesRebalanced(self.apiManager, paramGetAPI);
     if (lanes) {
       instState.lanesSnapshot = [lanes copy];
+      instState.lanesEverPersisted = YES;
       [self _applyHTHParameterFlagsForLanes:lanes];
     }
+  } else if (instState.lanesEverPersisted && instState.lanesSnapshot.count) {
+    // Probe came back empty but we've already persisted JSON for this
+    // instance. The empty read is an XPC scope artifact — trust the
+    // in-memory snapshot rather than clobbering the user's edit with
+    // rebuilt defaults.
+    lanes = instState.lanesSnapshot;
   } else {
     // Fresh instance: no persisted JSON. Re-seed from live param values
     // inside this action scope (where reads actually succeed) and

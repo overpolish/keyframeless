@@ -50,6 +50,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// Lanes that should be pushed to the sequencer view on the next OSC draw.
 @property(nonatomic, copy, nullable) NSArray<KKTimingLane *> *pendingLanes;
 
+/// Set once we've either successfully read non-empty JSON for this instance
+/// or written JSON via KKWriteLanesJSON. Distinguishes a truly fresh instance
+/// (re-seed from defaults is correct) from an XPC scope where the param
+/// probe transiently returns nil right after a write (re-seeding would clobber
+/// the user's edit).
+@property(nonatomic) BOOL lanesEverPersisted;
+
 /// The live sequencer view for this instance (weak — auto-nils on dealloc).
 @property(nonatomic, weak, nullable) KKStageSequencerView *sequencerView;
 

@@ -42,7 +42,7 @@
   lane.segments = segs;
   lanes[jsonIdx] = lane;
 
-  KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
+  KKWriteLanesJSON(lanes, setAPI, self.apiManager, [self _kindsByLaneLabel]);
   [actAPI endAction:self];
   [self timingGraphApplyState];
 }
@@ -78,7 +78,7 @@
   lane.segments = segs;
   lanes[jsonIdx] = lane;
 
-  KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
+  KKWriteLanesJSON(lanes, setAPI, self.apiManager, [self _kindsByLaneLabel]);
   [actAPI endAction:self];
   [self timingGraphApplyState];
 }
@@ -191,7 +191,7 @@
   }
 
   if (anyChanged)
-    KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
+    KKWriteLanesJSON(lanes, setAPI, self.apiManager, [self _kindsByLaneLabel]);
   [actAPI endAction:self];
   if (anyChanged)
     [self timingGraphApplyState];

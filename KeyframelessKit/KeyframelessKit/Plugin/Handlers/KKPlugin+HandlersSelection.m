@@ -66,7 +66,7 @@
     lane = mLane;
   }
 
-  KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
+  KKWriteLanesJSON(lanes, setAPI, self.apiManager, [self _kindsByLaneLabel]);
   // Update snapshot + clear pending BEFORE endAction (which triggers
   // parameterChanged: that would read stale snapshot).
   state.lanesSnapshot = [lanes copy];
@@ -174,7 +174,7 @@
     [newSegPerLane addObject:@(newIdx)];
   }
 
-  KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
+  KKWriteLanesJSON(lanes, setAPI, self.apiManager, [self _kindsByLaneLabel]);
   state.lanesSnapshot = [lanes copy];
   state.pendingLanes = nil;
 
@@ -244,7 +244,7 @@
     }
   }
   mutable[jsonIdx] = lane;
-  KKWriteLanesJSON(mutable, setAPI, [self _kindsByLaneLabel]);
+  KKWriteLanesJSON(mutable, setAPI, self.apiManager, [self _kindsByLaneLabel]);
 
   // Enable-path: native params may have been edited while the lane was
   // disabled. Overwrite native params with the newly-selected segment's
@@ -319,7 +319,7 @@
     lanes[i] = lane;
   }
 
-  KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
+  KKWriteLanesJSON(lanes, setAPI, self.apiManager, [self _kindsByLaneLabel]);
 
   KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
   if (state) {
@@ -382,7 +382,7 @@
   lane.visibleInSequencer = visible;
   lanes[laneIndex] = lane;
 
-  KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
+  KKWriteLanesJSON(lanes, setAPI, self.apiManager, [self _kindsByLaneLabel]);
 
   KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
   if (state) {
@@ -432,7 +432,7 @@
     KKTimingLane *lane = [lanes[jsonIdx] copy];
     lane.oscVisible = visible;
     lanes[jsonIdx] = lane;
-    KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
+    KKWriteLanesJSON(lanes, setAPI, self.apiManager, [self _kindsByLaneLabel]);
     if (state)
       state.lanesSnapshot = [lanes copy];
   }
@@ -475,7 +475,7 @@
       updatedLane = relocked;
     }
     lanes[jsonIdx] = updatedLane;
-    KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
+    KKWriteLanesJSON(lanes, setAPI, self.apiManager, [self _kindsByLaneLabel]);
   }
   [actAPI endAction:self];
   [self timingGraphApplyState];
@@ -524,7 +524,7 @@
     }
     lanes[jsonIdx] = updatedLane;
   }
-  KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
+  KKWriteLanesJSON(lanes, setAPI, self.apiManager, [self _kindsByLaneLabel]);
   [actAPI endAction:self];
   [self timingGraphApplyState];
 }
@@ -564,7 +564,7 @@
   lane.segments = segs;
   lanes[jsonIdx] = lane;
 
-  KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
+  KKWriteLanesJSON(lanes, setAPI, self.apiManager, [self _kindsByLaneLabel]);
 
   // When the destination is the currently-selected segment, native params
   // still hold its pre-copy values. Push the new values through so the next

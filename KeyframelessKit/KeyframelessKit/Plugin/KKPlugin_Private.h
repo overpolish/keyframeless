@@ -139,6 +139,7 @@ extern NSMutableArray<KKTimingLane *> *_Nullable KKReadLanesRebalanced(
 /// normalize-everything.
 extern void KKWriteLanesJSON(
     NSArray<KKTimingLane *> *lanes, id<FxParameterSettingAPI_v5> setAPI,
+    id<PROAPIAccessing> _Nullable apiManager,
     NSDictionary<NSString *, NSArray<NSNumber *> *> *_Nullable kindsByLabel);
 
 /// Looks up the animatable property by `label`, or nil when no match.
