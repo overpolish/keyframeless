@@ -25,8 +25,10 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKCustomGroupHeaderView.h>
 #import <KeyframelessKit/KKEasing.h>
 #import <KeyframelessKit/KKGradientBarView.h>
+#import <KeyframelessKit/KKGradientControl.h>
 #import <KeyframelessKit/KKGradientFavorites.h>
 #import <KeyframelessKit/KKGradientFavoritesPopover.h>
+#import <KeyframelessKit/KKGradientSampling.h>
 #import <KeyframelessKit/KKHelpSection.h>
 #import <KeyframelessKit/KKHelpView.h>
 #import <KeyframelessKit/KKHostInfo.h>

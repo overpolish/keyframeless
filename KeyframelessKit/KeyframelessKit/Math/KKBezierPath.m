@@ -231,6 +231,42 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
           memcpy(&path->_fillTint, bytes + hdr, sizeof(float));
           hdr += sizeof(float);
         }
+        if (ver >= 16 && data.length >= hdr + 1 + 1 + sizeof(float) + 2) {
+          path->_strokeColorMode = bytes[hdr];
+          hdr += 1;
+          path->_strokeGradientType = bytes[hdr];
+          hdr += 1;
+          memcpy(&path->_strokeGradientAngle, bytes + hdr, sizeof(float));
+          hdr += sizeof(float);
+          uint16_t sgLen;
+          memcpy(&sgLen, bytes + hdr, 2);
+          hdr += 2;
+          if (sgLen > 0 && data.length >= hdr + sgLen) {
+            path->_strokeGradientJSON =
+                [[NSString alloc] initWithBytes:bytes + hdr
+                                         length:sgLen
+                                       encoding:NSUTF8StringEncoding];
+            hdr += sgLen;
+          }
+          if (data.length >= hdr + 1 + 1 + sizeof(float) + 2) {
+            path->_fillColorMode = bytes[hdr];
+            hdr += 1;
+            path->_fillGradientType = bytes[hdr];
+            hdr += 1;
+            memcpy(&path->_fillGradientAngle, bytes + hdr, sizeof(float));
+            hdr += sizeof(float);
+            uint16_t fgLen;
+            memcpy(&fgLen, bytes + hdr, 2);
+            hdr += 2;
+            if (fgLen > 0 && data.length >= hdr + fgLen) {
+              path->_fillGradientJSON =
+                  [[NSString alloc] initWithBytes:bytes + hdr
+                                           length:fgLen
+                                         encoding:NSUTF8StringEncoding];
+              hdr += fgLen;
+            }
+          }
+        }
       }
     }
   }
@@ -302,7 +338,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   // v11: + endWidth (1 float).
   // v12: + contour starts (2-byte count + N × uint32 indices).
   uint8_t propMarker = 0xAA;
-  uint8_t propVersion = 15;
+  uint8_t propVersion = 16;
   [data appendBytes:&propMarker length:1];
   [data appendBytes:&propVersion length:1];
   float strokeData[4] = {_strokeWidth, _strokeR, _strokeG, _strokeB};
@@ -356,6 +392,23 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   [data appendBytes:&aspect length:sizeof(float)];
   // v15: fillTint
   [data appendBytes:&_fillTint length:sizeof(float)];
+  // v16: per-path stroke + fill gradient (mode, type, angle, JSON).
+  [data appendBytes:&_strokeColorMode length:1];
+  [data appendBytes:&_strokeGradientType length:1];
+  [data appendBytes:&_strokeGradientAngle length:sizeof(float)];
+  NSData *sgData = [_strokeGradientJSON dataUsingEncoding:NSUTF8StringEncoding];
+  uint16_t sgLen = (uint16_t)sgData.length;
+  [data appendBytes:&sgLen length:2];
+  if (sgLen > 0)
+    [data appendData:sgData];
+  [data appendBytes:&_fillColorMode length:1];
+  [data appendBytes:&_fillGradientType length:1];
+  [data appendBytes:&_fillGradientAngle length:sizeof(float)];
+  NSData *fgData = [_fillGradientJSON dataUsingEncoding:NSUTF8StringEncoding];
+  uint16_t fgLen = (uint16_t)fgData.length;
+  [data appendBytes:&fgLen length:2];
+  if (fgLen > 0)
+    [data appendData:fgData];
   return data;
 }
 
@@ -439,6 +492,14 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     _startMarkerSize = 3.0f;
     _endMarkerSize = 3.0f;
     _endWidth = 0.0f;
+    _strokeColorMode = 0;
+    _strokeGradientType = 1;
+    _strokeGradientAngle = 0.0f;
+    _strokeGradientJSON = nil;
+    _fillColorMode = 0;
+    _fillGradientType = 1;
+    _fillGradientAngle = 0.0f;
+    _fillGradientJSON = nil;
   }
   return self;
 }

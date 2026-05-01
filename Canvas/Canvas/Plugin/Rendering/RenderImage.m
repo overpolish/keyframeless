@@ -4,9 +4,11 @@
  */
 
 #import "RenderImage.h"
+#import "CanvasGradientBuilder.h"
 #import "ShaderTypes.h"
 #import "SketchFill.h"
 #import <CoreImage/CoreImage.h>
+#import <KeyframelessKit/KKGradientSampling.h>
 
 static NSMutableDictionary<NSString *, id<MTLTexture>> *sImageTextureCache;
 static CIContext *sCIContext;
@@ -100,15 +102,58 @@ id<MTLTexture> KKApplyImageFill(id<MTLTexture> rawTexture, KKBezierPath *path,
       initWithMTLTexture:rawTexture
                  options:@{kCIImageColorSpace : (__bridge id)srgb}];
 
-  CIColor *fillCI = [CIColor colorWithRed:path.fillR
-                                    green:path.fillG
-                                     blue:path.fillB
-                                    alpha:1.0
-                               colorSpace:srgb];
-  CIFilter *colorGen = [CIFilter filterWithName:@"CIConstantColorGenerator"];
-  [colorGen setValue:fillCI forKey:kCIInputColorKey];
-  CIImage *flatColor =
-      [colorGen.outputImage imageByCroppingToRect:image.extent];
+  // Gradient mode: render a flat gradient texture matching the image bounds,
+  // then wrap it as a CIImage so the rest of the tint+blend pipeline reuses
+  // the same code path as the solid case.
+  CIImage *flatColor = nil;
+  CanvasGradientParams fillGP = {0};
+  fillGP.opacity = 1.0f;
+  if (KKBuildCanvasGradientSamples(path, NO, &fillGP)) {
+    static id<MTLComputePipelineState> sGradientFillPS;
+    if (!sGradientFillPS) {
+      id<MTLLibrary> lib = [device newDefaultLibrary];
+      id<MTLFunction> fn = [lib newFunctionWithName:@"gradientFillKernel"];
+      sGradientFillPS = [device newComputePipelineStateWithFunction:fn
+                                                              error:nil];
+    }
+    if (sGradientFillPS) {
+      CanvasGradientParams gp = fillGP;
+      gp.bboxMin = (simd_float2){0, 0};
+      gp.bboxMax =
+          (simd_float2){(float)rawTexture.width, (float)rawTexture.height};
+
+      MTLTextureDescriptor *gradDesc = [MTLTextureDescriptor
+          texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm_sRGB
+                                       width:rawTexture.width
+                                      height:rawTexture.height
+                                   mipmapped:NO];
+      gradDesc.usage = MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
+      id<MTLTexture> gradTex = [device newTextureWithDescriptor:gradDesc];
+
+      id<MTLComputeCommandEncoder> enc = [commandBuffer computeCommandEncoder];
+      [enc setComputePipelineState:sGradientFillPS];
+      [enc setTexture:gradTex atIndex:0];
+      [enc setBytes:&gp length:sizeof(gp) atIndex:0];
+      MTLSize tg = MTLSizeMake(16, 16, 1);
+      MTLSize grid = MTLSizeMake(rawTexture.width, rawTexture.height, 1);
+      [enc dispatchThreads:grid threadsPerThreadgroup:tg];
+      [enc endEncoding];
+
+      flatColor = [[CIImage alloc]
+          initWithMTLTexture:gradTex
+                     options:@{kCIImageColorSpace : (__bridge id)srgb}];
+    }
+  }
+  if (!flatColor) {
+    CIColor *fillCI = [CIColor colorWithRed:path.fillR
+                                      green:path.fillG
+                                       blue:path.fillB
+                                      alpha:1.0
+                                 colorSpace:srgb];
+    CIFilter *colorGen = [CIFilter filterWithName:@"CIConstantColorGenerator"];
+    [colorGen setValue:fillCI forKey:kCIInputColorKey];
+    flatColor = [colorGen.outputImage imageByCroppingToRect:image.extent];
+  }
 
   CIImage *tinted =
       [flatColor imageByApplyingFilter:@"CIBlendWithAlphaMask"
@@ -255,6 +300,16 @@ id<MTLTexture> KKApplyImageStroke(id<MTLTexture> srcTexture, KKBezierPath *path,
   id<MTLTexture> outTex = [device newTextureWithDescriptor:srcPadDesc];
   {
     simd_float4 strokeColor = {path.strokeR, path.strokeG, path.strokeB, 1.0f};
+
+    CanvasGradientParams gradParams = {0};
+    gradParams.opacity = path.opacity;
+    if (KKBuildCanvasGradientSamples(path, YES, &gradParams)) {
+      // Image bbox in padded-texture pixel space (image lives at pad..pad+src).
+      gradParams.bboxMin = (simd_float2){(float)pad, (float)pad};
+      gradParams.bboxMax = (simd_float2){(float)(pad + srcTexture.width),
+                                         (float)(pad + srcTexture.height)};
+    }
+
     id<MTLComputeCommandEncoder> enc = [commandBuffer computeCommandEncoder];
     [enc setComputePipelineState:sJFACompositePS];
     [enc setTexture:paddedSrc atIndex:0];
@@ -262,6 +317,7 @@ id<MTLTexture> KKApplyImageStroke(id<MTLTexture> srcTexture, KKBezierPath *path,
     [enc setTexture:outTex atIndex:2];
     [enc setBytes:&radius length:sizeof(radius) atIndex:0];
     [enc setBytes:&strokeColor length:sizeof(strokeColor) atIndex:1];
+    [enc setBytes:&gradParams length:sizeof(gradParams) atIndex:2];
     [enc dispatchThreads:gridSize threadsPerThreadgroup:threadGroupSize];
     [enc endEncoding];
   }
@@ -312,7 +368,15 @@ id<MTLTexture> KKApplyImageSketchFill(id<MTLTexture> rawTexture,
     return rawTexture;
 
   float fw = path.sketchFillWeight;
-  simd_float4 color = {path.fillR, path.fillG, path.fillB, 1.0f};
+  CanvasGradientParams gradParams = {0};
+  gradParams.solidColor =
+      (simd_float4){path.fillR, path.fillG, path.fillB, 1.0f};
+  gradParams.opacity = 1.0f;
+  if (KKBuildCanvasGradientSamples(path, NO, &gradParams)) {
+    // bbox in centered framebuffer-Y pixels (matches the vertex math below).
+    gradParams.bboxMin = (simd_float2){-imgW * 0.5f, -imgH * 0.5f};
+    gradParams.bboxMax = (simd_float2){imgW * 0.5f, imgH * 0.5f};
+  }
   float halfW = fw / 2.0f;
   BOOL isDots = (path.sketchFillStyle == 4);
   float dotRadius = fw * 1.5f;
@@ -423,7 +487,8 @@ id<MTLTexture> KKApplyImageSketchFill(id<MTLTexture> rawTexture,
                                           options:MTLResourceStorageModeShared];
   [enc setVertexBuffer:vBuf offset:0 atIndex:0];
   [enc setVertexBytes:&imgViewport length:sizeof(imgViewport) atIndex:1];
-  [enc setFragmentBytes:&color length:sizeof(color) atIndex:0];
+  [enc setFragmentBytes:&gradParams length:sizeof(gradParams) atIndex:0];
+  [enc setFragmentBytes:&imgViewport length:sizeof(imgViewport) atIndex:1];
   MTLPrimitiveType prim =
       isDots ? MTLPrimitiveTypeTriangle : MTLPrimitiveTypeTriangleStrip;
   [enc drawPrimitives:prim vertexStart:0 vertexCount:vc];
@@ -467,13 +532,17 @@ id<MTLTexture> KKProcessImageWithEffects(id<MTLTexture> rawTexture,
 
   NSString *cacheKey = [NSString
       stringWithFormat:@"%@_s%d_%.1f_%.2f_%.2f_%.2f_f%d_%d_%.1f_%.1f_%.1f_%.2f_"
-                       @"%.2f_%.2f_t%.2f",
+                       @"%.2f_%.2f_t%.2f_sg%d_%d_%.3f_%@_fg%d_%d_%.3f_%@",
                        path.imagePath, path.strokeEnabled, path.strokeWidth,
                        path.strokeR, path.strokeG, path.strokeB,
                        path.fillEnabled, path.sketchFillStyle,
                        path.sketchFillGap, path.sketchFillAngle,
                        path.sketchFillWeight, path.fillR, path.fillG,
-                       path.fillB, path.fillTint];
+                       path.fillB, path.fillTint, (int)path.strokeColorMode,
+                       (int)path.strokeGradientType, path.strokeGradientAngle,
+                       path.strokeGradientJSON ?: @"", (int)path.fillColorMode,
+                       (int)path.fillGradientType, path.fillGradientAngle,
+                       path.fillGradientJSON ?: @""];
   if (!sProcessedImageCache)
     sProcessedImageCache = [NSMutableDictionary dictionary];
   id<MTLTexture> cached = sProcessedImageCache[cacheKey];

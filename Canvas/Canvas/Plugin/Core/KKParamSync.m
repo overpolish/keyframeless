@@ -31,6 +31,13 @@ void KKParamSyncApplyFromSnapshot(KKCanvasStoreSnapshot *snap,
       (hasPath && isOpen) ? (int8_t)selectedPath.startMarker : -1;
   int8_t endMarker = (hasPath && isOpen) ? (int8_t)selectedPath.endMarker : -1;
   int fillStyle = selectedPath ? (int)selectedPath.sketchFillStyle : 0;
+  // Snapshot retains last-set mode/type when nothing is selected, so the
+  // inspector keeps the gradient sub-params visible as defaults for the next
+  // shape (same pattern as snap.strokeEnabled / snap.fillEnabled).
+  uint8_t strokeColorMode = snap.strokeColorMode;
+  uint8_t fillColorMode = snap.fillColorMode;
+  uint8_t strokeGradType = snap.strokeGradientType;
+  uint8_t fillGradType = snap.fillGradientType;
 
   BOOL strokeOpen =
       (snap.strokeEnabled || forceShow) && (snap.strokeExpanded || forceShow);
@@ -41,7 +48,8 @@ void KKParamSyncApplyFromSnapshot(KKCanvasStoreSnapshot *snap,
 
   KKVisCondition active = KKBuildVisConditions(
       isImage, isOpen, hasJoins, strokeOpen, fillOpen, sketchOpen, strokeStyle,
-      startMarker, endMarker, fillStyle);
+      startMarker, endMarker, fillStyle, strokeColorMode, fillColorMode,
+      strokeGradType, fillGradType);
 
   NSUInteger vh = (NSUInteger)active * 31 + forceShow;
   if (vh == st.visHash)

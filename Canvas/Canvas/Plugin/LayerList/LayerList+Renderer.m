@@ -305,13 +305,32 @@ static void syncStyleView(NSView *view, NSInteger snapshotValue) {
 }
 
 static void syncStyleViews(KKLayerInstanceState *st,
-                           KKCanvasStoreSnapshot *snap) {
+                           KKCanvasStoreSnapshot *snap,
+                           KKBezierPath *syncPath) {
   syncStyleView(st.capStyleView, snap.selectedLineCap);
   syncStyleView(st.joinStyleView, snap.selectedLineJoin);
   syncStyleView(st.strokeStyleView, snap.selectedStrokeStyle);
   syncStyleView(st.startMarkerView, snap.selectedStartMarker);
   syncStyleView(st.endMarkerView, snap.selectedEndMarker);
   syncStyleView(st.fillStyleView, snap.selectedFillStyle);
+
+  // When no path is selected, keep the bar showing the last-used stops as
+  // defaults for the next shape — same retain-on-deselect pattern as the
+  // color mode / gradient type fields in the store.
+  if (syncPath) {
+    void (^applyJSON)(KKGradientControl *, NSString *) =
+        ^(KKGradientControl *control, NSString *json) {
+          if (!control)
+            return;
+          if (json.length == 0)
+            json = KKDefaultGradientJSON();
+          NSArray<KKGradientStop *> *stops = KKGradientStopsFromJSON(json);
+          if (stops)
+            control.stops = stops;
+        };
+    applyJSON(st.strokeGradientControl, syncPath.strokeGradientJSON);
+    applyJSON(st.fillGradientControl, syncPath.fillGradientJSON);
+  }
 }
 
 static void syncGroupHeaders(KKLayerInstanceState *st,
@@ -492,6 +511,6 @@ void KKCanvasRefreshLayerListFromSnapshot(KKCanvasStoreSnapshot *snap,
   }
   KKParamSyncApplyFromSnapshot(snap, syncPath, st.store.uuid, api);
 
-  syncStyleViews(st, snap);
+  syncStyleViews(st, snap, syncPath);
   syncGroupHeaders(st, snap, syncPath.isImage);
 }

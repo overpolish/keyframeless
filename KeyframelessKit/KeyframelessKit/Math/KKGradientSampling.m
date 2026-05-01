@@ -7,6 +7,11 @@
 #import "../Views/KKGradientBarView.h"
 #import <AppKit/AppKit.h>
 
+NSString *KKDefaultGradientJSON(void) {
+  return @"[{\"p\":0,\"r\":0,\"g\":0,\"b\":0},"
+         @"{\"p\":1,\"r\":1,\"g\":1,\"b\":1}]";
+}
+
 NSArray<KKGradientStop *> *KKGradientStopsFromJSON(NSString *json) {
   if (!json.length)
     return nil;

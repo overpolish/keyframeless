@@ -31,6 +31,7 @@ static NSString *const _Nonnull kLayerDuplicateDragType
 @class KKCustomGroupHeaderView;
 @class KKFillStyleView;
 @class KKJoinStyleView;
+@class KKGradientControl;
 @class KKMarkerStyleView;
 @class KKStrokeStyleView;
 @class KKLayerActionTarget;
@@ -54,6 +55,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, weak, nullable) KKMarkerStyleView *startMarkerView;
 @property(nonatomic, weak, nullable) KKMarkerStyleView *endMarkerView;
 @property(nonatomic, weak, nullable) KKFillStyleView *fillStyleView;
+@property(nonatomic, weak, nullable) KKGradientControl *strokeGradientControl;
+@property(nonatomic, weak, nullable) KKGradientControl *fillGradientControl;
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *strokeGroupHeader;
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *fillGroupHeader;
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *sketchGroupHeader;

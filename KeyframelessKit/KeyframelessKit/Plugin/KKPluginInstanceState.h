@@ -8,7 +8,7 @@
 #import <AppKit/AppKit.h>
 
 @class KKEmptyLanesView;
-@class KKGradientBarView;
+@class KKGradientControl;
 @class KKLaneVisibilityBar;
 @class KKStagePlayheadView;
 @class KKStageSequencerRulerView;
@@ -100,7 +100,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Live gradient bar for this instance (weak). Used by the color sync pump
 /// to push undo/redo-restored stops back into the UI.
-@property(nonatomic, weak, nullable) KKGradientBarView *gradientBar;
+@property(nonatomic, weak, nullable) KKGradientControl *gradientControl;
 
 /// Last-known gradient JSON. Set by the custom UI and by the color sync
 /// pump; used to diff against the persisted param on sync ticks so self-

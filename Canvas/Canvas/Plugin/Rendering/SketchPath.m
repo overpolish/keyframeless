@@ -74,6 +74,14 @@ static void copyPathProps(KKBezierPath *dst, KKBezierPath *src) {
   dst.endMarker = src.endMarker;
   dst.startMarkerSize = src.startMarkerSize;
   dst.endMarkerSize = src.endMarkerSize;
+  dst.strokeColorMode = src.strokeColorMode;
+  dst.strokeGradientType = src.strokeGradientType;
+  dst.strokeGradientAngle = src.strokeGradientAngle;
+  dst.strokeGradientJSON = src.strokeGradientJSON;
+  dst.fillColorMode = src.fillColorMode;
+  dst.fillGradientType = src.fillGradientType;
+  dst.fillGradientAngle = src.fillGradientAngle;
+  dst.fillGradientJSON = src.fillGradientJSON;
 }
 
 static BOOL isSegmentLinear(KKBezierPoint p0, KKBezierPoint p1) {

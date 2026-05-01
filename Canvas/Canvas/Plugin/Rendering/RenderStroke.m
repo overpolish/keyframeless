@@ -4,18 +4,36 @@
  */
 
 #import "RenderStroke.h"
+#import "CanvasGradientBuilder.h"
 #import "MarkerTessellation.h"
 #import "ShaderTypes.h"
 #import "Tessellation.h"
 
-static void renderMarker(uint8_t marker, simd_float2 pos, simd_float2 tangent,
-                         simd_float2 normal, float markerSize, float strokeW,
-                         KKBezierPath *path, float outputWidth,
-                         float outputHeight, id<MTLDevice> device,
-                         id<MTLCommandBuffer> commandBuffer,
-                         id<MTLTexture> outputTexture,
-                         id<MTLRenderPipelineState> strokePS,
-                         simd_uint2 viewportSize, simd_float4 color) {
+static void buildStrokeGradientParams(KKBezierPath *path, float outputWidth,
+                                      float outputHeight,
+                                      CanvasGradientParams *out) {
+  CanvasGradientParams p = {0};
+  float oa = path.opacity;
+  p.solidColor = (simd_float4){path.strokeR * oa, path.strokeG * oa,
+                               path.strokeB * oa, oa};
+  p.opacity = oa;
+  if (!KKBuildCanvasGradientSamples(path, YES, &p)) {
+    *out = p;
+    return;
+  }
+  float pad = fmaxf(path.strokeWidth, path.endWidth) * 0.5f;
+  KKCanvasPathBBoxCenteredPx(path, outputWidth, outputHeight, pad, &p.bboxMin,
+                             &p.bboxMax);
+  *out = p;
+}
+
+static void
+renderMarker(uint8_t marker, simd_float2 pos, simd_float2 tangent,
+             simd_float2 normal, float markerSize, float strokeW,
+             KKBezierPath *path, float outputWidth, float outputHeight,
+             id<MTLDevice> device, id<MTLCommandBuffer> commandBuffer,
+             id<MTLTexture> outputTexture, id<MTLRenderPipelineState> strokePS,
+             simd_uint2 viewportSize, CanvasGradientParams *gradParams) {
   CanvasVertex markerVerts[256];
   MTLPrimitiveType markerPrim = MTLPrimitiveTypeTriangleStrip;
   NSUInteger mc = 0;
@@ -43,7 +61,8 @@ static void renderMarker(uint8_t marker, simd_float2 pos, simd_float2 tangent,
                                          options:MTLResourceStorageModeShared];
   [enc setVertexBuffer:buf offset:0 atIndex:0];
   [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
-  [enc setFragmentBytes:&color length:sizeof(color) atIndex:0];
+  [enc setFragmentBytes:gradParams length:sizeof(*gradParams) atIndex:0];
+  [enc setFragmentBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
   [enc drawPrimitives:markerPrim vertexStart:0 vertexCount:mc];
   [enc endEncoding];
 }
@@ -56,9 +75,9 @@ static void renderStrokeForSinglePath(KKBezierPath *path, float outputWidth,
                                       simd_uint2 viewportSize) {
   float sw = path.strokeWidth;
   float ew = (path.endWidth > 0) ? path.endWidth : sw;
-  float oa = path.opacity;
-  simd_float4 color = {path.strokeR * oa, path.strokeG * oa, path.strokeB * oa,
-                       oa};
+
+  CanvasGradientParams gradParams;
+  buildStrokeGradientParams(path, outputWidth, outputHeight, &gradParams);
 
   uint8_t startMarker = path.startMarker;
   uint8_t endMarker = path.endMarker;
@@ -127,7 +146,8 @@ static void renderStrokeForSinglePath(KKBezierPath *path, float outputWidth,
                            options:MTLResourceStorageModeShared];
     [enc setVertexBuffer:vertexBuffer offset:0 atIndex:0];
     [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
-    [enc setFragmentBytes:&color length:sizeof(color) atIndex:0];
+    [enc setFragmentBytes:&gradParams length:sizeof(gradParams) atIndex:0];
+    [enc setFragmentBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
     [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
             vertexStart:0
             vertexCount:vertexCount];
@@ -157,7 +177,7 @@ static void renderStrokeForSinglePath(KKBezierPath *path, float outputWidth,
         simd_float2 endPos = samples[sampleCount - 1].position;
         renderMarker(endMarker, endPos, eTan, eNorm, endMarkerSz, ew, path,
                      outputWidth, outputHeight, device, commandBuffer,
-                     outputTexture, strokePS, viewportSize, color);
+                     outputTexture, strokePS, viewportSize, &gradParams);
       }
 
       if (startMarker != 0) {
@@ -173,7 +193,7 @@ static void renderStrokeForSinglePath(KKBezierPath *path, float outputWidth,
         simd_float2 startPos = samples[0].position;
         renderMarker(startMarker, startPos, sTan, sNorm, startMarkerSz, sw,
                      path, outputWidth, outputHeight, device, commandBuffer,
-                     outputTexture, strokePS, viewportSize, color);
+                     outputTexture, strokePS, viewportSize, &gradParams);
       }
     }
     free(samples);

@@ -4,8 +4,26 @@
  */
 
 #import "RenderFill.h"
+#import "CanvasGradientBuilder.h"
 #import "SketchFill.h"
 #import "SketchPath.h"
+
+static void buildFillGradientParams(KKBezierPath *path, float outputWidth,
+                                    float outputHeight,
+                                    CanvasGradientParams *out) {
+  CanvasGradientParams p = {0};
+  float oa = path.opacity;
+  p.solidColor =
+      (simd_float4){path.fillR * oa, path.fillG * oa, path.fillB * oa, oa};
+  p.opacity = oa;
+  if (!KKBuildCanvasGradientSamples(path, NO, &p)) {
+    *out = p;
+    return;
+  }
+  KKCanvasPathBBoxCenteredPx(path, outputWidth, outputHeight, 0.0f, &p.bboxMin,
+                             &p.bboxMax);
+  *out = p;
+}
 
 NSUInteger KKBuildFillFan(KKBezierPath *path, float outputWidth,
                           float outputHeight, CanvasFillVertex **outVerts) {
@@ -130,8 +148,8 @@ void KKRenderFillForPath(KKBezierPath *path, float outputWidth,
 
   // Color pass.
   {
-    float a = path.opacity;
-    simd_float4 fc = {path.fillR * a, path.fillG * a, path.fillB * a, a};
+    CanvasGradientParams gradParams;
+    buildFillGradientParams(path, outputWidth, outputHeight, &gradParams);
 
     CanvasFillVertex quadVerts[6] = {
         {{-(float)outputWidth, -(float)outputHeight}},
@@ -159,7 +177,8 @@ void KKRenderFillForPath(KKBezierPath *path, float outputWidth,
     [enc setStencilReferenceValue:0];
     [enc setVertexBytes:quadVerts length:sizeof(quadVerts) atIndex:0];
     [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
-    [enc setFragmentBytes:&fc length:sizeof(fc) atIndex:0];
+    [enc setFragmentBytes:&gradParams length:sizeof(gradParams) atIndex:0];
+    [enc setFragmentBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
     [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
     [enc endEncoding];
   }
@@ -234,9 +253,8 @@ void KKRenderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
   }
 
   float fw = origPath.sketchFillWeight;
-  float oa = origPath.opacity;
-  simd_float4 color = {origPath.fillR * oa, origPath.fillG * oa,
-                       origPath.fillB * oa, oa};
+  CanvasGradientParams gradParams;
+  buildFillGradientParams(origPath, outputWidth, outputHeight, &gradParams);
   float halfW = fw / 2.0f;
 
   BOOL isDots = (fillStyle == 4);
@@ -353,7 +371,8 @@ void KKRenderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
                            options:MTLResourceStorageModeShared];
     [enc setVertexBuffer:vertexBuffer offset:0 atIndex:0];
     [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
-    [enc setFragmentBytes:&color length:sizeof(color) atIndex:0];
+    [enc setFragmentBytes:&gradParams length:sizeof(gradParams) atIndex:0];
+    [enc setFragmentBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
     MTLPrimitiveType prim =
         isDots ? MTLPrimitiveTypeTriangle : MTLPrimitiveTypeTriangleStrip;
     [enc drawPrimitives:prim vertexStart:0 vertexCount:vc];

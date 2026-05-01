@@ -52,6 +52,10 @@
   NSInteger _selectedStartMarker;
   NSInteger _selectedEndMarker;
   NSInteger _selectedFillStyle;
+  uint8_t _strokeColorMode;
+  uint8_t _fillColorMode;
+  uint8_t _strokeGradientType;
+  uint8_t _fillGradientType;
 
   // Observers.
   NSMutableArray<KKStoreObserverEntry *> *_observers;
@@ -81,6 +85,8 @@
     _selectedStartMarker = -1;
     _selectedEndMarker = -1;
     _selectedFillStyle = 0;
+    _strokeGradientType = 1;
+    _fillGradientType = 1;
   }
   return self;
 }
@@ -116,6 +122,10 @@
   [s setValue:@(_selectedEndMarker) forKey:@"selectedEndMarker"];
   [s setValue:@(_selectedFillStyle) forKey:@"selectedFillStyle"];
   [s setValue:@(_forceShow) forKey:@"forceShow"];
+  [s setValue:@(_strokeColorMode) forKey:@"strokeColorMode"];
+  [s setValue:@(_fillColorMode) forKey:@"fillColorMode"];
+  [s setValue:@(_strokeGradientType) forKey:@"strokeGradientType"];
+  [s setValue:@(_fillGradientType) forKey:@"fillGradientType"];
   return s;
 }
 
@@ -223,7 +233,11 @@
       b.selectedStrokeStyle != a.selectedStrokeStyle ||
       b.selectedStartMarker != a.selectedStartMarker ||
       b.selectedEndMarker != a.selectedEndMarker ||
-      b.selectedFillStyle != a.selectedFillStyle)
+      b.selectedFillStyle != a.selectedFillStyle ||
+      b.strokeColorMode != a.strokeColorMode ||
+      b.fillColorMode != a.fillColorMode ||
+      b.strokeGradientType != a.strokeGradientType ||
+      b.fillGradientType != a.fillGradientType)
     ch |= KKStoreChangePathProps;
 
   return ch;
@@ -309,6 +323,30 @@
   os_unfair_lock_unlock(&_lock);
 }
 
+- (void)setStrokeColorMode:(uint8_t)mode {
+  os_unfair_lock_lock(&_lock);
+  _strokeColorMode = mode;
+  os_unfair_lock_unlock(&_lock);
+}
+
+- (void)setFillColorMode:(uint8_t)mode {
+  os_unfair_lock_lock(&_lock);
+  _fillColorMode = mode;
+  os_unfair_lock_unlock(&_lock);
+}
+
+- (void)setStrokeGradientType:(uint8_t)t {
+  os_unfair_lock_lock(&_lock);
+  _strokeGradientType = t;
+  os_unfair_lock_unlock(&_lock);
+}
+
+- (void)setFillGradientType:(uint8_t)t {
+  os_unfair_lock_lock(&_lock);
+  _fillGradientType = t;
+  os_unfair_lock_unlock(&_lock);
+}
+
 - (void)syncSelectedPathProperties {
   os_unfair_lock_lock(&_lock);
 
@@ -350,6 +388,10 @@
         _selectedLineJoin = p.lineJoin;
       _selectedStrokeStyle = p.strokeStyle;
       _selectedFillStyle = p.sketchFillStyle;
+      _strokeColorMode = p.strokeColorMode;
+      _fillColorMode = p.fillColorMode;
+      _strokeGradientType = p.strokeGradientType;
+      _fillGradientType = p.fillGradientType;
       break;
     }
   }

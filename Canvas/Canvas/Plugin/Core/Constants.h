@@ -52,6 +52,16 @@ static const UInt32 kParamGroupSketch = 134;
 static const UInt32 kParamExpandedSketch = 135;
 static const UInt32 kParamEndWidth = 136;
 static const UInt32 kParamFillTint = 137;
+static const UInt32 kParamStrokeColorMode = 138;
+static const UInt32 kParamStrokeGradientType = 139;
+static const UInt32 kParamStrokeGradientAngle = 140;
+static const UInt32 kParamStrokeGradientData = 141;
+static const UInt32 kParamFillColorMode = 142;
+static const UInt32 kParamFillGradientType = 143;
+static const UInt32 kParamFillGradientAngle = 144;
+static const UInt32 kParamFillGradientData = 145;
+static const UInt32 kParamStrokeGradientUI = 146;
+static const UInt32 kParamFillGradientUI = 147;
 
 static const UInt32 kParamForceShow = 9000;
 static const UInt32 kParamHideOSC = 9001;

@@ -10,6 +10,7 @@
 #import "MarkerStyleView.h"
 #import "ObjectParams.h"
 #import "StrokeStyleView.h"
+#import <KeyframelessKit/KKGradientSampling.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
 
@@ -570,6 +571,67 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
     };
 
     return seedView;
+  }
+
+  if (parameterID == kParamStrokeGradientUI ||
+      parameterID == kParamFillGradientUI) {
+    BOOL isStroke = (parameterID == kParamStrokeGradientUI);
+
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    NSString *pathStr = nil;
+    [paramGetAPI getStringParameterValue:&pathStr fromParameter:kParamPathData];
+    NSInteger selIdx = KKReadSelectedIndex(paramGetAPI);
+    NSString *json = nil;
+    if (pathStr.length > 0 && selIdx >= 0) {
+      NSData *blob = [[NSData alloc] initWithBase64EncodedString:pathStr
+                                                         options:0];
+      NSArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+      if ((NSUInteger)selIdx < paths.count) {
+        json = isStroke ? paths[selIdx].strokeGradientJSON
+                        : paths[selIdx].fillGradientJSON;
+      }
+    }
+    if (json.length == 0)
+      json = KKDefaultGradientJSON();
+
+    KKGradientControl *control =
+        [[KKGradientControl alloc] initWithFrame:NSMakeRect(0, 0, 200, 36)];
+    NSArray<KKGradientStop *> *stops = KKGradientStopsFromJSON(json);
+    if (stops)
+      control.stops = stops;
+
+    control.onStopsChanged = ^(NSArray<KKGradientStop *> *newStops) {
+      id api = weakAPI;
+      if (!api)
+        return;
+      NSString *newJSON = KKGradientJSONFromStops(newStops);
+      if (!newJSON)
+        return;
+      KKModifySelectedPathProperty(api, ^(KKBezierPath *p) {
+        if (isStroke)
+          p.strokeGradientJSON = newJSON;
+        else
+          p.fillGradientJSON = newJSON;
+      });
+      id<FxCustomParameterActionAPI_v4> actAPI =
+          [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      [actAPI startAction:api];
+      id<FxParameterSettingAPI_v5> setAPI =
+          [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      [setAPI setStringParameterValue:newJSON
+                          toParameter:isStroke ? kParamStrokeGradientData
+                                               : kParamFillGradientData];
+      [actAPI endAction:api];
+    };
+
+    if (lst) {
+      if (isStroke)
+        lst.strokeGradientControl = control;
+      else
+        lst.fillGradientControl = control;
+    }
+    return control;
   }
 
   return nil;

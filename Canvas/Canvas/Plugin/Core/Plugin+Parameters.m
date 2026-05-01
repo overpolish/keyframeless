@@ -6,6 +6,35 @@
 #import "Constants.h"
 #import "Plugin_Private.h"
 
+static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
+                                      NSString *typeName, UInt32 typeID,
+                                      NSString *angleName, UInt32 angleID,
+                                      NSString *dataName, UInt32 dataID,
+                                      UInt32 uiID) {
+  [paramAPI addPopupMenuWithName:typeName
+                     parameterID:typeID
+                    defaultValue:1
+                     menuEntries:@[ @"Radial", @"Linear" ]
+                  parameterFlags:kFxParameterFlag_HIDDEN |
+                                 kFxParameterFlag_NOT_ANIMATABLE];
+  [paramAPI addAngleSliderWithName:angleName
+                       parameterID:angleID
+                    defaultDegrees:0.0
+               parameterMinDegrees:-360.0
+               parameterMaxDegrees:360.0
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+  [paramAPI addStringParameterWithName:dataName
+                           parameterID:dataID
+                          defaultValue:@""
+                        parameterFlags:kFxParameterFlag_HIDDEN |
+                                       kFxParameterFlag_NOT_ANIMATABLE];
+  [paramAPI addCustomParameterWithName:@"Gradient"
+                           parameterID:uiID
+                          defaultValue:@(uiID)
+                        parameterFlags:kFxParameterFlag_HIDDEN |
+                                       kFxParameterFlag_CUSTOM_UI];
+}
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 @implementation CanvasPlugin (Parameters)
@@ -155,12 +184,24 @@
                              delta:0.5
                     parameterFlags:kFxParameterFlag_HIDDEN];
 
+  [paramAPI addPopupMenuWithName:@"Color Mode"
+                     parameterID:kParamStrokeColorMode
+                    defaultValue:0
+                     menuEntries:@[ @"Solid", @"Gradient" ]
+                  parameterFlags:kFxParameterFlag_HIDDEN |
+                                 kFxParameterFlag_NOT_ANIMATABLE];
+
   [paramAPI addColorParameterWithName:@"Stroke Color"
                           parameterID:kParamStrokeColor
                            defaultRed:1.0
                          defaultGreen:0.0
                           defaultBlue:0.0
                        parameterFlags:kFxParameterFlag_HIDDEN];
+
+  registerGradientSubParams(paramAPI, @"Gradient Type",
+                            kParamStrokeGradientType, @"Gradient Angle",
+                            kParamStrokeGradientAngle, @"StrokeGradientData",
+                            kParamStrokeGradientData, kParamStrokeGradientUI);
 
   [paramAPI addCustomParameterWithName:@"Line Cap"
                            parameterID:kParamLineCap
@@ -261,12 +302,24 @@
                      parameterFlags:kFxParameterFlag_HIDDEN |
                                     kFxParameterFlag_NOT_ANIMATABLE];
 
+  [paramAPI addPopupMenuWithName:@"Fill Mode"
+                     parameterID:kParamFillColorMode
+                    defaultValue:0
+                     menuEntries:@[ @"Solid", @"Gradient" ]
+                  parameterFlags:kFxParameterFlag_HIDDEN |
+                                 kFxParameterFlag_NOT_ANIMATABLE];
+
   [paramAPI addColorParameterWithName:@"Fill Color"
                           parameterID:kParamFillColor
                            defaultRed:1.0
                          defaultGreen:1.0
                           defaultBlue:1.0
                        parameterFlags:kFxParameterFlag_HIDDEN];
+
+  registerGradientSubParams(paramAPI, @"Fill Gradient Type",
+                            kParamFillGradientType, @"Fill Gradient Angle",
+                            kParamFillGradientAngle, @"FillGradientData",
+                            kParamFillGradientData, kParamFillGradientUI);
 
   [paramAPI addCustomParameterWithName:@"Fill Style"
                            parameterID:kParamSketchFillStyle

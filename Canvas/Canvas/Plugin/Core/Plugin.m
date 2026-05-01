@@ -35,10 +35,63 @@
 - (BOOL)parameterChanged:(UInt32)parameterID
                   atTime:(CMTime)time
                    error:(NSError **)error {
-  if (parameterID == kParamClosedPath || parameterID == kParamSketchFillStyle) {
+  if (parameterID == kParamClosedPath || parameterID == kParamSketchFillStyle ||
+      parameterID == kParamStrokeColorMode ||
+      parameterID == kParamFillColorMode ||
+      parameterID == kParamStrokeGradientType ||
+      parameterID == kParamFillGradientType) {
     NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
     if (uuid)
       KKLayerStateForUUID(uuid).visHash = 0;
+  }
+
+  BOOL isColorMode = (parameterID == kParamStrokeColorMode ||
+                      parameterID == kParamFillColorMode);
+  BOOL isGradType = (parameterID == kParamStrokeGradientType ||
+                     parameterID == kParamFillGradientType);
+  if (isColorMode || isGradType) {
+    BOOL isStroke = (parameterID == kParamStrokeColorMode ||
+                     parameterID == kParamStrokeGradientType);
+    id<FxParameterRetrievalAPI_v6> getAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    int value = 0;
+    [getAPI getIntValue:&value fromParameter:parameterID atTime:time];
+    NSString *defaultJSON = KKDefaultGradientJSON();
+    KKModifySelectedPathProperty(self.apiManager, ^(KKBezierPath *p) {
+      if (isColorMode) {
+        if (isStroke) {
+          p.strokeColorMode = (uint8_t)value;
+          if (value == 1 && p.strokeGradientJSON.length == 0)
+            p.strokeGradientJSON = defaultJSON;
+        } else {
+          p.fillColorMode = (uint8_t)value;
+          if (value == 1 && p.fillGradientJSON.length == 0)
+            p.fillGradientJSON = defaultJSON;
+        }
+      } else {
+        if (isStroke)
+          p.strokeGradientType = (uint8_t)value;
+        else
+          p.fillGradientType = (uint8_t)value;
+      }
+    });
+    NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+    if (uuid) {
+      KKCanvasStore *store = KKLayerStateForUUID(uuid).store;
+      [store performBatch:^{
+        if (isColorMode) {
+          if (isStroke)
+            [store setStrokeColorMode:(uint8_t)value];
+          else
+            [store setFillColorMode:(uint8_t)value];
+        } else {
+          if (isStroke)
+            [store setStrokeGradientType:(uint8_t)value];
+          else
+            [store setFillGradientType:(uint8_t)value];
+        }
+      }];
+    }
   }
 
   if (parameterID == kParamForceShow) {

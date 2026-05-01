@@ -84,6 +84,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// Whether this path renders a stroke (default YES).
 @property(nonatomic, assign) BOOL strokeEnabled;
 
+/// Stroke color mode (0=solid, 1=gradient). Default 0.
+@property(nonatomic, assign) uint8_t strokeColorMode;
+
+/// Stroke gradient type (0=radial, 1=linear). Matches Glow's ordering.
+@property(nonatomic, assign) uint8_t strokeGradientType;
+
+/// Stroke gradient angle in degrees (default 0).
+@property(nonatomic, assign) float strokeGradientAngle;
+
+/// Stroke gradient stops as JSON (KKGradientStop array). Empty when solid.
+@property(nonatomic, copy, nullable) NSString *strokeGradientJSON;
+
 /// Stroke width at the start of this path (default 8.0).
 @property(nonatomic, assign) float strokeWidth;
 
@@ -185,6 +197,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// Fill tint amount for image layers (0–1, default 1.0).
 /// 0 = original image, 1 = fully colorized by fill color.
 @property(nonatomic, assign) float fillTint;
+
+/// Fill color mode (0=solid, 1=gradient). Default 0.
+@property(nonatomic, assign) uint8_t fillColorMode;
+
+/// Fill gradient type (0=radial, 1=linear). Matches Glow's ordering.
+@property(nonatomic, assign) uint8_t fillGradientType;
+
+/// Fill gradient angle in degrees (default 0).
+@property(nonatomic, assign) float fillGradientAngle;
+
+/// Fill gradient stops as JSON (KKGradientStop array). Empty when solid.
+@property(nonatomic, copy, nullable) NSString *fillGradientJSON;
 
 + (instancetype)pathWithData:(nullable NSData *)data;
 - (NSData *)dataRepresentation;

@@ -38,19 +38,25 @@ KKIsForceShowEnabled(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI) {
 
 typedef NS_OPTIONS(uint32_t, KKVisCondition) {
   KKVisAlways = 0,
-  KKVisStrokeOpen = 1 << 0,    // stroke enabled + expanded
-  KKVisFillOpen = 1 << 1,      // fill enabled + expanded
-  KKVisSketchOpen = 1 << 2,    // sketch enabled + expanded
-  KKVisOpenPath = 1 << 3,      // path is open (not closed)
-  KKVisHasJoins = 1 << 4,      // path has >2 points
-  KKVisNotImage = 1 << 5,      // not an image layer
-  KKVisDashed = 1 << 6,        // strokeStyle == 1
-  KKVisDotted = 1 << 7,        // strokeStyle == 2
-  KKVisStartMarker = 1 << 8,   // startMarker != 0
-  KKVisEndMarker = 1 << 9,     // endMarker != 0
-  KKVisFillHasStyle = 1 << 10, // fillStyle > 0
-  KKVisIsImage = 1 << 11,      // is an image layer
-  KKVisFillSolid = 1 << 12,    // fillStyle == 0 (solid)
+  KKVisStrokeOpen = 1 << 0,            // stroke enabled + expanded
+  KKVisFillOpen = 1 << 1,              // fill enabled + expanded
+  KKVisSketchOpen = 1 << 2,            // sketch enabled + expanded
+  KKVisOpenPath = 1 << 3,              // path is open (not closed)
+  KKVisHasJoins = 1 << 4,              // path has >2 points
+  KKVisNotImage = 1 << 5,              // not an image layer
+  KKVisDashed = 1 << 6,                // strokeStyle == 1
+  KKVisDotted = 1 << 7,                // strokeStyle == 2
+  KKVisStartMarker = 1 << 8,           // startMarker != 0
+  KKVisEndMarker = 1 << 9,             // endMarker != 0
+  KKVisFillHasStyle = 1 << 10,         // fillStyle > 0
+  KKVisIsImage = 1 << 11,              // is an image layer
+  KKVisFillSolid = 1 << 12,            // fillStyle == 0 (solid)
+  KKVisStrokeColorSolid = 1 << 13,     // strokeColorMode == 0
+  KKVisStrokeColorGradient = 1 << 14,  // strokeColorMode == 1
+  KKVisFillColorSolid = 1 << 15,       // fillColorMode == 0
+  KKVisFillColorGradient = 1 << 16,    // fillColorMode == 1
+  KKVisStrokeGradientLinear = 1 << 17, // strokeGradientType == 1 (linear)
+  KKVisFillGradientLinear = 1 << 18,   // fillGradientType == 1 (linear)
 };
 
 typedef struct {
@@ -67,7 +73,11 @@ static const KKParamVisRule kParamVisibility[] = {
   { kParamClosedPath,         KKVisNotImage,                                               kFxParameterFlag_NOT_ANIMATABLE },
   // ─── Stroke group children ───
   { kParamStrokeWidth,        KKVisStrokeOpen,                                             kFxParameterFlag_DEFAULT },
-  { kParamStrokeColor,        KKVisStrokeOpen,                                             kFxParameterFlag_DEFAULT },
+  { kParamStrokeColorMode,    KKVisStrokeOpen,                                             kFxParameterFlag_NOT_ANIMATABLE },
+  { kParamStrokeColor,        KKVisStrokeOpen | KKVisStrokeColorSolid,                     kFxParameterFlag_DEFAULT },
+  { kParamStrokeGradientType, KKVisStrokeOpen | KKVisStrokeColorGradient,                  kFxParameterFlag_NOT_ANIMATABLE },
+  { kParamStrokeGradientAngle,KKVisStrokeOpen | KKVisStrokeColorGradient | KKVisStrokeGradientLinear, kFxParameterFlag_DEFAULT },
+  { kParamStrokeGradientUI,   KKVisStrokeOpen | KKVisStrokeColorGradient,                  kFxParameterFlag_CUSTOM_UI },
   { kParamEndWidth,           KKVisStrokeOpen | KKVisOpenPath,                             kFxParameterFlag_DEFAULT },
   { kParamLineCap,            KKVisStrokeOpen | KKVisOpenPath,                             kFxParameterFlag_CUSTOM_UI },
   { kParamLineJoin,           KKVisStrokeOpen | KKVisHasJoins,                             kFxParameterFlag_CUSTOM_UI },
@@ -80,12 +90,16 @@ static const KKParamVisRule kParamVisibility[] = {
   { kParamStartMarkerSize,    KKVisStrokeOpen | KKVisOpenPath | KKVisStartMarker,          kFxParameterFlag_DEFAULT },
   { kParamEndMarkerSize,      KKVisStrokeOpen | KKVisOpenPath | KKVisEndMarker,            kFxParameterFlag_DEFAULT },
   // ─── Fill group children ───
-  { kParamFillColor,          KKVisFillOpen,                                               kFxParameterFlag_DEFAULT },
+  { kParamFillColorMode,      KKVisFillOpen,                                               kFxParameterFlag_NOT_ANIMATABLE },
+  { kParamFillColor,          KKVisFillOpen | KKVisFillColorSolid,                         kFxParameterFlag_DEFAULT },
+  { kParamFillGradientType,   KKVisFillOpen | KKVisFillColorGradient,                      kFxParameterFlag_NOT_ANIMATABLE },
+  { kParamFillGradientAngle,  KKVisFillOpen | KKVisFillColorGradient | KKVisFillGradientLinear, kFxParameterFlag_DEFAULT },
+  { kParamFillGradientUI,     KKVisFillOpen | KKVisFillColorGradient,                      kFxParameterFlag_CUSTOM_UI },
   { kParamSketchFillStyle,    KKVisFillOpen,                                               kFxParameterFlag_CUSTOM_UI },
   { kParamSketchFillGap,      KKVisFillOpen | KKVisFillHasStyle,                           kFxParameterFlag_DEFAULT },
   { kParamSketchFillAngle,    KKVisFillOpen | KKVisFillHasStyle,                           kFxParameterFlag_DEFAULT },
   { kParamSketchFillWeight,   KKVisFillOpen | KKVisFillHasStyle,                           kFxParameterFlag_DEFAULT },
-  { kParamFillTint,           KKVisFillOpen | KKVisIsImage | KKVisFillSolid,               kFxParameterFlag_DEFAULT },
+  { kParamFillTint,           KKVisFillOpen | KKVisIsImage | KKVisFillSolid, kFxParameterFlag_DEFAULT },
   // ─── Sketch group children ───
   { kParamSketchRoughness,    KKVisSketchOpen | KKVisNotImage,                             kFxParameterFlag_DEFAULT },
   { kParamSketchBowing,       KKVisSketchOpen | KKVisNotImage,                             kFxParameterFlag_DEFAULT },
@@ -101,7 +115,9 @@ static const size_t kParamVisibilityCount =
 static inline KKVisCondition
 KKBuildVisConditions(BOOL isImage, BOOL isOpen, BOOL hasJoins, BOOL strokeOpen,
                      BOOL fillOpen, BOOL sketchOpen, uint8_t strokeStyle,
-                     int8_t startMarker, int8_t endMarker, int fillStyle) {
+                     int8_t startMarker, int8_t endMarker, int fillStyle,
+                     uint8_t strokeColorMode, uint8_t fillColorMode,
+                     uint8_t strokeGradientType, uint8_t fillGradientType) {
   KKVisCondition c = KKVisAlways;
   if (strokeOpen)
     c |= KKVisStrokeOpen;
@@ -129,6 +145,18 @@ KKBuildVisConditions(BOOL isImage, BOOL isOpen, BOOL hasJoins, BOOL strokeOpen,
     c |= KKVisFillHasStyle;
   if (fillStyle == 0)
     c |= KKVisFillSolid;
+  if (strokeColorMode == 0)
+    c |= KKVisStrokeColorSolid;
+  else
+    c |= KKVisStrokeColorGradient;
+  if (fillColorMode == 0)
+    c |= KKVisFillColorSolid;
+  else
+    c |= KKVisFillColorGradient;
+  if (strokeGradientType == 1)
+    c |= KKVisStrokeGradientLinear;
+  if (fillGradientType == 1)
+    c |= KKVisFillGradientLinear;
   return c;
 }
 
@@ -188,6 +216,51 @@ KKReadSelectedFillStyle(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI) {
   return 0;
 }
 
+/// Read the four gradient sub-params (mode/type/angle/data) for one side
+/// (stroke or fill) and apply them to the path's matching properties.
+static inline void
+KKReadGradientParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull api,
+                           KKBezierPath *_Nonnull path, BOOL isStroke,
+                           UInt32 modeID, UInt32 typeID, UInt32 angleID,
+                           UInt32 dataID) {
+  int mode = 0;
+  [api getIntValue:&mode fromParameter:modeID atTime:kCMTimeZero];
+  int type = 1;
+  [api getIntValue:&type fromParameter:typeID atTime:kCMTimeZero];
+  double angle = 0.0;
+  [api getFloatValue:&angle fromParameter:angleID atTime:kCMTimeZero];
+  NSString *json = nil;
+  [api getStringParameterValue:&json fromParameter:dataID];
+  if (isStroke) {
+    path.strokeColorMode = (uint8_t)mode;
+    path.strokeGradientType = (uint8_t)type;
+    path.strokeGradientAngle = (float)angle;
+    path.strokeGradientJSON = json;
+  } else {
+    path.fillColorMode = (uint8_t)mode;
+    path.fillGradientType = (uint8_t)type;
+    path.fillGradientAngle = (float)angle;
+    path.fillGradientJSON = json;
+  }
+}
+
+/// Inverse of `KKReadGradientParamsToPath` — write one side's gradient
+/// properties out to FxPlug params.
+static inline void
+KKWriteGradientParamsFromPath(id<FxParameterSettingAPI_v5> _Nonnull api,
+                              KKBezierPath *_Nonnull path, BOOL isStroke,
+                              UInt32 modeID, UInt32 typeID, UInt32 angleID,
+                              UInt32 dataID) {
+  uint8_t mode = isStroke ? path.strokeColorMode : path.fillColorMode;
+  uint8_t type = isStroke ? path.strokeGradientType : path.fillGradientType;
+  float angle = isStroke ? path.strokeGradientAngle : path.fillGradientAngle;
+  NSString *json = isStroke ? path.strokeGradientJSON : path.fillGradientJSON;
+  [api setIntValue:(int)mode toParameter:modeID atTime:kCMTimeZero];
+  [api setIntValue:(int)type toParameter:typeID atTime:kCMTimeZero];
+  [api setFloatValue:angle toParameter:angleID atTime:kCMTimeZero];
+  [api setStringParameterValue:(json ?: @"") toParameter:dataID];
+}
+
 /// Read per-object param values from FxPlug and apply to a path.
 /// Add new per-object properties here.
 static inline void
@@ -245,6 +318,13 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                fromParameter:kParamOpacity
                       atTime:kCMTimeZero];
   path.opacity = (float)(op / 100.0);
+
+  KKReadGradientParamsToPath(
+      paramGetAPI, path, YES, kParamStrokeColorMode, kParamStrokeGradientType,
+      kParamStrokeGradientAngle, kParamStrokeGradientData);
+  KKReadGradientParamsToPath(paramGetAPI, path, NO, kParamFillColorMode,
+                             kParamFillGradientType, kParamFillGradientAngle,
+                             kParamFillGradientData);
 
   double dl = 20.0;
   [paramGetAPI getFloatValue:&dl
@@ -404,6 +484,14 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
   float oldSketchFillGap = primary.sketchFillGap;
   float oldSketchFillAngle = primary.sketchFillAngle;
   float oldSketchFillWeight = primary.sketchFillWeight;
+  uint8_t oldStrokeColorMode = primary.strokeColorMode;
+  uint8_t oldStrokeGradientType = primary.strokeGradientType;
+  float oldStrokeGradientAngle = primary.strokeGradientAngle;
+  NSString *oldStrokeGradientJSON = primary.strokeGradientJSON;
+  uint8_t oldFillColorMode = primary.fillColorMode;
+  uint8_t oldFillGradientType = primary.fillGradientType;
+  float oldFillGradientAngle = primary.fillGradientAngle;
+  NSString *oldFillGradientJSON = primary.fillGradientJSON;
 
   // Apply all inspector params to the primary path.
   KKParamsToPath(paramGetAPI, primary);
@@ -474,6 +562,24 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
       p.sketchFillAngle = primary.sketchFillAngle;
     if (primary.sketchFillWeight != oldSketchFillWeight)
       p.sketchFillWeight = primary.sketchFillWeight;
+    if (primary.strokeColorMode != oldStrokeColorMode)
+      p.strokeColorMode = primary.strokeColorMode;
+    if (primary.strokeGradientType != oldStrokeGradientType)
+      p.strokeGradientType = primary.strokeGradientType;
+    if (primary.strokeGradientAngle != oldStrokeGradientAngle)
+      p.strokeGradientAngle = primary.strokeGradientAngle;
+    if (![primary.strokeGradientJSON isEqualToString:oldStrokeGradientJSON] &&
+        !(primary.strokeGradientJSON == nil && oldStrokeGradientJSON == nil))
+      p.strokeGradientJSON = primary.strokeGradientJSON;
+    if (primary.fillColorMode != oldFillColorMode)
+      p.fillColorMode = primary.fillColorMode;
+    if (primary.fillGradientType != oldFillGradientType)
+      p.fillGradientType = primary.fillGradientType;
+    if (primary.fillGradientAngle != oldFillGradientAngle)
+      p.fillGradientAngle = primary.fillGradientAngle;
+    if (![primary.fillGradientJSON isEqualToString:oldFillGradientJSON] &&
+        !(primary.fillGradientJSON == nil && oldFillGradientJSON == nil))
+      p.fillGradientJSON = primary.fillGradientJSON;
   }];
 }
 
@@ -511,6 +617,12 @@ KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
   [paramSetAPI setFloatValue:path.opacity * 100.0f
                  toParameter:kParamOpacity
                       atTime:kCMTimeZero];
+  KKWriteGradientParamsFromPath(
+      paramSetAPI, path, YES, kParamStrokeColorMode, kParamStrokeGradientType,
+      kParamStrokeGradientAngle, kParamStrokeGradientData);
+  KKWriteGradientParamsFromPath(paramSetAPI, path, NO, kParamFillColorMode,
+                                kParamFillGradientType, kParamFillGradientAngle,
+                                kParamFillGradientData);
   [paramSetAPI setFloatValue:path.dashLength
                  toParameter:kParamDashLength
                       atTime:kCMTimeZero];

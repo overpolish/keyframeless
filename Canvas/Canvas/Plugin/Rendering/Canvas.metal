@@ -32,7 +32,39 @@ vertex StrokeRasterizerData strokeVertexShader(uint vertexID [[vertex_id]],
     return out;
 }
 
-fragment float4 strokeFragmentShader(StrokeRasterizerData in [[stage_in]], constant float4 *strokeColor [[buffer(0)]]) {
+// Sample the gradient at a pixel given in the same coordinate space as
+// `p.bboxMin`/`p.bboxMax`. Linear pivots through the bbox center for any
+// angle; radial reaches t=1 at every bbox edge (elliptical distance).
+static float3 sampleCanvasGradientAtPixel(constant CanvasGradientParams &p, float2 pixel) {
+    float2 bbCenter = (p.bboxMin + p.bboxMax) * 0.5;
+    float2 bbSize = max(p.bboxMax - p.bboxMin, float2(1.0));
+    float2 uv = (pixel - bbCenter) / bbSize; // [-0.5, 0.5]
+
+    float t;
+    if (p.gradientType == 1) {
+        float ca = cos(p.gradientAngle);
+        float sa = sin(p.gradientAngle);
+        t = saturate(uv.x * ca - uv.y * sa + 0.5);
+    } else {
+        t = saturate(length(uv) * 2.0);
+    }
+
+    float lutPos = t * float(KK_GRADIENT_LUT_SIZE - 1);
+    int idx0 = int(floor(lutPos));
+    int idx1 = min(idx0 + 1, KK_GRADIENT_LUT_SIZE - 1);
+    float3 srgb = mix(p.lut[idx0], p.lut[idx1], lutPos - float(idx0));
+    return pow(srgb, 2.2);
+}
+
+// Fragment-shader entry: framebuffer pixel → centered-pixel space (matching
+// the canvas vertex shader's coordinates) before sampling.
+static float3 sampleCanvasGradient(constant CanvasGradientParams &p, float2 fbPixel, float2 viewport) {
+    return sampleCanvasGradientAtPixel(p, fbPixel - viewport * 0.5);
+}
+
+fragment float4 strokeFragmentShader(StrokeRasterizerData in [[stage_in]],
+                                     constant CanvasGradientParams &params [[buffer(0)]],
+                                     constant vector_uint2 *viewportSizePointer [[buffer(1)]]) {
     float edgeDist = abs(in.edgeDistance);
     float edgeFw = fwidth(in.edgeDistance) * 1.5;
     float edgeAlpha = 1.0 - smoothstep(1.0 - edgeFw, 1.0, edgeDist);
@@ -40,7 +72,13 @@ fragment float4 strokeFragmentShader(StrokeRasterizerData in [[stage_in]], const
     float capFw = fwidth(in.capDistance) * 1.5;
     float capAlpha = 1.0 - smoothstep(1.0 - capFw, 1.0, in.capDistance);
 
-    return *strokeColor * edgeAlpha * capAlpha;
+    float coverage = edgeAlpha * capAlpha;
+    if (params.useGradient != 0) {
+        float3 rgb = sampleCanvasGradient(params, in.clipSpacePosition.xy, float2(*viewportSizePointer));
+        float a = params.opacity * coverage;
+        return float4(rgb * a, a);
+    }
+    return params.solidColor * coverage;
 }
 
 typedef struct {
@@ -58,8 +96,15 @@ vertex FillRasterizerData fillVertexShader(uint vertexID [[vertex_id]],
     return out;
 }
 
-fragment float4 fillFragmentShader(FillRasterizerData in [[stage_in]], constant float4 *fillColor [[buffer(0)]]) {
-    return *fillColor;
+fragment float4 fillFragmentShader(FillRasterizerData in [[stage_in]],
+                                   constant CanvasGradientParams &params [[buffer(0)]],
+                                   constant vector_uint2 *viewportSizePointer [[buffer(1)]]) {
+    if (params.useGradient != 0) {
+        float3 rgb = sampleCanvasGradient(params, in.clipSpacePosition.xy, float2(*viewportSizePointer));
+        float a = params.opacity;
+        return float4(rgb * a, a);
+    }
+    return params.solidColor;
 }
 
 // Composite shader: draws a fullscreen quad sampling an intermediate texture,
@@ -118,6 +163,19 @@ fragment float4 imageFragmentShader(ImageRasterizerData in [[stage_in]], texture
     constexpr sampler s(mag_filter::linear, min_filter::linear);
     float4 color = tex.sample(s, in.texCoord);
     return float4(color.rgb * color.a, color.a) * *opacity;
+}
+
+// Generate a flat gradient texture sized to the image bounds.
+// Used by image-fill tinting so gradient fill mode replaces the solid tint.
+kernel void gradientFillKernel(texture2d<float, access::write> dst [[texture(0)]],
+                               constant CanvasGradientParams &p [[buffer(0)]], uint2 gid [[thread_position_in_grid]]) {
+    uint w = dst.get_width();
+    uint h = dst.get_height();
+    if (gid.x >= w || gid.y >= h)
+        return;
+
+    float3 rgb = sampleCanvasGradientAtPixel(p, float2(gid));
+    dst.write(float4(rgb, 1.0), gid);
 }
 
 // --- JFA (Jump Flooding Algorithm) for image stroke outlines ---
@@ -182,7 +240,9 @@ kernel void jfaFloodPass(texture2d<float, access::read> src [[texture(0)]],
 kernel void jfaComposite(texture2d<float, access::read> srcTex [[texture(0)]],
                          texture2d<float, access::read> jfaTex [[texture(1)]],
                          texture2d<float, access::write> dstTex [[texture(2)]], constant float &radius [[buffer(0)]],
-                         constant float4 &strokeColor [[buffer(1)]], uint2 gid [[thread_position_in_grid]]) {
+                         constant float4 &strokeColor [[buffer(1)]],
+                         constant CanvasGradientParams &gradParams [[buffer(2)]],
+                         uint2 gid [[thread_position_in_grid]]) {
     uint w = srcTex.get_width();
     uint h = srcTex.get_height();
     if (gid.x >= w || gid.y >= h)
@@ -200,7 +260,15 @@ kernel void jfaComposite(texture2d<float, access::read> srcTex [[texture(0)]],
     float dist = length(diff);
 
     float outlineAlpha = 1.0 - smoothstep(radius - 1.0, radius, dist);
-    float4 outline = float4(strokeColor.rgb * outlineAlpha, outlineAlpha);
+
+    float3 outlineRGB;
+    if (gradParams.useGradient != 0) {
+        outlineRGB = sampleCanvasGradientAtPixel(gradParams, float2(gid)) * gradParams.opacity;
+    } else {
+        outlineRGB = strokeColor.rgb;
+    }
+
+    float4 outline = float4(outlineRGB * outlineAlpha, outlineAlpha);
 
     // Composite: source over outline (both premultiplied)
     float4 result = src + outline * (1.0 - src.a);
