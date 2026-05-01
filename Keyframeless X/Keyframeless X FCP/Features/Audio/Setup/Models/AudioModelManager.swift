@@ -170,6 +170,7 @@ class AudioModelManager: ObservableObject {
 		selectedLanguage = AudioSetupSettings.shared.selectedLanguage
 		translateToEnglish = AudioSetupSettings.shared.translateToEnglish
 		terms = AudioSetupSettings.shared.terms
+		normalizeLanguageForSelectedModel()
 		Task { await refreshDownloadedModels() }
 	}
 
