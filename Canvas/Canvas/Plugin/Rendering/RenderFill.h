@@ -27,6 +27,17 @@ void KKRenderFillForPath(KKBezierPath *_Nonnull path, float outputWidth,
                          id<MTLDepthStencilState> _Nonnull fillColorDSState,
                          simd_uint2 viewportSize);
 
+/// Draw a hairline AA ribbon along the polygon outline using the fill color
+/// and gradient. Run after KKRenderFillForPath to feather silhouette edges.
+/// The ribbon overlaps the fill on its inner half (idempotent in
+/// premultiplied source-over) and feathers off the outer half.
+void KKRenderFillAAOutline(KKBezierPath *_Nonnull path, float outputWidth,
+                           float outputHeight, id<MTLDevice> _Nonnull device,
+                           id<MTLCommandBuffer> _Nonnull commandBuffer,
+                           id<MTLTexture> _Nonnull outputTexture,
+                           id<MTLRenderPipelineState> _Nonnull strokePS,
+                           simd_uint2 viewportSize);
+
 /// Write the shape stencil only (no color pass). Used to clip sketch fills.
 void KKRenderFillStencilOnly(
     KKBezierPath *_Nonnull path, float outputWidth, float outputHeight,

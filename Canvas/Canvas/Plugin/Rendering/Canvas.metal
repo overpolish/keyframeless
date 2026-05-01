@@ -187,17 +187,48 @@ kernel void jfaSeedInit(texture2d<float, access::read> src [[texture(0)]],
     if (gid.x >= w || gid.y >= h)
         return;
 
-    float a = src.read(gid).a;
-    bool isEdge = false;
-    if (a > 0.5) {
-        float aL = (gid.x > 0) ? src.read(uint2(gid.x - 1, gid.y)).a : 0.0;
-        float aR = (gid.x < w - 1) ? src.read(uint2(gid.x + 1, gid.y)).a : 0.0;
-        float aU = (gid.y > 0) ? src.read(uint2(gid.x, gid.y - 1)).a : 0.0;
-        float aD = (gid.y < h - 1) ? src.read(uint2(gid.x, gid.y + 1)).a : 0.0;
-        isEdge = (aL <= 0.5 || aR <= 0.5 || aU <= 0.5 || aD <= 0.5);
-    }
+    // Read a 3x3 neighborhood and apply a binomial (1-2-1)² filter. For
+    // binary-alpha source images the smoothed alpha varies smoothly across
+    // the boundary, restoring sub-pixel info that would otherwise be lost.
+    float aTL = (gid.x > 0 && gid.y > 0) ? src.read(uint2(gid.x - 1, gid.y - 1)).a : 0.0;
+    float aT = (gid.y > 0) ? src.read(uint2(gid.x, gid.y - 1)).a : 0.0;
+    float aTR = (gid.x < w - 1 && gid.y > 0) ? src.read(uint2(gid.x + 1, gid.y - 1)).a : 0.0;
+    float aL = (gid.x > 0) ? src.read(uint2(gid.x - 1, gid.y)).a : 0.0;
+    float aC = src.read(gid).a;
+    float aR = (gid.x < w - 1) ? src.read(uint2(gid.x + 1, gid.y)).a : 0.0;
+    float aBL = (gid.x > 0 && gid.y < h - 1) ? src.read(uint2(gid.x - 1, gid.y + 1)).a : 0.0;
+    float aB = (gid.y < h - 1) ? src.read(uint2(gid.x, gid.y + 1)).a : 0.0;
+    float aBR = (gid.x < w - 1 && gid.y < h - 1) ? src.read(uint2(gid.x + 1, gid.y + 1)).a : 0.0;
+
+    float a = (aTL + 2.0 * aT + aTR + 2.0 * aL + 4.0 * aC + 2.0 * aR + aBL + 2.0 * aB + aBR) * (1.0 / 16.0);
+
+    // Sample axis-direction smoothed alphas the same way to keep gradient
+    // estimation consistent with the smoothed center.
+    float aLs = (aTL + 2.0 * aL + aBL) * (1.0 / 4.0);
+    float aRs = (aTR + 2.0 * aR + aBR) * (1.0 / 4.0);
+    float aTs = (aTL + 2.0 * aT + aTR) * (1.0 / 4.0);
+    float aBs = (aBL + 2.0 * aB + aBR) * (1.0 / 4.0);
+
+    // A pixel is part of the boundary if its smoothed alpha sits between 0
+    // and 1, OR if it is opaque next to a transparent neighbor (raw alpha
+    // covers the case where smoothing pushes a near-edge pixel just past 0.5).
+    bool isPartial = (a > 0.01 && a < 0.99);
+    bool isOpaqueEdge = (aC > 0.5) && (aL <= 0.5 || aR <= 0.5 || aT <= 0.5 || aB <= 0.5);
+    bool isEdge = isPartial || isOpaqueEdge;
+
     if (isEdge) {
-        dst.write(float4(float(gid.x), float(gid.y), 0, 0), gid);
+        // Estimate edge offset from pixel center using the alpha gradient.
+        // Boundary is the α = 0.5 isocontour; first-order expansion places
+        // it at -(α - 0.5) / |∇α| along the gradient direction.
+        float gx = (aRs - aLs) * 0.5;
+        float gy = (aBs - aTs) * 0.5;
+        float gMag = sqrt(gx * gx + gy * gy);
+        float2 sub = float2(0.5);
+        if (gMag > 0.001) {
+            float t = clamp(-(a - 0.5) / gMag, -0.75, 0.75);
+            sub += float2(gx, gy) / gMag * t;
+        }
+        dst.write(float4(float(gid.x) + sub.x, float(gid.y) + sub.y, 0, 0), gid);
     } else {
         dst.write(float4(-1.0, -1.0, 0, 0), gid);
     }
@@ -256,7 +287,8 @@ kernel void jfaComposite(texture2d<float, access::read> srcTex [[texture(0)]],
         return;
     }
 
-    float2 diff = float2(gid) - seed;
+    // Seeds are sub-pixel positions; compare against this pixel's center.
+    float2 diff = (float2(gid) + 0.5) - seed;
     float dist = length(diff);
 
     float outlineAlpha = 1.0 - smoothstep(radius - 1.0, radius, dist);

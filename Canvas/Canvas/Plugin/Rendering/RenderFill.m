@@ -184,6 +184,129 @@ void KKRenderFillForPath(KKBezierPath *path, float outputWidth,
   }
 }
 
+void KKRenderFillAAOutline(KKBezierPath *path, float outputWidth,
+                           float outputHeight, id<MTLDevice> device,
+                           id<MTLCommandBuffer> commandBuffer,
+                           id<MTLTexture> outputTexture,
+                           id<MTLRenderPipelineState> strokePS,
+                           simd_uint2 viewportSize) {
+  // Half-width of the AA ribbon. ~0.75px gives a ~1.5px feather; the stroke
+  // shader's smoothstep takes ~1px of that for falloff.
+  const float halfW = 0.75f;
+  const NSUInteger segsPerCurve = 64;
+  NSUInteger nc = path.contourCount;
+  if (nc == 0)
+    return;
+
+  CanvasGradientParams gradParams;
+  buildFillGradientParams(path, outputWidth, outputHeight, &gradParams);
+
+  // Rough capacity: per contour, segsPerCurve points × curveCount, each
+  // emitting 2 strip verts plus 2 bridge verts to break between contours.
+  NSUInteger maxVerts = 0;
+  for (NSUInteger ci = 0; ci < nc; ci++) {
+    NSRange r = [path contourRangeAtIndex:ci];
+    maxVerts += (r.length * segsPerCurve + 1) * 2 + 4;
+  }
+  CanvasVertex *vertices = malloc(maxVerts * sizeof(CanvasVertex));
+  NSUInteger vc = 0;
+
+  for (NSUInteger ci = 0; ci < nc; ci++) {
+    NSRange r = [path contourRangeAtIndex:ci];
+    NSUInteger cStart = r.location;
+    NSUInteger cLen = r.length;
+    if (cLen < 2)
+      continue;
+
+    NSUInteger sampleCount = cLen * segsPerCurve;
+    simd_float2 *outline = malloc(sampleCount * sizeof(simd_float2));
+    for (NSUInteger c = 0; c < cLen; c++) {
+      NSUInteger idx = cStart + c;
+      NSUInteger nextIdx = cStart + ((c + 1) % cLen);
+      for (NSUInteger s = 0; s < segsPerCurve; s++) {
+        float t = (float)s / (float)segsPerCurve;
+        simd_float2 pos = [path evaluatePointAtIndex:idx
+                                           nextIndex:nextIdx
+                                                 atT:t];
+        outline[c * segsPerCurve + s] =
+            (simd_float2){pos.x * outputWidth - outputWidth / 2.0f,
+                          (1.0f - pos.y) * outputHeight - outputHeight / 2.0f};
+      }
+    }
+
+    // Determine fill interior side using signed polygon area. Positive area
+    // (CCW in screen-down coords) means interior is on the +perp side; we
+    // mirror so +edgeDistance always points outward.
+    float area = 0.0f;
+    for (NSUInteger i = 0; i < sampleCount; i++) {
+      simd_float2 p0 = outline[i];
+      simd_float2 p1 = outline[(i + 1) % sampleCount];
+      area += p0.x * p1.y - p1.x * p0.y;
+    }
+    float outwardSign = (area > 0.0f) ? -1.0f : 1.0f;
+
+    NSUInteger ringStart = vc;
+    for (NSUInteger i = 0; i <= sampleCount; i++) {
+      simd_float2 p = outline[i % sampleCount];
+      simd_float2 pNext = outline[(i + 1) % sampleCount];
+      simd_float2 pPrev = outline[(i + sampleCount - 1) % sampleCount];
+      // Average tangent from neighboring edges so corners get a bisector
+      // perpendicular (cheap miter).
+      simd_float2 tangent = {pNext.x - pPrev.x, pNext.y - pPrev.y};
+      float tLen = sqrtf(tangent.x * tangent.x + tangent.y * tangent.y);
+      if (tLen < 0.0001f) {
+        tangent = (simd_float2){pNext.x - p.x, pNext.y - p.y};
+        tLen = sqrtf(tangent.x * tangent.x + tangent.y * tangent.y);
+        if (tLen < 0.0001f)
+          continue;
+      }
+      simd_float2 perp = {-tangent.y / tLen * halfW * outwardSign,
+                          tangent.x / tLen * halfW * outwardSign};
+      // Bridge vertex on contour break (after first contour).
+      if (vc > 0 && i == 0) {
+        vertices[vc] = vertices[vc - 1];
+        vc++;
+        vertices[vc++] =
+            (CanvasVertex){{p.x + perp.x, p.y + perp.y}, 1.0f, 0.0f};
+      }
+      vertices[vc++] = (CanvasVertex){{p.x + perp.x, p.y + perp.y}, 1.0f, 0.0f};
+      vertices[vc++] =
+          (CanvasVertex){{p.x - perp.x, p.y - perp.y}, -1.0f, 0.0f};
+    }
+    (void)ringStart;
+    free(outline);
+  }
+
+  if (vc == 0) {
+    free(vertices);
+    return;
+  }
+
+  MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
+  rpd.colorAttachments[0].texture = outputTexture;
+  rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+  rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+
+  id<MTLRenderCommandEncoder> enc =
+      [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+  [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1, 1}];
+  [enc setRenderPipelineState:strokePS];
+
+  id<MTLBuffer> vertexBuffer =
+      [device newBufferWithBytes:vertices
+                          length:vc * sizeof(CanvasVertex)
+                         options:MTLResourceStorageModeShared];
+  [enc setVertexBuffer:vertexBuffer offset:0 atIndex:0];
+  [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+  [enc setFragmentBytes:&gradParams length:sizeof(gradParams) atIndex:0];
+  [enc setFragmentBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+  [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
+          vertexStart:0
+          vertexCount:vc];
+  [enc endEncoding];
+  free(vertices);
+}
+
 void KKRenderFillStencilOnly(KKBezierPath *path, float outputWidth,
                              float outputHeight, id<MTLDevice> device,
                              id<MTLCommandBuffer> commandBuffer,
@@ -274,7 +397,10 @@ void KKRenderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
   NSUInteger vc = 0;
 
   if (isDots) {
-    NSUInteger dotSegs = 16;
+    // Triangle fan: center has edgeDistance=0, rim verts have edgeDistance=1.
+    // Stroke fragment shader smoothsteps |edgeDistance|→1 with fwidth, giving
+    // a ~1px feather at the rim. 32 segs keeps polygonal chord error invisible.
+    NSUInteger dotSegs = 32;
     for (NSUInteger i = 0; i < lineCount; i++) {
       simd_float2 a = lines[i].a;
       simd_float2 b = lines[i].b;
@@ -298,7 +424,7 @@ void KKRenderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
           }
           float a1 = (float)s / (float)dotSegs * 2.0f * M_PI;
           float a2 = (float)(s + 1) / (float)dotSegs * 2.0f * M_PI;
-          vertices[vc++] = (CanvasVertex){center, 1.0f, 0.0f};
+          vertices[vc++] = (CanvasVertex){center, 0.0f, 0.0f};
           vertices[vc++] = (CanvasVertex){{center.x + cosf(a1) * dotRadius,
                                            center.y + sinf(a1) * dotRadius},
                                           1.0f,
@@ -334,11 +460,11 @@ void KKRenderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
       vertices[vc++] =
           (CanvasVertex){{pa.x + perp.x, pa.y + perp.y}, 1.0f, 0.0f};
       vertices[vc++] =
-          (CanvasVertex){{pa.x - perp.x, pa.y - perp.y}, 1.0f, 0.0f};
+          (CanvasVertex){{pa.x - perp.x, pa.y - perp.y}, -1.0f, 0.0f};
       vertices[vc++] =
           (CanvasVertex){{pb.x + perp.x, pb.y + perp.y}, 1.0f, 0.0f};
       vertices[vc++] =
-          (CanvasVertex){{pb.x - perp.x, pb.y - perp.y}, 1.0f, 0.0f};
+          (CanvasVertex){{pb.x - perp.x, pb.y - perp.y}, -1.0f, 0.0f};
     }
   }
 

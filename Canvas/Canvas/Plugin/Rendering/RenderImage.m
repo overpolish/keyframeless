@@ -395,7 +395,7 @@ id<MTLTexture> KKApplyImageSketchFill(id<MTLTexture> rawTexture,
   NSUInteger vc = 0;
 
   if (isDots) {
-    NSUInteger dotSegs = 16;
+    NSUInteger dotSegs = 32;
     for (NSUInteger i = 0; i < lineCount; i++) {
       simd_float2 pa = {lines[i].a.x - imgW / 2.0f,
                         (imgH - lines[i].a.y) - imgH / 2.0f};
@@ -416,7 +416,7 @@ id<MTLTexture> KKApplyImageSketchFill(id<MTLTexture> rawTexture,
           }
           float a1 = (float)s / (float)dotSegs * 2.0f * M_PI;
           float a2 = (float)(s + 1) / (float)dotSegs * 2.0f * M_PI;
-          vertices[vc++] = (CanvasVertex){center, 1.0f, 0.0f};
+          vertices[vc++] = (CanvasVertex){center, 0.0f, 0.0f};
           vertices[vc++] = (CanvasVertex){{center.x + cosf(a1) * dotRadius,
                                            center.y + sinf(a1) * dotRadius},
                                           1.0f,
@@ -448,11 +448,11 @@ id<MTLTexture> KKApplyImageSketchFill(id<MTLTexture> rawTexture,
       vertices[vc++] =
           (CanvasVertex){{pa.x + perp.x, pa.y + perp.y}, 1.0f, 0.0f};
       vertices[vc++] =
-          (CanvasVertex){{pa.x - perp.x, pa.y - perp.y}, 1.0f, 0.0f};
+          (CanvasVertex){{pa.x - perp.x, pa.y - perp.y}, -1.0f, 0.0f};
       vertices[vc++] =
           (CanvasVertex){{pb.x + perp.x, pb.y + perp.y}, 1.0f, 0.0f};
       vertices[vc++] =
-          (CanvasVertex){{pb.x - perp.x, pb.y - perp.y}, 1.0f, 0.0f};
+          (CanvasVertex){{pb.x - perp.x, pb.y - perp.y}, -1.0f, 0.0f};
     }
   }
   free(lines);

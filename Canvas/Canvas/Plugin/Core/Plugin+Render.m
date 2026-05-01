@@ -204,6 +204,10 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
                           commandBuffer, target, stencilTexture, fillStencilPS,
                           fillColorPS, fillStencilDSState, fillColorDSState,
                           viewportSize);
+      if (strokePS) {
+        KKRenderFillAAOutline(fillPath, outputWidth, outputHeight, device,
+                              commandBuffer, target, strokePS, viewportSize);
+      }
     }
   }
 
