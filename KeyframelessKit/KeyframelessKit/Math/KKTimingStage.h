@@ -16,6 +16,24 @@ typedef NS_ENUM(NSInteger, KKSegmentType) {
   KKSegmentTypeTransition = 1,
 };
 
+/// Per-component kind hint stored on each lane in `valueComponentKinds`.
+/// Tells the sequencer renderer and HTH normalization how many scalar
+/// values each slot expands into and how to treat them across transitions.
+typedef NS_ENUM(NSInteger, KKAnimatableParamKind) {
+  /// 1 scalar; standard float-lerp across transitions.
+  KKAnimatableParamKindFloat = 0,
+  /// 3 scalars [R, G, B]; per-component float-lerp.
+  KKAnimatableParamKindColor = 1,
+  /// Variable-length flat `[pos, r, g, b, mid]` per stop. Stop counts can
+  /// differ across a transition — interp falls back to LUT-lerp.
+  KKAnimatableParamKindGradient = 2,
+  /// 2 scalars [X, Y].
+  KKAnimatableParamKindPoint = 3,
+  /// 1 scalar (0/1). Step semantics: HTH normalization preserves the
+  /// segment's own value rather than inheriting from the surrounding hold.
+  KKAnimatableParamKindBool = 4,
+};
+
 /// A single segment in a multi-stage timing lane.
 ///
 /// - **Hold segments** maintain constant values for their duration.
@@ -115,6 +133,35 @@ typedef NS_ENUM(NSInteger, KKSegmentType) {
 /// duration and persists it on the following write.
 @property(nonatomic) double lastKnownClipDuration;
 
+/// Optional grouping key. When non-nil, the sequencer renders a header row
+/// above each contiguous run of lanes sharing the same `groupKey` and groups
+/// the lanes underneath. Plugins use this when several lanes belong to the
+/// same conceptual instance — e.g. Canvas keys lanes by `path.pathID` so
+/// each layer's properties cluster under one collapsible header. Lanes
+/// without a `groupKey` render flat (legacy behaviour).
+@property(nonatomic, copy, nullable) NSString *groupKey;
+
+/// Display label for the group header. Read from the **first lane of each
+/// group** only — siblings' values are ignored. Persisted.
+@property(nonatomic, copy, nullable) NSString *groupLabel;
+
+/// Whether the group is collapsed in the sequencer. Read from the first
+/// lane of each group only. When YES, every lane sharing the same
+/// `groupKey` is hidden from the row plan (still evaluated at render time).
+/// Persisted.
+@property(nonatomic) BOOL groupCollapsed;
+
+/// Per-scalar render hints. One `KKAnimatableParamKind` (boxed as
+/// `NSNumber`) per slot in the property's natural shape — e.g. a single
+/// scalar lane has `@[ @(Float) ]`, a Color lane has `@[ @(Color) ]`, a
+/// Position+Bool lane has `@[ @(Point), @(Bool) ]`. The sequencer uses this
+/// to decide rendering (color strip vs scalar graph) and the eval function
+/// uses it to skip Bool components during transitions. Length is the number
+/// of native slots, NOT the number of scalars in `segment.values` —
+/// expansion to per-scalar entries (Color → 3, Point → 2) happens inside
+/// the consumer. Nil falls back to "treat every component as a Float".
+@property(nonatomic, copy, nullable) NSArray<NSNumber *> *valueComponentKinds;
+
 + (instancetype)laneWithLabel:(NSString *)label
                      segments:(NSArray<KKTimingSegment *> *)segments
                       enabled:(BOOL)enabled;
@@ -179,15 +226,10 @@ FOUNDATION_EXPORT BOOL KKIsHTHTransition(KKTimingLane *lane, NSInteger segIdx);
 
 /// In-place normalization: every HTH transition has its `values` array
 /// rewritten to match the preceding hold's values. Call before serializing so
-/// transitions sandwiched between holds keep stable, derivable state.
-///
-/// `kindsByLabel` maps lane.propertyLabel → an array of per-scalar
-/// `KKAnimatableParamKind` values (boxed as NSNumber, length matching
-/// segment.values). Bool scalars are preserved (not normalized) so per-segment
-/// step toggles like "rotate with motion" survive across writes. Pass nil to
-/// normalize every scalar.
-FOUNDATION_EXPORT void KKApplyHTHNormalizationInPlace(
-    NSMutableArray<KKTimingLane *> *lanes,
-    NSDictionary<NSString *, NSArray<NSNumber *> *> *_Nullable kindsByLabel);
+/// transitions sandwiched between holds keep stable, derivable state. Bool
+/// scalars (per `lane.valueComponentKinds`) are preserved so per-segment
+/// step toggles like "rotate with motion" survive across writes.
+FOUNDATION_EXPORT void
+KKApplyHTHNormalizationInPlace(NSMutableArray<KKTimingLane *> *lanes);
 
 NS_ASSUME_NONNULL_END

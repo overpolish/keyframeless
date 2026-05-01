@@ -8,6 +8,39 @@
 #import "ShaderTypes.h"
 #import <KeyframelessKit/KeyframelessKit.h>
 
+/// Reads `kKKParamMultiStageData` and returns a `propertyLabel → values`
+/// dict evaluated at `frac`.
+static NSDictionary<NSString *, NSArray<NSNumber *> *> *
+KKEvaluateLanesByLabel(id<FxParameterRetrievalAPI_v6> getAPI, double frac) {
+  NSString *json = nil;
+  [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+  if (!json.length)
+    return @{};
+  NSArray<KKTimingLane *> *lanes = [KKTimingLane lanesFromJSON:json];
+  NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *out =
+      [NSMutableDictionary dictionaryWithCapacity:lanes.count];
+  for (KKTimingLane *lane in lanes) {
+    if (!lane.enabled || !lane.propertyLabel.length)
+      continue;
+    NSArray<NSNumber *> *vals = KKTimingLaneValueAtFraction(lane, frac);
+    if (vals.count > 0)
+      out[lane.propertyLabel] = vals;
+  }
+  return out;
+}
+
+static double KKEffectFractionForTime(id<FxTimingAPI_v4> timingAPI,
+                                      CMTime time) {
+  CMTime startT = kCMTimeZero, durT = kCMTimeZero;
+  [timingAPI startTimeForEffect:&startT];
+  [timingAPI durationTimeForEffect:&durT];
+  double durSec = CMTimeGetSeconds(durT);
+  if (durSec <= 0)
+    return 0.0;
+  return MAX(0.0, MIN(1.0, (CMTimeGetSeconds(time) - CMTimeGetSeconds(startT)) /
+                               durSec));
+}
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 @implementation MagicMovePlugin (Animation)
@@ -107,8 +140,11 @@
   MagicMovePointValues v = [self readPointValuesAtTime:renderTime
                                                withAPI:paramGetAPI];
 
+  id<FxTimingAPI_v4> mmTimingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  double frac = KKEffectFractionForTime(mmTimingAPI, renderTime);
   NSDictionary<NSString *, NSArray<NSNumber *> *> *multiStage =
-      [self multiStageValuesAtTime:renderTime];
+      KKEvaluateLanesByLabel(paramGetAPI, frac);
 
   NSArray<NSNumber *> *msPosition = multiStage[@"Position"];
   NSArray<NSNumber *> *msScale = multiStage[@"Scale"];
@@ -173,8 +209,9 @@
     double window = 1.0 / 12.0;
     CMTime tPrev =
         CMTimeSubtract(renderTime, CMTimeMakeWithSeconds(window, 600));
+    double prevFrac = KKEffectFractionForTime(mmTimingAPI, tPrev);
     NSDictionary<NSString *, NSArray<NSNumber *> *> *prev =
-        [self multiStageValuesAtTime:tPrev];
+        KKEvaluateLanesByLabel(paramGetAPI, prevFrac);
     NSArray<NSNumber *> *prevPos = prev[@"Position"];
     double prevX = prevPos.count >= 1 ? prevPos[0].doubleValue : posX;
     double vx = (posX - prevX) / window;

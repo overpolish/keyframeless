@@ -152,9 +152,21 @@
     return;
   }
 
-  for (NSUInteger laneIdx = 0; laneIdx < self.lanes.count; laneIdx++) {
+  for (NSUInteger rowIdx = 0; rowIdx < _rowPlan.count; rowIdx++) {
+    KKSequencerRow *row = _rowPlan[rowIdx];
+    CGFloat rowY = [self _rowYForPlanIndex:rowIdx totalHeight:totalHeight];
+    if (row.kind == KKSequencerRowKindHeader) {
+      NSRect headerRect = [self _groupHeaderRectForRowY:rowY];
+      if (NSPointInRect(loc, headerRect)) {
+        if (self.onGroupCollapseToggled && row.groupKey)
+          self.onGroupCollapseToggled(row.groupKey, !row.groupCollapsed);
+        return;
+      }
+      continue;
+    }
+    NSUInteger laneIdx = (NSUInteger)row.laneIndex;
     KKTimingLane *lane = self.lanes[laneIdx];
-    CGFloat laneY = [self _laneYForIndex:laneIdx totalHeight:totalHeight];
+    CGFloat laneY = rowY;
 
     if (loc.y < laneY || loc.y > laneY + [self _laneHeight])
       continue;

@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "../KKAnimatableProperty.h"
 #import "KKStageSequencerView_Private.h"
 
 #pragma clang diagnostic push
@@ -26,9 +25,16 @@
       [[NSImage alloc] initWithSize:NSMakeSize(imageWidth, totalHeight)];
   [image lockFocus];
 
-  for (NSUInteger laneIdx = 0; laneIdx < self.lanes.count; laneIdx++) {
+  for (NSUInteger rowIdx = 0; rowIdx < _rowPlan.count; rowIdx++) {
+    KKSequencerRow *row = _rowPlan[rowIdx];
+    CGFloat rowY = [self _rowYForPlanIndex:rowIdx totalHeight:totalHeight];
+    if (row.kind == KKSequencerRowKindHeader) {
+      [self _renderGroupHeaderRow:row rowY:rowY];
+      continue;
+    }
+    NSUInteger laneIdx = (NSUInteger)row.laneIndex;
     KKTimingLane *lane = self.lanes[laneIdx];
-    CGFloat laneY = [self _laneYForIndex:laneIdx totalHeight:totalHeight];
+    CGFloat laneY = rowY;
 
     [self _renderLaneLabel:lane laneY:laneY];
 
@@ -42,7 +48,7 @@
                                laneY:laneY];
 
     if (lane.enabled && trackWidth > 10) {
-      NSNumber *kindNum = self.laneKindsByLabel[lane.propertyLabel];
+      NSNumber *kindNum = [self _slotKindForLane:lane];
       BOOL isColorLike =
           (kindNum.integerValue == KKAnimatableParamKindColor ||
            kindNum.integerValue == KKAnimatableParamKindGradient);

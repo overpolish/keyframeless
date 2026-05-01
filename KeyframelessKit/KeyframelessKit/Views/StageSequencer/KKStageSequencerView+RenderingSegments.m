@@ -5,7 +5,6 @@
 
 #import "../../Math/KKEasing.h"
 #import "../../Style/NSColor+KKColors.h"
-#import "../KKAnimatableProperty.h"
 #import "KKStageSequencerView_Private.h"
 
 #pragma clang diagnostic push
@@ -138,8 +137,7 @@ static NSColor *_componentTint(NSString *propertyLabel, NSUInteger component,
   for (KKTimingSegment *seg in lane.segments)
     componentCount = MAX(componentCount, seg.values.count);
 
-  NSArray<NSNumber *> *rangeKinds =
-      self.laneComponentKindsByLabel[lane.propertyLabel];
+  NSArray<NSNumber *> *rangeKinds = [self _componentKindsForLane:lane];
 
   // Compute dynamic value range across all components (including transition
   // overshoots from Elastic/Bounce) so every component shares the same Y scale.
@@ -198,8 +196,7 @@ static NSColor *_componentTint(NSString *propertyLabel, NSUInteger component,
     return (v - minVal) / valRange;
   };
 
-  NSArray<NSNumber *> *componentKinds =
-      self.laneComponentKindsByLabel[lane.propertyLabel];
+  NSArray<NSNumber *> *componentKinds = [self _componentKindsForLane:lane];
 
   for (NSUInteger c = 0; c < componentCount; c++) {
     if (c < componentKinds.count &&

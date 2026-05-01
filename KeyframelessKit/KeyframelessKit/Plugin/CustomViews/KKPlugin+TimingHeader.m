@@ -175,8 +175,14 @@
     return;
   }
 
-  NSArray<KKAnimatableProperty *> *seqProps = [self animatableProperties];
-  CGFloat lanesH = [KKStageSequencerView heightForLaneCount:seqProps.count];
+  id<FxParameterRetrievalAPI_v6> _hdrGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  NSArray<KKTimingLane *> *_hdrLanes =
+      KKReadLanesRebalanced(self.apiManager, _hdrGetAPI);
+  if (!_hdrLanes.count)
+    _hdrLanes = [self defaultLanesAtTime:[actionAPI currentTime]
+                             paramGetAPI:_hdrGetAPI];
+  CGFloat lanesH = [KKStageSequencerView heightForLaneCount:_hdrLanes.count];
   CGFloat rulerH = [KKStageSequencerRulerView preferredHeight];
   CGFloat contentH = KKPaddingSM + rulerH + lanesH + KKPaddingLG;
   CGSize contentSize = CGSizeMake(300.0, contentH);

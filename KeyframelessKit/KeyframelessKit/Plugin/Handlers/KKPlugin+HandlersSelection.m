@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "../../Views/KKAnimatableProperty.h"
 #import "../../Views/StageSequencer/KKStageSequencerView.h"
 #import "../KKPlugin+Color.h"
 #import "../KKPluginInstanceState.h"
@@ -22,7 +21,6 @@
   if (!state)
     return;
   state.selectionInProgress = YES;
-  NSArray<KKAnimatableProperty *> *props = [self animatableProperties];
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actAPI startAction:self];
@@ -42,14 +40,14 @@
   }
 
   KKTimingLane *lane = lanes[jsonIdx];
-  KKAnimatableProperty *prop = KKPropertyByLabel(props, lane.propertyLabel);
 
-  // Write-back: save current native param values into this lane's
-  // previously selected segment.
+  // Write-back: save current native values into the previously selected
+  // segment via the plugin's `currentValuesForLaneLabel:` hook.
   NSInteger prevSeg = lane.selectedSegment;
-  if (prop.valueParamIDs.count > 0 && prevSeg >= 0 &&
+  NSArray<NSNumber *> *curVals =
+      [self currentValuesForLaneLabel:lane.propertyLabel atTime:ct];
+  if (curVals.count && prevSeg >= 0 &&
       (NSUInteger)prevSeg < lane.segments.count) {
-    NSArray<NSNumber *> *curVals = [prop readValuesWithGetAPI:getAPI atTime:ct];
     KKTimingLane *mLane = [lane copy];
     NSMutableArray *mSegs = [mLane.segments mutableCopy];
     KKTimingSegment *mSeg = [mSegs[prevSeg] copy];
@@ -66,44 +64,21 @@
     lane = mLane;
   }
 
-  KKWriteLanesJSON(lanes, setAPI, self.apiManager, [self _kindsByLaneLabel]);
-  // Update snapshot + clear pending BEFORE endAction (which triggers
-  // parameterChanged: that would read stale snapshot).
+  KKWriteLanesJSON(lanes, setAPI, self.apiManager);
   state.lanesSnapshot = [lanes copy];
   state.pendingLanes = nil;
 
-  // FxPlug silently drops writes to DISABLED params, so make sure the value
-  // params for this lane are enabled while we push the new segment's values.
-  // If the new selection is itself HTH, the trailing
-  // `_applyHTHParameterFlagsForLanes:` call re-applies the disable.
-  for (NSNumber *pidNum in prop.valueParamIDs) {
-    UInt32 pid = pidNum.unsignedIntValue;
-    FxParameterFlags cur = 0;
-    [getAPI getParameterFlags:&cur fromParameter:pid];
-    FxParameterFlags want = cur & ~kFxParameterFlag_DISABLED;
-    if (cur != want)
-      [setAPI setParameterFlags:want toParameter:pid];
-  }
-
-  // Sync new selection: write segment values → native params.
-  NSArray<NSNumber *> *newVals = nil;
-  if (prop.valueParamIDs.count > 0 && segmentIndex >= 0 &&
-      (NSUInteger)segmentIndex < lane.segments.count) {
-    newVals = lane.segments[segmentIndex].values;
-    [prop writeValues:newVals withSetAPI:setAPI atTime:ct];
+  // Push new selection's values into the plugin's source of truth (params,
+  // gradient control, etc). Plugin clears DISABLED flags as needed.
+  if (segmentIndex >= 0 && (NSUInteger)segmentIndex < lane.segments.count) {
+    [self applyLaneValues:lane.segments[segmentIndex].values
+                 forLabel:lane.propertyLabel
+                   atTime:ct];
   }
   [self _applyHTHParameterFlagsForLanes:lanes];
 
   [actAPI endAction:self];
   state.selectionInProgress = NO;
-  // The gradient bar isn't auto-bound to its param; the drawOSC/render
-  // sync is both too slow for interactive clicks AND prone to reading a
-  // stale string value right after a write. Push the known segment values
-  // directly instead. No-op for non-gradient properties.
-  if (newVals)
-    [KKPlugin colorPushGradientForProperty:prop
-                                    values:newVals
-                                apiManager:self.apiManager];
   [self timingGraphApplyState];
 }
 
@@ -112,7 +87,6 @@
   if (!state)
     return;
   state.selectionInProgress = YES;
-  NSArray<KKAnimatableProperty *> *props = [self animatableProperties];
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actAPI startAction:self];
@@ -132,8 +106,6 @@
   NSSet<NSString *> *pluginHidden =
       [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
 
-  // Capture each lane's new (segIdx, values) before writing, so we can push
-  // them to native params after the JSON write.
   NSMutableArray<NSNumber *> *newSegPerLane = [NSMutableArray array];
   for (NSUInteger li = 0; li < lanes.count; li++) {
     KKTimingLane *lane = lanes[li];
@@ -150,20 +122,16 @@
         break;
       }
     }
-    // Edge: position == 1.0 lands past the last segment's [start, end).
     if (newIdx < 0 && lane.segments.count > 0)
       newIdx = (NSInteger)lane.segments.count - 1;
 
-    KKAnimatableProperty *prop = KKPropertyByLabel(props, lane.propertyLabel);
     KKTimingLane *mLane = [lane copy];
     NSMutableArray *mSegs = [mLane.segments mutableCopy];
 
-    // Write-back native values to the previously selected segment.
     NSInteger prevSeg = lane.selectedSegment;
-    if (prop.valueParamIDs.count > 0 && prevSeg >= 0 &&
-        (NSUInteger)prevSeg < mSegs.count) {
-      NSArray<NSNumber *> *curVals = [prop readValuesWithGetAPI:getAPI
-                                                         atTime:ct];
+    NSArray<NSNumber *> *curVals =
+        [self currentValuesForLaneLabel:lane.propertyLabel atTime:ct];
+    if (curVals.count && prevSeg >= 0 && (NSUInteger)prevSeg < mSegs.count) {
       KKTimingSegment *mSeg = [mSegs[prevSeg] copy];
       mSeg.values = curVals;
       mSegs[prevSeg] = mSeg;
@@ -174,33 +142,18 @@
     [newSegPerLane addObject:@(newIdx)];
   }
 
-  KKWriteLanesJSON(lanes, setAPI, self.apiManager, [self _kindsByLaneLabel]);
+  KKWriteLanesJSON(lanes, setAPI, self.apiManager);
   state.lanesSnapshot = [lanes copy];
   state.pendingLanes = nil;
 
-  // Push each lane's newly-selected segment values into native params. Clear
-  // DISABLED on every value param first so writes aren't silently dropped
-  // (HTH-selected lanes get the flag re-applied at the end).
   for (NSUInteger li = 0; li < lanes.count; li++) {
     KKTimingLane *lane = lanes[li];
     NSInteger newIdx = newSegPerLane[li].integerValue;
-    KKAnimatableProperty *prop = KKPropertyByLabel(props, lane.propertyLabel);
-    if (prop.valueParamIDs.count == 0 || newIdx < 0 ||
-        (NSUInteger)newIdx >= lane.segments.count)
+    if (newIdx < 0 || (NSUInteger)newIdx >= lane.segments.count)
       continue;
-    for (NSNumber *pidNum in prop.valueParamIDs) {
-      UInt32 pid = pidNum.unsignedIntValue;
-      FxParameterFlags cur = 0;
-      [getAPI getParameterFlags:&cur fromParameter:pid];
-      FxParameterFlags want = cur & ~kFxParameterFlag_DISABLED;
-      if (cur != want)
-        [setAPI setParameterFlags:want toParameter:pid];
-    }
-    NSArray<NSNumber *> *newVals = lane.segments[newIdx].values;
-    [prop writeValues:newVals withSetAPI:setAPI atTime:ct];
-    [KKPlugin colorPushGradientForProperty:prop
-                                    values:newVals
-                                apiManager:self.apiManager];
+    [self applyLaneValues:lane.segments[newIdx].values
+                 forLabel:lane.propertyLabel
+                   atTime:ct];
   }
 
   [self _applyHTHParameterFlagsForLanes:lanes];
@@ -244,7 +197,7 @@
     }
   }
   mutable[jsonIdx] = lane;
-  KKWriteLanesJSON(mutable, setAPI, self.apiManager, [self _kindsByLaneLabel]);
+  KKWriteLanesJSON(mutable, setAPI, self.apiManager);
 
   // Enable-path: native params may have been edited while the lane was
   // disabled. Overwrite native params with the newly-selected segment's
@@ -252,13 +205,11 @@
   // keep rendering stale values until the user clicks a segment.
   if (enabled && lane.selectedSegment >= 0 &&
       (NSUInteger)lane.selectedSegment < lane.segments.count) {
-    KKAnimatableProperty *prop =
-        KKPropertyByLabel([self animatableProperties], lane.propertyLabel);
     if (state)
       state.selectionInProgress = YES;
-    [prop writeValues:lane.segments[lane.selectedSegment].values
-           withSetAPI:setAPI
-               atTime:ct];
+    [self applyLaneValues:lane.segments[lane.selectedSegment].values
+                 forLabel:lane.propertyLabel
+                   atTime:ct];
     if (state) {
       state.lanesSnapshot = [mutable copy];
       state.pendingLanes = nil;
@@ -319,7 +270,7 @@
     lanes[i] = lane;
   }
 
-  KKWriteLanesJSON(lanes, setAPI, self.apiManager, [self _kindsByLaneLabel]);
+  KKWriteLanesJSON(lanes, setAPI, self.apiManager);
 
   KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
   if (state) {
@@ -382,7 +333,7 @@
   lane.visibleInSequencer = visible;
   lanes[laneIndex] = lane;
 
-  KKWriteLanesJSON(lanes, setAPI, self.apiManager, [self _kindsByLaneLabel]);
+  KKWriteLanesJSON(lanes, setAPI, self.apiManager);
 
   KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
   if (state) {
@@ -432,7 +383,7 @@
     KKTimingLane *lane = [lanes[jsonIdx] copy];
     lane.oscVisible = visible;
     lanes[jsonIdx] = lane;
-    KKWriteLanesJSON(lanes, setAPI, self.apiManager, [self _kindsByLaneLabel]);
+    KKWriteLanesJSON(lanes, setAPI, self.apiManager);
     if (state)
       state.lanesSnapshot = [lanes copy];
   }
@@ -475,7 +426,7 @@
       updatedLane = relocked;
     }
     lanes[jsonIdx] = updatedLane;
-    KKWriteLanesJSON(lanes, setAPI, self.apiManager, [self _kindsByLaneLabel]);
+    KKWriteLanesJSON(lanes, setAPI, self.apiManager);
   }
   [actAPI endAction:self];
   [self timingGraphApplyState];
@@ -524,7 +475,7 @@
     }
     lanes[jsonIdx] = updatedLane;
   }
-  KKWriteLanesJSON(lanes, setAPI, self.apiManager, [self _kindsByLaneLabel]);
+  KKWriteLanesJSON(lanes, setAPI, self.apiManager);
   [actAPI endAction:self];
   [self timingGraphApplyState];
 }
@@ -564,33 +515,25 @@
   lane.segments = segs;
   lanes[jsonIdx] = lane;
 
-  KKWriteLanesJSON(lanes, setAPI, self.apiManager, [self _kindsByLaneLabel]);
+  KKWriteLanesJSON(lanes, setAPI, self.apiManager);
 
   // When the destination is the currently-selected segment, native params
   // still hold its pre-copy values. Push the new values through so the next
   // click on this segment doesn't write the stale native values back into
   // it during onSegmentSelected's write-back step.
-  KKAnimatableProperty *prop = nil;
   if (dstSegmentIndex == lane.selectedSegment) {
-    prop = KKPropertyByLabel([self animatableProperties], lane.propertyLabel);
-    if (prop && prop.valueParamIDs.count > 0) {
-      if (state)
-        state.selectionInProgress = YES;
-      [prop writeValues:newVals withSetAPI:setAPI atTime:ct];
-      if (state) {
-        state.lanesSnapshot = [lanes copy];
-        state.pendingLanes = nil;
-      }
+    if (state)
+      state.selectionInProgress = YES;
+    if ([self applyLaneValues:newVals forLabel:lane.propertyLabel atTime:ct] &&
+        state) {
+      state.lanesSnapshot = [lanes copy];
+      state.pendingLanes = nil;
     }
   }
 
   [actAPI endAction:self];
   if (state)
     state.selectionInProgress = NO;
-  if (prop)
-    [KKPlugin colorPushGradientForProperty:prop
-                                    values:newVals
-                                apiManager:self.apiManager];
   [self timingGraphApplyState];
 }
 

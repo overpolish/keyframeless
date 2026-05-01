@@ -55,7 +55,31 @@
     [self updateTimingParameterVisibility];
   [self updateMotionBlurParameterVisibility];
   [self updateCropParameterVisibility];
-  [self multiStageHandleParameterChanged:parameterID atTime:time];
+
+  // Live-update the timing lane's selected segment when an animatable
+  // slider changes. paramID → (label, values) is plugin-owned — no
+  // `KKAnimatableProperty` lookup.
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (paramGetAPI) {
+    if (parameterID == kParamRadius) {
+      double v = 0;
+      [paramGetAPI getFloatValue:&v fromParameter:kParamRadius atTime:time];
+      [self multiStageUpdateSelectedSegmentForLabel:@"Radius" values:@[ @(v) ]];
+    } else if (parameterID == kParamCropTop ||
+               parameterID == kParamCropBottom ||
+               parameterID == kParamCropLeft ||
+               parameterID == kParamCropRight) {
+      double t = 0, b = 0, l = 0, r = 0;
+      [paramGetAPI getFloatValue:&t fromParameter:kParamCropTop atTime:time];
+      [paramGetAPI getFloatValue:&b fromParameter:kParamCropBottom atTime:time];
+      [paramGetAPI getFloatValue:&l fromParameter:kParamCropLeft atTime:time];
+      [paramGetAPI getFloatValue:&r fromParameter:kParamCropRight atTime:time];
+      [self
+          multiStageUpdateSelectedSegmentForLabel:@"Crop"
+                                           values:@[ @(t), @(b), @(l), @(r) ]];
+    }
+  }
   return YES;
 }
 

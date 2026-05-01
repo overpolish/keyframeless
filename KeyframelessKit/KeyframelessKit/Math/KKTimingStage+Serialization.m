@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "../Views/KKAnimatableProperty.h"
 #import "KKTimingStage.h"
 
 static NSString *const kKeyType = @"type";
@@ -28,6 +27,10 @@ static NSString *const kKeySelectedSeg = @"sel";
 static NSString *const kKeyOscVisible = @"osc";
 static NSString *const kKeyVisibleInSeq = @"vis";
 static NSString *const kKeyLastKnownDur = @"lkd";
+static NSString *const kKeyGroupKey = @"gk";
+static NSString *const kKeyGroupLabel = @"glab";
+static NSString *const kKeyGroupCollapsed = @"gcol";
+static NSString *const kKeyValueComponentKinds = @"kinds";
 
 static const NSInteger kCurrentVersion = 3;
 
@@ -99,15 +102,25 @@ static const NSInteger kCurrentVersion = 3;
         [NSMutableArray arrayWithCapacity:lane.segments.count];
     for (KKTimingSegment *seg in lane.segments)
       [segsArray addObject:[seg toDictionary]];
-    [lanesArray addObject:@{
+    NSMutableDictionary *laneDict = [@{
       kKeyLabel : lane.propertyLabel ?: @"",
       kKeyEnabled : @(lane.enabled),
       kKeySelectedSeg : @(lane.selectedSegment),
       kKeyOscVisible : @(lane.oscVisible),
+      @"hasOsc" : @(lane.hasOSC),
       kKeyVisibleInSeq : @(lane.visibleInSequencer),
       kKeyLastKnownDur : @(lane.lastKnownClipDuration),
       kKeySegments : segsArray,
-    }];
+    } mutableCopy];
+    if (lane.groupKey.length)
+      laneDict[kKeyGroupKey] = lane.groupKey;
+    if (lane.groupLabel.length)
+      laneDict[kKeyGroupLabel] = lane.groupLabel;
+    if (lane.groupCollapsed)
+      laneDict[kKeyGroupCollapsed] = @YES;
+    if (lane.valueComponentKinds.count)
+      laneDict[kKeyValueComponentKinds] = lane.valueComponentKinds;
+    [lanesArray addObject:laneDict];
   }
   NSDictionary *root = @{
     kKeyVersion : @(kCurrentVersion),
@@ -164,9 +177,29 @@ static const NSInteger kCurrentVersion = 3;
       lane.selectedSegment = selNum.integerValue;
     NSNumber *oscNum = laneDict[kKeyOscVisible];
     lane.oscVisible = oscNum ? oscNum.boolValue : YES;
+    NSNumber *hasOscNum = laneDict[@"hasOsc"];
+    if (hasOscNum)
+      lane.hasOSC = hasOscNum.boolValue;
     NSNumber *visNum = laneDict[kKeyVisibleInSeq];
     lane.visibleInSequencer = visNum ? visNum.boolValue : YES;
     lane.lastKnownClipDuration = [laneDict[kKeyLastKnownDur] doubleValue];
+    NSString *gkRaw = laneDict[kKeyGroupKey];
+    if ([gkRaw isKindOfClass:[NSString class]])
+      lane.groupKey = gkRaw;
+    NSString *glabRaw = laneDict[kKeyGroupLabel];
+    if ([glabRaw isKindOfClass:[NSString class]])
+      lane.groupLabel = glabRaw;
+    lane.groupCollapsed = [laneDict[kKeyGroupCollapsed] boolValue];
+    NSArray *kindsRaw = laneDict[kKeyValueComponentKinds];
+    if ([kindsRaw isKindOfClass:[NSArray class]] && kindsRaw.count) {
+      NSMutableArray<NSNumber *> *kinds =
+          [NSMutableArray arrayWithCapacity:kindsRaw.count];
+      for (id v in kindsRaw)
+        if ([v isKindOfClass:[NSNumber class]])
+          [kinds addObject:v];
+      if (kinds.count)
+        lane.valueComponentKinds = kinds;
+    }
     [result addObject:lane];
   }
   return result.count ? result : nil;
@@ -184,12 +217,38 @@ BOOL KKIsHTHTransition(KKTimingLane *lane, NSInteger segIdx) {
          lane.segments[segIdx + 1].type == KKSegmentTypeHold;
 }
 
-void KKApplyHTHNormalizationInPlace(
-    NSMutableArray<KKTimingLane *> *lanes,
-    NSDictionary<NSString *, NSArray<NSNumber *> *> *kindsByLabel) {
+/// Expands the lane's slot-level `valueComponentKinds` into a per-scalar
+/// kinds array. Color → 3 entries of Color, Point → 2 entries of Point,
+/// Gradient → 0 (variable; HTH normalization treats as non-Bool), Bool/
+/// Float → 1 each.
+static NSArray<NSNumber *> *_KKExpandedLaneKinds(KKTimingLane *lane) {
+  NSMutableArray<NSNumber *> *out = [NSMutableArray array];
+  for (NSNumber *k in lane.valueComponentKinds) {
+    NSUInteger n = 1;
+    switch ((KKAnimatableParamKind)k.integerValue) {
+    case KKAnimatableParamKindColor:
+      n = 3;
+      break;
+    case KKAnimatableParamKindPoint:
+      n = 2;
+      break;
+    case KKAnimatableParamKindGradient:
+      n = 0;
+      break;
+    default:
+      n = 1;
+      break;
+    }
+    for (NSUInteger i = 0; i < n; i++)
+      [out addObject:k];
+  }
+  return out;
+}
+
+void KKApplyHTHNormalizationInPlace(NSMutableArray<KKTimingLane *> *lanes) {
   for (NSUInteger li = 0; li < lanes.count; li++) {
     KKTimingLane *lane = lanes[li];
-    NSArray<NSNumber *> *kinds = kindsByLabel[lane.propertyLabel];
+    NSArray<NSNumber *> *kinds = _KKExpandedLaneKinds(lane);
     NSMutableArray<KKTimingSegment *> *mSegs = nil;
     for (NSUInteger si = 1; si + 1 < lane.segments.count; si++) {
       if (!KKIsHTHTransition(lane, (NSInteger)si))

@@ -4,7 +4,6 @@
  */
 
 #import "../Math/KKGradientSampling.h"
-#import "../Views/KKAnimatableProperty.h"
 #import "KKPlugin+Color.h"
 #import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
@@ -264,31 +263,6 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
   };
 
   return control;
-}
-
-+ (void)colorPushGradientForProperty:(KKAnimatableProperty *)prop
-                              values:(NSArray<NSNumber *> *)flatValues
-                          apiManager:(id<PROAPIAccessing>)apiManager {
-  BOOL isGradient = NO;
-  for (NSNumber *k in prop.valueParamKinds) {
-    if (k.integerValue == KKAnimatableParamKindGradient) {
-      isGradient = YES;
-      break;
-    }
-  }
-  if (!isGradient)
-    return;
-  KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
-  KKGradientControl *control = state.gradientControl;
-  if (!control)
-    return;
-  NSArray<KKGradientStop *> *stops = KKGradientStopsFromFlat(flatValues);
-  if (!stops)
-    return;
-  state.gradientJSONSnapshot = KKGradientJSONFromStops(stops);
-  dispatch_async(dispatch_get_main_queue(), ^{
-    control.stops = stops;
-  });
 }
 
 + (void)colorSyncFromParams:(id<PROAPIAccessing>)apiManager {

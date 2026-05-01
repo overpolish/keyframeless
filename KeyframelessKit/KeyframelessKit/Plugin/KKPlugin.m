@@ -443,7 +443,23 @@
   return NO;
 }
 
-- (NSArray<KKAnimatableProperty *> *)animatableProperties {
+- (NSArray<NSNumber *> *)currentValuesForLaneLabel:(NSString *)label
+                                            atTime:(CMTime)time {
+  return nil;
+}
+
+- (BOOL)applyLaneValues:(NSArray<NSNumber *> *)values
+               forLabel:(NSString *)label
+                 atTime:(CMTime)time {
+  return NO;
+}
+
+- (void)setEditingDisabled:(BOOL)disabled forLaneLabel:(NSString *)label {
+}
+
+- (NSArray<KKTimingLane *> *)defaultLanesAtTime:(CMTime)time
+                                    paramGetAPI:(id<FxParameterRetrievalAPI_v6>)
+                                                    paramGetAPI {
   return nil;
 }
 

@@ -5,7 +5,6 @@
 
 #import "../../Math/KKTimingStage.h"
 #import "../../Style/KKTokens.h"
-#import "../../Views/KKAnimatableProperty.h"
 #import "../../Views/StageSequencer/KKEmptyLanesView.h"
 #import "../../Views/StageSequencer/KKLaneVisibilityBar.h"
 #import "../../Views/StageSequencer/KKSequencerScrollView.h"
@@ -127,8 +126,6 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
 - (void)_buildSeqScrollViewInContainer:(NSView *)seqContainer
                             underRuler:(KKStageSequencerRulerView *)rulerView
                               uncapped:(BOOL)uncapped
-                              seqProps:
-                                  (NSArray<KKAnimatableProperty *> *)seqProps
                             fullLanesH:(CGFloat)fullLanesH
                             outSeqView:(KKStageSequencerView **)outSeqView
                           outEmptyView:(KKEmptyLanesView **)outEmptyView {
@@ -149,45 +146,8 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
   KKStageSequencerView *seqView = [[KKStageSequencerView alloc]
       initWithFrame:NSMakeRect(0, 0, 300, fullLanesH)];
   seqView.translatesAutoresizingMaskIntoConstraints = NO;
-  // Let the renderer differentiate color/gradient lanes (which should render
-  // as a value strip + single easing curve) from scalar lanes. Color and
-  // gradient props each have exactly one entry in `valueParamKinds`, so the
-  // first entry is representative.
-  NSMutableDictionary<NSString *, NSNumber *> *laneKinds =
-      [NSMutableDictionary dictionaryWithCapacity:seqProps.count];
-  NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *laneCompKinds =
-      [NSMutableDictionary dictionaryWithCapacity:seqProps.count];
-  for (KKAnimatableProperty *p in seqProps) {
-    NSNumber *kind = p.valueParamKinds.firstObject;
-    if (kind)
-      laneKinds[p.label] = kind;
-    NSMutableArray<NSNumber *> *expanded = [NSMutableArray array];
-    for (NSNumber *k in p.valueParamKinds) {
-      KKAnimatableParamKind kk = (KKAnimatableParamKind)k.integerValue;
-      NSUInteger n = 1;
-      switch (kk) {
-      case KKAnimatableParamKindColor:
-        n = 3;
-        break;
-      case KKAnimatableParamKindPoint:
-        n = 2;
-        break;
-      case KKAnimatableParamKindGradient:
-        n = 0;
-        break;
-      default:
-        n = 1;
-        break;
-      }
-      for (NSUInteger i = 0; i < n; i++)
-        [expanded addObject:k];
-    }
-    if (expanded.count)
-      laneCompKinds[p.label] = expanded;
-  }
-  seqView.laneKindsByLabel = laneKinds;
-  seqView.laneComponentKindsByLabel = laneCompKinds;
-  seqView.laneLabelsWithOSC = [self animatablePropertyLabelsWithOSC];
+  // Lane kind/OSC info now lives on each KKTimingLane (valueComponentKinds,
+  // hasOSC) — the sequencer view reads them directly.
   scrollView.documentView = seqView;
   [seqContainer addSubview:scrollView];
 
@@ -262,13 +222,12 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
 
 /// Reads persisted lanes; if none, seeds defaults from each property's
 /// current value and writes them back. Returns rebalanced lanes or nil.
-- (NSArray<KKTimingLane *> *)
-    _readOrSeedLanesForProps:(NSArray<KKAnimatableProperty *> *)seqProps
-                 paramGetAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI
-                      atTime:(CMTime)time {
+- (NSArray<KKTimingLane *> *)_readOrSeedLanesWithParamGetAPI:
+                                 (id<FxParameterRetrievalAPI_v6>)paramGetAPI
+                                                      atTime:(CMTime)time {
   NSArray<KKTimingLane *> *lanes =
       KKReadLanesRebalanced(self.apiManager, paramGetAPI);
-  if (lanes || seqProps.count == 0)
+  if (lanes)
     return lanes;
 
   // Real read failed. Prefer in-memory snapshot if we have one (re-mount
@@ -281,31 +240,7 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
   if (snapshot.count > 0)
     return snapshot;
 
-  return [self _buildDefaultLanesForProps:seqProps
-                              paramGetAPI:paramGetAPI
-                                   atTime:time];
-}
-
-- (NSArray<KKTimingLane *> *)
-    _buildDefaultLanesForProps:(NSArray<KKAnimatableProperty *> *)seqProps
-                   paramGetAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI
-                        atTime:(CMTime)time {
-  NSSet<NSString *> *oscOffByDefault =
-      [self animatablePropertyLabelsWithOSCDefaultOff];
-  NSMutableArray<KKTimingLane *> *defaults =
-      [NSMutableArray arrayWithCapacity:seqProps.count];
-  for (KKAnimatableProperty *prop in seqProps) {
-    NSArray<NSNumber *> *baseVals = [prop readValuesWithGetAPI:paramGetAPI
-                                                        atTime:time];
-    if (!baseVals.count)
-      baseVals = @[ @(1.0) ];
-    KKTimingLane *lane = [KKTimingLane defaultLaneForLabel:prop.label
-                                                baseValues:baseVals];
-    if ([oscOffByDefault containsObject:prop.label])
-      lane.oscVisible = NO;
-    [defaults addObject:lane];
-  }
-  return defaults;
+  return [self defaultLanesAtTime:time paramGetAPI:paramGetAPI];
 }
 
 - (void)_seedPlayheadForSeqView:(KKStageSequencerView *)seqView
@@ -332,21 +267,19 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
 }
 
 /// Seeds lane data (creating defaults if missing) and syncs the playhead.
-- (void)
-    _seedSequencerWithSeqContainer:(NSView *)seqContainer
-                           seqView:(KKStageSequencerView *)seqView
-                         rulerView:(KKStageSequencerRulerView *)rulerView
-                      playheadView:(KKStagePlayheadView *)playheadView
-                          seqProps:(NSArray<KKAnimatableProperty *> *)seqProps
-                       paramGetAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI
-                         actionAPI:
-                             (id<FxCustomParameterActionAPI_v4>)actionAPI {
+- (void)_seedSequencerWithSeqContainer:(NSView *)seqContainer
+                               seqView:(KKStageSequencerView *)seqView
+                             rulerView:(KKStageSequencerRulerView *)rulerView
+                          playheadView:(KKStagePlayheadView *)playheadView
+                           paramGetAPI:
+                               (id<FxParameterRetrievalAPI_v6>)paramGetAPI
+                             actionAPI:
+                                 (id<FxCustomParameterActionAPI_v4>)actionAPI {
   seqContainer.hidden = NO;
 
   NSArray<KKTimingLane *> *lanes =
-      [self _readOrSeedLanesForProps:seqProps
-                         paramGetAPI:paramGetAPI
-                              atTime:[actionAPI currentTime]];
+      [self _readOrSeedLanesWithParamGetAPI:paramGetAPI
+                                     atTime:[actionAPI currentTime]];
   if (lanes) {
     KKPluginInstanceState *instState = KKInstanceStateForAPI(self.apiManager);
     instState.lanesSnapshot = [lanes copy];
@@ -423,18 +356,24 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
 }
 
 - (NSView *)_createTimingGraphViewUncapped:(BOOL)uncapped {
-  NSArray<KKAnimatableProperty *> *seqProps = [self animatableProperties];
-  KKTimingGraphMetrics metrics =
-      KKTimingGraphMetricsCompute(uncapped, seqProps.count);
-
-  NSView *wrapper = [[NSView alloc]
-      initWithFrame:NSMakeRect(0, 0, 300, metrics.wrapperHeight)];
-  wrapper.autoresizingMask = NSViewWidthSizable;
-
   id<FxCustomParameterActionAPI_v4> actionAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  // Probe current lane count: use persisted lanes if available, otherwise
+  // ask the plugin for its default templates so metrics size correctly
+  // before the rest of the wiring runs.
+  NSArray<KKTimingLane *> *probeLanes =
+      KKReadLanesRebalanced(self.apiManager, paramGetAPI);
+  if (!probeLanes.count)
+    probeLanes = [self defaultLanesAtTime:[actionAPI currentTime]
+                              paramGetAPI:paramGetAPI];
+  KKTimingGraphMetrics metrics =
+      KKTimingGraphMetricsCompute(uncapped, probeLanes.count);
+
+  NSView *wrapper = [[NSView alloc]
+      initWithFrame:NSMakeRect(0, 0, 300, metrics.wrapperHeight)];
+  wrapper.autoresizingMask = NSViewWidthSizable;
 
   KKLaneVisibilityBar *visibilityBar = [[KKLaneVisibilityBar alloc] init];
   visibilityBar.translatesAutoresizingMaskIntoConstraints = NO;
@@ -463,7 +402,6 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
   [self _buildSeqScrollViewInContainer:seqContainer
                             underRuler:rulerView
                               uncapped:uncapped
-                              seqProps:seqProps
                             fullLanesH:metrics.fullLanesH
                             outSeqView:&seqView
                           outEmptyView:&emptyView];
@@ -497,7 +435,6 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
                                seqView:seqView
                              rulerView:rulerView
                           playheadView:playheadView
-                              seqProps:seqProps
                            paramGetAPI:paramGetAPI
                              actionAPI:actionAPI];
   [actionAPI endAction:self];

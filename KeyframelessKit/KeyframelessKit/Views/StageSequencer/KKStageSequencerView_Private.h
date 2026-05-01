@@ -7,11 +7,27 @@
 
 #import "../../Math/KKTimingStage.h"
 #import "../../Style/KKTokens.h"
-#import "../KKAnimatableProperty.h"
 #import "KKStageSequencerView.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
+typedef NS_ENUM(NSInteger, KKSequencerRowKind) {
+  KKSequencerRowKindLane = 0,
+  KKSequencerRowKindHeader = 1,
+};
+
+/// Row-plan entry used internally by `KKStageSequencerView`. Lane rows
+/// reference an index into `_lanes`; header rows carry the group's display
+/// state read from the first lane of the group.
+@interface KKSequencerRow : NSObject
+@property(nonatomic) KKSequencerRowKind kind;
+@property(nonatomic) NSInteger laneIndex;
+@property(nonatomic, copy, nullable) NSString *groupKey;
+@property(nonatomic, copy, nullable) NSString *groupLabel;
+@property(nonatomic) BOOL groupCollapsed;
+@end
+
+static const CGFloat kKSSGroupHeaderHeight __attribute__((unused)) = 22.0;
 static const CGFloat kKSSRulerHeight __attribute__((unused)) = 10.0;
 static const CGFloat kKSSPlayheadSnapPx __attribute__((unused)) = 10.0;
 static const CGFloat kKSSBoundaryLabelHeight __attribute__((unused)) = 10.0;
@@ -86,6 +102,14 @@ static const NSInteger kKSSCurveSegments __attribute__((unused)) = 40;
   // Snap guide state (set during an active drag when a boundary snaps).
   BOOL _snapActive;
   double _snapFrac;
+  // Row plan — one entry per visible row (header or lane). Rebuilt by
+  // `_rebuildRowPlan` whenever `_lanes` changes. When no lane carries a
+  // `groupKey`, this collapses to one lane row per lane and Y math matches
+  // the pre-group implementation.
+  NSArray<KKSequencerRow *> *_rowPlan;
+  // Maps each lane index in `_lanes` to its row index in `_rowPlan`, or
+  // -1 when the lane is hidden under a collapsed group.
+  NSArray<NSNumber *> *_planRowForLane;
 }
 
 - (void)_trackGeometryForWidth:(CGFloat)viewWidth
@@ -99,8 +123,19 @@ static const NSInteger kKSSCurveSegments __attribute__((unused)) = 40;
          trackWidth:(CGFloat)trackWidth;
 - (void)_clampPanOffset;
 - (CGFloat)_laneYForIndex:(NSUInteger)laneIdx totalHeight:(CGFloat)totalHeight;
+- (CGFloat)_rowYForPlanIndex:(NSUInteger)rowIdx
+                 totalHeight:(CGFloat)totalHeight;
 - (CGFloat)_laneHeight;
 - (CGFloat)_totalHeight;
+/// Returns the per-scalar kind array for `lane`, preferring the lane's own
+/// `valueComponentKinds` and falling back to the deprecated
+/// `laneComponentKindsByLabel` dict. May return nil when neither source
+/// has data.
+- (nullable NSArray<NSNumber *> *)_componentKindsForLane:(KKTimingLane *)lane;
+/// Returns the slot-level kind for `lane`, used for color/gradient
+/// detection. Prefers `lane.valueComponentKinds.firstObject`, falls back
+/// to `laneKindsByLabel[propertyLabel]`. May return nil.
+- (nullable NSNumber *)_slotKindForLane:(KKTimingLane *)lane;
 - (NSRect)_editButtonRectForLaneIndex:(NSUInteger)laneIdx
                          segmentIndex:(NSUInteger)segIdx
                                trackX:(CGFloat)trackX
@@ -111,6 +146,8 @@ static const NSInteger kKSSCurveSegments __attribute__((unused)) = 40;
 // +RenderingColorLanes, +RenderingOverlays. The orchestration entry point
 // `renderLanes` in +Rendering.m calls these on a per-lane basis.
 - (void)_renderLaneLabel:(KKTimingLane *)lane laneY:(CGFloat)laneY;
+- (void)_renderGroupHeaderRow:(KKSequencerRow *)row rowY:(CGFloat)rowY;
+- (NSRect)_groupHeaderRectForRowY:(CGFloat)rowY;
 - (void)_renderBoundaryLabelsForLane:(KKTimingLane *)lane
                            laneIndex:(NSUInteger)laneIdx
                               trackX:(CGFloat)trackX

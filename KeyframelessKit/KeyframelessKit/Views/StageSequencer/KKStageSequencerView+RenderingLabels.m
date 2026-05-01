@@ -10,6 +10,46 @@
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 @implementation KKStageSequencerView (RenderingLabels)
 
+- (NSRect)_groupHeaderRectForRowY:(CGFloat)rowY {
+  CGFloat totalWidth = NSWidth(self.bounds);
+  return NSMakeRect(kKSSBorderInset, rowY,
+                    MAX(0, totalWidth - 2 * kKSSBorderInset),
+                    kKSSGroupHeaderHeight);
+}
+
+- (void)_renderGroupHeaderRow:(KKSequencerRow *)row rowY:(CGFloat)rowY {
+  NSRect rect = [self _groupHeaderRectForRowY:rowY];
+  CGFloat triSize = 8.0;
+  CGFloat triLeft = NSMinX(rect) + KKPaddingSM;
+  CGFloat triCY = NSMidY(rect);
+
+  NSBezierPath *tri = [NSBezierPath bezierPath];
+  if (row.groupCollapsed) {
+    [tri moveToPoint:NSMakePoint(triLeft, triCY + triSize / 2.0)];
+    [tri lineToPoint:NSMakePoint(triLeft + triSize, triCY)];
+    [tri lineToPoint:NSMakePoint(triLeft, triCY - triSize / 2.0)];
+  } else {
+    [tri moveToPoint:NSMakePoint(triLeft, triCY + triSize / 2.0)];
+    [tri lineToPoint:NSMakePoint(triLeft + triSize, triCY + triSize / 2.0)];
+    [tri lineToPoint:NSMakePoint(triLeft + triSize / 2.0,
+                                 triCY - triSize / 2.0)];
+  }
+  [tri closePath];
+  [[[NSColor inspectorLabel] colorWithAlphaComponent:0.75] setFill];
+  [tri fill];
+
+  NSDictionary *attrs = @{
+    NSFontAttributeName : [NSFont systemFontOfSize:KKFontSizeSM
+                                            weight:NSFontWeightSemibold],
+    NSForegroundColorAttributeName : [NSColor inspectorLabel],
+  };
+  NSString *label = row.groupLabel ?: @"";
+  NSSize sz = [label sizeWithAttributes:attrs];
+  NSPoint pt = NSMakePoint(triLeft + triSize + KKPaddingSM,
+                           NSMidY(rect) - sz.height / 2.0);
+  [label drawAtPoint:pt withAttributes:attrs];
+}
+
 - (void)_renderLaneLabel:(KKTimingLane *)lane laneY:(CGFloat)laneY {
   NSColor *contentColor =
       lane.enabled ? [NSColor inspectorLabel]

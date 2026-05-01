@@ -42,7 +42,7 @@
   lane.segments = segs;
   lanes[jsonIdx] = lane;
 
-  KKWriteLanesJSON(lanes, setAPI, self.apiManager, [self _kindsByLaneLabel]);
+  KKWriteLanesJSON(lanes, setAPI, self.apiManager);
   [actAPI endAction:self];
   [self timingGraphApplyState];
 }
@@ -78,7 +78,7 @@
   lane.segments = segs;
   lanes[jsonIdx] = lane;
 
-  KKWriteLanesJSON(lanes, setAPI, self.apiManager, [self _kindsByLaneLabel]);
+  KKWriteLanesJSON(lanes, setAPI, self.apiManager);
   [actAPI endAction:self];
   [self timingGraphApplyState];
 }
@@ -127,7 +127,7 @@
   }
 
   if (anyChanged) {
-    KKApplyHTHNormalizationInPlace(lanes, [self _kindsByLaneLabel]);
+    KKApplyHTHNormalizationInPlace(lanes);
     NSString *updated = [KKTimingLane jsonFromLanes:lanes];
     if (updated)
       [setAPI setStringParameterValue:updated
@@ -191,7 +191,7 @@
   }
 
   if (anyChanged)
-    KKWriteLanesJSON(lanes, setAPI, self.apiManager, [self _kindsByLaneLabel]);
+    KKWriteLanesJSON(lanes, setAPI, self.apiManager);
   [actAPI endAction:self];
   if (anyChanged)
     [self timingGraphApplyState];

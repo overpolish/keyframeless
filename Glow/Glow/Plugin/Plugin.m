@@ -9,6 +9,11 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wprotocol"
 
+@interface GlowPlugin (AnimatableParamUpdate)
+- (void)_glowHandleAnimatableParameterChange:(UInt32)parameterID
+                                      atTime:(CMTime)time;
+@end
+
 @implementation GlowPlugin
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager;
@@ -46,7 +51,7 @@
 - (BOOL)parameterChanged:(UInt32)parameterID
                   atTime:(CMTime)time
                    error:(NSError **)error {
-  [self multiStageHandleParameterChanged:parameterID atTime:time];
+  [self _glowHandleAnimatableParameterChange:parameterID atTime:time];
   [self multiStageRefreshLaneVisibility];
   switch (parameterID) {
   case kKKParamColorMode:
@@ -67,6 +72,94 @@
     break;
   }
   return YES;
+}
+
+@end
+
+@implementation GlowPlugin (AnimatableParamUpdate)
+
+/// paramID → (lane label, current values) translator. Routes a slider /
+/// picker change into the corresponding lane's selected segment via
+/// `multiStageUpdateSelectedSegmentForLabel:values:` — replaces the
+/// `animatableProperties`-driven `multiStageHandleParameterChanged:` path.
+- (void)_glowHandleAnimatableParameterChange:(UInt32)parameterID
+                                      atTime:(CMTime)time {
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!getAPI)
+    return;
+
+  NSString *label = nil;
+  NSArray<NSNumber *> *values = nil;
+  switch (parameterID) {
+  case kParamRadiusX:
+  case kParamRadiusY: {
+    label = @"Radius";
+    double rx = 0, ry = 0;
+    [getAPI getFloatValue:&rx fromParameter:kParamRadiusX atTime:time];
+    [getAPI getFloatValue:&ry fromParameter:kParamRadiusY atTime:time];
+    values = @[ @(rx), @(ry) ];
+    break;
+  }
+  case kParamIntensity: {
+    label = @"Intensity";
+    double v = 0;
+    [getAPI getFloatValue:&v fromParameter:kParamIntensity atTime:time];
+    values = @[ @(v) ];
+    break;
+  }
+  case kParamFalloff: {
+    label = @"Falloff";
+    double v = 0;
+    [getAPI getFloatValue:&v fromParameter:kParamFalloff atTime:time];
+    values = @[ @(v) ];
+    break;
+  }
+  case kParamNoise: {
+    label = @"Noise";
+    double v = 0;
+    [getAPI getFloatValue:&v fromParameter:kParamNoise atTime:time];
+    values = @[ @(v) ];
+    break;
+  }
+  case kParamNoiseOffset: {
+    label = @"N. Offset";
+    double v = 0;
+    [getAPI getFloatValue:&v fromParameter:kParamNoiseOffset atTime:time];
+    values = @[ @(v) ];
+    break;
+  }
+  case kParamPosition: {
+    label = @"Position";
+    double x = 0, y = 0;
+    [getAPI getXValue:&x YValue:&y fromParameter:kParamPosition atTime:time];
+    values = @[ @(x), @(y) ];
+    break;
+  }
+  case kKKParamColorSolid: {
+    label = @"Color";
+    double r = 0, g = 0, b = 0;
+    [getAPI getRedValue:&r
+             greenValue:&g
+              blueValue:&b
+          fromParameter:kKKParamColorSolid
+                 atTime:time];
+    values = @[ @(r), @(g), @(b) ];
+    break;
+  }
+  case kKKParamGradientData: {
+    label = @"Gradient";
+    NSString *json = nil;
+    [getAPI getStringParameterValue:&json fromParameter:kKKParamGradientData];
+    NSArray<KKGradientStop *> *stops = KKGradientStopsFromJSON(json);
+    values = stops ? KKGradientFlatFromStops(stops) : @[];
+    break;
+  }
+  default:
+    return;
+  }
+  if (label.length && values.count)
+    [self multiStageUpdateSelectedSegmentForLabel:label values:values];
 }
 
 @end

@@ -281,6 +281,10 @@ NSArray<KKTimingLane *> *KKTimingRebalancedLanes(NSArray<KKTimingLane *> *lanes,
   c.oscVisible = _oscVisible;
   c.visibleInSequencer = _visibleInSequencer;
   c.lastKnownClipDuration = _lastKnownClipDuration;
+  c.groupKey = [_groupKey copy];
+  c.groupLabel = [_groupLabel copy];
+  c.groupCollapsed = _groupCollapsed;
+  c.valueComponentKinds = [_valueComponentKinds copy];
   return c;
 }
 

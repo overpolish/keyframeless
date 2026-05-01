@@ -5,7 +5,6 @@
 
 #import "../../Math/KKEasing.h"
 #import "../../Math/KKTimingStage.h"
-#import "../../Views/KKAnimatableProperty.h"
 #import "../../Views/KKSegmentEditView.h"
 #import "../../Views/StageSequencer/KKStageSequencerView.h"
 #import "../KKConstants.h"
@@ -45,7 +44,7 @@
   lane.segments = segs;
   lanes[laneIndex] = lane;
 
-  KKApplyHTHNormalizationInPlace(lanes, [self _kindsByLaneLabel]);
+  KKApplyHTHNormalizationInPlace(lanes);
   NSString *updated = [KKTimingLane jsonFromLanes:lanes];
   if (updated)
     [setAPI setStringParameterValue:updated toParameter:kKKParamMultiStageData];
@@ -90,7 +89,7 @@
     lane.segments = segs;
     lanes[li] = lane;
   }
-  KKApplyHTHNormalizationInPlace(lanes, [self _kindsByLaneLabel]);
+  KKApplyHTHNormalizationInPlace(lanes);
   NSString *updated = [KKTimingLane jsonFromLanes:lanes];
   if (updated)
     [setAPI setStringParameterValue:updated toParameter:kKKParamMultiStageData];
@@ -215,12 +214,23 @@
   // than one scalar component (e.g. Position, Radius X/Y).
   BOOL showsLinked = NO;
   if (kind == KKSegmentEditKindHold) {
-    for (KKAnimatableProperty *p in [self animatableProperties]) {
-      if ([p.label isEqualToString:lane.propertyLabel]) {
-        showsLinked = p.valueCount > 1;
+    NSUInteger expanded = 0;
+    for (NSNumber *k in lane.valueComponentKinds) {
+      switch ((KKAnimatableParamKind)k.integerValue) {
+      case KKAnimatableParamKindColor:
+        expanded += 3;
+        break;
+      case KKAnimatableParamKindPoint:
+        expanded += 2;
+        break;
+      case KKAnimatableParamKindGradient:
+        break;
+      default:
+        expanded += 1;
         break;
       }
     }
+    showsLinked = expanded > 1;
   }
 
   KKSegmentEditView *content =

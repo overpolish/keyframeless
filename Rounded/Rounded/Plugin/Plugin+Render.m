@@ -77,12 +77,41 @@
     }
     return NO;
   }
-  NSDictionary<NSString *, NSArray<NSNumber *> *> *multiStage =
-      [self multiStageValuesAtTime:renderTime];
+  // Read lanes JSON inline and evaluate per-lane via the public eval
+  // function — replaces the legacy `multiStageValuesAtTime:` pump path.
+  // Falls back to the inspector slider value when no enabled lane covers
+  // the property, so a fresh effect with no timing edits still renders.
+  NSString *lanesJSON = nil;
+  [paramGetAPI getStringParameterValue:&lanesJSON
+                         fromParameter:kKKParamMultiStageData];
+  NSArray<KKTimingLane *> *lanes =
+      lanesJSON.length ? [KKTimingLane lanesFromJSON:lanesJSON] : nil;
 
-  NSArray<NSNumber *> *msRadius = multiStage[@"Radius"];
-  if (msRadius.count > 0) {
-    outParams->radius = msRadius[0].doubleValue;
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
+  [timingAPI startTimeForEffect:&effectStart];
+  [timingAPI durationTimeForEffect:&effectDuration];
+  double durSec = CMTimeGetSeconds(effectDuration);
+  double frac = (durSec > 0)
+                    ? MAX(0.0, MIN(1.0, (CMTimeGetSeconds(renderTime) -
+                                         CMTimeGetSeconds(effectStart)) /
+                                            durSec))
+                    : 0.0;
+
+  NSArray<NSNumber *> *radiusVals = nil;
+  NSArray<NSNumber *> *cropVals = nil;
+  for (KKTimingLane *lane in lanes) {
+    if (!lane.enabled)
+      continue;
+    if (!radiusVals && [lane.propertyLabel isEqualToString:@"Radius"])
+      radiusVals = KKTimingLaneValueAtFraction(lane, frac);
+    else if (!cropVals && [lane.propertyLabel isEqualToString:@"Crop"])
+      cropVals = KKTimingLaneValueAtFraction(lane, frac);
+  }
+
+  if (radiusVals.count > 0) {
+    outParams->radius = radiusVals[0].doubleValue;
   } else {
     double radius = 20.0;
     [paramGetAPI getFloatValue:&radius
@@ -95,12 +124,11 @@
   outParams->cropBottom = 0.0;
   outParams->cropLeft = 0.0;
   outParams->cropRight = 0.0;
-  NSArray<NSNumber *> *msCrop = multiStage[@"Crop"];
-  if (msCrop.count >= 4) {
-    outParams->cropTop = msCrop[0].doubleValue;
-    outParams->cropBottom = msCrop[1].doubleValue;
-    outParams->cropLeft = msCrop[2].doubleValue;
-    outParams->cropRight = msCrop[3].doubleValue;
+  if (cropVals.count >= 4) {
+    outParams->cropTop = cropVals[0].doubleValue;
+    outParams->cropBottom = cropVals[1].doubleValue;
+    outParams->cropLeft = cropVals[2].doubleValue;
+    outParams->cropRight = cropVals[3].doubleValue;
   } else {
     [paramGetAPI getFloatValue:&outParams->cropTop
                  fromParameter:kParamCropTop
