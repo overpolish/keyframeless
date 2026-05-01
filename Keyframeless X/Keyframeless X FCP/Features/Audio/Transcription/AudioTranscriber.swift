@@ -46,6 +46,7 @@ actor AudioTranscriber {
 		case loadingModel = "Loading model"
 		case detectingLanguage = "Detecting language"
 		case transcribing = "Transcribing"
+		case refiningTerms = "Refining with terms"
 	}
 
 	struct Progress {
@@ -72,6 +73,9 @@ actor AudioTranscriber {
 	// FluidAudio Parakeet (Silicon)
 	private nonisolated(unsafe) var parakeetManager: AsrManager?
 	private var loadedParakeetVariant: String?
+	private nonisolated(unsafe) var parakeetRescorer: VocabularyRescorer?
+	private nonisolated(unsafe) var parakeetSpotter: CtcKeywordSpotter?
+	private nonisolated(unsafe) var parakeetVocabulary: CustomVocabularyContext?
 
 	func transcribe(
 		segments: [AudioPreparer.PreparedSegment],
@@ -96,7 +100,7 @@ actor AudioTranscriber {
 		case .parakeet:
 			return try await transcribeWithParakeet(
 				segments: segments, modelVariant: modelVariant,
-				language: language, onProgress: onProgress)
+				language: language, terms: terms, onProgress: onProgress)
 		case nil:
 			throw NSError(
 				domain: "AudioTranscriber", code: 3,
@@ -122,6 +126,9 @@ actor AudioTranscriber {
 		}
 		parakeetManager = nil
 		loadedParakeetVariant = nil
+		parakeetRescorer = nil
+		parakeetSpotter = nil
+		parakeetVocabulary = nil
 	}
 
 	// WhisperKit engine (Silicon)
@@ -310,6 +317,7 @@ actor AudioTranscriber {
 		segments: [AudioPreparer.PreparedSegment],
 		modelVariant: String,
 		language: String?,
+		terms: [String],
 		onProgress: @escaping @Sendable (Progress) -> Void
 	) async throws -> [ClipResult] {
 		onProgress(
@@ -342,15 +350,35 @@ actor AudioTranscriber {
 
 		let parakeetLanguage = language.flatMap { Language(rawValue: $0) }
 
+		try await ensureParakeetRescorer(terms: terms)
+
 		var allClipResults: [ClipResult] = []
 
+		let segmentCount = segments.count
 		for (i, segment) in segments.enumerated() {
 			try Task.checkCancellation()
 
 			onProgress(
 				Progress(
 					phase: .transcribing, completedSegments: i,
-					totalSegments: segments.count))
+					totalSegments: segmentCount))
+
+			let progressStream = await manager.transcriptionProgressStream
+			let progressTask = Task {
+				do {
+					for try await fraction in progressStream {
+						onProgress(
+							Progress(
+								phase: .transcribing,
+								completedSegments: i,
+								totalSegments: segmentCount,
+								segmentProgress: min(0.99, fraction)
+							)
+						)
+					}
+				} catch { /* stream ended or failed; ignore */  }
+			}
+			defer { progressTask.cancel() }
 
 			var decoderState = TdtDecoderState.make()
 			let result = try await manager.transcribe(
@@ -359,8 +387,23 @@ actor AudioTranscriber {
 				language: parakeetLanguage
 			)
 
+			if parakeetRescorer != nil {
+				onProgress(
+					Progress(
+						phase: .refiningTerms,
+						completedSegments: i,
+						totalSegments: segmentCount,
+						segmentProgress: 0.99
+					)
+				)
+			}
+			let rescoreOutput = try await rescoreParakeetResult(
+				result: result, audioURL: segment.tempFileURL)
+
 			let allWords = Self.wordsFromTokenTimings(result.tokenTimings ?? [])
-			let cleanedWords = Self.cleanParakeetWords(allWords, language: language)
+			let rescored = Self.applyRescoring(
+				to: allWords, replacements: rescoreOutput?.replacements ?? [])
+			let cleanedWords = Self.cleanParakeetWords(rescored, language: language)
 
 			print(
 				"[Transcriber] segment \(i): \(allWords.count) raw words, \(cleanedWords.count) cleaned, range \(segment.range.start)–\(segment.range.end)"
@@ -441,6 +484,95 @@ actor AudioTranscriber {
 		}
 		flush()
 		return words
+	}
+
+	private func ensureParakeetRescorer(terms: [String]) async throws {
+		guard !terms.isEmpty, AudioModelManager.ctcModelExists() else {
+			parakeetRescorer = nil
+			parakeetSpotter = nil
+			parakeetVocabulary = nil
+			return
+		}
+
+		let ctcCacheDir = CtcModels.defaultCacheDirectory(for: .ctc110m)
+		let ctcModels = try await CtcModels.load(from: ctcCacheDir, variant: .ctc110m)
+		let ctcTokenizer = try await CtcTokenizer.load(from: ctcCacheDir)
+
+		let tokenizedTerms: [CustomVocabularyTerm] = terms.compactMap { text in
+			let ids = ctcTokenizer.encode(text)
+			guard !ids.isEmpty else { return nil }
+			return CustomVocabularyTerm(
+				text: text, weight: 10.0, aliases: nil,
+				tokenIds: nil, ctcTokenIds: ids)
+		}
+		guard !tokenizedTerms.isEmpty else {
+			parakeetRescorer = nil
+			parakeetSpotter = nil
+			parakeetVocabulary = nil
+			return
+		}
+
+		let vocab = CustomVocabularyContext(terms: tokenizedTerms)
+		let blankId = ctcModels.vocabulary.count
+		let spotter = CtcKeywordSpotter(models: ctcModels, blankId: blankId)
+		let rescorer = try await VocabularyRescorer.create(
+			spotter: spotter, vocabulary: vocab, ctcModelDirectory: ctcCacheDir)
+
+		parakeetVocabulary = vocab
+		parakeetSpotter = spotter
+		parakeetRescorer = rescorer
+	}
+
+	private func rescoreParakeetResult(
+		result: ASRResult, audioURL: URL
+	) async throws -> VocabularyRescorer.RescoreOutput? {
+		guard let rescorer = parakeetRescorer,
+			let spotter = parakeetSpotter,
+			let vocab = parakeetVocabulary,
+			let tokenTimings = result.tokenTimings,
+			!tokenTimings.isEmpty
+		else { return nil }
+
+		let samples = try Self.loadAudioFrames(from: audioURL)
+		let spot = try await spotter.spotKeywordsWithLogProbs(
+			audioSamples: samples, customVocabulary: vocab)
+		guard !spot.logProbs.isEmpty else { return nil }
+
+		return rescorer.ctcTokenRescore(
+			transcript: result.text,
+			tokenTimings: tokenTimings,
+			logProbs: spot.logProbs,
+			frameDuration: spot.frameDuration
+		)
+	}
+
+	private static func applyRescoring(
+		to words: [ParakeetWord],
+		replacements: [VocabularyRescorer.RescoringResult]
+	) -> [ParakeetWord] {
+		guard !replacements.isEmpty else { return words }
+		var queue = replacements.compactMap { r -> (String, String)? in
+			guard r.shouldReplace, let replacement = r.replacementWord else { return nil }
+			return (normalizeForMatch(r.originalWord), replacement)
+		}
+		guard !queue.isEmpty else { return words }
+
+		var result: [ParakeetWord] = []
+		for word in words {
+			let key = normalizeForMatch(word.text)
+			if let idx = queue.firstIndex(where: { $0.0 == key }) {
+				let replacement = queue[idx].1
+				queue.remove(at: idx)
+				result.append(ParakeetWord(text: replacement, start: word.start, end: word.end))
+			} else {
+				result.append(word)
+			}
+		}
+		return result
+	}
+
+	private static func normalizeForMatch(_ s: String) -> String {
+		s.lowercased().filter { $0.isLetter || $0.isNumber }
 	}
 
 	private static func cleanParakeetWords(

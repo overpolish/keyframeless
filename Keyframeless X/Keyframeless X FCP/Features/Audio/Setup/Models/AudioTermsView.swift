@@ -126,7 +126,7 @@ struct AudioTermsView: View {
 			.frame(maxHeight: .infinity)
 			.kkPanel()
 			.overlay {
-				if manager.currentEngine == .parakeet {
+				if manager.currentEngine == .parakeet && !manager.hasCtcModel {
 					ParakeetTermsLockOverlay()
 				}
 			}
@@ -143,10 +143,12 @@ private struct ParakeetTermsLockOverlay: View {
 				Image(systemName: "lock.fill")
 					.font(.system(size: 16))
 					.foregroundStyle(.secondary)
-				Text("Parakeet doesn't support custom terms.")
-					.font(.system(size: 12, weight: .medium))
-					.foregroundStyle(.secondary)
-					.multilineTextAlignment(.center)
+				Text(
+					"Terms engine not installed."
+				)
+				.font(.system(size: 12, weight: .medium))
+				.foregroundStyle(.secondary)
+				.multilineTextAlignment(.center)
 			}
 			.padding(KKPaddingLG)
 		}

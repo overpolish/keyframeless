@@ -124,6 +124,7 @@ class AudioModelManager: ObservableObject {
 	@Published var downloadedModels: Set<String> = []
 	@Published var downloadingModel: String? = nil
 	@Published var downloadProgress: Double = 0
+	@Published var hasCtcModel: Bool = false
 	@Published var selectedModel: String? {
 		didSet {
 			AudioSetupSettings.shared.selectedModel = selectedModel
@@ -176,6 +177,7 @@ class AudioModelManager: ObservableObject {
 		for model in Self.models where isDownloaded(model.id) {
 			downloadedModels.insert(model.id)
 		}
+		hasCtcModel = Self.ctcModelExists()
 		let validModelIds = Set(Self.models.map(\.id))
 		if let current = selectedModel,
 			!validModelIds.contains(current) || !downloadedModels.contains(current)
@@ -183,6 +185,40 @@ class AudioModelManager: ObservableObject {
 			selectedModel = Self.models.first(where: { downloadedModels.contains($0.id) })?.id
 		} else if selectedModel == nil {
 			selectedModel = Self.models.first(where: { downloadedModels.contains($0.id) })?.id
+		}
+	}
+
+	private var hasAnyParakeetInstalled: Bool {
+		downloadedModels.contains(where: { Self.engine(for: $0) == .parakeet })
+	}
+
+	nonisolated static func ctcModelExists() -> Bool {
+		let dir = CtcModels.defaultCacheDirectory(for: .ctc110m)
+		// CtcModels has no public modelsExist helper; check the cache directory for files.
+		guard let contents = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else {
+			return false
+		}
+		return !contents.isEmpty
+	}
+
+	func retryDownloadCtcEngine(triggeredBy variant: String) async {
+		guard downloadingModel == nil else { return }
+		downloadingModel = variant
+		downloadProgress = 0
+		await downloadCtcEngineIfNeeded()
+		downloadingModel = nil
+	}
+
+	private func downloadCtcEngineIfNeeded() async {
+		if Self.ctcModelExists() {
+			hasCtcModel = true
+			return
+		}
+		do {
+			_ = try await CtcModels.download(variant: .ctc110m)
+			hasCtcModel = Self.ctcModelExists()
+		} catch {
+			print("[AudioModelManager] CTC engine download failed: \(error)")
 		}
 	}
 
@@ -284,13 +320,21 @@ class AudioModelManager: ObservableObject {
 			if selectedModel == nil { selectedModel = variant }
 		} catch {
 			print("[AudioModelManager] Parakeet download failed: \(error)")
+			return
 		}
+		await downloadCtcEngineIfNeeded()
 	}
 
 	private func uninstallParakeet(_ variant: String) {
 		guard let version = Self.parakeetVersion(for: variant) else { return }
 		let dir = AsrModels.defaultCacheDirectory(for: version)
 		try? FileManager.default.removeItem(at: dir)
+		downloadedModels.remove(variant)
+		if !hasAnyParakeetInstalled {
+			let ctcDir = CtcModels.defaultCacheDirectory(for: .ctc110m)
+			try? FileManager.default.removeItem(at: ctcDir)
+			hasCtcModel = false
+		}
 	}
 
 	// Intel — whisper.cpp (GGML)

@@ -21,24 +21,33 @@ struct AudioModelPickerView: View {
 			.frame(height: 20)
 
 			ScrollShadowView {
-				LazyVStack(alignment: .leading, spacing: KKSpacingXS) {
-					let groups = ModelGroup.grouped(AudioModelManager.models)
-					ForEach(Array(groups.enumerated()), id: \.element.title) { index, group in
-						if index > 0 {
-							ModelGroupHeader(title: group.title)
-								.padding(.top, KKSpacingMD)
-						} else {
-							ModelGroupHeader(title: group.title)
+				ScrollViewReader { proxy in
+					LazyVStack(alignment: .leading, spacing: KKSpacingXS) {
+						let groups = ModelGroup.grouped(AudioModelManager.models)
+						ForEach(Array(groups.enumerated()), id: \.element.title) { index, group in
+							if index > 0 {
+								ModelGroupHeader(title: group.title)
+									.padding(.top, KKSpacingMD)
+							} else {
+								ModelGroupHeader(title: group.title)
+							}
+							ForEach(group.models) { model in
+								AudioModelRow(model: model, manager: manager)
+									.id(model.id)
+							}
 						}
-						ForEach(group.models) { model in
-							AudioModelRow(model: model, manager: manager)
+						if !AudioModelManager.isAppleSilicon {
+							IntelModelNote()
 						}
 					}
-					if !AudioModelManager.isAppleSilicon {
-						IntelModelNote()
+					.padding(KKPaddingMD)
+					.onAppear {
+						guard let target = manager.selectedModel else { return }
+						DispatchQueue.main.async {
+							proxy.scrollTo(target, anchor: .center)
+						}
 					}
 				}
-				.padding(KKPaddingMD)
 			}
 			.kkPanel()
 			.frame(maxWidth: .infinity, minHeight: 200, maxHeight: .infinity)
@@ -104,6 +113,14 @@ private struct AudioModelRow: View {
 			if isDownloaded { manager.selectedModel = model.id }
 		}
 		.contextMenu {
+			if isDownloaded && model.engine == .parakeet && !manager.hasCtcModel {
+				Button {
+					Task { await manager.retryDownloadCtcEngine(triggeredBy: model.id) }
+				} label: {
+					Label("Download Terms Engine", systemImage: "arrow.down.circle")
+				}
+				.disabled(manager.downloadingModel != nil)
+			}
 			if isDownloaded {
 				Button(role: .destructive) {
 					manager.uninstall(model.id)
