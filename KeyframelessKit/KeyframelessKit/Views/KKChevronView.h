@@ -21,6 +21,10 @@ extern const CGFloat kChevronHeight;
 
 - (void)setExpanded:(BOOL)expanded animated:(BOOL)animated;
 
+/// Cached chevron image at a specific rotation. Used by the stage sequencer
+/// to render its group-header chevrons consistently with this view.
++ (NSImage *)chevronImageAtAngle:(CGFloat)angle color:(NSColor *)color;
+
 @end
 
 NS_ASSUME_NONNULL_END

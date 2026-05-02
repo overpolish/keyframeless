@@ -29,7 +29,10 @@
     KKSequencerRow *row = _rowPlan[rowIdx];
     CGFloat rowY = [self _rowYForPlanIndex:rowIdx totalHeight:totalHeight];
     if (row.kind == KKSequencerRowKindHeader) {
-      [self _renderGroupHeaderRow:row rowY:rowY];
+      [self _renderGroupHeaderRow:row
+                             rowY:rowY
+                           trackX:trackX
+                       trackWidth:trackWidth];
       continue;
     }
     NSUInteger laneIdx = (NSUInteger)row.laneIndex;

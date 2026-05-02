@@ -35,7 +35,7 @@ static const CGFloat kKSSEditButtonSize __attribute__((unused)) = 16.0;
 static const CGFloat kKSSEditMinSegmentPx __attribute__((unused)) = 30.0;
 static const CGFloat kKSSMinLaneHeight __attribute__((unused)) = 30.0;
 static const CGFloat kKSSLaneSpacing __attribute__((unused)) = KKSpacingXS;
-static const CGFloat kKSSLabelWidth __attribute__((unused)) = 84.0;
+static const CGFloat kKSSLabelWidth __attribute__((unused)) = 110.0;
 static const CGFloat kKSSLabelPadding __attribute__((unused)) = KKSpacingLG;
 static const CGFloat kKSSOSCIconSize __attribute__((unused)) = 12.0;
 static const CGFloat kKSSOSCIconGap __attribute__((unused)) = KKSpacingLG;
@@ -48,7 +48,7 @@ static const CGFloat kKSSMinSegmentSec __attribute__((unused)) = 0.1;
 static const CGFloat kKSSMinSegmentPx __attribute__((unused)) = 12.0;
 static const CGFloat kKSSSnapPx __attribute__((unused)) = 6.0;
 static const CGFloat kKSSDragThresholdPx __attribute__((unused)) = 4.0;
-static const NSInteger kKSSCurveSegments __attribute__((unused)) = 40;
+static const NSInteger kKSSCurveSegments __attribute__((unused)) = 160;
 
 @interface KKStageSequencerView () {
 @package
@@ -110,6 +110,11 @@ static const NSInteger kKSSCurveSegments __attribute__((unused)) = 40;
   // Maps each lane index in `_lanes` to its row index in `_rowPlan`, or
   // -1 when the lane is hidden under a collapsed group.
   NSArray<NSNumber *> *_planRowForLane;
+  // Per-groupKey chevron rotation (0/40/90 degrees) and animation token.
+  // Mirrors KKChevronView's two-frame snap so the inspector and sequencer
+  // group headers feel identical.
+  NSMutableDictionary<NSString *, NSNumber *> *_groupChevronRotation;
+  NSMutableDictionary<NSString *, NSNumber *> *_groupChevronAnimToken;
 }
 
 - (void)_trackGeometryForWidth:(CGFloat)viewWidth
@@ -146,7 +151,12 @@ static const NSInteger kKSSCurveSegments __attribute__((unused)) = 40;
 // +RenderingColorLanes, +RenderingOverlays. The orchestration entry point
 // `renderLanes` in +Rendering.m calls these on a per-lane basis.
 - (void)_renderLaneLabel:(KKTimingLane *)lane laneY:(CGFloat)laneY;
-- (void)_renderGroupHeaderRow:(KKSequencerRow *)row rowY:(CGFloat)rowY;
+- (void)_renderGroupHeaderRow:(KKSequencerRow *)row
+                         rowY:(CGFloat)rowY
+                       trackX:(CGFloat)trackX
+                   trackWidth:(CGFloat)trackWidth;
+- (void)_animateGroupChevronForKey:(NSString *)groupKey
+                         collapsed:(BOOL)collapsed;
 - (NSRect)_groupHeaderRectForRowY:(CGFloat)rowY;
 - (void)_renderBoundaryLabelsForLane:(KKTimingLane *)lane
                            laneIndex:(NSUInteger)laneIdx

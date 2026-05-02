@@ -24,6 +24,9 @@
     KKTimingLane *lane = self.lanes[laneIdx];
     if (!lane.enabled)
       continue;
+    if (laneIdx < _planRowForLane.count &&
+        _planRowForLane[laneIdx].integerValue < 0)
+      continue; // lane sits inside a collapsed group — no hit area
     CGFloat laneY = [self _laneYForIndex:laneIdx totalHeight:totalHeight];
     if (loc.y < laneY || loc.y > laneY + [self _laneHeight])
       continue;
@@ -155,6 +158,8 @@
     KKTimingLane *l = self.lanes[li];
     if (!l.enabled)
       continue;
+    if (li < _planRowForLane.count && _planRowForLane[li].integerValue < 0)
+      continue; // lane sits inside a collapsed group — no hit area
     CGFloat ly = [self _laneYForIndex:li totalHeight:totalHeight];
     if (loc.y < ly || loc.y > ly + [self _laneHeight])
       continue;

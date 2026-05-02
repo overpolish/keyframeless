@@ -125,6 +125,9 @@
   }
 
   [self handleLinkedParameterChanged:parameterID atTime:time];
+  [self updateMotionBlurParameterVisibility];
+
+  [self kkPushParamToLane:parameterID];
 
   return YES;
 }

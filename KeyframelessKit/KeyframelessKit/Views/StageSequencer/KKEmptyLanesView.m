@@ -6,50 +6,65 @@
 #import "KKEmptyLanesView.h"
 #import "../../Style/NSColor+KKColors.h"
 
-@implementation KKEmptyLanesView
+@implementation KKEmptyLanesView {
+  NSImageView *_iconView;
+  NSTextField *_label;
+  NSString *_currentText;
+  NSString *_currentIconName;
+}
 
 - (instancetype)init {
   self = [super initWithFrame:NSZeroRect];
   if (self) {
     self.translatesAutoresizingMaskIntoConstraints = NO;
-    // Opaque fill matches the scroll view's background so hidden lanes
-    // beneath are completely covered.
     self.wantsLayer = YES;
     self.layer.backgroundColor =
         [NSColor colorWithWhite:0.15 alpha:1.0].CGColor;
 
-    NSImage *icon =
-        [NSImage imageWithSystemSymbolName:@"rectangle.on.rectangle.slash"
-                  accessibilityDescription:nil];
-    NSImageView *iconView = [NSImageView imageViewWithImage:icon];
-    iconView.symbolConfiguration = [NSImageSymbolConfiguration
+    _iconView = [[NSImageView alloc] initWithFrame:NSZeroRect];
+    _iconView.symbolConfiguration = [NSImageSymbolConfiguration
         configurationWithPointSize:11.0
                             weight:NSFontWeightMedium];
-    iconView.contentTintColor =
+    _iconView.contentTintColor =
         [[NSColor inspectorLabel] colorWithAlphaComponent:0.45];
 
-    NSTextField *label = [NSTextField labelWithString:@"All lanes hidden"];
-    label.font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightMedium];
-    label.textColor = [[NSColor inspectorLabel] colorWithAlphaComponent:0.45];
-    label.backgroundColor = [NSColor clearColor];
-    label.bordered = NO;
-    label.editable = NO;
+    _label = [NSTextField labelWithString:@""];
+    _label.font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightMedium];
+    _label.textColor = [[NSColor inspectorLabel] colorWithAlphaComponent:0.45];
+    _label.backgroundColor = [NSColor clearColor];
+    _label.bordered = NO;
+    _label.editable = NO;
 
     NSStackView *row = [[NSStackView alloc] initWithFrame:NSZeroRect];
     row.translatesAutoresizingMaskIntoConstraints = NO;
     row.orientation = NSUserInterfaceLayoutOrientationHorizontal;
     row.alignment = NSLayoutAttributeCenterY;
     row.spacing = 6.0;
-    [row addArrangedSubview:iconView];
-    [row addArrangedSubview:label];
+    [row addArrangedSubview:_iconView];
+    [row addArrangedSubview:_label];
     [self addSubview:row];
 
     [NSLayoutConstraint activateConstraints:@[
       [row.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
       [row.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
     ]];
+
+    [self setText:@"All lanes hidden" iconName:@"rectangle.on.rectangle.slash"];
   }
   return self;
+}
+
+- (void)setText:(NSString *)text iconName:(NSString *)iconName {
+  if ([_currentText isEqualToString:text ?: @""] &&
+      [_currentIconName isEqualToString:iconName ?: @""])
+    return;
+  _currentText = [text copy] ?: @"";
+  _currentIconName = [iconName copy] ?: @"";
+  _label.stringValue = _currentText;
+  _iconView.image = iconName.length
+                        ? [NSImage imageWithSystemSymbolName:iconName
+                                    accessibilityDescription:nil]
+                        : nil;
 }
 
 @end

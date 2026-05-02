@@ -109,7 +109,7 @@
 
   BOOL anyChanged = NO;
   for (NSUInteger li = 0; li < lanes.count; li++) {
-    if (!lanes[li].visibleInSequencer ||
+    if (!lanes[li].effectivelyVisibleInSequencer ||
         [pluginHidden containsObject:lanes[li].propertyLabel])
       continue;
     KKTimingLane *lane = [lanes[li] copy];
@@ -243,7 +243,7 @@
 
   BOOL anyChanged = NO;
   for (NSUInteger li = 0; li < lanes.count; li++) {
-    if (!lanes[li].visibleInSequencer ||
+    if (!lanes[li].effectivelyVisibleInSequencer ||
         [pluginHidden containsObject:lanes[li].propertyLabel])
       continue;
     KKTimingLane *lane = [lanes[li] copy];

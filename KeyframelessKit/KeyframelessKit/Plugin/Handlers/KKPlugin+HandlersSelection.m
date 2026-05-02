@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "../../KKLog.h"
 #import "../../Views/StageSequencer/KKStageSequencerView.h"
 #import "../KKPlugin+Color.h"
 #import "../KKPluginInstanceState.h"
@@ -45,7 +46,9 @@
   // segment via the plugin's `currentValuesForLaneLabel:` hook.
   NSInteger prevSeg = lane.selectedSegment;
   NSArray<NSNumber *> *curVals =
-      [self currentValuesForLaneLabel:lane.propertyLabel atTime:ct];
+      [self currentValuesForLaneLabel:lane.propertyLabel
+                             groupKey:lane.groupKey
+                               atTime:ct];
   if (curVals.count && prevSeg >= 0 &&
       (NSUInteger)prevSeg < lane.segments.count) {
     KKTimingLane *mLane = [lane copy];
@@ -73,6 +76,7 @@
   if (segmentIndex >= 0 && (NSUInteger)segmentIndex < lane.segments.count) {
     [self applyLaneValues:lane.segments[segmentIndex].values
                  forLabel:lane.propertyLabel
+                 groupKey:lane.groupKey
                    atTime:ct];
   }
   [self _applyHTHParameterFlagsForLanes:lanes];
@@ -109,7 +113,7 @@
   NSMutableArray<NSNumber *> *newSegPerLane = [NSMutableArray array];
   for (NSUInteger li = 0; li < lanes.count; li++) {
     KKTimingLane *lane = lanes[li];
-    if (!lane.visibleInSequencer ||
+    if (!lane.effectivelyVisibleInSequencer ||
         [pluginHidden containsObject:lane.propertyLabel]) {
       [newSegPerLane addObject:@(-1)];
       continue;
@@ -130,7 +134,9 @@
 
     NSInteger prevSeg = lane.selectedSegment;
     NSArray<NSNumber *> *curVals =
-        [self currentValuesForLaneLabel:lane.propertyLabel atTime:ct];
+        [self currentValuesForLaneLabel:lane.propertyLabel
+                               groupKey:lane.groupKey
+                                 atTime:ct];
     if (curVals.count && prevSeg >= 0 && (NSUInteger)prevSeg < mSegs.count) {
       KKTimingSegment *mSeg = [mSegs[prevSeg] copy];
       mSeg.values = curVals;
@@ -153,6 +159,7 @@
       continue;
     [self applyLaneValues:lane.segments[newIdx].values
                  forLabel:lane.propertyLabel
+                 groupKey:lane.groupKey
                    atTime:ct];
   }
 
@@ -209,6 +216,7 @@
       state.selectionInProgress = YES;
     [self applyLaneValues:lane.segments[lane.selectedSegment].values
                  forLabel:lane.propertyLabel
+                 groupKey:lane.groupKey
                    atTime:ct];
     if (state) {
       state.lanesSnapshot = [mutable copy];
@@ -236,35 +244,60 @@
     [actAPI endAction:self];
     return;
   }
-  // Pill bar shows lanes filtered only by the plugin (system) hidden set —
-  // not by user-hidden — so translate via that same set.
+  // Pills are deduped by propertyLabel — a single pill controls every lane
+  // sharing that label (e.g. Canvas: one "Stroke Width" pill toggles every
+  // layer's stroke-width lane). Translate the pill index back to its label
+  // and operate on every matching lane.
   NSSet<NSString *> *pluginHiddenForIndex =
       [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
-  laneIndex =
-      KKLaneJSONIndexForViewIndex(laneIndex, lanes, pluginHiddenForIndex);
-  if (laneIndex < 0 || (NSUInteger)laneIndex >= lanes.count) {
+  NSString *clickedLabel =
+      KKLabelForPillIndex(laneIndex, lanes, pluginHiddenForIndex);
+  if (clickedLabel.length == 0) {
     [actAPI endAction:self];
     return;
   }
 
-  // Solo logic: option-click on a lane that's already the only-visible one
-  // unsolos (all visible). Otherwise option-click solos the clicked lane.
-  // Plain click toggles the clicked lane.
-  BOOL clickedCurrentlyVisible = lanes[laneIndex].visibleInSequencer;
-  NSInteger visibleCount = 0;
-  for (KKTimingLane *lane in lanes)
+  // For the visibility check, treat a pill as visible iff every matching
+  // lane is visible. Solo unsolos when this is the only currently-visible
+  // pill.
+  BOOL clickedCurrentlyVisible = YES;
+  for (KKTimingLane *lane in lanes) {
+    if (!lane.pluginVisible)
+      continue;
+    if ([lane.propertyLabel isEqualToString:clickedLabel] &&
+        !lane.visibleInSequencer) {
+      clickedCurrentlyVisible = NO;
+      break;
+    }
+  }
+  NSMutableSet<NSString *> *visibleLabels = [NSMutableSet set];
+  NSMutableSet<NSString *> *hiddenLabels = [NSMutableSet set];
+  for (KKTimingLane *lane in lanes) {
+    if (!lane.pluginVisible)
+      continue;
+    NSString *l = lane.propertyLabel ?: @"";
+    if ([pluginHiddenForIndex containsObject:l])
+      continue;
     if (lane.visibleInSequencer)
-      visibleCount++;
-  BOOL clickedIsOnlyVisible = clickedCurrentlyVisible && visibleCount == 1;
+      [visibleLabels addObject:l];
+    else
+      [hiddenLabels addObject:l];
+  }
+  // A label counts as visible for the pill bar only when *every* lane with
+  // that label is visible.
+  [visibleLabels minusSet:hiddenLabels];
+  BOOL clickedIsOnlyVisible =
+      clickedCurrentlyVisible && visibleLabels.count == 1;
 
   for (NSUInteger i = 0; i < lanes.count; i++) {
     KKTimingLane *lane = [lanes[i] copy];
+    NSString *l = lane.propertyLabel ?: @"";
+    BOOL matches = [l isEqualToString:clickedLabel];
     BOOL want;
     if (optionDown) {
-      want = clickedIsOnlyVisible ? YES : ((NSInteger)i == laneIndex);
+      want = clickedIsOnlyVisible ? YES : matches;
     } else {
-      want = ((NSInteger)i == laneIndex) ? !clickedCurrentlyVisible
-                                         : lane.visibleInSequencer;
+      want = matches ? !clickedCurrentlyVisible : lane.visibleInSequencer;
     }
     lane.visibleInSequencer = want;
     lanes[i] = lane;
@@ -291,10 +324,10 @@
         r.seqView.lanes = visible;
     });
     KKPushLanesToVisibilityBar(state.visibilityBar, lanes, pluginHidden);
-    KKApplyEmptyLanesVisibility(state.emptyLanesView, lanes);
+    KKApplyEmptyLanesVisibility(state.emptyLanesView, lanes, self);
     for (KKTimingViewRefs *r in extras) {
       KKPushLanesToVisibilityBar(r.visibilityBar, lanes, pluginHidden);
-      KKApplyEmptyLanesVisibility(r.emptyLanesView, lanes);
+      KKApplyEmptyLanesVisibility(r.emptyLanesView, lanes, self);
     }
   }
 
@@ -319,19 +352,27 @@
   }
   NSSet<NSString *> *pluginHiddenForIndex =
       [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
-  laneIndex =
-      KKLaneJSONIndexForViewIndex(laneIndex, lanes, pluginHiddenForIndex);
-  if (laneIndex < 0 || (NSUInteger)laneIndex >= lanes.count) {
+  NSString *targetLabel =
+      KKLabelForPillIndex(laneIndex, lanes, pluginHiddenForIndex);
+  if (targetLabel.length == 0) {
     [actAPI endAction:self];
     return;
   }
-  if (lanes[laneIndex].visibleInSequencer == visible) {
+  BOOL changed = NO;
+  for (NSUInteger i = 0; i < lanes.count; i++) {
+    KKTimingLane *l = lanes[i];
+    if (![l.propertyLabel isEqualToString:targetLabel] ||
+        l.visibleInSequencer == visible)
+      continue;
+    KKTimingLane *m = [l copy];
+    m.visibleInSequencer = visible;
+    lanes[i] = m;
+    changed = YES;
+  }
+  if (!changed) {
     [actAPI endAction:self];
     return;
   }
-  KKTimingLane *lane = [lanes[laneIndex] copy];
-  lane.visibleInSequencer = visible;
-  lanes[laneIndex] = lane;
 
   KKWriteLanesJSON(lanes, setAPI, self.apiManager);
 
@@ -354,13 +395,49 @@
         r.seqView.lanes = visibleLanes;
     });
     KKPushLanesToVisibilityBar(state.visibilityBar, lanes, pluginHidden);
-    KKApplyEmptyLanesVisibility(state.emptyLanesView, lanes);
+    KKApplyEmptyLanesVisibility(state.emptyLanesView, lanes, self);
     for (KKTimingViewRefs *r in extras) {
       KKPushLanesToVisibilityBar(r.visibilityBar, lanes, pluginHidden);
-      KKApplyEmptyLanesVisibility(r.emptyLanesView, lanes);
+      KKApplyEmptyLanesVisibility(r.emptyLanesView, lanes, self);
     }
   }
 
+  [actAPI endAction:self];
+  [self timingGraphApplyState];
+}
+
+- (void)_handleGroupCollapseToggledForKey:(NSString *)groupKey
+                                collapsed:(BOOL)collapsed {
+  if (groupKey.length == 0)
+    return;
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  NSMutableArray<KKTimingLane *> *lanes =
+      KKReadLanesRebalanced(self.apiManager, getAPI);
+  if (lanes) {
+    BOOL changed = NO;
+    for (NSUInteger i = 0; i < lanes.count; i++) {
+      KKTimingLane *l = lanes[i];
+      if ([l.groupKey isEqualToString:groupKey] &&
+          l.groupCollapsed != collapsed) {
+        KKTimingLane *m = [l copy];
+        m.groupCollapsed = collapsed;
+        lanes[i] = m;
+        changed = YES;
+      }
+    }
+    if (changed) {
+      KKWriteLanesJSON(lanes, setAPI, self.apiManager);
+      if (state)
+        state.lanesSnapshot = [lanes copy];
+    }
+  }
   [actAPI endAction:self];
   [self timingGraphApplyState];
 }
@@ -524,7 +601,10 @@
   if (dstSegmentIndex == lane.selectedSegment) {
     if (state)
       state.selectionInProgress = YES;
-    if ([self applyLaneValues:newVals forLabel:lane.propertyLabel atTime:ct] &&
+    if ([self applyLaneValues:newVals
+                     forLabel:lane.propertyLabel
+                     groupKey:lane.groupKey
+                       atTime:ct] &&
         state) {
       state.lanesSnapshot = [lanes copy];
       state.pendingLanes = nil;

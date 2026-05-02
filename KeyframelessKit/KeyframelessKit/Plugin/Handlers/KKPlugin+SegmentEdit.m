@@ -4,6 +4,7 @@
  */
 
 #import "../../Math/KKEasing.h"
+#import "../../Math/KKTimingEvaluation.h"
 #import "../../Math/KKTimingStage.h"
 #import "../../Views/KKSegmentEditView.h"
 #import "../../Views/StageSequencer/KKStageSequencerView.h"

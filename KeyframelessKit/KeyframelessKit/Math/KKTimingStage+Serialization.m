@@ -26,6 +26,7 @@ static NSString *const kKeyEnabled = @"on";
 static NSString *const kKeySelectedSeg = @"sel";
 static NSString *const kKeyOscVisible = @"osc";
 static NSString *const kKeyVisibleInSeq = @"vis";
+static NSString *const kKeyPluginVisible = @"pvis";
 static NSString *const kKeyLastKnownDur = @"lkd";
 static NSString *const kKeyGroupKey = @"gk";
 static NSString *const kKeyGroupLabel = @"glab";
@@ -109,6 +110,7 @@ static const NSInteger kCurrentVersion = 3;
       kKeyOscVisible : @(lane.oscVisible),
       @"hasOsc" : @(lane.hasOSC),
       kKeyVisibleInSeq : @(lane.visibleInSequencer),
+      kKeyPluginVisible : @(lane.pluginVisible),
       kKeyLastKnownDur : @(lane.lastKnownClipDuration),
       kKeySegments : segsArray,
     } mutableCopy];
@@ -182,6 +184,8 @@ static const NSInteger kCurrentVersion = 3;
       lane.hasOSC = hasOscNum.boolValue;
     NSNumber *visNum = laneDict[kKeyVisibleInSeq];
     lane.visibleInSequencer = visNum ? visNum.boolValue : YES;
+    NSNumber *pvisNum = laneDict[kKeyPluginVisible];
+    lane.pluginVisible = pvisNum ? pvisNum.boolValue : YES;
     lane.lastKnownClipDuration = [laneDict[kKeyLastKnownDur] doubleValue];
     NSString *gkRaw = laneDict[kKeyGroupKey];
     if ([gkRaw isKindOfClass:[NSString class]])

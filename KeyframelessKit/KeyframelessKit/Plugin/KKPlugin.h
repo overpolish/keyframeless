@@ -266,25 +266,33 @@ NS_ASSUME_NONNULL_BEGIN
 /// state for Canvas, etc). Used by the segment-select handler to write back
 /// any in-flight inspector edits into the previously selected segment
 /// before switching. Returns nil when the label is unknown.
-- (nullable NSArray<NSNumber *> *)currentValuesForLaneLabel:(NSString *)label
-                                                     atTime:(CMTime)time;
+/// `groupKey` is the lane's `groupKey` (Canvas: layer UUID) or nil for
+/// flat plugins where the propertyLabel uniquely identifies the lane.
+- (nullable NSArray<NSNumber *> *)
+    currentValuesForLaneLabel:(NSString *)label
+                     groupKey:(nullable NSString *)groupKey
+                       atTime:(CMTime)time;
 
 /// Disables (or re-enables) inspector editing for the lane's underlying
 /// params. Called when a lane's selected segment is an HTH transition
 /// (whose values are derived from the surrounding holds, so editing them
 /// would be a no-op). Plugins toggle `kFxParameterFlag_DISABLED` on each
 /// underlying paramID; Canvas-style plugins with no per-lane FxPlug params
-/// can no-op.
-- (void)setEditingDisabled:(BOOL)disabled forLaneLabel:(NSString *)label;
+/// can no-op. `groupKey` disambiguates lanes sharing a propertyLabel.
+- (void)setEditingDisabled:(BOOL)disabled
+              forLaneLabel:(NSString *)label
+                  groupKey:(nullable NSString *)groupKey;
 
 /// Pushes lane values back into the plugin's source of truth so the
 /// inspector reflects the newly selected segment (and downstream non-FxPlug
 /// UI like the gradient control stays in sync). Plugins are responsible
 /// for clearing any DISABLED flags they had set on involved params, since
 /// FxPlug silently drops writes to disabled params. Returns YES if the
-/// label was recognized.
+/// label was recognized. `groupKey` disambiguates lanes sharing a
+/// propertyLabel.
 - (BOOL)applyLaneValues:(NSArray<NSNumber *> *)values
                forLabel:(NSString *)label
+               groupKey:(nullable NSString *)groupKey
                  atTime:(CMTime)time;
 
 /// Override to return the seed lanes used when no persisted JSON exists.
@@ -294,6 +302,18 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable NSArray<KKTimingLane *> *)
     defaultLanesAtTime:(CMTime)time
            paramGetAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI;
+
+/// Override for plugins whose lane set tracks an external source (Canvas:
+/// the layer list). Receives the lanes just read from JSON and returns a
+/// reconciled array — typically by matching existing lanes against the
+/// current source items via `groupKey`, updating labels, dropping stale
+/// entries, and seeding lanes for new items. Default returns `existing`
+/// unchanged. The framework persists the new array when it differs from
+/// the input.
+- (nullable NSArray<KKTimingLane *> *)
+    reconcileLanes:(NSArray<KKTimingLane *> *)existing
+            atTime:(CMTime)time
+       paramGetAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI;
 
 /// Override to return YES when the plugin registers motion blur params
 /// via `addMotionBlurParametersWithAPI:`. Default NO. Used to auto-include
@@ -319,6 +339,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// rings revealed by holding Opt) and shouldn't appear by default. Returns an
 /// empty set by default.
 - (NSSet<NSString *> *)animatablePropertyLabelsWithOSCDefaultOff;
+
+/// Override to supply the empty-state message shown when the sequencer has
+/// zero lanes (e.g. Canvas with no layers). Return nil (default) to leave
+/// the empty view hidden in that case.
+- (nullable NSString *)emptyLanesMessageWhenNoLanes;
+
+/// SF Symbol name paired with `emptyLanesMessageWhenNoLanes`. Default
+/// `rectangle.on.rectangle.slash` matches the "all lanes hidden" state.
+- (NSString *)emptyLanesIconNameWhenNoLanes;
 
 /// Reads the bool at forceShowParamID; if YES, sets every param in paramIDs
 /// to kFxParameterFlag_DEFAULT and returns YES.  Caller should early-return

@@ -267,6 +267,18 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
             }
           }
         }
+        if (ver >= 17 && data.length >= hdr + 2) {
+          uint16_t lidLen;
+          memcpy(&lidLen, bytes + hdr, 2);
+          hdr += 2;
+          if (lidLen > 0 && data.length >= hdr + lidLen) {
+            path->_layerID =
+                [[NSString alloc] initWithBytes:bytes + hdr
+                                         length:lidLen
+                                       encoding:NSUTF8StringEncoding];
+            hdr += lidLen;
+          }
+        }
       }
     }
   }
@@ -338,7 +350,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   // v11: + endWidth (1 float).
   // v12: + contour starts (2-byte count + N × uint32 indices).
   uint8_t propMarker = 0xAA;
-  uint8_t propVersion = 16;
+  uint8_t propVersion = 17;
   [data appendBytes:&propMarker length:1];
   [data appendBytes:&propVersion length:1];
   float strokeData[4] = {_strokeWidth, _strokeR, _strokeG, _strokeB};
@@ -409,6 +421,12 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   [data appendBytes:&fgLen length:2];
   if (fgLen > 0)
     [data appendData:fgData];
+  // v17: layerID (length-prefixed UTF-8 UUID).
+  NSData *lidData = [_layerID dataUsingEncoding:NSUTF8StringEncoding];
+  uint16_t lidLen = (uint16_t)lidData.length;
+  [data appendBytes:&lidLen length:2];
+  if (lidLen > 0)
+    [data appendData:lidData];
   return data;
 }
 
@@ -463,6 +481,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
 - (instancetype)init {
   self = [super init];
   if (self) {
+    _layerID = [[NSUUID UUID] UUIDString];
     _points = NULL;
     _count = 0;
     _capacity = 0;

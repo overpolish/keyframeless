@@ -158,8 +158,12 @@
     if (row.kind == KKSequencerRowKindHeader) {
       NSRect headerRect = [self _groupHeaderRectForRowY:rowY];
       if (NSPointInRect(loc, headerRect)) {
-        if (self.onGroupCollapseToggled && row.groupKey)
-          self.onGroupCollapseToggled(row.groupKey, !row.groupCollapsed);
+        if (row.groupKey) {
+          [self _animateGroupChevronForKey:row.groupKey
+                                 collapsed:!row.groupCollapsed];
+          if (self.onGroupCollapseToggled)
+            self.onGroupCollapseToggled(row.groupKey, !row.groupCollapsed);
+        }
         return;
       }
       continue;

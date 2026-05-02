@@ -18,6 +18,7 @@
 }
 
 - (NSArray<NSNumber *> *)currentValuesForLaneLabel:(NSString *)label
+                                          groupKey:(NSString *)groupKey
                                             atTime:(CMTime)time {
   id<FxParameterRetrievalAPI_v6> getAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
@@ -41,6 +42,7 @@
 
 - (BOOL)applyLaneValues:(NSArray<NSNumber *> *)values
                forLabel:(NSString *)label
+               groupKey:(NSString *)groupKey
                  atTime:(CMTime)time {
   id<FxParameterSettingAPI_v5> setAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
@@ -90,7 +92,9 @@
   }
 }
 
-- (void)setEditingDisabled:(BOOL)disabled forLaneLabel:(NSString *)label {
+- (void)setEditingDisabled:(BOOL)disabled
+              forLaneLabel:(NSString *)label
+                  groupKey:(NSString *)groupKey {
   id<FxParameterRetrievalAPI_v6> getAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   id<FxParameterSettingAPI_v5> setAPI =

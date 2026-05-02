@@ -90,6 +90,10 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
 }
 
 - (void)drawRect:(NSRect)dirtyRect {
+  // Reject NaN/inf — comparisons against NaN are false, so the range guard
+  // alone leaks bad fractions through to NSBezierPath which then throws.
+  if (!isfinite(_playheadFraction) || !isfinite(_panOffset) || !isfinite(_zoom))
+    return;
   if (_playheadFraction < 0 || _playheadFraction > 1)
     return;
   CGFloat viewW = NSWidth(self.bounds);
@@ -101,6 +105,8 @@ static void _drawPlayheadKnob(CGFloat cx, CGFloat topY, NSColor *color) {
     return;
 
   CGFloat x = trackX + (_playheadFraction - _panOffset) * _zoom * trackW;
+  if (!isfinite(x))
+    return;
   if (x < trackX - 0.5 || x > trackX + trackW + 0.5)
     return;
 

@@ -96,6 +96,7 @@
 				"/Localized: Plugin/Localizable.strings",
 				Plugin/Core/KKParamSync.m,
 				Plugin/Core/Plugin.m,
+				"Plugin/Core/Plugin+Timing.m",
 				"Plugin/Core/Plugin+CustomUI.m",
 				"Plugin/Core/Plugin+Parameters.m",
 				"Plugin/Core/Plugin+Render.m",

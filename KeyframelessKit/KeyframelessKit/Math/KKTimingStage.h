@@ -127,6 +127,13 @@ typedef NS_ENUM(NSInteger, KKAnimatableParamKind) {
 /// bulk operations. Does not affect render-time evaluation. Persisted in
 /// JSON. Defaults to YES.
 @property(nonatomic) BOOL visibleInSequencer;
+/// Plugin-side structural filter: whether the source object backing this
+/// lane currently exposes the property at all (e.g. Canvas hides a layer's
+/// "Stroke Width" lane when the layer's stroke is disabled, while keeping
+/// the lane data in JSON so values restore on re-enable). Independent of
+/// the user's pill toggle (`visibleInSequencer`); a lane is shown only when
+/// both are YES. Persisted in JSON. Defaults to YES.
+@property(nonatomic) BOOL pluginVisible;
 /// Clip duration (seconds) this lane's segment fractions were last authored
 /// against. Used to decide when locked segments need rebalancing. Zero means
 /// "not yet established" — the next read initialises it to the current clip
@@ -165,6 +172,10 @@ typedef NS_ENUM(NSInteger, KKAnimatableParamKind) {
 + (instancetype)laneWithLabel:(NSString *)label
                      segments:(NSArray<KKTimingSegment *> *)segments
                       enabled:(BOOL)enabled;
+
+/// Combined visibility: `visibleInSequencer && pluginVisible`. Use for any
+/// "should this lane be shown / counted in bulk ops" check.
+@property(nonatomic, readonly) BOOL effectivelyVisibleInSequencer;
 
 /// Default lane: [transition 0→baseValues] [hold baseValues] [transition
 /// baseValues→0]

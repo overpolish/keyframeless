@@ -45,11 +45,20 @@ KKPushLanesToVisibilityBar(KKLaneVisibilityBar *_Nullable bar,
                            NSArray<KKTimingLane *> *_Nullable lanes,
                            NSSet<NSString *> *_Nullable pluginHidden);
 
-/// Shows the empty-lanes overlay when every lane in `lanes` is hidden.
-/// Marshals to the main queue.
+/// Shows the empty-lanes overlay when every lane in `lanes` is hidden,
+/// or when `lanes` is empty AND `plugin` supplies an
+/// `emptyLanesMessageWhenNoLanes`. Updates the view's content per state
+/// before toggling visibility. Marshals to the main queue.
 extern void
 KKApplyEmptyLanesVisibility(KKEmptyLanesView *_Nullable emptyView,
-                            NSArray<KKTimingLane *> *_Nullable lanes);
+                            NSArray<KKTimingLane *> *_Nullable lanes,
+                            KKPlugin *_Nullable plugin);
+
+/// Translates a pill index (index into the visibility bar's deduped label
+/// list) back to the propertyLabel string. Returns nil if out of range.
+extern NSString *_Nullable KKLabelForPillIndex(
+    NSInteger pillIndex, NSArray<KKTimingLane *> *jsonLanes,
+    NSSet<NSString *> *_Nullable pluginHidden);
 
 /// Translates a viewIndex (index into the filtered, view-visible lane list)
 /// to the JSON index (index into the full unfiltered lane array). Returns
@@ -162,6 +171,8 @@ extern void KKWriteLanesJSON(NSArray<KKTimingLane *> *lanes,
 - (void)_handleSegmentValuesCopiedAtLane:(NSInteger)laneIndex
                                      src:(NSInteger)srcSegmentIndex
                                      dst:(NSInteger)dstSegmentIndex;
+- (void)_handleGroupCollapseToggledForKey:(NSString *)groupKey
+                                collapsed:(BOOL)collapsed;
 @end
 
 @interface KKPlugin (HandlersStructure)

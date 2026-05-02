@@ -10,6 +10,7 @@
 @class KKEmptyLanesView;
 @class KKGradientControl;
 @class KKLaneVisibilityBar;
+@class KKPlugin;
 @class KKStagePlayheadView;
 @class KKStageSequencerRulerView;
 @class KKStageSequencerView;
@@ -125,6 +126,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Empty-state overlay shown when every lane is user-hidden (weak).
 @property(nonatomic, weak, nullable) KKEmptyLanesView *emptyLanesView;
+
+/// Weak ref to the plugin instance that owns this state. Set by the
+/// sequencer registration path so static pump helpers can route empty-
+/// state messaging through the plugin's `emptyLanesMessageWhenNoLanes`.
+@property(nonatomic, weak, nullable) KKPlugin *plugin;
 
 /// Whether the sequencer's loop-playback toggle is on. Session-scoped (not
 /// persisted across FCP restarts, not written to a param). Written from the

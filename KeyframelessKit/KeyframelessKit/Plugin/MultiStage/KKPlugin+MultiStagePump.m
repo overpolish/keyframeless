@@ -98,10 +98,53 @@ static void KKSyncLoopFromParams(id<PROAPIAccessing> apiManager) {
   });
 }
 
+static void KKSyncFromParams(id<PROAPIAccessing> apiManager);
+
+/// Drives plugin-side reconciliation (e.g. Canvas: layers ↔ lanes). Reads
+/// JSON, asks the plugin to reconcile against its current source items, and
+/// — when the result differs — dispatches a JSON write inside a fresh
+/// action scope. The next pump tick picks up the persisted change.
+static void KKReconcileLanesIfNeeded(id<PROAPIAccessing> apiManager,
+                                     KKPlugin *plugin) {
+  if (!plugin)
+    return;
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!actAPI)
+    return;
+  [actAPI startAction:plugin];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  if (!getAPI || !setAPI) {
+    [actAPI endAction:plugin];
+    return;
+  }
+  NSString *json = nil;
+  [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+  NSArray<KKTimingLane *> *existing =
+      json.length ? [KKTimingLane lanesFromJSON:json] : @[];
+  if (!existing)
+    existing = @[];
+  NSArray<KKTimingLane *> *reconciled = [plugin reconcileLanes:existing
+                                                        atTime:kCMTimeZero
+                                                   paramGetAPI:getAPI];
+  if (!reconciled) {
+    [actAPI endAction:plugin];
+    return;
+  }
+  NSString *newJSON = [KKTimingLane jsonFromLanes:reconciled];
+  if (newJSON && ![newJSON isEqualToString:json ?: @""])
+    [setAPI setStringParameterValue:newJSON toParameter:kKKParamMultiStageData];
+  [actAPI endAction:plugin];
+}
+
 static void KKSyncFromParams(id<PROAPIAccessing> apiManager) {
   KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
   if (!state)
     return;
+  KKReconcileLanesIfNeeded(apiManager, state.plugin);
   KKStageSequencerView *seq = state.sequencerView;
   NSArray<KKTimingViewRefs *> *extras =
       [state.additionalTimingViews copy] ?: @[];
@@ -144,10 +187,10 @@ static void KKSyncFromParams(id<PROAPIAccessing> apiManager) {
   NSSet<NSString *> *pluginHidden = state.pluginHiddenLaneLabels ?: [NSSet set];
   state.hiddenLaneLabels = KKEffectiveHiddenLaneLabels(pluginHidden, lanes);
   KKPushLanesToVisibilityBar(state.visibilityBar, lanes, pluginHidden);
-  KKApplyEmptyLanesVisibility(state.emptyLanesView, lanes);
+  KKApplyEmptyLanesVisibility(state.emptyLanesView, lanes, state.plugin);
   for (KKTimingViewRefs *r in extras) {
     KKPushLanesToVisibilityBar(r.visibilityBar, lanes, pluginHidden);
-    KKApplyEmptyLanesVisibility(r.emptyLanesView, lanes);
+    KKApplyEmptyLanesVisibility(r.emptyLanesView, lanes, state.plugin);
   }
   if (!seq && extras.count == 0)
     return;

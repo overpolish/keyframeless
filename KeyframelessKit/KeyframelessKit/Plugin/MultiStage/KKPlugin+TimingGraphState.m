@@ -22,18 +22,22 @@ static void KKApplySequencerState(KKPlugin *plugin, KKStageSequencerView *seq,
                                   NSView *seqContainer,
                                   KKStageSequencerRulerView *ruler,
                                   KKStagePlayheadView *playhead,
+                                  KKLaneVisibilityBar *visibilityBar,
+                                  KKEmptyLanesView *emptyView,
                                   NSArray<KKTimingLane *> *lanes, double durSec,
                                   double frac, BOOL hasTiming) {
   if (!seq)
     return;
   seqContainer.hidden = NO;
+  NSSet<NSString *> *pluginHidden =
+      [plugin hiddenAnimatablePropertyLabels] ?: [NSSet set];
   if (lanes) {
-    NSSet<NSString *> *pluginHidden =
-        [plugin hiddenAnimatablePropertyLabels] ?: [NSSet set];
     NSSet<NSString *> *hidden =
         KKEffectiveHiddenLaneLabels(pluginHidden, lanes);
     seq.lanes = KKFilterLanesForVisibility(lanes, hidden);
   }
+  KKPushLanesToVisibilityBar(visibilityBar, lanes, pluginHidden);
+  KKApplyEmptyLanesVisibility(emptyView, lanes, plugin);
   if (hasTiming) {
     seq.effectDuration = durSec;
     ruler.effectDuration = durSec;
@@ -53,7 +57,9 @@ static void KKApplySequencerState(KKPlugin *plugin, KKStageSequencerView *seq,
 - (void)_applyHTHParameterFlagsForLanes:(NSArray<KKTimingLane *> *)lanes {
   for (KKTimingLane *lane in lanes) {
     BOOL hth = KKIsHTHTransition(lane, lane.selectedSegment);
-    [self setEditingDisabled:hth forLaneLabel:lane.propertyLabel];
+    [self setEditingDisabled:hth
+                forLaneLabel:lane.propertyLabel
+                    groupKey:lane.groupKey];
   }
 }
 
@@ -127,8 +133,9 @@ static void KKApplySequencerState(KKPlugin *plugin, KKStageSequencerView *seq,
 
   // Primary (inspector) set.
   KKApplySequencerState(self, self.stageSequencer, self.stageSequencerContainer,
-                        self.stageSequencerRuler, instState.playheadView, lanes,
-                        durSec, frac, hasTiming);
+                        self.stageSequencerRuler, instState.playheadView,
+                        instState.visibilityBar, instState.emptyLanesView,
+                        lanes, durSec, frac, hasTiming);
 
   // Secondary (window) sets. Prune any dead (deallocated) entries.
   NSMutableArray *pruned = [NSMutableArray array];
@@ -137,7 +144,8 @@ static void KKApplySequencerState(KKPlugin *plugin, KKStageSequencerView *seq,
       continue;
     [pruned addObject:refs];
     KKApplySequencerState(self, refs.seqView, refs.seqContainer, refs.ruler,
-                          refs.playhead, lanes, durSec, frac, hasTiming);
+                          refs.playhead, refs.visibilityBar,
+                          refs.emptyLanesView, lanes, durSec, frac, hasTiming);
   }
   instState.additionalTimingViews = pruned;
 

@@ -104,6 +104,9 @@
                                                 anchorRect:anchorRect
                                                 sourceView:weakSeq];
       };
+  seqView.onGroupCollapseToggled = ^(NSString *groupKey, BOOL collapsed) {
+    [weakSelf _handleGroupCollapseToggledForKey:groupKey collapsed:collapsed];
+  };
   rulerView.onLoopToggled = ^(BOOL newState) {
     [weakSelf _handleRulerLoopToggled:newState];
   };

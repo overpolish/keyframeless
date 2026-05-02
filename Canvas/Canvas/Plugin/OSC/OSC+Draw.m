@@ -194,6 +194,8 @@ static const CGFloat kPathToolbarGap = 6.0;
               activePart:(NSInteger)activePart
         destinationImage:(FxImageTile *)destinationImage
                   atTime:(CMTime)time {
+  [KKPlugin multiStageDrawOSCTickForAPI:self.apiManager atTime:time];
+
   self.imageWidth = width;
   self.imageHeight = height;
 

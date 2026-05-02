@@ -444,23 +444,34 @@
 }
 
 - (NSArray<NSNumber *> *)currentValuesForLaneLabel:(NSString *)label
+                                          groupKey:(NSString *)groupKey
                                             atTime:(CMTime)time {
   return nil;
 }
 
 - (BOOL)applyLaneValues:(NSArray<NSNumber *> *)values
                forLabel:(NSString *)label
+               groupKey:(NSString *)groupKey
                  atTime:(CMTime)time {
   return NO;
 }
 
-- (void)setEditingDisabled:(BOOL)disabled forLaneLabel:(NSString *)label {
+- (void)setEditingDisabled:(BOOL)disabled
+              forLaneLabel:(NSString *)label
+                  groupKey:(NSString *)groupKey {
 }
 
 - (NSArray<KKTimingLane *> *)defaultLanesAtTime:(CMTime)time
                                     paramGetAPI:(id<FxParameterRetrievalAPI_v6>)
                                                     paramGetAPI {
   return nil;
+}
+
+- (NSArray<KKTimingLane *> *)reconcileLanes:(NSArray<KKTimingLane *> *)existing
+                                     atTime:(CMTime)time
+                                paramGetAPI:(id<FxParameterRetrievalAPI_v6>)
+                                                paramGetAPI {
+  return existing;
 }
 
 - (BOOL)usesMotionBlur {
@@ -477,6 +488,14 @@
 
 - (NSSet<NSString *> *)animatablePropertyLabelsWithOSCDefaultOff {
   return [NSSet set];
+}
+
+- (NSString *)emptyLanesMessageWhenNoLanes {
+  return nil;
+}
+
+- (NSString *)emptyLanesIconNameWhenNoLanes {
+  return @"rectangle.on.rectangle.slash";
 }
 
 @end

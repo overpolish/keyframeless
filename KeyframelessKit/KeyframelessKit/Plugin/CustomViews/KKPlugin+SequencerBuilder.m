@@ -23,16 +23,17 @@ typedef struct {
   CGFloat wrapperHeight;
 } KKTimingGraphMetrics;
 
-/// Sequencer container height for the given visible-lane count. In capped
-/// (inspector) mode, the container caps at 2.5 lanes worth and scrolls
-/// past that. In uncapped (window) mode, lanes always fit (no scroll).
+/// Sequencer container height. In capped (inspector) mode the row is
+/// reserved at a constant 2.5-lane height regardless of lane count — FCP
+/// locks parameter row height at createView time, so dynamic-lane-count
+/// plugins (Canvas) need a stable reservation; lanes overflow into the
+/// scroll view. In uncapped (window) mode the container fits all lanes
+/// exactly (no scroll).
 static CGFloat KKSeqContainerHeightForVisible(BOOL uncapped,
                                               NSUInteger visibleCount) {
-  // Treat zero-visible as one lane's worth so the empty container has
-  // some presence rather than collapsing to ruler-only.
-  NSUInteger laneCountForHeight = MAX((NSUInteger)1, visibleCount);
   CGFloat lanesH;
-  if (uncapped || visibleCount <= 2) {
+  if (uncapped) {
+    NSUInteger laneCountForHeight = MAX((NSUInteger)1, visibleCount);
     lanesH = [KKStageSequencerView heightForLaneCount:laneCountForHeight];
   } else {
     CGFloat h2 = [KKStageSequencerView heightForLaneCount:2];
@@ -227,8 +228,15 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
                                                       atTime:(CMTime)time {
   NSArray<KKTimingLane *> *lanes =
       KKReadLanesRebalanced(self.apiManager, paramGetAPI);
-  if (lanes)
-    return lanes;
+  if (lanes) {
+    // Run plugin reconciliation against current source items (e.g. Canvas:
+    // current layer list) so a remount catches up to layer adds/deletes/
+    // renames that happened while the inspector was unmounted.
+    NSArray<KKTimingLane *> *reconciled = [self reconcileLanes:lanes
+                                                        atTime:time
+                                                   paramGetAPI:paramGetAPI];
+    return reconciled ?: lanes;
+  }
 
   // Real read failed. Prefer in-memory snapshot if we have one (re-mount
   // recovery). Otherwise fall through and build display-only defaults so
@@ -280,8 +288,8 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
   NSArray<KKTimingLane *> *lanes =
       [self _readOrSeedLanesWithParamGetAPI:paramGetAPI
                                      atTime:[actionAPI currentTime]];
+  KKPluginInstanceState *instState = KKInstanceStateForAPI(self.apiManager);
   if (lanes) {
-    KKPluginInstanceState *instState = KKInstanceStateForAPI(self.apiManager);
     instState.lanesSnapshot = [lanes copy];
     NSSet<NSString *> *pluginHidden =
         [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
@@ -291,12 +299,13 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
     instState.pluginHiddenLaneLabels = pluginHidden;
     seqView.lanes = KKFilterLanesForVisibility(lanes, hidden);
     KKPushLanesToVisibilityBar(instState.visibilityBar, lanes, pluginHidden);
-    KKApplyEmptyLanesVisibility(instState.emptyLanesView, lanes);
-    for (KKTimingViewRefs *r in instState.additionalTimingViews) {
-      KKPushLanesToVisibilityBar(r.visibilityBar, lanes, pluginHidden);
-      KKApplyEmptyLanesVisibility(r.emptyLanesView, lanes);
-    }
   }
+  // Empty-state apply runs even when `lanes` is nil so dynamic-lane plugins
+  // (Canvas with no layers yet) get their no-lanes message at create time
+  // — the pump's gated paths only fire once JSON exists.
+  KKApplyEmptyLanesVisibility(instState.emptyLanesView, lanes, self);
+  for (KKTimingViewRefs *r in instState.additionalTimingViews)
+    KKApplyEmptyLanesVisibility(r.emptyLanesView, lanes, self);
 
   // FCP often can't deliver the real persisted JSON during the initial
   // create-view scope. Schedule a deferred re-apply on the next runloop
@@ -337,6 +346,7 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
     KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
     state.visibilityBar = visibilityBar;
     state.emptyLanesView = emptyView;
+    state.plugin = self;
     return;
   }
   KKTimingViewRefs *refs = [[KKTimingViewRefs alloc] init];
@@ -351,6 +361,7 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
     if (!state.additionalTimingViews)
       state.additionalTimingViews = [NSMutableArray array];
     [state.additionalTimingViews addObject:refs];
+    state.plugin = self;
   }
   [self timingGraphApplyState];
 }

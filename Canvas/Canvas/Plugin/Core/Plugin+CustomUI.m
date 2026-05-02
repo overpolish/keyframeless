@@ -66,6 +66,10 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
 
 @implementation CanvasPlugin (CustomUI)
 
+- (BOOL)usesMotionBlur {
+  return YES;
+}
+
 - (void)refreshLayerList {
 }
 
@@ -356,6 +360,9 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
                         if (!s || !api)
                           return;
                         KKCanvasRefreshLayerListFromSnapshot(snap, s, api);
+                        if (changes &
+                            (KKStoreChangePaths | KKStoreChangePathProps))
+                          [KKPlugin multiStageSyncFromParams:api];
                       }];
 
   // Seed the store so the observer fires on initial setup.
@@ -697,6 +704,14 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
   struct objc_super sup = {self, [KKPlugin class]};
   return ((NSView * (*)(struct objc_super *, SEL, UInt32)) objc_msgSendSuper)(
       &sup, @selector(createViewForParameterID:), parameterID);
+}
+
+- (NSString *)emptyLanesMessageWhenNoLanes {
+  return @"No layers";
+}
+
+- (NSString *)emptyLanesIconNameWhenNoLanes {
+  return @"square.dashed";
 }
 
 - (NSArray<KKHelpSection *> *)helpSections {

@@ -256,6 +256,7 @@
         return;
       KKBezierPath *clone =
           [KKBezierPath pathWithData:[paths[idx] dataRepresentation]];
+      clone.layerID = [[NSUUID UUID] UUIDString];
       if (clone.isGroup && clone.groupID) {
         NSString *newGID = [[NSUUID UUID] UUIDString];
         groupIDMap[clone.groupID] = newGID;
