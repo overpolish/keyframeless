@@ -348,6 +348,7 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
   // Register store observer.
   __weak KKLayerInstanceState *weakState = state;
   __weak id weakAPI = self.apiManager;
+  __weak CanvasPlugin *weakSelf = self;
   [state.store
       addObserverForChanges:(KKStoreChangePaths | KKStoreChangeSelection |
                              KKStoreChangeVisibility | KKStoreChangeCollapse |
@@ -363,6 +364,12 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
                         if (changes &
                             (KKStoreChangePaths | KKStoreChangePathProps))
                           [KKPlugin multiStageSyncFromParams:api];
+                        // Selection or path changes can both shift which
+                        // layer the sequencer should accent (paths gone →
+                        // groupKey vanishes; selection moves → key swaps).
+                        if (changes &
+                            (KKStoreChangeSelection | KKStoreChangePaths))
+                          [weakSelf kkRefreshSequencerSelectedGroup];
                       }];
 
   // Seed the store so the observer fires on initial setup.

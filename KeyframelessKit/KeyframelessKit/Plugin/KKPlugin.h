@@ -340,6 +340,27 @@ NS_ASSUME_NONNULL_BEGIN
 /// empty set by default.
 - (NSSet<NSString *> *)animatablePropertyLabelsWithOSCDefaultOff;
 
+/// Override to drive the sequencer's "selected group" highlight — return
+/// the `groupKey` (typically a layer/object ID) of the currently-selected
+/// item, or nil for none. The default returns nil.
+///
+/// When selection changes, call `-kkRefreshSequencerSelectedGroup` to push
+/// the new value into all active sequencer views.
+- (nullable NSString *)kkSelectedGroupKey;
+
+/// Override to handle a track-side click on a group header in the sequencer
+/// (the summary span bar, not the chevron/label). The default falls back
+/// to toggling the group's collapse state — i.e. behaves identically to
+/// clicking the label. Plugins that want a custom action (e.g. selecting
+/// the underlying object so editing is faster while animating) override
+/// this and dispatch their own selection write.
+- (void)kkHandleGroupSegmentClickedForKey:(NSString *)groupKey;
+
+/// Pushes `[self kkSelectedGroupKey]` into every active sequencer view
+/// (primary + any additional timing views). Call this whenever your
+/// selection state changes.
+- (void)kkRefreshSequencerSelectedGroup;
+
 /// Override to supply the empty-state message shown when the sequencer has
 /// zero lanes (e.g. Canvas with no layers). Return nil (default) to leave
 /// the empty view hidden in that case.

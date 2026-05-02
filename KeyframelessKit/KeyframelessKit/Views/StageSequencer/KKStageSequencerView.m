@@ -35,6 +35,13 @@
   return self;
 }
 
+- (void)setSelectedGroupKey:(NSString *)key {
+  if (_selectedGroupKey == key || [_selectedGroupKey isEqualToString:key])
+    return;
+  _selectedGroupKey = [key copy];
+  [self renderLanes];
+}
+
 - (void)setLanes:(NSArray<KKTimingLane *> *)lanes {
   NSUInteger prevRowCount = _rowPlan.count;
   NSMutableArray<KKTimingLane *> *stamped =

@@ -21,6 +21,125 @@
   return self;
 }
 
+- (NSString *)kkSelectedGroupKey {
+  // Mirror -selectedTransformablePath: the sequencer accent should track
+  // the same "single transformable layer" predicate the OSC uses, so the
+  // user's mental model matches.
+  NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+  NSIndexSet *sel = uuid ? KKCanvasCurrentSelection(uuid) : nil;
+  if (sel.count != 1)
+    return nil;
+  KKCanvasStore *store = KKLayerStateForUUID(uuid).store;
+  NSArray<KKBezierPath *> *paths = store.snapshot.paths;
+  NSUInteger idx = sel.firstIndex;
+  if (idx >= paths.count)
+    return nil;
+  KKBezierPath *p = paths[idx];
+  if (p.isGroup || p.locked || !p.transformEnabled)
+    return nil;
+  return p.layerID;
+}
+
+- (void)kkHandleGroupSegmentClickedForKey:(NSString *)groupKey {
+  NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+  if (!uuid || groupKey.length == 0)
+    return;
+  KKLayerInstanceState *lst = KKLayerStateForUUID(uuid);
+  KKLayerActionTarget *actionTarget = lst.container.actionTarget;
+
+  // Mirror LayerList+Selection.m's full flow: writing only the store /
+  // instance state leaves the OSC's selectedPathIndices stale and the
+  // inspector params pointing at the previous layer. To fully swap
+  // selection we must (a) write back the *current* selection's edits to
+  // the path blob, (b) update selection state, (c) sync inspector params
+  // to the new layer, and (d) push the blob back so FxPlug schedules a
+  // parameterChanged round-trip that the OSC picks up on its next draw.
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!actionAPI)
+    return;
+
+  // FxParameterRetrievalAPI_v6 / FxParameterSettingAPI_v5 only resolve
+  // inside an action scope when invoked from a custom-view callback —
+  // query them AFTER startAction.
+  [actionAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> paramSetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  if (!paramGetAPI || !paramSetAPI) {
+    [actionAPI endAction:self];
+    return;
+  }
+  NSString *str = nil;
+  [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
+  NSMutableArray<KKBezierPath *> *paths = nil;
+  if (str.length > 0) {
+    NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
+    paths = [KKBezierPath pathsFromBlob:blob];
+  }
+  if (!paths.count) {
+    [actionAPI endAction:self];
+    return;
+  }
+
+  NSUInteger targetIdx = NSNotFound;
+  for (NSUInteger i = 0; i < paths.count; i++) {
+    if ([paths[i].layerID isEqualToString:groupKey]) {
+      targetIdx = i;
+      break;
+    }
+  }
+  if (targetIdx == NSNotFound) {
+    [actionAPI endAction:self];
+    return;
+  }
+
+  NSIndexSet *oldSel = lst.uiSelection;
+  [actionTarget _writeBackObjectParams:paramGetAPI
+                               toPaths:paths
+                             selection:oldSel];
+
+  NSMutableIndexSet *newSel = [NSMutableIndexSet indexSetWithIndex:targetIdx];
+  if (paths[targetIdx].isGroup)
+    [newSel addIndexes:KKDescendantIndices(targetIdx, paths)];
+  NSIndexSet *finalSel = [newSel copy];
+  KKSetLayerSelection(uuid, finalSel);
+
+  [actionTarget _syncObjectParamsForSelection:finalSel
+                                        paths:paths
+                                  paramSetAPI:paramSetAPI];
+
+  // Persist the new active index. drawOSC's undo-detection compares the
+  // in-memory selection against `kParamLastSelectedIndex` and snaps memory
+  // back to the param value if they disagree — without this write the OSC
+  // would treat our swap as an undo and revert on the next render tick.
+  NSInteger primaryIdx = -1;
+  for (NSUInteger i = finalSel.firstIndex; i != NSNotFound;
+       i = [finalSel indexGreaterThanIndex:i]) {
+    if (i < paths.count && !paths[i].isGroup) {
+      primaryIdx = (NSInteger)i;
+      break;
+    }
+  }
+  KKSaveSelectedIndex(paramSetAPI, primaryIdx);
+
+  NSData *newBlob = [KKBezierPath blobFromPaths:paths];
+  [paramSetAPI
+      setStringParameterValue:[newBlob base64EncodedStringWithOptions:0]
+                  toParameter:kParamPathData];
+  [actionAPI endAction:self];
+
+  // The blob write triggers an async parameterChanged → drawOSC round-trip
+  // before the store sees the new selection. Push it through the store
+  // immediately so the layer-list redraw + sequencer accent refresh fire
+  // on this same tick — drawOSC will harmlessly re-apply the same value.
+  [lst.store performBatch:^{
+    [lst.store setPaths:paths];
+    [lst.store setSelectedIndices:finalSel];
+  }];
+}
+
 - (BOOL)properties:(NSDictionary *_Nonnull *)properties
              error:(NSError *_Nullable *)error {
   *properties = @{

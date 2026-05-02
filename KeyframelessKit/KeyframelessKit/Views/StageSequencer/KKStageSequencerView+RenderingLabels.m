@@ -78,7 +78,11 @@
           [NSBezierPath bezierPathWithRoundedRect:barRect
                                           xRadius:kKSSSegmentCornerRadius
                                           yRadius:kKSSSegmentCornerRadius];
-      [[NSColor colorWithWhite:1.0 alpha:0.10] setFill];
+      BOOL isSelected = self.selectedGroupKey.length > 0 &&
+                        [self.selectedGroupKey isEqualToString:row.groupKey];
+      NSColor *fill = isSelected ? [NSColor accentMatchingHost]
+                                 : [NSColor colorWithWhite:1.0 alpha:0.10];
+      [fill setFill];
       [bar fill];
     }
   }

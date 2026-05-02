@@ -157,8 +157,15 @@
     CGFloat rowY = [self _rowYForPlanIndex:rowIdx totalHeight:totalHeight];
     if (row.kind == KKSequencerRowKindHeader) {
       NSRect headerRect = [self _groupHeaderRectForRowY:rowY];
-      if (NSPointInRect(loc, headerRect)) {
-        if (row.groupKey) {
+      if (NSPointInRect(loc, headerRect) && row.groupKey) {
+        // Track-side click (the summary span bar): give plugins a hook for
+        // a custom action (e.g. select the underlying object). Falls back
+        // to collapse-toggle when unwired so existing plugins keep their
+        // behavior. Label/chevron side always toggles collapse.
+        BOOL onTrackSide = loc.x >= kKSSBorderInset + kKSSLabelWidth;
+        if (onTrackSide && self.onGroupSegmentClicked) {
+          self.onGroupSegmentClicked(row.groupKey);
+        } else {
           [self _animateGroupChevronForKey:row.groupKey
                                  collapsed:!row.groupCollapsed];
           if (self.onGroupCollapseToggled)

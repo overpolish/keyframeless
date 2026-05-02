@@ -64,6 +64,19 @@ NS_ASSUME_NONNULL_BEGIN
 /// `lanes`.
 @property(nonatomic, copy, nullable) void (^onGroupCollapseToggled)
     (NSString *groupKey, BOOL collapsed);
+/// Fires when the user clicks the **track-side** of a group header (the
+/// summary span bar, not the chevron/label). Plugins set this to wire a
+/// custom action — e.g. selecting the group's underlying object. If unset,
+/// the sequencer falls back to toggling collapse so behavior matches
+/// label-side clicks.
+@property(nonatomic, copy, nullable) void (^onGroupSegmentClicked)
+    (NSString *groupKey);
+/// When set, the matching group's summary span bar is filled with the
+/// host accent color instead of the default subtle white. Plugins drive
+/// this from their selection state — e.g. Canvas sets it to the layerID
+/// of the currently-selected layer so the sequencer reflects which group
+/// is "active". Setting this triggers a redraw.
+@property(nonatomic, copy, nullable) NSString *selectedGroupKey;
 /// Called when boundary drag changes segment positions.
 /// The callback receives the full updated lane (caller should persist).
 @property(nonatomic, copy, nullable) void (^onLaneChanged)
