@@ -30,10 +30,11 @@ static void buildStrokeGradientParams(KKBezierPath *path, float outputWidth,
 static void
 renderMarker(uint8_t marker, simd_float2 pos, simd_float2 tangent,
              simd_float2 normal, float markerSize, float strokeW,
-             KKBezierPath *path, float outputWidth, float outputHeight,
-             id<MTLDevice> device, id<MTLCommandBuffer> commandBuffer,
-             id<MTLTexture> outputTexture, id<MTLRenderPipelineState> strokePS,
-             simd_uint2 viewportSize, CanvasGradientParams *gradParams) {
+             KKBezierPath *path, CanvasPathTransform pathXform,
+             float outputWidth, float outputHeight, id<MTLDevice> device,
+             id<MTLCommandBuffer> commandBuffer, id<MTLTexture> outputTexture,
+             id<MTLRenderPipelineState> strokePS, simd_uint2 viewportSize,
+             CanvasGradientParams *gradParams) {
   CanvasVertex markerVerts[256];
   MTLPrimitiveType markerPrim = MTLPrimitiveTypeTriangleStrip;
   NSUInteger mc = 0;
@@ -61,18 +62,19 @@ renderMarker(uint8_t marker, simd_float2 pos, simd_float2 tangent,
                                          options:MTLResourceStorageModeShared];
   [enc setVertexBuffer:buf offset:0 atIndex:0];
   [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+  [enc setVertexBytes:&pathXform length:sizeof(pathXform) atIndex:2];
   [enc setFragmentBytes:gradParams length:sizeof(*gradParams) atIndex:0];
   [enc setFragmentBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+  [enc setFragmentBytes:&pathXform length:sizeof(pathXform) atIndex:2];
   [enc drawPrimitives:markerPrim vertexStart:0 vertexCount:mc];
   [enc endEncoding];
 }
 
-static void renderStrokeForSinglePath(KKBezierPath *path, float outputWidth,
-                                      float outputHeight, id<MTLDevice> device,
-                                      id<MTLCommandBuffer> commandBuffer,
-                                      id<MTLTexture> outputTexture,
-                                      id<MTLRenderPipelineState> strokePS,
-                                      simd_uint2 viewportSize) {
+static void renderStrokeForSinglePath(
+    KKBezierPath *path, CanvasPathTransform pathXform, float outputWidth,
+    float outputHeight, id<MTLDevice> device,
+    id<MTLCommandBuffer> commandBuffer, id<MTLTexture> outputTexture,
+    id<MTLRenderPipelineState> strokePS, simd_uint2 viewportSize) {
   float sw = path.strokeWidth;
   float ew = (path.endWidth > 0) ? path.endWidth : sw;
 
@@ -146,8 +148,10 @@ static void renderStrokeForSinglePath(KKBezierPath *path, float outputWidth,
                            options:MTLResourceStorageModeShared];
     [enc setVertexBuffer:vertexBuffer offset:0 atIndex:0];
     [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+    [enc setVertexBytes:&pathXform length:sizeof(pathXform) atIndex:2];
     [enc setFragmentBytes:&gradParams length:sizeof(gradParams) atIndex:0];
     [enc setFragmentBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+    [enc setFragmentBytes:&pathXform length:sizeof(pathXform) atIndex:2];
     [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
             vertexStart:0
             vertexCount:vertexCount];
@@ -176,8 +180,9 @@ static void renderStrokeForSinglePath(KKBezierPath *path, float outputWidth,
         simd_float2 eTan = (simd_float2){eNorm.y, -eNorm.x};
         simd_float2 endPos = samples[sampleCount - 1].position;
         renderMarker(endMarker, endPos, eTan, eNorm, endMarkerSz, ew, path,
-                     outputWidth, outputHeight, device, commandBuffer,
-                     outputTexture, strokePS, viewportSize, &gradParams);
+                     pathXform, outputWidth, outputHeight, device,
+                     commandBuffer, outputTexture, strokePS, viewportSize,
+                     &gradParams);
       }
 
       if (startMarker != 0) {
@@ -192,16 +197,18 @@ static void renderStrokeForSinglePath(KKBezierPath *path, float outputWidth,
         simd_float2 sTan = (simd_float2){-sNorm.y, sNorm.x};
         simd_float2 startPos = samples[0].position;
         renderMarker(startMarker, startPos, sTan, sNorm, startMarkerSz, sw,
-                     path, outputWidth, outputHeight, device, commandBuffer,
-                     outputTexture, strokePS, viewportSize, &gradParams);
+                     path, pathXform, outputWidth, outputHeight, device,
+                     commandBuffer, outputTexture, strokePS, viewportSize,
+                     &gradParams);
       }
     }
     free(samples);
   }
 }
 
-void KKRenderStrokeForPath(KKBezierPath *path, float outputWidth,
-                           float outputHeight, id<MTLDevice> device,
+void KKRenderStrokeForPath(KKBezierPath *path, CanvasPathTransform pathXform,
+                           float outputWidth, float outputHeight,
+                           id<MTLDevice> device,
                            id<MTLCommandBuffer> commandBuffer,
                            id<MTLTexture> outputTexture,
                            id<MTLRenderPipelineState> strokePS,
@@ -209,12 +216,12 @@ void KKRenderStrokeForPath(KKBezierPath *path, float outputWidth,
   NSArray<KKBezierPath *> *contours = [path splitContours];
   if (contours) {
     for (KKBezierPath *sub in contours)
-      renderStrokeForSinglePath(sub, outputWidth, outputHeight, device,
-                                commandBuffer, outputTexture, strokePS,
+      renderStrokeForSinglePath(sub, pathXform, outputWidth, outputHeight,
+                                device, commandBuffer, outputTexture, strokePS,
                                 viewportSize);
     return;
   }
-  renderStrokeForSinglePath(path, outputWidth, outputHeight, device,
+  renderStrokeForSinglePath(path, pathXform, outputWidth, outputHeight, device,
                             commandBuffer, outputTexture, strokePS,
                             viewportSize);
 }

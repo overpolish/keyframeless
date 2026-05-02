@@ -30,11 +30,25 @@ _kkIndexGroupsByID(NSArray<KKBezierPath *> *paths) {
   return out;
 }
 
-/// Sum of `path`'s own translation plus each enabled ancestor group's
-/// translation. Walks the parentGroupID chain with a depth cap to guard
-/// against malformed cycles.
-static simd_float2 _kkAccumulatedTranslation(
-    KKBezierPath *path, NSDictionary<NSString *, KKBezierPath *> *groupsByID) {
+/// Identity 3x3 affine. Used for draw calls that don't carry a per-path
+/// transform (off-screen image effects, fullscreen-quad fill color pass).
+static CanvasPathTransform _kkIdentityPathTransform(void) {
+  CanvasPathTransform x;
+  x.m = matrix_identity_float3x3;
+  x.mInv = matrix_identity_float3x3;
+  return x;
+}
+
+/// Build the per-path forward + inverse affine for `path`, in centered-pixel
+/// space. Sums `path`'s own translation with each enabled ancestor group's
+/// translation (walks parentGroupID with a depth cap). Y is flipped because
+/// bezier points live in a Y-up object space while pixel space is Y-down.
+static CanvasPathTransform
+_kkBuildPathTransform(KKBezierPath *path,
+                      NSDictionary<NSString *, KKBezierPath *> *groupsByID,
+                      float outputWidth, float outputHeight) {
+  if (!path.transformEnabled)
+    return _kkIdentityPathTransform();
   float tx = path.translateX, ty = path.translateY;
   NSString *parentID = path.parentGroupID;
   NSUInteger depth = 0;
@@ -48,7 +62,14 @@ static simd_float2 _kkAccumulatedTranslation(
     }
     parentID = g.parentGroupID;
   }
-  return simd_make_float2(tx, ty);
+  float pxTx = tx * outputWidth;
+  float pxTy = -ty * outputHeight;
+  CanvasPathTransform x;
+  x.m = simd_matrix(simd_make_float3(1, 0, 0), simd_make_float3(0, 1, 0),
+                    simd_make_float3(pxTx, pxTy, 1));
+  x.mInv = simd_matrix(simd_make_float3(1, 0, 0), simd_make_float3(0, 1, 0),
+                       simd_make_float3(-pxTx, -pxTy, 1));
+  return x;
 }
 
 static id<MTLRenderPipelineState> getOrCreatePipeline(
@@ -124,20 +145,10 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
                                         effectDurSec));
     [CanvasPlugin kkApplyLanes:lanes atFraction:frac toPaths:paths];
   }
-  // Bake per-layer translation into the sampled points. Render code reads
-  // raw point coords; baking here keeps the tessellation/gradient/marker
-  // pipelines transform-agnostic. The base blob is untouched so values
-  // don't accumulate frame-to-frame. Children inherit each enabled
-  // ancestor group's translation by walking the parentGroupID chain.
-  NSDictionary<NSString *, KKBezierPath *> *groupsByID =
-      _kkIndexGroupsByID(paths);
-  for (KKBezierPath *p in paths) {
-    if (p.isGroup || !p.transformEnabled)
-      continue;
-    simd_float2 t = _kkAccumulatedTranslation(p, groupsByID);
-    if (t.x != 0.0f || t.y != 0.0f)
-      [p translateBy:t];
-  }
+  // Per-path translate/rotate/scale lives on KKBezierPath as properties
+  // (translateX/Y, future scale/rotate); the render side composes them
+  // into a per-path matrix and applies it in the vertex shader. Nothing
+  // to bake into points here.
   return [KKBezierPath blobFromPaths:paths];
 }
 
@@ -238,6 +249,7 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
 
 - (void)renderPath:(KKBezierPath *)path
           originalPath:(KKBezierPath *)orig
+             transform:(CanvasPathTransform)pathXform
                 target:(id<MTLTexture>)target
            outputWidth:(float)outputWidth
           outputHeight:(float)outputHeight
@@ -294,6 +306,7 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
       [enc setRenderPipelineState:imagePS];
       [enc setVertexBytes:quadVerts length:sizeof(quadVerts) atIndex:0];
       [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+      [enc setVertexBytes:&pathXform length:sizeof(pathXform) atIndex:2];
       [enc setFragmentTexture:drawTex atIndex:0];
       [enc setFragmentBytes:&opacity length:sizeof(opacity) atIndex:0];
       [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
@@ -309,31 +322,33 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
         clipPath = KKSketchPath(orig, orig.sketchRoughness, orig.sketchBowing,
                                 orig.sketchSeed, 1, outputWidth, outputHeight);
       }
-      KKRenderFillStencilOnly(clipPath, outputWidth, outputHeight, device,
-                              commandBuffer, target, stencilTexture,
+      KKRenderFillStencilOnly(clipPath, pathXform, outputWidth, outputHeight,
+                              device, commandBuffer, target, stencilTexture,
                               fillStencilPS, fillStencilDSState, viewportSize);
-      KKRenderSketchFillForPath(
-          orig, outputWidth, outputHeight, device, commandBuffer, target,
-          stencilTexture, strokeStencilPS, fillColorDSState, viewportSize, YES);
+      KKRenderSketchFillForPath(orig, pathXform, outputWidth, outputHeight,
+                                device, commandBuffer, target, stencilTexture,
+                                strokeStencilPS, fillColorDSState, viewportSize,
+                                YES);
     } else {
       KKBezierPath *fillPath = orig;
       if (orig.sketchEnabled && orig.sketchRoughness > 0.0001f) {
         fillPath = KKSketchPath(orig, orig.sketchRoughness, orig.sketchBowing,
                                 orig.sketchSeed, 1, outputWidth, outputHeight);
       }
-      KKRenderFillForPath(fillPath, outputWidth, outputHeight, device,
-                          commandBuffer, target, stencilTexture, fillStencilPS,
-                          fillColorPS, fillStencilDSState, fillColorDSState,
-                          viewportSize);
+      KKRenderFillForPath(fillPath, pathXform, outputWidth, outputHeight,
+                          device, commandBuffer, target, stencilTexture,
+                          fillStencilPS, fillColorPS, fillStencilDSState,
+                          fillColorDSState, viewportSize);
       if (strokePS) {
-        KKRenderFillAAOutline(fillPath, outputWidth, outputHeight, device,
-                              commandBuffer, target, strokePS, viewportSize);
+        KKRenderFillAAOutline(fillPath, pathXform, outputWidth, outputHeight,
+                              device, commandBuffer, target, strokePS,
+                              viewportSize);
       }
     }
   }
 
   if (!path.isImage && path.strokeEnabled) {
-    KKRenderStrokeForPath(path, outputWidth, outputHeight, device,
+    KKRenderStrokeForPath(path, pathXform, outputWidth, outputHeight, device,
                           commandBuffer, target, strokePS, viewportSize);
   }
 }
@@ -638,12 +653,17 @@ static BOOL _kkDecodeSampleAt(NSData *pluginState, NSUInteger offset,
     }
   }
 
+  NSDictionary<NSString *, KKBezierPath *> *groupsByID =
+      _kkIndexGroupsByID(origPaths);
+
   for (NSUInteger pi = paths.count; pi > 0; pi--) {
     @autoreleasepool {
       KKBezierPath *path = paths[pi - 1];
       KKBezierPath *orig = origPaths[pi - 1];
       if (path.count < 2 || path.hidden)
         continue;
+      CanvasPathTransform pathXform =
+          _kkBuildPathTransform(orig, groupsByID, outputWidth, outputHeight);
 
       float pathOpacity = path.opacity;
       BOOL needsIntermediate =
@@ -669,6 +689,7 @@ static BOOL _kkDecodeSampleAt(NSData *pluginState, NSUInteger offset,
 
       [self renderPath:path
                 originalPath:orig
+                   transform:pathXform
                       target:drawTarget
                  outputWidth:outputWidth
                 outputHeight:outputHeight

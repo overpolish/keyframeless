@@ -485,10 +485,14 @@ id<MTLTexture> KKApplyImageSketchFill(id<MTLTexture> rawTexture,
   id<MTLBuffer> vBuf = [device newBufferWithBytes:vertices
                                            length:vc * sizeof(CanvasVertex)
                                           options:MTLResourceStorageModeShared];
+  CanvasPathTransform identityXform = {matrix_identity_float3x3,
+                                       matrix_identity_float3x3};
   [enc setVertexBuffer:vBuf offset:0 atIndex:0];
   [enc setVertexBytes:&imgViewport length:sizeof(imgViewport) atIndex:1];
+  [enc setVertexBytes:&identityXform length:sizeof(identityXform) atIndex:2];
   [enc setFragmentBytes:&gradParams length:sizeof(gradParams) atIndex:0];
   [enc setFragmentBytes:&imgViewport length:sizeof(imgViewport) atIndex:1];
+  [enc setFragmentBytes:&identityXform length:sizeof(identityXform) atIndex:2];
   MTLPrimitiveType prim =
       isDots ? MTLPrimitiveTypeTriangle : MTLPrimitiveTypeTriangleStrip;
   [enc drawPrimitives:prim vertexStart:0 vertexCount:vc];

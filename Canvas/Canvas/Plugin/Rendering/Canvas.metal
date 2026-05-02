@@ -17,10 +17,11 @@ typedef struct {
 
 vertex StrokeRasterizerData strokeVertexShader(uint vertexID [[vertex_id]],
                                                constant CanvasVertex *vertexArray [[buffer(0)]],
-                                               constant vector_uint2 *viewportSizePointer [[buffer(1)]]) {
+                                               constant vector_uint2 *viewportSizePointer [[buffer(1)]],
+                                               constant CanvasPathTransform &xform [[buffer(2)]]) {
     StrokeRasterizerData out;
 
-    float2 pixelSpacePosition = vertexArray[vertexID].position;
+    float2 pixelSpacePosition = (xform.m * float3(vertexArray[vertexID].position, 1.0)).xy;
     float2 viewportSize = float2(*viewportSizePointer);
 
     out.clipSpacePosition.xy = pixelSpacePosition / (viewportSize / 2.0);
@@ -57,14 +58,20 @@ static float3 sampleCanvasGradientAtPixel(constant CanvasGradientParams &p, floa
 }
 
 // Fragment-shader entry: framebuffer pixel → centered-pixel space (matching
-// the canvas vertex shader's coordinates) before sampling.
-static float3 sampleCanvasGradient(constant CanvasGradientParams &p, float2 fbPixel, float2 viewport) {
-    return sampleCanvasGradientAtPixel(p, fbPixel - viewport * 0.5);
+// the canvas vertex shader's coordinates) → path-local space (so the gradient
+// bbox stored in path-local pixels samples correctly even when the path's
+// per-path transform has moved the geometry on screen).
+static float3 sampleCanvasGradient(constant CanvasGradientParams &p, float2 fbPixel, float2 viewport,
+                                   constant CanvasPathTransform &xform) {
+    float2 centered = fbPixel - viewport * 0.5;
+    float2 local = (xform.mInv * float3(centered, 1.0)).xy;
+    return sampleCanvasGradientAtPixel(p, local);
 }
 
 fragment float4 strokeFragmentShader(StrokeRasterizerData in [[stage_in]],
                                      constant CanvasGradientParams &params [[buffer(0)]],
-                                     constant vector_uint2 *viewportSizePointer [[buffer(1)]]) {
+                                     constant vector_uint2 *viewportSizePointer [[buffer(1)]],
+                                     constant CanvasPathTransform &xform [[buffer(2)]]) {
     float edgeDist = abs(in.edgeDistance);
     float edgeFw = fwidth(in.edgeDistance) * 1.5;
     float edgeAlpha = 1.0 - smoothstep(1.0 - edgeFw, 1.0, edgeDist);
@@ -74,7 +81,7 @@ fragment float4 strokeFragmentShader(StrokeRasterizerData in [[stage_in]],
 
     float coverage = edgeAlpha * capAlpha;
     if (params.useGradient != 0) {
-        float3 rgb = sampleCanvasGradient(params, in.clipSpacePosition.xy, float2(*viewportSizePointer));
+        float3 rgb = sampleCanvasGradient(params, in.clipSpacePosition.xy, float2(*viewportSizePointer), xform);
         float a = params.opacity * coverage;
         return float4(rgb * a, a);
     }
@@ -87,10 +94,12 @@ typedef struct {
 
 vertex FillRasterizerData fillVertexShader(uint vertexID [[vertex_id]],
                                            constant CanvasFillVertex *vertexArray [[buffer(0)]],
-                                           constant vector_uint2 *viewportSizePointer [[buffer(1)]]) {
+                                           constant vector_uint2 *viewportSizePointer [[buffer(1)]],
+                                           constant CanvasPathTransform &xform [[buffer(2)]]) {
     FillRasterizerData out;
     float2 viewportSize = float2(*viewportSizePointer);
-    out.clipSpacePosition.xy = vertexArray[vertexID].position / (viewportSize / 2.0);
+    float2 pixelSpacePosition = (xform.m * float3(vertexArray[vertexID].position, 1.0)).xy;
+    out.clipSpacePosition.xy = pixelSpacePosition / (viewportSize / 2.0);
     out.clipSpacePosition.z = 0.0;
     out.clipSpacePosition.w = 1.0;
     return out;
@@ -98,9 +107,10 @@ vertex FillRasterizerData fillVertexShader(uint vertexID [[vertex_id]],
 
 fragment float4 fillFragmentShader(FillRasterizerData in [[stage_in]],
                                    constant CanvasGradientParams &params [[buffer(0)]],
-                                   constant vector_uint2 *viewportSizePointer [[buffer(1)]]) {
+                                   constant vector_uint2 *viewportSizePointer [[buffer(1)]],
+                                   constant CanvasPathTransform &xform [[buffer(2)]]) {
     if (params.useGradient != 0) {
-        float3 rgb = sampleCanvasGradient(params, in.clipSpacePosition.xy, float2(*viewportSizePointer));
+        float3 rgb = sampleCanvasGradient(params, in.clipSpacePosition.xy, float2(*viewportSizePointer), xform);
         float a = params.opacity;
         return float4(rgb * a, a);
     }
@@ -143,7 +153,8 @@ typedef struct {
 
 vertex ImageRasterizerData imageVertexShader(uint vertexID [[vertex_id]],
                                              constant CanvasFillVertex *vertexArray [[buffer(0)]],
-                                             constant vector_uint2 *viewportSizePointer [[buffer(1)]]) {
+                                             constant vector_uint2 *viewportSizePointer [[buffer(1)]],
+                                             constant CanvasPathTransform &xform [[buffer(2)]]) {
     // Triangle strip: 4 vertices (BL, BR, TL, TR)
     // Image data is top-down, so BL maps to bottom of texture (v=1),
     // TL maps to top of texture (v=0).
@@ -151,7 +162,8 @@ vertex ImageRasterizerData imageVertexShader(uint vertexID [[vertex_id]],
 
     ImageRasterizerData out;
     float2 viewportSize = float2(*viewportSizePointer);
-    out.clipSpacePosition.xy = vertexArray[vertexID].position / (viewportSize / 2.0);
+    float2 pixelSpacePosition = (xform.m * float3(vertexArray[vertexID].position, 1.0)).xy;
+    out.clipSpacePosition.xy = pixelSpacePosition / (viewportSize / 2.0);
     out.clipSpacePosition.z = 0.0;
     out.clipSpacePosition.w = 1.0;
     out.texCoord = texCoords[vertexID];

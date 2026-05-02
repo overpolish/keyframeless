@@ -100,16 +100,14 @@ NSUInteger KKBuildFillFan(KKBezierPath *path, float outputWidth,
   return ti;
 }
 
-void KKRenderFillForPath(KKBezierPath *path, float outputWidth,
-                         float outputHeight, id<MTLDevice> device,
-                         id<MTLCommandBuffer> commandBuffer,
-                         id<MTLTexture> outputTexture,
-                         id<MTLTexture> stencilTexture,
-                         id<MTLRenderPipelineState> fillStencilPS,
-                         id<MTLRenderPipelineState> fillColorPS,
-                         id<MTLDepthStencilState> fillStencilDSState,
-                         id<MTLDepthStencilState> fillColorDSState,
-                         simd_uint2 viewportSize) {
+void KKRenderFillForPath(
+    KKBezierPath *path, CanvasPathTransform pathXform, float outputWidth,
+    float outputHeight, id<MTLDevice> device,
+    id<MTLCommandBuffer> commandBuffer, id<MTLTexture> outputTexture,
+    id<MTLTexture> stencilTexture, id<MTLRenderPipelineState> fillStencilPS,
+    id<MTLRenderPipelineState> fillColorPS,
+    id<MTLDepthStencilState> fillStencilDSState,
+    id<MTLDepthStencilState> fillColorDSState, simd_uint2 viewportSize) {
   CanvasFillVertex *fillVerts = NULL;
   NSUInteger triCount =
       KKBuildFillFan(path, outputWidth, outputHeight, &fillVerts);
@@ -140,13 +138,17 @@ void KKRenderFillForPath(KKBezierPath *path, float outputWidth,
     [enc setStencilReferenceValue:0];
     [enc setVertexBuffer:fillBuf offset:0 atIndex:0];
     [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+    [enc setVertexBytes:&pathXform length:sizeof(pathXform) atIndex:2];
     [enc drawPrimitives:MTLPrimitiveTypeTriangle
             vertexStart:0
             vertexCount:triCount * 3];
     [enc endEncoding];
   }
 
-  // Color pass.
+  // Color pass: fullscreen quad, vertex stays in screen space (identity)
+  // so it always covers the viewport regardless of path scale; the fragment
+  // shader applies pathXform.mInv to map each fragment back into path-local
+  // pixel space for gradient sampling.
   {
     CanvasGradientParams gradParams;
     buildFillGradientParams(path, outputWidth, outputHeight, &gradParams);
@@ -159,6 +161,8 @@ void KKRenderFillForPath(KKBezierPath *path, float outputWidth,
         {{(float)outputWidth, (float)outputHeight}},
         {{-(float)outputWidth, (float)outputHeight}},
     };
+    CanvasPathTransform identityXform = {matrix_identity_float3x3,
+                                         matrix_identity_float3x3};
 
     MTLRenderPassDescriptor *rpd =
         [MTLRenderPassDescriptor renderPassDescriptor];
@@ -177,15 +181,18 @@ void KKRenderFillForPath(KKBezierPath *path, float outputWidth,
     [enc setStencilReferenceValue:0];
     [enc setVertexBytes:quadVerts length:sizeof(quadVerts) atIndex:0];
     [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+    [enc setVertexBytes:&identityXform length:sizeof(identityXform) atIndex:2];
     [enc setFragmentBytes:&gradParams length:sizeof(gradParams) atIndex:0];
     [enc setFragmentBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+    [enc setFragmentBytes:&pathXform length:sizeof(pathXform) atIndex:2];
     [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
     [enc endEncoding];
   }
 }
 
-void KKRenderFillAAOutline(KKBezierPath *path, float outputWidth,
-                           float outputHeight, id<MTLDevice> device,
+void KKRenderFillAAOutline(KKBezierPath *path, CanvasPathTransform pathXform,
+                           float outputWidth, float outputHeight,
+                           id<MTLDevice> device,
                            id<MTLCommandBuffer> commandBuffer,
                            id<MTLTexture> outputTexture,
                            id<MTLRenderPipelineState> strokePS,
@@ -298,8 +305,10 @@ void KKRenderFillAAOutline(KKBezierPath *path, float outputWidth,
                          options:MTLResourceStorageModeShared];
   [enc setVertexBuffer:vertexBuffer offset:0 atIndex:0];
   [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+  [enc setVertexBytes:&pathXform length:sizeof(pathXform) atIndex:2];
   [enc setFragmentBytes:&gradParams length:sizeof(gradParams) atIndex:0];
   [enc setFragmentBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+  [enc setFragmentBytes:&pathXform length:sizeof(pathXform) atIndex:2];
   [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
           vertexStart:0
           vertexCount:vc];
@@ -307,14 +316,12 @@ void KKRenderFillAAOutline(KKBezierPath *path, float outputWidth,
   free(vertices);
 }
 
-void KKRenderFillStencilOnly(KKBezierPath *path, float outputWidth,
-                             float outputHeight, id<MTLDevice> device,
-                             id<MTLCommandBuffer> commandBuffer,
-                             id<MTLTexture> outputTexture,
-                             id<MTLTexture> stencilTexture,
-                             id<MTLRenderPipelineState> fillStencilPS,
-                             id<MTLDepthStencilState> fillStencilDSState,
-                             simd_uint2 viewportSize) {
+void KKRenderFillStencilOnly(
+    KKBezierPath *path, CanvasPathTransform pathXform, float outputWidth,
+    float outputHeight, id<MTLDevice> device,
+    id<MTLCommandBuffer> commandBuffer, id<MTLTexture> outputTexture,
+    id<MTLTexture> stencilTexture, id<MTLRenderPipelineState> fillStencilPS,
+    id<MTLDepthStencilState> fillStencilDSState, simd_uint2 viewportSize) {
   CanvasFillVertex *fillVerts = NULL;
   NSUInteger triCount =
       KKBuildFillFan(path, outputWidth, outputHeight, &fillVerts);
@@ -342,13 +349,15 @@ void KKRenderFillStencilOnly(KKBezierPath *path, float outputWidth,
   [enc setStencilReferenceValue:0];
   [enc setVertexBuffer:fillBuf offset:0 atIndex:0];
   [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+  [enc setVertexBytes:&pathXform length:sizeof(pathXform) atIndex:2];
   [enc drawPrimitives:MTLPrimitiveTypeTriangle
           vertexStart:0
           vertexCount:triCount * 3];
   [enc endEncoding];
 }
 
-void KKRenderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
+void KKRenderSketchFillForPath(KKBezierPath *origPath,
+                               CanvasPathTransform pathXform, float outputWidth,
                                float outputHeight, id<MTLDevice> device,
                                id<MTLCommandBuffer> commandBuffer,
                                id<MTLTexture> outputTexture,
@@ -497,8 +506,10 @@ void KKRenderSketchFillForPath(KKBezierPath *origPath, float outputWidth,
                            options:MTLResourceStorageModeShared];
     [enc setVertexBuffer:vertexBuffer offset:0 atIndex:0];
     [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+    [enc setVertexBytes:&pathXform length:sizeof(pathXform) atIndex:2];
     [enc setFragmentBytes:&gradParams length:sizeof(gradParams) atIndex:0];
     [enc setFragmentBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+    [enc setFragmentBytes:&pathXform length:sizeof(pathXform) atIndex:2];
     MTLPrimitiveType prim =
         isDots ? MTLPrimitiveTypeTriangle : MTLPrimitiveTypeTriangleStrip;
     [enc drawPrimitives:prim vertexStart:0 vertexCount:vc];

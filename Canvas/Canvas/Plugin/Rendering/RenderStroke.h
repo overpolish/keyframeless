@@ -5,12 +5,14 @@
 
 #pragma once
 
+#import "ShaderTypes.h"
 #import <KeyframelessKit/KeyframelessKit.h>
 #import <Metal/Metal.h>
 
 /// Render the stroke (and markers) for a path. Handles contour splitting,
-/// dashed/dotted styles, and start/end markers.
-void KKRenderStrokeForPath(KKBezierPath *_Nonnull path, float outputWidth, float outputHeight,
-                           id<MTLDevice> _Nonnull device, id<MTLCommandBuffer> _Nonnull commandBuffer,
-                           id<MTLTexture> _Nonnull outputTexture, id<MTLRenderPipelineState> _Nonnull strokePS,
-                           simd_uint2 viewportSize);
+/// dashed/dotted styles, and start/end markers. `pathXform` is bound at
+/// vertex/fragment buffer slot 2 so the shader applies the per-path affine.
+void KKRenderStrokeForPath(KKBezierPath *_Nonnull path, CanvasPathTransform pathXform, float outputWidth,
+                           float outputHeight, id<MTLDevice> _Nonnull device,
+                           id<MTLCommandBuffer> _Nonnull commandBuffer, id<MTLTexture> _Nonnull outputTexture,
+                           id<MTLRenderPipelineState> _Nonnull strokePS, simd_uint2 viewportSize);

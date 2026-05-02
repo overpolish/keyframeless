@@ -13,6 +13,15 @@ typedef struct {
     float capDistance;  // 0 = interior, approaches 1 at path ends
 } CanvasVertex;
 
+// Per-path affine transform applied in centered-pixel space. `m` is composed
+// onto each vertex; `mInv` is applied to the fragment position before
+// gradient bbox sampling so gradients stay aligned with the path's local
+// coordinates. Identity for paths/draw-calls without a per-path transform.
+typedef struct {
+    matrix_float3x3 m;
+    matrix_float3x3 mInv;
+} CanvasPathTransform;
+
 typedef struct {
     float strokeWidth;
     float r, g, b;

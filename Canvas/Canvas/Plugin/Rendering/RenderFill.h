@@ -16,7 +16,12 @@ NSUInteger KKBuildFillFan(KKBezierPath *_Nonnull path, float outputWidth,
                           CanvasFillVertex *_Nullable *_Nonnull outVerts);
 
 /// Render fill for a path using stencil-based even-odd winding.
-void KKRenderFillForPath(KKBezierPath *_Nonnull path, float outputWidth,
+/// `pathXform` is bound at vertex/fragment buffer slot 2 for the stencil
+/// pass; the color pass uses identity on the vertex (fullscreen quad must
+/// stay in screen space) but `pathXform.mInv` on the fragment so the
+/// gradient samples in the path's local pixel space.
+void KKRenderFillForPath(KKBezierPath *_Nonnull path,
+                         CanvasPathTransform pathXform, float outputWidth,
                          float outputHeight, id<MTLDevice> _Nonnull device,
                          id<MTLCommandBuffer> _Nonnull commandBuffer,
                          id<MTLTexture> _Nonnull outputTexture,
@@ -31,7 +36,8 @@ void KKRenderFillForPath(KKBezierPath *_Nonnull path, float outputWidth,
 /// and gradient. Run after KKRenderFillForPath to feather silhouette edges.
 /// The ribbon overlaps the fill on its inner half (idempotent in
 /// premultiplied source-over) and feathers off the outer half.
-void KKRenderFillAAOutline(KKBezierPath *_Nonnull path, float outputWidth,
+void KKRenderFillAAOutline(KKBezierPath *_Nonnull path,
+                           CanvasPathTransform pathXform, float outputWidth,
                            float outputHeight, id<MTLDevice> _Nonnull device,
                            id<MTLCommandBuffer> _Nonnull commandBuffer,
                            id<MTLTexture> _Nonnull outputTexture,
@@ -40,8 +46,9 @@ void KKRenderFillAAOutline(KKBezierPath *_Nonnull path, float outputWidth,
 
 /// Write the shape stencil only (no color pass). Used to clip sketch fills.
 void KKRenderFillStencilOnly(
-    KKBezierPath *_Nonnull path, float outputWidth, float outputHeight,
-    id<MTLDevice> _Nonnull device, id<MTLCommandBuffer> _Nonnull commandBuffer,
+    KKBezierPath *_Nonnull path, CanvasPathTransform pathXform,
+    float outputWidth, float outputHeight, id<MTLDevice> _Nonnull device,
+    id<MTLCommandBuffer> _Nonnull commandBuffer,
     id<MTLTexture> _Nonnull outputTexture,
     id<MTLTexture> _Nonnull stencilTexture,
     id<MTLRenderPipelineState> _Nonnull fillStencilPS,
@@ -50,8 +57,9 @@ void KKRenderFillStencilOnly(
 
 /// Render sketch fill (hachure, cross-hatch, zigzag, dots) for a path.
 void KKRenderSketchFillForPath(
-    KKBezierPath *_Nonnull origPath, float outputWidth, float outputHeight,
-    id<MTLDevice> _Nonnull device, id<MTLCommandBuffer> _Nonnull commandBuffer,
+    KKBezierPath *_Nonnull origPath, CanvasPathTransform pathXform,
+    float outputWidth, float outputHeight, id<MTLDevice> _Nonnull device,
+    id<MTLCommandBuffer> _Nonnull commandBuffer,
     id<MTLTexture> _Nonnull outputTexture,
     id<MTLTexture> _Nullable stencilTexture,
     id<MTLRenderPipelineState> _Nonnull strokePS,
