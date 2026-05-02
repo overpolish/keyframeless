@@ -97,6 +97,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, assign) float scaleX;
 @property(nonatomic, assign) float scaleY;
 
+/// Per-layer rotation around the layer's anchor (radians, CCW positive).
+/// Default 0. Animatable via the Rot Z KKTiming lane.
+@property(nonatomic, assign) float rotationZ;
+
 /// Per-layer anchor (pivot) for rotate/scale, expressed as an *offset* from
 /// the path's bbox center in object-space units (Y=0 at bottom). (0, 0) puts
 /// the pivot at the bbox center; same convention as `translateX/Y` so the

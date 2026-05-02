@@ -72,6 +72,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, strong) KKArcOSC *transformPositionOSC;
 @property(nonatomic, strong) KKRingOSC *scaleRingOSC;
 @property(nonatomic, strong) KKSquarePointOSC *anchorOSC;
+@property(nonatomic, strong) KKRotationOSC *rotZOSC;
 @property(nonatomic, assign) BOOL transformPositionHovered;
 @property(nonatomic, assign) BOOL transformPositionDragging;
 @property(nonatomic, assign) double transformPositionDragStartX;
@@ -94,6 +95,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, assign) BOOL anchorHovered;
 @property(nonatomic, assign) BOOL anchorDragging;
 @property(nonatomic, strong) KKSnapEngine *anchorSnapEngine;
+
+// Per-layer Rotation Z handle. MagicMove-style: atan2 delta accumulation
+// from the anchor (rotation pivot); snap-to-zero at ±3°.
+@property(nonatomic, assign) BOOL rotZHovered;
+@property(nonatomic, assign) BOOL rotZDragging;
+@property(nonatomic, assign) double rotZDragPrevAngle;
+@property(nonatomic, assign) double rotZDragAccum;
 
 // Position-lane path editing (between two transition keyframes).
 @property(nonatomic, strong) KKPointOSC *positionPathPointOSC;

@@ -375,6 +375,15 @@ static const CGFloat kPathToolbarGap = 6.0;
                                      groupKey:p.layerID];
 }
 
+- (BOOL)isRotZOSCVisibleAtTime:(CMTime)time {
+  KKBezierPath *p = [self selectedTransformablePath];
+  if (!p)
+    return NO;
+  return [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                        label:@"Rot Z"
+                                     groupKey:p.layerID];
+}
+
 - (CGPoint)transformPositionCanvasPointAtTime:(CMTime)time {
   // Center the arc on the selected layer (its bbox center + translation
   // offset), so dragging always grabs the visual layer rather than the
@@ -429,7 +438,8 @@ static const CGFloat kPathToolbarGap = 6.0;
   BOOL posVisible = [self isTransformPositionOSCVisibleAtTime:time];
   BOOL scaleVisible = [self isScaleRingOSCVisibleAtTime:time];
   BOOL anchorVisible = [self isAnchorOSCVisibleAtTime:time];
-  if (!posVisible && !scaleVisible && !anchorVisible)
+  BOOL rotZVisible = [self isRotZOSCVisibleAtTime:time];
+  if (!posVisible && !scaleVisible && !anchorVisible && !rotZVisible)
     return;
 
   if (posVisible) {
@@ -442,8 +452,21 @@ static const CGFloat kPathToolbarGap = 6.0;
                       atTime:time];
   }
 
-  if (scaleVisible || anchorVisible) {
+  if (scaleVisible || anchorVisible || rotZVisible) {
     CGPoint anchorCanvas = [self transformAnchorCanvasPointAtTime:time];
+    if (rotZVisible) {
+      double rz = 0.0;
+      id<FxParameterRetrievalAPI_v6> api = [self.apiManager
+          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      [api getFloatValue:&rz fromParameter:kParamRotation atTime:time];
+      self.rotZOSC.center = anchorCanvas;
+      self.rotZOSC.angle = (float)rz;
+      [self.rotZOSC drawAtCanvasPosition:anchorCanvas
+                               isHovered:self.rotZHovered
+                                isActive:self.rotZDragging
+                        destinationImage:dest
+                                  atTime:time];
+    }
     if (scaleVisible) {
       CGFloat rx = 0, ry = 0;
       [self getScaleRingRadiiAtTime:time rx:&rx ry:&ry];

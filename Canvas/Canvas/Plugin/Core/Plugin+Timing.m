@@ -208,7 +208,20 @@ static NSArray<KKCanvasAnimProp *> *_kkAnimatableProperties(void) {
           }
         }];
 
-    sProps = @[ strokeWidth, position, scale, anchor ];
+    KKCanvasAnimProp *rotZ = [KKCanvasAnimProp propWithLabel:@"Rot Z"
+        paramID:kParamRotation
+        secondaryParamID:0
+        kind:KKAnimatableParamKindFloat
+        enabled:transformEnabled
+        read:^NSArray<NSNumber *> *(KKBezierPath *p) {
+          return @[ @(p.rotationZ) ];
+        }
+        write:^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
+          if (vals.count >= 1)
+            p.rotationZ = vals[0].floatValue;
+        }];
+
+    sProps = @[ strokeWidth, position, scale, anchor, rotZ ];
   });
   return sProps;
 }

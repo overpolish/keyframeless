@@ -206,6 +206,13 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
                              defaultY:0.0
                        parameterFlags:kFxParameterFlag_HIDDEN];
 
+  [paramAPI addAngleSliderWithName:@"Rotation Z"
+                       parameterID:kParamRotation
+                    defaultDegrees:0.0
+               parameterMinDegrees:-FLT_MAX
+               parameterMaxDegrees:FLT_MAX
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+
   [paramAPI addCustomParameterWithName:@""
                            parameterID:kParamGroupStroke
                           defaultValue:@(kParamGroupStroke)

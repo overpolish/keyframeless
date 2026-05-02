@@ -195,6 +195,24 @@
     return;
   }
 
+  if (activePart == kOSCTransformRotZ) {
+    self.rotZDragging = YES;
+    CGPoint anchorCanvas = [self transformAnchorCanvasPointAtTime:time];
+    double dx = positionX - anchorCanvas.x;
+    double dy = positionY - anchorCanvas.y;
+    self.rotZDragPrevAngle = atan2(-dy, dx);
+    double rz = 0.0;
+    id<FxParameterRetrievalAPI_v6> getAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    [getAPI getFloatValue:&rz fromParameter:kParamRotation atTime:time];
+    self.rotZDragAccum = rz;
+    id<FxOnScreenControlAPI_v4> oscAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    [oscAPI setCursor:[NSCursor crosshairCursor]];
+    *forceUpdate = YES;
+    return;
+  }
+
   // --- Toolbar button clicks ---
   if (activePart == kOSCToolbarCursor || activePart == kOSCToolbarPen ||
       activePart == kOSCToolbarRect || activePart == kOSCToolbarEllipse ||

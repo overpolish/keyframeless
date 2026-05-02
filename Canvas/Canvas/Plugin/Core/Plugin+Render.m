@@ -135,11 +135,12 @@ _kkBboxCentersByLayerID(NSArray<KKBezierPath *> *paths) {
 }
 
 /// Build the local 3x3 affine for one path/group in centered-pixel space:
-/// `T(translate) · T(anchor) · S(scale) · T(-anchor)`. The anchor is an
-/// object-space offset from the path's bbox center; the bbox center comes
-/// from `centers` so groups resolve via their descendants. Y is flipped
-/// because bezier points live in Y-up object space while pixel space is
-/// Y-down.
+/// `T(translate) · T(anchor) · R(rotZ) · S(scale) · T(-anchor)`. The anchor
+/// is an object-space offset from the path's bbox center; the bbox center
+/// comes from `centers` so groups resolve via their descendants. Y is
+/// flipped because bezier points live in Y-up object space while pixel
+/// space is Y-down — the rotation matrix is mirrored accordingly so a
+/// positive angle rotates CCW visually.
 static matrix_float3x3
 _kkLocalMatrix(KKBezierPath *p, NSDictionary<NSString *, NSData *> *centers,
                float W, float H) {
@@ -157,9 +158,25 @@ _kkLocalMatrix(KKBezierPath *p, NSDictionary<NSString *, NSData *> *centers,
   float ay = (0.5f - anchorObjY) * H;
   float sx = p.scaleX;
   float sy = p.scaleY;
-  return simd_matrix(
-      simd_make_float3(sx, 0, 0), simd_make_float3(0, sy, 0),
-      simd_make_float3(pxTx + ax * (1.0f - sx), pxTy + ay * (1.0f - sy), 1));
+  float c = cosf(p.rotationZ);
+  float s = sinf(p.rotationZ);
+  // Match MM's rotation direction: positive angle rotates the geometry the
+  // same visual direction as MM's image transform (+θ = CW in Y-down screen
+  // space, which lines up with the OSC handle: drag the arm clockwise →
+  // shape rotates clockwise).
+  matrix_float3x3 R =
+      simd_matrix(simd_make_float3(c, s, 0), simd_make_float3(-s, c, 0),
+                  simd_make_float3(0, 0, 1));
+  matrix_float3x3 S =
+      simd_matrix(simd_make_float3(sx, 0, 0), simd_make_float3(0, sy, 0),
+                  simd_make_float3(0, 0, 1));
+  matrix_float3x3 Tneg =
+      simd_matrix(simd_make_float3(1, 0, 0), simd_make_float3(0, 1, 0),
+                  simd_make_float3(-ax, -ay, 1));
+  matrix_float3x3 Tpos =
+      simd_matrix(simd_make_float3(1, 0, 0), simd_make_float3(0, 1, 0),
+                  simd_make_float3(pxTx + ax, pxTy + ay, 1));
+  return simd_mul(Tpos, simd_mul(R, simd_mul(S, Tneg)));
 }
 
 /// Build the per-path forward + inverse affine in centered-pixel space.

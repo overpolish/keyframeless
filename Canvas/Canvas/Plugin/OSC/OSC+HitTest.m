@@ -32,6 +32,7 @@
   self.transformPositionHovered = NO;
   self.scaleRingHovered = NO;
   self.anchorHovered = NO;
+  self.rotZHovered = NO;
   if ([self isTransformPositionOSCVisibleAtTime:kCMTimeZero]) {
     CGPoint pos = [self transformPositionCanvasPointAtTime:kCMTimeZero];
     if (hypot(x - pos.x, y - pos.y) < self.transformPositionOSC.hitRadius) {
@@ -43,8 +44,27 @@
   }
   BOOL anchorVisible = [self isAnchorOSCVisibleAtTime:kCMTimeZero];
   BOOL scaleVisible = [self isScaleRingOSCVisibleAtTime:kCMTimeZero];
-  if (anchorVisible || scaleVisible) {
+  BOOL rotZVisible = [self isRotZOSCVisibleAtTime:kCMTimeZero];
+  if (anchorVisible || scaleVisible || rotZVisible) {
     CGPoint anchor = [self transformAnchorCanvasPointAtTime:kCMTimeZero];
+    if (rotZVisible) {
+      double rz = 0.0;
+      id<FxParameterRetrievalAPI_v6> getAPI = [self.apiManager
+          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      [getAPI getFloatValue:&rz
+              fromParameter:kParamRotation
+                     atTime:kCMTimeZero];
+      self.rotZOSC.center = anchor;
+      self.rotZOSC.angle = (float)rz;
+      if ([self.rotZOSC hitTestAtMousePositionX:x
+                                      positionY:y
+                                         atTime:kCMTimeZero]) {
+        self.rotZHovered = YES;
+        *activePart = kOSCTransformRotZ;
+        [oscAPI setCursor:[NSCursor crosshairCursor]];
+        return;
+      }
+    }
     if (anchorVisible && hypot(x - anchor.x, y - anchor.y) < hitRadius) {
       self.anchorHovered = YES;
       *activePart = kOSCTransformAnchor;

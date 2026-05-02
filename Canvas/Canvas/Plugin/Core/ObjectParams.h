@@ -97,6 +97,7 @@ static const KKParamVisRule kParamVisibility[] = {
   { kParamScaleX,             KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
   { kParamScaleY,             KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
   { kParamAnchor,             KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
+  { kParamRotation,           KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
   // ─── Stroke group children ───
   { kParamStrokeWidth,        KKVisStrokeOpen,                                             kFxParameterFlag_DEFAULT },
   { kParamStrokeColorMode,    KKVisStrokeOpen,                                             kFxParameterFlag_NOT_ANIMATABLE },
@@ -321,6 +322,11 @@ KKReadTransformParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                   atTime:kCMTimeZero];
   path.anchorX = (float)ax;
   path.anchorY = (float)ay;
+  double rz = 0.0;
+  [paramGetAPI getFloatValue:&rz
+               fromParameter:kParamRotation
+                      atTime:kCMTimeZero];
+  path.rotationZ = (float)rz;
 }
 
 /// Mirror of KKReadTransformParamsToPath.
@@ -344,6 +350,9 @@ static inline void KKWriteTransformParamsFromPath(
                   YValue:path.anchorY
              toParameter:kParamAnchor
                   atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.rotationZ
+                 toParameter:kParamRotation
+                      atTime:kCMTimeZero];
 }
 
 /// Read the transform-only subset of params (the only fields a group owns).
@@ -581,6 +590,7 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
   float oldScaleY = primary.scaleY;
   float oldAnchorX = primary.anchorX;
   float oldAnchorY = primary.anchorY;
+  float oldRotationZ = primary.rotationZ;
   BOOL oldFillEnabled = primary.fillEnabled;
   float oldFillR = primary.fillR;
   float oldFillG = primary.fillG;
@@ -644,6 +654,7 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
     KK_COPY_IF_CHANGED(scaleY, oldScaleY);
     KK_COPY_IF_CHANGED(anchorX, oldAnchorX);
     KK_COPY_IF_CHANGED(anchorY, oldAnchorY);
+    KK_COPY_IF_CHANGED(rotationZ, oldRotationZ);
     KK_COPY_IF_CHANGED(strokeWidth, oldStrokeWidth);
     KK_COPY_IF_CHANGED(endWidth, oldEndWidth);
     if (strokeColorChanged) {

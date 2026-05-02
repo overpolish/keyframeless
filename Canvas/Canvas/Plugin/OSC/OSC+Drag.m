@@ -410,6 +410,35 @@
     return;
   }
 
+  if (self.rotZDragging) {
+    // MagicMove pattern: atan2 delta accumulation around the rotation
+    // pivot (anchor canvas point), with snap-to-zero at ±3°.
+    CGPoint anchorCanvas = [self transformAnchorCanvasPointAtTime:time];
+    double dx = positionX - anchorCanvas.x;
+    double dy = positionY - anchorCanvas.y;
+    double angle = atan2(-dy, dx);
+    double delta = angle - self.rotZDragPrevAngle;
+    if (delta > M_PI)
+      delta -= 2.0 * M_PI;
+    else if (delta < -M_PI)
+      delta += 2.0 * M_PI;
+    self.rotZDragAccum = self.rotZDragAccum + delta;
+    self.rotZDragPrevAngle = angle;
+    static const double kSnapToZero = 3.0 * (M_PI / 180.0);
+    double value = self.rotZDragAccum;
+    if (fabs(value) < kSnapToZero)
+      value = 0.0;
+    id<FxCustomParameterActionAPI_v4> actAPI = [self.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    id<FxParameterSettingAPI_v5> setAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [actAPI startAction:self];
+    [setAPI setFloatValue:value toParameter:kParamRotation atTime:time];
+    [actAPI endAction:self];
+    *forceUpdate = YES;
+    return;
+  }
+
   if (self.anchorDragging) {
     // MagicMove pattern: mouse → object space → that's the new anchor
     // (no translate compensation). Canvas anchor is bbox-relative, so we
@@ -596,6 +625,10 @@
   } else if (self.anchorDragging) {
     self.anchorDragging = NO;
     self.anchorHovered = NO;
+    transformDragEnded = YES;
+  } else if (self.rotZDragging) {
+    self.rotZDragging = NO;
+    self.rotZHovered = NO;
     transformDragEnded = YES;
   }
   if (transformDragEnded) {

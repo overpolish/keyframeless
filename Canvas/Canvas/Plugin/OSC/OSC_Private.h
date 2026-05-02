@@ -283,6 +283,10 @@ NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
 /// preconditions plus the "Anchor" per-lane OSC toggle.
 - (BOOL)isAnchorOSCVisibleAtTime:(CMTime)time;
 
+/// YES when the Rotation Z OSC should be visible — gated by the layer
+/// preconditions plus the "Rot Z" per-lane OSC toggle.
+- (BOOL)isRotZOSCVisibleAtTime:(CMTime)time;
+
 - (void)drawTransformOSCWithDestinationImage:(FxImageTile *)dest
                                       atTime:(CMTime)time;
 

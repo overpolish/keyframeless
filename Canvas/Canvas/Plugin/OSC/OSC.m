@@ -165,6 +165,9 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
     self.anchorOSC.outlineWidth = 1.5f;
     self.anchorSnapEngine = [[KKSnapEngine alloc] init];
 
+    self.rotZOSC = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
+    self.rotZOSC.clearsOnDraw = NO;
+
     self.positionPathPointOSC =
         [[KKPointOSC alloc] initWithAPIManager:apiManager];
     self.positionPathPointOSC.clearsOnDraw = NO;
