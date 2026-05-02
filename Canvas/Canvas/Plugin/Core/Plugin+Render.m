@@ -39,36 +39,156 @@ static CanvasPathTransform _kkIdentityPathTransform(void) {
   return x;
 }
 
-/// Build the per-path forward + inverse affine for `path`, in centered-pixel
-/// space. Sums `path`'s own translation with each enabled ancestor group's
-/// translation (walks parentGroupID with a depth cap). Y is flipped because
-/// bezier points live in a Y-up object space while pixel space is Y-down.
+/// Object-space bbox of a single (non-group) path. Approximates curves with
+/// 16 samples per segment, matching the OSC's bboxCenterOfPath:.
+static BOOL _kkPathBounds(KKBezierPath *p, simd_float2 *outMin,
+                          simd_float2 *outMax) {
+  if (p.count == 0)
+    return NO;
+  NSUInteger segCount = p.count - 1;
+  if (p.closed && p.count >= 2)
+    segCount = p.count;
+  simd_float2 first = [p evaluatePointAtIndex:0 nextIndex:0 atT:0.0f];
+  float minX = first.x, minY = first.y, maxX = first.x, maxY = first.y;
+  for (NSUInteger c = 0; c < segCount; c++) {
+    NSUInteger nextIdx = (c + 1) % p.count;
+    for (NSUInteger s = 0; s <= 16; s++) {
+      float t = (float)s / 16.0f;
+      simd_float2 pos = [p evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
+      minX = fminf(minX, pos.x);
+      minY = fminf(minY, pos.y);
+      maxX = fmaxf(maxX, pos.x);
+      maxY = fmaxf(maxY, pos.y);
+    }
+  }
+  *outMin = (simd_float2){minX, minY};
+  *outMax = (simd_float2){maxX, maxY};
+  return YES;
+}
+
+/// Object-space bbox center keyed by layerID, for both groups (union of
+/// descendants) and individual paths. (0.5, 0.5) is returned when a group
+/// has no points yet — matches OSC fallback so anchor handles don't snap to
+/// (0,0) on empty groups.
+static NSDictionary<NSString *, NSData *> *
+_kkBboxCentersByLayerID(NSArray<KKBezierPath *> *paths) {
+  NSMutableDictionary<NSString *, NSData *> *centers =
+      [NSMutableDictionary dictionary];
+  // First pass: non-group paths.
+  NSMutableDictionary<NSString *, NSData *> *pathBboxMin =
+      [NSMutableDictionary dictionary];
+  NSMutableDictionary<NSString *, NSData *> *pathBboxMax =
+      [NSMutableDictionary dictionary];
+  for (KKBezierPath *p in paths) {
+    if (p.isGroup || !p.layerID.length)
+      continue;
+    simd_float2 bmin, bmax;
+    if (!_kkPathBounds(p, &bmin, &bmax))
+      continue;
+    pathBboxMin[p.layerID] = [NSData dataWithBytes:&bmin length:sizeof(bmin)];
+    pathBboxMax[p.layerID] = [NSData dataWithBytes:&bmax length:sizeof(bmax)];
+    simd_float2 c = (bmin + bmax) * 0.5f;
+    centers[p.layerID] = [NSData dataWithBytes:&c length:sizeof(c)];
+  }
+  // Second pass: groups, by walking descendants. Iterate until stable so
+  // sub-groups resolve via earlier-resolved children. Cap iterations to
+  // group count + 1 so a malformed cycle can't spin forever.
+  NSUInteger maxRounds = paths.count + 1;
+  for (NSUInteger round = 0; round < maxRounds; round++) {
+    BOOL grew = NO;
+    for (KKBezierPath *g in paths) {
+      if (!g.isGroup || !g.groupID.length)
+        continue;
+      if (centers[g.layerID])
+        continue;
+      simd_float2 gmin = {HUGE_VALF, HUGE_VALF};
+      simd_float2 gmax = {-HUGE_VALF, -HUGE_VALF};
+      BOOL found = NO;
+      for (KKBezierPath *child in paths) {
+        if (![child.parentGroupID isEqualToString:g.groupID])
+          continue;
+        NSData *cMin = pathBboxMin[child.layerID];
+        NSData *cMax = pathBboxMax[child.layerID];
+        if (!cMin || !cMax)
+          continue;
+        simd_float2 cmin, cmax;
+        [cMin getBytes:&cmin length:sizeof(cmin)];
+        [cMax getBytes:&cmax length:sizeof(cmax)];
+        gmin = simd_min(gmin, cmin);
+        gmax = simd_max(gmax, cmax);
+        found = YES;
+      }
+      if (found && g.layerID.length) {
+        pathBboxMin[g.layerID] = [NSData dataWithBytes:&gmin
+                                                length:sizeof(gmin)];
+        pathBboxMax[g.layerID] = [NSData dataWithBytes:&gmax
+                                                length:sizeof(gmax)];
+        simd_float2 c = (gmin + gmax) * 0.5f;
+        centers[g.layerID] = [NSData dataWithBytes:&c length:sizeof(c)];
+        grew = YES;
+      }
+    }
+    if (!grew)
+      break;
+  }
+  return centers;
+}
+
+/// Build the local 3x3 affine for one path/group in centered-pixel space:
+/// `T(translate) · T(anchor) · S(scale) · T(-anchor)`. The anchor is an
+/// object-space offset from the path's bbox center; the bbox center comes
+/// from `centers` so groups resolve via their descendants. Y is flipped
+/// because bezier points live in Y-up object space while pixel space is
+/// Y-down.
+static matrix_float3x3
+_kkLocalMatrix(KKBezierPath *p, NSDictionary<NSString *, NSData *> *centers,
+               float W, float H) {
+  float pxTx = p.translateX * W;
+  float pxTy = -p.translateY * H;
+  simd_float2 bboxCenter = (simd_float2){0.5f, 0.5f};
+  if (p.layerID.length) {
+    NSData *d = centers[p.layerID];
+    if (d.length >= sizeof(bboxCenter))
+      [d getBytes:&bboxCenter length:sizeof(bboxCenter)];
+  }
+  float anchorObjX = bboxCenter.x + p.anchorX;
+  float anchorObjY = bboxCenter.y + p.anchorY;
+  float ax = (anchorObjX - 0.5f) * W;
+  float ay = (0.5f - anchorObjY) * H;
+  float sx = p.scaleX;
+  float sy = p.scaleY;
+  return simd_matrix(
+      simd_make_float3(sx, 0, 0), simd_make_float3(0, sy, 0),
+      simd_make_float3(pxTx + ax * (1.0f - sx), pxTy + ay * (1.0f - sy), 1));
+}
+
+/// Build the per-path forward + inverse affine in centered-pixel space.
+/// Composes `path`'s own local matrix with each enabled ancestor group's
+/// local matrix (parent matrices multiply on the left). Walks parentGroupID
+/// with a depth cap so a cyclic parent reference can't spin forever.
 static CanvasPathTransform
 _kkBuildPathTransform(KKBezierPath *path,
                       NSDictionary<NSString *, KKBezierPath *> *groupsByID,
+                      NSDictionary<NSString *, NSData *> *bboxCenters,
                       float outputWidth, float outputHeight) {
   if (!path.transformEnabled)
     return _kkIdentityPathTransform();
-  float tx = path.translateX, ty = path.translateY;
+  matrix_float3x3 m =
+      _kkLocalMatrix(path, bboxCenters, outputWidth, outputHeight);
   NSString *parentID = path.parentGroupID;
   NSUInteger depth = 0;
   while (parentID.length && depth++ < 32) {
     KKBezierPath *g = groupsByID[parentID];
     if (!g)
       break;
-    if (g.transformEnabled) {
-      tx += g.translateX;
-      ty += g.translateY;
-    }
+    if (g.transformEnabled)
+      m = simd_mul(_kkLocalMatrix(g, bboxCenters, outputWidth, outputHeight),
+                   m);
     parentID = g.parentGroupID;
   }
-  float pxTx = tx * outputWidth;
-  float pxTy = -ty * outputHeight;
   CanvasPathTransform x;
-  x.m = simd_matrix(simd_make_float3(1, 0, 0), simd_make_float3(0, 1, 0),
-                    simd_make_float3(pxTx, pxTy, 1));
-  x.mInv = simd_matrix(simd_make_float3(1, 0, 0), simd_make_float3(0, 1, 0),
-                       simd_make_float3(-pxTx, -pxTy, 1));
+  x.m = m;
+  x.mInv = simd_inverse(m);
   return x;
 }
 
@@ -655,6 +775,8 @@ static BOOL _kkDecodeSampleAt(NSData *pluginState, NSUInteger offset,
 
   NSDictionary<NSString *, KKBezierPath *> *groupsByID =
       _kkIndexGroupsByID(origPaths);
+  NSDictionary<NSString *, NSData *> *bboxCenters =
+      _kkBboxCentersByLayerID(origPaths);
 
   for (NSUInteger pi = paths.count; pi > 0; pi--) {
     @autoreleasepool {
@@ -662,8 +784,8 @@ static BOOL _kkDecodeSampleAt(NSData *pluginState, NSUInteger offset,
       KKBezierPath *orig = origPaths[pi - 1];
       if (path.count < 2 || path.hidden)
         continue;
-      CanvasPathTransform pathXform =
-          _kkBuildPathTransform(orig, groupsByID, outputWidth, outputHeight);
+      CanvasPathTransform pathXform = _kkBuildPathTransform(
+          orig, groupsByID, bboxCenters, outputWidth, outputHeight);
 
       float pathOpacity = path.opacity;
       BOOL needsIntermediate =

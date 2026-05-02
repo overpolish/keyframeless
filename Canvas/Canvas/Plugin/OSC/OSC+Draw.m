@@ -357,6 +357,24 @@ static const CGFloat kPathToolbarGap = 6.0;
                                      groupKey:p.layerID];
 }
 
+- (BOOL)isScaleRingOSCVisibleAtTime:(CMTime)time {
+  KKBezierPath *p = [self selectedTransformablePath];
+  if (!p)
+    return NO;
+  return [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                        label:@"Scale"
+                                     groupKey:p.layerID];
+}
+
+- (BOOL)isAnchorOSCVisibleAtTime:(CMTime)time {
+  KKBezierPath *p = [self selectedTransformablePath];
+  if (!p)
+    return NO;
+  return [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                        label:@"Anchor"
+                                     groupKey:p.layerID];
+}
+
 - (CGPoint)transformPositionCanvasPointAtTime:(CMTime)time {
   // Center the arc on the selected layer (its bbox center + translation
   // offset), so dragging always grabs the visual layer rather than the
@@ -372,16 +390,80 @@ static const CGFloat kPathToolbarGap = 6.0;
   return [self canvasPointFromObjectPoint:(center + translation)];
 }
 
+- (CGPoint)transformAnchorCanvasPointAtTime:(CMTime)time {
+  // Anchor convention matches Position's: bbox-center is neutral, the param
+  // value is an object-space offset on top of that. The visual handle also
+  // includes the per-layer translation so the pivot tracks the layer.
+  KKBezierPath *p = [self selectedTransformablePath];
+  if (!p)
+    return CGPointZero;
+  simd_float2 center = [self bboxCenterOfPath:p];
+  simd_float2 anchorOffset = [self objectPositionForParam:kParamAnchor
+                                                   atTime:time];
+  simd_float2 paramPos = [self objectPositionForParam:kParamPosition
+                                               atTime:time];
+  simd_float2 translation = paramPos - (simd_float2){0.5f, 0.5f};
+  return
+      [self canvasPointFromObjectPoint:(center + anchorOffset + translation)];
+}
+
+- (void)getScaleRingRadiiAtTime:(CMTime)time
+                             rx:(CGFloat *)outRx
+                             ry:(CGFloat *)outRy {
+  CGPoint c0 = [self canvasPointFromObjectPoint:(simd_float2){0, 0}];
+  CGPoint c1 = [self canvasPointFromObjectPoint:(simd_float2){1, 1}];
+  CGFloat minDim = MIN((CGFloat)fabs(c1.x - c0.x), (CGFloat)fabs(c1.y - c0.y));
+  double sx = 1.0, sy = 1.0;
+  id<FxParameterRetrievalAPI_v6> api =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  [api getFloatValue:&sx fromParameter:kParamScaleX atTime:time];
+  [api getFloatValue:&sy fromParameter:kParamScaleY atTime:time];
+  if (outRx)
+    *outRx = minDim * 0.1 * MAX(0.05, sx);
+  if (outRy)
+    *outRy = minDim * 0.1 * MAX(0.05, sy);
+}
+
 - (void)drawTransformOSCWithDestinationImage:(FxImageTile *)dest
                                       atTime:(CMTime)time {
-  if (![self isTransformPositionOSCVisibleAtTime:time])
+  BOOL posVisible = [self isTransformPositionOSCVisibleAtTime:time];
+  BOOL scaleVisible = [self isScaleRingOSCVisibleAtTime:time];
+  BOOL anchorVisible = [self isAnchorOSCVisibleAtTime:time];
+  if (!posVisible && !scaleVisible && !anchorVisible)
     return;
-  CGPoint pos = [self transformPositionCanvasPointAtTime:time];
-  [self.transformPositionOSC drawAtCanvasPosition:pos
-                                        isHovered:self.transformPositionHovered
-                                         isActive:self.transformPositionDragging
-                                 destinationImage:dest
-                                           atTime:time];
+
+  if (posVisible) {
+    CGPoint pos = [self transformPositionCanvasPointAtTime:time];
+    [self.transformPositionOSC
+        drawAtCanvasPosition:pos
+                   isHovered:self.transformPositionHovered
+                    isActive:self.transformPositionDragging
+            destinationImage:dest
+                      atTime:time];
+  }
+
+  if (scaleVisible || anchorVisible) {
+    CGPoint anchorCanvas = [self transformAnchorCanvasPointAtTime:time];
+    if (scaleVisible) {
+      CGFloat rx = 0, ry = 0;
+      [self getScaleRingRadiiAtTime:time rx:&rx ry:&ry];
+      self.scaleRingOSC.center = anchorCanvas;
+      self.scaleRingOSC.ringRadius = (float)rx;
+      self.scaleRingOSC.ringRadiusY = (float)ry;
+      [self.scaleRingOSC drawAtCanvasPosition:anchorCanvas
+                                    isHovered:self.scaleRingHovered
+                                     isActive:self.scaleRingDragging
+                             destinationImage:dest
+                                       atTime:time];
+    }
+    if (anchorVisible) {
+      [self.anchorOSC drawAtCanvasPosition:anchorCanvas
+                                 isHovered:self.anchorHovered
+                                  isActive:self.anchorDragging
+                          destinationImage:dest
+                                    atTime:time];
+    }
+  }
 }
 
 @end

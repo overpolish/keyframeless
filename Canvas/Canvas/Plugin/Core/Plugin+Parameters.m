@@ -178,6 +178,34 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
                              defaultY:0.5
                        parameterFlags:kFxParameterFlag_HIDDEN];
 
+  [paramAPI addPercentSliderWithName:@"Scale X"
+                         parameterID:kParamScaleX
+                        defaultValue:1.0
+                        parameterMin:0.0
+                        parameterMax:10.0
+                           sliderMin:0.0
+                           sliderMax:5.0
+                               delta:0.01
+                      parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addPercentSliderWithName:@"Scale Y"
+                         parameterID:kParamScaleY
+                        defaultValue:1.0
+                        parameterMin:0.0
+                        parameterMax:10.0
+                           sliderMin:0.0
+                           sliderMax:5.0
+                               delta:0.01
+                      parameterFlags:kFxParameterFlag_HIDDEN];
+
+  // Anchor is an offset from bbox center (matches Position's neutral-at-0
+  // semantics for the path: "no offset" = at the layer's center).
+  [paramAPI addPointParameterWithName:@"Anchor"
+                          parameterID:kParamAnchor
+                             defaultX:0.0
+                             defaultY:0.0
+                       parameterFlags:kFxParameterFlag_HIDDEN];
+
   [paramAPI addCustomParameterWithName:@""
                            parameterID:kParamGroupStroke
                           defaultValue:@(kParamGroupStroke)

@@ -371,6 +371,121 @@
     *forceUpdate = YES;
     return;
   }
+
+  if (self.scaleRingDragging) {
+    // MagicMove pattern: default = uniform (both axes track the radial
+    // ratio); shift held = unlink, applies the ratio to whichever axis
+    // dominated the start click direction. Clamp 0..10.
+    CGPoint anchorCanvas = [self transformAnchorCanvasPointAtTime:time];
+    double dx = positionX - anchorCanvas.x;
+    double dy = positionY - anchorCanvas.y;
+    double dist = sqrt(dx * dx + dy * dy);
+    if (self.scaleRingDragStartDist > 0) {
+      double ratio = dist / self.scaleRingDragStartDist;
+      BOOL shiftHeld = (modifiers & kFxModifierKey_SHIFT) != 0;
+      id<FxCustomParameterActionAPI_v4> actAPI = [self.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      id<FxParameterSettingAPI_v5> setAPI =
+          [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      [actAPI startAction:self];
+      if (shiftHeld) {
+        BOOL horizontal = self.scaleRingDragStartAngle < M_PI / 4.0;
+        double newVal =
+            MAX(0.0, MIN(10.0, (horizontal ? self.scaleRingDragStartValX
+                                           : self.scaleRingDragStartValY) *
+                                   ratio));
+        [setAPI setFloatValue:newVal
+                  toParameter:(horizontal ? kParamScaleX : kParamScaleY)atTime
+                             :time];
+      } else {
+        double newSx = MAX(0.0, MIN(10.0, self.scaleRingDragStartValX * ratio));
+        double newSy = MAX(0.0, MIN(10.0, self.scaleRingDragStartValY * ratio));
+        [setAPI setFloatValue:newSx toParameter:kParamScaleX atTime:time];
+        [setAPI setFloatValue:newSy toParameter:kParamScaleY atTime:time];
+      }
+      [actAPI endAction:self];
+    }
+    [self.scaleRingOSC updateCursorForMouseX:positionX positionY:positionY];
+    *forceUpdate = YES;
+    return;
+  }
+
+  if (self.anchorDragging) {
+    // MagicMove pattern: mouse → object space → that's the new anchor
+    // (no translate compensation). Canvas anchor is bbox-relative, so we
+    // subtract the path's bbox center first, then snap targets are
+    // expressed as bbox-relative offsets (corners, edges, thirds, center).
+    KKBezierPath *p = [self selectedTransformablePath];
+    if (!p) {
+      *forceUpdate = YES;
+      return;
+    }
+    simd_float2 mouseObj =
+        [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+    simd_float2 paramPos = [self objectPositionForParam:kParamPosition
+                                                 atTime:time];
+    simd_float2 translation = paramPos - (simd_float2){0.5f, 0.5f};
+    simd_float2 bboxCenter = [self bboxCenterOfPath:p];
+    // Anchor offset in object space: subtract bbox center and the layer's
+    // visual translation (so dragging the handle to a screen location
+    // resolves to the correct bbox-local pivot).
+    simd_float2 anchorOffset = mouseObj - bboxCenter - translation;
+
+    BOOL snapDisabled = (modifiers & kFxModifierKey_OPTION) != 0;
+    if (!snapDisabled) {
+      simd_float2 bmin, bmax;
+      if (p.isGroup)
+        [self boundsOfGroup:p min:&bmin max:&bmax];
+      else
+        [self boundsOfPath:p min:&bmin max:&bmax];
+      float bw = bmax.x - bmin.x;
+      float bh = bmax.y - bmin.y;
+      // 17 targets in bbox-local normalized space, mapped to object-space
+      // offsets from bbox center via (bw, bh). Mirrors MM's anchor target
+      // set (corners, edges, thirds, center).
+      simd_float2 targets[17] = {
+          {0, 0},
+          {-0.5f * bw, -0.5f * bh},
+          {0.5f * bw, -0.5f * bh},
+          {-0.5f * bw, 0.5f * bh},
+          {0.5f * bw, 0.5f * bh},
+          {0, -0.5f * bh},
+          {0.5f * bw, 0},
+          {0, 0.5f * bh},
+          {-0.5f * bw, 0},
+          {-bw / 6.0f, -0.5f * bh},
+          {bw / 6.0f, -0.5f * bh},
+          {-bw / 6.0f, 0.5f * bh},
+          {bw / 6.0f, 0.5f * bh},
+          {-0.5f * bw, -bh / 6.0f},
+          {-0.5f * bw, bh / 6.0f},
+          {0.5f * bw, -bh / 6.0f},
+          {0.5f * bw, bh / 6.0f},
+      };
+      CGPoint c0 = [self canvasPointFromObjectPoint:(simd_float2){0, 0}];
+      CGPoint c1 = [self canvasPointFromObjectPoint:(simd_float2){1, 0}];
+      float pixPerUnit = (float)fabs(c1.x - c0.x);
+      anchorOffset = [self.anchorSnapEngine snapObjectPoint:anchorOffset
+                                                  toTargets:targets
+                                                      count:17
+                                              pixelsPerUnit:pixPerUnit];
+    } else {
+      [self.anchorSnapEngine reset];
+    }
+
+    id<FxCustomParameterActionAPI_v4> actAPI = [self.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    id<FxParameterSettingAPI_v5> setAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [actAPI startAction:self];
+    [setAPI setXValue:anchorOffset.x
+               YValue:anchorOffset.y
+          toParameter:kParamAnchor
+               atTime:time];
+    [actAPI endAction:self];
+    *forceUpdate = YES;
+    return;
+  }
   if (self.stepperDragging) {
     [self handleStepperDragAtY:positionY
                      modifiers:modifiers
@@ -469,9 +584,21 @@
     return;
   }
 
+  BOOL transformDragEnded = NO;
   if (self.transformPositionDragging) {
     self.transformPositionDragging = NO;
     self.transformPositionHovered = NO;
+    transformDragEnded = YES;
+  } else if (self.scaleRingDragging) {
+    self.scaleRingDragging = NO;
+    self.scaleRingHovered = NO;
+    transformDragEnded = YES;
+  } else if (self.anchorDragging) {
+    self.anchorDragging = NO;
+    self.anchorHovered = NO;
+    transformDragEnded = YES;
+  }
+  if (transformDragEnded) {
     id<FxOnScreenControlAPI_v4> oscAPI =
         [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
     [oscAPI setCursor:[NSCursor arrowCursor]];

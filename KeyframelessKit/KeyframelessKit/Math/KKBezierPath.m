@@ -292,6 +292,15 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
           path->_transformEnabled = bytes[hdr] != 0;
           hdr += 1;
         }
+        if (ver >= 20 && data.length >= hdr + 4 * sizeof(float)) {
+          float sa[4];
+          memcpy(sa, bytes + hdr, 4 * sizeof(float));
+          path->_scaleX = sa[0];
+          path->_scaleY = sa[1];
+          path->_anchorX = sa[2];
+          path->_anchorY = sa[3];
+          hdr += 4 * sizeof(float);
+        }
       }
     }
   }
@@ -363,7 +372,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   // v11: + endWidth (1 float).
   // v12: + contour starts (2-byte count + N × uint32 indices).
   uint8_t propMarker = 0xAA;
-  uint8_t propVersion = 19;
+  uint8_t propVersion = 20;
   [data appendBytes:&propMarker length:1];
   [data appendBytes:&propVersion length:1];
   float strokeData[4] = {_strokeWidth, _strokeR, _strokeG, _strokeB};
@@ -449,6 +458,9 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   // v19: transformEnabled (1 byte).
   uint8_t txEnFlag = _transformEnabled ? 1 : 0;
   [data appendBytes:&txEnFlag length:1];
+  // v20: scaleX, scaleY, anchorX, anchorY (4 floats).
+  float sa[4] = {_scaleX, _scaleY, _anchorX, _anchorY};
+  [data appendBytes:sa length:4 * sizeof(float)];
   return data;
 }
 
@@ -509,6 +521,12 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     _capacity = 0;
     _strokeEnabled = YES;
     _transformEnabled = YES;
+    _scaleX = 1.0f;
+    _scaleY = 1.0f;
+    // Anchor is an offset from the path's bbox center in object-space units;
+    // (0, 0) means "pivot at bbox center" (the natural default).
+    _anchorX = 0.0f;
+    _anchorY = 0.0f;
     _strokeWidth = 8.0f;
     _strokeR = 1.0f;
     _strokeG = 0.0f;

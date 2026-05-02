@@ -68,6 +68,9 @@ static const UInt32 kParamExpandedTransform = 149;
 // toggle)
 static const UInt32 kParamPosition = 151;
 static const UInt32 kParamTransformEnabled = 153;
+static const UInt32 kParamScaleX = 154;
+static const UInt32 kParamScaleY = 155;
+static const UInt32 kParamAnchor = 156;
 
 static const UInt32 kParamForceShow = 9000;
 static const UInt32 kParamHideOSC = 9001;
@@ -102,6 +105,8 @@ static const NSInteger kOSCCornerRadiusBL = 9;
 static const NSInteger kOSCBoundingBox = 10;
 static const NSInteger kOSCRotateHandle = 12;
 static const NSInteger kOSCTransformPosition = 13;
+static const NSInteger kOSCTransformScaleRing = 14;
+static const NSInteger kOSCTransformAnchor = 16;
 
 // Position-lane path-editing parts. Encoding mirrors MagicMove's:
 // segmentIndex * 1000 + role-offset

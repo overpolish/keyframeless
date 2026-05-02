@@ -152,6 +152,19 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
         [[KKArcOSC alloc] initWithAPIManager:apiManager];
     self.transformPositionOSC.clearsOnDraw = NO;
 
+    self.scaleRingOSC = [[KKRingOSC alloc] initWithAPIManager:apiManager];
+    self.scaleRingOSC.clearsOnDraw = NO;
+    self.scaleRingOSC.fillWidth = 2.0f;
+    self.scaleRingOSC.ringOutlineWidth = 1.5f;
+    self.scaleRingOSC.hoverCursor = [NSCursor crosshairCursor];
+
+    self.anchorOSC = [[KKSquarePointOSC alloc] initWithAPIManager:apiManager];
+    self.anchorOSC.clearsOnDraw = NO;
+    self.anchorOSC.oscSize = 6.0f;
+    self.anchorOSC.cornerRadius = 1.0f;
+    self.anchorOSC.outlineWidth = 1.5f;
+    self.anchorSnapEngine = [[KKSnapEngine alloc] init];
+
     self.positionPathPointOSC =
         [[KKPointOSC alloc] initWithAPIManager:apiManager];
     self.positionPathPointOSC.clearsOnDraw = NO;

@@ -88,9 +88,21 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Per-layer translation applied at render time (object-space units).
 /// Animatable via the Position X / Position Y KKTiming lanes. Does not
-/// mutate the path's points — composes with rotation/scale once added.
+/// mutate the path's points — composes with rotation/scale.
 @property(nonatomic, assign) float translateX;
 @property(nonatomic, assign) float translateY;
+
+/// Per-layer scale applied at render time, around the layer's anchor.
+/// Default 1.0. Animatable via the Scale X / Scale Y KKTiming lanes.
+@property(nonatomic, assign) float scaleX;
+@property(nonatomic, assign) float scaleY;
+
+/// Per-layer anchor (pivot) for rotate/scale, expressed as an *offset* from
+/// the path's bbox center in object-space units (Y=0 at bottom). (0, 0) puts
+/// the pivot at the bbox center; same convention as `translateX/Y` so the
+/// inspector and OSC handle match Position semantics.
+@property(nonatomic, assign) float anchorX;
+@property(nonatomic, assign) float anchorY;
 
 /// Per-corner radius fractions 0–1 (TL, TR, BR, BL). 0 = sharp, 1 = max.
 @property(nonatomic, assign) float cornerRadiusTL;

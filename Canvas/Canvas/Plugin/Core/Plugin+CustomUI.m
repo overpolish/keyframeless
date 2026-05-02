@@ -733,11 +733,11 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
 }
 
 - (NSSet<NSString *> *)animatablePropertyLabelsWithOSC {
-  return [NSSet setWithObjects:@"Position", nil];
+  return [NSSet setWithObjects:@"Position", @"Scale", @"Anchor", nil];
 }
 
 - (NSSet<NSString *> *)animatablePropertyLabelsWithOSCDefaultOff {
-  return [NSSet setWithObjects:@"Position", nil];
+  return [NSSet setWithObjects:@"Position", @"Scale", @"Anchor", nil];
 }
 
 - (NSString *)emptyLanesMessageWhenNoLanes {

@@ -94,6 +94,9 @@ static const KKParamVisRule kParamVisibility[] = {
   // ─── Transform group children ───
   // (kParamTransformEnabled is rendered by the group header — keep it HIDDEN.)
   { kParamPosition,           KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
+  { kParamScaleX,             KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
+  { kParamScaleY,             KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
+  { kParamAnchor,             KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
   // ─── Stroke group children ───
   { kParamStrokeWidth,        KKVisStrokeOpen,                                             kFxParameterFlag_DEFAULT },
   { kParamStrokeColorMode,    KKVisStrokeOpen,                                             kFxParameterFlag_NOT_ANIMATABLE },
@@ -288,11 +291,12 @@ KKWriteGradientParamsFromPath(id<FxParameterSettingAPI_v5> _Nonnull api,
   [api setStringParameterValue:(json ?: @"") toParameter:dataID];
 }
 
-/// Read the transform-only subset of params (the only fields a group owns).
-/// Extend here when groups gain rotation/scale.
+/// Read the transformEnabled / position / scale / anchor params and apply
+/// to `path`. Shared by both the group-only path and the full per-object
+/// reader so the two can't drift.
 static inline void
-KKReadGroupTransformParams(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
-                           KKBezierPath *_Nonnull path) {
+KKReadTransformParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
+                            KKBezierPath *_Nonnull path) {
   BOOL txEn = YES;
   [paramGetAPI getBoolValue:&txEn
               fromParameter:kParamTransformEnabled
@@ -305,12 +309,24 @@ KKReadGroupTransformParams(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                   atTime:kCMTimeZero];
   path.translateX = (float)(px - 0.5);
   path.translateY = (float)(py - 0.5);
+  double sx = 1.0, sy = 1.0;
+  [paramGetAPI getFloatValue:&sx fromParameter:kParamScaleX atTime:kCMTimeZero];
+  [paramGetAPI getFloatValue:&sy fromParameter:kParamScaleY atTime:kCMTimeZero];
+  path.scaleX = (float)sx;
+  path.scaleY = (float)sy;
+  double ax = 0.0, ay = 0.0;
+  [paramGetAPI getXValue:&ax
+                  YValue:&ay
+           fromParameter:kParamAnchor
+                  atTime:kCMTimeZero];
+  path.anchorX = (float)ax;
+  path.anchorY = (float)ay;
 }
 
-/// Mirror of KKReadGroupTransformParams.
-static inline void
-KKWriteGroupTransformParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
-                            KKBezierPath *_Nonnull path) {
+/// Mirror of KKReadTransformParamsToPath.
+static inline void KKWriteTransformParamsFromPath(
+    id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
+    KKBezierPath *_Nonnull path) {
   [paramSetAPI setBoolValue:path.transformEnabled
                 toParameter:kParamTransformEnabled
                      atTime:kCMTimeZero];
@@ -318,6 +334,30 @@ KKWriteGroupTransformParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                   YValue:0.5 + path.translateY
              toParameter:kParamPosition
                   atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.scaleX
+                 toParameter:kParamScaleX
+                      atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.scaleY
+                 toParameter:kParamScaleY
+                      atTime:kCMTimeZero];
+  [paramSetAPI setXValue:path.anchorX
+                  YValue:path.anchorY
+             toParameter:kParamAnchor
+                  atTime:kCMTimeZero];
+}
+
+/// Read the transform-only subset of params (the only fields a group owns).
+static inline void
+KKReadGroupTransformParams(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
+                           KKBezierPath *_Nonnull path) {
+  KKReadTransformParamsToPath(paramGetAPI, path);
+}
+
+/// Mirror of KKReadGroupTransformParams.
+static inline void
+KKWriteGroupTransformParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
+                            KKBezierPath *_Nonnull path) {
+  KKWriteTransformParamsFromPath(paramSetAPI, path);
 }
 
 /// Read per-object param values from FxPlug and apply to a path.
@@ -385,19 +425,7 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                       atTime:kCMTimeZero];
   path.opacity = (float)(op / 100.0);
 
-  BOOL txEnabled = YES;
-  [paramGetAPI getBoolValue:&txEnabled
-              fromParameter:kParamTransformEnabled
-                     atTime:kCMTimeZero];
-  path.transformEnabled = txEnabled;
-
-  double px = 0.5, py = 0.5;
-  [paramGetAPI getXValue:&px
-                  YValue:&py
-           fromParameter:kParamPosition
-                  atTime:kCMTimeZero];
-  path.translateX = (float)(px - 0.5);
-  path.translateY = (float)(py - 0.5);
+  KKReadTransformParamsToPath(paramGetAPI, path);
 
   KKReadGradientParamsToPath(
       paramGetAPI, path, YES, kParamStrokeColorMode, kParamStrokeGradientType,
@@ -549,6 +577,10 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
   BOOL oldTransformEnabled = primary.transformEnabled;
   float oldTranslateX = primary.translateX;
   float oldTranslateY = primary.translateY;
+  float oldScaleX = primary.scaleX;
+  float oldScaleY = primary.scaleY;
+  float oldAnchorX = primary.anchorX;
+  float oldAnchorY = primary.anchorY;
   BOOL oldFillEnabled = primary.fillEnabled;
   float oldFillR = primary.fillR;
   float oldFillG = primary.fillG;
@@ -599,76 +631,59 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
     if (p == primary)
       return;
 
-    if (primary.strokeEnabled != oldStrokeEnabled)
-      p.strokeEnabled = primary.strokeEnabled;
-    if (primary.transformEnabled != oldTransformEnabled)
-      p.transformEnabled = primary.transformEnabled;
-    if (primary.translateX != oldTranslateX)
-      p.translateX = primary.translateX;
-    if (primary.translateY != oldTranslateY)
-      p.translateY = primary.translateY;
-    if (primary.strokeWidth != oldStrokeWidth)
-      p.strokeWidth = primary.strokeWidth;
-    if (primary.endWidth != oldEndWidth)
-      p.endWidth = primary.endWidth;
+#define KK_COPY_IF_CHANGED(field, snap)                                        \
+  do {                                                                         \
+    if (primary.field != snap)                                                 \
+      p.field = primary.field;                                                 \
+  } while (0)
+    KK_COPY_IF_CHANGED(strokeEnabled, oldStrokeEnabled);
+    KK_COPY_IF_CHANGED(transformEnabled, oldTransformEnabled);
+    KK_COPY_IF_CHANGED(translateX, oldTranslateX);
+    KK_COPY_IF_CHANGED(translateY, oldTranslateY);
+    KK_COPY_IF_CHANGED(scaleX, oldScaleX);
+    KK_COPY_IF_CHANGED(scaleY, oldScaleY);
+    KK_COPY_IF_CHANGED(anchorX, oldAnchorX);
+    KK_COPY_IF_CHANGED(anchorY, oldAnchorY);
+    KK_COPY_IF_CHANGED(strokeWidth, oldStrokeWidth);
+    KK_COPY_IF_CHANGED(endWidth, oldEndWidth);
     if (strokeColorChanged) {
       p.strokeR = primary.strokeR;
       p.strokeG = primary.strokeG;
       p.strokeB = primary.strokeB;
     }
-    if (primary.fillEnabled != oldFillEnabled)
-      p.fillEnabled = primary.fillEnabled;
+    KK_COPY_IF_CHANGED(fillEnabled, oldFillEnabled);
     if (fillColorChanged) {
       p.fillR = primary.fillR;
       p.fillG = primary.fillG;
       p.fillB = primary.fillB;
     }
-    if (primary.fillTint != oldFillTint)
-      p.fillTint = primary.fillTint;
-    if (primary.opacity != oldOpacity)
-      p.opacity = primary.opacity;
-    if (primary.dashLength != oldDashLength)
-      p.dashLength = primary.dashLength;
-    if (primary.dashGap != oldDashGap)
-      p.dashGap = primary.dashGap;
-    if (primary.dotGap != oldDotGap)
-      p.dotGap = primary.dotGap;
-    if (primary.startMarkerSize != oldStartMarkerSize)
-      p.startMarkerSize = primary.startMarkerSize;
-    if (primary.endMarkerSize != oldEndMarkerSize)
-      p.endMarkerSize = primary.endMarkerSize;
-    if (primary.sketchEnabled != oldSketchEnabled)
-      p.sketchEnabled = primary.sketchEnabled;
-    if (primary.sketchRoughness != oldSketchRoughness)
-      p.sketchRoughness = primary.sketchRoughness;
-    if (primary.sketchBowing != oldSketchBowing)
-      p.sketchBowing = primary.sketchBowing;
-    if (primary.sketchStrokes != oldSketchStrokes)
-      p.sketchStrokes = primary.sketchStrokes;
-    if (primary.sketchFillGap != oldSketchFillGap)
-      p.sketchFillGap = primary.sketchFillGap;
-    if (primary.sketchFillAngle != oldSketchFillAngle)
-      p.sketchFillAngle = primary.sketchFillAngle;
-    if (primary.sketchFillWeight != oldSketchFillWeight)
-      p.sketchFillWeight = primary.sketchFillWeight;
-    if (primary.strokeColorMode != oldStrokeColorMode)
-      p.strokeColorMode = primary.strokeColorMode;
-    if (primary.strokeGradientType != oldStrokeGradientType)
-      p.strokeGradientType = primary.strokeGradientType;
-    if (primary.strokeGradientAngle != oldStrokeGradientAngle)
-      p.strokeGradientAngle = primary.strokeGradientAngle;
+    KK_COPY_IF_CHANGED(fillTint, oldFillTint);
+    KK_COPY_IF_CHANGED(opacity, oldOpacity);
+    KK_COPY_IF_CHANGED(dashLength, oldDashLength);
+    KK_COPY_IF_CHANGED(dashGap, oldDashGap);
+    KK_COPY_IF_CHANGED(dotGap, oldDotGap);
+    KK_COPY_IF_CHANGED(startMarkerSize, oldStartMarkerSize);
+    KK_COPY_IF_CHANGED(endMarkerSize, oldEndMarkerSize);
+    KK_COPY_IF_CHANGED(sketchEnabled, oldSketchEnabled);
+    KK_COPY_IF_CHANGED(sketchRoughness, oldSketchRoughness);
+    KK_COPY_IF_CHANGED(sketchBowing, oldSketchBowing);
+    KK_COPY_IF_CHANGED(sketchStrokes, oldSketchStrokes);
+    KK_COPY_IF_CHANGED(sketchFillGap, oldSketchFillGap);
+    KK_COPY_IF_CHANGED(sketchFillAngle, oldSketchFillAngle);
+    KK_COPY_IF_CHANGED(sketchFillWeight, oldSketchFillWeight);
+    KK_COPY_IF_CHANGED(strokeColorMode, oldStrokeColorMode);
+    KK_COPY_IF_CHANGED(strokeGradientType, oldStrokeGradientType);
+    KK_COPY_IF_CHANGED(strokeGradientAngle, oldStrokeGradientAngle);
     if (![primary.strokeGradientJSON isEqualToString:oldStrokeGradientJSON] &&
         !(primary.strokeGradientJSON == nil && oldStrokeGradientJSON == nil))
       p.strokeGradientJSON = primary.strokeGradientJSON;
-    if (primary.fillColorMode != oldFillColorMode)
-      p.fillColorMode = primary.fillColorMode;
-    if (primary.fillGradientType != oldFillGradientType)
-      p.fillGradientType = primary.fillGradientType;
-    if (primary.fillGradientAngle != oldFillGradientAngle)
-      p.fillGradientAngle = primary.fillGradientAngle;
+    KK_COPY_IF_CHANGED(fillColorMode, oldFillColorMode);
+    KK_COPY_IF_CHANGED(fillGradientType, oldFillGradientType);
+    KK_COPY_IF_CHANGED(fillGradientAngle, oldFillGradientAngle);
     if (![primary.fillGradientJSON isEqualToString:oldFillGradientJSON] &&
         !(primary.fillGradientJSON == nil && oldFillGradientJSON == nil))
       p.fillGradientJSON = primary.fillGradientJSON;
+#undef KK_COPY_IF_CHANGED
   }];
 }
 
@@ -713,13 +728,7 @@ KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
   [paramSetAPI setFloatValue:path.opacity * 100.0f
                  toParameter:kParamOpacity
                       atTime:kCMTimeZero];
-  [paramSetAPI setXValue:0.5 + path.translateX
-                  YValue:0.5 + path.translateY
-             toParameter:kParamPosition
-                  atTime:kCMTimeZero];
-  [paramSetAPI setBoolValue:path.transformEnabled
-                toParameter:kParamTransformEnabled
-                     atTime:kCMTimeZero];
+  KKWriteTransformParamsFromPath(paramSetAPI, path);
   KKWriteGradientParamsFromPath(
       paramSetAPI, path, YES, kParamStrokeColorMode, kParamStrokeGradientType,
       kParamStrokeGradientAngle, kParamStrokeGradientData);

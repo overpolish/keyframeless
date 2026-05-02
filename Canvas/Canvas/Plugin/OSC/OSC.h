@@ -70,12 +70,30 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, strong, nullable) NSArray<NSNumber *> *resizeOrigIndices;
 @property(nonatomic, strong) KKPointOSC *rotateHandleOSC;
 @property(nonatomic, strong) KKArcOSC *transformPositionOSC;
+@property(nonatomic, strong) KKRingOSC *scaleRingOSC;
+@property(nonatomic, strong) KKSquarePointOSC *anchorOSC;
 @property(nonatomic, assign) BOOL transformPositionHovered;
 @property(nonatomic, assign) BOOL transformPositionDragging;
 @property(nonatomic, assign) double transformPositionDragStartX;
 @property(nonatomic, assign) double transformPositionDragStartY;
 @property(nonatomic, assign) simd_float2 transformPositionDragStartObj;
 @property(nonatomic, assign) simd_float2 transformPositionDragStartParam;
+
+// Per-layer scale ring. MagicMove-style: default is uniform (link X+Y);
+// shift held = unlink the axis whose start-click direction dominated.
+@property(nonatomic, assign) BOOL scaleRingHovered;
+@property(nonatomic, assign) BOOL scaleRingDragging;
+@property(nonatomic, assign) double scaleRingDragStartDist;
+@property(nonatomic, assign) double scaleRingDragStartAngle;
+@property(nonatomic, assign) double scaleRingDragStartValX;
+@property(nonatomic, assign) double scaleRingDragStartValY;
+@property(nonatomic, assign) NSTimeInterval scaleRingLastClickTime;
+
+// Per-layer anchor handle. MagicMove-style: mouse position is the anchor
+// (no compensation); 17 snap targets; option held disables snap.
+@property(nonatomic, assign) BOOL anchorHovered;
+@property(nonatomic, assign) BOOL anchorDragging;
+@property(nonatomic, strong) KKSnapEngine *anchorSnapEngine;
 
 // Position-lane path editing (between two transition keyframes).
 @property(nonatomic, strong) KKPointOSC *positionPathPointOSC;

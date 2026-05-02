@@ -17,61 +17,108 @@
 @interface KKCanvasAnimProp : NSObject
 @property(copy) NSString *label;
 @property UInt32 paramID;
+/// Optional second FxPlug param ID for Point-kind lanes whose two
+/// components live in *separate* float params (mirrors MagicMove's
+/// Scale-as-two-floats-but-one-lane pattern). 0 = unused (default).
+@property UInt32 secondaryParamID;
 @property KKAnimatableParamKind kind;
 @property(copy) BOOL (^enabledForPath)(KKBezierPath *p);
 @property(copy) NSArray<NSNumber *> * (^readPath)(KKBezierPath *p);
 @property(copy) void (^writePath)(KKBezierPath *p, NSArray<NSNumber *> *vals);
++ (instancetype)propWithLabel:(NSString *)label
+                      paramID:(UInt32)paramID
+             secondaryParamID:(UInt32)secondaryParamID
+                         kind:(KKAnimatableParamKind)kind
+                      enabled:(BOOL (^)(KKBezierPath *))enabled
+                         read:(NSArray<NSNumber *> * (^)(KKBezierPath *))read
+                        write:(void (^)(KKBezierPath *,
+                                        NSArray<NSNumber *> *))write;
 @end
 @implementation KKCanvasAnimProp
++ (instancetype)propWithLabel:(NSString *)label
+                      paramID:(UInt32)paramID
+             secondaryParamID:(UInt32)secondaryParamID
+                         kind:(KKAnimatableParamKind)kind
+                      enabled:(BOOL (^)(KKBezierPath *))enabled
+                         read:(NSArray<NSNumber *> * (^)(KKBezierPath *))read
+                        write:(void (^)(KKBezierPath *,
+                                        NSArray<NSNumber *> *))write {
+  KKCanvasAnimProp *p = [self new];
+  p.label = label;
+  p.paramID = paramID;
+  p.secondaryParamID = secondaryParamID;
+  p.kind = kind;
+  p.enabledForPath = enabled;
+  p.readPath = read;
+  p.writePath = write;
+  return p;
+}
 @end
 
 // --- FxPlug param read/write helpers, dispatched on KKAnimatableParamKind. ---
 
 static NSArray<NSNumber *> *
-_kkReadParamByKind(id<FxParameterRetrievalAPI_v6> getAPI, UInt32 paramID,
-                   KKAnimatableParamKind kind, CMTime time) {
-  switch (kind) {
+_kkReadParamForDesc(id<FxParameterRetrievalAPI_v6> getAPI,
+                    KKCanvasAnimProp *desc, CMTime time) {
+  switch (desc.kind) {
   case KKAnimatableParamKindPoint: {
+    if (desc.secondaryParamID) {
+      // Two-float Point: x lives in primary param, y in secondary.
+      double x = 1, y = 1;
+      [getAPI getFloatValue:&x fromParameter:desc.paramID atTime:time];
+      [getAPI getFloatValue:&y fromParameter:desc.secondaryParamID atTime:time];
+      return @[ @(x), @(y) ];
+    }
     double x = 0, y = 0;
-    [getAPI getXValue:&x YValue:&y fromParameter:paramID atTime:time];
+    [getAPI getXValue:&x YValue:&y fromParameter:desc.paramID atTime:time];
     return @[ @(x), @(y) ];
   }
   case KKAnimatableParamKindBool: {
     BOOL b = NO;
-    [getAPI getBoolValue:&b fromParameter:paramID atTime:time];
+    [getAPI getBoolValue:&b fromParameter:desc.paramID atTime:time];
     return @[ @(b ? 1.0 : 0.0) ];
   }
   case KKAnimatableParamKindFloat:
   default: {
     double v = 0;
-    [getAPI getFloatValue:&v fromParameter:paramID atTime:time];
+    [getAPI getFloatValue:&v fromParameter:desc.paramID atTime:time];
     return @[ @(v) ];
   }
   }
 }
 
-static void _kkWriteParamByKind(id<FxParameterSettingAPI_v5> setAPI,
-                                UInt32 paramID, KKAnimatableParamKind kind,
-                                NSArray<NSNumber *> *vals, CMTime time) {
-  switch (kind) {
+static void _kkWriteParamForDesc(id<FxParameterSettingAPI_v5> setAPI,
+                                 KKCanvasAnimProp *desc,
+                                 NSArray<NSNumber *> *vals, CMTime time) {
+  switch (desc.kind) {
   case KKAnimatableParamKindPoint:
-    if (vals.count >= 2)
+    if (desc.secondaryParamID) {
+      if (vals.count >= 2) {
+        [setAPI setFloatValue:vals[0].doubleValue
+                  toParameter:desc.paramID
+                       atTime:time];
+        [setAPI setFloatValue:vals[1].doubleValue
+                  toParameter:desc.secondaryParamID
+                       atTime:time];
+      }
+    } else if (vals.count >= 2) {
       [setAPI setXValue:vals[0].doubleValue
                  YValue:vals[1].doubleValue
-            toParameter:paramID
+            toParameter:desc.paramID
                  atTime:time];
+    }
     break;
   case KKAnimatableParamKindBool:
     if (vals.count >= 1)
       [setAPI setBoolValue:vals[0].doubleValue >= 0.5
-               toParameter:paramID
+               toParameter:desc.paramID
                     atTime:time];
     break;
   case KKAnimatableParamKindFloat:
   default:
     if (vals.count >= 1)
       [setAPI setFloatValue:vals[0].doubleValue
-                toParameter:paramID
+                toParameter:desc.paramID
                      atTime:time];
     break;
   }
@@ -91,42 +138,77 @@ static NSArray<KKCanvasAnimProp *> *_kkAnimatableProperties(void) {
   static NSArray<KKCanvasAnimProp *> *sProps = nil;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
-    KKCanvasAnimProp *strokeWidth = [KKCanvasAnimProp new];
-    strokeWidth.label = @"Stroke Width";
-    strokeWidth.paramID = kParamStrokeWidth;
-    strokeWidth.kind = KKAnimatableParamKindFloat;
-    strokeWidth.enabledForPath = ^BOOL(KKBezierPath *p) {
-      return p.strokeEnabled && !p.isGroup;
-    };
-    strokeWidth.readPath = ^NSArray<NSNumber *> *(KKBezierPath *p) {
-      return @[ @(p.strokeWidth) ];
-    };
-    strokeWidth.writePath = ^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
-      if (vals.count >= 1)
-        p.strokeWidth = vals[0].floatValue;
-    };
-
-    // Position is a 2-component Point lane; the FxPlug param uses 0.5,0.5
-    // as neutral (matching FCP convention), while the path stores the
-    // offset from neutral so render-time translation is just translateBy:.
-    KKCanvasAnimProp *position = [KKCanvasAnimProp new];
-    position.label = @"Position";
-    position.paramID = kParamPosition;
-    position.kind = KKAnimatableParamKindPoint;
-    position.enabledForPath = ^BOOL(KKBezierPath *p) {
+    BOOL (^transformEnabled)(KKBezierPath *) = ^BOOL(KKBezierPath *p) {
       return p.transformEnabled;
     };
-    position.readPath = ^NSArray<NSNumber *> *(KKBezierPath *p) {
-      return @[ @(0.5 + p.translateX), @(0.5 + p.translateY) ];
-    };
-    position.writePath = ^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
-      if (vals.count >= 2) {
-        p.translateX = vals[0].floatValue - 0.5f;
-        p.translateY = vals[1].floatValue - 0.5f;
-      }
-    };
 
-    sProps = @[ strokeWidth, position ];
+    KKCanvasAnimProp *strokeWidth =
+        [KKCanvasAnimProp propWithLabel:@"Stroke Width"
+            paramID:kParamStrokeWidth
+            secondaryParamID:0
+            kind:KKAnimatableParamKindFloat
+            enabled:^BOOL(KKBezierPath *p) {
+              return p.strokeEnabled && !p.isGroup;
+            }
+            read:^NSArray<NSNumber *> *(KKBezierPath *p) {
+              return @[ @(p.strokeWidth) ];
+            }
+            write:^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
+              if (vals.count >= 1)
+                p.strokeWidth = vals[0].floatValue;
+            }];
+
+    // Position uses 0.5,0.5 as neutral (FCP convention); the path stores the
+    // offset from neutral so render-time translation is just translateBy:.
+    KKCanvasAnimProp *position = [KKCanvasAnimProp propWithLabel:@"Position"
+        paramID:kParamPosition
+        secondaryParamID:0
+        kind:KKAnimatableParamKindPoint
+        enabled:transformEnabled
+        read:^NSArray<NSNumber *> *(KKBezierPath *p) {
+          return @[ @(0.5 + p.translateX), @(0.5 + p.translateY) ];
+        }
+        write:^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
+          if (vals.count >= 2) {
+            p.translateX = vals[0].floatValue - 0.5f;
+            p.translateY = vals[1].floatValue - 0.5f;
+          }
+        }];
+
+    // Single Scale lane carrying [scaleX, scaleY] — mirrors MagicMove. The
+    // two inspector sliders live in separate float FxPlug params; the lane
+    // reads/writes both via primary + secondary IDs.
+    KKCanvasAnimProp *scale = [KKCanvasAnimProp propWithLabel:@"Scale"
+        paramID:kParamScaleX
+        secondaryParamID:kParamScaleY
+        kind:KKAnimatableParamKindPoint
+        enabled:transformEnabled
+        read:^NSArray<NSNumber *> *(KKBezierPath *p) {
+          return @[ @(p.scaleX), @(p.scaleY) ];
+        }
+        write:^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
+          if (vals.count >= 2) {
+            p.scaleX = vals[0].floatValue;
+            p.scaleY = vals[1].floatValue;
+          }
+        }];
+
+    KKCanvasAnimProp *anchor = [KKCanvasAnimProp propWithLabel:@"Anchor"
+        paramID:kParamAnchor
+        secondaryParamID:0
+        kind:KKAnimatableParamKindPoint
+        enabled:transformEnabled
+        read:^NSArray<NSNumber *> *(KKBezierPath *p) {
+          return @[ @(p.anchorX), @(p.anchorY) ];
+        }
+        write:^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
+          if (vals.count >= 2) {
+            p.anchorX = vals[0].floatValue;
+            p.anchorY = vals[1].floatValue;
+          }
+        }];
+
+    sProps = @[ strokeWidth, position, scale, anchor ];
   });
   return sProps;
 }
@@ -140,7 +222,7 @@ static KKCanvasAnimProp *_kkPropForLabel(NSString *label) {
 
 static KKCanvasAnimProp *_kkPropForParamID(UInt32 paramID) {
   for (KKCanvasAnimProp *d in _kkAnimatableProperties())
-    if (d.paramID == paramID)
+    if (d.paramID == paramID || d.secondaryParamID == paramID)
       return d;
   return nil;
 }
@@ -183,7 +265,14 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
                                   NSSet<NSString *> *oscDefaultOff) {
   KKTimingLane *lane = [KKTimingLane defaultLaneForLabel:desc.label
                                               baseValues:desc.readPath(p)];
-  lane.valueComponentKinds = @[ @(desc.kind) ];
+  // Two-float Point lanes (Scale-style: independent X/Y sliders, single
+  // sequencer lane) report two Float component kinds — matches MagicMove.
+  if (desc.kind == KKAnimatableParamKindPoint && desc.secondaryParamID) {
+    lane.valueComponentKinds =
+        @[ @(KKAnimatableParamKindFloat), @(KKAnimatableParamKindFloat) ];
+  } else {
+    lane.valueComponentKinds = @[ @(desc.kind) ];
+  }
   lane.groupKey = p.layerID;
   lane.groupLabel = _kkGroupLabelForPath(p, idx);
   lane.hasOSC = [oscLabels containsObject:desc.label];
@@ -395,7 +484,7 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
   // segment's value. Other layers' lanes stay independent of the slider —
   // we never write the param for them.
   if ([groupKey isEqualToString:[self _kkSelectedLayerID]]) {
-    _kkWriteParamByKind(setAPI, desc.paramID, desc.kind, values, time);
+    _kkWriteParamForDesc(setAPI, desc, values, time);
   }
   return YES;
 }
@@ -433,8 +522,7 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
     return;
   }
   CMTime now = [actAPI currentTime];
-  NSArray<NSNumber *> *newValues =
-      _kkReadParamByKind(getAPI, paramID, desc.kind, now);
+  NSArray<NSNumber *> *newValues = _kkReadParamForDesc(getAPI, desc, now);
 
   // Mirror the slider value into pathData immediately. Otherwise a
   // subsequent segment-click reads a stale path value for its write-back

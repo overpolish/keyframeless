@@ -27,8 +27,11 @@
     }
   }
 
-  // Transform OSC arc — top-most overlay, highest hit priority.
+  // Transform OSC overlays — top-most, highest hit priority. Each handle
+  // is gated by its own multi-stage lane visibility, mirroring Position.
   self.transformPositionHovered = NO;
+  self.scaleRingHovered = NO;
+  self.anchorHovered = NO;
   if ([self isTransformPositionOSCVisibleAtTime:kCMTimeZero]) {
     CGPoint pos = [self transformPositionCanvasPointAtTime:kCMTimeZero];
     if (hypot(x - pos.x, y - pos.y) < self.transformPositionOSC.hitRadius) {
@@ -36,6 +39,31 @@
       *activePart = kOSCTransformPosition;
       [oscAPI setCursor:[NSCursor openHandCursor]];
       return;
+    }
+  }
+  BOOL anchorVisible = [self isAnchorOSCVisibleAtTime:kCMTimeZero];
+  BOOL scaleVisible = [self isScaleRingOSCVisibleAtTime:kCMTimeZero];
+  if (anchorVisible || scaleVisible) {
+    CGPoint anchor = [self transformAnchorCanvasPointAtTime:kCMTimeZero];
+    if (anchorVisible && hypot(x - anchor.x, y - anchor.y) < hitRadius) {
+      self.anchorHovered = YES;
+      *activePart = kOSCTransformAnchor;
+      [oscAPI setCursor:[NSCursor openHandCursor]];
+      return;
+    }
+    if (scaleVisible) {
+      CGFloat rx = 0, ry = 0;
+      [self getScaleRingRadiiAtTime:kCMTimeZero rx:&rx ry:&ry];
+      CGFloat dx = (x - anchor.x) / rx;
+      CGFloat dy = (y - anchor.y) / ry;
+      CGFloat normalized = hypot(dx, dy);
+      CGFloat distPx = fabs(normalized - 1.0) * MIN(rx, ry);
+      if (rx > 0.5 && ry > 0.5 && distPx < hitRadius) {
+        self.scaleRingHovered = YES;
+        *activePart = kOSCTransformScaleRing;
+        [oscAPI setCursor:[NSCursor crosshairCursor]];
+        return;
+      }
     }
   }
 

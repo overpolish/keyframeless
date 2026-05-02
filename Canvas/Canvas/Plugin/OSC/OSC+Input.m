@@ -142,6 +142,59 @@
     return;
   }
 
+  if (activePart == kOSCTransformScaleRing) {
+    // MM pattern: double-click links axes to the smaller value.
+    NSTimeInterval now = CACurrentMediaTime();
+    if ((now - self.scaleRingLastClickTime) < 0.35) {
+      id<FxParameterRetrievalAPI_v6> getAPI = [self.apiManager
+          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      double sx = 1.0, sy = 1.0;
+      [getAPI getFloatValue:&sx fromParameter:kParamScaleX atTime:time];
+      [getAPI getFloatValue:&sy fromParameter:kParamScaleY atTime:time];
+      if (sx != sy) {
+        double smaller = fmin(sx, sy);
+        id<FxCustomParameterActionAPI_v4> actAPI = [self.apiManager
+            apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+        id<FxParameterSettingAPI_v5> setAPI = [self.apiManager
+            apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+        [actAPI startAction:self];
+        [setAPI setFloatValue:smaller toParameter:kParamScaleX atTime:time];
+        [setAPI setFloatValue:smaller toParameter:kParamScaleY atTime:time];
+        [actAPI endAction:self];
+        *forceUpdate = YES;
+      }
+      self.scaleRingLastClickTime = 0;
+      return;
+    }
+    self.scaleRingLastClickTime = now;
+
+    self.scaleRingDragging = YES;
+    CGPoint anchorCanvas = [self transformAnchorCanvasPointAtTime:time];
+    double dx = positionX - anchorCanvas.x;
+    double dy = positionY - anchorCanvas.y;
+    self.scaleRingDragStartDist = sqrt(dx * dx + dy * dy);
+    self.scaleRingDragStartAngle = atan2(fabs(dy), fabs(dx));
+    id<FxParameterRetrievalAPI_v6> getAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    double sx = 1.0, sy = 1.0;
+    [getAPI getFloatValue:&sx fromParameter:kParamScaleX atTime:time];
+    [getAPI getFloatValue:&sy fromParameter:kParamScaleY atTime:time];
+    self.scaleRingDragStartValX = sx;
+    self.scaleRingDragStartValY = sy;
+    [self.scaleRingOSC updateCursorForMouseX:positionX positionY:positionY];
+    *forceUpdate = YES;
+    return;
+  }
+
+  if (activePart == kOSCTransformAnchor) {
+    self.anchorDragging = YES;
+    id<FxOnScreenControlAPI_v4> oscAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    [oscAPI setCursor:[NSCursor openHandCursor]];
+    *forceUpdate = YES;
+    return;
+  }
+
   // --- Toolbar button clicks ---
   if (activePart == kOSCToolbarCursor || activePart == kOSCToolbarPen ||
       activePart == kOSCToolbarRect || activePart == kOSCToolbarEllipse ||

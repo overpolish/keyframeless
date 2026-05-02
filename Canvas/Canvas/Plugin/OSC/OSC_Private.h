@@ -263,6 +263,26 @@ NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
 /// offset by its translateX/Y).
 - (CGPoint)transformPositionCanvasPointAtTime:(CMTime)time;
 
+/// Canvas-space position of the layer's anchor (the pivot for scale/rotate),
+/// resolved through the active path's parent group transforms.
+- (CGPoint)transformAnchorCanvasPointAtTime:(CMTime)time;
+
+/// Per-axis pixel-space radii of the scale ring at the current scale —
+/// `canvas-min-dimension × 0.1 × scale` per axis, floored at 0.05 so the
+/// ring stays grabbable when scale collapses to zero.
+- (void)getScaleRingRadiiAtTime:(CMTime)time
+                             rx:(CGFloat *)outRx
+                             ry:(CGFloat *)outRy;
+
+/// YES when the scale ring OSC should be visible — gated by the same layer
+/// preconditions as Position plus either the "Scale X" or "Scale Y"
+/// per-lane OSC toggle.
+- (BOOL)isScaleRingOSCVisibleAtTime:(CMTime)time;
+
+/// YES when the anchor square OSC should be visible — gated by the layer
+/// preconditions plus the "Anchor" per-lane OSC toggle.
+- (BOOL)isAnchorOSCVisibleAtTime:(CMTime)time;
+
 - (void)drawTransformOSCWithDestinationImage:(FxImageTile *)dest
                                       atTime:(CMTime)time;
 
