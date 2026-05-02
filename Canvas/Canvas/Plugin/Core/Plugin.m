@@ -24,7 +24,8 @@
 - (NSString *)kkSelectedGroupKey {
   // Mirror -selectedTransformablePath: the sequencer accent should track
   // the same "single transformable layer" predicate the OSC uses, so the
-  // user's mental model matches.
+  // user's mental model matches. Groups are eligible — their lane is keyed
+  // by layerID just like a path.
   NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
   NSIndexSet *sel = uuid ? KKCanvasCurrentSelection(uuid) : nil;
   if (sel.count != 1)
@@ -35,7 +36,7 @@
   if (idx >= paths.count)
     return nil;
   KKBezierPath *p = paths[idx];
-  if (p.isGroup || p.locked || !p.transformEnabled)
+  if (p.locked || !p.transformEnabled)
     return nil;
   return p.layerID;
 }
@@ -101,8 +102,6 @@
                              selection:oldSel];
 
   NSMutableIndexSet *newSel = [NSMutableIndexSet indexSetWithIndex:targetIdx];
-  if (paths[targetIdx].isGroup)
-    [newSel addIndexes:KKDescendantIndices(targetIdx, paths)];
   NSIndexSet *finalSel = [newSel copy];
   KKSetLayerSelection(uuid, finalSel);
 

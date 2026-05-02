@@ -96,7 +96,7 @@ static NSArray<KKCanvasAnimProp *> *_kkAnimatableProperties(void) {
     strokeWidth.paramID = kParamStrokeWidth;
     strokeWidth.kind = KKAnimatableParamKindFloat;
     strokeWidth.enabledForPath = ^BOOL(KKBezierPath *p) {
-      return p.strokeEnabled;
+      return p.strokeEnabled && !p.isGroup;
     };
     strokeWidth.readPath = ^NSArray<NSNumber *> *(KKBezierPath *p) {
       return @[ @(p.strokeWidth) ];
@@ -214,7 +214,7 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
     return;
   NSArray<KKCanvasAnimProp *> *props = _kkAnimatableProperties();
   for (KKBezierPath *p in paths) {
-    if (p.isGroup || p.layerID.length == 0)
+    if (p.layerID.length == 0)
       continue;
     for (KKCanvasAnimProp *desc in props) {
       KKTimingLane *lane =
@@ -274,7 +274,7 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
   NSUInteger idx = 0;
   for (KKBezierPath *p in paths) {
     idx++;
-    if (p.isGroup || p.layerID.length == 0)
+    if (p.layerID.length == 0)
       continue;
     for (KKCanvasAnimProp *desc in props) {
       if (desc.enabledForPath(p))
@@ -309,7 +309,7 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
   NSUInteger idx = 0;
   for (KKBezierPath *p in paths) {
     idx++;
-    if (p.isGroup || p.layerID.length == 0)
+    if (p.layerID.length == 0)
       continue;
     NSString *liveLabel = _kkGroupLabelForPath(p, idx);
     for (KKCanvasAnimProp *desc in props) {
@@ -352,9 +352,9 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
   return desc.readPath(p);
 }
 
-/// Returns the layerID of the currently-selected non-group path, or nil if
-/// there's no single selection. Used to scope inspector-slider writes (the
-/// slider only reflects the selected layer; lanes for other layers must
+/// Returns the layerID of the currently-selected layer (path or group), or
+/// nil if there's no single selection. Used to scope inspector-slider writes
+/// (the slider only reflects the selected layer; lanes for other layers must
 /// stay independent of slider edits).
 - (NSString *)_kkSelectedLayerID {
   NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
@@ -365,7 +365,7 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   NSArray<KKBezierPath *> *paths = _kkReadPaths(getAPI);
   NSUInteger idx = sel.firstIndex;
-  if (idx >= paths.count || paths[idx].isGroup)
+  if (idx >= paths.count)
     return nil;
   return paths[idx].layerID;
 }

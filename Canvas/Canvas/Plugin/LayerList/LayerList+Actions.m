@@ -12,6 +12,22 @@
 #pragma clang diagnostic ignored "-Wimplicit-retain-self"
 #pragma clang diagnostic ignored "-Wprotocol"
 
+/// Initialise a freshly-allocated group with the defaults that distinguish a
+/// group from a regular path: identity, parent linkage, name, and the
+/// stroke/fill/sketch flags forced off (groups own only transform state).
+static KKBezierPath *_kkMakeGroup(NSString *name,
+                                  NSString *_Nullable parentID) {
+  KKBezierPath *group = [[KKBezierPath alloc] init];
+  group.isGroup = YES;
+  group.groupID = [[NSUUID UUID] UUIDString];
+  group.parentGroupID = parentID;
+  group.name = name;
+  group.strokeEnabled = NO;
+  group.fillEnabled = NO;
+  group.sketchEnabled = NO;
+  return group;
+}
+
 @implementation KKLayerActionTarget
 
 - (void)_modifyPaths:(void (^)(NSMutableArray<KKBezierPath *> *))block {
@@ -280,11 +296,7 @@
                               [paths removeObjectAtIndex:idx];
                             }
                           }];
-    KKBezierPath *group = [[KKBezierPath alloc] init];
-    group.isGroup = YES;
-    group.groupID = [[NSUUID UUID] UUIDString];
-    group.parentGroupID = inheritedParent;
-    group.name = @"Group";
+    KKBezierPath *group = _kkMakeGroup(@"Group", inheritedParent);
     for (KKBezierPath *child in children) {
       if ([child.parentGroupID isEqual:inheritedParent] ||
           (!child.parentGroupID && !inheritedParent))
@@ -374,10 +386,7 @@
       KKSetLayerSelection(_instanceUUID,
                           [NSIndexSet indexSetWithIndex:insertAt]);
     } else {
-      KKBezierPath *group = [[KKBezierPath alloc] init];
-      group.isGroup = YES;
-      group.groupID = [[NSUUID UUID] UUIDString];
-      group.name = name;
+      KKBezierPath *group = _kkMakeGroup(name, nil);
       [paths insertObject:group atIndex:insertAt];
 
       for (NSUInteger i = 0; i < imported.count; i++) {

@@ -17,6 +17,40 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 
+static NSDictionary<NSString *, KKBezierPath *> *
+_kkIndexGroupsByID(NSArray<KKBezierPath *> *paths) {
+  NSMutableDictionary<NSString *, KKBezierPath *> *out = nil;
+  for (KKBezierPath *g in paths) {
+    if (g.isGroup && g.groupID.length) {
+      if (!out)
+        out = [NSMutableDictionary dictionary];
+      out[g.groupID] = g;
+    }
+  }
+  return out;
+}
+
+/// Sum of `path`'s own translation plus each enabled ancestor group's
+/// translation. Walks the parentGroupID chain with a depth cap to guard
+/// against malformed cycles.
+static simd_float2 _kkAccumulatedTranslation(
+    KKBezierPath *path, NSDictionary<NSString *, KKBezierPath *> *groupsByID) {
+  float tx = path.translateX, ty = path.translateY;
+  NSString *parentID = path.parentGroupID;
+  NSUInteger depth = 0;
+  while (parentID.length && depth++ < 32) {
+    KKBezierPath *g = groupsByID[parentID];
+    if (!g)
+      break;
+    if (g.transformEnabled) {
+      tx += g.translateX;
+      ty += g.translateY;
+    }
+    parentID = g.parentGroupID;
+  }
+  return simd_make_float2(tx, ty);
+}
+
 static id<MTLRenderPipelineState> getOrCreatePipeline(
     NSString *key, uint64_t registryID, MTLPixelFormat pixelFormat,
     KKMetalDeviceCache *cache, id<MTLDevice> device, NSString *vertexName,
@@ -93,12 +127,16 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
   // Bake per-layer translation into the sampled points. Render code reads
   // raw point coords; baking here keeps the tessellation/gradient/marker
   // pipelines transform-agnostic. The base blob is untouched so values
-  // don't accumulate frame-to-frame.
+  // don't accumulate frame-to-frame. Children inherit each enabled
+  // ancestor group's translation by walking the parentGroupID chain.
+  NSDictionary<NSString *, KKBezierPath *> *groupsByID =
+      _kkIndexGroupsByID(paths);
   for (KKBezierPath *p in paths) {
     if (p.isGroup || !p.transformEnabled)
       continue;
-    if (p.translateX != 0.0f || p.translateY != 0.0f)
-      [p translateBy:simd_make_float2(p.translateX, p.translateY)];
+    simd_float2 t = _kkAccumulatedTranslation(p, groupsByID);
+    if (t.x != 0.0f || t.y != 0.0f)
+      [p translateBy:t];
   }
   return [KKBezierPath blobFromPaths:paths];
 }

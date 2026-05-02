@@ -10,6 +10,8 @@
 #import <CoreGraphics/CGEventSource.h>
 #import <FxPlug/FxPlugSDK.h>
 
+NS_ASSUME_NONNULL_BEGIN
+
 NSCursor *cursorFromBundle(NSString *name, NSPoint hotSpot);
 NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx);
 NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
@@ -22,8 +24,8 @@ NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
 - (simd_float2)alignSnapDelta:(simd_float2)delta
              forSelectedPaths:(NSIndexSet *)selected;
 - (simd_float2)alignSnapPoint:(simd_float2)point
-               excludingPaths:(NSIndexSet *)excluded
-              excludingPoints:(NSIndexSet *)excludedPoints;
+               excludingPaths:(nullable NSIndexSet *)excluded
+              excludingPoints:(nullable NSIndexSet *)excludedPoints;
 - (void)resetAlignSnap;
 
 @end
@@ -54,12 +56,17 @@ NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
                  min:(simd_float2 *)outMin
                  max:(simd_float2 *)outMax;
 - (BOOL)boundsOfSelectedPaths:(simd_float2 *)outMin max:(simd_float2 *)outMax;
-/// Object-space center of a path's axis-aligned bbox.
+/// Object-space union of a group's descendants' bbox (recurses into
+/// sub-groups). Returns NO when the group has no renderable descendants.
+- (BOOL)boundsOfGroup:(KKBezierPath *)group
+                  min:(simd_float2 *)outMin
+                  max:(simd_float2 *)outMax;
+/// Object-space center of a path's axis-aligned bbox. For groups,
+/// uses `boundsOfGroup:`.
 - (simd_float2)bboxCenterOfPath:(KKBezierPath *)path;
 /// The single currently-selected layer eligible for transform editing
-/// (selection count == 1, not a group, not locked, transform enabled), or
-/// nil. Single source of truth — when group transforms ship, relax the
-/// `isGroup` predicate here only.
+/// (selection count == 1, not locked, transform enabled). Groups are
+/// allowed; their bbox is derived from descendants.
 - (nullable KKBezierPath *)selectedTransformablePath;
 - (CGPoint)cornerRadiusHandlePosition:(NSInteger)corner
                               forPath:(KKBezierPath *)path;
@@ -260,3 +267,5 @@ NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
                                       atTime:(CMTime)time;
 
 @end
+
+NS_ASSUME_NONNULL_END

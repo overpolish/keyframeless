@@ -249,6 +249,14 @@ NS_ASSUME_NONNULL_BEGIN
 + (BOOL)multiStageOSCVisibleForAPI:(id<PROAPIAccessing>)apiManager
                              label:(NSString *)label;
 
+/// Per-layer variant: scopes the lookup to the lane whose `groupKey`
+/// matches. Use when a plugin has multiple lanes sharing a property label
+/// (one per layer/group). When `groupKey` is nil, behaves like the
+/// label-only overload.
++ (BOOL)multiStageOSCVisibleForAPI:(id<PROAPIAccessing>)apiManager
+                             label:(NSString *)label
+                          groupKey:(nullable NSString *)groupKey;
+
 /// Pairs of parameter IDs that maintain their aspect ratio when the user
 /// holds Cmd while dragging either slider. Set before first use (e.g. in
 /// addParametersWithError:). Each element is @[@(paramA), @(paramB)].

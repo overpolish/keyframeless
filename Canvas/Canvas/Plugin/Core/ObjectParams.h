@@ -22,6 +22,25 @@ static inline KKBezierPath *_Nullable KKSelectedPath(
   return result;
 }
 
+/// Transform-aware primary: prefers a non-group, falls back to the first
+/// selected group. Used wherever the inspector's transform params (Position,
+/// later rotation/scale) need a target — groups support transform but not
+/// stroke/fill/sketch, so non-group selections still take priority.
+static inline KKBezierPath *_Nullable KKSelectedTransformTarget(
+    NSIndexSet *_Nullable sel, NSArray<KKBezierPath *> *_Nonnull paths) {
+  KKBezierPath *p = KKSelectedPath(sel, paths);
+  if (p)
+    return p;
+  __block KKBezierPath *group = nil;
+  [sel enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+    if (idx < paths.count && paths[idx].isGroup) {
+      group = paths[idx];
+      *stop = YES;
+    }
+  }];
+  return group;
+}
+
 /// Returns YES when the "Force Show All Parameters" toggle is ON.
 static inline BOOL
 KKIsForceShowEnabled(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI) {
@@ -269,11 +288,50 @@ KKWriteGradientParamsFromPath(id<FxParameterSettingAPI_v5> _Nonnull api,
   [api setStringParameterValue:(json ?: @"") toParameter:dataID];
 }
 
+/// Read the transform-only subset of params (the only fields a group owns).
+/// Extend here when groups gain rotation/scale.
+static inline void
+KKReadGroupTransformParams(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
+                           KKBezierPath *_Nonnull path) {
+  BOOL txEn = YES;
+  [paramGetAPI getBoolValue:&txEn
+              fromParameter:kParamTransformEnabled
+                     atTime:kCMTimeZero];
+  path.transformEnabled = txEn;
+  double px = 0.5, py = 0.5;
+  [paramGetAPI getXValue:&px
+                  YValue:&py
+           fromParameter:kParamPosition
+                  atTime:kCMTimeZero];
+  path.translateX = (float)(px - 0.5);
+  path.translateY = (float)(py - 0.5);
+}
+
+/// Mirror of KKReadGroupTransformParams.
+static inline void
+KKWriteGroupTransformParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
+                            KKBezierPath *_Nonnull path) {
+  [paramSetAPI setBoolValue:path.transformEnabled
+                toParameter:kParamTransformEnabled
+                     atTime:kCMTimeZero];
+  [paramSetAPI setXValue:0.5 + path.translateX
+                  YValue:0.5 + path.translateY
+             toParameter:kParamPosition
+                  atTime:kCMTimeZero];
+}
+
 /// Read per-object param values from FxPlug and apply to a path.
 /// Add new per-object properties here.
 static inline void
 KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                KKBezierPath *_Nonnull path) {
+  if (path.isGroup) {
+    // Groups carry only transform-related state; reading stroke/fill/sketch
+    // params would clobber unused fields with whatever the inspector last
+    // showed for a non-group selection.
+    KKReadGroupTransformParams(paramGetAPI, path);
+    return;
+  }
   BOOL strokeOn = YES;
   [paramGetAPI getBoolValue:&strokeOn
               fromParameter:kParamStrokeEnabled
@@ -477,7 +535,7 @@ static inline void
 KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                         NSIndexSet *_Nullable sel,
                         NSMutableArray<KKBezierPath *> *_Nonnull paths) {
-  KKBezierPath *primary = KKSelectedPath(sel, paths);
+  KKBezierPath *primary = KKSelectedTransformTarget(sel, paths);
   if (!primary)
     return;
 
@@ -619,6 +677,13 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
 static inline void
 KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                KKBezierPath *_Nonnull path) {
+  if (path.isGroup) {
+    // Groups own only transform state — leave stroke/fill/sketch params at
+    // whatever the previous selection set them to, so visibility cascades
+    // and snapshot defaults stay coherent.
+    KKWriteGroupTransformParams(paramSetAPI, path);
+    return;
+  }
   [paramSetAPI setBoolValue:path.strokeEnabled
                 toParameter:kParamStrokeEnabled
                      atTime:kCMTimeZero];

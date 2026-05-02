@@ -516,6 +516,16 @@ void KKCanvasRefreshLayerListFromSnapshot(KKCanvasStoreSnapshot *snap,
       break;
     }
   }
+  // Fall back to a group selection so the inspector's transform section
+  // populates from the group's own translateX/Y.
+  if (!syncPath) {
+    for (NSUInteger i = 0; i < pathCount; i++) {
+      if ([capturedSelection containsIndex:i] && groupFlags[i].boolValue) {
+        syncPath = paths[i];
+        break;
+      }
+    }
+  }
   KKParamSyncApplyFromSnapshot(snap, syncPath, st.store.uuid, api);
 
   syncStyleViews(st, snap, syncPath);

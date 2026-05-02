@@ -349,10 +349,12 @@ static const CGFloat kPathToolbarGap = 6.0;
 @implementation CanvasOSC (TransformOSC)
 
 - (BOOL)isTransformPositionOSCVisibleAtTime:(CMTime)time {
-  if (![self selectedTransformablePath])
+  KKBezierPath *p = [self selectedTransformablePath];
+  if (!p)
     return NO;
   return [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
-                                        label:@"Position"];
+                                        label:@"Position"
+                                     groupKey:p.layerID];
 }
 
 - (CGPoint)transformPositionCanvasPointAtTime:(CMTime)time {

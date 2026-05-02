@@ -394,10 +394,19 @@ static void KKBroadcastPlayheads(double nowSec) {
 
 + (BOOL)multiStageOSCVisibleForAPI:(id<PROAPIAccessing>)apiManager
                              label:(NSString *)label {
+  return [self multiStageOSCVisibleForAPI:apiManager label:label groupKey:nil];
+}
+
++ (BOOL)multiStageOSCVisibleForAPI:(id<PROAPIAccessing>)apiManager
+                             label:(NSString *)label
+                          groupKey:(NSString *)groupKey {
   KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
   for (KKTimingLane *lane in state.lanesSnapshot) {
-    if ([lane.propertyLabel isEqualToString:label])
-      return lane.oscVisible;
+    if (![lane.propertyLabel isEqualToString:label])
+      continue;
+    if (groupKey.length && ![lane.groupKey isEqualToString:groupKey])
+      continue;
+    return lane.oscVisible;
   }
   return YES;
 }
