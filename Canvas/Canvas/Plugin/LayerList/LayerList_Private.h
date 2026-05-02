@@ -57,6 +57,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, weak, nullable) KKFillStyleView *fillStyleView;
 @property(nonatomic, weak, nullable) KKGradientControl *strokeGradientControl;
 @property(nonatomic, weak, nullable) KKGradientControl *fillGradientControl;
+@property(nonatomic, weak, nullable)
+    KKCustomGroupHeaderView *transformGroupHeader;
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *strokeGroupHeader;
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *fillGroupHeader;
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *sketchGroupHeader;

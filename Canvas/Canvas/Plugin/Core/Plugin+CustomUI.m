@@ -648,6 +648,25 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
   if (parameterID == kParamLayerList)
     return [self createLayerListView];
 
+  if (parameterID == kParamGroupTransform) {
+    return [self
+        createGroupHeaderWithText:@"Transform"
+                             icon:
+                                 [NSImage
+                                     imageWithSystemSymbolName:
+                                         @"arrow.up.and.down.and.arrow.left.and"
+                                         @".right"
+                                      accessibilityDescription:nil]
+                     enabledParam:kParamTransformEnabled
+                    expandedParam:kParamExpandedTransform
+                  storeSetEnabled:@selector(setTransformEnabled:)
+                 storeSetExpanded:@selector(setTransformExpanded:)
+                  stateHeaderProp:@"transformGroupHeader"
+                pathPropertyBlock:^(KKBezierPath *path, BOOL enabled) {
+                  path.transformEnabled = enabled;
+                }];
+  }
+
   if (parameterID == kParamGroupStroke) {
     return
         [self createGroupHeaderWithText:@"Stroke"
@@ -704,6 +723,14 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
   struct objc_super sup = {self, [KKPlugin class]};
   return ((NSView * (*)(struct objc_super *, SEL, UInt32)) objc_msgSendSuper)(
       &sup, @selector(createViewForParameterID:), parameterID);
+}
+
+- (NSSet<NSString *> *)animatablePropertyLabelsWithOSC {
+  return [NSSet setWithObjects:@"Position", nil];
+}
+
+- (NSSet<NSString *> *)animatablePropertyLabelsWithOSCDefaultOff {
+  return [NSSet setWithObjects:@"Position", nil];
 }
 
 - (NSString *)emptyLanesMessageWhenNoLanes {

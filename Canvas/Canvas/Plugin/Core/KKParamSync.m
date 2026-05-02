@@ -45,11 +45,13 @@ void KKParamSyncApplyFromSnapshot(KKCanvasStoreSnapshot *snap,
       (snap.fillEnabled || forceShow) && (snap.fillExpanded || forceShow);
   BOOL sketchOpen =
       (snap.sketchEnabled || forceShow) && (snap.sketchExpanded || forceShow);
+  BOOL transformOpen = (snap.transformEnabled || forceShow) &&
+                       (snap.transformExpanded || forceShow);
 
   KKVisCondition active = KKBuildVisConditions(
-      isImage, isOpen, hasJoins, strokeOpen, fillOpen, sketchOpen, strokeStyle,
-      startMarker, endMarker, fillStyle, strokeColorMode, fillColorMode,
-      strokeGradType, fillGradType);
+      isImage, isOpen, hasJoins, strokeOpen, fillOpen, sketchOpen,
+      transformOpen, strokeStyle, startMarker, endMarker, fillStyle,
+      strokeColorMode, fillColorMode, strokeGradType, fillGradType);
 
   NSUInteger vh = (NSUInteger)active * 31 + forceShow;
   if (vh == st.visHash)

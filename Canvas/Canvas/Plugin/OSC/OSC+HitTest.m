@@ -17,6 +17,28 @@
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
   double hitRadius = 12.0;
 
+  // Position-lane motion path (control points / handles / curves) sits
+  // visually above the transform arc, so test it first.
+  {
+    NSInteger pathPart = [self hitTestPositionPathAtX:x y:y atTime:kCMTimeZero];
+    if (pathPart != 0) {
+      *activePart = pathPart;
+      return;
+    }
+  }
+
+  // Transform OSC arc — top-most overlay, highest hit priority.
+  self.transformPositionHovered = NO;
+  if ([self isTransformPositionOSCVisibleAtTime:kCMTimeZero]) {
+    CGPoint pos = [self transformPositionCanvasPointAtTime:kCMTimeZero];
+    if (hypot(x - pos.x, y - pos.y) < self.transformPositionOSC.hitRadius) {
+      self.transformPositionHovered = YES;
+      *activePart = kOSCTransformPosition;
+      [oscAPI setCursor:[NSCursor openHandCursor]];
+      return;
+    }
+  }
+
   __block BOOL allLocked = YES;
   [self.selectedPathIndices
       enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {

@@ -279,6 +279,19 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
             hdr += lidLen;
           }
         }
+        if (ver >= 18 && data.length >= hdr + 2 * sizeof(float) + 1) {
+          float tr[2];
+          memcpy(tr, bytes + hdr, 2 * sizeof(float));
+          path->_translateX = tr[0];
+          path->_translateY = tr[1];
+          hdr += 2 * sizeof(float);
+          // Reserved byte (was transformOSCVisible — now a per-lane setting).
+          hdr += 1;
+        }
+        if (ver >= 19 && data.length >= hdr + 1) {
+          path->_transformEnabled = bytes[hdr] != 0;
+          hdr += 1;
+        }
       }
     }
   }
@@ -350,7 +363,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   // v11: + endWidth (1 float).
   // v12: + contour starts (2-byte count + N × uint32 indices).
   uint8_t propMarker = 0xAA;
-  uint8_t propVersion = 17;
+  uint8_t propVersion = 19;
   [data appendBytes:&propMarker length:1];
   [data appendBytes:&propVersion length:1];
   float strokeData[4] = {_strokeWidth, _strokeR, _strokeG, _strokeB};
@@ -427,6 +440,15 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   [data appendBytes:&lidLen length:2];
   if (lidLen > 0)
     [data appendData:lidData];
+  // v18: translateX, translateY (2 floats) + 1 reserved byte
+  // (was transformOSCVisible — now driven by per-lane sequencer toggle).
+  float tr[2] = {_translateX, _translateY};
+  [data appendBytes:tr length:2 * sizeof(float)];
+  uint8_t reserved = 0;
+  [data appendBytes:&reserved length:1];
+  // v19: transformEnabled (1 byte).
+  uint8_t txEnFlag = _transformEnabled ? 1 : 0;
+  [data appendBytes:&txEnFlag length:1];
   return data;
 }
 
@@ -486,6 +508,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     _count = 0;
     _capacity = 0;
     _strokeEnabled = YES;
+    _transformEnabled = YES;
     _strokeWidth = 8.0f;
     _strokeR = 1.0f;
     _strokeG = 0.0f;

@@ -54,6 +54,13 @@ NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
                  min:(simd_float2 *)outMin
                  max:(simd_float2 *)outMax;
 - (BOOL)boundsOfSelectedPaths:(simd_float2 *)outMin max:(simd_float2 *)outMax;
+/// Object-space center of a path's axis-aligned bbox.
+- (simd_float2)bboxCenterOfPath:(KKBezierPath *)path;
+/// The single currently-selected layer eligible for transform editing
+/// (selection count == 1, not a group, not locked, transform enabled), or
+/// nil. Single source of truth — when group transforms ship, relax the
+/// `isGroup` predicate here only.
+- (nullable KKBezierPath *)selectedTransformablePath;
 - (CGPoint)cornerRadiusHandlePosition:(NSInteger)corner
                               forPath:(KKBezierPath *)path;
 - (CGPoint)resizeHandlePosition:(NSInteger)index
@@ -200,5 +207,56 @@ NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
 @end
 
 @interface CanvasOSC (Input)
+
+@end
+
+@interface CanvasOSC (PositionPath)
+
+/// Generic: lane named `label` scoped to the currently-selected
+/// transformable layer's group. Future per-layer transform properties
+/// (rotation, scale) reuse this — only the label changes.
+- (nullable KKTimingLane *)laneForSelectedLayerProperty:(NSString *)label;
+/// The Position lane scoped to the currently-selected single layer, or nil.
+- (nullable KKTimingLane *)positionLaneForSelectedLayer;
+
+/// Whether the position-path overlay is currently visible (Show OSC eye on
+/// for the selected layer's Position lane).
+- (BOOL)isPositionPathVisibleAtTime:(CMTime)time;
+
+- (void)drawPositionPathsAtTime:(CMTime)time
+               destinationImage:(FxImageTile *)dest;
+
+/// Hit-test against any path point/handle/curve. Returns 0 (no hit) or one
+/// of the kkOSCPositionPath* parts. Updates cursor when a hit is found.
+- (NSInteger)hitTestPositionPathAtX:(double)x y:(double)y atTime:(CMTime)time;
+
+/// Returns YES if it consumed the event.
+- (BOOL)mouseDownOnPositionPathPart:(NSInteger)part
+                          positionX:(double)positionX
+                          positionY:(double)positionY
+                          modifiers:(NSUInteger)modifiers
+                        forceUpdate:(BOOL *)forceUpdate
+                             atTime:(CMTime)time;
+- (BOOL)mouseDraggedOnPositionPathAtX:(double)positionX
+                                    y:(double)positionY
+                            modifiers:(NSUInteger)modifiers
+                               atTime:(CMTime)time;
+
+@end
+
+@interface CanvasOSC (TransformOSC)
+
+/// YES when the per-layer transform position OSC arc should be visible.
+/// Requires: a single non-image, non-group, non-locked, transform-enabled
+/// layer is selected, that layer's `transformOSCVisible` is YES, and the
+/// global Hide OSC toggle is OFF.
+- (BOOL)isTransformPositionOSCVisibleAtTime:(CMTime)time;
+
+/// Canvas-space position of the transform OSC arc (the layer's bbox center
+/// offset by its translateX/Y).
+- (CGPoint)transformPositionCanvasPointAtTime:(CMTime)time;
+
+- (void)drawTransformOSCWithDestinationImage:(FxImageTile *)dest
+                                      atTime:(CMTime)time;
 
 @end

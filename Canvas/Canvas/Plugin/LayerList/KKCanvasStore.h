@@ -41,9 +41,11 @@ typedef NS_OPTIONS(NSUInteger, KKStoreChange) {
 @property(nonatomic, readonly) BOOL strokeEnabled;
 @property(nonatomic, readonly) BOOL fillEnabled;
 @property(nonatomic, readonly) BOOL sketchEnabled;
+@property(nonatomic, readonly) BOOL transformEnabled;
 @property(nonatomic, readonly) BOOL strokeExpanded;
 @property(nonatomic, readonly) BOOL fillExpanded;
 @property(nonatomic, readonly) BOOL sketchExpanded;
+@property(nonatomic, readonly) BOOL transformExpanded;
 @property(nonatomic, readonly) uint8_t lineCap;
 @property(nonatomic, readonly) uint8_t lineJoin;
 @property(nonatomic, readonly) uint8_t strokeStyle;
@@ -95,10 +97,12 @@ typedef void (^KKStoreObserverBlock)(KKCanvasStoreSnapshot *snapshot,
 - (void)setStrokeExpanded:(BOOL)expanded;
 - (void)setFillExpanded:(BOOL)expanded;
 - (void)setSketchExpanded:(BOOL)expanded;
+- (void)setTransformExpanded:(BOOL)expanded;
 - (void)setForceShow:(BOOL)forceShow;
 - (void)setStrokeEnabled:(BOOL)enabled;
 - (void)setFillEnabled:(BOOL)enabled;
 - (void)setSketchEnabled:(BOOL)enabled;
+- (void)setTransformEnabled:(BOOL)enabled;
 - (void)setStrokeColorMode:(uint8_t)mode;
 - (void)setFillColorMode:(uint8_t)mode;
 - (void)setStrokeGradientType:(uint8_t)t;

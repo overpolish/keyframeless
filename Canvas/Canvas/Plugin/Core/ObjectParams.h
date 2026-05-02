@@ -57,6 +57,7 @@ typedef NS_OPTIONS(uint32_t, KKVisCondition) {
   KKVisFillColorGradient = 1 << 16,    // fillColorMode == 1
   KKVisStrokeGradientLinear = 1 << 17, // strokeGradientType == 1 (linear)
   KKVisFillGradientLinear = 1 << 18,   // fillGradientType == 1 (linear)
+  KKVisTransformOpen = 1 << 19,        // transform enabled + expanded
 };
 
 typedef struct {
@@ -71,6 +72,9 @@ static const KKParamVisRule kParamVisibility[] = {
   // ─── Always ───
   { kParamOpacity,            KKVisAlways,                                                 kFxParameterFlag_DEFAULT },
   { kParamClosedPath,         KKVisNotImage,                                               kFxParameterFlag_NOT_ANIMATABLE },
+  // ─── Transform group children ───
+  // (kParamTransformEnabled is rendered by the group header — keep it HIDDEN.)
+  { kParamPosition,           KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
   // ─── Stroke group children ───
   { kParamStrokeWidth,        KKVisStrokeOpen,                                             kFxParameterFlag_DEFAULT },
   { kParamStrokeColorMode,    KKVisStrokeOpen,                                             kFxParameterFlag_NOT_ANIMATABLE },
@@ -114,10 +118,11 @@ static const size_t kParamVisibilityCount =
 /// Build the active-condition bitmask from the current selection state.
 static inline KKVisCondition
 KKBuildVisConditions(BOOL isImage, BOOL isOpen, BOOL hasJoins, BOOL strokeOpen,
-                     BOOL fillOpen, BOOL sketchOpen, uint8_t strokeStyle,
-                     int8_t startMarker, int8_t endMarker, int fillStyle,
-                     uint8_t strokeColorMode, uint8_t fillColorMode,
-                     uint8_t strokeGradientType, uint8_t fillGradientType) {
+                     BOOL fillOpen, BOOL sketchOpen, BOOL transformOpen,
+                     uint8_t strokeStyle, int8_t startMarker, int8_t endMarker,
+                     int fillStyle, uint8_t strokeColorMode,
+                     uint8_t fillColorMode, uint8_t strokeGradientType,
+                     uint8_t fillGradientType) {
   KKVisCondition c = KKVisAlways;
   if (strokeOpen)
     c |= KKVisStrokeOpen;
@@ -125,6 +130,8 @@ KKBuildVisConditions(BOOL isImage, BOOL isOpen, BOOL hasJoins, BOOL strokeOpen,
     c |= KKVisFillOpen;
   if (sketchOpen)
     c |= KKVisSketchOpen;
+  if (transformOpen)
+    c |= KKVisTransformOpen;
   if (isOpen)
     c |= KKVisOpenPath;
   if (hasJoins)
@@ -169,6 +176,7 @@ KKApplyParamVisibility(id<FxParameterSettingAPI_v5> _Nonnull setAPI,
   FxParameterFlags groupFlags = kFxParameterFlag_CUSTOM_UI |
                                 kFxParameterFlag_NOT_ANIMATABLE |
                                 kFxParameterFlag_USE_FULL_VIEW_WIDTH;
+  [setAPI setParameterFlags:groupFlags toParameter:kParamGroupTransform];
   [setAPI setParameterFlags:groupFlags toParameter:kParamGroupStroke];
   [setAPI setParameterFlags:groupFlags toParameter:kParamGroupFill];
   [setAPI setParameterFlags:groupFlags toParameter:kParamGroupSketch];
@@ -319,6 +327,20 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                       atTime:kCMTimeZero];
   path.opacity = (float)(op / 100.0);
 
+  BOOL txEnabled = YES;
+  [paramGetAPI getBoolValue:&txEnabled
+              fromParameter:kParamTransformEnabled
+                     atTime:kCMTimeZero];
+  path.transformEnabled = txEnabled;
+
+  double px = 0.5, py = 0.5;
+  [paramGetAPI getXValue:&px
+                  YValue:&py
+           fromParameter:kParamPosition
+                  atTime:kCMTimeZero];
+  path.translateX = (float)(px - 0.5);
+  path.translateY = (float)(py - 0.5);
+
   KKReadGradientParamsToPath(
       paramGetAPI, path, YES, kParamStrokeColorMode, kParamStrokeGradientType,
       kParamStrokeGradientAngle, kParamStrokeGradientData);
@@ -466,6 +488,9 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
   float oldStrokeG = primary.strokeG;
   float oldStrokeB = primary.strokeB;
   BOOL oldStrokeEnabled = primary.strokeEnabled;
+  BOOL oldTransformEnabled = primary.transformEnabled;
+  float oldTranslateX = primary.translateX;
+  float oldTranslateY = primary.translateY;
   BOOL oldFillEnabled = primary.fillEnabled;
   float oldFillR = primary.fillR;
   float oldFillG = primary.fillG;
@@ -518,6 +543,12 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
 
     if (primary.strokeEnabled != oldStrokeEnabled)
       p.strokeEnabled = primary.strokeEnabled;
+    if (primary.transformEnabled != oldTransformEnabled)
+      p.transformEnabled = primary.transformEnabled;
+    if (primary.translateX != oldTranslateX)
+      p.translateX = primary.translateX;
+    if (primary.translateY != oldTranslateY)
+      p.translateY = primary.translateY;
     if (primary.strokeWidth != oldStrokeWidth)
       p.strokeWidth = primary.strokeWidth;
     if (primary.endWidth != oldEndWidth)
@@ -617,6 +648,13 @@ KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
   [paramSetAPI setFloatValue:path.opacity * 100.0f
                  toParameter:kParamOpacity
                       atTime:kCMTimeZero];
+  [paramSetAPI setXValue:0.5 + path.translateX
+                  YValue:0.5 + path.translateY
+             toParameter:kParamPosition
+                  atTime:kCMTimeZero];
+  [paramSetAPI setBoolValue:path.transformEnabled
+                toParameter:kParamTransformEnabled
+                     atTime:kCMTimeZero];
   KKWriteGradientParamsFromPath(
       paramSetAPI, path, YES, kParamStrokeColorMode, kParamStrokeGradientType,
       kParamStrokeGradientAngle, kParamStrokeGradientData);

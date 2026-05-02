@@ -90,6 +90,16 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
                                         effectDurSec));
     [CanvasPlugin kkApplyLanes:lanes atFraction:frac toPaths:paths];
   }
+  // Bake per-layer translation into the sampled points. Render code reads
+  // raw point coords; baking here keeps the tessellation/gradient/marker
+  // pipelines transform-agnostic. The base blob is untouched so values
+  // don't accumulate frame-to-frame.
+  for (KKBezierPath *p in paths) {
+    if (p.isGroup || !p.transformEnabled)
+      continue;
+    if (p.translateX != 0.0f || p.translateY != 0.0f)
+      [p translateBy:simd_make_float2(p.translateX, p.translateY)];
+  }
   return [KKBezierPath blobFromPaths:paths];
 }
 

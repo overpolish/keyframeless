@@ -117,6 +117,31 @@
                  forceUpdate:(BOOL *)forceUpdate
                       atTime:(CMTime)time {
 
+  if (kkIsOSCPositionPath(activePart)) {
+    [self mouseDownOnPositionPathPart:activePart
+                            positionX:positionX
+                            positionY:positionY
+                            modifiers:modifiers
+                          forceUpdate:forceUpdate
+                               atTime:time];
+    return;
+  }
+
+  if (activePart == kOSCTransformPosition) {
+    self.transformPositionDragging = YES;
+    self.transformPositionDragStartX = positionX;
+    self.transformPositionDragStartY = positionY;
+    self.transformPositionDragStartObj =
+        [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+    self.transformPositionDragStartParam =
+        [self objectPositionForParam:kParamPosition atTime:time];
+    id<FxOnScreenControlAPI_v4> oscAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    [oscAPI setCursor:[NSCursor closedHandCursor]];
+    *forceUpdate = YES;
+    return;
+  }
+
   // --- Toolbar button clicks ---
   if (activePart == kOSCToolbarCursor || activePart == kOSCToolbarPen ||
       activePart == kOSCToolbarRect || activePart == kOSCToolbarEllipse ||

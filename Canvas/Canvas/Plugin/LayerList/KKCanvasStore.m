@@ -31,6 +31,7 @@
   BOOL _strokeExpanded;
   BOOL _fillExpanded;
   BOOL _sketchExpanded;
+  BOOL _transformExpanded;
   BOOL _forceShow;
 
   // Derived from selected path.
@@ -40,6 +41,7 @@
   BOOL _strokeEnabled;
   BOOL _fillEnabled;
   BOOL _sketchEnabled;
+  BOOL _transformEnabled;
   uint8_t _lineCap;
   uint8_t _lineJoin;
   uint8_t _strokeStyle;
@@ -79,6 +81,7 @@
     _observers = [NSMutableArray array];
     _strokeEnabled =
         YES; // Match FxPlug default (addToggleButton defaultValue:YES).
+    _transformEnabled = YES;
     _selectedLineCap = -1;
     _selectedLineJoin = -1;
     _selectedStrokeStyle = -1;
@@ -106,9 +109,11 @@
   [s setValue:@(_strokeEnabled) forKey:@"strokeEnabled"];
   [s setValue:@(_fillEnabled) forKey:@"fillEnabled"];
   [s setValue:@(_sketchEnabled) forKey:@"sketchEnabled"];
+  [s setValue:@(_transformEnabled) forKey:@"transformEnabled"];
   [s setValue:@(_strokeExpanded) forKey:@"strokeExpanded"];
   [s setValue:@(_fillExpanded) forKey:@"fillExpanded"];
   [s setValue:@(_sketchExpanded) forKey:@"sketchExpanded"];
+  [s setValue:@(_transformExpanded) forKey:@"transformExpanded"];
   [s setValue:@(_lineCap) forKey:@"lineCap"];
   [s setValue:@(_lineJoin) forKey:@"lineJoin"];
   [s setValue:@(_strokeStyle) forKey:@"strokeStyle"];
@@ -204,7 +209,9 @@
     ch |= KKStoreChangeCollapse;
 
   if (b.strokeExpanded != a.strokeExpanded ||
-      b.fillExpanded != a.fillExpanded || b.sketchExpanded != a.sketchExpanded)
+      b.fillExpanded != a.fillExpanded ||
+      b.sketchExpanded != a.sketchExpanded ||
+      b.transformExpanded != a.transformExpanded)
     ch |= KKStoreChangeExpanded;
 
   // Check visibility (hidden/locked on paths).
@@ -223,6 +230,7 @@
   if (b.hasSelectedPath != a.hasSelectedPath ||
       b.strokeEnabled != a.strokeEnabled || b.fillEnabled != a.fillEnabled ||
       b.sketchEnabled != a.sketchEnabled ||
+      b.transformEnabled != a.transformEnabled ||
       b.selectedPathOpen != a.selectedPathOpen ||
       b.selectedPathHasJoins != a.selectedPathHasJoins ||
       b.lineCap != a.lineCap || b.lineJoin != a.lineJoin ||
@@ -299,6 +307,12 @@
   os_unfair_lock_unlock(&_lock);
 }
 
+- (void)setTransformExpanded:(BOOL)expanded {
+  os_unfair_lock_lock(&_lock);
+  _transformExpanded = expanded;
+  os_unfair_lock_unlock(&_lock);
+}
+
 - (void)setForceShow:(BOOL)forceShow {
   os_unfair_lock_lock(&_lock);
   _forceShow = forceShow;
@@ -320,6 +334,12 @@
 - (void)setSketchEnabled:(BOOL)enabled {
   os_unfair_lock_lock(&_lock);
   _sketchEnabled = enabled;
+  os_unfair_lock_unlock(&_lock);
+}
+
+- (void)setTransformEnabled:(BOOL)enabled {
+  os_unfair_lock_lock(&_lock);
+  _transformEnabled = enabled;
   os_unfair_lock_unlock(&_lock);
 }
 

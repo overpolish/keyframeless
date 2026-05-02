@@ -147,6 +147,26 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
     self.rotateHandleOSC.oscRadius = 5.0f;
     self.rotateHandleOSC.outlineWidth = 1.5f;
     self.rotateHandleOSC.fillColorOverride = [NSColor accent];
+
+    self.transformPositionOSC =
+        [[KKArcOSC alloc] initWithAPIManager:apiManager];
+    self.transformPositionOSC.clearsOnDraw = NO;
+
+    self.positionPathPointOSC =
+        [[KKPointOSC alloc] initWithAPIManager:apiManager];
+    self.positionPathPointOSC.clearsOnDraw = NO;
+    self.positionPathPointOSC.oscRadius = 5.0f;
+    self.positionPathPointOSC.outlineWidth = 1.5f;
+    self.positionPathHandleOSC =
+        [[KKPointOSC alloc] initWithAPIManager:apiManager];
+    self.positionPathHandleOSC.clearsOnDraw = NO;
+    self.positionPathHandleOSC.oscRadius = 3.0f;
+    self.positionPathHandleOSC.outlineWidth = 1.0f;
+
+    self.positionPathDragSegIndex = -1;
+    self.positionPathDragPointIndex = -1;
+    self.positionPathLastClickSegIdx = -1;
+    self.positionPathLastClickPointIdx = -1;
   }
   return self;
 }

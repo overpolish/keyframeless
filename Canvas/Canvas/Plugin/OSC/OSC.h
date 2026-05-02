@@ -69,6 +69,25 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, strong, nullable) NSArray<NSData *> *resizeOrigSnapshots;
 @property(nonatomic, strong, nullable) NSArray<NSNumber *> *resizeOrigIndices;
 @property(nonatomic, strong) KKPointOSC *rotateHandleOSC;
+@property(nonatomic, strong) KKArcOSC *transformPositionOSC;
+@property(nonatomic, assign) BOOL transformPositionHovered;
+@property(nonatomic, assign) BOOL transformPositionDragging;
+@property(nonatomic, assign) double transformPositionDragStartX;
+@property(nonatomic, assign) double transformPositionDragStartY;
+@property(nonatomic, assign) simd_float2 transformPositionDragStartObj;
+@property(nonatomic, assign) simd_float2 transformPositionDragStartParam;
+
+// Position-lane path editing (between two transition keyframes).
+@property(nonatomic, strong) KKPointOSC *positionPathPointOSC;
+@property(nonatomic, strong) KKPointOSC *positionPathHandleOSC;
+@property(nonatomic, assign) NSInteger positionPathDragSegIndex;
+@property(nonatomic, assign) NSInteger positionPathDragPointIndex;
+@property(nonatomic, assign) BOOL positionPathDragIsInHandle;
+@property(nonatomic, assign) BOOL positionPathDragIsOutHandle;
+@property(nonatomic, assign) simd_float2 positionPathDragStartObj;
+@property(nonatomic, assign) NSTimeInterval positionPathLastClickTime;
+@property(nonatomic, assign) NSInteger positionPathLastClickSegIdx;
+@property(nonatomic, assign) NSInteger positionPathLastClickPointIdx;
 @property(nonatomic, assign) BOOL dragIsRotation;
 @property(nonatomic, assign) simd_float2 rotateCenter;
 @property(nonatomic, assign) float rotateStartAngle;

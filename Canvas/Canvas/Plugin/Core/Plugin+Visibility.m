@@ -47,6 +47,9 @@
     @(kParamFillGradientType),
     @(kParamFillGradientAngle),
     @(kParamFillGradientData),
+    @(kParamGroupTransform),
+    @(kParamTransformEnabled),
+    @(kParamPosition),
   ];
 
   [self forceShowAllParametersIfEnabled:kParamForceShow

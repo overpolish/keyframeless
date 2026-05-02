@@ -81,6 +81,17 @@ NS_ASSUME_NONNULL_BEGIN
 /// on load.
 @property(nonatomic, copy) NSString *layerID;
 
+/// Whether the Transform group (translate/rotate/scale) applies at render
+/// time. When NO, the path renders at its raw point coords so OSC editing
+/// stays in sync. Default YES.
+@property(nonatomic, assign) BOOL transformEnabled;
+
+/// Per-layer translation applied at render time (object-space units).
+/// Animatable via the Position X / Position Y KKTiming lanes. Does not
+/// mutate the path's points — composes with rotation/scale once added.
+@property(nonatomic, assign) float translateX;
+@property(nonatomic, assign) float translateY;
+
 /// Per-corner radius fractions 0–1 (TL, TR, BR, BL). 0 = sharp, 1 = max.
 @property(nonatomic, assign) float cornerRadiusTL;
 @property(nonatomic, assign) float cornerRadiusTR;

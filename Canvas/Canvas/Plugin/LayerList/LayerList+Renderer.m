@@ -336,6 +336,13 @@ static void syncStyleViews(KKLayerInstanceState *st,
 static void syncGroupHeaders(KKLayerInstanceState *st,
                              KKCanvasStoreSnapshot *snap,
                              BOOL selectedIsImage) {
+  KKCustomGroupHeaderView *transformHeader = st.transformGroupHeader;
+  if (transformHeader) {
+    transformHeader.isInteractive = YES;
+    transformHeader.isEnabled = snap.transformEnabled;
+    transformHeader.isExpanded = snap.transformExpanded;
+    transformHeader.statusText = nil;
+  }
   KKCustomGroupHeaderView *strokeHeader = st.strokeGroupHeader;
   if (strokeHeader) {
     strokeHeader.isInteractive = YES;

@@ -337,6 +337,40 @@
                       modifiers:(NSUInteger)modifiers
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
+  if (self.positionPathDragSegIndex >= 0) {
+    if ([self mouseDraggedOnPositionPathAtX:positionX
+                                          y:positionY
+                                  modifiers:modifiers
+                                     atTime:time]) {
+      *forceUpdate = YES;
+      return;
+    }
+  }
+
+  if (self.transformPositionDragging) {
+    simd_float2 currentObj =
+        [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+    simd_float2 delta = currentObj - self.transformPositionDragStartObj;
+    if (modifiers & kFxModifierKey_SHIFT) {
+      if (fabsf(delta.x) > fabsf(delta.y))
+        delta.y = 0;
+      else
+        delta.x = 0;
+    }
+    simd_float2 newParam = self.transformPositionDragStartParam + delta;
+    id<FxCustomParameterActionAPI_v4> actAPI = [self.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    id<FxParameterSettingAPI_v5> setAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [actAPI startAction:self];
+    [setAPI setXValue:newParam.x
+               YValue:newParam.y
+          toParameter:kParamPosition
+               atTime:time];
+    [actAPI endAction:self];
+    *forceUpdate = YES;
+    return;
+  }
   if (self.stepperDragging) {
     [self handleStepperDragAtY:positionY
                      modifiers:modifiers
@@ -416,6 +450,40 @@
                  modifiers:(NSUInteger)modifiers
                forceUpdate:(BOOL *)forceUpdate
                     atTime:(CMTime)time {
+  if (self.positionPathDragSegIndex >= 0 ||
+      self.positionPathDragPointIndex >= 0) {
+    self.positionPathDragSegIndex = -1;
+    self.positionPathDragPointIndex = -1;
+    self.positionPathDragIsInHandle = NO;
+    self.positionPathDragIsOutHandle = NO;
+    id<FxOnScreenControlAPI_v4> oscAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    [oscAPI setCursor:[NSCursor arrowCursor]];
+    *forceUpdate = YES;
+    [super mouseUpAtPositionX:positionX
+                    positionY:positionY
+                   activePart:activePart
+                    modifiers:modifiers
+                  forceUpdate:forceUpdate
+                       atTime:time];
+    return;
+  }
+
+  if (self.transformPositionDragging) {
+    self.transformPositionDragging = NO;
+    self.transformPositionHovered = NO;
+    id<FxOnScreenControlAPI_v4> oscAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    [oscAPI setCursor:[NSCursor arrowCursor]];
+    *forceUpdate = YES;
+    [super mouseUpAtPositionX:positionX
+                    positionY:positionY
+                   activePart:activePart
+                    modifiers:modifiers
+                  forceUpdate:forceUpdate
+                       atTime:time];
+    return;
+  }
   if (self.stepperDragging) {
     self.stepperDragging = NO;
     self.stepperShiftWasDown = NO;

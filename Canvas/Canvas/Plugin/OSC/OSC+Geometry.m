@@ -334,4 +334,22 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
   }
 }
 
+- (simd_float2)bboxCenterOfPath:(KKBezierPath *)path {
+  simd_float2 bmin, bmax;
+  [self boundsOfPath:path min:&bmin max:&bmax];
+  return (bmin + bmax) * 0.5f;
+}
+
+- (KKBezierPath *)selectedTransformablePath {
+  if (self.selectedPathIndices.count != 1)
+    return nil;
+  NSUInteger idx = self.selectedPathIndices.firstIndex;
+  if (idx >= self.paths.count)
+    return nil;
+  KKBezierPath *p = self.paths[idx];
+  if (p.isGroup || p.locked || !p.transformEnabled)
+    return nil;
+  return p;
+}
+
 @end

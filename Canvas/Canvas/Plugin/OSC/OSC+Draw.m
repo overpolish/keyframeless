@@ -332,11 +332,54 @@ static const CGFloat kPathToolbarGap = 6.0;
   [self drawAlignmentGuidesWithDestinationImage:destinationImage];
   [self drawSpacingGuidesWithDestinationImage:destinationImage];
 
+  // Per-layer Transform OSC arc (position handle).
+  [self drawTransformOSCWithDestinationImage:destinationImage atTime:time];
+  // Position-lane motion path (between transition keyframes).
+  [self drawPositionPathsAtTime:time destinationImage:destinationImage];
+
   // Toolbars on top.
   [self.toolbar drawWithDestinationImage:destinationImage];
   [self.gridToolbar drawWithDestinationImage:destinationImage];
   if (showPathToolbar)
     [self.pathToolbar drawWithDestinationImage:destinationImage];
+}
+
+@end
+
+@implementation CanvasOSC (TransformOSC)
+
+- (BOOL)isTransformPositionOSCVisibleAtTime:(CMTime)time {
+  if (![self selectedTransformablePath])
+    return NO;
+  return [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                        label:@"Position"];
+}
+
+- (CGPoint)transformPositionCanvasPointAtTime:(CMTime)time {
+  // Center the arc on the selected layer (its bbox center + translation
+  // offset), so dragging always grabs the visual layer rather than the
+  // canvas center.
+  KKBezierPath *p = [self selectedTransformablePath];
+  if (!p)
+    return CGPointZero;
+  simd_float2 center = [self bboxCenterOfPath:p];
+  // Sample the live Position param so the OSC tracks animated values.
+  simd_float2 paramPos = [self objectPositionForParam:kParamPosition
+                                               atTime:time];
+  simd_float2 translation = paramPos - (simd_float2){0.5f, 0.5f};
+  return [self canvasPointFromObjectPoint:(center + translation)];
+}
+
+- (void)drawTransformOSCWithDestinationImage:(FxImageTile *)dest
+                                      atTime:(CMTime)time {
+  if (![self isTransformPositionOSCVisibleAtTime:time])
+    return;
+  CGPoint pos = [self transformPositionCanvasPointAtTime:time];
+  [self.transformPositionOSC drawAtCanvasPosition:pos
+                                        isHovered:self.transformPositionHovered
+                                         isActive:self.transformPositionDragging
+                                 destinationImage:dest
+                                           atTime:time];
 }
 
 @end

@@ -154,6 +154,31 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
     return NO;
 
   [paramAPI addCustomParameterWithName:@""
+                           parameterID:kParamGroupTransform
+                          defaultValue:@(kParamGroupTransform)
+                        parameterFlags:kFxParameterFlag_CUSTOM_UI |
+                                       kFxParameterFlag_NOT_ANIMATABLE |
+                                       kFxParameterFlag_USE_FULL_VIEW_WIDTH];
+
+  [paramAPI addToggleButtonWithName:@""
+                        parameterID:kParamExpandedTransform
+                       defaultValue:NO
+                     parameterFlags:kFxParameterFlag_HIDDEN |
+                                    kFxParameterFlag_NOT_ANIMATABLE];
+
+  [paramAPI addToggleButtonWithName:@"Transform"
+                        parameterID:kParamTransformEnabled
+                       defaultValue:YES
+                     parameterFlags:kFxParameterFlag_HIDDEN |
+                                    kFxParameterFlag_NOT_ANIMATABLE];
+
+  [paramAPI addPointParameterWithName:@"Position"
+                          parameterID:kParamPosition
+                             defaultX:0.5
+                             defaultY:0.5
+                       parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addCustomParameterWithName:@""
                            parameterID:kParamGroupStroke
                           defaultValue:@(kParamGroupStroke)
                         parameterFlags:kFxParameterFlag_CUSTOM_UI |

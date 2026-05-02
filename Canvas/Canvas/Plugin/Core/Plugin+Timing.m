@@ -10,16 +10,82 @@
 // Descriptor for an animatable per-path property. Adding a new animatable
 // property in Canvas means adding one entry to `_kkAnimatableProperties()` —
 // nothing else in this file branches on the property identity.
+//
+// readPath / writePath operate on NSArray<NSNumber *> so a single descriptor
+// can represent a Float (1 scalar), a Point (2 scalars), or a Bool (1 scalar
+// 0/1). The kind dictates how values are read from / written to FxPlug.
 @interface KKCanvasAnimProp : NSObject
 @property(copy) NSString *label;
 @property UInt32 paramID;
 @property KKAnimatableParamKind kind;
 @property(copy) BOOL (^enabledForPath)(KKBezierPath *p);
-@property(copy) double (^readPath)(KKBezierPath *p);
-@property(copy) void (^writePath)(KKBezierPath *p, double v);
+@property(copy) NSArray<NSNumber *> * (^readPath)(KKBezierPath *p);
+@property(copy) void (^writePath)(KKBezierPath *p, NSArray<NSNumber *> *vals);
 @end
 @implementation KKCanvasAnimProp
 @end
+
+// --- FxPlug param read/write helpers, dispatched on KKAnimatableParamKind. ---
+
+static NSArray<NSNumber *> *
+_kkReadParamByKind(id<FxParameterRetrievalAPI_v6> getAPI, UInt32 paramID,
+                   KKAnimatableParamKind kind, CMTime time) {
+  switch (kind) {
+  case KKAnimatableParamKindPoint: {
+    double x = 0, y = 0;
+    [getAPI getXValue:&x YValue:&y fromParameter:paramID atTime:time];
+    return @[ @(x), @(y) ];
+  }
+  case KKAnimatableParamKindBool: {
+    BOOL b = NO;
+    [getAPI getBoolValue:&b fromParameter:paramID atTime:time];
+    return @[ @(b ? 1.0 : 0.0) ];
+  }
+  case KKAnimatableParamKindFloat:
+  default: {
+    double v = 0;
+    [getAPI getFloatValue:&v fromParameter:paramID atTime:time];
+    return @[ @(v) ];
+  }
+  }
+}
+
+static void _kkWriteParamByKind(id<FxParameterSettingAPI_v5> setAPI,
+                                UInt32 paramID, KKAnimatableParamKind kind,
+                                NSArray<NSNumber *> *vals, CMTime time) {
+  switch (kind) {
+  case KKAnimatableParamKindPoint:
+    if (vals.count >= 2)
+      [setAPI setXValue:vals[0].doubleValue
+                 YValue:vals[1].doubleValue
+            toParameter:paramID
+                 atTime:time];
+    break;
+  case KKAnimatableParamKindBool:
+    if (vals.count >= 1)
+      [setAPI setBoolValue:vals[0].doubleValue >= 0.5
+               toParameter:paramID
+                    atTime:time];
+    break;
+  case KKAnimatableParamKindFloat:
+  default:
+    if (vals.count >= 1)
+      [setAPI setFloatValue:vals[0].doubleValue
+                toParameter:paramID
+                     atTime:time];
+    break;
+  }
+}
+
+static BOOL _kkValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
+  if (a.count != b.count)
+    return NO;
+  for (NSUInteger i = 0; i < a.count; i++) {
+    if (fabs(a[i].doubleValue - b[i].doubleValue) > 1e-6)
+      return NO;
+  }
+  return YES;
+}
 
 static NSArray<KKCanvasAnimProp *> *_kkAnimatableProperties(void) {
   static NSArray<KKCanvasAnimProp *> *sProps = nil;
@@ -32,13 +98,35 @@ static NSArray<KKCanvasAnimProp *> *_kkAnimatableProperties(void) {
     strokeWidth.enabledForPath = ^BOOL(KKBezierPath *p) {
       return p.strokeEnabled;
     };
-    strokeWidth.readPath = ^double(KKBezierPath *p) {
-      return p.strokeWidth;
+    strokeWidth.readPath = ^NSArray<NSNumber *> *(KKBezierPath *p) {
+      return @[ @(p.strokeWidth) ];
     };
-    strokeWidth.writePath = ^(KKBezierPath *p, double v) {
-      p.strokeWidth = (float)v;
+    strokeWidth.writePath = ^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
+      if (vals.count >= 1)
+        p.strokeWidth = vals[0].floatValue;
     };
-    sProps = @[ strokeWidth ];
+
+    // Position is a 2-component Point lane; the FxPlug param uses 0.5,0.5
+    // as neutral (matching FCP convention), while the path stores the
+    // offset from neutral so render-time translation is just translateBy:.
+    KKCanvasAnimProp *position = [KKCanvasAnimProp new];
+    position.label = @"Position";
+    position.paramID = kParamPosition;
+    position.kind = KKAnimatableParamKindPoint;
+    position.enabledForPath = ^BOOL(KKBezierPath *p) {
+      return p.transformEnabled;
+    };
+    position.readPath = ^NSArray<NSNumber *> *(KKBezierPath *p) {
+      return @[ @(0.5 + p.translateX), @(0.5 + p.translateY) ];
+    };
+    position.writePath = ^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
+      if (vals.count >= 2) {
+        p.translateX = vals[0].floatValue - 0.5f;
+        p.translateY = vals[1].floatValue - 0.5f;
+      }
+    };
+
+    sProps = @[ strokeWidth, position ];
   });
   return sProps;
 }
@@ -91,13 +179,16 @@ static NSString *_kkGroupLabelForPath(KKBezierPath *p, NSUInteger idx) {
 }
 
 static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
-                                  NSUInteger idx) {
-  KKTimingLane *lane =
-      [KKTimingLane defaultLaneForLabel:desc.label
-                             baseValues:@[ @(desc.readPath(p)) ]];
+                                  NSUInteger idx, NSSet<NSString *> *oscLabels,
+                                  NSSet<NSString *> *oscDefaultOff) {
+  KKTimingLane *lane = [KKTimingLane defaultLaneForLabel:desc.label
+                                              baseValues:desc.readPath(p)];
   lane.valueComponentKinds = @[ @(desc.kind) ];
   lane.groupKey = p.layerID;
   lane.groupLabel = _kkGroupLabelForPath(p, idx);
+  lane.hasOSC = [oscLabels containsObject:desc.label];
+  if (lane.hasOSC && [oscDefaultOff containsObject:desc.label])
+    lane.oscVisible = NO;
   return lane;
 }
 
@@ -131,8 +222,42 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
       if (!lane)
         continue;
       NSArray<NSNumber *> *vals = KKTimingLaneValueAtFraction(lane, frac);
+      // Position lane: when the active transition has a custom bezier
+      // motion path, traverse the curve instead of taking the engine's
+      // linearly-interpolated x/y.
+      if (desc.kind == KKAnimatableParamKindPoint && vals.count >= 2) {
+        KKTimingSegment *active =
+            KKTimingSegmentForFraction(lane.segments, frac);
+        if (active && active.type == KKSegmentTypeTransition &&
+            active.pathData.length > 0) {
+          KKBezierPath *path = [KKBezierPath pathWithData:active.pathData];
+          NSUInteger idx = [lane.segments indexOfObjectIdenticalTo:active];
+          NSArray<NSNumber *> *fromVals =
+              KKTimingBoundaryBefore(idx, lane.segments);
+          NSArray<NSNumber *> *toVals =
+              KKTimingBoundaryAfter(idx, lane.segments);
+          if (fromVals.count >= 2 && toVals.count >= 2) {
+            double segDur = active.end - active.start;
+            double t = (segDur > 0) ? (frac - active.start) / segDur : 1.0;
+            t = MAX(0.0, MIN(1.0, t));
+            BOOL isAnimateOut = (idx == lane.segments.count - 1);
+            double ti = isAnimateOut ? (1.0 - t) : t;
+            double easedT = KKApplyEasing(ti, active.easing, active.intensity,
+                                          active.frequency);
+            if (isAnimateOut)
+              easedT = 1.0 - easedT;
+            simd_float2 pt =
+                [path positionAtT:(float)easedT
+                            start:(simd_float2){(float)fromVals[0].doubleValue,
+                                                (float)fromVals[1].doubleValue}
+                              end:(simd_float2){(float)toVals[0].doubleValue,
+                                                (float)toVals[1].doubleValue}];
+            vals = @[ @(pt.x), @(pt.y) ];
+          }
+        }
+      }
       if (vals.count >= 1)
-        desc.writePath(p, vals[0].doubleValue);
+        desc.writePath(p, vals);
     }
   }
 }
@@ -142,6 +267,9 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
                                                     paramGetAPI {
   NSArray<KKBezierPath *> *paths = _kkReadPaths(paramGetAPI);
   NSArray<KKCanvasAnimProp *> *props = _kkAnimatableProperties();
+  NSSet<NSString *> *oscLabels = [self animatablePropertyLabelsWithOSC];
+  NSSet<NSString *> *oscDefaultOff =
+      [self animatablePropertyLabelsWithOSCDefaultOff];
   NSMutableArray<KKTimingLane *> *lanes = [NSMutableArray array];
   NSUInteger idx = 0;
   for (KKBezierPath *p in paths) {
@@ -150,7 +278,7 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
       continue;
     for (KKCanvasAnimProp *desc in props) {
       if (desc.enabledForPath(p))
-        [lanes addObject:_kkBuildLane(desc, p, idx)];
+        [lanes addObject:_kkBuildLane(desc, p, idx, oscLabels, oscDefaultOff)];
     }
   }
   return lanes.count ? lanes : nil;
@@ -162,6 +290,9 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
                                                 paramGetAPI {
   NSArray<KKBezierPath *> *paths = _kkReadPaths(paramGetAPI);
   NSArray<KKCanvasAnimProp *> *props = _kkAnimatableProperties();
+  NSSet<NSString *> *oscLabels = [self animatablePropertyLabelsWithOSC];
+  NSSet<NSString *> *oscDefaultOff =
+      [self animatablePropertyLabelsWithOSCDefaultOff];
 
   // Index existing lanes by (groupKey, propertyLabel) so we can carry forward
   // segment data when a path/property is still present.
@@ -183,20 +314,22 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
     NSString *liveLabel = _kkGroupLabelForPath(p, idx);
     for (KKCanvasAnimProp *desc in props) {
       BOOL applies = desc.enabledForPath(p);
+      BOOL liveHasOSC = [oscLabels containsObject:desc.label];
       NSString *key =
           [NSString stringWithFormat:@"%@\x1f%@", p.layerID, desc.label];
       KKTimingLane *prev = byKey[key];
       if (prev) {
         if (![prev.groupLabel isEqualToString:liveLabel] ||
-            prev.pluginVisible != applies) {
+            prev.pluginVisible != applies || prev.hasOSC != liveHasOSC) {
           KKTimingLane *m = [prev copy];
           m.groupLabel = liveLabel;
           m.pluginVisible = applies;
+          m.hasOSC = liveHasOSC;
           prev = m;
         }
         [out addObject:prev];
       } else if (applies) {
-        [out addObject:_kkBuildLane(desc, p, idx)];
+        [out addObject:_kkBuildLane(desc, p, idx, oscLabels, oscDefaultOff)];
       }
     }
   }
@@ -216,7 +349,7 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
   KKBezierPath *p = _kkPathByLayerID(_kkReadPaths(getAPI), groupKey);
   if (!p)
     return nil;
-  return @[ @(desc.readPath(p)) ];
+  return desc.readPath(p);
 }
 
 /// Returns the layerID of the currently-selected non-group path, or nil if
@@ -254,8 +387,7 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
   KKBezierPath *p = _kkPathByLayerID(paths, groupKey);
   if (!p)
     return NO;
-  double newValue = values[0].doubleValue;
-  desc.writePath(p, newValue);
+  desc.writePath(p, values);
   _kkWritePaths(setAPI, paths);
 
   // If this lane's layer is the one currently shown in the inspector, push
@@ -263,7 +395,7 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
   // segment's value. Other layers' lanes stay independent of the slider —
   // we never write the param for them.
   if ([groupKey isEqualToString:[self _kkSelectedLayerID]]) {
-    [setAPI setFloatValue:newValue toParameter:desc.paramID atTime:time];
+    _kkWriteParamByKind(setAPI, desc.paramID, desc.kind, values, time);
   }
   return YES;
 }
@@ -300,10 +432,9 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
     [actAPI endAction:self];
     return;
   }
-  double newValue = 0;
-  [getAPI getFloatValue:&newValue
-          fromParameter:paramID
-                 atTime:[actAPI currentTime]];
+  CMTime now = [actAPI currentTime];
+  NSArray<NSNumber *> *newValues =
+      _kkReadParamByKind(getAPI, paramID, desc.kind, now);
 
   // Mirror the slider value into pathData immediately. Otherwise a
   // subsequent segment-click reads a stale path value for its write-back
@@ -311,8 +442,8 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
   // the segment we just edited.
   NSMutableArray<KKBezierPath *> *paths = _kkReadPaths(getAPI);
   KKBezierPath *p = _kkPathByLayerID(paths, selID);
-  if (p && fabs(desc.readPath(p) - newValue) > 1e-6) {
-    desc.writePath(p, newValue);
+  if (p && !_kkValuesEqual(desc.readPath(p), newValues)) {
+    desc.writePath(p, newValues);
     _kkWritePaths(setAPI, paths);
   }
 
@@ -334,13 +465,12 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
     if (selSeg < 0 || (NSUInteger)selSeg >= lane.segments.count)
       break;
     KKTimingSegment *seg = lane.segments[selSeg];
-    NSNumber *cur = seg.values.firstObject;
-    if (cur && fabs(cur.doubleValue - newValue) < 1e-6)
+    if (_kkValuesEqual(seg.values, newValues))
       break;
     KKTimingLane *m = [lane copy];
     NSMutableArray<KKTimingSegment *> *segs = [m.segments mutableCopy];
     KKTimingSegment *mSeg = [seg copy];
-    mSeg.values = @[ @(newValue) ];
+    mSeg.values = newValues;
     segs[selSeg] = mSeg;
     m.segments = segs;
     lanes[i] = m;
