@@ -104,7 +104,8 @@
   BOOL anyChanged = NO;
   for (NSUInteger li = 0; li < lanes.count; li++) {
     if (!lanes[li].effectivelyVisibleInSequencer ||
-        [pluginHidden containsObject:lanes[li].propertyLabel])
+        [pluginHidden containsObject:lanes[li].propertyLabel] ||
+        KKLaneIsHiddenByCollapsedGroup(lanes, li))
       continue;
     KKTimingLane *lane = [lanes[li] copy];
     NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
@@ -166,7 +167,8 @@
   BOOL anyChanged = NO;
   for (NSUInteger li = 0; li < lanes.count; li++) {
     if (!lanes[li].effectivelyVisibleInSequencer ||
-        [pluginHidden containsObject:lanes[li].propertyLabel])
+        [pluginHidden containsObject:lanes[li].propertyLabel] ||
+        KKLaneIsHiddenByCollapsedGroup(lanes, li))
       continue;
     KKTimingLane *lane = [lanes[li] copy];
     NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];

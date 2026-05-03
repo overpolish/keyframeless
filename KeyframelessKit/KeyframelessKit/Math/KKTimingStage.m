@@ -5,6 +5,19 @@
 
 #import "KKTimingStage.h"
 
+BOOL KKLaneIsHiddenByCollapsedGroup(NSArray<KKTimingLane *> *lanes,
+                                    NSUInteger idx) {
+  if (idx >= lanes.count)
+    return NO;
+  NSString *key = lanes[idx].groupKey;
+  if (!key)
+    return NO;
+  NSUInteger head = idx;
+  while (head > 0 && [lanes[head - 1].groupKey isEqualToString:key])
+    head--;
+  return lanes[head].groupCollapsed;
+}
+
 NSArray<NSNumber *> *
 KKTimingBoundaryBefore(NSUInteger idx, NSArray<KKTimingSegment *> *segments) {
   if (idx == 0 || segments.count == 0)

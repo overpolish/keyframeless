@@ -115,6 +115,8 @@
     KKTimingLane *lane = self.lanes[li];
     if (lane.segments.count < 2)
       continue;
+    if (KKLaneIsHiddenByCollapsedGroup(self.lanes, li))
+      continue;
     NSInteger bestB = -1;
     double bestDelta = INFINITY;
     BOOL bestIsLeftSide = NO;

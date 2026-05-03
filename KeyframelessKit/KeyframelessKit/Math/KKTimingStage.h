@@ -190,6 +190,13 @@ typedef NS_ENUM(NSInteger, KKAnimatableParamKind) {
 
 @end
 
+/// YES when the lane at `idx` belongs to a group whose head has
+/// `groupCollapsed == YES`. Bulk operations targeting per-lane state
+/// (split/remove/select/toggle/lock/edge-drag) should skip such lanes
+/// so a collapsed group behaves as one opaque unit.
+FOUNDATION_EXPORT BOOL
+KKLaneIsHiddenByCollapsedGroup(NSArray<KKTimingLane *> *lanes, NSUInteger idx);
+
 /// Boundary resolution: between each pair of segments there is a single
 /// shared value that both sides agree on. Holds dictate their own boundaries.
 /// When two transitions meet, the "right" segment's own value wins.

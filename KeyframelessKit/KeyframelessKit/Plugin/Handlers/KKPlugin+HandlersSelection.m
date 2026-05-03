@@ -114,7 +114,8 @@
   for (NSUInteger li = 0; li < lanes.count; li++) {
     KKTimingLane *lane = lanes[li];
     if (!lane.effectivelyVisibleInSequencer ||
-        [pluginHidden containsObject:lane.propertyLabel]) {
+        [pluginHidden containsObject:lane.propertyLabel] ||
+        KKLaneIsHiddenByCollapsedGroup(lanes, li)) {
       [newSegPerLane addObject:@(-1)];
       continue;
     }
