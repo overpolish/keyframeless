@@ -58,6 +58,10 @@ static void copyPathProps(KKBezierPath *dst, KKBezierPath *src) {
   dst.dashLength = src.dashLength;
   dst.dashGap = src.dashGap;
   dst.dotGap = src.dotGap;
+  dst.drawOnStart = src.drawOnStart;
+  dst.drawOnEnd = src.drawOnEnd;
+  dst.marchingAntsOffset = src.marchingAntsOffset;
+  dst.marchingAntsSpeed = src.marchingAntsSpeed;
   dst.fillEnabled = src.fillEnabled;
   dst.fillR = src.fillR;
   dst.fillG = src.fillG;

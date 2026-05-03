@@ -309,6 +309,25 @@ NSUInteger KKTessellateTrimmedPath(KKBezierPath *path, float startWidth,
     vertices[vc].edgeDistance = -1.0f;
     vertices[vc].capDistance = 0.0f;
     vc++;
+
+    // Curve→curve boundary: emit round/bevel join geometry, then re-seed the
+    // strip at the joint with the next curve's starting normal so subsequent
+    // samples flow cleanly into curve c+1.
+    if (samples[i].atJoin && lineJoin != 0 && i < lastIdx) {
+      simd_float2 n2 = samples[i].nextCurveStartNormal;
+      vc = KKEmitJoinGeometry(vertices, vc, samples[i].position,
+                              samples[i].normal, n2, iHW, lineJoin);
+      vertices[vc] = vertices[vc - 1];
+      vc++;
+      vertices[vc].position = samples[i].position + n2 * iHW;
+      vertices[vc].edgeDistance = 1.0f;
+      vertices[vc].capDistance = 0.0f;
+      vc++;
+      vertices[vc].position = samples[i].position - n2 * iHW;
+      vertices[vc].edgeDistance = -1.0f;
+      vertices[vc].capDistance = 0.0f;
+      vc++;
+    }
   }
 
   // Emit the interpolated end point.

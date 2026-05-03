@@ -187,7 +187,11 @@ static void renderStrokeForSinglePath(
                                          outputHeight, path.dotGap, startTrim,
                                          endTrim, dottedPhase, vertices);
   } else if (hasMarkers || drawOnTrims) {
-    NSUInteger maxVertices = curveCount * ((segsPerCurve + 1) * 2 + 2) + 256;
+    // +48 per curve covers worst-case round-join expansion at every curve
+    // boundary in the trim range (matches KKTessellatePath's allocation).
+    NSUInteger joinExtra = (path.lineJoin != 0) ? curveCount * 48 : 0;
+    NSUInteger maxVertices =
+        curveCount * ((segsPerCurve + 1) * 2 + 2) + 256 + joinExtra;
     vertices = malloc(maxVertices * sizeof(CanvasVertex));
     vertexCount = KKTessellateTrimmedPath(
         path, sw, ew, outputWidth, outputHeight, path.lineCap, path.lineJoin,

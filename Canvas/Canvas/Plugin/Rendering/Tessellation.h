@@ -12,10 +12,16 @@
 static const float kMiterLimit = 4.0f;
 
 /// A sampled point along a path with cumulative arc length.
+/// `atJoin` is YES when this sample sits at a curve→curve boundary on the
+/// original path (last sample of curve c with curve c+1 to follow).
+/// `nextCurveStartNormal` carries the raw normal at the start of curve c+1 so
+/// trimmed tessellation can emit join geometry without re-walking the path.
 typedef struct {
   simd_float2 position;
   simd_float2 normal;
+  simd_float2 nextCurveStartNormal;
   float arcLength;
+  bool atJoin;
 } PathSample;
 
 /// Compute the miter normal between two segment normals.
