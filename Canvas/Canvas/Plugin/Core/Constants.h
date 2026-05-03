@@ -74,6 +74,7 @@ static const UInt32 kParamScaleY = 155;
 static const UInt32 kParamAnchor = 156;
 static const UInt32 kParamRotationX = 157;
 static const UInt32 kParamRotationY = 158;
+static const UInt32 kParamRotateWithMotion = 159;
 
 static const UInt32 kParamForceShow = 9000;
 static const UInt32 kParamHideOSC = 9001;

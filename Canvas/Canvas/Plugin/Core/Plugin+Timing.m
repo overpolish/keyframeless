@@ -21,6 +21,9 @@
 /// components live in *separate* float params (mirrors MagicMove's
 /// Scale-as-two-floats-but-one-lane pattern). 0 = unused (default).
 @property UInt32 secondaryParamID;
+/// Optional extra bool param appended as a 3rd component on the lane.
+/// Used by Position (rotate-with-motion). 0 = unused.
+@property UInt32 extraBoolParamID;
 @property KKAnimatableParamKind kind;
 @property(copy) BOOL (^enabledForPath)(KKBezierPath *p);
 @property(copy) NSArray<NSNumber *> * (^readPath)(KKBezierPath *p);
@@ -71,6 +74,11 @@ _kkReadParamForDesc(id<FxParameterRetrievalAPI_v6> getAPI,
     }
     double x = 0, y = 0;
     [getAPI getXValue:&x YValue:&y fromParameter:desc.paramID atTime:time];
+    if (desc.extraBoolParamID) {
+      BOOL b = NO;
+      [getAPI getBoolValue:&b fromParameter:desc.extraBoolParamID atTime:time];
+      return @[ @(x), @(y), @(b ? 1.0 : 0.0) ];
+    }
     return @[ @(x), @(y) ];
   }
   case KKAnimatableParamKindBool: {
@@ -106,6 +114,11 @@ static void _kkWriteParamForDesc(id<FxParameterSettingAPI_v5> setAPI,
                  YValue:vals[1].doubleValue
             toParameter:desc.paramID
                  atTime:time];
+      if (desc.extraBoolParamID && vals.count >= 3) {
+        [setAPI setBoolValue:vals[2].doubleValue >= 0.5
+                 toParameter:desc.extraBoolParamID
+                      atTime:time];
+      }
     }
     break;
   case KKAnimatableParamKindBool:
@@ -166,14 +179,20 @@ static NSArray<KKCanvasAnimProp *> *_kkAnimatableProperties(void) {
         kind:KKAnimatableParamKindPoint
         enabled:transformEnabled
         read:^NSArray<NSNumber *> *(KKBezierPath *p) {
-          return @[ @(0.5 + p.translateX), @(0.5 + p.translateY) ];
+          return @[
+            @(0.5 + p.translateX), @(0.5 + p.translateY),
+            @(p.rotateWithMotion ? 1.0 : 0.0)
+          ];
         }
         write:^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
           if (vals.count >= 2) {
             p.translateX = vals[0].floatValue - 0.5f;
             p.translateY = vals[1].floatValue - 0.5f;
           }
+          if (vals.count >= 3)
+            p.rotateWithMotion = vals[2].doubleValue >= 0.5;
         }];
+    position.extraBoolParamID = kParamRotateWithMotion;
 
     // Single Scale lane carrying [scaleX, scaleY] — mirrors MagicMove. The
     // two inspector sliders live in separate float FxPlug params; the lane
@@ -266,7 +285,8 @@ static KKCanvasAnimProp *_kkPropForLabel(NSString *label) {
 
 static KKCanvasAnimProp *_kkPropForParamID(UInt32 paramID) {
   for (KKCanvasAnimProp *d in _kkAnimatableProperties())
-    if (d.paramID == paramID || d.secondaryParamID == paramID)
+    if (d.paramID == paramID || d.secondaryParamID == paramID ||
+        d.extraBoolParamID == paramID)
       return d;
   return nil;
 }
@@ -314,6 +334,9 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
   if (desc.kind == KKAnimatableParamKindPoint && desc.secondaryParamID) {
     lane.valueComponentKinds =
         @[ @(KKAnimatableParamKindFloat), @(KKAnimatableParamKindFloat) ];
+  } else if (desc.kind == KKAnimatableParamKindPoint && desc.extraBoolParamID) {
+    lane.valueComponentKinds =
+        @[ @(KKAnimatableParamKindPoint), @(KKAnimatableParamKindBool) ];
   } else {
     lane.valueComponentKinds = @[ @(desc.kind) ];
   }
@@ -331,6 +354,7 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
 
 + (void)kkApplyLanes:(NSArray<KKTimingLane *> *)lanes
           atFraction:(double)frac
+        effectDurSec:(double)effectDurSec
              toPaths:(NSArray<KKBezierPath *> *)paths {
   if (!lanes.count || !paths.count)
     return;
@@ -385,12 +409,46 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
                                                 (float)fromVals[1].doubleValue}
                               end:(simd_float2){(float)toVals[0].doubleValue,
                                                 (float)toVals[1].doubleValue}];
-            vals = @[ @(pt.x), @(pt.y) ];
+            // Preserve any extra-component values (e.g. rotate-with-motion
+            // bool on Position) — only the x/y override.
+            NSMutableArray<NSNumber *> *replaced =
+                [NSMutableArray arrayWithObjects:@(pt.x), @(pt.y), nil];
+            for (NSUInteger k = 2; k < vals.count; k++)
+              [replaced addObject:vals[k]];
+            vals = replaced;
           }
         }
       }
       if (vals.count >= 1)
         desc.writePath(p, vals);
+    }
+  }
+
+  // Rotate-with-motion pass: for any path whose Position lane (now applied)
+  // marked rotateWithMotion ON at this fraction, sample the same lane at
+  // a 1/12s look-back and adjust rotationZ by velocity * 5°/unit. Mirrors
+  // MagicMove's Plugin+Animation.m.
+  if (effectDurSec > 0) {
+    double window = 1.0 / 12.0;
+    double dFrac = window / effectDurSec;
+    double prevFrac = MAX(0.0, frac - dFrac);
+    if (prevFrac != frac) {
+      for (KKBezierPath *p in paths) {
+        if (!p.rotateWithMotion || p.layerID.length == 0)
+          continue;
+        KKTimingLane *posLane = byKey[
+            [NSString stringWithFormat:@"%@\x1f%@", p.layerID, @"Position"]];
+        if (!posLane)
+          continue;
+        NSArray<NSNumber *> *prev =
+            KKTimingLaneValueAtFraction(posLane, prevFrac);
+        if (prev.count < 2)
+          continue;
+        double prevX = prev[0].doubleValue;
+        double posX = 0.5 + p.translateX;
+        double vx = (posX - prevX) / window;
+        p.rotationZ -= (float)(vx * 5.0 * (M_PI / 180.0));
+      }
     }
   }
 }

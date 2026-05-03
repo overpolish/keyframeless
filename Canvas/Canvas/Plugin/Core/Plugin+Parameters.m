@@ -178,6 +178,11 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
                              defaultY:0.5
                        parameterFlags:kFxParameterFlag_HIDDEN];
 
+  [paramAPI addToggleButtonWithName:@"Rotate with Motion"
+                        parameterID:kParamRotateWithMotion
+                       defaultValue:NO
+                     parameterFlags:kFxParameterFlag_HIDDEN];
+
   [paramAPI addPercentSliderWithName:@"Scale X"
                          parameterID:kParamScaleX
                         defaultValue:1.0

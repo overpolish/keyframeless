@@ -23,6 +23,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)kkPushParamToLane:(UInt32)paramID;
 + (void)kkApplyLanes:(NSArray<KKTimingLane *> *)lanes
           atFraction:(double)frac
+        effectDurSec:(double)effectDurSec
              toPaths:(NSArray<KKBezierPath *> *)paths;
 @end
 

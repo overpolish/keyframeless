@@ -352,7 +352,10 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
     double frac = MAX(0.0, MIN(1.0, (CMTimeGetSeconds(sampleTime) -
                                      CMTimeGetSeconds(effectStart)) /
                                         effectDurSec));
-    [CanvasPlugin kkApplyLanes:lanes atFraction:frac toPaths:paths];
+    [CanvasPlugin kkApplyLanes:lanes
+                    atFraction:frac
+                  effectDurSec:effectDurSec
+                       toPaths:paths];
   }
   // Per-path translate/rotate/scale lives on KKBezierPath as properties
   // (translateX/Y, future scale/rotate); the render side composes them

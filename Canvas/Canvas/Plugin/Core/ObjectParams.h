@@ -94,6 +94,7 @@ static const KKParamVisRule kParamVisibility[] = {
   // ─── Transform group children ───
   // (kParamTransformEnabled is rendered by the group header — keep it HIDDEN.)
   { kParamPosition,           KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
+  { kParamRotateWithMotion,   KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
   { kParamScaleX,             KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
   { kParamScaleY,             KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
   { kParamAnchor,             KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
@@ -334,6 +335,11 @@ KKReadTransformParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
   KK_READ_FLOAT(rotationX, kParamRotationX);
   KK_READ_FLOAT(rotationY, kParamRotationY);
 #undef KK_READ_FLOAT
+  BOOL rwm = NO;
+  [paramGetAPI getBoolValue:&rwm
+              fromParameter:kParamRotateWithMotion
+                     atTime:kCMTimeZero];
+  path.rotateWithMotion = rwm;
 }
 
 /// Mirror of KKReadTransformParamsToPath.
@@ -363,6 +369,9 @@ static inline void KKWriteTransformParamsFromPath(
   KK_WRITE_FLOAT(rotationX, kParamRotationX);
   KK_WRITE_FLOAT(rotationY, kParamRotationY);
 #undef KK_WRITE_FLOAT
+  [paramSetAPI setBoolValue:path.rotateWithMotion
+                toParameter:kParamRotateWithMotion
+                     atTime:kCMTimeZero];
 }
 
 /// Read the transform-only subset of params (the only fields a group owns).

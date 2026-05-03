@@ -101,6 +101,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// Default 0. Animatable via the Rot Z KKTiming lane.
 @property(nonatomic, assign) float rotationZ;
 
+/// When YES, render-time rotationZ gets a velocity-derived offset so the
+/// shape appears to lean into its motion. Carried as a stepped 3rd value
+/// on the Position lane so each timing segment captures its own state.
+@property(nonatomic, assign) BOOL rotateWithMotion;
+
 /// Per-layer 3D rotation around the layer's anchor (radians). RotX tilts the
 /// shape forward/back, RotY tilts it left/right; both run through a
 /// perspective projection in the vertex shader. Default 0.
