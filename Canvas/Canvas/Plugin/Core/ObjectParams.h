@@ -78,6 +78,7 @@ typedef NS_OPTIONS(uint32_t, KKVisCondition) {
   KKVisFillGradientLinear = 1 << 18,   // fillGradientType == 1 (linear)
   KKVisTransformOpen = 1 << 19,        // transform enabled + expanded
   KKVisDashedOrDotted = 1 << 20,       // strokeStyle == 1 || strokeStyle == 2
+  KKVisClosedPath = 1 << 21,           // path is closed (inverse of OpenPath)
 };
 
 typedef struct {
@@ -118,6 +119,7 @@ static const KKParamVisRule kParamVisibility[] = {
   { kParamDotGap,             KKVisStrokeOpen | KKVisNotImage | KKVisDotted,               kFxParameterFlag_DEFAULT },
   { kParamDrawOnStart,        KKVisStrokeOpen,                                             kFxParameterFlag_DEFAULT },
   { kParamDrawOnEnd,          KKVisStrokeOpen,                                             kFxParameterFlag_DEFAULT },
+  { kParamDrawOnOrigin,       KKVisStrokeOpen | KKVisClosedPath,                           kFxParameterFlag_DEFAULT },
   { kParamMarchingAntsSpeed,  KKVisStrokeOpen | KKVisNotImage | KKVisDashedOrDotted,       kFxParameterFlag_DEFAULT },
   { kParamStartMarker,        KKVisStrokeOpen | KKVisOpenPath,                             kFxParameterFlag_CUSTOM_UI },
   { kParamEndMarker,          KKVisStrokeOpen | KKVisOpenPath,                             kFxParameterFlag_CUSTOM_UI },
@@ -164,6 +166,8 @@ KKBuildVisConditions(BOOL isImage, BOOL isOpen, BOOL hasJoins, BOOL strokeOpen,
     c |= KKVisTransformOpen;
   if (isOpen)
     c |= KKVisOpenPath;
+  else
+    c |= KKVisClosedPath;
   if (hasJoins)
     c |= KKVisHasJoins;
   if (!isImage)
@@ -498,6 +502,12 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                       atTime:kCMTimeZero];
   path.drawOnEnd = (float)doe;
 
+  double doo = 0.0;
+  [paramGetAPI getFloatValue:&doo
+               fromParameter:kParamDrawOnOrigin
+                      atTime:kCMTimeZero];
+  path.drawOnOrigin = (float)doo;
+
   double mas = 0.0;
   [paramGetAPI getFloatValue:&mas
                fromParameter:kParamMarchingAntsSpeed
@@ -647,6 +657,7 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
   float oldDotGap = primary.dotGap;
   float oldDrawOnStart = primary.drawOnStart;
   float oldDrawOnEnd = primary.drawOnEnd;
+  float oldDrawOnOrigin = primary.drawOnOrigin;
   float oldMarchingAntsSpeed = primary.marchingAntsSpeed;
   float oldStartMarkerSize = primary.startMarkerSize;
   float oldEndMarkerSize = primary.endMarkerSize;
@@ -725,6 +736,7 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
     KK_COPY_IF_CHANGED(dotGap, oldDotGap);
     KK_COPY_IF_CHANGED(drawOnStart, oldDrawOnStart);
     KK_COPY_IF_CHANGED(drawOnEnd, oldDrawOnEnd);
+    KK_COPY_IF_CHANGED(drawOnOrigin, oldDrawOnOrigin);
     KK_COPY_IF_CHANGED(marchingAntsSpeed, oldMarchingAntsSpeed);
     KK_COPY_IF_CHANGED(startMarkerSize, oldStartMarkerSize);
     KK_COPY_IF_CHANGED(endMarkerSize, oldEndMarkerSize);
@@ -813,6 +825,9 @@ KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                       atTime:kCMTimeZero];
   [paramSetAPI setFloatValue:path.drawOnEnd
                  toParameter:kParamDrawOnEnd
+                      atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.drawOnOrigin
+                 toParameter:kParamDrawOnOrigin
                       atTime:kCMTimeZero];
   [paramSetAPI setFloatValue:path.marchingAntsSpeed
                  toParameter:kParamMarchingAntsSpeed

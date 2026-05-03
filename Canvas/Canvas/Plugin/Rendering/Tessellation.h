@@ -20,8 +20,10 @@ typedef struct {
   simd_float2 position;
   simd_float2 normal;
   simd_float2 nextCurveStartNormal;
+  simd_float2 prevCurveEndNormal;
   float arcLength;
   bool atJoin;
+  bool atWrapStart;
 } PathSample;
 
 /// Compute the miter normal between two segment normals.
@@ -98,8 +100,14 @@ NSUInteger KKTessellateDottedPath(KKBezierPath *path, float startWidth,
 
 /// Tessellate a solid stroke with arc-length trimming at start/end.
 /// Used when markers are present to pull the stroke back from the endpoints.
+/// `hasWrapSeam` indicates this strip is one half of an origin-shifted wrap
+/// pair — the trim endpoint that lands at the closed-path seam continues
+/// into the partner strip, so corner/miter geometry should be emitted there.
+/// Pass NO for a standalone trim (no partner strip), even if it happens to
+/// end at totalArc or start at 0 on a closed path.
 NSUInteger KKTessellateTrimmedPath(KKBezierPath *path, float startWidth,
                                    float endWidth, float outputWidth,
                                    float outputHeight, uint8_t lineCap,
                                    uint8_t lineJoin, float startTrim,
-                                   float endTrim, CanvasVertex *vertices);
+                                   float endTrim, BOOL hasWrapSeam,
+                                   CanvasVertex *vertices);

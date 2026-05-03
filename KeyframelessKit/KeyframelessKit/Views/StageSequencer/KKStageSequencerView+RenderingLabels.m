@@ -146,15 +146,23 @@
   }
 
   CGFloat labelLeft = iconSlotLeft + kKSSOSCIconSize + kKSSOSCIconGap;
+  CGFloat labelRight = kKSSBorderInset + kKSSLabelWidth - kKSSLabelPadding;
+  CGFloat labelWidth = MAX(0, labelRight - labelLeft);
+  NSMutableParagraphStyle *para = [NSMutableParagraphStyle new];
+  para.lineBreakMode = NSLineBreakByTruncatingHead;
   NSDictionary *labelAttrs = @{
     NSFontAttributeName : [NSFont systemFontOfSize:KKFontSizeSM
                                             weight:NSFontWeightMedium],
     NSForegroundColorAttributeName : contentColor,
+    NSParagraphStyleAttributeName : para,
   };
   NSSize labelSize = [lane.propertyLabel sizeWithAttributes:labelAttrs];
-  NSPoint labelPoint =
-      NSMakePoint(labelLeft, laneY + (laneH - labelSize.height) / 2.0);
-  [lane.propertyLabel drawAtPoint:labelPoint withAttributes:labelAttrs];
+  NSRect labelRect =
+      NSMakeRect(labelLeft, laneY + (laneH - labelSize.height) / 2.0,
+                 labelWidth, labelSize.height);
+  [lane.propertyLabel drawWithRect:labelRect
+                           options:NSStringDrawingUsesLineFragmentOrigin
+                        attributes:labelAttrs];
 }
 
 static NSString *_boundaryTimeLabel(double fraction, double duration) {

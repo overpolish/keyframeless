@@ -268,8 +268,10 @@ NSUInteger KKSamplePathPolyline(KKBezierPath *path, float outputWidth,
       samples[count].position = px;
       samples[count].normal = normal;
       samples[count].nextCurveStartNormal = (simd_float2){0, 0};
+      samples[count].prevCurveEndNormal = (simd_float2){0, 0};
       samples[count].arcLength = cumLen;
       samples[count].atJoin = false;
+      samples[count].atWrapStart = false;
       // Mark the last sample of this curve as a join when there's a
       // following curve (open paths: c+1 < curveCount; closed paths: also
       // after the final curve so the wrap-around joint emits geometry).
@@ -286,6 +288,13 @@ NSUInteger KKSamplePathPolyline(KKBezierPath *path, float outputWidth,
       }
       count++;
     }
+  }
+  // For closed paths, the very first sample is also the wrap-join partner of
+  // the last sample. Stash the previous-curve end normal here so trimmed
+  // tessellation can miter-extend strip 2's start at the wrap.
+  if (path.closed && count > 1) {
+    samples[0].atWrapStart = true;
+    samples[0].prevCurveEndNormal = samples[count - 1].normal;
   }
   *outSamples = samples;
   return count;

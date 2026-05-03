@@ -60,6 +60,7 @@ static void copyPathProps(KKBezierPath *dst, KKBezierPath *src) {
   dst.dotGap = src.dotGap;
   dst.drawOnStart = src.drawOnStart;
   dst.drawOnEnd = src.drawOnEnd;
+  dst.drawOnOrigin = src.drawOnOrigin;
   dst.marchingAntsOffset = src.marchingAntsOffset;
   dst.marchingAntsSpeed = src.marchingAntsSpeed;
   dst.fillEnabled = src.fillEnabled;

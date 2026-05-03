@@ -79,6 +79,7 @@ static const UInt32 kParamDrawOnStart = 160;
 static const UInt32 kParamDrawOnEnd = 161;
 static const UInt32 kParamMarchingAntsSpeed = 162;
 static const UInt32 kParamMarchingAntsOffset = 163;
+static const UInt32 kParamDrawOnOrigin = 164;
 
 static const UInt32 kParamForceShow = 9000;
 static const UInt32 kParamHideOSC = 9001;

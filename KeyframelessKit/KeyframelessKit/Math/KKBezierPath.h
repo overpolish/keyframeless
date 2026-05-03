@@ -182,6 +182,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Draw-on end fraction 0–1 (default 1). See drawOnStart.
 @property(nonatomic, assign) float drawOnEnd;
 
+/// Draw-on origin fraction 0–1 (default 0). Shifts where arc-length=0 is on
+/// the path so the visible draw-on range starts from anywhere along the path.
+/// Closed paths rotate seamlessly; open paths wrap with a visible jump at the
+/// original endpoints.
+@property(nonatomic, assign) float drawOnOrigin;
+
 /// Marching-ants phase offset, fraction of one dash/dot cycle (default 0).
 /// Animatable. Renderer multiplies by the cycle length to get an arc-length
 /// shift. Combined at sample time with `marchingAntsSpeed * elapsed` so the

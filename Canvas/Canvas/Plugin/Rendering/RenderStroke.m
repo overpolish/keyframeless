@@ -153,11 +153,26 @@ static void renderStrokeForSinglePath(
   float startPullback = startPullbackFull * startProgress;
   float endPullback = endPullbackFull * endProgress;
 
+  // Origin shift: rotate where arc-length=0 lives on the path. The visible
+  // region is [origin + drawOnStartArc, origin + (totalArc - drawOnEndArc)]
+  // in absolute arc terms; if it crosses totalArc we render in two passes.
+  // Origin shift suppresses markers (they'd float at the original endpoints,
+  // which are now mid-stroke).
+  float origin = fmaxf(0.0f, fminf(1.0f, path.drawOnOrigin));
+  BOOL hasOrigin = origin > 0.0f && totalArc > 0.0f;
+  if (hasOrigin) {
+    startMarker = 0;
+    endMarker = 0;
+    hasMarkers = NO;
+    startMarkerSz = 0;
+    endMarkerSz = 0;
+    startPullback = 0;
+    endPullback = 0;
+  }
+
   float startTrim = fmaxf(startPullback, drawOnStartArc);
   float endTrim = fmaxf(endPullback, drawOnEndArc);
 
-  CanvasVertex *vertices = NULL;
-  NSUInteger vertexCount = 0;
   NSUInteger segsPerCurve = 128;
   NSUInteger curveCount = path.count - 1;
   if (path.closed && path.count >= 2)
@@ -171,69 +186,98 @@ static void renderStrokeForSinglePath(
   float dashedPhase = path.marchingAntsOffset * dashCycle;
   float dottedPhase = path.marchingAntsOffset * dotCycle;
 
-  if (path.strokeStyle == 1) {
-    // Dashed tessellator samples at 512/curve to keep marching-ants animation
-    // smooth; size the buffer accordingly.
-    NSUInteger dashedSegs = 512;
-    NSUInteger maxVertices = curveCount * dashedSegs * 12 + 8192;
-    vertices = malloc(maxVertices * sizeof(CanvasVertex));
-    vertexCount = KKTessellateDashedPath(
-        path, sw, ew, outputWidth, outputHeight, path.dashLength, path.dashGap,
-        path.lineJoin, startTrim, endTrim, dashedPhase, vertices);
-  } else if (path.strokeStyle == 2) {
-    NSUInteger maxVertices = curveCount * segsPerCurve * 4 + 4096;
-    vertices = malloc(maxVertices * sizeof(CanvasVertex));
-    vertexCount = KKTessellateDottedPath(path, sw, ew, outputWidth,
-                                         outputHeight, path.dotGap, startTrim,
-                                         endTrim, dottedPhase, vertices);
-  } else if (hasMarkers || drawOnTrims) {
-    // +48 per curve covers worst-case round-join expansion at every curve
-    // boundary in the trim range (matches KKTessellatePath's allocation).
-    NSUInteger joinExtra = (path.lineJoin != 0) ? curveCount * 48 : 0;
-    NSUInteger maxVertices =
-        curveCount * ((segsPerCurve + 1) * 2 + 2) + 256 + joinExtra;
-    vertices = malloc(maxVertices * sizeof(CanvasVertex));
-    vertexCount = KKTessellateTrimmedPath(
-        path, sw, ew, outputWidth, outputHeight, path.lineCap, path.lineJoin,
-        startTrim, endTrim, vertices);
+  // Helper: tessellate + draw one stroke "range" (single startTrim/endTrim
+  // pair). Called once for the no-origin case, twice for the wrap case.
+  // `wrapSeam` says whether this strip is one half of an origin-shifted wrap
+  // pair (the seam at totalArc/0 continues into a partner strip). Standalone
+  // trims pass NO so the tessellator doesn't emit corner geometry past the
+  // visible end.
+  void (^emitRange)(float, float, BOOL) = ^(float st, float et, BOOL wrapSeam) {
+    CanvasVertex *vertices = NULL;
+    NSUInteger vertexCount = 0;
+    if (path.strokeStyle == 1) {
+      NSUInteger dashedSegs = 512;
+      NSUInteger maxVertices = curveCount * dashedSegs * 12 + 8192;
+      vertices = malloc(maxVertices * sizeof(CanvasVertex));
+      vertexCount = KKTessellateDashedPath(
+          path, sw, ew, outputWidth, outputHeight, path.dashLength,
+          path.dashGap, path.lineJoin, st, et, dashedPhase, vertices);
+    } else if (path.strokeStyle == 2) {
+      NSUInteger maxVertices = curveCount * segsPerCurve * 4 + 4096;
+      vertices = malloc(maxVertices * sizeof(CanvasVertex));
+      vertexCount =
+          KKTessellateDottedPath(path, sw, ew, outputWidth, outputHeight,
+                                 path.dotGap, st, et, dottedPhase, vertices);
+    } else if (hasMarkers || drawOnTrims || hasOrigin) {
+      NSUInteger joinExtra = (path.lineJoin != 0) ? curveCount * 48 : 0;
+      NSUInteger maxVertices =
+          curveCount * ((segsPerCurve + 1) * 2 + 2) + 256 + joinExtra;
+      vertices = malloc(maxVertices * sizeof(CanvasVertex));
+      vertexCount = KKTessellateTrimmedPath(
+          path, sw, ew, outputWidth, outputHeight, path.lineCap, path.lineJoin,
+          st, et, wrapSeam, vertices);
+    } else {
+      NSUInteger capExtra = (!path.closed && path.lineCap != 0) ? 256 : 0;
+      NSUInteger joinExtra = (path.lineJoin != 0) ? curveCount * 48 : 0;
+      NSUInteger maxVertices =
+          curveCount * ((segsPerCurve + 1) * 2 + 2) + 2 + capExtra + joinExtra;
+      vertices = malloc(maxVertices * sizeof(CanvasVertex));
+      vertexCount = KKTessellatePath(path, sw, ew, outputWidth, outputHeight,
+                                     path.lineCap, path.lineJoin, vertices);
+    }
+
+    if (vertexCount > 0 && vertices) {
+      MTLRenderPassDescriptor *rpd =
+          [MTLRenderPassDescriptor renderPassDescriptor];
+      rpd.colorAttachments[0].texture = outputTexture;
+      rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+      rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+
+      id<MTLRenderCommandEncoder> enc =
+          [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+      [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1, 1}];
+      [enc setRenderPipelineState:strokePS];
+
+      id<MTLBuffer> vertexBuffer =
+          [device newBufferWithBytes:vertices
+                              length:vertexCount * sizeof(CanvasVertex)
+                             options:MTLResourceStorageModeShared];
+      [enc setVertexBuffer:vertexBuffer offset:0 atIndex:0];
+      [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
+      [enc setVertexBytes:&pathXform length:sizeof(pathXform) atIndex:2];
+      [enc setFragmentBytes:&gradParams length:sizeof(gradParams) atIndex:0];
+      [enc setFragmentBytes:&viewportSize
+                     length:sizeof(viewportSize)
+                    atIndex:1];
+      [enc setFragmentBytes:&pathXform length:sizeof(pathXform) atIndex:2];
+      [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
+              vertexStart:0
+              vertexCount:vertexCount];
+      [enc endEncoding];
+    }
+    free(vertices);
+  };
+
+  if (!hasOrigin) {
+    emitRange(startTrim, endTrim, NO);
   } else {
-    NSUInteger capExtra = (!path.closed && path.lineCap != 0) ? 256 : 0;
-    NSUInteger joinExtra = (path.lineJoin != 0) ? curveCount * 48 : 0;
-    NSUInteger maxVertices =
-        curveCount * ((segsPerCurve + 1) * 2 + 2) + 2 + capExtra + joinExtra;
-    vertices = malloc(maxVertices * sizeof(CanvasVertex));
-    vertexCount = KKTessellatePath(path, sw, ew, outputWidth, outputHeight,
-                                   path.lineCap, path.lineJoin, vertices);
+    float originArc = origin * totalArc;
+    float visStart = fmodf(originArc + drawOnStartArc, totalArc);
+    float visLen = totalArc - drawOnStartArc - drawOnEndArc;
+    if (visLen <= 0) {
+      // Empty visible region — nothing to draw.
+    } else if (visStart + visLen <= totalArc) {
+      // Single contiguous range — no seam crossed.
+      emitRange(visStart, totalArc - (visStart + visLen), NO);
+    } else {
+      // Wraps past totalArc — emit two ranges sharing the same dash phase.
+      // Both halves flag wrapSeam=YES so the tessellator emits the corner
+      // join at the meeting point.
+      emitRange(visStart, 0.0f, YES);
+      float remainder = (visStart + visLen) - totalArc;
+      emitRange(0.0f, totalArc - remainder, YES);
+    }
   }
-
-  if (vertexCount > 0 && vertices) {
-    MTLRenderPassDescriptor *rpd =
-        [MTLRenderPassDescriptor renderPassDescriptor];
-    rpd.colorAttachments[0].texture = outputTexture;
-    rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
-    rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
-
-    id<MTLRenderCommandEncoder> enc =
-        [commandBuffer renderCommandEncoderWithDescriptor:rpd];
-    [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1, 1}];
-    [enc setRenderPipelineState:strokePS];
-
-    id<MTLBuffer> vertexBuffer =
-        [device newBufferWithBytes:vertices
-                            length:vertexCount * sizeof(CanvasVertex)
-                           options:MTLResourceStorageModeShared];
-    [enc setVertexBuffer:vertexBuffer offset:0 atIndex:0];
-    [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
-    [enc setVertexBytes:&pathXform length:sizeof(pathXform) atIndex:2];
-    [enc setFragmentBytes:&gradParams length:sizeof(gradParams) atIndex:0];
-    [enc setFragmentBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
-    [enc setFragmentBytes:&pathXform length:sizeof(pathXform) atIndex:2];
-    [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
-            vertexStart:0
-            vertexCount:vertexCount];
-    [enc endEncoding];
-  }
-  free(vertices);
 
   // Draw markers as separate draw calls.
   if (hasMarkers && path.count >= 2) {

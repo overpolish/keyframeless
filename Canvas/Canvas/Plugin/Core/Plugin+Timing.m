@@ -299,10 +299,23 @@ static NSArray<KKCanvasAnimProp *> *_kkAnimatableProperties(void) {
           if (vals.count >= 1)
             p.drawOnEnd = vals[0].floatValue;
         }];
+    KKCanvasAnimProp *drawOnOrigin =
+        [KKCanvasAnimProp propWithLabel:@"Draw On Origin"
+            paramID:kParamDrawOnOrigin
+            secondaryParamID:0
+            kind:KKAnimatableParamKindFloat
+            enabled:strokeOnPath
+            read:^NSArray<NSNumber *> *(KKBezierPath *p) {
+              return @[ @(p.drawOnOrigin) ];
+            }
+            write:^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
+              if (vals.count >= 1)
+                p.drawOnOrigin = vals[0].floatValue;
+            }];
 
     sProps = @[
-      drawOnStart, drawOnEnd, strokeWidth, position, scale, anchor, rotZ, rotX,
-      rotY
+      drawOnStart, drawOnEnd, drawOnOrigin, strokeWidth, position, scale,
+      anchor, rotZ, rotX, rotY
     ];
   });
   return sProps;
