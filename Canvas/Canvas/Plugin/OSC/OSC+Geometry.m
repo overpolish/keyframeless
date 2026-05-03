@@ -78,7 +78,7 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
     simd_float2 eNorm = (simd_float2){-eTan.y, eTan.x};
     float eMsz = ew * path.endMarkerSize;
 
-    CanvasVertex markerVerts[128];
+    CanvasVertex markerVerts[256];
     MTLPrimitiveType prim;
     NSUInteger mc = KKTessellateMarker(path.endMarker, endPt, eTan, eNorm, eMsz,
                                        ew, &prim, markerVerts);
@@ -97,7 +97,7 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
     simd_float2 sNorm = (simd_float2){-sTan.y, sTan.x};
     float sMsz = sw * path.startMarkerSize;
 
-    CanvasVertex markerVerts[128];
+    CanvasVertex markerVerts[256];
     MTLPrimitiveType prim;
     NSUInteger mc = KKTessellateMarker(path.startMarker, startPt, sTan, sNorm,
                                        sMsz, sw, &prim, markerVerts);
