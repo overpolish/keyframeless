@@ -109,16 +109,7 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float startWidth,
             NSUInteger nextC = (c < curveCount - 1) ? (c + 1) % path.count : 0;
             simd_float2 nextN =
                 KKRawNormalAtSegStart(path, nextC, outputWidth, outputHeight);
-            simd_float2 avg = normal + nextN;
-            float avgLen = simd_length(avg);
-            if (avgLen > 1e-6f) {
-              avg /= avgLen;
-              float d = simd_dot(avg, normal);
-              if (d > 1e-6f) {
-                float ext = fminf(1.0f / d, 1.0f);
-                normal = avg * ext;
-              }
-            }
+            normal = KKMiterNormal(normal, nextN);
           }
         } else if (i == 0 && (c > 0 || (path.closed && c == 0))) {
           float prevArc =
@@ -133,16 +124,7 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float startWidth,
             simd_float2 prevN =
                 KKNormalAtPoint(path, prevC, segsPerCurve, segsPerCurve,
                                 outputWidth, outputHeight);
-            simd_float2 avg = prevN + normal;
-            float avgLen = simd_length(avg);
-            if (avgLen > 1e-6f) {
-              avg /= avgLen;
-              float d = simd_dot(avg, prevN);
-              if (d > 1e-6f) {
-                float ext = fminf(1.0f / d, 1.0f);
-                normal = avg * ext;
-              }
-            }
+            normal = KKMiterNormal(prevN, normal);
           }
         }
       }
