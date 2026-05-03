@@ -301,8 +301,8 @@ static NSArray<KKCanvasAnimProp *> *_kkAnimatableProperties(void) {
         }];
 
     sProps = @[
-      strokeWidth, position, scale, anchor, rotZ, rotX, rotY, drawOnStart,
-      drawOnEnd
+      drawOnStart, drawOnEnd, strokeWidth, position, scale, anchor, rotZ, rotX,
+      rotY
     ];
   });
   return sProps;
