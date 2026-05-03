@@ -732,7 +732,6 @@ static void cornerRadii(float fraction, float maxRX, float maxRY, float objW,
   if (allZero) {
     [self ensureCapacity:4];
     _count = 4;
-    _closed = YES;
     _points[0] = (KKBezierPoint){min.x, max.y, 0, 0, 0, 0, KKBezierPointLinear};
     _points[1] = (KKBezierPoint){max.x, max.y, 0, 0, 0, 0, KKBezierPointLinear};
     _points[2] = (KKBezierPoint){max.x, min.y, 0, 0, 0, 0, KKBezierPointLinear};
@@ -852,7 +851,6 @@ static void cornerRadii(float fraction, float maxRX, float maxRY, float objW,
   [self ensureCapacity:m];
   _count = m;
   memcpy(_points, merged, m * sizeof(KKBezierPoint));
-  _closed = YES;
 }
 
 - (void)toggleTypeAtIndex:(NSUInteger)index
