@@ -115,6 +115,8 @@ static const KKParamVisRule kParamVisibility[] = {
   { kParamDashLength,         KKVisStrokeOpen | KKVisNotImage | KKVisDashed,               kFxParameterFlag_DEFAULT },
   { kParamDashGap,            KKVisStrokeOpen | KKVisNotImage | KKVisDashed,               kFxParameterFlag_DEFAULT },
   { kParamDotGap,             KKVisStrokeOpen | KKVisNotImage | KKVisDotted,               kFxParameterFlag_DEFAULT },
+  { kParamDrawOnStart,        KKVisStrokeOpen,                                             kFxParameterFlag_DEFAULT },
+  { kParamDrawOnEnd,          KKVisStrokeOpen,                                             kFxParameterFlag_DEFAULT },
   { kParamStartMarker,        KKVisStrokeOpen | KKVisOpenPath,                             kFxParameterFlag_CUSTOM_UI },
   { kParamEndMarker,          KKVisStrokeOpen | KKVisOpenPath,                             kFxParameterFlag_CUSTOM_UI },
   { kParamStartMarkerSize,    KKVisStrokeOpen | KKVisOpenPath | KKVisStartMarker,          kFxParameterFlag_DEFAULT },
@@ -480,6 +482,18 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                       atTime:kCMTimeZero];
   path.dotGap = (float)dotg;
 
+  double dos = 0.0;
+  [paramGetAPI getFloatValue:&dos
+               fromParameter:kParamDrawOnStart
+                      atTime:kCMTimeZero];
+  path.drawOnStart = (float)dos;
+
+  double doe = 1.0;
+  [paramGetAPI getFloatValue:&doe
+               fromParameter:kParamDrawOnEnd
+                      atTime:kCMTimeZero];
+  path.drawOnEnd = (float)doe;
+
   BOOL closedPath = YES;
   [paramGetAPI getBoolValue:&closedPath
               fromParameter:kParamClosedPath
@@ -621,6 +635,8 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
   float oldDashLength = primary.dashLength;
   float oldDashGap = primary.dashGap;
   float oldDotGap = primary.dotGap;
+  float oldDrawOnStart = primary.drawOnStart;
+  float oldDrawOnEnd = primary.drawOnEnd;
   float oldStartMarkerSize = primary.startMarkerSize;
   float oldEndMarkerSize = primary.endMarkerSize;
   BOOL oldSketchEnabled = primary.sketchEnabled;
@@ -696,6 +712,8 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
     KK_COPY_IF_CHANGED(dashLength, oldDashLength);
     KK_COPY_IF_CHANGED(dashGap, oldDashGap);
     KK_COPY_IF_CHANGED(dotGap, oldDotGap);
+    KK_COPY_IF_CHANGED(drawOnStart, oldDrawOnStart);
+    KK_COPY_IF_CHANGED(drawOnEnd, oldDrawOnEnd);
     KK_COPY_IF_CHANGED(startMarkerSize, oldStartMarkerSize);
     KK_COPY_IF_CHANGED(endMarkerSize, oldEndMarkerSize);
     KK_COPY_IF_CHANGED(sketchEnabled, oldSketchEnabled);
@@ -777,6 +795,12 @@ KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                       atTime:kCMTimeZero];
   [paramSetAPI setFloatValue:path.dotGap
                  toParameter:kParamDotGap
+                      atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.drawOnStart
+                 toParameter:kParamDrawOnStart
+                      atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.drawOnEnd
+                 toParameter:kParamDrawOnEnd
                       atTime:kCMTimeZero];
   [paramSetAPI setBoolValue:path.closed
                 toParameter:kParamClosedPath

@@ -81,20 +81,71 @@ static void renderStrokeForSinglePath(
   CanvasGradientParams gradParams;
   buildStrokeGradientParams(path, outputWidth, outputHeight, &gradParams);
 
-  uint8_t startMarker = path.startMarker;
-  uint8_t endMarker = path.endMarker;
+  // Compute total arc length up front so draw-on fractions can be converted
+  // to absolute trim offsets and combined with marker pullback.
+  float totalArc = 0.0f;
+  if (path.count >= 2) {
+    PathSample *arcSamples = NULL;
+    NSUInteger arcCount =
+        KKSamplePathPolyline(path, outputWidth, outputHeight, &arcSamples);
+    if (arcCount >= 2)
+      totalArc = arcSamples[arcCount - 1].arcLength;
+    free(arcSamples);
+  }
+  float drawOnStart = fmaxf(0.0f, fminf(1.0f, path.drawOnStart));
+  float drawOnEnd = fmaxf(0.0f, fminf(1.0f, path.drawOnEnd));
+  float drawOnStartArc = drawOnStart * totalArc;
+  float drawOnEndArc = (1.0f - drawOnEnd) * totalArc;
+  BOOL drawOnTrimsStart = drawOnStart > 0.0f;
+  BOOL drawOnTrimsEnd = drawOnEnd < 1.0f;
+  BOOL drawOnTrims = drawOnTrimsStart || drawOnTrimsEnd;
+
+  // Marker animation: as draw-on approaches an endpoint, the marker grows in
+  // place over a window equal to its own arc footprint. Below the window the
+  // marker is fully suppressed; inside it the size and the trim pullback both
+  // scale by `progress`, which keeps the small marker hugging the stroke tip.
+  float startMarkerSzFull = sw * path.startMarkerSize;
+  float endMarkerSzFull = ew * path.endMarkerSize;
+  float startPullbackFull =
+      path.startMarker != 0
+          ? KKMarkerPullback(path.startMarker, startMarkerSzFull)
+          : 0.0f;
+  float endPullbackFull =
+      path.endMarker != 0 ? KKMarkerPullback(path.endMarker, endMarkerSzFull)
+                          : 0.0f;
+  if (path.startMarker != 0 && startPullbackFull <= 0.0f)
+    startPullbackFull = 0.001f;
+  if (path.endMarker != 0 && endPullbackFull <= 0.0f)
+    endPullbackFull = 0.001f;
+
+  // Markers with no natural pullback (circle/square/arrowhead/line) still need
+  // an animation window. Use the marker's physical size as a uniform fallback;
+  // for arrows the size is already comparable to the pullback.
+  float startWindow = fmaxf(startPullbackFull, startMarkerSzFull);
+  float endWindow = fmaxf(endPullbackFull, endMarkerSzFull);
+  float startProgress =
+      (path.startMarker != 0 && startWindow > 0.0f)
+          ? fmaxf(0.0f, fminf(1.0f, 1.0f - drawOnStartArc / startWindow))
+          : 0.0f;
+  float endProgress =
+      (path.endMarker != 0 && endWindow > 0.0f)
+          ? fmaxf(0.0f, fminf(1.0f, 1.0f - drawOnEndArc / endWindow))
+          : 0.0f;
+  if (path.closed) {
+    startProgress = 0.0f;
+    endProgress = 0.0f;
+  }
+
+  uint8_t startMarker = startProgress > 0.0f ? path.startMarker : 0;
+  uint8_t endMarker = endProgress > 0.0f ? path.endMarker : 0;
   BOOL hasMarkers = !path.closed && (startMarker != 0 || endMarker != 0);
-  float startMarkerSz = sw * path.startMarkerSize;
-  float endMarkerSz = ew * path.endMarkerSize;
-  float startPullback =
-      hasMarkers ? KKMarkerPullback(startMarker, startMarkerSz) : 0;
-  float endPullback = hasMarkers ? KKMarkerPullback(endMarker, endMarkerSz) : 0;
-  // Any marker present at an endpoint needs a positive trim so
-  // KKTessellateTrimmedPath suppresses the cap at that end.
-  if (startMarker != 0 && startPullback <= 0.0f)
-    startPullback = 0.001f;
-  if (endMarker != 0 && endPullback <= 0.0f)
-    endPullback = 0.001f;
+  float startMarkerSz = startMarkerSzFull * startProgress;
+  float endMarkerSz = endMarkerSzFull * endProgress;
+  float startPullback = startPullbackFull * startProgress;
+  float endPullback = endPullbackFull * endProgress;
+
+  float startTrim = fmaxf(startPullback, drawOnStartArc);
+  float endTrim = fmaxf(endPullback, drawOnEndArc);
 
   CanvasVertex *vertices = NULL;
   NSUInteger vertexCount = 0;
@@ -106,20 +157,21 @@ static void renderStrokeForSinglePath(
   if (path.strokeStyle == 1) {
     NSUInteger maxVertices = curveCount * segsPerCurve * 12 + 8192;
     vertices = malloc(maxVertices * sizeof(CanvasVertex));
-    vertexCount = KKTessellateDashedPath(path, sw, ew, outputWidth,
-                                         outputHeight, path.dashLength,
-                                         path.dashGap, path.lineJoin, vertices);
+    vertexCount = KKTessellateDashedPath(
+        path, sw, ew, outputWidth, outputHeight, path.dashLength, path.dashGap,
+        path.lineJoin, startTrim, endTrim, vertices);
   } else if (path.strokeStyle == 2) {
     NSUInteger maxVertices = curveCount * segsPerCurve * 4 + 4096;
     vertices = malloc(maxVertices * sizeof(CanvasVertex));
-    vertexCount = KKTessellateDottedPath(path, sw, ew, outputWidth,
-                                         outputHeight, path.dotGap, vertices);
-  } else if (hasMarkers) {
+    vertexCount =
+        KKTessellateDottedPath(path, sw, ew, outputWidth, outputHeight,
+                               path.dotGap, startTrim, endTrim, vertices);
+  } else if (hasMarkers || drawOnTrims) {
     NSUInteger maxVertices = curveCount * ((segsPerCurve + 1) * 2 + 2) + 256;
     vertices = malloc(maxVertices * sizeof(CanvasVertex));
     vertexCount = KKTessellateTrimmedPath(
         path, sw, ew, outputWidth, outputHeight, path.lineCap, path.lineJoin,
-        startPullback, endPullback, vertices);
+        startTrim, endTrim, vertices);
   } else {
     NSUInteger capExtra = (!path.closed && path.lineCap != 0) ? 256 : 0;
     NSUInteger joinExtra = (path.lineJoin != 0) ? curveCount * 48 : 0;

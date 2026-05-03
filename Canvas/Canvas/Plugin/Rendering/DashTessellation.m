@@ -9,6 +9,7 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float startWidth,
                                   float endWidth, float outputWidth,
                                   float outputHeight, float dashLength,
                                   float dashGap, uint8_t lineJoin,
+                                  float startTrim, float endTrim,
                                   CanvasVertex *vertices) {
   float aaPadding = 1.0f;
   NSUInteger segsPerCurve = 128;
@@ -45,6 +46,13 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float startWidth,
   }
 
   float totalArc = (totalSamples > 0) ? arcLengths[totalSamples - 1] : 0.0f;
+  float arcStart = fmaxf(0.0f, startTrim);
+  float arcEnd = totalArc - fmaxf(0.0f, endTrim);
+  if (arcStart >= arcEnd) {
+    free(arcLengths);
+    free(positions);
+    return 0;
+  }
 
   NSUInteger vc = 0;
   NSUInteger sampleIdx = 0;
@@ -74,7 +82,8 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float startWidth,
 
       float arc = arcLengths[sampleIdx];
       float phase = fmodf(arc, cycle);
-      BOOL inDash = (phase < dashLength);
+      BOOL inDash =
+          (phase < dashLength) && (arc >= arcStart) && (arc <= arcEnd);
 
       float arcT = (totalArc > 0) ? arc / totalArc : 0.0f;
       float hw = tapers
@@ -89,7 +98,8 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float startWidth,
           float nextArc = (sampleIdx + 1 < totalSamples)
                               ? arcLengths[sampleIdx + 1]
                               : arcLengths[sampleIdx];
-          BOOL nextInDash = (fmodf(nextArc, cycle) < dashLength);
+          BOOL nextInDash = (fmodf(nextArc, cycle) < dashLength) &&
+                            (nextArc >= arcStart) && (nextArc <= arcEnd);
           if (nextInDash) {
             NSUInteger nextC = (c < curveCount - 1) ? (c + 1) % path.count : 0;
             simd_float2 nextN =
@@ -108,7 +118,8 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float startWidth,
         } else if (i == 0 && (c > 0 || (path.closed && c == 0))) {
           float prevArc =
               (sampleIdx > 0) ? arcLengths[sampleIdx - 1] : arcLengths[0];
-          BOOL prevInDash = (fmodf(prevArc, cycle) < dashLength);
+          BOOL prevInDash = (fmodf(prevArc, cycle) < dashLength) &&
+                            (prevArc >= arcStart) && (prevArc <= arcEnd);
           if (prevInDash) {
             NSUInteger prevC = (c > 0) ? c - 1 : curveCount - 1;
             simd_float2 prevN =
@@ -180,7 +191,8 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float startWidth,
 
     BOOL atJoin = (c < curveCount - 1) || (path.closed && c == curveCount - 1);
     float joinArc = arcLengths[sampleIdx - 1];
-    BOOL joinInDash = (fmodf(joinArc, cycle) < dashLength);
+    BOOL joinInDash = (fmodf(joinArc, cycle) < dashLength) &&
+                      (joinArc >= arcStart) && (joinArc <= arcEnd);
     float joinT = (totalArc > 0) ? joinArc / totalArc : 0.0f;
     float joinHW =
         tapers ? ((startWidth + (endWidth - startWidth) * joinT) / 2.0f +
@@ -233,6 +245,7 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float startWidth,
 NSUInteger KKTessellateDottedPath(KKBezierPath *path, float startWidth,
                                   float endWidth, float outputWidth,
                                   float outputHeight, float dotGap,
+                                  float startTrim, float endTrim,
                                   CanvasVertex *vertices) {
   PathSample *samples = NULL;
   NSUInteger sampleCount =
@@ -243,6 +256,12 @@ NSUInteger KKTessellateDottedPath(KKBezierPath *path, float startWidth,
   }
 
   float totalLength = samples[sampleCount - 1].arcLength;
+  float arcStart = fmaxf(0.0f, startTrim);
+  float arcEnd = totalLength - fmaxf(0.0f, endTrim);
+  if (arcStart >= arcEnd) {
+    free(samples);
+    return 0;
+  }
   float aaPadding = 1.0f;
   BOOL isOpen = !path.closed;
   BOOL tapers = isOpen && fabsf(startWidth - endWidth) > 0.001f;
@@ -252,9 +271,9 @@ NSUInteger KKTessellateDottedPath(KKBezierPath *path, float startWidth,
 
   NSUInteger vc = 0;
   NSUInteger hint = 0;
-  float pos = 0.0f;
+  float pos = arcStart;
 
-  while (pos <= totalLength) {
+  while (pos <= arcEnd) {
     PathSample s = KKSampleAtArc(samples, sampleCount, pos, &hint);
     simd_float2 tangent = {s.normal.y, -s.normal.x};
 

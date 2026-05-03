@@ -174,6 +174,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// Dot gap in points (default 10.0). Only used when strokeStyle == 2.
 @property(nonatomic, assign) float dotGap;
 
+/// Draw-on start fraction 0–1 (default 0). Stroke is rendered between
+/// drawOnStart and drawOnEnd along arc length. Animatable for draw-on /
+/// erase-on / snake reveals.
+@property(nonatomic, assign) float drawOnStart;
+
+/// Draw-on end fraction 0–1 (default 1). See drawOnStart.
+@property(nonatomic, assign) float drawOnEnd;
+
 /// Start marker type (0=none, 1=arrow, 2=circle, 3=square). Default 0.
 @property(nonatomic, assign) uint8_t startMarker;
 

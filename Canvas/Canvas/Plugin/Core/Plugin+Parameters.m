@@ -338,6 +338,26 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
                              delta:1.0
                     parameterFlags:kFxParameterFlag_HIDDEN];
 
+  [paramAPI addPercentSliderWithName:@"Draw On Start"
+                         parameterID:kParamDrawOnStart
+                        defaultValue:0.0
+                        parameterMin:0.0
+                        parameterMax:1.0
+                           sliderMin:0.0
+                           sliderMax:1.0
+                               delta:0.01
+                      parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addPercentSliderWithName:@"Draw On End"
+                         parameterID:kParamDrawOnEnd
+                        defaultValue:1.0
+                        parameterMin:0.0
+                        parameterMax:1.0
+                           sliderMin:0.0
+                           sliderMax:1.0
+                               delta:0.01
+                      parameterFlags:kFxParameterFlag_HIDDEN];
+
   [paramAPI addCustomParameterWithName:@"Start Marker"
                            parameterID:kParamStartMarker
                           defaultValue:@(0)

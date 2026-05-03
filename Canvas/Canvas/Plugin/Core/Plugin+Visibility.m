@@ -24,6 +24,8 @@
     @(kParamDashLength),
     @(kParamDashGap),
     @(kParamDotGap),
+    @(kParamDrawOnStart),
+    @(kParamDrawOnEnd),
     @(kParamStartMarker),
     @(kParamEndMarker),
     @(kParamStartMarkerSize),

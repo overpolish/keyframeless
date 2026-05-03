@@ -3,8 +3,30 @@
     {
       "name": "Mac",
       "includePath": [
-        "${workspaceFolder}/**"
+        "${workspaceFolder}/KeyframelessKit/**",
+        "${workspaceFolder}/Canvas/**",
+        "${workspaceFolder}/CanvasRenderer/**",
+        "${workspaceFolder}/MagicMove/**",
+        "${workspaceFolder}/Glow/**",
+        "${workspaceFolder}/Rounded/**",
+        "${workspaceFolder}/MotionTemplates/**",
+        "${workspaceFolder}/Template/**",
+        "${workspaceFolder}/Keyframeless X/**"
       ],
+      "browse": {
+        "path": [
+          "${workspaceFolder}/KeyframelessKit",
+          "${workspaceFolder}/Canvas",
+          "${workspaceFolder}/CanvasRenderer",
+          "${workspaceFolder}/MagicMove",
+          "${workspaceFolder}/Glow",
+          "${workspaceFolder}/Rounded",
+          "${workspaceFolder}/MotionTemplates",
+          "${workspaceFolder}/Template",
+          "${workspaceFolder}/Keyframeless X"
+        ],
+        "limitSymbolsToIncludedHeaders": true
+      },
       "defines": [],
       "macFrameworkPath": [
         "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks",
