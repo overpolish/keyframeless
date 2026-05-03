@@ -163,6 +163,38 @@
       KKLayerStateForUUID(uuid).visHash = 0;
   }
 
+  // Toggling Closed Path needs to write the new value back into the blob
+  // AND push paths into the store. The blob write makes the visibility sync
+  // see the right state; the store push fires the layer-list observer which
+  // is what actually invokes KKParamSyncApplyFromSnapshot. Without the store
+  // push, visHash sits at 0 with no consumer until the user reselects.
+  if (parameterID == kParamClosedPath) {
+    NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+    KKLayerInstanceState *lst = uuid ? KKLayerStateForUUID(uuid) : nil;
+    if (lst) {
+      id<FxParameterRetrievalAPI_v6> getAPI = [self.apiManager
+          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      BOOL isClosed = YES;
+      [getAPI getBoolValue:&isClosed
+             fromParameter:kParamClosedPath
+                    atTime:time];
+      KKModifySelectedPathProperty(self.apiManager, ^(KKBezierPath *p) {
+        p.closed = isClosed;
+      });
+      NSString *str = nil;
+      [getAPI getStringParameterValue:&str fromParameter:kParamPathData];
+      if (str.length > 0) {
+        NSData *blob = [[NSData alloc] initWithBase64EncodedString:str
+                                                           options:0];
+        NSMutableArray<KKBezierPath *> *paths =
+            [KKBezierPath pathsFromBlob:blob];
+        [lst.store performBatch:^{
+          [lst.store setPaths:paths];
+        }];
+      }
+    }
+  }
+
   BOOL isColorMode = (parameterID == kParamStrokeColorMode ||
                       parameterID == kParamFillColorMode);
   BOOL isGradType = (parameterID == kParamStrokeGradientType ||
