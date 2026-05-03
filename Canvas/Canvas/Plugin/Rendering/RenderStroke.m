@@ -131,6 +131,15 @@ static void renderStrokeForSinglePath(
       (path.endMarker != 0 && endWindow > 0.0f)
           ? fmaxf(0.0f, fminf(1.0f, 1.0f - drawOnEndArc / endWindow))
           : 0.0f;
+  // When the opposite side's draw-on eats into the visible range, the marker
+  // also has no stroke to attach to. Fade by the remaining stroke length so a
+  // collapsed range hides both markers symmetrically.
+  float visibleStrokeLen =
+      fmaxf(0.0f, totalArc - drawOnStartArc - drawOnEndArc);
+  if (startWindow > 0.0f)
+    startProgress *= fminf(1.0f, visibleStrokeLen / startWindow);
+  if (endWindow > 0.0f)
+    endProgress *= fminf(1.0f, visibleStrokeLen / endWindow);
   if (path.closed) {
     startProgress = 0.0f;
     endProgress = 0.0f;

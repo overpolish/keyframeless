@@ -271,7 +271,39 @@ static NSArray<KKCanvasAnimProp *> *_kkAnimatableProperties(void) {
           p.rotationY = v;
         });
 
-    sProps = @[ strokeWidth, position, scale, anchor, rotZ, rotX, rotY ];
+    BOOL (^strokeOnPath)(KKBezierPath *) = ^BOOL(KKBezierPath *p) {
+      return p.strokeEnabled && !p.isGroup;
+    };
+    KKCanvasAnimProp *drawOnStart =
+        [KKCanvasAnimProp propWithLabel:@"Draw On Start"
+            paramID:kParamDrawOnStart
+            secondaryParamID:0
+            kind:KKAnimatableParamKindFloat
+            enabled:strokeOnPath
+            read:^NSArray<NSNumber *> *(KKBezierPath *p) {
+              return @[ @(p.drawOnStart) ];
+            }
+            write:^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
+              if (vals.count >= 1)
+                p.drawOnStart = vals[0].floatValue;
+            }];
+    KKCanvasAnimProp *drawOnEnd = [KKCanvasAnimProp propWithLabel:@"Draw On End"
+        paramID:kParamDrawOnEnd
+        secondaryParamID:0
+        kind:KKAnimatableParamKindFloat
+        enabled:strokeOnPath
+        read:^NSArray<NSNumber *> *(KKBezierPath *p) {
+          return @[ @(p.drawOnEnd) ];
+        }
+        write:^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
+          if (vals.count >= 1)
+            p.drawOnEnd = vals[0].floatValue;
+        }];
+
+    sProps = @[
+      strokeWidth, position, scale, anchor, rotZ, rotX, rotY, drawOnStart,
+      drawOnEnd
+    ];
   });
   return sProps;
 }
