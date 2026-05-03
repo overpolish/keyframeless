@@ -13,12 +13,16 @@ typedef struct {
     float capDistance;  // 0 = interior, approaches 1 at path ends
 } CanvasVertex;
 
-// Per-path affine transform applied in centered-pixel space. `m` is composed
-// onto each vertex; `mInv` is applied to the fragment position before
-// gradient bbox sampling so gradients stay aligned with the path's local
-// coordinates. Identity for paths/draw-calls without a per-path transform.
+// Per-path transform. `m4` is the full forward transform — composed 2D
+// (translate, anchor, scale, rotZ) plus optional 3D rotation (rotX, rotY)
+// passed through a perspective projection — applied to each vertex with a
+// perspective divide. `mInv` is the 2D-only inverse (no rotX/rotY) used by
+// the fill color pass to map a screen fragment back into path-local pixels
+// for gradient bbox sampling; for stroke/image we instead pass the
+// pre-transform local position as a varying, which gives an exact result
+// even with 3D rotation. Identity for draw calls without a per-path transform.
 typedef struct {
-    matrix_float3x3 m;
+    matrix_float4x4 m4;
     matrix_float3x3 mInv;
 } CanvasPathTransform;
 

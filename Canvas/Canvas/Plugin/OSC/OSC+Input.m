@@ -195,6 +195,36 @@
     return;
   }
 
+  if (activePart == kOSCTransformRotXRing ||
+      activePart == kOSCTransformRotYRing) {
+    // MM convention: dragging the *red* horizontal ring controls Rot Y
+    // (mouse X delta), dragging the *green* vertical ring controls Rot X
+    // (mouse Y delta).
+    BOOL isXRing = (activePart == kOSCTransformRotXRing);
+    if (isXRing) {
+      self.rotXRingDragging = YES;
+      self.rotRingDragTargetParam = kParamRotationY;
+      self.rotRingDragPrevPos = positionX;
+    } else {
+      self.rotYRingDragging = YES;
+      self.rotRingDragTargetParam = kParamRotationX;
+      self.rotRingDragPrevPos = positionY;
+    }
+    double v = 0.0;
+    id<FxParameterRetrievalAPI_v6> getAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    [getAPI getFloatValue:&v
+            fromParameter:self.rotRingDragTargetParam
+                   atTime:time];
+    self.rotRingDragAccum = v;
+    id<FxOnScreenControlAPI_v4> oscAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    [oscAPI setCursor:isXRing ? [NSCursor resizeLeftRightCursor]
+                              : [NSCursor resizeUpDownCursor]];
+    *forceUpdate = YES;
+    return;
+  }
+
   if (activePart == kOSCTransformRotZ) {
     self.rotZDragging = YES;
     CGPoint anchorCanvas = [self transformAnchorCanvasPointAtTime:time];

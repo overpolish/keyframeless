@@ -161,7 +161,7 @@ void KKRenderFillForPath(
         {{(float)outputWidth, (float)outputHeight}},
         {{-(float)outputWidth, (float)outputHeight}},
     };
-    CanvasPathTransform identityXform = {matrix_identity_float3x3,
+    CanvasPathTransform identityXform = {matrix_identity_float4x4,
                                          matrix_identity_float3x3};
 
     MTLRenderPassDescriptor *rpd =

@@ -103,6 +103,19 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, assign) double rotZDragPrevAngle;
 @property(nonatomic, assign) double rotZDragAccum;
 
+// Per-layer 3D rotation rings. MagicMove-style: red horizontal ring drags
+// horizontally (controls Rot Y); green vertical ring drags vertically
+// (controls Rot X). M_PI/200 radians per pixel; snap-to-zero at ±3°.
+@property(nonatomic, strong) KKRingOSC *rotXRingOSC;
+@property(nonatomic, strong) KKRingOSC *rotYRingOSC;
+@property(nonatomic, assign) BOOL rotXRingHovered;
+@property(nonatomic, assign) BOOL rotXRingDragging;
+@property(nonatomic, assign) BOOL rotYRingHovered;
+@property(nonatomic, assign) BOOL rotYRingDragging;
+@property(nonatomic, assign) double rotRingDragPrevPos;
+@property(nonatomic, assign) double rotRingDragAccum;
+@property(nonatomic, assign) UInt32 rotRingDragTargetParam;
+
 // Position-lane path editing (between two transition keyframes).
 @property(nonatomic, strong) KKPointOSC *positionPathPointOSC;
 @property(nonatomic, strong) KKPointOSC *positionPathHandleOSC;

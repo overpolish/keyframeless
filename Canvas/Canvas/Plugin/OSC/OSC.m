@@ -168,6 +168,26 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
     self.rotZOSC = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
     self.rotZOSC.clearsOnDraw = NO;
 
+    KKRingOSC * (^makeRotRing)(NSColor *, CGFloat, CGFloat, NSCursor *) =
+        ^(NSColor *tint, CGFloat rx, CGFloat ry, NSCursor *cursor) {
+          KKRingOSC *r = [[KKRingOSC alloc] initWithAPIManager:apiManager];
+          r.clearsOnDraw = NO;
+          r.tintColor = tint;
+          r.ringRadius = rx;
+          r.ringRadiusY = ry;
+          r.fillWidth = 3.0f;
+          r.hoverCursor = cursor;
+          return r;
+        };
+    self.rotXRingOSC =
+        makeRotRing([NSColor colorWithRed:0.9 green:0.2 blue:0.2 alpha:1],
+                    70.0f, 40.0f, [NSCursor resizeLeftRightCursor]);
+    self.rotYRingOSC = makeRotRing([NSColor colorWithRed:0.2
+                                                   green:0.8
+                                                    blue:0.2
+                                                   alpha:1],
+                                   40.0f, 70.0f, [NSCursor resizeUpDownCursor]);
+
     self.positionPathPointOSC =
         [[KKPointOSC alloc] initWithAPIManager:apiManager];
     self.positionPathPointOSC.clearsOnDraw = NO;

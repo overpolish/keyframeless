@@ -30,13 +30,19 @@ _kkIndexGroupsByID(NSArray<KKBezierPath *> *paths) {
   return out;
 }
 
-/// Identity 3x3 affine. Used for draw calls that don't carry a per-path
+/// Identity transform. Used for draw calls that don't carry a per-path
 /// transform (off-screen image effects, fullscreen-quad fill color pass).
 static CanvasPathTransform _kkIdentityPathTransform(void) {
   CanvasPathTransform x;
-  x.m = matrix_identity_float3x3;
+  x.m4 = matrix_identity_float4x4;
   x.mInv = matrix_identity_float3x3;
   return x;
+}
+
+static matrix_float4x4 _kkTranslate4(float tx, float ty, float tz) {
+  return simd_matrix(simd_make_float4(1, 0, 0, 0), simd_make_float4(0, 1, 0, 0),
+                     simd_make_float4(0, 0, 1, 0),
+                     simd_make_float4(tx, ty, tz, 1));
 }
 
 /// Object-space bbox of a single (non-group) path. Approximates curves with
@@ -134,18 +140,15 @@ _kkBboxCentersByLayerID(NSArray<KKBezierPath *> *paths) {
   return centers;
 }
 
-/// Build the local 3x3 affine for one path/group in centered-pixel space:
-/// `T(translate) · T(anchor) · R(rotZ) · S(scale) · T(-anchor)`. The anchor
-/// is an object-space offset from the path's bbox center; the bbox center
-/// comes from `centers` so groups resolve via their descendants. Y is
-/// flipped because bezier points live in Y-up object space while pixel
-/// space is Y-down — the rotation matrix is mirrored accordingly so a
-/// positive angle rotates CCW visually.
-static matrix_float3x3
-_kkLocalMatrix(KKBezierPath *p, NSDictionary<NSString *, NSData *> *centers,
-               float W, float H) {
-  float pxTx = p.translateX * W;
-  float pxTy = -p.translateY * H;
+/// Compute the centered-pixel-space anchor (ax, ay) and pixel translation
+/// (pxTx, pxTy) for one path/group. The anchor is an object-space offset
+/// from the path's bbox center; the bbox center comes from `centers` so
+/// groups resolve via their descendants. Y is flipped because bezier points
+/// live in Y-up object space while pixel space is Y-down.
+static void _kkAnchorPixels(KKBezierPath *p,
+                            NSDictionary<NSString *, NSData *> *centers,
+                            float W, float H, float *outAx, float *outAy,
+                            float *outPxTx, float *outPxTy) {
   simd_float2 bboxCenter = (simd_float2){0.5f, 0.5f};
   if (p.layerID.length) {
     NSData *d = centers[p.layerID];
@@ -154,8 +157,21 @@ _kkLocalMatrix(KKBezierPath *p, NSDictionary<NSString *, NSData *> *centers,
   }
   float anchorObjX = bboxCenter.x + p.anchorX;
   float anchorObjY = bboxCenter.y + p.anchorY;
-  float ax = (anchorObjX - 0.5f) * W;
-  float ay = (0.5f - anchorObjY) * H;
+  *outAx = (anchorObjX - 0.5f) * W;
+  *outAy = (0.5f - anchorObjY) * H;
+  *outPxTx = p.translateX * W;
+  *outPxTy = -p.translateY * H;
+}
+
+/// Build the local 3x3 affine for one path/group in centered-pixel space:
+/// `T(translate) · T(anchor) · R(rotZ) · S(scale) · T(-anchor)`. The
+/// rotation matrix is mirrored to match Y-down pixel space so a positive
+/// angle rotates CCW visually.
+static matrix_float3x3
+_kkLocalMatrix(KKBezierPath *p, NSDictionary<NSString *, NSData *> *centers,
+               float W, float H) {
+  float ax, ay, pxTx, pxTy;
+  _kkAnchorPixels(p, centers, W, H, &ax, &ay, &pxTx, &pxTy);
   float sx = p.scaleX;
   float sy = p.scaleY;
   float c = cosf(p.rotationZ);
@@ -179,10 +195,53 @@ _kkLocalMatrix(KKBezierPath *p, NSDictionary<NSString *, NSData *> *centers,
   return simd_mul(Tpos, simd_mul(R, simd_mul(S, Tneg)));
 }
 
-/// Build the per-path forward + inverse affine in centered-pixel space.
-/// Composes `path`'s own local matrix with each enabled ancestor group's
-/// local matrix (parent matrices multiply on the left). Walks parentGroupID
-/// with a depth cap so a cyclic parent reference can't spin forever.
+/// 4x4 model transform around the path's anchor including 3D rotation
+/// (rotX/rotY/rotZ), scale, and translation. No perspective — that's
+/// applied once at the end of the chain so nested groups compose cleanly
+/// in 3D world space. Y is flipped to centered-pixel-space (Y-down).
+static matrix_float4x4
+_kkLocalModel4(KKBezierPath *p, NSDictionary<NSString *, NSData *> *centers,
+               float W, float H) {
+  float ax, ay, pxTx, pxTy;
+  _kkAnchorPixels(p, centers, W, H, &ax, &ay, &pxTx, &pxTy);
+
+  float sx = p.scaleX, sy = p.scaleY;
+  float cz = cosf(p.rotationZ), sz = sinf(p.rotationZ);
+  float cx = cosf(p.rotationX), sxx = sinf(p.rotationX);
+  float cy = cosf(p.rotationY), syy = sinf(p.rotationY);
+
+  matrix_float4x4 S =
+      simd_matrix(simd_make_float4(sx, 0, 0, 0), simd_make_float4(0, sy, 0, 0),
+                  simd_make_float4(0, 0, 1, 0), simd_make_float4(0, 0, 0, 1));
+  // Match the MM rotation convention: +Z rotates CW in Y-down screen.
+  matrix_float4x4 Rz = simd_matrix(
+      simd_make_float4(cz, sz, 0, 0), simd_make_float4(-sz, cz, 0, 0),
+      simd_make_float4(0, 0, 1, 0), simd_make_float4(0, 0, 0, 1));
+  // RotX (around screen X axis): positive tilts the top toward the viewer.
+  matrix_float4x4 Rx = simd_matrix(
+      simd_make_float4(1, 0, 0, 0), simd_make_float4(0, cx, sxx, 0),
+      simd_make_float4(0, -sxx, cx, 0), simd_make_float4(0, 0, 0, 1));
+  // RotY (around screen Y axis): positive tilts the right edge away.
+  matrix_float4x4 Ry = simd_matrix(
+      simd_make_float4(cy, 0, -syy, 0), simd_make_float4(0, 1, 0, 0),
+      simd_make_float4(syy, 0, cy, 0), simd_make_float4(0, 0, 0, 1));
+
+  matrix_float4x4 Tneg = _kkTranslate4(-ax, -ay, 0);
+  matrix_float4x4 Tpos = _kkTranslate4(pxTx + ax, pxTy + ay, 0);
+
+  return simd_mul(Tpos,
+                  simd_mul(Rz, simd_mul(Ry, simd_mul(Rx, simd_mul(S, Tneg)))));
+}
+
+/// Build the per-path forward (4x4 with perspective) + 2D inverse (3x3).
+/// Each level (leaf + ancestor groups) contributes its full 3D model
+/// transform, composed in 3D world space; one perspective projection is
+/// applied at the very end so the entire hierarchy sees the same camera.
+/// This way a group's rotX/rotY tilts its descendants together with the
+/// group, instead of being discarded. Walks parentGroupID with a depth cap
+/// so a cyclic parent reference can't spin forever. The 2D inverse is used
+/// by the fill color pass for gradient bbox sampling — it ignores rotX/rotY
+/// (gradients on 3D-rotated fills fall back to a 2D approximation).
 static CanvasPathTransform
 _kkBuildPathTransform(KKBezierPath *path,
                       NSDictionary<NSString *, KKBezierPath *> *groupsByID,
@@ -190,7 +249,9 @@ _kkBuildPathTransform(KKBezierPath *path,
                       float outputWidth, float outputHeight) {
   if (!path.transformEnabled)
     return _kkIdentityPathTransform();
-  matrix_float3x3 m =
+  matrix_float4x4 model =
+      _kkLocalModel4(path, bboxCenters, outputWidth, outputHeight);
+  matrix_float3x3 m2 =
       _kkLocalMatrix(path, bboxCenters, outputWidth, outputHeight);
   NSString *parentID = path.parentGroupID;
   NSUInteger depth = 0;
@@ -198,14 +259,25 @@ _kkBuildPathTransform(KKBezierPath *path,
     KKBezierPath *g = groupsByID[parentID];
     if (!g)
       break;
-    if (g.transformEnabled)
-      m = simd_mul(_kkLocalMatrix(g, bboxCenters, outputWidth, outputHeight),
-                   m);
+    if (g.transformEnabled) {
+      model = simd_mul(
+          _kkLocalModel4(g, bboxCenters, outputWidth, outputHeight), model);
+      m2 = simd_mul(_kkLocalMatrix(g, bboxCenters, outputWidth, outputHeight),
+                    m2);
+    }
     parentID = g.parentGroupID;
   }
+  // Perspective: camera at (0, 0, -camD) looking down +Z, applied once
+  // after the full hierarchy's 3D model transform.
+  // (x, y, z, 1) → (camD*x, camD*y, z, z + camD); after divide:
+  // ndc = (x, y) * camD / (z + camD).
+  float camD = fmaxf(outputWidth, outputHeight);
+  matrix_float4x4 P = simd_matrix(
+      simd_make_float4(camD, 0, 0, 0), simd_make_float4(0, camD, 0, 0),
+      simd_make_float4(0, 0, 1, 1), simd_make_float4(0, 0, 0, camD));
   CanvasPathTransform x;
-  x.m = m;
-  x.mInv = simd_inverse(m);
+  x.m4 = simd_mul(P, model);
+  x.mInv = simd_inverse(m2);
   return x;
 }
 

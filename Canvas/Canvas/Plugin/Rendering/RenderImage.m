@@ -485,7 +485,7 @@ id<MTLTexture> KKApplyImageSketchFill(id<MTLTexture> rawTexture,
   id<MTLBuffer> vBuf = [device newBufferWithBytes:vertices
                                            length:vc * sizeof(CanvasVertex)
                                           options:MTLResourceStorageModeShared];
-  CanvasPathTransform identityXform = {matrix_identity_float3x3,
+  CanvasPathTransform identityXform = {matrix_identity_float4x4,
                                        matrix_identity_float3x3};
   [enc setVertexBuffer:vBuf offset:0 atIndex:0];
   [enc setVertexBytes:&imgViewport length:sizeof(imgViewport) atIndex:1];

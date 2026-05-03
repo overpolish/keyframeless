@@ -208,20 +208,51 @@ static NSArray<KKCanvasAnimProp *> *_kkAnimatableProperties(void) {
           }
         }];
 
-    KKCanvasAnimProp *rotZ = [KKCanvasAnimProp propWithLabel:@"Rot Z"
-        paramID:kParamRotation
-        secondaryParamID:0
-        kind:KKAnimatableParamKindFloat
-        enabled:transformEnabled
-        read:^NSArray<NSNumber *> *(KKBezierPath *p) {
-          return @[ @(p.rotationZ) ];
-        }
-        write:^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
-          if (vals.count >= 1)
-            p.rotationZ = vals[0].floatValue;
-        }];
+    KKCanvasAnimProp * (^transformFloatProp)(NSString *, UInt32,
+                                             float (^)(KKBezierPath *),
+                                             void (^)(KKBezierPath *, float)) =
+        ^(NSString *label, UInt32 paramID, float (^getter)(KKBezierPath *),
+          void (^setter)(KKBezierPath *, float)) {
+          return [KKCanvasAnimProp propWithLabel:label
+              paramID:paramID
+              secondaryParamID:0
+              kind:KKAnimatableParamKindFloat
+              enabled:transformEnabled
+              read:^NSArray<NSNumber *> *(KKBezierPath *p) {
+                return @[ @(getter(p)) ];
+              }
+              write:^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
+                if (vals.count >= 1)
+                  setter(p, vals[0].floatValue);
+              }];
+        };
 
-    sProps = @[ strokeWidth, position, scale, anchor, rotZ ];
+    KKCanvasAnimProp *rotZ = transformFloatProp(
+        @"Rot Z", kParamRotation,
+        ^(KKBezierPath *p) {
+          return p.rotationZ;
+        },
+        ^(KKBezierPath *p, float v) {
+          p.rotationZ = v;
+        });
+    KKCanvasAnimProp *rotX = transformFloatProp(
+        @"Rot X", kParamRotationX,
+        ^(KKBezierPath *p) {
+          return p.rotationX;
+        },
+        ^(KKBezierPath *p, float v) {
+          p.rotationX = v;
+        });
+    KKCanvasAnimProp *rotY = transformFloatProp(
+        @"Rot Y", kParamRotationY,
+        ^(KKBezierPath *p) {
+          return p.rotationY;
+        },
+        ^(KKBezierPath *p, float v) {
+          p.rotationY = v;
+        });
+
+    sProps = @[ strokeWidth, position, scale, anchor, rotZ, rotX, rotY ];
   });
   return sProps;
 }

@@ -98,6 +98,8 @@ static const KKParamVisRule kParamVisibility[] = {
   { kParamScaleY,             KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
   { kParamAnchor,             KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
   { kParamRotation,           KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
+  { kParamRotationX,          KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
+  { kParamRotationY,          KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
   // ─── Stroke group children ───
   { kParamStrokeWidth,        KKVisStrokeOpen,                                             kFxParameterFlag_DEFAULT },
   { kParamStrokeColorMode,    KKVisStrokeOpen,                                             kFxParameterFlag_NOT_ANIMATABLE },
@@ -322,11 +324,16 @@ KKReadTransformParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                   atTime:kCMTimeZero];
   path.anchorX = (float)ax;
   path.anchorY = (float)ay;
-  double rz = 0.0;
-  [paramGetAPI getFloatValue:&rz
-               fromParameter:kParamRotation
-                      atTime:kCMTimeZero];
-  path.rotationZ = (float)rz;
+#define KK_READ_FLOAT(field, paramID)                                          \
+  do {                                                                         \
+    double v = 0.0;                                                            \
+    [paramGetAPI getFloatValue:&v fromParameter:(paramID)atTime:kCMTimeZero];  \
+    path.field = (float)v;                                                     \
+  } while (0)
+  KK_READ_FLOAT(rotationZ, kParamRotation);
+  KK_READ_FLOAT(rotationX, kParamRotationX);
+  KK_READ_FLOAT(rotationY, kParamRotationY);
+#undef KK_READ_FLOAT
 }
 
 /// Mirror of KKReadTransformParamsToPath.
@@ -350,9 +357,12 @@ static inline void KKWriteTransformParamsFromPath(
                   YValue:path.anchorY
              toParameter:kParamAnchor
                   atTime:kCMTimeZero];
-  [paramSetAPI setFloatValue:path.rotationZ
-                 toParameter:kParamRotation
-                      atTime:kCMTimeZero];
+#define KK_WRITE_FLOAT(field, paramID)                                         \
+  [paramSetAPI setFloatValue:path.field toParameter:(paramID)atTime:kCMTimeZero]
+  KK_WRITE_FLOAT(rotationZ, kParamRotation);
+  KK_WRITE_FLOAT(rotationX, kParamRotationX);
+  KK_WRITE_FLOAT(rotationY, kParamRotationY);
+#undef KK_WRITE_FLOAT
 }
 
 /// Read the transform-only subset of params (the only fields a group owns).
@@ -591,6 +601,8 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
   float oldAnchorX = primary.anchorX;
   float oldAnchorY = primary.anchorY;
   float oldRotationZ = primary.rotationZ;
+  float oldRotationX = primary.rotationX;
+  float oldRotationY = primary.rotationY;
   BOOL oldFillEnabled = primary.fillEnabled;
   float oldFillR = primary.fillR;
   float oldFillG = primary.fillG;
@@ -655,6 +667,8 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
     KK_COPY_IF_CHANGED(anchorX, oldAnchorX);
     KK_COPY_IF_CHANGED(anchorY, oldAnchorY);
     KK_COPY_IF_CHANGED(rotationZ, oldRotationZ);
+    KK_COPY_IF_CHANGED(rotationX, oldRotationX);
+    KK_COPY_IF_CHANGED(rotationY, oldRotationY);
     KK_COPY_IF_CHANGED(strokeWidth, oldStrokeWidth);
     KK_COPY_IF_CHANGED(endWidth, oldEndWidth);
     if (strokeColorChanged) {

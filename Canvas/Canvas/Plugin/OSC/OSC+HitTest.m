@@ -33,6 +33,8 @@
   self.scaleRingHovered = NO;
   self.anchorHovered = NO;
   self.rotZHovered = NO;
+  self.rotXRingHovered = NO;
+  self.rotYRingHovered = NO;
   if ([self isTransformPositionOSCVisibleAtTime:kCMTimeZero]) {
     CGPoint pos = [self transformPositionCanvasPointAtTime:kCMTimeZero];
     if (hypot(x - pos.x, y - pos.y) < self.transformPositionOSC.hitRadius) {
@@ -45,8 +47,39 @@
   BOOL anchorVisible = [self isAnchorOSCVisibleAtTime:kCMTimeZero];
   BOOL scaleVisible = [self isScaleRingOSCVisibleAtTime:kCMTimeZero];
   BOOL rotZVisible = [self isRotZOSCVisibleAtTime:kCMTimeZero];
-  if (anchorVisible || scaleVisible || rotZVisible) {
+  // MM rule: Rot X / Rot Y rings are hit-testable when their lane toggle is
+  // on, OR Opt is held. Same convention used at draw time.
+  CGEventFlags hitFlags =
+      CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+  // Opt only surfaces the rings when Rot Z is already visible — same gate
+  // as the draw path so what's hit-testable matches what's drawn.
+  BOOL optHeld = ((hitFlags & kCGEventFlagMaskAlternate) != 0) && rotZVisible;
+  BOOL rotXHit = [self isRotXRingOSCVisibleAtTime:kCMTimeZero] || optHeld;
+  BOOL rotYHit = [self isRotYRingOSCVisibleAtTime:kCMTimeZero] || optHeld;
+  if (anchorVisible || scaleVisible || rotZVisible || rotXHit || rotYHit) {
     CGPoint anchor = [self transformAnchorCanvasPointAtTime:kCMTimeZero];
+    BOOL (^hitRotRing)(KKRingOSC *, NSInteger, NSCursor *, void (^)(BOOL)) =
+        ^BOOL(KKRingOSC *ring, NSInteger part, NSCursor *cursor,
+              void (^setHovered)(BOOL)) {
+          ring.center = anchor;
+          if ([ring hitTestAtMousePositionX:x positionY:y atTime:kCMTimeZero]) {
+            setHovered(YES);
+            *activePart = part;
+            [oscAPI setCursor:cursor];
+            return YES;
+          }
+          return NO;
+        };
+    if (rotXHit && hitRotRing(self.rotXRingOSC, kOSCTransformRotXRing,
+                              [NSCursor resizeLeftRightCursor], ^(BOOL h) {
+                                self.rotXRingHovered = h;
+                              }))
+      return;
+    if (rotYHit && hitRotRing(self.rotYRingOSC, kOSCTransformRotYRing,
+                              [NSCursor resizeUpDownCursor], ^(BOOL h) {
+                                self.rotYRingHovered = h;
+                              }))
+      return;
     if (rotZVisible) {
       double rz = 0.0;
       id<FxParameterRetrievalAPI_v6> getAPI = [self.apiManager

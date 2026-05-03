@@ -384,6 +384,23 @@ static const CGFloat kPathToolbarGap = 6.0;
                                      groupKey:p.layerID];
 }
 
+- (BOOL)_isRotRingVisibleForLabel:(NSString *)label {
+  KKBezierPath *p = [self selectedTransformablePath];
+  if (!p)
+    return NO;
+  return [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                        label:label
+                                     groupKey:p.layerID];
+}
+
+- (BOOL)isRotXRingOSCVisibleAtTime:(CMTime)time {
+  return [self _isRotRingVisibleForLabel:@"Rot X"];
+}
+
+- (BOOL)isRotYRingOSCVisibleAtTime:(CMTime)time {
+  return [self _isRotRingVisibleForLabel:@"Rot Y"];
+}
+
 - (CGPoint)transformPositionCanvasPointAtTime:(CMTime)time {
   // Center the arc on the selected layer (its bbox center + translation
   // offset), so dragging always grabs the visual layer rather than the
@@ -439,7 +456,21 @@ static const CGFloat kPathToolbarGap = 6.0;
   BOOL scaleVisible = [self isScaleRingOSCVisibleAtTime:time];
   BOOL anchorVisible = [self isAnchorOSCVisibleAtTime:time];
   BOOL rotZVisible = [self isRotZOSCVisibleAtTime:time];
-  if (!posVisible && !scaleVisible && !anchorVisible && !rotZVisible)
+  // MM convention: Rot X / Rot Y rings show when their lane toggle is on,
+  // OR Opt is held, OR they're currently hovered/being dragged. This lets
+  // users grab them even with the lane OSC default-off.
+  CGEventFlags flags =
+      CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+  // Opt only reveals the X/Y rings when Rot Z is already visible — that's
+  // the signal the user is using the transform OSC at all. Otherwise Opt
+  // would surface them in unrelated cursor-mode contexts.
+  BOOL optHeld = ((flags & kCGEventFlagMaskAlternate) != 0) && rotZVisible;
+  BOOL rotXShown = [self isRotXRingOSCVisibleAtTime:time] || optHeld ||
+                   self.rotXRingDragging || self.rotXRingHovered;
+  BOOL rotYShown = [self isRotYRingOSCVisibleAtTime:time] || optHeld ||
+                   self.rotYRingDragging || self.rotYRingHovered;
+  if (!posVisible && !scaleVisible && !anchorVisible && !rotZVisible &&
+      !rotXShown && !rotYShown)
     return;
 
   if (posVisible) {
@@ -450,6 +481,25 @@ static const CGFloat kPathToolbarGap = 6.0;
                     isActive:self.transformPositionDragging
             destinationImage:dest
                       atTime:time];
+  }
+
+  if (rotXShown || rotYShown) {
+    CGPoint anchorCanvas = [self transformAnchorCanvasPointAtTime:time];
+    void (^drawRotRing)(KKRingOSC *, BOOL, BOOL) =
+        ^(KKRingOSC *ring, BOOL hovered, BOOL active) {
+          ring.center = anchorCanvas;
+          [ring drawAtCanvasPosition:anchorCanvas
+                           isHovered:hovered
+                            isActive:active
+                    destinationImage:dest
+                              atTime:time];
+        };
+    if (rotXShown)
+      drawRotRing(self.rotXRingOSC, self.rotXRingHovered,
+                  self.rotXRingDragging);
+    if (rotYShown)
+      drawRotRing(self.rotYRingOSC, self.rotYRingHovered,
+                  self.rotYRingDragging);
   }
 
   if (scaleVisible || anchorVisible || rotZVisible) {

@@ -410,6 +410,34 @@
     return;
   }
 
+  if (self.rotXRingDragging || self.rotYRingDragging) {
+    // MagicMove pattern: M_PI/200 radians per pixel of mouse movement;
+    // X ring tracks horizontal motion, Y ring tracks vertical (sign
+    // inverted to match MM's "up = positive RotX" feel). Snap to zero
+    // at ±3°.
+    double pos = self.rotXRingDragging ? positionX : positionY;
+    double delta = (pos - self.rotRingDragPrevPos) * (M_PI / 200.0);
+    if (self.rotYRingDragging)
+      delta = -delta;
+    self.rotRingDragPrevPos = pos;
+    self.rotRingDragAccum = self.rotRingDragAccum + delta;
+    static const double kSnapToZero = 3.0 * (M_PI / 180.0);
+    double value = self.rotRingDragAccum;
+    if (fabs(value) < kSnapToZero)
+      value = 0.0;
+    id<FxCustomParameterActionAPI_v4> actAPI = [self.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    id<FxParameterSettingAPI_v5> setAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [actAPI startAction:self];
+    [setAPI setFloatValue:value
+              toParameter:self.rotRingDragTargetParam
+                   atTime:time];
+    [actAPI endAction:self];
+    *forceUpdate = YES;
+    return;
+  }
+
   if (self.rotZDragging) {
     // MagicMove pattern: atan2 delta accumulation around the rotation
     // pivot (anchor canvas point), with snap-to-zero at ±3°.
@@ -629,6 +657,14 @@
   } else if (self.rotZDragging) {
     self.rotZDragging = NO;
     self.rotZHovered = NO;
+    transformDragEnded = YES;
+  } else if (self.rotXRingDragging) {
+    self.rotXRingDragging = NO;
+    self.rotXRingHovered = NO;
+    transformDragEnded = YES;
+  } else if (self.rotYRingDragging) {
+    self.rotYRingDragging = NO;
+    self.rotYRingHovered = NO;
     transformDragEnded = YES;
   }
   if (transformDragEnded) {

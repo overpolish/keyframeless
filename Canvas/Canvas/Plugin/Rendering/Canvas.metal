@@ -13,7 +13,15 @@ typedef struct {
     float4 clipSpacePosition [[position]];
     float edgeDistance;
     float capDistance;
+    float2 localPos; // pre-transform centered-pixel position (perspective-correct)
 } StrokeRasterizerData;
+
+// Apply the 4x4 forward transform (incl. perspective) to a 2D centered-pixel
+// vertex and emit a clip-space position for Metal's perspective divide.
+static float4 kkProjectVertex(float2 localPos, matrix_float4x4 m4, float2 viewport) {
+    float4 world = m4 * float4(localPos, 0.0, 1.0);
+    return float4(world.xy / (viewport / 2.0), 0.0, world.w);
+}
 
 vertex StrokeRasterizerData strokeVertexShader(uint vertexID [[vertex_id]],
                                                constant CanvasVertex *vertexArray [[buffer(0)]],
@@ -21,14 +29,12 @@ vertex StrokeRasterizerData strokeVertexShader(uint vertexID [[vertex_id]],
                                                constant CanvasPathTransform &xform [[buffer(2)]]) {
     StrokeRasterizerData out;
 
-    float2 pixelSpacePosition = (xform.m * float3(vertexArray[vertexID].position, 1.0)).xy;
     float2 viewportSize = float2(*viewportSizePointer);
-
-    out.clipSpacePosition.xy = pixelSpacePosition / (viewportSize / 2.0);
-    out.clipSpacePosition.z = 0.0;
-    out.clipSpacePosition.w = 1.0;
+    float2 localPos = vertexArray[vertexID].position;
+    out.clipSpacePosition = kkProjectVertex(localPos, xform.m4, viewportSize);
     out.edgeDistance = vertexArray[vertexID].edgeDistance;
     out.capDistance = vertexArray[vertexID].capDistance;
+    out.localPos = localPos;
 
     return out;
 }
@@ -57,10 +63,10 @@ static float3 sampleCanvasGradientAtPixel(constant CanvasGradientParams &p, floa
     return pow(srgb, 2.2);
 }
 
-// Fragment-shader entry: framebuffer pixel → centered-pixel space (matching
-// the canvas vertex shader's coordinates) → path-local space (so the gradient
-// bbox stored in path-local pixels samples correctly even when the path's
-// per-path transform has moved the geometry on screen).
+// Fallback for the fill color pass (fullscreen quad): framebuffer pixel →
+// centered-pixel space → path-local space via the 2D inverse. Ignores
+// rotX/rotY, so 3D-rotated paths get a 2D approximation for gradient
+// sampling — matches MM's tradeoff for image-fill 3D rotation.
 static float3 sampleCanvasGradient(constant CanvasGradientParams &p, float2 fbPixel, float2 viewport,
                                    constant CanvasPathTransform &xform) {
     float2 centered = fbPixel - viewport * 0.5;
@@ -81,7 +87,10 @@ fragment float4 strokeFragmentShader(StrokeRasterizerData in [[stage_in]],
 
     float coverage = edgeAlpha * capAlpha;
     if (params.useGradient != 0) {
-        float3 rgb = sampleCanvasGradient(params, in.clipSpacePosition.xy, float2(*viewportSizePointer), xform);
+        // Stroke vertices carry their pre-transform local position as a
+        // varying — perspective-correct interpolation gives the exact
+        // path-local pixel for each fragment, even with 3D rotation.
+        float3 rgb = sampleCanvasGradientAtPixel(params, in.localPos);
         float a = params.opacity * coverage;
         return float4(rgb * a, a);
     }
@@ -98,10 +107,7 @@ vertex FillRasterizerData fillVertexShader(uint vertexID [[vertex_id]],
                                            constant CanvasPathTransform &xform [[buffer(2)]]) {
     FillRasterizerData out;
     float2 viewportSize = float2(*viewportSizePointer);
-    float2 pixelSpacePosition = (xform.m * float3(vertexArray[vertexID].position, 1.0)).xy;
-    out.clipSpacePosition.xy = pixelSpacePosition / (viewportSize / 2.0);
-    out.clipSpacePosition.z = 0.0;
-    out.clipSpacePosition.w = 1.0;
+    out.clipSpacePosition = kkProjectVertex(vertexArray[vertexID].position, xform.m4, viewportSize);
     return out;
 }
 
@@ -162,10 +168,7 @@ vertex ImageRasterizerData imageVertexShader(uint vertexID [[vertex_id]],
 
     ImageRasterizerData out;
     float2 viewportSize = float2(*viewportSizePointer);
-    float2 pixelSpacePosition = (xform.m * float3(vertexArray[vertexID].position, 1.0)).xy;
-    out.clipSpacePosition.xy = pixelSpacePosition / (viewportSize / 2.0);
-    out.clipSpacePosition.z = 0.0;
-    out.clipSpacePosition.w = 1.0;
+    out.clipSpacePosition = kkProjectVertex(vertexArray[vertexID].position, xform.m4, viewportSize);
     out.texCoord = texCoords[vertexID];
     return out;
 }

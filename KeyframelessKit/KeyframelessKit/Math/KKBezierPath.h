@@ -101,6 +101,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Default 0. Animatable via the Rot Z KKTiming lane.
 @property(nonatomic, assign) float rotationZ;
 
+/// Per-layer 3D rotation around the layer's anchor (radians). RotX tilts the
+/// shape forward/back, RotY tilts it left/right; both run through a
+/// perspective projection in the vertex shader. Default 0.
+@property(nonatomic, assign) float rotationX;
+@property(nonatomic, assign) float rotationY;
+
 /// Per-layer anchor (pivot) for rotate/scale, expressed as an *offset* from
 /// the path's bbox center in object-space units (Y=0 at bottom). (0, 0) puts
 /// the pivot at the bbox center; same convention as `translateX/Y` so the

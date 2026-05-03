@@ -305,6 +305,13 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
           memcpy(&path->_rotationZ, bytes + hdr, sizeof(float));
           hdr += sizeof(float);
         }
+        if (ver >= 22 && data.length >= hdr + 2 * sizeof(float)) {
+          float rxy[2];
+          memcpy(rxy, bytes + hdr, 2 * sizeof(float));
+          path->_rotationX = rxy[0];
+          path->_rotationY = rxy[1];
+          hdr += 2 * sizeof(float);
+        }
       }
     }
   }
@@ -376,7 +383,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   // v11: + endWidth (1 float).
   // v12: + contour starts (2-byte count + N × uint32 indices).
   uint8_t propMarker = 0xAA;
-  uint8_t propVersion = 21;
+  uint8_t propVersion = 22;
   [data appendBytes:&propMarker length:1];
   [data appendBytes:&propVersion length:1];
   float strokeData[4] = {_strokeWidth, _strokeR, _strokeG, _strokeB};
@@ -467,6 +474,9 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   [data appendBytes:sa length:4 * sizeof(float)];
   // v21: rotationZ (1 float, radians).
   [data appendBytes:&_rotationZ length:sizeof(float)];
+  // v22: rotationX, rotationY (2 floats, radians).
+  float rxy[2] = {_rotationX, _rotationY};
+  [data appendBytes:rxy length:2 * sizeof(float)];
   return data;
 }
 

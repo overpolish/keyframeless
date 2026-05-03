@@ -732,12 +732,22 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
       &sup, @selector(createViewForParameterID:), parameterID);
 }
 
+static NSSet<NSString *> *_kkTransformOSCLabels(void) {
+  static NSSet<NSString *> *sLabels = nil;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    sLabels = [NSSet setWithObjects:@"Position", @"Scale", @"Anchor", @"Rot Z",
+                                    @"Rot X", @"Rot Y", nil];
+  });
+  return sLabels;
+}
+
 - (NSSet<NSString *> *)animatablePropertyLabelsWithOSC {
-  return [NSSet setWithObjects:@"Position", @"Scale", @"Anchor", @"Rot Z", nil];
+  return _kkTransformOSCLabels();
 }
 
 - (NSSet<NSString *> *)animatablePropertyLabelsWithOSCDefaultOff {
-  return [NSSet setWithObjects:@"Position", @"Scale", @"Anchor", @"Rot Z", nil];
+  return _kkTransformOSCLabels();
 }
 
 - (NSString *)emptyLanesMessageWhenNoLanes {

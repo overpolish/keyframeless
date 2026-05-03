@@ -287,6 +287,12 @@ NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
 /// preconditions plus the "Rot Z" per-lane OSC toggle.
 - (BOOL)isRotZOSCVisibleAtTime:(CMTime)time;
 
+/// YES when Rot X / Rot Y rings' per-lane OSC toggle is on. The MM-style
+/// `optHeld || hovering || dragging` overrides are layered on top by the
+/// caller so the rings can still be grabbed even when the toggle is off.
+- (BOOL)isRotXRingOSCVisibleAtTime:(CMTime)time;
+- (BOOL)isRotYRingOSCVisibleAtTime:(CMTime)time;
+
 - (void)drawTransformOSCWithDestinationImage:(FxImageTile *)dest
                                       atTime:(CMTime)time;
 
