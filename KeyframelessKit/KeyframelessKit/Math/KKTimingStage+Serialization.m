@@ -206,7 +206,11 @@ static const NSInteger kCurrentVersion = 3;
     }
     [result addObject:lane];
   }
-  return result.count ? result : nil;
+  // Return the (possibly empty) result. An empty parsed lanes array is a
+  // legitimate state — distinct from nil which signals invalid/unparseable
+  // JSON. Returning nil for empty caused KKSyncFromParams to skip its
+  // sequencer view push when reconciliation drops the last lane.
+  return result;
 }
 
 @end

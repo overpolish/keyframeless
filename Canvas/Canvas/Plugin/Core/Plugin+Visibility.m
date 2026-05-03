@@ -26,6 +26,7 @@
     @(kParamDotGap),
     @(kParamDrawOnStart),
     @(kParamDrawOnEnd),
+    @(kParamMarchingAntsSpeed),
     @(kParamStartMarker),
     @(kParamEndMarker),
     @(kParamStartMarkerSize),

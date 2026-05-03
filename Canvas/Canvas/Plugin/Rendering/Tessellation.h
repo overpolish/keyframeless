@@ -73,21 +73,22 @@ NSUInteger KKTessellatePath(KKBezierPath *path, float startWidth,
 
 /// Tessellate a dashed stroke path. `startTrim`/`endTrim` are arc-length
 /// offsets from each end (0 = no trim) used to render only a sub-range of the
-/// path — drives the draw-on animation.
+/// path — drives the draw-on animation. `phaseOffset` is an arc-length shift
+/// applied to the dash cycle for marching-ants animation.
 NSUInteger KKTessellateDashedPath(KKBezierPath *path, float startWidth,
                                   float endWidth, float outputWidth,
                                   float outputHeight, float dashLength,
                                   float dashGap, uint8_t lineJoin,
                                   float startTrim, float endTrim,
-                                  CanvasVertex *vertices);
+                                  float phaseOffset, CanvasVertex *vertices);
 
 /// Tessellate a dotted stroke path (isolated filled circles).
-/// See `KKTessellateDashedPath` for trim semantics.
+/// See `KKTessellateDashedPath` for trim/phase semantics.
 NSUInteger KKTessellateDottedPath(KKBezierPath *path, float startWidth,
                                   float endWidth, float outputWidth,
                                   float outputHeight, float dotGap,
                                   float startTrim, float endTrim,
-                                  CanvasVertex *vertices);
+                                  float phaseOffset, CanvasVertex *vertices);
 
 /// Tessellate a solid stroke with arc-length trimming at start/end.
 /// Used when markers are present to pull the stroke back from the endpoints.

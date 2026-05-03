@@ -358,6 +358,16 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
                                delta:0.01
                       parameterFlags:kFxParameterFlag_HIDDEN];
 
+  [paramAPI addPercentSliderWithName:@"Ants Speed"
+                         parameterID:kParamMarchingAntsSpeed
+                        defaultValue:0.0
+                        parameterMin:0.0
+                        parameterMax:5.0
+                           sliderMin:0.0
+                           sliderMax:2.0
+                               delta:0.01
+                      parameterFlags:kFxParameterFlag_HIDDEN];
+
   [paramAPI addCustomParameterWithName:@"Start Marker"
                            parameterID:kParamStartMarker
                           defaultValue:@(0)

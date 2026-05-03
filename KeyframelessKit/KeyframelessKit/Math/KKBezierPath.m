@@ -323,6 +323,13 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
           path->_drawOnEnd = dro[1];
           hdr += 2 * sizeof(float);
         }
+        if (ver >= 25 && data.length >= hdr + 2 * sizeof(float)) {
+          float ants[2];
+          memcpy(ants, bytes + hdr, 2 * sizeof(float));
+          path->_marchingAntsOffset = ants[0];
+          path->_marchingAntsSpeed = ants[1];
+          hdr += 2 * sizeof(float);
+        }
       }
     }
   }
@@ -394,7 +401,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   // v11: + endWidth (1 float).
   // v12: + contour starts (2-byte count + N × uint32 indices).
   uint8_t propMarker = 0xAA;
-  uint8_t propVersion = 24;
+  uint8_t propVersion = 25;
   [data appendBytes:&propMarker length:1];
   [data appendBytes:&propVersion length:1];
   float strokeData[4] = {_strokeWidth, _strokeR, _strokeG, _strokeB};
@@ -494,6 +501,9 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   // v24: drawOnStart, drawOnEnd (2 floats).
   float dro[2] = {_drawOnStart, _drawOnEnd};
   [data appendBytes:dro length:2 * sizeof(float)];
+  // v25: marchingAntsOffset, marchingAntsSpeed (2 floats).
+  float ants[2] = {_marchingAntsOffset, _marchingAntsSpeed};
+  [data appendBytes:ants length:2 * sizeof(float)];
   return data;
 }
 
@@ -575,6 +585,8 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     _dotGap = 10.0f;
     _drawOnStart = 0.0f;
     _drawOnEnd = 1.0f;
+    _marchingAntsOffset = 0.0f;
+    _marchingAntsSpeed = 0.0f;
     _sketchEnabled = NO;
     _sketchRoughness = kSketchRoughnessDefault;
     _sketchBowing = kSketchBowingDefault;

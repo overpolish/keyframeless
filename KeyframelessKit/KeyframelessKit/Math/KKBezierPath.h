@@ -182,6 +182,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// Draw-on end fraction 0–1 (default 1). See drawOnStart.
 @property(nonatomic, assign) float drawOnEnd;
 
+/// Marching-ants phase offset, fraction of one dash/dot cycle (default 0).
+/// Animatable. Renderer multiplies by the cycle length to get an arc-length
+/// shift. Combined at sample time with `marchingAntsSpeed * elapsed` so the
+/// path snapshot carries the final phase.
+@property(nonatomic, assign) float marchingAntsOffset;
+
+/// Marching-ants speed in cycles/sec (default 0). Not animatable via the
+/// multi-stage sequencer — the renderer treats it as continuous over time.
+@property(nonatomic, assign) float marchingAntsSpeed;
+
 /// Start marker type (0=none, 1=arrow, 2=circle, 3=square). Default 0.
 @property(nonatomic, assign) uint8_t startMarker;
 

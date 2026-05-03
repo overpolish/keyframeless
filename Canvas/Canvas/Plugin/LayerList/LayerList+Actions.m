@@ -58,6 +58,16 @@ static KKBezierPath *_kkMakeGroup(NSString *name,
   NSIndexSet *sel = KKLayerStateForUUID(_instanceUUID).uiSelection;
   [self _syncObjectParamsForSelection:sel paths:paths paramSetAPI:paramSetAPI];
   [actionAPI endAction:self];
+
+  // Push the mutated paths into the store directly so observers (sequencer
+  // reconciliation, layer-list refresh) fire on this tick rather than waiting
+  // for the next drawOSC round-trip — inspector-only actions like delete or
+  // group don't reliably trigger drawOSC.
+  KKCanvasStore *store = KKLayerStateForUUID(_instanceUUID).store;
+  if (store)
+    [store performBatch:^{
+      [store setPaths:paths];
+    }];
 }
 
 - (void)_forceRedrawAndRefresh {

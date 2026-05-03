@@ -163,18 +163,29 @@ static void renderStrokeForSinglePath(
   if (path.closed && path.count >= 2)
     curveCount = path.count;
 
+  // Marching-ants phase: path.marchingAntsOffset is a fraction of the dash
+  // cycle (already includes the time-driven advance baked in at sample time).
+  // Convert to arc-length here since cycle is per-style.
+  float dashCycle = path.dashLength + path.dashGap;
+  float dotCycle = sw + path.dotGap;
+  float dashedPhase = path.marchingAntsOffset * dashCycle;
+  float dottedPhase = path.marchingAntsOffset * dotCycle;
+
   if (path.strokeStyle == 1) {
-    NSUInteger maxVertices = curveCount * segsPerCurve * 12 + 8192;
+    // Dashed tessellator samples at 512/curve to keep marching-ants animation
+    // smooth; size the buffer accordingly.
+    NSUInteger dashedSegs = 512;
+    NSUInteger maxVertices = curveCount * dashedSegs * 12 + 8192;
     vertices = malloc(maxVertices * sizeof(CanvasVertex));
     vertexCount = KKTessellateDashedPath(
         path, sw, ew, outputWidth, outputHeight, path.dashLength, path.dashGap,
-        path.lineJoin, startTrim, endTrim, vertices);
+        path.lineJoin, startTrim, endTrim, dashedPhase, vertices);
   } else if (path.strokeStyle == 2) {
     NSUInteger maxVertices = curveCount * segsPerCurve * 4 + 4096;
     vertices = malloc(maxVertices * sizeof(CanvasVertex));
-    vertexCount =
-        KKTessellateDottedPath(path, sw, ew, outputWidth, outputHeight,
-                               path.dotGap, startTrim, endTrim, vertices);
+    vertexCount = KKTessellateDottedPath(path, sw, ew, outputWidth,
+                                         outputHeight, path.dotGap, startTrim,
+                                         endTrim, dottedPhase, vertices);
   } else if (hasMarkers || drawOnTrims) {
     NSUInteger maxVertices = curveCount * ((segsPerCurve + 1) * 2 + 2) + 256;
     vertices = malloc(maxVertices * sizeof(CanvasVertex));

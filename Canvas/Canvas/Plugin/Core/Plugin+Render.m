@@ -357,6 +357,24 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
                   effectDurSec:effectDurSec
                        toPaths:paths];
   }
+
+  // Bake the time-driven marching-ants phase into each path's offset field
+  // (used as a transient phase carrier) so the renderer stays time-agnostic.
+  // Speed of 1.0 = ~3 cycles/sec, matching Photoshop-style ants in the middle
+  // of the slider range.
+  double secsSinceStart =
+      CMTimeGetSeconds(sampleTime) - CMTimeGetSeconds(effectStart);
+  for (KKBezierPath *p in paths) {
+    if (p.isGroup || p.marchingAntsSpeed == 0.0f) {
+      p.marchingAntsOffset = 0.0f;
+      continue;
+    }
+    double advanced = secsSinceStart * p.marchingAntsSpeed * 3.0;
+    advanced = fmod(advanced, 1.0);
+    if (advanced < 0.0)
+      advanced += 1.0;
+    p.marchingAntsOffset = (float)advanced;
+  }
   // Per-path translate/rotate/scale lives on KKBezierPath as properties
   // (translateX/Y, future scale/rotate); the render side composes them
   // into a per-path matrix and applies it in the vertex shader. Nothing
