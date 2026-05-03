@@ -385,30 +385,28 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
       if (desc.kind == KKAnimatableParamKindPoint && vals.count >= 2) {
         KKTimingSegment *active =
             KKTimingSegmentForFraction(lane.segments, frac);
-        if (active && active.type == KKSegmentTypeTransition &&
-            active.pathData.length > 0) {
-          KKBezierPath *path = [KKBezierPath pathWithData:active.pathData];
-          NSUInteger idx = [lane.segments indexOfObjectIdenticalTo:active];
-          NSArray<NSNumber *> *fromVals =
-              KKTimingBoundaryBefore(idx, lane.segments);
-          NSArray<NSNumber *> *toVals =
-              KKTimingBoundaryAfter(idx, lane.segments);
-          if (fromVals.count >= 2 && toVals.count >= 2) {
-            double segDur = active.end - active.start;
-            double t = (segDur > 0) ? (frac - active.start) / segDur : 1.0;
-            t = MAX(0.0, MIN(1.0, t));
-            BOOL isAnimateOut = (idx == lane.segments.count - 1);
-            double ti = isAnimateOut ? (1.0 - t) : t;
-            double easedT = KKApplyEasing(ti, active.easing, active.intensity,
-                                          active.frequency);
-            if (isAnimateOut)
-              easedT = 1.0 - easedT;
-            simd_float2 pt =
-                [path positionAtT:(float)easedT
-                            start:(simd_float2){(float)fromVals[0].doubleValue,
-                                                (float)fromVals[1].doubleValue}
-                              end:(simd_float2){(float)toVals[0].doubleValue,
-                                                (float)toVals[1].doubleValue}];
+        NSUInteger idx = active
+                             ? [lane.segments indexOfObjectIdenticalTo:active]
+                             : NSNotFound;
+        NSArray<NSNumber *> *fromVals =
+            (idx != NSNotFound) ? KKTimingBoundaryBefore(idx, lane.segments)
+                                : nil;
+        NSArray<NSNumber *> *toVals =
+            (idx != NSNotFound) ? KKTimingBoundaryAfter(idx, lane.segments)
+                                : nil;
+        if (active && fromVals.count >= 2 && toVals.count >= 2) {
+          double segDur = active.end - active.start;
+          double t = (segDur > 0) ? (frac - active.start) / segDur : 1.0;
+          t = MAX(0.0, MIN(1.0, t));
+          BOOL isAnimateOut = (idx == lane.segments.count - 1);
+          simd_float2 pt;
+          if (KKEvaluateBezierPathPosition(
+                  active, isAnimateOut, t,
+                  (simd_float2){(float)fromVals[0].doubleValue,
+                                (float)fromVals[1].doubleValue},
+                  (simd_float2){(float)toVals[0].doubleValue,
+                                (float)toVals[1].doubleValue},
+                  &pt)) {
             // Preserve any extra-component values (e.g. rotate-with-motion
             // bool on Position) — only the x/y override.
             NSMutableArray<NSNumber *> *replaced =
@@ -424,12 +422,8 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
     }
   }
 
-  // Rotate-with-motion pass: for any path whose Position lane (now applied)
-  // marked rotateWithMotion ON at this fraction, sample the same lane at
-  // a 1/12s look-back and adjust rotationZ by velocity * 5°/unit. Mirrors
-  // MagicMove's Plugin+Animation.m.
   if (effectDurSec > 0) {
-    double window = 1.0 / 12.0;
+    double window = KKRotateWithMotionWindowSeconds;
     double dFrac = window / effectDurSec;
     double prevFrac = MAX(0.0, frac - dFrac);
     if (prevFrac != frac) {
@@ -447,7 +441,7 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
         double prevX = prev[0].doubleValue;
         double posX = 0.5 + p.translateX;
         double vx = (posX - prevX) / window;
-        p.rotationZ -= (float)(vx * 5.0 * (M_PI / 180.0));
+        p.rotationZ -= (float)KKRotateWithMotionDeltaRadians(vx);
       }
     }
   }

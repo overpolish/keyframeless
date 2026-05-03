@@ -6,8 +6,33 @@
 #import "KKTimingEvaluation.h"
 
 #import "../Plugin/KKColor.h"
+#import "KKBezierPath.h"
 #import "KKEasing.h"
 #import "KKGradientSampling.h"
+
+const double KKRotateWithMotionWindowSeconds = 1.0 / 12.0;
+
+BOOL KKEvaluateBezierPathPosition(KKTimingSegment *active, BOOL isAnimateOut,
+                                  double localT, simd_float2 fromPos,
+                                  simd_float2 toPos, simd_float2 *outPos) {
+  if (!active || active.type != KKSegmentTypeTransition ||
+      active.pathData.length == 0)
+    return NO;
+  KKBezierPath *path = [KKBezierPath pathWithData:active.pathData];
+  if (!path)
+    return NO;
+  double ti = isAnimateOut ? (1.0 - localT) : localT;
+  double easedT =
+      KKApplyEasing(ti, active.easing, active.intensity, active.frequency);
+  if (isAnimateOut)
+    easedT = 1.0 - easedT;
+  *outPos = [path positionAtT:(float)easedT start:fromPos end:toPos];
+  return YES;
+}
+
+double KKRotateWithMotionDeltaRadians(double vx) {
+  return vx * 5.0 * (M_PI / 180.0);
+}
 
 KKTimingSegment *
 KKTimingSegmentForFraction(NSArray<KKTimingSegment *> *segments, double frac) {
