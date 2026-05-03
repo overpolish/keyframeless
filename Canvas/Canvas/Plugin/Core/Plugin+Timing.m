@@ -156,7 +156,7 @@ static NSArray<KKCanvasAnimProp *> *_kkAnimatableProperties(void) {
     };
 
     KKCanvasAnimProp *strokeWidth =
-        [KKCanvasAnimProp propWithLabel:@"Stroke Width"
+        [KKCanvasAnimProp propWithLabel:@"Start Width"
             paramID:kParamStrokeWidth
             secondaryParamID:0
             kind:KKAnimatableParamKindFloat
@@ -169,6 +169,71 @@ static NSArray<KKCanvasAnimProp *> *_kkAnimatableProperties(void) {
             write:^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
               if (vals.count >= 1)
                 p.strokeWidth = vals[0].floatValue;
+            }];
+
+    // End Width is gated on KKVisStrokeOpen | KKVisOpenPath — only animate
+    // for stroked open paths (closed paths have no taper end).
+    KKCanvasAnimProp *endWidth = [KKCanvasAnimProp propWithLabel:@"End Width"
+        paramID:kParamEndWidth
+        secondaryParamID:0
+        kind:KKAnimatableParamKindFloat
+        enabled:^BOOL(KKBezierPath *p) {
+          return p.strokeEnabled && !p.isGroup && !p.closed;
+        }
+        read:^NSArray<NSNumber *> *(KKBezierPath *p) {
+          return @[ @(p.endWidth) ];
+        }
+        write:^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
+          if (vals.count >= 1)
+            p.endWidth = vals[0].floatValue;
+        }];
+
+    // Opacity FxPlug param is 0–100 but path stores 0–1. Lanes carry
+    // FxPlug-space values (matches kkPushParamToLane's _kkReadParamForDesc),
+    // so scale on the path boundary.
+    KKCanvasAnimProp *opacity = [KKCanvasAnimProp propWithLabel:@"Opacity"
+        paramID:kParamOpacity
+        secondaryParamID:0
+        kind:KKAnimatableParamKindFloat
+        enabled:^BOOL(KKBezierPath *p) {
+          return !p.isGroup;
+        }
+        read:^NSArray<NSNumber *> *(KKBezierPath *p) {
+          return @[ @(p.opacity * 100.0) ];
+        }
+        write:^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
+          if (vals.count >= 1)
+            p.opacity = vals[0].floatValue / 100.0f;
+        }];
+
+    BOOL (^sketchOnPath)(KKBezierPath *) = ^BOOL(KKBezierPath *p) {
+      return p.sketchEnabled && !p.isGroup && !p.isImage;
+    };
+    KKCanvasAnimProp *sketchRoughness =
+        [KKCanvasAnimProp propWithLabel:@"Sketch Roughness"
+            paramID:kParamSketchRoughness
+            secondaryParamID:0
+            kind:KKAnimatableParamKindFloat
+            enabled:sketchOnPath
+            read:^NSArray<NSNumber *> *(KKBezierPath *p) {
+              return @[ @(p.sketchRoughness) ];
+            }
+            write:^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
+              if (vals.count >= 1)
+                p.sketchRoughness = vals[0].floatValue;
+            }];
+    KKCanvasAnimProp *sketchBowing =
+        [KKCanvasAnimProp propWithLabel:@"Sketch Bowing"
+            paramID:kParamSketchBowing
+            secondaryParamID:0
+            kind:KKAnimatableParamKindFloat
+            enabled:sketchOnPath
+            read:^NSArray<NSNumber *> *(KKBezierPath *p) {
+              return @[ @(p.sketchBowing) ];
+            }
+            write:^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
+              if (vals.count >= 1)
+                p.sketchBowing = vals[0].floatValue;
             }];
 
     // Position uses 0.5,0.5 as neutral (FCP convention); the path stores the
@@ -314,8 +379,8 @@ static NSArray<KKCanvasAnimProp *> *_kkAnimatableProperties(void) {
             }];
 
     sProps = @[
-      drawOnStart, drawOnEnd, drawOnOrigin, strokeWidth, position, scale,
-      anchor, rotZ, rotX, rotY
+      drawOnStart, drawOnEnd, drawOnOrigin, strokeWidth, endWidth, opacity,
+      sketchRoughness, sketchBowing, position, scale, anchor, rotZ, rotX, rotY
     ];
   });
   return sProps;
