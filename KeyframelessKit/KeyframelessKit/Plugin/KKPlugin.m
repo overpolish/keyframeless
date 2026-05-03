@@ -4,7 +4,9 @@
  */
 
 #import "../Update/KKUpdateChecker.h"
+#import "../Views/StageSequencer/KKStageSequencerView.h"
 #import "KKHostInfo.h"
+#import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
 #import <AppKit/AppKit.h>
 #import <Carbon/Carbon.h>
@@ -443,8 +445,35 @@
   return NO;
 }
 
-- (NSArray<KKAnimatableProperty *> *)animatableProperties {
+- (NSArray<NSNumber *> *)currentValuesForLaneLabel:(NSString *)label
+                                          groupKey:(NSString *)groupKey
+                                            atTime:(CMTime)time {
   return nil;
+}
+
+- (BOOL)applyLaneValues:(NSArray<NSNumber *> *)values
+               forLabel:(NSString *)label
+               groupKey:(NSString *)groupKey
+                 atTime:(CMTime)time {
+  return NO;
+}
+
+- (void)setEditingDisabled:(BOOL)disabled
+              forLaneLabel:(NSString *)label
+                  groupKey:(NSString *)groupKey {
+}
+
+- (NSArray<KKTimingLane *> *)defaultLanesAtTime:(CMTime)time
+                                    paramGetAPI:(id<FxParameterRetrievalAPI_v6>)
+                                                    paramGetAPI {
+  return nil;
+}
+
+- (NSArray<KKTimingLane *> *)reconcileLanes:(NSArray<KKTimingLane *> *)existing
+                                     atTime:(CMTime)time
+                                paramGetAPI:(id<FxParameterRetrievalAPI_v6>)
+                                                paramGetAPI {
+  return existing;
 }
 
 - (BOOL)usesMotionBlur {
@@ -461,6 +490,49 @@
 
 - (NSSet<NSString *> *)animatablePropertyLabelsWithOSCDefaultOff {
   return [NSSet set];
+}
+
+- (NSString *)kkSelectedGroupKey {
+  return nil;
+}
+
+- (void)kkHandleGroupSegmentClickedForKey:(NSString *)groupKey {
+  // Default: behave like a label-side click. Plugins override to wire a
+  // custom action (e.g. selecting the underlying object).
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  KKStageSequencerView *seq = state.sequencerView;
+  BOOL nowCollapsed = NO;
+  for (KKTimingLane *lane in seq.lanes) {
+    if ([lane.groupKey isEqualToString:groupKey]) {
+      nowCollapsed = !lane.groupCollapsed;
+      break;
+    }
+  }
+  [self _handleGroupCollapseToggledForKey:groupKey collapsed:nowCollapsed];
+}
+
+- (void)kkRefreshSequencerSelectedGroup {
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  if (!state)
+    return;
+  NSString *key = [self kkSelectedGroupKey];
+  dispatch_block_t apply = ^{
+    state.sequencerView.selectedGroupKey = key;
+    for (KKTimingViewRefs *r in state.additionalTimingViews)
+      r.seqView.selectedGroupKey = key;
+  };
+  if (NSThread.isMainThread)
+    apply();
+  else
+    dispatch_async(dispatch_get_main_queue(), apply);
+}
+
+- (NSString *)emptyLanesMessageWhenNoLanes {
+  return nil;
+}
+
+- (NSString *)emptyLanesIconNameWhenNoLanes {
+  return @"rectangle.on.rectangle.slash";
 }
 
 @end

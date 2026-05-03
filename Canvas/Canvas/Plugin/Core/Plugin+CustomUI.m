@@ -10,6 +10,7 @@
 #import "MarkerStyleView.h"
 #import "ObjectParams.h"
 #import "StrokeStyleView.h"
+#import <KeyframelessKit/KKGradientSampling.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
 
@@ -64,6 +65,10 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
 }
 
 @implementation CanvasPlugin (CustomUI)
+
+- (BOOL)usesMotionBlur {
+  return YES;
+}
 
 - (void)refreshLayerList {
 }
@@ -343,6 +348,7 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
   // Register store observer.
   __weak KKLayerInstanceState *weakState = state;
   __weak id weakAPI = self.apiManager;
+  __weak CanvasPlugin *weakSelf = self;
   [state.store
       addObserverForChanges:(KKStoreChangePaths | KKStoreChangeSelection |
                              KKStoreChangeVisibility | KKStoreChangeCollapse |
@@ -355,6 +361,15 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
                         if (!s || !api)
                           return;
                         KKCanvasRefreshLayerListFromSnapshot(snap, s, api);
+                        if (changes &
+                            (KKStoreChangePaths | KKStoreChangePathProps))
+                          [KKPlugin multiStageSyncFromParams:api];
+                        // Selection or path changes can both shift which
+                        // layer the sequencer should accent (paths gone →
+                        // groupKey vanishes; selection moves → key swaps).
+                        if (changes &
+                            (KKStoreChangeSelection | KKStoreChangePaths))
+                          [weakSelf kkRefreshSequencerSelectedGroup];
                       }];
 
   // Seed the store so the observer fires on initial setup.
@@ -572,12 +587,92 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
     return seedView;
   }
 
+  if (parameterID == kParamStrokeGradientUI ||
+      parameterID == kParamFillGradientUI) {
+    BOOL isStroke = (parameterID == kParamStrokeGradientUI);
+
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    NSString *pathStr = nil;
+    [paramGetAPI getStringParameterValue:&pathStr fromParameter:kParamPathData];
+    NSInteger selIdx = KKReadSelectedIndex(paramGetAPI);
+    NSString *json = nil;
+    if (pathStr.length > 0 && selIdx >= 0) {
+      NSData *blob = [[NSData alloc] initWithBase64EncodedString:pathStr
+                                                         options:0];
+      NSArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+      if ((NSUInteger)selIdx < paths.count) {
+        json = isStroke ? paths[selIdx].strokeGradientJSON
+                        : paths[selIdx].fillGradientJSON;
+      }
+    }
+    if (json.length == 0)
+      json = KKDefaultGradientJSON();
+
+    KKGradientControl *control =
+        [[KKGradientControl alloc] initWithFrame:NSMakeRect(0, 0, 200, 36)];
+    NSArray<KKGradientStop *> *stops = KKGradientStopsFromJSON(json);
+    if (stops)
+      control.stops = stops;
+
+    control.onStopsChanged = ^(NSArray<KKGradientStop *> *newStops) {
+      id api = weakAPI;
+      if (!api)
+        return;
+      NSString *newJSON = KKGradientJSONFromStops(newStops);
+      if (!newJSON)
+        return;
+      KKModifySelectedPathProperty(api, ^(KKBezierPath *p) {
+        if (isStroke)
+          p.strokeGradientJSON = newJSON;
+        else
+          p.fillGradientJSON = newJSON;
+      });
+      id<FxCustomParameterActionAPI_v4> actAPI =
+          [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      [actAPI startAction:api];
+      id<FxParameterSettingAPI_v5> setAPI =
+          [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      [setAPI setStringParameterValue:newJSON
+                          toParameter:isStroke ? kParamStrokeGradientData
+                                               : kParamFillGradientData];
+      [actAPI endAction:api];
+    };
+
+    if (lst) {
+      if (isStroke)
+        lst.strokeGradientControl = control;
+      else
+        lst.fillGradientControl = control;
+    }
+    return control;
+  }
+
   return nil;
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
   if (parameterID == kParamLayerList)
     return [self createLayerListView];
+
+  if (parameterID == kParamGroupTransform) {
+    return [self
+        createGroupHeaderWithText:@"Transform"
+                             icon:
+                                 [NSImage
+                                     imageWithSystemSymbolName:
+                                         @"arrow.up.and.down.and.arrow.left.and"
+                                         @".right"
+                                      accessibilityDescription:nil]
+                     enabledParam:kParamTransformEnabled
+                    expandedParam:kParamExpandedTransform
+                  storeSetEnabled:@selector(setTransformEnabled:)
+                 storeSetExpanded:@selector(setTransformExpanded:)
+                  stateHeaderProp:@"transformGroupHeader"
+                pathPropertyBlock:^(KKBezierPath *path, BOOL enabled) {
+                  path.transformEnabled = enabled;
+                }];
+  }
 
   if (parameterID == kParamGroupStroke) {
     return
@@ -635,6 +730,122 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
   struct objc_super sup = {self, [KKPlugin class]};
   return ((NSView * (*)(struct objc_super *, SEL, UInt32)) objc_msgSendSuper)(
       &sup, @selector(createViewForParameterID:), parameterID);
+}
+
+static NSSet<NSString *> *_kkTransformOSCLabels(void) {
+  static NSSet<NSString *> *sLabels = nil;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    sLabels = [NSSet setWithObjects:@"Position", @"Scale", @"Anchor", @"Rot Z",
+                                    @"Rot X", @"Rot Y", nil];
+  });
+  return sLabels;
+}
+
+- (NSSet<NSString *> *)animatablePropertyLabelsWithOSC {
+  return _kkTransformOSCLabels();
+}
+
+- (NSSet<NSString *> *)animatablePropertyLabelsWithOSCDefaultOff {
+  return _kkTransformOSCLabels();
+}
+
+- (NSString *)emptyLanesMessageWhenNoLanes {
+  return @"No layers";
+}
+
+- (NSString *)emptyLanesIconNameWhenNoLanes {
+  return @"square.dashed";
+}
+
+- (NSArray<KKHelpSection *> *)helpSections {
+  KKHelpSection *tools = [KKHelpSection
+      sectionWithTitle:@"Tools"
+             tipMarkup:@[
+               (@"Pick a tool from the on-canvas toolbar - "
+                @"<accent>Cursor</accent> selects and reshapes paths, "
+                @"<accent>Pen</accent> draws bezier paths anchor by anchor, "
+                @"and <accent>Rectangle</accent>, <accent>Ellipse</accent>, "
+                @"and <accent>Line</accent> drag out primitive shapes."),
+               (@"Each path becomes a <accent>layer</accent> in the inspector "
+                @"with its own Stroke, Fill, and Sketch styling."),
+               (@"With the Pen tool, click to add corner anchors or drag to "
+                @"pull out smooth handles. Close a path by clicking its first "
+                @"anchor."),
+             ]
+             shortcuts:@[
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>⌃</kbd><kbd>V</kbd>"
+                               descMarkup:@"Cursor tool"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>⌃</kbd><kbd>X</kbd>"
+                               descMarkup:@"Pen tool"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>⌃</kbd><kbd>B</kbd>"
+                               descMarkup:@"Rectangle tool"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>⌃</kbd><kbd>G</kbd>"
+                               descMarkup:@"Ellipse tool"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>⌃</kbd><kbd>M</kbd>"
+                               descMarkup:@"Line tool"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>esc</kbd>"
+                                           descMarkup:@"Return to Cursor and "
+                                                      @"clear selection"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌫</kbd>"
+                                           descMarkup:@"Delete the selected "
+                                                      @"path or anchor"],
+             ]];
+  tools.icon = [NSImage imageWithSystemSymbolName:@"scribble.variable"
+                         accessibilityDescription:nil];
+
+  KKHelpSection *editing = [KKHelpSection
+      sectionWithTitle:@"Editing"
+             tipMarkup:@[
+               (@"Drag an anchor or handle to reshape a path. Drag empty "
+                @"canvas to marquee-select multiple anchors or paths."),
+               (@"Resize and rotate handles wrap any selection so you can "
+                @"transform several paths at once."),
+             ]
+             shortcuts:@[
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + drag"
+                               descMarkup:@"Constrain motion to X or Y axis"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌘</kbd> + drag"
+                                           descMarkup:@"Disable snapping"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + drag "
+                                                      @"path"
+                                           descMarkup:@"Duplicate the "
+                                                      @"selected path"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + corner resize"
+                               descMarkup:@"Lock to aspect ratio"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + corner resize"
+                               descMarkup:@"Scale symmetrically from center"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + "
+                                                      @"rotate"
+                                           descMarkup:@"Snap rotation to 15° "
+                                                      @"increments"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + "
+                                                      @"marquee"
+                                           descMarkup:@"Add to selection"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + marquee"
+                                           descMarkup:@"Remove from selection"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + click "
+                                                      @"anchor"
+                                           descMarkup:@"Delete the anchor "
+                                                      @"(Pen tool)"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + drag "
+                                                      @"handle"
+                                           descMarkup:@"Break handle "
+                                                      @"symmetry (move "
+                                                      @"independently)"],
+             ]];
+  editing.icon = [NSImage imageWithSystemSymbolName:@"hand.draw"
+                           accessibilityDescription:nil];
+
+  return @[ tools, editing ];
 }
 
 @end

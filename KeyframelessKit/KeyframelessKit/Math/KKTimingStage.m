@@ -5,6 +5,19 @@
 
 #import "KKTimingStage.h"
 
+BOOL KKLaneIsHiddenByCollapsedGroup(NSArray<KKTimingLane *> *lanes,
+                                    NSUInteger idx) {
+  if (idx >= lanes.count)
+    return NO;
+  NSString *key = lanes[idx].groupKey;
+  if (!key)
+    return NO;
+  NSUInteger head = idx;
+  while (head > 0 && [lanes[head - 1].groupKey isEqualToString:key])
+    head--;
+  return lanes[head].groupCollapsed;
+}
+
 NSArray<NSNumber *> *
 KKTimingBoundaryBefore(NSUInteger idx, NSArray<KKTimingSegment *> *segments) {
   if (idx == 0 || segments.count == 0)
@@ -234,6 +247,7 @@ NSArray<KKTimingLane *> *KKTimingRebalancedLanes(NSArray<KKTimingLane *> *lanes,
   l.enabled = enabled;
   l.oscVisible = YES;
   l.visibleInSequencer = YES;
+  l.pluginVisible = YES;
   // Default: select first hold segment.
   l.selectedSegment = -1;
   for (NSUInteger i = 0; i < segments.count; i++) {
@@ -269,6 +283,10 @@ NSArray<KKTimingLane *> *KKTimingRebalancedLanes(NSArray<KKTimingLane *> *lanes,
   self.segments = [m copy];
 }
 
+- (BOOL)effectivelyVisibleInSequencer {
+  return _visibleInSequencer && _pluginVisible;
+}
+
 - (id)copyWithZone:(NSZone *)zone {
   NSMutableArray *copied = [NSMutableArray arrayWithCapacity:_segments.count];
   for (KKTimingSegment *s in _segments)
@@ -280,7 +298,12 @@ NSArray<KKTimingLane *> *KKTimingRebalancedLanes(NSArray<KKTimingLane *> *lanes,
   c.hasOSC = _hasOSC;
   c.oscVisible = _oscVisible;
   c.visibleInSequencer = _visibleInSequencer;
+  c.pluginVisible = _pluginVisible;
   c.lastKnownClipDuration = _lastKnownClipDuration;
+  c.groupKey = [_groupKey copy];
+  c.groupLabel = [_groupLabel copy];
+  c.groupCollapsed = _groupCollapsed;
+  c.valueComponentKinds = [_valueComponentKinds copy];
   return c;
 }
 

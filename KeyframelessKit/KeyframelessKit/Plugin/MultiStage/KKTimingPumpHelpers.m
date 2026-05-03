@@ -18,13 +18,31 @@
 NSArray<KKTimingLane *> *
 KKFilterLanesForVisibility(NSArray<KKTimingLane *> *lanes,
                            NSSet<NSString *> *hidden) {
-  if (!hidden.count || !lanes.count)
+  if (!lanes.count)
+    return lanes;
+  // Drop lanes whose label is in the user-toggled / plugin-hidden label set,
+  // and lanes individually marked `pluginVisible == NO` (the source object
+  // currently doesn't expose this property — e.g. Canvas layer with stroke
+  // disabled — but data is retained in JSON so re-enable restores it).
+  BOOL anyHiddenByLabel = hidden.count > 0;
+  BOOL anyHiddenByPlugin = NO;
+  for (KKTimingLane *lane in lanes) {
+    if (!lane.pluginVisible) {
+      anyHiddenByPlugin = YES;
+      break;
+    }
+  }
+  if (!anyHiddenByLabel && !anyHiddenByPlugin)
     return lanes;
   NSMutableArray<KKTimingLane *> *filtered =
       [NSMutableArray arrayWithCapacity:lanes.count];
-  for (KKTimingLane *lane in lanes)
-    if (![hidden containsObject:lane.propertyLabel])
-      [filtered addObject:lane];
+  for (KKTimingLane *lane in lanes) {
+    if (!lane.pluginVisible)
+      continue;
+    if (anyHiddenByLabel && [hidden containsObject:lane.propertyLabel])
+      continue;
+    [filtered addObject:lane];
+  }
   return [filtered copy];
 }
 
@@ -74,18 +92,36 @@ NSSet<NSString *> *KKEffectiveHiddenLaneLabels(NSSet<NSString *> *pluginHidden,
 }
 
 void KKApplyEmptyLanesVisibility(KKEmptyLanesView *emptyView,
-                                 NSArray<KKTimingLane *> *lanes) {
+                                 NSArray<KKTimingLane *> *lanes,
+                                 KKPlugin *plugin) {
   if (!emptyView)
     return;
   BOOL anyVisible = NO;
   for (KKTimingLane *lane in lanes) {
-    if (lane.visibleInSequencer) {
+    if (lane.effectivelyVisibleInSequencer) {
       anyVisible = YES;
       break;
     }
   }
-  BOOL shouldHide = anyVisible || lanes.count == 0;
+  NSString *noLanesMessage =
+      lanes.count == 0 ? [plugin emptyLanesMessageWhenNoLanes] : nil;
+  NSString *text = nil;
+  NSString *iconName = nil;
+  BOOL shouldHide;
+  if (anyVisible) {
+    shouldHide = YES;
+  } else if (lanes.count == 0) {
+    shouldHide = noLanesMessage.length == 0;
+    text = noLanesMessage;
+    iconName = [plugin emptyLanesIconNameWhenNoLanes];
+  } else {
+    shouldHide = NO;
+    text = @"All lanes hidden";
+    iconName = @"rectangle.on.rectangle.slash";
+  }
   dispatch_block_t apply = ^{
+    if (!shouldHide)
+      [emptyView setText:text iconName:iconName];
     if (emptyView.hidden != shouldHide)
       emptyView.hidden = shouldHide;
   };
@@ -100,17 +136,31 @@ void KKPushLanesToVisibilityBar(KKLaneVisibilityBar *bar,
                                 NSSet<NSString *> *hidden) {
   if (!bar)
     return;
-  NSMutableArray<NSString *> *labels =
-      [NSMutableArray arrayWithCapacity:lanes.count];
-  NSMutableArray<NSNumber *> *states =
-      [NSMutableArray arrayWithCapacity:lanes.count];
+  // Dedupe by propertyLabel — when multiple lanes share a label (Canvas:
+  // one "Stroke Width" lane per layer), one pill represents them all.
+  // Visible state is YES iff every lane sharing the label is visible
+  // (hiding the pill toggles every matching lane via the existing
+  // label-keyed filter).
+  NSMutableArray<NSString *> *labels = [NSMutableArray array];
+  NSMutableDictionary<NSString *, NSNumber *> *labelVisible =
+      [NSMutableDictionary dictionary];
   for (KKTimingLane *lane in lanes) {
+    if (!lane.pluginVisible)
+      continue;
     NSString *label = lane.propertyLabel ?: @"";
     if (hidden && [hidden containsObject:label])
       continue;
-    [labels addObject:label];
-    [states addObject:@(lane.visibleInSequencer)];
+    if (labelVisible[label] == nil) {
+      [labels addObject:label];
+      labelVisible[label] = @(lane.visibleInSequencer);
+    } else if (!lane.visibleInSequencer) {
+      labelVisible[label] = @NO;
+    }
   }
+  NSMutableArray<NSNumber *> *states =
+      [NSMutableArray arrayWithCapacity:labels.count];
+  for (NSString *label in labels)
+    [states addObject:labelVisible[label]];
   dispatch_block_t apply = ^{
     bar.labels = labels;
     bar.visibleStates = states;
@@ -119,6 +169,27 @@ void KKPushLanesToVisibilityBar(KKLaneVisibilityBar *bar,
     apply();
   else
     dispatch_async(dispatch_get_main_queue(), apply);
+}
+
+NSString *KKLabelForPillIndex(NSInteger pillIndex,
+                              NSArray<KKTimingLane *> *jsonLanes,
+                              NSSet<NSString *> *pluginHidden) {
+  if (pillIndex < 0)
+    return nil;
+  NSMutableSet<NSString *> *seen = [NSMutableSet set];
+  NSInteger pos = 0;
+  for (KKTimingLane *lane in jsonLanes) {
+    NSString *label = lane.propertyLabel ?: @"";
+    if (pluginHidden && [pluginHidden containsObject:label])
+      continue;
+    if ([seen containsObject:label])
+      continue;
+    [seen addObject:label];
+    if (pos == pillIndex)
+      return label;
+    pos++;
+  }
+  return nil;
 }
 
 NSInteger KKLaneJSONIndexForViewIndex(NSInteger viewIndex,

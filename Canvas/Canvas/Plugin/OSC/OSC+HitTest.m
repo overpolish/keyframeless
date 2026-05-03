@@ -17,6 +17,109 @@
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
   double hitRadius = 12.0;
 
+  // Position-lane motion path (control points / handles / curves) sits
+  // visually above the transform arc, so test it first.
+  {
+    NSInteger pathPart = [self hitTestPositionPathAtX:x y:y atTime:kCMTimeZero];
+    if (pathPart != 0) {
+      *activePart = pathPart;
+      return;
+    }
+  }
+
+  // Transform OSC overlays — top-most, highest hit priority. Each handle
+  // is gated by its own multi-stage lane visibility, mirroring Position.
+  self.transformPositionHovered = NO;
+  self.scaleRingHovered = NO;
+  self.anchorHovered = NO;
+  self.rotZHovered = NO;
+  self.rotXRingHovered = NO;
+  self.rotYRingHovered = NO;
+  if ([self isTransformPositionOSCVisibleAtTime:kCMTimeZero]) {
+    CGPoint pos = [self transformPositionCanvasPointAtTime:kCMTimeZero];
+    if (hypot(x - pos.x, y - pos.y) < self.transformPositionOSC.hitRadius) {
+      self.transformPositionHovered = YES;
+      *activePart = kOSCTransformPosition;
+      [oscAPI setCursor:[NSCursor openHandCursor]];
+      return;
+    }
+  }
+  BOOL anchorVisible = [self isAnchorOSCVisibleAtTime:kCMTimeZero];
+  BOOL scaleVisible = [self isScaleRingOSCVisibleAtTime:kCMTimeZero];
+  BOOL rotZVisible = [self isRotZOSCVisibleAtTime:kCMTimeZero];
+  // MM rule: Rot X / Rot Y rings are hit-testable when their lane toggle is
+  // on, OR Opt is held. Same convention used at draw time.
+  CGEventFlags hitFlags =
+      CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+  // Opt only surfaces the rings when Rot Z is already visible — same gate
+  // as the draw path so what's hit-testable matches what's drawn.
+  BOOL optHeld = ((hitFlags & kCGEventFlagMaskAlternate) != 0) && rotZVisible;
+  BOOL rotXHit = [self isRotXRingOSCVisibleAtTime:kCMTimeZero] || optHeld;
+  BOOL rotYHit = [self isRotYRingOSCVisibleAtTime:kCMTimeZero] || optHeld;
+  if (anchorVisible || scaleVisible || rotZVisible || rotXHit || rotYHit) {
+    CGPoint anchor = [self transformAnchorCanvasPointAtTime:kCMTimeZero];
+    BOOL (^hitRotRing)(KKRingOSC *, NSInteger, NSCursor *, void (^)(BOOL)) =
+        ^BOOL(KKRingOSC *ring, NSInteger part, NSCursor *cursor,
+              void (^setHovered)(BOOL)) {
+          ring.center = anchor;
+          if ([ring hitTestAtMousePositionX:x positionY:y atTime:kCMTimeZero]) {
+            setHovered(YES);
+            *activePart = part;
+            [oscAPI setCursor:cursor];
+            return YES;
+          }
+          return NO;
+        };
+    if (rotXHit && hitRotRing(self.rotXRingOSC, kOSCTransformRotXRing,
+                              [NSCursor resizeLeftRightCursor], ^(BOOL h) {
+                                self.rotXRingHovered = h;
+                              }))
+      return;
+    if (rotYHit && hitRotRing(self.rotYRingOSC, kOSCTransformRotYRing,
+                              [NSCursor resizeUpDownCursor], ^(BOOL h) {
+                                self.rotYRingHovered = h;
+                              }))
+      return;
+    if (rotZVisible) {
+      double rz = 0.0;
+      id<FxParameterRetrievalAPI_v6> getAPI = [self.apiManager
+          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      [getAPI getFloatValue:&rz
+              fromParameter:kParamRotation
+                     atTime:kCMTimeZero];
+      self.rotZOSC.center = anchor;
+      self.rotZOSC.angle = (float)rz;
+      if ([self.rotZOSC hitTestAtMousePositionX:x
+                                      positionY:y
+                                         atTime:kCMTimeZero]) {
+        self.rotZHovered = YES;
+        *activePart = kOSCTransformRotZ;
+        [oscAPI setCursor:[NSCursor crosshairCursor]];
+        return;
+      }
+    }
+    if (anchorVisible && hypot(x - anchor.x, y - anchor.y) < hitRadius) {
+      self.anchorHovered = YES;
+      *activePart = kOSCTransformAnchor;
+      [oscAPI setCursor:[NSCursor openHandCursor]];
+      return;
+    }
+    if (scaleVisible) {
+      CGFloat rx = 0, ry = 0;
+      [self getScaleRingRadiiAtTime:kCMTimeZero rx:&rx ry:&ry];
+      CGFloat dx = (x - anchor.x) / rx;
+      CGFloat dy = (y - anchor.y) / ry;
+      CGFloat normalized = hypot(dx, dy);
+      CGFloat distPx = fabs(normalized - 1.0) * MIN(rx, ry);
+      if (rx > 0.5 && ry > 0.5 && distPx < hitRadius) {
+        self.scaleRingHovered = YES;
+        *activePart = kOSCTransformScaleRing;
+        [oscAPI setCursor:[NSCursor crosshairCursor]];
+        return;
+      }
+    }
+  }
+
   __block BOOL allLocked = YES;
   [self.selectedPathIndices
       enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {

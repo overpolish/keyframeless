@@ -10,3 +10,5 @@ scripts/*.fcpxml
 !scripts/*.template.fcpxml
 .derived-data*
 .claude
+CLAUDE.md
+.compile

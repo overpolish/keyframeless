@@ -492,8 +492,8 @@ static BOOL findBestSnap(const float *targets, NSUInteger count,
 }
 
 - (simd_float2)alignSnapPoint:(simd_float2)point
-               excludingPaths:(NSIndexSet *)excluded
-              excludingPoints:(NSIndexSet *)excludedPoints {
+               excludingPaths:(nullable NSIndexSet *)excluded
+              excludingPoints:(nullable NSIndexSet *)excludedPoints {
   self.alignSnappedX = NO;
   self.alignSnappedY = NO;
   self.spacingSnapX = NO;

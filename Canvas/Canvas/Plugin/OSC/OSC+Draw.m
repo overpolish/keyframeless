@@ -194,6 +194,8 @@ static const CGFloat kPathToolbarGap = 6.0;
               activePart:(NSInteger)activePart
         destinationImage:(FxImageTile *)destinationImage
                   atTime:(CMTime)time {
+  [KKPlugin multiStageDrawOSCTickForAPI:self.apiManager atTime:time];
+
   self.imageWidth = width;
   self.imageHeight = height;
 
@@ -330,11 +332,211 @@ static const CGFloat kPathToolbarGap = 6.0;
   [self drawAlignmentGuidesWithDestinationImage:destinationImage];
   [self drawSpacingGuidesWithDestinationImage:destinationImage];
 
+  // Per-layer Transform OSC arc (position handle).
+  [self drawTransformOSCWithDestinationImage:destinationImage atTime:time];
+  // Position-lane motion path (between transition keyframes).
+  [self drawPositionPathsAtTime:time destinationImage:destinationImage];
+
   // Toolbars on top.
   [self.toolbar drawWithDestinationImage:destinationImage];
   [self.gridToolbar drawWithDestinationImage:destinationImage];
   if (showPathToolbar)
     [self.pathToolbar drawWithDestinationImage:destinationImage];
+}
+
+@end
+
+@implementation CanvasOSC (TransformOSC)
+
+- (BOOL)isTransformPositionOSCVisibleAtTime:(CMTime)time {
+  KKBezierPath *p = [self selectedTransformablePath];
+  if (!p)
+    return NO;
+  return [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                        label:@"Position"
+                                     groupKey:p.layerID];
+}
+
+- (BOOL)isScaleRingOSCVisibleAtTime:(CMTime)time {
+  KKBezierPath *p = [self selectedTransformablePath];
+  if (!p)
+    return NO;
+  return [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                        label:@"Scale"
+                                     groupKey:p.layerID];
+}
+
+- (BOOL)isAnchorOSCVisibleAtTime:(CMTime)time {
+  KKBezierPath *p = [self selectedTransformablePath];
+  if (!p)
+    return NO;
+  return [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                        label:@"Anchor"
+                                     groupKey:p.layerID];
+}
+
+- (BOOL)isRotZOSCVisibleAtTime:(CMTime)time {
+  KKBezierPath *p = [self selectedTransformablePath];
+  if (!p)
+    return NO;
+  return [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                        label:@"Rot Z"
+                                     groupKey:p.layerID];
+}
+
+- (BOOL)_isRotRingVisibleForLabel:(NSString *)label {
+  KKBezierPath *p = [self selectedTransformablePath];
+  if (!p)
+    return NO;
+  return [KKPlugin multiStageOSCVisibleForAPI:self.apiManager
+                                        label:label
+                                     groupKey:p.layerID];
+}
+
+- (BOOL)isRotXRingOSCVisibleAtTime:(CMTime)time {
+  return [self _isRotRingVisibleForLabel:@"Rot X"];
+}
+
+- (BOOL)isRotYRingOSCVisibleAtTime:(CMTime)time {
+  return [self _isRotRingVisibleForLabel:@"Rot Y"];
+}
+
+- (CGPoint)transformPositionCanvasPointAtTime:(CMTime)time {
+  // Center the arc on the selected layer (its bbox center + translation
+  // offset), so dragging always grabs the visual layer rather than the
+  // canvas center.
+  KKBezierPath *p = [self selectedTransformablePath];
+  if (!p)
+    return CGPointZero;
+  simd_float2 center = [self bboxCenterOfPath:p];
+  // Sample the live Position param so the OSC tracks animated values.
+  simd_float2 paramPos = [self objectPositionForParam:kParamPosition
+                                               atTime:time];
+  simd_float2 translation = paramPos - (simd_float2){0.5f, 0.5f};
+  return [self canvasPointFromObjectPoint:(center + translation)];
+}
+
+- (CGPoint)transformAnchorCanvasPointAtTime:(CMTime)time {
+  // Anchor convention matches Position's: bbox-center is neutral, the param
+  // value is an object-space offset on top of that. The visual handle also
+  // includes the per-layer translation so the pivot tracks the layer.
+  KKBezierPath *p = [self selectedTransformablePath];
+  if (!p)
+    return CGPointZero;
+  simd_float2 center = [self bboxCenterOfPath:p];
+  simd_float2 anchorOffset = [self objectPositionForParam:kParamAnchor
+                                                   atTime:time];
+  simd_float2 paramPos = [self objectPositionForParam:kParamPosition
+                                               atTime:time];
+  simd_float2 translation = paramPos - (simd_float2){0.5f, 0.5f};
+  return
+      [self canvasPointFromObjectPoint:(center + anchorOffset + translation)];
+}
+
+- (void)getScaleRingRadiiAtTime:(CMTime)time
+                             rx:(CGFloat *)outRx
+                             ry:(CGFloat *)outRy {
+  CGPoint c0 = [self canvasPointFromObjectPoint:(simd_float2){0, 0}];
+  CGPoint c1 = [self canvasPointFromObjectPoint:(simd_float2){1, 1}];
+  CGFloat minDim = MIN((CGFloat)fabs(c1.x - c0.x), (CGFloat)fabs(c1.y - c0.y));
+  double sx = 1.0, sy = 1.0;
+  id<FxParameterRetrievalAPI_v6> api =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  [api getFloatValue:&sx fromParameter:kParamScaleX atTime:time];
+  [api getFloatValue:&sy fromParameter:kParamScaleY atTime:time];
+  if (outRx)
+    *outRx = minDim * 0.1 * MAX(0.05, sx);
+  if (outRy)
+    *outRy = minDim * 0.1 * MAX(0.05, sy);
+}
+
+- (void)drawTransformOSCWithDestinationImage:(FxImageTile *)dest
+                                      atTime:(CMTime)time {
+  BOOL posVisible = [self isTransformPositionOSCVisibleAtTime:time];
+  BOOL scaleVisible = [self isScaleRingOSCVisibleAtTime:time];
+  BOOL anchorVisible = [self isAnchorOSCVisibleAtTime:time];
+  BOOL rotZVisible = [self isRotZOSCVisibleAtTime:time];
+  // MM convention: Rot X / Rot Y rings show when their lane toggle is on,
+  // OR Opt is held, OR they're currently hovered/being dragged. This lets
+  // users grab them even with the lane OSC default-off.
+  CGEventFlags flags =
+      CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+  // Opt only reveals the X/Y rings when Rot Z is already visible — that's
+  // the signal the user is using the transform OSC at all. Otherwise Opt
+  // would surface them in unrelated cursor-mode contexts.
+  BOOL optHeld = ((flags & kCGEventFlagMaskAlternate) != 0) && rotZVisible;
+  BOOL rotXShown = [self isRotXRingOSCVisibleAtTime:time] || optHeld ||
+                   self.rotXRingDragging || self.rotXRingHovered;
+  BOOL rotYShown = [self isRotYRingOSCVisibleAtTime:time] || optHeld ||
+                   self.rotYRingDragging || self.rotYRingHovered;
+  if (!posVisible && !scaleVisible && !anchorVisible && !rotZVisible &&
+      !rotXShown && !rotYShown)
+    return;
+
+  if (posVisible) {
+    CGPoint pos = [self transformPositionCanvasPointAtTime:time];
+    [self.transformPositionOSC
+        drawAtCanvasPosition:pos
+                   isHovered:self.transformPositionHovered
+                    isActive:self.transformPositionDragging
+            destinationImage:dest
+                      atTime:time];
+  }
+
+  if (rotXShown || rotYShown) {
+    CGPoint anchorCanvas = [self transformAnchorCanvasPointAtTime:time];
+    void (^drawRotRing)(KKRingOSC *, BOOL, BOOL) =
+        ^(KKRingOSC *ring, BOOL hovered, BOOL active) {
+          ring.center = anchorCanvas;
+          [ring drawAtCanvasPosition:anchorCanvas
+                           isHovered:hovered
+                            isActive:active
+                    destinationImage:dest
+                              atTime:time];
+        };
+    if (rotXShown)
+      drawRotRing(self.rotXRingOSC, self.rotXRingHovered,
+                  self.rotXRingDragging);
+    if (rotYShown)
+      drawRotRing(self.rotYRingOSC, self.rotYRingHovered,
+                  self.rotYRingDragging);
+  }
+
+  if (scaleVisible || anchorVisible || rotZVisible) {
+    CGPoint anchorCanvas = [self transformAnchorCanvasPointAtTime:time];
+    if (rotZVisible) {
+      double rz = 0.0;
+      id<FxParameterRetrievalAPI_v6> api = [self.apiManager
+          apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      [api getFloatValue:&rz fromParameter:kParamRotation atTime:time];
+      self.rotZOSC.center = anchorCanvas;
+      self.rotZOSC.angle = (float)rz;
+      [self.rotZOSC drawAtCanvasPosition:anchorCanvas
+                               isHovered:self.rotZHovered
+                                isActive:self.rotZDragging
+                        destinationImage:dest
+                                  atTime:time];
+    }
+    if (scaleVisible) {
+      CGFloat rx = 0, ry = 0;
+      [self getScaleRingRadiiAtTime:time rx:&rx ry:&ry];
+      self.scaleRingOSC.center = anchorCanvas;
+      self.scaleRingOSC.ringRadius = (float)rx;
+      self.scaleRingOSC.ringRadiusY = (float)ry;
+      [self.scaleRingOSC drawAtCanvasPosition:anchorCanvas
+                                    isHovered:self.scaleRingHovered
+                                     isActive:self.scaleRingDragging
+                             destinationImage:dest
+                                       atTime:time];
+    }
+    if (anchorVisible) {
+      [self.anchorOSC drawAtCanvasPosition:anchorCanvas
+                                 isHovered:self.anchorHovered
+                                  isActive:self.anchorDragging
+                          destinationImage:dest
+                                    atTime:time];
+    }
+  }
 }
 
 @end

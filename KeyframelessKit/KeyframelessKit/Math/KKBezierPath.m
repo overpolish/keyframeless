@@ -231,6 +231,109 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
           memcpy(&path->_fillTint, bytes + hdr, sizeof(float));
           hdr += sizeof(float);
         }
+        if (ver >= 16 && data.length >= hdr + 1 + 1 + sizeof(float) + 2) {
+          path->_strokeColorMode = bytes[hdr];
+          hdr += 1;
+          path->_strokeGradientType = bytes[hdr];
+          hdr += 1;
+          memcpy(&path->_strokeGradientAngle, bytes + hdr, sizeof(float));
+          hdr += sizeof(float);
+          uint16_t sgLen;
+          memcpy(&sgLen, bytes + hdr, 2);
+          hdr += 2;
+          if (sgLen > 0 && data.length >= hdr + sgLen) {
+            path->_strokeGradientJSON =
+                [[NSString alloc] initWithBytes:bytes + hdr
+                                         length:sgLen
+                                       encoding:NSUTF8StringEncoding];
+            hdr += sgLen;
+          }
+          if (data.length >= hdr + 1 + 1 + sizeof(float) + 2) {
+            path->_fillColorMode = bytes[hdr];
+            hdr += 1;
+            path->_fillGradientType = bytes[hdr];
+            hdr += 1;
+            memcpy(&path->_fillGradientAngle, bytes + hdr, sizeof(float));
+            hdr += sizeof(float);
+            uint16_t fgLen;
+            memcpy(&fgLen, bytes + hdr, 2);
+            hdr += 2;
+            if (fgLen > 0 && data.length >= hdr + fgLen) {
+              path->_fillGradientJSON =
+                  [[NSString alloc] initWithBytes:bytes + hdr
+                                           length:fgLen
+                                         encoding:NSUTF8StringEncoding];
+              hdr += fgLen;
+            }
+          }
+        }
+        if (ver >= 17 && data.length >= hdr + 2) {
+          uint16_t lidLen;
+          memcpy(&lidLen, bytes + hdr, 2);
+          hdr += 2;
+          if (lidLen > 0 && data.length >= hdr + lidLen) {
+            path->_layerID =
+                [[NSString alloc] initWithBytes:bytes + hdr
+                                         length:lidLen
+                                       encoding:NSUTF8StringEncoding];
+            hdr += lidLen;
+          }
+        }
+        if (ver >= 18 && data.length >= hdr + 2 * sizeof(float) + 1) {
+          float tr[2];
+          memcpy(tr, bytes + hdr, 2 * sizeof(float));
+          path->_translateX = tr[0];
+          path->_translateY = tr[1];
+          hdr += 2 * sizeof(float);
+          // Reserved byte (was transformOSCVisible — now a per-lane setting).
+          hdr += 1;
+        }
+        if (ver >= 19 && data.length >= hdr + 1) {
+          path->_transformEnabled = bytes[hdr] != 0;
+          hdr += 1;
+        }
+        if (ver >= 20 && data.length >= hdr + 4 * sizeof(float)) {
+          float sa[4];
+          memcpy(sa, bytes + hdr, 4 * sizeof(float));
+          path->_scaleX = sa[0];
+          path->_scaleY = sa[1];
+          path->_anchorX = sa[2];
+          path->_anchorY = sa[3];
+          hdr += 4 * sizeof(float);
+        }
+        if (ver >= 21 && data.length >= hdr + sizeof(float)) {
+          memcpy(&path->_rotationZ, bytes + hdr, sizeof(float));
+          hdr += sizeof(float);
+        }
+        if (ver >= 22 && data.length >= hdr + 2 * sizeof(float)) {
+          float rxy[2];
+          memcpy(rxy, bytes + hdr, 2 * sizeof(float));
+          path->_rotationX = rxy[0];
+          path->_rotationY = rxy[1];
+          hdr += 2 * sizeof(float);
+        }
+        if (ver >= 23 && data.length >= hdr + 1) {
+          path->_rotateWithMotion = bytes[hdr] != 0;
+          hdr += 1;
+        }
+        if (ver >= 24 && data.length >= hdr + 2 * sizeof(float)) {
+          float dro[2];
+          memcpy(dro, bytes + hdr, 2 * sizeof(float));
+          path->_drawOnStart = dro[0];
+          path->_drawOnEnd = dro[1];
+          hdr += 2 * sizeof(float);
+        }
+        if (ver >= 25 && data.length >= hdr + 2 * sizeof(float)) {
+          float ants[2];
+          memcpy(ants, bytes + hdr, 2 * sizeof(float));
+          path->_marchingAntsOffset = ants[0];
+          path->_marchingAntsSpeed = ants[1];
+          hdr += 2 * sizeof(float);
+        }
+        if (ver >= 26 && data.length >= hdr + sizeof(float)) {
+          memcpy(&path->_drawOnOrigin, bytes + hdr, sizeof(float));
+          hdr += sizeof(float);
+        }
       }
     }
   }
@@ -302,7 +405,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   // v11: + endWidth (1 float).
   // v12: + contour starts (2-byte count + N × uint32 indices).
   uint8_t propMarker = 0xAA;
-  uint8_t propVersion = 15;
+  uint8_t propVersion = 26;
   [data appendBytes:&propMarker length:1];
   [data appendBytes:&propVersion length:1];
   float strokeData[4] = {_strokeWidth, _strokeR, _strokeG, _strokeB};
@@ -356,6 +459,57 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   [data appendBytes:&aspect length:sizeof(float)];
   // v15: fillTint
   [data appendBytes:&_fillTint length:sizeof(float)];
+  // v16: per-path stroke + fill gradient (mode, type, angle, JSON).
+  [data appendBytes:&_strokeColorMode length:1];
+  [data appendBytes:&_strokeGradientType length:1];
+  [data appendBytes:&_strokeGradientAngle length:sizeof(float)];
+  NSData *sgData = [_strokeGradientJSON dataUsingEncoding:NSUTF8StringEncoding];
+  uint16_t sgLen = (uint16_t)sgData.length;
+  [data appendBytes:&sgLen length:2];
+  if (sgLen > 0)
+    [data appendData:sgData];
+  [data appendBytes:&_fillColorMode length:1];
+  [data appendBytes:&_fillGradientType length:1];
+  [data appendBytes:&_fillGradientAngle length:sizeof(float)];
+  NSData *fgData = [_fillGradientJSON dataUsingEncoding:NSUTF8StringEncoding];
+  uint16_t fgLen = (uint16_t)fgData.length;
+  [data appendBytes:&fgLen length:2];
+  if (fgLen > 0)
+    [data appendData:fgData];
+  // v17: layerID (length-prefixed UTF-8 UUID).
+  NSData *lidData = [_layerID dataUsingEncoding:NSUTF8StringEncoding];
+  uint16_t lidLen = (uint16_t)lidData.length;
+  [data appendBytes:&lidLen length:2];
+  if (lidLen > 0)
+    [data appendData:lidData];
+  // v18: translateX, translateY (2 floats) + 1 reserved byte
+  // (was transformOSCVisible — now driven by per-lane sequencer toggle).
+  float tr[2] = {_translateX, _translateY};
+  [data appendBytes:tr length:2 * sizeof(float)];
+  uint8_t reserved = 0;
+  [data appendBytes:&reserved length:1];
+  // v19: transformEnabled (1 byte).
+  uint8_t txEnFlag = _transformEnabled ? 1 : 0;
+  [data appendBytes:&txEnFlag length:1];
+  // v20: scaleX, scaleY, anchorX, anchorY (4 floats).
+  float sa[4] = {_scaleX, _scaleY, _anchorX, _anchorY};
+  [data appendBytes:sa length:4 * sizeof(float)];
+  // v21: rotationZ (1 float, radians).
+  [data appendBytes:&_rotationZ length:sizeof(float)];
+  // v22: rotationX, rotationY (2 floats, radians).
+  float rxy[2] = {_rotationX, _rotationY};
+  [data appendBytes:rxy length:2 * sizeof(float)];
+  // v23: rotateWithMotion (1 byte).
+  uint8_t rwmFlag = _rotateWithMotion ? 1 : 0;
+  [data appendBytes:&rwmFlag length:1];
+  // v24: drawOnStart, drawOnEnd (2 floats).
+  float dro[2] = {_drawOnStart, _drawOnEnd};
+  [data appendBytes:dro length:2 * sizeof(float)];
+  // v25: marchingAntsOffset, marchingAntsSpeed (2 floats).
+  float ants[2] = {_marchingAntsOffset, _marchingAntsSpeed};
+  [data appendBytes:ants length:2 * sizeof(float)];
+  // v26: drawOnOrigin (1 float).
+  [data appendBytes:&_drawOnOrigin length:sizeof(float)];
   return data;
 }
 
@@ -410,10 +564,18 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
 - (instancetype)init {
   self = [super init];
   if (self) {
+    _layerID = [[NSUUID UUID] UUIDString];
     _points = NULL;
     _count = 0;
     _capacity = 0;
     _strokeEnabled = YES;
+    _transformEnabled = YES;
+    _scaleX = 1.0f;
+    _scaleY = 1.0f;
+    // Anchor is an offset from the path's bbox center in object-space units;
+    // (0, 0) means "pivot at bbox center" (the natural default).
+    _anchorX = 0.0f;
+    _anchorY = 0.0f;
     _strokeWidth = 8.0f;
     _strokeR = 1.0f;
     _strokeG = 0.0f;
@@ -427,6 +589,11 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     _dashLength = 20.0f;
     _dashGap = 10.0f;
     _dotGap = 10.0f;
+    _drawOnStart = 0.0f;
+    _drawOnEnd = 1.0f;
+    _drawOnOrigin = 0.0f;
+    _marchingAntsOffset = 0.0f;
+    _marchingAntsSpeed = 0.0f;
     _sketchEnabled = NO;
     _sketchRoughness = kSketchRoughnessDefault;
     _sketchBowing = kSketchBowingDefault;
@@ -439,6 +606,14 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     _startMarkerSize = 3.0f;
     _endMarkerSize = 3.0f;
     _endWidth = 0.0f;
+    _strokeColorMode = 0;
+    _strokeGradientType = 1;
+    _strokeGradientAngle = 0.0f;
+    _strokeGradientJSON = nil;
+    _fillColorMode = 0;
+    _fillGradientType = 1;
+    _fillGradientAngle = 0.0f;
+    _fillGradientJSON = nil;
   }
   return self;
 }
@@ -557,7 +732,6 @@ static void cornerRadii(float fraction, float maxRX, float maxRY, float objW,
   if (allZero) {
     [self ensureCapacity:4];
     _count = 4;
-    _closed = YES;
     _points[0] = (KKBezierPoint){min.x, max.y, 0, 0, 0, 0, KKBezierPointLinear};
     _points[1] = (KKBezierPoint){max.x, max.y, 0, 0, 0, 0, KKBezierPointLinear};
     _points[2] = (KKBezierPoint){max.x, min.y, 0, 0, 0, 0, KKBezierPointLinear};
@@ -677,7 +851,6 @@ static void cornerRadii(float fraction, float maxRX, float maxRY, float objW,
   [self ensureCapacity:m];
   _count = m;
   memcpy(_points, merged, m * sizeof(KKBezierPoint));
-  _closed = YES;
 }
 
 - (void)toggleTypeAtIndex:(NSUInteger)index

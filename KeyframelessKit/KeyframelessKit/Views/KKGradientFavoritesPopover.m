@@ -391,10 +391,15 @@ static void _clearPopoverBackground(NSView *view) {
         __strong typeof(weakSelf) strongSelf = weakSelf;
         if (!strongSelf)
           return;
-        if (strongSelf->_popover)
-          [strongSelf->_popover close];
+        // Defer the close to next runloop — closing an NSPopover from inside
+        // its own click handler in an XPC view service crashes via ViewBridge
+        // re-entrancy. Apply the favorite first, close after.
         if (strongSelf.onApplyFavorite)
           strongSelf.onApplyFavorite(stops);
+        dispatch_async(dispatch_get_main_queue(), ^{
+          if (strongSelf->_popover)
+            [strongSelf->_popover close];
+        });
       };
 
       row.onDelete = ^(NSString *identifier) {

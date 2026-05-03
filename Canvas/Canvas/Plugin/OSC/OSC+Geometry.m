@@ -6,6 +6,25 @@
 #import "MarkerTessellation.h"
 #import "OSC_Private.h"
 
+/// Fold a single (pMin,pMax) into a running bbox. On first call (`*found ==
+/// NO`) seeds the accumulator; subsequent calls expand it with fminf/fmaxf.
+static inline void _kkExpandBounds(BOOL *found, float *minX, float *minY,
+                                   float *maxX, float *maxY, simd_float2 pMin,
+                                   simd_float2 pMax) {
+  if (!*found) {
+    *minX = pMin.x;
+    *minY = pMin.y;
+    *maxX = pMax.x;
+    *maxY = pMax.y;
+    *found = YES;
+  } else {
+    *minX = fminf(*minX, pMin.x);
+    *minY = fminf(*minY, pMin.y);
+    *maxX = fmaxf(*maxX, pMax.x);
+    *maxY = fmaxf(*maxY, pMax.y);
+  }
+}
+
 static BOOL pointInTriangle(double px, double py, simd_float2 a, simd_float2 b,
                             simd_float2 c) {
   double d1 = (px - b.x) * (a.y - b.y) - (a.x - b.x) * (py - b.y);
@@ -59,7 +78,7 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
     simd_float2 eNorm = (simd_float2){-eTan.y, eTan.x};
     float eMsz = ew * path.endMarkerSize;
 
-    CanvasVertex markerVerts[128];
+    CanvasVertex markerVerts[256];
     MTLPrimitiveType prim;
     NSUInteger mc = KKTessellateMarker(path.endMarker, endPt, eTan, eNorm, eMsz,
                                        ew, &prim, markerVerts);
@@ -78,7 +97,7 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
     simd_float2 sNorm = (simd_float2){-sTan.y, sTan.x};
     float sMsz = sw * path.startMarkerSize;
 
-    CanvasVertex markerVerts[128];
+    CanvasVertex markerVerts[256];
     MTLPrimitiveType prim;
     NSUInteger mc = KKTessellateMarker(path.startMarker, startPt, sTan, sNorm,
                                        sMsz, sw, &prim, markerVerts);
@@ -245,6 +264,44 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
   *outMax = (simd_float2){maxX, maxY};
 }
 
+- (BOOL)boundsOfGroup:(KKBezierPath *)group
+                  min:(simd_float2 *)outMin
+                  max:(simd_float2 *)outMax {
+  if (!group.isGroup || group.groupID.length == 0)
+    return NO;
+  NSMutableSet<NSString *> *frontier =
+      [NSMutableSet setWithObject:group.groupID];
+  __block BOOL found = NO;
+  __block float minX = 0, minY = 0, maxX = 0, maxY = 0;
+  // Descendants may be sub-groups; walk breadth-first by expanding the
+  // frontier until no new groupIDs are added.
+  BOOL grew;
+  do {
+    grew = NO;
+    for (KKBezierPath *p in self.paths) {
+      if (!p.parentGroupID.length || ![frontier containsObject:p.parentGroupID])
+        continue;
+      if (p.isGroup) {
+        if (p.groupID.length && ![frontier containsObject:p.groupID]) {
+          [frontier addObject:p.groupID];
+          grew = YES;
+        }
+        continue;
+      }
+      if (p.count == 0)
+        continue;
+      simd_float2 pMin, pMax;
+      [self boundsOfPath:p min:&pMin max:&pMax];
+      _kkExpandBounds(&found, &minX, &minY, &maxX, &maxY, pMin, pMax);
+    }
+  } while (grew);
+  if (found) {
+    *outMin = (simd_float2){minX, minY};
+    *outMax = (simd_float2){maxX, maxY};
+  }
+  return found;
+}
+
 - (BOOL)boundsOfSelectedPaths:(simd_float2 *)outMin max:(simd_float2 *)outMax {
   __block BOOL found = NO;
   __block float minX, minY, maxX, maxY;
@@ -257,18 +314,7 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
           return;
         simd_float2 pMin, pMax;
         [self boundsOfPath:path min:&pMin max:&pMax];
-        if (!found) {
-          minX = pMin.x;
-          minY = pMin.y;
-          maxX = pMax.x;
-          maxY = pMax.y;
-          found = YES;
-        } else {
-          minX = fminf(minX, pMin.x);
-          minY = fminf(minY, pMin.y);
-          maxX = fmaxf(maxX, pMax.x);
-          maxY = fmaxf(maxY, pMax.y);
-        }
+        _kkExpandBounds(&found, &minX, &minY, &maxX, &maxY, pMin, pMax);
       }];
   if (found) {
     *outMin = (simd_float2){minX, minY};
@@ -332,6 +378,34 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
   default:
     return CGPointZero;
   }
+}
+
+- (simd_float2)bboxCenterOfPath:(KKBezierPath *)path {
+  simd_float2 bmin = (simd_float2){0, 0}, bmax = (simd_float2){0, 0};
+  if (path.isGroup) {
+    if (![self boundsOfGroup:path min:&bmin max:&bmax])
+      return (simd_float2){0.5f, 0.5f};
+  } else {
+    [self boundsOfPath:path min:&bmin max:&bmax];
+  }
+  return (bmin + bmax) * 0.5f;
+}
+
+- (KKBezierPath *)selectedTransformablePath {
+  if (self.selectedPathIndices.count != 1)
+    return nil;
+  NSUInteger idx = self.selectedPathIndices.firstIndex;
+  if (idx >= self.paths.count)
+    return nil;
+  KKBezierPath *p = self.paths[idx];
+  if (p.locked || !p.transformEnabled)
+    return nil;
+  if (p.isGroup) {
+    simd_float2 unused1, unused2;
+    if (![self boundsOfGroup:p min:&unused1 max:&unused2])
+      return nil;
+  }
+  return p;
 }
 
 @end

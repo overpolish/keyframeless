@@ -387,8 +387,33 @@ static void _texPairReturn(NSInteger idx) {
        fromParameter:kParamGradientAngle
               atTime:renderTime];
 
-  NSDictionary<NSString *, NSArray<NSNumber *> *> *multiStage =
-      [self multiStageValuesAtTime:renderTime];
+  // Read lanes JSON inline + evaluate via the public eval function. Builds
+  // the same `label -> values` dict the legacy pump used to return so the
+  // downstream code below is unchanged.
+  NSString *lanesJSON = nil;
+  [api getStringParameterValue:&lanesJSON fromParameter:kKKParamMultiStageData];
+  NSArray<KKTimingLane *> *lanes =
+      lanesJSON.length ? [KKTimingLane lanesFromJSON:lanesJSON] : nil;
+  CMTime effectStart2 = kCMTimeZero, effectDuration2 = kCMTimeZero;
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  [timingAPI startTimeForEffect:&effectStart2];
+  [timingAPI durationTimeForEffect:&effectDuration2];
+  double durSec2 = CMTimeGetSeconds(effectDuration2);
+  double frac2 = (durSec2 > 0)
+                     ? MAX(0.0, MIN(1.0, (CMTimeGetSeconds(renderTime) -
+                                          CMTimeGetSeconds(effectStart2)) /
+                                             durSec2))
+                     : 0.0;
+  NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *multiStage =
+      [NSMutableDictionary dictionaryWithCapacity:lanes.count];
+  for (KKTimingLane *lane in lanes) {
+    if (!lane.enabled || !lane.propertyLabel.length)
+      continue;
+    NSArray<NSNumber *> *vals = KKTimingLaneValueAtFraction(lane, frac2);
+    if (vals.count > 0)
+      multiStage[lane.propertyLabel] = vals;
+  }
 
   KKColorResult *color = [self colorAtTime:renderTime];
 

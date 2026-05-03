@@ -41,9 +41,11 @@ typedef NS_OPTIONS(NSUInteger, KKStoreChange) {
 @property(nonatomic, readonly) BOOL strokeEnabled;
 @property(nonatomic, readonly) BOOL fillEnabled;
 @property(nonatomic, readonly) BOOL sketchEnabled;
+@property(nonatomic, readonly) BOOL transformEnabled;
 @property(nonatomic, readonly) BOOL strokeExpanded;
 @property(nonatomic, readonly) BOOL fillExpanded;
 @property(nonatomic, readonly) BOOL sketchExpanded;
+@property(nonatomic, readonly) BOOL transformExpanded;
 @property(nonatomic, readonly) uint8_t lineCap;
 @property(nonatomic, readonly) uint8_t lineJoin;
 @property(nonatomic, readonly) uint8_t strokeStyle;
@@ -57,6 +59,10 @@ typedef NS_OPTIONS(NSUInteger, KKStoreChange) {
 @property(nonatomic, readonly) NSInteger selectedEndMarker;
 @property(nonatomic, readonly) NSInteger selectedFillStyle;
 @property(nonatomic, readonly) BOOL forceShow;
+@property(nonatomic, readonly) uint8_t strokeColorMode;
+@property(nonatomic, readonly) uint8_t fillColorMode;
+@property(nonatomic, readonly) uint8_t strokeGradientType;
+@property(nonatomic, readonly) uint8_t fillGradientType;
 
 @end
 
@@ -91,10 +97,16 @@ typedef void (^KKStoreObserverBlock)(KKCanvasStoreSnapshot *snapshot,
 - (void)setStrokeExpanded:(BOOL)expanded;
 - (void)setFillExpanded:(BOOL)expanded;
 - (void)setSketchExpanded:(BOOL)expanded;
+- (void)setTransformExpanded:(BOOL)expanded;
 - (void)setForceShow:(BOOL)forceShow;
 - (void)setStrokeEnabled:(BOOL)enabled;
 - (void)setFillEnabled:(BOOL)enabled;
 - (void)setSketchEnabled:(BOOL)enabled;
+- (void)setTransformEnabled:(BOOL)enabled;
+- (void)setStrokeColorMode:(uint8_t)mode;
+- (void)setFillColorMode:(uint8_t)mode;
+- (void)setStrokeGradientType:(uint8_t)t;
+- (void)setFillGradientType:(uint8_t)t;
 
 /// Updates cached style properties from the first selected non-group path.
 /// Also updates lineCap/lineJoin/strokeStyle/markers/fillStyle caches.

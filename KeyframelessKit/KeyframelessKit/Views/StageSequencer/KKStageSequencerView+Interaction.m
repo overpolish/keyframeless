@@ -152,9 +152,32 @@
     return;
   }
 
-  for (NSUInteger laneIdx = 0; laneIdx < self.lanes.count; laneIdx++) {
+  for (NSUInteger rowIdx = 0; rowIdx < _rowPlan.count; rowIdx++) {
+    KKSequencerRow *row = _rowPlan[rowIdx];
+    CGFloat rowY = [self _rowYForPlanIndex:rowIdx totalHeight:totalHeight];
+    if (row.kind == KKSequencerRowKindHeader) {
+      NSRect headerRect = [self _groupHeaderRectForRowY:rowY];
+      if (NSPointInRect(loc, headerRect) && row.groupKey) {
+        // Track-side click (the summary span bar): give plugins a hook for
+        // a custom action (e.g. select the underlying object). Falls back
+        // to collapse-toggle when unwired so existing plugins keep their
+        // behavior. Label/chevron side always toggles collapse.
+        BOOL onTrackSide = loc.x >= kKSSBorderInset + kKSSLabelWidth;
+        if (onTrackSide && self.onGroupSegmentClicked) {
+          self.onGroupSegmentClicked(row.groupKey);
+        } else {
+          [self _animateGroupChevronForKey:row.groupKey
+                                 collapsed:!row.groupCollapsed];
+          if (self.onGroupCollapseToggled)
+            self.onGroupCollapseToggled(row.groupKey, !row.groupCollapsed);
+        }
+        return;
+      }
+      continue;
+    }
+    NSUInteger laneIdx = (NSUInteger)row.laneIndex;
     KKTimingLane *lane = self.lanes[laneIdx];
-    CGFloat laneY = [self _laneYForIndex:laneIdx totalHeight:totalHeight];
+    CGFloat laneY = rowY;
 
     if (loc.y < laneY || loc.y > laneY + [self _laneHeight])
       continue;

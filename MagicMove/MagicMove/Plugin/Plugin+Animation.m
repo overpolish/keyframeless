@@ -8,6 +8,39 @@
 #import "ShaderTypes.h"
 #import <KeyframelessKit/KeyframelessKit.h>
 
+/// Reads `kKKParamMultiStageData` and returns a `propertyLabel → values`
+/// dict evaluated at `frac`.
+static NSDictionary<NSString *, NSArray<NSNumber *> *> *
+KKEvaluateLanesByLabel(id<FxParameterRetrievalAPI_v6> getAPI, double frac) {
+  NSString *json = nil;
+  [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+  if (!json.length)
+    return @{};
+  NSArray<KKTimingLane *> *lanes = [KKTimingLane lanesFromJSON:json];
+  NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *out =
+      [NSMutableDictionary dictionaryWithCapacity:lanes.count];
+  for (KKTimingLane *lane in lanes) {
+    if (!lane.enabled || !lane.propertyLabel.length)
+      continue;
+    NSArray<NSNumber *> *vals = KKTimingLaneValueAtFraction(lane, frac);
+    if (vals.count > 0)
+      out[lane.propertyLabel] = vals;
+  }
+  return out;
+}
+
+static double KKEffectFractionForTime(id<FxTimingAPI_v4> timingAPI,
+                                      CMTime time) {
+  CMTime startT = kCMTimeZero, durT = kCMTimeZero;
+  [timingAPI startTimeForEffect:&startT];
+  [timingAPI durationTimeForEffect:&durT];
+  double durSec = CMTimeGetSeconds(durT);
+  if (durSec <= 0)
+    return 0.0;
+  return MAX(0.0, MIN(1.0, (CMTimeGetSeconds(time) - CMTimeGetSeconds(startT)) /
+                               durSec));
+}
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 @implementation MagicMovePlugin (Animation)
@@ -107,8 +140,11 @@
   MagicMovePointValues v = [self readPointValuesAtTime:renderTime
                                                withAPI:paramGetAPI];
 
+  id<FxTimingAPI_v4> mmTimingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  double frac = KKEffectFractionForTime(mmTimingAPI, renderTime);
   NSDictionary<NSString *, NSArray<NSNumber *> *> *multiStage =
-      [self multiStageValuesAtTime:renderTime];
+      KKEvaluateLanesByLabel(paramGetAPI, frac);
 
   NSArray<NSNumber *> *msPosition = multiStage[@"Position"];
   NSArray<NSNumber *> *msScale = multiStage[@"Scale"];
@@ -128,36 +164,26 @@
                        atTime:renderTime];
   }
 
-  // Bezier path override: when the active Position transition has pathData,
-  // evaluate position along the curve instead of taking the engine's
-  // linearly-interpolated x/y.
   NSArray<KKTimingSegment *> *posSegs = nil;
   double localT = 0.0;
   KKTimingSegment *activePos = [self multiStageActiveSegmentForLabel:@"Position"
                                                               atTime:renderTime
                                                             segments:&posSegs
                                                               localT:&localT];
-  if (activePos && activePos.type == KKSegmentTypeTransition &&
-      activePos.pathData.length > 0) {
-    KKBezierPath *path = [KKBezierPath pathWithData:activePos.pathData];
-    if (path) {
-      NSUInteger idx = [posSegs indexOfObjectIdenticalTo:activePos];
-      NSArray<NSNumber *> *fromVals = KKTimingBoundaryBefore(idx, posSegs);
-      NSArray<NSNumber *> *toVals = KKTimingBoundaryAfter(idx, posSegs);
-      double fromX = fromVals.count >= 1 ? fromVals[0].doubleValue : posX;
-      double fromY = fromVals.count >= 2 ? fromVals[1].doubleValue : posY;
-      double toX = toVals.count >= 1 ? toVals[0].doubleValue : posX;
-      double toY = toVals.count >= 2 ? toVals[1].doubleValue : posY;
-      BOOL isAnimateOut = (idx == posSegs.count - 1);
-      double ti = isAnimateOut ? (1.0 - localT) : localT;
-      double easedT = KKApplyEasing(ti, activePos.easing, activePos.intensity,
-                                    activePos.frequency);
-      if (isAnimateOut)
-        easedT = 1.0 - easedT;
-      simd_float2 p =
-          [path positionAtT:(float)easedT
-                      start:(simd_float2){(float)fromX, (float)fromY}
-                        end:(simd_float2){(float)toX, (float)toY}];
+  if (activePos) {
+    NSUInteger idx = [posSegs indexOfObjectIdenticalTo:activePos];
+    NSArray<NSNumber *> *fromVals = KKTimingBoundaryBefore(idx, posSegs);
+    NSArray<NSNumber *> *toVals = KKTimingBoundaryAfter(idx, posSegs);
+    double fromX = fromVals.count >= 1 ? fromVals[0].doubleValue : posX;
+    double fromY = fromVals.count >= 2 ? fromVals[1].doubleValue : posY;
+    double toX = toVals.count >= 1 ? toVals[0].doubleValue : posX;
+    double toY = toVals.count >= 2 ? toVals[1].doubleValue : posY;
+    BOOL isAnimateOut = (idx == posSegs.count - 1);
+    simd_float2 p;
+    if (KKEvaluateBezierPathPosition(activePos, isAnimateOut, localT,
+                                     (simd_float2){(float)fromX, (float)fromY},
+                                     (simd_float2){(float)toX, (float)toY},
+                                     &p)) {
       posX = p.x;
       posY = p.y;
     }
@@ -170,15 +196,16 @@
   double opacity = msOpacity.count >= 1 ? msOpacity[0].doubleValue : v.opacity;
 
   if (rotateWithMotion) {
-    double window = 1.0 / 12.0;
+    double window = KKRotateWithMotionWindowSeconds;
     CMTime tPrev =
         CMTimeSubtract(renderTime, CMTimeMakeWithSeconds(window, 600));
+    double prevFrac = KKEffectFractionForTime(mmTimingAPI, tPrev);
     NSDictionary<NSString *, NSArray<NSNumber *> *> *prev =
-        [self multiStageValuesAtTime:tPrev];
+        KKEvaluateLanesByLabel(paramGetAPI, prevFrac);
     NSArray<NSNumber *> *prevPos = prev[@"Position"];
     double prevX = prevPos.count >= 1 ? prevPos[0].doubleValue : posX;
     double vx = (posX - prevX) / window;
-    rotZ -= vx * 5.0 * (M_PI / 180.0);
+    rotZ -= KKRotateWithMotionDeltaRadians(vx);
   }
 
   outParams->translate =

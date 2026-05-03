@@ -12,13 +12,13 @@
 #import <Metal/Metal.h>
 
 @class FxImageTile;
-@class KKAnimatableProperty;
 @class KKHelpSection;
 @class KKTimingLane;
 @class KKTimingSegment;
 @class NSBezierPath;
 @protocol PROAPIAccessing;
 @protocol FxParameterCreationAPI_v5;
+@protocol FxParameterRetrievalAPI_v6;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -168,24 +168,22 @@ NS_ASSUME_NONNULL_BEGIN
 /// animation.
 - (void)updateTimingParameterVisibility;
 
-/// Returns interpolated absolute values for each enabled multi-stage property
-/// at renderTime, keyed by property label. Each value is an array matching
-/// the property's valueParamIDs (e.g. @"Radius" -> @[@(35.2)],
-/// @"Crop" -> @[@(0.1), @(0.1), @(0.05), @(0.05)]).
-/// Returns nil when no lanes are enabled — caller should fall back to
-/// reading the static native param values.
-- (nullable NSDictionary<NSString *, NSArray<NSNumber *> *> *)
-    multiStageValuesAtTime:(CMTime)renderTime;
-
-/// Call from parameterChanged: to detect native param changes and stage
-/// pending lane updates. Returns YES if the parameter matched a staged
-/// property.
-- (BOOL)multiStageHandleParameterChanged:(UInt32)parameterID
-                                  atTime:(CMTime)time;
+/// Updates the selected segment of the lane matching `label` with `values`
+/// and persists. Used by `parameterChanged:` to translate slider drags into
+/// segment edits. Plugin owns the `paramID → (label, values)` mapping —
+/// no `KKAnimatableProperty` lookup is performed.
+///
+/// Returns YES when a lane matched and was updated; NO when no enabled
+/// lane has the label, or no segment is selected, or the persist scope
+/// isn't available. Stamps the "recent parameter change" timestamp so the
+/// pump's playhead-suppression heuristics still apply.
+- (BOOL)multiStageUpdateSelectedSegmentForLabel:(NSString *)label
+                                         values:(NSArray<NSNumber *> *)values;
 
 /// Returns the active segment of the lane matching `label` at `time`. Lets
-/// plugins reach per-segment data (e.g. `pathData`) beyond the values dict
-/// returned by `multiStageValuesAtTime:`.
+/// plugins reach per-segment data (e.g. `pathData`) — the only remaining
+/// pump-side accessor since `multiStageValuesAtTime:` was retired in
+/// favour of `KKTimingLaneValueAtFraction`.
 ///
 /// `outSegments` (optional) is the lane's segments array — useful for
 /// `KKTimingBoundaryBefore/After` when interpreting transitions.
@@ -201,13 +199,6 @@ NS_ASSUME_NONNULL_BEGIN
                            segments:(NSArray<KKTimingSegment *> *_Nullable
                                          *_Nullable)outSegments
                              localT:(double *_Nullable)outLocalT;
-
-/// Returns the lane (rebalanced + live-overridden) matching `label`, or nil
-/// when multi-stage is disabled or the lane doesn't exist. Intended for OSC
-/// code that needs to enumerate every segment (e.g. to draw path overlays
-/// across an entire Position lane).
-- (nullable KKTimingLane *)multiStageLaneForLabel:(NSString *)label
-                                           atTime:(CMTime)time;
 
 /// Whether any enabled multi-stage lane is currently inside a Transition
 /// segment at `time`. Used by motion blur (and similar features) to skip
@@ -258,6 +249,14 @@ NS_ASSUME_NONNULL_BEGIN
 + (BOOL)multiStageOSCVisibleForAPI:(id<PROAPIAccessing>)apiManager
                              label:(NSString *)label;
 
+/// Per-layer variant: scopes the lookup to the lane whose `groupKey`
+/// matches. Use when a plugin has multiple lanes sharing a property label
+/// (one per layer/group). When `groupKey` is nil, behaves like the
+/// label-only overload.
++ (BOOL)multiStageOSCVisibleForAPI:(id<PROAPIAccessing>)apiManager
+                             label:(NSString *)label
+                          groupKey:(nullable NSString *)groupKey;
+
 /// Pairs of parameter IDs that maintain their aspect ratio when the user
 /// holds Cmd while dragging either slider. Set before first use (e.g. in
 /// addParametersWithError:). Each element is @[@(paramA), @(paramB)].
@@ -270,10 +269,59 @@ NS_ASSUME_NONNULL_BEGIN
 /// parameter is not part of a pair or Cmd is not held.
 - (BOOL)handleLinkedParameterChanged:(UInt32)parameterID atTime:(CMTime)time;
 
-/// Override to declare animatable properties. The multi-stage sequencer
-/// auto-generates one lane per property; the property's `valueParamIDs`
-/// receive the per-frame interpolated values during render.
-- (nullable NSArray<KKAnimatableProperty *> *)animatableProperties;
+/// Returns the current "live" values for the lane labeled `label` from the
+/// plugin's source of truth (FxPlug params for built-in plugins, per-layer
+/// state for Canvas, etc). Used by the segment-select handler to write back
+/// any in-flight inspector edits into the previously selected segment
+/// before switching. Returns nil when the label is unknown.
+/// `groupKey` is the lane's `groupKey` (Canvas: layer UUID) or nil for
+/// flat plugins where the propertyLabel uniquely identifies the lane.
+- (nullable NSArray<NSNumber *> *)
+    currentValuesForLaneLabel:(NSString *)label
+                     groupKey:(nullable NSString *)groupKey
+                       atTime:(CMTime)time;
+
+/// Disables (or re-enables) inspector editing for the lane's underlying
+/// params. Called when a lane's selected segment is an HTH transition
+/// (whose values are derived from the surrounding holds, so editing them
+/// would be a no-op). Plugins toggle `kFxParameterFlag_DISABLED` on each
+/// underlying paramID; Canvas-style plugins with no per-lane FxPlug params
+/// can no-op. `groupKey` disambiguates lanes sharing a propertyLabel.
+- (void)setEditingDisabled:(BOOL)disabled
+              forLaneLabel:(NSString *)label
+                  groupKey:(nullable NSString *)groupKey;
+
+/// Pushes lane values back into the plugin's source of truth so the
+/// inspector reflects the newly selected segment (and downstream non-FxPlug
+/// UI like the gradient control stays in sync). Plugins are responsible
+/// for clearing any DISABLED flags they had set on involved params, since
+/// FxPlug silently drops writes to disabled params. Returns YES if the
+/// label was recognized. `groupKey` disambiguates lanes sharing a
+/// propertyLabel.
+- (BOOL)applyLaneValues:(NSArray<NSNumber *> *)values
+               forLabel:(NSString *)label
+               groupKey:(nullable NSString *)groupKey
+                 atTime:(CMTime)time;
+
+/// Override to return the seed lanes used when no persisted JSON exists.
+/// Each lane should have `propertyLabel`, `valueComponentKinds`, and a
+/// single Hold segment whose `values` reflects the current FxPlug param
+/// state. Returns nil/empty when the plugin has no animation lanes.
+- (nullable NSArray<KKTimingLane *> *)
+    defaultLanesAtTime:(CMTime)time
+           paramGetAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI;
+
+/// Override for plugins whose lane set tracks an external source (Canvas:
+/// the layer list). Receives the lanes just read from JSON and returns a
+/// reconciled array — typically by matching existing lanes against the
+/// current source items via `groupKey`, updating labels, dropping stale
+/// entries, and seeding lanes for new items. Default returns `existing`
+/// unchanged. The framework persists the new array when it differs from
+/// the input.
+- (nullable NSArray<KKTimingLane *> *)
+    reconcileLanes:(NSArray<KKTimingLane *> *)existing
+            atTime:(CMTime)time
+       paramGetAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI;
 
 /// Override to return YES when the plugin registers motion blur params
 /// via `addMotionBlurParametersWithAPI:`. Default NO. Used to auto-include
@@ -299,6 +347,36 @@ NS_ASSUME_NONNULL_BEGIN
 /// rings revealed by holding Opt) and shouldn't appear by default. Returns an
 /// empty set by default.
 - (NSSet<NSString *> *)animatablePropertyLabelsWithOSCDefaultOff;
+
+/// Override to drive the sequencer's "selected group" highlight — return
+/// the `groupKey` (typically a layer/object ID) of the currently-selected
+/// item, or nil for none. The default returns nil.
+///
+/// When selection changes, call `-kkRefreshSequencerSelectedGroup` to push
+/// the new value into all active sequencer views.
+- (nullable NSString *)kkSelectedGroupKey;
+
+/// Override to handle a track-side click on a group header in the sequencer
+/// (the summary span bar, not the chevron/label). The default falls back
+/// to toggling the group's collapse state — i.e. behaves identically to
+/// clicking the label. Plugins that want a custom action (e.g. selecting
+/// the underlying object so editing is faster while animating) override
+/// this and dispatch their own selection write.
+- (void)kkHandleGroupSegmentClickedForKey:(NSString *)groupKey;
+
+/// Pushes `[self kkSelectedGroupKey]` into every active sequencer view
+/// (primary + any additional timing views). Call this whenever your
+/// selection state changes.
+- (void)kkRefreshSequencerSelectedGroup;
+
+/// Override to supply the empty-state message shown when the sequencer has
+/// zero lanes (e.g. Canvas with no layers). Return nil (default) to leave
+/// the empty view hidden in that case.
+- (nullable NSString *)emptyLanesMessageWhenNoLanes;
+
+/// SF Symbol name paired with `emptyLanesMessageWhenNoLanes`. Default
+/// `rectangle.on.rectangle.slash` matches the "all lanes hidden" state.
+- (NSString *)emptyLanesIconNameWhenNoLanes;
 
 /// Reads the bool at forceShowParamID; if YES, sets every param in paramIDs
 /// to kFxParameterFlag_DEFAULT and returns YES.  Caller should early-return

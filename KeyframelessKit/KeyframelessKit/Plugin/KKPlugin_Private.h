@@ -11,7 +11,6 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@class KKAnimatableProperty;
 @class KKCustomGroupHeaderView;
 @class KKEmptyLanesView;
 @class KKLaneVisibilityBar;
@@ -46,11 +45,20 @@ KKPushLanesToVisibilityBar(KKLaneVisibilityBar *_Nullable bar,
                            NSArray<KKTimingLane *> *_Nullable lanes,
                            NSSet<NSString *> *_Nullable pluginHidden);
 
-/// Shows the empty-lanes overlay when every lane in `lanes` is hidden.
-/// Marshals to the main queue.
+/// Shows the empty-lanes overlay when every lane in `lanes` is hidden,
+/// or when `lanes` is empty AND `plugin` supplies an
+/// `emptyLanesMessageWhenNoLanes`. Updates the view's content per state
+/// before toggling visibility. Marshals to the main queue.
 extern void
 KKApplyEmptyLanesVisibility(KKEmptyLanesView *_Nullable emptyView,
-                            NSArray<KKTimingLane *> *_Nullable lanes);
+                            NSArray<KKTimingLane *> *_Nullable lanes,
+                            KKPlugin *_Nullable plugin);
+
+/// Translates a pill index (index into the visibility bar's deduped label
+/// list) back to the propertyLabel string. Returns nil if out of range.
+extern NSString *_Nullable KKLabelForPillIndex(
+    NSInteger pillIndex, NSArray<KKTimingLane *> *jsonLanes,
+    NSSet<NSString *> *_Nullable pluginHidden);
 
 /// Translates a viewIndex (index into the filtered, view-visible lane list)
 /// to the JSON index (index into the full unfiltered lane array). Returns
@@ -101,24 +109,14 @@ extern NSMutableArray<KKTimingLane *> *_Nullable KKReadLanesRebalanced(
 
 @interface KKPlugin (SequencerBuilder)
 - (NSView *)_createTimingGraphViewUncapped:(BOOL)uncapped;
-- (NSArray<KKTimingLane *> *)
-    _readOrSeedLanesForProps:(NSArray<KKAnimatableProperty *> *)seqProps
-                 paramGetAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI
-                      atTime:(CMTime)time;
-/// Builds display-only default lanes purely from current param values —
-/// no snapshot cache, no JSON fallback. Use from inside an action scope
-/// to recover from a stale build-time seed (e.g. when Gradient
-/// `getStringParameterValue` came back nil during create-view).
-- (NSArray<KKTimingLane *> *)
-    _buildDefaultLanesForProps:(NSArray<KKAnimatableProperty *> *)seqProps
-                   paramGetAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI
-                        atTime:(CMTime)time;
+- (NSArray<KKTimingLane *> *)_readOrSeedLanesWithParamGetAPI:
+                                 (id<FxParameterRetrievalAPI_v6>)paramGetAPI
+                                                      atTime:(CMTime)time;
 @end
 
 @interface KKPlugin (TimingGraph)
 - (void)timingGraphApplyState;
 - (void)_applyHTHParameterFlagsForLanes:(NSArray<KKTimingLane *> *)lanes;
-- (NSDictionary<NSString *, NSArray<NSNumber *> *> *)_kindsByLaneLabel;
 - (void)_showSegmentEditPopoverForLane:(NSInteger)laneIndex
                             segmentIdx:(NSInteger)segmentIndex
                             anchorRect:(NSRect)anchorRect
@@ -131,19 +129,12 @@ extern NSMutableArray<KKTimingLane *> *_Nullable KKReadLanesRebalanced(
                                                    sourceView;
 @end
 
-@class KKAnimatableProperty;
-
 /// Writes `lanes` to the shared `kKKParamMultiStageData` JSON param. HTH
-/// transitions are normalized in-place before serialization. Pass
-/// `[self _kindsByLaneLabel]` for `kindsByLabel`; nil falls back to
-/// normalize-everything.
-extern void KKWriteLanesJSON(
-    NSArray<KKTimingLane *> *lanes, id<FxParameterSettingAPI_v5> setAPI,
-    NSDictionary<NSString *, NSArray<NSNumber *> *> *_Nullable kindsByLabel);
-
-/// Looks up the animatable property by `label`, or nil when no match.
-extern KKAnimatableProperty *_Nullable KKPropertyByLabel(
-    NSArray<KKAnimatableProperty *> *props, NSString *label);
+/// transitions are normalized in-place (preserving Bool scalars per each
+/// lane's `valueComponentKinds`) before serialization.
+extern void KKWriteLanesJSON(NSArray<KKTimingLane *> *lanes,
+                             id<FxParameterSettingAPI_v5> setAPI,
+                             id<PROAPIAccessing> _Nullable apiManager);
 
 @interface KKPlugin (StageSequencerCallbacks)
 /// Wires the sequencer view's `onX` block callbacks (segment selection,
@@ -180,6 +171,8 @@ extern KKAnimatableProperty *_Nullable KKPropertyByLabel(
 - (void)_handleSegmentValuesCopiedAtLane:(NSInteger)laneIndex
                                      src:(NSInteger)srcSegmentIndex
                                      dst:(NSInteger)dstSegmentIndex;
+- (void)_handleGroupCollapseToggledForKey:(NSString *)groupKey
+                                collapsed:(BOOL)collapsed;
 @end
 
 @interface KKPlugin (HandlersStructure)

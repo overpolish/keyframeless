@@ -4,11 +4,117 @@
  */
 
 #import "../../Style/NSColor+KKColors.h"
+#import "../KKChevronView.h"
 #import "KKStageSequencerView_Private.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 @implementation KKStageSequencerView (RenderingLabels)
+
+- (NSRect)_groupHeaderRectForRowY:(CGFloat)rowY {
+  CGFloat totalWidth = NSWidth(self.bounds);
+  return NSMakeRect(kKSSBorderInset, rowY,
+                    MAX(0, totalWidth - 2 * kKSSBorderInset),
+                    kKSSGroupHeaderHeight);
+}
+
+- (void)_renderGroupHeaderRow:(KKSequencerRow *)row
+                         rowY:(CGFloat)rowY
+                       trackX:(CGFloat)trackX
+                   trackWidth:(CGFloat)trackWidth {
+  NSRect rect = [self _groupHeaderRectForRowY:rowY];
+
+  // Chevron — reuses KKChevronView's cached rotated images so the icon and
+  // its 0→40→90 snap animation match the inspector group headers exactly.
+  NSNumber *rotNum = _groupChevronRotation[row.groupKey];
+  CGFloat rotation =
+      rotNum ? rotNum.doubleValue : (row.groupCollapsed ? 0.0 : 90.0);
+  NSImage *chevron =
+      [KKChevronView chevronImageAtAngle:rotation
+                                   color:[[NSColor inspectorLabel]
+                                             colorWithAlphaComponent:0.75]];
+  CGFloat chevLeft = NSMinX(rect) + KKPaddingSM;
+  CGFloat chevCY = NSMidY(rect);
+  NSRect chevRect = NSMakeRect(chevLeft, chevCY - chevron.size.height / 2.0,
+                               chevron.size.width, chevron.size.height);
+  [chevron drawInRect:chevRect];
+
+  NSDictionary *attrs = @{
+    NSFontAttributeName : [NSFont systemFontOfSize:KKFontSizeSM
+                                            weight:NSFontWeightSemibold],
+    NSForegroundColorAttributeName : [NSColor inspectorLabel],
+  };
+  NSString *label = row.groupLabel ?: @"";
+  NSSize sz = [label sizeWithAttributes:attrs];
+  NSPoint pt = NSMakePoint(chevLeft + chevron.size.width + KKPaddingSM + 2.0,
+                           NSMidY(rect) - sz.height / 2.0);
+  [label drawAtPoint:pt withAttributes:attrs];
+
+  // Group span bar: union of all segment ranges across lanes in this group,
+  // drawn as a single rounded "summary segment" on the track.
+  if (trackWidth >= 1 && row.groupKey.length) {
+    double minStart = 1.0, maxEnd = 0.0;
+    BOOL any = NO;
+    for (KKTimingLane *l in self.lanes) {
+      if (![l.groupKey isEqualToString:row.groupKey])
+        continue;
+      for (KKTimingSegment *seg in l.segments) {
+        if (seg.start < minStart)
+          minStart = seg.start;
+        if (seg.end > maxEnd)
+          maxEnd = seg.end;
+        any = YES;
+      }
+    }
+    if (any && maxEnd > minStart) {
+      CGFloat x0 = [self _xForFrac:minStart
+                            trackX:trackX
+                        trackWidth:trackWidth];
+      CGFloat x1 = [self _xForFrac:maxEnd trackX:trackX trackWidth:trackWidth];
+      CGFloat barH = NSHeight(rect) - 8.0;
+      NSRect barRect =
+          NSMakeRect(x0, NSMidY(rect) - barH / 2.0, MAX(2.0, x1 - x0), barH);
+      NSBezierPath *bar =
+          [NSBezierPath bezierPathWithRoundedRect:barRect
+                                          xRadius:kKSSSegmentCornerRadius
+                                          yRadius:kKSSSegmentCornerRadius];
+      BOOL isSelected = self.selectedGroupKey.length > 0 &&
+                        [self.selectedGroupKey isEqualToString:row.groupKey];
+      NSColor *fill = isSelected ? [NSColor accentMatchingHost]
+                                 : [NSColor colorWithWhite:1.0 alpha:0.10];
+      [fill setFill];
+      [bar fill];
+    }
+  }
+}
+
+- (void)_animateGroupChevronForKey:(NSString *)groupKey
+                         collapsed:(BOOL)collapsed {
+  if (groupKey.length == 0)
+    return;
+  if (!_groupChevronRotation)
+    _groupChevronRotation = [NSMutableDictionary dictionary];
+  if (!_groupChevronAnimToken)
+    _groupChevronAnimToken = [NSMutableDictionary dictionary];
+  NSUInteger token = _groupChevronAnimToken[groupKey].unsignedIntegerValue + 1;
+  _groupChevronAnimToken[groupKey] = @(token);
+  _groupChevronRotation[groupKey] = @(40.0);
+  [self renderLanes];
+
+  __weak typeof(self) weakSelf = self;
+  dispatch_after(
+      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.08 * NSEC_PER_SEC)),
+      dispatch_get_main_queue(), ^{
+        __strong typeof(weakSelf) self_ = weakSelf;
+        if (!self_)
+          return;
+        if (self_->_groupChevronAnimToken[groupKey].unsignedIntegerValue !=
+            token)
+          return;
+        self_->_groupChevronRotation[groupKey] = @(collapsed ? 0.0 : 90.0);
+        [self_ renderLanes];
+      });
+}
 
 - (void)_renderLaneLabel:(KKTimingLane *)lane laneY:(CGFloat)laneY {
   NSColor *contentColor =
@@ -40,15 +146,23 @@
   }
 
   CGFloat labelLeft = iconSlotLeft + kKSSOSCIconSize + kKSSOSCIconGap;
+  CGFloat labelRight = kKSSBorderInset + kKSSLabelWidth - kKSSLabelPadding;
+  CGFloat labelWidth = MAX(0, labelRight - labelLeft);
+  NSMutableParagraphStyle *para = [NSMutableParagraphStyle new];
+  para.lineBreakMode = NSLineBreakByTruncatingHead;
   NSDictionary *labelAttrs = @{
     NSFontAttributeName : [NSFont systemFontOfSize:KKFontSizeSM
                                             weight:NSFontWeightMedium],
     NSForegroundColorAttributeName : contentColor,
+    NSParagraphStyleAttributeName : para,
   };
   NSSize labelSize = [lane.propertyLabel sizeWithAttributes:labelAttrs];
-  NSPoint labelPoint =
-      NSMakePoint(labelLeft, laneY + (laneH - labelSize.height) / 2.0);
-  [lane.propertyLabel drawAtPoint:labelPoint withAttributes:labelAttrs];
+  NSRect labelRect =
+      NSMakeRect(labelLeft, laneY + (laneH - labelSize.height) / 2.0,
+                 labelWidth, labelSize.height);
+  [lane.propertyLabel drawWithRect:labelRect
+                           options:NSStringDrawingUsesLineFragmentOrigin
+                        attributes:labelAttrs];
 }
 
 static NSString *_boundaryTimeLabel(double fraction, double duration) {

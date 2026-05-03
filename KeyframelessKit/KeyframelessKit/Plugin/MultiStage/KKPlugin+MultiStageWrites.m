@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "../../Views/KKAnimatableProperty.h"
 #import "../../Views/StageSequencer/KKStageSequencerView.h"
 #import "../KKPluginInstanceState.h"
 #import "../KKPlugin_Private.h"
@@ -87,69 +86,48 @@ static void KKMultiStagePersistAndPush(KKPluginInstanceState *state,
     lanes[li] = mLane;
 
     NSMutableArray<KKTimingLane *> *normalized = [lanes mutableCopy];
-    KKApplyHTHNormalizationInPlace(normalized, [self _kindsByLaneLabel]);
+    KKApplyHTHNormalizationInPlace(normalized);
     KKMultiStagePersistAndPush(state, [normalized copy], self.apiManager);
     return YES;
   }
   return NO;
 }
 
-- (BOOL)multiStageHandleParameterChanged:(UInt32)parameterID
-                                  atTime:(CMTime)time {
+- (BOOL)multiStageUpdateSelectedSegmentForLabel:(NSString *)label
+                                         values:(NSArray<NSNumber *> *)values {
+  if (!label.length || !values.count)
+    return NO;
   KKMultiStageMarkParameterChanged();
   KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
   if (!state || state.selectionInProgress)
     return NO;
 
-  id<FxParameterRetrievalAPI_v6> paramGetAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  if (!paramGetAPI)
-    return NO;
-
-  NSArray<KKAnimatableProperty *> *props = [self animatableProperties];
-  if (!props.count)
-    return NO;
-
-  KKAnimatableProperty *matchedProp = nil;
-  for (KKAnimatableProperty *prop in props) {
-    for (NSNumber *pid in prop.valueParamIDs) {
-      if (pid.unsignedIntValue == parameterID) {
-        matchedProp = prop;
-        break;
-      }
-    }
-    if (matchedProp)
-      break;
-  }
-  if (!matchedProp)
-    return NO;
-
   NSMutableArray<KKTimingLane *> *lanes = [state.lanesSnapshot mutableCopy];
-  if (!lanes)
+  if (!lanes.count) {
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    lanes = KKReadLanesRebalanced(self.apiManager, paramGetAPI);
+  }
+  if (!lanes.count)
     return NO;
 
   for (NSUInteger li = 0; li < lanes.count; li++) {
     KKTimingLane *lane = lanes[li];
-    if (![lane.propertyLabel isEqualToString:matchedProp.label])
+    if (![lane.propertyLabel isEqualToString:label])
       continue;
     NSInteger selSeg = lane.selectedSegment;
     if (selSeg < 0 || (NSUInteger)selSeg >= lane.segments.count)
       break;
 
-    NSArray<NSNumber *> *liveVals =
-        [matchedProp readValuesWithGetAPI:paramGetAPI atTime:time];
-    if (!liveVals)
-      break;
-
     KKTimingLane *mLane = [lane copy];
     NSMutableArray *mSegs = [mLane.segments mutableCopy];
     KKTimingSegment *mSeg = [mSegs[selSeg] copy];
-    mSeg.values = liveVals;
+    mSeg.values = [values copy];
     mSegs[selSeg] = mSeg;
     mLane.segments = mSegs;
     lanes[li] = mLane;
 
-    KKApplyHTHNormalizationInPlace(lanes, [self _kindsByLaneLabel]);
+    KKApplyHTHNormalizationInPlace(lanes);
     KKMultiStagePersistAndPush(state, [lanes copy], self.apiManager);
     return YES;
   }

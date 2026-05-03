@@ -12,6 +12,11 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// Default two-stop black→white gradient JSON. Used as the seed value when
+/// a path first switches to gradient mode and as the fallback when stops are
+/// missing or malformed at render time.
+NSString *KKDefaultGradientJSON(void);
+
 /// Parse persisted gradient JSON (array of {p, r, g, b, m}) into stops.
 /// Returns nil when input is malformed or has fewer than 2 stops.
 NSArray<KKGradientStop *> *_Nullable KKGradientStopsFromJSON(

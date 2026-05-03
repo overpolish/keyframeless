@@ -6,7 +6,6 @@
 #import "../../KKLog.h"
 #import "../../Math/KKEasing.h"
 #import "../../Math/KKTimingStage.h"
-#import "../../Views/KKAnimatableProperty.h"
 #import "../../Views/StageSequencer/KKStagePlayheadView.h"
 #import "../../Views/StageSequencer/KKStageSequencerRulerView.h"
 #import "../../Views/StageSequencer/KKStageSequencerView.h"
@@ -23,18 +22,22 @@ static void KKApplySequencerState(KKPlugin *plugin, KKStageSequencerView *seq,
                                   NSView *seqContainer,
                                   KKStageSequencerRulerView *ruler,
                                   KKStagePlayheadView *playhead,
+                                  KKLaneVisibilityBar *visibilityBar,
+                                  KKEmptyLanesView *emptyView,
                                   NSArray<KKTimingLane *> *lanes, double durSec,
                                   double frac, BOOL hasTiming) {
   if (!seq)
     return;
   seqContainer.hidden = NO;
+  NSSet<NSString *> *pluginHidden =
+      [plugin hiddenAnimatablePropertyLabels] ?: [NSSet set];
   if (lanes) {
-    NSSet<NSString *> *pluginHidden =
-        [plugin hiddenAnimatablePropertyLabels] ?: [NSSet set];
     NSSet<NSString *> *hidden =
         KKEffectiveHiddenLaneLabels(pluginHidden, lanes);
     seq.lanes = KKFilterLanesForVisibility(lanes, hidden);
   }
+  KKPushLanesToVisibilityBar(visibilityBar, lanes, pluginHidden);
+  KKApplyEmptyLanesVisibility(emptyView, lanes, plugin);
   if (hasTiming) {
     seq.effectDuration = durSec;
     ruler.effectDuration = durSec;
@@ -45,42 +48,6 @@ static void KKApplySequencerState(KKPlugin *plugin, KKStageSequencerView *seq,
   }
 }
 
-/// Builds a `propertyLabel → per-scalar kind array` map for use by
-/// `KKApplyHTHNormalizationInPlace` so Bool scalars can be preserved across
-/// HTH normalization. Keys mirror `KKAnimatableProperty.label`; each value is
-/// a flattened scalar-index → KKAnimatableParamKind array (e.g. Position with
-/// kinds [Point, Bool] expands to [Point, Point, Bool] for X/Y/bool).
-- (NSDictionary<NSString *, NSArray<NSNumber *> *> *)_kindsByLaneLabel {
-  NSArray<KKAnimatableProperty *> *props = [self animatableProperties];
-  NSMutableDictionary *result =
-      [NSMutableDictionary dictionaryWithCapacity:props.count];
-  for (KKAnimatableProperty *p in props) {
-    NSMutableArray<NSNumber *> *flat = [NSMutableArray array];
-    for (NSNumber *kindNum in p.valueParamKinds) {
-      KKAnimatableParamKind kind = (KKAnimatableParamKind)kindNum.integerValue;
-      NSUInteger n = 1;
-      switch (kind) {
-      case KKAnimatableParamKindColor:
-        n = 3;
-        break;
-      case KKAnimatableParamKindPoint:
-        n = 2;
-        break;
-      case KKAnimatableParamKindGradient:
-        n = 0;
-        break;
-      default:
-        n = 1;
-        break;
-      }
-      for (NSUInteger i = 0; i < n; i++)
-        [flat addObject:kindNum];
-    }
-    result[p.label] = [flat copy];
-  }
-  return result;
-}
-
 /// Walks every lane and toggles `kFxParameterFlag_DISABLED` on each lane's
 /// value param IDs based on whether the lane's currently selected segment is
 /// an HTH transition (Hold-Transition-Hold). HTH transitions derive their
@@ -88,41 +55,11 @@ static void KKApplySequencerState(KKPlugin *plugin, KKStageSequencerView *seq,
 /// no-op — the disabled flag tells the user. Caller must already be inside
 /// an action scope so `setParameterFlags` persists.
 - (void)_applyHTHParameterFlagsForLanes:(NSArray<KKTimingLane *> *)lanes {
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!getAPI || !setAPI)
-    return;
-  NSArray<KKAnimatableProperty *> *props = [self animatableProperties];
   for (KKTimingLane *lane in lanes) {
-    KKAnimatableProperty *prop = nil;
-    for (KKAnimatableProperty *p in props) {
-      if ([p.label isEqualToString:lane.propertyLabel]) {
-        prop = p;
-        break;
-      }
-    }
-    if (!prop)
-      continue;
     BOOL hth = KKIsHTHTransition(lane, lane.selectedSegment);
-    for (NSUInteger i = 0; i < prop.valueParamIDs.count; i++) {
-      UInt32 pid = prop.valueParamIDs[i].unsignedIntValue;
-      // Bool params (e.g. MagicMove's "rotate with motion") are step values,
-      // not derived from neighbours during a transition. Leave them editable
-      // even when the rest of the lane is HTH-disabled.
-      KKAnimatableParamKind kind = KKAnimatableParamKindFloat;
-      if (i < prop.valueParamKinds.count)
-        kind = (KKAnimatableParamKind)prop.valueParamKinds[i].integerValue;
-      BOOL skip = (kind == KKAnimatableParamKindBool);
-      FxParameterFlags cur = 0;
-      [getAPI getParameterFlags:&cur fromParameter:pid];
-      FxParameterFlags want = (hth && !skip)
-                                  ? (cur | kFxParameterFlag_DISABLED)
-                                  : (cur & ~kFxParameterFlag_DISABLED);
-      if (cur != want)
-        [setAPI setParameterFlags:want toParameter:pid];
-    }
+    [self setEditingDisabled:hth
+                forLaneLabel:lane.propertyLabel
+                    groupKey:lane.groupKey];
   }
 }
 
@@ -159,17 +96,21 @@ static void KKApplySequencerState(KKPlugin *plugin, KKStageSequencerView *seq,
     lanes = KKReadLanesRebalanced(self.apiManager, paramGetAPI);
     if (lanes) {
       instState.lanesSnapshot = [lanes copy];
+      instState.lanesEverPersisted = YES;
       [self _applyHTHParameterFlagsForLanes:lanes];
     }
+  } else if (instState.lanesEverPersisted && instState.lanesSnapshot.count) {
+    // Probe came back empty but we've already persisted JSON for this
+    // instance. The empty read is an XPC scope artifact — trust the
+    // in-memory snapshot rather than clobbering the user's edit with
+    // rebuilt defaults.
+    lanes = instState.lanesSnapshot;
   } else {
     // Fresh instance: no persisted JSON. Re-seed from live param values
     // inside this action scope (where reads actually succeed) and
     // overwrite the bad build-time snapshot.
-    NSArray<KKAnimatableProperty *> *seqProps = [self animatableProperties];
-    NSArray<KKTimingLane *> *seeded =
-        [self _buildDefaultLanesForProps:seqProps
-                             paramGetAPI:paramGetAPI
-                                  atTime:t];
+    NSArray<KKTimingLane *> *seeded = [self defaultLanesAtTime:t
+                                                   paramGetAPI:paramGetAPI];
     if (seeded.count) {
       instState.lanesSnapshot = [seeded copy];
       lanes = seeded;
@@ -192,8 +133,9 @@ static void KKApplySequencerState(KKPlugin *plugin, KKStageSequencerView *seq,
 
   // Primary (inspector) set.
   KKApplySequencerState(self, self.stageSequencer, self.stageSequencerContainer,
-                        self.stageSequencerRuler, instState.playheadView, lanes,
-                        durSec, frac, hasTiming);
+                        self.stageSequencerRuler, instState.playheadView,
+                        instState.visibilityBar, instState.emptyLanesView,
+                        lanes, durSec, frac, hasTiming);
 
   // Secondary (window) sets. Prune any dead (deallocated) entries.
   NSMutableArray *pruned = [NSMutableArray array];
@@ -202,7 +144,8 @@ static void KKApplySequencerState(KKPlugin *plugin, KKStageSequencerView *seq,
       continue;
     [pruned addObject:refs];
     KKApplySequencerState(self, refs.seqView, refs.seqContainer, refs.ruler,
-                          refs.playhead, lanes, durSec, frac, hasTiming);
+                          refs.playhead, refs.visibilityBar,
+                          refs.emptyLanesView, lanes, durSec, frac, hasTiming);
   }
   instState.additionalTimingViews = pruned;
 

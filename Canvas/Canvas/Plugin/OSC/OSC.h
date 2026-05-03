@@ -69,6 +69,64 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, strong, nullable) NSArray<NSData *> *resizeOrigSnapshots;
 @property(nonatomic, strong, nullable) NSArray<NSNumber *> *resizeOrigIndices;
 @property(nonatomic, strong) KKPointOSC *rotateHandleOSC;
+@property(nonatomic, strong) KKArcOSC *transformPositionOSC;
+@property(nonatomic, strong) KKRingOSC *scaleRingOSC;
+@property(nonatomic, strong) KKSquarePointOSC *anchorOSC;
+@property(nonatomic, strong) KKRotationOSC *rotZOSC;
+@property(nonatomic, assign) BOOL transformPositionHovered;
+@property(nonatomic, assign) BOOL transformPositionDragging;
+@property(nonatomic, assign) double transformPositionDragStartX;
+@property(nonatomic, assign) double transformPositionDragStartY;
+@property(nonatomic, assign) simd_float2 transformPositionDragStartObj;
+@property(nonatomic, assign) simd_float2 transformPositionDragStartParam;
+
+// Per-layer scale ring. MagicMove-style: default is uniform (link X+Y);
+// shift held = unlink the axis whose start-click direction dominated.
+@property(nonatomic, assign) BOOL scaleRingHovered;
+@property(nonatomic, assign) BOOL scaleRingDragging;
+@property(nonatomic, assign) double scaleRingDragStartDist;
+@property(nonatomic, assign) double scaleRingDragStartAngle;
+@property(nonatomic, assign) double scaleRingDragStartValX;
+@property(nonatomic, assign) double scaleRingDragStartValY;
+@property(nonatomic, assign) NSTimeInterval scaleRingLastClickTime;
+
+// Per-layer anchor handle. MagicMove-style: mouse position is the anchor
+// (no compensation); 17 snap targets; option held disables snap.
+@property(nonatomic, assign) BOOL anchorHovered;
+@property(nonatomic, assign) BOOL anchorDragging;
+@property(nonatomic, strong) KKSnapEngine *anchorSnapEngine;
+
+// Per-layer Rotation Z handle. MagicMove-style: atan2 delta accumulation
+// from the anchor (rotation pivot); snap-to-zero at ±3°.
+@property(nonatomic, assign) BOOL rotZHovered;
+@property(nonatomic, assign) BOOL rotZDragging;
+@property(nonatomic, assign) double rotZDragPrevAngle;
+@property(nonatomic, assign) double rotZDragAccum;
+
+// Per-layer 3D rotation rings. MagicMove-style: red horizontal ring drags
+// horizontally (controls Rot Y); green vertical ring drags vertically
+// (controls Rot X). M_PI/200 radians per pixel; snap-to-zero at ±3°.
+@property(nonatomic, strong) KKRingOSC *rotXRingOSC;
+@property(nonatomic, strong) KKRingOSC *rotYRingOSC;
+@property(nonatomic, assign) BOOL rotXRingHovered;
+@property(nonatomic, assign) BOOL rotXRingDragging;
+@property(nonatomic, assign) BOOL rotYRingHovered;
+@property(nonatomic, assign) BOOL rotYRingDragging;
+@property(nonatomic, assign) double rotRingDragPrevPos;
+@property(nonatomic, assign) double rotRingDragAccum;
+@property(nonatomic, assign) UInt32 rotRingDragTargetParam;
+
+// Position-lane path editing (between two transition keyframes).
+@property(nonatomic, strong) KKPointOSC *positionPathPointOSC;
+@property(nonatomic, strong) KKPointOSC *positionPathHandleOSC;
+@property(nonatomic, assign) NSInteger positionPathDragSegIndex;
+@property(nonatomic, assign) NSInteger positionPathDragPointIndex;
+@property(nonatomic, assign) BOOL positionPathDragIsInHandle;
+@property(nonatomic, assign) BOOL positionPathDragIsOutHandle;
+@property(nonatomic, assign) simd_float2 positionPathDragStartObj;
+@property(nonatomic, assign) NSTimeInterval positionPathLastClickTime;
+@property(nonatomic, assign) NSInteger positionPathLastClickSegIdx;
+@property(nonatomic, assign) NSInteger positionPathLastClickPointIdx;
 @property(nonatomic, assign) BOOL dragIsRotation;
 @property(nonatomic, assign) simd_float2 rotateCenter;
 @property(nonatomic, assign) float rotateStartAngle;

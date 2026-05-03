@@ -12,6 +12,22 @@
 #pragma clang diagnostic ignored "-Wimplicit-retain-self"
 #pragma clang diagnostic ignored "-Wprotocol"
 
+/// Initialise a freshly-allocated group with the defaults that distinguish a
+/// group from a regular path: identity, parent linkage, name, and the
+/// stroke/fill/sketch flags forced off (groups own only transform state).
+static KKBezierPath *_kkMakeGroup(NSString *name,
+                                  NSString *_Nullable parentID) {
+  KKBezierPath *group = [[KKBezierPath alloc] init];
+  group.isGroup = YES;
+  group.groupID = [[NSUUID UUID] UUIDString];
+  group.parentGroupID = parentID;
+  group.name = name;
+  group.strokeEnabled = NO;
+  group.fillEnabled = NO;
+  group.sketchEnabled = NO;
+  return group;
+}
+
 @implementation KKLayerActionTarget
 
 - (void)_modifyPaths:(void (^)(NSMutableArray<KKBezierPath *> *))block {
@@ -42,6 +58,16 @@
   NSIndexSet *sel = KKLayerStateForUUID(_instanceUUID).uiSelection;
   [self _syncObjectParamsForSelection:sel paths:paths paramSetAPI:paramSetAPI];
   [actionAPI endAction:self];
+
+  // Push the mutated paths into the store directly so observers (sequencer
+  // reconciliation, layer-list refresh) fire on this tick rather than waiting
+  // for the next drawOSC round-trip — inspector-only actions like delete or
+  // group don't reliably trigger drawOSC.
+  KKCanvasStore *store = KKLayerStateForUUID(_instanceUUID).store;
+  if (store)
+    [store performBatch:^{
+      [store setPaths:paths];
+    }];
 }
 
 - (void)_forceRedrawAndRefresh {
@@ -218,6 +244,7 @@
         return;
       KKBezierPath *clone =
           [KKBezierPath pathWithData:[paths[src] dataRepresentation]];
+      clone.layerID = [[NSUUID UUID] UUIDString];
       if (clone.isGroup && clone.groupID) {
         NSString *newID = [[NSUUID UUID] UUIDString];
         groupIDMap[clone.groupID] = newID;
@@ -279,11 +306,7 @@
                               [paths removeObjectAtIndex:idx];
                             }
                           }];
-    KKBezierPath *group = [[KKBezierPath alloc] init];
-    group.isGroup = YES;
-    group.groupID = [[NSUUID UUID] UUIDString];
-    group.parentGroupID = inheritedParent;
-    group.name = @"Group";
+    KKBezierPath *group = _kkMakeGroup(@"Group", inheritedParent);
     for (KKBezierPath *child in children) {
       if ([child.parentGroupID isEqual:inheritedParent] ||
           (!child.parentGroupID && !inheritedParent))
@@ -373,10 +396,7 @@
       KKSetLayerSelection(_instanceUUID,
                           [NSIndexSet indexSetWithIndex:insertAt]);
     } else {
-      KKBezierPath *group = [[KKBezierPath alloc] init];
-      group.isGroup = YES;
-      group.groupID = [[NSUUID UUID] UUIDString];
-      group.name = name;
+      KKBezierPath *group = _kkMakeGroup(name, nil);
       [paths insertObject:group atIndex:insertAt];
 
       for (NSUInteger i = 0; i < imported.count; i++) {

@@ -19,6 +19,14 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)refreshLayerList;
 @end
 
+@interface CanvasPlugin (Timing)
+- (void)kkPushParamToLane:(UInt32)paramID;
++ (void)kkApplyLanes:(NSArray<KKTimingLane *> *)lanes
+          atFraction:(double)frac
+        effectDurSec:(double)effectDurSec
+             toPaths:(NSArray<KKBezierPath *> *)paths;
+@end
+
 @interface CanvasPlugin (Render)
 - (BOOL)pluginState:(NSData *_Nullable *_Nonnull)pluginState
              atTime:(CMTime)renderTime

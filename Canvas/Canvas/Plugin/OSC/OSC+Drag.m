@@ -337,6 +337,212 @@
                       modifiers:(NSUInteger)modifiers
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
+  if (self.positionPathDragSegIndex >= 0) {
+    if ([self mouseDraggedOnPositionPathAtX:positionX
+                                          y:positionY
+                                  modifiers:modifiers
+                                     atTime:time]) {
+      *forceUpdate = YES;
+      return;
+    }
+  }
+
+  if (self.transformPositionDragging) {
+    simd_float2 currentObj =
+        [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+    simd_float2 delta = currentObj - self.transformPositionDragStartObj;
+    if (modifiers & kFxModifierKey_SHIFT) {
+      if (fabsf(delta.x) > fabsf(delta.y))
+        delta.y = 0;
+      else
+        delta.x = 0;
+    }
+    simd_float2 newParam = self.transformPositionDragStartParam + delta;
+    id<FxCustomParameterActionAPI_v4> actAPI = [self.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    id<FxParameterSettingAPI_v5> setAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [actAPI startAction:self];
+    [setAPI setXValue:newParam.x
+               YValue:newParam.y
+          toParameter:kParamPosition
+               atTime:time];
+    [actAPI endAction:self];
+    *forceUpdate = YES;
+    return;
+  }
+
+  if (self.scaleRingDragging) {
+    // MagicMove pattern: default = uniform (both axes track the radial
+    // ratio); shift held = unlink, applies the ratio to whichever axis
+    // dominated the start click direction. Clamp 0..10.
+    CGPoint anchorCanvas = [self transformAnchorCanvasPointAtTime:time];
+    double dx = positionX - anchorCanvas.x;
+    double dy = positionY - anchorCanvas.y;
+    double dist = sqrt(dx * dx + dy * dy);
+    if (self.scaleRingDragStartDist > 0) {
+      double ratio = dist / self.scaleRingDragStartDist;
+      BOOL shiftHeld = (modifiers & kFxModifierKey_SHIFT) != 0;
+      id<FxCustomParameterActionAPI_v4> actAPI = [self.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      id<FxParameterSettingAPI_v5> setAPI =
+          [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      [actAPI startAction:self];
+      if (shiftHeld) {
+        BOOL horizontal = self.scaleRingDragStartAngle < M_PI / 4.0;
+        double newVal =
+            MAX(0.0, MIN(10.0, (horizontal ? self.scaleRingDragStartValX
+                                           : self.scaleRingDragStartValY) *
+                                   ratio));
+        [setAPI setFloatValue:newVal
+                  toParameter:(horizontal ? kParamScaleX : kParamScaleY)atTime
+                             :time];
+      } else {
+        double newSx = MAX(0.0, MIN(10.0, self.scaleRingDragStartValX * ratio));
+        double newSy = MAX(0.0, MIN(10.0, self.scaleRingDragStartValY * ratio));
+        [setAPI setFloatValue:newSx toParameter:kParamScaleX atTime:time];
+        [setAPI setFloatValue:newSy toParameter:kParamScaleY atTime:time];
+      }
+      [actAPI endAction:self];
+    }
+    [self.scaleRingOSC updateCursorForMouseX:positionX positionY:positionY];
+    *forceUpdate = YES;
+    return;
+  }
+
+  if (self.rotXRingDragging || self.rotYRingDragging) {
+    // MagicMove pattern: M_PI/200 radians per pixel of mouse movement;
+    // X ring tracks horizontal motion, Y ring tracks vertical (sign
+    // inverted to match MM's "up = positive RotX" feel). Snap to zero
+    // at ±3°.
+    double pos = self.rotXRingDragging ? positionX : positionY;
+    double delta = (pos - self.rotRingDragPrevPos) * (M_PI / 200.0);
+    if (self.rotYRingDragging)
+      delta = -delta;
+    self.rotRingDragPrevPos = pos;
+    self.rotRingDragAccum = self.rotRingDragAccum + delta;
+    static const double kSnapToZero = 3.0 * (M_PI / 180.0);
+    double value = self.rotRingDragAccum;
+    if (fabs(value) < kSnapToZero)
+      value = 0.0;
+    id<FxCustomParameterActionAPI_v4> actAPI = [self.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    id<FxParameterSettingAPI_v5> setAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [actAPI startAction:self];
+    [setAPI setFloatValue:value
+              toParameter:self.rotRingDragTargetParam
+                   atTime:time];
+    [actAPI endAction:self];
+    *forceUpdate = YES;
+    return;
+  }
+
+  if (self.rotZDragging) {
+    // MagicMove pattern: atan2 delta accumulation around the rotation
+    // pivot (anchor canvas point), with snap-to-zero at ±3°.
+    CGPoint anchorCanvas = [self transformAnchorCanvasPointAtTime:time];
+    double dx = positionX - anchorCanvas.x;
+    double dy = positionY - anchorCanvas.y;
+    double angle = atan2(-dy, dx);
+    double delta = angle - self.rotZDragPrevAngle;
+    if (delta > M_PI)
+      delta -= 2.0 * M_PI;
+    else if (delta < -M_PI)
+      delta += 2.0 * M_PI;
+    self.rotZDragAccum = self.rotZDragAccum + delta;
+    self.rotZDragPrevAngle = angle;
+    static const double kSnapToZero = 3.0 * (M_PI / 180.0);
+    double value = self.rotZDragAccum;
+    if (fabs(value) < kSnapToZero)
+      value = 0.0;
+    id<FxCustomParameterActionAPI_v4> actAPI = [self.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    id<FxParameterSettingAPI_v5> setAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [actAPI startAction:self];
+    [setAPI setFloatValue:value toParameter:kParamRotation atTime:time];
+    [actAPI endAction:self];
+    *forceUpdate = YES;
+    return;
+  }
+
+  if (self.anchorDragging) {
+    // MagicMove pattern: mouse → object space → that's the new anchor
+    // (no translate compensation). Canvas anchor is bbox-relative, so we
+    // subtract the path's bbox center first, then snap targets are
+    // expressed as bbox-relative offsets (corners, edges, thirds, center).
+    KKBezierPath *p = [self selectedTransformablePath];
+    if (!p) {
+      *forceUpdate = YES;
+      return;
+    }
+    simd_float2 mouseObj =
+        [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
+    simd_float2 paramPos = [self objectPositionForParam:kParamPosition
+                                                 atTime:time];
+    simd_float2 translation = paramPos - (simd_float2){0.5f, 0.5f};
+    simd_float2 bboxCenter = [self bboxCenterOfPath:p];
+    // Anchor offset in object space: subtract bbox center and the layer's
+    // visual translation (so dragging the handle to a screen location
+    // resolves to the correct bbox-local pivot).
+    simd_float2 anchorOffset = mouseObj - bboxCenter - translation;
+
+    BOOL snapDisabled = (modifiers & kFxModifierKey_OPTION) != 0;
+    if (!snapDisabled) {
+      simd_float2 bmin, bmax;
+      if (p.isGroup)
+        [self boundsOfGroup:p min:&bmin max:&bmax];
+      else
+        [self boundsOfPath:p min:&bmin max:&bmax];
+      float bw = bmax.x - bmin.x;
+      float bh = bmax.y - bmin.y;
+      // 17 targets in bbox-local normalized space, mapped to object-space
+      // offsets from bbox center via (bw, bh). Mirrors MM's anchor target
+      // set (corners, edges, thirds, center).
+      simd_float2 targets[17] = {
+          {0, 0},
+          {-0.5f * bw, -0.5f * bh},
+          {0.5f * bw, -0.5f * bh},
+          {-0.5f * bw, 0.5f * bh},
+          {0.5f * bw, 0.5f * bh},
+          {0, -0.5f * bh},
+          {0.5f * bw, 0},
+          {0, 0.5f * bh},
+          {-0.5f * bw, 0},
+          {-bw / 6.0f, -0.5f * bh},
+          {bw / 6.0f, -0.5f * bh},
+          {-bw / 6.0f, 0.5f * bh},
+          {bw / 6.0f, 0.5f * bh},
+          {-0.5f * bw, -bh / 6.0f},
+          {-0.5f * bw, bh / 6.0f},
+          {0.5f * bw, -bh / 6.0f},
+          {0.5f * bw, bh / 6.0f},
+      };
+      CGPoint c0 = [self canvasPointFromObjectPoint:(simd_float2){0, 0}];
+      CGPoint c1 = [self canvasPointFromObjectPoint:(simd_float2){1, 0}];
+      float pixPerUnit = (float)fabs(c1.x - c0.x);
+      anchorOffset = [self.anchorSnapEngine snapObjectPoint:anchorOffset
+                                                  toTargets:targets
+                                                      count:17
+                                              pixelsPerUnit:pixPerUnit];
+    } else {
+      [self.anchorSnapEngine reset];
+    }
+
+    id<FxCustomParameterActionAPI_v4> actAPI = [self.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    id<FxParameterSettingAPI_v5> setAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [actAPI startAction:self];
+    [setAPI setXValue:anchorOffset.x
+               YValue:anchorOffset.y
+          toParameter:kParamAnchor
+               atTime:time];
+    [actAPI endAction:self];
+    *forceUpdate = YES;
+    return;
+  }
   if (self.stepperDragging) {
     [self handleStepperDragAtY:positionY
                      modifiers:modifiers
@@ -416,6 +622,64 @@
                  modifiers:(NSUInteger)modifiers
                forceUpdate:(BOOL *)forceUpdate
                     atTime:(CMTime)time {
+  if (self.positionPathDragSegIndex >= 0 ||
+      self.positionPathDragPointIndex >= 0) {
+    self.positionPathDragSegIndex = -1;
+    self.positionPathDragPointIndex = -1;
+    self.positionPathDragIsInHandle = NO;
+    self.positionPathDragIsOutHandle = NO;
+    id<FxOnScreenControlAPI_v4> oscAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    [oscAPI setCursor:[NSCursor arrowCursor]];
+    *forceUpdate = YES;
+    [super mouseUpAtPositionX:positionX
+                    positionY:positionY
+                   activePart:activePart
+                    modifiers:modifiers
+                  forceUpdate:forceUpdate
+                       atTime:time];
+    return;
+  }
+
+  BOOL transformDragEnded = NO;
+  if (self.transformPositionDragging) {
+    self.transformPositionDragging = NO;
+    self.transformPositionHovered = NO;
+    transformDragEnded = YES;
+  } else if (self.scaleRingDragging) {
+    self.scaleRingDragging = NO;
+    self.scaleRingHovered = NO;
+    transformDragEnded = YES;
+  } else if (self.anchorDragging) {
+    self.anchorDragging = NO;
+    self.anchorHovered = NO;
+    transformDragEnded = YES;
+  } else if (self.rotZDragging) {
+    self.rotZDragging = NO;
+    self.rotZHovered = NO;
+    transformDragEnded = YES;
+  } else if (self.rotXRingDragging) {
+    self.rotXRingDragging = NO;
+    self.rotXRingHovered = NO;
+    transformDragEnded = YES;
+  } else if (self.rotYRingDragging) {
+    self.rotYRingDragging = NO;
+    self.rotYRingHovered = NO;
+    transformDragEnded = YES;
+  }
+  if (transformDragEnded) {
+    id<FxOnScreenControlAPI_v4> oscAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    [oscAPI setCursor:[NSCursor arrowCursor]];
+    *forceUpdate = YES;
+    [super mouseUpAtPositionX:positionX
+                    positionY:positionY
+                   activePart:activePart
+                    modifiers:modifiers
+                  forceUpdate:forceUpdate
+                       atTime:time];
+    return;
+  }
   if (self.stepperDragging) {
     self.stepperDragging = NO;
     self.stepperShiftWasDown = NO;

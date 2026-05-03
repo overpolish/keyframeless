@@ -234,7 +234,8 @@ NSUInteger KKTessellateTrimmedPath(KKBezierPath *path, float startWidth,
                                    float endWidth, float outputWidth,
                                    float outputHeight, uint8_t lineCap,
                                    uint8_t lineJoin, float startTrim,
-                                   float endTrim, CanvasVertex *vertices) {
+                                   float endTrim, BOOL hasWrapSeam,
+                                   CanvasVertex *vertices) {
   if (startTrim <= 0.0f && endTrim <= 0.0f) {
     return KKTessellatePath(path, startWidth, endWidth, outputWidth,
                             outputHeight, lineCap, lineJoin, vertices);
@@ -271,8 +272,24 @@ NSUInteger KKTessellateTrimmedPath(KKBezierPath *path, float startWidth,
   while (lastIdx > 0 && samples[lastIdx].arcLength > arcEnd)
     lastIdx--;
 
+  // Wrap-start / wrap-end only fire when the caller explicitly told us this
+  // is half of an origin-shifted wrap pair. A standalone trim that happens
+  // to start at 0 or end at totalArc on a closed path must NOT emit corner
+  // geometry at the seam — there's no partner strip to attach to, so any
+  // join geometry would just hang past the visible end as a stray spike.
+  BOOL isWrapStart =
+      hasWrapSeam && path.closed && samples[0].atWrapStart && arcStart < 0.001f;
+  BOOL isWrapEnd = hasWrapSeam && path.closed && arcEnd >= totalArc - 0.001f;
+
   // Emit the interpolated start point.
   PathSample trimStart = KKSampleAtArc(samples, count, arcStart, &hint);
+  if (lineJoin == 0 && isWrapStart) {
+    simd_float2 miter =
+        KKMiterNormal(samples[0].prevCurveEndNormal, samples[0].normal);
+    float miterLen = simd_length(miter);
+    if (miterLen > 0.0f && miterLen < kMiterLimit)
+      trimStart.normal = miter;
+  }
   float tsT = (totalArc > 0) ? arcStart / totalArc : 0.0f;
   float tsHW =
       tapers ? ((startWidth + (endWidth - startWidth) * tsT) / 2.0f + aaPadding)
@@ -286,12 +303,29 @@ NSUInteger KKTessellateTrimmedPath(KKBezierPath *path, float startWidth,
   vertices[vc].capDistance = 0.0f;
   vc++;
 
+  // Only let the round/bevel join replace the trim-end terminator at the
+  // wrap-end seam. Other coincidences (drawOnEnd happening to align with an
+  // interior corner) should just truncate cleanly.
+  BOOL endIsAtJoin = isWrapEnd && (lineJoin != 0) && samples[lastIdx].atJoin &&
+                     fabsf(samples[lastIdx].arcLength - arcEnd) < 0.001f;
+
   // Emit interior samples.
   for (NSUInteger i = firstIdx; i <= lastIdx; i++) {
     simd_float2 n = samples[i].normal;
-    if (lineJoin == 0 && i > 0 && i < count - 1) {
+    // Interior miter: only between true interior samples of the trim range.
+    // At trim endpoints we want a flat truncation, not a mitered spike.
+    if (lineJoin == 0 && i > firstIdx && i < lastIdx) {
       simd_float2 n2 = samples[i + 1].normal;
       simd_float2 miter = KKMiterNormal(samples[i].normal, n2);
+      float miterLen = simd_length(miter);
+      if (miterLen > 0.0f && miterLen < kMiterLimit)
+        n = miter;
+    }
+    // Wrap-end miter so strip 1's last vertex reaches the corner tip and
+    // meets strip 2's mitered start.
+    if (lineJoin == 0 && i == lastIdx && isWrapEnd && samples[i].atJoin) {
+      simd_float2 miter =
+          KKMiterNormal(samples[i].normal, samples[i].nextCurveStartNormal);
       float miterLen = simd_length(miter);
       if (miterLen > 0.0f && miterLen < kMiterLimit)
         n = miter;
@@ -309,22 +343,57 @@ NSUInteger KKTessellateTrimmedPath(KKBezierPath *path, float startWidth,
     vertices[vc].edgeDistance = -1.0f;
     vertices[vc].capDistance = 0.0f;
     vc++;
+
+    // Curve→curve boundary: emit round/bevel join geometry, then re-seed the
+    // strip at the joint with the next curve's starting normal so subsequent
+    // samples flow cleanly into curve c+1.
+    BOOL emitJoinHere = samples[i].atJoin && lineJoin != 0 && i > firstIdx &&
+                        (i < lastIdx || (i == lastIdx && endIsAtJoin));
+    if (emitJoinHere) {
+      simd_float2 n2 = samples[i].nextCurveStartNormal;
+      vc = KKEmitJoinGeometry(vertices, vc, samples[i].position,
+                              samples[i].normal, n2, iHW, lineJoin);
+      vertices[vc] = vertices[vc - 1];
+      vc++;
+      vertices[vc].position = samples[i].position + n2 * iHW;
+      vertices[vc].edgeDistance = 1.0f;
+      vertices[vc].capDistance = 0.0f;
+      vc++;
+      vertices[vc].position = samples[i].position - n2 * iHW;
+      vertices[vc].edgeDistance = -1.0f;
+      vertices[vc].capDistance = 0.0f;
+      vc++;
+    }
   }
 
-  // Emit the interpolated end point.
+  // Emit the interpolated end point. Skipped when the loop already emitted a
+  // join + post-join pair for an arcEnd that landed exactly on a join — those
+  // two pairs already terminate the strip at the same physical position.
   PathSample trimEnd = KKSampleAtArc(samples, count, arcEnd, &hint);
+  // Mirror the strip 1 end miter so the trim-end pair lines up with the
+  // mitered corner emitted by the loop. Only at the wrap-end seam.
+  if (lineJoin == 0 && isWrapEnd && samples[lastIdx].atJoin &&
+      fabsf(samples[lastIdx].arcLength - arcEnd) < 0.001f) {
+    simd_float2 miter = KKMiterNormal(samples[lastIdx].normal,
+                                      samples[lastIdx].nextCurveStartNormal);
+    float miterLen = simd_length(miter);
+    if (miterLen > 0.0f && miterLen < kMiterLimit)
+      trimEnd.normal = miter;
+  }
   float teT = (totalArc > 0) ? arcEnd / totalArc : 0.0f;
   float teHW =
       tapers ? ((startWidth + (endWidth - startWidth) * teT) / 2.0f + aaPadding)
              : (startWidth / 2.0f + aaPadding);
-  vertices[vc].position = trimEnd.position + trimEnd.normal * teHW;
-  vertices[vc].edgeDistance = 1.0f;
-  vertices[vc].capDistance = 0.0f;
-  vc++;
-  vertices[vc].position = trimEnd.position - trimEnd.normal * teHW;
-  vertices[vc].edgeDistance = -1.0f;
-  vertices[vc].capDistance = 0.0f;
-  vc++;
+  if (!endIsAtJoin) {
+    vertices[vc].position = trimEnd.position + trimEnd.normal * teHW;
+    vertices[vc].edgeDistance = 1.0f;
+    vertices[vc].capDistance = 0.0f;
+    vc++;
+    vertices[vc].position = trimEnd.position - trimEnd.normal * teHW;
+    vertices[vc].edgeDistance = -1.0f;
+    vertices[vc].capDistance = 0.0f;
+    vc++;
+  }
 
   // Add caps at trimmed endpoints if the original path is open and has caps,
   // but only at ends without a positive trim (markers use trim > 0).

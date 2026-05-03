@@ -6,6 +6,35 @@
 #import "Constants.h"
 #import "Plugin_Private.h"
 
+static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
+                                      NSString *typeName, UInt32 typeID,
+                                      NSString *angleName, UInt32 angleID,
+                                      NSString *dataName, UInt32 dataID,
+                                      UInt32 uiID) {
+  [paramAPI addPopupMenuWithName:typeName
+                     parameterID:typeID
+                    defaultValue:1
+                     menuEntries:@[ @"Radial", @"Linear" ]
+                  parameterFlags:kFxParameterFlag_HIDDEN |
+                                 kFxParameterFlag_NOT_ANIMATABLE];
+  [paramAPI addAngleSliderWithName:angleName
+                       parameterID:angleID
+                    defaultDegrees:0.0
+               parameterMinDegrees:-360.0
+               parameterMaxDegrees:360.0
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+  [paramAPI addStringParameterWithName:dataName
+                           parameterID:dataID
+                          defaultValue:@""
+                        parameterFlags:kFxParameterFlag_HIDDEN |
+                                       kFxParameterFlag_NOT_ANIMATABLE];
+  [paramAPI addCustomParameterWithName:@"Gradient"
+                           parameterID:uiID
+                          defaultValue:@(uiID)
+                        parameterFlags:kFxParameterFlag_HIDDEN |
+                                       kFxParameterFlag_CUSTOM_UI];
+}
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 @implementation CanvasPlugin (Parameters)
@@ -116,6 +145,93 @@
                      parameterFlags:kFxParameterFlag_HIDDEN |
                                     kFxParameterFlag_NOT_ANIMATABLE];
 
+  // Timing (multi-stage sequencer) and Motion Blur sit above the stroke
+  // group so the visible portion of the inspector doesn't get pushed down
+  // as Stroke / Fill / Sketch expand.
+  if (![self addMultiStageParametersWithAPI:paramAPI error:error])
+    return NO;
+  if (![self addMotionBlurParametersWithAPI:paramAPI error:error])
+    return NO;
+
+  [paramAPI addCustomParameterWithName:@""
+                           parameterID:kParamGroupTransform
+                          defaultValue:@(kParamGroupTransform)
+                        parameterFlags:kFxParameterFlag_CUSTOM_UI |
+                                       kFxParameterFlag_NOT_ANIMATABLE |
+                                       kFxParameterFlag_USE_FULL_VIEW_WIDTH];
+
+  [paramAPI addToggleButtonWithName:@""
+                        parameterID:kParamExpandedTransform
+                       defaultValue:NO
+                     parameterFlags:kFxParameterFlag_HIDDEN |
+                                    kFxParameterFlag_NOT_ANIMATABLE];
+
+  [paramAPI addToggleButtonWithName:@"Transform"
+                        parameterID:kParamTransformEnabled
+                       defaultValue:YES
+                     parameterFlags:kFxParameterFlag_HIDDEN |
+                                    kFxParameterFlag_NOT_ANIMATABLE];
+
+  [paramAPI addPointParameterWithName:@"Position"
+                          parameterID:kParamPosition
+                             defaultX:0.5
+                             defaultY:0.5
+                       parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addToggleButtonWithName:@"Rotate with Motion"
+                        parameterID:kParamRotateWithMotion
+                       defaultValue:NO
+                     parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addPercentSliderWithName:@"Scale X"
+                         parameterID:kParamScaleX
+                        defaultValue:1.0
+                        parameterMin:0.0
+                        parameterMax:10.0
+                           sliderMin:0.0
+                           sliderMax:5.0
+                               delta:0.01
+                      parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addPercentSliderWithName:@"Scale Y"
+                         parameterID:kParamScaleY
+                        defaultValue:1.0
+                        parameterMin:0.0
+                        parameterMax:10.0
+                           sliderMin:0.0
+                           sliderMax:5.0
+                               delta:0.01
+                      parameterFlags:kFxParameterFlag_HIDDEN];
+
+  // Anchor is an offset from bbox center (matches Position's neutral-at-0
+  // semantics for the path: "no offset" = at the layer's center).
+  [paramAPI addPointParameterWithName:@"Anchor"
+                          parameterID:kParamAnchor
+                             defaultX:0.0
+                             defaultY:0.0
+                       parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addAngleSliderWithName:@"Rotation Z"
+                       parameterID:kParamRotation
+                    defaultDegrees:0.0
+               parameterMinDegrees:-FLT_MAX
+               parameterMaxDegrees:FLT_MAX
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addAngleSliderWithName:@"Rotation X"
+                       parameterID:kParamRotationX
+                    defaultDegrees:0.0
+               parameterMinDegrees:-FLT_MAX
+               parameterMaxDegrees:FLT_MAX
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addAngleSliderWithName:@"Rotation Y"
+                       parameterID:kParamRotationY
+                    defaultDegrees:0.0
+               parameterMinDegrees:-FLT_MAX
+               parameterMaxDegrees:FLT_MAX
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+
   [paramAPI addCustomParameterWithName:@""
                            parameterID:kParamGroupStroke
                           defaultValue:@(kParamGroupStroke)
@@ -155,12 +271,24 @@
                              delta:0.5
                     parameterFlags:kFxParameterFlag_HIDDEN];
 
+  [paramAPI addPopupMenuWithName:@"Color Mode"
+                     parameterID:kParamStrokeColorMode
+                    defaultValue:0
+                     menuEntries:@[ @"Solid", @"Gradient" ]
+                  parameterFlags:kFxParameterFlag_HIDDEN |
+                                 kFxParameterFlag_NOT_ANIMATABLE];
+
   [paramAPI addColorParameterWithName:@"Stroke Color"
                           parameterID:kParamStrokeColor
                            defaultRed:1.0
                          defaultGreen:0.0
                           defaultBlue:0.0
                        parameterFlags:kFxParameterFlag_HIDDEN];
+
+  registerGradientSubParams(paramAPI, @"Gradient Type",
+                            kParamStrokeGradientType, @"Gradient Angle",
+                            kParamStrokeGradientAngle, @"StrokeGradientData",
+                            kParamStrokeGradientData, kParamStrokeGradientUI);
 
   [paramAPI addCustomParameterWithName:@"Line Cap"
                            parameterID:kParamLineCap
@@ -209,6 +337,46 @@
                          sliderMax:200.0
                              delta:1.0
                     parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addPercentSliderWithName:@"Draw On Start"
+                         parameterID:kParamDrawOnStart
+                        defaultValue:0.0
+                        parameterMin:0.0
+                        parameterMax:1.0
+                           sliderMin:0.0
+                           sliderMax:1.0
+                               delta:0.01
+                      parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addPercentSliderWithName:@"Draw On End"
+                         parameterID:kParamDrawOnEnd
+                        defaultValue:1.0
+                        parameterMin:0.0
+                        parameterMax:1.0
+                           sliderMin:0.0
+                           sliderMax:1.0
+                               delta:0.01
+                      parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addPercentSliderWithName:@"Draw On Origin"
+                         parameterID:kParamDrawOnOrigin
+                        defaultValue:0.0
+                        parameterMin:0.0
+                        parameterMax:1.0
+                           sliderMin:0.0
+                           sliderMax:1.0
+                               delta:0.01
+                      parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addPercentSliderWithName:@"Ants Speed"
+                         parameterID:kParamMarchingAntsSpeed
+                        defaultValue:0.0
+                        parameterMin:0.0
+                        parameterMax:5.0
+                           sliderMin:0.0
+                           sliderMax:2.0
+                               delta:0.01
+                      parameterFlags:kFxParameterFlag_HIDDEN];
 
   [paramAPI addCustomParameterWithName:@"Start Marker"
                            parameterID:kParamStartMarker
@@ -261,12 +429,24 @@
                      parameterFlags:kFxParameterFlag_HIDDEN |
                                     kFxParameterFlag_NOT_ANIMATABLE];
 
+  [paramAPI addPopupMenuWithName:@"Fill Mode"
+                     parameterID:kParamFillColorMode
+                    defaultValue:0
+                     menuEntries:@[ @"Solid", @"Gradient" ]
+                  parameterFlags:kFxParameterFlag_HIDDEN |
+                                 kFxParameterFlag_NOT_ANIMATABLE];
+
   [paramAPI addColorParameterWithName:@"Fill Color"
                           parameterID:kParamFillColor
                            defaultRed:1.0
                          defaultGreen:1.0
                           defaultBlue:1.0
                        parameterFlags:kFxParameterFlag_HIDDEN];
+
+  registerGradientSubParams(paramAPI, @"Fill Gradient Type",
+                            kParamFillGradientType, @"Fill Gradient Angle",
+                            kParamFillGradientAngle, @"FillGradientData",
+                            kParamFillGradientData, kParamFillGradientUI);
 
   [paramAPI addCustomParameterWithName:@"Fill Style"
                            parameterID:kParamSketchFillStyle

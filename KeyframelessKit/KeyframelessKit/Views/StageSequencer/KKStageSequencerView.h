@@ -18,24 +18,23 @@ NS_ASSUME_NONNULL_BEGIN
 /// Per-lane selection is read from each lane's selectedSegment property.
 @property(nonatomic, copy) NSArray<KKTimingLane *> *lanes;
 
-/// Optional mapping from `propertyLabel` to a `KKAnimatableParamKind` boxed
-/// as `NSNumber`. Lets the renderer draw color/gradient lanes as a color
-/// strip + single easing curve instead of plotting flat NSNumber values as
-/// a multi-component line graph (which is meaningless for RGB/stop data).
-/// Labels missing from the dict fall back to the scalar line rendering.
+/// **Deprecated.** Prefer setting `valueComponentKinds` on each lane and
+/// leaving this nil. The sequencer first reads the lane's own kinds; this
+/// dict is consulted only as a fallback when the lane has no kinds, for
+/// callers that haven't migrated yet.
 @property(nonatomic, copy, nullable)
     NSDictionary<NSString *, NSNumber *> *laneKindsByLabel;
 
+/// **Deprecated.** Prefer setting `valueComponentKinds` on each lane.
 /// Per-component value kinds, expanded so each entry corresponds to one
-/// scalar in the segment's `values` array (e.g. a Point kind contributes
-/// two `KKAnimatableParamKindPoint` entries). Used by the graph renderer
-/// to skip non-numeric components like Bool.
+/// scalar in the segment's `values` array. Consulted as a fallback only.
 @property(nonatomic, copy, nullable)
     NSDictionary<NSString *, NSArray<NSNumber *> *> *laneComponentKindsByLabel;
 
-/// Property labels whose lanes have an associated on-screen control.
-/// The sequencer stamps `lane.hasOSC` automatically whenever lanes are
-/// assigned; plugins set this once at setup and never again.
+/// **Deprecated.** Prefer setting `lane.hasOSC` on each lane directly.
+/// When non-nil, the sequencer overrides each lane's `hasOSC` based on
+/// whether its `propertyLabel` is in the set (legacy behaviour). When nil,
+/// the sequencer trusts whatever value the plugin baked into the lane.
 @property(nonatomic, copy, nullable) NSSet<NSString *> *laneLabelsWithOSC;
 
 /// Effect duration in seconds (for timecode ruler labels).
@@ -58,6 +57,26 @@ NS_ASSUME_NONNULL_BEGIN
 /// for lanes with `hasOSC = YES`.
 @property(nonatomic, copy, nullable) void (^onLaneOSCVisibilityToggled)
     (NSInteger laneIndex, BOOL visible);
+/// Fires when the user clicks a group header to expand/collapse it. The
+/// plugin should toggle `groupCollapsed` on every lane sharing this
+/// `groupKey` (only the first lane is read by the sequencer, but keeping
+/// siblings in lockstep simplifies serialization), persist, and refresh
+/// `lanes`.
+@property(nonatomic, copy, nullable) void (^onGroupCollapseToggled)
+    (NSString *groupKey, BOOL collapsed);
+/// Fires when the user clicks the **track-side** of a group header (the
+/// summary span bar, not the chevron/label). Plugins set this to wire a
+/// custom action — e.g. selecting the group's underlying object. If unset,
+/// the sequencer falls back to toggling collapse so behavior matches
+/// label-side clicks.
+@property(nonatomic, copy, nullable) void (^onGroupSegmentClicked)
+    (NSString *groupKey);
+/// When set, the matching group's summary span bar is filled with the
+/// host accent color instead of the default subtle white. Plugins drive
+/// this from their selection state — e.g. Canvas sets it to the layerID
+/// of the currently-selected layer so the sequencer reflects which group
+/// is "active". Setting this triggers a redraw.
+@property(nonatomic, copy, nullable) NSString *selectedGroupKey;
 /// Called when boundary drag changes segment positions.
 /// The callback receives the full updated lane (caller should persist).
 @property(nonatomic, copy, nullable) void (^onLaneChanged)

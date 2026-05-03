@@ -147,6 +147,62 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
     self.rotateHandleOSC.oscRadius = 5.0f;
     self.rotateHandleOSC.outlineWidth = 1.5f;
     self.rotateHandleOSC.fillColorOverride = [NSColor accent];
+
+    self.transformPositionOSC =
+        [[KKArcOSC alloc] initWithAPIManager:apiManager];
+    self.transformPositionOSC.clearsOnDraw = NO;
+
+    self.scaleRingOSC = [[KKRingOSC alloc] initWithAPIManager:apiManager];
+    self.scaleRingOSC.clearsOnDraw = NO;
+    self.scaleRingOSC.fillWidth = 2.0f;
+    self.scaleRingOSC.ringOutlineWidth = 1.5f;
+    self.scaleRingOSC.hoverCursor = [NSCursor crosshairCursor];
+
+    self.anchorOSC = [[KKSquarePointOSC alloc] initWithAPIManager:apiManager];
+    self.anchorOSC.clearsOnDraw = NO;
+    self.anchorOSC.oscSize = 6.0f;
+    self.anchorOSC.cornerRadius = 1.0f;
+    self.anchorOSC.outlineWidth = 1.5f;
+    self.anchorSnapEngine = [[KKSnapEngine alloc] init];
+
+    self.rotZOSC = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
+    self.rotZOSC.clearsOnDraw = NO;
+
+    KKRingOSC * (^makeRotRing)(NSColor *, CGFloat, CGFloat, NSCursor *) =
+        ^(NSColor *tint, CGFloat rx, CGFloat ry, NSCursor *cursor) {
+          KKRingOSC *r = [[KKRingOSC alloc] initWithAPIManager:apiManager];
+          r.clearsOnDraw = NO;
+          r.tintColor = tint;
+          r.ringRadius = rx;
+          r.ringRadiusY = ry;
+          r.fillWidth = 3.0f;
+          r.hoverCursor = cursor;
+          return r;
+        };
+    self.rotXRingOSC =
+        makeRotRing([NSColor colorWithRed:0.9 green:0.2 blue:0.2 alpha:1],
+                    70.0f, 40.0f, [NSCursor resizeLeftRightCursor]);
+    self.rotYRingOSC = makeRotRing([NSColor colorWithRed:0.2
+                                                   green:0.8
+                                                    blue:0.2
+                                                   alpha:1],
+                                   40.0f, 70.0f, [NSCursor resizeUpDownCursor]);
+
+    self.positionPathPointOSC =
+        [[KKPointOSC alloc] initWithAPIManager:apiManager];
+    self.positionPathPointOSC.clearsOnDraw = NO;
+    self.positionPathPointOSC.oscRadius = 5.0f;
+    self.positionPathPointOSC.outlineWidth = 1.5f;
+    self.positionPathHandleOSC =
+        [[KKPointOSC alloc] initWithAPIManager:apiManager];
+    self.positionPathHandleOSC.clearsOnDraw = NO;
+    self.positionPathHandleOSC.oscRadius = 3.0f;
+    self.positionPathHandleOSC.outlineWidth = 1.0f;
+
+    self.positionPathDragSegIndex = -1;
+    self.positionPathDragPointIndex = -1;
+    self.positionPathLastClickSegIdx = -1;
+    self.positionPathLastClickPointIdx = -1;
   }
   return self;
 }

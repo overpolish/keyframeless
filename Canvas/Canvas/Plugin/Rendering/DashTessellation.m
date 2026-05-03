@@ -9,9 +9,10 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float startWidth,
                                   float endWidth, float outputWidth,
                                   float outputHeight, float dashLength,
                                   float dashGap, uint8_t lineJoin,
-                                  CanvasVertex *vertices) {
+                                  float startTrim, float endTrim,
+                                  float phaseOffset, CanvasVertex *vertices) {
   float aaPadding = 1.0f;
-  NSUInteger segsPerCurve = 128;
+  NSUInteger segsPerCurve = 512;
   NSUInteger curveCount = path.count - 1;
   if (path.closed && path.count >= 2)
     curveCount = path.count;
@@ -45,6 +46,13 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float startWidth,
   }
 
   float totalArc = (totalSamples > 0) ? arcLengths[totalSamples - 1] : 0.0f;
+  float arcStart = fmaxf(0.0f, startTrim);
+  float arcEnd = totalArc - fmaxf(0.0f, endTrim);
+  if (arcStart >= arcEnd) {
+    free(arcLengths);
+    free(positions);
+    return 0;
+  }
 
   NSUInteger vc = 0;
   NSUInteger sampleIdx = 0;
@@ -73,8 +81,11 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float startWidth,
       }
 
       float arc = arcLengths[sampleIdx];
-      float phase = fmodf(arc, cycle);
-      BOOL inDash = (phase < dashLength);
+      float phase = fmodf(arc - phaseOffset, cycle);
+      if (phase < 0.0f)
+        phase += cycle;
+      BOOL inDash =
+          (phase < dashLength) && (arc >= arcStart) && (arc <= arcEnd);
 
       float arcT = (totalArc > 0) ? arc / totalArc : 0.0f;
       float hw = tapers
@@ -89,41 +100,31 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float startWidth,
           float nextArc = (sampleIdx + 1 < totalSamples)
                               ? arcLengths[sampleIdx + 1]
                               : arcLengths[sampleIdx];
-          BOOL nextInDash = (fmodf(nextArc, cycle) < dashLength);
+          float nextPhase = fmodf(nextArc - phaseOffset, cycle);
+          if (nextPhase < 0.0f)
+            nextPhase += cycle;
+          BOOL nextInDash = (nextPhase < dashLength) && (nextArc >= arcStart) &&
+                            (nextArc <= arcEnd);
           if (nextInDash) {
             NSUInteger nextC = (c < curveCount - 1) ? (c + 1) % path.count : 0;
             simd_float2 nextN =
                 KKRawNormalAtSegStart(path, nextC, outputWidth, outputHeight);
-            simd_float2 avg = normal + nextN;
-            float avgLen = simd_length(avg);
-            if (avgLen > 1e-6f) {
-              avg /= avgLen;
-              float d = simd_dot(avg, normal);
-              if (d > 1e-6f) {
-                float ext = fminf(1.0f / d, 1.0f);
-                normal = avg * ext;
-              }
-            }
+            normal = KKMiterNormal(normal, nextN);
           }
         } else if (i == 0 && (c > 0 || (path.closed && c == 0))) {
           float prevArc =
               (sampleIdx > 0) ? arcLengths[sampleIdx - 1] : arcLengths[0];
-          BOOL prevInDash = (fmodf(prevArc, cycle) < dashLength);
+          float prevPhase = fmodf(prevArc - phaseOffset, cycle);
+          if (prevPhase < 0.0f)
+            prevPhase += cycle;
+          BOOL prevInDash = (prevPhase < dashLength) && (prevArc >= arcStart) &&
+                            (prevArc <= arcEnd);
           if (prevInDash) {
             NSUInteger prevC = (c > 0) ? c - 1 : curveCount - 1;
             simd_float2 prevN =
                 KKNormalAtPoint(path, prevC, segsPerCurve, segsPerCurve,
                                 outputWidth, outputHeight);
-            simd_float2 avg = prevN + normal;
-            float avgLen = simd_length(avg);
-            if (avgLen > 1e-6f) {
-              avg /= avgLen;
-              float d = simd_dot(avg, prevN);
-              if (d > 1e-6f) {
-                float ext = fminf(1.0f / d, 1.0f);
-                normal = avg * ext;
-              }
-            }
+            normal = KKMiterNormal(prevN, normal);
           }
         }
       }
@@ -180,7 +181,11 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float startWidth,
 
     BOOL atJoin = (c < curveCount - 1) || (path.closed && c == curveCount - 1);
     float joinArc = arcLengths[sampleIdx - 1];
-    BOOL joinInDash = (fmodf(joinArc, cycle) < dashLength);
+    float joinPhase = fmodf(joinArc - phaseOffset, cycle);
+    if (joinPhase < 0.0f)
+      joinPhase += cycle;
+    BOOL joinInDash = (joinPhase < dashLength) && (joinArc >= arcStart) &&
+                      (joinArc <= arcEnd);
     float joinT = (totalArc > 0) ? joinArc / totalArc : 0.0f;
     float joinHW =
         tapers ? ((startWidth + (endWidth - startWidth) * joinT) / 2.0f +
@@ -233,7 +238,8 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float startWidth,
 NSUInteger KKTessellateDottedPath(KKBezierPath *path, float startWidth,
                                   float endWidth, float outputWidth,
                                   float outputHeight, float dotGap,
-                                  CanvasVertex *vertices) {
+                                  float startTrim, float endTrim,
+                                  float phaseOffset, CanvasVertex *vertices) {
   PathSample *samples = NULL;
   NSUInteger sampleCount =
       KKSamplePathPolyline(path, outputWidth, outputHeight, &samples);
@@ -243,6 +249,12 @@ NSUInteger KKTessellateDottedPath(KKBezierPath *path, float startWidth,
   }
 
   float totalLength = samples[sampleCount - 1].arcLength;
+  float arcStart = fmaxf(0.0f, startTrim);
+  float arcEnd = totalLength - fmaxf(0.0f, endTrim);
+  if (arcStart >= arcEnd) {
+    free(samples);
+    return 0;
+  }
   float aaPadding = 1.0f;
   BOOL isOpen = !path.closed;
   BOOL tapers = isOpen && fabsf(startWidth - endWidth) > 0.001f;
@@ -252,9 +264,19 @@ NSUInteger KKTessellateDottedPath(KKBezierPath *path, float startWidth,
 
   NSUInteger vc = 0;
   NSUInteger hint = 0;
-  float pos = 0.0f;
+  // Wrap phase into [0, spacing) so dots shift forward by `phaseOffset` along
+  // arc length; start one cycle earlier than arcStart so a dot that lands near
+  // the start boundary still emits.
+  float phaseShift = fmodf(phaseOffset, spacing);
+  if (phaseShift < 0.0f)
+    phaseShift += spacing;
+  float pos = arcStart + phaseShift - spacing;
 
-  while (pos <= totalLength) {
+  while (pos <= arcEnd) {
+    if (pos < arcStart) {
+      pos += spacing;
+      continue;
+    }
     PathSample s = KKSampleAtArc(samples, sampleCount, pos, &hint);
     simd_float2 tangent = {s.normal.y, -s.normal.x};
 

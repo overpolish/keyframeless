@@ -3,27 +3,25 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "../../Views/KKAnimatableProperty.h"
+#import "../KKPluginInstanceState.h"
 #import "../KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKConstants.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
-void KKWriteLanesJSON(
-    NSArray<KKTimingLane *> *lanes, id<FxParameterSettingAPI_v5> setAPI,
-    NSDictionary<NSString *, NSArray<NSNumber *> *> *kindsByLabel) {
+void KKWriteLanesJSON(NSArray<KKTimingLane *> *lanes,
+                      id<FxParameterSettingAPI_v5> setAPI,
+                      id<PROAPIAccessing> apiManager) {
   NSMutableArray<KKTimingLane *> *mutableLanes = [lanes mutableCopy];
-  KKApplyHTHNormalizationInPlace(mutableLanes, kindsByLabel);
+  KKApplyHTHNormalizationInPlace(mutableLanes);
   NSString *updated = [KKTimingLane jsonFromLanes:mutableLanes];
   if (updated)
     [setAPI setStringParameterValue:updated toParameter:kKKParamMultiStageData];
-}
-
-KKAnimatableProperty *KKPropertyByLabel(NSArray<KKAnimatableProperty *> *props,
-                                        NSString *label) {
-  for (KKAnimatableProperty *p in props) {
-    if ([p.label isEqualToString:label])
-      return p;
+  if (apiManager) {
+    KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
+    if (state) {
+      state.lanesSnapshot = [mutableLanes copy];
+      state.lanesEverPersisted = YES;
+    }
   }
-  return nil;
 }

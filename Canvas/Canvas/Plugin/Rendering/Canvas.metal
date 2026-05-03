@@ -13,26 +13,71 @@ typedef struct {
     float4 clipSpacePosition [[position]];
     float edgeDistance;
     float capDistance;
+    float2 localPos; // pre-transform centered-pixel position (perspective-correct)
 } StrokeRasterizerData;
+
+// Apply the 4x4 forward transform (incl. perspective) to a 2D centered-pixel
+// vertex and emit a clip-space position for Metal's perspective divide.
+static float4 kkProjectVertex(float2 localPos, matrix_float4x4 m4, float2 viewport) {
+    float4 world = m4 * float4(localPos, 0.0, 1.0);
+    return float4(world.xy / (viewport / 2.0), 0.0, world.w);
+}
 
 vertex StrokeRasterizerData strokeVertexShader(uint vertexID [[vertex_id]],
                                                constant CanvasVertex *vertexArray [[buffer(0)]],
-                                               constant vector_uint2 *viewportSizePointer [[buffer(1)]]) {
+                                               constant vector_uint2 *viewportSizePointer [[buffer(1)]],
+                                               constant CanvasPathTransform &xform [[buffer(2)]]) {
     StrokeRasterizerData out;
 
-    float2 pixelSpacePosition = vertexArray[vertexID].position;
     float2 viewportSize = float2(*viewportSizePointer);
-
-    out.clipSpacePosition.xy = pixelSpacePosition / (viewportSize / 2.0);
-    out.clipSpacePosition.z = 0.0;
-    out.clipSpacePosition.w = 1.0;
+    float2 localPos = vertexArray[vertexID].position;
+    out.clipSpacePosition = kkProjectVertex(localPos, xform.m4, viewportSize);
     out.edgeDistance = vertexArray[vertexID].edgeDistance;
     out.capDistance = vertexArray[vertexID].capDistance;
+    out.localPos = localPos;
 
     return out;
 }
 
-fragment float4 strokeFragmentShader(StrokeRasterizerData in [[stage_in]], constant float4 *strokeColor [[buffer(0)]]) {
+// Sample the gradient at a pixel given in the same coordinate space as
+// `p.bboxMin`/`p.bboxMax`. Linear pivots through the bbox center for any
+// angle; radial reaches t=1 at every bbox edge (elliptical distance).
+static float3 sampleCanvasGradientAtPixel(constant CanvasGradientParams &p, float2 pixel) {
+    float2 bbCenter = (p.bboxMin + p.bboxMax) * 0.5;
+    float2 bbSize = max(p.bboxMax - p.bboxMin, float2(1.0));
+    float2 uv = (pixel - bbCenter) / bbSize; // [-0.5, 0.5]
+
+    float t;
+    if (p.gradientType == 1) {
+        float ca = cos(p.gradientAngle);
+        float sa = sin(p.gradientAngle);
+        t = saturate(uv.x * ca - uv.y * sa + 0.5);
+    } else {
+        t = saturate(length(uv) * 2.0);
+    }
+
+    float lutPos = t * float(KK_GRADIENT_LUT_SIZE - 1);
+    int idx0 = int(floor(lutPos));
+    int idx1 = min(idx0 + 1, KK_GRADIENT_LUT_SIZE - 1);
+    float3 srgb = mix(p.lut[idx0], p.lut[idx1], lutPos - float(idx0));
+    return pow(srgb, 2.2);
+}
+
+// Fallback for the fill color pass (fullscreen quad): framebuffer pixel →
+// centered-pixel space → path-local space via the 2D inverse. Ignores
+// rotX/rotY, so 3D-rotated paths get a 2D approximation for gradient
+// sampling — matches MM's tradeoff for image-fill 3D rotation.
+static float3 sampleCanvasGradient(constant CanvasGradientParams &p, float2 fbPixel, float2 viewport,
+                                   constant CanvasPathTransform &xform) {
+    float2 centered = fbPixel - viewport * 0.5;
+    float2 local = (xform.mInv * float3(centered, 1.0)).xy;
+    return sampleCanvasGradientAtPixel(p, local);
+}
+
+fragment float4 strokeFragmentShader(StrokeRasterizerData in [[stage_in]],
+                                     constant CanvasGradientParams &params [[buffer(0)]],
+                                     constant vector_uint2 *viewportSizePointer [[buffer(1)]],
+                                     constant CanvasPathTransform &xform [[buffer(2)]]) {
     float edgeDist = abs(in.edgeDistance);
     float edgeFw = fwidth(in.edgeDistance) * 1.5;
     float edgeAlpha = 1.0 - smoothstep(1.0 - edgeFw, 1.0, edgeDist);
@@ -40,7 +85,16 @@ fragment float4 strokeFragmentShader(StrokeRasterizerData in [[stage_in]], const
     float capFw = fwidth(in.capDistance) * 1.5;
     float capAlpha = 1.0 - smoothstep(1.0 - capFw, 1.0, in.capDistance);
 
-    return *strokeColor * edgeAlpha * capAlpha;
+    float coverage = edgeAlpha * capAlpha;
+    if (params.useGradient != 0) {
+        // Stroke vertices carry their pre-transform local position as a
+        // varying — perspective-correct interpolation gives the exact
+        // path-local pixel for each fragment, even with 3D rotation.
+        float3 rgb = sampleCanvasGradientAtPixel(params, in.localPos);
+        float a = params.opacity * coverage;
+        return float4(rgb * a, a);
+    }
+    return params.solidColor * coverage;
 }
 
 typedef struct {
@@ -49,17 +103,24 @@ typedef struct {
 
 vertex FillRasterizerData fillVertexShader(uint vertexID [[vertex_id]],
                                            constant CanvasFillVertex *vertexArray [[buffer(0)]],
-                                           constant vector_uint2 *viewportSizePointer [[buffer(1)]]) {
+                                           constant vector_uint2 *viewportSizePointer [[buffer(1)]],
+                                           constant CanvasPathTransform &xform [[buffer(2)]]) {
     FillRasterizerData out;
     float2 viewportSize = float2(*viewportSizePointer);
-    out.clipSpacePosition.xy = vertexArray[vertexID].position / (viewportSize / 2.0);
-    out.clipSpacePosition.z = 0.0;
-    out.clipSpacePosition.w = 1.0;
+    out.clipSpacePosition = kkProjectVertex(vertexArray[vertexID].position, xform.m4, viewportSize);
     return out;
 }
 
-fragment float4 fillFragmentShader(FillRasterizerData in [[stage_in]], constant float4 *fillColor [[buffer(0)]]) {
-    return *fillColor;
+fragment float4 fillFragmentShader(FillRasterizerData in [[stage_in]],
+                                   constant CanvasGradientParams &params [[buffer(0)]],
+                                   constant vector_uint2 *viewportSizePointer [[buffer(1)]],
+                                   constant CanvasPathTransform &xform [[buffer(2)]]) {
+    if (params.useGradient != 0) {
+        float3 rgb = sampleCanvasGradient(params, in.clipSpacePosition.xy, float2(*viewportSizePointer), xform);
+        float a = params.opacity;
+        return float4(rgb * a, a);
+    }
+    return params.solidColor;
 }
 
 // Composite shader: draws a fullscreen quad sampling an intermediate texture,
@@ -98,7 +159,8 @@ typedef struct {
 
 vertex ImageRasterizerData imageVertexShader(uint vertexID [[vertex_id]],
                                              constant CanvasFillVertex *vertexArray [[buffer(0)]],
-                                             constant vector_uint2 *viewportSizePointer [[buffer(1)]]) {
+                                             constant vector_uint2 *viewportSizePointer [[buffer(1)]],
+                                             constant CanvasPathTransform &xform [[buffer(2)]]) {
     // Triangle strip: 4 vertices (BL, BR, TL, TR)
     // Image data is top-down, so BL maps to bottom of texture (v=1),
     // TL maps to top of texture (v=0).
@@ -106,9 +168,7 @@ vertex ImageRasterizerData imageVertexShader(uint vertexID [[vertex_id]],
 
     ImageRasterizerData out;
     float2 viewportSize = float2(*viewportSizePointer);
-    out.clipSpacePosition.xy = vertexArray[vertexID].position / (viewportSize / 2.0);
-    out.clipSpacePosition.z = 0.0;
-    out.clipSpacePosition.w = 1.0;
+    out.clipSpacePosition = kkProjectVertex(vertexArray[vertexID].position, xform.m4, viewportSize);
     out.texCoord = texCoords[vertexID];
     return out;
 }
@@ -120,6 +180,19 @@ fragment float4 imageFragmentShader(ImageRasterizerData in [[stage_in]], texture
     return float4(color.rgb * color.a, color.a) * *opacity;
 }
 
+// Generate a flat gradient texture sized to the image bounds.
+// Used by image-fill tinting so gradient fill mode replaces the solid tint.
+kernel void gradientFillKernel(texture2d<float, access::write> dst [[texture(0)]],
+                               constant CanvasGradientParams &p [[buffer(0)]], uint2 gid [[thread_position_in_grid]]) {
+    uint w = dst.get_width();
+    uint h = dst.get_height();
+    if (gid.x >= w || gid.y >= h)
+        return;
+
+    float3 rgb = sampleCanvasGradientAtPixel(p, float2(gid));
+    dst.write(float4(rgb, 1.0), gid);
+}
+
 // --- JFA (Jump Flooding Algorithm) for image stroke outlines ---
 
 kernel void jfaSeedInit(texture2d<float, access::read> src [[texture(0)]],
@@ -129,17 +202,48 @@ kernel void jfaSeedInit(texture2d<float, access::read> src [[texture(0)]],
     if (gid.x >= w || gid.y >= h)
         return;
 
-    float a = src.read(gid).a;
-    bool isEdge = false;
-    if (a > 0.5) {
-        float aL = (gid.x > 0) ? src.read(uint2(gid.x - 1, gid.y)).a : 0.0;
-        float aR = (gid.x < w - 1) ? src.read(uint2(gid.x + 1, gid.y)).a : 0.0;
-        float aU = (gid.y > 0) ? src.read(uint2(gid.x, gid.y - 1)).a : 0.0;
-        float aD = (gid.y < h - 1) ? src.read(uint2(gid.x, gid.y + 1)).a : 0.0;
-        isEdge = (aL <= 0.5 || aR <= 0.5 || aU <= 0.5 || aD <= 0.5);
-    }
+    // Read a 3x3 neighborhood and apply a binomial (1-2-1)² filter. For
+    // binary-alpha source images the smoothed alpha varies smoothly across
+    // the boundary, restoring sub-pixel info that would otherwise be lost.
+    float aTL = (gid.x > 0 && gid.y > 0) ? src.read(uint2(gid.x - 1, gid.y - 1)).a : 0.0;
+    float aT = (gid.y > 0) ? src.read(uint2(gid.x, gid.y - 1)).a : 0.0;
+    float aTR = (gid.x < w - 1 && gid.y > 0) ? src.read(uint2(gid.x + 1, gid.y - 1)).a : 0.0;
+    float aL = (gid.x > 0) ? src.read(uint2(gid.x - 1, gid.y)).a : 0.0;
+    float aC = src.read(gid).a;
+    float aR = (gid.x < w - 1) ? src.read(uint2(gid.x + 1, gid.y)).a : 0.0;
+    float aBL = (gid.x > 0 && gid.y < h - 1) ? src.read(uint2(gid.x - 1, gid.y + 1)).a : 0.0;
+    float aB = (gid.y < h - 1) ? src.read(uint2(gid.x, gid.y + 1)).a : 0.0;
+    float aBR = (gid.x < w - 1 && gid.y < h - 1) ? src.read(uint2(gid.x + 1, gid.y + 1)).a : 0.0;
+
+    float a = (aTL + 2.0 * aT + aTR + 2.0 * aL + 4.0 * aC + 2.0 * aR + aBL + 2.0 * aB + aBR) * (1.0 / 16.0);
+
+    // Sample axis-direction smoothed alphas the same way to keep gradient
+    // estimation consistent with the smoothed center.
+    float aLs = (aTL + 2.0 * aL + aBL) * (1.0 / 4.0);
+    float aRs = (aTR + 2.0 * aR + aBR) * (1.0 / 4.0);
+    float aTs = (aTL + 2.0 * aT + aTR) * (1.0 / 4.0);
+    float aBs = (aBL + 2.0 * aB + aBR) * (1.0 / 4.0);
+
+    // A pixel is part of the boundary if its smoothed alpha sits between 0
+    // and 1, OR if it is opaque next to a transparent neighbor (raw alpha
+    // covers the case where smoothing pushes a near-edge pixel just past 0.5).
+    bool isPartial = (a > 0.01 && a < 0.99);
+    bool isOpaqueEdge = (aC > 0.5) && (aL <= 0.5 || aR <= 0.5 || aT <= 0.5 || aB <= 0.5);
+    bool isEdge = isPartial || isOpaqueEdge;
+
     if (isEdge) {
-        dst.write(float4(float(gid.x), float(gid.y), 0, 0), gid);
+        // Estimate edge offset from pixel center using the alpha gradient.
+        // Boundary is the α = 0.5 isocontour; first-order expansion places
+        // it at -(α - 0.5) / |∇α| along the gradient direction.
+        float gx = (aRs - aLs) * 0.5;
+        float gy = (aBs - aTs) * 0.5;
+        float gMag = sqrt(gx * gx + gy * gy);
+        float2 sub = float2(0.5);
+        if (gMag > 0.001) {
+            float t = clamp(-(a - 0.5) / gMag, -0.75, 0.75);
+            sub += float2(gx, gy) / gMag * t;
+        }
+        dst.write(float4(float(gid.x) + sub.x, float(gid.y) + sub.y, 0, 0), gid);
     } else {
         dst.write(float4(-1.0, -1.0, 0, 0), gid);
     }
@@ -182,7 +286,9 @@ kernel void jfaFloodPass(texture2d<float, access::read> src [[texture(0)]],
 kernel void jfaComposite(texture2d<float, access::read> srcTex [[texture(0)]],
                          texture2d<float, access::read> jfaTex [[texture(1)]],
                          texture2d<float, access::write> dstTex [[texture(2)]], constant float &radius [[buffer(0)]],
-                         constant float4 &strokeColor [[buffer(1)]], uint2 gid [[thread_position_in_grid]]) {
+                         constant float4 &strokeColor [[buffer(1)]],
+                         constant CanvasGradientParams &gradParams [[buffer(2)]],
+                         uint2 gid [[thread_position_in_grid]]) {
     uint w = srcTex.get_width();
     uint h = srcTex.get_height();
     if (gid.x >= w || gid.y >= h)
@@ -196,11 +302,20 @@ kernel void jfaComposite(texture2d<float, access::read> srcTex [[texture(0)]],
         return;
     }
 
-    float2 diff = float2(gid) - seed;
+    // Seeds are sub-pixel positions; compare against this pixel's center.
+    float2 diff = (float2(gid) + 0.5) - seed;
     float dist = length(diff);
 
     float outlineAlpha = 1.0 - smoothstep(radius - 1.0, radius, dist);
-    float4 outline = float4(strokeColor.rgb * outlineAlpha, outlineAlpha);
+
+    float3 outlineRGB;
+    if (gradParams.useGradient != 0) {
+        outlineRGB = sampleCanvasGradientAtPixel(gradParams, float2(gid)) * gradParams.opacity;
+    } else {
+        outlineRGB = strokeColor.rgb;
+    }
+
+    float4 outline = float4(outlineRGB * outlineAlpha, outlineAlpha);
 
     // Composite: source over outline (both premultiplied)
     float4 result = src + outline * (1.0 - src.a);

@@ -10,6 +10,27 @@ static inline CanvasVertex markerVert(simd_float2 pos) {
   return (CanvasVertex){pos, 0.0f, 0.0f};
 }
 
+static inline CanvasVertex markerVertCap(simd_float2 pos, float capDistance) {
+  return (CanvasVertex){pos, 0.0f, capDistance};
+}
+
+// Segments needed so chord error ≤ 0.25 px at the given radius.
+// n = π / acos(1 - 0.25/r). Clamped to [16, 96].
+static inline NSUInteger circleSegmentsForRadius(float radius) {
+  if (radius < 1.0f)
+    return 16;
+  float c = 1.0f - 0.25f / radius;
+  if (c < -1.0f)
+    c = -1.0f;
+  float n = (float)M_PI / acosf(c);
+  NSUInteger segs = (NSUInteger)ceilf(n);
+  if (segs < 16)
+    segs = 16;
+  if (segs > 96)
+    segs = 96;
+  return segs;
+}
+
 static uint32_t s_markerRng;
 static void markerSeedRNG(uint32_t seed) { s_markerRng = seed ? seed : 1; }
 static float markerRandUnit(void) {
@@ -43,14 +64,14 @@ static NSUInteger tessellateArrow(simd_float2 endpoint, simd_float2 tangent,
 /// Triangle fan as strip: center, rim0, center, rim1, ...
 static NSUInteger tessellateCircle(simd_float2 endpoint, simd_float2 tangent,
                                    float radius, CanvasVertex *v) {
-  NSUInteger segments = 24;
+  NSUInteger segments = circleSegmentsForRadius(radius);
   NSUInteger vc = 0;
   for (NSUInteger i = 0; i <= segments; i++) {
     float angle = (float)i / (float)segments * 2.0f * (float)M_PI;
     simd_float2 rim =
         endpoint + (simd_float2){cosf(angle) * radius, sinf(angle) * radius};
-    v[vc++] = markerVert(endpoint);
-    v[vc++] = markerVert(rim);
+    v[vc++] = markerVertCap(endpoint, 0.0f);
+    v[vc++] = markerVertCap(rim, 1.0f);
   }
   return vc;
 }
@@ -202,9 +223,11 @@ static NSUInteger tessellateSketchArrow(simd_float2 endpoint,
 static NSUInteger tessellateSketchCircle(simd_float2 endpoint,
                                          simd_float2 tangent, float radius,
                                          float roughness, CanvasVertex *v) {
-  NSUInteger segments = 24;
+  NSUInteger segments = circleSegmentsForRadius(radius);
+  if (segments > 96)
+    segments = 96;
   float jitterAmp = radius * 0.07f;
-  simd_float2 outline[24];
+  simd_float2 outline[96];
   for (NSUInteger i = 0; i < segments; i++) {
     float angle = (float)i / (float)segments * 2.0f * (float)M_PI;
     float r = radius + markerOffset(jitterAmp, roughness);

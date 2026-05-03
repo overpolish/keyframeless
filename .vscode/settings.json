@@ -7,7 +7,23 @@
     "editor.formatOnSave": true
   },
   "C_Cpp.files.exclude": {
-    "**/*.metal": true
+    "**/*.metal": true,
+    "**/DerivedData": true,
+    "**/build": true,
+    "**/*.framework": true
+  },
+  "files.exclude": {
+    "**/DerivedData": true,
+    "**/build/Debug": true,
+    "**/build/Release": true
+  },
+  "files.watcherExclude": {
+    "**/DerivedData/**": true,
+    "**/build/**": true
+  },
+  "search.exclude": {
+    "**/DerivedData": true,
+    "**/build": true
   },
   "files.associations": {
     "*.h": "objective-c",

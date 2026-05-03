@@ -77,7 +77,7 @@
   lane.selectedSegment = splitIdx + 1;
   lanes[jsonIdx] = lane;
 
-  KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
+  KKWriteLanesJSON(lanes, setAPI, self.apiManager);
   [actAPI endAction:self];
   [self timingGraphApplyState];
 }
@@ -109,8 +109,9 @@
 
   BOOL anyChanged = NO;
   for (NSUInteger li = 0; li < lanes.count; li++) {
-    if (!lanes[li].visibleInSequencer ||
-        [pluginHidden containsObject:lanes[li].propertyLabel])
+    if (!lanes[li].effectivelyVisibleInSequencer ||
+        [pluginHidden containsObject:lanes[li].propertyLabel] ||
+        KKLaneIsHiddenByCollapsedGroup(lanes, li))
       continue;
     KKTimingLane *lane = [lanes[li] copy];
     NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
@@ -154,7 +155,7 @@
   }
 
   if (anyChanged)
-    KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
+    KKWriteLanesJSON(lanes, setAPI, self.apiManager);
   [actAPI endAction:self];
   if (anyChanged)
     [self timingGraphApplyState];
@@ -218,7 +219,7 @@
   lane.segments = segs;
   lanes[jsonIdx] = lane;
 
-  KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
+  KKWriteLanesJSON(lanes, setAPI, self.apiManager);
   [actAPI endAction:self];
   [self timingGraphApplyState];
 }
@@ -243,8 +244,9 @@
 
   BOOL anyChanged = NO;
   for (NSUInteger li = 0; li < lanes.count; li++) {
-    if (!lanes[li].visibleInSequencer ||
-        [pluginHidden containsObject:lanes[li].propertyLabel])
+    if (!lanes[li].effectivelyVisibleInSequencer ||
+        [pluginHidden containsObject:lanes[li].propertyLabel] ||
+        KKLaneIsHiddenByCollapsedGroup(lanes, li))
       continue;
     KKTimingLane *lane = [lanes[li] copy];
     NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
@@ -292,7 +294,7 @@
   }
 
   if (anyChanged)
-    KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
+    KKWriteLanesJSON(lanes, setAPI, self.apiManager);
   [actAPI endAction:self];
   if (anyChanged)
     [self timingGraphApplyState];

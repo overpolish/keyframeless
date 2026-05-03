@@ -22,6 +22,25 @@ static inline KKBezierPath *_Nullable KKSelectedPath(
   return result;
 }
 
+/// Transform-aware primary: prefers a non-group, falls back to the first
+/// selected group. Used wherever the inspector's transform params (Position,
+/// later rotation/scale) need a target — groups support transform but not
+/// stroke/fill/sketch, so non-group selections still take priority.
+static inline KKBezierPath *_Nullable KKSelectedTransformTarget(
+    NSIndexSet *_Nullable sel, NSArray<KKBezierPath *> *_Nonnull paths) {
+  KKBezierPath *p = KKSelectedPath(sel, paths);
+  if (p)
+    return p;
+  __block KKBezierPath *group = nil;
+  [sel enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+    if (idx < paths.count && paths[idx].isGroup) {
+      group = paths[idx];
+      *stop = YES;
+    }
+  }];
+  return group;
+}
+
 /// Returns YES when the "Force Show All Parameters" toggle is ON.
 static inline BOOL
 KKIsForceShowEnabled(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI) {
@@ -38,19 +57,28 @@ KKIsForceShowEnabled(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI) {
 
 typedef NS_OPTIONS(uint32_t, KKVisCondition) {
   KKVisAlways = 0,
-  KKVisStrokeOpen = 1 << 0,    // stroke enabled + expanded
-  KKVisFillOpen = 1 << 1,      // fill enabled + expanded
-  KKVisSketchOpen = 1 << 2,    // sketch enabled + expanded
-  KKVisOpenPath = 1 << 3,      // path is open (not closed)
-  KKVisHasJoins = 1 << 4,      // path has >2 points
-  KKVisNotImage = 1 << 5,      // not an image layer
-  KKVisDashed = 1 << 6,        // strokeStyle == 1
-  KKVisDotted = 1 << 7,        // strokeStyle == 2
-  KKVisStartMarker = 1 << 8,   // startMarker != 0
-  KKVisEndMarker = 1 << 9,     // endMarker != 0
-  KKVisFillHasStyle = 1 << 10, // fillStyle > 0
-  KKVisIsImage = 1 << 11,      // is an image layer
-  KKVisFillSolid = 1 << 12,    // fillStyle == 0 (solid)
+  KKVisStrokeOpen = 1 << 0,            // stroke enabled + expanded
+  KKVisFillOpen = 1 << 1,              // fill enabled + expanded
+  KKVisSketchOpen = 1 << 2,            // sketch enabled + expanded
+  KKVisOpenPath = 1 << 3,              // path is open (not closed)
+  KKVisHasJoins = 1 << 4,              // path has >2 points
+  KKVisNotImage = 1 << 5,              // not an image layer
+  KKVisDashed = 1 << 6,                // strokeStyle == 1
+  KKVisDotted = 1 << 7,                // strokeStyle == 2
+  KKVisStartMarker = 1 << 8,           // startMarker != 0
+  KKVisEndMarker = 1 << 9,             // endMarker != 0
+  KKVisFillHasStyle = 1 << 10,         // fillStyle > 0
+  KKVisIsImage = 1 << 11,              // is an image layer
+  KKVisFillSolid = 1 << 12,            // fillStyle == 0 (solid)
+  KKVisStrokeColorSolid = 1 << 13,     // strokeColorMode == 0
+  KKVisStrokeColorGradient = 1 << 14,  // strokeColorMode == 1
+  KKVisFillColorSolid = 1 << 15,       // fillColorMode == 0
+  KKVisFillColorGradient = 1 << 16,    // fillColorMode == 1
+  KKVisStrokeGradientLinear = 1 << 17, // strokeGradientType == 1 (linear)
+  KKVisFillGradientLinear = 1 << 18,   // fillGradientType == 1 (linear)
+  KKVisTransformOpen = 1 << 19,        // transform enabled + expanded
+  KKVisDashedOrDotted = 1 << 20,       // strokeStyle == 1 || strokeStyle == 2
+  KKVisClosedPath = 1 << 21,           // path is closed (inverse of OpenPath)
 };
 
 typedef struct {
@@ -65,9 +93,23 @@ static const KKParamVisRule kParamVisibility[] = {
   // ─── Always ───
   { kParamOpacity,            KKVisAlways,                                                 kFxParameterFlag_DEFAULT },
   { kParamClosedPath,         KKVisNotImage,                                               kFxParameterFlag_NOT_ANIMATABLE },
+  // ─── Transform group children ───
+  // (kParamTransformEnabled is rendered by the group header — keep it HIDDEN.)
+  { kParamPosition,           KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
+  { kParamRotateWithMotion,   KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
+  { kParamScaleX,             KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
+  { kParamScaleY,             KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
+  { kParamAnchor,             KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
+  { kParamRotation,           KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
+  { kParamRotationX,          KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
+  { kParamRotationY,          KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
   // ─── Stroke group children ───
   { kParamStrokeWidth,        KKVisStrokeOpen,                                             kFxParameterFlag_DEFAULT },
-  { kParamStrokeColor,        KKVisStrokeOpen,                                             kFxParameterFlag_DEFAULT },
+  { kParamStrokeColorMode,    KKVisStrokeOpen,                                             kFxParameterFlag_NOT_ANIMATABLE },
+  { kParamStrokeColor,        KKVisStrokeOpen | KKVisStrokeColorSolid,                     kFxParameterFlag_DEFAULT },
+  { kParamStrokeGradientType, KKVisStrokeOpen | KKVisStrokeColorGradient,                  kFxParameterFlag_NOT_ANIMATABLE },
+  { kParamStrokeGradientAngle,KKVisStrokeOpen | KKVisStrokeColorGradient | KKVisStrokeGradientLinear, kFxParameterFlag_DEFAULT },
+  { kParamStrokeGradientUI,   KKVisStrokeOpen | KKVisStrokeColorGradient,                  kFxParameterFlag_CUSTOM_UI },
   { kParamEndWidth,           KKVisStrokeOpen | KKVisOpenPath,                             kFxParameterFlag_DEFAULT },
   { kParamLineCap,            KKVisStrokeOpen | KKVisOpenPath,                             kFxParameterFlag_CUSTOM_UI },
   { kParamLineJoin,           KKVisStrokeOpen | KKVisHasJoins,                             kFxParameterFlag_CUSTOM_UI },
@@ -75,17 +117,25 @@ static const KKParamVisRule kParamVisibility[] = {
   { kParamDashLength,         KKVisStrokeOpen | KKVisNotImage | KKVisDashed,               kFxParameterFlag_DEFAULT },
   { kParamDashGap,            KKVisStrokeOpen | KKVisNotImage | KKVisDashed,               kFxParameterFlag_DEFAULT },
   { kParamDotGap,             KKVisStrokeOpen | KKVisNotImage | KKVisDotted,               kFxParameterFlag_DEFAULT },
+  { kParamDrawOnStart,        KKVisStrokeOpen,                                             kFxParameterFlag_DEFAULT },
+  { kParamDrawOnEnd,          KKVisStrokeOpen,                                             kFxParameterFlag_DEFAULT },
+  { kParamDrawOnOrigin,       KKVisStrokeOpen | KKVisClosedPath,                           kFxParameterFlag_DEFAULT },
+  { kParamMarchingAntsSpeed,  KKVisStrokeOpen | KKVisNotImage | KKVisDashedOrDotted,       kFxParameterFlag_DEFAULT },
   { kParamStartMarker,        KKVisStrokeOpen | KKVisOpenPath,                             kFxParameterFlag_CUSTOM_UI },
   { kParamEndMarker,          KKVisStrokeOpen | KKVisOpenPath,                             kFxParameterFlag_CUSTOM_UI },
   { kParamStartMarkerSize,    KKVisStrokeOpen | KKVisOpenPath | KKVisStartMarker,          kFxParameterFlag_DEFAULT },
   { kParamEndMarkerSize,      KKVisStrokeOpen | KKVisOpenPath | KKVisEndMarker,            kFxParameterFlag_DEFAULT },
   // ─── Fill group children ───
-  { kParamFillColor,          KKVisFillOpen,                                               kFxParameterFlag_DEFAULT },
+  { kParamFillColorMode,      KKVisFillOpen,                                               kFxParameterFlag_NOT_ANIMATABLE },
+  { kParamFillColor,          KKVisFillOpen | KKVisFillColorSolid,                         kFxParameterFlag_DEFAULT },
+  { kParamFillGradientType,   KKVisFillOpen | KKVisFillColorGradient,                      kFxParameterFlag_NOT_ANIMATABLE },
+  { kParamFillGradientAngle,  KKVisFillOpen | KKVisFillColorGradient | KKVisFillGradientLinear, kFxParameterFlag_DEFAULT },
+  { kParamFillGradientUI,     KKVisFillOpen | KKVisFillColorGradient,                      kFxParameterFlag_CUSTOM_UI },
   { kParamSketchFillStyle,    KKVisFillOpen,                                               kFxParameterFlag_CUSTOM_UI },
   { kParamSketchFillGap,      KKVisFillOpen | KKVisFillHasStyle,                           kFxParameterFlag_DEFAULT },
   { kParamSketchFillAngle,    KKVisFillOpen | KKVisFillHasStyle,                           kFxParameterFlag_DEFAULT },
   { kParamSketchFillWeight,   KKVisFillOpen | KKVisFillHasStyle,                           kFxParameterFlag_DEFAULT },
-  { kParamFillTint,           KKVisFillOpen | KKVisIsImage | KKVisFillSolid,               kFxParameterFlag_DEFAULT },
+  { kParamFillTint,           KKVisFillOpen | KKVisIsImage | KKVisFillSolid, kFxParameterFlag_DEFAULT },
   // ─── Sketch group children ───
   { kParamSketchRoughness,    KKVisSketchOpen | KKVisNotImage,                             kFxParameterFlag_DEFAULT },
   { kParamSketchBowing,       KKVisSketchOpen | KKVisNotImage,                             kFxParameterFlag_DEFAULT },
@@ -100,8 +150,11 @@ static const size_t kParamVisibilityCount =
 /// Build the active-condition bitmask from the current selection state.
 static inline KKVisCondition
 KKBuildVisConditions(BOOL isImage, BOOL isOpen, BOOL hasJoins, BOOL strokeOpen,
-                     BOOL fillOpen, BOOL sketchOpen, uint8_t strokeStyle,
-                     int8_t startMarker, int8_t endMarker, int fillStyle) {
+                     BOOL fillOpen, BOOL sketchOpen, BOOL transformOpen,
+                     uint8_t strokeStyle, int8_t startMarker, int8_t endMarker,
+                     int fillStyle, uint8_t strokeColorMode,
+                     uint8_t fillColorMode, uint8_t strokeGradientType,
+                     uint8_t fillGradientType) {
   KKVisCondition c = KKVisAlways;
   if (strokeOpen)
     c |= KKVisStrokeOpen;
@@ -109,8 +162,12 @@ KKBuildVisConditions(BOOL isImage, BOOL isOpen, BOOL hasJoins, BOOL strokeOpen,
     c |= KKVisFillOpen;
   if (sketchOpen)
     c |= KKVisSketchOpen;
+  if (transformOpen)
+    c |= KKVisTransformOpen;
   if (isOpen)
     c |= KKVisOpenPath;
+  else
+    c |= KKVisClosedPath;
   if (hasJoins)
     c |= KKVisHasJoins;
   if (!isImage)
@@ -121,6 +178,8 @@ KKBuildVisConditions(BOOL isImage, BOOL isOpen, BOOL hasJoins, BOOL strokeOpen,
     c |= KKVisDashed;
   if (strokeStyle == 2)
     c |= KKVisDotted;
+  if (strokeStyle == 1 || strokeStyle == 2)
+    c |= KKVisDashedOrDotted;
   if (startMarker > 0)
     c |= KKVisStartMarker;
   if (endMarker > 0)
@@ -129,6 +188,18 @@ KKBuildVisConditions(BOOL isImage, BOOL isOpen, BOOL hasJoins, BOOL strokeOpen,
     c |= KKVisFillHasStyle;
   if (fillStyle == 0)
     c |= KKVisFillSolid;
+  if (strokeColorMode == 0)
+    c |= KKVisStrokeColorSolid;
+  else
+    c |= KKVisStrokeColorGradient;
+  if (fillColorMode == 0)
+    c |= KKVisFillColorSolid;
+  else
+    c |= KKVisFillColorGradient;
+  if (strokeGradientType == 1)
+    c |= KKVisStrokeGradientLinear;
+  if (fillGradientType == 1)
+    c |= KKVisFillGradientLinear;
   return c;
 }
 
@@ -141,6 +212,7 @@ KKApplyParamVisibility(id<FxParameterSettingAPI_v5> _Nonnull setAPI,
   FxParameterFlags groupFlags = kFxParameterFlag_CUSTOM_UI |
                                 kFxParameterFlag_NOT_ANIMATABLE |
                                 kFxParameterFlag_USE_FULL_VIEW_WIDTH;
+  [setAPI setParameterFlags:groupFlags toParameter:kParamGroupTransform];
   [setAPI setParameterFlags:groupFlags toParameter:kParamGroupStroke];
   [setAPI setParameterFlags:groupFlags toParameter:kParamGroupFill];
   [setAPI setParameterFlags:groupFlags toParameter:kParamGroupSketch];
@@ -188,11 +260,156 @@ KKReadSelectedFillStyle(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI) {
   return 0;
 }
 
+/// Read the four gradient sub-params (mode/type/angle/data) for one side
+/// (stroke or fill) and apply them to the path's matching properties.
+static inline void
+KKReadGradientParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull api,
+                           KKBezierPath *_Nonnull path, BOOL isStroke,
+                           UInt32 modeID, UInt32 typeID, UInt32 angleID,
+                           UInt32 dataID) {
+  int mode = 0;
+  [api getIntValue:&mode fromParameter:modeID atTime:kCMTimeZero];
+  int type = 1;
+  [api getIntValue:&type fromParameter:typeID atTime:kCMTimeZero];
+  double angle = 0.0;
+  [api getFloatValue:&angle fromParameter:angleID atTime:kCMTimeZero];
+  NSString *json = nil;
+  [api getStringParameterValue:&json fromParameter:dataID];
+  if (isStroke) {
+    path.strokeColorMode = (uint8_t)mode;
+    path.strokeGradientType = (uint8_t)type;
+    path.strokeGradientAngle = (float)angle;
+    path.strokeGradientJSON = json;
+  } else {
+    path.fillColorMode = (uint8_t)mode;
+    path.fillGradientType = (uint8_t)type;
+    path.fillGradientAngle = (float)angle;
+    path.fillGradientJSON = json;
+  }
+}
+
+/// Inverse of `KKReadGradientParamsToPath` — write one side's gradient
+/// properties out to FxPlug params.
+static inline void
+KKWriteGradientParamsFromPath(id<FxParameterSettingAPI_v5> _Nonnull api,
+                              KKBezierPath *_Nonnull path, BOOL isStroke,
+                              UInt32 modeID, UInt32 typeID, UInt32 angleID,
+                              UInt32 dataID) {
+  uint8_t mode = isStroke ? path.strokeColorMode : path.fillColorMode;
+  uint8_t type = isStroke ? path.strokeGradientType : path.fillGradientType;
+  float angle = isStroke ? path.strokeGradientAngle : path.fillGradientAngle;
+  NSString *json = isStroke ? path.strokeGradientJSON : path.fillGradientJSON;
+  [api setIntValue:(int)mode toParameter:modeID atTime:kCMTimeZero];
+  [api setIntValue:(int)type toParameter:typeID atTime:kCMTimeZero];
+  [api setFloatValue:angle toParameter:angleID atTime:kCMTimeZero];
+  [api setStringParameterValue:(json ?: @"") toParameter:dataID];
+}
+
+/// Read the transformEnabled / position / scale / anchor params and apply
+/// to `path`. Shared by both the group-only path and the full per-object
+/// reader so the two can't drift.
+static inline void
+KKReadTransformParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
+                            KKBezierPath *_Nonnull path) {
+  BOOL txEn = YES;
+  [paramGetAPI getBoolValue:&txEn
+              fromParameter:kParamTransformEnabled
+                     atTime:kCMTimeZero];
+  path.transformEnabled = txEn;
+  double px = 0.5, py = 0.5;
+  [paramGetAPI getXValue:&px
+                  YValue:&py
+           fromParameter:kParamPosition
+                  atTime:kCMTimeZero];
+  path.translateX = (float)(px - 0.5);
+  path.translateY = (float)(py - 0.5);
+  double sx = 1.0, sy = 1.0;
+  [paramGetAPI getFloatValue:&sx fromParameter:kParamScaleX atTime:kCMTimeZero];
+  [paramGetAPI getFloatValue:&sy fromParameter:kParamScaleY atTime:kCMTimeZero];
+  path.scaleX = (float)sx;
+  path.scaleY = (float)sy;
+  double ax = 0.0, ay = 0.0;
+  [paramGetAPI getXValue:&ax
+                  YValue:&ay
+           fromParameter:kParamAnchor
+                  atTime:kCMTimeZero];
+  path.anchorX = (float)ax;
+  path.anchorY = (float)ay;
+#define KK_READ_FLOAT(field, paramID)                                          \
+  do {                                                                         \
+    double v = 0.0;                                                            \
+    [paramGetAPI getFloatValue:&v fromParameter:(paramID)atTime:kCMTimeZero];  \
+    path.field = (float)v;                                                     \
+  } while (0)
+  KK_READ_FLOAT(rotationZ, kParamRotation);
+  KK_READ_FLOAT(rotationX, kParamRotationX);
+  KK_READ_FLOAT(rotationY, kParamRotationY);
+#undef KK_READ_FLOAT
+  BOOL rwm = NO;
+  [paramGetAPI getBoolValue:&rwm
+              fromParameter:kParamRotateWithMotion
+                     atTime:kCMTimeZero];
+  path.rotateWithMotion = rwm;
+}
+
+/// Mirror of KKReadTransformParamsToPath.
+static inline void KKWriteTransformParamsFromPath(
+    id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
+    KKBezierPath *_Nonnull path) {
+  [paramSetAPI setBoolValue:path.transformEnabled
+                toParameter:kParamTransformEnabled
+                     atTime:kCMTimeZero];
+  [paramSetAPI setXValue:0.5 + path.translateX
+                  YValue:0.5 + path.translateY
+             toParameter:kParamPosition
+                  atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.scaleX
+                 toParameter:kParamScaleX
+                      atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.scaleY
+                 toParameter:kParamScaleY
+                      atTime:kCMTimeZero];
+  [paramSetAPI setXValue:path.anchorX
+                  YValue:path.anchorY
+             toParameter:kParamAnchor
+                  atTime:kCMTimeZero];
+#define KK_WRITE_FLOAT(field, paramID)                                         \
+  [paramSetAPI setFloatValue:path.field toParameter:(paramID)atTime:kCMTimeZero]
+  KK_WRITE_FLOAT(rotationZ, kParamRotation);
+  KK_WRITE_FLOAT(rotationX, kParamRotationX);
+  KK_WRITE_FLOAT(rotationY, kParamRotationY);
+#undef KK_WRITE_FLOAT
+  [paramSetAPI setBoolValue:path.rotateWithMotion
+                toParameter:kParamRotateWithMotion
+                     atTime:kCMTimeZero];
+}
+
+/// Read the transform-only subset of params (the only fields a group owns).
+static inline void
+KKReadGroupTransformParams(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
+                           KKBezierPath *_Nonnull path) {
+  KKReadTransformParamsToPath(paramGetAPI, path);
+}
+
+/// Mirror of KKReadGroupTransformParams.
+static inline void
+KKWriteGroupTransformParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
+                            KKBezierPath *_Nonnull path) {
+  KKWriteTransformParamsFromPath(paramSetAPI, path);
+}
+
 /// Read per-object param values from FxPlug and apply to a path.
 /// Add new per-object properties here.
 static inline void
 KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                KKBezierPath *_Nonnull path) {
+  if (path.isGroup) {
+    // Groups carry only transform-related state; reading stroke/fill/sketch
+    // params would clobber unused fields with whatever the inspector last
+    // showed for a non-group selection.
+    KKReadGroupTransformParams(paramGetAPI, path);
+    return;
+  }
   BOOL strokeOn = YES;
   [paramGetAPI getBoolValue:&strokeOn
               fromParameter:kParamStrokeEnabled
@@ -246,6 +463,15 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                       atTime:kCMTimeZero];
   path.opacity = (float)(op / 100.0);
 
+  KKReadTransformParamsToPath(paramGetAPI, path);
+
+  KKReadGradientParamsToPath(
+      paramGetAPI, path, YES, kParamStrokeColorMode, kParamStrokeGradientType,
+      kParamStrokeGradientAngle, kParamStrokeGradientData);
+  KKReadGradientParamsToPath(paramGetAPI, path, NO, kParamFillColorMode,
+                             kParamFillGradientType, kParamFillGradientAngle,
+                             kParamFillGradientData);
+
   double dl = 20.0;
   [paramGetAPI getFloatValue:&dl
                fromParameter:kParamDashLength
@@ -263,6 +489,30 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                fromParameter:kParamDotGap
                       atTime:kCMTimeZero];
   path.dotGap = (float)dotg;
+
+  double dos = 0.0;
+  [paramGetAPI getFloatValue:&dos
+               fromParameter:kParamDrawOnStart
+                      atTime:kCMTimeZero];
+  path.drawOnStart = (float)dos;
+
+  double doe = 1.0;
+  [paramGetAPI getFloatValue:&doe
+               fromParameter:kParamDrawOnEnd
+                      atTime:kCMTimeZero];
+  path.drawOnEnd = (float)doe;
+
+  double doo = 0.0;
+  [paramGetAPI getFloatValue:&doo
+               fromParameter:kParamDrawOnOrigin
+                      atTime:kCMTimeZero];
+  path.drawOnOrigin = (float)doo;
+
+  double mas = 0.0;
+  [paramGetAPI getFloatValue:&mas
+               fromParameter:kParamMarchingAntsSpeed
+                      atTime:kCMTimeZero];
+  path.marchingAntsSpeed = (float)mas;
 
   BOOL closedPath = YES;
   [paramGetAPI getBoolValue:&closedPath
@@ -375,7 +625,7 @@ static inline void
 KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
                         NSIndexSet *_Nullable sel,
                         NSMutableArray<KKBezierPath *> *_Nonnull paths) {
-  KKBezierPath *primary = KKSelectedPath(sel, paths);
+  KKBezierPath *primary = KKSelectedTransformTarget(sel, paths);
   if (!primary)
     return;
 
@@ -386,6 +636,16 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
   float oldStrokeG = primary.strokeG;
   float oldStrokeB = primary.strokeB;
   BOOL oldStrokeEnabled = primary.strokeEnabled;
+  BOOL oldTransformEnabled = primary.transformEnabled;
+  float oldTranslateX = primary.translateX;
+  float oldTranslateY = primary.translateY;
+  float oldScaleX = primary.scaleX;
+  float oldScaleY = primary.scaleY;
+  float oldAnchorX = primary.anchorX;
+  float oldAnchorY = primary.anchorY;
+  float oldRotationZ = primary.rotationZ;
+  float oldRotationX = primary.rotationX;
+  float oldRotationY = primary.rotationY;
   BOOL oldFillEnabled = primary.fillEnabled;
   float oldFillR = primary.fillR;
   float oldFillG = primary.fillG;
@@ -395,6 +655,10 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
   float oldDashLength = primary.dashLength;
   float oldDashGap = primary.dashGap;
   float oldDotGap = primary.dotGap;
+  float oldDrawOnStart = primary.drawOnStart;
+  float oldDrawOnEnd = primary.drawOnEnd;
+  float oldDrawOnOrigin = primary.drawOnOrigin;
+  float oldMarchingAntsSpeed = primary.marchingAntsSpeed;
   float oldStartMarkerSize = primary.startMarkerSize;
   float oldEndMarkerSize = primary.endMarkerSize;
   BOOL oldSketchEnabled = primary.sketchEnabled;
@@ -404,6 +668,14 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
   float oldSketchFillGap = primary.sketchFillGap;
   float oldSketchFillAngle = primary.sketchFillAngle;
   float oldSketchFillWeight = primary.sketchFillWeight;
+  uint8_t oldStrokeColorMode = primary.strokeColorMode;
+  uint8_t oldStrokeGradientType = primary.strokeGradientType;
+  float oldStrokeGradientAngle = primary.strokeGradientAngle;
+  NSString *oldStrokeGradientJSON = primary.strokeGradientJSON;
+  uint8_t oldFillColorMode = primary.fillColorMode;
+  uint8_t oldFillGradientType = primary.fillGradientType;
+  float oldFillGradientAngle = primary.fillGradientAngle;
+  NSString *oldFillGradientJSON = primary.fillGradientJSON;
 
   // Apply all inspector params to the primary path.
   KKParamsToPath(paramGetAPI, primary);
@@ -428,52 +700,66 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
     if (p == primary)
       return;
 
-    if (primary.strokeEnabled != oldStrokeEnabled)
-      p.strokeEnabled = primary.strokeEnabled;
-    if (primary.strokeWidth != oldStrokeWidth)
-      p.strokeWidth = primary.strokeWidth;
-    if (primary.endWidth != oldEndWidth)
-      p.endWidth = primary.endWidth;
+#define KK_COPY_IF_CHANGED(field, snap)                                        \
+  do {                                                                         \
+    if (primary.field != snap)                                                 \
+      p.field = primary.field;                                                 \
+  } while (0)
+    KK_COPY_IF_CHANGED(strokeEnabled, oldStrokeEnabled);
+    KK_COPY_IF_CHANGED(transformEnabled, oldTransformEnabled);
+    KK_COPY_IF_CHANGED(translateX, oldTranslateX);
+    KK_COPY_IF_CHANGED(translateY, oldTranslateY);
+    KK_COPY_IF_CHANGED(scaleX, oldScaleX);
+    KK_COPY_IF_CHANGED(scaleY, oldScaleY);
+    KK_COPY_IF_CHANGED(anchorX, oldAnchorX);
+    KK_COPY_IF_CHANGED(anchorY, oldAnchorY);
+    KK_COPY_IF_CHANGED(rotationZ, oldRotationZ);
+    KK_COPY_IF_CHANGED(rotationX, oldRotationX);
+    KK_COPY_IF_CHANGED(rotationY, oldRotationY);
+    KK_COPY_IF_CHANGED(strokeWidth, oldStrokeWidth);
+    KK_COPY_IF_CHANGED(endWidth, oldEndWidth);
     if (strokeColorChanged) {
       p.strokeR = primary.strokeR;
       p.strokeG = primary.strokeG;
       p.strokeB = primary.strokeB;
     }
-    if (primary.fillEnabled != oldFillEnabled)
-      p.fillEnabled = primary.fillEnabled;
+    KK_COPY_IF_CHANGED(fillEnabled, oldFillEnabled);
     if (fillColorChanged) {
       p.fillR = primary.fillR;
       p.fillG = primary.fillG;
       p.fillB = primary.fillB;
     }
-    if (primary.fillTint != oldFillTint)
-      p.fillTint = primary.fillTint;
-    if (primary.opacity != oldOpacity)
-      p.opacity = primary.opacity;
-    if (primary.dashLength != oldDashLength)
-      p.dashLength = primary.dashLength;
-    if (primary.dashGap != oldDashGap)
-      p.dashGap = primary.dashGap;
-    if (primary.dotGap != oldDotGap)
-      p.dotGap = primary.dotGap;
-    if (primary.startMarkerSize != oldStartMarkerSize)
-      p.startMarkerSize = primary.startMarkerSize;
-    if (primary.endMarkerSize != oldEndMarkerSize)
-      p.endMarkerSize = primary.endMarkerSize;
-    if (primary.sketchEnabled != oldSketchEnabled)
-      p.sketchEnabled = primary.sketchEnabled;
-    if (primary.sketchRoughness != oldSketchRoughness)
-      p.sketchRoughness = primary.sketchRoughness;
-    if (primary.sketchBowing != oldSketchBowing)
-      p.sketchBowing = primary.sketchBowing;
-    if (primary.sketchStrokes != oldSketchStrokes)
-      p.sketchStrokes = primary.sketchStrokes;
-    if (primary.sketchFillGap != oldSketchFillGap)
-      p.sketchFillGap = primary.sketchFillGap;
-    if (primary.sketchFillAngle != oldSketchFillAngle)
-      p.sketchFillAngle = primary.sketchFillAngle;
-    if (primary.sketchFillWeight != oldSketchFillWeight)
-      p.sketchFillWeight = primary.sketchFillWeight;
+    KK_COPY_IF_CHANGED(fillTint, oldFillTint);
+    KK_COPY_IF_CHANGED(opacity, oldOpacity);
+    KK_COPY_IF_CHANGED(dashLength, oldDashLength);
+    KK_COPY_IF_CHANGED(dashGap, oldDashGap);
+    KK_COPY_IF_CHANGED(dotGap, oldDotGap);
+    KK_COPY_IF_CHANGED(drawOnStart, oldDrawOnStart);
+    KK_COPY_IF_CHANGED(drawOnEnd, oldDrawOnEnd);
+    KK_COPY_IF_CHANGED(drawOnOrigin, oldDrawOnOrigin);
+    KK_COPY_IF_CHANGED(marchingAntsSpeed, oldMarchingAntsSpeed);
+    KK_COPY_IF_CHANGED(startMarkerSize, oldStartMarkerSize);
+    KK_COPY_IF_CHANGED(endMarkerSize, oldEndMarkerSize);
+    KK_COPY_IF_CHANGED(sketchEnabled, oldSketchEnabled);
+    KK_COPY_IF_CHANGED(sketchRoughness, oldSketchRoughness);
+    KK_COPY_IF_CHANGED(sketchBowing, oldSketchBowing);
+    KK_COPY_IF_CHANGED(sketchStrokes, oldSketchStrokes);
+    KK_COPY_IF_CHANGED(sketchFillGap, oldSketchFillGap);
+    KK_COPY_IF_CHANGED(sketchFillAngle, oldSketchFillAngle);
+    KK_COPY_IF_CHANGED(sketchFillWeight, oldSketchFillWeight);
+    KK_COPY_IF_CHANGED(strokeColorMode, oldStrokeColorMode);
+    KK_COPY_IF_CHANGED(strokeGradientType, oldStrokeGradientType);
+    KK_COPY_IF_CHANGED(strokeGradientAngle, oldStrokeGradientAngle);
+    if (![primary.strokeGradientJSON isEqualToString:oldStrokeGradientJSON] &&
+        !(primary.strokeGradientJSON == nil && oldStrokeGradientJSON == nil))
+      p.strokeGradientJSON = primary.strokeGradientJSON;
+    KK_COPY_IF_CHANGED(fillColorMode, oldFillColorMode);
+    KK_COPY_IF_CHANGED(fillGradientType, oldFillGradientType);
+    KK_COPY_IF_CHANGED(fillGradientAngle, oldFillGradientAngle);
+    if (![primary.fillGradientJSON isEqualToString:oldFillGradientJSON] &&
+        !(primary.fillGradientJSON == nil && oldFillGradientJSON == nil))
+      p.fillGradientJSON = primary.fillGradientJSON;
+#undef KK_COPY_IF_CHANGED
   }];
 }
 
@@ -482,6 +768,13 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
 static inline void
 KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                KKBezierPath *_Nonnull path) {
+  if (path.isGroup) {
+    // Groups own only transform state — leave stroke/fill/sketch params at
+    // whatever the previous selection set them to, so visibility cascades
+    // and snapshot defaults stay coherent.
+    KKWriteGroupTransformParams(paramSetAPI, path);
+    return;
+  }
   [paramSetAPI setBoolValue:path.strokeEnabled
                 toParameter:kParamStrokeEnabled
                      atTime:kCMTimeZero];
@@ -511,6 +804,13 @@ KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
   [paramSetAPI setFloatValue:path.opacity * 100.0f
                  toParameter:kParamOpacity
                       atTime:kCMTimeZero];
+  KKWriteTransformParamsFromPath(paramSetAPI, path);
+  KKWriteGradientParamsFromPath(
+      paramSetAPI, path, YES, kParamStrokeColorMode, kParamStrokeGradientType,
+      kParamStrokeGradientAngle, kParamStrokeGradientData);
+  KKWriteGradientParamsFromPath(paramSetAPI, path, NO, kParamFillColorMode,
+                                kParamFillGradientType, kParamFillGradientAngle,
+                                kParamFillGradientData);
   [paramSetAPI setFloatValue:path.dashLength
                  toParameter:kParamDashLength
                       atTime:kCMTimeZero];
@@ -519,6 +819,18 @@ KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                       atTime:kCMTimeZero];
   [paramSetAPI setFloatValue:path.dotGap
                  toParameter:kParamDotGap
+                      atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.drawOnStart
+                 toParameter:kParamDrawOnStart
+                      atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.drawOnEnd
+                 toParameter:kParamDrawOnEnd
+                      atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.drawOnOrigin
+                 toParameter:kParamDrawOnOrigin
+                      atTime:kCMTimeZero];
+  [paramSetAPI setFloatValue:path.marchingAntsSpeed
+                 toParameter:kParamMarchingAntsSpeed
                       atTime:kCMTimeZero];
   [paramSetAPI setBoolValue:path.closed
                 toParameter:kParamClosedPath

@@ -42,7 +42,7 @@
   lane.segments = segs;
   lanes[jsonIdx] = lane;
 
-  KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
+  KKWriteLanesJSON(lanes, setAPI, self.apiManager);
   [actAPI endAction:self];
   [self timingGraphApplyState];
 }
@@ -78,7 +78,7 @@
   lane.segments = segs;
   lanes[jsonIdx] = lane;
 
-  KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
+  KKWriteLanesJSON(lanes, setAPI, self.apiManager);
   [actAPI endAction:self];
   [self timingGraphApplyState];
 }
@@ -103,8 +103,9 @@
 
   BOOL anyChanged = NO;
   for (NSUInteger li = 0; li < lanes.count; li++) {
-    if (!lanes[li].visibleInSequencer ||
-        [pluginHidden containsObject:lanes[li].propertyLabel])
+    if (!lanes[li].effectivelyVisibleInSequencer ||
+        [pluginHidden containsObject:lanes[li].propertyLabel] ||
+        KKLaneIsHiddenByCollapsedGroup(lanes, li))
       continue;
     KKTimingLane *lane = [lanes[li] copy];
     NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
@@ -127,7 +128,7 @@
   }
 
   if (anyChanged) {
-    KKApplyHTHNormalizationInPlace(lanes, [self _kindsByLaneLabel]);
+    KKApplyHTHNormalizationInPlace(lanes);
     NSString *updated = [KKTimingLane jsonFromLanes:lanes];
     if (updated)
       [setAPI setStringParameterValue:updated
@@ -165,8 +166,9 @@
 
   BOOL anyChanged = NO;
   for (NSUInteger li = 0; li < lanes.count; li++) {
-    if (!lanes[li].visibleInSequencer ||
-        [pluginHidden containsObject:lanes[li].propertyLabel])
+    if (!lanes[li].effectivelyVisibleInSequencer ||
+        [pluginHidden containsObject:lanes[li].propertyLabel] ||
+        KKLaneIsHiddenByCollapsedGroup(lanes, li))
       continue;
     KKTimingLane *lane = [lanes[li] copy];
     NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
@@ -191,7 +193,7 @@
   }
 
   if (anyChanged)
-    KKWriteLanesJSON(lanes, setAPI, [self _kindsByLaneLabel]);
+    KKWriteLanesJSON(lanes, setAPI, self.apiManager);
   [actAPI endAction:self];
   if (anyChanged)
     [self timingGraphApplyState];
@@ -225,16 +227,20 @@
   id<FxCommandAPI_v2> commandAPI =
       [self.apiManager apiForProtocol:@protocol(FxCommandAPI_v2)];
   if (timingAPI && commandAPI) {
-    // Timeline in/out are the only timing-API values that return true
-    // timeline time across all clip kinds. -startTimeForEffect: and
-    // -startTimeOfInputToFilter: are source-relative in FCP and on still
-    // images return a stock ~1h offset, so movePlayheadToTime: (which
-    // expects timeline time) silently rejects the out-of-range value.
-    CMTime inPoint = kCMTimeZero, outPoint = kCMTimeZero;
-    [timingAPI inPointTimeOfTimelineForEffect:&inPoint];
-    [timingAPI outPointTimeOfTimelineForEffect:&outPoint];
-    double startSec = CMTimeGetSeconds(inPoint);
-    double endSec = CMTimeGetSeconds(outPoint);
+    // inPointTimeOfTimelineForEffect/outPointTimeOfTimelineForEffect return
+    // the *whole timeline's* in/out, not the clip's slice. To get the clip's
+    // true on-timeline range, take the source-relative input start/duration
+    // and convert each end through timelineTime:fromInputTime:. This works
+    // across video clips, still images (the 1h source offset cancels out in
+    // the conversion), and Motion.
+    CMTime srcStart = kCMTimeZero, srcDur = kCMTimeZero;
+    [timingAPI startTimeOfInputToFilter:&srcStart];
+    [timingAPI durationTimeOfInputToFilter:&srcDur];
+    CMTime tlStart = kCMTimeZero, tlEnd = kCMTimeZero;
+    [timingAPI timelineTime:&tlStart fromInputTime:srcStart];
+    [timingAPI timelineTime:&tlEnd fromInputTime:CMTimeAdd(srcStart, srcDur)];
+    double startSec = CMTimeGetSeconds(tlStart);
+    double endSec = CMTimeGetSeconds(tlEnd);
     double targetSec = startSec + fraction * (endSec - startSec);
     // Nudge half a frame inside the clip at the boundaries so the playhead
     // never lands exactly on the seam with the neighbouring clip (FCP

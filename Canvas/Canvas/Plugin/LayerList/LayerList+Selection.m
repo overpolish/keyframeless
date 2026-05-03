@@ -126,9 +126,6 @@
 
     NSIndexSet *oldSel = KKLayerStateForUUID(self.instanceUUID).uiSelection;
     [self _writeBackObjectParams:paramGetAPI toPaths:paths selection:oldSel];
-
-    if (clicked < paths.count && paths[clicked].isGroup)
-      [sel addIndexes:KKDescendantIndices(clicked, paths)];
   }
 
   KKSetLayerSelection(self.instanceUUID, [sel copy]);
@@ -256,6 +253,7 @@
         return;
       KKBezierPath *clone =
           [KKBezierPath pathWithData:[paths[idx] dataRepresentation]];
+      clone.layerID = [[NSUUID UUID] UUIDString];
       if (clone.isGroup && clone.groupID) {
         NSString *newGID = [[NSUUID UUID] UUIDString];
         groupIDMap[clone.groupID] = newGID;

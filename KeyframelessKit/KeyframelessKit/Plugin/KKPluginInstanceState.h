@@ -8,8 +8,9 @@
 #import <AppKit/AppKit.h>
 
 @class KKEmptyLanesView;
-@class KKGradientBarView;
+@class KKGradientControl;
 @class KKLaneVisibilityBar;
+@class KKPlugin;
 @class KKStagePlayheadView;
 @class KKStageSequencerRulerView;
 @class KKStageSequencerView;
@@ -49,6 +50,13 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Lanes that should be pushed to the sequencer view on the next OSC draw.
 @property(nonatomic, copy, nullable) NSArray<KKTimingLane *> *pendingLanes;
+
+/// Set once we've either successfully read non-empty JSON for this instance
+/// or written JSON via KKWriteLanesJSON. Distinguishes a truly fresh instance
+/// (re-seed from defaults is correct) from an XPC scope where the param
+/// probe transiently returns nil right after a write (re-seeding would clobber
+/// the user's edit).
+@property(nonatomic) BOOL lanesEverPersisted;
 
 /// The live sequencer view for this instance (weak — auto-nils on dealloc).
 @property(nonatomic, weak, nullable) KKStageSequencerView *sequencerView;
@@ -93,7 +101,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Live gradient bar for this instance (weak). Used by the color sync pump
 /// to push undo/redo-restored stops back into the UI.
-@property(nonatomic, weak, nullable) KKGradientBarView *gradientBar;
+@property(nonatomic, weak, nullable) KKGradientControl *gradientControl;
 
 /// Last-known gradient JSON. Set by the custom UI and by the color sync
 /// pump; used to diff against the persisted param on sync ticks so self-
@@ -118,6 +126,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Empty-state overlay shown when every lane is user-hidden (weak).
 @property(nonatomic, weak, nullable) KKEmptyLanesView *emptyLanesView;
+
+/// Weak ref to the plugin instance that owns this state. Set by the
+/// sequencer registration path so static pump helpers can route empty-
+/// state messaging through the plugin's `emptyLanesMessageWhenNoLanes`.
+@property(nonatomic, weak, nullable) KKPlugin *plugin;
 
 /// Whether the sequencer's loop-playback toggle is on. Session-scoped (not
 /// persisted across FCP restarts, not written to a param). Written from the

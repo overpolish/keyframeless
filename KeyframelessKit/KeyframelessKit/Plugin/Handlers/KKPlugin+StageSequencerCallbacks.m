@@ -104,6 +104,13 @@
                                                 anchorRect:anchorRect
                                                 sourceView:weakSeq];
       };
+  seqView.onGroupCollapseToggled = ^(NSString *groupKey, BOOL collapsed) {
+    [weakSelf _handleGroupCollapseToggledForKey:groupKey collapsed:collapsed];
+  };
+  seqView.onGroupSegmentClicked = ^(NSString *groupKey) {
+    [weakSelf kkHandleGroupSegmentClickedForKey:groupKey];
+  };
+  seqView.selectedGroupKey = [weakSelf kkSelectedGroupKey];
   rulerView.onLoopToggled = ^(BOOL newState) {
     [weakSelf _handleRulerLoopToggled:newState];
   };

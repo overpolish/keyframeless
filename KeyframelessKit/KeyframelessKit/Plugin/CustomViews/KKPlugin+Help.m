@@ -188,7 +188,10 @@
       [KKPlugin _clipWrappingTipForMode:[self clipWrappingMode]];
   if (wrapTip.length > 0 && sections.count > 0)
     [KKPlugin _prependClipWrappingTip:wrapTip toSection:sections.firstObject];
-  if ([self animatableProperties].count > 0)
+  id<FxParameterRetrievalAPI_v6> _helpGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if ([self defaultLanesAtTime:[actionAPI currentTime] paramGetAPI:_helpGetAPI]
+          .count > 0)
     [sections addObject:[KKPlugin _builtInTimingHelpSection]];
   if ([self usesMotionBlur])
     [sections addObject:[KKPlugin _builtInMotionBlurHelpSection]];

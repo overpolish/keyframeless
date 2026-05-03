@@ -4,7 +4,6 @@
  */
 
 #import "../Math/KKGradientSampling.h"
-#import "../Views/KKAnimatableProperty.h"
 #import "KKPlugin+Color.h"
 #import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
@@ -12,6 +11,7 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKAlertView.h>
 #import <KeyframelessKit/KKGradientBarView.h>
+#import <KeyframelessKit/KKGradientControl.h>
 #import <KeyframelessKit/KKGradientFavoritesPopover.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKTokens.h>
@@ -230,145 +230,24 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
   NSString *gradientJson = nil;
   [paramGetAPI getStringParameterValue:&gradientJson
                          fromParameter:kKKParamGradientData];
-  [actionAPI endAction:self];
-
-  CGFloat rowH = 36;
-  NSView *container =
-      [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 200, rowH)];
-  container.autoresizingMask = NSViewWidthSizable;
-
-  KKGradientBarView *bar = [[KKGradientBarView alloc] initWithFrame:NSZeroRect];
-  bar.translatesAutoresizingMaskIntoConstraints = NO;
-  NSArray<KKGradientStop *> *stops = KKGradientStopsFromJSON(gradientJson);
-  if (stops)
-    bar.stops = stops;
-  objc_setAssociatedObject([self class], kGradientBarKey, bar,
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-  // Ensure the UUID exists — the timing-UI creation path normally generates
-  // it, but the color custom UI can be mounted first on some inspector
-  // layouts. Without a UUID, `state` would be nil and the bar would never
-  // register, causing live updates to silently fail until a remount.
-  id<FxCustomParameterActionAPI_v4> registerAction =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [registerAction startAction:self];
   KKPluginInstanceState *instanceState =
       KKInstanceStateEnsureForAPI(self.apiManager);
-  [registerAction endAction:self];
-  instanceState.gradientBar = bar;
+  [actionAPI endAction:self];
+
+  KKGradientControl *control =
+      [[KKGradientControl alloc] initWithFrame:NSMakeRect(0, 0, 200, 36)];
+  NSArray<KKGradientStop *> *stops = KKGradientStopsFromJSON(gradientJson);
+  if (stops)
+    control.stops = stops;
+
+  instanceState.gradientControl = control;
   instanceState.gradientJSONSnapshot = gradientJson;
 
-  NSImageSymbolConfiguration *starCfg = [NSImageSymbolConfiguration
-      configurationWithPointSize:10.0
-                          weight:NSFontWeightRegular];
-  NSImage *starImg = [[NSImage imageWithSystemSymbolName:@"star"
-                                accessibilityDescription:@"Favorites"]
-      imageWithSymbolConfiguration:starCfg];
-  NSButton *starBtn =
-      [NSButton buttonWithImage:starImg
-                         target:self
-                         action:@selector(_kkGradientFavTapped:)];
-  starBtn.bordered = NO;
-  starBtn.contentTintColor =
-      [NSColor.inspectorLabel colorWithAlphaComponent:0.5];
-  starBtn.translatesAutoresizingMaskIntoConstraints = NO;
-
-  KKGradientFavoritesPopover *favPopover =
-      [[KKGradientFavoritesPopover alloc] init];
-  favPopover.currentStops = bar.stops;
-  objc_setAssociatedObject([self class], kGradientFavPopoverKey, favPopover,
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-  NSImage *reverseImg =
-      [[NSImage imageWithSystemSymbolName:@"arrow.left.and.right"
-                 accessibilityDescription:@"Reverse"]
-          imageWithSymbolConfiguration:starCfg];
-  NSButton *reverseBtn =
-      [NSButton buttonWithImage:reverseImg
-                         target:self
-                         action:@selector(_kkGradientReverseTapped:)];
-  reverseBtn.bordered = NO;
-  reverseBtn.contentTintColor =
-      [NSColor.inspectorLabel colorWithAlphaComponent:0.5];
-  reverseBtn.translatesAutoresizingMaskIntoConstraints = NO;
-
-  NSImage *distributeImg =
-      [[NSImage imageWithSystemSymbolName:@"rectangle.split.3x1"
-                 accessibilityDescription:@"Distribute"]
-          imageWithSymbolConfiguration:starCfg];
-  NSButton *distributeBtn =
-      [NSButton buttonWithImage:distributeImg
-                         target:self
-                         action:@selector(_kkGradientDistributeTapped:)];
-  distributeBtn.bordered = NO;
-  distributeBtn.contentTintColor =
-      [NSColor.inspectorLabel colorWithAlphaComponent:0.5];
-  distributeBtn.translatesAutoresizingMaskIntoConstraints = NO;
-
-  [container addSubview:bar];
-  [container addSubview:starBtn];
-  [container addSubview:reverseBtn];
-  [container addSubview:distributeBtn];
-  [NSLayoutConstraint activateConstraints:@[
-    [starBtn.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
-    [starBtn.topAnchor constraintEqualToAnchor:bar.topAnchor constant:5.0],
-    [starBtn.widthAnchor constraintEqualToConstant:16.0],
-    [starBtn.heightAnchor constraintEqualToConstant:16.0],
-
-    [bar.leadingAnchor constraintEqualToAnchor:starBtn.trailingAnchor
-                                      constant:KKSpacingSM],
-    [bar.trailingAnchor constraintEqualToAnchor:reverseBtn.leadingAnchor
-                                       constant:-KKSpacingSM],
-    [bar.topAnchor constraintEqualToAnchor:container.topAnchor],
-    [bar.bottomAnchor constraintEqualToAnchor:container.bottomAnchor],
-
-    [reverseBtn.trailingAnchor
-        constraintEqualToAnchor:distributeBtn.leadingAnchor
-                       constant:-KKSpacingSM],
-    [reverseBtn.topAnchor constraintEqualToAnchor:bar.topAnchor constant:5.0],
-    [reverseBtn.widthAnchor constraintEqualToConstant:16.0],
-    [reverseBtn.heightAnchor constraintEqualToConstant:16.0],
-
-    [distributeBtn.trailingAnchor
-        constraintEqualToAnchor:container.trailingAnchor],
-    [distributeBtn.topAnchor constraintEqualToAnchor:bar.topAnchor
-                                            constant:5.0],
-    [distributeBtn.widthAnchor constraintEqualToConstant:16.0],
-    [distributeBtn.heightAnchor constraintEqualToConstant:16.0],
-  ]];
-
   __weak typeof(self) weakSelf = self;
-  bar.onStopsChanged = ^(NSArray<KKGradientStop *> *newStops) {
+  control.onStopsChanged = ^(NSArray<KKGradientStop *> *newStops) {
     __strong typeof(weakSelf) strongSelf = weakSelf;
     if (!strongSelf)
       return;
-    NSString *json = KKGradientJSONFromStops(newStops);
-    if (!json)
-      return;
-    KKGradientFavoritesPopover *fp =
-        objc_getAssociatedObject([strongSelf class], kGradientFavPopoverKey);
-    fp.currentStops = newStops;
-    KKPluginInstanceState *s = KKInstanceStateForAPI(strongSelf.apiManager);
-    s.gradientJSONSnapshot = json;
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actAPI startAction:strongSelf];
-    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    [setAPI setStringParameterValue:json toParameter:kKKParamGradientData];
-    [actAPI endAction:strongSelf];
-  };
-
-  favPopover.onApplyFavorite = ^(NSArray<KKGradientStop *> *newStops) {
-    __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf)
-      return;
-    KKGradientBarView *b =
-        objc_getAssociatedObject([strongSelf class], kGradientBarKey);
-    b.stops = newStops;
-    KKGradientFavoritesPopover *fp =
-        objc_getAssociatedObject([strongSelf class], kGradientFavPopoverKey);
-    fp.currentStops = newStops;
     NSString *json = KKGradientJSONFromStops(newStops);
     if (!json)
       return;
@@ -383,62 +262,13 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
     [actAPI endAction:strongSelf];
   };
 
-  return container;
-}
-
-- (void)_kkGradientFavTapped:(NSButton *)sender {
-  KKGradientFavoritesPopover *favPopover =
-      objc_getAssociatedObject([self class], kGradientFavPopoverKey);
-  if (!favPopover)
-    return;
-  [favPopover showRelativeToRect:sender.bounds ofView:sender];
-}
-
-- (void)_kkGradientReverseTapped:(NSButton *)sender {
-  KKGradientBarView *bar =
-      objc_getAssociatedObject([self class], kGradientBarKey);
-  [bar reverseStops];
-}
-
-- (void)_kkGradientDistributeTapped:(NSButton *)sender {
-  KKGradientBarView *bar =
-      objc_getAssociatedObject([self class], kGradientBarKey);
-  [bar distributeStopsEvenly];
-}
-
-+ (void)colorPushGradientForProperty:(KKAnimatableProperty *)prop
-                              values:(NSArray<NSNumber *> *)flatValues
-                          apiManager:(id<PROAPIAccessing>)apiManager {
-  BOOL isGradient = NO;
-  for (NSNumber *k in prop.valueParamKinds) {
-    if (k.integerValue == KKAnimatableParamKindGradient) {
-      isGradient = YES;
-      break;
-    }
-  }
-  if (!isGradient)
-    return;
-  KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
-  KKGradientBarView *bar = state.gradientBar;
-  if (!bar)
-    return;
-  NSArray<KKGradientStop *> *stops = KKGradientStopsFromFlat(flatValues);
-  if (!stops)
-    return;
-  state.gradientJSONSnapshot = KKGradientJSONFromStops(stops);
-  Class klass = [self class];
-  dispatch_async(dispatch_get_main_queue(), ^{
-    bar.stops = stops;
-    KKGradientFavoritesPopover *fp =
-        objc_getAssociatedObject(klass, kGradientFavPopoverKey);
-    fp.currentStops = stops;
-  });
+  return control;
 }
 
 + (void)colorSyncFromParams:(id<PROAPIAccessing>)apiManager {
   KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
-  KKGradientBarView *bar = state.gradientBar;
-  if (!bar)
+  KKGradientControl *control = state.gradientControl;
+  if (!control)
     return;
   id<FxParameterRetrievalAPI_v6> getAPI =
       [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
@@ -455,10 +285,7 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
     return;
   state.gradientJSONSnapshot = json;
   dispatch_async(dispatch_get_main_queue(), ^{
-    bar.stops = stops;
-    KKGradientFavoritesPopover *fp =
-        objc_getAssociatedObject([self class], kGradientFavPopoverKey);
-    fp.currentStops = stops;
+    control.stops = stops;
   });
 }
 

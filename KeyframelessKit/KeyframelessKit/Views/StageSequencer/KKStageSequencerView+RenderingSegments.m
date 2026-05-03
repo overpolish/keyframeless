@@ -5,7 +5,6 @@
 
 #import "../../Math/KKEasing.h"
 #import "../../Style/NSColor+KKColors.h"
-#import "../KKAnimatableProperty.h"
 #import "KKStageSequencerView_Private.h"
 
 #pragma clang diagnostic push
@@ -138,8 +137,7 @@ static NSColor *_componentTint(NSString *propertyLabel, NSUInteger component,
   for (KKTimingSegment *seg in lane.segments)
     componentCount = MAX(componentCount, seg.values.count);
 
-  NSArray<NSNumber *> *rangeKinds =
-      self.laneComponentKindsByLabel[lane.propertyLabel];
+  NSArray<NSNumber *> *rangeKinds = [self _componentKindsForLane:lane];
 
   // Compute dynamic value range across all components (including transition
   // overshoots from Elastic/Bounce) so every component shares the same Y scale.
@@ -161,8 +159,11 @@ static NSColor *_componentTint(NSString *propertyLabel, NSUInteger component,
         double from = 0, to = 0;
         _laneGraphFromTo(lane.segments, i, c, &from, &to);
         BOOL mirror = (i == lane.segments.count - 1);
-        for (NSInteger j = 0; j <= 10; j++) {
-          double t = (double)j / 10.0;
+        // Sample at the same density the curve renderer uses; coarser scans
+        // miss elastic/spring peaks between samples and the curve overflows
+        // the lane bounds (very visible when the lane is tall).
+        for (NSInteger j = 0; j <= kKSSCurveSegments; j++) {
+          double t = (double)j / (double)kKSSCurveSegments;
           double ti = mirror ? (1.0 - t) : t;
           double eased = KKApplyEasing(ti, s.easing, s.intensity, s.frequency);
           if (mirror)
@@ -175,8 +176,8 @@ static NSColor *_componentTint(NSString *propertyLabel, NSUInteger component,
         }
       } else if (s.holdEffect != KKHoldEffectNone) {
         double base = _segValueAt(s, c);
-        for (NSInteger j = 0; j <= 20; j++) {
-          double t = (double)j / 20.0;
+        for (NSInteger j = 0; j <= kKSSCurveSegments; j++) {
+          double t = (double)j / (double)kKSSCurveSegments;
           double factor = KKApplyHoldEffect(t, s.holdEffect, s.intensity,
                                             s.frequency, (int)s.seed);
           double val = base * factor;
@@ -198,8 +199,7 @@ static NSColor *_componentTint(NSString *propertyLabel, NSUInteger component,
     return (v - minVal) / valRange;
   };
 
-  NSArray<NSNumber *> *componentKinds =
-      self.laneComponentKindsByLabel[lane.propertyLabel];
+  NSArray<NSNumber *> *componentKinds = [self _componentKindsForLane:lane];
 
   for (NSUInteger c = 0; c < componentCount; c++) {
     if (c < componentKinds.count &&
