@@ -406,7 +406,11 @@ static void KKBroadcastPlayheads(double nowSec) {
       continue;
     if (groupKey.length && ![lane.groupKey isEqualToString:groupKey])
       continue;
-    return lane.oscVisible;
+    if (!lane.oscVisible)
+      return NO;
+    if (KKIsHTHTransition(lane, lane.selectedSegment))
+      return NO;
+    return YES;
   }
   return YES;
 }
