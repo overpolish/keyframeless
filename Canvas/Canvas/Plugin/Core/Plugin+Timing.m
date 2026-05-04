@@ -86,6 +86,21 @@ _kkReadParamForDesc(id<FxParameterRetrievalAPI_v6> getAPI,
     [getAPI getBoolValue:&b fromParameter:desc.paramID atTime:time];
     return @[ @(b ? 1.0 : 0.0) ];
   }
+  case KKAnimatableParamKindColor: {
+    double r = 0, g = 0, b = 0;
+    [getAPI getRedValue:&r
+             greenValue:&g
+              blueValue:&b
+          fromParameter:desc.paramID
+                 atTime:time];
+    return @[ @(r), @(g), @(b) ];
+  }
+  case KKAnimatableParamKindGradient: {
+    NSString *json = nil;
+    [getAPI getStringParameterValue:&json fromParameter:desc.paramID];
+    NSArray<KKGradientStop *> *stops = KKGradientStopsFromJSON(json);
+    return stops ? KKGradientFlatFromStops(stops) : @[];
+  }
   case KKAnimatableParamKindFloat:
   default: {
     double v = 0;
@@ -127,6 +142,24 @@ static void _kkWriteParamForDesc(id<FxParameterSettingAPI_v5> setAPI,
                toParameter:desc.paramID
                     atTime:time];
     break;
+  case KKAnimatableParamKindColor:
+    if (vals.count >= 3) {
+      [setAPI setRedValue:vals[0].doubleValue
+               greenValue:vals[1].doubleValue
+                blueValue:vals[2].doubleValue
+              toParameter:desc.paramID
+                   atTime:time];
+    }
+    break;
+  case KKAnimatableParamKindGradient: {
+    NSArray<KKGradientStop *> *stops = KKGradientStopsFromFlat(vals);
+    if (stops) {
+      NSString *json = KKGradientJSONFromStops(stops);
+      if (json)
+        [setAPI setStringParameterValue:json toParameter:desc.paramID];
+    }
+    break;
+  }
   case KKAnimatableParamKindFloat:
   default:
     if (vals.count >= 1)
@@ -135,6 +168,29 @@ static void _kkWriteParamForDesc(id<FxParameterSettingAPI_v5> setAPI,
                      atTime:time];
     break;
   }
+}
+
+// Gradient lanes interpolate to a flat LUT (`KK_GRADIENT_LUT_SIZE × [r,g,b]`)
+// rather than back to the 5-tuple stop format the path stores. Convert that
+// LUT into evenly-spaced stops so the existing JSON-driven render path picks
+// up the per-frame value. Falls back to `KKGradientStopsFromFlat` for callers
+// (e.g. inspector pushes) that hand us the original stop layout.
+static NSArray<KKGradientStop *> *
+_kkStopsFromLaneValues(NSArray<NSNumber *> *vals) {
+  if (vals.count == (NSUInteger)(KK_GRADIENT_LUT_SIZE * 3)) {
+    NSMutableArray<KKGradientStop *> *stops =
+        [NSMutableArray arrayWithCapacity:KK_GRADIENT_LUT_SIZE];
+    for (NSInteger i = 0; i < KK_GRADIENT_LUT_SIZE; i++) {
+      double t = (double)i / (double)(KK_GRADIENT_LUT_SIZE - 1);
+      NSColor *c = [NSColor colorWithSRGBRed:vals[i * 3 + 0].doubleValue
+                                       green:vals[i * 3 + 1].doubleValue
+                                        blue:vals[i * 3 + 2].doubleValue
+                                       alpha:1.0];
+      [stops addObject:[KKGradientStop stopWithPosition:t color:c]];
+    }
+    return stops;
+  }
+  return KKGradientStopsFromFlat(vals);
 }
 
 static BOOL _kkValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
@@ -378,9 +434,85 @@ static NSArray<KKCanvasAnimProp *> *_kkAnimatableProperties(void) {
                 p.drawOnOrigin = vals[0].floatValue;
             }];
 
+    KKCanvasAnimProp *strokeColor =
+        [KKCanvasAnimProp propWithLabel:@"Stroke Color"
+            paramID:kParamStrokeColor
+            secondaryParamID:0
+            kind:KKAnimatableParamKindColor
+            enabled:^BOOL(KKBezierPath *p) {
+              return p.strokeEnabled && !p.isGroup && p.strokeColorMode == 0;
+            }
+            read:^NSArray<NSNumber *> *(KKBezierPath *p) {
+              return @[ @(p.strokeR), @(p.strokeG), @(p.strokeB) ];
+            }
+            write:^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
+              if (vals.count >= 3) {
+                p.strokeR = vals[0].floatValue;
+                p.strokeG = vals[1].floatValue;
+                p.strokeB = vals[2].floatValue;
+              }
+            }];
+
+    KKCanvasAnimProp *strokeGradient =
+        [KKCanvasAnimProp propWithLabel:@"Stroke Gradient"
+            paramID:kParamStrokeGradientData
+            secondaryParamID:0
+            kind:KKAnimatableParamKindGradient
+            enabled:^BOOL(KKBezierPath *p) {
+              return p.strokeEnabled && !p.isGroup && p.strokeColorMode == 1;
+            }
+            read:^NSArray<NSNumber *> *(KKBezierPath *p) {
+              NSArray<KKGradientStop *> *stops =
+                  KKGradientStopsFromJSON(p.strokeGradientJSON);
+              return stops ? KKGradientFlatFromStops(stops) : @[];
+            }
+            write:^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
+              NSArray<KKGradientStop *> *stops = _kkStopsFromLaneValues(vals);
+              if (stops)
+                p.strokeGradientJSON = KKGradientJSONFromStops(stops);
+            }];
+
+    KKCanvasAnimProp *fillColor = [KKCanvasAnimProp propWithLabel:@"Fill Color"
+        paramID:kParamFillColor
+        secondaryParamID:0
+        kind:KKAnimatableParamKindColor
+        enabled:^BOOL(KKBezierPath *p) {
+          return p.fillEnabled && !p.isGroup && p.fillColorMode == 0;
+        }
+        read:^NSArray<NSNumber *> *(KKBezierPath *p) {
+          return @[ @(p.fillR), @(p.fillG), @(p.fillB) ];
+        }
+        write:^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
+          if (vals.count >= 3) {
+            p.fillR = vals[0].floatValue;
+            p.fillG = vals[1].floatValue;
+            p.fillB = vals[2].floatValue;
+          }
+        }];
+
+    KKCanvasAnimProp *fillGradient =
+        [KKCanvasAnimProp propWithLabel:@"Fill Gradient"
+            paramID:kParamFillGradientData
+            secondaryParamID:0
+            kind:KKAnimatableParamKindGradient
+            enabled:^BOOL(KKBezierPath *p) {
+              return p.fillEnabled && !p.isGroup && p.fillColorMode == 1;
+            }
+            read:^NSArray<NSNumber *> *(KKBezierPath *p) {
+              NSArray<KKGradientStop *> *stops =
+                  KKGradientStopsFromJSON(p.fillGradientJSON);
+              return stops ? KKGradientFlatFromStops(stops) : @[];
+            }
+            write:^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
+              NSArray<KKGradientStop *> *stops = _kkStopsFromLaneValues(vals);
+              if (stops)
+                p.fillGradientJSON = KKGradientJSONFromStops(stops);
+            }];
+
     sProps = @[
-      drawOnStart, drawOnEnd, drawOnOrigin, strokeWidth, endWidth, opacity,
-      sketchRoughness, sketchBowing, position, scale, anchor, rotZ, rotX, rotY
+      drawOnStart, drawOnEnd, drawOnOrigin, strokeWidth, endWidth, strokeColor,
+      strokeGradient, fillColor, fillGradient, opacity, sketchRoughness,
+      sketchBowing, position, scale, anchor, rotZ, rotX, rotY
     ];
   });
   return sProps;

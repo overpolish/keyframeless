@@ -197,11 +197,12 @@ NSInteger KKLaneJSONIndexForViewIndex(NSInteger viewIndex,
                                       NSSet<NSString *> *hidden) {
   if (viewIndex < 0)
     return -1;
-  if (!hidden.count)
-    return viewIndex < (NSInteger)jsonLanes.count ? viewIndex : -1;
   NSInteger seen = 0;
   for (NSInteger i = 0; i < (NSInteger)jsonLanes.count; i++) {
-    if ([hidden containsObject:jsonLanes[i].propertyLabel])
+    KKTimingLane *lane = jsonLanes[i];
+    if (!lane.pluginVisible)
+      continue;
+    if (hidden.count && [hidden containsObject:lane.propertyLabel])
       continue;
     if (seen == viewIndex)
       return i;
