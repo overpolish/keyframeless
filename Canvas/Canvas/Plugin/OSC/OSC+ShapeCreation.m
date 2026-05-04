@@ -80,12 +80,10 @@
   KKBezierPath *rect = [[KKBezierPath alloc] init];
   rect.name = [NSString
       stringWithFormat:@"Rectangle %lu", (unsigned long)(self.paths.count + 1)];
-  [rect insertAtIndex:0 position:(simd_float2){minX, maxY}];
-  [rect insertAtIndex:1 position:(simd_float2){maxX, maxY}];
-  [rect insertAtIndex:2 position:(simd_float2){maxX, minY}];
-  [rect insertAtIndex:3 position:(simd_float2){minX, minY}];
-  rect.closed = YES;
-  rect.isRect = YES;
+  KKRectShape *rs = [[KKRectShape alloc] init];
+  rs.min = simd_make_float2(minX, minY);
+  rs.max = simd_make_float2(maxX, maxY);
+  rect.shape = rs;
   // Inherit stroke/fill/opacity from current inspector values.
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
@@ -109,35 +107,13 @@
   if (maxX - minX < 0.001f || maxY - minY < 0.001f)
     return;
 
-  float cx = (minX + maxX) * 0.5f, cy = (minY + maxY) * 0.5f;
-  float rx = (maxX - minX) * 0.5f, ry = (maxY - minY) * 0.5f;
-  float kx = rx * 0.5522847498f, ky = ry * 0.5522847498f;
-
   KKBezierPath *ellipse = [[KKBezierPath alloc] init];
   ellipse.name = [NSString
       stringWithFormat:@"Ellipse %lu", (unsigned long)(self.paths.count + 1)];
-  [ellipse insertAtIndex:0 position:(simd_float2){cx, cy + ry}];
-  [ellipse insertAtIndex:1 position:(simd_float2){cx + rx, cy}];
-  [ellipse insertAtIndex:2 position:(simd_float2){cx, cy - ry}];
-  [ellipse insertAtIndex:3 position:(simd_float2){cx - rx, cy}];
-
-  [ellipse setOutHandle:(simd_float2){kx, 0} atIndex:0];
-  [ellipse setInHandle:(simd_float2){-kx, 0} atIndex:0];
-  [ellipse setType:KKBezierPointBezier atIndex:0];
-
-  [ellipse setOutHandle:(simd_float2){0, -ky} atIndex:1];
-  [ellipse setInHandle:(simd_float2){0, ky} atIndex:1];
-  [ellipse setType:KKBezierPointBezier atIndex:1];
-
-  [ellipse setOutHandle:(simd_float2){-kx, 0} atIndex:2];
-  [ellipse setInHandle:(simd_float2){kx, 0} atIndex:2];
-  [ellipse setType:KKBezierPointBezier atIndex:2];
-
-  [ellipse setOutHandle:(simd_float2){0, ky} atIndex:3];
-  [ellipse setInHandle:(simd_float2){0, -ky} atIndex:3];
-  [ellipse setType:KKBezierPointBezier atIndex:3];
-
-  ellipse.closed = YES;
+  KKEllipseShape *es = [[KKEllipseShape alloc] init];
+  es.min = simd_make_float2(minX, minY);
+  es.max = simd_make_float2(maxX, maxY);
+  ellipse.shape = es;
   // Inherit stroke/fill/opacity from current inspector values.
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
@@ -162,10 +138,10 @@
   KKBezierPath *line = [[KKBezierPath alloc] init];
   line.name = [NSString
       stringWithFormat:@"Line %lu", (unsigned long)(self.paths.count + 1)];
-  [line insertAtIndex:0 position:a];
-  [line insertAtIndex:1 position:b];
-  line.closed = NO;
-  line.isLine = YES;
+  KKLineShape *ls = [[KKLineShape alloc] init];
+  ls.start = a;
+  ls.end = b;
+  line.shape = ls;
   // Inherit stroke/fill/opacity from current inspector values.
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];

@@ -4,6 +4,7 @@
  */
 
 #import "KKPathMorph.h"
+#import "KKShape.h"
 
 // Cubic-bezier-based morph implementation. Mirrors the recipe shared across
 // GSAP MorphSVG, Flubber, and KUTE.js Cubic Morph:
@@ -43,6 +44,13 @@ static simd_float2 evalCubic(simd_float2 p0, simd_float2 c0, simd_float2 c1,
 // trailing bytes — readHeader only consumes through the points array, and
 // readContours treats missing trailing bytes as "single contour".
 
+// Flags byte layout: bit 0 = closed, bit 1 = "shape tail follows points and
+// contours". Tail is kind-tagged: per-kind payload then 1 byte KKShapeKind
+// at the very end (reverse-readable so contour-block presence doesn't
+// matter). Payload sizes live on KKShape +payloadByteCountForKind:.
+#define KK_MORPH_FLAG_CLOSED (1u << 0)
+#define KK_MORPH_FLAG_HAS_SHAPE_TAIL (1u << 1)
+
 static BOOL readHeader(NSData *blob, const KKBezierPoint **outPts,
                        uint32_t *outCount, BOOL *outClosed) {
   if (!blob || blob.length < 5)
@@ -50,7 +58,7 @@ static BOOL readHeader(NSData *blob, const KKBezierPoint **outPts,
   const uint8_t *bytes = blob.bytes;
   uint32_t count;
   memcpy(&count, bytes, 4);
-  uint8_t closed = bytes[4];
+  uint8_t flags = bytes[4];
   size_t need = 5 + (size_t)count * sizeof(KKBezierPoint);
   if (blob.length < need)
     return NO;
@@ -59,8 +67,27 @@ static BOOL readHeader(NSData *blob, const KKBezierPoint **outPts,
   if (outCount)
     *outCount = count;
   if (outClosed)
-    *outClosed = (closed != 0);
+    *outClosed = (flags & KK_MORPH_FLAG_CLOSED) != 0;
   return YES;
+}
+
+// Reads the shape tail (payload + kind:u8 last byte). Returns the parsed
+// shape (autoreleased), or nil if the tail isn't present, malformed, or
+// of an unsupported kind. Tail is reverse-readable regardless of contour
+// block presence.
+static KKShape *readShapeTail(NSData *blob) {
+  if (!blob || blob.length < 6)
+    return nil;
+  const uint8_t *bytes = blob.bytes;
+  uint8_t flags = bytes[4];
+  if (!(flags & KK_MORPH_FLAG_HAS_SHAPE_TAIL))
+    return nil;
+  uint8_t kind = bytes[blob.length - 1];
+  size_t payload = [KKShape payloadByteCountForKind:kind];
+  if (payload == 0 || blob.length < 5 + payload + 1)
+    return nil;
+  size_t off = blob.length - 1 - payload;
+  return [KKShape shapeWithKind:kind bytes:bytes + off available:payload];
 }
 
 // Returns the array of contour start indices from a snapshot blob, or nil
@@ -89,12 +116,20 @@ static NSArray<NSNumber *> *readContours(NSData *blob, uint32_t pointCount) {
 
 NSData *KKMorphSnapshotCapture(KKBezierPath *path) {
   uint32_t count = (uint32_t)path.count;
-  uint8_t closed = path.closed ? 1 : 0;
+  KKShape *shape = path.shape;
+  NSData *shapePayload = shape.serializedPayload;
+  uint8_t flags = 0;
+  if (path.closed)
+    flags |= KK_MORPH_FLAG_CLOSED;
+  if (shapePayload)
+    flags |= KK_MORPH_FLAG_HAS_SHAPE_TAIL;
   NSUInteger nContours = path.contourCount;
-  NSMutableData *data = [NSMutableData
-      dataWithCapacity:5 + count * sizeof(KKBezierPoint) + 2 + nContours * 4];
+  size_t tailBytes = shapePayload ? shapePayload.length + 1 : 0;
+  NSMutableData *data =
+      [NSMutableData dataWithCapacity:5 + count * sizeof(KKBezierPoint) + 2 +
+                                      nContours * 4 + tailBytes];
   [data appendBytes:&count length:4];
-  [data appendBytes:&closed length:1];
+  [data appendBytes:&flags length:1];
   for (uint32_t i = 0; i < count; i++) {
     KKBezierPoint p = [path pointAtIndex:i];
     [data appendBytes:&p length:sizeof(KKBezierPoint)];
@@ -106,6 +141,13 @@ NSData *KKMorphSnapshotCapture(KKBezierPath *path) {
       uint32_t start = (uint32_t)[path contourRangeAtIndex:i].location;
       [data appendBytes:&start length:4];
     }
+  }
+  // Shape tail layout: payload, then kind:u8 as the very last byte. Reverse-
+  // readable so it works whether or not a contour block precedes it.
+  if (shapePayload) {
+    [data appendData:shapePayload];
+    uint8_t kind = (uint8_t)shape.kind;
+    [data appendBytes:&kind length:1];
   }
   return data;
 }
@@ -122,6 +164,7 @@ void KKMorphSnapshotApply(NSData *blob, KKBezierPath *path) {
     return;
   [path setBezierPoints:pts count:count closed:closed];
   [path setContourStarts:readContours(blob, count)];
+  [path restoreShape:readShapeTail(blob)];
 }
 
 // --- Cubic helpers -----------------------------------------------------
@@ -318,6 +361,19 @@ static KKBezierPoint *_kkCubicsToPoints(const KKMorphCubic *segs,
   return pts;
 }
 
+// When both blobs carry the same shape kind, restore the path's shape ivar
+// with t-lerped parameters. When kinds differ (or either is missing),
+// leave the shape as `setBezierPoints` left it (cleared) — mid-transition
+// across kinds is genuinely "not a rect/ellipse anymore."
+static void restoreLerpedShapeTail(NSData *fromBlob, NSData *toBlob, float t,
+                                   KKBezierPath *path) {
+  KKShape *lerped = [KKShape lerpFrom:readShapeTail(fromBlob)
+                                   to:readShapeTail(toBlob)
+                                    t:t];
+  if (lerped)
+    [path restoreShape:lerped];
+}
+
 // --- Public: cubic-based morph apply -----------------------------------
 
 void KKMorphInterpolateApply(NSData *fromBlob, NSData *toBlob, float t,
@@ -364,6 +420,7 @@ void KKMorphInterpolateApply(NSData *fromBlob, NSData *toBlob, float t,
     // contour starts (they're authoritative since user edits don't change
     // topology when the count matches).
     [path setContourStarts:readContours(fromBlob, aN)];
+    restoreLerpedShapeTail(fromBlob, toBlob, t, path);
     free(out);
     return;
   }
@@ -413,6 +470,7 @@ void KKMorphInterpolateApply(NSData *fromBlob, NSData *toBlob, float t,
     // to a single contour. (Compound-path morph between mismatched
     // topologies is a known limitation.)
     [path setContourStarts:nil];
+    restoreLerpedShapeTail(fromBlob, toBlob, t, path);
     free(outPts);
   }
   free(aSegs);

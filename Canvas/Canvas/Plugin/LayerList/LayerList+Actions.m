@@ -439,18 +439,15 @@ static KKBezierPath *_kkMakeGroup(NSString *name,
 
   KKBezierPath *p = [[KKBezierPath alloc] init];
   p.isImage = YES;
-  p.isRect = YES;
-  p.closed = YES;
   p.imagePath = path;
   p.imageAspect = (float)imgSize.width / (float)imgSize.height;
   p.name = name;
   p.strokeEnabled = NO;
   p.fillEnabled = NO;
-  // 4-corner rect matching setRoundedRectWithMin:max: order (TL, TR, BR, BL)
-  [p insertAtIndex:0 position:(simd_float2){x0, y1}];
-  [p insertAtIndex:1 position:(simd_float2){x1, y1}];
-  [p insertAtIndex:2 position:(simd_float2){x1, y0}];
-  [p insertAtIndex:3 position:(simd_float2){x0, y0}];
+  KKRectShape *rs = [[KKRectShape alloc] init];
+  rs.min = simd_make_float2(x0, y0);
+  rs.max = simd_make_float2(x1, y1);
+  p.shape = rs;
 
   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
     NSUInteger insertAt = MIN(index, paths.count);

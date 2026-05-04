@@ -168,7 +168,7 @@ static const CGFloat kPathToolbarGap = 6.0;
       KKParamsToSelectedPaths(paramGetAPI, self.selectedPathIndices,
                               self.paths);
     }
-    if (isCursorMode && selPath.isRect && !selPath.isImage &&
+    if (isCursorMode && selPath.rectShape && !selPath.isImage &&
         selPath.count >= 4) {
       simd_float2 bmin, bmax;
       [self boundsOfPath:selPath min:&bmin max:&bmax];
@@ -176,14 +176,7 @@ static const CGFloat kPathToolbarGap = 6.0;
       CGPoint cMax = [self canvasPointFromObjectPoint:bmax];
       float cW = (float)fabs(cMax.x - cMin.x);
       float cH = (float)fabs(cMax.y - cMin.y);
-      [selPath setRoundedRectWithMin:bmin
-                                 max:bmax
-                          fractionTL:selPath.cornerRadiusTL
-                          fractionTR:selPath.cornerRadiusTR
-                          fractionBR:selPath.cornerRadiusBR
-                          fractionBL:selPath.cornerRadiusBL
-                         canvasWidth:cW
-                        canvasHeight:cH];
+      [selPath.rectShape applyToPath:selPath canvasWidth:cW canvasHeight:cH];
     }
   }
   return hideOSCPending;

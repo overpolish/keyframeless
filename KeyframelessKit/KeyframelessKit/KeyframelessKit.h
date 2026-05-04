@@ -59,6 +59,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKSeedView.h>
 #import <KeyframelessKit/KKSeparatorView.h>
 #import <KeyframelessKit/KKShaderTypes.h>
+#import <KeyframelessKit/KKShape.h>
 #import <KeyframelessKit/KKSnapEngine.h>
 #import <KeyframelessKit/KKSquarePointOSC.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>

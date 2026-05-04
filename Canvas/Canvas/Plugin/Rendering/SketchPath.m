@@ -40,7 +40,6 @@ static float roughnessGainForLength(float length) {
 /// Copy all rendering properties from src to dst (except geometry).
 static void copyPathProps(KKBezierPath *dst, KKBezierPath *src) {
   dst.closed = src.closed;
-  dst.isRect = NO;
   dst.hidden = src.hidden;
   dst.locked = src.locked;
   dst.name = src.name;

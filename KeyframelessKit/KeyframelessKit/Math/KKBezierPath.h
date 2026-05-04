@@ -29,6 +29,11 @@ typedef struct {
 
 NS_ASSUME_NONNULL_BEGIN
 
+@class KKShape;
+@class KKRectShape;
+@class KKEllipseShape;
+@class KKLineShape;
+
 @interface KKBezierPath : NSObject
 
 /// Number of points.
@@ -40,11 +45,23 @@ NS_ASSUME_NONNULL_BEGIN
 /// Whether the path forms a closed loop (last point connects to first).
 @property(nonatomic, assign) BOOL closed;
 
-/// Whether the path was created as a rectangle (enables corner radius handles).
-@property(nonatomic, assign) BOOL isRect;
+/// The path's authored shape kind. Setter rewrites geometry from the shape
+/// (e.g., assigning a `KKRectShape` lays down 4 corners). Use `restoreShape:`
+/// instead when geometry is already correct and only the kind metadata
+/// needs to be reattached. Returns nil for groups.
+@property(nonatomic, nullable) KKShape *shape;
 
-/// Whether the path was created with the line tool.
-@property(nonatomic, assign) BOOL isLine;
+/// Reattach a shape to a path whose points are already correct (e.g., morph
+/// apply just wrote interpolated geometry). Stores the ivar + writes through
+/// to legacy radius fields without touching the point bag.
+- (void)restoreShape:(nullable KKShape *)shape;
+
+/// Typed accessors — return the shape cast to the matching subclass, or nil
+/// if the path's shape is a different kind (or nil). Avoids the
+/// `isKindOfClass` + cast chant at every callsite.
+@property(nonatomic, nullable, readonly) KKRectShape *rectShape;
+@property(nonatomic, nullable, readonly) KKEllipseShape *ellipseShape;
+@property(nonatomic, nullable, readonly) KKLineShape *lineShape;
 
 /// Whether the path is hidden in the canvas.
 @property(nonatomic, assign) BOOL hidden;
@@ -118,12 +135,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// inspector and OSC handle match Position semantics.
 @property(nonatomic, assign) float anchorX;
 @property(nonatomic, assign) float anchorY;
-
-/// Per-corner radius fractions 0–1 (TL, TR, BR, BL). 0 = sharp, 1 = max.
-@property(nonatomic, assign) float cornerRadiusTL;
-@property(nonatomic, assign) float cornerRadiusTR;
-@property(nonatomic, assign) float cornerRadiusBR;
-@property(nonatomic, assign) float cornerRadiusBL;
 
 /// Whether this path renders a stroke (default YES).
 @property(nonatomic, assign) BOOL strokeEnabled;

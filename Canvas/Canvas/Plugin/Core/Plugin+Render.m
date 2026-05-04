@@ -625,27 +625,14 @@ static BOOL _kkDecodeSampleAt(NSData *pluginState, NSUInteger offset,
                      sampleIndex:(int)sampleIndex {
   // Fix up rounded rect geometry.
   for (KKBezierPath *p in inputPaths) {
-    if (p.isRect && !p.isImage && p.count >= 4) {
-      simd_float2 pMin = {HUGE_VALF, HUGE_VALF};
-      simd_float2 pMax = {-HUGE_VALF, -HUGE_VALF};
-      for (NSUInteger i = 0; i < p.count; i++) {
-        KKBezierPoint pt = [p pointAtIndex:i];
-        pMin.x = fminf(pMin.x, pt.x);
-        pMin.y = fminf(pMin.y, pt.y);
-        pMax.x = fmaxf(pMax.x, pt.x);
-        pMax.y = fmaxf(pMax.y, pt.y);
-      }
-      float rW = (pMax.x - pMin.x) * outputWidth;
-      float rH = (pMax.y - pMin.y) * outputHeight;
-      [p setRoundedRectWithMin:pMin
-                           max:pMax
-                    fractionTL:p.cornerRadiusTL
-                    fractionTR:p.cornerRadiusTR
-                    fractionBR:p.cornerRadiusBR
-                    fractionBL:p.cornerRadiusBL
-                   canvasWidth:rW
-                  canvasHeight:rH];
-    }
+    if (p.isImage)
+      continue;
+    KKRectShape *rs = p.rectShape;
+    if (!rs)
+      continue;
+    float rW = (rs.max.x - rs.min.x) * outputWidth;
+    float rH = (rs.max.y - rs.min.y) * outputHeight;
+    [rs applyToPath:p canvasWidth:rW canvasHeight:rH];
   }
 
   // Blit upstream input → target so the canvas composites over it.

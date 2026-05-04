@@ -334,8 +334,7 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
       fminf((float)fabs(maxC.x - minC.x), (float)fabs(maxC.y - minC.y)) * 0.5f;
   float travel = fminf(100.0f, fmaxf(0.0f, halfShort - inset));
 
-  float fracs[4] = {path.cornerRadiusTL, path.cornerRadiusTR,
-                    path.cornerRadiusBR, path.cornerRadiusBL};
+  simd_float4 fracs = path.rectShape.radii;
   float f = fracs[corner];
   float offset = inset + f * travel;
 
