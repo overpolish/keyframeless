@@ -78,6 +78,11 @@
   lanes[jsonIdx] = lane;
 
   KKWriteLanesJSON(lanes, setAPI, self.apiManager);
+  [self kkHandleLaneSegmentMutation:KKLaneSegmentMutationInserted
+                               lane:lane
+                            atIndex:splitIdx + 1
+                             getAPI:getAPI
+                             setAPI:setAPI];
   [actAPI endAction:self];
   [self timingGraphApplyState];
 }
@@ -107,6 +112,10 @@
   NSSet<NSString *> *pluginHidden =
       [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
 
+  // Collect per-lane mutations so we can fire the subclass hook after the
+  // JSON write completes (still inside the action scope).
+  NSMutableArray<NSNumber *> *mutatedJsonIndices = [NSMutableArray array];
+  NSMutableArray<NSNumber *> *mutatedSegIndices = [NSMutableArray array];
   BOOL anyChanged = NO;
   for (NSUInteger li = 0; li < lanes.count; li++) {
     if (!lanes[li].effectivelyVisibleInSequencer ||
@@ -151,11 +160,22 @@
     if (lane.selectedSegment > splitIdx)
       lane.selectedSegment++;
     lanes[li] = lane;
+    [mutatedJsonIndices addObject:@(li)];
+    [mutatedSegIndices addObject:@(splitIdx + 1)];
     anyChanged = YES;
   }
 
-  if (anyChanged)
+  if (anyChanged) {
     KKWriteLanesJSON(lanes, setAPI, self.apiManager);
+    for (NSUInteger m = 0; m < mutatedJsonIndices.count; m++) {
+      NSUInteger li = mutatedJsonIndices[m].unsignedIntegerValue;
+      [self kkHandleLaneSegmentMutation:KKLaneSegmentMutationInserted
+                                   lane:lanes[li]
+                                atIndex:mutatedSegIndices[m].integerValue
+                                 getAPI:getAPI
+                                 setAPI:setAPI];
+    }
+  }
   [actAPI endAction:self];
   if (anyChanged)
     [self timingGraphApplyState];
@@ -220,6 +240,11 @@
   lanes[jsonIdx] = lane;
 
   KKWriteLanesJSON(lanes, setAPI, self.apiManager);
+  [self kkHandleLaneSegmentMutation:KKLaneSegmentMutationRemoved
+                               lane:lane
+                            atIndex:segmentIndex
+                             getAPI:getAPI
+                             setAPI:setAPI];
   [actAPI endAction:self];
   [self timingGraphApplyState];
 }
@@ -242,6 +267,8 @@
   NSSet<NSString *> *pluginHidden =
       [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
 
+  NSMutableArray<NSNumber *> *mutatedJsonIndices = [NSMutableArray array];
+  NSMutableArray<NSNumber *> *mutatedSegIndices = [NSMutableArray array];
   BOOL anyChanged = NO;
   for (NSUInteger li = 0; li < lanes.count; li++) {
     if (!lanes[li].effectivelyVisibleInSequencer ||
@@ -290,11 +317,22 @@
 
     lane.segments = segs;
     lanes[li] = lane;
+    [mutatedJsonIndices addObject:@(li)];
+    [mutatedSegIndices addObject:@(hitIdx)];
     anyChanged = YES;
   }
 
-  if (anyChanged)
+  if (anyChanged) {
     KKWriteLanesJSON(lanes, setAPI, self.apiManager);
+    for (NSUInteger m = 0; m < mutatedJsonIndices.count; m++) {
+      NSUInteger li = mutatedJsonIndices[m].unsignedIntegerValue;
+      [self kkHandleLaneSegmentMutation:KKLaneSegmentMutationRemoved
+                                   lane:lanes[li]
+                                atIndex:mutatedSegIndices[m].integerValue
+                                 getAPI:getAPI
+                                 setAPI:setAPI];
+    }
+  }
   [actAPI endAction:self];
   if (anyChanged)
     [self timingGraphApplyState];

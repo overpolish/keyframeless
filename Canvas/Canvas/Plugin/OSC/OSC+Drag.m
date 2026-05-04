@@ -79,6 +79,10 @@
       return;
     KKBezierPath *clone =
         [KKBezierPath pathWithData:[self.paths[idx] dataRepresentation]];
+    // Fresh layerID so per-layer state (Path-morph snapshots, lanes,
+    // selection) doesn't bleed between original and clone. Mirrors the
+    // layer-list duplicate path.
+    clone.layerID = [[NSUUID UUID] UUIDString];
     if (clone.isGroup && clone.groupID) {
       NSString *newID = [[NSUUID UUID] UUIDString];
       groupIDMap[clone.groupID] = newID;

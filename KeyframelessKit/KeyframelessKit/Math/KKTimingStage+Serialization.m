@@ -241,6 +241,7 @@ static NSArray<NSNumber *> *_KKExpandedLaneKinds(KKTimingLane *lane) {
       n = 2;
       break;
     case KKAnimatableParamKindGradient:
+    case KKAnimatableParamKindMorph:
       n = 0;
       break;
     default:

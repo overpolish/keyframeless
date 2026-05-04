@@ -278,6 +278,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// Fill gradient stops as JSON (KKGradientStop array). Empty when solid.
 @property(nonatomic, copy, nullable) NSString *fillGradientJSON;
 
+/// Per-segment morph target snapshots. Each entry is a raw point array
+/// (count uint32, closed uint8, then `count` × KKBezierPoint) representing
+/// the *target* shape for the corresponding morph-lane segment after the
+/// base. At render time the path's geometry is interpolated between the
+/// previous snapshot (or the base points for segment 0) and the next.
+/// Properties (stroke/fill/transform) come from the base path; only points
+/// + closed flag morph.
+@property(nonatomic, copy, nullable) NSArray<NSData *> *morphTargets;
+
 + (instancetype)pathWithData:(nullable NSData *)data;
 - (NSData *)dataRepresentation;
 
@@ -288,6 +297,26 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)insertAtIndex:(NSUInteger)index position:(simd_float2)pos;
 - (void)removeAtIndex:(NSUInteger)index;
+
+/// Replace all points with `count` linear points at the given positions,
+/// and set the closed flag. Clears bezier handles. Used by the morph
+/// renderer to swap geometry without rebuilding the path object.
+- (void)setLinearPositions:(const simd_float2 *)positions
+                     count:(NSUInteger)count
+                    closed:(BOOL)closed;
+
+/// Replace all points with the given KKBezierPoint array (handles + types
+/// preserved) and set the closed flag. Used by morph snapshot-apply for
+/// held segments where the original bezier authoring should be retained.
+- (void)setBezierPoints:(const KKBezierPoint *)points
+                  count:(NSUInteger)count
+                 closed:(BOOL)closed;
+
+/// Replace the contour boundary list (compound-path subpath starts). Pass
+/// `nil` or empty to collapse to a single contour. Caller passes the
+/// authored start indices in increasing order; the first start is always
+/// implicitly 0 and may be omitted.
+- (void)setContourStarts:(nullable NSArray<NSNumber *> *)starts;
 - (void)moveAtIndex:(NSUInteger)index to:(simd_float2)pos;
 - (void)setInHandle:(simd_float2)offset atIndex:(NSUInteger)index;
 - (void)setOutHandle:(simd_float2)offset atIndex:(NSUInteger)index;

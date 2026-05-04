@@ -19,6 +19,7 @@
 @protocol PROAPIAccessing;
 @protocol FxParameterCreationAPI_v5;
 @protocol FxParameterRetrievalAPI_v6;
+@protocol FxParameterSettingAPI_v5;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -363,6 +364,50 @@ NS_ASSUME_NONNULL_BEGIN
 /// the underlying object so editing is faster while animating) override
 /// this and dispatch their own selection write.
 - (void)kkHandleGroupSegmentClickedForKey:(NSString *)groupKey;
+
+/// Identifies how the sequencer's segment-add/remove handlers mutated a
+/// lane. Passed to the subclass hook below.
+typedef NS_ENUM(NSInteger, KKLaneSegmentMutation) {
+  KKLaneSegmentMutationInserted = 0,
+  KKLaneSegmentMutationRemoved = 1,
+};
+
+/// Subclass hook: invoked inside the action scope after a sequencer-driven
+/// segment add/remove has been written to a lane, before
+/// `timingGraphApplyState`. Plugins override this to keep out-of-band
+/// per-segment storage in sync (e.g. Canvas's path-morph snapshots, which live
+/// on the path blob rather than in the lane's `values`). `lane` is the
+/// post-mutation lane; `index` is the inserted or removed segment index. The
+/// default implementation does nothing.
+- (void)kkHandleLaneSegmentMutation:(KKLaneSegmentMutation)mutation
+                               lane:(KKTimingLane *)lane
+                            atIndex:(NSInteger)index
+                             getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
+                             setAPI:(id<FxParameterSettingAPI_v5>)setAPI;
+
+/// Subclass hook: invoked inside the action scope after `selectedSegment`
+/// changes on a lane, before applyState. Plugins override this to load
+/// out-of-band per-segment state into the source of truth (e.g. Canvas
+/// loads `morphTargets[segment]` into the path's points so the canvas
+/// shows the segment's authored geometry while the user edits it). The
+/// default implementation does nothing. Mirrors `applyLaneValues:` but
+/// runs alongside it for non-scalar payloads.
+- (void)kkLoadLaneSegmentForLabel:(NSString *)label
+                         groupKey:(NSString *)groupKey
+                          segment:(NSInteger)segmentIndex
+                           getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
+                           setAPI:(id<FxParameterSettingAPI_v5>)setAPI;
+
+/// Subclass hook: invoked inside the action scope after a sequencer
+/// opt-drag value-copy on a lane. Plugins override this to mirror
+/// out-of-band per-segment payloads alongside the scalar values copy
+/// (e.g. Canvas duplicates path-morph snapshots). Default no-op.
+- (void)kkCopyLaneSegmentForLabel:(NSString *)label
+                         groupKey:(NSString *)groupKey
+                      fromSegment:(NSInteger)srcSegmentIndex
+                        toSegment:(NSInteger)dstSegmentIndex
+                           getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
+                           setAPI:(id<FxParameterSettingAPI_v5>)setAPI;
 
 /// Pushes `[self kkSelectedGroupKey]` into every active sequencer view
 /// (primary + any additional timing views). Call this whenever your

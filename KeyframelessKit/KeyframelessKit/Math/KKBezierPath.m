@@ -334,6 +334,28 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
           memcpy(&path->_drawOnOrigin, bytes + hdr, sizeof(float));
           hdr += sizeof(float);
         }
+        if (ver >= 27 && data.length >= hdr + 2) {
+          uint16_t nTargets;
+          memcpy(&nTargets, bytes + hdr, 2);
+          hdr += 2;
+          if (nTargets > 0) {
+            NSMutableArray<NSData *> *targets =
+                [NSMutableArray arrayWithCapacity:nTargets];
+            for (uint16_t ti = 0; ti < nTargets; ti++) {
+              if (data.length < hdr + 4)
+                break;
+              uint32_t blobLen;
+              memcpy(&blobLen, bytes + hdr, 4);
+              hdr += 4;
+              if (blobLen == 0 || data.length < hdr + blobLen)
+                break;
+              [targets addObject:[NSData dataWithBytes:bytes + hdr
+                                                length:blobLen]];
+              hdr += blobLen;
+            }
+            path->_morphTargets = targets;
+          }
+        }
       }
     }
   }
@@ -405,7 +427,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   // v11: + endWidth (1 float).
   // v12: + contour starts (2-byte count + N × uint32 indices).
   uint8_t propMarker = 0xAA;
-  uint8_t propVersion = 26;
+  uint8_t propVersion = 27;
   [data appendBytes:&propMarker length:1];
   [data appendBytes:&propVersion length:1];
   float strokeData[4] = {_strokeWidth, _strokeR, _strokeG, _strokeB};
@@ -510,6 +532,18 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   [data appendBytes:ants length:2 * sizeof(float)];
   // v26: drawOnOrigin (1 float).
   [data appendBytes:&_drawOnOrigin length:sizeof(float)];
+  // v27: morph targets (uint16 count, then for each: uint32 blob length +
+  // blob).
+  uint16_t nTargets =
+      (uint16_t)MIN((NSUInteger)UINT16_MAX, _morphTargets.count);
+  [data appendBytes:&nTargets length:2];
+  for (uint16_t ti = 0; ti < nTargets; ti++) {
+    NSData *blob = _morphTargets[ti];
+    uint32_t blobLen = (uint32_t)blob.length;
+    [data appendBytes:&blobLen length:4];
+    if (blobLen > 0)
+      [data appendData:blob];
+  }
   return data;
 }
 
@@ -659,6 +693,56 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     memmove(&_points[index], &_points[index + 1],
             (_count - index - 1) * sizeof(KKBezierPoint));
   _count--;
+}
+
+- (void)setLinearPositions:(const simd_float2 *)positions
+                     count:(NSUInteger)count
+                    closed:(BOOL)closed {
+  [self ensureCapacity:count];
+  for (NSUInteger i = 0; i < count; i++) {
+    _points[i] = (KKBezierPoint){
+        .x = positions[i].x, .y = positions[i].y, .type = KKBezierPointLinear};
+  }
+  _count = count;
+  _closed = closed;
+  // Bulk geometry replacement invalidates the rect-style affordance — the
+  // new shape isn't an axis-aligned rectangle anymore. Matches the
+  // OSC point-edit codepath which clears isRect on per-point drag.
+  _isRect = NO;
+}
+
+- (void)setBezierPoints:(const KKBezierPoint *)points
+                  count:(NSUInteger)count
+                 closed:(BOOL)closed {
+  [self ensureCapacity:count];
+  if (count > 0)
+    memcpy(_points, points, count * sizeof(KKBezierPoint));
+  _count = count;
+  _closed = closed;
+  _isRect = NO;
+}
+
+- (void)setContourStarts:(NSArray<NSNumber *> *)starts {
+  // Strip a leading 0 if the caller included it — first contour always
+  // starts at index 0 implicitly.
+  NSUInteger leading =
+      (starts.count > 0 && starts[0].unsignedIntegerValue == 0) ? 1 : 0;
+  NSUInteger explicitCount =
+      starts.count > leading ? starts.count - leading : 0;
+  if (explicitCount == 0) {
+    _contourCount = 0;
+    return;
+  }
+  // _contourCount is the total contour count including the implicit first.
+  NSUInteger total = explicitCount + 1;
+  if (total > _contourCapacity) {
+    _contourStarts = realloc(_contourStarts, total * sizeof(NSUInteger));
+    _contourCapacity = total;
+  }
+  _contourStarts[0] = 0;
+  for (NSUInteger i = 0; i < explicitCount; i++)
+    _contourStarts[i + 1] = starts[leading + i].unsignedIntegerValue;
+  _contourCount = total;
 }
 
 - (void)moveAtIndex:(NSUInteger)index to:(simd_float2)pos {

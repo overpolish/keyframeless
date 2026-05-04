@@ -55,7 +55,15 @@
       BOOL isColorLike =
           (kindNum.integerValue == KKAnimatableParamKindColor ||
            kindNum.integerValue == KKAnimatableParamKindGradient);
-      if (isColorLike) {
+      // Morph lanes have no scalar payload — render the easing curve only,
+      // at full lane height (no value strip).
+      BOOL isMorph = (kindNum.integerValue == KKAnimatableParamKindMorph);
+      if (isMorph) {
+        [self _renderNormalizedCurveForLane:lane
+                                     trackX:trackX
+                                 trackWidth:trackWidth
+                                      laneY:laneY];
+      } else if (isColorLike) {
         [self
             _renderColorLaneForLane:lane
                                kind:(KKAnimatableParamKind)kindNum.integerValue

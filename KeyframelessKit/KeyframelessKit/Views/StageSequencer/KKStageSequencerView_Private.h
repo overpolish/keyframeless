@@ -177,6 +177,10 @@ static const NSInteger kKSSCurveSegments __attribute__((unused)) = 160;
                          trackX:(CGFloat)trackX
                      trackWidth:(CGFloat)trackWidth
                           laneY:(CGFloat)laneY;
+- (void)_renderNormalizedCurveForLane:(KKTimingLane *)lane
+                               trackX:(CGFloat)trackX
+                           trackWidth:(CGFloat)trackWidth
+                                laneY:(CGFloat)laneY;
 - (void)_renderEdgeHoverForLane:(KKTimingLane *)lane
                       laneIndex:(NSUInteger)laneIdx
                          trackX:(CGFloat)trackX

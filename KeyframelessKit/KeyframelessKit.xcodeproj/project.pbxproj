@@ -30,6 +30,7 @@
 				Math/KKEasing.h,
 				Math/KKGradientSampling.h,
 				Math/KKPathBoolean.h,
+				Math/KKPathMorph.h,
 				Math/KKSVGParser.h,
 				Math/KKTimingEvaluation.h,
 				Math/KKTimingStage.h,

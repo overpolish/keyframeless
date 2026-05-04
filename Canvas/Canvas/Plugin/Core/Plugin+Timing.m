@@ -509,10 +509,27 @@ static NSArray<KKCanvasAnimProp *> *_kkAnimatableProperties(void) {
                 p.fillGradientJSON = KKGradientJSONFromStops(stops);
             }];
 
+    // Morph: per-segment path-geometry snapshots. The lane is structural
+    // (no scalar values); snapshots live on path.morphTargets and are kept
+    // in sync via the kkHandleLaneSegmentMutation: hook below.
+    KKCanvasAnimProp *morph = [KKCanvasAnimProp propWithLabel:@"Path"
+        paramID:0
+        secondaryParamID:0
+        kind:KKAnimatableParamKindMorph
+        enabled:^BOOL(KKBezierPath *p) {
+          return !p.isGroup && !p.isImage;
+        }
+        read:^NSArray<NSNumber *> *(KKBezierPath *p) {
+          return @[];
+        }
+        write:^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
+          // No-op: morph data lives on path.morphTargets out-of-band.
+        }];
+
     sProps = @[
-      drawOnStart, drawOnEnd, drawOnOrigin, strokeWidth, endWidth, strokeColor,
-      strokeGradient, fillColor, fillGradient, opacity, sketchRoughness,
-      sketchBowing, position, scale, anchor, rotZ, rotX, rotY
+      morph, drawOnStart, drawOnEnd, drawOnOrigin, strokeWidth, endWidth,
+      strokeColor, strokeGradient, fillColor, fillGradient, opacity,
+      sketchRoughness, sketchBowing, position, scale, anchor, rotZ, rotX, rotY
     ];
   });
   return sProps;
@@ -566,6 +583,79 @@ static NSString *_kkGroupLabelForPath(KKBezierPath *p, NSUInteger idx) {
              : [NSString stringWithFormat:@"Layer %lu", (unsigned long)idx];
 }
 
+// Pick the morphTargets index that corresponds to segment idx's "before"
+// boundary — analogous to KKTimingBoundaryBefore for scalar lanes. For a
+// hold this is the hold itself; for a transition between two holds it's
+// the previous hold; for a leading transition (idx==0) it's the segment's
+// own snapshot (animate-in from-shape).
+static NSUInteger _kkMorphBoundaryBeforeIdx(NSUInteger idx,
+                                            NSArray<KKTimingSegment *> *segs) {
+  if (idx == 0 || segs.count == 0)
+    return 0;
+  KKTimingSegment *cur = segs[idx];
+  KKTimingSegment *prev = segs[idx - 1];
+  if (cur.type == KKSegmentTypeHold)
+    return idx;
+  if (prev.type == KKSegmentTypeHold)
+    return idx - 1;
+  return idx;
+}
+
+static NSUInteger _kkMorphBoundaryAfterIdx(NSUInteger idx,
+                                           NSArray<KKTimingSegment *> *segs) {
+  NSUInteger next = idx + 1;
+  if (next >= segs.count)
+    return idx;
+  return _kkMorphBoundaryBeforeIdx(next, segs);
+}
+
+// Mutate `p` in place to its morphed shape at lane fraction `frac`. Returns
+// NO when the morph isn't applicable (mismatched counts, fewer than 2
+// snapshots, etc.) so the caller leaves the base geometry untouched.
+static BOOL _kkApplyMorphForPath(KKBezierPath *p, KKTimingLane *lane,
+                                 double frac) {
+  NSArray<NSData *> *targets = p.morphTargets;
+  NSArray<KKTimingSegment *> *segs = lane.segments;
+  if (targets.count < 2 || segs.count != targets.count)
+    return NO;
+
+  KKTimingSegment *active = KKTimingSegmentForFraction(segs, frac);
+  if (!active)
+    return NO;
+  NSUInteger idx = [segs indexOfObjectIdenticalTo:active];
+  if (idx == NSNotFound)
+    return NO;
+  // No selected-segment guard: writePaths keeps morphTargets[selected] in
+  // sync with path.points, so a Hold's apply collapses to identity.
+  // Leading/trailing transitions read the segment's own snapshot at the
+  // matching boundary, so the user's edit appears at that endpoint and
+  // tweens toward the neighbor. Letting render-apply run unconditionally
+  // means playback morphs correctly even when a segment happens to be
+  // selected.
+
+  if (active.type == KKSegmentTypeHold) {
+    KKMorphSnapshotApply(targets[idx], p);
+    return YES;
+  }
+
+  NSUInteger beforeIdx = _kkMorphBoundaryBeforeIdx(idx, segs);
+  NSUInteger afterIdx = _kkMorphBoundaryAfterIdx(idx, segs);
+
+  double segDur = active.end - active.start;
+  double t = (segDur > 0) ? (frac - active.start) / segDur : 1.0;
+  t = MAX(0.0, MIN(1.0, t));
+  BOOL isAnimateOut = (idx == segs.count - 1);
+  double ti = isAnimateOut ? (1.0 - t) : t;
+  double easedT =
+      KKApplyEasing(ti, active.easing, active.intensity, active.frequency);
+  if (isAnimateOut)
+    easedT = 1.0 - easedT;
+
+  KKMorphInterpolateApply(targets[beforeIdx], targets[afterIdx],
+                          (float)easedT, p);
+  return YES;
+}
+
 static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
                                   NSUInteger idx, NSSet<NSString *> *oscLabels,
                                   NSSet<NSString *> *oscDefaultOff) {
@@ -573,7 +663,12 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
                                               baseValues:desc.readPath(p)];
   // Two-float Point lanes (Scale-style: independent X/Y sliders, single
   // sequencer lane) report two Float component kinds — matches MagicMove.
-  if (desc.kind == KKAnimatableParamKindPoint && desc.secondaryParamID) {
+  if (desc.kind == KKAnimatableParamKindMorph) {
+    // Morph carries no scalar values, but tag the kind so renderers and
+    // segment-edit code can identify the lane (sequencer routes Morph
+    // through the normalized-curve graph alongside Color/Gradient).
+    lane.valueComponentKinds = @[ @(KKAnimatableParamKindMorph) ];
+  } else if (desc.kind == KKAnimatableParamKindPoint && desc.secondaryParamID) {
     lane.valueComponentKinds =
         @[ @(KKAnimatableParamKindFloat), @(KKAnimatableParamKindFloat) ];
   } else if (desc.kind == KKAnimatableParamKindPoint && desc.extraBoolParamID) {
@@ -620,6 +715,10 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
           byKey[[NSString stringWithFormat:@"%@\x1f%@", p.layerID, desc.label]];
       if (!lane)
         continue;
+      if (desc.kind == KKAnimatableParamKindMorph) {
+        _kkApplyMorphForPath(p, lane, frac);
+        continue;
+      }
       NSArray<NSNumber *> *vals = KKTimingLaneValueAtFraction(lane, frac);
       // Position lane: when the active transition has a custom bezier
       // motion path, traverse the curve instead of taking the engine's
@@ -911,6 +1010,87 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
                           toParameter:kKKParamMultiStageData];
   }
   [actAPI endAction:self];
+}
+
+- (void)kkHandleLaneSegmentMutation:(KKLaneSegmentMutation)mutation
+                                lane:(KKTimingLane *)lane
+                              atIndex:(NSInteger)index
+                              getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
+                              setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
+  if (![lane.propertyLabel isEqualToString:@"Path"])
+    return;
+  NSMutableArray<KKBezierPath *> *paths = _kkReadPaths(getAPI);
+  KKBezierPath *p = _kkPathByLayerID(paths, lane.groupKey);
+  if (!p || p.count < 2)
+    return;
+
+  NSMutableArray<NSData *> *targets =
+      p.morphTargets ? [p.morphTargets mutableCopy] : [NSMutableArray array];
+  // Lazily seed with a snapshot of the base path so morphTargets stays 1:1
+  // with the pre-mutation segment count. The mutation below brings the
+  // counts in sync with the post-mutation lane.
+  NSUInteger preMutationSegCount = (mutation == KKLaneSegmentMutationInserted)
+                                       ? lane.segments.count - 1
+                                       : lane.segments.count + 1;
+  while (targets.count < preMutationSegCount)
+    [targets addObject:KKMorphSnapshotCapture(p)];
+  if (targets.count > preMutationSegCount)
+    [targets removeObjectsInRange:NSMakeRange(preMutationSegCount,
+                                              targets.count -
+                                                  preMutationSegCount)];
+
+  if (mutation == KKLaneSegmentMutationInserted) {
+    // Capture the current path as the new segment's snapshot. Mirrors how
+    // scalar lanes inherit the current value at the split point.
+    NSData *snap = KKMorphSnapshotCapture(p);
+    NSUInteger insertAt = MIN((NSUInteger)index, targets.count);
+    [targets insertObject:snap atIndex:insertAt];
+  } else {
+    if ((NSUInteger)index < targets.count)
+      [targets removeObjectAtIndex:index];
+  }
+
+  p.morphTargets = targets;
+  _kkWritePaths(setAPI, paths);
+}
+
+- (void)kkLoadLaneSegmentForLabel:(NSString *)label
+                          groupKey:(NSString *)groupKey
+                          segment:(NSInteger)segmentIndex
+                            getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
+                            setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
+  if (![label isEqualToString:@"Path"])
+    return;
+  if (segmentIndex < 0)
+    return;
+  NSMutableArray<KKBezierPath *> *paths = _kkReadPaths(getAPI);
+  KKBezierPath *p = _kkPathByLayerID(paths, groupKey);
+  if (!p || (NSUInteger)segmentIndex >= p.morphTargets.count)
+    return;
+  KKMorphSnapshotApply(p.morphTargets[segmentIndex], p);
+  _kkWritePaths(setAPI, paths);
+}
+
+- (void)kkCopyLaneSegmentForLabel:(NSString *)label
+                          groupKey:(NSString *)groupKey
+                       fromSegment:(NSInteger)srcSegmentIndex
+                         toSegment:(NSInteger)dstSegmentIndex
+                            getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
+                            setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
+  if (![label isEqualToString:@"Path"])
+    return;
+  if (srcSegmentIndex < 0 || dstSegmentIndex < 0 ||
+      srcSegmentIndex == dstSegmentIndex)
+    return;
+  NSMutableArray<KKBezierPath *> *paths = _kkReadPaths(getAPI);
+  KKBezierPath *p = _kkPathByLayerID(paths, groupKey);
+  if (!p || (NSUInteger)srcSegmentIndex >= p.morphTargets.count ||
+      (NSUInteger)dstSegmentIndex >= p.morphTargets.count)
+    return;
+  NSMutableArray<NSData *> *targets = [p.morphTargets mutableCopy];
+  targets[dstSegmentIndex] = [targets[srcSegmentIndex] copy];
+  p.morphTargets = targets;
+  _kkWritePaths(setAPI, paths);
 }
 
 @end

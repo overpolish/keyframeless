@@ -78,6 +78,11 @@
                  forLabel:lane.propertyLabel
                  groupKey:lane.groupKey
                    atTime:ct];
+    [self kkLoadLaneSegmentForLabel:lane.propertyLabel
+                           groupKey:lane.groupKey
+                            segment:segmentIndex
+                             getAPI:getAPI
+                             setAPI:setAPI];
   }
   [self _applyHTHParameterFlagsForLanes:lanes];
 
@@ -162,6 +167,11 @@
                  forLabel:lane.propertyLabel
                  groupKey:lane.groupKey
                    atTime:ct];
+    [self kkLoadLaneSegmentForLabel:lane.propertyLabel
+                           groupKey:lane.groupKey
+                            segment:newIdx
+                             getAPI:getAPI
+                             setAPI:setAPI];
   }
 
   [self _applyHTHParameterFlagsForLanes:lanes];
@@ -595,6 +605,16 @@
 
   KKWriteLanesJSON(lanes, setAPI, self.apiManager);
 
+  // Mirror any out-of-band per-segment payload (e.g. Canvas's path-morph
+  // snapshots, which don't live in the lane's `values`). Runs in addition
+  // to the scalar-values copy above.
+  [self kkCopyLaneSegmentForLabel:lane.propertyLabel
+                         groupKey:lane.groupKey
+                      fromSegment:srcSegmentIndex
+                        toSegment:dstSegmentIndex
+                           getAPI:getAPI
+                           setAPI:setAPI];
+
   // When the destination is the currently-selected segment, native params
   // still hold its pre-copy values. Push the new values through so the next
   // click on this segment doesn't write the stale native values back into
@@ -610,6 +630,11 @@
       state.lanesSnapshot = [lanes copy];
       state.pendingLanes = nil;
     }
+    [self kkLoadLaneSegmentForLabel:lane.propertyLabel
+                           groupKey:lane.groupKey
+                            segment:dstSegmentIndex
+                             getAPI:getAPI
+                             setAPI:setAPI];
   }
 
   [actAPI endAction:self];
