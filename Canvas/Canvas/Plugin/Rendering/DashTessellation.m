@@ -107,8 +107,8 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float startWidth,
                             (nextArc <= arcEnd);
           if (nextInDash) {
             NSUInteger nextC = (c < curveCount - 1) ? (c + 1) % path.count : 0;
-            simd_float2 nextN =
-                KKRawNormalAtSegStart(path, nextC, outputWidth, outputHeight);
+            simd_float2 nextN = KKNormalAtPoint(path, nextC, segsPerCurve, 0,
+                                                outputWidth, outputHeight);
             normal = KKMiterNormal(normal, nextN);
           }
         } else if (i == 0 && (c > 0 || (path.closed && c == 0))) {
@@ -196,8 +196,8 @@ NSUInteger KKTessellateDashedPath(KKBezierPath *path, float startWidth,
       NSUInteger nextC = (c + 1) % curveCount;
       if (path.closed && c == curveCount - 1)
         nextC = 0;
-      simd_float2 n2 =
-          KKRawNormalAtSegStart(path, nextC, outputWidth, outputHeight);
+      simd_float2 n2 = KKNormalAtPoint(path, nextC, segsPerCurve, 0,
+                                       outputWidth, outputHeight);
 
       vc = KKEmitJoinGeometry(vertices, vc, segEndCenter, segEndNormal, n2,
                               joinHW, lineJoin);

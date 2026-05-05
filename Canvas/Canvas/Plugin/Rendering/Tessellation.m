@@ -282,8 +282,8 @@ NSUInteger KKSamplePathPolyline(KKBezierPath *path, float outputWidth,
           if (path.closed && c == curveCount - 1)
             nextC = 0;
           samples[count].atJoin = true;
-          samples[count].nextCurveStartNormal =
-              KKRawNormalAtSegStart(path, nextC, outputWidth, outputHeight);
+          samples[count].nextCurveStartNormal = KKNormalAtPoint(
+              path, nextC, segsPerCurve, 0, outputWidth, outputHeight);
         }
       }
       count++;
