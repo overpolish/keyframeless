@@ -10,10 +10,8 @@
 
 - (void)updateParameterVisibilityAtTime:(CMTime)time {
   NSArray<NSNumber *> *allParams = @[
-    @(kParamStrokeEnabled),
     @(kParamStrokeWidth),
     @(kParamStrokeColor),
-    @(kParamFillEnabled),
     @(kParamFillColor),
     @(kParamOpacity),
     @(kParamLineCap),
@@ -31,7 +29,6 @@
     @(kParamStartMarkerSize),
     @(kParamEndMarkerSize),
     @(kParamClosedPath),
-    @(kParamSketchEnabled),
     @(kParamSketchRoughness),
     @(kParamSketchBowing),
     @(kParamSketchStrokes),
@@ -46,7 +43,6 @@
     @(kParamFillColorMode),
     @(kParamFillGradientType),
     @(kParamFillGradientAngle),
-    @(kParamTransformEnabled),
     @(kParamPosition),
     @(kParamRotation),
     @(kParamScaleX),
