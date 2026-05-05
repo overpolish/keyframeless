@@ -163,23 +163,23 @@
 	</sceneSettings>
 	<publishSettings>
 		<version>2</version>
-		<target object="3001886901" channel="./9990" name=""/>
-		<target object="3001886901" channel="./9900" name=""/>
-		<target object="3001886901" channel="./9905" name=""/>
-		<target object="3001886901" channel="./9924" name=""/>
-		<target object="3001886901" channel="./9926" name="Length"/>
-		<target object="3001886901" channel="./9927" name="Quality"/>
-		<target object="3001886901" channel="./9929" name="Transitions only?"/>
-		<target object="3001886901" channel="./9930" name="Adaptive Quality"/>
-		<target object="3001886901" channel="./601" name="Anchor Point"/>
-		<target object="3001886901" channel="./2" name="Position"/>
-		<target object="3001886901" channel="./10" name="Rotate with Motion"/>
-		<target object="3001886901" channel="./3" name="Rotation Z"/>
-		<target object="3001886901" channel="./8" name="Rotation X"/>
-		<target object="3001886901" channel="./9" name="Rotation Y"/>
-		<target object="3001886901" channel="./4" name="Scale X"/>
-		<target object="3001886901" channel="./5" name="Scale Y"/>
-		<target object="3001886901" channel="./6" name="Opacity"/>
+		<target object="3001886903" channel="./9990" name=""/>
+		<target object="3001886903" channel="./9900" name=""/>
+		<target object="3001886903" channel="./9905" name=""/>
+		<target object="3001886903" channel="./9924" name=""/>
+		<target object="3001886903" channel="./9926" name="Length"/>
+		<target object="3001886903" channel="./9927" name="Quality"/>
+		<target object="3001886903" channel="./9929" name="Transitions only?"/>
+		<target object="3001886903" channel="./9930" name="Adaptive Quality"/>
+		<target object="3001886903" channel="./601" name="Anchor Point"/>
+		<target object="3001886903" channel="./2" name="Position"/>
+		<target object="3001886903" channel="./10" name="Rotate with Motion"/>
+		<target object="3001886903" channel="./3" name="Rotation Z"/>
+		<target object="3001886903" channel="./8" name="Rotation X"/>
+		<target object="3001886903" channel="./9" name="Rotation Y"/>
+		<target object="3001886903" channel="./4" name="Scale X"/>
+		<target object="3001886903" channel="./5" name="Scale Y"/>
+		<target object="3001886903" channel="./6" name="Opacity"/>
 	</publishSettings>
 	<currentFrame>225280 153600 1 0</currentFrame>
 	<currentObject>3001886884</currentObject>
@@ -270,7 +270,7 @@
 				<parameter name="Width" id="313" flags="8589934610" default="1" value="1920"/>
 				<parameter name="Height" id="314" flags="8589934610" default="1" value="1080"/>
 			</parameter>
-			<filter name="Magic Move · KF" id="3001886901" factoryID="6" pluginUUID="3A0B09C3-0F33-49C3-B58E-730D9D913BF9" pluginVersion="1" pluginName="Magic Move · KF" pluginDynamicParams="0">
+			<filter name="Magic Move · KF" id="3001886903" factoryID="6" pluginUUID="3A0B09C3-0F33-49C3-B58E-730D9D913BF9" pluginVersion="1" pluginName="Magic Move · KF" pluginDynamicParams="0">
 				<timing in="0 1 1 0" out="304640 153600 1 0" offset="0 1 1 0"/>
 				<baseFlags>8589934609</baseFlags>
 				<parameter name="" id="9990" flags="12901679124">
@@ -295,7 +295,7 @@
 				<parameter name="" id="9920" flags="12905938992" default="0" value="0"/>
 				<parameter name="" id="9921" flags="12905938992" default="0" value="0"/>
 				<parameter name="" id="9922" flags="12905938976">
-					<text>92704467-2555-4A98-9C5B-63D9DD07F7B5</text>
+					<text>4D05AC8C-2207-426F-BCDD-74D414F14D30</text>
 				</parameter>
 				<parameter name="" id="9924" flags="12901679120">
 					<numberOfKeypoints>0</numberOfKeypoints>
@@ -324,7 +324,7 @@
 				<parameter name="Mix" id="10001" flags="12901679104" default="1" value="1"/>
 				<parameter name="Flip" id="10002" flags="12905938976" default="0" value="0"/>
 				<parameter name="Input Points" id="10003" flags="12905938976" default="1" value="1"/>
-				<parameter name="Publish OSC" id="10005" flags="12901679104" default="0" value="1"/>
+				<parameter name="Publish OSC" id="10005" flags="4311744512" default="0" value="1"/>
 			</filter>
 		</scenenode>
 		<aspectRatio>1</aspectRatio>
