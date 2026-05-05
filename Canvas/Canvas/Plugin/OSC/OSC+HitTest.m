@@ -173,7 +173,7 @@
         NSUInteger idx = self.selectedPathIndices.firstIndex;
         if (idx < self.paths.count) {
           KKBezierPath *active = self.paths[idx];
-          if (active.isRect && !active.isImage) {
+          if (active.rectShape && !active.isImage) {
             NSInteger crParts[4] = {kOSCCornerRadiusTL, kOSCCornerRadiusTR,
                                     kOSCCornerRadiusBR, kOSCCornerRadiusBL};
             for (int ci = 0; ci < 4; ci++) {
@@ -257,8 +257,8 @@
     for (NSUInteger i = 0; i < active.count; i++) {
       KKBezierPoint pt = [active pointAtIndex:i];
       if (hypot(mouseObj.x - pt.x, mouseObj.y - pt.y) < objHitR) {
-        if (i == 0 && !active.closed && !active.isLine && active.count >= 2 &&
-            !cmdDown) {
+        if (i == 0 && !active.closed && !active.lineShape &&
+            active.count >= 2 && !cmdDown) {
           *activePart = kOSCClosePath;
           [oscAPI setCursor:self.penCloseCursor];
           return;

@@ -50,35 +50,16 @@
     fraction = fmaxf(minFraction, fminf(1.0f, rawFraction));
 
   BOOL optHeld = (modifiers & kFxModifierKey_OPTION) != 0;
-  float ftl = optHeld ? active.cornerRadiusTL : fraction;
-  float ftr = optHeld ? active.cornerRadiusTR : fraction;
-  float fbr = optHeld ? active.cornerRadiusBR : fraction;
-  float fbl = optHeld ? active.cornerRadiusBL : fraction;
-  if (optHeld) {
-    switch (ci) {
-    case 0:
-      ftl = fraction;
-      break;
-    case 1:
-      ftr = fraction;
-      break;
-    case 2:
-      fbr = fraction;
-      break;
-    case 3:
-      fbl = fraction;
-      break;
-    }
-  }
+  simd_float4 fracs =
+      optHeld ? active.rectShape.radii
+              : simd_make_float4(fraction, fraction, fraction, fraction);
+  fracs[ci] = fraction;
 
-  [active setRoundedRectWithMin:bmin
-                            max:bmax
-                     fractionTL:ftl
-                     fractionTR:ftr
-                     fractionBR:fbr
-                     fractionBL:fbl
-                    canvasWidth:canvasW
-                   canvasHeight:canvasH];
+  KKRectShape *rs = [[KKRectShape alloc] init];
+  rs.min = bmin;
+  rs.max = bmax;
+  rs.radii = fracs;
+  active.shape = rs;
   [self writePaths:self.paths];
   *forceUpdate = YES;
 }

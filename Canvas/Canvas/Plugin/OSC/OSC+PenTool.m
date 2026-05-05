@@ -33,7 +33,6 @@
 }
 
 - (void)toggleBezierAtIndex:(NSInteger)idx onPath:(KKBezierPath *)path {
-  path.isRect = NO;
   KKBezierPoint pt = [path pointAtIndex:idx];
   if (pt.type == KKBezierPointBezier) {
     [path setType:KKBezierPointLinear atIndex:idx];
@@ -150,7 +149,6 @@
            forceUpdate:(BOOL *)forceUpdate {
   if (idx < 0 || idx >= (NSInteger)active.count)
     return;
-  active.isRect = NO;
   [active removeAtIndex:idx];
   if (active.count < 2) {
     [self.paths removeObjectAtIndex:self.activePathIndex];
@@ -236,7 +234,6 @@
   NSInteger segIdx = activePart - kOSCPathSegmentBase;
   simd_float2 objPos =
       [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
-  active.isRect = NO;
   [active insertAtIndex:segIdx + 1 position:objPos];
   [self selectActivePath];
   [self writePaths:self.paths];
@@ -344,8 +341,7 @@
   self.dragIndex = -2;
   self.dragCornerIndex = activePart - kOSCCornerRadiusTL;
   self.dragAnchor = (simd_float2){(float)positionX, (float)positionY};
-  float fracs[4] = {active.cornerRadiusTL, active.cornerRadiusTR,
-                    active.cornerRadiusBR, active.cornerRadiusBL};
+  simd_float4 fracs = active.rectShape.radii;
   self.dragStartPixelRadius = fracs[self.dragCornerIndex];
   *forceUpdate = YES;
 }
@@ -371,11 +367,6 @@
   self.rotateStartAngle = atan2f((float)(handlePos.y - centerCanvas.y),
                                  (float)(handlePos.x - centerCanvas.x));
 
-  [self.selectedPathIndices
-      enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
-        if (idx < self.paths.count)
-          self.paths[idx].isRect = NO;
-      }];
   NSMutableArray<NSData *> *snapshots;
   NSMutableArray<NSNumber *> *indices;
   [self snapshotSelectedPaths:&snapshots indices:&indices];

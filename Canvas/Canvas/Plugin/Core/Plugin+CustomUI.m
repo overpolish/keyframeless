@@ -247,13 +247,14 @@ KKLayerInstanceState *KKLayerStateForUUID(NSString *uuid) {
                             accessibilityDescription:nil];
   NSImageView *iconView = [NSImageView imageViewWithImage:icon];
   iconView.translatesAutoresizingMaskIntoConstraints = NO;
-  iconView.contentTintColor = [NSColor secondaryLabelColor];
+  iconView.contentTintColor =
+      [[NSColor inspectorLabel] colorWithAlphaComponent:0.45];
   [iconView.widthAnchor constraintEqualToConstant:KKIconSizeSM].active = YES;
   [iconView.heightAnchor constraintEqualToConstant:KKIconSizeSM].active = YES;
 
   NSTextField *empty = [NSTextField labelWithString:@"No shapes"];
-  empty.font = [NSFont systemFontOfSize:KKFontSizeSM];
-  empty.textColor = [NSColor secondaryLabelColor];
+  empty.font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightMedium];
+  empty.textColor = [[NSColor inspectorLabel] colorWithAlphaComponent:0.45];
   empty.translatesAutoresizingMaskIntoConstraints = NO;
 
   NSStackView *emptyStack =

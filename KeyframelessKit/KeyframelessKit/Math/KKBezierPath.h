@@ -29,6 +29,11 @@ typedef struct {
 
 NS_ASSUME_NONNULL_BEGIN
 
+@class KKShape;
+@class KKRectShape;
+@class KKEllipseShape;
+@class KKLineShape;
+
 @interface KKBezierPath : NSObject
 
 /// Number of points.
@@ -40,11 +45,23 @@ NS_ASSUME_NONNULL_BEGIN
 /// Whether the path forms a closed loop (last point connects to first).
 @property(nonatomic, assign) BOOL closed;
 
-/// Whether the path was created as a rectangle (enables corner radius handles).
-@property(nonatomic, assign) BOOL isRect;
+/// The path's authored shape kind. Setter rewrites geometry from the shape
+/// (e.g., assigning a `KKRectShape` lays down 4 corners). Use `restoreShape:`
+/// instead when geometry is already correct and only the kind metadata
+/// needs to be reattached. Returns nil for groups.
+@property(nonatomic, nullable) KKShape *shape;
 
-/// Whether the path was created with the line tool.
-@property(nonatomic, assign) BOOL isLine;
+/// Reattach a shape to a path whose points are already correct (e.g., morph
+/// apply just wrote interpolated geometry). Stores the ivar + writes through
+/// to legacy radius fields without touching the point bag.
+- (void)restoreShape:(nullable KKShape *)shape;
+
+/// Typed accessors — return the shape cast to the matching subclass, or nil
+/// if the path's shape is a different kind (or nil). Avoids the
+/// `isKindOfClass` + cast chant at every callsite.
+@property(nonatomic, nullable, readonly) KKRectShape *rectShape;
+@property(nonatomic, nullable, readonly) KKEllipseShape *ellipseShape;
+@property(nonatomic, nullable, readonly) KKLineShape *lineShape;
 
 /// Whether the path is hidden in the canvas.
 @property(nonatomic, assign) BOOL hidden;
@@ -118,12 +135,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// inspector and OSC handle match Position semantics.
 @property(nonatomic, assign) float anchorX;
 @property(nonatomic, assign) float anchorY;
-
-/// Per-corner radius fractions 0–1 (TL, TR, BR, BL). 0 = sharp, 1 = max.
-@property(nonatomic, assign) float cornerRadiusTL;
-@property(nonatomic, assign) float cornerRadiusTR;
-@property(nonatomic, assign) float cornerRadiusBR;
-@property(nonatomic, assign) float cornerRadiusBL;
 
 /// Whether this path renders a stroke (default YES).
 @property(nonatomic, assign) BOOL strokeEnabled;
@@ -278,6 +289,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// Fill gradient stops as JSON (KKGradientStop array). Empty when solid.
 @property(nonatomic, copy, nullable) NSString *fillGradientJSON;
 
+/// Per-segment morph target snapshots. Each entry is a raw point array
+/// (count uint32, closed uint8, then `count` × KKBezierPoint) representing
+/// the *target* shape for the corresponding morph-lane segment after the
+/// base. At render time the path's geometry is interpolated between the
+/// previous snapshot (or the base points for segment 0) and the next.
+/// Properties (stroke/fill/transform) come from the base path; only points
+/// + closed flag morph.
+@property(nonatomic, copy, nullable) NSArray<NSData *> *morphTargets;
+
 + (instancetype)pathWithData:(nullable NSData *)data;
 - (NSData *)dataRepresentation;
 
@@ -288,6 +308,26 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)insertAtIndex:(NSUInteger)index position:(simd_float2)pos;
 - (void)removeAtIndex:(NSUInteger)index;
+
+/// Replace all points with `count` linear points at the given positions,
+/// and set the closed flag. Clears bezier handles. Used by the morph
+/// renderer to swap geometry without rebuilding the path object.
+- (void)setLinearPositions:(const simd_float2 *)positions
+                     count:(NSUInteger)count
+                    closed:(BOOL)closed;
+
+/// Replace all points with the given KKBezierPoint array (handles + types
+/// preserved) and set the closed flag. Used by morph snapshot-apply for
+/// held segments where the original bezier authoring should be retained.
+- (void)setBezierPoints:(const KKBezierPoint *)points
+                  count:(NSUInteger)count
+                 closed:(BOOL)closed;
+
+/// Replace the contour boundary list (compound-path subpath starts). Pass
+/// `nil` or empty to collapse to a single contour. Caller passes the
+/// authored start indices in increasing order; the first start is always
+/// implicitly 0 and may be omitted.
+- (void)setContourStarts:(nullable NSArray<NSNumber *> *)starts;
 - (void)moveAtIndex:(NSUInteger)index to:(simd_float2)pos;
 - (void)setInHandle:(simd_float2)offset atIndex:(NSUInteger)index;
 - (void)setOutHandle:(simd_float2)offset atIndex:(NSUInteger)index;

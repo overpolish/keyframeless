@@ -69,6 +69,7 @@ static NSArray<NSNumber *> *_Nullable KKExpandComponentKinds(
       n = 2;
       break;
     case KKAnimatableParamKindGradient:
+    case KKAnimatableParamKindMorph:
       n = 0;
       break;
     default:

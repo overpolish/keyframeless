@@ -127,7 +127,7 @@
                      activePart:(NSInteger)activePart
                destinationImage:(FxImageTile *)dest
                          atTime:(CMTime)time {
-  if (!path.isRect || path.isImage)
+  if (!path.rectShape || path.isImage)
     return;
   NSInteger crParts[4] = {kOSCCornerRadiusTL, kOSCCornerRadiusTR,
                           kOSCCornerRadiusBR, kOSCCornerRadiusBL};

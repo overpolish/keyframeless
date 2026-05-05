@@ -32,6 +32,11 @@ typedef NS_ENUM(NSInteger, KKAnimatableParamKind) {
   /// 1 scalar (0/1). Step semantics: HTH normalization preserves the
   /// segment's own value rather than inheriting from the surrounding hold.
   KKAnimatableParamKindBool = 4,
+  /// 0 scalars in the lane itself; the per-segment payload lives out-of-band
+  /// (e.g. on the path blob for Canvas's path-morph lane). The lane carries
+  /// only segment timing/easing; plugins keep external storage in sync via
+  /// the lane-mutation hook.
+  KKAnimatableParamKindMorph = 5,
 };
 
 /// A single segment in a multi-stage timing lane.

@@ -61,8 +61,8 @@ NSUInteger KKTessellatePath(KKBezierPath *path, float startWidth,
         if (i == segsPerCurve &&
             (c < curveCount - 1 || (path.closed && c == curveCount - 1))) {
           NSUInteger nextC = (c < curveCount - 1) ? (c + 1) % path.count : 0;
-          simd_float2 nextN =
-              KKRawNormalAtSegStart(path, nextC, outputWidth, outputHeight);
+          simd_float2 nextN = KKNormalAtPoint(path, nextC, segsPerCurve, 0,
+                                              outputWidth, outputHeight);
           normal = KKMiterNormal(normal, nextN);
           if (isLastPoint) {
             endNormal = normal;
@@ -117,8 +117,8 @@ NSUInteger KKTessellatePath(KKBezierPath *path, float startWidth,
       NSUInteger nextC = (c + 1) % curveCount;
       if (path.closed && c == curveCount - 1)
         nextC = 0;
-      simd_float2 n2 =
-          KKRawNormalAtSegStart(path, nextC, outputWidth, outputHeight);
+      simd_float2 n2 = KKNormalAtPoint(path, nextC, segsPerCurve, 0,
+                                       outputWidth, outputHeight);
 
       vertexCount = KKEmitJoinGeometry(vertices, vertexCount, segEndCenter,
                                        segEndNormal, n2, joinHW, lineJoin);

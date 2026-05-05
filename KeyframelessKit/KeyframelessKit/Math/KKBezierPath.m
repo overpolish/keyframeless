@@ -4,6 +4,7 @@
  */
 
 #import "KKBezierPath.h"
+#import "KKShape.h"
 
 static const NSUInteger kArcLengthSamples = 64;
 
@@ -21,10 +22,14 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   NSUInteger *_contourStarts;
   NSUInteger _contourCount;
   NSUInteger _contourCapacity;
+  KKShape *_shape;
 }
 
 + (instancetype)pathWithData:(NSData *)data {
   KKBezierPath *path = [[KKBezierPath alloc] init];
+  // Locals used to materialize a KKRectShape ivar from legacy v27 data.
+  // Reset only when bit 2 (`hasRadius`) is set in the basic-format flags.
+  float legacyRadii[4] = {0, 0, 0, 0};
   if (data.length >= 4) {
     const uint8_t *bytes = data.bytes;
     uint32_t count;
@@ -39,8 +44,10 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     if (data.length >= newExpected && (count > 0 || maybeGroup)) {
       uint8_t flags = bytes[4];
       path->_closed = (flags & 1) != 0;
-      path->_isLine = (flags & 2) != 0;
-      path->_isRect = (flags & 8) != 0;
+      // bits 1 (legacy `_isLine`) and 3 (legacy `_isRect`) are captured into
+      // locals for v < 28 → shape-ivar migration that runs after parsing.
+      BOOL legacyIsLine = (flags & 2) != 0;
+      BOOL legacyIsRect = (flags & 8) != 0;
       path->_hidden = (flags & 16) != 0;
       path->_locked = (flags & 32) != 0;
       path->_isGroup = (flags & 128) != 0;
@@ -63,15 +70,11 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
         path->_points = malloc(count * pointSize);
         memcpy(path->_points, bytes + headerSize, count * pointSize);
       }
-      // Extended: corner radii after points
+      // Extended: corner radii after points (v27 hasRadius extension —
+      // captured into locals for the v < 28 migration that follows).
       size_t extOffset = headerSize + count * pointSize;
       if ((flags & 4) && data.length >= extOffset + 4 * sizeof(float)) {
-        float cr[4];
-        memcpy(cr, bytes + extOffset, 4 * sizeof(float));
-        path->_cornerRadiusTL = cr[0];
-        path->_cornerRadiusTR = cr[1];
-        path->_cornerRadiusBR = cr[2];
-        path->_cornerRadiusBL = cr[3];
+        memcpy(legacyRadii, bytes + extOffset, 4 * sizeof(float));
         extOffset += 4 * sizeof(float);
       }
       if ((flags & 64) && data.length >= extOffset + 2) {
@@ -334,6 +337,71 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
           memcpy(&path->_drawOnOrigin, bytes + hdr, sizeof(float));
           hdr += sizeof(float);
         }
+        if (ver >= 27 && data.length >= hdr + 2) {
+          uint16_t nTargets;
+          memcpy(&nTargets, bytes + hdr, 2);
+          hdr += 2;
+          if (nTargets > 0) {
+            NSMutableArray<NSData *> *targets =
+                [NSMutableArray arrayWithCapacity:nTargets];
+            for (uint16_t ti = 0; ti < nTargets; ti++) {
+              if (data.length < hdr + 4)
+                break;
+              uint32_t blobLen;
+              memcpy(&blobLen, bytes + hdr, 4);
+              hdr += 4;
+              if (blobLen == 0 || data.length < hdr + blobLen)
+                break;
+              [targets addObject:[NSData dataWithBytes:bytes + hdr
+                                                length:blobLen]];
+              hdr += blobLen;
+            }
+            path->_morphTargets = targets;
+          }
+        }
+        if (ver >= 28 && data.length >= hdr + 1) {
+          uint8_t shapeKind = bytes[hdr];
+          hdr += 1;
+          size_t need = [KKShape payloadByteCountForKind:shapeKind];
+          if (need > 0 && data.length >= hdr + need) {
+            path->_shape = [KKShape shapeWithKind:shapeKind
+                                            bytes:bytes + hdr
+                                        available:need];
+            hdr += need;
+          }
+        }
+      }
+      // Migrate v27 (and earlier) rect-flagged paths: build a KKRectShape
+      // from the bbox + radii and stash it on the ivar. Newer blobs already
+      // wrote/read the ivar above, so this only fires for legacy data.
+      if (!path->_shape && legacyIsRect && path->_count > 0 &&
+          !path->_isGroup) {
+        simd_float2 mn =
+            simd_make_float2(path->_points[0].x, path->_points[0].y);
+        simd_float2 mx = mn;
+        for (NSUInteger i = 1; i < path->_count; ++i) {
+          mn.x = MIN(mn.x, path->_points[i].x);
+          mn.y = MIN(mn.y, path->_points[i].y);
+          mx.x = MAX(mx.x, path->_points[i].x);
+          mx.y = MAX(mx.y, path->_points[i].y);
+        }
+        KKRectShape *rs = [[KKRectShape alloc] init];
+        rs.min = mn;
+        rs.max = mx;
+        rs.radiusTL = legacyRadii[0];
+        rs.radiusTR = legacyRadii[1];
+        rs.radiusBR = legacyRadii[2];
+        rs.radiusBL = legacyRadii[3];
+        path->_shape = rs;
+      }
+      // Same migration for legacy line-flagged paths: 2 endpoints become
+      // a KKLineShape{start, end}.
+      if (!path->_shape && legacyIsLine && path->_count >= 2 &&
+          !path->_isGroup) {
+        KKLineShape *ls = [[KKLineShape alloc] init];
+        ls.start = simd_make_float2(path->_points[0].x, path->_points[0].y);
+        ls.end = simd_make_float2(path->_points[1].x, path->_points[1].y);
+        path->_shape = ls;
       }
     }
   }
@@ -343,20 +411,17 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
 - (NSData *)dataRepresentation {
   uint32_t count = (uint32_t)_count;
   uint8_t flags = _closed ? 1 : 0;
-  if (_isLine)
-    flags |= 2;
-  if (_isRect)
-    flags |= 8;
+  // bit 1 (legacy `_isLine`) and bit 3 (legacy `_isRect`) are no longer
+  // written. Both kinds live in the v28 shape ivar block. Old readers see
+  // those bits = 0; new readers consume the kind+payload tail.
   if (_hidden)
     flags |= 16;
   if (_locked)
     flags |= 32;
   if (_isGroup)
     flags |= 128;
-  BOOL hasRadius = (_cornerRadiusTL > 0 || _cornerRadiusTR > 0 ||
-                    _cornerRadiusBR > 0 || _cornerRadiusBL > 0);
-  if (hasRadius)
-    flags |= 4;
+  // bit 2 (legacy hasRadius extension) is no longer written. Rect radii
+  // persist in the v28 shape ivar block at the end of the per-object data.
   NSData *nameData = [_name dataUsingEncoding:NSUTF8StringEncoding];
   if (nameData.length > 0)
     flags |= 64;
@@ -376,11 +441,6 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   }
   if (count > 0)
     [data appendBytes:_points length:count * pointSize];
-  if (hasRadius) {
-    float cr[4] = {_cornerRadiusTL, _cornerRadiusTR, _cornerRadiusBR,
-                   _cornerRadiusBL};
-    [data appendBytes:cr length:4 * sizeof(float)];
-  }
   if (nameData.length > 0) {
     uint16_t nameLen = (uint16_t)nameData.length;
     [data appendBytes:&nameLen length:2];
@@ -405,7 +465,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   // v11: + endWidth (1 float).
   // v12: + contour starts (2-byte count + N × uint32 indices).
   uint8_t propMarker = 0xAA;
-  uint8_t propVersion = 26;
+  uint8_t propVersion = 28;
   [data appendBytes:&propMarker length:1];
   [data appendBytes:&propVersion length:1];
   float strokeData[4] = {_strokeWidth, _strokeR, _strokeG, _strokeB};
@@ -510,6 +570,25 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   [data appendBytes:ants length:2 * sizeof(float)];
   // v26: drawOnOrigin (1 float).
   [data appendBytes:&_drawOnOrigin length:sizeof(float)];
+  // v27: morph targets (uint16 count, then for each: uint32 blob length +
+  // blob).
+  uint16_t nTargets =
+      (uint16_t)MIN((NSUInteger)UINT16_MAX, _morphTargets.count);
+  [data appendBytes:&nTargets length:2];
+  for (uint16_t ti = 0; ti < nTargets; ti++) {
+    NSData *blob = _morphTargets[ti];
+    uint32_t blobLen = (uint32_t)blob.length;
+    [data appendBytes:&blobLen length:4];
+    if (blobLen > 0)
+      [data appendData:blob];
+  }
+  // v28: shape ivar (1 byte kind, 0xFF = none, then per-kind payload).
+  // Layout (kind + payload bytes) lives on KKShape; see -serializedPayload.
+  NSData *payload = _shape.serializedPayload;
+  uint8_t shapeKind = payload ? (uint8_t)_shape.kind : 0xFF;
+  [data appendBytes:&shapeKind length:1];
+  if (payload)
+    [data appendData:payload];
   return data;
 }
 
@@ -627,6 +706,90 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   return _count + 1;
 }
 
+- (KKShape *)shape {
+  if (_isGroup)
+    return nil;
+  if (_shape)
+    return _shape;
+
+  BOOL anyBezier = NO;
+  for (NSUInteger i = 0; i < _count; ++i) {
+    if (_points[i].type == KKBezierPointBezier) {
+      anyBezier = YES;
+      break;
+    }
+  }
+
+  if (anyBezier) {
+    KKBezierShape *b = [[KKBezierShape alloc] init];
+    b.pointsData = _count > 0
+                       ? [NSData dataWithBytes:_points
+                                        length:_count * sizeof(KKBezierPoint)]
+                       : [NSData data];
+    b.closed = _closed;
+    return b;
+  }
+
+  KKPolygonShape *p = [[KKPolygonShape alloc] init];
+  if (_count > 0) {
+    NSMutableData *buf =
+        [NSMutableData dataWithLength:_count * sizeof(simd_float2)];
+    simd_float2 *dst = buf.mutableBytes;
+    for (NSUInteger i = 0; i < _count; ++i) {
+      dst[i] = simd_make_float2(_points[i].x, _points[i].y);
+    }
+    p.pointsData = buf;
+  } else {
+    p.pointsData = [NSData data];
+  }
+  p.closed = _closed;
+  return p;
+}
+
+- (void)setShape:(KKShape *)shape {
+  if ([shape isKindOfClass:[KKRectShape class]]) {
+    // Lay down sharp corners as a placeholder. The renderer's
+    // "Fix up rounded rect geometry" pass re-materializes the rounded
+    // shape per-frame using actual canvas pixel dims.
+    KKRectShape *r = (KKRectShape *)shape;
+    simd_float2 mn = r.min, mx = r.max;
+    simd_float2 corners[4] = {
+        {mn.x, mx.y},
+        {mx.x, mx.y},
+        {mx.x, mn.y},
+        {mn.x, mn.y},
+    };
+    [self setLinearPositions:corners count:4 closed:YES];
+  } else if ([shape isKindOfClass:[KKEllipseShape class]]) {
+    [(KKEllipseShape *)shape applyToPath:self canvasWidth:0 canvasHeight:0];
+  } else if ([shape isKindOfClass:[KKLineShape class]]) {
+    [(KKLineShape *)shape applyToPath:self canvasWidth:0 canvasHeight:0];
+  } else if (shape != nil) {
+    NSAssert(NO, @"setShape: not yet implemented for %@", [shape class]);
+    return;
+  }
+  [self restoreShape:shape];
+}
+
+- (void)restoreShape:(KKShape *)shape {
+  _shape = [shape copy];
+}
+
+- (KKRectShape *)rectShape {
+  KKShape *s = self.shape;
+  return [s isKindOfClass:[KKRectShape class]] ? (KKRectShape *)s : nil;
+}
+
+- (KKEllipseShape *)ellipseShape {
+  KKShape *s = self.shape;
+  return [s isKindOfClass:[KKEllipseShape class]] ? (KKEllipseShape *)s : nil;
+}
+
+- (KKLineShape *)lineShape {
+  KKShape *s = self.shape;
+  return [s isKindOfClass:[KKLineShape class]] ? (KKLineShape *)s : nil;
+}
+
 - (KKBezierPoint)pointAtIndex:(NSUInteger)index {
   return _points[index];
 }
@@ -652,6 +815,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
       .type = KKBezierPointLinear,
   };
   _count++;
+  _shape = nil;
 }
 
 - (void)removeAtIndex:(NSUInteger)index {
@@ -659,26 +823,80 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     memmove(&_points[index], &_points[index + 1],
             (_count - index - 1) * sizeof(KKBezierPoint));
   _count--;
+  _shape = nil;
+}
+
+- (void)setLinearPositions:(const simd_float2 *)positions
+                     count:(NSUInteger)count
+                    closed:(BOOL)closed {
+  [self ensureCapacity:count];
+  for (NSUInteger i = 0; i < count; i++) {
+    _points[i] = (KKBezierPoint){
+        .x = positions[i].x, .y = positions[i].y, .type = KKBezierPointLinear};
+  }
+  _count = count;
+  _closed = closed;
+  // Bulk geometry replacement invalidates the cached shape — the new
+  // points may not be a rect/ellipse/line anymore.
+  _shape = nil;
+}
+
+- (void)setBezierPoints:(const KKBezierPoint *)points
+                  count:(NSUInteger)count
+                 closed:(BOOL)closed {
+  [self ensureCapacity:count];
+  if (count > 0)
+    memcpy(_points, points, count * sizeof(KKBezierPoint));
+  _count = count;
+  _closed = closed;
+  _shape = nil;
+}
+
+- (void)setContourStarts:(NSArray<NSNumber *> *)starts {
+  // Strip a leading 0 if the caller included it — first contour always
+  // starts at index 0 implicitly.
+  NSUInteger leading =
+      (starts.count > 0 && starts[0].unsignedIntegerValue == 0) ? 1 : 0;
+  NSUInteger explicitCount =
+      starts.count > leading ? starts.count - leading : 0;
+  if (explicitCount == 0) {
+    _contourCount = 0;
+    return;
+  }
+  // _contourCount is the total contour count including the implicit first.
+  NSUInteger total = explicitCount + 1;
+  if (total > _contourCapacity) {
+    _contourStarts = realloc(_contourStarts, total * sizeof(NSUInteger));
+    _contourCapacity = total;
+  }
+  _contourStarts[0] = 0;
+  for (NSUInteger i = 0; i < explicitCount; i++)
+    _contourStarts[i + 1] = starts[leading + i].unsignedIntegerValue;
+  _contourCount = total;
 }
 
 - (void)moveAtIndex:(NSUInteger)index to:(simd_float2)pos {
   _points[index].x = pos.x;
   _points[index].y = pos.y;
+  _shape = nil;
 }
 
 - (void)setInHandle:(simd_float2)offset atIndex:(NSUInteger)index {
   _points[index].inX = offset.x;
   _points[index].inY = offset.y;
+  _shape = nil;
 }
 
 - (void)setOutHandle:(simd_float2)offset atIndex:(NSUInteger)index {
   _points[index].outX = offset.x;
   _points[index].outY = offset.y;
+  _shape = nil;
 }
 
 - (void)setType:(KKBezierPointType)type atIndex:(NSUInteger)index {
   if (index < _count)
     _points[index].type = type;
+  _shape = nil;
 }
 
 - (void)translateBy:(simd_float2)delta {
@@ -717,18 +935,20 @@ static void cornerRadii(float fraction, float maxRX, float maxRY, float objW,
                    fractionBL:(float)fbl
                   canvasWidth:(float)canvasW
                  canvasHeight:(float)canvasH {
-  _cornerRadiusTL = fmaxf(0.0f, fminf(ftl, 1.0f));
-  _cornerRadiusTR = fmaxf(0.0f, fminf(ftr, 1.0f));
-  _cornerRadiusBR = fmaxf(0.0f, fminf(fbr, 1.0f));
-  _cornerRadiusBL = fmaxf(0.0f, fminf(fbl, 1.0f));
+  float fracs[4] = {
+      fmaxf(0.0f, fminf(ftl, 1.0f)),
+      fmaxf(0.0f, fminf(ftr, 1.0f)),
+      fmaxf(0.0f, fminf(fbr, 1.0f)),
+      fmaxf(0.0f, fminf(fbl, 1.0f)),
+  };
 
   float maxRX = (max.x - min.x) * 0.5f;
   float maxRY = (max.y - min.y) * 0.5f;
   float objW = max.x - min.x;
   float objH = max.y - min.y;
 
-  BOOL allZero = (_cornerRadiusTL < 0.0001f && _cornerRadiusTR < 0.0001f &&
-                  _cornerRadiusBR < 0.0001f && _cornerRadiusBL < 0.0001f);
+  BOOL allZero = (fracs[0] < 0.0001f && fracs[1] < 0.0001f &&
+                  fracs[2] < 0.0001f && fracs[3] < 0.0001f);
   if (allZero) {
     [self ensureCapacity:4];
     _count = 4;
@@ -741,8 +961,6 @@ static void cornerRadii(float fraction, float maxRX, float maxRY, float objW,
 
   // Compute per-corner rx/ry
   float rx[4], ry[4];
-  float fracs[4] = {_cornerRadiusTL, _cornerRadiusTR, _cornerRadiusBR,
-                    _cornerRadiusBL};
   for (int i = 0; i < 4; i++)
     cornerRadii(fracs[i], maxRX, maxRY, objW, objH, canvasW, canvasH, &rx[i],
                 &ry[i]);
@@ -856,6 +1074,7 @@ static void cornerRadii(float fraction, float maxRX, float maxRY, float objW,
 - (void)toggleTypeAtIndex:(NSUInteger)index
                     start:(simd_float2)start
                       end:(simd_float2)end {
+  _shape = nil;
   KKBezierPoint *pt = &_points[index];
   if (pt->type == KKBezierPointBezier) {
     pt->type = KKBezierPointLinear;

@@ -180,5 +180,102 @@ static NSArray<KKGradientStop *> *_stopsFromValues(NSArray<NSNumber *> *values,
   }
 }
 
+/// Render the easing curve at full lane height with no value strip — used
+/// by Morph lanes, which have no scalar per-segment payload to display.
+/// Same normalized 0–1 baseline as the color/gradient renderer's curve
+/// portion, scaled to occupy the entire lane.
+- (void)_renderNormalizedCurveForLane:(KKTimingLane *)lane
+                               trackX:(CGFloat)trackX
+                           trackWidth:(CGFloat)trackWidth
+                                laneY:(CGFloat)laneY {
+  CGFloat laneH = [self _laneHeight];
+  CGFloat curveBottom = laneY + 2 + kKSSCurvePadding;
+  CGFloat curveTop = laneY + laneH - 2 - kKSSCurvePadding;
+  if (curveTop <= curveBottom)
+    return;
+
+  NSArray<KKTimingSegment *> *segments = lane.segments;
+
+  double minVal = 0.0, maxVal = 1.0;
+  static const NSInteger kSampleCount = 32;
+  for (NSUInteger sIdx = 0; sIdx < segments.count; sIdx++) {
+    KKTimingSegment *s = segments[sIdx];
+    BOOL animateOut = (sIdx == segments.count - 1);
+    if (s.type == KKSegmentTypeHold && s.holdEffect == KKHoldEffectNone)
+      continue;
+    for (NSInteger i = 0; i <= kSampleCount; i++) {
+      double t = (double)i / (double)kSampleCount;
+      double v;
+      if (s.type == KKSegmentTypeHold) {
+        v = KKApplyHoldEffect(t, s.holdEffect, s.intensity, s.frequency,
+                              (int)s.seed);
+      } else if (KKIsHTHTransition(lane, (NSInteger)sIdx)) {
+        double e = KKApplyEasing(t, s.easing, s.intensity, s.frequency);
+        v = 1.0 + (e - t);
+      } else {
+        double ti = animateOut ? (1.0 - t) : t;
+        double e = KKApplyEasing(ti, s.easing, s.intensity, s.frequency);
+        v = animateOut ? (1.0 - e) : e;
+      }
+      if (v < minVal)
+        minVal = v;
+      if (v > maxVal)
+        maxVal = v;
+    }
+  }
+  double valRange = maxVal - minVal;
+  if (valRange < 0.001)
+    valRange = 1.0;
+
+  for (NSUInteger segIdx = 0; segIdx < segments.count; segIdx++) {
+    KKTimingSegment *seg = segments[segIdx];
+    CGFloat segX = [self _xForFrac:seg.start
+                            trackX:trackX
+                        trackWidth:trackWidth];
+    CGFloat segW = (seg.end - seg.start) * trackWidth * _zoom;
+    if (segW < 1)
+      continue;
+    CGFloat innerW = MAX(0, segW - 4);
+    CGFloat curveX = segX + 2;
+
+    BOOL isHTH = KKIsHTHTransition(lane, (NSInteger)segIdx);
+    NSColor *lineColor =
+        (seg.type == KKSegmentTypeHold)
+            ? [[NSColor accentMatchingHost] colorWithAlphaComponent:0.55]
+            : [[NSColor warning] colorWithAlphaComponent:0.55];
+    [lineColor setStroke];
+    NSBezierPath *path = [NSBezierPath bezierPath];
+    path.lineWidth = 1.5;
+    NSInteger steps = MAX(8, (NSInteger)floor(segW / 3.0));
+    BOOL isAnimateOut = (segIdx == segments.count - 1);
+    for (NSInteger i = 0; i <= steps; i++) {
+      double t = (double)i / (double)steps;
+      CGFloat x = curveX + (CGFloat)t * innerW;
+      double v;
+      if (isHTH) {
+        double e = KKApplyEasing(t, seg.easing, seg.intensity, seg.frequency);
+        v = 1.0 + (e - t);
+      } else if (seg.type == KKSegmentTypeHold) {
+        if (seg.holdEffect == KKHoldEffectNone) {
+          v = 1.0;
+        } else {
+          v = KKApplyHoldEffect(t, seg.holdEffect, seg.intensity, seg.frequency,
+                                (int)seg.seed);
+        }
+      } else {
+        double e = KKApplyEasing(t, seg.easing, seg.intensity, seg.frequency);
+        v = isAnimateOut ? (1.0 - e) : e;
+      }
+      double y01 = (v - minVal) / valRange;
+      CGFloat y = curveBottom + (CGFloat)y01 * (curveTop - curveBottom);
+      if (i == 0)
+        [path moveToPoint:NSMakePoint(x, y)];
+      else
+        [path lineToPoint:NSMakePoint(x, y)];
+    }
+    [path stroke];
+  }
+}
+
 @end
 #pragma clang diagnostic pop

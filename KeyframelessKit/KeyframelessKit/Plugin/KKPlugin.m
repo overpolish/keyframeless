@@ -527,6 +527,34 @@
     dispatch_async(dispatch_get_main_queue(), apply);
 }
 
+- (void)kkHandleLaneSegmentMutation:(KKLaneSegmentMutation)mutation
+                               lane:(KKTimingLane *)lane
+                            atIndex:(NSInteger)index
+                             getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
+                             setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
+  // Default: no-op. Plugins override to keep out-of-band per-segment data
+  // in sync with the sequencer's segment count.
+}
+
+- (void)kkLoadLaneSegmentForLabel:(NSString *)label
+                         groupKey:(NSString *)groupKey
+                          segment:(NSInteger)segmentIndex
+                           getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
+                           setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
+  // Default: no-op. Scalar lanes use the values-based applyLaneValues:
+  // path; this hook is for plugins with out-of-band per-segment payloads.
+}
+
+- (void)kkCopyLaneSegmentForLabel:(NSString *)label
+                         groupKey:(NSString *)groupKey
+                      fromSegment:(NSInteger)srcSegmentIndex
+                        toSegment:(NSInteger)dstSegmentIndex
+                           getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
+                           setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
+  // Default: no-op. The scalar values copy handled by
+  // _handleSegmentValuesCopiedAtLane: covers value-based lanes.
+}
+
 - (NSString *)emptyLanesMessageWhenNoLanes {
   return nil;
 }

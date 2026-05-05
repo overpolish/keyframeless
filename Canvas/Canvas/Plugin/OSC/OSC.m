@@ -264,6 +264,42 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
 }
 
 - (void)writePaths:(NSArray<KKBezierPath *> *)paths {
+  // Per-frame sync into the active morph segment: any path whose layer has
+  // a Morph lane with `selectedSegment >= 0` gets its current geometry
+  // captured into `morphTargets[selectedSegment]`. Mirrors how scalar lanes
+  // push slider edits into the selected segment immediately via
+  // `kkPushParamToLane:`.
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  NSArray<KKTimingLane *> *snap = state.lanesSnapshot;
+  if (snap.count) {
+    for (KKBezierPath *p in paths) {
+      if (p.layerID.length == 0 || p.count < 2)
+        continue;
+      KKTimingLane *morphLane = nil;
+      for (KKTimingLane *l in snap) {
+        if ([l.propertyLabel isEqualToString:@"Path"] &&
+            [l.groupKey isEqualToString:p.layerID]) {
+          morphLane = l;
+          break;
+        }
+      }
+      if (!morphLane)
+        continue;
+      NSInteger sel = morphLane.selectedSegment;
+      if (sel < 0 || (NSUInteger)sel >= morphLane.segments.count)
+        continue;
+      NSMutableArray<NSData *> *targets =
+          p.morphTargets ? [p.morphTargets mutableCopy] : [NSMutableArray array];
+      // Defensive: if morphTargets lags lane segment count (e.g. mutation
+      // hook hasn't fired yet for some reason), pad with current snapshot
+      // before overwriting at sel.
+      while (targets.count <= (NSUInteger)sel)
+        [targets addObject:KKMorphSnapshotCapture(p)];
+      targets[sel] = KKMorphSnapshotCapture(p);
+      p.morphTargets = targets;
+    }
+  }
+
   id<FxParameterSettingAPI_v5> paramSetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   NSData *blob = [KKBezierPath blobFromPaths:paths];
