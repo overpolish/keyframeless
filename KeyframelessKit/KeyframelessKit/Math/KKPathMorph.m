@@ -357,6 +357,39 @@ static KKBezierPoint *_kkCubicsToPoints(const KKMorphCubic *segs,
         .type = KKBezierPointBezier,
     };
   }
+  // Open-path endpoint tangent fix: the cubic-equalize step pairs cubics
+  // strictly by index, with no spatial alignment for open paths. That can
+  // leave the boundary cubics' handles dominated by whichever side had the
+  // larger authored handle — pointing in a direction that disagrees with
+  // the morphed visible chord. The stroke tessellator computes its end
+  // normal from the analytic tangent (3·(c0-p0) at t=0, 3·(p1-c1) at t=1),
+  // so a mis-directed boundary handle shows up as a V-notch at the cap.
+  // Re-project the head's outH and tail's inH onto the chord toward the
+  // neighboring anchor while preserving handle length.
+  if (!closed && n >= 2) {
+    simd_float2 a0 = {pts[0].x, pts[0].y};
+    simd_float2 a1 = {pts[1].x, pts[1].y};
+    simd_float2 chord0 = a1 - a0;
+    float chord0Len = simd_length(chord0);
+    if (chord0Len > 1e-6f) {
+      simd_float2 outH0 = {pts[0].outX, pts[0].outY};
+      float hLen = simd_length(outH0);
+      simd_float2 dir = chord0 / chord0Len;
+      pts[0].outX = dir.x * hLen;
+      pts[0].outY = dir.y * hLen;
+    }
+    simd_float2 aN = {pts[n - 1].x, pts[n - 1].y};
+    simd_float2 aP = {pts[n - 2].x, pts[n - 2].y};
+    simd_float2 chordN = aP - aN;
+    float chordNLen = simd_length(chordN);
+    if (chordNLen > 1e-6f) {
+      simd_float2 inHN = {pts[n - 1].inX, pts[n - 1].inY};
+      float hLen = simd_length(inHN);
+      simd_float2 dir = chordN / chordNLen;
+      pts[n - 1].inX = dir.x * hLen;
+      pts[n - 1].inY = dir.y * hLen;
+    }
+  }
   *outCount = n;
   return pts;
 }
