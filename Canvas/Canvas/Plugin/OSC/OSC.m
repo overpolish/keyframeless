@@ -308,6 +308,18 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   [paramSetAPI setStringParameterValue:str toParameter:kParamPathData];
   // Invalidate so the next readPaths detects the write as a change.
   self.lastReadBlobString = nil;
+
+  // Push into the store so the layer-list and sequencer-reconcile observers
+  // fire on this tick. Mirrors layer-list's `_modifyPaths`. Without this,
+  // OSC-driven path mutations (delete, boolean ops, outline, pen-tool point
+  // delete, shape creation/deletion) leave both views stale until another
+  // event happens to touch the store.
+  NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+  KKCanvasStore *store = uuid ? KKLayerStateForUUID(uuid).store : nil;
+  if (store)
+    [store performBatch:^{
+      [store setPaths:paths];
+    }];
 }
 
 - (void)syncStrokeParamsToSelection {

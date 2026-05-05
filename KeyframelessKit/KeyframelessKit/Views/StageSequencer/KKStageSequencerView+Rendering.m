@@ -11,8 +11,15 @@
 
 - (void)renderLanes {
   CGFloat totalWidth = NSWidth(self.bounds);
-  if (totalWidth < 1 || !self.lanes.count)
+  if (totalWidth < 1)
     return;
+  if (!self.lanes.count) {
+    // Drop the cached image so drawRect: doesn't keep blitting the previous
+    // lanes after the lane list empties (e.g. last Canvas layer deleted).
+    _lanesImage = nil;
+    [self setNeedsDisplay:YES];
+    return;
+  }
 
   CGFloat totalHeight = [self _totalHeight];
   CGFloat imageWidth = totalWidth;
