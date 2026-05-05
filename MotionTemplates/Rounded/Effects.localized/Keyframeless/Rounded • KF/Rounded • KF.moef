@@ -171,20 +171,20 @@
 	</sceneSettings>
 	<publishSettings>
 		<version>2</version>
-		<target object="3001886369" channel="./9990" name=""/>
-		<target object="3001886369" channel="./1" name="Radius"/>
-		<target object="3001886369" channel="./10" name=""/>
-		<target object="3001886369" channel="./12" name="Top"/>
-		<target object="3001886369" channel="./13" name="Bottom"/>
-		<target object="3001886369" channel="./14" name="Left"/>
-		<target object="3001886369" channel="./15" name="Right"/>
-		<target object="3001886369" channel="./9900" name=""/>
-		<target object="3001886369" channel="./9905" name=""/>
-		<target object="3001886369" channel="./9924" name=""/>
-		<target object="3001886369" channel="./9926" name="Length"/>
-		<target object="3001886369" channel="./9927" name="Quality"/>
-		<target object="3001886369" channel="./9929" name="Transitions only?"/>
-		<target object="3001886369" channel="./9930" name="Adaptive Quality"/>
+		<target object="3001886377" channel="./9990" name=""/>
+		<target object="3001886377" channel="./1" name="Radius"/>
+		<target object="3001886377" channel="./10" name=""/>
+		<target object="3001886377" channel="./12" name="Top"/>
+		<target object="3001886377" channel="./13" name="Bottom"/>
+		<target object="3001886377" channel="./14" name="Left"/>
+		<target object="3001886377" channel="./15" name="Right"/>
+		<target object="3001886377" channel="./9900" name=""/>
+		<target object="3001886377" channel="./9905" name=""/>
+		<target object="3001886377" channel="./9924" name=""/>
+		<target object="3001886377" channel="./9926" name="Length"/>
+		<target object="3001886377" channel="./9927" name="Quality"/>
+		<target object="3001886377" channel="./9929" name="Transitions only?"/>
+		<target object="3001886377" channel="./9930" name="Adaptive Quality"/>
 	</publishSettings>
 	<currentFrame>470 600 3 0</currentFrame>
 	<currentObject>3001886282</currentObject>
@@ -284,7 +284,7 @@
 				</parameter>
 				<parameter name="Height" id="314" flags="8589934610" default="1" value="1080"/>
 			</parameter>
-			<filter name="Rounded · KF" id="3001886369" factoryID="6" pluginUUID="A5D350B8-198F-499E-A35A-A6CE420473E4" pluginVersion="1" pluginName="Rounded · KF" pluginDynamicParams="0">
+			<filter name="Rounded · KF" id="3001886377" factoryID="6" pluginUUID="A5D350B8-198F-499E-A35A-A6CE420473E4" pluginVersion="1" pluginName="Rounded · KF" pluginDynamicParams="0">
 				<timing in="0 1 1 0" out="304640 153600 1 0" offset="0 1 1 0"/>
 				<baseFlags>8589934609</baseFlags>
 				<parameter name="" id="9990" flags="12901679124">
@@ -320,7 +320,7 @@
 				<parameter name="" id="9920" flags="12905938992" default="0" value="0"/>
 				<parameter name="" id="9921" flags="12905938992" default="0" value="0"/>
 				<parameter name="" id="9922" flags="12905938976">
-					<text>47B83389-D825-4067-974E-FA55BDAB2198</text>
+					<text>007DBBDC-BF8F-40F2-B74F-C4A113C80E92</text>
 				</parameter>
 				<parameter name="" id="9924" flags="12901679120">
 					<numberOfKeypoints>0</numberOfKeypoints>
@@ -336,7 +336,7 @@
 				<parameter name="Mix" id="10001" flags="12901679104" default="1" value="1"/>
 				<parameter name="Flip" id="10002" flags="12905938976" default="0" value="0"/>
 				<parameter name="Input Points" id="10003" flags="12905938976" default="1" value="1"/>
-				<parameter name="Publish OSC" id="10005" flags="12901679104" default="0" value="1"/>
+				<parameter name="Publish OSC" id="10005" flags="4311744512" default="0" value="1"/>
 			</filter>
 		</scenenode>
 		<aspectRatio>1</aspectRatio>
