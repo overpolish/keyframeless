@@ -78,6 +78,16 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) double cachedEffectStart;
 @property(nonatomic) double cachedEffectDuration;
 
+/// Timeline-time start of the clip, in seconds. `cachedEffectStart` above is
+/// in source (clip-local) time, but `FxCommandAPI_v2 movePlayheadToTime:`
+/// requires timeline time. Cached because `FxTimingAPI_v4` returns nil when
+/// queried from the loop-back's render-tick context — populated at custom-UI
+/// creation (inside an action scope, where the API is reliable) and opportu-
+/// nistically refreshed by the playhead pump. Computed via
+/// `startTimeOfInputToFilter:` + `timelineTime:fromInputTime:` (same pattern
+/// as the sequencer-click seek in KKPlugin+HandlersModifiers.m).
+@property(nonatomic) double cachedTimelineStart;
+
 /// Cached native frame duration for the clip, in seconds. Populated from
 /// `FxTimingAPI_v4 frameDuration:`. Used by the loop pump to trigger
 /// loop-back at the last rendered frame regardless of frame rate.

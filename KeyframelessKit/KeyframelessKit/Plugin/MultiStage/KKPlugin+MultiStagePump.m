@@ -234,6 +234,10 @@ static void KKRefreshActiveTiming(id<PROAPIAccessing> apiManager) {
   activeState.cachedEffectStart = CMTimeGetSeconds(effectStart);
   activeState.cachedEffectDuration = CMTimeGetSeconds(effectDuration);
   activeState.cachedFrameDuration = CMTimeGetSeconds(frameDuration);
+  CMTime srcStart = kCMTimeZero, tlStart = kCMTimeZero;
+  [timingAPI startTimeOfInputToFilter:&srcStart];
+  [timingAPI timelineTime:&tlStart fromInputTime:srcStart];
+  activeState.cachedTimelineStart = CMTimeGetSeconds(tlStart);
 }
 
 /// Last time we fired a loop-back `movePlayheadToTime:` for the active
@@ -282,13 +286,31 @@ static void KKMaybeLoopPlayback(id<PROAPIAccessing> apiManager,
   // since buffer depth varies with hardware/clip complexity, while
   // `currentTime` always reflects what the user is watching.
   double effectEndSec = state.cachedEffectStart + durSec;
-  double targetSec = state.cachedEffectStart;
+  // `cachedEffectStart` comes from `startTimeForEffect:` and is in source
+  // (clip-local) time, but `movePlayheadToTime:` interprets its argument as
+  // timeline time. Seeking to the raw source value lands at timeline t=0
+  // (or gets silently rejected when the clip doesn't start at t=0). Convert
+  // through `timelineTime:fromInputTime:` — same pattern as the
+  // sequencer-click seek in HandlersModifiers.m.
+  // Seek target is in timeline time (what `movePlayheadToTime:` expects).
+  // `cachedEffectStart` is source time and lands at timeline t=0 for any
+  // clip not positioned at t=0. Use the timeline-time value cached during
+  // custom-UI creation, when FxTimingAPI was reliable — it returns nil
+  // here, in the render-tick context where the loop check fires. Half-
+  // frame nudge keeps the playhead off the seam with the previous clip
+  // (FCP resolves t==inPoint to the previous clip's last frame).
+  double targetSec = state.cachedTimelineStart + frameDur * 0.5;
   id<PROAPIAccessing> strongAPI = apiManager;
   id strongSender = sender;
   __block NSInteger attemptsLeft = 20;
-  __block double lastSeenSec = -1.0;
-  __block BOOL sawForwardAdvance = NO;
   __block __weak void (^weakPoll)(void);
+  // The poll waits for the displayed `currentTime` to catch up to the clip
+  // end before firing the seek — FCP pre-renders a few frames ahead, so
+  // when the render-tick that triggered us hits end-of-clip, `currentTime`
+  // is still a few frames behind. Don't bail out on individual no-advance
+  // polls: FCP updates `currentTime` at roughly half the poll rate, so
+  // every other poll naturally shows delta=0 even during smooth playback.
+  // Just iterate until `atEnd` (good case) or attempts exhausted (give up).
   void (^poll)(void) = ^{
     id<FxCustomParameterActionAPI_v4> actAPI =
         [strongAPI apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
@@ -297,31 +319,15 @@ static void KKMaybeLoopPlayback(id<PROAPIAccessing> apiManager,
     [actAPI startAction:strongSender];
     double nowSec = CMTimeGetSeconds([actAPI currentTime]);
     double secondsRemaining = effectEndSec - nowSec;
-
-    BOOL firstPoll = lastSeenSec < 0;
-    double delta = firstPoll ? 0 : (nowSec - lastSeenSec);
-    BOOL advancing = !firstPoll && delta >= frameDur * 0.5;
-    if (advancing)
-      sawForwardAdvance = YES;
-    lastSeenSec = nowSec;
-
-    // Only fire if we've observed at least one forward advance — otherwise
-    // single-frame scrubs (arrow keys) would trigger a loop-back from a
-    // single render tick at the end of the clip.
     BOOL atEnd = secondsRemaining <= frameDur + 0.005;
-    BOOL paused = !firstPoll && !advancing;
 
-    if (atEnd && sawForwardAdvance) {
+    if (atEnd) {
       id<FxCommandAPI_v2> cmd =
           [strongAPI apiForProtocol:@protocol(FxCommandAPI_v2)];
       [cmd performCommand:kFxCommand_TogglePlayback error:nil];
       CMTime target = CMTimeMakeWithSeconds(targetSec, 600);
       [cmd movePlayheadToTime:target error:nil];
       [cmd performCommand:kFxCommand_TogglePlayback error:nil];
-      [actAPI endAction:strongSender];
-      return;
-    }
-    if (paused) {
       [actAPI endAction:strongSender];
       return;
     }
@@ -337,47 +343,51 @@ static void KKMaybeLoopPlayback(id<PROAPIAccessing> apiManager,
   dispatch_async(dispatch_get_main_queue(), poll);
 }
 
-/// Compute each live instance's playhead fraction from its cached timing
-/// and dispatch view updates on the main queue. Coalesces repeat pumps at
-/// the same fraction so slider drags (which trigger repeated renders at a
-/// static playback time) don't thrash the view.
-static void KKBroadcastPlayheads(double nowSec) {
-  for (KKPluginInstanceState *state in KKAllInstanceStates()) {
-    KKStageSequencerView *seq = state.sequencerView;
-    if (!seq && state.additionalTimingViews.count == 0)
-      continue;
-    double durSec = state.cachedEffectDuration;
-    if (durSec <= 0)
-      continue;
-    double frac = (nowSec - state.cachedEffectStart) / durSec;
+/// Update the calling instance's playhead fraction from its cached timing
+/// and dispatch view updates on the main queue. `nowSec` is the caller's
+/// local `currentTime` (clip-relative), so it's only valid for the instance
+/// that produced it — applying it to other instances would mix their clip
+/// times, which is what caused stacked-clip scrubber bleed and the snap-to-
+/// zero when the playhead crossed into the next clip. Each instance's own
+/// render tick keeps its own view updated.
+static void KKBroadcastPlayheads(id<PROAPIAccessing> apiManager,
+                                 double nowSec) {
+  KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
+  if (!state)
+    return;
+  KKStageSequencerView *seq = state.sequencerView;
+  if (!seq && state.additionalTimingViews.count == 0)
+    return;
+  double durSec = state.cachedEffectDuration;
+  if (durSec <= 0)
+    return;
+  double frac = (nowSec - state.cachedEffectStart) / durSec;
+  if (fabs(frac - state.pendingPlayheadFraction) < 0.0001 &&
+      fabs(durSec - state.pendingPlayheadDuration) < 0.001)
+    return;
 
-    if (fabs(frac - state.pendingPlayheadFraction) < 0.0001 &&
-        fabs(durSec - state.pendingPlayheadDuration) < 0.001)
-      continue;
-
-    state.pendingPlayheadFraction = frac;
-    state.pendingPlayheadDuration = durSec;
-    if (state.playheadDispatchPending)
-      continue;
-    state.playheadDispatchPending = YES;
-    KKStageSequencerRulerView *ruler = state.rulerView;
-    KKStagePlayheadView *ph = state.playheadView;
-    NSArray<KKTimingViewRefs *> *extras =
-        [state.additionalTimingViews copy] ?: @[];
-    dispatch_async(dispatch_get_main_queue(), ^{
-      state.playheadDispatchPending = NO;
-      seq.effectDuration = state.pendingPlayheadDuration;
-      seq.playheadFraction = state.pendingPlayheadFraction;
-      ruler.effectDuration = state.pendingPlayheadDuration;
-      ph.playheadFraction = state.pendingPlayheadFraction;
-      for (KKTimingViewRefs *r in extras) {
-        r.seqView.effectDuration = state.pendingPlayheadDuration;
-        r.seqView.playheadFraction = state.pendingPlayheadFraction;
-        r.ruler.effectDuration = state.pendingPlayheadDuration;
-        r.playhead.playheadFraction = state.pendingPlayheadFraction;
-      }
-    });
-  }
+  state.pendingPlayheadFraction = frac;
+  state.pendingPlayheadDuration = durSec;
+  if (state.playheadDispatchPending)
+    return;
+  state.playheadDispatchPending = YES;
+  KKStageSequencerRulerView *ruler = state.rulerView;
+  KKStagePlayheadView *ph = state.playheadView;
+  NSArray<KKTimingViewRefs *> *extras =
+      [state.additionalTimingViews copy] ?: @[];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    state.playheadDispatchPending = NO;
+    seq.effectDuration = state.pendingPlayheadDuration;
+    seq.playheadFraction = state.pendingPlayheadFraction;
+    ruler.effectDuration = state.pendingPlayheadDuration;
+    ph.playheadFraction = state.pendingPlayheadFraction;
+    for (KKTimingViewRefs *r in extras) {
+      r.seqView.effectDuration = state.pendingPlayheadDuration;
+      r.seqView.playheadFraction = state.pendingPlayheadFraction;
+      r.ruler.effectDuration = state.pendingPlayheadDuration;
+      r.playhead.playheadFraction = state.pendingPlayheadFraction;
+    }
+  });
 }
 
 #pragma clang diagnostic push
@@ -445,7 +455,7 @@ static void KKBroadcastPlayheads(double nowSec) {
                                  atTime:(CMTime)time {
   sLastDrawOSCPumpTime = CACurrentMediaTime();
   KKRefreshActiveTiming(apiManager);
-  KKBroadcastPlayheads(CMTimeGetSeconds(time));
+  KKBroadcastPlayheads(apiManager, CMTimeGetSeconds(time));
 }
 
 + (void)multiStageUpdatePlayheadsFromRenderForAPI:
@@ -484,7 +494,7 @@ static void KKBroadcastPlayheads(double nowSec) {
     double frameDur =
         endState.cachedFrameDuration > 0 ? endState.cachedFrameDuration : 0.033;
     if (CMTimeGetSeconds(time) >= clipEnd - frameDur * 0.5) {
-      KKBroadcastPlayheads(clipEnd);
+      KKBroadcastPlayheads(apiManager, clipEnd);
       return;
     }
   }
@@ -501,7 +511,7 @@ static void KKBroadcastPlayheads(double nowSec) {
     [actAPI startAction:strongSender];
     double nowSec = CMTimeGetSeconds([actAPI currentTime]);
     [actAPI endAction:strongSender];
-    KKBroadcastPlayheads(nowSec);
+    KKBroadcastPlayheads(strongAPI, nowSec);
   });
 }
 

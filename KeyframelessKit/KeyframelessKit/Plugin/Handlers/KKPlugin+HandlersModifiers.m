@@ -200,9 +200,13 @@
 }
 
 - (void)_handleRulerLoopToggled:(BOOL)newState {
-  // Write the param and stop. The loop-sync pump (runs on every drawOSC and
-  // render tick) picks up the change and pushes it back to every ruler
-  // (primary + additional). Inspector↔window sync is automatic.
+  // Write the param so the loop-sync pump can fan it out to other rulers
+  // (additional inspector views, layout sync). Mirror it onto the active
+  // instance's state directly: during playback drawOSC doesn't fire, so
+  // KKSyncLoopFromParams (which keeps `state.loopEnabled` in sync from the
+  // param) wouldn't run until playback stops — leaving the render-tick
+  // loop check reading a stale value. Without this the toggle would only
+  // take effect after the user stops/starts playback.
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (!actAPI)
@@ -213,6 +217,8 @@
   [setAPI setBoolValue:newState
            toParameter:kKKParamTimingLoopEnabled
                 atTime:kCMTimeZero];
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  state.loopEnabled = newState;
   [actAPI endAction:self];
 }
 
