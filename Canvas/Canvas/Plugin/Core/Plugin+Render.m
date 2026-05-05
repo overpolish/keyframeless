@@ -414,8 +414,7 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
   KKMotionBlurState mbState =
       [KKMotionBlur snapshotStateWithParameterAPI:paramGetAPI
                                         timingAPI:timingAPI
-                                           atTime:renderTime
-                                          quality:qualityLevel];
+                                           atTime:renderTime];
   if (mbState.enabled && mbState.transitionsOnly &&
       ![self multiStageAnyLaneInTransitionAtTime:renderTime])
     mbState.enabled = false;

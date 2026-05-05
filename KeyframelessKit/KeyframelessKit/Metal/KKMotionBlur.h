@@ -33,19 +33,6 @@ typedef struct {
   // pipeline assumes full-res sampleDest dims (Glow's composite viewport,
   // etc.) can set this to 1.0 to opt out.
   float subframeScale;
-  // When true and FCP requests a non-HIGH quality render (scrubbing /
-  // playback), `applyToDestinationImage:` overrides `subframeScale` to a
-  // very low value so frames land fast. Has no effect on HIGH-quality
-  // renders (paused inspector, export).
-  bool adaptiveQuality;
-  // FCP-reported quality level at snapshot time. HIGH = export (and
-  // paused-with-Best-render-pref); MEDIUM/LOW = everything else. Used
-  // only as an export filter — paused-at-Normal-pref is also non-HIGH.
-  bool qualityIsHigh;
-  // Timeline frame duration in seconds, captured from FxTimingAPI at
-  // snapshot. Apply uses this to compute a frame-rate-aware "is FCP
-  // currently rendering at playback cadence" check.
-  double frameDurationSec;
 } KKMotionBlurState;
 
 /// Sample-and-accumulate motion blur shared across plugins.
@@ -68,8 +55,7 @@ typedef struct {
 + (KKMotionBlurState)snapshotStateWithParameterAPI:
                          (id<FxParameterRetrievalAPI_v6>)paramAPI
                                          timingAPI:(id<FxTimingAPI_v4>)timingAPI
-                                            atTime:(CMTime)time
-                                           quality:(NSUInteger)quality;
+                                            atTime:(CMTime)time;
 
 /// Acquires a pooled intermediate ("scratch") texture inside a render
 /// block. Use for any plugin-private textures the render block needs as

@@ -28,8 +28,7 @@
   KKMotionBlurState mbState =
       [KKMotionBlur snapshotStateWithParameterAPI:paramAPI
                                         timingAPI:timingAPI
-                                           atTime:renderTime
-                                          quality:qualityLevel];
+                                           atTime:renderTime];
 
   if (mbState.enabled && mbState.transitionsOnly &&
       ![self multiStageAnyLaneInTransitionAtTime:renderTime]) {

@@ -170,7 +170,6 @@
 		<target object="3001886903" channel="./9926" name="Length"/>
 		<target object="3001886903" channel="./9927" name="Quality"/>
 		<target object="3001886903" channel="./9929" name="Transitions only?"/>
-		<target object="3001886903" channel="./9930" name="Adaptive Quality"/>
 		<target object="3001886903" channel="./601" name="Anchor Point"/>
 		<target object="3001886903" channel="./2" name="Position"/>
 		<target object="3001886903" channel="./10" name="Rotate with Motion"/>
@@ -307,7 +306,6 @@
 				<parameter name="Length" id="9926" flags="12905938992" default="0.5" value="0.5"/>
 				<parameter name="Quality" id="9927" flags="12905938992" default="0.5" value="0.5"/>
 				<parameter name="Transitions only?" id="9929" flags="12905938992" default="0" value="0"/>
-				<parameter name="Adaptive Quality" id="9930" flags="12905938992" default="1" value="1"/>
 				<parameter name="Anchor Point" id="601" flags="12884905984">
 					<foldFlags>15</foldFlags>
 				</parameter>

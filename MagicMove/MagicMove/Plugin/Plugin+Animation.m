@@ -77,8 +77,7 @@ static double KKEffectFractionForTime(id<FxTimingAPI_v4> timingAPI,
   KKMotionBlurState mbState =
       [KKMotionBlur snapshotStateWithParameterAPI:paramAPI
                                         timingAPI:timingAPI
-                                           atTime:renderTime
-                                          quality:qualityLevel];
+                                           atTime:renderTime];
 
   // Skip the blur path during Hold portions when the user opted in —
   // single-pass render is dramatically cheaper.

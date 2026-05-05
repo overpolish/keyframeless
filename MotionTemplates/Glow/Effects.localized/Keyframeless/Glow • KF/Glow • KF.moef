@@ -195,7 +195,6 @@
 		<target object="3001886607" channel="./9926" name="Length"/>
 		<target object="3001886607" channel="./9927" name="Quality"/>
 		<target object="3001886607" channel="./9929" name="Transitions only?"/>
-		<target object="3001886607" channel="./9930" name="Adaptive Quality"/>
 	</publishSettings>
 	<currentFrame>15360 153600 1 0</currentFrame>
 	<currentObject>3001886282</currentObject>
@@ -370,7 +369,6 @@
 				<parameter name="Length" id="9926" flags="12905938992" default="0.5" value="0.5"/>
 				<parameter name="Quality" id="9927" flags="12905938992" default="0.5" value="0.5"/>
 				<parameter name="Transitions only?" id="9929" flags="12905938992" default="0" value="0"/>
-				<parameter name="Adaptive Quality" id="9930" flags="12905938992" default="1" value="1"/>
 				<parameter name="Mix" id="10001" flags="12901679104" default="1" value="1"/>
 				<parameter name="Flip" id="10002" flags="12905938976" default="0" value="0"/>
 				<parameter name="Input Points" id="10003" flags="12905938976" default="1" value="1"/>

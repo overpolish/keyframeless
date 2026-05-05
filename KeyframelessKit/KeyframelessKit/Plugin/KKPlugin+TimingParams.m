@@ -177,19 +177,6 @@ static const FxParameterFlags kHiddenNotAnim =
                   error, @"Unable to add Motion Blur transitions-only toggle"))
     return NO;
 
-  // Adaptive quality drops sub-frame resolution dramatically during
-  // playback/scrub (non-HIGH FxQuality), restoring full quality when the
-  // user pauses. Default ON so users don't have to remember to toggle blur
-  // off for editing.
-  if (!KKAddParam([paramAPI
-                      addToggleButtonWithName:@"Adaptive Quality"
-                                  parameterID:kKKParamMotionBlurAdaptiveQuality
-                                 defaultValue:YES
-                               parameterFlags:kFxParameterFlag_HIDDEN |
-                                              kFxParameterFlag_NOT_ANIMATABLE],
-                  error, @"Unable to add Motion Blur adaptive-quality toggle"))
-    return NO;
-
   return YES;
 }
 
@@ -266,8 +253,6 @@ static void _setFlagsIfNeeded(id<FxParameterSettingAPI_v5> setAPI,
   _setFlagsIfNeeded(paramSetAPI, paramGetAPI, flag, kKKParamMotionBlurQuality);
   _setFlagsIfNeeded(paramSetAPI, paramGetAPI, toggleFlag,
                     kKKParamMotionBlurTransitionsOnly);
-  _setFlagsIfNeeded(paramSetAPI, paramGetAPI, toggleFlag,
-                    kKKParamMotionBlurAdaptiveQuality);
 }
 
 @end
