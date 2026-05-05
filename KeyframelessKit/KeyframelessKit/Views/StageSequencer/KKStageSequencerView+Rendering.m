@@ -75,12 +75,12 @@
                         trackX:trackX
                     trackWidth:trackWidth
                          laneY:laneY];
-        [self _renderBoundaryLabelsForLane:lane
-                                 laneIndex:laneIdx
-                                    trackX:trackX
-                                trackWidth:trackWidth
-                                     laneY:laneY];
       }
+      [self _renderBoundaryLabelsForLane:lane
+                               laneIndex:laneIdx
+                                  trackX:trackX
+                              trackWidth:trackWidth
+                                   laneY:laneY];
     }
 
     [self _renderEdgeHoverForLane:lane
