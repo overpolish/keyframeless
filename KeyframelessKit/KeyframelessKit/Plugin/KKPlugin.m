@@ -435,8 +435,12 @@
   id<FxParameterSettingAPI_v5> paramSetAPI =
       [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   for (NSNumber *paramID in paramIDs) {
-    [paramSetAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                       toParameter:paramID.unsignedIntValue];
+    UInt32 pid = paramID.unsignedIntValue;
+    FxParameterFlags cur = 0;
+    [paramGetAPI getParameterFlags:&cur fromParameter:pid];
+    FxParameterFlags want = cur & ~kFxParameterFlag_HIDDEN;
+    if (want != cur)
+      [paramSetAPI setParameterFlags:want toParameter:pid];
   }
   return YES;
 }
