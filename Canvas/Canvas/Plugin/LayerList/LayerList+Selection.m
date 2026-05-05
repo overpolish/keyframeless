@@ -128,7 +128,8 @@
     [self _writeBackObjectParams:paramGetAPI toPaths:paths selection:oldSel];
   }
 
-  KKSetLayerSelection(self.instanceUUID, [sel copy]);
+  NSIndexSet *newSel = [sel copy];
+  KKSetLayerSelection(self.instanceUUID, newSel);
 
   [self _syncObjectParamsForSelection:sel
                                 paths:paths ?: @[]
@@ -142,6 +143,19 @@
     [paramSetAPI setStringParameterValue:str ?: @"" toParameter:kParamPathData];
   }
   [actionAPI endAction:self];
+
+  // Fire the store observer on this tick so the layer list and sequencer
+  // refresh immediately, instead of waiting for FCP to round-trip the param
+  // writes through drawOSC.
+  KKCanvasStore *store = KKLayerStateForUUID(self.instanceUUID).store;
+  if (store) {
+    [store performBatch:^{
+      if (paths)
+        [store setPaths:paths];
+      [store setSelectedIndices:newSel];
+      [store syncSelectedPathProperties];
+    }];
+  }
 }
 
 - (void)toggleGroupCollapse:(id)sender {

@@ -339,6 +339,13 @@
                       modifiers:(NSUInteger)modifiers
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
+  if (!self.gestureDidDrag) {
+    CGFloat dx = positionX - self.mouseDownCanvasPos.x;
+    CGFloat dy = positionY - self.mouseDownCanvasPos.y;
+    if (hypot(dx, dy) >= 4.0)
+      self.gestureDidDrag = YES;
+  }
+
   if (self.positionPathDragSegIndex >= 0) {
     if ([self mouseDraggedOnPositionPathAtX:positionX
                                           y:positionY
@@ -710,18 +717,31 @@
     }
   }
 
-  if (self.dragIsMarquee)
+  BOOL shapeFinalized = NO;
+  if (self.dragIsMarquee) {
     [self finalizeMarqueeAtX:positionX y:positionY modifiers:modifiers];
-  if (self.dragIsRect)
+    shapeFinalized = YES;
+  }
+  if (self.dragIsRect) {
     [self finalizeRect];
-  if (self.dragIsEllipse)
+    shapeFinalized = YES;
+  }
+  if (self.dragIsEllipse) {
     [self finalizeEllipse];
-  if (self.dragIsLine)
+    shapeFinalized = YES;
+  }
+  if (self.dragIsLine) {
     [self finalizeLine];
+    shapeFinalized = YES;
+  }
 
   [self resetDragState];
   [self resetAlignSnap];
-  [self syncStrokeParamsToSelection];
+  // Skip the redundant param storm on a no-drag selection click — mouseDown's
+  // sync already wrote the new selection. Only re-sync if the user actually
+  // dragged or finalized a new shape.
+  if (self.gestureDidDrag || shapeFinalized)
+    [self syncStrokeParamsToSelection];
   *forceUpdate = YES;
   [super mouseUpAtPositionX:positionX
                   positionY:positionY

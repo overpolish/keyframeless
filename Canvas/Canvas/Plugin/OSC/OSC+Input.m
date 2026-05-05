@@ -116,6 +116,8 @@
                    modifiers:(NSUInteger)modifiers
                  forceUpdate:(BOOL *)forceUpdate
                       atTime:(CMTime)time {
+  self.mouseDownCanvasPos = CGPointMake(positionX, positionY);
+  self.gestureDidDrag = NO;
 
   if (kkIsOSCPositionPath(activePart)) {
     [self mouseDownOnPositionPathPart:activePart

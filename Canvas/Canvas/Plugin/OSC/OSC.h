@@ -40,6 +40,12 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, strong) NSMutableIndexSet *selectedPathIndices;
 @property(nonatomic, assign) NSInteger lastClickIndex;
 @property(nonatomic, assign) CFAbsoluteTime lastClickTime;
+/// Canvas-space position of the most recent mouseDown, and whether the
+/// cursor moved far enough during this gesture to count as a real drag.
+/// Used to suppress the redundant `syncStrokeParamsToSelection` call from
+/// mouseUp on a no-drag selection click.
+@property(nonatomic, assign) CGPoint mouseDownCanvasPos;
+@property(nonatomic, assign) BOOL gestureDidDrag;
 @property(nonatomic, strong) NSCursor *penCursor;
 @property(nonatomic, strong) NSCursor *penCloseCursor;
 @property(nonatomic, strong) NSCursor *penAddCursor;

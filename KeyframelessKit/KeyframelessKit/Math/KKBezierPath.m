@@ -904,6 +904,22 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     _points[i].x += delta.x;
     _points[i].y += delta.y;
   }
+  // Keep parametric shape structs (rect/ellipse/line) in sync — their
+  // bounds are the source of truth when a re-apply runs (e.g. drawOSC's
+  // rectShape applyToPath: that re-materializes points each frame).
+  if ([_shape isKindOfClass:[KKRectShape class]]) {
+    KKRectShape *rs = (KKRectShape *)_shape;
+    rs.min = (simd_float2){rs.min.x + delta.x, rs.min.y + delta.y};
+    rs.max = (simd_float2){rs.max.x + delta.x, rs.max.y + delta.y};
+  } else if ([_shape isKindOfClass:[KKEllipseShape class]]) {
+    KKEllipseShape *es = (KKEllipseShape *)_shape;
+    es.min = (simd_float2){es.min.x + delta.x, es.min.y + delta.y};
+    es.max = (simd_float2){es.max.x + delta.x, es.max.y + delta.y};
+  } else if ([_shape isKindOfClass:[KKLineShape class]]) {
+    KKLineShape *ls = (KKLineShape *)_shape;
+    ls.start = (simd_float2){ls.start.x + delta.x, ls.start.y + delta.y};
+    ls.end = (simd_float2){ls.end.x + delta.x, ls.end.y + delta.y};
+  }
 }
 
 static void cornerRadii(float fraction, float maxRX, float maxRY, float objW,

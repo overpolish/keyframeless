@@ -288,8 +288,9 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
       NSInteger sel = morphLane.selectedSegment;
       if (sel < 0 || (NSUInteger)sel >= morphLane.segments.count)
         continue;
-      NSMutableArray<NSData *> *targets =
-          p.morphTargets ? [p.morphTargets mutableCopy] : [NSMutableArray array];
+      NSMutableArray<NSData *> *targets = p.morphTargets
+                                              ? [p.morphTargets mutableCopy]
+                                              : [NSMutableArray array];
       // Defensive: if morphTargets lags lane segment count (e.g. mutation
       // hook hasn't fired yet for some reason), pad with current snapshot
       // before overwriting at sel.
@@ -319,12 +320,34 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   id<FxParameterSettingAPI_v5> paramSetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
 
+  NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+  BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
+  KKBezierPath *selPath = KKSelectedPath(self.selectedPathIndices, self.paths);
+
+  // Push the new selection into the store FIRST, so the layer-list and
+  // sequencer observers fire on a still-idle main thread. The FCP param
+  // writes below can block main for hundreds of ms while FCP processes the
+  // path-blob XPC write — if we did them first, the observer would queue
+  // behind that work and the layer list would lag visibly.
+  if (uuid) {
+    KKCanvasStore *store = KKLayerStateForUUID(uuid).store;
+    if (store) {
+      [store performBatch:^{
+        [store setSelectedIndices:[self.selectedPathIndices copy]];
+        if (selPath) {
+          [store setStrokeEnabled:selPath.strokeEnabled];
+          [store setFillEnabled:selPath.fillEnabled];
+          [store setSketchEnabled:selPath.sketchEnabled];
+        }
+        [store syncSelectedPathProperties];
+      }];
+    }
+  }
+
   // Write back current inspector param values to the previously-selected
   // paths.  Only safe in cursor mode where the user may have edited values
   // in the inspector.  In pen mode, KKParamsToPath would read shared FxPlug
   // params that may belong to a different path and corrupt the target.
-  NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
-  BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
   if (isCursorMode) {
     // Use the explicit previous selection when provided to avoid a race
     // with drawOSC updating lst.selectedIndices on the render thread.
@@ -344,27 +367,14 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   // Write param values from the newly-selected path.
   // Flag visibility is handled centrally by KKParamSyncApply via
   // KKCanvasRefreshLayerList — do not set flags here.
-  KKBezierPath *selPath = KKSelectedPath(self.selectedPathIndices, self.paths);
-  NSString *syncUUID = KKLayerUUIDForAPI(self.apiManager);
   if (selPath) {
     KKPathToParams(paramSetAPI, selPath);
-    if (syncUUID)
-      KKCacheCustomStyles(syncUUID, selPath);
+    if (uuid)
+      KKCacheCustomStyles(uuid, selPath);
     KKSaveSelectedIndex(
         paramSetAPI, (NSInteger)[self.paths indexOfObjectIdenticalTo:selPath]);
   } else {
     KKSaveSelectedIndex(paramSetAPI, -1);
-  }
-  if (syncUUID) {
-    KKCanvasStore *store = KKLayerStateForUUID(syncUUID).store;
-    [store performBatch:^{
-      if (selPath) {
-        [store setStrokeEnabled:selPath.strokeEnabled];
-        [store setFillEnabled:selPath.fillEnabled];
-        [store setSketchEnabled:selPath.sketchEnabled];
-      }
-      [store syncSelectedPathProperties];
-    }];
   }
 }
 

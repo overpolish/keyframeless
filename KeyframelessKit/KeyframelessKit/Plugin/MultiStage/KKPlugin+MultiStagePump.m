@@ -103,15 +103,22 @@ static void KKSyncFromParams(id<PROAPIAccessing> apiManager);
 /// Drives plugin-side reconciliation (e.g. Canvas: layers ↔ lanes). Reads
 /// JSON, asks the plugin to reconcile against its current source items, and
 /// — when the result differs — dispatches a JSON write inside a fresh
-/// action scope. The next pump tick picks up the persisted change.
-static void KKReconcileLanesIfNeeded(id<PROAPIAccessing> apiManager,
-                                     KKPlugin *plugin) {
+/// action scope.
+///
+/// Returns the reconciled lanes when they differ from the existing JSON, or
+/// nil when no change / no plugin / APIs unavailable. Callers should prefer
+/// the returned lanes over re-reading the param: FCP doesn't reliably
+/// propagate the write within the same outer tick, and a follow-up read
+/// outside the action scope can return the pre-write value (per CLAUDE.md
+/// FxPlug action-scope rules).
+static NSArray<KKTimingLane *> *
+KKReconcileLanesIfNeeded(id<PROAPIAccessing> apiManager, KKPlugin *plugin) {
   if (!plugin)
-    return;
+    return nil;
   id<FxCustomParameterActionAPI_v4> actAPI =
       [apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (!actAPI)
-    return;
+    return nil;
   [actAPI startAction:plugin];
   id<FxParameterRetrievalAPI_v6> getAPI =
       [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
@@ -119,7 +126,7 @@ static void KKReconcileLanesIfNeeded(id<PROAPIAccessing> apiManager,
       [apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   if (!getAPI || !setAPI) {
     [actAPI endAction:plugin];
-    return;
+    return nil;
   }
   NSString *json = nil;
   [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
@@ -132,47 +139,59 @@ static void KKReconcileLanesIfNeeded(id<PROAPIAccessing> apiManager,
                                                    paramGetAPI:getAPI];
   if (!reconciled) {
     [actAPI endAction:plugin];
-    return;
+    return nil;
   }
   NSString *newJSON = [KKTimingLane jsonFromLanes:reconciled];
-  if (newJSON && ![newJSON isEqualToString:json ?: @""])
+  BOOL changed = (newJSON && ![newJSON isEqualToString:json ?: @""]);
+  if (changed)
     [setAPI setStringParameterValue:newJSON toParameter:kKKParamMultiStageData];
   [actAPI endAction:plugin];
+  return changed ? reconciled : nil;
 }
 
 static void KKSyncFromParams(id<PROAPIAccessing> apiManager) {
   KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
   if (!state)
     return;
-  KKReconcileLanesIfNeeded(apiManager, state.plugin);
+  NSArray<KKTimingLane *> *reconciledLanes =
+      KKReconcileLanesIfNeeded(apiManager, state.plugin);
   KKStageSequencerView *seq = state.sequencerView;
   NSArray<KKTimingViewRefs *> *extras =
       [state.additionalTimingViews copy] ?: @[];
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  if (!getAPI)
-    return;
-  NSString *json = nil;
-  [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
-  if (!json)
-    return;
-  NSString *snapshotJSON = [KKTimingLane jsonFromLanes:state.lanesSnapshot];
-  BOOL jsonSame = [json isEqualToString:snapshotJSON ?: @""];
   double dur = KKCurrentEffectDurationSeconds(apiManager);
-  BOOL durDrift = NO;
-  if (dur > 0) {
-    for (KKTimingLane *lane in state.lanesSnapshot) {
-      if (fabs(lane.lastKnownClipDuration - dur) > 1e-6) {
-        durDrift = YES;
-        break;
+  NSArray<KKTimingLane *> *raw = nil;
+  if (reconciledLanes) {
+    // Reconcile changed something (e.g. Canvas user added a layer). Use the
+    // returned lanes directly — re-reading the param here can return the
+    // pre-write value and falsely trip jsonSame, leaving the seqView empty
+    // until the next view rebuild.
+    raw = reconciledLanes;
+  } else {
+    id<FxParameterRetrievalAPI_v6> getAPI =
+        [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    if (!getAPI)
+      return;
+    NSString *json = nil;
+    [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+    if (!json)
+      return;
+    NSString *snapshotJSON = [KKTimingLane jsonFromLanes:state.lanesSnapshot];
+    BOOL jsonSame = [json isEqualToString:snapshotJSON ?: @""];
+    BOOL durDrift = NO;
+    if (dur > 0) {
+      for (KKTimingLane *lane in state.lanesSnapshot) {
+        if (fabs(lane.lastKnownClipDuration - dur) > 1e-6) {
+          durDrift = YES;
+          break;
+        }
       }
     }
+    if (jsonSame && !durDrift)
+      return;
+    raw = [KKTimingLane lanesFromJSON:json];
+    if (!raw)
+      return;
   }
-  if (jsonSame && !durDrift)
-    return;
-  NSArray<KKTimingLane *> *raw = [KKTimingLane lanesFromJSON:json];
-  if (!raw)
-    return;
   NSArray<KKTimingLane *> *lanes =
       (dur > 0) ? KKTimingRebalancedLanes(raw, dur) : raw;
   state.lanesSnapshot = lanes;
