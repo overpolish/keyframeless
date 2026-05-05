@@ -28,6 +28,13 @@
   header.isEnabled = YES;
 
   __weak typeof(self) weakSelf = self;
+  // Apply both the bool write AND the curve-preview row flag synchronously
+  // inside the same action scope. The deferred
+  // `updateTimingParameterVisibility` path (used by parameterChanged: callers
+  // to dodge the cascade crash) commits setParameterFlags one inspector tick
+  // late on non-first instances, leaving the row state visually one click out
+  // of phase. The chevron click is not a parameterChanged: context, so the
+  // synchronous write is safe here.
   header.onExpandedChanged = ^(BOOL isExpanded) {
     __strong typeof(weakSelf) strongSelf = weakSelf;
     if (!strongSelf)
@@ -40,8 +47,13 @@
     [setAPI setBoolValue:isExpanded
              toParameter:kKKParamTimingExpanded
                   atTime:[actAPI currentTime]];
+    BOOL show = isExpanded || [strongSelf forceShowAllParameters];
+    FxParameterFlags wantFlags =
+        show ? (kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_CUSTOM_UI |
+                kFxParameterFlag_USE_FULL_VIEW_WIDTH)
+             : kFxParameterFlag_HIDDEN;
+    [setAPI setParameterFlags:wantFlags toParameter:kKKParamTimingCurvePreview];
     [actAPI endAction:strongSelf];
-    [strongSelf updateTimingParameterVisibility];
   };
 
   id<FxCustomParameterActionAPI_v4> actionAPI =
