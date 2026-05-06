@@ -5,6 +5,9 @@
 
 #import "LayerList_Private.h"
 #import "ObjectParams.h"
+#import <objc/runtime.h>
+
+static const void *kRenameButtonAssocKey = &kRenameButtonAssocKey;
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
@@ -43,9 +46,10 @@
                        forOrientation:NSLayoutConstraintOrientationHorizontal];
 
         NSUInteger viewIndex = [row.arrangedSubviews indexOfObject:btn];
-        [row removeArrangedSubview:btn];
-        [btn removeFromSuperview];
+        btn.hidden = YES;
         [row insertArrangedSubview:field atIndex:viewIndex];
+        objc_setAssociatedObject(field, kRenameButtonAssocKey, btn,
+                                 OBJC_ASSOCIATION_ASSIGN);
 
         KKLayerStateForUUID(self.instanceUUID).isEditing = YES;
         [field.window makeFirstResponder:field];
@@ -57,33 +61,65 @@
 
 - (void)controlTextDidEndEditing:(NSNotification *)note {
   NSTextField *field = note.object;
-  NSString *newName = field.stringValue;
+  if (!field || !KKLayerStateForUUID(self.instanceUUID).isEditing)
+    return;
   NSInteger index = field.tag;
+  NSButton *btn = objc_getAssociatedObject(field, kRenameButtonAssocKey);
+  NSString *originalTitle = btn.title;
+  NSString *newName = field.stringValue;
 
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actionAPI startAction:self];
-  id<FxParameterRetrievalAPI_v6> paramGetAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  id<FxParameterSettingAPI_v5> paramSetAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-
-  NSString *str = nil;
-  [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
-  if (str.length > 0) {
-    NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
-    NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
-    if (index >= 0 && (NSUInteger)index < paths.count) {
-      paths[index].name = newName.length > 0 ? newName : nil;
-      NSData *newBlob = [KKBezierPath blobFromPaths:paths];
-      [paramSetAPI
-          setStringParameterValue:[newBlob base64EncodedStringWithOptions:0]
-                      toParameter:kParamPathData];
+  if (newName.length > 0 && ![newName isEqualToString:originalTitle]) {
+    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actionAPI startAction:self];
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> paramSetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    NSString *str = nil;
+    [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
+    if (str.length > 0) {
+      NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
+      NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+      if (index >= 0 && (NSUInteger)index < paths.count) {
+        paths[index].name = newName;
+        NSData *newBlob = [KKBezierPath blobFromPaths:paths];
+        [paramSetAPI
+            setStringParameterValue:[newBlob base64EncodedStringWithOptions:0]
+                        toParameter:kParamPathData];
+      }
     }
+    [actionAPI endAction:self];
   }
-  [actionAPI endAction:self];
 
   KKLayerStateForUUID(self.instanceUUID).isEditing = NO;
+
+  NSStackView *row = (NSStackView *)field.superview;
+  if ([row isKindOfClass:[NSStackView class]]) {
+    [row removeArrangedSubview:field];
+  }
+  [field removeFromSuperview];
+  if (btn) {
+    btn.title =
+        newName.length > 0
+            ? newName
+            : [NSString stringWithFormat:@"Path %ld", (long)(index + 1)];
+    btn.hidden = NO;
+  }
+}
+
+- (BOOL)control:(NSControl *)control
+               textView:(NSTextView *)textView
+    doCommandBySelector:(SEL)cmd {
+  if (cmd == @selector(cancelOperation:) || cmd == @selector(cancel:)) {
+    NSTextField *tf = (NSTextField *)control;
+    NSButton *btn = objc_getAssociatedObject(tf, kRenameButtonAssocKey);
+    if (btn)
+      tf.stringValue = btn.title ?: @"";
+    [textView insertNewline:nil];
+    return YES;
+  }
+  return NO;
 }
 
 - (void)selectRow:(NSButton *)sender {

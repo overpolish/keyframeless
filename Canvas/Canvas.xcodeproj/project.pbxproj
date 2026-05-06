@@ -124,6 +124,7 @@
 				"Plugin/OSC/OSC+Snap.m",
 				"Plugin/OSC/OSC+Transform.m",
 				Plugin/Rendering/Canvas.metal,
+				Plugin/Rendering/CanvasGradientBuilder.m,
 				Plugin/Rendering/DashTessellation.m,
 				Plugin/Rendering/MarkerTessellation.m,
 				Plugin/Rendering/RenderFill.m,
