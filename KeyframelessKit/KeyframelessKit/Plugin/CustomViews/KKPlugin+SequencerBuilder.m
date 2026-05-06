@@ -347,6 +347,12 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
     state.visibilityBar = visibilityBar;
     state.emptyLanesView = emptyView;
     state.plugin = self;
+    // Push the current selection into the freshly-attached sequencer.
+    // The layer-list store seed fires its observer before the sequencer
+    // view exists, so that observer's `kkRefreshSequencerSelectedGroup`
+    // call no-ops on `state.sequencerView == nil` and the seq starts up
+    // with no accent. Re-push here now that the view is attached.
+    [self kkRefreshSequencerSelectedGroup];
     return;
   }
   KKTimingViewRefs *refs = [[KKTimingViewRefs alloc] init];
