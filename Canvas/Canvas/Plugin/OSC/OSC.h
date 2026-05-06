@@ -54,6 +54,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, strong) NSCursor *penDeleteCursor;
 @property(nonatomic, strong) KKToolbar *toolbar;
 @property(nonatomic, strong) KKToolbar *pathToolbar;
+@property(nonatomic, strong) KKToolbar *pathToolbarSingle;
 @property(nonatomic, strong) KKToolbar *gridToolbar;
 @property(nonatomic, assign) BOOL gridEnabled;
 @property(nonatomic, assign) BOOL gridAdaptive;

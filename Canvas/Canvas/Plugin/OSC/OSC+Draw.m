@@ -205,9 +205,13 @@ static const CGFloat kPathToolbarGap = 6.0;
   self.paths = [self readPaths];
 
   // Determine whether path toolbar should show.
+  // 2+ non-image, non-group paths → full toolbar (boolean ops +
+  // stroke-to-path). 1 non-image, non-group path     → single-button toolbar
+  // (stroke-to-path).
   BOOL showPathToolbar = NO;
+  BOOL showPathToolbarSingle = NO;
   if (self.toolbar.activeTag == kOSCToolbarCursor &&
-      self.selectedPathIndices.count >= 2) {
+      self.selectedPathIndices.count >= 1) {
     __block NSUInteger pathCount = 0;
     [self.selectedPathIndices
         enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
@@ -215,12 +219,18 @@ static const CGFloat kPathToolbarGap = 6.0;
               !self.paths[idx].isGroup)
             pathCount++;
         }];
-    showPathToolbar = (pathCount >= 2);
+    if (pathCount >= 2)
+      showPathToolbar = YES;
+    else if (pathCount == 1)
+      showPathToolbarSingle = YES;
   }
-  if (showPathToolbar) {
+  if (showPathToolbar || showPathToolbarSingle) {
     NSRect mainFrame = self.toolbar.toolbarFrame;
-    self.pathToolbar.bottomMargin =
-        mainFrame.size.height + kPathToolbarGap + 8.0;
+    CGFloat margin = mainFrame.size.height + kPathToolbarGap + 8.0;
+    if (showPathToolbar)
+      self.pathToolbar.bottomMargin = margin;
+    else
+      self.pathToolbarSingle.bottomMargin = margin;
   }
 
   [self syncStoreState];
@@ -335,6 +345,8 @@ static const CGFloat kPathToolbarGap = 6.0;
   [self.gridToolbar drawWithDestinationImage:destinationImage];
   if (showPathToolbar)
     [self.pathToolbar drawWithDestinationImage:destinationImage];
+  if (showPathToolbarSingle)
+    [self.pathToolbarSingle drawWithDestinationImage:destinationImage];
 }
 
 @end

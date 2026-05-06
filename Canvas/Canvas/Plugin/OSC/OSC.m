@@ -94,6 +94,15 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
                      ]];
     self.pathToolbar.activeTag = 0;
 
+    self.pathToolbarSingle = [[KKToolbar alloc]
+        initWithAPIManager:apiManager
+                     items:@[
+                       [KKToolbarItem itemWithIcon:@"square.dashed"
+                                               tag:kOSCPathOutline
+                                     shortcutLabel:@"Stroke\nto Path"],
+                     ]];
+    self.pathToolbarSingle.activeTag = 0;
+
     {
       KKToolbarItem *snapItem =
           [KKToolbarItem itemWithIcon:@"dot.squareshape.split.2x2"
