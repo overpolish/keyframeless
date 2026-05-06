@@ -460,6 +460,12 @@ void KKCanvasRefreshLayerListFromSnapshot(KKCanvasStoreSnapshot *snap,
   NSMutableArray<KKLayerRow *> *newRows =
       [NSMutableArray arrayWithCapacity:visCount];
 
+  // Track whether every visible row reused an existing oldRows entry — if so
+  // we can skip the teardown + AutoLayout constraint setup at the bottom of
+  // this function (the dominant cost on every refresh). updateRow already
+  // wrote the new selection/hidden/locked state into the reused rows.
+  BOOL allRowsReused = (visCount == oldRows.count);
+
   for (NSUInteger v = 0; v < visCount; v++) {
     NSUInteger i = visibleIndices[v].unsignedIntegerValue;
     BOOL isGroup = groupFlags[i].boolValue;
@@ -483,31 +489,35 @@ void KKCanvasRefreshLayerListFromSnapshot(KKCanvasStoreSnapshot *snap,
           lockedStates[i].boolValue, [capturedSelection containsIndex:i],
           solo && !hiddenStates[i].boolValue, names[i], groupIDs[i], pgid,
           depth, multiSelect, symConfig, container.actionTarget);
+      allRowsReused = NO;
     }
     [newRows addObject:row];
   }
 
-  [content.subviews makeObjectsPerformSelector:@selector(removeFromSuperview)];
-  for (NSUInteger v = 0; v < newRows.count; v++) {
-    KKLayerRow *row = newRows[v];
-    [content addSubview:row];
-    [row.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
-                                      constant:KKPaddingSM]
-        .active = YES;
-    [row.trailingAnchor constraintEqualToAnchor:content.trailingAnchor
-                                       constant:-KKPaddingSM]
-        .active = YES;
-    [row.topAnchor
-        constraintEqualToAnchor:content.topAnchor
-                       constant:kLayerListVerticalPad + v * kLayerRowStride]
-        .active = YES;
-    [row.heightAnchor constraintEqualToConstant:kLayerRowHeight].active = YES;
-  }
+  if (!allRowsReused) {
+    [content.subviews
+        makeObjectsPerformSelector:@selector(removeFromSuperview)];
+    for (NSUInteger v = 0; v < newRows.count; v++) {
+      KKLayerRow *row = newRows[v];
+      [content addSubview:row];
+      [row.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
+                                        constant:KKPaddingSM]
+          .active = YES;
+      [row.trailingAnchor constraintEqualToAnchor:content.trailingAnchor
+                                         constant:-KKPaddingSM]
+          .active = YES;
+      [row.topAnchor
+          constraintEqualToAnchor:content.topAnchor
+                         constant:kLayerListVerticalPad + v * kLayerRowStride]
+          .active = YES;
+      [row.heightAnchor constraintEqualToConstant:kLayerRowHeight].active = YES;
+    }
 
-  CGFloat totalHeight =
-      MAX(visCount * kLayerRowStride + kLayerListVerticalPad + kLayerRowHeight,
-          kLayerListHeight);
-  container.contentHeightConstraint.constant = totalHeight;
+    CGFloat totalHeight = MAX(visCount * kLayerRowStride +
+                                  kLayerListVerticalPad + kLayerRowHeight,
+                              kLayerListHeight);
+    container.contentHeightConstraint.constant = totalHeight;
+  }
 
   KKBezierPath *syncPath = nil;
   for (NSUInteger i = 0; i < pathCount; i++) {

@@ -98,27 +98,44 @@ static void KKSyncLoopFromParams(id<PROAPIAccessing> apiManager) {
   });
 }
 
-static void KKSyncFromParams(id<PROAPIAccessing> apiManager);
+static void KKSyncFromParams(id<PROAPIAccessing> apiManager, NSString *source);
 
-/// Drives plugin-side reconciliation (e.g. Canvas: layers ↔ lanes). Reads
-/// JSON, asks the plugin to reconcile against its current source items, and
-/// — when the result differs — dispatches a JSON write inside a fresh
-/// action scope.
+/// Drives plugin-side reconciliation (e.g. Canvas: layers ↔ lanes). Asks
+/// the plugin to reconcile against its current source items, and — when the
+/// result differs from the in-memory snapshot — dispatches a JSON write
+/// inside a fresh action scope.
 ///
-/// Returns the reconciled lanes when they differ from the existing JSON, or
-/// nil when no change / no plugin / APIs unavailable. Callers should prefer
-/// the returned lanes over re-reading the param: FCP doesn't reliably
+/// Short-circuits via the plugin-supplied `kkReconcileFingerprintForAPI:` —
+/// when the fingerprint matches the previous successful reconcile, the
+/// reconcile call (and the FCP read it would otherwise need) is skipped.
+///
+/// Uses `state.lanesSnapshot` as the existing-lanes baseline rather than
+/// reading the JSON param via XPC. The snapshot is the authoritative
+/// in-memory mirror — kept in sync by `KKSyncFromParams` on the canonical
+/// path and by this function's own writes — so the read is redundant.
+///
+/// Returns the reconciled lanes when they differ from the existing snapshot,
+/// or nil when no change / no plugin / APIs unavailable. Callers should
+/// prefer the returned lanes over re-reading the param: FCP doesn't reliably
 /// propagate the write within the same outer tick, and a follow-up read
 /// outside the action scope can return the pre-write value (per CLAUDE.md
 /// FxPlug action-scope rules).
 static NSArray<KKTimingLane *> *
-KKReconcileLanesIfNeeded(id<PROAPIAccessing> apiManager, KKPlugin *plugin) {
+KKReconcileLanesIfNeeded(id<PROAPIAccessing> apiManager, KKPlugin *plugin,
+                         NSString *source) {
   if (!plugin)
     return nil;
   id<FxCustomParameterActionAPI_v4> actAPI =
       [apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (!actAPI)
     return nil;
+
+  KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
+  NSString *fingerprint = [plugin kkReconcileFingerprintForAPI:apiManager];
+  if (state && fingerprint && state.cachedReconcileFingerprint &&
+      [fingerprint isEqualToString:state.cachedReconcileFingerprint])
+    return nil;
+
   [actAPI startAction:plugin];
   id<FxParameterRetrievalAPI_v6> getAPI =
       [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
@@ -128,10 +145,26 @@ KKReconcileLanesIfNeeded(id<PROAPIAccessing> apiManager, KKPlugin *plugin) {
     [actAPI endAction:plugin];
     return nil;
   }
-  NSString *json = nil;
-  [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
-  NSArray<KKTimingLane *> *existing =
-      json.length ? [KKTimingLane lanesFromJSON:json] : @[];
+
+  // Cold-start fallback: if `lanesSnapshot` hasn't been seeded yet (FCP
+  // just loaded the project, store observer fired before
+  // `timingGraphApplyState` could populate the snapshot from the persisted
+  // JSON), reconciling against `@[]` would build lanes from scratch with
+  // default segments and the JSON write below would clobber the user's
+  // persisted data. Read the JSON directly here so reconcile sees the
+  // real prior state and preserves segment edits across FCP restarts.
+  // Hot path is untouched: once `timingGraphApplyState` (or any
+  // mutation site) has seeded the snapshot, this branch is skipped.
+  NSArray<KKTimingLane *> *existing = state.lanesSnapshot;
+  if (existing.count == 0) {
+    NSString *json = nil;
+    [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+    if (json.length) {
+      NSArray<KKTimingLane *> *fromJSON = [KKTimingLane lanesFromJSON:json];
+      if (fromJSON.count)
+        existing = fromJSON;
+    }
+  }
   if (!existing)
     existing = @[];
   NSArray<KKTimingLane *> *reconciled = [plugin reconcileLanes:existing
@@ -139,44 +172,57 @@ KKReconcileLanesIfNeeded(id<PROAPIAccessing> apiManager, KKPlugin *plugin) {
                                                    paramGetAPI:getAPI];
   if (!reconciled) {
     [actAPI endAction:plugin];
+    if (state && fingerprint)
+      state.cachedReconcileFingerprint = fingerprint;
     return nil;
   }
   NSString *newJSON = [KKTimingLane jsonFromLanes:reconciled];
-  BOOL changed = (newJSON && ![newJSON isEqualToString:json ?: @""]);
+  NSString *existingJSON = [KKTimingLane jsonFromLanes:existing];
+  BOOL changed = (newJSON && ![newJSON isEqualToString:existingJSON ?: @""]);
   if (changed)
     [setAPI setStringParameterValue:newJSON toParameter:kKKParamMultiStageData];
   [actAPI endAction:plugin];
+  if (state && fingerprint)
+    state.cachedReconcileFingerprint = fingerprint;
   return changed ? reconciled : nil;
 }
 
-static void KKSyncFromParams(id<PROAPIAccessing> apiManager) {
+static void KKSyncFromParams(id<PROAPIAccessing> apiManager, NSString *source) {
   KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
   if (!state)
     return;
-  NSArray<KKTimingLane *> *reconciledLanes =
-      KKReconcileLanesIfNeeded(apiManager, state.plugin);
   KKStageSequencerView *seq = state.sequencerView;
   NSArray<KKTimingViewRefs *> *extras =
       [state.additionalTimingViews copy] ?: @[];
   double dur = KKCurrentEffectDurationSeconds(apiManager);
-  NSArray<KKTimingLane *> *raw = nil;
-  if (reconciledLanes) {
-    // Reconcile changed something (e.g. Canvas user added a layer). Use the
-    // returned lanes directly — re-reading the param here can return the
-    // pre-write value and falsely trip jsonSame, leaving the seqView empty
-    // until the next view rebuild.
-    raw = reconciledLanes;
-  } else {
-    id<FxParameterRetrievalAPI_v6> getAPI =
-        [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    if (!getAPI)
-      return;
-    NSString *json = nil;
-    [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
-    if (!json)
-      return;
-    NSString *snapshotJSON = [KKTimingLane jsonFromLanes:state.lanesSnapshot];
-    BOOL jsonSame = [json isEqualToString:snapshotJSON ?: @""];
+
+  // Early-exit when nothing the seq cares about has changed:
+  //   1. The plugin's source-state fingerprint matches the last reconcile
+  //      (so reconcile would no-op), AND
+  //   2. The `lanesSnapshot` pointer matches the last one we pushed (so
+  //      no in-memory edit — e.g. inspector value tweak from a plugin
+  //      mutation site — has replaced the array since), AND
+  //   3. No clip-duration drift.
+  //
+  // Pointer-equality on lanesSnapshot is required: the fingerprint only
+  // captures *source* topology (path layerIDs / *Enabled flags for
+  // Canvas), not lane values, easing curves, or segment durations. A
+  // value tweak replaces lanesSnapshot via [copy] but leaves the
+  // fingerprint unchanged — without the pointer check the live graph
+  // update would be skipped until the user clicked something else.
+  //
+  // Compute fingerprint locally rather than reading a shared flag:
+  // drawOSCTick runs off-main while the store observer runs on main,
+  // and a shared flag would race (one thread overwriting the other's
+  // NO/YES, causing a fresh-add to be misread as a fingerprint-skip
+  // → seq push gets dropped → newly-added shape disappears from the
+  // sequencer until the next event nudged things).
+  NSString *currentFingerprint =
+      [state.plugin kkReconcileFingerprintForAPI:apiManager];
+  if (currentFingerprint && state.cachedReconcileFingerprint &&
+      [currentFingerprint isEqualToString:state.cachedReconcileFingerprint] &&
+      state.lanesSnapshot.count &&
+      state.lanesSnapshot == state.lastPushedLanesSnapshot) {
     BOOL durDrift = NO;
     if (dur > 0) {
       for (KKTimingLane *lane in state.lanesSnapshot) {
@@ -186,15 +232,52 @@ static void KKSyncFromParams(id<PROAPIAccessing> apiManager) {
         }
       }
     }
-    if (jsonSame && !durDrift)
+    if (!durDrift)
       return;
-    raw = [KKTimingLane lanesFromJSON:json];
-    if (!raw)
+  }
+
+  NSArray<KKTimingLane *> *reconciledLanes =
+      KKReconcileLanesIfNeeded(apiManager, state.plugin, source);
+  NSArray<KKTimingLane *> *raw = nil;
+  if (reconciledLanes) {
+    // Reconcile changed something (e.g. Canvas user added a layer). Use the
+    // returned lanes directly — re-reading the param here can return the
+    // pre-write value and falsely trip jsonSame, leaving the seqView empty
+    // until the next view rebuild.
+    raw = reconciledLanes;
+  } else {
+    // Reconcile produced no new lanes — fingerprint matched, or it
+    // early-bailed (no plugin / no actAPI). Do NOT fall back to a
+    // `getStringParameterValue` read here: outside an action scope FCP
+    // returns the pre-write value (CLAUDE.md FxPlug rule), which would
+    // overwrite our fresh in-memory snapshot with stale or empty JSON
+    // and erase newly-added shapes from the sequencer until the next
+    // event refreshed things. The snapshot is the canonical mirror; it
+    // is updated synchronously by every in-process mutation site
+    // (writePaths, _modifyPaths, segment-edit handlers, etc.).
+    //
+    // The only legitimate reason to continue past this point is a
+    // clip-duration change — re-rebalance the current snapshot for the
+    // new duration and push it to seq. No FCP I/O.
+    BOOL durDrift = NO;
+    if (dur > 0) {
+      for (KKTimingLane *lane in state.lanesSnapshot) {
+        if (fabs(lane.lastKnownClipDuration - dur) > 1e-6) {
+          durDrift = YES;
+          break;
+        }
+      }
+    }
+    BOOL snapshotChanged =
+        (state.lanesSnapshot != state.lastPushedLanesSnapshot);
+    if ((!snapshotChanged && !durDrift) || state.lanesSnapshot.count == 0)
       return;
+    raw = state.lanesSnapshot;
   }
   NSArray<KKTimingLane *> *lanes =
       (dur > 0) ? KKTimingRebalancedLanes(raw, dur) : raw;
   state.lanesSnapshot = lanes;
+  state.lastPushedLanesSnapshot = lanes;
   state.pendingLanes = nil;
   // Use the cached plugin-hidden snapshot maintained by the
   // mode-change refresh path. Reverse-deriving it from the previous
@@ -216,7 +299,7 @@ static void KKSyncFromParams(id<PROAPIAccessing> apiManager) {
   NSArray<KKTimingLane *> *visible =
       KKFilterLanesForVisibility(lanes, state.hiddenLaneLabels);
   KKStageSequencerRulerView *primaryRuler = state.rulerView;
-  dispatch_async(dispatch_get_main_queue(), ^{
+  dispatch_block_t apply = ^{
     if (dur > 0) {
       seq.effectDuration = dur;
       primaryRuler.effectDuration = dur;
@@ -229,7 +312,16 @@ static void KKSyncFromParams(id<PROAPIAccessing> apiManager) {
       }
       r.seqView.lanes = visible;
     }
-  });
+  };
+  // When the caller is already on main (store observer, custom-view
+  // callbacks), apply synchronously — dispatch_async would push the seq
+  // update to the back of the main queue, *behind* whatever FCP enqueues
+  // on its parameterChanged callbacks. That gap is what makes the timing
+  // sequencer feel like it lags the layer list (which updates inline).
+  if (NSThread.isMainThread)
+    apply();
+  else
+    dispatch_async(dispatch_get_main_queue(), apply);
 }
 
 /// Refresh the calling instance's cached effectStart/effectDuration. Cross-
@@ -416,7 +508,7 @@ static void KKBroadcastPlayheads(id<PROAPIAccessing> apiManager,
 + (void)multiStageDrawOSCTickForAPI:(id<PROAPIAccessing>)apiManager
                              atTime:(CMTime)time {
   KKFlushPendingLanes();
-  KKSyncFromParams(apiManager);
+  KKSyncFromParams(apiManager, @"drawOSCTick");
   KKSyncLoopFromParams(apiManager);
   [self multiStageUpdatePlayheadsForAPI:apiManager atTime:time];
 }
@@ -467,7 +559,7 @@ static void KKBroadcastPlayheads(id<PROAPIAccessing> apiManager,
 }
 
 + (void)multiStageSyncFromParams:(id<PROAPIAccessing>)apiManager {
-  KKSyncFromParams(apiManager);
+  KKSyncFromParams(apiManager, @"public");
 }
 
 + (void)multiStageUpdatePlayheadsForAPI:(id<PROAPIAccessing>)apiManager

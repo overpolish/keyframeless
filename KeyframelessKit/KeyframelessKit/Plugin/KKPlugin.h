@@ -324,6 +324,15 @@ NS_ASSUME_NONNULL_BEGIN
             atTime:(CMTime)time
        paramGetAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI;
 
+/// Optional cheap fingerprint of the inputs `reconcileLanes:` would consume
+/// (for Canvas: layerIDs + the path bits that flip lane visibility/labels).
+/// Computed from in-memory state — must NOT do FCP param I/O. The pump
+/// short-circuits the reconcile (skipping the JSON read + plugin call)
+/// when the fingerprint matches the previous successful reconcile.
+/// Default returns nil → no caching, current behavior preserved.
+- (nullable NSString *)kkReconcileFingerprintForAPI:
+    (id<PROAPIAccessing>)apiManager;
+
 /// Override to return YES when the plugin registers motion blur params
 /// via `addMotionBlurParametersWithAPI:`. Default NO. Used to auto-include
 /// the Motion Blur section in the help window.

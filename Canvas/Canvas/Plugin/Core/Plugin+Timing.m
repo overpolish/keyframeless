@@ -4,6 +4,7 @@
  */
 
 #import "Constants.h"
+#import "LayerList_Private.h"
 #import "Plugin_Private.h"
 #import <KeyframelessKit/KeyframelessKit.h>
 
@@ -522,8 +523,8 @@ static NSArray<KKCanvasAnimProp *> *_kkAnimatableProperties(void) {
         read:^NSArray<NSNumber *> *(KKBezierPath *p) {
           return @[];
         }
-        write:^(KKBezierPath *p, NSArray<NSNumber *> *vals) {
-          // No-op: morph data lives on path.morphTargets out-of-band.
+        write:^(KKBezierPath *p, NSArray<NSNumber *> *vals){
+            // No-op: morph data lives on path.morphTargets out-of-band.
         }];
 
     sProps = @[
@@ -651,8 +652,8 @@ static BOOL _kkApplyMorphForPath(KKBezierPath *p, KKTimingLane *lane,
   if (isAnimateOut)
     easedT = 1.0 - easedT;
 
-  KKMorphInterpolateApply(targets[beforeIdx], targets[afterIdx],
-                          (float)easedT, p);
+  KKMorphInterpolateApply(targets[beforeIdx], targets[afterIdx], (float)easedT,
+                          p);
   return YES;
 }
 
@@ -814,7 +815,16 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
                                      atTime:(CMTime)time
                                 paramGetAPI:(id<FxParameterRetrievalAPI_v6>)
                                                 paramGetAPI {
-  NSArray<KKBezierPath *> *paths = _kkReadPaths(paramGetAPI);
+  // Prefer the in-memory KKCanvasStore over the FCP path-blob param read —
+  // the store is updated synchronously by every mutation site (writePaths,
+  // _modifyPaths, drawOSC) and a getStringParameterValue here costs 5–15ms.
+  // Fall back to the FCP read only when the store hasn't been seeded yet
+  // (first-time setup, or a context with no UUID).
+  NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+  KKLayerInstanceState *lst = uuid ? KKLayerStateForUUID(uuid) : nil;
+  KKCanvasStoreSnapshot *snap = lst ? [lst.store snapshot] : nil;
+  NSArray<KKBezierPath *> *paths =
+      snap ? snap.paths : _kkReadPaths(paramGetAPI);
   NSArray<KKCanvasAnimProp *> *props = _kkAnimatableProperties();
   NSSet<NSString *> *oscLabels = [self animatablePropertyLabelsWithOSC];
   NSSet<NSString *> *oscDefaultOff =
@@ -860,6 +870,33 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
     }
   }
   return out;
+}
+
+- (NSString *)kkReconcileFingerprintForAPI:(id<PROAPIAccessing>)apiManager {
+  // Fingerprint must capture every input that
+  // `reconcileLanes:atTime:paramGetAPI:` would consume. For Canvas that's: per
+  // path → layerID, name (drives
+  // `_kkGroupLabelForPath`), isGroup, isImage, closed, and the four
+  // `*Enabled` flags that gate `enabledForPath` for stroke/fill/sketch/
+  // transform-derived lanes. The OSC-label sets are static so don't need
+  // capturing here. Reads from KKCanvasStore (in-memory) — no FCP I/O.
+  NSString *uuid = KKLayerUUIDForAPI(apiManager);
+  KKLayerInstanceState *lst = uuid ? KKLayerStateForUUID(uuid) : nil;
+  KKCanvasStoreSnapshot *snap = lst ? [lst.store snapshot] : nil;
+  if (!snap)
+    return nil;
+  NSMutableString *fp =
+      [NSMutableString stringWithCapacity:snap.paths.count * 64];
+  NSUInteger idx = 0;
+  for (KKBezierPath *p in snap.paths) {
+    idx++;
+    [fp appendFormat:@"%lu|%@|%@|%d%d%d%d%d%d|", (unsigned long)idx,
+                     p.layerID ?: @"", p.name ?: @"", (int)p.isGroup,
+                     (int)p.isImage, (int)p.closed, (int)p.strokeEnabled,
+                     (int)p.fillEnabled, (int)p.sketchEnabled];
+    [fp appendFormat:@"%d\x1e", (int)p.transformEnabled];
+  }
+  return fp;
 }
 
 - (NSArray<NSNumber *> *)currentValuesForLaneLabel:(NSString *)label
@@ -1008,15 +1045,27 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
     if (updated)
       [setAPI setStringParameterValue:updated
                           toParameter:kKKParamMultiStageData];
+    KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+    if (state)
+      state.lanesSnapshot = [lanes copy];
   }
   [actAPI endAction:self];
+  // Inspector slider tweaks don't trigger drawOSC and don't fire the
+  // KKCanvasStore observer (paths unchanged), so the pump's normal
+  // entry points won't see the new snapshot until the next unrelated
+  // event — what the user perceives as "graph needs a click to update".
+  // Drive a sync tick directly. The reconcile call short-circuits on
+  // the cached fingerprint (path topology unchanged) so this is just
+  // rebalance + the main-thread seq.lanes assignment.
+  if (changed)
+    [KKPlugin multiStageSyncFromParams:self.apiManager];
 }
 
 - (void)kkHandleLaneSegmentMutation:(KKLaneSegmentMutation)mutation
-                                lane:(KKTimingLane *)lane
-                              atIndex:(NSInteger)index
-                              getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
-                              setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
+                               lane:(KKTimingLane *)lane
+                            atIndex:(NSInteger)index
+                             getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
+                             setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
   if (![lane.propertyLabel isEqualToString:@"Path"])
     return;
   NSMutableArray<KKBezierPath *> *paths = _kkReadPaths(getAPI);
@@ -1035,9 +1084,9 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
   while (targets.count < preMutationSegCount)
     [targets addObject:KKMorphSnapshotCapture(p)];
   if (targets.count > preMutationSegCount)
-    [targets removeObjectsInRange:NSMakeRange(preMutationSegCount,
-                                              targets.count -
-                                                  preMutationSegCount)];
+    [targets
+        removeObjectsInRange:NSMakeRange(preMutationSegCount,
+                                         targets.count - preMutationSegCount)];
 
   if (mutation == KKLaneSegmentMutationInserted) {
     // Capture the current path as the new segment's snapshot. Mirrors how
@@ -1055,10 +1104,10 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
 }
 
 - (void)kkLoadLaneSegmentForLabel:(NSString *)label
-                          groupKey:(NSString *)groupKey
+                         groupKey:(NSString *)groupKey
                           segment:(NSInteger)segmentIndex
-                            getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
-                            setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
+                           getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
+                           setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
   if (![label isEqualToString:@"Path"])
     return;
   if (segmentIndex < 0)
@@ -1072,11 +1121,11 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
 }
 
 - (void)kkCopyLaneSegmentForLabel:(NSString *)label
-                          groupKey:(NSString *)groupKey
-                       fromSegment:(NSInteger)srcSegmentIndex
-                         toSegment:(NSInteger)dstSegmentIndex
-                            getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
-                            setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
+                         groupKey:(NSString *)groupKey
+                      fromSegment:(NSInteger)srcSegmentIndex
+                        toSegment:(NSInteger)dstSegmentIndex
+                           getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
+                           setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
   if (![label isEqualToString:@"Path"])
     return;
   if (srcSegmentIndex < 0 || dstSegmentIndex < 0 ||

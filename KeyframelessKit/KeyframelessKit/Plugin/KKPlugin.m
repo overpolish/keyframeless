@@ -480,6 +480,10 @@
   return existing;
 }
 
+- (NSString *)kkReconcileFingerprintForAPI:(id<PROAPIAccessing>)apiManager {
+  return nil;
+}
+
 - (BOOL)usesMotionBlur {
   return NO;
 }

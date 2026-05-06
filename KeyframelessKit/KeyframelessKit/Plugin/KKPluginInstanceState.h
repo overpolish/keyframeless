@@ -155,6 +155,30 @@ NS_ASSUME_NONNULL_BEGIN
 /// pointer-compared, never dereferenced.
 @property(nonatomic, assign, nullable) void *ownerAPIPointer;
 
+/// Fingerprint of the most recent successful reconcile. The pump skips both
+/// the FCP JSON read and the plugin reconcile call when the plugin's current
+/// fingerprint matches this value (see `-kkReconcileFingerprintForAPI:`).
+/// Read concurrently from main (store observer) and render queue
+/// (drawOSCTick); each call computes its own fingerprint and compares
+/// locally — never use a shared "did we skip" flag, races corrupt it.
+@property(nonatomic, copy, nullable) NSString *cachedReconcileFingerprint;
+
+/// The `lanesSnapshot` array pointer most recently pushed to the sequencer
+/// view(s). The pump pointer-compares `state.lanesSnapshot` against this
+/// to decide whether a fresh seq.lanes push is needed. Pointer identity
+/// is sufficient because every `lanesSnapshot` writer assigns `[copy]` of
+/// a new array. Strong reference so the pointer stays valid for compare.
+///
+/// Why both this AND `cachedReconcileFingerprint`: the fingerprint gates
+/// the FCP reconcile call (skipped when source topology unchanged). This
+/// gates the seq push (skipped when the in-memory lanes pointer hasn't
+/// been replaced since the last push). Without this, in-memory edits
+/// that don't touch source topology — e.g. inspector value tweaks
+/// flowing into lanesSnapshot via a plugin-side mutation site — would
+/// match the fingerprint, get short-circuited, and never reach seq.
+@property(nonatomic, strong, nullable)
+    NSArray<KKTimingLane *> *lastPushedLanesSnapshot;
+
 @end
 
 /// Reads `kKKParamInstanceID` from the api, cached on the api via
