@@ -179,6 +179,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, strong, nullable)
     NSArray<KKTimingLane *> *lastPushedLanesSnapshot;
 
+/// Last JSON string we wrote to `kKKParamMultiStageData`. Used to dedupe
+/// no-op writes — every `setCustomParameterValue:atTime:` registers an
+/// undo entry on FCP/Motion's stack, so writing identical content puts
+/// phantom entries between user edits and forces extra cmd-Z presses to
+/// revert a single logical change.
+@property(nonatomic, copy, nullable) NSString *lastWrittenMultiStageJSON;
+
 @end
 
 /// Reads `kKKParamInstanceID` from the api, cached on the api via

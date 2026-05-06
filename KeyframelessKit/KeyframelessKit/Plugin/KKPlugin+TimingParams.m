@@ -5,7 +5,9 @@
 
 #import "../KKLog.h"
 #import "../Math/KKTimingStage.h"
+#import "../Views/KKCustomGroupHeaderView.h"
 #import "KKConstants.h"
+#import "KKDataBlob.h"
 #import "KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
 
@@ -66,10 +68,18 @@ static const FxParameterFlags kHiddenNotAnim =
                   error, @"Unable to add timing loop toggle"))
     return NO;
 
-  if (!KKAddParam([paramAPI addStringParameterWithName:@""
-                                           parameterID:kKKParamMultiStageData
-                                          defaultValue:@""
-                                        parameterFlags:kHiddenNotAnim],
+  // Custom parameter (KKDataBlob wrapping the lanes-JSON UTF-8 bytes).
+  // String params can't be undone in FCP — `setStringParameterValue:` has
+  // no `atTime:` variant and FCP filters those writes off its undo stack.
+  // Custom params route through `setCustomParameterValue:atTime:`, the
+  // same pipeline animatable scalars use, which IS undoable.
+  // NOT_ANIMATABLE deliberately omitted — that flag would re-exclude the
+  // param from the undo path.
+  if (!KKAddParam([paramAPI
+                      addCustomParameterWithName:@""
+                                     parameterID:kKKParamMultiStageData
+                                    defaultValue:[KKDataBlob blobWithData:nil]
+                                  parameterFlags:kFxParameterFlag_HIDDEN],
                   error, @"Unable to add multi-stage data"))
     return NO;
 
@@ -180,13 +190,27 @@ static const FxParameterFlags kHiddenNotAnim =
   return YES;
 }
 
+/// Mask of the parameter-flag bits we manage. FCP/Motion silently OR in
+/// internal bits (observed: 0x20200) on top of whatever we wrote, so a raw
+/// `cur != want` check never converges and we register a phantom undo
+/// entry on every `parameterChanged:`. Compare only our own bits, and
+/// preserve the host's bits when writing.
+static const FxParameterFlags kKKMutableFlagMask =
+    kFxParameterFlag_HIDDEN | kFxParameterFlag_DISABLED |
+    kFxParameterFlag_NOT_ANIMATABLE |
+    kFxParameterFlag_DONT_DISPLAY_IN_DASHBOARD | kFxParameterFlag_CUSTOM_UI |
+    kFxParameterFlag_USE_FULL_VIEW_WIDTH;
+
 static void _setFlagsIfNeeded(id<FxParameterSettingAPI_v5> setAPI,
                               id<FxParameterRetrievalAPI_v6> getAPI,
                               FxParameterFlags flags, UInt32 paramID) {
   FxParameterFlags cur = 0;
   [getAPI getParameterFlags:&cur fromParameter:paramID];
-  if (cur != flags)
-    [setAPI setParameterFlags:flags toParameter:paramID];
+  if ((cur & kKKMutableFlagMask) != (flags & kKKMutableFlagMask)) {
+    FxParameterFlags merged =
+        (cur & ~kKKMutableFlagMask) | (flags & kKKMutableFlagMask);
+    [setAPI setParameterFlags:merged toParameter:paramID];
+  }
 }
 
 - (void)updateTimingParameterVisibility {
@@ -220,12 +244,18 @@ static void _setFlagsIfNeeded(id<FxParameterSettingAPI_v5> setAPI,
     [paramGetAPI getBoolValue:&expandedTiming
                 fromParameter:kKKParamTimingExpanded
                        atTime:kCMTimeZero];
+    BOOL effectiveExpanded = expandedTiming;
     if ([strongSelf forceShowAllParameters])
-      expandedTiming = YES;
+      effectiveExpanded = YES;
     _setFlagsIfNeeded(paramSetAPI, paramGetAPI,
-                      expandedTiming ? kCustomUI : kFxParameterFlag_HIDDEN,
+                      effectiveExpanded ? kCustomUI : kFxParameterFlag_HIDDEN,
                       kKKParamTimingCurvePreview);
     [actAPI endAction:strongSelf];
+    KKCustomGroupHeaderView *header = strongSelf.timingHeader;
+    KKRunOnMain(^{
+      if (header.isExpanded != expandedTiming)
+        header.isExpanded = expandedTiming;
+    });
   });
 }
 
@@ -253,6 +283,23 @@ static void _setFlagsIfNeeded(id<FxParameterSettingAPI_v5> setAPI,
   _setFlagsIfNeeded(paramSetAPI, paramGetAPI, flag, kKKParamMotionBlurQuality);
   _setFlagsIfNeeded(paramSetAPI, paramGetAPI, toggleFlag,
                     kKKParamMotionBlurTransitionsOnly);
+
+  BOOL persistedExpanded = NO;
+  [paramGetAPI getBoolValue:&persistedExpanded
+              fromParameter:kKKParamMotionBlurExpanded
+                     atTime:kCMTimeZero];
+  BOOL persistedEnabled = NO;
+  [paramGetAPI getBoolValue:&persistedEnabled
+              fromParameter:kKKParamMotionBlurEnabled
+                     atTime:kCMTimeZero];
+  __weak typeof(self) weakSelf = self;
+  KKRunOnMain(^{
+    KKCustomGroupHeaderView *hdr = weakSelf.motionBlurHeader;
+    if (hdr.isExpanded != persistedExpanded)
+      hdr.isExpanded = persistedExpanded;
+    if (hdr.isEnabled != persistedEnabled)
+      hdr.isEnabled = persistedEnabled;
+  });
 }
 
 @end

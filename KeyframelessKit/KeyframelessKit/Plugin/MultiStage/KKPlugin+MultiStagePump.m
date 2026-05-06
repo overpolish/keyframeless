@@ -12,12 +12,12 @@
 /// See project_fxplug_custom_view_live_update.md for the full architecture.
 
 #import "../../KKLog.h"
-#import "../../Math/KKTimingStage.h"
 #import "../../Views/StageSequencer/KKLaneVisibilityBar.h"
 #import "../../Views/StageSequencer/KKStagePlayheadView.h"
 #import "../../Views/StageSequencer/KKStageSequencerRulerView.h"
 #import "../../Views/StageSequencer/KKStageSequencerView.h"
 #import "../KKConstants.h"
+#import "../KKDataBlob.h"
 #import "../KKPluginInstanceState.h"
 #import "../KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
@@ -157,8 +157,7 @@ KKReconcileLanesIfNeeded(id<PROAPIAccessing> apiManager, KKPlugin *plugin,
   // mutation site) has seeded the snapshot, this branch is skipped.
   NSArray<KKTimingLane *> *existing = state.lanesSnapshot;
   if (existing.count == 0) {
-    NSString *json = nil;
-    [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+    NSString *json = KKReadCustomParamString(getAPI, kKKParamMultiStageData);
     if (json.length) {
       NSArray<KKTimingLane *> *fromJSON = [KKTimingLane lanesFromJSON:json];
       if (fromJSON.count)
@@ -180,7 +179,7 @@ KKReconcileLanesIfNeeded(id<PROAPIAccessing> apiManager, KKPlugin *plugin,
   NSString *existingJSON = [KKTimingLane jsonFromLanes:existing];
   BOOL changed = (newJSON && ![newJSON isEqualToString:existingJSON ?: @""]);
   if (changed)
-    [setAPI setStringParameterValue:newJSON toParameter:kKKParamMultiStageData];
+    KKWriteMultiStageJSONDeduped(newJSON, setAPI, apiManager);
   [actAPI endAction:plugin];
   if (state && fingerprint)
     state.cachedReconcileFingerprint = fingerprint;
@@ -560,6 +559,89 @@ static void KKBroadcastPlayheads(id<PROAPIAccessing> apiManager,
 
 + (void)multiStageSyncFromParams:(id<PROAPIAccessing>)apiManager {
   KKSyncFromParams(apiManager, @"public");
+}
+
+/// Force-refresh path for *external* changes to `kKKParamMultiStageData` —
+/// notably host cmd-Z, which reverts the param outside any of our action
+/// scopes. The pump's hot path short-circuits on a still-valid in-memory
+/// snapshot and lastPushed pointer, both of which lag in this case (we
+/// never wrote the post-undo state ourselves). Bust those caches and
+/// re-read JSON straight from the param, then push to seq.
++ (void)multiStageRefreshFromParamForAPI:(id<PROAPIAccessing>)apiManager {
+  if (!apiManager)
+    return;
+  KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
+  if (!state)
+    return;
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!getAPI)
+    return;
+
+  NSString *json = KKReadCustomParamString(getAPI, kKKParamMultiStageData);
+  // Empty reads happen mid-undo (host briefly returns the param's default
+  // before propagating the reverted value) and as XPC scope artefacts.
+  // If we already have a snapshot, don't blank the sequencer — wait for
+  // the next refresh with real content. The host will fire another
+  // parameterChanged for kKKParamMultiStageData when the actual reverted
+  // JSON arrives.
+  if (!json.length && state.lanesEverPersisted && state.lanesSnapshot.count > 0)
+    return;
+  NSArray<KKTimingLane *> *parsed =
+      json.length ? [KKTimingLane lanesFromJSON:json] : @[];
+  if (!parsed)
+    parsed = @[];
+
+  double dur = KKCurrentEffectDurationSeconds(apiManager);
+  NSArray<KKTimingLane *> *lanes =
+      (dur > 0) ? KKTimingRebalancedLanes(parsed, dur) : parsed;
+
+  state.lanesSnapshot = lanes;
+  state.lastPushedLanesSnapshot = lanes;
+  state.pendingLanes = nil;
+  state.cachedReconcileFingerprint = nil;
+  state.lastWrittenMultiStageJSON = KKMultiStageNormalizedForDedup(json);
+
+  // Recompute the effective hidden set fresh against the reverted JSON
+  // so user-toggled visibility pills (which the host stored in lane
+  // `visibleInSequencer`) actually re-apply on undo. Without this the
+  // pills stay at the post-toggle visual state until something else
+  // forces a full re-push.
+  NSSet<NSString *> *pluginHidden = state.pluginHiddenLaneLabels ?: [NSSet set];
+  state.hiddenLaneLabels = KKEffectiveHiddenLaneLabels(pluginHidden, lanes);
+
+  KKStageSequencerView *seq = state.sequencerView;
+  NSArray<KKTimingViewRefs *> *extras =
+      [state.additionalTimingViews copy] ?: @[];
+  KKStageSequencerRulerView *primaryRuler = state.rulerView;
+  NSArray<KKTimingLane *> *visible =
+      KKFilterLanesForVisibility(lanes, state.hiddenLaneLabels);
+  dispatch_block_t apply = ^{
+    if (dur > 0) {
+      seq.effectDuration = dur;
+      primaryRuler.effectDuration = dur;
+      for (KKTimingViewRefs *r in extras) {
+        r.seqView.effectDuration = dur;
+        r.ruler.effectDuration = dur;
+      }
+    }
+    seq.lanes = visible;
+    KKPushLanesToVisibilityBar(state.visibilityBar, lanes, pluginHidden);
+    KKApplyEmptyLanesVisibility(state.emptyLanesView, lanes, state.plugin);
+    for (KKTimingViewRefs *r in extras) {
+      r.seqView.lanes = visible;
+      KKPushLanesToVisibilityBar(r.visibilityBar, lanes, pluginHidden);
+      KKApplyEmptyLanesVisibility(r.emptyLanesView, lanes, state.plugin);
+    }
+    KKPlugin *owner = state.plugin;
+    if (owner.segmentEditPopover.shown && owner.segmentEditPopoverRefresh)
+      owner.segmentEditPopoverRefresh(lanes);
+  };
+  KKRunOnMain(apply);
+}
+
++ (void)multiStageRefreshLoopFromParamForAPI:(id<PROAPIAccessing>)apiManager {
+  KKSyncLoopFromParams(apiManager);
 }
 
 + (void)multiStageUpdatePlayheadsForAPI:(id<PROAPIAccessing>)apiManager

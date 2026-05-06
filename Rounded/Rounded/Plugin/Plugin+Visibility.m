@@ -23,8 +23,19 @@
   if ([self forceShowAllParameters])
     expanded = YES;
 
-  [paramSetAPI setParameterFlags:kFxParameterFlag_HIDDEN
-                     toParameter:kParamCropExpanded];
+  // Mask out host-internal flag bits when comparing — FCP silently OR's
+  // bits like 0x20200 back in after our writes, so a raw `cur != want`
+  // check fires forever and pollutes the undo stack with phantom entries.
+  const FxParameterFlags kMask = kFxParameterFlag_HIDDEN |
+                                 kFxParameterFlag_DISABLED |
+                                 kFxParameterFlag_NOT_ANIMATABLE |
+                                 kFxParameterFlag_DONT_DISPLAY_IN_DASHBOARD;
+
+  // kParamCropExpanded is created HIDDEN at addCropParameters time and is
+  // never user-toggled — we only read its bool value. Don't try to manage
+  // its flags at runtime: FCP adds DISABLED on hidden params and our
+  // setParameterFlags fires would each pollute the host undo stack with
+  // an entry the user has to step past with extra cmd-Z presses.
 
   FxParameterFlags base =
       expanded ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;
@@ -36,7 +47,10 @@
     FxParameterFlags cur = 0;
     [paramGetAPI getParameterFlags:&cur fromParameter:leafIDs[i]];
     FxParameterFlags want = base | (cur & kFxParameterFlag_DISABLED);
-    [paramSetAPI setParameterFlags:want toParameter:leafIDs[i]];
+    if ((cur & kMask) != (want & kMask)) {
+      FxParameterFlags merged = (cur & ~kMask) | (want & kMask);
+      [paramSetAPI setParameterFlags:merged toParameter:leafIDs[i]];
+    }
   }
 }
 

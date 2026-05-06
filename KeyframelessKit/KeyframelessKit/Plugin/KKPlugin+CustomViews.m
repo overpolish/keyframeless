@@ -108,6 +108,10 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
 
   [actionAPI endAction:self];
 
+  if (!self.genericGroupHeaders)
+    self.genericGroupHeaders = [NSMapTable strongToWeakObjectsMapTable];
+  [self.genericGroupHeaders setObject:header forKey:@(expandedParamID)];
+
   __weak typeof(self) weakSelf = self;
   header.onExpandedChanged = ^(BOOL isExpanded) {
     __strong typeof(weakSelf) strongSelf = weakSelf;
@@ -125,6 +129,26 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
   };
 
   return header;
+}
+
+- (void)syncGroupHeaderExpandedForExpandedParamID:(UInt32)expandedParamID {
+  KKCustomGroupHeaderView *header =
+      [self.genericGroupHeaders objectForKey:@(expandedParamID)];
+  if (!header)
+    return;
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!getAPI)
+    return;
+  BOOL expanded = NO;
+  [getAPI getBoolValue:&expanded
+         fromParameter:expandedParamID
+                atTime:kCMTimeZero];
+  __weak KKCustomGroupHeaderView *weakHeader = header;
+  KKRunOnMain(^{
+    if (weakHeader.isExpanded != expanded)
+      weakHeader.isExpanded = expanded;
+  });
 }
 
 @end

@@ -11,6 +11,7 @@
 #import "../../Views/StageSequencer/KKEmptyLanesView.h"
 #import "../../Views/StageSequencer/KKLaneVisibilityBar.h"
 #import "../KKConstants.h"
+#import "../KKDataBlob.h"
 #import "../KKPluginInstanceState.h"
 #import "../KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
@@ -59,8 +60,7 @@ double KKCurrentEffectDurationSeconds(id<PROAPIAccessing> apiManager) {
 NSMutableArray<KKTimingLane *> *
 KKReadLanesRebalanced(id<PROAPIAccessing> apiManager,
                       id<FxParameterRetrievalAPI_v6> getAPI) {
-  NSString *json = nil;
-  [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+  NSString *json = KKReadCustomParamString(getAPI, kKKParamMultiStageData);
   NSArray<KKTimingLane *> *raw = [KKTimingLane lanesFromJSON:json];
   if (!raw) {
     // Param read failed (FxPlug XPC scope often isn't wired in custom-view

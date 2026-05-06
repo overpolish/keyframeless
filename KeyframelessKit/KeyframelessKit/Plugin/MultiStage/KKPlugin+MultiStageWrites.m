@@ -4,6 +4,7 @@
  */
 
 #import "../../Views/StageSequencer/KKStageSequencerView.h"
+#import "../KKDataBlob.h"
 #import "../KKPluginInstanceState.h"
 #import "../KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
@@ -29,8 +30,7 @@ static void KKMultiStagePersistAndPush(KKPluginInstanceState *state,
   if (paramSetAPI) {
     NSString *json = [KKTimingLane jsonFromLanes:lanes];
     if (json)
-      [paramSetAPI setStringParameterValue:json
-                               toParameter:kKKParamMultiStageData];
+      KKWriteMultiStageJSONDeduped(json, paramSetAPI, apiManager);
   }
 
   KKStageSequencerView *seq = state.sequencerView;

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "../KKDataBlob.h"
 #import "../KKPluginInstanceState.h"
 #import "../KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
@@ -13,6 +14,7 @@
 
 - (void)_handleSegmentTypeToggledAtLane:(NSInteger)laneIndex
                                 segment:(NSInteger)segmentIndex {
+  BOOL ug = KKBeginUndoGroup(self.apiManager, @"Toggle Segment Type");
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actAPI startAction:self];
@@ -27,12 +29,14 @@
       KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
   if (!lanes || jsonIdx < 0) {
     [actAPI endAction:self];
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
   KKTimingLane *lane = [lanes[jsonIdx] copy];
   NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
   if ((NSUInteger)segmentIndex >= segs.count) {
     [actAPI endAction:self];
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
   KKTimingSegment *seg = [segs[segmentIndex] copy];
@@ -45,11 +49,13 @@
   KKWriteLanesJSON(lanes, setAPI, self.apiManager);
   [actAPI endAction:self];
   [self timingGraphApplyState];
+  KKEndUndoGroup(self.apiManager, ug);
 }
 
 - (void)_handleSegmentLockToggledAtLane:(NSInteger)laneIndex
                                 segment:(NSInteger)segmentIndex
                                duration:(double)newLockedSeconds {
+  BOOL ug = KKBeginUndoGroup(self.apiManager, @"Toggle Segment Lock");
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actAPI startAction:self];
@@ -64,12 +70,14 @@
       KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
   if (!lanes || jsonIdx < 0) {
     [actAPI endAction:self];
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
   KKTimingLane *lane = [lanes[jsonIdx] copy];
   NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
   if ((NSUInteger)segmentIndex >= segs.count) {
     [actAPI endAction:self];
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
   KKTimingSegment *seg = [segs[segmentIndex] copy];
@@ -81,9 +89,11 @@
   KKWriteLanesJSON(lanes, setAPI, self.apiManager);
   [actAPI endAction:self];
   [self timingGraphApplyState];
+  KKEndUndoGroup(self.apiManager, ug);
 }
 
 - (void)_handleAllLanesSegmentTypesToggledAtPosition:(double)position {
+  BOOL ug = KKBeginUndoGroup(self.apiManager, @"Toggle Segment Types");
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actAPI startAction:self];
@@ -95,6 +105,7 @@
       KKReadLanesRebalanced(self.apiManager, getAPI);
   if (!lanes) {
     [actAPI endAction:self];
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
 
@@ -131,16 +142,17 @@
     KKApplyHTHNormalizationInPlace(lanes);
     NSString *updated = [KKTimingLane jsonFromLanes:lanes];
     if (updated)
-      [setAPI setStringParameterValue:updated
-                          toParameter:kKKParamMultiStageData];
+      KKWriteMultiStageJSONDeduped(updated, setAPI, self.apiManager);
   }
   [actAPI endAction:self];
   if (anyChanged)
     [self timingGraphApplyState];
+  KKEndUndoGroup(self.apiManager, ug);
 }
 
 - (void)_handleAllLanesSegmentLockToggledAtPosition:(double)position
                                                lock:(BOOL)lock {
+  BOOL ug = KKBeginUndoGroup(self.apiManager, @"Toggle Segment Locks");
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actAPI startAction:self];
@@ -154,6 +166,7 @@
       KKReadLanesRebalanced(self.apiManager, getAPI);
   if (!lanes) {
     [actAPI endAction:self];
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
   CMTime effectDuration = kCMTimeZero;
@@ -197,6 +210,7 @@
   [actAPI endAction:self];
   if (anyChanged)
     [self timingGraphApplyState];
+  KKEndUndoGroup(self.apiManager, ug);
 }
 
 - (void)_handleRulerLoopToggled:(BOOL)newState {
@@ -211,6 +225,7 @@
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (!actAPI)
     return;
+  BOOL ug = KKBeginUndoGroup(self.apiManager, @"Toggle Loop");
   [actAPI startAction:self];
   id<FxParameterSettingAPI_v5> setAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
@@ -220,6 +235,7 @@
   KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
   state.loopEnabled = newState;
   [actAPI endAction:self];
+  KKEndUndoGroup(self.apiManager, ug);
 }
 
 - (void)_handleRulerPlayheadScrubToFraction:(double)fraction {

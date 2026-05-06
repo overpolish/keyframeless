@@ -235,6 +235,19 @@ NS_ASSUME_NONNULL_BEGIN
 /// they're exposed for cases that need to compose or skip parts of a tick.
 + (void)multiStageFlushPendingLanes;
 + (void)multiStageSyncFromParams:(id<PROAPIAccessing>)apiManager;
+
+/// Force-refresh path for *external* changes to `kKKParamMultiStageData`
+/// (host cmd-Z reverts the param outside our action scopes). The hot
+/// `multiStageSyncFromParams` short-circuits on a stale in-memory snapshot
+/// + lastPushed pointer; this method busts those caches and re-reads JSON
+/// straight from the param, then pushes to seq. Plugins should call from
+/// their `parameterChanged:` when `parameterID == kKKParamMultiStageData`.
++ (void)multiStageRefreshFromParamForAPI:(id<PROAPIAccessing>)apiManager;
+
+/// Force-refresh path for `kKKParamTimingLoopEnabled` — read the current
+/// param value and push it to all rulers' `loopEnabled`. Plugins call from
+/// `parameterChanged:` when the loopback param changes (host cmd-Z, etc).
++ (void)multiStageRefreshLoopFromParamForAPI:(id<PROAPIAccessing>)apiManager;
 + (void)multiStageUpdatePlayheadsForAPI:(id<PROAPIAccessing>)apiManager
                                  atTime:(CMTime)time;
 + (void)multiStageUpdatePlayheadsFromRenderForAPI:
@@ -481,6 +494,13 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
                            parameterID:(UInt32)parameterID
                        expandedParamID:(UInt32)expandedParamID
     NS_RETURNS_RETAINED;
+
+/// Re-reads `expandedParamID` and pushes the result into the matching
+/// generic group header's `isExpanded` (chevron). Plugins should call this
+/// from `parameterChanged:` when host undo/redo of the expanded bool param
+/// could leave the chevron out of sync with the persisted state. No-op if
+/// no header was registered for that paramID.
+- (void)syncGroupHeaderExpandedForExpandedParamID:(UInt32)expandedParamID;
 
 @end
 

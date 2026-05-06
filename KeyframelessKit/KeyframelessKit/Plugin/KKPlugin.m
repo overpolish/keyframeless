@@ -5,6 +5,8 @@
 
 #import "../Update/KKUpdateChecker.h"
 #import "../Views/StageSequencer/KKStageSequencerView.h"
+#import "KKConstants.h"
+#import "KKDataBlob.h"
 #import "KKHostInfo.h"
 #import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
@@ -45,6 +47,7 @@
 #pragma clang diagnostic pop
 
 @synthesize timingHeader = _timingHeader;
+@synthesize motionBlurHeader = _motionBlurHeader;
 
 + (id)servicePrincipalDelegate {
   return [KKPrincipalDelegate shared];
@@ -569,6 +572,15 @@
 
 - (NSString *)emptyLanesIconNameWhenNoLanes {
   return @"rectangle.on.rectangle.slash";
+}
+
+// FxPlug requires this when the plugin uses custom parameters — FCP needs
+// the value classes ahead of unarchiving project files. Subclasses can
+// override and call super to add their own custom-param IDs.
+- (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
+  if (parameterID == kKKParamMultiStageData)
+    return [NSSet setWithObject:[KKDataBlob class]];
+  return [NSSet set];
 }
 
 @end

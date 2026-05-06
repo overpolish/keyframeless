@@ -223,12 +223,17 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
 
 /// Reads persisted lanes; if none, seeds defaults from each property's
 /// current value and writes them back. Returns rebalanced lanes or nil.
-- (NSArray<KKTimingLane *> *)_readOrSeedLanesWithParamGetAPI:
-                                 (id<FxParameterRetrievalAPI_v6>)paramGetAPI
-                                                      atTime:(CMTime)time {
+- (NSArray<KKTimingLane *> *)
+    _readOrSeedLanesWithParamGetAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI
+                             atTime:(CMTime)time
+                      fromPersisted:(BOOL *)fromPersisted {
+  if (fromPersisted)
+    *fromPersisted = NO;
   NSArray<KKTimingLane *> *lanes =
       KKReadLanesRebalanced(self.apiManager, paramGetAPI);
   if (lanes) {
+    if (fromPersisted)
+      *fromPersisted = YES;
     // Run plugin reconciliation against current source items (e.g. Canvas:
     // current layer list) so a remount catches up to layer adds/deletes/
     // renames that happened while the inspector was unmounted.
@@ -245,8 +250,11 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
   // first user edit will eventually persist real JSON.
   KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
   NSArray<KKTimingLane *> *snapshot = state.lanesSnapshot;
-  if (snapshot.count > 0)
+  if (snapshot.count > 0) {
+    if (fromPersisted)
+      *fromPersisted = YES;
     return snapshot;
+  }
 
   return [self defaultLanesAtTime:time paramGetAPI:paramGetAPI];
 }
@@ -285,12 +293,20 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
                                  (id<FxCustomParameterActionAPI_v4>)actionAPI {
   seqContainer.hidden = NO;
 
+  BOOL fromPersisted = NO;
   NSArray<KKTimingLane *> *lanes =
       [self _readOrSeedLanesWithParamGetAPI:paramGetAPI
-                                     atTime:[actionAPI currentTime]];
+                                     atTime:[actionAPI currentTime]
+                              fromPersisted:&fromPersisted];
   KKPluginInstanceState *instState = KKInstanceStateForAPI(self.apiManager);
   if (lanes) {
-    instState.lanesSnapshot = [lanes copy];
+    // Only seed `lanesSnapshot` from real persisted data. Cold-scope
+    // defaults (radius=0 etc.) must stay display-only — if they reach
+    // `lanesSnapshot`, an off-main pump (drawOSC/render tick) can
+    // capture the stale lanes in its dispatch_async block and clobber
+    // the seqView after `timingGraphApplyState` has corrected it.
+    if (fromPersisted)
+      instState.lanesSnapshot = [lanes copy];
     NSSet<NSString *> *pluginHidden =
         [self hiddenAnimatablePropertyLabels] ?: [NSSet set];
     NSSet<NSString *> *hidden =

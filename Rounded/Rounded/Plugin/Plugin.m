@@ -55,6 +55,16 @@
     [self updateTimingParameterVisibility];
   [self updateMotionBlurParameterVisibility];
   [self updateCropParameterVisibility];
+  if (parameterID == kParamCropExpanded || parameterID == kParamForceShow)
+    [self syncGroupHeaderExpandedForExpandedParamID:kParamCropExpanded];
+
+  // Host cmd-Z reverts `kKKParamMultiStageData` outside our action scopes,
+  // so the pump's hot path doesn't see the change. Force a re-read + push
+  // when FCP/Motion notifies us the param value changed externally.
+  if (parameterID == kKKParamMultiStageData)
+    [KKPlugin multiStageRefreshFromParamForAPI:self.apiManager];
+  if (parameterID == kKKParamTimingLoopEnabled)
+    [KKPlugin multiStageRefreshLoopFromParamForAPI:self.apiManager];
 
   // Live-update the timing lane's selected segment when an animatable
   // slider changes. paramID → (label, values) is plugin-owned — no

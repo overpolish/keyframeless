@@ -362,8 +362,15 @@
   } else if (_dragMoving) {
     BOOL moved = NO;
     if ((NSUInteger)_dragLaneIdx < self.lanes.count) {
-      KKTimingSegment *seg = self.lanes[_dragLaneIdx].segments[_dragSegIdx];
-      moved = (fabs(seg.start - _dragMoveOrigStart) > 0.001);
+      KKTimingLane *_lane = self.lanes[_dragLaneIdx];
+      // _dragSegIdx is captured at mouseDown but the underlying lanes can
+      // shrink between mouseDown and mouseUp — e.g. host cmd-Z reverts a
+      // segment-create and refreshes the data while the user's pointer
+      // is still considered "down" on the now-gone segment.
+      if ((NSUInteger)_dragSegIdx < _lane.segments.count) {
+        KKTimingSegment *seg = _lane.segments[_dragSegIdx];
+        moved = (fabs(seg.start - _dragMoveOrigStart) > 0.001);
+      }
     }
     _dragMoving = NO;
     [[NSCursor arrowCursor] set];

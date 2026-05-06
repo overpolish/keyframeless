@@ -170,6 +170,7 @@
     [actAPI endAction:strongSelf];
   };
 
+  self.motionBlurHeader = header;
   return header;
 }
 

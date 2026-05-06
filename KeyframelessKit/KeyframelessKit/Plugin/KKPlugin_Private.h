@@ -86,14 +86,34 @@ extern double KKCurrentEffectDurationSeconds(id<PROAPIAccessing> apiManager);
 extern NSMutableArray<KKTimingLane *> *_Nullable KKReadLanesRebalanced(
     id<PROAPIAccessing> apiManager, id<FxParameterRetrievalAPI_v6> getAPI);
 
-@interface KKPlugin () <FxCustomParameterViewHost_v2>
+@interface KKPlugin () <FxCustomParameterViewHost_v2, NSPopoverDelegate>
 
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *timingHeader;
+@property(nonatomic, weak, nullable) KKCustomGroupHeaderView *motionBlurHeader;
+/// Weak map of generic group headers (created via
+/// `createGroupHeaderWithTitle:…:expandedParamID:`) keyed by the
+/// `expandedParamID`. Lets `parameterChanged:` re-sync the chevron when the
+/// expanded bool param is reverted by host undo. Strong key (NSNumber),
+/// weak value (KKCustomGroupHeaderView).
+@property(nonatomic, strong, nullable)
+    NSMapTable<NSNumber *, KKCustomGroupHeaderView *> *genericGroupHeaders;
 @property(nonatomic, weak, nullable) KKStageSequencerView *stageSequencer;
 @property(nonatomic, weak, nullable) NSView *stageSequencerContainer;
 @property(nonatomic, weak, nullable)
     KKStageSequencerRulerView *stageSequencerRuler;
 @property(nonatomic, strong, nullable) NSPopover *segmentEditPopover;
+/// Refresh closure for the currently-open segment-edit popover. Called from
+/// `timingGraphApplyState` with the latest lanes so the popover's
+/// curve/intensity/frequency/seed values stay in sync with undo/redo of the
+/// underlying multi-stage data param. The closure must close the popover
+/// (and may clear `segmentEditPopover`) if the target segment is gone.
+@property(nonatomic, copy, nullable) void (^segmentEditPopoverRefresh)
+    (NSArray<KKTimingLane *> *latestLanes);
+/// YES while a slider drag in the segment-edit popover is in flight and an
+/// outer undo group is held open. Per-tick mutators see the open group via
+/// nested `KKBeginUndoGroup` returning NO, so all tick writes coalesce into
+/// the single drag-spanning undo entry.
+@property(nonatomic) BOOL segmentEditDragUndoActive;
 
 @end
 
@@ -109,9 +129,10 @@ extern NSMutableArray<KKTimingLane *> *_Nullable KKReadLanesRebalanced(
 
 @interface KKPlugin (SequencerBuilder)
 - (NSView *)_createTimingGraphViewUncapped:(BOOL)uncapped;
-- (NSArray<KKTimingLane *> *)_readOrSeedLanesWithParamGetAPI:
-                                 (id<FxParameterRetrievalAPI_v6>)paramGetAPI
-                                                      atTime:(CMTime)time;
+- (NSArray<KKTimingLane *> *)
+    _readOrSeedLanesWithParamGetAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI
+                             atTime:(CMTime)time
+                      fromPersisted:(nullable BOOL *)fromPersisted;
 @end
 
 @interface KKPlugin (TimingGraph)
@@ -135,6 +156,47 @@ extern NSMutableArray<KKTimingLane *> *_Nullable KKReadLanesRebalanced(
 extern void KKWriteLanesJSON(NSArray<KKTimingLane *> *lanes,
                              id<FxParameterSettingAPI_v5> setAPI,
                              id<PROAPIAccessing> _Nullable apiManager);
+
+/// Writes `json` to `kKKParamMultiStageData` only if it differs from the
+/// last JSON we wrote (tracked on `KKPluginInstanceState`). Each call to
+/// `setCustomParameterValue:atTime:` registers a new undo entry on the
+/// host stack — duplicate writes pollute the stack and force users to
+/// press cmd-Z multiple times to revert a single logical change. Returns
+/// YES if the write actually happened. `tag` is included in the trace
+/// log so the caller can be identified.
+extern BOOL
+KKWriteMultiStageJSONDeduped(NSString *_Nullable json,
+                             id<FxParameterSettingAPI_v5> setAPI,
+                             id<PROAPIAccessing> _Nullable apiManager);
+
+/// Canonical form of a multi-stage JSON string for dedup comparison —
+/// sorted-keys reserialization. UI-state fields (sel, etc.) are NOT
+/// stripped: each user click is a real undo entry, matching standard
+/// document-editor behavior.
+extern NSString *_Nullable KKMultiStageNormalizedForDedup(
+    NSString *_Nullable json);
+
+/// Runs `block` on the main thread. Synchronous when already on main,
+/// dispatch_async otherwise. Use for view-state pushes triggered from
+/// background callbacks (parameterChanged: from non-main, etc).
+extern void KKRunOnMain(dispatch_block_t block);
+
+/// Wraps `block` in an FxUndoAPI start/endUndoGroup pair so every host
+/// param write inside collapses into a single host undo entry. No-op
+/// fallback if the host (or this plugin's apiManager) doesn't implement
+/// FxUndoAPI — block runs unwrapped. `name` should be a short, localized
+/// human-readable label ("Add Segment", "Move Segment").
+extern void KKWithUndoGroup(id<PROAPIAccessing> _Nullable apiManager,
+                            NSString *name, dispatch_block_t block);
+
+/// Stack-style undo grouping. Pair every `KKBeginUndoGroup` with exactly
+/// one `KKEndUndoGroup` along every code path (including early returns).
+/// Returns YES if the group was actually started — pass that BOOL into
+/// `KKEndUndoGroup` so the end is a no-op when the start was a no-op.
+extern BOOL KKBeginUndoGroup(id<PROAPIAccessing> _Nullable apiManager,
+                             NSString *name);
+extern void KKEndUndoGroup(id<PROAPIAccessing> _Nullable apiManager,
+                           BOOL started);
 
 @interface KKPlugin (StageSequencerCallbacks)
 /// Wires the sequencer view's `onX` block callbacks (segment selection,

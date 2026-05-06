@@ -21,6 +21,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property(nonatomic, strong, nullable) NSColor *trackFillColor;
 
+/// Fires once when a drag begins on the slider thumb (mouseDown), and once
+/// when the drag ends (mouseUp). Use to bracket continuous drags inside a
+/// single undo group on the consumer side.
+@property(nonatomic, copy, nullable) void (^onDragBegin)(void);
+@property(nonatomic, copy, nullable) void (^onDragEnd)(void);
+
 /// Piecewise scale break. When both are > 0, the range [minValue,
 /// scaleBreakValue] occupies the first scaleBreakPosition fraction of the
 /// track (e.g. 0.8 = 80%), and [scaleBreakValue, maxValue] occupies the rest.
