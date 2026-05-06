@@ -352,6 +352,23 @@ KKReadTransformParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
   path.rotateWithMotion = rwm;
 }
 
+/// Reset a path's transform fields to identity defaults. Used when creating
+/// new layers so they don't inherit position/scale/rotation/anchor values
+/// that were sitting in the inspector from the previous selection.
+static inline void KKResetPathTransformToDefaults(KKBezierPath *_Nonnull path) {
+  path.transformEnabled = YES;
+  path.translateX = 0.0f;
+  path.translateY = 0.0f;
+  path.scaleX = 1.0f;
+  path.scaleY = 1.0f;
+  path.anchorX = 0.0f;
+  path.anchorY = 0.0f;
+  path.rotationX = 0.0f;
+  path.rotationY = 0.0f;
+  path.rotationZ = 0.0f;
+  path.rotateWithMotion = NO;
+}
+
 /// Mirror of KKReadTransformParamsToPath.
 static inline void KKWriteTransformParamsFromPath(
     id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,

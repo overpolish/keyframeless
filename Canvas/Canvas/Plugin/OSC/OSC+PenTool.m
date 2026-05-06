@@ -324,6 +324,7 @@
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   KKParamsToPath(paramGetAPI, newPath);
+  KKResetPathTransformToDefaults(newPath);
   NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
   if (uuid)
     KKApplyCachedStyles(uuid, newPath);
