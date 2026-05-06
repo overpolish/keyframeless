@@ -187,7 +187,8 @@
       NSRect iconRect = NSMakeRect(
           iconSlotLeft, laneY + ([self _laneHeight] - kKSSOSCIconSize) / 2.0,
           kKSSOSCIconSize, kKSSOSCIconSize);
-      if (lane.hasOSC && NSPointInRect(loc, iconRect)) {
+      NSRect iconHitRect = NSInsetRect(iconRect, -KKSpacingMD, -KKSpacingMD);
+      if (lane.hasOSC && NSPointInRect(loc, iconHitRect)) {
         if (self.onLaneOSCVisibilityToggled)
           self.onLaneOSCVisibilityToggled(laneIdx, !lane.oscVisible);
         return;
