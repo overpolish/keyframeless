@@ -5,6 +5,7 @@
 
 #import "Constants.h"
 #import "Plugin_Private.h"
+#import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKMarkup.h>
 
 #pragma clang diagnostic push
@@ -142,11 +143,11 @@
                                      kFxParameterFlag_USE_FULL_VIEW_WIDTH])
     return NO;
 
-  if (![paramAPI addToggleButtonWithName:@""
-                             parameterID:kParamNoiseExpanded
-                            defaultValue:NO
-                          parameterFlags:kFxParameterFlag_HIDDEN |
-                                         kFxParameterFlag_NOT_ANIMATABLE])
+  if (![paramAPI addCustomParameterWithName:@""
+                                parameterID:kParamNoiseExpanded
+                               defaultValue:[KKDataBlob blobWithString:@"0"]
+                             parameterFlags:kFxParameterFlag_HIDDEN |
+                                            kFxParameterFlag_NOT_ANIMATABLE])
     return NO;
 
   if (![paramAPI addPercentSliderWithName:@"Amount"

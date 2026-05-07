@@ -85,7 +85,10 @@ static void KKSyncLoopFromParams(id<PROAPIAccessing> apiManager) {
       [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   if (!getAPI)
     return;
-  BOOL loopEnabled = KKReadCustomParamBool(getAPI, kKKParamTimingLoopEnabled);
+  BOOL loopEnabled = NO;
+  [getAPI getBoolValue:&loopEnabled
+         fromParameter:kKKParamTimingLoopEnabled
+                atTime:kCMTimeZero];
   // No state-equality early-return: the toggling click handler already
   // mirrors `state.loopEnabled` synchronously, so a guard here would skip
   // the broadcast to the *other* window's ruler. `setLoopEnabled:` on each

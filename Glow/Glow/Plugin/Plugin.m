@@ -101,6 +101,12 @@
   return YES;
 }
 
+- (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
+  if (parameterID == kParamNoiseExpanded)
+    return [NSSet setWithObject:[KKDataBlob class]];
+  return [super classesForCustomParameterID:parameterID];
+}
+
 @end
 
 @implementation GlowPlugin (AnimatableParamUpdate)

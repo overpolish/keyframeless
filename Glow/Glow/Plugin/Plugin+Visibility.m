@@ -63,10 +63,8 @@ static void setFlagsIfChanged(id<FxParameterSettingAPI_v5> setAPI,
       return;
 
     // --- Noise group ---
-    BOOL noiseExpanded = NO;
-    [paramGetAPI getBoolValue:&noiseExpanded
-                fromParameter:kParamNoiseExpanded
-                       atTime:kCMTimeZero];
+    BOOL noiseExpanded =
+        KKReadCustomParamBool(paramGetAPI, kParamNoiseExpanded);
 
     FxParameterFlags noiseFlags =
         noiseExpanded ? kFxParameterFlag_DEFAULT : kFxParameterFlag_HIDDEN;

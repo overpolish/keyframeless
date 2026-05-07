@@ -233,7 +233,9 @@
   [actAPI startAction:self];
   id<FxParameterSettingAPI_v5> setAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  KKWriteCustomParamBool(setAPI, newState, kKKParamTimingLoopEnabled);
+  [setAPI setBoolValue:newState
+           toParameter:kKKParamTimingLoopEnabled
+                atTime:kCMTimeZero];
   KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
   state.loopEnabled = newState;
   [actAPI endAction:self];

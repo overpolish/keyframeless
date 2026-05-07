@@ -61,14 +61,18 @@ static const FxParameterFlags kHiddenNotAnim =
           error, @"Unable to add Timing expanded toggle"))
     return NO;
 
-  // NOT_ANIMATABLE deliberately omitted — see lanes-data param below for
-  // the rationale (that flag excludes the param from FCP's undo path).
-  if (!KKAddParam(
-          [paramAPI addCustomParameterWithName:@""
-                                   parameterID:kKKParamTimingLoopEnabled
-                                  defaultValue:[KKDataBlob blobWithString:@"0"]
-                                parameterFlags:kFxParameterFlag_HIDDEN],
-          error, @"Unable to add timing loop toggle"))
+  // Native bool toggle — NOT a KKDataBlob. `setBoolValue:atTime:` IS
+  // undoable (the no-undo caveat below applies to `setStringParameterValue:`,
+  // not booleans), AND native reads work from the OSC's separate apiManager
+  // scope. The pump's `KKSyncLoopFromParams` runs on every drawOSC tick and
+  // would clobber `state.loopEnabled` to NO if the read returned empty —
+  // see the matching kKKParamInstanceID note for the full failure mode.
+  // NOT_ANIMATABLE deliberately omitted so cmd-Z reverts the toggle.
+  if (!KKAddParam([paramAPI addToggleButtonWithName:@""
+                                        parameterID:kKKParamTimingLoopEnabled
+                                       defaultValue:NO
+                                     parameterFlags:kFxParameterFlag_HIDDEN],
+                  error, @"Unable to add timing loop toggle"))
     return NO;
 
   // Custom parameter (KKDataBlob wrapping the lanes-JSON UTF-8 bytes).
@@ -86,11 +90,19 @@ static const FxParameterFlags kHiddenNotAnim =
                   error, @"Unable to add multi-stage data"))
     return NO;
 
-  if (!KKAddParam([paramAPI
-                      addCustomParameterWithName:@""
-                                     parameterID:kKKParamInstanceID
-                                    defaultValue:[KKDataBlob blobWithString:@""]
-                                  parameterFlags:kHiddenNotAnim],
+  // Native string param — NOT a KKDataBlob. The OSC is a separate
+  // FxOnScreenControl principal with its own apiManager, and custom-blob
+  // reads from that scope return nil (they need an action scope, which
+  // OSCs aren't supposed to open per FxCustomParameterActionAPI docs).
+  // Since this UUID is the bootstrap key for the per-instance state
+  // map, a nil read here cascades into "OSC sees no state at all" — the
+  // sequencer's per-lane oscVisible toggle silently no-ops. Native
+  // string reads work from OSC scope. UUIDs don't need undo coverage —
+  // they're per-instance identity, never user-edited.
+  if (!KKAddParam([paramAPI addStringParameterWithName:@""
+                                           parameterID:kKKParamInstanceID
+                                          defaultValue:@""
+                                        parameterFlags:kHiddenNotAnim],
                   error, @"Unable to add instance ID"))
     return NO;
 

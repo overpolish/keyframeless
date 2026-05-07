@@ -583,9 +583,7 @@
       parameterID == kKKParamColorExpanded ||
       parameterID == kKKParamTimingExpanded ||
       parameterID == kKKParamMotionBlurExpanded ||
-      parameterID == kKKParamMotionBlurEnabled ||
-      parameterID == kKKParamTimingLoopEnabled ||
-      parameterID == kKKParamInstanceID)
+      parameterID == kKKParamMotionBlurEnabled)
     return [NSSet setWithObject:[KKDataBlob class]];
   return [NSSet set];
 }
