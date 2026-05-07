@@ -7,6 +7,7 @@
 #import "../../Views/StageSequencer/KKStageSequencerRulerView.h"
 #import "../../Views/StageSequencer/KKStageSequencerView.h"
 #import "../KKDataBlob.h"
+#import "../KKHostInfo.h"
 #import "../KKPluginInstanceState.h"
 #import "../KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
@@ -267,20 +268,33 @@
   id<FxCommandAPI_v2> commandAPI =
       [self.apiManager apiForProtocol:@protocol(FxCommandAPI_v2)];
   if (timingAPI && commandAPI) {
-    // inPointTimeOfTimelineForEffect/outPointTimeOfTimelineForEffect return
-    // the *whole timeline's* in/out, not the clip's slice. To get the clip's
-    // true on-timeline range, take the source-relative input start/duration
-    // and convert each end through timelineTime:fromInputTime:. This works
-    // across video clips, still images (the 1h source offset cancels out in
-    // the conversion), and Motion.
-    CMTime srcStart = kCMTimeZero, srcDur = kCMTimeZero;
-    [timingAPI startTimeOfInputToFilter:&srcStart];
-    [timingAPI durationTimeOfInputToFilter:&srcDur];
-    CMTime tlStart = kCMTimeZero, tlEnd = kCMTimeZero;
-    [timingAPI timelineTime:&tlStart fromInputTime:srcStart];
-    [timingAPI timelineTime:&tlEnd fromInputTime:CMTimeAdd(srcStart, srcDur)];
-    double startSec = CMTimeGetSeconds(tlStart);
-    double endSec = CMTimeGetSeconds(tlEnd);
+    // FCP and Motion disagree on what `startTimeForEffect:`/
+    // `durationTimeForEffect:` mean relative to the timeline:
+    //   - FCP: effect == clip; values are in media-time and do not match
+    //     the timeline scale. Use the input bounds (srcStart + srcDur)
+    //     converted through `timelineTime:fromInputTime:` to derive the
+    //     clip's on-timeline range.
+    //   - Motion: the effect can start partway through the clip and have
+    //     its own duration. `startTimeForEffect:` and `durationTimeForEffect:`
+    //     are already in timeline-time and define the scrub range we want.
+    // Same host-branch shape as the loop-back fix in KKPlugin+MultiStagePump.
+    double startSec = 0, endSec = 0;
+    if ([KKHostInfo isRunningInFinalCut]) {
+      CMTime srcStart = kCMTimeZero, srcDur = kCMTimeZero;
+      [timingAPI startTimeOfInputToFilter:&srcStart];
+      [timingAPI durationTimeOfInputToFilter:&srcDur];
+      CMTime tlStart = kCMTimeZero, tlEnd = kCMTimeZero;
+      [timingAPI timelineTime:&tlStart fromInputTime:srcStart];
+      [timingAPI timelineTime:&tlEnd fromInputTime:CMTimeAdd(srcStart, srcDur)];
+      startSec = CMTimeGetSeconds(tlStart);
+      endSec = CMTimeGetSeconds(tlEnd);
+    } else {
+      CMTime effectStart = kCMTimeZero, effectDur = kCMTimeZero;
+      [timingAPI startTimeForEffect:&effectStart];
+      [timingAPI durationTimeForEffect:&effectDur];
+      startSec = CMTimeGetSeconds(effectStart);
+      endSec = startSec + CMTimeGetSeconds(effectDur);
+    }
     double targetSec = startSec + fraction * (endSec - startSec);
     // Nudge half a frame inside the clip at the boundaries so the playhead
     // never lands exactly on the seam with the neighbouring clip (FCP

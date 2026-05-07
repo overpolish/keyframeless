@@ -18,6 +18,7 @@
 #import "../../Views/StageSequencer/KKStageSequencerView.h"
 #import "../KKConstants.h"
 #import "../KKDataBlob.h"
+#import "../KKHostInfo.h"
 #import "../KKPluginInstanceState.h"
 #import "../KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
@@ -408,7 +409,18 @@ static void KKMaybeLoopPlayback(id<PROAPIAccessing> apiManager,
   // here, in the render-tick context where the loop check fires. Half-
   // frame nudge keeps the playhead off the seam with the previous clip
   // (FCP resolves t==inPoint to the previous clip's last frame).
-  double targetSec = state.cachedTimelineStart + frameDur * 0.5;
+  // FCP and Motion report `effectStart` in different time spaces:
+  //   - FCP: media-time of the input (e.g. 3601.7); the effect spans the
+  //     whole clip, so loop-back-to-effect-start == loop-back-to-clip-start
+  //     == `tlStart` (timeline-time of clip start).
+  //   - Motion: timeline-time directly (e.g. 0.4667); the effect can begin
+  //     partway through the clip, so we want `effectStart` as-is.
+  // Pure math from the cached values can't distinguish these cases, so we
+  // branch on the host.
+  double seekStart = [KKHostInfo isRunningInFinalCut]
+                         ? state.cachedTimelineStart
+                         : state.cachedEffectStart;
+  double targetSec = seekStart + frameDur * 0.5;
   id<PROAPIAccessing> strongAPI = apiManager;
   id strongSender = sender;
   __block NSInteger attemptsLeft = 20;
@@ -645,7 +657,15 @@ static void KKBroadcastPlayheads(id<PROAPIAccessing> apiManager,
 
 + (void)multiStageUpdatePlayheadsForAPI:(id<PROAPIAccessing>)apiManager
                                  atTime:(CMTime)time {
-  sLastDrawOSCPumpTime = CACurrentMediaTime();
+  // Only mark drawOSC as "authoritative" (which suppresses the render-pump
+  // broadcast) when its apiManager actually resolves to instance state — in
+  // Motion the drawOSC apiManager's UUID context doesn't match our per-
+  // instance state, so its broadcast is a no-op. Without this guard, the
+  // render pump (which DOES have valid state) would be perpetually blocked
+  // by the suppression gate and the in-plugin scrubber would freeze during
+  // playback. FCP's drawOSC apiManager resolves correctly and keeps gating.
+  if (KKInstanceStateForAPI(apiManager))
+    sLastDrawOSCPumpTime = CACurrentMediaTime();
   KKRefreshActiveTiming(apiManager);
   KKBroadcastPlayheads(apiManager, CMTimeGetSeconds(time));
 }
