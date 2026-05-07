@@ -9,6 +9,7 @@
 #import "../../Views/StageSequencer/KKRemoteWindowKeyHandlerView.h"
 #import "../../Views/StageSequencer/KKStageSequencerRulerView.h"
 #import "../../Views/StageSequencer/KKStageSequencerView.h"
+#import "../KKDataBlob.h"
 #import "../KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKConstants.h>
@@ -44,9 +45,7 @@
     [actAPI startAction:strongSelf];
     id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
         apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    [setAPI setBoolValue:isExpanded
-             toParameter:kKKParamTimingExpanded
-                  atTime:[actAPI currentTime]];
+    KKWriteCustomParamBool(setAPI, isExpanded, kKKParamTimingExpanded);
     BOOL show = isExpanded || [strongSelf forceShowAllParameters];
     FxParameterFlags wantFlags =
         show ? (kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_CUSTOM_UI |
@@ -71,16 +70,11 @@
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   if (isNewProcess) {
     expanded = YES;
-    [setAPI setBoolValue:YES
-             toParameter:kKKParamTimingExpanded
-                  atTime:[actionAPI currentTime]];
+    KKWriteCustomParamBool(setAPI, YES, kKKParamTimingExpanded);
   } else {
-    expanded = NO;
     id<FxParameterRetrievalAPI_v6> paramGetAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    [paramGetAPI getBoolValue:&expanded
-                fromParameter:kKKParamTimingExpanded
-                       atTime:[actionAPI currentTime]];
+    expanded = KKReadCustomParamBool(paramGetAPI, kKKParamTimingExpanded);
   }
   header.isExpanded = expanded;
   // Apply the curve-preview row's flag SYNCHRONOUSLY here (still inside the
@@ -132,11 +126,8 @@
                      atTime:[actionAPI currentTime]];
   header.isEnabled = enabled;
 
-  BOOL expanded = NO;
-  [paramGetAPI getBoolValue:&expanded
-              fromParameter:kKKParamMotionBlurExpanded
-                     atTime:[actionAPI currentTime]];
-  header.isExpanded = expanded;
+  header.isExpanded =
+      KKReadCustomParamBool(paramGetAPI, kKKParamMotionBlurExpanded);
   [actionAPI endAction:self];
 
   __weak typeof(self) weakSelf = self;
@@ -164,9 +155,7 @@
     [actAPI startAction:strongSelf];
     id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
         apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    [setAPI setBoolValue:isExpanded
-             toParameter:kKKParamMotionBlurExpanded
-                  atTime:[actAPI currentTime]];
+    KKWriteCustomParamBool(setAPI, isExpanded, kKKParamMotionBlurExpanded);
     [actAPI endAction:strongSelf];
   };
 

@@ -502,6 +502,15 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 /// no header was registered for that paramID.
 - (void)syncGroupHeaderExpandedForExpandedParamID:(UInt32)expandedParamID;
 
+/// FxPlug calls this to learn the value classes for any custom parameter
+/// when unarchiving a saved project. Subclasses MUST call super and union
+/// in their own KKDataBlob param IDs (e.g. expand-state blobs created by
+/// `addCropParametersWithAPI:` or any plugin-local custom blob param).
+/// Reads return nil and saved state evaporates if the class isn't
+/// registered here. Base impl covers KKMultiStage / Gradient / Color /
+/// Timing / MotionBlur expand state.
+- (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID;
+
 @end
 
 @interface KKPlugin (MultiStageInstance)

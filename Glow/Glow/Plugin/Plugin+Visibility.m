@@ -5,6 +5,7 @@
 
 #import "Constants.h"
 #import "Plugin_Private.h"
+#import <KeyframelessKit/KKDataBlob.h>
 
 // Bits we own. Compare/mutate these only — the host silently OR's its own
 // bits (e.g. 0x20200) into the flags every parameterChanged: tick, so a
@@ -74,10 +75,8 @@ static void setFlagsIfChanged(id<FxParameterSettingAPI_v5> setAPI,
     setFlagsIfChanged(paramSetAPI, paramGetAPI, noiseFlags, kParamNoiseSpeed);
 
     // --- Color group ---
-    BOOL colorExpanded = NO;
-    [paramGetAPI getBoolValue:&colorExpanded
-                fromParameter:kKKParamColorExpanded
-                       atTime:kCMTimeZero];
+    BOOL colorExpanded =
+        KKReadCustomParamBool(paramGetAPI, kKKParamColorExpanded);
 
     if (colorExpanded) {
       [self updateColorParameterVisibility];

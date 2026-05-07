@@ -93,5 +93,11 @@
   return YES;
 }
 
+- (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
+  if (parameterID == kParamCropExpanded)
+    return [NSSet setWithObject:[KKDataBlob class]];
+  return [super classesForCustomParameterID:parameterID];
+}
+
 @end
 #pragma clang diagnostic pop

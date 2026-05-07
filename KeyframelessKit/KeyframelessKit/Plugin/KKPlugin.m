@@ -579,7 +579,10 @@
 // override and call super to add their own custom-param IDs.
 - (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
   if (parameterID == kKKParamMultiStageData ||
-      parameterID == kKKParamGradientData)
+      parameterID == kKKParamGradientData ||
+      parameterID == kKKParamColorExpanded ||
+      parameterID == kKKParamTimingExpanded ||
+      parameterID == kKKParamMotionBlurExpanded)
     return [NSSet setWithObject:[KKDataBlob class]];
   return [NSSet set];
 }

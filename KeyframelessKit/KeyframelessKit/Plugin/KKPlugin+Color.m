@@ -49,11 +49,11 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
                                      kFxParameterFlag_USE_FULL_VIEW_WIDTH])
     return NO;
 
-  if (![paramAPI addToggleButtonWithName:@""
-                             parameterID:kKKParamColorExpanded
-                            defaultValue:NO
-                          parameterFlags:kFxParameterFlag_HIDDEN |
-                                         kFxParameterFlag_NOT_ANIMATABLE])
+  if (![paramAPI addCustomParameterWithName:@""
+                                parameterID:kKKParamColorExpanded
+                               defaultValue:[KKDataBlob blobWithString:@"0"]
+                             parameterFlags:kFxParameterFlag_HIDDEN |
+                                            kFxParameterFlag_NOT_ANIMATABLE])
     return NO;
 
   BOOL hasSolid = [modes containsObject:@(KKColorModeSolid)];

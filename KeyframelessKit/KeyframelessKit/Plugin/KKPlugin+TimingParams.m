@@ -53,11 +53,12 @@ static const FxParameterFlags kHiddenNotAnim =
                   error, @"Unable to add Curve Preview"))
     return NO;
 
-  if (!KKAddParam([paramAPI addToggleButtonWithName:@""
-                                        parameterID:kKKParamTimingExpanded
-                                       defaultValue:YES
-                                     parameterFlags:kHiddenNotAnim],
-                  error, @"Unable to add Timing expanded toggle"))
+  if (!KKAddParam(
+          [paramAPI addCustomParameterWithName:@""
+                                   parameterID:kKKParamTimingExpanded
+                                  defaultValue:[KKDataBlob blobWithString:@"1"]
+                                parameterFlags:kHiddenNotAnim],
+          error, @"Unable to add Timing expanded toggle"))
     return NO;
 
   if (!KKAddParam([paramAPI addToggleButtonWithName:@""
@@ -141,12 +142,14 @@ static const FxParameterFlags kHiddenNotAnim =
                   error, @"Unable to add Motion Blur enabled toggle"))
     return NO;
 
-  // UI-only: header chevron state. Hidden, persisted, starts collapsed.
-  if (!KKAddParam([paramAPI addToggleButtonWithName:@""
-                                        parameterID:kKKParamMotionBlurExpanded
-                                       defaultValue:NO
-                                     parameterFlags:kHiddenNotAnim],
-                  error, @"Unable to add Motion Blur expanded toggle"))
+  // UI-only: header chevron state. KKDataBlob-backed so it lives in the
+  // same undoable custom-param pipeline as other plugin state. "1"/"0".
+  if (!KKAddParam(
+          [paramAPI addCustomParameterWithName:@""
+                                   parameterID:kKKParamMotionBlurExpanded
+                                  defaultValue:[KKDataBlob blobWithString:@"0"]
+                                parameterFlags:kHiddenNotAnim],
+          error, @"Unable to add Motion Blur expanded toggle"))
     return NO;
 
   // Length: 0–100% maps to 0–360° shutter angle. Default 50% = 180°.
@@ -239,10 +242,8 @@ static void _setFlagsIfNeeded(id<FxParameterSettingAPI_v5> setAPI,
       return;
     }
 
-    BOOL expandedTiming = NO;
-    [paramGetAPI getBoolValue:&expandedTiming
-                fromParameter:kKKParamTimingExpanded
-                       atTime:kCMTimeZero];
+    BOOL expandedTiming =
+        KKReadCustomParamBool(paramGetAPI, kKKParamTimingExpanded);
     BOOL effectiveExpanded = expandedTiming;
     if ([strongSelf forceShowAllParameters])
       effectiveExpanded = YES;
@@ -266,10 +267,8 @@ static void _setFlagsIfNeeded(id<FxParameterSettingAPI_v5> setAPI,
   if (!paramGetAPI || !paramSetAPI)
     return;
 
-  BOOL expanded = NO;
-  [paramGetAPI getBoolValue:&expanded
-              fromParameter:kKKParamMotionBlurExpanded
-                     atTime:kCMTimeZero];
+  BOOL expanded =
+      KKReadCustomParamBool(paramGetAPI, kKKParamMotionBlurExpanded);
   if ([self forceShowAllParameters])
     expanded = YES;
 
@@ -283,10 +282,8 @@ static void _setFlagsIfNeeded(id<FxParameterSettingAPI_v5> setAPI,
   _setFlagsIfNeeded(paramSetAPI, paramGetAPI, toggleFlag,
                     kKKParamMotionBlurTransitionsOnly);
 
-  BOOL persistedExpanded = NO;
-  [paramGetAPI getBoolValue:&persistedExpanded
-              fromParameter:kKKParamMotionBlurExpanded
-                     atTime:kCMTimeZero];
+  BOOL persistedExpanded =
+      KKReadCustomParamBool(paramGetAPI, kKKParamMotionBlurExpanded);
   BOOL persistedEnabled = NO;
   [paramGetAPI getBoolValue:&persistedEnabled
               fromParameter:kKKParamMotionBlurEnabled

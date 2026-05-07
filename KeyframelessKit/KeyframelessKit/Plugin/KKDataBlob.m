@@ -101,3 +101,14 @@ void KKWriteCustomParamString(id<FxParameterSettingAPI_v5> setAPI,
                       toParameter:parameterID
                            atTime:kCMTimeZero];
 }
+
+BOOL KKReadCustomParamBool(id<FxParameterRetrievalAPI_v6> getAPI,
+                           UInt32 parameterID) {
+  NSString *s = KKReadCustomParamString(getAPI, parameterID);
+  return [s isEqualToString:@"1"];
+}
+
+void KKWriteCustomParamBool(id<FxParameterSettingAPI_v5> setAPI, BOOL value,
+                            UInt32 parameterID) {
+  KKWriteCustomParamString(setAPI, value ? @"1" : @"0", parameterID);
+}

@@ -60,4 +60,16 @@ NSString *_Nullable KKReadCustomParamString(
 void KKWriteCustomParamString(id<FxParameterSettingAPI_v5> setAPI,
                               NSString *_Nullable string, UInt32 parameterID);
 
+/// Convenience: read a bool-encoded KKDataBlob param ("1"/"0"). Used for
+/// custom group-header expand state — replaces the legacy hidden toggle
+/// param so saved expand state lives in the same undoable custom-param
+/// pipeline as other plugin state. Returns NO when unset.
+BOOL KKReadCustomParamBool(id<FxParameterRetrievalAPI_v6> getAPI,
+                           UInt32 parameterID);
+
+/// Counterpart to `KKReadCustomParamBool`. Caller must already be inside
+/// an FxCustomParameterActionAPI_v4 action scope.
+void KKWriteCustomParamBool(id<FxParameterSettingAPI_v5> setAPI, BOOL value,
+                            UInt32 parameterID);
+
 NS_ASSUME_NONNULL_END

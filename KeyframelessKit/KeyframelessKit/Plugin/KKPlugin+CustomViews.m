@@ -7,6 +7,7 @@
 #import "../Views/KKCustomGroupHeaderView.h"
 #import "../Views/KKLogoBannerView.h"
 #import "../Views/KKSeparatorView.h"
+#import "KKDataBlob.h"
 #import "KKPlugin+Color.h"
 #import "KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
@@ -97,13 +98,9 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actionAPI startAction:self];
 
-  BOOL expanded = NO;
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  [paramGetAPI getBoolValue:&expanded
-              fromParameter:expandedParamID
-                     atTime:[actionAPI currentTime]];
-  header.isExpanded = expanded;
+  header.isExpanded = KKReadCustomParamBool(paramGetAPI, expandedParamID);
   header.isEnabled = YES;
 
   [actionAPI endAction:self];
@@ -122,9 +119,7 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
     [actAPI startAction:strongSelf];
     id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
         apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    [setAPI setBoolValue:isExpanded
-             toParameter:expandedParamID
-                  atTime:[actAPI currentTime]];
+    KKWriteCustomParamBool(setAPI, isExpanded, expandedParamID);
     [actAPI endAction:strongSelf];
   };
 
@@ -140,10 +135,7 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   if (!getAPI)
     return;
-  BOOL expanded = NO;
-  [getAPI getBoolValue:&expanded
-         fromParameter:expandedParamID
-                atTime:kCMTimeZero];
+  BOOL expanded = KKReadCustomParamBool(getAPI, expandedParamID);
   __weak KKCustomGroupHeaderView *weakHeader = header;
   KKRunOnMain(^{
     if (weakHeader.isExpanded != expanded)

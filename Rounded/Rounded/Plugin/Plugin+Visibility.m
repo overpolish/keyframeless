@@ -5,6 +5,7 @@
 
 #import "Constants.h"
 #import "Plugin_Private.h"
+#import <KeyframelessKit/KKDataBlob.h>
 
 @implementation RoundedPlugin (Visibility)
 
@@ -16,10 +17,7 @@
   if (!paramGetAPI || !paramSetAPI)
     return;
 
-  BOOL expanded = NO;
-  [paramGetAPI getBoolValue:&expanded
-              fromParameter:kParamCropExpanded
-                     atTime:kCMTimeZero];
+  BOOL expanded = KKReadCustomParamBool(paramGetAPI, kParamCropExpanded);
   if ([self forceShowAllParameters])
     expanded = YES;
 
