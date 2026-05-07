@@ -702,6 +702,41 @@ static void KKBroadcastPlayheads(id<PROAPIAccessing> apiManager,
       return;
     [actAPI startAction:strongSender];
     double nowSec = CMTimeGetSeconds([actAPI currentTime]);
+    // FxTimingAPI is nil in render context but resolves inside this action
+    // scope. Trim/slip changes to the clip never reach drawOSC unless the
+    // plugin is OSC-focused, so render-tick is the only callback we see —
+    // refresh the duration cache and rebalance lanes here.
+    id<FxTimingAPI_v4> tAPI =
+        [strongAPI apiForProtocol:@protocol(FxTimingAPI_v4)];
+    KKPluginInstanceState *st = KKInstanceStateForAPI(strongAPI);
+    if (tAPI && st) {
+      CMTime d = kCMTimeZero;
+      [tAPI durationTimeForEffect:&d];
+      double newDur = CMTimeGetSeconds(d);
+      if (newDur > 0 && fabs(newDur - st.cachedEffectDuration) > 0.001) {
+        st.cachedEffectDuration = newDur;
+        NSArray<KKTimingLane *> *raw = st.lanesSnapshot;
+        if (raw.count) {
+          NSArray<KKTimingLane *> *lanes = KKTimingRebalancedLanes(raw, newDur);
+          st.lanesSnapshot = lanes;
+          st.lastPushedLanesSnapshot = lanes;
+          NSArray<KKTimingLane *> *visible =
+              KKFilterLanesForVisibility(lanes, st.hiddenLaneLabels);
+          KKStageSequencerView *seq = st.sequencerView;
+          KKStageSequencerRulerView *ruler = st.rulerView;
+          NSArray<KKTimingViewRefs *> *extras =
+              [st.additionalTimingViews copy] ?: @[];
+          seq.effectDuration = newDur;
+          ruler.effectDuration = newDur;
+          seq.lanes = visible;
+          for (KKTimingViewRefs *r in extras) {
+            r.seqView.effectDuration = newDur;
+            r.ruler.effectDuration = newDur;
+            r.seqView.lanes = visible;
+          }
+        }
+      }
+    }
     [actAPI endAction:strongSender];
     KKBroadcastPlayheads(strongAPI, nowSec);
   });
