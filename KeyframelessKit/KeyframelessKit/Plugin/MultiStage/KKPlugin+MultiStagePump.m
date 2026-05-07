@@ -84,10 +84,7 @@ static void KKSyncLoopFromParams(id<PROAPIAccessing> apiManager) {
       [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   if (!getAPI)
     return;
-  BOOL loopEnabled = NO;
-  [getAPI getBoolValue:&loopEnabled
-         fromParameter:kKKParamTimingLoopEnabled
-                atTime:kCMTimeZero];
+  BOOL loopEnabled = KKReadCustomParamBool(getAPI, kKKParamTimingLoopEnabled);
   if (loopEnabled == state.loopEnabled)
     return;
   state.loopEnabled = loopEnabled;

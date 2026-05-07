@@ -5,6 +5,7 @@
 
 #import "KKPluginInstanceState.h"
 #import "KKConstants.h"
+#import "KKDataBlob.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <objc/runtime.h>
 
@@ -41,8 +42,7 @@ NSString *KKInstanceUUIDForAPI(id<PROAPIAccessing> api) {
   if (!getAPI)
     return nil;
 
-  NSString *uuid = nil;
-  [getAPI getStringParameterValue:&uuid fromParameter:kKKParamInstanceID];
+  NSString *uuid = KKReadCustomParamString(getAPI, kKKParamInstanceID);
   if (!uuid.length)
     return nil;
   objc_setAssociatedObject(api, &kKKInstanceUUIDAssocKey, uuid,
@@ -80,7 +80,7 @@ KKPluginInstanceState *KKInstanceStateEnsureForAPI(id<PROAPIAccessing> api) {
     uuid = [[NSUUID UUID] UUIDString];
     id<FxParameterSettingAPI_v5> setAPI =
         [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    [setAPI setStringParameterValue:uuid toParameter:kKKParamInstanceID];
+    KKWriteCustomParamString(setAPI, uuid, kKKParamInstanceID);
     // Re-read so the association cache is populated.
     uuid = KKInstanceUUIDForAPI(api);
   }
@@ -97,7 +97,7 @@ KKPluginInstanceState *KKInstanceStateEnsureForAPI(id<PROAPIAccessing> api) {
     NSString *newUUID = [[NSUUID UUID] UUIDString];
     id<FxParameterSettingAPI_v5> setAPI =
         [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    [setAPI setStringParameterValue:newUUID toParameter:kKKParamInstanceID];
+    KKWriteCustomParamString(setAPI, newUUID, kKKParamInstanceID);
     objc_setAssociatedObject(api, &kKKInstanceUUIDAssocKey, newUUID,
                              OBJC_ASSOCIATION_COPY_NONATOMIC);
     state = KKInstanceStateForUUID(newUUID);

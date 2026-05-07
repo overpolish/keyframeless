@@ -21,12 +21,10 @@ static const UInt32 kKKParamTimingExpanded __attribute__((unused)) = 9908;
 /// these but no current code reads or registers them. Do not reuse:
 ///   9901–9904, 9906, 9907, 9909–9917 (legacy 3-phase factor engine)
 ///   9918 (legacy always-on multi-stage gate)
-/// Multi-stage timing parameters (9919–9921):
+///   9920, 9921 (legacy MultiStage Selected* int sliders — selection is
+///               carried in the lanes JSON's `sel` field instead)
+/// Multi-stage timing parameters:
 static const UInt32 kKKParamMultiStageData __attribute__((unused)) = 9919;
-static const UInt32 kKKParamMultiStageSelectedProperty __attribute__((unused)) =
-    9920;
-static const UInt32 kKKParamMultiStageSelectedStage __attribute__((unused)) =
-    9921;
 
 /// Hidden per-instance UUID — keys the static per-instance state map so
 /// multiple copies of a plugin on the same timeline don't share state.

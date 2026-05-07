@@ -36,6 +36,16 @@
   // late on non-first instances, leaving the row state visually one click out
   // of phase. The chevron click is not a parameterChanged: context, so the
   // synchronous write is safe here.
+  //
+  // Known Motion-only edge case: the two writes (bool + curve-preview flag)
+  // record as two separate undo entries on Motion for non-first instances —
+  // user has to press cmd-Z twice to fully revert a chevron toggle. FCP
+  // coalesces them into one entry, so this is a no-op there. Tried wrapping
+  // in KKBeginUndoGroup (no effect) and routing the flag write through the
+  // deferred parameterChanged path (visual lag worse than the 2-undo issue).
+  // Accepting since FCP is the primary target. See: instance-1 works because
+  // its create-time KKWriteCustomParamBool fires parameterChanged which kicks
+  // the deferred flag update, somehow priming Motion's undo coalescing.
   header.onExpandedChanged = ^(BOOL isExpanded) {
     __strong typeof(weakSelf) strongSelf = weakSelf;
     if (!strongSelf)
@@ -120,12 +130,8 @@
 
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  BOOL enabled = NO;
-  [paramGetAPI getBoolValue:&enabled
-              fromParameter:kKKParamMotionBlurEnabled
-                     atTime:[actionAPI currentTime]];
-  header.isEnabled = enabled;
-
+  header.isEnabled =
+      KKReadCustomParamBool(paramGetAPI, kKKParamMotionBlurEnabled);
   header.isExpanded =
       KKReadCustomParamBool(paramGetAPI, kKKParamMotionBlurExpanded);
   [actionAPI endAction:self];
@@ -140,9 +146,7 @@
     [actAPI startAction:strongSelf];
     id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
         apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    [setAPI setBoolValue:isEnabled
-             toParameter:kKKParamMotionBlurEnabled
-                  atTime:[actAPI currentTime]];
+    KKWriteCustomParamBool(setAPI, isEnabled, kKKParamMotionBlurEnabled);
     [actAPI endAction:strongSelf];
   };
 

@@ -6,6 +6,7 @@
 #import "KKMotionBlur.h"
 #import "../KKLog.h"
 #import "../Plugin/KKConstants.h"
+#import "../Plugin/KKDataBlob.h"
 #import "KKMetalDeviceCache.h"
 #import "KKShaderTypes.h"
 #import <FxPlug/FxPlugSDK.h>
@@ -165,10 +166,7 @@ static NSString *KKMBScratchKey(NSString *key, NSUInteger width,
   if (!paramAPI)
     return state;
 
-  BOOL enabled = NO;
-  [paramAPI getBoolValue:&enabled
-           fromParameter:kKKParamMotionBlurEnabled
-                  atTime:time];
+  BOOL enabled = KKReadCustomParamBool(paramAPI, kKKParamMotionBlurEnabled);
   if (!enabled)
     return state;
 
