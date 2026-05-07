@@ -61,11 +61,13 @@ static const FxParameterFlags kHiddenNotAnim =
           error, @"Unable to add Timing expanded toggle"))
     return NO;
 
+  // NOT_ANIMATABLE deliberately omitted — see lanes-data param below for
+  // the rationale (that flag excludes the param from FCP's undo path).
   if (!KKAddParam(
           [paramAPI addCustomParameterWithName:@""
                                    parameterID:kKKParamTimingLoopEnabled
                                   defaultValue:[KKDataBlob blobWithString:@"0"]
-                                parameterFlags:kHiddenNotAnim],
+                                parameterFlags:kFxParameterFlag_HIDDEN],
           error, @"Unable to add timing loop toggle"))
     return NO;
 

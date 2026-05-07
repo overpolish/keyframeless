@@ -85,8 +85,10 @@ static void KKSyncLoopFromParams(id<PROAPIAccessing> apiManager) {
   if (!getAPI)
     return;
   BOOL loopEnabled = KKReadCustomParamBool(getAPI, kKKParamTimingLoopEnabled);
-  if (loopEnabled == state.loopEnabled)
-    return;
+  // No state-equality early-return: the toggling click handler already
+  // mirrors `state.loopEnabled` synchronously, so a guard here would skip
+  // the broadcast to the *other* window's ruler. `setLoopEnabled:` on each
+  // ruler is itself a no-op when already in sync.
   state.loopEnabled = loopEnabled;
   dispatch_async(dispatch_get_main_queue(), ^{
     primaryRuler.loopEnabled = loopEnabled;

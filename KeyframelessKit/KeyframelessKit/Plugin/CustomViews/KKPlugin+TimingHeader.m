@@ -219,7 +219,7 @@
                      keyHandler.identifier = KKRemoteWindowContentID;
                      keyHandler.translatesAutoresizingMaskIntoConstraints = NO;
                      __weak typeof(strongSelf) weakForKey = strongSelf;
-                     keyHandler.onTogglePlayback = ^{
+                     void (^perform)(FxCommand) = ^(FxCommand command) {
                        __strong typeof(weakForKey) s = weakForKey;
                        if (!s)
                          return;
@@ -233,8 +233,17 @@
                        [actionAPI startAction:s];
                        id<FxCommandAPI_v2> cmd = [s.apiManager
                            apiForProtocol:@protocol(FxCommandAPI_v2)];
-                       [cmd performCommand:kFxCommand_TogglePlayback error:nil];
+                       [cmd performCommand:command error:nil];
                        [actionAPI endAction:s];
+                     };
+                     keyHandler.onTogglePlayback = ^{
+                       perform(kFxCommand_TogglePlayback);
+                     };
+                     keyHandler.onUndo = ^{
+                       perform(kFxCommand_Undo);
+                     };
+                     keyHandler.onRedo = ^{
+                       perform(kFxCommand_Redo);
                      };
                      [host addSubview:keyHandler];
                      [NSLayoutConstraint activateConstraints:@[
