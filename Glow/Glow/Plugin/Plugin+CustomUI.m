@@ -5,6 +5,7 @@
 
 #import "Constants.h"
 #import "Plugin_Private.h"
+#import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKMarkup.h>
 #import <objc/message.h>
 
@@ -80,8 +81,7 @@
     return @[ @(r), @(g), @(b) ];
   }
   if ([label isEqualToString:@"Gradient"]) {
-    NSString *json = nil;
-    [getAPI getStringParameterValue:&json fromParameter:kKKParamGradientData];
+    NSString *json = KKReadCustomParamString(getAPI, kKKParamGradientData);
     NSArray<KKGradientStop *> *stops = KKGradientStopsFromJSON(json);
     return stops ? KKGradientFlatFromStops(stops) : @[];
   }
@@ -135,7 +135,7 @@
       return NO;
     NSString *json = KKGradientJSONFromStops(stops);
     if (json)
-      [setAPI setStringParameterValue:json toParameter:kKKParamGradientData];
+      KKWriteCustomParamString(setAPI, json, kKKParamGradientData);
     KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
     KKGradientControl *control = state.gradientControl;
     if (control) {
@@ -230,9 +230,8 @@
   colorLane.valueComponentKinds = @[ @(KKAnimatableParamKindColor) ];
   [out addObject:colorLane];
 
-  NSString *gradJSON = nil;
-  [paramGetAPI getStringParameterValue:&gradJSON
-                         fromParameter:kKKParamGradientData];
+  NSString *gradJSON =
+      KKReadCustomParamString(paramGetAPI, kKKParamGradientData);
   NSArray<KKGradientStop *> *stops = KKGradientStopsFromJSON(gradJSON);
   NSArray<NSNumber *> *gradFlat = stops ? KKGradientFlatFromStops(stops) : @[];
   KKTimingLane *gradLane = [KKTimingLane defaultLaneForLabel:@"Gradient"

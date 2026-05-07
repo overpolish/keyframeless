@@ -82,6 +82,16 @@
   _bar.onStopsChanged = ^(NSArray<KKGradientStop *> *newStops) {
     [weakSelf _kkEmitChange:newStops];
   };
+  _bar.onDragBegin = ^{
+    __strong typeof(weakSelf) s = weakSelf;
+    if (s.onDragBegin)
+      s.onDragBegin();
+  };
+  _bar.onDragEnd = ^{
+    __strong typeof(weakSelf) s = weakSelf;
+    if (s.onDragEnd)
+      s.onDragEnd();
+  };
   _favPopover.onApplyFavorite = ^(NSArray<KKGradientStop *> *newStops) {
     __strong typeof(weakSelf) strongSelf = weakSelf;
     if (!strongSelf)

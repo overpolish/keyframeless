@@ -115,6 +115,12 @@ extern NSMutableArray<KKTimingLane *> *_Nullable KKReadLanesRebalanced(
 /// the single drag-spanning undo entry.
 @property(nonatomic) BOOL segmentEditDragUndoActive;
 
+/// Same coalescing pattern as `segmentEditDragUndoActive`, but for
+/// gradient stop / midpoint drags in the color popover. Set YES while
+/// the drag is in flight; the per-tick `onStopsChanged` callback skips
+/// its own action scope + undo group when this is YES.
+@property(nonatomic) BOOL gradientDragUndoActive;
+
 @end
 
 @interface KKPlugin (ColorViews)

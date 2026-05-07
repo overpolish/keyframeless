@@ -334,7 +334,18 @@ void KKDrawCheckerboard(NSRect rect) {
   if (NSPointInRect(point, NSInsetRect(bar, 0, -kStopDiameter))) {
     _selectedMidpointIndex = -1;
     CGFloat pos = [self _positionForX:point.x];
+    // Open the drag bracket BEFORE the add so the add and any drag
+    // movement coalesce into one undo entry. Mark drag immediately
+    // active (no 3px threshold) so the user can keep moving the new
+    // stop without releasing — onStopsChanged fired by _addStopAtPosition
+    // will see inDrag=YES and skip its own bracket.
+    if (_onDragBegin)
+      _onDragBegin();
     [self _addStopAtPosition:pos];
+    _dragIndex = (NSInteger)_stops.count - 1;
+    _dragMidpointIndex = -1;
+    _dragStarted = YES;
+    _dragOrigin = point;
   }
 }
 
@@ -348,6 +359,8 @@ void KKDrawCheckerboard(NSRect rect) {
     if (hypot(point.x - _dragOrigin.x, point.y - _dragOrigin.y) < 3.0)
       return;
     _dragStarted = YES;
+    if (_onDragBegin)
+      _onDragBegin();
   }
 
   if (_dragMidpointIndex >= 0) {
@@ -400,9 +413,12 @@ void KKDrawCheckerboard(NSRect rect) {
 }
 
 - (void)mouseUp:(NSEvent *)event {
+  BOOL wasDragging = _dragStarted;
   _dragIndex = -1;
   _dragMidpointIndex = -1;
   _dragStarted = NO;
+  if (wasDragging && _onDragEnd)
+    _onDragEnd();
 }
 
 - (void)rightMouseDown:(NSEvent *)event {

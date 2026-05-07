@@ -24,6 +24,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) void (^onStopsChanged)
     (NSArray<KKGradientStop *> *newStops);
 
+/// Forwarded from the underlying gradient bar. Lets the consumer bracket
+/// the entire stop/midpoint drag in one undo group.
+@property(nonatomic, copy, nullable) void (^onDragBegin)(void);
+@property(nonatomic, copy, nullable) void (^onDragEnd)(void);
+
 @end
 
 NS_ASSUME_NONNULL_END

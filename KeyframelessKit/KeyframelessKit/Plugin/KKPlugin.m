@@ -578,7 +578,8 @@
 // the value classes ahead of unarchiving project files. Subclasses can
 // override and call super to add their own custom-param IDs.
 - (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
-  if (parameterID == kKKParamMultiStageData)
+  if (parameterID == kKKParamMultiStageData ||
+      parameterID == kKKParamGradientData)
     return [NSSet setWithObject:[KKDataBlob class]];
   return [NSSet set];
 }
