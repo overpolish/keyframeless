@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "../../Views/StageSequencer/KKStagePlayheadView.h"
+#import "../../Views/StageSequencer/KKStageSequencerRulerView.h"
+#import "../../Views/StageSequencer/KKStageSequencerView.h"
 #import "../KKDataBlob.h"
 #import "../KKPluginInstanceState.h"
 #import "../KKPlugin_Private.h"
@@ -237,6 +240,23 @@
 }
 
 - (void)_handleRulerPlayheadScrubToFraction:(double)fraction {
+  // Push the new fraction synchronously to this instance's views before
+  // asking FCP to move the playhead. The async broadcast pump
+  // (`KKBroadcastPlayheads`) coalesces and dispatches via main, which lags
+  // visibly behind a fast drag — the user sees the knob jump only on
+  // mouse-up. Pushing directly here keeps the drag visually live; the pump
+  // still runs and reconciles the final position.
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  if (state) {
+    double f = MAX(0.0, MIN(1.0, fraction));
+    state.sequencerView.playheadFraction = f;
+    state.playheadView.playheadFraction = f;
+    for (KKTimingViewRefs *r in [state.additionalTimingViews copy] ?: @[]) {
+      r.seqView.playheadFraction = f;
+      r.playhead.playheadFraction = f;
+    }
+  }
+
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (!actAPI)
