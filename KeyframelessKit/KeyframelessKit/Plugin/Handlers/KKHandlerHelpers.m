@@ -30,6 +30,32 @@ NSString *KKMultiStageNormalizedForDedup(NSString *json) {
              : json;
 }
 
+/// Native-string mirror of the lanes JSON. Written in lockstep with
+/// every blob write; read by the OSC's drawTick on cold-boot to seed
+/// the snapshot before consumers (oscVisible, bezier path, etc.) run.
+/// The blob remains the canonical undoable store — this is a write-
+/// through cache, not a separate source of truth.
+void KKWriteMultiStageMirror(NSString *json,
+                             id<FxParameterSettingAPI_v5> setAPI) {
+  if (!setAPI)
+    return;
+  [setAPI setStringParameterValue:json ?: @""
+                      toParameter:kKKParamMultiStageDataMirror];
+}
+
+NSString *KKReadMultiStageMirror(id<PROAPIAccessing> apiManager) {
+  if (!apiManager)
+    return nil;
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!getAPI)
+    return nil;
+  NSString *value = nil;
+  [getAPI getStringParameterValue:&value
+                    fromParameter:kKKParamMultiStageDataMirror];
+  return value;
+}
+
 BOOL KKWriteMultiStageJSONDeduped(NSString *json,
                                   id<FxParameterSettingAPI_v5> setAPI,
                                   id<PROAPIAccessing> apiManager) {
@@ -37,12 +63,29 @@ BOOL KKWriteMultiStageJSONDeduped(NSString *json,
     return NO;
   KKPluginInstanceState *state =
       apiManager ? KKInstanceStateForAPI(apiManager) : nil;
+  // While the host is reverting params for a cmd-Z, suppress all writes —
+  // every write here registers a fresh undo entry, which immediately
+  // overwrites the host's revert and fragments one logical undo into N.
+  // Flag is set by `multiStageRefreshFromParamForAPI:` and cleared after
+  // ~100ms (long enough to cover the full revert burst plus any deferred
+  // live-update blocks queued before MS-REFRESH ran).
+  if (state.hostUndoSuppressionPending)
+    return NO;
   NSString *normalized = KKMultiStageNormalizedForDedup(json);
   if (state && [state.lastWrittenMultiStageJSON isEqualToString:normalized])
     return NO;
   KKWriteCustomParamString(setAPI, json, kKKParamMultiStageData);
-  if (state)
+  // Mirror the same JSON to a native string param so OSC scope can
+  // read it on cold-boot (the blob is unreadable there).
+  KKWriteMultiStageMirror(json, setAPI);
+  if (state) {
     state.lastWrittenMultiStageJSON = normalized;
+    // Every successful write triggers exactly one parameterChanged echo
+    // from the host. Bumping this counter lets MS-REFRESH classify its
+    // next callback as an echo without any I/O — see the consume-side
+    // logic in `multiStageRefreshFromParamForAPI:`.
+    state.expectedMultiStageEchoCount += 1;
+  }
   return YES;
 }
 

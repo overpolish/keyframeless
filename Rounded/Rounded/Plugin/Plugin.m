@@ -75,7 +75,7 @@
     if (parameterID == kParamRadius) {
       double v = 0;
       [paramGetAPI getFloatValue:&v fromParameter:kParamRadius atTime:time];
-      [self multiStageUpdateSelectedSegmentForLabel:@"Radius" values:@[ @(v) ]];
+      [self multiStageDeferLiveUpdateForLabel:@"Radius" values:@[ @(v) ]];
     } else if (parameterID == kParamCropTop ||
                parameterID == kParamCropBottom ||
                parameterID == kParamCropLeft ||
@@ -85,9 +85,8 @@
       [paramGetAPI getFloatValue:&b fromParameter:kParamCropBottom atTime:time];
       [paramGetAPI getFloatValue:&l fromParameter:kParamCropLeft atTime:time];
       [paramGetAPI getFloatValue:&r fromParameter:kParamCropRight atTime:time];
-      [self
-          multiStageUpdateSelectedSegmentForLabel:@"Crop"
-                                           values:@[ @(t), @(b), @(l), @(r) ]];
+      [self multiStageDeferLiveUpdateForLabel:@"Crop"
+                                       values:@[ @(t), @(b), @(l), @(r) ]];
     }
   }
   return YES;

@@ -188,6 +188,19 @@ KKWriteMultiStageJSONDeduped(NSString *_Nullable json,
 extern NSString *_Nullable KKMultiStageNormalizedForDedup(
     NSString *_Nullable json);
 
+/// Writes the lanes JSON to the native-string mirror param. Called
+/// inside `KKWriteMultiStageJSONDeduped` so the mirror stays in
+/// lockstep with the canonical blob — refreshed on cmd-Z echo too.
+extern void KKWriteMultiStageMirror(NSString *_Nullable json,
+                                    id<FxParameterSettingAPI_v5> setAPI);
+
+/// Reads the native-string mirror of the lanes JSON. Used by the OSC
+/// drawTick on cold-boot to seed `lanesSnapshot` before consumers
+/// (oscVisible, bezier path, etc.) run. Returns nil when the mirror
+/// hasn't been populated yet (brand-new instance with no edits).
+extern NSString *_Nullable KKReadMultiStageMirror(
+    id<PROAPIAccessing> _Nullable apiManager);
+
 /// Runs `block` on the main thread. Synchronous when already on main,
 /// dispatch_async otherwise. Use for view-state pushes triggered from
 /// background callbacks (parameterChanged: from non-main, etc).

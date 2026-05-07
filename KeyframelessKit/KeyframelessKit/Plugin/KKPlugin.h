@@ -181,6 +181,28 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)multiStageUpdateSelectedSegmentForLabel:(NSString *)label
                                          values:(NSArray<NSNumber *> *)values;
 
+/// Coalesced + deferred + host-undo-aware variant of
+/// `multiStageUpdateSelectedSegmentForLabel:values:` for use from
+/// `parameterChanged:`-driven live-update paths.
+///
+/// Schedules the underlying write on a 16ms `dispatch_after` so that:
+///  - During a host cmd-Z, the multi-stage param's MS-REFRESH lands
+///    first and sets `hostUndoSuppressionPending`; this method then
+///    correctly skips its write instead of layering a stale animatable
+///    revert into a fresh undo entry.
+///  - During a continuous drag, multiple calls per runloop coalesce
+///    via `liveUpdatePending` (last-wins per label in
+///    `pendingLiveUpdates`), so a 60fps drag produces ~60 writes
+///    instead of 60×(num linked params) writes.
+///
+/// Plugins should call this from their `_xxxHandleAnimatableParameter
+/// Change:` switch instead of the synchronous variant. The synchronous
+/// variant remains for code paths that need an immediate write (e.g.
+/// segment-selection write-back, opt-drag commit) where the caller
+/// already owns the action scope.
+- (void)multiStageDeferLiveUpdateForLabel:(NSString *)label
+                                   values:(NSArray<NSNumber *> *)values;
+
 /// Returns the active segment of the lane matching `label` at `time`. Lets
 /// plugins reach per-segment data (e.g. `pathData`) — the only remaining
 /// pump-side accessor since `multiStageValuesAtTime:` was retired in

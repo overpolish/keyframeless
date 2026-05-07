@@ -106,6 +106,17 @@ static const FxParameterFlags kHiddenNotAnim =
                   error, @"Unable to add instance ID"))
     return NO;
 
+  // Native-string mirror of the lanes JSON — read by OSC on cold-boot
+  // (blob unreadable from OSC scope). Written in lockstep with every
+  // `KKWriteMultiStageJSONDeduped`; refreshed on cmd-Z echo.
+  if (!KKAddParam([paramAPI
+                      addStringParameterWithName:@""
+                                     parameterID:kKKParamMultiStageDataMirror
+                                    defaultValue:@""
+                                  parameterFlags:kHiddenNotAnim],
+                  error, @"Unable to add multi-stage mirror"))
+    return NO;
+
   return YES;
 }
 

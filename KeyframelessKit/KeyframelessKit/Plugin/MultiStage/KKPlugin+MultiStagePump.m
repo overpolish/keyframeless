@@ -521,6 +521,20 @@ static void KKBroadcastPlayheads(id<PROAPIAccessing> apiManager,
 + (void)multiStageDrawOSCTickForAPI:(id<PROAPIAccessing>)apiManager
                              atTime:(CMTime)time {
   KKFlushPendingLanes();
+  // Cold-boot: snapshot may be empty because the canonical blob isn't
+  // readable from OSC scope. The native-string mirror IS readable —
+  // seed `lanesSnapshot` from it so every downstream consumer (OSC
+  // visibility, bezier path, etc.) sees lane data on the first frame
+  // after a project reload, not after the first user click.
+  KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
+  if (state && state.lanesSnapshot.count == 0) {
+    NSString *mirrored = KKReadMultiStageMirror(apiManager);
+    if (mirrored.length) {
+      NSArray<KKTimingLane *> *lanes = [KKTimingLane lanesFromJSON:mirrored];
+      if (lanes.count)
+        state.lanesSnapshot = lanes;
+    }
+  }
   KKSyncFromParams(apiManager, @"drawOSCTick");
   KKSyncLoopFromParams(apiManager);
   [self multiStageUpdatePlayheadsForAPI:apiManager atTime:time];
@@ -587,6 +601,31 @@ static void KKBroadcastPlayheads(id<PROAPIAccessing> apiManager,
   KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
   if (!state)
     return;
+
+  // Distinguish "echo of our own write" from "real host cmd-Z" without
+  // any I/O — every `setCustomParameterValue:` we make causes FCP to
+  // fire `parameterChanged:` back to us, and we bump
+  // `expectedMultiStageEchoCount` on every successful MS-WRITE. If the
+  // count is > 0, this callback is consuming an echo (no suppression
+  // needed). If it's 0, it's a host-driven revert and we engage
+  // suppression IMMEDIATELY — synchronously, before the primary
+  // KKReadCustomParamString below, because that read can yield to the
+  // runloop and let a pending live-update block race in.
+  if (state.expectedMultiStageEchoCount > 0) {
+    state.expectedMultiStageEchoCount -= 1;
+  } else {
+    state.hostUndoSuppressionPending = YES;
+    __weak KKPluginInstanceState *weakState = state;
+    // Hold suppression for ~100ms — long enough to cover any deferred
+    // live-update blocks queued before this MS-REFRESH ran (including
+    // the 16ms-delayed ones in plugin handlers) plus a margin for the
+    // host's full revert burst. Drags don't trigger this path — echo
+    // counter skips it.
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC),
+                   dispatch_get_main_queue(), ^{
+                     weakState.hostUndoSuppressionPending = NO;
+                   });
+  }
   id<FxParameterRetrievalAPI_v6> getAPI =
       [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   if (!getAPI)
@@ -615,6 +654,15 @@ static void KKBroadcastPlayheads(id<PROAPIAccessing> apiManager,
   state.pendingLanes = nil;
   state.cachedReconcileFingerprint = nil;
   state.lastWrittenMultiStageJSON = KKMultiStageNormalizedForDedup(json);
+
+  // The blob just got reverted by the host (cmd-Z); the native-string
+  // mirror is NOT on the undo stack so it's now stale. Refresh it from
+  // the reverted JSON so the next cold-boot OSC tick reads the correct
+  // post-undo state.
+  id<FxParameterSettingAPI_v5> mirrorSetAPI =
+      [apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  if (mirrorSetAPI)
+    KKWriteMultiStageMirror(json ?: @"", mirrorSetAPI);
 
   // Recompute the effective hidden set fresh against the reverted JSON
   // so user-toggled visibility pills (which the host stored in lane

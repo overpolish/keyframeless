@@ -191,7 +191,7 @@
     return;
   }
   if (label.length && values.count)
-    [self multiStageUpdateSelectedSegmentForLabel:label values:values];
+    [self multiStageDeferLiveUpdateForLabel:label values:values];
 }
 
 @end

@@ -6,14 +6,14 @@
 #import "Constants.h"
 #import "Plugin_Private.h"
 #import "ShaderTypes.h"
+#import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 
 /// Reads `kKKParamMultiStageData` and returns a `propertyLabel → values`
 /// dict evaluated at `frac`.
 static NSDictionary<NSString *, NSArray<NSNumber *> *> *
 KKEvaluateLanesByLabel(id<FxParameterRetrievalAPI_v6> getAPI, double frac) {
-  NSString *json = nil;
-  [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+  NSString *json = KKReadCustomParamString(getAPI, kKKParamMultiStageData);
   if (!json.length)
     return @{};
   NSArray<KKTimingLane *> *lanes = [KKTimingLane lanesFromJSON:json];

@@ -36,6 +36,16 @@ static const UInt32 kKKParamInstanceID __attribute__((unused)) = 9922;
 /// from inside the render callback.
 static const UInt32 kKKParamTimingLoopEnabled __attribute__((unused)) = 9923;
 
+/// Native-string mirror of `kKKParamMultiStageData`. The blob is
+/// unreadable from the OSC's apiManager (FxPlug XPC scope rule); native
+/// strings DO read cold, so we mirror the same JSON here. Canonical
+/// store stays the blob (preserves undo); the mirror is a write-through
+/// cache kept in sync at every `KKWriteMultiStageJSONDeduped` tick and
+/// refreshed on cmd-Z echo. Cold-boot OSC ticks seed `lanesSnapshot`
+/// from this mirror so all existing snapshot consumers (oscVisible,
+/// bezier path, etc.) just work without per-consumer plumbing.
+static const UInt32 kKKParamMultiStageDataMirror __attribute__((unused)) = 9930;
+
 /// Motion blur parameters (9924–9929). Registered by
 /// `addMotionBlurParametersWithAPI:` as a custom group with an Enabled
 /// checkbox; shutter/quality reveal when enabled.

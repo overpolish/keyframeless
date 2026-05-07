@@ -49,7 +49,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// (e.g., assigning a `KKRectShape` lays down 4 corners). Use `restoreShape:`
 /// instead when geometry is already correct and only the kind metadata
 /// needs to be reattached. Returns nil for groups.
-@property(nonatomic, nullable) KKShape *shape;
+@property(nonatomic, strong, nullable) KKShape *shape;
 
 /// Reattach a shape to a path whose points are already correct (e.g., morph
 /// apply just wrote interpolated geometry). Stores the ivar + writes through

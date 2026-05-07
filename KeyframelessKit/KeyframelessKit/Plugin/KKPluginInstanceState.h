@@ -186,6 +186,41 @@ NS_ASSUME_NONNULL_BEGIN
 /// revert a single logical change.
 @property(nonatomic, copy, nullable) NSString *lastWrittenMultiStageJSON;
 
+/// Set transiently by `multiStageRefreshFromParamForAPI:` (the host cmd-Z
+/// entry point) and cleared on the next runloop tick via `dispatch_async`.
+/// While set, `KKWriteMultiStageJSONDeduped` skips the write — without this
+/// every host-driven param revert (animatable scalar OR multi-stage blob)
+/// triggers our live-update path, which writes a fresh entry back onto
+/// FCP's undo stack, immediately overwriting the host's revert and
+/// fragmenting one logical undo into N entries.
+@property(nonatomic) BOOL hostUndoSuppressionPending;
+
+/// Coalescing flag for plugin-side `parameterChanged:` live-update
+/// handlers funnelling through `multiStageDeferLiveUpdateForLabel:`.
+/// First call in a coalescing window sets the flag and schedules a
+/// `dispatch_after` block; subsequent calls early-return after merely
+/// updating `pendingLiveUpdates` with the latest values. When the
+/// deferred block fires it drains the dictionary and clears the flag.
+@property(nonatomic) BOOL liveUpdatePending;
+
+/// Latest-values-per-label staging dict drained by the deferred block
+/// in `multiStageDeferLiveUpdateForLabel:`. Last-wins semantics — a
+/// continuous slider drag keeps overwriting the same key, so the block
+/// always writes the freshest values when it fires.
+@property(nonatomic, strong, nullable)
+    NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *pendingLiveUpdates;
+
+/// How many `parameterChanged:` callbacks for `kKKParamMultiStageData`
+/// we expect from the host as echoes of our own setCustomParameterValue
+/// writes. Bumped on every successful MS-WRITE; decremented when MS-
+/// REFRESH fires and the count is > 0 (in which case the refresh is
+/// classified as an echo and suppression is NOT set). When the count is
+/// 0, the refresh is a real host cmd-Z and suppression is engaged. This
+/// replaces the earlier probeJSON-based echo detection — that approach
+/// required a custom-param read which could yield to the runloop and
+/// let a racing live-update block write before suppression was set.
+@property(nonatomic) NSInteger expectedMultiStageEchoCount;
+
 @end
 
 /// Reads `kKKParamInstanceID` from the api, cached on the api via

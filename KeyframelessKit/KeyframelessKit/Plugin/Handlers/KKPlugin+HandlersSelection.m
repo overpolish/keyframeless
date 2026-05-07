@@ -638,9 +638,25 @@
     KKEndUndoGroup(self.apiManager, ug);
     return;
   }
-  NSArray<NSNumber *> *newVals = [segs[srcSegmentIndex].values copy];
+  // Copy every "value-behaviour" field, not just `values` — for transition
+  // segments `.values` is just one piece (the boundary value); the curve
+  // shape itself lives in `easing`/`intensity`/`frequency`/`seed`, and the
+  // bezier handles for Position-lane transitions live in `pathData`.
+  // Copying only `.values` produced a flat curve when opt-dragging
+  // transition→transition because the dst kept its own (often default)
+  // easing while the boundary was rewritten.
+  // Skipped intentionally: `type`, `start`, `end` (structural),
+  // `lockedDurationSeconds` (per-segment duration lock the user set on dst).
+  KKTimingSegment *src = segs[srcSegmentIndex];
   KKTimingSegment *dst = [segs[dstSegmentIndex] copy];
-  dst.values = newVals;
+  dst.values = [src.values copy];
+  dst.easing = src.easing;
+  dst.holdEffect = src.holdEffect;
+  dst.intensity = src.intensity;
+  dst.frequency = src.frequency;
+  dst.seed = src.seed;
+  dst.linked = src.linked;
+  dst.pathData = [src.pathData copy];
   segs[dstSegmentIndex] = dst;
   lane.segments = segs;
   lanes[jsonIdx] = lane;
@@ -664,7 +680,7 @@
   if (dstSegmentIndex == lane.selectedSegment) {
     if (state)
       state.selectionInProgress = YES;
-    if ([self applyLaneValues:newVals
+    if ([self applyLaneValues:dst.values
                      forLabel:lane.propertyLabel
                      groupKey:lane.groupKey
                        atTime:ct] &&
@@ -679,10 +695,17 @@
                              setAPI:setAPI];
   }
 
-  [actAPI endAction:self];
+  // Call timingGraphApplyState INSIDE our outer action scope. It opens
+  // its own inner startAction/endAction; nesting that under ours means
+  // the whole opt-drag — JSON write plus any flag writes / reads
+  // timingGraphApplyState fans out — commits as a single undo entry.
+  // Calling it after our endAction (the previous order) gave it its own
+  // top-level scope, splitting opt-drag into 2+ host undo entries — the
+  // exact "one cmd-Z reverts curve, another reverts value" symptom.
+  [self timingGraphApplyState];
   if (state)
     state.selectionInProgress = NO;
-  [self timingGraphApplyState];
+  [actAPI endAction:self];
   KKEndUndoGroup(self.apiManager, ug);
 }
 
