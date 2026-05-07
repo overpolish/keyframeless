@@ -121,6 +121,12 @@ extern NSMutableArray<KKTimingLane *> *_Nullable KKReadLanesRebalanced(
 /// its own action scope + undo group when this is YES.
 @property(nonatomic) BOOL gradientDragUndoActive;
 
+/// Same coalescing pattern as `segmentEditDragUndoActive`, but for the
+/// lane-visibility pill bar above the sequencer. Set YES from mouseDown
+/// through mouseUp so the initial pill click + every drag-paint tick lands
+/// in one undo entry.
+@property(nonatomic) BOOL visibilityPillDragUndoActive;
+
 @end
 
 @interface KKPlugin (ColorViews)

@@ -458,6 +458,28 @@ static KKTimingGraphMetrics KKTimingGraphMetricsCompute(BOOL uncapped,
   visibilityBar.onPillDraggedToVisible = ^(NSInteger laneIndex, BOOL visible) {
     [weakSelf _handleLaneVisibilitySetAtIndex:laneIndex visible:visible];
   };
+  visibilityBar.onDragBegin = ^{
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf || strongSelf.visibilityPillDragUndoActive)
+      return;
+    id<FxCustomParameterActionAPI_v4> ax = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    if (!ax)
+      return;
+    [ax startAction:strongSelf];
+    KKBeginUndoGroup(strongSelf.apiManager, @"Lane Visibility");
+    strongSelf.visibilityPillDragUndoActive = YES;
+  };
+  visibilityBar.onDragEnd = ^{
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf || !strongSelf.visibilityPillDragUndoActive)
+      return;
+    KKEndUndoGroup(strongSelf.apiManager, YES);
+    id<FxCustomParameterActionAPI_v4> ax = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [ax endAction:strongSelf];
+    strongSelf.visibilityPillDragUndoActive = NO;
+  };
 
   [self _wireStageSequencerCallbacksFor:seqView
                               rulerView:rulerView

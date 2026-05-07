@@ -251,10 +251,12 @@
 
 - (void)_handleLaneVisibilityClickedAtIndex:(NSInteger)laneIndex
                                  optionDown:(BOOL)optionDown {
-  BOOL ug = KKBeginUndoGroup(self.apiManager, @"Lane Visibility");
+  BOOL inDrag = self.visibilityPillDragUndoActive;
+  BOOL ug = inDrag ? NO : KKBeginUndoGroup(self.apiManager, @"Lane Visibility");
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actAPI startAction:self];
+  if (!inDrag)
+    [actAPI startAction:self];
   id<FxParameterRetrievalAPI_v6> getAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   id<FxParameterSettingAPI_v5> setAPI =
@@ -262,7 +264,8 @@
   NSMutableArray<KKTimingLane *> *lanes =
       KKReadLanesRebalanced(self.apiManager, getAPI);
   if (!lanes) {
-    [actAPI endAction:self];
+    if (!inDrag)
+      [actAPI endAction:self];
     KKEndUndoGroup(self.apiManager, ug);
     return;
   }
@@ -275,7 +278,8 @@
   NSString *clickedLabel =
       KKLabelForPillIndex(laneIndex, lanes, pluginHiddenForIndex);
   if (clickedLabel.length == 0) {
-    [actAPI endAction:self];
+    if (!inDrag)
+      [actAPI endAction:self];
     KKEndUndoGroup(self.apiManager, ug);
     return;
   }
@@ -354,17 +358,20 @@
     }
   }
 
-  [actAPI endAction:self];
+  if (!inDrag)
+    [actAPI endAction:self];
   [self timingGraphApplyState];
   KKEndUndoGroup(self.apiManager, ug);
 }
 
 - (void)_handleLaneVisibilitySetAtIndex:(NSInteger)laneIndex
                                 visible:(BOOL)visible {
-  BOOL ug = KKBeginUndoGroup(self.apiManager, @"Lane Visibility");
+  BOOL inDrag = self.visibilityPillDragUndoActive;
+  BOOL ug = inDrag ? NO : KKBeginUndoGroup(self.apiManager, @"Lane Visibility");
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actAPI startAction:self];
+  if (!inDrag)
+    [actAPI startAction:self];
   id<FxParameterRetrievalAPI_v6> getAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   id<FxParameterSettingAPI_v5> setAPI =
@@ -372,7 +379,8 @@
   NSMutableArray<KKTimingLane *> *lanes =
       KKReadLanesRebalanced(self.apiManager, getAPI);
   if (!lanes) {
-    [actAPI endAction:self];
+    if (!inDrag)
+      [actAPI endAction:self];
     KKEndUndoGroup(self.apiManager, ug);
     return;
   }
@@ -381,7 +389,8 @@
   NSString *targetLabel =
       KKLabelForPillIndex(laneIndex, lanes, pluginHiddenForIndex);
   if (targetLabel.length == 0) {
-    [actAPI endAction:self];
+    if (!inDrag)
+      [actAPI endAction:self];
     KKEndUndoGroup(self.apiManager, ug);
     return;
   }
@@ -397,7 +406,8 @@
     changed = YES;
   }
   if (!changed) {
-    [actAPI endAction:self];
+    if (!inDrag)
+      [actAPI endAction:self];
     KKEndUndoGroup(self.apiManager, ug);
     return;
   }
@@ -430,7 +440,8 @@
     }
   }
 
-  [actAPI endAction:self];
+  if (!inDrag)
+    [actAPI endAction:self];
   [self timingGraphApplyState];
   KKEndUndoGroup(self.apiManager, ug);
 }
