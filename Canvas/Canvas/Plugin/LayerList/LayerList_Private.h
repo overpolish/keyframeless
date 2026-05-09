@@ -55,6 +55,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, weak, nullable) KKMarkerStyleView *startMarkerView;
 @property(nonatomic, weak, nullable) KKMarkerStyleView *endMarkerView;
 @property(nonatomic, weak, nullable) KKFillStyleView *fillStyleView;
+@property(nonatomic, weak, nullable) KKSeedView *seedView;
 @property(nonatomic, weak, nullable) KKGradientControl *strokeGradientControl;
 @property(nonatomic, weak, nullable) KKGradientControl *fillGradientControl;
 @property(nonatomic, weak, nullable)

@@ -209,6 +209,8 @@ static void KKWireCycleViewToParam(
       });
     };
 
+    if (lst)
+      lst.seedView = seedView;
     return seedView;
   }
 

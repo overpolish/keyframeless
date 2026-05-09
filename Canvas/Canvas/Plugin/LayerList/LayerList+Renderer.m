@@ -315,6 +315,13 @@ static void syncStyleViews(KKLayerInstanceState *st,
   syncStyleView(st.endMarkerView, snap.selectedEndMarker);
   syncStyleView(st.fillStyleView, snap.selectedFillStyle);
 
+  // Seed view: read directly from the selected path (not a snapshot field).
+  if (syncPath && st.seedView) {
+    uint32_t seed = syncPath.sketchSeed;
+    if (st.seedView.seed != seed)
+      st.seedView.seed = seed;
+  }
+
   // When no path is selected, keep the bar showing the last-used stops as
   // defaults for the next shape — same retain-on-deselect pattern as the
   // color mode / gradient type fields in the store.
