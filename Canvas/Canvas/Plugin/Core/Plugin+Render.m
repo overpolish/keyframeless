@@ -31,12 +31,21 @@ _kkIndexGroupsByID(NSArray<KKBezierPath *> *paths) {
   return out;
 }
 
-/// Identity transform. Used for draw calls that don't carry a per-path
-/// transform (off-screen image effects, fullscreen-quad fill color pass).
-static CanvasPathTransform _kkIdentityPathTransform(void) {
+static matrix_float4x4 _kkTranslate4(float tx, float ty, float tz);
+
+/// Tile-shift-only transform. Translates canvas-centered pixel-space
+/// vertices into the tile-relative pixel space the viewport expects when
+/// FCP renders into a sub-tile of the full image (e.g. project-browser
+/// previews). Used in place of identity for paths without per-path
+/// transforms so geometry still lands in the right tile pixels.
+static CanvasPathTransform _kkTileShiftPathTransform(float tileShiftX,
+                                                     float tileShiftY) {
   CanvasPathTransform x;
-  x.m4 = matrix_identity_float4x4;
-  x.mInv = matrix_identity_float3x3;
+  x.m4 = _kkTranslate4(tileShiftX, tileShiftY, 0);
+  matrix_float3x3 t2 =
+      simd_matrix(simd_make_float3(1, 0, 0), simd_make_float3(0, 1, 0),
+                  simd_make_float3(tileShiftX, tileShiftY, 1));
+  x.mInv = simd_inverse(t2);
   return x;
 }
 
@@ -243,17 +252,16 @@ _kkLocalModel4(KKBezierPath *p, NSDictionary<NSString *, NSData *> *centers,
 /// so a cyclic parent reference can't spin forever. The 2D inverse is used
 /// by the fill color pass for gradient bbox sampling — it ignores rotX/rotY
 /// (gradients on 3D-rotated fills fall back to a 2D approximation).
-static CanvasPathTransform
-_kkBuildPathTransform(KKBezierPath *path,
-                      NSDictionary<NSString *, KKBezierPath *> *groupsByID,
-                      NSDictionary<NSString *, NSData *> *bboxCenters,
-                      float outputWidth, float outputHeight) {
+static CanvasPathTransform _kkBuildPathTransform(
+    KKBezierPath *path, NSDictionary<NSString *, KKBezierPath *> *groupsByID,
+    NSDictionary<NSString *, NSData *> *bboxCenters, float imageWidth,
+    float imageHeight, float tileShiftX, float tileShiftY) {
   if (!path.transformEnabled)
-    return _kkIdentityPathTransform();
+    return _kkTileShiftPathTransform(tileShiftX, tileShiftY);
   matrix_float4x4 model =
-      _kkLocalModel4(path, bboxCenters, outputWidth, outputHeight);
+      _kkLocalModel4(path, bboxCenters, imageWidth, imageHeight);
   matrix_float3x3 m2 =
-      _kkLocalMatrix(path, bboxCenters, outputWidth, outputHeight);
+      _kkLocalMatrix(path, bboxCenters, imageWidth, imageHeight);
   NSString *parentID = path.parentGroupID;
   NSUInteger depth = 0;
   while (parentID.length && depth++ < 32) {
@@ -261,18 +269,28 @@ _kkBuildPathTransform(KKBezierPath *path,
     if (!g)
       break;
     if (g.transformEnabled) {
-      model = simd_mul(
-          _kkLocalModel4(g, bboxCenters, outputWidth, outputHeight), model);
-      m2 = simd_mul(_kkLocalMatrix(g, bboxCenters, outputWidth, outputHeight),
-                    m2);
+      model = simd_mul(_kkLocalModel4(g, bboxCenters, imageWidth, imageHeight),
+                       model);
+      m2 =
+          simd_mul(_kkLocalMatrix(g, bboxCenters, imageWidth, imageHeight), m2);
     }
     parentID = g.parentGroupID;
   }
+  // Tile-shift post-translation in centered-pixel space — applied AFTER
+  // the path's own model transform so per-path translate/rotate still
+  // operate in canvas-centered space, but the final output lands in the
+  // tile-relative pixel space the viewport expects (Approach C).
+  matrix_float4x4 Tshift = _kkTranslate4(tileShiftX, tileShiftY, 0);
+  matrix_float3x3 Tshift2 =
+      simd_matrix(simd_make_float3(1, 0, 0), simd_make_float3(0, 1, 0),
+                  simd_make_float3(tileShiftX, tileShiftY, 1));
+  model = simd_mul(Tshift, model);
+  m2 = simd_mul(Tshift2, m2);
   // Perspective: camera at (0, 0, -camD) looking down +Z, applied once
   // after the full hierarchy's 3D model transform.
   // (x, y, z, 1) → (camD*x, camD*y, z, z + camD); after divide:
   // ndc = (x, y) * camD / (z + camD).
-  float camD = fmaxf(outputWidth, outputHeight);
+  float camD = fmaxf(imageWidth, imageHeight);
   matrix_float4x4 P = simd_matrix(
       simd_make_float4(camD, 0, 0, 0), simd_make_float4(0, camD, 0, 0),
       simd_make_float4(0, 0, 1, 1), simd_make_float4(0, 0, 0, camD));
@@ -486,6 +504,10 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
                 target:(id<MTLTexture>)target
            outputWidth:(float)outputWidth
           outputHeight:(float)outputHeight
+            imageWidth:(float)imageWidth
+           imageHeight:(float)imageHeight
+           tileOffsetX:(float)tileOffsetX
+           tileOffsetY:(float)tileOffsetY
                 device:(id<MTLDevice>)device
          commandBuffer:(id<MTLCommandBuffer>)commandBuffer
           viewportSize:(simd_uint2)viewportSize
@@ -504,8 +526,6 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
       KKBezierPoint br = [path pointAtIndex:1];
       KKBezierPoint tr = [path pointAtIndex:2];
       KKBezierPoint tl = [path pointAtIndex:3];
-      float hw = outputWidth / 2.0f;
-      float hh = outputHeight / 2.0f;
 
       id<MTLTexture> drawTex =
           KKProcessImageWithEffects(imgTex, path, device, commandBuffer);
@@ -515,15 +535,21 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
       float cx = (bl.x + tr.x) * 0.5f;
       float cy = (bl.y + tr.y) * 0.5f;
 
+      // Canvas-centered pixel space — pathXform.m4 carries the tile-shift
+      // post-translation that maps canvas-centered coords into the
+      // tile-relative pixel space the viewport expects (Approach C; see
+      // `_kkBuildPathTransform`).
+      float halfW = imageWidth * 0.5f;
+      float halfH = imageHeight * 0.5f;
       CanvasFillVertex quadVerts[4] = {
-          {{(cx + (bl.x - cx) * scaleX) * outputWidth - hw,
-            (1.0f - (cy + (bl.y - cy) * scaleY)) * outputHeight - hh}},
-          {{(cx + (br.x - cx) * scaleX) * outputWidth - hw,
-            (1.0f - (cy + (br.y - cy) * scaleY)) * outputHeight - hh}},
-          {{(cx + (tl.x - cx) * scaleX) * outputWidth - hw,
-            (1.0f - (cy + (tl.y - cy) * scaleY)) * outputHeight - hh}},
-          {{(cx + (tr.x - cx) * scaleX) * outputWidth - hw,
-            (1.0f - (cy + (tr.y - cy) * scaleY)) * outputHeight - hh}},
+          {{(cx + (bl.x - cx) * scaleX) * imageWidth - halfW,
+            (1.0f - (cy + (bl.y - cy) * scaleY)) * imageHeight - halfH}},
+          {{(cx + (br.x - cx) * scaleX) * imageWidth - halfW,
+            (1.0f - (cy + (br.y - cy) * scaleY)) * imageHeight - halfH}},
+          {{(cx + (tl.x - cx) * scaleX) * imageWidth - halfW,
+            (1.0f - (cy + (tl.y - cy) * scaleY)) * imageHeight - halfH}},
+          {{(cx + (tr.x - cx) * scaleX) * imageWidth - halfW,
+            (1.0f - (cy + (tr.y - cy) * scaleY)) * imageHeight - halfH}},
       };
 
       float opacity = path.opacity;
@@ -549,16 +575,20 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
     }
   } else if (path.fillEnabled && orig.count >= 2 && fillStencilPS &&
              fillColorPS && stencilTexture) {
+    // All path-coord-based helpers (fan, bbox, hachure, sketch jitter,
+    // tessellation) work in canvas-centered pixel space; pass image dims
+    // so output is canvas-relative and let pathXform.m4 carry the
+    // tile-shift translation that maps it to the viewport (Approach C).
     if (path.sketchFillStyle > 0) {
       KKBezierPath *clipPath = orig;
       if (orig.sketchEnabled && orig.sketchRoughness > 0.0001f) {
         clipPath = KKSketchPath(orig, orig.sketchRoughness, orig.sketchBowing,
-                                orig.sketchSeed, 1, outputWidth, outputHeight);
+                                orig.sketchSeed, 1, imageWidth, imageHeight);
       }
-      KKRenderFillStencilOnly(clipPath, pathXform, outputWidth, outputHeight,
+      KKRenderFillStencilOnly(clipPath, pathXform, imageWidth, imageHeight,
                               device, commandBuffer, target, stencilTexture,
                               fillStencilPS, fillStencilDSState, viewportSize);
-      KKRenderSketchFillForPath(orig, pathXform, outputWidth, outputHeight,
+      KKRenderSketchFillForPath(orig, pathXform, imageWidth, imageHeight,
                                 device, commandBuffer, target, stencilTexture,
                                 strokeStencilPS, fillColorDSState, viewportSize,
                                 YES);
@@ -566,14 +596,14 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
       KKBezierPath *fillPath = orig;
       if (orig.sketchEnabled && orig.sketchRoughness > 0.0001f) {
         fillPath = KKSketchPath(orig, orig.sketchRoughness, orig.sketchBowing,
-                                orig.sketchSeed, 1, outputWidth, outputHeight);
+                                orig.sketchSeed, 1, imageWidth, imageHeight);
       }
-      KKRenderFillForPath(fillPath, pathXform, outputWidth, outputHeight,
-                          device, commandBuffer, target, stencilTexture,
-                          fillStencilPS, fillColorPS, fillStencilDSState,
-                          fillColorDSState, viewportSize);
+      KKRenderFillForPath(fillPath, pathXform, imageWidth, imageHeight, device,
+                          commandBuffer, target, stencilTexture, fillStencilPS,
+                          fillColorPS, fillStencilDSState, fillColorDSState,
+                          viewportSize);
       if (strokePS) {
-        KKRenderFillAAOutline(fillPath, pathXform, outputWidth, outputHeight,
+        KKRenderFillAAOutline(fillPath, pathXform, imageWidth, imageHeight,
                               device, commandBuffer, target, strokePS,
                               viewportSize);
       }
@@ -581,7 +611,7 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
   }
 
   if (!path.isImage && path.strokeEnabled && strokePS) {
-    KKRenderStrokeForPath(path, pathXform, outputWidth, outputHeight, device,
+    KKRenderStrokeForPath(path, pathXform, imageWidth, imageHeight, device,
                           commandBuffer, target, strokePS, viewportSize);
   }
 }
@@ -620,6 +650,10 @@ static BOOL _kkDecodeSampleAt(NSData *pluginState, NSUInteger offset,
                     inputTexture:(id<MTLTexture>)inputTexture
                      outputWidth:(float)outputWidth
                     outputHeight:(float)outputHeight
+                      imageWidth:(float)imageWidth
+                     imageHeight:(float)imageHeight
+                     tileOffsetX:(float)tileOffsetX
+                     tileOffsetY:(float)tileOffsetY
                      renderScale:(float)renderScale
                            cache:(KKMetalDeviceCache *)cache
                       registryID:(uint64_t)registryID
@@ -633,8 +667,8 @@ static BOOL _kkDecodeSampleAt(NSData *pluginState, NSUInteger offset,
     KKRectShape *rs = p.rectShape;
     if (!rs)
       continue;
-    float rW = (rs.max.x - rs.min.x) * outputWidth;
-    float rH = (rs.max.y - rs.min.y) * outputHeight;
+    float rW = (rs.max.x - rs.min.x) * imageWidth;
+    float rH = (rs.max.y - rs.min.y) * imageHeight;
     [rs applyToPath:p canvasWidth:rW canvasHeight:rH];
   }
 
@@ -679,12 +713,12 @@ static BOOL _kkDecodeSampleAt(NSData *pluginState, NSUInteger offset,
       if (needsSplit) {
         KKBezierPath *pass1 =
             KKSketchPath(p, p.sketchRoughness, p.sketchBowing, p.sketchSeed, 1,
-                         outputWidth, outputHeight);
+                         imageWidth, imageHeight);
         [renderPaths addObject:pass1];
         [origPathsMut addObject:p];
-        KKBezierPath *pass2 = KKSketchPath(p, p.sketchRoughness, p.sketchBowing,
-                                           p.sketchSeed ^ 0xFACE0042, 1,
-                                           outputWidth, outputHeight);
+        KKBezierPath *pass2 =
+            KKSketchPath(p, p.sketchRoughness, p.sketchBowing,
+                         p.sketchSeed ^ 0xFACE0042, 1, imageWidth, imageHeight);
         pass2.fillEnabled = NO;
         pass2.startMarker = 0;
         pass2.endMarker = 0;
@@ -693,8 +727,8 @@ static BOOL _kkDecodeSampleAt(NSData *pluginState, NSUInteger offset,
       } else {
         [renderPaths
             addObject:KKSketchPath(p, p.sketchRoughness, p.sketchBowing,
-                                   p.sketchSeed, p.sketchStrokes, outputWidth,
-                                   outputHeight)];
+                                   p.sketchSeed, p.sketchStrokes, imageWidth,
+                                   imageHeight)];
         [origPathsMut addObject:p];
       }
     } else {
@@ -884,8 +918,11 @@ static BOOL _kkDecodeSampleAt(NSData *pluginState, NSUInteger offset,
       KKBezierPath *orig = origPaths[pi - 1];
       if (path.count < 2 || path.hidden)
         continue;
-      CanvasPathTransform pathXform = _kkBuildPathTransform(
-          orig, groupsByID, bboxCenters, outputWidth, outputHeight);
+      float tileShiftX = imageWidth * 0.5f - tileOffsetX;
+      float tileShiftY = imageHeight * 0.5f - tileOffsetY;
+      CanvasPathTransform pathXform =
+          _kkBuildPathTransform(orig, groupsByID, bboxCenters, imageWidth,
+                                imageHeight, tileShiftX, tileShiftY);
 
       float pathOpacity = path.opacity;
       BOOL needsIntermediate =
@@ -915,6 +952,10 @@ static BOOL _kkDecodeSampleAt(NSData *pluginState, NSUInteger offset,
                       target:drawTarget
                  outputWidth:outputWidth
                 outputHeight:outputHeight
+                  imageWidth:imageWidth
+                 imageHeight:imageHeight
+                 tileOffsetX:tileOffsetX
+                 tileOffsetY:tileOffsetY
                       device:device
                commandBuffer:commandBuffer
                 viewportSize:viewportSize
@@ -1022,6 +1063,24 @@ static BOOL _kkDecodeSampleAt(NSData *pluginState, NSUInteger offset,
   float outputHeight = (float)(destinationImage.tilePixelBounds.top -
                                destinationImage.tilePixelBounds.bottom);
 
+  // FCP may composite the effect into a sub-tile of the full image
+  // (e.g. project-browser previews use 2x2 sub-tiling). Path coords
+  // are normalized to the canvas, so they must be scaled by image
+  // dims and shifted by the tile-center offset; otherwise each
+  // sub-tile draws the entire canvas inside itself (4-copies bug).
+  float imageWidth = (float)(destinationImage.imagePixelBounds.right -
+                             destinationImage.imagePixelBounds.left);
+  float imageHeight = (float)(destinationImage.imagePixelBounds.top -
+                              destinationImage.imagePixelBounds.bottom);
+  float tileOffsetX = (float)((destinationImage.tilePixelBounds.left +
+                               destinationImage.tilePixelBounds.right) *
+                                  0.5 -
+                              destinationImage.imagePixelBounds.left);
+  float tileOffsetY = (float)(destinationImage.imagePixelBounds.top -
+                              (destinationImage.tilePixelBounds.top +
+                               destinationImage.tilePixelBounds.bottom) *
+                                  0.5);
+
   NSString *renderUUID = KKLayerUUIDForAPI(self.apiManager);
   if (renderUUID) {
     KKLayerInstanceState *renderState = KKLayerStateForUUID(renderUUID);
@@ -1071,6 +1130,10 @@ static BOOL _kkDecodeSampleAt(NSData *pluginState, NSUInteger offset,
                                                   inputTexture:inputTextures[0]
                                                    outputWidth:outputWidth
                                                   outputHeight:outputHeight
+                                                    imageWidth:imageWidth
+                                                   imageHeight:imageHeight
+                                                   tileOffsetX:tileOffsetX
+                                                   tileOffsetY:tileOffsetY
                                                    renderScale:renderScale
                                                          cache:cache
                                                     registryID:registryID
@@ -1110,6 +1173,10 @@ static BOOL _kkDecodeSampleAt(NSData *pluginState, NSUInteger offset,
                                 inputTexture:inputTexture
                                  outputWidth:outputWidth
                                 outputHeight:outputHeight
+                                  imageWidth:imageWidth
+                                 imageHeight:imageHeight
+                                 tileOffsetX:tileOffsetX
+                                 tileOffsetY:tileOffsetY
                                  renderScale:renderScale
                                        cache:cache
                                   registryID:registryID

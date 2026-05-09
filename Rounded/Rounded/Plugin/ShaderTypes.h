@@ -10,7 +10,7 @@
 typedef enum FragmentIndex {
     FragmentIndex_Radius = 0,
     FragmentIndex_ImageSize = 1,
-    FragmentIndex_TileOffset = 2,
+    FragmentIndex_TileOffsetPx = 2,
     FragmentIndex_CropCenter = 3,
     FragmentIndex_CropSize = 4
 } FragmentIndex;

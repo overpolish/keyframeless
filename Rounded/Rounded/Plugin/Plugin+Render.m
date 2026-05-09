@@ -192,12 +192,18 @@
                                    destinationImage.imagePixelBounds.left),
                            (float)(destinationImage.imagePixelBounds.top -
                                    destinationImage.imagePixelBounds.bottom)};
-  simd_float2 tileOffset = {
-      roundf((float)(destinationImage.tilePixelBounds.left -
-                     destinationImage.imagePixelBounds.left)),
-      roundf((float)(destinationImage.tilePixelBounds.bottom -
-                     destinationImage.imagePixelBounds.bottom))};
-
+  // Top-left of the dest tile in Y-down image-pixel space, relative to
+  // the image origin. Empirically FCP's project-library preview composites
+  // tiles with FxRect.bottom as the Y-down top offset within the image
+  // (see logged data: strips appear in reverse FxRect-Y order). Subtract
+  // imagePixelBounds.left/bottom so the offset is relative to the image
+  // origin — handles render contexts where imagePixelBounds isn't at
+  // (0,0) (e.g. 480x270 thumbnail render at L720 B405).
+  simd_float2 tileOffsetPx = {
+      (float)(destinationImage.tilePixelBounds.left -
+              destinationImage.imagePixelBounds.left),
+      (float)(destinationImage.tilePixelBounds.bottom -
+              destinationImage.imagePixelBounds.bottom)};
   void (^encodeDraw)(id<MTLRenderCommandEncoder>, NSArray<id<MTLTexture>> *,
                      RoundedPluginState) = ^(id<MTLRenderCommandEncoder> enc,
                                              NSArray<id<MTLTexture>> *texs,
@@ -207,6 +213,9 @@
     float cropR = (float)s.cropRight * imageSize.x;
     float cropB = (float)s.cropBottom * imageSize.y;
     float cropT = (float)s.cropTop * imageSize.y;
+    // Original Y-up sign (cropTop in this codebase historically crops from
+    // FxRect-top = screen-bottom in Y-down; the OSC handles use the same
+    // convention so they match up). Don't change without also updating OSC.
     simd_float2 cropCenter = {(cropL - cropR) * 0.5f, (cropB - cropT) * 0.5f};
     simd_float2 cropSize = {imageSize.x - cropL - cropR,
                             imageSize.y - cropB - cropT};
@@ -218,9 +227,9 @@
     [enc setFragmentBytes:&imageSize
                    length:sizeof(imageSize)
                   atIndex:FragmentIndex_ImageSize];
-    [enc setFragmentBytes:&tileOffset
-                   length:sizeof(tileOffset)
-                  atIndex:FragmentIndex_TileOffset];
+    [enc setFragmentBytes:&tileOffsetPx
+                   length:sizeof(tileOffsetPx)
+                  atIndex:FragmentIndex_TileOffsetPx];
     [enc setFragmentBytes:&cropCenter
                    length:sizeof(cropCenter)
                   atIndex:FragmentIndex_CropCenter];

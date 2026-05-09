@@ -36,16 +36,21 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
                                texture2d<half> colorTexture [[texture(KKTextureIndex_InputImage)]],
                                constant float *radius [[buffer(FragmentIndex_Radius)]],
                                constant float2 *imageSize [[buffer(FragmentIndex_ImageSize)]],
-                               constant float2 *tileOffset [[buffer(FragmentIndex_TileOffset)]],
+                               constant float2 *tileOffsetPx [[buffer(FragmentIndex_TileOffsetPx)]],
                                constant float2 *cropCenter [[buffer(FragmentIndex_CropCenter)]],
                                constant float2 *cropSize [[buffer(FragmentIndex_CropSize)]]) {
     constexpr sampler textureSampler(mag_filter::linear, min_filter::linear);
 
-    half4 colorSample = colorTexture.sample(textureSampler, in.textureCoordinate);
+    // Source sampling: dest texture = source tile (in-place effect), so
+    // tile-normalized UV is just framebuffer-pixel / texture-size.
+    float2 textureSize = float2(colorTexture.get_width(), colorTexture.get_height());
+    float2 sampleUV = in.clipSpacePosition.xy / textureSize;
+    half4 colorSample = colorTexture.sample(textureSampler, sampleUV);
 
-    float2 tileSize = float2(colorTexture.get_width(), colorTexture.get_height());
-    float2 pixelInTile = in.textureCoordinate * tileSize;
-    float2 pixelInFullImage = pixelInTile + (*tileOffset);
+    // Y-down screen-pixel position in the final composited image.
+    // tileOffsetPx places this fragment at the right spot regardless of
+    // whether FCP composites the full image or a sub-tile.
+    float2 pixelInFullImage = in.clipSpacePosition.xy + (*tileOffsetPx);
 
     // Crop bounding box: center of image + crop offset, sized by cropSize
     float2 imageCenter = (*imageSize) * 0.5;

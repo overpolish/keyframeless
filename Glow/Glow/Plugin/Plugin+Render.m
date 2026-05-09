@@ -63,17 +63,45 @@ static void _encodeGlowPipeline(
   if (!prepPS || !compPS)
     return;
 
-  FxRect st = sourceImages[0].tilePixelBounds;
-  FxRect dt = destinationImage.tilePixelBounds;
-  float cx = (dt.left + dt.right) / 2.0f;
-  float cy = (dt.bottom + dt.top) / 2.0f;
-
+  // Source's sub-region within the dest-image-sized prep texture. When
+  // radius > 0, destinationImageRect expands beyond source bounds for glow
+  // bleed — source content occupies a sub-region of dest image, with the
+  // expansion margins transparent. Prep renders source at its actual
+  // position so blur correctly bleeds INTO the margins.
+  FxRect sp = sourceImages[0].imagePixelBounds;
+  FxRect dImg = destinationImage.imagePixelBounds;
+  // Resolution scale: radius is authored in canonical (canvas) pixels but
+  // sigma operates in actual render pixels. For thumbnail/small-preview
+  // renders, source is downscaled and resScale < 1 so the blur shrinks
+  // proportionally and the glow keeps a consistent visual ratio.
+  FxMatrix44 *invXf = sourceImages[0].inversePixelTransform;
+  FxPoint2D sll = {sp.left, sp.bottom}, sur = {sp.right, sp.top};
+  sll = [invXf transform2DPoint:sll];
+  sur = [invXf transform2DPoint:sur];
+  float canonW = (float)(sur.x - sll.x);
+  float pxW_src = (float)(sp.right - sp.left);
+  float resScale = (canonW > 0) ? (pxW_src / canonW) : 1.0f;
+  float effRx = state.radiusX * resScale;
+  float effRy = state.radiusY * resScale;
+  float dImgCenterX = ((float)dImg.left + (float)dImg.right) * 0.5f;
+  float dImgCenterY = ((float)dImg.bottom + (float)dImg.top) * 0.5f;
   KKVertex2D srcV[] = {
-      {{((float)st.right - cx) * bs, -((float)st.top - cy) * bs}, {1, 1}},
-      {{((float)st.left - cx) * bs, -((float)st.top - cy) * bs}, {0, 1}},
-      {{((float)st.right - cx) * bs, -((float)st.bottom - cy) * bs}, {1, 0}},
-      {{((float)st.left - cx) * bs, -((float)st.bottom - cy) * bs}, {0, 0}},
+      {{((float)sp.right - dImgCenterX) * bs,
+        -((float)sp.top - dImgCenterY) * bs},
+       {1, 1}},
+      {{((float)sp.left - dImgCenterX) * bs,
+        -((float)sp.top - dImgCenterY) * bs},
+       {0, 1}},
+      {{((float)sp.right - dImgCenterX) * bs,
+        -((float)sp.bottom - dImgCenterY) * bs},
+       {1, 0}},
+      {{((float)sp.left - dImgCenterX) * bs,
+        -((float)sp.bottom - dImgCenterY) * bs},
+       {0, 0}},
   };
+  // Composite fills the dest-tile viewport. UVs are unused — the
+  // fragment computes sampling positions from clipSpacePosition + the
+  // tileOffsetPx uniform (Y-down screen-pixel position in final image).
   KKVertex2D dstV[] = {
       {{outW / 2, -outH / 2}, {1, 1}},
       {{-outW / 2, -outH / 2}, {0, 1}},
@@ -83,7 +111,7 @@ static void _encodeGlowPipeline(
   simd_uint2 bvs = {(uint)bW, (uint)bH};
   simd_uint2 fvs = {(uint)outW, (uint)outH};
   MTLViewport bvp = {0, 0, (double)bW, (double)bH, -1, 1};
-  float sigma = fmaxf(fmaxf(state.radiusX, state.radiusY) * 0.5f * bs, 0.5f);
+  float sigma = fmaxf(fmaxf(effRx, effRy) * 0.5f * bs, 0.5f);
 
   // 1) Prep: draw source into blur-sized texture
   {
@@ -176,13 +204,20 @@ static void _encodeGlowPipeline(
     [e setFragmentTexture:inTex atIndex:KKTextureIndex_InputImage];
     [e setFragmentTexture:blurTex atIndex:1];
     [e setFragmentTexture:(hasBloom ? bloomBlurTex : blurTex) atIndex:2];
-    float rx = state.radiusX, ry = state.radiusY;
+    float rx = effRx, ry = effRy;
     float i = state.intensity, f = state.falloff, n = state.noise;
-    FxRect sp = sourceImages[0].imagePixelBounds;
-    float srcW = sp.right - sp.left;
-    float srcH = sp.top - sp.bottom;
-    simd_float2 off = {-state.offset.x * srcW / outW,
-                       -state.offset.y * srcH / outH};
+    // Position is authored as a fraction of the SOURCE image. The composite
+    // samples in dest-image-normalized space (which is bigger when radius
+    // expands the dest bounds), so scale by source/dest ratio to keep the
+    // shift consistent across thumbnail (dest==source) and full preview
+    // (dest > source).
+    float srcW_f = (float)(sp.right - sp.left);
+    float srcH_f = (float)(sp.top - sp.bottom);
+    float dImgW_f = (float)(dImg.right - dImg.left);
+    float dImgH_f = (float)(dImg.top - dImg.bottom);
+    simd_float2 off = {
+        -state.offset.x * (dImgW_f > 0 ? srcW_f / dImgW_f : 1.0f),
+        -state.offset.y * (dImgH_f > 0 ? srcH_f / dImgH_f : 1.0f)};
     int cm = state.colorMode, gt = state.gradientType;
     float ga = state.gradientAngle;
     [e setFragmentBytes:&rx length:sizeof(rx) atIndex:FragmentIndex_RadiusX];
@@ -217,6 +252,38 @@ static void _encodeGlowPipeline(
     [e setFragmentBytes:&blurUVScale
                  length:sizeof(blurUVScale)
                 atIndex:FragmentIndex_BlurUVScale];
+    // Y-down screen-pixel offset of the dest tile within the final
+    // composited image. FCP's project-library preview composites tiles in
+    // reverse FxRect-Y order (FxRect.bottom = Y-down screen-top), so the
+    // shader uses this offset + clipSpacePosition to find its position in
+    // the final image regardless of sub-tiling or composite mode.
+    FxRect dtRect = destinationImage.tilePixelBounds;
+    simd_float2 tileOffsetPx = {
+        (float)(dtRect.left - dImg.left),
+        (float)(dtRect.bottom - dImg.bottom)};
+    simd_float2 destImgSizePx = {
+        (float)(dImg.right - dImg.left),
+        (float)(dImg.top - dImg.bottom)};
+    // Source's Y-down origin within dest image, plus its size — lets the
+    // composite map dest-image pixels to source UVs (sub-region, not stretched).
+    simd_float2 srcOriginInDestPx = {
+        (float)(sp.left - dImg.left),
+        (float)(dImg.top - sp.top)};
+    simd_float2 srcImgSizePx = {
+        (float)(sp.right - sp.left),
+        (float)(sp.top - sp.bottom)};
+    [e setFragmentBytes:&tileOffsetPx
+                 length:sizeof(tileOffsetPx)
+                atIndex:FragmentIndex_TileOffsetPx];
+    [e setFragmentBytes:&destImgSizePx
+                 length:sizeof(destImgSizePx)
+                atIndex:FragmentIndex_DestImgSizePx];
+    [e setFragmentBytes:&srcOriginInDestPx
+                 length:sizeof(srcOriginInDestPx)
+                atIndex:FragmentIndex_SrcOriginInDestPx];
+    [e setFragmentBytes:&srcImgSizePx
+                 length:sizeof(srcImgSizePx)
+                atIndex:FragmentIndex_SrcImgSizePx];
     float thr = state.threshold;
     [e setFragmentBytes:&thr
                  length:sizeof(thr)
@@ -557,7 +624,13 @@ static void _texPairReturn(NSInteger idx) {
             pluginState:(NSData *)pluginState
                  atTime:(CMTime)renderTime
                   error:(NSError **)outError {
-  *sourceTileRect = destinationTileRect;
+  // Request the FULL source image, not just the dest tile, so the blur
+  // can sample neighbor pixels — otherwise sub-tile renders (FCP project-
+  // library preview) blur each tile independently and produce visible
+  // seams + per-tile glow at strip boundaries. The render pipeline below
+  // prepares + blurs the full image and the composite reads only the
+  // dest tile's portion.
+  *sourceTileRect = sourceImages[sourceImageIndex].imagePixelBounds;
   return YES;
 }
 
@@ -603,11 +676,18 @@ static void _texPairReturn(NSInteger idx) {
                          destinationImage.tilePixelBounds.left);
     float outH = (float)(destinationImage.tilePixelBounds.top -
                          destinationImage.tilePixelBounds.bottom);
+    // bW/bH are the prep+blur intermediate dimensions, sized for the FULL
+    // image (not the dest tile) so sub-tile renders blur with neighbor
+    // pixels and the composite reads from a single coherent blur.
+    float imgW = (float)(destinationImage.imagePixelBounds.right -
+                         destinationImage.imagePixelBounds.left);
+    float imgH = (float)(destinationImage.imagePixelBounds.top -
+                         destinationImage.imagePixelBounds.bottom);
     float bs = 1.0f;
-    if (outW > kMaxBlurDimension || outH > kMaxBlurDimension)
-      bs = fminf(kMaxBlurDimension / outW, kMaxBlurDimension / outH);
-    NSUInteger bW = MAX(1, (NSUInteger)(outW * bs));
-    NSUInteger bH = MAX(1, (NSUInteger)(outH * bs));
+    if (imgW > kMaxBlurDimension || imgH > kMaxBlurDimension)
+      bs = fminf(kMaxBlurDimension / imgW, kMaxBlurDimension / imgH);
+    NSUInteger bW = MAX(1, (NSUInteger)(imgW * bs));
+    NSUInteger bH = MAX(1, (NSUInteger)(imgH * bs));
 
     if (mbState.enabled) {
       NSData *capturedState = pluginState;
@@ -643,10 +723,12 @@ static void _texPairReturn(NSInteger idx) {
                         // full-res `outW/outH` reference.
                         float effRatio = (float)sampleDest.width / outW;
                         float bsEff = bs * effRatio;
+                        // Prep/blur dims are now image-based so sub-tile
+                        // renders see neighbor pixels in the blur.
                         NSUInteger bWEff =
-                            MAX((NSUInteger)1, (NSUInteger)(outW * bsEff));
+                            MAX((NSUInteger)1, (NSUInteger)(imgW * bsEff));
                         NSUInteger bHEff =
-                            MAX((NSUInteger)1, (NSUInteger)(outH * bsEff));
+                            MAX((NSUInteger)1, (NSUInteger)(imgH * bsEff));
                         MTLViewport sampleVP = {0,
                                                 0,
                                                 (double)sampleDest.width,

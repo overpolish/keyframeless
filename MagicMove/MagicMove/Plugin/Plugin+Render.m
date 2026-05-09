@@ -29,6 +29,17 @@
   KKMotionBlurState mbState;
   [pluginState getBytes:&mbState length:sizeof(mbState)];
 
+  // Y-down image-pixel offset of the dest tile within the image.
+  // FCP's project-library preview composites tiles in reverse FxRect-Y
+  // order (FxRect.bottom = screen-top), so the shader uses this offset
+  // plus its [[position]] to find its position in the final composited
+  // image regardless of sub-tiling.
+  simd_float2 tileOffsetPx = {
+      (float)(destinationImage.tilePixelBounds.left -
+              destinationImage.imagePixelBounds.left),
+      (float)(destinationImage.tilePixelBounds.bottom -
+              destinationImage.imagePixelBounds.bottom)};
+
   if (mbState.enabled) {
     __weak typeof(self) weakSelf = self;
     NSData *capturedState = pluginState;
@@ -90,6 +101,14 @@
                                                                 atIndex:
                                                                     FragmentIndex_Params];
                                                    [enc
+                                                       setFragmentBytes:
+                                                           &tileOffsetPx
+                                                                 length:
+                                                                     sizeof(
+                                                                         tileOffsetPx)
+                                                                atIndex:
+                                                                    FragmentIndex_TileOffsetPx];
+                                                   [enc
                                                        drawPrimitives:
                                                            MTLPrimitiveTypeTriangleStrip
                                                           vertexStart:0
@@ -106,13 +125,34 @@
   [pluginState getBytes:&params
                   range:NSMakeRange(sizeof(KKMotionBlurState), sizeof(params))];
 
-  return [self renderDestinationImage:destinationImage
-                         sourceImages:sourceImages
-                             pluginID:kPluginID
-                        fragmentBytes:&params
-                     fragmentBytesLen:sizeof(params)
-                  fragmentBufferIndex:FragmentIndex_Params
-                                error:outError];
+  id<MTLRenderPipelineState> pipeline =
+      [self pipelineStateForPluginID:kPluginID
+                    destinationImage:destinationImage
+                        vertexShader:@"vertexShader"
+                      fragmentShader:@"fragmentShader"
+                           blendMode:KKBlendModePremultipliedAlpha];
+  if (!pipeline)
+    return NO;
+
+  return [self encodeRenderCommandsForDestinationImage:destinationImage
+                                          sourceImages:sourceImages
+                                              commands:^(
+                                                  id<MTLRenderCommandEncoder>
+                                                      enc,
+                                                  NSArray<id<MTLTexture>>
+                                                      *texs) {
+    [enc setRenderPipelineState:pipeline];
+    [enc setFragmentTexture:texs[0] atIndex:KKTextureIndex_InputImage];
+    [enc setFragmentBytes:&params
+                   length:sizeof(params)
+                  atIndex:FragmentIndex_Params];
+    [enc setFragmentBytes:&tileOffsetPx
+                   length:sizeof(tileOffsetPx)
+                  atIndex:FragmentIndex_TileOffsetPx];
+    [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
+            vertexStart:0
+            vertexCount:4];
+  }];
 }
 
 - (BOOL)sourceTileRect:(FxRect *)sourceTileRect

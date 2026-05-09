@@ -55,7 +55,7 @@ renderMarker(uint8_t marker, simd_float2 pos, simd_float2 tangent,
   rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
   id<MTLRenderCommandEncoder> enc =
       [commandBuffer renderCommandEncoderWithDescriptor:rpd];
-  [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1, 1}];
+  [enc setViewport:(MTLViewport){0, 0, (double)viewportSize.x, (double)viewportSize.y, -1, 1}];
   [enc setRenderPipelineState:strokePS];
   id<MTLBuffer> buf = [device newBufferWithBytes:markerVerts
                                           length:mc * sizeof(CanvasVertex)
@@ -235,7 +235,7 @@ static void renderStrokeForSinglePath(
 
       id<MTLRenderCommandEncoder> enc =
           [commandBuffer renderCommandEncoderWithDescriptor:rpd];
-      [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1, 1}];
+      [enc setViewport:(MTLViewport){0, 0, (double)viewportSize.x, (double)viewportSize.y, -1, 1}];
       [enc setRenderPipelineState:strokePS];
 
       id<MTLBuffer> vertexBuffer =

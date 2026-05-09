@@ -18,4 +18,7 @@ typedef struct {
     float opacity;
 } MagicMoveParams;
 
-typedef enum { FragmentIndex_Params = 0 } FragmentIndex;
+typedef enum {
+    FragmentIndex_Params = 0,
+    FragmentIndex_TileOffsetPx = 1
+} FragmentIndex;
