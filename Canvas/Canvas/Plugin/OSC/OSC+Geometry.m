@@ -117,15 +117,42 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
   // making distance checks unreliable.  Object space is stable.
   simd_float2 mouseObj = [self objectPointFromCanvasPoint:CGPointMake(x, y)];
 
-  // Minimum hit padding in object space (convert screen-pixel padding).
-  simd_float2 padRef =
+  // Distance comparisons happen in *source-pixel* space because object space
+  // is non-uniform (x normalized by imageWidth, y by imageHeight). An
+  // isotropic radius in object space becomes an ellipse on screen — fat in
+  // x, thin in y — so top/bottom edges of strokes miss while left/right hit.
+  double imgW = (self.imageWidth > 0) ? (double)self.imageWidth : 1.0;
+  double imgH = (self.imageHeight > 0) ? (double)self.imageHeight : 1.0;
+
+  // Convert 4 screen-pixels of slop to source pixels in each axis, then take
+  // the larger so the tolerance is forgiving in whichever direction is more
+  // zoomed-out.
+  simd_float2 padRefX =
       [self objectPointFromCanvasPoint:CGPointMake(x + 4.0, y)];
-  double objPad = fabs(padRef.x - mouseObj.x);
+  simd_float2 padRefY =
+      [self objectPointFromCanvasPoint:CGPointMake(x, y + 4.0)];
+  double padPxX = fabs(padRefX.x - mouseObj.x) * imgW;
+  double padPxY = fabs(padRefY.y - mouseObj.y) * imgH;
+  double padPx = fmax(padPxX, padPxY);
+
+  KKLogInfo(@"hitTest@(%.1f,%.1f) mouseObj=(%.4f,%.4f) imgW=%.1f imgH=%.1f "
+            @"padPx=(%.2f,%.2f) paths=%lu",
+            x, y, mouseObj.x, mouseObj.y, imgW, imgH, padPxX, padPxY,
+            (unsigned long)self.paths.count);
 
   for (NSUInteger p = 0; p < self.paths.count; p++) {
     KKBezierPath *path = self.paths[p];
-    if (path.hidden || path.locked || path.isGroup)
+    if (path.hidden || path.locked || path.isGroup) {
+      KKLogInfo(@"  path[%lu] skipped hidden=%d locked=%d group=%d",
+                (unsigned long)p, path.hidden, path.locked, path.isGroup);
       continue;
+    }
+
+    KKLogInfo(@"  path[%lu] isImage=%d closed=%d count=%lu strokeW=%.2f "
+              @"endW=%.2f fill=%d",
+              (unsigned long)p, path.isImage, path.closed,
+              (unsigned long)path.count, path.strokeWidth, path.endWidth,
+              path.fillEnabled);
 
     if (path.isImage && path.count >= 4) {
       KKBezierPoint bl = [path pointAtIndex:0];
@@ -136,11 +163,13 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
       continue;
     }
 
-    // strokeWidth is in source pixels; convert to object space.
-    double objStrokeHalf = (self.imageWidth > 0)
-                               ? (path.strokeWidth * 0.5 / self.imageWidth)
-                               : 0.0;
-    double objHitR = fmax(objStrokeHalf + objPad, objPad * 3.0);
+    // strokeWidth/endWidth are in source pixels.
+    // endWidth taper is only meaningful for open paths (per KKBezierPath.h);
+    // closed paths can have stale endWidth values that must be ignored.
+    double halfPx0 = path.strokeWidth * 0.5;
+    double halfPx1 = (!path.closed && path.endWidth > 0)
+                         ? path.endWidth * 0.5
+                         : halfPx0;
 
     NSUInteger contours = path.contourCount;
 
@@ -169,14 +198,35 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
         }
       }
 
+      double minDistPx = INFINITY;
+      double minHitRPx = 0.0;
+      NSUInteger minIdx = 0;
       for (NSUInteger i = 0; i < oc; i++) {
-        double dx = mouseObj.x - outline[i].x;
-        double dy = mouseObj.y - outline[i].y;
-        if (hypot(dx, dy) < objHitR) {
+        double t = (oc > 1) ? ((double)i / (double)(oc - 1)) : 0.0;
+        double halfPx = halfPx0 + (halfPx1 - halfPx0) * t;
+        double hitRPx = fmax(halfPx + padPx, padPx * 3.0);
+        double dxPx = (mouseObj.x - outline[i].x) * imgW;
+        double dyPx = (mouseObj.y - outline[i].y) * imgH;
+        double dPx = hypot(dxPx, dyPx);
+        if (dPx < minDistPx) {
+          minDistPx = dPx;
+          minHitRPx = hitRPx;
+          minIdx = i;
+        }
+        if (dPx < hitRPx) {
           free(outline);
+          KKLogInfo(@"  path[%lu] HIT contour=%lu i=%lu distPx=%.2f "
+                    @"hitRPx=%.2f",
+                    (unsigned long)p, (unsigned long)ci, (unsigned long)i,
+                    dPx, hitRPx);
           return (NSInteger)p;
         }
       }
+      KKLogInfo(@"  path[%lu] contour=%lu MISS minDistPx=%.2f hitRPx=%.2f "
+                @"closestSample=(%.4f,%.4f) idx=%lu halfPx0=%.2f halfPx1=%.2f",
+                (unsigned long)p, (unsigned long)ci, minDistPx, minHitRPx,
+                outline[minIdx].x, outline[minIdx].y, (unsigned long)minIdx,
+                halfPx0, halfPx1);
 
       if (path.fillEnabled && oc >= 2) {
         NSUInteger crossings = 0;
