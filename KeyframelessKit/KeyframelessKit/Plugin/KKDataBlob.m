@@ -112,3 +112,25 @@ void KKWriteCustomParamBool(id<FxParameterSettingAPI_v5> setAPI, BOOL value,
                             UInt32 parameterID) {
   KKWriteCustomParamString(setAPI, value ? @"1" : @"0", parameterID);
 }
+
+int KKReadCustomParamInt(id<FxParameterRetrievalAPI_v6> getAPI,
+                         UInt32 parameterID) {
+  if (!getAPI)
+    return 0;
+  NSObject<NSSecureCoding, NSCopying> *raw = nil;
+  [getAPI getCustomParameterValue:&raw
+                    fromParameter:parameterID
+                           atTime:kCMTimeZero];
+  if ([raw isKindOfClass:[NSNumber class]])
+    return [(NSNumber *)raw intValue];
+  return 0;
+}
+
+void KKWriteCustomParamInt(id<FxParameterSettingAPI_v5> setAPI, int value,
+                           UInt32 parameterID) {
+  if (!setAPI)
+    return;
+  [setAPI setCustomParameterValue:@(value)
+                      toParameter:parameterID
+                           atTime:kCMTimeZero];
+}

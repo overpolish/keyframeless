@@ -640,6 +640,14 @@ void KKDrawCheckerboard(NSRect rect) {
 }
 
 - (void)setStops:(NSArray<KKGradientStop *> *)stops {
+  // Ignore external stop pushes while the user is mid-drag — host-driven
+  // refresh paths (layer-list snapshot redraw fired by parameterChanged
+  // echoes from our own drag-tick blob writes) otherwise race the live
+  // drag and visually ping the bar back to a previous tick's value.
+  // The local _onStopsChanged emit always uses `_stops = mutable; ...`
+  // assignment, never this setter, so it's unaffected.
+  if (_dragStarted)
+    return;
   _stops = [stops copy];
   if (_selectedIndex >= (NSInteger)_stops.count)
     _selectedIndex = MAX(0, (NSInteger)_stops.count - 1);

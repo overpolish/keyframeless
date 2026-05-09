@@ -72,6 +72,7 @@ void KKCanvasUpdateSelection(NSString *uuid, NSIndexSet *indices) {
   KKLayerInstanceState *s = KKLayerStateForUUID(uuid);
   NSIndexSet *copy = [indices copy];
   s.selectedIndices = copy;
+  s.pendingOSCSelection = copy;
   dispatch_async(dispatch_get_main_queue(), ^{
     s.uiSelection = copy;
   });
@@ -334,8 +335,9 @@ static void syncStyleViews(KKLayerInstanceState *st,
 }
 
 static void syncGroupHeaders(KKLayerInstanceState *st,
-                             KKCanvasStoreSnapshot *snap,
-                             BOOL selectedIsImage) {
+                             KKCanvasStoreSnapshot *snap, BOOL selectedIsImage,
+                             BOOL selectedIsGroup) {
+  NSString *groupStatus = selectedIsGroup ? @"Not available for groups" : nil;
   KKCustomGroupHeaderView *transformHeader = st.transformGroupHeader;
   if (transformHeader) {
     transformHeader.isInteractive = YES;
@@ -345,25 +347,27 @@ static void syncGroupHeaders(KKLayerInstanceState *st,
   }
   KKCustomGroupHeaderView *strokeHeader = st.strokeGroupHeader;
   if (strokeHeader) {
-    strokeHeader.isInteractive = YES;
-    strokeHeader.isEnabled = snap.strokeEnabled;
-    strokeHeader.isExpanded = snap.strokeExpanded;
-    strokeHeader.statusText = nil;
+    strokeHeader.isInteractive = !selectedIsGroup;
+    strokeHeader.isEnabled = selectedIsGroup ? NO : snap.strokeEnabled;
+    strokeHeader.isExpanded = selectedIsGroup ? NO : snap.strokeExpanded;
+    strokeHeader.statusText = groupStatus;
   }
   KKCustomGroupHeaderView *fillHeader = st.fillGroupHeader;
   if (fillHeader) {
-    fillHeader.isInteractive = YES;
-    fillHeader.isEnabled = snap.fillEnabled;
-    fillHeader.isExpanded = snap.fillExpanded;
-    fillHeader.statusText = nil;
+    fillHeader.isInteractive = !selectedIsGroup;
+    fillHeader.isEnabled = selectedIsGroup ? NO : snap.fillEnabled;
+    fillHeader.isExpanded = selectedIsGroup ? NO : snap.fillExpanded;
+    fillHeader.statusText = groupStatus;
   }
   KKCustomGroupHeaderView *sketchHeader = st.sketchGroupHeader;
   if (sketchHeader) {
-    sketchHeader.isInteractive = !selectedIsImage;
-    sketchHeader.isEnabled = selectedIsImage ? NO : snap.sketchEnabled;
-    sketchHeader.isExpanded = selectedIsImage ? NO : snap.sketchExpanded;
+    BOOL disabled = selectedIsImage || selectedIsGroup;
+    sketchHeader.isInteractive = !disabled;
+    sketchHeader.isEnabled = disabled ? NO : snap.sketchEnabled;
+    sketchHeader.isExpanded = disabled ? NO : snap.sketchExpanded;
     sketchHeader.statusText =
-        selectedIsImage ? @"Not available for images" : nil;
+        selectedIsGroup ? groupStatus
+                        : (selectedIsImage ? @"Not available for images" : nil);
   }
 }
 
@@ -377,6 +381,37 @@ void KKCanvasRefreshLayerListFromSnapshot(KKCanvasStoreSnapshot *snap,
     return;
   if (snap.isEditing || snap.isDragging)
     return;
+
+  // FCP doesn't replay parameterChanged for our hidden CollapsedGroups
+  // string param on project load, so the saved disclosure state never
+  // reaches the in-memory set via the echo handler. Do a one-shot read
+  // here on first refresh per instance — this runs in custom-UI scope so
+  // getStringParameterValue resolves.
+  if (!st.didLoadCollapsedFromParam) {
+    id<FxCustomParameterActionAPI_v4> actAPI =
+        [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actAPI startAction:api];
+    id<FxParameterRetrievalAPI_v6> getAPI =
+        [api apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    NSString *str = nil;
+    if (getAPI) {
+      [getAPI getStringParameterValue:&str fromParameter:kParamCollapsedGroups];
+      st.didLoadCollapsedFromParam = YES;
+    }
+    [actAPI endAction:api];
+    if (str.length > 0) {
+      NSMutableSet<NSString *> *set = [NSMutableSet set];
+      for (NSString *s in [str componentsSeparatedByString:@","]) {
+        if (s.length > 0)
+          [set addObject:s];
+      }
+      NSSet<NSString *> *parsed = [set copy];
+      st.collapsedGroupIDs = parsed;
+      [st.store performBatch:^{
+        [st.store setCollapsedGroupIDs:parsed];
+      }];
+    }
+  }
 
   NSArray<KKBezierPath *> *paths = snap.paths;
   NSUInteger pathCount = paths.count;
@@ -539,5 +574,5 @@ void KKCanvasRefreshLayerListFromSnapshot(KKCanvasStoreSnapshot *snap,
   KKParamSyncApplyFromSnapshot(snap, syncPath, st.store.uuid, api);
 
   syncStyleViews(st, snap, syncPath);
-  syncGroupHeaders(st, snap, syncPath.isImage);
+  syncGroupHeaders(st, snap, syncPath.isImage, syncPath.isGroup);
 }

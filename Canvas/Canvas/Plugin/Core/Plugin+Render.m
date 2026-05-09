@@ -4,6 +4,7 @@
  */
 
 #import "Constants.h"
+#import "KKParamSync.h"
 #import "LayerList_Private.h"
 #import "ObjectParams.h"
 #import "Plugin_Private.h"
@@ -423,16 +424,19 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
   // outputWidth/Height (KKMotionBlur header documents this opt-out).
   mbState.subframeScale = 1.0f;
 
-  NSString *baseStr = nil;
-  [paramGetAPI getStringParameterValue:&baseStr fromParameter:kParamPathData];
+  // Render tick can't read KKDataBlob params (FxPlug XPC scope rule —
+  // see project_osc_custom_blob_unreadable.md); read the native mirror.
+  NSString *baseStr = KKCanvasReadPathDataMirror(paramGetAPI);
   NSData *baseBlob = baseStr.length
                          ? [[NSData alloc] initWithBase64EncodedString:baseStr
                                                                options:0]
                          : nil;
 
+  // Render scope can't read KKDataBlob params; read the native-string
+  // mirror that KKKit writes in lockstep with every lanes blob write.
   NSString *lanesJSON = nil;
   [paramGetAPI getStringParameterValue:&lanesJSON
-                         fromParameter:kKKParamMultiStageData];
+                         fromParameter:kKKParamMultiStageDataMirror];
   NSArray<KKTimingLane *> *lanes =
       lanesJSON.length ? [KKTimingLane lanesFromJSON:lanesJSON] : nil;
   CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;

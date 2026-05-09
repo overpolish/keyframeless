@@ -4,7 +4,9 @@
  */
 
 #import "Constants.h"
+#import "KKParamSync.h"
 #import "LayerList_Private.h"
+#import "ObjectParams.h"
 #import "Plugin_Private.h"
 #import <KeyframelessKit/KeyframelessKit.h>
 
@@ -97,8 +99,8 @@ _kkReadParamForDesc(id<FxParameterRetrievalAPI_v6> getAPI,
     return @[ @(r), @(g), @(b) ];
   }
   case KKAnimatableParamKindGradient: {
-    NSString *json = nil;
-    [getAPI getStringParameterValue:&json fromParameter:desc.paramID];
+    // Gradient data params are KKDataBlobs — read via the blob helper.
+    NSString *json = KKReadCustomParamString(getAPI, desc.paramID);
     NSArray<KKGradientStop *> *stops = KKGradientStopsFromJSON(json);
     return stops ? KKGradientFlatFromStops(stops) : @[];
   }
@@ -157,7 +159,7 @@ static void _kkWriteParamForDesc(id<FxParameterSettingAPI_v5> setAPI,
     if (stops) {
       NSString *json = KKGradientJSONFromStops(stops);
       if (json)
-        [setAPI setStringParameterValue:json toParameter:desc.paramID];
+        KKWriteCustomParamString(setAPI, json, desc.paramID);
     }
     break;
   }
@@ -553,8 +555,7 @@ static KKCanvasAnimProp *_kkPropForParamID(UInt32 paramID) {
 
 static NSMutableArray<KKBezierPath *> *
 _kkReadPaths(id<FxParameterRetrievalAPI_v6> getAPI) {
-  NSString *str = nil;
-  [getAPI getStringParameterValue:&str fromParameter:kParamPathData];
+  NSString *str = KKCanvasReadPathData(getAPI);
   if (str.length == 0)
     return [NSMutableArray array];
   NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
@@ -564,8 +565,7 @@ _kkReadPaths(id<FxParameterRetrievalAPI_v6> getAPI) {
 static void _kkWritePaths(id<FxParameterSettingAPI_v5> setAPI,
                           NSArray<KKBezierPath *> *paths) {
   NSData *blob = [KKBezierPath blobFromPaths:paths];
-  [setAPI setStringParameterValue:[blob base64EncodedStringWithOptions:0]
-                      toParameter:kParamPathData];
+  KKCanvasWritePathData([blob base64EncodedStringWithOptions:0], setAPI);
 }
 
 static KKBezierPath *_kkPathByLayerID(NSArray<KKBezierPath *> *paths,
@@ -995,6 +995,43 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
     [actAPI endAction:self];
     return;
   }
+  // Host-revert guard: during cmd-Z, FCP echoes parameterChanged for the
+  // reverted slider before kParamLastSelectedIndex echoes (and before our
+  // selectedIndex parameterChanged hook can update the in-memory selection
+  // map). _kkSelectedLayerID then resolves to the *previously*-selected
+  // path, and the writePath/_kkWritePaths below would persist the reverted
+  // inspector value into that wrong path's blob.
+  //
+  // Detect the mismatch and bail: if the persisted selectedIndex param
+  // disagrees with the in-memory selection, we're mid-revert. The blob
+  // is canonical, the inspector echo is a downstream effect — don't
+  // re-persist it.
+  NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+  NSIndexSet *memSel = uuid ? KKCanvasCurrentSelection(uuid) : nil;
+  NSInteger paramSelIdx = KKReadSelectedIndex(getAPI);
+  NSInteger memIdx = (memSel.count == 1) ? (NSInteger)memSel.firstIndex : -1;
+  // Group-only selection: kParamLastSelectedIndex is -1 by design (groups
+  // have no path index — see KKSaveSelectedIndex), but memIdx is the
+  // group's array index. The mismatch here is the expected steady state,
+  // not a mid-cmd-Z revert. Compare layerIDs instead.
+  BOOL memIsGroup = NO;
+  if (memSel.count == 1) {
+    NSMutableArray<KKBezierPath *> *paths = _kkReadPaths(getAPI);
+    NSUInteger idx = memSel.firstIndex;
+    if (idx < paths.count && paths[idx].isGroup)
+      memIsGroup = YES;
+  }
+  if (memIsGroup) {
+    // For groups, the only valid kParamLastSelectedIndex is -1. If it's
+    // anything else, that *is* a mid-revert and we should bail.
+    if (paramSelIdx != -1) {
+      [actAPI endAction:self];
+      return;
+    }
+  } else if (paramSelIdx != memIdx) {
+    [actAPI endAction:self];
+    return;
+  }
   CMTime now = [actAPI currentTime];
   NSArray<NSNumber *> *newValues = _kkReadParamForDesc(getAPI, desc, now);
 
@@ -1009,8 +1046,7 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
     _kkWritePaths(setAPI, paths);
   }
 
-  NSString *json = nil;
-  [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
+  NSString *json = KKReadCustomParamString(getAPI, kKKParamMultiStageData);
   NSMutableArray<KKTimingLane *> *lanes =
       json.length ? [[KKTimingLane lanesFromJSON:json] mutableCopy] : nil;
   if (!lanes.count) {
@@ -1039,16 +1075,8 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
     changed = YES;
     break;
   }
-  if (changed) {
-    KKApplyHTHNormalizationInPlace(lanes);
-    NSString *updated = [KKTimingLane jsonFromLanes:lanes];
-    if (updated)
-      [setAPI setStringParameterValue:updated
-                          toParameter:kKKParamMultiStageData];
-    KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
-    if (state)
-      state.lanesSnapshot = [lanes copy];
-  }
+  if (changed)
+    [self kkWriteLanesJSON:lanes setAPI:setAPI];
   [actAPI endAction:self];
   // Inspector slider tweaks don't trigger drawOSC and don't fire the
   // KKCanvasStore observer (paths unchanged), so the pump's normal

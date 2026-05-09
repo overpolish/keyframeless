@@ -23,6 +23,11 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)refreshLayerList;
 @end
 
+@interface CanvasPlugin (StyleViews)
+- (NSView *)createStyleViewForParameterID:(UInt32)parameterID
+    NS_RETURNS_RETAINED;
+@end
+
 @interface CanvasPlugin (Timing)
 - (void)kkPushParamToLane:(UInt32)paramID;
 + (void)kkApplyLanes:(NSArray<KKTimingLane *> *)lanes

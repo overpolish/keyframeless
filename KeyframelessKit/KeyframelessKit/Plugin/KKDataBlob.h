@@ -72,4 +72,16 @@ BOOL KKReadCustomParamBool(id<FxParameterRetrievalAPI_v6> getAPI,
 void KKWriteCustomParamBool(id<FxParameterSettingAPI_v5> setAPI, BOOL value,
                             UInt32 parameterID);
 
+/// Read an int-valued custom parameter (NSNumber-typed). Returns 0 when
+/// unset or wrong type. For params registered via
+/// `addCustomParameterWithName:…defaultValue:@(N)…`.
+int KKReadCustomParamInt(id<FxParameterRetrievalAPI_v6> getAPI,
+                         UInt32 parameterID);
+
+/// Counterpart to `KKReadCustomParamInt`. Writes via
+/// setCustomParameterValue:atTime: so the change registers an undo entry.
+/// Caller must already be inside an FxCustomParameterActionAPI_v4 scope.
+void KKWriteCustomParamInt(id<FxParameterSettingAPI_v5> setAPI, int value,
+                           UInt32 parameterID);
+
 NS_ASSUME_NONNULL_END

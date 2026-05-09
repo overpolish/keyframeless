@@ -41,6 +41,60 @@ static inline KKBezierPath *_Nullable KKSelectedTransformTarget(
   return group;
 }
 
+/// Serialize a selection (paths or single group) to the string format used
+/// by `kParamCanvasSelection`. Groups are stored by layerID so the
+/// selection survives reorders within the same undo entry; paths are
+/// stored by index since their position is stable against the same blob.
+static inline NSString *_Nonnull KKSerializeCanvasSelection(
+    NSIndexSet *_Nullable sel, NSArray<KKBezierPath *> *_Nonnull paths) {
+  if (!sel.count)
+    return @"";
+  // Single group: encode by layerID.
+  if (sel.count == 1) {
+    NSUInteger idx = sel.firstIndex;
+    if (idx < paths.count && paths[idx].isGroup) {
+      NSString *gid = paths[idx].layerID ?: @"";
+      return [@"g:" stringByAppendingString:gid];
+    }
+  }
+  NSMutableArray<NSString *> *parts =
+      [NSMutableArray arrayWithCapacity:sel.count];
+  [sel enumerateIndexesUsingBlock:^(NSUInteger i, BOOL *stop) {
+    [parts addObject:[NSString stringWithFormat:@"%lu", (unsigned long)i]];
+  }];
+  return [@"p:" stringByAppendingString:[parts componentsJoinedByString:@","]];
+}
+
+/// Parse a `kParamCanvasSelection` string back into an NSIndexSet, given
+/// the current paths array (needed to resolve group layerIDs).
+static inline NSIndexSet *_Nonnull KKParseCanvasSelection(
+    NSString *_Nullable str, NSArray<KKBezierPath *> *_Nonnull paths) {
+  if (!str.length)
+    return [NSIndexSet indexSet];
+  if ([str hasPrefix:@"g:"]) {
+    NSString *gid = [str substringFromIndex:2];
+    if (!gid.length)
+      return [NSIndexSet indexSet];
+    for (NSUInteger i = 0; i < paths.count; i++) {
+      if (paths[i].isGroup && [paths[i].layerID isEqualToString:gid])
+        return [NSIndexSet indexSetWithIndex:i];
+    }
+    return [NSIndexSet indexSet];
+  }
+  if ([str hasPrefix:@"p:"]) {
+    NSMutableIndexSet *out = [NSMutableIndexSet indexSet];
+    NSArray<NSString *> *parts =
+        [[str substringFromIndex:2] componentsSeparatedByString:@","];
+    for (NSString *p in parts) {
+      NSInteger v = p.integerValue;
+      if (v >= 0 && (NSUInteger)v < paths.count)
+        [out addIndex:(NSUInteger)v];
+    }
+    return [out copy];
+  }
+  return [NSIndexSet indexSet];
+}
+
 /// Returns YES when the "Force Show All Parameters" toggle is ON.
 static inline BOOL
 KKIsForceShowEnabled(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI) {
@@ -79,6 +133,7 @@ typedef NS_OPTIONS(uint32_t, KKVisCondition) {
   KKVisTransformOpen = 1 << 19,        // transform enabled + expanded
   KKVisDashedOrDotted = 1 << 20,       // strokeStyle == 1 || strokeStyle == 2
   KKVisClosedPath = 1 << 21,           // path is closed (inverse of OpenPath)
+  KKVisNotGroup = 1 << 22,             // not a group selection
 };
 
 typedef struct {
@@ -91,8 +146,8 @@ typedef struct {
 static const KKParamVisRule kParamVisibility[] = {
   // Param                    Required conditions                                          Flags when visible
   // ─── Always ───
-  { kParamOpacity,            KKVisAlways,                                                 kFxParameterFlag_DEFAULT },
-  { kParamClosedPath,         KKVisNotImage,                                               kFxParameterFlag_NOT_ANIMATABLE },
+  { kParamOpacity,            KKVisNotGroup,                                               kFxParameterFlag_DEFAULT },
+  { kParamClosedPath,         KKVisNotImage | KKVisNotGroup,                               kFxParameterFlag_NOT_ANIMATABLE },
   // ─── Transform group children ───
   // (kParamTransformEnabled is rendered by the group header — keep it HIDDEN.)
   { kParamPosition,           KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
@@ -149,12 +204,12 @@ static const size_t kParamVisibilityCount =
 
 /// Build the active-condition bitmask from the current selection state.
 static inline KKVisCondition
-KKBuildVisConditions(BOOL isImage, BOOL isOpen, BOOL hasJoins, BOOL strokeOpen,
-                     BOOL fillOpen, BOOL sketchOpen, BOOL transformOpen,
-                     uint8_t strokeStyle, int8_t startMarker, int8_t endMarker,
-                     int fillStyle, uint8_t strokeColorMode,
-                     uint8_t fillColorMode, uint8_t strokeGradientType,
-                     uint8_t fillGradientType) {
+KKBuildVisConditions(BOOL isImage, BOOL isGroup, BOOL isOpen, BOOL hasJoins,
+                     BOOL strokeOpen, BOOL fillOpen, BOOL sketchOpen,
+                     BOOL transformOpen, uint8_t strokeStyle,
+                     int8_t startMarker, int8_t endMarker, int fillStyle,
+                     uint8_t strokeColorMode, uint8_t fillColorMode,
+                     uint8_t strokeGradientType, uint8_t fillGradientType) {
   KKVisCondition c = KKVisAlways;
   if (strokeOpen)
     c |= KKVisStrokeOpen;
@@ -174,6 +229,8 @@ KKBuildVisConditions(BOOL isImage, BOOL isOpen, BOOL hasJoins, BOOL strokeOpen,
     c |= KKVisNotImage;
   if (isImage)
     c |= KKVisIsImage;
+  if (!isGroup)
+    c |= KKVisNotGroup;
   if (strokeStyle == 1)
     c |= KKVisDashed;
   if (strokeStyle == 2)
@@ -203,26 +260,79 @@ KKBuildVisConditions(BOOL isImage, BOOL isOpen, BOOL hasJoins, BOOL strokeOpen,
   return c;
 }
 
+// Bits we own. The host silently OR's its own (observed: COLLAPSED 0x8,
+// DONT_DISPLAY_IN_DASHBOARD 0x20, CURVE_EDITOR_HIDDEN 0x200, 0x20000) into
+// flags every parameterChanged tick; a wholesale `cur != want` would always
+// disagree and produce a phantom undo entry. Compare/mutate only these.
+// Mirrors kKKMutableFlagMask in KKPlugin+TimingParams.m.
+static const FxParameterFlags kKKCanvasMutableFlagMask =
+    kFxParameterFlag_HIDDEN | kFxParameterFlag_NOT_ANIMATABLE |
+    kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_USE_FULL_VIEW_WIDTH;
+
+/// Mask-and-merge flag write. No-op when the bits we own already match —
+/// avoids creating phantom undo entries from host-OR'd bit drift.
+/// Preserves DISABLED (set externally by HTH transition lane disabling).
+/// Caller must already be inside an action scope.
+///
+/// `cache` is an optional per-instance dictionary mapping paramID →
+/// last-written merged flags. Some FxPlug params (notably the group
+/// container types) don't preserve CUSTOM_UI / USE_FULL_VIEW_WIDTH bits
+/// between writes — `getParameterFlags` returns the registered baseline
+/// regardless of what we just set — so without a write-side cache the
+/// host comparison always disagrees and we write every call. Pass nil
+/// to disable caching.
+static inline void KKSetFlagsIfNeeded(
+    id<FxParameterSettingAPI_v5> _Nonnull setAPI,
+    id<FxParameterRetrievalAPI_v6> _Nonnull getAPI, FxParameterFlags want,
+    UInt32 paramID,
+    NSMutableDictionary<NSNumber *, NSNumber *> *_Nullable cache) {
+  FxParameterFlags cur = 0;
+  [getAPI getParameterFlags:&cur fromParameter:paramID];
+  FxParameterFlags wantPreserved = want | (cur & kFxParameterFlag_DISABLED);
+  FxParameterFlags merged = (cur & ~kKKCanvasMutableFlagMask) |
+                            (wantPreserved & kKKCanvasMutableFlagMask);
+  if (cache) {
+    NSNumber *cached = cache[@(paramID)];
+    if (cached && cached.unsignedIntegerValue == merged)
+      return;
+  }
+  if ((cur & kKKCanvasMutableFlagMask) ==
+      (wantPreserved & kKKCanvasMutableFlagMask)) {
+    if (cache)
+      cache[@(paramID)] = @(merged);
+    return;
+  }
+  [setAPI setParameterFlags:merged toParameter:paramID];
+  if (cache)
+    cache[@(paramID)] = @(merged);
+}
+
 /// Evaluate the visibility table and set all parameter flags in one pass.
-/// When forceShow is YES, every parameter is made visible.
-static inline void
-KKApplyParamVisibility(id<FxParameterSettingAPI_v5> _Nonnull setAPI,
-                       KKVisCondition active, BOOL forceShow) {
-  // Group headers are always visible (interactivity is handled separately).
+/// Caller must already be inside an action scope. Mask-and-merge means a
+/// pass with no effective state change writes zero flags → no undo entry.
+/// `cache` is the per-instance last-written-flags dictionary; pass nil
+/// for callers that don't have one (the host-flag comparison is the
+/// fallback).
+static inline void KKApplyParamVisibility(
+    id<FxParameterSettingAPI_v5> _Nonnull setAPI,
+    id<FxParameterRetrievalAPI_v6> _Nonnull getAPI, KKVisCondition active,
+    BOOL forceShow,
+    NSMutableDictionary<NSNumber *, NSNumber *> *_Nullable cache) {
   FxParameterFlags groupFlags = kFxParameterFlag_CUSTOM_UI |
                                 kFxParameterFlag_NOT_ANIMATABLE |
                                 kFxParameterFlag_USE_FULL_VIEW_WIDTH;
-  [setAPI setParameterFlags:groupFlags toParameter:kParamGroupTransform];
-  [setAPI setParameterFlags:groupFlags toParameter:kParamGroupStroke];
-  [setAPI setParameterFlags:groupFlags toParameter:kParamGroupFill];
-  [setAPI setParameterFlags:groupFlags toParameter:kParamGroupSketch];
+  KKSetFlagsIfNeeded(setAPI, getAPI, groupFlags, kParamGroupTransform, cache);
+  KKSetFlagsIfNeeded(setAPI, getAPI, groupFlags, kParamGroupStroke, cache);
+  KKSetFlagsIfNeeded(setAPI, getAPI, groupFlags, kParamGroupFill, cache);
+  KKSetFlagsIfNeeded(setAPI, getAPI, groupFlags, kParamGroupSketch, cache);
 
   for (size_t i = 0; i < kParamVisibilityCount; i++) {
     KKVisCondition req = kParamVisibility[i].required;
     BOOL visible = forceShow || ((active & req) == req);
     FxParameterFlags flags =
         visible ? kParamVisibility[i].visibleFlags : kFxParameterFlag_HIDDEN;
-    [setAPI setParameterFlags:flags toParameter:kParamVisibility[i].paramID];
+    KKSetFlagsIfNeeded(setAPI, getAPI, flags, kParamVisibility[i].paramID,
+                       cache);
   }
 }
 
@@ -248,8 +358,7 @@ KKReadSelectedIndex(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI) {
 /// Read the fill style of the currently-selected path (0 if none).
 static inline int
 KKReadSelectedFillStyle(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI) {
-  NSString *str = nil;
-  [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
+  NSString *str = KKReadCustomParamString(paramGetAPI, kParamPathData);
   NSInteger selIdx = KKReadSelectedIndex(paramGetAPI);
   if (str.length > 0 && selIdx >= 0) {
     NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
@@ -273,8 +382,13 @@ KKReadGradientParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull api,
   [api getIntValue:&type fromParameter:typeID atTime:kCMTimeZero];
   double angle = 0.0;
   [api getFloatValue:&angle fromParameter:angleID atTime:kCMTimeZero];
+  // Read the native-string mirror — works in OSC scope where blob reads
+  // return nil. Writers always update both in lockstep.
+  UInt32 mirrorID = (dataID == kParamStrokeGradientData)
+                        ? kParamStrokeGradientDataMirror
+                        : kParamFillGradientDataMirror;
   NSString *json = nil;
-  [api getStringParameterValue:&json fromParameter:dataID];
+  [api getStringParameterValue:&json fromParameter:mirrorID];
   if (isStroke) {
     path.strokeColorMode = (uint8_t)mode;
     path.strokeGradientType = (uint8_t)type;
@@ -302,7 +416,12 @@ KKWriteGradientParamsFromPath(id<FxParameterSettingAPI_v5> _Nonnull api,
   [api setIntValue:(int)mode toParameter:modeID atTime:kCMTimeZero];
   [api setIntValue:(int)type toParameter:typeID atTime:kCMTimeZero];
   [api setFloatValue:angle toParameter:angleID atTime:kCMTimeZero];
-  [api setStringParameterValue:(json ?: @"") toParameter:dataID];
+  KKWriteCustomParamString(api, json ?: @"", dataID);
+  // Lockstep mirror write — readable from OSC/render scope.
+  UInt32 mirrorID = (dataID == kParamStrokeGradientData)
+                        ? kParamStrokeGradientDataMirror
+                        : kParamFillGradientDataMirror;
+  [api setStringParameterValue:json ?: @"" toParameter:mirrorID];
 }
 
 /// Read the transformEnabled / position / scale / anchor params and apply
@@ -592,6 +711,43 @@ KKParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
   path.sketchFillWeight = (float)fWeight;
 }
 
+/// In-scope variant: caller already opened the action scope and supplies
+/// get/set APIs. Use when the path mutation must coalesce with surrounding
+/// writes into one undo entry (e.g. group header checkbox toggle).
+static inline void KKModifySelectedPathPropertyInScope(
+    id<PROAPIAccessing> _Nonnull api,
+    id<FxParameterRetrievalAPI_v6> _Nonnull getAPI,
+    id<FxParameterSettingAPI_v5> _Nonnull setAPI,
+    void (^_Nonnull block)(KKBezierPath *_Nonnull)) {
+  NSString *str = KKReadCustomParamString(getAPI, kParamPathData);
+  if (str.length == 0)
+    return;
+  NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
+  NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+  NSString *uuid = KKLayerUUIDForAPI(api);
+  NSIndexSet *sel = uuid ? KKCanvasCurrentSelection(uuid) : nil;
+  BOOL modified = NO;
+  if (sel.count > 0) {
+    [sel enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+      if (idx < paths.count && !paths[idx].isGroup)
+        block(paths[idx]);
+    }];
+    modified = YES;
+  } else {
+    NSInteger selIdx = KKReadSelectedIndex(getAPI);
+    if (selIdx >= 0 && (NSUInteger)selIdx < paths.count) {
+      block(paths[selIdx]);
+      modified = YES;
+    }
+  }
+  if (modified) {
+    NSData *newBlob = [KKBezierPath blobFromPaths:paths];
+    NSString *base64 = [newBlob base64EncodedStringWithOptions:0];
+    KKWriteCustomParamString(setAPI, base64, kParamPathData);
+    [setAPI setStringParameterValue:base64 toParameter:kParamPathDataMirror];
+  }
+}
+
 /// Modify a property of all selected paths inside an action scope.
 /// The block receives each selected non-group path for mutation.
 static inline void
@@ -604,8 +760,7 @@ KKModifySelectedPathProperty(id<PROAPIAccessing> _Nonnull api,
       [api apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   id<FxParameterSettingAPI_v5> setAPI =
       [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  NSString *str = nil;
-  [getAPI getStringParameterValue:&str fromParameter:kParamPathData];
+  NSString *str = KKReadCustomParamString(getAPI, kParamPathData);
   if (str.length > 0) {
     NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
     NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
@@ -627,8 +782,10 @@ KKModifySelectedPathProperty(id<PROAPIAccessing> _Nonnull api,
     }
     if (modified) {
       NSData *newBlob = [KKBezierPath blobFromPaths:paths];
+      KKWriteCustomParamString(
+          setAPI, [newBlob base64EncodedStringWithOptions:0], kParamPathData);
       [setAPI setStringParameterValue:[newBlob base64EncodedStringWithOptions:0]
-                          toParameter:kParamPathData];
+                          toParameter:kParamPathDataMirror];
     }
   }
   [actAPI endAction:api];

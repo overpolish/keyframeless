@@ -137,13 +137,29 @@
   double valB = 0;
   [getAPI getFloatValue:&valB fromParameter:otherID atTime:time];
 
+  // First-tick guard: when prevSource is nil or different (i.e. this is
+  // the first parameterChanged for `parameterID` in this gesture), only
+  // record the ratio baseline — don't write the linked partner yet.
+  // A cmd-Z / cmd-Shift-Z echo for a linked param is a single one-shot
+  // event so it never reaches a "second tick", meaning the linked write
+  // never fires from a host-revert echo and the redo stack is preserved.
+  // A real cmd-drag emits parameterChanged at ~60 Hz so the second tick
+  // arrives within ~16 ms and the partner catches up imperceptibly.
   NSNumber *prevSource = objc_getAssociatedObject(self, kKKLinkedSource);
-  if (!prevSource || prevSource.unsignedIntValue != parameterID) {
+  BOOL firstTickForSource =
+      (!prevSource || prevSource.unsignedIntValue != parameterID);
+  // Default: clear the "last partner written" marker so plugins polling
+  // it via `linkedPartnerWrittenForLastChange` don't see a stale value
+  // from a previous call.
+  objc_setAssociatedObject(self, kKKLinkedLastPartner, nil,
+                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  if (firstTickForSource) {
     objc_setAssociatedObject(self, kKKLinkedSource, @(parameterID),
                              OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     double ratio = (valA > 0) ? valB / valA : 1.0;
     objc_setAssociatedObject(self, kKKLinkedRatio, @(ratio),
                              OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    return YES;
   }
 
   NSNumber *ratioNum = objc_getAssociatedObject(self, kKKLinkedRatio);
@@ -154,8 +170,21 @@
   [setAPI setFloatValue:valA * ratio toParameter:otherID atTime:time];
   objc_setAssociatedObject(self, kKKLinkedLocking, @NO,
                            OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  // Record the partner so the plugin can run any per-edit side effects
+  // (e.g. mirroring the value into a backing path blob) on the partner
+  // too. FCP does NOT echo `parameterChanged` for `setFloatValue:` calls
+  // made from inside another `parameterChanged`, so without this the
+  // partner write reaches the inspector but never triggers the plugin's
+  // normal parameterChanged-driven persistence path.
+  objc_setAssociatedObject(self, kKKLinkedLastPartner, @(otherID),
+                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
   return YES;
+}
+
+- (UInt32)linkedPartnerWrittenForLastChange {
+  NSNumber *partner = objc_getAssociatedObject(self, kKKLinkedLastPartner);
+  return partner ? partner.unsignedIntValue : 0;
 }
 
 - (nullable id<MTLRenderPipelineState>)

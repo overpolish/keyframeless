@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKParamSync.h"
 #import "LayerList_Private.h"
 #import "ObjectParams.h"
 #import <AppKit/AppKit.h>
@@ -39,8 +40,7 @@ static KKBezierPath *_kkMakeGroup(NSString *name,
   id<FxParameterSettingAPI_v5> paramSetAPI =
       [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
 
-  NSString *str = nil;
-  [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
+  NSString *str = KKCanvasReadPathData(paramGetAPI);
   NSMutableArray<KKBezierPath *> *paths;
   if (str.length > 0) {
     NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
@@ -52,22 +52,109 @@ static KKBezierPath *_kkMakeGroup(NSString *name,
   }
   block(paths);
   NSData *newBlob = [KKBezierPath blobFromPaths:paths];
-  [paramSetAPI
-      setStringParameterValue:[newBlob base64EncodedStringWithOptions:0]
-                  toParameter:kParamPathData];
+  KKCanvasWritePathData([newBlob base64EncodedStringWithOptions:0],
+                        paramSetAPI);
   NSIndexSet *sel = KKLayerStateForUUID(_instanceUUID).uiSelection;
   [self _syncObjectParamsForSelection:sel paths:paths paramSetAPI:paramSetAPI];
-  [actionAPI endAction:self];
 
-  // Push the mutated paths into the store directly so observers (sequencer
-  // reconciliation, layer-list refresh) fire on this tick rather than waiting
-  // for the next drawOSC round-trip — inspector-only actions like delete or
-  // group don't reliably trigger drawOSC.
+  // Persist the selection so cmd-Z reverts it alongside the blob.
+  // group/ungroup/duplicate/delete all change selection inside the block;
+  // sel here reflects the post-block state.
+  NSString *selStr = KKSerializeCanvasSelection(sel, paths);
+  [paramSetAPI setStringParameterValue:selStr
+                           toParameter:kParamCanvasSelection];
+
+  // Prune any lanes whose groupKey (layerID) no longer exists in `paths`.
+  // Otherwise the store-observer-driven reconcile fires after this action
+  // scope ends and writes the lanes blob as a separate undo entry — user
+  // sees two cmd-Z presses to fully revert a single delete (one for the
+  // lane, one for the layer). Coalescing into this scope keeps it atomic.
+  NSString *lanesJSON =
+      KKReadCustomParamString(paramGetAPI, kKKParamMultiStageData);
+  NSArray<KKTimingLane *> *existing =
+      lanesJSON.length ? [KKTimingLane lanesFromJSON:lanesJSON] : nil;
+  if (existing.count) {
+    NSMutableSet<NSString *> *validIDs =
+        [NSMutableSet setWithCapacity:paths.count];
+    for (KKBezierPath *p in paths)
+      if (p.layerID.length)
+        [validIDs addObject:p.layerID];
+    NSMutableArray<KKTimingLane *> *kept =
+        [NSMutableArray arrayWithCapacity:existing.count];
+    BOOL pruned = NO;
+    for (KKTimingLane *l in existing) {
+      if (l.groupKey.length == 0 || [validIDs containsObject:l.groupKey])
+        [kept addObject:l];
+      else
+        pruned = YES;
+    }
+    if (pruned)
+      KKWriteLanesJSON(kept, paramSetAPI, _apiManager);
+  }
+
+  // Push paths to the store BEFORE endAction so the in-scope visibility
+  // apply below sees the new state. Without this, the async store-
+  // observer's `KKParamSyncApplyFromSnapshot` would write the visibility
+  // flags later (e.g. when a delete flips `hasPath` NO → vis condition
+  // changes → flag writes) in its own scope = second undo entry.
   KKCanvasStore *store = KKLayerStateForUUID(_instanceUUID).store;
+  NSIndexSet *newSel = KKLayerStateForUUID(_instanceUUID).uiSelection;
   if (store)
     [store performBatch:^{
       [store setPaths:paths];
+      // Sync selection too — the block may have changed it
+      // (group/ungroup/duplicate). Without this, the in-scope visibility
+      // apply below reads the stale store selection and computes the old
+      // visHash; the async observer later sees the new selection and
+      // writes the flag flip in its own scope = 2nd undo entry.
+      [store setSelectedIndices:newSel];
     }];
+
+  // Inline lane reconcile + fingerprint cache, mirroring OSC writePaths.
+  // Must run AFTER the store push: both `reconcileLanes:` and
+  // `kkReconcileFingerprintForAPI` read from the store snapshot.
+  // Without the inline reconcile, group/duplicate add a path but leave
+  // the lanes JSON untouched in this scope; the async observer would
+  // normally reconcile-and-add, but we cache the fingerprint below to
+  // suppress it (otherwise = 2nd undo entry). Net result without the
+  // inline call: new lane never appears until something else
+  // (e.g. selection change) forces a sync.
+  KKPluginInstanceState *kkState = KKInstanceStateForAPI(_apiManager);
+  KKPlugin *plugin = kkState.plugin;
+  if (plugin) {
+    NSString *lanesJSON = nil;
+    [paramGetAPI getStringParameterValue:&lanesJSON
+                           fromParameter:kKKParamMultiStageDataMirror];
+    NSArray<KKTimingLane *> *existingLanes =
+        lanesJSON.length ? [KKTimingLane lanesFromJSON:lanesJSON] : @[];
+    NSArray<KKTimingLane *> *reconciled = [plugin reconcileLanes:existingLanes
+                                                          atTime:kCMTimeZero
+                                                     paramGetAPI:paramGetAPI];
+    if (reconciled) {
+      NSString *newJSON = [KKTimingLane jsonFromLanes:reconciled];
+      NSString *existJSON = [KKTimingLane jsonFromLanes:existingLanes];
+      if (newJSON && ![newJSON isEqualToString:existJSON ?: @""]) {
+        KKWriteLanesJSON(reconciled, paramSetAPI, _apiManager);
+        kkState.lanesSnapshot = reconciled;
+      }
+    }
+    NSString *fingerprint = [plugin kkReconcileFingerprintForAPI:_apiManager];
+    if (fingerprint)
+      kkState.cachedReconcileFingerprint = fingerprint;
+  }
+
+  // In-scope visibility apply: writes any flag flips inside the current
+  // action scope so they coalesce with the path-blob change as one undo
+  // entry. The async observer's apply later will see vh unchanged + skip.
+  if (store) {
+    KKCanvasStoreSnapshot *snap = [store snapshot];
+    KKBezierPath *selPath =
+        KKSelectedTransformTarget(snap.selectedIndices, snap.paths);
+    KKParamSyncApplyFromSnapshotInScope(snap, selPath, _instanceUUID,
+                                        _apiManager);
+  }
+
+  [actionAPI endAction:self];
 }
 
 - (void)_forceRedrawAndRefresh {
@@ -78,9 +165,8 @@ static KKBezierPath *_kkMakeGroup(NSString *name,
       [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   id<FxParameterSettingAPI_v5> paramSetAPI =
       [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  NSString *str = nil;
-  [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
-  [paramSetAPI setStringParameterValue:str ?: @"" toParameter:kParamPathData];
+  NSString *str = KKCanvasReadPathData(paramGetAPI);
+  KKCanvasWritePathData(str, paramSetAPI);
   [actionAPI endAction:self];
 }
 

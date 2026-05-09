@@ -126,6 +126,86 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
   return header;
 }
 
+- (KKCustomGroupHeaderView *)
+    createCheckboxGroupHeaderWithTitle:(NSString *)title
+                                  icon:(nullable NSImage *)icon
+                        enabledParamID:(UInt32)enabledParamID
+                       expandedParamID:(UInt32)expandedParamID
+                        onEnabledExtra:(void (^_Nullable)(
+                                           BOOL isEnabled,
+                                           id<FxParameterSettingAPI_v5> setAPI))
+                                           onEnabledExtra
+                       onExpandedExtra:(void (^_Nullable)(
+                                           BOOL isExpanded,
+                                           id<FxParameterSettingAPI_v5> setAPI))
+                                           onExpandedExtra {
+  KKCustomGroupHeaderView *header =
+      [[KKCustomGroupHeaderView alloc] initWithFrame:NSMakeRect(0, 0, 300, 26)
+                                          apiManager:self.apiManager
+                                         parameterId:enabledParamID
+                                                text:title
+                                                icon:icon
+                                       showsCheckbox:YES];
+
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  CMTime currentTime = [actionAPI currentTime];
+  BOOL enabled = NO;
+  [paramGetAPI getBoolValue:&enabled
+              fromParameter:enabledParamID
+                     atTime:currentTime];
+  header.isEnabled = enabled;
+  header.isExpanded = KKReadCustomParamBool(paramGetAPI, expandedParamID);
+  [actionAPI endAction:self];
+
+  __weak typeof(self) weakSelf = self;
+  void (^onEnabledExtraCopy)(BOOL, id<FxParameterSettingAPI_v5>) =
+      [onEnabledExtra copy];
+  void (^onExpandedExtraCopy)(BOOL, id<FxParameterSettingAPI_v5>) =
+      [onExpandedExtra copy];
+
+  header.onEnabledChanged = ^(BOOL isEnabled) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actAPI startAction:strongSelf];
+    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [setAPI setBoolValue:isEnabled
+             toParameter:enabledParamID
+                  atTime:[actAPI currentTime]];
+    if (onEnabledExtraCopy)
+      onEnabledExtraCopy(isEnabled, setAPI);
+    [actAPI endAction:strongSelf];
+  };
+
+  header.onExpandedChanged = ^(BOOL isExpanded) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actAPI startAction:strongSelf];
+    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    KKWriteCustomParamBool(setAPI, isExpanded, expandedParamID);
+    if (onExpandedExtraCopy)
+      onExpandedExtraCopy(isExpanded, setAPI);
+    [actAPI endAction:strongSelf];
+  };
+
+  [self registerGroupHeader:header
+             enabledParamID:enabledParamID
+            expandedParamID:expandedParamID];
+
+  return header;
+}
+
 - (void)syncGroupHeaderExpandedForExpandedParamID:(UInt32)expandedParamID {
   KKCustomGroupHeaderView *header =
       [self.genericGroupHeaders objectForKey:@(expandedParamID)];
@@ -141,6 +221,47 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
     if (weakHeader.isExpanded != expanded)
       weakHeader.isExpanded = expanded;
   });
+}
+
+- (void)syncGroupHeaderEnabledForEnabledParamID:(UInt32)enabledParamID
+                                         atTime:(CMTime)time {
+  KKCustomGroupHeaderView *header =
+      [self.genericGroupHeadersByEnabledParamID objectForKey:@(enabledParamID)];
+  if (!header)
+    return;
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!getAPI)
+    return;
+  BOOL enabled = NO;
+  [getAPI getBoolValue:&enabled fromParameter:enabledParamID atTime:time];
+  __weak KKCustomGroupHeaderView *weakHeader = header;
+  KKRunOnMain(^{
+    if (weakHeader.isEnabled != enabled)
+      weakHeader.isEnabled = enabled;
+  });
+}
+
+- (void)kkWriteLanesJSON:(NSArray<KKTimingLane *> *)lanes
+                  setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
+  KKWriteLanesJSON(lanes, setAPI, self.apiManager);
+}
+
+- (void)registerGroupHeader:(KKCustomGroupHeaderView *)header
+             enabledParamID:(UInt32)enabledParamID
+            expandedParamID:(UInt32)expandedParamID {
+  if (!header)
+    return;
+  if (!self.genericGroupHeaders)
+    self.genericGroupHeaders = [NSMapTable strongToWeakObjectsMapTable];
+  [self.genericGroupHeaders setObject:header forKey:@(expandedParamID)];
+  if (enabledParamID != 0) {
+    if (!self.genericGroupHeadersByEnabledParamID)
+      self.genericGroupHeadersByEnabledParamID =
+          [NSMapTable strongToWeakObjectsMapTable];
+    [self.genericGroupHeadersByEnabledParamID setObject:header
+                                                 forKey:@(enabledParamID)];
+  }
 }
 
 @end

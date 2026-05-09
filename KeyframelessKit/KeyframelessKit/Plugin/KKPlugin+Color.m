@@ -99,8 +99,7 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
     // as scalar animatable params — and ARE undoable. String param
     // writes are filtered off FCP's undo stack. See
     // project_kkdatablob_custom_param memory.
-    NSString *defaultJSON = @"[{\"p\":0,\"r\":1,\"g\":1,\"b\":1},"
-                            @"{\"p\":1,\"r\":1,\"g\":1,\"b\":1}]";
+    NSString *defaultJSON = KKDefaultGradientJSON();
     if (![paramAPI
             addCustomParameterWithName:@"GradientData"
                            parameterID:kKKParamGradientData

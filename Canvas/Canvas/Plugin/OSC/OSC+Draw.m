@@ -45,14 +45,18 @@ static const CGFloat kPathToolbarGap = 6.0;
                 atTime:kCMTimeZero];
   self.snapToGrid = snapVal;
 
-  if (!self.restoredTool) {
-    self.restoredTool = YES;
+  // Re-read on every tick (not just first restore) so cmd-Z of a tool
+  // change reverts the toolbar visual — the int-slider param's value
+  // changes underneath us, and there's no parameterChanged callback in
+  // OSC scope to react to it.
+  {
     int toolVal = (int)kOSCToolbarCursor;
     [getAPI getIntValue:&toolVal
           fromParameter:kParamLastTool
                  atTime:kCMTimeZero];
-    if (toolVal > 0)
+    if (toolVal > 0 && self.toolbar.activeTag != toolVal)
       self.toolbar.activeTag = toolVal;
+    self.restoredTool = YES;
   }
 }
 
@@ -91,8 +95,12 @@ static const CGFloat kPathToolbarGap = 6.0;
 
   // Detect undo/redo: if kParamLastSelectedIndex disagrees with the
   // in-memory selection, undo restored a different selection state.
+  // Skip when a pending selection was just consumed — that pending came
+  // from layer-list / sequencer / kParamCanvasSelection echo and is
+  // authoritative (in particular, multi-select pending must not be
+  // collapsed by kParamLastSelectedIndex's single-index value).
   BOOL undoDetected = NO;
-  {
+  if (!uiSelection) {
     id<FxParameterRetrievalAPI_v6> paramGetAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
     NSInteger paramIdx = KKReadSelectedIndex(paramGetAPI);
@@ -104,9 +112,29 @@ static const CGFloat kPathToolbarGap = 6.0;
             *stop = YES;
           }
         }];
+    // kParamCanvasSelection is the authoritative multi-select store; if it
+    // matches the in-memory selection, the kParamLastSelectedIndex / memIdx
+    // disagreement is benign (e.g. paramLastSel=-1 because layer-list
+    // multi-select doesn't write it, while the multi-set is intact).
+    BOOL canvasSelMatches = NO;
     if (paramIdx != memIdx) {
+      NSString *selStr = nil;
+      [paramGetAPI getStringParameterValue:&selStr
+                             fromParameter:kParamCanvasSelection];
+      NSIndexSet *parsedSel = KKParseCanvasSelection(selStr, self.paths);
+      canvasSelMatches = [parsedSel isEqualToIndexSet:self.selectedPathIndices];
+    }
+    if (paramIdx != memIdx && !canvasSelMatches) {
       undoDetected = YES;
-      lst.visHash = 0;
+      // Previously reset `lst.visHash = 0` here to force a visibility
+      // refresh on undo. With the cmd-Z echo handlers (Plugin.m kParam
+      // *Style/*Enabled/Expanded/CanvasSelection) now running
+      // KKParamSyncApplyFromSnapshotInScope synchronously inside FCP's
+      // own revert scope, visHash is already in sync after cmd-Z. Leaving
+      // the reset in caused this draw tick (which runs ~30ms after
+      // cmd-Z) to wipe vh, then drawOSC's store writes below fired the
+      // async observer in a fresh action scope which re-wrote flags as
+      // a separate undo entry — making one cmd-Z silently take 2-3.
       [self.selectedPathIndices removeAllIndexes];
       if (paramIdx >= 0 && (NSUInteger)paramIdx < self.paths.count) {
         [self.selectedPathIndices addIndex:(NSUInteger)paramIdx];
@@ -127,7 +155,21 @@ static const CGFloat kPathToolbarGap = 6.0;
       [store setPaths:self.paths];
       self.storeBlobString = self.lastReadBlobString;
     }
-    [store setSelectedIndices:self.selectedPathIndices];
+    // Only push selection when OSC actually has a path selection. OSC can't
+    // represent group selection (selectedPathIndices is path-indices only),
+    // so when it's empty the authoritative selection lives elsewhere
+    // (kParamCanvasSelection echo handler pushes group selections to the
+    // store). Pushing empty here would clobber that group selection on the
+    // very next drawOSC tick after a cmd-Z that restored a group.
+    NSIndexSet *currentStoreSel = store.snapshot.selectedIndices;
+    BOOL storeHoldsGroup = NO;
+    if (currentStoreSel.count == 1) {
+      NSUInteger idx = currentStoreSel.firstIndex;
+      if (idx < self.paths.count && self.paths[idx].isGroup)
+        storeHoldsGroup = YES;
+    }
+    if (!(self.selectedPathIndices.count == 0 && storeHoldsGroup))
+      [store setSelectedIndices:self.selectedPathIndices];
     [store setSoloActive:lst.soloActive];
     [store setEditing:lst.isEditing];
     [store setDragging:lst.isDragging];
@@ -159,7 +201,14 @@ static const CGFloat kPathToolbarGap = 6.0;
                       atTime:kCMTimeZero];
   }
   KKBezierPath *selPath = KKSelectedPath(self.selectedPathIndices, self.paths);
-  if (selPath) {
+  // Use the transform-aware target so a group-only selection still flushes
+  // inspector params to the group's own transform fields (translateX/Y,
+  // rotation, scale). Render walks parentGroupID and applies group
+  // transforms to descendants — so the group's own transform is what
+  // makes "move group" actually move the children.
+  KKBezierPath *transformTarget =
+      KKSelectedTransformTarget(self.selectedPathIndices, self.paths);
+  if (selPath || transformTarget) {
     BOOL isCursorMode =
         (self.toolbar.activeTag == kOSCToolbarCursor) || hideOSCPending;
     if (isCursorMode) {

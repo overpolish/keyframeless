@@ -289,11 +289,21 @@
     }
     self.toolbar.activeTag = activePart;
     {
+      // Wrap in an action scope. Without this the int-slider write at
+      // kCMTimeZero doesn't land on FCP's undo stack reliably from OSC
+      // scope, even though the param has no NOT_ANIMATABLE flag — the
+      // bool toggle right below works because bool writes coalesce
+      // differently. Action scope makes the int-slider write undoable
+      // the same way the OSC's path writes are.
+      id<FxCustomParameterActionAPI_v4> actAPI = [self.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      [actAPI startAction:self];
       id<FxParameterSettingAPI_v5> toolSetAPI =
           [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
       [toolSetAPI setIntValue:(int)activePart
                   toParameter:kParamLastTool
                        atTime:kCMTimeZero];
+      [actAPI endAction:self];
     }
     *forceUpdate = YES;
     return;

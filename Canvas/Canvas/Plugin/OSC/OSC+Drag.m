@@ -718,6 +718,14 @@
   }
 
   BOOL shapeFinalized = NO;
+  BOOL isShapeCreation =
+      (self.dragIsRect || self.dragIsEllipse || self.dragIsLine);
+  // Coalesce shape-creation writes (path blob in finalizeRect/Ellipse/Line +
+  // selectedIndex / inspector params written by syncStrokeParamsToSelection)
+  // into a single host undo entry. Without this, drawing a rect produces two
+  // cmd-Z steps: one to revert the post-finalize sync, one to remove the path.
+  BOOL ug =
+      isShapeCreation ? KKBeginUndoGroup(self.apiManager, @"Draw Shape") : NO;
   if (self.dragIsMarquee) {
     [self finalizeMarqueeAtX:positionX y:positionY modifiers:modifiers];
     shapeFinalized = YES;
@@ -742,6 +750,8 @@
   // dragged or finalized a new shape.
   if (self.gestureDidDrag || shapeFinalized)
     [self syncStrokeParamsToSelection];
+  if (isShapeCreation)
+    KKEndUndoGroup(self.apiManager, ug);
   *forceUpdate = YES;
   [super mouseUpAtPositionX:positionX
                   positionY:positionY

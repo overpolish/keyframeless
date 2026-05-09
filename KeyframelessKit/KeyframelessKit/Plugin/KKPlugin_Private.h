@@ -97,6 +97,14 @@ extern NSMutableArray<KKTimingLane *> *_Nullable KKReadLanesRebalanced(
 /// weak value (KKCustomGroupHeaderView).
 @property(nonatomic, strong, nullable)
     NSMapTable<NSNumber *, KKCustomGroupHeaderView *> *genericGroupHeaders;
+/// Companion to `genericGroupHeaders`: same headers keyed by their
+/// `enabledParamID` (the native bool toggle) instead of the expanded blob
+/// param. Populated by `registerGroupHeader:enabledParamID:expandedParamID:`
+/// when the caller's header has a checkbox. Used by
+/// `syncGroupHeaderEnabledForEnabledParamID:atTime:`.
+@property(nonatomic, strong, nullable)
+    NSMapTable<NSNumber *, KKCustomGroupHeaderView *>
+        *genericGroupHeadersByEnabledParamID;
 @property(nonatomic, weak, nullable) KKStageSequencerView *stageSequencer;
 @property(nonatomic, weak, nullable) NSView *stageSequencerContainer;
 @property(nonatomic, weak, nullable)
@@ -162,12 +170,8 @@ extern NSMutableArray<KKTimingLane *> *_Nullable KKReadLanesRebalanced(
                                                    sourceView;
 @end
 
-/// Writes `lanes` to the shared `kKKParamMultiStageData` JSON param. HTH
-/// transitions are normalized in-place (preserving Bool scalars per each
-/// lane's `valueComponentKinds`) before serialization.
-extern void KKWriteLanesJSON(NSArray<KKTimingLane *> *lanes,
-                             id<FxParameterSettingAPI_v5> setAPI,
-                             id<PROAPIAccessing> _Nullable apiManager);
+/// `KKWriteLanesJSON` is now declared publicly in `KKPlugin.h` so plugin
+/// code (e.g. OSC principals) can use it without importing private headers.
 
 /// Writes `json` to `kKKParamMultiStageData` only if it differs from the
 /// last JSON we wrote (tracked on `KKPluginInstanceState`). Each call to
@@ -308,6 +312,7 @@ static const void *_Nonnull const kKKLinkedPairs = &kKKLinkedPairs;
 static const void *_Nonnull const kKKLinkedLocking = &kKKLinkedLocking;
 static const void *_Nonnull const kKKLinkedRatio = &kKKLinkedRatio;
 static const void *_Nonnull const kKKLinkedSource = &kKKLinkedSource;
+static const void *_Nonnull const kKKLinkedLastPartner = &kKKLinkedLastPartner;
 
 static inline NSMutableDictionary<NSNumber *, id> *
 kkClassRegistry(Class cls, const void *_Nonnull key) {
