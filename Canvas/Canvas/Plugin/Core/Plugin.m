@@ -456,6 +456,12 @@
     paths = [NSMutableArray array];
   [lst.store performBatch:^{
     [lst.store setPaths:paths];
+    // Recompute selected-path derived properties (cycle styles, open/closed,
+    // etc.) so the snapshot the async observer receives carries up-to-date
+    // values.  Without this, syncStyleViews reads stale selectedStrokeStyle /
+    // selectedFillStyle from the snapshot and briefly resets the pill UI to the
+    // previous value before the next render tick corrects it (1-frame flash).
+    [lst.store syncSelectedPathProperties];
   }];
 }
 
