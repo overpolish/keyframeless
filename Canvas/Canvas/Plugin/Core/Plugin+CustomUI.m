@@ -321,9 +321,24 @@
       NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
       seedPaths = [KKBezierPath pathsFromBlob:blob];
     }
-    NSIndexSet *seedSel = [NSIndexSet indexSet];
-    if (lastIdx >= 0)
+    // Prefer kParamCanvasSelection — it's the only carrier that can
+    // represent a group-only selection (kParamLastSelectedIndex is -1
+    // for groups by design, so on cold-boot of a project saved with a
+    // group selected, lastIdx alone seeds an empty selection and the
+    // sequencer's group accent never lights up).
+    NSString *canvasSelStr = nil;
+    [paramGetAPI getStringParameterValue:&canvasSelStr
+                           fromParameter:kParamCanvasSelection];
+    NSIndexSet *seedSel = KKParseCanvasSelection(canvasSelStr, seedPaths);
+    if (seedSel.count == 0 && lastIdx >= 0 &&
+        (NSUInteger)lastIdx < seedPaths.count)
       seedSel = [NSIndexSet indexSetWithIndex:(NSUInteger)lastIdx];
+    // Mirror the seed into layer-instance state so KKCanvasCurrentSelection
+    // (used by `kkSelectedGroupKey`, OSC, etc.) is coherent before the
+    // store observer fires its first batch — otherwise observer →
+    // kkRefreshSequencerSelectedGroup reads nil and the sequencer stays
+    // unaccented until something else mutates selection.
+    KKCanvasUpdateSelection(uuid, seedSel);
     KKCanvasStore *initStore = state.store;
     [initStore performBatch:^{
       [initStore setPaths:seedPaths];
