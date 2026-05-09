@@ -297,6 +297,15 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
   _intensitySlider.trackFillColor = [NSColor accentMatchingHost];
   _intensitySlider.target = self;
   _intensitySlider.action = @selector(intensityChanged:);
+  __weak typeof(self) weakSelfDragI = self;
+  _intensitySlider.onDragBegin = ^{
+    if (weakSelfDragI.onSliderDragBegin)
+      weakSelfDragI.onSliderDragBegin();
+  };
+  _intensitySlider.onDragEnd = ^{
+    if (weakSelfDragI.onSliderDragEnd)
+      weakSelfDragI.onSliderDragEnd();
+  };
   [self addSubview:_intensitySlider];
 
   _frequencySlider = [KKSliderView styledSlider];
@@ -308,6 +317,15 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
   _frequencySlider.trackFillColor = [NSColor warning];
   _frequencySlider.target = self;
   _frequencySlider.action = @selector(frequencyChanged:);
+  __weak typeof(self) weakSelfDragF = self;
+  _frequencySlider.onDragBegin = ^{
+    if (weakSelfDragF.onSliderDragBegin)
+      weakSelfDragF.onSliderDragBegin();
+  };
+  _frequencySlider.onDragEnd = ^{
+    if (weakSelfDragF.onSliderDragEnd)
+      weakSelfDragF.onSliderDragEnd();
+  };
   [self addSubview:_frequencySlider];
 
   _intensityTicks = [[NSImageView alloc] initWithFrame:NSZeroRect];

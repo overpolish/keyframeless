@@ -10,7 +10,14 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
                                       NSString *typeName, UInt32 typeID,
                                       NSString *angleName, UInt32 angleID,
                                       NSString *dataName, UInt32 dataID,
-                                      UInt32 uiID) {
+                                      UInt32 dataMirrorID, UInt32 uiID) {
+  // Inspector display order: picker (gradient stops bar) → type → angle,
+  // matching Glow.
+  [paramAPI addCustomParameterWithName:@"Gradient"
+                           parameterID:uiID
+                          defaultValue:@(uiID)
+                        parameterFlags:kFxParameterFlag_HIDDEN |
+                                       kFxParameterFlag_CUSTOM_UI];
   [paramAPI addPopupMenuWithName:typeName
                      parameterID:typeID
                     defaultValue:1
@@ -23,16 +30,21 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
                parameterMinDegrees:-360.0
                parameterMaxDegrees:360.0
                     parameterFlags:kFxParameterFlag_HIDDEN];
-  [paramAPI addStringParameterWithName:dataName
+  // KKDataBlob so writes route through the undoable
+  // setCustomParameterValue:atTime: path. NOT_ANIMATABLE deliberately
+  // omitted — it would re-exclude the param from undo.
+  [paramAPI addCustomParameterWithName:dataName
                            parameterID:dataID
+                          defaultValue:[KKDataBlob blobWithData:nil]
+                        parameterFlags:kFxParameterFlag_HIDDEN];
+  // Native-string mirror — readable from OSC/render scope where the
+  // KKDataBlob would return nil. Written in lockstep with the blob via
+  // KKWriteGradientParamsFromPath.
+  [paramAPI addStringParameterWithName:@""
+                           parameterID:dataMirrorID
                           defaultValue:@""
                         parameterFlags:kFxParameterFlag_HIDDEN |
                                        kFxParameterFlag_NOT_ANIMATABLE];
-  [paramAPI addCustomParameterWithName:@"Gradient"
-                           parameterID:uiID
-                          defaultValue:@(uiID)
-                        parameterFlags:kFxParameterFlag_HIDDEN |
-                                       kFxParameterFlag_CUSTOM_UI];
 }
 
 #pragma clang diagnostic push
@@ -105,6 +117,9 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
                      parameterFlags:kFxParameterFlag_HIDDEN |
                                     kFxParameterFlag_NOT_ANIMATABLE];
 
+  // NOT_ANIMATABLE deliberately omitted — that flag excludes a param from
+  // FCP's undo stack, so tool-bar clicks (`setIntValue:atTime:`) wouldn't
+  // be reversible. Same caveat that applies to KKDataBlob params.
   [paramAPI addIntSliderWithName:@"Last Tool"
                      parameterID:kParamLastTool
                     defaultValue:kOSCToolbarCursor
@@ -113,8 +128,7 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
                        sliderMin:0
                        sliderMax:100
                            delta:1
-                  parameterFlags:kFxParameterFlag_HIDDEN |
-                                 kFxParameterFlag_NOT_ANIMATABLE];
+                  parameterFlags:kFxParameterFlag_HIDDEN];
 
   [paramAPI addCustomParameterWithName:@""
                            parameterID:kParamLayerList
@@ -123,11 +137,34 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
                                        kFxParameterFlag_NOT_ANIMATABLE |
                                        kFxParameterFlag_USE_FULL_VIEW_WIDTH];
 
-  [paramAPI addStringParameterWithName:@"PathData"
+  // KKDataBlob wraps the base64 path blob so writes route through
+  // `setCustomParameterValue:atTime:` (undoable) instead of
+  // `setStringParameterValue:` (filtered off FCP's undo stack).
+  // NOT_ANIMATABLE deliberately omitted — it re-excludes blob writes
+  // from undo. See project_kkdatablob_custom_param.md.
+  [paramAPI addCustomParameterWithName:@"PathData"
                            parameterID:kParamPathData
+                          defaultValue:[KKDataBlob blobWithData:nil]
+                        parameterFlags:kFxParameterFlag_HIDDEN];
+
+  // Native-string mirror — readable from OSC and render scopes where
+  // KKDataBlob reads return nil. Written in lockstep with the blob via
+  // KKCanvasWritePathData. See kParamPathDataMirror declaration.
+  [paramAPI addStringParameterWithName:@""
+                           parameterID:kParamPathDataMirror
                           defaultValue:@""
                         parameterFlags:kFxParameterFlag_HIDDEN |
                                        kFxParameterFlag_NOT_ANIMATABLE];
+
+  // Timing (multi-stage sequencer) and Motion Blur sit above the stroke
+  // group so the visible portion of the inspector doesn't get pushed down
+  // as Stroke / Fill / Sketch expand. Opacity / Closed Path follow Motion
+  // Blur so that when group selection hides them, the two custom-UI
+  // panels above don't jump around.
+  if (![self addMultiStageParametersWithAPI:paramAPI error:error])
+    return NO;
+  if (![self addMotionBlurParametersWithAPI:paramAPI error:error])
+    return NO;
 
   [paramAPI addFloatSliderWithName:@"Opacity"
                        parameterID:kParamOpacity
@@ -145,14 +182,6 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
                      parameterFlags:kFxParameterFlag_HIDDEN |
                                     kFxParameterFlag_NOT_ANIMATABLE];
 
-  // Timing (multi-stage sequencer) and Motion Blur sit above the stroke
-  // group so the visible portion of the inspector doesn't get pushed down
-  // as Stroke / Fill / Sketch expand.
-  if (![self addMultiStageParametersWithAPI:paramAPI error:error])
-    return NO;
-  if (![self addMotionBlurParametersWithAPI:paramAPI error:error])
-    return NO;
-
   [paramAPI addCustomParameterWithName:@""
                            parameterID:kParamGroupTransform
                           defaultValue:@(kParamGroupTransform)
@@ -160,11 +189,16 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
                                        kFxParameterFlag_NOT_ANIMATABLE |
                                        kFxParameterFlag_USE_FULL_VIEW_WIDTH];
 
-  [paramAPI addToggleButtonWithName:@""
-                        parameterID:kParamExpandedTransform
-                       defaultValue:NO
-                     parameterFlags:kFxParameterFlag_HIDDEN |
-                                    kFxParameterFlag_NOT_ANIMATABLE];
+  // KKDataBlob-backed expand state (matches Glow/Rounded/MagicMove). The
+  // legacy `addToggleButton` + `setBoolValue:atTime:` path doesn't survive
+  // FCP's undo stack reliably for hidden header toggles; routing through
+  // setCustomParameterValue:atTime: gives the same undo coverage as other
+  // blob params. See project_kkdatablob_custom_param.md.
+  [paramAPI addCustomParameterWithName:@""
+                           parameterID:kParamExpandedTransform
+                          defaultValue:[KKDataBlob blobWithString:@"0"]
+                        parameterFlags:kFxParameterFlag_HIDDEN |
+                                       kFxParameterFlag_NOT_ANIMATABLE];
 
   [paramAPI addToggleButtonWithName:@"Transform"
                         parameterID:kParamTransformEnabled
@@ -239,11 +273,11 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
                                        kFxParameterFlag_NOT_ANIMATABLE |
                                        kFxParameterFlag_USE_FULL_VIEW_WIDTH];
 
-  [paramAPI addToggleButtonWithName:@""
-                        parameterID:kParamExpandedStroke
-                       defaultValue:NO
-                     parameterFlags:kFxParameterFlag_HIDDEN |
-                                    kFxParameterFlag_NOT_ANIMATABLE];
+  [paramAPI addCustomParameterWithName:@""
+                           parameterID:kParamExpandedStroke
+                          defaultValue:[KKDataBlob blobWithString:@"0"]
+                        parameterFlags:kFxParameterFlag_HIDDEN |
+                                       kFxParameterFlag_NOT_ANIMATABLE];
 
   [paramAPI addToggleButtonWithName:@"Stroke"
                         parameterID:kParamStrokeEnabled
@@ -285,10 +319,11 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
                           defaultBlue:0.0
                        parameterFlags:kFxParameterFlag_HIDDEN];
 
-  registerGradientSubParams(paramAPI, @"Gradient Type",
-                            kParamStrokeGradientType, @"Gradient Angle",
-                            kParamStrokeGradientAngle, @"StrokeGradientData",
-                            kParamStrokeGradientData, kParamStrokeGradientUI);
+  registerGradientSubParams(
+      paramAPI, @"Gradient Type", kParamStrokeGradientType, @"Gradient Angle",
+      kParamStrokeGradientAngle, @"StrokeGradientData",
+      kParamStrokeGradientData, kParamStrokeGradientDataMirror,
+      kParamStrokeGradientUI);
 
   [paramAPI addCustomParameterWithName:@"Line Cap"
                            parameterID:kParamLineCap
@@ -307,36 +342,6 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
                           defaultValue:@(0)
                         parameterFlags:kFxParameterFlag_CUSTOM_UI |
                                        kFxParameterFlag_HIDDEN];
-
-  [paramAPI addFloatSliderWithName:@"Dash Length"
-                       parameterID:kParamDashLength
-                      defaultValue:20.0
-                      parameterMin:1.0
-                      parameterMax:200.0
-                         sliderMin:1.0
-                         sliderMax:200.0
-                             delta:1.0
-                    parameterFlags:kFxParameterFlag_HIDDEN];
-
-  [paramAPI addFloatSliderWithName:@"Dash Gap"
-                       parameterID:kParamDashGap
-                      defaultValue:10.0
-                      parameterMin:1.0
-                      parameterMax:200.0
-                         sliderMin:1.0
-                         sliderMax:200.0
-                             delta:1.0
-                    parameterFlags:kFxParameterFlag_HIDDEN];
-
-  [paramAPI addFloatSliderWithName:@"Dot Gap"
-                       parameterID:kParamDotGap
-                      defaultValue:10.0
-                      parameterMin:1.0
-                      parameterMax:200.0
-                         sliderMin:1.0
-                         sliderMax:200.0
-                             delta:1.0
-                    parameterFlags:kFxParameterFlag_HIDDEN];
 
   [paramAPI addPercentSliderWithName:@"Draw On Start"
                          parameterID:kParamDrawOnStart
@@ -367,6 +372,36 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
                            sliderMax:1.0
                                delta:0.01
                       parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addFloatSliderWithName:@"Dash Length"
+                       parameterID:kParamDashLength
+                      defaultValue:20.0
+                      parameterMin:1.0
+                      parameterMax:200.0
+                         sliderMin:1.0
+                         sliderMax:200.0
+                             delta:1.0
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addFloatSliderWithName:@"Dash Gap"
+                       parameterID:kParamDashGap
+                      defaultValue:10.0
+                      parameterMin:1.0
+                      parameterMax:200.0
+                         sliderMin:1.0
+                         sliderMax:200.0
+                             delta:1.0
+                    parameterFlags:kFxParameterFlag_HIDDEN];
+
+  [paramAPI addFloatSliderWithName:@"Dot Gap"
+                       parameterID:kParamDotGap
+                      defaultValue:10.0
+                      parameterMin:1.0
+                      parameterMax:200.0
+                         sliderMin:1.0
+                         sliderMax:200.0
+                             delta:1.0
+                    parameterFlags:kFxParameterFlag_HIDDEN];
 
   [paramAPI addPercentSliderWithName:@"Ants Speed"
                          parameterID:kParamMarchingAntsSpeed
@@ -417,11 +452,11 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
                                        kFxParameterFlag_NOT_ANIMATABLE |
                                        kFxParameterFlag_USE_FULL_VIEW_WIDTH];
 
-  [paramAPI addToggleButtonWithName:@""
-                        parameterID:kParamExpandedFill
-                       defaultValue:NO
-                     parameterFlags:kFxParameterFlag_HIDDEN |
-                                    kFxParameterFlag_NOT_ANIMATABLE];
+  [paramAPI addCustomParameterWithName:@""
+                           parameterID:kParamExpandedFill
+                          defaultValue:[KKDataBlob blobWithString:@"0"]
+                        parameterFlags:kFxParameterFlag_HIDDEN |
+                                       kFxParameterFlag_NOT_ANIMATABLE];
 
   [paramAPI addToggleButtonWithName:@"Fill"
                         parameterID:kParamFillEnabled
@@ -446,7 +481,8 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
   registerGradientSubParams(paramAPI, @"Fill Gradient Type",
                             kParamFillGradientType, @"Fill Gradient Angle",
                             kParamFillGradientAngle, @"FillGradientData",
-                            kParamFillGradientData, kParamFillGradientUI);
+                            kParamFillGradientData,
+                            kParamFillGradientDataMirror, kParamFillGradientUI);
 
   [paramAPI addCustomParameterWithName:@"Fill Style"
                            parameterID:kParamSketchFillStyle
@@ -498,11 +534,11 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
                                        kFxParameterFlag_NOT_ANIMATABLE |
                                        kFxParameterFlag_USE_FULL_VIEW_WIDTH];
 
-  [paramAPI addToggleButtonWithName:@""
-                        parameterID:kParamExpandedSketch
-                       defaultValue:NO
-                     parameterFlags:kFxParameterFlag_HIDDEN |
-                                    kFxParameterFlag_NOT_ANIMATABLE];
+  [paramAPI addCustomParameterWithName:@""
+                           parameterID:kParamExpandedSketch
+                          defaultValue:[KKDataBlob blobWithString:@"0"]
+                        parameterFlags:kFxParameterFlag_HIDDEN |
+                                       kFxParameterFlag_NOT_ANIMATABLE];
 
   [paramAPI addToggleButtonWithName:@"Sketch"
                         parameterID:kParamSketchEnabled
@@ -546,6 +582,13 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
                         parameterFlags:kFxParameterFlag_CUSTOM_UI |
                                        kFxParameterFlag_HIDDEN];
 
+  // Animatable so selection changes go on the host undo stack. Without
+  // this, an inspector value edit on path A followed by selecting path B
+  // and pressing cmd-Z reverts the value param while B is selected — the
+  // mutation hook then applies the reverted value to B (wrong path).
+  // Making selectedIndex undoable means cmd-Z first restores the prior
+  // selection (back to A), so the next cmd-Z reverts the value with A
+  // active and the mutation hook writes to the correct path.
   [paramAPI addFloatSliderWithName:@"LastSelectedIndex"
                        parameterID:kParamLastSelectedIndex
                       defaultValue:-1.0
@@ -554,11 +597,22 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
                          sliderMin:-1.0
                          sliderMax:10000.0
                              delta:1.0
-                    parameterFlags:kFxParameterFlag_HIDDEN |
-                                   kFxParameterFlag_NOT_ANIMATABLE];
+                    parameterFlags:kFxParameterFlag_HIDDEN];
 
   [paramAPI addStringParameterWithName:@"InstanceID"
                            parameterID:kParamInstanceID
+                          defaultValue:@""
+                        parameterFlags:kFxParameterFlag_HIDDEN |
+                                       kFxParameterFlag_NOT_ANIMATABLE];
+
+  [paramAPI addStringParameterWithName:@"CanvasSelection"
+                           parameterID:kParamCanvasSelection
+                          defaultValue:@""
+                        parameterFlags:kFxParameterFlag_HIDDEN |
+                                       kFxParameterFlag_NOT_ANIMATABLE];
+
+  [paramAPI addStringParameterWithName:@"CollapsedGroups"
+                           parameterID:kParamCollapsedGroups
                           defaultValue:@""
                         parameterFlags:kFxParameterFlag_HIDDEN |
                                        kFxParameterFlag_NOT_ANIMATABLE];

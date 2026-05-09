@@ -63,9 +63,14 @@
   id<FxTimingAPI_v4> timingAPI =
       [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
   CMTime cachedStart = kCMTimeZero, cachedDur = kCMTimeZero;
+  CMTime srcStart = kCMTimeZero, tlStart = kCMTimeZero;
+  BOOL haveTimeline = NO;
   if (timingAPI) {
     [timingAPI startTimeForEffect:&cachedStart];
     [timingAPI durationTimeForEffect:&cachedDur];
+    [timingAPI startTimeOfInputToFilter:&srcStart];
+    [timingAPI timelineTime:&tlStart fromInputTime:srcStart];
+    haveTimeline = YES;
   }
   [actAPI endAction:self];
 
@@ -74,6 +79,8 @@
   state.playheadView = playhead;
   state.cachedEffectStart = CMTimeGetSeconds(cachedStart);
   state.cachedEffectDuration = CMTimeGetSeconds(cachedDur);
+  if (haveTimeline)
+    state.cachedTimelineStart = CMTimeGetSeconds(tlStart);
 }
 
 @end

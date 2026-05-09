@@ -9,6 +9,7 @@
 #import "../../Views/StageSequencer/KKRemoteWindowKeyHandlerView.h"
 #import "../../Views/StageSequencer/KKStageSequencerRulerView.h"
 #import "../../Views/StageSequencer/KKStageSequencerView.h"
+#import "../KKDataBlob.h"
 #import "../KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKConstants.h>
@@ -28,6 +29,23 @@
   header.isEnabled = YES;
 
   __weak typeof(self) weakSelf = self;
+  // Apply both the bool write AND the curve-preview row flag synchronously
+  // inside the same action scope. The deferred
+  // `updateTimingParameterVisibility` path (used by parameterChanged: callers
+  // to dodge the cascade crash) commits setParameterFlags one inspector tick
+  // late on non-first instances, leaving the row state visually one click out
+  // of phase. The chevron click is not a parameterChanged: context, so the
+  // synchronous write is safe here.
+  //
+  // Known Motion-only edge case: the two writes (bool + curve-preview flag)
+  // record as two separate undo entries on Motion for non-first instances —
+  // user has to press cmd-Z twice to fully revert a chevron toggle. FCP
+  // coalesces them into one entry, so this is a no-op there. Tried wrapping
+  // in KKBeginUndoGroup (no effect) and routing the flag write through the
+  // deferred parameterChanged path (visual lag worse than the 2-undo issue).
+  // Accepting since FCP is the primary target. See: instance-1 works because
+  // its create-time KKWriteCustomParamBool fires parameterChanged which kicks
+  // the deferred flag update, somehow priming Motion's undo coalescing.
   header.onExpandedChanged = ^(BOOL isExpanded) {
     __strong typeof(weakSelf) strongSelf = weakSelf;
     if (!strongSelf)
@@ -37,11 +55,14 @@
     [actAPI startAction:strongSelf];
     id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
         apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    [setAPI setBoolValue:isExpanded
-             toParameter:kKKParamTimingExpanded
-                  atTime:[actAPI currentTime]];
+    KKWriteCustomParamBool(setAPI, isExpanded, kKKParamTimingExpanded);
+    BOOL show = isExpanded || [strongSelf forceShowAllParameters];
+    FxParameterFlags wantFlags =
+        show ? (kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_CUSTOM_UI |
+                kFxParameterFlag_USE_FULL_VIEW_WIDTH)
+             : kFxParameterFlag_HIDDEN;
+    [setAPI setParameterFlags:wantFlags toParameter:kKKParamTimingCurvePreview];
     [actAPI endAction:strongSelf];
-    [strongSelf updateTimingParameterVisibility];
   };
 
   id<FxCustomParameterActionAPI_v4> actionAPI =
@@ -59,16 +80,11 @@
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   if (isNewProcess) {
     expanded = YES;
-    [setAPI setBoolValue:YES
-             toParameter:kKKParamTimingExpanded
-                  atTime:[actionAPI currentTime]];
+    KKWriteCustomParamBool(setAPI, YES, kKKParamTimingExpanded);
   } else {
-    expanded = NO;
     id<FxParameterRetrievalAPI_v6> paramGetAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    [paramGetAPI getBoolValue:&expanded
-                fromParameter:kKKParamTimingExpanded
-                       atTime:[actionAPI currentTime]];
+    expanded = KKReadCustomParamBool(paramGetAPI, kKKParamTimingExpanded);
   }
   header.isExpanded = expanded;
   // Apply the curve-preview row's flag SYNCHRONOUSLY here (still inside the
@@ -114,17 +130,10 @@
 
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  BOOL enabled = NO;
-  [paramGetAPI getBoolValue:&enabled
-              fromParameter:kKKParamMotionBlurEnabled
-                     atTime:[actionAPI currentTime]];
-  header.isEnabled = enabled;
-
-  BOOL expanded = NO;
-  [paramGetAPI getBoolValue:&expanded
-              fromParameter:kKKParamMotionBlurExpanded
-                     atTime:[actionAPI currentTime]];
-  header.isExpanded = expanded;
+  header.isEnabled =
+      KKReadCustomParamBool(paramGetAPI, kKKParamMotionBlurEnabled);
+  header.isExpanded =
+      KKReadCustomParamBool(paramGetAPI, kKKParamMotionBlurExpanded);
   [actionAPI endAction:self];
 
   __weak typeof(self) weakSelf = self;
@@ -137,9 +146,7 @@
     [actAPI startAction:strongSelf];
     id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
         apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    [setAPI setBoolValue:isEnabled
-             toParameter:kKKParamMotionBlurEnabled
-                  atTime:[actAPI currentTime]];
+    KKWriteCustomParamBool(setAPI, isEnabled, kKKParamMotionBlurEnabled);
     [actAPI endAction:strongSelf];
   };
 
@@ -152,12 +159,11 @@
     [actAPI startAction:strongSelf];
     id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
         apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    [setAPI setBoolValue:isExpanded
-             toParameter:kKKParamMotionBlurExpanded
-                  atTime:[actAPI currentTime]];
+    KKWriteCustomParamBool(setAPI, isExpanded, kKKParamMotionBlurExpanded);
     [actAPI endAction:strongSelf];
   };
 
+  self.motionBlurHeader = header;
   return header;
 }
 
@@ -213,7 +219,7 @@
                      keyHandler.identifier = KKRemoteWindowContentID;
                      keyHandler.translatesAutoresizingMaskIntoConstraints = NO;
                      __weak typeof(strongSelf) weakForKey = strongSelf;
-                     keyHandler.onTogglePlayback = ^{
+                     void (^perform)(FxCommand) = ^(FxCommand command) {
                        __strong typeof(weakForKey) s = weakForKey;
                        if (!s)
                          return;
@@ -227,8 +233,17 @@
                        [actionAPI startAction:s];
                        id<FxCommandAPI_v2> cmd = [s.apiManager
                            apiForProtocol:@protocol(FxCommandAPI_v2)];
-                       [cmd performCommand:kFxCommand_TogglePlayback error:nil];
+                       [cmd performCommand:command error:nil];
                        [actionAPI endAction:s];
+                     };
+                     keyHandler.onTogglePlayback = ^{
+                       perform(kFxCommand_TogglePlayback);
+                     };
+                     keyHandler.onUndo = ^{
+                       perform(kFxCommand_Undo);
+                     };
+                     keyHandler.onRedo = ^{
+                       perform(kFxCommand_Redo);
                      };
                      [host addSubview:keyHandler];
                      [NSLayoutConstraint activateConstraints:@[

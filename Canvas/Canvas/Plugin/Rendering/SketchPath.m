@@ -343,6 +343,39 @@ KKBezierPath *KKSketchPath(KKBezierPath *path, float roughness, float bowing,
   if (path.count < 2 || roughness <= 0.0001f)
     return path;
 
+  // Compound paths: sketch each contour independently, then reassemble with
+  // contour starts preserved so the renderer's splitContours sees them again.
+  if (path.contourCount > 1) {
+    NSArray<KKBezierPath *> *subs = [path splitContours];
+    if (subs.count > 1) {
+      KKBezierPath *combined = [[KKBezierPath alloc] init];
+      copyPathProps(combined, path);
+      NSMutableArray<NSNumber *> *starts = [NSMutableArray array];
+      for (NSUInteger si = 0; si < subs.count; si++) {
+        KKBezierPath *sub = subs[si];
+        copyPathProps(sub, path);
+        KKBezierPath *sketched = KKSketchPath(
+            sub, roughness, bowing, seed + (uint32_t)si * 0x9E3779B1u, strokes,
+            canvasWidth, canvasHeight);
+        if (si > 0)
+          [starts addObject:@(combined.count)];
+        for (NSUInteger i = 0; i < sketched.count; i++) {
+          KKBezierPoint pt = [sketched pointAtIndex:i];
+          NSUInteger ci = combined.count;
+          [combined insertAtIndex:ci position:(simd_float2){pt.x, pt.y}];
+          [combined setType:pt.type atIndex:ci];
+          if (pt.type == KKBezierPointBezier) {
+            [combined setOutHandle:(simd_float2){pt.outX, pt.outY} atIndex:ci];
+            [combined setInHandle:(simd_float2){pt.inX, pt.inY} atIndex:ci];
+          }
+        }
+      }
+      combined.closed = path.closed;
+      [combined setContourStarts:starts];
+      return combined;
+    }
+  }
+
   seedRNG(seed);
 
   float canvasSize = fmaxf(canvasWidth, canvasHeight);

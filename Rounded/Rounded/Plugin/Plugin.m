@@ -55,6 +55,16 @@
     [self updateTimingParameterVisibility];
   [self updateMotionBlurParameterVisibility];
   [self updateCropParameterVisibility];
+  if (parameterID == kParamCropExpanded || parameterID == kParamForceShow)
+    [self syncGroupHeaderExpandedForExpandedParamID:kParamCropExpanded];
+
+  // Host cmd-Z reverts `kKKParamMultiStageData` outside our action scopes,
+  // so the pump's hot path doesn't see the change. Force a re-read + push
+  // when FCP/Motion notifies us the param value changed externally.
+  if (parameterID == kKKParamMultiStageData)
+    [KKPlugin multiStageRefreshFromParamForAPI:self.apiManager];
+  if (parameterID == kKKParamTimingLoopEnabled)
+    [KKPlugin multiStageRefreshLoopFromParamForAPI:self.apiManager];
 
   // Live-update the timing lane's selected segment when an animatable
   // slider changes. paramID → (label, values) is plugin-owned — no
@@ -65,7 +75,7 @@
     if (parameterID == kParamRadius) {
       double v = 0;
       [paramGetAPI getFloatValue:&v fromParameter:kParamRadius atTime:time];
-      [self multiStageUpdateSelectedSegmentForLabel:@"Radius" values:@[ @(v) ]];
+      [self multiStageDeferLiveUpdateForLabel:@"Radius" values:@[ @(v) ]];
     } else if (parameterID == kParamCropTop ||
                parameterID == kParamCropBottom ||
                parameterID == kParamCropLeft ||
@@ -75,12 +85,17 @@
       [paramGetAPI getFloatValue:&b fromParameter:kParamCropBottom atTime:time];
       [paramGetAPI getFloatValue:&l fromParameter:kParamCropLeft atTime:time];
       [paramGetAPI getFloatValue:&r fromParameter:kParamCropRight atTime:time];
-      [self
-          multiStageUpdateSelectedSegmentForLabel:@"Crop"
-                                           values:@[ @(t), @(b), @(l), @(r) ]];
+      [self multiStageDeferLiveUpdateForLabel:@"Crop"
+                                       values:@[ @(t), @(b), @(l), @(r) ]];
     }
   }
   return YES;
+}
+
+- (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
+  if (parameterID == kParamCropExpanded)
+    return [NSSet setWithObject:[KKDataBlob class]];
+  return [super classesForCustomParameterID:parameterID];
 }
 
 @end

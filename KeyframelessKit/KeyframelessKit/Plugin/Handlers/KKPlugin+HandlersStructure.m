@@ -12,6 +12,7 @@
 
 - (void)_handleSegmentAddedAtLane:(NSInteger)laneIndex
                          position:(double)position {
+  BOOL ug = KKBeginUndoGroup(self.apiManager, @"Add Segment");
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actAPI startAction:self];
@@ -26,6 +27,7 @@
       KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
   if (!lanes || jsonIdx < 0) {
     [actAPI endAction:self];
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
   KKTimingLane *lane = [lanes[jsonIdx] copy];
@@ -41,6 +43,7 @@
   }
   if (splitIdx < 0) {
     [actAPI endAction:self];
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
 
@@ -85,9 +88,11 @@
                              setAPI:setAPI];
   [actAPI endAction:self];
   [self timingGraphApplyState];
+  KKEndUndoGroup(self.apiManager, ug);
 }
 
 - (void)_handleAllLanesSegmentAddedAtPosition:(double)position {
+  BOOL ug = KKBeginUndoGroup(self.apiManager, @"Add Segments");
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actAPI startAction:self];
@@ -101,6 +106,7 @@
       KKReadLanesRebalanced(self.apiManager, getAPI);
   if (!lanes) {
     [actAPI endAction:self];
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
   CMTime effectDuration = kCMTimeZero;
@@ -179,10 +185,12 @@
   [actAPI endAction:self];
   if (anyChanged)
     [self timingGraphApplyState];
+  KKEndUndoGroup(self.apiManager, ug);
 }
 
 - (void)_handleSegmentRemovedAtLane:(NSInteger)laneIndex
                             segment:(NSInteger)segmentIndex {
+  BOOL ug = KKBeginUndoGroup(self.apiManager, @"Delete Segment");
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actAPI startAction:self];
@@ -197,12 +205,14 @@
       KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
   if (!lanes || jsonIdx < 0) {
     [actAPI endAction:self];
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
   KKTimingLane *lane = [lanes[jsonIdx] copy];
   NSMutableArray<KKTimingSegment *> *segs = [lane.segments mutableCopy];
   if (segs.count <= 1 || (NSUInteger)segmentIndex >= segs.count) {
     [actAPI endAction:self];
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
 
@@ -245,11 +255,29 @@
                             atIndex:segmentIndex
                              getAPI:getAPI
                              setAPI:setAPI];
+
+  // Native params still hold the deleted segment's last live value.
+  // Push the new selection's stored values through so the inspector
+  // reflects the survivor, not the dead segment.
+  if (lane.selectedSegment >= 0 &&
+      (NSUInteger)lane.selectedSegment < lane.segments.count) {
+    if (state)
+      state.selectionInProgress = YES;
+    [self applyLaneValues:lane.segments[lane.selectedSegment].values
+                 forLabel:lane.propertyLabel
+                 groupKey:lane.groupKey
+                   atTime:[actAPI currentTime]];
+    if (state)
+      state.selectionInProgress = NO;
+  }
+
   [actAPI endAction:self];
   [self timingGraphApplyState];
+  KKEndUndoGroup(self.apiManager, ug);
 }
 
 - (void)_handleAllLanesSegmentRemovedAtPosition:(double)position {
+  BOOL ug = KKBeginUndoGroup(self.apiManager, @"Delete Segments");
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actAPI startAction:self];
@@ -261,6 +289,7 @@
       KKReadLanesRebalanced(self.apiManager, getAPI);
   if (!lanes) {
     [actAPI endAction:self];
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
 
@@ -336,6 +365,7 @@
   [actAPI endAction:self];
   if (anyChanged)
     [self timingGraphApplyState];
+  KKEndUndoGroup(self.apiManager, ug);
 }
 
 @end

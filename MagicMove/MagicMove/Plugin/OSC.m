@@ -7,6 +7,8 @@
 #import "Constants.h"
 #import <CoreGraphics/CGEventSource.h>
 #import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KKDataBlob.h>
+#import <KeyframelessKit/KKPluginInstanceState.h>
 #import <KeyframelessKit/KKSquarePointOSC.h>
 #import <QuartzCore/QuartzCore.h>
 
@@ -195,13 +197,14 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
 }
 
 - (KKTimingLane *)_positionLaneAtTime:(CMTime)time {
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  if (!getAPI)
-    return nil;
-  NSString *json = nil;
-  [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
-  for (KKTimingLane *lane in [KKTimingLane lanesFromJSON:json]) {
+  // KKDataBlob reads from OSC scope return nil even inside an action
+  // scope — FxPlug's OSC apiManager refuses custom-param reads, full
+  // stop (see project_osc_custom_blob_unreadable.md). The documented
+  // workaround is to read the lanes off KKKit's per-instance state
+  // map, which the plugin populates via the multi-stage pump and which
+  // both principals see (same XPC process, UUID-keyed static map).
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  for (KKTimingLane *lane in state.lanesSnapshot) {
     if ([lane.propertyLabel isEqualToString:@"Position"])
       return lane;
   }
@@ -218,17 +221,15 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
   NSData *data = [path dataRepresentation];
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   id<FxParameterSettingAPI_v5> setAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!setAPI || !getAPI)
+  if (!setAPI || !actAPI)
     return;
+  // Read the merge baseline from the per-instance snapshot (see comment
+  // in `_positionLaneAtTime:` — KKDataBlob reads from OSC scope are nil).
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  NSMutableArray<KKTimingLane *> *lanes = [state.lanesSnapshot mutableCopy];
   [actAPI startAction:self];
-  NSString *json = nil;
-  [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
-  NSMutableArray<KKTimingLane *> *lanes =
-      [[KKTimingLane lanesFromJSON:json] mutableCopy];
   if (lanes) {
     for (NSUInteger li = 0; li < lanes.count; li++) {
       KKTimingLane *lane = lanes[li];
@@ -243,10 +244,11 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
       mSegs[segIdx] = mSeg;
       mLane.segments = mSegs;
       lanes[li] = mLane;
-      NSString *outJSON = [KKTimingLane jsonFromLanes:lanes];
-      if (outJSON)
-        [setAPI setStringParameterValue:outJSON
-                            toParameter:kKKParamMultiStageData];
+      // Route through KKWriteLanesJSON so the native-string mirror stays
+      // in lockstep with the blob — OSC scope can't read the blob, so on
+      // a project reload the mirror is what seeds `lanesSnapshot` (and
+      // therefore the bezier `pathData`) before the first drawTick.
+      KKWriteLanesJSON(lanes, setAPI, self.apiManager);
       break;
     }
   }
@@ -255,15 +257,9 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
 
 - (void)_drawPositionPathsAtTime:(CMTime)time
                 destinationImage:(FxImageTile *)dest {
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  if (!getAPI)
-    return;
-  NSString *json = nil;
-  [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
-  NSArray<KKTimingLane *> *lanes = [KKTimingLane lanesFromJSON:json];
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
   KKTimingLane *posLane = nil;
-  for (KKTimingLane *lane in lanes) {
+  for (KKTimingLane *lane in state.lanesSnapshot) {
     if ([lane.propertyLabel isEqualToString:@"Position"]) {
       posLane = lane;
       break;

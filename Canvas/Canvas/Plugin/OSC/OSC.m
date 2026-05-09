@@ -94,6 +94,15 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
                      ]];
     self.pathToolbar.activeTag = 0;
 
+    self.pathToolbarSingle = [[KKToolbar alloc]
+        initWithAPIManager:apiManager
+                     items:@[
+                       [KKToolbarItem itemWithIcon:@"square.dashed"
+                                               tag:kOSCPathOutline
+                                     shortcutLabel:@"Stroke\nto Path"],
+                     ]];
+    self.pathToolbarSingle.activeTag = 0;
+
     {
       KKToolbarItem *snapItem =
           [KKToolbarItem itemWithIcon:@"dot.squareshape.split.2x2"
@@ -254,8 +263,10 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
 - (NSMutableArray<KKBezierPath *> *)readPaths {
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  NSString *str = nil;
-  [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
+  // OSC scope can't read KKDataBlob params (FxPlug XPC scope rule);
+  // read the native-string mirror, written in lockstep with every blob
+  // write via KKCanvasWritePathData.
+  NSString *str = KKCanvasReadPathDataMirror(paramGetAPI);
   self.lastReadBlobString = str;
   if (str.length == 0)
     return [NSMutableArray array];
@@ -288,8 +299,9 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
       NSInteger sel = morphLane.selectedSegment;
       if (sel < 0 || (NSUInteger)sel >= morphLane.segments.count)
         continue;
-      NSMutableArray<NSData *> *targets =
-          p.morphTargets ? [p.morphTargets mutableCopy] : [NSMutableArray array];
+      NSMutableArray<NSData *> *targets = p.morphTargets
+                                              ? [p.morphTargets mutableCopy]
+                                              : [NSMutableArray array];
       // Defensive: if morphTargets lags lane segment count (e.g. mutation
       // hook hasn't fired yet for some reason), pad with current snapshot
       // before overwriting at sel.
@@ -300,11 +312,63 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
     }
   }
 
+  // Push paths into the store BEFORE the action scope so the inline lane
+  // reconcile below (which reads from the store) sees the new state. The
+  // store-observer-driven reconcile that fires async on this tick will
+  // short-circuit on fingerprint match.
+  NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+  KKCanvasStore *store = uuid ? KKLayerStateForUUID(uuid).store : nil;
+  if (store)
+    [store performBatch:^{
+      [store setPaths:paths];
+    }];
+
+  id<FxCustomParameterActionAPI_v4> actAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actAPI startAction:self];
   id<FxParameterSettingAPI_v5> paramSetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   NSData *blob = [KKBezierPath blobFromPaths:paths];
   NSString *str = [blob base64EncodedStringWithOptions:0];
-  [paramSetAPI setStringParameterValue:str toParameter:kParamPathData];
+  // KKCanvasWritePathData writes blob (undoable) + mirror (OSC-readable)
+  // in lockstep.
+  KKCanvasWritePathData(str, paramSetAPI);
+
+  // Inline lane reconcile: if the path set changed (orphan layerIDs to drop,
+  // new layerIDs to add lanes for, label/visibility drift), run the same
+  // reconcile the store observer would, but synchronously inside this action
+  // scope. Without this:
+  //   • Deletes need 2 cmd-Z (path blob revert + observer's lane write).
+  //   • Creates need 2 cmd-Z (observer's lane add + path blob revert).
+  // Mirrors KKReconcileLanesIfNeeded; the async observer will fingerprint-
+  // match and skip after we cache below.
+  KKPlugin *plugin = state.plugin;
+  if (plugin) {
+    NSString *lanesJSON = nil;
+    [paramGetAPI getStringParameterValue:&lanesJSON
+                           fromParameter:kKKParamMultiStageDataMirror];
+    NSArray<KKTimingLane *> *existingLanes =
+        lanesJSON.length ? [KKTimingLane lanesFromJSON:lanesJSON] : @[];
+    NSArray<KKTimingLane *> *reconciled = [plugin reconcileLanes:existingLanes
+                                                          atTime:kCMTimeZero
+                                                     paramGetAPI:paramGetAPI];
+    if (reconciled) {
+      NSString *newJSON = [KKTimingLane jsonFromLanes:reconciled];
+      NSString *existJSON = [KKTimingLane jsonFromLanes:existingLanes];
+      if (newJSON && ![newJSON isEqualToString:existJSON ?: @""]) {
+        KKWriteLanesJSON(reconciled, paramSetAPI, self.apiManager);
+        state.lanesSnapshot = reconciled;
+      }
+    }
+    NSString *fingerprint =
+        [plugin kkReconcileFingerprintForAPI:self.apiManager];
+    if (fingerprint)
+      state.cachedReconcileFingerprint = fingerprint;
+  }
+
+  [actAPI endAction:self];
   // Invalidate so the next readPaths detects the write as a change.
   self.lastReadBlobString = nil;
 }
@@ -319,12 +383,46 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   id<FxParameterSettingAPI_v5> paramSetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
 
+  NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
+  BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
+  KKBezierPath *selPath = KKSelectedPath(self.selectedPathIndices, self.paths);
+
+  // Push the new selection into the store FIRST, so the layer-list and
+  // sequencer observers fire on a still-idle main thread. The FCP param
+  // writes below can block main for hundreds of ms while FCP processes the
+  // path-blob XPC write — if we did them first, the observer would queue
+  // behind that work and the layer list would lag visibly.
+  if (uuid) {
+    KKCanvasStore *store = KKLayerStateForUUID(uuid).store;
+    if (store) {
+      [store performBatch:^{
+        [store setSelectedIndices:[self.selectedPathIndices copy]];
+        if (selPath) {
+          [store setStrokeEnabled:selPath.strokeEnabled];
+          [store setFillEnabled:selPath.fillEnabled];
+          [store setSketchEnabled:selPath.sketchEnabled];
+        }
+        [store syncSelectedPathProperties];
+      }];
+    }
+  }
+
+  // Coalesce the entire selection swap into one host undo entry: write-back
+  // of inspector values to the previously-selected path, the new
+  // selection's KKPathToParams write, and the selectedIndex bump must
+  // revert atomically. Otherwise cmd-Z reverts only the latest write
+  // (selectedIndex) while the inspector still holds the new path's stored
+  // values — the next render-tick KKParamsToSelectedPaths then writes
+  // those wrong values into the now-reselected path's in-memory state.
+  BOOL ug = KKBeginUndoGroup(self.apiManager, @"Select Path");
+  id<FxCustomParameterActionAPI_v4> selActAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [selActAPI startAction:self];
+
   // Write back current inspector param values to the previously-selected
   // paths.  Only safe in cursor mode where the user may have edited values
   // in the inspector.  In pen mode, KKParamsToPath would read shared FxPlug
   // params that may belong to a different path and corrupt the target.
-  NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
-  BOOL isCursorMode = (self.toolbar.activeTag == kOSCToolbarCursor);
   if (isCursorMode) {
     // Use the explicit previous selection when provided to avoid a race
     // with drawOSC updating lst.selectedIndices on the render thread.
@@ -344,28 +442,25 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   // Write param values from the newly-selected path.
   // Flag visibility is handled centrally by KKParamSyncApply via
   // KKCanvasRefreshLayerList — do not set flags here.
-  KKBezierPath *selPath = KKSelectedPath(self.selectedPathIndices, self.paths);
-  NSString *syncUUID = KKLayerUUIDForAPI(self.apiManager);
   if (selPath) {
     KKPathToParams(paramSetAPI, selPath);
-    if (syncUUID)
-      KKCacheCustomStyles(syncUUID, selPath);
+    if (uuid)
+      KKCacheCustomStyles(uuid, selPath);
     KKSaveSelectedIndex(
         paramSetAPI, (NSInteger)[self.paths indexOfObjectIdenticalTo:selPath]);
   } else {
     KKSaveSelectedIndex(paramSetAPI, -1);
   }
-  if (syncUUID) {
-    KKCanvasStore *store = KKLayerStateForUUID(syncUUID).store;
-    [store performBatch:^{
-      if (selPath) {
-        [store setStrokeEnabled:selPath.strokeEnabled];
-        [store setFillEnabled:selPath.fillEnabled];
-        [store setSketchEnabled:selPath.sketchEnabled];
-      }
-      [store syncSelectedPathProperties];
-    }];
-  }
+
+  // Persist the full selection (multi-path or group) so cmd-Z restores
+  // the entire set, not just the single index above.
+  NSString *selStr =
+      KKSerializeCanvasSelection(self.selectedPathIndices, self.paths);
+  [paramSetAPI setStringParameterValue:selStr
+                           toParameter:kParamCanvasSelection];
+
+  [selActAPI endAction:self];
+  KKEndUndoGroup(self.apiManager, ug);
 }
 
 @end

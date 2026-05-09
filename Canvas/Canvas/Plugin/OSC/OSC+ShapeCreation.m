@@ -88,6 +88,7 @@
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   KKParamsToPath(paramGetAPI, rect);
+  KKResetPathTransformToDefaults(rect);
   NSString *shapeUUID = KKLayerUUIDForAPI(self.apiManager);
   if (shapeUUID)
     KKApplyCachedStyles(shapeUUID, rect);
@@ -118,6 +119,7 @@
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   KKParamsToPath(paramGetAPI, ellipse);
+  KKResetPathTransformToDefaults(ellipse);
   NSString *ellipseUUID = KKLayerUUIDForAPI(self.apiManager);
   if (ellipseUUID)
     KKApplyCachedStyles(ellipseUUID, ellipse);
@@ -146,6 +148,7 @@
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   KKParamsToPath(paramGetAPI, line);
+  KKResetPathTransformToDefaults(line);
   NSString *lineUUID = KKLayerUUIDForAPI(self.apiManager);
   if (lineUUID)
     KKApplyCachedStyles(lineUUID, line);

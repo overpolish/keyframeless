@@ -23,6 +23,8 @@ static const CGFloat kEdgeShadowW = 16.0;
     (NSInteger laneIndex, BOOL optionDown);
 @property(nonatomic, copy, nullable) void (^onPillDraggedToVisible)
     (NSInteger laneIndex, BOOL visible);
+@property(nonatomic, copy, nullable) void (^onDragBegin)(void);
+@property(nonatomic, copy, nullable) void (^onDragEnd)(void);
 - (CGFloat)intrinsicContentWidth;
 @end
 
@@ -135,6 +137,16 @@ static const CGFloat kEdgeShadowW = 16.0;
       if (strongSelf && strongSelf->_onPillDraggedToVisible)
         strongSelf->_onPillDraggedToVisible(laneIndex, visible);
     };
+    _pills.onDragBegin = ^{
+      __strong typeof(weakSelf) strongSelf = weakSelf;
+      if (strongSelf && strongSelf->_onDragBegin)
+        strongSelf->_onDragBegin();
+    };
+    _pills.onDragEnd = ^{
+      __strong typeof(weakSelf) strongSelf = weakSelf;
+      if (strongSelf && strongSelf->_onDragEnd)
+        strongSelf->_onDragEnd();
+    };
 
     _boundsObserver = [[NSNotificationCenter defaultCenter]
         addObserverForName:NSViewBoundsDidChangeNotification
@@ -194,6 +206,7 @@ static const CGFloat kEdgeShadowW = 16.0;
   BOOL _dragActive;
   BOOL _dragTargetVisible;
   NSMutableIndexSet *_draggedIndices;
+  BOOL _undoScopeOpen;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect {
@@ -330,6 +343,10 @@ static const CGFloat kEdgeShadowW = 16.0;
   BOOL optDown = (event.modifierFlags & NSEventModifierFlagOption) != 0;
   BOOL wasVisible =
       (idx < (NSInteger)_visibleStates.count) && _visibleStates[idx].boolValue;
+  if (_onDragBegin) {
+    _onDragBegin();
+    _undoScopeOpen = YES;
+  }
   if (_onPillClicked)
     _onPillClicked(idx, optDown);
   if (optDown)
@@ -356,6 +373,11 @@ static const CGFloat kEdgeShadowW = 16.0;
 - (void)mouseUp:(NSEvent *)event {
   _dragActive = NO;
   _draggedIndices = nil;
+  if (_undoScopeOpen) {
+    _undoScopeOpen = NO;
+    if (_onDragEnd)
+      _onDragEnd();
+  }
 }
 
 @end

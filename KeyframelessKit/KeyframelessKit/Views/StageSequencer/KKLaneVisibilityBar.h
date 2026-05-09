@@ -34,6 +34,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) void (^onPillDraggedToVisible)
     (NSInteger laneIndex, BOOL visible);
 
+/// Fired on mouseDown for any non-option pill click (whether or not the
+/// user goes on to drag). Pairs with `onDragEnd` on mouseUp. Plugin uses
+/// these to bracket the entire interaction in one outer action scope +
+/// undo group so the click-and-drag toggles coalesce into one undo entry.
+@property(nonatomic, copy, nullable) void (^onDragBegin)(void);
+@property(nonatomic, copy, nullable) void (^onDragEnd)(void);
+
 @end
 
 NS_ASSUME_NONNULL_END

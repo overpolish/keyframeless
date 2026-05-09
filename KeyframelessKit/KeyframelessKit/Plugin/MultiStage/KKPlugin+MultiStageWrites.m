@@ -4,6 +4,7 @@
  */
 
 #import "../../Views/StageSequencer/KKStageSequencerView.h"
+#import "../KKDataBlob.h"
 #import "../KKPluginInstanceState.h"
 #import "../KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
@@ -29,8 +30,7 @@ static void KKMultiStagePersistAndPush(KKPluginInstanceState *state,
   if (paramSetAPI) {
     NSString *json = [KKTimingLane jsonFromLanes:lanes];
     if (json)
-      [paramSetAPI setStringParameterValue:json
-                               toParameter:kKKParamMultiStageData];
+      KKWriteMultiStageJSONDeduped(json, paramSetAPI, apiManager);
   }
 
   KKStageSequencerView *seq = state.sequencerView;
@@ -132,6 +132,63 @@ static void KKMultiStagePersistAndPush(KKPluginInstanceState *state,
     return YES;
   }
   return NO;
+}
+
+- (void)multiStageDeferLiveUpdateForLabel:(NSString *)label
+                                   values:(NSArray<NSNumber *> *)values {
+  if (!label.length || !values.count)
+    return;
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  if (!state)
+    return;
+
+  if (!state.pendingLiveUpdates)
+    state.pendingLiveUpdates = [NSMutableDictionary dictionary];
+  state.pendingLiveUpdates[label] = [values copy];
+
+  if (state.liveUpdatePending)
+    return;
+  state.liveUpdatePending = YES;
+
+  __weak typeof(self) ws = self;
+  // 16ms ≈ one 60fps frame. Long enough that FCP's full host-cmd-Z
+  // revert burst (animatable params + multi-stage blob) lands and the
+  // resulting MS-REFRESH sets `hostUndoSuppressionPending` before this
+  // block fires. Imperceptible during continuous drag — successive ticks
+  // overwrite the staged values, so live preview tracks the slider.
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 16 * NSEC_PER_MSEC),
+                 dispatch_get_main_queue(), ^{
+                   typeof(self) ss = ws;
+                   if (!ss)
+                     return;
+                   KKPluginInstanceState *st =
+                       KKInstanceStateForAPI(ss.apiManager);
+                   if (!st)
+                     return;
+                   st.liveUpdatePending = NO;
+                   if (st.hostUndoSuppressionPending) {
+                     [st.pendingLiveUpdates removeAllObjects];
+                     return;
+                   }
+                   // Param read/write APIs resolve to nil outside an action
+                   // scope. The caller's parameterChanged scope is long gone by
+                   // now; open our own.
+                   id<FxCustomParameterActionAPI_v4> actAPI = [ss.apiManager
+                       apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+                   if (!actAPI) {
+                     [st.pendingLiveUpdates removeAllObjects];
+                     return;
+                   }
+                   NSDictionary<NSString *, NSArray<NSNumber *> *> *toApply =
+                       [st.pendingLiveUpdates copy];
+                   [st.pendingLiveUpdates removeAllObjects];
+                   [actAPI startAction:ss];
+                   for (NSString *lbl in toApply) {
+                     [ss multiStageUpdateSelectedSegmentForLabel:lbl
+                                                          values:toApply[lbl]];
+                   }
+                   [actAPI endAction:ss];
+                 });
 }
 
 @end

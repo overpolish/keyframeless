@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "../KKLog.h"
 #import "../Math/KKTimingStage.h"
+#import "../Views/KKCustomGroupHeaderView.h"
 #import "KKConstants.h"
+#import "KKDataBlob.h"
 #import "KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
 
@@ -52,57 +53,68 @@ static const FxParameterFlags kHiddenNotAnim =
                   error, @"Unable to add Curve Preview"))
     return NO;
 
-  if (!KKAddParam([paramAPI addToggleButtonWithName:@""
-                                        parameterID:kKKParamTimingExpanded
-                                       defaultValue:YES
-                                     parameterFlags:kHiddenNotAnim],
-                  error, @"Unable to add Timing expanded toggle"))
+  if (!KKAddParam(
+          [paramAPI addCustomParameterWithName:@""
+                                   parameterID:kKKParamTimingExpanded
+                                  defaultValue:[KKDataBlob blobWithString:@"1"]
+                                parameterFlags:kHiddenNotAnim],
+          error, @"Unable to add Timing expanded toggle"))
     return NO;
 
+  // Native bool toggle — NOT a KKDataBlob. `setBoolValue:atTime:` IS
+  // undoable (the no-undo caveat below applies to `setStringParameterValue:`,
+  // not booleans), AND native reads work from the OSC's separate apiManager
+  // scope. The pump's `KKSyncLoopFromParams` runs on every drawOSC tick and
+  // would clobber `state.loopEnabled` to NO if the read returned empty —
+  // see the matching kKKParamInstanceID note for the full failure mode.
+  // NOT_ANIMATABLE deliberately omitted so cmd-Z reverts the toggle.
   if (!KKAddParam([paramAPI addToggleButtonWithName:@""
                                         parameterID:kKKParamTimingLoopEnabled
                                        defaultValue:NO
-                                     parameterFlags:kHiddenNotAnim],
+                                     parameterFlags:kFxParameterFlag_HIDDEN],
                   error, @"Unable to add timing loop toggle"))
     return NO;
 
-  if (!KKAddParam([paramAPI addStringParameterWithName:@""
-                                           parameterID:kKKParamMultiStageData
-                                          defaultValue:@""
-                                        parameterFlags:kHiddenNotAnim],
+  // Custom parameter (KKDataBlob wrapping the lanes-JSON UTF-8 bytes).
+  // String params can't be undone in FCP — `setStringParameterValue:` has
+  // no `atTime:` variant and FCP filters those writes off its undo stack.
+  // Custom params route through `setCustomParameterValue:atTime:`, the
+  // same pipeline animatable scalars use, which IS undoable.
+  // NOT_ANIMATABLE deliberately omitted — that flag would re-exclude the
+  // param from the undo path.
+  if (!KKAddParam([paramAPI
+                      addCustomParameterWithName:@""
+                                     parameterID:kKKParamMultiStageData
+                                    defaultValue:[KKDataBlob blobWithData:nil]
+                                  parameterFlags:kFxParameterFlag_HIDDEN],
                   error, @"Unable to add multi-stage data"))
     return NO;
 
-  if (!KKAddParam([paramAPI
-                      addIntSliderWithName:@""
-                               parameterID:kKKParamMultiStageSelectedProperty
-                              defaultValue:0
-                              parameterMin:0
-                              parameterMax:64
-                                 sliderMin:0
-                                 sliderMax:64
-                                     delta:1
-                            parameterFlags:kHiddenNotAnim],
-                  error, @"Unable to add multi-stage selected property"))
-    return NO;
-
-  if (!KKAddParam([paramAPI addIntSliderWithName:@""
-                                     parameterID:kKKParamMultiStageSelectedStage
-                                    defaultValue:0
-                                    parameterMin:0
-                                    parameterMax:64
-                                       sliderMin:0
-                                       sliderMax:64
-                                           delta:1
-                                  parameterFlags:kHiddenNotAnim],
-                  error, @"Unable to add multi-stage selected stage"))
-    return NO;
-
+  // Native string param — NOT a KKDataBlob. The OSC is a separate
+  // FxOnScreenControl principal with its own apiManager, and custom-blob
+  // reads from that scope return nil (they need an action scope, which
+  // OSCs aren't supposed to open per FxCustomParameterActionAPI docs).
+  // Since this UUID is the bootstrap key for the per-instance state
+  // map, a nil read here cascades into "OSC sees no state at all" — the
+  // sequencer's per-lane oscVisible toggle silently no-ops. Native
+  // string reads work from OSC scope. UUIDs don't need undo coverage —
+  // they're per-instance identity, never user-edited.
   if (!KKAddParam([paramAPI addStringParameterWithName:@""
                                            parameterID:kKKParamInstanceID
                                           defaultValue:@""
                                         parameterFlags:kHiddenNotAnim],
                   error, @"Unable to add instance ID"))
+    return NO;
+
+  // Native-string mirror of the lanes JSON — read by OSC on cold-boot
+  // (blob unreadable from OSC scope). Written in lockstep with every
+  // `KKWriteMultiStageJSONDeduped`; refreshed on cmd-Z echo.
+  if (!KKAddParam([paramAPI
+                      addStringParameterWithName:@""
+                                     parameterID:kKKParamMultiStageDataMirror
+                                    defaultValue:@""
+                                  parameterFlags:kHiddenNotAnim],
+                  error, @"Unable to add multi-stage mirror"))
     return NO;
 
   return YES;
@@ -124,20 +136,25 @@ static const FxParameterFlags kHiddenNotAnim =
                   error, @"Unable to add Motion Blur group"))
     return NO;
 
-  // Hidden — driven by the checkbox in the group header view.
-  if (!KKAddParam([paramAPI addToggleButtonWithName:@""
-                                        parameterID:kKKParamMotionBlurEnabled
-                                       defaultValue:NO
-                                     parameterFlags:kHiddenNotAnim],
-                  error, @"Unable to add Motion Blur enabled toggle"))
+  // Hidden — driven by the checkbox in the group header view. KKDataBlob-
+  // backed so it lives in the same undoable custom-param pipeline as other
+  // plugin-internal state. "1"/"0".
+  if (!KKAddParam(
+          [paramAPI addCustomParameterWithName:@""
+                                   parameterID:kKKParamMotionBlurEnabled
+                                  defaultValue:[KKDataBlob blobWithString:@"0"]
+                                parameterFlags:kHiddenNotAnim],
+          error, @"Unable to add Motion Blur enabled toggle"))
     return NO;
 
-  // UI-only: header chevron state. Hidden, persisted, starts collapsed.
-  if (!KKAddParam([paramAPI addToggleButtonWithName:@""
-                                        parameterID:kKKParamMotionBlurExpanded
-                                       defaultValue:NO
-                                     parameterFlags:kHiddenNotAnim],
-                  error, @"Unable to add Motion Blur expanded toggle"))
+  // UI-only: header chevron state. KKDataBlob-backed so it lives in the
+  // same undoable custom-param pipeline as other plugin state. "1"/"0".
+  if (!KKAddParam(
+          [paramAPI addCustomParameterWithName:@""
+                                   parameterID:kKKParamMotionBlurExpanded
+                                  defaultValue:[KKDataBlob blobWithString:@"0"]
+                                parameterFlags:kHiddenNotAnim],
+          error, @"Unable to add Motion Blur expanded toggle"))
     return NO;
 
   // Length: 0–100% maps to 0–360° shutter angle. Default 50% = 180°.
@@ -177,29 +194,30 @@ static const FxParameterFlags kHiddenNotAnim =
                   error, @"Unable to add Motion Blur transitions-only toggle"))
     return NO;
 
-  // Adaptive quality drops sub-frame resolution dramatically during
-  // playback/scrub (non-HIGH FxQuality), restoring full quality when the
-  // user pauses. Default ON so users don't have to remember to toggle blur
-  // off for editing.
-  if (!KKAddParam([paramAPI
-                      addToggleButtonWithName:@"Adaptive Quality"
-                                  parameterID:kKKParamMotionBlurAdaptiveQuality
-                                 defaultValue:YES
-                               parameterFlags:kFxParameterFlag_HIDDEN |
-                                              kFxParameterFlag_NOT_ANIMATABLE],
-                  error, @"Unable to add Motion Blur adaptive-quality toggle"))
-    return NO;
-
   return YES;
 }
+
+/// Mask of the parameter-flag bits we manage. FCP/Motion silently OR in
+/// internal bits (observed: 0x20200) on top of whatever we wrote, so a raw
+/// `cur != want` check never converges and we register a phantom undo
+/// entry on every `parameterChanged:`. Compare only our own bits, and
+/// preserve the host's bits when writing.
+static const FxParameterFlags kKKMutableFlagMask =
+    kFxParameterFlag_HIDDEN | kFxParameterFlag_DISABLED |
+    kFxParameterFlag_NOT_ANIMATABLE |
+    kFxParameterFlag_DONT_DISPLAY_IN_DASHBOARD | kFxParameterFlag_CUSTOM_UI |
+    kFxParameterFlag_USE_FULL_VIEW_WIDTH;
 
 static void _setFlagsIfNeeded(id<FxParameterSettingAPI_v5> setAPI,
                               id<FxParameterRetrievalAPI_v6> getAPI,
                               FxParameterFlags flags, UInt32 paramID) {
   FxParameterFlags cur = 0;
   [getAPI getParameterFlags:&cur fromParameter:paramID];
-  if (cur != flags)
-    [setAPI setParameterFlags:flags toParameter:paramID];
+  if ((cur & kKKMutableFlagMask) != (flags & kKKMutableFlagMask)) {
+    FxParameterFlags merged =
+        (cur & ~kKKMutableFlagMask) | (flags & kKKMutableFlagMask);
+    [setAPI setParameterFlags:merged toParameter:paramID];
+  }
 }
 
 - (void)updateTimingParameterVisibility {
@@ -229,16 +247,20 @@ static void _setFlagsIfNeeded(id<FxParameterSettingAPI_v5> setAPI,
       return;
     }
 
-    BOOL expandedTiming = NO;
-    [paramGetAPI getBoolValue:&expandedTiming
-                fromParameter:kKKParamTimingExpanded
-                       atTime:kCMTimeZero];
+    BOOL expandedTiming =
+        KKReadCustomParamBool(paramGetAPI, kKKParamTimingExpanded);
+    BOOL effectiveExpanded = expandedTiming;
     if ([strongSelf forceShowAllParameters])
-      expandedTiming = YES;
+      effectiveExpanded = YES;
     _setFlagsIfNeeded(paramSetAPI, paramGetAPI,
-                      expandedTiming ? kCustomUI : kFxParameterFlag_HIDDEN,
+                      effectiveExpanded ? kCustomUI : kFxParameterFlag_HIDDEN,
                       kKKParamTimingCurvePreview);
     [actAPI endAction:strongSelf];
+    KKCustomGroupHeaderView *header = strongSelf.timingHeader;
+    KKRunOnMain(^{
+      if (header.isExpanded != expandedTiming)
+        header.isExpanded = expandedTiming;
+    });
   });
 }
 
@@ -250,10 +272,8 @@ static void _setFlagsIfNeeded(id<FxParameterSettingAPI_v5> setAPI,
   if (!paramGetAPI || !paramSetAPI)
     return;
 
-  BOOL expanded = NO;
-  [paramGetAPI getBoolValue:&expanded
-              fromParameter:kKKParamMotionBlurExpanded
-                     atTime:kCMTimeZero];
+  BOOL expanded =
+      KKReadCustomParamBool(paramGetAPI, kKKParamMotionBlurExpanded);
   if ([self forceShowAllParameters])
     expanded = YES;
 
@@ -266,8 +286,19 @@ static void _setFlagsIfNeeded(id<FxParameterSettingAPI_v5> setAPI,
   _setFlagsIfNeeded(paramSetAPI, paramGetAPI, flag, kKKParamMotionBlurQuality);
   _setFlagsIfNeeded(paramSetAPI, paramGetAPI, toggleFlag,
                     kKKParamMotionBlurTransitionsOnly);
-  _setFlagsIfNeeded(paramSetAPI, paramGetAPI, toggleFlag,
-                    kKKParamMotionBlurAdaptiveQuality);
+
+  BOOL persistedExpanded =
+      KKReadCustomParamBool(paramGetAPI, kKKParamMotionBlurExpanded);
+  BOOL persistedEnabled =
+      KKReadCustomParamBool(paramGetAPI, kKKParamMotionBlurEnabled);
+  __weak typeof(self) weakSelf = self;
+  KKRunOnMain(^{
+    KKCustomGroupHeaderView *hdr = weakSelf.motionBlurHeader;
+    if (hdr.isExpanded != persistedExpanded)
+      hdr.isExpanded = persistedExpanded;
+    if (hdr.isEnabled != persistedEnabled)
+      hdr.isEnabled = persistedEnabled;
+  });
 }
 
 @end

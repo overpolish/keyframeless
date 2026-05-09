@@ -78,6 +78,16 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) double cachedEffectStart;
 @property(nonatomic) double cachedEffectDuration;
 
+/// Timeline-time start of the clip, in seconds. `cachedEffectStart` above is
+/// in source (clip-local) time, but `FxCommandAPI_v2 movePlayheadToTime:`
+/// requires timeline time. Cached because `FxTimingAPI_v4` returns nil when
+/// queried from the loop-back's render-tick context — populated at custom-UI
+/// creation (inside an action scope, where the API is reliable) and opportu-
+/// nistically refreshed by the playhead pump. Computed via
+/// `startTimeOfInputToFilter:` + `timelineTime:fromInputTime:` (same pattern
+/// as the sequencer-click seek in KKPlugin+HandlersModifiers.m).
+@property(nonatomic) double cachedTimelineStart;
+
 /// Cached native frame duration for the clip, in seconds. Populated from
 /// `FxTimingAPI_v4 frameDuration:`. Used by the loop pump to trigger
 /// loop-back at the last rendered frame regardless of frame rate.
@@ -144,6 +154,72 @@ NS_ASSUME_NONNULL_BEGIN
 /// UUID for the second instance. Stored unsafe-unretained: only ever
 /// pointer-compared, never dereferenced.
 @property(nonatomic, assign, nullable) void *ownerAPIPointer;
+
+/// Fingerprint of the most recent successful reconcile. The pump skips both
+/// the FCP JSON read and the plugin reconcile call when the plugin's current
+/// fingerprint matches this value (see `-kkReconcileFingerprintForAPI:`).
+/// Read concurrently from main (store observer) and render queue
+/// (drawOSCTick); each call computes its own fingerprint and compares
+/// locally — never use a shared "did we skip" flag, races corrupt it.
+@property(nonatomic, copy, nullable) NSString *cachedReconcileFingerprint;
+
+/// The `lanesSnapshot` array pointer most recently pushed to the sequencer
+/// view(s). The pump pointer-compares `state.lanesSnapshot` against this
+/// to decide whether a fresh seq.lanes push is needed. Pointer identity
+/// is sufficient because every `lanesSnapshot` writer assigns `[copy]` of
+/// a new array. Strong reference so the pointer stays valid for compare.
+///
+/// Why both this AND `cachedReconcileFingerprint`: the fingerprint gates
+/// the FCP reconcile call (skipped when source topology unchanged). This
+/// gates the seq push (skipped when the in-memory lanes pointer hasn't
+/// been replaced since the last push). Without this, in-memory edits
+/// that don't touch source topology — e.g. inspector value tweaks
+/// flowing into lanesSnapshot via a plugin-side mutation site — would
+/// match the fingerprint, get short-circuited, and never reach seq.
+@property(nonatomic, strong, nullable)
+    NSArray<KKTimingLane *> *lastPushedLanesSnapshot;
+
+/// Last JSON string we wrote to `kKKParamMultiStageData`. Used to dedupe
+/// no-op writes — every `setCustomParameterValue:atTime:` registers an
+/// undo entry on FCP/Motion's stack, so writing identical content puts
+/// phantom entries between user edits and forces extra cmd-Z presses to
+/// revert a single logical change.
+@property(nonatomic, copy, nullable) NSString *lastWrittenMultiStageJSON;
+
+/// Set transiently by `multiStageRefreshFromParamForAPI:` (the host cmd-Z
+/// entry point) and cleared on the next runloop tick via `dispatch_async`.
+/// While set, `KKWriteMultiStageJSONDeduped` skips the write — without this
+/// every host-driven param revert (animatable scalar OR multi-stage blob)
+/// triggers our live-update path, which writes a fresh entry back onto
+/// FCP's undo stack, immediately overwriting the host's revert and
+/// fragmenting one logical undo into N entries.
+@property(nonatomic) BOOL hostUndoSuppressionPending;
+
+/// Coalescing flag for plugin-side `parameterChanged:` live-update
+/// handlers funnelling through `multiStageDeferLiveUpdateForLabel:`.
+/// First call in a coalescing window sets the flag and schedules a
+/// `dispatch_after` block; subsequent calls early-return after merely
+/// updating `pendingLiveUpdates` with the latest values. When the
+/// deferred block fires it drains the dictionary and clears the flag.
+@property(nonatomic) BOOL liveUpdatePending;
+
+/// Latest-values-per-label staging dict drained by the deferred block
+/// in `multiStageDeferLiveUpdateForLabel:`. Last-wins semantics — a
+/// continuous slider drag keeps overwriting the same key, so the block
+/// always writes the freshest values when it fires.
+@property(nonatomic, strong, nullable)
+    NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *pendingLiveUpdates;
+
+/// How many `parameterChanged:` callbacks for `kKKParamMultiStageData`
+/// we expect from the host as echoes of our own setCustomParameterValue
+/// writes. Bumped on every successful MS-WRITE; decremented when MS-
+/// REFRESH fires and the count is > 0 (in which case the refresh is
+/// classified as an echo and suppression is NOT set). When the count is
+/// 0, the refresh is a real host cmd-Z and suppression is engaged. This
+/// replaces the earlier probeJSON-based echo detection — that approach
+/// required a custom-param read which could yield to the runloop and
+/// let a racing live-update block write before suppression was set.
+@property(nonatomic) NSInteger expectedMultiStageEchoCount;
 
 @end
 

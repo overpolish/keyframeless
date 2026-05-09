@@ -324,6 +324,7 @@
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   KKParamsToPath(paramGetAPI, newPath);
+  KKResetPathTransformToDefaults(newPath);
   NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
   if (uuid)
     KKApplyCachedStyles(uuid, newPath);
@@ -408,6 +409,13 @@
   NSInteger nearPath = [self pathIndexNearX:positionX
                                           y:positionY
                                      radius:hitRadiusStroke];
+  // Auto-select OFF: clicking an unselected path on the canvas is a no-op
+  // for selection; only the layer list / sequencer or a marquee can change
+  // selection. Already-selected paths still respond (drag, double-click
+  // → pen mode) so the user can manipulate what they explicitly selected.
+  if (nearPath >= 0 && !self.autoSelect &&
+      ![self.selectedPathIndices containsIndex:nearPath])
+    nearPath = -1;
   if (nearPath >= 0) {
     // Selecting a path clears any pen-mode point selection.
     [self.selectedPoints removeAllIndexes];

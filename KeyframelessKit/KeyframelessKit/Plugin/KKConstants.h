@@ -21,12 +21,10 @@ static const UInt32 kKKParamTimingExpanded __attribute__((unused)) = 9908;
 /// these but no current code reads or registers them. Do not reuse:
 ///   9901–9904, 9906, 9907, 9909–9917 (legacy 3-phase factor engine)
 ///   9918 (legacy always-on multi-stage gate)
-/// Multi-stage timing parameters (9919–9921):
+///   9920, 9921 (legacy MultiStage Selected* int sliders — selection is
+///               carried in the lanes JSON's `sel` field instead)
+/// Multi-stage timing parameters:
 static const UInt32 kKKParamMultiStageData __attribute__((unused)) = 9919;
-static const UInt32 kKKParamMultiStageSelectedProperty __attribute__((unused)) =
-    9920;
-static const UInt32 kKKParamMultiStageSelectedStage __attribute__((unused)) =
-    9921;
 
 /// Hidden per-instance UUID — keys the static per-instance state map so
 /// multiple copies of a plugin on the same timeline don't share state.
@@ -38,7 +36,17 @@ static const UInt32 kKKParamInstanceID __attribute__((unused)) = 9922;
 /// from inside the render callback.
 static const UInt32 kKKParamTimingLoopEnabled __attribute__((unused)) = 9923;
 
-/// Motion blur parameters (9924–9930). Registered by
+/// Native-string mirror of `kKKParamMultiStageData`. The blob is
+/// unreadable from the OSC's apiManager (FxPlug XPC scope rule); native
+/// strings DO read cold, so we mirror the same JSON here. Canonical
+/// store stays the blob (preserves undo); the mirror is a write-through
+/// cache kept in sync at every `KKWriteMultiStageJSONDeduped` tick and
+/// refreshed on cmd-Z echo. Cold-boot OSC ticks seed `lanesSnapshot`
+/// from this mirror so all existing snapshot consumers (oscVisible,
+/// bezier path, etc.) just work without per-consumer plumbing.
+static const UInt32 kKKParamMultiStageDataMirror __attribute__((unused)) = 9930;
+
+/// Motion blur parameters (9924–9929). Registered by
 /// `addMotionBlurParametersWithAPI:` as a custom group with an Enabled
 /// checkbox; shutter/quality reveal when enabled.
 static const UInt32 kKKParamMotionBlurSeparator __attribute__((unused)) = 9924;
@@ -48,8 +56,6 @@ static const UInt32 kKKParamMotionBlurQuality __attribute__((unused)) = 9927;
 static const UInt32 kKKParamMotionBlurExpanded __attribute__((unused)) = 9928;
 static const UInt32 kKKParamMotionBlurTransitionsOnly __attribute__((unused)) =
     9929;
-static const UInt32 kKKParamMotionBlurAdaptiveQuality __attribute__((unused)) =
-    9930;
 
 /// Color system parameters (9800–9810)
 static const UInt32 kKKParamColorGroup __attribute__((unused)) = 9800;

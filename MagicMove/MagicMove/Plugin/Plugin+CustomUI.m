@@ -230,6 +230,11 @@
                (@"When the Position lane has multiple segments a bezier "
                 @"<accent>path</accent> draws between them on canvas - "
                 @"reshape it by dragging anchors or their handles."),
+               (@"Stacking with <accent>Crop</accent> or similar spatial "
+                @"effects? Place them <accent>below</accent> Magic Move in "
+                @"the inspector so they apply to the clip first, then move "
+                @"with it - otherwise they anchor to the canvas and clip "
+                @"around the moved content."),
              ]
              shortcuts:@[
                [KKHelpShortcut

@@ -7,6 +7,7 @@
 #import "Plugin_Private.h"
 #import "ShaderTypes.h"
 #import <IOSurface/IOSurfaceObjC.h>
+#import <KeyframelessKit/KKDataBlob.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
@@ -28,8 +29,7 @@
   KKMotionBlurState mbState =
       [KKMotionBlur snapshotStateWithParameterAPI:paramAPI
                                         timingAPI:timingAPI
-                                           atTime:renderTime
-                                          quality:qualityLevel];
+                                           atTime:renderTime];
 
   if (mbState.enabled && mbState.transitionsOnly &&
       ![self multiStageAnyLaneInTransitionAtTime:renderTime]) {
@@ -81,9 +81,8 @@
   // function — replaces the legacy `multiStageValuesAtTime:` pump path.
   // Falls back to the inspector slider value when no enabled lane covers
   // the property, so a fresh effect with no timing edits still renders.
-  NSString *lanesJSON = nil;
-  [paramGetAPI getStringParameterValue:&lanesJSON
-                         fromParameter:kKKParamMultiStageData];
+  NSString *lanesJSON =
+      KKReadCustomParamString(paramGetAPI, kKKParamMultiStageData);
   NSArray<KKTimingLane *> *lanes =
       lanesJSON.length ? [KKTimingLane lanesFromJSON:lanesJSON] : nil;
 

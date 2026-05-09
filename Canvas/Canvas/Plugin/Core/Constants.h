@@ -80,6 +80,30 @@ static const UInt32 kParamDrawOnEnd = 161;
 static const UInt32 kParamMarchingAntsSpeed = 162;
 static const UInt32 kParamMarchingAntsOffset = 163;
 static const UInt32 kParamDrawOnOrigin = 164;
+// Native-string mirror of `kParamPathData`. The path blob is a KKDataBlob
+// (undoable via setCustomParameterValue:atTime:) but blob reads return nil
+// from OSC / render scope. The mirror is written in lockstep with every
+// blob write so OSC and render can read paths via getStringParameterValue.
+// See project_osc_custom_blob_unreadable.md / project_lanes_native_mirror.md.
+static const UInt32 kParamPathDataMirror = 165;
+// Native-string mirrors of the gradient data blob params. Same OSC/render
+// readability requirement: `KKParamsToPath` is invoked from OSC scope by
+// finalizeRect/handleCursorMouseDownX, and a blob read there returns nil
+// → path.strokeGradientJSON = nil → gradient gets stripped on deselect.
+static const UInt32 kParamStrokeGradientDataMirror = 166;
+static const UInt32 kParamFillGradientDataMirror = 167;
+// Hidden string param that captures the full layer-list selection so it
+// participates in FCP's undo stack. Format:
+//   ""              — empty selection
+//   "g:<layerID>"   — single group selected (layerID survives reorders)
+//   "p:0,2,5"       — one or more paths selected by index
+// Indices are valid against the path-blob in the same undo entry, so the
+// blob revert and selection revert stay consistent across cmd-Z.
+static const UInt32 kParamCanvasSelection = 168;
+
+// Hidden string param holding the comma-separated layerIDs of collapsed
+// groups so the layer-list disclosure state survives FCP project reload.
+static const UInt32 kParamCollapsedGroups = 169;
 
 static const UInt32 kParamForceShow = 9000;
 static const UInt32 kParamHideOSC = 9001;
@@ -91,7 +115,25 @@ static const UInt32 kParamGridAdaptive = 9006;
 static const UInt32 kParamSnapToGrid = 9007;
 
 @protocol PROAPIAccessing;
+@protocol FxParameterRetrievalAPI_v6;
+@protocol FxParameterSettingAPI_v5;
 NSString *_Nullable KKLayerUUIDForAPI(id<PROAPIAccessing> _Nonnull api);
+
+/// Read kParamPathData (KKDataBlob) from plugin-side scope. Caller must
+/// be inside an action scope. Returns nil/empty otherwise.
+NSString *_Nullable KKCanvasReadPathData(
+    id<FxParameterRetrievalAPI_v6> _Nonnull getAPI);
+
+/// Read kParamPathDataMirror (native string) — usable from OSC and
+/// render scopes where KKDataBlob reads return nil.
+NSString *_Nullable KKCanvasReadPathDataMirror(
+    id<FxParameterRetrievalAPI_v6> _Nonnull getAPI);
+
+/// Write the path blob in lockstep to (a) kParamPathData (KKDataBlob,
+/// undoable) and (b) kParamPathDataMirror (native string, OSC/render
+/// readable). Caller must already be inside an action scope.
+void KKCanvasWritePathData(NSString *_Nullable base64,
+                           id<FxParameterSettingAPI_v5> _Nonnull setAPI);
 
 void KKCanvasUpdateSelection(NSString *_Nonnull uuid, NSIndexSet *indices);
 NSIndexSet *_Nullable KKCanvasConsumePendingSelection(NSString *_Nonnull uuid);

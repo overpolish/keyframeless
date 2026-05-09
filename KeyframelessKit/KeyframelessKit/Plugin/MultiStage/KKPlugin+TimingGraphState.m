@@ -10,6 +10,7 @@
 #import "../../Views/StageSequencer/KKStageSequencerRulerView.h"
 #import "../../Views/StageSequencer/KKStageSequencerView.h"
 #import "../KKConstants.h"
+#import "../KKDataBlob.h"
 #import "../KKPluginInstanceState.h"
 #import "../KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
@@ -88,11 +89,21 @@ static void KKApplySequencerState(KKPlugin *plugin, KKStageSequencerView *seq,
   // (placeholder `[1]` values written when readValuesWithGetAPI fails in
   // create-view scope). Probe the param directly to know whether to
   // re-seed.
-  NSString *probeJSON = nil;
-  [paramGetAPI getStringParameterValue:&probeJSON
-                         fromParameter:kKKParamMultiStageData];
+  NSString *probeJSON =
+      KKReadCustomParamString(paramGetAPI, kKKParamMultiStageData);
   NSArray<KKTimingLane *> *lanes = nil;
-  if (probeJSON.length) {
+  // If the probed JSON normalises to the last JSON we wrote and a snapshot
+  // exists, the host has nothing newer than what's in memory — and the
+  // snapshot may carry selection-only edits that the dedup'd write didn't
+  // round-trip through the param. Trust the snapshot in that case so we
+  // don't clobber the new selection with the host's stale (pre-dedup) sel.
+  BOOL probeMatchesLastWritten =
+      probeJSON.length && instState.lastWrittenMultiStageJSON.length &&
+      [KKMultiStageNormalizedForDedup(probeJSON)
+          isEqualToString:instState.lastWrittenMultiStageJSON];
+  if (probeMatchesLastWritten && instState.lanesSnapshot.count) {
+    lanes = instState.lanesSnapshot;
+  } else if (probeJSON.length) {
     lanes = KKReadLanesRebalanced(self.apiManager, paramGetAPI);
     if (lanes) {
       instState.lanesSnapshot = [lanes copy];
@@ -108,7 +119,12 @@ static void KKApplySequencerState(KKPlugin *plugin, KKStageSequencerView *seq,
   } else {
     // Fresh instance: no persisted JSON. Re-seed from live param values
     // inside this action scope (where reads actually succeed) and
-    // overwrite the bad build-time snapshot.
+    // overwrite the bad build-time snapshot. The host write that burns
+    // the apply-coalesce slot is done synchronously by
+    // _seedSequencerWithSeqContainer: — don't write again here, that
+    // landed-after-apply write would record as a separate undo entry
+    // and produce the "cmd-Z right after apply puts you in 0-baseline"
+    // behaviour. Just update in-memory state.
     NSArray<KKTimingLane *> *seeded = [self defaultLanesAtTime:t
                                                    paramGetAPI:paramGetAPI];
     if (seeded.count) {
@@ -148,6 +164,9 @@ static void KKApplySequencerState(KKPlugin *plugin, KKStageSequencerView *seq,
                           refs.emptyLanesView, lanes, durSec, frac, hasTiming);
   }
   instState.additionalTimingViews = pruned;
+
+  if (self.segmentEditPopover.shown && self.segmentEditPopoverRefresh && lanes)
+    self.segmentEditPopoverRefresh(lanes);
 
   [actionAPI endAction:self];
 }

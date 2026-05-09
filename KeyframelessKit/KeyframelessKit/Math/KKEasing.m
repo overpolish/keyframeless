@@ -52,22 +52,26 @@ static double KKEaseInOut(double t, double intensity) {
   return power * (1.0 - blend) + back * blend;
 }
 
+// Spring/elastic with a polynomial decay envelope: (1-t)^p kills both
+// value and velocity at t=1 (for p>=2), so the curve naturally lands on
+// (1, 0) without needing a tail-damp blend.
+//
+//   v(t) = 1 - (1-t)^p · cos(2π·N·t)
+//
+// v(0) = 1 - 1·1 = 0; v(1) = 1 - 0·cos = 1; v'(1) = 0 (envelope dominates).
 static double KKEaseOutElastic(double t, double intensity, double frequency) {
   if (t <= 0.0)
     return 0.0;
   if (t >= 1.0)
     return 1.0;
 
-  // Amplitude always 1 so the curve naturally starts at 0
-  double period = 0.5 * (1.7 - frequency * 1.4);
-  if (period < 0.05)
-    period = 0.05;
-  // Low intensity = fast decay (subtle), high intensity = slow decay (dramatic)
-  double decay = 15.0 - intensity * 13.0;
+  // intensity: 0 → fast decay (subtle), 1 → slow decay (dramatic).
+  double p = 2.0 + (1.0 - intensity) * 5.0; // [2, 7]
+  // frequency: 0 → 1 oscillation, 1 → 4 oscillations.
+  double N = 1.0 + frequency * 3.0;
 
-  return pow(2.0, -decay * t) *
-             sin((t - period / 4.0) * (2.0 * M_PI) / period) +
-         1.0;
+  double envelope = pow(1.0 - t, p);
+  return 1.0 - envelope * cos(2.0 * M_PI * N * t);
 }
 
 static double KKEaseOutBounce(double t, double intensity, double frequency) {
@@ -79,7 +83,7 @@ static double KKEaseOutBounce(double t, double intensity, double frequency) {
   // intensity: restitution (how much speed is retained per bounce)
   // frequency: number of bounces (2-7)
   double restitution = 0.15 + intensity * 0.75;
-  int numBounces = 2 + (int)round(frequency * 5.0);
+  int numBounces = 3 + (int)round(frequency * 5.0);
 
   // Segment durations proportional to physical air time.
   // Initial drop from height H: t0 ∝ √H. Each subsequent bounce reaches
@@ -103,8 +107,16 @@ static double KKEaseOutBounce(double t, double intensity, double frequency) {
         // Initial fall: gravity accelerates the ball (ease-in parabola).
         return local * local;
       }
-      // Bounce arc: projectile under gravity, peak at local=0.5.
       double depth = pow(restitution, 2.0 * i);
+      if (i == numBounces) {
+        // Last arc: cubic that peaks at local=0.5 and lands at local=1
+        // with zero velocity — `8·local·(1-local)²` satisfies g(0)=0,
+        // g(0.5)=1, g(1)=0, g'(1)=0. Ball settles into the floor.
+        double oneMinus = 1.0 - local;
+        return 1.0 - depth * 8.0 * local * oneMinus * oneMinus;
+      }
+      // Mid bounce: projectile arc, peak at local=0.5, hits floor with
+      // velocity (next bounce picks it up).
       return 1.0 - depth * 4.0 * local * (1.0 - local);
     }
     cumul += d;

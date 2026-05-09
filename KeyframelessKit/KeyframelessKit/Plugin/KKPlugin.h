@@ -12,6 +12,7 @@
 #import <Metal/Metal.h>
 
 @class FxImageTile;
+@class KKCustomGroupHeaderView;
 @class KKHelpSection;
 @class KKTimingLane;
 @class KKTimingSegment;
@@ -181,6 +182,28 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)multiStageUpdateSelectedSegmentForLabel:(NSString *)label
                                          values:(NSArray<NSNumber *> *)values;
 
+/// Coalesced + deferred + host-undo-aware variant of
+/// `multiStageUpdateSelectedSegmentForLabel:values:` for use from
+/// `parameterChanged:`-driven live-update paths.
+///
+/// Schedules the underlying write on a 16ms `dispatch_after` so that:
+///  - During a host cmd-Z, the multi-stage param's MS-REFRESH lands
+///    first and sets `hostUndoSuppressionPending`; this method then
+///    correctly skips its write instead of layering a stale animatable
+///    revert into a fresh undo entry.
+///  - During a continuous drag, multiple calls per runloop coalesce
+///    via `liveUpdatePending` (last-wins per label in
+///    `pendingLiveUpdates`), so a 60fps drag produces ~60 writes
+///    instead of 60×(num linked params) writes.
+///
+/// Plugins should call this from their `_xxxHandleAnimatableParameter
+/// Change:` switch instead of the synchronous variant. The synchronous
+/// variant remains for code paths that need an immediate write (e.g.
+/// segment-selection write-back, opt-drag commit) where the caller
+/// already owns the action scope.
+- (void)multiStageDeferLiveUpdateForLabel:(NSString *)label
+                                   values:(NSArray<NSNumber *> *)values;
+
 /// Returns the active segment of the lane matching `label` at `time`. Lets
 /// plugins reach per-segment data (e.g. `pathData`) — the only remaining
 /// pump-side accessor since `multiStageValuesAtTime:` was retired in
@@ -235,6 +258,19 @@ NS_ASSUME_NONNULL_BEGIN
 /// they're exposed for cases that need to compose or skip parts of a tick.
 + (void)multiStageFlushPendingLanes;
 + (void)multiStageSyncFromParams:(id<PROAPIAccessing>)apiManager;
+
+/// Force-refresh path for *external* changes to `kKKParamMultiStageData`
+/// (host cmd-Z reverts the param outside our action scopes). The hot
+/// `multiStageSyncFromParams` short-circuits on a stale in-memory snapshot
+/// + lastPushed pointer; this method busts those caches and re-reads JSON
+/// straight from the param, then pushes to seq. Plugins should call from
+/// their `parameterChanged:` when `parameterID == kKKParamMultiStageData`.
++ (void)multiStageRefreshFromParamForAPI:(id<PROAPIAccessing>)apiManager;
+
+/// Force-refresh path for `kKKParamTimingLoopEnabled` — read the current
+/// param value and push it to all rulers' `loopEnabled`. Plugins call from
+/// `parameterChanged:` when the loopback param changes (host cmd-Z, etc).
++ (void)multiStageRefreshLoopFromParamForAPI:(id<PROAPIAccessing>)apiManager;
 + (void)multiStageUpdatePlayheadsForAPI:(id<PROAPIAccessing>)apiManager
                                  atTime:(CMTime)time;
 + (void)multiStageUpdatePlayheadsFromRenderForAPI:
@@ -269,6 +305,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// parameter in the pair was updated to maintain ratio). Returns NO if the
 /// parameter is not part of a pair or Cmd is not held.
 - (BOOL)handleLinkedParameterChanged:(UInt32)parameterID atTime:(CMTime)time;
+
+/// After `handleLinkedParameterChanged:` writes the partner via
+/// `setFloatValue:`, FCP does NOT echo a separate `parameterChanged:` for
+/// the partner (FCP suppresses recursive echoes). This means
+/// `parameterChanged:`-driven persistence (e.g. Canvas's
+/// `kkPushParamToLane:`) never runs for the partner, and any backing
+/// blob/path-side effect for it is skipped — the inspector value updates
+/// but the persistent state lags. Plugins that mirror inspector values
+/// to a backing blob should query this after `handleLinkedParameterChanged:`
+/// returns and run the same per-edit hook for the partner ID. Returns 0
+/// when the last call did not write a partner.
+- (UInt32)linkedPartnerWrittenForLastChange;
 
 /// Returns the current "live" values for the lane labeled `label` from the
 /// plugin's source of truth (FxPlug params for built-in plugins, per-layer
@@ -323,6 +371,15 @@ NS_ASSUME_NONNULL_BEGIN
     reconcileLanes:(NSArray<KKTimingLane *> *)existing
             atTime:(CMTime)time
        paramGetAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI;
+
+/// Optional cheap fingerprint of the inputs `reconcileLanes:` would consume
+/// (for Canvas: layerIDs + the path bits that flip lane visibility/labels).
+/// Computed from in-memory state — must NOT do FCP param I/O. The pump
+/// short-circuits the reconcile (skipping the JSON read + plugin call)
+/// when the fingerprint matches the previous successful reconcile.
+/// Default returns nil → no caching, current behavior preserved.
+- (nullable NSString *)kkReconcileFingerprintForAPI:
+    (id<PROAPIAccessing>)apiManager;
 
 /// Override to return YES when the plugin registers motion blur params
 /// via `addMotionBlurParametersWithAPI:`. Default NO. Used to auto-include
@@ -473,7 +530,90 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
                        expandedParamID:(UInt32)expandedParamID
     NS_RETURNS_RETAINED;
 
+/// Same as above but with a checkbox bound to `enabledParamID`. The two
+/// extra closures run **inside** the same action scope as the bool write,
+/// so any extra writes (e.g. mutating selected-path properties for the
+/// undo entry to coalesce) coalesce with the user's checkbox/chevron
+/// change as one undo entry — matches motion blur's pattern. Pass nil if
+/// not needed. The header is auto-registered via `registerGroupHeader:`.
+- (KKCustomGroupHeaderView *)
+    createCheckboxGroupHeaderWithTitle:(NSString *)title
+                                  icon:(nullable NSImage *)icon
+                        enabledParamID:(UInt32)enabledParamID
+                       expandedParamID:(UInt32)expandedParamID
+                        onEnabledExtra:(void (^_Nullable)(
+                                           BOOL isEnabled,
+                                           id<FxParameterSettingAPI_v5> setAPI))
+                                           onEnabledExtra
+                       onExpandedExtra:(void (^_Nullable)(
+                                           BOOL isExpanded,
+                                           id<FxParameterSettingAPI_v5> setAPI))
+                                           onExpandedExtra NS_RETURNS_RETAINED;
+
+/// Re-reads `expandedParamID` and pushes the result into the matching
+/// generic group header's `isExpanded` (chevron). Plugins should call this
+/// from `parameterChanged:` when host undo/redo of the expanded bool param
+/// could leave the chevron out of sync with the persisted state. No-op if
+/// no header was registered for that paramID.
+- (void)syncGroupHeaderExpandedForExpandedParamID:(UInt32)expandedParamID;
+
+/// Writes `lanes` to `kKKParamMultiStageData` (KKDataBlob, undoable) and
+/// the lockstep `kKKParamMultiStageDataMirror` (native string, OSC/render
+/// readable), and updates the per-instance lanesSnapshot. Plugins that
+/// mutate lanes outside the standard kit handlers (e.g. routing inspector
+/// slider edits into the selected segment) MUST use this rather than
+/// writing the blob directly — otherwise the mirror trails and the render
+/// scope reads stale lane values until something else triggers a write.
+/// Caller must already be inside an FxCustomParameterActionAPI_v4 scope.
+/// Convenience wrapper around the C-level `KKWriteLanesJSON`.
+- (void)kkWriteLanesJSON:(NSArray<KKTimingLane *> *)lanes
+                  setAPI:(id<FxParameterSettingAPI_v5>)setAPI;
+
+/// Re-reads `enabledParamID` (a native bool toggle) and pushes the result
+/// into the matching group header's `isEnabled` (checkbox). Counterpart
+/// to `syncGroupHeaderExpandedForExpandedParamID:` for plugins whose
+/// headers expose a checkbox. No-op if no header was registered for the
+/// matching enabled paramID.
+- (void)syncGroupHeaderEnabledForEnabledParamID:(UInt32)enabledParamID
+                                         atTime:(CMTime)time;
+
+/// Register an externally-built group header so KK kit's sync helpers can
+/// find and update it from `parameterChanged:`. Use when a plugin builds
+/// its own header (e.g. with a checkbox) instead of going through
+/// `createGroupHeaderWithTitle:…`. Pass `enabledParamID = 0` if the header
+/// has no checkbox. Map values are weak — caller retains the header.
+- (void)registerGroupHeader:(KKCustomGroupHeaderView *)header
+             enabledParamID:(UInt32)enabledParamID
+            expandedParamID:(UInt32)expandedParamID;
+
+/// FxPlug calls this to learn the value classes for any custom parameter
+/// when unarchiving a saved project. Subclasses MUST call super and union
+/// in their own KKDataBlob param IDs (e.g. expand-state blobs created by
+/// `addCropParametersWithAPI:` or any plugin-local custom blob param).
+/// Reads return nil and saved state evaporates if the class isn't
+/// registered here. Base impl covers KKMultiStage / Gradient / Color /
+/// Timing / MotionBlur expand state.
+- (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID;
+
 @end
+
+/// C-callable counterpart to `-[KKPlugin kkWriteLanesJSON:setAPI:]` for
+/// callers outside the plugin instance (e.g. an OSC principal with its
+/// own apiManager). Caller must already be inside an action scope.
+extern void KKWriteLanesJSON(NSArray<KKTimingLane *> *_Nonnull lanes,
+                             id<FxParameterSettingAPI_v5> _Nonnull setAPI,
+                             id<PROAPIAccessing> _Nullable apiManager);
+
+/// Stack-style undo grouping. Pair every `KKBeginUndoGroup` with exactly
+/// one `KKEndUndoGroup` along every code path (including early returns).
+/// Returns YES if the group was actually started — pass that BOOL into
+/// `KKEndUndoGroup` so the end is a no-op when the start was a no-op.
+/// Nested calls return NO; only the outermost begin/end pair starts the
+/// host-level undo group.
+extern BOOL KKBeginUndoGroup(id<PROAPIAccessing> _Nullable apiManager,
+                             NSString *_Nonnull name);
+extern void KKEndUndoGroup(id<PROAPIAccessing> _Nullable apiManager,
+                           BOOL started);
 
 @interface KKPlugin (MultiStageInstance)
 /// Recomputes `-hiddenAnimatablePropertyLabels`; if it differs from the last

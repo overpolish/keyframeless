@@ -38,6 +38,11 @@ typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
     (NSInteger curveType);
 @property(nonatomic, copy, nullable) void (^onIntensityChanged)(double value);
 @property(nonatomic, copy, nullable) void (^onFrequencyChanged)(double value);
+/// Fires once on slider mouseDown / mouseUp (intensity or frequency). Lets
+/// the consumer bracket the entire continuous drag in one undo group, so
+/// cmd-Z reverts the drag as a single step rather than per-tick.
+@property(nonatomic, copy, nullable) void (^onSliderDragBegin)(void);
+@property(nonatomic, copy, nullable) void (^onSliderDragEnd)(void);
 @property(nonatomic, copy, nullable) void (^onSeedChanged)(uint32_t newSeed);
 @property(nonatomic, copy, nullable) void (^onSeedReroll)(void);
 @property(nonatomic, copy, nullable) void (^onLinkedChanged)(BOOL linked);

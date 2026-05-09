@@ -5,6 +5,7 @@
 
 #import "Constants.h"
 #import "Plugin_Private.h"
+#import <KeyframelessKit/KKDataBlob.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wprotocol"
@@ -53,6 +54,33 @@
                    error:(NSError **)error {
   [self _glowHandleAnimatableParameterChange:parameterID atTime:time];
   [self multiStageRefreshLaneVisibility];
+
+  // Visibility refresh. Timing is gated to specific paramIDs to avoid the
+  // cascade documented in project_published_custom_ui_cascade. Motion blur
+  // is unconditional — the named-header chevron/checkbox sync lives inside
+  // updateMotionBlurParameterVisibility, so cmd-Z of the checkbox or
+  // expanded toggle has to land here for the header to redraw.
+  if (parameterID == kParamForceShow || parameterID == kKKParamTimingExpanded)
+    [self updateTimingParameterVisibility];
+  [self updateMotionBlurParameterVisibility];
+
+  // Generic group headers (Noise, Color) — chevron is a separate custom
+  // view that doesn't observe its expanded param; on host undo/redo we
+  // have to push the reverted bool back to the header explicitly.
+  if (parameterID == kParamNoiseExpanded || parameterID == kParamForceShow)
+    [self syncGroupHeaderExpandedForExpandedParamID:kParamNoiseExpanded];
+  if (parameterID == kKKParamColorExpanded || parameterID == kParamForceShow)
+    [self syncGroupHeaderExpandedForExpandedParamID:kKKParamColorExpanded];
+
+  // Host cmd-Z reverts blob params outside our action scopes; the in-
+  // memory snapshots / views don't see the change. Force a re-read + push.
+  if (parameterID == kKKParamMultiStageData)
+    [KKPlugin multiStageRefreshFromParamForAPI:self.apiManager];
+  if (parameterID == kKKParamTimingLoopEnabled)
+    [KKPlugin multiStageRefreshLoopFromParamForAPI:self.apiManager];
+  if (parameterID == kKKParamGradientData)
+    [KKPlugin colorSyncFromParams:self.apiManager];
+
   switch (parameterID) {
   case kKKParamColorMode:
   case kParamGradientType:
@@ -61,7 +89,6 @@
   case kParamNoiseExpanded:
   case kKKParamColorExpanded:
   case kKKParamMotionBlurExpanded:
-    [self updateMotionBlurParameterVisibility];
     [self updateParameterVisibilityAtTime:time];
     break;
   case kParamPreset:
@@ -72,6 +99,12 @@
     break;
   }
   return YES;
+}
+
+- (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
+  if (parameterID == kParamNoiseExpanded)
+    return [NSSet setWithObject:[KKDataBlob class]];
+  return [super classesForCustomParameterID:parameterID];
 }
 
 @end
@@ -149,8 +182,7 @@
   }
   case kKKParamGradientData: {
     label = @"Gradient";
-    NSString *json = nil;
-    [getAPI getStringParameterValue:&json fromParameter:kKKParamGradientData];
+    NSString *json = KKReadCustomParamString(getAPI, kKKParamGradientData);
     NSArray<KKGradientStop *> *stops = KKGradientStopsFromJSON(json);
     values = stops ? KKGradientFlatFromStops(stops) : @[];
     break;
@@ -159,7 +191,7 @@
     return;
   }
   if (label.length && values.count)
-    [self multiStageUpdateSelectedSegmentForLabel:label values:values];
+    [self multiStageDeferLiveUpdateForLabel:label values:values];
 }
 
 @end

@@ -22,6 +22,7 @@
   if (!state)
     return;
   state.selectionInProgress = YES;
+  BOOL ug = KKBeginUndoGroup(self.apiManager, @"Select Segment");
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actAPI startAction:self];
@@ -37,6 +38,7 @@
       KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
   if (!lanes || jsonIdx < 0) {
     [actAPI endAction:self];
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
 
@@ -89,6 +91,7 @@
   [actAPI endAction:self];
   state.selectionInProgress = NO;
   [self timingGraphApplyState];
+  KKEndUndoGroup(self.apiManager, ug);
 }
 
 - (void)_handleAllLanesSegmentSelectedAtPosition:(double)position {
@@ -96,6 +99,7 @@
   if (!state)
     return;
   state.selectionInProgress = YES;
+  BOOL ug = KKBeginUndoGroup(self.apiManager, @"Select Segments");
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actAPI startAction:self];
@@ -109,6 +113,7 @@
   if (!lanes) {
     [actAPI endAction:self];
     state.selectionInProgress = NO;
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
 
@@ -179,10 +184,12 @@
   [actAPI endAction:self];
   state.selectionInProgress = NO;
   [self timingGraphApplyState];
+  KKEndUndoGroup(self.apiManager, ug);
 }
 
 - (void)_handleLaneToggledAtIndex:(NSInteger)laneIndex enabled:(BOOL)enabled {
   KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  BOOL ug = KKBeginUndoGroup(self.apiManager, @"Toggle Lane");
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actAPI startAction:self];
@@ -199,6 +206,7 @@
     [actAPI endAction:self];
     if (state)
       state.selectionInProgress = NO;
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
 
@@ -238,13 +246,17 @@
   if (state)
     state.selectionInProgress = NO;
   [self timingGraphApplyState];
+  KKEndUndoGroup(self.apiManager, ug);
 }
 
 - (void)_handleLaneVisibilityClickedAtIndex:(NSInteger)laneIndex
                                  optionDown:(BOOL)optionDown {
+  BOOL inDrag = self.visibilityPillDragUndoActive;
+  BOOL ug = inDrag ? NO : KKBeginUndoGroup(self.apiManager, @"Lane Visibility");
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actAPI startAction:self];
+  if (!inDrag)
+    [actAPI startAction:self];
   id<FxParameterRetrievalAPI_v6> getAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   id<FxParameterSettingAPI_v5> setAPI =
@@ -252,7 +264,9 @@
   NSMutableArray<KKTimingLane *> *lanes =
       KKReadLanesRebalanced(self.apiManager, getAPI);
   if (!lanes) {
-    [actAPI endAction:self];
+    if (!inDrag)
+      [actAPI endAction:self];
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
   // Pills are deduped by propertyLabel — a single pill controls every lane
@@ -264,7 +278,9 @@
   NSString *clickedLabel =
       KKLabelForPillIndex(laneIndex, lanes, pluginHiddenForIndex);
   if (clickedLabel.length == 0) {
-    [actAPI endAction:self];
+    if (!inDrag)
+      [actAPI endAction:self];
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
 
@@ -342,15 +358,20 @@
     }
   }
 
-  [actAPI endAction:self];
+  if (!inDrag)
+    [actAPI endAction:self];
   [self timingGraphApplyState];
+  KKEndUndoGroup(self.apiManager, ug);
 }
 
 - (void)_handleLaneVisibilitySetAtIndex:(NSInteger)laneIndex
                                 visible:(BOOL)visible {
+  BOOL inDrag = self.visibilityPillDragUndoActive;
+  BOOL ug = inDrag ? NO : KKBeginUndoGroup(self.apiManager, @"Lane Visibility");
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actAPI startAction:self];
+  if (!inDrag)
+    [actAPI startAction:self];
   id<FxParameterRetrievalAPI_v6> getAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   id<FxParameterSettingAPI_v5> setAPI =
@@ -358,7 +379,9 @@
   NSMutableArray<KKTimingLane *> *lanes =
       KKReadLanesRebalanced(self.apiManager, getAPI);
   if (!lanes) {
-    [actAPI endAction:self];
+    if (!inDrag)
+      [actAPI endAction:self];
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
   NSSet<NSString *> *pluginHiddenForIndex =
@@ -366,7 +389,9 @@
   NSString *targetLabel =
       KKLabelForPillIndex(laneIndex, lanes, pluginHiddenForIndex);
   if (targetLabel.length == 0) {
-    [actAPI endAction:self];
+    if (!inDrag)
+      [actAPI endAction:self];
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
   BOOL changed = NO;
@@ -381,7 +406,9 @@
     changed = YES;
   }
   if (!changed) {
-    [actAPI endAction:self];
+    if (!inDrag)
+      [actAPI endAction:self];
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
 
@@ -413,8 +440,10 @@
     }
   }
 
-  [actAPI endAction:self];
+  if (!inDrag)
+    [actAPI endAction:self];
   [self timingGraphApplyState];
+  KKEndUndoGroup(self.apiManager, ug);
 }
 
 - (void)_handleGroupCollapseToggledForKey:(NSString *)groupKey
@@ -422,6 +451,8 @@
   if (groupKey.length == 0)
     return;
   KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  BOOL ug = KKBeginUndoGroup(self.apiManager,
+                             collapsed ? @"Collapse Group" : @"Expand Group");
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actAPI startAction:self];
@@ -451,11 +482,13 @@
   }
   [actAPI endAction:self];
   [self timingGraphApplyState];
+  KKEndUndoGroup(self.apiManager, ug);
 }
 
 - (void)_handleLaneOSCVisibilityAtIndex:(NSInteger)laneIndex
                                 visible:(BOOL)visible {
   KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  BOOL ug = KKBeginUndoGroup(self.apiManager, @"Toggle OSC Visibility");
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actAPI startAction:self];
@@ -477,10 +510,12 @@
   }
   [actAPI endAction:self];
   [self timingGraphApplyState];
+  KKEndUndoGroup(self.apiManager, ug);
 }
 
 - (void)_handleLaneChangedAtIndex:(NSInteger)laneIndex
                              lane:(KKTimingLane *)updatedLane {
+  BOOL ug = KKBeginUndoGroup(self.apiManager, @"Edit Lane");
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actAPI startAction:self];
@@ -518,12 +553,14 @@
   }
   [actAPI endAction:self];
   [self timingGraphApplyState];
+  KKEndUndoGroup(self.apiManager, ug);
 }
 
 - (void)_handleLanesChangedAtIndexes:(NSArray<NSNumber *> *)laneIndexes
                                lanes:(NSArray<KKTimingLane *> *)updatedLanes {
   if (laneIndexes.count == 0 || laneIndexes.count != updatedLanes.count)
     return;
+  BOOL ug = KKBeginUndoGroup(self.apiManager, @"Edit Lanes");
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actAPI startAction:self];
@@ -536,6 +573,7 @@
   KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
   if (!lanes) {
     [actAPI endAction:self];
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
 
@@ -566,12 +604,14 @@
   KKWriteLanesJSON(lanes, setAPI, self.apiManager);
   [actAPI endAction:self];
   [self timingGraphApplyState];
+  KKEndUndoGroup(self.apiManager, ug);
 }
 
 - (void)_handleSegmentValuesCopiedAtLane:(NSInteger)laneIndex
                                      src:(NSInteger)srcSegmentIndex
                                      dst:(NSInteger)dstSegmentIndex {
   KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  BOOL ug = KKBeginUndoGroup(self.apiManager, @"Copy Segment Values");
   id<FxCustomParameterActionAPI_v4> actAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actAPI startAction:self];
@@ -586,6 +626,7 @@
       KKLaneJSONIndexForViewIndex(laneIndex, lanes, state.hiddenLaneLabels);
   if (!lanes || jsonIdx < 0) {
     [actAPI endAction:self];
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
   KKTimingLane *lane = [lanes[jsonIdx] copy];
@@ -594,11 +635,28 @@
       (NSUInteger)dstSegmentIndex >= segs.count ||
       srcSegmentIndex == dstSegmentIndex) {
     [actAPI endAction:self];
+    KKEndUndoGroup(self.apiManager, ug);
     return;
   }
-  NSArray<NSNumber *> *newVals = [segs[srcSegmentIndex].values copy];
+  // Copy every "value-behaviour" field, not just `values` — for transition
+  // segments `.values` is just one piece (the boundary value); the curve
+  // shape itself lives in `easing`/`intensity`/`frequency`/`seed`, and the
+  // bezier handles for Position-lane transitions live in `pathData`.
+  // Copying only `.values` produced a flat curve when opt-dragging
+  // transition→transition because the dst kept its own (often default)
+  // easing while the boundary was rewritten.
+  // Skipped intentionally: `type`, `start`, `end` (structural),
+  // `lockedDurationSeconds` (per-segment duration lock the user set on dst).
+  KKTimingSegment *src = segs[srcSegmentIndex];
   KKTimingSegment *dst = [segs[dstSegmentIndex] copy];
-  dst.values = newVals;
+  dst.values = [src.values copy];
+  dst.easing = src.easing;
+  dst.holdEffect = src.holdEffect;
+  dst.intensity = src.intensity;
+  dst.frequency = src.frequency;
+  dst.seed = src.seed;
+  dst.linked = src.linked;
+  dst.pathData = [src.pathData copy];
   segs[dstSegmentIndex] = dst;
   lane.segments = segs;
   lanes[jsonIdx] = lane;
@@ -622,7 +680,7 @@
   if (dstSegmentIndex == lane.selectedSegment) {
     if (state)
       state.selectionInProgress = YES;
-    if ([self applyLaneValues:newVals
+    if ([self applyLaneValues:dst.values
                      forLabel:lane.propertyLabel
                      groupKey:lane.groupKey
                        atTime:ct] &&
@@ -637,10 +695,18 @@
                              setAPI:setAPI];
   }
 
-  [actAPI endAction:self];
+  // Call timingGraphApplyState INSIDE our outer action scope. It opens
+  // its own inner startAction/endAction; nesting that under ours means
+  // the whole opt-drag — JSON write plus any flag writes / reads
+  // timingGraphApplyState fans out — commits as a single undo entry.
+  // Calling it after our endAction (the previous order) gave it its own
+  // top-level scope, splitting opt-drag into 2+ host undo entries — the
+  // exact "one cmd-Z reverts curve, another reverts value" symptom.
+  [self timingGraphApplyState];
   if (state)
     state.selectionInProgress = NO;
-  [self timingGraphApplyState];
+  [actAPI endAction:self];
+  KKEndUndoGroup(self.apiManager, ug);
 }
 
 @end

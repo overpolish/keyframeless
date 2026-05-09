@@ -46,13 +46,24 @@
                  atTime:(CMTime)time {
   id<FxParameterSettingAPI_v5> setAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   if (!setAPI)
     return NO;
+  // setFloatValue:atTime: registers a host undo entry even when the value
+  // is unchanged, so a same-value write (e.g. selecting a segment whose
+  // stored value already matches the live param) creates a phantom cmd-Z
+  // step. Read first and skip writes whose value is already current.
+  void (^writeIfChanged)(double, UInt32) = ^(double want, UInt32 pid) {
+    double cur = 0;
+    if (getAPI)
+      [getAPI getFloatValue:&cur fromParameter:pid atTime:time];
+    if (fabs(cur - want) > 1e-6)
+      [setAPI setFloatValue:want toParameter:pid atTime:time];
+  };
   if ([label isEqualToString:@"Radius"] && values.count >= 1) {
     [self _rdSetEnabled:@[ @(kParamRadius) ] setAPI:setAPI];
-    [setAPI setFloatValue:values[0].doubleValue
-              toParameter:kParamRadius
-                   atTime:time];
+    writeIfChanged(values[0].doubleValue, kParamRadius);
     return YES;
   }
   if ([label isEqualToString:@"Crop"] && values.count >= 4) {
@@ -61,18 +72,10 @@
       @(kParamCropRight)
     ]
                  setAPI:setAPI];
-    [setAPI setFloatValue:values[0].doubleValue
-              toParameter:kParamCropTop
-                   atTime:time];
-    [setAPI setFloatValue:values[1].doubleValue
-              toParameter:kParamCropBottom
-                   atTime:time];
-    [setAPI setFloatValue:values[2].doubleValue
-              toParameter:kParamCropLeft
-                   atTime:time];
-    [setAPI setFloatValue:values[3].doubleValue
-              toParameter:kParamCropRight
-                   atTime:time];
+    writeIfChanged(values[0].doubleValue, kParamCropTop);
+    writeIfChanged(values[1].doubleValue, kParamCropBottom);
+    writeIfChanged(values[2].doubleValue, kParamCropLeft);
+    writeIfChanged(values[3].doubleValue, kParamCropRight);
     return YES;
   }
   return NO;

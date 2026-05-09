@@ -32,13 +32,11 @@ static const NSUInteger kPositionPathHitResolution = 24;
   NSString *layerID = [self _selectedSingleLayerID];
   if (!layerID)
     return nil;
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  if (!getAPI)
-    return nil;
-  NSString *json = nil;
-  [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
-  for (KKTimingLane *lane in [KKTimingLane lanesFromJSON:json]) {
+  // OSC scope can't read KKDataBlob params — read from the per-instance
+  // lanesSnapshot, populated by the multi-stage pump and the cold-boot
+  // mirror seed. See project_osc_custom_blob_unreadable.md.
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  for (KKTimingLane *lane in state.lanesSnapshot) {
     if ([lane.propertyLabel isEqualToString:label] &&
         [lane.groupKey isEqualToString:layerID])
       return lane;
@@ -110,11 +108,11 @@ static BOOL _segmentBounds(NSArray<KKTimingSegment *> *segs, NSUInteger idx,
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   if (!setAPI || !getAPI)
     return;
+  // Read merge baseline from the per-instance snapshot — KKDataBlob
+  // reads from OSC scope return nil even inside an action scope.
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  NSMutableArray<KKTimingLane *> *lanes = [state.lanesSnapshot mutableCopy];
   [actAPI startAction:self];
-  NSString *json = nil;
-  [getAPI getStringParameterValue:&json fromParameter:kKKParamMultiStageData];
-  NSMutableArray<KKTimingLane *> *lanes =
-      [[KKTimingLane lanesFromJSON:json] mutableCopy];
   if (lanes) {
     for (NSUInteger li = 0; li < lanes.count; li++) {
       KKTimingLane *lane = lanes[li];
@@ -130,10 +128,9 @@ static BOOL _segmentBounds(NSArray<KKTimingSegment *> *segs, NSUInteger idx,
       mSegs[segIdx] = mSeg;
       mLane.segments = mSegs;
       lanes[li] = mLane;
-      NSString *outJSON = [KKTimingLane jsonFromLanes:lanes];
-      if (outJSON)
-        [setAPI setStringParameterValue:outJSON
-                            toParameter:kKKParamMultiStageData];
+      // Use KKWriteLanesJSON: writes blob (undoable) + mirror (OSC/render
+      // readable) in lockstep, normalizes HTH, and updates lanesSnapshot.
+      KKWriteLanesJSON(lanes, setAPI, self.apiManager);
       break;
     }
   }

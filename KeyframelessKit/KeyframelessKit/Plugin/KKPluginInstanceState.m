@@ -5,6 +5,7 @@
 
 #import "KKPluginInstanceState.h"
 #import "KKConstants.h"
+#import "KKDataBlob.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <objc/runtime.h>
 

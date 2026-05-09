@@ -69,6 +69,16 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) uint8_t cachedEndMarker;
 @property(nonatomic) uint8_t cachedFillStyle;
 @property(nonatomic) NSUInteger visHash;
+@property(nonatomic) BOOL didLoadCollapsedFromParam;
+/// Last `merged` flags value we wrote per paramID. Some param flags
+/// (notably the group containers 130/132/134/148) don't preserve all
+/// bits across `getParameterFlags` calls — FCP appears to strip
+/// CUSTOM_UI / USE_FULL_VIEW_WIDTH between reads — so the host-flag
+/// comparison in `KKSetFlagsIfNeeded` always disagrees and we'd write
+/// every call, fragmenting one user action into multiple undo entries.
+/// Cache what we wrote and short-circuit when it matches.
+@property(nonatomic, strong, nullable)
+    NSMutableDictionary<NSNumber *, NSNumber *> *lastWrittenFlags;
 @property(nonatomic) float canvasWidth;
 @property(nonatomic) float canvasHeight;
 @property(nonatomic, copy, nullable) NSIndexSet *previewSelectedIndices;
@@ -83,6 +93,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 NSString *_Nullable KKLayerUUIDForAPI(id<PROAPIAccessing> api);
 KKLayerInstanceState *_Nullable KKLayerStateForUUID(NSString *_Nullable uuid);
+/// Caches `uuid` against `api` so subsequent KKLayerUUIDForAPI calls hit the
+/// cache without re-reading kParamInstanceID. Used when the caller mints a
+/// fresh UUID (initial setup, duplicate-clone rebind).
+void KKBindUUIDToAPI(id<PROAPIAccessing> _Nonnull api, NSString *_Nonnull uuid);
 
 @protocol KKLayerReorder
 - (void)_reorderFromIndices:(NSIndexSet *)indices

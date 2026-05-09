@@ -7,6 +7,7 @@
 #import "Plugin_Private.h"
 #import "ShaderTypes.h"
 #import <IOSurface/IOSurfaceObjC.h>
+#import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKEasing.h>
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 
@@ -304,8 +305,7 @@ static void _texPairReturn(NSInteger idx) {
   KKMotionBlurState mbState =
       [KKMotionBlur snapshotStateWithParameterAPI:paramAPI
                                         timingAPI:timingAPI
-                                           atTime:renderTime
-                                          quality:qualityLevel];
+                                           atTime:renderTime];
 
   if (mbState.enabled && mbState.transitionsOnly &&
       ![self multiStageAnyLaneInTransitionAtTime:renderTime]) {
@@ -390,8 +390,7 @@ static void _texPairReturn(NSInteger idx) {
   // Read lanes JSON inline + evaluate via the public eval function. Builds
   // the same `label -> values` dict the legacy pump used to return so the
   // downstream code below is unchanged.
-  NSString *lanesJSON = nil;
-  [api getStringParameterValue:&lanesJSON fromParameter:kKKParamMultiStageData];
+  NSString *lanesJSON = KKReadCustomParamString(api, kKKParamMultiStageData);
   NSArray<KKTimingLane *> *lanes =
       lanesJSON.length ? [KKTimingLane lanesFromJSON:lanesJSON] : nil;
   CMTime effectStart2 = kCMTimeZero, effectDuration2 = kCMTimeZero;

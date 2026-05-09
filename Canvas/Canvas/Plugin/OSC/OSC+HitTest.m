@@ -360,9 +360,13 @@
     return;
   }
 
-  // Path combine toolbar (only visible when 2+ non-image paths selected).
+  // Path combine toolbar (full toolbar when 2+ non-image paths selected,
+  // single stroke-to-path button when exactly 1 selected). The two toolbars
+  // are mutually exclusive — at most one is visible at a time.
   NSInteger pathToolbarPart = [self.pathToolbar hitTestAtX:positionX
                                                          y:positionY];
+  if (pathToolbarPart == 0)
+    pathToolbarPart = [self.pathToolbarSingle hitTestAtX:positionX y:positionY];
   if (pathToolbarPart > 0) {
     self.hoveredPathOp = pathToolbarPart;
   } else {

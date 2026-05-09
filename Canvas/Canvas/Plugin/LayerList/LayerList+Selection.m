@@ -3,8 +3,12 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKParamSync.h"
 #import "LayerList_Private.h"
 #import "ObjectParams.h"
+#import <objc/runtime.h>
+
+static const void *kRenameButtonAssocKey = &kRenameButtonAssocKey;
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
@@ -43,9 +47,10 @@
                        forOrientation:NSLayoutConstraintOrientationHorizontal];
 
         NSUInteger viewIndex = [row.arrangedSubviews indexOfObject:btn];
-        [row removeArrangedSubview:btn];
-        [btn removeFromSuperview];
+        btn.hidden = YES;
         [row insertArrangedSubview:field atIndex:viewIndex];
+        objc_setAssociatedObject(field, kRenameButtonAssocKey, btn,
+                                 OBJC_ASSOCIATION_ASSIGN);
 
         KKLayerStateForUUID(self.instanceUUID).isEditing = YES;
         [field.window makeFirstResponder:field];
@@ -57,39 +62,69 @@
 
 - (void)controlTextDidEndEditing:(NSNotification *)note {
   NSTextField *field = note.object;
-  NSString *newName = field.stringValue;
+  if (!field || !KKLayerStateForUUID(self.instanceUUID).isEditing)
+    return;
   NSInteger index = field.tag;
+  NSButton *btn = objc_getAssociatedObject(field, kRenameButtonAssocKey);
+  NSString *originalTitle = btn.title;
+  NSString *newName = field.stringValue;
 
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actionAPI startAction:self];
-  id<FxParameterRetrievalAPI_v6> paramGetAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  id<FxParameterSettingAPI_v5> paramSetAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-
-  NSString *str = nil;
-  [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
-  if (str.length > 0) {
-    NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
-    NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
-    if (index >= 0 && (NSUInteger)index < paths.count) {
-      paths[index].name = newName.length > 0 ? newName : nil;
-      NSData *newBlob = [KKBezierPath blobFromPaths:paths];
-      [paramSetAPI
-          setStringParameterValue:[newBlob base64EncodedStringWithOptions:0]
-                      toParameter:kParamPathData];
+  if (newName.length > 0 && ![newName isEqualToString:originalTitle]) {
+    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actionAPI startAction:self];
+    id<FxParameterRetrievalAPI_v6> paramGetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> paramSetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    NSString *str = KKCanvasReadPathData(paramGetAPI);
+    if (str.length > 0) {
+      NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
+      NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+      if (index >= 0 && (NSUInteger)index < paths.count) {
+        paths[index].name = newName;
+        NSData *newBlob = [KKBezierPath blobFromPaths:paths];
+        KKCanvasWritePathData([newBlob base64EncodedStringWithOptions:0],
+                              paramSetAPI);
+      }
     }
+    [actionAPI endAction:self];
   }
-  [actionAPI endAction:self];
 
   KKLayerStateForUUID(self.instanceUUID).isEditing = NO;
+
+  NSStackView *row = (NSStackView *)field.superview;
+  if ([row isKindOfClass:[NSStackView class]]) {
+    [row removeArrangedSubview:field];
+  }
+  [field removeFromSuperview];
+  if (btn) {
+    btn.title =
+        newName.length > 0
+            ? newName
+            : [NSString stringWithFormat:@"Path %ld", (long)(index + 1)];
+    btn.hidden = NO;
+  }
+}
+
+- (BOOL)control:(NSControl *)control
+               textView:(NSTextView *)textView
+    doCommandBySelector:(SEL)cmd {
+  if (cmd == @selector(cancelOperation:) || cmd == @selector(cancel:)) {
+    NSTextField *tf = (NSTextField *)control;
+    NSButton *btn = objc_getAssociatedObject(tf, kRenameButtonAssocKey);
+    if (btn)
+      tf.stringValue = btn.title ?: @"";
+    [textView insertNewline:nil];
+    return YES;
+  }
+  return NO;
 }
 
 - (void)selectRow:(NSButton *)sender {
   [self _commitEditing];
   NSUInteger clicked = sender.tag;
-  NSEventModifierFlags flags = NSEvent.modifierFlags;
+  NSEventModifierFlags flags = NSApp.currentEvent.modifierFlags;
   NSMutableIndexSet *sel =
       [KKLayerStateForUUID(self.instanceUUID).uiSelection mutableCopy]
           ?: [NSMutableIndexSet indexSet];
@@ -116,8 +151,7 @@
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   id<FxParameterSettingAPI_v5> paramSetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  NSString *str = nil;
-  [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
+  NSString *str = KKCanvasReadPathData(paramGetAPI);
 
   NSMutableArray<KKBezierPath *> *paths = nil;
   if (str.length > 0) {
@@ -128,19 +162,50 @@
     [self _writeBackObjectParams:paramGetAPI toPaths:paths selection:oldSel];
   }
 
-  KKSetLayerSelection(self.instanceUUID, [sel copy]);
+  NSIndexSet *newSel = [sel copy];
+  KKSetLayerSelection(self.instanceUUID, newSel);
 
   [self _syncObjectParamsForSelection:sel
                                 paths:paths ?: @[]
                           paramSetAPI:paramSetAPI];
   if (paths) {
     NSData *newBlob = [KKBezierPath blobFromPaths:paths];
-    [paramSetAPI
-        setStringParameterValue:[newBlob base64EncodedStringWithOptions:0]
-                    toParameter:kParamPathData];
+    KKCanvasWritePathData([newBlob base64EncodedStringWithOptions:0],
+                          paramSetAPI);
   } else {
-    [paramSetAPI setStringParameterValue:str ?: @"" toParameter:kParamPathData];
+    KKCanvasWritePathData(str, paramSetAPI);
   }
+
+  // Persist the selection in a hidden FCP param so cmd-Z can revert it
+  // alongside the path blob. `kParamLastSelectedIndex` only encodes a
+  // single path index (-1 for groups), so it can't restore group
+  // selection on undo — this fills that gap. See ObjectParams.h for the
+  // string format.
+  NSString *selStr = KKSerializeCanvasSelection(newSel, paths ?: @[]);
+  [paramSetAPI setStringParameterValue:selStr
+                           toParameter:kParamCanvasSelection];
+
+  // Push to the in-process store + apply visibility flags BEFORE endAction
+  // so any flag flips coalesce with the param writes above as one undo
+  // entry. Without this, the async store-observer fires after endAction,
+  // calls KKParamSyncApplyFromSnapshot in its own scope, and the resulting
+  // group-container flag writes (kParamGroupStroke/Fill/Sketch/Transform)
+  // become a second undo entry per click. Mirrors the fix in _modifyPaths.
+  KKCanvasStore *store = KKLayerStateForUUID(self.instanceUUID).store;
+  if (store) {
+    [store performBatch:^{
+      if (paths)
+        [store setPaths:paths];
+      [store setSelectedIndices:newSel];
+      [store syncSelectedPathProperties];
+    }];
+    KKCanvasStoreSnapshot *snap = [store snapshot];
+    KKBezierPath *selPath =
+        KKSelectedTransformTarget(snap.selectedIndices, snap.paths);
+    KKParamSyncApplyFromSnapshotInScope(snap, selPath, self.instanceUUID,
+                                        self.apiManager);
+  }
+
   [actionAPI endAction:self];
 }
 
@@ -154,11 +219,10 @@
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   id<FxParameterSettingAPI_v5> paramSetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  NSString *str = nil;
-  [paramGetAPI getStringParameterValue:&str fromParameter:kParamPathData];
-  [paramSetAPI setStringParameterValue:str ?: @"" toParameter:kParamPathData];
-  [actionAPI endAction:self];
+  NSString *str = KKCanvasReadPathData(paramGetAPI);
+  KKCanvasWritePathData(str, paramSetAPI);
 
+  NSSet<NSString *> *newCollapsed = nil;
   if (str.length > 0) {
     NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
     NSArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
@@ -173,8 +237,23 @@
         [mut removeObject:gid];
       else
         [mut addObject:gid];
-      KKLayerStateForUUID(self.instanceUUID).collapsedGroupIDs = [mut copy];
+      newCollapsed = [mut copy];
+      // Persist to a hidden param so the disclosure state survives FCP
+      // project reload (the in-memory lst dies with the XPC instance).
+      NSString *joined =
+          [[newCollapsed allObjects] componentsJoinedByString:@","];
+      [paramSetAPI setStringParameterValue:joined ?: @""
+                               toParameter:kParamCollapsedGroups];
     }
+  }
+  [actionAPI endAction:self];
+
+  if (newCollapsed) {
+    KKLayerInstanceState *lst = KKLayerStateForUUID(self.instanceUUID);
+    lst.collapsedGroupIDs = newCollapsed;
+    [lst.store performBatch:^{
+      [lst.store setCollapsedGroupIDs:newCollapsed];
+    }];
   }
 }
 

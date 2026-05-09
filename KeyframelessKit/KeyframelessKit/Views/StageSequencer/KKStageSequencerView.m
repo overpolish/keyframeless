@@ -56,6 +56,27 @@
     [stamped addObject:c];
   }
   _lanes = [stamped copy];
+  // Reconcile the chevron-rotation cache: when host undo/redo flips
+  // `groupCollapsed` underneath us, the cached rotation (set by user
+  // click) lies about the current state and the render path otherwise
+  // wins over `row.groupCollapsed`. Drop any cache entry that
+  // disagrees with the new lane data so the chevron flips visually.
+  if (_groupChevronRotation.count) {
+    NSMutableDictionary<NSString *, NSNumber *> *expected =
+        [NSMutableDictionary dictionary];
+    for (KKTimingLane *l in _lanes) {
+      if (!l.groupKey.length || expected[l.groupKey])
+        continue;
+      expected[l.groupKey] = @(l.groupCollapsed ? 0.0 : 90.0);
+    }
+    NSArray<NSString *> *keys = [_groupChevronRotation.allKeys copy];
+    for (NSString *gk in keys) {
+      NSNumber *cached = _groupChevronRotation[gk];
+      NSNumber *want = expected[gk];
+      if (!want || cached.doubleValue != want.doubleValue)
+        [_groupChevronRotation removeObjectForKey:gk];
+    }
+  }
   [self _rebuildRowPlan];
   if (_rowPlan.count != prevRowCount)
     [self invalidateIntrinsicContentSize];

@@ -49,11 +49,31 @@
 - (BOOL)parameterChanged:(UInt32)parameterID
                   atTime:(CMTime)time
                    error:(NSError **)error {
-  [self handleLinkedParameterChanged:parameterID atTime:time];
-  [self updateTimingParameterVisibility];
-  [self updateMotionBlurParameterVisibility];
-  [self updateParameterVisibilityAtTime:time];
   [self _mmHandleAnimatableParameterChange:parameterID atTime:time];
+  [self multiStageRefreshLaneVisibility];
+
+  // Gate timing-visibility refresh to params that actually change its
+  // outcome — calling it on every parameterChanged tick layers phantom
+  // setParameterFlags writes into FCP's transaction batch and produces
+  // the "2 undos per param" churn (and risks the published-custom-UI
+  // cascade crash documented in project_published_custom_ui_cascade.md).
+  if (parameterID == kParamForceShowAlerts ||
+      parameterID == kKKParamTimingExpanded)
+    [self updateTimingParameterVisibility];
+  [self updateMotionBlurParameterVisibility];
+
+  // Host cmd-Z reverts blob params outside our action scopes — the pump
+  // and snapshot don't see the change. Force a re-read + push so the
+  // sequencer / OSC reflect the reverted state.
+  if (parameterID == kKKParamMultiStageData)
+    [KKPlugin multiStageRefreshFromParamForAPI:self.apiManager];
+  if (parameterID == kKKParamTimingLoopEnabled)
+    [KKPlugin multiStageRefreshLoopFromParamForAPI:self.apiManager];
+
+  if (parameterID != kParamForceShowAlerts &&
+      parameterID != kKKParamTimingExpanded &&
+      parameterID != kKKParamMotionBlurExpanded)
+    [self handleLinkedParameterChanged:parameterID atTime:time];
   return YES;
 }
 
@@ -61,9 +81,11 @@
 
 @implementation MagicMovePlugin (AnimatableParamUpdate)
 
-/// paramID → (lane label, current values) translator. Routes a slider /
-/// picker change into the corresponding lane's selected segment via
-/// `multiStageUpdateSelectedSegmentForLabel:values:`.
+/// paramID → (label, values) translator. Routes a slider / picker
+/// change into the corresponding lane's selected segment via
+/// `multiStageDeferLiveUpdateForLabel:` — the deferred + suppression-
+/// aware variant. The KKKit helper handles host-cmd-Z race avoidance,
+/// drag-tick coalescing, and action-scope wrapping.
 - (void)_mmHandleAnimatableParameterChange:(UInt32)parameterID
                                     atTime:(CMTime)time {
   id<FxParameterRetrievalAPI_v6> getAPI =
@@ -125,7 +147,7 @@
     return;
   }
   if (label.length && values.count)
-    [self multiStageUpdateSelectedSegmentForLabel:label values:values];
+    [self multiStageDeferLiveUpdateForLabel:label values:values];
 }
 
 @end

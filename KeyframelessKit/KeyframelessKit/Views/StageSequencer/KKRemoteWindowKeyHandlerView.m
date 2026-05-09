@@ -17,12 +17,37 @@
                                        __strong typeof(weakSelf) s = weakSelf;
                                        if (!s)
                                          return evt;
-                                       if (evt.window == s.window &&
-                                           [evt.charactersIgnoringModifiers
-                                               isEqualToString:@" "] &&
-                                           s.onTogglePlayback) {
+                                       if (evt.window != s.window)
+                                         return evt;
+                                       NSString *chars =
+                                           evt.charactersIgnoringModifiers;
+                                       NSEventModifierFlags mods =
+                                           evt.modifierFlags &
+                                           NSEventModifierFlagDeviceIndependentFlagsMask;
+                                       BOOL cmd =
+                                           (mods &
+                                            NSEventModifierFlagCommand) != 0;
+                                       BOOL shift =
+                                           (mods & NSEventModifierFlagShift) !=
+                                           0;
+                                       if ([chars isEqualToString:@" "] &&
+                                           !cmd && s.onTogglePlayback) {
                                          s.onTogglePlayback();
                                          return nil;
+                                       }
+                                       if (cmd && [[chars lowercaseString]
+                                                      isEqualToString:@"z"]) {
+                                         if (shift) {
+                                           if (s.onRedo) {
+                                             s.onRedo();
+                                             return nil;
+                                           }
+                                         } else {
+                                           if (s.onUndo) {
+                                             s.onUndo();
+                                             return nil;
+                                           }
+                                         }
                                        }
                                        return evt;
                                      }];

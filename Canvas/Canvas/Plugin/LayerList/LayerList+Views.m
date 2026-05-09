@@ -24,9 +24,9 @@
 @implementation KKEditableLabel
 
 - (BOOL)performKeyEquivalent:(NSEvent *)event {
-  if (self.currentEditor) {
-    [self.currentEditor keyDown:event];
-    return YES;
+  if (self.currentEditor &&
+      (event.modifierFlags & NSEventModifierFlagCommand)) {
+    return [self.currentEditor performKeyEquivalent:event];
   }
   return [super performKeyEquivalent:event];
 }

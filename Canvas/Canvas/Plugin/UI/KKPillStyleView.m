@@ -5,6 +5,7 @@
 
 #import "KKPillStyleView.h"
 #import <KeyframelessKit/KeyframelessKit.h>
+#import <QuartzCore/CATransaction.h>
 
 static const CGFloat kPillSpacing = 2.0;
 static const CGFloat kPillCorner = 3.0;
@@ -70,6 +71,11 @@ static const CGFloat kPillSize = 22.0;
 }
 
 - (void)updateButtonAppearance {
+  // Wrap layer mutations in a CATransaction with implicit animations
+  // disabled — without this the border can lag behind the background
+  // (border animates over ~0.25s, bg snaps), looking stale when cycling.
+  [CATransaction begin];
+  [CATransaction setDisableActions:YES];
   for (NSInteger i = 0; i < (NSInteger)_buttons.count; i++) {
     NSButton *btn = _buttons[i];
     BOOL active = (i == _selectedIndex);
@@ -86,6 +92,7 @@ static const CGFloat kPillSize = 22.0;
       btn.layer.borderWidth = 0.0;
     }
   }
+  [CATransaction commit];
 }
 
 - (void)rebuildImages {
