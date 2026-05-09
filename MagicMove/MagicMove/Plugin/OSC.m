@@ -244,9 +244,11 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
       mSegs[segIdx] = mSeg;
       mLane.segments = mSegs;
       lanes[li] = mLane;
-      NSString *outJSON = [KKTimingLane jsonFromLanes:lanes];
-      if (outJSON)
-        KKWriteCustomParamString(setAPI, outJSON, kKKParamMultiStageData);
+      // Route through KKWriteLanesJSON so the native-string mirror stays
+      // in lockstep with the blob — OSC scope can't read the blob, so on
+      // a project reload the mirror is what seeds `lanesSnapshot` (and
+      // therefore the bezier `pathData`) before the first drawTick.
+      KKWriteLanesJSON(lanes, setAPI, self.apiManager);
       break;
     }
   }
