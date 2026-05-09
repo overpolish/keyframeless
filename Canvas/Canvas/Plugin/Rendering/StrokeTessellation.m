@@ -425,7 +425,7 @@ NSUInteger KKTessellateTrimmedPath(KKBezierPath *path, float startWidth,
         vc++;
         vertices[vc] = startFirst;
         vc++;
-        vc = KKAddRoundCap(vertices, vc, trimStart.position, -sTan,
+        vc = KKAddRoundCap(vertices, vc, trimStart.position, sTan,
                            trimStart.normal, sCapHW, YES);
       }
     }
