@@ -203,6 +203,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// deferred block fires it drains the dictionary and clears the flag.
 @property(nonatomic) BOOL liveUpdatePending;
 
+/// Mach-time deadline used to swallow a live-update echo whose source
+/// write was already flushed synchronously inside an outer drag scope.
+/// `multiStageDeferLiveUpdateForLabel:` early-returns while
+/// `CACurrentMediaTime() < liveUpdateSuppressUntil`. Set by drag-end
+/// handlers (e.g. gradient `onDragEnd`) after force-flushing pending
+/// values inline so the host's post-endAction `parameterChanged:` echo
+/// doesn't spawn an orphan undo entry.
+@property(nonatomic) NSTimeInterval liveUpdateSuppressUntil;
+
 /// Latest-values-per-label staging dict drained by the deferred block
 /// in `multiStageDeferLiveUpdateForLabel:`. Last-wins semantics — a
 /// continuous slider drag keeps overwriting the same key, so the block

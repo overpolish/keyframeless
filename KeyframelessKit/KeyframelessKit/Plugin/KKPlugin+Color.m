@@ -17,6 +17,7 @@
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKTokens.h>
 #import <KeyframelessKit/NSColor+KKColors.h>
+#import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
 
 static const void *const kColorModesKey = &kColorModesKey;
@@ -288,6 +289,26 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
     __strong typeof(weakSelf) strongSelf = weakSelf;
     if (!strongSelf || !strongSelf.gradientDragUndoActive)
       return;
+    // Flush the multi-stage "Gradient" lane write inline INSIDE the
+    // still-open drag scope. Without this, the host's post-endAction
+    // `parameterChanged:` echo for kKKParamGradientData arrives async
+    // and `multiStageDeferLiveUpdateForLabel:` opens its own
+    // startAction/endAction 16ms later — landing the MS-data write in
+    // a separate undo entry (so cmd-Z needs two presses to revert
+    // gradient + UI together).
+    KKPluginInstanceState *s = KKInstanceStateForAPI(strongSelf.apiManager);
+    NSArray<KKGradientStop *> *stopsNow =
+        KKGradientStopsFromJSON(s.gradientJSONSnapshot);
+    NSArray<NSNumber *> *flat =
+        stopsNow ? KKGradientFlatFromStops(stopsNow) : @[];
+    if (flat.count) {
+      [strongSelf multiStageUpdateSelectedSegmentForLabel:@"Gradient"
+                                                   values:flat];
+      // Swallow the post-endAction echo for ~100ms so its deferred
+      // animatable-update doesn't re-write what we just wrote.
+      s.liveUpdateSuppressUntil = CACurrentMediaTime() + 0.1;
+      [s.pendingLiveUpdates removeAllObjects];
+    }
     KKEndUndoGroup(strongSelf.apiManager, YES);
     id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
         apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];

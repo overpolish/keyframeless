@@ -634,11 +634,11 @@ static void KKBroadcastPlayheads(id<PROAPIAccessing> apiManager,
   NSString *json = KKReadCustomParamString(getAPI, kKKParamMultiStageData);
   // Empty reads happen mid-undo (host briefly returns the param's default
   // before propagating the reverted value) and as XPC scope artefacts.
-  // If we already have a snapshot, don't blank the sequencer — wait for
-  // the next refresh with real content. The host will fire another
-  // parameterChanged for kKKParamMultiStageData when the actual reverted
-  // JSON arrives.
-  if (!json.length && state.lanesEverPersisted && state.lanesSnapshot.count > 0)
+  // A non-empty in-memory snapshot is sufficient evidence we had real
+  // data — don't blank the sequencer; wait for the next refresh with
+  // real content. The host will fire another parameterChanged for
+  // kKKParamMultiStageData when the actual reverted JSON arrives.
+  if (!json.length && state.lanesSnapshot.count > 0)
     return;
   NSArray<KKTimingLane *> *parsed =
       json.length ? [KKTimingLane lanesFromJSON:json] : @[];

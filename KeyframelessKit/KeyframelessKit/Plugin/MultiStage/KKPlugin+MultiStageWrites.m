@@ -10,6 +10,7 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKConstants.h>
 #import <KeyframelessKit/KKTimingStage.h>
+#import <QuartzCore/QuartzCore.h>
 
 /// Stamps the "recent parameter change" timestamp used by the multi-stage
 /// pump to suppress render-sourced playhead updates in the wake of a slider
@@ -140,6 +141,15 @@ static void KKMultiStagePersistAndPush(KKPluginInstanceState *state,
     return;
   KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
   if (!state)
+    return;
+
+  // Drag-end handlers force-flush the latest values inline inside the
+  // still-open drag scope and set this deadline. Skip queuing the
+  // 16ms-deferred write for that window so the post-endAction echo
+  // doesn't land in its own undo entry. (See KKPluginInstanceState
+  // `liveUpdateSuppressUntil`.)
+  if (state.liveUpdateSuppressUntil > 0 &&
+      CACurrentMediaTime() < state.liveUpdateSuppressUntil)
     return;
 
   if (!state.pendingLiveUpdates)
