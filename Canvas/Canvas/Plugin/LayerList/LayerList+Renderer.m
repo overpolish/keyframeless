@@ -89,11 +89,11 @@ isAncestorCollapsed(NSUInteger index, NSArray<NSString *> *parentGroupIDs,
   while (pid.length > 0 && guard < kGroupDepthGuard) {
     guard++;
     NSNumber *parentIdx = groupIndexMap[pid];
-    if (parentIdx &&
+    if (parentIdx != nil &&
         [collapsedGroupIDs
             containsObject:groupIDs[parentIdx.unsignedIntegerValue]])
       return YES;
-    if (parentIdx)
+    if (parentIdx != nil)
       pid = parentGroupIDs[parentIdx.unsignedIntegerValue];
     else
       break;
@@ -109,7 +109,7 @@ static NSUInteger groupDepth(NSUInteger index,
   while (pid.length > 0 && depth < kGroupDepthGuard) {
     depth++;
     NSNumber *pIdx = map[pid];
-    if (pIdx)
+    if (pIdx != nil)
       pid = parentGroupIDs[pIdx.unsignedIntegerValue];
     else
       break;

@@ -580,7 +580,7 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
     }
   }
 
-  if (!path.isImage && path.strokeEnabled) {
+  if (!path.isImage && path.strokeEnabled && strokePS) {
     KKRenderStrokeForPath(path, pathXform, outputWidth, outputHeight, device,
                           commandBuffer, target, strokePS, viewportSize);
   }

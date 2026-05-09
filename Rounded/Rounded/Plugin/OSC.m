@@ -36,8 +36,14 @@ static float paddingForRadius(double radius, float minDim) {
     crop.cropLeftParam = kParamCropLeft;
     crop.cropRightParam = kParamCropRight;
     self.cropOSC = crop;
+    [crop release];
   }
   return self;
+}
+
+- (void)dealloc {
+  [_cropOSC release];
+  [super dealloc];
 }
 
 - (BOOL)getCanvasTopRight:(CGPoint *)outTopRight

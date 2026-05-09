@@ -369,19 +369,19 @@
   }
 
   if (parameterID == kParamGroupStroke) {
-    return
-        [self createGroupHeaderWithText:@"Stroke"
-                                   icon:[NSImage imageWithSystemSymbolName:
-                                                     @"stroke.line.diagonal"
-                                                  accessibilityDescription:nil]
-                           enabledParam:kParamStrokeEnabled
-                          expandedParam:kParamExpandedStroke
-                        storeSetEnabled:@selector(setStrokeEnabled:)
-                       storeSetExpanded:@selector(setStrokeExpanded:)
-                        stateHeaderProp:@"strokeGroupHeader"
-                      pathPropertyBlock:^(KKBezierPath *path, BOOL enabled) {
-                        path.strokeEnabled = enabled;
-                      }];
+    return [self
+        createGroupHeaderWithText:@"Stroke"
+                             icon:[NSImage
+                                      imageWithSystemSymbolName:@"line.diagonal"
+                                       accessibilityDescription:nil]
+                     enabledParam:kParamStrokeEnabled
+                    expandedParam:kParamExpandedStroke
+                  storeSetEnabled:@selector(setStrokeEnabled:)
+                 storeSetExpanded:@selector(setStrokeExpanded:)
+                  stateHeaderProp:@"strokeGroupHeader"
+                pathPropertyBlock:^(KKBezierPath *path, BOOL enabled) {
+                  path.strokeEnabled = enabled;
+                }];
   }
 
   if (parameterID == kParamGroupFill) {

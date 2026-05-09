@@ -433,6 +433,8 @@ void KKMorphInterpolateApply(NSData *fromBlob, NSData *toBlob, float t,
     BOOL ac, bc;
     readHeader(fromBlob, &aPts, &aN, &ac);
     readHeader(toBlob, &bPts, &bN, &bc);
+    if (!aPts || !bPts)
+      return;
     KKBezierPoint *out = malloc(sizeof(KKBezierPoint) * aN);
     if (!out)
       return;

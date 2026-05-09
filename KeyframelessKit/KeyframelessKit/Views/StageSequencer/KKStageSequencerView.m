@@ -73,7 +73,7 @@
     for (NSString *gk in keys) {
       NSNumber *cached = _groupChevronRotation[gk];
       NSNumber *want = expected[gk];
-      if (!want || cached.doubleValue != want.doubleValue)
+      if (want == nil || cached.doubleValue != want.doubleValue)
         [_groupChevronRotation removeObjectForKey:gk];
     }
   }
@@ -157,7 +157,7 @@
 
 - (NSNumber *)_slotKindForLane:(KKTimingLane *)lane {
   NSNumber *first = lane.valueComponentKinds.firstObject;
-  if (first)
+  if (first != nil)
     return first;
   return _laneKindsByLabel[lane.propertyLabel];
 }

@@ -251,7 +251,7 @@
 
 - (void)penAddPointX:(double)positionX
                    y:(double)positionY
-              active:(KKBezierPath *)active
+              active:(nullable KKBezierPath *)active
          forceUpdate:(BOOL *)forceUpdate {
   if (!active) {
     active = [self createNewPathInheritingParams];

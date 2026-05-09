@@ -362,10 +362,23 @@
 
   // Path combine toolbar (full toolbar when 2+ non-image paths selected,
   // single stroke-to-path button when exactly 1 selected). The two toolbars
-  // are mutually exclusive — at most one is visible at a time.
-  NSInteger pathToolbarPart = [self.pathToolbar hitTestAtX:positionX
-                                                         y:positionY];
-  if (pathToolbarPart == 0)
+  // are mutually exclusive — at most one is visible at a time. Mirror the
+  // visibility check in OSC+Draw and only hit-test the visible variant —
+  // the hidden one keeps a stale `bottomMargin` from when it was last
+  // shown, so testing it would generate phantom hits at the old position.
+  __block NSUInteger pathCount = 0;
+  if (self.toolbar.activeTag == kOSCToolbarCursor) {
+    [self.selectedPathIndices
+        enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+          if (idx < self.paths.count && !self.paths[idx].isImage &&
+              !self.paths[idx].isGroup)
+            pathCount++;
+        }];
+  }
+  NSInteger pathToolbarPart = 0;
+  if (pathCount >= 2)
+    pathToolbarPart = [self.pathToolbar hitTestAtX:positionX y:positionY];
+  else if (pathCount == 1)
     pathToolbarPart = [self.pathToolbarSingle hitTestAtX:positionX y:positionY];
   if (pathToolbarPart > 0) {
     self.hoveredPathOp = pathToolbarPart;

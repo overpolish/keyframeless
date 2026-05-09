@@ -7,7 +7,7 @@
 #import <CoreGraphics/CoreGraphics.h>
 #import <Metal/Metal.h>
 
-static CGMutablePathRef CGPathFromKKBezierPath(KKBezierPath *path) {
+static CGMutablePathRef CGPathCreateFromKKBezierPath(KKBezierPath *path) {
   CGMutablePathRef cgPath = CGPathCreateMutable();
   NSUInteger contours = path.contourCount;
 
@@ -285,10 +285,14 @@ static CGPathRef createTaperedOutline(KKBezierPath *src, CGFloat sw, CGFloat ew,
                                       CGFloat refW, CGFloat refH,
                                       uint8_t lineCap) {
   NSUInteger segs = 64;
+  if (src.count < 2)
+    return CGPathCreateMutable();
   NSUInteger curveCount = src.count - 1;
   BOOL isClosed = src.closed;
   if (isClosed && src.count >= 2)
     curveCount = src.count;
+  if (curveCount == 0)
+    return CGPathCreateMutable();
   NSUInteger totalSamples = curveCount * segs + 1;
   float totalSteps = (float)(curveCount * segs);
 
@@ -618,7 +622,7 @@ static CGPathRef createDashedOutline(KKBezierPath *src, CGFloat sw, CGFloat ew,
   if (!tapers) {
     // Uniform width: let CoreGraphics handle dashing natively.
     // CG produces bezier arcs for round caps — minimal point count.
-    CGMutablePathRef cgPath = CGPathFromKKBezierPath(src);
+    CGMutablePathRef cgPath = CGPathCreateFromKKBezierPath(src);
     CGAffineTransform toPixel = CGAffineTransformMake(refW, 0, 0, refH, 0, 0);
     CGPathRef scaled = CGPathCreateCopyByTransformingPath(cgPath, &toPixel);
     CGPathRelease(cgPath);
@@ -984,7 +988,7 @@ NSArray<KKBezierPath *> *KKPathStrokeToOutline(NSArray<KKBezierPath *> *paths,
       CGPathRelease(tapered);
     } else {
       // Uniform stroke: use CG stroking.
-      CGMutablePathRef cgPath = CGPathFromKKBezierPath(src);
+      CGMutablePathRef cgPath = CGPathCreateFromKKBezierPath(src);
       CGAffineTransform toPixel =
           CGAffineTransformMake(referenceWidth, 0, 0, referenceHeight, 0, 0);
       CGPathRef scaled = CGPathCreateCopyByTransformingPath(cgPath, &toPixel);
@@ -1175,10 +1179,10 @@ KKBezierPath *KKPathBooleanApply(NSArray<KKBezierPath *> *paths,
   if (paths.count < 2)
     return nil;
 
-  CGPathRef accumulator = CGPathFromKKBezierPath(paths[0]);
+  CGPathRef accumulator = CGPathCreateFromKKBezierPath(paths[0]);
 
   for (NSUInteger i = 1; i < paths.count; i++) {
-    CGPathRef operand = CGPathFromKKBezierPath(paths[i]);
+    CGPathRef operand = CGPathCreateFromKKBezierPath(paths[i]);
     CGPathRef result = NULL;
 
     switch (op) {
@@ -1263,14 +1267,14 @@ KKPathBooleanPreviewTexture(NSArray<KKBezierPath *> *selectedPaths,
   for (KKBezierPath *path in selectedPaths) {
     if (path.count == 0 || path.isImage || path.isGroup)
       continue;
-    CGMutablePathRef cgPath = CGPathFromKKBezierPath(path);
+    CGMutablePathRef cgPath = CGPathCreateFromKKBezierPath(path);
     strokeAndFillCGPath(ctx, cgPath, path, width, height, 1.0, 0.2, 0.2);
     CGPathRelease(cgPath);
   }
 
   // Draw result path in green (will remain).
   if (resultPath && resultPath.count > 0) {
-    CGMutablePathRef cgPath = CGPathFromKKBezierPath(resultPath);
+    CGMutablePathRef cgPath = CGPathCreateFromKKBezierPath(resultPath);
     // Use the first selected path's stroke properties for the result preview.
     KKBezierPath *styleSrc = selectedPaths.firstObject;
     if (styleSrc) {

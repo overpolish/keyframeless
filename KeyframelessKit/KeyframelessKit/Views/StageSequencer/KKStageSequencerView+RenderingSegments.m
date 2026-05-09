@@ -191,7 +191,6 @@ static NSColor *_componentTint(NSString *propertyLabel, NSUInteger component,
   }
   double valRange = maxVal - minVal;
   if (valRange < 0.001) {
-    maxVal = 1.0;
     minVal = 0.0;
     valRange = 1.0;
   }

@@ -60,7 +60,7 @@ static void KKWireCycleViewToParam(
 
 @implementation CanvasPlugin (StyleViews)
 
-- (NSView *)createStyleViewForParameterID:(UInt32)parameterID
+- (nullable NSView *)createStyleViewForParameterID:(UInt32)parameterID
     NS_RETURNS_RETAINED {
   __weak id weakAPI = self.apiManager;
   NSString *uuid = KKLayerUUIDForAPI(self.apiManager);

@@ -153,6 +153,7 @@ static void _encodeGlowPipeline(
       [mps encodeToCommandBuffer:cb
                    sourceTexture:bloomPrepTex
               destinationTexture:bloomBlurTex];
+      [mps release];
     }
   }
 
@@ -731,9 +732,7 @@ static void _texPairReturn(NSInteger idx) {
     id<MTLTexture> bloomBlurTex = nil;
     if (hasBloom) {
       bloomTexIdx = _texPairCheckout(device, pf);
-      if (bloomTexIdx < 0)
-        hasBloom = NO;
-      else {
+      if (bloomTexIdx >= 0) {
         bloomPrepTex = _texPairPool[bloomTexIdx].a;
         bloomBlurTex = _texPairPool[bloomTexIdx].b;
       }

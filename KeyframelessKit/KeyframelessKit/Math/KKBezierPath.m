@@ -367,7 +367,6 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
             path->_shape = [KKShape shapeWithKind:shapeKind
                                             bytes:bytes + hdr
                                         available:need];
-            hdr += need;
           }
         }
       }

@@ -70,25 +70,10 @@ static const void *kRenameButtonAssocKey = &kRenameButtonAssocKey;
   NSString *newName = field.stringValue;
 
   if (newName.length > 0 && ![newName isEqualToString:originalTitle]) {
-    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actionAPI startAction:self];
-    id<FxParameterRetrievalAPI_v6> paramGetAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    id<FxParameterSettingAPI_v5> paramSetAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    NSString *str = KKCanvasReadPathData(paramGetAPI);
-    if (str.length > 0) {
-      NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
-      NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
-      if (index >= 0 && (NSUInteger)index < paths.count) {
+    [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
+      if (index >= 0 && (NSUInteger)index < paths.count)
         paths[index].name = newName;
-        NSData *newBlob = [KKBezierPath blobFromPaths:paths];
-        KKCanvasWritePathData([newBlob base64EncodedStringWithOptions:0],
-                              paramSetAPI);
-      }
-    }
-    [actionAPI endAction:self];
+    }];
   }
 
   KKLayerStateForUUID(self.instanceUUID).isEditing = NO;

@@ -28,7 +28,7 @@
   // its 0→40→90 snap animation match the inspector group headers exactly.
   NSNumber *rotNum = _groupChevronRotation[row.groupKey];
   CGFloat rotation =
-      rotNum ? rotNum.doubleValue : (row.groupCollapsed ? 0.0 : 90.0);
+      rotNum != nil ? rotNum.doubleValue : (row.groupCollapsed ? 0.0 : 90.0);
   NSImage *chevron =
       [KKChevronView chevronImageAtAngle:rotation
                                    color:[[NSColor inspectorLabel]

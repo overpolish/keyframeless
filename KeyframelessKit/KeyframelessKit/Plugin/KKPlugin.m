@@ -147,7 +147,7 @@
   // arrives within ~16 ms and the partner catches up imperceptibly.
   NSNumber *prevSource = objc_getAssociatedObject(self, kKKLinkedSource);
   BOOL firstTickForSource =
-      (!prevSource || prevSource.unsignedIntValue != parameterID);
+      (prevSource == nil || prevSource.unsignedIntValue != parameterID);
   // Default: clear the "last partner written" marker so plugins polling
   // it via `linkedPartnerWrittenForLastChange` don't see a stale value
   // from a previous call.
@@ -163,7 +163,7 @@
   }
 
   NSNumber *ratioNum = objc_getAssociatedObject(self, kKKLinkedRatio);
-  double ratio = ratioNum ? ratioNum.doubleValue : 1.0;
+  double ratio = ratioNum != nil ? ratioNum.doubleValue : 1.0;
 
   objc_setAssociatedObject(self, kKKLinkedLocking, @YES,
                            OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -184,7 +184,7 @@
 
 - (UInt32)linkedPartnerWrittenForLastChange {
   NSNumber *partner = objc_getAssociatedObject(self, kKKLinkedLastPartner);
-  return partner ? partner.unsignedIntValue : 0;
+  return partner != nil ? partner.unsignedIntValue : 0;
 }
 
 - (nullable id<MTLRenderPipelineState>)

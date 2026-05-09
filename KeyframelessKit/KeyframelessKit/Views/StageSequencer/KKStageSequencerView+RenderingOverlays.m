@@ -101,8 +101,10 @@
                                    xRadius:KKRadiusSM
                                    yRadius:KKRadiusSM] fill];
 
-  NSImage *icon = [NSImage imageWithSystemSymbolName:@"graph.2d"
-                            accessibilityDescription:@"Edit curve"];
+  NSImage *icon = [NSImage
+      imageWithSystemSymbolName:@"point.topleft.down.to.point.bottomright."
+                                @"curvepath"
+       accessibilityDescription:@"Edit curve"];
   if (!icon)
     return;
   NSImageSymbolConfiguration *size = [NSImageSymbolConfiguration

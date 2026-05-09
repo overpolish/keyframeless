@@ -214,7 +214,7 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
 - (KKBezierPath *)_pathForSegment:(KKTimingSegment *)seg {
   if (seg.pathData.length > 0)
     return [KKBezierPath pathWithData:seg.pathData];
-  return [[KKBezierPath alloc] init];
+  return [[[KKBezierPath alloc] init] autorelease];
 }
 
 - (void)_writePath:(KKBezierPath *)path forSegmentIndex:(NSInteger)segIdx {
@@ -228,7 +228,8 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
   // Read the merge baseline from the per-instance snapshot (see comment
   // in `_positionLaneAtTime:` — KKDataBlob reads from OSC scope are nil).
   KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
-  NSMutableArray<KKTimingLane *> *lanes = [state.lanesSnapshot mutableCopy];
+  NSMutableArray<KKTimingLane *> *lanes =
+      [[state.lanesSnapshot mutableCopy] autorelease];
   [actAPI startAction:self];
   if (lanes) {
     for (NSUInteger li = 0; li < lanes.count; li++) {
@@ -237,9 +238,9 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
         continue;
       if (segIdx < 0 || (NSUInteger)segIdx >= lane.segments.count)
         break;
-      KKTimingLane *mLane = [lane copy];
-      NSMutableArray *mSegs = [mLane.segments mutableCopy];
-      KKTimingSegment *mSeg = [mSegs[segIdx] copy];
+      KKTimingLane *mLane = [[lane copy] autorelease];
+      NSMutableArray *mSegs = [[mLane.segments mutableCopy] autorelease];
+      KKTimingSegment *mSeg = [[mSegs[segIdx] copy] autorelease];
       mSeg.pathData = data.length > 0 ? data : nil;
       mSegs[segIdx] = mSeg;
       mLane.segments = mSegs;
@@ -286,9 +287,7 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
     simd_float2 endObj = {(float)toVals[0].doubleValue,
                           (float)toVals[1].doubleValue};
 
-    KKBezierPath *path = seg.pathData.length > 0
-                             ? [KKBezierPath pathWithData:seg.pathData]
-                             : [[KKBezierPath alloc] init];
+    KKBezierPath *path = [self _pathForSegment:seg];
     NSUInteger segCount = path.segmentCount;
 
     for (NSUInteger s = 0; s < segCount; s++) {

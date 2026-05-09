@@ -173,7 +173,7 @@ NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
                forceUpdate:(BOOL *)forceUpdate;
 - (void)penAddPointX:(double)positionX
                    y:(double)positionY
-              active:(KKBezierPath *)active
+              active:(nullable KKBezierPath *)active
          forceUpdate:(BOOL *)forceUpdate;
 - (void)selectActivePath;
 - (void)toggleBezierAtIndex:(NSInteger)ptIdx onPath:(KKBezierPath *)path;

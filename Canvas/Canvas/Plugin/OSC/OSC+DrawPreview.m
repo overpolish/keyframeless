@@ -52,7 +52,7 @@
   self.previewTexture = nil;
 }
 
-- (CGMutablePathRef)canvasCGPathForPath:(KKBezierPath *)p {
+- (CGMutablePathRef)canvasCGPathForPath:(KKBezierPath *)p CF_RETURNS_RETAINED {
   CGMutablePathRef cgp = CGPathCreateMutable();
   NSUInteger nc = p.contourCount;
   for (NSUInteger ci = 0; ci < nc; ci++) {

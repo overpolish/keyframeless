@@ -2831,7 +2831,7 @@
 				<key>USE_HFS+_COMPRESSION</key>
 				<false/>
 				<key>VERSION</key>
-				<string>2.0.0</string>
+				<string>1.0.0</string>
 			</dict>
 			<key>TYPE</key>
 			<integer>0</integer>
@@ -3021,7 +3021,7 @@
 										<key>LANGUAGE</key>
 										<string>English</string>
 										<key>VALUE</key>
-										<string>Canvas plugin. Effect for use in Motion/Final Cut Pro.</string>
+										<string>Draw and animate paths and shapes directly in Final Cut Pro. Effect for use in Motion/Final Cut Pro.</string>
 									</dict>
 								</array>
 								<key>OPTIONS</key>
@@ -3039,7 +3039,8 @@
 								<integer>0</integer>
 								<key>UUID</key>
 								<string>46161E1D-52B1-4474-9527-B79EC065F5C7</string>
-							</dict>						</array>
+							</dict>
+						</array>
 						<key>REMOVED</key>
 						<dict/>
 					</dict>

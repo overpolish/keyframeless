@@ -60,7 +60,7 @@ static const NSInteger kCurrentVersion = 3;
   if (![dict isKindOfClass:[NSDictionary class]])
     return nil;
   NSNumber *typeNum = dict[kKeyType];
-  if (!typeNum)
+  if (typeNum == nil)
     return nil;
   KKTimingSegment *s = [[KKTimingSegment alloc] init];
   s.type = (KKSegmentType)typeNum.integerValue;
@@ -72,7 +72,7 @@ static const NSInteger kCurrentVersion = 3;
     s.values = vals;
   } else {
     NSNumber *singleVal = dict[@"val"];
-    s.values = singleVal ? @[ singleVal ] : @[ @(0) ];
+    s.values = singleVal != nil ? @[ singleVal ] : @[ @(0) ];
   }
   s.easing = (KKEasingCurve)[dict[kKeyEasing] integerValue];
   s.holdEffect = (KKHoldEffect)[dict[kKeyHoldEffect] integerValue];
@@ -80,7 +80,7 @@ static const NSInteger kCurrentVersion = 3;
   s.frequency = [dict[kKeyFrequency] doubleValue];
   s.seed = (uint32_t)[dict[kKeySeed] unsignedIntegerValue];
   NSNumber *linkedNum = dict[kKeyLinked];
-  s.linked = linkedNum ? linkedNum.boolValue : YES;
+  s.linked = linkedNum != nil ? linkedNum.boolValue : YES;
   s.lockedDurationSeconds = [dict[kKeyLockedSec] doubleValue];
   NSString *pathStr = dict[kKeyPathData];
   if ([pathStr isKindOfClass:[NSString class]] && pathStr.length > 0) {
@@ -175,17 +175,17 @@ static const NSInteger kCurrentVersion = 3;
                                             segments:segments
                                              enabled:enabled];
     NSNumber *selNum = laneDict[kKeySelectedSeg];
-    if (selNum)
+    if (selNum != nil)
       lane.selectedSegment = selNum.integerValue;
     NSNumber *oscNum = laneDict[kKeyOscVisible];
-    lane.oscVisible = oscNum ? oscNum.boolValue : YES;
+    lane.oscVisible = oscNum != nil ? oscNum.boolValue : YES;
     NSNumber *hasOscNum = laneDict[@"hasOsc"];
-    if (hasOscNum)
+    if (hasOscNum != nil)
       lane.hasOSC = hasOscNum.boolValue;
     NSNumber *visNum = laneDict[kKeyVisibleInSeq];
-    lane.visibleInSequencer = visNum ? visNum.boolValue : YES;
+    lane.visibleInSequencer = visNum != nil ? visNum.boolValue : YES;
     NSNumber *pvisNum = laneDict[kKeyPluginVisible];
-    lane.pluginVisible = pvisNum ? pvisNum.boolValue : YES;
+    lane.pluginVisible = pvisNum != nil ? pvisNum.boolValue : YES;
     lane.lastKnownClipDuration = [laneDict[kKeyLastKnownDur] doubleValue];
     NSString *gkRaw = laneDict[kKeyGroupKey];
     if ([gkRaw isKindOfClass:[NSString class]])

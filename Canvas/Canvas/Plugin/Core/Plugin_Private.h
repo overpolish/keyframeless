@@ -24,7 +24,7 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 @interface CanvasPlugin (StyleViews)
-- (NSView *)createStyleViewForParameterID:(UInt32)parameterID
+- (nullable NSView *)createStyleViewForParameterID:(UInt32)parameterID
     NS_RETURNS_RETAINED;
 @end
 
