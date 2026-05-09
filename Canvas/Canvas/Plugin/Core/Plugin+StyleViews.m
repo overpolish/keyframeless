@@ -239,6 +239,7 @@ static void KKWireCycleViewToParam(
     if (stops)
       control.stops = stops;
 
+    __block BOOL gradientDragActive = NO;
     control.onStopsChanged = ^(NSArray<KKGradientStop *> *newStops) {
       id api = weakAPI;
       if (!api)
@@ -246,17 +247,22 @@ static void KKWireCycleViewToParam(
       NSString *newJSON = KKGradientJSONFromStops(newStops);
       if (!newJSON)
         return;
-      KKModifySelectedPathProperty(api, ^(KKBezierPath *p) {
-        if (isStroke)
-          p.strokeGradientJSON = newJSON;
-        else
-          p.fillGradientJSON = newJSON;
-      });
+      BOOL inDrag = gradientDragActive;
       id<FxCustomParameterActionAPI_v4> actAPI =
           [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      [actAPI startAction:api];
+      if (!inDrag)
+        [actAPI startAction:api];
+      id<FxParameterRetrievalAPI_v6> getAPI =
+          [api apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
       id<FxParameterSettingAPI_v5> setAPI =
           [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      KKModifySelectedPathPropertyInScope(api, getAPI, setAPI,
+                                          ^(KKBezierPath *p) {
+                                            if (isStroke)
+                                              p.strokeGradientJSON = newJSON;
+                                            else
+                                              p.fillGradientJSON = newJSON;
+                                          });
       KKWriteCustomParamString(setAPI, newJSON,
                                isStroke ? kParamStrokeGradientData
                                         : kParamFillGradientData);
@@ -265,7 +271,34 @@ static void KKWireCycleViewToParam(
       [setAPI setStringParameterValue:newJSON
                           toParameter:isStroke ? kParamStrokeGradientDataMirror
                                                : kParamFillGradientDataMirror];
+      if (!inDrag)
+        [actAPI endAction:api];
+    };
+
+    // Coalesce continuous-drag ticks (gradient stop / midpoint drag) into a
+    // single undo entry by holding one outer action scope + undo group across
+    // the whole mouse-down → drag → mouse-up sequence.
+    control.onDragBegin = ^{
+      id api = weakAPI;
+      if (!api || gradientDragActive)
+        return;
+      id<FxCustomParameterActionAPI_v4> actAPI =
+          [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      if (!actAPI)
+        return;
+      [actAPI startAction:api];
+      KKBeginUndoGroup(api, @"Edit Gradient");
+      gradientDragActive = YES;
+    };
+    control.onDragEnd = ^{
+      id api = weakAPI;
+      if (!api || !gradientDragActive)
+        return;
+      KKEndUndoGroup(api, YES);
+      id<FxCustomParameterActionAPI_v4> actAPI =
+          [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
       [actAPI endAction:api];
+      gradientDragActive = NO;
     };
 
     if (lst) {

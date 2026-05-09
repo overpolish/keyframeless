@@ -101,10 +101,8 @@
                                    xRadius:KKRadiusSM
                                    yRadius:KKRadiusSM] fill];
 
-  NSImage *icon = [NSImage
-      imageWithSystemSymbolName:@"point.topleft.down.to.point.bottomright."
-                                @"curvepath"
-       accessibilityDescription:@"Edit curve"];
+  NSImage *icon = [NSImage imageWithSystemSymbolName:@"water.waves"
+                            accessibilityDescription:@"Edit curve"];
   if (!icon)
     return;
   NSImageSymbolConfiguration *size = [NSImageSymbolConfiguration
