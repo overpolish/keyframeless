@@ -255,6 +255,22 @@
                             atIndex:segmentIndex
                              getAPI:getAPI
                              setAPI:setAPI];
+
+  // Native params still hold the deleted segment's last live value.
+  // Push the new selection's stored values through so the inspector
+  // reflects the survivor, not the dead segment.
+  if (lane.selectedSegment >= 0 &&
+      (NSUInteger)lane.selectedSegment < lane.segments.count) {
+    if (state)
+      state.selectionInProgress = YES;
+    [self applyLaneValues:lane.segments[lane.selectedSegment].values
+                 forLabel:lane.propertyLabel
+                 groupKey:lane.groupKey
+                   atTime:[actAPI currentTime]];
+    if (state)
+      state.selectionInProgress = NO;
+  }
+
   [actAPI endAction:self];
   [self timingGraphApplyState];
   KKEndUndoGroup(self.apiManager, ug);
