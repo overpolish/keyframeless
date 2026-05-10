@@ -9,8 +9,7 @@
 
 static NSString *const kOwner = @"overpolish";
 static NSString *const kRepo = @"keyframeless";
-static NSString *const kGumroadProductURL =
-    @"https://overpolish.gumroad.com/l/keyframeless";
+static NSString *const kProductURL = @"https://store.overpolish.co/b/QG73g";
 static NSString *const kCachedVersionKey =
     @"co.overpolish.keyframeless.cachedAvailableVersion";
 static NSString *const kCachedNewKeysKey =
@@ -159,7 +158,7 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
             return;
           }
 
-          NSString *htmlURL = kGumroadProductURL;
+          NSString *htmlURL = kProductURL;
 
           NSURL *manifestURL = nil;
           for (NSDictionary *asset in assets) {

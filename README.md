@@ -20,7 +20,15 @@
 <br />
 
 <div align="center">
-	<img width="500" alt="Published parameters section with custom banner and separator" src="./.github/images/magic-move-screenshot.png" />
+	<img width="200" alt="Keyframeless - One timing engine. Every plugin." src="./Assets/Marketing/keyframeless-header.png" />
+	<img width="200" alt="Canvas - Draw directly in Final Cut Pro." src="./Assets/Marketing/keyframeless-canvas.png" />
+	<img width="200" alt="Magic Move - Hold. Move. Hold. No keyframes." src="./Assets/Marketing/keyframeless-magicmove.png" />
+</div>
+
+<div align="center">
+	<img width="200" alt="AI Captions - Edit captions before they hit the timeline." src="./Assets/Marketing/keyframeless-ai-captions.png" />
+	<img width="200" alt="Glow - The glow Final Cut never shipped." src="./Assets/Marketing/keyframeless-glow.png" />
+	<img width="200" alt="Rounded - No more shape masks." src="./Assets/Marketing/keyframeless-rounded.png" />
 </div>
 
 <br />
@@ -30,10 +38,12 @@
 
 - [Install](#-install)
 - [Supercharge Your Workflow](#️-supercharge-your-workflow)
+  - [Canvas](#canvas)
   - [Magic Move](#magic-move)
-  - [Glow](#glow)
   - [AI Captions](#ai-captions)
+  - [Glow](#glow)
   - [Rounded](#rounded)
+- [Source & License](#-source--license)
 
 </details>
 
@@ -41,10 +51,10 @@
 
 # 🤝 Install
 
-Grab the installer from Gumroad - one payment to help support continued development, all future updates included.
+Grab the installer from Payhip - one payment to help support continued development, all future updates included.
 
 <div align="center">
-	<a href="https://overpolish.gumroad.com/l/keyframeless"><b>Buy on Gumroad →</b></a>
+	<a href="https://store.overpolish.co/b/QG73g"><b>Buy on Payhip →</b></a>
 </div>
 
 <br />
@@ -57,34 +67,30 @@ Grab the installer from Gumroad - one payment to help support continued developm
 
 <br />
 
-If you'd rather build Keyframeless yourself than pay for the installer, you can - clone the repo, open it in Xcode, and go. Paying saves you the signing/notarization process and helps fund continued development.
+If you'd rather build Keyframeless yourself than pay for the installer, you can - clone the repo, open it in Xcode, and go. Note the source is [PolyForm Noncommercial](./LICENSE), self-built use is for personal projects only. Paying gets you a signed installer with a [commercial-use license](./COMMERCIAL-LICENSE.md) for paid client work, plus all future plugins and updates.
 
 <br />
 
 # ⚡️ Supercharge Your Workflow
 
-No clutter in your inspector with working groups in Final Cut Pro.
+## Canvas
+
+Actual vector drawing inside Final Cut Pro. Drop in SVGs or draw paths from scratch with bezier control - the drawing tool Final Cut never had.
+
+Each path animates independently with draw-on, trim, opacity, and the same timing engine the rest of the suite uses. Handwritten signatures, scribbled annotations, animated illustrations, all without leaving the timeline. Drag handles directly in the viewer for fine-tuning, `opt+click` to add points, double-click to toggle linear/curve.
 
 <div align="center">
-	<img width="400" alt="Published parameters showcasing expanded timing section" src="./.github/images/published-properties-showcasing-groups.png" />
+	<img alt="Canvas demo" src="./.github/images/canvas-demo.gif" />
 </div>
 
 ## Magic Move
 
-Easy to use animation engine with, you guessed it, no keyframes. You have the option of enable/disabling 4 points `A`, `B` (always on), `Drift`, and `Exit`.
+Animation built around a simple mental model - think in seconds, not keyframes. Each property (Position, Scale, Rot X/Y/Z, Opacity) gets its own lane in the sequencer, and you fill it with as many `hold` and `move` segments as you need. Drag to resize, double-click to split, `cmd-click` to delete, `shift-click` to lock a segment to an absolute duration.
 
-Intuitive on-screen controls make animating a breeze, for more fine-tuning you can go into each point and be as precise as you need.
+Real easing curves per transition - Linear, EaseIn/Out/InOut, Elastic, Bounce - rather than the 3 options FCP gives you. Hold segments can ride a Bounce or Wiggle effect with adjustable intensity and frequency, so static doesn't have to mean lifeless.
 
 <div align="center">
 	<img alt="Magic Move demo" src="./.github/images/magicmove-demo.gif" />
-</div>
-
-## Glow
-
-Add glow effects with solid, gradient, and dynamic colour support. Also doubles as a drop shadow. Animate glow in and out with full timing control, and use outward noise for organic, evolving edges.
-
-<div align="center">
-	<img alt="Glow demo" src="./.github/images/glow-demo.gif" />
 </div>
 
 ## AI Captions
@@ -92,6 +98,11 @@ Add glow effects with solid, gradient, and dynamic colour support. Also doubles 
 Ever felt like AI caption tools are too basic? No way to edit captions before pulling them into Final Cut Pro, leaving you to fix things title-by-title? This is the first clip-based caption workflow - see your Final Cut Pro audio timeline, pick which clips to transcribe, and use different models for different clips.
 
 There's also community captions - download and use existing ones, or make your own Motion Templates, drag them in, and you're good to go. Customize published parameters **BEFORE** dragging them into Final Cut Pro so you don't have to touch titles once they're on the timeline.
+
+Supported Models:
+
+- Whisper
+- Parakeet
 
 <div align="center">
 	<img alt="AI Captions demo" src="./.github/images/ai-captions-demo.gif" />
@@ -112,9 +123,17 @@ There's also community captions - download and use existing ones, or make your o
 > [!WARNING]
 > Intel performance is limited by CPU. For best performance, and better models, Silicon is recommended.
 
+## Glow
+
+Add glow effects with solid, gradient, and dynamic colour support. Also doubles as a drop shadow. Animate glow in and out with full timing control, and use outward noise for organic, evolving edges.
+
+<div align="center">
+	<img alt="Glow demo" src="./.github/images/glow-demo.gif" />
+</div>
+
 ## Rounded
 
-Easily crop and round your videos corners,
+Easily crop and round your video's corners.
 
 <div align="center">
 	<img alt="Rounded demo" src="./.github/images/rounded-demo.gif" />
@@ -124,6 +143,9 @@ Easily crop and round your videos corners,
 
 # 📜 Source & License
 
-Keyframeless is source-available under the [PolyForm Noncommercial License 1.0.0](./LICENSE) - read it, learn from it, and build it for personal use. The signed installer is paid, sold on Gumroad.
+Keyframeless is dual-licensed:
+
+- **Source code:** [PolyForm Noncommercial 1.0.0](./LICENSE) enabling you to read it, learn from it, and build it for personal use.
+- **Paid installer (Payhip):** [Commercial-use license](./COMMERCIAL-LICENSE.md) granted to the named purchaser. One person, non-transferable, all current and future updates included.
 
 Older releases were distributed under GPLv3 and stay that way - [Final GPLv3 release](https://github.com/overpolish/keyframeless/releases/tag/2026-04-11)
