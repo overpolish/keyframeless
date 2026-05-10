@@ -62,7 +62,7 @@ Grab the installer from Payhip - one payment to help support continued developme
 <br />
 
 <div align="center">
-	<img width="500" alt="Installation window showcasing the various tools available for install." src="./.github/images/installer.png" />
+	<img width="500" alt="Installation window showcasing the various tools available for install." src="./.github/images/installer-1.png" />
 </div>
 
 <br />
@@ -80,7 +80,7 @@ Actual vector drawing inside Final Cut Pro. Drop in SVGs or draw paths from scra
 Each path animates independently with draw-on, trim, opacity, and the same timing engine the rest of the suite uses. Handwritten signatures, scribbled annotations, animated illustrations, all without leaving the timeline. Drag handles directly in the viewer for fine-tuning, `opt+click` to add points, double-click to toggle linear/curve.
 
 <div align="center">
-	<img alt="Canvas demo" src="./.github/images/canvas-demo.gif" />
+	<img alt="Canvas demo" src="./.github/images/canvas-demo-1.gif" />
 </div>
 
 ## Magic Move
@@ -90,7 +90,7 @@ Animation built around a simple mental model - think in seconds, not keyframes. 
 Real easing curves per transition - Linear, EaseIn/Out/InOut, Elastic, Bounce - rather than the 3 options FCP gives you. Hold segments can ride a Bounce or Wiggle effect with adjustable intensity and frequency, so static doesn't have to mean lifeless.
 
 <div align="center">
-	<img alt="Magic Move demo" src="./.github/images/magicmove-demo.gif" />
+	<img alt="Magic Move demo" src="./.github/images/magicmove-demo-1.gif" />
 </div>
 
 ## AI Captions
@@ -105,7 +105,7 @@ Supported Models:
 - Parakeet
 
 <div align="center">
-	<img alt="AI Captions demo" src="./.github/images/ai-captions-demo.gif" />
+	<img alt="AI Captions demo" src="./.github/images/ai-captions-demo-1.gif" />
 </div>
 
 <br />
@@ -128,7 +128,7 @@ Supported Models:
 Add glow effects with solid, gradient, and dynamic colour support. Also doubles as a drop shadow. Animate glow in and out with full timing control, and use outward noise for organic, evolving edges.
 
 <div align="center">
-	<img alt="Glow demo" src="./.github/images/glow-demo.gif" />
+	<img alt="Glow demo" src="./.github/images/glow-demo-1.gif" />
 </div>
 
 ## Rounded
@@ -136,7 +136,7 @@ Add glow effects with solid, gradient, and dynamic colour support. Also doubles 
 Easily crop and round your video's corners.
 
 <div align="center">
-	<img alt="Rounded demo" src="./.github/images/rounded-demo.gif" />
+	<img alt="Rounded demo" src="./.github/images/rounded-demo-1.gif" />
 </div>
 
 <br />
