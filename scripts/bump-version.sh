@@ -8,10 +8,10 @@
 # Usage: bump-version.sh <component> <breaking|major|minor|alpha|release>
 #
 # Components:
-#   motionblur     MotionBlur plugin
 #   rounded        Rounded plugin
 #   magicmove      MagicMove plugin
 #   keyframelessx  Keyframeless X app
+#   canvas       Canvas plugin
 #   glow         Glow plugin
 
 set -euo pipefail
@@ -23,10 +23,10 @@ usage() {
   echo "Usage: bump-version.sh <component> <breaking|major|minor|alpha|release>"
   echo ""
   echo "Components:"
-  echo "  motionblur     MotionBlur plugin"
   echo "  rounded        Rounded plugin"
   echo "  magicmove      MagicMove plugin"
   echo "  keyframelessx  Keyframeless X app"
+  echo "  canvas       Canvas plugin"
   echo "  glow           Glow plugin"
   echo ""
   echo "Version format: BREAKING.MAJOR.MINOR[-vN]"
@@ -51,10 +51,10 @@ BUMP="$2"
 # for alpha/release operations where the plist may differ from manifest).
 plist_for_component() {
   case "$1" in
-    motionblur)    echo "MotionBlur/MotionBlur/Plugin/Info.plist" ;;
     rounded)       echo "Rounded/Rounded/Plugin/Info.plist" ;;
     magicmove)     echo "MagicMove/MagicMove/Plugin/Info.plist" ;;
     glow)          echo "Glow/Glow/Plugin/Info.plist" ;;
+    canvas) echo "Canvas/Canvas/Plugin/Info.plist" ;;
     keyframelessx) echo "" ;;
   esac
 }
@@ -187,13 +187,6 @@ with open('$MANIFEST', 'w') as f:
 echo "Bumping $COMPONENT: $CURRENT -> $VERSION"
 
 case "$COMPONENT" in
-  motionblur)
-    bump_plist "MotionBlur/MotionBlur/Wrapper Application/Info.plist"
-    bump_plist "MotionBlur/MotionBlur/Plugin/Info.plist"
-    bump_fxplug "MotionBlur/MotionBlur/Plugin/Info.plist"
-    bump_pkgproj "co.overpolish.keyframeless.MotionBlur"
-    ;;
-
   rounded)
     bump_plist "Rounded/Rounded/Wrapper Application/Info.plist"
     bump_plist "Rounded/Rounded/Plugin/Info.plist"
@@ -214,6 +207,13 @@ case "$COMPONENT" in
     bump_plist "Glow/Glow/Plugin/Info.plist"
     bump_fxplug "Glow/Glow/Plugin/Info.plist"
     bump_pkgproj "co.overpolish.keyframeless.Glow"
+    ;;
+
+  canvas)
+    bump_plist "Canvas/Canvas/Wrapper Application/Info.plist"
+    bump_plist "Canvas/Canvas/Plugin/Info.plist"
+    bump_fxplug "Canvas/Canvas/Plugin/Info.plist"
+    bump_pkgproj "co.overpolish.keyframeless.Canvas"
     ;;
   keyframelessx)
     proj="Keyframeless X/Keyframeless X.xcodeproj/project.pbxproj"

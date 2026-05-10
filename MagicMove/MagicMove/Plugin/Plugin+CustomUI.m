@@ -1,589 +1,285 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #import "Constants.h"
 #import "Plugin_Private.h"
 #import <AppKit/NSView.h>
 #import <KeyframelessKit/KeyframelessKit.h>
-#import <objc/runtime.h>
-
-@interface KKPlugin (TimingGraph)
-- (void)timingGraphApplyState;
-@end
-
-@interface MagicMovePreviewClearTarget : NSObject
-@property(nonatomic, weak) id<PROAPIAccessing> apiManager;
-- (void)clearPreviews:(id)sender;
-@end
-
-@implementation MagicMovePreviewClearTarget
-- (void)clearPreviews:(id)sender {
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actionAPI startAction:self];
-  id<FxParameterSettingAPI_v5> paramSetAPI =
-      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  id<FxTimingAPI_v4> timingAPI =
-      [_apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-  CMTime now = kCMTimeZero;
-  if (timingAPI) {
-    CMTime start = kCMTimeZero;
-    [timingAPI startTimeForEffect:&start];
-    now = start;
-  }
-  UInt32 previews[] = {kParamPreviewA, kParamPreviewB, kParamPreviewDrift,
-                       kParamPreviewExit};
-  for (int i = 0; i < 4; i++)
-    [paramSetAPI setBoolValue:NO toParameter:previews[i] atTime:now];
-  [actionAPI endAction:self];
-}
-@end
-
-@interface MagicMoveShowOSCTarget : NSObject
-@property(nonatomic, weak) id<PROAPIAccessing> apiManager;
-- (void)showAll:(id)sender;
-@end
-
-@implementation MagicMoveShowOSCTarget
-- (void)showAll:(id)sender {
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [_apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actionAPI startAction:self];
-  id<FxParameterSettingAPI_v5> paramSetAPI =
-      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  id<FxTimingAPI_v4> timingAPI =
-      [_apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-  CMTime now = kCMTimeZero;
-  if (timingAPI) {
-    CMTime start = kCMTimeZero;
-    [timingAPI startTimeForEffect:&start];
-    now = start;
-  }
-  UInt32 hideParams[] = {kParamHideOSCA, kParamHideOSCB, kParamHideOSCDrift,
-                         kParamHideOSCExit};
-  for (int i = 0; i < 4; i++)
-    [paramSetAPI setBoolValue:NO toParameter:hideParams[i] atTime:now];
-  [actionAPI endAction:self];
-}
-@end
 
 @implementation MagicMovePlugin (CustomUI)
 
-- (NSArray<KKTimingSlot *> *)timingGlobalSlots {
-  return @[];
+- (BOOL)usesMotionBlur {
+  return YES;
 }
 
-- (KKTimingSlot *)_rotateWithMotionSlotForParam:(UInt32)paramID {
-  KKParameterRowView *row = [[KKParameterRowView alloc]
-      initWithFrame:NSMakeRect(0, 0, 300, KKInspectorRowHeight)
-         apiManager:self.apiManager
-        parameterId:paramID];
+- (NSSet<NSString *> *)animatablePropertyLabelsWithOSC {
+  return [NSSet setWithObjects:@"Position", @"Scale", @"Rot Z", @"Rot X",
+                               @"Rot Y", @"Opacity", nil];
+}
 
-  KKLabelView *label = [[KKLabelView alloc] initWithText:@"Rotate with Motion"];
-  row.leftView = label;
+- (NSSet<NSString *> *)animatablePropertyLabelsWithOSCDefaultOff {
+  return [NSSet setWithObjects:@"Rot X", @"Rot Y", nil];
+}
 
-  NSView *rightContainer = [[NSView alloc] initWithFrame:NSZeroRect];
-  KKCheckboxView *checkbox = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
-  checkbox.translatesAutoresizingMaskIntoConstraints = NO;
-  [rightContainer addSubview:checkbox];
-  [NSLayoutConstraint activateConstraints:@[
-    [checkbox.trailingAnchor
-        constraintEqualToAnchor:rightContainer.trailingAnchor
-                       constant:-23.0],
-    [checkbox.centerYAnchor
-        constraintEqualToAnchor:rightContainer.centerYAnchor],
-    [checkbox.widthAnchor constraintEqualToConstant:12.0],
-    [checkbox.heightAnchor constraintEqualToConstant:12.0],
-  ]];
-  row.rightView = rightContainer;
+/// Maps lane label → (paramID, isBool) so apply/read/disable can iterate.
+/// Bool entries are skipped by `setEditingDisabled:` (per-segment toggles
+/// stay editable even when surrounding lane is HTH-disabled).
+- (NSArray<NSDictionary *> *)_mmParamMappingForLabel:(NSString *)label {
+  if ([label isEqualToString:@"Position"])
+    return @[
+      @{@"pid" : @(kParamPoint), @"bool" : @NO},
+      @{@"pid" : @(kParamRotateWithMotion), @"bool" : @YES},
+    ];
+  if ([label isEqualToString:@"Scale"])
+    return @[
+      @{@"pid" : @(kParamScale), @"bool" : @NO},
+      @{@"pid" : @(kParamScaleY), @"bool" : @NO},
+    ];
+  if ([label isEqualToString:@"Rot Z"])
+    return @[ @{@"pid" : @(kParamRotation), @"bool" : @NO} ];
+  if ([label isEqualToString:@"Rot X"])
+    return @[ @{@"pid" : @(kParamRotationX), @"bool" : @NO} ];
+  if ([label isEqualToString:@"Rot Y"])
+    return @[ @{@"pid" : @(kParamRotationY), @"bool" : @NO} ];
+  if ([label isEqualToString:@"Opacity"])
+    return @[ @{@"pid" : @(kParamOpacity), @"bool" : @NO} ];
+  return nil;
+}
 
-  __weak typeof(self) weakSelf = self;
-  checkbox.onToggle = ^(BOOL isChecked) {
-    __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf)
-      return;
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actAPI startAction:strongSelf];
-    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    [setAPI setBoolValue:isChecked
-             toParameter:paramID
-                  atTime:[actAPI currentTime]];
-    [actAPI endAction:strongSelf];
+- (NSArray<NSNumber *> *)currentValuesForLaneLabel:(NSString *)label
+                                          groupKey:(NSString *)groupKey
+                                            atTime:(CMTime)time {
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!getAPI)
+    return nil;
+  if ([label isEqualToString:@"Position"]) {
+    double x = 0, y = 0;
+    [getAPI getXValue:&x YValue:&y fromParameter:kParamPoint atTime:time];
+    BOOL rwm = NO;
+    [getAPI getBoolValue:&rwm fromParameter:kParamRotateWithMotion atTime:time];
+    return @[ @(x), @(y), @(rwm ? 1.0 : 0.0) ];
+  }
+  if ([label isEqualToString:@"Scale"]) {
+    double sx = 1, sy = 1;
+    [getAPI getFloatValue:&sx fromParameter:kParamScale atTime:time];
+    [getAPI getFloatValue:&sy fromParameter:kParamScaleY atTime:time];
+    return @[ @(sx), @(sy) ];
+  }
+  if ([label isEqualToString:@"Rot Z"] || [label isEqualToString:@"Rot X"] ||
+      [label isEqualToString:@"Rot Y"] || [label isEqualToString:@"Opacity"]) {
+    UInt32 pid =
+        [(NSNumber *)[self _mmParamMappingForLabel:label].firstObject[@"pid"]
+            unsignedIntValue];
+    double v = 0;
+    [getAPI getFloatValue:&v fromParameter:pid atTime:time];
+    return @[ @(v) ];
+  }
+  return nil;
+}
+
+- (BOOL)applyLaneValues:(NSArray<NSNumber *> *)values
+               forLabel:(NSString *)label
+               groupKey:(NSString *)groupKey
+                 atTime:(CMTime)time {
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  if (!setAPI)
+    return NO;
+  [self setEditingDisabled:NO forLaneLabel:label groupKey:groupKey];
+  if ([label isEqualToString:@"Position"] && values.count >= 3) {
+    [setAPI setXValue:values[0].doubleValue
+               YValue:values[1].doubleValue
+          toParameter:kParamPoint
+               atTime:time];
+    [setAPI setBoolValue:values[2].doubleValue >= 0.5
+             toParameter:kParamRotateWithMotion
+                  atTime:time];
+    return YES;
+  }
+  if ([label isEqualToString:@"Scale"] && values.count >= 2) {
+    [setAPI setFloatValue:values[0].doubleValue
+              toParameter:kParamScale
+                   atTime:time];
+    [setAPI setFloatValue:values[1].doubleValue
+              toParameter:kParamScaleY
+                   atTime:time];
+    return YES;
+  }
+  if (([label isEqualToString:@"Rot Z"] || [label isEqualToString:@"Rot X"] ||
+       [label isEqualToString:@"Rot Y"] ||
+       [label isEqualToString:@"Opacity"]) &&
+      values.count >= 1) {
+    UInt32 pid =
+        [(NSNumber *)[self _mmParamMappingForLabel:label].firstObject[@"pid"]
+            unsignedIntValue];
+    [setAPI setFloatValue:values[0].doubleValue toParameter:pid atTime:time];
+    return YES;
+  }
+  return NO;
+}
+
+- (void)setEditingDisabled:(BOOL)disabled
+              forLaneLabel:(NSString *)label
+                  groupKey:(NSString *)groupKey {
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  if (!getAPI || !setAPI)
+    return;
+  for (NSDictionary *entry in [self _mmParamMappingForLabel:label]) {
+    if ([entry[@"bool"] boolValue])
+      continue;
+    UInt32 pid = [entry[@"pid"] unsignedIntValue];
+    FxParameterFlags cur = 0;
+    [getAPI getParameterFlags:&cur fromParameter:pid];
+    FxParameterFlags want = disabled ? (cur | kFxParameterFlag_DISABLED)
+                                     : (cur & ~kFxParameterFlag_DISABLED);
+    if (cur != want)
+      [setAPI setParameterFlags:want toParameter:pid];
+  }
+}
+
+- (NSArray<KKTimingLane *> *)defaultLanesAtTime:(CMTime)time
+                                    paramGetAPI:(id<FxParameterRetrievalAPI_v6>)
+                                                    paramGetAPI {
+  NSMutableArray<KKTimingLane *> *out = [NSMutableArray array];
+
+  double px = 0.5, py = 0.5;
+  [paramGetAPI getXValue:&px YValue:&py fromParameter:kParamPoint atTime:time];
+  BOOL rwm = NO;
+  [paramGetAPI getBoolValue:&rwm
+              fromParameter:kParamRotateWithMotion
+                     atTime:time];
+  KKTimingLane *posLane =
+      [KKTimingLane defaultLaneForLabel:@"Position"
+                             baseValues:@[ @(px), @(py), @(rwm ? 1.0 : 0.0) ]];
+  posLane.valueComponentKinds =
+      @[ @(KKAnimatableParamKindPoint), @(KKAnimatableParamKindBool) ];
+  posLane.hasOSC = YES;
+  [out addObject:posLane];
+
+  double sx = 1, sy = 1;
+  [paramGetAPI getFloatValue:&sx fromParameter:kParamScale atTime:time];
+  [paramGetAPI getFloatValue:&sy fromParameter:kParamScaleY atTime:time];
+  KKTimingLane *scaleLane =
+      [KKTimingLane defaultLaneForLabel:@"Scale" baseValues:@[ @(sx), @(sy) ]];
+  scaleLane.valueComponentKinds =
+      @[ @(KKAnimatableParamKindFloat), @(KKAnimatableParamKindFloat) ];
+  scaleLane.hasOSC = YES;
+  [out addObject:scaleLane];
+
+  struct {
+    NSString *label;
+    UInt32 pid;
+  } rots[] = {
+      {@"Rot Z", kParamRotation},
+      {@"Rot X", kParamRotationX},
+      {@"Rot Y", kParamRotationY},
   };
+  NSSet<NSString *> *oscOff = [self animatablePropertyLabelsWithOSCDefaultOff];
+  for (size_t i = 0; i < sizeof(rots) / sizeof(rots[0]); i++) {
+    double v = 0;
+    [paramGetAPI getFloatValue:&v fromParameter:rots[i].pid atTime:time];
+    KKTimingLane *lane = [KKTimingLane defaultLaneForLabel:rots[i].label
+                                                baseValues:@[ @(v) ]];
+    lane.valueComponentKinds = @[ @(KKAnimatableParamKindFloat) ];
+    lane.hasOSC = YES;
+    if ([oscOff containsObject:rots[i].label])
+      lane.oscVisible = NO;
+    [out addObject:lane];
+  }
 
-  return [KKTimingSlot
-      slotWithView:row
-            height:KKInspectorRowHeight
-        applyState:^(id<FxParameterRetrievalAPI_v6> paramAPI, CMTime time) {
-          BOOL val = NO;
-          [paramAPI getBoolValue:&val fromParameter:paramID atTime:time];
-          checkbox.isChecked = val;
-        }];
-}
+  double op = 1;
+  [paramGetAPI getFloatValue:&op fromParameter:kParamOpacity atTime:time];
+  KKTimingLane *opLane = [KKTimingLane defaultLaneForLabel:@"Opacity"
+                                                baseValues:@[ @(op) ]];
+  opLane.valueComponentKinds = @[ @(KKAnimatableParamKindFloat) ];
+  opLane.hasOSC = YES;
+  [out addObject:opLane];
 
-- (NSArray<KKTimingSlot *> *)timingSlotsForSection:(NSInteger)section {
-  static const UInt32 rwmParams[] = {kParamRotateWithMotionIn,
-                                     kParamRotateWithMotionHold,
-                                     kParamRotateWithMotionOut};
-  return @[ [self _rotateWithMotionSlotForParam:rwmParams[section]] ];
-}
-
-- (NSArray<KKAnimatableProperty *> *)animatableProperties {
-  return @[
-    [KKAnimatableProperty propertyWithLabel:@"Pos X"
-                                       inID:kParamInPositionX
-                                     holdID:kParamHoldPositionX
-                                      outID:kParamOutPositionX],
-    [KKAnimatableProperty propertyWithLabel:@"Pos Y"
-                                       inID:kParamInPositionY
-                                     holdID:kParamHoldPositionY
-                                      outID:kParamOutPositionY],
-    [KKAnimatableProperty propertyWithLabel:@"Sca X"
-                                       inID:kParamInScaleX
-                                     holdID:kParamHoldScaleX
-                                      outID:kParamOutScaleX],
-    [KKAnimatableProperty propertyWithLabel:@"Sca Y"
-                                       inID:kParamInScaleY
-                                     holdID:kParamHoldScaleY
-                                      outID:kParamOutScaleY],
-    [KKAnimatableProperty propertyWithLabel:@"Rot Z"
-                                       inID:kParamInRotationZ
-                                     holdID:kParamHoldRotationZ
-                                      outID:kParamOutRotationZ],
-    [KKAnimatableProperty propertyWithLabel:@"Rot X"
-                                       inID:kParamInRotationX
-                                     holdID:kParamHoldRotationX
-                                      outID:kParamOutRotationX],
-    [KKAnimatableProperty propertyWithLabel:@"Rot Y"
-                                       inID:kParamInRotationY
-                                     holdID:kParamHoldRotationY
-                                      outID:kParamOutRotationY],
-    [KKAnimatableProperty propertyWithLabel:@"Opa"
-                                       inID:kParamInOpacity
-                                     holdID:kParamHoldOpacity
-                                      outID:kParamOutOpacity],
-  ];
+  return out;
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
-  if (parameterID == kParamGroupPointA) {
-    NSImage *icon = [NSImage imageWithSystemSymbolName:@"circle.circle"
-                              accessibilityDescription:nil];
-    KKCustomGroupHeaderView *header =
-        [[KKCustomGroupHeaderView alloc] initWithFrame:NSMakeRect(0, 0, 300, 26)
-                                            apiManager:self.apiManager
-                                           parameterId:parameterID
-                                                  text:@"Point A"
-                                                  icon:icon
-                                         showsCheckbox:NO];
-
-    __weak typeof(self) weakSelf = self;
-    header.onExpandedChanged = ^(BOOL isExpanded) {
-      __strong typeof(weakSelf) strongSelf = weakSelf;
-      if (!strongSelf)
-        return;
-      id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      [actAPI startAction:strongSelf];
-      id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      [setAPI setBoolValue:isExpanded
-               toParameter:kParamExpandedA
-                    atTime:[actAPI currentTime]];
-      [actAPI endAction:strongSelf];
-    };
-
-    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actionAPI startAction:self];
-    CMTime currentTime = [actionAPI currentTime];
-    id<FxParameterRetrievalAPI_v6> paramGetAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-
-    BOOL animIn = NO, animOut = NO, exitOn = NO;
-    [paramGetAPI getBoolValue:&animIn
-                fromParameter:kKKParamAnimateIn
-                       atTime:currentTime];
-    [paramGetAPI getBoolValue:&animOut
-                fromParameter:kKKParamAnimateOut
-                       atTime:currentTime];
-    [paramGetAPI getBoolValue:&exitOn
-                fromParameter:kParamExit
-                       atTime:currentTime];
-
-    BOOL showA = animIn || (animOut && !exitOn);
-    header.isEnabled = showA;
-    if (!showA) {
-      header.statusText = (!animIn && !animOut)
-                              ? @"Enable Animate In or Out"
-                              : @"Overridden by Exit and Animate In is off";
-    }
-    if (showA) {
-      BOOL expanded = NO;
-      [paramGetAPI getBoolValue:&expanded
-                  fromParameter:kParamExpandedA
-                         atTime:currentTime];
-      header.isExpanded = expanded;
-    }
-
-    [actionAPI endAction:self];
-
-    self.pointAHeader = header;
-    return header;
-  }
-  if (parameterID == kParamGroupPointB) {
-    NSImage *icon = [NSImage imageWithSystemSymbolName:@"circle.circle"
-                              accessibilityDescription:nil];
-    KKCustomGroupHeaderView *header =
-        [[KKCustomGroupHeaderView alloc] initWithFrame:NSMakeRect(0, 0, 300, 26)
-                                            apiManager:self.apiManager
-                                           parameterId:parameterID
-                                                  text:@"Point B"
-                                                  icon:icon
-                                         showsCheckbox:NO];
-    header.isEnabled = YES;
-
-    __weak typeof(self) weakSelf = self;
-    header.onExpandedChanged = ^(BOOL isExpanded) {
-      __strong typeof(weakSelf) strongSelf = weakSelf;
-      if (!strongSelf)
-        return;
-      id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      [actAPI startAction:strongSelf];
-      id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      [setAPI setBoolValue:isExpanded
-               toParameter:kParamExpandedB
-                    atTime:[actAPI currentTime]];
-      [actAPI endAction:strongSelf];
-    };
-
-    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actionAPI startAction:self];
-    id<FxParameterRetrievalAPI_v6> paramGetAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-
-    BOOL expanded = NO;
-    [paramGetAPI getBoolValue:&expanded
-                fromParameter:kParamExpandedB
-                       atTime:[actionAPI currentTime]];
-    header.isExpanded = expanded;
-
-    [actionAPI endAction:self];
-
-    self.pointBHeader = header;
-    return header;
-  }
-  if (parameterID == kParamGroupDrift) {
-    NSImage *icon =
-        [NSImage imageWithSystemSymbolName:@"circle.dotted.and.circle"
-                  accessibilityDescription:nil];
-    KKCustomGroupHeaderView *header =
-        [[KKCustomGroupHeaderView alloc] initWithFrame:NSMakeRect(0, 0, 300, 26)
-                                            apiManager:self.apiManager
-                                           parameterId:parameterID
-                                                  text:@"Drift"
-                                                  icon:icon
-                                         showsCheckbox:YES];
-
-    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actionAPI startAction:self];
-    CMTime currentTime = [actionAPI currentTime];
-    id<FxParameterRetrievalAPI_v6> paramGetAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-
-    BOOL enabled = NO;
-    [paramGetAPI getBoolValue:&enabled
-                fromParameter:kParamDrift
-                       atTime:currentTime];
-    header.isEnabled = enabled;
-
-    if (enabled) {
-      BOOL expanded = NO;
-      [paramGetAPI getBoolValue:&expanded
-                  fromParameter:kParamExpandedDrift
-                         atTime:currentTime];
-      header.isExpanded = expanded;
-    }
-
-    [actionAPI endAction:self];
-
-    __weak typeof(self) weakSelf = self;
-    header.onEnabledChanged = ^(BOOL isEnabled) {
-      __strong typeof(weakSelf) strongSelf = weakSelf;
-      if (!strongSelf)
-        return;
-      id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      [actAPI startAction:strongSelf];
-      id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      [setAPI setBoolValue:isEnabled
-               toParameter:kParamDrift
-                    atTime:[actAPI currentTime]];
-      [actAPI endAction:strongSelf];
-    };
-    header.onExpandedChanged = ^(BOOL isExpanded) {
-      __strong typeof(weakSelf) strongSelf = weakSelf;
-      if (!strongSelf)
-        return;
-      id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      [actAPI startAction:strongSelf];
-      id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      [setAPI setBoolValue:isExpanded
-               toParameter:kParamExpandedDrift
-                    atTime:[actAPI currentTime]];
-      [actAPI endAction:strongSelf];
-    };
-    self.driftHeader = header;
-    return header;
-  }
-  if (parameterID == kParamGroupExit) {
-    NSImage *icon = [NSImage
-        imageWithSystemSymbolName:@"arrowshape.turn.up.right.circle.fill"
-         accessibilityDescription:nil];
-    KKCustomGroupHeaderView *header =
-        [[KKCustomGroupHeaderView alloc] initWithFrame:NSMakeRect(0, 0, 300, 26)
-                                            apiManager:self.apiManager
-                                           parameterId:parameterID
-                                                  text:@"Exit"
-                                                  icon:icon
-                                         showsCheckbox:YES];
-
-    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actionAPI startAction:self];
-    CMTime currentTime = [actionAPI currentTime];
-    id<FxParameterRetrievalAPI_v6> paramGetAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-
-    BOOL exitOn = NO, animOut = NO;
-    [paramGetAPI getBoolValue:&exitOn
-                fromParameter:kParamExit
-                       atTime:currentTime];
-    [paramGetAPI getBoolValue:&animOut
-                fromParameter:kKKParamAnimateOut
-                       atTime:currentTime];
-    header.isEnabled = exitOn;
-
-    if (exitOn && !animOut) {
-      header.statusText = @"Enable Animate Out";
-    }
-
-    if (exitOn) {
-      BOOL expanded = NO;
-      [paramGetAPI getBoolValue:&expanded
-                  fromParameter:kParamExpandedExit
-                         atTime:currentTime];
-      header.isExpanded = expanded;
-    }
-
-    [actionAPI endAction:self];
-
-    __weak typeof(self) weakSelf = self;
-    header.onEnabledChanged = ^(BOOL isEnabled) {
-      __strong typeof(weakSelf) strongSelf = weakSelf;
-      if (!strongSelf)
-        return;
-      id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      [actAPI startAction:strongSelf];
-      id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      [setAPI setBoolValue:isEnabled
-               toParameter:kParamExit
-                    atTime:[actAPI currentTime]];
-      [actAPI endAction:strongSelf];
-    };
-    header.onExpandedChanged = ^(BOOL isExpanded) {
-      __strong typeof(weakSelf) strongSelf = weakSelf;
-      if (!strongSelf)
-        return;
-      id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      [actAPI startAction:strongSelf];
-      id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      [setAPI setBoolValue:isExpanded
-               toParameter:kParamExpandedExit
-                    atTime:[actAPI currentTime]];
-      [actAPI endAction:strongSelf];
-    };
-
-    self.exitHeader = header;
-    return header;
-  }
-  if (parameterID == kParamInfoCompound) {
-    // Info alert
-    NSArray<NSAttributedString *> *pages = @[
-      [KKMarkup attributedStringFromMarkup:
-                    @"Create a Compound Clip <kbd>⌥ G</kbd> before applying "
-                    @"to avoid clipping"],
-      [KKMarkup attributedStringFromMarkup:
-                    @"<kbd>⌘ + click</kbd> a point to show or hide its "
-                    @"controls"],
-      [KKMarkup attributedStringFromMarkup:
-                    @"<kbd>⌥ + click</kbd> the path to add or remove a "
-                    @"control point"],
-      [KKMarkup attributedStringFromMarkup:
-                    @"Double-click a point to toggle between linear and "
-                    @"bezier"],
-      [KKMarkup attributedStringFromMarkup:
-                    @"Hold <kbd>⌥</kbd> to move a bezier handle "
-                    @"independently"],
-      [KKMarkup attributedStringFromMarkup:
-                    @"Hold <kbd>Shift</kbd> while dragging to constrain to "
-                    @"X or Y axis"],
-      [KKMarkup attributedStringFromMarkup:
-                    @"Hold <kbd>⌃</kbd> while dragging to disable snapping"],
-      [KKMarkup attributedStringFromMarkup:
-                    @"Hold <kbd>⌥</kbd> to show X and Y rotation rings"],
-      [KKMarkup attributedStringFromMarkup:
-                    @"Hold <kbd>Shift</kbd> while scaling to lock to X or Y"],
-      [KKMarkup attributedStringFromMarkup:
-                    @"Double-click the scale ring to reset to 1:1 ratio"],
-      [KKMarkup attributedStringFromMarkup:
-                    @"<symbol squareshape.fill color=white /> toggles scale "
-                    @"between 0\% and 100\%"],
-      [KKMarkup attributedStringFromMarkup:
-                    @"<symbol circle.fill color=white /> toggles opacity "
-                    @"between 0\% and 100\%"],
-      [KKMarkup attributedStringFromMarkup:
-                    @"<symbol eye.fill color=white /> previews the clip at "
-                    @"that point"],
-    ];
-    KKAlertView *infoAlert =
-        [[KKAlertView alloc] initWithAttributedText:pages.firstObject];
-    infoAlert.icon = [NSImage imageWithSystemSymbolName:@"info.circle"
-                               accessibilityDescription:nil];
-    infoAlert.attributedPages = pages;
-
-    // Warning alerts
-    KKAlertView *previewAlert =
-        [[KKAlertView alloc] initWithText:@"Preview mode is active"
-                                    color:[NSColor warning]];
-    previewAlert.icon = [NSImage imageWithSystemSymbolName:@"eye.fill"
-                                  accessibilityDescription:nil];
-    [self _addRenderedText:@"Preview mode is active"
-                     color:[NSColor warning]
-                   toAlert:previewAlert];
-
-    MagicMovePreviewClearTarget *clearTarget =
-        [[MagicMovePreviewClearTarget alloc] init];
-    clearTarget.apiManager = self.apiManager;
-    NSButton *clearBtn = [NSButton buttonWithTitle:@"Clear"
-                                            target:clearTarget
-                                            action:@selector(clearPreviews:)];
-    clearBtn.controlSize = NSControlSizeSmall;
-    clearBtn.bezelStyle = NSBezelStyleAccessoryBarAction;
-    clearBtn.contentTintColor = [NSColor warning];
-    objc_setAssociatedObject(clearBtn, "clearTarget", clearTarget,
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    previewAlert.accessoryView = clearBtn;
-
-    KKAlertView *hideOSCAlert =
-        [[KKAlertView alloc] initWithText:@"Some controls are hidden"
-                                    color:[NSColor warning]];
-    hideOSCAlert.icon = [NSImage imageWithSystemSymbolName:@"circle.slash.fill"
-                                  accessibilityDescription:nil];
-    [self _addRenderedText:@"Some controls are hidden"
-                     color:[NSColor warning]
-                   toAlert:hideOSCAlert];
-
-    MagicMoveShowOSCTarget *showTarget = [[MagicMoveShowOSCTarget alloc] init];
-    showTarget.apiManager = self.apiManager;
-    NSButton *showBtn = [NSButton buttonWithTitle:@"Show All"
-                                           target:showTarget
-                                           action:@selector(showAll:)];
-    showBtn.controlSize = NSControlSizeSmall;
-    showBtn.bezelStyle = NSBezelStyleAccessoryBarAction;
-    showBtn.contentTintColor = [NSColor warning];
-    objc_setAssociatedObject(showBtn, "showTarget", showTarget,
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    hideOSCAlert.accessoryView = showBtn;
-
-    self.previewAlertView = previewAlert;
-    self.hideOSCAlertView = hideOSCAlert;
-
-    KKAlertStackView *stack = [[KKAlertStackView alloc]
-        initWithDefaultAlert:infoAlert
-                  apiManager:self.apiManager
-          persistParameterID:kParamAlertStackSelected];
-    [stack addAlert:previewAlert priority:0];
-    [stack addAlert:hideOSCAlert priority:1];
-
-    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actionAPI startAction:self];
-    CMTime now = [actionAPI currentTime];
-    id<FxParameterRetrievalAPI_v6> paramGetAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-
-    BOOL pA = NO, pB = NO, pD = NO, pE = NO;
-    [paramGetAPI getBoolValue:&pA fromParameter:kParamPreviewA atTime:now];
-    [paramGetAPI getBoolValue:&pB fromParameter:kParamPreviewB atTime:now];
-    [paramGetAPI getBoolValue:&pD fromParameter:kParamPreviewDrift atTime:now];
-    [paramGetAPI getBoolValue:&pE fromParameter:kParamPreviewExit atTime:now];
-    BOOL hA = NO, hB = NO, hD = NO, hE = NO;
-    [paramGetAPI getBoolValue:&hA fromParameter:kParamHideOSCA atTime:now];
-    [paramGetAPI getBoolValue:&hB fromParameter:kParamHideOSCB atTime:now];
-    [paramGetAPI getBoolValue:&hD fromParameter:kParamHideOSCDrift atTime:now];
-    [paramGetAPI getBoolValue:&hE fromParameter:kParamHideOSCExit atTime:now];
-    [actionAPI endAction:self];
-
-    [stack setAlert:previewAlert active:(pA || pB || pD || pE)];
-    [stack setAlert:hideOSCAlert active:(hA || hB || hD || hE)];
-
-    self.alertStackView = stack;
-    return stack;
-  }
-
   typedef NSView *(*ViewIMP)(id, SEL, UInt32);
   ViewIMP imp = (ViewIMP)[KKPlugin instanceMethodForSelector:_cmd];
   return imp(self, _cmd, parameterID);
 }
 
-- (void)_addRenderedText:(NSString *)text
-                   color:(NSColor *)color
-                 toAlert:(KKAlertView *)alert {
-  NSFont *font = [NSFont systemFontOfSize:[NSFont smallSystemFontSize]
-                                   weight:NSFontWeightLight];
-  NSDictionary *attrs = @{
-    NSFontAttributeName : font,
-    NSForegroundColorAttributeName : color,
-  };
-  NSSize textSize = [text sizeWithAttributes:attrs];
-  NSImage *img = [[NSImage alloc]
-      initWithSize:NSMakeSize(ceil(textSize.width), ceil(textSize.height))];
-  [img lockFocus];
-  [text drawAtPoint:NSZeroPoint withAttributes:attrs];
-  [img unlockFocus];
+- (NSArray<KKHelpSection *> *)helpSections {
+  KKHelpSection *magicMove = [KKHelpSection
+      sectionWithTitle:@"Magic Move"
+             tipMarkup:@[
+               (@"<accent>Position</accent>, <accent>Scale</accent>, "
+                @"<accent>Rotation</accent>, and <accent>Opacity</accent> "
+                @"all animate from the clip's natural state to the values "
+                @"set here - drive each one on canvas via the "
+                @"<symbol arcade.stick.console.fill /> on-screen control."),
+               (@"<accent>Anchor Point</accent> sets the pivot rotations "
+                @"and scale swing around."),
+               (@"Toggle <accent>Rotate with Motion</accent> to align the "
+                @"clip's heading with its motion path."),
+               (@"<symbol squareshape.fill color=white /> on the canvas "
+                @"toggles Scale between 0% and 100%; "
+                @"<symbol circle.fill color=white /> on the canvas "
+                @"toggles Opacity between 0% and 100%."),
+               (@"When the Position lane has multiple segments a bezier "
+                @"<accent>path</accent> draws between them on canvas - "
+                @"reshape it by dragging anchors or their handles."),
+               (@"Stacking with <accent>Crop</accent> or similar spatial "
+                @"effects? Place them <accent>below</accent> Magic Move in "
+                @"the inspector so they apply to the clip first, then move "
+                @"with it - otherwise they anchor to the canvas and clip "
+                @"around the moved content."),
+             ]
+             shortcuts:@[
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + drag"
+                               descMarkup:@"Constrain motion to X or Y axis"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌃</kbd> + drag"
+                                           descMarkup:@"Disable snapping"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>⌥</kbd>"
+                               descMarkup:@"Reveal X and Y rotation rings"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + scale"
+                               descMarkup:@"Lock scale to X or Y axis"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"Double-click scale ring"
+                                           descMarkup:@"Reset to 1:1"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"Double-click path anchor"
+                               descMarkup:@"Toggle between smooth and corner"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + click "
+                                                      @"path anchor"
+                                           descMarkup:@"Delete the anchor"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + click "
+                                                      @"path curve"
+                                           descMarkup:@"Insert a new anchor "
+                                                      @"at the nearest spot"],
+               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + drag "
+                                                      @"handle"
+                                           descMarkup:@"Break handle "
+                                                      @"symmetry (move "
+                                                      @"independently)"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + click Scale slider"
+                               descMarkup:@"Match X and Y scale values"],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>⌘</kbd> + drag Scale slider"
+                               descMarkup:@"Maintain X:Y aspect ratio"],
+             ]];
+  magicMove.icon =
+      [NSImage imageWithSystemSymbolName:@"circle.dotted.and.circle"
+                accessibilityDescription:nil];
+  return @[ magicMove ];
+}
 
-  NSImageView *iv = [NSImageView imageViewWithImage:img];
-  iv.translatesAutoresizingMaskIntoConstraints = NO;
-  iv.imageScaling = NSImageScaleNone;
-  iv.imageAlignment = NSImageAlignLeft;
-  [alert addSubview:iv];
-
-  // Position over the label area: after icon, vertically centered in content.
-  NSView *content = alert.subviews.firstObject;
-  [NSLayoutConstraint activateConstraints:@[
-    [iv.leadingAnchor
-        constraintEqualToAnchor:content.leadingAnchor
-                       constant:KKSpacingMD * 1.5 + 12.0 + KKSpacingMD],
-    [iv.trailingAnchor constraintEqualToAnchor:content.trailingAnchor
-                                      constant:-KKSpacingMD],
-    [iv.centerYAnchor constraintEqualToAnchor:content.centerYAnchor],
-  ]];
+- (KKClipWrappingMode)clipWrappingMode {
+  return KKClipWrappingModeCompound;
 }
 
 @end

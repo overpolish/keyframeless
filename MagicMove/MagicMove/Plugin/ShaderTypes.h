@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #pragma once
@@ -18,4 +18,7 @@ typedef struct {
     float opacity;
 } MagicMoveParams;
 
-typedef enum { FragmentIndex_Params = 0 } FragmentIndex;
+typedef enum {
+    FragmentIndex_Params = 0,
+    FragmentIndex_TileOffsetPx = 1
+} FragmentIndex;

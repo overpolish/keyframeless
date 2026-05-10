@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #import "KKAlertView.h"
@@ -23,7 +23,6 @@ static const CGFloat KKAlertViewHeight = KKInspectorRowHeight * 2;
   NSImageView *_iconView;
   NSView *_contentView;
   NSLayoutConstraint *_labelTrailing;
-  KKLog *_log;
   NSUInteger _currentPage;
   NSTextField *_pageLabel;
   NSImageView *_renderedLabel;
@@ -54,7 +53,6 @@ static const CGFloat KKAlertViewHeight = KKInspectorRowHeight * 2;
 
 - (instancetype)initWithText:(NSString *)text color:(NSColor *)color {
   self = [super initWithFrame:NSMakeRect(0, 0, 0.0, KKAlertViewHeight)];
-  _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
 
   if (self) {
     _text = [text copy];

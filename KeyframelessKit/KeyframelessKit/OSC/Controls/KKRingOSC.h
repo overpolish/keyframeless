@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #pragma once
@@ -42,6 +42,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// Updates the resize cursor direction based on mouse position relative to
 /// center. Call during drag to keep the cursor aligned with drag direction.
 - (void)updateCursorForMouseX:(double)positionX positionY:(double)positionY;
+
+/// Resets cursor to arrow if this ring previously set a hover cursor. Call
+/// when skipping hit-test on a ring that may have been hovered, to avoid a
+/// stale cursor.
+- (void)clearCursorIfSet;
 
 @end
 

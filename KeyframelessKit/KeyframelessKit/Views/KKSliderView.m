@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #import "KKSliderView.h"
@@ -263,6 +263,21 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
 
 @end
 
+@interface KKDragAwareSlider : NSSlider
+@property(nonatomic, copy, nullable) void (^onDragBegin)(void);
+@property(nonatomic, copy, nullable) void (^onDragEnd)(void);
+@end
+
+@implementation KKDragAwareSlider
+- (void)mouseDown:(NSEvent *)event {
+  if (self.onDragBegin)
+    self.onDragBegin();
+  [super mouseDown:event];
+  if (self.onDragEnd)
+    self.onDragEnd();
+}
+@end
+
 @implementation KKSliderView
 
 + (instancetype)styledSlider {
@@ -272,7 +287,17 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
 - (instancetype)initWithFrame:(NSRect)frame {
   self = [super initWithFrame:frame];
   if (self) {
-    _slider = [[NSSlider alloc] init];
+    KKDragAwareSlider *s = [[KKDragAwareSlider alloc] init];
+    __weak typeof(self) weakSelf = self;
+    s.onDragBegin = ^{
+      if (weakSelf.onDragBegin)
+        weakSelf.onDragBegin();
+    };
+    s.onDragEnd = ^{
+      if (weakSelf.onDragEnd)
+        weakSelf.onDragEnd();
+    };
+    _slider = s;
     _slider.cell = [[KKSliderCell alloc] init];
     _slider.minValue = 0.0;
     _slider.maxValue = 100.0;

@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #import "KKRingOSC.h"
@@ -111,6 +111,15 @@ static NSColor *ringActiveStrokeColor(void) {
 - (float)oscSize {
   return fmaxf(_ringRadius, _ringRadiusY) + _fillWidth / 2.0f +
          _ringOutlineWidth;
+}
+
+- (void)clearCursorIfSet {
+  if (!_cursorSet)
+    return;
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  [oscAPI setCursor:[NSCursor arrowCursor]];
+  _cursorSet = NO;
 }
 
 - (void)updateCursorForMouseX:(double)positionX positionY:(double)positionY {

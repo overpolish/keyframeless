@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 import KeyframelessKit
@@ -8,7 +8,7 @@ import SwiftUI
 
 struct AppShell: View {
 	@ObservedObject var audioModel: AudioModel
-	@StateObject private var whisperManager = WhisperModelManager()
+	@StateObject private var audioModelManager = AudioModelManager()
 	@StateObject private var processingCoordinator = AudioProcessingCoordinator()
 	@State private var selectedTab: AppTab = .audio
 	@State private var updateMessage: String?
@@ -37,7 +37,7 @@ struct AppShell: View {
 					case .setup:
 						AudioSetupView(
 							model: audioModel,
-							whisperManager: whisperManager,
+							audioModelManager: audioModelManager,
 							onProcess: { replaceAll in
 								if replaceAll {
 									audioModel.editSelectedClips = nil
@@ -47,7 +47,7 @@ struct AppShell: View {
 								}
 								processingCoordinator.process(
 									model: audioModel,
-									whisperManager: whisperManager,
+									audioModelManager: audioModelManager,
 									replaceAll: replaceAll
 								)
 							}

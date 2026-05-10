@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #import "Plugin_Private.h"
@@ -8,13 +8,11 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wprotocol"
 
-@implementation TemplatePlugin {
-  KKLog *_log;
-}
+@implementation TemplatePlugin
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager;
 {
-  _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
+  KKLogInfo(@"TemplatePlugin: initialized");
   self = [super initWithAPIManager:newApiManager];
   return self;
 }

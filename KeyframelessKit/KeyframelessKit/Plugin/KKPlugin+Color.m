@@ -1,18 +1,31 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "../Math/KKGradientSampling.h"
 #import "KKPlugin+Color.h"
+#import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
 #import <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKAlertView.h>
+#import <KeyframelessKit/KKDataBlob.h>
+#import <KeyframelessKit/KKGradientBarView.h>
+#import <KeyframelessKit/KKGradientControl.h>
+#import <KeyframelessKit/KKGradientFavoritesPopover.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKTokens.h>
+#import <KeyframelessKit/NSColor+KKColors.h>
+#import <QuartzCore/QuartzCore.h>
 #import <objc/runtime.h>
 
 static const void *const kColorModesKey = &kColorModesKey;
+static const void *const kGradientBarKey = &kGradientBarKey;
+static const void *const kGradientFavPopoverKey = &kGradientFavPopoverKey;
+
+static const FxParameterFlags kKKColorCustomUIBaseFlags =
+    kFxParameterFlag_CUSTOM_UI;
 
 static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
   return objc_getAssociatedObject([self class], kColorModesKey) ?: @[
@@ -37,11 +50,11 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
                                      kFxParameterFlag_USE_FULL_VIEW_WIDTH])
     return NO;
 
-  if (![paramAPI addToggleButtonWithName:@""
-                             parameterID:kKKParamColorExpanded
-                            defaultValue:NO
-                          parameterFlags:kFxParameterFlag_HIDDEN |
-                                         kFxParameterFlag_NOT_ANIMATABLE])
+  if (![paramAPI addCustomParameterWithName:@""
+                                parameterID:kKKParamColorExpanded
+                               defaultValue:[KKDataBlob blobWithString:@"0"]
+                             parameterFlags:kFxParameterFlag_HIDDEN |
+                                            kFxParameterFlag_NOT_ANIMATABLE])
     return NO;
 
   BOOL hasSolid = [modes containsObject:@(KKColorModeSolid)];
@@ -82,26 +95,48 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
   }
 
   if (hasGradient) {
-    if (![paramAPI addGradientWithName:@"Gradient"
-                           parameterID:kKKParamColorGradient
+    // KKDataBlob custom param (was string param). Custom params route
+    // through `setCustomParameterValue:atTime:` — same keyframe pipeline
+    // as scalar animatable params — and ARE undoable. String param
+    // writes are filtered off FCP's undo stack. See
+    // project_kkdatablob_custom_param memory.
+    NSString *defaultJSON = KKDefaultGradientJSON();
+    if (![paramAPI
+            addCustomParameterWithName:@"GradientData"
+                           parameterID:kKKParamGradientData
+                          defaultValue:[KKDataBlob blobWithString:defaultJSON]
                         parameterFlags:kFxParameterFlag_HIDDEN])
+      return NO;
+
+    if (![paramAPI addCustomParameterWithName:@"Gradient"
+                                  parameterID:kKKParamColorCustomUI
+                                 defaultValue:@(kKKParamColorCustomUI)
+                               parameterFlags:kKKColorCustomUIBaseFlags |
+                                              kFxParameterFlag_HIDDEN])
       return NO;
   }
 
   return YES;
 }
 
-- (KKColorResult *)colorAtTime:(CMTime)renderTime {
-  static KKLog *sLog;
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    sLog = [KKLog loggerForPlugin:@"co.overpolish.keyframeless.Color"];
-  });
+- (KKColorMode)colorModeAtTime:(CMTime)time {
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  NSArray<NSNumber *> *modes = _colorModes(self);
+  if (!getAPI || modes.count <= 1)
+    return (KKColorMode)modes.firstObject.integerValue;
+  int idx = 0;
+  [getAPI getIntValue:&idx fromParameter:kKKParamColorMode atTime:time];
+  if (idx < 0 || idx >= (int)modes.count)
+    return (KKColorMode)modes.firstObject.integerValue;
+  return (KKColorMode)modes[idx].integerValue;
+}
 
+- (KKColorResult *)colorAtTime:(CMTime)renderTime {
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   if (!paramGetAPI) {
-    [sLog warn:@"colorAtTime: paramGetAPI is nil"];
+    KKLogWarn(@"colorAtTime: paramGetAPI is nil");
     return [KKColorResult resultWithMode:KKColorModeSolid
                               solidColor:(simd_float3){1, 1, 1}];
   }
@@ -116,32 +151,15 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
                          ? (KKColorMode)modes[modeIndex].integerValue
                          : (KKColorMode)modes.firstObject.integerValue;
 
-  [sLog verbose:@"colorAtTime: modeIndex=%d mode=%ld modes.count=%lu",
-                modeIndex, (long)mode, (unsigned long)modes.count];
-
   if (mode == KKColorModeGradient) {
-    float samples[KK_GRADIENT_LUT_SIZE * 4];
-    memset(samples, 0, sizeof(samples));
-    BOOL ok = [paramGetAPI getGradientSamples:samples
-                                   numSamples:KK_GRADIENT_LUT_SIZE
-                                        depth:kFxDepth_FLOAT32
-                                fromParameter:kKKParamColorGradient
-                                       atTime:renderTime];
-    if (!ok) {
-      [sLog error:@"getGradientSamples failed"];
-      return [KKColorResult resultWithMode:KKColorModeSolid
-                                solidColor:(simd_float3){1, 1, 1}];
-    }
+    NSString *json = KKReadCustomParamString(paramGetAPI, kKKParamGradientData);
+    NSArray<KKGradientStop *> *stops = KKGradientStopsFromJSON(json);
     simd_float3 lut[KK_GRADIENT_LUT_SIZE];
-    for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++) {
-      float r = samples[i * 4], g = samples[i * 4 + 1], b = samples[i * 4 + 2];
-      if (!isfinite(r))
-        r = 1;
-      if (!isfinite(g))
-        g = 1;
-      if (!isfinite(b))
-        b = 1;
-      lut[i] = (simd_float3){r, g, b};
+    if (stops.count >= 2) {
+      KKGradientSampleStopsToLUT(stops, lut, KK_GRADIENT_LUT_SIZE);
+    } else {
+      for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++)
+        lut[i] = (simd_float3){1, 1, 1};
     }
     return [KKColorResult resultWithGradientLUT:lut];
   }
@@ -198,14 +216,130 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
   }
 
   if (hasGradient) {
-    FxParameterFlags want = (mode == KKColorModeGradient)
-                                ? kFxParameterFlag_DEFAULT
-                                : kFxParameterFlag_HIDDEN;
+    FxParameterFlags want =
+        kKKColorCustomUIBaseFlags |
+        ((mode == KKColorModeGradient) ? 0 : kFxParameterFlag_HIDDEN);
     FxParameterFlags cur = 0;
-    [paramGetAPI getParameterFlags:&cur fromParameter:kKKParamColorGradient];
+    [paramGetAPI getParameterFlags:&cur fromParameter:kKKParamColorCustomUI];
     if (cur != want)
-      [paramSetAPI setParameterFlags:want toParameter:kKKParamColorGradient];
+      [paramSetAPI setParameterFlags:want toParameter:kKKParamColorCustomUI];
   }
+}
+
+- (NSView *)_createColorCustomUI:(UInt32)parameterID {
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  NSString *gradientJson =
+      KKReadCustomParamString(paramGetAPI, kKKParamGradientData);
+  KKPluginInstanceState *instanceState =
+      KKInstanceStateEnsureForAPI(self.apiManager);
+  [actionAPI endAction:self];
+
+  KKGradientControl *control =
+      [[KKGradientControl alloc] initWithFrame:NSMakeRect(0, 0, 200, 36)];
+  NSArray<KKGradientStop *> *stops = KKGradientStopsFromJSON(gradientJson);
+  if (stops)
+    control.stops = stops;
+
+  instanceState.gradientControl = control;
+  instanceState.gradientJSONSnapshot = gradientJson;
+
+  __weak typeof(self) weakSelf = self;
+  control.onStopsChanged = ^(NSArray<KKGradientStop *> *newStops) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    NSString *json = KKGradientJSONFromStops(newStops);
+    if (!json)
+      return;
+    KKPluginInstanceState *s = KKInstanceStateForAPI(strongSelf.apiManager);
+    s.gradientJSONSnapshot = json;
+    BOOL inDrag = strongSelf.gradientDragUndoActive;
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    if (!inDrag)
+      [actAPI startAction:strongSelf];
+    BOOL ug =
+        inDrag ? NO : KKBeginUndoGroup(strongSelf.apiManager, @"Edit Gradient");
+    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    KKWriteCustomParamString(setAPI, json, kKKParamGradientData);
+    if (!inDrag) {
+      KKEndUndoGroup(strongSelf.apiManager, ug);
+      [actAPI endAction:strongSelf];
+    }
+  };
+
+  control.onDragBegin = ^{
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf || strongSelf.gradientDragUndoActive)
+      return;
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    if (!actAPI)
+      return;
+    [actAPI startAction:strongSelf];
+    KKBeginUndoGroup(strongSelf.apiManager, @"Edit Gradient");
+    strongSelf.gradientDragUndoActive = YES;
+  };
+  control.onDragEnd = ^{
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf || !strongSelf.gradientDragUndoActive)
+      return;
+    // Flush the multi-stage "Gradient" lane write inline INSIDE the
+    // still-open drag scope. Without this, the host's post-endAction
+    // `parameterChanged:` echo for kKKParamGradientData arrives async
+    // and `multiStageDeferLiveUpdateForLabel:` opens its own
+    // startAction/endAction 16ms later — landing the MS-data write in
+    // a separate undo entry (so cmd-Z needs two presses to revert
+    // gradient + UI together).
+    KKPluginInstanceState *s = KKInstanceStateForAPI(strongSelf.apiManager);
+    NSArray<KKGradientStop *> *stopsNow =
+        KKGradientStopsFromJSON(s.gradientJSONSnapshot);
+    NSArray<NSNumber *> *flat =
+        stopsNow ? KKGradientFlatFromStops(stopsNow) : @[];
+    if (flat.count) {
+      [strongSelf multiStageUpdateSelectedSegmentForLabel:@"Gradient"
+                                                   values:flat];
+      // Swallow the post-endAction echo for ~100ms so its deferred
+      // animatable-update doesn't re-write what we just wrote.
+      s.liveUpdateSuppressUntil = CACurrentMediaTime() + 0.1;
+      [s.pendingLiveUpdates removeAllObjects];
+    }
+    KKEndUndoGroup(strongSelf.apiManager, YES);
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actAPI endAction:strongSelf];
+    strongSelf.gradientDragUndoActive = NO;
+  };
+
+  return control;
+}
+
++ (void)colorSyncFromParams:(id<PROAPIAccessing>)apiManager {
+  KKPluginInstanceState *state = KKInstanceStateForAPI(apiManager);
+  KKGradientControl *control = state.gradientControl;
+  if (!control)
+    return;
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!getAPI)
+    return;
+  NSString *json = KKReadCustomParamString(getAPI, kKKParamGradientData);
+  if (!json)
+    return;
+  if ([json isEqualToString:state.gradientJSONSnapshot])
+    return;
+  NSArray<KKGradientStop *> *stops = KKGradientStopsFromJSON(json);
+  if (!stops)
+    return;
+  state.gradientJSONSnapshot = json;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    control.stops = stops;
+  });
 }
 
 @end

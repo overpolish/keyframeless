@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #include "ShaderTypes.h"
@@ -45,8 +45,16 @@ fragment float4 triangleFragment(RasterizerData in [[stage_in]], constant float4
 
 fragment float4 fragmentShader(RasterizerData in [[stage_in]],
                                texture2d<half> colorTexture [[texture(KKTextureIndex_InputImage)]],
-                               constant MagicMoveParams *params [[buffer(FragmentIndex_Params)]]) {
-    float2 p = in.textureCoordinate - 0.5;
+                               constant MagicMoveParams *params [[buffer(FragmentIndex_Params)]],
+                               constant float2 *tileOffsetPx [[buffer(FragmentIndex_TileOffsetPx)]]) {
+    // Source is the full source image (sourceTileRect returns
+    // imagePixelBounds), so colorTexture dims == image dims. Use the
+    // fragment's framebuffer position + tile offset (Y-down, FCP's project-
+    // library convention) to recover the normalized centered position
+    // regardless of whether we're rendering full-image or a sub-tile.
+    float2 imageSizePx = float2(colorTexture.get_width(), colorTexture.get_height());
+    float2 pixelInImage = in.clipSpacePosition.xy + (*tileOffsetPx);
+    float2 p = pixelInImage / imageSizePx - 0.5;
 
     p -= params->translate;
 

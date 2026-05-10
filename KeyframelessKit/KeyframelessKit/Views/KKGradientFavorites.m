@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #import "KKGradientFavorites.h"
@@ -126,6 +126,17 @@ static NSArray<KKGradientStop *> *_arrayToStops(NSArray<NSDictionary *> *arr) {
   for (KKGradientFavorite *f in _items) {
     if ([f.identifier isEqualToString:identifier]) {
       f.name = name;
+      [self _save];
+      return;
+    }
+  }
+}
+
+- (void)updateFavoriteWithIdentifier:(NSString *)identifier
+                               stops:(NSArray<KKGradientStop *> *)stops {
+  for (KKGradientFavorite *f in _items) {
+    if ([f.identifier isEqualToString:identifier]) {
+      f.stops = [stops copy];
       [self _save];
       return;
     }

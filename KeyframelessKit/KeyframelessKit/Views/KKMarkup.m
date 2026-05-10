@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #import "KKMarkup.h"
@@ -31,6 +31,22 @@
       if (key) {
         [result appendAttributedString:[KKKbd attributedStringWithKey:key]];
       }
+    } else if ([scanner scanString:@"<accent>" intoString:nil]) {
+      NSString *body = nil;
+      [scanner scanUpToString:@"</accent>" intoString:&body];
+      [scanner scanString:@"</accent>" intoString:nil];
+      if (body) {
+        [result appendAttributedString:[self _coloredBold:body
+                                                    color:[NSColor accent]]];
+      }
+    } else if ([scanner scanString:@"<warn>" intoString:nil]) {
+      NSString *body = nil;
+      [scanner scanUpToString:@"</warn>" intoString:&body];
+      [scanner scanString:@"</warn>" intoString:nil];
+      if (body) {
+        [result appendAttributedString:[self _coloredBold:body
+                                                    color:[NSColor warning]]];
+      }
     } else if ([scanner scanString:@"<symbol " intoString:nil]) {
       NSString *content = nil;
       [scanner scanUpToString:@"/>" intoString:&content];
@@ -47,6 +63,17 @@
   }
 
   return result;
+}
+
++ (NSAttributedString *)_coloredBold:(NSString *)body color:(NSColor *)color {
+  NSFont *font = [NSFont systemFontOfSize:[NSFont smallSystemFontSize]
+                                   weight:NSFontWeightSemibold];
+  return
+      [[NSAttributedString alloc] initWithString:body
+                                      attributes:@{
+                                        NSForegroundColorAttributeName : color,
+                                        NSFontAttributeName : font,
+                                      }];
 }
 
 + (NSAttributedString *)_parseSymbol:(NSString *)content {

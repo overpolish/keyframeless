@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #import "KKOnScreenControl.h"
@@ -16,14 +16,12 @@
 @end
 
 @implementation KKOnScreenControl {
-  KKLog *_log;
   BOOL _isHovered;
   BOOL _isDragging;
 }
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
   self = [super init];
-  _log = [KKLog loggerForPlugin:@"co.overpolish.keyframeless"];
   if (self) {
     _apiManager = apiManager;
     _isHovered = NO;
@@ -104,8 +102,8 @@
 
   id<MTLLibrary> lib = [device newDefaultLibraryWithBundle:bundle error:&error];
   if (!lib || error) {
-    [_log error:@"%@: Failed to load Metal library: %@",
-                NSStringFromClass([self class]), error];
+    KKLogError(@"%@: Failed to load Metal library: %@",
+               NSStringFromClass([self class]), error);
     return nil;
   }
 
@@ -114,8 +112,8 @@
       [lib newFunctionWithName:[self fragmentFunctionName]];
 
   if (!vertFn || !fragFn) {
-    [_log error:@"%@: Required shaders not found.",
-                NSStringFromClass([self class])];
+    KKLogError(@"%@: Required shaders not found.",
+               NSStringFromClass([self class]));
     return nil;
   }
 
@@ -127,8 +125,8 @@
 
   ps = [device newRenderPipelineStateWithDescriptor:desc error:&error];
   if (!ps || error) {
-    [_log error:@"%@: Failed to create pipeline state: %@",
-                NSStringFromClass([self class]), error];
+    KKLogError(@"%@: Failed to create pipeline state: %@",
+               NSStringFromClass([self class]), error);
     return nil;
   }
 
@@ -221,6 +219,258 @@
                                                     MTLPrimitiveTypeTriangle
                                                    vertexStart:0
                                                    vertexCount:6];
+                                     }];
+}
+
+- (void)drawLineStripWithPoints:(const CGPoint *)points
+                          count:(NSUInteger)count
+                          color:(simd_float4)lineColor
+                      halfWidth:(float)hw
+               destinationImage:(FxImageTile *)destinationImage {
+  if (count < 2)
+    return;
+
+  KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
+  uint64_t registryID = destinationImage.deviceRegistryID;
+  MTLPixelFormat pixelFormat =
+      [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
+  id<MTLRenderPipelineState> ps = [cache
+      buildAndRegisterPipelineStateForPluginID:
+          @"co.overpolish.keyframelesskit.Line"
+                                    registryID:registryID
+                                   pixelFormat:pixelFormat
+                                      bundleID:@"co.overpolish"
+                                                ".keyframeless"
+                                                ".KeyframelessKit"
+                                  vertexShader:@"KKVertexShader"
+                                fragmentShader:@"KKLineFragment"
+                                     blendMode:KKBlendModePremultipliedAlpha];
+  if (!ps)
+    return;
+
+  CGPoint center = points[0];
+  [self
+      encodeRenderCommandsForDestinationImage:destinationImage
+                               canvasPosition:center
+                             clearDestination:NO
+                                     commands:^(
+                                         id<MTLRenderCommandEncoder> encoder,
+                                         CGPoint metalMid,
+                                         simd_uint2 viewportSize) {
+                                       float ioW = viewportSize.x;
+                                       float ioH = viewportSize.y;
+                                       float pad = hw + 1.0f;
+                                       float edge = pad / hw;
+
+                                       NSUInteger segCount = count - 1;
+                                       NSUInteger vertCount = segCount * 6;
+                                       KKVertex2D *verts = malloc(
+                                           sizeof(KKVertex2D) * vertCount);
+                                       NSUInteger vi = 0;
+
+                                       for (NSUInteger i = 0; i < segCount;
+                                            i++) {
+                                         simd_float2 mA = {
+                                             (float)(points[i].x - ioW / 2.0),
+                                             (float)(ioH / 2.0 - points[i].y)};
+                                         simd_float2 mB = {
+                                             (float)(points[i + 1].x -
+                                                     ioW / 2.0),
+                                             (float)(ioH / 2.0 -
+                                                     points[i + 1].y)};
+
+                                         simd_float2 d = mB - mA;
+                                         float len = simd_length(d);
+                                         if (len < 0.001f)
+                                           continue;
+                                         simd_float2 dir = d / len;
+                                         simd_float2 perp = {-dir.y, dir.x};
+
+                                         simd_float2 v0 = mA + perp * pad;
+                                         simd_float2 v1 = mA - perp * pad;
+                                         simd_float2 v2 = mB + perp * pad;
+                                         simd_float2 v3 = mB - perp * pad;
+
+                                         verts[vi++] =
+                                             (KKVertex2D){v0, {0, edge}};
+                                         verts[vi++] =
+                                             (KKVertex2D){v1, {0, -edge}};
+                                         verts[vi++] =
+                                             (KKVertex2D){v2, {0, edge}};
+                                         verts[vi++] =
+                                             (KKVertex2D){v1, {0, -edge}};
+                                         verts[vi++] =
+                                             (KKVertex2D){v3, {0, -edge}};
+                                         verts[vi++] =
+                                             (KKVertex2D){v2, {0, edge}};
+                                       }
+
+                                       if (vi > 0) {
+                                         NSUInteger byteLen =
+                                             sizeof(KKVertex2D) * vi;
+                                         simd_float4 color = lineColor;
+                                         [encoder setRenderPipelineState:ps];
+                                         if (byteLen <= 4096) {
+                                           [encoder
+                                               setVertexBytes:verts
+                                                       length:byteLen
+                                                      atIndex:
+                                                          KKVertexInputIndex_Vertices];
+                                         } else {
+                                           id<MTLDevice> dev = encoder.device;
+                                           id<MTLBuffer> buf = [dev
+                                               newBufferWithBytes:verts
+                                                           length:byteLen
+                                                          options:
+                                                              MTLResourceStorageModeShared];
+                                           [encoder
+                                               setVertexBuffer:buf
+                                                        offset:0
+                                                       atIndex:
+                                                           KKVertexInputIndex_Vertices];
+                                         }
+                                         [encoder
+                                             setVertexBytes:&viewportSize
+                                                     length:sizeof(viewportSize)
+                                                    atIndex:
+                                                        KKVertexInputIndex_ViewportSize];
+                                         [encoder setFragmentBytes:&color
+                                                            length:sizeof(color)
+                                                           atIndex:0];
+                                         [encoder drawPrimitives:
+                                                      MTLPrimitiveTypeTriangle
+                                                     vertexStart:0
+                                                     vertexCount:vi];
+                                       }
+
+                                       free(verts);
+                                     }];
+}
+
+- (void)drawLineSegmentsWithPoints:(const CGPoint *)points
+                             count:(NSUInteger)count
+                             color:(simd_float4)lineColor
+                         halfWidth:(float)hw
+                  destinationImage:(FxImageTile *)destinationImage {
+  if (count < 2)
+    return;
+
+  KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
+  uint64_t registryID = destinationImage.deviceRegistryID;
+  MTLPixelFormat pixelFormat =
+      [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
+  id<MTLRenderPipelineState> ps = [cache
+      buildAndRegisterPipelineStateForPluginID:
+          @"co.overpolish.keyframelesskit.Line"
+                                    registryID:registryID
+                                   pixelFormat:pixelFormat
+                                      bundleID:@"co.overpolish"
+                                                ".keyframeless"
+                                                ".KeyframelessKit"
+                                  vertexShader:@"KKVertexShader"
+                                fragmentShader:@"KKLineFragment"
+                                     blendMode:KKBlendModePremultipliedAlpha];
+  if (!ps)
+    return;
+
+  CGPoint center = points[0];
+  [self
+      encodeRenderCommandsForDestinationImage:destinationImage
+                               canvasPosition:center
+                             clearDestination:NO
+                                     commands:^(
+                                         id<MTLRenderCommandEncoder> encoder,
+                                         CGPoint metalMid,
+                                         simd_uint2 viewportSize) {
+                                       float ioW = viewportSize.x;
+                                       float ioH = viewportSize.y;
+                                       float pad = hw + 1.0f;
+                                       float edge = pad / hw;
+
+                                       NSUInteger pairCount = count / 2;
+                                       NSUInteger vertCount = pairCount * 6;
+                                       KKVertex2D *verts = malloc(
+                                           sizeof(KKVertex2D) * vertCount);
+                                       NSUInteger vi = 0;
+
+                                       for (NSUInteger i = 0; i < pairCount;
+                                            i++) {
+                                         simd_float2 mA = {
+                                             (float)(points[i * 2].x -
+                                                     ioW / 2.0),
+                                             (float)(ioH / 2.0 -
+                                                     points[i * 2].y)};
+                                         simd_float2 mB = {
+                                             (float)(points[i * 2 + 1].x -
+                                                     ioW / 2.0),
+                                             (float)(ioH / 2.0 -
+                                                     points[i * 2 + 1].y)};
+
+                                         simd_float2 d = mB - mA;
+                                         float len = simd_length(d);
+                                         if (len < 0.001f)
+                                           continue;
+                                         simd_float2 dir = d / len;
+                                         simd_float2 perp = {-dir.y, dir.x};
+
+                                         simd_float2 v0 = mA + perp * pad;
+                                         simd_float2 v1 = mA - perp * pad;
+                                         simd_float2 v2 = mB + perp * pad;
+                                         simd_float2 v3 = mB - perp * pad;
+
+                                         verts[vi++] =
+                                             (KKVertex2D){v0, {0, edge}};
+                                         verts[vi++] =
+                                             (KKVertex2D){v1, {0, -edge}};
+                                         verts[vi++] =
+                                             (KKVertex2D){v2, {0, edge}};
+                                         verts[vi++] =
+                                             (KKVertex2D){v1, {0, -edge}};
+                                         verts[vi++] =
+                                             (KKVertex2D){v3, {0, -edge}};
+                                         verts[vi++] =
+                                             (KKVertex2D){v2, {0, edge}};
+                                       }
+
+                                       if (vi > 0) {
+                                         NSUInteger byteLen =
+                                             sizeof(KKVertex2D) * vi;
+                                         simd_float4 color = lineColor;
+                                         [encoder setRenderPipelineState:ps];
+                                         if (byteLen <= 4096) {
+                                           [encoder
+                                               setVertexBytes:verts
+                                                       length:byteLen
+                                                      atIndex:
+                                                          KKVertexInputIndex_Vertices];
+                                         } else {
+                                           id<MTLDevice> dev = encoder.device;
+                                           id<MTLBuffer> buf = [dev
+                                               newBufferWithBytes:verts
+                                                           length:byteLen
+                                                          options:
+                                                              MTLResourceStorageModeShared];
+                                           [encoder
+                                               setVertexBuffer:buf
+                                                        offset:0
+                                                       atIndex:
+                                                           KKVertexInputIndex_Vertices];
+                                         }
+                                         [encoder
+                                             setVertexBytes:&viewportSize
+                                                     length:sizeof(viewportSize)
+                                                    atIndex:
+                                                        KKVertexInputIndex_ViewportSize];
+                                         [encoder setFragmentBytes:&color
+                                                            length:sizeof(color)
+                                                           atIndex:0];
+                                         [encoder drawPrimitives:
+                                                      MTLPrimitiveTypeTriangle
+                                                     vertexStart:0
+                                                     vertexCount:vi];
+                                       }
+
+                                       free(verts);
                                      }];
 }
 

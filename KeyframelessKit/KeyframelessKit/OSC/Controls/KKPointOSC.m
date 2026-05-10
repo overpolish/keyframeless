@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #import "KKPointOSC.h"
@@ -63,8 +63,9 @@ static NSColor *pointStrokeColor(void) {
 
   float outerRadiusPixels = _oscRadius + _outlineWidth;
 
+  NSColor *fill = _fillColorOverride ? _fillColorOverride : pointFillColor();
   KKPointOSCParams params = {.outlineWidth = _outlineWidth / outerRadiusPixels,
-                             .fillColor = [pointFillColor() simdFloat4],
+                             .fillColor = [fill simdFloat4],
                              .strokeColor = [pointStrokeColor() simdFloat4]};
 
   [self drawQuadForDestinationImage:destinationImage

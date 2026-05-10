@@ -1,11 +1,14 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #import "../Update/KKUpdateChecker.h"
-#import "../Views/KKTimingSlot.h"
+#import "../Views/StageSequencer/KKStageSequencerView.h"
+#import "KKConstants.h"
+#import "KKDataBlob.h"
 #import "KKHostInfo.h"
+#import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
 #import <AppKit/AppKit.h>
 #import <Carbon/Carbon.h>
@@ -44,7 +47,7 @@
 #pragma clang diagnostic pop
 
 @synthesize timingHeader = _timingHeader;
-@synthesize timingGraph = _timingGraph;
+@synthesize motionBlurHeader = _motionBlurHeader;
 
 + (id)servicePrincipalDelegate {
   return [KKPrincipalDelegate shared];
@@ -134,25 +137,54 @@
   double valB = 0;
   [getAPI getFloatValue:&valB fromParameter:otherID atTime:time];
 
+  // First-tick guard: when prevSource is nil or different (i.e. this is
+  // the first parameterChanged for `parameterID` in this gesture), only
+  // record the ratio baseline — don't write the linked partner yet.
+  // A cmd-Z / cmd-Shift-Z echo for a linked param is a single one-shot
+  // event so it never reaches a "second tick", meaning the linked write
+  // never fires from a host-revert echo and the redo stack is preserved.
+  // A real cmd-drag emits parameterChanged at ~60 Hz so the second tick
+  // arrives within ~16 ms and the partner catches up imperceptibly.
   NSNumber *prevSource = objc_getAssociatedObject(self, kKKLinkedSource);
-  if (!prevSource || prevSource.unsignedIntValue != parameterID) {
+  BOOL firstTickForSource =
+      (prevSource == nil || prevSource.unsignedIntValue != parameterID);
+  // Default: clear the "last partner written" marker so plugins polling
+  // it via `linkedPartnerWrittenForLastChange` don't see a stale value
+  // from a previous call.
+  objc_setAssociatedObject(self, kKKLinkedLastPartner, nil,
+                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  if (firstTickForSource) {
     objc_setAssociatedObject(self, kKKLinkedSource, @(parameterID),
                              OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     double ratio = (valA > 0) ? valB / valA : 1.0;
     objc_setAssociatedObject(self, kKKLinkedRatio, @(ratio),
                              OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    return YES;
   }
 
   NSNumber *ratioNum = objc_getAssociatedObject(self, kKKLinkedRatio);
-  double ratio = ratioNum ? ratioNum.doubleValue : 1.0;
+  double ratio = ratioNum != nil ? ratioNum.doubleValue : 1.0;
 
   objc_setAssociatedObject(self, kKKLinkedLocking, @YES,
                            OBJC_ASSOCIATION_RETAIN_NONATOMIC);
   [setAPI setFloatValue:valA * ratio toParameter:otherID atTime:time];
   objc_setAssociatedObject(self, kKKLinkedLocking, @NO,
                            OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  // Record the partner so the plugin can run any per-edit side effects
+  // (e.g. mirroring the value into a backing path blob) on the partner
+  // too. FCP does NOT echo `parameterChanged` for `setFloatValue:` calls
+  // made from inside another `parameterChanged`, so without this the
+  // partner write reaches the inspector but never triggers the plugin's
+  // normal parameterChanged-driven persistence path.
+  objc_setAssociatedObject(self, kKKLinkedLastPartner, @(otherID),
+                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
   return YES;
+}
+
+- (UInt32)linkedPartnerWrittenForLastChange {
+  NSNumber *partner = objc_getAssociatedObject(self, kKKLinkedLastPartner);
+  return partner != nil ? partner.unsignedIntValue : 0;
 }
 
 - (nullable id<MTLRenderPipelineState>)
@@ -230,11 +262,29 @@
   MTLViewport viewport = {0, 0, outputWidth, outputHeight, -1.0, 1.0};
   [encoder setViewport:viewport];
 
+  // When parent Scale > 100%, FCP renders only a sub-tile of the destination
+  // image (tilePixelBounds ⊂ imagePixelBounds). UVs map [0,1] across the full
+  // source image, so the shader sees the tile as the corresponding sub-region
+  // of the source — not the whole image — which prevents the entire source
+  // from being squashed into the sub-tile.
+  FxRect dTile = destinationImage.tilePixelBounds;
+  FxRect dImg = destinationImage.imagePixelBounds;
+  float imgW = (float)(dImg.right - dImg.left);
+  float imgH = (float)(dImg.top - dImg.bottom);
+  if (imgW <= 0)
+    imgW = 1;
+  if (imgH <= 0)
+    imgH = 1;
+  float uvL = (float)(dTile.left - dImg.left) / imgW;
+  float uvR = (float)(dTile.right - dImg.left) / imgW;
+  float uvT = (float)(dImg.top - dTile.top) / imgH;
+  float uvB = (float)(dImg.top - dTile.bottom) / imgH;
+
   KKVertex2D vertices[] = {
-      {{outputWidth / 2.0f, -outputHeight / 2.0f}, {1.0, 1.0}},
-      {{-outputWidth / 2.0f, -outputHeight / 2.0f}, {0.0, 1.0}},
-      {{outputWidth / 2.0f, outputHeight / 2.0f}, {1.0, 0.0}},
-      {{-outputWidth / 2.0f, outputHeight / 2.0f}, {0.0, 0.0}},
+      {{outputWidth / 2.0f, -outputHeight / 2.0f}, {uvR, uvB}},
+      {{-outputWidth / 2.0f, -outputHeight / 2.0f}, {uvL, uvB}},
+      {{outputWidth / 2.0f, outputHeight / 2.0f}, {uvR, uvT}},
+      {{-outputWidth / 2.0f, outputHeight / 2.0f}, {uvL, uvT}},
   };
 
   simd_uint2 viewportSize = {(unsigned int)outputWidth,
@@ -255,6 +305,71 @@
 
   [cache returnCommandQueueToCache:commandQueue];
 
+  return YES;
+}
+
+- (BOOL)
+    encodeFullScreenQuadIntoTexture:(id<MTLTexture>)destTexture
+                   destinationImage:(FxImageTile *)destinationImage
+                      commandBuffer:(id<MTLCommandBuffer>)commandBuffer
+                     sourceTextures:(NSArray<id<MTLTexture>> *)sourceTextures
+                           commands:
+                               (void (^)(id<MTLRenderCommandEncoder>,
+                                         NSArray<id<MTLTexture>> *))commands {
+  MTLRenderPassColorAttachmentDescriptor *colorAttachment =
+      [[MTLRenderPassColorAttachmentDescriptor alloc] init];
+  colorAttachment.texture = destTexture;
+  colorAttachment.clearColor = MTLClearColorMake(0, 0, 0, 0);
+  colorAttachment.loadAction = MTLLoadActionClear;
+
+  MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
+  rpd.colorAttachments[0] = colorAttachment;
+
+  id<MTLRenderCommandEncoder> encoder =
+      [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+
+  float w = (float)destTexture.width;
+  float h = (float)destTexture.height;
+  MTLViewport viewport = {0, 0, w, h, -1.0, 1.0};
+  [encoder setViewport:viewport];
+
+  // See encodeRenderCommandsForDestinationImage: — UVs are mapped to the
+  // sub-region of source addressed by the destination tile, so >100% parent
+  // Scale (which makes FCP request only a sub-tile) renders sharply.
+  float uvL = 0, uvR = 1, uvT = 0, uvB = 1;
+  if (destinationImage) {
+    FxRect dTile = destinationImage.tilePixelBounds;
+    FxRect dImg = destinationImage.imagePixelBounds;
+    float imgW = (float)(dImg.right - dImg.left);
+    float imgH = (float)(dImg.top - dImg.bottom);
+    if (imgW <= 0)
+      imgW = 1;
+    if (imgH <= 0)
+      imgH = 1;
+    uvL = (float)(dTile.left - dImg.left) / imgW;
+    uvR = (float)(dTile.right - dImg.left) / imgW;
+    uvT = (float)(dImg.top - dTile.top) / imgH;
+    uvB = (float)(dImg.top - dTile.bottom) / imgH;
+  }
+
+  KKVertex2D vertices[] = {
+      {{w / 2.0f, -h / 2.0f}, {uvR, uvB}},
+      {{-w / 2.0f, -h / 2.0f}, {uvL, uvB}},
+      {{w / 2.0f, h / 2.0f}, {uvR, uvT}},
+      {{-w / 2.0f, h / 2.0f}, {uvL, uvT}},
+  };
+  simd_uint2 viewportSize = {(unsigned int)w, (unsigned int)h};
+
+  [encoder setVertexBytes:vertices
+                   length:sizeof(vertices)
+                  atIndex:KKVertexInputIndex_Vertices];
+  [encoder setVertexBytes:&viewportSize
+                   length:sizeof(viewportSize)
+                  atIndex:KKVertexInputIndex_ViewportSize];
+
+  commands(encoder, sourceTextures);
+
+  [encoder endEncoding];
   return YES;
 }
 
@@ -352,34 +467,154 @@
   id<FxParameterSettingAPI_v5> paramSetAPI =
       [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   for (NSNumber *paramID in paramIDs) {
-    [paramSetAPI setParameterFlags:kFxParameterFlag_DEFAULT
-                       toParameter:paramID.unsignedIntValue];
+    UInt32 pid = paramID.unsignedIntValue;
+    FxParameterFlags cur = 0;
+    [paramGetAPI getParameterFlags:&cur fromParameter:pid];
+    FxParameterFlags want = cur & ~kFxParameterFlag_HIDDEN;
+    if (want != cur)
+      [paramSetAPI setParameterFlags:want toParameter:pid];
   }
   return YES;
 }
 
-- (NSArray<KKTimingSlot *> *)timingGlobalSlots {
-  return @[];
+- (BOOL)forceShowAllParameters {
+  return NO;
 }
 
-- (NSArray<KKTimingSlot *> *)timingSlotsForSection:(NSInteger)section {
-  return @[];
-}
-
-- (NSArray<KKAnimatableProperty *> *)animatableProperties {
+- (NSArray<NSNumber *> *)currentValuesForLaneLabel:(NSString *)label
+                                          groupKey:(NSString *)groupKey
+                                            atTime:(CMTime)time {
   return nil;
 }
 
-- (NSView *)holdPropertyView {
+- (BOOL)applyLaneValues:(NSArray<NSNumber *> *)values
+               forLabel:(NSString *)label
+               groupKey:(NSString *)groupKey
+                 atTime:(CMTime)time {
+  return NO;
+}
+
+- (void)setEditingDisabled:(BOOL)disabled
+              forLaneLabel:(NSString *)label
+                  groupKey:(NSString *)groupKey {
+}
+
+- (NSArray<KKTimingLane *> *)defaultLanesAtTime:(CMTime)time
+                                    paramGetAPI:(id<FxParameterRetrievalAPI_v6>)
+                                                    paramGetAPI {
   return nil;
 }
 
-- (CGFloat)holdPropertyViewHeight {
-  return 23.0;
+- (NSArray<KKTimingLane *> *)reconcileLanes:(NSArray<KKTimingLane *> *)existing
+                                     atTime:(CMTime)time
+                                paramGetAPI:(id<FxParameterRetrievalAPI_v6>)
+                                                paramGetAPI {
+  return existing;
 }
 
-- (void (^)(id, CMTime))holdPropertyApplyState {
+- (NSString *)kkReconcileFingerprintForAPI:(id<PROAPIAccessing>)apiManager {
   return nil;
+}
+
+- (BOOL)usesMotionBlur {
+  return NO;
+}
+
+- (NSSet<NSString *> *)hiddenAnimatablePropertyLabels {
+  return [NSSet set];
+}
+
+- (NSSet<NSString *> *)animatablePropertyLabelsWithOSC {
+  return [NSSet set];
+}
+
+- (NSSet<NSString *> *)animatablePropertyLabelsWithOSCDefaultOff {
+  return [NSSet set];
+}
+
+- (NSString *)kkSelectedGroupKey {
+  return nil;
+}
+
+- (void)kkHandleGroupSegmentClickedForKey:(NSString *)groupKey {
+  // Default: behave like a label-side click. Plugins override to wire a
+  // custom action (e.g. selecting the underlying object).
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  KKStageSequencerView *seq = state.sequencerView;
+  BOOL nowCollapsed = NO;
+  for (KKTimingLane *lane in seq.lanes) {
+    if ([lane.groupKey isEqualToString:groupKey]) {
+      nowCollapsed = !lane.groupCollapsed;
+      break;
+    }
+  }
+  [self _handleGroupCollapseToggledForKey:groupKey collapsed:nowCollapsed];
+}
+
+- (void)kkRefreshSequencerSelectedGroup {
+  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
+  if (!state)
+    return;
+  NSString *key = [self kkSelectedGroupKey];
+  dispatch_block_t apply = ^{
+    state.sequencerView.selectedGroupKey = key;
+    for (KKTimingViewRefs *r in state.additionalTimingViews)
+      r.seqView.selectedGroupKey = key;
+  };
+  if (NSThread.isMainThread)
+    apply();
+  else
+    dispatch_async(dispatch_get_main_queue(), apply);
+}
+
+- (void)kkHandleLaneSegmentMutation:(KKLaneSegmentMutation)mutation
+                               lane:(KKTimingLane *)lane
+                            atIndex:(NSInteger)index
+                             getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
+                             setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
+  // Default: no-op. Plugins override to keep out-of-band per-segment data
+  // in sync with the sequencer's segment count.
+}
+
+- (void)kkLoadLaneSegmentForLabel:(NSString *)label
+                         groupKey:(NSString *)groupKey
+                          segment:(NSInteger)segmentIndex
+                           getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
+                           setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
+  // Default: no-op. Scalar lanes use the values-based applyLaneValues:
+  // path; this hook is for plugins with out-of-band per-segment payloads.
+}
+
+- (void)kkCopyLaneSegmentForLabel:(NSString *)label
+                         groupKey:(NSString *)groupKey
+                      fromSegment:(NSInteger)srcSegmentIndex
+                        toSegment:(NSInteger)dstSegmentIndex
+                           getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
+                           setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
+  // Default: no-op. The scalar values copy handled by
+  // _handleSegmentValuesCopiedAtLane: covers value-based lanes.
+}
+
+- (NSString *)emptyLanesMessageWhenNoLanes {
+  return nil;
+}
+
+- (NSString *)emptyLanesIconNameWhenNoLanes {
+  return @"rectangle.on.rectangle.slash";
+}
+
+// FxPlug requires this when the plugin uses custom parameters — FCP needs
+// the value classes ahead of unarchiving project files. Subclasses can
+// override and call super to add their own custom-param IDs.
+- (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
+  if (parameterID == kKKParamMultiStageData ||
+      parameterID == kKKParamGradientData ||
+      parameterID == kKKParamColorExpanded ||
+      parameterID == kKKParamTimingExpanded ||
+      parameterID == kKKParamMotionBlurExpanded ||
+      parameterID == kKKParamMotionBlurEnabled)
+    return [NSSet setWithObject:[KKDataBlob class]];
+  return [NSSet set];
 }
 
 @end

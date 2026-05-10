@@ -1,9 +1,10 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #import "KKCustomGroupHeaderView.h"
+#import "../Style/NSColor+KKColors.h"
 #import "KKCheckboxView.h"
 #import "KKChevronView.h"
 #import "KKLabelView.h"
@@ -15,11 +16,16 @@ static const CGFloat kChevronMarginLeft = 10.0;
 static const CGFloat kCheckboxTrailingMargin = 23.0;
 static const CGFloat kStatusCheckboxGap = 8.0;
 static const CGFloat kStatusTrailingMargin = 23.0;
+static const CGFloat kTrailingButtonSize = 22.0;
 
 @implementation KKCustomGroupHeaderView {
   KKChevronView *_chevron;
   KKCheckboxView *_checkbox;
   NSTextField *_statusLabel;
+  NSButton *_trailingButton;
+  NSLayoutConstraint *_statusTrailingConstraint;
+  void (^_trailingButtonAction)(void);
+  BOOL _hasCheckbox;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect
@@ -34,6 +40,7 @@ static const CGFloat kStatusTrailingMargin = 23.0;
   if (self) {
     _isEnabled = NO;
     _isExpanded = NO;
+    _isInteractive = YES;
 
     _chevron = [[KKChevronView alloc] initWithFrame:NSZeroRect];
     _chevron.translatesAutoresizingMaskIntoConstraints = NO;
@@ -73,13 +80,18 @@ static const CGFloat kStatusTrailingMargin = 23.0;
         constraintEqualToAnchor:rightContainer.centerYAnchor]
         .active = YES;
 
+    _hasCheckbox = showsCheckbox;
     if (showsCheckbox) {
       _checkbox = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
       _checkbox.translatesAutoresizingMaskIntoConstraints = NO;
       _checkbox.onToggle = ^(BOOL isChecked) {
         __strong typeof(weakSelf) strongSelf = weakSelf;
-        if (!strongSelf)
+        if (!strongSelf || !strongSelf->_isInteractive) {
+          // Revert the visual state if not interactive.
+          if (strongSelf)
+            strongSelf->_checkbox.isChecked = strongSelf->_isEnabled;
           return;
+        }
         strongSelf->_isEnabled = isChecked;
         strongSelf->_chevron.isInteractive = isChecked;
         if (!isChecked && strongSelf->_isExpanded) {
@@ -95,6 +107,9 @@ static const CGFloat kStatusTrailingMargin = 23.0;
       };
 
       [rightContainer addSubview:_checkbox];
+      _statusTrailingConstraint = [_statusLabel.trailingAnchor
+          constraintEqualToAnchor:_checkbox.leadingAnchor
+                         constant:-kStatusCheckboxGap];
       [NSLayoutConstraint activateConstraints:@[
         [_checkbox.trailingAnchor
             constraintEqualToAnchor:rightContainer.trailingAnchor
@@ -103,15 +118,13 @@ static const CGFloat kStatusTrailingMargin = 23.0;
             constraintEqualToAnchor:rightContainer.centerYAnchor],
         [_checkbox.widthAnchor constraintEqualToConstant:12.0],
         [_checkbox.heightAnchor constraintEqualToConstant:12.0],
-        [_statusLabel.trailingAnchor
-            constraintEqualToAnchor:_checkbox.leadingAnchor
-                           constant:-kStatusCheckboxGap],
+        _statusTrailingConstraint,
       ]];
     } else {
-      [_statusLabel.trailingAnchor
+      _statusTrailingConstraint = [_statusLabel.trailingAnchor
           constraintEqualToAnchor:rightContainer.trailingAnchor
-                         constant:-kStatusTrailingMargin]
-          .active = YES;
+                         constant:-kStatusTrailingMargin];
+      _statusTrailingConstraint.active = YES;
     }
 
     self.rightView = rightContainer;
@@ -122,11 +135,16 @@ static const CGFloat kStatusTrailingMargin = 23.0;
 - (void)setIsEnabled:(BOOL)isEnabled {
   _isEnabled = isEnabled;
   _checkbox.isChecked = isEnabled;
-  _chevron.isInteractive = isEnabled;
+  _chevron.isInteractive = isEnabled && _isInteractive;
   if (!isEnabled && _isExpanded) {
     _isExpanded = NO;
     [_chevron setExpanded:NO animated:YES];
   }
+}
+
+- (void)setIsInteractive:(BOOL)isInteractive {
+  _isInteractive = isInteractive;
+  _chevron.isInteractive = isInteractive && _isEnabled;
 }
 
 - (void)setIsExpanded:(BOOL)isExpanded {
@@ -143,6 +161,48 @@ static const CGFloat kStatusTrailingMargin = 23.0;
 - (void)setStatusColor:(NSColor *)statusColor {
   _statusColor = statusColor;
   _statusLabel.textColor = statusColor ?: [NSColor tertiaryLabelColor];
+}
+
+- (void)addTrailingButtonWithIcon:(NSImage *)icon
+                           action:(void (^)(void))action {
+  if (_trailingButton || _hasCheckbox)
+    return;
+
+  _trailingButtonAction = [action copy];
+
+  _trailingButton =
+      [NSButton buttonWithImage:icon
+                         target:self
+                         action:@selector(_trailingButtonClicked:)];
+  _trailingButton.bezelStyle = NSBezelStyleAccessoryBarAction;
+  _trailingButton.bordered = NO;
+  _trailingButton.contentTintColor = [NSColor accentMatchingHost];
+  _trailingButton.translatesAutoresizingMaskIntoConstraints = NO;
+
+  NSView *rightContainer = self.rightView;
+  [rightContainer addSubview:_trailingButton];
+
+  _statusTrailingConstraint.active = NO;
+  _statusTrailingConstraint = [_statusLabel.trailingAnchor
+      constraintEqualToAnchor:_trailingButton.leadingAnchor
+                     constant:-kStatusCheckboxGap];
+
+  [NSLayoutConstraint activateConstraints:@[
+    [_trailingButton.trailingAnchor
+        constraintEqualToAnchor:rightContainer.trailingAnchor
+                       constant:-kStatusTrailingMargin],
+    [_trailingButton.centerYAnchor
+        constraintEqualToAnchor:rightContainer.centerYAnchor],
+    [_trailingButton.widthAnchor constraintEqualToConstant:kTrailingButtonSize],
+    [_trailingButton.heightAnchor
+        constraintEqualToConstant:kTrailingButtonSize],
+    _statusTrailingConstraint,
+  ]];
+}
+
+- (void)_trailingButtonClicked:(id)sender {
+  if (_trailingButtonAction)
+    _trailingButtonAction();
 }
 
 @end

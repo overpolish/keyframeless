@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #import "KKGradientFavoritesPopover.h"
@@ -114,17 +114,48 @@ static void _clearPopoverBackground(NSView *view) {
 
 @end
 
+@interface KKGradientNameTextField : NSTextField
+@end
+
+@implementation KKGradientNameTextField
+
+- (BOOL)performKeyEquivalent:(NSEvent *)event {
+  if (self.currentEditor) {
+    [self.currentEditor keyDown:event];
+    return YES;
+  }
+  return [super performKeyEquivalent:event];
+}
+
+- (BOOL)becomeFirstResponder {
+  BOOL ok = [super becomeFirstResponder];
+  if (ok) {
+    NSTextView *editor = (NSTextView *)self.currentEditor;
+    NSColor *accent = [NSColor accent];
+    editor.insertionPointColor = accent;
+    editor.selectedTextAttributes = @{
+      NSBackgroundColorAttributeName : [accent colorWithAlphaComponent:0.3],
+      NSForegroundColorAttributeName : [NSColor labelColor],
+    };
+  }
+  return ok;
+}
+
+@end
+
 @interface KKGradientFavoriteRowView : NSView <NSTextFieldDelegate>
 @property(nonatomic, strong) KKGradientFavorite *favorite;
 @property(nonatomic, copy) void (^onDelete)(NSString *identifier);
 @property(nonatomic, copy) void (^onRename)
     (NSString *identifier, NSString *newName);
 @property(nonatomic, copy) void (^onSelect)(NSArray<KKGradientStop *> *stops);
+@property(nonatomic, copy) void (^onOverwrite)(NSString *identifier);
 @end
 
 @implementation KKGradientFavoriteRowView {
   KKGradientMiniBar *_preview;
   NSTextField *_nameField;
+  NSButton *_overwriteButton;
   NSButton *_deleteButton;
 }
 
@@ -145,7 +176,7 @@ static void _clearPopoverBackground(NSView *view) {
         strongSelf.onSelect(strongSelf.favorite.stops);
     };
 
-    _nameField = [[NSTextField alloc] initWithFrame:NSZeroRect];
+    _nameField = [[KKGradientNameTextField alloc] initWithFrame:NSZeroRect];
     _nameField.stringValue = favorite.name;
     _nameField.font = [NSFont systemFontOfSize:11.0];
     _nameField.textColor = [NSColor inspectorLabel];
@@ -165,6 +196,19 @@ static void _clearPopoverBackground(NSView *view) {
     NSImageSymbolConfiguration *cfg = [NSImageSymbolConfiguration
         configurationWithPointSize:10.0
                             weight:NSFontWeightRegular];
+    NSImage *overwriteImg =
+        [[NSImage imageWithSystemSymbolName:@"square.and.arrow.down"
+                   accessibilityDescription:@"Save current"]
+            imageWithSymbolConfiguration:cfg];
+    _overwriteButton = [NSButton buttonWithImage:overwriteImg
+                                          target:self
+                                          action:@selector(_overwriteTapped:)];
+    _overwriteButton.bordered = NO;
+    _overwriteButton.contentTintColor =
+        [NSColor.inspectorLabel colorWithAlphaComponent:0.4];
+    _overwriteButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:_overwriteButton];
+
     NSImage *xImg = [[NSImage imageWithSystemSymbolName:@"trash"
                                accessibilityDescription:@"Delete"]
         imageWithSymbolConfiguration:cfg];
@@ -188,8 +232,16 @@ static void _clearPopoverBackground(NSView *view) {
                                                constant:KKSpacingLG],
       [_nameField.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
       [_nameField.trailingAnchor
-          constraintLessThanOrEqualToAnchor:_deleteButton.leadingAnchor
+          constraintLessThanOrEqualToAnchor:_overwriteButton.leadingAnchor
                                    constant:-KKSpacingSM],
+
+      [_overwriteButton.trailingAnchor
+          constraintEqualToAnchor:_deleteButton.leadingAnchor
+                         constant:-KKSpacingSM],
+      [_overwriteButton.centerYAnchor
+          constraintEqualToAnchor:self.centerYAnchor],
+      [_overwriteButton.widthAnchor constraintEqualToConstant:16.0],
+      [_overwriteButton.heightAnchor constraintEqualToConstant:16.0],
 
       [_deleteButton.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
                                                    constant:-KKPaddingLG],
@@ -199,6 +251,11 @@ static void _clearPopoverBackground(NSView *view) {
     ]];
   }
   return self;
+}
+
+- (void)_overwriteTapped:(id)sender {
+  if (_onOverwrite)
+    _onOverwrite(_favorite.identifier);
 }
 
 - (void)mouseDown:(NSEvent *)event {
@@ -334,10 +391,15 @@ static void _clearPopoverBackground(NSView *view) {
         __strong typeof(weakSelf) strongSelf = weakSelf;
         if (!strongSelf)
           return;
-        if (strongSelf->_popover)
-          [strongSelf->_popover close];
+        // Defer the close to next runloop — closing an NSPopover from inside
+        // its own click handler in an XPC view service crashes via ViewBridge
+        // re-entrancy. Apply the favorite first, close after.
         if (strongSelf.onApplyFavorite)
           strongSelf.onApplyFavorite(stops);
+        dispatch_async(dispatch_get_main_queue(), ^{
+          if (strongSelf->_popover)
+            [strongSelf->_popover close];
+        });
       };
 
       row.onDelete = ^(NSString *identifier) {
@@ -351,6 +413,16 @@ static void _clearPopoverBackground(NSView *view) {
       row.onRename = ^(NSString *identifier, NSString *newName) {
         [[KKGradientFavorites shared] renameFavoriteWithIdentifier:identifier
                                                             toName:newName];
+      };
+
+      row.onOverwrite = ^(NSString *identifier) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf || strongSelf.currentStops.count < 2)
+          return;
+        [[KKGradientFavorites shared]
+            updateFavoriteWithIdentifier:identifier
+                                   stops:strongSelf.currentStops];
+        [strongSelf _rebuildPopover];
       };
 
       [listContainer addSubview:row];

@@ -1,116 +1,58 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "../Math/KKEasing.h"
-#import "../Style/KKTokens.h"
 #import "../Views/KKAlertView.h"
 #import "../Views/KKCustomGroupHeaderView.h"
+#import "../Views/KKLogoBannerView.h"
 #import "../Views/KKSeparatorView.h"
-#import "../Views/KKTimingGraphView.h"
-#import "../Views/KKAnimatableProperty.h"
-#import "../Views/KKPillToggleRowView.h"
-#import "../Views/KKTimingSlot.h"
-#import "../Views/KKUpdateBannerView.h"
-#import "KKConstants.h"
+#import "KKDataBlob.h"
+#import "KKPlugin+Color.h"
 #import "KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KKConstants.h>
+
+NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
+    @"KKRemoteWindowContent";
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
+
 @implementation KKPlugin (CustomViews)
 
-- (void)_applyTimingParamsToGraph:(KKTimingGraphView *)graph
-                     withParamAPI:(id<FxParameterRetrievalAPI_v6>)paramGetAPI
-                           atTime:(CMTime)t {
-  BOOL animIn = NO, animOut = NO;
-  int inCurve = KKEasingCurveEaseOut, outCurve = KKEasingCurveEaseOut;
-  int sel = KKTimingGraphSectionHold, holdEffectVal = KKHoldEffectNone;
-  [paramGetAPI getBoolValue:&animIn fromParameter:kKKParamAnimateIn atTime:t];
-  [paramGetAPI getBoolValue:&animOut fromParameter:kKKParamAnimateOut atTime:t];
-  [paramGetAPI getIntValue:&inCurve
-             fromParameter:kKKParamAnimateInInterpolation
-                    atTime:t];
-  [paramGetAPI getIntValue:&outCurve
-             fromParameter:kKKParamAnimateOutInterpolation
-                    atTime:t];
-  [paramGetAPI getIntValue:&sel
-             fromParameter:kKKParamTimingSelectedSection
-                    atTime:t];
-  [paramGetAPI getIntValue:&holdEffectVal
-             fromParameter:kKKParamHoldEffect
-                    atTime:t];
-
-  double inIntensity = 0.5, outIntensity = 0.5, holdIntensity = 0.5;
-  [paramGetAPI getFloatValue:&inIntensity
-               fromParameter:kKKParamAnimateInIntensity
-                      atTime:t];
-  [paramGetAPI getFloatValue:&outIntensity
-               fromParameter:kKKParamAnimateOutIntensity
-                      atTime:t];
-  [paramGetAPI getFloatValue:&holdIntensity
-               fromParameter:kKKParamHoldIntensity
-                      atTime:t];
-
-  double inFrequency = 0.5, outFrequency = 0.5, holdFrequency = 0.5;
-  [paramGetAPI getFloatValue:&inFrequency
-               fromParameter:kKKParamAnimateInFrequency
-                      atTime:t];
-  [paramGetAPI getFloatValue:&outFrequency
-               fromParameter:kKKParamAnimateOutFrequency
-                      atTime:t];
-  [paramGetAPI getFloatValue:&holdFrequency
-               fromParameter:kKKParamHoldFrequency
-                      atTime:t];
-
-  int holdSeed = 0;
-  [paramGetAPI getIntValue:&holdSeed fromParameter:kKKParamHoldSeed atTime:t];
-
-  double inDuration = 0.5, outDuration = 0.5;
-  [paramGetAPI getFloatValue:&inDuration
-               fromParameter:kKKParamAnimateInDuration
-                      atTime:t];
-  [paramGetAPI getFloatValue:&outDuration
-               fromParameter:kKKParamAnimateOutDuration
-                      atTime:t];
-
-  graph.inEnabled = animIn;
-  graph.outEnabled = animOut;
-  graph.inDuration = inDuration;
-  graph.outDuration = outDuration;
-  graph.inCurve = (KKEasingCurve)inCurve;
-  graph.outCurve = (KKEasingCurve)outCurve;
-  graph.holdEffect = (KKHoldEffect)holdEffectVal;
-  graph.inIntensity = inIntensity;
-  graph.outIntensity = outIntensity;
-  graph.holdIntensity = holdIntensity;
-  graph.inFrequency = inFrequency;
-  graph.outFrequency = outFrequency;
-  graph.holdFrequency = holdFrequency;
-  graph.holdSeed = holdSeed;
-  graph.selectedSection = (KKTimingGraphSection)sel;
-}
-
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
-  if (parameterID == kKKParamUpdateBanner)
-    return [[KKUpdateBannerView alloc] init];
-
+  if (parameterID == kKKParamLogoBanner) {
+    KKLogoBannerView *banner = [[KKLogoBannerView alloc] init];
+    if ([self helpSections].count > 0) {
+      __weak typeof(self) weakSelf = self;
+      banner.onHelpTap = ^{
+        [weakSelf openHelpRemoteWindow];
+      };
+    }
+    return banner;
+  }
 
   if (parameterID == kKKParamColorGroup)
     return [self
         createGroupHeaderWithTitle:@"Color Style"
                               icon:[NSImage
                                        imageWithSystemSymbolName:@"paintpalette"
-                                       accessibilityDescription:nil]
+                                        accessibilityDescription:nil]
                        parameterID:parameterID
                    expandedParamID:kKKParamColorExpanded];
+
+  if (parameterID == kKKParamColorCustomUI)
+    return [self _createColorCustomUI:parameterID];
 
   if (parameterID == kKKParamAnimationSeparator)
     return [self _createTimingHeader:parameterID];
 
+  if (parameterID == kKKParamMotionBlurSeparator)
+    return [self _createMotionBlurHeader:parameterID];
+
   if (parameterID == kKKParamTimingCurvePreview)
-    return [self _createTimingGraphView];
+    return [self _createTimingGraphViewUncapped:NO];
 
   NSString *separatorText =
       kkClassRegistry([self class], kKKSepTexts)[@(parameterID)];
@@ -152,20 +94,20 @@
                                                 icon:icon
                                        showsCheckbox:NO];
 
-  id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
-      apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actionAPI startAction:self];
 
-  BOOL expanded = NO;
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  [paramGetAPI getBoolValue:&expanded
-              fromParameter:expandedParamID
-                     atTime:[actionAPI currentTime]];
-  header.isExpanded = expanded;
+  header.isExpanded = KKReadCustomParamBool(paramGetAPI, expandedParamID);
   header.isEnabled = YES;
 
   [actionAPI endAction:self];
+
+  if (!self.genericGroupHeaders)
+    self.genericGroupHeaders = [NSMapTable strongToWeakObjectsMapTable];
+  [self.genericGroupHeaders setObject:header forKey:@(expandedParamID)];
 
   __weak typeof(self) weakSelf = self;
   header.onExpandedChanged = ^(BOOL isExpanded) {
@@ -177,28 +119,71 @@
     [actAPI startAction:strongSelf];
     id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
         apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    [setAPI setBoolValue:isExpanded
-             toParameter:expandedParamID
-                  atTime:[actAPI currentTime]];
+    KKWriteCustomParamBool(setAPI, isExpanded, expandedParamID);
     [actAPI endAction:strongSelf];
   };
 
   return header;
 }
 
-- (NSView *)_createTimingHeader:(UInt32)parameterID {
-  NSImage *icon = [NSImage imageWithSystemSymbolName:@"timer"
-                            accessibilityDescription:nil];
+- (KKCustomGroupHeaderView *)
+    createCheckboxGroupHeaderWithTitle:(NSString *)title
+                                  icon:(nullable NSImage *)icon
+                        enabledParamID:(UInt32)enabledParamID
+                       expandedParamID:(UInt32)expandedParamID
+                        onEnabledExtra:(void (^_Nullable)(
+                                           BOOL isEnabled,
+                                           id<FxParameterSettingAPI_v5> setAPI))
+                                           onEnabledExtra
+                       onExpandedExtra:(void (^_Nullable)(
+                                           BOOL isExpanded,
+                                           id<FxParameterSettingAPI_v5> setAPI))
+                                           onExpandedExtra {
   KKCustomGroupHeaderView *header =
       [[KKCustomGroupHeaderView alloc] initWithFrame:NSMakeRect(0, 0, 300, 26)
                                           apiManager:self.apiManager
-                                         parameterId:parameterID
-                                                text:@"Timing"
+                                         parameterId:enabledParamID
+                                                text:title
                                                 icon:icon
-                                       showsCheckbox:NO];
-  header.isEnabled = YES;
+                                       showsCheckbox:YES];
+
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  CMTime currentTime = [actionAPI currentTime];
+  BOOL enabled = NO;
+  [paramGetAPI getBoolValue:&enabled
+              fromParameter:enabledParamID
+                     atTime:currentTime];
+  header.isEnabled = enabled;
+  header.isExpanded = KKReadCustomParamBool(paramGetAPI, expandedParamID);
+  [actionAPI endAction:self];
 
   __weak typeof(self) weakSelf = self;
+  void (^onEnabledExtraCopy)(BOOL, id<FxParameterSettingAPI_v5>) =
+      [onEnabledExtra copy];
+  void (^onExpandedExtraCopy)(BOOL, id<FxParameterSettingAPI_v5>) =
+      [onExpandedExtra copy];
+
+  header.onEnabledChanged = ^(BOOL isEnabled) {
+    __strong typeof(weakSelf) strongSelf = weakSelf;
+    if (!strongSelf)
+      return;
+    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actAPI startAction:strongSelf];
+    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
+        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    [setAPI setBoolValue:isEnabled
+             toParameter:enabledParamID
+                  atTime:[actAPI currentTime]];
+    if (onEnabledExtraCopy)
+      onEnabledExtraCopy(isEnabled, setAPI);
+    [actAPI endAction:strongSelf];
+  };
+
   header.onExpandedChanged = ^(BOOL isExpanded) {
     __strong typeof(weakSelf) strongSelf = weakSelf;
     if (!strongSelf)
@@ -208,415 +193,77 @@
     [actAPI startAction:strongSelf];
     id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
         apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    [setAPI setBoolValue:isExpanded
-             toParameter:kKKParamTimingExpanded
-                  atTime:[actAPI currentTime]];
+    KKWriteCustomParamBool(setAPI, isExpanded, expandedParamID);
+    if (onExpandedExtraCopy)
+      onExpandedExtraCopy(isExpanded, setAPI);
     [actAPI endAction:strongSelf];
   };
 
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actionAPI startAction:self];
+  [self registerGroupHeader:header
+             enabledParamID:enabledParamID
+            expandedParamID:expandedParamID];
 
-  static pid_t sInitializedPID = 0;
-  pid_t currentPID = getpid();
-  BOOL isNewProcess = (sInitializedPID != currentPID);
-  if (isNewProcess)
-    sInitializedPID = currentPID;
-
-  BOOL expanded;
-  if (isNewProcess) {
-    expanded = YES;
-    id<FxParameterSettingAPI_v5> setAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    [setAPI setBoolValue:YES
-             toParameter:kKKParamTimingExpanded
-                  atTime:[actionAPI currentTime]];
-  } else {
-    expanded = NO;
-    id<FxParameterRetrievalAPI_v6> paramGetAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    [paramGetAPI getBoolValue:&expanded
-                fromParameter:kKKParamTimingExpanded
-                       atTime:[actionAPI currentTime]];
-  }
-  header.isExpanded = expanded;
-  [actionAPI endAction:self];
-
-  self.timingHeader = header;
   return header;
 }
 
-static CGFloat KKTotalSlotHeight(NSArray<KKTimingSlot *> *slots) {
-  CGFloat h = 0;
-  for (KKTimingSlot *s in slots)
-    h += s.height;
-  return h;
-}
-
-- (NSView *)_createTimingGraphView {
-  // pill(24) + ticks(16) + spacing(8) + graph(60) + labels(20) + slider(28) +
-  // ticks(16)
-  static const CGFloat kBaseHeight = 170.0;
-
-  NSArray<KKTimingSlot *> *globalSlots = [self timingGlobalSlots];
-  NSArray<KKTimingSlot *> *inSlots =
-      [self timingSlotsForSection:KKTimingGraphSectionIn];
-  NSArray<KKTimingSlot *> *holdSlots =
-      [self timingSlotsForSection:KKTimingGraphSectionHold];
-  NSArray<KKTimingSlot *> *outSlots =
-      [self timingSlotsForSection:KKTimingGraphSectionOut];
-
-  CGFloat globalHeight = KKTotalSlotHeight(globalSlots);
-  NSArray<KKAnimatableProperty *> *animPropsForHeight =
-      [self animatableProperties];
-  BOOL hasAnimProps = animPropsForHeight.count > 0;
-  CGFloat animPropH = hasAnimProps
-                          ? (animPropsForHeight.count > 5 ? 18.0 * 2 + KKSpacingXS
-                                                          : 18.0)
-                          : 0;
-  CGFloat propHeight =
-      (hasAnimProps || [self holdPropertyView])
-          ? MAX(hasAnimProps ? animPropH : [self holdPropertyViewHeight], 14.0) +
-                KKSpacingSM
-          : 0;
-  CGFloat maxSectionHeight;
-  if (hasAnimProps) {
-    maxSectionHeight =
-        MAX(KKTotalSlotHeight(inSlots) + propHeight,
-            MAX(KKTotalSlotHeight(holdSlots) + propHeight,
-                KKTotalSlotHeight(outSlots) + propHeight));
-  } else {
-    maxSectionHeight =
-        MAX(KKTotalSlotHeight(inSlots),
-            MAX(KKTotalSlotHeight(holdSlots) + propHeight,
-                KKTotalSlotHeight(outSlots)));
-  }
-  CGFloat slotHeight = globalHeight + maxSectionHeight;
-  CGFloat totalHeight =
-      kBaseHeight + (slotHeight > 0 ? KKPaddingSM + slotHeight : 0);
-
-  NSView *wrapper =
-      [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, totalHeight)];
-  wrapper.autoresizingMask = NSViewWidthSizable;
-
-  KKTimingGraphView *graphView =
-      [[KKTimingGraphView alloc] initWithFrame:NSZeroRect];
-  graphView.translatesAutoresizingMaskIntoConstraints = NO;
-  [wrapper addSubview:graphView];
-
-  [NSLayoutConstraint activateConstraints:@[
-    [graphView.leadingAnchor constraintEqualToAnchor:wrapper.leadingAnchor],
-    [graphView.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
-    [graphView.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor],
-    [graphView.trailingAnchor constraintEqualToAnchor:wrapper.trailingAnchor],
-  ]];
-
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actionAPI startAction:self];
-  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+- (void)syncGroupHeaderExpandedForExpandedParamID:(UInt32)expandedParamID {
+  KKCustomGroupHeaderView *header =
+      [self.genericGroupHeaders objectForKey:@(expandedParamID)];
+  if (!header)
+    return;
+  id<FxParameterRetrievalAPI_v6> getAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  [self _applyTimingParamsToGraph:graphView
-                     withParamAPI:paramGetAPI
-                           atTime:[actionAPI currentTime]];
-  [actionAPI endAction:self];
-
-  __weak typeof(self) weakSelf = self;
-  graphView.onInToggled = ^(BOOL enabled) {
-    [weakSelf _timingGraphSetAnimateEnabled:enabled
-                               forParameter:kKKParamAnimateIn
-                            disabledSection:KKTimingGraphSectionIn];
-  };
-  graphView.onOutToggled = ^(BOOL enabled) {
-    [weakSelf _timingGraphSetAnimateEnabled:enabled
-                               forParameter:kKKParamAnimateOut
-                            disabledSection:KKTimingGraphSectionOut];
-  };
-  graphView.onSectionSelected = ^(KKTimingGraphSection section) {
-    [weakSelf timingGraphSelectSection:section];
-  };
-  graphView.onInDurationChanged = ^(double duration) {
-    [weakSelf timingGraphSetFloatValue:duration
-                          forParameter:kKKParamAnimateInDuration];
-  };
-  graphView.onOutDurationChanged = ^(double duration) {
-    [weakSelf timingGraphSetFloatValue:duration
-                          forParameter:kKKParamAnimateOutDuration];
-  };
-  graphView.onInCurveChanged = ^(KKEasingCurve curve) {
-    [weakSelf timingGraphSetIntValue:(int)curve
-                        forParameter:kKKParamAnimateInInterpolation];
-  };
-  graphView.onOutCurveChanged = ^(KKEasingCurve curve) {
-    [weakSelf timingGraphSetIntValue:(int)curve
-                        forParameter:kKKParamAnimateOutInterpolation];
-  };
-  graphView.onHoldEffectChanged = ^(KKHoldEffect effect) {
-    [weakSelf timingGraphSetIntValue:(int)effect
-                        forParameter:kKKParamHoldEffect];
-  };
-  graphView.onInIntensityChanged = ^(double intensity) {
-    [weakSelf timingGraphSetFloatValue:intensity
-                          forParameter:kKKParamAnimateInIntensity];
-  };
-  graphView.onOutIntensityChanged = ^(double intensity) {
-    [weakSelf timingGraphSetFloatValue:intensity
-                          forParameter:kKKParamAnimateOutIntensity];
-  };
-  graphView.onHoldIntensityChanged = ^(double intensity) {
-    [weakSelf timingGraphSetFloatValue:intensity
-                          forParameter:kKKParamHoldIntensity];
-  };
-  graphView.onInFrequencyChanged = ^(double frequency) {
-    [weakSelf timingGraphSetFloatValue:frequency
-                          forParameter:kKKParamAnimateInFrequency];
-  };
-  graphView.onOutFrequencyChanged = ^(double frequency) {
-    [weakSelf timingGraphSetFloatValue:frequency
-                          forParameter:kKKParamAnimateOutFrequency];
-  };
-  graphView.onHoldFrequencyChanged = ^(double frequency) {
-    [weakSelf timingGraphSetFloatValue:frequency
-                          forParameter:kKKParamHoldFrequency];
-  };
-  graphView.onHoldSeedChanged = ^(int seed) {
-    [weakSelf timingGraphSetIntValue:seed forParameter:kKKParamHoldSeed];
-  };
-
-  graphView.globalSlots = globalSlots;
-  graphView.inSectionSlots = inSlots;
-  graphView.holdSectionSlots = holdSlots;
-  graphView.outSectionSlots = outSlots;
-
-  NSArray<KKAnimatableProperty *> *animProps = [self animatableProperties];
-  if (animProps.count > 0) {
-    static const CGFloat kRowH = 18.0;
-    NSMutableArray<NSString *> *labels = [NSMutableArray new];
-    for (KKAnimatableProperty *p in animProps)
-      [labels addObject:p.label];
-
-    // Split into 2 rows when >5 properties.
-    BOOL twoRows = animProps.count > 5;
-    NSView *propView;
-    KKPillToggleRowView *row1, *row2;
-    NSUInteger splitAt = twoRows ? (animProps.count + 1) / 2 : animProps.count;
-    CGFloat totalH;
-
-    if (twoRows) {
-      NSArray *labels1 = [labels subarrayWithRange:NSMakeRange(0, splitAt)];
-      NSArray *labels2 =
-          [labels subarrayWithRange:NSMakeRange(splitAt, animProps.count - splitAt)];
-      row1 = [[KKPillToggleRowView alloc] initWithLabels:labels1];
-      row2 = [[KKPillToggleRowView alloc] initWithLabels:labels2];
-      row1.autoresizingMask = NSViewWidthSizable;
-      row2.autoresizingMask = NSViewWidthSizable;
-      totalH = kRowH * 2 + KKSpacingXS;
-      NSView *container =
-          [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, totalH)];
-      row1.frame = NSMakeRect(0, 0, 300, kRowH);
-      row2.frame = NSMakeRect(0, kRowH + KKSpacingXS, 300, kRowH);
-      [container addSubview:row1];
-      [container addSubview:row2];
-      propView = container;
-    } else {
-      row1 = [[KKPillToggleRowView alloc] initWithLabels:labels];
-      row2 = nil;
-      totalH = kRowH;
-      propView = row1;
-    }
-
-    __weak typeof(self) weakSelf = self;
-    __weak KKTimingGraphView *weakGraph = graphView;
-
-    void (^handleToggle)(NSInteger, BOOL) = ^(NSInteger index, BOOL isOn) {
-      __strong typeof(weakSelf) strongSelf = weakSelf;
-      KKTimingGraphView *graph = weakGraph;
-      if (!strongSelf || !graph || (NSUInteger)index >= animProps.count)
-        return;
-      KKAnimatableProperty *prop = animProps[index];
-      UInt32 paramID;
-      switch (graph.selectedSection) {
-      case KKTimingGraphSectionIn:
-        paramID = prop.inParamID;
-        break;
-      case KKTimingGraphSectionOut:
-        paramID = prop.outParamID;
-        break;
-      default:
-        paramID = prop.holdParamID;
-        break;
-      }
-      id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      [actAPI startAction:strongSelf];
-      id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      [setAPI setBoolValue:isOn toParameter:paramID atTime:[actAPI currentTime]];
-      [actAPI endAction:strongSelf];
-    };
-    row1.onToggled = ^(NSInteger index, BOOL isOn) {
-      handleToggle(index, isOn);
-    };
-    if (row2) {
-      row2.onToggled = ^(NSInteger index, BOOL isOn) {
-        handleToggle(index + (NSInteger)splitAt, isOn);
-      };
-    }
-
-    graphView.holdPropertyView = propView;
-    graphView.holdPropertyViewHeight = totalH;
-    graphView.showPropertyViewForAllSections = YES;
-    graphView.holdPropertyApplyState = ^(id paramAPI, CMTime time) {
-      KKTimingGraphView *graph = weakGraph;
-      if (!graph)
-        return;
-      for (NSUInteger i = 0; i < animProps.count; i++) {
-        KKAnimatableProperty *prop = animProps[i];
-        UInt32 paramID;
-        switch (graph.selectedSection) {
-        case KKTimingGraphSectionIn:
-          paramID = prop.inParamID;
-          break;
-        case KKTimingGraphSectionOut:
-          paramID = prop.outParamID;
-          break;
-        default:
-          paramID = prop.holdParamID;
-          break;
-        }
-        BOOL val = YES;
-        [paramAPI getBoolValue:&val fromParameter:paramID atTime:time];
-        if (i < splitAt)
-          [row1 setState:val atIndex:i];
-        else
-          [row2 setState:val atIndex:i - splitAt];
-      }
-    };
-  } else {
-    NSView *holdPropView = [self holdPropertyView];
-    if (holdPropView) {
-      graphView.holdPropertyView = holdPropView;
-      graphView.holdPropertyViewHeight = [self holdPropertyViewHeight];
-      graphView.holdPropertyApplyState = [self holdPropertyApplyState];
-    }
-  }
-
-  self.timingGraph = graphView;
-
-  [actionAPI startAction:self];
-  CMTime t = [actionAPI currentTime];
-  [self _applySlotState:globalSlots withParamAPI:paramGetAPI atTime:t];
-  [self _applySlotState:inSlots withParamAPI:paramGetAPI atTime:t];
-  [self _applySlotState:holdSlots withParamAPI:paramGetAPI atTime:t];
-  [self _applySlotState:outSlots withParamAPI:paramGetAPI atTime:t];
-  if (graphView.holdPropertyApplyState)
-    graphView.holdPropertyApplyState(paramGetAPI, t);
-  [actionAPI endAction:self];
-
-  return wrapper;
-}
-
-- (void)_applySlotState:(NSArray<KKTimingSlot *> *)slots
-           withParamAPI:(id<FxParameterRetrievalAPI_v6>)paramAPI
-                 atTime:(CMTime)time {
-  for (KKTimingSlot *slot in slots)
-    slot.applyState(paramAPI, time);
-}
-
-- (void)timingGraphApplyState {
-  if (!self.timingGraph)
+  if (!getAPI)
     return;
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actionAPI startAction:self];
-  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+  BOOL expanded = KKReadCustomParamBool(getAPI, expandedParamID);
+  __weak KKCustomGroupHeaderView *weakHeader = header;
+  KKRunOnMain(^{
+    if (weakHeader.isExpanded != expanded)
+      weakHeader.isExpanded = expanded;
+  });
+}
+
+- (void)syncGroupHeaderEnabledForEnabledParamID:(UInt32)enabledParamID
+                                         atTime:(CMTime)time {
+  KKCustomGroupHeaderView *header =
+      [self.genericGroupHeadersByEnabledParamID objectForKey:@(enabledParamID)];
+  if (!header)
+    return;
+  id<FxParameterRetrievalAPI_v6> getAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  CMTime t = [actionAPI currentTime];
-  [self _applyTimingParamsToGraph:self.timingGraph
-                     withParamAPI:paramGetAPI
-                           atTime:t];
-  [self _applySlotState:self.timingGraph.globalSlots
-           withParamAPI:paramGetAPI
-                 atTime:t];
-  [self _applySlotState:self.timingGraph.inSectionSlots
-           withParamAPI:paramGetAPI
-                 atTime:t];
-  [self _applySlotState:self.timingGraph.holdSectionSlots
-           withParamAPI:paramGetAPI
-                 atTime:t];
-  [self _applySlotState:self.timingGraph.outSectionSlots
-           withParamAPI:paramGetAPI
-                 atTime:t];
-  if (self.timingGraph.holdPropertyApplyState)
-    self.timingGraph.holdPropertyApplyState(paramGetAPI, t);
-  [actionAPI endAction:self];
+  if (!getAPI)
+    return;
+  BOOL enabled = NO;
+  [getAPI getBoolValue:&enabled fromParameter:enabledParamID atTime:time];
+  __weak KKCustomGroupHeaderView *weakHeader = header;
+  KKRunOnMain(^{
+    if (weakHeader.isEnabled != enabled)
+      weakHeader.isEnabled = enabled;
+  });
 }
 
-- (void)_timingGraphSetAnimateEnabled:(BOOL)enabled
-                         forParameter:(UInt32)paramID
-                      disabledSection:(KKTimingGraphSection)section {
-  id<FxCustomParameterActionAPI_v4> actAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actAPI startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  CMTime t = [actAPI currentTime];
-  [setAPI setBoolValue:enabled toParameter:paramID atTime:t];
-  if (!enabled) {
-    int sel = KKTimingGraphSectionHold;
-    id<FxParameterRetrievalAPI_v6> getAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    [getAPI getIntValue:&sel
-          fromParameter:kKKParamTimingSelectedSection
-                 atTime:t];
-    if (sel == (int)section)
-      [setAPI setIntValue:KKTimingGraphSectionHold
-              toParameter:kKKParamTimingSelectedSection
-                   atTime:t];
+- (void)kkWriteLanesJSON:(NSArray<KKTimingLane *> *)lanes
+                  setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
+  KKWriteLanesJSON(lanes, setAPI, self.apiManager);
+}
+
+- (void)registerGroupHeader:(KKCustomGroupHeaderView *)header
+             enabledParamID:(UInt32)enabledParamID
+            expandedParamID:(UInt32)expandedParamID {
+  if (!header)
+    return;
+  if (!self.genericGroupHeaders)
+    self.genericGroupHeaders = [NSMapTable strongToWeakObjectsMapTable];
+  [self.genericGroupHeaders setObject:header forKey:@(expandedParamID)];
+  if (enabledParamID != 0) {
+    if (!self.genericGroupHeadersByEnabledParamID)
+      self.genericGroupHeadersByEnabledParamID =
+          [NSMapTable strongToWeakObjectsMapTable];
+    [self.genericGroupHeadersByEnabledParamID setObject:header
+                                                 forKey:@(enabledParamID)];
   }
-  [actAPI endAction:self];
-  [self timingGraphApplyState];
-}
-
-- (void)timingGraphSelectSection:(KKTimingGraphSection)section {
-  if (section == KKTimingGraphSectionIn && !self.timingGraph.inEnabled)
-    return;
-  if (section == KKTimingGraphSectionOut && !self.timingGraph.outEnabled)
-    return;
-
-  id<FxCustomParameterActionAPI_v4> actAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actAPI startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  [setAPI setIntValue:(int)section
-          toParameter:kKKParamTimingSelectedSection
-               atTime:[actAPI currentTime]];
-  [actAPI endAction:self];
-  [self timingGraphApplyState];
-}
-
-- (void)timingGraphSetIntValue:(int)value forParameter:(UInt32)paramID {
-  id<FxCustomParameterActionAPI_v4> actAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actAPI startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  [setAPI setIntValue:value toParameter:paramID atTime:[actAPI currentTime]];
-  [actAPI endAction:self];
-  [self timingGraphApplyState];
-}
-
-- (void)timingGraphSetFloatValue:(double)value forParameter:(UInt32)paramID {
-  id<FxCustomParameterActionAPI_v4> actAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actAPI startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  [setAPI setFloatValue:value toParameter:paramID atTime:[actAPI currentTime]];
-  [actAPI endAction:self];
-  [self timingGraphApplyState];
 }
 
 @end
+
+#pragma clang diagnostic pop

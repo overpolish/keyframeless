@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #import "OSC.h"
@@ -36,16 +36,45 @@ static float paddingForRadius(double radius, float minDim) {
     crop.cropLeftParam = kParamCropLeft;
     crop.cropRightParam = kParamCropRight;
     self.cropOSC = crop;
+    [crop release];
   }
   return self;
 }
 
+- (void)dealloc {
+  [_cropOSC release];
+  [super dealloc];
+}
+
+- (BOOL)getCanvasTopRight:(CGPoint *)outTopRight
+               bottomLeft:(CGPoint *)outBottomLeft {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  if (!oscAPI)
+    return NO;
+  CGPoint tr = {0, 0}, bl = {0, 0};
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:1.0
+                          fromY:1.0
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&tr.x
+                            toY:&tr.y];
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:0.0
+                          fromY:0.0
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&bl.x
+                            toY:&bl.y];
+  if (outTopRight)
+    *outTopRight = tr;
+  if (outBottomLeft)
+    *outBottomLeft = bl;
+  return YES;
+}
+
 - (CGPoint)oscPositionAtTime:(CMTime)time {
   CGPoint topRight = {0, 0}, bottomLeft = {0, 0};
-  if (![self.cropOSC getTopRight:&topRight
-                      bottomLeft:&bottomLeft
-                 fullImageCanvas:NULL
-                          atTime:time])
+  if (![self getCanvasTopRight:&topRight bottomLeft:&bottomLeft])
     return CGPointZero;
 
   float canvasImageWidth = topRight.x - bottomLeft.x;
@@ -78,6 +107,8 @@ static float paddingForRadius(double radius, float minDim) {
               activePart:(NSInteger)activePart
         destinationImage:(FxImageTile *)destinationImage
                   atTime:(CMTime)time {
+  [KKPlugin multiStageDrawOSCTickForAPI:self.apiManager atTime:time];
+
   [self encodeRenderCommandsForDestinationImage:destinationImage
                                  canvasPosition:CGPointZero
                                clearDestination:YES
@@ -85,14 +116,17 @@ static float paddingForRadius(double radius, float minDim) {
                                                   CGPoint p, simd_uint2 v){
                                        }];
 
-  [self.cropOSC drawWithDestinationImage:destinationImage atTime:time];
+  if ([KKPlugin multiStageOSCVisibleForAPI:self.apiManager label:@"Crop"])
+    [self.cropOSC drawWithDestinationImage:destinationImage atTime:time];
 
-  CGPoint radiusPos = [self oscPositionAtTime:time];
-  [self drawAtCanvasPosition:radiusPos
-                   isHovered:(activePart == kOSCRadiusPart)
-                    isActive:self.isDragging && (activePart == kOSCRadiusPart)
-            destinationImage:destinationImage
-                      atTime:time];
+  if ([KKPlugin multiStageOSCVisibleForAPI:self.apiManager label:@"Radius"]) {
+    CGPoint radiusPos = [self oscPositionAtTime:time];
+    [self drawAtCanvasPosition:radiusPos
+                     isHovered:(activePart == kOSCRadiusPart)
+                      isActive:self.isDragging && (activePart == kOSCRadiusPart)
+              destinationImage:destinationImage
+                        atTime:time];
+  }
 }
 
 - (void)hitTestOSCAtMousePositionX:(double)positionX
@@ -101,17 +135,21 @@ static float paddingForRadius(double radius, float minDim) {
                             atTime:(CMTime)time {
   *activePart = 0;
 
-  NSInteger cropPart = [self.cropOSC hitTestAtMousePositionX:positionX
-                                                   positionY:positionY
-                                                      atTime:time];
-  if (cropPart != KKCropPartNone) {
-    *activePart = cropPart;
+  if ([KKPlugin multiStageOSCVisibleForAPI:self.apiManager label:@"Crop"]) {
+    NSInteger cropPart = [self.cropOSC hitTestAtMousePositionX:positionX
+                                                     positionY:positionY
+                                                        atTime:time];
+    if (cropPart != KKCropPartNone) {
+      *activePart = cropPart;
+    }
   }
 
-  if ([self hitTestAtMousePositionX:positionX
-                          positionY:positionY
-                             atTime:time]) {
-    *activePart = kOSCRadiusPart;
+  if ([KKPlugin multiStageOSCVisibleForAPI:self.apiManager label:@"Radius"]) {
+    if ([self hitTestAtMousePositionX:positionX
+                            positionY:positionY
+                               atTime:time]) {
+      *activePart = kOSCRadiusPart;
+    }
   }
 }
 
@@ -179,10 +217,7 @@ static float paddingForRadius(double radius, float minDim) {
     return;
 
   CGPoint topRight = {0, 0}, bottomLeft = {0, 0};
-  if (![self.cropOSC getTopRight:&topRight
-                      bottomLeft:&bottomLeft
-                 fullImageCanvas:NULL
-                          atTime:time])
+  if (![self getCanvasTopRight:&topRight bottomLeft:&bottomLeft])
     return;
 
   float canvasImageWidth = topRight.x - bottomLeft.x;

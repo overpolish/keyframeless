@@ -1,8 +1,9 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKDataBlob.h"
 #import "KKPlugin+Crop.h"
 #import <FxPlug/FxPlugSDK.h>
 
@@ -26,11 +27,11 @@
     return NO;
   }
 
-  if (![paramAPI addToggleButtonWithName:@""
-                             parameterID:expandedID
-                            defaultValue:NO
-                          parameterFlags:kFxParameterFlag_HIDDEN |
-                                         kFxParameterFlag_NOT_ANIMATABLE]) {
+  if (![paramAPI addCustomParameterWithName:@""
+                                parameterID:expandedID
+                               defaultValue:[KKDataBlob blobWithString:@"0"]
+                             parameterFlags:kFxParameterFlag_HIDDEN |
+                                            kFxParameterFlag_NOT_ANIMATABLE]) {
     return NO;
   }
 

@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #pragma once
@@ -22,7 +22,11 @@ typedef enum FragmentIndex {
     FragmentIndex_NoiseOffset = 11,
     FragmentIndex_NoiseSeed = 12,
     FragmentIndex_BlurUVScale = 13,
-    FragmentIndex_Threshold = 14
+    FragmentIndex_Threshold = 14,
+    FragmentIndex_TileOffsetPx = 15,
+    FragmentIndex_DestImgSizePx = 16,
+    FragmentIndex_SrcOriginInDestPx = 17,
+    FragmentIndex_SrcImgSizePx = 18
 } FragmentIndex;
 
 #define KK_GRADIENT_LUT_SIZE 64

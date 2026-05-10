@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #pragma once
@@ -26,6 +26,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)removeFavoriteWithIdentifier:(NSString *)identifier;
 - (void)renameFavoriteWithIdentifier:(NSString *)identifier
                               toName:(NSString *)name;
+- (void)updateFavoriteWithIdentifier:(NSString *)identifier
+                               stops:(NSArray<KKGradientStop *> *)stops;
 @end
 
 NS_ASSUME_NONNULL_END

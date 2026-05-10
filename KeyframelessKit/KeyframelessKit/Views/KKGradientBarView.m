@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #import "KKGradientBarView.h"
@@ -334,7 +334,18 @@ void KKDrawCheckerboard(NSRect rect) {
   if (NSPointInRect(point, NSInsetRect(bar, 0, -kStopDiameter))) {
     _selectedMidpointIndex = -1;
     CGFloat pos = [self _positionForX:point.x];
+    // Open the drag bracket BEFORE the add so the add and any drag
+    // movement coalesce into one undo entry. Mark drag immediately
+    // active (no 3px threshold) so the user can keep moving the new
+    // stop without releasing — onStopsChanged fired by _addStopAtPosition
+    // will see inDrag=YES and skip its own bracket.
+    if (_onDragBegin)
+      _onDragBegin();
     [self _addStopAtPosition:pos];
+    _dragIndex = (NSInteger)_stops.count - 1;
+    _dragMidpointIndex = -1;
+    _dragStarted = YES;
+    _dragOrigin = point;
   }
 }
 
@@ -348,6 +359,8 @@ void KKDrawCheckerboard(NSRect rect) {
     if (hypot(point.x - _dragOrigin.x, point.y - _dragOrigin.y) < 3.0)
       return;
     _dragStarted = YES;
+    if (_onDragBegin)
+      _onDragBegin();
   }
 
   if (_dragMidpointIndex >= 0) {
@@ -400,9 +413,12 @@ void KKDrawCheckerboard(NSRect rect) {
 }
 
 - (void)mouseUp:(NSEvent *)event {
+  BOOL wasDragging = _dragStarted;
   _dragIndex = -1;
   _dragMidpointIndex = -1;
   _dragStarted = NO;
+  if (wasDragging && _onDragEnd)
+    _onDragEnd();
 }
 
 - (void)rightMouseDown:(NSEvent *)event {
@@ -588,7 +604,50 @@ void KKDrawCheckerboard(NSRect rect) {
     _onStopsChanged(_stops);
 }
 
+- (void)reverseStops {
+  if (_stops.count < 2)
+    return;
+  NSMutableArray<KKGradientStop *> *mutable = [NSMutableArray new];
+  for (KKGradientStop *s in _stops) {
+    [mutable addObject:[KKGradientStop stopWithPosition:1.0 - s.position
+                                                  color:s.color
+                                               midpoint:1.0 - s.midpoint]];
+  }
+  _stops = [mutable copy];
+  [self setNeedsDisplay:YES];
+  if (_onStopsChanged)
+    _onStopsChanged(_stops);
+}
+
+- (void)distributeStopsEvenly {
+  NSUInteger n = _stops.count;
+  if (n < 2)
+    return;
+  NSArray<KKGradientStop *> *sorted = [self _sortedStops];
+  NSMutableArray<KKGradientStop *> *mutable = [NSMutableArray new];
+  for (NSUInteger i = 0; i < n; i++) {
+    CGFloat pos = (CGFloat)i / (CGFloat)(n - 1);
+    [mutable addObject:[KKGradientStop stopWithPosition:pos
+                                                  color:sorted[i].color
+                                               midpoint:0.5]];
+  }
+  _stops = [mutable copy];
+  _selectedIndex = MIN(_selectedIndex, (NSInteger)n - 1);
+  _selectedMidpointIndex = -1;
+  [self setNeedsDisplay:YES];
+  if (_onStopsChanged)
+    _onStopsChanged(_stops);
+}
+
 - (void)setStops:(NSArray<KKGradientStop *> *)stops {
+  // Ignore external stop pushes while the user is mid-drag — host-driven
+  // refresh paths (layer-list snapshot redraw fired by parameterChanged
+  // echoes from our own drag-tick blob writes) otherwise race the live
+  // drag and visually ping the bar back to a previous tick's value.
+  // The local _onStopsChanged emit always uses `_stops = mutable; ...`
+  // assignment, never this setter, so it's unaffected.
+  if (_dragStarted)
+    return;
   _stops = [stops copy];
   if (_selectedIndex >= (NSInteger)_stops.count)
     _selectedIndex = MAX(0, (NSInteger)_stops.count - 1);

@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #include "ShaderTypes.h"
@@ -83,11 +83,26 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
                               constant float *noiseOffset [[buffer(FragmentIndex_NoiseOffset)]],
                               constant float *noiseSeed [[buffer(FragmentIndex_NoiseSeed)]],
                               constant float2 *blurUVScale [[buffer(FragmentIndex_BlurUVScale)]],
-                              constant float *thresholdPtr [[buffer(FragmentIndex_Threshold)]]) {
+                              constant float *thresholdPtr [[buffer(FragmentIndex_Threshold)]],
+                              constant float2 *tileOffsetPx [[buffer(FragmentIndex_TileOffsetPx)]],
+                              constant float2 *destImgSizePx [[buffer(FragmentIndex_DestImgSizePx)]],
+                              constant float2 *srcOriginInDestPx [[buffer(FragmentIndex_SrcOriginInDestPx)]],
+                              constant float2 *srcImgSizePx [[buffer(FragmentIndex_SrcImgSizePx)]]) {
+
+    // Source/blur sample positions are derived from the fragment's Y-down
+    // pixel position in the final composited image (clipSpacePosition +
+    // tileOffsetPx) — robust to sub-tiling and to FCP's project-library
+    // reverse-Y composite. destUV indexes the dest-image-sized prep+blur;
+    // srcUV indexes the source texture's actual sub-region of dest image.
+    float2 pxInDest = in.clipSpacePosition.xy + (*tileOffsetPx);
+    float2 destUV = pxInDest / (*destImgSizePx);
+    float2 srcUV = (pxInDest - (*srcOriginInDestPx)) / (*srcImgSizePx);
 
     constexpr sampler s(mag_filter::linear, min_filter::linear);
+    constexpr sampler srcS(mag_filter::linear, min_filter::linear,
+                           address::clamp_to_zero);
 
-    half4 original = source.sample(s, in.textureCoordinate);
+    half4 original = source.sample(srcS, srcUV);
     float rx = *radiusX;
     float ry = *radiusY;
     float maxR = max(rx, ry);
@@ -100,7 +115,7 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
 
     // Remap UVs to the active sub-region of the pooled blur texture.
     float2 bScale = *blurUVScale;
-    float2 baseUV = in.textureCoordinate * bScale;
+    float2 baseUV = destUV * bScale;
     float2 offsetUV = baseUV + *offsetPtr * bScale;
     // Scale UV to create elliptical glow from isotropic blur.
     float2 bCenter = bScale * 0.5;
@@ -114,7 +129,7 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
     float fade = 1.0 - smoothstep(0.0, 1.0 / glowFalloff, t);
     float nAmt = *noiseAmount;
     if (nAmt > 0.0) {
-        float2 px = in.textureCoordinate * float2(blurred.get_width(), blurred.get_height());
+        float2 px = destUV * float2(blurred.get_width(), blurred.get_height());
         float radialDist = 1.0 - blur.a;
         float pixelRand = hash12(floor(px));
         // Single radial flow — all layers move outward at the same speed
@@ -182,7 +197,7 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
     // Light scatters from bright sources — pure addition, preserves source color.
     float thresh = *thresholdPtr;
     if (thresh > 0.0) {
-        float2 bloomUV = in.textureCoordinate * bScale;
+        float2 bloomUV = destUV * bScale;
         float4 bloom = float4(bloomTex.sample(s, bloomUV));
         result += float3(bloom.rgb) * glowIntensity * float(original.a);
     }

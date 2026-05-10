@@ -12,12 +12,12 @@
 
 /* Begin PBXFileReference section */
 		F20815D82F73D0A6004260DF /* MagicMove.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = MagicMove.xcodeproj; path = ../MagicMove/MagicMove.xcodeproj; sourceTree = SOURCE_ROOT; };
-		F21399642F65423400E1EC03 /* MotionBlur.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = MotionBlur.xcodeproj; path = ../MotionBlur/MotionBlur.xcodeproj; sourceTree = "<group>"; };
 		F21E97D52F4EE9CC00DF8CF3 /* FxPlug.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FxPlug.framework; path = ../../../../../Library/Developer/Frameworks/FxPlug.framework; sourceTree = "<group>"; };
 		F2330A742F8577290020CB71 /* Glow.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Glow.xcodeproj; path = ../Glow/Glow.xcodeproj; sourceTree = SOURCE_ROOT; };
 		F26E01B62F4DE280009D949A /* KeyframelessKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = KeyframelessKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F26E02092F4DE539009D949A /* Rounded.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Rounded.xcodeproj; path = ../Rounded/Rounded.xcodeproj; sourceTree = SOURCE_ROOT; };
 		F29C84D42F68205F0073B1A9 /* Keyframeless X.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = "Keyframeless X.xcodeproj"; path = "../Keyframeless X/Keyframeless X.xcodeproj"; sourceTree = SOURCE_ROOT; };
+		F2D394A62F8AABA6003F4558 /* Canvas.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Canvas.xcodeproj; path = ../Canvas/Canvas.xcodeproj; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -28,14 +28,20 @@
 				KKLog.h,
 				Math/KKBezierPath.h,
 				Math/KKEasing.h,
-				Math/KKTiming.h,
+				Math/KKGradientSampling.h,
+				Math/KKPathBoolean.h,
+				Math/KKPathMorph.h,
+				Math/KKShape.h,
+				Math/KKSVGParser.h,
+				Math/KKTimingEvaluation.h,
+				Math/KKTimingStage.h,
 				Metal/KKMetalDeviceCache.h,
+				Metal/KKMotionBlur.h,
 				Metal/KKRenderPrimitives.h,
 				Metal/KKShaderTypes.h,
 				OSC/Base/KKOnScreenControl.h,
 				"OSC/Base/KKOnScreenControl+CoordinateSpace.h",
 				OSC/Controls/KKArcOSC.h,
-				OSC/Controls/KKCompoundPointOSC.h,
 				OSC/Controls/KKCropOSC.h,
 				OSC/Controls/KKIconButtonOSC.h,
 				OSC/Controls/KKOSCLabel.h,
@@ -44,34 +50,40 @@
 				OSC/Controls/KKRingOSC.h,
 				OSC/Controls/KKRotationOSC.h,
 				OSC/Controls/KKSquarePointOSC.h,
+				OSC/Controls/KKToolbar.h,
 				OSC/Utilities/KKSnapEngine.h,
 				Plugin/KKColor.h,
 				Plugin/KKConstants.h,
+				Plugin/KKDataBlob.h,
 				Plugin/KKHostInfo.h,
 				Plugin/KKPlugin.h,
 				"Plugin/KKPlugin+Color.h",
 				"Plugin/KKPlugin+Crop.h",
+				Plugin/KKPluginInstanceState.h,
 				Style/KKTokens.h,
 				"Style/NSColor+KKColors.h",
 				Update/KKUpdateChecker.h,
 				Views/KKAlertStackView.h,
 				Views/KKAlertView.h,
-				Views/KKAnimatableProperty.h,
 				Views/KKCheckboxView.h,
 				Views/KKChevronView.h,
 				Views/KKColorWellView.h,
 				Views/KKCustomGroupHeaderView.h,
 				Views/KKGradientBarView.h,
+				Views/KKGradientControl.h,
 				Views/KKGradientFavorites.h,
 				Views/KKGradientFavoritesPopover.h,
+				Views/KKHelpSection.h,
+				Views/KKHelpView.h,
 				Views/KKKbd.h,
 				Views/KKLabelView.h,
 				Views/KKMarkup.h,
+				Views/KKPaddedScrollView.h,
 				Views/KKParameterRowView.h,
 				Views/KKPillToggleRowView.h,
 				Views/KKPopupSelectView.h,
+				Views/KKSeedView.h,
 				Views/KKSeparatorView.h,
-				Views/KKTimingSlot.h,
 			);
 			target = F26E01B52F4DE280009D949A /* KeyframelessKit */;
 		};
@@ -107,13 +119,6 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		F2139A0D2F65426100E1EC03 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
 		F21E97D42F4EE9CC00DF8CF3 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -132,9 +137,9 @@
 		F26E01AC2F4DE280009D949A = {
 			isa = PBXGroup;
 			children = (
+				F2D394A62F8AABA6003F4558 /* Canvas.xcodeproj */,
 				F2330A742F8577290020CB71 /* Glow.xcodeproj */,
 				F29C84D42F68205F0073B1A9 /* Keyframeless X.xcodeproj */,
-				F21399642F65423400E1EC03 /* MotionBlur.xcodeproj */,
 				F26E02092F4DE539009D949A /* Rounded.xcodeproj */,
 				F26E01B82F4DE280009D949A /* KeyframelessKit */,
 				F21E97D42F4EE9CC00DF8CF3 /* Frameworks */,
@@ -159,6 +164,13 @@
 			sourceTree = "<group>";
 		};
 		F29C84D72F68205F0073B1A9 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		F2D394EA2F8AABA6003F4558 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -233,6 +245,10 @@
 			projectDirPath = "";
 			projectReferences = (
 				{
+					ProductGroup = F2D394EA2F8AABA6003F4558 /* Products */;
+					ProjectRef = F2D394A62F8AABA6003F4558 /* Canvas.xcodeproj */;
+				},
+				{
 					ProductGroup = F2330AB82F8577290020CB71 /* Products */;
 					ProjectRef = F2330A742F8577290020CB71 /* Glow.xcodeproj */;
 				},
@@ -243,10 +259,6 @@
 				{
 					ProductGroup = F20816252F73D0A6004260DF /* Products */;
 					ProjectRef = F20815D82F73D0A6004260DF /* MagicMove.xcodeproj */;
-				},
-				{
-					ProductGroup = F2139A0D2F65426100E1EC03 /* Products */;
-					ProjectRef = F21399642F65423400E1EC03 /* MotionBlur.xcodeproj */;
 				},
 				{
 					ProductGroup = F26E02462F4DE539009D949A /* Products */;

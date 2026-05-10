@@ -1,7 +1,7 @@
 {
-  "keyframelessx": "2.0.0",
-  "rounded": "2.2.0",
-  "motionblur": "2.1.0",
-  "magicmove": "1.2.0",
-  "glow": "1.1.0"
+  "keyframelessx": "2.1.0",
+  "rounded": "3.0.0",
+  "magicmove": "2.0.0",
+  "glow": "2.0.0",
+  "canvas": "1.0.0"
 }

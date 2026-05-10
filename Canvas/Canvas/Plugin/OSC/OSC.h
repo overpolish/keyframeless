@@ -1,0 +1,201 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+#pragma once
+
+#import "Constants.h"
+#import <KeyframelessKit/KeyframelessKit.h>
+
+NS_ASSUME_NONNULL_BEGIN
+
+@interface CanvasOSC : KKOnScreenControl
+
+@property(nonatomic, strong) NSMutableArray<KKBezierPath *> *paths;
+@property(nonatomic, assign) NSInteger activePathIndex;
+@property(nonatomic, strong) KKPointOSC *pathPointOSC;
+@property(nonatomic, strong) KKPointOSC *pathHandleOSC;
+@property(nonatomic, assign) NSInteger dragIndex;
+@property(nonatomic, assign) BOOL dragIsInHandle;
+@property(nonatomic, assign) BOOL dragIsOutHandle;
+@property(nonatomic, assign) BOOL dragIsNewPoint;
+@property(nonatomic, assign) CGPoint newPointCanvasOrigin;
+@property(nonatomic, assign) BOOL dragIsPath;
+@property(nonatomic, assign) BOOL dragIsMarquee;
+@property(nonatomic, assign) BOOL dragIsSelection;
+@property(nonatomic, assign) BOOL dragDidDuplicate;
+@property(nonatomic, assign) BOOL dragIsRect;
+@property(nonatomic, assign) BOOL dragIsEllipse;
+@property(nonatomic, assign) BOOL dragIsLine;
+@property(nonatomic, assign) simd_float2 dragOrigin;
+@property(nonatomic, assign)
+    simd_float2 dragAnchor; // initial position for shift-constrain
+@property(nonatomic, assign) simd_float2 rectStart;
+@property(nonatomic, assign) float dragStartPixelRadius;
+@property(nonatomic, assign) NSInteger dragCornerIndex; // 0=TL 1=TR 2=BR 3=BL
+@property(nonatomic, assign) CGPoint marqueeStart;
+@property(nonatomic, assign) CGPoint marqueeEnd;
+@property(nonatomic, strong) NSMutableIndexSet *selectedPoints;
+@property(nonatomic, strong) NSMutableIndexSet *selectedPathIndices;
+@property(nonatomic, assign) NSInteger lastClickIndex;
+@property(nonatomic, assign) CFAbsoluteTime lastClickTime;
+/// Canvas-space position of the most recent mouseDown, and whether the
+/// cursor moved far enough during this gesture to count as a real drag.
+/// Used to suppress the redundant `syncStrokeParamsToSelection` call from
+/// mouseUp on a no-drag selection click.
+@property(nonatomic, assign) CGPoint mouseDownCanvasPos;
+@property(nonatomic, assign) BOOL gestureDidDrag;
+@property(nonatomic, strong) NSCursor *penCursor;
+@property(nonatomic, strong) NSCursor *penCloseCursor;
+@property(nonatomic, strong) NSCursor *penAddCursor;
+@property(nonatomic, strong) NSCursor *moveCursor;
+@property(nonatomic, strong) NSCursor *editPointsCursor;
+@property(nonatomic, strong) NSCursor *penDeleteCursor;
+@property(nonatomic, strong) KKToolbar *toolbar;
+@property(nonatomic, strong) KKToolbar *pathToolbar;
+@property(nonatomic, strong) KKToolbar *pathToolbarSingle;
+@property(nonatomic, strong) KKToolbar *gridToolbar;
+@property(nonatomic, assign) BOOL gridEnabled;
+@property(nonatomic, assign) BOOL gridAdaptive;
+@property(nonatomic, assign) BOOL snapToGrid;
+@property(nonatomic, assign) NSInteger gridSpacing;
+@property(nonatomic, assign) BOOL restoredTool;
+@property(nonatomic, assign) BOOL stepperDragging;
+@property(nonatomic, assign) BOOL stepperShiftWasDown;
+@property(nonatomic, assign) double stepperDragOriginY;
+@property(nonatomic, assign) double stepperAccumulatedDelta;
+@property(nonatomic, assign) NSInteger stepperDragStartValue;
+@property(nonatomic, strong) KKOSCLabel *sizeLabel;
+@property(nonatomic, strong) KKRectBorderOSC *borderOSC;
+@property(nonatomic, strong) NSArray<KKPointOSC *> *resizeHandleOSCs;
+@property(nonatomic, assign) NSInteger dragResizeHandle;
+@property(nonatomic, assign) simd_float2 resizeOrigMin;
+@property(nonatomic, assign) simd_float2 resizeOrigMax;
+@property(nonatomic, assign) float resizeOrigAspect;
+@property(nonatomic, strong, nullable) NSArray<NSData *> *resizeOrigSnapshots;
+@property(nonatomic, strong, nullable) NSArray<NSNumber *> *resizeOrigIndices;
+@property(nonatomic, strong) KKPointOSC *rotateHandleOSC;
+@property(nonatomic, strong) KKArcOSC *transformPositionOSC;
+@property(nonatomic, strong) KKRingOSC *scaleRingOSC;
+@property(nonatomic, strong) KKSquarePointOSC *anchorOSC;
+@property(nonatomic, strong) KKRotationOSC *rotZOSC;
+@property(nonatomic, assign) BOOL transformPositionHovered;
+@property(nonatomic, assign) BOOL transformPositionDragging;
+@property(nonatomic, assign) double transformPositionDragStartX;
+@property(nonatomic, assign) double transformPositionDragStartY;
+@property(nonatomic, assign) simd_float2 transformPositionDragStartObj;
+@property(nonatomic, assign) simd_float2 transformPositionDragStartParam;
+
+// Per-layer scale ring. MagicMove-style: default is uniform (link X+Y);
+// shift held = unlink the axis whose start-click direction dominated.
+@property(nonatomic, assign) BOOL scaleRingHovered;
+@property(nonatomic, assign) BOOL scaleRingDragging;
+@property(nonatomic, assign) double scaleRingDragStartDist;
+@property(nonatomic, assign) double scaleRingDragStartAngle;
+@property(nonatomic, assign) double scaleRingDragStartValX;
+@property(nonatomic, assign) double scaleRingDragStartValY;
+@property(nonatomic, assign) NSTimeInterval scaleRingLastClickTime;
+
+// Per-layer anchor handle. MagicMove-style: mouse position is the anchor
+// (no compensation); 17 snap targets; option held disables snap.
+@property(nonatomic, assign) BOOL anchorHovered;
+@property(nonatomic, assign) BOOL anchorDragging;
+@property(nonatomic, strong) KKSnapEngine *anchorSnapEngine;
+
+// Per-layer Rotation Z handle. MagicMove-style: atan2 delta accumulation
+// from the anchor (rotation pivot); snap-to-zero at ±3°.
+@property(nonatomic, assign) BOOL rotZHovered;
+@property(nonatomic, assign) BOOL rotZDragging;
+@property(nonatomic, assign) double rotZDragPrevAngle;
+@property(nonatomic, assign) double rotZDragAccum;
+
+// Per-layer 3D rotation rings. MagicMove-style: red horizontal ring drags
+// horizontally (controls Rot Y); green vertical ring drags vertically
+// (controls Rot X). M_PI/200 radians per pixel; snap-to-zero at ±3°.
+@property(nonatomic, strong) KKRingOSC *rotXRingOSC;
+@property(nonatomic, strong) KKRingOSC *rotYRingOSC;
+@property(nonatomic, assign) BOOL rotXRingHovered;
+@property(nonatomic, assign) BOOL rotXRingDragging;
+@property(nonatomic, assign) BOOL rotYRingHovered;
+@property(nonatomic, assign) BOOL rotYRingDragging;
+@property(nonatomic, assign) double rotRingDragPrevPos;
+@property(nonatomic, assign) double rotRingDragAccum;
+@property(nonatomic, assign) UInt32 rotRingDragTargetParam;
+
+// Position-lane path editing (between two transition keyframes).
+@property(nonatomic, strong) KKPointOSC *positionPathPointOSC;
+@property(nonatomic, strong) KKPointOSC *positionPathHandleOSC;
+@property(nonatomic, assign) NSInteger positionPathDragSegIndex;
+@property(nonatomic, assign) NSInteger positionPathDragPointIndex;
+@property(nonatomic, assign) BOOL positionPathDragIsInHandle;
+@property(nonatomic, assign) BOOL positionPathDragIsOutHandle;
+@property(nonatomic, assign) simd_float2 positionPathDragStartObj;
+@property(nonatomic, assign) NSTimeInterval positionPathLastClickTime;
+@property(nonatomic, assign) NSInteger positionPathLastClickSegIdx;
+@property(nonatomic, assign) NSInteger positionPathLastClickPointIdx;
+@property(nonatomic, assign) BOOL dragIsRotation;
+@property(nonatomic, assign) simd_float2 rotateCenter;
+@property(nonatomic, assign) float rotateStartAngle;
+@property(nonatomic, assign) float rotateDeltaAngle;
+@property(nonatomic, assign) simd_float2 rotateOrigMin;
+@property(nonatomic, assign) simd_float2 rotateOrigMax;
+@property(nonatomic, strong, nullable) NSArray<NSData *> *rotateOrigSnapshots;
+@property(nonatomic, strong, nullable) NSArray<NSNumber *> *rotateOrigIndices;
+@property(nonatomic, assign) NSInteger imageWidth;
+@property(nonatomic, assign) NSInteger imageHeight;
+@property(nonatomic, assign) BOOL autoSelect;
+@property(nonatomic, assign) CGPoint autoSelectClickOrigin;
+@property(nonatomic, assign) BOOL autoSelectPending;
+@property(nonatomic, assign)
+    CGPoint hoverCanvasPosition;                   // last hitTest mouse pos
+@property(nonatomic, assign) BOOL cmdSnapOverride; // cmd toggles snap on/off
+@property(nonatomic, assign) BOOL alignSnappedX;
+@property(nonatomic, assign) BOOL alignSnappedY;
+@property(nonatomic, assign) float alignSnapValueX; // object-space X
+@property(nonatomic, assign) float alignSnapValueY; // object-space Y
+
+// Equal spacing guides (object-space edge coordinates).
+@property(nonatomic, assign) BOOL spacingSnapX;
+@property(nonatomic, assign) float spacingLeftEdge;
+@property(nonatomic, assign) float spacingSelLeft;
+@property(nonatomic, assign) float spacingSelRight;
+@property(nonatomic, assign) float spacingRightEdge;
+@property(nonatomic, assign) float spacingMidY;
+@property(nonatomic, assign) BOOL spacingRefX; // has a reference gap to draw
+@property(nonatomic, assign) float spacingRefLeftX;  // reference gap left edge
+@property(nonatomic, assign) float spacingRefRightX; // reference gap right edge
+@property(nonatomic, assign) float spacingRefMidYX;  // reference gap Y
+
+@property(nonatomic, assign) BOOL spacingSnapY;
+@property(nonatomic, assign) float spacingTopEdge;
+@property(nonatomic, assign) float spacingSelTop;
+@property(nonatomic, assign) float spacingSelBottom;
+@property(nonatomic, assign) float spacingBottomEdge;
+@property(nonatomic, assign) float spacingMidX;
+@property(nonatomic, assign) BOOL spacingRefY;
+@property(nonatomic, assign) float spacingRefTopY;
+@property(nonatomic, assign) float spacingRefBottomY;
+@property(nonatomic, assign) float spacingRefMidXY;
+
+@property(nonatomic, assign) NSInteger hoveredPathOp;
+@property(nonatomic, strong, nullable) KKBezierPath *previewResultPath;
+@property(nonatomic, strong, nullable) id<MTLTexture> previewTexture;
+@property(nonatomic, assign) NSInteger previewCachedOp;
+
+- (NSMutableArray<KKBezierPath *> *)readPaths;
+- (void)writePaths:(NSArray<KKBezierPath *> *)paths;
+
+/// The raw base64 blob string from the last readPaths call.
+@property(nonatomic, copy, nullable) NSString *lastReadBlobString;
+
+/// The blob string that was last written to the store via setPaths:.
+/// Compared against lastReadBlobString to skip no-op store writes.
+@property(nonatomic, copy, nullable) NSString *storeBlobString;
+- (void)syncStrokeParamsToSelection;
+- (void)syncStrokeParamsToSelectionWithPrevious:(nullable NSIndexSet *)prevSel;
+- (nullable KKBezierPath *)activePath;
+
+@end
+
+NS_ASSUME_NONNULL_END

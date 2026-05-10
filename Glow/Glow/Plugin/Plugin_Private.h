@@ -1,12 +1,30 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #pragma once
 
 #import "Plugin.h"
+#import "ShaderTypes.h"
 #import <KeyframelessKit/KeyframelessKit.h>
+
+typedef struct {
+  float radiusX;
+  float radiusY;
+  float intensity;
+  float falloff;
+  float noise;
+  float noiseOffset;
+  simd_float2 offset;
+  simd_float3 glowColor;
+  int colorMode;
+  int gradientType;
+  float gradientAngle;
+  simd_float3 gradientLUT[KK_GRADIENT_LUT_SIZE];
+  float noiseSeed;
+  float threshold;
+} GlowPluginState;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -27,6 +45,12 @@ NS_ASSUME_NONNULL_BEGIN
              atTime:(CMTime)renderTime
             quality:(FxQuality)qualityLevel
               error:(NSError **)error;
+/// Computes per-frame Glow params at `time`. Used by both the normal
+/// render path (via pluginState:atTime:) and the motion blur sub-frame
+/// sample loop.
+- (BOOL)glowParams:(GlowPluginState *)outParams
+            atTime:(CMTime)time
+             error:(NSError **)error;
 - (BOOL)destinationImageRect:(FxRect *)destinationImageRect
                 sourceImages:(NSArray<FxImageTile *> *)sourceImages
             destinationImage:(FxImageTile *)destinationImage

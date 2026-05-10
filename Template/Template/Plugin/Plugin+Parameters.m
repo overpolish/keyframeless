@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #import "Constants.h"
@@ -26,7 +26,7 @@
     return NO;
   }
 
-  if (![self addUpdateBannerParameterWithAPI:paramAPI error:error]) {
+  if (![self addLogoBannerParameterWithAPI:paramAPI error:error]) {
     return NO;
   }
 

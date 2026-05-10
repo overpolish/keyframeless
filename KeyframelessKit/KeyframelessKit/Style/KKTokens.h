@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #pragma once
@@ -26,6 +26,11 @@ static const CGFloat KKBorderWidthSM __attribute__((unused)) = 2.0;
 static const CGFloat KKRadiusSM __attribute__((unused)) = 2.0;
 static const CGFloat KKRadiusMD __attribute__((unused)) = 8.0;
 static const CGFloat KKRadiusLG __attribute__((unused)) = 16.0;
+
+static const CGFloat KKIconSizeSM __attribute__((unused)) = 12.0;
+static const CGFloat KKSymbolPointSize __attribute__((unused)) = 10.0;
+
+static const CGFloat KKFontSizeSM __attribute__((unused)) = 11.0;
 
 // Motion/FCP specific geometry for inspector rows
 static const CGFloat KKInspectorRowHeight __attribute__((unused)) = 23.0;

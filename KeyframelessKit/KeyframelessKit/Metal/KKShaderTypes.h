@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #pragma once
@@ -13,6 +13,8 @@ typedef enum KKVertexInputIndex {
 } KKVertexInputIndex;
 
 typedef enum KKTextureIndex { KKTextureIndex_InputImage = 0 } KKTextureIndex;
+
+#define KK_MOTION_BLUR_MAX_SAMPLES 128
 
 typedef struct KKVertex2D {
     vector_float2 position;

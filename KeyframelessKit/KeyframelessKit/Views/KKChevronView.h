@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2026 overpolish
- * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
 #pragma once
@@ -20,6 +20,10 @@ extern const CGFloat kChevronHeight;
 @property(nonatomic, copy, nullable) void (^onToggle)(BOOL isExpanded);
 
 - (void)setExpanded:(BOOL)expanded animated:(BOOL)animated;
+
+/// Cached chevron image at a specific rotation. Used by the stage sequencer
+/// to render its group-header chevrons consistently with this view.
++ (NSImage *)chevronImageAtAngle:(CGFloat)angle color:(NSColor *)color;
 
 @end
 
