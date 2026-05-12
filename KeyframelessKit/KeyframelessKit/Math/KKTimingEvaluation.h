@@ -8,6 +8,7 @@
 #import <Foundation/Foundation.h>
 #import <simd/simd.h>
 
+#import <KeyframelessKit/KKTimingLane.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -52,6 +53,22 @@ FOUNDATION_EXPORT NSArray<NSNumber *> *_Nullable KKTimingLaneValueAtFraction(
 FOUNDATION_EXPORT BOOL KKEvaluateBezierPathPosition(
     KKTimingSegment *active, BOOL isAnimateOut, double localT,
     simd_float2 fromPos, simd_float2 toPos, simd_float2 *outPos);
+
+/// Evaluates `lane` at fraction `frac` (0–1 of clip duration) and returns
+/// the per-component interpolated values.
+///
+/// - Adjacent keyposes with equal values evaluate as a hold (same values
+///   returned across the span between them).
+/// - Adjacent keyposes with different values interpolate using the outgoing
+///   `KKInterval`'s curve and intensity.
+/// - `frac` outside the keypose range clamps to the nearest endpoint.
+///
+/// Returns nil when `lane.keyposes` is empty. Disabled lanes are still
+/// evaluated; call sites that want the kill-switch behaviour should check
+/// `lane.enabled` themselves.
+FOUNDATION_EXPORT
+    NSArray<NSNumber *> *_Nullable KKTimelineLaneValueAtFraction(KKLane *lane,
+                                                                 double frac);
 
 /// Look-back window (seconds) used by both Canvas and MagicMove for the
 /// rotate-with-motion velocity sample.

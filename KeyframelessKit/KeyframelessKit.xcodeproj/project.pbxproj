@@ -34,6 +34,7 @@
 				Math/KKShape.h,
 				Math/KKSVGParser.h,
 				Math/KKTimingEvaluation.h,
+				Math/KKTimingLane.h,
 				Math/KKTimingStage.h,
 				Metal/KKMetalDeviceCache.h,
 				Metal/KKMotionBlur.h,

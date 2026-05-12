@@ -7,7 +7,6 @@
 
 #import "../Plugin/KKColor.h"
 #import "KKBezierPath.h"
-#import "KKEasing.h"
 #import "KKGradientSampling.h"
 
 const double KKRotateWithMotionWindowSeconds = 1.0 / 12.0;
@@ -167,6 +166,47 @@ KKEvaluateTransition(NSArray<KKTimingSegment *> *segments, NSUInteger idx,
     }
   }
   return interpolated;
+}
+
+NSArray<NSNumber *> *KKTimelineLaneValueAtFraction(KKLane *lane, double frac) {
+  NSArray<KKKeyPose *> *kps = lane.keyposes;
+  if (!kps.count)
+    return nil;
+  if (kps.count == 1)
+    return kps[0].values;
+  if (frac <= kps.firstObject.time)
+    return kps.firstObject.values;
+  if (frac >= kps.lastObject.time)
+    return kps.lastObject.values;
+
+  KKKeyPose *a = kps.firstObject;
+  KKKeyPose *b = kps[1];
+  for (NSUInteger i = 0; i + 1 < kps.count; i++) {
+    if (frac < kps[i + 1].time) {
+      a = kps[i];
+      b = kps[i + 1];
+      break;
+    }
+  }
+
+  double span = b.time - a.time;
+  double localT = (span > 0) ? (frac - a.time) / span : 1.0;
+  localT = MAX(0.0, MIN(1.0, localT));
+
+  KKInterval *iv = a.outgoing;
+  double easedT =
+      iv ? KKApplyEasing(localT, (KKEasingCurve)iv.curve, iv.intensity, 0.5)
+         : localT;
+
+  NSUInteger valCount = MIN(a.values.count, b.values.count);
+  NSMutableArray<NSNumber *> *result =
+      [NSMutableArray arrayWithCapacity:valCount];
+  for (NSUInteger i = 0; i < valCount; i++) {
+    double av = a.values[i].doubleValue;
+    double bv = b.values[i].doubleValue;
+    [result addObject:@(av + (bv - av) * easedT)];
+  }
+  return result;
 }
 
 NSArray<NSNumber *> *KKTimingLaneValueAtFraction(KKTimingLane *lane,

@@ -5,6 +5,7 @@
 
 #pragma once
 
+#import "../../Math/KKTimingLane.h"
 #import "../../Math/KKTimingStage.h"
 #import "../../Style/KKTokens.h"
 #import "KKStageSequencerView.h"

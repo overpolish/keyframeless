@@ -6,6 +6,7 @@
 #import "Constants.h"
 #import "Plugin_Private.h"
 #import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKTimingStage.h>
 
 @implementation RoundedPlugin (CustomUI)
 
@@ -123,30 +124,30 @@
   }
 }
 
-- (NSArray<KKTimingLane *> *)defaultLanesAtTime:(CMTime)time
-                                    paramGetAPI:(id<FxParameterRetrievalAPI_v6>)
-                                                    paramGetAPI {
+- (KKTimeline *)defaultTimelineAtTime:(CMTime)time
+                          paramGetAPI:
+                              (id<FxParameterRetrievalAPI_v6>)paramGetAPI {
   double radius = 0;
   [paramGetAPI getFloatValue:&radius fromParameter:kParamRadius atTime:time];
-  KKTimingLane *radiusLane = [KKTimingLane defaultLaneForLabel:@"Radius"
-                                                    baseValues:@[ @(radius) ]];
-  radiusLane.valueComponentKinds = @[ @(KKAnimatableParamKindFloat) ];
-  radiusLane.hasOSC = YES;
+  KKLane *radiusLane = [KKLane laneWithLabel:@"Radius"];
+  KKKeyPose *radiusKP = [KKKeyPose keyposeAtTime:0.0 values:@[ @(radius) ]];
+  radiusKP.outgoing = nil;
+  [radiusLane insertKeypose:radiusKP];
 
   double t = 0, b = 0, l = 0, r = 0;
   [paramGetAPI getFloatValue:&t fromParameter:kParamCropTop atTime:time];
   [paramGetAPI getFloatValue:&b fromParameter:kParamCropBottom atTime:time];
   [paramGetAPI getFloatValue:&l fromParameter:kParamCropLeft atTime:time];
   [paramGetAPI getFloatValue:&r fromParameter:kParamCropRight atTime:time];
-  KKTimingLane *cropLane =
-      [KKTimingLane defaultLaneForLabel:@"Crop"
-                             baseValues:@[ @(t), @(b), @(l), @(r) ]];
-  cropLane.valueComponentKinds = @[
-    @(KKAnimatableParamKindFloat), @(KKAnimatableParamKindFloat),
-    @(KKAnimatableParamKindFloat), @(KKAnimatableParamKindFloat)
-  ];
-  cropLane.hasOSC = YES;
-  return @[ radiusLane, cropLane ];
+  KKLane *cropLane = [KKLane laneWithLabel:@"Crop"];
+  KKKeyPose *cropKP = [KKKeyPose keyposeAtTime:0.0
+                                        values:@[ @(t), @(b), @(l), @(r) ]];
+  cropKP.outgoing = nil;
+  [cropLane insertKeypose:cropKP];
+
+  KKTimeline *timeline = [KKTimeline timeline];
+  timeline.lanes = @[ radiusLane, cropLane ];
+  return timeline;
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {

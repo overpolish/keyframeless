@@ -73,6 +73,13 @@
     return NO;
   }
 
+  if (![paramAPI addCustomParameterWithName:@""
+                                parameterID:kKKParamTimelineData
+                               defaultValue:[KKDataBlob blobWithData:nil]
+                             parameterFlags:kFxParameterFlag_HIDDEN]) {
+    return NO;
+  }
+
   if (![self addMotionBlurParametersWithAPI:paramAPI error:error]) {
     return NO;
   }

@@ -8,6 +8,7 @@
 #import <CoreMedia/CoreMedia.h>
 #import <Foundation/Foundation.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
+#import <KeyframelessKit/KKTimingLane.h>
 #import <KeyframelessKit/KKTimingStage.h>
 #import <Metal/Metal.h>
 

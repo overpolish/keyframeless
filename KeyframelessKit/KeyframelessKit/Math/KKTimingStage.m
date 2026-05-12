@@ -5,306 +5,437 @@
 
 #import "KKTimingStage.h"
 
-BOOL KKLaneIsHiddenByCollapsedGroup(NSArray<KKTimingLane *> *lanes,
-                                    NSUInteger idx) {
-  if (idx >= lanes.count)
-    return NO;
-  NSString *key = lanes[idx].groupKey;
-  if (!key)
-    return NO;
-  NSUInteger head = idx;
-  while (head > 0 && [lanes[head - 1].groupKey isEqualToString:key])
-    head--;
-  return lanes[head].groupCollapsed;
-}
+// ---------------------------------------------------------------------------
+// KKInterval
+// ---------------------------------------------------------------------------
 
-NSArray<NSNumber *> *
-KKTimingBoundaryBefore(NSUInteger idx, NSArray<KKTimingSegment *> *segments) {
-  if (idx == 0 || segments.count == 0)
-    return segments.firstObject.values;
-  KKTimingSegment *current = segments[idx];
-  KKTimingSegment *prev = segments[idx - 1];
-  if (current.type == KKSegmentTypeHold)
-    return current.values;
-  if (prev.type == KKSegmentTypeHold)
-    return prev.values;
-  return current.values;
-}
+@implementation KKInterval
 
-NSArray<NSNumber *> *
-KKTimingBoundaryAfter(NSUInteger idx, NSArray<KKTimingSegment *> *segments) {
-  NSUInteger next = idx + 1;
-  if (next >= segments.count)
-    return segments[idx].values;
-  return KKTimingBoundaryBefore(next, segments);
-}
-
-/// Minimum segment width in seconds. Matches the sequencer's
-/// interactive-drag floor (`kKSSMinSegmentSec`).
-static const double kKKTimingMinSegmentSec = 0.1;
-
-NSArray<KKTimingSegment *> *
-KKTimingRebalancedSegments(NSArray<KKTimingSegment *> *segments,
-                           double oldDuration, double newDuration) {
-  if (segments.count == 0 || oldDuration <= 0 || newDuration <= 0 ||
-      fabs(oldDuration - newDuration) < 1e-9)
-    return segments;
-
-  double rangeStart = segments.firstObject.start;
-  double rangeEnd = segments.lastObject.end;
-  double rangeFrac = rangeEnd - rangeStart;
-  if (rangeFrac <= 0)
-    return segments;
-  double rangeSecNew = rangeFrac * newDuration;
-
-  double totalLockedSec = 0;
-  double totalUnlockedSec = 0;
-  for (KKTimingSegment *s in segments) {
-    double secOld = (s.end - s.start) * oldDuration;
-    if (s.lockedDurationSeconds > 0)
-      totalLockedSec += s.lockedDurationSeconds;
-    else
-      totalUnlockedSec += secOld;
+- (instancetype)init {
+  self = [super init];
+  if (self) {
+    _curve = KKIntervalCurveEaseInOut;
+    _intensity = 1.0;
+    _modulation = KKIntervalModulationNone;
+    _modulationIntensity = 1.0;
+    _modulationFrequency = 1.0;
+    _modulationLinked = YES;
   }
-
-  BOOL lockedFit = totalLockedSec <= rangeSecNew;
-  double unlockedScale = 1.0;
-  double globalScale = 1.0;
-  if (lockedFit) {
-    double unlockedSecNew = rangeSecNew - totalLockedSec;
-    if (totalUnlockedSec > 0)
-      unlockedScale = unlockedSecNew / totalUnlockedSec;
-  } else {
-    double totalCurrentSec = totalLockedSec + totalUnlockedSec;
-    if (totalCurrentSec > 0)
-      globalScale = rangeSecNew / totalCurrentSec;
-  }
-
-  NSUInteger n = segments.count;
-  double *fracs = (double *)malloc(sizeof(double) * n);
-  for (NSUInteger i = 0; i < n; i++) {
-    KKTimingSegment *orig = segments[i];
-    double secNew;
-    if (lockedFit) {
-      secNew = (orig.lockedDurationSeconds > 0)
-                   ? orig.lockedDurationSeconds
-                   : (orig.end - orig.start) * oldDuration * unlockedScale;
-    } else {
-      double secOld = (orig.lockedDurationSeconds > 0)
-                          ? orig.lockedDurationSeconds
-                          : (orig.end - orig.start) * oldDuration;
-      secNew = secOld * globalScale;
-    }
-    fracs[i] = secNew / newDuration;
-  }
-
-  // Enforce per-segment minimum width. When any segment falls below the
-  // floor, bump it up and steal the deficit from above-floor segments
-  // proportional to their excess. If the clip is too small to honour the
-  // floor for every segment, fall back to uniform distribution.
-  double minFrac = kKKTimingMinSegmentSec / newDuration;
-  if ((double)n * minFrac >= rangeFrac - 1e-9) {
-    double uniform = rangeFrac / (double)n;
-    for (NSUInteger i = 0; i < n; i++)
-      fracs[i] = uniform;
-  } else {
-    for (int iter = 0; iter < 8; iter++) {
-      double deficit = 0;
-      for (NSUInteger i = 0; i < n; i++) {
-        if (fracs[i] < minFrac) {
-          deficit += (minFrac - fracs[i]);
-          fracs[i] = minFrac;
-        }
-      }
-      if (deficit < 1e-9)
-        break;
-      double excess = 0;
-      for (NSUInteger i = 0; i < n; i++)
-        if (fracs[i] > minFrac)
-          excess += (fracs[i] - minFrac);
-      if (excess < 1e-9)
-        break;
-      double ratio = MIN(deficit, excess) / excess;
-      for (NSUInteger i = 0; i < n; i++)
-        if (fracs[i] > minFrac)
-          fracs[i] -= (fracs[i] - minFrac) * ratio;
-    }
-  }
-
-  NSMutableArray<KKTimingSegment *> *result =
-      [NSMutableArray arrayWithCapacity:n];
-  double pos = rangeStart;
-  for (NSUInteger i = 0; i < n; i++) {
-    KKTimingSegment *copy = [segments[i] copy];
-    copy.start = pos;
-    pos += fracs[i];
-    // Last segment pins to rangeEnd to absorb floating-point drift.
-    copy.end = (i == n - 1) ? rangeEnd : pos;
-    [result addObject:copy];
-  }
-  free(fracs);
-  return result;
-}
-
-NSArray<KKTimingLane *> *KKTimingRebalancedLanes(NSArray<KKTimingLane *> *lanes,
-                                                 double currentDuration) {
-  if (currentDuration <= 0 || lanes.count == 0)
-    return lanes;
-  NSMutableArray<KKTimingLane *> *out =
-      [NSMutableArray arrayWithCapacity:lanes.count];
-  for (KKTimingLane *lane in lanes) {
-    double last = lane.lastKnownClipDuration;
-    if (last <= 0) {
-      // First read: baseline at current duration without mutating segments.
-      KKTimingLane *copy = [lane copy];
-      copy.lastKnownClipDuration = currentDuration;
-      [out addObject:copy];
-      continue;
-    }
-    if (fabs(last - currentDuration) < 1e-9) {
-      [out addObject:lane];
-      continue;
-    }
-    KKTimingLane *copy = [lane copy];
-    copy.segments =
-        KKTimingRebalancedSegments(lane.segments, last, currentDuration);
-    copy.lastKnownClipDuration = currentDuration;
-    [out addObject:copy];
-  }
-  return out;
-}
-
-@implementation KKTimingSegment
-
-+ (instancetype)holdWithValues:(NSArray<NSNumber *> *)values
-                         start:(double)start
-                           end:(double)end {
-  KKTimingSegment *s = [[KKTimingSegment alloc] init];
-  s.type = KKSegmentTypeHold;
-  s.start = start;
-  s.end = end;
-  s.values = values;
-  s.easing = KKEasingCurveLinear;
-  s.holdEffect = KKHoldEffectNone;
-  s.intensity = 0.5;
-  s.frequency = 0.5;
-  s.seed = 0;
-  s.linked = YES;
-  return s;
-}
-
-+ (instancetype)transitionWithStart:(double)start
-                                end:(double)end
-                             easing:(KKEasingCurve)easing
-                          intensity:(double)intensity
-                          frequency:(double)frequency
-                             values:(NSArray<NSNumber *> *)values {
-  KKTimingSegment *s = [[KKTimingSegment alloc] init];
-  s.type = KKSegmentTypeTransition;
-  s.start = start;
-  s.end = end;
-  s.values = values;
-  s.easing = easing;
-  s.holdEffect = KKHoldEffectNone;
-  s.intensity = intensity;
-  s.frequency = frequency;
-  s.seed = 0;
-  s.linked = YES;
-  return s;
-}
-
-- (double)value {
-  return _values.count > 0 ? _values[0].doubleValue : 0;
+  return self;
 }
 
 - (id)copyWithZone:(NSZone *)zone {
-  KKTimingSegment *c = [[KKTimingSegment alloc] init];
-  c.type = _type;
-  c.start = _start;
-  c.end = _end;
-  c.values = [_values copy];
-  c.easing = _easing;
-  c.holdEffect = _holdEffect;
+  KKInterval *c = [[[self class] allocWithZone:zone] init];
+  c.curve = _curve;
   c.intensity = _intensity;
-  c.frequency = _frequency;
-  c.seed = _seed;
-  c.linked = _linked;
-  c.lockedDurationSeconds = _lockedDurationSeconds;
-  c.pathData = [_pathData copy];
+  c.modulation = _modulation;
+  c.modulationIntensity = _modulationIntensity;
+  c.modulationFrequency = _modulationFrequency;
+  c.modulationSeed = _modulationSeed;
+  c.modulationLinked = _modulationLinked;
+  c.lockedSeconds = _lockedSeconds;
+  c.pathData = _pathData;
+  return c;
+}
+
+- (NSDictionary *)toDictionary {
+  NSMutableDictionary *d = [NSMutableDictionary dictionary];
+  d[@"curve"] = @(_curve);
+  d[@"intensity"] = @(_intensity);
+  d[@"modulation"] = @(_modulation);
+  d[@"modulation_intensity"] = @(_modulationIntensity);
+  d[@"modulation_frequency"] = @(_modulationFrequency);
+  d[@"modulation_seed"] = @(_modulationSeed);
+  d[@"modulation_linked"] = @(_modulationLinked);
+  d[@"locked_seconds"] = @(_lockedSeconds);
+  if (_pathData) {
+    d[@"path_data"] = [_pathData base64EncodedStringWithOptions:0];
+  }
+  return d;
+}
+
++ (nullable instancetype)fromDictionary:(NSDictionary *)d {
+  if (![d isKindOfClass:[NSDictionary class]])
+    return nil;
+  KKInterval *i = [[KKInterval alloc] init];
+  if (d[@"curve"])
+    i.curve = [d[@"curve"] integerValue];
+  if (d[@"intensity"])
+    i.intensity = [d[@"intensity"] doubleValue];
+  if (d[@"modulation"])
+    i.modulation = [d[@"modulation"] integerValue];
+  if (d[@"modulation_intensity"])
+    i.modulationIntensity = [d[@"modulation_intensity"] doubleValue];
+  if (d[@"modulation_frequency"])
+    i.modulationFrequency = [d[@"modulation_frequency"] doubleValue];
+  if (d[@"modulation_seed"])
+    i.modulationSeed = [d[@"modulation_seed"] unsignedIntValue];
+  if (d[@"modulation_linked"])
+    i.modulationLinked = [d[@"modulation_linked"] boolValue];
+  if (d[@"locked_seconds"])
+    i.lockedSeconds = [d[@"locked_seconds"] doubleValue];
+  NSString *b64 = d[@"path_data"];
+  if (b64)
+    i.pathData = [[NSData alloc] initWithBase64EncodedString:b64 options:0];
+  return i;
+}
+
+@end
+
+// ---------------------------------------------------------------------------
+// KKKeyPose
+// ---------------------------------------------------------------------------
+
+@implementation KKKeyPose
+
++ (instancetype)keyposeAtTime:(double)time
+                       values:(NSArray<NSNumber *> *)values {
+  KKKeyPose *kp = [[KKKeyPose alloc] init];
+  kp.time = time;
+  kp.values = values;
+  kp.outgoing = [[KKInterval alloc] init];
+  return kp;
+}
+
+- (id)copyWithZone:(NSZone *)zone {
+  KKKeyPose *c = [[[self class] allocWithZone:zone] init];
+  c.time = _time;
+  c.values = [_values copy];
+  c.outgoing = [_outgoing copy];
+  return c;
+}
+
+- (NSDictionary *)toDictionary {
+  NSMutableDictionary *d = [NSMutableDictionary dictionary];
+  d[@"time"] = @(_time);
+  d[@"values"] = _values;
+  if (_outgoing)
+    d[@"outgoing"] = [_outgoing toDictionary];
+  return d;
+}
+
++ (nullable instancetype)fromDictionary:(NSDictionary *)d {
+  if (![d isKindOfClass:[NSDictionary class]])
+    return nil;
+  KKKeyPose *kp = [[KKKeyPose alloc] init];
+  kp.time = [d[@"time"] doubleValue];
+  kp.values = d[@"values"] ?: @[];
+  NSDictionary *out = d[@"outgoing"];
+  kp.outgoing = out ? [KKInterval fromDictionary:out] : nil;
+  return kp;
+}
+
+@end
+
+// ---------------------------------------------------------------------------
+// KKLane
+// ---------------------------------------------------------------------------
+
+@interface KKLane ()
+@property(nonatomic, readwrite) NSUUID *laneID;
+@end
+
+@implementation KKLane
+
++ (instancetype)laneWithLabel:(NSString *)label {
+  KKLane *l = [[KKLane alloc] init];
+  l.laneID = [NSUUID UUID];
+  l.label = label;
+  l.enabled = YES;
+  l.keyposes = @[];
+  return l;
+}
+
+- (void)insertKeypose:(KKKeyPose *)keypose {
+  NSMutableArray *kps = [_keyposes mutableCopy];
+  NSUInteger idx = [kps
+      indexOfObjectPassingTest:^BOOL(KKKeyPose *kp, NSUInteger i, BOOL *stop) {
+        return kp.time > keypose.time;
+      }];
+  if (idx == NSNotFound) {
+    [kps addObject:keypose];
+  } else {
+    [kps insertObject:keypose atIndex:idx];
+  }
+  self.keyposes = kps;
+}
+
+- (void)removeKeyposeAtIndex:(NSUInteger)index {
+  NSMutableArray *kps = [_keyposes mutableCopy];
+  [kps removeObjectAtIndex:index];
+  self.keyposes = kps;
+}
+
+- (id)copyWithZone:(NSZone *)zone {
+  KKLane *c = [[[self class] allocWithZone:zone] init];
+  c.laneID = _laneID;
+  c.label = [_label copy];
+  c.groupKey = [_groupKey copy];
+  c.enabled = _enabled;
+  c.keyposes = [[NSArray alloc] initWithArray:_keyposes copyItems:YES];
+  c.lastKnownClipDuration = _lastKnownClipDuration;
+  return c;
+}
+
+- (NSDictionary *)toDictionary {
+  NSMutableDictionary *d = [NSMutableDictionary dictionary];
+  d[@"id"] = _laneID.UUIDString;
+  d[@"label"] = _label;
+  if (_groupKey)
+    d[@"group_key"] = _groupKey;
+  d[@"enabled"] = @(_enabled);
+  d[@"keyposes"] = [_keyposes valueForKey:@"toDictionary"];
+  d[@"last_known_clip_duration"] = @(_lastKnownClipDuration);
+  return d;
+}
+
++ (nullable instancetype)fromDictionary:(NSDictionary *)d {
+  if (![d isKindOfClass:[NSDictionary class]])
+    return nil;
+  KKLane *l = [[KKLane alloc] init];
+  NSString *uuidStr = d[@"id"];
+  l.laneID =
+      uuidStr ? [[NSUUID alloc] initWithUUIDString:uuidStr] : [NSUUID UUID];
+  l.label = d[@"label"] ?: @"";
+  l.groupKey = d[@"group_key"];
+  l.enabled = d[@"enabled"] ? [d[@"enabled"] boolValue] : YES;
+  l.lastKnownClipDuration = [d[@"last_known_clip_duration"] doubleValue];
+  NSArray *rawKps = d[@"keyposes"];
+  if ([rawKps isKindOfClass:[NSArray class]]) {
+    NSMutableArray *kps = [NSMutableArray arrayWithCapacity:rawKps.count];
+    for (NSDictionary *kpd in rawKps) {
+      KKKeyPose *kp = [KKKeyPose fromDictionary:kpd];
+      if (kp)
+        [kps addObject:kp];
+    }
+    l.keyposes = kps;
+  } else {
+    l.keyposes = @[];
+  }
+  return l;
+}
+
+@end
+
+// ---------------------------------------------------------------------------
+// KKLaneGroup
+// ---------------------------------------------------------------------------
+
+@implementation KKLaneGroup
+
++ (instancetype)groupWithKey:(NSString *)key label:(NSString *)label {
+  KKLaneGroup *g = [[KKLaneGroup alloc] init];
+  g.key = key;
+  g.label = label;
+  return g;
+}
+
+- (id)copyWithZone:(NSZone *)zone {
+  KKLaneGroup *c = [[[self class] allocWithZone:zone] init];
+  c.key = [_key copy];
+  c.label = [_label copy];
+  return c;
+}
+
+- (NSDictionary *)toDictionary {
+  return @{@"key" : _key, @"label" : _label};
+}
+
++ (nullable instancetype)fromDictionary:(NSDictionary *)d {
+  if (![d isKindOfClass:[NSDictionary class]])
+    return nil;
+  return [KKLaneGroup groupWithKey:d[@"key"] ?: @"" label:d[@"label"] ?: @""];
+}
+
+@end
+
+// ---------------------------------------------------------------------------
+// KKTimeline
+// ---------------------------------------------------------------------------
+
+@implementation KKTimeline
+
++ (instancetype)timeline {
+  KKTimeline *t = [[KKTimeline alloc] init];
+  t.lanes = @[];
+  t.groups = @[];
+  return t;
+}
+
+- (id)copyWithZone:(NSZone *)zone {
+  KKTimeline *c = [[[self class] allocWithZone:zone] init];
+  c.lanes = [[NSArray alloc] initWithArray:_lanes copyItems:YES];
+  c.groups = [[NSArray alloc] initWithArray:_groups copyItems:YES];
   return c;
 }
 
 @end
 
-@implementation KKTimingLane
+// ---------------------------------------------------------------------------
+// KKTimelineRebalanced
+// ---------------------------------------------------------------------------
 
-+ (instancetype)laneWithLabel:(NSString *)label
-                     segments:(NSArray<KKTimingSegment *> *)segments
-                      enabled:(BOOL)enabled {
-  KKTimingLane *l = [[KKTimingLane alloc] init];
-  l.propertyLabel = label;
-  l.segments = segments;
-  l.enabled = enabled;
-  l.oscVisible = YES;
-  l.visibleInSequencer = YES;
-  l.pluginVisible = YES;
-  // Default: select first hold segment.
-  l.selectedSegment = -1;
-  for (NSUInteger i = 0; i < segments.count; i++) {
-    if (segments[i].type == KKSegmentTypeHold) {
-      l.selectedSegment = (NSInteger)i;
-      break;
+KKTimeline *KKTimelineRebalanced(KKTimeline *timeline, double oldDuration,
+                                 double newDuration) {
+  if (oldDuration <= 0 || newDuration <= 0 || oldDuration == newDuration)
+    return timeline;
+
+  KKTimeline *result = [timeline copy];
+  NSMutableArray<KKLane *> *newLanes =
+      [NSMutableArray arrayWithCapacity:result.lanes.count];
+
+  for (KKLane *lane in result.lanes) {
+    KKLane *newLane = [lane copy];
+    newLane.lastKnownClipDuration = newDuration;
+
+    NSArray<KKKeyPose *> *kps = lane.keyposes;
+    if (kps.count < 2) {
+      [newLanes addObject:newLane];
+      continue;
     }
+
+    // Compute desired fractional width for each interval.
+    NSUInteger intervalCount = kps.count - 1;
+    NSMutableArray<NSNumber *> *targetFracs =
+        [NSMutableArray arrayWithCapacity:intervalCount];
+    double totalLocked = 0.0;
+    double totalUnlockedFrac = 0.0;
+
+    for (NSUInteger i = 0; i < intervalCount; i++) {
+      KKKeyPose *a = kps[i];
+      KKKeyPose *b = kps[i + 1];
+      double frac = b.time - a.time;
+      double lockedSecs = a.outgoing.lockedSeconds;
+      if (lockedSecs > 0) {
+        double desiredFrac = lockedSecs / newDuration;
+        [targetFracs addObject:@(desiredFrac)];
+        totalLocked += desiredFrac;
+      } else {
+        [targetFracs addObject:@(frac)];
+        totalUnlockedFrac += frac;
+      }
+    }
+
+    // If locked intervals overflow, scale everything proportionally.
+    NSMutableArray<NSNumber *> *finalFracs =
+        [NSMutableArray arrayWithCapacity:intervalCount];
+    double totalSpan = kps.lastObject.time - kps.firstObject.time;
+    double available = totalSpan;
+
+    if (totalLocked > available) {
+      double scale = available / totalLocked;
+      for (NSUInteger i = 0; i < intervalCount; i++) {
+        KKKeyPose *a = kps[i];
+        if (a.outgoing.lockedSeconds > 0) {
+          [finalFracs addObject:@([targetFracs[i] doubleValue] * scale)];
+        } else {
+          [finalFracs addObject:@(0.0)];
+        }
+      }
+    } else {
+      double unlockedAvailable = available - totalLocked;
+      for (NSUInteger i = 0; i < intervalCount; i++) {
+        KKKeyPose *a = kps[i];
+        if (a.outgoing.lockedSeconds > 0) {
+          [finalFracs addObject:targetFracs[i]];
+        } else {
+          double frac = totalUnlockedFrac > 0
+                            ? [targetFracs[i] doubleValue] / totalUnlockedFrac *
+                                  unlockedAvailable
+                            : 0.0;
+          [finalFracs addObject:@(frac)];
+        }
+      }
+    }
+
+    // Rebuild keypose times from the first keypose's position.
+    NSMutableArray<KKKeyPose *> *newKps =
+        [NSMutableArray arrayWithCapacity:kps.count];
+    double t = kps.firstObject.time;
+    KKKeyPose *firstCopy = [kps.firstObject copy];
+    firstCopy.time = t;
+    [newKps addObject:firstCopy];
+    for (NSUInteger i = 0; i < intervalCount; i++) {
+      t += [finalFracs[i] doubleValue];
+      KKKeyPose *copy = [kps[i + 1] copy];
+      copy.time = MIN(1.0, MAX(0.0, t));
+      [newKps addObject:copy];
+    }
+    newLane.keyposes = newKps;
+    [newLanes addObject:newLane];
   }
-  return l;
+
+  result.lanes = newLanes;
+  return result;
 }
 
-+ (instancetype)defaultLaneForLabel:(NSString *)label
-                         baseValues:(NSArray<NSNumber *> *)baseValues {
-  KKTimingSegment *hold = [KKTimingSegment holdWithValues:baseValues
-                                                    start:0.0
-                                                      end:1.0];
-  return [self laneWithLabel:label segments:@[ hold ] enabled:YES];
+// ---------------------------------------------------------------------------
+// Serialization
+// ---------------------------------------------------------------------------
+
+@implementation KKTimeline (Serialization)
+
++ (nullable NSString *)jsonFromTimeline:(KKTimeline *)timeline {
+  NSMutableArray *lanesArr =
+      [NSMutableArray arrayWithCapacity:timeline.lanes.count];
+  for (KKLane *lane in timeline.lanes) {
+    [lanesArr addObject:[lane toDictionary]];
+  }
+  NSMutableArray *groupsArr =
+      [NSMutableArray arrayWithCapacity:timeline.groups.count];
+  for (KKLaneGroup *group in timeline.groups) {
+    [groupsArr addObject:[group toDictionary]];
+  }
+  NSDictionary *root = @{
+    @"version" : @1,
+    @"lanes" : lanesArr,
+    @"groups" : groupsArr,
+  };
+  NSError *err;
+  NSData *data = [NSJSONSerialization dataWithJSONObject:root
+                                                 options:0
+                                                   error:&err];
+  if (!data)
+    return nil;
+  return [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
 }
 
-- (void)insertSegment:(KKTimingSegment *)segment atIndex:(NSUInteger)index {
-  NSMutableArray *m = [_segments mutableCopy];
-  if (index > m.count)
-    index = m.count;
-  [m insertObject:segment atIndex:index];
-  self.segments = [m copy];
-}
++ (nullable KKTimeline *)timelineFromJSON:(NSString *)json {
+  NSData *data = [json dataUsingEncoding:NSUTF8StringEncoding];
+  if (!data)
+    return nil;
+  NSError *err;
+  NSDictionary *root = [NSJSONSerialization JSONObjectWithData:data
+                                                       options:0
+                                                         error:&err];
+  if (![root isKindOfClass:[NSDictionary class]])
+    return nil;
 
-- (void)removeSegmentAtIndex:(NSUInteger)index {
-  if (index >= _segments.count)
-    return;
-  NSMutableArray *m = [_segments mutableCopy];
-  [m removeObjectAtIndex:index];
-  self.segments = [m copy];
-}
+  KKTimeline *timeline = [KKTimeline timeline];
 
-- (BOOL)effectivelyVisibleInSequencer {
-  return _visibleInSequencer && _pluginVisible;
-}
+  NSArray *lanesArr = root[@"lanes"];
+  if ([lanesArr isKindOfClass:[NSArray class]]) {
+    NSMutableArray *lanes = [NSMutableArray arrayWithCapacity:lanesArr.count];
+    for (NSDictionary *d in lanesArr) {
+      KKLane *lane = [KKLane fromDictionary:d];
+      if (lane)
+        [lanes addObject:lane];
+    }
+    timeline.lanes = lanes;
+  }
 
-- (id)copyWithZone:(NSZone *)zone {
-  NSMutableArray *copied = [NSMutableArray arrayWithCapacity:_segments.count];
-  for (KKTimingSegment *s in _segments)
-    [copied addObject:[s copy]];
-  KKTimingLane *c = [KKTimingLane laneWithLabel:_propertyLabel
-                                       segments:copied
-                                        enabled:_enabled];
-  c.selectedSegment = _selectedSegment;
-  c.hasOSC = _hasOSC;
-  c.oscVisible = _oscVisible;
-  c.visibleInSequencer = _visibleInSequencer;
-  c.pluginVisible = _pluginVisible;
-  c.lastKnownClipDuration = _lastKnownClipDuration;
-  c.groupKey = [_groupKey copy];
-  c.groupLabel = [_groupLabel copy];
-  c.groupCollapsed = _groupCollapsed;
-  c.valueComponentKinds = [_valueComponentKinds copy];
-  return c;
+  NSArray *groupsArr = root[@"groups"];
+  if ([groupsArr isKindOfClass:[NSArray class]]) {
+    NSMutableArray *groups = [NSMutableArray arrayWithCapacity:groupsArr.count];
+    for (NSDictionary *d in groupsArr) {
+      KKLaneGroup *group = [KKLaneGroup fromDictionary:d];
+      if (group)
+        [groups addObject:group];
+    }
+    timeline.groups = groups;
+  }
+
+  return timeline;
 }
 
 @end

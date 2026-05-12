@@ -36,6 +36,10 @@ static const UInt32 kKKParamInstanceID __attribute__((unused)) = 9922;
 /// from inside the render callback.
 static const UInt32 kKKParamTimingLoopEnabled __attribute__((unused)) = 9923;
 
+/// Timeline blob (KKTimeline JSON, KKDataBlob). Written by the sequencer;
+/// read by the render path via `KKTimelineLaneValueAtFraction`.
+static const UInt32 kKKParamTimelineData __attribute__((unused)) = 9931;
+
 /// Native-string mirror of `kKKParamMultiStageData`. The blob is
 /// unreadable from the OSC's apiManager (FxPlug XPC scope rule); native
 /// strings DO read cold, so we mirror the same JSON here. Canonical

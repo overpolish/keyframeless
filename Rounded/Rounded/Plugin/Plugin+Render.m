@@ -31,9 +31,44 @@
                                         timingAPI:timingAPI
                                            atTime:renderTime];
 
-  if (mbState.enabled && mbState.transitionsOnly &&
-      ![self multiStageAnyLaneInTransitionAtTime:renderTime]) {
-    mbState.enabled = false;
+  if (mbState.enabled && mbState.transitionsOnly) {
+    NSString *tlJSON = KKReadCustomParamString(paramAPI, kKKParamTimelineData);
+    KKTimeline *tl = tlJSON.length ? [KKTimeline timelineFromJSON:tlJSON] : nil;
+    BOOL anyTransition = NO;
+    if (tl.lanes.count) {
+      CMTime effectStart = kCMTimeZero, effectDur = kCMTimeZero;
+      [timingAPI startTimeForEffect:&effectStart];
+      [timingAPI durationTimeForEffect:&effectDur];
+      double durSec = CMTimeGetSeconds(effectDur);
+      double frac = durSec > 0
+                        ? MAX(0.0, MIN(1.0, (CMTimeGetSeconds(renderTime) -
+                                             CMTimeGetSeconds(effectStart)) /
+                                                durSec))
+                        : 0.0;
+      for (KKLane *lane in tl.lanes) {
+        if (!lane.enabled || lane.keyposes.count < 2)
+          continue;
+        NSArray<KKKeyPose *> *kps = lane.keyposes;
+        for (NSUInteger i = 0; i + 1 < kps.count; i++) {
+          if (frac < kps[i + 1].time) {
+            KKKeyPose *a = kps[i], *b = kps[i + 1];
+            for (NSUInteger j = 0; j < MIN(a.values.count, b.values.count);
+                 j++) {
+              if (fabs(a.values[j].doubleValue - b.values[j].doubleValue) >
+                  1e-6) {
+                anyTransition = YES;
+                break;
+              }
+            }
+            break;
+          }
+        }
+        if (anyTransition)
+          break;
+      }
+    }
+    if (!anyTransition)
+      mbState.enabled = NO;
   }
 
   // Layout: [KKMotionBlurState | N × RoundedPluginState]. Sample 0 is at
@@ -77,14 +112,10 @@
     }
     return NO;
   }
-  // Read lanes JSON inline and evaluate per-lane via the public eval
-  // function — replaces the legacy `multiStageValuesAtTime:` pump path.
-  // Falls back to the inspector slider value when no enabled lane covers
-  // the property, so a fresh effect with no timing edits still renders.
-  NSString *lanesJSON =
-      KKReadCustomParamString(paramGetAPI, kKKParamMultiStageData);
-  NSArray<KKTimingLane *> *lanes =
-      lanesJSON.length ? [KKTimingLane lanesFromJSON:lanesJSON] : nil;
+  NSString *timelineJSON =
+      KKReadCustomParamString(paramGetAPI, kKKParamTimelineData);
+  KKTimeline *timeline =
+      timelineJSON.length ? [KKTimeline timelineFromJSON:timelineJSON] : nil;
 
   id<FxTimingAPI_v4> timingAPI =
       [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
@@ -100,13 +131,13 @@
 
   NSArray<NSNumber *> *radiusVals = nil;
   NSArray<NSNumber *> *cropVals = nil;
-  for (KKTimingLane *lane in lanes) {
+  for (KKLane *lane in timeline.lanes) {
     if (!lane.enabled)
       continue;
-    if (!radiusVals && [lane.propertyLabel isEqualToString:@"Radius"])
-      radiusVals = KKTimingLaneValueAtFraction(lane, frac);
-    else if (!cropVals && [lane.propertyLabel isEqualToString:@"Crop"])
-      cropVals = KKTimingLaneValueAtFraction(lane, frac);
+    if (!radiusVals && [lane.label isEqualToString:@"Radius"])
+      radiusVals = KKTimelineLaneValueAtFraction(lane, frac);
+    else if (!cropVals && [lane.label isEqualToString:@"Crop"])
+      cropVals = KKTimelineLaneValueAtFraction(lane, frac);
   }
 
   if (radiusVals.count > 0) {

@@ -93,7 +93,7 @@
 }
 
 - (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
-  if (parameterID == kParamCropExpanded)
+  if (parameterID == kParamCropExpanded || parameterID == kKKParamTimelineData)
     return [NSSet setWithObject:[KKDataBlob class]];
   return [super classesForCustomParameterID:parameterID];
 }
