@@ -6,7 +6,12 @@
 #pragma once
 
 #import "Plugin.h"
+#import "RoundedInspectorView.h"
 #import <KeyframelessKit/KeyframelessKit.h>
+
+@interface RoundedPlugin ()
+@property(nonatomic, weak, nullable) RoundedInspectorView *inspectorView;
+@end
 
 NS_ASSUME_NONNULL_BEGIN
 

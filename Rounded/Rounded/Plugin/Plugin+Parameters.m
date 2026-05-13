@@ -41,6 +41,13 @@
   }
 
   if (![paramAPI addCustomParameterWithName:@""
+                                parameterID:kParamUIState
+                               defaultValue:[KKDataBlob blobWithData:nil]
+                             parameterFlags:kFxParameterFlag_HIDDEN]) {
+    return NO;
+  }
+
+  if (![paramAPI addCustomParameterWithName:@""
                                 parameterID:kKKParamTimelineData
                                defaultValue:[KKDataBlob blobWithData:nil]
                              parameterFlags:kFxParameterFlag_HIDDEN]) {

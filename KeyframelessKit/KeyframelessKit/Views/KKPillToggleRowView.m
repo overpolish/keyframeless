@@ -11,10 +11,16 @@
 static const CGFloat kPillHeight = 18.0;
 static const CGFloat kPillSpacing = 2.0;
 static const CGFloat kPillPadX = 5.0;
+static const CGFloat kPillIconSize = 10.0;
+static const CGFloat kPillIconGap = 3.0;
+static const CGFloat kGroupTrackInset = 2.0;
+static const CGFloat kGroupPillHeight = 22.0;
+static const CGFloat kGroupPillPadX = 8.0;
 
 @implementation KKPillToggleRowView {
   NSArray<NSString *> *_labels;
   NSArray<NSImage *> *_icons;
+  BOOL _iconAndLabel;
   NSInteger _count;
 }
 
@@ -38,6 +44,19 @@ static const CGFloat kPillPadX = 5.0;
   return self;
 }
 
+- (instancetype)initWithLabels:(NSArray<NSString *> *)labels
+                         icons:(NSArray<NSImage *> *)icons {
+  self = [super initWithFrame:NSZeroRect];
+  if (self) {
+    _labels = [labels copy];
+    _icons = [icons copy];
+    _iconAndLabel = YES;
+    _count = labels.count;
+    [self _initStates];
+  }
+  return self;
+}
+
 - (void)_initStates {
   NSMutableArray *s = [NSMutableArray arrayWithCapacity:_count];
   for (NSInteger i = 0; i < _count; i++)
@@ -47,6 +66,26 @@ static const CGFloat kPillPadX = 5.0;
 
 - (BOOL)isFlipped {
   return YES;
+}
+
+- (CGFloat)pillSpacing {
+  return _grouped ? 0.0 : kPillSpacing;
+}
+
+- (CGFloat)currentPillHeight {
+  return _grouped ? kGroupPillHeight : kPillHeight;
+}
+
+- (CGFloat)currentPillPadX {
+  return _grouped ? kGroupPillPadX : kPillPadX;
+}
+
+- (NSSize)intrinsicContentSize {
+  CGFloat w = 0;
+  CGFloat spacing = [self pillSpacing];
+  for (NSInteger i = 0; i < _count; i++)
+    w += [self pillWidthForIndex:i] + (i > 0 ? spacing : 0);
+  return NSMakeSize(w, [self currentPillHeight]);
 }
 
 - (void)setState:(BOOL)on atIndex:(NSInteger)index {
@@ -63,28 +102,38 @@ static const CGFloat kPillPadX = 5.0;
 }
 
 - (CGFloat)pillWidthForIndex:(NSInteger)i {
+  CGFloat padX = [self currentPillPadX];
+  if (_iconAndLabel) {
+    NSFont *font = [self pillFont];
+    NSDictionary *attrs = @{NSFontAttributeName : font};
+    CGFloat textW = ceil([_labels[i] sizeWithAttributes:attrs].width);
+    NSImage *icon =
+        [_icons[i] imageWithSymbolConfiguration:
+                       [NSImageSymbolConfiguration
+                           configurationWithPointSize:kPillIconSize
+                                               weight:NSFontWeightMedium]];
+    CGFloat iconW = ceil(icon.size.width);
+    return padX + iconW + kPillIconGap + textW + padX;
+  }
   if (_icons) {
-    return 10.0 + 2 * kPillPadX;
+    return kPillIconSize + 2 * padX;
   }
   NSFont *font = [self pillFont];
   NSDictionary *attrs = @{NSFontAttributeName : font};
-  CGFloat textW = [_labels[i] sizeWithAttributes:attrs].width;
-  return textW + 2 * kPillPadX;
+  CGFloat textW = ceil([_labels[i] sizeWithAttributes:attrs].width);
+  return textW + 2 * padX;
 }
 
 - (NSArray<NSValue *> *)pillRects {
-  CGFloat availableWidth = NSWidth(self.bounds);
   NSMutableArray<NSValue *> *rects = [NSMutableArray array];
 
-  CGFloat totalWidth = 0;
-  for (NSInteger i = 0; i < _count; i++)
-    totalWidth += [self pillWidthForIndex:i] + (i > 0 ? kPillSpacing : 0);
-
-  CGFloat x = availableWidth - totalWidth;
+  CGFloat spacing = [self pillSpacing];
+  CGFloat h = [self currentPillHeight];
+  CGFloat x = 0;
   for (NSInteger i = 0; i < _count; i++) {
     CGFloat w = [self pillWidthForIndex:i];
-    [rects addObject:[NSValue valueWithRect:NSMakeRect(x, 0, w, kPillHeight)]];
-    x += w + kPillSpacing;
+    [rects addObject:[NSValue valueWithRect:NSMakeRect(x, 0, w, h)]];
+    x += w + spacing;
   }
 
   return rects;
@@ -93,38 +142,91 @@ static const CGFloat kPillPadX = 5.0;
 - (void)drawRect:(NSRect)dirtyRect {
   NSArray<NSValue *> *rects = [self pillRects];
 
+  if (_grouped) {
+    CGFloat h = [self currentPillHeight];
+    CGFloat totalW = NSMaxX(rects.lastObject.rectValue);
+    NSRect trackRect = NSMakeRect(0, 0, totalW, h);
+    CGFloat trackRadius = h / 2.0;
+    NSBezierPath *track = [NSBezierPath bezierPathWithRoundedRect:trackRect
+                                                          xRadius:trackRadius
+                                                          yRadius:trackRadius];
+    [[[NSColor inspectorLabel] colorWithAlphaComponent:0.07] setFill];
+    [track fill];
+  }
+
   for (NSInteger i = 0; i < _count; i++) {
     NSRect r = rects[i].rectValue;
     BOOL on = _states[i].boolValue;
 
-    NSBezierPath *bg = [NSBezierPath bezierPathWithRoundedRect:r
-                                                       xRadius:KKRadiusMD
-                                                       yRadius:KKRadiusMD];
-    if (on) {
-      [[[NSColor accentMatchingHost] colorWithAlphaComponent:0.15] setFill];
-      [bg fill];
+    if (_grouped) {
+      if (on) {
+        CGFloat inset = kGroupTrackInset;
+        NSRect hr = NSInsetRect(r, inset, inset);
+        CGFloat hr_radius = hr.size.height / 2.0;
+        NSBezierPath *highlight =
+            [NSBezierPath bezierPathWithRoundedRect:hr
+                                            xRadius:hr_radius
+                                            yRadius:hr_radius];
+        [[[NSColor accentMatchingHost] colorWithAlphaComponent:0.25] setFill];
+        [highlight fill];
+      }
     } else {
-      [[[NSColor inspectorLabel] colorWithAlphaComponent:0.06] setFill];
-      [bg fill];
+      NSBezierPath *bg = [NSBezierPath bezierPathWithRoundedRect:r
+                                                         xRadius:KKRadiusMD
+                                                         yRadius:KKRadiusMD];
+      if (on) {
+        [[[NSColor accentMatchingHost] colorWithAlphaComponent:0.15] setFill];
+        [bg fill];
+      } else {
+        [[[NSColor inspectorLabel] colorWithAlphaComponent:0.06] setFill];
+        [bg fill];
+      }
     }
 
     NSColor *tint =
         on ? [NSColor accentMatchingHost]
            : [[NSColor inspectorLabel] colorWithAlphaComponent:0.35];
 
-    if (_icons) {
+    if (_iconAndLabel) {
       NSImage *icon =
           [_icons[i] imageWithSymbolConfiguration:
                          [NSImageSymbolConfiguration
-                             configurationWithPointSize:10.0
+                             configurationWithPointSize:kPillIconSize
                                                  weight:NSFontWeightMedium]];
       NSImage *tinted = [icon copy];
       [tinted lockFocus];
       [tint set];
-      NSRect imgRect = NSMakeRect(0, 0, tinted.size.width, tinted.size.height);
-      NSRectFillUsingOperation(imgRect, NSCompositingOperationSourceAtop);
+      NSRectFillUsingOperation(
+          NSMakeRect(0, 0, tinted.size.width, tinted.size.height),
+          NSCompositingOperationSourceAtop);
       [tinted unlockFocus];
-
+      CGFloat contentX = NSMinX(r) + [self currentPillPadX];
+      CGFloat iconY = NSMidY(r) - tinted.size.height / 2.0;
+      [tinted drawAtPoint:NSMakePoint(contentX, iconY)
+                 fromRect:NSZeroRect
+                operation:NSCompositingOperationSourceOver
+                 fraction:1.0];
+      NSDictionary *attrs = @{
+        NSFontAttributeName : [self pillFont],
+        NSForegroundColorAttributeName : tint,
+      };
+      NSSize textSize = [_labels[i] sizeWithAttributes:attrs];
+      CGFloat textX = contentX + tinted.size.width + kPillIconGap;
+      CGFloat textY = NSMidY(r) - textSize.height / 2.0;
+      [_labels[i] drawAtPoint:NSMakePoint(textX, textY) withAttributes:attrs];
+    } else if (_icons) {
+      NSImage *icon =
+          [_icons[i] imageWithSymbolConfiguration:
+                         [NSImageSymbolConfiguration
+                             configurationWithPointSize:kPillIconSize
+                                                 weight:NSFontWeightMedium]];
+      NSImage *tinted = [icon copy];
+      [tinted lockFocus];
+      [tint set];
+      NSRectFillUsingOperation(
+          NSMakeRect(0, 0, tinted.size.width, tinted.size.height),
+          NSCompositingOperationSourceAtop);
+      [tinted unlockFocus];
       CGFloat iconX = NSMidX(r) - tinted.size.width / 2.0;
       CGFloat iconY = NSMidY(r) - tinted.size.height / 2.0;
       [tinted drawAtPoint:NSMakePoint(iconX, iconY)
@@ -154,6 +256,8 @@ static const CGFloat kPillPadX = 5.0;
 
   for (NSInteger i = 0; i < (NSInteger)rects.count; i++) {
     if (NSPointInRect(loc, rects[i].rectValue)) {
+      if (_radioMode && _states[i].boolValue)
+        return;
       BOOL newState = !_states[i].boolValue;
       [self setState:newState atIndex:i];
       if (_onToggled)
