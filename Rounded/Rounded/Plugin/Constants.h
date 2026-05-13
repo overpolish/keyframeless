@@ -10,3 +10,5 @@
 static NSString *const kPluginID = @"co.overpolish.keyframeless.Rounded";
 
 static const NSInteger kOSCRadiusPart = 100;
+
+static const UInt32 kParamInspectorUI = 200;

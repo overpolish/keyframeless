@@ -30,6 +30,16 @@
     return NO;
   }
 
+  FxParameterFlags inspectorFlags =
+      kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_CUSTOM_UI |
+      kFxParameterFlag_USE_FULL_VIEW_WIDTH | kFxParameterFlag_DISABLED;
+  if (![paramAPI addCustomParameterWithName:@""
+                                parameterID:kParamInspectorUI
+                               defaultValue:@(kParamInspectorUI)
+                             parameterFlags:inspectorFlags]) {
+    return NO;
+  }
+
   if (![paramAPI addCustomParameterWithName:@""
                                 parameterID:kKKParamTimelineData
                                defaultValue:[KKDataBlob blobWithData:nil]
