@@ -101,7 +101,6 @@
 				"Plugin/Plugin+CustomUI.m",
 				"Plugin/Plugin+Parameters.m",
 				"Plugin/Plugin+Render.m",
-				"Plugin/Plugin+Visibility.m",
 				Plugin/Rounded.metal,
 				"Wrapper Application/Info.plist",
 			);

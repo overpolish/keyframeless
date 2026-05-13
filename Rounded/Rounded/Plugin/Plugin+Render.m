@@ -130,48 +130,29 @@
                     : 0.0;
 
   NSArray<NSNumber *> *radiusVals = nil;
-  NSArray<NSNumber *> *cropVals = nil;
+  NSArray<NSNumber *> *boxVals = nil;
   for (KKLane *lane in timeline.lanes) {
     if (!lane.enabled)
       continue;
     if (!radiusVals && [lane.label isEqualToString:@"Radius"])
       radiusVals = KKTimelineLaneValueAtFraction(lane, frac);
-    else if (!cropVals && [lane.label isEqualToString:@"Crop"])
-      cropVals = KKTimelineLaneValueAtFraction(lane, frac);
+    else if (!boxVals && [lane.label isEqualToString:@"Box"])
+      boxVals = KKTimelineLaneValueAtFraction(lane, frac);
   }
 
-  if (radiusVals.count > 0) {
-    outParams->radius = radiusVals[0].doubleValue;
-  } else {
-    double radius = 20.0;
-    [paramGetAPI getFloatValue:&radius
-                 fromParameter:kParamRadius
-                        atTime:renderTime];
-    outParams->radius = radius;
-  }
+  outParams->radius = radiusVals.count > 0 ? radiusVals[0].doubleValue : 20.0;
 
   outParams->cropTop = 0.0;
   outParams->cropBottom = 0.0;
   outParams->cropLeft = 0.0;
   outParams->cropRight = 0.0;
-  if (cropVals.count >= 4) {
-    outParams->cropTop = cropVals[0].doubleValue;
-    outParams->cropBottom = cropVals[1].doubleValue;
-    outParams->cropLeft = cropVals[2].doubleValue;
-    outParams->cropRight = cropVals[3].doubleValue;
-  } else {
-    [paramGetAPI getFloatValue:&outParams->cropTop
-                 fromParameter:kParamCropTop
-                        atTime:renderTime];
-    [paramGetAPI getFloatValue:&outParams->cropBottom
-                 fromParameter:kParamCropBottom
-                        atTime:renderTime];
-    [paramGetAPI getFloatValue:&outParams->cropLeft
-                 fromParameter:kParamCropLeft
-                        atTime:renderTime];
-    [paramGetAPI getFloatValue:&outParams->cropRight
-                 fromParameter:kParamCropRight
-                        atTime:renderTime];
+  if (boxVals.count >= 4) {
+    // Box: [width, height, x, y] normalized center offsets
+    // TODO: convert Box → crop edges in Phase 4+ when Box lane UI exists
+    outParams->cropTop = boxVals[0].doubleValue;
+    outParams->cropBottom = boxVals[1].doubleValue;
+    outParams->cropLeft = boxVals[2].doubleValue;
+    outParams->cropRight = boxVals[3].doubleValue;
   }
   return YES;
 }
@@ -181,13 +162,6 @@
                    pluginState:(NSData *)pluginState
                         atTime:(CMTime)renderTime
                          error:(NSError *_Nullable *)outError {
-  // Drive the multi-stage pump from render so sequencer graph + playhead
-  // updates still fire when a completely unrelated effect is OSC-selected.
-  // Render fires on every effect per frame regardless of OSC focus.
-  [KKPlugin multiStageRenderTickForAPI:self.apiManager
-                                atTime:renderTime
-                                sender:self];
-
   if (!pluginState || !sourceImages[0].ioSurface ||
       !destinationImage.ioSurface ||
       pluginState.length <

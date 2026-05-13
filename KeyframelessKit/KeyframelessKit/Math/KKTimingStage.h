@@ -9,6 +9,15 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+typedef NS_ENUM(NSInteger, KKLaneValueType) {
+  KKLaneValueTypeGeneric    = 0,
+  KKLaneValueTypeFloat      = 1,
+  KKLaneValueTypeNormalized = 2,
+  KKLaneValueTypeBox        = 3, // [width, height, x, y] normalized center offsets
+  KKLaneValueTypeColor      = 4, // [r, g, b, a] 0–1
+  KKLaneValueTypeGradient   = 5, // flat stop array: [position, r, g, b, midpoint, ...] × N stops; variable length
+};
+
 typedef NS_ENUM(NSInteger, KKIntervalCurve) {
   KKIntervalCurveLinear = 0,
   KKIntervalCurveEaseIn = 1,
@@ -67,6 +76,9 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 @property(nonatomic, copy) NSString *label;
 @property(nonatomic, copy, nullable) NSString *groupKey;
 @property(nonatomic) BOOL enabled;
+@property(nonatomic) KKLaneValueType valueType; // default: Generic
+@property(nonatomic, copy) NSArray<NSNumber *> *componentMin; // one per component, empty = unconstrained
+@property(nonatomic, copy) NSArray<NSNumber *> *componentMax; // one per component, empty = unconstrained
 @property(nonatomic, copy) NSArray<KKKeyPose *> *keyposes; // ordered by time
 @property(nonatomic) double lastKnownClipDuration; // 0 = not yet established
 

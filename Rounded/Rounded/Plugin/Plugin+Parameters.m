@@ -30,57 +30,10 @@
     return NO;
   }
 
-  if (![paramAPI
-          addToggleButtonWithName:@"Force Show All Parameters"
-                      parameterID:kParamForceShow
-                     defaultValue:NO
-                   parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
-                                  kFxParameterFlag_DONT_DISPLAY_IN_DASHBOARD])
-    return NO;
-
-  if (![paramAPI addFloatSliderWithName:@"Radius"
-                            parameterID:kParamRadius
-                           defaultValue:20.0
-                           parameterMin:0.0
-                           parameterMax:100.0
-                              sliderMin:0.0
-                              sliderMax:100.0
-                                  delta:1.0
-                         parameterFlags:kFxParameterFlag_DEFAULT]) {
-    if (error != NULL) {
-      *error = [NSError
-          errorWithDomain:FxPlugErrorDomain
-                     code:kFxError_InvalidParameter
-                 userInfo:@{
-                   NSLocalizedDescriptionKey : @"Unable to add radius slider"
-                 }];
-    }
-    return NO;
-  }
-
-  if (![self addCropParametersWithAPI:paramAPI
-                              groupID:kParamCropGroup
-                           expandedID:kParamCropExpanded
-                                topID:kParamCropTop
-                             bottomID:kParamCropBottom
-                               leftID:kParamCropLeft
-                              rightID:kParamCropRight
-                                error:error]) {
-    return NO;
-  }
-
-  if (![self addMultiStageParametersWithAPI:paramAPI error:error]) {
-    return NO;
-  }
-
   if (![paramAPI addCustomParameterWithName:@""
                                 parameterID:kKKParamTimelineData
                                defaultValue:[KKDataBlob blobWithData:nil]
                              parameterFlags:kFxParameterFlag_HIDDEN]) {
-    return NO;
-  }
-
-  if (![self addMotionBlurParametersWithAPI:paramAPI error:error]) {
     return NO;
   }
 

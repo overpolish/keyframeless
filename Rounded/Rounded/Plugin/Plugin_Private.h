@@ -14,10 +14,6 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)addParametersWithError:(NSError **)error;
 @end
 
-@interface RoundedPlugin (Visibility)
-- (void)updateCropParameterVisibility;
-@end
-
 @interface RoundedPlugin (CustomUI)
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED;
 @end

@@ -20,30 +20,39 @@ static float paddingForRadius(double radius, float minDim) {
   return minDim * 0.05f + cornerRadiusPixels * insetFactor * squircleCorrection;
 }
 
+static double radiusFromBlobAtFraction(id<PROAPIAccessing> apiManager, double frac) {
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!paramGetAPI)
+    return 20.0;
+  NSString *json = KKReadCustomParamString(paramGetAPI, kKKParamTimelineData);
+  if (!json.length)
+    return 20.0;
+  KKTimeline *tl = [KKTimeline timelineFromJSON:json];
+  for (KKLane *lane in tl.lanes) {
+    if (!lane.enabled)
+      continue;
+    if ([lane.label isEqualToString:@"Radius"]) {
+      NSArray<NSNumber *> *vals = KKTimelineLaneValueAtFraction(lane, frac);
+      return vals.count > 0 ? vals[0].doubleValue : 20.0;
+    }
+  }
+  return 20.0;
+}
+
 @implementation RoundedOSC {
   CGPoint _dragStartPosition;
   double _dragStartRadius;
+  double _dragCurrentRadius;
 }
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
   self = [super initWithAPIManager:apiManager];
   if (self) {
     self.clearsOnDraw = NO;
-
-    KKCropOSC *crop = [[KKCropOSC alloc] initWithAPIManager:apiManager];
-    crop.cropTopParam = kParamCropTop;
-    crop.cropBottomParam = kParamCropBottom;
-    crop.cropLeftParam = kParamCropLeft;
-    crop.cropRightParam = kParamCropRight;
-    self.cropOSC = crop;
-    [crop release];
+    _dragCurrentRadius = 20.0;
   }
   return self;
-}
-
-- (void)dealloc {
-  [_cropOSC release];
-  [super dealloc];
 }
 
 - (BOOL)getCanvasTopRight:(CGPoint *)outTopRight
@@ -72,6 +81,20 @@ static float paddingForRadius(double radius, float minDim) {
   return YES;
 }
 
+- (double)fractionAtTime:(CMTime)time {
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  if (!timingAPI)
+    return 0.0;
+  CMTime effectStart = kCMTimeZero, effectDur = kCMTimeZero;
+  [timingAPI startTimeForEffect:&effectStart];
+  [timingAPI durationTimeForEffect:&effectDur];
+  double durSec = CMTimeGetSeconds(effectDur);
+  if (durSec <= 0)
+    return 0.0;
+  return MAX(0.0, MIN(1.0, (CMTimeGetSeconds(time) - CMTimeGetSeconds(effectStart)) / durSec));
+}
+
 - (CGPoint)oscPositionAtTime:(CMTime)time {
   CGPoint topRight = {0, 0}, bottomLeft = {0, 0};
   if (![self getCanvasTopRight:&topRight bottomLeft:&bottomLeft])
@@ -83,16 +106,11 @@ static float paddingForRadius(double radius, float minDim) {
   BOOL isFlippedY = canvasImageHeight < 0;
   float minDim = fminf(fabsf(canvasImageWidth), fabsf(canvasImageHeight));
 
-  float padding = 0.0f;
-  id<FxParameterRetrievalAPI_v6> paramGetAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  if (paramGetAPI) {
-    double paramRadius = 0.0;
-    [paramGetAPI getFloatValue:&paramRadius
-                 fromParameter:kParamRadius
-                        atTime:time];
-    padding = paddingForRadius(paramRadius, minDim);
-  }
+  double radius = self.isDragging
+                      ? _dragCurrentRadius
+                      : radiusFromBlobAtFraction(self.apiManager,
+                                                 [self fractionAtTime:time]);
+  float padding = paddingForRadius(radius, minDim);
 
   float offsetX =
       isFlippedX ? -(self.oscSize + padding) : (self.oscSize + padding);
@@ -107,8 +125,6 @@ static float paddingForRadius(double radius, float minDim) {
               activePart:(NSInteger)activePart
         destinationImage:(FxImageTile *)destinationImage
                   atTime:(CMTime)time {
-  [KKPlugin multiStageDrawOSCTickForAPI:self.apiManager atTime:time];
-
   [self encodeRenderCommandsForDestinationImage:destinationImage
                                  canvasPosition:CGPointZero
                                clearDestination:YES
@@ -116,17 +132,12 @@ static float paddingForRadius(double radius, float minDim) {
                                                   CGPoint p, simd_uint2 v){
                                        }];
 
-  if ([KKPlugin multiStageOSCVisibleForAPI:self.apiManager label:@"Crop"])
-    [self.cropOSC drawWithDestinationImage:destinationImage atTime:time];
-
-  if ([KKPlugin multiStageOSCVisibleForAPI:self.apiManager label:@"Radius"]) {
-    CGPoint radiusPos = [self oscPositionAtTime:time];
-    [self drawAtCanvasPosition:radiusPos
-                     isHovered:(activePart == kOSCRadiusPart)
-                      isActive:self.isDragging && (activePart == kOSCRadiusPart)
-              destinationImage:destinationImage
-                        atTime:time];
-  }
+  CGPoint radiusPos = [self oscPositionAtTime:time];
+  [self drawAtCanvasPosition:radiusPos
+                   isHovered:(activePart == kOSCRadiusPart)
+                    isActive:self.isDragging && (activePart == kOSCRadiusPart)
+            destinationImage:destinationImage
+                      atTime:time];
 }
 
 - (void)hitTestOSCAtMousePositionX:(double)positionX
@@ -134,22 +145,10 @@ static float paddingForRadius(double radius, float minDim) {
                         activePart:(NSInteger *)activePart
                             atTime:(CMTime)time {
   *activePart = 0;
-
-  if ([KKPlugin multiStageOSCVisibleForAPI:self.apiManager label:@"Crop"]) {
-    NSInteger cropPart = [self.cropOSC hitTestAtMousePositionX:positionX
-                                                     positionY:positionY
-                                                        atTime:time];
-    if (cropPart != KKCropPartNone) {
-      *activePart = cropPart;
-    }
-  }
-
-  if ([KKPlugin multiStageOSCVisibleForAPI:self.apiManager label:@"Radius"]) {
-    if ([self hitTestAtMousePositionX:positionX
-                            positionY:positionY
-                               atTime:time]) {
-      *activePart = kOSCRadiusPart;
-    }
+  if ([self hitTestAtMousePositionX:positionX
+                          positionY:positionY
+                             atTime:time]) {
+    *activePart = kOSCRadiusPart;
   }
 }
 
@@ -159,17 +158,6 @@ static float paddingForRadius(double radius, float minDim) {
                    modifiers:(NSUInteger)modifiers
                  forceUpdate:(BOOL *)forceUpdate
                       atTime:(CMTime)time {
-  if (activePart == KKCropPartRect ||
-      (activePart >= KKCropPartPointBase &&
-       activePart < KKCropPartPointBase + KKCropPointCount)) {
-    [self.cropOSC mouseDownForPart:activePart
-                         positionX:positionX
-                         positionY:positionY
-                            atTime:time];
-    *forceUpdate = YES;
-    return;
-  }
-
   [super mouseDownAtPositionX:positionX
                     positionY:positionY
                    activePart:activePart
@@ -181,14 +169,9 @@ static float paddingForRadius(double radius, float minDim) {
     return;
 
   _dragStartPosition = CGPointMake(positionX, positionY);
-
-  id<FxParameterRetrievalAPI_v6> paramGetAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  if (paramGetAPI) {
-    [paramGetAPI getFloatValue:&_dragStartRadius
-                 fromParameter:kParamRadius
-                        atTime:time];
-  }
+  _dragStartRadius = radiusFromBlobAtFraction(self.apiManager,
+                                              [self fractionAtTime:time]);
+  _dragCurrentRadius = _dragStartRadius;
 }
 
 - (void)mouseDraggedAtPositionX:(double)positionX
@@ -197,23 +180,7 @@ static float paddingForRadius(double radius, float minDim) {
                       modifiers:(NSUInteger)modifiers
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
-  if (activePart == KKCropPartRect ||
-      (activePart >= KKCropPartPointBase &&
-       activePart < KKCropPartPointBase + KKCropPointCount)) {
-    [self.cropOSC mouseDraggedForPart:activePart
-                            positionX:positionX
-                            positionY:positionY
-                          forceUpdate:forceUpdate
-                               atTime:time];
-    return;
-  }
-
   if (activePart == 0)
-    return;
-
-  id<FxParameterSettingAPI_v5> paramSetAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!paramSetAPI)
     return;
 
   CGPoint topRight = {0, 0}, bottomLeft = {0, 0};
@@ -237,7 +204,6 @@ static float paddingForRadius(double radius, float minDim) {
   for (int i = 0; i < 32; i++) {
     float mid = (lo + hi) * 0.5f;
     float padding = paddingForRadius(mid, minDim);
-
     if (padding < mouseDist)
       lo = mid;
     else
@@ -245,7 +211,48 @@ static float paddingForRadius(double radius, float minDim) {
   }
 
   double newRadius = CLAMP((lo + hi) * 0.5, 0.0, 100.0);
-  [paramSetAPI setFloatValue:newRadius toParameter:kParamRadius atTime:time];
+  _dragCurrentRadius = newRadius;
+
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!actionAPI)
+    return;
+  [actionAPI startAction:self];
+
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  if (!setAPI) {
+    [actionAPI endAction:self];
+    return;
+  }
+
+  NSString *json = KKReadCustomParamString(getAPI, kKKParamTimelineData);
+  KKTimeline *tl =
+      json.length ? [KKTimeline timelineFromJSON:json] : [KKTimeline timeline];
+
+  KKLane *radiusLane = nil;
+  for (KKLane *lane in tl.lanes) {
+    if ([lane.label isEqualToString:@"Radius"]) {
+      radiusLane = lane;
+      break;
+    }
+  }
+  if (!radiusLane) {
+    radiusLane = [KKLane laneWithLabel:@"Radius"];
+    radiusLane.enabled = YES;
+    NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
+    [lanes addObject:radiusLane];
+    tl.lanes = lanes;
+  }
+
+  KKKeyPose *kp = [KKKeyPose keyposeAtTime:0.0 values:@[ @(newRadius) ]];
+  radiusLane.keyposes = @[ kp ];
+
+  KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
+                           kKKParamTimelineData);
+  [actionAPI endAction:self];
   *forceUpdate = YES;
 }
 
@@ -255,7 +262,6 @@ static float paddingForRadius(double radius, float minDim) {
                  modifiers:(NSUInteger)modifiers
                forceUpdate:(BOOL *)forceUpdate
                     atTime:(CMTime)time {
-  [self.cropOSC mouseUp];
   [super mouseUpAtPositionX:positionX
                   positionY:positionY
                  activePart:activePart
