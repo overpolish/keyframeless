@@ -98,7 +98,7 @@ static const CGFloat kGroupPillPadX = 8.0;
 }
 
 - (NSFont *)pillFont {
-  return [NSFont systemFontOfSize:8.0 weight:NSFontWeightMedium];
+  return [NSFont systemFontOfSize:KKFontSizeSM weight:NSFontWeightMedium];
 }
 
 - (CGFloat)pillWidthForIndex:(NSInteger)i {
@@ -150,7 +150,7 @@ static const CGFloat kGroupPillPadX = 8.0;
     NSBezierPath *track = [NSBezierPath bezierPathWithRoundedRect:trackRect
                                                           xRadius:trackRadius
                                                           yRadius:trackRadius];
-    [[[NSColor inspectorLabel] colorWithAlphaComponent:0.07] setFill];
+    [[[NSColor inspectorLabel] colorWithAlphaComponent:0.06] setFill];
     [track fill];
   }
 
@@ -167,7 +167,7 @@ static const CGFloat kGroupPillPadX = 8.0;
             [NSBezierPath bezierPathWithRoundedRect:hr
                                             xRadius:hr_radius
                                             yRadius:hr_radius];
-        [[[NSColor accentMatchingHost] colorWithAlphaComponent:0.25] setFill];
+        [[[NSColor accentMatchingHost] colorWithAlphaComponent:0.15] setFill];
         [highlight fill];
       }
     } else {

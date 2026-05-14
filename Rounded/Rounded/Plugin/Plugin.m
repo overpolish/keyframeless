@@ -55,6 +55,23 @@
       [self.inspectorView setActiveTab:tab];
     });
   }
+
+  if (parameterID == kKKParamTimelineData) {
+    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    [actionAPI startAction:self];
+    id<FxParameterRetrievalAPI_v6> getAPI =
+        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    NSString *json = KKReadCustomParamString(getAPI, kKKParamTimelineData);
+    [actionAPI endAction:self];
+    KKTimeline *timeline =
+        (json.length ? [KKTimeline timelineFromJSON:json] : nil)
+            ?: [KKTimeline timeline];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [self.inspectorView applyTimeline:timeline];
+    });
+  }
+
   return YES;
 }
 

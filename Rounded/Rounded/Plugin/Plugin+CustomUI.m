@@ -7,11 +7,26 @@
 #import "Plugin_Private.h"
 #import "RoundedInspectorView.h"
 #import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKTimingStage.h>
 
 @implementation RoundedPlugin (CustomUI)
 
 - (BOOL)usesMotionBlur {
   return YES;
+}
+
++ (NSArray<KKLane *> *)availableLanes {
+  KKLane *radius = [KKLane laneWithLabel:@"Radius"];
+  radius.valueType = KKLaneValueTypeFloat;
+  radius.componentMin = @[ @0.0 ];
+  radius.componentMax = @[ @100.0 ];
+
+  KKLane *box = [KKLane laneWithLabel:@"Box"];
+  box.valueType = KKLaneValueTypeBox;
+  box.componentMin = @[ @0.0, @0.0, @-0.5, @-0.5 ];
+  box.componentMax = @[ @1.0, @1.0, @0.5, @0.5 ];
+
+  return @[ radius, box ];
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
@@ -21,6 +36,7 @@
     [actionAPI startAction:self];
     id<FxParameterRetrievalAPI_v6> getAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+
     NSString *uiJson = KKReadCustomParamString(getAPI, kParamUIState);
     NSDictionary *uiState =
         uiJson.length
@@ -33,12 +49,22 @@
             : @{};
     BOOL loopEnabled = [uiState[@"loopEnabled"] boolValue];
     NSInteger activeTab = [uiState[@"activeTab"] integerValue];
+
+    NSString *timelineJson =
+        KKReadCustomParamString(getAPI, kKKParamTimelineData);
+    KKTimeline *timeline =
+        (timelineJson.length ? [KKTimeline timelineFromJSON:timelineJson] : nil)
+            ?: [KKTimeline timeline];
+
     [actionAPI endAction:self];
 
+    NSArray<KKLane *> *available = [RoundedPlugin availableLanes];
     RoundedInspectorView *view =
         [[RoundedInspectorView alloc] initWithAPIManager:self.apiManager
                                              loopEnabled:loopEnabled
-                                               activeTab:activeTab];
+                                               activeTab:activeTab
+                                          availableLanes:available
+                                                timeline:timeline];
     __weak typeof(self) weak = self;
 
     void (^writeUIState)(NSString *, id) = ^(NSString *key, id value) {
@@ -81,6 +107,23 @@
     view.onTabChanged = ^(NSInteger tab) {
       writeUIState(@"activeTab", @(tab));
     };
+    view.onTimelineMutated = ^(KKTimeline *updated) {
+      __strong typeof(weak) strong = weak;
+      if (!strong)
+        return;
+      id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      if (!act)
+        return;
+      [act startAction:strong];
+      id<FxParameterSettingAPI_v5> setAPI = [strong.apiManager
+          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      NSString *json = [KKTimeline jsonFromTimeline:updated];
+      if (json)
+        KKWriteCustomParamString(setAPI, json, kKKParamTimelineData);
+      [act endAction:strong];
+    };
+
     self.inspectorView = view;
     return view;
   }

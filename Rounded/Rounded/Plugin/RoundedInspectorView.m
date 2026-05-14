@@ -5,11 +5,13 @@
 
 #import "RoundedInspectorView.h"
 #import <KeyframelessKit/KKPillToggleRowView.h>
+#import <KeyframelessKit/KKTimelineLanesView.h>
 #import <KeyframelessKit/KKTokens.h>
 #import <KeyframelessKit/NSColor+KKColors.h>
 
 static const CGFloat kInspectorHeight = 200.0;
 static const CGFloat kLoopIconSize = 11.0;
+static const CGFloat kConstantsIconSize = 10.0;
 
 typedef NS_ENUM(NSInteger, RoundedTab) {
   RoundedTabBasic = 0,
@@ -73,17 +75,89 @@ typedef NS_ENUM(NSInteger, RoundedTab) {
 
 @end
 
+@interface _RoundedConstantsButton : NSView
+@property(nonatomic, copy, nullable) void (^onTapped)(void);
+@end
+
+@implementation _RoundedConstantsButton
+
+- (BOOL)isFlipped {
+  return YES;
+}
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+  return YES;
+}
+
+- (void)drawRect:(NSRect)dirtyRect {
+  NSImage *img = [[NSImage imageWithSystemSymbolName:@"slider.horizontal.3"
+                            accessibilityDescription:nil]
+      imageWithSymbolConfiguration:
+          [NSImageSymbolConfiguration
+              configurationWithPointSize:kConstantsIconSize
+                                  weight:NSFontWeightMedium]];
+  NSColor *tint = [[NSColor inspectorLabel] colorWithAlphaComponent:0.45];
+  NSImage *tinted = [img copy];
+  [tinted lockFocus];
+  [tint set];
+  NSRectFillUsingOperation(
+      NSMakeRect(0, 0, tinted.size.width, tinted.size.height),
+      NSCompositingOperationSourceAtop);
+  [tinted unlockFocus];
+
+  static const CGFloat kPadX = 5.0, kGap = 3.0;
+  CGFloat iconY = NSMidY(self.bounds) - tinted.size.height / 2.0;
+  [tinted drawAtPoint:NSMakePoint(kPadX, iconY)
+             fromRect:NSZeroRect
+            operation:NSCompositingOperationSourceOver
+             fraction:1.0];
+
+  NSFont *font = [NSFont systemFontOfSize:KKFontSizeSM
+                                   weight:NSFontWeightMedium];
+  NSDictionary *attrs =
+      @{NSFontAttributeName : font, NSForegroundColorAttributeName : tint};
+  NSSize textSz = [@"Constants" sizeWithAttributes:attrs];
+  CGFloat textX = kPadX + tinted.size.width + kGap;
+  CGFloat textY = NSMidY(self.bounds) - textSz.height / 2.0;
+  [@"Constants" drawAtPoint:NSMakePoint(textX, textY) withAttributes:attrs];
+}
+
+- (void)mouseDown:(NSEvent *)event {
+  if (_onTapped)
+    _onTapped();
+}
+
+- (NSSize)intrinsicContentSize {
+  NSImage *img = [[NSImage imageWithSystemSymbolName:@"slider.horizontal.3"
+                            accessibilityDescription:nil]
+      imageWithSymbolConfiguration:
+          [NSImageSymbolConfiguration
+              configurationWithPointSize:kConstantsIconSize
+                                  weight:NSFontWeightMedium]];
+  NSFont *font = [NSFont systemFontOfSize:KKFontSizeSM
+                                   weight:NSFontWeightMedium];
+  CGFloat textW = ceil(
+      [@"Constants" sizeWithAttributes:@{NSFontAttributeName : font}].width);
+  static const CGFloat kPadX = 5.0, kGap = 3.0;
+  return NSMakeSize(kPadX + ceil(img.size.width) + kGap + textW + kPadX, 18.0);
+}
+
+@end
+
 @implementation RoundedInspectorView {
   id<PROAPIAccessing> _apiManager;
   RoundedTab _selectedTab;
   KKPillToggleRowView *_tabBar;
   _RoundedLoopButton *_loopButton;
+  _RoundedConstantsButton *_constantsButton;
   NSView *_contentView;
+  KKTimelineLanesView *_basicView;
 }
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager
                        loopEnabled:(BOOL)loopEnabled
-                         activeTab:(NSInteger)activeTab {
+                         activeTab:(NSInteger)activeTab
+                    availableLanes:(NSArray<KKLane *> *)availableLanes
+                          timeline:(KKTimeline *)timeline {
   self = [super initWithFrame:NSMakeRect(0, 0, 0, kInspectorHeight)];
   if (self) {
     _apiManager = apiManager;
@@ -118,7 +192,13 @@ typedef NS_ENUM(NSInteger, RoundedTab) {
               atIndex:RoundedTabAdvanced];
     [self addSubview:_tabBar];
 
+    _constantsButton = [[_RoundedConstantsButton alloc] init];
+    _constantsButton.translatesAutoresizingMaskIntoConstraints = NO;
+    _constantsButton.hidden = (timeline.lanes.count >= availableLanes.count);
+    [self addSubview:_constantsButton];
+
     __weak typeof(self) weak = self;
+
     _tabBar.onToggled = ^(NSInteger index, BOOL isOn) {
       if (!isOn)
         return;
@@ -128,10 +208,14 @@ typedef NS_ENUM(NSInteger, RoundedTab) {
       [strong _selectTab:(RoundedTab)index];
     };
 
+    NSView *headerRow = [[NSView alloc] init];
+    headerRow.translatesAutoresizingMaskIntoConstraints = NO;
+    [box addSubview:headerRow];
+
     _loopButton = [[_RoundedLoopButton alloc] init];
     _loopButton.translatesAutoresizingMaskIntoConstraints = NO;
     _loopButton.on = loopEnabled;
-    [box addSubview:_loopButton];
+    [headerRow addSubview:_loopButton];
 
     _loopButton.onToggled = ^(BOOL isOn) {
       __strong typeof(weak) strong = weak;
@@ -145,12 +229,47 @@ typedef NS_ENUM(NSInteger, RoundedTab) {
     _contentView.translatesAutoresizingMaskIntoConstraints = NO;
     [box addSubview:_contentView];
 
+    _basicView =
+        [[KKTimelineLanesView alloc] initWithAvailableLanes:availableLanes
+                                                   timeline:timeline];
+    _basicView.translatesAutoresizingMaskIntoConstraints = NO;
+    [_contentView addSubview:_basicView];
+
+    // Capture weakBasic and weakConstants AFTER _basicView is assigned.
+    __weak _RoundedConstantsButton *weakConstants = _constantsButton;
+    __weak KKTimelineLanesView *weakBasic = _basicView;
+
+    _constantsButton.onTapped = ^{
+      __strong KKTimelineLanesView *basic = weakBasic;
+      __strong _RoundedConstantsButton *btn = weakConstants;
+      if (basic && btn)
+        [basic showStaticValuesPopoverFromView:btn];
+    };
+
+    _basicView.onTimelineMutated = ^(KKTimeline *updated) {
+      __strong typeof(weak) strong = weak;
+      __strong KKTimelineLanesView *basic = weakBasic;
+      __strong _RoundedConstantsButton *btn = weakConstants;
+      if (!strong)
+        return;
+      if (basic && btn)
+        btn.hidden = !basic.hasUnoptedLanes;
+      if (strong.onTimelineMutated)
+        strong.onTimelineMutated(updated);
+    };
+
     CGFloat h = KKInspectorHorizontalInset;
     [NSLayoutConstraint activateConstraints:@[
       [_tabBar.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
                                             constant:h],
       [_tabBar.topAnchor constraintEqualToAnchor:self.topAnchor
                                         constant:KKPaddingMD],
+
+      [_constantsButton.trailingAnchor
+          constraintEqualToAnchor:self.trailingAnchor
+                         constant:-h],
+      [_constantsButton.centerYAnchor
+          constraintEqualToAnchor:_tabBar.centerYAnchor],
 
       [box.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:h],
       [box.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
@@ -160,15 +279,28 @@ typedef NS_ENUM(NSInteger, RoundedTab) {
       [box.bottomAnchor constraintEqualToAnchor:self.bottomAnchor
                                        constant:-KKPaddingLG],
 
-      [_loopButton.leadingAnchor constraintEqualToAnchor:box.leadingAnchor
+      [headerRow.leadingAnchor constraintEqualToAnchor:box.leadingAnchor],
+      [headerRow.trailingAnchor constraintEqualToAnchor:box.trailingAnchor],
+      [headerRow.topAnchor constraintEqualToAnchor:box.topAnchor],
+      [headerRow.heightAnchor constraintEqualToConstant:28.0],
+
+      [_loopButton.leadingAnchor constraintEqualToAnchor:headerRow.leadingAnchor
                                                 constant:KKPaddingMD],
-      [_loopButton.topAnchor constraintEqualToAnchor:box.topAnchor
-                                            constant:KKPaddingMD],
+      [_loopButton.centerYAnchor
+          constraintEqualToAnchor:headerRow.centerYAnchor],
 
       [_contentView.leadingAnchor constraintEqualToAnchor:box.leadingAnchor],
       [_contentView.trailingAnchor constraintEqualToAnchor:box.trailingAnchor],
-      [_contentView.topAnchor constraintEqualToAnchor:box.topAnchor],
+      [_contentView.topAnchor constraintEqualToAnchor:headerRow.bottomAnchor],
       [_contentView.bottomAnchor constraintEqualToAnchor:box.bottomAnchor],
+
+      [_basicView.leadingAnchor
+          constraintEqualToAnchor:_contentView.leadingAnchor],
+      [_basicView.trailingAnchor
+          constraintEqualToAnchor:_contentView.trailingAnchor],
+      [_basicView.topAnchor constraintEqualToAnchor:_contentView.topAnchor],
+      [_basicView.bottomAnchor
+          constraintEqualToAnchor:_contentView.bottomAnchor],
     ]];
   }
   return self;
@@ -177,6 +309,11 @@ typedef NS_ENUM(NSInteger, RoundedTab) {
 - (void)setLoopEnabled:(BOOL)enabled {
   _loopButton.on = enabled;
   [_loopButton setNeedsDisplay:YES];
+}
+
+- (void)applyTimeline:(KKTimeline *)timeline {
+  [_basicView applyTimeline:timeline];
+  _constantsButton.hidden = !_basicView.hasUnoptedLanes;
 }
 
 - (void)_selectTab:(RoundedTab)tab {
