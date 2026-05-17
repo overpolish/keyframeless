@@ -35,3 +35,34 @@
 }
 
 @end
+
+@implementation KKHelpGuide
+
++ (instancetype)guideWithTitle:(NSString *)title
+                      subtitle:(nullable NSString *)subtitle
+                       onStart:(void (^)(void))onStart {
+  KKHelpGuide *g = [[self alloc] init];
+  g->_title = [title copy];
+  g->_subtitle = [subtitle copy];
+  g->_onStart = [onStart copy];
+  return g;
+}
+
+- (NSString *)_completedDefaultsKey {
+  return [@"KKHelpGuideCompleted."
+      stringByAppendingString:(self.identifier.length ? self.identifier
+                                                      : self.title)];
+}
+
+- (BOOL)hasBeenCompleted {
+  return [NSUserDefaults.standardUserDefaults
+      boolForKey:[self _completedDefaultsKey]];
+}
+
+- (void)markCompleted {
+  [NSUserDefaults.standardUserDefaults setBool:YES
+                                        forKey:[self _completedDefaultsKey]];
+  [NSUserDefaults.standardUserDefaults synchronize];
+}
+
+@end

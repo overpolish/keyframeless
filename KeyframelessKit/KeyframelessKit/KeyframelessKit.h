@@ -33,12 +33,16 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKHelpView.h>
 #import <KeyframelessKit/KKHostInfo.h>
 #import <KeyframelessKit/KKIconButtonOSC.h>
+#import <KeyframelessKit/KKJoyrideController.h>
+#import <KeyframelessKit/KKJoyrideOSCSegment.h>
 #import <KeyframelessKit/KKKbd.h>
 #import <KeyframelessKit/KKLabelView.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMarkup.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKMotionBlur.h>
+#import <KeyframelessKit/KKOSCGuideBridge.h>
+#import <KeyframelessKit/KKOSCGuideStrategy.h>
 #import <KeyframelessKit/KKOSCLabel.h>
 #import <KeyframelessKit/KKOnScreenControl+CoordinateSpace.h>
 #import <KeyframelessKit/KKPaddedScrollView.h>

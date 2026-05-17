@@ -102,6 +102,11 @@
 				"Plugin/Plugin+Parameters.m",
 				"Plugin/Plugin+Render.m",
 				Plugin/Rounded.metal,
+				Plugin/RoundedInspectorButtons.m,
+				"Plugin/RoundedInspectorView+Guides.m",
+				Plugin/RoundedInspectorView.m,
+				"Plugin/RoundedOSC+MouseHandlers.m",
+				Plugin/RoundedOSCRadiusMath.m,
 				"Wrapper Application/Info.plist",
 			);
 			target = F2E2ED742F4CA530008620D9 /* Wrapper Application */;

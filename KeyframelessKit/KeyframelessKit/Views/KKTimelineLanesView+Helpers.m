@@ -9,6 +9,9 @@
 #import <KeyframelessKit/KKLog.h>
 #import <QuartzCore/QuartzCore.h>
 
+// macOS 26 wraps popover content in a GlassView that injects a CoreHostingView
+// (glass chrome) and ContentHolderView (opaque bg fill). Walk up to
+// NSPopoverFrame and zero out both so liquid glass shows through unobstructed.
 static void _clearPopoverBackground(NSView *view) {
   dispatch_after(
       dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)),
@@ -264,6 +267,13 @@ static void _clearPopoverBackground(NSView *view) {
   }
   [CATransaction commit];
   [CATransaction flush];
+}
+
+- (nullable NSView *)rowViewForLabel:(NSString *)label {
+  for (_KKManageRow *row in _allRows)
+    if ([row.rowLabel isEqualToString:label])
+      return row;
+  return nil;
 }
 
 - (void)controlTextDidChange:(NSNotification *)note {

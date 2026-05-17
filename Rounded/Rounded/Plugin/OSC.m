@@ -5,54 +5,123 @@
 
 #import "OSC.h"
 #import "Constants.h"
+#import "OSC_Internal.h"
+#import "RoundedOSCRadiusMath.h"
 #import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KeyframelessKit.h>
 
-#define CLAMP(x, lo, hi) MAX((lo), MIN((hi), (x)))
+// Mirrors KKOSCGuideBridge's position-notification name (the bridge posts it);
+// the plugin returns this as its help-guide refresh notification.
+NSNotificationName const kRoundedOSCPositionNotification =
+    @"com.overpolish.kk.oscGuidePosition";
 
-static float paddingForRadius(double radius, float minDim) {
-  float t = radius / 100.0f;
-  float power = 5.0f * (1.0f - t) + 2.0f * t;
-  float cornerRadiusPixels = minDim * 0.5f * t;
-  float circleInsetFactor = 1.0f - 1.0f / sqrtf(2.0f);
-  float squircleInsetFactor = 1.0f - 1.0f / powf(2.0f, 1.0f / power);
-  float insetFactor = squircleInsetFactor * (1.0f - t) + circleInsetFactor * t;
-  float squircleCorrection = 1.0f - 0.22f * sinf(t * M_PI);
-  return minDim * 0.05f + cornerRadiusPixels * insetFactor * squircleCorrection;
+static RoundedOSC *sCurrentOSC = nil;
+
+// All OSC-guide affine / staleness / velocity-gate state now lives in the
+// generic KKOSCGuideBridge (KeyframelessKit). One process-lifetime instance
+// per XPC process — the inspector custom view and the OSC render run in the
+// same process (pid confirmed identical). MRR: retained forever, no
+// dispatch_once (autoreleased ObjC statics dangle under MRR).
+static KKOSCGuideBridge *RoundedGuideBridge(void) {
+  static KKOSCGuideBridge *sBridge = nil;
+  if (!sBridge)
+    sBridge = [[KKOSCGuideBridge alloc] init];
+  return sBridge;
 }
 
-static double radiusFromBlobAtFraction(id<PROAPIAccessing> apiManager, double frac) {
-  id<FxParameterRetrievalAPI_v6> paramGetAPI =
-      [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  if (!paramGetAPI)
-    return 20.0;
-  NSString *json = KKReadCustomParamString(paramGetAPI, kKKParamTimelineData);
-  if (!json.length)
-    return 20.0;
-  KKTimeline *tl = [KKTimeline timelineFromJSON:json];
-  for (KKLane *lane in tl.lanes) {
-    if (!lane.enabled)
-      continue;
-    if ([lane.label isEqualToString:@"Radius"]) {
-      NSArray<NSNumber *> *vals = KKTimelineLaneValueAtFraction(lane, frac);
-      return vals.count > 0 ? vals[0].doubleValue : 20.0;
-    }
+// Same instance, exported so the inspector guide (same XPC process) can hand
+// it to a KKJoyrideOSCSegment.
+KKOSCGuideBridge *RoundedSharedOSCGuideBridge(void) {
+  return RoundedGuideBridge();
+}
+
+// Re-anchor the bridge's screen↔canvas map by pairing a screen point with the
+// OSC handle's current canvas position (the bridge supplies the live scale).
+static BOOL RoundedReanchor(RoundedOSC *osc, NSPoint screenPt) {
+  if (!osc)
+    return NO;
+  CGPoint handle = [osc oscPositionAtTime:kCMTimeZero];
+  return [RoundedGuideBridge() reanchorAtScreen:screenPt
+                                handleCanvasPos:handle];
+}
+
+void RoundedSetOSCGuideStep(NSInteger step) {
+  RoundedGuideBridge().guideStep = step;
+}
+
+BOOL RoundedHasCanvasReference(void) {
+  return [RoundedGuideBridge() hasCanvasReference];
+}
+
+void RoundedOSCCaptureGuideAnchorAtScreen(NSPoint screenPt) {
+  RoundedOSC *osc = sCurrentOSC;
+  if (!osc) {
+    KKLogWarn(@"[OSCGuide] capture anchor skipped: no current OSC");
+    return;
   }
-  return 20.0;
+  if (!RoundedReanchor(osc, screenPt))
+    KKLogWarn(@"[OSCGuide] capture anchor skipped: no live scale yet "
+              @"(drawOSC has not run)");
 }
 
-@implementation RoundedOSC {
-  CGPoint _dragStartPosition;
-  double _dragStartRadius;
-  double _dragCurrentRadius;
+// Guide-scoped radius. The OSC cannot read the KKDataBlob from the drawOSC
+// tick (FxParameterRetrievalAPI is nil there — see oscAPI2=nil in every
+// drawOSC log). During the guide the blob-drag handler pushes the live radius
+// here (same XPC process — pid confirmed identical) so the OSC handle tracks
+// without the unreadable blob. Real (non-guide) OSC↔blob reads are Phase 10.
+static double sGuideRadius = 20.0;
+
+void RoundedSetGuideRadius(double radius) { sGuideRadius = radius; }
+
+// Point-OSC value mapping: invert the bridge's proportional viewer-rect map
+// (screen → canvas), then the OSC's own radius math, so the drag tracks the
+// cursor 1:1 like a native OSC drag. Falls back to the last guide radius
+// until the bridge has cached usable geometry. This is the only OSC-shape-
+// specific piece left in this file; a different OSC supplies its own.
+double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
+  KKOSCGuideBridge *b = RoundedGuideBridge();
+  NSRect vr = b.estimatedViewerScreenRect;
+  CGPoint tr = b.currentCanvasTopRight, bl = b.currentCanvasBottomLeft;
+  if (!b.geometryValid || NSIsEmptyRect(vr) || fabs(tr.x - bl.x) < 1e-3 ||
+      fabs(tr.y - bl.y) < 1e-3)
+    return sGuideRadius;
+  double oscSize = sCurrentOSC ? sCurrentOSC.oscSize : 0.0;
+  double minDim = fmin(fabs(tr.x - bl.x), fabs(tr.y - bl.y));
+  // Inverse of the bridge's proportional viewer-rect map: screen → canvas.
+  double cx = bl.x + (screenPt.x - NSMinX(vr)) / NSWidth(vr) * (tr.x - bl.x);
+  double cy = bl.y + (screenPt.y - NSMinY(vr)) / NSHeight(vr) * (tr.y - bl.y);
+  // Same as mouseDraggedAtPositionX:.
+  double signX = (tr.x - bl.x) < 0 ? -1.0 : 1.0;
+  double signY = (tr.y - bl.y) < 0 ? -1.0 : 1.0;
+  double dx = cx - tr.x, dy = cy - tr.y;
+  double mouseDist = (-dx * signX + -dy * signY) * 0.5 - oscSize;
+  float lo = 0.0f, hi = 100.0f;
+  for (int i = 0; i < 32; i++) {
+    float mid = (lo + hi) * 0.5f;
+    if (paddingForRadius(mid, (float)minDim) < mouseDist)
+      lo = mid;
+    else
+      hi = mid;
+  }
+  return MAX(0.0, MIN(100.0, (lo + hi) * 0.5));
 }
+
+@implementation RoundedOSC
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
   self = [super initWithAPIManager:apiManager];
   if (self) {
     self.clearsOnDraw = NO;
     _dragCurrentRadius = 20.0;
+    sCurrentOSC = self;
   }
   return self;
+}
+
+- (void)dealloc {
+  if (sCurrentOSC == self)
+    sCurrentOSC = nil;
+  [super dealloc];
 }
 
 - (BOOL)getCanvasTopRight:(CGPoint *)outTopRight
@@ -92,7 +161,9 @@ static double radiusFromBlobAtFraction(id<PROAPIAccessing> apiManager, double fr
   double durSec = CMTimeGetSeconds(effectDur);
   if (durSec <= 0)
     return 0.0;
-  return MAX(0.0, MIN(1.0, (CMTimeGetSeconds(time) - CMTimeGetSeconds(effectStart)) / durSec));
+  return MAX(0.0,
+             MIN(1.0, (CMTimeGetSeconds(time) - CMTimeGetSeconds(effectStart)) /
+                          durSec));
 }
 
 - (CGPoint)oscPositionAtTime:(CMTime)time {
@@ -106,10 +177,13 @@ static double radiusFromBlobAtFraction(id<PROAPIAccessing> apiManager, double fr
   BOOL isFlippedY = canvasImageHeight < 0;
   float minDim = fminf(fabsf(canvasImageWidth), fabsf(canvasImageHeight));
 
-  double radius = self.isDragging
-                      ? _dragCurrentRadius
-                      : radiusFromBlobAtFraction(self.apiManager,
-                                                 [self fractionAtTime:time]);
+  double radius =
+      (RoundedGuideBridge().guideStep > 0)
+          ? sGuideRadius
+          : (self.isDragging
+                 ? _dragCurrentRadius
+                 : radiusFromBlobAtFraction(self.apiManager,
+                                            [self fractionAtTime:time]));
   float padding = paddingForRadius(radius, minDim);
 
   float offsetX =
@@ -117,6 +191,23 @@ static double radiusFromBlobAtFraction(id<PROAPIAccessing> apiManager, double fr
   float offsetY =
       isFlippedY ? -(self.oscSize + padding) : (self.oscSize + padding);
 
+  return CGPointMake(topRight.x - offsetX, topRight.y - offsetY);
+}
+
+- (CGPoint)_guideTargetCanvasPosition {
+  CGPoint topRight = {0, 0}, bottomLeft = {0, 0};
+  if (![self getCanvasTopRight:&topRight bottomLeft:&bottomLeft])
+    return CGPointZero;
+  float canvasImageWidth = topRight.x - bottomLeft.x;
+  float canvasImageHeight = topRight.y - bottomLeft.y;
+  BOOL isFlippedX = canvasImageWidth < 0;
+  BOOL isFlippedY = canvasImageHeight < 0;
+  float minDim = fminf(fabsf(canvasImageWidth), fabsf(canvasImageHeight));
+  float padding = paddingForRadius(kOSCGuideTargetRadius, minDim);
+  float offsetX =
+      isFlippedX ? -(self.oscSize + padding) : (self.oscSize + padding);
+  float offsetY =
+      isFlippedY ? -(self.oscSize + padding) : (self.oscSize + padding);
   return CGPointMake(topRight.x - offsetX, topRight.y - offsetY);
 }
 
@@ -133,6 +224,28 @@ static double radiusFromBlobAtFraction(id<PROAPIAccessing> apiManager, double fr
                                        }];
 
   CGPoint radiusPos = [self oscPositionAtTime:time];
+
+  // Pull the live geometry FCP only exposes from this tick and feed it to the
+  // generic bridge — it owns the zoom-invariant CANVAS→screen affine, the
+  // viewer-rect recompute (never stale vs corners), and the position
+  // notifications. spC=0 means "no scale this tick" (bridge keeps the last).
+  CGPoint trC = {0, 0}, blC = {0, 0};
+  [self getCanvasTopRight:&trC bottomLeft:&blC];
+  id<FxOnScreenControlAPI_v2> oscAPI2 =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v2)];
+  double rawZoom = oscAPI2 ? ([oscAPI2 canvasZoom] / 100.0) : 0.0;
+  double displayScale = [[NSScreen mainScreen] backingScaleFactor];
+  double spC =
+      (rawZoom > 0.0 && displayScale > 0.0) ? rawZoom / displayScale : 0.0;
+
+  [RoundedGuideBridge()
+      ingestDrawTickWithCanvasTopRight:trC
+                            bottomLeft:blC
+                           canvasScale:spC
+                       handleCanvasPos:radiusPos
+                       targetCanvasPos:[self _guideTargetCanvasPosition]
+                             hasTarget:YES];
+
   [self drawAtCanvasPosition:radiusPos
                    isHovered:(activePart == kOSCRadiusPart)
                     isActive:self.isDragging && (activePart == kOSCRadiusPart)
@@ -150,124 +263,28 @@ static double radiusFromBlobAtFraction(id<PROAPIAccessing> apiManager, double fr
                              atTime:time]) {
     *activePart = kOSCRadiusPart;
   }
-}
-
-- (void)mouseDownAtPositionX:(double)positionX
-                   positionY:(double)positionY
-                  activePart:(NSInteger)activePart
-                   modifiers:(NSUInteger)modifiers
-                 forceUpdate:(BOOL *)forceUpdate
-                      atTime:(CMTime)time {
-  [super mouseDownAtPositionX:positionX
-                    positionY:positionY
-                   activePart:activePart
-                    modifiers:modifiers
-                  forceUpdate:forceUpdate
-                       atTime:time];
-
-  if (activePart == 0)
+  // The only place screen + canvas coords arrive together. Hand it to the
+  // bridge: it velocity-gates the sample, re-anchors the screen↔canvas map,
+  // recomputes the viewer rect, and posts the position notification. The
+  // handle position is only needed while a guide step is active.
+  CGPoint tr = {0, 0}, bl = {0, 0};
+  if (![self getCanvasTopRight:&tr bottomLeft:&bl])
     return;
-
-  _dragStartPosition = CGPointMake(positionX, positionY);
-  _dragStartRadius = radiusFromBlobAtFraction(self.apiManager,
-                                              [self fractionAtTime:time]);
-  _dragCurrentRadius = _dragStartRadius;
-}
-
-- (void)mouseDraggedAtPositionX:(double)positionX
-                      positionY:(double)positionY
-                     activePart:(NSInteger)activePart
-                      modifiers:(NSUInteger)modifiers
-                    forceUpdate:(BOOL *)forceUpdate
-                         atTime:(CMTime)time {
-  if (activePart == 0)
-    return;
-
-  CGPoint topRight = {0, 0}, bottomLeft = {0, 0};
-  if (![self getCanvasTopRight:&topRight bottomLeft:&bottomLeft])
-    return;
-
-  float canvasImageWidth = topRight.x - bottomLeft.x;
-  float canvasImageHeight = topRight.y - bottomLeft.y;
-  float minDim = fminf(fabsf(canvasImageWidth), fabsf(canvasImageHeight));
-  BOOL isFlippedX = canvasImageWidth < 0;
-  BOOL isFlippedY = canvasImageHeight < 0;
-
-  double dx = positionX - topRight.x;
-  double dy = positionY - topRight.y;
-  double signX = isFlippedX ? -1.0 : 1.0;
-  double signY = isFlippedY ? -1.0 : 1.0;
-
-  double mouseDist = (-dx * signX + -dy * signY) * 0.5 - self.oscSize;
-
-  float lo = 0.0f, hi = 100.0f;
-  for (int i = 0; i < 32; i++) {
-    float mid = (lo + hi) * 0.5f;
-    float padding = paddingForRadius(mid, minDim);
-    if (padding < mouseDist)
-      lo = mid;
-    else
-      hi = mid;
-  }
-
-  double newRadius = CLAMP((lo + hi) * 0.5, 0.0, 100.0);
-  _dragCurrentRadius = newRadius;
-
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!actionAPI)
-    return;
-  [actionAPI startAction:self];
-
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!setAPI) {
-    [actionAPI endAction:self];
-    return;
-  }
-
-  NSString *json = KKReadCustomParamString(getAPI, kKKParamTimelineData);
-  KKTimeline *tl =
-      json.length ? [KKTimeline timelineFromJSON:json] : [KKTimeline timeline];
-
-  KKLane *radiusLane = nil;
-  for (KKLane *lane in tl.lanes) {
-    if ([lane.label isEqualToString:@"Radius"]) {
-      radiusLane = lane;
-      break;
-    }
-  }
-  if (!radiusLane) {
-    radiusLane = [KKLane laneWithLabel:@"Radius"];
-    radiusLane.enabled = YES;
-    NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
-    [lanes addObject:radiusLane];
-    tl.lanes = lanes;
-  }
-
-  KKKeyPose *kp = [KKKeyPose keyposeAtTime:0.0 values:@[ @(newRadius) ]];
-  radiusLane.keyposes = @[ kp ];
-
-  KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
-                           kKKParamTimelineData);
-  [actionAPI endAction:self];
-  *forceUpdate = YES;
-}
-
-- (void)mouseUpAtPositionX:(double)positionX
-                 positionY:(double)positionY
-                activePart:(NSInteger)activePart
-                 modifiers:(NSUInteger)modifiers
-               forceUpdate:(BOOL *)forceUpdate
-                    atTime:(CMTime)time {
-  [super mouseUpAtPositionX:positionX
-                  positionY:positionY
-                 activePart:activePart
-                  modifiers:modifiers
-                forceUpdate:forceUpdate
-                     atTime:time];
+  id<FxOnScreenControlAPI_v2> oscAPI2 =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v2)];
+  double rawZoom = oscAPI2 ? ([oscAPI2 canvasZoom] / 100.0) : 1.0;
+  double displayScale = [[NSScreen mainScreen] backingScaleFactor];
+  double spC = rawZoom / displayScale;
+  CGPoint handle = CGPointZero;
+  if (RoundedGuideBridge().guideStep > 0)
+    handle = [self oscPositionAtTime:time];
+  [RoundedGuideBridge() ingestHitTestAtScreen:NSEvent.mouseLocation
+                                    canvasPos:CGPointMake(positionX, positionY)
+                                  canvasScale:spC
+                                     topRight:tr
+                                   bottomLeft:bl
+                                     onHandle:(*activePart == kOSCRadiusPart)
+                              handleCanvasPos:handle];
 }
 
 @end

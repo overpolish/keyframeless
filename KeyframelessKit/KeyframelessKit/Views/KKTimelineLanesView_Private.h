@@ -38,6 +38,7 @@ NS_ASSUME_NONNULL_BEGIN
                 checkedLabels:(NSSet<NSString *> *)checked
                      onToggle:(void (^)(NSString *label))onToggle;
 - (void)updateCheckedLabels:(NSSet<NSString *> *)checked;
+- (nullable NSView *)rowViewForLabel:(NSString *)label;
 + (CGFloat)heightForLaneCount:(NSInteger)count;
 @end
 

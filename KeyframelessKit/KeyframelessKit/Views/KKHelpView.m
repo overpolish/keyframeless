@@ -8,132 +8,29 @@
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
 #import "KKHelpSection.h"
+#import "KKHelpView+Guides.h"
+#import "KKHelpViewSubviews.h"
+#import "KKHelpView_Private.h"
 #import "KKPaddedScrollView.h"
 
-@interface KKHelpShortcutsGrid : NSGridView
-@end
-
-@implementation KKHelpShortcutsGrid
-
-- (void)drawRect:(NSRect)dirtyRect {
-  [super drawRect:dirtyRect];
-  if (self.numberOfRows < 2)
-    return;
-
-  NSColor *line = [[NSColor inspectorLabel] colorWithAlphaComponent:0.10];
-  [line setStroke];
-  NSBezierPath *path = [NSBezierPath bezierPath];
-  path.lineWidth = 1.0;
-
-  for (NSInteger r = 0; r < self.numberOfRows - 1; r++) {
-    NSView *aCell = [self cellAtColumnIndex:0 rowIndex:r].contentView;
-    NSView *bCell = [self cellAtColumnIndex:0 rowIndex:r + 1].contentView;
-    if (!aCell || !bCell)
-      continue;
-    CGFloat yBottomA = NSMinY(aCell.frame);
-    CGFloat yTopB = NSMaxY(bCell.frame);
-    CGFloat y = (yBottomA + yTopB) * 0.5;
-    [path moveToPoint:NSMakePoint(0, y)];
-    [path lineToPoint:NSMakePoint(self.bounds.size.width, y)];
-  }
-  [path stroke];
-}
-
-@end
-
-@interface KKHelpBackgroundView : NSView
-@end
-
-@implementation KKHelpBackgroundView
-
-- (BOOL)isFlipped {
-  return NO;
-}
-
-- (void)drawRect:(NSRect)dirtyRect {
-  [[NSColor inspectorBackground] setFill];
-  NSRectFill(self.bounds);
-
-  NSBundle *bundle = [NSBundle bundleForClass:[KKHelpBackgroundView class]];
-  NSImage *logo = [[NSImage alloc]
-      initByReferencingFile:[bundle pathForResource:@"keyframeless-logo"
-                                             ofType:@"png"]];
-  if (!logo)
-    return;
-
-  CGFloat side = MIN(self.bounds.size.width, self.bounds.size.height) * 0.9;
-  NSGraphicsContext *gc = [NSGraphicsContext currentContext];
-  [gc saveGraphicsState];
-
-  NSAffineTransform *t = [NSAffineTransform transform];
-  // Tuck the logo into the bottom-right corner with a slice peeking past
-  // the right edge.
-  [t translateXBy:self.bounds.size.width - side * 0.75 yBy:-side * 0.25];
-  [t rotateByDegrees:-18.0];
-  [t concat];
-
-  NSRect target = NSMakeRect(0, 0, side, side);
-  [logo drawInRect:target
-          fromRect:NSZeroRect
-         operation:NSCompositingOperationSourceOver
-          fraction:0.06];
-
-  [gc restoreGraphicsState];
-}
-
-@end
-
-static const CGFloat KKHelpPagePadding = 24.0;
-static const CGFloat KKHelpSectionGap = 24.0;
-static const CGFloat KKHelpAfterTitleGap = 10.0;
-static const CGFloat KKHelpKeyColumnMin = 170.0;
-
-/// Borderless link button used in the help-page table of contents.
-/// Holds weak refs to its target section view and the scroll view, so a
-/// click can scroll that section's title to the top of the visible
-/// area. Confluence-style "On this page" jumplist.
-@interface KKHelpTOCLink : NSButton
-@property(weak) NSView *anchorView;
-/// Document view of the surrounding scroll view (the page stack). Used
-/// as the coordinate space for the scroll target and as the receiver of
-/// `scrollPoint:`, which walks up to the nearest clip view automatically.
-@property(weak) NSView *documentHost;
-@end
-
-@implementation KKHelpTOCLink
-- (void)mouseDown:(NSEvent *)event {
-  NSView *doc = self.documentHost;
-  NSView *anchor = self.anchorView;
-  NSScrollView *sv = doc.enclosingScrollView;
-  NSClipView *clip = sv.contentView;
-  if (!doc || !anchor || !sv || !clip)
-    return;
-  // Compute the anchor's top edge in clip-view coordinates (the clip is
-  // flipped, so smaller y = visually higher), then translate to a new
-  // bounds origin. Doing it via the clip rather than `scrollPoint:`
-  // sidesteps the doc-flipped vs. clip-flipped mismatch (page stack is
-  // non-flipped, so NSMinY of a section frame in doc coords is the
-  // section's *bottom*, which is why scrollPoint was landing wrong).
-  NSRect inClip = [clip convertRect:anchor.bounds fromView:anchor];
-  CGFloat newY =
-      clip.bounds.origin.y + NSMinY(inClip) - KKHelpPagePadding * 0.5;
-  if (newY < 0)
-    newY = 0;
-  [clip setBoundsOrigin:NSMakePoint(clip.bounds.origin.x, newY)];
-  [sv reflectScrolledClipView:clip];
-}
-- (void)resetCursorRects {
-  [self addCursorRect:self.bounds cursor:[NSCursor pointingHandCursor]];
-}
-@end
+const CGFloat KKHelpPagePadding = 24.0;
+const CGFloat KKHelpSectionGap = 24.0;
+const CGFloat KKHelpAfterTitleGap = 10.0;
+const CGFloat KKHelpKeyColumnMin = 170.0;
 
 @implementation KKHelpView
 
 - (instancetype)initWithSections:(NSArray<KKHelpSection *> *)sections {
+  return [self initWithSections:sections guides:nil];
+}
+
+- (instancetype)initWithSections:(NSArray<KKHelpSection *> *)sections
+                          guides:(nullable NSArray<KKHelpGuide *> *)guides {
   self = [super initWithFrame:NSMakeRect(0, 0, 480, 520)];
   if (!self)
     return nil;
   self.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+  _guides = [guides copy];
 
   KKHelpBackgroundView *bg =
       [[KKHelpBackgroundView alloc] initWithFrame:self.bounds];
@@ -148,6 +45,13 @@ static const CGFloat KKHelpKeyColumnMin = 170.0;
   KKPaddedScrollView *scroll =
       [[KKPaddedScrollView alloc] initWithDocumentView:page
                                                padding:KKHelpPagePadding];
+
+  if (guides.count > 0) {
+    NSView *guidesBlock = [self _guidesBlockForGuides:guides];
+    [page addArrangedSubview:guidesBlock];
+    [guidesBlock.widthAnchor constraintEqualToAnchor:page.widthAnchor].active =
+        YES;
+  }
 
   // Two-pass build: first materialise each section view (so we have a
   // stable anchor to scroll to), then build the TOC linking to those
@@ -356,6 +260,12 @@ static const CGFloat KKHelpKeyColumnMin = 170.0;
     [list addArrangedSubview:row];
   }
   return list;
+}
+
+- (void)viewDidMoveToSuperview {
+  [super viewDidMoveToSuperview];
+  if (!self.superview)
+    [self _teardownGuideRefresh];
 }
 
 - (NSView *)_gridForShortcuts:(NSArray<KKHelpShortcut *> *)shortcuts {

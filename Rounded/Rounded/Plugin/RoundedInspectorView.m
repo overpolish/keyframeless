@@ -4,154 +4,13 @@
  */
 
 #import "RoundedInspectorView.h"
-#import <KeyframelessKit/KKPillToggleRowView.h>
-#import <KeyframelessKit/KKTimelineLanesView.h>
+#import "RoundedInspectorView+Guides.h"
+#import "RoundedInspectorView_Private.h"
 #import <KeyframelessKit/KKTokens.h>
-#import <KeyframelessKit/NSColor+KKColors.h>
 
 static const CGFloat kInspectorHeight = 200.0;
-static const CGFloat kLoopIconSize = 11.0;
-static const CGFloat kConstantsIconSize = 10.0;
 
-typedef NS_ENUM(NSInteger, RoundedTab) {
-  RoundedTabBasic = 0,
-  RoundedTabAdvanced = 1,
-};
-
-@interface _RoundedLoopButton : NSView
-@property(nonatomic) BOOL on;
-@property(nonatomic, copy, nullable) void (^onToggled)(BOOL isOn);
-@end
-
-@implementation _RoundedLoopButton
-
-- (BOOL)isFlipped {
-  return YES;
-}
-- (BOOL)acceptsFirstMouse:(NSEvent *)event {
-  return YES;
-}
-
-- (void)drawRect:(NSRect)dirtyRect {
-  NSImage *img = [[NSImage imageWithSystemSymbolName:@"repeat"
-                            accessibilityDescription:nil]
-      imageWithSymbolConfiguration:
-          [NSImageSymbolConfiguration
-              configurationWithPointSize:kLoopIconSize
-                                  weight:NSFontWeightMedium]];
-  NSColor *tint = _on ? [NSColor accentMatchingHost]
-                      : [[NSColor inspectorLabel] colorWithAlphaComponent:0.35];
-  NSImage *tinted = [img copy];
-  [tinted lockFocus];
-  [tint set];
-  NSRectFillUsingOperation(
-      NSMakeRect(0, 0, tinted.size.width, tinted.size.height),
-      NSCompositingOperationSourceAtop);
-  [tinted unlockFocus];
-  CGFloat x = NSMidX(self.bounds) - tinted.size.width / 2.0;
-  CGFloat y = NSMidY(self.bounds) - tinted.size.height / 2.0;
-  [tinted drawAtPoint:NSMakePoint(x, y)
-             fromRect:NSZeroRect
-            operation:NSCompositingOperationSourceOver
-             fraction:1.0];
-}
-
-- (void)mouseDown:(NSEvent *)event {
-  _on = !_on;
-  [self setNeedsDisplay:YES];
-  if (_onToggled)
-    _onToggled(_on);
-}
-
-- (NSSize)intrinsicContentSize {
-  NSImage *img = [[NSImage imageWithSystemSymbolName:@"repeat"
-                            accessibilityDescription:nil]
-      imageWithSymbolConfiguration:
-          [NSImageSymbolConfiguration
-              configurationWithPointSize:kLoopIconSize
-                                  weight:NSFontWeightMedium]];
-  return NSMakeSize(ceil(img.size.width) + 2.5, 18.0);
-}
-
-@end
-
-@interface _RoundedConstantsButton : NSView
-@property(nonatomic, copy, nullable) void (^onTapped)(void);
-@end
-
-@implementation _RoundedConstantsButton
-
-- (BOOL)isFlipped {
-  return YES;
-}
-- (BOOL)acceptsFirstMouse:(NSEvent *)event {
-  return YES;
-}
-
-- (void)drawRect:(NSRect)dirtyRect {
-  NSImage *img = [[NSImage imageWithSystemSymbolName:@"slider.horizontal.3"
-                            accessibilityDescription:nil]
-      imageWithSymbolConfiguration:
-          [NSImageSymbolConfiguration
-              configurationWithPointSize:kConstantsIconSize
-                                  weight:NSFontWeightMedium]];
-  NSColor *tint = [[NSColor inspectorLabel] colorWithAlphaComponent:0.45];
-  NSImage *tinted = [img copy];
-  [tinted lockFocus];
-  [tint set];
-  NSRectFillUsingOperation(
-      NSMakeRect(0, 0, tinted.size.width, tinted.size.height),
-      NSCompositingOperationSourceAtop);
-  [tinted unlockFocus];
-
-  static const CGFloat kPadX = 5.0, kGap = 3.0;
-  CGFloat iconY = NSMidY(self.bounds) - tinted.size.height / 2.0;
-  [tinted drawAtPoint:NSMakePoint(kPadX, iconY)
-             fromRect:NSZeroRect
-            operation:NSCompositingOperationSourceOver
-             fraction:1.0];
-
-  NSFont *font = [NSFont systemFontOfSize:KKFontSizeSM
-                                   weight:NSFontWeightMedium];
-  NSDictionary *attrs =
-      @{NSFontAttributeName : font, NSForegroundColorAttributeName : tint};
-  NSSize textSz = [@"Constants" sizeWithAttributes:attrs];
-  CGFloat textX = kPadX + tinted.size.width + kGap;
-  CGFloat textY = NSMidY(self.bounds) - textSz.height / 2.0;
-  [@"Constants" drawAtPoint:NSMakePoint(textX, textY) withAttributes:attrs];
-}
-
-- (void)mouseDown:(NSEvent *)event {
-  if (_onTapped)
-    _onTapped();
-}
-
-- (NSSize)intrinsicContentSize {
-  NSImage *img = [[NSImage imageWithSystemSymbolName:@"slider.horizontal.3"
-                            accessibilityDescription:nil]
-      imageWithSymbolConfiguration:
-          [NSImageSymbolConfiguration
-              configurationWithPointSize:kConstantsIconSize
-                                  weight:NSFontWeightMedium]];
-  NSFont *font = [NSFont systemFontOfSize:KKFontSizeSM
-                                   weight:NSFontWeightMedium];
-  CGFloat textW = ceil(
-      [@"Constants" sizeWithAttributes:@{NSFontAttributeName : font}].width);
-  static const CGFloat kPadX = 5.0, kGap = 3.0;
-  return NSMakeSize(kPadX + ceil(img.size.width) + kGap + textW + kPadX, 18.0);
-}
-
-@end
-
-@implementation RoundedInspectorView {
-  id<PROAPIAccessing> _apiManager;
-  RoundedTab _selectedTab;
-  KKPillToggleRowView *_tabBar;
-  _RoundedLoopButton *_loopButton;
-  _RoundedConstantsButton *_constantsButton;
-  NSView *_contentView;
-  KKTimelineLanesView *_basicView;
-}
+@implementation RoundedInspectorView
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager
                        loopEnabled:(BOOL)loopEnabled
@@ -233,6 +92,7 @@ typedef NS_ENUM(NSInteger, RoundedTab) {
         [[KKTimelineLanesView alloc] initWithAvailableLanes:availableLanes
                                                    timeline:timeline];
     _basicView.translatesAutoresizingMaskIntoConstraints = NO;
+    _basicView.managePopoverSpotlightLabel = @"Radius";
     [_contentView addSubview:_basicView];
 
     // Capture weakBasic and weakConstants AFTER _basicView is assigned.
@@ -304,6 +164,15 @@ typedef NS_ENUM(NSInteger, RoundedTab) {
     ]];
   }
   return self;
+}
+
+- (KKTimelineLanesView *)basicLanesView {
+  return _basicView;
+}
+
+- (void)viewDidMoveToWindow {
+  [super viewDidMoveToWindow];
+  [self _maybeAutostartIntroGuide];
 }
 
 - (void)setLoopEnabled:(BOOL)enabled {

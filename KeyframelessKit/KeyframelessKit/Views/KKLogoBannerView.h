@@ -21,6 +21,14 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (instancetype)init;
 
+/// Best-effort screen rect of FCP's effect header row for *this* banner's
+/// inspector. FCP exposes no API for it; the banner is the first plugin
+/// parameter, immediately below the header, so the header is approximated as
+/// the strip directly above the banner. Returns NSZeroRect when this banner
+/// isn't in a window. Instance-scoped so multi-instance timelines resolve the
+/// correct effect's header.
+- (NSRect)effectHeaderScreenRect;
+
 - (instancetype)initWithFrame:(NSRect)frameRect NS_UNAVAILABLE;
 - (nullable instancetype)initWithCoder:(NSCoder *)coder NS_UNAVAILABLE;
 

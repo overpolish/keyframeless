@@ -5,18 +5,60 @@
 
 #import "../../KKLog.h"
 #import "../../Views/KKHelpSection.h"
+#import "../../Views/KKHelpView+Guides.h"
 #import "../../Views/KKHelpView.h"
 #import "../../Views/KKMarkup.h"
+#import "../KKDataBlob.h"
 #import "../KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
 
-#pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 
 @implementation KKPlugin (Help)
 
+- (void)patchUIStateKey:(NSString *)key
+                  value:(id)value
+                paramID:(UInt32)paramID {
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!actionAPI)
+    return;
+  [actionAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  NSString *existing = KKReadCustomParamString(getAPI, paramID);
+  NSMutableDictionary *state =
+      (existing.length
+           ? [NSJSONSerialization
+                 JSONObjectWithData:[existing
+                                        dataUsingEncoding:NSUTF8StringEncoding]
+                            options:0
+                              error:nil]
+           : nil)
+          ?: @{};
+  state = [state mutableCopy];
+  state[key] = value;
+  NSString *json = [[NSString alloc]
+      initWithData:[NSJSONSerialization dataWithJSONObject:state
+                                                   options:0
+                                                     error:nil]
+          encoding:NSUTF8StringEncoding];
+  KKWriteCustomParamString(setAPI, json, paramID);
+  [actionAPI endAction:self];
+}
+
 - (NSArray<KKHelpSection *> *)helpSections {
   return @[];
+}
+
+- (NSArray<KKHelpGuide *> *)helpGuides {
+  return @[];
+}
+
+- (nullable NSNotificationName)helpGuideRefreshNotificationName {
+  return nil;
 }
 
 - (KKClipWrappingMode)clipWrappingMode {
@@ -191,39 +233,44 @@
   if ([self usesMotionBlur])
     [sections addObject:[KKPlugin _builtInMotionBlurHelpSection]];
   CGSize contentSize = CGSizeMake(500.0, 420.0);
-  [windowAPI remoteWindowOfSize:contentSize
-                          reply:^(FxXPView *parentView, NSError *error) {
-                            if (!parentView) {
-                              if (error)
-                                KKLogError(@"remoteWindow error: %@", error);
-                              return;
-                            }
-                            NSView *host = parentView.superview ?: parentView;
-                            for (NSView *sub in [host.subviews copy])
-                              if ([sub.identifier
-                                      isEqualToString:KKRemoteWindowContentID])
-                                [sub removeFromSuperview];
-                            KKHelpView *helpView =
-                                [[KKHelpView alloc] initWithSections:sections];
-                            helpView.identifier = KKRemoteWindowContentID;
-                            helpView.translatesAutoresizingMaskIntoConstraints =
-                                NO;
-                            [host addSubview:helpView];
-                            [NSLayoutConstraint activateConstraints:@[
-                              [helpView.leadingAnchor
-                                  constraintEqualToAnchor:host.leadingAnchor],
-                              [helpView.trailingAnchor
-                                  constraintEqualToAnchor:host.trailingAnchor],
-                              [helpView.topAnchor
-                                  constraintEqualToAnchor:host.topAnchor],
-                              [helpView.bottomAnchor
-                                  constraintEqualToAnchor:host.bottomAnchor],
-                            ]];
-                          }];
+  [windowAPI
+      remoteWindowOfSize:contentSize
+                   reply:^(FxXPView *parentView, NSError *error) {
+                     if (!parentView) {
+                       if (error)
+                         KKLogError(@"remoteWindow error: %@", error);
+                       return;
+                     }
+                     NSView *host = parentView.superview ?: parentView;
+                     for (NSView *sub in [host.subviews copy])
+                       if ([sub.identifier
+                               isEqualToString:KKRemoteWindowContentID])
+                         [sub removeFromSuperview];
+                     NSArray<KKHelpGuide *> *guides = [self helpGuides];
+                     KKHelpView *helpView =
+                         [[KKHelpView alloc] initWithSections:sections
+                                                       guides:guides];
+                     NSNotificationName refreshName =
+                         [self helpGuideRefreshNotificationName];
+                     if (refreshName)
+                       [helpView
+                           observeGuideRefreshNotificationNamed:refreshName];
+                     helpView.identifier = KKRemoteWindowContentID;
+                     helpView.translatesAutoresizingMaskIntoConstraints = NO;
+                     [host addSubview:helpView];
+                     [NSLayoutConstraint activateConstraints:@[
+                       [helpView.leadingAnchor
+                           constraintEqualToAnchor:host.leadingAnchor],
+                       [helpView.trailingAnchor
+                           constraintEqualToAnchor:host.trailingAnchor],
+                       [helpView.topAnchor
+                           constraintEqualToAnchor:host.topAnchor],
+                       [helpView.bottomAnchor
+                           constraintEqualToAnchor:host.bottomAnchor],
+                     ]];
+                   }];
 
   [actionAPI endAction:self];
 }
 
 @end
-
-#pragma clang diagnostic pop

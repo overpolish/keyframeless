@@ -34,6 +34,19 @@
 >
 > Restart FCP after fixing.
 
+## Resetting the joyride intro (debug builds)
+
+Debug XPC service builds are non-sandboxed, so `NSUserDefaults` writes to `~/Library/Preferences/<BundleID>.plist` instead of the sandbox container. The `defaults` CLI looks in the container and won't find or delete the key. To reset the intro-seen state:
+
+```sh
+plutil -remove introSeen ~/Library/Preferences/Rounded-XPC-Service.plist
+killall cfprefsd
+```
+
+`cfprefsd` restarts automatically and re-reads from disk. The joyride will auto-show on the next fresh (no-lanes) clip.
+
+> Production sandboxed builds use the container path — `defaults delete <BundleID> introSeen` works normally there.
+
 ## VSCode
 
 If you're using VSCode with clangd, run the following after building the project to generate the language server config:

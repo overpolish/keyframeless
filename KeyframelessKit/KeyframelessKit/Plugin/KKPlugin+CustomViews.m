@@ -21,9 +21,15 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
 
 @implementation KKPlugin (CustomViews)
 
+- (NSRect)effectHeaderScreenRect {
+  return self.logoBanner ? [self.logoBanner effectHeaderScreenRect]
+                         : NSZeroRect;
+}
+
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
   if (parameterID == kKKParamLogoBanner) {
     KKLogoBannerView *banner = [[KKLogoBannerView alloc] init];
+    self.logoBanner = banner; // per-instance, for guide header anchoring
     if ([self helpSections].count > 0) {
       __weak typeof(self) weakSelf = self;
       banner.onHelpTap = ^{

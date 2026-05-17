@@ -6,22 +6,11 @@
 #import "KKTimelineLanesView.h"
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
+#import "KKTimelineLanesView_Popovers.h"
 #import "KKTimelineLanesView_Private.h"
 #import <KeyframelessKit/KKLog.h>
 
-@implementation KKTimelineLanesView {
-  NSArray<KKLane *> *_availableLanes;
-  KKTimeline *_timeline;
-
-  NSStackView *_laneStack;
-  NSView *_centeredArea;
-  NSTextField *_hintLabel;
-  _KKDropdownTrigger *_dropdownTrigger;
-
-  NSMutableDictionary<NSString *, _KKLaneRow *> *_laneRows;
-  __weak _KKManagePopoverView *_openManageView;
-  __weak _KKStaticValuesPopoverView *_openStaticView;
-}
+@implementation KKTimelineLanesView
 
 - (instancetype)initWithAvailableLanes:(NSArray<KKLane *> *)availableLanes
                               timeline:(KKTimeline *)timeline {
@@ -50,14 +39,13 @@
   _laneStack.alignment = NSLayoutAttributeLeading;
   _laneStack.spacing = 0;
   _laneStack.edgeInsets = NSEdgeInsetsZero;
-  // Collapse to 0 height when empty so _centeredArea fills the available area
-  // correctly.
   [_laneStack setContentHuggingPriority:NSLayoutPriorityRequired
                          forOrientation:NSLayoutConstraintOrientationVertical];
   [self addSubview:_laneStack];
 
   NSView *footerRow = [[NSView alloc] init];
   footerRow.translatesAutoresizingMaskIntoConstraints = NO;
+  _footerRow = footerRow;
   [self addSubview:footerRow];
 
   NSTextField *animatedLabel = [NSTextField labelWithString:@"Animated"];
@@ -77,12 +65,19 @@
   _dropdownTrigger.onTapped = ^{
     __strong typeof(weak) s = weak;
     __strong _KKDropdownTrigger *trigger = weakTrigger;
-    if (s && trigger)
-      [s _showManagePopoverFromView:trigger];
+    if (!s || !trigger)
+      return;
+    // Defer by one run-loop cycle so any in-flight mouseDown event (e.g. from
+    // sendEvent: during joyride click forwarding) is fully consumed before
+    // NSPopoverBehaviorTransient installs its outside-click monitor.
+    dispatch_async(dispatch_get_main_queue(), ^{
+      __strong typeof(weak) s2 = weak;
+      __strong _KKDropdownTrigger *t2 = weakTrigger;
+      if (s2 && t2)
+        [s2 _showManagePopoverFromView:t2];
+    });
   };
 
-  // Spacer that fills the gap between lane rows and footer; hint is centered
-  // within it.
   _centeredArea = [[NSView alloc] init];
   _centeredArea.translatesAutoresizingMaskIntoConstraints = NO;
   [self addSubview:_centeredArea];
@@ -133,7 +128,6 @@
 }
 
 - (void)_refresh {
-  // Remove rows for lanes no longer in the timeline (e.g. after undo).
   NSMutableArray<NSString *> *toRemove = [NSMutableArray array];
   for (NSString *label in _laneRows) {
     if (![self _laneForLabel:label])
@@ -215,6 +209,18 @@
   return result;
 }
 
+- (NSView *)footerView {
+  return _footerRow;
+}
+
+- (nullable NSView *)laneRowViewForLabel:(NSString *)label {
+  return _laneRows[label];
+}
+
+- (KKTimeline *)currentTimeline {
+  return _timeline;
+}
+
 - (NSArray<NSNumber *> *)_defaultValuesForLabel:(NSString *)label {
   KKLane *tmpl = [self _templateForLabel:label];
   if (!tmpl)
@@ -228,8 +234,6 @@
 
 - (void)_optInLaneWithLabel:(NSString *)label
                      values:(NSArray<NSNumber *> *)values {
-  KKLogDebug(@"KKLanesView: _optInLane label=%@ laneStack.arrangedSubviews=%lu",
-             label, (unsigned long)_laneStack.arrangedSubviews.count);
   KKLane *tmpl = [self _templateForLabel:label];
   if (!tmpl)
     return;
@@ -260,7 +264,6 @@
 }
 
 - (void)_optOutLaneWithLabel:(NSString *)label {
-  KKLogDebug(@"KKLanesView: _optOutLane label=%@", label);
   KKTimeline *updated = [_timeline copy];
   NSMutableArray<KKLane *> *lanes = [updated.lanes mutableCopy];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
@@ -283,137 +286,8 @@
     _onTimelineMutated(updated);
 }
 
-- (NSPopover *)_showPopoverWithContent:(NSView *)content
-                              fromView:(NSView *)anchor
-                               onClose:(void (^)(void))onClose {
-  _KKLVPopoverContentView *wrapper = [[_KKLVPopoverContentView alloc] init];
-  wrapper.frame = content.bounds;
-  content.translatesAutoresizingMaskIntoConstraints = NO;
-  [wrapper addSubview:content];
-  [NSLayoutConstraint activateConstraints:@[
-    [content.leadingAnchor constraintEqualToAnchor:wrapper.leadingAnchor],
-    [content.trailingAnchor constraintEqualToAnchor:wrapper.trailingAnchor],
-    [content.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
-    [content.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor],
-  ]];
-
-  NSViewController *vc = [[NSViewController alloc] init];
-  vc.view = wrapper;
-
-  NSPopover *popover = [[NSPopover alloc] init];
-  popover.behavior = NSPopoverBehaviorTransient;
-  popover.contentViewController = vc;
-
-  [popover showRelativeToRect:anchor.bounds
-                       ofView:anchor
-                preferredEdge:NSRectEdgeMinY];
-
-  NSWindow *popoverWindow = popover.contentViewController.view.window;
-  __weak NSPopover *weakPopover = popover;
-  __block id localMon = nil;
-  __block id globalMon = nil;
-
-  void (^removeMonitors)(void) = ^{
-    if (localMon) {
-      [NSEvent removeMonitor:localMon];
-      localMon = nil;
-    }
-    if (globalMon) {
-      [NSEvent removeMonitor:globalMon];
-      globalMon = nil;
-    }
-  };
-
-  __block id closeObs = [[NSNotificationCenter defaultCenter]
-      addObserverForName:NSPopoverWillCloseNotification
-                  object:popover
-                   queue:NSOperationQueue.mainQueue
-              usingBlock:^(NSNotification *n) {
-                removeMonitors();
-                if (onClose)
-                  onClose();
-                [[NSNotificationCenter defaultCenter] removeObserver:closeObs];
-              }];
-
-  // Local monitor: catches scrolls in our own XPC window — skip events inside
-  // the popover.
-  localMon =
-      [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
-                                            handler:^NSEvent *(NSEvent *e) {
-                                              if (e.window != popoverWindow)
-                                                [weakPopover close];
-                                              return e;
-                                            }];
-
-  // Global monitor: catches scrolls in FCP inspector (different process) —
-  // always close.
-  globalMon =
-      [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
-                                             handler:^(NSEvent *e) {
-                                               [weakPopover close];
-                                             }];
-
-  return popover;
-}
-
-- (void)_showManagePopoverFromView:(NSView *)anchorView {
-  NSSet<NSString *> *checked = [self _optedInLabelsSet];
-  __weak typeof(self) weak = self;
-
-  __block _KKManagePopoverView *manageView = nil;
-  manageView = [[_KKManagePopoverView alloc]
-      initWithLanes:_availableLanes
-      checkedLabels:checked
-           onToggle:^(NSString *label) {
-             __strong typeof(weak) s = weak;
-             KKLogDebug(@"KKLanesView: onToggle label=%@ s=%@", label,
-                        s ? @"alive" : @"nil");
-             if (!s)
-               return;
-             if ([s _laneForLabel:label])
-               [s _optOutLaneWithLabel:label];
-             else
-               [s _optInLaneWithLabel:label
-                               values:[s _defaultValuesForLabel:label]];
-             KKLogDebug(
-                 @"KKLanesView: calling updateCheckedLabels manageView=%@",
-                 manageView ? @"set" : @"nil");
-             [manageView updateCheckedLabels:[s _optedInLabelsSet]];
-           }];
-
-  _openManageView = manageView;
-
-  [self _showPopoverWithContent:manageView
-                       fromView:anchorView
-                        onClose:^{
-                          __strong typeof(weak) s = weak;
-                          if (s)
-                            s->_openManageView = nil;
-                        }];
-}
-
 - (BOOL)hasUnoptedLanes {
   return [self _unoptedLanes].count > 0;
-}
-
-- (void)showStaticValuesPopoverFromView:(NSView *)anchor {
-  NSArray<KKLane *> *unopted = [self _unoptedLanes];
-  if (unopted.count == 0)
-    return;
-  __weak typeof(self) weak = self;
-
-  _KKStaticValuesPopoverView *staticView =
-      [[_KKStaticValuesPopoverView alloc] initWithLanes:unopted];
-  _openStaticView = staticView;
-
-  NSPopover *popover = [self _showPopoverWithContent:staticView
-                                            fromView:anchor
-                                             onClose:^{
-                                               __strong typeof(weak) s = weak;
-                                               if (s)
-                                                 s->_openStaticView = nil;
-                                             }];
-  staticView.popover = popover;
 }
 
 - (void)applyTimeline:(KKTimeline *)timeline {
