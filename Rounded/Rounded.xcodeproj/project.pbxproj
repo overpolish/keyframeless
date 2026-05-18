@@ -105,6 +105,7 @@
 				Plugin/RoundedInspectorButtons.m,
 				Plugin/RoundedInspectorView.m,
 				"Plugin/RoundedInspectorView+Guides.m",
+				Plugin/RoundedMiniCanvasRenderer.m,
 				"Plugin/RoundedOSC+MouseHandlers.m",
 				Plugin/RoundedOSCRadiusMath.m,
 				"Wrapper Application/Info.plist",

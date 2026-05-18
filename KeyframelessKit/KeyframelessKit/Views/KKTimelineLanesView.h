@@ -8,6 +8,8 @@
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
+@protocol KKMiniCanvasDelegate;
+
 NS_ASSUME_NONNULL_BEGIN
 
 /// Plugin-agnostic timeline lane editor. Plugin provides available lane
@@ -36,6 +38,12 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) void (^onTimelineMutated)
     (KKTimeline *updated);
 
+/// Fired once around a continuous mini-canvas handle drag (start / end), so
+/// the host can wrap the burst of `onTimelineMutated` writes in a single
+/// undo group.
+@property(nonatomic, copy, nullable) void (^onDragBegin)(void);
+@property(nonatomic, copy, nullable) void (^onDragEnd)(void);
+
 /// The footer row view that contains the "Add properties…" dropdown trigger.
 /// Useful as a joyride spotlight target.
 @property(nonatomic, readonly) NSView *footerView;
@@ -59,6 +67,20 @@ NS_ASSUME_NONNULL_BEGIN
 /// Label to spotlight inside the manage popover when onManagePopoverWillOpen
 /// fires. Defaults to nil — first available lane alphabetically is used.
 @property(nonatomic, copy, nullable) NSString *managePopoverSpotlightLabel;
+
+/// Path to the mini-canvas source descriptor JSON the render side publishes.
+/// Threaded into the static-values popover so spatial lanes (Crop) can show a
+/// live preview. nil = no preview (label-only rows).
+@property(nonatomic, copy, nullable) NSString *miniCanvasDescriptorPath;
+
+/// Cold-start clip aspect (w/h) for the mini canvas before a source resolves.
+/// Defaults to 16:9.
+@property(nonatomic) CGFloat miniCanvasClipAspect;
+
+/// Plugin delegate that runs its effect on the mini canvas source. Threaded
+/// into the static-values popover's canvas.
+@property(nonatomic, weak, nullable) id<KKMiniCanvasDelegate>
+    miniCanvasDelegate;
 
 @end
 

@@ -20,7 +20,8 @@
         sortedArrayUsingComparator:^NSComparisonResult(KKLane *a, KKLane *b) {
           return [a.label localizedCaseInsensitiveCompare:b.label];
         }];
-    _timeline = [timeline copy];
+    _timeline = [self _timelineSeededFrom:timeline];
+    _miniCanvasClipAspect = 16.0 / 9.0;
     _laneRows = [NSMutableDictionary dictionary];
     [self _buildUI];
     [self _refresh];
@@ -130,7 +131,7 @@
 - (void)_refresh {
   NSMutableArray<NSString *> *toRemove = [NSMutableArray array];
   for (NSString *label in _laneRows) {
-    if (![self _laneForLabel:label])
+    if (![self _isAnimatableLabel:label])
       [toRemove addObject:label];
   }
   for (NSString *label in toRemove) {
@@ -142,7 +143,7 @@
 
   BOOL anyOptedIn = NO;
   for (KKLane *tmpl in _availableLanes) {
-    if (![self _laneForLabel:tmpl.label])
+    if (![self _isAnimatableLabel:tmpl.label])
       continue;
     anyOptedIn = YES;
     if (!_laneRows[tmpl.label]) {
@@ -169,7 +170,7 @@
 
   NSMutableArray<NSString *> *opted = [NSMutableArray array];
   for (KKLane *tmpl in _availableLanes)
-    if ([self _laneForLabel:tmpl.label])
+    if ([self _isAnimatableLabel:tmpl.label])
       [opted addObject:tmpl.label];
   _dropdownTrigger.selectedLabels = opted;
   [_dropdownTrigger setNeedsDisplay:YES];
@@ -194,18 +195,70 @@
   return nil;
 }
 
+// Every available property ALWAYS has a lane (single keypose at t=0 is its
+// constant value). `lane.enabled` means "animatable" (shown in the sequencer,
+// checked in the dropdown) and is toggled ONLY by the dropdown — editing a
+// value never changes it. This returns `src` with any missing lanes added as
+// disabled (constant) lanes seeded to the template default.
+- (KKTimeline *)_timelineSeededFrom:(KKTimeline *)src {
+  KKTimeline *out = [src copy] ?: [KKTimeline timeline];
+  NSMutableArray<KKLane *> *lanes =
+      [out.lanes mutableCopy] ?: [NSMutableArray array];
+  for (KKLane *tmpl in _availableLanes) {
+    NSInteger presentIdx = NSNotFound;
+    for (NSInteger i = 0; i < (NSInteger)lanes.count; i++)
+      if ([lanes[i].label isEqualToString:tmpl.label]) {
+        presentIdx = i;
+        break;
+      }
+    if (presentIdx != NSNotFound) {
+      // valueType / component bounds are canonical (defined by the plugin
+      // template, not user-editable). Re-assert them so lanes from older
+      // blobs that didn't serialize these still render correctly.
+      KKLane *fixed = [lanes[presentIdx] copy];
+      fixed.valueType = tmpl.valueType;
+      fixed.componentMin = tmpl.componentMin;
+      fixed.componentMax = tmpl.componentMax;
+      lanes[presentIdx] = fixed;
+      continue;
+    }
+    KKLane *lane = [KKLane laneWithLabel:tmpl.label];
+    lane.valueType = tmpl.valueType;
+    lane.componentMin = tmpl.componentMin;
+    lane.componentMax = tmpl.componentMax;
+    lane.enabled = NO; // constant until the dropdown makes it animatable
+    [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                          values:[self _defaultValuesForLabel:
+                                                           tmpl.label]]];
+    [lanes addObject:lane];
+  }
+  out.lanes = lanes;
+  return out;
+}
+
+// Animatable == the lane exists and is enabled (dropdown-controlled).
+- (BOOL)_isAnimatableLabel:(NSString *)label {
+  KKLane *lane = [self _laneForLabel:label];
+  return lane != nil && lane.enabled;
+}
+
 - (NSSet<NSString *> *)_optedInLabelsSet {
   NSMutableSet<NSString *> *set = [NSMutableSet set];
   for (KKLane *lane in _timeline.lanes)
-    [set addObject:lane.label];
+    if (lane.enabled)
+      [set addObject:lane.label];
   return [set copy];
 }
 
+// The constants editor shows every non-animatable property's lane (with its
+// current value, so the editor reflects/edits the real constant).
 - (NSArray<KKLane *> *)_unoptedLanes {
   NSMutableArray<KKLane *> *result = [NSMutableArray array];
-  for (KKLane *tmpl in _availableLanes)
-    if (![self _laneForLabel:tmpl.label])
-      [result addObject:tmpl];
+  for (KKLane *tmpl in _availableLanes) {
+    KKLane *lane = [self _laneForLabel:tmpl.label];
+    if (lane && !lane.enabled)
+      [result addObject:lane];
+  }
   return result;
 }
 
@@ -225,37 +278,27 @@
   KKLane *tmpl = [self _templateForLabel:label];
   if (!tmpl)
     return @[ @0.0 ];
-  if (tmpl.valueType == KKLaneValueTypeBox)
+  NSArray<NSNumber *> *tmplDefault = tmpl.keyposes.firstObject.values;
+  if (tmplDefault.count)
+    return tmplDefault;
+  if (tmpl.valueType == KKLaneValueTypeCrop)
     return @[ @1.0, @1.0, @0.0, @0.0 ];
   double def =
       tmpl.componentMin.firstObject ? tmpl.componentMin[0].doubleValue : 0.0;
   return @[ @(def) ];
 }
 
-- (void)_optInLaneWithLabel:(NSString *)label
-                     values:(NSArray<NSNumber *> *)values {
-  KKLane *tmpl = [self _templateForLabel:label];
-  if (!tmpl)
-    return;
-  KKLane *lane = [KKLane laneWithLabel:label];
-  lane.valueType = tmpl.valueType;
-  lane.componentMin = tmpl.componentMin;
-  lane.componentMax = tmpl.componentMax;
-  KKKeyPose *kp = [KKKeyPose keyposeAtTime:0.0 values:values];
-  [lane insertKeypose:kp];
-
+// Replace the lane for `label` with `lane` (always present after seeding),
+// persist, and refresh. Single funnel for both animatable + value edits.
+- (void)_replaceLane:(KKLane *)lane forLabel:(NSString *)label {
   KKTimeline *updated = [_timeline copy];
   NSMutableArray<KKLane *> *lanes = [updated.lanes mutableCopy];
-  BOOL replaced = NO;
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
     if ([lanes[i].label isEqualToString:label]) {
       lanes[i] = lane;
-      replaced = YES;
       break;
     }
   }
-  if (!replaced)
-    [lanes addObject:lane];
   updated.lanes = lanes;
   _timeline = updated;
   [self _refresh];
@@ -263,27 +306,38 @@
     _onTimelineMutated(updated);
 }
 
-- (void)_optOutLaneWithLabel:(NSString *)label {
-  KKTimeline *updated = [_timeline copy];
-  NSMutableArray<KKLane *> *lanes = [updated.lanes mutableCopy];
-  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if ([lanes[i].label isEqualToString:label]) {
-      [lanes removeObjectAtIndex:i];
-      break;
+// Dropdown only: flip a property between animatable (sequencer) and constant.
+// Never touches the value.
+- (void)_setLaneAnimatable:(BOOL)animatable forLabel:(NSString *)label {
+  KKLane *lane = [[self _laneForLabel:label] copy];
+  if (!lane || lane.enabled == animatable)
+    return;
+  lane.enabled = animatable;
+  if (!animatable) {
+    _KKLaneRow *row = _laneRows[label];
+    if (row) {
+      [_laneStack removeArrangedSubview:row];
+      [row removeFromSuperview];
+      [_laneRows removeObjectForKey:label];
     }
   }
-  updated.lanes = lanes;
-  _timeline = updated;
+  [self _replaceLane:lane forLabel:label];
+}
 
-  _KKLaneRow *row = _laneRows[label];
-  if (row) {
-    [_laneStack removeArrangedSubview:row];
-    [row removeFromSuperview];
-    [_laneRows removeObjectForKey:label];
-  }
-  [self _refresh];
-  if (_onTimelineMutated)
-    _onTimelineMutated(updated);
+// Value editor (mini canvas / fields): set the property's constant value
+// without changing its animatable status.
+- (void)_setLaneValues:(NSArray<NSNumber *> *)values
+              forLabel:(NSString *)label {
+  KKLane *existing = [self _laneForLabel:label];
+  if (!existing)
+    return;
+  KKLane *lane = [KKLane laneWithLabel:label];
+  lane.valueType = existing.valueType;
+  lane.componentMin = existing.componentMin;
+  lane.componentMax = existing.componentMax;
+  lane.enabled = existing.enabled;
+  [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:values]];
+  [self _replaceLane:lane forLabel:label];
 }
 
 - (BOOL)hasUnoptedLanes {
@@ -291,7 +345,7 @@
 }
 
 - (void)applyTimeline:(KKTimeline *)timeline {
-  _timeline = [timeline copy];
+  _timeline = [self _timelineSeededFrom:timeline];
   [self _refresh];
 }
 

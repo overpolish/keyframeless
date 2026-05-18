@@ -54,7 +54,10 @@ static const CGFloat kInspectorHeight = 200.0;
 
     _constantsButton = [[_RoundedConstantsButton alloc] init];
     _constantsButton.translatesAutoresizingMaskIntoConstraints = NO;
-    _constantsButton.hidden = (timeline.lanes.count >= availableLanes.count);
+    // Authoritative visibility is set from _basicView.hasUnoptedLanes once
+    // it exists (below) — the old count-based check wrongly hid this on
+    // reboot, when the persisted blob already has the (constant) lanes.
+    _constantsButton.hidden = YES;
     [self addSubview:_constantsButton];
 
     _detachButton = [[_RoundedDetachButton alloc] init];
@@ -106,7 +109,16 @@ static const CGFloat kInspectorHeight = 200.0;
                                                    timeline:timeline];
     _basicView.translatesAutoresizingMaskIntoConstraints = NO;
     _basicView.managePopoverSpotlightLabel = @"Radius";
+    _basicView.miniCanvasDescriptorPath = RoundedMiniCanvasDescriptorPath;
+    _miniCanvasRenderer = [[RoundedMiniCanvasRenderer alloc] init];
+    _miniCanvasRenderer.timeline = timeline;
+    _basicView.miniCanvasDelegate = _miniCanvasRenderer;
     [_contentView addSubview:_basicView];
+
+    // New model: a property is a constant when its (always-present, seeded)
+    // lane is not enabled. Use the same signal as applyTimeline:/mutated so
+    // fresh and rebooted instances behave identically.
+    _constantsButton.hidden = !_basicView.hasUnoptedLanes;
 
     // Capture weakBasic and weakConstants AFTER _basicView is assigned.
     __weak _RoundedConstantsButton *weakConstants = _constantsButton;
@@ -129,6 +141,17 @@ static const CGFloat kInspectorHeight = 200.0;
         btn.hidden = !basic.hasUnoptedLanes;
       if (strong.onTimelineMutated)
         strong.onTimelineMutated(updated);
+    };
+
+    _basicView.onDragBegin = ^{
+      __strong typeof(weak) strong = weak;
+      if (strong.onDragBegin)
+        strong.onDragBegin();
+    };
+    _basicView.onDragEnd = ^{
+      __strong typeof(weak) strong = weak;
+      if (strong.onDragEnd)
+        strong.onDragEnd();
     };
 
     CGFloat h = KKInspectorHorizontalInset;
@@ -211,6 +234,7 @@ static const CGFloat kInspectorHeight = 200.0;
 
 - (void)applyTimeline:(KKTimeline *)timeline {
   [_basicView applyTimeline:timeline];
+  _miniCanvasRenderer.timeline = timeline;
   _constantsButton.hidden = !_basicView.hasUnoptedLanes;
   [_detachedView applyTimeline:timeline];
 }
@@ -249,6 +273,8 @@ static const CGFloat kInspectorHeight = 200.0;
   copy.onLoopToggled = self.onLoopToggled;
   copy.onTabChanged = self.onTabChanged;
   copy.onTimelineMutated = self.onTimelineMutated;
+  copy.onDragBegin = self.onDragBegin;
+  copy.onDragEnd = self.onDragEnd;
   copy.effectHeaderRectProvider = self.effectHeaderRectProvider;
   _detachedView = copy;
   _detachButton.on = YES;
@@ -274,6 +300,7 @@ static const CGFloat kInspectorHeight = 200.0;
 
 - (void)dealloc {
   [_detachedView release];
+  [_miniCanvasRenderer release];
   [_availableLanes release];
   [super dealloc];
 }

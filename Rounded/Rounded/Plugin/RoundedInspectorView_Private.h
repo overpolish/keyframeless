@@ -7,6 +7,7 @@
 
 #import "RoundedInspectorButtons.h"
 #import "RoundedInspectorView.h"
+#import "RoundedMiniCanvasRenderer.h"
 #import <KeyframelessKit/KKJoyrideController.h>
 #import <KeyframelessKit/KKJoyrideOSCSegment.h>
 #import <KeyframelessKit/KKPillToggleRowView.h>
@@ -29,6 +30,7 @@ typedef NS_ENUM(NSInteger, RoundedTab) {
   _RoundedDetachButton *_detachButton;
   NSView *_contentView;
   KKTimelineLanesView *_basicView;
+  RoundedMiniCanvasRenderer *_miniCanvasRenderer;
   NSArray<KKLane *> *_availableLanes;
   BOOL _isDetachedCopy;
   BOOL _detachedAttached;

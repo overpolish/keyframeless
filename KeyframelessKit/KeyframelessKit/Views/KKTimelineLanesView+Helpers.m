@@ -5,9 +5,26 @@
 
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
+#import "KKMiniCanvasView.h"
+#import "KKSliderView.h"
 #import "KKTimelineLanesView_Private.h"
 #import <KeyframelessKit/KKLog.h>
 #import <QuartzCore/QuartzCore.h>
+
+/// Hosts the mini canvas as its documentView so magnify/scroll events flow
+/// (the arrangement the old working KKStageSequencerView used). Blocks
+/// at-boundary overscroll from reaching FCP's inspector root scroll view.
+@interface _KKMiniCanvasScrollView : NSScrollView
+@end
+
+@implementation _KKMiniCanvasScrollView
+- (NSResponder *)_recursiveResponderThatWantsForwardedScrollEventsForAxis:
+                     (NSEventGestureAxis)axis
+                                                         intendedForSwipe:
+                                                             (BOOL)forSwipe {
+  return nil;
+}
+@end
 
 // macOS 26 wraps popover content in a GlassView that injects a CoreHostingView
 // (glass chrome) and ContentHolderView (opaque bg fill). Walk up to
@@ -288,34 +305,307 @@ static void _clearPopoverBackground(NSView *view) {
 
 @end
 
-@implementation _KKStaticValueRow
+static const CGFloat kFloatRowH = 30.0;
+static const CGFloat kCropRowH = 30.0; // single-line W/H/X/Y hstack
+static const CGFloat kStaticFieldW = 40.0;
+
+// Mirrors KKSeedView's field: only takes focus on an explicit click (so the
+// popover doesn't steal keyboard shortcuts), accent caret/selection, and
+// hands focus back to the window when editing ends.
+@interface _KKStaticNumberField : NSTextField
+@end
+
+@implementation _KKStaticNumberField {
+  BOOL _userClickPending;
+}
+- (BOOL)acceptsFirstResponder {
+  return _userClickPending;
+}
+- (void)mouseDown:(NSEvent *)event {
+  _userClickPending = YES;
+  [super mouseDown:event];
+}
+- (BOOL)performKeyEquivalent:(NSEvent *)event {
+  if (self.currentEditor) {
+    [self.currentEditor keyDown:event];
+    return YES;
+  }
+  return [super performKeyEquivalent:event];
+}
+- (BOOL)becomeFirstResponder {
+  BOOL ok = [super becomeFirstResponder];
+  if (ok) {
+    [self _styleFieldEditor];
+    // The field editor may not be installed yet on this runloop tick;
+    // re-apply next tick so the accent caret/selection actually takes.
+    __weak typeof(self) weak = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [weak _styleFieldEditor];
+    });
+  }
+  return ok;
+}
+- (void)_styleFieldEditor {
+  NSText *ed = self.currentEditor;
+  if (![ed isKindOfClass:[NSTextView class]])
+    return;
+  NSTextView *editor = (NSTextView *)ed;
+  NSColor *accent = [NSColor accent];
+  editor.insertionPointColor = accent;
+  editor.selectedTextAttributes = @{
+    NSBackgroundColorAttributeName : [accent colorWithAlphaComponent:0.3],
+    NSForegroundColorAttributeName : [NSColor labelColor],
+  };
+}
+- (void)textDidEndEditing:(NSNotification *)notification {
+  [super textDidEndEditing:notification];
+  _userClickPending = NO;
+  [self.window makeFirstResponder:nil];
+}
+@end
+
+static NSTextField *_KKMakeNumberField(void) {
+  _KKStaticNumberField *f = [[_KKStaticNumberField alloc] init];
+  f.translatesAutoresizingMaskIntoConstraints = NO;
+  f.font = [NSFont monospacedDigitSystemFontOfSize:KKFontSizeSM
+                                            weight:NSFontWeightRegular];
+  f.alignment = NSTextAlignmentRight;
+  f.textColor = [NSColor inspectorLabel];
+  f.backgroundColor = [NSColor clearColor];
+  f.bordered = NO;
+  f.bezeled = NO;
+  f.drawsBackground = NO;
+  f.focusRingType = NSFocusRingTypeNone;
+  f.editable = YES;
+  f.selectable = YES;
+  // Fire the action on Return *and* on focus loss, so a typed value commits
+  // without a drag (the host applies it immediately — see coalescing).
+  [f.cell setSendsActionOnEndEditing:YES];
+  return f;
+}
+
+static NSTextField *_KKMakeCaption(NSString *s) {
+  NSTextField *l = [NSTextField labelWithString:s];
+  l.translatesAutoresizingMaskIntoConstraints = NO;
+  l.font = [NSFont systemFontOfSize:KKFontSizeSM weight:NSFontWeightRegular];
+  l.textColor = [NSColor inspectorLabel];
+  return l;
+}
+
+@implementation _KKStaticValueRow {
+  KKLaneValueType _valueType;
+  NSArray<NSNumber *> *_cmin;
+  NSArray<NSNumber *> *_cmax;
+  KKSliderView *_slider;               // Float only
+  NSArray<NSTextField *> *_fields;     // Float: 1; Crop: 4 (w,h,x,y)
+  NSMutableArray<NSNumber *> *_values; // normalized, authoritative
+}
+
+// Display = stored(normalized) × scale; stored = entered ÷ scale. Lets the
+// crop fields show pixels while the model stays 0–1. 1.0 == show raw.
+- (double)_scaleAt:(NSInteger)i {
+  double s = _componentScale ? _componentScale(i) : 1.0;
+  return s > 0 ? s : 1.0;
+}
 
 - (BOOL)isFlipped {
   return YES;
 }
 
-- (instancetype)initWithLabel:(NSString *)label {
-  self = [super initWithFrame:NSMakeRect(0, 0, kPopoverW, kRowHeight)];
++ (CGFloat)heightForLane:(KKLane *)lane {
+  return lane.valueType == KKLaneValueTypeCrop ? kCropRowH : kFloatRowH;
+}
+
+// NSStackView sizes arranged rows by their intrinsic height; without this
+// the rows collapse on top of each other (no height constraint otherwise).
+- (NSSize)intrinsicContentSize {
+  return NSMakeSize(NSViewNoIntrinsicMetric,
+                    _valueType == KKLaneValueTypeCrop ? kCropRowH : kFloatRowH);
+}
+
+- (double)_clamp:(double)v index:(NSInteger)i {
+  if (i < (NSInteger)_cmin.count && v < _cmin[i].doubleValue)
+    v = _cmin[i].doubleValue;
+  if (i < (NSInteger)_cmax.count && v > _cmax[i].doubleValue)
+    v = _cmax[i].doubleValue;
+  return v;
+}
+
+// normalized (clamped) → display string in scaled units. Pixel-scaled
+// fields (scale ≠ 1, i.e. crop) show whole numbers; raw fields (radius)
+// keep 2 decimals.
+- (NSString *)_displayForNorm:(double)norm index:(NSInteger)i {
+  double scale = [self _scaleAt:i];
+  BOOL intFmt = (scale != 1.0);
+  double dv = norm * scale;
+  // Round to the displayed precision first, then squash -0 → 0 so a tiny
+  // negative never shows as "-0".
+  dv = intFmt ? round(dv) : round(dv * 100.0) / 100.0;
+  if (dv == 0.0)
+    dv = 0.0;
+  return [NSString stringWithFormat:(intFmt ? @"%.0f" : @"%.2f"), dv];
+}
+
+- (instancetype)initWithLane:(KKLane *)lane {
+  CGFloat h = [_KKStaticValueRow heightForLane:lane];
+  self = [super initWithFrame:NSMakeRect(0, 0, kCanvasPopoverW, h)];
   if (!self)
     return nil;
-  _laneLabel = [label copy];
+  _laneLabel = [lane.label copy];
+  _valueType = lane.valueType;
+  _cmin = lane.componentMin ?: @[];
+  _cmax = lane.componentMax ?: @[];
+
+  NSTextField *title = _KKMakeCaption(lane.label);
+  [self addSubview:title];
+
+  if (_valueType == KKLaneValueTypeCrop) {
+    NSArray<NSString *> *caps = @[ @"W", @"H", @"X", @"Y" ];
+    NSMutableArray<NSView *> *arranged = [NSMutableArray array];
+    NSMutableArray<NSTextField *> *fs = [NSMutableArray array];
+    for (NSInteger i = 0; i < 4; i++) {
+      NSTextField *cap = _KKMakeCaption(caps[i]);
+      NSTextField *fld = _KKMakeNumberField();
+      fld.target = self;
+      fld.action = @selector(_fieldCommitted:);
+      [fld.widthAnchor constraintEqualToConstant:kStaticFieldW].active = YES;
+      [arranged addObject:cap];
+      [arranged addObject:fld];
+      [fs addObject:fld];
+      if (i < 3) { // divider between each W | H | X | Y group
+        NSView *div = [[NSView alloc] init];
+        div.translatesAutoresizingMaskIntoConstraints = NO;
+        div.wantsLayer = YES;
+        div.layer.backgroundColor =
+            [[NSColor inspectorLabel] colorWithAlphaComponent:0.25].CGColor;
+        [div.widthAnchor constraintEqualToConstant:1.0].active = YES;
+        [div.heightAnchor constraintEqualToConstant:16.0].active = YES;
+        [arranged addObject:div];
+      }
+    }
+    NSStackView *hs = [NSStackView stackViewWithViews:arranged];
+    hs.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    hs.alignment = NSLayoutAttributeCenterY;
+    hs.spacing = KKPaddingMD;
+    hs.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:hs];
+    [NSLayoutConstraint activateConstraints:@[
+      [title.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                          constant:KKPaddingLG],
+      [title.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      // Pushed to the right, hugging the trailing edge (like the radius
+      // field) rather than sitting right after the label.
+      [hs.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                        constant:-KKPaddingLG],
+      [hs.leadingAnchor
+          constraintGreaterThanOrEqualToAnchor:title.trailingAnchor
+                                      constant:KKPaddingMD],
+      [hs.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    ]];
+    _fields = fs;
+  } else {
+    NSTextField *fld = _KKMakeNumberField();
+    fld.target = self;
+    fld.action = @selector(_fieldCommitted:);
+    _fields = @[ fld ];
+    _slider = [KKSliderView styledSlider];
+    _slider.translatesAutoresizingMaskIntoConstraints = NO;
+    _slider.minValue = _cmin.count ? _cmin[0].doubleValue : 0.0;
+    _slider.maxValue = _cmax.count ? _cmax[0].doubleValue : 1.0;
+    _slider.continuous = YES;
+    _slider.trackFillColor = [NSColor accent];
+    _slider.target = self;
+    _slider.action = @selector(_sliderMoved:);
+    __weak typeof(self) weak = self;
+    _slider.onDragBegin = ^{
+      if (weak.onDragBegin)
+        weak.onDragBegin();
+    };
+    _slider.onDragEnd = ^{
+      if (weak.onDragEnd)
+        weak.onDragEnd();
+    };
+    [self addSubview:_slider];
+    [self addSubview:fld];
+    [NSLayoutConstraint activateConstraints:@[
+      [title.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                          constant:KKPaddingLG],
+      [title.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [title.widthAnchor constraintEqualToConstant:54.0],
+      [_slider.leadingAnchor constraintEqualToAnchor:title.trailingAnchor
+                                            constant:KKPaddingSM],
+      [_slider.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [fld.leadingAnchor constraintEqualToAnchor:_slider.trailingAnchor
+                                        constant:KKPaddingSM],
+      [fld.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                         constant:-KKPaddingLG],
+      [fld.widthAnchor constraintEqualToConstant:kStaticFieldW],
+      [fld.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    ]];
+  }
+
+  [self applyLane:lane];
   return self;
 }
 
-- (void)drawRect:(NSRect)dirty {
-  NSDictionary *attrs = @{
-    NSFontAttributeName : [NSFont systemFontOfSize:KKFontSizeSM
-                                            weight:NSFontWeightRegular],
-    NSForegroundColorAttributeName : [NSColor inspectorLabel],
-  };
-  NSSize sz = [_laneLabel sizeWithAttributes:attrs];
-  [_laneLabel drawAtPoint:NSMakePoint(KKPaddingLG,
-                                      NSMidY(self.bounds) - sz.height / 2.0)
-           withAttributes:attrs];
+// Per-component clamp; for Crop additionally keep the box inside the image
+// (|x| ≤ (1-w)/2, |y| ≤ (1-h)/2) so typed values match the OSC, which
+// never lets the crop rect exceed the image.
+- (void)_constrain:(NSMutableArray<NSNumber *> *)v {
+  for (NSInteger i = 0; i < (NSInteger)v.count; i++)
+    v[i] = @([self _clamp:v[i].doubleValue index:i]);
+  if (_valueType == KKLaneValueTypeCrop && v.count >= 4) {
+    double w = v[0].doubleValue, h = v[1].doubleValue;
+    double xb = (1.0 - w) / 2.0, yb = (1.0 - h) / 2.0;
+    double x = v[2].doubleValue, y = v[3].doubleValue;
+    v[2] = @(x < -xb ? -xb : (x > xb ? xb : x));
+    v[3] = @(y < -yb ? -yb : (y > yb ? yb : y));
+  }
 }
 
-- (NSSize)intrinsicContentSize {
-  return NSMakeSize(NSViewNoIntrinsicMetric, kRowHeight);
+// Render _values into the fields/slider (display = norm × scale). Skips a
+// field the user is editing so typing isn't clobbered.
+- (void)refreshDisplay {
+  for (NSInteger i = 0;
+       i < (NSInteger)_fields.count && i < (NSInteger)_values.count; i++) {
+    if (_fields[i].currentEditor)
+      continue;
+    _fields[i].stringValue = [self _displayForNorm:_values[i].doubleValue
+                                             index:i];
+  }
+  if (_slider && _values.count && !_fields[0].currentEditor)
+    _slider.doubleValue = _values[0].doubleValue;
+}
+
+- (void)_setValues:(NSArray<NSNumber *> *)v emit:(BOOL)emit {
+  _values = [v mutableCopy] ?: [NSMutableArray array];
+  [self _constrain:_values];
+  [self refreshDisplay];
+  if (emit && self.onValue)
+    self.onValue([_values copy]);
+}
+
+- (void)_sliderMoved:(id)sender {
+  NSMutableArray *v = [_values mutableCopy];
+  if (v.count)
+    v[0] = @(_slider.doubleValue); // radius: scale 1
+  [self _setValues:v emit:YES];
+}
+
+- (void)_fieldCommitted:(id)sender {
+  NSMutableArray<NSNumber *> *v = [_values mutableCopy];
+  for (NSInteger i = 0; i < (NSInteger)_fields.count && i < (NSInteger)v.count;
+       i++)
+    v[i] = @(_fields[i].doubleValue / [self _scaleAt:i]);
+  [self _setValues:v emit:YES];
+}
+
+- (void)applyValues:(NSArray<NSNumber *> *)vals {
+  [self _setValues:vals emit:NO];
+}
+
+- (void)applyLane:(KKLane *)lane {
+  [self applyValues:lane.keyposes.firstObject.values];
 }
 
 @end
@@ -323,22 +613,134 @@ static void _clearPopoverBackground(NSView *view) {
 @implementation _KKStaticValuesPopoverView {
   NSMutableDictionary<NSString *, _KKStaticValueRow *> *_rowsByLabel;
   NSStackView *_stack;
+  KKMiniCanvasView *_miniCanvas;
+  NSString *_descriptorPath;
+  CGFloat _clipAspect;
+  void (^_onHandleValue)(NSString *, NSArray<NSNumber *> *);
+  void (^_onDragBegin)(void);
+  void (^_onDragEnd)(void);
 }
 
-+ (CGFloat)heightForLanes:(NSArray<KKLane *> *)lanes {
-  return KKPaddingMD + lanes.count * kRowHeight + KKPaddingMD;
++ (CGFloat)_popoverWidthForDescriptor:(NSString *)descriptorPath {
+  return descriptorPath.length > 0 ? kCanvasPopoverW : kPopoverW;
+}
+
++ (CGFloat)_canvasHeightForAspect:(CGFloat)aspect width:(CGFloat)w {
+  CGFloat a = aspect > 0 ? aspect : (16.0 / 9.0);
+  return (w - 2 * KKPaddingMD) / a;
+}
+
++ (CGFloat)heightForLanes:(NSArray<KKLane *> *)lanes
+           descriptorPath:(NSString *)descriptorPath
+               clipAspect:(CGFloat)clipAspect {
+  CGFloat rows = 0;
+  for (KKLane *lane in lanes)
+    rows += [_KKStaticValueRow heightForLane:lane];
+  CGFloat h = KKPaddingMD + rows + KKPaddingMD;
+  if (descriptorPath.length > 0)
+    h += [self _canvasHeightForAspect:clipAspect
+                                width:[self _popoverWidthForDescriptor:
+                                                descriptorPath]] +
+         KKPaddingMD;
+  return h;
 }
 
 - (BOOL)isFlipped {
   return YES;
 }
 
-- (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes {
-  CGFloat h = [_KKStaticValuesPopoverView heightForLanes:lanes];
-  self = [super initWithFrame:NSMakeRect(0, 0, kPopoverW, h)];
+- (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes
+               descriptorPath:(NSString *)descriptorPath
+                   clipAspect:(CGFloat)clipAspect
+               canvasDelegate:(id<KKMiniCanvasDelegate>)canvasDelegate
+                onHandleValue:(void (^)(NSString *,
+                                        NSArray<NSNumber *> *))onHandleValue
+                  onDragBegin:(void (^)(void))onDragBegin
+                    onDragEnd:(void (^)(void))onDragEnd {
+  CGFloat W =
+      [_KKStaticValuesPopoverView _popoverWidthForDescriptor:descriptorPath];
+  CGFloat h = [_KKStaticValuesPopoverView heightForLanes:lanes
+                                          descriptorPath:descriptorPath
+                                              clipAspect:clipAspect];
+  self = [super initWithFrame:NSMakeRect(0, 0, W, h)];
   if (!self)
     return nil;
+  _descriptorPath = [descriptorPath copy];
+  _clipAspect = clipAspect;
   _rowsByLabel = [NSMutableDictionary dictionary];
+  _onHandleValue = [onHandleValue copy];
+  _onDragBegin = [onDragBegin copy];
+  _onDragEnd = [onDragEnd copy];
+
+  NSLayoutYAxisAnchor *stackTopAnchor = self.topAnchor;
+  CGFloat stackTopInset = KKPaddingMD;
+  if (descriptorPath.length > 0) {
+    _miniCanvas = [[KKMiniCanvasView alloc] initWithFrame:NSZeroRect];
+    _miniCanvas.sourceDescriptorPath = descriptorPath;
+    _miniCanvas.canvasDelegate = canvasDelegate;
+    __weak typeof(self) weakSelf = self;
+    _miniCanvas.onHandleValue =
+        ^(NSString *label, NSArray<NSNumber *> *values) {
+          // Live UI every tick (cheap); persist stays coalesced downstream.
+          [weakSelf liveUpdateValues:values forLabel:label];
+          if (onHandleValue)
+            onHandleValue(label, values);
+        };
+    _miniCanvas.onHandleDragBegin = onDragBegin;
+    _miniCanvas.onHandleDragEnd = onDragEnd;
+    __weak typeof(self) weakSelfRes = self;
+    _miniCanvas.onSourceResolved = ^{
+      __strong typeof(weakSelfRes) s = weakSelfRes;
+      // Media size now known → re-render pixel-scaled (crop) fields.
+      for (_KKStaticValueRow *row in s->_rowsByLabel.allValues)
+        [row refreshDisplay];
+    };
+    _miniCanvas.clipAspect = clipAspect > 0 ? clipAspect : (16.0 / 9.0);
+    _miniCanvas.translatesAutoresizingMaskIntoConstraints = NO;
+    _miniCanvas.wantsLayer = YES;
+    _miniCanvas.layer.cornerRadius = 4.0;
+    _miniCanvas.layer.masksToBounds = YES;
+
+    // Host the canvas as the documentView of an NSScrollView — this is the
+    // exact arrangement the old (working) KKStageSequencerView used to get
+    // magnify/scroll events. The subclass blocks at-boundary overscroll from
+    // propagating to FCP's inspector root scroll view.
+    _KKMiniCanvasScrollView *sv =
+        [[_KKMiniCanvasScrollView alloc] initWithFrame:NSZeroRect];
+    sv.translatesAutoresizingMaskIntoConstraints = NO;
+    sv.drawsBackground = NO;
+    sv.hasVerticalScroller = NO;
+    sv.hasHorizontalScroller = NO;
+    // documentView is pinned to the clip view (no scrollable content); without
+    // this, [super scrollWheel:] elastically bounces the whole canvas on
+    // overscroll. We still call super first for momentum/phase coherence.
+    sv.horizontalScrollElasticity = NSScrollElasticityNone;
+    sv.verticalScrollElasticity = NSScrollElasticityNone;
+    sv.documentView = _miniCanvas;
+    [self addSubview:sv];
+    NSClipView *clip = sv.contentView;
+    [NSLayoutConstraint activateConstraints:@[
+      [sv.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                       constant:KKPaddingMD],
+      [sv.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                        constant:-KKPaddingMD],
+      [sv.topAnchor constraintEqualToAnchor:self.topAnchor
+                                   constant:KKPaddingMD],
+      [sv.heightAnchor
+          constraintEqualToConstant:[_KKStaticValuesPopoverView
+                                        _canvasHeightForAspect:clipAspect
+                                                         width:W]],
+      [_miniCanvas.leadingAnchor constraintEqualToAnchor:clip.leadingAnchor],
+      [_miniCanvas.trailingAnchor constraintEqualToAnchor:clip.trailingAnchor],
+      [_miniCanvas.topAnchor constraintEqualToAnchor:clip.topAnchor],
+      [_miniCanvas.bottomAnchor constraintEqualToAnchor:clip.bottomAnchor],
+    ]];
+
+    // The crop size readout is drawn inside the canvas at the crop's
+    // bottom-right corner (see _KKMiniCanvasOverlay), matching the OSC.
+    stackTopAnchor = sv.bottomAnchor;
+    stackTopInset = KKPaddingMD;
+  }
 
   _stack = [NSStackView stackViewWithViews:@[]];
   _stack.translatesAutoresizingMaskIntoConstraints = NO;
@@ -348,19 +750,68 @@ static void _clearPopoverBackground(NSView *view) {
   [NSLayoutConstraint activateConstraints:@[
     [_stack.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
     [_stack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-    [_stack.topAnchor constraintEqualToAnchor:self.topAnchor
-                                     constant:KKPaddingMD],
+    [_stack.topAnchor constraintEqualToAnchor:stackTopAnchor
+                                     constant:stackTopInset],
   ]];
 
   for (KKLane *lane in lanes) {
-    _KKStaticValueRow *row =
-        [[_KKStaticValueRow alloc] initWithLabel:lane.label];
-    row.translatesAutoresizingMaskIntoConstraints = NO;
+    _KKStaticValueRow *row = [self _makeRowForLane:lane];
     [_stack addArrangedSubview:row];
     [row.widthAnchor constraintEqualToAnchor:_stack.widthAnchor].active = YES;
     _rowsByLabel[lane.label] = row;
   }
   return self;
+}
+
+- (_KKStaticValueRow *)_makeRowForLane:(KKLane *)lane {
+  _KKStaticValueRow *row = [[_KKStaticValueRow alloc] initWithLane:lane];
+  row.translatesAutoresizingMaskIntoConstraints = NO;
+  NSString *label = lane.label;
+  __weak typeof(self) weak = self;
+  if (lane.valueType == KKLaneValueTypeCrop) {
+    // Show crop in media pixels: W/X scale by media width, H/Y by height.
+    // (≤0 until the feed resolves → row falls back to raw 0–1.)
+    row.componentScale = ^double(NSInteger i) {
+      __strong typeof(weak) s = weak;
+      CGSize m = s ? s->_miniCanvas.sourceMediaSize : CGSizeZero;
+      return (i == 0 || i == 2) ? m.width : m.height;
+    };
+  }
+  row.onValue = ^(NSArray<NSNumber *> *values) {
+    __strong typeof(weak) s = weak;
+    // Live preview: feed the edit into the renderer + redraw the canvas
+    // (persist stays coalesced via _onHandleValue downstream).
+    id<KKMiniCanvasDelegate> del = s->_miniCanvas.canvasDelegate;
+    if ([del
+            respondsToSelector:@selector(
+                                   miniCanvas:applyConstantValues:forLabel:)]) {
+      [del miniCanvas:s->_miniCanvas applyConstantValues:values forLabel:label];
+      [s->_miniCanvas setNeedsDisplay:YES];
+      [s->_miniCanvas setHandlesNeedDisplay];
+    }
+    if (s->_onHandleValue)
+      s->_onHandleValue(label, values);
+  };
+  row.onDragBegin = ^{
+    __strong typeof(weak) s = weak;
+    if (s->_onDragBegin)
+      s->_onDragBegin();
+  };
+  row.onDragEnd = ^{
+    __strong typeof(weak) s = weak;
+    if (s->_onDragEnd)
+      s->_onDragEnd();
+  };
+  return row;
+}
+
+// Live (per-tick) UI update during a mini-canvas handle drag — refresh the
+// matching row's fields/slider WITHOUT persisting (the heavy timeline/FCP
+// write stays coalesced to drag end). The crop size readout lives in the
+// canvas overlay and redraws itself.
+- (void)liveUpdateValues:(NSArray<NSNumber *> *)values
+                forLabel:(NSString *)label {
+  [_rowsByLabel[label] applyValues:values];
 }
 
 - (void)updateUnoptedLanes:(NSArray<KKLane *> *)lanes {
@@ -379,11 +830,11 @@ static void _clearPopoverBackground(NSView *view) {
   }
 
   for (KKLane *lane in lanes) {
-    if (_rowsByLabel[lane.label])
+    if (_rowsByLabel[lane.label]) {
+      [_rowsByLabel[lane.label] applyLane:lane]; // reflect external edits
       continue;
-    _KKStaticValueRow *row =
-        [[_KKStaticValueRow alloc] initWithLabel:lane.label];
-    row.translatesAutoresizingMaskIntoConstraints = NO;
+    }
+    _KKStaticValueRow *row = [self _makeRowForLane:lane];
     NSInteger insertIdx = _stack.arrangedSubviews.count;
     for (NSInteger i = 0; i < (NSInteger)_stack.arrangedSubviews.count; i++) {
       _KKStaticValueRow *existing =
@@ -403,7 +854,10 @@ static void _clearPopoverBackground(NSView *view) {
     [_popover close];
   else if (_popover)
     _popover.contentSize = NSMakeSize(
-        kPopoverW, [_KKStaticValuesPopoverView heightForLanes:lanes]);
+        [_KKStaticValuesPopoverView _popoverWidthForDescriptor:_descriptorPath],
+        [_KKStaticValuesPopoverView heightForLanes:lanes
+                                    descriptorPath:_descriptorPath
+                                        clipAspect:_clipAspect]);
 }
 
 @end

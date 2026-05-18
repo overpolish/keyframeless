@@ -33,9 +33,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSSet<NSString *> *)_optedInLabelsSet;
 - (NSArray<KKLane *> *)_unoptedLanes;
 - (NSArray<NSNumber *> *)_defaultValuesForLabel:(NSString *)label;
-- (void)_optInLaneWithLabel:(NSString *)label
-                     values:(NSArray<NSNumber *> *)values;
-- (void)_optOutLaneWithLabel:(NSString *)label;
+- (BOOL)_isAnimatableLabel:(NSString *)label;
+- (void)_setLaneAnimatable:(BOOL)animatable forLabel:(NSString *)label;
+- (void)_setLaneValues:(NSArray<NSNumber *> *)values forLabel:(NSString *)label;
 - (void)_refresh;
 @end
 

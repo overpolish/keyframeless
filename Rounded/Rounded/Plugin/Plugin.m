@@ -18,6 +18,11 @@
   return self;
 }
 
+- (void)dealloc {
+  [_miniCanvasFeed release];
+  [super dealloc];
+}
+
 - (BOOL)properties:(NSDictionary *_Nonnull *)properties
              error:(NSError *_Nullable *)error {
   *properties = @{

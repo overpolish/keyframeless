@@ -20,6 +20,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKColor.h>
 #import <KeyframelessKit/KKColorWellView.h>
 #import <KeyframelessKit/KKConstants.h>
+#import <KeyframelessKit/KKCropModel.h>
 #import <KeyframelessKit/KKCropOSC.h>
 #import <KeyframelessKit/KKCustomGroupHeaderView.h>
 #import <KeyframelessKit/KKDataBlob.h>
@@ -40,6 +41,10 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMarkup.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
+#import <KeyframelessKit/KKMiniCanvasCropEditor.h>
+#import <KeyframelessKit/KKMiniCanvasFeed.h>
+#import <KeyframelessKit/KKMiniCanvasRenderer.h>
+#import <KeyframelessKit/KKMiniCanvasView.h>
 #import <KeyframelessKit/KKMotionBlur.h>
 #import <KeyframelessKit/KKOSCGuideBridge.h>
 #import <KeyframelessKit/KKOSCGuideStrategy.h>

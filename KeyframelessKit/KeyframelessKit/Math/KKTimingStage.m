@@ -184,6 +184,11 @@
   if (_groupKey)
     d[@"group_key"] = _groupKey;
   d[@"enabled"] = @(_enabled);
+  d[@"value_type"] = @(_valueType);
+  if (_componentMin)
+    d[@"component_min"] = _componentMin;
+  if (_componentMax)
+    d[@"component_max"] = _componentMax;
   d[@"keyposes"] = [_keyposes valueForKey:@"toDictionary"];
   d[@"last_known_clip_duration"] = @(_lastKnownClipDuration);
   return d;
@@ -199,6 +204,12 @@
   l.label = d[@"label"] ?: @"";
   l.groupKey = d[@"group_key"];
   l.enabled = d[@"enabled"] ? [d[@"enabled"] boolValue] : YES;
+  if (d[@"value_type"])
+    l.valueType = (KKLaneValueType)[d[@"value_type"] integerValue];
+  if ([d[@"component_min"] isKindOfClass:[NSArray class]])
+    l.componentMin = d[@"component_min"];
+  if ([d[@"component_max"] isKindOfClass:[NSArray class]])
+    l.componentMax = d[@"component_max"];
   l.lastKnownClipDuration = [d[@"last_known_clip_duration"] doubleValue];
   NSArray *rawKps = d[@"keyposes"];
   if ([rawKps isKindOfClass:[NSArray class]]) {

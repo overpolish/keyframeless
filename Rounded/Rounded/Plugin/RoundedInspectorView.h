@@ -18,6 +18,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) void (^onTimelineMutated)
     (KKTimeline *updated);
 
+/// Start / end of a continuous mini-canvas handle drag — host wraps the
+/// burst of onTimelineMutated writes in one undo group.
+@property(nonatomic, copy, nullable) void (^onDragBegin)(void);
+@property(nonatomic, copy, nullable) void (^onDragEnd)(void);
+
 /// Fired when the detach button is tapped. The plugin owns the
 /// FxRemoteWindowAPI call (it must run inside its own action scope), so the
 /// view just signals intent. The handler decides open vs. close via

@@ -3,8 +3,20 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKMiniCanvasView.h"
 #import "KKTimelineLanesView_Popovers.h"
 #import <QuartzCore/QuartzCore.h>
+
+static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
+  if ([root isKindOfClass:[KKMiniCanvasView class]])
+    return (KKMiniCanvasView *)root;
+  for (NSView *sub in root.subviews) {
+    KKMiniCanvasView *found = KKFindMiniCanvas(sub);
+    if (found)
+      return found;
+  }
+  return nil;
+}
 
 @implementation KKTimelineLanesView (PopoversInternal)
 
@@ -20,14 +32,10 @@
              __strong typeof(weak) s = weak;
              if (!s)
                return;
-             if ([s _laneForLabel:label]) {
-               [s _optOutLaneWithLabel:label];
-             } else {
-               [s _optInLaneWithLabel:label
-                               values:[s _defaultValuesForLabel:label]];
-               if (s.onLaneOptedIn)
-                 s.onLaneOptedIn(label);
-             }
+             BOOL nowAnimatable = ![s _isAnimatableLabel:label];
+             [s _setLaneAnimatable:nowAnimatable forLabel:label];
+             if (nowAnimatable && s.onLaneOptedIn)
+               s.onLaneOptedIn(label);
              [manageView updateCheckedLabels:[s _optedInLabelsSet]];
            }];
 
@@ -95,8 +103,11 @@
   NSWindow *popoverWindow = popover.contentViewController.view.window;
   CFTimeInterval shownAt = CACurrentMediaTime();
   __weak NSPopover *weakPopover = popover;
+  KKMiniCanvasView *canvas = KKFindMiniCanvas(content);
   __block id localMon = nil;
   __block id globalMon = nil;
+  __block id magnifyLocalMon = nil;
+  __block id magnifyGlobalMon = nil;
   __block id mouseLocalMon = nil;
   __block id mouseGlobalMon = nil;
 
@@ -108,6 +119,14 @@
     if (globalMon) {
       [NSEvent removeMonitor:globalMon];
       globalMon = nil;
+    }
+    if (magnifyLocalMon) {
+      [NSEvent removeMonitor:magnifyLocalMon];
+      magnifyLocalMon = nil;
+    }
+    if (magnifyGlobalMon) {
+      [NSEvent removeMonitor:magnifyGlobalMon];
+      magnifyGlobalMon = nil;
     }
     if (mouseLocalMon) {
       [NSEvent removeMonitor:mouseLocalMon];
@@ -130,19 +149,30 @@
                 [NSNotificationCenter.defaultCenter removeObserver:closeObs];
               }];
 
-  localMon =
-      [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
-                                            handler:^NSEvent *(NSEvent *e) {
-                                              if (e.window != popoverWindow)
-                                                [weakPopover close];
-                                              return e;
-                                            }];
+  // Scroll over the mini canvas = zoom/pan (events arrive global in
+  // ViewBridge XPC — see [[project_viewbridge_global_sendEvent]]); scroll
+  // elsewhere keeps the old outside-dismiss behavior.
+  // Scroll/magnify over the canvas is handled by the responder chain
+  // (KKMiniCanvasView inside an NSScrollView — the proven mechanism). These
+  // monitors only keep the outside-scroll-dismiss behavior, and must NOT
+  // swallow or close when the pointer is over the canvas.
+  localMon = [NSEvent
+      addLocalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
+                                   handler:^NSEvent *(NSEvent *e) {
+                                     if (canvas && [canvas pointerOverCanvas])
+                                       return e; // let the responder handle it
+                                     if (e.window != popoverWindow)
+                                       [weakPopover close];
+                                     return e;
+                                   }];
 
-  globalMon =
-      [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
-                                             handler:^(NSEvent *e) {
-                                               [weakPopover close];
-                                             }];
+  globalMon = [NSEvent
+      addGlobalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
+                                    handler:^(NSEvent *e) {
+                                      if (canvas && [canvas pointerOverCanvas])
+                                        return;
+                                      [weakPopover close];
+                                    }];
 
   // Replaces Transient's built-in outside-click close. Without the joyride
   // overlay, clicks in the XPC custom view are local events; clicks elsewhere
@@ -189,9 +219,50 @@
   if (unopted.count == 0)
     return;
   __weak typeof(self) weak = self;
+  // The mini canvas tracks the cursor live from the renderer's optimistic
+  // timeline, so the heavy persist (_setLaneValues → _refresh →
+  // onTimelineMutated → FCP param write + JSON) doesn't need to run per
+  // mouse-moved tick — doing so blocks the main thread and makes the
+  // handles/redraw lag. Coalesce: stash the latest value during the drag,
+  // commit once on drag end, inside the drag's undo group.
+  __block NSString *pendingLabel = nil;
+  __block NSArray<NSNumber *> *pendingValues = nil;
+  __block BOOL dragging = NO;
 
   _KKStaticValuesPopoverView *staticView =
-      [[_KKStaticValuesPopoverView alloc] initWithLanes:unopted];
+      [[_KKStaticValuesPopoverView alloc] initWithLanes:unopted
+          descriptorPath:self.miniCanvasDescriptorPath
+          clipAspect:self.miniCanvasClipAspect
+          canvasDelegate:self.miniCanvasDelegate
+          onHandleValue:^(NSString *label, NSArray<NSNumber *> *values) {
+            __strong typeof(weak) s = weak;
+            // During a drag (mini-canvas handle or slider) coalesce — commit
+            // once on drag end. A discrete edit (text field) has no drag, so
+            // commit immediately.
+            if (dragging) {
+              pendingLabel = label;
+              pendingValues = values;
+            } else {
+              [s _setLaneValues:values forLabel:label];
+            }
+          }
+          onDragBegin:^{
+            __strong typeof(weak) s = weak;
+            dragging = YES;
+            if (s.onDragBegin)
+              s.onDragBegin();
+          }
+          onDragEnd:^{
+            __strong typeof(weak) s = weak;
+            if (pendingValues && pendingLabel) {
+              [s _setLaneValues:pendingValues forLabel:pendingLabel];
+              pendingValues = nil;
+              pendingLabel = nil;
+            }
+            dragging = NO;
+            if (s.onDragEnd)
+              s.onDragEnd();
+          }];
   _openStaticView = staticView;
 
   NSPopover *popover = [self _showPopoverWithContent:staticView

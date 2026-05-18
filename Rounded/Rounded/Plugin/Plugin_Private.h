@@ -11,6 +11,8 @@
 
 @interface RoundedPlugin ()
 @property(nonatomic, weak, nullable) RoundedInspectorView *inspectorView;
+@property(nonatomic, retain, nullable) KKMiniCanvasFeed *miniCanvasFeed;
+@property(nonatomic) BOOL miniDragUndoStarted;
 @end
 
 NS_ASSUME_NONNULL_BEGIN
@@ -25,10 +27,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 typedef struct {
   double radius;
-  double cropTop;
-  double cropBottom;
-  double cropLeft;
-  double cropRight;
+  double cropW; // 0..1 fraction of image width
+  double cropH; // 0..1 fraction of image height
+  double cropX; // center offset, -0.5..0.5 (+ = right)
+  double cropY; // center offset, -0.5..0.5 (+ = up)
 } RoundedPluginState;
 
 @interface RoundedPlugin (Render)

@@ -22,13 +22,19 @@
   radius.valueType = KKLaneValueTypeFloat;
   radius.componentMin = @[ @0.0 ];
   radius.componentMax = @[ @100.0 ];
+  // Template default == the product default constant (seeded when the
+  // property has no lane yet; keeps the constants editor in sync with the
+  // render fallback).
+  [radius insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @20.0 ]]];
 
-  KKLane *box = [KKLane laneWithLabel:@"Box"];
-  box.valueType = KKLaneValueTypeBox;
-  box.componentMin = @[ @0.0, @0.0, @-0.5, @-0.5 ];
-  box.componentMax = @[ @1.0, @1.0, @0.5, @0.5 ];
+  KKLane *crop = [KKLane laneWithLabel:@"Crop"];
+  crop.valueType = KKLaneValueTypeCrop;
+  crop.componentMin = @[ @0.0, @0.0, @-0.5, @-0.5 ];
+  crop.componentMax = @[ @1.0, @1.0, @0.5, @0.5 ];
+  [crop insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                        values:@[ @1.0, @1.0, @0.0, @0.0 ]]];
 
-  return @[ radius, box ];
+  return @[ radius, crop ];
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
@@ -98,6 +104,22 @@
       if (json)
         KKWriteCustomParamString(setAPI, json, kKKParamTimelineData);
       [act endAction:strong];
+    };
+
+    // Coalesce a continuous mini-canvas handle drag into one undo entry: the
+    // per-tick onTimelineMutated writes nest inside this outer group.
+    view.onDragBegin = ^{
+      __strong typeof(weak) strong = weak;
+      if (strong)
+        strong.miniDragUndoStarted =
+            KKBeginUndoGroup(strong.apiManager, @"Adjust Radius");
+    };
+    view.onDragEnd = ^{
+      __strong typeof(weak) strong = weak;
+      if (strong) {
+        KKEndUndoGroup(strong.apiManager, strong.miniDragUndoStarted);
+        strong.miniDragUndoStarted = NO;
+      }
     };
 
     view.effectHeaderRectProvider = ^NSRect {

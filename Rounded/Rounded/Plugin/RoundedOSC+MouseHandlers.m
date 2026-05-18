@@ -124,7 +124,9 @@
   }
   if (!radiusLane) {
     radiusLane = [KKLane laneWithLabel:@"Radius"];
-    radiusLane.enabled = YES;
+    // A value edit must not opt the property into the sequencer; animatable
+    // is dropdown-only. enabled == animatable.
+    radiusLane.enabled = NO;
     NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
     [lanes addObject:radiusLane];
     tl.lanes = lanes;

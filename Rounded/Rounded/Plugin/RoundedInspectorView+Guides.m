@@ -344,7 +344,8 @@ static void RoundedTriggerFCPZoomToFit(void) {
 - (KKTimeline *)_guideTimelineWithRadius:(double)radius {
   KKTimeline *tl = [KKTimeline timeline];
   KKLane *radiusLane = [KKLane laneWithLabel:@"Radius"];
-  radiusLane.enabled = YES;
+  // enabled == animatable (dropdown-only); the guide just sets a value.
+  radiusLane.enabled = NO;
   radiusLane.valueType = KKLaneValueTypeFloat;
   radiusLane.componentMin = @[ @0.0 ];
   radiusLane.componentMax = @[ @100.0 ];

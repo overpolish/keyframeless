@@ -5,6 +5,7 @@
 
 #import "Constants.h"
 #import "Plugin_Private.h"
+#import "RoundedMiniCanvasRenderer.h"
 #import "ShaderTypes.h"
 #import <IOSurface/IOSurfaceObjC.h>
 #import <KeyframelessKit/KKDataBlob.h>
@@ -130,29 +131,29 @@
                     : 0.0;
 
   NSArray<NSNumber *> *radiusVals = nil;
-  NSArray<NSNumber *> *boxVals = nil;
+  NSArray<NSNumber *> *cropVals = nil;
+  // `enabled` now means "animatable", not "apply" — a constant (disabled)
+  // lane still contributes its single-keypose value. KKTimelineLaneValueAt
+  // Fraction returns that constant for a 1-keypose lane regardless of frac.
   for (KKLane *lane in timeline.lanes) {
-    if (!lane.enabled)
-      continue;
     if (!radiusVals && [lane.label isEqualToString:@"Radius"])
       radiusVals = KKTimelineLaneValueAtFraction(lane, frac);
-    else if (!boxVals && [lane.label isEqualToString:@"Box"])
-      boxVals = KKTimelineLaneValueAtFraction(lane, frac);
+    else if (!cropVals && [lane.label isEqualToString:@"Crop"])
+      cropVals = KKTimelineLaneValueAtFraction(lane, frac);
   }
 
   outParams->radius = radiusVals.count > 0 ? radiusVals[0].doubleValue : 20.0;
 
-  outParams->cropTop = 0.0;
-  outParams->cropBottom = 0.0;
-  outParams->cropLeft = 0.0;
-  outParams->cropRight = 0.0;
-  if (boxVals.count >= 4) {
-    // Box: [width, height, x, y] normalized center offsets
-    // TODO: convert Box → crop edges in Phase 4+ when Box lane UI exists
-    outParams->cropTop = boxVals[0].doubleValue;
-    outParams->cropBottom = boxVals[1].doubleValue;
-    outParams->cropLeft = boxVals[2].doubleValue;
-    outParams->cropRight = boxVals[3].doubleValue;
+  outParams->cropW = 1.0;
+  outParams->cropH = 1.0;
+  outParams->cropX = 0.0;
+  outParams->cropY = 0.0;
+  if (cropVals.count >= 4) {
+    // Crop lane: [width, height, x, y] — normalized; x/y are center offsets.
+    outParams->cropW = cropVals[0].doubleValue;
+    outParams->cropH = cropVals[1].doubleValue;
+    outParams->cropX = cropVals[2].doubleValue;
+    outParams->cropY = cropVals[3].doubleValue;
   }
   return YES;
 }
@@ -182,6 +183,39 @@
   KKMotionBlurState mbState;
   [pluginState getBytes:&mbState length:sizeof(mbState)];
 
+  // Mini-canvas source feed (7a): only on full-frame ticks — a sub-tile
+  // (parent Scale > 100%) would publish a squashed sub-region. Runs before
+  // the MB/normal branches so it captures every full render regardless of
+  // path; the feed self-throttles so this is cheap during playback.
+  {
+    FxRect sTile = sourceImages[0].tilePixelBounds;
+    FxRect sImg = sourceImages[0].imagePixelBounds;
+    BOOL fullFrame = (sTile.left == sImg.left && sTile.right == sImg.right &&
+                      sTile.top == sImg.top && sTile.bottom == sImg.bottom);
+    if (fullFrame) {
+      KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
+      MTLPixelFormat pf =
+          [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
+      uint64_t rid = destinationImage.deviceRegistryID;
+      id<MTLCommandQueue> q = [cache commandQueueWithRegistryID:rid
+                                                    pixelFormat:pf];
+      id<MTLDevice> dev = [cache deviceWithRegistryID:rid];
+      if (q && dev) {
+        id<MTLTexture> srcTex = [sourceImages[0] metalTextureForDevice:dev];
+        if (!self.miniCanvasFeed) {
+          KKMiniCanvasFeed *feed = [[KKMiniCanvasFeed alloc]
+              initWithDescriptorPath:RoundedMiniCanvasDescriptorPath];
+          self.miniCanvasFeed = feed;
+          [feed release];
+        }
+        [self.miniCanvasFeed updateWithSourceTexture:srcTex
+                                              device:dev
+                                        commandQueue:q];
+        [cache returnCommandQueueToCache:q];
+      }
+    }
+  }
+
   id<MTLRenderPipelineState> pipelineState =
       [self pipelineStateForPluginID:kPluginID
                     destinationImage:destinationImage
@@ -210,41 +244,34 @@
       (float)(destinationImage.tilePixelBounds.bottom -
               destinationImage.imagePixelBounds.bottom)};
   void (^encodeDraw)(id<MTLRenderCommandEncoder>, NSArray<id<MTLTexture>> *,
-                     RoundedPluginState) = ^(id<MTLRenderCommandEncoder> enc,
-                                             NSArray<id<MTLTexture>> *texs,
-                                             RoundedPluginState s) {
-    float fragmentRadius = (float)s.radius;
-    float cropL = (float)s.cropLeft * imageSize.x;
-    float cropR = (float)s.cropRight * imageSize.x;
-    float cropB = (float)s.cropBottom * imageSize.y;
-    float cropT = (float)s.cropTop * imageSize.y;
-    // Original Y-up sign (cropTop in this codebase historically crops from
-    // FxRect-top = screen-bottom in Y-down; the OSC handles use the same
-    // convention so they match up). Don't change without also updating OSC.
-    simd_float2 cropCenter = {(cropL - cropR) * 0.5f, (cropB - cropT) * 0.5f};
-    simd_float2 cropSize = {imageSize.x - cropL - cropR,
-                            imageSize.y - cropB - cropT};
-    [enc setRenderPipelineState:pipelineState];
-    [enc setFragmentTexture:texs[0] atIndex:KKTextureIndex_InputImage];
-    [enc setFragmentBytes:&fragmentRadius
-                   length:sizeof(fragmentRadius)
-                  atIndex:FragmentIndex_Radius];
-    [enc setFragmentBytes:&imageSize
-                   length:sizeof(imageSize)
-                  atIndex:FragmentIndex_ImageSize];
-    [enc setFragmentBytes:&tileOffsetPx
-                   length:sizeof(tileOffsetPx)
-                  atIndex:FragmentIndex_TileOffsetPx];
-    [enc setFragmentBytes:&cropCenter
-                   length:sizeof(cropCenter)
-                  atIndex:FragmentIndex_CropCenter];
-    [enc setFragmentBytes:&cropSize
-                   length:sizeof(cropSize)
-                  atIndex:FragmentIndex_CropSize];
-    [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
-            vertexStart:0
-            vertexCount:4];
-  };
+                     RoundedPluginState) =
+      ^(id<MTLRenderCommandEncoder> enc, NSArray<id<MTLTexture>> *texs,
+        RoundedPluginState s) {
+        float fragmentRadius = (float)s.radius;
+        simd_float2 cropCenter, cropSize;
+        KKCropModelToShader(s.cropW, s.cropH, s.cropX, s.cropY, imageSize,
+                            &cropCenter, &cropSize);
+        [enc setRenderPipelineState:pipelineState];
+        [enc setFragmentTexture:texs[0] atIndex:KKTextureIndex_InputImage];
+        [enc setFragmentBytes:&fragmentRadius
+                       length:sizeof(fragmentRadius)
+                      atIndex:FragmentIndex_Radius];
+        [enc setFragmentBytes:&imageSize
+                       length:sizeof(imageSize)
+                      atIndex:FragmentIndex_ImageSize];
+        [enc setFragmentBytes:&tileOffsetPx
+                       length:sizeof(tileOffsetPx)
+                      atIndex:FragmentIndex_TileOffsetPx];
+        [enc setFragmentBytes:&cropCenter
+                       length:sizeof(cropCenter)
+                      atIndex:FragmentIndex_CropCenter];
+        [enc setFragmentBytes:&cropSize
+                       length:sizeof(cropSize)
+                      atIndex:FragmentIndex_CropSize];
+        [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                vertexStart:0
+                vertexCount:4];
+      };
 
   if (mbState.enabled) {
     __weak typeof(self) weakSelf = self;
