@@ -112,21 +112,26 @@ static const CGFloat kJTipBottomRowH = 18.0;
 }
 
 - (void)_drawBubble:(NSRect)bubble
-               midX:(CGFloat)midX
+             arrowX:(CGFloat)arrowX
           drawBelow:(BOOL)drawBelow {
   [[NSColor colorWithWhite:0.18 alpha:1.0] setFill];
   [[NSBezierPath bezierPathWithRoundedRect:bubble xRadius:6.0
                                    yRadius:6.0] fill];
 
+  // Keep the arrow within the rounded body, but point it at the target — not
+  // the bubble centre, which detaches when the bubble is clamped to stay
+  // on-screen near an edge.
+  CGFloat ax = MAX(NSMinX(bubble) + 6.0 + kJTipArrowHalfW,
+                   MIN(NSMaxX(bubble) - 6.0 - kJTipArrowHalfW, arrowX));
   NSBezierPath *arrow = [NSBezierPath bezierPath];
   if (drawBelow) {
-    [arrow moveToPoint:NSMakePoint(midX - kJTipArrowHalfW, NSMinY(bubble))];
-    [arrow lineToPoint:NSMakePoint(midX + kJTipArrowHalfW, NSMinY(bubble))];
-    [arrow lineToPoint:NSMakePoint(midX, NSMinY(bubble) - kJTipArrowH)];
+    [arrow moveToPoint:NSMakePoint(ax - kJTipArrowHalfW, NSMinY(bubble))];
+    [arrow lineToPoint:NSMakePoint(ax + kJTipArrowHalfW, NSMinY(bubble))];
+    [arrow lineToPoint:NSMakePoint(ax, NSMinY(bubble) - kJTipArrowH)];
   } else {
-    [arrow moveToPoint:NSMakePoint(midX - kJTipArrowHalfW, NSMaxY(bubble))];
-    [arrow lineToPoint:NSMakePoint(midX + kJTipArrowHalfW, NSMaxY(bubble))];
-    [arrow lineToPoint:NSMakePoint(midX, NSMaxY(bubble) + kJTipArrowH)];
+    [arrow moveToPoint:NSMakePoint(ax - kJTipArrowHalfW, NSMaxY(bubble))];
+    [arrow lineToPoint:NSMakePoint(ax + kJTipArrowHalfW, NSMaxY(bubble))];
+    [arrow lineToPoint:NSMakePoint(ax, NSMaxY(bubble) + kJTipArrowH)];
   }
   [arrow closePath];
   [[NSColor colorWithWhite:0.18 alpha:1.0] setFill];
@@ -178,13 +183,25 @@ static const CGFloat kJTipBottomRowH = 18.0;
                          NSMidX(paddedSpot)));
   CGFloat bubbleX = midX - bubbleW / 2.0;
 
+  // The panel spans the whole screen.frame and this view is flipped, so y=0
+  // sits under the menu bar. Use the screen's visibleFrame insets (menu bar
+  // at top, dock at bottom) as the usable band — otherwise a tooltip near
+  // the top draws "above" into the menu bar and gets clipped.
+  NSScreen *scr = self.window.screen ?: NSScreen.mainScreen;
+  CGFloat topInset = NSMaxY(scr.frame) - NSMaxY(scr.visibleFrame);
+  CGFloat botInset = NSMinY(scr.visibleFrame) - NSMinY(scr.frame);
+  CGFloat minY = topInset + 4.0;
+  CGFloat maxY = NSHeight(self.bounds) - botInset - 4.0;
+
   CGFloat bubbleYAbove = NSMinY(paddedSpot) - kJTipArrowH - bubbleH - 4.0;
-  BOOL drawBelow = bubbleYAbove < 4.0;
+  BOOL drawBelow = bubbleYAbove < minY;
   CGFloat bubbleY =
       drawBelow ? NSMaxY(paddedSpot) + kJTipArrowH + 4.0 : bubbleYAbove;
+  // Keep the whole bubble inside the usable band (no menu-bar / dock clip).
+  bubbleY = MAX(minY, MIN(bubbleY, maxY - bubbleH));
   NSRect bubbleRect = NSMakeRect(bubbleX, bubbleY, bubbleW, bubbleH);
 
-  [self _drawBubble:bubbleRect midX:midX drawBelow:drawBelow];
+  [self _drawBubble:bubbleRect arrowX:NSMidX(paddedSpot) drawBelow:drawBelow];
   [_attributedMessage
       drawAtPoint:NSMakePoint(bubbleX + kJTipPadH, bubbleY + kJTipPadV)];
 

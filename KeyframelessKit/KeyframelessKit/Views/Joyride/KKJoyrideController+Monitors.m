@@ -34,7 +34,6 @@ static const NSEventModifierFlags kJoyrideModifierMask =
   void (^downBlock)(NSPoint) = [self _currentStep].spotlightMouseDown;
   if (!downBlock)
     return;
-  KKLogInfo(@"[Joyride] synthetic mouseDown at (%.1f,%.1f)", mouse.x, mouse.y);
   if (async) {
     dispatch_async(dispatch_get_main_queue(), ^{
       downBlock(mouse);
@@ -58,30 +57,31 @@ static const NSEventModifierFlags kJoyrideModifierMask =
   if (!target)
     return;
   NSPoint winPt = [target convertPointFromScreen:mouse];
-  NSEvent *fwd = [NSEvent mouseEventWithType:NSEventTypeLeftMouseDown
-                                    location:winPt
-                               modifierFlags:event.modifierFlags
-                                   timestamp:event.timestamp
-                                windowNumber:target.windowNumber
-                                     context:nil
-                                 eventNumber:event.eventNumber
-                                  clickCount:event.clickCount
-                                    pressure:event.pressure];
-  [target sendEvent:fwd];
+  NSEvent * (^mk)(NSEventType) = ^NSEvent *(NSEventType t) {
+    return [NSEvent mouseEventWithType:t
+                              location:winPt
+                         modifierFlags:event.modifierFlags
+                             timestamp:event.timestamp
+                          windowNumber:target.windowNumber
+                               context:nil
+                           eventNumber:event.eventNumber
+                            clickCount:event.clickCount
+                              pressure:event.pressure];
+  };
+  // A complete click (down THEN up) — a lone down leaves a text field stuck
+  // in selection-tracking (never places the caret / enters edit mode).
+  [target sendEvent:mk(NSEventTypeLeftMouseDown)];
+  [target sendEvent:mk(NSEventTypeLeftMouseUp)];
+  // Route keystrokes here (e.g. typing into a field): the forwarded click is
+  // the user's intent to interact with this window.
+  [target makeKeyWindow];
 }
 
 - (void)_handleGlobalMouseDown:(NSEvent *)event {
   NSPoint mouse = NSEvent.mouseLocation;
-  KKLogInfo(@"[Joyride] globalMonitor mouseDown at (%.1f,%.1f) step=%ld",
-            mouse.x, mouse.y, (long)_currentIndex);
   NSRect nextRect = [_overlay screenNextRect];
   NSRect actionRect = [_overlay screenActionRect];
   NSRect spotRect = [_overlay screenSpotRect];
-  KKLogInfo(@"[Joyride] branch check mouse=(%.1f,%.1f) nextRect=%@ "
-            @"actionRect=%@ spotRect=%@ passThrough=%d",
-            mouse.x, mouse.y, NSStringFromRect(nextRect),
-            NSStringFromRect(actionRect), NSStringFromRect(spotRect),
-            (int)_overlay.spotlightPassThrough);
 
   // On a pass-through step the spotlight is the primary interaction target
   // (the OSC handle lives under it). Checking buttons first would let Skip/
@@ -91,29 +91,22 @@ static const NSEventModifierFlags kJoyrideModifierMask =
                    NSPointInRect(mouse, spotRect);
   if (!spotFirst) {
     if (!NSIsEmptyRect(nextRect) && NSPointInRect(mouse, nextRect)) {
-      KKLogInfo(@"[Joyride] → hit NEXT button, advancing");
       if (_overlay.onNext)
         _overlay.onNext();
       return;
     }
     if (!NSIsEmptyRect(actionRect) && NSPointInRect(mouse, actionRect)) {
-      KKLogInfo(@"[Joyride] → hit SKIP/DONE button, aborting guide");
       if (_overlay.onSkip)
         _overlay.onSkip();
       return;
     }
   } else {
-    KKLogInfo(@"[Joyride] → spotlight wins (passthrough), skipping button "
-              @"checks");
   }
 
   NSRect spotScreen = [_overlay screenSpotRect];
   if (NSIsEmptyRect(spotScreen) || !NSPointInRect(mouse, spotScreen)) {
-    KKLogInfo(@"[Joyride] → click outside spotlight, ignored (passthrough "
-              @"lets it reach FCP if windows allow)");
     return;
   }
-  KKLogInfo(@"[Joyride] → click INSIDE spotlight");
 
   if (_overlay.spotlightPassThrough) {
     [self _activatePassthroughMouseDownAtScreenPoint:mouse async:YES];
@@ -127,8 +120,15 @@ static const NSEventModifierFlags kJoyrideModifierMask =
 // the FCP viewer at the spotlight position.
 - (void)_handleLocalMouseDown:(NSEvent *)event {
   NSPoint mouse = NSEvent.mouseLocation;
-  KKLogInfo(@"[Joyride] localMonitor mouseDown at (%.1f,%.1f) step=%ld",
-            mouse.x, mouse.y, (long)_currentIndex);
+  // In forwardsGestures mode the panel doesn't ignore events, so a click on
+  // it stays in-process — the GLOBAL monitor never fires (it only sees
+  // other-app events). Run the full branch/forward logic here instead, the
+  // same as the global path would. (Normal mode is unchanged: the global
+  // monitor does the work and this stays passthrough-only.)
+  if (self.forwardsGestures) {
+    [self _handleGlobalMouseDown:event];
+    return;
+  }
   if (!_overlay.spotlightPassThrough)
     return;
   NSRect spotScreen = [_overlay screenSpotRect];
@@ -224,18 +224,12 @@ static const NSEventModifierFlags kJoyrideModifierMask =
       (_currentIndex < (NSInteger)_steps.count) ? _steps[_currentIndex] : nil;
   if (event.type == NSEventTypeLeftMouseDragged) {
     void (^dragBlock)(NSPoint) = step.spotlightMouseDragged;
-    KKLogInfo(
-        @"[Joyride] dragMonitor(%@) dragged idx=%ld hasBlock=%d pt=(%.1f,%.1f)",
-        src, (long)_currentIndex, dragBlock != nil, pt.x, pt.y);
     if (dragBlock)
       dispatch_async(dispatch_get_main_queue(), ^{
         dragBlock(pt);
       });
   } else {
     void (^upBlock)(NSPoint) = step.spotlightMouseUp;
-    KKLogInfo(
-        @"[Joyride] dragMonitor(%@) mouseUp idx=%ld hasBlock=%d pt=(%.1f,%.1f)",
-        src, (long)_currentIndex, upBlock != nil, pt.x, pt.y);
     if (upBlock)
       dispatch_async(dispatch_get_main_queue(), ^{
         upBlock(pt);

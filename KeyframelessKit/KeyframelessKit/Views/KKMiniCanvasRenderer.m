@@ -47,6 +47,11 @@
            forContentRect:(CGRect)contentRect {
   return NO;
 }
+- (BOOL)pointHandleCenter:(out CGPoint *)outCenter
+                 forValue:(double)value
+           forContentRect:(CGRect)contentRect {
+  return NO;
+}
 - (BOOL)pointHandleHitAtPoint:(CGPoint)p contentRect:(CGRect)contentRect {
   return NO;
 }
@@ -147,6 +152,14 @@
                               contentRect:cr];
 }
 
+- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+        cropHandleCentersForValues:(NSArray<NSNumber *> *)values
+                       contentRect:(CGRect)cr {
+  if (![self _cropActiveForContentRect:cr])
+    return nil;
+  return [_cropEditor handleCentersForValues:values contentRect:cr];
+}
+
 - (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
         borderRect:(out CGRect *)outRect
     forContentRect:(CGRect)cr {
@@ -167,6 +180,15 @@
   if (![self _pointActiveForContentRect:cr])
     return NO;
   return [self pointHandleCenter:outCenter forContentRect:cr];
+}
+
+- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+    pointHandleCenter:(out CGPoint *)outCenter
+             forValue:(double)value
+          contentRect:(CGRect)cr {
+  if (![self _pointActiveForContentRect:cr])
+    return NO;
+  return [self pointHandleCenter:outCenter forValue:value forContentRect:cr];
 }
 
 - (BOOL)miniCanvas:(KKMiniCanvasView *)canvas

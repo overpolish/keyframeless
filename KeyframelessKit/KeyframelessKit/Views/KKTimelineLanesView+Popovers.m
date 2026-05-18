@@ -245,6 +245,8 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
             } else {
               [s _setLaneValues:values forLabel:label];
             }
+            if (s.onStaticValueChanged)
+              s.onStaticValueChanged(label, values);
           }
           onDragBegin:^{
             __strong typeof(weak) s = weak;
@@ -254,6 +256,8 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
           }
           onDragEnd:^{
             __strong typeof(weak) s = weak;
+            NSString *endedLabel = pendingLabel;
+            NSArray<NSNumber *> *endedValues = pendingValues;
             if (pendingValues && pendingLabel) {
               [s _setLaneValues:pendingValues forLabel:pendingLabel];
               pendingValues = nil;
@@ -262,17 +266,86 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
             dragging = NO;
             if (s.onDragEnd)
               s.onDragEnd();
+            if (endedLabel && endedValues && s.onStaticValueDragEnded)
+              s.onStaticValueDragEnded(endedLabel, endedValues);
           }];
   _openStaticView = staticView;
 
-  NSPopover *popover = [self _showPopoverWithContent:staticView
-                                            fromView:anchor
-                                             onClose:^{
-                                               __strong typeof(weak) s = weak;
-                                               if (s)
-                                                 s->_openStaticView = nil;
-                                             }];
+  NSPopover *popover =
+      [self _showPopoverWithContent:staticView
+                           fromView:anchor
+                            onClose:^{
+                              __strong typeof(weak) s = weak;
+                              if (!s)
+                                return;
+                              s->_openStaticView = nil;
+                              if (s.onStaticValuesPopoverClosed)
+                                s.onStaticValuesPopoverClosed();
+                            }];
   staticView.popover = popover;
+
+  if (self.onStaticValuesPopoverWillOpen) {
+    __weak _KKStaticValuesPopoverView *weakStatic = staticView;
+    // Delay matches the manage popover: let the entrance animation settle and
+    // the window attach before a guide reads frames / spotlights the handle.
+    dispatch_after(
+        dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),
+        dispatch_get_main_queue(), ^{
+          __strong typeof(weak) strong = weak;
+          __strong _KKStaticValuesPopoverView *sv = weakStatic;
+          if (!strong || !sv || !strong.onStaticValuesPopoverWillOpen)
+            return;
+          strong.onStaticValuesPopoverWillOpen(sv, KKFindMiniCanvas(sv));
+        });
+  }
+}
+
+- (nullable NSView *)staticValueRowViewForLabel:(NSString *)label {
+  return [_openStaticView rowViewForLabel:label];
+}
+
+- (void)beginGuideConstantDrag {
+  [_openStaticView guideBeginConstantDrag];
+}
+
+- (void)applyGuideConstantValues:(NSArray<NSNumber *> *)values
+                        forLabel:(NSString *)label {
+  [_openStaticView guideApplyConstantValues:values forLabel:label];
+}
+
+- (void)endGuideConstantDrag {
+  [_openStaticView guideEndConstantDrag];
+}
+
+- (NSRect)guideConstantSliderTrackScreenRectForLabel:(NSString *)label {
+  return [_openStaticView guideSliderTrackScreenRectForLabel:label];
+}
+
+- (CGFloat)guideConstantSliderScreenXForValue:(double)value
+                                     forLabel:(NSString *)label {
+  return [_openStaticView guideSliderScreenXForValue:value forLabel:label];
+}
+
+- (double)guideConstantSliderValueForScreenX:(CGFloat)screenX
+                                    forLabel:(NSString *)label {
+  return [_openStaticView guideSliderValueForScreenX:screenX forLabel:label];
+}
+
+- (NSRect)guideConstantFieldScreenRectForLabel:(NSString *)label
+                                     component:(NSInteger)component {
+  return [_openStaticView guideFieldScreenRectForLabel:label
+                                             component:component];
+}
+
+- (void)setGuideConstantFieldEditHandlerForLabel:(NSString *)label
+                                         handler:(void (^)(NSInteger,
+                                                           double))handler {
+  [_openStaticView setGuideFieldEditHandlerForLabel:label handler:handler];
+}
+
+- (void)commitGuideConstantFieldForLabel:(NSString *)label
+                               component:(NSInteger)component {
+  [_openStaticView guideCommitFieldForLabel:label component:component];
 }
 
 @end

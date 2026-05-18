@@ -65,8 +65,6 @@
 }
 
 - (void)setGuideStep:(NSInteger)step {
-  KKLogInfo(@"[OSCGuide] guideStep=%ld pid=%d (was %ld)", (long)step, getpid(),
-            (long)_guideStep);
   _guideStep = step;
   if (step == 0 || step == 1)
     _hasHandleScreenPos = NO;
@@ -139,9 +137,6 @@
   _refMouseCanvasY = handle.y;
   _refSpC = _freshSpC;
   _hasCanvasRef = YES;
-  KKLogInfo(@"[OSCGuide] reanchor screen=(%.1f,%.1f) handleCanvas=(%.1f,%.1f) "
-            @"spC=%.4f",
-            screenPt.x, screenPt.y, handle.x, handle.y, _freshSpC);
   return YES;
 }
 
@@ -170,8 +165,6 @@
   _hasHandleScreenPos = NO;
   _hasTargetScreenPos = NO;
   _geometryValid = NO;
-  KKLogInfo(@"[OSCGuide] mapping invalidated (zoom-to-fit) — awaiting fresh "
-            @"post-zoom hitTest");
 }
 
 - (void)_postPositionNotification {

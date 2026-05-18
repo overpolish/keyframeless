@@ -13,7 +13,6 @@
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager;
 {
-  KKLogInfo(@"RoundedPlugin: initialized");
   self = [super initWithAPIManager:newApiManager];
   return self;
 }

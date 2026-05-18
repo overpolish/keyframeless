@@ -38,6 +38,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// Called on the main queue with the mouseUp point after spotlightMouseDown.
 @property(nonatomic, copy, nullable) void (^spotlightMouseUp)
     (NSPoint screenPoint);
+/// Magnify (pinch) events are delivered to the frontmost window — the guide
+/// panel — and `ignoresMouseEvents` does NOT pass gestures through (unlike
+/// clicks/scroll), so they're dropped before reaching content below. When
+/// set, the panel intercepts magnify events and hands them here so a step
+/// can forward the pinch to its control (e.g. a mini-canvas zoom).
+@property(nonatomic, copy, nullable) void (^spotlightMagnifyEvent)
+    (NSEvent *event);
 /// When set alongside targetScreenRect, the spotlight is drawn as a capsule
 /// spanning from the primary targetScreenRect centre to this rect's centre.
 /// Use for "drag from A to B" steps. Falls back to spotlightCircular behaviour
@@ -117,6 +124,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// Use to activate the host app so click-throughs land as real events rather
 /// than activation taps (e.g. [fcpApp activateWithOptions:...]).
 @property(nonatomic, copy, nullable) void (^passthroughActivationHandler)(void);
+
+/// When YES, the overlay panel does NOT set `ignoresMouseEvents` — so the
+/// windowserver actually delivers gesture events (pinch/magnify) to the
+/// panel, where `-sendEvent:` forwards them to the active step's
+/// `spotlightMagnifyEvent`. Click-through still works (the global mouse
+/// monitor + synthesize-into-target path doesn't depend on the panel
+/// ignoring events, and the overlay's hitTest returns nil). Default NO —
+/// only guides that need to forward gestures into scrollable content (e.g.
+/// a mini-canvas) should set it. Set before `startWithSteps:`.
+@property(nonatomic) BOOL forwardsGestures;
 
 @end
 

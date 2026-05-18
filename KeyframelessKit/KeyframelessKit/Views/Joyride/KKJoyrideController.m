@@ -7,6 +7,24 @@
 #import "KKJoyrideController_Private.h"
 #import "KKLog.h"
 
+/// `ignoresMouseEvents` makes a window transparent to clicks/scroll but NOT
+/// to gesture events — a pinch is delivered to this (frontmost) panel and,
+/// unhandled, dropped before it can reach content below. Intercept magnify
+/// at the window and hand it to the active step instead.
+@interface _KKJoyrideForwardingPanel : NSPanel
+@property(nonatomic, copy, nullable) void (^magnifyForwarder)(NSEvent *);
+@end
+
+@implementation _KKJoyrideForwardingPanel
+- (void)sendEvent:(NSEvent *)event {
+  if (event.type == NSEventTypeMagnify && _magnifyForwarder) {
+    _magnifyForwarder(event);
+    return;
+  }
+  [super sendEvent:event];
+}
+@end
+
 @implementation KKJoyrideStep
 
 + (instancetype)stepWithMessage:(NSString *)message
@@ -130,17 +148,28 @@
   BOOL isFinal = (idx + 1 == (NSInteger)_steps.count);
 
   NSScreen *screen = host.window.screen ?: NSScreen.mainScreen;
-  NSPanel *panel =
-      [[NSPanel alloc] initWithContentRect:screen.frame
-                                 styleMask:NSWindowStyleMaskBorderless |
-                                           NSWindowStyleMaskNonactivatingPanel
-                                   backing:NSBackingStoreBuffered
-                                     defer:NO];
+  _KKJoyrideForwardingPanel *panel = [[_KKJoyrideForwardingPanel alloc]
+      initWithContentRect:screen.frame
+                styleMask:NSWindowStyleMaskBorderless |
+                          NSWindowStyleMaskNonactivatingPanel
+                  backing:NSBackingStoreBuffered
+                    defer:NO];
+  __weak typeof(self) weakForward = self;
+  panel.magnifyForwarder = ^(NSEvent *e) {
+    __strong typeof(weakForward) sForward = weakForward;
+    KKJoyrideStep *cur = [sForward _currentStep];
+    if (cur.spotlightMagnifyEvent)
+      cur.spotlightMagnifyEvent(e);
+  };
   panel.level = NSPopUpMenuWindowLevel - 1;
   panel.opaque = NO;
   panel.backgroundColor = NSColor.clearColor;
   panel.hasShadow = NO;
-  panel.ignoresMouseEvents = YES;
+  // Gesture events (pinch) bypass an ignoresMouseEvents window entirely, so a
+  // guide that forwards gestures must let the panel receive events; clicks
+  // still pass via the global monitor + synthesize path (overlay hitTest is
+  // nil, so it never absorbs a click).
+  panel.ignoresMouseEvents = !self.forwardsGestures;
   panel.alphaValue = 0.0;
 
   _KKJoyrideOverlayView *overlay =
@@ -182,9 +211,6 @@
     [strong dismiss];
   };
 
-  KKLogInfo(@"[Joyride] _showStep:%ld target=%@ screen=%@ panel.frame=%@",
-            (long)idx, target, screen.localizedName,
-            NSStringFromRect(panel.frame));
   [panel orderFront:nil];
   [NSAnimationContext runAnimationGroup:^(NSAnimationContext *ctx) {
     ctx.duration = 0.3;

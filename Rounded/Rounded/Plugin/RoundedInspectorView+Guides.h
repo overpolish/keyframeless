@@ -32,6 +32,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// completes or is skipped.
 - (void)restartFullWalkthroughGuide;
 
+/// Seeds a clean Radius-constant timeline and runs the 5-step constants
+/// guide (Constants button → mini-canvas radius handle → zoom/pan →
+/// double-click reset → slider to 80). Restores the previous timeline via
+/// onTimelineMutated when the guide completes or is skipped.
+- (void)restartConstantsGuide;
+
 /// YES once the OSC guide overlay is on screen (after its zoom-to-fit +
 /// settle warm-up). Drives the help button's loading spinner.
 @property(nonatomic, readonly) BOOL oscGuideActive;

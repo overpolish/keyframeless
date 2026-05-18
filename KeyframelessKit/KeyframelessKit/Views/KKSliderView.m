@@ -392,4 +392,37 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
   return ((KKSliderCell *)_slider.cell).scaleBreakPosition;
 }
 
+// The inner NSSlider is pinned to our bounds, so the cell's bar rect has
+// origin.x 0 and our width — knob centre math matches knobPositionForBarRect:
+// (inset kKnobWidth/2 each side). Same source of truth as drawing/hit-test.
+- (NSRect)trackScreenRect {
+  if (!self.window)
+    return NSZeroRect;
+  return [self.window convertRectToScreen:[self convertRect:self.bounds
+                                                     toView:nil]];
+}
+
+- (CGFloat)screenXForValue:(double)value {
+  if (!self.window)
+    return 0.0;
+  CGFloat usable = self.bounds.size.width - kKnobWidth;
+  CGFloat norm = [(KKSliderCell *)_slider.cell valueToNormalized:value];
+  CGFloat viewX = kKnobWidth / 2.0 + usable * MAX(0.0, MIN(1.0, norm));
+  NSPoint inWin = [self convertPoint:NSMakePoint(viewX, NSMidY(self.bounds))
+                              toView:nil];
+  return [self.window convertPointToScreen:inWin].x;
+}
+
+- (double)valueForScreenX:(CGFloat)screenX {
+  if (!self.window)
+    return self.doubleValue;
+  NSPoint inWin =
+      [self.window convertPointFromScreen:NSMakePoint(screenX, 0.0)];
+  CGFloat viewX = [self convertPoint:inWin fromView:nil].x;
+  CGFloat usable = self.bounds.size.width - kKnobWidth;
+  CGFloat norm = usable > 0.0 ? (viewX - kKnobWidth / 2.0) / usable : 0.0;
+  return
+      [(KKSliderCell *)_slider.cell normalizedToValue:MAX(0.0, MIN(1.0, norm))];
+}
+
 @end

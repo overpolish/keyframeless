@@ -15,6 +15,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+@class KKMiniCanvasGuideScroll;
+
 typedef NS_ENUM(NSInteger, RoundedTab) {
   RoundedTabBasic = 0,
   RoundedTabAdvanced = 1,
@@ -43,6 +45,9 @@ typedef NS_ENUM(NSInteger, RoundedTab) {
   KKJoyrideController *_fullGuide;
   KKTimeline *_savedFullTimeline;
   KKJoyrideOSCSegment *_oscSegment;
+  KKJoyrideController *_constantsGuide;
+  KKTimeline *_savedConstantsTimeline;
+  KKMiniCanvasGuideScroll *_constantsScrollFwd;
 }
 @end
 

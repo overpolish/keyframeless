@@ -60,6 +60,17 @@ NS_ASSUME_NONNULL_BEGIN
 /// fields show pixels while the model stays normalized. nil/≤0 == raw.
 @property(nonatomic, copy, nullable) double (^componentScale)(NSInteger idx);
 - (instancetype)initWithLane:(KKLane *)lane;
+/// The KKSliderView (Float rows), for a guide that drives the slider.
+- (nullable NSView *)guideSliderView;
+/// The number field for component `i` (Float: 0; Crop: 0..3 = W,H,X,Y), for
+/// a guide to spotlight / drive it.
+- (nullable NSView *)guideFieldViewForComponent:(NSInteger)i;
+/// Fired on every live keystroke in any field with the parsed *display*
+/// value (pixels for crop). Lets a guide watch the user type toward a value.
+@property(nonatomic, copy, nullable) void (^onGuideFieldEdit)
+    (NSInteger component, double displayValue);
+/// Commit component `i`'s field as if the user pressed Return.
+- (void)guideCommitFieldForComponent:(NSInteger)i;
 /// Set the displayed values (skips a field currently being edited).
 - (void)applyValues:(NSArray<NSNumber *> *)values;
 - (void)applyLane:(KKLane *)lane;
@@ -81,6 +92,33 @@ NS_ASSUME_NONNULL_BEGIN
        onDragBegin:(nullable void (^)(void))onDragBegin
          onDragEnd:(nullable void (^)(void))onDragEnd;
 - (void)updateUnoptedLanes:(NSArray<KKLane *> *)lanes;
+/// The value-editor row (slider/fields) for `label`, or nil. Lets a guide
+/// spotlight a specific constant's control.
+- (nullable NSView *)rowViewForLabel:(NSString *)label;
+/// Guide-driven constant edit through the *same* coalesced channel a real
+/// slider/handle drag uses: begin → per-tick apply (live preview, knob +
+/// mini-canvas track, persist stashed) → end (one persist + undo entry).
+- (void)guideBeginConstantDrag;
+- (void)guideApplyConstantValues:(NSArray<NSNumber *> *)values
+                        forLabel:(NSString *)label;
+- (void)guideEndConstantDrag;
+/// Screen geometry of `label`'s slider (NSZeroRect / 0 if none), for a guide
+/// to place its target marker and map the drag onto the real track.
+- (NSRect)guideSliderTrackScreenRectForLabel:(NSString *)label;
+- (CGFloat)guideSliderScreenXForValue:(double)value forLabel:(NSString *)label;
+- (double)guideSliderValueForScreenX:(CGFloat)screenX
+                            forLabel:(NSString *)label;
+/// Guide hooks for a numeric field of `label`'s row (Crop component 0..3 =
+/// W,H,X,Y): the field's screen rect (spotlight), a live-keystroke handler,
+/// and a programmatic Return.
+- (NSRect)guideFieldScreenRectForLabel:(NSString *)label
+                             component:(NSInteger)component;
+- (void)setGuideFieldEditHandlerForLabel:(NSString *)label
+                                 handler:(nullable void (^)(
+                                             NSInteger component,
+                                             double displayValue))handler;
+- (void)guideCommitFieldForLabel:(NSString *)label
+                       component:(NSInteger)component;
 + (CGFloat)heightForLanes:(NSArray<KKLane *> *)lanes
            descriptorPath:(nullable NSString *)descriptorPath
                clipAspect:(CGFloat)clipAspect;

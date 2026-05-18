@@ -23,7 +23,6 @@
     __strong typeof(weak) strong = weak;
     if (!strong || !strong->_active)
       return;
-    KKLogInfo(@"[Joyride] dismissing — %@ (avoids stale spotlight)", why);
     // Defer: notifications fire synchronously and dismiss runs an animation
     // + onComplete (which may applyTimeline:) — avoid reentrancy.
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -92,9 +91,6 @@
                         if (!w ||
                             ![s->_hostPassthroughWindows containsObject:w])
                           return;
-                        KKLogInfo(
-                            @"[Joyride] dismissing — host window occlusion "
-                            @"changed (overlay not front)");
                         dispatch_async(dispatch_get_main_queue(), ^{
                           __strong typeof(weak) s2 = weak;
                           if (s2 && s2->_active)

@@ -55,6 +55,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// Point handle centre (overlay points), or NO if none. Default NO.
 - (BOOL)pointHandleCenter:(out CGPoint *)outCenter
            forContentRect:(CGRect)contentRect;
+/// Point handle centre if its value were `value` (for a guide's amber
+/// "drag to here" target marker). Default NO.
+- (BOOL)pointHandleCenter:(out CGPoint *)outCenter
+                 forValue:(double)value
+           forContentRect:(CGRect)contentRect;
 /// YES if `p` grabs the point handle. Default NO.
 - (BOOL)pointHandleHitAtPoint:(CGPoint)p contentRect:(CGRect)contentRect;
 /// Apply a point-handle drag: compute the new value, then call

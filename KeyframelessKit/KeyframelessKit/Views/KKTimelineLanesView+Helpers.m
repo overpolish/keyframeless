@@ -120,14 +120,10 @@ static void _clearPopoverBackground(NSView *view) {
 
 - (void)setChecked:(BOOL)checked {
   _checked = checked;
-  KKLogDebug(@"KKLanesView: setChecked=%d label=%@ needs redraw", checked,
-             _rowLabel);
   [self setNeedsDisplay:YES];
 }
 
 - (void)drawRect:(NSRect)dirty {
-  KKLogDebug(@"KKLanesView: ManageRow drawRect label=%@ checked=%d", _rowLabel,
-             _checked);
   // Square checkbox — Bezier path approach (coordinate-system independent
   // shape).
   CGFloat checkX = KKPaddingLG;
@@ -187,8 +183,6 @@ static void _clearPopoverBackground(NSView *view) {
 }
 
 - (void)mouseDown:(NSEvent *)e {
-  KKLogDebug(@"KKLanesView: ManageRow mouseDown label=%@ onToggle=%@",
-             _rowLabel, _onToggle ? @"set" : @"nil");
   if (_onToggle)
     _onToggle();
 }
@@ -468,6 +462,7 @@ static NSTextField *_KKMakeCaption(NSString *s) {
       NSTextField *fld = _KKMakeNumberField();
       fld.target = self;
       fld.action = @selector(_fieldCommitted:);
+      fld.delegate = (id<NSTextFieldDelegate>)self; // live-typing for a guide
       [fld.widthAnchor constraintEqualToConstant:kStaticFieldW].active = YES;
       [arranged addObject:cap];
       [arranged addObject:fld];
@@ -507,6 +502,7 @@ static NSTextField *_KKMakeCaption(NSString *s) {
     NSTextField *fld = _KKMakeNumberField();
     fld.target = self;
     fld.action = @selector(_fieldCommitted:);
+    fld.delegate = (id<NSTextFieldDelegate>)self;
     _fields = @[ fld ];
     _slider = [KKSliderView styledSlider];
     _slider.translatesAutoresizingMaskIntoConstraints = NO;
@@ -606,6 +602,35 @@ static NSTextField *_KKMakeCaption(NSString *s) {
 
 - (void)applyLane:(KKLane *)lane {
   [self applyValues:lane.keyposes.firstObject.values];
+}
+
+- (NSView *)guideSliderView {
+  return _slider;
+}
+
+- (NSView *)guideFieldViewForComponent:(NSInteger)i {
+  return (i >= 0 && i < (NSInteger)_fields.count) ? _fields[i] : nil;
+}
+
+- (void)guideCommitFieldForComponent:(NSInteger)i {
+  if (i < 0 || i >= (NSInteger)_fields.count)
+    return;
+  // End editing → sendsActionOnEndEditing fires _fieldCommitted:.
+  [_fields[i].window makeFirstResponder:nil];
+}
+
+// Live keystrokes in any field — report the parsed *display* value (the
+// editor's current text, not the cell's committed value) so a guide can
+// watch the user type toward a target.
+- (void)controlTextDidChange:(NSNotification *)note {
+  if (!_onGuideFieldEdit)
+    return;
+  NSInteger comp = [_fields indexOfObjectIdenticalTo:note.object];
+  if (comp == NSNotFound)
+    return;
+  NSText *ed = note.userInfo[@"NSFieldEditor"];
+  double disp = ed ? ed.string.doubleValue : [note.object doubleValue];
+  _onGuideFieldEdit(comp, disp);
 }
 
 @end
@@ -812,6 +837,73 @@ static NSTextField *_KKMakeCaption(NSString *s) {
 - (void)liveUpdateValues:(NSArray<NSNumber *> *)values
                 forLabel:(NSString *)label {
   [_rowsByLabel[label] applyValues:values];
+}
+
+- (nullable NSView *)rowViewForLabel:(NSString *)label {
+  return _rowsByLabel[label];
+}
+
+- (void)guideBeginConstantDrag {
+  if (_onDragBegin)
+    _onDragBegin();
+}
+
+- (void)guideApplyConstantValues:(NSArray<NSNumber *> *)values
+                        forLabel:(NSString *)label {
+  // Same body as _KKStaticValueRow.onValue: live preview into the renderer +
+  // canvas redraw + move the row's knob/fields, persist coalesced downstream.
+  id<KKMiniCanvasDelegate> del = _miniCanvas.canvasDelegate;
+  if ([del respondsToSelector:@selector(
+                                  miniCanvas:applyConstantValues:forLabel:)]) {
+    [del miniCanvas:_miniCanvas applyConstantValues:values forLabel:label];
+    [_miniCanvas setNeedsDisplay:YES];
+    [_miniCanvas setHandlesNeedDisplay];
+  }
+  [self liveUpdateValues:values forLabel:label];
+  if (_onHandleValue)
+    _onHandleValue(label, values);
+}
+
+- (void)guideEndConstantDrag {
+  if (_onDragEnd)
+    _onDragEnd();
+}
+
+- (KKSliderView *)_guideSliderForLabel:(NSString *)label {
+  NSView *v = [_rowsByLabel[label] guideSliderView];
+  return [v isKindOfClass:[KKSliderView class]] ? (KKSliderView *)v : nil;
+}
+
+- (NSRect)guideSliderTrackScreenRectForLabel:(NSString *)label {
+  return [[self _guideSliderForLabel:label] trackScreenRect];
+}
+
+- (CGFloat)guideSliderScreenXForValue:(double)value forLabel:(NSString *)label {
+  return [[self _guideSliderForLabel:label] screenXForValue:value];
+}
+
+- (double)guideSliderValueForScreenX:(CGFloat)screenX
+                            forLabel:(NSString *)label {
+  return [[self _guideSliderForLabel:label] valueForScreenX:screenX];
+}
+
+- (NSRect)guideFieldScreenRectForLabel:(NSString *)label
+                             component:(NSInteger)component {
+  NSView *f = [_rowsByLabel[label] guideFieldViewForComponent:component];
+  NSWindow *w = f.window;
+  if (!f || !w)
+    return NSZeroRect;
+  return [w convertRectToScreen:[f convertRect:f.bounds toView:nil]];
+}
+
+- (void)setGuideFieldEditHandlerForLabel:(NSString *)label
+                                 handler:(void (^)(NSInteger, double))handler {
+  _rowsByLabel[label].onGuideFieldEdit = handler;
+}
+
+- (void)guideCommitFieldForLabel:(NSString *)label
+                       component:(NSInteger)component {
+  [_rowsByLabel[label] guideCommitFieldForComponent:component];
 }
 
 - (void)updateUnoptedLanes:(NSArray<KKLane *> *)lanes {

@@ -106,6 +106,14 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
 
 - (void)mouseDown:(NSEvent *)e {
   KKMiniCanvasView *c = self.canvas;
+  // A double-click is always "reset view", even when it lands on the crop
+  // box / a handle (the overlay's hitTest swallows those clicks, so the
+  // canvas's own -mouseDown: never sees them otherwise).
+  if (e.clickCount == 2) {
+    [self.window makeFirstResponder:nil];
+    [c resetView];
+    return;
+  }
   id<KKMiniCanvasDelegate> d = c.canvasDelegate;
   if (![d respondsToSelector:
               @selector(miniCanvas:beginHandleDragAtPoint:contentRect:)])
@@ -348,8 +356,6 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
     _processedTexture = nil; // size changed — rebuilt lazily in draw
     if (h > 0)
       _clipAspect = (CGFloat)w / (CGFloat)h;
-    KKLogInfo(@"KKMiniCanvasView: resolved IOSurface %u %lux%lu gen=%llu", sid,
-              (unsigned long)w, (unsigned long)h, gen);
   }
   _resolvedSurfaceID = sid;
   _resolvedGeneration = gen;
@@ -594,6 +600,7 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   if (r0.size.width <= 0 || r0.size.height <= 0 || _zoom <= 0) {
     _zoom = newZoom;
     [self setNeedsDisplay:YES];
+    [self _didChangeViewTransform];
     return;
   }
   CGFloat fx = (c.x - r0.origin.x) / r0.size.width;
@@ -607,23 +614,19 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   _panPixels.y = originY - d.height / 2.0 + newH / 2.0;
   _zoom = newZoom;
   [self setNeedsDisplay:YES];
+  [self _didChangeViewTransform];
 }
 
 // Exact mechanism copied from the old KKStageSequencerView+InteractionZoomPan
 // (which had working pinch/pan): plain responder overrides, scrollWheel:
 // forwards to super first for a coherent NSScrollView event stream.
 - (void)magnifyWithEvent:(NSEvent *)event {
-  KKLogDebug(@"KKMiniCanvasView: magnifyWithEvent mag=%.3f",
-             event.magnification);
   NSPoint p = [self convertPoint:event.locationInWindow fromView:nil];
   [self _zoomTo:_zoom * (1.0 + event.magnification) aboutViewPoint:p];
 }
 
 - (void)scrollWheel:(NSEvent *)event {
   [super scrollWheel:event];
-  KKLogDebug(@"KKMiniCanvasView: scrollWheel dx=%.1f dy=%.1f precise=%d",
-             event.scrollingDeltaX, event.scrollingDeltaY,
-             event.hasPreciseScrollingDeltas);
   NSPoint p = [self convertPoint:event.locationInWindow fromView:nil];
   if (event.hasPreciseScrollingDeltas) {
     // Trackpad two-finger → pan.
@@ -631,25 +634,146 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
     _panPixels.x += event.scrollingDeltaX * s;
     _panPixels.y -= event.scrollingDeltaY * s; // drawable y is up; delta y-down
     [self setNeedsDisplay:YES];
-    KKLogDebug(@"KKMiniCanvasView: pan d=(%.0f,%.0f)", event.scrollingDeltaX,
-               event.scrollingDeltaY);
+    [self _didChangeViewTransform];
   } else {
     // Mouse wheel → zoom toward cursor.
     CGFloat factor = 1.0 - event.scrollingDeltaY * 0.05;
     [self _zoomTo:_zoom * factor aboutViewPoint:p];
-    KKLogDebug(@"KKMiniCanvasView: wheel zoom=%.2f", _zoom);
   }
 }
 
 - (void)mouseDown:(NSEvent *)event {
   // End any focused value field (see _KKMiniCanvasOverlay -mouseDown:).
   [self.window makeFirstResponder:nil];
-  if (event.clickCount == 2) {
-    _zoom = kKKMiniInitialZoom;
-    _panPixels = CGPointZero;
-    [self setNeedsDisplay:YES];
-    KKLogDebug(@"KKMiniCanvasView: double-click reset");
-  }
+  if (event.clickCount == 2)
+    [self resetView];
+}
+
+- (void)resetView {
+  _zoom = kKKMiniInitialZoom;
+  _panPixels = CGPointZero;
+  [self setNeedsDisplay:YES];
+  if (self.onViewReset)
+    self.onViewReset();
+}
+
+- (void)_didChangeViewTransform {
+  if (self.onViewTransformChanged)
+    self.onViewTransformChanged();
+}
+
+- (NSPoint)_viewPointForScreenPoint:(NSPoint)screenPoint {
+  NSWindow *w = self.window;
+  if (!w)
+    return NSZeroPoint;
+  return [self convertPoint:[w convertPointFromScreen:screenPoint]
+                   fromView:nil];
+}
+
+- (void)beginPointHandleDragAtScreenPoint:(NSPoint)screenPoint {
+  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  if (![d respondsToSelector:
+              @selector(miniCanvas:beginHandleDragAtPoint:contentRect:)])
+    return;
+  [self.window makeFirstResponder:nil];
+  if (self.onHandleDragBegin)
+    self.onHandleDragBegin();
+  [d miniCanvas:self
+      beginHandleDragAtPoint:[self _viewPointForScreenPoint:screenPoint]
+                 contentRect:[self contentRectInViewPoints]];
+}
+
+- (void)dragPointHandleToScreenPoint:(NSPoint)screenPoint {
+  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  if (![d respondsToSelector:@selector(
+                                 miniCanvas:dragHandleToPoint:contentRect:)])
+    return;
+  [d miniCanvas:self
+      dragHandleToPoint:[self _viewPointForScreenPoint:screenPoint]
+            contentRect:[self contentRectInViewPoints]];
+}
+
+- (void)endPointHandleDrag {
+  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  if ([d respondsToSelector:@selector(miniCanvasEndHandleDrag:)])
+    [d miniCanvasEndHandleDrag:self];
+  if (self.onHandleDragEnd)
+    self.onHandleDragEnd();
+}
+
+// `ctr` is overlay points, y-up, in the canvas's own coordinate space (the
+// overlay fills the canvas bounds 1:1) → glyph rect in screen space.
+- (NSRect)_screenRectForHandleCenter:(CGPoint)ctr {
+  NSWindow *w = self.window;
+  if (!w)
+    return NSZeroRect;
+  CGFloat r = kKKMiniHandleOuterPt;
+  NSRect inView = NSMakeRect(ctr.x - r, ctr.y - r, 2 * r, 2 * r);
+  return [w convertRectToScreen:[self convertRect:inView toView:nil]];
+}
+
+- (NSRect)pointHandleScreenRect {
+  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  if (!self.window ||
+      ![d respondsToSelector:@selector(
+                                 miniCanvas:pointHandleCenter:contentRect:)])
+    return NSZeroRect;
+  CGPoint ctr;
+  if (![d miniCanvas:self
+          pointHandleCenter:&ctr
+                contentRect:[self contentRectInViewPoints]])
+    return NSZeroRect;
+  return [self _screenRectForHandleCenter:ctr];
+}
+
+- (NSRect)pointHandleScreenRectForValue:(double)value {
+  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  if (!self.window ||
+      ![d respondsToSelector:
+              @selector(miniCanvas:pointHandleCenter:forValue:contentRect:)])
+    return NSZeroRect;
+  CGPoint ctr;
+  if (![d miniCanvas:self
+          pointHandleCenter:&ctr
+                   forValue:value
+                contentRect:[self contentRectInViewPoints]])
+    return NSZeroRect;
+  return [self _screenRectForHandleCenter:ctr];
+}
+
+- (NSRect)_screenRectForHandleCenters:(NSArray<NSValue *> *)centers
+                              atIndex:(NSInteger)index {
+  if (index < 0 || index >= (NSInteger)centers.count)
+    return NSZeroRect;
+  return [self _screenRectForHandleCenter:centers[index].pointValue];
+}
+
+- (NSRect)cropHandleScreenRectAtIndex:(NSInteger)index {
+  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  if (!self.window ||
+      ![d respondsToSelector:@selector(
+                                 miniCanvas:extraHandleCentersForContentRect:)])
+    return NSZeroRect;
+  return [self
+      _screenRectForHandleCenters:
+          [d miniCanvas:self
+              extraHandleCentersForContentRect:[self contentRectInViewPoints]]
+                          atIndex:index];
+}
+
+- (NSRect)cropHandleScreenRectAtIndex:(NSInteger)index
+                        forCropValues:(NSArray<NSNumber *> *)values {
+  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  if (!self.window ||
+      ![d respondsToSelector:
+              @selector(miniCanvas:cropHandleCentersForValues:contentRect:)])
+    return NSZeroRect;
+  return
+      [self _screenRectForHandleCenters:
+                [d miniCanvas:self
+                    cropHandleCentersForValues:values
+                                   contentRect:[self contentRectInViewPoints]]
+                                atIndex:index];
 }
 
 - (void)mouseDragged:(NSEvent *)event {
@@ -657,6 +781,7 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   _panPixels.x += event.deltaX * s;
   _panPixels.y -= event.deltaY * s; // deltaY is y-down
   [self setNeedsDisplay:YES];
+  [self _didChangeViewTransform];
 }
 
 - (BOOL)_pointFromGlobalEvent:(NSPoint *)outViewPt {
@@ -685,12 +810,10 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
     _panPixels.x += event.scrollingDeltaX * s;
     _panPixels.y -= event.scrollingDeltaY * s;
     [self setNeedsDisplay:YES];
-    KKLogDebug(@"KKMiniCanvasView: [mon] pan d=(%.0f,%.0f)",
-               event.scrollingDeltaX, event.scrollingDeltaY);
+    [self _didChangeViewTransform];
   } else {
     [self _zoomTo:_zoom * (1.0 - event.scrollingDeltaY * 0.05)
         aboutViewPoint:p];
-    KKLogDebug(@"KKMiniCanvasView: [mon] wheel zoom=%.2f", _zoom);
   }
   return YES;
 }
@@ -700,7 +823,6 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   if (![self _pointFromGlobalEvent:&p])
     return NO;
   [self _zoomTo:_zoom * (1.0 + event.magnification) aboutViewPoint:p];
-  KKLogDebug(@"KKMiniCanvasView: [mon] pinch zoom=%.2f", _zoom);
   return YES;
 }
 

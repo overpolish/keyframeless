@@ -91,9 +91,6 @@
   if (RoundedSharedOSCGuideBridge().guideStep == 2 &&
       fabs(newRadius - kOSCGuideTargetRadius) < 8.0)
     newRadius = kOSCGuideTargetRadius;
-  KKLogInfo(@"[OSCGuide] mouseDragged canvas=(%.1f,%.1f) topRight=(%.1f,%.1f) "
-            @"mouseDist=%.1f newRadius=%.1f",
-            positionX, positionY, topRight.x, topRight.y, mouseDist, newRadius);
   _dragCurrentRadius = newRadius;
 
   id<FxCustomParameterActionAPI_v4> actionAPI =

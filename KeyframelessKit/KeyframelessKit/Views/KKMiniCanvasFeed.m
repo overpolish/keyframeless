@@ -109,10 +109,6 @@ static const NSTimeInterval kMinUpdateInterval = 0.1;
 
   _srcW = sw;
   _srcH = sh;
-  KKLogInfo(@"KKMiniCanvasFeed: surface ready src=%lux%lu dst=%lux%lu "
-            @"ioSurfaceID=%u",
-            (unsigned long)sw, (unsigned long)sh, (unsigned long)_dstW,
-            (unsigned long)_dstH, (unsigned)IOSurfaceGetID(_surface));
   return YES;
 }
 
@@ -131,11 +127,7 @@ static const NSTimeInterval kMinUpdateInterval = 0.1;
   NSData *json = [NSJSONSerialization dataWithJSONObject:desc
                                                  options:0
                                                    error:nil];
-  if ([json writeToFile:_descriptorPath atomically:YES])
-    KKLogDebug(@"KKMiniCanvasFeed: published gen=%llu id=%u %lux%lu",
-               _generation, (unsigned)IOSurfaceGetID(_surface),
-               (unsigned long)_dstW, (unsigned long)_dstH);
-  else
+  if (![json writeToFile:_descriptorPath atomically:YES])
     KKLogWarn(@"KKMiniCanvasFeed: failed to write %@", _descriptorPath);
 }
 

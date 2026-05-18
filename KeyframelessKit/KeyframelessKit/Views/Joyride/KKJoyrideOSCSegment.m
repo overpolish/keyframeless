@@ -86,8 +86,6 @@
     // in place (no panel/monitor rebuild, so the drag keeps flowing).
     __strong KKJoyrideController *g = weakGuide;
     [g updateMessage:dragMessage stepNumber:dragStepNumber];
-    KKLogInfo(@"[OSCGuide] press → drag begin at (%.1f,%.1f) start=%.1f",
-              screenPt.x, screenPt.y, v);
   };
   s1.spotlightMouseDragged = ^(NSPoint screenPt) {
     if (!strategy.valueForScreenPoint)
@@ -98,19 +96,13 @@
     lastValue = v;
     if (strategy.applyValue)
       strategy.applyValue(v);
-    KKLogInfo(@"[OSCGuide] drag move pt=(%.1f,%.1f) value=%.1f", screenPt.x,
-              screenPt.y, v);
   };
   s1.spotlightMouseUp = ^(NSPoint screenPt) {
     BOOL onTarget =
         fabs(lastValue - strategy.targetValue) < strategy.snapTolerance;
     if (strategy.requireTargetHit && !onTarget) {
-      KKLogInfo(@"[OSCGuide] released off target (v=%.1f) — staying on drag "
-                @"step (require-target gate)",
-                lastValue);
       return; // user can press+drag again to land on it
     }
-    KKLogInfo(@"[OSCGuide] drag end → advancing");
     bridge.guideStep = 3;
   };
 

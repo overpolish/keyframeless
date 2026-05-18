@@ -172,6 +172,13 @@ static const CGFloat kHandleHitTolPt = 12.0;
   return YES;
 }
 
+- (BOOL)pointHandleCenter:(out CGPoint *)outCenter
+                 forValue:(double)radius
+           forContentRect:(CGRect)cr {
+  *outCenter = [self _handlePointForContentRect:cr radius:radius];
+  return YES;
+}
+
 - (BOOL)pointHandleHitAtPoint:(CGPoint)p contentRect:(CGRect)cr {
   CGPoint hp = [self _handlePointForContentRect:cr
                                          radius:[self _currentRadius]];

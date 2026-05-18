@@ -220,7 +220,28 @@
   full.disabledSubtitle =
       @"Select a Rounded clip or, if it's already selected, move the "
       @"mouse over the viewer";
-  return @[ intro, osc, full ];
+
+  __block __weak KKHelpGuide *weakConstants = nil;
+  KKHelpGuide *constants = [KKHelpGuide
+      guideWithTitle:@"Constants"
+            subtitle:@"Edit non-animating values in the mini-canvas"
+             onStart:^{
+               __strong typeof(weak) strong = weak;
+               strong.inspectorView.onGuideCompleted = ^{
+                 [weakConstants markCompleted];
+               };
+               [strong.inspectorView restartConstantsGuide];
+             }];
+  weakConstants = constants;
+  // Needs the live mini-canvas preview (radius handle + zoom/pan), so it
+  // requires a Rounded clip just like the OSC guide.
+  constants.enabledProvider = ^BOOL {
+    return RoundedHasCanvasReference();
+  };
+  constants.disabledSubtitle =
+      @"Select a Rounded clip to preview the constant values";
+
+  return @[ intro, osc, full, constants ];
 }
 
 - (NSNotificationName)helpGuideRefreshNotificationName {

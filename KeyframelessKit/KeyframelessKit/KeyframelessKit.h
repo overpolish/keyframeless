@@ -35,6 +35,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKHostInfo.h>
 #import <KeyframelessKit/KKIconButtonOSC.h>
 #import <KeyframelessKit/KKJoyrideController.h>
+#import <KeyframelessKit/KKJoyrideDragStep.h>
 #import <KeyframelessKit/KKJoyrideOSCSegment.h>
 #import <KeyframelessKit/KKKbd.h>
 #import <KeyframelessKit/KKLabelView.h>
@@ -43,6 +44,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKMiniCanvasCropEditor.h>
 #import <KeyframelessKit/KKMiniCanvasFeed.h>
+#import <KeyframelessKit/KKMiniCanvasGuideScroll.h>
 #import <KeyframelessKit/KKMiniCanvasRenderer.h>
 #import <KeyframelessKit/KKMiniCanvasView.h>
 #import <KeyframelessKit/KKMotionBlur.h>
