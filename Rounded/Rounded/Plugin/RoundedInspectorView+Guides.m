@@ -54,6 +54,8 @@ static void RoundedTriggerFCPZoomToFit(void) {
 @implementation RoundedInspectorView (Guides)
 
 - (void)_maybeAutostartIntroGuide {
+  if (_isDetachedCopy)
+    return;
   if (!self.window)
     return;
   if (_basicView.currentTimeline.lanes.count > 0)

@@ -18,4 +18,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) void (^onTapped)(void);
 @end
 
+@interface _RoundedDetachButton : NSView
+@property(nonatomic) BOOL on;
+@property(nonatomic, copy, nullable) void (^onTapped)(void);
+@end
+
 NS_ASSUME_NONNULL_END

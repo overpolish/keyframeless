@@ -53,7 +53,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, weak) NSTextField *subtitle;
 @property(nonatomic, weak) NSProgressIndicator *spinner;
 @property(nonatomic, weak) NSView *badge;
-@property(nonatomic, strong) NSTimer *loaderTimer;
+@property(nonatomic, strong, nullable) NSTimer *loaderTimer;
 @property(nonatomic) NSTimeInterval loaderStart;
 @property(nonatomic) BOOL hasState;
 @property(nonatomic) BOOL lastEnabled;

@@ -26,8 +26,14 @@ typedef NS_ENUM(NSInteger, RoundedTab) {
   KKPillToggleRowView *_tabBar;
   _RoundedLoopButton *_loopButton;
   _RoundedConstantsButton *_constantsButton;
+  _RoundedDetachButton *_detachButton;
   NSView *_contentView;
   KKTimelineLanesView *_basicView;
+  NSArray<KKLane *> *_availableLanes;
+  BOOL _isDetachedCopy;
+  BOOL _detachedAttached;
+  __weak RoundedInspectorView *_detachedOwner;
+  RoundedInspectorView *_detachedView;
   KKJoyrideController *_introGuide;
   KKTimeline *_savedIntroTimeline;
   KKJoyrideController *_oscGuide;

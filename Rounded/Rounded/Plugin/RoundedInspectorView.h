@@ -18,6 +18,24 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) void (^onTimelineMutated)
     (KKTimeline *updated);
 
+/// Fired when the detach button is tapped. The plugin owns the
+/// FxRemoteWindowAPI call (it must run inside its own action scope), so the
+/// view just signals intent. The handler decides open vs. close via
+/// -hasDetachedWindow.
+@property(nonatomic, copy, nullable) void (^onToggleDetached)(void);
+
+/// YES while a detached copy exists (window open or opening).
+@property(nonatomic, readonly) BOOL hasDetachedWindow;
+
+/// Builds the second, fully-wired RoundedInspectorView to embed in the host
+/// remote window and retains it. Caller adds the returned view into the
+/// host-provided parent. Returns the same instance until it closes.
+- (RoundedInspectorView *)beginDetachedCopy;
+
+/// Called by the plugin (or detected via the copy losing its window) when the
+/// remote window has closed; resets the button and releases the copy.
+- (void)handleDetachedWindowClosed;
+
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager
                        loopEnabled:(BOOL)loopEnabled
                          activeTab:(NSInteger)activeTab

@@ -20,6 +20,7 @@ static const CGFloat kInspectorHeight = 200.0;
   self = [super initWithFrame:NSMakeRect(0, 0, 0, kInspectorHeight)];
   if (self) {
     _apiManager = apiManager;
+    _availableLanes = [availableLanes copy];
     _selectedTab = (RoundedTab)activeTab;
     self.autoresizingMask =
         NSViewWidthSizable | NSViewHeightSizable | NSViewMinYMargin;
@@ -56,6 +57,10 @@ static const CGFloat kInspectorHeight = 200.0;
     _constantsButton.hidden = (timeline.lanes.count >= availableLanes.count);
     [self addSubview:_constantsButton];
 
+    _detachButton = [[_RoundedDetachButton alloc] init];
+    _detachButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:_detachButton];
+
     __weak typeof(self) weak = self;
 
     _tabBar.onToggled = ^(NSInteger index, BOOL isOn) {
@@ -65,6 +70,14 @@ static const CGFloat kInspectorHeight = 200.0;
       if (!strong)
         return;
       [strong _selectTab:(RoundedTab)index];
+    };
+
+    _detachButton.onTapped = ^{
+      __strong typeof(weak) strong = weak;
+      if (!strong)
+        return;
+      if (strong.onToggleDetached)
+        strong.onToggleDetached();
     };
 
     NSView *headerRow = [[NSView alloc] init];
@@ -131,6 +144,12 @@ static const CGFloat kInspectorHeight = 200.0;
       [_constantsButton.centerYAnchor
           constraintEqualToAnchor:_tabBar.centerYAnchor],
 
+      [_detachButton.leadingAnchor
+          constraintEqualToAnchor:_tabBar.trailingAnchor
+                         constant:KKPaddingMD],
+      [_detachButton.centerYAnchor
+          constraintEqualToAnchor:_tabBar.centerYAnchor],
+
       [box.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:h],
       [box.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
                                          constant:-h],
@@ -172,17 +191,28 @@ static const CGFloat kInspectorHeight = 200.0;
 
 - (void)viewDidMoveToWindow {
   [super viewDidMoveToWindow];
+  if (_isDetachedCopy) {
+    if (self.window) {
+      _detachedAttached = YES;
+    } else if (_detachedAttached) {
+      _detachedAttached = NO;
+      [_detachedOwner handleDetachedWindowClosed];
+    }
+    return;
+  }
   [self _maybeAutostartIntroGuide];
 }
 
 - (void)setLoopEnabled:(BOOL)enabled {
   _loopButton.on = enabled;
   [_loopButton setNeedsDisplay:YES];
+  [_detachedView setLoopEnabled:enabled];
 }
 
 - (void)applyTimeline:(KKTimeline *)timeline {
   [_basicView applyTimeline:timeline];
   _constantsButton.hidden = !_basicView.hasUnoptedLanes;
+  [_detachedView applyTimeline:timeline];
 }
 
 - (void)_selectTab:(RoundedTab)tab {
@@ -197,6 +227,55 @@ static const CGFloat kInspectorHeight = 200.0;
   _selectedTab = (RoundedTab)tab;
   [_tabBar setState:(tab == RoundedTabBasic) atIndex:RoundedTabBasic];
   [_tabBar setState:(tab == RoundedTabAdvanced) atIndex:RoundedTabAdvanced];
+  [_detachedView setActiveTab:tab];
+}
+
+- (BOOL)hasDetachedWindow {
+  return _detachedView != nil;
+}
+
+- (RoundedInspectorView *)beginDetachedCopy {
+  if (_isDetachedCopy || _detachedView)
+    return _detachedView;
+  RoundedInspectorView *copy = [[RoundedInspectorView alloc]
+      initWithAPIManager:_apiManager
+             loopEnabled:_loopButton.on
+               activeTab:_selectedTab
+          availableLanes:_availableLanes
+                timeline:_basicView.currentTimeline];
+  copy->_isDetachedCopy = YES;
+  copy->_detachedOwner = self;
+  copy->_detachButton.hidden = YES;
+  copy.onLoopToggled = self.onLoopToggled;
+  copy.onTabChanged = self.onTabChanged;
+  copy.onTimelineMutated = self.onTimelineMutated;
+  copy.effectHeaderRectProvider = self.effectHeaderRectProvider;
+  _detachedView = copy;
+  _detachButton.on = YES;
+  [_detachButton setNeedsDisplay:YES];
+  return copy;
+}
+
+// Called when the remote window has closed (the plugin asked the host to, or
+// the user closed it and the copy's window went nil). Deferred — we may be
+// unwinding the copy's own -viewDidMoveToWindow; releasing inline is UAF.
+- (void)handleDetachedWindowClosed {
+  _detachButton.on = NO;
+  [_detachButton setNeedsDisplay:YES];
+  if (!_detachedView)
+    return;
+  RoundedInspectorView *dying = _detachedView;
+  _detachedView = nil;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [dying removeFromSuperview];
+    [dying release];
+  });
+}
+
+- (void)dealloc {
+  [_detachedView release];
+  [_availableLanes release];
+  [super dealloc];
 }
 
 - (CGSize)intrinsicContentSize {

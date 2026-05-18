@@ -546,6 +546,19 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 /// Opens the host's remote window with the rendered `helpSections` and guides.
 - (void)openHelpRemoteWindow;
 
+/// Generic host remote-window presenter. Runs the required action scope,
+/// resolves FxRemoteWindowAPI, attaches to the correctly-sized superview,
+/// clears any prior remote content, and wraps `contentProvider()`'s view in a
+/// key handler that forwards Space / Cmd-Z / Cmd-Shift-Z to the host command
+/// API. Every plugin's remote window (help, editor, …) gets those keystrokes
+/// for free. The provider is invoked on the reply to build the content view.
+- (void)presentRemoteWindowOfSize:(CGSize)size
+                  contentProvider:(NSView * (^)(void))contentProvider;
+
+/// Asks the host to close this instance's remote window if the resolved
+/// FxRemoteWindowAPI supports it (v3+). Runs inside an action scope.
+- (void)closeRemoteWindowIfSupported;
+
 /// Creates a collapsible group header view wired to a hidden bool toggle.
 /// Use from createViewForParameterID: — the returned view reads/writes
 /// the expanded state at expandedParamID via an action scope.

@@ -9,6 +9,7 @@
 
 static const CGFloat kLoopIconSize = 11.0;
 static const CGFloat kConstantsIconSize = 10.0;
+static const CGFloat kDetachIconSize = 12.0;
 
 static NSImage *KKTintedImage(NSImage *src, NSColor *tint) {
   NSImage *result = [src copy];
@@ -36,6 +37,15 @@ static NSImage *KKConstantsImage(void) {
       imageWithSymbolConfiguration:
           [NSImageSymbolConfiguration
               configurationWithPointSize:kConstantsIconSize
+                                  weight:NSFontWeightMedium]];
+}
+
+static NSImage *KKDetachImage(void) {
+  return [[NSImage imageWithSystemSymbolName:@"arrow.up.forward.app.fill"
+                    accessibilityDescription:nil]
+      imageWithSymbolConfiguration:
+          [NSImageSymbolConfiguration
+              configurationWithPointSize:kDetachIconSize
                                   weight:NSFontWeightMedium]];
 }
 
@@ -117,6 +127,41 @@ static NSImage *KKConstantsImage(void) {
       [@"Constants" sizeWithAttributes:@{NSFontAttributeName : font}].width);
   static const CGFloat kPadX = 5.0, kGap = 3.0;
   return NSMakeSize(kPadX + ceil(img.size.width) + kGap + textW + kPadX, 18.0);
+}
+
+@end
+
+@implementation _RoundedDetachButton
+
+- (BOOL)isFlipped {
+  return YES;
+}
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+  return YES;
+}
+
+- (void)drawRect:(NSRect)dirtyRect {
+  NSColor *tint = _on ? [NSColor accentMatchingHost]
+                      : [[NSColor inspectorLabel] colorWithAlphaComponent:0.45];
+  NSImage *tinted = KKTintedImage(KKDetachImage(), tint);
+  CGFloat x = NSMidX(self.bounds) - tinted.size.width / 2.0;
+  CGFloat y = NSMidY(self.bounds) - tinted.size.height / 2.0;
+  [tinted drawInRect:NSMakeRect(x, y, tinted.size.width, tinted.size.height)
+            fromRect:NSZeroRect
+           operation:NSCompositingOperationSourceOver
+            fraction:1.0
+      respectFlipped:YES
+               hints:nil];
+}
+
+- (void)mouseDown:(NSEvent *)event {
+  if (_onTapped)
+    _onTapped();
+}
+
+- (NSSize)intrinsicContentSize {
+  NSImage *img = KKDetachImage();
+  return NSMakeSize(ceil(img.size.width) + 4.0, 18.0);
 }
 
 @end

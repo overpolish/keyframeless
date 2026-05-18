@@ -105,6 +105,23 @@
       return strong ? [strong effectHeaderScreenRect] : NSZeroRect;
     };
 
+    view.onToggleDetached = ^{
+      __strong typeof(weak) strong = weak;
+      if (!strong)
+        return;
+      RoundedInspectorView *insp = strong.inspectorView;
+      if (!insp)
+        return;
+      if (insp.hasDetachedWindow) {
+        [strong closeRemoteWindowIfSupported];
+        return;
+      }
+      [strong presentRemoteWindowOfSize:CGSizeMake(720.0, 460.0)
+                        contentProvider:^NSView * {
+                          return [insp beginDetachedCopy];
+                        }];
+    };
+
     self.inspectorView = view;
     return view;
   }
