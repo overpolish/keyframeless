@@ -11,6 +11,18 @@
 
 #define CLAMP(x, lo, hi) MAX((lo), MIN((hi), (x)))
 
+// Returns the KKCropOSC part for a Rounded activePart, or KKCropPartNone if
+// it's not crop-related. Keeps the Rounded-side enum constants out of the KK
+// header.
+static NSInteger _kkCropPartForRoundedActive(NSInteger activePart) {
+  if (activePart == kOSCCropRectPart)
+    return KKCropPartRect;
+  if (activePart >= kOSCCropPointBase &&
+      activePart < kOSCCropPointBase + KKCropPointCount)
+    return KKCropPartPointBase + (activePart - kOSCCropPointBase);
+  return KKCropPartNone;
+}
+
 @implementation RoundedOSC (MouseHandlers)
 
 - (void)keyDownAtPositionX:(double)mousePositionX
@@ -30,6 +42,18 @@
                    modifiers:(NSUInteger)modifiers
                  forceUpdate:(BOOL *)forceUpdate
                       atTime:(CMTime)time {
+  // Route crop-handle / crop-rect presses to the embedded KKCropOSC, which
+  // owns its own drag state. The radius super-handler ignores parts it
+  // doesn't recognise.
+  NSInteger cropPart = _kkCropPartForRoundedActive(activePart);
+  if (cropPart != KKCropPartNone) {
+    [_cropOSC mouseDownForPart:cropPart
+                     positionX:positionX
+                     positionY:positionY
+                        atTime:time];
+    return;
+  }
+
   [super mouseDownAtPositionX:positionX
                     positionY:positionY
                    activePart:activePart
@@ -42,7 +66,7 @@
 
   _dragStartPosition = CGPointMake(positionX, positionY);
   _dragStartRadius =
-      radiusFromBlobAtFraction(self.apiManager, [self fractionAtTime:time]);
+      RoundedSnapshotRadiusAtFraction([self fractionAtTime:time]);
   _dragCurrentRadius = _dragStartRadius;
 
   if (RoundedSharedOSCGuideBridge().guideStep == 1) {
@@ -57,21 +81,38 @@
                       modifiers:(NSUInteger)modifiers
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
+  // Crop-part drag → delegate to the embedded KKCropOSC.
+  NSInteger cropPart = _kkCropPartForRoundedActive(activePart);
+  if (cropPart != KKCropPartNone) {
+    [_cropOSC mouseDraggedForPart:cropPart
+                        positionX:positionX
+                        positionY:positionY
+                      forceUpdate:forceUpdate
+                           atTime:time];
+    return;
+  }
+
   if (activePart == 0)
     return;
 
-  CGPoint topRight = {0, 0}, bottomLeft = {0, 0};
-  if (![self getCanvasTopRight:&topRight bottomLeft:&bottomLeft])
+  // Mirror oscPositionAtTime: drag math projects from the crop TR with the
+  // crop's minDim (not the full-canvas anchor), so the cursor tracks the
+  // handle 1:1 even with a non-default crop.
+  double frac = [self fractionAtTime:time];
+  CGPoint cropTR = CGPointZero;
+  BOOL isFlippedX = NO, isFlippedY = NO;
+  float minDim = 0.0f;
+  // Use the cached crop-anchor helper on the OSC (declared in OSC.m's @impl).
+  if (![self _cropAnchorCornerForFraction:frac
+                                outCorner:&cropTR
+                              outFlippedX:&isFlippedX
+                              outFlippedY:&isFlippedY
+                                outMinDim:&minDim] ||
+      minDim <= 0)
     return;
 
-  float canvasImageWidth = topRight.x - bottomLeft.x;
-  float canvasImageHeight = topRight.y - bottomLeft.y;
-  float minDim = fminf(fabsf(canvasImageWidth), fabsf(canvasImageHeight));
-  BOOL isFlippedX = canvasImageWidth < 0;
-  BOOL isFlippedY = canvasImageHeight < 0;
-
-  double dx = positionX - topRight.x;
-  double dy = positionY - topRight.y;
+  double dx = positionX - cropTR.x;
+  double dy = positionY - cropTR.y;
   double signX = isFlippedX ? -1.0 : 1.0;
   double signY = isFlippedY ? -1.0 : 1.0;
 
@@ -99,8 +140,6 @@
     return;
   [actionAPI startAction:self];
 
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   id<FxParameterSettingAPI_v5> setAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   if (!setAPI) {
@@ -108,29 +147,67 @@
     return;
   }
 
-  NSString *json = KKReadCustomParamString(getAPI, kKKParamTimelineData);
-  KKTimeline *tl =
-      json.length ? [KKTimeline timelineFromJSON:json] : [KKTimeline timeline];
+  // KKReadCustomParamString returns empty for kKKParamTimelineData in the OSC
+  // mouse-drag action scope (verified via logs: jsonLen=0 even with getAPI
+  // resolved). The parameterChanged-driven snapshot is canonical anyway —
+  // start from it so the radius edit doesn't wipe In/Hold/Out structure.
+  KKTimeline *snap = RoundedTimelineSnapshot();
+  KKTimeline *tl = snap ? [[snap copy] autorelease] : [KKTimeline timeline];
 
-  KKLane *radiusLane = nil;
-  for (KKLane *lane in tl.lanes) {
-    if ([lane.label isEqualToString:@"Radius"]) {
-      radiusLane = lane;
+  NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
+  NSInteger laneIdx = NSNotFound;
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+    if ([((KKLane *)lanes[i]).label isEqualToString:@"Radius"]) {
+      laneIdx = i;
       break;
     }
   }
-  if (!radiusLane) {
-    radiusLane = [KKLane laneWithLabel:@"Radius"];
-    // A value edit must not opt the property into the sequencer; animatable
-    // is dropdown-only. enabled == animatable.
-    radiusLane.enabled = NO;
-    NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
-    [lanes addObject:radiusLane];
-    tl.lanes = lanes;
-  }
 
-  KKKeyPose *kp = [KKKeyPose keyposeAtTime:0.0 values:@[ @(newRadius) ]];
-  radiusLane.keyposes = @[ kp ];
+  KKLane *radiusLane;
+  if (laneIdx == NSNotFound) {
+    // No lane: this is a fresh constant. Seed with one keypose at t=0.
+    // (Visibility rule means the OSC was reachable because !lane → constant.)
+    radiusLane = [KKLane laneWithLabel:@"Radius"];
+    radiusLane.enabled = NO;
+    radiusLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
+                                               values:@[ @(newRadius) ]] ];
+    [lanes addObject:radiusLane];
+  } else {
+    // Existing lane: replace the keypose value nearest the current playhead
+    // fraction, preserving every other keypose's time/interval (so the In/
+    // Hold/Out structure isn't wiped). Mirrors KKMiniCanvasRenderer's
+    // `_timelineBySettingValues:forLabel:` boundary-edit path.
+    radiusLane = [[lanes[laneIdx] copy] autorelease];
+    NSArray<KKKeyPose *> *kps = radiusLane.keyposes;
+    if (kps.count == 0) {
+      radiusLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
+                                                 values:@[ @(newRadius) ]] ];
+    } else {
+      NSInteger best = 0;
+      double bd = 1e9;
+      for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
+        double d = fabs(kps[k].time - frac);
+        if (d < bd) {
+          bd = d;
+          best = k;
+        }
+      }
+      NSMutableArray<KKKeyPose *> *out = [NSMutableArray arrayWithArray:kps];
+      // MRR: cache old's fields BEFORE `out[best] = nk`. The replacement
+      // releases the array's hold on `old`; if no other retainer exists it
+      // dangles and subsequent property reads (incl. KKLog) crash. See
+      // project_mrr_array_dangling.md — exact same pattern.
+      double oldTime = out[best].time;
+      KKInterval *oldOutgoing = out[best].outgoing;
+      KKKeyPose *nk = [KKKeyPose keyposeAtTime:oldTime
+                                        values:@[ @(newRadius) ]];
+      nk.outgoing = oldOutgoing; // preserve easing/modulation
+      out[best] = nk;
+      radiusLane.keyposes = out;
+    }
+    lanes[laneIdx] = radiusLane;
+  }
+  tl.lanes = lanes;
 
   KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
                            kKKParamTimelineData);
@@ -144,6 +221,9 @@
                  modifiers:(NSUInteger)modifiers
                forceUpdate:(BOOL *)forceUpdate
                     atTime:(CMTime)time {
+  // Always reset crop drag state on mouseUp (cheap; no-op when not dragging).
+  [_cropOSC mouseUp];
+
   if (RoundedSharedOSCGuideBridge().guideStep == 2 && self.isDragging) {
     RoundedSharedOSCGuideBridge().guideStep = 3;
     *forceUpdate = YES;

@@ -33,6 +33,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// from the render tick (a clip trim never fires parameterChanged:).
 - (void)setClipDurationSeconds:(double)seconds;
 
+/// Live frame duration (seconds) for the Basic motion-graph scrubber clamp.
+/// The playhead can't reach the clip end (it stops one frame before), so the
+/// scrubber's upper bound is `(clipDur - frameDur) / clipDur`. Forwarded to
+/// the Basic motion graph.
+- (void)setFrameDurationSeconds:(double)seconds;
+
 /// Live playhead position (clip fraction 0–1; < 0 hides), pushed from the
 /// render tick. Forwarded to the Basic motion graph.
 - (void)setPlayheadFraction:(double)frac;

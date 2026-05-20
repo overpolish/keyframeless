@@ -136,6 +136,7 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
   // Backing storage for the public properties — declared here (instead of
   // synthesized in the core .m) so all categories can read/write them.
   double _clipDurationSeconds;
+  double _frameDurationSeconds;
   double _playheadFraction;
   // Guide-only: optional callback fired AFTER the existing In/Out checkbox
   // handler runs. Lets a Joyride step advance on user toggle without

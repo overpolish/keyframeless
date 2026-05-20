@@ -301,6 +301,117 @@ NSArray<NSNumber *> *KKTimelineLaneValueAtFractionSmoothed(KKLane *lane,
   return KKLaneRawValueAtFraction(lane, frac);
 }
 
+// Inverse of the Basic-view _projection's visual In/Out remap. Stored kp
+// times sit at tIn/tOut even when In/Out is off — the Basic graph draws the
+// Hold-start at visual t=0 (In off) and Hold-end at visual t=1 (Out off).
+// This function applies the same remap on the read side so the rendered
+// output and OSC reads match the visual graph.
+static double _kkVisualToDataFrac(KKLane *lane, double visualFrac) {
+  NSArray<KKKeyPose *> *kps = lane.keyposes;
+  NSInteger n = (NSInteger)kps.count;
+  if (n < 2)
+    return visualFrac;
+
+  // Shape detection — match KKShapeOfLane (count-based, framerate-agnostic).
+  static const double kEps = 1e-4;
+  BOOL inEn = NO, outEn = NO;
+  if (n == 4) {
+    inEn = YES;
+    outEn = YES;
+  } else if (n == 3) {
+    if (kps.firstObject.time < kEps)
+      inEn = YES;
+    else
+      outEn = YES;
+  }
+  NSInteger holdStart = inEn ? 1 : 0;
+  NSInteger holdEnd = n - (outEn ? 2 : 1);
+  if (holdEnd <= holdStart)
+    return visualFrac;
+  double tA = kps[holdStart].time;
+  double tB = kps[holdEnd].time;
+  // Visual extents of the Hold region. In on → starts at tA (after In
+  // transition). Out on → ends at tB (before Out transition).
+  double vL = inEn ? tA : 0.0;
+  double vR = outEn ? tB : 1.0;
+
+  if (visualFrac <= vL)
+    return inEn ? visualFrac : tA;
+  if (visualFrac >= vR)
+    return outEn ? visualFrac : tB;
+  double span = vR - vL;
+  if (span <= kEps)
+    return tA;
+  double t = (visualFrac - vL) / span;
+  return tA + t * (tB - tA);
+}
+
+NSArray<NSNumber *> *
+KKTimelineLaneValueAtVisualFractionSmoothed(KKLane *lane, double visualFrac) {
+  return KKTimelineLaneValueAtFractionSmoothed(
+      lane, _kkVisualToDataFrac(lane, visualFrac));
+}
+
+BOOL KKLaneVisibleAtFraction(KKLane *lane, double frac, double frameDurSec) {
+  // Constants (disabled / no kps) — always show. Callers that want a
+  // different "constant" rule should branch before calling.
+  if (!lane || !lane.enabled)
+    return YES;
+  NSArray<KKKeyPose *> *kps = lane.keyposes;
+  if (kps.count == 0)
+    return YES;
+
+  // Count-based shape detection — must match KKShapeOfLane /
+  // _kkVisualToDataFrac so visibility lines up with where the kp is
+  // *drawn* (Basic-view projects Hold-start→0 when In off, Hold-end→1
+  // when Out off; stored times stay at tIn/tOut).
+  static const double kShapeEps = 1e-4;
+  NSInteger n = (NSInteger)kps.count;
+  BOOL inEnabled = NO, outEnabled = NO;
+  if (n == 4) {
+    inEnabled = YES;
+    outEnabled = YES;
+  } else if (n == 3) {
+    if (kps.firstObject.time < kShapeEps)
+      inEnabled = YES;
+    else
+      outEnabled = YES;
+  }
+  NSInteger holdStart = inEnabled ? 1 : 0;
+  NSInteger holdEnd = n - (outEnabled ? 2 : 1);
+
+  // Frame-aware snap tolerance — FCP's playhead is frame-quantized, so
+  // the readback frac is up to one frame off the kp's stored time.
+  double clipDur = lane.lastKnownClipDuration;
+  double epsilon;
+  if (clipDur > 0.0 && frameDurSec > 0.0)
+    epsilon = frameDurSec / clipDur;
+  else
+    epsilon = 0.05;
+  static const double kMinEps = 1e-4;
+  if (epsilon < kMinEps)
+    epsilon = kMinEps;
+
+  // Last-frame fraction — matches the scrubber's visual max and where
+  // FCP delivers the playhead when parked at the clip end. Used as the
+  // Out-end position when Out is off so the projected kp aligns with
+  // where the playhead can actually land.
+  double lastFrameFrac = 1.0;
+  if (clipDur > 0.0 && frameDurSec > 0.0 && frameDurSec < clipDur)
+    lastFrameFrac = (clipDur - frameDurSec) / clipDur;
+
+  for (NSInteger i = 0; i < n; i++) {
+    double t = kps[i].time;
+    if (i == holdStart && !inEnabled)
+      t = 0.0;
+    else if (i == holdEnd && !outEnabled)
+      t = lastFrameFrac;
+    if (fabs(t - frac) <= epsilon)
+      return YES;
+  }
+  return NO;
+}
+
 NSArray<NSNumber *> *KKTimingLaneValueAtFraction(KKTimingLane *lane,
                                                  double frac) {
   NSArray<KKTimingSegment *> *segments = lane.segments;

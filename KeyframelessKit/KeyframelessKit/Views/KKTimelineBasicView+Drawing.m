@@ -248,7 +248,9 @@
     // readout is the combined held duration, not just the middle.
     a = p.inEnabled ? p.inEndFrac : 0.0;
     b = p.outEnabled ? p.outStartFrac : 1.0;
-    tint = [NSColor accentMatchingHost];
+    // Drift = Hold endpoints with different values (a real tween, not flat) →
+    // surface it with warning, matching the warn fill used by _drawHoldSection.
+    tint = [self _holdDrift] ? [NSColor warning] : [NSColor accentMatchingHost];
   } else {
     a = p.outStartFrac;
     b = 1.0;

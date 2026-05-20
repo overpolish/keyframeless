@@ -33,6 +33,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// blob-stamped `lane.lastKnownClipDuration` cold-start fallback.
 @property(nonatomic) double clipDurationSeconds;
 
+/// Single frame duration in seconds, pushed from the render tick. Used to
+/// clamp the scrubber so the playhead can't land on the unreachable clip-
+/// end position (FCP stops at the last *frame*, not the clip end).
+@property(nonatomic) double frameDurationSeconds;
+
 /// Live playhead position as a clip fraction (0–1), pushed from the render
 /// tick. < 0 hides it (not playing / no timing yet). Drawn on the warped
 /// (log) axis like everything else.

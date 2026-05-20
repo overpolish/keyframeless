@@ -12,11 +12,6 @@
 #import <KeyframelessKit/KKTimelineLanesView+Guide.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
 
-// FCP's spurious play=1 push right after movePlayheadToTime: arrives within
-// ~150ms; the playPauseEdge guard ignores any play/pause flips inside this
-// window from when the step became active.
-static const CFAbsoluteTime kPlayPauseEdgeWarmupSeconds = 0.3;
-
 @interface _KKJoyrideStepBinding : NSObject
 @property(nonatomic, weak) KKJoyrideStep *step;
 @property(nonatomic) NSInteger stepIndex;
@@ -111,10 +106,9 @@ static const CFAbsoluteTime kPlayPauseEdgeWarmupSeconds = 0.3;
 
 - (void)notifyPlayingChanged:(BOOL)playing {
   [self _fireType:KKJoyrideTriggerTypePlayingChanged
-            intArg:0
-           intArg2:(playing ? 1 : 0)
-             label:nil
-            extraPlayPauseEdge:YES];
+                  intArg:0
+                 intArg2:(playing ? 1 : 0)label:nil
+      extraPlayPauseEdge:YES];
 }
 
 #pragma mark - Teardown
@@ -170,10 +164,10 @@ static const CFAbsoluteTime kPlayPauseEdgeWarmupSeconds = 0.3;
     KKJoyrideController *g = s->_guide;
     g.additionalPassthroughWindow = row.window;
     [s _fireType:KKJoyrideTriggerTypeManagePopoverWillOpen
-            intArg:0
-           intArg2:0
-             label:nil
-            extraPlayPauseEdge:NO];
+                    intArg:0
+                   intArg2:0
+                     label:nil
+        extraPlayPauseEdge:NO];
   };
 
   lanes.onManagePopoverClosed = ^{
@@ -184,10 +178,10 @@ static const CFAbsoluteTime kPlayPauseEdgeWarmupSeconds = 0.3;
     KKJoyrideController *g = s->_guide;
     g.additionalPassthroughWindow = nil;
     [s _fireType:KKJoyrideTriggerTypeManagePopoverClosed
-            intArg:0
-           intArg2:0
-             label:nil
-            extraPlayPauseEdge:NO];
+                    intArg:0
+                   intArg2:0
+                     label:nil
+        extraPlayPauseEdge:NO];
   };
 
   lanes.onLaneOptedIn = ^(NSString *label) {
@@ -196,31 +190,31 @@ static const CFAbsoluteTime kPlayPauseEdgeWarmupSeconds = 0.3;
       return;
     s->_latestOptedInLane = label;
     [s _fireType:KKJoyrideTriggerTypeLaneOptedIn
-            intArg:0
-           intArg2:0
-             label:label
-            extraPlayPauseEdge:NO];
+                    intArg:0
+                   intArg2:0
+                     label:label
+        extraPlayPauseEdge:NO];
   };
 
   lanes.onStaticValuesPopoverWillOpen =
       ^(NSView *content, KKMiniCanvasView *_Nullable cv) {
-    __strong typeof(weak) s = weak;
-    if (!s)
-      return;
-    s->_latestStaticValuesPopoverContent = content;
-    s->_latestMiniCanvas = cv;
-    KKJoyrideController *g = s->_guide;
-    g.additionalPassthroughWindow = content.window;
-    [s _wireMiniCanvas:cv];
-    [s _installFieldHandlersForOpenPopover];
-    [s _fireType:KKJoyrideTriggerTypeStaticValuesPopoverWillOpen
-            intArg:0
-           intArg2:0
-             label:nil
+        __strong typeof(weak) s = weak;
+        if (!s)
+          return;
+        s->_latestStaticValuesPopoverContent = content;
+        s->_latestMiniCanvas = cv;
+        KKJoyrideController *g = s->_guide;
+        g.additionalPassthroughWindow = content.window;
+        [s _wireMiniCanvas:cv];
+        [s _installFieldHandlersForOpenPopover];
+        [s _fireType:KKJoyrideTriggerTypeStaticValuesPopoverWillOpen
+                        intArg:0
+                       intArg2:0
+                         label:nil
             extraPlayPauseEdge:NO];
-    if (s.staticValuesPopoverDidOpen)
-      s.staticValuesPopoverDidOpen(content, cv);
-  };
+        if (s.staticValuesPopoverDidOpen)
+          s.staticValuesPopoverDidOpen(content, cv);
+      };
 
   lanes.onStaticValuesPopoverClosed = ^{
     __strong typeof(weak) s = weak;
@@ -231,16 +225,15 @@ static const CFAbsoluteTime kPlayPauseEdgeWarmupSeconds = 0.3;
     KKJoyrideController *g = s->_guide;
     g.additionalPassthroughWindow = nil;
     [s _fireType:KKJoyrideTriggerTypeStaticValuesPopoverClosed
-            intArg:0
-           intArg2:0
-             label:nil
-            extraPlayPauseEdge:NO];
+                    intArg:0
+                   intArg2:0
+                     label:nil
+        extraPlayPauseEdge:NO];
     if (s.staticValuesPopoverDidClose)
       s.staticValuesPopoverDidClose();
   };
 
-  lanes.onStaticValueChanged =
-      ^(NSString *label, NSArray<NSNumber *> *values) {
+  lanes.onStaticValueChanged = ^(NSString *label, NSArray<NSNumber *> *values) {
     __strong typeof(weak) s = weak;
     if (!s || !label)
       return;
@@ -249,22 +242,21 @@ static const CFAbsoluteTime kPlayPauseEdgeWarmupSeconds = 0.3;
 
   lanes.onStaticValueDragEnded =
       ^(NSString *label, NSArray<NSNumber *> *values) {
-    __strong typeof(weak) s = weak;
-    if (!s)
-      return;
-    if (label)
-      s->_latestStaticValues[label] = [values copy];
-    [s _fireType:KKJoyrideTriggerTypeStaticValueDragEnded
-            intArg:0
-           intArg2:0
-             label:label
+        __strong typeof(weak) s = weak;
+        if (!s)
+          return;
+        if (label)
+          s->_latestStaticValues[label] = [values copy];
+        [s _fireType:KKJoyrideTriggerTypeStaticValueDragEnded
+                        intArg:0
+                       intArg2:0
+                         label:label
             extraPlayPauseEdge:NO];
-    if (s.staticValueDragDidEnd)
-      s.staticValueDragDidEnd(label ?: @"", values ?: @[]);
-  };
+        if (s.staticValueDragDidEnd)
+          s.staticValueDragDidEnd(label ?: @"", values ?: @[]);
+      };
 
-  lanes.onGapPopoverWillOpen =
-      ^(NSView *content, KKSegmentEditView *editor) {
+  lanes.onGapPopoverWillOpen = ^(NSView *content, KKSegmentEditView *editor) {
     __strong typeof(weak) s = weak;
     if (!s)
       return;
@@ -273,10 +265,10 @@ static const CFAbsoluteTime kPlayPauseEdgeWarmupSeconds = 0.3;
     KKJoyrideController *g = s->_guide;
     g.additionalPassthroughWindow = content.window;
     [s _fireType:KKJoyrideTriggerTypeGapPopoverWillOpen
-            intArg:0
-           intArg2:0
-             label:nil
-            extraPlayPauseEdge:NO];
+                    intArg:0
+                   intArg2:0
+                     label:nil
+        extraPlayPauseEdge:NO];
   };
 
   lanes.onGapPopoverCurveChanged = ^(NSInteger curveType) {
@@ -284,10 +276,10 @@ static const CFAbsoluteTime kPlayPauseEdgeWarmupSeconds = 0.3;
     if (!s)
       return;
     [s _fireType:KKJoyrideTriggerTypeGapPopoverCurveChanged
-            intArg:curveType
-           intArg2:0
-             label:nil
-            extraPlayPauseEdge:NO];
+                    intArg:curveType
+                   intArg2:0
+                     label:nil
+        extraPlayPauseEdge:NO];
   };
 
   KKTimelineBasicView *graph = lanes.basicGraph;
@@ -296,30 +288,29 @@ static const CFAbsoluteTime kPlayPauseEdgeWarmupSeconds = 0.3;
     if (!s)
       return;
     [s _fireType:KKJoyrideTriggerTypePhaseToggled
-            intArg:phase
-           intArg2:(on ? 1 : 0)
-             label:nil
-            extraPlayPauseEdge:NO];
+                    intArg:phase
+                   intArg2:(on ? 1 : 0)label:nil
+        extraPlayPauseEdge:NO];
   };
   graph.onDiamondTapped = ^(NSInteger idx) {
     __strong typeof(weak) s = weak;
     if (!s)
       return;
     [s _fireType:KKJoyrideTriggerTypeDiamondTapped
-            intArg:idx
-           intArg2:0
-             label:nil
-            extraPlayPauseEdge:NO];
+                    intArg:idx
+                   intArg2:0
+                     label:nil
+        extraPlayPauseEdge:NO];
   };
   graph.onGapTapped = ^(NSInteger section) {
     __strong typeof(weak) s = weak;
     if (!s)
       return;
     [s _fireType:KKJoyrideTriggerTypeGapTapped
-            intArg:section
-           intArg2:0
-             label:nil
-            extraPlayPauseEdge:NO];
+                    intArg:section
+                   intArg2:0
+                     label:nil
+        extraPlayPauseEdge:NO];
   };
 }
 
@@ -338,20 +329,20 @@ static const CFAbsoluteTime kPlayPauseEdgeWarmupSeconds = 0.3;
     if (!s)
       return;
     [s _fireType:KKJoyrideTriggerTypeMiniCanvasViewTransformChanged
-            intArg:0
-           intArg2:0
-             label:nil
-            extraPlayPauseEdge:NO];
+                    intArg:0
+                   intArg2:0
+                     label:nil
+        extraPlayPauseEdge:NO];
   };
   cv.onViewReset = ^{
     __strong typeof(weak) s = weak;
     if (!s)
       return;
     [s _fireType:KKJoyrideTriggerTypeMiniCanvasViewReset
-            intArg:0
-           intArg2:0
-             label:nil
-            extraPlayPauseEdge:NO];
+                    intArg:0
+                   intArg2:0
+                     label:nil
+        extraPlayPauseEdge:NO];
   };
 }
 
@@ -381,24 +372,28 @@ static const CFAbsoluteTime kPlayPauseEdgeWarmupSeconds = 0.3;
     [_installedFieldHandlerLabels addObject:label];
     NSString *capturedLabel = [label copy];
     [lanes setGuideConstantFieldEditHandlerForLabel:label
-                                             handler:^(NSInteger comp,
-                                                       double disp) {
-      __strong typeof(weak) s = weak;
-      if (!s)
-        return;
-      // Dispatch checks the comp/equals/tolerance match in _trigger:matches…
-      [s _fireFieldEdited:capturedLabel component:comp value:disp];
-    }];
+                                            handler:^(NSInteger comp,
+                                                      double disp) {
+                                              __strong typeof(weak) s = weak;
+                                              if (!s)
+                                                return;
+                                              // Dispatch checks the
+                                              // comp/equals/tolerance match in
+                                              // _trigger:matches…
+                                              [s _fireFieldEdited:capturedLabel
+                                                        component:comp
+                                                            value:disp];
+                                            }];
   }
 }
 
 #pragma mark - Dispatch
 
 - (void)_fireType:(KKJoyrideTriggerType)type
-            intArg:(NSInteger)intArg
-           intArg2:(NSInteger)intArg2
-             label:(NSString *)label
-   extraPlayPauseEdge:(BOOL)alsoCheckEdge {
+                intArg:(NSInteger)intArg
+               intArg2:(NSInteger)intArg2
+                 label:(NSString *)label
+    extraPlayPauseEdge:(BOOL)alsoCheckEdge {
   KKJoyrideController *guide = _guide;
   if (!guide || !guide.isActive)
     return;
@@ -433,10 +428,10 @@ static const CFAbsoluteTime kPlayPauseEdgeWarmupSeconds = 0.3;
 
   // Advance match (with thenWaitFor arming).
   if ([self _trigger:match.advanceActive
-         matchesType:type
-              intArg:intArg
-             intArg2:intArg2
-               label:label]) {
+          matchesType:type
+               intArg:intArg
+              intArg2:intArg2
+                label:label]) {
     if (match.advanceActive.next) {
       match.advanceActive = match.advanceActive.next;
     } else {
@@ -446,10 +441,10 @@ static const CFAbsoluteTime kPlayPauseEdgeWarmupSeconds = 0.3;
   }
   // Dismiss match.
   if ([self _trigger:match.dismiss
-         matchesType:type
-              intArg:intArg
-             intArg2:intArg2
-               label:label]) {
+          matchesType:type
+               intArg:intArg
+              intArg2:intArg2
+                label:label]) {
     [guide dismiss];
   }
 }

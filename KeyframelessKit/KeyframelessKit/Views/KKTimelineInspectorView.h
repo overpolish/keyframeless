@@ -100,6 +100,8 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// Live clip duration (seconds) for the Basic ruler, pushed from the
 /// render tick (clip trims never fire `parameterChanged:`).
 - (void)setClipDurationSeconds:(double)seconds;
+/// Live frame duration (seconds) — bounds the scrubber to the last frame.
+- (void)setFrameDurationSeconds:(double)seconds;
 /// Live playhead position (clip fraction 0–1; < 0 hides) for the scrubber.
 - (void)setPlayheadFraction:(double)frac;
 /// Playback state — drives the play/pause button color.

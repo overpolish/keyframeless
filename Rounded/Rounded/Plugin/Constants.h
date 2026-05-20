@@ -10,6 +10,9 @@
 static NSString *const kPluginID = @"co.overpolish.keyframeless.Rounded";
 
 static const NSInteger kOSCRadiusPart = 100;
+// Crop part IDs: rect-drag = 200, 8 handles = 201..208.
+static const NSInteger kOSCCropRectPart = 200;
+static const NSInteger kOSCCropPointBase = 201;
 
 /// Posted on the main queue when the OSC handle's screen position updates;
 /// the plugin returns this as its help-guide refresh notification.

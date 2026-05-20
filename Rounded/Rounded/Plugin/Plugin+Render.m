@@ -6,6 +6,7 @@
 #import "Constants.h"
 #import "Plugin_Private.h"
 #import "RoundedMiniCanvasRenderer.h"
+#import "RoundedOSCRadiusMath.h"
 #import "ShaderTypes.h"
 #import <IOSurface/IOSurfaceObjC.h>
 #import <KeyframelessKit/KKDataBlob.h>
@@ -313,6 +314,10 @@ static BOOL KKReadBoundaryRequest(NSString *path, double *outFrac) {
     CMTime frameDur = kCMTimeZero;
     [timingAPI frameDuration:&frameDur];
     self.cachedFrameDurSec = CMTimeGetSeconds(frameDur);
+    // Hand the frame duration to the OSC math so its keypose-snap epsilon
+    // is one frame, not a fixed fraction — works across 24/30/60fps + any
+    // clip length.
+    RoundedSetFrameDurationSeconds(self.cachedFrameDurSec);
   }
   // A clip trim never fires parameterChanged:; the render tick is the only
   // callback that sees the new length. Push it straight into the weakly-
@@ -320,9 +325,12 @@ static BOOL KKReadBoundaryRequest(NSString *path, double *outFrac) {
   // changes — no blob write, no undo entry.
   if (durSec > 0 && fabs(durSec - self.lastPushedClipDuration) > 0.001) {
     self.lastPushedClipDuration = durSec;
+    double frameDurSec = self.cachedFrameDurSec;
     __weak typeof(self) weakSelf = self;
     dispatch_async(dispatch_get_main_queue(), ^{
       [weakSelf.inspectorView setClipDurationSeconds:durSec];
+      if (frameDurSec > 0)
+        [weakSelf.inspectorView setFrameDurationSeconds:frameDurSec];
     });
   }
   double frac = (durSec > 0)
@@ -349,9 +357,9 @@ static BOOL KKReadBoundaryRequest(NSString *path, double *outFrac) {
   // Fraction returns that constant for a 1-keypose lane regardless of frac.
   for (KKLane *lane in timeline.lanes) {
     if (!radiusVals && [lane.label isEqualToString:@"Radius"])
-      radiusVals = KKTimelineLaneValueAtFractionSmoothed(lane, frac);
+      radiusVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
     else if (!cropVals && [lane.label isEqualToString:@"Crop"])
-      cropVals = KKTimelineLaneValueAtFractionSmoothed(lane, frac);
+      cropVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
   }
 
   outParams->radius = radiusVals.count > 0 ? radiusVals[0].doubleValue : 20.0;

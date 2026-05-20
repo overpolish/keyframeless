@@ -7,6 +7,7 @@
 #import "Plugin_Private.h"
 #import "RoundedInspectorView+Guides.h"
 #import "RoundedInspectorView.h"
+#import "RoundedOSCRadiusMath.h"
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKHelpSection.h>
 #import <KeyframelessKit/KKTimingStage.h>
@@ -65,6 +66,34 @@
             ?: [KKTimeline timeline];
     timeline = [self timelineStampedWithClipDuration:timeline];
 
+    // Cold-boot seed for the OSC. Without this, the first drawOSC tick after
+    // FCP relaunch sees an empty snapshot → falls through to "no lane =
+    // constant", radius reads default 20, crop reads [1,1,0,0] → handle is
+    // visible at the canvas TR regardless of saved state. parameterChanged
+    // eventually catches up, but only after a redraw nudge.
+    RoundedSetTimelineSnapshot(timeline);
+
+    // Frame + clip duration for the keypose-snap epsilon AND the basic-view
+    // scrubber clamp. FxTimingAPI resolves inside this action scope. We
+    // also push these into the view itself right after construction (below)
+    // because the Plugin+Render push is gated on lastPushedClipDuration and
+    // can race with view creation: if the first render fires before the
+    // inspector view exists, the push targets a nil weak ref and the basic
+    // view never learns the frame duration for the lifetime of this session.
+    id<FxTimingAPI_v4> timingAPI =
+        [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+    double seedFrameDurSec = 0.0;
+    double seedClipDurSec = 0.0;
+    if (timingAPI) {
+      CMTime frameDur = kCMTimeZero, clipDur = kCMTimeZero;
+      [timingAPI frameDuration:&frameDur];
+      [timingAPI durationTimeForEffect:&clipDur];
+      seedFrameDurSec = CMTimeGetSeconds(frameDur);
+      seedClipDurSec = CMTimeGetSeconds(clipDur);
+      if (seedFrameDurSec > 0)
+        RoundedSetFrameDurationSeconds(seedFrameDurSec);
+    }
+
     [actionAPI endAction:self];
 
     NSArray<KKLane *> *available = [RoundedPlugin availableLanes];
@@ -74,6 +103,14 @@
                                                activeTab:activeTab
                                           availableLanes:available
                                                 timeline:timeline];
+    // Seed the basic-view scrubber clamp immediately. Plugin+Render's
+    // dispatch_async push runs once on first render — if it raced ahead
+    // and weakSelf.inspectorView was still nil, the basic view would
+    // never see the frame duration. Pushing here too is idempotent.
+    if (seedClipDurSec > 0)
+      [view setClipDurationSeconds:seedClipDurSec];
+    if (seedFrameDurSec > 0)
+      [view setFrameDurationSeconds:seedFrameDurSec];
     __weak typeof(self) weak = self;
 
     view.onLoopToggled = ^(BOOL enabled) {

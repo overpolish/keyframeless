@@ -97,6 +97,38 @@ FOUNDATION_EXPORT
 NSArray<NSNumber *> *_Nullable KKTimelineLaneValueAtFractionSmoothed(
     KKLane *lane, double frac);
 
+/// Same as `KKTimelineLaneValueAtFractionSmoothed` but with a Basic-view-
+/// shape-aware fraction remap applied first. The Basic view stores Hold
+/// keyposes at fixed tIn/tOut even when In/Out is off, but visually projects
+/// the Hold-start to t=0 (In off) and Hold-end to t=1 (Out off). This call
+/// applies that same projection on read, so a Hold-only drift evaluates
+/// across the full clip rather than only between the stored kp times.
+///
+/// Inside an enabled In or Out transition region the remap is identity, so
+/// In/Out easing is preserved unchanged.
+FOUNDATION_EXPORT
+NSArray<NSNumber *> *_Nullable KKTimelineLaneValueAtVisualFractionSmoothed(
+    KKLane *lane, double visualFrac);
+
+/// Returns YES when an OSC bound to `lane` should be visible at clip
+/// fraction `frac`. Mirrors the Basic-view projection: an In-off lane's
+/// Hold-start kp is visible at frac=0, an Out-off lane's Hold-end kp is
+/// visible at the last-frame fraction (≈1.0). Snap tolerance is frame-
+/// aware (≈one frame in fraction units) when the lane's
+/// `lastKnownClipDuration` and `frameDurSec` are known, otherwise a
+/// permissive default is used.
+///
+/// Constants — disabled lanes, or lanes with no keyposes — return YES
+/// (always visible). Animated lanes with keyposes only return YES when
+/// `frac` lands within `~1 frame` of a kp's *drawn* position.
+///
+/// `frameDurSec` is the project frame duration in seconds (e.g.
+/// 1.0/60.0). Callers in plugin render context typically read it via
+/// `FxTimingAPI`'s frame duration; OSC paths should keep a cached copy
+/// (FxTimingAPI is nil from a drawOSC tick).
+FOUNDATION_EXPORT BOOL KKLaneVisibleAtFraction(KKLane *lane, double frac,
+                                               double frameDurSec);
+
 /// Look-back window (seconds) used by both Canvas and MagicMove for the
 /// rotate-with-motion velocity sample.
 FOUNDATION_EXPORT const double KKRotateWithMotionWindowSeconds;

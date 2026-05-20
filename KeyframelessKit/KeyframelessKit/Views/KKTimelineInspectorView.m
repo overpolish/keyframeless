@@ -323,6 +323,11 @@ static const CGFloat kHeaderRowHeight = 28.0;
   [_detachedView setClipDurationSeconds:seconds];
 }
 
+- (void)setFrameDurationSeconds:(double)seconds {
+  [_basicView setFrameDurationSeconds:seconds];
+  [_detachedView setFrameDurationSeconds:seconds];
+}
+
 - (void)setPlayheadFraction:(double)frac {
   [_basicView setPlayheadFraction:frac];
   [_detachedView setPlayheadFraction:frac];

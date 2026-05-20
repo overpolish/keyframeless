@@ -17,22 +17,67 @@ float paddingForRadius(double radius, float minDim) {
   return minDim * 0.05f + cornerRadiusPixels * insetFactor * squircleCorrection;
 }
 
-double radiusFromBlobAtFraction(id<PROAPIAccessing> apiManager, double frac) {
-  id<FxParameterRetrievalAPI_v6> paramGetAPI =
-      [apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  if (!paramGetAPI)
-    return 20.0;
-  NSString *json = KKReadCustomParamString(paramGetAPI, kKKParamTimelineData);
-  if (!json.length)
-    return 20.0;
-  KKTimeline *tl = [KKTimeline timelineFromJSON:json];
-  for (KKLane *lane in tl.lanes) {
-    // `enabled` == animatable; a constant lane still supplies its value.
-    if ([lane.label isEqualToString:@"Radius"]) {
-      NSArray<NSNumber *> *vals =
-          KKTimelineLaneValueAtFractionSmoothed(lane, frac);
-      return vals.count > 0 ? vals[0].doubleValue : 20.0;
-    }
-  }
-  return 20.0;
+// Single-instance assumption (PLAN §"OSC cache"). Retained on assignment.
+// Reads on drawOSC tick / hit-test are pointer-atomic; no torn reads possible.
+static KKTimeline *sTimelineSnapshot = nil;
+
+void RoundedSetTimelineSnapshot(KKTimeline *timeline) {
+  // MRR: retain new before releasing old.
+  KKTimeline *prev = sTimelineSnapshot;
+  sTimelineSnapshot = [timeline retain];
+  [prev release];
+}
+
+KKTimeline *RoundedTimelineSnapshot(void) { return sTimelineSnapshot; }
+
+static KKLane *_laneForLabel(NSString *label) {
+  KKTimeline *tl = sTimelineSnapshot;
+  for (KKLane *lane in tl.lanes)
+    if ([lane.label isEqualToString:label])
+      return lane;
+  return nil;
+}
+
+NSArray<NSNumber *> *
+RoundedSnapshotValuesForLabel(NSString *label, double frac,
+                              NSArray<NSNumber *> *defaultValues) {
+  KKLane *lane = _laneForLabel(label);
+  if (!lane)
+    return defaultValues;
+  // Visual-frac variant so a Hold-only drift evaluates across the entire
+  // clip (matches Basic-view projection: Hold-start at visual t=0 when In
+  // off, Hold-end at visual t=1 when Out off).
+  NSArray<NSNumber *> *vals =
+      KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+  return vals.count > 0 ? vals : defaultValues;
+}
+
+double RoundedSnapshotRadiusAtFraction(double frac) {
+  NSArray<NSNumber *> *vals =
+      RoundedSnapshotValuesForLabel(@"Radius", frac, @[ @20.0 ]);
+  return vals.firstObject.doubleValue;
+}
+
+// Frame-aware snap tolerance. FCP's playhead is frame-quantized, so the
+// readback frac is up to one frame off the keypose's stored time. We
+// compute eps as ~1 frame in fraction units: frameDurSec / clipDurSec.
+// Pushed in from the plugin render path (FxTimingAPI is unavailable here).
+static double sFrameDurSec = 1.0 / 60.0;
+static const double kRoundedSnapEpsilonMin = 1e-4;
+
+void RoundedSetFrameDurationSeconds(double frameDurSec) {
+  if (frameDurSec > 0.0)
+    sFrameDurSec = frameDurSec;
+}
+
+static double _snapEpsilonForLane(KKLane *lane) {
+  double clipDur = lane.lastKnownClipDuration;
+  if (clipDur <= 0.0)
+    return 0.05; // unknown duration → wide enough for any reasonable clip
+  double eps = sFrameDurSec / clipDur;
+  return eps < kRoundedSnapEpsilonMin ? kRoundedSnapEpsilonMin : eps;
+}
+
+BOOL RoundedLaneVisibleAtFraction(NSString *label, double frac) {
+  return KKLaneVisibleAtFraction(_laneForLabel(label), frac, sFrameDurSec);
 }

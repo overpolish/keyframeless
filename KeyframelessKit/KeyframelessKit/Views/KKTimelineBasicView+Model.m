@@ -136,6 +136,13 @@ BOOL KKValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   KKHoldShape os = KKShapeOfLane(lane);
   NSArray<NSNumber *> *inStart = os.inEnabled ? old.firstObject.values : hold;
   NSArray<NSNumber *> *outEnd = os.outEnabled ? old.lastObject.values : hold;
+  // Preserve drift: when the existing Hold endpoints carry different
+  // values (unlinked / drift), keep them on rebuild. Falling back to the
+  // shared `hold` value collapsed drift on every boundary drag.
+  NSArray<NSNumber *> *holdStartVals =
+      (old.count >= 2) ? old[os.holdStart].values : hold;
+  NSArray<NSNumber *> *holdEndVals =
+      (old.count >= 2) ? old[os.holdEnd].values : hold;
 
   KKInterval *oldHold = (old.count >= 2) ? old[os.holdStart].outgoing : nil;
   KKInterval *oldIn = os.inEnabled ? old.firstObject.outgoing : nil;
@@ -147,14 +154,23 @@ BOOL KKValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
     a.outgoing = [oldIn copy] ?: [[KKInterval alloc] init];
     [kps addObject:a];
   }
-  KKKeyPose *hs = [KKKeyPose keyposeAtTime:tIn values:hold];
+  KKKeyPose *hs = [KKKeyPose keyposeAtTime:tIn values:holdStartVals];
   hs.outgoing = [oldHold copy] ?: [[KKInterval alloc] init];
   [kps addObject:hs];
-  KKKeyPose *he = [KKKeyPose keyposeAtTime:tOut values:hold];
+  KKKeyPose *he = [KKKeyPose keyposeAtTime:tOut values:holdEndVals];
   [kps addObject:he];
   if (outOn) {
     he.outgoing = [oldOut copy] ?: [[KKInterval alloc] init];
-    [kps addObject:[KKKeyPose keyposeAtTime:1.0 values:outEnd]];
+    // FCP's playhead stops one frame before clipEnd, so storing the Out kp
+    // at exactly 1.0 makes it unreachable. Store at (clipDur - frameDur) /
+    // clipDur so a scrub-to-end + render lands on a real frame. Fallback
+    // to 1.0 when frame duration isn't known yet (cold start).
+    double outEndFrac = 1.0;
+    double clipDur = [self _clipDuration];
+    if (clipDur > 0.0 && _frameDurationSeconds > 0.0 &&
+        _frameDurationSeconds < clipDur)
+      outEndFrac = (clipDur - _frameDurationSeconds) / clipDur;
+    [kps addObject:[KKKeyPose keyposeAtTime:outEndFrac values:outEnd]];
   }
 
   KKLane *nl = [lane copy];

@@ -100,6 +100,13 @@
   [self setNeedsDisplay:YES];
 }
 
+- (void)setFrameDurationSeconds:(double)seconds {
+  if (fabs(seconds - _frameDurationSeconds) < 1.0e-5)
+    return;
+  _frameDurationSeconds = seconds;
+  [self setNeedsDisplay:YES];
+}
+
 - (void)setPlayheadFraction:(double)frac {
   // While scrubbing, the view owns the playhead optimistically — ignore the
   // render round-trip so it doesn't fight the drag (the "double" jitter).
@@ -125,8 +132,22 @@ KKHoldShape KKShapeOfLane(KKLane *lane) {
   NSArray<KKKeyPose *> *k = lane.keyposes;
   if (k.count < 2)
     return s;
-  s.inEnabled = k.firstObject.time < kEps;
-  s.outEnabled = k.lastObject.time > 1.0 - kEps;
+  // Count-based detection (framerate-independent). Basic-view rebuild emits
+  // counts 2/3/3/4 — neither/In-only/Out-only/both. For a 3-kp lane, the
+  // extra kp is In iff its time is ~0 (Out kps are stored at 1-frameFrac,
+  // which varies with framerate, so we can't pin a threshold).
+  NSInteger n = (NSInteger)k.count;
+  if (n == 4) {
+    s.inEnabled = YES;
+    s.outEnabled = YES;
+  } else if (n == 3) {
+    if (k.firstObject.time < kEps) {
+      s.inEnabled = YES;
+    } else {
+      s.outEnabled = YES;
+    }
+  }
+  // n == 2 or n > 4 (legacy / advanced edits) → leave both NO.
   s.holdStart = s.inEnabled ? 1 : 0;
   s.holdEnd = (NSInteger)k.count - (s.outEnabled ? 2 : 1);
   if (s.holdEnd < s.holdStart)
@@ -184,10 +205,15 @@ KKHoldShape KKShapeOfLane(KKLane *lane) {
         p.holdModFrequency = hv.modulationFrequency;
         p.holdModSeed = hv.modulationSeed;
       }
-      p.holdDrift = (s.holdEnd > s.holdStart) &&
-                    !KKValuesEqual(lane.keyposes[s.holdStart].values,
-                                   lane.keyposes[s.holdEnd].values);
     }
+    // Drift is OR-style across animated lanes: any lane with differing Hold
+    // endpoint values means the graph should show a drift slope. Without
+    // this, adding a new (initially-flat) animatable lane would mask an
+    // existing drifted lane and visually flatten the curve.
+    if (!p.holdDrift && s.holdEnd > s.holdStart &&
+        !KKValuesEqual(lane.keyposes[s.holdStart].values,
+                       lane.keyposes[s.holdEnd].values))
+      p.holdDrift = YES;
     if (!p.inEnabled && s.inEnabled) {
       p.inEnabled = YES;
       KKInterval *iiv = lane.keyposes.firstObject.outgoing;
@@ -222,6 +248,11 @@ KKHoldShape KKShapeOfLane(KKLane *lane) {
   // start / to the very end). The stored keypose time is left untouched —
   // re-enabling the phase restores its boundary, and keypose-presence
   // inference stays valid (we never move keyposes to 0/1 in the model).
+  // Keep outStartFrac at 1.0 (not 1-frameFrac) so the log-warped edge
+  // remap doesn't see a thin "Out region" and inflate it to its floor
+  // width, which would push the Hold-end diamond visually inward.
+  // Scrubber-max + OSC-snap handle the playhead's last-frame quantization
+  // separately; the diamond stays parked at the visual right edge.
   if (!p.inEnabled)
     p.inEndFrac = 0.0;
   if (!p.outEnabled)

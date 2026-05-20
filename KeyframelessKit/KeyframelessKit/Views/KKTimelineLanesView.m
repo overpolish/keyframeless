@@ -437,11 +437,84 @@
   if (animatable) {
     // Keep in sync with KKTimelineBasicView's kDefaultInEnd/kDefaultOutStart.
     static const double kDefInEnd = 0.22, kDefOutStart = 0.78;
+    static const double kEps = 1e-4;
+
+    // Inherit global In/Out state from existing animated lanes (OR — any
+    // lane with In/Out means In/Out is globally on). Without this, a newly
+    // animatable lane is always Hold-only even when other lanes have
+    // active In/Out phases, which is jarring when the rest of the UI is
+    // mid-transition.
+    BOOL globalIn = NO, globalOut = NO;
+    double tIn = kDefInEnd, tOut = kDefOutStart;
+    BOOL tFound = NO;
+    // Inherit interval params (curve, intensity, freq, modulation, link) from
+    // the first animatable lane so a new lane joins the same In/Hold/Out
+    // shape — particularly drift/link state, which would otherwise clash
+    // (radius unlinked, new crop linked → ambiguous popover toggle).
+    KKInterval *tmplIn = nil, *tmplHold = nil, *tmplOut = nil;
+    for (KKLane *l in _timeline.lanes) {
+      if (!l.enabled || l.keyposes.count < 2)
+        continue;
+      NSArray<KKKeyPose *> *kk = l.keyposes;
+      // Count-based In/Out detection — matches KKShapeOfLane. Framerate-
+      // independent (Out kps are stored at 1-frameFrac, not 1.0, so a time
+      // threshold is unreliable).
+      NSInteger n = (NSInteger)kk.count;
+      BOOL lInEn = NO, lOutEn = NO;
+      if (n == 4) {
+        lInEn = YES;
+        lOutEn = YES;
+      } else if (n == 3) {
+        if (kk.firstObject.time < kEps)
+          lInEn = YES;
+        else
+          lOutEn = YES;
+      }
+      if (lInEn)
+        globalIn = YES;
+      if (lOutEn)
+        globalOut = YES;
+      if (!tFound) {
+        NSInteger holdStart = lInEn ? 1 : 0;
+        NSInteger holdEnd = n - (lOutEn ? 2 : 1);
+        if (holdEnd > holdStart) {
+          tIn = kk[holdStart].time;
+          tOut = kk[holdEnd].time;
+          tFound = YES;
+          tmplHold = [kk[holdStart].outgoing copy];
+          if (lInEn)
+            tmplIn = [kk.firstObject.outgoing copy];
+          if (lOutEn)
+            tmplOut = [kk[holdEnd].outgoing copy];
+        }
+      }
+    }
+
+    // Out-end position — one frame before clipEnd so FCP playhead can reach
+    // it. Read frame/clip dur off the basic graph (single source of truth).
+    double outEndFrac = 1.0;
+    double clipDur = _basicGraph.clipDurationSeconds;
+    double frameDur = _basicGraph.frameDurationSeconds;
+    if (clipDur > 0.0 && frameDur > 0.0 && frameDur < clipDur)
+      outEndFrac = (clipDur - frameDur) / clipDur;
+
     NSArray<NSNumber *> *v = [self _holdValuesOfLane:lane forLabel:label];
-    KKKeyPose *hs = [KKKeyPose keyposeAtTime:kDefInEnd values:v];
-    hs.outgoing = [[KKInterval alloc] init]; // the always-present Hold gap
-    KKKeyPose *he = [KKKeyPose keyposeAtTime:kDefOutStart values:v];
-    lane.keyposes = @[ hs, he ];
+    NSMutableArray<KKKeyPose *> *kps = [NSMutableArray array];
+    if (globalIn) {
+      KKKeyPose *a = [KKKeyPose keyposeAtTime:0.0 values:v];
+      a.outgoing = tmplIn ?: [[KKInterval alloc] init];
+      [kps addObject:a];
+    }
+    KKKeyPose *hs = [KKKeyPose keyposeAtTime:tIn values:v];
+    hs.outgoing = tmplHold ?: [[KKInterval alloc] init]; // Hold gap
+    [kps addObject:hs];
+    KKKeyPose *he = [KKKeyPose keyposeAtTime:tOut values:v];
+    [kps addObject:he];
+    if (globalOut) {
+      he.outgoing = tmplOut ?: [[KKInterval alloc] init];
+      [kps addObject:[KKKeyPose keyposeAtTime:outEndFrac values:v]];
+    }
+    lane.keyposes = kps;
   } else {
     NSArray<NSNumber *> *v = [self _holdValuesOfLane:lane forLabel:label];
     lane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:v] ];
@@ -482,6 +555,10 @@
 
 - (void)setClipDurationSeconds:(double)seconds {
   [_basicGraph setClipDurationSeconds:seconds];
+}
+
+- (void)setFrameDurationSeconds:(double)seconds {
+  [_basicGraph setFrameDurationSeconds:seconds];
 }
 
 - (void)setPlayheadFraction:(double)frac {

@@ -7,6 +7,7 @@
 
 #import "OSC.h"
 #import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KKCropOSC.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -15,12 +16,27 @@ NS_ASSUME_NONNULL_BEGIN
   CGPoint _dragStartPosition;
   double _dragStartRadius;
   double _dragCurrentRadius;
+  KKCropOSC *_cropOSC;
 }
 // Geometry/time helpers implemented in the primary @implementation (OSC.m);
 // called by the MouseHandlers category.
 - (BOOL)getCanvasTopRight:(CGPoint *)outTopRight
                bottomLeft:(CGPoint *)outBottomLeft;
 - (double)fractionAtTime:(CMTime)time;
+// Crop-aware anchor for the radius handle: top-right corner of the crop
+// rect in canvas space + that crop's min dim (canvas pixels), matching the
+// mini canvas's `_anchorRectForContentRect:`. Falls back to the full canvas
+// for the default crop.
+- (BOOL)_cropAnchorCornerForFraction:(double)frac
+                           outCorner:(CGPoint *)outCorner
+                         outFlippedX:(BOOL *)outFlippedX
+                         outFlippedY:(BOOL *)outFlippedY
+                           outMinDim:(float *)outMinDim;
+// Crop-OSC writeback. Called from the KKCropOSC.valuesWriter block during a
+// drag — opens an action scope, mutates the snapshot's Crop lane (preserving
+// In/Hold/Out structure like radius), and writes the blob back. Same pattern
+// as RoundedOSC+MouseHandlers' radius writer.
+- (void)_writeCropValues:(NSArray<NSNumber *> *)values atTime:(CMTime)time;
 @end
 
 /// Pointer/key event handlers (mouseDown/Dragged/Up + keyDown). Split out of

@@ -113,6 +113,26 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
   if (self) {
     self.clearsOnDraw = NO;
     _dragCurrentRadius = 20.0;
+    // Blue, matching the mini canvas radius handle (accent color).
+    self.fillColorOverride = [NSColor accent];
+
+    // Crop OSC: model-agnostic block-based I/O. Reads from / writes to the
+    // Rounded timeline-snapshot Crop lane (single instance per PLAN §"OSC
+    // cache"). The OSC owns rendering + drag math; we own persistence.
+    _cropOSC = [[KKCropOSC alloc] initWithAPIManager:apiManager];
+    __weak typeof(self) weak = self;
+    _cropOSC.valuesProvider = ^NSArray<NSNumber *> *(CMTime t) {
+      __strong typeof(weak) strong = weak;
+      double frac = strong ? [strong fractionAtTime:t] : 0.0;
+      return RoundedSnapshotValuesForLabel(@"Crop", frac,
+                                           @[ @1.0, @1.0, @0.0, @0.0 ]);
+    };
+    _cropOSC.valuesWriter = ^(NSArray<NSNumber *> *vals, CMTime t) {
+      __strong typeof(weak) strong = weak;
+      if (strong)
+        [strong _writeCropValues:vals atTime:t];
+    };
+
     sCurrentOSC = self;
   }
   return self;
@@ -121,6 +141,7 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
 - (void)dealloc {
   if (sCurrentOSC == self)
     sCurrentOSC = nil;
+  [_cropOSC release];
   [super dealloc];
 }
 
@@ -166,49 +187,153 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
                           durSec));
 }
 
-- (CGPoint)oscPositionAtTime:(CMTime)time {
+// Compute the crop rect's top-right corner in canvas space (and the crop's
+// min dimension in canvas pixels) for the current playhead fraction. With
+// full crop (w=h=1, x=y=0) this collapses to the canvas top-right. Matches
+// the mini canvas's `_anchorRectForContentRect:` — the radius handle is
+// pinned to the crop, not the canvas.
+- (BOOL)_cropAnchorCornerForFraction:(double)frac
+                           outCorner:(CGPoint *)outCorner
+                         outFlippedX:(BOOL *)outFlippedX
+                         outFlippedY:(BOOL *)outFlippedY
+                           outMinDim:(float *)outMinDim {
   CGPoint topRight = {0, 0}, bottomLeft = {0, 0};
   if (![self getCanvasTopRight:&topRight bottomLeft:&bottomLeft])
-    return CGPointZero;
+    return NO;
+  float canvasW = topRight.x - bottomLeft.x;
+  float canvasH = topRight.y - bottomLeft.y;
 
-  float canvasImageWidth = topRight.x - bottomLeft.x;
-  float canvasImageHeight = topRight.y - bottomLeft.y;
-  BOOL isFlippedX = canvasImageWidth < 0;
-  BOOL isFlippedY = canvasImageHeight < 0;
-  float minDim = fminf(fabsf(canvasImageWidth), fabsf(canvasImageHeight));
+  NSArray<NSNumber *> *cv =
+      RoundedSnapshotValuesForLabel(@"Crop", frac, @[ @1.0, @1.0, @0.0, @0.0 ]);
+  double cw = cv[0].doubleValue, ch = cv[1].doubleValue;
+  double cx = cv[2].doubleValue, cy = cv[3].doubleValue;
+
+  // Empirically (verified in viewer with non-default crop): the FxPlug
+  // OBJECT axis used by getCanvasTopRight has +y DOWN relative to the model
+  // (where header docs +y up). User test: drag crop visually DOWN in mini
+  // canvas → model cy increases → OSC must move down with it, so negate cy.
+  double trU = 0.5 + cx + cw * 0.5;
+  double trV = 0.5 - cy + ch * 0.5;
+  *outCorner =
+      CGPointMake(bottomLeft.x + trU * canvasW, bottomLeft.y + trV * canvasH);
+  *outFlippedX = canvasW < 0;
+  *outFlippedY = canvasH < 0;
+  *outMinDim = (float)fmin(fabs(cw * canvasW), fabs(ch * canvasH));
+  return YES;
+}
+
+- (CGPoint)oscPositionAtTime:(CMTime)time {
+  double frac = [self fractionAtTime:time];
+  CGPoint corner;
+  BOOL flippedX, flippedY;
+  float minDim;
+  if (![self _cropAnchorCornerForFraction:frac
+                                outCorner:&corner
+                              outFlippedX:&flippedX
+                              outFlippedY:&flippedY
+                                outMinDim:&minDim])
+    return CGPointZero;
 
   double radius =
       (RoundedGuideBridge().guideStep > 0)
           ? sGuideRadius
-          : (self.isDragging
-                 ? _dragCurrentRadius
-                 : radiusFromBlobAtFraction(self.apiManager,
-                                            [self fractionAtTime:time]));
+          : (self.isDragging ? _dragCurrentRadius
+                             : RoundedSnapshotRadiusAtFraction(frac));
   float padding = paddingForRadius(radius, minDim);
-
   float offsetX =
-      isFlippedX ? -(self.oscSize + padding) : (self.oscSize + padding);
+      flippedX ? -(self.oscSize + padding) : (self.oscSize + padding);
   float offsetY =
-      isFlippedY ? -(self.oscSize + padding) : (self.oscSize + padding);
+      flippedY ? -(self.oscSize + padding) : (self.oscSize + padding);
+  return CGPointMake(corner.x - offsetX, corner.y - offsetY);
+}
 
-  return CGPointMake(topRight.x - offsetX, topRight.y - offsetY);
+// Crop writeback. Same pattern as radius (RoundedOSC+MouseHandlers): open
+// an action scope, mutate the snapshot's Crop lane at the nearest keypose
+// (preserving In/Hold/Out structure), write the blob.
+- (void)_writeCropValues:(NSArray<NSNumber *> *)values atTime:(CMTime)time {
+  if (values.count < 4)
+    return;
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!actionAPI)
+    return;
+  [actionAPI startAction:self];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  if (!setAPI) {
+    [actionAPI endAction:self];
+    return;
+  }
+
+  double frac = [self fractionAtTime:time];
+  KKTimeline *snap = RoundedTimelineSnapshot();
+  KKTimeline *tl = snap ? [[snap copy] autorelease] : [KKTimeline timeline];
+
+  NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
+  NSInteger laneIdx = NSNotFound;
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+    if ([((KKLane *)lanes[i]).label isEqualToString:@"Crop"]) {
+      laneIdx = i;
+      break;
+    }
+  }
+
+  KKLane *cropLane;
+  if (laneIdx == NSNotFound) {
+    // Fresh constant — seed one keypose at t=0 with the new values.
+    cropLane = [KKLane laneWithLabel:@"Crop"];
+    cropLane.enabled = NO;
+    cropLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
+    [lanes addObject:cropLane];
+  } else {
+    cropLane = [[lanes[laneIdx] copy] autorelease];
+    NSArray<KKKeyPose *> *kps = cropLane.keyposes;
+    if (kps.count == 0) {
+      cropLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
+    } else {
+      NSInteger best = 0;
+      double bd = 1e9;
+      for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
+        double d = fabs(kps[k].time - frac);
+        if (d < bd) {
+          bd = d;
+          best = k;
+        }
+      }
+      NSMutableArray<KKKeyPose *> *out = [NSMutableArray arrayWithArray:kps];
+      // MRR dangling-pointer guard (see project_mrr_array_dangling.md).
+      double oldTime = out[best].time;
+      KKInterval *oldOutgoing = out[best].outgoing;
+      KKKeyPose *nk = [KKKeyPose keyposeAtTime:oldTime values:values];
+      nk.outgoing = oldOutgoing;
+      out[best] = nk;
+      cropLane.keyposes = out;
+    }
+    lanes[laneIdx] = cropLane;
+  }
+  tl.lanes = lanes;
+
+  KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
+                           kKKParamTimelineData);
+  [actionAPI endAction:self];
 }
 
 - (CGPoint)_guideTargetCanvasPosition {
-  CGPoint topRight = {0, 0}, bottomLeft = {0, 0};
-  if (![self getCanvasTopRight:&topRight bottomLeft:&bottomLeft])
+  CGPoint corner;
+  BOOL flippedX, flippedY;
+  float minDim;
+  if (![self _cropAnchorCornerForFraction:0.0
+                                outCorner:&corner
+                              outFlippedX:&flippedX
+                              outFlippedY:&flippedY
+                                outMinDim:&minDim])
     return CGPointZero;
-  float canvasImageWidth = topRight.x - bottomLeft.x;
-  float canvasImageHeight = topRight.y - bottomLeft.y;
-  BOOL isFlippedX = canvasImageWidth < 0;
-  BOOL isFlippedY = canvasImageHeight < 0;
-  float minDim = fminf(fabsf(canvasImageWidth), fabsf(canvasImageHeight));
   float padding = paddingForRadius(kOSCGuideTargetRadius, minDim);
   float offsetX =
-      isFlippedX ? -(self.oscSize + padding) : (self.oscSize + padding);
+      flippedX ? -(self.oscSize + padding) : (self.oscSize + padding);
   float offsetY =
-      isFlippedY ? -(self.oscSize + padding) : (self.oscSize + padding);
-  return CGPointMake(topRight.x - offsetX, topRight.y - offsetY);
+      flippedY ? -(self.oscSize + padding) : (self.oscSize + padding);
+  return CGPointMake(corner.x - offsetX, corner.y - offsetY);
 }
 
 - (void)drawOSCWithWidth:(NSInteger)width
@@ -246,6 +371,30 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
                        targetCanvasPos:[self _guideTargetCanvasPosition]
                              hasTarget:YES];
 
+  // Visibility rule (matches mini canvas): show when the lane is a constant
+  // (always), or when animated and the playhead is on a keypose. Mid-drag
+  // the active OSC always draws so the handle tracks the cursor.
+  BOOL inGuide = (RoundedGuideBridge().guideStep > 0);
+  double frac = [self fractionAtTime:time];
+
+  // Crop OSC (drawn before radius — its border + handles sit underneath the
+  // radius handle visually if they overlap at the corner).
+  BOOL cropDragging = (_cropOSC.draggingIndex >= 0);
+  BOOL cropVisible =
+      cropDragging || RoundedLaneVisibleAtFraction(@"Crop", frac);
+  if (cropVisible) {
+    _cropOSC.hoveredIndex = (activePart >= kOSCCropPointBase &&
+                             activePart < kOSCCropPointBase + KKCropPointCount)
+                                ? (activePart - kOSCCropPointBase)
+                                : -1;
+    [_cropOSC drawWithDestinationImage:destinationImage atTime:time];
+  }
+
+  BOOL radiusVisible = self.isDragging || inGuide ||
+                       RoundedLaneVisibleAtFraction(@"Radius", frac);
+  if (!radiusVisible)
+    return;
+
   [self drawAtCanvasPosition:radiusPos
                    isHovered:(activePart == kOSCRadiusPart)
                     isActive:self.isDragging && (activePart == kOSCRadiusPart)
@@ -258,10 +407,24 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
                         activePart:(NSInteger *)activePart
                             atTime:(CMTime)time {
   *activePart = 0;
-  if ([self hitTestAtMousePositionX:positionX
-                          positionY:positionY
-                             atTime:time]) {
+  BOOL inGuide = (RoundedGuideBridge().guideStep > 0);
+  double frac = [self fractionAtTime:time];
+  BOOL radiusInteractive =
+      inGuide || RoundedLaneVisibleAtFraction(@"Radius", frac);
+  if (radiusInteractive && [self hitTestAtMousePositionX:positionX
+                                               positionY:positionY
+                                                  atTime:time]) {
     *activePart = kOSCRadiusPart;
+  } else if (RoundedLaneVisibleAtFraction(@"Crop", frac)) {
+    // Radius didn't catch it → try crop handles / rect.
+    NSInteger cropPart = [_cropOSC hitTestAtMousePositionX:positionX
+                                                 positionY:positionY
+                                                    atTime:time];
+    if (cropPart == KKCropPartRect) {
+      *activePart = kOSCCropRectPart;
+    } else if (cropPart >= KKCropPartPointBase) {
+      *activePart = kOSCCropPointBase + (cropPart - KKCropPartPointBase);
+    }
   }
   // The only place screen + canvas coords arrive together. Hand it to the
   // bridge: it velocity-gates the sample, re-anchors the screen↔canvas map,

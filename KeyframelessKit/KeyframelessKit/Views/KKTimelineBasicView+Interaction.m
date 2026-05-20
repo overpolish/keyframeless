@@ -126,6 +126,10 @@ static const CGFloat kScrubSnapOutPx = 12.0;
 
 - (double)_snappedScrubFracForX:(CGFloat)x proj:(KKBasicProj)p rect:(NSRect)g {
   double rawFrac = KKBasicFracForX(x, g, p);
+  // Visual scrubber stays unclamped to 1.0 so it can reach the right-edge
+  // diamond on short clips (where 1-frameFrac is several percent inside the
+  // edge). The actual playhead delivery is clamped to the last frame at the
+  // call site — see -_deliveredScrubFracFromVisual:.
   double candidateFracs[4] = {0.0, p.inEndFrac, p.outStartFrac, 1.0};
   BOOL enabled[4] = {p.inEnabled, p.anyAnimatable, p.anyAnimatable,
                      p.outEnabled};
@@ -162,6 +166,20 @@ static const CGFloat kScrubSnapOutPx = 12.0;
   return bestFrac;
 }
 
+// Decouple visual scrubber position from the value handed to the host. FCP
+// can't park its playhead at clipEnd (the last *frame* sits one frame before
+// it), so when the visual scrubber is at the right edge we still need to
+// deliver `(clipDur - frameDur) / clipDur` for the seek to land on a real
+// frame and the keypose to be reachable.
+- (double)_deliveredScrubFracFromVisual:(double)visualFrac {
+  double clipDur = [self _clipDuration];
+  if (clipDur <= 0.0 || _frameDurationSeconds <= 0.0 ||
+      _frameDurationSeconds >= clipDur)
+    return visualFrac;
+  double maxFrac = (clipDur - _frameDurationSeconds) / clipDur;
+  return visualFrac > maxFrac ? maxFrac : visualFrac;
+}
+
 // YES if pt is in the ruler strip (above the track). The whole ruler is the
 // scrub zone — click anywhere there to jump the playhead, then drag. It's
 // separate from the track so it never conflicts with diamonds / gap clicks.
@@ -189,7 +207,7 @@ static const CGFloat kScrubSnapOutPx = 12.0;
     _playheadFraction = frac;
     [self setNeedsDisplay:YES];
     if (self.onScrub)
-      self.onScrub(frac);
+      self.onScrub([self _deliveredScrubFracFromVisual:frac]);
     return;
   }
   _pressedDiamond =
@@ -211,7 +229,7 @@ static const CGFloat kScrubSnapOutPx = 12.0;
     _playheadFraction = frac;
     [self setNeedsDisplay:YES];
     if (self.onScrub)
-      self.onScrub(frac);
+      self.onScrub([self _deliveredScrubFracFromVisual:frac]);
     return;
   }
   if (_pressedDiamond != 2 && _pressedDiamond != 3)

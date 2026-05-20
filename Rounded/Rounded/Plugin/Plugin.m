@@ -5,6 +5,7 @@
 
 #import "Constants.h"
 #import "Plugin_Private.h"
+#import "RoundedOSCRadiusMath.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wprotocol"
@@ -80,6 +81,9 @@
         (json.length ? [KKTimeline timelineFromJSON:json] : nil)
             ?: [KKTimeline timeline];
     timeline = [self timelineStampedWithClipDuration:timeline];
+    // Publish to the OSC snapshot cache so drawOSC ticks don't have to re-
+    // read the blob (PLAN §"OSC cache" — single-instance assumption).
+    RoundedSetTimelineSnapshot(timeline);
     [actionAPI endAction:self];
     dispatch_async(dispatch_get_main_queue(), ^{
       [self.inspectorView applyTimeline:timeline];
