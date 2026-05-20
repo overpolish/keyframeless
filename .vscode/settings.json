@@ -148,6 +148,7 @@
     "Glow",
     "Canvas",
     "Timing",
-    "MotionBlur"
+    "MotionBlur",
+    "Joyride"
   ]
 }

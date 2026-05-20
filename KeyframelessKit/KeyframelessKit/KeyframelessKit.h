@@ -36,7 +36,10 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKIconButtonOSC.h>
 #import <KeyframelessKit/KKJoyrideController.h>
 #import <KeyframelessKit/KKJoyrideDragStep.h>
+#import <KeyframelessKit/KKJoyrideGuideHost.h>
+#import <KeyframelessKit/KKJoyrideLanesBinder.h>
 #import <KeyframelessKit/KKJoyrideOSCSegment.h>
+#import <KeyframelessKit/KKJoyrideTrigger.h>
 #import <KeyframelessKit/KKKbd.h>
 #import <KeyframelessKit/KKLabelView.h>
 #import <KeyframelessKit/KKLog.h>

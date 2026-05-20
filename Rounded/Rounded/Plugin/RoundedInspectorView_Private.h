@@ -8,6 +8,8 @@
 #import "RoundedInspectorView.h"
 #import "RoundedMiniCanvasRenderer.h"
 #import <KeyframelessKit/KKJoyrideController.h>
+#import <KeyframelessKit/KKJoyrideGuideHost.h>
+#import <KeyframelessKit/KKJoyrideLanesBinder.h>
 #import <KeyframelessKit/KKJoyrideOSCSegment.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -21,18 +23,15 @@ NS_ASSUME_NONNULL_BEGIN
 @interface RoundedInspectorView () {
 @protected
   RoundedMiniCanvasRenderer *_miniCanvasRenderer;
-  KKJoyrideController *_introGuide;
-  KKTimeline *_savedIntroTimeline;
-  KKJoyrideController *_oscGuide;
-  KKTimeline *_savedOSCTimeline;
-  KKJoyrideController *_fullGuide;
-  KKTimeline *_savedFullTimeline;
+  // One host serves all guides — they're mutually exclusive (only one at a
+  // time runs), so a single host owns the live controller/binder/saved
+  // timeline. Lazy-initialised in -_guideHost.
+  KKJoyrideGuideHost *_guideHost;
   KKJoyrideOSCSegment *_oscSegment;
-  KKJoyrideController *_constantsGuide;
-  KKTimeline *_savedConstantsTimeline;
   KKMiniCanvasGuideScroll *_constantsScrollFwd;
-  KKJoyrideController *_basicTimingGuide;
-  KKTimeline *_savedBasicTimingTimeline;
+  // YES from when restartOSCGuide kicks off until the OSC guide's onComplete
+  // — drives the help-button spinner during the zoom-to-fit warm-up.
+  BOOL _oscGuideActive;
 }
 @end
 
