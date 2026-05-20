@@ -63,6 +63,7 @@
     KKTimeline *timeline =
         (timelineJson.length ? [KKTimeline timelineFromJSON:timelineJson] : nil)
             ?: [KKTimeline timeline];
+    timeline = [self timelineStampedWithClipDuration:timeline];
 
     [actionAPI endAction:self];
 
@@ -108,18 +109,108 @@
 
     // Coalesce a continuous mini-canvas handle drag into one undo entry: the
     // per-tick onTimelineMutated writes nest inside this outer group.
+    // FxUndoAPI resolves to nil outside an action scope, so the begin/end
+    // of the coalescing group must run inside one (the per-tick mutate
+    // writes then land in the still-open host undo group).
     view.onDragBegin = ^{
       __strong typeof(weak) strong = weak;
-      if (strong)
-        strong.miniDragUndoStarted =
-            KKBeginUndoGroup(strong.apiManager, @"Adjust Radius");
+      if (!strong)
+        return;
+      id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      if (!act)
+        return;
+      [act startAction:strong];
+      strong.miniDragUndoStarted =
+          KKBeginUndoGroup(strong.apiManager, @"Adjust Radius");
+      [act endAction:strong];
     };
     view.onDragEnd = ^{
       __strong typeof(weak) strong = weak;
-      if (strong) {
-        KKEndUndoGroup(strong.apiManager, strong.miniDragUndoStarted);
-        strong.miniDragUndoStarted = NO;
+      if (!strong)
+        return;
+      id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      if (act)
+        [act startAction:strong];
+      KKEndUndoGroup(strong.apiManager, strong.miniDragUndoStarted);
+      if (act)
+        [act endAction:strong];
+      strong.miniDragUndoStarted = NO;
+    };
+
+    // Boundary popover just opened and wrote its request file. FCP only
+    // re-runs -scheduleInputs: on a render, and it serves a cached frame
+    // for a static playhead (no scheduleInputs at all). Writing a fresh
+    // random value to a hidden scratch param makes FCP treat it as a real
+    // parameter change → it re-renders the current frame → scheduleInputs
+    // runs and picks up the request file. Random (not incremented) so it
+    // never collides with a previously cached value after undo/redo.
+    view.onBoundaryPreviewNeedsRender = ^{
+      __strong typeof(weak) strong = weak;
+      if (!strong)
+        return;
+      id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      if (!act)
+        return;
+      [act startAction:strong];
+      id<FxParameterSettingAPI_v5> setAPI = [strong.apiManager
+          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      NSString *nonce = [[NSUUID UUID] UUIDString];
+      KKWriteCustomParamString(setAPI, nonce, kParamRenderNudge);
+      [act endAction:strong];
+    };
+
+    // Scrub: drag the Basic playhead → move the host playhead. FxTimingAPI
+    // resolves inside this action scope (it's nil in the render tick).
+    // movePlayheadToTime: is timeline-time in FCP, effect-time in Motion.
+    view.onScrub = ^(double frac) {
+      __strong typeof(weak) strong = weak;
+      if (!strong)
+        return;
+      id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      if (!act)
+        return;
+      [act startAction:strong];
+      id<FxTimingAPI_v4> timing =
+          [strong.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+      id<FxCommandAPI_v2> cmd =
+          [strong.apiManager apiForProtocol:@protocol(FxCommandAPI_v2)];
+      CMTime es = kCMTimeZero, ed = kCMTimeZero;
+      [timing startTimeForEffect:&es];
+      [timing durationTimeForEffect:&ed];
+      double dsec = CMTimeGetSeconds(ed);
+      double base;
+      if ([KKHostInfo isRunningInFinalCut]) {
+        CMTime src = kCMTimeZero, tl = kCMTimeZero;
+        [timing startTimeOfInputToFilter:&src];
+        [timing timelineTime:&tl fromInputTime:src];
+        base = CMTimeGetSeconds(tl);
+      } else {
+        base = CMTimeGetSeconds(es);
       }
+      if (dsec > 0.0)
+        [cmd movePlayheadToTime:CMTimeMakeWithSeconds(base + frac * dsec, 600)
+                          error:nil];
+      [act endAction:strong];
+    };
+
+    // Spacebar in the inspector → play/pause (FCP eats it otherwise).
+    view.onTogglePlayback = ^{
+      __strong typeof(weak) strong = weak;
+      if (!strong)
+        return;
+      id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      if (!act)
+        return;
+      [act startAction:strong];
+      id<FxCommandAPI_v2> cmd =
+          [strong.apiManager apiForProtocol:@protocol(FxCommandAPI_v2)];
+      [cmd performCommand:kFxCommand_TogglePlayback error:nil];
+      [act endAction:strong];
     };
 
     view.effectHeaderRectProvider = ^NSRect {

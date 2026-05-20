@@ -160,13 +160,13 @@ double KKSeedSign(int seed, int index) {
 }
 
 static double KKHoldBounce(double t, double frequency, int seed) {
-  double freq = 1.0 + frequency * 11.0;
+  double freq = frequency * 12.0; // 0 at min (barely-there), 12 at max
   double phase = (seed != 0) ? KKSeedHash(seed, 0) * M_PI * 2.0 : 0.0;
   return 1.0 + 0.15 * sin(t * M_PI * freq + phase) * sin(t * M_PI);
 }
 
 static double KKHoldWiggle(double t, double frequency, int seed) {
-  double fScale = 0.25 + frequency * 2.75;
+  double fScale = frequency * 3.0; // 0 at min (barely-there), 3 at max
   double envelope = sin(t * M_PI);
   double f0 = 17.0, f1 = 31.0, f2 = 59.0, f3 = 97.0;
   double p0 = 0, p1 = 0, p2 = 0, p3 = 0;
@@ -186,9 +186,30 @@ static double KKHoldWiggle(double t, double frequency, int seed) {
   return 1.0 + 0.08 * noise * envelope;
 }
 
+// Low-frequency-dominant fractal noise (fBm / 1-over-f). A slow wander with
+// progressively smaller tremor layered on — the analogue/handheld-camera
+// signature, unlike Wiggle's flat high-frequency hash. Smooth, band-limited,
+// deterministic per seed. Centred on 1.0; envelope zeroes at the hold ends.
+static double KKHoldHandheld(double t, double frequency, int seed) {
+  double envelope = sin(t * M_PI);
+  double cycles = frequency * 3.75; // 0 at min (barely-there) … slow sway
+  const int octaves = 5;
+  double sum = 0.0, norm = 0.0, amp = 1.0;
+  for (int k = 0; k < octaves; k++) {
+    double ph = (seed != 0) ? KKSeedHash(seed, k) * M_PI * 2.0 : k * 1.2399;
+    double detune = 1.0 + 0.03 * (KKSeedHash(seed, k + 16) - 0.5);
+    double c = cycles * pow(2.0, k) * detune; // octave: ~2× frequency
+    sum += amp * sin(t * 2.0 * M_PI * c + ph);
+    norm += amp;
+    amp *= 0.5; // …and ~½ amplitude → low frequencies dominate (pink)
+  }
+  double noise = (norm > 0.0) ? sum / norm : 0.0; // ~[-1, 1]
+  return 1.0 + 0.12 * noise * envelope;
+}
+
 double KKApplyHoldEffect(double t, KKHoldEffect effect, double intensity,
                          double frequency, int seed) {
-  double scale = 0.2 + intensity * 2.8; // 0.2 at min, 3.0 at max
+  double scale = intensity * 3.0; // 0 at min (no modulation), 3.0 at max
   switch (effect) {
   case KKHoldEffectBounce: {
     double raw = KKHoldBounce(t, frequency, seed);
@@ -196,6 +217,10 @@ double KKApplyHoldEffect(double t, KKHoldEffect effect, double intensity,
   }
   case KKHoldEffectWiggle: {
     double raw = KKHoldWiggle(t, frequency, seed);
+    return 1.0 + (raw - 1.0) * scale;
+  }
+  case KKHoldEffectHandheld: {
+    double raw = KKHoldHandheld(t, frequency, seed);
     return 1.0 + (raw - 1.0) * scale;
   }
   case KKHoldEffectNone:

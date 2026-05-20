@@ -16,10 +16,12 @@
   if (self) {
     _curve = KKIntervalCurveEaseInOut;
     _intensity = 1.0;
+    _frequency = 0.5;
     _modulation = KKIntervalModulationNone;
     _modulationIntensity = 1.0;
     _modulationFrequency = 1.0;
     _modulationLinked = YES;
+    _endpointsLinked = YES;
   }
   return self;
 }
@@ -28,12 +30,14 @@
   KKInterval *c = [[[self class] allocWithZone:zone] init];
   c.curve = _curve;
   c.intensity = _intensity;
+  c.frequency = _frequency;
   c.modulation = _modulation;
   c.modulationIntensity = _modulationIntensity;
   c.modulationFrequency = _modulationFrequency;
   c.modulationSeed = _modulationSeed;
   c.modulationLinked = _modulationLinked;
   c.lockedSeconds = _lockedSeconds;
+  c.endpointsLinked = _endpointsLinked;
   c.pathData = _pathData;
   return c;
 }
@@ -42,12 +46,14 @@
   NSMutableDictionary *d = [NSMutableDictionary dictionary];
   d[@"curve"] = @(_curve);
   d[@"intensity"] = @(_intensity);
+  d[@"frequency"] = @(_frequency);
   d[@"modulation"] = @(_modulation);
   d[@"modulation_intensity"] = @(_modulationIntensity);
   d[@"modulation_frequency"] = @(_modulationFrequency);
   d[@"modulation_seed"] = @(_modulationSeed);
   d[@"modulation_linked"] = @(_modulationLinked);
   d[@"locked_seconds"] = @(_lockedSeconds);
+  d[@"endpoints_linked"] = @(_endpointsLinked);
   if (_pathData) {
     d[@"path_data"] = [_pathData base64EncodedStringWithOptions:0];
   }
@@ -62,6 +68,8 @@
     i.curve = [d[@"curve"] integerValue];
   if (d[@"intensity"])
     i.intensity = [d[@"intensity"] doubleValue];
+  if (d[@"frequency"])
+    i.frequency = [d[@"frequency"] doubleValue];
   if (d[@"modulation"])
     i.modulation = [d[@"modulation"] integerValue];
   if (d[@"modulation_intensity"])
@@ -74,6 +82,8 @@
     i.modulationLinked = [d[@"modulation_linked"] boolValue];
   if (d[@"locked_seconds"])
     i.lockedSeconds = [d[@"locked_seconds"] doubleValue];
+  if (d[@"endpoints_linked"])
+    i.endpointsLinked = [d[@"endpoints_linked"] boolValue];
   NSString *b64 = d[@"path_data"];
   if (b64)
     i.pathData = [[NSData alloc] initWithBase64EncodedString:b64 options:0];

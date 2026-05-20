@@ -22,9 +22,10 @@ typedef NS_ENUM(NSInteger, KKHoldEffect) {
   KKHoldEffectNone = 0,
   KKHoldEffectBounce = 1,
   KKHoldEffectWiggle = 2,
+  KKHoldEffectHandheld = 3, // low-frequency fBm (analogue/handheld camera)
 };
 
-static const NSInteger KKHoldEffectCount __attribute__((unused)) = 3;
+static const NSInteger KKHoldEffectCount __attribute__((unused)) = 4;
 
 /// Apply the given curve to a raw 0→1 factor.
 /// intensity: 0.0 (gentle) to 1.0 (pronounced), 0.5 = default.

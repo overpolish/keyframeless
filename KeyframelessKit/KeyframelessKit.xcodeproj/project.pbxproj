@@ -96,6 +96,8 @@
 				Views/KKPopupSelectView.h,
 				Views/KKSeedView.h,
 				Views/KKSeparatorView.h,
+				Views/KKTimelineInspectorButtons.h,
+				Views/KKTimelineInspectorView.h,
 				Views/KKTimelineLanesView.h,
 			);
 			target = F26E01B52F4DE280009D949A /* KeyframelessKit */;

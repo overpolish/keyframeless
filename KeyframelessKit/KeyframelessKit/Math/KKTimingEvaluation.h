@@ -67,8 +67,35 @@ FOUNDATION_EXPORT BOOL KKEvaluateBezierPathPosition(
 /// evaluated; call sites that want the kill-switch behaviour should check
 /// `lane.enabled` themselves.
 FOUNDATION_EXPORT
-    NSArray<NSNumber *> *_Nullable KKTimelineLaneValueAtFraction(KKLane *lane,
-                                                                 double frac);
+NSArray<NSNumber *> *_Nullable KKTimelineLaneValueAtFraction(KKLane *lane,
+                                                             double frac);
+
+/// Fraction of the smaller adjacent span used as the half-window for C1
+/// join smoothing (see `KKTimelineLaneValueAtFractionSmoothed`). Shared so
+/// the Basic graph preview and the render evaluator round joins identically.
+/// Small on purpose: just a corner fillet at the joins, not a reshape of
+/// the transition/hold.
+#define KK_JOIN_BLEND_FRAC 0.08
+
+/// Cubic-Hermite C1 join blend around a single boundary. When `frac` is
+/// inside `[boundary - window, boundary + window]` the result is a Hermite
+/// matching `sample`'s value *and* slope (central-difference) at both window
+/// edges, so it splices back C1 into the surrounding curve while rounding
+/// the velocity kink at `boundary`. Outside the window (or `window <= 0`)
+/// it is exactly `sample(frac)`. Used by both the render evaluator and the
+/// Basic timeline graph so they stay in lock-step.
+FOUNDATION_EXPORT double KKHermiteJoinBlend(double frac, double boundary,
+                                            double window,
+                                            double (^sample)(double f));
+
+/// Like `KKTimelineLaneValueAtFraction` but with C1 join smoothing applied
+/// at every interior keypose, so transitions glide into/out of holds with
+/// no detectable "stop" while long flats away from the joins are preserved.
+/// The render / OSC / graph paths use this; authoring reads stay on the
+/// exact (raw) `KKTimelineLaneValueAtFraction`.
+FOUNDATION_EXPORT
+NSArray<NSNumber *> *_Nullable KKTimelineLaneValueAtFractionSmoothed(
+    KKLane *lane, double frac);
 
 /// Look-back window (seconds) used by both Canvas and MagicMove for the
 /// rotate-with-motion velocity sample.

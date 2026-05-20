@@ -54,6 +54,14 @@
     return NO;
   }
 
+  if (![paramAPI addCustomParameterWithName:@""
+                                parameterID:kParamRenderNudge
+                               defaultValue:[KKDataBlob blobWithData:nil]
+                             parameterFlags:kFxParameterFlag_HIDDEN |
+                                            kFxParameterFlag_NOT_ANIMATABLE]) {
+    return NO;
+  }
+
   return YES;
 }
 

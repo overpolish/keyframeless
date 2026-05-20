@@ -102,7 +102,6 @@
 				"Plugin/Plugin+Parameters.m",
 				"Plugin/Plugin+Render.m",
 				Plugin/Rounded.metal,
-				Plugin/RoundedInspectorButtons.m,
 				Plugin/RoundedInspectorView.m,
 				"Plugin/RoundedInspectorView+Guides.m",
 				Plugin/RoundedMiniCanvasRenderer.m,

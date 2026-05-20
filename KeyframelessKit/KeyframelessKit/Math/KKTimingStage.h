@@ -32,6 +32,7 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
   KKIntervalModulationNone = 0,
   KKIntervalModulationWiggle = 1,
   KKIntervalModulationOscillate = 2,
+  KKIntervalModulationHandheld = 3, // low-frequency fBm (analogue camera)
 };
 
 /// The character of the gap between two adjacent keyposes.
@@ -40,6 +41,7 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 
 @property(nonatomic) KKIntervalCurve curve; // default: EaseInOut
 @property(nonatomic) double intensity;      // default: 1.0
+@property(nonatomic) double frequency;      // default: 0.5 (Elastic/Bounce)
 
 @property(nonatomic) KKIntervalModulation modulation; // default: None
 @property(nonatomic) double modulationIntensity;      // default: 1.0
@@ -48,6 +50,11 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 @property(nonatomic) BOOL modulationLinked;           // default: YES
 
 @property(nonatomic) double lockedSeconds; // 0 = scale proportionally
+
+/// When YES, the two keyposes bordering this gap share one value: editing
+/// either endpoint mirrors to the other (a true "Hold"). When NO they move
+/// independently (a "Drift"). Toggled by cmd-clicking the gap. Default YES.
+@property(nonatomic) BOOL endpointsLinked;
 
 @property(nonatomic, copy, nullable)
     NSData *pathData; // plugin blob (MagicMove bezier)

@@ -46,6 +46,14 @@ typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
 @property(nonatomic, copy, nullable) void (^onSeedChanged)(uint32_t newSeed);
 @property(nonatomic, copy, nullable) void (^onSeedReroll)(void);
 @property(nonatomic, copy, nullable) void (^onLinkedChanged)(BOOL linked);
+/// Per-property participation pills (which animatable properties this phase
+/// applies to). Multi-select with click-drag sweep; drag-begin/end bracket
+/// the gesture for one undo entry. Present only when constructed with
+/// non-empty participation labels.
+@property(nonatomic, copy, nullable) void (^onParticipationToggled)
+    (NSInteger index, BOOL isOn);
+@property(nonatomic, copy, nullable) void (^onParticipationDragBegin)(void);
+@property(nonatomic, copy, nullable) void (^onParticipationDragEnd)(void);
 
 - (instancetype)initWithKind:(KKSegmentEditKind)kind;
 - (instancetype)initWithKind:(KKSegmentEditKind)kind
@@ -53,12 +61,21 @@ typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
 - (instancetype)initWithKind:(KKSegmentEditKind)kind
                  showsLinked:(BOOL)showsLinked
                   bulkHeader:(BOOL)bulkHeader;
+- (instancetype)initWithKind:(KKSegmentEditKind)kind
+                 showsLinked:(BOOL)showsLinked
+                  bulkHeader:(BOOL)bulkHeader
+         participationLabels:(nullable NSArray<NSString *> *)labels
+         participationStates:(nullable NSArray<NSNumber *> *)states;
 
 /// Computed height required for the view's content. Caller sizes the
 /// containing popover accordingly.
 + (CGFloat)contentHeightForKind:(KKSegmentEditKind)kind
                     showsLinked:(BOOL)showsLinked
                      bulkHeader:(BOOL)bulkHeader;
++ (CGFloat)contentHeightForKind:(KKSegmentEditKind)kind
+                    showsLinked:(BOOL)showsLinked
+                     bulkHeader:(BOOL)bulkHeader
+                  participation:(BOOL)participation;
 + (CGFloat)contentWidth;
 
 @end

@@ -74,6 +74,8 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKShape.h>
 #import <KeyframelessKit/KKSnapEngine.h>
 #import <KeyframelessKit/KKSquarePointOSC.h>
+#import <KeyframelessKit/KKTimelineInspectorButtons.h>
+#import <KeyframelessKit/KKTimelineInspectorView.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 #import <KeyframelessKit/KKTimingLane.h>

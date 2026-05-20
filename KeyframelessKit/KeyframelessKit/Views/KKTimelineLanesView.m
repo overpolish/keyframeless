@@ -6,6 +6,7 @@
 #import "KKTimelineLanesView.h"
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
+#import "KKTimelineBasicView.h"
 #import "KKTimelineLanesView_Popovers.h"
 #import "KKTimelineLanesView_Private.h"
 #import <KeyframelessKit/KKLog.h>
@@ -126,6 +127,120 @@
     [_hintLabel.centerYAnchor
         constraintEqualToAnchor:_centeredArea.centerYAnchor],
   ]];
+
+  _basicGraph =
+      [[KKTimelineBasicView alloc] initWithAvailableLanes:_availableLanes
+                                                 timeline:_timeline];
+  _basicGraph.translatesAutoresizingMaskIntoConstraints = NO;
+  _basicGraph.hidden = YES;
+  [_centeredArea addSubview:_basicGraph
+                 positioned:NSWindowBelow
+                 relativeTo:_hintLabel];
+  [NSLayoutConstraint activateConstraints:@[
+    [_basicGraph.leadingAnchor
+        constraintEqualToAnchor:_centeredArea.leadingAnchor],
+    [_basicGraph.trailingAnchor
+        constraintEqualToAnchor:_centeredArea.trailingAnchor],
+    [_basicGraph.topAnchor constraintEqualToAnchor:_centeredArea.topAnchor],
+    [_basicGraph.bottomAnchor
+        constraintEqualToAnchor:_centeredArea.bottomAnchor],
+  ]];
+
+  __weak typeof(self) weakSelf = self;
+  _basicGraph.onTimelineMutated = ^(KKTimeline *updated) {
+    __strong typeof(weakSelf) s = weakSelf;
+    if (!s)
+      return;
+    s->_timeline = updated;
+    [s _refresh];
+    if (s->_onTimelineMutated)
+      s->_onTimelineMutated(updated);
+  };
+  _basicGraph.onDragBegin = ^{
+    __strong typeof(weakSelf) s = weakSelf;
+    if (s && s->_onDragBegin)
+      s->_onDragBegin();
+  };
+  _basicGraph.onDragEnd = ^{
+    __strong typeof(weakSelf) s = weakSelf;
+    if (s && s->_onDragEnd)
+      s->_onDragEnd();
+  };
+  _basicGraph.onScrub = ^(double frac) {
+    __strong typeof(weakSelf) s = weakSelf;
+    if (s && s->_onScrub)
+      s->_onScrub(frac);
+  };
+  _basicGraph.onZoomChanged = ^(BOOL zoomed) {
+    __strong typeof(weakSelf) s = weakSelf;
+    if (s && s->_onZoomChanged)
+      s->_onZoomChanged(zoomed);
+  };
+  _basicGraph.onBoundaryValuePopover =
+      ^(NSView *anchor, NSArray<KKLane *> *displayLanes, double frac,
+        NSArray<NSString *> *excludedLabels,
+        void (^onValue)(NSString *, NSArray<NSNumber *> *),
+        void (^onAnimate)(NSString *), void (^onDragBegin)(void),
+        void (^onDragEnd)(void)) {
+        __strong typeof(weakSelf) s = weakSelf;
+        [s _presentBoundaryValuePopoverFromAnchor:anchor
+                                     displayLanes:displayLanes
+                                         fraction:frac
+                                   excludedLabels:excludedLabels
+                                          onValue:onValue
+                                        onAnimate:onAnimate
+                                      onDragBegin:onDragBegin
+                                        onDragEnd:onDragEnd];
+      };
+  _basicGraph.onGapPopover =
+      ^(NSView *anchor, BOOL animateOut, KKIntervalCurve curve,
+        double intensity, double frequency, NSArray<NSString *> *partLabels,
+        NSArray<NSNumber *> *partStates, void (^onCurve)(KKIntervalCurve),
+        void (^onIntensity)(double), void (^onFrequency)(double),
+        void (^onParticipation)(NSInteger, BOOL), void (^onDragBegin)(void),
+        void (^onDragEnd)(void)) {
+        __strong typeof(weakSelf) s = weakSelf;
+        [s _presentGapPopoverFromAnchor:anchor
+                             animateOut:animateOut
+                                  curve:curve
+                              intensity:intensity
+                              frequency:frequency
+                             partLabels:partLabels
+                             partStates:partStates
+                                onCurve:onCurve
+                            onIntensity:onIntensity
+                            onFrequency:onFrequency
+                        onParticipation:onParticipation
+                            onDragBegin:onDragBegin
+                              onDragEnd:onDragEnd];
+      };
+  _basicGraph.onHoldModulationPopover =
+      ^(NSView *anchor, KKIntervalModulation modulation, double intensity,
+        double frequency, uint32_t seed, BOOL linked, BOOL showsLinked,
+        NSArray<NSString *> *partLabels, NSArray<NSNumber *> *partStates,
+        void (^onModulation)(KKIntervalModulation), void (^onIntensity)(double),
+        void (^onFrequency)(double), void (^onSeed)(uint32_t),
+        void (^onLinked)(BOOL), void (^onParticipation)(NSInteger, BOOL),
+        void (^onDragBegin)(void), void (^onDragEnd)(void)) {
+        __strong typeof(weakSelf) s = weakSelf;
+        [s _presentHoldModulationPopoverFromAnchor:anchor
+                                        modulation:modulation
+                                         intensity:intensity
+                                         frequency:frequency
+                                              seed:seed
+                                            linked:linked
+                                       showsLinked:showsLinked
+                                        partLabels:partLabels
+                                        partStates:partStates
+                                      onModulation:onModulation
+                                       onIntensity:onIntensity
+                                       onFrequency:onFrequency
+                                            onSeed:onSeed
+                                          onLinked:onLinked
+                                   onParticipation:onParticipation
+                                       onDragBegin:onDragBegin
+                                         onDragEnd:onDragEnd];
+      };
 }
 
 - (void)_refresh {
@@ -141,32 +256,18 @@
     [_laneRows removeObjectForKey:label];
   }
 
+  // Basic mode shows one shared motion graph (not per-property rows): the
+  // graph fills the content area whenever ≥1 property is animatable.
   BOOL anyOptedIn = NO;
   for (KKLane *tmpl in _availableLanes) {
-    if (![self _isAnimatableLabel:tmpl.label])
-      continue;
-    anyOptedIn = YES;
-    if (!_laneRows[tmpl.label]) {
-      _KKLaneRow *row = [[_KKLaneRow alloc] init];
-      row.translatesAutoresizingMaskIntoConstraints = NO;
-      row.laneLabel = tmpl.label;
-      _laneRows[tmpl.label] = row;
-      NSInteger insertIdx = _laneStack.arrangedSubviews.count;
-      for (NSInteger i = 0; i < (NSInteger)_laneStack.arrangedSubviews.count;
-           i++) {
-        _KKLaneRow *existing = (_KKLaneRow *)_laneStack.arrangedSubviews[i];
-        if ([tmpl.label localizedCaseInsensitiveCompare:existing.laneLabel] ==
-            NSOrderedAscending) {
-          insertIdx = i;
-          break;
-        }
-      }
-      [_laneStack insertArrangedSubview:row atIndex:insertIdx];
-      [row.widthAnchor constraintEqualToAnchor:_laneStack.widthAnchor].active =
-          YES;
+    if ([self _isAnimatableLabel:tmpl.label]) {
+      anyOptedIn = YES;
+      break;
     }
   }
   _hintLabel.hidden = anyOptedIn;
+  _basicGraph.hidden = !anyOptedIn;
+  [_basicGraph applyTimeline:_timeline];
 
   NSMutableArray<NSString *> *opted = [NSMutableArray array];
   for (KKLane *tmpl in _availableLanes)
@@ -177,7 +278,10 @@
 
   if (_openManageView)
     [_openManageView updateCheckedLabels:[self _optedInLabelsSet]];
-  if (_openStaticView)
+  // Only the constants popover tracks the un-opted set. A boundary-value
+  // popover has caller-supplied display lanes; clobbering them here is what
+  // made Radius (the un-opted lane) replace Crop after a crop edit.
+  if (_openStaticView && !_openStaticIsBoundary)
     [_openStaticView updateUnoptedLanes:[self _unoptedLanes]];
 }
 
@@ -306,14 +410,41 @@
     _onTimelineMutated(updated);
 }
 
-// Dropdown only: flip a property between animatable (sequencer) and constant.
-// Never touches the value.
+// The settled (Hold) value of a lane, independent of which phases it has.
+// Mirrors KKTimelineBasicView's _holdValuesForLane: without the shape struct.
+- (NSArray<NSNumber *> *)_holdValuesOfLane:(KKLane *)lane
+                                  forLabel:(NSString *)label {
+  NSArray<KKKeyPose *> *k = lane.keyposes;
+  if (k.count == 0)
+    return [self _defaultValuesForLabel:label];
+  if (k.count == 1)
+    return k.firstObject.values;
+  static const double kE = 1.0e-4;
+  BOOL inEnabled = k.firstObject.time < kE;
+  return k[inEnabled ? 1 : 0].values; // the hold-start keypose
+}
+
+// Dropdown only: flip a property between animatable and constant. Never
+// changes the value — but it does (re)shape the keyposes: turning animatable
+// seeds the always-present 2-keypose Hold pair (both = the current constant,
+// so every phase starts at the constant, not a stray 0); turning it off
+// collapses back to a single constant keypose at the Hold value.
 - (void)_setLaneAnimatable:(BOOL)animatable forLabel:(NSString *)label {
   KKLane *lane = [[self _laneForLabel:label] copy];
   if (!lane || lane.enabled == animatable)
     return;
   lane.enabled = animatable;
-  if (!animatable) {
+  if (animatable) {
+    // Keep in sync with KKTimelineBasicView's kDefaultInEnd/kDefaultOutStart.
+    static const double kDefInEnd = 0.22, kDefOutStart = 0.78;
+    NSArray<NSNumber *> *v = [self _holdValuesOfLane:lane forLabel:label];
+    KKKeyPose *hs = [KKKeyPose keyposeAtTime:kDefInEnd values:v];
+    hs.outgoing = [[KKInterval alloc] init]; // the always-present Hold gap
+    KKKeyPose *he = [KKKeyPose keyposeAtTime:kDefOutStart values:v];
+    lane.keyposes = @[ hs, he ];
+  } else {
+    NSArray<NSNumber *> *v = [self _holdValuesOfLane:lane forLabel:label];
+    lane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:v] ];
     _KKLaneRow *row = _laneRows[label];
     if (row) {
       [_laneStack removeArrangedSubview:row];
@@ -347,6 +478,18 @@
 - (void)applyTimeline:(KKTimeline *)timeline {
   _timeline = [self _timelineSeededFrom:timeline];
   [self _refresh];
+}
+
+- (void)setClipDurationSeconds:(double)seconds {
+  [_basicGraph setClipDurationSeconds:seconds];
+}
+
+- (void)setPlayheadFraction:(double)frac {
+  [_basicGraph setPlayheadFraction:frac];
+}
+
+- (void)resetZoom {
+  [_basicGraph resetZoom];
 }
 
 @end

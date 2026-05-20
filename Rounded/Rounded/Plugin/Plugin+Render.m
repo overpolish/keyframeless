@@ -13,7 +13,171 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 
+// Reverse channel: the boundary-value popover writes the requested clip
+// fraction; YES + *outFrac set when a boundary preview is active.
+static BOOL KKReadBoundaryRequest(NSString *path, double *outFrac) {
+  NSData *d = [NSData dataWithContentsOfFile:path];
+  if (!d)
+    return NO;
+  NSDictionary *j = [NSJSONSerialization JSONObjectWithData:d
+                                                    options:0
+                                                      error:nil];
+  if (![j isKindOfClass:[NSDictionary class]] || ![j[@"active"] boolValue])
+    return NO;
+  if (outFrac)
+    *outFrac = [j[@"frac"] doubleValue];
+  return YES;
+}
+
 @implementation RoundedPlugin (Render)
+
+- (void)_ensurePlayheadPolling {
+  if (self.playheadTimer)
+    return;
+  double frameDur =
+      self.cachedFrameDurSec > 0.0 ? self.cachedFrameDurSec : (1.0 / 60.0);
+  self.playheadPollLast = -999.0;
+  self.playheadPollStall = 0;
+  self.playheadTimer =
+      [NSTimer scheduledTimerWithTimeInterval:frameDur
+                                       target:self
+                                     selector:@selector(_pollPlayheadScrubber:)
+                                     userInfo:nil
+                                      repeats:YES];
+}
+
+- (void)_pollPlayheadScrubber:(NSTimer *)timer {
+  id<FxCustomParameterActionAPI_v4> act =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!act) {
+    [self.playheadTimer invalidate];
+    self.playheadTimer = nil;
+    return;
+  }
+  [act startAction:self];
+  double curSec = CMTimeGetSeconds([act currentTime]);
+  [act endAction:self];
+  double es = self.cachedEffectStartSec, ed = self.cachedEffectDurSec;
+  if (ed <= 0.0) {
+    // No timing yet (cold clip / no details) — still show the scrubber at
+    // the start instead of hiding it. Self-terminate if it stays idle; the
+    // render tick re-arms once timing resolves.
+    if (self.lastPushedPlayheadFrac != 0.0) {
+      self.lastPushedPlayheadFrac = 0.0;
+      [self.inspectorView setPlayheadFraction:0.0];
+    }
+    self.playheadPollStall += 1;
+    if (self.playheadPollStall >= 10) {
+      [self.playheadTimer invalidate];
+      self.playheadTimer = nil;
+    }
+    return;
+  }
+  // Stall = currentTime not advancing → paused or clip ended. currentTime
+  // updates ~30Hz vs our ~frame poll, so a single no-change tick is normal
+  // mid-playback — only stop after sustained no-change.
+  if (fabs(curSec - self.playheadPollLast) < 1.0e-4) {
+    self.playheadPollStall += 1;
+  } else {
+    self.playheadPollStall = 0;
+    self.playheadPollLast = curSec;
+  }
+  double ph = MAX(0.0, MIN(1.0, (curSec - es) / ed));
+  if (fabs(ph - self.lastPushedPlayheadFrac) > 1.0e-5) {
+    self.lastPushedPlayheadFrac = ph;
+    [self.inspectorView setPlayheadFraction:ph];
+  }
+  // Playing ≈ currentTime is advancing. Tolerate a couple of no-change
+  // ticks (currentTime ~30Hz vs the ~frame poll) before calling it paused.
+  BOOL playing = self.playheadPollStall < 3;
+  if (playing != self.lastPushedPlaying) {
+    self.lastPushedPlaying = playing;
+    [self.inspectorView setPlaying:playing];
+  }
+
+  // Loop-back: when enabled and the playhead has reached the clip end,
+  // wrap it to the start. The primary trigger is "within ~1 frame of the
+  // end"; the stall-near-end fallback catches hosts that halt currentTime
+  // a hair short of the true end. Cooldown so the pause→seek→resume
+  // sequence isn't re-fired while the host processes it.
+  double frameDur =
+      self.cachedFrameDurSec > 0.0 ? self.cachedFrameDurSec : (1.0 / 60.0);
+  double remaining = (es + ed) - curSec;
+  BOOL atEnd = remaining <= frameDur * 1.5 ||
+               (self.playheadPollStall >= 4 && ph >= 0.97);
+  NSTimeInterval nowMach = CACurrentMediaTime();
+  if (self.loopEnabledCached && atEnd &&
+      (nowMach - self.lastLoopWrapTime) > 0.3) {
+    self.lastLoopWrapTime = nowMach;
+    // FCP's movePlayheadToTime: is timeline-time; Motion's is effect-time.
+    // Half-frame nudge inside the clip avoids landing on the edit seam.
+    double base =
+        [KKHostInfo isRunningInFinalCut] ? self.cachedTimelineStartSec : es;
+    CMTime target = CMTimeMakeWithSeconds(base + frameDur * 0.5, 600);
+    [act startAction:self];
+    id<FxCommandAPI_v2> cmd =
+        [self.apiManager apiForProtocol:@protocol(FxCommandAPI_v2)];
+    [cmd performCommand:kFxCommand_TogglePlayback error:nil]; // pause
+    [cmd movePlayheadToTime:target error:nil];
+    [cmd performCommand:kFxCommand_TogglePlayback error:nil]; // resume
+    [act endAction:self];
+    self.lastPushedPlayheadFrac = 0.0;
+    [self.inspectorView setPlayheadFraction:0.0];
+    self.playheadPollLast = base;
+    self.playheadPollStall = 0;
+    return; // keep polling; playback resumed from the start
+  }
+
+  if (self.playheadPollStall >= 10) { // ~10 frames of no movement → idle
+    [self.playheadTimer invalidate];
+    self.playheadTimer = nil;
+  }
+}
+
+// Always request the current frame (= default behavior). When a boundary
+// popover is open, additionally request that clip fraction's frame so the
+// preview can show the actual rendered frame at that time. Step (d) refines
+// the fraction→CMTime mapping (host-aware); for now: effectStart +
+// frac·effectDuration.
+- (BOOL)scheduleInputs:(NSArray<FxImageTileRequest *> *_Nullable *_Nullable)
+                           inputImageRequests
+       withPluginState:(NSData *)pluginState
+                atTime:(CMTime)renderTime
+                 error:(NSError **)error {
+  NSMutableArray<FxImageTileRequest *> *reqs = [NSMutableArray array];
+  FxImageTileRequest *cur = [[[FxImageTileRequest alloc]
+      initWithSource:kFxImageTileRequestSourceEffectClip
+                time:renderTime
+      includeFilters:YES
+         parameterID:0] autorelease];
+  if (cur)
+    [reqs addObject:cur];
+
+  double frac = -1.0;
+  BOOL boundaryActive =
+      KKReadBoundaryRequest(RoundedMiniCanvasRequestPath, &frac);
+  self.boundaryFeedActive = boundaryActive;
+  if (boundaryActive) {
+    // FxTimingAPI returns 0 here; use start/duration cached from the render
+    // path. (Host-aware FCP/Motion mapping is step d.)
+    double es = self.cachedEffectStartSec;
+    double ed = self.cachedEffectDurSec;
+    double sec = es + frac * ed;
+    self.lastBoundaryReqSec = sec;
+    if (ed > 0) {
+      CMTime bt = CMTimeMakeWithSeconds(sec, 600);
+      FxImageTileRequest *br = [[[FxImageTileRequest alloc]
+          initWithSource:kFxImageTileRequestSourceEffectClip
+                    time:bt
+          includeFilters:YES
+             parameterID:0] autorelease];
+      if (br)
+        [reqs addObject:br];
+    }
+  }
+  *inputImageRequests = reqs;
+  return YES;
+}
 
 - (BOOL)pluginState:(NSData **)pluginState
              atTime:(CMTime)renderTime
@@ -118,17 +282,65 @@
   KKTimeline *timeline =
       timelineJSON.length ? [KKTimeline timelineFromJSON:timelineJSON] : nil;
 
+  // Cache the loop toggle (lives in the UI-state blob) so the main-queue
+  // playhead poll can decide whether to wrap at the clip end.
+  NSString *uiJSON = KKReadCustomParamString(paramGetAPI, kParamUIState);
+  if (uiJSON.length) {
+    NSDictionary *ui = [NSJSONSerialization
+        JSONObjectWithData:[uiJSON dataUsingEncoding:NSUTF8StringEncoding]
+                   options:0
+                     error:nil];
+    if ([ui isKindOfClass:[NSDictionary class]])
+      self.loopEnabledCached = [ui[@"loopEnabled"] boolValue];
+  }
+
   id<FxTimingAPI_v4> timingAPI =
       [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
   CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
   [timingAPI startTimeForEffect:&effectStart];
   [timingAPI durationTimeForEffect:&effectDuration];
   double durSec = CMTimeGetSeconds(effectDuration);
+  if (durSec > 0) {
+    // Cache for -scheduleInputs:, where FxTimingAPI returns 0.
+    self.cachedEffectStartSec = CMTimeGetSeconds(effectStart);
+    self.cachedEffectDurSec = durSec;
+    // Host-aware playhead-move bases (scrubber + loop-back). FCP's
+    // movePlayheadToTime: is timeline-time; convert the clip input start.
+    CMTime srcStart = kCMTimeZero, tlStart = kCMTimeZero;
+    [timingAPI startTimeOfInputToFilter:&srcStart];
+    [timingAPI timelineTime:&tlStart fromInputTime:srcStart];
+    self.cachedTimelineStartSec = CMTimeGetSeconds(tlStart);
+    CMTime frameDur = kCMTimeZero;
+    [timingAPI frameDuration:&frameDur];
+    self.cachedFrameDurSec = CMTimeGetSeconds(frameDur);
+  }
+  // A clip trim never fires parameterChanged:; the render tick is the only
+  // callback that sees the new length. Push it straight into the weakly-
+  // referenced inspector view (the old sequencer's mechanism) when it
+  // changes — no blob write, no undo entry.
+  if (durSec > 0 && fabs(durSec - self.lastPushedClipDuration) > 0.001) {
+    self.lastPushedClipDuration = durSec;
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [weakSelf.inspectorView setClipDurationSeconds:durSec];
+    });
+  }
   double frac = (durSec > 0)
                     ? MAX(0.0, MIN(1.0, (CMTimeGetSeconds(renderTime) -
                                          CMTimeGetSeconds(effectStart)) /
                                             durSec))
                     : 0.0;
+  // Live scrubber: render ticks stop ~1s before the clip end (FCP
+  // pre-render buffer — renderTime leads currentTime). So instead of
+  // sampling per render tick, the render tick just (re)arms a self-
+  // terminating main-queue poll that follows currentTime through the
+  // buffered tail to the true end, then stops when it stalls.
+  if (durSec > 0) {
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [weakSelf _ensurePlayheadPolling];
+    });
+  }
 
   NSArray<NSNumber *> *radiusVals = nil;
   NSArray<NSNumber *> *cropVals = nil;
@@ -137,9 +349,9 @@
   // Fraction returns that constant for a 1-keypose lane regardless of frac.
   for (KKLane *lane in timeline.lanes) {
     if (!radiusVals && [lane.label isEqualToString:@"Radius"])
-      radiusVals = KKTimelineLaneValueAtFraction(lane, frac);
+      radiusVals = KKTimelineLaneValueAtFractionSmoothed(lane, frac);
     else if (!cropVals && [lane.label isEqualToString:@"Crop"])
-      cropVals = KKTimelineLaneValueAtFraction(lane, frac);
+      cropVals = KKTimelineLaneValueAtFractionSmoothed(lane, frac);
   }
 
   outParams->radius = radiusVals.count > 0 ? radiusVals[0].doubleValue : 20.0;
@@ -187,9 +399,27 @@
   // (parent Scale > 100%) would publish a squashed sub-region. Runs before
   // the MB/normal branches so it captures every full render regardless of
   // path; the feed self-throttles so this is cheap during playback.
-  {
-    FxRect sTile = sourceImages[0].tilePixelBounds;
-    FxRect sImg = sourceImages[0].imagePixelBounds;
+  // While a boundary popover is open, publish ONLY the tile whose mediaTime
+  // matches the requested boundary time. FCP does NOT honor request order and
+  // serves stale boundary tiles while it re-schedules (proven via mediaTime
+  // logs — sourceImages[1] was often the *previous* diamond's frame), so
+  // index-based selection flickers between hold frames. If no delivered tile
+  // matches this tick, skip the publish and keep the last good frame.
+  FxImageTile *feedTile = nil;
+  if (self.boundaryFeedActive) {
+    for (FxImageTile *t in sourceImages) {
+      if (fabs(CMTimeGetSeconds(t.mediaTime) - self.lastBoundaryReqSec) <
+          0.034) { // ~1 frame @30fps
+        feedTile = t;
+        break;
+      }
+    }
+  } else {
+    feedTile = sourceImages[0];
+  }
+  if (feedTile) {
+    FxRect sTile = feedTile.tilePixelBounds;
+    FxRect sImg = feedTile.imagePixelBounds;
     BOOL fullFrame = (sTile.left == sImg.left && sTile.right == sImg.right &&
                       sTile.top == sImg.top && sTile.bottom == sImg.bottom);
     if (fullFrame) {
@@ -201,7 +431,7 @@
                                                     pixelFormat:pf];
       id<MTLDevice> dev = [cache deviceWithRegistryID:rid];
       if (q && dev) {
-        id<MTLTexture> srcTex = [sourceImages[0] metalTextureForDevice:dev];
+        id<MTLTexture> srcTex = [feedTile metalTextureForDevice:dev];
         if (!self.miniCanvasFeed) {
           KKMiniCanvasFeed *feed = [[KKMiniCanvasFeed alloc]
               initWithDescriptorPath:RoundedMiniCanvasDescriptorPath];

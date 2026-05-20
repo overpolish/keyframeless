@@ -47,7 +47,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (CGFloat)heightForLaneCount:(NSInteger)count;
 @end
 
-@interface _KKStaticValueRow : NSView
+@interface _KKStaticValueRow : NSView <NSTextFieldDelegate>
 @property(nonatomic, copy) NSString *laneLabel;
 /// New constant values for the lane (Float: [v]; Crop: [w,h,x,y]).
 @property(nonatomic, copy, nullable) void (^onValue)
@@ -59,6 +59,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Per-component display scale (display = stored × scale). Used so crop
 /// fields show pixels while the model stays normalized. nil/≤0 == raw.
 @property(nonatomic, copy, nullable) double (^componentScale)(NSInteger idx);
+/// Plugin template default for this lane. When set, a small reset button
+/// right of the label restores the value to it (commits like a field edit).
+@property(nonatomic, copy, nullable) NSArray<NSNumber *> *defaultValues;
 - (instancetype)initWithLane:(KKLane *)lane;
 /// The KKSliderView (Float rows), for a guide that drives the slider.
 - (nullable NSView *)guideSliderView;
@@ -92,6 +95,15 @@ NS_ASSUME_NONNULL_BEGIN
        onDragBegin:(nullable void (^)(void))onDragBegin
          onDragEnd:(nullable void (^)(void))onDragEnd;
 - (void)updateUnoptedLanes:(NSArray<KKLane *> *)lanes;
+/// Set each row's reset-to-default value (called right after construction;
+/// rows are built during init so this can't be an init arg without churn).
+- (void)applyDefaultsProvider:
+    (NSArray<NSNumber *> * (^)(NSString *label))provider;
+/// Append non-editable "excluded from this phase" rows (label + message +
+/// an Animate button → onAnimate(label)) and grow the view to fit. Called
+/// before the popover is shown so it sizes correctly.
+- (void)applyExcludedLabels:(NSArray<NSString *> *)labels
+                  onAnimate:(void (^)(NSString *label))onAnimate;
 /// The value-editor row (slider/fields) for `label`, or nil. Lets a guide
 /// spotlight a specific constant's control.
 - (nullable NSView *)rowViewForLabel:(NSString *)label;

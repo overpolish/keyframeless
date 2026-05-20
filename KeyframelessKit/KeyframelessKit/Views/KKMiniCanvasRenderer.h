@@ -31,6 +31,20 @@ NS_ASSUME_NONNULL_BEGIN
 /// lanes). The host keeps this in sync.
 @property(nonatomic, copy, nullable) KKTimeline *timeline;
 
+/// Boundary-editing mode (Basic step 27): the popover edits an animatable
+/// lane's keypose at a specific clip time rather than a constant.
+/// `editFraction` is that time (default 0 = constants). When YES:
+/// `valuesForLabel:` evaluates at `editFraction`, handles stay active for
+/// animatable lanes, and optimistic writes replace the keypose nearest
+/// `editFraction` (preserving structure) instead of a t=0 single keypose.
+@property(nonatomic) BOOL boundaryEditing;
+@property(nonatomic) double editFraction;
+/// Lane labels whose handle/box must NOT be drawn or hit — a property
+/// excluded from the boundary's phase has no keypose there, so its OSC
+/// would be meaningless. Set by the boundary popover; cleared on close.
+@property(nonatomic, copy, nullable)
+    NSArray<NSString *> *suppressedHandleLabels;
+
 #pragma mark - Subclass vocabulary (override)
 
 /// Lane label for the crop box, or nil if this plugin has no crop. Default

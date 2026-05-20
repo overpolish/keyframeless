@@ -1,0 +1,218 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+#pragma once
+
+#import "KKTimelineBasicView.h"
+
+#import "KKCheckboxView.h"
+#import "KKTimelineZoomPan.h"
+#import <KeyframelessKit/KKEasing.h>
+#import <KeyframelessKit/KKTimingStage.h>
+
+NS_ASSUME_NONNULL_BEGIN
+
+static const CGFloat kGraphPadX = 20.0;     // left/right inset of the track
+static const CGFloat kGraphPadTop = 8.0;    // headroom above the curve
+static const CGFloat kRulerH = 13.0;        // top clip-duration ruler strip
+static const CGFloat kRulerGap = 3.0;       // between ruler and graph top
+static const CGFloat kLabelStripH = 22.0;   // bottom strip: labels + checkbox
+static const CGFloat kGraphBottomGap = 6.0; // between track and label strip
+static const CGFloat kDiamondR = 5.0;       // half-diagonal of a boundary ◆
+static const CGFloat kCurveWidth = 2.0;
+static const NSInteger kCurveSamples = 160;
+static const CGFloat kTickMinSpacing = 50.0; // px between ruler ticks
+
+// Display fractions used for a phase that is currently off, so the section
+// is still legible and toggling it on activates that region rather than
+// growing from zero width.
+static const double kDefaultInEnd = 0.22;
+static const double kDefaultOutStart = 0.78;
+static const double kEps = 1.0e-4;
+static const double kMinPhaseFrac = 0.002;  // fallback when duration unknown
+static const double kMinPhaseSeconds = 0.1; // absolute min In/Out duration
+static const double kMinHoldFrac = 0.05;    // min Hold span between boundaries
+
+typedef NS_ENUM(NSInteger, KKBasicBoundary) {
+  KKBasicBoundaryInStart = 0,
+  KKBasicBoundaryHold = 1,
+  KKBasicBoundaryOutEnd = 2,
+};
+
+typedef NS_ENUM(NSInteger, KKBasicSection) {
+  KKBasicSectionNone = 0,
+  KKBasicSectionIn = 1,
+  KKBasicSectionHold = 2,
+  KKBasicSectionOut = 3,
+};
+
+// The Basic projection of the shared timeline: derived from the animatable
+// lanes' keyposes (all opted-in lanes share boundary times — the invariant).
+typedef struct {
+  BOOL anyAnimatable;
+  BOOL inEnabled;
+  BOOL outEnabled;
+  double inEndFrac;
+  double outStartFrac;
+  KKEasingCurve inCurve;
+  KKEasingCurve outCurve;
+  double inIntensity;
+  double outIntensity;
+  double inFrequency;
+  double outFrequency;
+  BOOL holdDrift; // the two interior Hold keyposes carry different values
+  KKEasingCurve holdCurve;
+  double holdIntensity;
+  double holdFrequency;
+  KKIntervalModulation holdMod;
+  double holdModIntensity;
+  double holdModFrequency;
+  uint32_t holdModSeed;
+  double clipDur;   // seconds; for the log-weight time scale
+  double zoom;      // 1 = fit; visible span = 1/zoom of the warped axis
+  double panOffset; // visible start in warped-u space [0, 1-1/zoom]
+} KKBasicProj;
+
+typedef struct {
+  BOOL inEnabled;
+  BOOL outEnabled;
+  NSInteger holdStart;
+  NSInteger holdEnd;
+} KKHoldShape;
+
+// Pure timeline/projection helpers — definitions live in the core .m and are
+// reused across the categories below.
+FOUNDATION_EXPORT KKHoldShape KKShapeOfLane(KKLane *lane);
+FOUNDATION_EXPORT BOOL KKValuesEqual(NSArray<NSNumber *> *a,
+                                     NSArray<NSNumber *> *b);
+FOUNDATION_EXPORT KKHoldEffect KKBasicHoldEffect(KKIntervalModulation m);
+FOUNDATION_EXPORT double KKBasicHoldValue(double t, KKBasicProj p,
+                                          double holdEnd);
+FOUNDATION_EXPORT double KKBasicMotionY(double t, KKBasicProj p);
+FOUNDATION_EXPORT double KKBasicMotionYSmoothed(double t, KKBasicProj p);
+FOUNDATION_EXPORT void KKBasicDisplayWidths(KKBasicProj p, double *outIn,
+                                            double *outHold, double *outOut);
+FOUNDATION_EXPORT double KKBasicFracToU(double frac, KKBasicProj p);
+FOUNDATION_EXPORT double KKBasicUToFrac(double u, KKBasicProj p);
+FOUNDATION_EXPORT double KKBasicBoundaryU(KKBasicProj p, NSInteger d, double v);
+FOUNDATION_EXPORT double KKBasicSolveBoundary(KKBasicProj p, NSInteger d,
+                                              double targetU, double lo,
+                                              double hi);
+FOUNDATION_EXPORT CGFloat KKBasicXForFrac(double frac, NSRect g, KKBasicProj p);
+FOUNDATION_EXPORT double KKBasicFracForX(CGFloat x, NSRect g, KKBasicProj p);
+FOUNDATION_EXPORT NSPoint KKBasicPoint(NSRect g, double frac, double val,
+                                       double lo, double hi, KKBasicProj p);
+FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
+                                          double *outHi);
+
+// Class extension: ivars only. Cross-category method decls live in the
+// named (Internal) category below — declaring them in the class extension
+// would trigger "category is implementing a method which will also be
+// implemented by its primary class" when a category provides the body.
+@interface KKTimelineBasicView () {
+@package
+  NSArray<KKLane *> *_availableLanes;
+  KKTimeline *_timeline;
+  KKCheckboxView *_inCheck;
+  KKCheckboxView *_outCheck;
+  NSTextField *_inLabel;
+  NSTextField *_holdLabel;
+  NSTextField *_outLabel;
+  NSTrackingArea *_trackingArea;
+  KKBasicSection _hoverSection;
+  NSInteger _pressedDiamond;
+  BOOL _dragActive;
+  BOOL _scrubbing;
+  NSPoint _pressPoint;
+  NSView *_popoverAnchor;
+  KKTimelineZoomPan *_zp;
+  BOOL _zoomedNotified;
+  // Backing storage for the public properties — declared here (instead of
+  // synthesized in the core .m) so all categories can read/write them.
+  double _clipDurationSeconds;
+  double _playheadFraction;
+}
+@end
+
+// Cross-category private methods. Each one is *defined* in exactly one of
+// the +Model / +Drawing / +Interaction / +Popovers (or core) .m files; all
+// the others can call it via this declaration.
+@interface KKTimelineBasicView (Internal)
+
+- (void)_buildUI;
+- (NSTextField *)_makeSectionLabel:(NSString *)text;
+- (void)_restoreCheckboxes;
+
+- (NSArray<NSNumber *> *)_holdValuesForLane:(KKLane *)lane;
+- (nullable KKInterval *)_holdIntervalForLane:(KKLane *)lane;
+- (BOOL)_holdLinked;
+- (BOOL)_holdDrift;
+- (void)_toggleHoldLink;
+- (KKLane *)_rebuiltLane:(KKLane *)lane
+                    inOn:(BOOL)inOn
+                   outOn:(BOOL)outOn
+                     tIn:(double)tIn
+                    tOut:(double)tOut;
+- (void)_rebuildInOn:(BOOL)inOn
+               outOn:(BOOL)outOn
+                 tIn:(double)tIn
+                tOut:(double)tOut;
+- (void)_applyInEnabled:(BOOL)inOn outEnabled:(BOOL)outOn;
+- (void)_setInEnabled:(BOOL)on;
+- (void)_setOutEnabled:(BOOL)on;
+
+- (double)_clipDuration;
+- (KKBasicProj)_projection;
+- (NSRect)_graphRect;
+
+- (void)_strokeCurveFrom:(double)t0
+                      to:(double)t1
+                    proj:(KKBasicProj)p
+                   xproj:(KKBasicProj)xp
+                    rect:(NSRect)g
+                      lo:(double)lo
+                      hi:(double)hi
+                  dashed:(BOOL)dashed
+                   color:(NSColor *)color;
+- (void)_drawDiamondAt:(NSPoint)c filled:(BOOL)filled color:(NSColor *)color;
+- (void)_drawDurationForSection:(KKBasicSection)section
+                         inRect:(NSRect)g
+                           proj:(KKBasicProj)p
+                          xproj:(KKBasicProj)xp
+                            dur:(double)dur
+                         rulerY:(CGFloat)rulerY;
+- (void)_drawRulerInRect:(NSRect)g proj:(KKBasicProj)p xproj:(KKBasicProj)xp;
+- (void)_placeSection:(NSTextField *)label
+             checkbox:(nullable KKCheckboxView *)check
+              centerX:(CGFloat)cx
+                 midY:(CGFloat)midY
+              enabled:(BOOL)enabled;
+
+- (KKBasicSection)_sectionAtPoint:(NSPoint)pt;
+- (void)_notifyZoomChanged;
+- (NSInteger)_diamondAtPoint:(NSPoint)pt proj:(KKBasicProj)p rect:(NSRect)g;
+- (BOOL)_isInScrubBand:(NSPoint)pt rect:(NSRect)g;
+
+- (void)_openGapPopoverForSection:(KKBasicSection)sec;
+- (void)_setLaneParticipation:(BOOL)on
+                     forLabel:(NSString *)label
+                      section:(KKBasicSection)sec;
+- (void)_openHoldPopover;
+- (void)_mutateHoldModWith:(void (^)(KKInterval *iv))mut;
+- (void)_setHoldModApplied:(BOOL)on forLabel:(NSString *)label;
+- (void)_setHoldDriftApplied:(BOOL)on forLabel:(NSString *)label;
+- (void)_mutateInterval:(KKBasicSection)section
+                   with:(void (^)(KKInterval *iv))mut;
+- (void)_openBoundaryPopoverForDiamond:(NSInteger)d;
+- (void)_writeBoundary:(KKBasicBoundary)boundary
+                values:(NSArray<NSNumber *> *)values
+              forLabel:(NSString *)label
+                  inOn:(BOOL)inOn
+                 outOn:(BOOL)outOn
+        holdTargetFrac:(double)holdTargetFrac;
+
+@end
+
+NS_ASSUME_NONNULL_END

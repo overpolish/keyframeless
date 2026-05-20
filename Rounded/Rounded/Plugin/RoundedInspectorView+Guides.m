@@ -102,11 +102,11 @@ static void RoundedTriggerHostZoomToFit(void) {
 @implementation RoundedInspectorView (Guides)
 
 - (void)_maybeAutostartIntroGuide {
-  if (_isDetachedCopy)
+  if (self.isDetachedCopy)
     return;
   if (!self.window)
     return;
-  if (_basicView.currentTimeline.lanes.count > 0)
+  if (self.basicLanesView.currentTimeline.lanes.count > 0)
     return;
   if ([NSUserDefaults.standardUserDefaults boolForKey:kRoundedIntroSeenKey])
     return;
@@ -115,7 +115,7 @@ static void RoundedTriggerHostZoomToFit(void) {
     __strong typeof(self) strong = weak;
     if (!strong || !strong.window)
       return;
-    if (strong->_basicView.currentTimeline.lanes.count > 0)
+    if (strong.basicLanesView.currentTimeline.lanes.count > 0)
       return;
     if ([NSUserDefaults.standardUserDefaults boolForKey:kRoundedIntroSeenKey])
       return;
@@ -133,7 +133,7 @@ static void RoundedTriggerHostZoomToFit(void) {
                                      displayTotal:(NSInteger)displayTotal {
   __block NSView *step2Row = nil;
   __block NSView *step3Row = nil;
-  __weak KKTimelineLanesView *weakBasic = _basicView;
+  __weak KKTimelineLanesView *weakBasic = self.basicLanesView;
   __weak KKJoyrideController *weakGuide = guide;
 
   KKJoyrideStep *s1 = [KKJoyrideStep
@@ -161,19 +161,19 @@ static void RoundedTriggerHostZoomToFit(void) {
     for (KKJoyrideStep *s in @[ s1, s2, s3 ])
       s.displayTotalSteps = displayTotal;
 
-  _basicView.onManagePopoverWillOpen = ^(NSView *row) {
+  self.basicLanesView.onManagePopoverWillOpen = ^(NSView *row) {
     step2Row = row;
     __strong KKJoyrideController *g = weakGuide;
     g.additionalPassthroughWindow = row.window;
     [g advance];
   };
-  _basicView.onManagePopoverClosed = ^{
+  self.basicLanesView.onManagePopoverClosed = ^{
     __strong KKJoyrideController *g = weakGuide;
     g.additionalPassthroughWindow = nil;
     if (g.isActive && g.currentStepIndex == 1)
       [g dismiss];
   };
-  _basicView.onLaneOptedIn = ^(NSString *label) {
+  self.basicLanesView.onLaneOptedIn = ^(NSString *label) {
     __strong KKTimelineLanesView *basic = weakBasic;
     __strong KKJoyrideController *g = weakGuide;
     step3Row = [basic laneRowViewForLabel:label];
@@ -193,7 +193,7 @@ static void RoundedTriggerHostZoomToFit(void) {
   [_introGuide dismiss];
 
   __weak typeof(self) weak = self;
-  __weak KKTimelineLanesView *weakBasic = _basicView;
+  __weak KKTimelineLanesView *weakBasic = self.basicLanesView;
   KKJoyrideController *guide =
       [[KKJoyrideController alloc] initWithHostView:self];
   __weak KKJoyrideController *weakGuide = guide;
@@ -242,9 +242,9 @@ static void RoundedTriggerHostZoomToFit(void) {
   [NSUserDefaults.standardUserDefaults removeObjectForKey:kRoundedIntroSeenKey];
   [NSUserDefaults.standardUserDefaults synchronize];
   [_savedIntroTimeline release];
-  _savedIntroTimeline = [_basicView.currentTimeline retain];
+  _savedIntroTimeline = [self.basicLanesView.currentTimeline retain];
   KKTimeline *empty = [KKTimeline timeline];
-  [_basicView applyTimeline:empty];
+  [self.basicLanesView applyTimeline:empty];
   if (self.onTimelineMutated)
     self.onTimelineMutated(empty);
   [self _startIntroGuide];
@@ -255,7 +255,7 @@ static void RoundedTriggerHostZoomToFit(void) {
 // code the inspector still owns — a different OSC supplies its own strategy.
 - (KKOSCGuideStrategy *)_pointOSCStrategy {
   __weak typeof(self) weak = self;
-  __weak KKTimelineLanesView *weakBasic = _basicView;
+  __weak KKTimelineLanesView *weakBasic = self.basicLanesView;
   KKOSCGuideStrategy *s = [[[KKOSCGuideStrategy alloc] init] autorelease];
   s.captureAnchorAtScreen = ^(NSPoint pt) {
     RoundedOSCCaptureGuideAnchorAtScreen(pt);
@@ -331,7 +331,7 @@ static void RoundedTriggerHostZoomToFit(void) {
   [_oscGuide dismiss];
 
   __weak typeof(self) weak = self;
-  __weak KKTimelineLanesView *weakBasic = _basicView;
+  __weak KKTimelineLanesView *weakBasic = self.basicLanesView;
   KKJoyrideController *guide =
       [[KKJoyrideController alloc] initWithHostView:self];
   __weak KKJoyrideController *weakGuide = guide;
@@ -422,7 +422,7 @@ static void RoundedTriggerHostZoomToFit(void) {
 }
 
 - (double)_guideCurrentRadius {
-  for (KKLane *lane in _basicView.currentTimeline.lanes) {
+  for (KKLane *lane in self.basicLanesView.currentTimeline.lanes) {
     if ([lane.label isEqualToString:@"Radius"] && lane.keyposes.count > 0) {
       KKKeyPose *kp = lane.keyposes.firstObject;
       if (kp.values.count > 0)
@@ -446,11 +446,11 @@ static void RoundedTriggerHostZoomToFit(void) {
   RoundedSetGuideRadius(20.0);
 
   [_savedOSCTimeline release];
-  _savedOSCTimeline = [_basicView.currentTimeline retain];
+  _savedOSCTimeline = [self.basicLanesView.currentTimeline retain];
 
   KKTimeline *clean = [self _guideTimelineWithRadius:20.0];
 
-  [_basicView applyTimeline:clean];
+  [self.basicLanesView applyTimeline:clean];
   if (self.onTimelineMutated)
     self.onTimelineMutated(clean);
 
@@ -470,7 +470,7 @@ static void RoundedTriggerHostZoomToFit(void) {
           if (!s)
             return;
           KKTimeline *settle = [s _guideTimelineWithRadius:20.0];
-          [s->_basicView applyTimeline:settle];
+          [s.basicLanesView applyTimeline:settle];
           if (s.onTimelineMutated)
             s.onTimelineMutated(settle);
           dispatch_after(
@@ -495,7 +495,7 @@ static void RoundedTriggerHostZoomToFit(void) {
   RoundedSetOSCGuideStep(1);
   RoundedSetGuideRadius(20.0);
   KKTimeline *clean = [self _guideTimelineWithRadius:20.0];
-  [_basicView applyTimeline:clean];
+  [self.basicLanesView applyTimeline:clean];
   if (self.onTimelineMutated)
     self.onTimelineMutated(clean);
 }
@@ -512,7 +512,7 @@ static void RoundedTriggerHostZoomToFit(void) {
   [_fullGuide dismiss];
 
   __weak typeof(self) weak = self;
-  __weak KKTimelineLanesView *weakBasic = _basicView;
+  __weak KKTimelineLanesView *weakBasic = self.basicLanesView;
   KKJoyrideController *guide =
       [[KKJoyrideController alloc] initWithHostView:self];
   __weak KKJoyrideController *weakGuide = guide;
@@ -636,7 +636,7 @@ static void RoundedTriggerHostZoomToFit(void) {
                       @"don't change over time"
            targetView:^NSView * {
              __strong typeof(self) s = weak;
-             return s ? s->_constantsButton : nil;
+             return s ? s.constantsButton : nil;
            }];
 
   // The two mini-canvas drags (radius dot, crop corner) and the slider are
@@ -746,8 +746,8 @@ static void RoundedTriggerHostZoomToFit(void) {
     __strong typeof(self) s = weak;
     if (!s)
       return lastRadius;
-    double v = [s->_basicView guideConstantSliderValueForScreenX:x
-                                                        forLabel:@"Radius"];
+    double v = [s.basicLanesView guideConstantSliderValueForScreenX:x
+                                                           forLabel:@"Radius"];
     if (fabs(v - kConstantsGuideTargetRadius) <= kConstantsGuideSliderMagnet)
       v = kConstantsGuideTargetRadius;
     return v;
@@ -770,11 +770,11 @@ static void RoundedTriggerHostZoomToFit(void) {
         __strong typeof(self) s = weak;
         if (!s)
           return NSZeroRect;
-        NSRect tr = [s->_basicView
+        NSRect tr = [s.basicLanesView
             guideConstantSliderTrackScreenRectForLabel:@"Radius"];
         if (NSIsEmptyRect(tr))
           return NSZeroRect;
-        CGFloat x = [s->_basicView
+        CGFloat x = [s.basicLanesView
             guideConstantSliderScreenXForValue:kConstantsGuideTargetRadius
                                       forLabel:@"Radius"];
         CGFloat r = 7.0;
@@ -783,24 +783,24 @@ static void RoundedTriggerHostZoomToFit(void) {
       begin:^(NSPoint p) {
         __strong typeof(self) s = weak;
         s5Last = valueForX(p.x);
-        [s->_basicView beginGuideConstantDrag];
-        [s->_basicView applyGuideConstantValues:@[ @(s5Last) ]
-                                       forLabel:@"Radius"];
+        [s.basicLanesView beginGuideConstantDrag];
+        [s.basicLanesView applyGuideConstantValues:@[ @(s5Last) ]
+                                          forLabel:@"Radius"];
       }
       dragTo:^(NSPoint p) {
         __strong typeof(self) s = weak;
         s5Last = valueForX(p.x);
-        [s->_basicView applyGuideConstantValues:@[ @(s5Last) ]
-                                       forLabel:@"Radius"];
+        [s.basicLanesView applyGuideConstantValues:@[ @(s5Last) ]
+                                          forLabel:@"Radius"];
       }
       end:^{
         __strong typeof(self) s = weak;
         if (fabs(s5Last - kConstantsGuideTargetRadius) <=
             kConstantsGuideSliderSnap)
-          [s->_basicView
+          [s.basicLanesView
               applyGuideConstantValues:@[ @(kConstantsGuideTargetRadius) ]
                               forLabel:@"Radius"];
-        [s->_basicView endGuideConstantDrag];
+        [s.basicLanesView endGuideConstantDrag];
       }
       hitOnRelease:^BOOL(NSPoint p) {
         return fabs(s5Last - kConstantsGuideTargetRadius) <=
@@ -817,20 +817,20 @@ static void RoundedTriggerHostZoomToFit(void) {
            targetView:nil];
   sX.targetScreenRect = ^NSRect {
     __strong typeof(self) s = weak;
-    return s ? [s->_basicView
+    return s ? [s.basicLanesView
                    guideConstantFieldScreenRectForLabel:@"Crop"
                                               component:
                                                   kConstantsGuideCropXComponent]
              : NSZeroRect;
   };
 
-  _basicView.onStaticValuesPopoverWillOpen = ^(NSView *content,
-                                               KKMiniCanvasView *cv) {
+  self.basicLanesView.onStaticValuesPopoverWillOpen = ^(NSView *content,
+                                                        KKMiniCanvasView *cv) {
     __strong KKJoyrideController *g = weakGuide;
     __strong typeof(self) s = weak;
     weakCanvas = cv;
     if (s)
-      weakRadiusRow = [s->_basicView staticValueRowViewForLabel:@"Radius"];
+      weakRadiusRow = [s.basicLanesView staticValueRowViewForLabel:@"Radius"];
     if (!g)
       return;
     g.additionalPassthroughWindow = content.window;
@@ -851,7 +851,7 @@ static void RoundedTriggerHostZoomToFit(void) {
     // Final step: auto-commit + end when the user types the target into
     // the Crop X field.
     if (s)
-      [s->_basicView
+      [s.basicLanesView
           setGuideConstantFieldEditHandlerForLabel:@"Crop"
                                            handler:^(NSInteger comp,
                                                      double disp) {
@@ -868,7 +868,7 @@ static void RoundedTriggerHostZoomToFit(void) {
                                                      disp -
                                                      kConstantsGuideCropXTarget) <
                                                  0.5) {
-                                               [hs->_basicView
+                                               [hs.basicLanesView
                                                    commitGuideConstantFieldForLabel:
                                                        @"Crop"
                                                                           component:
@@ -880,7 +880,7 @@ static void RoundedTriggerHostZoomToFit(void) {
     if (g.isActive && g.currentStepIndex == ixConstants)
       [g advance];
   };
-  _basicView.onStaticValuesPopoverClosed = ^{
+  self.basicLanesView.onStaticValuesPopoverClosed = ^{
     __strong KKJoyrideController *g = weakGuide;
     if (!g)
       return;
@@ -890,7 +890,7 @@ static void RoundedTriggerHostZoomToFit(void) {
     if (g.isActive)
       [g dismiss];
   };
-  _basicView.onStaticValueDragEnded =
+  self.basicLanesView.onStaticValueDragEnded =
       ^(NSString *label, NSArray<NSNumber *> *values) {
         __strong KKJoyrideController *g = weakGuide;
         if (g && g.isActive && g.currentStepIndex == ixRadius &&
@@ -899,7 +899,7 @@ static void RoundedTriggerHostZoomToFit(void) {
       };
   // Just track the latest Radius (mini-canvas handle or slider). The
   // require-target-hit gates fire on release in s2/s5, not per tick.
-  _basicView.onStaticValueChanged =
+  self.basicLanesView.onStaticValueChanged =
       ^(NSString *label, NSArray<NSNumber *> *values) {
         if ([label isEqualToString:@"Radius"] && values.count > 0)
           lastRadius = values.firstObject.doubleValue;
@@ -912,7 +912,7 @@ static void RoundedTriggerHostZoomToFit(void) {
   [_constantsGuide dismiss];
 
   __weak typeof(self) weak = self;
-  __weak KKTimelineLanesView *weakBasic = _basicView;
+  __weak KKTimelineLanesView *weakBasic = self.basicLanesView;
   KKJoyrideController *guide =
       [[KKJoyrideController alloc] initWithHostView:self];
   // Let the panel receive pinch so s3 can forward it to the mini-canvas;
@@ -975,12 +975,12 @@ static void RoundedTriggerHostZoomToFit(void) {
 
 - (void)restartConstantsGuide {
   [_savedConstantsTimeline release];
-  _savedConstantsTimeline = [_basicView.currentTimeline retain];
+  _savedConstantsTimeline = [self.basicLanesView.currentTimeline retain];
 
   // Teach on a known state: Radius + Crop both constant so the popover shows
   // the radius slider + handle AND the crop box/handles + X field.
   KKTimeline *seed = [self _constantsGuideSeedTimeline];
-  [_basicView applyTimeline:seed];
+  [self.basicLanesView applyTimeline:seed];
   if (self.onTimelineMutated)
     self.onTimelineMutated(seed);
 
@@ -998,10 +998,10 @@ static void RoundedTriggerHostZoomToFit(void) {
   RoundedSetGuideRadius(20.0);
 
   [_savedFullTimeline release];
-  _savedFullTimeline = [_basicView.currentTimeline retain];
+  _savedFullTimeline = [self.basicLanesView.currentTimeline retain];
 
   KKTimeline *empty = [KKTimeline timeline];
-  [_basicView applyTimeline:empty];
+  [self.basicLanesView applyTimeline:empty];
   if (self.onTimelineMutated)
     self.onTimelineMutated(empty);
 
@@ -1019,7 +1019,7 @@ static void RoundedTriggerHostZoomToFit(void) {
           if (!s)
             return;
           KKTimeline *settle = [KKTimeline timeline];
-          [s->_basicView applyTimeline:settle];
+          [s.basicLanesView applyTimeline:settle];
           if (s.onTimelineMutated)
             s.onTimelineMutated(settle);
           dispatch_after(

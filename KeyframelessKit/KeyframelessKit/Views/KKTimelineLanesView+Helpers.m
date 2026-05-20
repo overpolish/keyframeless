@@ -344,7 +344,7 @@ static const CGFloat kStaticFieldW = 40.0;
   if (![ed isKindOfClass:[NSTextView class]])
     return;
   NSTextView *editor = (NSTextView *)ed;
-  NSColor *accent = [NSColor accent];
+  NSColor *accent = [NSColor accentMatchingHost];
   editor.insertionPointColor = accent;
   editor.selectedTextAttributes = @{
     NSBackgroundColorAttributeName : [accent colorWithAlphaComponent:0.3],
@@ -393,6 +393,33 @@ static NSTextField *_KKMakeCaption(NSString *s) {
   KKSliderView *_slider;               // Float only
   NSArray<NSTextField *> *_fields;     // Float: 1; Crop: 4 (w,h,x,y)
   NSMutableArray<NSNumber *> *_values; // normalized, authoritative
+  NSButton *_reset;                    // reset-to-default, right of the label
+  NSArray<NSNumber *> *_defaultValues;
+}
+
+- (void)setDefaultValues:(NSArray<NSNumber *> *)defaultValues {
+  _defaultValues = [defaultValues copy];
+  [self _updateResetVisibility];
+}
+
+- (NSArray<NSNumber *> *)defaultValues {
+  return _defaultValues;
+}
+
+// Reset is only meaningful when a default exists AND the current value
+// differs from it — hidden otherwise so a row at default has no clutter.
+- (void)_updateResetVisibility {
+  BOOL atDefault =
+      _defaultValues.count > 0 && _values.count == _defaultValues.count;
+  for (NSInteger i = 0; atDefault && i < (NSInteger)_values.count; i++)
+    if (fabs(_values[i].doubleValue - _defaultValues[i].doubleValue) > 1e-6)
+      atDefault = NO;
+  _reset.hidden = (_defaultValues.count == 0) || atDefault;
+}
+
+- (void)_resetTapped:(id)sender {
+  if (_defaultValues.count)
+    [self _setValues:_defaultValues emit:YES]; // commits like a field edit
 }
 
 // Display = stored(normalized) × scale; stored = entered ÷ scale. Lets the
@@ -453,6 +480,34 @@ static NSTextField *_KKMakeCaption(NSString *s) {
   NSTextField *title = _KKMakeCaption(lane.label);
   [self addSubview:title];
 
+  NSImage *resetImg =
+      [[NSImage imageWithSystemSymbolName:@"arrow.counterclockwise"
+                 accessibilityDescription:@"Reset to default"]
+          imageWithSymbolConfiguration:
+              [NSImageSymbolConfiguration
+                  configurationWithPointSize:10.5
+                                      weight:NSFontWeightRegular]];
+  _reset = [NSButton buttonWithImage:resetImg
+                              target:self
+                              action:@selector(_resetTapped:)];
+  _reset.bordered = NO;
+  _reset.imagePosition = NSImageOnly;
+  _reset.contentTintColor =
+      [[NSColor inspectorLabel] colorWithAlphaComponent:0.5];
+  _reset.toolTip = @"Reset to default";
+  _reset.translatesAutoresizingMaskIntoConstraints = NO;
+  _reset.hidden = YES; // shown only when off-default (set after init)
+  [self addSubview:_reset];
+  // Trailing-most element so its position is identical on every lane row,
+  // regardless of label/control widths.
+  [NSLayoutConstraint activateConstraints:@[
+    [_reset.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                          constant:-KKPaddingLG],
+    [_reset.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    [_reset.widthAnchor constraintEqualToConstant:15.0],
+    [_reset.heightAnchor constraintEqualToConstant:15.0],
+  ]];
+
   if (_valueType == KKLaneValueTypeCrop) {
     NSArray<NSString *> *caps = @[ @"W", @"H", @"X", @"Y" ];
     NSMutableArray<NSView *> *arranged = [NSMutableArray array];
@@ -490,7 +545,7 @@ static NSTextField *_KKMakeCaption(NSString *s) {
       [title.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
       // Pushed to the right, hugging the trailing edge (like the radius
       // field) rather than sitting right after the label.
-      [hs.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+      [hs.trailingAnchor constraintEqualToAnchor:_reset.leadingAnchor
                                         constant:-KKPaddingLG],
       [hs.leadingAnchor
           constraintGreaterThanOrEqualToAnchor:title.trailingAnchor
@@ -509,7 +564,7 @@ static NSTextField *_KKMakeCaption(NSString *s) {
     _slider.minValue = _cmin.count ? _cmin[0].doubleValue : 0.0;
     _slider.maxValue = _cmax.count ? _cmax[0].doubleValue : 1.0;
     _slider.continuous = YES;
-    _slider.trackFillColor = [NSColor accent];
+    _slider.trackFillColor = [NSColor accentMatchingHost];
     _slider.target = self;
     _slider.action = @selector(_sliderMoved:);
     __weak typeof(self) weak = self;
@@ -533,7 +588,7 @@ static NSTextField *_KKMakeCaption(NSString *s) {
       [_slider.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
       [fld.leadingAnchor constraintEqualToAnchor:_slider.trailingAnchor
                                         constant:KKPaddingSM],
-      [fld.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+      [fld.trailingAnchor constraintEqualToAnchor:_reset.leadingAnchor
                                          constant:-KKPaddingLG],
       [fld.widthAnchor constraintEqualToConstant:kStaticFieldW],
       [fld.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
@@ -577,6 +632,7 @@ static NSTextField *_KKMakeCaption(NSString *s) {
   _values = [v mutableCopy] ?: [NSMutableArray array];
   [self _constrain:_values];
   [self refreshDisplay];
+  [self _updateResetVisibility];
   if (emit && self.onValue)
     self.onValue([_values copy]);
 }
@@ -633,6 +689,67 @@ static NSTextField *_KKMakeCaption(NSString *s) {
   _onGuideFieldEdit(comp, disp);
 }
 
+@end
+
+// A non-editable row for a property excluded from the clicked boundary's
+// phase: its name, a muted message, and an Animate button that opts it back
+// in (so there's no detour to the gap popover).
+@interface _KKExcludedRow : NSView
+@property(nonatomic, copy) void (^onAnimate)(void);
+- (instancetype)initWithLabel:(NSString *)label;
+@end
+
+@implementation _KKExcludedRow
+- (BOOL)isFlipped {
+  return YES;
+}
+- (NSSize)intrinsicContentSize {
+  return NSMakeSize(NSViewNoIntrinsicMetric, kFloatRowH);
+}
+- (instancetype)initWithLabel:(NSString *)label {
+  self = [super initWithFrame:NSMakeRect(0, 0, kCanvasPopoverW, kFloatRowH)];
+  if (!self)
+    return nil;
+  NSTextField *title = _KKMakeCaption(label);
+  NSTextField *msg = _KKMakeCaption(@"Excluded from this phase");
+  msg.textColor = [[NSColor inspectorLabel] colorWithAlphaComponent:0.4];
+  NSButton *btn = [NSButton buttonWithTitle:@"Animate"
+                                     target:self
+                                     action:@selector(_tap:)];
+  btn.bordered = NO;
+  btn.bezelStyle = NSBezelStyleInline;
+  btn.controlSize = NSControlSizeSmall;
+  NSFont *btnFont = [NSFont systemFontOfSize:KKFontSizeSM
+                                      weight:NSFontWeightMedium];
+  btn.font = btnFont;
+  btn.attributedTitle = [[NSAttributedString alloc]
+      initWithString:@"Animate"
+          attributes:@{
+            NSForegroundColorAttributeName : [NSColor accentMatchingHost],
+            NSFontAttributeName : btnFont
+          }];
+  btn.translatesAutoresizingMaskIntoConstraints = NO;
+  for (NSView *v in @[ title, msg, btn ])
+    [self addSubview:v];
+  [NSLayoutConstraint activateConstraints:@[
+    [title.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                        constant:KKPaddingLG],
+    [title.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    [btn.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                       constant:-KKPaddingLG],
+    [btn.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    [msg.trailingAnchor constraintEqualToAnchor:btn.leadingAnchor
+                                       constant:-KKPaddingMD],
+    [msg.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    [msg.leadingAnchor constraintGreaterThanOrEqualToAnchor:title.trailingAnchor
+                                                   constant:KKPaddingSM],
+  ]];
+  return self;
+}
+- (void)_tap:(id)sender {
+  if (_onAnimate)
+    _onAnimate();
+}
 @end
 
 @implementation _KKStaticValuesPopoverView {
@@ -828,6 +945,45 @@ static NSTextField *_KKMakeCaption(NSString *s) {
       s->_onDragEnd();
   };
   return row;
+}
+
+- (void)applyDefaultsProvider:
+    (NSArray<NSNumber *> * (^)(NSString *label))provider {
+  if (!provider)
+    return;
+  for (NSString *label in _rowsByLabel)
+    _rowsByLabel[label].defaultValues = provider(label);
+}
+
+- (void)applyExcludedLabels:(NSArray<NSString *> *)labels
+                  onAnimate:(void (^)(NSString *))onAnimate {
+  if (labels.count == 0)
+    return;
+  // Swap the excluded property's editable row for a message+Animate row at
+  // the SAME stack position, so the original property order is preserved
+  // (heights match → no resize).
+  for (NSString *label in labels) {
+    _KKStaticValueRow *old = _rowsByLabel[label];
+    if (!old)
+      continue;
+    NSInteger idx = [_stack.arrangedSubviews indexOfObject:old];
+    if (idx == NSNotFound)
+      continue;
+    [_stack removeArrangedSubview:old];
+    [old removeFromSuperview];
+    [_rowsByLabel removeObjectForKey:label];
+
+    _KKExcludedRow *row = [[_KKExcludedRow alloc] initWithLabel:label];
+    row.translatesAutoresizingMaskIntoConstraints = NO;
+    NSString *cap = [label copy];
+    row.onAnimate = ^{
+      if (onAnimate)
+        onAnimate(cap);
+    };
+    [_stack insertArrangedSubview:row atIndex:idx];
+    [row.widthAnchor constraintEqualToAnchor:_stack.widthAnchor].active = YES;
+    [row.heightAnchor constraintEqualToConstant:kFloatRowH].active = YES;
+  }
 }
 
 // Live (per-tick) UI update during a mini-canvas handle drag — refresh the

@@ -70,15 +70,19 @@
 - (BOOL)isConstantLabel:(NSString *)label {
   for (KKLane *lane in self.timeline.lanes)
     if ([lane.label isEqualToString:label])
-      return !lane.enabled;
-  return YES;
+      // Constants popover: a constant (disabled) lane shows its handle.
+      // Boundary popover: only the *animatable* lanes being edited there
+      // show theirs (so a disabled property's handle doesn't intrude).
+      return self.boundaryEditing ? lane.enabled : !lane.enabled;
+  return !self.boundaryEditing;
 }
 
 - (NSArray<NSNumber *> *)valuesForLabel:(NSString *)label {
   for (KKLane *lane in self.timeline.lanes) {
     if (![lane.label isEqualToString:label])
       continue;
-    NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, 0.0);
+    NSArray<NSNumber *> *v =
+        KKTimelineLaneValueAtFraction(lane, self.editFraction);
     if (v.count > 0)
       return v;
   }
@@ -95,6 +99,38 @@
 
 - (KKTimeline *)_timelineBySettingValues:(NSArray<NSNumber *> *)values
                                 forLabel:(NSString *)label {
+  if (self.boundaryEditing) {
+    // Replace the keypose nearest editFraction, preserving the lane's
+    // structure (times, intervals, enabled). Authoritative Hold-twin
+    // handling is the host's job; the preview only renders editFraction.
+    KKTimeline *updated = [self.timeline copy] ?: [KKTimeline timeline];
+    NSMutableArray<KKLane *> *lanes = [updated.lanes mutableCopy];
+    for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+      if (![lanes[i].label isEqualToString:label])
+        continue;
+      KKLane *nl = [lanes[i] copy];
+      NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];
+      if (kps.count) {
+        NSInteger best = 0;
+        double bd = 1.0e9;
+        for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
+          double d = fabs(kps[k].time - self.editFraction);
+          if (d < bd) {
+            bd = d;
+            best = k;
+          }
+        }
+        KKKeyPose *nk = [KKKeyPose keyposeAtTime:kps[best].time values:values];
+        nk.outgoing = kps[best].outgoing; // preserve easing/modulation
+        kps[best] = nk;
+        nl.keyposes = kps;
+      }
+      lanes[i] = nl;
+      break;
+    }
+    updated.lanes = lanes;
+    return updated;
+  }
   KKTimeline *updated = [self.timeline copy] ?: [KKTimeline timeline];
   KKLane *lane = [KKLane laneWithLabel:label];
   lane.valueType = (KKLaneValueType)[self valueTypeForLabel:label];
@@ -138,8 +174,13 @@
   return [self encodeEffectFromSource:source into:dest commandBuffer:cb];
 }
 
+- (BOOL)_labelSuppressed:(NSString *)label {
+  return label && [_suppressedHandleLabels containsObject:label];
+}
+
 - (BOOL)_cropActiveForContentRect:(CGRect)cr {
   return !CGRectIsEmpty(cr) && self.cropLabel &&
+         ![self _labelSuppressed:self.cropLabel] &&
          [self isConstantLabel:self.cropLabel];
 }
 
@@ -171,6 +212,7 @@
 
 - (BOOL)_pointActiveForContentRect:(CGRect)cr {
   return !CGRectIsEmpty(cr) && self.pointLabel &&
+         ![self _labelSuppressed:self.pointLabel] &&
          [self isConstantLabel:self.pointLabel];
 }
 

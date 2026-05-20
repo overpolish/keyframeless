@@ -22,6 +22,9 @@ static const CGFloat kGroupPillPadX = 8.0;
   NSArray<NSImage *> *_icons;
   BOOL _iconAndLabel;
   NSInteger _count;
+  BOOL _dragActive;      // a sweep is in progress
+  BOOL _dragTargetState; // every pill the sweep touches is set to this
+  NSMutableIndexSet *_swept;
 }
 
 - (instancetype)initWithLabels:(NSArray<NSString *> *)labels {
@@ -250,21 +253,66 @@ static const CGFloat kGroupPillPadX = 8.0;
   return YES;
 }
 
+- (NSInteger)_pillIndexAt:(NSPoint)loc {
+  NSArray<NSValue *> *rects = [self pillRects];
+  for (NSInteger i = 0; i < (NSInteger)rects.count; i++)
+    if (NSPointInRect(loc, rects[i].rectValue))
+      return i;
+  return NSNotFound;
+}
+
 - (void)mouseDown:(NSEvent *)event {
   NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
-  NSArray<NSValue *> *rects = [self pillRects];
+  NSInteger i = [self _pillIndexAt:loc];
+  if (i == NSNotFound)
+    return;
 
-  for (NSInteger i = 0; i < (NSInteger)rects.count; i++) {
-    if (NSPointInRect(loc, rects[i].rectValue)) {
-      if (_radioMode && _states[i].boolValue)
-        return;
-      BOOL newState = !_states[i].boolValue;
-      [self setState:newState atIndex:i];
-      if (_onToggled)
-        _onToggled(i, newState);
+  // Radio: single-select, no sweep / undo bracket (consumer-managed).
+  if (_radioMode) {
+    if (_states[i].boolValue)
       return;
-    }
+    [self setState:YES atIndex:i];
+    if (_onToggled)
+      _onToggled(i, YES);
+    return;
   }
+
+  // Multi-select: start a sweep. Every pill the drag touches is forced to
+  // the start pill's *new* state. onDragBegin/End bracket the whole gesture
+  // so the consumer coalesces it to one undo entry (fires for a plain
+  // click too — down then up with nothing dragged).
+  _dragActive = YES;
+  _dragTargetState = !_states[i].boolValue;
+  _swept = [NSMutableIndexSet indexSetWithIndex:i];
+  if (_onDragBegin)
+    _onDragBegin();
+  [self setState:_dragTargetState atIndex:i];
+  if (_onToggled)
+    _onToggled(i, _dragTargetState);
+}
+
+- (void)mouseDragged:(NSEvent *)event {
+  if (!_dragActive)
+    return;
+  NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
+  NSInteger i = [self _pillIndexAt:loc];
+  if (i == NSNotFound || [_swept containsIndex:i])
+    return;
+  [_swept addIndex:i];
+  if (_states[i].boolValue == _dragTargetState)
+    return; // already in the target state — nothing to write
+  [self setState:_dragTargetState atIndex:i];
+  if (_onToggled)
+    _onToggled(i, _dragTargetState);
+}
+
+- (void)mouseUp:(NSEvent *)event {
+  if (!_dragActive)
+    return;
+  _dragActive = NO;
+  _swept = nil;
+  if (_onDragEnd)
+    _onDragEnd();
 }
 
 @end

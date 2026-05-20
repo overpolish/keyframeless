@@ -44,6 +44,11 @@ extern double RoundedGuideRadiusForScreenPoint(NSPoint screenPt);
 
 static const UInt32 kParamInspectorUI = 200;
 static const UInt32 kParamUIState = 201;
+/// Hidden, never-read scratch param. The boundary-value popover writes a fresh
+/// random value here on open so FCP treats it as a real parameter change and
+/// re-runs -scheduleInputs: for the (otherwise cached) static frame, letting
+/// the boundary preview resolve without manual scrubbing.
+static const UInt32 kParamRenderNudge = 202;
 
 /// Radius value (in radius units) that the OSC guide targets during the
 /// interactive drag step. Shared between OSC.m and RoundedInspectorView.m.

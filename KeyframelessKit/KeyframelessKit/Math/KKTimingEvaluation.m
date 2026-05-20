@@ -168,7 +168,8 @@ KKEvaluateTransition(NSArray<KKTimingSegment *> *segments, NSUInteger idx,
   return interpolated;
 }
 
-NSArray<NSNumber *> *KKTimelineLaneValueAtFraction(KKLane *lane, double frac) {
+static NSArray<NSNumber *> *KKLaneRawValueAtFraction(KKLane *lane,
+                                                     double frac) {
   NSArray<KKKeyPose *> *kps = lane.keyposes;
   if (!kps.count)
     return nil;
@@ -194,9 +195,9 @@ NSArray<NSNumber *> *KKTimelineLaneValueAtFraction(KKLane *lane, double frac) {
   localT = MAX(0.0, MIN(1.0, localT));
 
   KKInterval *iv = a.outgoing;
-  double easedT =
-      iv ? KKApplyEasing(localT, (KKEasingCurve)iv.curve, iv.intensity, 0.5)
-         : localT;
+  double easedT = iv ? KKApplyEasing(localT, (KKEasingCurve)iv.curve,
+                                     iv.intensity, iv.frequency)
+                     : localT;
 
   NSUInteger valCount = MIN(a.values.count, b.values.count);
   NSMutableArray<NSNumber *> *result =
@@ -206,7 +207,98 @@ NSArray<NSNumber *> *KKTimelineLaneValueAtFraction(KKLane *lane, double frac) {
     double bv = b.values[i].doubleValue;
     [result addObject:@(av + (bv - av) * easedT)];
   }
+
+  if (iv && iv.modulation != KKIntervalModulationNone) {
+    // Multiplicative factor centred on 1.0; envelope zeroes at localT 0/1
+    // so it joins the keyposes continuously. Wiggle = high-freq hash,
+    // Oscillate = regular sinusoid, Handheld = low-freq fBm.
+    KKHoldEffect effect =
+        (iv.modulation == KKIntervalModulationWiggle)     ? KKHoldEffectWiggle
+        : (iv.modulation == KKIntervalModulationHandheld) ? KKHoldEffectHandheld
+                                                          : KKHoldEffectBounce;
+    if (iv.modulationLinked) {
+      double f =
+          KKApplyHoldEffect(localT, effect, iv.modulationIntensity,
+                            iv.modulationFrequency, (int)iv.modulationSeed);
+      for (NSUInteger i = 0; i < result.count; i++)
+        result[i] = @(result[i].doubleValue * f);
+    } else {
+      for (NSUInteger i = 0; i < result.count; i++) {
+        double f = KKApplyHoldEffectForComponent(
+            localT, effect, iv.modulationIntensity, iv.modulationFrequency,
+            (int)iv.modulationSeed, (int)i);
+        result[i] = @(result[i].doubleValue * f);
+      }
+    }
+  }
   return result;
+}
+
+NSArray<NSNumber *> *KKTimelineLaneValueAtFraction(KKLane *lane, double frac) {
+  return KKLaneRawValueAtFraction(lane, frac);
+}
+
+double KKHermiteJoinBlend(double frac, double boundary, double window,
+                          double (^sample)(double f)) {
+  if (window <= 0.0)
+    return sample(frac);
+  double lo = boundary - window;
+  double hi = boundary + window;
+  if (frac <= lo || frac >= hi)
+    return sample(frac);
+  double h = window * 0.05;
+  if (h < 1.0e-5)
+    h = 1.0e-5;
+  double p0 = sample(lo);
+  double p1 = sample(hi);
+  double m0 = (sample(lo + h) - sample(lo - h)) / (2.0 * h);
+  double m1 = (sample(hi + h) - sample(hi - h)) / (2.0 * h);
+  double L = hi - lo;
+  double x = (frac - lo) / L;
+  double x2 = x * x, x3 = x2 * x;
+  double h00 = 2.0 * x3 - 3.0 * x2 + 1.0;
+  double h10 = x3 - 2.0 * x2 + x;
+  double h01 = -2.0 * x3 + 3.0 * x2;
+  double h11 = x3 - x2;
+  return h00 * p0 + h10 * m0 * L + h01 * p1 + h11 * m1 * L;
+}
+
+NSArray<NSNumber *> *KKTimelineLaneValueAtFractionSmoothed(KKLane *lane,
+                                                           double frac) {
+  NSArray<KKKeyPose *> *kps = lane.keyposes;
+  if (kps.count < 3)
+    return KKLaneRawValueAtFraction(lane, frac); // no interior join to round
+  if (frac <= kps.firstObject.time || frac >= kps.lastObject.time)
+    return KKLaneRawValueAtFraction(lane, frac); // endpoints stay exact
+
+  // Find the interior keypose whose join window contains `frac`. Windows are
+  // a fraction of the smaller adjacent span and capped so neighbouring
+  // windows can't overlap (and never reach a neighbour keypose).
+  for (NSUInteger i = 1; i + 1 < kps.count; i++) {
+    double b = kps[i].time;
+    double prev = b - kps[i - 1].time;
+    double next = kps[i + 1].time - b;
+    if (prev <= 0.0 || next <= 0.0)
+      continue;
+    double w = KK_JOIN_BLEND_FRAC * MIN(prev, next);
+    w = MIN(w, 0.49 * prev);
+    w = MIN(w, 0.49 * next);
+    if (frac <= b - w || frac >= b + w)
+      continue;
+
+    NSArray<NSNumber *> *probe = KKLaneRawValueAtFraction(lane, b);
+    NSUInteger nc = probe.count;
+    NSMutableArray<NSNumber *> *out = [NSMutableArray arrayWithCapacity:nc];
+    for (NSUInteger c = 0; c < nc; c++) {
+      double v = KKHermiteJoinBlend(frac, b, w, ^double(double f) {
+        NSArray<NSNumber *> *vv = KKLaneRawValueAtFraction(lane, f);
+        return c < vv.count ? vv[c].doubleValue : 0.0;
+      });
+      [out addObject:@(v)];
+    }
+    return out;
+  }
+  return KKLaneRawValueAtFraction(lane, frac);
 }
 
 NSArray<NSNumber *> *KKTimingLaneValueAtFraction(KKTimingLane *lane,

@@ -14,6 +14,9 @@
 NSString *const RoundedMiniCanvasDescriptorPath =
     @"/tmp/rounded-minicanvas.json";
 
+NSString *const RoundedMiniCanvasRequestPath =
+    @"/tmp/rounded-minicanvas-request.json";
+
 // Mini-canvas analog of the viewer OSC's `oscSize` (KKPointOSC oscRadius +
 // outline). Kept in sync with KKMiniCanvasView's kKKMiniHandleOuterPt so
 // placement, hit-test and the drawn glyph all agree.

@@ -38,7 +38,7 @@
   BOOL ok = [super becomeFirstResponder];
   if (ok) {
     NSTextView *editor = (NSTextView *)self.currentEditor;
-    NSColor *accent = [NSColor accent];
+    NSColor *accent = [NSColor accentMatchingHost];
     editor.insertionPointColor = accent;
     editor.selectedTextAttributes = @{
       NSBackgroundColorAttributeName : [accent colorWithAlphaComponent:0.3],

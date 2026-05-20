@@ -4,8 +4,43 @@
  */
 
 #import "KKMiniCanvasView.h"
+#import "KKSegmentEditView.h"
 #import "KKTimelineLanesView_Popovers.h"
+#import <KeyframelessKit/KKEasing.h>
 #import <QuartzCore/QuartzCore.h>
+
+// The mini-canvas delegate is a KKMiniCanvasRenderer (or subclass) but its
+// header framework-imports KKMiniCanvasView.h, which collides with the quote
+// import above (path-dedup). Toggle its boundary-editing mode via KVC to
+// avoid pulling that header in here.
+static void KKSetBoundaryEditing(id delegate, BOOL on, double fraction) {
+  if ([delegate
+          respondsToSelector:NSSelectorFromString(@"setBoundaryEditing:")]) {
+    [delegate setValue:@(on) forKey:@"boundaryEditing"];
+    [delegate setValue:@(fraction) forKey:@"editFraction"];
+  }
+}
+
+// Hide the mini-canvas handle/box for properties excluded from this phase.
+static void KKSetSuppressedHandles(id delegate, NSArray<NSString *> *labels) {
+  if ([delegate respondsToSelector:NSSelectorFromString(
+                                       @"setSuppressedHandleLabels:")])
+    [delegate setValue:labels forKey:@"suppressedHandleLabels"];
+}
+
+// Reverse channel: tell the render side which clip fraction the popover is
+// previewing so it can pull that frame (via -scheduleInputs:).
+static void KKWriteBoundaryRequest(NSString *path, double frac, BOOL active) {
+  if (!path)
+    return;
+  NSDictionary *d = @{
+    @"frac" : @(frac),
+    @"active" : @(active ? 1 : 0),
+    @"gen" : @((long long)(CACurrentMediaTime() * 1000.0))
+  };
+  NSData *j = [NSJSONSerialization dataWithJSONObject:d options:0 error:nil];
+  [j writeToFile:path atomically:YES];
+}
 
 static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
   if ([root isKindOfClass:[KKMiniCanvasView class]])
@@ -74,6 +109,12 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
 - (NSPopover *)_showPopoverWithContent:(NSView *)content
                               fromView:(NSView *)anchor
                                onClose:(void (^)(void))onClose {
+  // Dismiss any popover from a previous call first — the ApplicationDefined
+  // outside-click monitors don't fire click-to-click between two gaps in the
+  // same custom view, so a second gap would otherwise stack on the first.
+  // (Not reentrant: we're in a fresh mouseUp, not the old popover's callback.)
+  [_openContentPopover close];
+
   _KKLVPopoverContentView *wrapper = [[_KKLVPopoverContentView alloc] init];
   wrapper.frame = content.bounds;
   content.translatesAutoresizingMaskIntoConstraints = NO;
@@ -203,7 +244,314 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
                                                closeIfOutsidePopover();
                                              }];
 
+  _openContentPopover = popover;
   return popover;
+}
+
+- (void)
+    _presentBoundaryValuePopoverFromAnchor:(NSView *)anchor
+                              displayLanes:(NSArray<KKLane *> *)lanes
+                                  fraction:(double)fraction
+                            excludedLabels:(NSArray<NSString *> *)excludedLabels
+                                   onValue:
+                                       (void (^)(NSString *,
+                                                 NSArray<NSNumber *> *))onValue
+                                 onAnimate:(void (^)(NSString *))onAnimate
+                               onDragBegin:(void (^)(void))onDragBegin
+                                 onDragEnd:(void (^)(void))onDragEnd {
+  if (lanes.count == 0 && excludedLabels.count == 0)
+    return;
+  // If a popover is still open, close it NOW (its onClose tears down the old
+  // boundary state in order) but DEFER building the replacement one runloop
+  // tick — back-to-back mini-canvas teardown+rebuild in the same call stack
+  // stalls ~0.5s and the new MTKView comes up blank. Re-entry next tick finds
+  // it closed and proceeds on the fast path (matches the outside-click order).
+  if (_openContentPopover.isShown) {
+    [_openContentPopover close];
+    __weak typeof(self) wself = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [wself _presentBoundaryValuePopoverFromAnchor:anchor
+                                       displayLanes:lanes
+                                           fraction:fraction
+                                     excludedLabels:excludedLabels
+                                            onValue:onValue
+                                          onAnimate:onAnimate
+                                        onDragBegin:onDragBegin
+                                          onDragEnd:onDragEnd];
+    });
+    return;
+  }
+  [_openContentPopover close];
+
+  __weak typeof(self) weak = self;
+  KKSetBoundaryEditing(self.miniCanvasDelegate, YES, fraction);
+  KKSetSuppressedHandles(self.miniCanvasDelegate, excludedLabels);
+  KKWriteBoundaryRequest(self.miniCanvasRequestPath, fraction, YES);
+  // Static playhead → no render → -scheduleInputs: never sees the request
+  // just written. Nudge one render so the boundary frame resolves now.
+  if (self.onBoundaryPreviewNeedsRender)
+    self.onBoundaryPreviewNeedsRender();
+
+  // Coalesce continuous handle/slider drags to one commit on drag-end (same
+  // pattern as the constants popover); a discrete field edit commits at once.
+  __block NSString *pendingLabel = nil;
+  __block NSArray<NSNumber *> *pendingValues = nil;
+  __block BOOL dragging = NO;
+
+  _KKStaticValuesPopoverView *staticView =
+      [[_KKStaticValuesPopoverView alloc] initWithLanes:lanes
+          descriptorPath:self.miniCanvasDescriptorPath
+          clipAspect:self.miniCanvasClipAspect
+          canvasDelegate:self.miniCanvasDelegate
+          onHandleValue:^(NSString *label, NSArray<NSNumber *> *values) {
+            if (dragging) {
+              pendingLabel = label;
+              pendingValues = values;
+            } else if (onValue) {
+              onValue(label, values);
+            }
+          }
+          onDragBegin:^{
+            dragging = YES;
+            if (onDragBegin)
+              onDragBegin();
+          }
+          onDragEnd:^{
+            if (pendingLabel && pendingValues && onValue) {
+              onValue(pendingLabel, pendingValues);
+              pendingLabel = nil;
+              pendingValues = nil;
+            }
+            dragging = NO;
+            if (onDragEnd)
+              onDragEnd();
+          }];
+  _openStaticView = staticView;
+  _openStaticIsBoundary = YES;
+  [staticView applyDefaultsProvider:^NSArray<NSNumber *> *(NSString *l) {
+    __strong typeof(weak) s = weak;
+    return s ? [s _defaultValuesForLabel:l] : nil;
+  }];
+  [staticView applyExcludedLabels:excludedLabels
+                        onAnimate:^(NSString *label) {
+                          if (onAnimate)
+                            onAnimate(label);
+                        }];
+
+  NSPopover *popover = [self
+      _showPopoverWithContent:staticView
+                     fromView:anchor
+                      onClose:^{
+                        __strong typeof(weak) s = weak;
+                        if (!s)
+                          return;
+                        s->_openStaticView = nil;
+                        s->_openStaticIsBoundary = NO;
+                        KKSetBoundaryEditing(s.miniCanvasDelegate, NO, 0.0);
+                        KKSetSuppressedHandles(s.miniCanvasDelegate, nil);
+                        KKWriteBoundaryRequest(s.miniCanvasRequestPath, 0.0,
+                                               NO);
+                      }];
+  staticView.popover = popover;
+}
+
+- (void)_presentGapPopoverFromAnchor:(NSView *)anchor
+                          animateOut:(BOOL)animateOut
+                               curve:(KKIntervalCurve)curve
+                           intensity:(double)intensity
+                           frequency:(double)frequency
+                          partLabels:(NSArray<NSString *> *)partLabels
+                          partStates:(NSArray<NSNumber *> *)partStates
+                             onCurve:(void (^)(KKIntervalCurve))onCurve
+                         onIntensity:(void (^)(double))onIntensity
+                         onFrequency:(void (^)(double))onFrequency
+                     onParticipation:(void (^)(NSInteger, BOOL))onParticipation
+                         onDragBegin:(void (^)(void))onDragBegin
+                           onDragEnd:(void (^)(void))onDragEnd {
+  KKSegmentEditView *edit =
+      [[KKSegmentEditView alloc] initWithKind:KKSegmentEditKindTransition
+                                  showsLinked:NO
+                                   bulkHeader:NO
+                          participationLabels:partLabels
+                          participationStates:partStates];
+  edit.onParticipationToggled = ^(NSInteger idx, BOOL on) {
+    if (onParticipation)
+      onParticipation(idx, on);
+  };
+  edit.onParticipationDragBegin = ^{
+    if (onDragBegin)
+      onDragBegin();
+  };
+  edit.onParticipationDragEnd = ^{
+    if (onDragEnd)
+      onDragEnd();
+  };
+  edit.animateOut = animateOut;
+  edit.curveType = (NSInteger)curve;
+  edit.intensity = intensity;
+  edit.frequency = frequency;
+  // A curve pick is discrete → commits immediately (its own undo entry).
+  // Intensity/frequency are continuous → KKSegmentEditView brackets the drag
+  // via onSliderDragBegin/End, which we route to the host's undo group so the
+  // per-tick writes coalesce to one entry (same chain as the boundary drag).
+  edit.onCurveTypeChanged = ^(NSInteger ct) {
+    if (onCurve)
+      onCurve((KKIntervalCurve)ct);
+  };
+  edit.onIntensityChanged = ^(double v) {
+    if (onIntensity)
+      onIntensity(v);
+  };
+  edit.onFrequencyChanged = ^(double v) {
+    if (onFrequency)
+      onFrequency(v);
+  };
+  edit.onSliderDragBegin = ^{
+    if (onDragBegin)
+      onDragBegin();
+  };
+  edit.onSliderDragEnd = ^{
+    if (onDragEnd)
+      onDragEnd();
+  };
+
+  CGFloat w = [KKSegmentEditView contentWidth];
+  CGFloat h =
+      [KKSegmentEditView contentHeightForKind:KKSegmentEditKindTransition
+                                  showsLinked:NO
+                                   bulkHeader:NO
+                                participation:(partLabels.count > 0)];
+  edit.frame = NSMakeRect(0, 0, w, h);
+  [edit.widthAnchor constraintEqualToConstant:w].active = YES;
+  [edit.heightAnchor constraintEqualToConstant:h].active = YES;
+
+  [self _showPopoverWithContent:edit
+                       fromView:anchor
+                        onClose:^{
+                        }];
+}
+
+// KKSegmentEditView (Hold kind) pills are indexed by KKHoldEffect
+// (0 None, 1 Bounce, 2 Wiggle); the model stores KKIntervalModulation. The
+// evaluator maps Wiggle→Wiggle, Oscillate→Bounce (KKTimingEvaluation.m), so
+// the pill index and the stored enum are NOT interchangeable.
+static NSInteger KKModulationToPill(KKIntervalModulation m) {
+  switch (m) {
+  case KKIntervalModulationWiggle:
+    return KKHoldEffectWiggle;
+  case KKIntervalModulationOscillate:
+    return KKHoldEffectBounce;
+  case KKIntervalModulationHandheld:
+    return KKHoldEffectHandheld;
+  default:
+    return KKHoldEffectNone;
+  }
+}
+static KKIntervalModulation KKPillToModulation(NSInteger pill) {
+  switch (pill) {
+  case KKHoldEffectWiggle:
+    return KKIntervalModulationWiggle;
+  case KKHoldEffectBounce:
+    return KKIntervalModulationOscillate;
+  case KKHoldEffectHandheld:
+    return KKIntervalModulationHandheld;
+  default:
+    return KKIntervalModulationNone;
+  }
+}
+
+- (void)
+    _presentHoldModulationPopoverFromAnchor:(NSView *)anchor
+                                 modulation:(KKIntervalModulation)modulation
+                                  intensity:(double)intensity
+                                  frequency:(double)frequency
+                                       seed:(uint32_t)seed
+                                     linked:(BOOL)linked
+                                showsLinked:(BOOL)showsLinked
+                                 partLabels:(NSArray<NSString *> *)partLabels
+                                 partStates:(NSArray<NSNumber *> *)partStates
+                               onModulation:
+                                   (void (^)(KKIntervalModulation))onModulation
+                                onIntensity:(void (^)(double))onIntensity
+                                onFrequency:(void (^)(double))onFrequency
+                                     onSeed:(void (^)(uint32_t))onSeed
+                                   onLinked:(void (^)(BOOL))onLinked
+                            onParticipation:(void (^)(NSInteger,
+                                                      BOOL))onParticipation
+                                onDragBegin:(void (^)(void))onDragBegin
+                                  onDragEnd:(void (^)(void))onDragEnd {
+  KKSegmentEditView *edit =
+      [[KKSegmentEditView alloc] initWithKind:KKSegmentEditKindHold
+                                  showsLinked:showsLinked
+                                   bulkHeader:NO
+                          participationLabels:partLabels
+                          participationStates:partStates];
+  edit.onParticipationToggled = ^(NSInteger idx, BOOL on) {
+    if (onParticipation)
+      onParticipation(idx, on);
+  };
+  edit.onParticipationDragBegin = ^{
+    if (onDragBegin)
+      onDragBegin();
+  };
+  edit.onParticipationDragEnd = ^{
+    if (onDragEnd)
+      onDragEnd();
+  };
+  edit.curveType = KKModulationToPill(modulation);
+  edit.intensity = intensity;
+  edit.frequency = frequency;
+  edit.seed = seed;
+  edit.linked = linked;
+  __weak KKSegmentEditView *weakEdit = edit;
+  edit.onCurveTypeChanged = ^(NSInteger ct) {
+    if (onModulation)
+      onModulation(KKPillToModulation(ct));
+  };
+  edit.onIntensityChanged = ^(double v) {
+    if (onIntensity)
+      onIntensity(v);
+  };
+  edit.onFrequencyChanged = ^(double v) {
+    if (onFrequency)
+      onFrequency(v);
+  };
+  edit.onSeedChanged = ^(uint32_t s) {
+    if (onSeed)
+      onSeed(s);
+  };
+  edit.onSeedReroll = ^{
+    uint32_t s = arc4random();
+    weakEdit.seed = s;
+    if (onSeed)
+      onSeed(s);
+  };
+  edit.onLinkedChanged = ^(BOOL l) {
+    if (onLinked)
+      onLinked(l);
+  };
+  edit.onSliderDragBegin = ^{
+    if (onDragBegin)
+      onDragBegin();
+  };
+  edit.onSliderDragEnd = ^{
+    if (onDragEnd)
+      onDragEnd();
+  };
+
+  CGFloat w = [KKSegmentEditView contentWidth];
+  CGFloat h = [KKSegmentEditView contentHeightForKind:KKSegmentEditKindHold
+                                          showsLinked:showsLinked
+                                           bulkHeader:NO
+                                        participation:(partLabels.count > 0)];
+  edit.frame = NSMakeRect(0, 0, w, h);
+  [edit.widthAnchor constraintEqualToConstant:w].active = YES;
+  [edit.heightAnchor constraintEqualToConstant:h].active = YES;
+
+  [self _showPopoverWithContent:edit
+                       fromView:anchor
+                        onClose:^{
+                        }];
 }
 
 @end
@@ -270,6 +618,11 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
               s.onStaticValueDragEnded(endedLabel, endedValues);
           }];
   _openStaticView = staticView;
+  _openStaticIsBoundary = NO;
+  [staticView applyDefaultsProvider:^NSArray<NSNumber *> *(NSString *l) {
+    __strong typeof(weak) s = weak;
+    return s ? [s _defaultValuesForLabel:l] : nil;
+  }];
 
   NSPopover *popover =
       [self _showPopoverWithContent:staticView

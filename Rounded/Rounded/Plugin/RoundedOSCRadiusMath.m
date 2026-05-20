@@ -29,7 +29,8 @@ double radiusFromBlobAtFraction(id<PROAPIAccessing> apiManager, double frac) {
   for (KKLane *lane in tl.lanes) {
     // `enabled` == animatable; a constant lane still supplies its value.
     if ([lane.label isEqualToString:@"Radius"]) {
-      NSArray<NSNumber *> *vals = KKTimelineLaneValueAtFraction(lane, frac);
+      NSArray<NSNumber *> *vals =
+          KKTimelineLaneValueAtFractionSmoothed(lane, frac);
       return vals.count > 0 ? vals[0].doubleValue : 20.0;
     }
   }

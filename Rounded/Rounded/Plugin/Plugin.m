@@ -14,10 +14,17 @@
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager;
 {
   self = [super initWithAPIManager:newApiManager];
+  if (self) {
+    // Sentinel so the very first render pushes the playhead even when it
+    // sits at frac 0 (the throttle would otherwise see "no change").
+    _lastPushedPlayheadFrac = -1.0;
+  }
   return self;
 }
 
 - (void)dealloc {
+  [_playheadTimer invalidate];
+  [_playheadTimer release];
   [_miniCanvasFeed release];
   [super dealloc];
 }
@@ -25,7 +32,9 @@
 - (BOOL)properties:(NSDictionary *_Nonnull *)properties
              error:(NSError *_Nullable *)error {
   *properties = @{
-    kFxPropertyKey_MayRemapTime : @NO,
+    // YES so FCP calls -scheduleInputs: and honors FxImageTileRequests at
+    // times other than the output time (the boundary-preview source-at-time).
+    kFxPropertyKey_MayRemapTime : @YES,
     kFxPropertyKey_PixelTransformSupport : @(kFxPixelTransform_ScaleTranslate),
     kFxPropertyKey_VariesWhenParamsAreStatic : @YES
   };
@@ -67,10 +76,11 @@
     id<FxParameterRetrievalAPI_v6> getAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
     NSString *json = KKReadCustomParamString(getAPI, kKKParamTimelineData);
-    [actionAPI endAction:self];
     KKTimeline *timeline =
         (json.length ? [KKTimeline timelineFromJSON:json] : nil)
             ?: [KKTimeline timeline];
+    timeline = [self timelineStampedWithClipDuration:timeline];
+    [actionAPI endAction:self];
     dispatch_async(dispatch_get_main_queue(), ^{
       [self.inspectorView applyTimeline:timeline];
     });
@@ -79,8 +89,31 @@
   return YES;
 }
 
+- (nullable KKTimeline *)timelineStampedWithClipDuration:
+    (nullable KKTimeline *)timeline {
+  if (!timeline)
+    return timeline;
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  CMTime dur = kCMTimeZero;
+  [timingAPI durationTimeForEffect:&dur];
+  double durSec = CMTimeGetSeconds(dur);
+  if (durSec <= 0)
+    return timeline;
+  KKTimeline *out = [[timeline copy] autorelease];
+  NSMutableArray<KKLane *> *lanes = [[out.lanes mutableCopy] autorelease];
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+    KKLane *l = [[lanes[i] copy] autorelease];
+    l.lastKnownClipDuration = durSec;
+    lanes[i] = l;
+  }
+  out.lanes = lanes;
+  return out;
+}
+
 - (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
-  if (parameterID == kKKParamTimelineData || parameterID == kParamUIState)
+  if (parameterID == kKKParamTimelineData || parameterID == kParamUIState ||
+      parameterID == kParamRenderNudge)
     return [NSSet setWithObject:[KKDataBlob class]];
   return [super classesForCustomParameterID:parameterID];
 }

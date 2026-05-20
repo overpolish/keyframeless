@@ -29,6 +29,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// Does not fire onTimelineMutated.
 - (void)applyTimeline:(KKTimeline *)timeline;
 
+/// Live clip duration (seconds) for the Basic motion-graph ruler, pushed
+/// from the render tick (a clip trim never fires parameterChanged:).
+- (void)setClipDurationSeconds:(double)seconds;
+
+/// Live playhead position (clip fraction 0–1; < 0 hides), pushed from the
+/// render tick. Forwarded to the Basic motion graph.
+- (void)setPlayheadFraction:(double)frac;
+
 /// The current timeline state. KVO-unsafe; read only from the main queue.
 @property(nonatomic, readonly) KKTimeline *currentTimeline;
 
@@ -44,6 +52,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// undo group.
 @property(nonatomic, copy, nullable) void (^onDragBegin)(void);
 @property(nonatomic, copy, nullable) void (^onDragEnd)(void);
+
+/// Fired while the user drags the Basic playhead handle to scrub; the host
+/// moves the host playhead to that clip fraction.
+@property(nonatomic, copy, nullable) void (^onScrub)(double frac);
+
+/// Fired when the Basic graph zoom/pan changes (YES = zoomed in, not fit).
+@property(nonatomic, copy, nullable) void (^onZoomChanged)(BOOL zoomed);
+
+/// Reset the Basic graph's pinch-zoom/pan back to fit.
+- (void)resetZoom;
 
 /// The footer row view that contains the "Add properties…" dropdown trigger.
 /// Useful as a joyride spotlight target.
@@ -88,6 +106,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// Threaded into the static-values popover so spatial lanes (Crop) can show a
 /// live preview. nil = no preview (label-only rows).
 @property(nonatomic, copy, nullable) NSString *miniCanvasDescriptorPath;
+
+/// Reverse channel: when a boundary-value popover opens, the requested clip
+/// fraction is written here so the render side can pull that frame for the
+/// preview. Cleared on close. nil = no source-at-time (current frame only).
+@property(nonatomic, copy, nullable) NSString *miniCanvasRequestPath;
+
+/// Fired right after the boundary request file is written (popover open).
+/// FCP only re-runs -scheduleInputs: on a render, so with a static playhead
+/// the freshly-written request is never picked up until the user scrubs. The
+/// host wires this to a one-shot render nudge (jog a frame and back) so the
+/// boundary preview resolves without manual scrubbing.
+@property(nonatomic, copy, nullable) void (^onBoundaryPreviewNeedsRender)(void);
 
 /// Cold-start clip aspect (w/h) for the mini canvas before a source resolves.
 /// Defaults to 16:9.

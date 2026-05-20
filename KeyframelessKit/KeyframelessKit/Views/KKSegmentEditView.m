@@ -11,6 +11,7 @@
 #import "../Style/NSColor+KKColors.h"
 #import "KKCheckboxView.h"
 #import "KKCurvePillView.h"
+#import "KKPillBar.h"
 #import "KKSeedView.h"
 #import "KKSliderView.h"
 
@@ -74,11 +75,18 @@ static const CGFloat kBulkHeaderHeight = 18.0;
   KKCheckboxView *_linkedToggle;
   NSLayoutConstraint *_intensityTrailingHalf;
   NSLayoutConstraint *_intensityTrailingFull;
+  KKPillBar *_partBar;
+  NSArray<NSString *> *_partLabels;
+  NSArray<NSNumber *> *_partStates;
 }
+
+static const CGFloat kPartBarH = 18.0;
+static const CGFloat kPartRowH = kPartBarH; // caption + bar share one line
 
 static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
   if (kind == KKSegmentEditKindHold)
-    return curveType == KKHoldEffectBounce || curveType == KKHoldEffectWiggle;
+    return curveType == KKHoldEffectBounce || curveType == KKHoldEffectWiggle ||
+           curveType == KKHoldEffectHandheld;
   return curveType == KKEasingCurveElastic || curveType == KKEasingCurveBounce;
 }
 
@@ -94,10 +102,25 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
 - (instancetype)initWithKind:(KKSegmentEditKind)kind
                  showsLinked:(BOOL)showsLinked
                   bulkHeader:(BOOL)bulkHeader {
+  return [self initWithKind:kind
+                showsLinked:showsLinked
+                 bulkHeader:bulkHeader
+        participationLabels:nil
+        participationStates:nil];
+}
+
+- (instancetype)initWithKind:(KKSegmentEditKind)kind
+                 showsLinked:(BOOL)showsLinked
+                  bulkHeader:(BOOL)bulkHeader
+         participationLabels:(NSArray<NSString *> *)labels
+         participationStates:(NSArray<NSNumber *> *)states {
   BOOL actuallyShows = showsLinked && kind == KKSegmentEditKindHold;
+  _partLabels = [labels copy];
+  _partStates = [states copy];
   CGFloat h = [KKSegmentEditView contentHeightForKind:kind
                                           showsLinked:actuallyShows
-                                           bulkHeader:bulkHeader];
+                                           bulkHeader:bulkHeader
+                                        participation:(_partLabels.count > 0)];
   self = [super initWithFrame:NSMakeRect(0, 0, kWidth, h)];
   if (self) {
     _kind = kind;
@@ -119,6 +142,16 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
 + (CGFloat)contentHeightForKind:(KKSegmentEditKind)kind
                     showsLinked:(BOOL)showsLinked
                      bulkHeader:(BOOL)bulkHeader {
+  return [self contentHeightForKind:kind
+                        showsLinked:showsLinked
+                         bulkHeader:bulkHeader
+                      participation:NO];
+}
+
++ (CGFloat)contentHeightForKind:(KKSegmentEditKind)kind
+                    showsLinked:(BOOL)showsLinked
+                     bulkHeader:(BOOL)bulkHeader
+                  participation:(BOOL)participation {
   CGFloat h =
       2 * kVPadding + kPillHeight + kRowGap + kSliderHeight + kTickHeight;
   if (kind == KKSegmentEditKindHold) {
@@ -128,6 +161,8 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
   }
   if (bulkHeader)
     h += kBulkHeaderHeight + kRowGap;
+  if (participation)
+    h += kRowGap + kPartRowH;
   return h;
 }
 
@@ -263,6 +298,14 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
   _pills.translatesAutoresizingMaskIntoConstraints = NO;
   _pills.pillCount =
       (_kind == KKSegmentEditKindHold) ? KKHoldEffectCount : KKEasingCurveCount;
+  if (_kind == KKSegmentEditKindHold) {
+    // Hold-effect intensity scales amplitude around 1.0; plot against a fixed
+    // band (≈ max deviation across the effects) so intensity is visible in
+    // the preview instead of being auto-normalised away.
+    _pills.usesFixedRange = YES;
+    _pills.fixedMin = 0.4;
+    _pills.fixedMax = 1.6;
+  }
   _pills.valueBlock = ^CGFloat(NSInteger pillIndex, CGFloat t) {
     __strong typeof(weakSelf) self = weakSelf;
     if (!self)
@@ -402,6 +445,58 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
                                 ? [self _buildLinkedRowBelow:_intensityTicks]
                                 : (NSView *)_intensityTicks;
     [self _buildSeedRowBelow:seedTopAnchor];
+  }
+
+  if (_partLabels.count > 0) {
+    NSView *bottom = (_kind == KKSegmentEditKindHold)
+                         ? (NSView *)_seedView
+                         : (NSView *)_intensityTicks;
+    NSTextField *cap = [NSTextField labelWithString:@"Applies to"];
+    cap.font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightMedium];
+    cap.textColor = [NSColor inspectorLabel];
+    cap.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:cap];
+
+    _partBar = [[KKPillBar alloc] initWithLabels:_partLabels];
+    if (_partStates.count == _partLabels.count)
+      _partBar.states = _partStates;
+    _partBar.translatesAutoresizingMaskIntoConstraints = NO;
+    __weak typeof(self) weakSelf = self;
+    _partBar.onToggled = ^(NSInteger idx, BOOL on) {
+      if (weakSelf.onParticipationToggled)
+        weakSelf.onParticipationToggled(idx, on);
+    };
+    _partBar.onDragBegin = ^{
+      if (weakSelf.onParticipationDragBegin)
+        weakSelf.onParticipationDragBegin();
+    };
+    _partBar.onDragEnd = ^{
+      if (weakSelf.onParticipationDragEnd)
+        weakSelf.onParticipationDragEnd();
+    };
+    [self addSubview:_partBar];
+    [cap setContentHuggingPriority:NSLayoutPriorityRequired
+                    forOrientation:NSLayoutConstraintOrientationHorizontal];
+    // Hug the bar to its content and pin it to the trailing edge so the
+    // pills sit on the right (label-left / control-right). The leading is a
+    // ≥ inequality so a wide pill set can still grow back toward the caption
+    // (then KKPillBar scrolls) instead of overflowing.
+    [_partBar
+        setContentHuggingPriority:NSLayoutPriorityDefaultHigh + 1
+                   forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [NSLayoutConstraint activateConstraints:@[
+      [cap.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                        constant:kHPadding],
+      [cap.centerYAnchor constraintEqualToAnchor:_partBar.centerYAnchor],
+      [_partBar.topAnchor constraintEqualToAnchor:bottom.bottomAnchor
+                                         constant:kRowGap],
+      [_partBar.leadingAnchor
+          constraintGreaterThanOrEqualToAnchor:cap.trailingAnchor
+                                      constant:KKPaddingMD],
+      [_partBar.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                              constant:-kHPadding],
+      [_partBar.heightAnchor constraintEqualToConstant:kPartBarH],
+    ]];
   }
 }
 

@@ -83,24 +83,59 @@ static const NSInteger kSegments = 60;
   CGFloat w = x1 - x0;
   CGFloat h = yTop - yBot;
 
-  CGFloat minVal = CGFLOAT_MAX, maxVal = -CGFLOAT_MAX;
-  for (NSInteger j = 0; j <= kSegments; j++) {
-    CGFloat t = (CGFloat)j / (CGFloat)kSegments;
-    CGFloat v = _valueBlock(pillIndex, t);
-    if (v < minVal)
-      minVal = v;
-    if (v > maxVal)
-      maxVal = v;
+  CGFloat minVal, maxVal;
+  if (_usesFixedRange) {
+    minVal = _fixedMin;
+    maxVal = _fixedMax;
+  } else {
+    minVal = CGFLOAT_MAX;
+    maxVal = -CGFLOAT_MAX;
+    for (NSInteger j = 0; j <= kSegments; j++) {
+      CGFloat t = (CGFloat)j / (CGFloat)kSegments;
+      CGFloat v = _valueBlock(pillIndex, t);
+      if (v < minVal)
+        minVal = v;
+      if (v > maxVal)
+        maxVal = v;
+    }
   }
   CGFloat range = maxVal - minVal;
 
   NSBezierPath *path = [NSBezierPath bezierPath];
   path.lineWidth = active ? 1.5 : 1.0;
 
+  // Fixed-range pills oscillate about the neutral midpoint (value 1.0 →
+  // 0.5). A subtle setting barely deviates and would read as a flat line,
+  // so remap the *amplitude* through a compressive curve — one uniform
+  // scale about the midpoint, applied to every sample. The waveform's
+  // shape stays exact (a sine still looks like a sine) while low
+  // intensity/frequency becomes visible and stronger settings still read
+  // bigger (monotonic — the slider's effect stays legible).
+  CGFloat ampGain = 1.0;
+  if (_usesFixedRange) {
+    CGFloat peak = 0.0;
+    for (NSInteger j = 0; j <= kSegments; j++) {
+      CGFloat t = (CGFloat)j / (CGFloat)kSegments;
+      CGFloat n =
+          (range > 0) ? (_valueBlock(pillIndex, t) - minVal) / range : 0.5;
+      n = MAX(0.0, MIN(1.0, n));
+      peak = MAX(peak, (CGFloat)fabs(n - 0.5));
+    }
+    if (peak > 1.0e-4) {
+      CGFloat shown = 0.5 * pow(peak / 0.5, 0.5); // √: lift small, keep order
+      ampGain = shown / peak;
+    }
+  }
+
   for (NSInteger j = 0; j <= kSegments; j++) {
     CGFloat t = (CGFloat)j / (CGFloat)kSegments;
     CGFloat v = _valueBlock(pillIndex, t);
     CGFloat normalized = (range > 0) ? (v - minVal) / range : 0.5;
+    if (_usesFixedRange) {
+      normalized = MAX(0.0, MIN(1.0, normalized));
+      normalized = 0.5 + (normalized - 0.5) * ampGain; // uniform: shape-true
+      normalized = MAX(0.0, MIN(1.0, normalized));
+    }
     CGFloat px = x0 + t * w;
     CGFloat py = yTop - normalized * h;
 
