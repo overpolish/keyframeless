@@ -5,8 +5,8 @@
 
 #pragma once
 
-#import "KKTimelineLanesView.h"
 #import "KKTimelineLanesView_Private.h"
+#import <KeyframelessKit/KKTimelineLanesView.h>
 
 @class KKTimelineBasicView;
 
@@ -36,6 +36,13 @@ NS_ASSUME_NONNULL_BEGIN
   // display lanes) — its rows must NOT be clobbered by _refresh's
   // updateUnoptedLanes:, which is only for the constants popover.
   BOOL _openStaticIsBoundary;
+
+  // Guide-only callbacks (set via KKTimelineLanesView+Guide). Fired
+  // alongside the existing host plumbing so production behaviour is
+  // unaffected; the basic-timing guide uses these to resolve a curve pill's
+  // screen rect and advance on a curve pick.
+  void (^_onGapPopoverWillOpen)(NSView *content, KKSegmentEditView *editor);
+  void (^_onGapPopoverCurveChanged)(NSInteger curveType);
 }
 
 // Model + refresh helpers implemented in the primary @implementation; the

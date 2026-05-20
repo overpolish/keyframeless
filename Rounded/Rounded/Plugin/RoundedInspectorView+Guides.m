@@ -987,6 +987,561 @@ static void RoundedTriggerHostZoomToFit(void) {
   [self _startConstantsGuide];
 }
 
+// Chunk-1 Basic Timing guide: open the "+" footer popover, add Crop and
+// Radius, then toggle the In transition on. All advances come from existing
+// KKTimelineLanesView callbacks (onManagePopoverWillOpen / onLaneOptedIn)
+// plus the new KKTimelineBasicView onPhaseToggled hook; cutouts use the
+// new screen-rect helpers in the +Guide categories.
+- (NSArray<KKJoyrideStep *> *)_basicTimingStepsForGuide:
+    (KKJoyrideController *)guide {
+  __weak typeof(self) weak = self;
+  __weak KKTimelineLanesView *weakBasic = self.basicLanesView;
+  __weak KKTimelineBasicView *weakGraph = self.basicLanesView.basicGraph;
+  __weak KKJoyrideController *weakGuide = guide;
+
+  const NSInteger ixIntro = 0, ixPlay = 1, ixAdd = 2, ixAddCrop = 3,
+                  ixAddRadius = 4, ixPhasesIntro = 5, ixToggleIn = 6,
+                  ixGraphNotice = 7, ixDiamondClick = 8, ixMiniViewer = 9,
+                  ixCropRadius = 10, ixGapClick = 11, ixSpringPick = 12,
+                  ixDragDiamond = 13, ixWatchBack = 14, ixDone = 15;
+  (void)ixIntro;
+  (void)ixPhasesIntro;
+  (void)ixGraphNotice;
+  (void)ixMiniViewer;
+  (void)ixDone;
+
+  // Step 15: auto-pause this long after the user starts playback before
+  // advancing — long enough to see a beat of the animation, short enough
+  // that the demo doesn't feel like it's stalled.
+  const double kWatchBackSeconds = 1.0;
+
+  // Step 14: drag the In-end diamond to t=0.8s. Snap window in seconds —
+  // both for the gentle in-drag magnet and the final release tolerance.
+  const double kDragTargetSeconds = 0.8;
+  const double kDragSnapSeconds = 0.05;
+  const CGFloat kDragSnapPx = 14.0;
+
+  // KKIntervalCurveElastic == 4 (Linear=0, EaseIn=1, EaseOut=2, EaseInOut=3,
+  // Elastic=4, Bounce=5) — what we present to users as the "Spring" curve.
+  const NSInteger kSpringCurveType = 4;
+  __block __weak KKSegmentEditView *weakGapEditor = nil;
+
+  // Diamond 2 (hold-start) — chronologically the second visible keypose
+  // once the In transition is on (the diamonds the user just saw appear).
+  const NSInteger kDiamondTarget = 2;
+  __block __weak KKMiniCanvasView *weakBoundaryMini = nil;
+  __block __weak NSView *weakBoundaryPopoverContent = nil;
+  __block BOOL cropChanged = NO, radiusChanged = NO;
+
+  KKJoyrideStep *s1 = [KKJoyrideStep
+      stepWithMessage:@"Here is where you edit the <accent>timing</accent> "
+                      @"of things"
+           targetView:^NSView * {
+             __strong KKTimelineBasicView *g = weakGraph;
+             __strong KKTimelineLanesView *b = weakBasic;
+             return g ?: (NSView *)b;
+           }];
+  s1.showsNext = YES;
+
+  // Step 2: click to play, then click again to pause — advances on the
+  // pause edge. Useful demo when the spacebar shortcut isn't working.
+  KKJoyrideStep *sPlay = [KKJoyrideStep
+      stepWithMessage:@"Click <symbol play.fill color=accent /> to play, then "
+                      @"again to <accent>pause</accent> — handy when "
+                      @"<warn>spacebar</warn> isn't working"
+           targetView:nil];
+  sPlay.targetScreenRect = ^NSRect {
+    __strong typeof(self) s = weak;
+    return s ? [s guidePlayButtonScreenRect] : NSZeroRect;
+  };
+
+  KKJoyrideStep *s2 = [KKJoyrideStep
+      stepWithMessage:@"Tap <symbol plus.circle.fill color=accent /> to add "
+                      @"<accent>Crop</accent> and <accent>Radius</accent> "
+                      @"for animation"
+           targetView:^NSView * {
+             __strong KKTimelineLanesView *b = weakBasic;
+             return b.footerView;
+           }];
+
+  KKJoyrideStep *s3 =
+      [KKJoyrideStep stepWithMessage:@"Tap <accent>Crop</accent>"
+                          targetView:nil];
+  s3.targetScreenRect = ^NSRect {
+    __strong KKTimelineLanesView *b = weakBasic;
+    return b ? [b guideManagePopoverItemScreenRectForLabel:@"Crop"]
+             : NSZeroRect;
+  };
+
+  KKJoyrideStep *s4 =
+      [KKJoyrideStep stepWithMessage:@"Tap <accent>Radius</accent>"
+                          targetView:nil];
+  s4.targetScreenRect = ^NSRect {
+    __strong KKTimelineLanesView *b = weakBasic;
+    return b ? [b guideManagePopoverItemScreenRectForLabel:@"Radius"]
+             : NSZeroRect;
+  };
+
+  KKJoyrideStep *s5 = [KKJoyrideStep
+      stepWithMessage:@"Basic timing has three phases: <accent>In</accent>, "
+                      @"<accent>Hold</accent>, and <accent>Out</accent>"
+           targetView:^NSView * {
+             __strong KKTimelineBasicView *g = weakGraph;
+             return g;
+           }];
+  s5.showsNext = YES;
+
+  KKJoyrideStep *s6 = [KKJoyrideStep
+      stepWithMessage:@"Turn on the <accent>In</accent> transition"
+           targetView:nil];
+  s6.targetScreenRect = ^NSRect {
+    __strong KKTimelineBasicView *g = weakGraph;
+    return g ? [g guidePhaseToggleScreenRectForPhase:0] : NSZeroRect;
+  };
+
+  KKJoyrideStep *sGraph = [KKJoyrideStep
+      stepWithMessage:@"Notice the <accent>graph</accent> has updated to "
+                      @"show the general movement"
+           targetView:^NSView * {
+             __strong KKTimelineBasicView *g = weakGraph;
+             return g;
+           }];
+  sGraph.showsNext = YES;
+
+  KKJoyrideStep *sDiamond = [KKJoyrideStep
+      stepWithMessage:@"Click one of the <accent>diamonds</accent> to edit "
+                      @"values at that point in time"
+           targetView:nil];
+  sDiamond.targetScreenRect = ^NSRect {
+    __strong KKTimelineBasicView *g = weakGraph;
+    return g ? [g guideDiamondScreenRectForIndex:kDiamondTarget] : NSZeroRect;
+  };
+
+  KKJoyrideStep *sMini = [KKJoyrideStep
+      stepWithMessage:@"This <accent>mini viewer</accent> shows the clip at "
+                      @"this point in time — no need to scrub around"
+           targetView:^NSView * {
+             return weakBoundaryMini;
+           }];
+  sMini.showsNext = YES;
+
+  // Drag the radius dot OR a crop corner inside the boundary popover —
+  // same canvas API the constants guide uses for radius/crop drags, so the
+  // popover's onDragBegin/onHandleValue/onDragEnd fire in a clean pair (no
+  // leaked action scopes). Advances once both Crop AND Radius have been
+  // changed (tracked via onStaticValueChanged below).
+  KKJoyrideStep *sEdit = [KKJoyrideStep
+      stepWithMessage:@"Drag the <accent>dot</accent> for Radius or a "
+                      @"<accent>corner</accent> for Crop"
+           targetView:nil];
+  sEdit.spotlightCircular = NO;
+  sEdit.spotlightPassThrough = YES;
+  sEdit.targetScreenRect = ^NSRect {
+    __strong NSView *content = weakBoundaryPopoverContent;
+    NSWindow *w = content.window;
+    if (!content || !w)
+      return NSZeroRect;
+    return [w convertRectToScreen:[content convertRect:content.bounds
+                                                toView:nil]];
+  };
+  sEdit.spotlightMouseDown = ^(NSPoint p) {
+    [weakBoundaryMini beginPointHandleDragAtScreenPoint:p];
+  };
+  sEdit.spotlightMouseDragged = ^(NSPoint p) {
+    [weakBoundaryMini dragPointHandleToScreenPoint:p];
+  };
+  sEdit.spotlightMouseUp = ^(NSPoint p) {
+    [weakBoundaryMini endPointHandleDrag];
+  };
+  sEdit.onEnter = ^{
+    cropChanged = NO;
+    radiusChanged = NO;
+  };
+
+  KKJoyrideStep *sGap = [KKJoyrideStep
+      stepWithMessage:@"Click the <accent>gap</accent> between keyposes to "
+                      @"edit timing"
+           targetView:nil];
+  sGap.targetScreenRect = ^NSRect {
+    __strong KKTimelineBasicView *g = weakGraph;
+    return g ? [g guideGapScreenRectForSection:1 /* KKBasicSectionIn */]
+             : NSZeroRect;
+  };
+
+  // No spotlightPassThrough — that sends the click to FCP. We want it
+  // forwarded to the XPC popover so the pill receives it (same path as the
+  // Crop/Radius row click in the animated-dropdown popover).
+  // Step 14: drag diamond 2 (Hold-start / In-end) toward 0.8s on the
+  // timeline. Same KKJoyrideDragStep snap pattern the constants slider uses.
+  NSRect (^dragSpotRect)(void) = ^NSRect {
+    __strong KKTimelineBasicView *g = weakGraph;
+    return g ? [g guideDiamondScreenRectForIndex:2] : NSZeroRect;
+  };
+  NSRect (^dragTargetRect)(void) = ^NSRect {
+    __strong KKTimelineBasicView *g = weakGraph;
+    return g ? [g guideDiamondScreenRectAtTimeSeconds:kDragTargetSeconds
+                                           forDiamond:2]
+             : NSZeroRect;
+  };
+  KKJoyrideStep *sDrag = [KKJoyrideDragStep stepForGuide:guide
+      atIndex:ixDragDiamond
+      isLast:NO
+      clickMessage:@"Drag the <accent>diamond</accent> toward the "
+                   @"<warn>glowing target</warn> (0.8s)"
+      dragMessage:nil
+      circular:YES
+      spotRect:dragSpotRect
+      targetRect:dragTargetRect
+      begin:^(NSPoint p) {
+        [weakGraph guideBeginDragDiamondAtIndex:2 atScreenPoint:p];
+      }
+      dragTo:^(NSPoint p) {
+        // Magnetic snap onto target during the drag (same feel as the
+        // constants mini-canvas snap).
+        NSPoint snapped =
+            KKJoyrideSnapToTarget(p, dragTargetRect(), kDragSnapPx);
+        [weakGraph guideDragDiamondToScreenPoint:snapped];
+      }
+      end:^{
+        [weakGraph guideEndDiamondDrag];
+      }
+      hitOnRelease:^BOOL(NSPoint p) {
+        double now = [weakGraph guideCurrentDiamondTimeSecondsForIndex:2];
+        if (isnan(now))
+          return NO;
+        return fabs(now - kDragTargetSeconds) <= kDragSnapSeconds;
+      }];
+
+  KKJoyrideStep *sWatchBack = [KKJoyrideStep
+      stepWithMessage:@"Let's <accent>watch it back</accent> — click play"
+           targetView:nil];
+  // Cutout encompasses both the play button AND the FCP viewer (when the OSC
+  // is alive — the shared bridge gives us the viewer image rect). Non-
+  // circular so the wide bounding box renders sensibly.
+  sWatchBack.spotlightCircular = NO;
+  sWatchBack.targetScreenRect = ^NSRect {
+    __strong typeof(self) s = weak;
+    NSRect play = s ? [s guidePlayButtonScreenRect] : NSZeroRect;
+    NSRect viewer = RoundedSharedOSCGuideBridge().estimatedViewerScreenRect;
+    if (NSIsEmptyRect(viewer))
+      return play;
+    if (NSIsEmptyRect(play))
+      return viewer;
+    return NSUnionRect(play, viewer);
+  };
+  // Reset playhead to clip start before the user hits play, so they always
+  // watch from the beginning. onScrub is wired to the host's
+  // movePlayheadToTime: (FxCommandAPI), same as restartBasicTimingGuide.
+  __block CFAbsoluteTime watchBackEnteredAt = 0;
+  sWatchBack.onEnter = ^{
+    __strong typeof(self) s = weak;
+    watchBackEnteredAt = CFAbsoluteTimeGetCurrent();
+    if (s && s.onScrub)
+      s.onScrub(0.0);
+    // Wake up the OSC so the bridge gets a draw tick → its
+    // estimatedViewerScreenRect populates and the cutout can union the
+    // viewer with the play button. Same nudge the boundary popover uses
+    // to force a render when the playhead is static.
+    if (s && s.onBoundaryPreviewNeedsRender)
+      s.onBoundaryPreviewNeedsRender();
+  };
+
+  KKJoyrideStep *sDone = [KKJoyrideStep
+      stepWithMessage:@"That's all you need to know to get going!"
+           targetView:^NSView * {
+             __strong KKTimelineBasicView *g = weakGraph;
+             return g;
+           }];
+
+  KKJoyrideStep *sSpring =
+      [KKJoyrideStep stepWithMessage:@"Pick the <accent>Spring</accent> curve"
+                          targetView:nil];
+  sSpring.targetScreenRect = ^NSRect {
+    __strong KKSegmentEditView *e = weakGapEditor;
+    return e ? [e guideCurvePillScreenRectForCurve:kSpringCurveType]
+             : NSZeroRect;
+  };
+
+  self.basicLanesView.onManagePopoverWillOpen = ^(NSView *row) {
+    __strong KKJoyrideController *g = weakGuide;
+    g.additionalPassthroughWindow = row.window;
+    if (g.isActive && g.currentStepIndex == ixAdd)
+      [g advance];
+  };
+  self.basicLanesView.onManagePopoverClosed = ^{
+    __strong KKJoyrideController *g = weakGuide;
+    g.additionalPassthroughWindow = nil;
+    // If the user dismisses the popover before adding both lanes, end the
+    // guide (the saved timeline is restored in onComplete).
+    if (g.isActive &&
+        (g.currentStepIndex == ixAddCrop || g.currentStepIndex == ixAddRadius))
+      [g dismiss];
+  };
+  self.basicLanesView.onLaneOptedIn = ^(NSString *label) {
+    __strong KKJoyrideController *g = weakGuide;
+    __strong KKTimelineLanesView *basic = weakBasic;
+    if (!g)
+      return;
+    if (g.currentStepIndex == ixAddCrop && [label isEqualToString:@"Crop"]) {
+      [g advance];
+    } else if (g.currentStepIndex == ixAddRadius &&
+               [label isEqualToString:@"Radius"]) {
+      [g advance];
+      // Both lanes added — close the popover so the basic graph is in view
+      // for the next steps. Defer per the intro-guide pattern; closing in
+      // the toggle's call stack cascades through applyTimeline:.
+      dispatch_async(dispatch_get_main_queue(), ^{
+        [basic closeManagePopover];
+      });
+    }
+  };
+  self.basicLanesView.basicGraph.onPhaseToggled = ^(NSInteger phase, BOOL on) {
+    __strong KKJoyrideController *g = weakGuide;
+    if (g && g.currentStepIndex == ixToggleIn && phase == 0 && on)
+      [g advance];
+  };
+  // Track which diamond the user tapped so the popover-open handler can
+  // distinguish "advanced from the diamond step" from "popover opened for
+  // some other reason." Doesn't advance directly — the canvas isn't found
+  // until willOpen fires (after the popover entrance-animation settle), so
+  // advancing here would leave sMini's targetView nil for ~0.25s and the
+  // cutout would draw in the wrong place.
+  __block BOOL armedForDiamondAdvance = NO;
+  self.basicLanesView.basicGraph.onDiamondTapped = ^(NSInteger idx) {
+    __strong KKJoyrideController *g = weakGuide;
+    if (g && g.currentStepIndex == ixDiamondClick && idx == kDiamondTarget)
+      armedForDiamondAdvance = YES;
+  };
+  // Boundary popover (re-uses the constants popover machinery + callbacks).
+  // willOpen gives us the mini canvas for sMini's cutout; closed dismisses
+  // the guide if the user closes the popover while we still need it.
+  self.basicLanesView.onStaticValuesPopoverWillOpen =
+      ^(NSView *content, KKMiniCanvasView *cv) {
+        __strong KKJoyrideController *g = weakGuide;
+        weakBoundaryMini = cv;
+        weakBoundaryPopoverContent = content;
+        g.additionalPassthroughWindow = content.window;
+        // Now that the canvas reference is live, advance from the diamond
+        // step (if we're still on it and the user tapped the right one).
+        if (g.isActive && g.currentStepIndex == ixDiamondClick &&
+            armedForDiamondAdvance) {
+          armedForDiamondAdvance = NO;
+          [g advance];
+        }
+      };
+  self.basicLanesView.onStaticValuesPopoverClosed = ^{
+    __strong KKJoyrideController *g = weakGuide;
+    g.additionalPassthroughWindow = nil;
+    weakBoundaryMini = nil;
+    weakBoundaryPopoverContent = nil;
+    // If the user dismisses the popover before finishing the in-popover
+    // steps, end the guide (saved timeline restored in onComplete).
+    if (g.isActive && (g.currentStepIndex == ixMiniViewer ||
+                       g.currentStepIndex == ixCropRadius))
+      [g dismiss];
+  };
+  // Gap tap: arm an advance flag, but DON'T advance yet — the segment
+  // editor isn't reachable until onGapPopoverWillOpen fires after the
+  // popover's settle delay. Advancing here would land sSpring with a nil
+  // editor (targetScreenRect returns NSZeroRect → cutout in the wrong
+  // place). Same pattern as diamond → mini-viewer.
+  __block BOOL armedForGapAdvance = NO;
+  self.basicLanesView.basicGraph.onGapTapped = ^(NSInteger section) {
+    __strong KKJoyrideController *g = weakGuide;
+    if (g && g.currentStepIndex == ixGapClick &&
+        section == 1 /* KKBasicSectionIn */)
+      armedForGapAdvance = YES;
+  };
+  self.basicLanesView.onGapPopoverWillOpen = ^(NSView *content,
+                                               KKSegmentEditView *editor) {
+    __strong KKJoyrideController *g = weakGuide;
+    weakGapEditor = editor;
+    g.additionalPassthroughWindow = content.window;
+    if (g.isActive && g.currentStepIndex == ixGapClick && armedForGapAdvance) {
+      armedForGapAdvance = NO;
+      [g advance];
+    }
+  };
+  // Curve pick in the gap popover → advance from sSpring + close popover.
+  self.basicLanesView.onGapPopoverCurveChanged = ^(NSInteger curveType) {
+    __strong KKJoyrideController *g = weakGuide;
+    __strong KKTimelineLanesView *basic = weakBasic;
+    if (!g || g.currentStepIndex != ixSpringPick)
+      return;
+    if (curveType != kSpringCurveType)
+      return;
+    [g advance];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [basic guideCloseContentPopover];
+    });
+  };
+
+  // Advance ONLY after a drag completes — not on per-tick value changes.
+  // Advancing mid-drag tears down the spotlight monitors, so the synthesized
+  // mouseUp never fires, endPointHandleDrag never runs, onDragEnd never
+  // closes the "Adjust Radius" undo group — the next FCP action collides
+  // and abort()s. onStaticValueDragEnded fires AFTER the wrapper has
+  // committed the value AND called the host onDragEnd (which closes the
+  // group), so it's safe to advance from here.
+  self.basicLanesView.onStaticValueDragEnded =
+      ^(NSString *label, NSArray<NSNumber *> *values) {
+        __strong KKJoyrideController *g = weakGuide;
+        __strong KKTimelineLanesView *basic = weakBasic;
+        if (!g || g.currentStepIndex != ixCropRadius)
+          return;
+        if ([label isEqualToString:@"Crop"])
+          cropChanged = YES;
+        else if ([label isEqualToString:@"Radius"])
+          radiusChanged = YES;
+        if (cropChanged && radiusChanged) {
+          [g advance];
+          // Defer close per the manage-popover pattern — closing inside the
+          // value-change call stack cascades through applyTimeline:.
+          dispatch_async(dispatch_get_main_queue(), ^{
+            [basic guideCloseContentPopover];
+          });
+        }
+      };
+  // Step 2 (sPlay): track play→pause edge. Only count the pause AFTER the
+  // user has played in this step (so entering already-playing doesn't fast-
+  // forward, and a stray off-on-off during another step is ignored).
+  // Step 15 (sWatchBack): user clicks play → wait kWatchBackSeconds → auto-
+  // pause and advance. Don't await a manual pause — the guide handles it.
+  __block BOOL playStartedInPlayStep = NO;
+  self.onPlayingChanged = ^(BOOL playing) {
+    __strong typeof(self) strong = weak;
+    __strong KKJoyrideController *g = weakGuide;
+    if (!g)
+      return;
+    if (g.currentStepIndex == ixPlay) {
+      if (playing) {
+        playStartedInPlayStep = YES;
+      } else if (playStartedInPlayStep) {
+        playStartedInPlayStep = NO;
+        [g advance];
+      }
+      return;
+    }
+    if (g.currentStepIndex == ixWatchBack && playing) {
+      // Ignore the spurious play=1 FCP pushes right after onScrub(0.0)
+      // (movePlayheadToTime: produces a play/stop blip within ~150ms). If
+      // we don't, we'd schedule auto-pause too early and the 1s toggle
+      // would end up STARTING playback instead of stopping it.
+      if (CFAbsoluteTimeGetCurrent() - watchBackEnteredAt < 0.3)
+        return;
+      dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                   (int64_t)(kWatchBackSeconds * NSEC_PER_SEC)),
+                     dispatch_get_main_queue(), ^{
+                       __strong typeof(weak) s2 = weak;
+                       __strong KKJoyrideController *g2 = weakGuide;
+                       if (!s2 || !g2 || g2.currentStepIndex != ixWatchBack)
+                         return;
+                       if (s2.onTogglePlayback)
+                         s2.onTogglePlayback();
+                       [g2 advance];
+                     });
+      (void)strong;
+    }
+  };
+
+  return @[
+    s1, sPlay, s2, s3, s4, s5, s6, sGraph, sDiamond, sMini, sEdit, sGap,
+    sSpring, sDrag, sWatchBack, sDone
+  ];
+}
+
+- (void)_startBasicTimingGuide {
+  [_basicTimingGuide dismiss];
+
+  __weak typeof(self) weak = self;
+  __weak KKTimelineLanesView *weakBasic = self.basicLanesView;
+  KKJoyrideController *guide =
+      [[KKJoyrideController alloc] initWithHostView:self];
+  // forwardsGestures: panel intercepts clicks instead of ignoresMouseEvents
+  // letting them through. Without this, a click inside the spotlight reaches
+  // the popover natively (canvas's own mouseDown → onHandleDragBegin) AND
+  // fires the spotlight block (beginPointHandleDragAtScreenPoint: → ALSO
+  // onHandleDragBegin) — two "Adjust Radius" undo groups race for the same
+  // channel and FCP abort()s. Constants guide uses the same flag.
+  guide.forwardsGestures = YES;
+  __weak KKJoyrideController *weakGuide = guide;
+  NSArray<KKJoyrideStep *> *steps = [self _basicTimingStepsForGuide:guide];
+  NSInteger finalIdx = (NSInteger)steps.count - 1;
+
+  [guide startWithSteps:steps
+             onComplete:^{
+               __strong typeof(self) strong = weak;
+               __strong KKTimelineLanesView *basic = weakBasic;
+
+               __strong KKJoyrideController *cg = weakGuide;
+               if (cg && cg.currentStepIndex >= finalIdx &&
+                   strong.onGuideCompleted)
+                 strong.onGuideCompleted();
+
+               if (basic) {
+                 basic.onManagePopoverWillOpen = nil;
+                 basic.onManagePopoverClosed = nil;
+                 basic.onLaneOptedIn = nil;
+                 basic.onStaticValuesPopoverWillOpen = nil;
+                 basic.onStaticValuesPopoverClosed = nil;
+                 basic.onStaticValueChanged = nil;
+                 basic.basicGraph.onPhaseToggled = nil;
+                 basic.basicGraph.onDiamondTapped = nil;
+                 basic.basicGraph.onGapTapped = nil;
+                 basic.onGapPopoverWillOpen = nil;
+                 basic.onGapPopoverCurveChanged = nil;
+               }
+               if (strong)
+                 strong.onPlayingChanged = nil;
+
+               KKJoyrideController *toRelease =
+                   strong ? strong->_basicTimingGuide : nil;
+               if (strong)
+                 strong->_basicTimingGuide = nil;
+               if (toRelease) {
+                 dispatch_async(dispatch_get_main_queue(), ^{
+                   [toRelease release];
+                 });
+               }
+
+               KKTimeline *saved =
+                   strong ? strong->_savedBasicTimingTimeline : nil;
+               if (strong)
+                 strong->_savedBasicTimingTimeline = nil;
+               if (saved) {
+                 dispatch_async(dispatch_get_main_queue(), ^{
+                   __strong typeof(self) s2 = weak;
+                   __strong KKTimelineLanesView *b2 = weakBasic;
+                   if (b2) {
+                     [b2 applyTimeline:saved];
+                     if (s2 && s2.onTimelineMutated)
+                       s2.onTimelineMutated(saved);
+                   }
+                 });
+                 [saved release];
+               }
+             }];
+  _basicTimingGuide = guide;
+}
+
+- (void)restartBasicTimingGuide {
+  [_savedBasicTimingTimeline release];
+  _savedBasicTimingTimeline = [self.basicLanesView.currentTimeline retain];
+
+  KKTimeline *empty = [KKTimeline timeline];
+  [self.basicLanesView applyTimeline:empty];
+  if (self.onTimelineMutated)
+    self.onTimelineMutated(empty);
+
+  // Prereq: park the host playhead at clip start so every step (and the
+  // boundary mini-viewer) renders from a predictable position. onScrub is
+  // host-aware (FxCommandAPI movePlayheadToTime:); the plugin wires it.
+  if (self.onScrub)
+    self.onScrub(0.0);
+
+  [self _startBasicTimingGuide];
+}
+
 - (void)restartFullWalkthroughGuide {
   // One controller: inspector intro steps, then OSC steps. Because some steps
   // need the OSC, do the OSC setup UP FRONT — the zoom-to-fit AppleScript

@@ -4,9 +4,10 @@
  */
 
 #import "KKMiniCanvasView.h"
-#import "KKSegmentEditView.h"
+#import "KKTimelineLanesView+Guide.h"
 #import "KKTimelineLanesView_Popovers.h"
 #import <KeyframelessKit/KKEasing.h>
+#import <KeyframelessKit/KKSegmentEditView.h>
 #import <QuartzCore/QuartzCore.h>
 
 // The mini-canvas delegate is a KKMiniCanvasRenderer (or subclass) but its
@@ -218,9 +219,29 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
   // Replaces Transient's built-in outside-click close. Without the joyride
   // overlay, clicks in the XPC custom view are local events; clicks elsewhere
   // in FCP are global events. Both monitors are needed to cover all cases.
+  // Joyride forwarding panels sit above the popover during a guide — a Next
+  // click in that panel would dismiss the popover before the guide can hand
+  // off to the next step, so treat any click landing inside one as inside-
+  // the-popover. Identified by class name to avoid coupling to a private
+  // joyride header.
+  BOOL (^pointInJoyridePanel)(NSPoint) = ^BOOL(NSPoint p) {
+    for (NSWindow *w in NSApp.windows) {
+      if (!w.isVisible)
+        continue;
+      if (![NSStringFromClass(w.class)
+              isEqualToString:@"_KKJoyrideForwardingPanel"])
+        continue;
+      if (NSPointInRect(p, w.frame))
+        return YES;
+    }
+    return NO;
+  };
   void (^closeIfOutsidePopover)(void) = ^{
     NSWindow *pw = [weakPopover contentViewController].view.window;
-    if (pw && NSPointInRect(NSEvent.mouseLocation, pw.frame))
+    NSPoint p = NSEvent.mouseLocation;
+    if (pw && NSPointInRect(p, pw.frame))
+      return;
+    if (pointInJoyridePanel(p))
       return;
     [weakPopover close];
   };
@@ -304,12 +325,17 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
           clipAspect:self.miniCanvasClipAspect
           canvasDelegate:self.miniCanvasDelegate
           onHandleValue:^(NSString *label, NSArray<NSNumber *> *values) {
+            __strong typeof(weak) s = weak;
             if (dragging) {
               pendingLabel = label;
               pendingValues = values;
             } else if (onValue) {
               onValue(label, values);
             }
+            // Mirror the constants popover so a guide can observe edits
+            // made in either popover via the same hook.
+            if (s.onStaticValueChanged)
+              s.onStaticValueChanged(label, values);
           }
           onDragBegin:^{
             dragging = YES;
@@ -317,6 +343,9 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
               onDragBegin();
           }
           onDragEnd:^{
+            __strong typeof(weak) s = weak;
+            NSString *endedLabel = pendingLabel;
+            NSArray<NSNumber *> *endedValues = pendingValues;
             if (pendingLabel && pendingValues && onValue) {
               onValue(pendingLabel, pendingValues);
               pendingLabel = nil;
@@ -325,6 +354,8 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
             dragging = NO;
             if (onDragEnd)
               onDragEnd();
+            if (endedLabel && endedValues && s.onStaticValueDragEnded)
+              s.onStaticValueDragEnded(endedLabel, endedValues);
           }];
   _openStaticView = staticView;
   _openStaticIsBoundary = YES;
@@ -351,8 +382,25 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
                         KKSetSuppressedHandles(s.miniCanvasDelegate, nil);
                         KKWriteBoundaryRequest(s.miniCanvasRequestPath, 0.0,
                                                NO);
+                        if (s.onStaticValuesPopoverClosed)
+                          s.onStaticValuesPopoverClosed();
                       }];
   staticView.popover = popover;
+
+  if (self.onStaticValuesPopoverWillOpen) {
+    __weak _KKStaticValuesPopoverView *weakStatic = staticView;
+    // Same settle delay as the constants popover so the entrance animation
+    // is done before a guide reads frames / spotlights the mini-canvas.
+    dispatch_after(
+        dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),
+        dispatch_get_main_queue(), ^{
+          __strong typeof(weak) strong = weak;
+          __strong _KKStaticValuesPopoverView *sv = weakStatic;
+          if (!strong || !sv || !strong.onStaticValuesPopoverWillOpen)
+            return;
+          strong.onStaticValuesPopoverWillOpen(sv, KKFindMiniCanvas(sv));
+        });
+  }
 }
 
 - (void)_presentGapPopoverFromAnchor:(NSView *)anchor
@@ -394,9 +442,13 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
   // Intensity/frequency are continuous → KKSegmentEditView brackets the drag
   // via onSliderDragBegin/End, which we route to the host's undo group so the
   // per-tick writes coalesce to one entry (same chain as the boundary drag).
+  __weak typeof(self) weakGap = self;
   edit.onCurveTypeChanged = ^(NSInteger ct) {
     if (onCurve)
       onCurve((KKIntervalCurve)ct);
+    __strong typeof(weakGap) sg = weakGap;
+    if (sg && sg->_onGapPopoverCurveChanged)
+      sg->_onGapPopoverCurveChanged(ct);
   };
   edit.onIntensityChanged = ^(double v) {
     if (onIntensity)
@@ -429,6 +481,22 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
                        fromView:anchor
                         onClose:^{
                         }];
+
+  // Guide hook: same settle delay as the static-values popover so the
+  // segment editor is in a window and laid out before the guide reads pill
+  // rects. content == editor for this popover.
+  if (self.onGapPopoverWillOpen) {
+    __weak KKSegmentEditView *weakEdit = edit;
+    __weak typeof(self) weakSelf = self;
+    dispatch_after(
+        dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),
+        dispatch_get_main_queue(), ^{
+          __strong typeof(weakSelf) s = weakSelf;
+          __strong KKSegmentEditView *e = weakEdit;
+          if (s && e && s.onGapPopoverWillOpen)
+            s.onGapPopoverWillOpen(e, e);
+        });
+  }
 }
 
 // KKSegmentEditView (Hold kind) pills are indexed by KKHoldEffect

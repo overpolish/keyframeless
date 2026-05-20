@@ -4,6 +4,7 @@
  */
 
 #import "KKTimelineInspectorView.h"
+#import "KKTimelineInspectorView_Private.h"
 
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
@@ -328,8 +329,15 @@ static const CGFloat kHeaderRowHeight = 28.0;
 }
 
 - (void)setPlaying:(BOOL)playing {
+  BOOL was = _playButton.playing;
   _playButton.playing = playing;
   [_detachedView setPlaying:playing];
+  if (was != playing && _onPlayingChanged)
+    _onPlayingChanged(playing);
+}
+
+- (KKPlayButton *)_guidePlayButton {
+  return _playButton;
 }
 
 #pragma mark - Detached copy

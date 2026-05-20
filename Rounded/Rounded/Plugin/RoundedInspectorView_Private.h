@@ -31,6 +31,8 @@ NS_ASSUME_NONNULL_BEGIN
   KKJoyrideController *_constantsGuide;
   KKTimeline *_savedConstantsTimeline;
   KKMiniCanvasGuideScroll *_constantsScrollFwd;
+  KKJoyrideController *_basicTimingGuide;
+  KKTimeline *_savedBasicTimingTimeline;
 }
 @end
 

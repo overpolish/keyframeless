@@ -38,6 +38,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// onTimelineMutated when the guide completes or is skipped.
 - (void)restartConstantsGuide;
 
+/// Seeds an empty timeline and runs the Basic Timing guide (chunk 1: open
+/// the animated-property dropdown → add Crop → add Radius → message →
+/// toggle In transition on). Restores the previous timeline via
+/// onTimelineMutated when the guide completes or is skipped.
+- (void)restartBasicTimingGuide;
+
 /// YES once the OSC guide overlay is on screen (after its zoom-to-fit +
 /// settle warm-up). Drives the help button's loading spinner.
 @property(nonatomic, readonly) BOOL oscGuideActive;

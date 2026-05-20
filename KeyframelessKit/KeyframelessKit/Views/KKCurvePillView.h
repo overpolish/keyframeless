@@ -32,6 +32,10 @@ typedef CGFloat (^KKCurvePillValueBlock)(NSInteger pillIndex, CGFloat t);
 
 - (void)redraw;
 
+/// View-space rect of pill `index` (0..pillCount-1). NSZeroRect if pillCount
+/// is 0. Used by guide code that needs to spotlight a specific pill.
+- (NSRect)pillRectForIndex:(NSInteger)index;
+
 @end
 
 NS_ASSUME_NONNULL_END

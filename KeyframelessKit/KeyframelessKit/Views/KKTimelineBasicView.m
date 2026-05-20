@@ -49,10 +49,16 @@
 
   __weak typeof(self) weak = self;
   _inCheck.onToggle = ^(BOOL on) {
-    [weak _setInEnabled:on];
+    __strong typeof(self) s = weak;
+    [s _setInEnabled:on];
+    if (s && s->_onPhaseToggled)
+      s->_onPhaseToggled(0, on);
   };
   _outCheck.onToggle = ^(BOOL on) {
-    [weak _setOutEnabled:on];
+    __strong typeof(self) s = weak;
+    [s _setOutEnabled:on];
+    if (s && s->_onPhaseToggled)
+      s->_onPhaseToggled(1, on);
   };
 }
 

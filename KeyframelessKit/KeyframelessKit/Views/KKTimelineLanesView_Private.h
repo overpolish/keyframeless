@@ -6,8 +6,10 @@
 #pragma once
 
 #import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKTimelineLanesView.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
+@class KKSegmentEditView;
 @protocol KKMiniCanvasDelegate;
 
 static const CGFloat kRowHeight = 28.0;

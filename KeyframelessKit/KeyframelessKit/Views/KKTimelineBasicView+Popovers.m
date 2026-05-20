@@ -21,6 +21,8 @@
 // KKSegmentEditView (Transition) popover via the host and routes curve /
 // intensity / frequency edits back across all animatable lanes.
 - (void)_openGapPopoverForSection:(KKBasicSection)sec {
+  if (_onGapTapped)
+    _onGapTapped((NSInteger)sec);
   if (!self.onGapPopover)
     return;
   KKBasicProj p = [self _projection];
@@ -426,6 +428,8 @@
 }
 
 - (void)_openBoundaryPopoverForDiamond:(NSInteger)d {
+  if (_onDiamondTapped)
+    _onDiamondTapped(d);
   if (!self.onBoundaryValuePopover)
     return;
   KKBasicProj p = [self _projection];

@@ -5,7 +5,7 @@
 
 #pragma once
 
-#import "KKTimelineBasicView.h"
+#import <KeyframelessKit/KKTimelineBasicView.h>
 
 #import "KKCheckboxView.h"
 #import "KKTimelineZoomPan.h"
@@ -133,6 +133,21 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
   // synthesized in the core .m) so all categories can read/write them.
   double _clipDurationSeconds;
   double _playheadFraction;
+  // Guide-only: optional callback fired AFTER the existing In/Out checkbox
+  // handler runs. Lets a Joyride step advance on user toggle without
+  // bypassing the normal _setInEnabled:/_setOutEnabled: path. phase: 0=In,
+  // 1=Out. Stored here so the +Guide category can read/write it.
+  void (^_onPhaseToggled)(NSInteger phase, BOOL on);
+  // Guide-only: fired at the start of _openBoundaryPopoverForDiamond:
+  // (i.e. when a diamond click resolves to a popover request). idx: 1-4
+  // matching the diamond model (1 in-start, 2 hold-start, 3 hold-end,
+  // 4 out-end).
+  void (^_onDiamondTapped)(NSInteger idx);
+  // Guide-only: fired at the start of _openGapPopoverForSection:. section is
+  // a KKBasicSection (1=In, 2=Hold, 3=Out). Only fires for sections that
+  // actually open a transition popover (In/Out for now); Hold has its own
+  // _openHoldPopover path.
+  void (^_onGapTapped)(NSInteger section);
 }
 @end
 

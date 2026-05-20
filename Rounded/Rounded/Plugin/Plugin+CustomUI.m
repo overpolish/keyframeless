@@ -332,7 +332,29 @@
   constants.disabledSubtitle =
       @"Select a Rounded clip to preview the constant values";
 
-  return @[ intro, osc, full, constants ];
+  __block __weak KKHelpGuide *weakBasicTiming = nil;
+  KKHelpGuide *basicTiming = [KKHelpGuide
+      guideWithTitle:@"Timing Basics"
+            subtitle:@"Add animatable properties and turn on a transition"
+             onStart:^{
+               __strong typeof(weak) strong = weak;
+               strong.inspectorView.onGuideCompleted = ^{
+                 [weakBasicTiming markCompleted];
+               };
+               [strong.inspectorView restartBasicTimingGuide];
+             }];
+  weakBasicTiming = basicTiming;
+  // The final step's cutout unions the play button with the FCP viewer
+  // rect, which only resolves once the OSC bridge has a draw tick. Same
+  // canvas-reference gate as the OSC + constants guides.
+  basicTiming.enabledProvider = ^BOOL {
+    return RoundedHasCanvasReference();
+  };
+  basicTiming.disabledSubtitle =
+      @"Select a Rounded clip or, if it's already selected, move the "
+      @"mouse over the viewer";
+
+  return @[ intro, osc, full, constants, basicTiming ];
 }
 
 - (NSNotificationName)helpGuideRefreshNotificationName {

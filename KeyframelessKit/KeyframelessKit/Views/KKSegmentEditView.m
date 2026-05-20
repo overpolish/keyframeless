@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "KKSegmentEditView.h"
+#import "KKSegmentEditView_Private.h"
+#import <KeyframelessKit/KKSegmentEditView.h>
 
 #import "../Math/KKCurveTicks.h"
 #import "../Math/KKEasing.h"
@@ -678,6 +679,10 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
     [self.window makeFirstResponder:nil];
     _clearPopoverBackground(self);
   }
+}
+
+- (KKCurvePillView *)_guidePillsView {
+  return _pills;
 }
 
 @end
