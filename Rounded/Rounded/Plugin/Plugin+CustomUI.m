@@ -257,6 +257,16 @@
                             [strong.inspectorView restartIntroGuide];
                           }];
   weakIntro = intro;
+  // Gate every guide on Rounded being the selected effect — consistent
+  // expectation across all guides (the per-guide reasons differ in detail
+  // but the user-facing requirement is the same). The section-level warning
+  // pulls the first non-empty disabledSubtitle, so set it on intro too.
+  intro.enabledProvider = ^BOOL {
+    return RoundedHasCanvasReference();
+  };
+  intro.disabledSubtitle =
+      @"Guides are disabled. Please select a Rounded clip to enable them, if "
+      @"already selected move your mouse over the viewer.";
 
   __block __weak KKHelpGuide *weakOSC = nil;
   KKHelpGuide *osc =
@@ -277,8 +287,7 @@
     return RoundedHasCanvasReference();
   };
   osc.disabledSubtitle =
-      @"Select a Rounded clip or, if it's already selected, move the "
-      @"mouse over the viewer";
+      @"Guides are disabled — select a Rounded clip to enable them";
   // OSC guide has a zoom-to-fit + settle warm-up; spin the play button until
   // the overlay is actually on screen.
   osc.activeProvider = ^BOOL {
@@ -309,8 +318,7 @@
     return RoundedHasCanvasReference();
   };
   full.disabledSubtitle =
-      @"Select a Rounded clip or, if it's already selected, move the "
-      @"mouse over the viewer";
+      @"Guides are disabled — select a Rounded clip to enable them";
 
   __block __weak KKHelpGuide *weakConstants = nil;
   KKHelpGuide *constants = [KKHelpGuide
@@ -330,7 +338,7 @@
     return RoundedHasCanvasReference();
   };
   constants.disabledSubtitle =
-      @"Select a Rounded clip to preview the constant values";
+      @"Guides are disabled — select a Rounded clip to enable them";
 
   __block __weak KKHelpGuide *weakBasicTiming = nil;
   KKHelpGuide *basicTiming = [KKHelpGuide
@@ -351,8 +359,7 @@
     return RoundedHasCanvasReference();
   };
   basicTiming.disabledSubtitle =
-      @"Select a Rounded clip or, if it's already selected, move the "
-      @"mouse over the viewer";
+      @"Guides are disabled — select a Rounded clip to enable them";
 
   return @[ intro, osc, full, constants, basicTiming ];
 }

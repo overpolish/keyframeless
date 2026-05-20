@@ -19,6 +19,23 @@
 
   [stack addArrangedSubview:[self _subheading:@"Interactive Guides"]];
 
+  // Section-level warning: shown once under the subheading whenever ANY
+  // guide is disabled. Text is sourced from the first disabled guide's
+  // disabledSubtitle in -refreshGuideRows. Hidden by default; -refreshGuideRows
+  // sets visibility on first pass.
+  NSTextField *warn = [NSTextField labelWithString:@""];
+  warn.font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightRegular];
+  warn.textColor = [NSColor warning];
+  warn.lineBreakMode = NSLineBreakByWordWrapping;
+  warn.maximumNumberOfLines = 0;
+  warn.hidden = YES;
+  warn.translatesAutoresizingMaskIntoConstraints = NO;
+  [stack addArrangedSubview:warn];
+  [warn.leadingAnchor constraintEqualToAnchor:stack.leadingAnchor].active = YES;
+  [warn.trailingAnchor constraintEqualToAnchor:stack.trailingAnchor].active =
+      YES;
+  _guidesWarningLabel = warn;
+
   NSStackView *links = [[NSStackView alloc] initWithFrame:NSZeroRect];
   links.orientation = NSUserInterfaceLayoutOrientationVertical;
   links.alignment = NSLayoutAttributeLeading;
@@ -38,6 +55,7 @@
   _guidesLinksStack = links;
   [stack addArrangedSubview:links];
   [links.widthAnchor constraintEqualToAnchor:stack.widthAnchor].active = YES;
+  [self _refreshSectionWarning];
 
   return stack;
 }
@@ -241,11 +259,11 @@
   r.icon.hidden = NO;
 }
 
-// Mutates the existing controls — never rebuilds the row. Icon is accent when
-// actionable & new, muted once the guide has been completed, dim when
-// disabled; the "Completed" pill shows after a full run. Disabled subtitle uses
-// the KKTokens warning colour so the "select a clip first" hint is easy to
-// spot.
+// Mutates the existing controls — never rebuilds the row. Icon is accent
+// when actionable & new, muted once the guide has been completed, dim when
+// disabled. The "Completed" pill shows after a full run. The "select a clip"
+// warning now lives section-wide via -_refreshSectionWarning; rows just dim
+// when disabled so it's still visible per-row without per-row text.
 - (void)_applyStateToRefs:(_KKGuideRowRefs *)r {
   KKHelpGuide *guide = r.guide;
   if (!guide)
@@ -265,16 +283,41 @@
               : [[NSColor inspectorLabel] colorWithAlphaComponent:0.4];
 
   if (r.subtitle) {
-    NSString *text =
-        enabled ? guide.subtitle : (guide.disabledSubtitle ?: guide.subtitle);
+    NSString *text = guide.subtitle;
     r.subtitle.stringValue = text ?: @"";
     r.subtitle.hidden = (text.length == 0);
-    r.subtitle.textColor =
-        enabled ? [[NSColor inspectorLabel] colorWithAlphaComponent:0.5]
-                : [NSColor warning];
+    r.subtitle.textColor = [[NSColor inspectorLabel]
+        colorWithAlphaComponent:(enabled ? 0.5 : 0.3)];
   }
 
   r.badge.hidden = !viewed;
+}
+
+// Walks the row state and toggles the section warning. Text comes from the
+// first disabled guide's `disabledSubtitle` (Rounded's 4 guides all share the
+// same "select a Rounded clip…" text — picking the first is fine; if a future
+// plugin wants distinct per-guide reasons it can normalise them to one shared
+// message).
+- (void)_refreshSectionWarning {
+  if (!_guidesWarningLabel)
+    return;
+  NSString *warningText = nil;
+  for (_KKGuideRowRefs *r in _guideRowRefs) {
+    KKHelpGuide *guide = r.guide;
+    if (!guide)
+      continue;
+    BOOL enabled = guide.enabledProvider ? guide.enabledProvider() : YES;
+    if (!enabled && guide.disabledSubtitle.length > 0) {
+      warningText = guide.disabledSubtitle;
+      break;
+    }
+  }
+  if (warningText.length > 0) {
+    _guidesWarningLabel.stringValue = warningText;
+    _guidesWarningLabel.hidden = NO;
+  } else {
+    _guidesWarningLabel.hidden = YES;
+  }
 }
 
 - (void)refreshGuideRows {
@@ -290,6 +333,7 @@
       continue; // no change → no work, no flicker
     [self _applyStateToRefs:r];
   }
+  [self _refreshSectionWarning];
 }
 
 - (void)observeGuideRefreshNotificationNamed:(NSNotificationName)name {

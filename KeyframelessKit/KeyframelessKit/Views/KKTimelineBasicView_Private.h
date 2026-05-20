@@ -125,6 +125,10 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
   NSInteger _pressedDiamond;
   BOOL _dragActive;
   BOOL _scrubbing;
+  // Sticky scrub-snap: which diamond frac the scrubber is currently snapped
+  // to (or NAN if not snapped). Sticky to avoid pinging near the threshold
+  // in log-warped regions where the visual jump on unsnap is large.
+  double _snappedScrubFrac;
   NSPoint _pressPoint;
   NSView *_popoverAnchor;
   KKTimelineZoomPan *_zp;

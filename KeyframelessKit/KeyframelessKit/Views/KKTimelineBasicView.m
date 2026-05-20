@@ -31,6 +31,7 @@
     _timeline = timeline;
     _hoverSection = KKBasicSectionNone;
     _playheadFraction = -1.0; // hidden until the render tick pushes a value
+    _snappedScrubFrac = NAN;
     _zp = [[KKTimelineZoomPan alloc] init];
     [self _buildUI];
   }

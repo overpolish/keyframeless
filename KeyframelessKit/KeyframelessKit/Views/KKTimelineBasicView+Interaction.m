@@ -112,6 +112,56 @@
 // The two middle diamonds drag to set In/Out duration (endpoints are
 // time-locked). A press that doesn't move opens the value popover for that
 // boundary instead.
+// Subtle snap so a scrub can land precisely on a diamond — important for the
+// main viewer OSC, which renders at the playhead time. Snap-in window is
+// small (4px) so free scrubbing is unaffected; only diamonds the user
+// actually sees are candidates (matches the visibility rules in
+// -_diamondAtPoint:proj:rect:). Once snapped, sticky until the cursor moves
+// past the wider snap-out threshold — without hysteresis, tiny cursor jitter
+// near the 4px boundary flips snapped/unsnapped every frame, which in
+// log-warped regions reads as the playhead pinging because the visual jump
+// on each unsnap is significant.
+static const CGFloat kScrubSnapInPx = 4.0;
+static const CGFloat kScrubSnapOutPx = 12.0;
+
+- (double)_snappedScrubFracForX:(CGFloat)x proj:(KKBasicProj)p rect:(NSRect)g {
+  double rawFrac = KKBasicFracForX(x, g, p);
+  double candidateFracs[4] = {0.0, p.inEndFrac, p.outStartFrac, 1.0};
+  BOOL enabled[4] = {p.inEnabled, p.anyAnimatable, p.anyAnimatable,
+                     p.outEnabled};
+
+  // Already snapped: stay snapped until cursor exits the wider window.
+  if (!isnan(_snappedScrubFrac)) {
+    for (NSInteger i = 0; i < 4; i++) {
+      if (!enabled[i] || candidateFracs[i] != _snappedScrubFrac)
+        continue;
+      CGFloat cx = KKBasicXForFrac(candidateFracs[i], g, p);
+      if (fabs(x - cx) <= kScrubSnapOutPx)
+        return _snappedScrubFrac;
+      break;
+    }
+    _snappedScrubFrac = NAN;
+  }
+
+  // Not snapped: pick the closest candidate within the entry window.
+  double bestFrac = rawFrac;
+  CGFloat bestDist = kScrubSnapInPx;
+  double bestSnapFrac = NAN;
+  for (NSInteger i = 0; i < 4; i++) {
+    if (!enabled[i])
+      continue;
+    CGFloat cx = KKBasicXForFrac(candidateFracs[i], g, p);
+    CGFloat d = fabs(x - cx);
+    if (d < bestDist) {
+      bestDist = d;
+      bestFrac = candidateFracs[i];
+      bestSnapFrac = candidateFracs[i];
+    }
+  }
+  _snappedScrubFrac = bestSnapFrac;
+  return bestFrac;
+}
+
 // YES if pt is in the ruler strip (above the track). The whole ruler is the
 // scrub zone — click anywhere there to jump the playhead, then drag. It's
 // separate from the track so it never conflicts with diamonds / gap clicks.
@@ -129,12 +179,13 @@
   KKBasicProj p = [self _projection];
   _scrubbing = [self _isInScrubBand:pt rect:g];
   if (_scrubbing) {
+    _snappedScrubFrac = NAN; // fresh scrub starts with no sticky snap
     // Click-jump: move the playhead to the clicked position immediately,
     // then -mouseDragged: continues tracking. Update the visual optimistic-
     // ally (bypassing the setter, which ignores pushes while scrubbing).
     _pressedDiamond = 0;
     _pressPoint = pt;
-    double frac = KKBasicFracForX(pt.x, g, p);
+    double frac = [self _snappedScrubFracForX:pt.x proj:p rect:g];
     _playheadFraction = frac;
     [self setNeedsDisplay:YES];
     if (self.onScrub)
@@ -156,7 +207,7 @@
     // Playhead drag doesn't change the warp, so the plain live inverse
     // tracks the cursor exactly. Update the visual optimistically; the
     // host playhead follows via onScrub (render pushes are ignored here).
-    double frac = KKBasicFracForX(pt.x, g, p);
+    double frac = [self _snappedScrubFracForX:pt.x proj:p rect:g];
     _playheadFraction = frac;
     [self setNeedsDisplay:YES];
     if (self.onScrub)
