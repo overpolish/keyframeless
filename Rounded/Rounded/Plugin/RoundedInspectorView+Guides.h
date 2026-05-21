@@ -44,6 +44,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// onTimelineMutated when the guide completes or is skipped.
 - (void)restartBasicTimingGuide;
 
+/// Seeds a Crop+Radius timeline with start/end keyposes on both, then runs
+/// the Advanced Timing guide (switch to Advanced tab → cmd-click Crop lane
+/// → value popover intro → drag a Radius pill → done). Restores the
+/// previous timeline + tab via onTimelineMutated when the guide completes.
+- (void)restartAdvancedTimingGuide;
+
 /// YES once the OSC guide overlay is on screen (after its zoom-to-fit +
 /// settle warm-up). Drives the help button's loading spinner.
 @property(nonatomic, readonly) BOOL oscGuideActive;

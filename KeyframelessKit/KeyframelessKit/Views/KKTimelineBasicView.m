@@ -125,33 +125,56 @@
 // The canonical Basic shape of a lane. The two Hold keyposes are ALWAYS
 // present (so drift / modulation are always possible); an In adds a keypose
 // at t≈0, an Out at t≈1. Keypose counts: neither 2, In 3, Out 3, both 4.
-// holdStart / holdEnd index the two Hold keyposes (valid when count ≥ 2);
-// inEndFrac == holdStart.time, outStartFrac == holdEnd.time.
+// New model: the hold endpoints sit at t=0 and t=outEndFrac (~1) when In/Out
+// are off; In adds a t=0 In-start (hold-start shifts to t_inEnd); Out adds a
+// t=outEndFrac Out-end (hold-end shifts to t_outStart).
+//   n==2: [hold@0, hold@outEndFrac]                     — no In, no Out
+//   n==3: [in@0, hold@t_inEnd, hold@outEndFrac]         — In only  (mid<0.5)
+//   n==3: [hold@0, hold@t_outStart, out@outEndFrac]     — Out only (mid≥0.5)
+//   n==4: [in@0, hold@t_inEnd, hold@t_outStart, out@outEndFrac]
 KKHoldShape KKShapeOfLane(KKLane *lane) {
   KKHoldShape s = {NO, NO, 0, 0};
   NSArray<KKKeyPose *> *k = lane.keyposes;
   if (k.count < 2)
     return s;
-  // Count-based detection (framerate-independent). Basic-view rebuild emits
-  // counts 2/3/3/4 — neither/In-only/Out-only/both. For a 3-kp lane, the
-  // extra kp is In iff its time is ~0 (Out kps are stored at 1-frameFrac,
-  // which varies with framerate, so we can't pin a threshold).
-  NSInteger n = (NSInteger)k.count;
-  if (n == 4) {
+  // Explicit holdShape overrides the count/time heuristic. Set every time
+  // Basic rebuilds, so once a lane has been touched the projection is no
+  // longer guessing — dragging the boundary past 0.5 stays In (or Out).
+  switch (lane.holdShape) {
+  case KKLaneHoldShapeNone:
+    break;
+  case KKLaneHoldShapeInOnly:
+    s.inEnabled = YES;
+    break;
+  case KKLaneHoldShapeOutOnly:
+    s.outEnabled = YES;
+    break;
+  case KKLaneHoldShapeBoth:
     s.inEnabled = YES;
     s.outEnabled = YES;
-  } else if (n == 3) {
-    if (k.firstObject.time < kEps) {
+    break;
+  case KKLaneHoldShapeAuto: {
+    // Legacy blobs without the annotation: infer from KP count + middle
+    // time. Breaks for boundary > 0.5 in single-phase but that's exactly
+    // what the explicit field is for; legacy data hasn't been through a
+    // rebuild yet.
+    NSInteger n = (NSInteger)k.count;
+    if (n == 4) {
       s.inEnabled = YES;
-    } else {
       s.outEnabled = YES;
+    } else if (n == 3) {
+      if (k[1].time < 0.5)
+        s.inEnabled = YES;
+      else
+        s.outEnabled = YES;
     }
+    break;
   }
-  // n == 2 or n > 4 (legacy / advanced edits) → leave both NO.
+  }
   s.holdStart = s.inEnabled ? 1 : 0;
   s.holdEnd = (NSInteger)k.count - (s.outEnabled ? 2 : 1);
   if (s.holdEnd < s.holdStart)
-    s.holdEnd = s.holdStart; // degenerate legacy data
+    s.holdEnd = s.holdStart;
   return s;
 }
 

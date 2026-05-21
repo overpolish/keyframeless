@@ -67,6 +67,27 @@ typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
          participationLabels:(nullable NSArray<NSString *> *)labels
          participationStates:(nullable NSArray<NSNumber *> *)states;
 
+/// Compound participation variant — `labels`/`states` are nested per
+/// compound (one compound = one lane, each compound's inner array is its
+/// segments: lane label + optional component labels). Renders one grouped
+/// pill capsule per compound packed horizontally with scroll/shadow on
+/// overflow. The flat `onParticipationToggled` index is computed by
+/// summing prior compounds' segment counts plus the within-compound idx,
+/// so existing callers don't need a separate callback shape.
+- (instancetype)initWithKind:(KKSegmentEditKind)kind
+                    showsLinked:(BOOL)showsLinked
+                     bulkHeader:(BOOL)bulkHeader
+         participationCompounds:
+             (nullable NSArray<NSArray<NSString *> *> *)compoundLabels
+    participationCompoundStates:
+        (nullable NSArray<NSArray<NSNumber *> *> *)compoundStates;
+
+/// Live-update the participation pill row from a fresh state array. Lets
+/// the host refresh after an external timeline mutation (e.g. cmd-Z) so
+/// the pills stay in sync without closing the popover.
+- (void)applyParticipationCompoundStates:
+    (NSArray<NSArray<NSNumber *> *> *)states;
+
 /// Computed height required for the view's content. Caller sizes the
 /// containing popover accordingly.
 + (CGFloat)contentHeightForKind:(KKSegmentEditKind)kind

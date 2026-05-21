@@ -6,6 +6,8 @@
 #import "KKTimelineLanesView.h"
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
+#import "KKSegmentEditView.h"
+#import "KKTimelineAdvancedView.h"
 #import "KKTimelineBasicView.h"
 #import "KKTimelineLanesView_Popovers.h"
 #import "KKTimelineLanesView_Private.h"
@@ -173,7 +175,10 @@
   };
   _basicGraph.onZoomChanged = ^(BOOL zoomed) {
     __strong typeof(weakSelf) s = weakSelf;
-    if (s && s->_onZoomChanged)
+    if (!s)
+      return;
+    s->_basicZoomed = zoomed;
+    if (s->_activeTab == 0 && s->_onZoomChanged)
       s->_onZoomChanged(zoomed);
   };
   _basicGraph.onBoundaryValuePopover =
@@ -214,10 +219,93 @@
                             onDragBegin:onDragBegin
                               onDragEnd:onDragEnd];
       };
-  _basicGraph.onHoldModulationPopover =
+  _advancedGraph =
+      [[KKTimelineAdvancedView alloc] initWithAvailableLanes:_availableLanes
+                                                    timeline:_timeline];
+  _advancedGraph.translatesAutoresizingMaskIntoConstraints = NO;
+  _advancedGraph.hidden = YES;
+  [_centeredArea addSubview:_advancedGraph
+                 positioned:NSWindowBelow
+                 relativeTo:_hintLabel];
+  [NSLayoutConstraint activateConstraints:@[
+    [_advancedGraph.leadingAnchor
+        constraintEqualToAnchor:_centeredArea.leadingAnchor],
+    [_advancedGraph.trailingAnchor
+        constraintEqualToAnchor:_centeredArea.trailingAnchor],
+    [_advancedGraph.topAnchor constraintEqualToAnchor:_centeredArea.topAnchor],
+    [_advancedGraph.bottomAnchor
+        constraintEqualToAnchor:_centeredArea.bottomAnchor],
+  ]];
+  _advancedGraph.onZoomChanged = ^(BOOL zoomed) {
+    __strong typeof(weakSelf) s = weakSelf;
+    if (!s)
+      return;
+    s->_advancedZoomed = zoomed;
+    if (s->_activeTab == 1 && s->_onZoomChanged)
+      s->_onZoomChanged(zoomed);
+  };
+  _advancedGraph.onSelectionChanged = ^{
+    __strong typeof(weakSelf) s = weakSelf;
+    if (!s)
+      return;
+    if (s->_clearSelectionButton)
+      s->_clearSelectionButton.enabled = (s->_advancedGraph.selectionCount > 0);
+    if (s->_onAdvancedSelectionChanged)
+      s->_onAdvancedSelectionChanged(s->_advancedGraph.selectedPillKeys,
+                                     s->_advancedGraph.selectedGapKeys);
+  };
+  _advancedGraph.onTimelineMutated = ^(KKTimeline *updated) {
+    __strong typeof(weakSelf) s = weakSelf;
+    if (!s)
+      return;
+    s->_timeline = updated;
+    [s _refresh];
+    if (s->_onTimelineMutated)
+      s->_onTimelineMutated(updated);
+  };
+  _advancedGraph.onDragBegin = ^{
+    __strong typeof(weakSelf) s = weakSelf;
+    if (s && s->_onDragBegin)
+      s->_onDragBegin();
+  };
+  _advancedGraph.onDragEnd = ^{
+    __strong typeof(weakSelf) s = weakSelf;
+    if (s && s->_onDragEnd)
+      s->_onDragEnd();
+  };
+  _advancedGraph.onScrub = ^(double frac) {
+    __strong typeof(weakSelf) s = weakSelf;
+    if (s && s->_onScrub)
+      s->_onScrub(frac);
+  };
+  _advancedGraph.onGapPopover =
+      ^(NSView *anchor, BOOL animateOut, KKIntervalCurve curve,
+        double intensity, double frequency, NSArray<NSString *> *partLabels,
+        NSArray<NSNumber *> *partStates, void (^onCurve)(KKIntervalCurve),
+        void (^onIntensity)(double), void (^onFrequency)(double),
+        void (^onParticipation)(NSInteger, BOOL), void (^onDragBegin)(void),
+        void (^onDragEnd)(void)) {
+        __strong typeof(weakSelf) s = weakSelf;
+        [s _presentGapPopoverFromAnchor:anchor
+                             animateOut:animateOut
+                                  curve:curve
+                              intensity:intensity
+                              frequency:frequency
+                             partLabels:partLabels
+                             partStates:partStates
+                                onCurve:onCurve
+                            onIntensity:onIntensity
+                            onFrequency:onFrequency
+                        onParticipation:onParticipation
+                            onDragBegin:onDragBegin
+                              onDragEnd:onDragEnd];
+      };
+  _advancedGraph.onHoldModulationPopover =
       ^(NSView *anchor, KKIntervalModulation modulation, double intensity,
         double frequency, uint32_t seed, BOOL linked, BOOL showsLinked,
-        NSArray<NSString *> *partLabels, NSArray<NSNumber *> *partStates,
+        NSArray<NSArray<NSString *> *> *partLabels,
+        NSArray<NSArray<NSNumber *> *> *partStates,
+        NSArray<NSArray<NSNumber *> *> * (^partRebuilder)(void),
         void (^onModulation)(KKIntervalModulation), void (^onIntensity)(double),
         void (^onFrequency)(double), void (^onSeed)(uint32_t),
         void (^onLinked)(BOOL), void (^onParticipation)(NSInteger, BOOL),
@@ -232,6 +320,54 @@
                                        showsLinked:showsLinked
                                         partLabels:partLabels
                                         partStates:partStates
+                                     partRebuilder:partRebuilder
+                                      onModulation:onModulation
+                                       onIntensity:onIntensity
+                                       onFrequency:onFrequency
+                                            onSeed:onSeed
+                                          onLinked:onLinked
+                                   onParticipation:onParticipation
+                                       onDragBegin:onDragBegin
+                                         onDragEnd:onDragEnd];
+      };
+  _advancedGraph.onValuePopover =
+      ^(NSView *anchor, NSArray<KKLane *> *displayLanes, double frac,
+        NSArray<NSString *> *excludedLabels,
+        void (^onValue)(NSString *, NSArray<NSNumber *> *),
+        void (^onAnimate)(NSString *), void (^onDragBegin)(void),
+        void (^onDragEnd)(void)) {
+        __strong typeof(weakSelf) s = weakSelf;
+        [s _presentBoundaryValuePopoverFromAnchor:anchor
+                                     displayLanes:displayLanes
+                                         fraction:frac
+                                   excludedLabels:excludedLabels
+                                          onValue:onValue
+                                        onAnimate:onAnimate
+                                      onDragBegin:onDragBegin
+                                        onDragEnd:onDragEnd];
+      };
+
+  _basicGraph.onHoldModulationPopover =
+      ^(NSView *anchor, KKIntervalModulation modulation, double intensity,
+        double frequency, uint32_t seed, BOOL linked, BOOL showsLinked,
+        NSArray<NSArray<NSString *> *> *partLabels,
+        NSArray<NSArray<NSNumber *> *> *partStates,
+        NSArray<NSArray<NSNumber *> *> * (^partRebuilder)(void),
+        void (^onModulation)(KKIntervalModulation), void (^onIntensity)(double),
+        void (^onFrequency)(double), void (^onSeed)(uint32_t),
+        void (^onLinked)(BOOL), void (^onParticipation)(NSInteger, BOOL),
+        void (^onDragBegin)(void), void (^onDragEnd)(void)) {
+        __strong typeof(weakSelf) s = weakSelf;
+        [s _presentHoldModulationPopoverFromAnchor:anchor
+                                        modulation:modulation
+                                         intensity:intensity
+                                         frequency:frequency
+                                              seed:seed
+                                            linked:linked
+                                       showsLinked:showsLinked
+                                        partLabels:partLabels
+                                        partStates:partStates
+                                     partRebuilder:partRebuilder
                                       onModulation:onModulation
                                        onIntensity:onIntensity
                                        onFrequency:onFrequency
@@ -265,9 +401,24 @@
       break;
     }
   }
+  BOOL showBasic = anyOptedIn && _activeTab == 0;
+  BOOL showAdvanced = anyOptedIn && _activeTab == 1;
   _hintLabel.hidden = anyOptedIn;
-  _basicGraph.hidden = !anyOptedIn;
+  _basicGraph.hidden = !showBasic;
+  _advancedGraph.hidden = !showAdvanced;
   [_basicGraph applyTimeline:_timeline];
+  [_advancedGraph applyTimeline:_timeline];
+
+  // Now that the sub-views' _timeline ivars are fresh, refresh any open
+  // hold-modulation popover's participation pills. The rebuilder closure
+  // reads from those ivars — running it before applyTimeline pushed the
+  // new blob downstream produced stale states (e.g. cmd-Z left the pill
+  // bar showing the post-edit state instead of the undone one).
+  if (_openHoldModEditor && _openHoldModRebuilder) {
+    NSArray<NSArray<NSNumber *> *> *fresh = _openHoldModRebuilder();
+    if (fresh)
+      [_openHoldModEditor applyParticipationCompoundStates:fresh];
+  }
 
   NSMutableArray<NSString *> *opted = [NSMutableArray array];
   for (KKLane *tmpl in _availableLanes)
@@ -437,7 +588,6 @@
   if (animatable) {
     // Keep in sync with KKTimelineBasicView's kDefaultInEnd/kDefaultOutStart.
     static const double kDefInEnd = 0.22, kDefOutStart = 0.78;
-    static const double kEps = 1e-4;
 
     // Inherit global In/Out state from existing animated lanes (OR — any
     // lane with In/Out means In/Out is globally on). Without this, a newly
@@ -449,23 +599,22 @@
     BOOL tFound = NO;
     // Inherit interval params (curve, intensity, freq, modulation, link) from
     // the first animatable lane so a new lane joins the same In/Hold/Out
-    // shape — particularly drift/link state, which would otherwise clash
-    // (radius unlinked, new crop linked → ambiguous popover toggle).
+    // shape — particularly drift/link state.
     KKInterval *tmplIn = nil, *tmplHold = nil, *tmplOut = nil;
     for (KKLane *l in _timeline.lanes) {
       if (!l.enabled || l.keyposes.count < 2)
         continue;
       NSArray<KKKeyPose *> *kk = l.keyposes;
-      // Count-based In/Out detection — matches KKShapeOfLane. Framerate-
-      // independent (Out kps are stored at 1-frameFrac, not 1.0, so a time
-      // threshold is unreliable).
+      // New model: middle-KP time disambiguates In-only vs Out-only for
+      // n==3 (under the old model the first KP's time did, but now both
+      // start at t=0).
       NSInteger n = (NSInteger)kk.count;
       BOOL lInEn = NO, lOutEn = NO;
       if (n == 4) {
         lInEn = YES;
         lOutEn = YES;
       } else if (n == 3) {
-        if (kk.firstObject.time < kEps)
+        if (kk[1].time < 0.5)
           lInEn = YES;
         else
           lOutEn = YES;
@@ -477,9 +626,14 @@
       if (!tFound) {
         NSInteger holdStart = lInEn ? 1 : 0;
         NSInteger holdEnd = n - (lOutEn ? 2 : 1);
-        if (holdEnd > holdStart) {
-          tIn = kk[holdStart].time;
-          tOut = kk[holdEnd].time;
+        if (holdEnd > holdStart && (lInEn || lOutEn)) {
+          // Only inherit boundary times when the source actually has a
+          // boundary (≥3 KPs) — pure hold-only lanes sit at [0, outEnd]
+          // and would seed silly defaults.
+          if (lInEn)
+            tIn = kk[holdStart].time;
+          if (lOutEn)
+            tOut = kk[holdEnd].time;
           tFound = YES;
           tmplHold = [kk[holdStart].outgoing copy];
           if (lInEn)
@@ -490,8 +644,8 @@
       }
     }
 
-    // Out-end position — one frame before clipEnd so FCP playhead can reach
-    // it. Read frame/clip dur off the basic graph (single source of truth).
+    // Out-end / hold-end position — one frame before clipEnd so FCP playhead
+    // can reach it. Read frame/clip dur off the basic graph.
     double outEndFrac = 1.0;
     double clipDur = _basicGraph.clipDurationSeconds;
     double frameDur = _basicGraph.frameDurationSeconds;
@@ -505,10 +659,13 @@
       a.outgoing = tmplIn ?: [[KKInterval alloc] init];
       [kps addObject:a];
     }
-    KKKeyPose *hs = [KKKeyPose keyposeAtTime:tIn values:v];
-    hs.outgoing = tmplHold ?: [[KKInterval alloc] init]; // Hold gap
+    // Hold-start: at 0 when In off, at tIn when In on.
+    KKKeyPose *hs = [KKKeyPose keyposeAtTime:(globalIn ? tIn : 0.0) values:v];
+    hs.outgoing = tmplHold ?: [[KKInterval alloc] init];
     [kps addObject:hs];
-    KKKeyPose *he = [KKKeyPose keyposeAtTime:tOut values:v];
+    // Hold-end: at outEndFrac when Out off, at tOut when Out on.
+    KKKeyPose *he =
+        [KKKeyPose keyposeAtTime:(globalOut ? tOut : outEndFrac) values:v];
     [kps addObject:he];
     if (globalOut) {
       he.outgoing = tmplOut ?: [[KKInterval alloc] init];
@@ -555,18 +712,69 @@
 
 - (void)setClipDurationSeconds:(double)seconds {
   [_basicGraph setClipDurationSeconds:seconds];
+  [_advancedGraph setClipDurationSeconds:seconds];
 }
 
 - (void)setFrameDurationSeconds:(double)seconds {
   [_basicGraph setFrameDurationSeconds:seconds];
+  [_advancedGraph setFrameDurationSeconds:seconds];
 }
 
 - (void)setPlayheadFraction:(double)frac {
   [_basicGraph setPlayheadFraction:frac];
+  [_advancedGraph setPlayheadFraction:frac];
 }
 
 - (void)resetZoom {
-  [_basicGraph resetZoom];
+  // Both tabs share one toolbar button — reset whichever is active.
+  if (_activeTab == 1)
+    [_advancedGraph resetZoom];
+  else
+    [_basicGraph resetZoom];
+}
+
+- (void)setActiveTab:(NSInteger)tab {
+  if (_activeTab == tab)
+    return;
+  _activeTab = tab;
+  [self _refresh];
+  if (_onAccessoryButtonsChanged)
+    _onAccessoryButtonsChanged();
+  // The reset-zoom button reflects only the active tab — re-fire so it
+  // tracks the new side's state immediately on tab change.
+  if (_onZoomChanged)
+    _onZoomChanged(tab == 1 ? _advancedZoomed : _basicZoomed);
+}
+
+- (void)applyAdvancedSelectionPillKeys:(NSSet<NSString *> *)pillKeys
+                               gapKeys:(NSSet<NSString *> *)gapKeys {
+  [_advancedGraph applySelectionPillKeys:pillKeys gapKeys:gapKeys];
+}
+
+- (void)setOverlayBlockingInteractions:(BOOL)blocked {
+  _advancedGraph.interactionsBlocked = blocked;
+}
+
+- (NSArray<NSView *> *)accessoryButtons {
+  if (_activeTab != 1)
+    return @[];
+
+  if (!_clearSelectionButton) {
+    _clearSelectionButton = [[KKClearSelectionButton alloc] init];
+    _clearSelectionButton.translatesAutoresizingMaskIntoConstraints = NO;
+    __weak typeof(self) weakSelf = self;
+    _clearSelectionButton.onTapped = ^{
+      __strong typeof(weakSelf) s = weakSelf;
+      if (s)
+        [s->_advancedGraph clearSelection];
+    };
+  }
+  _clearSelectionButton.enabled = (_advancedGraph.selectionCount > 0);
+  return @[ _clearSelectionButton ];
+}
+
+- (void)setRenderMode:(KKMiniCanvasRenderMode)mode {
+  _renderMode = mode;
 }
 
 @end

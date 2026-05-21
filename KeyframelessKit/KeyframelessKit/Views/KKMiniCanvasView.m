@@ -153,14 +153,40 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
 
 @end
 
+// One filmstrip slot: a resolved IOSurface from the feed's `slots[]` array,
+// wrapped as the source texture and a per-slot persistent processed texture.
+// Slot 0 is the single-slot fast path; the multi-slot ivars below alias it.
+@interface _KKMiniFilmSlot : NSObject
+@property(nonatomic) uint32_t sid;
+@property(nonatomic) uint64_t generation;
+@property(nonatomic) IOSurfaceRef surface;
+@property(nonatomic, strong) id<MTLTexture> sourceTexture;
+@property(nonatomic, strong) id<MTLTexture> processedTexture;
+@property(nonatomic) double tag; // the slot's clip fraction
+@end
+
+@implementation _KKMiniFilmSlot
+- (void)dealloc {
+  if (_surface)
+    CFRelease(_surface);
+}
+@end
+
 @implementation KKMiniCanvasView {
   id<MTLRenderPipelineState> _pipeline;
+  id<MTLRenderPipelineState> _onionPipeline;
   id<MTLCommandQueue> _queue;
+  // Slot 0 aliases — keep the existing names so the handle/border/OSC code
+  // paths (which always target the editable slot) don't need to change.
+  // The aliases point at `_filmstripSlots.firstObject`'s textures/surface.
   id<MTLTexture> _sourceTexture;
   id<MTLTexture> _processedTexture;
   IOSurfaceRef _sourceSurface;
   uint32_t _resolvedSurfaceID;
   uint64_t _resolvedGeneration;
+  // Multi-slot bookkeeping. Always has at least 1 entry (slot 0); onion-skin
+  // grows it to N when the descriptor's `slots[]` is published with N>1.
+  NSMutableArray<_KKMiniFilmSlot *> *_filmstripSlots;
   NSTimer *_pollTimer;
   id<MTLRenderPipelineState> _pointPipeline;
   id<MTLRenderPipelineState> _linePipeline;
@@ -175,6 +201,13 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   return _sourceMediaSize;
 }
 
+- (void)setRenderMode:(NSInteger)mode {
+  if (_renderMode == mode)
+    return;
+  _renderMode = mode;
+  [self setNeedsDisplay:YES];
+}
+
 - (instancetype)initWithFrame:(NSRect)frameRect {
   id<MTLDevice> device = MTLCreateSystemDefaultDevice();
   self = [super initWithFrame:frameRect device:device];
@@ -184,6 +217,8 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   _clipAspect = 16.0 / 9.0;
   _zoom = kKKMiniInitialZoom;
   _panPixels = CGPointZero;
+  _filmstripSlots = [NSMutableArray array];
+  [_filmstripSlots addObject:[[_KKMiniFilmSlot alloc] init]];
 
   self.delegate = self;
   self.paused = YES;
@@ -248,6 +283,25 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   if (!_pipeline)
     KKLogError(@"KKMiniCanvasView: pipeline build failed: %@", err);
 
+  // Onion-skin: tint+alpha texture pass, premultiplied alpha blending so
+  // overlaid ghost frames composite over the active opaque base.
+  MTLRenderPipelineDescriptor *op = [[MTLRenderPipelineDescriptor alloc] init];
+  op.vertexFunction = [lib newFunctionWithName:@"KKVertexShader"];
+  op.fragmentFunction = [lib newFunctionWithName:@"KKTextureTintFragment"];
+  op.colorAttachments[0].pixelFormat = self.colorPixelFormat;
+  op.colorAttachments[0].blendingEnabled = YES;
+  op.colorAttachments[0].rgbBlendOperation = MTLBlendOperationAdd;
+  op.colorAttachments[0].alphaBlendOperation = MTLBlendOperationAdd;
+  op.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorOne;
+  op.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
+  op.colorAttachments[0].destinationRGBBlendFactor =
+      MTLBlendFactorOneMinusSourceAlpha;
+  op.colorAttachments[0].destinationAlphaBlendFactor =
+      MTLBlendFactorOneMinusSourceAlpha;
+  _onionPipeline = [device newRenderPipelineStateWithDescriptor:op error:&err];
+  if (!_onionPipeline)
+    KKLogError(@"KKMiniCanvasView: onion pipeline failed: %@", err);
+
   // Shared KKPointOSC glyph, alpha-blended over the composited image.
   MTLRenderPipelineDescriptor *pp = [[MTLRenderPipelineDescriptor alloc] init];
   pp.vertexFunction = [lib newFunctionWithName:@"KKVertexShader"];
@@ -300,6 +354,95 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   }
 }
 
+- (BOOL)_resolveSlot:(_KKMiniFilmSlot *)slot
+                 sid:(uint32_t)sid
+                 gen:(uint64_t)gen
+                 tag:(double)tag {
+  if (sid == 0)
+    return NO;
+  if (sid == slot.sid && gen == slot.generation && slot.sourceTexture) {
+    slot.tag = tag; // tag may change even when surface/gen are stable
+    return YES;
+  }
+
+  if (sid != slot.sid || !slot.sourceTexture) {
+    IOSurfaceRef surf = IOSurfaceLookup((IOSurfaceID)sid);
+    if (!surf) {
+      KKLogWarn(@"KKMiniCanvasView: IOSurfaceLookup(%u) failed", sid);
+      return NO;
+    }
+    NSUInteger w = IOSurfaceGetWidth(surf);
+    NSUInteger h = IOSurfaceGetHeight(surf);
+    MTLTextureDescriptor *td = [MTLTextureDescriptor
+        texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+                                     width:w
+                                    height:h
+                                 mipmapped:NO];
+    td.usage = MTLTextureUsageShaderRead;
+    td.storageMode = MTLStorageModeShared;
+    id<MTLTexture> tex = [self.device newTextureWithDescriptor:td
+                                                     iosurface:surf
+                                                         plane:0];
+    if (!tex) {
+      KKLogWarn(@"KKMiniCanvasView: wrap IOSurface %u as texture failed", sid);
+      CFRelease(surf);
+      return NO;
+    }
+    if (slot.surface)
+      CFRelease(slot.surface);
+    slot.surface = surf;
+    slot.sourceTexture = tex;
+    slot.processedTexture = nil; // size changed — rebuilt lazily in draw
+  }
+  slot.sid = sid;
+  slot.generation = gen;
+  slot.tag = tag;
+  return YES;
+}
+
+// Active slot = the cell the OSC handles + content rect target. With one
+// slot, always 0. With many, it's the slot whose tag is closest to the
+// renderer's editFraction (= the KP whose popover the user opened).
+- (NSUInteger)_activeSlotIndex {
+  if (_filmstripSlots.count <= 1)
+    return 0;
+  id<KKMiniCanvasDelegate> del = self.canvasDelegate;
+  NSNumber *editFrac = nil;
+  if (del) {
+    @try {
+      editFrac = [(NSObject *)del valueForKey:@"editFraction"];
+    } @catch (...) {
+    }
+  }
+  if (!editFrac)
+    return 0;
+  double want = editFrac.doubleValue;
+  NSUInteger best = 0;
+  double bestDt = INFINITY;
+  for (NSUInteger i = 0; i < _filmstripSlots.count; i++) {
+    double dt = fabs(_filmstripSlots[i].tag - want);
+    if (dt < bestDt) {
+      bestDt = dt;
+      best = i;
+    }
+  }
+  return best;
+}
+
+// Aliases follow the ACTIVE slot — that's the one OSC code paths edit /
+// inspect. With N=1, active is slot 0 and behavior matches single-slot mode.
+- (void)_syncSlot0Aliases {
+  NSUInteger active = [self _activeSlotIndex];
+  if (active >= _filmstripSlots.count)
+    return;
+  _KKMiniFilmSlot *s = _filmstripSlots[active];
+  _sourceTexture = s.sourceTexture;
+  _processedTexture = s.processedTexture;
+  _sourceSurface = s.surface;
+  _resolvedSurfaceID = s.sid;
+  _resolvedGeneration = s.generation;
+}
+
 - (void)_poll {
   NSString *path = self.sourceDescriptorPath;
   if (path.length == 0)
@@ -319,48 +462,56 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   if (!CGSizeEqualToSize(prevMedia, _sourceMediaSize) &&
       _sourceMediaSize.width > 0 && self.onSourceResolved)
     self.onSourceResolved();
-  uint32_t sid = (uint32_t)[desc[@"ioSurfaceID"] unsignedIntValue];
-  uint64_t gen = (uint64_t)[desc[@"generation"] unsignedLongLongValue];
-  if (sid == 0)
-    return;
-  if (sid == _resolvedSurfaceID && gen == _resolvedGeneration && _sourceTexture)
-    return;
 
-  if (sid != _resolvedSurfaceID || !_sourceTexture) {
-    IOSurfaceRef surf = IOSurfaceLookup((IOSurfaceID)sid);
-    if (!surf) {
-      KKLogWarn(@"KKMiniCanvasView: IOSurfaceLookup(%u) failed", sid);
-      return;
+  // Walk the multi-slot array if present; fall back to the top-level
+  // single-slot keys (descriptor format pre-onion-skin).
+  NSArray *slotEntries = desc[@"slots"];
+  if (![slotEntries isKindOfClass:NSArray.class] || slotEntries.count == 0) {
+    NSDictionary *one = @{
+      @"ioSurfaceID" : desc[@"ioSurfaceID"] ?: @0,
+      @"generation" : desc[@"generation"] ?: @0,
+      @"tag" : @0,
+    };
+    slotEntries = @[ one ];
+  }
+
+  NSUInteger n = slotEntries.count;
+  while (_filmstripSlots.count < n)
+    [_filmstripSlots addObject:[[_KKMiniFilmSlot alloc] init]];
+  while (_filmstripSlots.count > n)
+    [_filmstripSlots removeLastObject];
+
+  BOOL anyChange = NO;
+  for (NSUInteger i = 0; i < n; i++) {
+    NSDictionary *e = slotEntries[i];
+    uint32_t sid = (uint32_t)[e[@"ioSurfaceID"] unsignedIntValue];
+    uint64_t gen = (uint64_t)[e[@"generation"] unsignedLongLongValue];
+    double tag = [e[@"tag"] doubleValue];
+    _KKMiniFilmSlot *slot = _filmstripSlots[i];
+    if (sid != slot.sid || gen != slot.generation || tag != slot.tag) {
+      if ([self _resolveSlot:slot sid:sid gen:gen tag:tag])
+        anyChange = YES;
     }
-    NSUInteger w = IOSurfaceGetWidth(surf);
-    NSUInteger h = IOSurfaceGetHeight(surf);
-    MTLTextureDescriptor *td = [MTLTextureDescriptor
-        texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
-                                     width:w
-                                    height:h
-                                 mipmapped:NO];
-    td.usage = MTLTextureUsageShaderRead;
-    td.storageMode = MTLStorageModeShared;
-    id<MTLTexture> tex = [self.device newTextureWithDescriptor:td
-                                                     iosurface:surf
-                                                         plane:0];
-    if (!tex) {
-      KKLogWarn(@"KKMiniCanvasView: wrap IOSurface %u as texture failed", sid);
-      CFRelease(surf);
-      return;
-    }
-    if (_sourceSurface)
-      CFRelease(_sourceSurface);
-    _sourceSurface = surf;
-    _sourceTexture = tex;
-    _processedTexture = nil; // size changed — rebuilt lazily in draw
+  }
+
+  // Clip aspect tracks slot 0.
+  _KKMiniFilmSlot *s0 = _filmstripSlots.firstObject;
+  if (s0.surface) {
+    NSUInteger w = IOSurfaceGetWidth(s0.surface);
+    NSUInteger h = IOSurfaceGetHeight(s0.surface);
     if (h > 0)
       _clipAspect = (CGFloat)w / (CGFloat)h;
   }
-  _resolvedSurfaceID = sid;
-  _resolvedGeneration = gen;
-  [self setNeedsDisplay:YES];
+  [self _syncSlot0Aliases];
+  if (anyChange)
+    [self setNeedsDisplay:YES];
 }
+
+// Slot 0's content rect — the editable cell when onion-skin is on, and the
+// single rectangle when it's off. Layout for the filmstrip is then computed
+// as N cells of this width laid horizontally, with `kFilmstripGap` between
+// (drawable space).
+static const CGFloat kFilmstripGap = 16.0;
 
 - (CGRect)_contentRectInDrawable {
   CGSize d = self.drawableSize;
@@ -383,20 +534,52 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   return CGRectMake(cx - w / 2.0, cy - h / 2.0, w, h);
 }
 
-- (void)_ensureProcessedTexture {
-  if (!_sourceTexture)
+// Filmstrip layout: the ACTIVE slot's cell sits at the viewport centre (so
+// pan=0 frames it like the single-slot case + all OSC handle code reads
+// `_contentRectInDrawable` and naturally targets the active cell). Other
+// cells fan out left/right of active, kFilmstripGap apart.
+- (CGRect)_filmstripCellRectInDrawable:(NSUInteger)i ofTotal:(NSUInteger)n {
+  CGRect r = [self _contentRectInDrawable];
+  if (n <= 1)
+    return r;
+  // Onion mode: every slot draws into the ACTIVE cell rect (stacked).
+  if (_renderMode == 2)
+    return r;
+  CGSize d = self.drawableSize;
+  CGFloat s = self.window.backingScaleFactor;
+  if (s <= 0)
+    s = 2.0;
+  CGFloat gap = kFilmstripGap * s;
+  CGFloat cellW = r.size.width;
+  CGFloat stride = cellW + gap;
+  NSUInteger active = [self _activeSlotIndex];
+  CGFloat activeCenterX = d.width / 2.0 + _panPixels.x;
+  CGFloat cellCenterX = activeCenterX + ((CGFloat)i - (CGFloat)active) * stride;
+  return CGRectMake(cellCenterX - cellW / 2.0, r.origin.y, cellW,
+                    r.size.height);
+}
+
+- (void)_ensureProcessedTextureForSlot:(_KKMiniFilmSlot *)slot {
+  if (!slot.sourceTexture)
     return;
-  if (_processedTexture && _processedTexture.width == _sourceTexture.width &&
-      _processedTexture.height == _sourceTexture.height)
+  if (slot.processedTexture &&
+      slot.processedTexture.width == slot.sourceTexture.width &&
+      slot.processedTexture.height == slot.sourceTexture.height)
     return;
   MTLTextureDescriptor *td = [MTLTextureDescriptor
       texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
-                                   width:_sourceTexture.width
-                                  height:_sourceTexture.height
+                                   width:slot.sourceTexture.width
+                                  height:slot.sourceTexture.height
                                mipmapped:NO];
   td.usage = MTLTextureUsageShaderRead | MTLTextureUsageRenderTarget;
   td.storageMode = MTLStorageModePrivate;
-  _processedTexture = [self.device newTextureWithDescriptor:td];
+  slot.processedTexture = [self.device newTextureWithDescriptor:td];
+}
+
+- (void)_ensureProcessedTexture {
+  _KKMiniFilmSlot *s0 = _filmstripSlots.firstObject;
+  [self _ensureProcessedTextureForSlot:s0];
+  _processedTexture = s0.processedTexture;
 }
 
 // Encodes one shared KKPointOSC glyph centered at `centerPts` (overlay
@@ -446,52 +629,135 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
 
   id<MTLCommandBuffer> cb = [_queue commandBuffer];
 
-  // Let the plugin run its effect into an offscreen at source size first;
-  // fall back to the raw source if no delegate handles it.
-  id<MTLTexture> displayTex = _sourceTexture;
+  // Per-slot effect pass — the plugin's renderer reads its `editFraction`
+  // property to pick which keypose's params to apply, so we mutate it
+  // around each slot's process call. KVC because the view only knows the
+  // canvasDelegate via its protocol (the renderer's concrete class lives in
+  // the same KK module, so this stays cheap).
   id<KKMiniCanvasDelegate> del = self.canvasDelegate;
-  if (_sourceTexture && del &&
-      [del respondsToSelector:@selector(miniCanvas:processSourceTexture:
-                                        intoTexture:commandBuffer:)]) {
-    [self _ensureProcessedTexture];
-    if (_processedTexture && [del miniCanvas:self
-                                 processSourceTexture:_sourceTexture
-                                          intoTexture:_processedTexture
-                                        commandBuffer:cb])
-      displayTex = _processedTexture;
+  NSUInteger n = _filmstripSlots.count;
+  BOOL canProcess =
+      (del && [del respondsToSelector:@selector(miniCanvas:processSourceTexture:
+                                                intoTexture:commandBuffer:)]);
+  NSNumber *savedFrac =
+      canProcess && n > 1
+          ? [(NSObject *)del valueForKey:@"editFraction"] // nil if absent
+          : nil;
+  if (canProcess) {
+    for (NSUInteger i = 0; i < n; i++) {
+      _KKMiniFilmSlot *slot = _filmstripSlots[i];
+      if (!slot.sourceTexture)
+        continue;
+      [self _ensureProcessedTextureForSlot:slot];
+      if (!slot.processedTexture)
+        continue;
+      if (n > 1) {
+        @try {
+          [(NSObject *)del setValue:@(slot.tag) forKey:@"editFraction"];
+        } @catch (...) {
+        }
+      }
+      [del miniCanvas:self
+          processSourceTexture:slot.sourceTexture
+                   intoTexture:slot.processedTexture
+                 commandBuffer:cb];
+    }
+    if (savedFrac) {
+      @try {
+        [(NSObject *)del setValue:savedFrac forKey:@"editFraction"];
+      } @catch (...) {
+      }
+    }
   }
+  // Slot 0 alias kept fresh for the OSC / handle / border code paths.
+  _processedTexture = _filmstripSlots.firstObject.processedTexture;
 
   id<MTLRenderCommandEncoder> enc = [cb renderCommandEncoderWithDescriptor:rpd];
 
-  if (displayTex && _pipeline) {
-    CGRect r = [self _contentRectInDrawable];
+  if (_pipeline) {
     CGSize d = self.drawableSize;
-    float cx = (float)(CGRectGetMidX(r) - d.width / 2.0);
-    float cy = (float)(CGRectGetMidY(r) - d.height / 2.0);
-    float hw = (float)(r.size.width / 2.0);
-    float hh = (float)(r.size.height / 2.0);
-
-    // Source arrives vertically flipped relative to view space (FCP Y-down
-    // image origin + the MPS blit), so V is flipped; U stays normal.
-    KKVertex2D verts[4] = {
-        {{cx - hw, cy + hh}, {0, 1}}, // top-left
-        {{cx - hw, cy - hh}, {0, 0}}, // bottom-left
-        {{cx + hw, cy + hh}, {1, 1}}, // top-right
-        {{cx + hw, cy - hh}, {1, 0}}, // bottom-right
-    };
     simd_uint2 vp = {(unsigned)d.width, (unsigned)d.height};
+    BOOL onion = (_renderMode == 2 && n > 1);
+    NSUInteger activeIdx = onion ? [self _activeSlotIndex] : 0;
+
+    // Helper: emit one textured quad for slot `i` at its cell rect, using
+    // the currently-bound pipeline (texture / tint / alpha bound by caller).
+    void (^drawSlotQuad)(NSUInteger, id<MTLTexture>) =
+        ^(NSUInteger i, id<MTLTexture> tex) {
+          CGRect r = [self _filmstripCellRectInDrawable:i ofTotal:n];
+          float cx = (float)(CGRectGetMidX(r) - d.width / 2.0);
+          float cy = (float)(CGRectGetMidY(r) - d.height / 2.0);
+          float hw = (float)(r.size.width / 2.0);
+          float hh = (float)(r.size.height / 2.0);
+          KKVertex2D verts[4] = {
+              {{cx - hw, cy + hh}, {0, 1}},
+              {{cx - hw, cy - hh}, {0, 0}},
+              {{cx + hw, cy + hh}, {1, 1}},
+              {{cx + hw, cy - hh}, {1, 0}},
+          };
+          [enc setVertexBytes:verts
+                       length:sizeof(verts)
+                      atIndex:KKVertexInputIndex_Vertices];
+          [enc setFragmentTexture:tex atIndex:KKTextureIndex_InputImage];
+          [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                  vertexStart:0
+                  vertexCount:4];
+        };
 
     [enc setRenderPipelineState:_pipeline];
-    [enc setVertexBytes:verts
-                 length:sizeof(verts)
-                atIndex:KKVertexInputIndex_Vertices];
     [enc setVertexBytes:&vp
                  length:sizeof(vp)
                 atIndex:KKVertexInputIndex_ViewportSize];
-    [enc setFragmentTexture:displayTex atIndex:KKTextureIndex_InputImage];
-    [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
-            vertexStart:0
-            vertexCount:4];
+
+    if (_renderMode == 0) {
+      // Off: only the active slot, even if the descriptor still has the
+      // old multi-slot list — avoids a fan-out flash on a Filmstrip→Off
+      // pill flip before the descriptor poll resyncs to a single slot.
+      NSUInteger ai = (n > 1) ? [self _activeSlotIndex] : 0;
+      _KKMiniFilmSlot *slot = _filmstripSlots[ai];
+      id<MTLTexture> tex = slot.processedTexture ?: slot.sourceTexture;
+      if (tex)
+        drawSlotQuad(ai, tex);
+    } else if (!onion) {
+      // Filmstrip: passthrough for every slot, each in its own cell.
+      for (NSUInteger i = 0; i < n; i++) {
+        _KKMiniFilmSlot *slot = _filmstripSlots[i];
+        id<MTLTexture> tex = slot.processedTexture ?: slot.sourceTexture;
+        if (!tex)
+          continue;
+        drawSlotQuad(i, tex);
+      }
+    } else if (_onionPipeline) {
+      // Onion: active frame opaque first, then prev (red) / next (blue)
+      // ghosts on top with a low alpha so the active still reads through.
+      // (Drawing active LAST would fully cover the ghosts — they paint
+      // every pixel, not just outlines, so they'd be invisible.)
+      _KKMiniFilmSlot *aSlot = _filmstripSlots[activeIdx];
+      id<MTLTexture> aTex = aSlot.processedTexture ?: aSlot.sourceTexture;
+      if (aTex)
+        drawSlotQuad(activeIdx, aTex);
+
+      [enc setRenderPipelineState:_onionPipeline];
+      [enc setVertexBytes:&vp
+                   length:sizeof(vp)
+                  atIndex:KKVertexInputIndex_ViewportSize];
+      for (NSInteger side = -1; side <= 1; side += 2) {
+        NSInteger idx = (NSInteger)activeIdx + side;
+        if (idx < 0 || idx >= (NSInteger)n)
+          continue;
+        _KKMiniFilmSlot *slot = _filmstripSlots[idx];
+        id<MTLTexture> tex = slot.processedTexture ?: slot.sourceTexture;
+        if (!tex)
+          continue;
+        simd_float4 tintRGBA = (side < 0)
+                                   ? (simd_float4){1.0f, 0.2f, 0.2f, 0.7f}
+                                   : (simd_float4){0.2f, 0.4f, 1.0f, 0.7f};
+        float outAlpha = 0.35f;
+        [enc setFragmentBytes:&tintRGBA length:sizeof(tintRGBA) atIndex:0];
+        [enc setFragmentBytes:&outAlpha length:sizeof(outAlpha) atIndex:1];
+        drawSlotQuad((NSUInteger)idx, tex);
+      }
+    }
   }
 
   // Crop border — drawn here (before the glyphs) so the handles sit on
@@ -645,8 +911,42 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
 - (void)mouseDown:(NSEvent *)event {
   // End any focused value field (see _KKMiniCanvasOverlay -mouseDown:).
   [self.window makeFirstResponder:nil];
-  if (event.clickCount == 2)
+  if (event.clickCount == 2) {
     [self resetView];
+    return;
+  }
+  // Filmstrip: a click in an INACTIVE cell asks the host to swap the popover
+  // to that KP. Single-slot mode (or click in the active cell) falls through.
+  // Onion stacks every cell on the active rect — there's no spatial way to
+  // pick a specific KP, so we suppress here and let the header's prev/next
+  // buttons drive navigation instead.
+  NSUInteger n = _filmstripSlots.count;
+  if (n > 1 && self.onFilmstripCellActivated && _renderMode != 2) {
+    NSPoint vp = [self convertPoint:event.locationInWindow fromView:nil];
+    CGFloat s = self.window.backingScaleFactor;
+    if (s <= 0)
+      s = 2.0;
+    NSUInteger active = [self _activeSlotIndex];
+    for (NSUInteger i = 0; i < n; i++) {
+      if (i == active)
+        continue;
+      CGRect cellDrawable = [self _filmstripCellRectInDrawable:i ofTotal:n];
+      // Convert drawable px → view points so it lines up with `vp` (which is
+      // in view points). The MTKView itself isn't flipped, so the Y origin
+      // already matches; we just rescale.
+      CGRect cell =
+          CGRectMake(cellDrawable.origin.x / s, cellDrawable.origin.y / s,
+                     cellDrawable.size.width / s, cellDrawable.size.height / s);
+      if (CGRectContainsPoint(cell, vp)) {
+        // Reset pan so the newly-activated cell lands centred — otherwise
+        // the existing pan stays applied to the new layout and the strip
+        // visually jumps even further off-centre.
+        _panPixels = CGPointZero;
+        self.onFilmstripCellActivated(_filmstripSlots[i].tag);
+        return;
+      }
+    }
+  }
 }
 
 - (void)resetView {

@@ -13,6 +13,16 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// Mini-canvas render mode for keypose-value popovers. Off = single frame
+/// at the active KP; Filmstrip = one rendered frame per KP, side-by-side in
+/// the pannable canvas; Onion = all KP frames stacked on the active cell
+/// with prev/next tinting. Persisted in the host UI-state blob.
+typedef NS_ENUM(NSInteger, KKMiniCanvasRenderMode) {
+  KKMiniCanvasRenderModeOff = 0,
+  KKMiniCanvasRenderModeFilmstrip = 1,
+  KKMiniCanvasRenderModeOnion = 2,
+};
+
 /// Plugin-agnostic timeline lane editor. Plugin provides available lane
 /// templates (KKLane with valueType/ranges, no keyposes); view handles opt-in
 /// pills, hold value editors, and the static-values popover. Used as shared
@@ -68,6 +78,43 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Reset the Basic graph's pinch-zoom/pan back to fit.
 - (void)resetZoom;
+
+/// Swap the visible motion graph between Basic (0) and Advanced (1). Defaults
+/// to Basic. Only changes which child is visible; the timeline blob and lane
+/// opt-in state are shared.
+- (void)setActiveTab:(NSInteger)tab;
+
+/// Advanced-tab selection mirror plumbing. The inspector wires its detached
+/// copy to forward selection both ways so both views stay in sync. Selection
+/// state is per-view (not in the timeline blob), so the bridge lives here.
+/// `applyAdvancedSelectionPillKeys:gapKeys:` is a no-op when sets match,
+/// breaking the ping-pong loop. Fires `onAdvancedSelectionChanged` only on
+/// genuine local user-driven changes (clicks, marquee, delete, clear, esc).
+@property(nonatomic, copy, nullable) void (^onAdvancedSelectionChanged)
+    (NSSet<NSString *> *pillKeys, NSSet<NSString *> *gapKeys);
+- (void)applyAdvancedSelectionPillKeys:(NSSet<NSString *> *)pillKeys
+                               gapKeys:(NSSet<NSString *> *)gapKeys;
+
+/// Block all user interaction on the timeline graphs while an overlay
+/// (e.g. the Basic-compat banner) is up — stops the Advanced row hover
+/// highlight and any click-through on either tab.
+- (void)setOverlayBlockingInteractions:(BOOL)blocked;
+
+/// Optional accessory buttons for the inspector toolbar that depend on the
+/// active tab (e.g. Advanced's clear-selection). Owned by this view, slotted
+/// in by the inspector next to the reset-zoom button. Recomputed on tab
+/// change; `onAccessoryButtonsChanged` fires so the inspector can re-mount.
+/// May be empty.
+@property(nonatomic, readonly) NSArray<NSView *> *accessoryButtons;
+@property(nonatomic, copy, nullable) void (^onAccessoryButtonsChanged)(void);
+
+/// Mini-canvas render mode (see typedef above). The 3-way pill lives in the
+/// popover's header bar (only visible while a boundary popover is open).
+/// Setter is the host pushing the persisted value; `onRenderModeChanged`
+/// relays user picks back.
+@property(nonatomic) KKMiniCanvasRenderMode renderMode;
+@property(nonatomic, copy, nullable) void (^onRenderModeChanged)
+    (KKMiniCanvasRenderMode mode);
 
 /// The footer row view that contains the "Add properties…" dropdown trigger.
 /// Useful as a joyride spotlight target.

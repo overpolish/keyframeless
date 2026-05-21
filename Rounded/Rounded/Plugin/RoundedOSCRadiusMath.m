@@ -63,19 +63,10 @@ double RoundedSnapshotRadiusAtFraction(double frac) {
 // compute eps as ~1 frame in fraction units: frameDurSec / clipDurSec.
 // Pushed in from the plugin render path (FxTimingAPI is unavailable here).
 static double sFrameDurSec = 1.0 / 60.0;
-static const double kRoundedSnapEpsilonMin = 1e-4;
 
 void RoundedSetFrameDurationSeconds(double frameDurSec) {
   if (frameDurSec > 0.0)
     sFrameDurSec = frameDurSec;
-}
-
-static double _snapEpsilonForLane(KKLane *lane) {
-  double clipDur = lane.lastKnownClipDuration;
-  if (clipDur <= 0.0)
-    return 0.05; // unknown duration → wide enough for any reasonable clip
-  double eps = sFrameDurSec / clipDur;
-  return eps < kRoundedSnapEpsilonMin ? kRoundedSnapEpsilonMin : eps;
 }
 
 BOOL RoundedLaneVisibleAtFraction(NSString *label, double frac) {

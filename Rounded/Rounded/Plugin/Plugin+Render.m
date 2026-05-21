@@ -15,19 +15,24 @@
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 
 // Reverse channel: the boundary-value popover writes the requested clip
-// fraction; YES + *outFrac set when a boundary preview is active.
-static BOOL KKReadBoundaryRequest(NSString *path, double *outFrac) {
+// fraction(s). Returns the `fracs[]` array if present and the request is
+// active. Falls back to single-element `[frac]` for old-format payloads.
+static NSArray<NSNumber *> *KKReadBoundaryRequestFracs(NSString *path) {
   NSData *d = [NSData dataWithContentsOfFile:path];
   if (!d)
-    return NO;
+    return nil;
   NSDictionary *j = [NSJSONSerialization JSONObjectWithData:d
                                                     options:0
                                                       error:nil];
   if (![j isKindOfClass:[NSDictionary class]] || ![j[@"active"] boolValue])
-    return NO;
-  if (outFrac)
-    *outFrac = [j[@"frac"] doubleValue];
-  return YES;
+    return nil;
+  NSArray *fracs = j[@"fracs"];
+  if ([fracs isKindOfClass:[NSArray class]] && fracs.count > 0)
+    return fracs;
+  NSNumber *frac = j[@"frac"];
+  if (frac)
+    return @[ frac ];
+  return nil;
 }
 
 @implementation RoundedPlugin (Render)
@@ -154,27 +159,41 @@ static BOOL KKReadBoundaryRequest(NSString *path, double *outFrac) {
   if (cur)
     [reqs addObject:cur];
 
-  double frac = -1.0;
-  BOOL boundaryActive =
-      KKReadBoundaryRequest(RoundedMiniCanvasRequestPath, &frac);
+  NSArray<NSNumber *> *fracs =
+      KKReadBoundaryRequestFracs(RoundedMiniCanvasRequestPath);
+  BOOL boundaryActive = fracs.count > 0;
   self.boundaryFeedActive = boundaryActive;
   if (boundaryActive) {
     // FxTimingAPI returns 0 here; use start/duration cached from the render
-    // path. (Host-aware FCP/Motion mapping is step d.)
+    // path.
     double es = self.cachedEffectStartSec;
     double ed = self.cachedEffectDurSec;
-    double sec = es + frac * ed;
-    self.lastBoundaryReqSec = sec;
+    NSMutableArray<NSNumber *> *reqSecs =
+        [NSMutableArray arrayWithCapacity:fracs.count];
     if (ed > 0) {
-      CMTime bt = CMTimeMakeWithSeconds(sec, 600);
-      FxImageTileRequest *br = [[[FxImageTileRequest alloc]
-          initWithSource:kFxImageTileRequestSourceEffectClip
-                    time:bt
-          includeFilters:YES
-             parameterID:0] autorelease];
-      if (br)
-        [reqs addObject:br];
+      for (NSNumber *f in fracs) {
+        double sec = es + f.doubleValue * ed;
+        [reqSecs addObject:@(sec)];
+        CMTime bt = CMTimeMakeWithSeconds(sec, 600);
+        FxImageTileRequest *br = [[[FxImageTileRequest alloc]
+            initWithSource:kFxImageTileRequestSourceEffectClip
+                      time:bt
+            includeFilters:YES
+               parameterID:0] autorelease];
+        if (br)
+          [reqs addObject:br];
+      }
     }
+    // First requested time keeps populating lastBoundaryReqSec so any
+    // single-slot consumer still works; the multi-slot path reads
+    // boundaryReqSecs.
+    self.lastBoundaryReqSec =
+        reqSecs.count ? reqSecs.firstObject.doubleValue : 0.0;
+    self.boundaryReqSecs = reqSecs;
+    self.boundaryReqFracs = fracs;
+  } else {
+    self.boundaryReqSecs = nil;
+    self.boundaryReqFracs = nil;
   }
   *inputImageRequests = reqs;
   return YES;
@@ -413,45 +432,97 @@ static BOOL KKReadBoundaryRequest(NSString *path, double *outFrac) {
   // logs — sourceImages[1] was often the *previous* diamond's frame), so
   // index-based selection flickers between hold frames. If no delivered tile
   // matches this tick, skip the publish and keep the last good frame.
-  FxImageTile *feedTile = nil;
-  if (self.boundaryFeedActive) {
-    for (FxImageTile *t in sourceImages) {
-      if (fabs(CMTimeGetSeconds(t.mediaTime) - self.lastBoundaryReqSec) <
-          0.034) { // ~1 frame @30fps
-        feedTile = t;
-        break;
+  // Build the list of (slot index, tile) pairs to publish this tick. The
+  // boundary channel can request multiple times (onion-skin) — we match
+  // each requested time to whichever delivered tile's mediaTime is closest
+  // (within ~1 frame). Tiles that don't match anything are skipped (FCP
+  // serves stale boundary tiles while it re-schedules — same caveat as the
+  // single-time path).
+  NSArray<NSNumber *> *reqSecs = self.boundaryReqSecs;
+  NSMutableArray *pairs = [NSMutableArray array]; // @[ @(slotIdx), tile ]
+  if (self.boundaryFeedActive && reqSecs.count > 0) {
+    if (self.miniCanvasFeed.slotCount != reqSecs.count) {
+      self.miniCanvasFeed.slotCount = reqSecs.count;
+      [self.miniCanvasFeed publishDescriptor];
+    }
+    // Greedy assignment: each REQUESTED time claims its closest unclaimed
+    // delivered tile. Walking the requests (not the delivered list) avoids
+    // the playhead-tile (always sourceImages[0]) poaching a middle slot
+    // before the actual mid-clip tile gets a chance to match.
+    const double kMaxDt = 0.5;
+    NSMutableArray<NSNumber *> *availTileIdx = [NSMutableArray array];
+    for (NSUInteger i = 0; i < sourceImages.count; i++)
+      [availTileIdx addObject:@(i)];
+    for (NSUInteger slot = 0; slot < reqSecs.count; slot++) {
+      double want = reqSecs[slot].doubleValue;
+      NSInteger bestPos = -1;
+      double bestDt = kMaxDt;
+      for (NSUInteger p = 0; p < availTileIdx.count; p++) {
+        NSUInteger ti = availTileIdx[p].unsignedIntegerValue;
+        double mt = CMTimeGetSeconds(sourceImages[ti].mediaTime);
+        double dt = fabs(mt - want);
+        if (dt < bestDt) {
+          bestDt = dt;
+          bestPos = (NSInteger)p;
+        }
+      }
+      if (bestPos >= 0) {
+        NSUInteger ti = availTileIdx[bestPos].unsignedIntegerValue;
+        [pairs addObject:@[ @(slot), sourceImages[ti] ]];
+        [availTileIdx removeObjectAtIndex:bestPos];
       }
     }
   } else {
-    feedTile = sourceImages[0];
+    if (self.miniCanvasFeed.slotCount != 1)
+      self.miniCanvasFeed.slotCount = 1;
+    [pairs addObject:@[ @0, sourceImages[0] ]];
   }
-  if (feedTile) {
+  for (NSArray *pair in pairs) {
+    NSUInteger slotIdx = [pair[0] unsignedIntegerValue];
+    FxImageTile *feedTile = pair[1];
     FxRect sTile = feedTile.tilePixelBounds;
     FxRect sImg = feedTile.imagePixelBounds;
     BOOL fullFrame = (sTile.left == sImg.left && sTile.right == sImg.right &&
                       sTile.top == sImg.top && sTile.bottom == sImg.bottom);
-    if (fullFrame) {
-      KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
-      MTLPixelFormat pf =
-          [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
-      uint64_t rid = destinationImage.deviceRegistryID;
-      id<MTLCommandQueue> q = [cache commandQueueWithRegistryID:rid
-                                                    pixelFormat:pf];
-      id<MTLDevice> dev = [cache deviceWithRegistryID:rid];
-      if (q && dev) {
-        id<MTLTexture> srcTex = [feedTile metalTextureForDevice:dev];
-        if (!self.miniCanvasFeed) {
-          KKMiniCanvasFeed *feed = [[KKMiniCanvasFeed alloc]
-              initWithDescriptorPath:RoundedMiniCanvasDescriptorPath];
-          self.miniCanvasFeed = feed;
-          [feed release];
-        }
-        [self.miniCanvasFeed updateWithSourceTexture:srcTex
-                                              device:dev
-                                        commandQueue:q];
-        [cache returnCommandQueueToCache:q];
-      }
+    if (!fullFrame)
+      continue;
+    // FCP's project-library preview re-runs the effect into a 1920×1080
+    // browser thumb destination while passing the same source. Both
+    // contexts write into the same per-instance feed slot 0 → aspect
+    // ping-pongs. Gate on dest *aspect* matching the source within a
+    // generous tolerance (FCP often delivers off-by-one bounds for the
+    // canonical render).
+    FxRect dImg = destinationImage.imagePixelBounds;
+    int sW = sImg.right - sImg.left, sH = sImg.top - sImg.bottom;
+    int dW = dImg.right - dImg.left, dH = dImg.top - dImg.bottom;
+    double sAsp = (sH > 0) ? fabs((double)sW / (double)sH) : 0;
+    double dAsp = (dH > 0) ? fabs((double)dW / (double)dH) : 0;
+    if (sAsp > 0 && dAsp > 0 && fabs(sAsp - dAsp) > 0.05)
+      continue;
+    KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
+    MTLPixelFormat pf =
+        [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
+    uint64_t rid = destinationImage.deviceRegistryID;
+    id<MTLCommandQueue> q = [cache commandQueueWithRegistryID:rid
+                                                  pixelFormat:pf];
+    id<MTLDevice> dev = [cache deviceWithRegistryID:rid];
+    if (!q || !dev)
+      continue;
+    id<MTLTexture> srcTex = [feedTile metalTextureForDevice:dev];
+    if (!self.miniCanvasFeed) {
+      KKMiniCanvasFeed *feed = [[KKMiniCanvasFeed alloc]
+          initWithDescriptorPath:RoundedMiniCanvasDescriptorPath];
+      self.miniCanvasFeed = feed;
+      [feed release];
     }
+    NSArray<NSNumber *> *fracs = self.boundaryReqFracs;
+    double tag = (slotIdx < fracs.count) ? fracs[slotIdx].doubleValue : 0.0;
+    [self.miniCanvasFeed updateSlot:slotIdx
+                  withSourceTexture:srcTex
+                                tag:tag
+                             device:dev
+                       commandQueue:q];
+    [cache returnCommandQueueToCache:q];
   }
 
   id<MTLRenderPipelineState> pipelineState =

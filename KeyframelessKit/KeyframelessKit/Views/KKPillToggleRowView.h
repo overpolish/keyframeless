@@ -34,6 +34,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)setState:(BOOL)on atIndex:(NSInteger)index;
 
+/// Screen rect of the pill at `index`. Used by joyride guides to cutout a
+/// single segment of a grouped tab/radio bar. NSZeroRect if out of range or
+/// not in a window.
+- (NSRect)guidePillScreenRectAtIndex:(NSInteger)index;
+
 @end
 
 NS_ASSUME_NONNULL_END

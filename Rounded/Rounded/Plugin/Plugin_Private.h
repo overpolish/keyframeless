@@ -53,6 +53,17 @@
 /// Requested boundary time (seconds), cached from -scheduleInputs: so the
 /// render tick can compare it against each delivered tile's mediaTime.
 @property(nonatomic) double lastBoundaryReqSec;
+/// Onion-skin: list of requested boundary times (seconds), one per
+/// filmstrip slot. Cached from -scheduleInputs: so renderDestinationImage
+/// can match each delivered tile by mediaTime back to a feed slot index.
+/// Nil when only single-time boundary preview is active.
+@property(nonatomic, copy, nullable) NSArray<NSNumber *> *boundaryReqSecs;
+/// Sister list of clip-fractions (0–1) for each requested boundary time,
+/// passed straight from the boundary-request file. Used as the feed slot's
+/// `tag` so the mini-canvas renderer can drive `editFraction` per slot. The
+/// `secs` array exists only to match delivered tiles by mediaTime; the
+/// fraction is what the lane evaluator uses.
+@property(nonatomic, copy, nullable) NSArray<NSNumber *> *boundaryReqFracs;
 /// Returns a copy of `timeline` with every lane's lastKnownClipDuration set
 /// to the current effect duration (seconds), so the Basic ruler/hover have a
 /// duration without extra plumbing (it then persists via the next blob

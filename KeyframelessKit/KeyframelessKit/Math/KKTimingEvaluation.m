@@ -81,6 +81,28 @@ static NSArray<NSNumber *> *_Nullable KKExpandComponentKinds(
   return out;
 }
 
+// Apply the modulation envelope's multiplicative factor `f` (≈ 1±intensity*
+// envelope) to `v`. Plain multiplication is a no-op when `v==0`, which
+// breaks oscillation on offset-style params (Crop X/Y centred at 0). For
+// near-zero values we fall back to an additive form whose amplitude scales
+// with the component's value range (componentMax-componentMin), so 0
+// wiggles by a meaningful fraction of its range instead of staying put.
+static double KKApplyModulationFactor(double v, double f,
+                                      NSArray<NSNumber *> *cMin,
+                                      NSArray<NSNumber *> *cMax, NSUInteger i) {
+  static const double kZeroThreshold = 1.0e-6;
+  if (fabs(v) >= kZeroThreshold)
+    return v * f;
+  double lo = (i < cMin.count) ? cMin[i].doubleValue : 0.0;
+  double hi = (i < cMax.count) ? cMax[i].doubleValue : 1.0;
+  double range = hi - lo;
+  if (range <= 0.0)
+    range = 1.0;
+  // Quarter-range amplitude keeps the wiggle visible at typical intensity
+  // values without overshooting the plot's headroom too aggressively.
+  return v + (f - 1.0) * range * 0.25;
+}
+
 static BOOL KKLaneIsGradient(KKTimingLane *lane) {
   for (NSNumber *k in lane.valueComponentKinds)
     if (k.integerValue == KKAnimatableParamKindGradient)
@@ -216,18 +238,28 @@ static NSArray<NSNumber *> *KKLaneRawValueAtFraction(KKLane *lane,
         (iv.modulation == KKIntervalModulationWiggle)     ? KKHoldEffectWiggle
         : (iv.modulation == KKIntervalModulationHandheld) ? KKHoldEffectHandheld
                                                           : KKHoldEffectBounce;
+    NSIndexSet *mask = iv.modulationComponents; // nil = all components
+    NSArray<NSNumber *> *cMin = lane.componentMin;
+    NSArray<NSNumber *> *cMax = lane.componentMax;
     if (iv.modulationLinked) {
       double f =
           KKApplyHoldEffect(localT, effect, iv.modulationIntensity,
                             iv.modulationFrequency, (int)iv.modulationSeed);
-      for (NSUInteger i = 0; i < result.count; i++)
-        result[i] = @(result[i].doubleValue * f);
+      for (NSUInteger i = 0; i < result.count; i++) {
+        if (mask && ![mask containsIndex:i])
+          continue;
+        result[i] =
+            @(KKApplyModulationFactor(result[i].doubleValue, f, cMin, cMax, i));
+      }
     } else {
       for (NSUInteger i = 0; i < result.count; i++) {
+        if (mask && ![mask containsIndex:i])
+          continue;
         double f = KKApplyHoldEffectForComponent(
             localT, effect, iv.modulationIntensity, iv.modulationFrequency,
             (int)iv.modulationSeed, (int)i);
-        result[i] = @(result[i].doubleValue * f);
+        result[i] =
+            @(KKApplyModulationFactor(result[i].doubleValue, f, cMin, cMax, i));
       }
     }
   }
@@ -312,8 +344,22 @@ static double _kkVisualToDataFrac(KKLane *lane, double visualFrac) {
   if (n < 2)
     return visualFrac;
 
-  // Shape detection — match KKShapeOfLane (count-based, framerate-agnostic).
   static const double kEps = 1e-4;
+  // The remap exists for the Basic projection (KPs anchored at canonical
+  // positions: first at 0, last at the last-frame). In Advanced the user
+  // can drag KPs anywhere, in which case the stored time IS the visual
+  // time — stretching the [first.time, last.time] range over [0, 1] would
+  // mis-time the lane (e.g. firstKP @ 0.2 then visualFrac=0.1 maps into
+  // the transition instead of clamping to firstKP's value).
+  // Heuristic: skip remap when first/last KPs aren't anchored to the
+  // Basic edges. Conservative — short clips at unknown frame durations
+  // can put `lastFrameFrac` slightly inside 1; allow ~2% slack.
+  if (kps.firstObject.time > 2.0 * kEps)
+    return visualFrac;
+  if (kps.lastObject.time < 0.98)
+    return visualFrac;
+
+  // Shape detection — match KKShapeOfLane (count-based, framerate-agnostic).
   BOOL inEn = NO, outEn = NO;
   if (n == 4) {
     inEn = YES;

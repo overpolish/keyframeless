@@ -307,6 +307,21 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
       KKKeyPose *nk = [KKKeyPose keyposeAtTime:oldTime values:values];
       nk.outgoing = oldOutgoing;
       out[best] = nk;
+      // Hold-link propagation (see RoundedOSC+MouseHandlers radius write).
+      if (best + 1 < (NSInteger)out.count && nk.outgoing.endpointsLinked) {
+        KKKeyPose *partner = out[best + 1];
+        KKKeyPose *np = [KKKeyPose keyposeAtTime:partner.time values:values];
+        np.outgoing = partner.outgoing;
+        out[best + 1] = np;
+      }
+      if (best > 0) {
+        KKKeyPose *prev = out[best - 1];
+        if (prev.outgoing.endpointsLinked) {
+          KKKeyPose *np = [KKKeyPose keyposeAtTime:prev.time values:values];
+          np.outgoing = prev.outgoing;
+          out[best - 1] = np;
+        }
+      }
       cropLane.keyposes = out;
     }
     lanes[laneIdx] = cropLane;

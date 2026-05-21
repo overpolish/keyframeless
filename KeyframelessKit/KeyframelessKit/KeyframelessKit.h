@@ -79,6 +79,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKShape.h>
 #import <KeyframelessKit/KKSnapEngine.h>
 #import <KeyframelessKit/KKSquarePointOSC.h>
+#import <KeyframelessKit/KKTimelineAdvancedView.h>
 #import <KeyframelessKit/KKTimelineBasicView+Guide.h>
 #import <KeyframelessKit/KKTimelineBasicView.h>
 #import <KeyframelessKit/KKTimelineInspectorButtons.h>
@@ -86,6 +87,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKTimelineInspectorView.h>
 #import <KeyframelessKit/KKTimelineLanesView+Guide.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
+#import <KeyframelessKit/KKTimingCompat.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 #import <KeyframelessKit/KKTimingLane.h>
 #import <KeyframelessKit/KKTimingStage.h>

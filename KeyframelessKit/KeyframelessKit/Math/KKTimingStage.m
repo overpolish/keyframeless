@@ -36,6 +36,7 @@
   c.modulationFrequency = _modulationFrequency;
   c.modulationSeed = _modulationSeed;
   c.modulationLinked = _modulationLinked;
+  c.modulationComponents = [_modulationComponents copy];
   c.lockedSeconds = _lockedSeconds;
   c.endpointsLinked = _endpointsLinked;
   c.pathData = _pathData;
@@ -52,6 +53,15 @@
   d[@"modulation_frequency"] = @(_modulationFrequency);
   d[@"modulation_seed"] = @(_modulationSeed);
   d[@"modulation_linked"] = @(_modulationLinked);
+  if (_modulationComponents) {
+    NSMutableArray<NSNumber *> *idx =
+        [NSMutableArray arrayWithCapacity:_modulationComponents.count];
+    [_modulationComponents
+        enumerateIndexesUsingBlock:^(NSUInteger i, BOOL *stop) {
+          [idx addObject:@(i)];
+        }];
+    d[@"modulation_components"] = idx;
+  }
   d[@"locked_seconds"] = @(_lockedSeconds);
   d[@"endpoints_linked"] = @(_endpointsLinked);
   if (_pathData) {
@@ -80,6 +90,13 @@
     i.modulationSeed = [d[@"modulation_seed"] unsignedIntValue];
   if (d[@"modulation_linked"])
     i.modulationLinked = [d[@"modulation_linked"] boolValue];
+  if ([d[@"modulation_components"] isKindOfClass:[NSArray class]]) {
+    NSMutableIndexSet *set = [NSMutableIndexSet indexSet];
+    for (NSNumber *n in d[@"modulation_components"])
+      if ([n isKindOfClass:[NSNumber class]])
+        [set addIndex:n.unsignedIntegerValue];
+    i.modulationComponents = set;
+  }
   if (d[@"locked_seconds"])
     i.lockedSeconds = [d[@"locked_seconds"] doubleValue];
   if (d[@"endpoints_linked"])
@@ -182,8 +199,12 @@
   c.label = [_label copy];
   c.groupKey = [_groupKey copy];
   c.enabled = _enabled;
+  c.valueType = _valueType;
+  c.componentMin = [_componentMin copy];
+  c.componentMax = [_componentMax copy];
   c.keyposes = [[NSArray alloc] initWithArray:_keyposes copyItems:YES];
   c.lastKnownClipDuration = _lastKnownClipDuration;
+  c.holdShape = _holdShape;
   return c;
 }
 
@@ -201,6 +222,8 @@
     d[@"component_max"] = _componentMax;
   d[@"keyposes"] = [_keyposes valueForKey:@"toDictionary"];
   d[@"last_known_clip_duration"] = @(_lastKnownClipDuration);
+  if (_holdShape != KKLaneHoldShapeAuto)
+    d[@"hold_shape"] = @(_holdShape);
   return d;
 }
 
@@ -221,6 +244,8 @@
   if ([d[@"component_max"] isKindOfClass:[NSArray class]])
     l.componentMax = d[@"component_max"];
   l.lastKnownClipDuration = [d[@"last_known_clip_duration"] doubleValue];
+  if (d[@"hold_shape"])
+    l.holdShape = (KKLaneHoldShape)[d[@"hold_shape"] integerValue];
   NSArray *rawKps = d[@"keyposes"];
   if ([rawKps isKindOfClass:[NSArray class]]) {
     NSMutableArray *kps = [NSMutableArray arrayWithCapacity:rawKps.count];
@@ -460,3 +485,29 @@ KKTimeline *KKTimelineRebalanced(KKTimeline *timeline, double oldDuration,
 }
 
 @end
+
+NSArray<NSString *> *KKLaneComponentLabels(KKLane *lane) {
+  if (!lane)
+    return nil;
+  switch (lane.valueType) {
+  case KKLaneValueTypeCrop:
+    return @[ @"W", @"H", @"X", @"Y" ];
+  case KKLaneValueTypeColor:
+    return @[ @"R", @"G", @"B", @"A" ];
+  case KKLaneValueTypeFloat:
+  case KKLaneValueTypeNormalized:
+    return nil;
+  case KKLaneValueTypeGradient:
+  case KKLaneValueTypeGeneric:
+  default: {
+    NSUInteger n = lane.keyposes.firstObject.values.count;
+    if (n <= 1)
+      return nil;
+    NSMutableArray<NSString *> *out = [NSMutableArray arrayWithCapacity:n];
+    for (NSUInteger i = 0; i < n; i++)
+      [out
+          addObject:[NSString stringWithFormat:@"%lu", (unsigned long)(i + 1)]];
+    return out;
+  }
+  }
+}

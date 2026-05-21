@@ -100,6 +100,13 @@ static const CGFloat kGroupPillPadX = 8.0;
   [self setNeedsDisplay:YES];
 }
 
+- (void)setStates:(NSArray<NSNumber *> *)states {
+  if ([_states isEqualToArray:states])
+    return;
+  _states = [states copy];
+  [self setNeedsDisplay:YES];
+}
+
 - (NSFont *)pillFont {
   return [NSFont systemFontOfSize:KKFontSizeSM weight:NSFontWeightMedium];
 }
@@ -253,6 +260,20 @@ static const CGFloat kGroupPillPadX = 8.0;
   return YES;
 }
 
+- (NSRect)guidePillScreenRectAtIndex:(NSInteger)index {
+  if (index < 0 || index >= _count)
+    return NSZeroRect;
+  NSWindow *w = self.window;
+  if (!w)
+    return NSZeroRect;
+  NSArray<NSValue *> *rects = [self pillRects];
+  if (index >= (NSInteger)rects.count)
+    return NSZeroRect;
+  NSRect r = rects[index].rectValue;
+  NSRect inWin = [self convertRect:r toView:nil];
+  return [w convertRectToScreen:inWin];
+}
+
 - (NSInteger)_pillIndexAt:(NSPoint)loc {
   NSArray<NSValue *> *rects = [self pillRects];
   for (NSInteger i = 0; i < (NSInteger)rects.count; i++)
@@ -268,10 +289,16 @@ static const CGFloat kGroupPillPadX = 8.0;
     return;
 
   // Radio: single-select, no sweep / undo bracket (consumer-managed).
+  // Clear every other pill so only the picked one ends up on (without this
+  // the row drifts to all-on as the user clicks each pill in turn).
   if (_radioMode) {
     if (_states[i].boolValue)
       return;
-    [self setState:YES atIndex:i];
+    NSMutableArray<NSNumber *> *next =
+        [NSMutableArray arrayWithCapacity:_count];
+    for (NSInteger k = 0; k < _count; k++)
+      [next addObject:@(k == i)];
+    [self setStates:next];
     if (_onToggled)
       _onToggled(i, YES);
     return;

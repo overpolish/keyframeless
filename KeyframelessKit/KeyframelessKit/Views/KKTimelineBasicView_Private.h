@@ -20,7 +20,10 @@ static const CGFloat kRulerH = 13.0;        // top clip-duration ruler strip
 static const CGFloat kRulerGap = 3.0;       // between ruler and graph top
 static const CGFloat kLabelStripH = 22.0;   // bottom strip: labels + checkbox
 static const CGFloat kGraphBottomGap = 6.0; // between track and label strip
-static const CGFloat kDiamondR = 5.0;       // half-diagonal of a boundary ◆
+static const CGFloat kDiamondR = 5.0;       // legacy diamond hit radius
+static const CGFloat kPillW = 6.0;          // boundary pill width
+static const CGFloat kPillInsetY = 4.0;     // pill inset from graph top/bottom
+static const CGFloat kPillHitSlop = 3.0;    // extra hit slop around pill width
 static const CGFloat kCurveWidth = 2.0;
 static const NSInteger kCurveSamples = 160;
 static const CGFloat kTickMinSpacing = 50.0; // px between ruler ticks
@@ -138,6 +141,17 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
   double _clipDurationSeconds;
   double _frameDurationSeconds;
   double _playheadFraction;
+  // Boundary-popover state — read by the onValue/onAnimate closures created
+  // in _openBoundaryPopoverForDiamond:. Stored as ivars (not closure
+  // locals) so an onion-skin filmstrip cell click can swap which boundary
+  // the open popover targets without rebuilding the popover. Match the
+  // closure captures in _openBoundaryPopoverForDiamond: 1:1.
+  KKBasicBoundary _curBoundary;
+  BOOL _curBoundaryInOn;
+  BOOL _curBoundaryOutOn;
+  double _curBoundaryHoldFrac;
+  KKBasicSection _curAnimateSec;
+  NSInteger _curDiamond;
   // Guide-only: optional callback fired AFTER the existing In/Out checkbox
   // handler runs. Lets a Joyride step advance on user toggle without
   // bypassing the normal _setInEnabled:/_setOutEnabled: path. phase: 0=In,
@@ -197,6 +211,10 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
                   dashed:(BOOL)dashed
                    color:(NSColor *)color;
 - (void)_drawDiamondAt:(NSPoint)c filled:(BOOL)filled color:(NSColor *)color;
+- (void)_drawPillAtX:(CGFloat)x
+              inRect:(NSRect)g
+              filled:(BOOL)filled
+               color:(NSColor *)color;
 - (void)_drawDurationForSection:(KKBasicSection)section
                          inRect:(NSRect)g
                            proj:(KKBasicProj)p
@@ -222,6 +240,9 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
 - (void)_openHoldPopover;
 - (void)_mutateHoldModWith:(void (^)(KKInterval *iv))mut;
 - (void)_setHoldModApplied:(BOOL)on forLabel:(NSString *)label;
+- (void)_setHoldModComponent:(NSUInteger)componentIdx
+                          on:(BOOL)on
+                    forLabel:(NSString *)label;
 - (void)_setHoldDriftApplied:(BOOL)on forLabel:(NSString *)label;
 - (void)_mutateInterval:(KKBasicSection)section
                    with:(void (^)(KKInterval *iv))mut;

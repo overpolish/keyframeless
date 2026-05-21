@@ -38,23 +38,8 @@
   // freezing the map (which caused a jarring re-warp on release).
   KKBasicProj xp = p;
 
-  // Only show a phase divider for an enabled phase — a disabled In/Out has
-  // no boundary; it's just an extension of the flat hold.
-  NSMutableArray<NSNumber *> *dividers = [NSMutableArray array];
-  if (p.inEnabled)
-    [dividers addObject:@(p.inEndFrac)];
-  if (p.outEnabled)
-    [dividers addObject:@(p.outStartFrac)];
-  [[[NSColor inspectorLabel] colorWithAlphaComponent:0.12] setStroke];
-  for (NSNumber *fn in dividers) {
-    double f = fn.doubleValue;
-    CGFloat x = KKBasicXForFrac(f, g, xp);
-    NSBezierPath *div = [NSBezierPath bezierPath];
-    [div moveToPoint:NSMakePoint(x, NSMinY(g))];
-    [div lineToPoint:NSMakePoint(x, NSMaxY(g))];
-    div.lineWidth = KKBorderWidthXS;
-    [div stroke];
-  }
+  // Phase dividers used to be drawn here; the boundary pills (further down)
+  // serve as the divider now — one less stroke per frame.
 
   // Stroke per section, all solid. A live transition (enabled In/Out) is
   // "non-hold" — warn-tinted so it reads distinctly. A disabled In/Out is
@@ -94,54 +79,43 @@
                   dashed:NO
                    color:p.outEnabled ? warn : hold];
 
-  // The Hold pair is always present, so its two diamonds always show. The
-  // first/last (In-start / Out-end) diamonds appear only when that phase is
-  // enabled — a disabled phase renders as a plain flat hold.
+  // Boundary pills — vertical capsules spanning the track height. Hold pair
+  // always shows when any lane is animatable; In-start / Out-end only when
+  // that phase is enabled (and rendered hollow = time-locked endpoint).
   if (p.anyAnimatable) {
-    [self
-        _drawDiamondAt:KKBasicPoint(g, p.inEndFrac,
-                                    KKBasicMotionY(p.inEndFrac, xp), lo, hi, xp)
+    [self _drawPillAtX:KKBasicXForFrac(p.inEndFrac, g, xp)
+                inRect:g
                 filled:YES
                  color:holdC];
-    [self _drawDiamondAt:KKBasicPoint(g, p.outStartFrac,
-                                      KKBasicMotionY(p.outStartFrac, xp), lo,
-                                      hi, xp)
-                  filled:YES
-                   color:holdC];
+    [self _drawPillAtX:KKBasicXForFrac(p.outStartFrac, g, xp)
+                inRect:g
+                filled:YES
+                 color:holdC];
   }
   if (p.inEnabled)
-    [self _drawDiamondAt:KKBasicPoint(g, 0.0, 0.0, lo, hi, xp)
-                  filled:NO
-                   color:warn];
+    [self _drawPillAtX:KKBasicXForFrac(0.0, g, xp)
+                inRect:g
+                filled:NO
+                 color:warn];
   if (p.outEnabled)
-    [self _drawDiamondAt:KKBasicPoint(g, 1.0, 0.0, lo, hi, xp)
-                  filled:NO
-                   color:warn];
+    [self _drawPillAtX:KKBasicXForFrac(1.0, g, xp)
+                inRect:g
+                filled:NO
+                 color:warn];
 
-  // When the Hold pair is linked, bridge the two interior diamonds with a
-  // tie-bar. Its rail rides *above the curve's peak* across the held span
-  // (sampled), so a high-amplitude modulation can never cross it — the
-  // bond stays a clean, unambiguous clamp.
+  // When the Hold pair is linked, bridge the two interior pills with a
+  // tie-bar. With full-height pills the bar floats just above the pill tops
+  // (a thin horizontal connector signalling the bond).
   if (p.anyAnimatable && [self _holdLinked]) {
-    NSPoint a = KKBasicPoint(g, p.inEndFrac, KKBasicMotionY(p.inEndFrac, xp),
-                             lo, hi, xp);
-    NSPoint b = KKBasicPoint(g, p.outStartFrac,
-                             KKBasicMotionY(p.outStartFrac, xp), lo, hi, xp);
-    CGFloat peakY = MAX(a.y, b.y);
-    NSInteger n = 48;
-    for (NSInteger i = 0; i <= n; i++) {
-      double t =
-          p.inEndFrac + (p.outStartFrac - p.inEndFrac) * (double)i / (double)n;
-      CGFloat cy =
-          KKBasicPoint(g, t, KKBasicMotionYSmoothed(t, p), lo, hi, xp).y;
-      peakY = MAX(peakY, cy);
-    }
-    CGFloat barY = MIN(peakY + kDiamondR + 6.0, NSMaxY(g) - 1.0);
+    CGFloat ax = KKBasicXForFrac(p.inEndFrac, g, xp);
+    CGFloat bx = KKBasicXForFrac(p.outStartFrac, g, xp);
+    CGFloat pillTopY = NSMaxY(g) - kPillInsetY;
+    CGFloat barY = MIN(pillTopY + 4.0, NSMaxY(g) - 1.0);
     NSBezierPath *tie = [NSBezierPath bezierPath];
-    [tie moveToPoint:NSMakePoint(a.x, a.y + kDiamondR)];
-    [tie lineToPoint:NSMakePoint(a.x, barY)];
-    [tie lineToPoint:NSMakePoint(b.x, barY)];
-    [tie lineToPoint:NSMakePoint(b.x, b.y + kDiamondR)];
+    [tie moveToPoint:NSMakePoint(ax, pillTopY)];
+    [tie lineToPoint:NSMakePoint(ax, barY)];
+    [tie lineToPoint:NSMakePoint(bx, barY)];
+    [tie lineToPoint:NSMakePoint(bx, pillTopY)];
     tie.lineWidth = KKBorderWidthSM;
     tie.lineJoinStyle = NSLineJoinStyleRound;
     tie.lineCapStyle = NSLineCapStyleRound;
@@ -230,6 +204,15 @@
 
 - (void)_drawDiamondAt:(NSPoint)c filled:(BOOL)filled color:(NSColor *)color {
   KKDrawKeyposeDiamond(c, kDiamondR, filled, color);
+}
+
+- (void)_drawPillAtX:(CGFloat)x
+              inRect:(NSRect)g
+              filled:(BOOL)filled
+               color:(NSColor *)color {
+  NSRect pill = NSMakeRect(x - kPillW * 0.5, NSMinY(g) + kPillInsetY, kPillW,
+                           NSHeight(g) - 2.0 * kPillInsetY);
+  KKDrawKeyposePill(pill, filled, color);
 }
 
 - (void)_drawDurationForSection:(KKBasicSection)section

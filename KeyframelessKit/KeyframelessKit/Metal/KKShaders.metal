@@ -43,3 +43,17 @@ fragment float4 KKTexturePassthroughFragment(KKRasterizerData in [[stage_in]],
 fragment float4 KKSolidColorFragment(KKRasterizerData in [[stage_in]], constant float4 *color [[buffer(0)]]) {
     return *color;
 }
+
+/// Onion-skin tint+alpha: samples the input texture, lerps RGB toward
+/// `tintRGBA.rgb` by `tintRGBA.a`, then multiplies the whole output by
+/// `outAlpha` (premultiplied). Lets KKMiniCanvasView stack prev/next KP
+/// frames with a coloured wash and a global opacity on the active cell.
+fragment float4 KKTextureTintFragment(KKRasterizerData in [[stage_in]],
+                                      texture2d<float> tex [[texture(KKTextureIndex_InputImage)]],
+                                      constant float4 *tintRGBA [[buffer(0)]], constant float *outAlpha [[buffer(1)]]) {
+    constexpr sampler s(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
+    float4 c = tex.sample(s, in.textureCoordinate);
+    float3 rgb = mix(c.rgb, tintRGBA->rgb, tintRGBA->a);
+    float a = c.a * (*outAlpha);
+    return float4(rgb * a, a);
+}

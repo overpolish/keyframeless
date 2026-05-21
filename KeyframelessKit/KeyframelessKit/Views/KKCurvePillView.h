@@ -30,6 +30,12 @@ typedef CGFloat (^KKCurvePillValueBlock)(NSInteger pillIndex, CGFloat t);
 @property(nonatomic) CGFloat fixedMin;
 @property(nonatomic) CGFloat fixedMax;
 
+/// Accent colour used for the selected pill border and its curve glyph.
+/// Defaults to `[NSColor accentMatchingHost]`. Transition-kind popovers
+/// override to `[NSColor warning]` so the glyph colour matches the curve
+/// the user will see drawn in the lane.
+@property(nonatomic, strong, nullable) NSColor *accentColor;
+
 - (void)redraw;
 
 /// View-space rect of pill `index` (0..pillCount-1). NSZeroRect if pillCount

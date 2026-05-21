@@ -27,6 +27,10 @@
   return _basicGraph;
 }
 
+- (KKTimelineAdvancedView *)advancedGraph {
+  return _advancedGraph;
+}
+
 - (void)guideCloseContentPopover {
   [_openContentPopover close];
 }

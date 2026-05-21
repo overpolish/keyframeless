@@ -87,20 +87,40 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface _KKStaticValuesPopoverView : NSView
 @property(nonatomic, weak, nullable) NSPopover *popover;
+/// The inner mini-canvas. Exposed so callers (e.g. the boundary popover
+/// path that wires onion-skin filmstrip clicks) can attach extra closures
+/// without threading another init parameter.
+@property(nonatomic, readonly, nullable) KKMiniCanvasView *miniCanvas;
 - (instancetype)
      initWithLanes:(NSArray<KKLane *> *)lanes
     descriptorPath:(nullable NSString *)descriptorPath
         clipAspect:(CGFloat)clipAspect
     canvasDelegate:(nullable id<KKMiniCanvasDelegate>)canvasDelegate
+        renderMode:(KKMiniCanvasRenderMode)renderMode
+     onModeChanged:(nullable void (^)(KKMiniCanvasRenderMode mode))onModeChanged
+        onNavigate:(nullable void (^)(NSInteger direction))onNavigate
      onHandleValue:(nullable void (^)(NSString *label,
                                       NSArray<NSNumber *> *values))onHandleValue
        onDragBegin:(nullable void (^)(void))onDragBegin
          onDragEnd:(nullable void (^)(void))onDragEnd;
+
+/// Enable/disable the popover header's prev/next KP buttons (only meaningful
+/// when `onNavigate` was passed at init). The lanes view calls this on open
+/// and on every in-place rebind so the chevrons reflect the active KP's
+/// position in the time-sorted KP list.
+- (void)setNavPrevEnabled:(BOOL)prev nextEnabled:(BOOL)next;
 - (void)updateUnoptedLanes:(NSArray<KKLane *> *)lanes;
 /// Set each row's reset-to-default value (called right after construction;
 /// rows are built during init so this can't be an init arg without churn).
 - (void)applyDefaultsProvider:
     (NSArray<NSNumber *> * (^)(NSString *label))provider;
+/// In-place value swap — push the latest values from `lanes` into the
+/// matching `_KKStaticValueRow`s without tearing down the popover. Used by
+/// the onion-skin filmstrip (Advanced) when the user clicks an inactive
+/// cell so the popover stays open but rebinds to a different KP. Pairs
+/// with the graph keeping its onValue/onAnimate closures reading a
+/// mutable `_currentPopoverFrac` ivar so writes target the new KP.
+- (void)rebindLanes:(NSArray<KKLane *> *)lanes;
 /// Append non-editable "excluded from this phase" rows (label + message +
 /// an Animate button → onAnimate(label)) and grow the view to fit. Called
 /// before the popover is shown so it sizes correctly.
@@ -135,7 +155,8 @@ NS_ASSUME_NONNULL_BEGIN
                        component:(NSInteger)component;
 + (CGFloat)heightForLanes:(NSArray<KKLane *> *)lanes
            descriptorPath:(nullable NSString *)descriptorPath
-               clipAspect:(CGFloat)clipAspect;
+               clipAspect:(CGFloat)clipAspect
+       showRenderModePill:(BOOL)showRenderModePill;
 @end
 
 @interface _KKDropdownTrigger : NSView

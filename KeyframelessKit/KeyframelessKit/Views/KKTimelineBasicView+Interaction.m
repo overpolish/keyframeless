@@ -6,6 +6,7 @@
 #import "KKTimelineBasicView_Private.h"
 
 #import "../Math/KKTimelineScale.h"
+#import "../Math/KKTimelineScrubMath.h"
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
 #import "KKKeyposeSymbol.h"
@@ -87,24 +88,23 @@
   return YES;
 }
 
-// Diamond index under `pt` (1 t=0, 2 t_inEnd, 3 t_outStart, 4 t=1), or 0.
+// Pill index under `pt` (1 t=0, 2 t_inEnd, 3 t_outStart, 4 t=1), or 0. Pills
+// span the full track height — the hit is a vertical band around the pill x
+// regardless of cursor y.
 - (NSInteger)_diamondAtPoint:(NSPoint)pt proj:(KKBasicProj)p rect:(NSRect)g {
-  double lo = 0.0, hi = 1.0;
-  KKBasicValueExtent(p, &lo, &hi);
-  CGFloat hitR = kDiamondR + 5.0;
-  NSPoint centers[4] = {
-      KKBasicPoint(g, 0.0, 0.0, lo, hi, p),
-      KKBasicPoint(g, p.inEndFrac, KKBasicMotionY(p.inEndFrac, p), lo, hi, p),
-      KKBasicPoint(g, p.outStartFrac, KKBasicMotionY(p.outStartFrac, p), lo, hi,
-                   p),
-      KKBasicPoint(g, 1.0, 0.0, lo, hi, p),
+  if (pt.y < NSMinY(g) || pt.y > NSMaxY(g))
+    return 0;
+  CGFloat xs[4] = {
+      KKBasicXForFrac(0.0, g, p),
+      KKBasicXForFrac(p.inEndFrac, g, p),
+      KKBasicXForFrac(p.outStartFrac, g, p),
+      KKBasicXForFrac(1.0, g, p),
   };
-  // The Hold pair (indices 1,2) is always present/hittable; the In-start
-  // (0) and Out-end (3) endpoints only when that phase is enabled.
   BOOL enabled[4] = {p.inEnabled, p.anyAnimatable, p.anyAnimatable,
                      p.outEnabled};
+  CGFloat halfHit = kPillW * 0.5 + kPillHitSlop;
   for (NSInteger i = 0; i < 4; i++)
-    if (enabled[i] && hypot(pt.x - centers[i].x, pt.y - centers[i].y) <= hitR)
+    if (enabled[i] && fabs(pt.x - xs[i]) <= halfHit)
       return i + 1;
   return 0;
 }
@@ -113,81 +113,39 @@
 // time-locked). A press that doesn't move opens the value popover for that
 // boundary instead.
 // Subtle snap so a scrub can land precisely on a diamond — important for the
-// main viewer OSC, which renders at the playhead time. Snap-in window is
-// small (4px) so free scrubbing is unaffected; only diamonds the user
-// actually sees are candidates (matches the visibility rules in
-// -_diamondAtPoint:proj:rect:). Once snapped, sticky until the cursor moves
-// past the wider snap-out threshold — without hysteresis, tiny cursor jitter
-// near the 4px boundary flips snapped/unsnapped every frame, which in
-// log-warped regions reads as the playhead pinging because the visual jump
-// on each unsnap is significant.
+// Snap window — closest enabled diamond within this many px wins; no
+// hysteresis (the old sticky-out caused worse jitter on log-warped regions).
 static const CGFloat kScrubSnapInPx = 4.0;
-static const CGFloat kScrubSnapOutPx = 12.0;
 
 - (double)_snappedScrubFracForX:(CGFloat)x proj:(KKBasicProj)p rect:(NSRect)g {
-  double rawFrac = KKBasicFracForX(x, g, p);
   // Visual scrubber stays unclamped to 1.0 so it can reach the right-edge
   // diamond on short clips (where 1-frameFrac is several percent inside the
   // edge). The actual playhead delivery is clamped to the last frame at the
-  // call site — see -_deliveredScrubFracFromVisual:.
-  double candidateFracs[4] = {0.0, p.inEndFrac, p.outStartFrac, 1.0};
-  BOOL enabled[4] = {p.inEnabled, p.anyAnimatable, p.anyAnimatable,
-                     p.outEnabled};
-
-  // Already snapped: stay snapped until cursor exits the wider window.
-  if (!isnan(_snappedScrubFrac)) {
-    for (NSInteger i = 0; i < 4; i++) {
-      if (!enabled[i] || candidateFracs[i] != _snappedScrubFrac)
-        continue;
-      CGFloat cx = KKBasicXForFrac(candidateFracs[i], g, p);
-      if (fabs(x - cx) <= kScrubSnapOutPx)
-        return _snappedScrubFrac;
-      break;
-    }
-    _snappedScrubFrac = NAN;
+  // call site — see KKTimelineScrubFracDelivered().
+  NSMutableArray<NSNumber *> *cands = [NSMutableArray arrayWithCapacity:4];
+  if (p.inEnabled)
+    [cands addObject:@(0.0)];
+  if (p.anyAnimatable) {
+    [cands addObject:@(p.inEndFrac)];
+    [cands addObject:@(p.outStartFrac)];
   }
-
-  // Not snapped: pick the closest candidate within the entry window.
-  double bestFrac = rawFrac;
-  CGFloat bestDist = kScrubSnapInPx;
-  double bestSnapFrac = NAN;
-  for (NSInteger i = 0; i < 4; i++) {
-    if (!enabled[i])
-      continue;
-    CGFloat cx = KKBasicXForFrac(candidateFracs[i], g, p);
-    CGFloat d = fabs(x - cx);
-    if (d < bestDist) {
-      bestDist = d;
-      bestFrac = candidateFracs[i];
-      bestSnapFrac = candidateFracs[i];
-    }
-  }
-  _snappedScrubFrac = bestSnapFrac;
-  return bestFrac;
+  if (p.outEnabled)
+    [cands addObject:@(1.0)];
+  return KKTimelineSnapFracInPixels(
+      x, KKBasicFracForX(x, g, p), cands,
+      ^CGFloat(double frac) {
+        return KKBasicXForFrac(frac, g, p);
+      },
+      kScrubSnapInPx, &_snappedScrubFrac);
 }
 
-// Decouple visual scrubber position from the value handed to the host. FCP
-// can't park its playhead at clipEnd (the last *frame* sits one frame before
-// it), so when the visual scrubber is at the right edge we still need to
-// deliver `(clipDur - frameDur) / clipDur` for the seek to land on a real
-// frame and the keypose to be reachable.
 - (double)_deliveredScrubFracFromVisual:(double)visualFrac {
-  double clipDur = [self _clipDuration];
-  if (clipDur <= 0.0 || _frameDurationSeconds <= 0.0 ||
-      _frameDurationSeconds >= clipDur)
-    return visualFrac;
-  double maxFrac = (clipDur - _frameDurationSeconds) / clipDur;
-  return visualFrac > maxFrac ? maxFrac : visualFrac;
+  return KKTimelineScrubFracDelivered(visualFrac, [self _clipDuration],
+                                      _frameDurationSeconds);
 }
 
-// YES if pt is in the ruler strip (above the track). The whole ruler is the
-// scrub zone — click anywhere there to jump the playhead, then drag. It's
-// separate from the track so it never conflicts with diamonds / gap clicks.
 - (BOOL)_isInScrubBand:(NSPoint)pt rect:(NSRect)g {
-  if (NSWidth(g) <= 0)
-    return NO;
-  return pt.x >= NSMinX(g) && pt.x <= NSMaxX(g) && pt.y >= NSMaxY(g) &&
-         pt.y <= NSMaxY(g) + kRulerGap + kRulerH + 2.0;
+  return KKTimelineScrubBandContainsPoint(pt, NSMinX(g), NSMaxX(g), NSMaxY(g));
 }
 
 - (void)mouseDown:(NSEvent *)event {
@@ -296,20 +254,9 @@ static const CGFloat kScrubSnapOutPx = 12.0;
     [self _openBoundaryPopoverForDiamond:d];
     return;
   }
-  // Modifier comes from the system HID state — NSEvent flags read empty in
-  // the plugin XPC.
-  CGEventFlags flags =
-      CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
+  // Link toggle moved to the right-click context menu — ctrl+click would
+  // conflict with AppKit's contextual-menu routing in the XPC inspector.
   KKBasicSection sec = [self _sectionAtPoint:_pressPoint];
-  if (flags & kCGEventFlagMaskCommand) {
-    // Cmd-click the Hold gap toggles its link (the Hold pair always exists).
-    if (sec == KKBasicSectionHold) {
-      KKBasicProj p = [self _projection];
-      if (p.anyAnimatable)
-        [self _toggleHoldLink];
-    }
-    return;
-  }
   // Plain click on a gap → that phase's popover. In/Out: easing. Hold:
   // modulation when flat, or the easing editor when it's a drift (a drift
   // is a real tween from hold-start to hold-end). A disabled In/Out reports
@@ -318,6 +265,42 @@ static const CGFloat kScrubSnapOutPx = 12.0;
     [self _openGapPopoverForSection:sec];
   else if (sec == KKBasicSectionHold)
     [self _openHoldPopover];
+}
+
+// Right-click on the Hold gap → "Link Endpoints" / "Unlink Endpoints".
+// In/Out sections have no link concept (the curve always spans those
+// phases as a single transition), so right-click there shows no menu.
+- (NSMenu *)menuForEvent:(NSEvent *)event {
+  NSPoint pt = [self convertPoint:event.locationInWindow fromView:nil];
+  KKBasicSection sec = [self _sectionAtPoint:pt];
+  if (sec != KKBasicSectionHold)
+    return nil;
+  KKBasicProj p = [self _projection];
+  if (!p.anyAnimatable)
+    return nil;
+  // Probe the first animatable lane's Hold interval to decide the verb —
+  // _toggleHoldLink mutates every animatable lane's Hold uniformly so this
+  // first-lane state is representative of the toggle's effect.
+  KKInterval *holdIv = nil;
+  for (KKLane *lane in _timeline.lanes)
+    if (lane.enabled && lane.keyposes.count >= 2) {
+      holdIv = lane.keyposes[KKShapeOfLane(lane).holdStart].outgoing;
+      break;
+    }
+  if (!holdIv)
+    return nil;
+  NSMenu *menu = [[NSMenu alloc] init];
+  NSString *title =
+      holdIv.endpointsLinked ? @"Unlink Endpoints" : @"Link Endpoints";
+  [menu addItemWithTitle:title
+                  action:@selector(_menuToggleHoldLink:)
+           keyEquivalent:@""]
+      .target = self;
+  return menu;
+}
+
+- (void)_menuToggleHoldLink:(id)sender {
+  [self _toggleHoldLink];
 }
 
 @end

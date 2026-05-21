@@ -210,20 +210,91 @@
   uint32_t seed = hv ? hv.modulationSeed : 0;
   BOOL linked = hv ? hv.modulationLinked : YES;
   BOOL showsLinked = NO;
-  NSMutableArray<NSString *> *partLabels = [NSMutableArray array];
-  NSMutableArray<NSNumber *> *partStates = [NSMutableArray array];
+  // Each animatable lane becomes one compound pill: single-component lanes
+  // are one-segment compounds (just the lane label); multi-component lanes
+  // are master+components (lane label + W/H/X/Y), rendered as one capsule
+  // with internal dividers so 4+1 sub-pills don't eat the popover width.
+  NSMutableArray<NSArray<NSString *> *> *partCompoundLabels =
+      [NSMutableArray array];
+  NSMutableArray<NSArray<NSNumber *> *> *partCompoundStates =
+      [NSMutableArray array];
+  // Parallel decode map for the flat-index participation callback. One
+  // entry per visible segment, pairing (lane label, componentIdx). -1 in
+  // componentIdx means the segment is a master (toggles the lane); -2 is
+  // the single-segment compound for a single-component lane.
+  NSMutableArray<NSString *> *partLaneLabels = [NSMutableArray array];
+  NSMutableArray<NSNumber *> *partComponentIdx = [NSMutableArray array];
   for (KKLane *lane in _timeline.lanes) {
     if (!lane.enabled || lane.keyposes.count < 2)
       continue;
-    if (lane.keyposes.firstObject.values.count > 1)
-      showsLinked = YES;
+    NSArray<NSString *> *compLabels = KKLaneComponentLabels(lane);
+    NSUInteger compCount = lane.keyposes.firstObject.values.count;
     KKInterval *liv = lane.keyposes[KKShapeOfLane(lane).holdStart].outgoing;
-    [partLabels addObject:lane.label];
-    [partStates addObject:@(liv && liv.modulation != KKIntervalModulationNone)];
+    BOOL laneModActive = liv && liv.modulation != KKIntervalModulationNone;
+    if (compLabels.count > 1 && compCount > 1) {
+      showsLinked = YES;
+      NSIndexSet *mask = liv.modulationComponents;
+      NSMutableArray<NSString *> *segLabels =
+          [NSMutableArray arrayWithObject:lane.label];
+      NSMutableArray<NSNumber *> *segStates =
+          [NSMutableArray arrayWithObject:@(laneModActive)];
+      [partLaneLabels addObject:lane.label];
+      [partComponentIdx addObject:@(-1)]; // master segment
+      for (NSUInteger c = 0; c < compCount; c++) {
+        NSString *cn =
+            (c < compLabels.count)
+                ? compLabels[c]
+                : [NSString stringWithFormat:@"%lu", (unsigned long)c];
+        [segLabels addObject:cn];
+        BOOL on = laneModActive && (!mask || [mask containsIndex:c]);
+        [segStates addObject:@(on)];
+        [partLaneLabels addObject:lane.label];
+        [partComponentIdx addObject:@(c)];
+      }
+      [partCompoundLabels addObject:segLabels];
+      [partCompoundStates addObject:segStates];
+    } else {
+      [partCompoundLabels addObject:@[ lane.label ]];
+      [partCompoundStates addObject:@[ @(laneModActive) ]];
+      [partLaneLabels addObject:lane.label];
+      [partComponentIdx addObject:@(-2)]; // single-segment, lane-level
+    }
   }
+  // Rebuilder closure — re-runs the same state derivation against the
+  // current timeline so external mutations (cmd-Z) can refresh the
+  // already-open popover's pills. Captures weak so it lives as long as
+  // the popover does.
+  NSArray<NSArray<NSNumber *> *> * (^partRebuilder)(void) =
+      ^NSArray<NSArray<NSNumber *> *> * {
+    __strong typeof(weak) strong = weak;
+    if (!strong)
+      return nil;
+    NSMutableArray<NSArray<NSNumber *> *> *out = [NSMutableArray array];
+    for (KKLane *lane in strong->_timeline.lanes) {
+      if (!lane.enabled || lane.keyposes.count < 2)
+        continue;
+      NSArray<NSString *> *compLabels2 = KKLaneComponentLabels(lane);
+      NSUInteger compCount2 = lane.keyposes.firstObject.values.count;
+      KKInterval *liv2 = lane.keyposes[KKShapeOfLane(lane).holdStart].outgoing;
+      BOOL active = liv2 && liv2.modulation != KKIntervalModulationNone;
+      if (compLabels2.count > 1 && compCount2 > 1) {
+        NSMutableArray<NSNumber *> *segStates =
+            [NSMutableArray arrayWithObject:@(active)];
+        NSIndexSet *mask = liv2.modulationComponents;
+        for (NSUInteger c = 0; c < compCount2; c++) {
+          BOOL on = active && (!mask || [mask containsIndex:c]);
+          [segStates addObject:@(on)];
+        }
+        [out addObject:segStates];
+      } else {
+        [out addObject:@[ @(active) ]];
+      }
+    }
+    return out;
+  };
   self.onHoldModulationPopover(
-      _popoverAnchor, mod, mInten, mFreq, seed, linked, showsLinked, partLabels,
-      partStates,
+      _popoverAnchor, mod, mInten, mFreq, seed, linked, showsLinked,
+      partCompoundLabels, partCompoundStates, partRebuilder,
       ^(KKIntervalModulation m) {
         [weak _mutateHoldModWith:^(KKInterval *iv) {
           iv.modulation = m;
@@ -249,9 +320,16 @@
           iv.modulationLinked = l;
         }];
       },
-      ^(NSInteger laneIndex, BOOL on) {
-        if (laneIndex >= 0 && laneIndex < (NSInteger)partLabels.count)
-          [weak _setHoldModApplied:on forLabel:partLabels[laneIndex]];
+      ^(NSInteger idx, BOOL on) {
+        if (idx < 0 || idx >= (NSInteger)partLaneLabels.count)
+          return;
+        NSInteger c = partComponentIdx[idx].integerValue;
+        if (c < 0)
+          [weak _setHoldModApplied:on forLabel:partLaneLabels[idx]];
+        else
+          [weak _setHoldModComponent:(NSUInteger)c
+                                  on:on
+                            forLabel:partLaneLabels[idx]];
       },
       self.onDragBegin, self.onDragEnd);
 }
@@ -327,6 +405,65 @@
       iv.modulationSeed = p.holdModSeed;
     } else {
       iv.modulation = KKIntervalModulationNone;
+    }
+    kp.outgoing = iv;
+    kps[s.holdStart] = kp;
+    nl.keyposes = kps;
+    lanes[i] = nl;
+    break;
+  }
+  t.lanes = lanes;
+  _timeline = t;
+  [self setNeedsDisplay:YES];
+  if (self.onTimelineMutated)
+    self.onTimelineMutated(t);
+}
+
+// Per-component modulation participation for a multi-component lane. Adds
+// or removes `componentIdx` in the lane's Hold-interval modulationComponents
+// mask. When the mask empties out the lane's modulation flips to None (the
+// pill row reads the lane as excluded); turning a component on while the
+// lane is excluded re-arms the modulation with the current shared type +
+// intensity/freq/seed taken from the projection so it lights up immediately.
+- (void)_setHoldModComponent:(NSUInteger)componentIdx
+                          on:(BOOL)on
+                    forLabel:(NSString *)label {
+  KKBasicProj p = [self _projection];
+  KKIntervalModulation type = (p.holdMod != KKIntervalModulationNone)
+                                  ? p.holdMod
+                                  : KKIntervalModulationWiggle;
+  KKTimeline *t = [_timeline copy];
+  NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+    KKLane *lane = lanes[i];
+    if (!lane.enabled || ![lane.label isEqualToString:label] ||
+        lane.keyposes.count < 2)
+      continue;
+    KKHoldShape s = KKShapeOfLane(lane);
+    KKLane *nl = [lane copy];
+    NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];
+    KKKeyPose *kp = [kps[s.holdStart] copy];
+    KKInterval *iv = [kp.outgoing copy] ?: [[KKInterval alloc] init];
+    NSUInteger compCount = lane.keyposes.firstObject.values.count;
+    // Seed the mask from current state: nil ⇒ all components active.
+    NSMutableIndexSet *mask =
+        iv.modulationComponents ? [iv.modulationComponents mutableCopy] : ({
+          NSMutableIndexSet *all = [NSMutableIndexSet indexSet];
+          [all addIndexesInRange:NSMakeRange(0, compCount)];
+          all;
+        });
+    if (on)
+      [mask addIndex:componentIdx];
+    else
+      [mask removeIndex:componentIdx];
+    iv.modulationComponents = mask;
+    if (mask.count == 0) {
+      iv.modulation = KKIntervalModulationNone;
+    } else if (iv.modulation == KKIntervalModulationNone) {
+      iv.modulation = type;
+      iv.modulationIntensity = p.holdModIntensity;
+      iv.modulationFrequency = p.holdModFrequency;
+      iv.modulationSeed = p.holdModSeed;
     }
     kp.outgoing = iv;
     kps[s.holdStart] = kp;
@@ -497,27 +634,20 @@
   if (displayLanes.count == 0 && excludedLabels.count == 0)
     return;
 
-  double lo = 0.0, hi = 1.0;
-  KKBasicValueExtent(p, &lo, &hi);
-  NSPoint c = KKBasicPoint(g,
-                           (d == 1   ? 0.0
-                            : d == 4 ? 1.0
-                                     : frac),
-                           (d == 1   ? (p.inEnabled ? 0.0 : 1.0)
-                            : d == 4 ? (p.outEnabled ? 0.0 : 1.0)
-                                     : KKBasicMotionY(frac, p)),
-                           lo, hi, p);
+  // Anchor on the boundary pill (full track height) so the popover arrow
+  // lands on the pill body regardless of where the click hit it.
+  CGFloat pillX = KKBasicXForFrac((d == 1 ? 0.0 : d == 4 ? 1.0 : frac), g, p);
   if (!_popoverAnchor) {
     _popoverAnchor = [[NSView alloc] initWithFrame:NSZeroRect];
     [self addSubview:_popoverAnchor positioned:NSWindowBelow relativeTo:nil];
   }
-  _popoverAnchor.frame = NSMakeRect(c.x - kDiamondR, c.y - kDiamondR,
-                                    2 * kDiamondR, 2 * kDiamondR);
+  _popoverAnchor.frame =
+      NSMakeRect(pillX - kPillW * 0.5, NSMinY(g) + kPillInsetY, kPillW,
+                 NSHeight(g) - 2.0 * kPillInsetY);
 
-  BOOL inOn = p.inEnabled, outOn = p.outEnabled;
   // For an unlinked Hold, this picks the single targeted interior keypose
   // (d==2 → hold-start, d==3 → hold-end); ignored for In/Out boundaries.
-  // It must be the *stored* keypose time, not `frac` — when a phase is off
+  // Must be the *stored* keypose time, not `frac` — when a phase is off,
   // the projection pins frac to the clip edge (0/1) while the keypose stays
   // at its boundary, so frac would match neither Hold keypose and the edit
   // would be dropped.
@@ -529,29 +659,58 @@
       holdEndTime = lane.keyposes[s.holdEnd].time;
       break;
     }
-  double holdFrac = (d == 3) ? holdEndTime : holdStartTime;
-  KKBasicSection animateSec = (boundary == KKBasicBoundaryInStart)
-                                  ? KKBasicSectionIn
-                                  : KKBasicSectionOut;
-  NSInteger capD = d;
+  // Bind the popover's state into ivars so the closures below read live
+  // values — that's what lets requestValuePopoverAtFraction: (filmstrip
+  // click) swap boundaries on the open popover without rebuilding it.
+  _curBoundary = boundary;
+  _curBoundaryInOn = p.inEnabled;
+  _curBoundaryOutOn = p.outEnabled;
+  _curBoundaryHoldFrac = (d == 3) ? holdEndTime : holdStartTime;
+  _curAnimateSec = (boundary == KKBasicBoundaryInStart) ? KKBasicSectionIn
+                                                        : KKBasicSectionOut;
+  _curDiamond = d;
   __weak typeof(self) weak = self;
   self.onBoundaryValuePopover(
       _popoverAnchor, displayLanes, frac, excludedLabels,
       ^(NSString *label, NSArray<NSNumber *> *values) {
-        [weak _writeBoundary:boundary
-                      values:values
-                    forLabel:label
-                        inOn:inOn
-                       outOn:outOn
-              holdTargetFrac:holdFrac];
+        __strong typeof(weak) s = weak;
+        if (!s)
+          return;
+        [s _writeBoundary:s->_curBoundary
+                    values:values
+                  forLabel:label
+                      inOn:s->_curBoundaryInOn
+                     outOn:s->_curBoundaryOutOn
+            holdTargetFrac:s->_curBoundaryHoldFrac];
       },
       ^(NSString *label) {
-        // Opt the property back into this phase, then re-present so its
-        // editable row replaces the message in place.
-        [weak _setLaneParticipation:YES forLabel:label section:animateSec];
-        [weak _openBoundaryPopoverForDiamond:capD];
+        __strong typeof(weak) s = weak;
+        if (!s)
+          return;
+        [s _setLaneParticipation:YES forLabel:label section:s->_curAnimateSec];
+        [s _openBoundaryPopoverForDiamond:s->_curDiamond];
       },
       self.onDragBegin, self.onDragEnd);
+}
+
+- (void)requestValuePopoverAtFraction:(double)fraction {
+  // Map the requested fraction to whichever of the 4 boundary diamonds is
+  // closest, then re-open at that diamond. Reuses the lanes-view in-place
+  // rebind path for an already-open popover.
+  KKBasicProj p = [self _projection];
+  double in0 = 0.0, inE = p.inEndFrac, outS = p.outStartFrac, out1 = 1.0;
+  double dists[4] = {fabs(fraction - in0), fabs(fraction - inE),
+                     fabs(fraction - outS), fabs(fraction - out1)};
+  NSInteger best = 0;
+  double bestDt = dists[0];
+  for (NSInteger i = 1; i < 4; i++)
+    if (dists[i] < bestDt) {
+      bestDt = dists[i];
+      best = i;
+    }
+  // Diamond IDs are 1-indexed (1=InStart, 2=Hold-start, 3=Hold-end,
+  // 4=OutEnd); array index `best` maps directly to (best + 1).
+  [self _openBoundaryPopoverForDiamond:(best + 1)];
 }
 
 // Rewrite the keyposes that make up `boundary` for the lane `label`,

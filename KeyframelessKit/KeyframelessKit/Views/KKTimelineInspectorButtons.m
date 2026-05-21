@@ -13,6 +13,8 @@ static const CGFloat kConstantsIconSize = 10.0;
 static const CGFloat kDetachIconSize = 12.0;
 static const CGFloat kPlayIconSize = 11.0;
 static const CGFloat kResetIconSize = 11.0;
+static const CGFloat kClearIconSize = 11.0;
+static const CGFloat kOnionSkinIconSize = 11.0;
 
 // Tint a copy of `src` with `tint` by source-atop fill. Used so each button
 // shares one base symbol image and just paints it on/off-state coloured.
@@ -49,6 +51,9 @@ static NSImage *KKConstantsImage(void) {
 }
 static NSImage *KKDetachImage(void) {
   return KKSymbolImage(@"arrow.up.forward.app.fill", kDetachIconSize);
+}
+static NSImage *KKOnionSkinImage(void) {
+  return KKSymbolImage(@"film", kOnionSkinIconSize);
 }
 
 // Shared body for the centred icon-only buttons (Loop / Play / Reset /
@@ -161,6 +166,44 @@ static void KKDrawCentredIcon(NSImage *tinted, NSRect bounds) {
 
 @end
 
+@implementation KKClearSelectionButton
+
+- (BOOL)isFlipped {
+  return YES;
+}
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+  return YES;
+}
+
+- (void)setEnabled:(BOOL)enabled {
+  if (_enabled == enabled)
+    return;
+  _enabled = enabled;
+  [self setNeedsDisplay:YES];
+}
+
+- (void)drawRect:(NSRect)dirtyRect {
+  NSColor *tint = _enabled
+                      ? [NSColor accentMatchingHost]
+                      : [[NSColor inspectorLabel] colorWithAlphaComponent:0.35];
+  NSImage *img = KKSymbolImage(@"xmark.circle", kClearIconSize);
+  KKDrawCentredIcon(KKTintedImage(img, tint), self.bounds);
+}
+
+- (void)mouseDown:(NSEvent *)event {
+  if (!_enabled)
+    return;
+  if (_onTapped)
+    _onTapped();
+}
+
+- (NSSize)intrinsicContentSize {
+  NSImage *img = KKSymbolImage(@"xmark.circle", kClearIconSize);
+  return NSMakeSize(ceil(img.size.width) + 2.5, 18.0);
+}
+
+@end
+
 @implementation KKConstantsButton
 
 - (BOOL)isFlipped {
@@ -238,6 +281,34 @@ static void KKDrawCentredIcon(NSImage *tinted, NSRect bounds) {
 
 - (NSSize)intrinsicContentSize {
   return NSMakeSize(ceil(KKDetachImage().size.width) + 4.0, 18.0);
+}
+
+@end
+
+@implementation KKOnionSkinButton
+
+- (BOOL)isFlipped {
+  return YES;
+}
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+  return YES;
+}
+
+- (void)drawRect:(NSRect)dirtyRect {
+  NSColor *tint = _on ? [NSColor accentMatchingHost]
+                      : [[NSColor inspectorLabel] colorWithAlphaComponent:0.35];
+  KKDrawCentredIcon(KKTintedImage(KKOnionSkinImage(), tint), self.bounds);
+}
+
+- (void)mouseDown:(NSEvent *)event {
+  _on = !_on;
+  [self setNeedsDisplay:YES];
+  if (_onToggled)
+    _onToggled(_on);
+}
+
+- (NSSize)intrinsicContentSize {
+  return NSMakeSize(ceil(KKOnionSkinImage().size.width) + 2.5, 18.0);
 }
 
 @end

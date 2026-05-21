@@ -6,6 +6,7 @@
 #pragma once
 
 #import <KeyframelessKit/KKSegmentEditView.h>
+#import <KeyframelessKit/KKTimelineAdvancedView.h>
 #import <KeyframelessKit/KKTimelineBasicView.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
 
@@ -25,6 +26,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// gap clicks). Always present. Exposed so guide code can talk to it without
 /// reaching through the private popovers header.
 @property(nonatomic, readonly, nullable) KKTimelineBasicView *basicGraph;
+
+/// The embedded advanced-mode sequencer (lane rows, keyposes, intervals).
+/// Always present (only visible when active tab = Advanced + ≥1 lane
+/// animatable). Exposed for guide steps that target advanced UI.
+@property(nonatomic, readonly, nullable) KKTimelineAdvancedView *advancedGraph;
 
 /// Close whatever lane-content popover is currently open (Constants /
 /// Boundary / Gap easing) — used by guide steps that need the popover gone

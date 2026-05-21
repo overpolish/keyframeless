@@ -120,12 +120,13 @@ BOOL KKValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
 }
 
 // Rebuild one animatable lane's keyposes for the requested In/Out phases.
-// The two Hold keyposes are ALWAYS emitted (so a Hold-only lane can still
-// drift / modulate); In adds a t=0 keypose, Out a t=1 one — counts 2/3/3/4.
-// Every keypose value defaults to the Hold (constant) value, so a freshly
-// animatable property has every phase seeded to its constant rather than a
-// stray 0. Existing In-start / Out-end values and the In / Hold / Out
-// intervals (curve, intensity, frequency, modulation, link) are preserved.
+// New model: hold-pair sits at [0, outEndFrac] when neither phase is on;
+// enabling In moves the hold-start to tIn and adds an in-start at 0; Out
+// moves the hold-end to tOut and adds an out-end at outEndFrac. Counts
+// 2/3/3/4. Every keypose value defaults to the Hold (constant) value so a
+// freshly-animatable property has every phase seeded to its constant rather
+// than a stray 0. Existing In-start / Out-end values and the In / Hold /
+// Out intervals (curve, intensity, frequency, modulation, link) preserved.
 - (KKLane *)_rebuiltLane:(KKLane *)lane
                     inOn:(BOOL)inOn
                    outOn:(BOOL)outOn
@@ -148,33 +149,45 @@ BOOL KKValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   KKInterval *oldIn = os.inEnabled ? old.firstObject.outgoing : nil;
   KKInterval *oldOut = os.outEnabled ? old[os.holdEnd].outgoing : nil;
 
+  // FCP's playhead stops one frame before clipEnd, so storing the hold/out
+  // end at exactly 1.0 makes it unreachable. Use (clipDur-frameDur)/clipDur
+  // when known; fall back to 1.0 cold-start.
+  double outEndFrac = 1.0;
+  double clipDur = [self _clipDuration];
+  if (clipDur > 0.0 && _frameDurationSeconds > 0.0 &&
+      _frameDurationSeconds < clipDur)
+    outEndFrac = (clipDur - _frameDurationSeconds) / clipDur;
+
   NSMutableArray<KKKeyPose *> *kps = [NSMutableArray array];
   if (inOn) {
     KKKeyPose *a = [KKKeyPose keyposeAtTime:0.0 values:inStart];
     a.outgoing = [oldIn copy] ?: [[KKInterval alloc] init];
     [kps addObject:a];
   }
-  KKKeyPose *hs = [KKKeyPose keyposeAtTime:tIn values:holdStartVals];
+  KKKeyPose *hs =
+      [KKKeyPose keyposeAtTime:(inOn ? tIn : 0.0) values:holdStartVals];
   hs.outgoing = [oldHold copy] ?: [[KKInterval alloc] init];
   [kps addObject:hs];
-  KKKeyPose *he = [KKKeyPose keyposeAtTime:tOut values:holdEndVals];
+  KKKeyPose *he =
+      [KKKeyPose keyposeAtTime:(outOn ? tOut : outEndFrac) values:holdEndVals];
   [kps addObject:he];
   if (outOn) {
     he.outgoing = [oldOut copy] ?: [[KKInterval alloc] init];
-    // FCP's playhead stops one frame before clipEnd, so storing the Out kp
-    // at exactly 1.0 makes it unreachable. Store at (clipDur - frameDur) /
-    // clipDur so a scrub-to-end + render lands on a real frame. Fallback
-    // to 1.0 when frame duration isn't known yet (cold start).
-    double outEndFrac = 1.0;
-    double clipDur = [self _clipDuration];
-    if (clipDur > 0.0 && _frameDurationSeconds > 0.0 &&
-        _frameDurationSeconds < clipDur)
-      outEndFrac = (clipDur - _frameDurationSeconds) / clipDur;
     [kps addObject:[KKKeyPose keyposeAtTime:outEndFrac values:outEnd]];
   }
 
   KKLane *nl = [lane copy];
   nl.keyposes = kps;
+  // Pin the projection's interpretation so the keypose-count + middle-time
+  // heuristic can't second-guess us mid-drag.
+  if (inOn && outOn)
+    nl.holdShape = KKLaneHoldShapeBoth;
+  else if (inOn)
+    nl.holdShape = KKLaneHoldShapeInOnly;
+  else if (outOn)
+    nl.holdShape = KKLaneHoldShapeOutOnly;
+  else
+    nl.holdShape = KKLaneHoldShapeNone;
   return nl;
 }
 

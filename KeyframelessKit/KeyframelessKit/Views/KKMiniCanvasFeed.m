@@ -11,39 +11,74 @@
 
 // Long-edge cap for the preview surface. _computeDst never upscales, so a
 // ≤2048 source is cached at native res (crisp when zoomed); larger sources
-// (4K+) are bounded here to keep the persistent IOSurface ~9MB and the
+// (4K+) are bounded here to keep each persistent IOSurface ~9MB and the
 // throttled (≤10fps) MPS pass cheap.
 static const NSUInteger kTargetLongEdge = 2048;
 
-// Minimum wall-clock gap between surface updates. The mini canvas only needs
-// a recent frame, not every render tick — this keeps the render path from
-// paying an MPS pass on every frame during playback.
+// Minimum wall-clock gap between surface updates per slot. The mini canvas
+// only needs a recent frame, not every render tick — this keeps the render
+// path from paying an MPS pass on every frame during playback.
 static const NSTimeInterval kMinUpdateInterval = 0.1;
 
-@implementation KKMiniCanvasFeed {
-  NSString *_descriptorPath;
-  IOSurfaceRef _surface;
-  id<MTLTexture> _surfaceTexture;
-  MPSImageBilinearScale *_scaler;
-  NSUInteger _srcW, _srcH;
-  NSUInteger _dstW, _dstH;
-  uint64_t _generation;
-  NSTimeInterval _lastUpdate;
-}
+// One IOSurface + texture + bookkeeping per filmstrip frame. Slot 0 is the
+// single-slot default; onion-skin enlarges the array.
+@interface _KKMiniFeedSlot : NSObject
+@property(nonatomic) IOSurfaceRef surface;
+@property(nonatomic, strong) id<MTLTexture> surfaceTexture;
+@property(nonatomic) NSUInteger srcW;
+@property(nonatomic) NSUInteger srcH;
+@property(nonatomic) NSUInteger dstW;
+@property(nonatomic) NSUInteger dstH;
+@property(nonatomic) uint64_t generation;
+@property(nonatomic) double tag; // opaque (callers store the slot's frac)
+@property(nonatomic) NSTimeInterval lastUpdate;
+@end
 
-- (instancetype)initWithDescriptorPath:(NSString *)descriptorPath {
-  self = [super init];
-  if (self)
-    _descriptorPath = [descriptorPath copy];
-  return self;
-}
-
+@implementation _KKMiniFeedSlot
 - (void)dealloc {
   if (_surface)
     CFRelease(_surface);
 }
+@end
 
-- (void)_computeDstForSrcW:(NSUInteger)sw h:(NSUInteger)sh {
+@implementation KKMiniCanvasFeed {
+  NSString *_descriptorPath;
+  NSMutableArray<_KKMiniFeedSlot *> *_slots;
+  MPSImageBilinearScale *_scaler;
+}
+
+- (instancetype)initWithDescriptorPath:(NSString *)descriptorPath {
+  self = [super init];
+  if (self) {
+    _descriptorPath = [descriptorPath copy];
+    _slots = [NSMutableArray array];
+    [_slots addObject:[[_KKMiniFeedSlot alloc] init]];
+  }
+  return self;
+}
+
+- (NSUInteger)slotCount {
+  @synchronized(self) {
+    return _slots.count;
+  }
+}
+
+- (void)setSlotCount:(NSUInteger)slotCount {
+  if (slotCount < 1)
+    slotCount = 1;
+  @synchronized(self) {
+    if (_slots.count == slotCount)
+      return;
+    while (_slots.count < slotCount)
+      [_slots addObject:[[_KKMiniFeedSlot alloc] init]];
+    while (_slots.count > slotCount)
+      [_slots removeLastObject];
+  }
+}
+
+- (void)_computeDstForSrcW:(NSUInteger)sw
+                         h:(NSUInteger)sh
+                      slot:(_KKMiniFeedSlot *)slot {
   NSUInteger longEdge = MAX(sw, sh);
   double scale =
       longEdge > 0 ? (double)kTargetLongEdge / (double)longEdge : 1.0;
@@ -51,36 +86,37 @@ static const NSTimeInterval kMinUpdateInterval = 0.1;
     scale = 1.0; // never upscale a small source
   NSUInteger w = (NSUInteger)lround((double)sw * scale);
   NSUInteger h = (NSUInteger)lround((double)sh * scale);
-  _dstW = MAX(w & ~1u, 2u); // keep even
-  _dstH = MAX(h & ~1u, 2u);
+  slot.dstW = MAX(w & ~1u, 2u); // keep even
+  slot.dstH = MAX(h & ~1u, 2u);
 }
 
-- (BOOL)_ensureSurfaceForDevice:(id<MTLDevice>)device
-                           srcW:(NSUInteger)sw
-                           srcH:(NSUInteger)sh {
-  if (_surfaceTexture && sw == _srcW && sh == _srcH)
+- (BOOL)_ensureSurfaceForSlot:(_KKMiniFeedSlot *)slot
+                       device:(id<MTLDevice>)device
+                         srcW:(NSUInteger)sw
+                         srcH:(NSUInteger)sh {
+  if (slot.surfaceTexture && sw == slot.srcW && sh == slot.srcH)
     return YES;
 
-  [self _computeDstForSrcW:sw h:sh];
+  [self _computeDstForSrcW:sw h:sh slot:slot];
 
-  _surfaceTexture = nil;
-  if (_surface) {
-    CFRelease(_surface);
-    _surface = NULL;
+  slot.surfaceTexture = nil;
+  if (slot.surface) {
+    CFRelease(slot.surface);
+    slot.surface = NULL;
   }
 
-  size_t bpr = IOSurfaceAlignProperty(kIOSurfaceBytesPerRow, _dstW * 4);
+  size_t bpr = IOSurfaceAlignProperty(kIOSurfaceBytesPerRow, slot.dstW * 4);
   NSDictionary *props = @{
-    (id)kIOSurfaceWidth : @(_dstW),
-    (id)kIOSurfaceHeight : @(_dstH),
+    (id)kIOSurfaceWidth : @(slot.dstW),
+    (id)kIOSurfaceHeight : @(slot.dstH),
     (id)kIOSurfaceBytesPerElement : @4,
     (id)kIOSurfaceBytesPerRow : @(bpr),
     (id)kIOSurfacePixelFormat : @((uint32_t)'BGRA'),
   };
-  _surface = IOSurfaceCreate((__bridge CFDictionaryRef)props);
-  if (!_surface) {
+  slot.surface = IOSurfaceCreate((__bridge CFDictionaryRef)props);
+  if (!slot.surface) {
     KKLogError(@"KKMiniCanvasFeed: IOSurfaceCreate failed (%lux%lu)",
-               (unsigned long)_dstW, (unsigned long)_dstH);
+               (unsigned long)slot.dstW, (unsigned long)slot.dstH);
     return NO;
   }
 
@@ -90,39 +126,57 @@ static const NSTimeInterval kMinUpdateInterval = 0.1;
   // shows them straight, matching the brightness FCP displays.
   MTLTextureDescriptor *td = [MTLTextureDescriptor
       texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm_sRGB
-                                   width:_dstW
-                                  height:_dstH
+                                   width:slot.dstW
+                                  height:slot.dstH
                                mipmapped:NO];
   td.usage = MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite |
              MTLTextureUsageRenderTarget;
   td.storageMode = MTLStorageModeShared;
-  _surfaceTexture = [device newTextureWithDescriptor:td
-                                           iosurface:_surface
-                                               plane:0];
-  if (!_surfaceTexture) {
+  slot.surfaceTexture = [device newTextureWithDescriptor:td
+                                               iosurface:slot.surface
+                                                   plane:0];
+  if (!slot.surfaceTexture) {
     KKLogError(@"KKMiniCanvasFeed: newTextureWithDescriptor:iosurface: "
                @"returned nil");
-    CFRelease(_surface);
-    _surface = NULL;
+    CFRelease(slot.surface);
+    slot.surface = NULL;
     return NO;
   }
 
-  _srcW = sw;
-  _srcH = sh;
+  slot.srcW = sw;
+  slot.srcH = sh;
   return YES;
 }
 
-- (void)_publish {
+- (void)_publishLocked {
+  NSMutableArray *slotEntries = [NSMutableArray array];
+  for (_KKMiniFeedSlot *s in _slots) {
+    if (!s.surface)
+      continue;
+    [slotEntries addObject:@{
+      @"ioSurfaceID" : @((uint32_t)IOSurfaceGetID(s.surface)),
+      @"width" : @(s.dstW),
+      @"height" : @(s.dstH),
+      @"generation" : @(s.generation),
+      @"tag" : @(s.tag),
+    }];
+  }
+  if (slotEntries.count == 0)
+    return;
+
+  // Top-level keys at slot 0 stay for the single-slot fast path (so existing
+  // consumers that don't know about `slots` keep working). New consumers
+  // walk the `slots` array.
+  _KKMiniFeedSlot *first = _slots.firstObject;
   NSDictionary *desc = @{
-    @"ioSurfaceID" : @((uint32_t)IOSurfaceGetID(_surface)),
-    @"width" : @(_dstW),
-    @"height" : @(_dstH),
-    // Original media size, so a constants popover's crop size label can
-    // show real pixel dimensions (the surface is a downscaled preview).
-    @"srcWidth" : @(_srcW),
-    @"srcHeight" : @(_srcH),
-    @"generation" : @(_generation),
+    @"ioSurfaceID" : @((uint32_t)IOSurfaceGetID(first.surface)),
+    @"width" : @(first.dstW),
+    @"height" : @(first.dstH),
+    @"srcWidth" : @(first.srcW),
+    @"srcHeight" : @(first.srcH),
+    @"generation" : @(first.generation),
     @"ts" : @([NSDate timeIntervalSinceReferenceDate]),
+    @"slots" : slotEntries,
   };
   NSData *json = [NSJSONSerialization dataWithJSONObject:desc
                                                  options:0
@@ -131,42 +185,81 @@ static const NSTimeInterval kMinUpdateInterval = 0.1;
     KKLogWarn(@"KKMiniCanvasFeed: failed to write %@", _descriptorPath);
 }
 
+- (void)publishDescriptor {
+  @synchronized(self) {
+    [self _publishLocked];
+  }
+}
+
+- (void)_encodeUpdateForSlot:(_KKMiniFeedSlot *)slot
+               sourceTexture:(id<MTLTexture>)sourceTexture
+                         tag:(double)tag
+                      device:(id<MTLDevice>)device
+                commandQueue:(id<MTLCommandQueue>)commandQueue {
+  NSUInteger sw = sourceTexture.width;
+  NSUInteger sh = sourceTexture.height;
+  if (sw == 0 || sh == 0)
+    return;
+  if (![self _ensureSurfaceForSlot:slot device:device srcW:sw srcH:sh])
+    return;
+
+  if (!_scaler)
+    _scaler = [[MPSImageBilinearScale alloc] initWithDevice:device];
+
+  id<MTLCommandBuffer> cb = [commandQueue commandBuffer];
+  cb.label = @"KKMiniCanvasFeed";
+  [_scaler encodeToCommandBuffer:cb
+                   sourceTexture:sourceTexture
+              destinationTexture:slot.surfaceTexture];
+
+  slot.generation++;
+  slot.tag = tag;
+  slot.lastUpdate = [NSDate timeIntervalSinceReferenceDate];
+  [cb addCompletedHandler:^(id<MTLCommandBuffer> _Nonnull done) {
+    @synchronized(self) {
+      [self _publishLocked];
+    }
+  }];
+  [cb commit];
+}
+
 - (void)updateWithSourceTexture:(id<MTLTexture>)sourceTexture
                          device:(id<MTLDevice>)device
                    commandQueue:(id<MTLCommandQueue>)commandQueue {
   if (!sourceTexture || !device || !commandQueue)
     return;
-
   @synchronized(self) {
+    _KKMiniFeedSlot *slot = _slots.firstObject;
     NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
-    if (now - _lastUpdate < kMinUpdateInterval)
+    if (now - slot.lastUpdate < kMinUpdateInterval)
       return;
+    [self _encodeUpdateForSlot:slot
+                 sourceTexture:sourceTexture
+                           tag:slot.tag
+                        device:device
+                  commandQueue:commandQueue];
+  }
+}
 
-    NSUInteger sw = sourceTexture.width;
-    NSUInteger sh = sourceTexture.height;
-    if (sw == 0 || sh == 0)
+- (void)updateSlot:(NSUInteger)slotIdx
+    withSourceTexture:(id<MTLTexture>)sourceTexture
+                  tag:(double)tag
+               device:(id<MTLDevice>)device
+         commandQueue:(id<MTLCommandQueue>)commandQueue {
+  if (!sourceTexture || !device || !commandQueue)
+    return;
+  @synchronized(self) {
+    if (slotIdx >= _slots.count)
       return;
-    if (![self _ensureSurfaceForDevice:device srcW:sw srcH:sh])
+    _KKMiniFeedSlot *slot = _slots[slotIdx];
+    NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+    if (now - slot.lastUpdate < kMinUpdateInterval && slot.tag == tag)
       return;
-
-    if (!_scaler)
-      _scaler = [[MPSImageBilinearScale alloc] initWithDevice:device];
-
-    id<MTLCommandBuffer> cb = [commandQueue commandBuffer];
-    cb.label = @"KKMiniCanvasFeed";
-    [_scaler encodeToCommandBuffer:cb
-                     sourceTexture:sourceTexture
-                destinationTexture:_surfaceTexture];
-
-    _generation++;
-    _lastUpdate = now;
-    [cb addCompletedHandler:^(id<MTLCommandBuffer> _Nonnull done) {
-      @synchronized(self) {
-        if (self->_surface)
-          [self _publish];
-      }
-    }];
-    [cb commit];
+    [self _encodeUpdateForSlot:slot
+                 sourceTexture:sourceTexture
+                           tag:tag
+                        device:device
+                  commandQueue:commandQueue];
   }
 }
 

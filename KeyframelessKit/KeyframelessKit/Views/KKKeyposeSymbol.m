@@ -28,6 +28,23 @@ void KKDrawKeyposeDiamond(NSPoint c, CGFloat radius, BOOL filled,
   }
 }
 
+void KKDrawKeyposePill(NSRect bounds, BOOL filled, NSColor *color) {
+  CGFloat r = MIN(bounds.size.width, bounds.size.height) * 0.5;
+  NSBezierPath *p = [NSBezierPath bezierPathWithRoundedRect:bounds
+                                                    xRadius:r
+                                                    yRadius:r];
+  if (filled) {
+    [color setFill];
+    [p fill];
+  } else {
+    [[[NSColor inspectorBackground] colorWithAlphaComponent:0.9] setFill];
+    [p fill];
+    p.lineWidth = KKBorderWidthSM;
+    [color setStroke];
+    [p stroke];
+  }
+}
+
 void KKStrokeTimelineCurve(const NSPoint *points, NSInteger count,
                            CGFloat width, BOOL dashed, NSColor *color) {
   if (count < 2 || !points)

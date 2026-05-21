@@ -38,10 +38,26 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) void (^onTapped)(void);
 @end
 
+/// "Clear selection" button: accent while `enabled` (>=1 item selected),
+/// gray-dim at 0. Click is no-op when disabled. Used by Advanced where the
+/// timeline can be full and there's no empty area to click for deselect.
+@interface KKClearSelectionButton : NSView
+@property(nonatomic) BOOL enabled;
+@property(nonatomic, copy, nullable) void (^onTapped)(void);
+@end
+
 /// "Detach window" button: accent while `on` (a detached window exists).
 @interface KKDetachButton : NSView
 @property(nonatomic) BOOL on;
 @property(nonatomic, copy, nullable) void (^onTapped)(void);
+@end
+
+/// "Onion-skin" toggle (accent when `on`). Filmstrip icon — turns on the
+/// per-keypose filmstrip layout inside the keypose value popover's
+/// mini-canvas (host renders each KP's source frame side-by-side).
+@interface KKOnionSkinButton : NSView
+@property(nonatomic) BOOL on;
+@property(nonatomic, copy, nullable) void (^onToggled)(BOOL isOn);
 @end
 
 NS_ASSUME_NONNULL_END

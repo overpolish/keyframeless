@@ -28,6 +28,20 @@ typedef NS_ENUM(NSInteger, KKIntervalCurve) {
   KKIntervalCurveBounce = 5,
 };
 
+/// Explicit hold-shape annotation for Basic-mode lanes. Auto = legacy
+/// blobs without this field; `KKShapeOfLane` infers from KP count + middle
+/// time. Anything else is authoritative — set by Basic's rebuild path
+/// every time In/Out is toggled, so the projection doesn't have to guess
+/// from keypose times (and so dragging the boundary past 0.5 doesn't flip
+/// the interpretation mid-drag).
+typedef NS_ENUM(NSInteger, KKLaneHoldShape) {
+  KKLaneHoldShapeAuto = 0,
+  KKLaneHoldShapeNone = 1,
+  KKLaneHoldShapeInOnly = 2,
+  KKLaneHoldShapeOutOnly = 3,
+  KKLaneHoldShapeBoth = 4,
+};
+
 typedef NS_ENUM(NSInteger, KKIntervalModulation) {
   KKIntervalModulationNone = 0,
   KKIntervalModulationWiggle = 1,
@@ -48,6 +62,12 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 @property(nonatomic) double modulationFrequency;      // default: 1.0
 @property(nonatomic) uint32_t modulationSeed;         // default: 0
 @property(nonatomic) BOOL modulationLinked;           // default: YES
+
+/// Subset of the lane's value components the modulation envelope multiplies
+/// against. nil = all components (default / legacy). Lets multi-component
+/// lanes (Crop, Color) wiggle just one axis — e.g. oscillate X horizontally
+/// without disturbing W/H/Y. Indices match the lane's `values` array order.
+@property(nonatomic, copy, nullable) NSIndexSet *modulationComponents;
 
 @property(nonatomic) double lockedSeconds; // 0 = scale proportionally
 
@@ -92,12 +112,24 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 @property(nonatomic, copy) NSArray<KKKeyPose *> *keyposes; // ordered by time
 @property(nonatomic) double lastKnownClipDuration; // 0 = not yet established
 
+/// Basic-mode hold-shape annotation. `Auto` (default) means infer from KP
+/// layout; any other value pins the In/Out interpretation regardless of
+/// where the user has dragged the boundary keypose to.
+@property(nonatomic) KKLaneHoldShape holdShape;
+
 + (instancetype)laneWithLabel:(NSString *)label;
 
 - (void)insertKeypose:(KKKeyPose *)keypose; // inserts maintaining time order
 - (void)removeKeyposeAtIndex:(NSUInteger)index;
 
 @end
+
+/// Display labels for a lane's value components, derived from its valueType.
+/// Used in per-component selection UI (modulation popover's component pills).
+/// Returns nil for single-component types (no UI shown). Generic multi-comp
+/// lanes fall back to "1", "2", ... indices.
+FOUNDATION_EXPORT
+    NSArray<NSString *> *_Nullable KKLaneComponentLabels(KKLane *lane);
 
 /// Metadata for a group header in the sequencer.
 /// Lanes reference groupKey only; group display state lives in

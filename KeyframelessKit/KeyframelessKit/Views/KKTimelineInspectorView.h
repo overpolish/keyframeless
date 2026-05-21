@@ -97,6 +97,18 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 - (void)applyTimeline:(KKTimeline *)timeline;
 - (void)setLoopEnabled:(BOOL)enabled;
 - (void)setActiveTab:(NSInteger)tab;
+/// Push the persisted mini-canvas render mode from the host's UI-state
+/// blob. The 3-way pill lives in the keypose-value popover header (only
+/// while open); this just mirrors the persisted enum. Defaults to Off.
+- (void)setRenderMode:(KKMiniCanvasRenderMode)mode;
+@property(nonatomic, readonly) KKMiniCanvasRenderMode renderMode;
+/// Fired when the user picks a different render mode. Host writes back to
+/// the UI-state blob via this callback.
+@property(nonatomic, copy, nullable) void (^onRenderModeChanged)
+    (KKMiniCanvasRenderMode mode);
+/// The currently selected tab. Lets guides snapshot the state at entry
+/// and restore it on completion.
+@property(nonatomic, readonly) NSInteger activeTab;
 /// Live clip duration (seconds) for the Basic ruler, pushed from the
 /// render tick (clip trims never fire `parameterChanged:`).
 - (void)setClipDurationSeconds:(double)seconds;

@@ -141,6 +141,19 @@ NS_ASSUME_NONNULL_BEGIN
 /// reset" step.
 @property(nonatomic, copy, nullable) void (^onViewReset)(void);
 
+/// Fired when the user single-clicks an INACTIVE filmstrip cell (onion-skin
+/// only). The host swaps the popover to the KP at that fraction. Cells in
+/// single-slot mode never fire — there's nothing to switch to.
+@property(nonatomic, copy, nullable) void (^onFilmstripCellActivated)
+    (double fraction);
+
+/// 0 = Off (single frame at the active KP), 1 = Filmstrip (each KP fans out
+/// side-by-side in the pannable canvas), 2 = Onion (all KP frames stacked
+/// on the active cell with prev=red / next=blue tinting). Mirrors the value
+/// the popover header pill sets; mapped 1:1 to KKMiniCanvasRenderMode by
+/// the popover so the canvas stays free of the lanes-view import cycle.
+@property(nonatomic) NSInteger renderMode;
+
 /// Reset zoom/pan to the initial aspect-fit framing — the same effect as a
 /// double-click on the canvas. Fires `onViewReset`.
 - (void)resetView;

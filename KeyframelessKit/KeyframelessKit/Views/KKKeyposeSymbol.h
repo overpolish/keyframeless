@@ -21,6 +21,14 @@ NS_ASSUME_NONNULL_BEGIN
 FOUNDATION_EXPORT void KKDrawKeyposeDiamond(NSPoint center, CGFloat radius,
                                             BOOL filled, NSColor *color);
 
+/// Draw a vertical-capsule keypose marker filling `bounds`. The keypose
+/// pill is the time-axis equivalent of the diamond: it says "drag in time
+/// only" by spanning the full row/track height. Filled = solid `color`;
+/// unfilled = `inspectorBackground` fill stroked in `color` (time-locked
+/// endpoint look — matches the diamond's hollow style).
+FOUNDATION_EXPORT void KKDrawKeyposePill(NSRect bounds, BOOL filled,
+                                         NSColor *color);
+
 /// Stroke a smooth motion curve through `points` (round joins/caps,
 /// `width`). `dashed` draws the "nothing happens here" pattern at 0.45
 /// alpha; solid uses `color` as-is. No-op for `count < 2`.

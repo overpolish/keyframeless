@@ -5,10 +5,12 @@
 
 #pragma once
 
+#import "KKTimelineInspectorButtons.h"
 #import "KKTimelineLanesView_Private.h"
 #import <KeyframelessKit/KKTimelineLanesView.h>
 
 @class KKTimelineBasicView;
+@class KKTimelineAdvancedView;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -16,10 +18,12 @@ NS_ASSUME_NONNULL_BEGIN
 @protected
   NSArray<KKLane *> *_availableLanes;
   KKTimeline *_timeline;
+  NSInteger _activeTab; // 0 = Basic, 1 = Advanced
 
   NSStackView *_laneStack;
   NSView *_centeredArea;
   KKTimelineBasicView *_basicGraph;
+  KKTimelineAdvancedView *_advancedGraph;
   NSTextField *_hintLabel;
   _KKDropdownTrigger *_dropdownTrigger;
   NSView *_footerRow;
@@ -43,6 +47,31 @@ NS_ASSUME_NONNULL_BEGIN
   // screen rect and advance on a curve pick.
   void (^_onGapPopoverWillOpen)(NSView *content, KKSegmentEditView *editor);
   void (^_onGapPopoverCurveChanged)(NSInteger curveType);
+
+  // Tab-specific accessory buttons surfaced to the inspector's header row.
+  // _clearSelectionButton is lazily created and only included in the
+  // accessoryButtons list while the Advanced tab is active.
+  KKClearSelectionButton *_clearSelectionButton;
+  // Mini-canvas render mode (Off/Filmstrip/Onion). Drives the boundary
+  // value popover's preview shape. The 3-way pill lives in the popover
+  // header (KKTimelineLanesView+Helpers.m); the lanes view just owns the
+  // persisted bit + cached boundary-popover state so a mid-popover mode
+  // toggle can re-publish the boundary request without reopening.
+  KKMiniCanvasRenderMode _renderMode;
+  double _openStaticBoundaryFraction;
+  NSArray<KKLane *> *_openStaticBoundaryLanes;
+  NSArray<NSString *> *_openStaticBoundaryExcluded;
+  // Open hold-modulation popover plumbing: weak editor + a rebuilder
+  // closure supplied by the host (Basic/Advanced) so external timeline
+  // changes (e.g. cmd-Z) can push fresh participation states into the
+  // live pill row without closing the popover.
+  __weak KKSegmentEditView *_openHoldModEditor;
+  NSArray<NSArray<NSNumber *> *> * (^_openHoldModRebuilder)(void);
+  // Per-tab last-reported zoom state. The toolbar button only reflects the
+  // active tab, so we cache each side's state here and re-fire on tab
+  // switch / when the active side changes.
+  BOOL _basicZoomed;
+  BOOL _advancedZoomed;
 }
 
 // Model + refresh helpers implemented in the primary @implementation; the
@@ -81,6 +110,19 @@ NS_ASSUME_NONNULL_BEGIN
                                  onAnimate:(void (^)(NSString *label))onAnimate
                                onDragBegin:(void (^)(void))onDragBegin
                                  onDragEnd:(void (^)(void))onDragEnd;
+
+/// In-place re-bind for an already-open boundary popover. Used by the
+/// onion-skin filmstrip when the user clicks an inactive cell — the popover
+/// stays open (no close/reopen blink), the value rows re-display the new
+/// KP's values, and the boundary state (editing fraction, request file)
+/// re-publishes. The graph is responsible for updating any closure-captured
+/// state (e.g. a `_currentPopoverFrac` ivar) BEFORE calling this so the
+/// existing onValue/onAnimate closures write to the right KP. No-op if no
+/// boundary popover is open.
+- (void)_updateBoundaryPopoverInPlaceWithLanes:(NSArray<KKLane *> *)lanes
+                                      fraction:(double)fraction
+                                excludedLabels:
+                                    (NSArray<NSString *> *)excludedLabels;
 - (NSPopover *)_showPopoverWithContent:(NSView *)content
                               fromView:(NSView *)anchor
                                onClose:(void (^)(void))onClose;
@@ -114,8 +156,13 @@ NS_ASSUME_NONNULL_BEGIN
                                        seed:(uint32_t)seed
                                      linked:(BOOL)linked
                                 showsLinked:(BOOL)showsLinked
-                                 partLabels:(NSArray<NSString *> *)partLabels
-                                 partStates:(NSArray<NSNumber *> *)partStates
+                                 partLabels:(NSArray<NSArray<NSString *> *> *)
+                                                partCompoundLabels
+                                 partStates:(NSArray<NSArray<NSNumber *> *> *)
+                                                partCompoundStates
+                              partRebuilder:
+                                  (NSArray<NSArray<NSNumber *> *> *_Nullable (
+                                      ^_Nullable)(void))partRebuilder
                                onModulation:(void (^)(KKIntervalModulation m))
                                                 onModulation
                                 onIntensity:(void (^)(double v))onIntensity

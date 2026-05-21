@@ -111,13 +111,28 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) void (^onHoldModulationPopover)
     (NSView *anchorView, KKIntervalModulation modulation, double intensity,
      double frequency, uint32_t seed, BOOL linked, BOOL showsLinked,
-     NSArray<NSString *> *participantLabels,
-     NSArray<NSNumber *> *participantStates,
+     NSArray<NSArray<NSString *> *> *participantCompoundLabels,
+     NSArray<NSArray<NSNumber *> *> *participantCompoundStates,
+     NSArray<NSArray<NSNumber *> *> *_Nullable (^participantStateRebuilder)
+         (void),
      void (^onModulation)(KKIntervalModulation modulation),
      void (^onIntensity)(double value), void (^onFrequency)(double value),
      void (^onSeed)(uint32_t seed), void (^onLinked)(BOOL linked),
-     void (^onParticipation)(NSInteger laneIndex, BOOL on),
+     void (^onParticipation)(NSInteger flatIndex, BOOL on),
      void (^onDragBegin)(void), void (^onDragEnd)(void));
+
+@end
+
+/// Implemented in KKTimelineBasicView+Popovers.m. Declared as a category so
+/// the primary @implementation isn't expected to provide it (silences
+/// -Wincomplete-implementation while keeping the method public).
+@interface KKTimelineBasicView (Popovers)
+
+/// Programmatic re-open of the boundary value popover at the diamond
+/// closest to `fraction`. Used by the onion-skin filmstrip — clicking an
+/// inactive cell swaps the popover to the corresponding boundary diamond
+/// (Basic's filmstrip cells correspond to the 4 boundary times).
+- (void)requestValuePopoverAtFraction:(double)fraction;
 
 @end
 

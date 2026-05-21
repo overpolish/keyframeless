@@ -7,7 +7,9 @@
 #import "KKTimelineLanesView+Guide.h"
 #import "KKTimelineLanesView_Popovers.h"
 #import <KeyframelessKit/KKEasing.h>
+#import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKSegmentEditView.h>
+#import <KeyframelessKit/KKTimelineAdvancedView.h>
 #import <QuartzCore/QuartzCore.h>
 
 // The mini-canvas delegate is a KKMiniCanvasRenderer (or subclass) but its
@@ -34,8 +36,35 @@ static void KKSetSuppressedHandles(id delegate, NSArray<NSString *> *labels) {
 static void KKWriteBoundaryRequest(NSString *path, double frac, BOOL active) {
   if (!path)
     return;
+  // Single-time payload. `frac` and `fracs` both written for backward
+  // compatibility (older render readers only see `frac`; new readers prefer
+  // `fracs` for onion-skin's N-time request).
   NSDictionary *d = @{
     @"frac" : @(frac),
+    @"fracs" : @[ @(frac) ],
+    @"active" : @(active ? 1 : 0),
+    @"gen" : @((long long)(CACurrentMediaTime() * 1000.0))
+  };
+  NSData *j = [NSJSONSerialization dataWithJSONObject:d options:0 error:nil];
+  [j writeToFile:path atomically:YES];
+}
+
+// Multi-time variant — writes the list of clip fractions the onion-skin
+// filmstrip wants rendered. Render side honours all of them via
+// -scheduleInputs:; renderDestinationImage matches delivered tiles by
+// mediaTime back into one feed slot per fraction.
+static void KKWriteBoundaryRequestMulti(NSString *path,
+                                        NSArray<NSNumber *> *fracs,
+                                        BOOL active) {
+  if (!path)
+    return;
+  if (fracs.count == 0) {
+    KKWriteBoundaryRequest(path, 0.0, active);
+    return;
+  }
+  NSDictionary *d = @{
+    @"frac" : fracs.firstObject, // legacy field = slot 0's frac
+    @"fracs" : fracs,
     @"active" : @(active ? 1 : 0),
     @"gen" : @((long long)(CACurrentMediaTime() * 1000.0))
   };
@@ -269,6 +298,205 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
   return popover;
 }
 
+// Dedup tolerance for "same keypose, different lane" filmstrip cells. Two
+// KPs within one frame render the same composite (the render pipeline
+// already merges them), so the filmstrip should show one cell. Falls back
+// to 1e-3 (~0.1% of the clip) before durations are populated by the first
+// render tick.
+- (double)_kpDedupEps {
+  double clipDur = _basicGraph.clipDurationSeconds;
+  if (clipDur <= 0.0)
+    clipDur = _advancedGraph.clipDurationSeconds;
+  double frameDur = _basicGraph.frameDurationSeconds;
+  if (frameDur <= 0.0)
+    frameDur = _advancedGraph.frameDurationSeconds;
+  if (clipDur > 0.0 && frameDur > 0.0)
+    return (frameDur * 0.5) / clipDur;
+  return 1.0e-3;
+}
+
+// Build the label set of lanes participating in the open boundary popover
+// (its displayLanes ∪ excludedLabels — both are same-group as the clicked KP).
+// Used to scope the filmstrip / prev-next nav so Advanced's per-lane timing
+// doesn't bleed unrelated lanes' KPs into the strip. Returns nil when no
+// popover is open OR no scope was recorded — caller falls back to "all
+// animatable lanes" which is correct for Basic (shared timing).
+// Scope = the *primary* lane the popover is anchored to (the lane whose
+// pill was clicked, or last navigated to via the filmstrip). Falls back to
+// the full `displayLanes` set when no primary is known (Basic has no per-
+// lane primary — all animatable lanes share boundary times anyway).
+//
+// `displayLanes` alone is wrong: when two same-group lanes happen to have a
+// KP at the same time, Advanced expands displayLanes to include both so the
+// popover can edit either value — but the filmstrip should still only
+// reflect the originally-clicked lane's keypose timeline, otherwise the
+// other lane's unrelated KPs leak in as phantom cells.
+- (nullable NSSet<NSString *> *)_scopedLaneLabelsForOpenPopover {
+  if (_advancedGraph && !_advancedGraph.hidden) {
+    NSString *primary = _advancedGraph.primaryLaneLabel;
+    if (primary)
+      return [NSSet setWithObject:primary];
+  }
+  if (_openStaticBoundaryLanes.count == 0)
+    return nil;
+  NSMutableSet<NSString *> *labels = [NSMutableSet set];
+  for (KKLane *l in _openStaticBoundaryLanes)
+    if (l.label)
+      [labels addObject:l.label];
+  return labels;
+}
+
+- (void)_publishBoundaryRequestForFraction:(double)fraction {
+  // Filmstrip / Onion = one frame per KP across the lanes participating in
+  // the open popover (same-group as the clicked KP), time-sorted. Off =
+  // single-frame at the clicked fraction. KP-snap (within ~1 frame) so
+  // Basic's OutEnd (frac=1.0 click vs endFrac<1.0 KP) doesn't produce a
+  // phantom extra cell.
+  if (_renderMode != KKMiniCanvasRenderModeOff) {
+    NSSet<NSString *> *scope = [self _scopedLaneLabelsForOpenPopover];
+    NSMutableArray<NSNumber *> *kpTimes = [NSMutableArray array];
+    for (KKLane *lane in _timeline.lanes) {
+      if (!lane.enabled)
+        continue;
+      if (scope && ![scope containsObject:lane.label])
+        continue;
+      for (KKKeyPose *kp in lane.keyposes)
+        [kpTimes addObject:@(kp.time)];
+    }
+    const double kSnapToKP = 0.05;
+    double snapped = fraction;
+    double bestDt = kSnapToKP;
+    for (NSNumber *t in kpTimes) {
+      double dt = fabs(t.doubleValue - fraction);
+      if (dt < bestDt) {
+        bestDt = dt;
+        snapped = t.doubleValue;
+      }
+    }
+    NSMutableArray<NSNumber *> *all = [NSMutableArray array];
+    [all addObject:@(snapped)];
+    [all addObjectsFromArray:kpTimes];
+    [all sortUsingSelector:@selector(compare:)];
+    NSMutableArray<NSNumber *> *ordered = [NSMutableArray array];
+    const double dedupEps = [self _kpDedupEps];
+    for (NSNumber *f in all) {
+      if (ordered.count == 0 ||
+          fabs(f.doubleValue - ordered.lastObject.doubleValue) > dedupEps)
+        [ordered addObject:f];
+    }
+    KKWriteBoundaryRequestMulti(self.miniCanvasRequestPath, ordered, YES);
+  } else {
+    KKWriteBoundaryRequest(self.miniCanvasRequestPath, fraction, YES);
+  }
+}
+
+// Time-sorted, eps-deduped list of every KP fraction across animatable
+// lanes — the navigable set behind the popover's prev/next buttons.
+- (NSArray<NSNumber *> *)_animatableKPFractions {
+  NSSet<NSString *> *scope = [self _scopedLaneLabelsForOpenPopover];
+  NSMutableArray<NSNumber *> *kpTimes = [NSMutableArray array];
+  for (KKLane *lane in _timeline.lanes) {
+    if (!lane.enabled)
+      continue;
+    if (scope && ![scope containsObject:lane.label])
+      continue;
+    for (KKKeyPose *kp in lane.keyposes)
+      [kpTimes addObject:@(kp.time)];
+  }
+  [kpTimes sortUsingSelector:@selector(compare:)];
+  NSMutableArray<NSNumber *> *deduped = [NSMutableArray array];
+  const double dedupEps = [self _kpDedupEps];
+  for (NSNumber *f in kpTimes) {
+    if (deduped.count == 0 ||
+        fabs(f.doubleValue - deduped.lastObject.doubleValue) > dedupEps)
+      [deduped addObject:f];
+  }
+  return deduped;
+}
+
+// Returns the index of the KP closest to `frac` in `fracs` (NSNotFound only
+// if the list is empty). Mirrors the snap behaviour used when publishing
+// the boundary request so prev/next agree with the rendered filmstrip.
+- (NSInteger)_indexOfFraction:(double)frac
+                     inSorted:(NSArray<NSNumber *> *)fracs {
+  if (fracs.count == 0)
+    return NSNotFound;
+  NSInteger best = 0;
+  double bestDt = INFINITY;
+  for (NSInteger i = 0; i < (NSInteger)fracs.count; i++) {
+    double dt = fabs(fracs[i].doubleValue - frac);
+    if (dt < bestDt) {
+      bestDt = dt;
+      best = i;
+    }
+  }
+  return best;
+}
+
+- (void)_refreshBoundaryPopoverNavEnabled {
+  if (!_openStaticView)
+    return;
+  NSArray<NSNumber *> *fracs = [self _animatableKPFractions];
+  NSInteger idx = [self _indexOfFraction:_openStaticBoundaryFraction
+                                inSorted:fracs];
+  BOOL prev = (idx != NSNotFound && idx > 0);
+  BOOL next = (idx != NSNotFound && idx + 1 < (NSInteger)fracs.count);
+  [_openStaticView setNavPrevEnabled:prev nextEnabled:next];
+}
+
+- (void)_navigateBoundaryPopoverDirection:(NSInteger)direction {
+  if (!(_openContentPopover.isShown && _openStaticIsBoundary))
+    return;
+  NSArray<NSNumber *> *fracs = [self _animatableKPFractions];
+  NSInteger idx = [self _indexOfFraction:_openStaticBoundaryFraction
+                                inSorted:fracs];
+  if (idx == NSNotFound)
+    return;
+  NSInteger target = idx + direction;
+  if (target < 0 || target >= (NSInteger)fracs.count)
+    return;
+  double newFrac = fracs[target].doubleValue;
+  // Same path the filmstrip cell click uses — graph rebuilds the display
+  // lanes for the new KP, then calls back into the in-place updater.
+  if (_activeTab == 1) {
+    [_advancedGraph requestValuePopoverAtFraction:newFrac];
+  } else {
+    [_basicGraph requestValuePopoverAtFraction:newFrac];
+  }
+}
+
+- (void)_renderModeDidChange:(KKMiniCanvasRenderMode)mode {
+  _renderMode = mode;
+  if (self.onRenderModeChanged)
+    self.onRenderModeChanged(mode);
+  // Pill toggle while a boundary popover is open → re-publish so the
+  // render side switches single↔multi without close/reopen.
+  if (_openContentPopover.isShown && _openStaticIsBoundary && _openStaticView) {
+    [self _publishBoundaryRequestForFraction:_openStaticBoundaryFraction];
+    if (self.onBoundaryPreviewNeedsRender)
+      self.onBoundaryPreviewNeedsRender();
+  }
+}
+
+- (void)_updateBoundaryPopoverInPlaceWithLanes:(NSArray<KKLane *> *)lanes
+                                      fraction:(double)fraction
+                                excludedLabels:
+                                    (NSArray<NSString *> *)excludedLabels {
+  if (!(_openContentPopover.isShown && _openStaticIsBoundary &&
+        _openStaticView))
+    return;
+  KKSetBoundaryEditing(self.miniCanvasDelegate, YES, fraction);
+  KKSetSuppressedHandles(self.miniCanvasDelegate, excludedLabels);
+  [_openStaticView rebindLanes:lanes];
+  _openStaticBoundaryFraction = fraction;
+  _openStaticBoundaryLanes = [lanes copy];
+  _openStaticBoundaryExcluded = [excludedLabels copy];
+  [self _publishBoundaryRequestForFraction:fraction];
+  [self _refreshBoundaryPopoverNavEnabled];
+  if (self.onBoundaryPreviewNeedsRender)
+    self.onBoundaryPreviewNeedsRender();
+}
+
 - (void)
     _presentBoundaryValuePopoverFromAnchor:(NSView *)anchor
                               displayLanes:(NSArray<KKLane *> *)lanes
@@ -282,6 +510,17 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
                                  onDragEnd:(void (^)(void))onDragEnd {
   if (lanes.count == 0 && excludedLabels.count == 0)
     return;
+  // If the boundary popover is already open, rebind values in place
+  // instead of close/reopen. Both Basic and Advanced route their popover
+  // closures through ivars (`_curBoundary`/`_curBoundaryInOn`/etc. in
+  // Basic, `_currentPopoverFrac` in Advanced), so swapping target KP
+  // doesn't need closure rebuild.
+  if (_openContentPopover.isShown && _openStaticIsBoundary && _openStaticView) {
+    [self _updateBoundaryPopoverInPlaceWithLanes:lanes
+                                        fraction:fraction
+                                  excludedLabels:excludedLabels];
+    return;
+  }
   // If a popover is still open, close it NOW (its onClose tears down the old
   // boundary state in order) but DEFER building the replacement one runloop
   // tick — back-to-back mini-canvas teardown+rebuild in the same call stack
@@ -307,7 +546,10 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
   __weak typeof(self) weak = self;
   KKSetBoundaryEditing(self.miniCanvasDelegate, YES, fraction);
   KKSetSuppressedHandles(self.miniCanvasDelegate, excludedLabels);
-  KKWriteBoundaryRequest(self.miniCanvasRequestPath, fraction, YES);
+  _openStaticBoundaryFraction = fraction;
+  _openStaticBoundaryLanes = [lanes copy];
+  _openStaticBoundaryExcluded = [excludedLabels copy];
+  [self _publishBoundaryRequestForFraction:fraction];
   // Static playhead → no render → -scheduleInputs: never sees the request
   // just written. Nudge one render so the boundary frame resolves now.
   if (self.onBoundaryPreviewNeedsRender)
@@ -324,6 +566,15 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
           descriptorPath:self.miniCanvasDescriptorPath
           clipAspect:self.miniCanvasClipAspect
           canvasDelegate:self.miniCanvasDelegate
+          renderMode:_renderMode
+          onModeChanged:^(KKMiniCanvasRenderMode mode) {
+            __strong typeof(weak) s = weak;
+            [s _renderModeDidChange:mode];
+          }
+          onNavigate:^(NSInteger dir) {
+            __strong typeof(weak) s = weak;
+            [s _navigateBoundaryPopoverDirection:dir];
+          }
           onHandleValue:^(NSString *label, NSArray<NSNumber *> *values) {
             __strong typeof(weak) s = weak;
             if (dragging) {
@@ -359,6 +610,24 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
           }];
   _openStaticView = staticView;
   _openStaticIsBoundary = YES;
+  [self _refreshBoundaryPopoverNavEnabled];
+  // Onion-skin filmstrip: clicking an inactive cell asks the active tab's
+  // graph to swap the popover to that KP. Advanced uses an in-place rebind
+  // path (no popover blink); Basic maps the fraction to the closest
+  // boundary diamond and re-opens.
+  __weak KKTimelineAdvancedView *weakAdv = _advancedGraph;
+  __weak KKTimelineBasicView *weakBasic = _basicGraph;
+  __weak typeof(self) weakSelf = self;
+  staticView.miniCanvas.onFilmstripCellActivated = ^(double newFrac) {
+    __strong typeof(weakSelf) s = weakSelf;
+    if (!s)
+      return;
+    if (s->_activeTab == 1) {
+      [weakAdv requestValuePopoverAtFraction:newFrac];
+    } else {
+      [weakBasic requestValuePopoverAtFraction:newFrac];
+    }
+  };
   [staticView applyDefaultsProvider:^NSArray<NSNumber *> *(NSString *l) {
     __strong typeof(weak) s = weak;
     return s ? [s _defaultValuesForLabel:l] : nil;
@@ -536,8 +805,13 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
                                        seed:(uint32_t)seed
                                      linked:(BOOL)linked
                                 showsLinked:(BOOL)showsLinked
-                                 partLabels:(NSArray<NSString *> *)partLabels
-                                 partStates:(NSArray<NSNumber *> *)partStates
+                                 partLabels:(NSArray<NSArray<NSString *> *> *)
+                                                partCompoundLabels
+                                 partStates:(NSArray<NSArray<NSNumber *> *> *)
+                                                partCompoundStates
+                              partRebuilder:
+                                  (NSArray<NSArray<NSNumber *> *> *_Nullable (
+                                      ^)(void))partRebuilder
                                onModulation:
                                    (void (^)(KKIntervalModulation))onModulation
                                 onIntensity:(void (^)(double))onIntensity
@@ -552,8 +826,8 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
       [[KKSegmentEditView alloc] initWithKind:KKSegmentEditKindHold
                                   showsLinked:showsLinked
                                    bulkHeader:NO
-                          participationLabels:partLabels
-                          participationStates:partStates];
+                       participationCompounds:partCompoundLabels
+                  participationCompoundStates:partCompoundStates];
   edit.onParticipationToggled = ^(NSInteger idx, BOOL on) {
     if (onParticipation)
       onParticipation(idx, on);
@@ -608,17 +882,27 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
   };
 
   CGFloat w = [KKSegmentEditView contentWidth];
-  CGFloat h = [KKSegmentEditView contentHeightForKind:KKSegmentEditKindHold
-                                          showsLinked:showsLinked
-                                           bulkHeader:NO
-                                        participation:(partLabels.count > 0)];
+  CGFloat h =
+      [KKSegmentEditView contentHeightForKind:KKSegmentEditKindHold
+                                  showsLinked:showsLinked
+                                   bulkHeader:NO
+                                participation:(partCompoundLabels.count > 0)];
   edit.frame = NSMakeRect(0, 0, w, h);
   [edit.widthAnchor constraintEqualToConstant:w].active = YES;
   [edit.heightAnchor constraintEqualToConstant:h].active = YES;
 
+  // Stash for external refresh on applyTimeline (cmd-Z etc).
+  _openHoldModEditor = edit;
+  _openHoldModRebuilder = [partRebuilder copy];
+  __weak typeof(self) weak = self;
   [self _showPopoverWithContent:edit
                        fromView:anchor
                         onClose:^{
+                          __strong typeof(weak) s = weak;
+                          if (!s)
+                            return;
+                          s->_openHoldModEditor = nil;
+                          s->_openHoldModRebuilder = nil;
                         }];
 }
 
@@ -650,6 +934,9 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
           descriptorPath:self.miniCanvasDescriptorPath
           clipAspect:self.miniCanvasClipAspect
           canvasDelegate:self.miniCanvasDelegate
+          renderMode:KKMiniCanvasRenderModeOff
+          onModeChanged:nil
+          onNavigate:nil
           onHandleValue:^(NSString *label, NSArray<NSNumber *> *values) {
             __strong typeof(weak) s = weak;
             // During a drag (mini-canvas handle or slider) coalesce — commit

@@ -52,10 +52,11 @@ static const NSInteger kSegments = 60;
     NSBezierPath *bg = [NSBezierPath bezierPathWithRoundedRect:pillRect
                                                        xRadius:KKRadiusMD
                                                        yRadius:KKRadiusMD];
+    NSColor *accent = _accentColor ?: [NSColor accentMatchingHost];
     if (active) {
       [[NSColor inspectorBackground] setFill];
       [bg fill];
-      [[NSColor accentMatchingHost] setStroke];
+      [accent setStroke];
       bg.lineWidth = 1.5;
       [bg stroke];
     } else {
@@ -71,9 +72,9 @@ static const NSInteger kSegments = 60;
 - (void)drawCurveInRect:(NSRect)rect
               pillIndex:(NSInteger)pillIndex
                  active:(BOOL)active {
+  NSColor *accent = _accentColor ?: [NSColor accentMatchingHost];
   NSColor *color =
-      active ? [NSColor accentMatchingHost]
-             : [[NSColor inspectorLabel] colorWithAlphaComponent:0.35];
+      active ? accent : [[NSColor inspectorLabel] colorWithAlphaComponent:0.35];
   [color setStroke];
 
   CGFloat x0 = NSMinX(rect);

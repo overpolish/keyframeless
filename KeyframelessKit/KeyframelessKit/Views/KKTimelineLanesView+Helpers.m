@@ -6,6 +6,7 @@
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
 #import "KKMiniCanvasView.h"
+#import "KKPillToggleRowView.h"
 #import "KKSliderView.h"
 #import "KKTimelineLanesView_Private.h"
 #import <KeyframelessKit/KKLog.h>
@@ -761,6 +762,27 @@ static NSTextField *_KKMakeCaption(NSString *s) {
   void (^_onHandleValue)(NSString *, NSArray<NSNumber *> *);
   void (^_onDragBegin)(void);
   void (^_onDragEnd)(void);
+  NSButton *_navPrevButton;
+  NSButton *_navNextButton;
+  void (^_onNavigate)(NSInteger);
+}
+
+- (void)setNavPrevEnabled:(BOOL)prev nextEnabled:(BOOL)next {
+  _navPrevButton.enabled = prev;
+  _navNextButton.enabled = next;
+}
+
+- (KKMiniCanvasView *)miniCanvas {
+  return _miniCanvas;
+}
+
+- (void)rebindLanes:(NSArray<KKLane *> *)lanes {
+  for (KKLane *lane in lanes) {
+    _KKStaticValueRow *row = _rowsByLabel[lane.label];
+    if (!row || lane.keyposes.count == 0)
+      continue;
+    [row applyValues:lane.keyposes.firstObject.values];
+  }
 }
 
 + (CGFloat)_popoverWidthForDescriptor:(NSString *)descriptorPath {
@@ -772,18 +794,26 @@ static NSTextField *_KKMakeCaption(NSString *s) {
   return (w - 2 * KKPaddingMD) / a;
 }
 
++ (CGFloat)_renderModePillHeaderHeight {
+  return 22.0; // pill row + spacing handled by KKPaddingMD below
+}
+
 + (CGFloat)heightForLanes:(NSArray<KKLane *> *)lanes
            descriptorPath:(NSString *)descriptorPath
-               clipAspect:(CGFloat)clipAspect {
+               clipAspect:(CGFloat)clipAspect
+       showRenderModePill:(BOOL)showRenderModePill {
   CGFloat rows = 0;
   for (KKLane *lane in lanes)
     rows += [_KKStaticValueRow heightForLane:lane];
   CGFloat h = KKPaddingMD + rows + KKPaddingMD;
-  if (descriptorPath.length > 0)
+  if (descriptorPath.length > 0) {
     h += [self _canvasHeightForAspect:clipAspect
                                 width:[self _popoverWidthForDescriptor:
                                                 descriptorPath]] +
          KKPaddingMD;
+    if (showRenderModePill)
+      h += [self _renderModePillHeaderHeight] + KKPaddingMD;
+  }
   return h;
 }
 
@@ -791,19 +821,74 @@ static NSTextField *_KKMakeCaption(NSString *s) {
   return YES;
 }
 
+- (NSButton *)_makeNavButton:(NSString *)symbolName
+                   direction:(NSInteger)direction
+                  onNavigate:(void (^)(NSInteger))onNavigate {
+  NSImage *img = [NSImage imageWithSystemSymbolName:symbolName
+                           accessibilityDescription:nil];
+  NSButton *b = [NSButton buttonWithImage:img ?: [[NSImage alloc] init]
+                                   target:self
+                                   action:@selector(_navButtonClicked:)];
+  b.translatesAutoresizingMaskIntoConstraints = NO;
+  b.bordered = NO;
+  b.bezelStyle = NSBezelStyleShadowlessSquare;
+  b.imageScaling = NSImageScaleProportionallyDown;
+  b.tag = direction;
+  // Stash the callback on the view itself; both buttons share the same
+  // handler so the ivar is a single block.
+  _onNavigate = [onNavigate copy];
+  return b;
+}
+
+- (void)_navButtonClicked:(NSButton *)sender {
+  if (_onNavigate)
+    _onNavigate((NSInteger)sender.tag);
+}
+
+- (KKPillToggleRowView *)_makeRenderModePill:(KKMiniCanvasRenderMode)mode
+                               onModeChanged:
+                                   (void (^)(KKMiniCanvasRenderMode))cb {
+  NSImage * (^sym)(NSString *) = ^NSImage *(NSString *name) {
+    NSImage *img = [NSImage imageWithSystemSymbolName:name
+                             accessibilityDescription:nil];
+    return img ?: [[NSImage alloc] initWithSize:NSMakeSize(11, 11)];
+  };
+  KKPillToggleRowView *pill = [[KKPillToggleRowView alloc] initWithIcons:@[
+    sym(@"minus.circle"), sym(@"film"), sym(@"square.stack")
+  ]];
+  pill.translatesAutoresizingMaskIntoConstraints = NO;
+  pill.grouped = YES;
+  pill.radioMode = YES;
+  NSMutableArray<NSNumber *> *states = [NSMutableArray array];
+  for (NSInteger i = 0; i < 3; i++)
+    [states addObject:@(i == (NSInteger)mode)];
+  pill.states = states;
+  pill.onToggled = ^(NSInteger index, BOOL isOn) {
+    if (!isOn || !cb)
+      return;
+    cb((KKMiniCanvasRenderMode)index);
+  };
+  return pill;
+}
+
 - (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes
                descriptorPath:(NSString *)descriptorPath
                    clipAspect:(CGFloat)clipAspect
                canvasDelegate:(id<KKMiniCanvasDelegate>)canvasDelegate
+                   renderMode:(KKMiniCanvasRenderMode)renderMode
+                onModeChanged:(void (^)(KKMiniCanvasRenderMode))onModeChanged
+                   onNavigate:(void (^)(NSInteger))onNavigate
                 onHandleValue:(void (^)(NSString *,
                                         NSArray<NSNumber *> *))onHandleValue
                   onDragBegin:(void (^)(void))onDragBegin
                     onDragEnd:(void (^)(void))onDragEnd {
+  BOOL showPill = (onModeChanged != nil && descriptorPath.length > 0);
   CGFloat W =
       [_KKStaticValuesPopoverView _popoverWidthForDescriptor:descriptorPath];
   CGFloat h = [_KKStaticValuesPopoverView heightForLanes:lanes
                                           descriptorPath:descriptorPath
-                                              clipAspect:clipAspect];
+                                              clipAspect:clipAspect
+                                      showRenderModePill:showPill];
   self = [super initWithFrame:NSMakeRect(0, 0, W, h)];
   if (!self)
     return nil;
@@ -816,10 +901,63 @@ static NSTextField *_KKMakeCaption(NSString *s) {
 
   NSLayoutYAxisAnchor *stackTopAnchor = self.topAnchor;
   CGFloat stackTopInset = KKPaddingMD;
+  NSLayoutYAxisAnchor *canvasTopAnchor = self.topAnchor;
+  CGFloat canvasTopInset = KKPaddingMD;
+  if (showPill) {
+    __weak typeof(self) weakSelfPill = self;
+    void (^wrappedModeChanged)(KKMiniCanvasRenderMode) =
+        ^(KKMiniCanvasRenderMode m) {
+          __strong typeof(weakSelfPill) ss = weakSelfPill;
+          ss->_miniCanvas.renderMode = (NSInteger)m;
+          if (onModeChanged)
+            onModeChanged(m);
+        };
+    KKPillToggleRowView *pill = [self _makeRenderModePill:renderMode
+                                            onModeChanged:wrappedModeChanged];
+    [self addSubview:pill];
+    [NSLayoutConstraint activateConstraints:@[
+      [pill.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                          constant:-KKPaddingMD],
+      [pill.topAnchor constraintEqualToAnchor:self.topAnchor
+                                     constant:KKPaddingMD],
+      [pill.heightAnchor
+          constraintEqualToConstant:[_KKStaticValuesPopoverView
+                                        _renderModePillHeaderHeight]],
+    ]];
+    if (onNavigate) {
+      _navPrevButton = [self _makeNavButton:@"chevron.left"
+                                  direction:-1
+                                 onNavigate:onNavigate];
+      _navNextButton = [self _makeNavButton:@"chevron.right"
+                                  direction:1
+                                 onNavigate:onNavigate];
+      [self addSubview:_navPrevButton];
+      [self addSubview:_navNextButton];
+      CGFloat hPill = [_KKStaticValuesPopoverView _renderModePillHeaderHeight];
+      [NSLayoutConstraint activateConstraints:@[
+        [_navPrevButton.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                                     constant:KKPaddingMD],
+        [_navPrevButton.centerYAnchor
+            constraintEqualToAnchor:pill.centerYAnchor],
+        [_navPrevButton.widthAnchor constraintEqualToConstant:hPill],
+        [_navPrevButton.heightAnchor constraintEqualToConstant:hPill],
+        [_navNextButton.leadingAnchor
+            constraintEqualToAnchor:_navPrevButton.trailingAnchor
+                           constant:KKPaddingSM],
+        [_navNextButton.centerYAnchor
+            constraintEqualToAnchor:pill.centerYAnchor],
+        [_navNextButton.widthAnchor constraintEqualToConstant:hPill],
+        [_navNextButton.heightAnchor constraintEqualToConstant:hPill],
+      ]];
+    }
+    canvasTopAnchor = pill.bottomAnchor;
+    canvasTopInset = KKPaddingMD;
+  }
   if (descriptorPath.length > 0) {
     _miniCanvas = [[KKMiniCanvasView alloc] initWithFrame:NSZeroRect];
     _miniCanvas.sourceDescriptorPath = descriptorPath;
     _miniCanvas.canvasDelegate = canvasDelegate;
+    _miniCanvas.renderMode = (NSInteger)renderMode;
     __weak typeof(self) weakSelf = self;
     _miniCanvas.onHandleValue =
         ^(NSString *label, NSArray<NSNumber *> *values) {
@@ -866,8 +1004,8 @@ static NSTextField *_KKMakeCaption(NSString *s) {
                                        constant:KKPaddingMD],
       [sv.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
                                         constant:-KKPaddingMD],
-      [sv.topAnchor constraintEqualToAnchor:self.topAnchor
-                                   constant:KKPaddingMD],
+      [sv.topAnchor constraintEqualToAnchor:canvasTopAnchor
+                                   constant:canvasTopInset],
       [sv.heightAnchor
           constraintEqualToConstant:[_KKStaticValuesPopoverView
                                         _canvasHeightForAspect:clipAspect
@@ -1105,7 +1243,8 @@ static NSTextField *_KKMakeCaption(NSString *s) {
         [_KKStaticValuesPopoverView _popoverWidthForDescriptor:_descriptorPath],
         [_KKStaticValuesPopoverView heightForLanes:lanes
                                     descriptorPath:_descriptorPath
-                                        clipAspect:_clipAspect]);
+                                        clipAspect:_clipAspect
+                                showRenderModePill:NO]);
 }
 
 @end

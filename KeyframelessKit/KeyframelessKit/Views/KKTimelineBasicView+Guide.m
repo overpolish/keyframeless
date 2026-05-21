@@ -106,11 +106,11 @@
     return NSZeroRect;
   double frac = MAX(0.0, MIN(1.0, seconds / dur));
   KKBasicProj p = [self _projection];
-  double lo = 0.0, hi = 1.0;
-  KKBasicValueExtent(p, &lo, &hi);
-  NSPoint c = KKBasicPoint(g, frac, KKBasicMotionY(frac, p), lo, hi, p);
-  CGFloat r = kDiamondR + 6.0;
-  NSRect view = NSMakeRect(c.x - r, c.y - r, 2 * r, 2 * r);
+  CGFloat px = KKBasicXForFrac(frac, g, p);
+  CGFloat halo = 4.0;
+  NSRect view = NSMakeRect(px - kPillW * 0.5 - halo,
+                           NSMinY(g) + kPillInsetY - halo, kPillW + 2.0 * halo,
+                           NSHeight(g) - 2.0 * kPillInsetY + 2.0 * halo);
   NSRect inWin = [self convertRect:view toView:nil];
   return [w convertRectToScreen:inWin];
 }
@@ -208,27 +208,15 @@
                      p.outEnabled};
   if (!enabled[idx - 1])
     return NSZeroRect;
-  double lo = 0.0, hi = 1.0;
-  KKBasicValueExtent(p, &lo, &hi);
-  NSPoint c;
-  switch (idx) {
-  case 1:
-    c = KKBasicPoint(g, 0.0, 0.0, lo, hi, p);
-    break;
-  case 2:
-    c = KKBasicPoint(g, p.inEndFrac, KKBasicMotionY(p.inEndFrac, p), lo, hi, p);
-    break;
-  case 3:
-    c = KKBasicPoint(g, p.outStartFrac, KKBasicMotionY(p.outStartFrac, p), lo,
-                     hi, p);
-    break;
-  default:
-    c = KKBasicPoint(g, 1.0, 0.0, lo, hi, p);
-    break;
-  }
-  // Pad the cutout a few pts so the diamond reads as a glow target.
-  CGFloat r = kDiamondR + 6.0;
-  NSRect view = NSMakeRect(c.x - r, c.y - r, 2 * r, 2 * r);
+  double pillFrac = (idx == 1   ? 0.0
+                     : idx == 2 ? p.inEndFrac
+                     : idx == 3 ? p.outStartFrac
+                                : 1.0);
+  CGFloat px = KKBasicXForFrac(pillFrac, g, p);
+  CGFloat halo = 4.0;
+  NSRect view = NSMakeRect(px - kPillW * 0.5 - halo,
+                           NSMinY(g) + kPillInsetY - halo, kPillW + 2.0 * halo,
+                           NSHeight(g) - 2.0 * kPillInsetY + 2.0 * halo);
   NSRect win = [self convertRect:view toView:nil];
   return [w convertRectToScreen:win];
 }

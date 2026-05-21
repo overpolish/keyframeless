@@ -58,6 +58,15 @@
             : @{};
     BOOL loopEnabled = [uiState[@"loopEnabled"] boolValue];
     NSInteger activeTab = [uiState[@"activeTab"] integerValue];
+    // Migration: legacy onionSkinEnabled BOOL → new renderMode enum
+    // (0=Off, 1=Filmstrip, 2=Onion). Old true maps to Filmstrip.
+    KKMiniCanvasRenderMode renderMode = KKMiniCanvasRenderModeOff;
+    if (uiState[@"renderMode"]) {
+      renderMode =
+          (KKMiniCanvasRenderMode)[uiState[@"renderMode"] integerValue];
+    } else if ([uiState[@"onionSkinEnabled"] boolValue]) {
+      renderMode = KKMiniCanvasRenderModeFilmstrip;
+    }
 
     NSString *timelineJson =
         KKReadCustomParamString(getAPI, kKKParamTimelineData);
@@ -126,6 +135,15 @@
       if (!strong)
         return;
       [strong patchUIStateKey:@"activeTab" value:@(tab) paramID:kParamUIState];
+    };
+    [view setRenderMode:renderMode];
+    view.onRenderModeChanged = ^(KKMiniCanvasRenderMode mode) {
+      __strong typeof(weak) strong = weak;
+      if (!strong)
+        return;
+      [strong patchUIStateKey:@"renderMode"
+                        value:@((NSInteger)mode)
+                      paramID:kParamUIState];
     };
     view.onTimelineMutated = ^(KKTimeline *updated) {
       __strong typeof(weak) strong = weak;
@@ -398,7 +416,25 @@
   basicTiming.disabledSubtitle =
       @"Guides are disabled — select a Rounded clip to enable them";
 
-  return @[ intro, osc, full, constants, basicTiming ];
+  __block __weak KKHelpGuide *weakAdvancedTiming = nil;
+  KKHelpGuide *advancedTiming = [KKHelpGuide
+      guideWithTitle:@"Advanced Timing"
+            subtitle:@"Add keyposes anywhere and shape transitions per property"
+             onStart:^{
+               __strong typeof(weak) strong = weak;
+               strong.inspectorView.onGuideCompleted = ^{
+                 [weakAdvancedTiming markCompleted];
+               };
+               [strong.inspectorView restartAdvancedTimingGuide];
+             }];
+  weakAdvancedTiming = advancedTiming;
+  advancedTiming.enabledProvider = ^BOOL {
+    return RoundedHasCanvasReference();
+  };
+  advancedTiming.disabledSubtitle =
+      @"Guides are disabled — select a Rounded clip to enable them";
+
+  return @[ intro, osc, full, constants, basicTiming, advancedTiming ];
 }
 
 - (NSNotificationName)helpGuideRefreshNotificationName {

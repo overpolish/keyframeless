@@ -197,12 +197,31 @@ static NSInteger _kkCropPartForRoundedActive(NSInteger activePart) {
       // releases the array's hold on `old`; if no other retainer exists it
       // dangles and subsequent property reads (incl. KKLog) crash. See
       // project_mrr_array_dangling.md — exact same pattern.
+      NSArray<NSNumber *> *newValues = @[ @(newRadius) ];
       double oldTime = out[best].time;
       KKInterval *oldOutgoing = out[best].outgoing;
-      KKKeyPose *nk = [KKKeyPose keyposeAtTime:oldTime
-                                        values:@[ @(newRadius) ]];
+      KKKeyPose *nk = [KKKeyPose keyposeAtTime:oldTime values:newValues];
       nk.outgoing = oldOutgoing; // preserve easing/modulation
       out[best] = nk;
+      // Propagate through hold-link bonds — a linked endpoint shares the
+      // same value as its partner, so an OSC edit to one side must mirror
+      // to the other or the hold becomes a drift with the bond still set
+      // (mismatched semantic). See project_canvas_undo_aware_selection /
+      // KKPathToParams for the equivalent pattern on Canvas.
+      if (best + 1 < (NSInteger)out.count && nk.outgoing.endpointsLinked) {
+        KKKeyPose *partner = out[best + 1];
+        KKKeyPose *np = [KKKeyPose keyposeAtTime:partner.time values:newValues];
+        np.outgoing = partner.outgoing;
+        out[best + 1] = np;
+      }
+      if (best > 0) {
+        KKKeyPose *prev = out[best - 1];
+        if (prev.outgoing.endpointsLinked) {
+          KKKeyPose *np = [KKKeyPose keyposeAtTime:prev.time values:newValues];
+          np.outgoing = prev.outgoing;
+          out[best - 1] = np;
+        }
+      }
       radiusLane.keyposes = out;
     }
     lanes[laneIdx] = radiusLane;
