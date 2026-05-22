@@ -202,6 +202,7 @@
   c.valueType = _valueType;
   c.componentMin = [_componentMin copy];
   c.componentMax = [_componentMax copy];
+  c.componentUnits = [_componentUnits copy];
   c.keyposes = [[NSArray alloc] initWithArray:_keyposes copyItems:YES];
   c.lastKnownClipDuration = _lastKnownClipDuration;
   c.holdShape = _holdShape;
@@ -220,6 +221,8 @@
     d[@"component_min"] = _componentMin;
   if (_componentMax)
     d[@"component_max"] = _componentMax;
+  if (_componentUnits)
+    d[@"component_units"] = _componentUnits;
   d[@"keyposes"] = [_keyposes valueForKey:@"toDictionary"];
   d[@"last_known_clip_duration"] = @(_lastKnownClipDuration);
   if (_holdShape != KKLaneHoldShapeAuto)
@@ -243,6 +246,8 @@
     l.componentMin = d[@"component_min"];
   if ([d[@"component_max"] isKindOfClass:[NSArray class]])
     l.componentMax = d[@"component_max"];
+  if ([d[@"component_units"] isKindOfClass:[NSArray class]])
+    l.componentUnits = d[@"component_units"];
   l.lastKnownClipDuration = [d[@"last_known_clip_duration"] doubleValue];
   if (d[@"hold_shape"])
     l.holdShape = (KKLaneHoldShape)[d[@"hold_shape"] integerValue];

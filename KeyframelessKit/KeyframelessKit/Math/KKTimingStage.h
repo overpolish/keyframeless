@@ -109,6 +109,8 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
     *componentMin; // one per component, empty = unconstrained
 @property(nonatomic, copy) NSArray<NSNumber *>
     *componentMax; // one per component, empty = unconstrained
+@property(nonatomic, copy) NSArray<NSString *>
+    *componentUnits; // one per component (e.g. @"px", @"%"); empty = unitless
 @property(nonatomic, copy) NSArray<KKKeyPose *> *keyposes; // ordered by time
 @property(nonatomic) double lastKnownClipDuration; // 0 = not yet established
 
@@ -129,7 +131,7 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// Returns nil for single-component types (no UI shown). Generic multi-comp
 /// lanes fall back to "1", "2", ... indices.
 FOUNDATION_EXPORT
-    NSArray<NSString *> *_Nullable KKLaneComponentLabels(KKLane *lane);
+NSArray<NSString *> *_Nullable KKLaneComponentLabels(KKLane *lane);
 
 /// Metadata for a group header in the sequencer.
 /// Lanes reference groupKey only; group display state lives in

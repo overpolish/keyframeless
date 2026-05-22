@@ -9,6 +9,7 @@
 #import "KKPillToggleRowView.h"
 #import "KKSliderView.h"
 #import "KKTimelineLanesView_Private.h"
+#import "KKValueTextField.h"
 #import <KeyframelessKit/KKLog.h>
 #import <QuartzCore/QuartzCore.h>
 
@@ -304,79 +305,8 @@ static const CGFloat kFloatRowH = 30.0;
 static const CGFloat kCropRowH = 30.0; // single-line W/H/X/Y hstack
 static const CGFloat kStaticFieldW = 40.0;
 
-// Mirrors KKSeedView's field: only takes focus on an explicit click (so the
-// popover doesn't steal keyboard shortcuts), accent caret/selection, and
-// hands focus back to the window when editing ends.
-@interface _KKStaticNumberField : NSTextField
-@end
-
-@implementation _KKStaticNumberField {
-  BOOL _userClickPending;
-}
-- (BOOL)acceptsFirstResponder {
-  return _userClickPending;
-}
-- (void)mouseDown:(NSEvent *)event {
-  _userClickPending = YES;
-  [super mouseDown:event];
-}
-- (BOOL)performKeyEquivalent:(NSEvent *)event {
-  if (self.currentEditor) {
-    [self.currentEditor keyDown:event];
-    return YES;
-  }
-  return [super performKeyEquivalent:event];
-}
-- (BOOL)becomeFirstResponder {
-  BOOL ok = [super becomeFirstResponder];
-  if (ok) {
-    [self _styleFieldEditor];
-    // The field editor may not be installed yet on this runloop tick;
-    // re-apply next tick so the accent caret/selection actually takes.
-    __weak typeof(self) weak = self;
-    dispatch_async(dispatch_get_main_queue(), ^{
-      [weak _styleFieldEditor];
-    });
-  }
-  return ok;
-}
-- (void)_styleFieldEditor {
-  NSText *ed = self.currentEditor;
-  if (![ed isKindOfClass:[NSTextView class]])
-    return;
-  NSTextView *editor = (NSTextView *)ed;
-  NSColor *accent = [NSColor accentMatchingHost];
-  editor.insertionPointColor = accent;
-  editor.selectedTextAttributes = @{
-    NSBackgroundColorAttributeName : [accent colorWithAlphaComponent:0.3],
-    NSForegroundColorAttributeName : [NSColor labelColor],
-  };
-}
-- (void)textDidEndEditing:(NSNotification *)notification {
-  [super textDidEndEditing:notification];
-  _userClickPending = NO;
-  [self.window makeFirstResponder:nil];
-}
-@end
-
 static NSTextField *_KKMakeNumberField(void) {
-  _KKStaticNumberField *f = [[_KKStaticNumberField alloc] init];
-  f.translatesAutoresizingMaskIntoConstraints = NO;
-  f.font = [NSFont monospacedDigitSystemFontOfSize:KKFontSizeSM
-                                            weight:NSFontWeightRegular];
-  f.alignment = NSTextAlignmentRight;
-  f.textColor = [NSColor inspectorLabel];
-  f.backgroundColor = [NSColor clearColor];
-  f.bordered = NO;
-  f.bezeled = NO;
-  f.drawsBackground = NO;
-  f.focusRingType = NSFocusRingTypeNone;
-  f.editable = YES;
-  f.selectable = YES;
-  // Fire the action on Return *and* on focus loss, so a typed value commits
-  // without a drag (the host applies it immediately — see coalescing).
-  [f.cell setSendsActionOnEndEditing:YES];
-  return f;
+  return [KKValueTextField valueField];
 }
 
 static NSTextField *_KKMakeCaption(NSString *s) {
@@ -387,10 +317,70 @@ static NSTextField *_KKMakeCaption(NSString *s) {
   return l;
 }
 
+// Reserved widths for the prefix caption and unit suffix, kept whether or not
+// either renders so the value column lands in the same place on every row
+// (e.g. "1080" lines up across rows whether or not there's a leading "H" or a
+// trailing "px"/"%"). Prefix fits one caption character.
+static const CGFloat kPrefixSlotW = 13.0;
+static const CGFloat kSuffixSlotW = 17.0;
+
+// A right-aligned number field flanked by fixed-width prefix (caption) and
+// suffix (unit) slots. Both slots are always present so columns line up; pass
+// nil/@"" for an absent prefix/unit. The inner `field` is exposed for
+// target/action, delegate, and guide wiring.
+@interface _KKValueField : NSView
+@property(nonatomic, readonly) NSTextField *field;
+- (void)setPrefix:(nullable NSString *)prefix;
+- (void)setSuffix:(nullable NSString *)suffix;
+@end
+
+@implementation _KKValueField {
+  NSTextField *_prefix;
+  NSTextField *_suffix;
+}
+- (instancetype)init {
+  self = [super initWithFrame:NSZeroRect];
+  if (!self)
+    return nil;
+  self.translatesAutoresizingMaskIntoConstraints = NO;
+  _prefix = _KKMakeCaption(@"");
+  _prefix.alignment = NSTextAlignmentLeft;
+  _field = _KKMakeNumberField();
+  _suffix = _KKMakeCaption(@"");
+  _suffix.alignment = NSTextAlignmentLeft;
+  _suffix.textColor = [[NSColor inspectorLabel] colorWithAlphaComponent:0.5];
+  [self addSubview:_prefix];
+  [self addSubview:_field];
+  [self addSubview:_suffix];
+  [NSLayoutConstraint activateConstraints:@[
+    [_prefix.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+    [_prefix.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    [_prefix.widthAnchor constraintEqualToConstant:kPrefixSlotW],
+    [_field.leadingAnchor constraintEqualToAnchor:_prefix.trailingAnchor
+                                         constant:KKPaddingXS],
+    [_field.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    [_field.widthAnchor constraintEqualToConstant:kStaticFieldW],
+    [_suffix.leadingAnchor constraintEqualToAnchor:_field.trailingAnchor
+                                          constant:KKPaddingXS],
+    [_suffix.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    [_suffix.widthAnchor constraintEqualToConstant:kSuffixSlotW],
+    [_suffix.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+  ]];
+  return self;
+}
+- (void)setPrefix:(NSString *)prefix {
+  _prefix.stringValue = prefix ?: @"";
+}
+- (void)setSuffix:(NSString *)suffix {
+  _suffix.stringValue = suffix ?: @"";
+}
+@end
+
 @implementation _KKStaticValueRow {
   KKLaneValueType _valueType;
   NSArray<NSNumber *> *_cmin;
   NSArray<NSNumber *> *_cmax;
+  NSArray<NSString *> *_cunits;
   KKSliderView *_slider;               // Float only
   NSArray<NSTextField *> *_fields;     // Float: 1; Crop: 4 (w,h,x,y)
   NSMutableArray<NSNumber *> *_values; // normalized, authoritative
@@ -419,6 +409,10 @@ static NSTextField *_KKMakeCaption(NSString *s) {
 }
 
 - (void)_resetTapped:(id)sender {
+  // Drop focus from any field still being edited first — otherwise
+  // refreshDisplay skips the focused field and the reset value won't appear in
+  // it (the editor's typed text lingers).
+  [self.window makeFirstResponder:nil];
   if (_defaultValues.count)
     [self _setValues:_defaultValues emit:YES]; // commits like a field edit
 }
@@ -477,6 +471,7 @@ static NSTextField *_KKMakeCaption(NSString *s) {
   _valueType = lane.valueType;
   _cmin = lane.componentMin ?: @[];
   _cmax = lane.componentMax ?: @[];
+  _cunits = lane.componentUnits ?: @[];
 
   NSTextField *title = _KKMakeCaption(lane.label);
   [self addSubview:title];
@@ -514,14 +509,14 @@ static NSTextField *_KKMakeCaption(NSString *s) {
     NSMutableArray<NSView *> *arranged = [NSMutableArray array];
     NSMutableArray<NSTextField *> *fs = [NSMutableArray array];
     for (NSInteger i = 0; i < 4; i++) {
-      NSTextField *cap = _KKMakeCaption(caps[i]);
-      NSTextField *fld = _KKMakeNumberField();
+      _KKValueField *cell = [[_KKValueField alloc] init];
+      [cell setPrefix:caps[i]];
+      [cell setSuffix:(i < (NSInteger)_cunits.count ? _cunits[i] : nil)];
+      NSTextField *fld = cell.field;
       fld.target = self;
       fld.action = @selector(_fieldCommitted:);
       fld.delegate = (id<NSTextFieldDelegate>)self; // live-typing for a guide
-      [fld.widthAnchor constraintEqualToConstant:kStaticFieldW].active = YES;
-      [arranged addObject:cap];
-      [arranged addObject:fld];
+      [arranged addObject:cell];
       [fs addObject:fld];
       if (i < 3) { // divider between each W | H | X | Y group
         NSView *div = [[NSView alloc] init];
@@ -555,7 +550,9 @@ static NSTextField *_KKMakeCaption(NSString *s) {
     ]];
     _fields = fs;
   } else {
-    NSTextField *fld = _KKMakeNumberField();
+    _KKValueField *cell = [[_KKValueField alloc] init];
+    [cell setSuffix:(_cunits.count ? _cunits[0] : nil)];
+    NSTextField *fld = cell.field;
     fld.target = self;
     fld.action = @selector(_fieldCommitted:);
     fld.delegate = (id<NSTextFieldDelegate>)self;
@@ -578,7 +575,7 @@ static NSTextField *_KKMakeCaption(NSString *s) {
         weak.onDragEnd();
     };
     [self addSubview:_slider];
-    [self addSubview:fld];
+    [self addSubview:cell];
     [NSLayoutConstraint activateConstraints:@[
       [title.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
                                           constant:KKPaddingLG],
@@ -586,13 +583,16 @@ static NSTextField *_KKMakeCaption(NSString *s) {
       [title.widthAnchor constraintEqualToConstant:54.0],
       [_slider.leadingAnchor constraintEqualToAnchor:title.trailingAnchor
                                             constant:KKPaddingSM],
+      [_slider.trailingAnchor constraintEqualToAnchor:cell.leadingAnchor
+                                             constant:-KKPaddingSM],
       [_slider.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-      [fld.leadingAnchor constraintEqualToAnchor:_slider.trailingAnchor
-                                        constant:KKPaddingSM],
-      [fld.trailingAnchor constraintEqualToAnchor:_reset.leadingAnchor
-                                         constant:-KKPaddingLG],
-      [fld.widthAnchor constraintEqualToConstant:kStaticFieldW],
-      [fld.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [cell.trailingAnchor constraintEqualToAnchor:_reset.leadingAnchor
+                                          constant:-KKPaddingLG],
+      // Pin top/bottom (not just centerY): a direct subview cell has no other
+      // height source, and a zero-height cell clips hit-testing so the field
+      // inside can't be clicked. (Crop cells get height from their stack view.)
+      [cell.topAnchor constraintEqualToAnchor:self.topAnchor],
+      [cell.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
     ]];
   }
 
@@ -616,17 +616,25 @@ static NSTextField *_KKMakeCaption(NSString *s) {
 }
 
 // Render _values into the fields/slider (display = norm × scale). Skips a
-// field the user is editing so typing isn't clobbered.
+// field the user is editing (or mid end-editing) so typing isn't clobbered and
+// a stringValue write can't re-grab focus on the field that's resigning.
 - (void)refreshDisplay {
   for (NSInteger i = 0;
        i < (NSInteger)_fields.count && i < (NSInteger)_values.count; i++) {
-    if (_fields[i].currentEditor)
+    if ([self _fieldEditing:_fields[i]])
       continue;
     _fields[i].stringValue = [self _displayForNorm:_values[i].doubleValue
                                              index:i];
   }
-  if (_slider && _values.count && !_fields[0].currentEditor)
+  if (_slider && _values.count && ![self _fieldEditing:_fields[0]])
     _slider.doubleValue = _values[0].doubleValue;
+}
+
+- (BOOL)_fieldEditing:(NSTextField *)f {
+  if (f.currentEditor)
+    return YES;
+  return [f isKindOfClass:[KKValueTextField class]] &&
+         ((KKValueTextField *)f).kkEditing;
 }
 
 - (void)_setValues:(NSArray<NSNumber *> *)v emit:(BOOL)emit {
@@ -651,6 +659,14 @@ static NSTextField *_KKMakeCaption(NSString *s) {
        i++)
     v[i] = @(_fields[i].doubleValue / [self _scaleAt:i]);
   [self _setValues:v emit:YES];
+  // _setValues clamps to componentMin/Max, but the field editor is still
+  // tearing down this tick so refreshDisplay skipped the edited field — leaving
+  // an out-of-range entry (e.g. "150") on screen. Re-render next tick, once the
+  // editor is gone, so the field snaps to the clamped value.
+  __weak typeof(self) weak = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [weak refreshDisplay];
+  });
 }
 
 - (void)applyValues:(NSArray<NSNumber *> *)vals {
@@ -674,6 +690,16 @@ static NSTextField *_KKMakeCaption(NSString *s) {
     return;
   // End editing → sendsActionOnEndEditing fires _fieldCommitted:.
   [_fields[i].window makeFirstResponder:nil];
+}
+
+// Return commits and fully defocuses. Returning YES suppresses AppKit's
+// default Return handling, which otherwise re-selects all text and re-focuses
+// the field *after* our textDidEndEditing handler — leaving it stuck "all
+// selected" and impossible to clear via reset/OSC.
+- (BOOL)control:(NSControl *)control
+               textView:(NSTextView *)textView
+    doCommandBySelector:(SEL)commandSelector {
+  return KKValueFieldHandleReturnCommand(self.window, commandSelector);
 }
 
 // Live keystrokes in any field — report the parsed *display* value (the

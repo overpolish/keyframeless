@@ -23,6 +23,7 @@
   radius.valueType = KKLaneValueTypeFloat;
   radius.componentMin = @[ @0.0 ];
   radius.componentMax = @[ @100.0 ];
+  radius.componentUnits = @[ @"%" ];
   // Template default == the product default constant (seeded when the
   // property has no lane yet; keeps the constants editor in sync with the
   // render fallback).
@@ -32,6 +33,7 @@
   crop.valueType = KKLaneValueTypeCrop;
   crop.componentMin = @[ @0.0, @0.0, @-0.5, @-0.5 ];
   crop.componentMax = @[ @1.0, @1.0, @0.5, @0.5 ];
+  crop.componentUnits = @[ @"px", @"px", @"px", @"px" ];
   [crop insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                         values:@[ @1.0, @1.0, @0.0, @0.0 ]]];
 

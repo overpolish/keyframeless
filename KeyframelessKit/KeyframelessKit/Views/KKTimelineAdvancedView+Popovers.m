@@ -67,6 +67,7 @@
     display.valueType = l.valueType;
     display.componentMin = l.componentMin;
     display.componentMax = l.componentMax;
+    display.componentUnits = l.componentUnits;
     display.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:match.values] ];
     [displayLanes addObject:display];
   }
