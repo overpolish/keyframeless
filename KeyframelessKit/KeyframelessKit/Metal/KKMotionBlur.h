@@ -9,9 +9,9 @@
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
 
-@protocol FxParameterRetrievalAPI_v6;
 @protocol FxTimingAPI_v4;
 @class FxImageTile;
+@class FxImageTileRequest;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -21,18 +21,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// can use the values.
 typedef struct {
   bool enabled;
-  bool transitionsOnly; // when true, plugin should clear `enabled` for
-                        // frames where no timing lane is in a Transition
-                        // segment, so hold portions skip the blur path
   int sampleCount; // 2..KK_MOTION_BLUR_MAX_SAMPLES, undefined when disabled
   double shutterSec;
-  // Per-sample render-target downscale. Sample textures are allocated at
-  // (destW * subframeScale, destH * subframeScale); the accumulation pass
-  // bilinear-upsamples back to full dest. Default 0.5 — invisible on
-  // motion-blurred output and ~4× cheaper per sample. Plugins whose render
-  // pipeline assumes full-res sampleDest dims (Glow's composite viewport,
-  // etc.) can set this to 1.0 to opt out.
-  float subframeScale;
 } KKMotionBlurState;
 
 /// Sample-and-accumulate motion blur shared across plugins.
@@ -47,15 +37,6 @@ typedef struct {
 /// state (KKTiming queries, transforms, etc.) at the `subTime` it is
 /// handed — KKMotionBlur knows nothing about what is being drawn.
 @interface KKMotionBlur : NSObject
-
-/// Snapshots the motion-blur params at `time`. Call from
-/// `pluginState:atTime:` (where paramAPI is available) and embed the
-/// returned struct in your pluginState NSData; pass it back to
-/// `applyToDestinationImage:state:...` from your render path.
-+ (KKMotionBlurState)snapshotStateWithParameterAPI:
-                         (id<FxParameterRetrievalAPI_v6>)paramAPI
-                                         timingAPI:(id<FxTimingAPI_v4>)timingAPI
-                                            atTime:(CMTime)time;
 
 /// Snapshots motion-blur state from a custom-UI JSON blob
 /// (`{"enabled":bool,"shutterAngle":0–360,"samples":2–128}`) instead of the
@@ -100,6 +81,31 @@ typedef struct {
 /// at render time, so all sample-time evaluation must happen up-front).
 + (NSArray<NSValue *> *)sampleTimesForState:(KKMotionBlurState)state
                                  renderTime:(CMTime)renderTime;
+
+/// Opt into REAL (content) motion blur: appends one source-clip request per
+/// sub-frame sample time (skipping `renderTime`, which the plugin already
+/// requests) to `requests`. Call from `scheduleInputs:`. FCP then delivers the
+/// source at each sub-frame time, and `applyToDestinationImage:` feeds the
+/// time-matched frame to each accumulate pass — so the underlying content
+/// smears, not just the plugin's parameter animation.
+///
+/// `builder` creates one request for a given sample time: the plugin owns this
+/// because KeyframelessKit doesn't link FxPlug (can't construct
+/// `FxImageTileRequest`). Typically a one-liner:
+/// `^(CMTime t){ return [[FxImageTileRequest alloc]
+///   initWithSource:kFxImageTileRequestSourceEffectClip time:t
+///   includeFilters:YES parameterID:0]; }` (autorelease under MRR).
+///
+/// No-op when blur is disabled, so it's safe to call unconditionally. Each
+/// added request is another source frame FCP decodes — heavier, can drop live-
+/// playback frames; FCP delivers discrete frames, so content smears smoothly
+/// only with Frame Blending / Optical Flow or a shutter spanning >1 frame.
++ (void)appendSourceRequestsForState:(KKMotionBlurState)state
+                          renderTime:(CMTime)renderTime
+                                  to:(NSMutableArray<FxImageTileRequest *> *)
+                                         requests
+                             builder:(FxImageTileRequest *_Nullable (^)(
+                                         CMTime sampleTime))builder;
 
 /// Renders one frame with motion blur applied. Owns its own command queue
 /// and command buffer; commits and waits before returning.

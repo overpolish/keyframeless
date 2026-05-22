@@ -159,6 +159,27 @@ static NSArray<NSNumber *> *KKReadBoundaryRequestFracs(NSString *path) {
   if (cur)
     [reqs addObject:cur];
 
+  // Real motion blur: when blur is on, also request the source at each
+  // sub-frame sample time so the accumulate pass smears actual content (not
+  // just the mask animation). mbState lives at the front of pluginState; the
+  // shared helper handles the sample-time math and skips renderTime.
+  if (pluginState.length >= sizeof(KKMotionBlurState)) {
+    KKMotionBlurState mbState;
+    [pluginState getBytes:&mbState length:sizeof(mbState)];
+    [KKMotionBlur
+        appendSourceRequestsForState:mbState
+                          renderTime:renderTime
+                                  to:reqs
+                             builder:^FxImageTileRequest *(CMTime t) {
+                               return [[[FxImageTileRequest alloc]
+                                   initWithSource:
+                                       kFxImageTileRequestSourceEffectClip
+                                             time:t
+                                   includeFilters:YES
+                                      parameterID:0] autorelease];
+                             }];
+  }
+
   NSArray<NSNumber *> *fracs =
       KKReadBoundaryRequestFracs(RoundedMiniCanvasRequestPath);
   BOOL boundaryActive = fracs.count > 0;

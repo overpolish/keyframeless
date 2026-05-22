@@ -154,16 +154,12 @@ static NSString *KKMBScratchKey(NSString *key, NSUInteger width,
   dispatch_semaphore_signal(sKKMotionBlurScratchPoolLock);
 }
 
-// Shared mapping for both snapshot paths. `shutterFraction` is 0–1 (shutter
-// angle / 360°); `sampleCount` is the explicit sample count (clamped here).
+// Maps a shutter fraction (0–1 = shutter angle / 360°) + explicit sample count
+// to a snapshot. Sample count is clamped here.
 static KKMotionBlurState _kkMBState(double shutterFraction, int sampleCount,
-                                    BOOL transitionsOnly,
                                     id<FxTimingAPI_v4> timingAPI) {
-  KKMotionBlurState state = {.enabled = true,
-                             .transitionsOnly = transitionsOnly ? true : false,
-                             .sampleCount = 0,
-                             .shutterSec = 0.0,
-                             .subframeScale = 0.5f};
+  KKMotionBlurState state = {
+      .enabled = true, .sampleCount = 0, .shutterSec = 0.0};
 
   int samples = MAX(2, sampleCount);
   if (samples > KK_MOTION_BLUR_MAX_SAMPLES)
@@ -179,50 +175,11 @@ static KKMotionBlurState _kkMBState(double shutterFraction, int sampleCount,
   return state;
 }
 
-+ (KKMotionBlurState)snapshotStateWithParameterAPI:
-                         (id<FxParameterRetrievalAPI_v6>)paramAPI
-                                         timingAPI:(id<FxTimingAPI_v4>)timingAPI
-                                            atTime:(CMTime)time {
-  KKMotionBlurState disabled = {.enabled = false,
-                                .transitionsOnly = false,
-                                .sampleCount = 0,
-                                .shutterSec = 0.0,
-                                .subframeScale = 0.5f};
-  if (!paramAPI)
-    return disabled;
-
-  BOOL enabled = KKReadCustomParamBool(paramAPI, kKKParamMotionBlurEnabled);
-  if (!enabled)
-    return disabled;
-
-  BOOL transitionsOnly = NO;
-  [paramAPI getBoolValue:&transitionsOnly
-           fromParameter:kKKParamMotionBlurTransitionsOnly
-                  atTime:time];
-
-  double shutter = 0.5, qualitySlider = 0.5;
-  [paramAPI getFloatValue:&shutter
-            fromParameter:kKKParamMotionBlurShutter
-                   atTime:time];
-  [paramAPI getFloatValue:&qualitySlider
-            fromParameter:kKKParamMotionBlurQuality
-                   atTime:time];
-
-  // Native group's Quality slider keeps its exponential 0%→2 / 50%→16 /
-  // 100%→128 mapping; the custom-UI blob path stores an explicit sample count
-  // instead.
-  int samples = (int)(2.0 * pow(64.0, qualitySlider));
-  return _kkMBState(shutter, samples, transitionsOnly, timingAPI);
-}
-
 + (KKMotionBlurState)snapshotStateFromJSON:(NSString *)json
                                  timingAPI:(id<FxTimingAPI_v4>)timingAPI
                                     atTime:(CMTime)time {
-  KKMotionBlurState disabled = {.enabled = false,
-                                .transitionsOnly = false,
-                                .sampleCount = 0,
-                                .shutterSec = 0.0,
-                                .subframeScale = 0.5f};
+  KKMotionBlurState disabled = {
+      .enabled = false, .sampleCount = 0, .shutterSec = 0.0};
   if (!json.length)
     return disabled;
 
@@ -239,7 +196,7 @@ static KKMotionBlurState _kkMBState(double shutterFraction, int sampleCount,
   double shutterAngle =
       dict[@"shutterAngle"] ? [dict[@"shutterAngle"] doubleValue] : 180.0;
   int samples = dict[@"samples"] ? [dict[@"samples"] intValue] : 16;
-  return _kkMBState(shutterAngle / 360.0, samples, NO, timingAPI);
+  return _kkMBState(shutterAngle / 360.0, samples, timingAPI);
 }
 
 + (NSString *)poolKeyForRegistryID:(uint64_t)registryID
@@ -327,14 +284,38 @@ static KKMotionBlurState _kkMBState(double shutterFraction, int sampleCount,
   for (int i = 0; i < n; i++) {
     double t = (double)i / (double)(n - 1);
     double offsetSec = state.shutterSec * t;
-    CMTime sampleTime = CMTimeSubtract(
-        renderTime, CMTimeMakeWithSeconds(offsetSec, renderTime.timescale));
+    // Build the sub-frame offset in a fixed high timescale, NOT
+    // renderTime.timescale: FCP delivers varying (sometimes low) timescales
+    // during playback, and a sub-frame offset rounds to 0 at low timescale →
+    // samples collapse onto renderTime → blur flickers off frame-to-frame.
+    CMTime sampleTime =
+        CMTimeSubtract(renderTime, CMTimeMakeWithSeconds(offsetSec, 90000));
     if (CMTimeCompare(sampleTime, kCMTimeZero) < 0)
       sampleTime = kCMTimeZero;
     [times addObject:[NSValue valueWithBytes:&sampleTime
                                     objCType:@encode(CMTime)]];
   }
   return times;
+}
+
++ (void)appendSourceRequestsForState:(KKMotionBlurState)state
+                          renderTime:(CMTime)renderTime
+                                  to:(NSMutableArray<FxImageTileRequest *> *)
+                                         requests
+                             builder:(FxImageTileRequest * (^)(CMTime))builder {
+  if (!state.enabled || !builder || !requests)
+    return;
+  NSArray<NSValue *> *times = [self sampleTimesForState:state
+                                             renderTime:renderTime];
+  // Skip index 0 (== renderTime) — the plugin already requests the current
+  // frame in its own scheduleInputs:.
+  for (NSUInteger i = 1; i < times.count; i++) {
+    CMTime t = kCMTimeZero;
+    [times[i] getValue:&t];
+    FxImageTileRequest *r = builder(t);
+    if (r)
+      [requests addObject:r];
+  }
 }
 
 + (BOOL)applyToDestinationImage:(FxImageTile *)dest
@@ -407,11 +388,24 @@ static KKMotionBlurState _kkMBState(double shutterFraction, int sampleCount,
 
   NSMutableArray<id<MTLTexture>> *inputTextures =
       [NSMutableArray arrayWithCapacity:sourceImages.count];
+  NSMutableArray<NSNumber *> *inputMediaSecs =
+      [NSMutableArray arrayWithCapacity:sourceImages.count];
   for (FxImageTile *src in sourceImages) {
     id<MTLTexture> tex = [src metalTextureForDevice:device];
-    if (tex)
+    if (tex) {
       [inputTextures addObject:tex];
+      [inputMediaSecs addObject:@(CMTimeGetSeconds(src.mediaTime))];
+    }
   }
+
+  // Per-sample source selection (REAL motion blur): if the plugin requested
+  // the source at each sub-frame time (via -sampleInputRequestsForState:), FCP
+  // delivers multiple frames here. FCP does NOT honor request order, so match
+  // each sample to the delivered tile whose mediaTime is nearest the sample's
+  // time. When only the current frame was delivered (parameter-only blur),
+  // every sample resolves to it — unchanged behavior.
+  NSArray<NSValue *> *sampleTimes = [self sampleTimesForState:state
+                                                   renderTime:renderTime];
 
   // Per-sample commit + wait keeps peak intermediate-texture working set
   // bounded to one sample's worth (instead of all N alive simultaneously
@@ -429,7 +423,32 @@ static KKMotionBlurState _kkMBState(double shutterFraction, int sampleCount,
       [NSThread currentThread]
           .threadDictionary[kKKMotionBlurScratchContextThreadKey] = scratchCtx;
 
-      BOOL ok = renderBlock(i, samples[i], sampleBuffer, inputTextures);
+      // Resolve this sample's source: nearest delivered tile by mediaTime,
+      // surfaced at index 0 (plugins read inputTextures[0]). Falls back to the
+      // existing array untouched when there's only one source.
+      NSArray<id<MTLTexture>> *sampleInputs = inputTextures;
+      if (inputTextures.count > 1 && i < (int)sampleTimes.count) {
+        CMTime st = kCMTimeZero;
+        [sampleTimes[i] getValue:&st];
+        double want = CMTimeGetSeconds(st);
+        NSUInteger best = 0;
+        double bestDt = INFINITY;
+        for (NSUInteger k = 0; k < inputMediaSecs.count; k++) {
+          double dt = fabs(inputMediaSecs[k].doubleValue - want);
+          if (dt < bestDt) {
+            bestDt = dt;
+            best = k;
+          }
+        }
+        if (best != 0) {
+          NSMutableArray<id<MTLTexture>> *reordered =
+              [inputTextures mutableCopy];
+          reordered[0] = inputTextures[best];
+          sampleInputs = reordered;
+        }
+      }
+
+      BOOL ok = renderBlock(i, samples[i], sampleBuffer, sampleInputs);
 
       if (ok) {
         [sampleBuffer commit];
