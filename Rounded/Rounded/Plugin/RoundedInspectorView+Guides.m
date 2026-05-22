@@ -845,6 +845,10 @@ static void RoundedTriggerHostZoomToFit(void) {
   // Let the panel receive pinch so s3 can forward it to the mini-canvas;
   // clicks still pass via the global-monitor synthesize path.
   host.forwardsGestures = YES;
+  // Single-frame preview while teaching the constant handles; restore the
+  // user's filmstrip/onion choice on completion (plain setter, no persistence).
+  KKMiniCanvasRenderMode priorRenderMode = self.basicLanesView.renderMode;
+  self.basicLanesView.renderMode = KKMiniCanvasRenderModeOff;
   __weak typeof(self) weak = self;
   [host
       runWithSeed:^KKTimeline * {
@@ -861,6 +865,7 @@ static void RoundedTriggerHostZoomToFit(void) {
       extraOnComplete:^{
         __strong typeof(weak) s = weak;
         [s _teardownConstantsScrollMonitors];
+        s.basicLanesView.renderMode = priorRenderMode;
       }];
 }
 
@@ -1259,6 +1264,11 @@ static void RoundedTriggerHostZoomToFit(void) {
   // Snapshot so we can restore on completion.
   NSInteger priorTab = self.activeTab;
   [self setActiveTab:KKTimelineTabBasic];
+  // Filmstrip/onion would clutter the mini-viewer steps — force a single-frame
+  // preview for the guide and restore the user's choice on completion. Plain
+  // setter (not _renderModeDidChange:) so persisted UI state is untouched.
+  KKMiniCanvasRenderMode priorRenderMode = self.basicLanesView.renderMode;
+  self.basicLanesView.renderMode = KKMiniCanvasRenderModeOff;
   KKJoyrideGuideHost *host = [self _guideHost];
   // forwardsGestures: panel intercepts clicks instead of ignoresMouseEvents
   // letting them through. Without this, a click inside the spotlight reaches
@@ -1289,6 +1299,7 @@ static void RoundedTriggerHostZoomToFit(void) {
         if (!s)
           return;
         s.onPlayingChanged = nil;
+        s.basicLanesView.renderMode = priorRenderMode;
         if (priorTab != KKTimelineTabBasic)
           [s setActiveTab:priorTab];
       }];
@@ -1478,6 +1489,10 @@ sCmdClick: {
 
 - (void)restartAdvancedTimingGuide {
   NSInteger priorTab = self.activeTab;
+  // Single-frame mini-viewer during the guide; restore the user's
+  // filmstrip/onion choice on completion (plain setter, no persistence).
+  KKMiniCanvasRenderMode priorRenderMode = self.basicLanesView.renderMode;
+  self.basicLanesView.renderMode = KKMiniCanvasRenderModeOff;
   KKJoyrideGuideHost *host = [self _guideHost];
   host.forwardsGestures = YES; // cmd-click + drag must reach the lane view
 
@@ -1520,6 +1535,7 @@ sCmdClick: {
         if (!s)
           return;
         s.onGuideTabChanged = nil;
+        s.basicLanesView.renderMode = priorRenderMode;
         if (priorTab != s.activeTab)
           [s setActiveTab:priorTab];
       }];

@@ -103,7 +103,7 @@ NS_ASSUME_NONNULL_BEGIN
      double endFraction, KKIntervalCurve curve, double intensity,
      double frequency, NSArray<NSString *> *participantLabels,
      NSArray<NSNumber *> *participantStates,
-     NSArray<NSNumber *> * (^participantRebuilder)(void),
+     NSArray<NSNumber *> * (^_Nullable participantRebuilder)(void),
      void (^onCurve)(KKIntervalCurve curve), void (^onIntensity)(double value),
      void (^onFrequency)(double value),
      void (^onParticipation)(NSInteger laneIndex, BOOL on),
