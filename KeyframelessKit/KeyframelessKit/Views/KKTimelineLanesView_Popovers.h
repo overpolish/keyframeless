@@ -126,6 +126,11 @@ NS_ASSUME_NONNULL_BEGIN
                                       fraction:(double)fraction
                                 excludedLabels:
                                     (NSArray<NSString *> *)excludedLabels;
+/// A structural edit (e.g. unlink) while a boundary popover is open changes the
+/// tied-hold-collapsed KP set the filmstrip / onion shows — re-publish so it
+/// updates live instead of waiting for a close/reopen or a nav. No-op when no
+/// boundary popover is open or render mode is Off.
+- (void)_republishBoundaryRequestIfOpen;
 - (NSPopover *)_showPopoverWithContent:(NSView *)content
                               fromView:(NSView *)anchor
                                onClose:(void (^)(void))onClose;

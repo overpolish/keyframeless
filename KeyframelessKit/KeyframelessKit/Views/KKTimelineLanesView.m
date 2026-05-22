@@ -155,6 +155,7 @@
       return;
     s->_timeline = updated;
     [s _refresh];
+    [s _republishBoundaryRequestIfOpen];
     if (s->_onTimelineMutated)
       s->_onTimelineMutated(updated);
   };
@@ -262,6 +263,7 @@
       return;
     s->_timeline = updated;
     [s _refresh];
+    [s _republishBoundaryRequestIfOpen];
     if (s->_onTimelineMutated)
       s->_onTimelineMutated(updated);
   };

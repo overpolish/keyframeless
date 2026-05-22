@@ -386,7 +386,9 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
           fabs(f.doubleValue - ordered.lastObject.doubleValue) > dedupEps)
         [ordered addObject:f];
     }
-    KKWriteBoundaryRequestMulti(self.miniCanvasRequestPath, ordered, YES);
+    NSArray<NSNumber *> *collapsed = [self _collapseTiedHolds:ordered
+                                                        scope:scope];
+    KKWriteBoundaryRequestMulti(self.miniCanvasRequestPath, collapsed, YES);
   } else {
     KKWriteBoundaryRequest(self.miniCanvasRequestPath, fraction, YES);
   }
@@ -413,7 +415,64 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
         fabs(f.doubleValue - deduped.lastObject.doubleValue) > dedupEps)
       [deduped addObject:f];
   }
-  return deduped;
+  return [self _collapseTiedHolds:deduped scope:scope];
+}
+
+// YES when every in-scope lane is constant across the open span (a,b) *because
+// it's a tied/linked flat hold* (or the lane simply isn't animating there) —
+// i.e. the frame at b is identical to the one at a by user intent, not
+// coincidence. A lane with a real transition straddling the span returns NO
+// (keep the cell). Spans passed here are consecutive entries in the KP-time
+// union, so no lane has an interior KP between a and b: each sits in exactly
+// one interval, found by the midpoint.
+- (BOOL)_spanIsTiedHoldBetween:(double)a
+                           and:(double)b
+                         scope:(nullable NSSet<NSString *> *)scope {
+  double mid = 0.5 * (a + b);
+  for (KKLane *lane in _timeline.lanes) {
+    if (!lane.enabled)
+      continue;
+    if (scope && ![scope containsObject:lane.label])
+      continue;
+    NSArray<KKKeyPose *> *kps = lane.keyposes;
+    if (kps.count < 2)
+      continue; // constant lane — never blocks
+    KKKeyPose *ia = nil, *ib = nil;
+    for (NSInteger i = 0; i + 1 < (NSInteger)kps.count; i++) {
+      if (kps[i].time <= mid && mid < kps[i + 1].time) {
+        ia = kps[i];
+        ib = kps[i + 1];
+        break;
+      }
+    }
+    if (!ia)
+      continue; // span lies outside this lane's KP range — constant there
+    if (!(ia.outgoing.endpointsLinked &&
+          _kkBoundaryValuesEqual(ia.values, ib.values)))
+      return NO;
+  }
+  return YES;
+}
+
+// Drop KP times whose span from the previous time is a tied/linked flat hold
+// across all in-scope lanes — collapsing a tie-bar hold to a single
+// representative (the earlier KP) so the filmstrip / onion / prev-next nav
+// don't show identical frames twice. Input must be time-sorted.
+- (NSArray<NSNumber *> *)_collapseTiedHolds:(NSArray<NSNumber *> *)sorted
+                                      scope:
+                                          (nullable NSSet<NSString *> *)scope {
+  if (sorted.count < 2)
+    return sorted;
+  NSMutableArray<NSNumber *> *out = [NSMutableArray array];
+  [out addObject:sorted[0]];
+  for (NSUInteger i = 1; i < sorted.count; i++) {
+    if ([self _spanIsTiedHoldBetween:sorted[i - 1].doubleValue
+                                 and:sorted[i].doubleValue
+                               scope:scope])
+      continue;
+    [out addObject:sorted[i]];
+  }
+  return out;
 }
 
 // Returns the index of the KP closest to `frac` in `fracs` (NSNotFound only
@@ -478,6 +537,18 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
     if (self.onBoundaryPreviewNeedsRender)
       self.onBoundaryPreviewNeedsRender();
   }
+}
+
+- (void)_republishBoundaryRequestIfOpen {
+  if (_renderMode == KKMiniCanvasRenderModeOff)
+    return;
+  if (!(_openContentPopover.isShown && _openStaticIsBoundary &&
+        _openStaticView))
+    return;
+  [self _publishBoundaryRequestForFraction:_openStaticBoundaryFraction];
+  [self _refreshBoundaryPopoverNavEnabled];
+  if (self.onBoundaryPreviewNeedsRender)
+    self.onBoundaryPreviewNeedsRender();
 }
 
 - (void)_updateBoundaryPopoverInPlaceWithLanes:(NSArray<KKLane *> *)lanes
