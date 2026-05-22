@@ -736,10 +736,17 @@
       continue;
     KKLane *nl = [lanes[i] copy];
     NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];
+    // Identify In-start / Out-end by INDEX from the lane's own shape, not by
+    // comparing time to 0.0 / 1.0: the Out-end keypose is stored at
+    // outEndFrac (≈0.99, one frame short of clip end so FCP can reach it), so
+    // a `tm > 1.0 - kEps` test never matched it and the OutEnd edit was
+    // silently dropped (the graph then re-read the old value, looking undone).
+    KKHoldShape sh = KKShapeOfLane(nl);
+    NSInteger lastIdx = (NSInteger)kps.count - 1;
     for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
       double tm = kps[k].time;
-      BOOL isIn = inOn && tm < kEps;
-      BOOL isOut = outOn && tm > 1.0 - kEps;
+      BOOL isIn = inOn && sh.inEnabled && k == 0;
+      BOOL isOut = outOn && sh.outEnabled && k == lastIdx;
       BOOL isHold = !isIn && !isOut;
       if (isHold && !holdLinked && kps.count >= 2 &&
           fabs(tm - holdTargetFrac) > kEps)
