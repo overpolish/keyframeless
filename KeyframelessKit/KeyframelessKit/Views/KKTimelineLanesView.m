@@ -638,20 +638,25 @@
       if (!tFound) {
         NSInteger holdStart = lInEn ? 1 : 0;
         NSInteger holdEnd = n - (lOutEn ? 2 : 1);
-        if (holdEnd > holdStart && (lInEn || lOutEn)) {
-          // Only inherit boundary times when the source actually has a
-          // boundary (≥3 KPs) — pure hold-only lanes sit at [0, outEnd]
-          // and would seed silly defaults.
-          if (lInEn)
-            tIn = kk[holdStart].time;
-          if (lOutEn)
-            tOut = kk[holdEnd].time;
-          tFound = YES;
+        if (holdEnd > holdStart) {
+          // Inherit the Hold link state from the first existing animated lane —
+          // pure-hold lanes included — so a new lane MATCHES the current
+          // linked/unlinked choice (Basic: "auto-link iff the others are
+          // linked"). Without this, a pure-hold source's link was ignored and
+          // the new lane fell back to the fresh=linked default.
           tmplHold = [kk[holdStart].outgoing copy];
-          if (lInEn)
+          // Boundary times + In/Out interval templates only when the source
+          // actually has that phase (≥3 KPs) — pure hold-only lanes sit at
+          // [0, outEnd] and would seed silly boundary defaults.
+          if (lInEn) {
+            tIn = kk[holdStart].time;
             tmplIn = [kk.firstObject.outgoing copy];
-          if (lOutEn)
+          }
+          if (lOutEn) {
+            tOut = kk[holdEnd].time;
             tmplOut = [kk[holdEnd].outgoing copy];
+          }
+          tFound = YES;
         }
       }
     }

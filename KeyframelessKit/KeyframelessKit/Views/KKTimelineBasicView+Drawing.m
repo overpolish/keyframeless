@@ -229,10 +229,13 @@
                             dur:(double)dur
                          rulerY:(CGFloat)rulerY {
   double a = 0, b = 0;
-  NSColor *tint = [NSColor warning];
+  // Value-based tint (matches the curve/pill colour): warn only when the
+  // section's endpoints actually differ — a flat In/Out reads accent.
+  NSColor *tint = [NSColor accentMatchingHost];
   if (section == KKBasicSectionIn) {
     a = 0;
     b = p.inEndFrac;
+    tint = p.inIsTransition ? [NSColor warning] : [NSColor accentMatchingHost];
   } else if (section == KKBasicSectionHold) {
     // Hold spans the merged flat region: a disabled In/Out folds in, so the
     // readout is the combined held duration, not just the middle.
@@ -244,6 +247,7 @@
   } else {
     a = p.outStartFrac;
     b = 1.0;
+    tint = p.outIsTransition ? [NSColor warning] : [NSColor accentMatchingHost];
   }
   double secs = (b - a) * dur;
   NSString *txt = secs < 10.0 ? [NSString stringWithFormat:@"%.1fs", secs]
