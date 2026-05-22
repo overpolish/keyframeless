@@ -10,6 +10,8 @@
 #import "KKMetalDeviceCache.h"
 #import "KKShaderTypes.h"
 #import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KKTimingEvaluation.h>
+#import <KeyframelessKit/KKTimingStage.h>
 
 static NSString *const KKMotionBlurPipelineID =
     @"co.overpolish.keyframeless.kit.motionblur";
@@ -196,7 +198,61 @@ static KKMotionBlurState _kkMBState(double shutterFraction, int sampleCount,
   double shutterAngle =
       dict[@"shutterAngle"] ? [dict[@"shutterAngle"] doubleValue] : 180.0;
   int samples = dict[@"samples"] ? [dict[@"samples"] intValue] : 16;
-  return _kkMBState(shutterAngle / 360.0, samples, timingAPI);
+  KKMotionBlurState state =
+      _kkMBState(shutterAngle / 360.0, samples, timingAPI);
+  int mode = dict[@"mode"] ? [dict[@"mode"] intValue] : 0;
+  if (mode < KKMotionBlurModeTransitionsOnly || mode > KKMotionBlurModeAlways)
+    mode = KKMotionBlurModeTransitionsOnly;
+  state.mode = (KKMotionBlurMode)mode;
+  return state;
+}
+
++ (BOOL)frameShouldBlurForMode:(KKMotionBlurMode)mode
+                      timeline:(KKTimeline *)timeline
+                     fracStart:(double)fracStart
+                       fracEnd:(double)fracEnd {
+  if (mode == KKMotionBlurModeAlways)
+    return YES;
+  if (!timeline.lanes.count)
+    return YES;
+
+  double lo = MIN(fracStart, fracEnd);
+  double hi = MAX(fracStart, fracEnd);
+  // Movement smaller than this is below sub-pixel and not worth a multi-pass.
+  static const double kMoveEps = 1e-4;
+
+  if (mode == KKMotionBlurModeValueChanging) {
+    for (KKLane *lane in timeline.lanes) {
+      NSArray<NSNumber *> *a =
+          KKTimelineLaneValueAtVisualFractionSmoothed(lane, lo);
+      NSArray<NSNumber *> *b =
+          KKTimelineLaneValueAtVisualFractionSmoothed(lane, hi);
+      NSUInteger n = MIN(a.count, b.count);
+      for (NSUInteger i = 0; i < n; i++)
+        if (fabs(a[i].doubleValue - b[i].doubleValue) > kMoveEps)
+          return YES;
+    }
+    return NO;
+  }
+
+  // TransitionsOnly: structural — any keypose interval overlapping the window
+  // whose endpoint values differ is a real transition. Modulation lives on the
+  // interval but never changes its endpoints, so a modulated hold (equal
+  // endpoints) is correctly excluded.
+  for (KKLane *lane in timeline.lanes) {
+    NSArray<KKKeyPose *> *kps = lane.keyposes;
+    for (NSUInteger i = 0; i + 1 < kps.count; i++) {
+      KKKeyPose *p = kps[i];
+      KKKeyPose *q = kps[i + 1];
+      if (q.time <= lo || p.time >= hi)
+        continue; // interval doesn't overlap the shutter window
+      NSUInteger n = MIN(p.values.count, q.values.count);
+      for (NSUInteger c = 0; c < n; c++)
+        if (fabs(p.values[c].doubleValue - q.values[c].doubleValue) > kMoveEps)
+          return YES;
+    }
+  }
+  return NO;
 }
 
 + (NSString *)poolKeyForRegistryID:(uint64_t)registryID

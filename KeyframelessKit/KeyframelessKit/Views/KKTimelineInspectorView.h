@@ -6,6 +6,7 @@
 #pragma once
 
 #import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKMotionBlur.h>
 #import <KeyframelessKit/KKTimelineInspectorButtons.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
 #import <KeyframelessKit/KKTimingStage.h>
@@ -55,14 +56,17 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 
 @property(nonatomic, copy, nullable) void (^onLoopToggled)(BOOL enabled);
 @property(nonatomic, copy, nullable) void (^onTabChanged)(NSInteger tab);
-/// Any motion-blur edit (enable toggle or a Shutter/Samples slider/field in the
-/// settings popover). `shutterAngle` is degrees (0–360); `samples` is the
-/// sample count (2–128). The host writes the full
-/// `{enabled,shutterAngle,samples}` blob. Only fired when `showsMotionBlurRow`
-/// is YES. Wrap continuous slider drags with `onDragBegin`/`onDragEnd` for undo
-/// coalescing (same chain the mini-canvas handles use).
+/// Any motion-blur edit (enable toggle, a Shutter/Samples slider/field, or the
+/// When dropdown in the settings popover). `shutterAngle` is degrees (0–360);
+/// `samples` is the sample count (2–128); `mode` is when blur fires (see
+/// `KKMotionBlurMode`). The host writes the full
+/// `{enabled,shutterAngle,samples,mode}` blob. Only fired when
+/// `showsMotionBlurRow` is YES. Wrap continuous slider drags with
+/// `onDragBegin`/`onDragEnd` for undo coalescing (same chain the mini-canvas
+/// handles use).
 @property(nonatomic, copy, nullable) void (^onMotionBlurChanged)
-    (BOOL enabled, double shutterAngle, NSInteger samples);
+    (BOOL enabled, double shutterAngle, NSInteger samples,
+     KKMotionBlurMode mode);
 @property(nonatomic, copy, nullable) void (^onTimelineMutated)
     (KKTimeline *updated);
 /// Start / end of a continuous mini-canvas handle drag — host wraps the
@@ -111,6 +115,9 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// from the host's MB blob. No-op when `showsMotionBlurRow` is NO.
 - (void)setMotionBlurShutterAngle:(double)shutterAngle
                           samples:(NSInteger)samples;
+/// Push the persisted motion-blur fire mode from the host's MB blob. No-op
+/// when `showsMotionBlurRow` is NO.
+- (void)setMotionBlurMode:(KKMotionBlurMode)mode;
 - (void)setActiveTab:(NSInteger)tab;
 /// Push the persisted mini-canvas render mode from the host's UI-state
 /// blob. The 3-way pill lives in the keypose-value popover header (only

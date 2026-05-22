@@ -16,6 +16,27 @@ static const CGFloat kResetIconSize = 11.0;
 static const CGFloat kClearIconSize = 11.0;
 static const CGFloat kOnionSkinIconSize = 11.0;
 
+NSButton *KKResetToDefaultButton(id target, SEL action) {
+  NSImage *resetImg =
+      [[NSImage imageWithSystemSymbolName:@"arrow.counterclockwise"
+                 accessibilityDescription:@"Reset to default"]
+          imageWithSymbolConfiguration:
+              [NSImageSymbolConfiguration
+                  configurationWithPointSize:10.5
+                                      weight:NSFontWeightRegular]];
+  NSButton *reset = [NSButton buttonWithImage:resetImg
+                                       target:target
+                                       action:action];
+  reset.bordered = NO;
+  reset.imagePosition = NSImageOnly;
+  reset.contentTintColor =
+      [[NSColor inspectorLabel] colorWithAlphaComponent:0.5];
+  reset.toolTip = @"Reset to default";
+  reset.translatesAutoresizingMaskIntoConstraints = NO;
+  reset.hidden = YES;
+  return reset;
+}
+
 // Tint a copy of `src` with `tint` by source-atop fill. Used so each button
 // shares one base symbol image and just paints it on/off-state coloured.
 static NSImage *KKTintedImage(NSImage *src, NSColor *tint) {

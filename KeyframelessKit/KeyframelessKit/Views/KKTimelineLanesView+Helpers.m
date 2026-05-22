@@ -9,6 +9,7 @@
 #import "KKPillToggleRowView.h"
 #import "KKPopoverHeaderView.h"
 #import "KKSliderView.h"
+#import "KKTimelineInspectorButtons.h"
 #import "KKTimelineLanesView_Private.h"
 #import "KKValueTextField.h"
 #import <KeyframelessKit/KKLog.h>
@@ -477,23 +478,7 @@ static const CGFloat kSuffixSlotW = 17.0;
   NSTextField *title = _KKMakeCaption(lane.label);
   [self addSubview:title];
 
-  NSImage *resetImg =
-      [[NSImage imageWithSystemSymbolName:@"arrow.counterclockwise"
-                 accessibilityDescription:@"Reset to default"]
-          imageWithSymbolConfiguration:
-              [NSImageSymbolConfiguration
-                  configurationWithPointSize:10.5
-                                      weight:NSFontWeightRegular]];
-  _reset = [NSButton buttonWithImage:resetImg
-                              target:self
-                              action:@selector(_resetTapped:)];
-  _reset.bordered = NO;
-  _reset.imagePosition = NSImageOnly;
-  _reset.contentTintColor =
-      [[NSColor inspectorLabel] colorWithAlphaComponent:0.5];
-  _reset.toolTip = @"Reset to default";
-  _reset.translatesAutoresizingMaskIntoConstraints = NO;
-  _reset.hidden = YES; // shown only when off-default (set after init)
+  _reset = KKResetToDefaultButton(self, @selector(_resetTapped:));
   [self addSubview:_reset];
   // Trailing-most element so its position is identical on every lane row,
   // regardless of label/control widths.

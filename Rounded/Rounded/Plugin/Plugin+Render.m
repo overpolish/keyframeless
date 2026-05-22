@@ -237,6 +237,38 @@ static NSArray<NSNumber *> *KKReadBoundaryRequestFracs(NSString *path) {
                                                         timingAPI:timingAPI
                                                            atTime:renderTime];
 
+  // Per-frame fire-mode gate. In transitions-only / value-changing modes, skip
+  // the whole multi-pass on frames where nothing relevant moves across the
+  // shutter window (saves the extra source decodes + accumulate, and keeps
+  // scheduleInputs from requesting sub-frame sources). Always mode is
+  // unconditional.
+  if (mbState.enabled && mbState.mode != KKMotionBlurModeAlways) {
+    CMTime es = kCMTimeZero, dur = kCMTimeZero;
+    [timingAPI startTimeForEffect:&es];
+    [timingAPI durationTimeForEffect:&dur];
+    double durSec = CMTimeGetSeconds(dur);
+    if (durSec > 0) {
+      NSArray<NSValue *> *times = [KKMotionBlur sampleTimesForState:mbState
+                                                         renderTime:renderTime];
+      CMTime tEarliest = renderTime;
+      if (times.count)
+        [times.lastObject getValue:&tEarliest];
+      double fracEnd =
+          (CMTimeGetSeconds(renderTime) - CMTimeGetSeconds(es)) / durSec;
+      double fracStart =
+          (CMTimeGetSeconds(tEarliest) - CMTimeGetSeconds(es)) / durSec;
+      NSString *tlJSON =
+          KKReadCustomParamString(paramAPI, kKKParamTimelineData);
+      KKTimeline *tl =
+          tlJSON.length ? [KKTimeline timelineFromJSON:tlJSON] : nil;
+      if (![KKMotionBlur frameShouldBlurForMode:mbState.mode
+                                       timeline:tl
+                                      fracStart:fracStart
+                                        fracEnd:fracEnd])
+        mbState.enabled = NO;
+    }
+  }
+
   // Layout: [KKMotionBlurState | N × RoundedPluginState]. Sample 0 is at
   // renderTime; samples 1..N-1 are evaluated backwards across the shutter
   // window when blur is enabled.

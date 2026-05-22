@@ -12,8 +12,24 @@
 @protocol FxTimingAPI_v4;
 @class FxImageTile;
 @class FxImageTileRequest;
+@class KKTimeline;
 
 NS_ASSUME_NONNULL_BEGIN
+
+/// When motion blur should actually fire on a given frame. Stored in the
+/// custom-UI blob as `"mode"`; absent / 0 = transitions-only (the default).
+typedef NS_ENUM(int32_t, KKMotionBlurMode) {
+  /// Blur only while the shutter window overlaps a real keypose transition
+  /// (endpoints differ). Modulation jitter during a hold is ignored — the
+  /// cheapest mode and the default.
+  KKMotionBlurModeTransitionsOnly = 0,
+  /// Blur whenever any animated value moves across the shutter window —
+  /// transitions AND modulation (wiggle / oscillate / handheld).
+  KKMotionBlurModeValueChanging = 1,
+  /// Blur every frame regardless of whether anything animates. Required for
+  /// real content (source-frame) blur when params are static but footage moves.
+  KKMotionBlurModeAlways = 2,
+};
 
 /// Snapshot of motion-blur params resolved during `pluginState:atTime:`,
 /// where FxParameterRetrievalAPI_v6 is available. Plugins concatenate this
@@ -23,6 +39,7 @@ typedef struct {
   bool enabled;
   int sampleCount; // 2..KK_MOTION_BLUR_MAX_SAMPLES, undefined when disabled
   double shutterSec;
+  KKMotionBlurMode mode; // when to fire; 0 = transitions-only
 } KKMotionBlurState;
 
 /// Sample-and-accumulate motion blur shared across plugins.
@@ -39,14 +56,31 @@ typedef struct {
 @interface KKMotionBlur : NSObject
 
 /// Snapshots motion-blur state from a custom-UI JSON blob
-/// (`{"enabled":bool,"shutterAngle":0–360,"samples":2–128}`) instead of the
-/// native 9924–9929 params. shutterAngle maps to the shutter window; samples is
-/// the explicit sample count. Empty / nil / disabled JSON returns a disabled
-/// state. `transitionsOnly` is always false here (not yet supported in the
-/// custom-UI path).
+/// (`{"enabled":bool,"shutterAngle":0–360,"samples":2–128,"mode":0–2}`) instead
+/// of the native 9924–9929 params. shutterAngle maps to the shutter window;
+/// samples is the explicit sample count; mode is when to fire (see
+/// `KKMotionBlurMode`, absent = transitions-only). Empty / nil / disabled JSON
+/// returns a disabled state.
 + (KKMotionBlurState)snapshotStateFromJSON:(nullable NSString *)json
                                  timingAPI:(id<FxTimingAPI_v4>)timingAPI
                                     atTime:(CMTime)time;
+
+/// Decides whether a frame should actually blur, given the mode and the clip
+/// fractions the shutter window spans (`fracStart`/`fracEnd`, order-agnostic).
+///
+/// - `Always` → YES.
+/// - `ValueChanging` → YES if any lane's resolved value (modulation included)
+///   differs across the window.
+/// - `TransitionsOnly` → YES if the window overlaps a keypose interval whose
+///   endpoints differ (a real transition); modulation-only holds are ignored.
+///
+/// Returns YES when `timeline` is nil (can't gate — don't suppress a wanted
+/// blur). Plugins call this from `pluginState:atTime:` and clear
+/// `state.enabled` for the frame when it returns NO.
++ (BOOL)frameShouldBlurForMode:(KKMotionBlurMode)mode
+                      timeline:(nullable KKTimeline *)timeline
+                     fracStart:(double)fracStart
+                       fracEnd:(double)fracEnd;
 
 /// Acquires a pooled intermediate ("scratch") texture inside a render
 /// block. Use for any plugin-private textures the render block needs as

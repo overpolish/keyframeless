@@ -15,6 +15,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// click — host plugins wire the callbacks to playback, loop, constants,
 /// detach-window, etc. No timeline-internal state lives here.
 
+/// Shared "reset to default" button: the gray `arrow.counterclockwise`
+/// affordance every parameter row uses (lane value rows, the motion-blur
+/// popover, etc.). Returns a fresh button each call (a view can't be shared
+/// across rows) configured identically — `bordered`=NO, accessory-gray tint,
+/// `hidden`=YES initially. The caller wires nothing else: it just shows the
+/// button when off-default and lays it out (15×15, trailing-most by
+/// convention).
+FOUNDATION_EXPORT NSButton *KKResetToDefaultButton(id target, SEL action);
+
 /// Toggle button (accent when `on`). Loop / repeat icon.
 @interface KKLoopButton : NSView
 @property(nonatomic) BOOL on;

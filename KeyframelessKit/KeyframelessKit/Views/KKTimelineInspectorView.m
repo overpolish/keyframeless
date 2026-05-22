@@ -16,6 +16,7 @@
 #import "KKParameterRowView.h"
 #import "KKPillToggleRowView.h"
 #import "KKPopoverHeaderView.h"
+#import "KKPopupSelectView.h"
 #import "KKSliderView.h"
 #import "KKTimelineInspectorButtons.h"
 #import "KKTimelineLanesView_Private.h"
@@ -155,21 +156,30 @@ static NSTextField *_KKMBCaption(NSString *s) {
 
 // Motion-blur settings popover content: a "Motion Blur" header, then Shutter
 // (degrees, 0–360) and Samples (count, 2–128), each a slider (accent track,
-// like Radius) + a value field. Real units so the numbers are meaningful —
-// 180° is the natural shutter, and the sample count is explicit (a percentage
-// just invites people to crank it to the max).
+// like Radius) + a value field, then a "When" dropdown picking the fire mode.
+// Real units so the numbers are meaningful — 180° is the natural shutter, and
+// the sample count is explicit (a percentage just invites people to crank it to
+// the max).
 @interface _KKMotionBlurSettingsView : NSView <NSTextFieldDelegate>
 @property(nonatomic, copy, nullable) void (^onChanged)
-    (double shutterAngle, NSInteger samples);
+    (double shutterAngle, NSInteger samples, KKMotionBlurMode mode);
 @property(nonatomic, copy, nullable) void (^onDragBegin)(void);
 @property(nonatomic, copy, nullable) void (^onDragEnd)(void);
 - (instancetype)initWithShutterAngle:(double)shutterAngle
-                             samples:(NSInteger)samples;
-- (void)applyShutterAngle:(double)shutterAngle samples:(NSInteger)samples;
+                             samples:(NSInteger)samples
+                                mode:(KKMotionBlurMode)mode;
+- (void)applyShutterAngle:(double)shutterAngle
+                  samples:(NSInteger)samples
+                     mode:(KKMotionBlurMode)mode;
 @end
 
 static const double kMBDefaultShutter = 180.0;
 static const NSInteger kMBDefaultSamples = 16;
+static const KKMotionBlurMode kMBDefaultMode = KKMotionBlurModeTransitionsOnly;
+// Dropdown order maps 1:1 to KKMotionBlurMode (index 0 = TransitionsOnly).
+static NSArray<NSString *> *_KKMBModeTitles(void) {
+  return @[ @"Transitions only", @"Value changes", @"Always" ];
+}
 
 @implementation _KKMotionBlurSettingsView {
   KKSliderView *_shutterSlider;
@@ -178,17 +188,22 @@ static const NSInteger kMBDefaultSamples = 16;
   KKValueTextField *_samplesField;
   NSButton *_shutterReset;
   NSButton *_samplesReset;
+  KKPopupSelectView *_modePopup;
+  NSButton *_modeReset;
   double _shutterAngle;
   NSInteger _samples;
+  KKMotionBlurMode _mode;
 }
 
 - (instancetype)initWithShutterAngle:(double)shutterAngle
-                             samples:(NSInteger)samples {
-  self = [super initWithFrame:NSMakeRect(0, 0, 252, 116)];
+                             samples:(NSInteger)samples
+                                mode:(KKMotionBlurMode)mode {
+  self = [super initWithFrame:NSMakeRect(0, 0, 252, 144)];
   if (!self)
     return nil;
   _shutterAngle = shutterAngle;
   _samples = samples;
+  _mode = mode;
 
   KKPopoverHeaderView *header =
       [[KKPopoverHeaderView alloc] initWithTitle:@"Motion Blur"
@@ -232,6 +247,34 @@ static const NSInteger kMBDefaultSamples = 16;
   [self addSubview:samplesRow];
   [self _updateResetVisibility];
 
+  // "When" row: a styled dropdown picking the fire mode. Caption matches the
+  // slider rows' gutter; the popup floats to the trailing edge.
+  NSView *whenRow = [[NSView alloc] initWithFrame:NSZeroRect];
+  whenRow.translatesAutoresizingMaskIntoConstraints = NO;
+  NSTextField *whenCaption = _KKMBCaption(@"When");
+  KKPopupSelectView *modePopup =
+      [[KKPopupSelectView alloc] initWithTitles:_KKMBModeTitles()];
+  modePopup.translatesAutoresizingMaskIntoConstraints = NO;
+  [modePopup selectIndex:(NSInteger)_mode];
+  __weak typeof(self) weakSelf = self;
+  modePopup.onSelectionChanged = ^(NSInteger idx) {
+    typeof(self) s = weakSelf;
+    if (!s)
+      return;
+    s->_mode = (KKMotionBlurMode)idx;
+    [s _updateResetVisibility];
+    if (s.onChanged)
+      s.onChanged(s->_shutterAngle, s->_samples, s->_mode);
+  };
+  _modePopup = modePopup;
+  NSButton *modeReset = KKResetToDefaultButton(self, @selector(_resetTapped:));
+  _modeReset = modeReset;
+  [whenRow addSubview:whenCaption];
+  [whenRow addSubview:modePopup];
+  [whenRow addSubview:modeReset];
+  [self addSubview:whenRow];
+  [self _updateResetVisibility];
+
   [NSLayoutConstraint activateConstraints:@[
     [header.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
                                          constant:KKPaddingMD],
@@ -251,8 +294,29 @@ static const NSInteger kMBDefaultSamples = 16;
     [samplesRow.topAnchor constraintEqualToAnchor:shutterRow.bottomAnchor
                                          constant:KKSpacingSM],
     [samplesRow.heightAnchor constraintEqualToAnchor:shutterRow.heightAnchor],
-    [samplesRow.bottomAnchor constraintEqualToAnchor:self.bottomAnchor
-                                            constant:-KKPaddingMD],
+
+    [whenRow.leadingAnchor constraintEqualToAnchor:shutterRow.leadingAnchor],
+    [whenRow.trailingAnchor constraintEqualToAnchor:shutterRow.trailingAnchor],
+    [whenRow.topAnchor constraintEqualToAnchor:samplesRow.bottomAnchor
+                                      constant:KKSpacingSM],
+    [whenRow.heightAnchor constraintEqualToAnchor:shutterRow.heightAnchor],
+    [whenRow.bottomAnchor constraintEqualToAnchor:self.bottomAnchor
+                                         constant:-KKPaddingMD],
+
+    [whenCaption.leadingAnchor constraintEqualToAnchor:whenRow.leadingAnchor],
+    [whenCaption.centerYAnchor constraintEqualToAnchor:whenRow.centerYAnchor],
+    [whenCaption.widthAnchor constraintEqualToConstant:54.0],
+    [modePopup.leadingAnchor constraintEqualToAnchor:whenCaption.trailingAnchor
+                                            constant:KKSpacingSM],
+    [modePopup.trailingAnchor constraintEqualToAnchor:modeReset.leadingAnchor
+                                             constant:-KKPaddingXS],
+    [modePopup.topAnchor constraintEqualToAnchor:whenRow.topAnchor],
+    [modePopup.bottomAnchor constraintEqualToAnchor:whenRow.bottomAnchor],
+
+    [modeReset.trailingAnchor constraintEqualToAnchor:whenRow.trailingAnchor],
+    [modeReset.centerYAnchor constraintEqualToAnchor:whenRow.centerYAnchor],
+    [modeReset.widthAnchor constraintEqualToConstant:15.0],
+    [modeReset.heightAnchor constraintEqualToConstant:15.0],
   ]];
   return self;
 }
@@ -307,24 +371,7 @@ static const NSInteger kMBDefaultSamples = 16;
   NSTextField *unit = _KKMBCaption(suffix ?: @"");
   unit.textColor = [[NSColor inspectorLabel] colorWithAlphaComponent:0.5];
 
-  // Reset-to-default, trailing-most — same affordance as the radius/crop rows.
-  NSImage *resetImg =
-      [[NSImage imageWithSystemSymbolName:@"arrow.counterclockwise"
-                 accessibilityDescription:@"Reset to default"]
-          imageWithSymbolConfiguration:
-              [NSImageSymbolConfiguration
-                  configurationWithPointSize:10.5
-                                      weight:NSFontWeightRegular]];
-  NSButton *reset = [NSButton buttonWithImage:resetImg
-                                       target:self
-                                       action:@selector(_resetTapped:)];
-  reset.bordered = NO;
-  reset.imagePosition = NSImageOnly;
-  reset.contentTintColor =
-      [[NSColor inspectorLabel] colorWithAlphaComponent:0.5];
-  reset.toolTip = @"Reset to default";
-  reset.translatesAutoresizingMaskIntoConstraints = NO;
-  reset.hidden = YES;
+  NSButton *reset = KKResetToDefaultButton(self, @selector(_resetTapped:));
 
   [row addSubview:caption];
   [row addSubview:slider];
@@ -370,6 +417,7 @@ static const NSInteger kMBDefaultSamples = 16;
 - (void)_updateResetVisibility {
   _shutterReset.hidden = fabs(_shutterAngle - kMBDefaultShutter) < 1e-6;
   _samplesReset.hidden = (_samples == kMBDefaultSamples);
+  _modeReset.hidden = (_mode == kMBDefaultMode);
 }
 
 - (void)_sliderMoved:(id)sender {
@@ -383,7 +431,7 @@ static const NSInteger kMBDefaultSamples = 16;
         [NSString stringWithFormat:@"%ld", (long)_samples];
   [self _updateResetVisibility];
   if (_onChanged)
-    _onChanged(_shutterAngle, _samples);
+    _onChanged(_shutterAngle, _samples, _mode);
 }
 
 - (void)_fieldChanged:(id)sender {
@@ -398,7 +446,7 @@ static const NSInteger kMBDefaultSamples = 16;
       [NSString stringWithFormat:@"%ld", (long)_samples];
   [self _updateResetVisibility];
   if (_onChanged)
-    _onChanged(_shutterAngle, _samples);
+    _onChanged(_shutterAngle, _samples, _mode);
 }
 
 - (void)_resetTapped:(id)sender {
@@ -406,14 +454,19 @@ static const NSInteger kMBDefaultSamples = 16;
     _shutterAngle = kMBDefaultShutter;
   else if (sender == _samplesReset)
     _samples = kMBDefaultSamples;
-  [self applyShutterAngle:_shutterAngle samples:_samples];
+  else if (sender == _modeReset)
+    _mode = kMBDefaultMode;
+  [self applyShutterAngle:_shutterAngle samples:_samples mode:_mode];
   if (_onChanged)
-    _onChanged(_shutterAngle, _samples);
+    _onChanged(_shutterAngle, _samples, _mode);
 }
 
-- (void)applyShutterAngle:(double)shutterAngle samples:(NSInteger)samples {
+- (void)applyShutterAngle:(double)shutterAngle
+                  samples:(NSInteger)samples
+                     mode:(KKMotionBlurMode)mode {
   _shutterAngle = shutterAngle;
   _samples = samples;
+  _mode = mode;
   if (!_shutterField.kkEditing) {
     _shutterSlider.doubleValue = shutterAngle;
     _shutterField.stringValue =
@@ -424,6 +477,7 @@ static const NSInteger kMBDefaultSamples = 16;
     _samplesField.stringValue =
         [NSString stringWithFormat:@"%ld", (long)samples];
   }
+  [_modePopup selectIndex:(NSInteger)mode];
   [self _updateResetVisibility];
 }
 
@@ -456,6 +510,7 @@ static const NSInteger kMBDefaultSamples = 16;
   BOOL _showsMotionBlurRow;
   double _mbShutterAngle;
   NSInteger _mbSamples;
+  KKMotionBlurMode _mbMode;
   NSArray<KKLane *> *_availableLanes;
   BOOL _isDetachedCopy;
   BOOL _detachedAttached;
@@ -488,6 +543,7 @@ static const NSInteger kMBDefaultSamples = 16;
   _showsMotionBlurRow = [self showsMotionBlurRow];
   _mbShutterAngle = 180.0; // the natural shutter
   _mbSamples = 16;
+  _mbMode = KKMotionBlurModeTransitionsOnly; // default; cheapest
   [self setFrameSize:NSMakeSize(0, [self _totalHeight])];
   self.autoresizingMask =
       NSViewWidthSizable | NSViewHeightSizable | NSViewMinYMargin;
@@ -773,7 +829,7 @@ static const NSInteger kMBDefaultSamples = 16;
     strong->_mbSettingsButton.enabled = isChecked;
     if (strong.onMotionBlurChanged)
       strong.onMotionBlurChanged(isChecked, strong->_mbShutterAngle,
-                                 strong->_mbSamples);
+                                 strong->_mbSamples, strong->_mbMode);
   };
 
   [self addSubview:_mbRow];
@@ -788,7 +844,14 @@ static const NSInteger kMBDefaultSamples = 16;
                           samples:(NSInteger)samples {
   _mbShutterAngle = shutterAngle;
   _mbSamples = samples;
-  [_mbSettingsView applyShutterAngle:shutterAngle samples:samples];
+  [_mbSettingsView applyShutterAngle:shutterAngle samples:samples mode:_mbMode];
+}
+
+- (void)setMotionBlurMode:(KKMotionBlurMode)mode {
+  _mbMode = mode;
+  [_mbSettingsView applyShutterAngle:_mbShutterAngle
+                             samples:_mbSamples
+                                mode:mode];
 }
 
 - (void)_mbSettingsClicked:(id)sender {
@@ -798,18 +861,21 @@ static const NSInteger kMBDefaultSamples = 16;
   }
   _KKMotionBlurSettingsView *content =
       [[_KKMotionBlurSettingsView alloc] initWithShutterAngle:_mbShutterAngle
-                                                      samples:_mbSamples];
+                                                      samples:_mbSamples
+                                                         mode:_mbMode];
   __weak typeof(self) weak = self;
-  content.onChanged = ^(double shutterAngle, NSInteger samples) {
-    KKTimelineInspectorView *strong = weak;
-    if (!strong)
-      return;
-    strong->_mbShutterAngle = shutterAngle;
-    strong->_mbSamples = samples;
-    if (strong.onMotionBlurChanged)
-      strong.onMotionBlurChanged(strong->_mbCheckbox.isChecked, shutterAngle,
-                                 samples);
-  };
+  content.onChanged =
+      ^(double shutterAngle, NSInteger samples, KKMotionBlurMode mode) {
+        KKTimelineInspectorView *strong = weak;
+        if (!strong)
+          return;
+        strong->_mbShutterAngle = shutterAngle;
+        strong->_mbSamples = samples;
+        strong->_mbMode = mode;
+        if (strong.onMotionBlurChanged)
+          strong.onMotionBlurChanged(strong->_mbCheckbox.isChecked,
+                                     shutterAngle, samples, mode);
+      };
   content.onDragBegin = ^{
     if (weak.onDragBegin)
       weak.onDragBegin();
@@ -1103,6 +1169,7 @@ static const NSInteger kMBDefaultSamples = 16;
   copy.onMotionBlurChanged = _onMotionBlurChanged;
   [copy setMotionBlurEnabled:_mbCheckbox.isChecked];
   [copy setMotionBlurShutterAngle:_mbShutterAngle samples:_mbSamples];
+  [copy setMotionBlurMode:_mbMode];
   copy.onRenderModeChanged = _onRenderModeChanged;
   copy.renderMode = _basicView.renderMode;
   copy.onTimelineMutated = _onTimelineMutated;
