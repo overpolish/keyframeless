@@ -6,15 +6,30 @@
 #import "KKTimelineInspectorView.h"
 #import "KKTimelineInspectorView_Private.h"
 
+#import "../Metal/KKShaderTypes.h"
+#import "../Plugin/KKConstants.h"
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
+#import "KKCheckboxView.h"
+#import "KKLabelView.h"
 #import "KKMiniCanvasView.h"
+#import "KKParameterRowView.h"
 #import "KKPillToggleRowView.h"
+#import "KKPopoverHeaderView.h"
+#import "KKSliderView.h"
 #import "KKTimelineInspectorButtons.h"
+#import "KKTimelineLanesView_Private.h"
+#import "KKValueTextField.h"
 #import <KeyframelessKit/KKTimingCompat.h>
 
 static const CGFloat kInspectorHeight = 200.0;
 static const CGFloat kHeaderRowHeight = 28.0;
+// The motion-blur parameter row sits in its own section below the box. The
+// custom-UI height is fixed at init, so we reserve this once up front.
+static const CGFloat kMotionBlurRowHeight = 28.0;
+// Trailing margin that lands the checkbox on the native control gutter, same
+// value KKCustomGroupHeaderView uses.
+static const CGFloat kMBCheckboxTrailing = 23.0;
 
 // Frosted overlay shown when the user tries to switch Advanced → Basic
 // while the timeline has Advanced-only structure. Confirms "Switch anyway"
@@ -130,6 +145,296 @@ static const CGFloat kHeaderRowHeight = 28.0;
 
 @end
 
+static NSTextField *_KKMBCaption(NSString *s) {
+  NSTextField *l = [NSTextField labelWithString:s];
+  l.translatesAutoresizingMaskIntoConstraints = NO;
+  l.font = [NSFont systemFontOfSize:KKFontSizeSM];
+  l.textColor = [NSColor inspectorLabel];
+  return l;
+}
+
+// Motion-blur settings popover content: a "Motion Blur" header, then Shutter
+// (degrees, 0–360) and Samples (count, 2–128), each a slider (accent track,
+// like Radius) + a value field. Real units so the numbers are meaningful —
+// 180° is the natural shutter, and the sample count is explicit (a percentage
+// just invites people to crank it to the max).
+@interface _KKMotionBlurSettingsView : NSView <NSTextFieldDelegate>
+@property(nonatomic, copy, nullable) void (^onChanged)
+    (double shutterAngle, NSInteger samples);
+@property(nonatomic, copy, nullable) void (^onDragBegin)(void);
+@property(nonatomic, copy, nullable) void (^onDragEnd)(void);
+- (instancetype)initWithShutterAngle:(double)shutterAngle
+                             samples:(NSInteger)samples;
+- (void)applyShutterAngle:(double)shutterAngle samples:(NSInteger)samples;
+@end
+
+static const double kMBDefaultShutter = 180.0;
+static const NSInteger kMBDefaultSamples = 16;
+
+@implementation _KKMotionBlurSettingsView {
+  KKSliderView *_shutterSlider;
+  KKSliderView *_samplesSlider;
+  KKValueTextField *_shutterField;
+  KKValueTextField *_samplesField;
+  NSButton *_shutterReset;
+  NSButton *_samplesReset;
+  double _shutterAngle;
+  NSInteger _samples;
+}
+
+- (instancetype)initWithShutterAngle:(double)shutterAngle
+                             samples:(NSInteger)samples {
+  self = [super initWithFrame:NSMakeRect(0, 0, 252, 116)];
+  if (!self)
+    return nil;
+  _shutterAngle = shutterAngle;
+  _samples = samples;
+
+  KKPopoverHeaderView *header =
+      [[KKPopoverHeaderView alloc] initWithTitle:@"Motion Blur"
+                                      symbolName:@"figure.walk.motion"];
+  [self addSubview:header];
+
+  KKSliderView *shSlider = nil, *spSlider = nil;
+  KKValueTextField *shField = nil, *spField = nil;
+  NSButton *shReset = nil, *spReset = nil;
+  // Samples slider: scale break so the useful low end (2–32) gets most of the
+  // track, with 32–128 in the last quarter.
+  NSView *shutterRow = [self _buildRow:@"Shutter"
+                                   min:0.0
+                                   max:360.0
+                                 value:_shutterAngle
+                          defaultValue:kMBDefaultShutter
+                                suffix:@"°"
+                       scaleBreakValue:0.0
+                    scaleBreakPosition:0.0
+                                slider:&shSlider
+                                 field:&shField
+                                 reset:&shReset];
+  NSView *samplesRow = [self _buildRow:@"Samples"
+                                   min:2.0
+                                   max:(double)KK_MOTION_BLUR_MAX_SAMPLES
+                                 value:(double)_samples
+                          defaultValue:(double)kMBDefaultSamples
+                                suffix:@""
+                       scaleBreakValue:32.0
+                    scaleBreakPosition:0.75
+                                slider:&spSlider
+                                 field:&spField
+                                 reset:&spReset];
+  _shutterSlider = shSlider;
+  _shutterField = shField;
+  _shutterReset = shReset;
+  _samplesSlider = spSlider;
+  _samplesField = spField;
+  _samplesReset = spReset;
+  [self addSubview:shutterRow];
+  [self addSubview:samplesRow];
+  [self _updateResetVisibility];
+
+  [NSLayoutConstraint activateConstraints:@[
+    [header.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                         constant:KKPaddingMD],
+    [header.topAnchor constraintEqualToAnchor:self.topAnchor
+                                     constant:KKPaddingMD],
+
+    [shutterRow.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                             constant:KKPaddingMD],
+    [shutterRow.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                              constant:-KKPaddingMD],
+    [shutterRow.topAnchor constraintEqualToAnchor:header.bottomAnchor
+                                         constant:KKSpacingSM],
+
+    [samplesRow.leadingAnchor constraintEqualToAnchor:shutterRow.leadingAnchor],
+    [samplesRow.trailingAnchor
+        constraintEqualToAnchor:shutterRow.trailingAnchor],
+    [samplesRow.topAnchor constraintEqualToAnchor:shutterRow.bottomAnchor
+                                         constant:KKSpacingSM],
+    [samplesRow.heightAnchor constraintEqualToAnchor:shutterRow.heightAnchor],
+    [samplesRow.bottomAnchor constraintEqualToAnchor:self.bottomAnchor
+                                            constant:-KKPaddingMD],
+  ]];
+  return self;
+}
+
+- (NSView *)_buildRow:(NSString *)title
+                   min:(double)minValue
+                   max:(double)maxValue
+                 value:(double)value
+          defaultValue:(double)defaultValue
+                suffix:(NSString *)suffix
+       scaleBreakValue:(double)sbValue
+    scaleBreakPosition:(double)sbPosition
+                slider:(KKSliderView **)outSlider
+                 field:(KKValueTextField **)outField
+                 reset:(NSButton **)outReset {
+  (void)defaultValue; // visibility/reset use the shared default constants
+  NSView *row = [[NSView alloc] initWithFrame:NSZeroRect];
+  row.translatesAutoresizingMaskIntoConstraints = NO;
+
+  NSTextField *caption = _KKMBCaption(title);
+
+  KKSliderView *slider = [KKSliderView styledSlider];
+  slider.translatesAutoresizingMaskIntoConstraints = NO;
+  slider.minValue = minValue;
+  slider.maxValue = maxValue;
+  if (sbValue > 0.0) {
+    slider.scaleBreakValue = sbValue;
+    slider.scaleBreakPosition = sbPosition;
+  }
+  slider.doubleValue = value;
+  slider.continuous = YES;
+  slider.trackFillColor = [NSColor accentMatchingHost];
+  slider.target = self;
+  slider.action = @selector(_sliderMoved:);
+  __weak typeof(self) weak = self;
+  slider.onDragBegin = ^{
+    if (weak.onDragBegin)
+      weak.onDragBegin();
+  };
+  slider.onDragEnd = ^{
+    if (weak.onDragEnd)
+      weak.onDragEnd();
+  };
+
+  KKValueTextField *field = [KKValueTextField valueField];
+  field.translatesAutoresizingMaskIntoConstraints = NO;
+  field.stringValue = [NSString stringWithFormat:@"%.0f", value];
+  field.target = self;
+  field.action = @selector(_fieldChanged:);
+  field.delegate = (id<NSTextFieldDelegate>)self;
+
+  NSTextField *unit = _KKMBCaption(suffix ?: @"");
+  unit.textColor = [[NSColor inspectorLabel] colorWithAlphaComponent:0.5];
+
+  // Reset-to-default, trailing-most — same affordance as the radius/crop rows.
+  NSImage *resetImg =
+      [[NSImage imageWithSystemSymbolName:@"arrow.counterclockwise"
+                 accessibilityDescription:@"Reset to default"]
+          imageWithSymbolConfiguration:
+              [NSImageSymbolConfiguration
+                  configurationWithPointSize:10.5
+                                      weight:NSFontWeightRegular]];
+  NSButton *reset = [NSButton buttonWithImage:resetImg
+                                       target:self
+                                       action:@selector(_resetTapped:)];
+  reset.bordered = NO;
+  reset.imagePosition = NSImageOnly;
+  reset.contentTintColor =
+      [[NSColor inspectorLabel] colorWithAlphaComponent:0.5];
+  reset.toolTip = @"Reset to default";
+  reset.translatesAutoresizingMaskIntoConstraints = NO;
+  reset.hidden = YES;
+
+  [row addSubview:caption];
+  [row addSubview:slider];
+  [row addSubview:field];
+  [row addSubview:unit];
+  [row addSubview:reset];
+
+  [NSLayoutConstraint activateConstraints:@[
+    [caption.leadingAnchor constraintEqualToAnchor:row.leadingAnchor],
+    [caption.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+    [caption.widthAnchor constraintEqualToConstant:54.0],
+
+    [slider.leadingAnchor constraintEqualToAnchor:caption.trailingAnchor
+                                         constant:KKSpacingSM],
+    [slider.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+    [slider.trailingAnchor constraintEqualToAnchor:field.leadingAnchor
+                                          constant:-KKSpacingSM],
+
+    [field.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+    [field.widthAnchor constraintEqualToConstant:32.0],
+    [field.trailingAnchor constraintEqualToAnchor:unit.leadingAnchor
+                                         constant:-KKPaddingXS],
+
+    [unit.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+    [unit.widthAnchor constraintEqualToConstant:12.0],
+    [unit.trailingAnchor constraintEqualToAnchor:reset.leadingAnchor
+                                        constant:-KKPaddingXS],
+
+    [reset.trailingAnchor constraintEqualToAnchor:row.trailingAnchor],
+    [reset.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+    [reset.widthAnchor constraintEqualToConstant:15.0],
+    [reset.heightAnchor constraintEqualToConstant:15.0],
+
+    [row.heightAnchor constraintEqualToConstant:24.0],
+  ]];
+
+  *outSlider = slider;
+  *outField = field;
+  *outReset = reset;
+  return row;
+}
+
+- (void)_updateResetVisibility {
+  _shutterReset.hidden = fabs(_shutterAngle - kMBDefaultShutter) < 1e-6;
+  _samplesReset.hidden = (_samples == kMBDefaultSamples);
+}
+
+- (void)_sliderMoved:(id)sender {
+  _shutterAngle = round(_shutterSlider.doubleValue);
+  _samples = (NSInteger)round(_samplesSlider.doubleValue);
+  if (!_shutterField.kkEditing)
+    _shutterField.stringValue =
+        [NSString stringWithFormat:@"%.0f", (double)_shutterAngle];
+  if (!_samplesField.kkEditing)
+    _samplesField.stringValue =
+        [NSString stringWithFormat:@"%ld", (long)_samples];
+  [self _updateResetVisibility];
+  if (_onChanged)
+    _onChanged(_shutterAngle, _samples);
+}
+
+- (void)_fieldChanged:(id)sender {
+  _shutterAngle = MAX(0.0, MIN(360.0, _shutterField.doubleValue));
+  _samples = MAX(2, MIN((NSInteger)KK_MOTION_BLUR_MAX_SAMPLES,
+                        (NSInteger)round(_samplesField.doubleValue)));
+  _shutterSlider.doubleValue = _shutterAngle;
+  _samplesSlider.doubleValue = (double)_samples;
+  _shutterField.stringValue =
+      [NSString stringWithFormat:@"%.0f", (double)_shutterAngle];
+  _samplesField.stringValue =
+      [NSString stringWithFormat:@"%ld", (long)_samples];
+  [self _updateResetVisibility];
+  if (_onChanged)
+    _onChanged(_shutterAngle, _samples);
+}
+
+- (void)_resetTapped:(id)sender {
+  if (sender == _shutterReset)
+    _shutterAngle = kMBDefaultShutter;
+  else if (sender == _samplesReset)
+    _samples = kMBDefaultSamples;
+  [self applyShutterAngle:_shutterAngle samples:_samples];
+  if (_onChanged)
+    _onChanged(_shutterAngle, _samples);
+}
+
+- (void)applyShutterAngle:(double)shutterAngle samples:(NSInteger)samples {
+  _shutterAngle = shutterAngle;
+  _samples = samples;
+  if (!_shutterField.kkEditing) {
+    _shutterSlider.doubleValue = shutterAngle;
+    _shutterField.stringValue =
+        [NSString stringWithFormat:@"%.0f", shutterAngle];
+  }
+  if (!_samplesField.kkEditing) {
+    _samplesSlider.doubleValue = (double)samples;
+    _samplesField.stringValue =
+        [NSString stringWithFormat:@"%ld", (long)samples];
+  }
+  [self _updateResetVisibility];
+}
+
+- (BOOL)control:(NSControl *)control
+               textView:(NSTextView *)textView
+    doCommandBySelector:(SEL)commandSelector {
+  return KKValueFieldHandleReturnCommand(self.window, commandSelector);
+}
+
+@end
+
 @implementation KKTimelineInspectorView {
   id<PROAPIAccessing> _apiManager;
   KKTimelineTab _selectedTab;
@@ -143,6 +448,14 @@ static const CGFloat kHeaderRowHeight = 28.0;
   NSView *_contentView;
   _KKCompatBannerView *_compatBanner;
   KKTimelineLanesView *_basicView;
+  KKParameterRowView *_mbRow;
+  KKCheckboxView *_mbCheckbox;
+  NSButton *_mbSettingsButton;
+  NSPopover *_mbPopover;
+  __weak _KKMotionBlurSettingsView *_mbSettingsView;
+  BOOL _showsMotionBlurRow;
+  double _mbShutterAngle;
+  NSInteger _mbSamples;
   NSArray<KKLane *> *_availableLanes;
   BOOL _isDetachedCopy;
   BOOL _detachedAttached;
@@ -171,6 +484,11 @@ static const CGFloat kHeaderRowHeight = 28.0;
   _availableLanes = [availableLanes copy];
   _selectedTab = (KKTimelineTab)activeTab;
   _constantsButtonTitle = @"Constants";
+  // Read the subclass hook once; the custom-UI height can't change after init.
+  _showsMotionBlurRow = [self showsMotionBlurRow];
+  _mbShutterAngle = 180.0; // the natural shutter
+  _mbSamples = 16;
+  [self setFrameSize:NSMakeSize(0, [self _totalHeight])];
   self.autoresizingMask =
       NSViewWidthSizable | NSViewHeightSizable | NSViewMinYMargin;
 
@@ -179,6 +497,8 @@ static const CGFloat kHeaderRowHeight = 28.0;
   [self _buildHeaderButtons:loopEnabled];
   NSView *headerRow = [self _buildHeaderRow:box];
   [self _buildContentArea:box availableLanes:availableLanes timeline:timeline];
+  if (_showsMotionBlurRow)
+    [self _buildMotionBlurRow];
   [self _installConstraints:box headerRow:headerRow];
   return self;
 }
@@ -385,6 +705,146 @@ static const CGFloat kHeaderRowHeight = 28.0;
   };
 }
 
+- (BOOL)showsMotionBlurRow {
+  return YES;
+}
+
+- (CGFloat)_totalHeight {
+  return kInspectorHeight +
+         (_showsMotionBlurRow ? kMotionBlurRowHeight + KKPaddingMD : 0.0);
+}
+
+- (void)_buildMotionBlurRow {
+  _mbRow = [[KKParameterRowView alloc] initWithFrame:NSZeroRect
+                                          apiManager:_apiManager
+                                         parameterId:kKKParamMotionBlurData];
+  _mbRow.translatesAutoresizingMaskIntoConstraints = NO;
+
+  // KKLabelView carries the native label inset/styling so the gutter lines up
+  // with FCP's other param rows. figure.walk.motion = the walking figure with
+  // motion lines, the same icon the old native MB group header used.
+  NSImage *mbIcon = [NSImage imageWithSystemSymbolName:@"figure.walk.motion"
+                              accessibilityDescription:@"Motion Blur"];
+  _mbRow.leftView = [[KKLabelView alloc] initWithText:@"Motion Blur"
+                                                 icon:mbIcon];
+
+  // rightView must be a container (KKParameterRowView contract), not a bare
+  // control. Checkbox sits in the native control gutter (same as
+  // KKCustomGroupHeaderView); the settings gear sits just to its left and
+  // opens the Length/Quality popover.
+  NSView *controls = [[NSView alloc] initWithFrame:NSZeroRect];
+  _mbCheckbox = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
+  _mbCheckbox.translatesAutoresizingMaskIntoConstraints = NO;
+  [controls addSubview:_mbCheckbox];
+
+  NSImage *gear = [NSImage imageWithSystemSymbolName:@"gearshape"
+                            accessibilityDescription:@"Motion Blur settings"];
+  _mbSettingsButton = [NSButton buttonWithImage:gear
+                                         target:self
+                                         action:@selector(_mbSettingsClicked:)];
+  _mbSettingsButton.bezelStyle = NSBezelStyleAccessoryBarAction;
+  _mbSettingsButton.bordered = NO;
+  _mbSettingsButton.contentTintColor = [NSColor accentMatchingHost];
+  _mbSettingsButton.translatesAutoresizingMaskIntoConstraints = NO;
+  [controls addSubview:_mbSettingsButton];
+
+  [NSLayoutConstraint activateConstraints:@[
+    [_mbCheckbox.trailingAnchor constraintEqualToAnchor:controls.trailingAnchor
+                                               constant:-kMBCheckboxTrailing],
+    [_mbCheckbox.centerYAnchor constraintEqualToAnchor:controls.centerYAnchor],
+    [_mbCheckbox.widthAnchor constraintEqualToConstant:12.0],
+    [_mbCheckbox.heightAnchor constraintEqualToConstant:12.0],
+
+    [_mbSettingsButton.trailingAnchor
+        constraintEqualToAnchor:_mbCheckbox.leadingAnchor
+                       constant:-KKSpacingMD],
+    [_mbSettingsButton.centerYAnchor
+        constraintEqualToAnchor:controls.centerYAnchor],
+    [_mbSettingsButton.widthAnchor constraintEqualToConstant:18.0],
+    [_mbSettingsButton.heightAnchor constraintEqualToConstant:18.0],
+  ]];
+  _mbRow.rightView = controls;
+
+  __weak typeof(self) weak = self;
+  _mbCheckbox.onToggle = ^(BOOL isChecked) {
+    KKTimelineInspectorView *strong = weak;
+    if (!strong)
+      return;
+    strong->_mbSettingsButton.enabled = isChecked;
+    if (strong.onMotionBlurChanged)
+      strong.onMotionBlurChanged(isChecked, strong->_mbShutterAngle,
+                                 strong->_mbSamples);
+  };
+
+  [self addSubview:_mbRow];
+}
+
+- (void)setMotionBlurEnabled:(BOOL)enabled {
+  _mbCheckbox.isChecked = enabled;
+  _mbSettingsButton.enabled = enabled;
+}
+
+- (void)setMotionBlurShutterAngle:(double)shutterAngle
+                          samples:(NSInteger)samples {
+  _mbShutterAngle = shutterAngle;
+  _mbSamples = samples;
+  [_mbSettingsView applyShutterAngle:shutterAngle samples:samples];
+}
+
+- (void)_mbSettingsClicked:(id)sender {
+  if (_mbPopover.isShown) {
+    [_mbPopover close];
+    return;
+  }
+  _KKMotionBlurSettingsView *content =
+      [[_KKMotionBlurSettingsView alloc] initWithShutterAngle:_mbShutterAngle
+                                                      samples:_mbSamples];
+  __weak typeof(self) weak = self;
+  content.onChanged = ^(double shutterAngle, NSInteger samples) {
+    KKTimelineInspectorView *strong = weak;
+    if (!strong)
+      return;
+    strong->_mbShutterAngle = shutterAngle;
+    strong->_mbSamples = samples;
+    if (strong.onMotionBlurChanged)
+      strong.onMotionBlurChanged(strong->_mbCheckbox.isChecked, shutterAngle,
+                                 samples);
+  };
+  content.onDragBegin = ^{
+    if (weak.onDragBegin)
+      weak.onDragBegin();
+  };
+  content.onDragEnd = ^{
+    if (weak.onDragEnd)
+      weak.onDragEnd();
+  };
+  _mbSettingsView = content;
+
+  // Reuse the lanes view's popover wrapper so the macOS 26 liquid-glass
+  // double-border fix (CoreHostingView/ContentHolderView clear) applies here
+  // too — same as the constants / curve popovers.
+  _KKLVPopoverContentView *wrapper = [[_KKLVPopoverContentView alloc] init];
+  wrapper.frame = content.bounds;
+  content.translatesAutoresizingMaskIntoConstraints = NO;
+  [wrapper addSubview:content];
+  [NSLayoutConstraint activateConstraints:@[
+    [content.leadingAnchor constraintEqualToAnchor:wrapper.leadingAnchor],
+    [content.trailingAnchor constraintEqualToAnchor:wrapper.trailingAnchor],
+    [content.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
+    [content.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor],
+  ]];
+
+  NSViewController *vc = [[NSViewController alloc] init];
+  vc.view = wrapper;
+  _mbPopover = [[NSPopover alloc] init];
+  _mbPopover.contentViewController = vc;
+  _mbPopover.behavior = NSPopoverBehaviorTransient;
+  _mbPopover.contentSize = content.frame.size;
+  [_mbPopover showRelativeToRect:_mbSettingsButton.bounds
+                          ofView:_mbSettingsButton
+                   preferredEdge:NSRectEdgeMaxY];
+}
+
 - (void)_installConstraints:(NSView *)box headerRow:(NSView *)headerRow {
   CGFloat h = KKInspectorHorizontalInset;
   [NSLayoutConstraint activateConstraints:@[
@@ -407,8 +867,6 @@ static const CGFloat kHeaderRowHeight = 28.0;
                                        constant:-h],
     [box.topAnchor constraintEqualToAnchor:_tabBar.bottomAnchor
                                   constant:KKPaddingMD],
-    [box.bottomAnchor constraintEqualToAnchor:self.bottomAnchor
-                                     constant:-KKPaddingLG],
 
     [headerRow.leadingAnchor constraintEqualToAnchor:box.leadingAnchor],
     [headerRow.trailingAnchor constraintEqualToAnchor:box.trailingAnchor],
@@ -445,6 +903,27 @@ static const CGFloat kHeaderRowHeight = 28.0;
     [_basicView.topAnchor constraintEqualToAnchor:_contentView.topAnchor],
     [_basicView.bottomAnchor constraintEqualToAnchor:_contentView.bottomAnchor],
   ]];
+
+  // The MB row sits in its own section below the box; otherwise the box runs
+  // to the bottom of the view (original layout).
+  if (_showsMotionBlurRow && _mbRow) {
+    // Full width (no box inset): KKParameterRowView aligns its own label gutter
+    // + control region to match FCP's native param rows, which span edge to
+    // edge. Insetting it would misalign the spacing.
+    [NSLayoutConstraint activateConstraints:@[
+      [_mbRow.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+      [_mbRow.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+      [_mbRow.bottomAnchor constraintEqualToAnchor:self.bottomAnchor
+                                          constant:-KKPaddingLG],
+      [_mbRow.heightAnchor constraintEqualToConstant:kMotionBlurRowHeight],
+      [box.bottomAnchor constraintEqualToAnchor:_mbRow.topAnchor
+                                       constant:-KKPaddingMD],
+    ]];
+  } else {
+    [box.bottomAnchor constraintEqualToAnchor:self.bottomAnchor
+                                     constant:-KKPaddingLG]
+        .active = YES;
+  }
 }
 
 #pragma mark - Configuration propagation
@@ -621,6 +1100,9 @@ static const CGFloat kHeaderRowHeight = 28.0;
   // calling super).
   copy.onLoopToggled = _onLoopToggled;
   copy.onTabChanged = _onTabChanged;
+  copy.onMotionBlurChanged = _onMotionBlurChanged;
+  [copy setMotionBlurEnabled:_mbCheckbox.isChecked];
+  [copy setMotionBlurShutterAngle:_mbShutterAngle samples:_mbSamples];
   copy.onRenderModeChanged = _onRenderModeChanged;
   copy.renderMode = _basicView.renderMode;
   copy.onTimelineMutated = _onTimelineMutated;
@@ -679,7 +1161,7 @@ static const CGFloat kHeaderRowHeight = 28.0;
 }
 
 - (CGSize)intrinsicContentSize {
-  return NSMakeSize(NSViewNoIntrinsicMetric, kInspectorHeight);
+  return NSMakeSize(NSViewNoIntrinsicMetric, [self _totalHeight]);
 }
 
 @end

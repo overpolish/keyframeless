@@ -324,7 +324,7 @@
       return @[ segStates2 ];
     };
     self.onHoldModulationPopover(
-        _popoverAnchor, iv.modulation, iv.modulationIntensity,
+        _popoverAnchor, a.time, b.time, iv.modulation, iv.modulationIntensity,
         iv.modulationFrequency, iv.modulationSeed, iv.modulationLinked,
         showsModLinked, partCompoundLabels, partCompoundStates, partRebuilder,
         onModulation, onIntensity, onFrequency, onSeed, onLinked,
@@ -365,8 +365,9 @@
                                   iv2.frequency = v;
                                 }];
   };
-  self.onGapPopover(_popoverAnchor, descending, iv.curve, iv.intensity,
-                    iv.frequency, @[], @[], onCurve, onIntensity, onFrequency,
+  self.onGapPopover(_popoverAnchor, descending, a.time, b.time, iv.curve,
+                    iv.intensity, iv.frequency, @[], @[], onCurve, onIntensity,
+                    onFrequency,
                     ^(NSInteger _, BOOL __){
                     },
                     onDragBegin, onDragEnd);

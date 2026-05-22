@@ -55,6 +55,14 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 
 @property(nonatomic, copy, nullable) void (^onLoopToggled)(BOOL enabled);
 @property(nonatomic, copy, nullable) void (^onTabChanged)(NSInteger tab);
+/// Any motion-blur edit (enable toggle or a Shutter/Samples slider/field in the
+/// settings popover). `shutterAngle` is degrees (0–360); `samples` is the
+/// sample count (2–128). The host writes the full
+/// `{enabled,shutterAngle,samples}` blob. Only fired when `showsMotionBlurRow`
+/// is YES. Wrap continuous slider drags with `onDragBegin`/`onDragEnd` for undo
+/// coalescing (same chain the mini-canvas handles use).
+@property(nonatomic, copy, nullable) void (^onMotionBlurChanged)
+    (BOOL enabled, double shutterAngle, NSInteger samples);
 @property(nonatomic, copy, nullable) void (^onTimelineMutated)
     (KKTimeline *updated);
 /// Start / end of a continuous mini-canvas handle drag — host wraps the
@@ -96,6 +104,13 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 
 - (void)applyTimeline:(KKTimeline *)timeline;
 - (void)setLoopEnabled:(BOOL)enabled;
+/// Push the persisted motion-blur enable state from the host's MB blob.
+/// No-op when `showsMotionBlurRow` is NO.
+- (void)setMotionBlurEnabled:(BOOL)enabled;
+/// Push the persisted motion-blur Shutter angle (degrees) + Samples (count)
+/// from the host's MB blob. No-op when `showsMotionBlurRow` is NO.
+- (void)setMotionBlurShutterAngle:(double)shutterAngle
+                          samples:(NSInteger)samples;
 - (void)setActiveTab:(NSInteger)tab;
 /// Push the persisted mini-canvas render mode from the host's UI-state
 /// blob. The 3-way pill lives in the keypose-value popover header (only
@@ -129,6 +144,13 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// Called when the remote window has closed; resets the button and frees
 /// the copy.
 - (void)handleDetachedWindowClosed;
+
+#pragma mark - Subclass hooks
+
+/// Whether to build the motion-blur parameter row below the box (and reserve
+/// height for it). Default YES. Override to NO in a plugin whose effect has no
+/// motion blur. Read once during init.
+- (BOOL)showsMotionBlurRow;
 
 @end
 

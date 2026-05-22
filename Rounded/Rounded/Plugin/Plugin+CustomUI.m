@@ -70,6 +70,22 @@
       renderMode = KKMiniCanvasRenderModeFilmstrip;
     }
 
+    NSString *mbJson = KKReadCustomParamString(getAPI, kKKParamMotionBlurData);
+    NSDictionary *mbState =
+        (mbJson.length ? [NSJSONSerialization
+                             JSONObjectWithData:
+                                 [mbJson dataUsingEncoding:NSUTF8StringEncoding]
+                                        options:0
+                                          error:nil]
+                       : nil)
+            ?: @{};
+    BOOL motionBlurEnabled = [mbState[@"enabled"] boolValue];
+    double motionBlurShutterAngle = mbState[@"shutterAngle"]
+                                        ? [mbState[@"shutterAngle"] doubleValue]
+                                        : 180.0;
+    NSInteger motionBlurSamples =
+        mbState[@"samples"] ? [mbState[@"samples"] integerValue] : 16;
+
     NSString *timelineJson =
         KKReadCustomParamString(getAPI, kKKParamTimelineData);
     KKTimeline *timeline =
@@ -122,6 +138,9 @@
       [view setClipDurationSeconds:seedClipDurSec];
     if (seedFrameDurSec > 0)
       [view setFrameDurationSeconds:seedFrameDurSec];
+    [view setMotionBlurEnabled:motionBlurEnabled];
+    [view setMotionBlurShutterAngle:motionBlurShutterAngle
+                            samples:motionBlurSamples];
     __weak typeof(self) weak = self;
 
     view.onLoopToggled = ^(BOOL enabled) {
@@ -138,6 +157,33 @@
         return;
       [strong patchUIStateKey:@"activeTab" value:@(tab) paramID:kParamUIState];
     };
+    view.onMotionBlurChanged =
+        ^(BOOL enabled, double shutterAngle, NSInteger samples) {
+          __strong typeof(weak) strong = weak;
+          if (!strong)
+            return;
+          id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
+              apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+          if (!act)
+            return;
+          [act startAction:strong];
+          id<FxParameterSettingAPI_v5> setAPI = [strong.apiManager
+              apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+          NSDictionary *mb = @{
+            @"enabled" : @(enabled),
+            @"shutterAngle" : @(shutterAngle),
+            @"samples" : @(samples)
+          };
+          NSData *data = [NSJSONSerialization dataWithJSONObject:mb
+                                                         options:0
+                                                           error:nil];
+          NSString *json = [[[NSString alloc] initWithData:data
+                                                  encoding:NSUTF8StringEncoding]
+              autorelease];
+          if (json)
+            KKWriteCustomParamString(setAPI, json, kKKParamMotionBlurData);
+          [act endAction:strong];
+        };
     [view setRenderMode:renderMode];
     view.onRenderModeChanged = ^(KKMiniCanvasRenderMode mode) {
       __strong typeof(weak) strong = weak;

@@ -65,7 +65,9 @@ typedef struct {
   double outIntensity;
   double inFrequency;
   double outFrequency;
-  BOOL holdDrift; // the two interior Hold keyposes carry different values
+  BOOL holdDrift;       // the two interior Hold keyposes carry different values
+  BOOL inIsTransition;  // the In phase endpoints actually differ (value-based)
+  BOOL outIsTransition; // the Out phase endpoints actually differ (value-based)
   KKEasingCurve holdCurve;
   double holdIntensity;
   double holdFrequency;
@@ -183,6 +185,12 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
 - (nullable KKInterval *)_holdIntervalForLane:(KKLane *)lane;
 - (BOOL)_holdLinked;
 - (BOOL)_holdDrift;
+/// Value-based phase classification (matches Advanced's per-keypose rule): a
+/// phase is a real transition only when its endpoints actually carry different
+/// values on some animatable lane. Drives pill / curve colour so a flat
+/// (in-start == hold) In reads accent, not warning.
+- (BOOL)_inIsTransition;
+- (BOOL)_outIsTransition;
 - (void)_toggleHoldLink;
 - (KKLane *)_rebuiltLane:(KKLane *)lane
                     inOn:(BOOL)inOn

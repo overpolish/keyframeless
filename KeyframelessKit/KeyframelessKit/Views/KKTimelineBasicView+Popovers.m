@@ -63,7 +63,8 @@
   __weak typeof(self) weak = self;
   KKBasicSection capSec = sec;
   self.onGapPopover(
-      _popoverAnchor, isOut, cur, inten, freq, partLabels, partStates,
+      _popoverAnchor, isOut, isOut ? p.outStartFrac : 0.0,
+      isOut ? 1.0 : p.inEndFrac, cur, inten, freq, partLabels, partStates,
       ^(KKIntervalCurve c2) {
         [weak _mutateInterval:capSec
                          with:^(KKInterval *iv) {
@@ -162,8 +163,9 @@
     if (!self.onGapPopover)
       return;
     self.onGapPopover(
-        _popoverAnchor, NO, (KKIntervalCurve)p.holdCurve, p.holdIntensity,
-        p.holdFrequency, holdLabels, driftStates,
+        _popoverAnchor, NO, p.inEndFrac, p.outStartFrac,
+        (KKIntervalCurve)p.holdCurve, p.holdIntensity, p.holdFrequency,
+        holdLabels, driftStates,
         ^(KKIntervalCurve c2) {
           [weak _mutateInterval:KKBasicSectionHold
                            with:^(KKInterval *iv) {
@@ -293,8 +295,9 @@
     return out;
   };
   self.onHoldModulationPopover(
-      _popoverAnchor, mod, mInten, mFreq, seed, linked, showsLinked,
-      partCompoundLabels, partCompoundStates, partRebuilder,
+      _popoverAnchor, p.inEndFrac, p.outStartFrac, mod, mInten, mFreq, seed,
+      linked, showsLinked, partCompoundLabels, partCompoundStates,
+      partRebuilder,
       ^(KKIntervalModulation m) {
         [weak _mutateHoldModWith:^(KKInterval *iv) {
           iv.modulation = m;

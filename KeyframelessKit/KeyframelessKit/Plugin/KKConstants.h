@@ -61,6 +61,14 @@ static const UInt32 kKKParamMotionBlurExpanded __attribute__((unused)) = 9928;
 static const UInt32 kKKParamMotionBlurTransitionsOnly __attribute__((unused)) =
     9929;
 
+/// Custom-UI motion blur state (KKDataBlob, JSON
+/// `{enabled,shutterAngle,samples}`). Replaces the native 9924–9929 group when
+/// motion blur is edited from a custom-UI parameter row instead of native
+/// controls. `shutterAngle` 0–360° sets the shutter window; `samples` 2–128 is
+/// the explicit sample count. Read at render time via
+/// `+[KKMotionBlur snapshotStateFromJSON:...]`.
+static const UInt32 kKKParamMotionBlurData __attribute__((unused)) = 9932;
+
 /// Color system parameters (9800–9810)
 static const UInt32 kKKParamColorGroup __attribute__((unused)) = 9800;
 static const UInt32 kKKParamColorMode __attribute__((unused)) = 9801;

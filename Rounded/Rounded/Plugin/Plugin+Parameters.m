@@ -62,6 +62,17 @@
     return NO;
   }
 
+  // Motion blur state lives in this custom-UI blob (edited from the inspector
+  // MB row, not native controls). Read at render time via
+  // +[KKMotionBlur snapshotStateFromJSON:...].
+  if (![paramAPI addCustomParameterWithName:@""
+                                parameterID:kKKParamMotionBlurData
+                               defaultValue:[KKDataBlob blobWithData:nil]
+                             parameterFlags:kFxParameterFlag_HIDDEN |
+                                            kFxParameterFlag_NOT_ANIMATABLE]) {
+    return NO;
+  }
+
   return YES;
 }
 

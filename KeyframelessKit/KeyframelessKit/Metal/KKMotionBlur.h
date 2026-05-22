@@ -57,6 +57,16 @@ typedef struct {
                                          timingAPI:(id<FxTimingAPI_v4>)timingAPI
                                             atTime:(CMTime)time;
 
+/// Snapshots motion-blur state from a custom-UI JSON blob
+/// (`{"enabled":bool,"shutterAngle":0–360,"samples":2–128}`) instead of the
+/// native 9924–9929 params. shutterAngle maps to the shutter window; samples is
+/// the explicit sample count. Empty / nil / disabled JSON returns a disabled
+/// state. `transitionsOnly` is always false here (not yet supported in the
+/// custom-UI path).
++ (KKMotionBlurState)snapshotStateFromJSON:(nullable NSString *)json
+                                 timingAPI:(id<FxTimingAPI_v4>)timingAPI
+                                    atTime:(CMTime)time;
+
 /// Acquires a pooled intermediate ("scratch") texture inside a render
 /// block. Use for any plugin-private textures the render block needs as
 /// passes feed each other (Glow's blur pyramid, etc.) so they survive the

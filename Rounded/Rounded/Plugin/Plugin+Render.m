@@ -211,50 +211,10 @@ static NSArray<NSNumber *> *KKReadBoundaryRequestFracs(NSString *path) {
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   id<FxTimingAPI_v4> timingAPI =
       [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-  KKMotionBlurState mbState =
-      [KKMotionBlur snapshotStateWithParameterAPI:paramAPI
-                                        timingAPI:timingAPI
-                                           atTime:renderTime];
-
-  if (mbState.enabled && mbState.transitionsOnly) {
-    NSString *tlJSON = KKReadCustomParamString(paramAPI, kKKParamTimelineData);
-    KKTimeline *tl = tlJSON.length ? [KKTimeline timelineFromJSON:tlJSON] : nil;
-    BOOL anyTransition = NO;
-    if (tl.lanes.count) {
-      CMTime effectStart = kCMTimeZero, effectDur = kCMTimeZero;
-      [timingAPI startTimeForEffect:&effectStart];
-      [timingAPI durationTimeForEffect:&effectDur];
-      double durSec = CMTimeGetSeconds(effectDur);
-      double frac = durSec > 0
-                        ? MAX(0.0, MIN(1.0, (CMTimeGetSeconds(renderTime) -
-                                             CMTimeGetSeconds(effectStart)) /
-                                                durSec))
-                        : 0.0;
-      for (KKLane *lane in tl.lanes) {
-        if (!lane.enabled || lane.keyposes.count < 2)
-          continue;
-        NSArray<KKKeyPose *> *kps = lane.keyposes;
-        for (NSUInteger i = 0; i + 1 < kps.count; i++) {
-          if (frac < kps[i + 1].time) {
-            KKKeyPose *a = kps[i], *b = kps[i + 1];
-            for (NSUInteger j = 0; j < MIN(a.values.count, b.values.count);
-                 j++) {
-              if (fabs(a.values[j].doubleValue - b.values[j].doubleValue) >
-                  1e-6) {
-                anyTransition = YES;
-                break;
-              }
-            }
-            break;
-          }
-        }
-        if (anyTransition)
-          break;
-      }
-    }
-    if (!anyTransition)
-      mbState.enabled = NO;
-  }
+  NSString *mbJSON = KKReadCustomParamString(paramAPI, kKKParamMotionBlurData);
+  KKMotionBlurState mbState = [KKMotionBlur snapshotStateFromJSON:mbJSON
+                                                        timingAPI:timingAPI
+                                                           atTime:renderTime];
 
   // Layout: [KKMotionBlurState | N × RoundedPluginState]. Sample 0 is at
   // renderTime; samples 1..N-1 are evaluated backwards across the shutter

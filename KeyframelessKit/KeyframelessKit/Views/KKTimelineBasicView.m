@@ -283,6 +283,12 @@ KKHoldShape KKShapeOfLane(KKLane *lane) {
   p.clipDur = [self _clipDuration];
   p.zoom = _zp.zoom > 0.0 ? _zp.zoom : 1.0;
   p.panOffset = _zp.panOffset;
+  // Value-based: a phase only draws its easing ramp when its endpoints
+  // actually differ. A freshly enabled In/Out seeds its endpoint to the hold
+  // value, so the schematic stays flat until the user gives it a distinct
+  // value (matching the accent colour rule).
+  p.inIsTransition = [self _inIsTransition];
+  p.outIsTransition = [self _outIsTransition];
   return p;
 }
 
@@ -326,14 +332,14 @@ double KKBasicHoldValue(double t, KKBasicProj p, double holdEnd) {
 double KKBasicMotionY(double t, KKBasicProj p) {
   double holdEnd = p.holdDrift ? 2.0 : 1.0;
   if (t <= p.inEndFrac) {
-    if (p.inEnabled && p.inEndFrac > kEps)
+    if (p.inEnabled && p.inIsTransition && p.inEndFrac > kEps)
       return KKApplyEasing(t / p.inEndFrac, p.inCurve, p.inIntensity,
                            p.inFrequency);
     return 1.0;
   }
   if (t < p.outStartFrac)
     return KKBasicHoldValue(t, p, holdEnd);
-  if (p.outEnabled && p.outStartFrac < 1.0 - kEps) {
+  if (p.outEnabled && p.outIsTransition && p.outStartFrac < 1.0 - kEps) {
     double q = (t - p.outStartFrac) / (1.0 - p.outStartFrac);
     return holdEnd -
            KKApplyEasing(q, p.outCurve, p.outIntensity, p.outFrequency) *
@@ -352,7 +358,7 @@ double KKBasicMotionYSmoothed(double t, KKBasicProj p) {
   double (^raw)(double) = ^double(double f) {
     return KKBasicMotionY(f, p);
   };
-  if (p.inEnabled && p.inEndFrac > kEps) {
+  if (p.inEnabled && p.inIsTransition && p.inEndFrac > kEps) {
     double prev = p.inEndFrac;
     double next = p.outStartFrac - p.inEndFrac;
     if (next > 0.0) {
@@ -362,7 +368,7 @@ double KKBasicMotionYSmoothed(double t, KKBasicProj p) {
         return KKHermiteJoinBlend(t, p.inEndFrac, w, raw);
     }
   }
-  if (p.outEnabled && p.outStartFrac < 1.0 - kEps) {
+  if (p.outEnabled && p.outIsTransition && p.outStartFrac < 1.0 - kEps) {
     double prev = p.outStartFrac - p.inEndFrac;
     double next = 1.0 - p.outStartFrac;
     if (prev > 0.0) {

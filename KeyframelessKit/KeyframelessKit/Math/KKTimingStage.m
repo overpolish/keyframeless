@@ -21,7 +21,10 @@
     _modulationIntensity = 1.0;
     _modulationFrequency = 1.0;
     _modulationLinked = YES;
-    _endpointsLinked = YES;
+    // Default unlinked: an interval freshly created in Advanced (new keypose /
+    // property) starts unlinked. Basic explicitly links its Hold pair when it
+    // builds the hold (see KKTimelineBasicView+Model `_rebuiltLane`).
+    _endpointsLinked = NO;
   }
   return self;
 }

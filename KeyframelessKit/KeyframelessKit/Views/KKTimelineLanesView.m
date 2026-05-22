@@ -197,28 +197,30 @@
                                       onDragBegin:onDragBegin
                                         onDragEnd:onDragEnd];
       };
-  _basicGraph.onGapPopover =
-      ^(NSView *anchor, BOOL animateOut, KKIntervalCurve curve,
-        double intensity, double frequency, NSArray<NSString *> *partLabels,
-        NSArray<NSNumber *> *partStates, void (^onCurve)(KKIntervalCurve),
-        void (^onIntensity)(double), void (^onFrequency)(double),
-        void (^onParticipation)(NSInteger, BOOL), void (^onDragBegin)(void),
-        void (^onDragEnd)(void)) {
-        __strong typeof(weakSelf) s = weakSelf;
-        [s _presentGapPopoverFromAnchor:anchor
-                             animateOut:animateOut
-                                  curve:curve
-                              intensity:intensity
-                              frequency:frequency
-                             partLabels:partLabels
-                             partStates:partStates
-                                onCurve:onCurve
-                            onIntensity:onIntensity
-                            onFrequency:onFrequency
-                        onParticipation:onParticipation
-                            onDragBegin:onDragBegin
-                              onDragEnd:onDragEnd];
-      };
+  _basicGraph.onGapPopover = ^(
+      NSView *anchor, BOOL animateOut, double startFraction, double endFraction,
+      KKIntervalCurve curve, double intensity, double frequency,
+      NSArray<NSString *> *partLabels, NSArray<NSNumber *> *partStates,
+      void (^onCurve)(KKIntervalCurve), void (^onIntensity)(double),
+      void (^onFrequency)(double), void (^onParticipation)(NSInteger, BOOL),
+      void (^onDragBegin)(void), void (^onDragEnd)(void)) {
+    __strong typeof(weakSelf) s = weakSelf;
+    [s _presentGapPopoverFromAnchor:anchor
+                         animateOut:animateOut
+                      startFraction:startFraction
+                        endFraction:endFraction
+                              curve:curve
+                          intensity:intensity
+                          frequency:frequency
+                         partLabels:partLabels
+                         partStates:partStates
+                            onCurve:onCurve
+                        onIntensity:onIntensity
+                        onFrequency:onFrequency
+                    onParticipation:onParticipation
+                        onDragBegin:onDragBegin
+                          onDragEnd:onDragEnd];
+  };
   _advancedGraph =
       [[KKTimelineAdvancedView alloc] initWithAvailableLanes:_availableLanes
                                                     timeline:_timeline];
@@ -278,31 +280,34 @@
     if (s && s->_onScrub)
       s->_onScrub(frac);
   };
-  _advancedGraph.onGapPopover =
-      ^(NSView *anchor, BOOL animateOut, KKIntervalCurve curve,
-        double intensity, double frequency, NSArray<NSString *> *partLabels,
-        NSArray<NSNumber *> *partStates, void (^onCurve)(KKIntervalCurve),
-        void (^onIntensity)(double), void (^onFrequency)(double),
-        void (^onParticipation)(NSInteger, BOOL), void (^onDragBegin)(void),
-        void (^onDragEnd)(void)) {
-        __strong typeof(weakSelf) s = weakSelf;
-        [s _presentGapPopoverFromAnchor:anchor
-                             animateOut:animateOut
-                                  curve:curve
-                              intensity:intensity
-                              frequency:frequency
-                             partLabels:partLabels
-                             partStates:partStates
-                                onCurve:onCurve
-                            onIntensity:onIntensity
-                            onFrequency:onFrequency
-                        onParticipation:onParticipation
-                            onDragBegin:onDragBegin
-                              onDragEnd:onDragEnd];
-      };
+  _advancedGraph.onGapPopover = ^(
+      NSView *anchor, BOOL animateOut, double startFraction, double endFraction,
+      KKIntervalCurve curve, double intensity, double frequency,
+      NSArray<NSString *> *partLabels, NSArray<NSNumber *> *partStates,
+      void (^onCurve)(KKIntervalCurve), void (^onIntensity)(double),
+      void (^onFrequency)(double), void (^onParticipation)(NSInteger, BOOL),
+      void (^onDragBegin)(void), void (^onDragEnd)(void)) {
+    __strong typeof(weakSelf) s = weakSelf;
+    [s _presentGapPopoverFromAnchor:anchor
+                         animateOut:animateOut
+                      startFraction:startFraction
+                        endFraction:endFraction
+                              curve:curve
+                          intensity:intensity
+                          frequency:frequency
+                         partLabels:partLabels
+                         partStates:partStates
+                            onCurve:onCurve
+                        onIntensity:onIntensity
+                        onFrequency:onFrequency
+                    onParticipation:onParticipation
+                        onDragBegin:onDragBegin
+                          onDragEnd:onDragEnd];
+  };
   _advancedGraph.onHoldModulationPopover =
-      ^(NSView *anchor, KKIntervalModulation modulation, double intensity,
-        double frequency, uint32_t seed, BOOL linked, BOOL showsLinked,
+      ^(NSView *anchor, double startFraction, double endFraction,
+        KKIntervalModulation modulation, double intensity, double frequency,
+        uint32_t seed, BOOL linked, BOOL showsLinked,
         NSArray<NSArray<NSString *> *> *partLabels,
         NSArray<NSArray<NSNumber *> *> *partStates,
         NSArray<NSArray<NSNumber *> *> * (^partRebuilder)(void),
@@ -312,6 +317,8 @@
         void (^onDragBegin)(void), void (^onDragEnd)(void)) {
         __strong typeof(weakSelf) s = weakSelf;
         [s _presentHoldModulationPopoverFromAnchor:anchor
+                                     startFraction:startFraction
+                                       endFraction:endFraction
                                         modulation:modulation
                                          intensity:intensity
                                          frequency:frequency
@@ -348,8 +355,9 @@
       };
 
   _basicGraph.onHoldModulationPopover =
-      ^(NSView *anchor, KKIntervalModulation modulation, double intensity,
-        double frequency, uint32_t seed, BOOL linked, BOOL showsLinked,
+      ^(NSView *anchor, double startFraction, double endFraction,
+        KKIntervalModulation modulation, double intensity, double frequency,
+        uint32_t seed, BOOL linked, BOOL showsLinked,
         NSArray<NSArray<NSString *> *> *partLabels,
         NSArray<NSArray<NSNumber *> *> *partStates,
         NSArray<NSArray<NSNumber *> *> * (^partRebuilder)(void),
@@ -359,6 +367,8 @@
         void (^onDragBegin)(void), void (^onDragEnd)(void)) {
         __strong typeof(weakSelf) s = weakSelf;
         [s _presentHoldModulationPopoverFromAnchor:anchor
+                                     startFraction:startFraction
+                                       endFraction:endFraction
                                         modulation:modulation
                                          intensity:intensity
                                          frequency:frequency
@@ -661,9 +671,18 @@
       a.outgoing = tmplIn ?: [[KKInterval alloc] init];
       [kps addObject:a];
     }
-    // Hold-start: at 0 when In off, at tIn when In on.
+    // Hold-start: at 0 when In off, at tIn when In on. A freshly animatable
+    // property's Hold pair starts linked (the two interior keyposes move
+    // together) — "fresh = linked, then it's on the user". A second lane
+    // joining an existing shape inherits that shape's link state via tmplHold.
     KKKeyPose *hs = [KKKeyPose keyposeAtTime:(globalIn ? tIn : 0.0) values:v];
-    hs.outgoing = tmplHold ?: [[KKInterval alloc] init];
+    if (tmplHold) {
+      hs.outgoing = tmplHold;
+    } else {
+      KKInterval *freshHold = [[KKInterval alloc] init];
+      freshHold.endpointsLinked = YES;
+      hs.outgoing = freshHold;
+    }
     [kps addObject:hs];
     // Hold-end: at outEndFrac when Out off, at tOut when Out on.
     KKKeyPose *he =
@@ -714,6 +733,7 @@
 }
 
 - (void)setClipDurationSeconds:(double)seconds {
+  _clipDurationSeconds = seconds;
   [_basicGraph setClipDurationSeconds:seconds];
   [_advancedGraph setClipDurationSeconds:seconds];
 }

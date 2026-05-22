@@ -48,8 +48,8 @@ BOOL KKValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   return YES;
 }
 
-// The Hold pair is "linked" when its interval says so (default YES). Read
-// from the first enabled lane that has the linkable 4-keypose shape.
+// The Hold pair is "linked" when its interval says so (Basic holds start
+// linked). Read from the first enabled lane that has the linkable shape.
 - (BOOL)_holdLinked {
   for (KKLane *lane in _timeline.lanes) {
     if (!lane.enabled)
@@ -71,6 +71,38 @@ BOOL KKValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
     if (s.holdEnd > s.holdStart &&
         !KKValuesEqual(lane.keyposes[s.holdStart].values,
                        lane.keyposes[s.holdEnd].values))
+      return YES;
+  }
+  return NO;
+}
+
+// A phase is a real transition only when some enabled lane's phase endpoints
+// actually differ (value-based, matching Advanced's per-keypose rule). A
+// freshly enabled In/Out seeds its endpoint to the hold value, so it stays
+// accent until the user gives it a distinct value.
+- (BOOL)_inIsTransition {
+  for (KKLane *lane in _timeline.lanes) {
+    if (!lane.enabled || lane.keyposes.count < 2)
+      continue;
+    KKHoldShape s = KKShapeOfLane(lane);
+    if (!s.inEnabled)
+      continue;
+    if (!KKValuesEqual(lane.keyposes.firstObject.values,
+                       lane.keyposes[s.holdStart].values))
+      return YES;
+  }
+  return NO;
+}
+
+- (BOOL)_outIsTransition {
+  for (KKLane *lane in _timeline.lanes) {
+    if (!lane.enabled || lane.keyposes.count < 2)
+      continue;
+    KKHoldShape s = KKShapeOfLane(lane);
+    if (!s.outEnabled)
+      continue;
+    if (!KKValuesEqual(lane.keyposes[s.holdEnd].values,
+                       lane.keyposes.lastObject.values))
       return YES;
   }
   return NO;
@@ -166,7 +198,14 @@ BOOL KKValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   }
   KKKeyPose *hs =
       [KKKeyPose keyposeAtTime:(inOn ? tIn : 0.0) values:holdStartVals];
-  hs.outgoing = [oldHold copy] ?: [[KKInterval alloc] init];
+  hs.outgoing = [oldHold copy];
+  if (!hs.outgoing) {
+    // A freshly built Basic Hold starts linked (the two interior keyposes move
+    // together); the In/Out intervals stay unlinked (model default).
+    KKInterval *freshHold = [[KKInterval alloc] init];
+    freshHold.endpointsLinked = YES;
+    hs.outgoing = freshHold;
+  }
   [kps addObject:hs];
   KKKeyPose *he =
       [KKKeyPose keyposeAtTime:(outOn ? tOut : outEndFrac) values:holdEndVals];

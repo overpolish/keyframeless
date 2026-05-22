@@ -7,6 +7,7 @@
 #import "../Style/NSColor+KKColors.h"
 #import "KKMiniCanvasView.h"
 #import "KKPillToggleRowView.h"
+#import "KKPopoverHeaderView.h"
 #import "KKSliderView.h"
 #import "KKTimelineLanesView_Private.h"
 #import "KKValueTextField.h"
@@ -791,6 +792,20 @@ static const CGFloat kSuffixSlotW = 17.0;
   NSButton *_navPrevButton;
   NSButton *_navNextButton;
   void (^_onNavigate)(NSInteger);
+  KKPopoverHeaderView *_header;
+  BOOL _hasHeader;
+}
+
+- (void)setHeaderTitle:(NSString *)title {
+  _header.title = title;
+}
+
+- (void)setHeaderDetail:(NSString *)detail {
+  _header.detail = detail;
+}
+
+- (void)setHeaderLinked:(BOOL)linked {
+  [_header setTrailingSymbolName:linked ? @"link" : nil];
 }
 
 - (void)setNavPrevEnabled:(BOOL)prev nextEnabled:(BOOL)next {
@@ -827,19 +842,19 @@ static const CGFloat kSuffixSlotW = 17.0;
 + (CGFloat)heightForLanes:(NSArray<KKLane *> *)lanes
            descriptorPath:(NSString *)descriptorPath
                clipAspect:(CGFloat)clipAspect
-       showRenderModePill:(BOOL)showRenderModePill {
+            reserveHeader:(BOOL)reserveHeader {
   CGFloat rows = 0;
   for (KKLane *lane in lanes)
     rows += [_KKStaticValueRow heightForLane:lane];
   CGFloat h = KKPaddingMD + rows + KKPaddingMD;
-  if (descriptorPath.length > 0) {
+  if (descriptorPath.length > 0)
     h += [self _canvasHeightForAspect:clipAspect
                                 width:[self _popoverWidthForDescriptor:
                                                 descriptorPath]] +
          KKPaddingMD;
-    if (showRenderModePill)
-      h += [self _renderModePillHeaderHeight] + KKPaddingMD;
-  }
+  // The header band (title + render-mode pill + nav chevrons) shares one row.
+  if (reserveHeader)
+    h += [self _renderModePillHeaderHeight] + KKPaddingMD;
   return h;
 }
 
@@ -900,6 +915,9 @@ static const CGFloat kSuffixSlotW = 17.0;
 - (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes
                descriptorPath:(NSString *)descriptorPath
                    clipAspect:(CGFloat)clipAspect
+                  headerTitle:(NSString *)headerTitle
+                 headerDetail:(NSString *)headerDetail
+                   headerIcon:(NSImage *)headerIcon
                canvasDelegate:(id<KKMiniCanvasDelegate>)canvasDelegate
                    renderMode:(KKMiniCanvasRenderMode)renderMode
                 onModeChanged:(void (^)(KKMiniCanvasRenderMode))onModeChanged
@@ -909,15 +927,17 @@ static const CGFloat kSuffixSlotW = 17.0;
                   onDragBegin:(void (^)(void))onDragBegin
                     onDragEnd:(void (^)(void))onDragEnd {
   BOOL showPill = (onModeChanged != nil && descriptorPath.length > 0);
+  BOOL hasHeader = showPill || headerTitle.length > 0;
   CGFloat W =
       [_KKStaticValuesPopoverView _popoverWidthForDescriptor:descriptorPath];
   CGFloat h = [_KKStaticValuesPopoverView heightForLanes:lanes
                                           descriptorPath:descriptorPath
                                               clipAspect:clipAspect
-                                      showRenderModePill:showPill];
+                                           reserveHeader:hasHeader];
   self = [super initWithFrame:NSMakeRect(0, 0, W, h)];
   if (!self)
     return nil;
+  _hasHeader = hasHeader;
   _descriptorPath = [descriptorPath copy];
   _clipAspect = clipAspect;
   _rowsByLabel = [NSMutableDictionary dictionary];
@@ -929,6 +949,58 @@ static const CGFloat kSuffixSlotW = 17.0;
   CGFloat stackTopInset = KKPaddingMD;
   NSLayoutYAxisAnchor *canvasTopAnchor = self.topAnchor;
   CGFloat canvasTopInset = KKPaddingMD;
+
+  // Header band (one row, shared): nav chevrons (leftmost, fixed position) →
+  // title; render-mode pill trailing. Everything shares the band's
+  // vertical centre.
+  CGFloat bandH = [_KKStaticValuesPopoverView _renderModePillHeaderHeight];
+  CGFloat bandCenterOffset = KKPaddingMD + bandH / 2.0;
+  BOOL hasNav = (showPill && onNavigate != nil);
+  BOOL hasBand = (showPill || headerTitle.length > 0);
+
+  NSLayoutXAxisAnchor *titleLead = self.leadingAnchor;
+  CGFloat titleLeadInset = KKPaddingMD;
+  if (hasNav) {
+    _navPrevButton = [self _makeNavButton:@"chevron.left"
+                                direction:-1
+                               onNavigate:onNavigate];
+    _navNextButton = [self _makeNavButton:@"chevron.right"
+                                direction:1
+                               onNavigate:onNavigate];
+    [self addSubview:_navPrevButton];
+    [self addSubview:_navNextButton];
+    [NSLayoutConstraint activateConstraints:@[
+      [_navPrevButton.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                                   constant:KKPaddingMD],
+      [_navPrevButton.centerYAnchor constraintEqualToAnchor:self.topAnchor
+                                                   constant:bandCenterOffset],
+      [_navPrevButton.widthAnchor constraintEqualToConstant:bandH],
+      [_navPrevButton.heightAnchor constraintEqualToConstant:bandH],
+      [_navNextButton.leadingAnchor
+          constraintEqualToAnchor:_navPrevButton.trailingAnchor
+                         constant:KKPaddingSM],
+      [_navNextButton.centerYAnchor constraintEqualToAnchor:self.topAnchor
+                                                   constant:bandCenterOffset],
+      [_navNextButton.widthAnchor constraintEqualToConstant:bandH],
+      [_navNextButton.heightAnchor constraintEqualToConstant:bandH],
+    ]];
+    titleLead = _navNextButton.trailingAnchor;
+    titleLeadInset = KKSpacingMD;
+  }
+
+  if (headerTitle.length > 0) {
+    _header = [[KKPopoverHeaderView alloc] initWithTitle:headerTitle
+                                                  detail:headerDetail
+                                                    icon:headerIcon];
+    [self addSubview:_header];
+    [NSLayoutConstraint activateConstraints:@[
+      [_header.leadingAnchor constraintEqualToAnchor:titleLead
+                                            constant:titleLeadInset],
+      [_header.centerYAnchor constraintEqualToAnchor:self.topAnchor
+                                            constant:bandCenterOffset],
+    ]];
+  }
+
   if (showPill) {
     __weak typeof(self) weakSelfPill = self;
     void (^wrappedModeChanged)(KKMiniCanvasRenderMode) =
@@ -944,40 +1016,17 @@ static const CGFloat kSuffixSlotW = 17.0;
     [NSLayoutConstraint activateConstraints:@[
       [pill.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
                                           constant:-KKPaddingMD],
-      [pill.topAnchor constraintEqualToAnchor:self.topAnchor
-                                     constant:KKPaddingMD],
-      [pill.heightAnchor
-          constraintEqualToConstant:[_KKStaticValuesPopoverView
-                                        _renderModePillHeaderHeight]],
+      [pill.centerYAnchor constraintEqualToAnchor:self.topAnchor
+                                         constant:bandCenterOffset],
+      [pill.heightAnchor constraintEqualToConstant:bandH],
     ]];
-    if (onNavigate) {
-      _navPrevButton = [self _makeNavButton:@"chevron.left"
-                                  direction:-1
-                                 onNavigate:onNavigate];
-      _navNextButton = [self _makeNavButton:@"chevron.right"
-                                  direction:1
-                                 onNavigate:onNavigate];
-      [self addSubview:_navPrevButton];
-      [self addSubview:_navNextButton];
-      CGFloat hPill = [_KKStaticValuesPopoverView _renderModePillHeaderHeight];
-      [NSLayoutConstraint activateConstraints:@[
-        [_navPrevButton.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
-                                                     constant:KKPaddingMD],
-        [_navPrevButton.centerYAnchor
-            constraintEqualToAnchor:pill.centerYAnchor],
-        [_navPrevButton.widthAnchor constraintEqualToConstant:hPill],
-        [_navPrevButton.heightAnchor constraintEqualToConstant:hPill],
-        [_navNextButton.leadingAnchor
-            constraintEqualToAnchor:_navPrevButton.trailingAnchor
-                           constant:KKPaddingSM],
-        [_navNextButton.centerYAnchor
-            constraintEqualToAnchor:pill.centerYAnchor],
-        [_navNextButton.widthAnchor constraintEqualToConstant:hPill],
-        [_navNextButton.heightAnchor constraintEqualToConstant:hPill],
-      ]];
-    }
-    canvasTopAnchor = pill.bottomAnchor;
-    canvasTopInset = KKPaddingMD;
+  }
+
+  if (hasBand) {
+    canvasTopAnchor = self.topAnchor;
+    canvasTopInset = KKPaddingMD + bandH + KKPaddingMD;
+    stackTopAnchor = self.topAnchor;
+    stackTopInset = KKPaddingMD + bandH + KKPaddingMD;
   }
   if (descriptorPath.length > 0) {
     _miniCanvas = [[KKMiniCanvasView alloc] initWithFrame:NSZeroRect];
@@ -1270,7 +1319,7 @@ static const CGFloat kSuffixSlotW = 17.0;
         [_KKStaticValuesPopoverView heightForLanes:lanes
                                     descriptorPath:_descriptorPath
                                         clipAspect:_clipAspect
-                                showRenderModePill:NO]);
+                                     reserveHeader:_hasHeader]);
 }
 
 @end

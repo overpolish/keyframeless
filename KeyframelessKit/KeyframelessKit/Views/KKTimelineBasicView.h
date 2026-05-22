@@ -91,8 +91,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// toggles one lane's participation. The drag blocks bracket curve / slider
 /// AND participation edits into one undo group.
 @property(nonatomic, copy, nullable) void (^onGapPopover)
-    (NSView *anchorView, BOOL animateOut, KKIntervalCurve curve,
-     double intensity, double frequency, NSArray<NSString *> *participantLabels,
+    (NSView *anchorView, BOOL animateOut, double startFraction,
+     double endFraction, KKIntervalCurve curve, double intensity,
+     double frequency, NSArray<NSString *> *participantLabels,
      NSArray<NSNumber *> *participantStates,
      void (^onCurve)(KKIntervalCurve curve), void (^onIntensity)(double value),
      void (^onFrequency)(double value),
@@ -109,8 +110,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// and whether the Hold modulation currently applies to each (its Hold
 /// interval modulation != None); `onParticipation` toggles one lane on/off.
 @property(nonatomic, copy, nullable) void (^onHoldModulationPopover)
-    (NSView *anchorView, KKIntervalModulation modulation, double intensity,
-     double frequency, uint32_t seed, BOOL linked, BOOL showsLinked,
+    (NSView *anchorView, double startFraction, double endFraction,
+     KKIntervalModulation modulation, double intensity, double frequency,
+     uint32_t seed, BOOL linked, BOOL showsLinked,
      NSArray<NSArray<NSString *> *> *participantCompoundLabels,
      NSArray<NSArray<NSNumber *> *> *participantCompoundStates,
      NSArray<NSArray<NSNumber *> *> *_Nullable (^participantStateRebuilder)

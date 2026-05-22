@@ -32,6 +32,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// segment screen rects.
 - (nullable KKPillToggleRowView *)_guideTabBar;
 
+/// Total custom-UI height including the motion-blur section when shown.
+- (CGFloat)_totalHeight;
+/// Builds the motion-blur parameter row (called from init when shown).
+- (void)_buildMotionBlurRow;
+
 @end
 
 NS_ASSUME_NONNULL_END

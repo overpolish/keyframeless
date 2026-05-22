@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "../Style/KKTokens.h"
 #import "KKMiniCanvasView.h"
+#import "KKPopoverHeaderView.h"
 #import "KKTimelineLanesView+Guide.h"
 #import "KKTimelineLanesView_Popovers.h"
 #import <KeyframelessKit/KKEasing.h>
@@ -488,6 +490,8 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
   KKSetBoundaryEditing(self.miniCanvasDelegate, YES, fraction);
   KKSetSuppressedHandles(self.miniCanvasDelegate, excludedLabels);
   [_openStaticView rebindLanes:lanes];
+  [_openStaticView setHeaderDetail:[self _timeStringForFraction:fraction]];
+  [_openStaticView setHeaderLinked:[self _anyLinkedKeyposeAtFraction:fraction]];
   _openStaticBoundaryFraction = fraction;
   _openStaticBoundaryLanes = [lanes copy];
   _openStaticBoundaryExcluded = [excludedLabels copy];
@@ -495,6 +499,66 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
   [self _refreshBoundaryPopoverNavEnabled];
   if (self.onBoundaryPreviewNeedsRender)
     self.onBoundaryPreviewNeedsRender();
+}
+
+- (NSString *)_timeStringForFraction:(double)frac {
+  if (_clipDurationSeconds > 0)
+    return [NSString stringWithFormat:@"%.2fs", frac * _clipDurationSeconds];
+  return [NSString stringWithFormat:@"%.0f%%", frac * 100.0];
+}
+
+// A skinny vertical pill matching the timeline keypose glyph (capsule.* is too
+// fat). Template image so it tints with the header's dim colour.
+static NSImage *_kkKeyposePillImage(void) {
+  const CGFloat w = 5.0, h = 13.0;
+  NSImage *img =
+      [NSImage imageWithSize:NSMakeSize(w, h)
+                     flipped:NO
+              drawingHandler:^BOOL(NSRect r) {
+                NSRect box = NSInsetRect(NSMakeRect(0, 0, w, h), 0.5, 0.5);
+                NSBezierPath *p =
+                    [NSBezierPath bezierPathWithRoundedRect:box
+                                                    xRadius:(w - 1) / 2.0
+                                                    yRadius:(w - 1) / 2.0];
+                [[NSColor blackColor] setFill];
+                [p fill];
+                return YES;
+              }];
+  img.template = YES;
+  return img;
+}
+
+static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
+                                   NSArray<NSNumber *> *b) {
+  if (a.count != b.count)
+    return NO;
+  for (NSUInteger i = 0; i < a.count; i++)
+    if (fabs(a[i].doubleValue - b[i].doubleValue) > 1e-6)
+      return NO;
+  return YES;
+}
+
+// A boundary keypose is "linked" exactly when the tie-bar is drawn over an
+// interval touching it: the interval's endpoints are linked AND its two
+// keyposes hold the same value (a flat, linked hold). Mirror that condition
+// against the real timeline so the title flag matches the graph 1:1.
+- (BOOL)_anyLinkedKeyposeAtFraction:(double)frac {
+  for (KKLane *lane in _timeline.lanes) {
+    if (!lane.enabled)
+      continue;
+    NSArray<KKKeyPose *> *kps = lane.keyposes;
+    for (NSInteger i = 0; i < (NSInteger)kps.count; i++) {
+      if (fabs(kps[i].time - frac) > 1e-3)
+        continue;
+      if (i + 1 < (NSInteger)kps.count && kps[i].outgoing.endpointsLinked &&
+          _kkBoundaryValuesEqual(kps[i].values, kps[i + 1].values))
+        return YES;
+      if (i > 0 && kps[i - 1].outgoing.endpointsLinked &&
+          _kkBoundaryValuesEqual(kps[i - 1].values, kps[i].values))
+        return YES;
+    }
+  }
+  return NO;
 }
 
 - (void)
@@ -565,6 +629,9 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
       [[_KKStaticValuesPopoverView alloc] initWithLanes:lanes
           descriptorPath:self.miniCanvasDescriptorPath
           clipAspect:self.miniCanvasClipAspect
+          headerTitle:@"Keypose"
+          headerDetail:[self _timeStringForFraction:fraction]
+          headerIcon:_kkKeyposePillImage()
           canvasDelegate:self.miniCanvasDelegate
           renderMode:_renderMode
           onModeChanged:^(KKMiniCanvasRenderMode mode) {
@@ -610,6 +677,7 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
           }];
   _openStaticView = staticView;
   _openStaticIsBoundary = YES;
+  [staticView setHeaderLinked:[self _anyLinkedKeyposeAtFraction:fraction]];
   [self _refreshBoundaryPopoverNavEnabled];
   // Onion-skin filmstrip: clicking an inactive cell asks the active tab's
   // graph to swap the popover to that KP. Advanced uses an in-place rebind
@@ -674,6 +742,8 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
 
 - (void)_presentGapPopoverFromAnchor:(NSView *)anchor
                           animateOut:(BOOL)animateOut
+                       startFraction:(double)startFraction
+                         endFraction:(double)endFraction
                                curve:(KKIntervalCurve)curve
                            intensity:(double)intensity
                            frequency:(double)frequency
@@ -737,16 +807,43 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
   };
 
   CGFloat w = [KKSegmentEditView contentWidth];
-  CGFloat h =
+  CGFloat editH =
       [KKSegmentEditView contentHeightForKind:KKSegmentEditKindTransition
                                   showsLinked:NO
                                    bulkHeader:NO
                                 participation:(partLabels.count > 0)];
-  edit.frame = NSMakeRect(0, 0, w, h);
-  [edit.widthAnchor constraintEqualToConstant:w].active = YES;
-  [edit.heightAnchor constraintEqualToConstant:h].active = YES;
+  edit.translatesAutoresizingMaskIntoConstraints = NO;
 
-  [self _showPopoverWithContent:edit
+  // Wrap the editor with a "Curve <start>–<end>" header (the editor itself is
+  // left untouched — it's also used by the hold-modulation popover).
+  NSString *range = [NSString
+      stringWithFormat:@"%@ → %@", [self _timeStringForFraction:startFraction],
+                       [self _timeStringForFraction:endFraction]];
+  KKPopoverHeaderView *header = [[KKPopoverHeaderView alloc]
+      initWithTitle:@"Curve"
+             detail:range
+         symbolName:@"point.topleft.down.to.point.bottomright.curvepath"];
+  CGFloat headerH = [KKPopoverHeaderView height];
+  CGFloat totalH = KKPaddingMD + headerH + KKSpacingSM + editH;
+  NSView *container =
+      [[NSView alloc] initWithFrame:NSMakeRect(0, 0, w, totalH)];
+  [container addSubview:header];
+  [container addSubview:edit];
+  [NSLayoutConstraint activateConstraints:@[
+    [header.leadingAnchor constraintEqualToAnchor:container.leadingAnchor
+                                         constant:KKPaddingMD],
+    [header.topAnchor constraintEqualToAnchor:container.topAnchor
+                                     constant:KKPaddingMD],
+    [edit.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
+    [edit.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
+    [edit.topAnchor constraintEqualToAnchor:header.bottomAnchor
+                                   constant:KKSpacingSM],
+    [edit.heightAnchor constraintEqualToConstant:editH],
+    [container.widthAnchor constraintEqualToConstant:w],
+    [container.heightAnchor constraintEqualToConstant:totalH],
+  ]];
+
+  [self _showPopoverWithContent:container
                        fromView:anchor
                         onClose:^{
                         }];
@@ -799,6 +896,8 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
 
 - (void)
     _presentHoldModulationPopoverFromAnchor:(NSView *)anchor
+                              startFraction:(double)startFraction
+                                endFraction:(double)endFraction
                                  modulation:(KKIntervalModulation)modulation
                                   intensity:(double)intensity
                                   frequency:(double)frequency
@@ -882,20 +981,47 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
   };
 
   CGFloat w = [KKSegmentEditView contentWidth];
-  CGFloat h =
+  CGFloat editH =
       [KKSegmentEditView contentHeightForKind:KKSegmentEditKindHold
                                   showsLinked:showsLinked
                                    bulkHeader:NO
                                 participation:(partCompoundLabels.count > 0)];
-  edit.frame = NSMakeRect(0, 0, w, h);
-  [edit.widthAnchor constraintEqualToConstant:w].active = YES;
-  [edit.heightAnchor constraintEqualToConstant:h].active = YES;
+  edit.translatesAutoresizingMaskIntoConstraints = NO;
+
+  // Same header treatment as the curve popover (the editor is
+  // shared/untouched).
+  NSString *range = [NSString
+      stringWithFormat:@"%@ → %@", [self _timeStringForFraction:startFraction],
+                       [self _timeStringForFraction:endFraction]];
+  KKPopoverHeaderView *header =
+      [[KKPopoverHeaderView alloc] initWithTitle:@"Modulation"
+                                          detail:range
+                                      symbolName:@"waveform"];
+  CGFloat headerH = [KKPopoverHeaderView height];
+  CGFloat totalH = KKPaddingMD + headerH + KKSpacingSM + editH;
+  NSView *container =
+      [[NSView alloc] initWithFrame:NSMakeRect(0, 0, w, totalH)];
+  [container addSubview:header];
+  [container addSubview:edit];
+  [NSLayoutConstraint activateConstraints:@[
+    [header.leadingAnchor constraintEqualToAnchor:container.leadingAnchor
+                                         constant:KKPaddingMD],
+    [header.topAnchor constraintEqualToAnchor:container.topAnchor
+                                     constant:KKPaddingMD],
+    [edit.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
+    [edit.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
+    [edit.topAnchor constraintEqualToAnchor:header.bottomAnchor
+                                   constant:KKSpacingSM],
+    [edit.heightAnchor constraintEqualToConstant:editH],
+    [container.widthAnchor constraintEqualToConstant:w],
+    [container.heightAnchor constraintEqualToConstant:totalH],
+  ]];
 
   // Stash for external refresh on applyTimeline (cmd-Z etc).
   _openHoldModEditor = edit;
   _openHoldModRebuilder = [partRebuilder copy];
   __weak typeof(self) weak = self;
-  [self _showPopoverWithContent:edit
+  [self _showPopoverWithContent:container
                        fromView:anchor
                         onClose:^{
                           __strong typeof(weak) s = weak;
@@ -933,6 +1059,10 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
       [[_KKStaticValuesPopoverView alloc] initWithLanes:unopted
           descriptorPath:self.miniCanvasDescriptorPath
           clipAspect:self.miniCanvasClipAspect
+          headerTitle:@"Constants"
+          headerDetail:nil
+          headerIcon:[KKPopoverHeaderView
+                         iconImageForSymbolName:@"slider.horizontal.3"]
           canvasDelegate:self.miniCanvasDelegate
           renderMode:KKMiniCanvasRenderModeOff
           onModeChanged:nil

@@ -72,6 +72,9 @@ NS_ASSUME_NONNULL_BEGIN
   // switch / when the active side changes.
   BOOL _basicZoomed;
   BOOL _advancedZoomed;
+  // Cached live clip duration (seconds) so the keypose/curve popover headers
+  // can show times. Forwarded from setClipDurationSeconds:.
+  double _clipDurationSeconds;
 }
 
 // Model + refresh helpers implemented in the primary @implementation; the
@@ -132,6 +135,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// once; intensity/frequency slider drags coalesce via the drag blocks.
 - (void)_presentGapPopoverFromAnchor:(NSView *)anchor
                           animateOut:(BOOL)animateOut
+                       startFraction:(double)startFraction
+                         endFraction:(double)endFraction
                                curve:(KKIntervalCurve)curve
                            intensity:(double)intensity
                            frequency:(double)frequency
@@ -150,6 +155,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// seed pick commits at once; intensity/frequency drags coalesce.
 - (void)
     _presentHoldModulationPopoverFromAnchor:(NSView *)anchor
+                              startFraction:(double)startFraction
+                                endFraction:(double)endFraction
                                  modulation:(KKIntervalModulation)modulation
                                   intensity:(double)intensity
                                   frequency:(double)frequency

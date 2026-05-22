@@ -47,10 +47,17 @@
   // like one continuous hold line with no dashing.
   NSColor *hold = [NSColor accentMatchingHost];
   NSColor *warn = [NSColor warning];
-  // A drifting Hold (unlinked, endpoints differ) is itself "non-hold" —
-  // warn-tint its segment and interior diamonds like a transition.
+  // Value-based colour (matches Advanced's per-keypose rule): a section/pill is
+  // warn only when its endpoints actually differ. A drifting Hold (unlinked,
+  // endpoints differ) counts as a transition; a flat In/Out (endpoint == hold)
+  // reads accent until it's given a distinct value.
   BOOL drift = [self _holdDrift];
+  BOOL inTrans = [self _inIsTransition];
+  BOOL outTrans = [self _outIsTransition];
   NSColor *holdC = drift ? warn : hold;
+  // Interior pill colour follows EITHER adjacent interval, like Advanced.
+  NSColor *holdStartC = (inTrans || drift) ? warn : hold;
+  NSColor *holdEndC = (outTrans || drift) ? warn : hold;
   [self _strokeCurveFrom:0.0
                       to:p.inEndFrac
                     proj:p
@@ -59,7 +66,7 @@
                       lo:lo
                       hi:hi
                   dashed:NO
-                   color:p.inEnabled ? warn : hold];
+                   color:inTrans ? warn : hold];
   [self _strokeCurveFrom:p.inEndFrac
                       to:p.outStartFrac
                     proj:p
@@ -77,7 +84,7 @@
                       lo:lo
                       hi:hi
                   dashed:NO
-                   color:p.outEnabled ? warn : hold];
+                   color:outTrans ? warn : hold];
 
   // Boundary pills — vertical capsules spanning the track height. Hold pair
   // always shows when any lane is animatable; In-start / Out-end only when
@@ -86,22 +93,22 @@
     [self _drawPillAtX:KKBasicXForFrac(p.inEndFrac, g, xp)
                 inRect:g
                 filled:YES
-                 color:holdC];
+                 color:holdStartC];
     [self _drawPillAtX:KKBasicXForFrac(p.outStartFrac, g, xp)
                 inRect:g
                 filled:YES
-                 color:holdC];
+                 color:holdEndC];
   }
   if (p.inEnabled)
     [self _drawPillAtX:KKBasicXForFrac(0.0, g, xp)
                 inRect:g
                 filled:NO
-                 color:warn];
+                 color:inTrans ? warn : hold];
   if (p.outEnabled)
     [self _drawPillAtX:KKBasicXForFrac(1.0, g, xp)
                 inRect:g
                 filled:NO
-                 color:warn];
+                 color:outTrans ? warn : hold];
 
   // When the Hold pair is linked, bridge the two interior pills with a
   // tie-bar. With full-height pills the bar floats just above the pill tops

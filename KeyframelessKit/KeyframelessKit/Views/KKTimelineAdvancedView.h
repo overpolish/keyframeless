@@ -105,8 +105,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// `_presentGapPopoverFromAnchor:`. Advanced is per-lane so participation
 /// labels are always empty.
 @property(nonatomic, copy, nullable) void (^onGapPopover)
-    (NSView *anchorView, BOOL animateOut, KKIntervalCurve curve,
-     double intensity, double frequency, NSArray<NSString *> *participantLabels,
+    (NSView *anchorView, BOOL animateOut, double startFraction,
+     double endFraction, KKIntervalCurve curve, double intensity,
+     double frequency, NSArray<NSString *> *participantLabels,
      NSArray<NSNumber *> *participantStates,
      void (^onCurve)(KKIntervalCurve curve), void (^onIntensity)(double value),
      void (^onFrequency)(double value),
@@ -120,8 +121,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// is NO (link in Advanced is toggled by ctrl+click on the gap, not from
 /// inside the popover).
 @property(nonatomic, copy, nullable) void (^onHoldModulationPopover)
-    (NSView *anchorView, KKIntervalModulation modulation, double intensity,
-     double frequency, uint32_t seed, BOOL linked, BOOL showsLinked,
+    (NSView *anchorView, double startFraction, double endFraction,
+     KKIntervalModulation modulation, double intensity, double frequency,
+     uint32_t seed, BOOL linked, BOOL showsLinked,
      NSArray<NSArray<NSString *> *> *participantCompoundLabels,
      NSArray<NSArray<NSNumber *> *> *participantCompoundStates,
      NSArray<NSArray<NSNumber *> *> *_Nullable (^participantStateRebuilder)

@@ -95,6 +95,9 @@ NS_ASSUME_NONNULL_BEGIN
      initWithLanes:(NSArray<KKLane *> *)lanes
     descriptorPath:(nullable NSString *)descriptorPath
         clipAspect:(CGFloat)clipAspect
+       headerTitle:(nullable NSString *)headerTitle
+      headerDetail:(nullable NSString *)headerDetail
+        headerIcon:(nullable NSImage *)headerIcon
     canvasDelegate:(nullable id<KKMiniCanvasDelegate>)canvasDelegate
         renderMode:(KKMiniCanvasRenderMode)renderMode
      onModeChanged:(nullable void (^)(KKMiniCanvasRenderMode mode))onModeChanged
@@ -103,6 +106,14 @@ NS_ASSUME_NONNULL_BEGIN
                                       NSArray<NSNumber *> *values))onHandleValue
        onDragBegin:(nullable void (^)(void))onDragBegin
          onDragEnd:(nullable void (^)(void))onDragEnd;
+
+/// Update the header title in place (e.g. the keypose time as you navigate
+/// between keyposes). No-op if the popover has no header.
+- (void)setHeaderTitle:(NSString *)title;
+/// Update the smaller subscript detail (e.g. the keypose time) in place.
+- (void)setHeaderDetail:(NSString *)detail;
+/// Show/hide a "link" chain glyph in the header to flag a linked keypose.
+- (void)setHeaderLinked:(BOOL)linked;
 
 /// Enable/disable the popover header's prev/next KP buttons (only meaningful
 /// when `onNavigate` was passed at init). The lanes view calls this on open
@@ -156,7 +167,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (CGFloat)heightForLanes:(NSArray<KKLane *> *)lanes
            descriptorPath:(nullable NSString *)descriptorPath
                clipAspect:(CGFloat)clipAspect
-       showRenderModePill:(BOOL)showRenderModePill;
+            reserveHeader:(BOOL)reserveHeader;
 @end
 
 @interface _KKDropdownTrigger : NSView

@@ -154,27 +154,51 @@ static NSString *KKMBScratchKey(NSString *key, NSUInteger width,
   dispatch_semaphore_signal(sKKMotionBlurScratchPoolLock);
 }
 
+// Shared mapping for both snapshot paths. `shutterFraction` is 0–1 (shutter
+// angle / 360°); `sampleCount` is the explicit sample count (clamped here).
+static KKMotionBlurState _kkMBState(double shutterFraction, int sampleCount,
+                                    BOOL transitionsOnly,
+                                    id<FxTimingAPI_v4> timingAPI) {
+  KKMotionBlurState state = {.enabled = true,
+                             .transitionsOnly = transitionsOnly ? true : false,
+                             .sampleCount = 0,
+                             .shutterSec = 0.0,
+                             .subframeScale = 0.5f};
+
+  int samples = MAX(2, sampleCount);
+  if (samples > KK_MOTION_BLUR_MAX_SAMPLES)
+    samples = KK_MOTION_BLUR_MAX_SAMPLES;
+
+  CMTime frameDuration = kCMTimeZero;
+  if (timingAPI)
+    [timingAPI frameDuration:&frameDuration];
+  double frameSec = CMTimeGetSeconds(frameDuration);
+
+  state.sampleCount = samples;
+  state.shutterSec = frameSec * shutterFraction;
+  return state;
+}
+
 + (KKMotionBlurState)snapshotStateWithParameterAPI:
                          (id<FxParameterRetrievalAPI_v6>)paramAPI
                                          timingAPI:(id<FxTimingAPI_v4>)timingAPI
                                             atTime:(CMTime)time {
-  KKMotionBlurState state = {.enabled = false,
-                             .transitionsOnly = false,
-                             .sampleCount = 0,
-                             .shutterSec = 0.0,
-                             .subframeScale = 0.5f};
+  KKMotionBlurState disabled = {.enabled = false,
+                                .transitionsOnly = false,
+                                .sampleCount = 0,
+                                .shutterSec = 0.0,
+                                .subframeScale = 0.5f};
   if (!paramAPI)
-    return state;
+    return disabled;
 
   BOOL enabled = KKReadCustomParamBool(paramAPI, kKKParamMotionBlurEnabled);
   if (!enabled)
-    return state;
+    return disabled;
 
   BOOL transitionsOnly = NO;
   [paramAPI getBoolValue:&transitionsOnly
            fromParameter:kKKParamMotionBlurTransitionsOnly
                   atTime:time];
-  state.transitionsOnly = transitionsOnly;
 
   double shutter = 0.5, qualitySlider = 0.5;
   [paramAPI getFloatValue:&shutter
@@ -184,22 +208,38 @@ static NSString *KKMBScratchKey(NSString *key, NSUInteger width,
             fromParameter:kKKParamMotionBlurQuality
                    atTime:time];
 
-  // Exponential mapping mirrors standalone MotionBlur: 0%→2, 50%→16,
-  // 100%→128.
-  int samples = MAX(2, (int)(2.0 * pow(64.0, qualitySlider)));
-  if (samples > KK_MOTION_BLUR_MAX_SAMPLES)
-    samples = KK_MOTION_BLUR_MAX_SAMPLES;
+  // Native group's Quality slider keeps its exponential 0%→2 / 50%→16 /
+  // 100%→128 mapping; the custom-UI blob path stores an explicit sample count
+  // instead.
+  int samples = (int)(2.0 * pow(64.0, qualitySlider));
+  return _kkMBState(shutter, samples, transitionsOnly, timingAPI);
+}
 
-  CMTime frameDuration = kCMTimeZero;
-  if (timingAPI)
-    [timingAPI frameDuration:&frameDuration];
-  double frameSec = CMTimeGetSeconds(frameDuration);
-  double shutterAngle = shutter * 360.0;
++ (KKMotionBlurState)snapshotStateFromJSON:(NSString *)json
+                                 timingAPI:(id<FxTimingAPI_v4>)timingAPI
+                                    atTime:(CMTime)time {
+  KKMotionBlurState disabled = {.enabled = false,
+                                .transitionsOnly = false,
+                                .sampleCount = 0,
+                                .shutterSec = 0.0,
+                                .subframeScale = 0.5f};
+  if (!json.length)
+    return disabled;
 
-  state.enabled = true;
-  state.sampleCount = samples;
-  state.shutterSec = frameSec * (shutterAngle / 360.0);
-  return state;
+  NSDictionary *dict = [NSJSONSerialization
+      JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding]
+                 options:0
+                   error:nil];
+  if (![dict isKindOfClass:[NSDictionary class]] ||
+      ![dict[@"enabled"] boolValue])
+    return disabled;
+
+  // Custom-UI blob stores meaningful units: shutter angle in degrees (0–360,
+  // default 180) and an explicit sample count (default 16).
+  double shutterAngle =
+      dict[@"shutterAngle"] ? [dict[@"shutterAngle"] doubleValue] : 180.0;
+  int samples = dict[@"samples"] ? [dict[@"samples"] intValue] : 16;
+  return _kkMBState(shutterAngle / 360.0, samples, NO, timingAPI);
 }
 
 + (NSString *)poolKeyForRegistryID:(uint64_t)registryID
