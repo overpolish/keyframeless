@@ -76,6 +76,16 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// independently (a "Drift"). Toggled by cmd-clicking the gap. Default YES.
 @property(nonatomic) BOOL endpointsLinked;
 
+/// When YES this interval contributes no motion — the lane holds flat across
+/// it at its Hold-side value, while BOTH keyposes (and their stored values)
+/// are preserved. Used by Basic's per-property "applies to": turning a phase
+/// off for one property flattens that property's In/Out interval without
+/// destroying its keypose, so toggling it back on restores the exact value.
+/// The evaluator holds at the END value for the first interval (In→Hold) and
+/// the START value for the last interval (Hold→Out) — i.e. the Hold side.
+/// Default NO (animates normally).
+@property(nonatomic) BOOL holdsFlat;
+
 @property(nonatomic, copy, nullable)
     NSData *pathData; // plugin blob (MagicMove bezier)
 

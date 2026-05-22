@@ -85,8 +85,8 @@ BOOL KKValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
     if (!lane.enabled || lane.keyposes.count < 2)
       continue;
     KKHoldShape s = KKShapeOfLane(lane);
-    if (!s.inEnabled)
-      continue;
+    if (!s.inEnabled || lane.keyposes.firstObject.outgoing.holdsFlat)
+      continue; // no In keypose, or applies-to off (flat) → not animating
     if (!KKValuesEqual(lane.keyposes.firstObject.values,
                        lane.keyposes[s.holdStart].values))
       return YES;
@@ -99,7 +99,7 @@ BOOL KKValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
     if (!lane.enabled || lane.keyposes.count < 2)
       continue;
     KKHoldShape s = KKShapeOfLane(lane);
-    if (!s.outEnabled)
+    if (!s.outEnabled || lane.keyposes[s.holdEnd].outgoing.holdsFlat)
       continue;
     if (!KKValuesEqual(lane.keyposes[s.holdEnd].values,
                        lane.keyposes.lastObject.values))
@@ -265,6 +265,10 @@ BOOL KKValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   [self _rebuildInOn:inOn outOn:outOn tIn:tIn tOut:tOut];
 }
 
+// Master In/Out checkbox is structural: on adds the phase's start keyposes,
+// off removes them. Per-property exclusion uses holdsFlat (non-destructive),
+// but the *fully-off* phase has no keyposes — and removing the last applier
+// (in _setLaneParticipation) routes here so the disabled state is consistent.
 - (void)_setInEnabled:(BOOL)on {
   [self _applyInEnabled:on outEnabled:[self _projection].outEnabled];
 }

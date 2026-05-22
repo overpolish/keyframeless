@@ -207,6 +207,9 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 - (void)_removeKPInLaneIdx:(NSInteger)laneIdx kpIdx:(NSInteger)kpIdx;
 - (void)_addAndOpenKPForLaneIdx:(NSInteger)laneIdx atFrac:(double)frac;
 - (void)_addKeyposeAtFrac:(double)frac forLabel:(NSString *)label;
+- (void)_removeKeyposeAtFrac:(double)frac forLabel:(NSString *)label;
+- (BOOL)_anySameGroupKeyposeAtFrac:(double)frac
+                             group:(nullable NSString *)group;
 - (NSInteger)_insertDuplicateOfKPInLaneLabel:(NSString *)label
                                        kpIdx:(NSInteger)kpIdx;
 - (BOOL)_replaceOnDropForLabel:(NSString *)label dupIdx:(NSInteger)dupIdx;

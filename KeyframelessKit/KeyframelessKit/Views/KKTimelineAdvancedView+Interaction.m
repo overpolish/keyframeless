@@ -442,6 +442,56 @@
   [self _openValuePopoverForLane:newLaneIdx kp:newKPIdx];
 }
 
+// Remove the keypose at `frac` for `label` (the value-popover "−" gutter).
+// Resolves the lane + keypose by time, then reuses removeKeyposeAtIndex:.
+- (void)_removeKeyposeAtFrac:(double)frac forLabel:(NSString *)label {
+  KKTimeline *t = [_timeline copy];
+  NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
+  BOOL changed = NO;
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+    if (![lanes[i].label isEqualToString:label])
+      continue;
+    KKLane *src = lanes[i];
+    NSInteger kpIdx = -1;
+    for (NSInteger k = 0; k < (NSInteger)src.keyposes.count; k++)
+      if (fabs(src.keyposes[k].time - frac) < 1.0e-4) {
+        kpIdx = k;
+        break;
+      }
+    if (kpIdx < 0)
+      return;
+    KKLane *nl = [src copy];
+    [nl removeKeyposeAtIndex:kpIdx];
+    lanes[i] = nl;
+    changed = YES;
+    break;
+  }
+  if (!changed)
+    return;
+  t.lanes = lanes;
+  _timeline = t;
+  _topLaneLabel = nil;
+  _topKPIdx = -1;
+  [self setNeedsDisplay:YES];
+  if (self.onTimelineMutated)
+    self.onTimelineMutated(t);
+}
+
+// Does any animatable lane in `group` still hold a keypose at `frac`? Drives
+// the value popover's refresh-vs-close decision after a remove.
+- (BOOL)_anySameGroupKeyposeAtFrac:(double)frac group:(NSString *)group {
+  for (KKLane *l in [self _animatableLanes]) {
+    BOOL sameGroup =
+        (l.groupKey == group) || [l.groupKey isEqualToString:group];
+    if (!sameGroup)
+      continue;
+    for (KKKeyPose *k in l.keyposes)
+      if (fabs(k.time - frac) < 1.0e-4)
+        return YES;
+  }
+  return NO;
+}
+
 - (void)_addKeyposeAtFrac:(double)frac forLabel:(NSString *)label {
   KKTimeline *t = [_timeline copy];
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];

@@ -558,18 +558,30 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
   if (!(_openContentPopover.isShown && _openStaticIsBoundary &&
         _openStaticView))
     return;
+  BOOL fracChanged = fabs(fraction - _openStaticBoundaryFraction) > 1e-6;
   KKSetBoundaryEditing(self.miniCanvasDelegate, YES, fraction);
   KKSetSuppressedHandles(self.miniCanvasDelegate, excludedLabels);
-  [_openStaticView rebindLanes:lanes];
+  // Full row rebuild (not just value rebind): the editable↔Animate split can
+  // change between fractions (navigate) or after add/remove, and the one-way
+  // applyExcludedLabels: swap can't restore an editable row on its own.
+  [_openStaticView rebuildRowsWithLanes:lanes excludedLabels:excludedLabels];
   [_openStaticView setHeaderDetail:[self _timeStringForFraction:fraction]];
   [_openStaticView setHeaderLinked:[self _anyLinkedKeyposeAtFraction:fraction]];
   _openStaticBoundaryFraction = fraction;
   _openStaticBoundaryLanes = [lanes copy];
   _openStaticBoundaryExcluded = [excludedLabels copy];
-  [self _publishBoundaryRequestForFraction:fraction];
+  // The render nudge writes an undoable param to force FCP to resolve the
+  // preview frame at a NEW boundary time. A same-fraction in-place rebuild
+  // (add / remove / undo-refresh) keeps the time, and the blob write already
+  // triggers a render — nudging here would add a phantom undo entry (cmd-Z
+  // would then need two presses). Only republish + nudge on a real time change
+  // (navigation between boundaries).
+  if (fracChanged) {
+    [self _publishBoundaryRequestForFraction:fraction];
+    if (self.onBoundaryPreviewNeedsRender)
+      self.onBoundaryPreviewNeedsRender();
+  }
   [self _refreshBoundaryPopoverNavEnabled];
-  if (self.onBoundaryPreviewNeedsRender)
-    self.onBoundaryPreviewNeedsRender();
 }
 
 - (NSString *)_timeStringForFraction:(double)frac {
@@ -641,6 +653,7 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
                                        (void (^)(NSString *,
                                                  NSArray<NSNumber *> *))onValue
                                  onAnimate:(void (^)(NSString *))onAnimate
+                                  onRemove:(void (^)(NSString *))onRemove
                                onDragBegin:(void (^)(void))onDragBegin
                                  onDragEnd:(void (^)(void))onDragEnd {
   if (lanes.count == 0 && excludedLabels.count == 0)
@@ -671,6 +684,7 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
                                      excludedLabels:excludedLabels
                                             onValue:onValue
                                           onAnimate:onAnimate
+                                           onRemove:onRemove
                                         onDragBegin:onDragBegin
                                           onDragEnd:onDragEnd];
     });
@@ -715,6 +729,9 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
           }
           onHandleValue:^(NSString *label, NSArray<NSNumber *> *values) {
             __strong typeof(weak) s = weak;
+            if (s)
+              s->_boundaryRedriveSuppressUntil =
+                  [NSDate timeIntervalSinceReferenceDate] + 0.4;
             if (dragging) {
               pendingLabel = label;
               pendingValues = values;
@@ -727,6 +744,10 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
               s.onStaticValueChanged(label, values);
           }
           onDragBegin:^{
+            __strong typeof(weak) s = weak;
+            if (s)
+              s->_boundaryRedriveSuppressUntil =
+                  [NSDate timeIntervalSinceReferenceDate] + 0.4;
             dragging = YES;
             if (onDragBegin)
               onDragBegin();
@@ -771,11 +792,34 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
     __strong typeof(weak) s = weak;
     return s ? [s _defaultValuesForLabel:l] : nil;
   }];
+  // Advanced tracks are per-property, so a missing row just means "no keypose
+  // at this time"; Basic shares one phase across properties, so there it's
+  // "excluded from this phase". Same widget, context-specific wording.
+  NSString *excludedMsg =
+      (_activeTab == 1) ? @"No keypose here" : @"Excluded from this phase";
   [staticView applyExcludedLabels:excludedLabels
+                          message:excludedMsg
                         onAnimate:^(NSString *label) {
+                          __strong typeof(weak) s = weak;
+                          if (s)
+                            s->_boundaryRedriveSuppressUntil =
+                                [NSDate timeIntervalSinceReferenceDate] + 0.4;
                           if (onAnimate)
                             onAnimate(label);
                         }];
+  // Advanced supplies onRemove → editable rows get a leading "−" gutter.
+  // Setting the handler then rebuilding once applies the gutter to the rows
+  // built at init (which had no handler yet).
+  if (onRemove) {
+    [staticView setRowRemoveHandler:^(NSString *label) {
+      __strong typeof(weak) s = weak;
+      if (s)
+        s->_boundaryRedriveSuppressUntil =
+            [NSDate timeIntervalSinceReferenceDate] + 0.4;
+      onRemove(label);
+    }];
+    [staticView rebuildRowsWithLanes:lanes excludedLabels:excludedLabels];
+  }
 
   NSPopover *popover = [self
       _showPopoverWithContent:staticView
@@ -820,6 +864,8 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
                            frequency:(double)frequency
                           partLabels:(NSArray<NSString *> *)partLabels
                           partStates:(NSArray<NSNumber *> *)partStates
+                       partRebuilder:
+                           (NSArray<NSNumber *> * (^)(void))partRebuilder
                              onCurve:(void (^)(KKIntervalCurve))onCurve
                          onIntensity:(void (^)(double))onIntensity
                          onFrequency:(void (^)(double))onFrequency
@@ -914,9 +960,20 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
     [container.heightAnchor constraintEqualToConstant:totalH],
   ]];
 
+  // Track the editor + a rebuilder so _refresh can push fresh participation
+  // pill states after an external mutation (cmd-Z) without reopening — same
+  // pattern as the hold-modulation popover.
+  _openGapEditor = edit;
+  _openGapRebuilder = [partRebuilder copy];
+  __weak typeof(self) weakClose = self;
   [self _showPopoverWithContent:container
                        fromView:anchor
                         onClose:^{
+                          __strong typeof(weakClose) sc = weakClose;
+                          if (!sc)
+                            return;
+                          sc->_openGapEditor = nil;
+                          sc->_openGapRebuilder = nil;
                         }];
 
   // Guide hook: same settle delay as the static-values popover so the

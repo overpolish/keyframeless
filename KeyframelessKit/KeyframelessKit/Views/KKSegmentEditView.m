@@ -588,6 +588,12 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
     _compoundBar.states = states;
 }
 
+- (void)applyParticipationStates:(NSArray<NSNumber *> *)states {
+  _partStates = [states copy];
+  if (_partBar && states.count == _partLabels.count)
+    _partBar.states = states;
+}
+
 - (void)setCurveType:(NSInteger)curveType {
   _curveType = curveType;
   _pills.selectedIndex = curveType;

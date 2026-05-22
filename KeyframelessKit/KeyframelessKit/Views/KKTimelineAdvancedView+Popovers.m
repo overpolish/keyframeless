@@ -59,16 +59,23 @@
         match = k;
         break;
       }
-    if (!match) {
+    // A same-group lane with no co-time keypose still gets a (base) display
+    // row so the static popover can swap it to an "Animate" row IN PLACE,
+    // preserving property order — matching Basic. Without a base row,
+    // applyExcludedLabels: no-ops (it only transforms an existing row), so
+    // the property silently vanished from the popover.
+    NSArray<NSNumber *> *vals = match ? match.values
+                                      : (KKTimelineLaneValueAtFraction(l, frac)
+                                             ?: l.keyposes.firstObject.values);
+    if (!match)
       [excludedLabels addObject:l.label];
-      continue;
-    }
     KKLane *display = [KKLane laneWithLabel:l.label];
     display.valueType = l.valueType;
     display.componentMin = l.componentMin;
     display.componentMax = l.componentMax;
     display.componentUnits = l.componentUnits;
-    display.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:match.values] ];
+    display.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
+                                            values:vals ?: @[ @0.0 ]] ];
     [displayLanes addObject:display];
   }
   if (displayLanes.count == 0 && excludedLabels.count == 0)
@@ -87,7 +94,26 @@
     __strong typeof(weak) s = weak;
     if (!s)
       return;
-    [s _addKeyposeAtFrac:s->_currentPopoverFrac forLabel:lab];
+    double f = s->_currentPopoverFrac;
+    [s _addKeyposeAtFrac:f forLabel:lab];
+    // Re-drive the popover so the just-added lane flips from an Animate row to
+    // an editable row in place (the present path detects it's open → rebuilds
+    // rows, no reopen / canvas blink).
+    [s requestValuePopoverAtFraction:f];
+  };
+  NSString *capGroup = groupKey;
+  void (^onRemove)(NSString *) = ^(NSString *lab) {
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return;
+    double f = s->_currentPopoverFrac;
+    [s _removeKeyposeAtFrac:f forLabel:lab];
+    // Other same-group lanes still keyed here → refresh in place so the
+    // removed row flips back to "No keypose here"; nothing left → close.
+    if ([s _anySameGroupKeyposeAtFrac:f group:capGroup])
+      [s requestValuePopoverAtFraction:f];
+    else if (s.onRequestClosePopover)
+      s.onRequestClosePopover();
   };
   void (^onDragBegin)(void) = ^{
     __strong typeof(weak) s = weak;
@@ -100,7 +126,7 @@
       s.onDragEnd();
   };
   self.onValuePopover(_popoverAnchor, displayLanes, frac, excludedLabels,
-                      onValue, onAnimate, onDragBegin, onDragEnd);
+                      onValue, onAnimate, onRemove, onDragBegin, onDragEnd);
 }
 
 - (void)requestValuePopoverAtFraction:(double)fraction {
@@ -366,8 +392,8 @@
                                 }];
   };
   self.onGapPopover(_popoverAnchor, descending, a.time, b.time, iv.curve,
-                    iv.intensity, iv.frequency, @[], @[], onCurve, onIntensity,
-                    onFrequency,
+                    iv.intensity, iv.frequency, @[], @[], nil, onCurve,
+                    onIntensity, onFrequency,
                     ^(NSInteger _, BOOL __){
                     },
                     onDragBegin, onDragEnd);

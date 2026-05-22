@@ -186,8 +186,8 @@
       ^(NSView *anchor, NSArray<KKLane *> *displayLanes, double frac,
         NSArray<NSString *> *excludedLabels,
         void (^onValue)(NSString *, NSArray<NSNumber *> *),
-        void (^onAnimate)(NSString *), void (^onDragBegin)(void),
-        void (^onDragEnd)(void)) {
+        void (^onAnimate)(NSString *), void (^onRemove)(NSString *),
+        void (^onDragBegin)(void), void (^onDragEnd)(void)) {
         __strong typeof(weakSelf) s = weakSelf;
         [s _presentBoundaryValuePopoverFromAnchor:anchor
                                      displayLanes:displayLanes
@@ -195,13 +195,20 @@
                                    excludedLabels:excludedLabels
                                           onValue:onValue
                                         onAnimate:onAnimate
+                                         onRemove:onRemove
                                       onDragBegin:onDragBegin
                                         onDragEnd:onDragEnd];
       };
+  _basicGraph.onRequestClosePopover = ^{
+    __strong typeof(weakSelf) s = weakSelf;
+    if (s->_openContentPopover.isShown)
+      [s->_openContentPopover close];
+  };
   _basicGraph.onGapPopover = ^(
       NSView *anchor, BOOL animateOut, double startFraction, double endFraction,
       KKIntervalCurve curve, double intensity, double frequency,
       NSArray<NSString *> *partLabels, NSArray<NSNumber *> *partStates,
+      NSArray<NSNumber *> * (^partRebuilder)(void),
       void (^onCurve)(KKIntervalCurve), void (^onIntensity)(double),
       void (^onFrequency)(double), void (^onParticipation)(NSInteger, BOOL),
       void (^onDragBegin)(void), void (^onDragEnd)(void)) {
@@ -215,6 +222,7 @@
                           frequency:frequency
                          partLabels:partLabels
                          partStates:partStates
+                      partRebuilder:partRebuilder
                             onCurve:onCurve
                         onIntensity:onIntensity
                         onFrequency:onFrequency
@@ -286,6 +294,7 @@
       NSView *anchor, BOOL animateOut, double startFraction, double endFraction,
       KKIntervalCurve curve, double intensity, double frequency,
       NSArray<NSString *> *partLabels, NSArray<NSNumber *> *partStates,
+      NSArray<NSNumber *> * (^partRebuilder)(void),
       void (^onCurve)(KKIntervalCurve), void (^onIntensity)(double),
       void (^onFrequency)(double), void (^onParticipation)(NSInteger, BOOL),
       void (^onDragBegin)(void), void (^onDragEnd)(void)) {
@@ -299,6 +308,7 @@
                           frequency:frequency
                          partLabels:partLabels
                          partStates:partStates
+                      partRebuilder:partRebuilder
                             onCurve:onCurve
                         onIntensity:onIntensity
                         onFrequency:onFrequency
@@ -343,8 +353,8 @@
       ^(NSView *anchor, NSArray<KKLane *> *displayLanes, double frac,
         NSArray<NSString *> *excludedLabels,
         void (^onValue)(NSString *, NSArray<NSNumber *> *),
-        void (^onAnimate)(NSString *), void (^onDragBegin)(void),
-        void (^onDragEnd)(void)) {
+        void (^onAnimate)(NSString *), void (^onRemove)(NSString *),
+        void (^onDragBegin)(void), void (^onDragEnd)(void)) {
         __strong typeof(weakSelf) s = weakSelf;
         [s _presentBoundaryValuePopoverFromAnchor:anchor
                                      displayLanes:displayLanes
@@ -352,9 +362,15 @@
                                    excludedLabels:excludedLabels
                                           onValue:onValue
                                         onAnimate:onAnimate
+                                         onRemove:onRemove
                                       onDragBegin:onDragBegin
                                         onDragEnd:onDragEnd];
       };
+  _advancedGraph.onRequestClosePopover = ^{
+    __strong typeof(weakSelf) s = weakSelf;
+    if (s->_openContentPopover.isShown)
+      [s->_openContentPopover close];
+  };
 
   _basicGraph.onHoldModulationPopover =
       ^(NSView *anchor, double startFraction, double endFraction,
@@ -431,6 +447,13 @@
     if (fresh)
       [_openHoldModEditor applyParticipationCompoundStates:fresh];
   }
+  // Same for the In/Out curve (gap) popover's applies-to pills, so cmd-Z keeps
+  // them in sync without the user closing and reopening the popover.
+  if (_openGapEditor && _openGapRebuilder) {
+    NSArray<NSNumber *> *fresh = _openGapRebuilder();
+    if (fresh)
+      [_openGapEditor applyParticipationStates:fresh];
+  }
 
   NSMutableArray<NSString *> *opted = [NSMutableArray array];
   for (KKLane *tmpl in _availableLanes)
@@ -446,6 +469,24 @@
   // made Radius (the un-opted lane) replace Crop after a crop edit.
   if (_openStaticView && !_openStaticIsBoundary)
     [_openStaticView updateUnoptedLanes:[self _unoptedLanes]];
+
+  // A boundary/value popover is built from a snapshot at open; an external
+  // timeline change (cmd-Z / redo) reaches the graphs but not the popover, so
+  // re-drive it from the active graph at its open fraction — the active/Animate
+  // row split and values rebuild from the new state (e.g. cmd-Z re-adding a
+  // keypose flips its row from "+ No keypose here" back to editable).
+  // Suppressed briefly after a popover edit so the host's echo write doesn't
+  // rebuild rows mid-interaction (add/remove already refresh synchronously).
+  if (_openStaticView && _openStaticIsBoundary && _openContentPopover.isShown &&
+      anyOptedIn &&
+      [NSDate timeIntervalSinceReferenceDate] >=
+          _boundaryRedriveSuppressUntil) {
+    double f = _openStaticBoundaryFraction;
+    if (_activeTab == 1)
+      [_advancedGraph requestValuePopoverAtFraction:f];
+    else
+      [_basicGraph requestValuePopoverAtFraction:f];
+  }
 }
 
 - (nullable KKLane *)_laneForLabel:(NSString *)label {

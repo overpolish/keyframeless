@@ -96,8 +96,12 @@ NS_ASSUME_NONNULL_BEGIN
     (NSView *anchorView, NSArray<KKLane *> *displayLanes,
      double previewFraction, NSArray<NSString *> *excludedLabels,
      void (^onValue)(NSString *label, NSArray<NSNumber *> *values),
-     void (^onAnimate)(NSString *label), void (^onValueDragBegin)(void),
-     void (^onValueDragEnd)(void));
+     void (^onAnimate)(NSString *label), void (^onRemove)(NSString *label),
+     void (^onValueDragBegin)(void), void (^onValueDragEnd)(void));
+
+/// Asked by the value popover when removing the last keypose at a time leaves
+/// nothing left to edit there — the host closes the open popover.
+@property(nonatomic, copy, nullable) void (^onRequestClosePopover)(void);
 
 /// Single-click on the gap between two pills in a lane row → request the
 /// per-interval curve/intensity/frequency popover for that one interval.
@@ -109,6 +113,7 @@ NS_ASSUME_NONNULL_BEGIN
      double endFraction, KKIntervalCurve curve, double intensity,
      double frequency, NSArray<NSString *> *participantLabels,
      NSArray<NSNumber *> *participantStates,
+     NSArray<NSNumber *> * (^participantRebuilder)(void),
      void (^onCurve)(KKIntervalCurve curve), void (^onIntensity)(double value),
      void (^onFrequency)(double value),
      void (^onParticipation)(NSInteger laneIndex, BOOL on),

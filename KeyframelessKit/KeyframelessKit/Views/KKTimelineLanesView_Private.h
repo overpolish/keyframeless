@@ -64,7 +64,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// Plugin template default for this lane. When set, a small reset button
 /// right of the label restores the value to it (commits like a field edit).
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *defaultValues;
-- (instancetype)initWithLane:(KKLane *)lane;
+/// When `showsRemove` is YES the row carries a leading "−" gutter button that
+/// fires this; the host removes the keypose at this time (Advanced only).
+@property(nonatomic, copy, nullable) void (^onRemove)(void);
+- (instancetype)initWithLane:(KKLane *)lane showsRemove:(BOOL)showsRemove;
 /// The KKSliderView (Float rows), for a guide that drives the slider.
 - (nullable NSView *)guideSliderView;
 /// The number field for component `i` (Float: 0; Crop: 0..3 = W,H,X,Y), for
@@ -132,11 +135,23 @@ NS_ASSUME_NONNULL_BEGIN
 /// with the graph keeping its onValue/onAnimate closures reading a
 /// mutable `_currentPopoverFrac` ivar so writes target the new KP.
 - (void)rebindLanes:(NSArray<KKLane *> *)lanes;
-/// Append non-editable "excluded from this phase" rows (label + message +
-/// an Animate button → onAnimate(label)) and grow the view to fit. Called
-/// before the popover is shown so it sizes correctly.
+/// Swap the listed labels' rows for non-editable "addable" rows (label +
+/// `message` + an Animate button → onAnimate(label)), in place so property
+/// order is preserved. `message` is context-specific: Basic uses phase
+/// wording, Advanced "No keypose here". Called before the popover is shown.
 - (void)applyExcludedLabels:(NSArray<NSString *> *)labels
+                    message:(NSString *)message
                   onAnimate:(void (^)(NSString *label))onAnimate;
+/// Rebuild the row stack in place (mini-canvas/header untouched) from a fresh
+/// lane set + excluded labels, reusing the stored defaults provider / excluded
+/// message / onAnimate. Used by the in-place update path so add/remove/navigate
+/// re-render rows without reopening (which blinks the MTKView).
+- (void)rebuildRowsWithLanes:(NSArray<KKLane *> *)lanes
+              excludedLabels:(NSArray<NSString *> *)excluded;
+/// Set (Advanced only) to give editable rows a leading "−" remove button that
+/// fires `handler(label)`. Must be set before rows are (re)built; the present
+/// path rebuilds once after setting it. nil = no remove gutter.
+- (void)setRowRemoveHandler:(void (^)(NSString *label))handler;
 /// The value-editor row (slider/fields) for `label`, or nil. Lets a guide
 /// spotlight a specific constant's control.
 - (nullable NSView *)rowViewForLabel:(NSString *)label;

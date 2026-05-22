@@ -73,12 +73,20 @@ NS_ASSUME_NONNULL_BEGIN
 /// this boundary's phase (e.g. clicking In-start while a property has In
 /// off) — shown as a message row with an "Animate" button that calls
 /// `onAnimate(label)` to opt that property back into the phase.
+/// `onRemove(label)` (In/Out boundaries only; nil for Hold) removes that
+/// property from this phase's "applies to" — same as unticking it in the gap
+/// popover. Removing the last participant turns the phase off (the projection
+/// derives In/Out enabled from participation) and closes the popover.
 @property(nonatomic, copy, nullable) void (^onBoundaryValuePopover)
     (NSView *anchorView, NSArray<KKLane *> *displayLanes,
      double previewFraction, NSArray<NSString *> *excludedLabels,
      void (^onValue)(NSString *label, NSArray<NSNumber *> *values),
-     void (^onAnimate)(NSString *label), void (^onValueDragBegin)(void),
-     void (^onValueDragEnd)(void));
+     void (^onAnimate)(NSString *label), void (^onRemove)(NSString *label),
+     void (^onValueDragBegin)(void), void (^onValueDragEnd)(void));
+
+/// Asked when removing the last participant from a phase leaves the boundary
+/// gone — the host closes the open popover.
+@property(nonatomic, copy, nullable) void (^onRequestClosePopover)(void);
 
 /// In/Out gap click → request the shared easing popover for that phase. The
 /// host builds a KKSegmentEditView (Transition kind), seeds it from `curve` /
@@ -95,6 +103,7 @@ NS_ASSUME_NONNULL_BEGIN
      double endFraction, KKIntervalCurve curve, double intensity,
      double frequency, NSArray<NSString *> *participantLabels,
      NSArray<NSNumber *> *participantStates,
+     NSArray<NSNumber *> * (^participantRebuilder)(void),
      void (^onCurve)(KKIntervalCurve curve), void (^onIntensity)(double value),
      void (^onFrequency)(double value),
      void (^onParticipation)(NSInteger laneIndex, BOOL on),

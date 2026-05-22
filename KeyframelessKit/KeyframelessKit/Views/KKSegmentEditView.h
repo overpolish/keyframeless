@@ -88,6 +88,9 @@ typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
 - (void)applyParticipationCompoundStates:
     (NSArray<NSArray<NSNumber *> *> *)states;
 
+/// Plain (non-compound) participation pill variant of the above.
+- (void)applyParticipationStates:(NSArray<NSNumber *> *)states;
+
 /// Computed height required for the view's content. Caller sizes the
 /// containing popover accordingly.
 + (CGFloat)contentHeightForKind:(KKSegmentEditKind)kind

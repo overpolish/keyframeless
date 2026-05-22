@@ -48,16 +48,20 @@
   double inten = isOut ? p.outIntensity : p.inIntensity;
   double freq = isOut ? p.outFrequency : p.inFrequency;
 
-  // Per-property participation in THIS phase: each animatable lane + whether
-  // it currently has the In (t=0) / Out (t=1) keypose.
+  // Per-property "applies to" in THIS phase: a lane applies when it has the
+  // phase keypose AND that interval isn't flat (holdsFlat). Toggling a checkbox
+  // flips holdsFlat (non-destructive) via _setLaneParticipation.
   NSMutableArray<NSString *> *partLabels = [NSMutableArray array];
   NSMutableArray<NSNumber *> *partStates = [NSMutableArray array];
   for (KKLane *lane in _timeline.lanes) {
     if (!lane.enabled || lane.keyposes.count < 2)
       continue;
     KKHoldShape s = KKShapeOfLane(lane);
+    BOOL applies =
+        isOut ? (s.outEnabled && !lane.keyposes[s.holdEnd].outgoing.holdsFlat)
+              : (s.inEnabled && !lane.keyposes.firstObject.outgoing.holdsFlat);
     [partLabels addObject:lane.label];
-    [partStates addObject:@(isOut ? s.outEnabled : s.inEnabled)];
+    [partStates addObject:@(applies)];
   }
 
   __weak typeof(self) weak = self;
@@ -65,6 +69,26 @@
   self.onGapPopover(
       _popoverAnchor, isOut, isOut ? p.outStartFrac : 0.0,
       isOut ? 1.0 : p.inEndFrac, cur, inten, freq, partLabels, partStates,
+      ^NSArray<NSNumber *> * {
+        // Recompute applies-to states from the current timeline so the host
+        // can refresh the pills after cmd-Z (same lane order as partLabels).
+        __strong typeof(weak) s = weak;
+        if (!s)
+          return nil;
+        NSMutableArray<NSNumber *> *out = [NSMutableArray array];
+        for (KKLane *lane in s->_timeline.lanes) {
+          if (!lane.enabled || lane.keyposes.count < 2)
+            continue;
+          KKHoldShape sh = KKShapeOfLane(lane);
+          BOOL ap = (capSec == KKBasicSectionOut)
+                        ? (sh.outEnabled &&
+                           !lane.keyposes[sh.holdEnd].outgoing.holdsFlat)
+                        : (sh.inEnabled &&
+                           !lane.keyposes.firstObject.outgoing.holdsFlat);
+          [out addObject:@(ap)];
+        }
+        return out;
+      },
       ^(KKIntervalCurve c2) {
         [weak _mutateInterval:capSec
                          with:^(KKInterval *iv) {
@@ -84,21 +108,60 @@
                          }];
       },
       ^(NSInteger laneIndex, BOOL on) {
-        if (laneIndex >= 0 && laneIndex < (NSInteger)partLabels.count)
-          [weak _setLaneParticipation:on
-                             forLabel:partLabels[laneIndex]
-                              section:capSec];
+        __strong typeof(weak) s = weak;
+        if (!s || laneIndex < 0 || laneIndex >= (NSInteger)partLabels.count)
+          return;
+        [s _setLaneParticipation:on
+                        forLabel:partLabels[laneIndex]
+                         section:capSec];
+        // Unchecking the last property empties the phase → the curve popover
+        // has nothing left to edit, so close it (mirrors the keypose popover).
+        KKBasicProj pp = [s _projection];
+        BOOL phaseOn =
+            (capSec == KKBasicSectionOut) ? pp.outEnabled : pp.inEnabled;
+        if (!phaseOn && s.onRequestClosePopover)
+          s.onRequestClosePopover();
       },
       self.onDragBegin, self.onDragEnd);
 }
 
-// Per-lane phase participation: rebuild just this lane so it gains/loses its
-// In (t=0) or Out (t=1) keypose, keeping its always-present Hold pair, the
-// other endpoint, and all intervals (via _rebuiltLane:). Uses the lane's own
-// stored Hold-pair times so its boundaries are preserved.
+// Per-lane phase "applies to" — NON-DESTRUCTIVE. Turning a phase off for one
+// property just flips that property's In/Out interval to holdsFlat (it sits at
+// the Hold value through the phase, no animation); the keypose and its stored
+// value are kept, so turning it back on restores the exact animation. Keyposes
+// are never moved or removed (moving them is what corrupted the shared boundary
+// times before). Legacy fallback: if a lane somehow lacks the phase keypose
+// when enabling, build it once via _rebuiltLane:.
 - (void)_setLaneParticipation:(BOOL)on
                      forLabel:(NSString *)label
                       section:(KKBasicSection)sec {
+  // Removing the LAST applier empties the phase: disable it structurally
+  // (drop every lane's start keypose for that phase) instead of leaving a
+  // lane flat, so the off state matches the master checkbox. One mutation.
+  if (!on) {
+    BOOL othersApply = NO;
+    for (KKLane *lane in _timeline.lanes) {
+      if (!lane.enabled || lane.keyposes.count < 2 ||
+          [lane.label isEqualToString:label])
+        continue;
+      KKHoldShape s = KKShapeOfLane(lane);
+      BOOL applies =
+          (sec == KKBasicSectionOut)
+              ? (s.outEnabled && !lane.keyposes[s.holdEnd].outgoing.holdsFlat)
+              : (s.inEnabled && !lane.keyposes.firstObject.outgoing.holdsFlat);
+      if (applies) {
+        othersApply = YES;
+        break;
+      }
+    }
+    if (!othersApply) {
+      if (sec == KKBasicSectionOut)
+        [self _setOutEnabled:NO];
+      else
+        [self _setInEnabled:NO];
+      return;
+    }
+  }
   KKTimeline *t = [_timeline copy];
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
@@ -107,11 +170,31 @@
         lane.keyposes.count < 2)
       continue;
     KKHoldShape s = KKShapeOfLane(lane);
-    BOOL inOn = (sec == KKBasicSectionOut) ? s.inEnabled : on;
-    BOOL outOn = (sec == KKBasicSectionOut) ? on : s.outEnabled;
-    double tIn = lane.keyposes[s.holdStart].time;
-    double tOut = lane.keyposes[s.holdEnd].time;
-    lanes[i] = [self _rebuiltLane:lane inOn:inOn outOn:outOn tIn:tIn tOut:tOut];
+    BOOL hasPhase = (sec == KKBasicSectionOut) ? s.outEnabled : s.inEnabled;
+    if (hasPhase) {
+      // Flip the phase interval's flat flag, leaving every keypose in place.
+      NSInteger ivIdx = (sec == KKBasicSectionOut) ? s.holdEnd : 0;
+      KKLane *nl = [lane copy];
+      NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];
+      KKKeyPose *kp = [kps[ivIdx] copy];
+      KKInterval *iv = [kp.outgoing copy] ?: [[KKInterval alloc] init];
+      iv.holdsFlat = !on;
+      kp.outgoing = iv;
+      kps[ivIdx] = kp;
+      nl.keyposes = kps;
+      lanes[i] = nl;
+    } else if (on) {
+      // Legacy data with no keypose for this phase yet → create it (animating).
+      BOOL inOn = (sec == KKBasicSectionOut) ? s.inEnabled : YES;
+      BOOL outOn = (sec == KKBasicSectionOut) ? YES : s.outEnabled;
+      double tIn = lane.keyposes[s.holdStart].time;
+      double tOut = lane.keyposes[s.holdEnd].time;
+      lanes[i] = [self _rebuiltLane:lane
+                               inOn:inOn
+                              outOn:outOn
+                                tIn:tIn
+                               tOut:tOut];
+    }
     break;
   }
   t.lanes = lanes;
@@ -165,7 +248,7 @@
     self.onGapPopover(
         _popoverAnchor, NO, p.inEndFrac, p.outStartFrac,
         (KKIntervalCurve)p.holdCurve, p.holdIntensity, p.holdFrequency,
-        holdLabels, driftStates,
+        holdLabels, driftStates, nil,
         ^(KKIntervalCurve c2) {
           [weak _mutateInterval:KKBasicSectionHold
                            with:^(KKInterval *iv) {
@@ -606,16 +689,21 @@
   for (KKLane *lane in _timeline.lanes) {
     if (!lane.enabled)
       continue;
-    // A property that doesn't participate in this boundary's phase has no
-    // keypose here — flag it excluded (its row becomes a message + Animate,
-    // in place, so the original property order is preserved). Hold always
-    // participates (the Hold pair always exists).
+    // A property "doesn't apply to" this boundary's phase when it has no
+    // keypose there OR its phase interval is flat (holdsFlat) — either way it
+    // sits at Hold through the phase. Flag it excluded (row becomes a message +
+    // Animate, in place, preserving property order). Hold always participates.
     if (lane.keyposes.count >= 2) {
       KKHoldShape sh = KKShapeOfLane(lane);
-      BOOL participates =
-          boundary == KKBasicBoundaryInStart
-              ? sh.inEnabled
-              : (boundary == KKBasicBoundaryOutEnd ? sh.outEnabled : YES);
+      BOOL participates;
+      if (boundary == KKBasicBoundaryInStart)
+        participates =
+            sh.inEnabled && !lane.keyposes.firstObject.outgoing.holdsFlat;
+      else if (boundary == KKBasicBoundaryOutEnd)
+        participates =
+            sh.outEnabled && !lane.keyposes[sh.holdEnd].outgoing.holdsFlat;
+      else
+        participates = YES;
       if (!participates)
         [excludedLabels addObject:lane.label];
     }
@@ -674,6 +762,30 @@
                                                         : KKBasicSectionOut;
   _curDiamond = d;
   __weak typeof(self) weak = self;
+  // Remove only applies to In/Out boundaries (their "applies to" set). Hold
+  // always participates, so the Hold popover has no − gutter (onRemove nil).
+  BOOL isInOut =
+      (boundary == KKBasicBoundaryInStart || boundary == KKBasicBoundaryOutEnd);
+  void (^onRemove)(NSString *) =
+      isInOut ? ^(NSString *label) {
+        __strong typeof(weak) s = weak;
+        if (!s)
+          return;
+        // Drop the property from this phase's applies-to (same as unticking
+        // it in the gap popover). The projection derives In/Out enabled from
+        // participation, so removing the last one turns the phase off — then
+        // the boundary is gone and the popover closes.
+        [s _setLaneParticipation:NO forLabel:label section:s->_curAnimateSec];
+        KKBasicProj pp = [s _projection];
+        BOOL phaseStillOn = (s->_curAnimateSec == KKBasicSectionOut)
+                                ? pp.outEnabled
+                                : pp.inEnabled;
+        if (phaseStillOn)
+          [s _openBoundaryPopoverForDiamond:s->_curDiamond];
+        else if (s.onRequestClosePopover)
+          s.onRequestClosePopover();
+      }
+              : nil;
   self.onBoundaryValuePopover(
       _popoverAnchor, displayLanes, frac, excludedLabels,
       ^(NSString *label, NSArray<NSNumber *> *values) {
@@ -694,7 +806,7 @@
         [s _setLaneParticipation:YES forLabel:label section:s->_curAnimateSec];
         [s _openBoundaryPopoverForDiamond:s->_curDiamond];
       },
-      self.onDragBegin, self.onDragEnd);
+      onRemove, self.onDragBegin, self.onDragEnd);
 }
 
 - (void)requestValuePopoverAtFraction:(double)fraction {

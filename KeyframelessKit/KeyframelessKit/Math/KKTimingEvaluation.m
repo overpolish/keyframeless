@@ -197,10 +197,16 @@ static NSArray<NSNumber *> *KKLaneRawValueAtFraction(KKLane *lane,
     return nil;
   if (kps.count == 1)
     return kps[0].values;
+  // Endpoint clamps must respect a flat first/last interval: if In is disabled
+  // (first interval holdsFlat) the lane sits at the Hold value even at t≤0, so
+  // clamp to the Hold-side keypose, not the (preserved) In-start value. Same at
+  // the tail for a disabled Out.
   if (frac <= kps.firstObject.time)
-    return kps.firstObject.values;
+    return (kps.firstObject.outgoing.holdsFlat) ? kps[1].values
+                                                : kps.firstObject.values;
   if (frac >= kps.lastObject.time)
-    return kps.lastObject.values;
+    return (kps[kps.count - 2].outgoing.holdsFlat) ? kps[kps.count - 2].values
+                                                   : kps.lastObject.values;
 
   KKKeyPose *a = kps.firstObject;
   KKKeyPose *b = kps[1];
@@ -217,6 +223,11 @@ static NSArray<NSNumber *> *KKLaneRawValueAtFraction(KKLane *lane,
   localT = MAX(0.0, MIN(1.0, localT));
 
   KKInterval *iv = a.outgoing;
+  // A flat interval contributes no motion: hold at the Hold-side value (the
+  // end keypose for the first/In interval, the start keypose for the last/Out
+  // interval). Both keyposes' values stay stored so re-enabling restores them.
+  if (iv && iv.holdsFlat)
+    return (a == kps.firstObject) ? b.values : a.values;
   double easedT = iv ? KKApplyEasing(localT, (KKEasingCurve)iv.curve,
                                      iv.intensity, iv.frequency)
                      : localT;

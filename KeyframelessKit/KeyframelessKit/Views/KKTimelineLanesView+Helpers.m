@@ -378,6 +378,23 @@ static const CGFloat kSuffixSlotW = 17.0;
 }
 @end
 
+// Small borderless SF-symbol button for the leading gutter (− remove / + add).
+// Template image → tints with contentTintColor.
+static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
+                                      NSColor *tint) {
+  NSImage *img = [NSImage imageWithSystemSymbolName:symbol
+                           accessibilityDescription:nil];
+  NSButton *b = [NSButton buttonWithImage:img ?: [[NSImage alloc] init]
+                                   target:target
+                                   action:action];
+  b.translatesAutoresizingMaskIntoConstraints = NO;
+  b.bordered = NO;
+  b.bezelStyle = NSBezelStyleShadowlessSquare;
+  b.imageScaling = NSImageScaleProportionallyDown;
+  b.contentTintColor = tint;
+  return b;
+}
+
 @implementation _KKStaticValueRow {
   KKLaneValueType _valueType;
   NSArray<NSNumber *> *_cmin;
@@ -387,6 +404,7 @@ static const CGFloat kSuffixSlotW = 17.0;
   NSArray<NSTextField *> *_fields;     // Float: 1; Crop: 4 (w,h,x,y)
   NSMutableArray<NSNumber *> *_values; // normalized, authoritative
   NSButton *_reset;                    // reset-to-default, right of the label
+  NSButton *_removeBtn;                // leading "−" gutter (Advanced only)
   NSArray<NSNumber *> *_defaultValues;
 }
 
@@ -417,6 +435,12 @@ static const CGFloat kSuffixSlotW = 17.0;
   [self.window makeFirstResponder:nil];
   if (_defaultValues.count)
     [self _setValues:_defaultValues emit:YES]; // commits like a field edit
+}
+
+- (void)_removeTapped:(id)sender {
+  [self.window makeFirstResponder:nil];
+  if (self.onRemove)
+    self.onRemove();
 }
 
 // Display = stored(normalized) × scale; stored = entered ÷ scale. Lets the
@@ -464,7 +488,7 @@ static const CGFloat kSuffixSlotW = 17.0;
   return [NSString stringWithFormat:(intFmt ? @"%.0f" : @"%.2f"), dv];
 }
 
-- (instancetype)initWithLane:(KKLane *)lane {
+- (instancetype)initWithLane:(KKLane *)lane showsRemove:(BOOL)showsRemove {
   CGFloat h = [_KKStaticValueRow heightForLane:lane];
   self = [super initWithFrame:NSMakeRect(0, 0, kCanvasPopoverW, h)];
   if (!self)
@@ -477,6 +501,26 @@ static const CGFloat kSuffixSlotW = 17.0;
 
   NSTextField *title = _KKMakeCaption(lane.label);
   [self addSubview:title];
+
+  // Leading gutter: the "−" remove button (Advanced keypose popover only). When
+  // present the label tucks in beside it; otherwise it keeps the normal inset.
+  NSLayoutXAxisAnchor *titleLead = self.leadingAnchor;
+  CGFloat titleLeadInset = KKPaddingLG;
+  if (showsRemove) {
+    _removeBtn = _KKGutterGlyphButton(
+        @"minus", self, @selector(_removeTapped:),
+        [[NSColor inspectorLabel] colorWithAlphaComponent:0.55]);
+    [self addSubview:_removeBtn];
+    [NSLayoutConstraint activateConstraints:@[
+      [_removeBtn.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                               constant:KKPaddingMD],
+      [_removeBtn.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [_removeBtn.widthAnchor constraintEqualToConstant:15.0],
+      [_removeBtn.heightAnchor constraintEqualToConstant:15.0],
+    ]];
+    titleLead = _removeBtn.trailingAnchor;
+    titleLeadInset = KKPaddingSM;
+  }
 
   _reset = KKResetToDefaultButton(self, @selector(_resetTapped:));
   [self addSubview:_reset];
@@ -522,8 +566,8 @@ static const CGFloat kSuffixSlotW = 17.0;
     hs.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:hs];
     [NSLayoutConstraint activateConstraints:@[
-      [title.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
-                                          constant:KKPaddingLG],
+      [title.leadingAnchor constraintEqualToAnchor:titleLead
+                                          constant:titleLeadInset],
       [title.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
       // Pushed to the right, hugging the trailing edge (like the radius
       // field) rather than sitting right after the label.
@@ -563,8 +607,8 @@ static const CGFloat kSuffixSlotW = 17.0;
     [self addSubview:_slider];
     [self addSubview:cell];
     [NSLayoutConstraint activateConstraints:@[
-      [title.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
-                                          constant:KKPaddingLG],
+      [title.leadingAnchor constraintEqualToAnchor:titleLead
+                                          constant:titleLeadInset],
       [title.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
       [title.widthAnchor constraintEqualToConstant:54.0],
       [_slider.leadingAnchor constraintEqualToAnchor:title.trailingAnchor
@@ -709,7 +753,9 @@ static const CGFloat kSuffixSlotW = 17.0;
 // in (so there's no detour to the gap popover).
 @interface _KKExcludedRow : NSView
 @property(nonatomic, copy) void (^onAnimate)(void);
-- (instancetype)initWithLabel:(NSString *)label;
+- (instancetype)initWithLabel:(NSString *)label
+                      message:(NSString *)message
+                       gutter:(BOOL)gutter;
 @end
 
 @implementation _KKExcludedRow
@@ -719,13 +765,43 @@ static const CGFloat kSuffixSlotW = 17.0;
 - (NSSize)intrinsicContentSize {
   return NSMakeSize(NSViewNoIntrinsicMetric, kFloatRowH);
 }
-- (instancetype)initWithLabel:(NSString *)label {
+- (instancetype)initWithLabel:(NSString *)label
+                      message:(NSString *)message
+                       gutter:(BOOL)gutter {
   self = [super initWithFrame:NSMakeRect(0, 0, kCanvasPopoverW, kFloatRowH)];
   if (!self)
     return nil;
   NSTextField *title = _KKMakeCaption(label);
-  NSTextField *msg = _KKMakeCaption(@"Excluded from this phase");
+  NSTextField *msg = _KKMakeCaption(message);
   msg.textColor = [[NSColor inspectorLabel] colorWithAlphaComponent:0.4];
+
+  if (gutter) {
+    // Advanced: a leading "+" in the same gutter as the editable row's "−", so
+    // adding/removing a keypose swaps the glyph in place with no row jump. The
+    // muted message hugs the trailing edge.
+    NSButton *add = _KKGutterGlyphButton(@"plus", self, @selector(_tap:),
+                                         [NSColor accentMatchingHost]);
+    for (NSView *v in @[ add, title, msg ])
+      [self addSubview:v];
+    [NSLayoutConstraint activateConstraints:@[
+      [add.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                        constant:KKPaddingMD],
+      [add.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [add.widthAnchor constraintEqualToConstant:15.0],
+      [add.heightAnchor constraintEqualToConstant:15.0],
+      [title.leadingAnchor constraintEqualToAnchor:add.trailingAnchor
+                                          constant:KKPaddingSM],
+      [title.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [msg.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                         constant:-KKPaddingLG],
+      [msg.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [msg.leadingAnchor
+          constraintGreaterThanOrEqualToAnchor:title.trailingAnchor
+                                      constant:KKPaddingSM],
+    ]];
+    return self;
+  }
+
   NSButton *btn = [NSButton buttonWithTitle:@"Animate"
                                      target:self
                                      action:@selector(_tap:)];
@@ -779,6 +855,20 @@ static const CGFloat kSuffixSlotW = 17.0;
   void (^_onNavigate)(NSInteger);
   KKPopoverHeaderView *_header;
   BOOL _hasHeader;
+  // Stored so the in-place row rebuild (add/remove/navigate) can re-derive
+  // rows without the popover reopening: provider feeds reset defaults,
+  // message/onAnimate drive the "Animate" (addable) rows.
+  NSArray<NSNumber *> * (^_defaultsProvider)(NSString *);
+  NSString *_excludedMessage;
+  void (^_onAnimate)(NSString *);
+  // Set (Advanced only) → editable rows gain a leading "−" remove button
+  // that calls this with the row's label; nil → no remove gutter (Basic /
+  // constants). Stored so the in-place rebuild keeps the gutter.
+  void (^_rowRemoveHandler)(NSString *);
+}
+
+- (void)setRowRemoveHandler:(void (^)(NSString *label))handler {
+  _rowRemoveHandler = [handler copy];
 }
 
 - (void)setHeaderTitle:(NSString *)title {
@@ -1104,10 +1194,18 @@ static const CGFloat kSuffixSlotW = 17.0;
 }
 
 - (_KKStaticValueRow *)_makeRowForLane:(KKLane *)lane {
-  _KKStaticValueRow *row = [[_KKStaticValueRow alloc] initWithLane:lane];
+  BOOL showsRemove = (_rowRemoveHandler != nil);
+  _KKStaticValueRow *row = [[_KKStaticValueRow alloc] initWithLane:lane
+                                                       showsRemove:showsRemove];
   row.translatesAutoresizingMaskIntoConstraints = NO;
   NSString *label = lane.label;
   __weak typeof(self) weak = self;
+  if (showsRemove)
+    row.onRemove = ^{
+      __strong typeof(weak) s = weak;
+      if (s->_rowRemoveHandler)
+        s->_rowRemoveHandler(label);
+    };
   if (lane.valueType == KKLaneValueTypeCrop) {
     // Show crop in media pixels: W/X scale by media width, H/Y by height.
     // (≤0 until the feed resolves → row falls back to raw 0–1.)
@@ -1147,6 +1245,7 @@ static const CGFloat kSuffixSlotW = 17.0;
 
 - (void)applyDefaultsProvider:
     (NSArray<NSNumber *> * (^)(NSString *label))provider {
+  _defaultsProvider = [provider copy];
   if (!provider)
     return;
   for (NSString *label in _rowsByLabel)
@@ -1154,7 +1253,10 @@ static const CGFloat kSuffixSlotW = 17.0;
 }
 
 - (void)applyExcludedLabels:(NSArray<NSString *> *)labels
+                    message:(NSString *)message
                   onAnimate:(void (^)(NSString *))onAnimate {
+  _excludedMessage = [message copy];
+  _onAnimate = [onAnimate copy];
   if (labels.count == 0)
     return;
   // Swap the excluded property's editable row for a message+Animate row at
@@ -1171,7 +1273,10 @@ static const CGFloat kSuffixSlotW = 17.0;
     [old removeFromSuperview];
     [_rowsByLabel removeObjectForKey:label];
 
-    _KKExcludedRow *row = [[_KKExcludedRow alloc] initWithLabel:label];
+    _KKExcludedRow *row =
+        [[_KKExcludedRow alloc] initWithLabel:label
+                                      message:message
+                                       gutter:(_rowRemoveHandler != nil)];
     row.translatesAutoresizingMaskIntoConstraints = NO;
     NSString *cap = [label copy];
     row.onAnimate = ^{
@@ -1182,6 +1287,34 @@ static const CGFloat kSuffixSlotW = 17.0;
     [row.widthAnchor constraintEqualToAnchor:_stack.widthAnchor].active = YES;
     [row.heightAnchor constraintEqualToConstant:kFloatRowH].active = YES;
   }
+}
+
+// Tear down the row stack only (mini-canvas + header are separate subviews,
+// left intact) and rebuild editable rows in lane order, re-apply reset
+// defaults, then swap the keypose-less lanes to Animate rows in place. Lets
+// the in-place update path (add / remove / navigate) re-render rows without
+// reopening the popover — reopening blinks the MTKView. The popover height was
+// budgeted at first-open for all-editable rows, so a row growing back from
+// excluded to editable always fits; no resize needed.
+- (void)rebuildRowsWithLanes:(NSArray<KKLane *> *)lanes
+              excludedLabels:(NSArray<NSString *> *)excluded {
+  for (NSView *v in [_stack.arrangedSubviews copy]) {
+    [_stack removeArrangedSubview:v];
+    [v removeFromSuperview];
+  }
+  [_rowsByLabel removeAllObjects];
+  for (KKLane *lane in lanes) {
+    _KKStaticValueRow *row = [self _makeRowForLane:lane];
+    [_stack addArrangedSubview:row];
+    [row.widthAnchor constraintEqualToAnchor:_stack.widthAnchor].active = YES;
+    _rowsByLabel[lane.label] = row;
+  }
+  if (_defaultsProvider)
+    for (NSString *label in _rowsByLabel)
+      _rowsByLabel[label].defaultValues = _defaultsProvider(label);
+  [self applyExcludedLabels:excluded
+                    message:_excludedMessage
+                  onAnimate:_onAnimate];
 }
 
 // Live (per-tick) UI update during a mini-canvas handle drag — refresh the

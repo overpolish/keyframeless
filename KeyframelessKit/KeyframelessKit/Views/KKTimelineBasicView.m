@@ -214,8 +214,12 @@ KKHoldShape KKShapeOfLane(KKLane *lane) {
     KKHoldShape s = KKShapeOfLane(lane);
     if (!holdFound) {
       holdFound = YES;
-      // The always-present Hold pair defines the In→Hold and Hold→Out
-      // boundary times even when In/Out themselves are off.
+      // Tentative boundary times + the shared Hold curve/mod params from the
+      // first animatable lane. The In/Out blocks below OVERRIDE inEndFrac /
+      // outStartFrac from a lane that actually participates in that phase —
+      // a Hold-only lane parks its hold-start at t=0 (no In) / hold-end at the
+      // clip edge (no Out), so reading boundaries off the first lane collapses
+      // the In/Out region when that lane isn't an In/Out participant.
       p.inEndFrac = lane.keyposes[s.holdStart].time;
       p.outStartFrac = lane.keyposes[s.holdEnd].time;
       KKInterval *hv = lane.keyposes[s.holdStart].outgoing;
@@ -237,18 +241,26 @@ KKHoldShape KKShapeOfLane(KKLane *lane) {
         !KKValuesEqual(lane.keyposes[s.holdStart].values,
                        lane.keyposes[s.holdEnd].values))
       p.holdDrift = YES;
-    if (!p.inEnabled && s.inEnabled) {
+    // In/Out is "on" when at least one property still APPLIES (its phase
+    // interval isn't flat). A property toggled off via applies-to keeps its
+    // keypose but goes flat, so removing the last applier turns the phase off
+    // even though the keyposes remain.
+    KKInterval *iiv = lane.keyposes.firstObject.outgoing;
+    if (!p.inEnabled && s.inEnabled && !iiv.holdsFlat) {
       p.inEnabled = YES;
-      KKInterval *iiv = lane.keyposes.firstObject.outgoing;
+      // Authoritative In→Hold boundary from an applying lane.
+      p.inEndFrac = lane.keyposes[s.holdStart].time;
       if (iiv) {
         p.inCurve = (KKEasingCurve)iiv.curve;
         p.inIntensity = iiv.intensity;
         p.inFrequency = iiv.frequency;
       }
     }
-    if (!p.outEnabled && s.outEnabled) {
+    KKInterval *oiv = lane.keyposes[s.holdEnd].outgoing;
+    if (!p.outEnabled && s.outEnabled && !oiv.holdsFlat) {
       p.outEnabled = YES;
-      KKInterval *oiv = lane.keyposes[s.holdEnd].outgoing;
+      // Authoritative Hold→Out boundary from an applying lane.
+      p.outStartFrac = lane.keyposes[s.holdEnd].time;
       if (oiv) {
         p.outCurve = (KKEasingCurve)oiv.curve;
         p.outIntensity = oiv.intensity;

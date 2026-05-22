@@ -61,12 +61,21 @@ NS_ASSUME_NONNULL_BEGIN
   double _openStaticBoundaryFraction;
   NSArray<KKLane *> *_openStaticBoundaryLanes;
   NSArray<NSString *> *_openStaticBoundaryExcluded;
+  // Suppress the _refresh-driven boundary-popover re-drive briefly after a
+  // popover-originated edit, so the host's echo write doesn't rebuild rows
+  // mid-interaction (add/remove already refresh themselves). External changes
+  // (cmd-Z) land outside the window → they refresh.
+  NSTimeInterval _boundaryRedriveSuppressUntil;
   // Open hold-modulation popover plumbing: weak editor + a rebuilder
   // closure supplied by the host (Basic/Advanced) so external timeline
   // changes (e.g. cmd-Z) can push fresh participation states into the
   // live pill row without closing the popover.
   __weak KKSegmentEditView *_openHoldModEditor;
   NSArray<NSArray<NSNumber *> *> * (^_openHoldModRebuilder)(void);
+  // Same mechanism for the In/Out curve (gap) popover's plain participation
+  // pills — kept in sync on cmd-Z without closing the popover.
+  __weak KKSegmentEditView *_openGapEditor;
+  NSArray<NSNumber *> * (^_openGapRebuilder)(void);
   // Per-tab last-reported zoom state. The toolbar button only reflects the
   // active tab, so we cache each side's state here and re-fire on tab
   // switch / when the active side changes.
@@ -111,6 +120,7 @@ NS_ASSUME_NONNULL_BEGIN
                                                  NSArray<NSNumber *> *values))
                                            onValue
                                  onAnimate:(void (^)(NSString *label))onAnimate
+                                  onRemove:(void (^)(NSString *label))onRemove
                                onDragBegin:(void (^)(void))onDragBegin
                                  onDragEnd:(void (^)(void))onDragEnd;
 
@@ -147,6 +157,8 @@ NS_ASSUME_NONNULL_BEGIN
                            frequency:(double)frequency
                           partLabels:(NSArray<NSString *> *)partLabels
                           partStates:(NSArray<NSNumber *> *)partStates
+                       partRebuilder:
+                           (NSArray<NSNumber *> * (^)(void))partRebuilder
                              onCurve:(void (^)(KKIntervalCurve curve))onCurve
                          onIntensity:(void (^)(double value))onIntensity
                          onFrequency:(void (^)(double value))onFrequency

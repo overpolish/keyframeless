@@ -42,6 +42,7 @@
   c.modulationComponents = [_modulationComponents copy];
   c.lockedSeconds = _lockedSeconds;
   c.endpointsLinked = _endpointsLinked;
+  c.holdsFlat = _holdsFlat;
   c.pathData = _pathData;
   return c;
 }
@@ -67,6 +68,8 @@
   }
   d[@"locked_seconds"] = @(_lockedSeconds);
   d[@"endpoints_linked"] = @(_endpointsLinked);
+  if (_holdsFlat)
+    d[@"holds_flat"] = @(_holdsFlat);
   if (_pathData) {
     d[@"path_data"] = [_pathData base64EncodedStringWithOptions:0];
   }
@@ -104,6 +107,8 @@
     i.lockedSeconds = [d[@"locked_seconds"] doubleValue];
   if (d[@"endpoints_linked"])
     i.endpointsLinked = [d[@"endpoints_linked"] boolValue];
+  if (d[@"holds_flat"])
+    i.holdsFlat = [d[@"holds_flat"] boolValue];
   NSString *b64 = d[@"path_data"];
   if (b64)
     i.pathData = [[NSData alloc] initWithBase64EncodedString:b64 options:0];
