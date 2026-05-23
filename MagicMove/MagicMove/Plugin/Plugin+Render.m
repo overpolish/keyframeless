@@ -117,7 +117,7 @@
                     }];
     if (applied)
       return YES;
-    // Fall through on failure — render the un-blurred frame so the user
+    // Fall through on failure - render the un-blurred frame so the user
     // sees something rather than a black tile.
   }
 
@@ -134,25 +134,30 @@
   if (!pipeline)
     return NO;
 
-  return [self encodeRenderCommandsForDestinationImage:destinationImage
-                                          sourceImages:sourceImages
-                                              commands:^(
-                                                  id<MTLRenderCommandEncoder>
-                                                      enc,
-                                                  NSArray<id<MTLTexture>>
-                                                      *texs) {
-    [enc setRenderPipelineState:pipeline];
-    [enc setFragmentTexture:texs[0] atIndex:KKTextureIndex_InputImage];
-    [enc setFragmentBytes:&params
-                   length:sizeof(params)
-                  atIndex:FragmentIndex_Params];
-    [enc setFragmentBytes:&tileOffsetPx
-                   length:sizeof(tileOffsetPx)
-                  atIndex:FragmentIndex_TileOffsetPx];
-    [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
-            vertexStart:0
-            vertexCount:4];
-  }];
+  return [self
+      encodeRenderCommandsForDestinationImage:destinationImage
+                                 sourceImages:sourceImages
+                                     commands:^(id<MTLRenderCommandEncoder> enc,
+                                                NSArray<id<MTLTexture>> *texs) {
+                                       [enc setRenderPipelineState:pipeline];
+                                       [enc
+                                           setFragmentTexture:texs[0]
+                                                      atIndex:
+                                                          KKTextureIndex_InputImage];
+                                       [enc setFragmentBytes:&params
+                                                      length:sizeof(params)
+                                                     atIndex:
+                                                         FragmentIndex_Params];
+                                       [enc
+                                           setFragmentBytes:&tileOffsetPx
+                                                     length:sizeof(tileOffsetPx)
+                                                    atIndex:
+                                                        FragmentIndex_TileOffsetPx];
+                                       [enc drawPrimitives:
+                                                MTLPrimitiveTypeTriangleStrip
+                                               vertexStart:0
+                                               vertexCount:4];
+                                     }];
 }
 
 - (BOOL)sourceTileRect:(FxRect *)sourceTileRect

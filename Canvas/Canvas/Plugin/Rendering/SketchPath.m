@@ -385,13 +385,13 @@ KKBezierPath *KKSketchPath(KKBezierPath *path, float roughness, float bowing,
   float strokeNorm = fmaxf(path.strokeWidth, ew) / canvasSize;
   float baseOffset = strokeNorm * 1.5f + 0.003f;
 
-  // Pass 1: primary stroke — continuous path with full jitter.
+  // Pass 1: primary stroke - continuous path with full jitter.
   KKBezierPath *pass1 = buildPass(path, roughness, bowing, baseOffset, NO);
 
   if (strokes < 2)
     return pass1;
 
-  // Pass 2: overlay stroke — continuous path with half jitter.
+  // Pass 2: overlay stroke - continuous path with half jitter.
   // We need to combine both passes into a single path for the renderer.
   // Insert pass2 points after pass1 points as a disjoint subpath.
   KKBezierPath *pass2 = buildPass(path, roughness, bowing, baseOffset, YES);

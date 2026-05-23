@@ -10,7 +10,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// YES iff `timeline` can be losslessly represented in Basic mode — i.e.
+/// YES iff `timeline` can be losslessly represented in Basic mode - i.e.
 /// there exist consistent boundary times (t_inEnd, t_outStart) such that
 /// every animatable lane's keypose times are a subset of
 /// `{0, t_inEnd, t_outStart, 1}`, and the Hold interval (between t_inEnd

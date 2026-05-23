@@ -337,7 +337,7 @@ void KKDrawCheckerboard(NSRect rect) {
     // Open the drag bracket BEFORE the add so the add and any drag
     // movement coalesce into one undo entry. Mark drag immediately
     // active (no 3px threshold) so the user can keep moving the new
-    // stop without releasing — onStopsChanged fired by _addStopAtPosition
+    // stop without releasing - onStopsChanged fired by _addStopAtPosition
     // will see inDrag=YES and skip its own bracket.
     if (_onDragBegin)
       _onDragBegin();
@@ -640,7 +640,7 @@ void KKDrawCheckerboard(NSRect rect) {
 }
 
 - (void)setStops:(NSArray<KKGradientStop *> *)stops {
-  // Ignore external stop pushes while the user is mid-drag — host-driven
+  // Ignore external stop pushes while the user is mid-drag - host-driven
   // refresh paths (layer-list snapshot redraw fired by parameterChanged
   // echoes from our own drag-tick blob writes) otherwise race the live
   // drag and visually ping the bar back to a previous tick's value.

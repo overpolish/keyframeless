@@ -24,7 +24,7 @@ static inline KKBezierPath *_Nullable KKSelectedPath(
 
 /// Transform-aware primary: prefers a non-group, falls back to the first
 /// selected group. Used wherever the inspector's transform params (Position,
-/// later rotation/scale) need a target — groups support transform but not
+/// later rotation/scale) need a target - groups support transform but not
 /// stroke/fill/sketch, so non-group selections still take priority.
 static inline KKBezierPath *_Nullable KKSelectedTransformTarget(
     NSIndexSet *_Nullable sel, NSArray<KKBezierPath *> *_Nonnull paths) {
@@ -107,7 +107,7 @@ KKIsForceShowEnabled(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI) {
 
 // --- Parameter visibility matrix ---
 // Each parameter declares the conditions required for it to be visible.
-// A single loop evaluates all of them — no scattered if/else chains.
+// A single loop evaluates all of them - no scattered if/else chains.
 
 typedef NS_OPTIONS(uint32_t, KKVisCondition) {
   KKVisAlways = 0,
@@ -149,7 +149,7 @@ static const KKParamVisRule kParamVisibility[] = {
   { kParamOpacity,            KKVisNotGroup,                                               kFxParameterFlag_DEFAULT },
   { kParamClosedPath,         KKVisNotImage | KKVisNotGroup,                               kFxParameterFlag_NOT_ANIMATABLE },
   // ─── Transform group children ───
-  // (kParamTransformEnabled is rendered by the group header — keep it HIDDEN.)
+  // (kParamTransformEnabled is rendered by the group header - keep it HIDDEN.)
   { kParamPosition,           KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
   { kParamRotateWithMotion,   KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
   { kParamScaleX,             KKVisTransformOpen,                                          kFxParameterFlag_DEFAULT },
@@ -269,7 +269,7 @@ static const FxParameterFlags kKKCanvasMutableFlagMask =
     kFxParameterFlag_HIDDEN | kFxParameterFlag_NOT_ANIMATABLE |
     kFxParameterFlag_CUSTOM_UI | kFxParameterFlag_USE_FULL_VIEW_WIDTH;
 
-/// Mask-and-merge flag write. No-op when the bits we own already match —
+/// Mask-and-merge flag write. No-op when the bits we own already match -
 /// avoids creating phantom undo entries from host-OR'd bit drift.
 /// Preserves DISABLED (set externally by HTH transition lane disabling).
 /// Caller must already be inside an action scope.
@@ -277,8 +277,8 @@ static const FxParameterFlags kKKCanvasMutableFlagMask =
 /// `cache` is an optional per-instance dictionary mapping paramID →
 /// last-written merged flags. Some FxPlug params (notably the group
 /// container types) don't preserve CUSTOM_UI / USE_FULL_VIEW_WIDTH bits
-/// between writes — `getParameterFlags` returns the registered baseline
-/// regardless of what we just set — so without a write-side cache the
+/// between writes - `getParameterFlags` returns the registered baseline
+/// regardless of what we just set - so without a write-side cache the
 /// host comparison always disagrees and we write every call. Pass nil
 /// to disable caching.
 static inline void KKSetFlagsIfNeeded(
@@ -382,7 +382,7 @@ KKReadGradientParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull api,
   [api getIntValue:&type fromParameter:typeID atTime:kCMTimeZero];
   double angle = 0.0;
   [api getFloatValue:&angle fromParameter:angleID atTime:kCMTimeZero];
-  // Read the native-string mirror — works in OSC scope where blob reads
+  // Read the native-string mirror - works in OSC scope where blob reads
   // return nil. Writers always update both in lockstep.
   UInt32 mirrorID = (dataID == kParamStrokeGradientData)
                         ? kParamStrokeGradientDataMirror
@@ -402,7 +402,7 @@ KKReadGradientParamsToPath(id<FxParameterRetrievalAPI_v6> _Nonnull api,
   }
 }
 
-/// Inverse of `KKReadGradientParamsToPath` — write one side's gradient
+/// Inverse of `KKReadGradientParamsToPath` - write one side's gradient
 /// properties out to FxPlug params.
 static inline void
 KKWriteGradientParamsFromPath(id<FxParameterSettingAPI_v5> _Nonnull api,
@@ -417,7 +417,7 @@ KKWriteGradientParamsFromPath(id<FxParameterSettingAPI_v5> _Nonnull api,
   [api setIntValue:(int)type toParameter:typeID atTime:kCMTimeZero];
   [api setFloatValue:angle toParameter:angleID atTime:kCMTimeZero];
   KKWriteCustomParamString(api, json ?: @"", dataID);
-  // Lockstep mirror write — readable from OSC/render scope.
+  // Lockstep mirror write - readable from OSC/render scope.
   UInt32 mirrorID = (dataID == kParamStrokeGradientData)
                         ? kParamStrokeGradientDataMirror
                         : kParamFillGradientDataMirror;
@@ -854,7 +854,7 @@ KKParamsToSelectedPaths(id<FxParameterRetrievalAPI_v6> _Nonnull paramGetAPI,
   // Apply all inspector params to the primary path.
   KKParamsToPath(paramGetAPI, primary);
 
-  // Single selection — nothing else to cascade.
+  // Single selection - nothing else to cascade.
   if (!sel || sel.count <= 1)
     return;
 
@@ -943,7 +943,7 @@ static inline void
 KKPathToParams(id<FxParameterSettingAPI_v5> _Nonnull paramSetAPI,
                KKBezierPath *_Nonnull path) {
   if (path.isGroup) {
-    // Groups own only transform state — leave stroke/fill/sketch params at
+    // Groups own only transform state - leave stroke/fill/sketch params at
     // whatever the previous selection set them to, so visibility cascades
     // and snapshot defaults stay coherent.
     KKWriteGroupTransformParams(paramSetAPI, path);

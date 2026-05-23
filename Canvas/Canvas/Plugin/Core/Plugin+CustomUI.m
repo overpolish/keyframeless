@@ -51,7 +51,7 @@
             pathPropertyBlock:(void (^)(KKBezierPath *, BOOL))pathBlock {
   // Delegate to KKKit's checkbox group header factory. Path-mutation runs
   // *inside* the click-handler's scope (via the in-scope variant), and the
-  // store push is dropped — Plugin.m's parameterChanged hook re-pushes the
+  // store push is dropped - Plugin.m's parameterChanged hook re-pushes the
   // bool to KKCanvasStore, so doing it here a second time creates a
   // separate scope/undo entry (the bug we're fixing).
   __weak typeof(self) weakSelf = self;
@@ -321,7 +321,7 @@
       NSData *blob = [[NSData alloc] initWithBase64EncodedString:str options:0];
       seedPaths = [KKBezierPath pathsFromBlob:blob];
     }
-    // Prefer kParamCanvasSelection — it's the only carrier that can
+    // Prefer kParamCanvasSelection - it's the only carrier that can
     // represent a group-only selection (kParamLastSelectedIndex is -1
     // for groups by design, so on cold-boot of a project saved with a
     // group selected, lastIdx alone seeds an empty selection and the
@@ -335,7 +335,7 @@
       seedSel = [NSIndexSet indexSetWithIndex:(NSUInteger)lastIdx];
     // Mirror the seed into layer-instance state so KKCanvasCurrentSelection
     // (used by `kkSelectedGroupKey`, OSC, etc.) is coherent before the
-    // store observer fires its first batch — otherwise observer →
+    // store observer fires its first batch - otherwise observer →
     // kkRefreshSequencerSelectedGroup reads nil and the sequencer stays
     // unaccented until something else mutates selection.
     KKCanvasUpdateSelection(uuid, seedSel);

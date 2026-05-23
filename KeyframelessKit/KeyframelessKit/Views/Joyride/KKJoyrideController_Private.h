@@ -33,7 +33,7 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 /// Event-monitor machinery (mouse/key/drag global+local monitors and the
-/// pass-through forwarding) — implemented in KKJoyrideController+Monitors.m.
+/// pass-through forwarding) - implemented in KKJoyrideController+Monitors.m.
 @interface KKJoyrideController (Monitors)
 /// Current step, or nil past the end.
 - (nullable KKJoyrideStep *)_currentStep;
@@ -52,7 +52,7 @@ NS_ASSUME_NONNULL_BEGIN
               requiredFlags:(NSEventModifierFlags)reqFlags;
 @end
 
-/// Focus / occlusion dismiss observers — implemented in
+/// Focus / occlusion dismiss observers - implemented in
 /// KKJoyrideController+FocusObservers.m.
 @interface KKJoyrideController (FocusObservers)
 - (void)_installFocusObservers;

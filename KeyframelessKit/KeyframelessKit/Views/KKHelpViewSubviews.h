@@ -38,13 +38,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property(weak) NSView *documentHost;
 @end
 
-/// Self-rounding capsule (cornerRadius tracks height) — matches the
+/// Self-rounding capsule (cornerRadius tracks height) - matches the
 /// app-wide InfoBadge look.
 @interface _KKCapsuleView : NSView
 @end
 
 /// Holds the live controls for one guide row so its enabled appearance can
-/// be updated in place — no tearing down and rebuilding the whole stack on
+/// be updated in place - no tearing down and rebuilding the whole stack on
 /// every refresh tick (the old churny "polling" behaviour).
 @interface _KKGuideRowRefs : NSObject
 @property(nonatomic, weak) KKHelpGuide *guide;

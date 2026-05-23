@@ -72,7 +72,7 @@ static const CGFloat kPillSize = 22.0;
 
 - (void)updateButtonAppearance {
   // Wrap layer mutations in a CATransaction with implicit animations
-  // disabled — without this the border can lag behind the background
+  // disabled - without this the border can lag behind the background
   // (border animates over ~0.25s, bg snaps), looking stale when cycling.
   [CATransaction begin];
   [CATransaction setDisableActions:YES];

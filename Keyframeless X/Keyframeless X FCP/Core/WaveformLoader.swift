@@ -47,7 +47,7 @@ actor WaveformLoader {
 			return samples
 		}
 
-		// AVAssetReader: handles video containers (.MP4, .MOV) — streams audio, never loads full file
+		// AVAssetReader: handles video containers (.MP4, .MOV) - streams audio, never loads full file
 		return try await loadViaAssetReader(url: resolved.url, clip: clip, buckets: buckets)
 	}
 

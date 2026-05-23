@@ -23,7 +23,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// tab segment.
 - (NSRect)guideTabSegmentScreenRectForTab:(NSInteger)tab;
 
-/// Fired AFTER `setPlaying:` actually crosses — only on real transitions,
+/// Fired AFTER `setPlaying:` actually crosses - only on real transitions,
 /// not on equal-state pushes. Guide-only.
 @property(nonatomic, copy, nullable) void (^onPlayingChanged)(BOOL playing);
 

@@ -20,7 +20,7 @@ static NSString *const KKMotionBlurPipelineID =
 /// pixelFormat). FCP renders the same effect at many tile sizes
 /// (full-canvas, scopes, thumbnails, etc.), so distinct keys accumulate.
 /// LRU-capped: when more than `kKKMotionBlurPoolMaxKeys` keys are seen,
-/// the oldest key (and all its textures) is dropped — bounding memory
+/// the oldest key (and all its textures) is dropped - bounding memory
 /// regardless of how many sizes FCP throws at us.
 static NSMutableDictionary<NSString *, NSMutableArray<id<MTLTexture>> *>
     *sKKMotionBlurPool;
@@ -60,7 +60,7 @@ static dispatch_semaphore_t sKKMotionBlurInFlightSema;
 }
 
 /// Move `key` to the most-recent end of `lru`. If adding the key pushes
-/// `dict.count` past the cap, evict the oldest key — its textures are
+/// `dict.count` past the cap, evict the oldest key - its textures are
 /// released by ARC when the array goes out of scope. Caller holds the
 /// pool lock.
 static void KKMBPoolTouchAndEvict(NSString *key, NSMutableDictionary *dict,
@@ -235,7 +235,7 @@ static KKMotionBlurState _kkMBState(double shutterFraction, int sampleCount,
     return NO;
   }
 
-  // TransitionsOnly: structural — any keypose interval overlapping the window
+  // TransitionsOnly: structural - any keypose interval overlapping the window
   // whose endpoint values differ is a real transition. Modulation lives on the
   // interval but never changes its endpoints, so a modulated hold (equal
   // endpoints) is correctly excluded.
@@ -363,7 +363,7 @@ static KKMotionBlurState _kkMBState(double shutterFraction, int sampleCount,
     return;
   NSArray<NSValue *> *times = [self sampleTimesForState:state
                                              renderTime:renderTime];
-  // Skip index 0 (== renderTime) — the plugin already requests the current
+  // Skip index 0 (== renderTime) - the plugin already requests the current
   // frame in its own scheduleInputs:.
   for (NSUInteger i = 1; i < times.count; i++) {
     CMTime t = kCMTimeZero;
@@ -459,7 +459,7 @@ static KKMotionBlurState _kkMBState(double shutterFraction, int sampleCount,
   // delivers multiple frames here. FCP does NOT honor request order, so match
   // each sample to the delivered tile whose mediaTime is nearest the sample's
   // time. When only the current frame was delivered (parameter-only blur),
-  // every sample resolves to it — unchanged behavior.
+  // every sample resolves to it - unchanged behavior.
   NSArray<NSValue *> *sampleTimes = [self sampleTimesForState:state
                                                    renderTime:renderTime];
 

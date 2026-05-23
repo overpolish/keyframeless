@@ -8,7 +8,7 @@
 #import "KKLog.h"
 
 /// `ignoresMouseEvents` makes a window transparent to clicks/scroll but NOT
-/// to gesture events — a pinch is delivered to this (frontmost) panel and,
+/// to gesture events - a pinch is delivered to this (frontmost) panel and,
 /// unhandled, dropped before it can reach content below. Intercept magnify
 /// at the window and hand it to the active step instead.
 @interface _KKJoyrideForwardingPanel : NSPanel
@@ -228,7 +228,7 @@
   [self _installGlobalMonitor];
 
   // Fire the step's entry hook once it's on screen. Used to kick async work
-  // for this step (e.g. the OSC portion's zoom-to-fit warm-up) — the step's
+  // for this step (e.g. the OSC portion's zoom-to-fit warm-up) - the step's
   // targetScreenRect stays NSZeroRect until that lands and a refreshSpotlight
   // reveals the cutout. This is the seam that lets one guide cross between
   // inspector-targeted and OSC-targeted steps.

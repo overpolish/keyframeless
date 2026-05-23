@@ -58,7 +58,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// the user's edit).
 @property(nonatomic) BOOL lanesEverPersisted;
 
-/// The live sequencer view for this instance (weak — auto-nils on dealloc).
+/// The live sequencer view for this instance (weak - auto-nils on dealloc).
 @property(nonatomic, weak, nullable) KKStageSequencerView *sequencerView;
 
 /// The paired ruler view (weak). Mirrors effectDuration/playheadFraction
@@ -72,7 +72,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Cached effect timing (seconds). Populated when the custom UI is created
 /// (inside an action scope where FxTimingAPI answers) and used by the
 /// playhead pump to broadcast updates across all instances. Cannot be
-/// refreshed from the OSC pump's drawOSC context — FxTimingAPI returns nil
+/// refreshed from the OSC pump's drawOSC context - FxTimingAPI returns nil
 /// when queried through a non-active instance's apiManager, and wrapping
 /// in a fresh action scope inside drawOSC causes re-entrant redraws.
 @property(nonatomic) double cachedEffectStart;
@@ -81,7 +81,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Timeline-time start of the clip, in seconds. `cachedEffectStart` above is
 /// in source (clip-local) time, but `FxCommandAPI_v2 movePlayheadToTime:`
 /// requires timeline time. Cached because `FxTimingAPI_v4` returns nil when
-/// queried from the loop-back's render-tick context — populated at custom-UI
+/// queried from the loop-back's render-tick context - populated at custom-UI
 /// creation (inside an action scope, where the API is reliable) and opportu-
 /// nistically refreshed by the playhead pump. Computed via
 /// `startTimeOfInputToFilter:` + `timelineTime:fromInputTime:` (same pattern
@@ -124,13 +124,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// Applied as a filter to every `seq.lanes =` push.
 @property(nonatomic, copy, nullable) NSSet<NSString *> *hiddenLaneLabels;
 
-/// Plugin-suppressed lanes only — i.e. the latest snapshot of
+/// Plugin-suppressed lanes only - i.e. the latest snapshot of
 /// `-hiddenAnimatablePropertyLabels`. Maintained alongside
 /// `hiddenLaneLabels` so the JSON-drift pump can filter without having to
 /// reverse-derive plugin-hidden from the (possibly stale) effective set.
 @property(nonatomic, copy, nullable) NSSet<NSString *> *pluginHiddenLaneLabels;
 
-/// The live lane-visibility-bar view for this instance (weak — auto-nils on
+/// The live lane-visibility-bar view for this instance (weak - auto-nils on
 /// dealloc). Sync pump pushes lane label/state updates here on JSON change.
 @property(nonatomic, weak, nullable) KKLaneVisibilityBar *visibilityBar;
 
@@ -160,7 +160,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// fingerprint matches this value (see `-kkReconcileFingerprintForAPI:`).
 /// Read concurrently from main (store observer) and render queue
 /// (drawOSCTick); each call computes its own fingerprint and compares
-/// locally — never use a shared "did we skip" flag, races corrupt it.
+/// locally - never use a shared "did we skip" flag, races corrupt it.
 @property(nonatomic, copy, nullable) NSString *cachedReconcileFingerprint;
 
 /// The `lanesSnapshot` array pointer most recently pushed to the sequencer
@@ -173,14 +173,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// the FCP reconcile call (skipped when source topology unchanged). This
 /// gates the seq push (skipped when the in-memory lanes pointer hasn't
 /// been replaced since the last push). Without this, in-memory edits
-/// that don't touch source topology — e.g. inspector value tweaks
-/// flowing into lanesSnapshot via a plugin-side mutation site — would
+/// that don't touch source topology - e.g. inspector value tweaks
+/// flowing into lanesSnapshot via a plugin-side mutation site - would
 /// match the fingerprint, get short-circuited, and never reach seq.
 @property(nonatomic, strong, nullable)
     NSArray<KKTimingLane *> *lastPushedLanesSnapshot;
 
 /// Last JSON string we wrote to `kKKParamMultiStageData`. Used to dedupe
-/// no-op writes — every `setCustomParameterValue:atTime:` registers an
+/// no-op writes - every `setCustomParameterValue:atTime:` registers an
 /// undo entry on FCP/Motion's stack, so writing identical content puts
 /// phantom entries between user edits and forces extra cmd-Z presses to
 /// revert a single logical change.
@@ -188,7 +188,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Set transiently by `multiStageRefreshFromParamForAPI:` (the host cmd-Z
 /// entry point) and cleared on the next runloop tick via `dispatch_async`.
-/// While set, `KKWriteMultiStageJSONDeduped` skips the write — without this
+/// While set, `KKWriteMultiStageJSONDeduped` skips the write - without this
 /// every host-driven param revert (animatable scalar OR multi-stage blob)
 /// triggers our live-update path, which writes a fresh entry back onto
 /// FCP's undo stack, immediately overwriting the host's revert and
@@ -213,7 +213,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) NSTimeInterval liveUpdateSuppressUntil;
 
 /// Latest-values-per-label staging dict drained by the deferred block
-/// in `multiStageDeferLiveUpdateForLabel:`. Last-wins semantics — a
+/// in `multiStageDeferLiveUpdateForLabel:`. Last-wins semantics - a
 /// continuous slider drag keeps overwriting the same key, so the block
 /// always writes the freshest values when it fires.
 @property(nonatomic, strong, nullable)
@@ -225,7 +225,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// REFRESH fires and the count is > 0 (in which case the refresh is
 /// classified as an echo and suppression is NOT set). When the count is
 /// 0, the refresh is a real host cmd-Z and suppression is engaged. This
-/// replaces the earlier probeJSON-based echo detection — that approach
+/// replaces the earlier probeJSON-based echo detection - that approach
 /// required a custom-param read which could yield to the runloop and
 /// let a racing live-update block write before suppression was set.
 @property(nonatomic) NSInteger expectedMultiStageEchoCount;
@@ -235,7 +235,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Reads `kKKParamInstanceID` from the api, cached on the api via
 /// associated object for fast re-reads. Returns nil if no UUID has been
 /// assigned yet (the first `createViewForParameterID` call generates and
-/// persists one inside an action scope — see KKPlugin+CustomViews.m).
+/// persists one inside an action scope - see KKPlugin+CustomViews.m).
 NSString *_Nullable KKInstanceUUIDForAPI(id<PROAPIAccessing> api);
 
 /// Returns (or lazy-creates) the state for a given UUID. Uses the
@@ -251,14 +251,14 @@ KKPluginInstanceState *_Nullable KKInstanceStateForAPI(id<PROAPIAccessing> api);
 /// fresh FxPlug plugin instances resolve to the same state entry. Must be
 /// called inside an `startAction:/endAction:` scope (required for the
 /// string-param write). Any custom-UI creation that stores per-instance
-/// state (e.g. gradient bar) should use this — otherwise, if the custom UI
+/// state (e.g. gradient bar) should use this - otherwise, if the custom UI
 /// runs before the first sequencer is registered, the state assignment
 /// silently no-ops on nil and the UI stays disconnected until a remount.
 KKPluginInstanceState *_Nullable KKInstanceStateEnsureForAPI(
     id<PROAPIAccessing> api);
 
 /// Snapshot of all live per-instance states. Used by the OSC flush pump to
-/// broadcast view updates across every effect instance — any single running
+/// broadcast view updates across every effect instance - any single running
 /// `drawOSC` (the OSC-selected effect) can deliver updates to every live
 /// sequencer view on the timeline, not just its own.
 NSArray<KKPluginInstanceState *> *KKAllInstanceStates(void);

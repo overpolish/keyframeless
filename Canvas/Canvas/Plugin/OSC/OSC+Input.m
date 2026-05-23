@@ -291,7 +291,7 @@
     {
       // Wrap in an action scope. Without this the int-slider write at
       // kCMTimeZero doesn't land on FCP's undo stack reliably from OSC
-      // scope, even though the param has no NOT_ANIMATABLE flag — the
+      // scope, even though the param has no NOT_ANIMATABLE flag - the
       // bool toggle right below works because bool writes coalesce
       // differently. Action scope makes the int-slider write undoable
       // the same way the OSC's path writes are.
@@ -501,7 +501,7 @@
     return;
   }
 
-  // --- Shape tools (rect, ellipse, line) — start drag preview ---
+  // --- Shape tools (rect, ellipse, line) - start drag preview ---
   simd_float2 objPos =
       [self objectPointFromCanvasPoint:CGPointMake(positionX, positionY)];
   objPos = [self snapToGridPosition:objPos];

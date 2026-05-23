@@ -13,9 +13,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// KKKbd keyboard badges and SF Symbol images.
 ///
 /// Supported tags:
-///   <kbd>⌥ G</kbd>         — keyboard shortcut badge
-///   <symbol info.circle />   — inline SF Symbol (inherits label color)
-///   <symbol squareshape.fill color=white /> — SF Symbol with explicit tint
+///   <kbd>⌥ G</kbd>         - keyboard shortcut badge
+///   <symbol info.circle />   - inline SF Symbol (inherits label color)
+///   <symbol squareshape.fill color=white /> - SF Symbol with explicit tint
 ///
 /// Everything else is plain text.
 @interface KKMarkup : NSObject

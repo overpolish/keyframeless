@@ -32,7 +32,7 @@ static const NSUInteger kPositionPathHitResolution = 24;
   NSString *layerID = [self _selectedSingleLayerID];
   if (!layerID)
     return nil;
-  // OSC scope can't read KKDataBlob params — read from the per-instance
+  // OSC scope can't read KKDataBlob params - read from the per-instance
   // lanesSnapshot, populated by the multi-stage pump and the cold-boot
   // mirror seed. See project_osc_custom_blob_unreadable.md.
   KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
@@ -108,7 +108,7 @@ static BOOL _segmentBounds(NSArray<KKTimingSegment *> *segs, NSUInteger idx,
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   if (!setAPI || !getAPI)
     return;
-  // Read merge baseline from the per-instance snapshot — KKDataBlob
+  // Read merge baseline from the per-instance snapshot - KKDataBlob
   // reads from OSC scope return nil even inside an action scope.
   KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
   NSMutableArray<KKTimingLane *> *lanes = [state.lanesSnapshot mutableCopy];

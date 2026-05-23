@@ -46,7 +46,7 @@ static const CGFloat kPathToolbarGap = 6.0;
   self.snapToGrid = snapVal;
 
   // Re-read on every tick (not just first restore) so cmd-Z of a tool
-  // change reverts the toolbar visual — the int-slider param's value
+  // change reverts the toolbar visual - the int-slider param's value
   // changes underneath us, and there's no parameterChanged callback in
   // OSC scope to react to it.
   {
@@ -95,7 +95,7 @@ static const CGFloat kPathToolbarGap = 6.0;
 
   // Detect undo/redo: if kParamLastSelectedIndex disagrees with the
   // in-memory selection, undo restored a different selection state.
-  // Skip when a pending selection was just consumed — that pending came
+  // Skip when a pending selection was just consumed - that pending came
   // from layer-list / sequencer / kParamCanvasSelection echo and is
   // authoritative (in particular, multi-select pending must not be
   // collapsed by kParamLastSelectedIndex's single-index value).
@@ -134,7 +134,7 @@ static const CGFloat kPathToolbarGap = 6.0;
       // the reset in caused this draw tick (which runs ~30ms after
       // cmd-Z) to wipe vh, then drawOSC's store writes below fired the
       // async observer in a fresh action scope which re-wrote flags as
-      // a separate undo entry — making one cmd-Z silently take 2-3.
+      // a separate undo entry - making one cmd-Z silently take 2-3.
       [self.selectedPathIndices removeAllIndexes];
       if (paramIdx >= 0 && (NSUInteger)paramIdx < self.paths.count) {
         [self.selectedPathIndices addIndex:(NSUInteger)paramIdx];
@@ -204,7 +204,7 @@ static const CGFloat kPathToolbarGap = 6.0;
   // Use the transform-aware target so a group-only selection still flushes
   // inspector params to the group's own transform fields (translateX/Y,
   // rotation, scale). Render walks parentGroupID and applies group
-  // transforms to descendants — so the group's own transform is what
+  // transforms to descendants - so the group's own transform is what
   // makes "move group" actually move the children.
   KKBezierPath *transformTarget =
       KKSelectedTransformTarget(self.selectedPathIndices, self.paths);
@@ -515,7 +515,7 @@ static const CGFloat kPathToolbarGap = 6.0;
   // users grab them even with the lane OSC default-off.
   CGEventFlags flags =
       CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
-  // Opt only reveals the X/Y rings when Rot Z is already visible — that's
+  // Opt only reveals the X/Y rings when Rot Z is already visible - that's
   // the signal the user is using the transform OSC at all. Otherwise Opt
   // would surface them in unrelated cursor-mode contexts.
   BOOL optHeld = ((flags & kCGEventFlagMaskAlternate) != 0) && rotZVisible;

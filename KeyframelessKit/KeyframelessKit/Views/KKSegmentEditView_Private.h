@@ -13,7 +13,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface KKSegmentEditView (Internal)
 
-/// Internal accessor for the +Guide category — returns the pills view so
+/// Internal accessor for the +Guide category - returns the pills view so
 /// guide code can resolve a pill's screen rect without exposing it on the
 /// public header.
 - (nullable KKCurvePillView *)_guidePillsView;

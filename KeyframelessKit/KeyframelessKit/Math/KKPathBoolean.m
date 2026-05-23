@@ -621,7 +621,7 @@ static CGPathRef createDashedOutline(KKBezierPath *src, CGFloat sw, CGFloat ew,
 
   if (!tapers) {
     // Uniform width: let CoreGraphics handle dashing natively.
-    // CG produces bezier arcs for round caps — minimal point count.
+    // CG produces bezier arcs for round caps - minimal point count.
     CGMutablePathRef cgPath = CGPathCreateFromKKBezierPath(src);
     CGAffineTransform toPixel = CGAffineTransformMake(refW, 0, 0, refH, 0, 0);
     CGPathRef scaled = CGPathCreateCopyByTransformingPath(cgPath, &toPixel);
@@ -794,7 +794,7 @@ static CGPathRef createMarkerOutline(uint8_t markerType, simd_float2 endpoint,
   CGMutablePathRef path = CGPathCreateMutable();
 
   switch (markerType) {
-  case 1: { // Arrow — filled triangle.
+  case 1: { // Arrow - filled triangle.
     float wingSpread = markerSize * 0.5f;
     simd_float2 base = endpoint - tangent * markerSize;
     simd_float2 left = base + normal * wingSpread;
@@ -827,7 +827,7 @@ static CGPathRef createMarkerOutline(uint8_t markerType, simd_float2 endpoint,
     CGPathCloseSubpath(path);
     break;
   }
-  case 4: { // Arrowhead — open chevron (two thick arms).
+  case 4: { // Arrowhead - open chevron (two thick arms).
     float wingSpread = markerSize * 0.5f;
     float halfThick = strokeWidth * 0.5f;
     simd_float2 base = endpoint - tangent * markerSize;
@@ -867,7 +867,7 @@ static CGPathRef createMarkerOutline(uint8_t markerType, simd_float2 endpoint,
     CGPathCloseSubpath(path);
     break;
   }
-  case 5: { // Line — perpendicular bar.
+  case 5: { // Line - perpendicular bar.
     float halfSpread = markerSize * 0.5f;
     float halfThick = strokeWidth * 0.5f;
     simd_float2 top = endpoint + normal * halfSpread;
@@ -891,7 +891,7 @@ static CGPathRef createMarkerOutline(uint8_t markerType, simd_float2 endpoint,
   return path;
 }
 
-/// Stroke pullback distance for a marker type — matches KKMarkerPullback
+/// Stroke pullback distance for a marker type - matches KKMarkerPullback
 /// in MarkerTessellation. Duplicated here because KeyframelessKit cannot
 /// import Canvas plugin headers.
 static float outlineMarkerPullback(uint8_t markerType, float markerSize) {
@@ -904,7 +904,7 @@ static float outlineMarkerPullback(uint8_t markerType, float markerSize) {
 }
 
 /// Compute marker tangent/normal by sampling the polyline at a pullback arc
-/// position — matches the rendering pipeline. The tangent points outward from
+/// position - matches the rendering pipeline. The tangent points outward from
 /// the path at the endpoint.
 static void endpointFromPolyline(const simd_float2 *positions,
                                  const float *arcLengths, NSUInteger count,

@@ -443,7 +443,7 @@
 
   // Now that the sub-views' _timeline ivars are fresh, refresh any open
   // hold-modulation popover's participation pills. The rebuilder closure
-  // reads from those ivars — running it before applyTimeline pushed the
+  // reads from those ivars - running it before applyTimeline pushed the
   // new blob downstream produced stale states (e.g. cmd-Z left the pill
   // bar showing the post-edit state instead of the undone one).
   if (_openHoldModEditor && _openHoldModRebuilder) {
@@ -476,7 +476,7 @@
 
   // A boundary/value popover is built from a snapshot at open; an external
   // timeline change (cmd-Z / redo) reaches the graphs but not the popover, so
-  // re-drive it from the active graph at its open fraction — the active/Animate
+  // re-drive it from the active graph at its open fraction - the active/Animate
   // row split and values rebuild from the new state (e.g. cmd-Z re-adding a
   // keypose flips its row from "+ No keypose here" back to editable).
   // Suppressed briefly after a popover edit so the host's echo write doesn't
@@ -509,7 +509,7 @@
 
 // Every available property ALWAYS has a lane (single keypose at t=0 is its
 // constant value). `lane.enabled` means "animatable" (shown in the sequencer,
-// checked in the dropdown) and is toggled ONLY by the dropdown — editing a
+// checked in the dropdown) and is toggled ONLY by the dropdown - editing a
 // value never changes it. This returns `src` with any missing lanes added as
 // disabled (constant) lanes seeded to the template default.
 - (KKTimeline *)_timelineSeededFrom:(KKTimeline *)src {
@@ -635,7 +635,7 @@
 }
 
 // Dropdown only: flip a property between animatable and constant. Never
-// changes the value — but it does (re)shape the keyposes: turning animatable
+// changes the value - but it does (re)shape the keyposes: turning animatable
 // seeds the always-present 2-keypose Hold pair (both = the current constant,
 // so every phase starts at the constant, not a stray 0); turning it off
 // collapses back to a single constant keypose at the Hold value.
@@ -648,7 +648,7 @@
     // Keep in sync with KKTimelineBasicView's kDefaultInEnd/kDefaultOutStart.
     static const double kDefInEnd = 0.22, kDefOutStart = 0.78;
 
-    // Inherit global In/Out state from existing animated lanes (OR — any
+    // Inherit global In/Out state from existing animated lanes (OR - any
     // lane with In/Out means In/Out is globally on). Without this, a newly
     // animatable lane is always Hold-only even when other lanes have
     // active In/Out phases, which is jarring when the rest of the UI is
@@ -658,7 +658,7 @@
     BOOL tFound = NO;
     // Inherit interval params (curve, intensity, freq, modulation, link) from
     // the first animatable lane so a new lane joins the same In/Hold/Out
-    // shape — particularly drift/link state.
+    // shape - particularly drift/link state.
     KKInterval *tmplIn = nil, *tmplHold = nil, *tmplOut = nil;
     for (KKLane *l in _timeline.lanes) {
       if (!l.enabled || l.keyposes.count < 2)
@@ -686,14 +686,14 @@
         NSInteger holdStart = lInEn ? 1 : 0;
         NSInteger holdEnd = n - (lOutEn ? 2 : 1);
         if (holdEnd > holdStart) {
-          // Inherit the Hold link state from the first existing animated lane —
-          // pure-hold lanes included — so a new lane MATCHES the current
+          // Inherit the Hold link state from the first existing animated lane -
+          // pure-hold lanes included - so a new lane MATCHES the current
           // linked/unlinked choice (Basic: "auto-link iff the others are
           // linked"). Without this, a pure-hold source's link was ignored and
           // the new lane fell back to the fresh=linked default.
           tmplHold = [kk[holdStart].outgoing copy];
           // Boundary times + In/Out interval templates only when the source
-          // actually has that phase (≥3 KPs) — pure hold-only lanes sit at
+          // actually has that phase (≥3 KPs) - pure hold-only lanes sit at
           // [0, outEnd] and would seed silly boundary defaults.
           if (lInEn) {
             tIn = kk[holdStart].time;
@@ -708,7 +708,7 @@
       }
     }
 
-    // Out-end / hold-end position — one frame before clipEnd so FCP playhead
+    // Out-end / hold-end position - one frame before clipEnd so FCP playhead
     // can reach it. Read frame/clip dur off the basic graph.
     double outEndFrac = 1.0;
     double clipDur = _basicGraph.clipDurationSeconds;
@@ -725,7 +725,7 @@
     }
     // Hold-start: at 0 when In off, at tIn when In on. A freshly animatable
     // property's Hold pair starts linked (the two interior keyposes move
-    // together) — "fresh = linked, then it's on the user". A second lane
+    // together) - "fresh = linked, then it's on the user". A second lane
     // joining an existing shape inherits that shape's link state via tmplHold.
     KKKeyPose *hs = [KKKeyPose keyposeAtTime:(globalIn ? tIn : 0.0) values:v];
     if (tmplHold) {
@@ -801,7 +801,7 @@
 }
 
 - (void)resetZoom {
-  // Both tabs share one toolbar button — reset whichever is active.
+  // Both tabs share one toolbar button - reset whichever is active.
   if (_activeTab == 1)
     [_advancedGraph resetZoom];
   else
@@ -815,7 +815,7 @@
   [self _refresh];
   if (_onAccessoryButtonsChanged)
     _onAccessoryButtonsChanged();
-  // The reset-zoom button reflects only the active tab — re-fire so it
+  // The reset-zoom button reflects only the active tab - re-fire so it
   // tracks the new side's state immediately on tab change.
   if (_onZoomChanged)
     _onZoomChanged(tab == 1 ? _advancedZoomed : _basicZoomed);

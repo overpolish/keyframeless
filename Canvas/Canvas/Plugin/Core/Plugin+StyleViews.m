@@ -26,7 +26,7 @@ static void KKWireCycleViewToParam(
     id apiManager, KKPillStyleView *_Nonnull v, UInt32 paramID,
     void (^_Nullable pathBlock)(KKBezierPath *_Nonnull path, NSInteger index)) {
   // Initial-value read: createView is a custom-view callback (no host
-  // scope) — open one so getCustomParameterValue resolves.
+  // scope) - open one so getCustomParameterValue resolves.
   id<FxCustomParameterActionAPI_v4> initAct =
       [apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [initAct startAction:apiManager];
@@ -268,7 +268,7 @@ static void KKWireCycleViewToParam(
       KKWriteCustomParamString(setAPI, newJSON,
                                isStroke ? kParamStrokeGradientData
                                         : kParamFillGradientData);
-      // Mirror write — keeps OSC-scope reads (KKReadGradientParamsToPath
+      // Mirror write - keeps OSC-scope reads (KKReadGradientParamsToPath
       // via finalizeRect / handleCursorMouseDownX) in sync.
       [setAPI setStringParameterValue:newJSON
                           toParameter:isStroke ? kParamStrokeGradientDataMirror

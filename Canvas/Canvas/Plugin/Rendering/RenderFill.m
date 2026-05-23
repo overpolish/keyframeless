@@ -63,7 +63,7 @@ NSUInteger KKBuildFillFan(KKBezierPath *path, float outputWidth,
   }
   fanStarts[nc] = oc; // sentinel
 
-  // Build triangle fans — one per contour, each with its own centroid.
+  // Build triangle fans - one per contour, each with its own centroid.
   CanvasFillVertex *fillVerts = malloc(oc * 3 * sizeof(CanvasFillVertex));
   NSUInteger ti = 0;
   for (NSUInteger ci = 0; ci < nc; ci++) {
@@ -132,7 +132,8 @@ void KKRenderFillForPath(
 
     id<MTLRenderCommandEncoder> enc =
         [commandBuffer renderCommandEncoderWithDescriptor:rpd];
-    [enc setViewport:(MTLViewport){0, 0, (double)viewportSize.x, (double)viewportSize.y, -1, 1}];
+    [enc setViewport:(MTLViewport){0, 0, (double)viewportSize.x,
+                                   (double)viewportSize.y, -1, 1}];
     [enc setRenderPipelineState:fillStencilPS];
     [enc setDepthStencilState:fillStencilDSState];
     [enc setStencilReferenceValue:0];
@@ -175,7 +176,8 @@ void KKRenderFillForPath(
 
     id<MTLRenderCommandEncoder> enc =
         [commandBuffer renderCommandEncoderWithDescriptor:rpd];
-    [enc setViewport:(MTLViewport){0, 0, (double)viewportSize.x, (double)viewportSize.y, -1, 1}];
+    [enc setViewport:(MTLViewport){0, 0, (double)viewportSize.x,
+                                   (double)viewportSize.y, -1, 1}];
     [enc setRenderPipelineState:fillColorPS];
     [enc setDepthStencilState:fillColorDSState];
     [enc setStencilReferenceValue:0];
@@ -296,7 +298,8 @@ void KKRenderFillAAOutline(KKBezierPath *path, CanvasPathTransform pathXform,
 
   id<MTLRenderCommandEncoder> enc =
       [commandBuffer renderCommandEncoderWithDescriptor:rpd];
-  [enc setViewport:(MTLViewport){0, 0, (double)viewportSize.x, (double)viewportSize.y, -1, 1}];
+  [enc setViewport:(MTLViewport){0, 0, (double)viewportSize.x,
+                                 (double)viewportSize.y, -1, 1}];
   [enc setRenderPipelineState:strokePS];
 
   id<MTLBuffer> vertexBuffer =
@@ -343,7 +346,8 @@ void KKRenderFillStencilOnly(
 
   id<MTLRenderCommandEncoder> enc =
       [commandBuffer renderCommandEncoderWithDescriptor:rpd];
-  [enc setViewport:(MTLViewport){0, 0, (double)viewportSize.x, (double)viewportSize.y, -1, 1}];
+  [enc setViewport:(MTLViewport){0, 0, (double)viewportSize.x,
+                                 (double)viewportSize.y, -1, 1}];
   [enc setRenderPipelineState:fillStencilPS];
   [enc setDepthStencilState:fillStencilDSState];
   [enc setStencilReferenceValue:0];
@@ -493,7 +497,8 @@ void KKRenderSketchFillForPath(KKBezierPath *origPath,
 
     id<MTLRenderCommandEncoder> enc =
         [commandBuffer renderCommandEncoderWithDescriptor:rpd];
-    [enc setViewport:(MTLViewport){0, 0, (double)viewportSize.x, (double)viewportSize.y, -1, 1}];
+    [enc setViewport:(MTLViewport){0, 0, (double)viewportSize.x,
+                                   (double)viewportSize.y, -1, 1}];
     [enc setRenderPipelineState:strokePS];
     if (useStencilClip) {
       [enc setDepthStencilState:fillColorDSState];

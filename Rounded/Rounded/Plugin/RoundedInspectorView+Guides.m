@@ -28,17 +28,17 @@ static const double kOSCGuideTargetSnap = 4.0;
 // Radius the constants guide's final slider step asks the user to reach, and
 // how close (radius units) counts as "there".
 static const double kConstantsGuideTargetRadius = 80.0;
-// Release tolerance for the slider step — forgiving enough to "land near 80"
+// Release tolerance for the slider step - forgiving enough to "land near 80"
 // by hand (no mid-drag magnetism), then it snaps exactly onto 80.
 static const double kConstantsGuideSliderSnap = 4.0;
 // The mini-canvas (miniOSC) drag step targets a *different* radius than the
 // slider step, with the same generous snap as the in-viewer OSC guide.
 static const double kConstantsGuideS2Radius = 40.0;
 // Magnetic-snap radius (screen points) around the amber target for the
-// mini-canvas drag step — gentle so it doesn't grab from far away.
+// mini-canvas drag step - gentle so it doesn't grab from far away.
 static const CGFloat kConstantsGuideSnapPx = 9.0;
 // Gentle mid-drag magnet (radius units) so the slider knob sticks onto the
-// target as it approaches — same feel as the miniOSC, but not grabby.
+// target as it approaches - same feel as the miniOSC, but not grabby.
 static const double kConstantsGuideSliderMagnet = 2.0;
 // Crop drag step: drag the top-left handle (index 0 in KKCropPt order) to a
 // centred 60% box. Target [w,h,x,y]; snap reuses kConstantsGuideSnapPx.
@@ -53,7 +53,7 @@ static const double kConstantsGuideCropXTarget = 100.0;
 
 @implementation RoundedInspectorView (Guides)
 
-// One host serves all guides — they're mutually exclusive and share the same
+// One host serves all guides - they're mutually exclusive and share the same
 // timeline accessor/applier + completion-callback wiring. Lazy so it picks up
 // `self.basicLanesView` after the superclass finishes setting it up.
 - (KKJoyrideGuideHost *)_guideHost {
@@ -158,7 +158,7 @@ static const double kConstantsGuideCropXTarget = 100.0;
 }
 
 // Autostart path: no seed (so the lanes the user creates during the guide
-// persist after it ends — the host won't save+restore). The intro-seen flag
+// persist after it ends - the host won't save+restore). The intro-seen flag
 // is set in extraOnComplete regardless of skip vs complete, matching the
 // pre-host behaviour.
 - (void)_startIntroGuide {
@@ -207,7 +207,7 @@ static const double kConstantsGuideCropXTarget = 100.0;
 
 // The point-OSC value mapping for the generic KKJoyrideOSCSegment: how a
 // screen drag becomes a radius and back. This is the only OSC-shape-specific
-// code the inspector still owns — a different OSC supplies its own strategy.
+// code the inspector still owns - a different OSC supplies its own strategy.
 - (KKOSCGuideStrategy *)_pointOSCStrategy {
   __weak typeof(self) weak = self;
   __weak KKTimelineLanesView *weakBasic = self.basicLanesView;
@@ -223,7 +223,7 @@ static const double kConstantsGuideCropXTarget = 100.0;
     RoundedSetGuideRadius(v); // OSC handle tracks (blob unreadable in drawOSC)
   };
   s.valueForScreenPoint = ^double(NSPoint pt) {
-    // Map the cursor to the radius that puts the OSC handle under it — the
+    // Map the cursor to the radius that puts the OSC handle under it - the
     // OSC's own geometry, so the drag tracks the mouse 1:1 like a native drag.
     return RoundedGuideRadiusForScreenPoint(pt);
   };
@@ -288,7 +288,7 @@ static const double kConstantsGuideCropXTarget = 100.0;
 
 // Builds the guide's single-lane Radius timeline at the given value. The OSC
 // reads radius from this blob (via parameterChanged → instance state), so
-// writing it is the only channel that moves the on-screen control — the
+// writing it is the only channel that moves the on-screen control - the
 // in-viewer OSC never receives events through the overlay and its API is nil
 // outside FCP callbacks.
 - (KKTimeline *)_guideTimelineWithRadius:(double)radius {
@@ -342,7 +342,7 @@ static const double kConstantsGuideCropXTarget = 100.0;
 
 - (void)restartOSCGuide {
   // Step 1: spotlight on the handle, no target yet. The press bumps to OSC
-  // step 2 (in spotlightMouseDown) which reveals the target — the handle
+  // step 2 (in spotlightMouseDown) which reveals the target - the handle
   // already follows sGuideRadius at any step > 0.
   RoundedSetOSCGuideStep(1);
   // The OSC handle reads sGuideRadius during the guide; reset it so a new
@@ -378,7 +378,7 @@ static const double kConstantsGuideCropXTarget = 100.0;
 // Crossover into the OSC portion: the user finished the inspector portion and
 // the first OSC step just became active. Zoom-to-fit already ran up front (in
 // restartFullWalkthroughGuide) so FCP's focus steal happened before the
-// overlay existed — here we only do the focus-free work: enable the OSC guide
+// overlay existed - here we only do the focus-free work: enable the OSC guide
 // visuals and seed a clean Radius-only timeline (the drag math needs one
 // Radius lane). That param write retriggers drawOSC at the already-fitted
 // geometry, and the position observer's refreshSpotlight reveals the cutout.
@@ -400,7 +400,7 @@ static const double kConstantsGuideCropXTarget = 100.0;
 // Scroll/pinch routing during the guide now lives in the reusable
 // KKMiniCanvasGuideScroll (any plugin's mini-canvas guide gets it). It
 // forwards to the canvas only while the constants guide is active and the
-// pointer is over the canvas. (Magnify monitors are the real pinch carrier —
+// pointer is over the canvas. (Magnify monitors are the real pinch carrier -
 // see [[project_joyride_xpc_popover_gestures]].)
 - (void)_installConstantsScrollMonitorsForCanvas:(KKMiniCanvasView *)canvas {
   [self _teardownConstantsScrollMonitors];
@@ -551,7 +551,7 @@ static const double kConstantsGuideCropXTarget = 100.0;
            }];
 
   // The slider has a modal tracking loop, so (unlike pan/scroll) its drag
-  // can't be forwarded — capture it and drive the constant through the
+  // can't be forwarded - capture it and drive the constant through the
   // popover's coalesced channel. Same KKJoyrideDragStep factory, slider
   // variant: target shown immediately (no press-gated reveal, dragMessage
   // nil) and not circular. The map uses the slider's own screen geometry so
@@ -625,7 +625,7 @@ static const double kConstantsGuideCropXTarget = 100.0;
       }];
 
   // Final step: click into the Crop X field and type the target value. No
-  // capture — a normal forwarded click focuses the field, the user types,
+  // capture - a normal forwarded click focuses the field, the user types,
   // and the live-keystroke handler (set in willOpen) auto-commits + ends
   // the guide when the value matches.
   KKJoyrideStep *sX = [KKJoyrideStep
@@ -772,21 +772,21 @@ static const double kConstantsGuideCropXTarget = 100.0;
   (void)ixDone;
 
   // Step 15: auto-pause this long after the user starts playback before
-  // advancing — long enough to see a beat of the animation, short enough
+  // advancing - long enough to see a beat of the animation, short enough
   // that the demo doesn't feel like it's stalled.
   const double kWatchBackSeconds = 1.0;
 
-  // Step 14: drag the In-end diamond to t=0.8s. Snap window in seconds —
+  // Step 14: drag the In-end diamond to t=0.8s. Snap window in seconds -
   // both for the gentle in-drag magnet and the final release tolerance.
   const double kDragTargetSeconds = 0.8;
   const double kDragSnapSeconds = 0.05;
   const CGFloat kDragSnapPx = 14.0;
 
   // KKIntervalCurveElastic == 4 (Linear=0, EaseIn=1, EaseOut=2, EaseInOut=3,
-  // Elastic=4, Bounce=5) — what we present to users as the "Spring" curve.
+  // Elastic=4, Bounce=5) - what we present to users as the "Spring" curve.
   const NSInteger kSpringCurveType = 4;
 
-  // Diamond 2 (hold-start) — chronologically the second visible keypose
+  // Diamond 2 (hold-start) - chronologically the second visible keypose
   // once the In transition is on (the diamonds the user just saw appear).
   const NSInteger kDiamondTarget = 2;
   __block BOOL cropChanged = NO, radiusChanged = NO;
@@ -802,12 +802,12 @@ static const double kConstantsGuideCropXTarget = 100.0;
            }];
   s1.showsNext = YES;
 
-  // Step 2: click to play, then click again to pause — advances on the
+  // Step 2: click to play, then click again to pause - advances on the
   // pause edge. Useful demo when the spacebar shortcut isn't working.
   KKJoyrideStep *sPlay = [KKJoyrideStep
       stepWithMessage:RLoc(
                           @"Click <symbol play.fill color=accent /> to play, "
-                          @"then again to <accent>pause</accent> — handy when "
+                          @"then again to <accent>pause</accent> - handy when "
                           @"<warn>spacebar</warn> isn't working",
                           @"Basic timing guide: play/pause from the inspector.")
            targetView:nil];
@@ -890,14 +890,14 @@ static const double kConstantsGuideCropXTarget = 100.0;
 
   KKJoyrideStep *sMini = [KKJoyrideStep
       stepWithMessage:RLoc(@"This <accent>mini viewer</accent> shows the clip "
-                           @"at this point in time — no need to scrub around",
+                           @"at this point in time - no need to scrub around",
                            @"Advanced timing guide: the keypose mini viewer.")
            targetView:^NSView * {
              return weakBinder.latestMiniCanvas;
            }];
   sMini.showsNext = YES;
 
-  // Drag the radius dot OR a crop corner inside the boundary popover —
+  // Drag the radius dot OR a crop corner inside the boundary popover -
   // same canvas API the constants guide uses for radius/crop drags, so the
   // popover's onDragBegin/onHandleValue/onDragEnd fire in a clean pair (no
   // leaked action scopes). Advances once both Crop AND Radius have been
@@ -944,7 +944,7 @@ static const double kConstantsGuideCropXTarget = 100.0;
              : NSZeroRect;
   };
 
-  // No spotlightPassThrough — that sends the click to FCP. We want it
+  // No spotlightPassThrough - that sends the click to FCP. We want it
   // forwarded to the XPC popover so the pill receives it (same path as the
   // Crop/Radius row click in the animated-dropdown popover).
   // Step 14: drag diamond 2 (Hold-start / In-end) toward 0.8s on the
@@ -991,11 +991,11 @@ static const double kConstantsGuideCropXTarget = 100.0;
       }];
 
   KKJoyrideStep *sWatchBack = [KKJoyrideStep
-      stepWithMessage:RLoc(@"Let's <accent>watch it back</accent> — click play",
+      stepWithMessage:RLoc(@"Let's <accent>watch it back</accent> - click play",
                            @"Basic timing guide: play back the animation.")
            targetView:nil];
   // Cutout encompasses both the play button AND the FCP viewer (when the OSC
-  // is alive — the shared bridge gives us the viewer image rect). Non-
+  // is alive - the shared bridge gives us the viewer image rect). Non-
   // circular so the wide bounding box renders sensibly.
   sWatchBack.spotlightCircular = NO;
   sWatchBack.targetScreenRect = ^NSRect {
@@ -1099,7 +1099,7 @@ static const double kConstantsGuideCropXTarget = 100.0;
                     forStep:sSpring];
 
   // sEdit's "advance ONLY after BOTH Crop AND Radius dragged" doesn't fit a
-  // single trigger — keep it as a plugin-side AND via the binder's relay.
+  // single trigger - keep it as a plugin-side AND via the binder's relay.
   binder.staticValueDragDidEnd =
       ^(NSString *label, NSArray<NSNumber *> *values) {
         __strong KKJoyrideController *g = weakGuide;
@@ -1120,7 +1120,7 @@ static const double kConstantsGuideCropXTarget = 100.0;
   // sEdit.onEnter already resets cropChanged/radiusChanged above.
 
   // Step 15 (sWatchBack): user clicks play → wait kWatchBackSeconds → auto-
-  // pause and advance. Don't await a manual pause — the guide handles it.
+  // pause and advance. Don't await a manual pause - the guide handles it.
   // Also forward all plays/pauses to the binder so its playPauseEdge fires
   // for sPlay.
   self.onPlayingChanged = ^(BOOL playing) {
@@ -1159,13 +1159,13 @@ static const double kConstantsGuideCropXTarget = 100.0;
 }
 
 - (void)restartBasicTimingGuide {
-  // Force Basic tab — the guide assumes Basic-mode UI (boundary pills,
+  // Force Basic tab - the guide assumes Basic-mode UI (boundary pills,
   // In/Hold/Out projection). If the user last left the inspector on
   // Advanced the guide steps would target controls that aren't visible.
   // Snapshot so we can restore on completion.
   NSInteger priorTab = self.activeTab;
   [self setActiveTab:KKTimelineTabBasic];
-  // Filmstrip/onion would clutter the mini-viewer steps — force a single-frame
+  // Filmstrip/onion would clutter the mini-viewer steps - force a single-frame
   // preview for the guide and restore the user's choice on completion. Plain
   // setter (not _renderModeDidChange:) so persisted UI state is untouched.
   KKMiniCanvasRenderMode priorRenderMode = self.basicLanesView.renderMode;
@@ -1175,7 +1175,7 @@ static const double kConstantsGuideCropXTarget = 100.0;
   // letting them through. Without this, a click inside the spotlight reaches
   // the popover natively (canvas's own mouseDown → onHandleDragBegin) AND
   // fires the spotlight block (beginPointHandleDragAtScreenPoint: → ALSO
-  // onHandleDragBegin) — two "Adjust Radius" undo groups race for the same
+  // onHandleDragBegin) - two "Adjust Radius" undo groups race for the same
   // channel and FCP abort()s. Constants guide uses the same flag.
   host.forwardsGestures = YES;
 
@@ -1235,14 +1235,14 @@ static const double kConstantsGuideCropXTarget = 100.0;
 
   // KKTimelineLanesView sorts lanes alphabetically by label for display
   // (and only seeds *missing* lanes at the end), so order this seed to
-  // match — otherwise the guide's lane-row lookups land on the wrong row.
+  // match - otherwise the guide's lane-row lookups land on the wrong row.
   tl.lanes = @[ crop, radius ];
   return tl;
 }
 
 // Advanced guide steps (POC): tab-switch → orientation → cmd-click adds a
 // Crop keypose → popover intro → final "drag a pill" + done.
-// Step plumbing is intentionally light — most steps use `showsNext` and the
+// Step plumbing is intentionally light - most steps use `showsNext` and the
 // one auto-advance (cmd-click → popover) reuses the existing
 // `staticValuesPopoverWillOpen` trigger (Advanced's value popover goes
 // through the same `_presentBoundaryValuePopover…` path as Basic).
@@ -1255,7 +1255,7 @@ static const double kConstantsGuideCropXTarget = 100.0;
   const NSInteger ixSwitch = 0, ixIntro = 1, ixCmdClick = 2, ixPopover = 3,
                   ixDrag = 4;
 
-  // Step 1 — Tap the Advanced tab segment. forwardsGestures=YES routes the
+  // Step 1 - Tap the Advanced tab segment. forwardsGestures=YES routes the
   // synthesized click to the underlying pill; the inspector's
   // `onGuideTabChanged` (set in `restartAdvancedTimingGuide`) advances the
   // guide once the tab actually flips to Advanced.
@@ -1270,10 +1270,10 @@ static const double kConstantsGuideCropXTarget = 100.0;
              : NSZeroRect;
   };
 
-  // Step 2 — Orientation. Cutout the Advanced view itself.
+  // Step 2 - Orientation. Cutout the Advanced view itself.
   KKJoyrideStep *sIntro = [KKJoyrideStep
       stepWithMessage:
-          RLoc(@"Each row is a property — drop keyposes anywhere on the "
+          RLoc(@"Each row is a property - drop keyposes anywhere on the "
                @"timeline and shape transitions independently",
                @"Advanced timing guide: explains the per-property lanes.")
            targetView:^NSView * {
@@ -1282,7 +1282,7 @@ static const double kConstantsGuideCropXTarget = 100.0;
            }];
   sIntro.showsNext = YES;
 
-  // Step 3 — Cmd-click on the Crop lane. Cutout the whole row; glowing
+  // Step 3 - Cmd-click on the Crop lane. Cutout the whole row; glowing
   // target shows where to drop the new keypose (~50% time). The user
   // performs the cmd-click natively (forwardsGestures = YES). Advance fires
   // when Advanced opens the value popover.
@@ -1306,7 +1306,7 @@ sCmdClick: {
              : NSZeroRect;
   };
 
-  // Step 4 — Popover intro. Cutout the popover content; Next closes it.
+  // Step 4 - Popover intro. Cutout the popover content; Next closes it.
   KKJoyrideStep *sPopover = [KKJoyrideStep
       stepWithMessage:
           RLoc(@"Edit values at this point in time. Next closes the popover.",
@@ -1322,7 +1322,7 @@ sCmdClick: {
   };
   sPopover.showsNext = YES;
 
-  // Step 5 — Drag the Radius KP at t=1 toward an earlier time. Same
+  // Step 5 - Drag the Radius KP at t=1 toward an earlier time. Same
   // KKJoyrideDragStep pattern Basic uses for the diamond drag, so the
   // joyride panel captures the press and feeds it through
   // guideBegin/Drag/EndPillDrag.
@@ -1375,7 +1375,7 @@ sCmdClick: {
         return fabs(now - kDragTargetFrac) <= kDragSnapFrac;
       }];
   // Closing the boundary value popover is the seam between popover-intro
-  // and drag — the showsNext path on sPopover skips the binder's
+  // and drag - the showsNext path on sPopover skips the binder's
   // closeOnAdvance, so we close it inline as the drag step opens.
   __weak KKTimelineLanesView *weakBasic = self.basicLanesView;
   sDrag.onEnter = ^{

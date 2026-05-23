@@ -6,7 +6,7 @@
 #import "KKDataBlob.h"
 #import <FxPlug/FxPlugSDK.h>
 
-// Private declaration of the FxCustom interpolation conformance — kept out
+// Private declaration of the FxCustom interpolation conformance - kept out
 // of the public header so the framework module doesn't transitively import
 // FxPlug's non-modular headers.
 @interface KKDataBlob () <FxCustomParameterInterpolation_v2>

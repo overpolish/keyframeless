@@ -37,7 +37,7 @@ NS_ASSUME_NONNULL_BEGIN
   __weak NSPopover *_openContentPopover;
   __weak _KKStaticValuesPopoverView *_openStaticView;
   // YES when _openStaticView is a boundary-value popover (caller-supplied
-  // display lanes) — its rows must NOT be clobbered by _refresh's
+  // display lanes) - its rows must NOT be clobbered by _refresh's
   // updateUnoptedLanes:, which is only for the constants popover.
   BOOL _openStaticIsBoundary;
 
@@ -73,7 +73,7 @@ NS_ASSUME_NONNULL_BEGIN
   __weak KKSegmentEditView *_openHoldModEditor;
   NSArray<NSArray<NSNumber *> *> * (^_openHoldModRebuilder)(void);
   // Same mechanism for the In/Out curve (gap) popover's plain participation
-  // pills — kept in sync on cmd-Z without closing the popover.
+  // pills - kept in sync on cmd-Z without closing the popover.
   __weak KKSegmentEditView *_openGapEditor;
   NSArray<NSNumber *> * (^_openGapRebuilder)(void);
   // Per-tab last-reported zoom state. The toolbar button only reflects the
@@ -98,7 +98,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)_refresh;
 @end
 
-/// Internal popover plumbing — the manage-popover presenter and the generic
+/// Internal popover plumbing - the manage-popover presenter and the generic
 /// popover-with-outside-click-monitors helper. The public popover entry
 /// points (closeManagePopover / showStaticValuesPopoverFromView:) are on the
 /// (Popovers) category in KKTimelineLanesView.h. Both are implemented in
@@ -125,7 +125,7 @@ NS_ASSUME_NONNULL_BEGIN
                                  onDragEnd:(void (^)(void))onDragEnd;
 
 /// In-place re-bind for an already-open boundary popover. Used by the
-/// onion-skin filmstrip when the user clicks an inactive cell — the popover
+/// onion-skin filmstrip when the user clicks an inactive cell - the popover
 /// stays open (no close/reopen blink), the value rows re-display the new
 /// KP's values, and the boundary state (editing fraction, request file)
 /// re-publishes. The graph is responsible for updating any closure-captured
@@ -137,7 +137,7 @@ NS_ASSUME_NONNULL_BEGIN
                                 excludedLabels:
                                     (NSArray<NSString *> *)excludedLabels;
 /// A structural edit (e.g. unlink) while a boundary popover is open changes the
-/// tied-hold-collapsed KP set the filmstrip / onion shows — re-publish so it
+/// tied-hold-collapsed KP set the filmstrip / onion shows - re-publish so it
 /// updates live instead of waiting for a close/reopen or a nav. No-op when no
 /// boundary popover is open or render mode is Off.
 - (void)_republishBoundaryRequestIfOpen;

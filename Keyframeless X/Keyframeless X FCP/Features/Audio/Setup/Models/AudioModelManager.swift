@@ -282,7 +282,7 @@ class AudioModelManager: ObservableObject {
 		}
 	}
 
-	// Silicon — WhisperKit
+	// Silicon - WhisperKit
 
 	private nonisolated static func whisperKitModelDirectory(for variant: String) -> URL {
 		FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
@@ -311,7 +311,7 @@ class AudioModelManager: ObservableObject {
 		try? FileManager.default.removeItem(at: modelPath)
 	}
 
-	// Parakeet — FluidAudio
+	// Parakeet - FluidAudio
 
 	private func downloadParakeet(_ variant: String) async {
 		guard let version = Self.parakeetVersion(for: variant) else { return }
@@ -338,7 +338,7 @@ class AudioModelManager: ObservableObject {
 		}
 	}
 
-	// Intel — whisper.cpp (GGML)
+	// Intel - whisper.cpp (GGML)
 
 	private nonisolated static var ggmlModelsDirectory: URL {
 		FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!

@@ -55,7 +55,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) void (^onSkip)(void);
 /// Fired when the user taps Next. Only shown when this block is non-nil.
 @property(nonatomic, copy, nullable) void (^onNext)(void);
-/// When NO the dim background is suppressed — only the bubble is drawn.
+/// When NO the dim background is suppressed - only the bubble is drawn.
 @property(nonatomic) BOOL drawsBackground;
 
 @end

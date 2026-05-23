@@ -128,7 +128,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// rows are built during init so this can't be an init arg without churn).
 - (void)applyDefaultsProvider:
     (NSArray<NSNumber *> * (^)(NSString *label))provider;
-/// In-place value swap — push the latest values from `lanes` into the
+/// In-place value swap - push the latest values from `lanes` into the
 /// matching `_KKStaticValueRow`s without tearing down the popover. Used by
 /// the onion-skin filmstrip (Advanced) when the user clicks an inactive
 /// cell so the popover stays open but rebinds to a different KP. Pairs

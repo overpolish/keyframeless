@@ -39,7 +39,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// `editFraction` (preserving structure) instead of a t=0 single keypose.
 @property(nonatomic) BOOL boundaryEditing;
 @property(nonatomic) double editFraction;
-/// Lane labels whose handle/box must NOT be drawn or hit — a property
+/// Lane labels whose handle/box must NOT be drawn or hit - a property
 /// excluded from the boundary's phase has no keypose there, so its OSC
 /// would be meaningless. Set by the boundary popover; cleared on close.
 @property(nonatomic, copy, nullable)

@@ -32,12 +32,12 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
                     parameterFlags:kFxParameterFlag_HIDDEN];
   // KKDataBlob so writes route through the undoable
   // setCustomParameterValue:atTime: path. NOT_ANIMATABLE deliberately
-  // omitted — it would re-exclude the param from undo.
+  // omitted - it would re-exclude the param from undo.
   [paramAPI addCustomParameterWithName:dataName
                            parameterID:dataID
                           defaultValue:[KKDataBlob blobWithData:nil]
                         parameterFlags:kFxParameterFlag_HIDDEN];
-  // Native-string mirror — readable from OSC/render scope where the
+  // Native-string mirror - readable from OSC/render scope where the
   // KKDataBlob would return nil. Written in lockstep with the blob via
   // KKWriteGradientParamsFromPath.
   [paramAPI addStringParameterWithName:@""
@@ -117,7 +117,7 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
                      parameterFlags:kFxParameterFlag_HIDDEN |
                                     kFxParameterFlag_NOT_ANIMATABLE];
 
-  // NOT_ANIMATABLE deliberately omitted — that flag excludes a param from
+  // NOT_ANIMATABLE deliberately omitted - that flag excludes a param from
   // FCP's undo stack, so tool-bar clicks (`setIntValue:atTime:`) wouldn't
   // be reversible. Same caveat that applies to KKDataBlob params.
   [paramAPI addIntSliderWithName:@"Last Tool"
@@ -140,14 +140,14 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
   // KKDataBlob wraps the base64 path blob so writes route through
   // `setCustomParameterValue:atTime:` (undoable) instead of
   // `setStringParameterValue:` (filtered off FCP's undo stack).
-  // NOT_ANIMATABLE deliberately omitted — it re-excludes blob writes
+  // NOT_ANIMATABLE deliberately omitted - it re-excludes blob writes
   // from undo. See project_kkdatablob_custom_param.md.
   [paramAPI addCustomParameterWithName:@"PathData"
                            parameterID:kParamPathData
                           defaultValue:[KKDataBlob blobWithData:nil]
                         parameterFlags:kFxParameterFlag_HIDDEN];
 
-  // Native-string mirror — readable from OSC and render scopes where
+  // Native-string mirror - readable from OSC and render scopes where
   // KKDataBlob reads return nil. Written in lockstep with the blob via
   // KKCanvasWritePathData. See kParamPathDataMirror declaration.
   [paramAPI addStringParameterWithName:@""
@@ -584,7 +584,7 @@ static void registerGradientSubParams(id<FxParameterCreationAPI_v5> paramAPI,
 
   // Animatable so selection changes go on the host undo stack. Without
   // this, an inspector value edit on path A followed by selecting path B
-  // and pressing cmd-Z reverts the value param while B is selected — the
+  // and pressing cmd-Z reverts the value param while B is selected - the
   // mutation hook then applies the reverted value to B (wrong path).
   // Making selectedIndex undoable means cmd-Z first restores the prior
   // selection (back to A), so the next cmd-Z reverts the value with A

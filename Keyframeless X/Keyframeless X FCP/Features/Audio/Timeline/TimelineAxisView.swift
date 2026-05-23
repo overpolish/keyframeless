@@ -14,7 +14,7 @@ import SwiftUI
 // monitors (NSEvent.addLocalMonitorForEvents) never receive keyDown unless a
 // native NSView has been made first responder through an actual user click.
 // Programmatic makeFirstResponder calls (e.g. in viewDidAppear) do NOT prime
-// the routing — only a real mouseDown on an NSView that accepts first responder
+// the routing - only a real mouseDown on an NSView that accepts first responder
 // causes the system to start forwarding key events to the extension process.
 //
 // Solution: AxisDocumentView accepts first responder and overrides keyDown to
@@ -312,7 +312,7 @@ private class AxisDocumentView: NSView {
 
 	override func mouseDown(with event: NSEvent) {
 		// Claiming first responder on click primes FCP's key event routing
-		// to the extension — see TimelineFirstResponder comment.
+		// to the extension - see TimelineFirstResponder comment.
 		window?.makeFirstResponder(self)
 		let point = convert(event.locationInWindow, from: nil)
 		for entry in cachedClipRects.reversed() {

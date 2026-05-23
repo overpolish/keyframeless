@@ -10,7 +10,7 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /// One step in a sequential guided tour. targetView is evaluated lazily at
-/// display time — return nil to dim the host without a spotlight cutout.
+/// display time - return nil to dim the host without a spotlight cutout.
 @interface KKJoyrideStep : NSObject
 + (instancetype)stepWithMessage:(NSString *)message
                      targetView:(nullable NSView * (^)(void))targetView;
@@ -38,8 +38,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// Called on the main queue with the mouseUp point after spotlightMouseDown.
 @property(nonatomic, copy, nullable) void (^spotlightMouseUp)
     (NSPoint screenPoint);
-/// Magnify (pinch) events are delivered to the frontmost window — the guide
-/// panel — and `ignoresMouseEvents` does NOT pass gestures through (unlike
+/// Magnify (pinch) events are delivered to the frontmost window - the guide
+/// panel - and `ignoresMouseEvents` does NOT pass gestures through (unlike
 /// clicks/scroll), so they're dropped before reaching content below. When
 /// set, the panel intercepts magnify events and hands them here so a step
 /// can forward the pinch to its control (e.g. a mini-canvas zoom).
@@ -57,8 +57,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// case-insensitively against event.charactersIgnoringModifiers.
 /// Nil means no key-triggered advance.
 @property(nonatomic, copy, nullable) NSString *advanceOnCharacter;
-/// Common modifier flags (shift/ctrl/opt/cmd) that must be held — and no
-/// others — for advanceOnCharacter to fire. 0 means any modifiers are fine.
+/// Common modifier flags (shift/ctrl/opt/cmd) that must be held - and no
+/// others - for advanceOnCharacter to fire. 0 means any modifiers are fine.
 @property(nonatomic) NSEventModifierFlags advanceOnModifierFlags;
 /// Step counter shown in the bubble. 0 = auto (1-based position in the steps
 /// array). Set when one logical step should display as a different number
@@ -69,7 +69,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) NSInteger displayTotalSteps;
 /// Called once on the main queue when this step becomes active, just after its
 /// (possibly empty) spotlight is shown. Fire-and-forget: use for an async
-/// transition into the step — e.g. an OSC step that must zoom-to-fit the
+/// transition into the step - e.g. an OSC step that must zoom-to-fit the
 /// viewer first. Have targetScreenRect return NSZeroRect until the work lands,
 /// then call -refreshSpotlight (e.g. from a position observer) to reveal the
 /// cutout. This is what lets one guide move between inspector and OSC steps.
@@ -103,7 +103,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Updates the live overlay's tooltip text and step counter in place without
 /// advancing (no panel/monitor rebuild). Use to make one continuous-gesture
-/// step present as two visual steps — e.g. swap "Click…" → "Drag…" on
+/// step present as two visual steps - e.g. swap "Click…" → "Drag…" on
 /// mousedown while the same press flows into the drag.
 - (void)updateMessage:(NSString *)message stepNumber:(NSInteger)stepNumber;
 
@@ -125,12 +125,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// than activation taps (e.g. [fcpApp activateWithOptions:...]).
 @property(nonatomic, copy, nullable) void (^passthroughActivationHandler)(void);
 
-/// When YES, the overlay panel does NOT set `ignoresMouseEvents` — so the
+/// When YES, the overlay panel does NOT set `ignoresMouseEvents` - so the
 /// windowserver actually delivers gesture events (pinch/magnify) to the
 /// panel, where `-sendEvent:` forwards them to the active step's
 /// `spotlightMagnifyEvent`. Click-through still works (the global mouse
 /// monitor + synthesize-into-target path doesn't depend on the panel
-/// ignoring events, and the overlay's hitTest returns nil). Default NO —
+/// ignoring events, and the overlay's hitTest returns nil). Default NO -
 /// only guides that need to forward gestures into scrollable content (e.g.
 /// a mini-canvas) should set it. Set before `startWithSteps:`.
 @property(nonatomic) BOOL forwardsGestures;

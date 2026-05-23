@@ -198,7 +198,7 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
 
 - (KKTimingLane *)_positionLaneAtTime:(CMTime)time {
   // KKDataBlob reads from OSC scope return nil even inside an action
-  // scope — FxPlug's OSC apiManager refuses custom-param reads, full
+  // scope - FxPlug's OSC apiManager refuses custom-param reads, full
   // stop (see project_osc_custom_blob_unreadable.md). The documented
   // workaround is to read the lanes off KKKit's per-instance state
   // map, which the plugin populates via the multi-stage pump and which
@@ -226,7 +226,7 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
   if (!setAPI || !actAPI)
     return;
   // Read the merge baseline from the per-instance snapshot (see comment
-  // in `_positionLaneAtTime:` — KKDataBlob reads from OSC scope are nil).
+  // in `_positionLaneAtTime:` - KKDataBlob reads from OSC scope are nil).
   KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
   NSMutableArray<KKTimingLane *> *lanes =
       [[state.lanesSnapshot mutableCopy] autorelease];
@@ -246,7 +246,7 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
       mLane.segments = mSegs;
       lanes[li] = mLane;
       // Route through KKWriteLanesJSON so the native-string mirror stays
-      // in lockstep with the blob — OSC scope can't read the blob, so on
+      // in lockstep with the blob - OSC scope can't read the blob, so on
       // a project reload the mirror is what seeds `lanesSnapshot` (and
       // therefore the bezier `pathData`) before the first drawTick.
       KKWriteLanesJSON(lanes, setAPI, self.apiManager);
@@ -577,7 +577,7 @@ static inline NSInteger pathRoleOffset(NSInteger part) { return part % 1000; }
     return;
   }
 
-  // Rotation X/Y rings — interactive when their lane is on, or Opt held.
+  // Rotation X/Y rings - interactive when their lane is on, or Opt held.
   if (rotXVisible || optHeld) {
     _rotXRing.center = center;
     if ([_rotXRing hitTestAtMousePositionX:positionX

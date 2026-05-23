@@ -12,12 +12,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Plugin-agnostic Advanced-mode sequencer: one row per animatable lane,
 /// each with its own keyposes and intervals. A projection of the same
-/// KKTimeline blob Basic edits — Advanced is freeform (any number of
+/// KKTimeline blob Basic edits - Advanced is freeform (any number of
 /// keyposes per lane, independent per-lane timing). Mutations are reported
 /// through the callbacks; the host writes the blob.
 ///
 /// Sibling of KKTimelineBasicView inside KKTimelineLanesView's centered
-/// area; the active tab decides which is shown. Step 1: skeleton only —
+/// area; the active tab decides which is shown. Step 1: skeleton only -
 /// renders empty lane rows with a placeholder strip; no keyposes / no
 /// interactions yet.
 @interface KKTimelineAdvancedView : NSView
@@ -53,7 +53,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// inspector's clear-selection button to toggle its enabled tint.
 @property(nonatomic, readonly) NSInteger selectionCount;
 
-/// Fires whenever pill or gap selection count changes — including via
+/// Fires whenever pill or gap selection count changes - including via
 /// `clearSelection`, mouse events, delete, marquee, applyTimeline reset.
 @property(nonatomic, copy, nullable) void (^onSelectionChanged)(void);
 
@@ -66,14 +66,14 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, readonly) NSSet<NSString *> *selectedPillKeys;
 @property(nonatomic, copy, readonly) NSSet<NSString *> *selectedGapKeys;
 /// Replace the current selection. No-op + no `onSelectionChanged` fire if
-/// both sets equal the current state — safe to call from a peer's
+/// both sets equal the current state - safe to call from a peer's
 /// onSelectionChanged callback without ping-pong.
 - (void)applySelectionPillKeys:(NSSet<NSString *> *)pillKeys
                        gapKeys:(NSSet<NSString *> *)gapKeys;
 
 /// When YES, mouse + tracking events are dropped (no hover highlight, no
 /// click handling). Used while an overlay (e.g. the Basic-compat banner)
-/// covers the lanes — without this the row hover keeps firing because
+/// covers the lanes - without this the row hover keeps firing because
 /// tracking areas don't respect overlay siblings.
 @property(nonatomic) BOOL interactionsBlocked;
 
@@ -81,7 +81,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// lane whose pill was clicked, or the lane whose KP was selected via
 /// requestValuePopoverAtFraction:). nil before the first pill click.
 /// KKTimelineLanesView reads this to scope the popover's filmstrip cells
-/// to *this* lane's keypose timeline — without it, opening a popover at
+/// to *this* lane's keypose timeline - without it, opening a popover at
 /// a time that happens to be shared with another lane would let that
 /// other lane's unrelated KPs leak into the filmstrip.
 @property(nonatomic, readonly, nullable, copy) NSString *primaryLaneLabel;
@@ -91,7 +91,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// value (so the popover renders the right editor / mini-canvas handles);
 /// `previewFraction` is the clicked KP's time (mini-canvas evaluates the
 /// frame there). The host wires this to KKTimelineLanesView's existing
-/// boundary-popover plumbing — same coalesced drag chain Basic uses.
+/// boundary-popover plumbing - same coalesced drag chain Basic uses.
 @property(nonatomic, copy, nullable) void (^onValuePopover)
     (NSView *anchorView, NSArray<KKLane *> *displayLanes,
      double previewFraction, NSArray<NSString *> *excludedLabels,
@@ -100,7 +100,7 @@ NS_ASSUME_NONNULL_BEGIN
      void (^onValueDragBegin)(void), void (^onValueDragEnd)(void));
 
 /// Asked by the value popover when removing the last keypose at a time leaves
-/// nothing left to edit there — the host closes the open popover.
+/// nothing left to edit there - the host closes the open popover.
 @property(nonatomic, copy, nullable) void (^onRequestClosePopover)(void);
 
 /// Single-click on the gap between two pills in a lane row → request the
@@ -143,12 +143,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Popover entry points implemented in KKTimelineAdvancedView+Popovers.m.
 /// Declared in a category (not the primary interface) so the primary
-/// @implementation isn't expected to provide them — silences
+/// @implementation isn't expected to provide them - silences
 /// -Wincomplete-implementation while the methods stay part of the public API.
 @interface KKTimelineAdvancedView (Popovers)
 
 /// Programmatic re-open of the value popover at a different keypose time.
-/// Used by the onion-skin filmstrip when the user clicks an inactive cell —
+/// Used by the onion-skin filmstrip when the user clicks an inactive cell -
 /// the popover swaps to that KP. Prefers the lane the popover was last
 /// opened against; falls back to any animatable lane that has a KP at
 /// `fraction`. No-op if no matching KP exists.
@@ -183,7 +183,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Drive a keypose pill drag from a guide's spotlightMouseDown/Dragged/Up
 /// (the joyride panel intercepts the click, so the regular mouseDown:/
-/// Dragged:/Up: path never sees the press — these mirror Basic's
+/// Dragged:/Up: path never sees the press - these mirror Basic's
 /// guideBeginDragDiamondAtIndex: family). Returns NO if the lane is missing
 /// or the kpIdx is out of range.
 - (BOOL)guideBeginPillDragForLabel:(NSString *)label

@@ -26,7 +26,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// completes or is skipped.
 - (void)restartOSCGuide;
 
-/// Runs the intro and OSC guides back-to-back on a single controller — the
+/// Runs the intro and OSC guides back-to-back on a single controller - the
 /// concrete example of one guide crossing inspector → OSC. Starts on a clean
 /// timeline; restores the previous one via onTimelineMutated when the guide
 /// completes or is skipped.

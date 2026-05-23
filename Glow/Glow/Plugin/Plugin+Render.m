@@ -65,7 +65,7 @@ static void _encodeGlowPipeline(
 
   // Source's sub-region within the dest-image-sized prep texture. When
   // radius > 0, destinationImageRect expands beyond source bounds for glow
-  // bleed — source content occupies a sub-region of dest image, with the
+  // bleed - source content occupies a sub-region of dest image, with the
   // expansion margins transparent. Prep renders source at its actual
   // position so blur correctly bleeds INTO the margins.
   FxRect sp = sourceImages[0].imagePixelBounds;
@@ -99,7 +99,7 @@ static void _encodeGlowPipeline(
         -((float)sp.bottom - dImgCenterY) * bs},
        {0, 0}},
   };
-  // Composite fills the dest-tile viewport. UVs are unused — the
+  // Composite fills the dest-tile viewport. UVs are unused - the
   // fragment computes sampling positions from clipSpacePosition + the
   // tileOffsetPx uniform (Y-down screen-pixel position in final image).
   KKVertex2D dstV[] = {
@@ -258,20 +258,17 @@ static void _encodeGlowPipeline(
     // shader uses this offset + clipSpacePosition to find its position in
     // the final image regardless of sub-tiling or composite mode.
     FxRect dtRect = destinationImage.tilePixelBounds;
-    simd_float2 tileOffsetPx = {
-        (float)(dtRect.left - dImg.left),
-        (float)(dtRect.bottom - dImg.bottom)};
-    simd_float2 destImgSizePx = {
-        (float)(dImg.right - dImg.left),
-        (float)(dImg.top - dImg.bottom)};
-    // Source's Y-down origin within dest image, plus its size — lets the
-    // composite map dest-image pixels to source UVs (sub-region, not stretched).
-    simd_float2 srcOriginInDestPx = {
-        (float)(sp.left - dImg.left),
-        (float)(dImg.top - sp.top)};
-    simd_float2 srcImgSizePx = {
-        (float)(sp.right - sp.left),
-        (float)(sp.top - sp.bottom)};
+    simd_float2 tileOffsetPx = {(float)(dtRect.left - dImg.left),
+                                (float)(dtRect.bottom - dImg.bottom)};
+    simd_float2 destImgSizePx = {(float)(dImg.right - dImg.left),
+                                 (float)(dImg.top - dImg.bottom)};
+    // Source's Y-down origin within dest image, plus its size - lets the
+    // composite map dest-image pixels to source UVs (sub-region, not
+    // stretched).
+    simd_float2 srcOriginInDestPx = {(float)(sp.left - dImg.left),
+                                     (float)(dImg.top - sp.top)};
+    simd_float2 srcImgSizePx = {(float)(sp.right - sp.left),
+                                (float)(sp.top - sp.bottom)};
     [e setFragmentBytes:&tileOffsetPx
                  length:sizeof(tileOffsetPx)
                 atIndex:FragmentIndex_TileOffsetPx];
@@ -296,7 +293,7 @@ static void _encodeGlowPipeline(
 }
 
 // Pool of texture pairs for blur intermediates. All allocated at max cap size.
-// Concurrency limited by semaphore — at most kTexPairPoolSize renders
+// Concurrency limited by semaphore - at most kTexPairPoolSize renders
 // in-flight.
 typedef struct {
   id<MTLTexture> a;
@@ -504,7 +501,7 @@ static void _texPairReturn(NSInteger idx) {
   }
 
   // Multi-stage gradient LUT: `[r0, g0, b0, r1, g1, b1, ...]` of length
-  // `3 * KK_GRADIENT_LUT_SIZE` — wins over the static gradient when present.
+  // `3 * KK_GRADIENT_LUT_SIZE` - wins over the static gradient when present.
   NSArray<NSNumber *> *msGradient = multiStage[@"Gradient"];
   if (color.mode == KKColorModeGradient &&
       msGradient.count == (NSUInteger)(KK_GRADIENT_LUT_SIZE * 3)) {
@@ -625,7 +622,7 @@ static void _texPairReturn(NSInteger idx) {
                  atTime:(CMTime)renderTime
                   error:(NSError **)outError {
   // Request the FULL source image, not just the dest tile, so the blur
-  // can sample neighbor pixels — otherwise sub-tile renders (FCP project-
+  // can sample neighbor pixels - otherwise sub-tile renders (FCP project-
   // library preview) blur each tile independently and produce visible
   // seams + per-tile glow at strip boundaries. The render pipeline below
   // prepares + blurs the full image and the composite reads only the
@@ -735,7 +732,7 @@ static void _texPairReturn(NSInteger idx) {
                                                 (double)sampleDest.height,
                                                 -1,
                                                 1};
-                        // Pooled scratch textures — reused across frames so
+                        // Pooled scratch textures - reused across frames so
                         // memory stays bounded under FCP look-ahead playback.
                         id<MTLTexture> prepTex =
                             [KKMotionBlur scratchTextureForKey:@"glow.prep"

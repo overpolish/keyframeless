@@ -18,7 +18,7 @@
 /// Original (pre-arm) advance trigger; preserved so that re-entering this
 /// step resets the arm state.
 @property(nonatomic, strong, nullable) KKJoyrideTrigger *advanceOriginal;
-/// Currently-listening advance trigger — equal to `advanceOriginal` until a
+/// Currently-listening advance trigger - equal to `advanceOriginal` until a
 /// `thenWaitFor:` outer matches, after which it points at the inner.
 @property(nonatomic, strong, nullable) KKJoyrideTrigger *advanceActive;
 @property(nonatomic, strong, nullable) KKJoyrideTrigger *dismiss;
@@ -410,7 +410,7 @@
   [self _resetBindingIfNewlyActive:match];
 
   // playPauseEdge: arm on first play during the step, fire on the matching
-  // pause. No warmup gate — sPlay is a vanilla user-clicks-play step.
+  // pause. No warmup gate - sPlay is a vanilla user-clicks-play step.
   // (sWatchBack's spurious-play-after-scrub guard stays plugin-side; it
   // doesn't use playPauseEdge.)
   if (alsoCheckEdge && type == KKJoyrideTriggerTypePlayingChanged) {

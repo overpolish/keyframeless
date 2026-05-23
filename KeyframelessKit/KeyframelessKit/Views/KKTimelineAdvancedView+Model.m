@@ -158,7 +158,7 @@
   return nil;
 }
 
-// Per-label "identity" default from the plugin's lane template — used when
+// Per-label "identity" default from the plugin's lane template - used when
 // a lane has zero keyposes and the user is adding the first one back.
 - (NSArray<NSNumber *> *)_templateDefaultValuesForLabel:(NSString *)label {
   KKLane *tmpl = nil;
@@ -212,7 +212,7 @@
 
 // Find a pill under `pt`: returns the lane index in _animatableLanes and the
 // keypose index within that lane, or both -1 if no pill is hit. Last-touched
-// pill gets first refusal — when two pills overlap, the one the user just
+// pill gets first refusal - when two pills overlap, the one the user just
 // dragged into the stack draws on top and stays the click target.
 - (BOOL)_pillAtPoint:(NSPoint)pt
                 lane:(NSInteger *)outLaneIdx

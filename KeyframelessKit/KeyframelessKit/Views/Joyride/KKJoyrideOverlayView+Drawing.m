@@ -119,7 +119,7 @@ static const CGFloat kJTipBottomRowH = 18.0;
   [[NSBezierPath bezierPathWithRoundedRect:bubble xRadius:6.0
                                    yRadius:6.0] fill];
 
-  // Keep the arrow within the rounded body, but point it at the target — not
+  // Keep the arrow within the rounded body, but point it at the target - not
   // the bubble centre, which detaches when the bubble is clamped to stay
   // on-screen near an edge.
   CGFloat ax = MAX(NSMinX(bubble) + 6.0 + kJTipArrowHalfW,
@@ -193,7 +193,7 @@ static const CGFloat kJTipBottomRowH = 18.0;
 
   // The panel spans the whole screen.frame and this view is flipped, so y=0
   // sits under the menu bar. Use the screen's visibleFrame insets (menu bar
-  // at top, dock at bottom) as the usable band — otherwise a tooltip near
+  // at top, dock at bottom) as the usable band - otherwise a tooltip near
   // the top draws "above" into the menu bar and gets clipped.
   NSScreen *scr = self.window.screen ?: NSScreen.mainScreen;
   CGFloat topInset = NSMaxY(scr.frame) - NSMaxY(scr.visibleFrame);
@@ -294,13 +294,13 @@ static const CGFloat kJTipBottomRowH = 18.0;
       (_frozen && _haveLastSpot) ? _lastSpotRect : [self spotRectInSelf];
   if (NSIsEmptyRect(spotRect)) {
     if (_frozen)
-      return; // tearing down — don't pop the centred fallback in
+      return; // tearing down - don't pop the centred fallback in
     if (_drawsBackground) {
       [[NSColor colorWithWhite:0.0 alpha:0.35] setFill];
       NSRectFill(self.bounds);
     }
     if (_message) {
-      // No spotlight target — draw a floating bubble near the top of the
+      // No spotlight target - draw a floating bubble near the top of the
       // screen so steps that require viewer interaction still show guidance.
       NSRect synthetic = NSMakeRect(NSMidX(self.bounds) - 1, 200.0, 2, 2);
       [self _drawBubbleAnchoredAt:NSInsetRect(synthetic, -8.0, -3.0)];

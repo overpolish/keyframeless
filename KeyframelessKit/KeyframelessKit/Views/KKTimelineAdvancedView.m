@@ -113,7 +113,7 @@
   if (row >= 0) {
     NSArray<KKLane *> *anim = [self _animatableLanes];
     NSRect tracks = [self _tracksRect];
-    // Gate on the cursor being inside the tracks rect — left of it is the
+    // Gate on the cursor being inside the tracks rect - left of it is the
     // lane-label gutter (frac would clamp to 0 and falsely register a hit
     // on the first interval).
     if (row < (NSInteger)anim.count && pt.x >= NSMinX(tracks) &&
@@ -198,7 +198,7 @@
 }
 
 - (void)applyTimeline:(KKTimeline *)timeline {
-  // While a pill drag is active the view owns the timeline optimistically —
+  // While a pill drag is active the view owns the timeline optimistically -
   // ignoring the host's parameterChanged echo round-trip prevents the curve
   // from flickering between the live drag state and the previous tick.
   if (_dragActive)

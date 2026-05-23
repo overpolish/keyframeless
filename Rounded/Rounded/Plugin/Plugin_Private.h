@@ -21,7 +21,7 @@
 @property(nonatomic) double lastPushedPlayheadFrac;
 /// Self-terminating main-queue poll that samples currentTime for the
 /// scrubber. Needed because render ticks stop ~1s before the clip end (FCP
-/// pre-render buffer) — the poll keeps following currentTime through the
+/// pre-render buffer) - the poll keeps following currentTime through the
 /// buffered tail until it stalls (paused/ended), then invalidates itself.
 @property(nonatomic, retain, nullable) NSTimer *playheadTimer;
 @property(nonatomic) double playheadPollLast;     // last currentTime sampled
@@ -31,7 +31,7 @@
 /// render path so the main-queue poll can read it. When YES and the
 /// playhead reaches the clip end, wrap it back to the start.
 @property(nonatomic) BOOL loopEnabledCached;
-/// CACurrentMediaTime() of the last loop wrap — cooldown so the
+/// CACurrentMediaTime() of the last loop wrap - cooldown so the
 /// pause→seek→resume sequence isn't re-triggered while FCP processes it.
 @property(nonatomic) NSTimeInterval lastLoopWrapTime;
 /// Effect start + duration (seconds) cached from the render path, where

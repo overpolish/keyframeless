@@ -21,7 +21,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithTitle:(NSString *)title
                        detail:(nullable NSString *)detail
                    symbolName:(nullable NSString *)symbolName;
-/// Designated — `icon` is a fully-prepared (template) leading glyph, for
+/// Designated - `icon` is a fully-prepared (template) leading glyph, for
 /// callers that need a custom shape rather than an SF symbol.
 - (instancetype)initWithTitle:(NSString *)title
                        detail:(nullable NSString *)detail

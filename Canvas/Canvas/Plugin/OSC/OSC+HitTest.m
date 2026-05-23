@@ -27,7 +27,7 @@
     }
   }
 
-  // Transform OSC overlays — top-most, highest hit priority. Each handle
+  // Transform OSC overlays - top-most, highest hit priority. Each handle
   // is gated by its own multi-stage lane visibility, mirroring Position.
   self.transformPositionHovered = NO;
   self.scaleRingHovered = NO;
@@ -51,7 +51,7 @@
   // on, OR Opt is held. Same convention used at draw time.
   CGEventFlags hitFlags =
       CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
-  // Opt only surfaces the rings when Rot Z is already visible — same gate
+  // Opt only surfaces the rings when Rot Z is already visible - same gate
   // as the draw path so what's hit-testable matches what's drawn.
   BOOL optHeld = ((hitFlags & kCGEventFlagMaskAlternate) != 0) && rotZVisible;
   BOOL rotXHit = [self isRotXRingOSCVisibleAtTime:kCMTimeZero] || optHeld;
@@ -362,8 +362,8 @@
 
   // Path combine toolbar (full toolbar when 2+ non-image paths selected,
   // single stroke-to-path button when exactly 1 selected). The two toolbars
-  // are mutually exclusive — at most one is visible at a time. Mirror the
-  // visibility check in OSC+Draw and only hit-test the visible variant —
+  // are mutually exclusive - at most one is visible at a time. Mirror the
+  // visibility check in OSC+Draw and only hit-test the visible variant -
   // the hidden one keeps a stale `bottomMargin` from when it was last
   // shown, so testing it would generate phantom hits at the old position.
   __block NSUInteger pathCount = 0;

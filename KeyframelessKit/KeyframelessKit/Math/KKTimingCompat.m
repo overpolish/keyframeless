@@ -57,7 +57,7 @@ BOOL KKTimelineIsBasicCompatible(KKTimeline *timeline) {
     return NO;
   [internals sortUsingSelector:@selector(compare:)];
 
-  // Basic's projection is shared across lanes — `inEnabled`/`outEnabled`
+  // Basic's projection is shared across lanes - `inEnabled`/`outEnabled`
   // toggle the same boundaries on every animatable lane. So any internal
   // boundary that appears in *one* lane must appear in *every* lane (PLAN:
   // "consistent boundary times exist such that every animatable lane's
@@ -94,7 +94,7 @@ BOOL KKTimelineIsBasicCompatible(KKTimeline *timeline) {
   double tIn = internals[0].doubleValue;
   double tOut = internals[1].doubleValue;
 
-  // Hold interval (between t_inEnd and t_outStart) must hold flat — PLAN
+  // Hold interval (between t_inEnd and t_outStart) must hold flat - PLAN
   // requires equal endpoint values; modulation on the interval is allowed
   // and isn't checked here.
   for (KKLane *lane in timeline.lanes) {
@@ -120,7 +120,7 @@ KKTimeline *KKTimelineReseedToBasic(KKTimeline *timeline, double endFrac) {
   if (endFrac <= 0.0 || endFrac > 1.0)
     endFrac = 1.0;
 
-  // Basic's projection is uniform across lanes — partial reseeds leave
+  // Basic's projection is uniform across lanes - partial reseeds leave
   // siblings misaligned at the global boundaries and the timeline stays
   // incompatible. Per the user-chosen "flat hold at midpoint" strategy,
   // collapse every animatable lane to a two-keypose flat hold; lanes the

@@ -55,7 +55,7 @@
 - (NSString *)kkSelectedGroupKey {
   // Mirror -selectedTransformablePath: the sequencer accent should track
   // the same "single transformable layer" predicate the OSC uses, so the
-  // user's mental model matches. Groups are eligible — their lane is keyed
+  // user's mental model matches. Groups are eligible - their lane is keyed
   // by layerID just like a path.
   NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
   NSIndexSet *sel = uuid ? KKCanvasCurrentSelection(uuid) : nil;
@@ -92,7 +92,7 @@
     return;
 
   // FxParameterRetrievalAPI_v6 / FxParameterSettingAPI_v5 only resolve
-  // inside an action scope when invoked from a custom-view callback —
+  // inside an action scope when invoked from a custom-view callback -
   // query them AFTER startAction.
   [actionAPI startAction:self];
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
@@ -141,7 +141,7 @@
 
   // Persist the new active index. drawOSC's undo-detection compares the
   // in-memory selection against `kParamLastSelectedIndex` and snaps memory
-  // back to the param value if they disagree — without this write the OSC
+  // back to the param value if they disagree - without this write the OSC
   // would treat our swap as an undo and revert on the next render tick.
   NSInteger primaryIdx = -1;
   for (NSUInteger i = finalSel.firstIndex; i != NSNotFound;
@@ -161,7 +161,7 @@
   // The blob write triggers an async parameterChanged → drawOSC round-trip
   // before the store sees the new selection. Push it through the store
   // immediately so the layer-list redraw + sequencer accent refresh fire
-  // on this same tick — drawOSC will harmlessly re-apply the same value.
+  // on this same tick - drawOSC will harmlessly re-apply the same value.
   [lst.store performBatch:^{
     [lst.store setPaths:paths];
     [lst.store setSelectedIndices:finalSel];
@@ -208,7 +208,7 @@
     [self _handlePathDataEcho];
     break;
   case kKKParamMultiStageData:
-    // Same pattern as path-data echo — kit helper handles the
+    // Same pattern as path-data echo - kit helper handles the
     // suppression-flag dance so subsequent writes don't clobber the revert.
     [KKPlugin multiStageRefreshFromParamForAPI:self.apiManager];
     break;
@@ -251,14 +251,14 @@
 
   // Closed Path used to be written into the path blob from here via
   // KKModifySelectedPathProperty, but that opens a fresh action scope
-  // — producing a second undo entry on top of FCP's own bool entry,
+  // - producing a second undo entry on top of FCP's own bool entry,
   // and re-firing on every cmd-Z echo (the handler reads the reverted
   // bool, mutates the path, writes the blob in a new scope → endless
   // oscillation, "closed-path never undoes"). Render-tick
   // KKParamsToSelectedPaths already reads kParamClosedPath and applies
   // it to the selected path each frame, and end-width pill visibility
   // is driven by the visibility refresh switch above. So no blob write
-  // is needed here — the bool param alone is the source of truth.
+  // is needed here - the bool param alone is the source of truth.
 
   if (parameterID == kParamStrokeColorMode ||
       parameterID == kParamFillColorMode ||
@@ -271,8 +271,8 @@
 
   // Visibility refresh helpers write setParameterFlags into FCP's
   // current undo transaction. Running them on every parameterChanged
-  // tick — including cmd-Z echoes for the path / selection / lanes
-  // blobs — layers phantom flag writes onto the host undo stack and
+  // tick - including cmd-Z echoes for the path / selection / lanes
+  // blobs - layers phantom flag writes onto the host undo stack and
   // produces "2 cmd-Z per edit" in FCP. Motion's transaction model is
   // unaffected. Gate by paramID, mirroring Glow/MagicMove/Rounded.
   if (parameterID == kParamForceShow || parameterID == kKKParamTimingExpanded)
@@ -325,7 +325,7 @@
 // in-memory KKCanvasCurrentSelection map (which is mutated only by
 // explicit OSC/layer-list selection sites). Render-tick
 // KKParamsToSelectedPaths reads from that map and writes inspector
-// values to it — so without a synchronous update here, the host's
+// values to it - so without a synchronous update here, the host's
 // reverted stroke (or any inspector value) gets smeared into the
 // *previously*-selected path before the map catches up. Mirror to
 // the store too so observers (layer list / sequencer) flip on the
@@ -336,7 +336,7 @@
   NSInteger newIdx = KKReadSelectedIndex(getAPI);
   NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
   // Only sync the store when the param holds a real path index. -1 means
-  // "no path selected" — which can mean either nothing selected OR a
+  // "no path selected" - which can mean either nothing selected OR a
   // group-only selection (group indices aren't representable here as
   // groups have their own ID space). Overwriting the store with an empty
   // index set in the group case wipes the just-set group selection,
@@ -345,7 +345,7 @@
   if (!uuid || newIdx < 0)
     return;
   KKLayerInstanceState *lst = KKLayerStateForUUID(uuid);
-  // Skip when the in-memory selection already contains newIdx — that's
+  // Skip when the in-memory selection already contains newIdx - that's
   // our own write echoing back (kParamLastSelectedIndex carries only
   // the primary path index, so during a multi-select it equals the
   // first selected index; pushing [newIdx] here would collapse
@@ -353,7 +353,7 @@
   // than the store snapshot, so we see writes from the
   // kParamCanvasSelection echo handler that may have just run for the
   // same cmd-Z (its store push goes through performBatch, which is
-  // async — by the time we check the snapshot here, it's still stale).
+  // async - by the time we check the snapshot here, it's still stale).
   NSIndexSet *current = KKCanvasCurrentSelection(uuid);
   if ([current containsIndex:(NSUInteger)newIdx])
     return;
@@ -369,7 +369,7 @@
 // Selection-state echo: cmd-Z reverts kParamCanvasSelection alongside
 // the path blob. Re-read it here, parse against the (now post-revert)
 // store paths, and push to the store. This is what restores group
-// selection on cmd-Z — kParamLastSelectedIndex above can only carry a
+// selection on cmd-Z - kParamLastSelectedIndex above can only carry a
 // path index, so it can't represent group selection on its own.
 - (void)_handleCanvasSelectionEcho {
   NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
@@ -382,7 +382,7 @@
   [getAPI getStringParameterValue:&str fromParameter:kParamCanvasSelection];
   KKCanvasStoreSnapshot *snap = [lst.store snapshot];
   NSIndexSet *parsed = KKParseCanvasSelection(str, snap.paths ?: @[]);
-  // Skip if the store already matches — avoids redundant observer fires
+  // Skip if the store already matches - avoids redundant observer fires
   // when this is just our own write echoing back.
   if ([parsed isEqualToIndexSet:snap.selectedIndices])
     return;
@@ -425,7 +425,7 @@
 // (post-undo) blob so render and OSC see the reverted paths, and push
 // parsed paths into KKCanvasStore so the layer list / sequencer / OSC
 // observers redraw against reverted state. Without this push, undo
-// looks like "nothing happened" — params revert but the UI keeps
+// looks like "nothing happened" - params revert but the UI keeps
 // showing post-edit state.
 - (void)_handlePathDataEcho {
   id<FxCustomParameterActionAPI_v4> actAPI =
@@ -443,7 +443,7 @@
   KKLayerInstanceState *lst = uuid ? KKLayerStateForUUID(uuid) : nil;
   if (!lst)
     return;
-  // Push parsed paths to store regardless of length — an empty blob
+  // Push parsed paths to store regardless of length - an empty blob
   // (e.g. cmd-Z reverting the very first draw) must propagate to
   // observers so the sequencer/layer-list redraws against the empty
   // state. Skipping the empty case left the sequencer lane stale.
@@ -465,7 +465,7 @@
   }];
 }
 
-// Group-header expand state — KK kit's helper handles the main-queue
+// Group-header expand state - KK kit's helper handles the main-queue
 // dispatch needed for the header's AutoLayout mutations. The store push
 // remains Canvas-specific (other observers like the layer-list renderer
 // key off it).
@@ -473,7 +473,7 @@
   NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
   KKLayerInstanceState *lst = uuid ? KKLayerStateForUUID(uuid) : nil;
   // Skip the kit's direct header.isExpanded write when stroke/fill/sketch
-  // header is "Not available for groups" — the layer-list refresh below
+  // header is "Not available for groups" - the layer-list refresh below
   // (via syncGroupHeaders) keeps it collapsed. Without this, cmd-Z's
   // expanded-param echo flips the header back open right after we
   // disabled it.
@@ -490,7 +490,7 @@
   }];
 }
 
-// Group-header enabled checkbox — native bool toggle; KK kit's helper
+// Group-header enabled checkbox - native bool toggle; KK kit's helper
 // syncs the header's `isEnabled` on the main queue.
 - (void)_handleGroupHeaderEnabledEcho:(UInt32)parameterID atTime:(CMTime)time {
   NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
@@ -557,7 +557,7 @@
   lst.visHash = 0;
 }
 
-// Visibility flip — write the new flag set synchronously inside FCP's
+// Visibility flip - write the new flag set synchronously inside FCP's
 // parameterChanged scope so it joins the user's bool change in one undo
 // entry (mirrors motion blur's _setFlagsIfNeeded). The async store-
 // observer apply that follows will see visHash unchanged and skip.
@@ -604,7 +604,7 @@
 
   // Seed the gradient-data param with the default JSON if it's still
   // empty. Without this, the path has the gradient JSON but the param
-  // doesn't — and any later sync that calls KKParamsToPath
+  // doesn't - and any later sync that calls KKParamsToPath
   // (fresh-shape creation, click-to-select) reads the empty param and
   // overwrites the path's gradient back to nothing → renders solid.
   // Dragging a stop happens to write both, which is why "move a stop"
@@ -620,7 +620,7 @@
           [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
       [actAPI startAction:self];
       KKWriteCustomParamString(setAPI, defaultJSON, dataParamID);
-      // Mirror lockstep write — readable from OSC scope.
+      // Mirror lockstep write - readable from OSC scope.
       [setAPI setStringParameterValue:defaultJSON
                           toParameter:isStroke ? kParamStrokeGradientDataMirror
                                                : kParamFillGradientDataMirror];

@@ -17,16 +17,16 @@ static const UInt32 kKKParamAnimationSeparator __attribute__((unused)) = 9900;
 static const UInt32 kKKParamTimingCurvePreview __attribute__((unused)) = 9905;
 static const UInt32 kKKParamTimingExpanded __attribute__((unused)) = 9908;
 
-/// Retired animation IDs — old saved projects may still carry values for
+/// Retired animation IDs - old saved projects may still carry values for
 /// these but no current code reads or registers them. Do not reuse:
 ///   9901–9904, 9906, 9907, 9909–9917 (legacy 3-phase factor engine)
 ///   9918 (legacy always-on multi-stage gate)
-///   9920, 9921 (legacy MultiStage Selected* int sliders — selection is
+///   9920, 9921 (legacy MultiStage Selected* int sliders - selection is
 ///               carried in the lanes JSON's `sel` field instead)
 /// Multi-stage timing parameters:
 static const UInt32 kKKParamMultiStageData __attribute__((unused)) = 9919;
 
-/// Hidden per-instance UUID — keys the static per-instance state map so
+/// Hidden per-instance UUID - keys the static per-instance state map so
 /// multiple copies of a plugin on the same timeline don't share state.
 static const UInt32 kKKParamInstanceID __attribute__((unused)) = 9922;
 

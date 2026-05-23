@@ -28,7 +28,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Center of the point handle in overlay points (y-up), given the image's
 /// `contentRect` (same space). Return NO for no handle. The canvas draws it
 /// with the shared `KKPointOSC` shader so it's pixel-identical to the viewer
-/// OSC handle — the plugin only decides where.
+/// OSC handle - the plugin only decides where.
 - (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
     pointHandleCenter:(out CGPoint *)outCenter
           contentRect:(CGRect)contentRect;
@@ -57,7 +57,7 @@ NS_ASSUME_NONNULL_BEGIN
              forValue:(double)value
           contentRect:(CGRect)contentRect;
 /// Crop handle centres (overlay points, y-up) the box *would* have if the
-/// crop were `values` (`[w,h,x,y]`) — same order/count as
+/// crop were `values` (`[w,h,x,y]`) - same order/count as
 /// -miniCanvas:extraHandleCentersForContentRect: (0 = top-left). Lets a
 /// guide target a specific crop handle. nil if unsupported.
 - (nullable NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
@@ -76,8 +76,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)miniCanvasEndHandleDrag:(KKMiniCanvasView *)canvas;
 @end
 
-/// `MTKView` that resolves a cross-process source `IOSurface` — published by
-/// the render side to a small JSON descriptor file — and displays it. The
+/// `MTKView` that resolves a cross-process source `IOSurface` - published by
+/// the render side to a small JSON descriptor file - and displays it. The
 /// render and view sides live in separate XPC processes, so the only shared
 /// primitive is the `IOSurface` (looked up here by global ID). Shader
 /// compositing, handles and value editing arrive in later phases. See
@@ -102,7 +102,7 @@ NS_ASSUME_NONNULL_BEGIN
     (NSString *laneLabel, NSArray<NSNumber *> *values);
 
 /// Fired once when a handle drag starts / ends, around all the per-tick
-/// `onHandleValue` writes — the host opens/closes an undo group so the whole
+/// `onHandleValue` writes - the host opens/closes an undo group so the whole
 /// drag coalesces into a single undo entry.
 @property(nonatomic, copy, nullable) void (^onHandleDragBegin)(void);
 @property(nonatomic, copy, nullable) void (^onHandleDragEnd)(void);
@@ -120,7 +120,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// YES if the pointer was over the canvas and the event was consumed.
 - (BOOL)applyScrollEvent:(NSEvent *)event;
 - (BOOL)applyMagnifyEvent:(NSEvent *)event;
-/// Is the pointer (screen) currently over the canvas? Non-mutating — used by
+/// Is the pointer (screen) currently over the canvas? Non-mutating - used by
 /// the popover's local monitor to swallow without double-applying.
 - (BOOL)pointerOverCanvas;
 
@@ -128,7 +128,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// or zero until the source resolves. Used to show crop in pixel units.
 @property(nonatomic, readonly) CGSize sourceMediaSize;
 
-/// Fired when `sourceMediaSize` first resolves (or changes) — lets a host
+/// Fired when `sourceMediaSize` first resolves (or changes) - lets a host
 /// re-render any pixel-scaled UI that depends on it.
 @property(nonatomic, copy, nullable) void (^onSourceResolved)(void);
 
@@ -143,7 +143,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Fired when the user single-clicks an INACTIVE filmstrip cell (onion-skin
 /// only). The host swaps the popover to the KP at that fraction. Cells in
-/// single-slot mode never fire — there's nothing to switch to.
+/// single-slot mode never fire - there's nothing to switch to.
 @property(nonatomic, copy, nullable) void (^onFilmstripCellActivated)
     (double fraction);
 
@@ -154,7 +154,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// the popover so the canvas stays free of the lanes-view import cycle.
 @property(nonatomic) NSInteger renderMode;
 
-/// Reset zoom/pan to the initial aspect-fit framing — the same effect as a
+/// Reset zoom/pan to the initial aspect-fit framing - the same effect as a
 /// double-click on the canvas. Fires `onViewReset`.
 - (void)resetView;
 
@@ -164,7 +164,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// way the viewer OSC guide spotlights the in-viewer handle.
 - (NSRect)pointHandleScreenRect;
 
-/// Drive the point handle from screen points — the exact path a real overlay
+/// Drive the point handle from screen points - the exact path a real overlay
 /// drag takes (delegate hit-test/commit + the `onHandleDragBegin/End`
 /// coalescing), so a guide can capture the gesture (clicks can't pass through
 /// the XPC overlay) and the renderer geometry + persist behave identically to
@@ -173,7 +173,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)dragPointHandleToScreenPoint:(NSPoint)screenPoint;
 - (void)endPointHandleDrag;
 
-/// Screen rect of where the point handle's glyph would sit at `value` — the
+/// Screen rect of where the point handle's glyph would sit at `value` - the
 /// guide's amber "drag to here" target. `NSZeroRect` if the delegate doesn't
 /// implement the value-parameterized hook or the view isn't in a window.
 - (NSRect)pointHandleScreenRectForValue:(double)value;

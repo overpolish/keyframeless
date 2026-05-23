@@ -21,7 +21,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Generic NSData wrapper for use as an FxPlug *custom* parameter value.
 ///
-/// Custom parameters are required to make blob writes undoable in FCP —
+/// Custom parameters are required to make blob writes undoable in FCP -
 /// `setStringParameterValue:` has no `atTime:` variant and FCP filters
 /// non-time-keyed writes off its undo stack. `setCustomParameterValue:
 /// toParameter:atTime:` routes through the same keyframe pipeline that
@@ -29,8 +29,8 @@ NS_ASSUME_NONNULL_BEGIN
 ///
 /// FxPlug requires custom value classes to conform to NSSecureCoding,
 /// NSCopying, and FxCustomParameterInterpolation_v2. Blob params (path
-/// geometry, timing-lane JSON) are logically a single value — we always
-/// write at `kCMTimeZero` and never produce in-between keyframes — so
+/// geometry, timing-lane JSON) are logically a single value - we always
+/// write at `kCMTimeZero` and never produce in-between keyframes - so
 /// `interpolateBetween:withWeight:` snap-steps to one side or the other.
 // Conformance to FxCustomParameterInterpolation_v2 is declared in the .m
 // (private class extension that imports FxPlugSDK.h). Forward-declaring a
@@ -55,13 +55,13 @@ NSString *_Nullable KKReadCustomParamString(
 
 /// Write `string` (UTF-8) to a string-typed custom parameter at
 /// kCMTimeZero. Caller must already be inside an
-/// FxCustomParameterActionAPI_v4 action scope — that's what registers the
+/// FxCustomParameterActionAPI_v4 action scope - that's what registers the
 /// write on FCP's undo stack.
 void KKWriteCustomParamString(id<FxParameterSettingAPI_v5> setAPI,
                               NSString *_Nullable string, UInt32 parameterID);
 
 /// Convenience: read a bool-encoded KKDataBlob param ("1"/"0"). Used for
-/// custom group-header expand state — replaces the legacy hidden toggle
+/// custom group-header expand state - replaces the legacy hidden toggle
 /// param so saved expand state lives in the same undoable custom-param
 /// pipeline as other plugin state. Returns NO when unset.
 BOOL KKReadCustomParamBool(id<FxParameterRetrievalAPI_v6> getAPI,

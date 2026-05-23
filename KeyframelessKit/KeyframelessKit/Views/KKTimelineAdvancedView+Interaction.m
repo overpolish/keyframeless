@@ -508,7 +508,7 @@
       vals = [self _templateDefaultValuesForLabel:src.label];
     KKLane *nl = [src copy];
     [nl insertKeypose:[KKKeyPose keyposeAtTime:frac values:vals]];
-    // The user added an independent checkpoint — break any link chain at
+    // The user added an independent checkpoint - break any link chain at
     // this insertion point so the first value edit doesn't propagate into
     // the neighbours.
     NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];

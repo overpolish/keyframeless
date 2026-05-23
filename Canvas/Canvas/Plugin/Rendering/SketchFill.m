@@ -191,7 +191,7 @@ NSUInteger KKGenerateHachureLines(KKBezierPath *path, float outputWidth,
   NSUInteger slot = (NSUInteger)(key % FILL_CACHE_SIZE);
   KKFillCacheEntry *ce = &s_fillCache[slot];
   if (ce->key == key && ce->lines) {
-    // Cache hit — return a copy so caller can free independently.
+    // Cache hit - return a copy so caller can free independently.
     NSUInteger bytes = ce->lineCount * sizeof(KKHachureLine);
     KKHachureLine *copy = malloc(bytes);
     memcpy(copy, ce->lines, bytes);

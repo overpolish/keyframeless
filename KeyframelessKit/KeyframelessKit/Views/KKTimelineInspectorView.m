@@ -174,7 +174,7 @@ static NSTextField *_KKMBCaption(NSString *s) {
 // Motion-blur settings popover content: a "Motion Blur" header, then Shutter
 // (degrees, 0–360) and Samples (count, 2–128), each a slider (accent track,
 // like Radius) + a value field, then a "When" dropdown picking the fire mode.
-// Real units so the numbers are meaningful — 180° is the natural shutter, and
+// Real units so the numbers are meaningful - 180° is the natural shutter, and
 // the sample count is explicit (a percentage just invites people to crank it to
 // the max).
 @interface _KKMotionBlurSettingsView : NSView <NSTextFieldDelegate>
@@ -633,7 +633,7 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   _constantsButton = [[KKConstantsButton alloc] init];
   _constantsButton.translatesAutoresizingMaskIntoConstraints = NO;
   // Authoritative visibility is set from `_basicView.hasUnoptedLanes` once
-  // it exists — a count-based check would wrongly hide this on reboot when
+  // it exists - a count-based check would wrongly hide this on reboot when
   // the persisted blob already has the (constant) lanes.
   _constantsButton.hidden = YES;
   [self addSubview:_constantsButton];
@@ -920,7 +920,7 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
 
   // Reuse the lanes view's popover wrapper so the macOS 26 liquid-glass
   // double-border fix (CoreHostingView/ContentHolderView clear) applies here
-  // too — same as the constants / curve popovers.
+  // too - same as the constants / curve popovers.
   _KKLVPopoverContentView *wrapper = [[_KKLVPopoverContentView alloc] init];
   wrapper.frame = content.bounds;
   content.translatesAutoresizingMaskIntoConstraints = NO;
@@ -1078,7 +1078,7 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
 
 - (void)_confirmCompatSwitch {
   // Basic stores the lane-end at `outEndFrac` (one frame before clip end),
-  // not at 1.0 — feeding the reseed that value keeps the produced lanes
+  // not at 1.0 - feeding the reseed that value keeps the produced lanes
   // shaped exactly like Basic itself would emit, so switching the tab
   // doesn't show a stray pill past Basic's end marker.
   double endFrac = 1.0;
@@ -1211,7 +1211,7 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   copy.onTogglePlayback = _onTogglePlayback;
   copy.onBoundaryPreviewNeedsRender = _onBoundaryPreviewNeedsRender;
   _detachedView = copy;
-  // Bidirectional Advanced selection mirror — selection lives per-view, not
+  // Bidirectional Advanced selection mirror - selection lives per-view, not
   // in the timeline blob, so without this clicks in the detached window
   // wouldn't reflect in the inspector and vice versa. Each side's
   // applyAdvancedSelectionPillKeys: no-ops on equal sets, breaking the
@@ -1240,7 +1240,7 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
     return;
   KKTimelineInspectorView *dying = _detachedView;
   _detachedView = nil;
-  // Deferred — we may be unwinding the copy's own `-viewDidMoveToWindow`;
+  // Deferred - we may be unwinding the copy's own `-viewDidMoveToWindow`;
   // releasing inline is a use-after-free.
   dispatch_async(dispatch_get_main_queue(), ^{
     [dying removeFromSuperview];

@@ -745,7 +745,7 @@
 
   [self resetDragState];
   [self resetAlignSnap];
-  // Skip the redundant param storm on a no-drag selection click — mouseDown's
+  // Skip the redundant param storm on a no-drag selection click - mouseDown's
   // sync already wrote the new selection. Only re-sync if the user actually
   // dragged or finalized a new shape.
   if (self.gestureDidDrag || shapeFinalized)

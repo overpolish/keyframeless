@@ -10,7 +10,7 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /// The KeyframelessKit framework bundle, which carries KKLocalizable.xcstrings.
-/// Look strings up against this bundle — never +[NSBundle mainBundle] — because
+/// Look strings up against this bundle - never +[NSBundle mainBundle] - because
 /// KKKit runs inside FCP's XPC render and shared ViewBridge processes, where
 /// the main bundle is not the framework.
 FOUNDATION_EXPORT NSBundle *KKLocalizationBundle(void);
@@ -18,7 +18,7 @@ FOUNDATION_EXPORT NSBundle *KKLocalizationBundle(void);
 /// Localized DISPLAY name for a property/parameter whose English string is the
 /// stable identity key (e.g. a KKLane label like @"Radius"/@"Crop"). Returns
 /// the translation from the KKParamNames table, falling back to the English
-/// name when untranslated. Use ONLY at render sites — never where the name is
+/// name when untranslated. Use ONLY at render sites - never where the name is
 /// compared, persisted, used as a dictionary key, or matched by joyride. The
 /// English identity must stay untouched so saved projects and cross-language
 /// sharing keep working.

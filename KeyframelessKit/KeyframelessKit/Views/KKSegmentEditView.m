@@ -379,7 +379,7 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
                                self.frequency, (int)self.seed);
     }
     // For animate-out, show the curve with time mirrored so the pill reads
-    // as the value descending over time — matches the lane graph.
+    // as the value descending over time - matches the lane graph.
     double ti = self.animateOut ? (1.0 - t) : t;
     return KKApplyEasing(ti, (KKEasingCurve)pillIndex, self.intensity,
                          self.frequency);

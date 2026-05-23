@@ -134,7 +134,7 @@
                                           availableLanes:available
                                                 timeline:timeline];
     // Seed the basic-view scrubber clamp immediately. Plugin+Render's
-    // dispatch_async push runs once on first render — if it raced ahead
+    // dispatch_async push runs once on first render - if it raced ahead
     // and weakSelf.inspectorView was still nil, the basic view would
     // never see the frame duration. Pushing here too is idempotent.
     if (seedClipDurSec > 0)
@@ -367,7 +367,7 @@
                [strong.inspectorView restartIntroGuide];
              }];
   weakIntro = intro;
-  // Gate every guide on Rounded being the selected effect — consistent
+  // Gate every guide on Rounded being the selected effect - consistent
   // expectation across all guides (the per-guide reasons differ in detail
   // but the user-facing requirement is the same). The section-level warning
   // pulls the first non-empty disabledSubtitle, so set it on intro too.
@@ -387,7 +387,7 @@
                           @"Help guide subtitle: OSC Basics.")
              onStart:^{
                __strong typeof(weak) strong = weak;
-               // This guide teaches the drag — require actually
+               // This guide teaches the drag - require actually
                // reaching the target before it advances.
                strong.inspectorView.oscGuideRequireTargetHit = YES;
                strong.inspectorView.onGuideCompleted = ^{
@@ -400,7 +400,7 @@
     return RoundedHasCanvasReference();
   };
   osc.disabledSubtitle =
-      RLoc(@"Guides are disabled — select a Rounded clip to enable them",
+      RLoc(@"Guides are disabled - select a Rounded clip to enable them",
            @"Help guide disabled subtitle (no Rounded clip selected).");
   // OSC guide has a zoom-to-fit + settle warm-up; spin the play button until
   // the overlay is actually on screen.
@@ -418,7 +418,7 @@
                           @"Help guide subtitle: Full Walkthrough.")
              onStart:^{
                __strong typeof(weak) strong = weak;
-               // Ends on the OSC drag — enforce landing on the
+               // Ends on the OSC drag - enforce landing on the
                // target, same as the standalone OSC guide.
                strong.inspectorView.oscGuideRequireTargetHit = YES;
                strong.inspectorView.onGuideCompleted = ^{
@@ -435,7 +435,7 @@
     return RoundedHasCanvasReference();
   };
   full.disabledSubtitle =
-      RLoc(@"Guides are disabled — select a Rounded clip to enable them",
+      RLoc(@"Guides are disabled - select a Rounded clip to enable them",
            @"Help guide disabled subtitle (no Rounded clip selected).");
 
   __block __weak KKHelpGuide *weakConstants = nil;
@@ -458,7 +458,7 @@
     return RoundedHasCanvasReference();
   };
   constants.disabledSubtitle =
-      RLoc(@"Guides are disabled — select a Rounded clip to enable them",
+      RLoc(@"Guides are disabled - select a Rounded clip to enable them",
            @"Help guide disabled subtitle (no Rounded clip selected).");
 
   __block __weak KKHelpGuide *weakBasicTiming = nil;
@@ -482,7 +482,7 @@
     return RoundedHasCanvasReference();
   };
   basicTiming.disabledSubtitle =
-      RLoc(@"Guides are disabled — select a Rounded clip to enable them",
+      RLoc(@"Guides are disabled - select a Rounded clip to enable them",
            @"Help guide disabled subtitle (no Rounded clip selected).");
 
   __block __weak KKHelpGuide *weakAdvancedTiming = nil;
@@ -505,7 +505,7 @@
     return RoundedHasCanvasReference();
   };
   advancedTiming.disabledSubtitle =
-      RLoc(@"Guides are disabled — select a Rounded clip to enable them",
+      RLoc(@"Guides are disabled - select a Rounded clip to enable them",
            @"Help guide disabled subtitle (no Rounded clip selected).");
 
   return @[ intro, osc, full, constants, basicTiming, advancedTiming ];
@@ -523,7 +523,7 @@
                RLoc(@"Round the corners of any clip with an animatable "
                     @"<accent>Radius</accent>.",
                     @"Help tip: what the Radius property does."),
-               RLoc(@"<accent>Box</accent> crops and positions the clip — "
+               RLoc(@"<accent>Box</accent> crops and positions the clip - "
                     @"animate it to reveal or hide content over time.",
                     @"Help tip: what the Box/Crop property does."),
              ]

@@ -66,7 +66,7 @@ static float3 sampleCanvasGradientAtPixel(constant CanvasGradientParams &p, floa
 // Fallback for the fill color pass (fullscreen quad): framebuffer pixel →
 // centered-pixel space → path-local space via the 2D inverse. Ignores
 // rotX/rotY, so 3D-rotated paths get a 2D approximation for gradient
-// sampling — matches MM's tradeoff for image-fill 3D rotation.
+// sampling - matches MM's tradeoff for image-fill 3D rotation.
 static float3 sampleCanvasGradient(constant CanvasGradientParams &p, float2 fbPixel, float2 viewport,
                                    constant CanvasPathTransform &xform) {
     float2 centered = fbPixel - viewport * 0.5;
@@ -88,7 +88,7 @@ fragment float4 strokeFragmentShader(StrokeRasterizerData in [[stage_in]],
     float coverage = edgeAlpha * capAlpha;
     if (params.useGradient != 0) {
         // Stroke vertices carry their pre-transform local position as a
-        // varying — perspective-correct interpolation gives the exact
+        // varying - perspective-correct interpolation gives the exact
         // path-local pixel for each fragment, even with 3D rotation.
         float3 rgb = sampleCanvasGradientAtPixel(params, in.localPos);
         float a = params.opacity * coverage;

@@ -92,7 +92,7 @@
   NSString *shapeUUID = KKLayerUUIDForAPI(self.apiManager);
   if (shapeUUID)
     KKApplyCachedStyles(shapeUUID, rect);
-  rect.closed = YES; // Restore — KKParamsToPath reads closedPath param.
+  rect.closed = YES; // Restore - KKParamsToPath reads closedPath param.
   [self.paths insertObject:rect atIndex:0];
   self.activePathIndex = 0;
   [self.selectedPathIndices removeAllIndexes];
@@ -152,7 +152,7 @@
   NSString *lineUUID = KKLayerUUIDForAPI(self.apiManager);
   if (lineUUID)
     KKApplyCachedStyles(lineUUID, line);
-  line.closed = NO; // Restore — KKParamsToPath reads closedPath param.
+  line.closed = NO; // Restore - KKParamsToPath reads closedPath param.
   [self.paths insertObject:line atIndex:0];
   self.activePathIndex = 0;
   [self.selectedPathIndices removeAllIndexes];

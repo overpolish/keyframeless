@@ -43,7 +43,7 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// fraction here; the render side reads it in `-scheduleInputs:`.
 @property(nonatomic, copy, nullable) NSString *miniCanvasRequestPath;
 /// Plugin's mini-canvas delegate (typically a `KKMiniCanvasRenderer`
-/// subclass) — supplies the effect render + point-handle vocabulary.
+/// subclass) - supplies the effect render + point-handle vocabulary.
 @property(nonatomic, strong, nullable) id<KKMiniCanvasDelegate>
     miniCanvasDelegate;
 /// Lane label the "manage properties" popover highlights for the first-run
@@ -69,7 +69,7 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
      KKMotionBlurMode mode);
 @property(nonatomic, copy, nullable) void (^onTimelineMutated)
     (KKTimeline *updated);
-/// Start / end of a continuous mini-canvas handle drag — host wraps the
+/// Start / end of a continuous mini-canvas handle drag - host wraps the
 /// burst of `onTimelineMutated` writes in one undo group.
 @property(nonatomic, copy, nullable) void (^onDragBegin)(void);
 @property(nonatomic, copy, nullable) void (^onDragEnd)(void);
@@ -89,7 +89,7 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 
 @property(nonatomic, readonly) KKTimelineLanesView *basicLanesView;
 @property(nonatomic, readonly) KKConstantsButton *constantsButton;
-/// YES for the secondary copy living in a detached remote window — used to
+/// YES for the secondary copy living in a detached remote window - used to
 /// suppress per-instance UI (joyride autostart, the detach button, etc.).
 @property(nonatomic, readonly) BOOL isDetachedCopy;
 /// YES while a detached copy exists (window open or opening).
@@ -134,11 +134,11 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// Live clip duration (seconds) for the Basic ruler, pushed from the
 /// render tick (clip trims never fire `parameterChanged:`).
 - (void)setClipDurationSeconds:(double)seconds;
-/// Live frame duration (seconds) — bounds the scrubber to the last frame.
+/// Live frame duration (seconds) - bounds the scrubber to the last frame.
 - (void)setFrameDurationSeconds:(double)seconds;
 /// Live playhead position (clip fraction 0–1; < 0 hides) for the scrubber.
 - (void)setPlayheadFraction:(double)frac;
-/// Playback state — drives the play/pause button color.
+/// Playback state - drives the play/pause button color.
 - (void)setPlaying:(BOOL)playing;
 
 #pragma mark - Detached copy

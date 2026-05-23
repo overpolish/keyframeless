@@ -11,7 +11,7 @@
 //   1. Promote every segment to a cubic bezier (linear segments become
 //      degenerate cubics with handles at 1/3 and 2/3 along the chord).
 //   2. Equalize segment counts by recursively splitting the shorter path's
-//      longest segments via de Casteljau (lossless — no detail discarded).
+//      longest segments via de Casteljau (lossless - no detail discarded).
 //   3. Direction-match closed paths via signed area; reverse one if signs
 //      differ to prevent inversions during interpolation.
 //   4. For closed paths, cyclically rotate one path's segments to minimize
@@ -41,7 +41,7 @@ static simd_float2 evalCubic(simd_float2 p0, simd_float2 c0, simd_float2 c1,
 //   always 0 implicitly and is included in the array)
 //
 // Older blobs written before the contour fields existed simply omit the
-// trailing bytes — readHeader only consumes through the points array, and
+// trailing bytes - readHeader only consumes through the points array, and
 // readContours treats missing trailing bytes as "single contour".
 
 // Flags byte layout: bit 0 = closed, bit 1 = "shape tail follows points and
@@ -220,7 +220,7 @@ static void _kkCubicSplit(KKMorphCubic s, float t, KKMorphCubic *outL,
   *outR = (KKMorphCubic){mid, r1, q2, s.p1};
 }
 
-// Chord length is enough for the "split the longest" heuristic — exact arc
+// Chord length is enough for the "split the longest" heuristic - exact arc
 // length isn't necessary and is much more expensive.
 static float _kkCubicChord(KKMorphCubic s) { return simd_distance(s.p0, s.p1); }
 
@@ -360,7 +360,7 @@ static KKBezierPoint *_kkCubicsToPoints(const KKMorphCubic *segs,
   // Open-path endpoint tangent fix: the cubic-equalize step pairs cubics
   // strictly by index, with no spatial alignment for open paths. That can
   // leave the boundary cubics' handles dominated by whichever side had the
-  // larger authored handle — pointing in a direction that disagrees with
+  // larger authored handle - pointing in a direction that disagrees with
   // the morphed visible chord. The stroke tessellator computes its end
   // normal from the analytic tangent (3·(c0-p0) at t=0, 3·(p1-c1) at t=1),
   // so a mis-directed boundary handle shows up as a V-notch at the cap.
@@ -396,7 +396,7 @@ static KKBezierPoint *_kkCubicsToPoints(const KKMorphCubic *segs,
 
 // When both blobs carry the same shape kind, restore the path's shape ivar
 // with t-lerped parameters. When kinds differ (or either is missing),
-// leave the shape as `setBezierPoints` left it (cleared) — mid-transition
+// leave the shape as `setBezierPoints` left it (cleared) - mid-transition
 // across kinds is genuinely "not a rect/ellipse anymore."
 static void restoreLerpedShapeTail(NSData *fromBlob, NSData *toBlob, float t,
                                    KKBezierPath *path) {
@@ -418,11 +418,11 @@ void KKMorphInterpolateApply(NSData *fromBlob, NSData *toBlob, float t,
     return;
   if (aN < 2 || bN < 2)
     return;
-  // Open vs closed mismatch is ambiguous — bail rather than guess.
+  // Open vs closed mismatch is ambiguous - bail rather than guess.
   if (aClosed != bClosed)
     return;
 
-  // Don't clamp t — overshoot easing curves (Elastic/Bounce/Back) carry
+  // Don't clamp t - overshoot easing curves (Elastic/Bounce/Back) carry
   // values outside [0, 1], and clamping them flattens the overshoot. Linear
   // extrapolation past either endpoint is the desired behavior here.
 
@@ -451,7 +451,7 @@ void KKMorphInterpolateApply(NSData *fromBlob, NSData *toBlob, float t,
                         : KKBezierPointLinear;
     }
     [path setBezierPoints:out count:aN closed:aClosed];
-    // Matching topology means contour structure also matches — pick from's
+    // Matching topology means contour structure also matches - pick from's
     // contour starts (they're authoritative since user edits don't change
     // topology when the count matches).
     [path setContourStarts:readContours(fromBlob, aN)];

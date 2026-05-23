@@ -65,7 +65,7 @@ static NSArray<NSNumber *> *KKReadBoundaryRequestFracs(NSString *path) {
   [act endAction:self];
   double es = self.cachedEffectStartSec, ed = self.cachedEffectDurSec;
   if (ed <= 0.0) {
-    // No timing yet (cold clip / no details) — still show the scrubber at
+    // No timing yet (cold clip / no details) - still show the scrubber at
     // the start instead of hiding it. Self-terminate if it stays idle; the
     // render tick re-arms once timing resolves.
     if (self.lastPushedPlayheadFrac != 0.0) {
@@ -81,7 +81,7 @@ static NSArray<NSNumber *> *KKReadBoundaryRequestFracs(NSString *path) {
   }
   // Stall = currentTime not advancing → paused or clip ended. currentTime
   // updates ~30Hz vs our ~frame poll, so a single no-change tick is normal
-  // mid-playback — only stop after sustained no-change.
+  // mid-playback - only stop after sustained no-change.
   if (fabs(curSec - self.playheadPollLast) < 1.0e-4) {
     self.playheadPollStall += 1;
   } else {
@@ -347,14 +347,14 @@ static NSArray<NSNumber *> *KKReadBoundaryRequestFracs(NSString *path) {
     [timingAPI frameDuration:&frameDur];
     self.cachedFrameDurSec = CMTimeGetSeconds(frameDur);
     // Hand the frame duration to the OSC math so its keypose-snap epsilon
-    // is one frame, not a fixed fraction — works across 24/30/60fps + any
+    // is one frame, not a fixed fraction - works across 24/30/60fps + any
     // clip length.
     RoundedSetFrameDurationSeconds(self.cachedFrameDurSec);
   }
   // A clip trim never fires parameterChanged:; the render tick is the only
   // callback that sees the new length. Push it straight into the weakly-
   // referenced inspector view (the old sequencer's mechanism) when it
-  // changes — no blob write, no undo entry.
+  // changes - no blob write, no undo entry.
   if (durSec > 0 && fabs(durSec - self.lastPushedClipDuration) > 0.001) {
     self.lastPushedClipDuration = durSec;
     double frameDurSec = self.cachedFrameDurSec;
@@ -371,7 +371,7 @@ static NSArray<NSNumber *> *KKReadBoundaryRequestFracs(NSString *path) {
                                             durSec))
                     : 0.0;
   // Live scrubber: render ticks stop ~1s before the clip end (FCP
-  // pre-render buffer — renderTime leads currentTime). So instead of
+  // pre-render buffer - renderTime leads currentTime). So instead of
   // sampling per render tick, the render tick just (re)arms a self-
   // terminating main-queue poll that follows currentTime through the
   // buffered tail to the true end, then stops when it stalls.
@@ -384,7 +384,7 @@ static NSArray<NSNumber *> *KKReadBoundaryRequestFracs(NSString *path) {
 
   NSArray<NSNumber *> *radiusVals = nil;
   NSArray<NSNumber *> *cropVals = nil;
-  // `enabled` now means "animatable", not "apply" — a constant (disabled)
+  // `enabled` now means "animatable", not "apply" - a constant (disabled)
   // lane still contributes its single-keypose value. KKTimelineLaneValueAt
   // Fraction returns that constant for a 1-keypose lane regardless of frac.
   for (KKLane *lane in timeline.lanes) {
@@ -401,7 +401,7 @@ static NSArray<NSNumber *> *KKReadBoundaryRequestFracs(NSString *path) {
   outParams->cropX = 0.0;
   outParams->cropY = 0.0;
   if (cropVals.count >= 4) {
-    // Crop lane: [width, height, x, y] — normalized; x/y are center offsets.
+    // Crop lane: [width, height, x, y] - normalized; x/y are center offsets.
     outParams->cropW = cropVals[0].doubleValue;
     outParams->cropH = cropVals[1].doubleValue;
     outParams->cropX = cropVals[2].doubleValue;
@@ -435,21 +435,21 @@ static NSArray<NSNumber *> *KKReadBoundaryRequestFracs(NSString *path) {
   KKMotionBlurState mbState;
   [pluginState getBytes:&mbState length:sizeof(mbState)];
 
-  // Mini-canvas source feed (7a): only on full-frame ticks — a sub-tile
+  // Mini-canvas source feed (7a): only on full-frame ticks - a sub-tile
   // (parent Scale > 100%) would publish a squashed sub-region. Runs before
   // the MB/normal branches so it captures every full render regardless of
   // path; the feed self-throttles so this is cheap during playback.
   // While a boundary popover is open, publish ONLY the tile whose mediaTime
   // matches the requested boundary time. FCP does NOT honor request order and
   // serves stale boundary tiles while it re-schedules (proven via mediaTime
-  // logs — sourceImages[1] was often the *previous* diamond's frame), so
+  // logs - sourceImages[1] was often the *previous* diamond's frame), so
   // index-based selection flickers between hold frames. If no delivered tile
   // matches this tick, skip the publish and keep the last good frame.
   // Build the list of (slot index, tile) pairs to publish this tick. The
-  // boundary channel can request multiple times (onion-skin) — we match
+  // boundary channel can request multiple times (onion-skin) - we match
   // each requested time to whichever delivered tile's mediaTime is closest
   // (within ~1 frame). Tiles that don't match anything are skipped (FCP
-  // serves stale boundary tiles while it re-schedules — same caveat as the
+  // serves stale boundary tiles while it re-schedules - same caveat as the
   // single-time path).
   NSArray<NSNumber *> *reqSecs = self.boundaryReqSecs;
   NSMutableArray *pairs = [NSMutableArray array]; // @[ @(slotIdx), tile ]
@@ -558,7 +558,7 @@ static NSArray<NSNumber *> *KKReadBoundaryRequestFracs(NSString *path) {
   // tiles with FxRect.bottom as the Y-down top offset within the image
   // (see logged data: strips appear in reverse FxRect-Y order). Subtract
   // imagePixelBounds.left/bottom so the offset is relative to the image
-  // origin — handles render contexts where imagePixelBounds isn't at
+  // origin - handles render contexts where imagePixelBounds isn't at
   // (0,0) (e.g. 480x270 thumbnail render at L720 B405).
   simd_float2 tileOffsetPx = {
       (float)(destinationImage.tilePixelBounds.left -

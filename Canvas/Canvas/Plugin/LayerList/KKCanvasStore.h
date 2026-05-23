@@ -72,7 +72,7 @@ typedef void (^KKStoreObserverBlock)(KKCanvasStoreSnapshot *snapshot,
 /// Reactive state store for a single Canvas plugin instance.
 ///
 /// Thread-safe. Producers write via performBatch:. Consumers register
-/// observers with a change mask — only notified when relevant state changes.
+/// observers with a change mask - only notified when relevant state changes.
 /// Notifications are coalesced and delivered on the main thread.
 @interface KKCanvasStore : NSObject
 
@@ -84,7 +84,7 @@ typedef void (^KKStoreObserverBlock)(KKCanvasStoreSnapshot *snapshot,
 - (KKCanvasStoreSnapshot *)snapshot;
 
 /// Batch multiple mutations. Diffs before/after and notifies observers.
-/// Thread-safe — acquires internal lock for the duration of the block.
+/// Thread-safe - acquires internal lock for the duration of the block.
 - (void)performBatch:(void (^)(void))block;
 
 // --- Mutators (call inside performBatch: only) ---
@@ -114,7 +114,7 @@ typedef void (^KKStoreObserverBlock)(KKCanvasStoreSnapshot *snapshot,
 
 // --- Observation ---
 /// Register an observer. Always called on main thread.
-/// Returns an opaque token — caller must call removeObserver: to unregister.
+/// Returns an opaque token - caller must call removeObserver: to unregister.
 - (id)addObserverForChanges:(KKStoreChange)mask
                       block:(KKStoreObserverBlock)block;
 - (void)removeObserver:(id)token;

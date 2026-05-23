@@ -307,7 +307,7 @@ static const CGFloat kGroupPillPadX = 8.0;
   // Multi-select: start a sweep. Every pill the drag touches is forced to
   // the start pill's *new* state. onDragBegin/End bracket the whole gesture
   // so the consumer coalesces it to one undo entry (fires for a plain
-  // click too — down then up with nothing dragged).
+  // click too - down then up with nothing dragged).
   _dragActive = YES;
   _dragTargetState = !_states[i].boolValue;
   _swept = [NSMutableIndexSet indexSetWithIndex:i];
@@ -327,7 +327,7 @@ static const CGFloat kGroupPillPadX = 8.0;
     return;
   [_swept addIndex:i];
   if (_states[i].boolValue == _dragTargetState)
-    return; // already in the target state — nothing to write
+    return; // already in the target state - nothing to write
   [self setState:_dragTargetState atIndex:i];
   if (_onToggled)
     _onToggled(i, _dragTargetState);

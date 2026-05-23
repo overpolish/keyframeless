@@ -41,7 +41,7 @@ typedef NS_ENUM(NSInteger, KKJoyrideCloseOnAdvance) {
 ///
 /// Inspector-side signals (`playingChanged`, `playPauseEdge`) are driven by
 /// the plugin calling `-notifyPlayingChanged:` from its own onPlayingChanged
-/// callback — the binder doesn't know about the inspector class.
+/// callback - the binder doesn't know about the inspector class.
 ///
 /// Lifetime: create one per guide, give it to the steps builder, call
 /// `-teardown` from the controller's `onComplete`.
@@ -78,14 +78,14 @@ typedef NS_ENUM(NSInteger, KKJoyrideCloseOnAdvance) {
 @property(nonatomic, readonly, weak, nullable) NSView *latestManagePopoverRow;
 - (nullable NSView *)latestOptedInLaneRow;
 
-@property(nonatomic, readonly, weak, nullable) NSView
-    *latestStaticValuesPopoverContent;
-@property(nonatomic, readonly, weak, nullable) KKMiniCanvasView
-    *latestMiniCanvas;
+@property(nonatomic, readonly, weak, nullable)
+    NSView *latestStaticValuesPopoverContent;
+@property(nonatomic, readonly, weak, nullable)
+    KKMiniCanvasView *latestMiniCanvas;
 
 @property(nonatomic, readonly, weak, nullable) NSView *latestGapPopoverContent;
-@property(nonatomic, readonly, weak, nullable) KKSegmentEditView
-    *latestGapSegmentEditor;
+@property(nonatomic, readonly, weak, nullable)
+    KKSegmentEditView *latestGapSegmentEditor;
 
 /// Last static value array reported via `onStaticValueChanged` for `label`,
 /// or nil if none yet. Use for drag-step hit tests.

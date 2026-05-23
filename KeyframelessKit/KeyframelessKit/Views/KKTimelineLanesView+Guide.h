@@ -33,7 +33,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, readonly, nullable) KKTimelineAdvancedView *advancedGraph;
 
 /// Close whatever lane-content popover is currently open (Constants /
-/// Boundary / Gap easing) — used by guide steps that need the popover gone
+/// Boundary / Gap easing) - used by guide steps that need the popover gone
 /// before the next step's target becomes interactive. No-op if nothing is
 /// open.
 - (void)guideCloseContentPopover;

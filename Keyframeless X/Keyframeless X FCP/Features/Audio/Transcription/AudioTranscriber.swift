@@ -829,7 +829,7 @@ actor AudioTranscriber {
 
 	private static func stripDashes(_ text: String) -> String {
 		var s = text
-		while s.hasPrefix("-") || s.hasPrefix("–") || s.hasPrefix("—") {
+		while s.hasPrefix("-") || s.hasPrefix("–") || s.hasPrefix("-") {
 			s = String(s.dropFirst()).trimmingCharacters(in: .whitespaces)
 		}
 		return s

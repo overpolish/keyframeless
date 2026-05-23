@@ -56,7 +56,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// to legacy radius fields without touching the point bag.
 - (void)restoreShape:(nullable KKShape *)shape;
 
-/// Typed accessors — return the shape cast to the matching subclass, or nil
+/// Typed accessors - return the shape cast to the matching subclass, or nil
 /// if the path's shape is a different kind (or nil). Avoids the
 /// `isKindOfClass` + cast chant at every callsite.
 @property(nonatomic, nullable, readonly) KKRectShape *rectShape;
@@ -105,7 +105,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Per-layer translation applied at render time (object-space units).
 /// Animatable via the Position X / Position Y KKTiming lanes. Does not
-/// mutate the path's points — composes with rotation/scale.
+/// mutate the path's points - composes with rotation/scale.
 @property(nonatomic, assign) float translateX;
 @property(nonatomic, assign) float translateY;
 
@@ -206,7 +206,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, assign) float marchingAntsOffset;
 
 /// Marching-ants speed in cycles/sec (default 0). Not animatable via the
-/// multi-stage sequencer — the renderer treats it as continuous over time.
+/// multi-stage sequencer - the renderer treats it as continuous over time.
 @property(nonatomic, assign) float marchingAntsSpeed;
 
 /// Start marker type (0=none, 1=arrow, 2=circle, 3=square). Default 0.

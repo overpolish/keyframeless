@@ -19,7 +19,7 @@ static RoundedOSC *sCurrentOSC = nil;
 
 // All OSC-guide affine / staleness / velocity-gate state now lives in the
 // generic KKOSCGuideBridge (KeyframelessKit). One process-lifetime instance
-// per XPC process — the inspector custom view and the OSC render run in the
+// per XPC process - the inspector custom view and the OSC render run in the
 // same process (pid confirmed identical). MRR: retained forever, no
 // dispatch_once (autoreleased ObjC statics dangle under MRR).
 static KKOSCGuideBridge *RoundedGuideBridge(void) {
@@ -65,9 +65,9 @@ void RoundedOSCCaptureGuideAnchorAtScreen(NSPoint screenPt) {
 }
 
 // Guide-scoped radius. The OSC cannot read the KKDataBlob from the drawOSC
-// tick (FxParameterRetrievalAPI is nil there — see oscAPI2=nil in every
+// tick (FxParameterRetrievalAPI is nil there - see oscAPI2=nil in every
 // drawOSC log). During the guide the blob-drag handler pushes the live radius
-// here (same XPC process — pid confirmed identical) so the OSC handle tracks
+// here (same XPC process - pid confirmed identical) so the OSC handle tracks
 // without the unreadable blob. Real (non-guide) OSC↔blob reads are Phase 10.
 static double sGuideRadius = 20.0;
 
@@ -190,7 +190,7 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
 // Compute the crop rect's top-right corner in canvas space (and the crop's
 // min dimension in canvas pixels) for the current playhead fraction. With
 // full crop (w=h=1, x=y=0) this collapses to the canvas top-right. Matches
-// the mini canvas's `_anchorRectForContentRect:` — the radius handle is
+// the mini canvas's `_anchorRectForContentRect:` - the radius handle is
 // pinned to the crop, not the canvas.
 - (BOOL)_cropAnchorCornerForFraction:(double)frac
                            outCorner:(CGPoint *)outCorner
@@ -280,7 +280,7 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
 
   KKLane *cropLane;
   if (laneIdx == NSNotFound) {
-    // Fresh constant — seed one keypose at t=0 with the new values.
+    // Fresh constant - seed one keypose at t=0 with the new values.
     cropLane = [KKLane laneWithLabel:@"Crop"];
     cropLane.enabled = NO;
     cropLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
@@ -366,7 +366,7 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
   CGPoint radiusPos = [self oscPositionAtTime:time];
 
   // Pull the live geometry FCP only exposes from this tick and feed it to the
-  // generic bridge — it owns the zoom-invariant CANVAS→screen affine, the
+  // generic bridge - it owns the zoom-invariant CANVAS→screen affine, the
   // viewer-rect recompute (never stale vs corners), and the position
   // notifications. spC=0 means "no scale this tick" (bridge keeps the last).
   CGPoint trC = {0, 0}, blC = {0, 0};
@@ -392,7 +392,7 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
   BOOL inGuide = (RoundedGuideBridge().guideStep > 0);
   double frac = [self fractionAtTime:time];
 
-  // Crop OSC (drawn before radius — its border + handles sit underneath the
+  // Crop OSC (drawn before radius - its border + handles sit underneath the
   // radius handle visually if they overlap at the corner).
   BOOL cropDragging = (_cropOSC.draggingIndex >= 0);
   BOOL cropVisible =

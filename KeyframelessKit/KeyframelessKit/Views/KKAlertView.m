@@ -296,7 +296,7 @@ static const CGFloat KKAlertViewHeight = KKInspectorRowHeight * 2;
   [navView addSubview:_pageLabel];
   [navView addSubview:_renderedPageLabel];
 
-  // [1/2] [▲] — buttons fill top/bottom halves for hit area, chevron views
+  // [1/2] [▲] - buttons fill top/bottom halves for hit area, chevron views
   //       [▼]   pinned to the inner edges so they sit close together.
   [NSLayoutConstraint activateConstraints:@[
     [navView.heightAnchor constraintEqualToConstant:KKInspectorRowHeight * 1.5],

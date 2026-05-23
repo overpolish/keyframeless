@@ -393,7 +393,7 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
 }
 
 // The inner NSSlider is pinned to our bounds, so the cell's bar rect has
-// origin.x 0 and our width — knob centre math matches knobPositionForBarRect:
+// origin.x 0 and our width - knob centre math matches knobPositionForBarRect:
 // (inset kKnobWidth/2 each side). Same source of truth as drawing/hit-test.
 - (NSRect)trackScreenRect {
   if (!self.window)

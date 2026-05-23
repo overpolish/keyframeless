@@ -26,7 +26,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable instancetype)initWithCoder:(NSCoder *)coder NS_UNAVAILABLE;
 
 // refreshGuideRows / observeGuideRefreshNotificationNamed: live on the
-// KKHelpView (Guides) category — import "KKHelpView+Guides.h" to call them.
+// KKHelpView (Guides) category - import "KKHelpView+Guides.h" to call them.
 
 @end
 

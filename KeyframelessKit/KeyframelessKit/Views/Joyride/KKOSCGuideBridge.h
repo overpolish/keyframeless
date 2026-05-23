@@ -16,7 +16,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// KKJoyrideController over an on-screen control.
 ///
 /// The plugin's OSC tick (which alone has the FxPlug APIs) extracts raw
-/// geometry — canvas corners, canvas scale, the handle's canvas position —
+/// geometry - canvas corners, canvas scale, the handle's canvas position -
 /// and feeds it in via -ingestDrawTick… / -ingestHitTest…; the bridge does
 /// all the math. None of this code touches FxPlug or any plugin specifics,
 /// so every plugin and OSC shape reuses it unchanged.
@@ -59,7 +59,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// The viewer image rect in screen space (recomputed every draw tick).
 @property(nonatomic, readonly) NSRect estimatedViewerScreenRect;
 
-/// Live canvas corners + viewer rect from the last draw tick — exposed so an
+/// Live canvas corners + viewer rect from the last draw tick - exposed so an
 /// OSC-shape strategy can run its own inverse screen→value map. geometryValid
 /// is NO until a usable draw tick has landed.
 @property(nonatomic, readonly) CGPoint currentCanvasTopRight;
@@ -71,7 +71,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Feed one drawOSC tick. The caller passes the live geometry it pulled from
 /// FxPlug; the bridge refreshes scale, recomputes the viewer rect from fresh
-/// corners (the zoom-invariant CANVAS→screen affine — never stale vs
+/// corners (the zoom-invariant CANVAS→screen affine - never stale vs
 /// corners), maps the handle/target to screen, and posts the position
 /// notification (throttled to 1/s, plus immediately on change while a guide
 /// step is active).

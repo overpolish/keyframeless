@@ -183,7 +183,7 @@ static const NSTimeInterval kKKOSCRunDelay = 0.2;
   [_binder teardown];
   _binder = nil;
 
-  // Defer controller release until the next runloop tick — we're inside
+  // Defer controller release until the next runloop tick - we're inside
   // its own onComplete block, so dropping the strong ref here would
   // dealloc it mid-call.
   KKJoyrideController *toRelease = _guide;
@@ -194,7 +194,7 @@ static const NSTimeInterval kKKOSCRunDelay = 0.2;
     });
   }
 
-  // Restore the saved timeline on the next tick, for the same reason —
+  // Restore the saved timeline on the next tick, for the same reason -
   // the inspector callback chain that fires off applyTimeline: may still
   // be unwinding on this call stack.
   KKTimeline *saved = _savedTimeline;

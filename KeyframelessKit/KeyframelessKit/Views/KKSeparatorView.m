@@ -89,7 +89,7 @@ static const CGFloat KKSeparatorLineHeight = 1.0;
     _contentStack.detachesHiddenViews = YES;
     [contentView addSubview:_contentStack];
 
-    // Layout: leftLine — [contentStack] — rightLine, equal widths = centred
+    // Layout: leftLine - [contentStack] - rightLine, equal widths = centred
     [NSLayoutConstraint activateConstraints:@[
       [_leftLine.leadingAnchor
           constraintEqualToAnchor:contentView.leadingAnchor],
@@ -118,7 +118,7 @@ static const CGFloat KKSeparatorLineHeight = 1.0;
       [_leftLine.widthAnchor constraintEqualToAnchor:_rightLine.widthAnchor],
     ]];
 
-    // Apply initial values — triggers detach logic via hidden=YES
+    // Apply initial values - triggers detach logic via hidden=YES
     _iconView.hidden = (icon == nil);
     if (icon) {
       _iconView.image = icon;

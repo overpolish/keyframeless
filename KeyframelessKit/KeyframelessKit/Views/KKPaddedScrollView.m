@@ -148,9 +148,9 @@ static const CGFloat KKPaddedScrollShadowH = 16.0;
     return;
   }
   // documentVisibleRect is reported in the documentView's natural coords
-  // (origin bottom-left for non-flipped stacks), so the fraction we want —
+  // (origin bottom-left for non-flipped stacks), so the fraction we want -
   // "how far the top edge of the visible window has been scrolled down
-  // from the top of the document" — is the inverse of vr.origin.y.
+  // from the top of the document" - is the inverse of vr.origin.y.
   CGFloat fromTop =
       (cr.origin.y + cr.size.height) - (vr.origin.y + vr.size.height);
   CGFloat percent = fromTop / scrollable;

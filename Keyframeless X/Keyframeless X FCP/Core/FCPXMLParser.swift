@@ -666,7 +666,7 @@ enum FCPXMLParser {
 	private static func projectTime(of el: XMLElement, tcStart: Double) -> Double {
 		let offset = parseTime(el.attribute(forName: "offset")?.stringValue ?? "0s")
 		guard let parent = el.parent as? XMLElement else { return offset - tcStart }
-		// Primary spine (no lane) and sequence use sequence-absolute offsets — stop here
+		// Primary spine (no lane) and sequence use sequence-absolute offsets - stop here
 		let isPrimaryContainer =
 			parent.name == "sequence"
 			|| (parent.name == "spine" && parent.attribute(forName: "lane") == nil)

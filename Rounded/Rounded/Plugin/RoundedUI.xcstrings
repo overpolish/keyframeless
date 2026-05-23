@@ -1,26 +1,26 @@
 {
   "sourceLanguage": "en",
   "strings": {
-    "<accent>Box</accent> crops and positions the clip — animate it to reveal or hide content over time.": {
+    "<accent>Box</accent> crops and positions the clip - animate it to reveal or hide content over time.": {
       "comment": "Help tip: what the Box/Crop property does.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Box</accent> beschneidet und positioniert den Clip — animiere sie, um Inhalte mit der Zeit ein- oder auszublenden."
+            "value": "<accent>Box</accent> beschneidet und positioniert den Clip - animiere sie, um Inhalte mit der Zeit ein- oder auszublenden."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>方框</accent>用于裁剪和定位片段——为其制作动画即可随时间显示或隐藏内容。"
+            "value": "<accent>方框</accent>用于裁剪和定位片段--为其制作动画即可随时间显示或隐藏内容。"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La <accent>boîte</accent> recadre et positionne le plan — animez-la pour révéler ou masquer du contenu au fil du temps."
+            "value": "La <accent>boîte</accent> recadre et positionne le plan - animez-la pour révéler ou masquer du contenu au fil du temps."
           }
         },
         "ja": {
@@ -295,26 +295,26 @@
         }
       }
     },
-    "Click <symbol play.fill color=accent /> to play, then again to <accent>pause</accent> — handy when <warn>spacebar</warn> isn't working": {
+    "Click <symbol play.fill color=accent /> to play, then again to <accent>pause</accent> - handy when <warn>spacebar</warn> isn't working": {
       "comment": "Basic timing guide: play/pause from the inspector.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Klicke auf <symbol play.fill color=accent />, um abzuspielen, dann erneut zum <accent>Pausieren</accent> — praktisch, wenn die <warn>Leertaste</warn> nicht funktioniert"
+            "value": "Klicke auf <symbol play.fill color=accent />, um abzuspielen, dann erneut zum <accent>Pausieren</accent> - praktisch, wenn die <warn>Leertaste</warn> nicht funktioniert"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "点按 <symbol play.fill color=accent /> 播放，再次点按可<accent>暂停</accent>——当<warn>空格键</warn>失效时很实用"
+            "value": "点按 <symbol play.fill color=accent /> 播放，再次点按可<accent>暂停</accent>--当<warn>空格键</warn>失效时很实用"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cliquez sur <symbol play.fill color=accent /> pour lire, puis à nouveau pour mettre en <accent>pause</accent> — pratique quand la <warn>barre d'espace</warn> ne fonctionne pas"
+            "value": "Cliquez sur <symbol play.fill color=accent /> pour lire, puis à nouveau pour mettre en <accent>pause</accent> - pratique quand la <warn>barre d'espace</warn> ne fonctionne pas"
           }
         },
         "ja": {
@@ -925,26 +925,26 @@
         }
       }
     },
-    "Each row is a property — drop keyposes anywhere on the timeline and shape transitions independently": {
+    "Each row is a property - drop keyposes anywhere on the timeline and shape transitions independently": {
       "comment": "Advanced timing guide: explains the per-property lanes.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jede Zeile ist eine Eigenschaft — setze Keyposes überall auf der Timeline und gestalte Übergänge unabhängig"
+            "value": "Jede Zeile ist eine Eigenschaft - setze Keyposes überall auf der Timeline und gestalte Übergänge unabhängig"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "每一行代表一个属性——在时间线上的任意位置放置关键姿势，并独立塑造过渡"
+            "value": "每一行代表一个属性--在时间线上的任意位置放置关键姿势，并独立塑造过渡"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque ligne est une propriété — déposez des poses clés où vous voulez sur la timeline et façonnez les transitions indépendamment"
+            "value": "Chaque ligne est une propriété - déposez des poses clés où vous voulez sur la timeline et façonnez les transitions indépendamment"
           }
         },
         "ja": {
@@ -1093,26 +1093,26 @@
         }
       }
     },
-    "Guides are disabled — select a Rounded clip to enable them": {
+    "Guides are disabled - select a Rounded clip to enable them": {
       "comment": "Help guide disabled subtitle (no Rounded clip selected).",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Anleitungen sind deaktiviert — wähle einen Rounded-Clip, um sie zu aktivieren"
+            "value": "Anleitungen sind deaktiviert - wähle einen Rounded-Clip, um sie zu aktivieren"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "指南已禁用——请选择一个 Rounded 片段以启用"
+            "value": "指南已禁用--请选择一个 Rounded 片段以启用"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les guides sont désactivés — sélectionnez un plan Rounded pour les activer"
+            "value": "Les guides sont désactivés - sélectionnez un plan Rounded pour les activer"
           }
         },
         "ja": {
@@ -1345,26 +1345,26 @@
         }
       }
     },
-    "Let's <accent>watch it back</accent> — click play": {
+    "Let's <accent>watch it back</accent> - click play": {
       "comment": "Basic timing guide: play back the animation.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Schauen wir es uns <accent>noch mal an</accent> — klicke auf Play"
+            "value": "Schauen wir es uns <accent>noch mal an</accent> - klicke auf Play"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "让我们<accent>回放看看</accent>——点按播放"
+            "value": "让我们<accent>回放看看</accent>--点按播放"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Regardons le résultat</accent> — cliquez sur Lecture"
+            "value": "<accent>Regardons le résultat</accent> - cliquez sur Lecture"
           }
         },
         "ja": {
@@ -2017,26 +2017,26 @@
         }
       }
     },
-    "This <accent>mini viewer</accent> shows the clip at this point in time — no need to scrub around": {
+    "This <accent>mini viewer</accent> shows the clip at this point in time - no need to scrub around": {
       "comment": "Advanced timing guide: the keypose mini viewer.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dieser <accent>Mini-Viewer</accent> zeigt den Clip zu diesem Zeitpunkt — kein Scrubbing nötig"
+            "value": "Dieser <accent>Mini-Viewer</accent> zeigt den Clip zu diesem Zeitpunkt - kein Scrubbing nötig"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "此<accent>迷你检视器</accent>显示该时间点的片段——无需来回拖拽播放头"
+            "value": "此<accent>迷你检视器</accent>显示该时间点的片段--无需来回拖拽播放头"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce <accent>mini-visualiseur</accent> montre le plan à ce moment précis — pas besoin de parcourir la timeline"
+            "value": "Ce <accent>mini-visualiseur</accent> montre le plan à ce moment précis - pas besoin de parcourir la timeline"
           }
         },
         "ja": {

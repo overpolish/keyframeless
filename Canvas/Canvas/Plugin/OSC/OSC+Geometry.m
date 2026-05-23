@@ -119,8 +119,8 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
 
   // Distance comparisons happen in *source-pixel* space because object space
   // is non-uniform (x normalized by imageWidth, y by imageHeight). An
-  // isotropic radius in object space becomes an ellipse on screen — fat in
-  // x, thin in y — so top/bottom edges of strokes miss while left/right hit.
+  // isotropic radius in object space becomes an ellipse on screen - fat in
+  // x, thin in y - so top/bottom edges of strokes miss while left/right hit.
   double imgW = (self.imageWidth > 0) ? (double)self.imageWidth : 1.0;
   double imgH = (self.imageHeight > 0) ? (double)self.imageHeight : 1.0;
 
@@ -167,9 +167,8 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
     // endWidth taper is only meaningful for open paths (per KKBezierPath.h);
     // closed paths can have stale endWidth values that must be ignored.
     double halfPx0 = path.strokeWidth * 0.5;
-    double halfPx1 = (!path.closed && path.endWidth > 0)
-                         ? path.endWidth * 0.5
-                         : halfPx0;
+    double halfPx1 =
+        (!path.closed && path.endWidth > 0) ? path.endWidth * 0.5 : halfPx0;
 
     NSUInteger contours = path.contourCount;
 
@@ -217,8 +216,8 @@ static BOOL markerHitTest(CanvasOSC *osc, KKBezierPath *path, double px,
           free(outline);
           KKLogInfo(@"  path[%lu] HIT contour=%lu i=%lu distPx=%.2f "
                     @"hitRPx=%.2f",
-                    (unsigned long)p, (unsigned long)ci, (unsigned long)i,
-                    dPx, hitRPx);
+                    (unsigned long)p, (unsigned long)ci, (unsigned long)i, dPx,
+                    hitRPx);
           return (NSInteger)p;
         }
       }

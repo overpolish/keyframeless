@@ -64,7 +64,7 @@ static const UInt32 kParamStrokeGradientUI = 146;
 static const UInt32 kParamFillGradientUI = 147;
 static const UInt32 kParamGroupTransform = 148;
 static const UInt32 kParamExpandedTransform = 149;
-// 150: reserved (was kParamTransformOSCVisible — replaced by per-lane sequencer
+// 150: reserved (was kParamTransformOSCVisible - replaced by per-lane sequencer
 // toggle)
 static const UInt32 kParamPosition = 151;
 static const UInt32 kParamRotation = 152;
@@ -94,9 +94,9 @@ static const UInt32 kParamStrokeGradientDataMirror = 166;
 static const UInt32 kParamFillGradientDataMirror = 167;
 // Hidden string param that captures the full layer-list selection so it
 // participates in FCP's undo stack. Format:
-//   ""              — empty selection
-//   "g:<layerID>"   — single group selected (layerID survives reorders)
-//   "p:0,2,5"       — one or more paths selected by index
+//   ""              - empty selection
+//   "g:<layerID>"   - single group selected (layerID survives reorders)
+//   "p:0,2,5"       - one or more paths selected by index
 // Indices are valid against the path-blob in the same undo entry, so the
 // blob revert and selection revert stay consistent across cmd-Z.
 static const UInt32 kParamCanvasSelection = 168;
@@ -124,7 +124,7 @@ NSString *_Nullable KKLayerUUIDForAPI(id<PROAPIAccessing> _Nonnull api);
 NSString *_Nullable KKCanvasReadPathData(
     id<FxParameterRetrievalAPI_v6> _Nonnull getAPI);
 
-/// Read kParamPathDataMirror (native string) — usable from OSC and
+/// Read kParamPathDataMirror (native string) - usable from OSC and
 /// render scopes where KKDataBlob reads return nil.
 NSString *_Nullable KKCanvasReadPathDataMirror(
     id<FxParameterRetrievalAPI_v6> _Nonnull getAPI);

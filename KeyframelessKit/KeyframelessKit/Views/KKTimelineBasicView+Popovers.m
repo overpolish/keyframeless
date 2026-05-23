@@ -125,7 +125,7 @@
       self.onDragBegin, self.onDragEnd);
 }
 
-// Per-lane phase "applies to" — NON-DESTRUCTIVE. Turning a phase off for one
+// Per-lane phase "applies to" - NON-DESTRUCTIVE. Turning a phase off for one
 // property just flips that property's In/Out interval to holdsFlat (it sits at
 // the Hold value through the phase, no animation); the keypose and its stored
 // value are kept, so turning it back on restores the exact animation. Keyposes
@@ -210,7 +210,7 @@
 // Hold opens the modulation editor; a drift (interior keyposes differ) opens
 // the easing editor, since a drift is a real tween from hold-start to
 // hold-end. (Modulation on a Hold-only / In-only / Out-only property needs
-// the 2-equal-keypose carrier — deferred with the In/Out enable work.)
+// the 2-equal-keypose carrier - deferred with the In/Out enable work.)
 - (void)_openHoldPopover {
   KKBasicProj p = [self _projection];
   NSRect g = [self _graphRect];
@@ -272,7 +272,7 @@
             return;
           [weak _setHoldDriftApplied:on forLabel:holdLabels[laneIndex]];
           // Collapsing the last drift back to a flat Hold means this
-          // popover (the easing editor) is now the wrong one — swap to
+          // popover (the easing editor) is now the wrong one - swap to
           // the modulation editor in place.
           if (![weak _holdDrift])
             [weak _openHoldPopover];
@@ -345,7 +345,7 @@
       [partComponentIdx addObject:@(-2)]; // single-segment, lane-level
     }
   }
-  // Rebuilder closure — re-runs the same state derivation against the
+  // Rebuilder closure - re-runs the same state derivation against the
   // current timeline so external mutations (cmd-Z) can refresh the
   // already-open popover's pills. Captures weak so it lives as long as
   // the popover does.
@@ -423,7 +423,7 @@
 // Hold-modulation param edits apply only to lanes the modulation is ON for
 // (Hold interval modulation != None) so tweaking a param never silently
 // re-enables an excluded lane. If none participate yet, target all
-// animatable lanes — picking a type from the None state turns it on for all
+// animatable lanes - picking a type from the None state turns it on for all
 // (the user then unticks individual properties).
 - (void)_mutateHoldModWith:(void (^)(KKInterval *iv))mut {
   KKTimeline *t = [_timeline copy];
@@ -446,7 +446,7 @@
     KKInterval *cur = lane.keyposes[s.holdStart].outgoing;
     if (anyParticipating &&
         (!cur || cur.modulation == KKIntervalModulationNone))
-      continue; // excluded — leave it None
+      continue; // excluded - leave it None
     KKLane *nl = [lane copy];
     NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];
     KKKeyPose *kp = [kps[s.holdStart] copy];
@@ -606,8 +606,8 @@
     self.onTimelineMutated(t);
 }
 
-// Apply `mut` to the In / Hold / Out interval of every animatable lane —
-// Basic shares one In easing, one Out easing, one Hold (modulation/drift) —
+// Apply `mut` to the In / Hold / Out interval of every animatable lane -
+// Basic shares one In easing, one Out easing, one Hold (modulation/drift) -
 // then fire onTimelineMutated. The live BasicView redraw is local
 // (setNeedsDisplay re-reads from the projection); the host coalesces the
 // per-tick blob writes into the slider drag's undo group.
@@ -627,7 +627,7 @@
         continue;      // this lane has no Out phase
       idx = s.holdEnd; // keypose before t=1 carries the Out interval
     } else if (section == KKBasicSectionHold) {
-      idx = s.holdStart; // Hold interval — always present
+      idx = s.holdStart; // Hold interval - always present
     } else {
       if (!s.inEnabled)
         continue; // this lane has no In phase
@@ -681,7 +681,7 @@
     frac = p.inEnabled ? p.inEndFrac : (p.outEnabled ? p.outStartFrac : 0.0);
 
   // Build synthetic single-keypose lanes carrying the value at this boundary
-  // — with valueType / component bounds taken from the plugin template
+  // - with valueType / component bounds taken from the plugin template
   // (canonical), exactly like _timelineSeededFrom:, so the reused
   // static-values rows pick the right editor (Radius float 0–100, Crop grid).
   NSMutableArray<KKLane *> *displayLanes = [NSMutableArray array];
@@ -690,7 +690,7 @@
     if (!lane.enabled)
       continue;
     // A property "doesn't apply to" this boundary's phase when it has no
-    // keypose there OR its phase interval is flat (holdsFlat) — either way it
+    // keypose there OR its phase interval is flat (holdsFlat) - either way it
     // sits at Hold through the phase. Flag it excluded (row becomes a message +
     // Animate, in place, preserving property order). Hold always participates.
     if (lane.keyposes.count >= 2) {
@@ -739,7 +739,7 @@
 
   // For an unlinked Hold, this picks the single targeted interior keypose
   // (d==2 → hold-start, d==3 → hold-end); ignored for In/Out boundaries.
-  // Must be the *stored* keypose time, not `frac` — when a phase is off,
+  // Must be the *stored* keypose time, not `frac` - when a phase is off,
   // the projection pins frac to the clip edge (0/1) while the keypose stays
   // at its boundary, so frac would match neither Hold keypose and the edit
   // would be dropped.
@@ -752,7 +752,7 @@
       break;
     }
   // Bind the popover's state into ivars so the closures below read live
-  // values — that's what lets requestValuePopoverAtFraction: (filmstrip
+  // values - that's what lets requestValuePopoverAtFraction: (filmstrip
   // click) swap boundaries on the open popover without rebuilding it.
   _curBoundary = boundary;
   _curBoundaryInOn = p.inEnabled;
@@ -773,7 +773,7 @@
           return;
         // Drop the property from this phase's applies-to (same as unticking
         // it in the gap popover). The projection derives In/Out enabled from
-        // participation, so removing the last one turns the phase off — then
+        // participation, so removing the last one turns the phase off - then
         // the boundary is gone and the popover closes.
         [s _setLaneParticipation:NO forLabel:label section:s->_curAnimateSec];
         KKBasicProj pp = [s _projection];
@@ -876,12 +876,12 @@
     lanes[i] = nl;
     break;
   }
-  // Drift and modulation are alternative authoring states in Basic — the
+  // Drift and modulation are alternative authoring states in Basic - the
   // Hold popover routes to one or the other based on `_holdDrift`, so a
   // modulation field lingering on a now-drifting Hold has no UI access and
   // would still wiggle the rendered curve. If this edit just caused the
   // global Hold pair to drift, wipe modulation from every animatable lane's
-  // hold-start interval (re-linking won't bring it back — matches the
+  // hold-start interval (re-linking won't bring it back - matches the
   // mental model that drift replaced the wobble).
   BOOL nowDrifts = NO;
   for (KKLane *lane in lanes) {

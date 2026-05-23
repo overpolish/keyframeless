@@ -12,13 +12,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// Plugin-agnostic inspector-toolbar buttons used alongside
 /// `KKTimelineBasicView` / Advanced. Each is a tiny icon view that draws an
 /// SF Symbol tinted by accent / disabled state and fires a callback on
-/// click — host plugins wire the callbacks to playback, loop, constants,
+/// click - host plugins wire the callbacks to playback, loop, constants,
 /// detach-window, etc. No timeline-internal state lives here.
 
 /// Shared "reset to default" button: the gray `arrow.counterclockwise`
 /// affordance every parameter row uses (lane value rows, the motion-blur
 /// popover, etc.). Returns a fresh button each call (a view can't be shared
-/// across rows) configured identically — `bordered`=NO, accessory-gray tint,
+/// across rows) configured identically - `bordered`=NO, accessory-gray tint,
 /// `hidden`=YES initially. The caller wires nothing else: it just shows the
 /// button when off-default and lays it out (15×15, trailing-most by
 /// convention).
@@ -61,7 +61,7 @@ FOUNDATION_EXPORT NSButton *KKResetToDefaultButton(id target, SEL action);
 @property(nonatomic, copy, nullable) void (^onTapped)(void);
 @end
 
-/// "Onion-skin" toggle (accent when `on`). Filmstrip icon — turns on the
+/// "Onion-skin" toggle (accent when `on`). Filmstrip icon - turns on the
 /// per-keypose filmstrip layout inside the keypose value popover's
 /// mini-canvas (host renders each KP's source frame side-by-side).
 @interface KKOnionSkinButton : NSView

@@ -84,7 +84,7 @@ static BOOL _kkPathBounds(KKBezierPath *p, simd_float2 *outMin,
 
 /// Object-space bbox center keyed by layerID, for both groups (union of
 /// descendants) and individual paths. (0.5, 0.5) is returned when a group
-/// has no points yet — matches OSC fallback so anchor handles don't snap to
+/// has no points yet - matches OSC fallback so anchor handles don't snap to
 /// (0,0) on empty groups.
 static NSDictionary<NSString *, NSData *> *
 _kkBboxCentersByLayerID(NSArray<KKBezierPath *> *paths) {
@@ -206,7 +206,7 @@ _kkLocalMatrix(KKBezierPath *p, NSDictionary<NSString *, NSData *> *centers,
 }
 
 /// 4x4 model transform around the path's anchor including 3D rotation
-/// (rotX/rotY/rotZ), scale, and translation. No perspective — that's
+/// (rotX/rotY/rotZ), scale, and translation. No perspective - that's
 /// applied once at the end of the chain so nested groups compose cleanly
 /// in 3D world space. Y is flipped to centered-pixel-space (Y-down).
 static matrix_float4x4
@@ -250,7 +250,7 @@ _kkLocalModel4(KKBezierPath *p, NSDictionary<NSString *, NSData *> *centers,
 /// This way a group's rotX/rotY tilts its descendants together with the
 /// group, instead of being discarded. Walks parentGroupID with a depth cap
 /// so a cyclic parent reference can't spin forever. The 2D inverse is used
-/// by the fill color pass for gradient bbox sampling — it ignores rotX/rotY
+/// by the fill color pass for gradient bbox sampling - it ignores rotX/rotY
 /// (gradients on 3D-rotated fills fall back to a 2D approximation).
 static CanvasPathTransform _kkBuildPathTransform(
     KKBezierPath *path, NSDictionary<NSString *, KKBezierPath *> *groupsByID,
@@ -276,7 +276,7 @@ static CanvasPathTransform _kkBuildPathTransform(
     }
     parentID = g.parentGroupID;
   }
-  // Tile-shift post-translation in centered-pixel space — applied AFTER
+  // Tile-shift post-translation in centered-pixel space - applied AFTER
   // the path's own model transform so per-path translate/rotate still
   // operate in canvas-centered space, but the final output lands in the
   // tile-relative pixel space the viewport expects (Approach C).
@@ -442,7 +442,7 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
   // outputWidth/Height (KKMotionBlur header documents this opt-out).
   mbState.subframeScale = 1.0f;
 
-  // Render tick can't read KKDataBlob params (FxPlug XPC scope rule —
+  // Render tick can't read KKDataBlob params (FxPlug XPC scope rule -
   // see project_osc_custom_blob_unreadable.md); read the native mirror.
   NSString *baseStr = KKCanvasReadPathDataMirror(paramGetAPI);
   NSData *baseBlob = baseStr.length
@@ -535,7 +535,7 @@ static id<MTLRenderPipelineState> getOrCreatePipeline(
       float cx = (bl.x + tr.x) * 0.5f;
       float cy = (bl.y + tr.y) * 0.5f;
 
-      // Canvas-centered pixel space — pathXform.m4 carries the tile-shift
+      // Canvas-centered pixel space - pathXform.m4 carries the tile-shift
       // post-translation that maps canvas-centered coords into the
       // tile-relative pixel space the viewport expects (Approach C; see
       // `_kkBuildPathTransform`).
@@ -640,7 +640,7 @@ static BOOL _kkDecodeSampleAt(NSData *pluginState, NSUInteger offset,
 }
 
 /// Renders one Canvas frame (paths → target). Encodes onto `commandBuffer`
-/// but does NOT commit/wait — caller owns lifetime. `sampleIndex` < 0 uses
+/// but does NOT commit/wait - caller owns lifetime. `sampleIndex` < 0 uses
 /// the static texture cache (single-frame path); ≥ 0 fetches per-sample
 /// scratch textures from `KKMotionBlur` so concurrent samples on the same
 /// command buffer don't share state.
@@ -702,7 +702,7 @@ static BOOL _kkDecodeSampleAt(NSData *pluginState, NSUInteger offset,
     }
   }
 
-  // Apply sketch jitter — produces (renderPaths, origPaths) pairs.
+  // Apply sketch jitter - produces (renderPaths, origPaths) pairs.
   NSMutableArray<KKBezierPath *> *origPathsMut =
       [NSMutableArray arrayWithCapacity:inputPaths.count];
   NSMutableArray<KKBezierPath *> *renderPaths =
@@ -747,7 +747,7 @@ static BOOL _kkDecodeSampleAt(NSData *pluginState, NSUInteger offset,
     }
   }
   if (!hasDrawablePaths)
-    return YES; // background blit already laid down — nothing else to do
+    return YES; // background blit already laid down - nothing else to do
 
   NSString *strokeKey = [NSString
       stringWithFormat:@"%@_stroke_%lu", kPluginID, (unsigned long)pixelFormat];
@@ -1143,7 +1143,7 @@ static BOOL _kkDecodeSampleAt(NSData *pluginState, NSUInteger offset,
                     }];
     if (applied)
       return YES;
-    // Fall through on failure — render the un-blurred frame.
+    // Fall through on failure - render the un-blurred frame.
   }
 
   id<MTLCommandQueue> commandQueue =

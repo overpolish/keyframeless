@@ -132,7 +132,7 @@ static const CGFloat kCompoundGap = 6.0;
 - (void)layout {
   [super layout];
   _scroll.frame = self.bounds;
-  // Force the document view to take the stack's natural width — when wider
+  // Force the document view to take the stack's natural width - when wider
   // than the clip, NSScrollView scrolls; the shadows hint at the overflow.
   NSSize fitting = _stack.fittingSize;
   CGFloat docW = MAX(fitting.width, _scroll.contentView.bounds.size.width);

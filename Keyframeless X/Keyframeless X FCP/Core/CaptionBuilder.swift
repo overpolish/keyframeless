@@ -405,7 +405,7 @@ enum CaptionBuilder {
 				continue
 			}
 
-			// Step 2: Find break point — forced breaks take priority
+			// Step 2: Find break point - forced breaks take priority
 			var segEnd = greedyEnd
 			let firstForced = forcedBreaks.filter { $0 > segStart && $0 < greedyEnd }
 				.min()

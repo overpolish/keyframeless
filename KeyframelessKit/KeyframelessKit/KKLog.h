@@ -33,7 +33,7 @@
 - (void)warn:(NSString *)format, ... NS_FORMAT_FUNCTION(1, 2);
 - (void)error:(NSString *)format, ... NS_FORMAT_FUNCTION(1, 2);
 
-/// Macro entry point — captures call site, routes through +shared.
+/// Macro entry point - captures call site, routes through +shared.
 - (void)logFlagValue:(NSUInteger)flag
                 file:(const char *)file
             function:(const char *)function

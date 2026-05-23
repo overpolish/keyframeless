@@ -54,7 +54,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, readonly, nullable) NSString *subtitle;
 @property(nonatomic, readonly, copy) void (^onStart)(void);
 /// Stable key for persisting completion state across launches. Defaults to
-/// `title` when nil — set explicitly if the title may change.
+/// `title` when nil - set explicitly if the title may change.
 @property(nonatomic, copy, nullable) NSString *identifier;
 
 /// YES once the guide has been fully completed at least once (persisted

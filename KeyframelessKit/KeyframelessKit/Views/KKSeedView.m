@@ -65,7 +65,7 @@
 }
 
 - (void)updateField {
-  // Never write stringValue into a live field — it re-creates the field editor
+  // Never write stringValue into a live field - it re-creates the field editor
   // and reselects, yanking focus back. The post-commit refresh is deferred to
   // after the field resigns (see controlTextDidEndEditing:).
   if (_field.kkEditing)
@@ -104,7 +104,7 @@
       _onSeedChanged(newSeed);
   }
   // Normalize the displayed text (empty→placeholder, clamp to uint32) after the
-  // field has fully resigned — updateField no-ops while it's still editing.
+  // field has fully resigned - updateField no-ops while it's still editing.
   __weak typeof(self) weak = self;
   dispatch_async(dispatch_get_main_queue(), ^{
     [weak updateField];

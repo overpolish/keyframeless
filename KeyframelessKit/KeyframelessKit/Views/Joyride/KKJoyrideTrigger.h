@@ -31,9 +31,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Fires when the user types into the constant field for `label`/`component`
 /// and the parsed display value lands within `tolerance` of `equals`.
 + (instancetype)constantFieldEditedLabel:(NSString *)label
-                                component:(NSInteger)component
-                                   equals:(double)target
-                                tolerance:(double)tolerance;
+                               component:(NSInteger)component
+                                  equals:(double)target
+                               tolerance:(double)tolerance;
 
 #pragma mark - Lanes view: gap popover (basic timing)
 
@@ -59,7 +59,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (instancetype)playingChanged:(BOOL)playing;
 /// Compound: fires when the user starts playback during the active step and
 /// then stops it (pause edge). Survives FCP's spurious play=1 pushes within
-/// the first 300ms — same gate the hand-rolled play guard used.
+/// the first 300ms - same gate the hand-rolled play guard used.
 + (instancetype)playPauseEdge;
 
 #pragma mark - Combinators

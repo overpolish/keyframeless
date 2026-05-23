@@ -49,7 +49,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) void (^timelineApplier)
     (KKTimeline *timeline);
 
-/// Fired (if non-nil) when a run ends with the final step reached — i.e. the
+/// Fired (if non-nil) when a run ends with the final step reached - i.e. the
 /// user completed the guide rather than skipping. Plugin uses this to mark
 /// the guide seen, advance an onboarding tally, etc.
 @property(nonatomic, copy, nullable) void (^onGuideCompleted)(void);
@@ -70,7 +70,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// next runloop tick.
 ///
 /// `extraOnComplete` (optional) runs synchronously inside the onComplete
-/// block, after the "did-complete" detection and before binder teardown —
+/// block, after the "did-complete" detection and before binder teardown -
 /// use it for guide-specific cleanup (e.g. resetting a plugin OSC step).
 ///
 /// Save+restore is opt-in via `seedBlock`: nil = "don't touch the current

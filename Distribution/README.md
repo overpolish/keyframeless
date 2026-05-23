@@ -25,7 +25,7 @@ scripts/bump-version.sh magicmove alpha    # 1.0.1 -> 1.0.1-v0, then 1.0.1-v1, e
 scripts/bump-version.sh magicmove release  # 1.0.1-v2 -> 1.0.1
 ```
 
-`alpha` adds or increments a `-vN` suffix and **skips** `manifest.json` — the manifest only ever contains official release versions. `release` strips the suffix and updates the manifest. Users running `1.0.1-v0` will see the update banner when the official `1.0.1` ships because a release version is always considered newer than a pre-release with the same base version.
+`alpha` adds or increments a `-vN` suffix and **skips** `manifest.json` - the manifest only ever contains official release versions. `release` strips the suffix and updates the manifest. Users running `1.0.1-v0` will see the update banner when the official `1.0.1` ships because a release version is always considered newer than a pre-release with the same base version.
 
 ### How update checking works
 
@@ -33,7 +33,7 @@ On app launch, `KKUpdateChecker` fetches the latest GitHub release and looks for
 
 ### Releasing
 
-GitHub releases are tagged by date (e.g. `2026-03-24`) rather than a component version — the `manifest.json` asset is what communicates individual component versions to the update checker.
+GitHub releases are tagged by date (e.g. `2026-03-24`) rather than a component version - the `manifest.json` asset is what communicates individual component versions to the update checker.
 
 1. Bump the component(s) that changed using the script above.
 2. Build, sign, and notarize the `.pkg` (see below).
@@ -41,14 +41,14 @@ GitHub releases are tagged by date (e.g. `2026-03-24`) rather than a component v
 
 ### KeyframelessKit
 
-`KeyframelessKit` is a shared framework linked by all components — it has no version in the manifest. When it changes, bump whichever components ship with the new behaviour. If it's a framework-wide fix, bump all components.
+`KeyframelessKit` is a shared framework linked by all components - it has no version in the manifest. When it changes, bump whichever components ship with the new behaviour. If it's a framework-wide fix, bump all components.
 
 ### Adding a new component
 
 The manifest key is the project name lowercased with no spaces or separators (e.g. `MagicMove` → `magicmove`, `Keyframeless X` → `keyframelessx`).
 
 1. Add an entry to `manifest.json` with the key and initial version (e.g. `"newplugin": "1.0.0"`).
-2. Add the key to `KKKnownComponents()` and `KKBundleIDToComponent()` in `KKUpdateChecker.m` — map both the wrapper app and XPC service bundle IDs.
+2. Add the key to `KKKnownComponents()` and `KKBundleIDToComponent()` in `KKUpdateChecker.m` - map both the wrapper app and XPC service bundle IDs.
 3. Add a case to `scripts/bump-version.sh` that updates the relevant `Info.plist` files and calls `bump_manifest`.
 4. Call `addUpdateBannerParameterWithAPI:error:` at the start of `addParametersWithError:` and pass `[KKPlugin servicePrincipalDelegate]` to `startServicePrincipalWithDelegate:` in `main()` to wire up update checking.
 5. Add the component to `Packages` as a separate package so end users can install it independently.
@@ -60,7 +60,7 @@ The manifest key is the project name lowercased with no spaces or separators (e.
 Generate the following in XCode (`Settings > Apple Accounts > Manage Certificates`):
 
 - Developer ID Application - signing the `.app`
-- Developer ID Installer — signing the `.pkg`
+- Developer ID Installer - signing the `.pkg`
 - Enable `Hardened Runtime` for each project (`Build Settings > Enable hardened runtime`)
 
 - `Signing & Capabilities` for each target:

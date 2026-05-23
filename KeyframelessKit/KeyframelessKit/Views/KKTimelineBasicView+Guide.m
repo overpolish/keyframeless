@@ -126,7 +126,7 @@
   _dragActive = YES;
   if (self.onDragBegin)
     self.onDragBegin();
-  // Run an immediate drag tick so the first frame snaps to the cursor —
+  // Run an immediate drag tick so the first frame snaps to the cursor -
   // mirrors what mouseDown→mouseDragged does for a real drag.
   [self guideDragDiamondToScreenPoint:screenPoint];
   return YES;

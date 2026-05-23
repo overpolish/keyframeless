@@ -56,7 +56,7 @@
 }
 
 // ---------------------------------------------------------------------------
-// Image helper — restore original aspect ratio on double-click
+// Image helper - restore original aspect ratio on double-click
 // ---------------------------------------------------------------------------
 
 - (void)restoreImageAspectRatio:(KKBezierPath *)path {
@@ -103,7 +103,7 @@
 }
 
 // ---------------------------------------------------------------------------
-// Selection helper — keeps selectedPathIndices consistent with activePathIndex
+// Selection helper - keeps selectedPathIndices consistent with activePathIndex
 // ---------------------------------------------------------------------------
 
 - (void)selectActivePath {

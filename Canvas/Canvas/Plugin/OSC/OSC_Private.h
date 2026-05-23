@@ -221,7 +221,7 @@ NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
 
 /// Generic: lane named `label` scoped to the currently-selected
 /// transformable layer's group. Future per-layer transform properties
-/// (rotation, scale) reuse this — only the label changes.
+/// (rotation, scale) reuse this - only the label changes.
 - (nullable KKTimingLane *)laneForSelectedLayerProperty:(NSString *)label;
 /// The Position lane scoped to the currently-selected single layer, or nil.
 - (nullable KKTimingLane *)positionLaneForSelectedLayer;
@@ -267,23 +267,23 @@ NSIndexSet *KKDescendantIndices(NSUInteger groupIdx,
 /// resolved through the active path's parent group transforms.
 - (CGPoint)transformAnchorCanvasPointAtTime:(CMTime)time;
 
-/// Per-axis pixel-space radii of the scale ring at the current scale —
+/// Per-axis pixel-space radii of the scale ring at the current scale -
 /// `canvas-min-dimension × 0.1 × scale` per axis, floored at 0.05 so the
 /// ring stays grabbable when scale collapses to zero.
 - (void)getScaleRingRadiiAtTime:(CMTime)time
                              rx:(CGFloat *)outRx
                              ry:(CGFloat *)outRy;
 
-/// YES when the scale ring OSC should be visible — gated by the same layer
+/// YES when the scale ring OSC should be visible - gated by the same layer
 /// preconditions as Position plus either the "Scale X" or "Scale Y"
 /// per-lane OSC toggle.
 - (BOOL)isScaleRingOSCVisibleAtTime:(CMTime)time;
 
-/// YES when the anchor square OSC should be visible — gated by the layer
+/// YES when the anchor square OSC should be visible - gated by the layer
 /// preconditions plus the "Anchor" per-lane OSC toggle.
 - (BOOL)isAnchorOSCVisibleAtTime:(CMTime)time;
 
-/// YES when the Rotation Z OSC should be visible — gated by the layer
+/// YES when the Rotation Z OSC should be visible - gated by the layer
 /// preconditions plus the "Rot Z" per-lane OSC toggle.
 - (BOOL)isRotZOSCVisibleAtTime:(CMTime)time;
 

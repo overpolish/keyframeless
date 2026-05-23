@@ -86,7 +86,7 @@
 - (void)setPillToScreenRectBlock:(nullable NSRect (^)(void))block {
   _pillToScreenRectBlock = [block copy];
   if (block && !_pulseTimer) {
-    // Drive the target glow ourselves — the FCP-rendered OSC only redraws
+    // Drive the target glow ourselves - the FCP-rendered OSC only redraws
     // when FCP decides, so a real pulse must come from a view we control.
     // Common modes so it keeps ticking during the drag's event tracking.
     __weak typeof(self) weak = self;
@@ -179,7 +179,7 @@
   _pulseTimer = nil;
 }
 
-// hitTest returns nil everywhere — the panel has ignoresMouseEvents = YES so
+// hitTest returns nil everywhere - the panel has ignoresMouseEvents = YES so
 // this view never receives events directly. Clicks on buttons are handled by
 // the global monitor in KKJoyrideController.
 - (NSView *)hitTest:(NSPoint)point {

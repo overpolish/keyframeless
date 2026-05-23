@@ -10,8 +10,8 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /// The bundle that carries Rounded's compiled string catalog
-/// (RoundedUI.xcstrings). Look strings up against this bundle — never
-/// +[NSBundle mainBundle] — because the inspector and joyride guides run in
+/// (RoundedUI.xcstrings). Look strings up against this bundle - never
+/// +[NSBundle mainBundle] - because the inspector and joyride guides run in
 /// FCP's shared ViewBridge process, where the main bundle is not the plugin.
 FOUNDATION_EXPORT NSBundle *RoundedLocalizationBundle(void);
 
