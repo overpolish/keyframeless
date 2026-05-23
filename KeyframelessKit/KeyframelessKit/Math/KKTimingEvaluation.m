@@ -7,7 +7,6 @@
 
 #import "../Plugin/KKColor.h"
 #import "KKBezierPath.h"
-#import "KKEasing.h"
 #import "KKGradientSampling.h"
 
 const double KKRotateWithMotionWindowSeconds = 1.0 / 12.0;
@@ -80,6 +79,28 @@ static NSArray<NSNumber *> *_Nullable KKExpandComponentKinds(
       [out addObject:k];
   }
   return out;
+}
+
+// Apply the modulation envelope's multiplicative factor `f` (≈ 1±intensity*
+// envelope) to `v`. Plain multiplication is a no-op when `v==0`, which
+// breaks oscillation on offset-style params (Crop X/Y centred at 0). For
+// near-zero values we fall back to an additive form whose amplitude scales
+// with the component's value range (componentMax-componentMin), so 0
+// wiggles by a meaningful fraction of its range instead of staying put.
+static double KKApplyModulationFactor(double v, double f,
+                                      NSArray<NSNumber *> *cMin,
+                                      NSArray<NSNumber *> *cMax, NSUInteger i) {
+  static const double kZeroThreshold = 1.0e-6;
+  if (fabs(v) >= kZeroThreshold)
+    return v * f;
+  double lo = (i < cMin.count) ? cMin[i].doubleValue : 0.0;
+  double hi = (i < cMax.count) ? cMax[i].doubleValue : 1.0;
+  double range = hi - lo;
+  if (range <= 0.0)
+    range = 1.0;
+  // Quarter-range amplitude keeps the wiggle visible at typical intensity
+  // values without overshooting the plot's headroom too aggressively.
+  return v + (f - 1.0) * range * 0.25;
 }
 
 static BOOL KKLaneIsGradient(KKTimingLane *lane) {
@@ -167,6 +188,285 @@ KKEvaluateTransition(NSArray<KKTimingSegment *> *segments, NSUInteger idx,
     }
   }
   return interpolated;
+}
+
+static NSArray<NSNumber *> *KKLaneRawValueAtFraction(KKLane *lane,
+                                                     double frac) {
+  NSArray<KKKeyPose *> *kps = lane.keyposes;
+  if (!kps.count)
+    return nil;
+  if (kps.count == 1)
+    return kps[0].values;
+  // Endpoint clamps must respect a flat first/last interval: if In is disabled
+  // (first interval holdsFlat) the lane sits at the Hold value even at t≤0, so
+  // clamp to the Hold-side keypose, not the (preserved) In-start value. Same at
+  // the tail for a disabled Out.
+  if (frac <= kps.firstObject.time)
+    return (kps.firstObject.outgoing.holdsFlat) ? kps[1].values
+                                                : kps.firstObject.values;
+  if (frac >= kps.lastObject.time)
+    return (kps[kps.count - 2].outgoing.holdsFlat) ? kps[kps.count - 2].values
+                                                   : kps.lastObject.values;
+
+  KKKeyPose *a = kps.firstObject;
+  KKKeyPose *b = kps[1];
+  for (NSUInteger i = 0; i + 1 < kps.count; i++) {
+    if (frac < kps[i + 1].time) {
+      a = kps[i];
+      b = kps[i + 1];
+      break;
+    }
+  }
+
+  double span = b.time - a.time;
+  double localT = (span > 0) ? (frac - a.time) / span : 1.0;
+  localT = MAX(0.0, MIN(1.0, localT));
+
+  KKInterval *iv = a.outgoing;
+  // A flat interval contributes no motion: hold at the Hold-side value (the
+  // end keypose for the first/In interval, the start keypose for the last/Out
+  // interval). Both keyposes' values stay stored so re-enabling restores them.
+  if (iv && iv.holdsFlat)
+    return (a == kps.firstObject) ? b.values : a.values;
+  double easedT = iv ? KKApplyEasing(localT, (KKEasingCurve)iv.curve,
+                                     iv.intensity, iv.frequency)
+                     : localT;
+
+  NSUInteger valCount = MIN(a.values.count, b.values.count);
+  NSMutableArray<NSNumber *> *result =
+      [NSMutableArray arrayWithCapacity:valCount];
+  for (NSUInteger i = 0; i < valCount; i++) {
+    double av = a.values[i].doubleValue;
+    double bv = b.values[i].doubleValue;
+    [result addObject:@(av + (bv - av) * easedT)];
+  }
+
+  if (iv && iv.modulation != KKIntervalModulationNone) {
+    // Multiplicative factor centred on 1.0; envelope zeroes at localT 0/1
+    // so it joins the keyposes continuously. Wiggle = high-freq hash,
+    // Oscillate = regular sinusoid, Handheld = low-freq fBm.
+    KKHoldEffect effect =
+        (iv.modulation == KKIntervalModulationWiggle)     ? KKHoldEffectWiggle
+        : (iv.modulation == KKIntervalModulationHandheld) ? KKHoldEffectHandheld
+                                                          : KKHoldEffectBounce;
+    NSIndexSet *mask = iv.modulationComponents; // nil = all components
+    NSArray<NSNumber *> *cMin = lane.componentMin;
+    NSArray<NSNumber *> *cMax = lane.componentMax;
+    if (iv.modulationLinked) {
+      double f =
+          KKApplyHoldEffect(localT, effect, iv.modulationIntensity,
+                            iv.modulationFrequency, (int)iv.modulationSeed);
+      for (NSUInteger i = 0; i < result.count; i++) {
+        if (mask && ![mask containsIndex:i])
+          continue;
+        result[i] =
+            @(KKApplyModulationFactor(result[i].doubleValue, f, cMin, cMax, i));
+      }
+    } else {
+      for (NSUInteger i = 0; i < result.count; i++) {
+        if (mask && ![mask containsIndex:i])
+          continue;
+        double f = KKApplyHoldEffectForComponent(
+            localT, effect, iv.modulationIntensity, iv.modulationFrequency,
+            (int)iv.modulationSeed, (int)i);
+        result[i] =
+            @(KKApplyModulationFactor(result[i].doubleValue, f, cMin, cMax, i));
+      }
+    }
+  }
+  return result;
+}
+
+NSArray<NSNumber *> *KKTimelineLaneValueAtFraction(KKLane *lane, double frac) {
+  return KKLaneRawValueAtFraction(lane, frac);
+}
+
+double KKHermiteJoinBlend(double frac, double boundary, double window,
+                          double (^sample)(double f)) {
+  if (window <= 0.0)
+    return sample(frac);
+  double lo = boundary - window;
+  double hi = boundary + window;
+  if (frac <= lo || frac >= hi)
+    return sample(frac);
+  double h = window * 0.05;
+  if (h < 1.0e-5)
+    h = 1.0e-5;
+  double p0 = sample(lo);
+  double p1 = sample(hi);
+  double m0 = (sample(lo + h) - sample(lo - h)) / (2.0 * h);
+  double m1 = (sample(hi + h) - sample(hi - h)) / (2.0 * h);
+  double L = hi - lo;
+  double x = (frac - lo) / L;
+  double x2 = x * x, x3 = x2 * x;
+  double h00 = 2.0 * x3 - 3.0 * x2 + 1.0;
+  double h10 = x3 - 2.0 * x2 + x;
+  double h01 = -2.0 * x3 + 3.0 * x2;
+  double h11 = x3 - x2;
+  return h00 * p0 + h10 * m0 * L + h01 * p1 + h11 * m1 * L;
+}
+
+NSArray<NSNumber *> *KKTimelineLaneValueAtFractionSmoothed(KKLane *lane,
+                                                           double frac) {
+  NSArray<KKKeyPose *> *kps = lane.keyposes;
+  if (kps.count < 3)
+    return KKLaneRawValueAtFraction(lane, frac); // no interior join to round
+  if (frac <= kps.firstObject.time || frac >= kps.lastObject.time)
+    return KKLaneRawValueAtFraction(lane, frac); // endpoints stay exact
+
+  // Find the interior keypose whose join window contains `frac`. Windows are
+  // a fraction of the smaller adjacent span and capped so neighbouring
+  // windows can't overlap (and never reach a neighbour keypose).
+  for (NSUInteger i = 1; i + 1 < kps.count; i++) {
+    double b = kps[i].time;
+    double prev = b - kps[i - 1].time;
+    double next = kps[i + 1].time - b;
+    if (prev <= 0.0 || next <= 0.0)
+      continue;
+    double w = KK_JOIN_BLEND_FRAC * MIN(prev, next);
+    w = MIN(w, 0.49 * prev);
+    w = MIN(w, 0.49 * next);
+    if (frac <= b - w || frac >= b + w)
+      continue;
+
+    NSArray<NSNumber *> *probe = KKLaneRawValueAtFraction(lane, b);
+    NSUInteger nc = probe.count;
+    NSMutableArray<NSNumber *> *out = [NSMutableArray arrayWithCapacity:nc];
+    for (NSUInteger c = 0; c < nc; c++) {
+      double v = KKHermiteJoinBlend(frac, b, w, ^double(double f) {
+        NSArray<NSNumber *> *vv = KKLaneRawValueAtFraction(lane, f);
+        return c < vv.count ? vv[c].doubleValue : 0.0;
+      });
+      [out addObject:@(v)];
+    }
+    return out;
+  }
+  return KKLaneRawValueAtFraction(lane, frac);
+}
+
+// Inverse of the Basic-view _projection's visual In/Out remap. Stored kp
+// times sit at tIn/tOut even when In/Out is off — the Basic graph draws the
+// Hold-start at visual t=0 (In off) and Hold-end at visual t=1 (Out off).
+// This function applies the same remap on the read side so the rendered
+// output and OSC reads match the visual graph.
+static double _kkVisualToDataFrac(KKLane *lane, double visualFrac) {
+  NSArray<KKKeyPose *> *kps = lane.keyposes;
+  NSInteger n = (NSInteger)kps.count;
+  if (n < 2)
+    return visualFrac;
+
+  static const double kEps = 1e-4;
+  // The remap exists for the Basic projection (KPs anchored at canonical
+  // positions: first at 0, last at the last-frame). In Advanced the user
+  // can drag KPs anywhere, in which case the stored time IS the visual
+  // time — stretching the [first.time, last.time] range over [0, 1] would
+  // mis-time the lane (e.g. firstKP @ 0.2 then visualFrac=0.1 maps into
+  // the transition instead of clamping to firstKP's value).
+  // Heuristic: skip remap when first/last KPs aren't anchored to the
+  // Basic edges. Conservative — short clips at unknown frame durations
+  // can put `lastFrameFrac` slightly inside 1; allow ~2% slack.
+  if (kps.firstObject.time > 2.0 * kEps)
+    return visualFrac;
+  if (kps.lastObject.time < 0.98)
+    return visualFrac;
+
+  // Shape detection — match KKShapeOfLane (count-based, framerate-agnostic).
+  BOOL inEn = NO, outEn = NO;
+  if (n == 4) {
+    inEn = YES;
+    outEn = YES;
+  } else if (n == 3) {
+    if (kps.firstObject.time < kEps)
+      inEn = YES;
+    else
+      outEn = YES;
+  }
+  NSInteger holdStart = inEn ? 1 : 0;
+  NSInteger holdEnd = n - (outEn ? 2 : 1);
+  if (holdEnd <= holdStart)
+    return visualFrac;
+  double tA = kps[holdStart].time;
+  double tB = kps[holdEnd].time;
+  // Visual extents of the Hold region. In on → starts at tA (after In
+  // transition). Out on → ends at tB (before Out transition).
+  double vL = inEn ? tA : 0.0;
+  double vR = outEn ? tB : 1.0;
+
+  if (visualFrac <= vL)
+    return inEn ? visualFrac : tA;
+  if (visualFrac >= vR)
+    return outEn ? visualFrac : tB;
+  double span = vR - vL;
+  if (span <= kEps)
+    return tA;
+  double t = (visualFrac - vL) / span;
+  return tA + t * (tB - tA);
+}
+
+NSArray<NSNumber *> *
+KKTimelineLaneValueAtVisualFractionSmoothed(KKLane *lane, double visualFrac) {
+  return KKTimelineLaneValueAtFractionSmoothed(
+      lane, _kkVisualToDataFrac(lane, visualFrac));
+}
+
+BOOL KKLaneVisibleAtFraction(KKLane *lane, double frac, double frameDurSec) {
+  // Constants (disabled / no kps) — always show. Callers that want a
+  // different "constant" rule should branch before calling.
+  if (!lane || !lane.enabled)
+    return YES;
+  NSArray<KKKeyPose *> *kps = lane.keyposes;
+  if (kps.count == 0)
+    return YES;
+
+  // Count-based shape detection — must match KKShapeOfLane /
+  // _kkVisualToDataFrac so visibility lines up with where the kp is
+  // *drawn* (Basic-view projects Hold-start→0 when In off, Hold-end→1
+  // when Out off; stored times stay at tIn/tOut).
+  static const double kShapeEps = 1e-4;
+  NSInteger n = (NSInteger)kps.count;
+  BOOL inEnabled = NO, outEnabled = NO;
+  if (n == 4) {
+    inEnabled = YES;
+    outEnabled = YES;
+  } else if (n == 3) {
+    if (kps.firstObject.time < kShapeEps)
+      inEnabled = YES;
+    else
+      outEnabled = YES;
+  }
+  NSInteger holdStart = inEnabled ? 1 : 0;
+  NSInteger holdEnd = n - (outEnabled ? 2 : 1);
+
+  // Frame-aware snap tolerance — FCP's playhead is frame-quantized, so
+  // the readback frac is up to one frame off the kp's stored time.
+  double clipDur = lane.lastKnownClipDuration;
+  double epsilon;
+  if (clipDur > 0.0 && frameDurSec > 0.0)
+    epsilon = frameDurSec / clipDur;
+  else
+    epsilon = 0.05;
+  static const double kMinEps = 1e-4;
+  if (epsilon < kMinEps)
+    epsilon = kMinEps;
+
+  // Last-frame fraction — matches the scrubber's visual max and where
+  // FCP delivers the playhead when parked at the clip end. Used as the
+  // Out-end position when Out is off so the projected kp aligns with
+  // where the playhead can actually land.
+  double lastFrameFrac = 1.0;
+  if (clipDur > 0.0 && frameDurSec > 0.0 && frameDurSec < clipDur)
+    lastFrameFrac = (clipDur - frameDurSec) / clipDur;
+
+  for (NSInteger i = 0; i < n; i++) {
+    double t = kps[i].time;
+    if (i == holdStart && !inEnabled)
+      t = 0.0;
+    else if (i == holdEnd && !outEnabled)
+      t = lastFrameFrac;
+    if (fabs(t - frac) <= epsilon)
+      return YES;
+  }
+  return NO;
 }
 
 NSArray<NSNumber *> *KKTimingLaneValueAtFraction(KKTimingLane *lane,

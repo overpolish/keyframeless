@@ -101,8 +101,12 @@
 				"Plugin/Plugin+CustomUI.m",
 				"Plugin/Plugin+Parameters.m",
 				"Plugin/Plugin+Render.m",
-				"Plugin/Plugin+Visibility.m",
 				Plugin/Rounded.metal,
+				Plugin/RoundedInspectorView.m,
+				"Plugin/RoundedInspectorView+Guides.m",
+				Plugin/RoundedMiniCanvasRenderer.m,
+				"Plugin/RoundedOSC+MouseHandlers.m",
+				Plugin/RoundedOSCRadiusMath.m,
 				"Wrapper Application/Info.plist",
 			);
 			target = F2E2ED742F4CA530008620D9 /* Wrapper Application */;

@@ -35,6 +35,14 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (instancetype)styledSlider;
 
+/// Screen-space geometry for a guide that drives this slider: the track rect,
+/// the knob-centre X for a value, and the value for a screen X. All honour
+/// the scale break and knob inset so a guide's target marker and drag map
+/// line up exactly with the rendered knob.
+- (NSRect)trackScreenRect;
+- (CGFloat)screenXForValue:(double)value;
+- (double)valueForScreenX:(CGFloat)screenX;
+
 @end
 
 NS_ASSUME_NONNULL_END

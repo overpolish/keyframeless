@@ -124,6 +124,27 @@ void KKWithUndoGroup(id<PROAPIAccessing> apiManager, NSString *name,
   }
 }
 
+NSMutableArray<KKTimingLane *> *KKReadLanesRebalanced(
+    id<PROAPIAccessing> __unused apiManager,
+    id<FxParameterRetrievalAPI_v6> __unused getAPI) {
+  return nil;
+}
+
+NSInteger KKLaneJSONIndexForViewIndex(NSInteger viewIndex,
+                                      NSArray<KKTimingLane *> *jsonLanes,
+                                      NSSet<NSString *> *hidden) {
+  NSInteger visible = 0;
+  for (NSInteger i = 0; i < (NSInteger)jsonLanes.count; i++) {
+    KKTimingLane *lane = jsonLanes[i];
+    if (hidden && [hidden containsObject:lane.propertyLabel])
+      continue;
+    if (visible == viewIndex)
+      return i;
+    visible++;
+  }
+  return -1;
+}
+
 void KKWriteLanesJSON(NSArray<KKTimingLane *> *lanes,
                       id<FxParameterSettingAPI_v5> setAPI,
                       id<PROAPIAccessing> apiManager) {

@@ -6,62 +6,13 @@
 #import "KKSeedView.h"
 
 #import "../Style/NSColor+KKColors.h"
-
-@interface KKSeedTextField : NSTextField
-@end
-
-@implementation KKSeedTextField {
-  BOOL _userClickPending;
-}
-
-- (BOOL)acceptsFirstResponder {
-  // Only accept first responder when the user explicitly clicked us. Prevents
-  // the popover from stealing focus and swallowing keyboard shortcuts like
-  // spacebar (timeline playback) when it opens.
-  return _userClickPending;
-}
-
-- (void)mouseDown:(NSEvent *)event {
-  _userClickPending = YES;
-  [super mouseDown:event];
-}
-
-- (BOOL)performKeyEquivalent:(NSEvent *)event {
-  if (self.currentEditor) {
-    [self.currentEditor keyDown:event];
-    return YES;
-  }
-  return [super performKeyEquivalent:event];
-}
-
-- (BOOL)becomeFirstResponder {
-  BOOL ok = [super becomeFirstResponder];
-  if (ok) {
-    NSTextView *editor = (NSTextView *)self.currentEditor;
-    NSColor *accent = [NSColor accent];
-    editor.insertionPointColor = accent;
-    editor.selectedTextAttributes = @{
-      NSBackgroundColorAttributeName : [accent colorWithAlphaComponent:0.3],
-      NSForegroundColorAttributeName : [NSColor labelColor],
-    };
-  }
-  return ok;
-}
-
-- (void)textDidEndEditing:(NSNotification *)notification {
-  [super textDidEndEditing:notification];
-  _userClickPending = NO;
-  // Return focus to the window so keyboard shortcuts work again.
-  [self.window makeFirstResponder:nil];
-}
-
-@end
+#import "KKValueTextField.h"
 
 @interface KKSeedView () <NSTextFieldDelegate>
 @end
 
 @implementation KKSeedView {
-  NSTextField *_field;
+  KKValueTextField *_field;
   NSButton *_button;
 }
 
@@ -83,19 +34,9 @@
   stack.spacing = 6.0;
   stack.translatesAutoresizingMaskIntoConstraints = NO;
 
-  _field = [[KKSeedTextField alloc] init];
-  _field.font = [NSFont monospacedDigitSystemFontOfSize:11.0
-                                                 weight:NSFontWeightRegular];
-  _field.alignment = NSTextAlignmentRight;
-  _field.textColor = [NSColor inspectorLabel];
-  _field.backgroundColor = [NSColor clearColor];
-  _field.bordered = NO;
-  _field.editable = YES;
-  _field.selectable = YES;
-  _field.focusRingType = NSFocusRingTypeNone;
+  _field = [KKValueTextField valueField];
   _field.delegate = self;
-  _field.translatesAutoresizingMaskIntoConstraints = NO;
-  [_field.widthAnchor constraintGreaterThanOrEqualToConstant:60.0].active = YES;
+  [_field.widthAnchor constraintGreaterThanOrEqualToConstant:72.0].active = YES;
   [stack addArrangedSubview:_field];
 
   _button =
@@ -120,6 +61,11 @@
 }
 
 - (void)updateField {
+  // Never write stringValue into a live field — it re-creates the field editor
+  // and reselects, yanking focus back. The post-commit refresh is deferred to
+  // after the field resigns (see controlTextDidEndEditing:).
+  if (_field.kkEditing)
+    return;
   if (_seed == 0) {
     _field.stringValue = @"";
     _field.placeholderString = @"0";
@@ -138,15 +84,27 @@
     _onReroll();
 }
 
+// Return commits and fully defocuses (suppressing AppKit's default reselect).
+- (BOOL)control:(NSControl *)control
+               textView:(NSTextView *)textView
+    doCommandBySelector:(SEL)commandSelector {
+  return KKValueFieldHandleReturnCommand(self.window, commandSelector);
+}
+
 - (void)controlTextDidEndEditing:(NSNotification *)notification {
   unsigned long long val = _field.stringValue.longLongValue;
   uint32_t newSeed = (uint32_t)(val & 0xFFFFFFFF);
   if (newSeed != _seed) {
     _seed = newSeed;
-    [self updateField];
     if (_onSeedChanged)
       _onSeedChanged(newSeed);
   }
+  // Normalize the displayed text (empty→placeholder, clamp to uint32) after the
+  // field has fully resigned — updateField no-ops while it's still editing.
+  __weak typeof(self) weak = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [weak updateField];
+  });
 }
 
 @end

@@ -91,8 +91,10 @@ static CGPoint cropPointPosition(NSInteger idx, CGPoint topRight,
     for (int i = 0; i < KKCropPointCount; i++) {
       KKPointOSC *pt = [[KKPointOSC alloc] initWithAPIManager:apiManager];
       pt.clearsOnDraw = NO;
-      pt.oscRadius = 5.0f;
-      pt.outlineWidth = 1.5f;
+      // Match the in-viewer radius OSC's default size so corner/edge handles
+      // are equally grabbable.
+      pt.oscRadius = 7.0f;
+      pt.outlineWidth = 2.0f;
       [points addObject:pt];
     }
     _pointOSCs = points;
@@ -105,27 +107,31 @@ static CGPoint cropPointPosition(NSInteger idx, CGPoint topRight,
   return self;
 }
 
+// Bridge between the plugin-facing `[w, h, x, y]` model (KKCropModel.h —
+// w/h size, x/y centre offset from image centre) and the internal L/R/T/B
+// edge-inset representation the drag math uses. Y mapping mirrors the
+// in-viewer empirical convention validated against the radius OSC anchor.
 - (void)readCropValues:(double *)cL
                     cR:(double *)cR
                     cT:(double *)cT
                     cB:(double *)cB
                 atTime:(CMTime)time {
-  id<FxParameterRetrievalAPI_v6> paramGetAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   *cL = 0;
   *cR = 0;
   *cT = 0;
   *cB = 0;
-  if (paramGetAPI) {
-    [paramGetAPI getFloatValue:cL fromParameter:self.cropLeftParam atTime:time];
-    [paramGetAPI getFloatValue:cR
-                 fromParameter:self.cropRightParam
-                        atTime:time];
-    [paramGetAPI getFloatValue:cT fromParameter:self.cropTopParam atTime:time];
-    [paramGetAPI getFloatValue:cB
-                 fromParameter:self.cropBottomParam
-                        atTime:time];
-  }
+  NSArray<NSNumber *> *vals =
+      self.valuesProvider ? self.valuesProvider(time) : nil;
+  if (vals.count < 4)
+    return; // nil/short → full image (all insets 0)
+  double w = vals[0].doubleValue;
+  double h = vals[1].doubleValue;
+  double x = vals[2].doubleValue;
+  double y = vals[3].doubleValue;
+  *cL = 0.5 + x - w * 0.5;
+  *cR = 0.5 - x - w * 0.5;
+  *cT = 0.5 + y - h * 0.5;
+  *cB = 0.5 - y - h * 0.5;
 }
 
 - (BOOL)getTopRight:(CGPoint *)topRight
@@ -291,14 +297,14 @@ static CGPoint cropPointPosition(NSInteger idx, CGPoint topRight,
                 top:(double)cT
              bottom:(double)cB
              atTime:(CMTime)time {
-  id<FxParameterSettingAPI_v5> paramSetAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!paramSetAPI)
+  if (!self.valuesWriter)
     return;
-  [paramSetAPI setFloatValue:cL toParameter:self.cropLeftParam atTime:time];
-  [paramSetAPI setFloatValue:cR toParameter:self.cropRightParam atTime:time];
-  [paramSetAPI setFloatValue:cT toParameter:self.cropTopParam atTime:time];
-  [paramSetAPI setFloatValue:cB toParameter:self.cropBottomParam atTime:time];
+  // Inverse of -readCropValues:'s mapping.
+  double w = 1.0 - cL - cR;
+  double h = 1.0 - cT - cB;
+  double x = (cL - cR) * 0.5;
+  double y = (cT - cB) * 0.5;
+  self.valuesWriter(@[ @(w), @(h), @(x), @(y) ], time);
 }
 
 - (void)mouseDraggedForPart:(NSInteger)part

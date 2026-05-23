@@ -8,12 +8,14 @@
 #import <CoreMedia/CoreMedia.h>
 #import <Foundation/Foundation.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
+#import <KeyframelessKit/KKTimingLane.h>
 #import <KeyframelessKit/KKTimingStage.h>
 #import <Metal/Metal.h>
 
 @class FxImageTile;
 @class KKCustomGroupHeaderView;
 @class KKHelpSection;
+@class KKHelpGuide;
 @class KKTimingLane;
 @class KKTimingSegment;
 @class NSBezierPath;
@@ -137,6 +139,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Call at the end of addParametersWithError:.
 - (BOOL)addLogoBannerParameterWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                                 error:(NSError **)error;
+
+/// Best-effort screen rect of THIS effect instance's FCP header row, derived
+/// from its own logo banner. NSZeroRect if the banner isn't placed. Use to
+/// anchor a guide step at the header; correct with multiple effect instances
+/// (unlike a process-global lookup).
+- (NSRect)effectHeaderScreenRect;
 
 /// Adds a full-width informational text display occupying one parameter ID.
 /// The parameter is not animatable and stores no meaningful value — it is
@@ -512,14 +520,44 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 /// Default: `KKClipWrappingModeNone`.
 - (KKClipWrappingMode)clipWrappingMode;
 
+/// Reads the flat JSON dict stored at `paramID`, patches `{key: value}` into
+/// it, and writes it back — all in a fresh action scope. Suitable for any
+/// plugin that keeps lightweight UI state (tab index, toggle values, etc.) in
+/// a single custom-string param as a JSON object. The param must already be
+/// registered as a custom-string parameter.
+- (void)patchUIStateKey:(NSString *)key value:(id)value paramID:(UInt32)paramID;
+
 /// Override to provide help/keyboard-shortcut sections. Each section is
 /// rendered as a titled block with a tips bullet list and/or a 2-column
 /// shortcuts table. Returning a non-empty array makes the logo-banner
 /// help button visible. Default: empty array.
 - (NSArray<KKHelpSection *> *)helpSections;
 
-/// Opens the host's remote window with the rendered `helpSections`.
+/// Override to provide interactive guide entries shown at the top of the
+/// help window. Each guide has a title, optional subtitle, and an onStart
+/// block that launches the in-inspector walkthrough. Default: empty array.
+- (NSArray<KKHelpGuide *> *)helpGuides;
+
+/// Override to return an NSNotificationName that signals guide enabled-state
+/// may have changed. When non-nil, the help window automatically calls
+/// refreshGuideRows when the notification is posted. Default: nil.
+- (nullable NSNotificationName)helpGuideRefreshNotificationName;
+
+/// Opens the host's remote window with the rendered `helpSections` and guides.
 - (void)openHelpRemoteWindow;
+
+/// Generic host remote-window presenter. Runs the required action scope,
+/// resolves FxRemoteWindowAPI, attaches to the correctly-sized superview,
+/// clears any prior remote content, and wraps `contentProvider()`'s view in a
+/// key handler that forwards Space / Cmd-Z / Cmd-Shift-Z to the host command
+/// API. Every plugin's remote window (help, editor, …) gets those keystrokes
+/// for free. The provider is invoked on the reply to build the content view.
+- (void)presentRemoteWindowOfSize:(CGSize)size
+                  contentProvider:(NSView * (^)(void))contentProvider;
+
+/// Asks the host to close this instance's remote window if the resolved
+/// FxRemoteWindowAPI supports it (v3+). Runs inside an action scope.
+- (void)closeRemoteWindowIfSupported;
 
 /// Creates a collapsible group header view wired to a hidden bool toggle.
 /// Use from createViewForParameterID: — the returned view reads/writes

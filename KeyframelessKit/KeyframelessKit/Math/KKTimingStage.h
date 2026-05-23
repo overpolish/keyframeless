@@ -7,252 +7,176 @@
 
 #import <Foundation/Foundation.h>
 
-#import <KeyframelessKit/KKEasing.h>
-
 NS_ASSUME_NONNULL_BEGIN
 
-typedef NS_ENUM(NSInteger, KKSegmentType) {
-  KKSegmentTypeHold = 0,
-  KKSegmentTypeTransition = 1,
+typedef NS_ENUM(NSInteger, KKLaneValueType) {
+  KKLaneValueTypeGeneric = 0,
+  KKLaneValueTypeFloat = 1,
+  KKLaneValueTypeNormalized = 2,
+  KKLaneValueTypeCrop = 3,  // [width, height, x, y] normalized center offsets
+  KKLaneValueTypeColor = 4, // [r, g, b, a] 0–1
+  KKLaneValueTypeGradient = 5, // flat stop array: [position, r, g, b, midpoint,
+                               // ...] × N stops; variable length
 };
 
-/// Per-component kind hint stored on each lane in `valueComponentKinds`.
-/// Tells the sequencer renderer and HTH normalization how many scalar
-/// values each slot expands into and how to treat them across transitions.
-typedef NS_ENUM(NSInteger, KKAnimatableParamKind) {
-  /// 1 scalar; standard float-lerp across transitions.
-  KKAnimatableParamKindFloat = 0,
-  /// 3 scalars [R, G, B]; per-component float-lerp.
-  KKAnimatableParamKindColor = 1,
-  /// Variable-length flat `[pos, r, g, b, mid]` per stop. Stop counts can
-  /// differ across a transition — interp falls back to LUT-lerp.
-  KKAnimatableParamKindGradient = 2,
-  /// 2 scalars [X, Y].
-  KKAnimatableParamKindPoint = 3,
-  /// 1 scalar (0/1). Step semantics: HTH normalization preserves the
-  /// segment's own value rather than inheriting from the surrounding hold.
-  KKAnimatableParamKindBool = 4,
-  /// 0 scalars in the lane itself; the per-segment payload lives out-of-band
-  /// (e.g. on the path blob for Canvas's path-morph lane). The lane carries
-  /// only segment timing/easing; plugins keep external storage in sync via
-  /// the lane-mutation hook.
-  KKAnimatableParamKindMorph = 5,
+typedef NS_ENUM(NSInteger, KKIntervalCurve) {
+  KKIntervalCurveLinear = 0,
+  KKIntervalCurveEaseIn = 1,
+  KKIntervalCurveEaseOut = 2,
+  KKIntervalCurveEaseInOut = 3,
+  KKIntervalCurveElastic = 4,
+  KKIntervalCurveBounce = 5,
 };
 
-/// A single segment in a multi-stage timing lane.
-///
-/// - **Hold segments** maintain constant values for their duration.
-/// - **Transition segments** interpolate between the values of their
-///   adjacent segments using the specified easing curve.
-///
-/// Positions are 0–1 fractions of the clip duration.
-/// Empty regions before the first segment or after the last use the
-/// property's base parameter values.
-///
-/// Each segment stores an array of values, one per native parameter
-/// in the property's valueParamIDs. For single-param properties (like
-/// Radius) this is a one-element array. For multi-param properties
-/// (like Crop with top/bottom/left/right) it matches the param count.
-@interface KKTimingSegment : NSObject <NSCopying>
+/// Explicit hold-shape annotation for Basic-mode lanes. Auto = legacy
+/// blobs without this field; `KKShapeOfLane` infers from KP count + middle
+/// time. Anything else is authoritative — set by Basic's rebuild path
+/// every time In/Out is toggled, so the projection doesn't have to guess
+/// from keypose times (and so dragging the boundary past 0.5 doesn't flip
+/// the interpretation mid-drag).
+typedef NS_ENUM(NSInteger, KKLaneHoldShape) {
+  KKLaneHoldShapeAuto = 0,
+  KKLaneHoldShapeNone = 1,
+  KKLaneHoldShapeInOnly = 2,
+  KKLaneHoldShapeOutOnly = 3,
+  KKLaneHoldShapeBoth = 4,
+};
 
-@property(nonatomic) KKSegmentType type;
-@property(nonatomic) double start;
-@property(nonatomic) double end;
-/// Absolute parameter values. One per native param in the property's
-/// valueParamIDs array.
-@property(nonatomic, copy) NSArray<NSNumber *> *values;
-/// Easing curve used when `type == KKSegmentTypeTransition`.
-@property(nonatomic) KKEasingCurve easing;
-/// Hold effect used when `type == KKSegmentTypeHold`.
-@property(nonatomic) KKHoldEffect holdEffect;
-@property(nonatomic) double intensity;
-@property(nonatomic) double frequency;
-/// Hold-effect seed for randomising per-property variation.
-@property(nonatomic) uint32_t seed;
-/// For hold segments on multi-component lanes (e.g. Position, Radius X/Y):
-/// when YES, the hold effect uses a single shared factor across components
-/// so they modulate in lockstep (e.g. Radius maintains aspect). When NO,
-/// each component gets an independent factor for more organic motion.
-/// Has no effect on single-scalar lanes. Defaults to YES for back-compat
-/// with single-factor behaviour.
-@property(nonatomic) BOOL linked;
-/// When > 0, this segment holds an absolute duration in seconds across clip
-/// length changes. Unlocked (= 0) segments scale proportionally with the clip.
-@property(nonatomic) double lockedDurationSeconds;
+typedef NS_ENUM(NSInteger, KKIntervalModulation) {
+  KKIntervalModulationNone = 0,
+  KKIntervalModulationWiggle = 1,
+  KKIntervalModulationOscillate = 2,
+  KKIntervalModulationHandheld = 3, // low-frequency fBm (analogue camera)
+};
 
-/// Optional plugin-specific binary blob persisted alongside the segment in
-/// JSON (base64-encoded). Used by MagicMove to store the bezier path between
-/// a transition's boundary endpoints; nil/empty means default behaviour
-/// (linear interpolation). The timing engine itself does not interpret this.
-@property(nonatomic, copy, nullable) NSData *pathData;
+/// The character of the gap between two adjacent keyposes.
+/// Stored on KKKeyPose.outgoing — nil on the last keypose in a lane.
+@interface KKInterval : NSObject <NSCopying>
 
-/// Convenience: first value (for single-param properties).
-@property(nonatomic, readonly) double value;
+@property(nonatomic) KKIntervalCurve curve; // default: EaseInOut
+@property(nonatomic) double intensity;      // default: 1.0
+@property(nonatomic) double frequency;      // default: 0.5 (Elastic/Bounce)
 
-+ (instancetype)holdWithValues:(NSArray<NSNumber *> *)values
-                         start:(double)start
-                           end:(double)end;
+@property(nonatomic) KKIntervalModulation modulation; // default: None
+@property(nonatomic) double modulationIntensity;      // default: 1.0
+@property(nonatomic) double modulationFrequency;      // default: 1.0
+@property(nonatomic) uint32_t modulationSeed;         // default: 0
+@property(nonatomic) BOOL modulationLinked;           // default: YES
 
-+ (instancetype)transitionWithStart:(double)start
-                                end:(double)end
-                             easing:(KKEasingCurve)easing
-                          intensity:(double)intensity
-                          frequency:(double)frequency
-                             values:(NSArray<NSNumber *> *)values;
+/// Subset of the lane's value components the modulation envelope multiplies
+/// against. nil = all components (default / legacy). Lets multi-component
+/// lanes (Crop, Color) wiggle just one axis — e.g. oscillate X horizontally
+/// without disturbing W/H/Y. Indices match the lane's `values` array order.
+@property(nonatomic, copy, nullable) NSIndexSet *modulationComponents;
+
+@property(nonatomic) double lockedSeconds; // 0 = scale proportionally
+
+/// When YES, the two keyposes bordering this gap share one value: editing
+/// either endpoint mirrors to the other (a true "Hold"). When NO they move
+/// independently (a "Drift"). Toggled by cmd-clicking the gap. Default YES.
+@property(nonatomic) BOOL endpointsLinked;
+
+/// When YES this interval contributes no motion — the lane holds flat across
+/// it at its Hold-side value, while BOTH keyposes (and their stored values)
+/// are preserved. Used by Basic's per-property "applies to": turning a phase
+/// off for one property flattens that property's In/Out interval without
+/// destroying its keypose, so toggling it back on restores the exact value.
+/// The evaluator holds at the END value for the first interval (In→Hold) and
+/// the START value for the last interval (Hold→Out) — i.e. the Hold side.
+/// Default NO (animates normally).
+@property(nonatomic) BOOL holdsFlat;
+
+@property(nonatomic, copy, nullable)
+    NSData *pathData; // plugin blob (MagicMove bezier)
 
 @end
 
-@interface KKTimingSegment (Serialization)
+/// A single time-point with a value. The atomic unit of the data model.
+@interface KKKeyPose : NSObject <NSCopying>
 
-- (NSDictionary *)toDictionary;
-+ (nullable instancetype)segmentFromDictionary:(NSDictionary *)dict;
+@property(nonatomic) double time; // 0–1 fraction of clip
+@property(nonatomic, copy)
+    NSArray<NSNumber *> *values; // absolute, one per component
+@property(nonatomic, copy, nullable)
+    KKInterval *outgoing; // nil on last keypose
+
++ (instancetype)keyposeAtTime:(double)time values:(NSArray<NSNumber *> *)values;
 
 @end
 
-/// An ordered list of segments for one animatable property.
-///
-/// Segments are contiguous and non-overlapping, ordered by start position.
-/// A lane can be enabled/disabled — when disabled the property uses its
-/// base value and the classic timing path applies.
-@interface KKTimingLane : NSObject <NSCopying>
+/// An ordered sequence of keyposes for one animatable property.
+/// laneID is stable for the lifetime of the lane — label is display only.
+/// UI state (selection, visibility, collapsed) lives in KKSequencerViewState,
+/// not here.
+@interface KKLane : NSObject <NSCopying>
 
-@property(nonatomic, copy) NSString *propertyLabel;
-@property(nonatomic, copy) NSArray<KKTimingSegment *> *segments;
-@property(nonatomic) BOOL enabled;
-/// Index of the currently selected segment in this lane (-1 for none).
-/// Persisted in JSON so selection survives view rebuilds.
-@property(nonatomic) NSInteger selectedSegment;
-/// Whether this lane has an associated on-screen control (OSC). Set by the
-/// plugin at lane build time; not serialized.
-@property(nonatomic) BOOL hasOSC;
-/// Whether the lane's OSC should be rendered on canvas. Persisted in JSON
-/// so visibility survives view rebuilds. Defaults to YES.
-@property(nonatomic) BOOL oscVisible;
-/// UI filter: whether this lane is shown in the sequencer and included in
-/// bulk operations. Does not affect render-time evaluation. Persisted in
-/// JSON. Defaults to YES.
-@property(nonatomic) BOOL visibleInSequencer;
-/// Plugin-side structural filter: whether the source object backing this
-/// lane currently exposes the property at all (e.g. Canvas hides a layer's
-/// "Stroke Width" lane when the layer's stroke is disabled, while keeping
-/// the lane data in JSON so values restore on re-enable). Independent of
-/// the user's pill toggle (`visibleInSequencer`); a lane is shown only when
-/// both are YES. Persisted in JSON. Defaults to YES.
-@property(nonatomic) BOOL pluginVisible;
-/// Clip duration (seconds) this lane's segment fractions were last authored
-/// against. Used to decide when locked segments need rebalancing. Zero means
-/// "not yet established" — the next read initialises it to the current clip
-/// duration and persists it on the following write.
-@property(nonatomic) double lastKnownClipDuration;
-
-/// Optional grouping key. When non-nil, the sequencer renders a header row
-/// above each contiguous run of lanes sharing the same `groupKey` and groups
-/// the lanes underneath. Plugins use this when several lanes belong to the
-/// same conceptual instance — e.g. Canvas keys lanes by `path.pathID` so
-/// each layer's properties cluster under one collapsible header. Lanes
-/// without a `groupKey` render flat (legacy behaviour).
+@property(nonatomic, readonly) NSUUID *laneID;
+@property(nonatomic, copy) NSString *label;
 @property(nonatomic, copy, nullable) NSString *groupKey;
+@property(nonatomic) BOOL enabled;
+@property(nonatomic) KKLaneValueType valueType; // default: Generic
+@property(nonatomic, copy) NSArray<NSNumber *>
+    *componentMin; // one per component, empty = unconstrained
+@property(nonatomic, copy) NSArray<NSNumber *>
+    *componentMax; // one per component, empty = unconstrained
+@property(nonatomic, copy) NSArray<NSString *>
+    *componentUnits; // one per component (e.g. @"px", @"%"); empty = unitless
+@property(nonatomic, copy) NSArray<KKKeyPose *> *keyposes; // ordered by time
+@property(nonatomic) double lastKnownClipDuration; // 0 = not yet established
 
-/// Display label for the group header. Read from the **first lane of each
-/// group** only — siblings' values are ignored. Persisted.
-@property(nonatomic, copy, nullable) NSString *groupLabel;
+/// Basic-mode hold-shape annotation. `Auto` (default) means infer from KP
+/// layout; any other value pins the In/Out interpretation regardless of
+/// where the user has dragged the boundary keypose to.
+@property(nonatomic) KKLaneHoldShape holdShape;
 
-/// Whether the group is collapsed in the sequencer. Read from the first
-/// lane of each group only. When YES, every lane sharing the same
-/// `groupKey` is hidden from the row plan (still evaluated at render time).
-/// Persisted.
-@property(nonatomic) BOOL groupCollapsed;
++ (instancetype)laneWithLabel:(NSString *)label;
 
-/// Per-scalar render hints. One `KKAnimatableParamKind` (boxed as
-/// `NSNumber`) per slot in the property's natural shape — e.g. a single
-/// scalar lane has `@[ @(Float) ]`, a Color lane has `@[ @(Color) ]`, a
-/// Position+Bool lane has `@[ @(Point), @(Bool) ]`. The sequencer uses this
-/// to decide rendering (color strip vs scalar graph) and the eval function
-/// uses it to skip Bool components during transitions. Length is the number
-/// of native slots, NOT the number of scalars in `segment.values` —
-/// expansion to per-scalar entries (Color → 3, Point → 2) happens inside
-/// the consumer. Nil falls back to "treat every component as a Float".
-@property(nonatomic, copy, nullable) NSArray<NSNumber *> *valueComponentKinds;
-
-+ (instancetype)laneWithLabel:(NSString *)label
-                     segments:(NSArray<KKTimingSegment *> *)segments
-                      enabled:(BOOL)enabled;
-
-/// Combined visibility: `visibleInSequencer && pluginVisible`. Use for any
-/// "should this lane be shown / counted in bulk ops" check.
-@property(nonatomic, readonly) BOOL effectivelyVisibleInSequencer;
-
-/// Default lane: [transition 0→baseValues] [hold baseValues] [transition
-/// baseValues→0]
-+ (instancetype)defaultLaneForLabel:(NSString *)label
-                         baseValues:(NSArray<NSNumber *> *)baseValues;
-
-/// Insert a segment at the given index.
-- (void)insertSegment:(KKTimingSegment *)segment atIndex:(NSUInteger)index;
-
-/// Remove a segment by index.
-- (void)removeSegmentAtIndex:(NSUInteger)index;
+- (void)insertKeypose:(KKKeyPose *)keypose; // inserts maintaining time order
+- (void)removeKeyposeAtIndex:(NSUInteger)index;
 
 @end
 
-/// YES when the lane at `idx` belongs to a group whose head has
-/// `groupCollapsed == YES`. Bulk operations targeting per-lane state
-/// (split/remove/select/toggle/lock/edge-drag) should skip such lanes
-/// so a collapsed group behaves as one opaque unit.
-FOUNDATION_EXPORT BOOL
-KKLaneIsHiddenByCollapsedGroup(NSArray<KKTimingLane *> *lanes, NSUInteger idx);
+/// Display labels for a lane's value components, derived from its valueType.
+/// Used in per-component selection UI (modulation popover's component pills).
+/// Returns nil for single-component types (no UI shown). Generic multi-comp
+/// lanes fall back to "1", "2", ... indices.
+FOUNDATION_EXPORT
+NSArray<NSString *> *_Nullable KKLaneComponentLabels(KKLane *lane);
 
-/// Boundary resolution: between each pair of segments there is a single
-/// shared value that both sides agree on. Holds dictate their own boundaries.
-/// When two transitions meet, the "right" segment's own value wins.
-FOUNDATION_EXPORT NSArray<NSNumber *> *
-KKTimingBoundaryBefore(NSUInteger idx, NSArray<KKTimingSegment *> *segments);
-FOUNDATION_EXPORT NSArray<NSNumber *> *
-KKTimingBoundaryAfter(NSUInteger idx, NSArray<KKTimingSegment *> *segments);
+/// Metadata for a group header in the sequencer.
+/// Lanes reference groupKey only; group display state lives in
+/// KKSequencerViewState, not here.
+@interface KKLaneGroup : NSObject <NSCopying>
 
-/// Rewrites segment start/end fractions for a new clip duration, preserving
-/// locked segments' absolute durations where possible.
-///
-/// - Locked segments retain `lockedDurationSeconds` when there's room.
-/// - Unlocked segments absorb the clip-duration delta proportionally to
-///   their current seconds.
-/// - If locked segments can't all fit in the new range, every segment
-///   shrinks proportionally to current seconds. `lockedDurationSeconds` is
-///   not mutated, so the lock restores if the clip grows back.
-///
-/// The first segment's start and last segment's end stay invariant — empty
-/// head/tail space keeps its fraction of the clip.
-FOUNDATION_EXPORT NSArray<KKTimingSegment *> *
-KKTimingRebalancedSegments(NSArray<KKTimingSegment *> *segments,
-                           double oldDuration, double newDuration);
+@property(nonatomic, copy) NSString *key;
+@property(nonatomic, copy) NSString *label;
 
-/// Returns a new lanes array rebalanced for the current clip duration. Each
-/// lane's segments are rewritten through `KKTimingRebalancedSegments` and
-/// `lastKnownClipDuration` is updated. Lanes with a lastKnownClipDuration of
-/// zero (never established) are implicitly initialised to `currentDuration`.
-/// Safe to call unconditionally — returns equivalent data when no rebalance
-/// is required.
-FOUNDATION_EXPORT NSArray<KKTimingLane *> *
-KKTimingRebalancedLanes(NSArray<KKTimingLane *> *lanes, double currentDuration);
-
-/// Serialize / deserialize a full set of lanes as JSON.
-@interface KKTimingLane (Serialization)
-
-+ (nullable NSString *)jsonFromLanes:(NSArray<KKTimingLane *> *)lanes;
-+ (nullable NSArray<KKTimingLane *> *)lanesFromJSON:(NSString *)json;
++ (instancetype)groupWithKey:(NSString *)key label:(NSString *)label;
 
 @end
 
-/// Returns YES when `segIdx` is a transition segment that has a hold on both
-/// sides (Hold-Transition-Hold). Edge transitions (TH, HT, THT) don't count.
-FOUNDATION_EXPORT BOOL KKIsHTHTransition(KKTimingLane *lane, NSInteger segIdx);
+/// Top-level container serialized into the single blob param.
+@interface KKTimeline : NSObject <NSCopying>
 
-/// In-place normalization: every HTH transition has its `values` array
-/// rewritten to match the preceding hold's values. Call before serializing so
-/// transitions sandwiched between holds keep stable, derivable state. Bool
-/// scalars (per `lane.valueComponentKinds`) are preserved so per-segment
-/// step toggles like "rotate with motion" survive across writes.
-FOUNDATION_EXPORT void
-KKApplyHTHNormalizationInPlace(NSMutableArray<KKTimingLane *> *lanes);
+@property(nonatomic, copy) NSArray<KKLane *> *lanes;
+@property(nonatomic, copy) NSArray<KKLaneGroup *> *groups;
+
++ (instancetype)timeline;
+
+@end
+
+/// Rewrites keypose time fractions for a new clip duration, preserving
+/// locked intervals' absolute durations where possible. Unlocked intervals
+/// scale proportionally. Returns a new KKTimeline; input is not mutated.
+FOUNDATION_EXPORT KKTimeline *KKTimelineRebalanced(KKTimeline *timeline,
+                                                   double oldDuration,
+                                                   double newDuration);
+
+@interface KKTimeline (Serialization)
+
++ (nullable NSString *)jsonFromTimeline:(KKTimeline *)timeline;
++ (nullable KKTimeline *)timelineFromJSON:(NSString *)json;
+
+@end
 
 NS_ASSUME_NONNULL_END

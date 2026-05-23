@@ -68,6 +68,7 @@
     "Keyframeless",
     "keyframelesskit",
     "keyframelessx",
+    "keypose",
     "KKOSC",
     "KKRing",
     "lefthalf",
@@ -147,6 +148,7 @@
     "Glow",
     "Canvas",
     "Timing",
-    "MotionBlur"
+    "MotionBlur",
+    "Joyride"
   ]
 }

@@ -4,7 +4,6 @@
  */
 
 #import "../Update/KKUpdateChecker.h"
-#import "../Views/StageSequencer/KKStageSequencerView.h"
 #import "KKConstants.h"
 #import "KKDataBlob.h"
 #import "KKHostInfo.h"
@@ -537,34 +536,9 @@
 }
 
 - (void)kkHandleGroupSegmentClickedForKey:(NSString *)groupKey {
-  // Default: behave like a label-side click. Plugins override to wire a
-  // custom action (e.g. selecting the underlying object).
-  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
-  KKStageSequencerView *seq = state.sequencerView;
-  BOOL nowCollapsed = NO;
-  for (KKTimingLane *lane in seq.lanes) {
-    if ([lane.groupKey isEqualToString:groupKey]) {
-      nowCollapsed = !lane.groupCollapsed;
-      break;
-    }
-  }
-  [self _handleGroupCollapseToggledForKey:groupKey collapsed:nowCollapsed];
 }
 
 - (void)kkRefreshSequencerSelectedGroup {
-  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
-  if (!state)
-    return;
-  NSString *key = [self kkSelectedGroupKey];
-  dispatch_block_t apply = ^{
-    state.sequencerView.selectedGroupKey = key;
-    for (KKTimingViewRefs *r in state.additionalTimingViews)
-      r.seqView.selectedGroupKey = key;
-  };
-  if (NSThread.isMainThread)
-    apply();
-  else
-    dispatch_async(dispatch_get_main_queue(), apply);
 }
 
 - (void)kkHandleLaneSegmentMutation:(KKLaneSegmentMutation)mutation

@@ -30,50 +30,46 @@
     return NO;
   }
 
-  if (![paramAPI
-          addToggleButtonWithName:@"Force Show All Parameters"
-                      parameterID:kParamForceShow
-                     defaultValue:NO
-                   parameterFlags:kFxParameterFlag_NOT_ANIMATABLE |
-                                  kFxParameterFlag_DONT_DISPLAY_IN_DASHBOARD])
-    return NO;
-
-  if (![paramAPI addFloatSliderWithName:@"Radius"
-                            parameterID:kParamRadius
-                           defaultValue:20.0
-                           parameterMin:0.0
-                           parameterMax:100.0
-                              sliderMin:0.0
-                              sliderMax:100.0
-                                  delta:1.0
-                         parameterFlags:kFxParameterFlag_DEFAULT]) {
-    if (error != NULL) {
-      *error = [NSError
-          errorWithDomain:FxPlugErrorDomain
-                     code:kFxError_InvalidParameter
-                 userInfo:@{
-                   NSLocalizedDescriptionKey : @"Unable to add radius slider"
-                 }];
-    }
+  FxParameterFlags inspectorFlags =
+      kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_CUSTOM_UI |
+      kFxParameterFlag_USE_FULL_VIEW_WIDTH | kFxParameterFlag_DISABLED;
+  if (![paramAPI addCustomParameterWithName:@""
+                                parameterID:kParamInspectorUI
+                               defaultValue:@(kParamInspectorUI)
+                             parameterFlags:inspectorFlags]) {
     return NO;
   }
 
-  if (![self addCropParametersWithAPI:paramAPI
-                              groupID:kParamCropGroup
-                           expandedID:kParamCropExpanded
-                                topID:kParamCropTop
-                             bottomID:kParamCropBottom
-                               leftID:kParamCropLeft
-                              rightID:kParamCropRight
-                                error:error]) {
+  if (![paramAPI addCustomParameterWithName:@""
+                                parameterID:kParamUIState
+                               defaultValue:[KKDataBlob blobWithData:nil]
+                             parameterFlags:kFxParameterFlag_HIDDEN]) {
     return NO;
   }
 
-  if (![self addMultiStageParametersWithAPI:paramAPI error:error]) {
+  if (![paramAPI addCustomParameterWithName:@""
+                                parameterID:kKKParamTimelineData
+                               defaultValue:[KKDataBlob blobWithData:nil]
+                             parameterFlags:kFxParameterFlag_HIDDEN]) {
     return NO;
   }
 
-  if (![self addMotionBlurParametersWithAPI:paramAPI error:error]) {
+  if (![paramAPI addCustomParameterWithName:@""
+                                parameterID:kParamRenderNudge
+                               defaultValue:[KKDataBlob blobWithData:nil]
+                             parameterFlags:kFxParameterFlag_HIDDEN |
+                                            kFxParameterFlag_NOT_ANIMATABLE]) {
+    return NO;
+  }
+
+  // Motion blur state lives in this custom-UI blob (edited from the inspector
+  // MB row, not native controls). Read at render time via
+  // +[KKMotionBlur snapshotStateFromJSON:...].
+  if (![paramAPI addCustomParameterWithName:@""
+                                parameterID:kKKParamMotionBlurData
+                               defaultValue:[KKDataBlob blobWithData:nil]
+                             parameterFlags:kFxParameterFlag_HIDDEN |
+                                            kFxParameterFlag_NOT_ANIMATABLE]) {
     return NO;
   }
 

@@ -36,6 +36,10 @@ static const UInt32 kKKParamInstanceID __attribute__((unused)) = 9922;
 /// from inside the render callback.
 static const UInt32 kKKParamTimingLoopEnabled __attribute__((unused)) = 9923;
 
+/// Timeline blob (KKTimeline JSON, KKDataBlob). Written by the sequencer;
+/// read by the render path via `KKTimelineLaneValueAtFraction`.
+static const UInt32 kKKParamTimelineData __attribute__((unused)) = 9931;
+
 /// Native-string mirror of `kKKParamMultiStageData`. The blob is
 /// unreadable from the OSC's apiManager (FxPlug XPC scope rule); native
 /// strings DO read cold, so we mirror the same JSON here. Canonical
@@ -56,6 +60,14 @@ static const UInt32 kKKParamMotionBlurQuality __attribute__((unused)) = 9927;
 static const UInt32 kKKParamMotionBlurExpanded __attribute__((unused)) = 9928;
 static const UInt32 kKKParamMotionBlurTransitionsOnly __attribute__((unused)) =
     9929;
+
+/// Custom-UI motion blur state (KKDataBlob, JSON
+/// `{enabled,shutterAngle,samples}`). Replaces the native 9924–9929 group when
+/// motion blur is edited from a custom-UI parameter row instead of native
+/// controls. `shutterAngle` 0–360° sets the shutter window; `samples` 2–128 is
+/// the explicit sample count. Read at render time via
+/// `+[KKMotionBlur snapshotStateFromJSON:...]`.
+static const UInt32 kKKParamMotionBlurData __attribute__((unused)) = 9932;
 
 /// Color system parameters (9800–9810)
 static const UInt32 kKKParamColorGroup __attribute__((unused)) = 9800;

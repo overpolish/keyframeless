@@ -17,6 +17,21 @@ static const CGFloat KKHelpButtonSize = 18.0;
   NSButton *_helpButton;
 }
 
+- (NSRect)effectHeaderScreenRect {
+  if (!self.window)
+    return NSZeroRect;
+  NSRect scr = [self.window convertRectToScreen:[self convertRect:self.bounds
+                                                           toView:nil]];
+  if (NSIsEmptyRect(scr))
+    return NSZeroRect;
+  // Header sits directly above the banner (same width); approximate it as a
+  // one-row strip just above the banner's top edge. Screen coords are y-up,
+  // so "above" is +y from NSMaxY.
+  static const CGFloat kGap = 2.0;
+  return NSMakeRect(NSMinX(scr), NSMaxY(scr) + kGap, NSWidth(scr),
+                    KKInspectorRowHeight);
+}
+
 - (instancetype)init {
   self = [super initWithFrame:NSMakeRect(0, 0, 0, KKInspectorRowHeight * 2)];
   if (self) {

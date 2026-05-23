@@ -664,7 +664,7 @@
                    modifiers:(FxModifierKeys)modifiers
                  forceUpdate:(BOOL *)forceUpdate
                       atTime:(CMTime)time {
-  _isDragging = (activePart == 1);
+  _isDragging = (activePart != 0);
   *forceUpdate = YES;
 }
 

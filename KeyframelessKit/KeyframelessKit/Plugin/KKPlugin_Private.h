@@ -12,6 +12,7 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @class KKCustomGroupHeaderView;
+@class KKLogoBannerView;
 @class KKEmptyLanesView;
 @class KKLaneVisibilityBar;
 @class KKStagePlayheadView;
@@ -88,6 +89,10 @@ extern NSMutableArray<KKTimingLane *> *_Nullable KKReadLanesRebalanced(
 
 @interface KKPlugin () <FxCustomParameterViewHost_v2, NSPopoverDelegate>
 
+/// This effect instance's logo banner. Scoped per plugin instance (FxPlug
+/// makes one plugin object per effect) so multi-instance timelines resolve
+/// the correct banner instead of a process-global "latest".
+@property(nonatomic, weak, nullable) KKLogoBannerView *logoBanner;
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *timingHeader;
 @property(nonatomic, weak, nullable) KKCustomGroupHeaderView *motionBlurHeader;
 /// Weak map of generic group headers (created via

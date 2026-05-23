@@ -28,10 +28,17 @@ enum {
 
 @property(nonatomic, weak) id<PROAPIAccessing> apiManager;
 
-@property(nonatomic) UInt32 cropTopParam;
-@property(nonatomic) UInt32 cropBottomParam;
-@property(nonatomic) UInt32 cropLeftParam;
-@property(nonatomic) UInt32 cropRightParam;
+/// Returns the current crop as `[w, h, x, y]` (KKCropModel semantics) at
+/// the given clip time. May return nil → treated as full image. Plugins
+/// typically read from their timeline snapshot or other data source — the
+/// crop OSC is unaware of the storage format.
+@property(nonatomic, copy, nullable)
+    NSArray<NSNumber *> *_Nullable (^valuesProvider)(CMTime time);
+
+/// Persists a new `[w, h, x, y]` from a drag. The plugin is responsible for
+/// wrapping in an action scope and any undo-coalescing.
+@property(nonatomic, copy, nullable) void (^valuesWriter)
+    (NSArray<NSNumber *> *values, CMTime time);
 
 @property(nonatomic, strong, readonly) NSArray<KKPointOSC *> *pointOSCs;
 @property(nonatomic, strong, readonly) KKRectBorderOSC *borderOSC;
