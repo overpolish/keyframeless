@@ -32,15 +32,16 @@ struct AudioExportOptionsView: View {
 			.frame(height: 100)
 			HStack(spacing: KKSpacingLG) {
 				LabeledSlider(
-					label: "Max Words", value: $model.maxWordsPerLine, range: 1...10,
+					label: String(localized: "Max Words"), value: $model.maxWordsPerLine,
+					range: 1...10,
 					step: 1, valueWidth: 16
 				).padding(.trailing, KKSpacingMD)
 				HStack(spacing: KKSpacingLG) {
 					PillToggle(
 						selection: $model.captionLines,
 						options: [
-							(label: "One", value: CaptionLineCount.one),
-							(label: "Two", value: CaptionLineCount.two),
+							(label: String(localized: "One"), value: CaptionLineCount.one),
+							(label: String(localized: "Two"), value: CaptionLineCount.two),
 						]
 					)
 					Text("Lines")
@@ -48,31 +49,30 @@ struct AudioExportOptionsView: View {
 						.foregroundStyle(.secondary)
 				}
 			}
-			HStack(alignment: .center, spacing: KKSpacingMD) {
+			FlowLayout(spacing: KKSpacingMD, lineSpacing: KKSpacingSM) {
 				CapsuleToggle(
 					isOn: $model.allCaps,
-					label: "ALL CAPS",
+					label: String(localized: "ALL CAPS"),
 					systemImage: "textformat"
 				)
 				CapsuleToggle(
 					isOn: $model.noGaps,
-					label: "No Gaps",
+					label: String(localized: "No Gaps"),
 					systemImage: "arrow.down.right.and.arrow.up.left"
 				)
-				Divider().frame(height: 12).padding(.horizontal, KKPaddingMD)
 				CapsuleToggle(
 					isOn: $model.censorProfanity,
-					label: "Censor",
+					label: String(localized: "Censor"),
 					systemImage: "exclamationmark.bubble.fill"
 				)
 				CapsuleToggle(
 					isOn: $model.stripPunctuation,
-					label: "Strip Punctuation",
+					label: String(localized: "Strip Punctuation"),
 					systemImage: "xmark.triangle.circle.square.fill"
 				)
 				CapsuleToggle(
 					isOn: $model.keepQuestionMarks,
-					label: "Keep",
+					label: String(localized: "Keep"),
 					systemImage: "questionmark",
 					disabled: !model.stripPunctuation
 				)
@@ -160,7 +160,7 @@ struct AudioExportOptionsSidebar: View {
 					.allowsHitTesting(hasTranscribedSelection && !srtHasOverlaps)
 					.opacity(hasTranscribedSelection && !srtHasOverlaps ? 1 : 0.4)
 					PrimaryButton(
-						label: "Paste to FCP",
+						label: String(localized: "Paste to FCP"),
 						systemImage: "doc.on.clipboard",
 						disabled: !hasTranscribedSelection || !hasAccessibility,
 						fontSize: 11
@@ -214,8 +214,8 @@ struct AudioExportOptionsSidebar: View {
 					} else if hasTranscribedSelection {
 						HelperText(
 							srtHasOverlaps
-								? "Use paste for overlapping clips"
-								: "Drag for single clip, paste for multiple",
+								? String(localized: "Use paste for overlapping clips")
+								: String(localized: "Drag for single clip, paste for multiple"),
 							systemImage: "info.circle"
 						)
 						.offset(y: -KKSpacingXL - KKSpacingSM)

@@ -18,24 +18,29 @@ struct ClipSelectionToolbar: View {
 
 		ToolbarGroup {
 			if hasMain {
-				ClipTypeFilterButton(label: "Main", color: Color.kkAccent) {
+				ClipTypeFilterButton(label: String(localized: "Main"), color: Color.kkAccent) {
 					selectedClips = allowed.filter { !clips[$0].isCompound }
 				}
 				ToolbarDivider()
 			}
 			if hasCompound {
 				ClipTypeFilterButton(
-					label: "Compound", color: Color.kkCompoundAccent
+					label: String(localized: "Compound"), color: Color.kkCompoundAccent
 				) {
 					selectedClips = allowed.filter { clips[$0].isCompound }
 				}
 				ToolbarDivider()
 			}
-			ClipActionButton(label: "Select All", systemImage: "checkmark.rectangle.stack.fill") {
+			ClipActionButton(
+				label: String(localized: "Select All"),
+				systemImage: "checkmark.rectangle.stack.fill"
+			) {
 				selectedClips = allowed
 			}
 			ToolbarDivider()
-			ClipActionButton(label: "Deselect All", systemImage: "rectangle.stack") {
+			ClipActionButton(
+				label: String(localized: "Deselect All"), systemImage: "rectangle.stack"
+			) {
 				selectedClips = []
 			}
 		}

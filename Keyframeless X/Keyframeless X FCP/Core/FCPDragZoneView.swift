@@ -60,7 +60,7 @@ class FCPDragSourceView: NSView, NSDraggingSource {
 
 		let iconString = NSAttributedString(attachment: iconAttachment)
 		let labelString = NSAttributedString(
-			string: " Drag to FCP",
+			string: String(localized: " Drag to FCP"),
 			attributes: [
 				.font: NSFont.systemFont(ofSize: 11, weight: .medium),
 				.foregroundColor: accentColor,

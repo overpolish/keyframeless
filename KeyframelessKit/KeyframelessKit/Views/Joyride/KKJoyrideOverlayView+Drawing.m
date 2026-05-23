@@ -4,6 +4,7 @@
  */
 
 #import "KKJoyrideOverlayView_Private.h"
+#import "KKLocalized.h"
 #import "KKTokens.h"
 #import <QuartzCore/QuartzCore.h>
 
@@ -161,13 +162,20 @@ static const CGFloat kJTipBottomRowH = 18.0;
                                            weight:NSFontWeightMedium];
     BOOL isLastStep = _step == _totalSteps;
     BOOL showsNext = !isLastStep && self.onNext != nil;
-    NSString *actionStr = isLastStep ? @"Done" : @"Skip";
+    NSString *actionStr =
+        isLastStep
+            ? KKLoc(@"Done", @"Joyride guide: final-step button that closes "
+                             @"the walkthrough.")
+            : KKLoc(@"Skip",
+                    @"Joyride guide: button that dismisses the walkthrough.");
     CGFloat actionW =
         [actionStr sizeWithAttributes:@{NSFontAttributeName : actionFont}]
             .width;
     CGFloat nextW =
         showsNext
-            ? [@"Next" sizeWithAttributes:@{NSFontAttributeName : actionFont}]
+            ? [KKLoc(@"Next",
+                     @"Joyride guide: button that advances to the next step.")
+                  sizeWithAttributes:@{NSFontAttributeName : actionFont}]
                       .width +
                   16.0
             : 0.0;
@@ -235,7 +243,11 @@ static const CGFloat kJTipBottomRowH = 18.0;
   BOOL isLast = _step == _totalSteps;
   BOOL showsNext = !isLast && self.onNext != nil;
 
-  NSString *actionStr = isLast ? @"Done" : @"Skip";
+  NSString *actionStr =
+      isLast ? KKLoc(@"Done", @"Joyride guide: final-step button that closes "
+                              @"the walkthrough.")
+             : KKLoc(@"Skip",
+                     @"Joyride guide: button that dismisses the walkthrough.");
   NSColor *actionColor =
       isLast ? KJActionGreen() : [NSColor colorWithWhite:1.0 alpha:0.55];
   NSDictionary *actionAttrs = @{
@@ -251,10 +263,13 @@ static const CGFloat kJTipBottomRowH = 18.0;
                                               weight:NSFontWeightMedium],
       NSForegroundColorAttributeName : KJActionGreen(),
     };
-    NSSize nextSz = [@"Next" sizeWithAttributes:nextAttrs];
+    NSSize nextSz = [KKLoc(
+        @"Next", @"Joyride guide: button that advances to the next step.")
+        sizeWithAttributes:nextAttrs];
     CGFloat nextX = NSMaxX(bubble) - kJTipPadH - nextSz.width;
-    [@"Next" drawAtPoint:NSMakePoint(nextX, centerY - nextSz.height / 2.0)
-          withAttributes:nextAttrs];
+    [KKLoc(@"Next", @"Joyride guide: button that advances to the next step.")
+           drawAtPoint:NSMakePoint(nextX, centerY - nextSz.height / 2.0)
+        withAttributes:nextAttrs];
     _nextRect = NSMakeRect(nextX - 8.0, NSMinY(bubble),
                            nextSz.width + 8.0 + kJTipPadH, NSHeight(bubble));
 

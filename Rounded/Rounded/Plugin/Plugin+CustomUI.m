@@ -7,6 +7,7 @@
 #import "Plugin_Private.h"
 #import "RoundedInspectorView+Guides.h"
 #import "RoundedInspectorView.h"
+#import "RoundedLocalized.h"
 #import "RoundedOSCRadiusMath.h"
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKHelpSection.h>
@@ -353,16 +354,18 @@
 - (NSArray<KKHelpGuide *> *)helpGuides {
   __weak typeof(self) weak = self;
   __block __weak KKHelpGuide *weakIntro = nil;
-  KKHelpGuide *intro =
-      [KKHelpGuide guideWithTitle:@"Introduction"
-                         subtitle:@"Walk through the basics again"
-                          onStart:^{
-                            __strong typeof(weak) strong = weak;
-                            strong.inspectorView.onGuideCompleted = ^{
-                              [weakIntro markCompleted];
-                            };
-                            [strong.inspectorView restartIntroGuide];
-                          }];
+  KKHelpGuide *intro = [KKHelpGuide
+      guideWithTitle:RLoc(@"Introduction",
+                          @"Help guide title: re-run the basics walkthrough.")
+            subtitle:RLoc(@"Walk through the basics again",
+                          @"Help guide subtitle: Introduction.")
+             onStart:^{
+               __strong typeof(weak) strong = weak;
+               strong.inspectorView.onGuideCompleted = ^{
+                 [weakIntro markCompleted];
+               };
+               [strong.inspectorView restartIntroGuide];
+             }];
   weakIntro = intro;
   // Gate every guide on Rounded being the selected effect — consistent
   // expectation across all guides (the per-guide reasons differ in detail
@@ -372,29 +375,33 @@
     return RoundedHasCanvasReference();
   };
   intro.disabledSubtitle =
-      @"Guides are disabled. Please select a Rounded clip to enable them, if "
-      @"already selected move your mouse over the viewer.";
+      RLoc(@"Guides are disabled. Please select a Rounded clip to enable them, "
+           @"if already selected move your mouse over the viewer.",
+           @"Intro guide disabled subtitle (no Rounded clip selected).");
 
   __block __weak KKHelpGuide *weakOSC = nil;
-  KKHelpGuide *osc =
-      [KKHelpGuide guideWithTitle:@"OSC Basics"
-                         subtitle:@"Learn how the on-screen control works"
-                          onStart:^{
-                            __strong typeof(weak) strong = weak;
-                            // This guide teaches the drag — require actually
-                            // reaching the target before it advances.
-                            strong.inspectorView.oscGuideRequireTargetHit = YES;
-                            strong.inspectorView.onGuideCompleted = ^{
-                              [weakOSC markCompleted];
-                            };
-                            [strong.inspectorView restartOSCGuide];
-                          }];
+  KKHelpGuide *osc = [KKHelpGuide
+      guideWithTitle:RLoc(@"OSC Basics",
+                          @"Help guide title: on-screen control basics.")
+            subtitle:RLoc(@"Learn how the on-screen control works",
+                          @"Help guide subtitle: OSC Basics.")
+             onStart:^{
+               __strong typeof(weak) strong = weak;
+               // This guide teaches the drag — require actually
+               // reaching the target before it advances.
+               strong.inspectorView.oscGuideRequireTargetHit = YES;
+               strong.inspectorView.onGuideCompleted = ^{
+                 [weakOSC markCompleted];
+               };
+               [strong.inspectorView restartOSCGuide];
+             }];
   weakOSC = osc;
   osc.enabledProvider = ^BOOL {
     return RoundedHasCanvasReference();
   };
   osc.disabledSubtitle =
-      @"Guides are disabled — select a Rounded clip to enable them";
+      RLoc(@"Guides are disabled — select a Rounded clip to enable them",
+           @"Help guide disabled subtitle (no Rounded clip selected).");
   // OSC guide has a zoom-to-fit + settle warm-up; spin the play button until
   // the overlay is actually on screen.
   osc.activeProvider = ^BOOL {
@@ -403,19 +410,22 @@
   };
 
   __block __weak KKHelpGuide *weakFull = nil;
-  KKHelpGuide *full =
-      [KKHelpGuide guideWithTitle:@"Full Walkthrough"
-                         subtitle:@"Inspector and on-screen control, end to end"
-                          onStart:^{
-                            __strong typeof(weak) strong = weak;
-                            // Ends on the OSC drag — enforce landing on the
-                            // target, same as the standalone OSC guide.
-                            strong.inspectorView.oscGuideRequireTargetHit = YES;
-                            strong.inspectorView.onGuideCompleted = ^{
-                              [weakFull markCompleted];
-                            };
-                            [strong.inspectorView restartFullWalkthroughGuide];
-                          }];
+  KKHelpGuide *full = [KKHelpGuide
+      guideWithTitle:RLoc(
+                         @"Full Walkthrough",
+                         @"Help guide title: full inspector + OSC walkthrough.")
+            subtitle:RLoc(@"Inspector and on-screen control, end to end",
+                          @"Help guide subtitle: Full Walkthrough.")
+             onStart:^{
+               __strong typeof(weak) strong = weak;
+               // Ends on the OSC drag — enforce landing on the
+               // target, same as the standalone OSC guide.
+               strong.inspectorView.oscGuideRequireTargetHit = YES;
+               strong.inspectorView.onGuideCompleted = ^{
+                 [weakFull markCompleted];
+               };
+               [strong.inspectorView restartFullWalkthroughGuide];
+             }];
   weakFull = full;
   // Starts on the inspector but ends in the viewer, so it needs the canvas
   // reference just like the OSC guide. No activeProvider: the zoom-to-fit
@@ -425,12 +435,15 @@
     return RoundedHasCanvasReference();
   };
   full.disabledSubtitle =
-      @"Guides are disabled — select a Rounded clip to enable them";
+      RLoc(@"Guides are disabled — select a Rounded clip to enable them",
+           @"Help guide disabled subtitle (no Rounded clip selected).");
 
   __block __weak KKHelpGuide *weakConstants = nil;
   KKHelpGuide *constants = [KKHelpGuide
-      guideWithTitle:@"Constants"
-            subtitle:@"Edit non-animating values in the mini-canvas"
+      guideWithTitle:RLoc(@"Constants",
+                          @"Help guide title: editing non-animating values.")
+            subtitle:RLoc(@"Edit non-animating values in the mini-canvas",
+                          @"Help guide subtitle: Constants.")
              onStart:^{
                __strong typeof(weak) strong = weak;
                strong.inspectorView.onGuideCompleted = ^{
@@ -445,12 +458,15 @@
     return RoundedHasCanvasReference();
   };
   constants.disabledSubtitle =
-      @"Guides are disabled — select a Rounded clip to enable them";
+      RLoc(@"Guides are disabled — select a Rounded clip to enable them",
+           @"Help guide disabled subtitle (no Rounded clip selected).");
 
   __block __weak KKHelpGuide *weakBasicTiming = nil;
   KKHelpGuide *basicTiming = [KKHelpGuide
-      guideWithTitle:@"Timing Basics"
-            subtitle:@"Add animatable properties and turn on a transition"
+      guideWithTitle:RLoc(@"Timing Basics",
+                          @"Help guide title: basic timing walkthrough.")
+            subtitle:RLoc(@"Add animatable properties and turn on a transition",
+                          @"Help guide subtitle: Timing Basics.")
              onStart:^{
                __strong typeof(weak) strong = weak;
                strong.inspectorView.onGuideCompleted = ^{
@@ -466,12 +482,17 @@
     return RoundedHasCanvasReference();
   };
   basicTiming.disabledSubtitle =
-      @"Guides are disabled — select a Rounded clip to enable them";
+      RLoc(@"Guides are disabled — select a Rounded clip to enable them",
+           @"Help guide disabled subtitle (no Rounded clip selected).");
 
   __block __weak KKHelpGuide *weakAdvancedTiming = nil;
   KKHelpGuide *advancedTiming = [KKHelpGuide
-      guideWithTitle:@"Advanced Timing"
-            subtitle:@"Add keyposes anywhere and shape transitions per property"
+      guideWithTitle:RLoc(@"Advanced Timing",
+                          @"Help guide title: advanced timing walkthrough.")
+            subtitle:
+                RLoc(
+                    @"Add keyposes anywhere and shape transitions per property",
+                    @"Help guide subtitle: Advanced Timing.")
              onStart:^{
                __strong typeof(weak) strong = weak;
                strong.inspectorView.onGuideCompleted = ^{
@@ -484,7 +505,8 @@
     return RoundedHasCanvasReference();
   };
   advancedTiming.disabledSubtitle =
-      @"Guides are disabled — select a Rounded clip to enable them";
+      RLoc(@"Guides are disabled — select a Rounded clip to enable them",
+           @"Help guide disabled subtitle (no Rounded clip selected).");
 
   return @[ intro, osc, full, constants, basicTiming, advancedTiming ];
 }
@@ -495,12 +517,15 @@
 
 - (NSArray<KKHelpSection *> *)helpSections {
   KKHelpSection *rounded = [KKHelpSection
-      sectionWithTitle:@"Rounded"
+      sectionWithTitle:RLoc(@"Rounded",
+                            @"Help section title (the plugin name).")
              tipMarkup:@[
-               (@"Round the corners of any clip with an animatable "
-                @"<accent>Radius</accent>."),
-               (@"<accent>Box</accent> crops and positions the clip — "
-                @"animate it to reveal or hide content over time."),
+               RLoc(@"Round the corners of any clip with an animatable "
+                    @"<accent>Radius</accent>.",
+                    @"Help tip: what the Radius property does."),
+               RLoc(@"<accent>Box</accent> crops and positions the clip — "
+                    @"animate it to reveal or hide content over time.",
+                    @"Help tip: what the Box/Crop property does."),
              ]
              shortcuts:nil];
   rounded.icon = [NSImage imageWithSystemSymbolName:@"square.dotted"

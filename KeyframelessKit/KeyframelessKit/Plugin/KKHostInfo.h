@@ -21,6 +21,15 @@ NS_ASSUME_NONNULL_BEGIN
 + (BOOL)isRunningInWorkflowExtension;
 + (instancetype)shared;
 
+/// Fits the host app's viewer/canvas to its window via System Events
+/// AppleScript, branching on FCP vs Motion. Locale-proof: navigates the host
+/// menus by structural position (identical across UI languages) rather than by
+/// localized title. Runs synchronously, so call from a background queue or
+/// dispatch_async (and, for an OSC joyride, before the overlay exists so the
+/// host-app focus steal happens first). Shared so every plugin's interactive
+/// guide can zoom-to-fit the same way.
++ (void)zoomHostViewerToFit;
+
 @end
 
 NS_ASSUME_NONNULL_END

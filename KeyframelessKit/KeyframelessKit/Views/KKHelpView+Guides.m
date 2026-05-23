@@ -8,6 +8,7 @@
 #import "KKHelpSection.h"
 #import "KKHelpView+Guides.h"
 #import "KKHelpView_Private.h"
+#import "KKLocalized.h"
 
 @implementation KKHelpView (Guides)
 
@@ -17,7 +18,10 @@
   stack.alignment = NSLayoutAttributeLeading;
   stack.spacing = KKHelpAfterTitleGap;
 
-  [stack addArrangedSubview:[self _subheading:@"Interactive Guides"]];
+  [stack
+      addArrangedSubview:
+          [self _subheading:KKLoc(@"Interactive Guides",
+                                  @"Help: interactive guides section title.")]];
 
   // Section-level warning: shown once under the subheading whenever ANY
   // guide is disabled. Text is sourced from the first disabled guide's
@@ -138,7 +142,8 @@
       [NSImageSymbolConfiguration configurationWithPointSize:8.0
                                                       weight:NSFontWeightBold];
   tick.contentTintColor = badgeColor;
-  NSTextField *badgeLabel = [NSTextField labelWithString:@"Completed"];
+  NSTextField *badgeLabel = [NSTextField
+      labelWithString:KKLoc(@"Completed", @"Help: guide completed badge.")];
   badgeLabel.font = [NSFont systemFontOfSize:9.0 weight:NSFontWeightMedium];
   badgeLabel.textColor = badgeColor;
 

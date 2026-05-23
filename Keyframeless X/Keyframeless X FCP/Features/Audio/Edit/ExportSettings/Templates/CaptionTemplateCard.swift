@@ -116,7 +116,7 @@ struct CaptionTemplateCard: View {
 			.overlay(alignment: .top) {
 				if template.supportsPerWordAnimation {
 					InfoBadge(
-						label: "Per word",
+						label: String(localized: "Per word"),
 						systemImage: "directcurrent",
 						color: .green
 					)

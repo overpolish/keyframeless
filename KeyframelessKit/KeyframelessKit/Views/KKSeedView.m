@@ -4,6 +4,7 @@
  */
 
 #import "KKSeedView.h"
+#import "KKLocalized.h"
 
 #import "../Style/NSColor+KKColors.h"
 #import "KKValueTextField.h"
@@ -39,11 +40,14 @@
   [_field.widthAnchor constraintGreaterThanOrEqualToConstant:72.0].active = YES;
   [stack addArrangedSubview:_field];
 
-  _button =
-      [NSButton buttonWithImage:[NSImage imageWithSystemSymbolName:@"shuffle"
-                                          accessibilityDescription:@"Randomize"]
-                         target:self
-                         action:@selector(rerollClicked:)];
+  _button = [NSButton
+      buttonWithImage:[NSImage
+                          imageWithSystemSymbolName:@"shuffle"
+                           accessibilityDescription:
+                               KKLoc(@"Randomize",
+                                     @"Accessibility: randomize seed button.")]
+               target:self
+               action:@selector(rerollClicked:)];
   _button.bezelStyle = NSBezelStyleAccessoryBarAction;
   _button.bordered = NO;
   _button.translatesAutoresizingMaskIntoConstraints = NO;

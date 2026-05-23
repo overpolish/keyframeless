@@ -9,6 +9,7 @@
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
 #import "KKKeyposeSymbol.h"
+#import "KKLocalized.h"
 #import <KeyframelessKit/KKEasing.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 
@@ -68,7 +69,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
       [[[NSColor inspectorLabel] colorWithAlphaComponent:0.05] setFill];
       [hi fill];
     }
-    NSString *label = lane.label ?: @"";
+    NSString *label = KKLocalizedParamName(lane.label ?: @"");
     NSSize lsz = [label sizeWithAttributes:labelAttrs];
     NSPoint lp =
         NSMakePoint(NSMinX(g) + kRowLabelInset, NSMidY(row) - lsz.height * 0.5);

@@ -223,7 +223,7 @@ struct CaptionTemplatePicker: View {
 								.padding(.vertical, KKPaddingLG)
 							}
 						}
-						TemplateSection(title: "Custom") {
+						TemplateSection(title: String(localized: "Custom")) {
 							ForEach(customTemplates) { template in
 								CaptionTemplateCard(
 									template: template,

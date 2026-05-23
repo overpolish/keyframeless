@@ -11,6 +11,7 @@
 #import "KKHelpView+Guides.h"
 #import "KKHelpViewSubviews.h"
 #import "KKHelpView_Private.h"
+#import "KKLocalized.h"
 #import "KKPaddedScrollView.h"
 
 const CGFloat KKHelpPagePadding = 24.0;
@@ -135,7 +136,9 @@ const CGFloat KKHelpKeyColumnMin = 170.0;
   }
 
   if (section.shortcuts.count > 0) {
-    [stack addArrangedSubview:[self _subheading:@"Shortcuts"]];
+    [stack addArrangedSubview:
+               [self _subheading:KKLoc(@"Shortcuts",
+                                       @"Help: shortcuts section title.")]];
     NSView *grid = [self _gridForShortcuts:section.shortcuts];
     [stack addArrangedSubview:grid];
     [grid.widthAnchor constraintEqualToAnchor:stack.widthAnchor].active = YES;
@@ -152,7 +155,9 @@ const CGFloat KKHelpKeyColumnMin = 170.0;
   toc.alignment = NSLayoutAttributeLeading;
   toc.spacing = KKHelpAfterTitleGap;
 
-  [toc addArrangedSubview:[self _subheading:@"On this page"]];
+  [toc addArrangedSubview:
+           [self _subheading:KKLoc(@"On this page",
+                                   @"Help: table-of-contents heading.")]];
 
   NSStackView *links = [[NSStackView alloc] initWithFrame:NSZeroRect];
   links.orientation = NSUserInterfaceLayoutOrientationVertical;

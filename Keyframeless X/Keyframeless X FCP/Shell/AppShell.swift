@@ -176,10 +176,14 @@ struct AppShell: View {
 				selection: $audioModel.stage,
 				options: [
 					(
-						label: "Setup", systemImage: "sparkles.rectangle.stack.fill",
+						label: String(localized: "Setup"),
+						systemImage: "sparkles.rectangle.stack.fill",
 						value: .setup
 					),
-					(label: "Edit", systemImage: "bubble.and.pencil", value: .edit),
+					(
+						label: String(localized: "Edit"), systemImage: "bubble.and.pencil",
+						value: .edit
+					),
 				],
 				disabledValues: audioModel.audioClips.isEmpty ? [.edit] : []
 			)

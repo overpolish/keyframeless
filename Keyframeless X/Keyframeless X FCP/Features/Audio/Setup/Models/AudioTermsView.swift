@@ -46,7 +46,7 @@ struct AudioTermsView: View {
 					.font(.title3)
 					.foregroundStyle(.secondary)
 				Spacer()
-				HelperText("Optional")
+				HelperText(String(localized: "Optional"))
 			}
 			.frame(height: 20)
 

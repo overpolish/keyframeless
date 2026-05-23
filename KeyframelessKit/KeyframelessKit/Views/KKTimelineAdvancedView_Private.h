@@ -139,6 +139,7 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 - (NSArray<KKLane *> *)_animatableLanes;
 - (double)_clipDuration;
 - (NSRect)_graphRect;
+- (CGFloat)_trackLeftOffset;
 - (NSRect)_tracksRect;
 - (CGFloat)_xForFrac:(double)frac inTracks:(NSRect)t;
 - (double)_fracForX:(CGFloat)x inTracks:(NSRect)t;

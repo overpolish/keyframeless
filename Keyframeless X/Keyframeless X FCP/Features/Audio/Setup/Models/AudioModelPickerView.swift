@@ -16,7 +16,7 @@ struct AudioModelPickerView: View {
 					.font(.title3)
 					.foregroundStyle(.secondary)
 				Spacer()
-				HelperText("Recommended is based on hardware")
+				HelperText(String(localized: "Recommended is based on hardware"))
 			}
 			.frame(height: 20)
 
@@ -77,7 +77,7 @@ private struct AudioModelRow: View {
 						.foregroundStyle(isDownloaded ? .primary : .secondary)
 					if model.id == AudioModelManager.recommendedModelId {
 						InfoBadge(
-							label: "Recommended",
+							label: String(localized: "Recommended"),
 							systemImage: "desktopcomputer.and.macbook",
 							color: .green
 						)

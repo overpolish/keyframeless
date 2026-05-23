@@ -4,6 +4,7 @@
  */
 
 #import "../Style/KKTokens.h"
+#import "KKLocalized.h"
 #import "KKMiniCanvasView.h"
 #import "KKPopoverHeaderView.h"
 #import "KKTimelineLanesView+Guide.h"
@@ -714,7 +715,7 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
       [[_KKStaticValuesPopoverView alloc] initWithLanes:lanes
           descriptorPath:self.miniCanvasDescriptorPath
           clipAspect:self.miniCanvasClipAspect
-          headerTitle:@"Keypose"
+          headerTitle:KKLoc(@"Keypose", @"Popover header: keypose.")
           headerDetail:[self _timeStringForFraction:fraction]
           headerIcon:_kkKeyposePillImage()
           canvasDelegate:self.miniCanvasDelegate
@@ -796,7 +797,10 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
   // at this time"; Basic shares one phase across properties, so there it's
   // "excluded from this phase". Same widget, context-specific wording.
   NSString *excludedMsg =
-      (_activeTab == 1) ? @"No keypose here" : @"Excluded from this phase";
+      (_activeTab == 1)
+          ? KKLoc(@"No keypose here", @"Keypose popover empty state.")
+          : KKLoc(@"Excluded from this phase",
+                  @"Keypose popover: excluded from phase.");
   [staticView applyExcludedLabels:excludedLabels
                           message:excludedMsg
                         onAnimate:^(NSString *label) {
@@ -937,7 +941,7 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
       stringWithFormat:@"%@ → %@", [self _timeStringForFraction:startFraction],
                        [self _timeStringForFraction:endFraction]];
   KKPopoverHeaderView *header = [[KKPopoverHeaderView alloc]
-      initWithTitle:@"Curve"
+      initWithTitle:KKLoc(@"Curve", @"Section: easing curve.")
              detail:range
          symbolName:@"point.topleft.down.to.point.bottomright.curvepath"];
   CGFloat headerH = [KKPopoverHeaderView height];
@@ -1121,10 +1125,10 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
   NSString *range = [NSString
       stringWithFormat:@"%@ → %@", [self _timeStringForFraction:startFraction],
                        [self _timeStringForFraction:endFraction]];
-  KKPopoverHeaderView *header =
-      [[KKPopoverHeaderView alloc] initWithTitle:@"Modulation"
-                                          detail:range
-                                      symbolName:@"waveform"];
+  KKPopoverHeaderView *header = [[KKPopoverHeaderView alloc]
+      initWithTitle:KKLoc(@"Modulation", @"Section: modulation settings.")
+             detail:range
+         symbolName:@"waveform"];
   CGFloat headerH = [KKPopoverHeaderView height];
   CGFloat totalH = KKPaddingMD + headerH + KKSpacingSM + editH;
   NSView *container =
@@ -1183,53 +1187,53 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
   __block NSArray<NSNumber *> *pendingValues = nil;
   __block BOOL dragging = NO;
 
-  _KKStaticValuesPopoverView *staticView =
-      [[_KKStaticValuesPopoverView alloc] initWithLanes:unopted
-          descriptorPath:self.miniCanvasDescriptorPath
-          clipAspect:self.miniCanvasClipAspect
-          headerTitle:@"Constants"
-          headerDetail:nil
-          headerIcon:[KKPopoverHeaderView
-                         iconImageForSymbolName:@"slider.horizontal.3"]
-          canvasDelegate:self.miniCanvasDelegate
-          renderMode:KKMiniCanvasRenderModeOff
-          onModeChanged:nil
-          onNavigate:nil
-          onHandleValue:^(NSString *label, NSArray<NSNumber *> *values) {
-            __strong typeof(weak) s = weak;
-            // During a drag (mini-canvas handle or slider) coalesce — commit
-            // once on drag end. A discrete edit (text field) has no drag, so
-            // commit immediately.
-            if (dragging) {
-              pendingLabel = label;
-              pendingValues = values;
-            } else {
-              [s _setLaneValues:values forLabel:label];
-            }
-            if (s.onStaticValueChanged)
-              s.onStaticValueChanged(label, values);
-          }
-          onDragBegin:^{
-            __strong typeof(weak) s = weak;
-            dragging = YES;
-            if (s.onDragBegin)
-              s.onDragBegin();
-          }
-          onDragEnd:^{
-            __strong typeof(weak) s = weak;
-            NSString *endedLabel = pendingLabel;
-            NSArray<NSNumber *> *endedValues = pendingValues;
-            if (pendingValues && pendingLabel) {
-              [s _setLaneValues:pendingValues forLabel:pendingLabel];
-              pendingValues = nil;
-              pendingLabel = nil;
-            }
-            dragging = NO;
-            if (s.onDragEnd)
-              s.onDragEnd();
-            if (endedLabel && endedValues && s.onStaticValueDragEnded)
-              s.onStaticValueDragEnded(endedLabel, endedValues);
-          }];
+  _KKStaticValuesPopoverView *staticView = [[_KKStaticValuesPopoverView alloc]
+      initWithLanes:unopted
+      descriptorPath:self.miniCanvasDescriptorPath
+      clipAspect:self.miniCanvasClipAspect
+      headerTitle:KKLoc(@"Constants", @"Constants editor tab/section header.")
+      headerDetail:nil
+      headerIcon:[KKPopoverHeaderView
+                     iconImageForSymbolName:@"slider.horizontal.3"]
+      canvasDelegate:self.miniCanvasDelegate
+      renderMode:KKMiniCanvasRenderModeOff
+      onModeChanged:nil
+      onNavigate:nil
+      onHandleValue:^(NSString *label, NSArray<NSNumber *> *values) {
+        __strong typeof(weak) s = weak;
+        // During a drag (mini-canvas handle or slider) coalesce — commit
+        // once on drag end. A discrete edit (text field) has no drag, so
+        // commit immediately.
+        if (dragging) {
+          pendingLabel = label;
+          pendingValues = values;
+        } else {
+          [s _setLaneValues:values forLabel:label];
+        }
+        if (s.onStaticValueChanged)
+          s.onStaticValueChanged(label, values);
+      }
+      onDragBegin:^{
+        __strong typeof(weak) s = weak;
+        dragging = YES;
+        if (s.onDragBegin)
+          s.onDragBegin();
+      }
+      onDragEnd:^{
+        __strong typeof(weak) s = weak;
+        NSString *endedLabel = pendingLabel;
+        NSArray<NSNumber *> *endedValues = pendingValues;
+        if (pendingValues && pendingLabel) {
+          [s _setLaneValues:pendingValues forLabel:pendingLabel];
+          pendingValues = nil;
+          pendingLabel = nil;
+        }
+        dragging = NO;
+        if (s.onDragEnd)
+          s.onDragEnd();
+        if (endedLabel && endedValues && s.onStaticValueDragEnded)
+          s.onStaticValueDragEnded(endedLabel, endedValues);
+      }];
   _openStaticView = staticView;
   _openStaticIsBoundary = NO;
   [staticView applyDefaultsProvider:^NSArray<NSNumber *> *(NSString *l) {

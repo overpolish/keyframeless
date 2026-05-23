@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKLocalized.h"
 #import "KKTimelineBasicView_Private.h"
 
 #import "../Math/KKTimelineScale.h"
@@ -291,7 +292,9 @@ static const CGFloat kScrubSnapInPx = 4.0;
     return nil;
   NSMenu *menu = [[NSMenu alloc] init];
   NSString *title =
-      holdIv.endpointsLinked ? @"Unlink Endpoints" : @"Link Endpoints";
+      holdIv.endpointsLinked
+          ? KKLoc(@"Unlink Endpoints", @"Context menu: unlink endpoints.")
+          : KKLoc(@"Link Endpoints", @"Context menu: link endpoints.");
   [menu addItemWithTitle:title
                   action:@selector(_menuToggleHoldLink:)
            keyEquivalent:@""]

@@ -11,7 +11,8 @@ struct ProcessButton: View {
 
 	var body: some View {
 		PrimaryButton(
-			label: "Process", systemImage: "sparkles.rectangle.stack.fill", disabled: disabled,
+			label: String(localized: "Process"), systemImage: "sparkles.rectangle.stack.fill",
+			disabled: disabled,
 			action: action)
 	}
 }

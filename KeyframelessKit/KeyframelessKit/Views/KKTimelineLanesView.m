@@ -6,6 +6,7 @@
 #import "KKTimelineLanesView.h"
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
+#import "KKLocalized.h"
 #import "KKSegmentEditView.h"
 #import "KKTimelineAdvancedView.h"
 #import "KKTimelineBasicView.h"
@@ -52,7 +53,8 @@
   _footerRow = footerRow;
   [self addSubview:footerRow];
 
-  NSTextField *animatedLabel = [NSTextField labelWithString:@"Animated"];
+  NSTextField *animatedLabel = [NSTextField
+      labelWithString:KKLoc(@"Animated", @"Header: animated properties.")];
   animatedLabel.translatesAutoresizingMaskIntoConstraints = NO;
   animatedLabel.font = [NSFont systemFontOfSize:KKFontSizeSM
                                          weight:NSFontWeightMedium];
@@ -86,7 +88,9 @@
   _centeredArea.translatesAutoresizingMaskIntoConstraints = NO;
   [self addSubview:_centeredArea];
 
-  _hintLabel = [NSTextField labelWithString:@"No animated properties"];
+  _hintLabel = [NSTextField
+      labelWithString:KKLoc(@"No animated properties",
+                            @"Empty state: no animated properties.")];
   _hintLabel.translatesAutoresizingMaskIntoConstraints = NO;
   _hintLabel.font = [NSFont systemFontOfSize:KKFontSizeSM
                                       weight:NSFontWeightRegular];

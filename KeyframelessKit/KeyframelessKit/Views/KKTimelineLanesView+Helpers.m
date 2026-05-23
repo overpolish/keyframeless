@@ -5,6 +5,7 @@
 
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
+#import "KKLocalized.h"
 #import "KKMiniCanvasView.h"
 #import "KKPillToggleRowView.h"
 #import "KKPopoverHeaderView.h"
@@ -180,10 +181,11 @@ static void _clearPopoverBackground(NSView *view) {
                                             weight:NSFontWeightRegular],
     NSForegroundColorAttributeName : textColor,
   };
-  NSSize textSz = [_rowLabel sizeWithAttributes:attrs];
-  [_rowLabel drawAtPoint:NSMakePoint(KKPaddingLG + kCheckSize + 6.0,
-                                     NSMidY(self.bounds) - textSz.height / 2.0)
-          withAttributes:attrs];
+  NSString *display = KKLocalizedParamName(_rowLabel);
+  NSSize textSz = [display sizeWithAttributes:attrs];
+  [display drawAtPoint:NSMakePoint(KKPaddingLG + kCheckSize + 6.0,
+                                   NSMidY(self.bounds) - textSz.height / 2.0)
+        withAttributes:attrs];
 }
 
 - (void)mouseDown:(NSEvent *)e {
@@ -225,7 +227,8 @@ static void _clearPopoverBackground(NSView *view) {
 
   _searchField = [[_KKSearchField alloc] init];
   _searchField.translatesAutoresizingMaskIntoConstraints = NO;
-  _searchField.placeholderString = @"Search";
+  _searchField.placeholderString =
+      KKLoc(@"Search", @"Placeholder: search properties.");
   _searchField.delegate = self;
   _searchField.font = [NSFont systemFontOfSize:KKFontSizeSM
                                         weight:NSFontWeightRegular];
@@ -499,7 +502,7 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   _cmax = lane.componentMax ?: @[];
   _cunits = lane.componentUnits ?: @[];
 
-  NSTextField *title = _KKMakeCaption(lane.label);
+  NSTextField *title = _KKMakeCaption(KKLocalizedParamName(lane.label));
   [self addSubview:title];
 
   // Leading gutter: the "−" remove button (Advanced keypose popover only). When
@@ -802,9 +805,10 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
     return self;
   }
 
-  NSButton *btn = [NSButton buttonWithTitle:@"Animate"
-                                     target:self
-                                     action:@selector(_tap:)];
+  NSButton *btn = [NSButton
+      buttonWithTitle:KKLoc(@"Animate", @"Button: make property animatable.")
+               target:self
+               action:@selector(_tap:)];
   btn.bordered = NO;
   btn.bezelStyle = NSBezelStyleInline;
   btn.controlSize = NSControlSizeSmall;
@@ -812,7 +816,7 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
                                       weight:NSFontWeightMedium];
   btn.font = btnFont;
   btn.attributedTitle = [[NSAttributedString alloc]
-      initWithString:@"Animate"
+      initWithString:KKLoc(@"Animate", @"Button: make property animatable.")
           attributes:@{
             NSForegroundColorAttributeName : [NSColor accentMatchingHost],
             NSFontAttributeName : btnFont
@@ -1453,13 +1457,13 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 
 - (NSString *)_summaryText {
   if (_selectedLabels.count == 0)
-    return @"Add properties…";
+    return KKLoc(@"Add properties…", @"Button: add animatable properties.");
   NSMutableString *s = [NSMutableString string];
   NSInteger shown = MIN((NSInteger)_selectedLabels.count, kMaxSummaryLabels);
   for (NSInteger i = 0; i < shown; i++) {
     if (i > 0)
       [s appendString:@", "];
-    [s appendString:_selectedLabels[i]];
+    [s appendString:KKLocalizedParamName(_selectedLabels[i])];
   }
   NSInteger overflow = (NSInteger)_selectedLabels.count - kMaxSummaryLabels;
   if (overflow > 0)
@@ -1545,7 +1549,7 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 
 - (void)setLaneLabel:(NSString *)laneLabel {
   _laneLabel = [laneLabel copy];
-  _nameLabel.stringValue = laneLabel;
+  _nameLabel.stringValue = KKLocalizedParamName(laneLabel);
 }
 
 - (NSSize)intrinsicContentSize {

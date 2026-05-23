@@ -105,7 +105,7 @@ struct AudioLanguagePickerView: View {
 					ScrollViewReader { proxy in
 						LazyVStack(spacing: 0) {
 							LanguageRow(
-								name: "Auto-detect", code: nil,
+								name: String(localized: "Auto-detect"), code: nil,
 								selected: manager.selectedLanguage == nil,
 								hasProfanityList: false,
 								disabled: isParakeet
@@ -143,7 +143,8 @@ struct AudioLanguagePickerView: View {
 			.kkPanel()
 			.overlay {
 				if lockToEnglish {
-					ParakeetLockOverlay(message: "Parakeet 0.6B v2 is English only.")
+					ParakeetLockOverlay(
+						message: String(localized: "Parakeet 0.6B v2 is English only."))
 				}
 			}
 		}
@@ -180,7 +181,7 @@ private struct TranslateToggle: View {
 	var body: some View {
 		CapsuleToggle(
 			isOn: $isOn,
-			label: "Translate to English",
+			label: String(localized: "Translate to English"),
 			systemImage: "translate",
 			disabled: disabled
 		)
@@ -207,7 +208,7 @@ private struct LanguageRow: View {
 			Spacer()
 			if hasProfanityList {
 				InfoBadge(
-					label: "Profanity",
+					label: String(localized: "Profanity"),
 					systemImage:
 						"exclamationmark.bubble.fill",
 					color: .green

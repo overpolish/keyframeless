@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKLocalized.h"
 #import "KKTimelineAdvancedView_Private.h"
 
 #import "../Math/KKTimelineScrubMath.h"
@@ -1005,26 +1006,29 @@
   NSMenu *menu = [[NSMenu alloc] init];
   BOOL hasSelection = _selection.count > 0;
   if (hasSelection) {
-    [menu addItemWithTitle:@"Reverse"
+    [menu addItemWithTitle:KKLoc(@"Reverse", @"Context menu: reverse keyposes.")
                     action:@selector(_menuReverseSelection:)
              keyEquivalent:@""]
         .target = self;
-    [menu addItemWithTitle:@"Distribute Evenly"
+    [menu addItemWithTitle:KKLoc(@"Distribute Evenly",
+                                 @"Context menu: space keyposes evenly.")
                     action:@selector(_menuDistributeEvenly:)
              keyEquivalent:@""]
         .target = self;
     [menu addItem:[NSMenuItem separatorItem]];
-    [menu addItemWithTitle:@"Delete"
+    [menu addItemWithTitle:KKLoc(@"Delete", @"Context menu: delete.")
                     action:@selector(_menuDeleteSelection:)
              keyEquivalent:@""]
         .target = self;
   } else if (_menuPillLabel) {
-    [menu addItemWithTitle:@"Remove Keypose"
+    [menu addItemWithTitle:KKLoc(@"Remove Keypose",
+                                 @"Context menu: remove keypose.")
                     action:@selector(_menuRemovePill:)
              keyEquivalent:@""]
         .target = self;
   } else if (_menuGapLabel) {
-    [menu addItemWithTitle:@"Add Keypose Here"
+    [menu addItemWithTitle:KKLoc(@"Add Keypose Here",
+                                 @"Context menu: add keypose.")
                     action:@selector(_menuAddKeyposeAtGap:)
              keyEquivalent:@""]
         .target = self;
@@ -1042,7 +1046,9 @@
       if (iv) {
         [menu addItem:[NSMenuItem separatorItem]];
         NSString *title =
-            iv.endpointsLinked ? @"Unlink Endpoints" : @"Link Endpoints";
+            iv.endpointsLinked
+                ? KKLoc(@"Unlink Endpoints", @"Context menu: unlink endpoints.")
+                : KKLoc(@"Link Endpoints", @"Context menu: link endpoints.");
         [menu addItemWithTitle:title
                         action:@selector(_menuToggleGapLink:)
                  keyEquivalent:@""]

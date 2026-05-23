@@ -111,7 +111,7 @@ struct AudioEditView: View {
 			.frame(height: height)
 			.overlay(alignment: .bottomTrailing) {
 				HelperText(
-					"Click and drag to quickly select/deselect clips",
+					String(localized: "Click and drag to quickly select/deselect clips"),
 					systemImage: "cursorarrow.motionlines"
 				)
 				.padding(.trailing, KKPaddingSM)
@@ -125,8 +125,8 @@ struct AudioEditView: View {
 			ClipCountDisplay(
 				selectedCount: model.editSelectedClips?.count ?? 0,
 				totalCount: transcribedIndices.count,
-				emptyLabel: "No Transcriptions Found",
-				selectedLabel: "Transcriptions Selected"
+				emptyLabel: String(localized: "No Transcriptions Found"),
+				selectedLabel: String(localized: "Transcriptions Selected")
 			)
 			HStack(alignment: .top, spacing: KKSpacingLG) {
 				VStack(alignment: .leading, spacing: KKSpacingLG) {
@@ -161,7 +161,9 @@ struct AudioEditView: View {
 								LazyVStack(alignment: .leading, spacing: 0) {
 									HStack {
 										HelperText(
-											"Right-click to add/remove manual breaks",
+											String(
+												localized: "Right-click to add/remove manual breaks"
+											),
 											systemImage:
 												"square.fill.and.line.vertical.and.square.fill"
 										)

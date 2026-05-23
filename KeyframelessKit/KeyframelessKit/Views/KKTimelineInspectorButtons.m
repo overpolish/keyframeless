@@ -4,6 +4,7 @@
  */
 
 #import "KKTimelineInspectorButtons.h"
+#import "KKLocalized.h"
 
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
@@ -19,7 +20,8 @@ static const CGFloat kOnionSkinIconSize = 11.0;
 NSButton *KKResetToDefaultButton(id target, SEL action) {
   NSImage *resetImg =
       [[NSImage imageWithSystemSymbolName:@"arrow.counterclockwise"
-                 accessibilityDescription:@"Reset to default"]
+                 accessibilityDescription:KKLoc(@"Reset to default",
+                                                @"Reset control to default.")]
           imageWithSymbolConfiguration:
               [NSImageSymbolConfiguration
                   configurationWithPointSize:10.5
@@ -31,7 +33,7 @@ NSButton *KKResetToDefaultButton(id target, SEL action) {
   reset.imagePosition = NSImageOnly;
   reset.contentTintColor =
       [[NSColor inspectorLabel] colorWithAlphaComponent:0.5];
-  reset.toolTip = @"Reset to default";
+  reset.toolTip = KKLoc(@"Reset to default", @"Reset control to default.");
   reset.translatesAutoresizingMaskIntoConstraints = NO;
   reset.hidden = YES;
   return reset;
@@ -249,10 +251,13 @@ static void KKDrawCentredIcon(NSImage *tinted, NSRect bounds) {
                                    weight:NSFontWeightMedium];
   NSDictionary *attrs =
       @{NSFontAttributeName : font, NSForegroundColorAttributeName : tint};
-  NSSize textSz = [@"Constants" sizeWithAttributes:attrs];
+  NSSize textSz = [KKLoc(@"Constants", @"Constants editor tab/section header.")
+      sizeWithAttributes:attrs];
   CGFloat textX = kPadX + tinted.size.width + kGap;
   CGFloat textY = NSMidY(self.bounds) - textSz.height / 2.0;
-  [@"Constants" drawAtPoint:NSMakePoint(textX, textY) withAttributes:attrs];
+  [KKLoc(@"Constants", @"Constants editor tab/section header.")
+         drawAtPoint:NSMakePoint(textX, textY)
+      withAttributes:attrs];
 }
 
 - (void)mouseDown:(NSEvent *)event {
@@ -264,8 +269,10 @@ static void KKDrawCentredIcon(NSImage *tinted, NSRect bounds) {
   NSImage *img = KKConstantsImage();
   NSFont *font = [NSFont systemFontOfSize:KKFontSizeSM
                                    weight:NSFontWeightMedium];
-  CGFloat textW = ceil(
-      [@"Constants" sizeWithAttributes:@{NSFontAttributeName : font}].width);
+  CGFloat textW =
+      ceil([KKLoc(@"Constants", @"Constants editor tab/section header.")
+               sizeWithAttributes:@{NSFontAttributeName : font}]
+               .width);
   static const CGFloat kPadX = 5.0, kGap = 3.0;
   return NSMakeSize(kPadX + ceil(img.size.width) + kGap + textW + kPadX, 18.0);
 }

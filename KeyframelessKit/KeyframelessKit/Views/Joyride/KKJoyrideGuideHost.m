@@ -4,8 +4,17 @@
  */
 
 #import "KKJoyrideGuideHost.h"
+#import <KeyframelessKit/KKHostInfo.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
 #import <KeyframelessKit/KKTimingStage.h>
+
+// OSC warm-up timing: after the zoom-to-fit AppleScript, the host needs time
+// to actually resize the viewer before the guide reads spotlight positions.
+// Wait for the resize to settle, force a re-render at the final geometry, then
+// wait once more before starting. Tuned values; do not shorten without testing
+// against a slow host resize.
+static const NSTimeInterval kKKOSCZoomSettleDelay = 0.6;
+static const NSTimeInterval kKKOSCRunDelay = 0.2;
 
 @implementation KKJoyrideGuideHost {
   __weak NSView *_hostView;
@@ -44,9 +53,9 @@
 }
 
 - (void)runWithSeed:(KKTimeline * (^)(void))seedBlock
-         buildSteps:(NSArray<KKJoyrideStep *> *(^)(
-                        KKJoyrideController *,
-                        KKJoyrideLanesBinder *))buildSteps
+         buildSteps:
+             (NSArray<KKJoyrideStep *> * (^)(KKJoyrideController *,
+                                             KKJoyrideLanesBinder *))buildSteps
     extraOnComplete:(void (^)(void))extraOnComplete {
   // End any in-flight run (its onComplete will restore + release).
   [_guide dismiss];
@@ -54,6 +63,74 @@
   if (seed)
     [self prepareWithSeed:seed];
   [self runBuildSteps:buildSteps extraOnComplete:extraOnComplete];
+}
+
+- (void)runOSCGuideWithSeed:(KKTimeline *)seed
+                 buildSteps:(NSArray<KKJoyrideStep *> * (^)(
+                                KKJoyrideController *,
+                                KKJoyrideLanesBinder *))buildSteps
+            extraOnComplete:(void (^)(void))extraOnComplete {
+  [_guide dismiss];
+  [self prepareWithSeed:seed];
+
+  NSArray<KKJoyrideStep *> * (^build)(
+      KKJoyrideController *, KKJoyrideLanesBinder *) = [buildSteps copy];
+  void (^extra)(void) = [extraOnComplete copy];
+  __weak typeof(self) weak = self;
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    [KKHostInfo zoomHostViewerToFit];
+    dispatch_after(
+        dispatch_time(DISPATCH_TIME_NOW,
+                      (int64_t)(kKKOSCZoomSettleDelay * NSEC_PER_SEC)),
+        dispatch_get_main_queue(), ^{
+          __strong typeof(weak) s = weak;
+          if (!s)
+            return;
+          // Settle: re-apply the seed so a re-render runs at the final,
+          // post-resize geometry before the guide reads spotlight positions.
+          if (s.timelineApplier && seed)
+            s.timelineApplier(seed);
+          dispatch_after(
+              dispatch_time(DISPATCH_TIME_NOW,
+                            (int64_t)(kKKOSCRunDelay * NSEC_PER_SEC)),
+              dispatch_get_main_queue(), ^{
+                __strong typeof(weak) s2 = weak;
+                if (s2)
+                  [s2 runBuildSteps:build extraOnComplete:extra];
+              });
+        });
+  });
+}
+
+- (void)autostartOnceWithSeenKey:(NSString *)seenKey
+                    precondition:(BOOL (^)(void))precondition
+                           start:(void (^)(void))start {
+  if (!start)
+    return;
+  if (![self _autostartAllowedWithKey:seenKey precondition:precondition])
+    return;
+  BOOL (^pre)(void) = [precondition copy];
+  void (^st)(void) = [start copy];
+  __weak typeof(self) weak = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return;
+    if ([s _autostartAllowedWithKey:seenKey precondition:pre])
+      st();
+  });
+}
+
+- (BOOL)_autostartAllowedWithKey:(NSString *)seenKey
+                    precondition:(BOOL (^)(void))precondition {
+  if (!_hostView.window)
+    return NO;
+  if (precondition && !precondition())
+    return NO;
+  if (seenKey.length &&
+      [NSUserDefaults.standardUserDefaults boolForKey:seenKey])
+    return NO;
+  return YES;
 }
 
 - (void)prepareWithSeed:(KKTimeline *)seed {
@@ -65,9 +142,9 @@
     self.timelineApplier(seed);
 }
 
-- (void)runBuildSteps:(NSArray<KKJoyrideStep *> *(^)(
-                          KKJoyrideController *,
-                          KKJoyrideLanesBinder *))buildSteps
+- (void)runBuildSteps:
+            (NSArray<KKJoyrideStep *> * (^)(KKJoyrideController *,
+                                            KKJoyrideLanesBinder *))buildSteps
       extraOnComplete:(void (^)(void))extraOnComplete {
   NSView *hostView = _hostView;
   KKTimelineLanesView *lanesView = _lanesView;

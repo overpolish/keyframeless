@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKLocalized.h"
 #import "KKSegmentEditView_Private.h"
 #import <KeyframelessKit/KKSegmentEditView.h>
 
@@ -16,6 +17,25 @@
 #import "KKPillBar.h"
 #import "KKSeedView.h"
 #import "KKSliderView.h"
+
+// Part pills display the property names, which are identity keys elsewhere; the
+// pill controls report toggles by index, so we hand them localized DISPLAY
+// copies while the originals (_partLabels / _partCompoundLabels) stay English.
+static NSArray<NSString *> *KKLocalizedNames(NSArray<NSString *> *names) {
+  NSMutableArray<NSString *> *out =
+      [NSMutableArray arrayWithCapacity:names.count];
+  for (NSString *n in names)
+    [out addObject:KKLocalizedParamName(n)];
+  return out;
+}
+static NSArray<NSArray<NSString *> *> *
+KKLocalizedCompounds(NSArray<NSArray<NSString *> *> *compounds) {
+  NSMutableArray<NSArray<NSString *> *> *out =
+      [NSMutableArray arrayWithCapacity:compounds.count];
+  for (NSArray<NSString *> *grp in compounds)
+    [out addObject:KKLocalizedNames(grp)];
+  return out;
+}
 
 static const CGFloat kWidth = 280.0;
 static const CGFloat kHPadding = 10.0;
@@ -205,9 +225,10 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
 
 - (NSView *)_buildBulkHeaderRow {
   NSImageView *icon = [[NSImageView alloc] initWithFrame:NSZeroRect];
-  NSImage *img =
-      [NSImage imageWithSystemSymbolName:@"rectangle.on.rectangle.angled"
-                accessibilityDescription:@"Bulk edit"];
+  NSImage *img = [NSImage
+      imageWithSystemSymbolName:@"rectangle.on.rectangle.angled"
+       accessibilityDescription:KKLoc(@"Bulk edit",
+                                      @"Accessibility: bulk edit toggle.")];
   NSImageSymbolConfiguration *cfg = [NSImageSymbolConfiguration
       configurationWithPointSize:11.0
                           weight:NSFontWeightMedium];
@@ -216,7 +237,8 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
   icon.translatesAutoresizingMaskIntoConstraints = NO;
   [self addSubview:icon];
 
-  NSTextField *label = [NSTextField labelWithString:@"Bulk Edit"];
+  NSTextField *label = [NSTextField
+      labelWithString:KKLoc(@"Bulk Edit", @"Label: bulk edit mode.")];
   label.font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightMedium];
   label.textColor = [NSColor inspectorLabel];
   label.translatesAutoresizingMaskIntoConstraints = NO;
@@ -238,12 +260,14 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
 
 - (NSView *)_buildLinkedRowBelow:(NSView *)anchorView {
   __weak typeof(self) weakSelf = self;
-  NSTextField *linkedLabel = [NSTextField labelWithString:@"Linked"];
+  NSTextField *linkedLabel = [NSTextField
+      labelWithString:KKLoc(@"Linked", @"Label: components linked toggle.")];
   linkedLabel.font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightMedium];
   linkedLabel.textColor = [NSColor inspectorLabel];
   linkedLabel.translatesAutoresizingMaskIntoConstraints = NO;
-  linkedLabel.toolTip = @"Maintain proportions across components (e.g. "
-                        @"keep Radius X/Y aspect-locked through wobble)";
+  linkedLabel.toolTip = KKLoc(@"Maintain proportions across components (e.g. "
+                              @"keep Radius X/Y aspect-locked through wobble)",
+                              @"Tooltip for the Linked toggle.");
   [self addSubview:linkedLabel];
 
   _linkedToggle = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
@@ -278,7 +302,8 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
 
 - (void)_buildSeedRowBelow:(NSView *)anchorView {
   __weak typeof(self) weakSelf = self;
-  NSTextField *seedLabel = [NSTextField labelWithString:@"Seed"];
+  NSTextField *seedLabel = [NSTextField
+      labelWithString:KKLoc(@"Seed", @"Label: random seed field.")];
   seedLabel.font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightMedium];
   seedLabel.textColor = [NSColor inspectorLabel];
   seedLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -490,7 +515,9 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
     NSView *bottom = (_kind == KKSegmentEditKindHold)
                          ? (NSView *)_seedView
                          : (NSView *)_intensityTicks;
-    NSTextField *cap = [NSTextField labelWithString:@"Applies to"];
+    NSTextField *cap =
+        [NSTextField labelWithString:KKLoc(@"Applies to",
+                                           @"Label: where a setting applies.")];
     cap.font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightMedium];
     cap.textColor = [NSColor inspectorLabel];
     cap.translatesAutoresizingMaskIntoConstraints = NO;
@@ -499,8 +526,8 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
     __weak typeof(self) weakSelf = self;
     NSView *partView;
     if (_partCompoundLabels.count > 0) {
-      _compoundBar =
-          [[KKCompoundPillBar alloc] initWithCompounds:_partCompoundLabels];
+      _compoundBar = [[KKCompoundPillBar alloc]
+          initWithCompounds:KKLocalizedCompounds(_partCompoundLabels)];
       if (_partCompoundStates.count == _partCompoundLabels.count)
         _compoundBar.states = _partCompoundStates;
       _compoundBar.translatesAutoresizingMaskIntoConstraints = NO;
@@ -526,7 +553,8 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
       };
       partView = _compoundBar;
     } else {
-      _partBar = [[KKPillBar alloc] initWithLabels:_partLabels];
+      _partBar =
+          [[KKPillBar alloc] initWithLabels:KKLocalizedNames(_partLabels)];
       if (_partStates.count == _partLabels.count)
         _partBar.states = _partStates;
       _partBar.translatesAutoresizingMaskIntoConstraints = NO;

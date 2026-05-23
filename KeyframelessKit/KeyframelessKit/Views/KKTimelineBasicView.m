@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKLocalized.h"
 #import "KKTimelineBasicView_Private.h"
 
 #import "../Math/KKTimelineScale.h"
@@ -39,9 +40,12 @@
 }
 
 - (void)_buildUI {
-  _inLabel = [self _makeSectionLabel:@"In"];
-  _holdLabel = [self _makeSectionLabel:@"Hold"];
-  _outLabel = [self _makeSectionLabel:@"Out"];
+  _inLabel =
+      [self _makeSectionLabel:KKLoc(@"In", @"Timeline phase: In (ease-in).")];
+  _holdLabel = [self
+      _makeSectionLabel:KKLoc(@"Hold", @"Timeline phase / hold effect name.")];
+  _outLabel = [self
+      _makeSectionLabel:KKLoc(@"Out", @"Timeline phase: Out (ease-out).")];
 
   _inCheck = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
   _outCheck = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
@@ -573,7 +577,9 @@ void KKBasicValueExtent(KKBasicProj p, double *outLo, double *outHi) {
   // Label tells the truth from the values: equal endpoints = "Hold",
   // differing = "Drift" (warn-tinted), regardless of the link toggle.
   BOOL drift = [self _holdDrift];
-  _holdLabel.stringValue = drift ? @"Drift" : @"Hold";
+  _holdLabel.stringValue =
+      drift ? KKLoc(@"Drift", @"Hold effect: endpoints differ (drift).")
+            : KKLoc(@"Hold", @"Timeline phase / hold effect name.");
   _holdLabel.textColor = drift ? [NSColor warning] : [NSColor inspectorLabel];
   [_holdLabel sizeToFit];
   CGFloat hx = NSMinX(g) + 0.5 * W;

@@ -77,7 +77,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// timeline" (the autostart pattern, where the user is supposed to keep
 /// any state they create during the guide).
 - (void)runWithSeed:(nullable KKTimeline * (^)(void))seedBlock
-         buildSteps:(NSArray<KKJoyrideStep *> *(^)(
+         buildSteps:(NSArray<KKJoyrideStep *> * (^)(
                         KKJoyrideController *guide,
                         KKJoyrideLanesBinder *binder))buildSteps
     extraOnComplete:(nullable void (^)(void))extraOnComplete;
@@ -93,10 +93,34 @@ NS_ASSUME_NONNULL_BEGIN
 /// On completion the saved timeline (if any) is restored. Pair with
 /// `-prepareWithSeed:` after an async warm-up; otherwise prefer
 /// `-runWithSeed:buildSteps:extraOnComplete:` which does both in one call.
-- (void)runBuildSteps:(NSArray<KKJoyrideStep *> *(^)(
+- (void)runBuildSteps:(NSArray<KKJoyrideStep *> * (^)(
                           KKJoyrideController *guide,
                           KKJoyrideLanesBinder *binder))buildSteps
       extraOnComplete:(nullable void (^)(void))extraOnComplete;
+
+/// In-viewer OSC guides: applies `seed`, then runs the host-viewer
+/// zoom-to-fit warm-up before starting the guide. The zoom (`+[KKHostInfo
+/// zoomHostViewerToFit]`, an AppleScript that steals host-app focus) runs on a
+/// background queue so the focus steal happens BEFORE the overlay exists;
+/// after the host has had time to resize the viewer, the seed is re-applied to
+/// force a re-render at the final geometry, then `buildSteps`/`extraOnComplete`
+/// run via -runBuildSteps:. Encapsulates the settle timing every OSC guide
+/// needs. Set any plugin OSC state (step index, guide-active flag) before
+/// calling.
+- (void)runOSCGuideWithSeed:(KKTimeline *)seed
+                 buildSteps:(NSArray<KKJoyrideStep *> * (^)(
+                                KKJoyrideController *guide,
+                                KKJoyrideLanesBinder *binder))buildSteps
+            extraOnComplete:(nullable void (^)(void))extraOnComplete;
+
+/// "Show once" autostart: does nothing unless the host view is in a window,
+/// `precondition` (if non-nil) returns YES, and `seenKey` is not yet set in
+/// NSUserDefaults; otherwise defers to the main queue, re-checks the same
+/// conditions, and calls `start`. The caller owns setting `seenKey` (typically
+/// in the guide's completion handler), so this only reads it.
+- (void)autostartOnceWithSeenKey:(NSString *)seenKey
+                    precondition:(nullable BOOL (^)(void))precondition
+                           start:(void (^)(void))start;
 
 /// Dismisses the in-flight guide, if any. Triggers the full onComplete
 /// path (binder teardown, timeline restore, controller release).
