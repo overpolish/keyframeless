@@ -425,4 +425,14 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
       [(KKSliderCell *)_slider.cell normalizedToValue:MAX(0.0, MIN(1.0, norm))];
 }
 
+- (NSRect)knobScreenRect {
+  if (!self.window)
+    return NSZeroRect;
+  CGFloat cx = [self screenXForValue:self.doubleValue];
+  NSRect track = [self trackScreenRect];
+  CGFloat cy = NSMidY(track);
+  return NSMakeRect(cx - kKnobWidth / 2.0, cy - kKnobHeight / 2.0, kKnobWidth,
+                    kKnobHeight);
+}
+
 @end

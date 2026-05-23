@@ -209,6 +209,9 @@ typedef NS_ENUM(NSInteger, KKMiniCanvasRenderMode) {
 /// a guide's target marker and drag map line up with the rendered knob.
 /// NSZeroRect / 0 when the popover isn't open or `label` has no slider.
 - (NSRect)guideConstantSliderTrackScreenRectForLabel:(NSString *)label;
+/// Screen rect of `label`'s knob at its current value - the grab point, so a
+/// guide's spotlight sits on the thumb rather than the track centre.
+- (NSRect)guideConstantSliderKnobScreenRectForLabel:(NSString *)label;
 - (CGFloat)guideConstantSliderScreenXForValue:(double)value
                                      forLabel:(NSString *)label;
 - (double)guideConstantSliderValueForScreenX:(CGFloat)screenX

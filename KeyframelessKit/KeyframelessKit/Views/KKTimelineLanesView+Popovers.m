@@ -1291,6 +1291,10 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
   return [_openStaticView guideSliderTrackScreenRectForLabel:label];
 }
 
+- (NSRect)guideConstantSliderKnobScreenRectForLabel:(NSString *)label {
+  return [_openStaticView guideSliderKnobScreenRectForLabel:label];
+}
+
 - (CGFloat)guideConstantSliderScreenXForValue:(double)value
                                      forLabel:(NSString *)label {
   return [_openStaticView guideSliderScreenXForValue:value forLabel:label];

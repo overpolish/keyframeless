@@ -4,12 +4,12 @@
  */
 
 #import "KKPillToggleRowView.h"
+#import "KKTimelineInspectorButtons.h"
 #import "KKTimelineInspectorView+Guide.h"
 #import "KKTimelineInspectorView_Private.h"
 
 @implementation KKTimelineInspectorView (Guide)
 
-@dynamic onPlayingChanged;
 @dynamic onGuideTabChanged;
 
 - (void (^)(NSInteger))onGuideTabChanged {
@@ -35,12 +35,24 @@
   return [bar guidePillScreenRectAtIndex:tab];
 }
 
-- (void (^)(BOOL))onPlayingChanged {
-  return _onPlayingChanged;
+- (BOOL)guideOwnsPlayState {
+  return _guideOwnsPlayState;
 }
 
-- (void)setOnPlayingChanged:(void (^)(BOOL))onPlayingChanged {
-  _onPlayingChanged = [onPlayingChanged copy];
+- (void)setGuideOwnsPlayState:(BOOL)owns {
+  _guideOwnsPlayState = owns;
+}
+
+- (void (^)(void))onPlaybackToggleTapped {
+  return _onPlaybackToggleTapped;
+}
+
+- (void)setOnPlaybackToggleTapped:(void (^)(void))block {
+  _onPlaybackToggleTapped = [block copy];
+}
+
+- (void)guideSetPlayingAccent:(BOOL)on {
+  [self _guidePlayButton].playing = on;
 }
 
 @end

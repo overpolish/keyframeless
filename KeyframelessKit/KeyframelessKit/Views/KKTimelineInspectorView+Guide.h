@@ -23,9 +23,23 @@ NS_ASSUME_NONNULL_BEGIN
 /// tab segment.
 - (NSRect)guideTabSegmentScreenRectForTab:(NSInteger)tab;
 
-/// Fired AFTER `setPlaying:` actually crosses - only on real transitions,
-/// not on equal-state pushes. Guide-only.
-@property(nonatomic, copy, nullable) void (^onPlayingChanged)(BOOL playing);
+/// Guide-only: when YES the play button accent is driven deterministically by
+/// taps (each tap toggles it) and the poll-inferred `setPlaying:` is ignored.
+/// A guide owns the playhead scenario, so the inferred play state - which
+/// flickers under FCP's bursty currentTime - must not touch the button. Set
+/// YES for the duration of a guide that walks the play control; restore NO on
+/// completion.
+@property(nonatomic) BOOL guideOwnsPlayState;
+
+/// Guide-only: fired on every raw play-button tap (one per click,
+/// deterministic). Use this to advance a step on the *click* rather than the
+/// poll-inferred play state. Drives nothing on its own.
+@property(nonatomic, copy, nullable) void (^onPlaybackToggleTapped)(void);
+
+/// Guide-only: set the play button accent directly, bypassing the
+/// `guideOwnsPlayState` guard. For the guide to reflect a play state it caused
+/// itself (e.g. an auto-pause), not a user tap.
+- (void)guideSetPlayingAccent:(BOOL)on;
 
 /// Guide-only: fired AFTER the tab actually changes (in addition to the
 /// host's `onTabChanged`, which the plugin owns for blob persistence). Lets

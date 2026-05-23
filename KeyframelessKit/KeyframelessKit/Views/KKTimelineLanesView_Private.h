@@ -165,6 +165,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Screen geometry of `label`'s slider (NSZeroRect / 0 if none), for a guide
 /// to place its target marker and map the drag onto the real track.
 - (NSRect)guideSliderTrackScreenRectForLabel:(NSString *)label;
+/// Screen rect of `label`'s knob at its current value - the grab point a guide
+/// spotlights so the cutout sits on the thumb, not the track centre.
+- (NSRect)guideSliderKnobScreenRectForLabel:(NSString *)label;
 - (CGFloat)guideSliderScreenXForValue:(double)value forLabel:(NSString *)label;
 - (double)guideSliderValueForScreenX:(CGFloat)screenX
                             forLabel:(NSString *)label;

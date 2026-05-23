@@ -576,12 +576,17 @@ static const double kConstantsGuideCropXTarget = 100.0;
       dragMessage:nil
       circular:NO
       spotRect:^NSRect {
+        // Spotlight the knob at its current value - the actual grab point -
+        // not the whole track/row. The cutout is drawn as a capsule anchored
+        // at the spot's CENTRE (radius = its short dimension), so a wide
+        // control collapses to a circle at the track midpoint and the thumb
+        // (sitting off-centre at the value) falls outside it. Tracking the
+        // knob keeps the cutout on the thumb wherever it is - same as the
+        // keypose-diamond step, whose spot already is the thing you grab.
         __strong typeof(self) s = weak;
-        NSView *r = [s.basicLanesView staticValueRowViewForLabel:@"Radius"];
-        NSWindow *w = r.window;
-        if (!r || !w)
-          return NSZeroRect;
-        return [w convertRectToScreen:[r convertRect:r.bounds toView:nil]];
+        return s ? [s.basicLanesView
+                       guideConstantSliderKnobScreenRectForLabel:@"Radius"]
+                 : NSZeroRect;
       }
       targetRect:^NSRect {
         __strong typeof(self) s = weak;
@@ -1011,10 +1016,10 @@ static const double kConstantsGuideCropXTarget = 100.0;
   // Reset playhead to clip start before the user hits play, so they always
   // watch from the beginning. onScrub is wired to the host's
   // movePlayheadToTime: (FxCommandAPI), same as restartBasicTimingGuide.
-  __block CFAbsoluteTime watchBackEnteredAt = 0;
+  __block BOOL watchBackScheduled = NO;
   sWatchBack.onEnter = ^{
     __strong typeof(self) s = weak;
-    watchBackEnteredAt = CFAbsoluteTimeGetCurrent();
+    watchBackScheduled = NO;
     if (s && s.onScrub)
       s.onScrub(0.0);
     // Wake up the OSC so the bridge gets a draw tick → its
@@ -1045,12 +1050,14 @@ static const double kConstantsGuideCropXTarget = 100.0;
   };
 
   // Declarative advance/dismiss via the binder. The "armed" diamond/gap →
-  // popover-open patterns are now `thenWaitFor:`; the sPlay play→pause edge
-  // is the binder's `playPauseEdge`. sWatchBack's timed auto-advance and
-  // sEdit's multi-signal AND (Crop AND Radius dragged) stay plugin-side.
+  // popover-open patterns are now `thenWaitFor:`; the sPlay play→pause edge is
+  // the binder's `playToggleEdge` - driven by deterministic play-button taps
+  // (not the poll-inferred play state, which flickers under FCP's bursty
+  // currentTime mid-guide and would auto-advance the step). sWatchBack's timed
+  // auto-advance and sEdit's multi-signal AND stay plugin-side.
   [binder bindStep:sPlay
            atIndex:ixPlay
-         advanceOn:[KKJoyrideTrigger playPauseEdge]
+         advanceOn:[KKJoyrideTrigger playToggleEdge]
          dismissOn:nil];
   [binder bindStep:s2
            atIndex:ixAdd
@@ -1119,37 +1126,42 @@ static const double kConstantsGuideCropXTarget = 100.0;
       };
   // sEdit.onEnter already resets cropChanged/radiusChanged above.
 
-  // Step 15 (sWatchBack): user clicks play → wait kWatchBackSeconds → auto-
-  // pause and advance. Don't await a manual pause - the guide handles it.
-  // Also forward all plays/pauses to the binder so its playPauseEdge fires
-  // for sPlay.
-  self.onPlayingChanged = ^(BOOL playing) {
+  // Both play steps are driven by deterministic play-button taps, not the
+  // poll-inferred play state (which flickers under FCP's bursty currentTime
+  // mid-guide - that flicker used to flash the accent and auto-advance the
+  // step). Each tap is one unambiguous toggle:
+  //   - sPlay advances on `playToggleEdge` (1st tap plays, 2nd pauses), via
+  //     the binder below.
+  //   - sWatchBack starts playback on the 1st tap, then auto-pauses + advances
+  //     after kWatchBackSeconds (no manual pause - the guide handles it).
+  // `guideOwnsPlayState` (set in restartBasicTimingGuide) makes each tap drive
+  // the accent directly, so it tracks the clicks instead of the poll.
+  self.onPlaybackToggleTapped = ^{
     __strong typeof(self) strong = weak;
     __strong KKJoyrideLanesBinder *b = weakBinder;
     __strong KKJoyrideController *g = weakGuide;
-    [b notifyPlayingChanged:playing];
-    if (!g)
+    [b notifyPlaybackToggleTapped];
+    if (!strong || !g || g.currentStepIndex != ixWatchBack)
       return;
-    if (g.currentStepIndex == ixWatchBack && playing) {
-      // Ignore the spurious play=1 FCP pushes right after onScrub(0.0)
-      // (movePlayheadToTime: produces a play/stop blip within ~150ms). If
-      // we don't, we'd schedule auto-pause too early and the 1s toggle
-      // would end up STARTING playback instead of stopping it.
-      if (CFAbsoluteTimeGetCurrent() - watchBackEnteredAt < 0.3)
-        return;
-      dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                                   (int64_t)(kWatchBackSeconds * NSEC_PER_SEC)),
-                     dispatch_get_main_queue(), ^{
-                       __strong typeof(weak) s2 = weak;
-                       __strong KKJoyrideController *g2 = weakGuide;
-                       if (!s2 || !g2 || g2.currentStepIndex != ixWatchBack)
-                         return;
-                       if (s2.onTogglePlayback)
-                         s2.onTogglePlayback();
-                       [g2 advance];
-                     });
-      (void)strong;
-    }
+    // First tap = the user started playback. Schedule the auto-pause +
+    // advance once; ignore further taps within this step.
+    if (watchBackScheduled)
+      return;
+    watchBackScheduled = YES;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                 (int64_t)(kWatchBackSeconds * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+                     __strong typeof(weak) s2 = weak;
+                     __strong KKJoyrideController *g2 = weakGuide;
+                     if (!s2 || !g2 || g2.currentStepIndex != ixWatchBack)
+                       return;
+                     // The auto-pause isn't a user tap, so flip the accent
+                     // off ourselves to match the host stopping.
+                     if (s2.onTogglePlayback)
+                       s2.onTogglePlayback();
+                     [s2 guideSetPlayingAccent:NO];
+                     [g2 advance];
+                   });
   };
 
   return @[
@@ -1179,6 +1191,12 @@ static const double kConstantsGuideCropXTarget = 100.0;
   // channel and FCP abort()s. Constants guide uses the same flag.
   host.forwardsGestures = YES;
 
+  // The guide owns the play accent for its duration: taps drive it
+  // deterministically and the poll-inferred setPlaying: is ignored, so it
+  // can't flicker the button (or fire spurious edges) under FCP's bursty
+  // currentTime. Restored on completion below.
+  self.guideOwnsPlayState = YES;
+
   // Prereq: park the host playhead at clip start so every step (and the
   // boundary mini-viewer) renders from a predictable position. onScrub is
   // host-aware (FxCommandAPI movePlayheadToTime:); the plugin wires it.
@@ -1199,7 +1217,8 @@ static const double kConstantsGuideCropXTarget = 100.0;
         __strong typeof(weak) s = weak;
         if (!s)
           return;
-        s.onPlayingChanged = nil;
+        s.onPlaybackToggleTapped = nil;
+        s.guideOwnsPlayState = NO;
         s.basicLanesView.renderMode = priorRenderMode;
         if (priorTab != KKTimelineTabBasic)
           [s setActiveTab:priorTab];

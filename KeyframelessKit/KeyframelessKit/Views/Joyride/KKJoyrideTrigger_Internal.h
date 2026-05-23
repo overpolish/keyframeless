@@ -24,8 +24,7 @@ typedef NS_ENUM(NSInteger, KKJoyrideTriggerType) {
   KKJoyrideTriggerTypeGapTapped,
   KKJoyrideTriggerTypeMiniCanvasViewTransformChanged,
   KKJoyrideTriggerTypeMiniCanvasViewReset,
-  KKJoyrideTriggerTypePlayingChanged,
-  KKJoyrideTriggerTypePlayPauseEdge,
+  KKJoyrideTriggerTypePlayToggleEdge,
 };
 
 @interface KKJoyrideTrigger ()

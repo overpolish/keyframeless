@@ -1369,6 +1369,10 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   return [[self _guideSliderForLabel:label] trackScreenRect];
 }
 
+- (NSRect)guideSliderKnobScreenRectForLabel:(NSString *)label {
+  return [[self _guideSliderForLabel:label] knobScreenRect];
+}
+
 - (CGFloat)guideSliderScreenXForValue:(double)value forLabel:(NSString *)label {
   return [[self _guideSliderForLabel:label] screenXForValue:value];
 }

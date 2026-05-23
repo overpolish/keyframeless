@@ -649,8 +649,19 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   _playButton = [[KKPlayButton alloc] init];
   _playButton.translatesAutoresizingMaskIntoConstraints = NO;
   _playButton.onTapped = ^{
-    if (weak.onTogglePlayback)
-      weak.onTogglePlayback();
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return;
+    // During a guide the inspector owns the play accent: each tap is a
+    // deterministic toggle, so flip it locally instead of waiting on the
+    // poll-inferred `setPlaying:` (which flickers under FCP's bursty
+    // currentTime). The tap hook lets a Joyride step advance on the click.
+    if (s->_guideOwnsPlayState)
+      s->_playButton.playing = !s->_playButton.playing;
+    if (s->_onPlaybackToggleTapped)
+      s->_onPlaybackToggleTapped();
+    if (s.onTogglePlayback)
+      s.onTogglePlayback();
   };
 
   _loopButton = [[KKLoopButton alloc] init];
@@ -1155,11 +1166,12 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
 }
 
 - (void)setPlaying:(BOOL)playing {
-  BOOL was = _playButton.playing;
+  // A guide drives the accent deterministically from taps; ignore the
+  // poll-inferred state so it can't flicker the button mid-guide.
+  if (_guideOwnsPlayState)
+    return;
   _playButton.playing = playing;
   [_detachedView setPlaying:playing];
-  if (was != playing && _onPlayingChanged)
-    _onPlayingChanged(playing);
 }
 
 - (KKPlayButton *)_guidePlayButton {

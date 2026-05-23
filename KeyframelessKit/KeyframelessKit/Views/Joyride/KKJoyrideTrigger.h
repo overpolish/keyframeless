@@ -56,11 +56,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 #pragma mark - Inspector
 
-+ (instancetype)playingChanged:(BOOL)playing;
-/// Compound: fires when the user starts playback during the active step and
-/// then stops it (pause edge). Survives FCP's spurious play=1 pushes within
-/// the first 300ms - same gate the hand-rolled play guard used.
-+ (instancetype)playPauseEdge;
+/// Play-button toggle, driven by raw taps (`-notifyPlaybackToggleTapped`), not
+/// any poll-inferred play state. Arms on the first tap during the step, fires
+/// on the second. Use this for a "click play, then click again to pause" step:
+/// the click is unambiguous, so it never flickers under FCP's bursty
+/// currentTime the way an inferred play state would inside a guide.
++ (instancetype)playToggleEdge;
 
 #pragma mark - Combinators
 
