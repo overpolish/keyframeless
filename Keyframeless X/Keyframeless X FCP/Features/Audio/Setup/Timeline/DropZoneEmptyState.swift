@@ -40,9 +40,9 @@ struct DropZoneEmptyState: View {
 
 	private var label: String {
 		switch dropState {
-		case .idle: return "Drop FCP project (or clips) here"
-		case .denied: return "Cannot drop library or event"
-		case .dropped: return "No dialogue found"
+		case .idle: return String(localized: "Drop FCP project (or clips) here")
+		case .denied: return String(localized: "Cannot drop library or event")
+		case .dropped: return String(localized: "No dialogue found")
 		}
 	}
 }

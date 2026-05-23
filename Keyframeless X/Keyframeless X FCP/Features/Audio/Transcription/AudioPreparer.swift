@@ -94,7 +94,7 @@ struct AudioPreparer {
 	}
 
 	static func extractAudio(for segments: [ProcessingSegment]) async throws -> [PreparedSegment] {
-		print("[AudioPreparer] BEGIN extractAudio — \(segments.count) segments")
+		print("[AudioPreparer] BEGIN extractAudio - \(segments.count) segments")
 		var sourceFileCache: [String: URL] = [:]
 		var audioURLCache: [String: URL] = [:]
 		var prepared: [PreparedSegment] = []
@@ -175,7 +175,7 @@ struct AudioPreparer {
 				)
 			else {
 				print(
-					"[AudioPreparer] skipping segment \(segment.sourceName) — buffer alloc failed (frameCount: \(frameCount))"
+					"[AudioPreparer] skipping segment \(segment.sourceName) - buffer alloc failed (frameCount: \(frameCount))"
 				)
 				continue
 			}

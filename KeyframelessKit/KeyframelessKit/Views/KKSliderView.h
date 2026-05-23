@@ -42,6 +42,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSRect)trackScreenRect;
 - (CGFloat)screenXForValue:(double)value;
 - (double)valueForScreenX:(CGFloat)screenX;
+/// Screen rect of the knob at the slider's *current* value - the actual grab
+/// point. A guide spotlights this (not the whole track/row) so the cutout sits
+/// on the thumb wherever it is, instead of collapsing to the track's centre.
+- (NSRect)knobScreenRect;
 
 @end
 

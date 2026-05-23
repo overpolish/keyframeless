@@ -323,7 +323,7 @@ static void syncStyleViews(KKLayerInstanceState *st,
   }
 
   // When no path is selected, keep the bar showing the last-used stops as
-  // defaults for the next shape — same retain-on-deselect pattern as the
+  // defaults for the next shape - same retain-on-deselect pattern as the
   // color mode / gradient type fields in the store.
   if (syncPath) {
     void (^applyJSON)(KKGradientControl *, NSString *) =
@@ -392,7 +392,7 @@ void KKCanvasRefreshLayerListFromSnapshot(KKCanvasStoreSnapshot *snap,
   // FCP doesn't replay parameterChanged for our hidden CollapsedGroups
   // string param on project load, so the saved disclosure state never
   // reaches the in-memory set via the echo handler. Do a one-shot read
-  // here on first refresh per instance — this runs in custom-UI scope so
+  // here on first refresh per instance - this runs in custom-UI scope so
   // getStringParameterValue resolves.
   if (!st.didLoadCollapsedFromParam) {
     id<FxCustomParameterActionAPI_v4> actAPI =
@@ -502,7 +502,7 @@ void KKCanvasRefreshLayerListFromSnapshot(KKCanvasStoreSnapshot *snap,
   NSMutableArray<KKLayerRow *> *newRows =
       [NSMutableArray arrayWithCapacity:visCount];
 
-  // Track whether every visible row reused an existing oldRows entry — if so
+  // Track whether every visible row reused an existing oldRows entry - if so
   // we can skip the teardown + AutoLayout constraint setup at the bottom of
   // this function (the dominant cost on every refresh). updateRow already
   // wrote the new selection/hidden/locked state into the reused rows.

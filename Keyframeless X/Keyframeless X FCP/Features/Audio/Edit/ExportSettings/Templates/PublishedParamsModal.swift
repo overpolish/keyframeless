@@ -57,7 +57,9 @@ struct PublishedParamsModal: View {
 						.font(.title3).foregroundStyle(.primary)
 					Spacer()
 					if hasPerWordAnimation {
-						InfoBadge(label: "Per word", systemImage: "directcurrent", color: .green)
+						InfoBadge(
+							label: String(localized: "Per word"), systemImage: "directcurrent",
+							color: .green)
 					}
 				}
 				if !hasAnyContent {
@@ -86,8 +88,8 @@ struct PublishedParamsModal: View {
 					PillToggle(
 						selection: $perWordStartsAtZero,
 						options: [
-							(label: "Straight Away", value: true),
-							(label: "Late Start", value: false),
+							(label: String(localized: "Straight Away"), value: true),
+							(label: String(localized: "Late Start"), value: false),
 						])
 				}
 			}

@@ -23,6 +23,8 @@ struct CapsuleToggle: View {
 				}
 				Text(label)
 					.font(.system(size: 10, weight: .medium))
+					.lineLimit(1)
+					.fixedSize(horizontal: true, vertical: false)
 			}
 			.padding(.horizontal, 8)
 			.padding(.vertical, 4)

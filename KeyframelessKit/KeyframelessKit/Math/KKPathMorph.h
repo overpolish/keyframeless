@@ -14,7 +14,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Capture a path's geometry as a morph snapshot blob.
 /// Format: uint32 count + uint8 closed + `count` × KKBezierPoint.
-/// Properties (stroke/fill/transform) are NOT included — morph only operates
+/// Properties (stroke/fill/transform) are NOT included - morph only operates
 /// on geometry.
 FOUNDATION_EXPORT NSData *KKMorphSnapshotCapture(KKBezierPath *path);
 
@@ -32,8 +32,8 @@ FOUNDATION_EXPORT void KKMorphSnapshotApply(NSData *blob, KKBezierPath *path);
 
 /// High-level: morph `path` to the interpolated state between two snapshots
 /// at progress `t`. When both snapshots have matching topology (same point
-/// count + closed flag) — the dominant case for the split-then-edit-a-point
-/// workflow — interpolates control points 1:1 with bezier handles
+/// count + closed flag) - the dominant case for the split-then-edit-a-point
+/// workflow - interpolates control points 1:1 with bezier handles
 /// preserved. When topologies differ, falls back to uniform arc-length
 /// resampling with linear-only output.
 FOUNDATION_EXPORT void KKMorphInterpolateApply(NSData *fromBlob, NSData *toBlob,
@@ -42,7 +42,7 @@ FOUNDATION_EXPORT void KKMorphInterpolateApply(NSData *fromBlob, NSData *toBlob,
 /// Interpolate two snapshots at progress t (0..1). Both snapshots are
 /// uniformly resampled along arc length to a common point count, then
 /// positions are linearly lerped. The resulting points are linear
-/// (handles cleared) — Stage 1 limitation; corner pinning + bezier
+/// (handles cleared) - Stage 1 limitation; corner pinning + bezier
 /// preservation are future work.
 ///
 /// `outPositions` must have capacity for at least `outSampleCount` entries

@@ -235,10 +235,10 @@ esac
 if [[ "$UPDATE_MANIFEST" == true ]]; then
   bump_manifest "$COMPONENT" "$VERSION"
   echo ""
-  echo "Done — $COMPONENT bumped to $VERSION"
+  echo "Done - $COMPONENT bumped to $VERSION"
   echo "  manifest.json updated"
 else
   echo ""
-  echo "Done — $COMPONENT bumped to $VERSION"
+  echo "Done - $COMPONENT bumped to $VERSION"
   echo "  manifest.json unchanged (alpha)"
 fi

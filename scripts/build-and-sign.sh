@@ -36,7 +36,7 @@ echo "Building .pkg..."
 packagesbuild "$PKGPROJ"
 
 if [[ ! -f "$UNSIGNED" ]]; then
-  echo "Error: build failed — $UNSIGNED not found."
+  echo "Error: build failed - $UNSIGNED not found."
   exit 1
 fi
 
@@ -45,4 +45,4 @@ echo ""
 
 echo "Copying manifest.json to build folder..."
 cp "$ROOT/manifest.json" "$BUILD_DIR/manifest.json"
-echo "Done — manifest.json copied to $BUILD_DIR/"
+echo "Done - manifest.json copied to $BUILD_DIR/"

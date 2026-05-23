@@ -128,7 +128,7 @@ BOOL KKValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
     KKKeyPose *c = [kps[s.holdEnd] copy];
     KKInterval *iv = [b.outgoing copy] ?: [[KKInterval alloc] init];
     iv.endpointsLinked = newLinked;
-    // A drift is a real tween from hold-start to hold-end — start it linear
+    // A drift is a real tween from hold-start to hold-end - start it linear
     // (the EaseInOut default belongs to In/Out, not a freshly split Hold).
     if (!newLinked)
       iv.curve = KKIntervalCurveLinear;
@@ -267,7 +267,7 @@ BOOL KKValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
 
 // Master In/Out checkbox is structural: on adds the phase's start keyposes,
 // off removes them. Per-property exclusion uses holdsFlat (non-destructive),
-// but the *fully-off* phase has no keyposes — and removing the last applier
+// but the *fully-off* phase has no keyposes - and removing the last applier
 // (in _setLaneParticipation) routes here so the disabled state is consistent.
 - (void)_setInEnabled:(BOOL)on {
   [self _applyInEnabled:on outEnabled:[self _projection].outEnabled];

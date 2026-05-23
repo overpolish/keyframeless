@@ -30,7 +30,7 @@ static const CGFloat kRowLabelInset = 8.0;
 static const CGFloat kRowMin = 22.0;
 static const CGFloat kRowGap = 2.0;
 
-// Boundary pill — vertical capsule spanning the row, same width as Basic.
+// Boundary pill - vertical capsule spanning the row, same width as Basic.
 static const CGFloat kPillW = 6.0;
 static const CGFloat kPillInsetY = 3.0;
 static const CGFloat kIntervalWidth = 2.0;
@@ -43,7 +43,7 @@ static const double kValueEqEps = 1.0e-6;
 
 // Playhead scrub + pill drag snap: closest candidate within this many px.
 static const CGFloat kSnapInPx = 4.0;
-// A press initiates either a pill drag or a popover open — disambiguated by
+// A press initiates either a pill drag or a popover open - disambiguated by
 // the pointer travelling further than this from the press point.
 static const CGFloat kDragThresholdPx = 3.0;
 
@@ -57,7 +57,7 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
                                             NSUInteger i);
 
 // Class extension: ivars only. Mirrors KKTimelineBasicView_Private.h's
-// pattern — ivars are @package so categories in the same module can read /
+// pattern - ivars are @package so categories in the same module can read /
 // write them, and cross-category method decls live in the (Internal)
 // category below to avoid duplicate-implementation warnings.
 @interface KKTimelineAdvancedView () {
@@ -118,7 +118,7 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   NSString *_hoverGapLabel;
   NSInteger _hoverGapAIdx;
 
-  // Backing ivars for public properties — declared here so categories can
+  // Backing ivars for public properties - declared here so categories can
   // read/write them directly (auto-synthesized ivars aren't visible to
   // categories). Property synthesis in the core .m picks these up.
   double _clipDurationSeconds;
@@ -135,10 +135,11 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 // class" warnings.
 @interface KKTimelineAdvancedView (Internal)
 
-// Model — pure helpers (no mutations, no UI side effects).
+// Model - pure helpers (no mutations, no UI side effects).
 - (NSArray<KKLane *> *)_animatableLanes;
 - (double)_clipDuration;
 - (NSRect)_graphRect;
+- (CGFloat)_trackLeftOffset;
 - (NSRect)_tracksRect;
 - (CGFloat)_xForFrac:(double)frac inTracks:(NSRect)t;
 - (double)_fracForX:(CGFloat)x inTracks:(NSRect)t;
@@ -162,7 +163,7 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
                   kp:(NSInteger *)outKPIdx;
 - (NSInteger)_laneRowAtPoint:(NSPoint)pt;
 
-// Drawing — drawRect helpers (see +Drawing.m).
+// Drawing - drawRect helpers (see +Drawing.m).
 - (void)_drawDurationPillInRect:(NSRect)g
                          tracks:(NSRect)tracks
                           fracA:(double)fracA
@@ -191,7 +192,7 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 - (void)_drawRulerInRect:(NSRect)g tracks:(NSRect)tracks;
 - (void)_drawPlayheadInRect:(NSRect)g tracks:(NSRect)tracks;
 
-// Interaction — scrub + drag + edits + keyboard + menu.
+// Interaction - scrub + drag + edits + keyboard + menu.
 - (BOOL)_isInScrubBand:(NSPoint)pt;
 - (double)_snappedDragFracForX:(CGFloat)x
                           frac:(double)rawFrac
@@ -222,7 +223,7 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
                           kpIdx:(NSInteger)kpIdx
                          toFrac:(double)frac;
 
-// Popovers — value / gap / link.
+// Popovers - value / gap / link.
 - (void)_openValuePopoverForLane:(NSInteger)laneIdx kp:(NSInteger)kpIdx;
 - (void)_openGapPopoverForLabel:(NSString *)label kpIdx:(NSInteger)aIdx;
 - (void)_toggleLinkForLabel:(NSString *)label kpIdx:(NSInteger)aIdx;

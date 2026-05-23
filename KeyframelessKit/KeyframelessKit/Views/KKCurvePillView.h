@@ -24,7 +24,7 @@ typedef CGFloat (^KKCurvePillValueBlock)(NSInteger pillIndex, CGFloat t);
 
 /// When YES the curve is plotted against [fixedMin, fixedMax] instead of each
 /// pill's own auto-fitted min/max. Needed for hold-effect pills, where
-/// intensity is a pure amplitude scale around 1.0 — auto-fit would normalise
+/// intensity is a pure amplitude scale around 1.0 - auto-fit would normalise
 /// that scaling right back out, so the preview wouldn't react to intensity.
 @property(nonatomic) BOOL usesFixedRange;
 @property(nonatomic) CGFloat fixedMin;

@@ -66,7 +66,7 @@
 // while it's a constant. Every property always has a lane; `enabled` means
 // animatable (dropdown-controlled). Constant == the lane is absent or not
 // enabled. Editing a value preserves `enabled`, so the handle stays put
-// through a drag — no mid-drag exemption needed.
+// through a drag - no mid-drag exemption needed.
 - (BOOL)isConstantLabel:(NSString *)label {
   for (KKLane *lane in self.timeline.lanes)
     if ([lane.label isEqualToString:label])
@@ -291,7 +291,7 @@
   [_cropEditor endDrag];
 }
 
-// Slider/field edits in the constants popover — mirror into the preview
+// Slider/field edits in the constants popover - mirror into the preview
 // timeline so the mini canvas tracks live (persist stays coalesced
 // upstream).
 - (void)miniCanvas:(KKMiniCanvasView *)canvas

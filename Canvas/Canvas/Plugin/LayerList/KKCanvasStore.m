@@ -21,7 +21,7 @@
 @implementation KKCanvasStore {
   os_unfair_lock _lock;
 
-  // Mutable state — only access under _lock.
+  // Mutable state - only access under _lock.
   NSArray<KKBezierPath *> *_paths;
   NSIndexSet *_selectedIndices;
   BOOL _soloActive;

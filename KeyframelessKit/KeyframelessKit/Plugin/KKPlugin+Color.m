@@ -96,8 +96,8 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
 
   if (hasGradient) {
     // KKDataBlob custom param (was string param). Custom params route
-    // through `setCustomParameterValue:atTime:` — same keyframe pipeline
-    // as scalar animatable params — and ARE undoable. String param
+    // through `setCustomParameterValue:atTime:` - same keyframe pipeline
+    // as scalar animatable params - and ARE undoable. String param
     // writes are filtered off FCP's undo stack. See
     // project_kkdatablob_custom_param memory.
     NSString *defaultJSON = KKDefaultGradientJSON();
@@ -293,7 +293,7 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
     // still-open drag scope. Without this, the host's post-endAction
     // `parameterChanged:` echo for kKKParamGradientData arrives async
     // and `multiStageDeferLiveUpdateForLabel:` opens its own
-    // startAction/endAction 16ms later — landing the MS-data write in
+    // startAction/endAction 16ms later - landing the MS-data write in
     // a separate undo entry (so cmd-Z needs two presses to revert
     // gradient + UI together).
     KKPluginInstanceState *s = KKInstanceStateForAPI(strongSelf.apiManager);

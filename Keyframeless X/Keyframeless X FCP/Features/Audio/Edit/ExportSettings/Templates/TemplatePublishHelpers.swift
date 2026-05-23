@@ -207,7 +207,7 @@ struct ParamKindRow: View {
 
 	private let kindOptions:
 		[(label: String, value: PublishedParameter.ParamKind, icon: String?, color: Color?)] = [
-			("Off", .off, nil, .kkError),
+			(String(localized: "Off"), .off, nil, .kkError),
 			("Color", .color, "paintpalette", .kkAccent),
 			("Slider", .slider, "slider.horizontal.3", .kkWarning),
 			("Toggle", .toggle, "checkmark.circle", .green),
@@ -244,8 +244,14 @@ struct FontModeRow: View {
 			PillToggle(
 				selection: $fontMode,
 				options: [
-					(label: "Base", value: TemplatePublishedParamsStore.FontMode.base),
-					(label: "Custom", value: TemplatePublishedParamsStore.FontMode.custom),
+					(
+						label: String(localized: "Base"),
+						value: TemplatePublishedParamsStore.FontMode.base
+					),
+					(
+						label: String(localized: "Custom"),
+						value: TemplatePublishedParamsStore.FontMode.custom
+					),
 				]
 			)
 		}

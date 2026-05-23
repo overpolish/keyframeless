@@ -149,7 +149,7 @@ static NSInteger _kkCropPartForRoundedActive(NSInteger activePart) {
 
   // KKReadCustomParamString returns empty for kKKParamTimelineData in the OSC
   // mouse-drag action scope (verified via logs: jsonLen=0 even with getAPI
-  // resolved). The parameterChanged-driven snapshot is canonical anyway —
+  // resolved). The parameterChanged-driven snapshot is canonical anyway -
   // start from it so the radius edit doesn't wipe In/Hold/Out structure.
   KKTimeline *snap = RoundedTimelineSnapshot();
   KKTimeline *tl = snap ? [[snap copy] autorelease] : [KKTimeline timeline];
@@ -196,14 +196,14 @@ static NSInteger _kkCropPartForRoundedActive(NSInteger activePart) {
       // MRR: cache old's fields BEFORE `out[best] = nk`. The replacement
       // releases the array's hold on `old`; if no other retainer exists it
       // dangles and subsequent property reads (incl. KKLog) crash. See
-      // project_mrr_array_dangling.md — exact same pattern.
+      // project_mrr_array_dangling.md - exact same pattern.
       NSArray<NSNumber *> *newValues = @[ @(newRadius) ];
       double oldTime = out[best].time;
       KKInterval *oldOutgoing = out[best].outgoing;
       KKKeyPose *nk = [KKKeyPose keyposeAtTime:oldTime values:newValues];
       nk.outgoing = oldOutgoing; // preserve easing/modulation
       out[best] = nk;
-      // Propagate through hold-link bonds — a linked endpoint shares the
+      // Propagate through hold-link bonds - a linked endpoint shares the
       // same value as its partner, so an OSC edit to one side must mirror
       // to the other or the hold becomes a drift with the bond still set
       // (mismatched semantic). See project_canvas_undo_aware_selection /

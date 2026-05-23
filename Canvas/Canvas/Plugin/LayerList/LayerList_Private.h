@@ -73,8 +73,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) BOOL didLoadCollapsedFromParam;
 /// Last `merged` flags value we wrote per paramID. Some param flags
 /// (notably the group containers 130/132/134/148) don't preserve all
-/// bits across `getParameterFlags` calls — FCP appears to strip
-/// CUSTOM_UI / USE_FULL_VIEW_WIDTH between reads — so the host-flag
+/// bits across `getParameterFlags` calls - FCP appears to strip
+/// CUSTOM_UI / USE_FULL_VIEW_WIDTH between reads - so the host-flag
 /// comparison in `KKSetFlagsIfNeeded` always disagrees and we'd write
 /// every call, fragmenting one user action into multiple undo entries.
 /// Cache what we wrote and short-circuit when it matches.

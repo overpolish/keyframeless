@@ -82,7 +82,7 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
     if (cachedURL) {
       _downloadURL = [NSURL URLWithString:cachedURL];
     }
-    // Validate cached version against current — clear stale cache from
+    // Validate cached version against current - clear stale cache from
     // pre-update
     if (_availableVersion && ![self isVersion:_availableVersion
                                     newerThan:_currentVersion]) {
@@ -102,7 +102,7 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
 
 - (void)checkWithCompletion:(void (^)(BOOL))completion {
   if (_checkedThisSession) {
-    KKLogDebug(@"Skipping update check — already checked this session");
+    KKLogDebug(@"Skipping update check - already checked this session");
     if (completion) {
       dispatch_async(dispatch_get_main_queue(), ^{
         completion(self.updateAvailable);
@@ -331,7 +331,7 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
       return NO;
   }
 
-  // Base versions equal — release is newer than pre-release (1.0.1 > 1.0.1-v0)
+  // Base versions equal - release is newer than pre-release (1.0.1 > 1.0.1-v0)
   if (dashA.location == NSNotFound && dashB.location != NSNotFound)
     return YES;
 

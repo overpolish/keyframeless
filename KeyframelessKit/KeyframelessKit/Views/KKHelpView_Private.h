@@ -21,7 +21,7 @@ FOUNDATION_EXTERN const CGFloat KKHelpKeyColumnMin;
   NSStackView *_guidesLinksStack;
   NSMutableArray<_KKGuideRowRefs *> *_guideRowRefs;
   // Section-level warning shown when ANY guide's enabledProvider returns NO
-  // — replaces the per-row warning subtitle so the warning grows once with
+  // - replaces the per-row warning subtitle so the warning grows once with
   // the section, not once per guide.
   NSTextField *_guidesWarningLabel;
   id _refreshObserver;

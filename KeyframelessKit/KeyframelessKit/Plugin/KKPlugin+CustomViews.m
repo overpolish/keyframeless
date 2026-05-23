@@ -300,7 +300,7 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
                        return;
                      }
                      // The host hands us a parentView at a non-zero origin
-                     // in its superview — adding content there right-clips
+                     // in its superview - adding content there right-clips
                      // and offsets the first render. Attach to the superview
                      // (the correctly sized XPC jail).
                      NSView *host = parentView.superview ?: parentView;

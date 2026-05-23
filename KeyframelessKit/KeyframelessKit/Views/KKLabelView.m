@@ -6,6 +6,7 @@
 #import "KKLabelView.h"
 #import "../Plugin/KKHostInfo.h"
 #import "../Style/NSColor+KKColors.h"
+#import "KKLocalized.h"
 #import <AppKit/AppKit.h>
 
 static const CGFloat kLeadingMargin = 21.0;
@@ -29,7 +30,7 @@ static const CGFloat kFCPFontSize = 12.0;
 - (instancetype)initWithText:(NSString *)text icon:(NSImage *)icon {
   self = [super initWithFrame:NSZeroRect];
   if (self) {
-    _text = [text copy] ?: @"Label";
+    _text = [text copy] ?: KKLoc(@"Label", @"Default property label fallback.");
     _icon = icon;
     [self setupViews];
     [self updateIconLayout];

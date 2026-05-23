@@ -70,7 +70,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
         path->_points = malloc(count * pointSize);
         memcpy(path->_points, bytes + headerSize, count * pointSize);
       }
-      // Extended: corner radii after points (v27 hasRadius extension —
+      // Extended: corner radii after points (v27 hasRadius extension -
       // captured into locals for the v < 28 migration that follows).
       size_t extOffset = headerSize + count * pointSize;
       if ((flags & 4) && data.length >= extOffset + 4 * sizeof(float)) {
@@ -288,7 +288,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
           path->_translateX = tr[0];
           path->_translateY = tr[1];
           hdr += 2 * sizeof(float);
-          // Reserved byte (was transformOSCVisible — now a per-lane setting).
+          // Reserved byte (was transformOSCVisible - now a per-lane setting).
           hdr += 1;
         }
         if (ver >= 19 && data.length >= hdr + 1) {
@@ -542,7 +542,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   if (lidLen > 0)
     [data appendData:lidData];
   // v18: translateX, translateY (2 floats) + 1 reserved byte
-  // (was transformOSCVisible — now driven by per-lane sequencer toggle).
+  // (was transformOSCVisible - now driven by per-lane sequencer toggle).
   float tr[2] = {_translateX, _translateY};
   [data appendBytes:tr length:2 * sizeof(float)];
   uint8_t reserved = 0;
@@ -835,7 +835,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   }
   _count = count;
   _closed = closed;
-  // Bulk geometry replacement invalidates the cached shape — the new
+  // Bulk geometry replacement invalidates the cached shape - the new
   // points may not be a rect/ellipse/line anymore.
   _shape = nil;
 }
@@ -852,7 +852,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
 }
 
 - (void)setContourStarts:(NSArray<NSNumber *> *)starts {
-  // Strip a leading 0 if the caller included it — first contour always
+  // Strip a leading 0 if the caller included it - first contour always
   // starts at index 0 implicitly.
   NSUInteger leading =
       (starts.count > 0 && starts[0].unsignedIntegerValue == 0) ? 1 : 0;
@@ -903,7 +903,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     _points[i].x += delta.x;
     _points[i].y += delta.y;
   }
-  // Keep parametric shape structs (rect/ellipse/line) in sync — their
+  // Keep parametric shape structs (rect/ellipse/line) in sync - their
   // bounds are the source of truth when a re-apply runs (e.g. drawOSC's
   // rectShape applyToPath: that re-materializes points each frame).
   if ([_shape isKindOfClass:[KKRectShape class]]) {
@@ -1030,7 +1030,7 @@ static void cornerRadii(float fraction, float maxRX, float maxRY, float objW,
 
   // Merge between-corner point pairs whose side has fully collapsed
   // (adjacent corners' radii sum to the full side length). Use a very
-  // tight threshold so we only merge at/near 100% — the old 1e-4
+  // tight threshold so we only merge at/near 100% - the old 1e-4
   // threshold was triggering at ~99% and warping the curve.
   KKBezierPoint merged[12];
   NSUInteger m = 0;

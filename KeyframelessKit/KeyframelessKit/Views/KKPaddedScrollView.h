@@ -14,7 +14,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// stay visible on all sides) and the inner clip view is flipped so the
 /// document anchors at the top instead of the bottom. The document view
 /// is given a width equal to the visible scroll width, with intrinsic
-/// height — content grows downward and scrolls when it exceeds the
+/// height - content grows downward and scrolls when it exceeds the
 /// container height.
 ///
 /// Usage from a remote-window reply: build your content as a single

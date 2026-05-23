@@ -25,7 +25,7 @@ static const NSEventModifierFlags kJoyrideModifierMask =
          (event.modifierFlags & kJoyrideModifierMask) == reqFlags;
 }
 
-// Called when a click lands inside a pass-through spotlight — fires the step's
+// Called when a click lands inside a pass-through spotlight - fires the step's
 // spotlightMouseDown block and arms the drag monitors. global=YES means the
 // click arrived on a background thread (global monitor) and must dispatch to
 // main before calling the block; local monitors already run on main.
@@ -46,7 +46,7 @@ static const NSEventModifierFlags kJoyrideModifierMask =
 
 // In ViewBridge XPC the panel blocks normal click delivery to XPC windows.
 // Forward clicks inside the spotlight cutout to the appropriate XPC window.
-// Skipped for pass-through steps (OSC / viewer) — ignoresMouseEvents lets the
+// Skipped for pass-through steps (OSC / viewer) - ignoresMouseEvents lets the
 // click reach the host app naturally.
 - (void)_forwardMouseDown:(NSEvent *)event
     toXPCWindowAtScreenPoint:(NSPoint)mouse {
@@ -68,7 +68,7 @@ static const NSEventModifierFlags kJoyrideModifierMask =
                             clickCount:event.clickCount
                               pressure:event.pressure];
   };
-  // A complete click (down THEN up) — a lone down leaves a text field stuck
+  // A complete click (down THEN up) - a lone down leaves a text field stuck
   // in selection-tracking (never places the caret / enters edit mode).
   [target sendEvent:mk(NSEventTypeLeftMouseDown)];
   [target sendEvent:mk(NSEventTypeLeftMouseUp)];
@@ -116,12 +116,12 @@ static const NSEventModifierFlags kJoyrideModifierMask =
 }
 
 // Local monitor catches clicks that land in our own XPC process instead of
-// FCP — this happens for pass-through steps when an XPC window sits above
+// FCP - this happens for pass-through steps when an XPC window sits above
 // the FCP viewer at the spotlight position.
 - (void)_handleLocalMouseDown:(NSEvent *)event {
   NSPoint mouse = NSEvent.mouseLocation;
   // In forwardsGestures mode the panel doesn't ignore events, so a click on
-  // it stays in-process — the GLOBAL monitor never fires (it only sees
+  // it stays in-process - the GLOBAL monitor never fires (it only sees
   // other-app events). Run the full branch/forward logic here instead, the
   // same as the global path would. (Normal mode is unchanged: the global
   // monitor does the work and this stays passthrough-only.)

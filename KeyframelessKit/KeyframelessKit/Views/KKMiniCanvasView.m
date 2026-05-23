@@ -15,7 +15,7 @@
 #import <simd/simd.h>
 
 // Outer radius (points) of the shared KKPointOSC handle glyph. Smaller than
-// the viewer OSC's oscSize — the mini canvas is a compact preview. Must stay
+// the viewer OSC's oscSize - the mini canvas is a compact preview. Must stay
 // in sync with RoundedMiniCanvasRenderer's MiniOscSize() (placement/hit).
 static const CGFloat kKKMiniHandleOuterPt = 4.5;
 
@@ -82,7 +82,7 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   // glyphs); this overlay only adds the size readout on top.
 
   // Size readout in pixels: trailing edge aligned to the crop's right edge,
-  // just below its bottom edge — same placement as the in-viewer crop OSC.
+  // just below its bottom edge - same placement as the in-viewer crop OSC.
   // The crop fraction is border/content; × the source media size.
   CGSize media = [c sourceMediaSize];
   if (media.width <= 0 || media.height <= 0 || cr.size.width <= 0 ||
@@ -176,7 +176,7 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   id<MTLRenderPipelineState> _pipeline;
   id<MTLRenderPipelineState> _onionPipeline;
   id<MTLCommandQueue> _queue;
-  // Slot 0 aliases — keep the existing names so the handle/border/OSC code
+  // Slot 0 aliases - keep the existing names so the handle/border/OSC code
   // paths (which always target the editable slot) don't need to change.
   // The aliases point at `_filmstripSlots.firstObject`'s textures/surface.
   id<MTLTexture> _sourceTexture;
@@ -392,7 +392,7 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
       CFRelease(slot.surface);
     slot.surface = surf;
     slot.sourceTexture = tex;
-    slot.processedTexture = nil; // size changed — rebuilt lazily in draw
+    slot.processedTexture = nil; // size changed - rebuilt lazily in draw
   }
   slot.sid = sid;
   slot.generation = gen;
@@ -429,7 +429,7 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   return best;
 }
 
-// Aliases follow the ACTIVE slot — that's the one OSC code paths edit /
+// Aliases follow the ACTIVE slot - that's the one OSC code paths edit /
 // inspect. With N=1, active is slot 0 and behavior matches single-slot mode.
 - (void)_syncSlot0Aliases {
   NSUInteger active = [self _activeSlotIndex];
@@ -507,7 +507,7 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
     [self setNeedsDisplay:YES];
 }
 
-// Slot 0's content rect — the editable cell when onion-skin is on, and the
+// Slot 0's content rect - the editable cell when onion-skin is on, and the
 // single rectangle when it's off. Layout for the filmstrip is then computed
 // as N cells of this width laid horizontally, with `kFilmstripGap` between
 // (drawable space).
@@ -629,7 +629,7 @@ static const CGFloat kFilmstripGap = 16.0;
 
   id<MTLCommandBuffer> cb = [_queue commandBuffer];
 
-  // Per-slot effect pass — the plugin's renderer reads its `editFraction`
+  // Per-slot effect pass - the plugin's renderer reads its `editFraction`
   // property to pick which keypose's params to apply, so we mutate it
   // around each slot's process call. KVC because the view only knows the
   // canvasDelegate via its protocol (the renderer's concrete class lives in
@@ -711,7 +711,7 @@ static const CGFloat kFilmstripGap = 16.0;
 
     if (_renderMode == 0) {
       // Off: only the active slot, even if the descriptor still has the
-      // old multi-slot list — avoids a fan-out flash on a Filmstrip→Off
+      // old multi-slot list - avoids a fan-out flash on a Filmstrip→Off
       // pill flip before the descriptor poll resyncs to a single slot.
       NSUInteger ai = (n > 1) ? [self _activeSlotIndex] : 0;
       _KKMiniFilmSlot *slot = _filmstripSlots[ai];
@@ -730,7 +730,7 @@ static const CGFloat kFilmstripGap = 16.0;
     } else if (_onionPipeline) {
       // Onion: active frame opaque first, then prev (red) / next (blue)
       // ghosts on top with a low alpha so the active still reads through.
-      // (Drawing active LAST would fully cover the ghosts — they paint
+      // (Drawing active LAST would fully cover the ghosts - they paint
       // every pixel, not just outlines, so they'd be invisible.)
       _KKMiniFilmSlot *aSlot = _filmstripSlots[activeIdx];
       id<MTLTexture> aTex = aSlot.processedTexture ?: aSlot.sourceTexture;
@@ -760,7 +760,7 @@ static const CGFloat kFilmstripGap = 16.0;
     }
   }
 
-  // Crop border — drawn here (before the glyphs) so the handles sit on
+  // Crop border - drawn here (before the glyphs) so the handles sit on
   // top of the line, not under it.
   if (_linePipeline && del &&
       [del respondsToSelector:@selector(
@@ -843,7 +843,7 @@ static const CGFloat kFilmstripGap = 16.0;
   [cb presentDrawable:drawable];
   [cb commit];
 
-  // Content rect may have shifted (pan/zoom/resolve) — keep handles aligned.
+  // Content rect may have shifted (pan/zoom/resolve) - keep handles aligned.
   [_overlay setNeedsDisplay:YES];
 }
 
@@ -917,7 +917,7 @@ static const CGFloat kFilmstripGap = 16.0;
   }
   // Filmstrip: a click in an INACTIVE cell asks the host to swap the popover
   // to that KP. Single-slot mode (or click in the active cell) falls through.
-  // Onion stacks every cell on the active rect — there's no spatial way to
+  // Onion stacks every cell on the active rect - there's no spatial way to
   // pick a specific KP, so we suppress here and let the header's prev/next
   // buttons drive navigation instead.
   NSUInteger n = _filmstripSlots.count;
@@ -938,7 +938,7 @@ static const CGFloat kFilmstripGap = 16.0;
           CGRectMake(cellDrawable.origin.x / s, cellDrawable.origin.y / s,
                      cellDrawable.size.width / s, cellDrawable.size.height / s);
       if (CGRectContainsPoint(cell, vp)) {
-        // Reset pan so the newly-activated cell lands centred — otherwise
+        // Reset pan so the newly-activated cell lands centred - otherwise
         // the existing pan stays applied to the new layout and the strip
         // visually jumps even further off-centre.
         _panPixels = CGPointZero;

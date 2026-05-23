@@ -110,7 +110,7 @@ static double KKEaseOutBounce(double t, double intensity, double frequency) {
       double depth = pow(restitution, 2.0 * i);
       if (i == numBounces) {
         // Last arc: cubic that peaks at local=0.5 and lands at local=1
-        // with zero velocity — `8·local·(1-local)²` satisfies g(0)=0,
+        // with zero velocity - `8·local·(1-local)²` satisfies g(0)=0,
         // g(0.5)=1, g(1)=0, g'(1)=0. Ball settles into the floor.
         double oneMinus = 1.0 - local;
         return 1.0 - depth * 8.0 * local * oneMinus * oneMinus;
@@ -187,7 +187,7 @@ static double KKHoldWiggle(double t, double frequency, int seed) {
 }
 
 // Low-frequency-dominant fractal noise (fBm / 1-over-f). A slow wander with
-// progressively smaller tremor layered on — the analogue/handheld-camera
+// progressively smaller tremor layered on - the analogue/handheld-camera
 // signature, unlike Wiggle's flat high-frequency hash. Smooth, band-limited,
 // deterministic per seed. Centred on 1.0; envelope zeroes at the hold ends.
 static double KKHoldHandheld(double t, double frequency, int seed) {

@@ -10,11 +10,11 @@
 #import <KeyframelessKit/KKConstants.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
-/// Returns a canonical form of `json` for dedup comparison — sorted keys
+/// Returns a canonical form of `json` for dedup comparison - sorted keys
 /// so two semantically-equal JSONs that differ only in field order
 /// compare equal. Selection (`sel`) is **not** stripped: each segment
 /// click writes a real undo entry through the host (typical document-
-/// editor behavior — cmd-Z bounces through selection history along with
+/// editor behavior - cmd-Z bounces through selection history along with
 /// structural edits).
 NSString *KKMultiStageNormalizedForDedup(NSString *json) {
   if (!json.length)
@@ -33,7 +33,7 @@ NSString *KKMultiStageNormalizedForDedup(NSString *json) {
 /// Native-string mirror of the lanes JSON. Written in lockstep with
 /// every blob write; read by the OSC's drawTick on cold-boot to seed
 /// the snapshot before consumers (oscVisible, bezier path, etc.) run.
-/// The blob remains the canonical undoable store — this is a write-
+/// The blob remains the canonical undoable store - this is a write-
 /// through cache, not a separate source of truth.
 void KKWriteMultiStageMirror(NSString *json,
                              id<FxParameterSettingAPI_v5> setAPI) {
@@ -63,7 +63,7 @@ BOOL KKWriteMultiStageJSONDeduped(NSString *json,
     return NO;
   KKPluginInstanceState *state =
       apiManager ? KKInstanceStateForAPI(apiManager) : nil;
-  // While the host is reverting params for a cmd-Z, suppress all writes —
+  // While the host is reverting params for a cmd-Z, suppress all writes -
   // every write here registers a fresh undo entry, which immediately
   // overwrites the host's revert and fragments one logical undo into N.
   // Flag is set by `multiStageRefreshFromParamForAPI:` and cleared after
@@ -82,7 +82,7 @@ BOOL KKWriteMultiStageJSONDeduped(NSString *json,
     state.lastWrittenMultiStageJSON = normalized;
     // Every successful write triggers exactly one parameterChanged echo
     // from the host. Bumping this counter lets MS-REFRESH classify its
-    // next callback as an echo without any I/O — see the consume-side
+    // next callback as an echo without any I/O - see the consume-side
     // logic in `multiStageRefreshFromParamForAPI:`.
     state.expectedMultiStageEchoCount += 1;
   }
@@ -124,9 +124,9 @@ void KKWithUndoGroup(id<PROAPIAccessing> apiManager, NSString *name,
   }
 }
 
-NSMutableArray<KKTimingLane *> *KKReadLanesRebalanced(
-    id<PROAPIAccessing> __unused apiManager,
-    id<FxParameterRetrievalAPI_v6> __unused getAPI) {
+NSMutableArray<KKTimingLane *> *
+KKReadLanesRebalanced(id<PROAPIAccessing> __unused apiManager,
+                      id<FxParameterRetrievalAPI_v6> __unused getAPI) {
   return nil;
 }
 

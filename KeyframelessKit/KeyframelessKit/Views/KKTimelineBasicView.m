@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKLocalized.h"
 #import "KKTimelineBasicView_Private.h"
 
 #import "../Math/KKTimelineScale.h"
@@ -39,9 +40,12 @@
 }
 
 - (void)_buildUI {
-  _inLabel = [self _makeSectionLabel:@"In"];
-  _holdLabel = [self _makeSectionLabel:@"Hold"];
-  _outLabel = [self _makeSectionLabel:@"Out"];
+  _inLabel =
+      [self _makeSectionLabel:KKLoc(@"In", @"Timeline phase: In (ease-in).")];
+  _holdLabel = [self
+      _makeSectionLabel:KKLoc(@"Hold", @"Timeline phase / hold effect name.")];
+  _outLabel = [self
+      _makeSectionLabel:KKLoc(@"Out", @"Timeline phase: Out (ease-out).")];
 
   _inCheck = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
   _outCheck = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
@@ -108,7 +112,7 @@
 }
 
 - (void)setPlayheadFraction:(double)frac {
-  // While scrubbing, the view owns the playhead optimistically — ignore the
+  // While scrubbing, the view owns the playhead optimistically - ignore the
   // render round-trip so it doesn't fight the drag (the "double" jitter).
   if (_scrubbing)
     return;
@@ -128,9 +132,9 @@
 // New model: the hold endpoints sit at t=0 and t=outEndFrac (~1) when In/Out
 // are off; In adds a t=0 In-start (hold-start shifts to t_inEnd); Out adds a
 // t=outEndFrac Out-end (hold-end shifts to t_outStart).
-//   n==2: [hold@0, hold@outEndFrac]                     — no In, no Out
-//   n==3: [in@0, hold@t_inEnd, hold@outEndFrac]         — In only  (mid<0.5)
-//   n==3: [hold@0, hold@t_outStart, out@outEndFrac]     — Out only (mid≥0.5)
+//   n==2: [hold@0, hold@outEndFrac]                     - no In, no Out
+//   n==3: [in@0, hold@t_inEnd, hold@outEndFrac]         - In only  (mid<0.5)
+//   n==3: [hold@0, hold@t_outStart, out@outEndFrac]     - Out only (mid≥0.5)
 //   n==4: [in@0, hold@t_inEnd, hold@t_outStart, out@outEndFrac]
 KKHoldShape KKShapeOfLane(KKLane *lane) {
   KKHoldShape s = {NO, NO, 0, 0};
@@ -139,7 +143,7 @@ KKHoldShape KKShapeOfLane(KKLane *lane) {
     return s;
   // Explicit holdShape overrides the count/time heuristic. Set every time
   // Basic rebuilds, so once a lane has been touched the projection is no
-  // longer guessing — dragging the boundary past 0.5 stays In (or Out).
+  // longer guessing - dragging the boundary past 0.5 stays In (or Out).
   switch (lane.holdShape) {
   case KKLaneHoldShapeNone:
     break;
@@ -216,7 +220,7 @@ KKHoldShape KKShapeOfLane(KKLane *lane) {
       holdFound = YES;
       // Tentative boundary times + the shared Hold curve/mod params from the
       // first animatable lane. The In/Out blocks below OVERRIDE inEndFrac /
-      // outStartFrac from a lane that actually participates in that phase —
+      // outStartFrac from a lane that actually participates in that phase -
       // a Hold-only lane parks its hold-start at t=0 (no In) / hold-end at the
       // clip edge (no Out), so reading boundaries off the first lane collapses
       // the In/Out region when that lane isn't an In/Out participant.
@@ -280,7 +284,7 @@ KKHoldShape KKShapeOfLane(KKLane *lane) {
   }
   // Projection-only: a disabled In/Out has no transition, so its Hold
   // boundary is drawn at the clip edge (the value is held from the very
-  // start / to the very end). The stored keypose time is left untouched —
+  // start / to the very end). The stored keypose time is left untouched -
   // re-enabling the phase restores its boundary, and keypose-presence
   // inference stays valid (we never move keyposes to 0/1 in the model).
   // Keep outStartFrac at 1.0 (not 1-frameFrac) so the log-warped edge
@@ -315,7 +319,7 @@ KKHoldEffect KKBasicHoldEffect(KKIntervalModulation m) {
 }
 
 // The Hold region's normalized value: the flat held level (1) or the drift
-// slope (1→2), times the modulation envelope when one is set — exactly the
+// slope (1→2), times the modulation envelope when one is set - exactly the
 // evaluator's "eased value × hold-effect factor". The envelope zeroes at the
 // region ends so it joins In/Out continuously.
 double KKBasicHoldValue(double t, KKBasicProj p, double holdEnd) {
@@ -362,7 +366,7 @@ double KKBasicMotionY(double t, KKBasicProj p) {
 
 // The drawn curve: `KKBasicMotionY` with the same C1 join smoothing the
 // render evaluator applies (`KKTimelineLaneValueAtFractionSmoothed`), so the
-// graph shows exactly what plays — transitions glide into/out of the Hold
+// graph shows exactly what plays - transitions glide into/out of the Hold
 // with no detectable stop. Only an *enabled* In/Out is a real join (a
 // disabled phase is already a flat continuation). Diamonds/handles keep the
 // raw value so they stay pinned to the true keypose.
@@ -454,7 +458,7 @@ double KKBasicUToFrac(double u, KKBasicProj p) {
 }
 
 // Display u of a dragged boundary (d==2: In|Hold, d==3: Hold|Out) if it sat
-// at fraction v — recomputing the warp for that v. Strictly increasing in v.
+// at fraction v - recomputing the warp for that v. Strictly increasing in v.
 double KKBasicBoundaryU(KKBasicProj p, NSInteger d, double v) {
   KKBasicProj t = p;
   if (d == 2)
@@ -468,7 +472,7 @@ double KKBasicBoundaryU(KKBasicProj p, NSInteger d, double v) {
 
 // Solve for the boundary fraction whose *warped* screen position equals
 // targetU, accounting for the warp depending on that very fraction. A
-// per-frame bisection — exact and feedback-free, so the handle tracks the
+// per-frame bisection - exact and feedback-free, so the handle tracks the
 // cursor under the live log scale with no oscillation.
 double KKBasicSolveBoundary(KKBasicProj p, NSInteger d, double targetU,
                             double lo, double hi) {
@@ -510,7 +514,7 @@ NSPoint KKBasicPoint(NSRect g, double frac, double val, double lo, double hi,
 
 // Curve value extent, always including the [0,1] base range, plus 6% slack.
 // Sample each phase's easing in its OWN normalized parameter (not global t),
-// so the extent depends only on the curve type/intensity — never on the
+// so the extent depends only on the curve type/intensity - never on the
 // In/Out durations. Otherwise a short segment gets too few global samples to
 // catch an overshoot peak, and the detected max flickers as you drag the
 // boundary (the curve appears to rise and fall though the peak is fixed).
@@ -558,7 +562,7 @@ void KKBasicValueExtent(KKBasicProj p, double *outLo, double *outHi) {
   CGFloat W = NSWidth(g);
   // Fixed anchors (left / centre / right thirds). Tracking the variable
   // section centres made the labels jump when enabling/disabling In/Out
-  // snapped the projection fractions — not worth matching section width.
+  // snapped the projection fractions - not worth matching section width.
   [self _placeSection:_inLabel
              checkbox:_inCheck
               centerX:NSMinX(g) + 0.16 * W
@@ -573,7 +577,9 @@ void KKBasicValueExtent(KKBasicProj p, double *outLo, double *outHi) {
   // Label tells the truth from the values: equal endpoints = "Hold",
   // differing = "Drift" (warn-tinted), regardless of the link toggle.
   BOOL drift = [self _holdDrift];
-  _holdLabel.stringValue = drift ? @"Drift" : @"Hold";
+  _holdLabel.stringValue =
+      drift ? KKLoc(@"Drift", @"Hold effect: endpoints differ (drift).")
+            : KKLoc(@"Hold", @"Timeline phase / hold effect name.");
   _holdLabel.textColor = drift ? [NSColor warning] : [NSColor inspectorLabel];
   [_holdLabel sizeToFit];
   CGFloat hx = NSMinX(g) + 0.5 * W;

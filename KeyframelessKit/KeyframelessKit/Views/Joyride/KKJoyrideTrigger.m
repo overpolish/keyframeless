@@ -90,14 +90,8 @@
   return [self _t:KKJoyrideTriggerTypeMiniCanvasViewReset];
 }
 
-+ (instancetype)playingChanged:(BOOL)playing {
-  KKJoyrideTrigger *t = [self _t:KKJoyrideTriggerTypePlayingChanged];
-  t->_intArg2 = playing ? 1 : 0;
-  return t;
-}
-
-+ (instancetype)playPauseEdge {
-  return [self _t:KKJoyrideTriggerTypePlayPauseEdge];
++ (instancetype)playToggleEdge {
+  return [self _t:KKJoyrideTriggerTypePlayToggleEdge];
 }
 
 - (instancetype)thenWaitFor:(KKJoyrideTrigger *)next {

@@ -13,13 +13,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// (so its popover doesn't steal keyboard shortcuts), accent caret/selection,
 /// and hands focus back to the window when editing ends.
 ///
-/// `kkEditing` is YES for the whole editing session — set at
+/// `kkEditing` is YES for the whole editing session - set at
 /// `textDidBeginEditing` (editing can re-start without a fresh
 /// `becomeFirstResponder`) and cleared after `textDidEndEditing`'s super call.
 /// An owner's redisplay must skip a field while `kkEditing`: writing its
 /// stringValue mid-edit re-creates the field editor and re-selects all, yanking
 /// focus back so it can never be defocused. (`currentEditor` is an unreliable
-/// guard — already nil by the time `textDidEndEditing:` fires.)
+/// guard - already nil by the time `textDidEndEditing:` fires.)
 @interface KKValueTextField : NSTextField
 @property(nonatomic, readonly) BOOL kkEditing;
 

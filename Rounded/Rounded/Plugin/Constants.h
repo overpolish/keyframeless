@@ -19,7 +19,7 @@ static const NSInteger kOSCCropPointBase = 201;
 extern NSNotificationName const kRoundedOSCPositionNotification;
 
 @class KKOSCGuideBridge;
-/// The shared OSC-guide engine for this XPC process — the generic affine /
+/// The shared OSC-guide engine for this XPC process - the generic affine /
 /// staleness / notification state behind the Rounded OSC guide. Hand this to
 /// a KKJoyrideOSCSegment to build a guide for the Rounded point OSC.
 extern KKOSCGuideBridge *RoundedSharedOSCGuideBridge(void);
@@ -28,7 +28,7 @@ extern KKOSCGuideBridge *RoundedSharedOSCGuideBridge(void);
 /// any thread; the step notification is delivered on the main queue.
 extern void RoundedSetOSCGuideStep(NSInteger step);
 /// YES while the Rounded OSC is actively being drawn (drawOSC fired within the
-/// last ~15s) — i.e. the effect is selected in the FCP viewer. FCP gives no
+/// last ~15s) - i.e. the effect is selected in the FCP viewer. FCP gives no
 /// deselect callback, so this is a staleness heuristic: idle and deselected
 /// both stop drawOSC. NO before the first drawOSC or ~15s after deselect.
 extern BOOL RoundedHasCanvasReference(void);

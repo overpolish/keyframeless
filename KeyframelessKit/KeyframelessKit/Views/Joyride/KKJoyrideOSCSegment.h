@@ -12,8 +12,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// Builds the generic OSC portion of a joyride — one combined press→drag→
-/// release step plus a final "available whenever selected" tip — and owns the
+/// Builds the generic OSC portion of a joyride - one combined press→drag→
+/// release step plus a final "available whenever selected" tip - and owns the
 /// step/position observers that drive the controller off the bridge's
 /// notifications. Plugin- and OSC-shape-agnostic: the bridge supplies the
 /// affine, the strategy supplies the value mapping.

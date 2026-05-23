@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKLocalized.h"
 #import "KKTimelineBasicView_Private.h"
 
 #import "../Math/KKTimelineScale.h"
@@ -19,7 +20,7 @@
 
 - (KKBasicSection)_sectionAtPoint:(NSPoint)pt {
   NSRect g = [self _graphRect];
-  // Track only — the ruler strip is the scrub zone, not part of the
+  // Track only - the ruler strip is the scrub zone, not part of the
   // In/Hold/Out hover area, so hovering it doesn't pop a duration readout.
   if (!NSPointInRect(pt, g) || NSWidth(g) <= 0)
     return KKBasicSectionNone;
@@ -89,7 +90,7 @@
 }
 
 // Pill index under `pt` (1 t=0, 2 t_inEnd, 3 t_outStart, 4 t=1), or 0. Pills
-// span the full track height — the hit is a vertical band around the pill x
+// span the full track height - the hit is a vertical band around the pill x
 // regardless of cursor y.
 - (NSInteger)_diamondAtPoint:(NSPoint)pt proj:(KKBasicProj)p rect:(NSRect)g {
   if (pt.y < NSMinY(g) || pt.y > NSMaxY(g))
@@ -112,8 +113,8 @@
 // The two middle diamonds drag to set In/Out duration (endpoints are
 // time-locked). A press that doesn't move opens the value popover for that
 // boundary instead.
-// Subtle snap so a scrub can land precisely on a diamond — important for the
-// Snap window — closest enabled diamond within this many px wins; no
+// Subtle snap so a scrub can land precisely on a diamond - important for the
+// Snap window - closest enabled diamond within this many px wins; no
 // hysteresis (the old sticky-out caused worse jitter on log-warped regions).
 static const CGFloat kScrubSnapInPx = 4.0;
 
@@ -121,7 +122,7 @@ static const CGFloat kScrubSnapInPx = 4.0;
   // Visual scrubber stays unclamped to 1.0 so it can reach the right-edge
   // diamond on short clips (where 1-frameFrac is several percent inside the
   // edge). The actual playhead delivery is clamped to the last frame at the
-  // call site — see KKTimelineScrubFracDelivered().
+  // call site - see KKTimelineScrubFracDelivered().
   NSMutableArray<NSNumber *> *cands = [NSMutableArray arrayWithCapacity:4];
   if (p.inEnabled)
     [cands addObject:@(0.0)];
@@ -192,7 +193,7 @@ static const CGFloat kScrubSnapInPx = 4.0;
   }
   if (_pressedDiamond != 2 && _pressedDiamond != 3)
     return; // endpoints are time-locked; non-diamond presses do nothing
-  // When a phase is off its Hold boundary is pinned to the clip edge — not a
+  // When a phase is off its Hold boundary is pinned to the clip edge - not a
   // draggable In/Out boundary. The press still falls through to mouseUp as a
   // click (→ Hold value popover).
   if ((_pressedDiamond == 2 && !p.inEnabled) ||
@@ -200,12 +201,12 @@ static const CGFloat kScrubSnapInPx = 4.0;
     return;
   if (!_dragActive) {
     if (hypot(pt.x - _pressPoint.x, pt.y - _pressPoint.y) < 3.0)
-      return; // not yet a drag — still a potential click
+      return; // not yet a drag - still a potential click
     _dragActive = YES;
     if (self.onDragBegin)
       self.onDragBegin();
   }
-  // Minimum In/Out is an absolute duration, not a fixed fraction — a fixed
+  // Minimum In/Out is an absolute duration, not a fixed fraction - a fixed
   // fraction makes the floor balloon on long clips (0.02·19.5s ≈ 0.4s).
   double dur = [self _clipDuration];
   double minPh = (dur > 0.0) ? (kMinPhaseSeconds / dur) : kMinPhaseFrac;
@@ -215,7 +216,7 @@ static const CGFloat kScrubSnapInPx = 4.0;
   double targetU = MAX(
       0.0, MIN(1.0, p.panOffset + (pt.x - NSMinX(g)) / (zsolve * NSWidth(g))));
   // Baseline must be the *stored* Hold-pair times, not p.inEndFrac /
-  // p.outStartFrac — those are display-pinned to the clip edge when a phase
+  // p.outStartFrac - those are display-pinned to the clip edge when a phase
   // is off, and feeding 1.0 into the rebuild would park the hold-end keypose
   // at t=1 and make keypose-presence inference re-enable Out.
   double tIn = p.inEndFrac, tOut = p.outStartFrac;
@@ -227,7 +228,7 @@ static const CGFloat kScrubSnapInPx = 4.0;
       break;
     }
   // Solve the exact fraction that places the boundary under the cursor on
-  // the LIVE log warp (the warp depends on it — so root-solve per frame
+  // the LIVE log warp (the warp depends on it - so root-solve per frame
   // instead of one self-referential step that would ping).
   if (_pressedDiamond == 2)
     tIn = KKBasicSolveBoundary(p, 2, targetU, minPh, tOut - kMinHoldFrac);
@@ -254,7 +255,7 @@ static const CGFloat kScrubSnapInPx = 4.0;
     [self _openBoundaryPopoverForDiamond:d];
     return;
   }
-  // Link toggle moved to the right-click context menu — ctrl+click would
+  // Link toggle moved to the right-click context menu - ctrl+click would
   // conflict with AppKit's contextual-menu routing in the XPC inspector.
   KKBasicSection sec = [self _sectionAtPoint:_pressPoint];
   // Plain click on a gap → that phase's popover. In/Out: easing. Hold:
@@ -278,7 +279,7 @@ static const CGFloat kScrubSnapInPx = 4.0;
   KKBasicProj p = [self _projection];
   if (!p.anyAnimatable)
     return nil;
-  // Probe the first animatable lane's Hold interval to decide the verb —
+  // Probe the first animatable lane's Hold interval to decide the verb -
   // _toggleHoldLink mutates every animatable lane's Hold uniformly so this
   // first-lane state is representative of the toggle's effect.
   KKInterval *holdIv = nil;
@@ -291,7 +292,9 @@ static const CGFloat kScrubSnapInPx = 4.0;
     return nil;
   NSMenu *menu = [[NSMenu alloc] init];
   NSString *title =
-      holdIv.endpointsLinked ? @"Unlink Endpoints" : @"Link Endpoints";
+      holdIv.endpointsLinked
+          ? KKLoc(@"Unlink Endpoints", @"Context menu: unlink endpoints.")
+          : KKLoc(@"Link Endpoints", @"Context menu: link endpoints.");
   [menu addItemWithTitle:title
                   action:@selector(_menuToggleHoldLink:)
            keyEquivalent:@""]

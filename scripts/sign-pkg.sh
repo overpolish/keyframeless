@@ -56,4 +56,4 @@ rm "$UNSIGNED"
 mv "$SIGNED" "$UNSIGNED"
 
 echo ""
-echo "Done — $UNSIGNED is signed, notarized, and ready to distribute."
+echo "Done - $UNSIGNED is signed, notarized, and ready to distribute."

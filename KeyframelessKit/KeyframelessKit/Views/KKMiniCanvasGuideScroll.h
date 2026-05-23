@@ -16,13 +16,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// During a guide the overlay panel sits over the popover, so the popover's
 /// own scroll/responder zoom-pan path doesn't fire. With the controller's
 /// `forwardsGestures` (panel not ignoring events) scroll AND magnify reach
-/// app-wide `NSEvent` monitors — this object installs local+global monitors
+/// app-wide `NSEvent` monitors - this object installs local+global monitors
 /// for both and forwards them to the canvas's public
 /// `-applyScrollEvent:` / `-applyMagnifyEvent:` while `activeWhen` is YES and
 /// the pointer is over the canvas. Plugin-agnostic: any guide over a
 /// `KKMiniCanvasView` gets zoom/pan + pinch for free.
 ///
-/// Note: the magnify monitors are the actual pinch carrier — never drop them
+/// Note: the magnify monitors are the actual pinch carrier - never drop them
 /// as "dead"; they only look dead before `forwardsGestures`.
 @interface KKMiniCanvasGuideScroll : NSObject
 
@@ -31,7 +31,7 @@ NS_ASSUME_NONNULL_BEGIN
     NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;
 
-/// Install the monitors (idempotent — replaces any existing).
+/// Install the monitors (idempotent - replaces any existing).
 - (void)install;
 /// Remove the monitors. Also runs on dealloc.
 - (void)teardown;

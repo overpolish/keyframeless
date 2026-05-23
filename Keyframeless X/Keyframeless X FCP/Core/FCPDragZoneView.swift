@@ -60,7 +60,7 @@ class FCPDragSourceView: NSView, NSDraggingSource {
 
 		let iconString = NSAttributedString(attachment: iconAttachment)
 		let labelString = NSAttributedString(
-			string: " Drag to FCP",
+			string: String(localized: " Drag to FCP"),
 			attributes: [
 				.font: NSFont.systemFont(ofSize: 11, weight: .medium),
 				.foregroundColor: accentColor,
@@ -102,7 +102,7 @@ class FCPDragSourceView: NSView, NSDraggingSource {
 	}
 
 	// FCP's drag handler doesn't create custom roles from the embedded roles data
-	// in the native pasteboard — only paste (Cmd+V) does. So before every drag we
+	// in the native pasteboard - only paste (Cmd+V) does. So before every drag we
 	// silently paste a 1-frame stub with the Captions role and immediately undo it.
 	// This forces FCP to register the role in the library, after which the native
 	// drag works fine. Hacky but there's no public API to create roles.

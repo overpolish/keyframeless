@@ -16,7 +16,7 @@
 static const NSUInteger kTargetLongEdge = 2048;
 
 // Minimum wall-clock gap between surface updates per slot. The mini canvas
-// only needs a recent frame, not every render tick — this keeps the render
+// only needs a recent frame, not every render tick - this keeps the render
 // path from paying an MPS pass on every frame during playback.
 static const NSTimeInterval kMinUpdateInterval = 0.1;
 
@@ -122,7 +122,7 @@ static const NSTimeInterval kMinUpdateInterval = 0.1;
 
   // FCP hands us a linear-light source. Writing through an _sRGB-typed
   // texture makes MPS gamma-encode on store, so the 8-bit surface holds
-  // display-encoded values — KKMiniCanvasView reads them as plain BGRA8 and
+  // display-encoded values - KKMiniCanvasView reads them as plain BGRA8 and
   // shows them straight, matching the brightness FCP displays.
   MTLTextureDescriptor *td = [MTLTextureDescriptor
       texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm_sRGB

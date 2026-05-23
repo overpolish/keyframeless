@@ -66,7 +66,7 @@ static KKBezierPath *_kkMakeGroup(NSString *name,
 
   // Prune any lanes whose groupKey (layerID) no longer exists in `paths`.
   // Otherwise the store-observer-driven reconcile fires after this action
-  // scope ends and writes the lanes blob as a separate undo entry — user
+  // scope ends and writes the lanes blob as a separate undo entry - user
   // sees two cmd-Z presses to fully revert a single delete (one for the
   // lane, one for the layer). Coalescing into this scope keeps it atomic.
   NSString *lanesJSON =
@@ -102,7 +102,7 @@ static KKBezierPath *_kkMakeGroup(NSString *name,
   if (store)
     [store performBatch:^{
       [store setPaths:paths];
-      // Sync selection too — the block may have changed it
+      // Sync selection too - the block may have changed it
       // (group/ungroup/duplicate). Without this, the in-scope visibility
       // apply below reads the stale store selection and computes the old
       // visHash; the async observer later sees the new selection and

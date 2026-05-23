@@ -7,7 +7,7 @@
 
 #import <math.h>
 
-// Ruler strip geometry shared by both timeline views — kept private to this
+// Ruler strip geometry shared by both timeline views - kept private to this
 // helper. If either view ever needs a different ruler height, take the
 // trackTopY argument as already-band-bottom instead.
 static const CGFloat kScrubRulerH = 13.0;

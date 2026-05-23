@@ -14,7 +14,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// curve over the shared timeline, four boundary diamonds (the endpoints are
 /// time-locked, the two middle ones drive the global In/Out duration), and
 /// In/Out enable checkboxes. A projection of the same KKTimeline blob the
-/// Advanced sequencer edits — Basic just constrains where keyposes land.
+/// Advanced sequencer edits - Basic just constrains where keyposes land.
 /// Mutations are reported through the callbacks; the host writes the blob.
 @interface KKTimelineBasicView : NSView
 
@@ -71,10 +71,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// and routes edits back through `onValue` (coalesced via the drag blocks).
 /// `excludedLabels` are animatable properties that do NOT participate in
 /// this boundary's phase (e.g. clicking In-start while a property has In
-/// off) — shown as a message row with an "Animate" button that calls
+/// off) - shown as a message row with an "Animate" button that calls
 /// `onAnimate(label)` to opt that property back into the phase.
 /// `onRemove(label)` (In/Out boundaries only; nil for Hold) removes that
-/// property from this phase's "applies to" — same as unticking it in the gap
+/// property from this phase's "applies to" - same as unticking it in the gap
 /// popover. Removing the last participant turns the phase off (the projection
 /// derives In/Out enabled from participation) and closes the popover.
 @property(nonatomic, copy, nullable) void (^onBoundaryValuePopover)
@@ -85,7 +85,7 @@ NS_ASSUME_NONNULL_BEGIN
      void (^onValueDragBegin)(void), void (^onValueDragEnd)(void));
 
 /// Asked when removing the last participant from a phase leaves the boundary
-/// gone — the host closes the open popover.
+/// gone - the host closes the open popover.
 @property(nonatomic, copy, nullable) void (^onRequestClosePopover)(void);
 
 /// In/Out gap click → request the shared easing popover for that phase. The
@@ -114,7 +114,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// passed modulation state and routes edits back through the write blocks. A
 /// type/seed pick commits immediately (its own undo); intensity / frequency
 /// slider drags coalesce via `onDragBegin` / `onDragEnd`. (A drift Hold uses
-/// `onGapPopover` instead — it's a real tween.)
+/// `onGapPopover` instead - it's a real tween.)
 /// `participantLabels` / `participantStates` are the animatable properties
 /// and whether the Hold modulation currently applies to each (its Hold
 /// interval modulation != None); `onParticipation` toggles one lane on/off.
@@ -140,7 +140,7 @@ NS_ASSUME_NONNULL_BEGIN
 @interface KKTimelineBasicView (Popovers)
 
 /// Programmatic re-open of the boundary value popover at the diamond
-/// closest to `fraction`. Used by the onion-skin filmstrip — clicking an
+/// closest to `fraction`. Used by the onion-skin filmstrip - clicking an
 /// inactive cell swaps the popover to the corresponding boundary diamond
 /// (Basic's filmstrip cells correspond to the 4 boundary times).
 - (void)requestValuePopoverAtFraction:(double)fraction;

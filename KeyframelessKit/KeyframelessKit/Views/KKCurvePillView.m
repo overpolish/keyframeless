@@ -107,11 +107,11 @@ static const NSInteger kSegments = 60;
 
   // Fixed-range pills oscillate about the neutral midpoint (value 1.0 →
   // 0.5). A subtle setting barely deviates and would read as a flat line,
-  // so remap the *amplitude* through a compressive curve — one uniform
+  // so remap the *amplitude* through a compressive curve - one uniform
   // scale about the midpoint, applied to every sample. The waveform's
   // shape stays exact (a sine still looks like a sine) while low
   // intensity/frequency becomes visible and stronger settings still read
-  // bigger (monotonic — the slider's effect stays legible).
+  // bigger (monotonic - the slider's effect stays legible).
   CGFloat ampGain = 1.0;
   if (_usesFixedRange) {
     CGFloat peak = 0.0;

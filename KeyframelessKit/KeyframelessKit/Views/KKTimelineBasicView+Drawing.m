@@ -39,10 +39,10 @@
   KKBasicProj xp = p;
 
   // Phase dividers used to be drawn here; the boundary pills (further down)
-  // serve as the divider now — one less stroke per frame.
+  // serve as the divider now - one less stroke per frame.
 
   // Stroke per section, all solid. A live transition (enabled In/Out) is
-  // "non-hold" — warn-tinted so it reads distinctly. A disabled In/Out is
+  // "non-hold" - warn-tinted so it reads distinctly. A disabled In/Out is
   // just the flat hold extended (hold color), so the whole thing looks
   // like one continuous hold line with no dashing.
   NSColor *hold = [NSColor accentMatchingHost];
@@ -86,7 +86,7 @@
                   dashed:NO
                    color:outTrans ? warn : hold];
 
-  // Boundary pills — vertical capsules spanning the track height. Hold pair
+  // Boundary pills - vertical capsules spanning the track height. Hold pair
   // always shows when any lane is animatable; In-start / Out-end only when
   // that phase is enabled (and rendered hollow = time-locked endpoint).
   if (p.anyAnimatable) {
@@ -169,7 +169,7 @@
                    color:(NSColor *)color {
   if (t1 - t0 < kEps)
     return;
-  // Sample by *displayed* width, not true-fraction span — a short In/Out is
+  // Sample by *displayed* width, not true-fraction span - a short In/Out is
   // warped wide, so it still needs enough points to show its easing. Shape
   // from `p` (live), X from `xp` (frozen while dragging).
   double du = fabs(KKBasicFracToU(t1, xp) - KKBasicFracToU(t0, xp)) *
@@ -230,7 +230,7 @@
                          rulerY:(CGFloat)rulerY {
   double a = 0, b = 0;
   // Value-based tint (matches the curve/pill colour): warn only when the
-  // section's endpoints actually differ — a flat In/Out reads accent.
+  // section's endpoints actually differ - a flat In/Out reads accent.
   NSColor *tint = [NSColor accentMatchingHost];
   if (section == KKBasicSectionIn) {
     a = 0;
@@ -278,7 +278,7 @@
   if (dur <= 0)
     return;
 
-  // Ruler ticks always draw — the duration readout overlays them rather
+  // Ruler ticks always draw - the duration readout overlays them rather
   // than replacing them, so the timeline stays legible while hovering.
   CGFloat pps = NSWidth(g) / dur;
   double interval = KKTimelineScaleTickInterval(pps, kTickMinSpacing);

@@ -44,7 +44,7 @@ struct AudioEditView: View {
 			updateSRTOverlaps()
 			// On non-text-field clicks, redirect first responder to the timeline's
 			// AxisDocumentView so spacebar can stop playback. Must happen during a
-			// real mouseDown — see TimelineFirstResponder comment for details.
+			// real mouseDown - see TimelineFirstResponder comment for details.
 			clickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
 				guard let window = event.window else { return event }
 				let hitView = window.contentView?.hitTest(event.locationInWindow)
@@ -111,7 +111,7 @@ struct AudioEditView: View {
 			.frame(height: height)
 			.overlay(alignment: .bottomTrailing) {
 				HelperText(
-					"Click and drag to quickly select/deselect clips",
+					String(localized: "Click and drag to quickly select/deselect clips"),
 					systemImage: "cursorarrow.motionlines"
 				)
 				.padding(.trailing, KKPaddingSM)
@@ -125,8 +125,8 @@ struct AudioEditView: View {
 			ClipCountDisplay(
 				selectedCount: model.editSelectedClips?.count ?? 0,
 				totalCount: transcribedIndices.count,
-				emptyLabel: "No Transcriptions Found",
-				selectedLabel: "Transcriptions Selected"
+				emptyLabel: String(localized: "No Transcriptions Found"),
+				selectedLabel: String(localized: "Transcriptions Selected")
 			)
 			HStack(alignment: .top, spacing: KKSpacingLG) {
 				VStack(alignment: .leading, spacing: KKSpacingLG) {
@@ -161,7 +161,9 @@ struct AudioEditView: View {
 								LazyVStack(alignment: .leading, spacing: 0) {
 									HStack {
 										HelperText(
-											"Right-click to add/remove manual breaks",
+											String(
+												localized: "Right-click to add/remove manual breaks"
+											),
 											systemImage:
 												"square.fill.and.line.vertical.and.square.fill"
 										)

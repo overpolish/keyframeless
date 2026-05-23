@@ -36,7 +36,7 @@ extern NSSet<NSString *> *_Nullable KKEffectiveHiddenLaneLabels(
 
 /// Pushes `lanes`' labels and per-lane visibility states to the bar on the
 /// main queue. Pass the full unfiltered JSON lane list and the **plugin
-/// (system) hidden-label set** — i.e. `-hiddenAnimatablePropertyLabels`,
+/// (system) hidden-label set** - i.e. `-hiddenAnimatablePropertyLabels`,
 /// NOT the effective set. The bar omits lanes whose label is in
 /// `pluginHidden` (so e.g. Glow's color/gradient lanes are absent in the
 /// wrong colour mode), but still shows user-hidden pills so the user can
@@ -181,7 +181,7 @@ extern NSMutableArray<KKTimingLane *> *_Nullable KKReadLanesRebalanced(
 /// Writes `json` to `kKKParamMultiStageData` only if it differs from the
 /// last JSON we wrote (tracked on `KKPluginInstanceState`). Each call to
 /// `setCustomParameterValue:atTime:` registers a new undo entry on the
-/// host stack — duplicate writes pollute the stack and force users to
+/// host stack - duplicate writes pollute the stack and force users to
 /// press cmd-Z multiple times to revert a single logical change. Returns
 /// YES if the write actually happened. `tag` is included in the trace
 /// log so the caller can be identified.
@@ -190,7 +190,7 @@ KKWriteMultiStageJSONDeduped(NSString *_Nullable json,
                              id<FxParameterSettingAPI_v5> setAPI,
                              id<PROAPIAccessing> _Nullable apiManager);
 
-/// Canonical form of a multi-stage JSON string for dedup comparison —
+/// Canonical form of a multi-stage JSON string for dedup comparison -
 /// sorted-keys reserialization. UI-state fields (sel, etc.) are NOT
 /// stripped: each user click is a real undo entry, matching standard
 /// document-editor behavior.
@@ -199,7 +199,7 @@ extern NSString *_Nullable KKMultiStageNormalizedForDedup(
 
 /// Writes the lanes JSON to the native-string mirror param. Called
 /// inside `KKWriteMultiStageJSONDeduped` so the mirror stays in
-/// lockstep with the canonical blob — refreshed on cmd-Z echo too.
+/// lockstep with the canonical blob - refreshed on cmd-Z echo too.
 extern void KKWriteMultiStageMirror(NSString *_Nullable json,
                                     id<FxParameterSettingAPI_v5> setAPI);
 
@@ -218,14 +218,14 @@ extern void KKRunOnMain(dispatch_block_t block);
 /// Wraps `block` in an FxUndoAPI start/endUndoGroup pair so every host
 /// param write inside collapses into a single host undo entry. No-op
 /// fallback if the host (or this plugin's apiManager) doesn't implement
-/// FxUndoAPI — block runs unwrapped. `name` should be a short, localized
+/// FxUndoAPI - block runs unwrapped. `name` should be a short, localized
 /// human-readable label ("Add Segment", "Move Segment").
 extern void KKWithUndoGroup(id<PROAPIAccessing> _Nullable apiManager,
                             NSString *name, dispatch_block_t block);
 
 /// Stack-style undo grouping. Pair every `KKBeginUndoGroup` with exactly
 /// one `KKEndUndoGroup` along every code path (including early returns).
-/// Returns YES if the group was actually started — pass that BOOL into
+/// Returns YES if the group was actually started - pass that BOOL into
 /// `KKEndUndoGroup` so the end is a no-op when the start was a no-op.
 extern BOOL KKBeginUndoGroup(id<PROAPIAccessing> _Nullable apiManager,
                              NSString *name);
@@ -296,7 +296,7 @@ extern void KKEndUndoGroup(id<PROAPIAccessing> _Nullable apiManager,
 @interface KKPlugin (MultiStagePumpInternal)
 /// Wires a newly-created sequencer view into per-instance state. Generates
 /// a UUID if this instance doesn't yet have one (`kKKParamInstanceID`), and
-/// caches the effect's start/duration via `FxTimingAPI` — both inside an
+/// caches the effect's start/duration via `FxTimingAPI` - both inside an
 /// `startAction:/endAction:` scope where the needed APIs are live.
 /// Call from `createViewForParameterID:` right after building the view.
 - (void)_registerMultiStageSequencerView:(KKStageSequencerView *)view

@@ -10,7 +10,7 @@
 @implementation MagicMovePlugin (Visibility)
 
 - (void)updateParameterVisibilityAtTime:(CMTime)time {
-  // No conditional visibility yet — multi-stage timing will own this later.
+  // No conditional visibility yet - multi-stage timing will own this later.
 }
 
 @end

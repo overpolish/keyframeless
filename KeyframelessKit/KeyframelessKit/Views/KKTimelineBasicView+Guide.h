@@ -19,7 +19,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSRect)guidePhaseToggleScreenRectForPhase:(NSInteger)phase;
 
 /// Fired AFTER the user toggles the In/Out checkbox via the existing
-/// internal handler. phase: 0=In, 1=Out. Guide-only — production code uses
+/// internal handler. phase: 0=In, 1=Out. Guide-only - production code uses
 /// onTimelineMutated to observe the resulting change.
 @property(nonatomic, copy, nullable) void (^onPhaseToggled)
     (NSInteger phase, BOOL on);
@@ -46,12 +46,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// requested). section: 1=In, 2=Hold, 3=Out.
 @property(nonatomic, copy, nullable) void (^onGapTapped)(NSInteger section);
 
-/// Screen X for a clip time in seconds — for guide steps that draw a glow
+/// Screen X for a clip time in seconds - for guide steps that draw a glow
 /// target at a specific time. NaN if no graph is laid out or
 /// `clipDurationSeconds` is unknown.
 - (CGFloat)guideScreenXForTimeSeconds:(double)seconds;
 
-/// Screen rect of diamond `idx` (1-4) at a hypothetical time — for a glow
+/// Screen rect of diamond `idx` (1-4) at a hypothetical time - for a glow
 /// target showing where the diamond would land. Only meaningful for the
 /// draggable diamonds (2 = Hold-start, 3 = Hold-end). NSZeroRect otherwise.
 - (NSRect)guideDiamondScreenRectAtTimeSeconds:(double)seconds
@@ -66,7 +66,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)guideDragDiamondToScreenPoint:(NSPoint)screenPoint;
 - (void)guideEndDiamondDrag;
 
-/// Current time (seconds) of diamond `idx` — for the guide's hit-on-release
+/// Current time (seconds) of diamond `idx` - for the guide's hit-on-release
 /// check. NaN if unknown.
 - (double)guideCurrentDiamondTimeSecondsForIndex:(NSInteger)idx;
 

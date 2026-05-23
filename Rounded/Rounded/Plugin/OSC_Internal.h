@@ -33,7 +33,7 @@ NS_ASSUME_NONNULL_BEGIN
                          outFlippedY:(BOOL *)outFlippedY
                            outMinDim:(float *)outMinDim;
 // Crop-OSC writeback. Called from the KKCropOSC.valuesWriter block during a
-// drag — opens an action scope, mutates the snapshot's Crop lane (preserving
+// drag - opens an action scope, mutates the snapshot's Crop lane (preserving
 // In/Hold/Out structure like radius), and writes the blob back. Same pattern
 // as RoundedOSC+MouseHandlers' radius writer.
 - (void)_writeCropValues:(NSArray<NSNumber *> *)values atTime:(CMTime)time;

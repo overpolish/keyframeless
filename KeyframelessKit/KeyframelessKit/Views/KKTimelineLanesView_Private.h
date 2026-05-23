@@ -128,7 +128,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// rows are built during init so this can't be an init arg without churn).
 - (void)applyDefaultsProvider:
     (NSArray<NSNumber *> * (^)(NSString *label))provider;
-/// In-place value swap — push the latest values from `lanes` into the
+/// In-place value swap - push the latest values from `lanes` into the
 /// matching `_KKStaticValueRow`s without tearing down the popover. Used by
 /// the onion-skin filmstrip (Advanced) when the user clicks an inactive
 /// cell so the popover stays open but rebinds to a different KP. Pairs
@@ -165,6 +165,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Screen geometry of `label`'s slider (NSZeroRect / 0 if none), for a guide
 /// to place its target marker and map the drag onto the real track.
 - (NSRect)guideSliderTrackScreenRectForLabel:(NSString *)label;
+/// Screen rect of `label`'s knob at its current value - the grab point a guide
+/// spotlights so the cutout sits on the thumb, not the track centre.
+- (NSRect)guideSliderKnobScreenRectForLabel:(NSString *)label;
 - (CGFloat)guideSliderScreenXForValue:(double)value forLabel:(NSString *)label;
 - (double)guideSliderValueForScreenX:(CGFloat)screenX
                             forLabel:(NSString *)label;

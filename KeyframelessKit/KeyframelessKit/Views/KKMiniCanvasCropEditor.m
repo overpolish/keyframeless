@@ -70,7 +70,7 @@ static inline CGFloat KKClampF(CGFloat v, CGFloat lo, CGFloat hi) {
 
 // Crop box in overlay points (y-up). Model +y is up, but the mini canvas
 // displays the shader output V-flipped, so the rendered crop-box centre
-// lands at midY(cr) - y·height — match it so handles sit on the crop.
+// lands at midY(cr) - y·height - match it so handles sit on the crop.
 - (CGRect)cropRectForValues:(NSArray<NSNumber *> *)v contentRect:(CGRect)cr {
   if (v.count < 4)
     return CGRectZero;

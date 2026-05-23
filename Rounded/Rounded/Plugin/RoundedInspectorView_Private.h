@@ -23,14 +23,14 @@ NS_ASSUME_NONNULL_BEGIN
 @interface RoundedInspectorView () {
 @protected
   RoundedMiniCanvasRenderer *_miniCanvasRenderer;
-  // One host serves all guides — they're mutually exclusive (only one at a
+  // One host serves all guides - they're mutually exclusive (only one at a
   // time runs), so a single host owns the live controller/binder/saved
   // timeline. Lazy-initialised in -_guideHost.
   KKJoyrideGuideHost *_guideHost;
   KKJoyrideOSCSegment *_oscSegment;
   KKMiniCanvasGuideScroll *_constantsScrollFwd;
   // YES from when restartOSCGuide kicks off until the OSC guide's onComplete
-  // — drives the help-button spinner during the zoom-to-fit warm-up.
+  // - drives the help-button spinner during the zoom-to-fit warm-up.
   BOOL _oscGuideActive;
 }
 @end

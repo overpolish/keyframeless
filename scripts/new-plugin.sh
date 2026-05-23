@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# new-plugin.sh — Scaffold a new Keyframeless plugin from the Template.
+# new-plugin.sh - Scaffold a new Keyframeless plugin from the Template.
 #
 # Usage:
 #   ./scripts/new-plugin.sh <PluginName> [--type effect|title|generator] [--bundle-prefix <prefix>] [--add-to-workspace]
@@ -89,7 +89,7 @@ UPDATE_CHECKER="$REPO_ROOT/KeyframelessKit/KeyframelessKit/Update/KKUpdateChecke
 
 # ── Known UUIDs to replace ───────────────────────────────────────────────────
 
-# These are Template's fixed UUIDs from Info.plist — must be unique per plugin.
+# These are Template's fixed UUIDs from Info.plist - must be unique per plugin.
 OLD_UUID_EFFECT="E62BB814-A76B-4438-B1B1-090145A42CC2"
 OLD_UUID_OSC="A1B70771-EDBB-4D3B-81B6-DB70B74CEDE4"
 OLD_UUID_GROUP="450150AA-FB81-4198-BB73-058CFEF39F5C"

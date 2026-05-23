@@ -43,7 +43,7 @@
   // Display lanes: every animatable lane in the same group that has a KP at
   // *exactly* this time goes into the active zone (editable + mini-canvas
   // handle visible). Same-group lanes without a co-time KP go into
-  // excludedLabels — shown as the "available zone" row with an "Animate"
+  // excludedLabels - shown as the "available zone" row with an "Animate"
   // button.
   NSString *groupKey = lane.groupKey;
   NSMutableArray<KKLane *> *displayLanes = [NSMutableArray array];
@@ -61,7 +61,7 @@
       }
     // A same-group lane with no co-time keypose still gets a (base) display
     // row so the static popover can swap it to an "Animate" row IN PLACE,
-    // preserving property order — matching Basic. Without a base row,
+    // preserving property order - matching Basic. Without a base row,
     // applyExcludedLabels: no-ops (it only transforms an existing row), so
     // the property silently vanished from the popover.
     NSArray<NSNumber *> *vals = match ? match.values
@@ -172,7 +172,7 @@
   [self _openValuePopoverForLane:foundLane kp:foundKP];
 }
 
-// Equal endpoints → modulation pills (Wiggle / Oscillate / Handheld) — curve
+// Equal endpoints → modulation pills (Wiggle / Oscillate / Handheld) - curve
 // type has no visible effect when values are equal. Different endpoints →
 // curve pills, modulation isn't useful there. Mirrors Basic's
 // `_openGapPopoverForSection:` vs `_openHoldPopover` routing.

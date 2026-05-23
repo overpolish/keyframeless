@@ -82,7 +82,7 @@
             ?: [KKTimeline timeline];
     timeline = [self timelineStampedWithClipDuration:timeline];
     // Publish to the OSC snapshot cache so drawOSC ticks don't have to re-
-    // read the blob (PLAN §"OSC cache" — single-instance assumption).
+    // read the blob (PLAN §"OSC cache" - single-instance assumption).
     RoundedSetTimelineSnapshot(timeline);
     [actionAPI endAction:self];
     dispatch_async(dispatch_get_main_queue(), ^{

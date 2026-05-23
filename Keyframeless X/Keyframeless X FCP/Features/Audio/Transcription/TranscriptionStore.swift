@@ -196,7 +196,7 @@ class TranscriptionStore {
 			guard clips.indices.contains(result.clipIndex) else { continue }
 			if result.words.isEmpty {
 				print(
-					"[TranscriptionStore] clip \(result.clipIndex) (\(clips[result.clipIndex].name)) produced 0 words — skipping store"
+					"[TranscriptionStore] clip \(result.clipIndex) (\(clips[result.clipIndex].name)) produced 0 words - skipping store"
 				)
 				continue
 			}

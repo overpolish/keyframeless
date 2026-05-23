@@ -30,7 +30,7 @@ typedef NS_ENUM(NSInteger, KKIntervalCurve) {
 
 /// Explicit hold-shape annotation for Basic-mode lanes. Auto = legacy
 /// blobs without this field; `KKShapeOfLane` infers from KP count + middle
-/// time. Anything else is authoritative — set by Basic's rebuild path
+/// time. Anything else is authoritative - set by Basic's rebuild path
 /// every time In/Out is toggled, so the projection doesn't have to guess
 /// from keypose times (and so dragging the boundary past 0.5 doesn't flip
 /// the interpretation mid-drag).
@@ -50,7 +50,7 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 };
 
 /// The character of the gap between two adjacent keyposes.
-/// Stored on KKKeyPose.outgoing — nil on the last keypose in a lane.
+/// Stored on KKKeyPose.outgoing - nil on the last keypose in a lane.
 @interface KKInterval : NSObject <NSCopying>
 
 @property(nonatomic) KKIntervalCurve curve; // default: EaseInOut
@@ -65,7 +65,7 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 
 /// Subset of the lane's value components the modulation envelope multiplies
 /// against. nil = all components (default / legacy). Lets multi-component
-/// lanes (Crop, Color) wiggle just one axis — e.g. oscillate X horizontally
+/// lanes (Crop, Color) wiggle just one axis - e.g. oscillate X horizontally
 /// without disturbing W/H/Y. Indices match the lane's `values` array order.
 @property(nonatomic, copy, nullable) NSIndexSet *modulationComponents;
 
@@ -76,13 +76,13 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// independently (a "Drift"). Toggled by cmd-clicking the gap. Default YES.
 @property(nonatomic) BOOL endpointsLinked;
 
-/// When YES this interval contributes no motion — the lane holds flat across
+/// When YES this interval contributes no motion - the lane holds flat across
 /// it at its Hold-side value, while BOTH keyposes (and their stored values)
 /// are preserved. Used by Basic's per-property "applies to": turning a phase
 /// off for one property flattens that property's In/Out interval without
 /// destroying its keypose, so toggling it back on restores the exact value.
 /// The evaluator holds at the END value for the first interval (In→Hold) and
-/// the START value for the last interval (Hold→Out) — i.e. the Hold side.
+/// the START value for the last interval (Hold→Out) - i.e. the Hold side.
 /// Default NO (animates normally).
 @property(nonatomic) BOOL holdsFlat;
 
@@ -105,7 +105,7 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 @end
 
 /// An ordered sequence of keyposes for one animatable property.
-/// laneID is stable for the lifetime of the lane — label is display only.
+/// laneID is stable for the lifetime of the lane - label is display only.
 /// UI state (selection, visibility, collapsed) lives in KKSequencerViewState,
 /// not here.
 @interface KKLane : NSObject <NSCopying>

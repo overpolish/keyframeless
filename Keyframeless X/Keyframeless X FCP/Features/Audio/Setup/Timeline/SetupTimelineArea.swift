@@ -45,7 +45,7 @@ struct SetupTimelineArea: View {
 			.frame(minHeight: 80)
 			.overlay(alignment: .bottomTrailing) {
 				HelperText(
-					"Click and drag to quickly select/deselect clips",
+					String(localized: "Click and drag to quickly select/deselect clips"),
 					systemImage: "cursorarrow.motionlines"
 				)
 				.padding(.trailing, KKPaddingSM)

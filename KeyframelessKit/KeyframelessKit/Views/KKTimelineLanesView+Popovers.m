@@ -4,6 +4,7 @@
  */
 
 #import "../Style/KKTokens.h"
+#import "KKLocalized.h"
 #import "KKMiniCanvasView.h"
 #import "KKPopoverHeaderView.h"
 #import "KKTimelineLanesView+Guide.h"
@@ -51,7 +52,7 @@ static void KKWriteBoundaryRequest(NSString *path, double frac, BOOL active) {
   [j writeToFile:path atomically:YES];
 }
 
-// Multi-time variant — writes the list of clip fractions the onion-skin
+// Multi-time variant - writes the list of clip fractions the onion-skin
 // filmstrip wants rendered. Render side honours all of them via
 // -scheduleInputs:; renderDestinationImage matches delivered tiles by
 // mediaTime back into one feed slot per fraction.
@@ -141,7 +142,7 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
 - (NSPopover *)_showPopoverWithContent:(NSView *)content
                               fromView:(NSView *)anchor
                                onClose:(void (^)(void))onClose {
-  // Dismiss any popover from a previous call first — the ApplicationDefined
+  // Dismiss any popover from a previous call first - the ApplicationDefined
   // outside-click monitors don't fire click-to-click between two gaps in the
   // same custom view, so a second gap would otherwise stack on the first.
   // (Not reentrant: we're in a fresh mouseUp, not the old popover's callback.)
@@ -163,7 +164,7 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
 
   NSPopover *popover = [[NSPopover alloc] init];
   // ApplicationDefined instead of Transient: Transient closes the popover if
-  // ANY event targets a different window — ViewBridge-routed clicks from FCP
+  // ANY event targets a different window - ViewBridge-routed clicks from FCP
   // target the inspector window, not the popover, triggering that immediately.
   // We replicate outside-click close with local + global mouseDown monitors.
   popover.behavior = NSPopoverBehaviorApplicationDefined;
@@ -223,10 +224,10 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
               }];
 
   // Scroll over the mini canvas = zoom/pan (events arrive global in
-  // ViewBridge XPC — see [[project_viewbridge_global_sendEvent]]); scroll
+  // ViewBridge XPC - see [[project_viewbridge_global_sendEvent]]); scroll
   // elsewhere keeps the old outside-dismiss behavior.
   // Scroll/magnify over the canvas is handled by the responder chain
-  // (KKMiniCanvasView inside an NSScrollView — the proven mechanism). These
+  // (KKMiniCanvasView inside an NSScrollView - the proven mechanism). These
   // monitors only keep the outside-scroll-dismiss behavior, and must NOT
   // swallow or close when the pointer is over the canvas.
   localMon = [NSEvent
@@ -250,7 +251,7 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
   // Replaces Transient's built-in outside-click close. Without the joyride
   // overlay, clicks in the XPC custom view are local events; clicks elsewhere
   // in FCP are global events. Both monitors are needed to cover all cases.
-  // Joyride forwarding panels sit above the popover during a guide — a Next
+  // Joyride forwarding panels sit above the popover during a guide - a Next
   // click in that panel would dismiss the popover before the guide can hand
   // off to the next step, so treat any click landing inside one as inside-
   // the-popover. Identified by class name to avoid coupling to a private
@@ -318,19 +319,19 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
 }
 
 // Build the label set of lanes participating in the open boundary popover
-// (its displayLanes ∪ excludedLabels — both are same-group as the clicked KP).
+// (its displayLanes ∪ excludedLabels - both are same-group as the clicked KP).
 // Used to scope the filmstrip / prev-next nav so Advanced's per-lane timing
 // doesn't bleed unrelated lanes' KPs into the strip. Returns nil when no
-// popover is open OR no scope was recorded — caller falls back to "all
+// popover is open OR no scope was recorded - caller falls back to "all
 // animatable lanes" which is correct for Basic (shared timing).
 // Scope = the *primary* lane the popover is anchored to (the lane whose
 // pill was clicked, or last navigated to via the filmstrip). Falls back to
 // the full `displayLanes` set when no primary is known (Basic has no per-
-// lane primary — all animatable lanes share boundary times anyway).
+// lane primary - all animatable lanes share boundary times anyway).
 //
 // `displayLanes` alone is wrong: when two same-group lanes happen to have a
 // KP at the same time, Advanced expands displayLanes to include both so the
-// popover can edit either value — but the filmstrip should still only
+// popover can edit either value - but the filmstrip should still only
 // reflect the originally-clicked lane's keypose timeline, otherwise the
 // other lane's unrelated KPs leak in as phantom cells.
 - (nullable NSSet<NSString *> *)_scopedLaneLabelsForOpenPopover {
@@ -395,7 +396,7 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
 }
 
 // Time-sorted, eps-deduped list of every KP fraction across animatable
-// lanes — the navigable set behind the popover's prev/next buttons.
+// lanes - the navigable set behind the popover's prev/next buttons.
 - (NSArray<NSNumber *> *)_animatableKPFractions {
   NSSet<NSString *> *scope = [self _scopedLaneLabelsForOpenPopover];
   NSMutableArray<NSNumber *> *kpTimes = [NSMutableArray array];
@@ -419,7 +420,7 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
 }
 
 // YES when every in-scope lane is constant across the open span (a,b) *because
-// it's a tied/linked flat hold* (or the lane simply isn't animating there) —
+// it's a tied/linked flat hold* (or the lane simply isn't animating there) -
 // i.e. the frame at b is identical to the one at a by user intent, not
 // coincidence. A lane with a real transition straddling the span returns NO
 // (keep the cell). Spans passed here are consecutive entries in the KP-time
@@ -436,7 +437,7 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
       continue;
     NSArray<KKKeyPose *> *kps = lane.keyposes;
     if (kps.count < 2)
-      continue; // constant lane — never blocks
+      continue; // constant lane - never blocks
     KKKeyPose *ia = nil, *ib = nil;
     for (NSInteger i = 0; i + 1 < (NSInteger)kps.count; i++) {
       if (kps[i].time <= mid && mid < kps[i + 1].time) {
@@ -446,7 +447,7 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
       }
     }
     if (!ia)
-      continue; // span lies outside this lane's KP range — constant there
+      continue; // span lies outside this lane's KP range - constant there
     if (!(ia.outgoing.endpointsLinked &&
           _kkBoundaryValuesEqual(ia.values, ib.values)))
       return NO;
@@ -455,7 +456,7 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
 }
 
 // Drop KP times whose span from the previous time is a tied/linked flat hold
-// across all in-scope lanes — collapsing a tie-bar hold to a single
+// across all in-scope lanes - collapsing a tie-bar hold to a single
 // representative (the earlier KP) so the filmstrip / onion / prev-next nav
 // don't show identical frames twice. Input must be time-sorted.
 - (NSArray<NSNumber *> *)_collapseTiedHolds:(NSArray<NSNumber *> *)sorted
@@ -517,7 +518,7 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
   if (target < 0 || target >= (NSInteger)fracs.count)
     return;
   double newFrac = fracs[target].doubleValue;
-  // Same path the filmstrip cell click uses — graph rebuilds the display
+  // Same path the filmstrip cell click uses - graph rebuilds the display
   // lanes for the new KP, then calls back into the in-place updater.
   if (_activeTab == 1) {
     [_advancedGraph requestValuePopoverAtFraction:newFrac];
@@ -573,7 +574,7 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
   // The render nudge writes an undoable param to force FCP to resolve the
   // preview frame at a NEW boundary time. A same-fraction in-place rebuild
   // (add / remove / undo-refresh) keeps the time, and the blob write already
-  // triggers a render — nudging here would add a phantom undo entry (cmd-Z
+  // triggers a render - nudging here would add a phantom undo entry (cmd-Z
   // would then need two presses). Only republish + nudge on a real time change
   // (navigation between boundaries).
   if (fracChanged) {
@@ -671,7 +672,7 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
   }
   // If a popover is still open, close it NOW (its onClose tears down the old
   // boundary state in order) but DEFER building the replacement one runloop
-  // tick — back-to-back mini-canvas teardown+rebuild in the same call stack
+  // tick - back-to-back mini-canvas teardown+rebuild in the same call stack
   // stalls ~0.5s and the new MTKView comes up blank. Re-entry next tick finds
   // it closed and proceeds on the fast path (matches the outside-click order).
   if (_openContentPopover.isShown) {
@@ -714,7 +715,7 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
       [[_KKStaticValuesPopoverView alloc] initWithLanes:lanes
           descriptorPath:self.miniCanvasDescriptorPath
           clipAspect:self.miniCanvasClipAspect
-          headerTitle:@"Keypose"
+          headerTitle:KKLoc(@"Keypose", @"Popover header: keypose.")
           headerDetail:[self _timeStringForFraction:fraction]
           headerIcon:_kkKeyposePillImage()
           canvasDelegate:self.miniCanvasDelegate
@@ -796,7 +797,10 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
   // at this time"; Basic shares one phase across properties, so there it's
   // "excluded from this phase". Same widget, context-specific wording.
   NSString *excludedMsg =
-      (_activeTab == 1) ? @"No keypose here" : @"Excluded from this phase";
+      (_activeTab == 1)
+          ? KKLoc(@"No keypose here", @"Keypose popover empty state.")
+          : KKLoc(@"Excluded from this phase",
+                  @"Keypose popover: excluded from phase.");
   [staticView applyExcludedLabels:excludedLabels
                           message:excludedMsg
                         onAnimate:^(NSString *label) {
@@ -932,12 +936,12 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
   edit.translatesAutoresizingMaskIntoConstraints = NO;
 
   // Wrap the editor with a "Curve <start>–<end>" header (the editor itself is
-  // left untouched — it's also used by the hold-modulation popover).
+  // left untouched - it's also used by the hold-modulation popover).
   NSString *range = [NSString
       stringWithFormat:@"%@ → %@", [self _timeStringForFraction:startFraction],
                        [self _timeStringForFraction:endFraction]];
   KKPopoverHeaderView *header = [[KKPopoverHeaderView alloc]
-      initWithTitle:@"Curve"
+      initWithTitle:KKLoc(@"Curve", @"Section: easing curve.")
              detail:range
          symbolName:@"point.topleft.down.to.point.bottomright.curvepath"];
   CGFloat headerH = [KKPopoverHeaderView height];
@@ -961,7 +965,7 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
   ]];
 
   // Track the editor + a rebuilder so _refresh can push fresh participation
-  // pill states after an external mutation (cmd-Z) without reopening — same
+  // pill states after an external mutation (cmd-Z) without reopening - same
   // pattern as the hold-modulation popover.
   _openGapEditor = edit;
   _openGapRebuilder = [partRebuilder copy];
@@ -1121,10 +1125,10 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
   NSString *range = [NSString
       stringWithFormat:@"%@ → %@", [self _timeStringForFraction:startFraction],
                        [self _timeStringForFraction:endFraction]];
-  KKPopoverHeaderView *header =
-      [[KKPopoverHeaderView alloc] initWithTitle:@"Modulation"
-                                          detail:range
-                                      symbolName:@"waveform"];
+  KKPopoverHeaderView *header = [[KKPopoverHeaderView alloc]
+      initWithTitle:KKLoc(@"Modulation", @"Section: modulation settings.")
+             detail:range
+         symbolName:@"waveform"];
   CGFloat headerH = [KKPopoverHeaderView height];
   CGFloat totalH = KKPaddingMD + headerH + KKSpacingSM + editH;
   NSView *container =
@@ -1176,60 +1180,60 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
   // The mini canvas tracks the cursor live from the renderer's optimistic
   // timeline, so the heavy persist (_setLaneValues → _refresh →
   // onTimelineMutated → FCP param write + JSON) doesn't need to run per
-  // mouse-moved tick — doing so blocks the main thread and makes the
+  // mouse-moved tick - doing so blocks the main thread and makes the
   // handles/redraw lag. Coalesce: stash the latest value during the drag,
   // commit once on drag end, inside the drag's undo group.
   __block NSString *pendingLabel = nil;
   __block NSArray<NSNumber *> *pendingValues = nil;
   __block BOOL dragging = NO;
 
-  _KKStaticValuesPopoverView *staticView =
-      [[_KKStaticValuesPopoverView alloc] initWithLanes:unopted
-          descriptorPath:self.miniCanvasDescriptorPath
-          clipAspect:self.miniCanvasClipAspect
-          headerTitle:@"Constants"
-          headerDetail:nil
-          headerIcon:[KKPopoverHeaderView
-                         iconImageForSymbolName:@"slider.horizontal.3"]
-          canvasDelegate:self.miniCanvasDelegate
-          renderMode:KKMiniCanvasRenderModeOff
-          onModeChanged:nil
-          onNavigate:nil
-          onHandleValue:^(NSString *label, NSArray<NSNumber *> *values) {
-            __strong typeof(weak) s = weak;
-            // During a drag (mini-canvas handle or slider) coalesce — commit
-            // once on drag end. A discrete edit (text field) has no drag, so
-            // commit immediately.
-            if (dragging) {
-              pendingLabel = label;
-              pendingValues = values;
-            } else {
-              [s _setLaneValues:values forLabel:label];
-            }
-            if (s.onStaticValueChanged)
-              s.onStaticValueChanged(label, values);
-          }
-          onDragBegin:^{
-            __strong typeof(weak) s = weak;
-            dragging = YES;
-            if (s.onDragBegin)
-              s.onDragBegin();
-          }
-          onDragEnd:^{
-            __strong typeof(weak) s = weak;
-            NSString *endedLabel = pendingLabel;
-            NSArray<NSNumber *> *endedValues = pendingValues;
-            if (pendingValues && pendingLabel) {
-              [s _setLaneValues:pendingValues forLabel:pendingLabel];
-              pendingValues = nil;
-              pendingLabel = nil;
-            }
-            dragging = NO;
-            if (s.onDragEnd)
-              s.onDragEnd();
-            if (endedLabel && endedValues && s.onStaticValueDragEnded)
-              s.onStaticValueDragEnded(endedLabel, endedValues);
-          }];
+  _KKStaticValuesPopoverView *staticView = [[_KKStaticValuesPopoverView alloc]
+      initWithLanes:unopted
+      descriptorPath:self.miniCanvasDescriptorPath
+      clipAspect:self.miniCanvasClipAspect
+      headerTitle:KKLoc(@"Constants", @"Constants editor tab/section header.")
+      headerDetail:nil
+      headerIcon:[KKPopoverHeaderView
+                     iconImageForSymbolName:@"slider.horizontal.3"]
+      canvasDelegate:self.miniCanvasDelegate
+      renderMode:KKMiniCanvasRenderModeOff
+      onModeChanged:nil
+      onNavigate:nil
+      onHandleValue:^(NSString *label, NSArray<NSNumber *> *values) {
+        __strong typeof(weak) s = weak;
+        // During a drag (mini-canvas handle or slider) coalesce - commit
+        // once on drag end. A discrete edit (text field) has no drag, so
+        // commit immediately.
+        if (dragging) {
+          pendingLabel = label;
+          pendingValues = values;
+        } else {
+          [s _setLaneValues:values forLabel:label];
+        }
+        if (s.onStaticValueChanged)
+          s.onStaticValueChanged(label, values);
+      }
+      onDragBegin:^{
+        __strong typeof(weak) s = weak;
+        dragging = YES;
+        if (s.onDragBegin)
+          s.onDragBegin();
+      }
+      onDragEnd:^{
+        __strong typeof(weak) s = weak;
+        NSString *endedLabel = pendingLabel;
+        NSArray<NSNumber *> *endedValues = pendingValues;
+        if (pendingValues && pendingLabel) {
+          [s _setLaneValues:pendingValues forLabel:pendingLabel];
+          pendingValues = nil;
+          pendingLabel = nil;
+        }
+        dragging = NO;
+        if (s.onDragEnd)
+          s.onDragEnd();
+        if (endedLabel && endedValues && s.onStaticValueDragEnded)
+          s.onStaticValueDragEnded(endedLabel, endedValues);
+      }];
   _openStaticView = staticView;
   _openStaticIsBoundary = NO;
   [staticView applyDefaultsProvider:^NSArray<NSNumber *> *(NSString *l) {
@@ -1285,6 +1289,10 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
 
 - (NSRect)guideConstantSliderTrackScreenRectForLabel:(NSString *)label {
   return [_openStaticView guideSliderTrackScreenRectForLabel:label];
+}
+
+- (NSRect)guideConstantSliderKnobScreenRectForLabel:(NSString *)label {
+  return [_openStaticView guideSliderKnobScreenRectForLabel:label];
 }
 
 - (CGFloat)guideConstantSliderScreenXForValue:(double)value

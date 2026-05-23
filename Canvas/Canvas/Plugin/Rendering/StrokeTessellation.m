@@ -275,7 +275,7 @@ NSUInteger KKTessellateTrimmedPath(KKBezierPath *path, float startWidth,
   // Wrap-start / wrap-end only fire when the caller explicitly told us this
   // is half of an origin-shifted wrap pair. A standalone trim that happens
   // to start at 0 or end at totalArc on a closed path must NOT emit corner
-  // geometry at the seam — there's no partner strip to attach to, so any
+  // geometry at the seam - there's no partner strip to attach to, so any
   // join geometry would just hang past the visible end as a stray spike.
   BOOL isWrapStart =
       hasWrapSeam && path.closed && samples[0].atWrapStart && arcStart < 0.001f;
@@ -367,7 +367,7 @@ NSUInteger KKTessellateTrimmedPath(KKBezierPath *path, float startWidth,
   }
 
   // Emit the interpolated end point. Skipped when the loop already emitted a
-  // join + post-join pair for an arcEnd that landed exactly on a join — those
+  // join + post-join pair for an arcEnd that landed exactly on a join - those
   // two pairs already terminate the strip at the same physical position.
   PathSample trimEnd = KKSampleAtArc(samples, count, arcEnd, &hint);
   // Mirror the strip 1 end miter so the trim-end pair lines up with the
@@ -400,7 +400,7 @@ NSUInteger KKTessellateTrimmedPath(KKBezierPath *path, float startWidth,
   float sCapHW = startWidth / 2.0f + aaPadding;
   float eCapHW = endWidth / 2.0f + aaPadding;
   if (isOpen && lineCap != 0) {
-    // End cap first (appended right after the stroke body — short bridge).
+    // End cap first (appended right after the stroke body - short bridge).
     if (endTrim <= 0.0f) {
       simd_float2 eTan = (simd_float2){trimEnd.normal.y, -trimEnd.normal.x};
       if (lineCap == 1) {
@@ -408,7 +408,7 @@ NSUInteger KKTessellateTrimmedPath(KKBezierPath *path, float startWidth,
                            eCapHW, NO);
       }
     }
-    // Start cap last — needs a full degenerate bridge back to the path start,
+    // Start cap last - needs a full degenerate bridge back to the path start,
     // matching the pattern in KKTessellatePath.
     if (startTrim <= 0.0f) {
       simd_float2 sTan = (simd_float2){trimStart.normal.y, -trimStart.normal.x};

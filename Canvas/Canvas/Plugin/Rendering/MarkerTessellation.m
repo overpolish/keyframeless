@@ -93,7 +93,7 @@ static NSUInteger tessellateSquare(simd_float2 endpoint, simd_float2 tangent,
   return vc;
 }
 
-// Forward declarations — sketch versions serve as the canonical implementation
+// Forward declarations - sketch versions serve as the canonical implementation
 // for arrowhead and line markers; regular versions call with roughness=0.
 static inline simd_float2 jitterPt(simd_float2 pt, float amp, float roughness);
 static NSUInteger tessellateSketchArrowhead(simd_float2 endpoint,

@@ -20,10 +20,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// custom-UI blob as `"mode"`; absent / 0 = transitions-only (the default).
 typedef NS_ENUM(int32_t, KKMotionBlurMode) {
   /// Blur only while the shutter window overlaps a real keypose transition
-  /// (endpoints differ). Modulation jitter during a hold is ignored — the
+  /// (endpoints differ). Modulation jitter during a hold is ignored - the
   /// cheapest mode and the default.
   KKMotionBlurModeTransitionsOnly = 0,
-  /// Blur whenever any animated value moves across the shutter window —
+  /// Blur whenever any animated value moves across the shutter window -
   /// transitions AND modulation (wiggle / oscillate / handheld).
   KKMotionBlurModeValueChanging = 1,
   /// Blur every frame regardless of whether anything animates. Required for
@@ -33,7 +33,7 @@ typedef NS_ENUM(int32_t, KKMotionBlurMode) {
 
 /// Snapshot of motion-blur params resolved during `pluginState:atTime:`,
 /// where FxParameterRetrievalAPI_v6 is available. Plugins concatenate this
-/// into their own pluginState NSData so render — which has no paramAPI —
+/// into their own pluginState NSData so render - which has no paramAPI -
 /// can use the values.
 typedef struct {
   bool enabled;
@@ -52,7 +52,7 @@ typedef struct {
 ///
 /// The plugin is responsible for re-evaluating its own time-dependent
 /// state (KKTiming queries, transforms, etc.) at the `subTime` it is
-/// handed — KKMotionBlur knows nothing about what is being drawn.
+/// handed - KKMotionBlur knows nothing about what is being drawn.
 @interface KKMotionBlur : NSObject
 
 /// Snapshots motion-blur state from a custom-UI JSON blob
@@ -74,7 +74,7 @@ typedef struct {
 /// - `TransitionsOnly` → YES if the window overlaps a keypose interval whose
 ///   endpoints differ (a real transition); modulation-only holds are ignored.
 ///
-/// Returns YES when `timeline` is nil (can't gate — don't suppress a wanted
+/// Returns YES when `timeline` is nil (can't gate - don't suppress a wanted
 /// blur). Plugins call this from `pluginState:atTime:` and clear
 /// `state.enabled` for the frame when it returns NO.
 + (BOOL)frameShouldBlurForMode:(KKMotionBlurMode)mode
@@ -88,7 +88,7 @@ typedef struct {
 /// life of the shared command buffer without per-frame allocation churn.
 ///
 /// Pool entries are keyed by (`key`, `sampleIndex`, `registryID`,
-/// `width`, `height`, `format`) — pick a key unique to the texture's
+/// `width`, `height`, `format`) - pick a key unique to the texture's
 /// purpose within the plugin (e.g. `@"glow.prep"`). Distinct sample
 /// indices return distinct textures, which is what you want when all N
 /// samples are queued on the same command buffer.
@@ -120,7 +120,7 @@ typedef struct {
 /// sub-frame sample time (skipping `renderTime`, which the plugin already
 /// requests) to `requests`. Call from `scheduleInputs:`. FCP then delivers the
 /// source at each sub-frame time, and `applyToDestinationImage:` feeds the
-/// time-matched frame to each accumulate pass — so the underlying content
+/// time-matched frame to each accumulate pass - so the underlying content
 /// smears, not just the plugin's parameter animation.
 ///
 /// `builder` creates one request for a given sample time: the plugin owns this
@@ -131,7 +131,7 @@ typedef struct {
 ///   includeFilters:YES parameterID:0]; }` (autorelease under MRR).
 ///
 /// No-op when blur is disabled, so it's safe to call unconditionally. Each
-/// added request is another source frame FCP decodes — heavier, can drop live-
+/// added request is another source frame FCP decodes - heavier, can drop live-
 /// playback frames; FCP delivers discrete frames, so content smears smoothly
 /// only with Frame Blending / Optical Flow or a shutter spanning >1 frame.
 + (void)appendSourceRequestsForState:(KKMotionBlurState)state

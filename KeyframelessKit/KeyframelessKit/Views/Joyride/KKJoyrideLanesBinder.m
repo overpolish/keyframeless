@@ -18,12 +18,12 @@
 /// Original (pre-arm) advance trigger; preserved so that re-entering this
 /// step resets the arm state.
 @property(nonatomic, strong, nullable) KKJoyrideTrigger *advanceOriginal;
-/// Currently-listening advance trigger — equal to `advanceOriginal` until a
+/// Currently-listening advance trigger - equal to `advanceOriginal` until a
 /// `thenWaitFor:` outer matches, after which it points at the inner.
 @property(nonatomic, strong, nullable) KKJoyrideTrigger *advanceActive;
 @property(nonatomic, strong, nullable) KKJoyrideTrigger *dismiss;
 @property(nonatomic) KKJoyrideCloseOnAdvance closeOnAdvance;
-/// playPauseEdge state, per binding.
+/// playToggleEdge state, per binding (armed by the first play-button tap).
 @property(nonatomic) BOOL playStarted;
 @property(nonatomic) CFAbsoluteTime activatedAt;
 @end
@@ -104,11 +104,11 @@
 
 #pragma mark - Inspector signal forwarding
 
-- (void)notifyPlayingChanged:(BOOL)playing {
-  [self _fireType:KKJoyrideTriggerTypePlayingChanged
-                  intArg:0
-                 intArg2:(playing ? 1 : 0)label:nil
-      extraPlayPauseEdge:YES];
+- (void)notifyPlaybackToggleTapped {
+  [self _fireType:KKJoyrideTriggerTypePlayToggleEdge
+           intArg:0
+          intArg2:0
+            label:nil];
 }
 
 #pragma mark - Teardown
@@ -164,10 +164,9 @@
     KKJoyrideController *g = s->_guide;
     g.additionalPassthroughWindow = row.window;
     [s _fireType:KKJoyrideTriggerTypeManagePopoverWillOpen
-                    intArg:0
-                   intArg2:0
-                     label:nil
-        extraPlayPauseEdge:NO];
+          intArg:0
+         intArg2:0
+           label:nil];
   };
 
   lanes.onManagePopoverClosed = ^{
@@ -178,10 +177,9 @@
     KKJoyrideController *g = s->_guide;
     g.additionalPassthroughWindow = nil;
     [s _fireType:KKJoyrideTriggerTypeManagePopoverClosed
-                    intArg:0
-                   intArg2:0
-                     label:nil
-        extraPlayPauseEdge:NO];
+          intArg:0
+         intArg2:0
+           label:nil];
   };
 
   lanes.onLaneOptedIn = ^(NSString *label) {
@@ -190,10 +188,9 @@
       return;
     s->_latestOptedInLane = label;
     [s _fireType:KKJoyrideTriggerTypeLaneOptedIn
-                    intArg:0
-                   intArg2:0
-                     label:label
-        extraPlayPauseEdge:NO];
+          intArg:0
+         intArg2:0
+           label:label];
   };
 
   lanes.onStaticValuesPopoverWillOpen =
@@ -208,10 +205,9 @@
         [s _wireMiniCanvas:cv];
         [s _installFieldHandlersForOpenPopover];
         [s _fireType:KKJoyrideTriggerTypeStaticValuesPopoverWillOpen
-                        intArg:0
-                       intArg2:0
-                         label:nil
-            extraPlayPauseEdge:NO];
+              intArg:0
+             intArg2:0
+               label:nil];
         if (s.staticValuesPopoverDidOpen)
           s.staticValuesPopoverDidOpen(content, cv);
       };
@@ -225,10 +221,9 @@
     KKJoyrideController *g = s->_guide;
     g.additionalPassthroughWindow = nil;
     [s _fireType:KKJoyrideTriggerTypeStaticValuesPopoverClosed
-                    intArg:0
-                   intArg2:0
-                     label:nil
-        extraPlayPauseEdge:NO];
+          intArg:0
+         intArg2:0
+           label:nil];
     if (s.staticValuesPopoverDidClose)
       s.staticValuesPopoverDidClose();
   };
@@ -248,10 +243,9 @@
         if (label)
           s->_latestStaticValues[label] = [values copy];
         [s _fireType:KKJoyrideTriggerTypeStaticValueDragEnded
-                        intArg:0
-                       intArg2:0
-                         label:label
-            extraPlayPauseEdge:NO];
+              intArg:0
+             intArg2:0
+               label:label];
         if (s.staticValueDragDidEnd)
           s.staticValueDragDidEnd(label ?: @"", values ?: @[]);
       };
@@ -265,10 +259,9 @@
     KKJoyrideController *g = s->_guide;
     g.additionalPassthroughWindow = content.window;
     [s _fireType:KKJoyrideTriggerTypeGapPopoverWillOpen
-                    intArg:0
-                   intArg2:0
-                     label:nil
-        extraPlayPauseEdge:NO];
+          intArg:0
+         intArg2:0
+           label:nil];
   };
 
   lanes.onGapPopoverCurveChanged = ^(NSInteger curveType) {
@@ -276,10 +269,9 @@
     if (!s)
       return;
     [s _fireType:KKJoyrideTriggerTypeGapPopoverCurveChanged
-                    intArg:curveType
-                   intArg2:0
-                     label:nil
-        extraPlayPauseEdge:NO];
+          intArg:curveType
+         intArg2:0
+           label:nil];
   };
 
   KKTimelineBasicView *graph = lanes.basicGraph;
@@ -288,29 +280,26 @@
     if (!s)
       return;
     [s _fireType:KKJoyrideTriggerTypePhaseToggled
-                    intArg:phase
-                   intArg2:(on ? 1 : 0)label:nil
-        extraPlayPauseEdge:NO];
+          intArg:phase
+         intArg2:(on ? 1 : 0)label:nil];
   };
   graph.onDiamondTapped = ^(NSInteger idx) {
     __strong typeof(weak) s = weak;
     if (!s)
       return;
     [s _fireType:KKJoyrideTriggerTypeDiamondTapped
-                    intArg:idx
-                   intArg2:0
-                     label:nil
-        extraPlayPauseEdge:NO];
+          intArg:idx
+         intArg2:0
+           label:nil];
   };
   graph.onGapTapped = ^(NSInteger section) {
     __strong typeof(weak) s = weak;
     if (!s)
       return;
     [s _fireType:KKJoyrideTriggerTypeGapTapped
-                    intArg:section
-                   intArg2:0
-                     label:nil
-        extraPlayPauseEdge:NO];
+          intArg:section
+         intArg2:0
+           label:nil];
   };
 }
 
@@ -329,20 +318,18 @@
     if (!s)
       return;
     [s _fireType:KKJoyrideTriggerTypeMiniCanvasViewTransformChanged
-                    intArg:0
-                   intArg2:0
-                     label:nil
-        extraPlayPauseEdge:NO];
+          intArg:0
+         intArg2:0
+           label:nil];
   };
   cv.onViewReset = ^{
     __strong typeof(weak) s = weak;
     if (!s)
       return;
     [s _fireType:KKJoyrideTriggerTypeMiniCanvasViewReset
-                    intArg:0
-                   intArg2:0
-                     label:nil
-        extraPlayPauseEdge:NO];
+          intArg:0
+         intArg2:0
+           label:nil];
   };
 }
 
@@ -390,10 +377,9 @@
 #pragma mark - Dispatch
 
 - (void)_fireType:(KKJoyrideTriggerType)type
-                intArg:(NSInteger)intArg
-               intArg2:(NSInteger)intArg2
-                 label:(NSString *)label
-    extraPlayPauseEdge:(BOOL)alsoCheckEdge {
+           intArg:(NSInteger)intArg
+          intArg2:(NSInteger)intArg2
+            label:(NSString *)label {
   KKJoyrideController *guide = _guide;
   if (!guide || !guide.isActive)
     return;
@@ -409,21 +395,19 @@
     return;
   [self _resetBindingIfNewlyActive:match];
 
-  // playPauseEdge: arm on first play during the step, fire on the matching
-  // pause. No warmup gate — sPlay is a vanilla user-clicks-play step.
-  // (sWatchBack's spurious-play-after-scrub guard stays plugin-side; it
-  // doesn't use playPauseEdge.)
-  if (alsoCheckEdge && type == KKJoyrideTriggerTypePlayingChanged) {
-    BOOL playing = (intArg2 != 0);
-    if (match.advanceActive.type == KKJoyrideTriggerTypePlayPauseEdge) {
-      if (playing) {
-        match.playStarted = YES;
-      } else if (match.playStarted) {
-        match.playStarted = NO;
-        [self _advanceBinding:match];
-        return;
-      }
+  // playToggleEdge: deterministic, driven by raw taps (notifyPlaybackToggle-
+  // Tapped). First tap during the step = started playing; second tap = pause
+  // → advance. No play-state inference, so it never flickers under FCP's
+  // bursty currentTime mid-guide.
+  if (type == KKJoyrideTriggerTypePlayToggleEdge &&
+      match.advanceActive.type == KKJoyrideTriggerTypePlayToggleEdge) {
+    if (!match.playStarted) {
+      match.playStarted = YES;
+    } else {
+      match.playStarted = NO;
+      [self _advanceBinding:match];
     }
+    return;
   }
 
   // Advance match (with thenWaitFor arming).
@@ -535,10 +519,8 @@
     return YES;
   case KKJoyrideTriggerTypePhaseToggled:
     return (t.intArg == intArg) && (t.intArg2 == intArg2);
-  case KKJoyrideTriggerTypePlayingChanged:
-    return t.intArg2 == intArg2;
   // Field-edited handled in _fireFieldEdited:.
-  // PlayPauseEdge handled inline in _fireType:.
+  // PlayToggleEdge handled inline in _fireType:.
   default:
     return YES;
   }

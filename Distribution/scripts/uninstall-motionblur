@@ -18,7 +18,7 @@ echo "The following will be deleted:"
 [ -e "$APP" ] && echo "  $APP"
 [ -e "$TEMPLATE" ] && echo "  $TEMPLATE"
 if [ ! -e "$APP" ] && [ ! -e "$TEMPLATE" ]; then
-    echo "  (nothing — already uninstalled)"
+    echo "  (nothing - already uninstalled)"
     sleep 2
     osascript -e 'tell application "Terminal" to close front window' &
     exit 0

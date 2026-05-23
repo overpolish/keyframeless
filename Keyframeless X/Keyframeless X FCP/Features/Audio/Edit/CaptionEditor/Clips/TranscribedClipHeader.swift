@@ -38,7 +38,7 @@ struct TranscribedClipHeader: View {
 			Spacer()
 			if containsProfanity {
 				InfoBadge(
-					label: "Profanity",
+					label: String(localized: "Profanity"),
 					systemImage:
 						"exclamationmark.bubble.fill",
 					color: Color.kkError

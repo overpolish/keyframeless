@@ -4,6 +4,7 @@
  */
 
 #import "KKJoyrideOverlayView_Private.h"
+#import "KKLocalized.h"
 #import "KKTokens.h"
 #import <QuartzCore/QuartzCore.h>
 
@@ -118,7 +119,7 @@ static const CGFloat kJTipBottomRowH = 18.0;
   [[NSBezierPath bezierPathWithRoundedRect:bubble xRadius:6.0
                                    yRadius:6.0] fill];
 
-  // Keep the arrow within the rounded body, but point it at the target — not
+  // Keep the arrow within the rounded body, but point it at the target - not
   // the bubble centre, which detaches when the bubble is clamped to stay
   // on-screen near an edge.
   CGFloat ax = MAX(NSMinX(bubble) + 6.0 + kJTipArrowHalfW,
@@ -161,13 +162,20 @@ static const CGFloat kJTipBottomRowH = 18.0;
                                            weight:NSFontWeightMedium];
     BOOL isLastStep = _step == _totalSteps;
     BOOL showsNext = !isLastStep && self.onNext != nil;
-    NSString *actionStr = isLastStep ? @"Done" : @"Skip";
+    NSString *actionStr =
+        isLastStep
+            ? KKLoc(@"Done", @"Joyride guide: final-step button that closes "
+                             @"the walkthrough.")
+            : KKLoc(@"Skip",
+                    @"Joyride guide: button that dismisses the walkthrough.");
     CGFloat actionW =
         [actionStr sizeWithAttributes:@{NSFontAttributeName : actionFont}]
             .width;
     CGFloat nextW =
         showsNext
-            ? [@"Next" sizeWithAttributes:@{NSFontAttributeName : actionFont}]
+            ? [KKLoc(@"Next",
+                     @"Joyride guide: button that advances to the next step.")
+                  sizeWithAttributes:@{NSFontAttributeName : actionFont}]
                       .width +
                   16.0
             : 0.0;
@@ -185,7 +193,7 @@ static const CGFloat kJTipBottomRowH = 18.0;
 
   // The panel spans the whole screen.frame and this view is flipped, so y=0
   // sits under the menu bar. Use the screen's visibleFrame insets (menu bar
-  // at top, dock at bottom) as the usable band — otherwise a tooltip near
+  // at top, dock at bottom) as the usable band - otherwise a tooltip near
   // the top draws "above" into the menu bar and gets clipped.
   NSScreen *scr = self.window.screen ?: NSScreen.mainScreen;
   CGFloat topInset = NSMaxY(scr.frame) - NSMaxY(scr.visibleFrame);
@@ -235,7 +243,11 @@ static const CGFloat kJTipBottomRowH = 18.0;
   BOOL isLast = _step == _totalSteps;
   BOOL showsNext = !isLast && self.onNext != nil;
 
-  NSString *actionStr = isLast ? @"Done" : @"Skip";
+  NSString *actionStr =
+      isLast ? KKLoc(@"Done", @"Joyride guide: final-step button that closes "
+                              @"the walkthrough.")
+             : KKLoc(@"Skip",
+                     @"Joyride guide: button that dismisses the walkthrough.");
   NSColor *actionColor =
       isLast ? KJActionGreen() : [NSColor colorWithWhite:1.0 alpha:0.55];
   NSDictionary *actionAttrs = @{
@@ -251,10 +263,13 @@ static const CGFloat kJTipBottomRowH = 18.0;
                                               weight:NSFontWeightMedium],
       NSForegroundColorAttributeName : KJActionGreen(),
     };
-    NSSize nextSz = [@"Next" sizeWithAttributes:nextAttrs];
+    NSSize nextSz = [KKLoc(
+        @"Next", @"Joyride guide: button that advances to the next step.")
+        sizeWithAttributes:nextAttrs];
     CGFloat nextX = NSMaxX(bubble) - kJTipPadH - nextSz.width;
-    [@"Next" drawAtPoint:NSMakePoint(nextX, centerY - nextSz.height / 2.0)
-          withAttributes:nextAttrs];
+    [KKLoc(@"Next", @"Joyride guide: button that advances to the next step.")
+           drawAtPoint:NSMakePoint(nextX, centerY - nextSz.height / 2.0)
+        withAttributes:nextAttrs];
     _nextRect = NSMakeRect(nextX - 8.0, NSMinY(bubble),
                            nextSz.width + 8.0 + kJTipPadH, NSHeight(bubble));
 
@@ -279,13 +294,13 @@ static const CGFloat kJTipBottomRowH = 18.0;
       (_frozen && _haveLastSpot) ? _lastSpotRect : [self spotRectInSelf];
   if (NSIsEmptyRect(spotRect)) {
     if (_frozen)
-      return; // tearing down — don't pop the centred fallback in
+      return; // tearing down - don't pop the centred fallback in
     if (_drawsBackground) {
       [[NSColor colorWithWhite:0.0 alpha:0.35] setFill];
       NSRectFill(self.bounds);
     }
     if (_message) {
-      // No spotlight target — draw a floating bubble near the top of the
+      // No spotlight target - draw a floating bubble near the top of the
       // screen so steps that require viewer interaction still show guidance.
       NSRect synthetic = NSMakeRect(NSMidX(self.bounds) - 1, 200.0, 2, 2);
       [self _drawBubbleAnchoredAt:NSInsetRect(synthetic, -8.0, -3.0)];

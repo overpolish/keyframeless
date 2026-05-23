@@ -8,6 +8,7 @@
 #import "KKHelpSection.h"
 #import "KKHelpView+Guides.h"
 #import "KKHelpView_Private.h"
+#import "KKLocalized.h"
 
 @implementation KKHelpView (Guides)
 
@@ -17,7 +18,10 @@
   stack.alignment = NSLayoutAttributeLeading;
   stack.spacing = KKHelpAfterTitleGap;
 
-  [stack addArrangedSubview:[self _subheading:@"Interactive Guides"]];
+  [stack
+      addArrangedSubview:
+          [self _subheading:KKLoc(@"Interactive Guides",
+                                  @"Help: interactive guides section title.")]];
 
   // Section-level warning: shown once under the subheading whenever ANY
   // guide is disabled. Text is sourced from the first disabled guide's
@@ -111,12 +115,12 @@
     if (onStart)
       onStart();
     // "Completed" is gated on real completion ([guide markCompleted], called
-    // by the guide owner) — not on tap. The refresh poll picks up the badge.
+    // by the guide owner) - not on tap. The refresh poll picks up the badge.
   };
   return iconSlot;
 }
 
-// Builds the trailing "Completed" capsule — checkmark + label, capsule fill
+// Builds the trailing "Completed" capsule - checkmark + label, capsule fill
 // at 15% opacity. The capsule self-rounds via _KKCapsuleView.layout.
 - (NSView *)_makeBadgeView {
   NSColor *badgeColor = [[NSColor inspectorLabel] colorWithAlphaComponent:0.6];
@@ -138,7 +142,8 @@
       [NSImageSymbolConfiguration configurationWithPointSize:8.0
                                                       weight:NSFontWeightBold];
   tick.contentTintColor = badgeColor;
-  NSTextField *badgeLabel = [NSTextField labelWithString:@"Completed"];
+  NSTextField *badgeLabel = [NSTextField
+      labelWithString:KKLoc(@"Completed", @"Help: guide completed badge.")];
   badgeLabel.font = [NSFont systemFontOfSize:9.0 weight:NSFontWeightMedium];
   badgeLabel.textColor = badgeColor;
 
@@ -259,7 +264,7 @@
   r.icon.hidden = NO;
 }
 
-// Mutates the existing controls — never rebuilds the row. Icon is accent
+// Mutates the existing controls - never rebuilds the row. Icon is accent
 // when actionable & new, muted once the guide has been completed, dim when
 // disabled. The "Completed" pill shows after a full run. The "select a clip"
 // warning now lives section-wide via -_refreshSectionWarning; rows just dim
@@ -295,7 +300,7 @@
 
 // Walks the row state and toggles the section warning. Text comes from the
 // first disabled guide's `disabledSubtitle` (Rounded's 4 guides all share the
-// same "select a Rounded clip…" text — picking the first is fine; if a future
+// same "select a Rounded clip…" text - picking the first is fine; if a future
 // plugin wants distinct per-guide reasons it can normalise them to one shared
 // message).
 - (void)_refreshSectionWarning {
@@ -339,8 +344,8 @@
 - (void)observeGuideRefreshNotificationNamed:(NSNotificationName)name {
   __weak typeof(self) weak = self;
   // The notification (posted while the OSC is alive) catches the *enable*
-  // edge promptly. The *disable* edge has no event — when the clip is
-  // deselected the host just stops posting — so a periodic state check is
+  // edge promptly. The *disable* edge has no event - when the clip is
+  // deselected the host just stops posting - so a periodic state check is
   // still required. refreshGuideRows is now a cheap diff that mutates a row
   // only when its enabled state actually flips, so this no longer churns.
   if (name.length) {

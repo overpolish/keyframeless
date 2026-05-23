@@ -6,6 +6,7 @@
 #import "Constants.h"
 #import "RoundedInspectorView+Guides.h"
 #import "RoundedInspectorView_Private.h"
+#import "RoundedLocalized.h"
 #import <KeyframelessKit/KKHostInfo.h>
 #import <KeyframelessKit/KKJoyrideDragStep.h>
 #import <KeyframelessKit/KKLog.h>
@@ -27,17 +28,17 @@ static const double kOSCGuideTargetSnap = 4.0;
 // Radius the constants guide's final slider step asks the user to reach, and
 // how close (radius units) counts as "there".
 static const double kConstantsGuideTargetRadius = 80.0;
-// Release tolerance for the slider step — forgiving enough to "land near 80"
+// Release tolerance for the slider step - forgiving enough to "land near 80"
 // by hand (no mid-drag magnetism), then it snaps exactly onto 80.
 static const double kConstantsGuideSliderSnap = 4.0;
 // The mini-canvas (miniOSC) drag step targets a *different* radius than the
 // slider step, with the same generous snap as the in-viewer OSC guide.
 static const double kConstantsGuideS2Radius = 40.0;
 // Magnetic-snap radius (screen points) around the amber target for the
-// mini-canvas drag step — gentle so it doesn't grab from far away.
+// mini-canvas drag step - gentle so it doesn't grab from far away.
 static const CGFloat kConstantsGuideSnapPx = 9.0;
 // Gentle mid-drag magnet (radius units) so the slider knob sticks onto the
-// target as it approaches — same feel as the miniOSC, but not grabby.
+// target as it approaches - same feel as the miniOSC, but not grabby.
 static const double kConstantsGuideSliderMagnet = 2.0;
 // Crop drag step: drag the top-left handle (index 0 in KKCropPt order) to a
 // centred 60% box. Target [w,h,x,y]; snap reuses kConstantsGuideSnapPx.
@@ -50,62 +51,9 @@ static NSArray<NSNumber *> *KKConstantsGuideCropTarget(void) {
 static const NSInteger kConstantsGuideCropXComponent = 2;
 static const double kConstantsGuideCropXTarget = 100.0;
 
-// Fits the viewer to the window via System Events AppleScript — host-aware:
-// FCP is "Window > Go To > Viewer" then "View > Zoom to Fit"; Motion is
-// "View > Zoom Level > Fit in Window". Runs synchronously — call from a
-// background queue or dispatch_async.
-static void RoundedTriggerHostZoomToFit(void) {
-  BOOL fcp = [KKHostInfo isRunningInFinalCut];
-  NSString *src = fcp ? @"tell application \"System Events\"\n"
-                         "  tell process \"Final Cut Pro\"\n"
-                         "    tell menu bar 1\n"
-                         "      tell menu bar item \"Window\"\n"
-                         "        tell menu \"Window\"\n"
-                         "          tell menu item \"Go To\"\n"
-                         "            tell menu \"Go To\"\n"
-                         "              click menu item \"Viewer\"\n"
-                         "            end tell\n"
-                         "          end tell\n"
-                         "        end tell\n"
-                         "      end tell\n"
-                         "    end tell\n"
-                         "    delay 0.1\n"
-                         "    tell menu bar 1\n"
-                         "      tell menu bar item \"View\"\n"
-                         "        tell menu \"View\"\n"
-                         "          click menu item \"Zoom to Fit\"\n"
-                         "        end tell\n"
-                         "      end tell\n"
-                         "    end tell\n"
-                         "  end tell\n"
-                         "end tell"
-                      : @"tell application \"System Events\"\n"
-                         "  tell process \"Motion\"\n"
-                         "    tell menu bar 1\n"
-                         "      tell menu bar item \"View\"\n"
-                         "        tell menu \"View\"\n"
-                         "          tell menu item \"Zoom Level\"\n"
-                         "            tell menu \"Zoom Level\"\n"
-                         "              click menu item \"Fit in Window\"\n"
-                         "            end tell\n"
-                         "          end tell\n"
-                         "        end tell\n"
-                         "      end tell\n"
-                         "    end tell\n"
-                         "  end tell\n"
-                         "end tell";
-  NSAppleScript *script = [[NSAppleScript alloc] initWithSource:src];
-  NSDictionary *err = nil;
-  [script executeAndReturnError:&err];
-  if (err)
-    KKLogWarn(@"[OSCGuide] zoom-to-fit AppleScript error (%@): %@",
-              fcp ? @"FCP" : @"Motion", err);
-  [script release];
-}
-
 @implementation RoundedInspectorView (Guides)
 
-// One host serves all guides — they're mutually exclusive and share the same
+// One host serves all guides - they're mutually exclusive and share the same
 // timeline accessor/applier + completion-callback wiring. Lazy so it picks up
 // `self.basicLanesView` after the superclass finishes setting it up.
 - (KKJoyrideGuideHost *)_guideHost {
@@ -136,25 +84,17 @@ static void RoundedTriggerHostZoomToFit(void) {
 }
 
 - (void)_maybeAutostartIntroGuide {
-  if (self.isDetachedCopy)
-    return;
-  if (!self.window)
-    return;
-  if (self.basicLanesView.currentTimeline.lanes.count > 0)
-    return;
-  if ([NSUserDefaults.standardUserDefaults boolForKey:kRoundedIntroSeenKey])
-    return;
   __weak typeof(self) weak = self;
-  dispatch_async(dispatch_get_main_queue(), ^{
-    __strong typeof(self) strong = weak;
-    if (!strong || !strong.window)
-      return;
-    if (strong.basicLanesView.currentTimeline.lanes.count > 0)
-      return;
-    if ([NSUserDefaults.standardUserDefaults boolForKey:kRoundedIntroSeenKey])
-      return;
-    [strong _startIntroGuide];
-  });
+  [[self _guideHost] autostartOnceWithSeenKey:kRoundedIntroSeenKey
+      precondition:^BOOL {
+        __strong typeof(weak) s = weak;
+        return s && !s.isDetachedCopy &&
+               s.basicLanesView.currentTimeline.lanes.count == 0;
+      }
+      start:^{
+        __strong typeof(weak) s = weak;
+        [s _startIntroGuide];
+      }];
 }
 
 // The 3 inspector intro steps. Trigger plumbing (advance/dismiss/close-on-
@@ -172,22 +112,25 @@ static void RoundedTriggerHostZoomToFit(void) {
   __weak KKJoyrideLanesBinder *weakBinder = binder;
 
   KKJoyrideStep *s1 = [KKJoyrideStep
-      stepWithMessage:@"Tap <symbol plus.circle.fill color=accent /> to add "
-                      @"an animated property"
+      stepWithMessage:RLoc(@"Tap <symbol plus.circle.fill color=accent /> to "
+                           @"add an animated property",
+                           @"Intro guide: add an animatable property.")
            targetView:^NSView * {
              __strong KKTimelineLanesView *b = weakBasic;
              return b.footerView;
            }];
 
   KKJoyrideStep *s2 = [KKJoyrideStep
-      stepWithMessage:@"Tap <accent>Radius</accent> to animate it"
+      stepWithMessage:RLoc(@"Tap <accent>Radius</accent> to animate it",
+                           @"Intro guide: tap Radius to make it animatable.")
            targetView:^NSView * {
              __strong KKJoyrideLanesBinder *b = weakBinder;
              return b.latestManagePopoverRow;
            }];
 
   KKJoyrideStep *s3 = [KKJoyrideStep
-      stepWithMessage:@"Drag the timeline to animate this property"
+      stepWithMessage:RLoc(@"Drag the timeline to animate this property",
+                           @"Intro guide: scrub the timeline to animate.")
            targetView:^NSView * {
              __strong KKJoyrideLanesBinder *b = weakBinder;
              return b.latestOptedInLaneRow;
@@ -215,7 +158,7 @@ static void RoundedTriggerHostZoomToFit(void) {
 }
 
 // Autostart path: no seed (so the lanes the user creates during the guide
-// persist after it ends — the host won't save+restore). The intro-seen flag
+// persist after it ends - the host won't save+restore). The intro-seen flag
 // is set in extraOnComplete regardless of skip vs complete, matching the
 // pre-host behaviour.
 - (void)_startIntroGuide {
@@ -264,7 +207,7 @@ static void RoundedTriggerHostZoomToFit(void) {
 
 // The point-OSC value mapping for the generic KKJoyrideOSCSegment: how a
 // screen drag becomes a radius and back. This is the only OSC-shape-specific
-// code the inspector still owns — a different OSC supplies its own strategy.
+// code the inspector still owns - a different OSC supplies its own strategy.
 - (KKOSCGuideStrategy *)_pointOSCStrategy {
   __weak typeof(self) weak = self;
   __weak KKTimelineLanesView *weakBasic = self.basicLanesView;
@@ -280,7 +223,7 @@ static void RoundedTriggerHostZoomToFit(void) {
     RoundedSetGuideRadius(v); // OSC handle tracks (blob unreadable in drawOSC)
   };
   s.valueForScreenPoint = ^double(NSPoint pt) {
-    // Map the cursor to the radius that puts the OSC handle under it — the
+    // Map the cursor to the radius that puts the OSC handle under it - the
     // OSC's own geometry, so the drag tracks the mouse 1:1 like a native drag.
     return RoundedGuideRadiusForScreenPoint(pt);
   };
@@ -298,11 +241,15 @@ static void RoundedTriggerHostZoomToFit(void) {
   s.targetValue = kOSCGuideTargetRadius;
   s.snapTolerance = kOSCGuideTargetSnap;
   s.requireTargetHit = self.oscGuideRequireTargetHit;
-  s.clickMessage = @"Click the <accent>circle</accent> in the viewer to "
-                   @"control the radius";
-  s.dragMessage = @"Drag toward the <warn>glowing target</warn>";
-  s.selectedMessage =
-      @"The OSC is available whenever <accent>Rounded</accent> is selected";
+  s.clickMessage = RLoc(
+      @"Click the <accent>circle</accent> in the viewer to control the radius",
+      @"OSC guide: click message for the radius circle.");
+  s.dragMessage =
+      RLoc(@"Drag toward the <warn>glowing target</warn>",
+           @"Drag message shown for OSC and crop-corner guide steps.");
+  s.selectedMessage = RLoc(
+      @"The OSC is available whenever <accent>Rounded</accent> is selected",
+      @"OSC guide: shown when the clip is selected.");
   // Point at THIS effect's FCP header (plugin-instance-scoped so multiple
   // effects each resolve their own); nil → floating tip.
   s.finalStepTargetRect = ^NSRect {
@@ -339,34 +286,9 @@ static void RoundedTriggerHostZoomToFit(void) {
   _oscSegment = nil;
 }
 
-// Starts the OSC guide on the already-prepared host (seed applied + settle
-// settled). Wired into the AppleScript zoom dance below.
-- (void)_runOSCGuideOnPreparedHost {
-  KKJoyrideGuideHost *host = [self _guideHost];
-  __weak typeof(self) weak = self;
-  [host
-      runBuildSteps:^NSArray<KKJoyrideStep *> *(KKJoyrideController *guide,
-                                                KKJoyrideLanesBinder *binder) {
-        __strong typeof(weak) s = weak;
-        return s ? [s _oscStepsForGuide:guide
-                            displayBase:0
-                           displayTotal:3
-                       firstStepOnEnter:nil]
-                 : @[];
-      }
-      extraOnComplete:^{
-        __strong typeof(self) s = weak;
-        if (!s)
-          return;
-        RoundedSetOSCGuideStep(0);
-        [s _teardownOSCSegment];
-        s->_oscGuideActive = NO;
-      }];
-}
-
 // Builds the guide's single-lane Radius timeline at the given value. The OSC
 // reads radius from this blob (via parameterChanged → instance state), so
-// writing it is the only channel that moves the on-screen control — the
+// writing it is the only channel that moves the on-screen control - the
 // in-viewer OSC never receives events through the overlay and its API is nil
 // outside FCP callbacks.
 - (KKTimeline *)_guideTimelineWithRadius:(double)radius {
@@ -420,55 +342,43 @@ static void RoundedTriggerHostZoomToFit(void) {
 
 - (void)restartOSCGuide {
   // Step 1: spotlight on the handle, no target yet. The press bumps to OSC
-  // step 2 (in spotlightMouseDown) which reveals the target — the handle
+  // step 2 (in spotlightMouseDown) which reveals the target - the handle
   // already follows sGuideRadius at any step > 0.
   RoundedSetOSCGuideStep(1);
   // The OSC handle reads sGuideRadius during the guide; reset it so a new
   // guide starts at the default and doesn't remember the last drag.
   RoundedSetGuideRadius(20.0);
 
-  // Save current + apply clean seed BEFORE the AppleScript dance — the dance
-  // needs the seed in place. The host stashes the saved timeline for restore
-  // when -runBuildSteps:'s onComplete eventually fires.
   KKJoyrideGuideHost *host = [self _guideHost];
   host.forwardsGestures = NO;
-  [host prepareWithSeed:[self _guideTimelineWithRadius:20.0]];
   _oscGuideActive = YES;
 
-  __weak typeof(self) weakSelf = self;
-  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-    RoundedTriggerHostZoomToFit();
-    // The AppleScript zoom-to-fit is async; FCP needs time to actually
-    // resize the viewer. drawOSC already gets fresh canvas corners, but the
-    // viewer-screen rect doesn't refresh until FCP re-renders/re-processes
-    // post-resize. Wait for the resize to settle, then force a param write
-    // (same clean timeline) so parameterChanged → re-render → drawOSC runs
-    // at the FINAL geometry before the guide reads the spotlight position.
-    dispatch_after(
-        dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)),
-        dispatch_get_main_queue(), ^{
-          __strong typeof(self) s = weakSelf;
-          if (!s)
-            return;
-          KKTimeline *settle = [s _guideTimelineWithRadius:20.0];
-          [s.basicLanesView applyTimeline:settle];
-          if (s.onTimelineMutated)
-            s.onTimelineMutated(settle);
-          dispatch_after(
-              dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)),
-              dispatch_get_main_queue(), ^{
-                __strong typeof(self) s2 = weakSelf;
-                if (s2)
-                  [s2 _runOSCGuideOnPreparedHost];
-              });
-        });
-  });
+  // The host runs the zoom-to-fit + settle warm-up, then starts these steps.
+  __weak typeof(self) weak = self;
+  [host runOSCGuideWithSeed:[self _guideTimelineWithRadius:20.0]
+      buildSteps:^NSArray<KKJoyrideStep *> *(KKJoyrideController *guide,
+                                             KKJoyrideLanesBinder *binder) {
+        __strong typeof(weak) s = weak;
+        return s ? [s _oscStepsForGuide:guide
+                            displayBase:0
+                           displayTotal:3
+                       firstStepOnEnter:nil]
+                 : @[];
+      }
+      extraOnComplete:^{
+        __strong typeof(self) s = weak;
+        if (!s)
+          return;
+        RoundedSetOSCGuideStep(0);
+        [s _teardownOSCSegment];
+        s->_oscGuideActive = NO;
+      }];
 }
 
 // Crossover into the OSC portion: the user finished the inspector portion and
 // the first OSC step just became active. Zoom-to-fit already ran up front (in
 // restartFullWalkthroughGuide) so FCP's focus steal happened before the
-// overlay existed — here we only do the focus-free work: enable the OSC guide
+// overlay existed - here we only do the focus-free work: enable the OSC guide
 // visuals and seed a clean Radius-only timeline (the drag math needs one
 // Radius lane). That param write retriggers drawOSC at the already-fitted
 // geometry, and the position observer's refreshSpotlight reveals the cutout.
@@ -481,52 +391,6 @@ static void RoundedTriggerHostZoomToFit(void) {
     self.onTimelineMutated(clean);
 }
 
-// Concrete example of one guide that crosses inspector → OSC: a single
-// controller running the 3 inspector intro steps followed by the 2 OSC steps.
-// The same KKJoyrideController drives both — inspector steps target NSViews,
-// OSC steps target screen rects + capture the gesture; the only seam is the
-// first OSC step's onEnter, which switches the viewer into OSC-guide mode.
-// The focus-stealing zoom-to-fit already ran up front in
-// restartFullWalkthroughGuide (before the overlay existed), so the crossover
-// is now a quiet param write that doesn't pull FCP in front of the overlay.
-- (void)_runFullWalkthroughOnPreparedHost {
-  KKJoyrideGuideHost *host = [self _guideHost];
-  __weak typeof(self) weak = self;
-  [host
-      runBuildSteps:^NSArray<KKJoyrideStep *> *(KKJoyrideController *guide,
-                                                KKJoyrideLanesBinder *binder) {
-        __strong typeof(weak) s = weak;
-        if (!s)
-          return @[];
-        NSArray<KKJoyrideStep *> *introSteps = [s _introStepsForGuide:guide
-                                                         displayTotal:6
-                                                               binder:binder];
-        void (^warmUp)(void) = ^{
-          __strong typeof(weak) sw = weak;
-          if (!sw)
-            return;
-          // Inspector portion done — record it seen, then enter the OSC portion
-          // (quiet param write; zoom-to-fit already ran up front).
-          [NSUserDefaults.standardUserDefaults setBool:YES
-                                                forKey:kRoundedIntroSeenKey];
-          [NSUserDefaults.standardUserDefaults synchronize];
-          [sw _enterFullWalkthroughOSCPortion];
-        };
-        NSArray<KKJoyrideStep *> *oscSteps = [s _oscStepsForGuide:guide
-                                                      displayBase:3
-                                                     displayTotal:6
-                                                 firstStepOnEnter:warmUp];
-        NSMutableArray<KKJoyrideStep *> *all = [introSteps mutableCopy];
-        [all addObjectsFromArray:oscSteps];
-        return all;
-      }
-      extraOnComplete:^{
-        __strong typeof(weak) s = weak;
-        RoundedSetOSCGuideStep(0);
-        [s _teardownOSCSegment];
-      }];
-}
-
 - (void)_teardownConstantsScrollMonitors {
   [_constantsScrollFwd teardown];
   [_constantsScrollFwd release];
@@ -536,7 +400,7 @@ static void RoundedTriggerHostZoomToFit(void) {
 // Scroll/pinch routing during the guide now lives in the reusable
 // KKMiniCanvasGuideScroll (any plugin's mini-canvas guide gets it). It
 // forwards to the canvas only while the constants guide is active and the
-// pointer is over the canvas. (Magnify monitors are the real pinch carrier —
+// pointer is over the canvas. (Magnify monitors are the real pinch carrier -
 // see [[project_joyride_xpc_popover_gestures]].)
 - (void)_installConstantsScrollMonitorsForCanvas:(KKMiniCanvasView *)canvas {
   [self _teardownConstantsScrollMonitors];
@@ -568,8 +432,9 @@ static void RoundedTriggerHostZoomToFit(void) {
                   ixReset = 4, ixSlider = 5, ixTypeX = 6, ixLast = 6;
 
   KKJoyrideStep *s1 = [KKJoyrideStep
-      stepWithMessage:@"Tap <accent>Constants</accent> to edit values that "
-                      @"don't change over time"
+      stepWithMessage:RLoc(@"Tap <accent>Constants</accent> to edit values "
+                           @"that don't change over time",
+                           @"Constants guide: open the Constants editor.")
            targetView:^NSView * {
              __strong typeof(self) s = weak;
              return s ? s.constantsButton : nil;
@@ -589,8 +454,12 @@ static void RoundedTriggerHostZoomToFit(void) {
   KKJoyrideStep *s2 = [KKJoyrideDragStep stepForGuide:guide
       atIndex:ixRadius
       isLast:(ixRadius == ixLast)
-      clickMessage:@"Click the <accent>dot</accent> to set the corner radius"
-      dragMessage:@"Drag toward the <warn>glowing target</warn>"
+      clickMessage:
+          RLoc(@"Click the <accent>dot</accent> to set the corner radius",
+               @"Constants guide: click message for the radius dot.")
+      dragMessage:
+          RLoc(@"Drag toward the <warn>glowing target</warn>",
+               @"Drag message shown for OSC and crop-corner guide steps.")
       circular:YES
       spotRect:^NSRect {
         __strong KKMiniCanvasView *c = weakBinder.latestMiniCanvas;
@@ -630,8 +499,11 @@ static void RoundedTriggerHostZoomToFit(void) {
   KKJoyrideStep *sCrop = [KKJoyrideDragStep stepForGuide:guide
       atIndex:ixCrop
       isLast:(ixCrop == ixLast)
-      clickMessage:@"Click the <accent>top-left</accent> crop corner"
-      dragMessage:@"Drag the corner toward the <warn>glowing target</warn>"
+      clickMessage:RLoc(@"Click the <accent>top-left</accent> crop corner",
+                        @"Constants guide: click message for the crop corner.")
+      dragMessage:RLoc(
+                      @"Drag the corner toward the <warn>glowing target</warn>",
+                      @"Constants guide: drag message for the crop corner.")
       circular:YES
       spotRect:^NSRect {
         __strong KKMiniCanvasView *c = weakBinder.latestMiniCanvas;
@@ -659,8 +531,10 @@ static void RoundedTriggerHostZoomToFit(void) {
       }];
 
   KKJoyrideStep *s3 = [KKJoyrideStep
-      stepWithMessage:@"Scroll to <accent>zoom</accent>, two-finger drag to "
-                      @"<accent>pan</accent> the preview"
+      stepWithMessage:RLoc(
+                          @"Scroll to <accent>zoom</accent>, two-finger drag "
+                          @"to <accent>pan</accent> the preview",
+                          @"Constants guide: zoom/pan the mini-canvas preview.")
            targetView:^NSView * {
              return weakBinder.latestMiniCanvas;
            }];
@@ -669,14 +543,15 @@ static void RoundedTriggerHostZoomToFit(void) {
   };
 
   KKJoyrideStep *s4 = [KKJoyrideStep
-      stepWithMessage:@"<accent>Double-click</accent> the preview to reset "
-                      @"the view"
+      stepWithMessage:
+          RLoc(@"<accent>Double-click</accent> the preview to reset the view",
+               @"Constants guide: reset the mini-canvas zoom/pan.")
            targetView:^NSView * {
              return weakBinder.latestMiniCanvas;
            }];
 
   // The slider has a modal tracking loop, so (unlike pan/scroll) its drag
-  // can't be forwarded — capture it and drive the constant through the
+  // can't be forwarded - capture it and drive the constant through the
   // popover's coalesced channel. Same KKJoyrideDragStep factory, slider
   // variant: target shown immediately (no press-gated reveal, dragMessage
   // nil) and not circular. The map uses the slider's own screen geometry so
@@ -696,16 +571,22 @@ static void RoundedTriggerHostZoomToFit(void) {
   KKJoyrideStep *s5 = [KKJoyrideDragStep stepForGuide:guide
       atIndex:ixSlider
       isLast:(ixSlider == ixLast)
-      clickMessage:@"Drag the slider to the <warn>target</warn> (80)"
+      clickMessage:RLoc(@"Drag the slider to the <warn>target</warn> (80)",
+                        @"Constants guide: drag a slider to a target value.")
       dragMessage:nil
       circular:NO
       spotRect:^NSRect {
+        // Spotlight the knob at its current value - the actual grab point -
+        // not the whole track/row. The cutout is drawn as a capsule anchored
+        // at the spot's CENTRE (radius = its short dimension), so a wide
+        // control collapses to a circle at the track midpoint and the thumb
+        // (sitting off-centre at the value) falls outside it. Tracking the
+        // knob keeps the cutout on the thumb wherever it is - same as the
+        // keypose-diamond step, whose spot already is the thing you grab.
         __strong typeof(self) s = weak;
-        NSView *r = [s.basicLanesView staticValueRowViewForLabel:@"Radius"];
-        NSWindow *w = r.window;
-        if (!r || !w)
-          return NSZeroRect;
-        return [w convertRectToScreen:[r convertRect:r.bounds toView:nil]];
+        return s ? [s.basicLanesView
+                       guideConstantSliderKnobScreenRectForLabel:@"Radius"]
+                 : NSZeroRect;
       }
       targetRect:^NSRect {
         __strong typeof(self) s = weak;
@@ -749,12 +630,13 @@ static void RoundedTriggerHostZoomToFit(void) {
       }];
 
   // Final step: click into the Crop X field and type the target value. No
-  // capture — a normal forwarded click focuses the field, the user types,
+  // capture - a normal forwarded click focuses the field, the user types,
   // and the live-keystroke handler (set in willOpen) auto-commits + ends
   // the guide when the value matches.
   KKJoyrideStep *sX = [KKJoyrideStep
-      stepWithMessage:@"Click the <accent>X</accent> field and type "
-                      @"<warn>100</warn>"
+      stepWithMessage:
+          RLoc(@"Click the <accent>X</accent> field and type <warn>100</warn>",
+               @"Constants guide: type a value into the X field.")
            targetView:nil];
   sX.targetScreenRect = ^NSRect {
     __strong typeof(self) s = weak;
@@ -895,28 +777,29 @@ static void RoundedTriggerHostZoomToFit(void) {
   (void)ixDone;
 
   // Step 15: auto-pause this long after the user starts playback before
-  // advancing — long enough to see a beat of the animation, short enough
+  // advancing - long enough to see a beat of the animation, short enough
   // that the demo doesn't feel like it's stalled.
   const double kWatchBackSeconds = 1.0;
 
-  // Step 14: drag the In-end diamond to t=0.8s. Snap window in seconds —
+  // Step 14: drag the In-end diamond to t=0.8s. Snap window in seconds -
   // both for the gentle in-drag magnet and the final release tolerance.
   const double kDragTargetSeconds = 0.8;
   const double kDragSnapSeconds = 0.05;
   const CGFloat kDragSnapPx = 14.0;
 
   // KKIntervalCurveElastic == 4 (Linear=0, EaseIn=1, EaseOut=2, EaseInOut=3,
-  // Elastic=4, Bounce=5) — what we present to users as the "Spring" curve.
+  // Elastic=4, Bounce=5) - what we present to users as the "Spring" curve.
   const NSInteger kSpringCurveType = 4;
 
-  // Diamond 2 (hold-start) — chronologically the second visible keypose
+  // Diamond 2 (hold-start) - chronologically the second visible keypose
   // once the In transition is on (the diamonds the user just saw appear).
   const NSInteger kDiamondTarget = 2;
   __block BOOL cropChanged = NO, radiusChanged = NO;
 
   KKJoyrideStep *s1 = [KKJoyrideStep
-      stepWithMessage:@"Here is where you edit the <accent>timing</accent> "
-                      @"of things"
+      stepWithMessage:
+          RLoc(@"Here is where you edit the <accent>timing</accent> of things",
+               @"Basic timing guide: intro to the timing editor.")
            targetView:^NSView * {
              __strong KKTimelineBasicView *g = weakGraph;
              __strong KKTimelineLanesView *b = weakBasic;
@@ -924,12 +807,14 @@ static void RoundedTriggerHostZoomToFit(void) {
            }];
   s1.showsNext = YES;
 
-  // Step 2: click to play, then click again to pause — advances on the
+  // Step 2: click to play, then click again to pause - advances on the
   // pause edge. Useful demo when the spacebar shortcut isn't working.
   KKJoyrideStep *sPlay = [KKJoyrideStep
-      stepWithMessage:@"Click <symbol play.fill color=accent /> to play, then "
-                      @"again to <accent>pause</accent> — handy when "
-                      @"<warn>spacebar</warn> isn't working"
+      stepWithMessage:RLoc(
+                          @"Click <symbol play.fill color=accent /> to play, "
+                          @"then again to <accent>pause</accent> - handy when "
+                          @"<warn>spacebar</warn> isn't working",
+                          @"Basic timing guide: play/pause from the inspector.")
            targetView:nil];
   sPlay.targetScreenRect = ^NSRect {
     __strong typeof(self) s = weak;
@@ -937,26 +822,30 @@ static void RoundedTriggerHostZoomToFit(void) {
   };
 
   KKJoyrideStep *s2 = [KKJoyrideStep
-      stepWithMessage:@"Tap <symbol plus.circle.fill color=accent /> to add "
-                      @"<accent>Crop</accent> and <accent>Radius</accent> "
-                      @"for animation"
+      stepWithMessage:
+          RLoc(@"Tap <symbol plus.circle.fill color=accent /> to add "
+               @"<accent>Crop</accent> and <accent>Radius</accent> for "
+               @"animation",
+               @"Basic timing guide: add Crop and Radius for animation.")
            targetView:^NSView * {
              __strong KKTimelineLanesView *b = weakBasic;
              return b.footerView;
            }];
 
-  KKJoyrideStep *s3 =
-      [KKJoyrideStep stepWithMessage:@"Tap <accent>Crop</accent>"
-                          targetView:nil];
+  KKJoyrideStep *s3 = [KKJoyrideStep
+      stepWithMessage:RLoc(@"Tap <accent>Crop</accent>",
+                           @"Basic timing guide: tap the Crop property.")
+           targetView:nil];
   s3.targetScreenRect = ^NSRect {
     __strong KKTimelineLanesView *b = weakBasic;
     return b ? [b guideManagePopoverItemScreenRectForLabel:@"Crop"]
              : NSZeroRect;
   };
 
-  KKJoyrideStep *s4 =
-      [KKJoyrideStep stepWithMessage:@"Tap <accent>Radius</accent>"
-                          targetView:nil];
+  KKJoyrideStep *s4 = [KKJoyrideStep
+      stepWithMessage:RLoc(@"Tap <accent>Radius</accent>",
+                           @"Basic timing guide: tap the Radius property.")
+           targetView:nil];
   s4.targetScreenRect = ^NSRect {
     __strong KKTimelineLanesView *b = weakBasic;
     return b ? [b guideManagePopoverItemScreenRectForLabel:@"Radius"]
@@ -964,8 +853,10 @@ static void RoundedTriggerHostZoomToFit(void) {
   };
 
   KKJoyrideStep *s5 = [KKJoyrideStep
-      stepWithMessage:@"Basic timing has three phases: <accent>In</accent>, "
-                      @"<accent>Hold</accent>, and <accent>Out</accent>"
+      stepWithMessage:
+          RLoc(@"Basic timing has three phases: <accent>In</accent>, "
+               @"<accent>Hold</accent>, and <accent>Out</accent>",
+               @"Basic timing guide: explains the three phases.")
            targetView:^NSView * {
              __strong KKTimelineBasicView *g = weakGraph;
              return g;
@@ -973,7 +864,8 @@ static void RoundedTriggerHostZoomToFit(void) {
   s5.showsNext = YES;
 
   KKJoyrideStep *s6 = [KKJoyrideStep
-      stepWithMessage:@"Turn on the <accent>In</accent> transition"
+      stepWithMessage:RLoc(@"Turn on the <accent>In</accent> transition",
+                           @"Basic timing guide: enable the In transition.")
            targetView:nil];
   s6.targetScreenRect = ^NSRect {
     __strong KKTimelineBasicView *g = weakGraph;
@@ -981,8 +873,10 @@ static void RoundedTriggerHostZoomToFit(void) {
   };
 
   KKJoyrideStep *sGraph = [KKJoyrideStep
-      stepWithMessage:@"Notice the <accent>graph</accent> has updated to "
-                      @"show the general movement"
+      stepWithMessage:
+          RLoc(@"Notice the <accent>graph</accent> has updated to show the "
+               @"general movement",
+               @"Basic timing guide: the easing graph reflects the transition.")
            targetView:^NSView * {
              __strong KKTimelineBasicView *g = weakGraph;
              return g;
@@ -990,8 +884,9 @@ static void RoundedTriggerHostZoomToFit(void) {
   sGraph.showsNext = YES;
 
   KKJoyrideStep *sDiamond = [KKJoyrideStep
-      stepWithMessage:@"Click one of the <accent>diamonds</accent> to edit "
-                      @"values at that point in time"
+      stepWithMessage:RLoc(@"Click one of the <accent>diamonds</accent> to "
+                           @"edit values at that point in time",
+                           @"Basic timing guide: edit a keypose diamond.")
            targetView:nil];
   sDiamond.targetScreenRect = ^NSRect {
     __strong KKTimelineBasicView *g = weakGraph;
@@ -999,21 +894,24 @@ static void RoundedTriggerHostZoomToFit(void) {
   };
 
   KKJoyrideStep *sMini = [KKJoyrideStep
-      stepWithMessage:@"This <accent>mini viewer</accent> shows the clip at "
-                      @"this point in time — no need to scrub around"
+      stepWithMessage:RLoc(@"This <accent>mini viewer</accent> shows the clip "
+                           @"at this point in time - no need to scrub around",
+                           @"Advanced timing guide: the keypose mini viewer.")
            targetView:^NSView * {
              return weakBinder.latestMiniCanvas;
            }];
   sMini.showsNext = YES;
 
-  // Drag the radius dot OR a crop corner inside the boundary popover —
+  // Drag the radius dot OR a crop corner inside the boundary popover -
   // same canvas API the constants guide uses for radius/crop drags, so the
   // popover's onDragBegin/onHandleValue/onDragEnd fire in a clean pair (no
   // leaked action scopes). Advances once both Crop AND Radius have been
   // changed (tracked via onStaticValueChanged below).
   KKJoyrideStep *sEdit = [KKJoyrideStep
-      stepWithMessage:@"Drag the <accent>dot</accent> for Radius or a "
-                      @"<accent>corner</accent> for Crop"
+      stepWithMessage:
+          RLoc(@"Drag the <accent>dot</accent> for Radius or a "
+               @"<accent>corner</accent> for Crop",
+               @"Basic timing guide: edit values in the mini viewer.")
            targetView:nil];
   sEdit.spotlightCircular = NO;
   sEdit.spotlightPassThrough = YES;
@@ -1040,8 +938,10 @@ static void RoundedTriggerHostZoomToFit(void) {
   };
 
   KKJoyrideStep *sGap = [KKJoyrideStep
-      stepWithMessage:@"Click the <accent>gap</accent> between keyposes to "
-                      @"edit timing"
+      stepWithMessage:
+          RLoc(
+              @"Click the <accent>gap</accent> between keyposes to edit timing",
+              @"Advanced timing guide: click a gap segment.")
            targetView:nil];
   sGap.targetScreenRect = ^NSRect {
     __strong KKTimelineBasicView *g = weakGraph;
@@ -1049,7 +949,7 @@ static void RoundedTriggerHostZoomToFit(void) {
              : NSZeroRect;
   };
 
-  // No spotlightPassThrough — that sends the click to FCP. We want it
+  // No spotlightPassThrough - that sends the click to FCP. We want it
   // forwarded to the XPC popover so the pill receives it (same path as the
   // Crop/Radius row click in the animated-dropdown popover).
   // Step 14: drag diamond 2 (Hold-start / In-end) toward 0.8s on the
@@ -1067,8 +967,10 @@ static void RoundedTriggerHostZoomToFit(void) {
   KKJoyrideStep *sDrag = [KKJoyrideDragStep stepForGuide:guide
       atIndex:ixDragDiamond
       isLast:NO
-      clickMessage:@"Drag the <accent>diamond</accent> toward the "
-                   @"<warn>glowing target</warn> (0.8s)"
+      clickMessage:
+          RLoc(@"Drag the <accent>diamond</accent> toward the <warn>glowing "
+               @"target</warn> (0.8s)",
+               @"Basic timing guide: drag a keypose diamond to a target time.")
       dragMessage:nil
       circular:YES
       spotRect:dragSpotRect
@@ -1094,10 +996,11 @@ static void RoundedTriggerHostZoomToFit(void) {
       }];
 
   KKJoyrideStep *sWatchBack = [KKJoyrideStep
-      stepWithMessage:@"Let's <accent>watch it back</accent> — click play"
+      stepWithMessage:RLoc(@"Let's <accent>watch it back</accent> - click play",
+                           @"Basic timing guide: play back the animation.")
            targetView:nil];
   // Cutout encompasses both the play button AND the FCP viewer (when the OSC
-  // is alive — the shared bridge gives us the viewer image rect). Non-
+  // is alive - the shared bridge gives us the viewer image rect). Non-
   // circular so the wide bounding box renders sensibly.
   sWatchBack.spotlightCircular = NO;
   sWatchBack.targetScreenRect = ^NSRect {
@@ -1113,10 +1016,10 @@ static void RoundedTriggerHostZoomToFit(void) {
   // Reset playhead to clip start before the user hits play, so they always
   // watch from the beginning. onScrub is wired to the host's
   // movePlayheadToTime: (FxCommandAPI), same as restartBasicTimingGuide.
-  __block CFAbsoluteTime watchBackEnteredAt = 0;
+  __block BOOL watchBackScheduled = NO;
   sWatchBack.onEnter = ^{
     __strong typeof(self) s = weak;
-    watchBackEnteredAt = CFAbsoluteTimeGetCurrent();
+    watchBackScheduled = NO;
     if (s && s.onScrub)
       s.onScrub(0.0);
     // Wake up the OSC so the bridge gets a draw tick → its
@@ -1128,15 +1031,18 @@ static void RoundedTriggerHostZoomToFit(void) {
   };
 
   KKJoyrideStep *sDone = [KKJoyrideStep
-      stepWithMessage:@"That's all you need to know to get going!"
+      stepWithMessage:RLoc(@"That's all you need to know to get going!",
+                           @"Basic timing guide: closing step.")
            targetView:^NSView * {
              __strong KKTimelineBasicView *g = weakGraph;
              return g;
            }];
 
-  KKJoyrideStep *sSpring =
-      [KKJoyrideStep stepWithMessage:@"Pick the <accent>Spring</accent> curve"
-                          targetView:nil];
+  KKJoyrideStep *sSpring = [KKJoyrideStep
+      stepWithMessage:
+          RLoc(@"Pick the <accent>Spring</accent> curve",
+               @"Basic timing guide: choose the Spring easing curve.")
+           targetView:nil];
   sSpring.targetScreenRect = ^NSRect {
     __strong KKSegmentEditView *e = weakBinder.latestGapSegmentEditor;
     return e ? [e guideCurvePillScreenRectForCurve:kSpringCurveType]
@@ -1144,12 +1050,14 @@ static void RoundedTriggerHostZoomToFit(void) {
   };
 
   // Declarative advance/dismiss via the binder. The "armed" diamond/gap →
-  // popover-open patterns are now `thenWaitFor:`; the sPlay play→pause edge
-  // is the binder's `playPauseEdge`. sWatchBack's timed auto-advance and
-  // sEdit's multi-signal AND (Crop AND Radius dragged) stay plugin-side.
+  // popover-open patterns are now `thenWaitFor:`; the sPlay play→pause edge is
+  // the binder's `playToggleEdge` - driven by deterministic play-button taps
+  // (not the poll-inferred play state, which flickers under FCP's bursty
+  // currentTime mid-guide and would auto-advance the step). sWatchBack's timed
+  // auto-advance and sEdit's multi-signal AND stay plugin-side.
   [binder bindStep:sPlay
            atIndex:ixPlay
-         advanceOn:[KKJoyrideTrigger playPauseEdge]
+         advanceOn:[KKJoyrideTrigger playToggleEdge]
          dismissOn:nil];
   [binder bindStep:s2
            atIndex:ixAdd
@@ -1198,7 +1106,7 @@ static void RoundedTriggerHostZoomToFit(void) {
                     forStep:sSpring];
 
   // sEdit's "advance ONLY after BOTH Crop AND Radius dragged" doesn't fit a
-  // single trigger — keep it as a plugin-side AND via the binder's relay.
+  // single trigger - keep it as a plugin-side AND via the binder's relay.
   binder.staticValueDragDidEnd =
       ^(NSString *label, NSArray<NSNumber *> *values) {
         __strong KKJoyrideController *g = weakGuide;
@@ -1218,37 +1126,42 @@ static void RoundedTriggerHostZoomToFit(void) {
       };
   // sEdit.onEnter already resets cropChanged/radiusChanged above.
 
-  // Step 15 (sWatchBack): user clicks play → wait kWatchBackSeconds → auto-
-  // pause and advance. Don't await a manual pause — the guide handles it.
-  // Also forward all plays/pauses to the binder so its playPauseEdge fires
-  // for sPlay.
-  self.onPlayingChanged = ^(BOOL playing) {
+  // Both play steps are driven by deterministic play-button taps, not the
+  // poll-inferred play state (which flickers under FCP's bursty currentTime
+  // mid-guide - that flicker used to flash the accent and auto-advance the
+  // step). Each tap is one unambiguous toggle:
+  //   - sPlay advances on `playToggleEdge` (1st tap plays, 2nd pauses), via
+  //     the binder below.
+  //   - sWatchBack starts playback on the 1st tap, then auto-pauses + advances
+  //     after kWatchBackSeconds (no manual pause - the guide handles it).
+  // `guideOwnsPlayState` (set in restartBasicTimingGuide) makes each tap drive
+  // the accent directly, so it tracks the clicks instead of the poll.
+  self.onPlaybackToggleTapped = ^{
     __strong typeof(self) strong = weak;
     __strong KKJoyrideLanesBinder *b = weakBinder;
     __strong KKJoyrideController *g = weakGuide;
-    [b notifyPlayingChanged:playing];
-    if (!g)
+    [b notifyPlaybackToggleTapped];
+    if (!strong || !g || g.currentStepIndex != ixWatchBack)
       return;
-    if (g.currentStepIndex == ixWatchBack && playing) {
-      // Ignore the spurious play=1 FCP pushes right after onScrub(0.0)
-      // (movePlayheadToTime: produces a play/stop blip within ~150ms). If
-      // we don't, we'd schedule auto-pause too early and the 1s toggle
-      // would end up STARTING playback instead of stopping it.
-      if (CFAbsoluteTimeGetCurrent() - watchBackEnteredAt < 0.3)
-        return;
-      dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                                   (int64_t)(kWatchBackSeconds * NSEC_PER_SEC)),
-                     dispatch_get_main_queue(), ^{
-                       __strong typeof(weak) s2 = weak;
-                       __strong KKJoyrideController *g2 = weakGuide;
-                       if (!s2 || !g2 || g2.currentStepIndex != ixWatchBack)
-                         return;
-                       if (s2.onTogglePlayback)
-                         s2.onTogglePlayback();
-                       [g2 advance];
-                     });
-      (void)strong;
-    }
+    // First tap = the user started playback. Schedule the auto-pause +
+    // advance once; ignore further taps within this step.
+    if (watchBackScheduled)
+      return;
+    watchBackScheduled = YES;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                 (int64_t)(kWatchBackSeconds * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+                     __strong typeof(weak) s2 = weak;
+                     __strong KKJoyrideController *g2 = weakGuide;
+                     if (!s2 || !g2 || g2.currentStepIndex != ixWatchBack)
+                       return;
+                     // The auto-pause isn't a user tap, so flip the accent
+                     // off ourselves to match the host stopping.
+                     if (s2.onTogglePlayback)
+                       s2.onTogglePlayback();
+                     [s2 guideSetPlayingAccent:NO];
+                     [g2 advance];
+                   });
   };
 
   return @[
@@ -1258,13 +1171,13 @@ static void RoundedTriggerHostZoomToFit(void) {
 }
 
 - (void)restartBasicTimingGuide {
-  // Force Basic tab — the guide assumes Basic-mode UI (boundary pills,
+  // Force Basic tab - the guide assumes Basic-mode UI (boundary pills,
   // In/Hold/Out projection). If the user last left the inspector on
   // Advanced the guide steps would target controls that aren't visible.
   // Snapshot so we can restore on completion.
   NSInteger priorTab = self.activeTab;
   [self setActiveTab:KKTimelineTabBasic];
-  // Filmstrip/onion would clutter the mini-viewer steps — force a single-frame
+  // Filmstrip/onion would clutter the mini-viewer steps - force a single-frame
   // preview for the guide and restore the user's choice on completion. Plain
   // setter (not _renderModeDidChange:) so persisted UI state is untouched.
   KKMiniCanvasRenderMode priorRenderMode = self.basicLanesView.renderMode;
@@ -1274,9 +1187,15 @@ static void RoundedTriggerHostZoomToFit(void) {
   // letting them through. Without this, a click inside the spotlight reaches
   // the popover natively (canvas's own mouseDown → onHandleDragBegin) AND
   // fires the spotlight block (beginPointHandleDragAtScreenPoint: → ALSO
-  // onHandleDragBegin) — two "Adjust Radius" undo groups race for the same
+  // onHandleDragBegin) - two "Adjust Radius" undo groups race for the same
   // channel and FCP abort()s. Constants guide uses the same flag.
   host.forwardsGestures = YES;
+
+  // The guide owns the play accent for its duration: taps drive it
+  // deterministically and the poll-inferred setPlaying: is ignored, so it
+  // can't flicker the button (or fire spurious edges) under FCP's bursty
+  // currentTime. Restored on completion below.
+  self.guideOwnsPlayState = YES;
 
   // Prereq: park the host playhead at clip start so every step (and the
   // boundary mini-viewer) renders from a predictable position. onScrub is
@@ -1298,7 +1217,8 @@ static void RoundedTriggerHostZoomToFit(void) {
         __strong typeof(weak) s = weak;
         if (!s)
           return;
-        s.onPlayingChanged = nil;
+        s.onPlaybackToggleTapped = nil;
+        s.guideOwnsPlayState = NO;
         s.basicLanesView.renderMode = priorRenderMode;
         if (priorTab != KKTimelineTabBasic)
           [s setActiveTab:priorTab];
@@ -1334,14 +1254,14 @@ static void RoundedTriggerHostZoomToFit(void) {
 
   // KKTimelineLanesView sorts lanes alphabetically by label for display
   // (and only seeds *missing* lanes at the end), so order this seed to
-  // match — otherwise the guide's lane-row lookups land on the wrong row.
+  // match - otherwise the guide's lane-row lookups land on the wrong row.
   tl.lanes = @[ crop, radius ];
   return tl;
 }
 
 // Advanced guide steps (POC): tab-switch → orientation → cmd-click adds a
 // Crop keypose → popover intro → final "drag a pill" + done.
-// Step plumbing is intentionally light — most steps use `showsNext` and the
+// Step plumbing is intentionally light - most steps use `showsNext` and the
 // one auto-advance (cmd-click → popover) reuses the existing
 // `staticValuesPopoverWillOpen` trigger (Advanced's value popover goes
 // through the same `_presentBoundaryValuePopover…` path as Basic).
@@ -1354,13 +1274,14 @@ static void RoundedTriggerHostZoomToFit(void) {
   const NSInteger ixSwitch = 0, ixIntro = 1, ixCmdClick = 2, ixPopover = 3,
                   ixDrag = 4;
 
-  // Step 1 — Tap the Advanced tab segment. forwardsGestures=YES routes the
+  // Step 1 - Tap the Advanced tab segment. forwardsGestures=YES routes the
   // synthesized click to the underlying pill; the inspector's
   // `onGuideTabChanged` (set in `restartAdvancedTimingGuide`) advances the
   // guide once the tab actually flips to Advanced.
   KKJoyrideStep *sSwitch = [KKJoyrideStep
-      stepWithMessage:@"Tap <accent>Advanced</accent> for the per-property "
-                      @"timeline editor"
+      stepWithMessage:RLoc(@"Tap <accent>Advanced</accent> for the "
+                           @"per-property timeline editor",
+                           @"Advanced timing guide: open the Advanced editor.")
            targetView:nil];
   sSwitch.targetScreenRect = ^NSRect {
     __strong typeof(self) s = weak;
@@ -1368,25 +1289,29 @@ static void RoundedTriggerHostZoomToFit(void) {
              : NSZeroRect;
   };
 
-  // Step 2 — Orientation. Cutout the Advanced view itself.
+  // Step 2 - Orientation. Cutout the Advanced view itself.
   KKJoyrideStep *sIntro = [KKJoyrideStep
-      stepWithMessage:@"Each row is a property — drop keyposes anywhere on "
-                      @"the timeline and shape transitions independently"
+      stepWithMessage:
+          RLoc(@"Each row is a property - drop keyposes anywhere on the "
+               @"timeline and shape transitions independently",
+               @"Advanced timing guide: explains the per-property lanes.")
            targetView:^NSView * {
              __strong KKTimelineAdvancedView *a = weakAdv;
              return a;
            }];
   sIntro.showsNext = YES;
 
-  // Step 3 — Cmd-click on the Crop lane. Cutout the whole row; glowing
+  // Step 3 - Cmd-click on the Crop lane. Cutout the whole row; glowing
   // target shows where to drop the new keypose (~50% time). The user
   // performs the cmd-click natively (forwardsGestures = YES). Advance fires
   // when Advanced opens the value popover.
   const double kCropAddFrac = 0.5;
 sCmdClick: {
   KKJoyrideStep *sCmdClick = [KKJoyrideStep
-      stepWithMessage:@"<accent>Cmd-click</accent> the Crop lane at the "
-                      @"<warn>glowing target</warn> to add a keypose"
+      stepWithMessage:
+          RLoc(@"<accent>Cmd-click</accent> the Crop lane at the <warn>glowing "
+               @"target</warn> to add a keypose",
+               @"Advanced timing guide: add a keypose to the Crop lane.")
            targetView:nil];
   sCmdClick.spotlightCircular = NO;
   sCmdClick.targetScreenRect = ^NSRect {
@@ -1400,10 +1325,11 @@ sCmdClick: {
              : NSZeroRect;
   };
 
-  // Step 4 — Popover intro. Cutout the popover content; Next closes it.
+  // Step 4 - Popover intro. Cutout the popover content; Next closes it.
   KKJoyrideStep *sPopover = [KKJoyrideStep
-      stepWithMessage:@"Edit values at this point in time. Next closes the "
-                      @"popover."
+      stepWithMessage:
+          RLoc(@"Edit values at this point in time. Next closes the popover.",
+               @"Advanced timing guide: edit values in the keypose popover.")
            targetView:nil];
   sPopover.targetScreenRect = ^NSRect {
     __strong NSView *content = binder.latestStaticValuesPopoverContent;
@@ -1415,7 +1341,7 @@ sCmdClick: {
   };
   sPopover.showsNext = YES;
 
-  // Step 5 — Drag the Radius KP at t=1 toward an earlier time. Same
+  // Step 5 - Drag the Radius KP at t=1 toward an earlier time. Same
   // KKJoyrideDragStep pattern Basic uses for the diamond drag, so the
   // joyride panel captures the press and feeds it through
   // guideBegin/Drag/EndPillDrag.
@@ -1437,8 +1363,9 @@ sCmdClick: {
   KKJoyrideStep *sDrag = [KKJoyrideDragStep stepForGuide:guide
       atIndex:ixDrag
       isLast:YES
-      clickMessage:@"Drag a Radius keypose toward the "
-                   @"<warn>glowing target</warn>"
+      clickMessage:
+          RLoc(@"Drag a Radius keypose toward the <warn>glowing target</warn>",
+               @"Advanced timing guide: drag a Radius keypose.")
       dragMessage:nil
       circular:YES
       spotRect:sDragSpot
@@ -1467,7 +1394,7 @@ sCmdClick: {
         return fabs(now - kDragTargetFrac) <= kDragSnapFrac;
       }];
   // Closing the boundary value popover is the seam between popover-intro
-  // and drag — the showsNext path on sPopover skips the binder's
+  // and drag - the showsNext path on sPopover skips the binder's
   // closeOnAdvance, so we close it inline as the drag step opens.
   __weak KKTimelineLanesView *weakBasic = self.basicLanesView;
   sDrag.onEnter = ^{
@@ -1542,40 +1469,48 @@ sCmdClick: {
 }
 
 - (void)restartFullWalkthroughGuide {
-  // OSC setup runs UP FRONT — the zoom-to-fit AppleScript steals FCP focus,
-  // so it must fire before the overlay exists. Running it mid-guide pulled
-  // FCP in front and dropped the overlay behind.
+  // OSC setup runs UP FRONT (inside the host warm-up): the zoom-to-fit
+  // AppleScript steals FCP focus, so it must fire before the overlay exists.
   RoundedSetOSCGuideStep(0);
   RoundedSetGuideRadius(20.0);
 
   KKJoyrideGuideHost *host = [self _guideHost];
   host.forwardsGestures = NO;
-  [host prepareWithSeed:[KKTimeline timeline]];
 
-  __weak typeof(self) weakSelf = self;
-  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-    RoundedTriggerHostZoomToFit();
-    dispatch_after(
-        dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)),
-        dispatch_get_main_queue(), ^{
-          __strong typeof(self) s = weakSelf;
-          if (!s)
+  __weak typeof(self) weak = self;
+  [host runOSCGuideWithSeed:[KKTimeline timeline]
+      buildSteps:^NSArray<KKJoyrideStep *> *(KKJoyrideController *guide,
+                                             KKJoyrideLanesBinder *binder) {
+        __strong typeof(weak) s = weak;
+        if (!s)
+          return @[];
+        NSArray<KKJoyrideStep *> *introSteps = [s _introStepsForGuide:guide
+                                                         displayTotal:6
+                                                               binder:binder];
+        void (^warmUp)(void) = ^{
+          __strong typeof(weak) sw = weak;
+          if (!sw)
             return;
-          // Settle: force a re-render at the FINAL geometry before the guide
-          // reads spotlight positions.
-          KKTimeline *settle = [KKTimeline timeline];
-          [s.basicLanesView applyTimeline:settle];
-          if (s.onTimelineMutated)
-            s.onTimelineMutated(settle);
-          dispatch_after(
-              dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)),
-              dispatch_get_main_queue(), ^{
-                __strong typeof(self) s2 = weakSelf;
-                if (s2)
-                  [s2 _runFullWalkthroughOnPreparedHost];
-              });
-        });
-  });
+          // Inspector portion done: record it seen, then enter the OSC portion
+          // (quiet param write; zoom-to-fit already ran up front).
+          [NSUserDefaults.standardUserDefaults setBool:YES
+                                                forKey:kRoundedIntroSeenKey];
+          [NSUserDefaults.standardUserDefaults synchronize];
+          [sw _enterFullWalkthroughOSCPortion];
+        };
+        NSArray<KKJoyrideStep *> *oscSteps = [s _oscStepsForGuide:guide
+                                                      displayBase:3
+                                                     displayTotal:6
+                                                 firstStepOnEnter:warmUp];
+        NSMutableArray<KKJoyrideStep *> *all = [introSteps mutableCopy];
+        [all addObjectsFromArray:oscSteps];
+        return all;
+      }
+      extraOnComplete:^{
+        __strong typeof(weak) s = weak;
+        RoundedSetOSCGuideStep(0);
+        [s _teardownOSCSegment];
+      }];
 }
 
 @end

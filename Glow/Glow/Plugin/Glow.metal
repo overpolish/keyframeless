@@ -37,7 +37,7 @@ vertex RasterizerData vertexShader(uint vertexID [[vertex_id]],
 
 // Prep: extract alpha-only (solid/gradient) or premultiplied RGBA (dynamic)
 // from the source image. Output is what MPS will blur for the outer glow.
-// Threshold does NOT affect this pass — outer glow is independent of bloom.
+// Threshold does NOT affect this pass - outer glow is independent of bloom.
 fragment float4 glowPrep(RasterizerData in [[stage_in]], texture2d<half> source [[texture(KKTextureIndex_InputImage)]],
                          constant int *colorMode [[buffer(0)]]) {
     constexpr sampler s(mag_filter::linear, min_filter::linear);
@@ -91,7 +91,7 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
 
     // Source/blur sample positions are derived from the fragment's Y-down
     // pixel position in the final composited image (clipSpacePosition +
-    // tileOffsetPx) — robust to sub-tiling and to FCP's project-library
+    // tileOffsetPx) - robust to sub-tiling and to FCP's project-library
     // reverse-Y composite. destUV indexes the dest-image-sized prep+blur;
     // srcUV indexes the source texture's actual sub-region of dest image.
     float2 pxInDest = in.clipSpacePosition.xy + (*tileOffsetPx);
@@ -99,8 +99,7 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
     float2 srcUV = (pxInDest - (*srcOriginInDestPx)) / (*srcImgSizePx);
 
     constexpr sampler s(mag_filter::linear, min_filter::linear);
-    constexpr sampler srcS(mag_filter::linear, min_filter::linear,
-                           address::clamp_to_zero);
+    constexpr sampler srcS(mag_filter::linear, min_filter::linear, address::clamp_to_zero);
 
     half4 original = source.sample(srcS, srcUV);
     float rx = *radiusX;
@@ -132,7 +131,7 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
         float2 px = destUV * float2(blurred.get_width(), blurred.get_height());
         float radialDist = 1.0 - blur.a;
         float pixelRand = hash12(floor(px));
-        // Single radial flow — all layers move outward at the same speed
+        // Single radial flow - all layers move outward at the same speed
         float rp = radialDist * 6.0 - *noiseSeed + pixelRand * 0.5;
         float band = floor(rp);
         float blend = smoothstep(0.0, 1.0, fract(rp));
@@ -194,7 +193,7 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
     float resultAlpha = behindAlpha + float(original.a);
 
     // Bloom: additive blend of separately-blurred bright-pass.
-    // Light scatters from bright sources — pure addition, preserves source color.
+    // Light scatters from bright sources - pure addition, preserves source color.
     float thresh = *thresholdPtr;
     if (thresh > 0.0) {
         float2 bloomUV = destUV * bScale;

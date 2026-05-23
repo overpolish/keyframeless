@@ -11,7 +11,7 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /// Ruler-strip scrub band hit test, shared by KKTimelineBasicView and
-/// KKTimelineAdvancedView. The band sits immediately above the track top —
+/// KKTimelineAdvancedView. The band sits immediately above the track top -
 /// click anywhere there to jump the playhead. Both views use identical
 /// ruler height + gap; this helper bakes them in.
 FOUNDATION_EXPORT BOOL KKTimelineScrubBandContainsPoint(NSPoint pt,
@@ -30,7 +30,7 @@ KKTimelineScrubFracDelivered(double visualFrac, double clipDurationSeconds,
 /// Closest-candidate-in-pixels snap. Returns the snapped frac (or `rawFrac`
 /// if none within `pixelTolerance`). `xForFrac` maps frac→x in the same
 /// coordinate space as `x`. If `outSnapFrac` is non-NULL, it's written with
-/// the chosen candidate (or NAN if none snapped) — callers store this for
+/// the chosen candidate (or NAN if none snapped) - callers store this for
 /// drawing a guide line / sticky-snap state.
 FOUNDATION_EXPORT double KKTimelineSnapFracInPixels(
     CGFloat x, double rawFrac, NSArray<NSNumber *> *candidateFracs,

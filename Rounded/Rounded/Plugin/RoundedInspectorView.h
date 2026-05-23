@@ -17,7 +17,7 @@ NS_ASSUME_NONNULL_BEGIN
 ///
 /// The guide entry points (`restartIntroGuide` / `restartOSCGuide` /
 /// `restartFullWalkthroughGuide` / `oscGuideActive`) live on the
-/// `RoundedInspectorView (Guides)` category — import
+/// `RoundedInspectorView (Guides)` category - import
 /// `RoundedInspectorView+Guides.h` to call them.
 @interface RoundedInspectorView : KKTimelineInspectorView
 

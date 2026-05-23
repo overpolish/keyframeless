@@ -10,7 +10,7 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /// Reusable zoom/pan state for a timeline track, in normalised display
-/// (`u`) space — model-agnostic, so `KKTimelineBasicView` and the upcoming
+/// (`u`) space - model-agnostic, so `KKTimelineBasicView` and the upcoming
 /// Advanced sequencer share identical cursor-anchored pinch + scroll-pan
 /// behaviour. The owning view feeds raw events in and reads `zoom` /
 /// `panOffset` back out (e.g. into its projection); pan clamping uses the

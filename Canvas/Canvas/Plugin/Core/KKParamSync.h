@@ -19,7 +19,7 @@
 /// should call setParameterFlags or the KKSet*Visible / KKShowObjectParams /
 /// KKHideObjectParams helpers directly.
 ///
-/// Uses a visibility hash to skip redundant work — only opens an action scope
+/// Uses a visibility hash to skip redundant work - only opens an action scope
 /// and calls setParameterFlags when the desired visibility state has actually
 /// changed from what was last applied.
 
@@ -45,7 +45,7 @@ void KKParamSyncApplyFromSnapshot(KKCanvasStoreSnapshot *_Nonnull snap,
 
 /// Same logic, but the caller is already inside an action scope (FCP's
 /// parameterChanged wrapper). No startAction is opened here, so the flag
-/// writes coalesce into the caller's existing undo entry — mirrors how
+/// writes coalesce into the caller's existing undo entry - mirrors how
 /// motion blur's _setFlagsIfNeeded lands in parameterChanged's scope.
 void KKParamSyncApplyFromSnapshotInScope(KKCanvasStoreSnapshot *_Nonnull snap,
                                          KKBezierPath *_Nullable selectedPath,

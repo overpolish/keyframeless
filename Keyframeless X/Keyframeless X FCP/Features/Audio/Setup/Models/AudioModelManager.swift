@@ -37,40 +37,40 @@ class AudioModelManager: ObservableObject {
 	private nonisolated static let siliconModels: [ModelInfo] = [
 		ModelInfo(
 			id: "openai_whisper-tiny", displayName: "Tiny", sizeDescription: "~390 MB",
-			hint: "Fastest, best for rough drafts", engine: .whisperKit),
+			hint: String(localized: "Fastest, best for rough drafts"), engine: .whisperKit),
 		ModelInfo(
 			id: "openai_whisper-base", displayName: "Base", sizeDescription: "~670 MB",
-			hint: "Good speed and accuracy", engine: .whisperKit),
+			hint: String(localized: "Good speed and accuracy"), engine: .whisperKit),
 		ModelInfo(
 			id: "openai_whisper-small", displayName: "Small", sizeDescription: "~1.4 GB",
-			hint: "Handles accents and noise", engine: .whisperKit),
+			hint: String(localized: "Handles accents and noise"), engine: .whisperKit),
 		ModelInfo(
 			id: "openai_whisper-large-v3_turbo", displayName: "Large v3 Turbo",
 			sizeDescription: "~1.6 GB",
-			hint: "Near-large accuracy at speed", engine: .whisperKit),
+			hint: String(localized: "Near-large accuracy at speed"), engine: .whisperKit),
 		ModelInfo(
 			id: "openai_whisper-large-v3", displayName: "Large v3", sizeDescription: "~6 GB",
-			hint: "Best accuracy, final exports", engine: .whisperKit),
+			hint: String(localized: "Best accuracy, final exports"), engine: .whisperKit),
 		ModelInfo(
 			id: "parakeet-tdt-0.6b-v2", displayName: "Parakeet 0.6B v2",
 			sizeDescription: "~600 MB",
-			hint: "English only, fastest", engine: .parakeet),
+			hint: String(localized: "English only, fastest"), engine: .parakeet),
 		ModelInfo(
 			id: "parakeet-tdt-0.6b-v3", displayName: "Parakeet 0.6B v3",
 			sizeDescription: "~600 MB",
-			hint: "25 European languages, fast", engine: .parakeet),
+			hint: String(localized: "25 European languages, fast"), engine: .parakeet),
 	]
 
 	private nonisolated static let intelModels: [ModelInfo] = [
 		ModelInfo(
 			id: "ggml-tiny-q5_1", displayName: "Tiny", sizeDescription: "~200 MB",
-			hint: "Fastest, best for rough drafts", engine: .whisperCpp),
+			hint: String(localized: "Fastest, best for rough drafts"), engine: .whisperCpp),
 		ModelInfo(
 			id: "ggml-base-q5_1", displayName: "Base", sizeDescription: "~300 MB",
-			hint: "Good speed and accuracy", engine: .whisperCpp),
+			hint: String(localized: "Good speed and accuracy"), engine: .whisperCpp),
 		ModelInfo(
 			id: "ggml-small-q5_1", displayName: "Small", sizeDescription: "~600 MB",
-			hint: "Best accuracy for Intel", engine: .whisperCpp),
+			hint: String(localized: "Best accuracy for Intel"), engine: .whisperCpp),
 	]
 
 	nonisolated static func engine(for variantId: String) -> Engine? {
@@ -282,7 +282,7 @@ class AudioModelManager: ObservableObject {
 		}
 	}
 
-	// Silicon — WhisperKit
+	// Silicon - WhisperKit
 
 	private nonisolated static func whisperKitModelDirectory(for variant: String) -> URL {
 		FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
@@ -311,7 +311,7 @@ class AudioModelManager: ObservableObject {
 		try? FileManager.default.removeItem(at: modelPath)
 	}
 
-	// Parakeet — FluidAudio
+	// Parakeet - FluidAudio
 
 	private func downloadParakeet(_ variant: String) async {
 		guard let version = Self.parakeetVersion(for: variant) else { return }
@@ -338,7 +338,7 @@ class AudioModelManager: ObservableObject {
 		}
 	}
 
-	// Intel — whisper.cpp (GGML)
+	// Intel - whisper.cpp (GGML)
 
 	private nonisolated static var ggmlModelsDirectory: URL {
 		FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!

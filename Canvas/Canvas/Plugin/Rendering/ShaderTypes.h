@@ -13,9 +13,9 @@ typedef struct {
     float capDistance;  // 0 = interior, approaches 1 at path ends
 } CanvasVertex;
 
-// Per-path transform. `m4` is the full forward transform — composed 2D
+// Per-path transform. `m4` is the full forward transform - composed 2D
 // (translate, anchor, scale, rotZ) plus optional 3D rotation (rotX, rotY)
-// passed through a perspective projection — applied to each vertex with a
+// passed through a perspective projection - applied to each vertex with a
 // perspective divide. `mInv` is the 2D-only inverse (no rotX/rotY) used by
 // the fill color pass to map a screen fragment back into path-local pixels
 // for gradient bbox sampling; for stroke/image we instead pass the

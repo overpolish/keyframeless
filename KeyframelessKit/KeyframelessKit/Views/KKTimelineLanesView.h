@@ -96,7 +96,7 @@ typedef NS_ENUM(NSInteger, KKMiniCanvasRenderMode) {
                                gapKeys:(NSSet<NSString *> *)gapKeys;
 
 /// Block all user interaction on the timeline graphs while an overlay
-/// (e.g. the Basic-compat banner) is up — stops the Advanced row hover
+/// (e.g. the Basic-compat banner) is up - stops the Advanced row hover
 /// highlight and any click-through on either tab.
 - (void)setOverlayBlockingInteractions:(BOOL)blocked;
 
@@ -137,7 +137,7 @@ typedef NS_ENUM(NSInteger, KKMiniCanvasRenderMode) {
 @property(nonatomic, copy, nullable) void (^onLaneOptedIn)(NSString *label);
 
 /// Label to spotlight inside the manage popover when onManagePopoverWillOpen
-/// fires. Defaults to nil — first available lane alphabetically is used.
+/// fires. Defaults to nil - first available lane alphabetically is used.
 @property(nonatomic, copy, nullable) NSString *managePopoverSpotlightLabel;
 
 /// Guide hooks for the static-values (constants) popover, mirroring the
@@ -209,6 +209,9 @@ typedef NS_ENUM(NSInteger, KKMiniCanvasRenderMode) {
 /// a guide's target marker and drag map line up with the rendered knob.
 /// NSZeroRect / 0 when the popover isn't open or `label` has no slider.
 - (NSRect)guideConstantSliderTrackScreenRectForLabel:(NSString *)label;
+/// Screen rect of `label`'s knob at its current value - the grab point, so a
+/// guide's spotlight sits on the thumb rather than the track centre.
+- (NSRect)guideConstantSliderKnobScreenRectForLabel:(NSString *)label;
 - (CGFloat)guideConstantSliderScreenXForValue:(double)value
                                      forLabel:(NSString *)label;
 - (double)guideConstantSliderValueForScreenX:(CGFloat)screenX

@@ -164,7 +164,7 @@ static const void *kRenameButtonAssocKey = &kRenameButtonAssocKey;
   // Persist the selection in a hidden FCP param so cmd-Z can revert it
   // alongside the path blob. `kParamLastSelectedIndex` only encodes a
   // single path index (-1 for groups), so it can't restore group
-  // selection on undo — this fills that gap. See ObjectParams.h for the
+  // selection on undo - this fills that gap. See ObjectParams.h for the
   // string format.
   NSString *selStr = KKSerializeCanvasSelection(newSel, paths ?: @[]);
   [paramSetAPI setStringParameterValue:selStr

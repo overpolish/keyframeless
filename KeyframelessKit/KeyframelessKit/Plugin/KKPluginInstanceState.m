@@ -51,7 +51,7 @@ NSString *KKInstanceUUIDForAPI(id<PROAPIAccessing> api) {
   return uuid;
 }
 
-/// Immutable static map. Replaced atomically via mutableCopy + copy — see
+/// Immutable static map. Replaced atomically via mutableCopy + copy - see
 /// project_fxplug_static_mutability.md for why NSMutableDictionary statics
 /// are unsafe in XPC.
 static NSDictionary<NSString *, KKPluginInstanceState *> *sInstanceStates;

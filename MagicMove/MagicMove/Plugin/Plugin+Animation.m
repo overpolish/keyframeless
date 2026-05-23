@@ -79,7 +79,7 @@ static double KKEffectFractionForTime(id<FxTimingAPI_v4> timingAPI,
                                         timingAPI:timingAPI
                                            atTime:renderTime];
 
-  // Skip the blur path during Hold portions when the user opted in —
+  // Skip the blur path during Hold portions when the user opted in -
   // single-pass render is dramatically cheaper.
   if (mbState.enabled && mbState.transitionsOnly &&
       ![self multiStageAnyLaneInTransitionAtTime:renderTime]) {
@@ -87,7 +87,7 @@ static double KKEffectFractionForTime(id<FxTimingAPI_v4> timingAPI,
   }
 
   // Layout: [KKMotionBlurState | N × MagicMoveParams]. When blur is off,
-  // N=1 and `params` (computed at renderTime) is the only entry — used
+  // N=1 and `params` (computed at renderTime) is the only entry - used
   // both as the fallback render input and as sample 0 if blur turns on
   // mid-frame. When blur is on, sample 0 is at renderTime and samples
   // 1..N-1 are evaluated backwards in time across the shutter window.

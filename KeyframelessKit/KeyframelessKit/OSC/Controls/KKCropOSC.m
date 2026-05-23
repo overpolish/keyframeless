@@ -107,7 +107,7 @@ static CGPoint cropPointPosition(NSInteger idx, CGPoint topRight,
   return self;
 }
 
-// Bridge between the plugin-facing `[w, h, x, y]` model (KKCropModel.h —
+// Bridge between the plugin-facing `[w, h, x, y]` model (KKCropModel.h -
 // w/h size, x/y centre offset from image centre) and the internal L/R/T/B
 // edge-inset representation the drag math uses. Y mapping mirrors the
 // in-viewer empirical convention validated against the radius OSC anchor.

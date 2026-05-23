@@ -11,7 +11,7 @@
 #import <KeyframelessKit/KeyframelessKit.h>
 
 // Descriptor for an animatable per-path property. Adding a new animatable
-// property in Canvas means adding one entry to `_kkAnimatableProperties()` —
+// property in Canvas means adding one entry to `_kkAnimatableProperties()` -
 // nothing else in this file branches on the property identity.
 //
 // readPath / writePath operate on NSArray<NSNumber *> so a single descriptor
@@ -99,7 +99,7 @@ _kkReadParamForDesc(id<FxParameterRetrievalAPI_v6> getAPI,
     return @[ @(r), @(g), @(b) ];
   }
   case KKAnimatableParamKindGradient: {
-    // Gradient data params are KKDataBlobs — read via the blob helper.
+    // Gradient data params are KKDataBlobs - read via the blob helper.
     NSString *json = KKReadCustomParamString(getAPI, desc.paramID);
     NSArray<KKGradientStop *> *stops = KKGradientStopsFromJSON(json);
     return stops ? KKGradientFlatFromStops(stops) : @[];
@@ -230,7 +230,7 @@ static NSArray<KKCanvasAnimProp *> *_kkAnimatableProperties(void) {
                 p.strokeWidth = vals[0].floatValue;
             }];
 
-    // End Width is gated on KKVisStrokeOpen | KKVisOpenPath — only animate
+    // End Width is gated on KKVisStrokeOpen | KKVisOpenPath - only animate
     // for stroked open paths (closed paths have no taper end).
     KKCanvasAnimProp *endWidth = [KKCanvasAnimProp propWithLabel:@"End Width"
         paramID:kParamEndWidth
@@ -318,7 +318,7 @@ static NSArray<KKCanvasAnimProp *> *_kkAnimatableProperties(void) {
         }];
     position.extraBoolParamID = kParamRotateWithMotion;
 
-    // Single Scale lane carrying [scaleX, scaleY] — mirrors MagicMove. The
+    // Single Scale lane carrying [scaleX, scaleY] - mirrors MagicMove. The
     // two inspector sliders live in separate float FxPlug params; the lane
     // reads/writes both via primary + secondary IDs.
     KKCanvasAnimProp *scale = [KKCanvasAnimProp propWithLabel:@"Scale"
@@ -585,7 +585,7 @@ static NSString *_kkGroupLabelForPath(KKBezierPath *p, NSUInteger idx) {
 }
 
 // Pick the morphTargets index that corresponds to segment idx's "before"
-// boundary — analogous to KKTimingBoundaryBefore for scalar lanes. For a
+// boundary - analogous to KKTimingBoundaryBefore for scalar lanes. For a
 // hold this is the hold itself; for a transition between two holds it's
 // the previous hold; for a leading transition (idx==0) it's the segment's
 // own snapshot (animate-in from-shape).
@@ -663,7 +663,7 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
   KKTimingLane *lane = [KKTimingLane defaultLaneForLabel:desc.label
                                               baseValues:desc.readPath(p)];
   // Two-float Point lanes (Scale-style: independent X/Y sliders, single
-  // sequencer lane) report two Float component kinds — matches MagicMove.
+  // sequencer lane) report two Float component kinds - matches MagicMove.
   if (desc.kind == KKAnimatableParamKindMorph) {
     // Morph carries no scalar values, but tag the kind so renderers and
     // segment-edit code can identify the lane (sequencer routes Morph
@@ -750,7 +750,7 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
                                 (float)toVals[1].doubleValue},
                   &pt)) {
             // Preserve any extra-component values (e.g. rotate-with-motion
-            // bool on Position) — only the x/y override.
+            // bool on Position) - only the x/y override.
             NSMutableArray<NSNumber *> *replaced =
                 [NSMutableArray arrayWithObjects:@(pt.x), @(pt.y), nil];
             for (NSUInteger k = 2; k < vals.count; k++)
@@ -815,7 +815,7 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
                                      atTime:(CMTime)time
                                 paramGetAPI:(id<FxParameterRetrievalAPI_v6>)
                                                 paramGetAPI {
-  // Prefer the in-memory KKCanvasStore over the FCP path-blob param read —
+  // Prefer the in-memory KKCanvasStore over the FCP path-blob param read -
   // the store is updated synchronously by every mutation site (writePaths,
   // _modifyPaths, drawOSC) and a getStringParameterValue here costs 5–15ms.
   // Fall back to the FCP read only when the store hasn't been seeded yet
@@ -879,7 +879,7 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
   // `_kkGroupLabelForPath`), isGroup, isImage, closed, and the four
   // `*Enabled` flags that gate `enabledForPath` for stroke/fill/sketch/
   // transform-derived lanes. The OSC-label sets are static so don't need
-  // capturing here. Reads from KKCanvasStore (in-memory) — no FCP I/O.
+  // capturing here. Reads from KKCanvasStore (in-memory) - no FCP I/O.
   NSString *uuid = KKLayerUUIDForAPI(apiManager);
   KKLayerInstanceState *lst = uuid ? KKLayerStateForUUID(uuid) : nil;
   KKCanvasStoreSnapshot *snap = lst ? [lst.store snapshot] : nil;
@@ -955,7 +955,7 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
 
   // If this lane's layer is the one currently shown in the inspector, push
   // the value into the slider's FxPlug param so the slider reflects the
-  // segment's value. Other layers' lanes stay independent of the slider —
+  // segment's value. Other layers' lanes stay independent of the slider -
   // we never write the param for them.
   if ([groupKey isEqualToString:[self _kkSelectedLayerID]]) {
     _kkWriteParamForDesc(setAPI, desc, values, time);
@@ -1004,14 +1004,14 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
   //
   // Detect the mismatch and bail: if the persisted selectedIndex param
   // disagrees with the in-memory selection, we're mid-revert. The blob
-  // is canonical, the inspector echo is a downstream effect — don't
+  // is canonical, the inspector echo is a downstream effect - don't
   // re-persist it.
   NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
   NSIndexSet *memSel = uuid ? KKCanvasCurrentSelection(uuid) : nil;
   NSInteger paramSelIdx = KKReadSelectedIndex(getAPI);
   NSInteger memIdx = (memSel.count == 1) ? (NSInteger)memSel.firstIndex : -1;
   // Group-only selection: kParamLastSelectedIndex is -1 by design (groups
-  // have no path index — see KKSaveSelectedIndex), but memIdx is the
+  // have no path index - see KKSaveSelectedIndex), but memIdx is the
   // group's array index. The mismatch here is the expected steady state,
   // not a mid-cmd-Z revert. Compare layerIDs instead.
   BOOL memIsGroup = NO;
@@ -1081,7 +1081,7 @@ static KKTimingLane *_kkBuildLane(KKCanvasAnimProp *desc, KKBezierPath *p,
   // Inspector slider tweaks don't trigger drawOSC and don't fire the
   // KKCanvasStore observer (paths unchanged), so the pump's normal
   // entry points won't see the new snapshot until the next unrelated
-  // event — what the user perceives as "graph needs a click to update".
+  // event - what the user perceives as "graph needs a click to update".
   // Drive a sync tick directly. The reconcile call short-circuits on
   // the cached fingerprint (path topology unchanged) so this is just
   // rebalance + the main-thread seq.lanes assignment.

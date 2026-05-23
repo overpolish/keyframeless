@@ -25,7 +25,7 @@ FOUNDATION_EXPORT void KKDrawKeyposeDiamond(NSPoint center, CGFloat radius,
 /// pill is the time-axis equivalent of the diamond: it says "drag in time
 /// only" by spanning the full row/track height. Filled = solid `color`;
 /// unfilled = `inspectorBackground` fill stroked in `color` (time-locked
-/// endpoint look — matches the diamond's hollow style).
+/// endpoint look - matches the diamond's hollow style).
 FOUNDATION_EXPORT void KKDrawKeyposePill(NSRect bounds, BOOL filled,
                                          NSColor *color);
 

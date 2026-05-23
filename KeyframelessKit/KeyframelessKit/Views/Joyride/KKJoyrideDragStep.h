@@ -11,19 +11,19 @@ NS_ASSUME_NONNULL_BEGIN
 
 @class KKJoyrideController, KKJoyrideStep;
 
-/// One reusable "drag a control onto a glowing target" guide step — the
+/// One reusable "drag a control onto a glowing target" guide step - the
 /// OSC-Basics flow, factored out so any plugin/OSC builds it from a few
 /// blocks instead of re-implementing the press/target/message/snap/advance
 /// wiring.
 ///
 /// Flow: the control glows with `clickMessage` and no target. If
 /// `dragMessage` is non-nil, the amber target stays hidden until the user
-/// presses; on press it appears and the message swaps in place (same step —
+/// presses; on press it appears and the message swaps in place (same step -
 /// the press flows straight into the drag). If `dragMessage` is nil the
 /// target shows immediately and the message never changes. The gesture is
 /// captured (clicks/drags can't pass the XPC overlay) and fed to the
-/// `begin`/`dragTo`/`end` blocks; the step advances — or completes, if it's
-/// the last step — when `hitOnRelease` is YES at mouse-up.
+/// `begin`/`dragTo`/`end` blocks; the step advances - or completes, if it's
+/// the last step - when `hitOnRelease` is YES at mouse-up.
 ///
 /// Control-specific behaviour (which control, how a screen point maps to a
 /// value, what "on target" means) lives entirely in the blocks; everything

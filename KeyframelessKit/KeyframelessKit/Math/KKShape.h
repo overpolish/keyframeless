@@ -68,7 +68,7 @@ typedef NS_ENUM(uint8_t, KKShapeKind) {
 @property(nonatomic, assign) simd_float2 max;
 
 /// Materialize the ellipse as 4 cubic-bezier points into `path`. Canvas
-/// dims are ignored — ellipse geometry is canvas-independent.
+/// dims are ignored - ellipse geometry is canvas-independent.
 - (void)applyToPath:(KKBezierPath *)path
         canvasWidth:(float)canvasW
        canvasHeight:(float)canvasH;

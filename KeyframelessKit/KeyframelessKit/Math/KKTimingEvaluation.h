@@ -28,11 +28,11 @@ FOUNDATION_EXPORT KKTimingSegment *_Nullable KKTimingSegmentForFraction(
 /// - **Gradient lanes** return a flat LUT (`KK_GRADIENT_LUT_SIZE × [r,g,b]`)
 ///   computed from the active segment's stops, optionally modulated when
 ///   the segment carries a hold effect.
-/// - **Bool components** are stepped — they use the active segment's own
+/// - **Bool components** are stepped - they use the active segment's own
 ///   value verbatim across transitions rather than easing-interpolated.
 ///
 /// Returns nil when `lane.segments` is empty. Disabled lanes are still
-/// evaluated by this function — call sites that want the kill-switch
+/// evaluated by this function - call sites that want the kill-switch
 /// behaviour should check `lane.enabled` themselves.
 FOUNDATION_EXPORT NSArray<NSNumber *> *_Nullable KKTimingLaneValueAtFraction(
     KKTimingLane *lane, double frac);
@@ -41,7 +41,7 @@ FOUNDATION_EXPORT NSArray<NSNumber *> *_Nullable KKTimingLaneValueAtFraction(
 /// transition segment, applying the segment's easing.
 ///
 /// Caller computes `localT` (0–1 within the segment) and `isAnimateOut`
-/// (true when the segment is the last in its lane — easing is flipped to
+/// (true when the segment is the last in its lane - easing is flipped to
 /// preserve the standard ease-in/out semantics for animate-out tails).
 /// `fromPos` / `toPos` are the segment's start/end anchor positions, used
 /// both as scaling input to `positionAtT:` and as fallback when the path
@@ -118,7 +118,7 @@ NSArray<NSNumber *> *_Nullable KKTimelineLaneValueAtVisualFractionSmoothed(
 /// `lastKnownClipDuration` and `frameDurSec` are known, otherwise a
 /// permissive default is used.
 ///
-/// Constants — disabled lanes, or lanes with no keyposes — return YES
+/// Constants - disabled lanes, or lanes with no keyposes - return YES
 /// (always visible). Animated lanes with keyposes only return YES when
 /// `frac` lands within `~1 frame` of a kp's *drawn* position.
 ///
@@ -135,7 +135,7 @@ FOUNDATION_EXPORT const double KKRotateWithMotionWindowSeconds;
 
 /// Z-rotation delta (radians) for rotate-with-motion: maps an X velocity
 /// in normalised units/sec to the heading offset both plugins apply.
-/// Adjustment is `-vx * 5° per unit/sec` — subtract from rotZ.
+/// Adjustment is `-vx * 5° per unit/sec` - subtract from rotZ.
 FOUNDATION_EXPORT double KKRotateWithMotionDeltaRadians(double vx);
 
 NS_ASSUME_NONNULL_END

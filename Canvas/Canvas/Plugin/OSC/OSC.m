@@ -390,7 +390,7 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   // Push the new selection into the store FIRST, so the layer-list and
   // sequencer observers fire on a still-idle main thread. The FCP param
   // writes below can block main for hundreds of ms while FCP processes the
-  // path-blob XPC write — if we did them first, the observer would queue
+  // path-blob XPC write - if we did them first, the observer would queue
   // behind that work and the layer list would lag visibly.
   if (uuid) {
     KKCanvasStore *store = KKLayerStateForUUID(uuid).store;
@@ -412,7 +412,7 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
   // selection's KKPathToParams write, and the selectedIndex bump must
   // revert atomically. Otherwise cmd-Z reverts only the latest write
   // (selectedIndex) while the inspector still holds the new path's stored
-  // values — the next render-tick KKParamsToSelectedPaths then writes
+  // values - the next render-tick KKParamsToSelectedPaths then writes
   // those wrong values into the now-reselected path's in-memory state.
   BOOL ug = KKBeginUndoGroup(self.apiManager, @"Select Path");
   id<FxCustomParameterActionAPI_v4> selActAPI =
@@ -441,7 +441,7 @@ NSUInteger selKey(NSUInteger pathIdx, NSUInteger ptIdx) {
 
   // Write param values from the newly-selected path.
   // Flag visibility is handled centrally by KKParamSyncApply via
-  // KKCanvasRefreshLayerList — do not set flags here.
+  // KKCanvasRefreshLayerList - do not set flags here.
   if (selPath) {
     KKPathToParams(paramSetAPI, selPath);
     if (uuid)

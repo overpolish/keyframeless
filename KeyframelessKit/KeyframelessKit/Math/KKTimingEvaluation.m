@@ -345,7 +345,7 @@ NSArray<NSNumber *> *KKTimelineLaneValueAtFractionSmoothed(KKLane *lane,
 }
 
 // Inverse of the Basic-view _projection's visual In/Out remap. Stored kp
-// times sit at tIn/tOut even when In/Out is off — the Basic graph draws the
+// times sit at tIn/tOut even when In/Out is off - the Basic graph draws the
 // Hold-start at visual t=0 (In off) and Hold-end at visual t=1 (Out off).
 // This function applies the same remap on the read side so the rendered
 // output and OSC reads match the visual graph.
@@ -359,18 +359,18 @@ static double _kkVisualToDataFrac(KKLane *lane, double visualFrac) {
   // The remap exists for the Basic projection (KPs anchored at canonical
   // positions: first at 0, last at the last-frame). In Advanced the user
   // can drag KPs anywhere, in which case the stored time IS the visual
-  // time — stretching the [first.time, last.time] range over [0, 1] would
+  // time - stretching the [first.time, last.time] range over [0, 1] would
   // mis-time the lane (e.g. firstKP @ 0.2 then visualFrac=0.1 maps into
   // the transition instead of clamping to firstKP's value).
   // Heuristic: skip remap when first/last KPs aren't anchored to the
-  // Basic edges. Conservative — short clips at unknown frame durations
+  // Basic edges. Conservative - short clips at unknown frame durations
   // can put `lastFrameFrac` slightly inside 1; allow ~2% slack.
   if (kps.firstObject.time > 2.0 * kEps)
     return visualFrac;
   if (kps.lastObject.time < 0.98)
     return visualFrac;
 
-  // Shape detection — match KKShapeOfLane (count-based, framerate-agnostic).
+  // Shape detection - match KKShapeOfLane (count-based, framerate-agnostic).
   BOOL inEn = NO, outEn = NO;
   if (n == 4) {
     inEn = YES;
@@ -410,7 +410,7 @@ KKTimelineLaneValueAtVisualFractionSmoothed(KKLane *lane, double visualFrac) {
 }
 
 BOOL KKLaneVisibleAtFraction(KKLane *lane, double frac, double frameDurSec) {
-  // Constants (disabled / no kps) — always show. Callers that want a
+  // Constants (disabled / no kps) - always show. Callers that want a
   // different "constant" rule should branch before calling.
   if (!lane || !lane.enabled)
     return YES;
@@ -418,7 +418,7 @@ BOOL KKLaneVisibleAtFraction(KKLane *lane, double frac, double frameDurSec) {
   if (kps.count == 0)
     return YES;
 
-  // Count-based shape detection — must match KKShapeOfLane /
+  // Count-based shape detection - must match KKShapeOfLane /
   // _kkVisualToDataFrac so visibility lines up with where the kp is
   // *drawn* (Basic-view projects Hold-start→0 when In off, Hold-end→1
   // when Out off; stored times stay at tIn/tOut).
@@ -437,7 +437,7 @@ BOOL KKLaneVisibleAtFraction(KKLane *lane, double frac, double frameDurSec) {
   NSInteger holdStart = inEnabled ? 1 : 0;
   NSInteger holdEnd = n - (outEnabled ? 2 : 1);
 
-  // Frame-aware snap tolerance — FCP's playhead is frame-quantized, so
+  // Frame-aware snap tolerance - FCP's playhead is frame-quantized, so
   // the readback frac is up to one frame off the kp's stored time.
   double clipDur = lane.lastKnownClipDuration;
   double epsilon;
@@ -449,7 +449,7 @@ BOOL KKLaneVisibleAtFraction(KKLane *lane, double frac, double frameDurSec) {
   if (epsilon < kMinEps)
     epsilon = kMinEps;
 
-  // Last-frame fraction — matches the scrubber's visual max and where
+  // Last-frame fraction - matches the scrubber's visual max and where
   // FCP delivers the playhead when parked at the clip end. Used as the
   // Out-end position when Out is off so the projected kp aligns with
   // where the playhead can actually land.

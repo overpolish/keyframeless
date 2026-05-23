@@ -57,14 +57,14 @@
 
   // Visibility refresh. Timing is gated to specific paramIDs to avoid the
   // cascade documented in project_published_custom_ui_cascade. Motion blur
-  // is unconditional — the named-header chevron/checkbox sync lives inside
+  // is unconditional - the named-header chevron/checkbox sync lives inside
   // updateMotionBlurParameterVisibility, so cmd-Z of the checkbox or
   // expanded toggle has to land here for the header to redraw.
   if (parameterID == kParamForceShow || parameterID == kKKParamTimingExpanded)
     [self updateTimingParameterVisibility];
   [self updateMotionBlurParameterVisibility];
 
-  // Generic group headers (Noise, Color) — chevron is a separate custom
+  // Generic group headers (Noise, Color) - chevron is a separate custom
   // view that doesn't observe its expanded param; on host undo/redo we
   // have to push the reverted bool back to the header explicitly.
   if (parameterID == kParamNoiseExpanded || parameterID == kParamForceShow)
@@ -113,7 +113,7 @@
 
 /// paramID → (lane label, current values) translator. Routes a slider /
 /// picker change into the corresponding lane's selected segment via
-/// `multiStageUpdateSelectedSegmentForLabel:values:` — replaces the
+/// `multiStageUpdateSelectedSegmentForLabel:values:` - replaces the
 /// `animatableProperties`-driven `multiStageHandleParameterChanged:` path.
 - (void)_glowHandleAnimatableParameterChange:(UInt32)parameterID
                                       atTime:(CMTime)time {

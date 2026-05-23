@@ -4,6 +4,7 @@
  */
 
 #import "KKTimelineInspectorView.h"
+#import "KKLocalized.h"
 #import "KKTimelineInspectorView_Private.h"
 
 #import "../Metal/KKShaderTypes.h"
@@ -55,17 +56,29 @@ static const CGFloat kMBCheckboxTrailing = 23.0;
 
   NSTextField *msg = [NSTextField
       labelWithString:
-          @"Your current sequence isn't compatible with Basic mode."];
+          KKLoc(@"Your current sequence isn't compatible with Basic mode.",
+                @"Alert: switching timeline to Basic mode.")];
   msg.translatesAutoresizingMaskIntoConstraints = NO;
   msg.font = [NSFont systemFontOfSize:KKFontSizeSM weight:NSFontWeightMedium];
   msg.textColor = [NSColor inspectorLabel];
   msg.alignment = NSTextAlignmentCenter;
   msg.maximumNumberOfLines = 2;
   msg.lineBreakMode = NSLineBreakByWordWrapping;
+  // This banner is normally hidden, but a hidden subview's constraints still
+  // feed the inspector's fittingSize. Without lowering compression resistance,
+  // a long localized message (e.g. German) reports its full single-line
+  // intrinsic width and forces the whole inspector to a wide minimum, which
+  // FCP then refuses to shrink below, clipping the right edge when the panel
+  // is narrowed. Yielding horizontally lets the label wrap instead of driving
+  // the layout width.
+  [msg setContentCompressionResistancePriority:NSLayoutPriorityDefaultLow - 1
+                                forOrientation:
+                                    NSLayoutConstraintOrientationHorizontal];
   [self addSubview:msg];
 
-  NSTextField *sub =
-      [NSTextField labelWithString:@"Switching will reset incompatible lanes."];
+  NSTextField *sub = [NSTextField
+      labelWithString:KKLoc(@"Switching will reset incompatible lanes.",
+                            @"Alert detail: switching to Basic mode.")];
   sub.translatesAutoresizingMaskIntoConstraints = NO;
   sub.font = [NSFont systemFontOfSize:KKFontSizeSM - 1];
   sub.textColor = [[NSColor inspectorLabel] colorWithAlphaComponent:0.55];
@@ -75,30 +88,34 @@ static const CGFloat kMBCheckboxTrailing = 23.0;
   NSFont *btnFont = [NSFont systemFontOfSize:KKFontSizeSM
                                       weight:NSFontWeightMedium];
 
-  NSButton *cancel = [NSButton buttonWithTitle:@"Cancel"
-                                        target:self
-                                        action:@selector(_cancelTap:)];
+  NSButton *cancel =
+      [NSButton buttonWithTitle:KKLoc(@"Cancel", @"Button: cancel.")
+                         target:self
+                         action:@selector(_cancelTap:)];
   cancel.bordered = NO;
   cancel.bezelStyle = NSBezelStyleInline;
   cancel.controlSize = NSControlSizeSmall;
   cancel.font = btnFont;
   cancel.attributedTitle = [[NSAttributedString alloc]
-      initWithString:@"Cancel"
+      initWithString:KKLoc(@"Cancel", @"Button: cancel.")
           attributes:@{
             NSForegroundColorAttributeName :
                 [[NSColor inspectorLabel] colorWithAlphaComponent:0.6],
             NSFontAttributeName : btnFont
           }];
 
-  NSButton *confirm = [NSButton buttonWithTitle:@"Switch anyway"
-                                         target:self
-                                         action:@selector(_confirmTap:)];
+  NSButton *confirm =
+      [NSButton buttonWithTitle:KKLoc(@"Switch anyway",
+                                      @"Alert button: switch despite warning.")
+                         target:self
+                         action:@selector(_confirmTap:)];
   confirm.bordered = NO;
   confirm.bezelStyle = NSBezelStyleInline;
   confirm.controlSize = NSControlSizeSmall;
   confirm.font = btnFont;
   confirm.attributedTitle = [[NSAttributedString alloc]
-      initWithString:@"Switch anyway"
+      initWithString:KKLoc(@"Switch anyway",
+                           @"Alert button: switch despite warning.")
           attributes:@{
             NSForegroundColorAttributeName : [NSColor accentMatchingHost],
             NSFontAttributeName : btnFont
@@ -157,7 +174,7 @@ static NSTextField *_KKMBCaption(NSString *s) {
 // Motion-blur settings popover content: a "Motion Blur" header, then Shutter
 // (degrees, 0–360) and Samples (count, 2–128), each a slider (accent track,
 // like Radius) + a value field, then a "When" dropdown picking the fire mode.
-// Real units so the numbers are meaningful — 180° is the natural shutter, and
+// Real units so the numbers are meaningful - 180° is the natural shutter, and
 // the sample count is explicit (a percentage just invites people to crank it to
 // the max).
 @interface _KKMotionBlurSettingsView : NSView <NSTextFieldDelegate>
@@ -178,7 +195,11 @@ static const NSInteger kMBDefaultSamples = 16;
 static const KKMotionBlurMode kMBDefaultMode = KKMotionBlurModeTransitionsOnly;
 // Dropdown order maps 1:1 to KKMotionBlurMode (index 0 = TransitionsOnly).
 static NSArray<NSString *> *_KKMBModeTitles(void) {
-  return @[ @"Transitions only", @"Value changes", @"Always" ];
+  return @[
+    KKLoc(@"Transitions only", @"Motion blur mode option."),
+    KKLoc(@"Value changes", @"Motion blur mode option."),
+    KKLoc(@"Always", @"Motion blur mode option.")
+  ];
 }
 
 @implementation _KKMotionBlurSettingsView {
@@ -205,9 +226,9 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   _samples = samples;
   _mode = mode;
 
-  KKPopoverHeaderView *header =
-      [[KKPopoverHeaderView alloc] initWithTitle:@"Motion Blur"
-                                      symbolName:@"figure.walk.motion"];
+  KKPopoverHeaderView *header = [[KKPopoverHeaderView alloc]
+      initWithTitle:KKLoc(@"Motion Blur", @"Section title: motion blur.")
+         symbolName:@"figure.walk.motion"];
   [self addSubview:header];
 
   KKSliderView *shSlider = nil, *spSlider = nil;
@@ -215,28 +236,30 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   NSButton *shReset = nil, *spReset = nil;
   // Samples slider: scale break so the useful low end (2–32) gets most of the
   // track, with 32–128 in the last quarter.
-  NSView *shutterRow = [self _buildRow:@"Shutter"
-                                   min:0.0
-                                   max:360.0
-                                 value:_shutterAngle
-                          defaultValue:kMBDefaultShutter
-                                suffix:@"°"
-                       scaleBreakValue:0.0
-                    scaleBreakPosition:0.0
-                                slider:&shSlider
-                                 field:&shField
-                                 reset:&shReset];
-  NSView *samplesRow = [self _buildRow:@"Samples"
-                                   min:2.0
-                                   max:(double)KK_MOTION_BLUR_MAX_SAMPLES
-                                 value:(double)_samples
-                          defaultValue:(double)kMBDefaultSamples
-                                suffix:@""
-                       scaleBreakValue:32.0
-                    scaleBreakPosition:0.75
-                                slider:&spSlider
-                                 field:&spField
-                                 reset:&spReset];
+  NSView *shutterRow =
+      [self _buildRow:KKLoc(@"Shutter", @"Motion blur: shutter angle label.")
+                         min:0.0
+                         max:360.0
+                       value:_shutterAngle
+                defaultValue:kMBDefaultShutter
+                      suffix:@"°"
+             scaleBreakValue:0.0
+          scaleBreakPosition:0.0
+                      slider:&shSlider
+                       field:&shField
+                       reset:&shReset];
+  NSView *samplesRow =
+      [self _buildRow:KKLoc(@"Samples", @"Motion blur: samples label.")
+                         min:2.0
+                         max:(double)KK_MOTION_BLUR_MAX_SAMPLES
+                       value:(double)_samples
+                defaultValue:(double)kMBDefaultSamples
+                      suffix:@""
+             scaleBreakValue:32.0
+          scaleBreakPosition:0.75
+                      slider:&spSlider
+                       field:&spField
+                       reset:&spReset];
   _shutterSlider = shSlider;
   _shutterField = shField;
   _shutterReset = shReset;
@@ -251,7 +274,8 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   // slider rows' gutter; the popup floats to the trailing edge.
   NSView *whenRow = [[NSView alloc] initWithFrame:NSZeroRect];
   whenRow.translatesAutoresizingMaskIntoConstraints = NO;
-  NSTextField *whenCaption = _KKMBCaption(@"When");
+  NSTextField *whenCaption =
+      _KKMBCaption(KKLoc(@"When", @"Label: when a setting applies."));
   KKPopupSelectView *modePopup =
       [[KKPopupSelectView alloc] initWithTitles:_KKMBModeTitles()];
   modePopup.translatesAutoresizingMaskIntoConstraints = NO;
@@ -538,7 +562,8 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   _apiManager = apiManager;
   _availableLanes = [availableLanes copy];
   _selectedTab = (KKTimelineTab)activeTab;
-  _constantsButtonTitle = @"Constants";
+  _constantsButtonTitle =
+      KKLoc(@"Constants", @"Constants editor tab/section header.");
   // Read the subclass hook once; the custom-UI height can't change after init.
   _showsMotionBlurRow = [self showsMotionBlurRow];
   _mbShutterAngle = 180.0; // the natural shutter
@@ -580,9 +605,11 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
     [NSImage imageWithSystemSymbolName:@"timeline.selection"
               accessibilityDescription:nil],
   ];
-  _tabBar =
-      [[KKPillToggleRowView alloc] initWithLabels:@[ @"Basic", @"Advanced" ]
-                                            icons:tabIcons];
+  _tabBar = [[KKPillToggleRowView alloc] initWithLabels:@[
+    KKLoc(@"Basic", @"Timeline mode tab: basic."),
+    KKLoc(@"Advanced", @"Timeline mode tab: advanced.")
+  ]
+                                                  icons:tabIcons];
   _tabBar.translatesAutoresizingMaskIntoConstraints = NO;
   _tabBar.radioMode = YES;
   _tabBar.grouped = YES;
@@ -606,7 +633,7 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   _constantsButton = [[KKConstantsButton alloc] init];
   _constantsButton.translatesAutoresizingMaskIntoConstraints = NO;
   // Authoritative visibility is set from `_basicView.hasUnoptedLanes` once
-  // it exists — a count-based check would wrongly hide this on reboot when
+  // it exists - a count-based check would wrongly hide this on reboot when
   // the persisted blob already has the (constant) lanes.
   _constantsButton.hidden = YES;
   [self addSubview:_constantsButton];
@@ -622,8 +649,19 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   _playButton = [[KKPlayButton alloc] init];
   _playButton.translatesAutoresizingMaskIntoConstraints = NO;
   _playButton.onTapped = ^{
-    if (weak.onTogglePlayback)
-      weak.onTogglePlayback();
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return;
+    // During a guide the inspector owns the play accent: each tap is a
+    // deterministic toggle, so flip it locally instead of waiting on the
+    // poll-inferred `setPlaying:` (which flickers under FCP's bursty
+    // currentTime). The tap hook lets a Joyride step advance on the click.
+    if (s->_guideOwnsPlayState)
+      s->_playButton.playing = !s->_playButton.playing;
+    if (s->_onPlaybackToggleTapped)
+      s->_onPlaybackToggleTapped();
+    if (s.onTogglePlayback)
+      s.onTogglePlayback();
   };
 
   _loopButton = [[KKLoopButton alloc] init];
@@ -779,10 +817,13 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   // KKLabelView carries the native label inset/styling so the gutter lines up
   // with FCP's other param rows. figure.walk.motion = the walking figure with
   // motion lines, the same icon the old native MB group header used.
-  NSImage *mbIcon = [NSImage imageWithSystemSymbolName:@"figure.walk.motion"
-                              accessibilityDescription:@"Motion Blur"];
-  _mbRow.leftView = [[KKLabelView alloc] initWithText:@"Motion Blur"
-                                                 icon:mbIcon];
+  NSImage *mbIcon =
+      [NSImage imageWithSystemSymbolName:@"figure.walk.motion"
+                accessibilityDescription:KKLoc(@"Motion Blur",
+                                               @"Section title: motion blur.")];
+  _mbRow.leftView = [[KKLabelView alloc]
+      initWithText:KKLoc(@"Motion Blur", @"Section title: motion blur.")
+              icon:mbIcon];
 
   // rightView must be a container (KKParameterRowView contract), not a bare
   // control. Checkbox sits in the native control gutter (same as
@@ -793,8 +834,10 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   _mbCheckbox.translatesAutoresizingMaskIntoConstraints = NO;
   [controls addSubview:_mbCheckbox];
 
-  NSImage *gear = [NSImage imageWithSystemSymbolName:@"gearshape"
-                            accessibilityDescription:@"Motion Blur settings"];
+  NSImage *gear = [NSImage
+      imageWithSystemSymbolName:@"gearshape"
+       accessibilityDescription:KKLoc(@"Motion Blur settings",
+                                      @"Accessibility: motion blur settings.")];
   _mbSettingsButton = [NSButton buttonWithImage:gear
                                          target:self
                                          action:@selector(_mbSettingsClicked:)];
@@ -888,7 +931,7 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
 
   // Reuse the lanes view's popover wrapper so the macOS 26 liquid-glass
   // double-border fix (CoreHostingView/ContentHolderView clear) applies here
-  // too — same as the constants / curve popovers.
+  // too - same as the constants / curve popovers.
   _KKLVPopoverContentView *wrapper = [[_KKLVPopoverContentView alloc] init];
   wrapper.frame = content.bounds;
   content.translatesAutoresizingMaskIntoConstraints = NO;
@@ -1046,7 +1089,7 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
 
 - (void)_confirmCompatSwitch {
   // Basic stores the lane-end at `outEndFrac` (one frame before clip end),
-  // not at 1.0 — feeding the reseed that value keeps the produced lanes
+  // not at 1.0 - feeding the reseed that value keeps the produced lanes
   // shaped exactly like Basic itself would emit, so switching the tab
   // doesn't show a stray pill past Basic's end marker.
   double endFrac = 1.0;
@@ -1123,11 +1166,12 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
 }
 
 - (void)setPlaying:(BOOL)playing {
-  BOOL was = _playButton.playing;
+  // A guide drives the accent deterministically from taps; ignore the
+  // poll-inferred state so it can't flicker the button mid-guide.
+  if (_guideOwnsPlayState)
+    return;
   _playButton.playing = playing;
   [_detachedView setPlaying:playing];
-  if (was != playing && _onPlayingChanged)
-    _onPlayingChanged(playing);
 }
 
 - (KKPlayButton *)_guidePlayButton {
@@ -1179,7 +1223,7 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   copy.onTogglePlayback = _onTogglePlayback;
   copy.onBoundaryPreviewNeedsRender = _onBoundaryPreviewNeedsRender;
   _detachedView = copy;
-  // Bidirectional Advanced selection mirror — selection lives per-view, not
+  // Bidirectional Advanced selection mirror - selection lives per-view, not
   // in the timeline blob, so without this clicks in the detached window
   // wouldn't reflect in the inspector and vice versa. Each side's
   // applyAdvancedSelectionPillKeys: no-ops on equal sets, breaking the
@@ -1208,7 +1252,7 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
     return;
   KKTimelineInspectorView *dying = _detachedView;
   _detachedView = nil;
-  // Deferred — we may be unwinding the copy's own `-viewDidMoveToWindow`;
+  // Deferred - we may be unwinding the copy's own `-viewDidMoveToWindow`;
   // releasing inline is a use-after-free.
   dispatch_async(dispatch_get_main_queue(), ^{
     [dying removeFromSuperview];

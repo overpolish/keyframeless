@@ -31,7 +31,7 @@ static void drawCapPath(CGFloat ox, CGFloat oy, CGFloat k, NSInteger cap) {
   [p lineToPoint:NSMakePoint(ox + 2 * k, oy + 13.008 * k)];
   [p lineToPoint:NSMakePoint(ox + 2 * k, oy + 20 * k)];
 
-  // Right edge + close — differs per cap style.
+  // Right edge + close - differs per cap style.
   switch (cap) {
   case 0: // Butt
     [p lineToPoint:NSMakePoint(ox + 14 * k, oy + 20 * k)];

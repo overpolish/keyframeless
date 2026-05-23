@@ -30,7 +30,7 @@ enum {
 
 /// Returns the current crop as `[w, h, x, y]` (KKCropModel semantics) at
 /// the given clip time. May return nil → treated as full image. Plugins
-/// typically read from their timeline snapshot or other data source — the
+/// typically read from their timeline snapshot or other data source - the
 /// crop OSC is unaware of the storage format.
 @property(nonatomic, copy, nullable)
     NSArray<NSNumber *> *_Nullable (^valuesProvider)(CMTime time);

@@ -93,8 +93,8 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				"/Localized: Plugin/InfoPlist.strings",
-				"/Localized: Plugin/Localizable.strings",
 				Plugin/Info.plist,
+				Plugin/Localizable.xcstrings,
 				Plugin/main.m,
 				Plugin/OSC.m,
 				Plugin/Plugin.m,
@@ -104,9 +104,11 @@
 				Plugin/Rounded.metal,
 				Plugin/RoundedInspectorView.m,
 				"Plugin/RoundedInspectorView+Guides.m",
+				Plugin/RoundedLocalized.m,
 				Plugin/RoundedMiniCanvasRenderer.m,
 				"Plugin/RoundedOSC+MouseHandlers.m",
 				Plugin/RoundedOSCRadiusMath.m,
+				Plugin/RoundedUI.xcstrings,
 				"Wrapper Application/Info.plist",
 			);
 			target = F2E2ED742F4CA530008620D9 /* Wrapper Application */;
@@ -258,7 +260,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastUpgradeCheck = 2630;
+				LastUpgradeCheck = 2640;
 				TargetAttributes = {
 					F2E2ED742F4CA530008620D9 = {
 						CreatedOnToolsVersion = 26.0.1;
@@ -274,6 +276,12 @@
 			knownRegions = (
 				en,
 				Base,
+				"zh-Hans",
+				fr,
+				de,
+				ja,
+				ko,
+				es,
 			);
 			mainGroup = F2E2ED6C2F4CA530008620D9;
 			minimizedProjectReferenceProxies = 1;
@@ -485,6 +493,7 @@
 				ADDITIONAL_SDKS = /Library/Developer/SDKs/FxPlug.sdk;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -555,6 +564,7 @@
 				ADDITIONAL_SDKS = /Library/Developer/SDKs/FxPlug.sdk;
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";

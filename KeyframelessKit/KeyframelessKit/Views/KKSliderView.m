@@ -393,7 +393,7 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
 }
 
 // The inner NSSlider is pinned to our bounds, so the cell's bar rect has
-// origin.x 0 and our width — knob centre math matches knobPositionForBarRect:
+// origin.x 0 and our width - knob centre math matches knobPositionForBarRect:
 // (inset kKnobWidth/2 each side). Same source of truth as drawing/hit-test.
 - (NSRect)trackScreenRect {
   if (!self.window)
@@ -423,6 +423,16 @@ static inline CGFloat NormalizeValue(double value, double min, double max) {
   CGFloat norm = usable > 0.0 ? (viewX - kKnobWidth / 2.0) / usable : 0.0;
   return
       [(KKSliderCell *)_slider.cell normalizedToValue:MAX(0.0, MIN(1.0, norm))];
+}
+
+- (NSRect)knobScreenRect {
+  if (!self.window)
+    return NSZeroRect;
+  CGFloat cx = [self screenXForValue:self.doubleValue];
+  NSRect track = [self trackScreenRect];
+  CGFloat cy = NSMidY(track);
+  return NSMakeRect(cx - kKnobWidth / 2.0, cy - kKnobHeight / 2.0, kKnobWidth,
+                    kKnobHeight);
 }
 
 @end

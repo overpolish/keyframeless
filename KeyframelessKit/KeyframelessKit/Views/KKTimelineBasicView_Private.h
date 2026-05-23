@@ -52,7 +52,7 @@ typedef NS_ENUM(NSInteger, KKBasicSection) {
 };
 
 // The Basic projection of the shared timeline: derived from the animatable
-// lanes' keyposes (all opted-in lanes share boundary times — the invariant).
+// lanes' keyposes (all opted-in lanes share boundary times - the invariant).
 typedef struct {
   BOOL anyAnimatable;
   BOOL inEnabled;
@@ -87,7 +87,7 @@ typedef struct {
   NSInteger holdEnd;
 } KKHoldShape;
 
-// Pure timeline/projection helpers — definitions live in the core .m and are
+// Pure timeline/projection helpers - definitions live in the core .m and are
 // reused across the categories below.
 FOUNDATION_EXPORT KKHoldShape KKShapeOfLane(KKLane *lane);
 FOUNDATION_EXPORT BOOL KKValuesEqual(NSArray<NSNumber *> *a,
@@ -113,7 +113,7 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
                                           double *outHi);
 
 // Class extension: ivars only. Cross-category method decls live in the
-// named (Internal) category below — declaring them in the class extension
+// named (Internal) category below - declaring them in the class extension
 // would trigger "category is implementing a method which will also be
 // implemented by its primary class" when a category provides the body.
 @interface KKTimelineBasicView () {
@@ -138,12 +138,12 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
   NSView *_popoverAnchor;
   KKTimelineZoomPan *_zp;
   BOOL _zoomedNotified;
-  // Backing storage for the public properties — declared here (instead of
+  // Backing storage for the public properties - declared here (instead of
   // synthesized in the core .m) so all categories can read/write them.
   double _clipDurationSeconds;
   double _frameDurationSeconds;
   double _playheadFraction;
-  // Boundary-popover state — read by the onValue/onAnimate closures created
+  // Boundary-popover state - read by the onValue/onAnimate closures created
   // in _openBoundaryPopoverForDiamond:. Stored as ivars (not closure
   // locals) so an onion-skin filmstrip cell click can swap which boundary
   // the open popover targets without rebuilding the popover. Match the

@@ -10,8 +10,8 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /// Variant of `KKPillBar` that renders each input *compound* (an array of
-/// labels) as one grouped pill capsule — a single rounded track with
-/// internal segments — and packs multiple compounds horizontally with a
+/// labels) as one grouped pill capsule - a single rounded track with
+/// internal segments - and packs multiple compounds horizontally with a
 /// small gap between. Used for the modulation popover's "Applies to" row
 /// where each lane is a compound (its label + per-component sub-pills) so
 /// `[Radius] [Crop | W | H | X | Y]` fits in less horizontal space than

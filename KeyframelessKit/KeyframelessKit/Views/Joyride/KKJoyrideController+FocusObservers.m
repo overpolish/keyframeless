@@ -24,7 +24,7 @@
     if (!strong || !strong->_active)
       return;
     // Defer: notifications fire synchronously and dismiss runs an animation
-    // + onComplete (which may applyTimeline:) — avoid reentrancy.
+    // + onComplete (which may applyTimeline:) - avoid reentrancy.
     dispatch_async(dispatch_get_main_queue(), ^{
       __strong typeof(weak) s = weak;
       if (s && s->_active)
@@ -66,7 +66,7 @@
   [self _installOcclusionDismissObserver];
 }
 
-// Dismiss the guide when a ViewBridge host window's occlusion changes — i.e.
+// Dismiss the guide when a ViewBridge host window's occlusion changes - i.e.
 // Mission Control / App Exposé / bringing FCP forward covered the overlay,
 // even when focus returns to FCP (so NSApplicationDidResignActive never
 // fires). The borderless non-activating panel's own occlusionState never

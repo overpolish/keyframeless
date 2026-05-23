@@ -27,7 +27,7 @@ typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
 /// lanes only). When hidden the control has no effect on layout.
 @property(nonatomic, readonly) BOOL showsLinked;
 @property(nonatomic) BOOL linked;
-/// When YES, pills render easing curves with time mirrored — matches the
+/// When YES, pills render easing curves with time mirrored - matches the
 /// animate-out rendering convention.
 @property(nonatomic) BOOL animateOut;
 /// Whether the view was constructed in bulk mode (shows a "Bulk Edit"
@@ -67,7 +67,7 @@ typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
          participationLabels:(nullable NSArray<NSString *> *)labels
          participationStates:(nullable NSArray<NSNumber *> *)states;
 
-/// Compound participation variant — `labels`/`states` are nested per
+/// Compound participation variant - `labels`/`states` are nested per
 /// compound (one compound = one lane, each compound's inner array is its
 /// segments: lane label + optional component labels). Renders one grouped
 /// pill capsule per compound packed horizontally with scroll/shadow on

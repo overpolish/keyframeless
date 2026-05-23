@@ -50,7 +50,7 @@
   KKTimingSegment *orig = segs[splitIdx];
   double splitPoint = position;
 
-  // Create two segments from the split. Clear any duration lock — the
+  // Create two segments from the split. Clear any duration lock - the
   // original's `lockedDurationSeconds` targeted the whole width, so
   // inheriting it on both halves would double the intended total.
   KKTimingSegment *left = [orig copy];
@@ -217,7 +217,7 @@
   }
 
   KKTimingSegment *removed = segs[segmentIndex];
-  // Expand the neighbor to fill the gap. Clear its lock too — the
+  // Expand the neighbor to fill the gap. Clear its lock too - the
   // neighbor's stored `lockedDurationSeconds` reflects its old width,
   // which no longer matches after absorbing the removed segment's span.
   if ((NSUInteger)segmentIndex + 1 < segs.count) {

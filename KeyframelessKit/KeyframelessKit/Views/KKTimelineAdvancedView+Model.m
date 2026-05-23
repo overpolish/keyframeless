@@ -4,6 +4,8 @@
  */
 
 #import "../Math/KKTimelineScrubMath.h"
+#import "../Style/KKTokens.h"
+#import "KKLocalized.h"
 #import "KKTimelineAdvancedView_Private.h"
 
 @implementation KKTimelineAdvancedView (Model)
@@ -33,9 +35,31 @@
                     NSHeight(self.bounds) - bottom - top);
 }
 
+// Tracks start after the lane-label gutter. The gutter grows to fit the widest
+// localized label (e.g. German "Zuschnitt" is wider than the English default),
+// floored at the original English width so en/short languages are unchanged and
+// capped at half the graph so a very long name can never swallow the timeline.
+- (CGFloat)_trackLeftOffset {
+  NSRect g = [self _graphRect];
+  NSDictionary *attrs = @{
+    NSFontAttributeName : [NSFont systemFontOfSize:KKFontSizeSM
+                                            weight:NSFontWeightMedium]
+  };
+  CGFloat maxW = 0.0;
+  for (KKLane *lane in [self _animatableLanes]) {
+    NSString *label = KKLocalizedParamName(lane.label ?: @"");
+    maxW = MAX(maxW, ceil([label sizeWithAttributes:attrs].width));
+  }
+  // inset (left) + label + inset (gap before tracks)
+  CGFloat needed = kRowLabelInset + maxW + kRowLabelInset;
+  CGFloat floor = kRowLabelW + kRowLabelInset;
+  CGFloat cap = NSWidth(g) * 0.5;
+  return MAX(floor, MIN(needed, cap));
+}
+
 - (NSRect)_tracksRect {
   NSRect g = [self _graphRect];
-  CGFloat x = NSMinX(g) + kRowLabelW + kRowLabelInset;
+  CGFloat x = NSMinX(g) + [self _trackLeftOffset];
   return NSMakeRect(x, NSMinY(g), NSMaxX(g) - x, NSHeight(g));
 }
 
@@ -134,7 +158,7 @@
   return nil;
 }
 
-// Per-label "identity" default from the plugin's lane template — used when
+// Per-label "identity" default from the plugin's lane template - used when
 // a lane has zero keyposes and the user is adding the first one back.
 - (NSArray<NSNumber *> *)_templateDefaultValuesForLabel:(NSString *)label {
   KKLane *tmpl = nil;
@@ -188,7 +212,7 @@
 
 // Find a pill under `pt`: returns the lane index in _animatableLanes and the
 // keypose index within that lane, or both -1 if no pill is hit. Last-touched
-// pill gets first refusal — when two pills overlap, the one the user just
+// pill gets first refusal - when two pills overlap, the one the user just
 // dragged into the stack draws on top and stays the click target.
 - (BOOL)_pillAtPoint:(NSPoint)pt
                 lane:(NSInteger *)outLaneIdx

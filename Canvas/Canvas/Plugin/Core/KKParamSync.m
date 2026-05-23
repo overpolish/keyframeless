@@ -83,7 +83,7 @@ void KKCanvasApplyEnabledToStore(KKCanvasStore *store, UInt32 paramID,
 // Returns YES if writes are needed (caller still has to do them); NO if
 // the visHash already matches and the caller can early-exit.
 //
-// `fallback*` values are consulted only when no path is selected — they
+// `fallback*` values are consulted only when no path is selected - they
 // let the inspector reveal sub-params (dash/dot, marker size, sketch
 // fill gap/angle/weight) that depend on the persisted cycle params on
 // empty canvas. Pass 0 to disable a given fallback.
