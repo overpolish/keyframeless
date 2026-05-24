@@ -1,0 +1,17 @@
+{
+  "siteTitle": "Keyframeless",
+  "payhip": "https://store.overpolish.co/b/QG73g",
+  "releases": "https://github.com/overpolish/keyframeless/releases",
+  "plugins": {
+    "rounded": {
+      "name": "Rounded",
+      "kind": "FxPlug effect",
+      "payhip": "https://store.overpolish.co/b/QG73g"
+    },
+    "keyframelessx": {
+      "name": "Keyframeless X",
+      "kind": "workflow extension",
+      "payhip": "https://store.overpolish.co/b/QG73g"
+    }
+  }
+}

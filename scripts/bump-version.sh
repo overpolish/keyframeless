@@ -184,6 +184,28 @@ with open('$MANIFEST', 'w') as f:
 " "$@"
 }
 
+# Create a prefilled release-notes .md for this version (the changelog site + the
+# kk-version meta tag both derive from this file). Never clobbers an existing one.
+create_changelog_md() {
+  local dir="$ROOT/docs/changelog/$COMPONENT"
+  local md="$dir/$VERSION.md"
+  if [[ -f "$md" ]]; then
+    echo "  changelog: docs/changelog/$COMPONENT/$VERSION.md already exists (left as-is)"
+    return
+  fi
+  mkdir -p "$dir"
+  cat >"$md" <<EOF
+<!-- date: $(date +%Y-%m-%d) -->
+
+### New
+
+### Improved
+
+### Fixed
+EOF
+  echo "  changelog: created docs/changelog/$COMPONENT/$VERSION.md"
+}
+
 echo "Bumping $COMPONENT: $CURRENT -> $VERSION"
 
 case "$COMPONENT" in
@@ -234,9 +256,11 @@ esac
 
 if [[ "$UPDATE_MANIFEST" == true ]]; then
   bump_manifest "$COMPONENT" "$VERSION"
+  create_changelog_md
   echo ""
   echo "Done - $COMPONENT bumped to $VERSION"
   echo "  manifest.json updated"
+  echo "  edit docs/changelog/$COMPONENT/$VERSION.md, then run scripts/build-changelog.py"
 else
   echo ""
   echo "Done - $COMPONENT bumped to $VERSION"

@@ -8,13 +8,22 @@
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
 #import "../Update/KKUpdateChecker.h"
+#import "KKLocalized.h"
 #import <AppKit/AppKit.h>
 
 static const CGFloat KKLogoSize = 28.0;
 static const CGFloat KKHelpButtonSize = 18.0;
 
+#if DEBUG
+// Flip to YES + rebuild to force the update banner in FCP (env vars don't reach
+// an FCP-hosted plugin, so this is a compile-time switch).
+static const BOOL kKKForceUpdateBanner = NO;
+#endif
+
 @implementation KKLogoBannerView {
   NSButton *_helpButton;
+  NSButton *_changelogButton;
+  NSStackView *_leftStack;
 }
 
 - (NSRect)effectHeaderScreenRect {
@@ -58,23 +67,74 @@ static const CGFloat KKHelpButtonSize = 18.0;
       [logoView.heightAnchor constraintEqualToConstant:KKLogoSize],
     ]];
 
-    if ([KKUpdateChecker shared].updateAvailable) {
-      NSImage *dlIcon =
-          [NSImage imageWithSystemSymbolName:@"arrow.down.circle.fill"
-                    accessibilityDescription:@"Download"];
+    // Left controls: [help (optional)] [changelog], in a leading stack.
+    _leftStack = [[NSStackView alloc] init];
+    _leftStack.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    _leftStack.spacing = KKSpacingMD;
+    _leftStack.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:_leftStack];
+    [NSLayoutConstraint activateConstraints:@[
+      [_leftStack.leadingAnchor
+          constraintEqualToAnchor:self.leadingAnchor
+                         constant:KKInspectorHorizontalInset],
+      [_leftStack.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    ]];
 
-      NSButton *button = [NSButton buttonWithTitle:@" New Version"
-                                             image:dlIcon
+    if ([KKUpdateChecker shared].notesURL) {
+      NSImage *icon = [NSImage
+          imageWithSystemSymbolName:
+              @"clock.arrow.trianglehead.counterclockwise.rotate.90"
+           accessibilityDescription:
+               KKLoc(@"What's New", @"Changelog button accessibility label")];
+      _changelogButton = [NSButton buttonWithImage:icon
+                                            target:self
+                                            action:@selector(openNotesURL:)];
+      _changelogButton.bezelStyle = NSBezelStyleAccessoryBarAction;
+      _changelogButton.bordered = NO;
+      _changelogButton.contentTintColor = [NSColor inspectorLabel];
+      _changelogButton.toolTip =
+          KKLoc(@"What's New", @"Changelog button tooltip");
+      _changelogButton.translatesAutoresizingMaskIntoConstraints = NO;
+      [NSLayoutConstraint activateConstraints:@[
+        [_changelogButton.widthAnchor
+            constraintEqualToConstant:KKHelpButtonSize],
+        [_changelogButton.heightAnchor
+            constraintEqualToConstant:KKHelpButtonSize],
+      ]];
+      [_leftStack addArrangedSubview:_changelogButton];
+    }
+
+    BOOL updateAvailable = [KKUpdateChecker shared].updateAvailable;
+    NSString *version = [KKUpdateChecker shared].availableVersion;
+#if DEBUG
+    if (kKKForceUpdateBanner) {
+      updateAvailable = YES;
+      version = version ?: @"9.9.9";
+    }
+#endif
+    if (updateAvailable) {
+      NSString *title =
+          version
+              ? [NSString
+                    stringWithFormat:KKLoc(
+                                         @"v%@ available",
+                                         @"Update banner: version X available"),
+                                     version]
+              : KKLoc(@"Update available", @"Update banner, no version");
+      NSButton *button = [NSButton buttonWithTitle:title
                                             target:self
                                             action:@selector(openDownloadURL:)];
       button.translatesAutoresizingMaskIntoConstraints = NO;
       button.bezelStyle = NSBezelStyleRecessed;
       button.bordered = NO;
-      button.imagePosition = NSImageLeft;
       button.font =
           [NSFont systemFontOfSize:[KKFonts inspectorLabelFont].pointSize
                             weight:NSFontWeightMedium];
       button.contentTintColor = [NSColor accent];
+      button.toolTip = [NSString
+          stringWithFormat:KKLoc(@"You have %@",
+                                 @"Update banner tooltip: installed version"),
+                           [KKUpdateChecker shared].currentVersion];
       [self addSubview:button];
 
       [NSLayoutConstraint activateConstraints:@[
@@ -92,25 +152,23 @@ static const CGFloat KKHelpButtonSize = 18.0;
   _onHelpTap = [onHelpTap copy];
 
   if (_onHelpTap && !_helpButton) {
-    NSImage *icon = [NSImage imageWithSystemSymbolName:@"questionmark.circle"
-                              accessibilityDescription:@"Help"];
+    NSImage *icon = [NSImage
+        imageWithSystemSymbolName:@"questionmark.circle"
+         accessibilityDescription:KKLoc(@"Help",
+                                        @"Help button accessibility label")];
     _helpButton = [NSButton buttonWithImage:icon
                                      target:self
                                      action:@selector(_helpClicked:)];
     _helpButton.bezelStyle = NSBezelStyleAccessoryBarAction;
     _helpButton.bordered = NO;
     _helpButton.contentTintColor = [NSColor inspectorLabel];
-    _helpButton.toolTip = @"Open help";
+    _helpButton.toolTip = KKLoc(@"Open help", @"Help button tooltip");
     _helpButton.translatesAutoresizingMaskIntoConstraints = NO;
-    [self addSubview:_helpButton];
     [NSLayoutConstraint activateConstraints:@[
-      [_helpButton.leadingAnchor
-          constraintEqualToAnchor:self.leadingAnchor
-                         constant:KKInspectorHorizontalInset],
-      [_helpButton.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
       [_helpButton.widthAnchor constraintEqualToConstant:KKHelpButtonSize],
       [_helpButton.heightAnchor constraintEqualToConstant:KKHelpButtonSize],
     ]];
+    [_leftStack insertArrangedSubview:_helpButton atIndex:0];
   } else if (!_onHelpTap && _helpButton) {
     [_helpButton removeFromSuperview];
     _helpButton = nil;
@@ -123,7 +181,15 @@ static const CGFloat KKHelpButtonSize = 18.0;
 }
 
 - (void)openDownloadURL:(id)sender {
-  NSURL *url = [KKUpdateChecker shared].downloadURL;
+  KKUpdateChecker *checker = [KKUpdateChecker shared];
+  NSURL *url = checker.downloadURL ?: checker.notesURL;
+  if (url) {
+    [[NSWorkspace sharedWorkspace] openURL:url];
+  }
+}
+
+- (void)openNotesURL:(id)sender {
+  NSURL *url = [KKUpdateChecker shared].notesURL;
   if (url) {
     [[NSWorkspace sharedWorkspace] openURL:url];
   }

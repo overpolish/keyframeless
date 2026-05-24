@@ -11,17 +11,25 @@ struct AppShell: View {
 	@StateObject private var audioModelManager = AudioModelManager()
 	@StateObject private var processingCoordinator = AudioProcessingCoordinator()
 	@State private var selectedTab: AppTab = .audio
-	@State private var updateMessage: String?
-	@State private var updateURL: URL?
+	@State private var availableVersion: String?
+	@State private var currentVersion: String = ""
 	@State private var updateDismissed = Self.dismissed
 	private static var dismissed = false
 
+	#if DEBUG
+		// Flip to true + rebuild to force the banner in FCP. Env vars / scheme args
+		// do NOT reach an FCP-hosted extension, so this is a compile-time switch.
+		// (For pure UI work, use the #Preview in UpdateBanner.swift instead.)
+		private static let forceUpdateBanner = false
+	#endif
+
 	var body: some View {
 		VStack(spacing: KKSpacingMD) {
-			if let message = updateMessage, !updateDismissed {
+			if let availableVersion, !updateDismissed {
 				UpdateBanner(
-					message: message,
-					url: updateURL,
+					version: availableVersion,
+					currentVersion: currentVersion,
+					url: KKUpdateChecker.shared().notesURL,
 					onDismiss: {
 						withAnimation { updateDismissed = true }
 						Self.dismissed = true
@@ -74,12 +82,22 @@ struct AppShell: View {
 		.background(Color(nsColor: .windowBackground()))
 		.onAppear {
 			FontCache.warmup()
+			#if DEBUG
+				if Self.forceUpdateBanner {
+					// Reset dismissal so the forced banner returns on every reopen.
+					Self.dismissed = false
+					updateDismissed = false
+					currentVersion = KKUpdateChecker.shared().currentVersion
+					availableVersion = "9.9.9"
+					return
+				}
+			#endif
 			KKUpdateChecker.shared().check { available in
-				guard available else { return }
 				let checker = KKUpdateChecker.shared()
+				guard available, let version = checker.availableVersion else { return }
 				withAnimation {
-					updateMessage = Self.updateMessage(from: checker)
-					updateURL = checker.downloadURL
+					currentVersion = checker.currentVersion
+					availableVersion = version
 				}
 			}
 		}
@@ -143,8 +161,9 @@ struct AppShell: View {
 	}
 
 	private var topBar: some View {
-		HStack {
+		HStack(spacing: KKSpacingLG) {
 			PillTabBar(selected: $selectedTab)
+			WhatsNewButton(url: KKUpdateChecker.shared().notesURL)
 			Spacer()
 			toolNav
 		}
@@ -155,17 +174,6 @@ struct AppShell: View {
 				.frame(width: 36)
 				.opacity(0.15)
 		}
-	}
-
-	private static func updateMessage(from checker: KKUpdateChecker) -> String {
-		var parts: [String] = []
-		if let version = checker.availableVersion {
-			parts.append("Keyframeless X \(version) available")
-		}
-		for key in checker.availableComponentKeys {
-			parts.append("\(key) now available")
-		}
-		return parts.joined(separator: " · ")
 	}
 
 	@ViewBuilder

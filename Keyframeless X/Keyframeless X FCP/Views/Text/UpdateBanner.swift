@@ -7,7 +7,8 @@ import KeyframelessKit
 import SwiftUI
 
 struct UpdateBanner: View {
-	let message: String
+	let version: String
+	let currentVersion: String
 	let url: URL?
 	let onDismiss: () -> Void
 
@@ -15,11 +16,16 @@ struct UpdateBanner: View {
 		HStack(spacing: KKSpacingLG) {
 			Image(systemName: "arrow.down.circle.fill")
 				.font(.system(size: 12))
-			Text(message)
-				.font(.system(size: 11, weight: .medium))
+			VStack(alignment: .leading, spacing: 1) {
+				Text("Keyframeless X \(version) available")
+					.font(.system(size: 11, weight: .medium))
+				Text("You have \(currentVersion)")
+					.font(.system(size: 9))
+					.foregroundStyle(.secondary)
+			}
 			Spacer()
 			if let url {
-				Button("Download") {
+				Button("What's New") {
 					NSWorkspace.shared.open(url)
 				}
 				.buttonStyle(.borderless)
@@ -48,3 +54,20 @@ struct UpdateBanner: View {
 		)
 	}
 }
+
+#if DEBUG
+	#Preview {
+		VStack(spacing: 12) {
+			UpdateBanner(
+				version: "2.2.0",
+				currentVersion: "2.1.0",
+				url: URL(string: "https://update.keyframeless.overpolish.co/keyframelessx/"),
+				onDismiss: {}
+			)
+			UpdateBanner(version: "3.0.0", currentVersion: "2.1.0", url: nil, onDismiss: {})
+		}
+		.padding()
+		.frame(width: 440)
+		.background(Color(nsColor: .windowBackground()))
+	}
+#endif
