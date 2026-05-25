@@ -15,6 +15,15 @@ static NSString *KKUpdateBaseURL(void) {
 #endif
 }
 
+static NSString *KKFeedbackBaseURL(void) {
+#if DEBUG
+  // `wrangler dev` in feedback-worker/ serves the form + /submit here.
+  return @"http://localhost:8787/";
+#else
+  return @"https://feedback.keyframeless.overpolish.co/";
+#endif
+}
+
 static NSString *const kCachedVersionKey =
     @"co.overpolish.keyframeless.cachedAvailableVersion";
 
@@ -67,6 +76,20 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
           URLWithString:[NSString stringWithFormat:@"%@/%@/", KKUpdateBaseURL(),
                                                    _componentKey]];
     }
+
+    NSURLComponents *feedback =
+        [NSURLComponents componentsWithString:KKFeedbackBaseURL()];
+    NSMutableArray<NSURLQueryItem *> *feedbackItems = [NSMutableArray array];
+    if (_componentKey) {
+      [feedbackItems
+          addObject:[NSURLQueryItem queryItemWithName:@"plugin"
+                                                value:_componentKey]];
+    }
+    [feedbackItems
+        addObject:[NSURLQueryItem queryItemWithName:@"version"
+                                              value:_currentVersion]];
+    feedback.queryItems = feedbackItems;
+    _feedbackURL = feedback.URL;
 
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     _availableVersion = [defaults stringForKey:kCachedVersionKey];

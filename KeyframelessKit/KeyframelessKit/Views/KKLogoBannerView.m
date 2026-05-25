@@ -23,6 +23,7 @@ static const BOOL kKKForceUpdateBanner = NO;
 @implementation KKLogoBannerView {
   NSButton *_helpButton;
   NSButton *_changelogButton;
+  NSButton *_feedbackButton;
   NSStackView *_leftStack;
 }
 
@@ -67,7 +68,8 @@ static const BOOL kKKForceUpdateBanner = NO;
       [logoView.heightAnchor constraintEqualToConstant:KKLogoSize],
     ]];
 
-    // Left controls: [help (optional)] [changelog], in a leading stack.
+    // Left controls: [help (optional)] [changelog] [feedback], in a leading
+    // stack.
     _leftStack = [[NSStackView alloc] init];
     _leftStack.orientation = NSUserInterfaceLayoutOrientationHorizontal;
     _leftStack.spacing = KKSpacingMD;
@@ -102,6 +104,29 @@ static const BOOL kKKForceUpdateBanner = NO;
             constraintEqualToConstant:KKHelpButtonSize],
       ]];
       [_leftStack addArrangedSubview:_changelogButton];
+    }
+
+    if ([KKUpdateChecker shared].feedbackURL) {
+      NSImage *icon = [NSImage
+          imageWithSystemSymbolName:@"exclamationmark.bubble"
+           accessibilityDescription:
+               KKLoc(@"Send feedback", @"Feedback button accessibility label")];
+      _feedbackButton = [NSButton buttonWithImage:icon
+                                           target:self
+                                           action:@selector(openFeedbackURL:)];
+      _feedbackButton.bezelStyle = NSBezelStyleAccessoryBarAction;
+      _feedbackButton.bordered = NO;
+      _feedbackButton.contentTintColor = [NSColor inspectorLabel];
+      _feedbackButton.toolTip =
+          KKLoc(@"Send feedback", @"Feedback button tooltip");
+      _feedbackButton.translatesAutoresizingMaskIntoConstraints = NO;
+      [NSLayoutConstraint activateConstraints:@[
+        [_feedbackButton.widthAnchor
+            constraintEqualToConstant:KKHelpButtonSize],
+        [_feedbackButton.heightAnchor
+            constraintEqualToConstant:KKHelpButtonSize],
+      ]];
+      [_leftStack addArrangedSubview:_feedbackButton];
     }
 
     BOOL updateAvailable = [KKUpdateChecker shared].updateAvailable;
@@ -190,6 +215,13 @@ static const BOOL kKKForceUpdateBanner = NO;
 
 - (void)openNotesURL:(id)sender {
   NSURL *url = [KKUpdateChecker shared].notesURL;
+  if (url) {
+    [[NSWorkspace sharedWorkspace] openURL:url];
+  }
+}
+
+- (void)openFeedbackURL:(id)sender {
+  NSURL *url = [KKUpdateChecker shared].feedbackURL;
   if (url) {
     [[NSWorkspace sharedWorkspace] openURL:url];
   }

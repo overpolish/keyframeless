@@ -164,6 +164,7 @@ struct AppShell: View {
 		HStack(spacing: KKSpacingLG) {
 			PillTabBar(selected: $selectedTab)
 			WhatsNewButton(url: KKUpdateChecker.shared().notesURL)
+			FeedbackButton(url: KKUpdateChecker.shared().feedbackURL)
 			Spacer()
 			toolNav
 		}

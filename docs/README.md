@@ -14,13 +14,17 @@ whether to show the in-app update banner.
 
 ## Media (images / GIFs / video)
 
-**Do not commit media to the repo.** Drag the file into any GitHub editor (a release
-draft, issue, or comment) to upload it - GitHub returns a `user-attachments` CDN URL.
-Use that absolute URL in the release `.md` so it renders both on the site and on GitHub,
-and the repo stays small as the changelog grows:
+**Do not commit media to the repo** - especially video. Upload it to the R2 media bucket and reference its public URL, so the changelog can grow without bloating git:
 
-- `![caption](https://github.com/user-attachments/assets/...)` - image or GIF
-- a bare `https://...` URL on its own line - video
+```sh
+wrangler r2 object put keyframeless-media/<component>/<version>/demo.mp4 --file ./demo.mp4
+```
 
-`CNAME` is the GitHub Pages custom domain (do not remove). See `CONTRIBUTING.md` for the
-local preview loop and how to test the update banner against a local server.
+(or drag-drop in the Cloudflare dashboard). The bucket is served over the custom domain `media.keyframeless.overpolish.co`, so the absolute URL renders both on the site and in a GitHub Release body:
+
+- `![caption](https://media.keyframeless.overpolish.co/<component>/<version>/shot.png)` - image or GIF
+- a bare `https://media.keyframeless.overpolish.co/.../demo.mp4` URL on its own line - video
+
+This bucket is separate from the feedback Worker's bucket (whose uploads auto-delete) - changelog media is permanent.
+
+`CNAME` is the GitHub Pages custom domain (do not remove). See `CONTRIBUTING.md` for the local preview loop and how to test the update banner against a local server.

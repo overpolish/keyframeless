@@ -1,0 +1,31 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "keyframeless-feedback",
+  "main": "src/index.js",
+  "compatibility_date": "2026-05-20",
+  // The static form (public/index.html) is served at / and the Worker handles
+  // POST /submit - same origin, so no CORS. Static assets are matched first;
+  // a request with no matching file (i.e. /submit) falls through to the Worker.
+  "assets": {
+    "directory": "./public",
+  },
+  // Screenshot uploads land here; the form embeds their public URLs in the issue.
+  "r2_buckets": [
+    {
+      "binding": "ATTACHMENTS",
+      "bucket_name": "keyframeless-feedback",
+      "remote": true,
+    },
+  ],
+  "vars": {
+    "GITHUB_REPO": "overpolish/keyframeless",
+    // Public base URL of the bucket - the r2.dev URL or a custom domain.
+    "R2_PUBLIC_URL": "https://pub-6e8fc2ae5e5249a398c8b3a182dfe768.r2.dev",
+  },
+  // Secrets - set with `wrangler secret put NAME`, never committed:
+  //   TURNSTILE_SECRET   Cloudflare Turnstile secret key
+  //   GITHUB_TOKEN       fine-grained PAT, issues:write on GITHUB_REPO only
+  "routes": [
+    { "pattern": "feedback.keyframeless.overpolish.co", "custom_domain": true },
+  ],
+}
