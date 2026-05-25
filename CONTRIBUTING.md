@@ -84,6 +84,42 @@ defaults write -g AppleLanguages '("en-GB")'   # then reboot FCP
 
 String Catalogs are compiled at build time (`xcstringstool` emits `<lang>.lproj/<Table>.strings` into the bundle), so **editing a translation requires a rebuild** before it shows up - it is not a runtime swap.
 
+## Previewing the changelog site (and the update banner)
+
+The changelog/update site under `docs/` is generated from Markdown - one file per
+release at `docs/changelog/<component>/<version>.md`. Edit a `.md` (or
+`docs/assets/style.css`), then rebuild and serve:
+
+```sh
+python3 scripts/build-changelog.py
+cd docs && python3 -m http.server 8000
+```
+
+Open http://localhost:8000/ for the suite index, or http://localhost:8000/rounded/
+for a plugin page. The generated `index.html` files are build output - edit the `.md`
+and rerun the script, never the HTML.
+
+Debug builds point `KKUpdateChecker` at `http://localhost:8000` (release builds use the
+live domain), so a running debug plugin reads the local page's `<meta name="kk-version">`
+tag. To make the update banner actually fire, serve a version newer than the installed
+one:
+
+```sh
+# bump the served version above what's installed, then rebuild + reload the plugin
+cp docs/changelog/rounded/3.0.0.md docs/changelog/rounded/9.9.9.md
+python3 scripts/build-changelog.py
+```
+
+Delete the throwaway `9.9.9.md` (and rebuild) before committing - a stray release file
+would publish a bogus version and trip the checker for real users.
+
+> [!IMPORTANT]
+> FCP-hosted plugins don't inherit Xcode scheme env vars, so the banner can't be forced
+> with an environment variable. For pure UI work without a server, flip the compile-time
+> switch instead: `forceUpdateBanner` in `AppShell.swift` (Keyframeless X) or
+> `kKKForceUpdateBanner` in `KKLogoBannerView.m` (Rounded). Keep both `false`/`NO` for
+> shipping.
+
 ## VSCode
 
 If you're using VSCode with clangd, run the following after building the project to generate the language server config:

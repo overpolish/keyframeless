@@ -78,7 +78,6 @@ SOURCE="$REPO_ROOT/Template"
 DEST="$REPO_ROOT/$PLUGIN_NAME"
 WORKSPACE="$REPO_ROOT/Keyframeless.xcworkspace/contents.xcworkspacedata"
 PKGPROJ="$REPO_ROOT/Distribution/Keyframeless.pkgproj"
-MANIFEST="$REPO_ROOT/manifest.json"
 BUMP_SCRIPT="$REPO_ROOT/scripts/bump-version.sh"
 UPDATE_CHECKER="$REPO_ROOT/KeyframelessKit/KeyframelessKit/Update/KKUpdateChecker.m"
 
@@ -166,23 +165,7 @@ ok "UUIDs: effect=$NEW_UUID_EFFECT"
 ok "       osc   =$NEW_UUID_OSC"
 ok "       group =$NEW_UUID_GROUP"
 
-# ── Step 5: Register in manifest.json ─────────────────────────────────────────
-
-log "Registering in manifest.json..."
-
-python3 -c "
-import json
-with open('$MANIFEST', 'r') as f:
-    m = json.load(f)
-m['$PLUGIN_KEY'] = '1.0.0'
-with open('$MANIFEST', 'w') as f:
-    json.dump(m, f, indent=2)
-    f.write('\n')
-"
-
-ok "Added '$PLUGIN_KEY' to manifest.json"
-
-# ── Step 6: Register in bump-version.sh ───────────────────────────────────────
+# ── Step 5: Register in bump-version.sh ───────────────────────────────────────
 
 log "Registering in bump-version.sh..."
 
@@ -210,7 +193,7 @@ sed -i '' "/^  keyframelessx)$/i\\
 
 ok "Added '$PLUGIN_KEY' to bump-version.sh"
 
-# ── Step 7: Register in KKUpdateChecker.m ─────────────────────────────────────
+# ── Step 6: Register in KKUpdateChecker.m ─────────────────────────────────────
 
 log "Registering in KKUpdateChecker.m..."
 
@@ -225,7 +208,7 @@ sed -i '' "s|@\"MagicMove-XPC-Service\" : @\"magicmove\"|@\"MagicMove-XPC-Servic
 
 ok "Added '$PLUGIN_NAME' to KKUpdateChecker.m"
 
-# ── Step 8: Register in installer pkgproj ────────────────────────────────────
+# ── Step 7: Register in installer pkgproj ────────────────────────────────────
 
 log "Registering in Keyframeless.pkgproj..."
 
@@ -282,7 +265,7 @@ with open(pkgproj, 'w') as f:
 
 ok "Added '$PLUGIN_NAME' to Keyframeless.pkgproj (pkg=$PKG_UUID)"
 
-# ── Step 9 (optional): Add to workspace ──────────────────────────────────────
+# ── Step 8 (optional): Add to workspace ──────────────────────────────────────
 
 if $ADD_TO_WORKSPACE; then
     log "Adding to workspace..."

@@ -8,6 +8,12 @@ xcuserdata/
 buildServer.json
 scripts/*.fcpxml
 !scripts/*.template.fcpxml
+# Per-product installer artifacts (generated transiently by build-and-sign.sh from
+# the combined project + uninstall.template; never committed).
+Distribution/*.pkgproj
+!Distribution/Keyframeless.pkgproj
+Distribution/scripts/uninstall-*
+!Distribution/scripts/uninstall-motionblur
 .derived-data*
 .claude
 CLAUDE.md

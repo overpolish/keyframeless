@@ -25,33 +25,34 @@ scripts/bump-version.sh magicmove alpha    # 1.0.1 -> 1.0.1-v0, then 1.0.1-v1, e
 scripts/bump-version.sh magicmove release  # 1.0.1-v2 -> 1.0.1
 ```
 
-`alpha` adds or increments a `-vN` suffix and **skips** `manifest.json` - the manifest only ever contains official release versions. `release` strips the suffix and updates the manifest. Users running `1.0.1-v0` will see the update banner when the official `1.0.1` ships because a release version is always considered newer than a pre-release with the same base version.
+`alpha` adds or increments a `-vN` suffix and creates no changelog entry. `release` strips the suffix and creates the prefilled `docs/changelog/<component>/<version>.md`. Users running `1.0.1-v0` will see the update banner when the official `1.0.1` ships because a release version is always considered newer than a pre-release with the same base version.
 
 ### How update checking works
 
-On app launch, `KKUpdateChecker` fetches the latest GitHub release and looks for a `manifest.json` asset. It compares each component version in the manifest against the `CFBundleShortVersionString` of the locally installed bundle at `/Applications/Keyframeless/`. If any component has a newer version, or a component exists in the manifest but isn't installed, the update banner is shown. Pre-release suffixes (e.g. `-v0`) are stripped for comparison, and a release version is treated as newer than a pre-release with the same base version.
+On app launch, `KKUpdateChecker` GETs the component's release-notes page (`<base>/<component>/`) and reads the `<meta name="kk-version">` tag, comparing it to the running bundle's `CFBundleShortVersionString`. If the page advertises a newer version, the update banner is shown. Pre-release suffixes (e.g. `-v0`) are stripped for comparison, and a release version is treated as newer than a pre-release with the same base version. The published version is just the changelog `.md` filename (which the build emits into the meta tag) - there is no `manifest.json`.
 
 ### Releasing
 
-GitHub releases are tagged by date (e.g. `2026-03-24`) rather than a component version - the `manifest.json` asset is what communicates individual component versions to the update checker.
-
 1. Bump the component(s) that changed using the script above.
-2. Build, sign, and notarize the `.pkg` (see below).
-3. Create a GitHub release tagged with today's date and attach both the signed `.pkg` and the repo root `manifest.json` as release assets.
+2. Fill in `docs/changelog/<component>/<version>.md`.
+3. Run `scripts/build-changelog.py`.
+4. Build, sign, and notarize the per-product `.pkg` (see below).
+5. Upload the signed `.pkg` to its Payhip product - buyers re-download the new file from there.
+6. Publish the docs (commit + push) so the `kk-version` meta tag advertises the new version to installed builds.
 
 ### KeyframelessKit
 
-`KeyframelessKit` is a shared framework linked by all components - it has no version in the manifest. When it changes, bump whichever components ship with the new behaviour. If it's a framework-wide fix, bump all components.
+`KeyframelessKit` is a shared framework linked by all components - it carries no version of its own. When it changes, bump whichever components ship with the new behaviour. If it's a framework-wide fix, bump all components.
 
 ### Adding a new component
 
-The manifest key is the project name lowercased with no spaces or separators (e.g. `MagicMove` → `magicmove`, `Keyframeless X` → `keyframelessx`).
+The component key is the project name lowercased with no spaces or separators (e.g. `MagicMove` → `magicmove`, `Keyframeless X` → `keyframelessx`).
 
-1. Add an entry to `manifest.json` with the key and initial version (e.g. `"newplugin": "1.0.0"`).
-2. Add the key to `KKKnownComponents()` and `KKBundleIDToComponent()` in `KKUpdateChecker.m` - map both the wrapper app and XPC service bundle IDs.
-3. Add a case to `scripts/bump-version.sh` that updates the relevant `Info.plist` files and calls `bump_manifest`.
-4. Call `addUpdateBannerParameterWithAPI:error:` at the start of `addParametersWithError:` and pass `[KKPlugin servicePrincipalDelegate]` to `startServicePrincipalWithDelegate:` in `main()` to wire up update checking.
-5. Add the component to `Packages` as a separate package so end users can install it independently.
+1. Add the key to `KKBundleIDToComponent()` in `KKUpdateChecker.m` - map both the wrapper app and XPC service bundle IDs.
+2. Add a case to `scripts/bump-version.sh` that updates the relevant `Info.plist` / `.pbxproj` files.
+3. Call `addUpdateBannerParameterWithAPI:error:` at the start of `addParametersWithError:` and pass `[KKPlugin servicePrincipalDelegate]` to `startServicePrincipalWithDelegate:` in `main()` to wire up update checking.
+4. Add the component to the combined `Distribution/Keyframeless.pkgproj` in Packages.app, and add its `key -> package identifier` to `COMPONENT_ID` in `scripts/split-pkgproj.py`. The per-product `.pkgproj` and per-plugin uninstaller are then generated automatically by `build-and-sign.sh`.
+5. Add it to `docs/changelog/plugins.json` (name, kind, payhip) so it gets a changelog page + meta tag.
 
 ## Code Signing & Notarization
 
@@ -79,16 +80,29 @@ With the app selected under `Notarization`, click `Export Notarized App` and sel
 
 ### Building & signing `.pkg`
 
-Build the installer and sign it in one step:
+Build an installer and sign it in one step. The first argument is the target:
 
 ```sh
-scripts/build-and-sign.sh "<apple-id>" "<team-id>"
+scripts/build-and-sign.sh combined "<apple-id>" "<team-id>"   # all-in-one Keyframeless.pkg
+scripts/build-and-sign.sh rounded  "<apple-id>" "<team-id>"   # just Rounded.pkg
+scripts/build-and-sign.sh all      "<apple-id>" "<team-id>"   # every plugin, one .pkg each
 ```
 
-This runs `packagesbuild` on `Distribution/Keyframeless.pkgproj`, then signs, notarizes, staples, and verifies the resulting `.pkg`.
+Per-product targets generate a single-product `.pkgproj` and a per-plugin uninstaller
+from `Distribution/Keyframeless.pkgproj` + `scripts/uninstall.template` (via
+`scripts/split-pkgproj.py`), build, sign, then delete those temp files - nothing
+per-plugin is committed. `combined` builds the committed `Keyframeless.pkgproj`. Each
+runs `packagesbuild`, then signs, notarizes, staples, and verifies the resulting `.pkg`.
 
-To sign an already-built `.pkg` without rebuilding:
+To sign an already-built `.pkg` without rebuilding (base name, no `.pkg`):
 
 ```sh
-scripts/sign-pkg.sh "<apple-id>" "<team-id>"
+scripts/sign-pkg.sh "Rounded" "<apple-id>" "<team-id>"
+```
+
+To just generate a per-product `.pkgproj` for an unsigned local build:
+
+```sh
+python3 scripts/split-pkgproj.py rounded
+packagesbuild "Distribution/Rounded.pkgproj"
 ```
