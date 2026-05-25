@@ -59,6 +59,20 @@ body {
   border-bottom: 1px solid var(--panel-border);
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.brand .logo {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--sp-md);
+  flex: none;
+  display: block;
+}
+
 .title {
   display: flex;
   align-items: baseline;

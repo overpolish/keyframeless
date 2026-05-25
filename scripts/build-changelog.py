@@ -174,12 +174,15 @@ def load_plugin_releases(plugin_id):
     return releases
 
 
-def render_topbar(title, sub, href):
+def render_topbar(title, sub, href, logo):
     return (
         '      <header class="topbar">\n'
-        '        <div class="title">\n'
-        f"          <h1>{esc(title)}</h1>\n"
-        f'          <span class="sub">{esc(sub)}</span>\n'
+        '        <div class="brand">\n'
+        f'          <img class="logo" src="{html.escape(logo)}" alt="" />\n'
+        '          <div class="title">\n'
+        f"            <h1>{esc(title)}</h1>\n"
+        f'            <span class="sub">{esc(sub)}</span>\n'
+        "          </div>\n"
         "        </div>\n"
         f'        <a class="cta" href="{html.escape(href)}">Get it on Payhip →</a>\n'
         "      </header>"
@@ -249,7 +252,11 @@ def render_release(rel):
 def write_page(path, title, css, content, version=None):
     # kk-version is the machine-readable version contract KKUpdateChecker reads -
     # so there is no separate manifest.json. The note + meta sit in <head>.
+    base = css.rsplit("/", 1)[0] if "/" in css else "."  # assets dir (depth-relative)
     head = f"    {GENERATED_NOTE}\n"
+    head += f'    <link rel="icon" type="image/png" sizes="32x32" href="{base}/favicon-32.png" />\n'
+    head += f'    <link rel="icon" type="image/png" sizes="16x16" href="{base}/favicon-16.png" />\n'
+    head += f'    <link rel="apple-touch-icon" href="{base}/apple-touch-icon.png" />\n'
     if version:
         head += f'    <meta name="kk-version" content="{html.escape(version)}" />\n'
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -270,7 +277,7 @@ def build():
         releases = load_plugin_releases(pid)
         latest = releases[0]["version"] if releases else None
         payhip = info.get("payhip", site_payhip)
-        parts = [render_topbar(info["name"], "What's New", payhip)]
+        parts = [render_topbar(info["name"], "What's New", payhip, "../assets/apple-touch-icon.png")]
         parts += [render_release(r) for r in releases]
         if releases:
             oldest = releases[-1]["version"]
@@ -301,7 +308,7 @@ def build():
         print(f"  {pid}: {len(releases)} release(s) (latest {latest})")
 
     # root index
-    rows = [render_topbar(meta.get("siteTitle", "Keyframeless"), "Release notes", site_payhip)]
+    rows = [render_topbar(meta.get("siteTitle", "Keyframeless"), "Release notes", site_payhip, "assets/apple-touch-icon.png")]
     rows.append('      <ul class="entries">')
     for pid, info in plugins.items():
         kind = "Extension" if "extension" in info["kind"].lower() else "Plugin"
