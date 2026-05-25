@@ -149,6 +149,7 @@
     "Canvas",
     "Timing",
     "MotionBlur",
-    "Joyride"
+    "Joyride",
+    "Feedback"
   ]
 }
