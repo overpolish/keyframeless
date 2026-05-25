@@ -35,6 +35,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// target).
 @property(nonatomic, copy, readonly, nullable) NSURL *downloadURL;
 
+/// The hosted feedback form for this component, prefilled with `plugin` and
+/// `version` query params. (DEBUG points at the local docs server.)
+@property(nonatomic, copy, readonly, nullable) NSURL *feedbackURL;
+
 + (instancetype)shared;
 
 /// Checks the docs site once per session. Calls `completion` on the main queue.

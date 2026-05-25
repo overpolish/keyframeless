@@ -84,6 +84,44 @@ defaults write -g AppleLanguages '("en-GB")'   # then reboot FCP
 
 String Catalogs are compiled at build time (`xcstringstool` emits `<lang>.lproj/<Table>.strings` into the bundle), so **editing a translation requires a rebuild** before it shows up - it is not a runtime swap.
 
+## How updates and feedback fit together
+
+Two related-but-separate systems share the docs site and the in-plugin banner.
+
+**Update checking** - changelog generated from Markdown and served by GitHub Pages (media hosted separately in R2), polled by each plugin on launch:
+
+```mermaid
+flowchart LR
+  MD["changelog .md<br/>(one per release)"] -->|"build-changelog.py"| HTML["generated HTML<br/>+ kk-version meta"]
+  HTML -->|"commit + push"| Pages["GitHub Pages<br/>update.keyframeless.overpolish.co"]
+  Media["images / video"] -->|"manual upload"| R2m[("R2<br/>media.keyframeless.overpolish.co")]
+  R2m -.->|"embedded in pages"| Pages
+  Plugin["Plugin · KKUpdateChecker"] -->|"GET notes page"| Pages
+  Pages -.->|"kk-version"| Plugin
+  Plugin -->|"newer version?"| Banner["Update banner → Payhip"]
+```
+
+**Feedback** - the same banner's "Send feedback" button opens a Cloudflare Worker that turns a form into a GitHub issue, with screenshots stored in R2:
+
+```mermaid
+flowchart TD
+  Btn["Plugin · Send feedback button"] -->|"opens feedbackURL<br/>(plugin + version)"| Form["Feedback form<br/>(static asset)"]
+  Form -->|"POST /submit (multipart)"| Submit
+
+  subgraph Worker["Cloudflare Worker · feedback.keyframeless.overpolish.co"]
+    Submit["/submit"]
+    Hook["/github-webhook"]
+  end
+
+  Submit -->|"verify token"| TS["Turnstile"]
+  Submit -->|"upload"| R2[("R2 bucket")]
+  Submit -->|"create issue"| GH["GitHub issue<br/>(+ image URLs)"]
+  GH -.->|"issue link"| Form
+  GH -->|"on close / delete"| Hook
+  Hook -->|"verify HMAC + delete"| R2
+  TTL["R2 lifecycle TTL"] -.->|"backstop sweep"| R2
+```
+
 ## Previewing the changelog site (and the update banner)
 
 The changelog/update site under `docs/` is generated from Markdown - one file per
@@ -119,6 +157,28 @@ would publish a bogus version and trip the checker for real users.
 > switch instead: `forceUpdateBanner` in `AppShell.swift` (Keyframeless X) or
 > `kKKForceUpdateBanner` in `KKLogoBannerView.m` (Rounded). Keep both `false`/`NO` for
 > shipping.
+
+## Running the feedback form locally
+
+The "Send feedback" button (in every plugin's banner and the Keyframeless X top bar) opens a form backed by a Cloudflare Worker in `feedback-worker/`. The Worker serves the form and turns submissions into GitHub issues.
+
+```sh
+cd feedback-worker
+npm install
+cp .dev.vars.example .dev.vars   # then fill in the two values below
+npm run dev                      # serves form + /submit at http://localhost:8787
+```
+
+`.dev.vars` (gitignored) needs:
+
+- `TURNSTILE_SECRET` - Cloudflare's always-pass test secret `1x0000000000000000000000000000000AA` is fine for local dev (it passes any token); use the widget's real secret for a true end-to-end check.
+- `GITHUB_TOKEN` - a fine-grained PAT with Issues: Read and write on this repo. Submitting locally creates a **real** GitHub issue, so use a throwaway and delete it.
+
+Debug plugin builds point `KKUpdateChecker` at `http://localhost:8787/`, so a running debug plugin's feedback button opens the local form. Open it directly with prefilled context at http://localhost:8787/?plugin=rounded&version=1.2.3.
+
+The form's CSS/icons are copied from `docs/assets` by `npm run sync-assets` (run automatically by `dev`/`deploy`) - edit the originals in `docs/assets`, never the copies under `feedback-worker/public/assets`.
+
+Screenshot uploads go to R2. Under local `wrangler dev` they land in a local R2 simulation, so the embedded image URLs (which point at the public `r2.dev` base) won't resolve - use `wrangler dev --remote` to exercise real uploads, or just verify image handling in production.
 
 ## VSCode
 

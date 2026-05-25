@@ -39,6 +39,7 @@ On app launch, `KKUpdateChecker` GETs the component's release-notes page (`<base
 4. Build, sign, and notarize the per-product `.pkg` (see below).
 5. Upload the signed `.pkg` to its Payhip product - buyers re-download the new file from there.
 6. Publish the docs (commit + push) so the `kk-version` meta tag advertises the new version to installed builds.
+7. Feedback (first release that ships the button, or after any Worker change): deploy the Worker (`cd feedback-worker && npm run deploy`) and make sure `KKFeedbackBaseURL()` in `KKUpdateChecker.m` points at a URL that resolves - the `feedback.keyframeless.overpolish.co` custom domain (needs the zone on Cloudflare) or the `*.workers.dev` URL. Confirm the Turnstile widget allows that host and the GitHub webhook points at it. See [Feedback Worker](#feedback-worker).
 
 ### KeyframelessKit
 
@@ -53,6 +54,47 @@ The component key is the project name lowercased with no spaces or separators (e
 3. Call `addUpdateBannerParameterWithAPI:error:` at the start of `addParametersWithError:` and pass `[KKPlugin servicePrincipalDelegate]` to `startServicePrincipalWithDelegate:` in `main()` to wire up update checking.
 4. Add the component to the combined `Distribution/Keyframeless.pkgproj` in Packages.app, and add its `key -> package identifier` to `COMPONENT_ID` in `scripts/split-pkgproj.py`. The per-product `.pkgproj` and per-plugin uninstaller are then generated automatically by `build-and-sign.sh`.
 5. Add it to `docs/changelog/plugins.json` (name, kind, payhip) so it gets a changelog page + meta tag.
+6. (Optional) Add the component's display name to `PLUGIN_NAMES` in `feedback-worker/src/index.js` and `feedback-worker/public/index.html`, and create a matching issue label, so feedback from it is attributed nicely. The feedback URL is derived from the component key automatically (step 1).
+
+## Feedback Worker
+
+The "Send feedback" button opens a form served by the Cloudflare Worker in `feedback-worker/`, which verifies a Turnstile token and opens a GitHub issue. It deploys independently of the plugin `.pkg`s - no plugin rebuild is needed unless the feedback URL changes.
+
+### First-time setup
+
+1. `cd feedback-worker && npm install`, then `wrangler login`.
+2. Create a Turnstile widget (Cloudflare dashboard → Turnstile). Add the production hostname (the `workers.dev` URL or `feedback.keyframeless.overpolish.co`) **and** `localhost`. Put the **site key** into `public/index.html` (`data-sitekey`).
+3. Set the secrets (never committed):
+   ```sh
+   wrangler secret put TURNSTILE_SECRET       # the widget's secret key
+   wrangler secret put GITHUB_TOKEN           # fine-grained PAT, Issues: RW on this repo
+   wrangler secret put GITHUB_WEBHOOK_SECRET  # any random string; reused in the webhook (see below)
+   ```
+4. Create the issue labels so they can be applied: `feedback`, `bug`, `idea`, and one per component (`rounded`, `magicmove`, `canvas`, `glow`, `keyframelessx`). Missing labels are auto-created and colored grey (GitHub default).
+5. Create the R2 bucket for screenshot uploads and enable public access:
+   ```sh
+   wrangler r2 bucket create keyframeless-feedback
+   ```
+   In the dashboard (R2 → the bucket → Settings) turn on the public **r2.dev** URL, then set it as `R2_PUBLIC_URL` in `wrangler.jsonc`. Uploads are capped at 5 images, 10MB each (enforced client- and server-side).
+
+### Deploy
+
+```sh
+cd feedback-worker && npm run deploy
+```
+
+`deploy` re-syncs the form's CSS/icons from `docs/assets` first. Run it after any change to the form or Worker when ready to release.
+
+### Custom domain
+
+To serve at `feedback.keyframeless.overpolish.co`, the `overpolish.co` zone must be on Cloudflare; uncomment the `routes` block in `wrangler.jsonc` and redeploy. Otherwise the Worker lives at `keyframeless-feedback.<account>.workers.dev` - set that URL as the production base in `KKFeedbackBaseURL()` in `KKUpdateChecker.m`.
+
+### Screenshot cleanup
+
+Uploaded screenshots are removed two ways:
+
+- **On issue close (webhook).** In the repo: Settings → Webhooks → Add webhook. Payload URL `https://<your-worker-domain>/github-webhook`, content type `application/json`, secret = the `GITHUB_WEBHOOK_SECRET` set above, events: **Issues** only. When an issue is closed or deleted, the Worker parses its body for R2 URLs and deletes them. (Reopening a closed issue won't restore its images.)
+- **TTL backstop.** In the dashboard (R2 → the bucket → Settings → Object lifecycle rules), add a rule to delete objects under the `feedback/` prefix after e.g. 180 days, to sweep anything the webhook misses (issues never formally closed, edited-out URLs).
 
 ## Code Signing & Notarization
 
