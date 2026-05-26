@@ -70,10 +70,10 @@ extension AudioModel {
 			storylines = sortedClipIndices.map { clipIdx in
 				grouped[clipIdx]!.map(makeTitleEntry)
 			}
-			clipStarts = sortedClipIndices.map { audioClips[$0].start }
+			clipStarts = Array(repeating: 0, count: sortedClipIndices.count)
 		} else {
 			storylines = [segments.map(makeTitleEntry)]
-			clipStarts = nil
+			clipStarts = [0]
 		}
 		let font = FCPXMLBuilder.fontInfo(postScriptName: textStyle.textFont)
 		let style = FCPNativePasteboardBuilder.Style(

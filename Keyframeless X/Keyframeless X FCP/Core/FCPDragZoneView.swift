@@ -4,7 +4,9 @@
  */
 
 import AppKit
+import CoreMedia
 import KeyframelessKit
+import ProExtensionHost
 import SwiftUI
 
 struct FCPDragZoneView: NSViewRepresentable {
@@ -194,14 +196,16 @@ class FCPDragSourceView: NSView, NSDraggingSource {
 		pb.clearContents()
 		pb.setData(data, forType: proFFPasteboardType)
 
+		_ = FCPHost.shared.timeline?.movePlayhead(to: .zero)
+
 		DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
 			let src = CGEventSource(stateID: .hidSystemState)
-			let keyDown = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: true)
-			keyDown?.flags = .maskCommand
-			let keyUp = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: false)
-			keyUp?.flags = .maskCommand
-			keyDown?.post(tap: .cghidEventTap)
-			keyUp?.post(tap: .cghidEventTap)
+			let pasteDown = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: true)
+			pasteDown?.flags = .maskCommand
+			let pasteUp = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: false)
+			pasteUp?.flags = .maskCommand
+			pasteDown?.post(tap: .cghidEventTap)
+			pasteUp?.post(tap: .cghidEventTap)
 		}
 	}
 }
