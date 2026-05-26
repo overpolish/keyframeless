@@ -497,8 +497,8 @@ private class AxisDocumentView: NSView {
 	}
 
 	private func loadWaveformsIfNeeded(from oldClips: [FCPXMLParser.AudioClip]) {
-		let urlsChanged = clips.map(\.url) != oldClips.map(\.url)
-		if urlsChanged {
+		let changed = clips.map(AudioClipFingerprint.of) != oldClips.map(AudioClipFingerprint.of)
+		if changed {
 			waveformTasks.values.forEach { $0.cancel() }
 			waveformTasks = [:]
 			waveforms = [:]
@@ -506,9 +506,8 @@ private class AxisDocumentView: NSView {
 		for (i, clip) in clips.enumerated() {
 			guard waveforms[i] == nil, waveformTasks[i] == nil else { continue }
 			waveformTasks[i] = Task {
-				guard let samples = try? await WaveformLoader.shared.waveform(for: clip) else {
-					return
-				}
+				guard let samples = try? await WaveformLoader.shared.waveform(for: clip)
+				else { return }
 				await MainActor.run { [weak self] in
 					self?.waveforms[i] = samples
 					self?.needsDisplay = true

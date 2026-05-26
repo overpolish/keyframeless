@@ -370,8 +370,8 @@ struct TimelineAxisRenderer {
 		let midY = rect.midY
 		let halfH = rect.height * 0.4
 
-		let peak = samples.max() ?? 1
-		let scale = peak > 0 ? 1 / CGFloat(peak) : 1
+		let globalPeak = waveforms.values.compactMap { $0.max() }.max() ?? 1
+		let scale = globalPeak > 0 ? 1 / CGFloat(globalPeak) : 1
 
 		// Only draw the visible portion of the waveform
 		let visX = dirtyRect.isNull ? rect : rect.intersection(dirtyRect)

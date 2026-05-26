@@ -109,14 +109,8 @@ struct AudioEditView: View {
 				)
 			}
 			.frame(height: height)
-			.overlay(alignment: .bottomTrailing) {
-				HelperText(
-					String(localized: "Click and drag to quickly select/deselect clips"),
-					systemImage: "cursorarrow.motionlines"
-				)
-				.padding(.trailing, KKPaddingSM)
-				.alignmentGuide(.bottom) { d in d[.top] - KKSpacingMD }
-			}
+			TimelineFooterMessages(clips: model.audioClips)
+				.padding(.top, KKSpacingMD)
 		}
 	}
 

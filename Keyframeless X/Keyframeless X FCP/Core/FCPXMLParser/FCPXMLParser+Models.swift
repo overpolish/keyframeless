@@ -1,0 +1,177 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+import Foundation
+
+extension FCPXMLParser {
+
+	struct DropItem: Codable {
+		let name: String
+		let kind: String
+		let dialogueCount: Int
+	}
+
+	struct ProjectFormat: Codable {
+		static let `default` = ProjectFormat(
+			name: "FFVideoFormat1080p60",
+			frameDuration: "100/6000s",
+			width: 1920,
+			height: 1080,
+			sequenceDuration: 0
+		)
+
+		let name: String
+		let frameDuration: String
+		let width: Int
+		let height: Int
+		let sequenceDuration: Double
+
+		private var fps: Double? {
+			let raw =
+				frameDuration.hasSuffix("s") ? String(frameDuration.dropLast()) : frameDuration
+			guard !raw.isEmpty else { return nil }
+			if let slash = raw.firstIndex(of: "/") {
+				let num = Double(raw[raw.startIndex..<slash]) ?? 1
+				let den = Double(raw[raw.index(after: slash)...]) ?? 1
+				return num > 0 ? den / num : nil
+			}
+			return Double(raw)
+		}
+
+		var fpsDisplay: String {
+			guard let fps else { return "" }
+			return fps.truncatingRemainder(dividingBy: 1) == 0
+				? "\(Int(fps)) fps"
+				: String(format: "%.2f fps", fps)
+		}
+
+		var durationDisplay: String { timecode(for: sequenceDuration) }
+
+		func timecode(for seconds: Double) -> String {
+			guard let fps, fps > 0 else {
+				return String(format: "%.2fs", seconds)
+			}
+			let roundedFps = Int(fps.rounded())
+			let totalFrames = Int(round(seconds * fps))
+			let ff = totalFrames % roundedFps
+			let totalSecs = totalFrames / roundedFps
+			let ss = totalSecs % 60
+			let mm = (totalSecs / 60) % 60
+			let hh = totalSecs / 3600
+			if hh > 0 {
+				return String(format: "%d:%02d:%02d:%02d", hh, mm, ss, ff)
+			} else if mm > 0 {
+				return String(format: "%d:%02d:%02d", mm, ss, ff)
+			} else {
+				return String(format: "%d:%02d", ss, ff)
+			}
+		}
+	}
+
+	struct VolumePoint: Codable {
+		let time: Double
+		let dB: Double
+	}
+
+	struct FadeSpec: Codable {
+		let duration: Double
+		let type: String
+	}
+
+	struct AudioFilter: Codable {
+		let auType: UInt32
+		let auSubtype: UInt32
+		let auManufacturer: UInt32
+		let name: String
+		let effectState: Data?
+		let paramOverrides: [ParamOverride]
+
+		struct ParamOverride: Codable {
+			let key: UInt32
+			let value: Float
+			let keyframes: [Keyframe]?
+
+			struct Keyframe: Codable {
+				let time: Double
+				let value: Float
+			}
+		}
+	}
+
+	struct AudioClip: Codable {
+		let name: String
+		let start: Double
+		let end: Double
+		let sourceStart: Double
+		let sourceDuration: Double
+		let url: URL?
+		let bookmark: Data?
+		let isCompound: Bool
+		let volumeCurve: [VolumePoint]?
+		let fadeIn: FadeSpec?
+		let fadeOut: FadeSpec?
+		let auFilters: [AudioFilter]?
+		let sourceChannels: [Int]?
+		let unhandledAdjustments: [String]?
+
+		struct ResolvedURL {
+			let url: URL
+			let isSecurityScoped: Bool
+			func stopAccess() {
+				if isSecurityScoped { url.stopAccessingSecurityScopedResource() }
+			}
+		}
+
+		func resolvedURL() throws -> ResolvedURL {
+			if let bookmark {
+				var isStale = false
+				if let scopedURL = try? URL(
+					resolvingBookmarkData: bookmark,
+					options: .withSecurityScope,
+					relativeTo: nil,
+					bookmarkDataIsStale: &isStale
+				) {
+					let accessing = scopedURL.startAccessingSecurityScopedResource()
+					return ResolvedURL(url: scopedURL, isSecurityScoped: accessing)
+				}
+			}
+			guard let url else { throw CocoaError(.fileNoSuchFile) }
+			return ResolvedURL(url: url, isSecurityScoped: false)
+		}
+
+		func data() throws -> Data {
+			let resolved = try resolvedURL()
+			defer { resolved.stopAccess() }
+			return try Data(contentsOf: resolved.url)
+		}
+	}
+
+	struct AudioEffectResource {
+		let auType: UInt32
+		let auSubtype: UInt32
+		let auManufacturer: UInt32
+		let name: String
+	}
+
+	struct AssetResource {
+		let url: URL
+		let bookmark: Data?
+		let mediaStart: Double
+	}
+
+	/// Carries the mapping context when walking inside a compound clip's
+	/// media spine.
+	/// - mainOffset: where the ref-clip starts in the main timeline.
+	/// - internalStart/End: the trimmed window in the compound clip's time
+	///   space (tcStart-relative).
+	/// - tcStart: the compound sequence's tcStart, used to normalise clip
+	///   offsets.
+	struct CompoundContext {
+		let mainOffset: Double
+		let internalStart: Double
+		let internalEnd: Double
+		let tcStart: Double
+	}
+}

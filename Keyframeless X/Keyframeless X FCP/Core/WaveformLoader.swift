@@ -10,55 +10,28 @@ import Foundation
 actor WaveformLoader {
 	static let shared = WaveformLoader()
 
-	private struct CacheKey: Hashable {
-		let urlString: String
-		let sourceStart: Double
-		let sourceDuration: Double
-	}
-
-	private var cache: [CacheKey: [Float]] = [:]
+	private var cache: [String: [Float]] = [:]
 
 	func waveform(for clip: FCPXMLParser.AudioClip) async throws -> [Float] {
-		let key = CacheKey(
-			urlString: clip.url?.absoluteString ?? "",
-			sourceStart: clip.sourceStart,
-			sourceDuration: clip.sourceDuration
-		)
+		let key = AudioClipFingerprint.of(clip)
 		if let cached = cache[key] { return cached }
 		let buckets = max(200, Int(clip.sourceDuration * 200))
-		let raw = try await load(clip: clip, buckets: buckets)
+		let renderedURL = try await ProcessedAudioRenderer.shared.renderedURL(for: clip)
+		let raw = try loadFromAudioFile(
+			url: renderedURL, durationSeconds: clip.sourceDuration, buckets: buckets)
 		let samples = smoothed(raw)
 		cache[key] = samples
 		return samples
 	}
 
-	private static let videoExtensions: Set<String> = ["mp4", "mov", "m4v", "mxf", "mts", "avi"]
-
-	private func load(clip: FCPXMLParser.AudioClip, buckets: Int) async throws -> [Float] {
-		let resolved = try clip.resolvedURL()
-		defer { resolved.stopAccess() }
-
-		let isVideo = Self.videoExtensions.contains(resolved.url.pathExtension.lowercased())
-
-		// AVAudioFile: fast path for audio-only files (WAV, AIFF, CAF, MP3)
-		if !isVideo,
-			let samples = try? loadFromAudioFile(url: resolved.url, clip: clip, buckets: buckets)
-		{
-			return samples
-		}
-
-		// AVAssetReader: handles video containers (.MP4, .MOV) - streams audio, never loads full file
-		return try await loadViaAssetReader(url: resolved.url, clip: clip, buckets: buckets)
-	}
-
 	private func loadFromAudioFile(
-		url: URL, clip: FCPXMLParser.AudioClip, buckets: Int
+		url: URL, durationSeconds: Double, buckets: Int
 	) throws -> [Float] {
 		let audioFile = try AVAudioFile(forReading: url)
 		let sampleRate = audioFile.processingFormat.sampleRate
-		let startFrame = AVAudioFramePosition(clip.sourceStart * sampleRate)
-		let totalFrames = AVAudioFrameCount(max(1, clip.sourceDuration * sampleRate))
-		audioFile.framePosition = max(0, min(startFrame, audioFile.length - 1))
+		audioFile.framePosition = 0
+		let requested = AVAudioFrameCount(max(1, durationSeconds * sampleRate))
+		let totalFrames = min(requested, AVAudioFrameCount(audioFile.length))
 
 		let chunkSize: AVAudioFrameCount = 65536
 		var result = [Float](repeating: 0, count: buckets)
@@ -99,74 +72,6 @@ actor WaveformLoader {
 			}
 
 			framesRead += count
-		}
-
-		return result
-	}
-
-	private func loadViaAssetReader(
-		url: URL, clip: FCPXMLParser.AudioClip, buckets: Int
-	) async throws -> [Float] {
-		let asset = AVURLAsset(url: url)
-		guard let track = try await asset.loadTracks(withMediaType: .audio).first else { return [] }
-		let reader = try AVAssetReader(asset: asset)
-		let output = AVAssetReaderTrackOutput(
-			track: track,
-			outputSettings: [
-				AVFormatIDKey: kAudioFormatLinearPCM,
-				AVLinearPCMBitDepthKey: 32,
-				AVLinearPCMIsFloatKey: true,
-				AVLinearPCMIsBigEndianKey: false,
-				AVLinearPCMIsNonInterleaved: false,
-				AVNumberOfChannelsKey: 1,
-				AVSampleRateKey: 48000,
-			])
-		reader.add(output)
-		reader.timeRange = CMTimeRange(
-			start: CMTime(seconds: clip.sourceStart, preferredTimescale: 48000),
-			duration: CMTime(seconds: clip.sourceDuration, preferredTimescale: 48000)
-		)
-		reader.startReading()
-
-		// Stream-downsample: compute bucket peaks as we read, no giant array needed
-		var result = [Float](repeating: 0, count: buckets)
-		var samplesProcessed = 0
-		// Estimate total samples for bucket sizing (refine as we read)
-		let estimatedTotal = max(1, Int(clip.sourceDuration * 48000))
-		let bucketSize = max(1, estimatedTotal / buckets)
-
-		while let sampleBuffer = output.copyNextSampleBuffer() {
-			guard let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else { continue }
-			var length = 0
-			var dataPointer: UnsafeMutablePointer<Int8>?
-			CMBlockBufferGetDataPointer(
-				blockBuffer, atOffset: 0, lengthAtOffsetOut: nil,
-				totalLengthOut: &length, dataPointerOut: &dataPointer
-			)
-			guard let ptr = dataPointer else { continue }
-			let floatCount = length / MemoryLayout<Float>.size
-			ptr.withMemoryRebound(to: Float.self, capacity: floatCount) { floatPtr in
-				let chunkStart = samplesProcessed
-				let chunkEnd = samplesProcessed + floatCount
-				let firstBucket = min(chunkStart / bucketSize, buckets - 1)
-				let lastBucket = min((chunkEnd - 1) / bucketSize, buckets - 1)
-
-				guard firstBucket <= lastBucket else {
-					samplesProcessed += floatCount
-					return
-				}
-				for b in firstBucket...lastBucket {
-					let bStart = max(b * bucketSize, chunkStart) - chunkStart
-					let bEnd = min((b + 1) * bucketSize, chunkEnd) - chunkStart
-					let len = bEnd - bStart
-					guard len > 0 else { continue }
-
-					var maxMag: Float = 0
-					vDSP_maxmgv(floatPtr + bStart, 1, &maxMag, vDSP_Length(len))
-					result[b] = max(result[b], maxMag)
-				}
-				samplesProcessed += floatCount
-			}
 		}
 
 		return result
