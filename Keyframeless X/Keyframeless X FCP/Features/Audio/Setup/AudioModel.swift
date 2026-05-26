@@ -42,6 +42,9 @@ class AudioModel: ObservableObject {
 	@Published var keepQuestionMarks: Bool = CaptionStyleDefaults.shared.settings.keepQuestionMarks
 	@Published var noGaps: Bool = CaptionStyleDefaults.shared.settings.noGaps
 
+	@Published var captionImportType: CaptionImportType = .title
+	@Published var captionFormat: CaptionFormat = .itt
+
 	@Published var captionTemplates: [CaptionTemplate] = []
 	@Published var selectedTemplate: CaptionTemplate = .basicTitle
 	@Published var paramsModalTemplate: CaptionTemplate?
@@ -144,7 +147,8 @@ class AudioModel: ObservableObject {
 	}
 
 	func buildFCPXML(from rows: [AudioEditRow]) -> String {
-		let segments = buildCaptionSegments(from: rows)
+		let segments = CaptionBuilder.enforceSequentialPerClip(
+			buildCaptionSegments(from: rows))
 		let format = FCPXMLBuilder.ExportFormat(
 			width: Int(exportWidth) ?? projectFormat?.width ?? 1920,
 			height: Int(exportHeight) ?? projectFormat?.height ?? 1080,
@@ -217,11 +221,35 @@ class AudioModel: ObservableObject {
 	}
 
 	func insertTitle(rows: [AudioEditRow]) {
-		let fcpxml = buildFCPXML(from: rows)
+		let fcpxml =
+			captionImportType == .caption
+			? buildNativeCaptionFCPXML(from: rows)
+			: buildFCPXML(from: rows)
 		let tmpURL = FileManager.default.temporaryDirectory
 			.appendingPathComponent("keyframeless_captions.fcpxml")
 		try? fcpxml.write(to: tmpURL, atomically: true, encoding: .utf8)
 		NSWorkspace.shared.open(tmpURL)
+	}
+
+	func buildNativeCaptionFCPXML(from rows: [AudioEditRow]) -> String {
+		var segments = buildCaptionSegments(from: rows)
+		if captionFormat == .cea608 {
+			segments = CaptionBuilder.splitToMaxChars(segments, maxChars: 32)
+			segments = CEA608TimingValidator.adjusted(
+				segments, frameDuration: exportFramerate.rawValue)
+		}
+		segments = CaptionBuilder.enforceSequentialPerClip(segments)
+		let format = FCPXMLBuilder.ExportFormat(
+			width: Int(exportWidth) ?? projectFormat?.width ?? 1920,
+			height: Int(exportHeight) ?? projectFormat?.height ?? 1080,
+			frameDuration: exportFramerate.rawValue
+		)
+		let language = AudioSetupSettings.shared.selectedLanguage ?? "en"
+		return FCPXMLBuilder.buildNativeCaptions(
+			segments: segments,
+			format: format,
+			role: captionFormat.role(language: language)
+		)
 	}
 
 	private struct PersistedState: Codable {
@@ -238,6 +266,8 @@ class AudioModel: ObservableObject {
 		var textStyle: TextStyleSettings?
 		var captionStyle: CaptionStyleSettings?
 		var selectedTemplateID: String?
+		var captionImportType: CaptionImportType?
+		var captionFormat: CaptionFormat?
 	}
 
 	private static var fcpProcessID: Int32? {
@@ -272,6 +302,8 @@ class AudioModel: ObservableObject {
 		if let ts = state.textStyle { textStyle = ts }
 		if let cs = state.captionStyle { captionStyle = cs }
 		if let tid = state.selectedTemplateID { _pendingTemplateID = tid }
+		if let ct = state.captionImportType { captionImportType = ct }
+		if let cf = state.captionFormat { captionFormat = cf }
 	}
 
 	private var _pendingTemplateID: String?
@@ -301,7 +333,9 @@ class AudioModel: ObservableObject {
 			exportFramerate: exportFramerate,
 			textStyle: textStyle,
 			captionStyle: captionStyle,
-			selectedTemplateID: selectedTemplate.id
+			selectedTemplateID: selectedTemplate.id,
+			captionImportType: captionImportType,
+			captionFormat: captionFormat
 		)
 		try? JSONEncoder().encode(state).write(to: url, options: .atomic)
 	}

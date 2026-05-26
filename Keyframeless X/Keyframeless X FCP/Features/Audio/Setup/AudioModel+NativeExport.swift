@@ -10,6 +10,31 @@ extension AudioModel {
 	func buildNativePasteboardData(from rows: [AudioEditRow]) -> Data? {
 		let segments = buildCaptionSegments(from: rows)
 
+		if captionImportType == .caption {
+			// Native captions are single-line (multi-line text breaks CEA-608's character grid),
+			// so collapse the segment's line breaks into one line. CEA-608 additionally caps a row
+			// at 32 columns, so split long segments to fit.
+			let capSegments: [CaptionSegment]
+			if captionFormat == .cea608 {
+				let split = CaptionBuilder.splitToMaxChars(segments, maxChars: 32)
+				let timed = CEA608TimingValidator.adjusted(
+					split, frameDuration: exportFramerate.rawValue)
+				// Trim same-clip overlaps the validator's asymmetric pushes may have re-introduced.
+				// Trim, not push, so start times stay anchored to speech timing; cross-clip overlaps
+				// (e.g. simultaneous speakers across two audio clips) are preserved.
+				capSegments = CaptionBuilder.enforceSequentialPerClip(timed)
+			} else {
+				capSegments = CaptionBuilder.enforceSequentialPerClip(segments)
+			}
+			let entries = capSegments.map {
+				FCPCaptionPasteboardBuilder.Entry(
+					text: $0.lines.joined(separator: " "),
+					startTime: $0.startTime, duration: $0.endTime - $0.startTime)
+			}
+			return FCPCaptionPasteboardBuilder.build(
+				captions: entries, format: captionFormat, frameDuration: exportFramerate.rawValue)
+		}
+
 		func makeTitleEntry(_ segment: CaptionSegment) -> FCPNativePasteboardBuilder.TitleEntry {
 			FCPNativePasteboardBuilder.TitleEntry(
 				displayName: segment.lines.first ?? "",

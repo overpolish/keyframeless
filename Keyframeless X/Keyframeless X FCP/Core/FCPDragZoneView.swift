@@ -87,7 +87,7 @@ class FCPDragSourceView: NSView, NSDraggingSource {
 		let dragEvent = event
 		let dragData = data
 
-		ensureCaptionRoleExists { [weak self] in
+		let startDrag = { [weak self] in
 			guard let self else { return }
 			let pbItem = NSPasteboardItem()
 			pbItem.setData(dragData, forType: proFFPasteboardType)
@@ -99,6 +99,8 @@ class FCPDragSourceView: NSView, NSDraggingSource {
 			let session = beginDraggingSession(with: [draggingItem], event: dragEvent, source: self)
 			session.animatesToStartingPositionsOnCancelOrFail = true
 		}
+
+		ensureCaptionRoleExists(then: startDrag)
 	}
 
 	// FCP's drag handler doesn't create custom roles from the embedded roles data

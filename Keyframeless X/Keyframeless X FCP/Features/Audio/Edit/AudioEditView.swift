@@ -327,9 +327,11 @@ struct AudioEditView: View {
 		let width = Int(model.exportWidth) ?? model.projectFormat?.width ?? 1920
 		let height = Int(model.exportHeight) ?? model.projectFormat?.height ?? 1080
 		let language = AudioSetupSettings.shared.selectedLanguage
+		let cea608 =
+			model.captionImportType == .caption && model.captionFormat == .cea608
 		var result: [Int: Set<Int>] = [:]
 		for row in group.sentences {
-			result[row.id] = CaptionBuilder.predictedBreakIndices(
+			let base = CaptionBuilder.predictedBreakIndices(
 				row: row,
 				style: model.captionStyle,
 				textStyle: model.textStyle,
@@ -337,6 +339,14 @@ struct AudioEditView: View {
 				exportHeight: height,
 				language: language
 			)
+			if cea608 {
+				// CEA-608 export splits each segment to a 32-column row; add those breaks on top of
+				// the manual/auto segment boundaries so the preview matches the export.
+				result[row.id] = CaptionBuilder.cea608BreakIndices(
+					row: row, baseBreaks: base, maxChars: 32)
+			} else {
+				result[row.id] = base
+			}
 		}
 		return result
 	}
