@@ -8,7 +8,7 @@ import Foundation
 enum FCPXMLParser {
 
 	private static let dialogueClipXPath =
-		"asset-clip[starts-with(@audioRole, 'dialogue') and not(audio-channel-source[starts-with(@role, 'effects')])]"
+		"asset-clip[starts-with(@audioRole, 'dialogue') and not(audio-channel-source[starts-with(@role, 'effects') and not(@active='0')]) and not(audio-channel-source and not(audio-channel-source[not(@active='0')]))]"
 
 	struct DropItem: Codable {
 		let name: String
@@ -65,11 +65,7 @@ enum FCPXMLParser {
 				}
 				count = projectCount
 			case "asset-clip":
-				let role = el.attribute(forName: "audioRole")?.stringValue ?? ""
-				let hasEffects = el.elements(forName: "audio-channel-source").contains {
-					$0.attribute(forName: "role")?.stringValue?.hasPrefix("effects") ?? false
-				}
-				count = role.hasPrefix("dialogue") && !hasEffects ? 1 : 0
+				count = isDialogue(el) ? 1 : 0
 			case "ref-clip":
 				let mediaId = el.attribute(forName: "ref")?.stringValue ?? ""
 				let media = resources?.elements(forName: "media").first {
@@ -373,17 +369,21 @@ enum FCPXMLParser {
 
 	private static func isDialogue(_ el: XMLElement) -> Bool {
 		let channelSources = el.elements(forName: "audio-channel-source")
-		let topRole = el.attribute(forName: "audioRole")?.stringValue ?? ""
+		let activeSources = channelSources.filter {
+			$0.attribute(forName: "active")?.stringValue != "0"
+		}
 
-		// If any channel-source overrides to dialogue, treat as dialogue
-		let hasDialogueChannel = channelSources.contains {
+		// Channel-sources present but all inactive: audio is disabled on this clip.
+		if !channelSources.isEmpty && activeSources.isEmpty { return false }
+
+		let topRole = el.attribute(forName: "audioRole")?.stringValue ?? ""
+		let hasDialogueChannel = activeSources.contains {
 			($0.attribute(forName: "role")?.stringValue ?? "").hasPrefix("dialogue")
 		}
 
 		guard topRole.hasPrefix("dialogue") || hasDialogueChannel else { return false }
 
-		// Exclude clips where a channel-source reassigns to effects
-		return !channelSources.contains {
+		return !activeSources.contains {
 			($0.attribute(forName: "role")?.stringValue ?? "").hasPrefix("effects")
 		}
 	}
