@@ -17,18 +17,22 @@ struct CaptionStyleControls: View {
 		return false
 	}
 
+	private var isCaption: Bool { model.captionImportType == .caption }
+
 	var body: some View {
 		VStack(alignment: .leading, spacing: KKSpacingLG) {
-			GeometryReader { geo in
-				let halfWidth = (geo.size.width - KKSpacingXL) / 2
-				HStack(alignment: .bottom, spacing: KKSpacingXL) {
-					TextSettingsPanel(model: model)
-						.frame(width: halfWidth)
-					DimensionsPreview(model: model)
-						.frame(width: halfWidth)
+			if !isCaption {
+				GeometryReader { geo in
+					let halfWidth = (geo.size.width - KKSpacingXL) / 2
+					HStack(alignment: .bottom, spacing: KKSpacingXL) {
+						TextSettingsPanel(model: model)
+							.frame(width: halfWidth)
+						DimensionsPreview(model: model)
+							.frame(width: halfWidth)
+					}
 				}
+				.frame(height: 100)
 			}
-			.frame(height: 100)
 			HStack(spacing: KKSpacingLG) {
 				LabeledSlider(
 					label: String(localized: "Max Words"), value: $model.maxWordsPerLine,
@@ -47,6 +51,12 @@ struct CaptionStyleControls: View {
 						.font(.caption)
 						.foregroundStyle(.secondary)
 				}
+			}
+			if model.captionImportType == .caption && model.captionFormat == .cea608 {
+				HelperText(
+					String(localized: "CEA-608 splits lines longer than 32 characters"),
+					systemImage: "info.circle"
+				)
 			}
 			FlowLayout(spacing: KKSpacingMD, lineSpacing: KKSpacingSM) {
 				CapsuleToggle(
@@ -108,13 +118,15 @@ struct CaptionStyleControls: View {
 					.foregroundStyle(.secondary)
 				}
 			}
-			Divider()
-			CaptionTemplatePicker(
-				model: model,
-				templates: model.captionTemplates,
-				onDropMoti: { model.addCustomTemplate(from: $0) },
-				onRemoveCustom: { model.removeCustomTemplate($0) }
-			)
+			if !isCaption {
+				Divider()
+				CaptionTemplatePicker(
+					model: model,
+					templates: model.captionTemplates,
+					onDropMoti: { model.addCustomTemplate(from: $0) },
+					onRemoveCustom: { model.removeCustomTemplate($0) }
+				)
+			}
 		}
 		.onAppear {
 			initialTextStyle = TextStyleDefaults.shared.settings

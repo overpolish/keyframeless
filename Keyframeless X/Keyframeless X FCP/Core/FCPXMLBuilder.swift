@@ -172,7 +172,8 @@ enum FCPXMLBuilder {
 	static func buildNativeCaptions(
 		segments: [CaptionSegment],
 		format: ExportFormat,
-		role: String
+		role: String,
+		captionFormat: CaptionFormat
 	) -> String {
 		guard !segments.isEmpty else { return emptyXML(format: format) }
 
@@ -213,18 +214,45 @@ enum FCPXMLBuilder {
 			let endFrames = frames(seconds: segment.endTime, frameRate: frameRate)
 			let offset = rationalFromFrames(startFrames, frameRate: frameRate)
 			let duration = rationalFromFrames(max(1, endFrames - startFrames), frameRate: frameRate)
-			// Native captions are single-line (multi-line breaks CEA-608's character grid).
-			let line = segment.lines.joined(separator: " ")
-			let name = xmlEscape(line)
+			// Trim per-row trailing whitespace before joining. CaptionBuilder + cascade-merge
+			// can leave a space at the row tail (32-col rows are sometimes filled to exactly 32
+			// including a trailing space); a joined "row1 \n row2" expands to "row1  row2" or
+			// pushes the line past CEA-608's 32-col grid, which FCP then truncates ("clip"→"clp").
+			// All formats use \n: iTT/SRT render it as a real line break; CEA-608's FCPXML
+			// importer treats it as a row break in the grid (vs " " which spills past 32 cols).
+			let trimmedLines = segment.lines
+				.map { $0.trimmingCharacters(in: CharacterSet.whitespaces) }
+			let line = trimmedLines.joined(separator: "\n")
+			let nameSource = trimmedLines.joined(separator: " ")
+			let name = xmlEscape(nameSource)
+			// CEA-608-specific text attributes verified against a roundtrip export from FCP.
+			// `position="cellX cellY"` is the top-left grid cell of the caption box: cellX is
+			// derived from the longest line (max(0, 30 - maxLineLen) - matches FCP's own
+			// formula); cellY anchors the box at the bottom of the grid (16 - rowCount, so
+			// 1 row→15, 2 rows→14). `display-style="pop-on"` + `alignment="left"` are the
+			// standard CEA-608 presentation defaults FCP uses. Without these, FCP's import-
+			// side validator rejects/mangles multi-row captions even when the text fits.
+			let textAttrs: String
+			if captionFormat == .cea608 {
+				let maxLineLen = trimmedLines.map { $0.count }.max() ?? 0
+				let cellX = max(0, 30 - maxLineLen)
+				let cellY = 16 - max(1, trimmedLines.count)
+				textAttrs =
+					" display-style=\"pop-on\" position=\"\(cellX) \(cellY)\" alignment=\"left\""
+			} else {
+				textAttrs = ""
+			}
+			let backgroundColor = captionFormat == .cea608 ? "0 0 0 1" : "0 0 0 0"
+			let fontName = captionFormat == .cea608 ? ".AppleSystemUIFont" : "Helvetica"
 			xml +=
 				"\t\t\t\t\t\t\t<caption lane=\"1\" offset=\"\(offset)\" name=\"\(name)\" duration=\"\(duration)\" role=\"\(escapedRole)\">\n"
-			xml += "\t\t\t\t\t\t\t\t<text>\n"
+			xml += "\t\t\t\t\t\t\t\t<text\(textAttrs)>\n"
 			xml +=
 				"\t\t\t\t\t\t\t\t\t<text-style ref=\"\(tsID)\">\(xmlEscape(line))</text-style>\n"
 			xml += "\t\t\t\t\t\t\t\t</text>\n"
 			xml += "\t\t\t\t\t\t\t\t<text-style-def id=\"\(tsID)\">\n"
 			xml +=
-				"\t\t\t\t\t\t\t\t\t<text-style font=\"Helvetica\" fontSize=\"13\" fontColor=\"1 1 1 1\" backgroundColor=\"0 0 0 0\" />\n"
+				"\t\t\t\t\t\t\t\t\t<text-style font=\"\(fontName)\" fontSize=\"13\" fontFace=\"Regular\" fontColor=\"1 1 1 1\" backgroundColor=\"\(backgroundColor)\" />\n"
 			xml += "\t\t\t\t\t\t\t\t</text-style-def>\n"
 			xml += "\t\t\t\t\t\t\t</caption>\n"
 		}

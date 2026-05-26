@@ -41,7 +41,7 @@ enum CEA608TimingValidator {
 		// run both each iteration until the validator returns no warnings.
 		for _ in 0..<maxIterations {
 			current = CaptionBuilder.enforceSequentialPerClip(current)
-			let warnings = validate(captions: current, frameRate: fr)
+			let (warnings, captionToSeg) = validate(captions: current, frameRate: fr)
 			if warnings.isEmpty { break }
 			var starts = current.map(\.startTime)
 			var ends = current.map(\.endTime)
@@ -53,9 +53,15 @@ enum CEA608TimingValidator {
 				let startOff = CMTimeGetSeconds(adj.startTimeOffset)
 				let durOff = CMTimeGetSeconds(adj.durationOffset)
 				if startOff == 0 && durOff == 0 { continue }
-				let lower = max(0, w.rangeOfCaptions.location)
-				let upper = min(current.count, lower + w.rangeOfCaptions.length)
-				for i in lower..<upper {
+				// rangeOfCaptions indexes the flat (per-row-expanded) caption list AVF saw, not
+				// our source segments. Map back via captionToSeg, dedupe so each source segment
+				// gets one adjustment per warning (worst-case wins via the max() folding).
+				let flatLower = max(0, w.rangeOfCaptions.location)
+				let flatUpper = min(captionToSeg.count, flatLower + w.rangeOfCaptions.length)
+				var segIdxs = Set<Int>()
+				for k in flatLower..<flatUpper { segIdxs.insert(captionToSeg[k]) }
+				for i in segIdxs.sorted() {
+					guard i < current.count else { continue }
 					// Apply with PRESERVE-END semantics: push only the start, keep the original
 					// end. The caption shrinks but its end frame is unchanged, so the next
 					// caption's required spacing window is unaffected and timing doesn't cascade.
@@ -78,6 +84,23 @@ enum CEA608TimingValidator {
 					wordStarts: seg.wordStarts)
 			}
 		}
+		// FCP's import-side validator is stricter than AVCaptionConversionValidator for the
+		// first caption when it's multi-row: AVF says "no warnings" but FCP demands ~6 more
+		// frames of pre-roll per extra row (positioning-code bytes AVF doesn't account for).
+		// Apply an empirical post-pass for the first caption only - in-between captions get
+		// their per-row cost through normal validator warnings since the windows are longer.
+		if let first = current.first {
+			let extraRows = max(1, first.lines.count) - 1
+			if extraRows > 0 {
+				let extraSec = Double(extraRows * 6) * Double(fr.num) / Double(fr.den)
+				let newStart = first.startTime + extraSec
+				let newEnd = max(newStart + minDuration, first.endTime)
+				current[0] = CaptionSegment(
+					clipIndex: first.clipIndex, clipName: first.clipName, text: first.text,
+					lines: first.lines, startTime: newStart, endTime: newEnd,
+					wordStarts: first.wordStarts)
+			}
+		}
 		// If we hit maxIterations the last action was an apply (may have created overlap); final
 		// trim guarantees a same-clip-sequential output regardless of validator convergence.
 		return CaptionBuilder.enforceSequentialPerClip(current)
@@ -86,7 +109,7 @@ enum CEA608TimingValidator {
 	@available(macOS 12.0, *)
 	private static func validate(
 		captions: [CaptionSegment], frameRate: (num: Int32, den: Int32)
-	) -> [AVCaptionConversionWarning] {
+	) -> (warnings: [AVCaptionConversionWarning], captionToSeg: [Int]) {
 		// Quantize each caption time to the PROJECT frame grid (CMTime value = frame * num,
 		// timescale = den). FCP's PCCaption → AVCaption conversion happens in this domain, so
 		// AVF inside FCP sees frame-aligned times. With an arbitrary 30000 timescale our
@@ -96,10 +119,23 @@ enum CEA608TimingValidator {
 			let frame = Int64((s * Double(frameRate.den) / Double(frameRate.num)).rounded())
 			return CMTime(value: frame * Int64(frameRate.num), timescale: frameRate.den)
 		}
-		let caps: [AVCaption] = captions.map { seg in
-			AVMutableCaption(
-				seg.text,
-				timeRange: CMTimeRange(start: quantize(seg.startTime), end: quantize(seg.endTime)))
+		// Multi-row CEA-608 fans into N PCs at paste-time (one per grid row); each row's
+		// positioning codes cost additional SCC bytes which AVF accounts for in its pre-roll
+		// math. Pass joined-text as one AVCaption and AVF underestimates byte cost (single
+		// row), so our pre-pass green-lights what FCP's import-time validator then rejects
+		// ("caption occurred too close to beginning of timeline, should be N frames later").
+		// Emit one AVCaption per row at the segment's timeRange so AVF sees the true
+		// per-row cost; warning indices still map to the source segment via the parallel
+		// `captionToSeg` table.
+		var caps: [AVCaption] = []
+		var captionToSeg: [Int] = []
+		for (i, seg) in captions.enumerated() {
+			let rows = seg.lines.isEmpty ? [seg.text] : seg.lines
+			let tr = CMTimeRange(start: quantize(seg.startTime), end: quantize(seg.endTime))
+			for row in rows {
+				caps.append(AVMutableCaption(row, timeRange: tr))
+				captionToSeg.append(i)
+			}
 		}
 		let settings: [AVCaptionSettingsKey: Any] = [
 			.mediaType: AVMediaType.closedCaption.rawValue,
@@ -116,6 +152,6 @@ enum CEA608TimingValidator {
 			if warning == nil { sema.signal() }
 		}
 		sema.wait()
-		return validator.warnings
+		return (validator.warnings, captionToSeg)
 	}
 }

@@ -921,6 +921,46 @@
         }
       }
     },
+    "CEA-608 splits lines longer than 32 characters": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CEA-608 teilt Zeilen mit mehr als 32 Zeichen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CEA-608 divide las líneas de más de 32 caracteres"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CEA-608 divise les lignes de plus de 32 caractères"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CEA-608は32文字を超える行を分割します"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CEA-608은 32자를 초과하는 줄을 분할합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CEA-608 会拆分超过 32 个字符的行"
+          }
+        }
+      }
+    },
     "Caption Format": {
       "localizations": {
         "de": {

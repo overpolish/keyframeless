@@ -34,7 +34,7 @@ enum CaptionFormat: String, Codable, CaseIterable, Identifiable {
 	/// reusing the built-in caption-format role (which also breaks rendering / makes the
 	/// import-side AVF validator emit stricter spacing than the paste-side validator).
 	func role(language: String) -> String {
-		"\(roleToken)?captionFormat=\(roleToken).\(language)"
+		"\(roleToken)?captionFormat=\(captionFormatToken).\(language)"
 	}
 
 	private var roleToken: String {
@@ -42,6 +42,18 @@ enum CaptionFormat: String, Codable, CaseIterable, Identifiable {
 		case .itt: return "iTT"
 		case .srt: return "SRT"
 		case .cea608: return "CEA-608"
+		}
+	}
+
+	/// `captionFormat=` value in the FCPXML role string. FCP's own FCPXML export uses a
+	/// suffix WITHOUT the dash for CEA-608 (verified against a roundtrip export), even
+	/// though the role-token prefix keeps the dash. Mirror FCP's exact form so the
+	/// import-side validator accepts the captions cleanly.
+	private var captionFormatToken: String {
+		switch self {
+		case .itt: return "iTT"
+		case .srt: return "SRT"
+		case .cea608: return "CEA608"
 		}
 	}
 

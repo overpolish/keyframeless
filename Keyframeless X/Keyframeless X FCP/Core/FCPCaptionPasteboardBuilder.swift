@@ -146,16 +146,69 @@ enum FCPCaptionPasteboardBuilder {
 				objects[pc] = d
 			}
 		}
+		// CEA-608 multi-row caption: one captionTextBlock holds N PCs (one per grid row) in
+		// both AVCaptionArray and FFEncodedAVCaptionArray. Clone the template PC subtree
+		// (pc + attributedString + NSString-wrapper) per extra row and patch each with row
+		// text + cellY (15-N+1+rowIdx, bottom-anchored) + cellX (30-rowChars). iTT/SRT render
+		// the attributed string's embedded \n directly so they fall through to single-PC patch.
+		func clonePCSubtree(_ pc: Int) -> Int {
+			let pcd = objects[pc] as? [String: Any] ?? [:]
+			let asU = u(pcd, "attributedString")
+			let asd = asU.flatMap { objects[$0] as? [String: Any] }
+			let nsU = asd.flatMap { u($0, "NSString") }
+			// FCP keys on the timeRange UID for per-row identity even when the CMTime values are
+			// identical; sharing the original timeRange across cloned rows makes FCP conflate the
+			// rows (duplicate row text on the multi-row caption, polluted neighbours). Clone the
+			// timeRange dict + its two leaf CMTime dicts per row.
+			let trU = u(pcd, "timeRange")
+			let trd = trU.flatMap { objects[$0] as? [String: Any] }
+			let trVals = ((trd?["NS.objects"]) as? [Any])?.compactMap { uid($0) } ?? []
+			let toClone = ([pc, asU, nsU, trU].compactMap { $0 }) + trVals
+			let base = objects.count
+			var remap = [Int: Int]()
+			for (off, idx) in toClone.enumerated() { remap[idx] = base + off }
+			for idx in toClone {
+				objects.append(FCPNativePasteboardBuilder.deepCopy(objects[idx], remap: remap))
+			}
+			return remap[pc]!
+		}
+		func fanRowsInto(arrIdx: Int, rows: [String]) {
+			guard let arrObj = objects[arrIdx] as? [String: Any] else { return }
+			let pcIndices = items(arrIdx)
+			guard let templatePC = pcIndices.first else { return }
+			var newPCs: [Int] = [templatePC]
+			for _ in 1..<rows.count { newPCs.append(clonePCSubtree(templatePC)) }
+			let rowCount = rows.count
+			for (i, pc) in newPCs.enumerated() {
+				let rowText = rows[i]
+				let rowCC = (rowText as NSString).length
+				patchPC(pc, text: rowText, cc: rowCC)
+				if rowCount > 1, var d = objects[pc] as? [String: Any], d["cellY"] != nil {
+					// Bottom-anchor: rowCount=2 → cellY 14,15; rowCount=3 → 13,14,15.
+					d["cellY"] = (15 - (rowCount - 1) + i) as NSNumber
+					objects[pc] = d
+				}
+			}
+			var arr2 = arrObj
+			arr2["NS.objects"] = newPCs.map { FCPNativePasteboardBuilder.makeUID($0) }
+			objects[arrIdx] = arr2
+		}
 		func patchCaption(_ cr: Int, text: String, anchorSec: Double, durSec: Double) {
 			let cc = (text as NSString).length
 			let anchorPair = "{(0/1),(\(ticks(anchorSec))/\(fr.denominator))}"
 			let clippedRange = "{(0/1),(\(ticks(durSec))/\(fr.denominator))}"
 			guard let cap = objects[cr] as? [String: Any] else { return }
-			if let i = u(cap, "displayName") { objects[i] = text }
+			// displayName is the inspector/timeline label - collapse \n so it reads as one line.
+			let displayText = text.replacingOccurrences(of: "\n", with: " ")
+			if let i = u(cap, "displayName") { objects[i] = displayText }
 			if let i = u(cap, "anchorPair") { objects[i] = anchorPair }
 			if let i = u(cap, "clippedRange") { objects[i] = clippedRange }
 			if let i = u(cap, "persistentID") { objects[i] = UUID().uuidString.uppercased() }
 			guard let tbArr = u(cap, "captionTextBlocks") else { return }
+			let cea608Rows: [String]? =
+				(format == .cea608 && text.contains("\n"))
+				? text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+				: nil
 			for tb in items(tbArr) {
 				guard let tbd = objects[tb] as? [String: Any] else { continue }
 				if let i = u(tbd, "persistentID") { objects[i] = UUID().uuidString.uppercased() }
@@ -167,7 +220,29 @@ enum FCPCaptionPasteboardBuilder {
 				for (k, v) in zip(keys, vals) {
 					let name = objects[k] as? String
 					if name == "AVCaptionArray" || name == "FFEncodedAVCaptionArray" {
-						for pc in items(v) { patchPC(pc, text: text, cc: cc) }
+						if let rows = cea608Rows {
+							fanRowsInto(arrIdx: v, rows: rows)
+						} else {
+							// Single-line path. Cap 0 reuses the template's actual capRoot, so its
+							// fan-out mutates the template's AVCaptionArray.NS.objects in-place to
+							// [origPC, cloneRow1]. Later captions' deepCopy walks the template array
+							// and only remaps UIDs in orderedClone - the newly-appended cloneRow1
+							// index leaks through unchanged. If THIS caption is single-line we must
+							// drop those stale entries (else we'd patch both PCs with the same single-
+							// line text and render a duplicated 2-row caption with a stale shared PC).
+							let pcIndices = items(v)
+							guard let keepPC = pcIndices.first else { continue }
+							patchPC(keepPC, text: text, cc: cc)
+							if pcIndices.count > 1, var arrObj = objects[v] as? [String: Any] {
+								arrObj["NS.objects"] = [FCPNativePasteboardBuilder.makeUID(keepPC)]
+								objects[v] = arrObj
+							}
+							// Reset cellY to bottom row for single-line (cap 0's fan-out left cellY=14).
+							if var d = objects[keepPC] as? [String: Any], d["cellY"] != nil {
+								d["cellY"] = 15 as NSNumber
+								objects[keepPC] = d
+							}
+						}
 					}
 				}
 			}

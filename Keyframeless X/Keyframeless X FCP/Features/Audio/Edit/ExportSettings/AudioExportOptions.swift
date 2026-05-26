@@ -13,9 +13,7 @@ struct AudioExportOptionsView: View {
 		VStack(alignment: .leading, spacing: KKSpacingLG) {
 			ProjectSettingsHeader(model: model)
 			CaptionTypeSelector(model: model).padding(.bottom, KKPaddingMD)
-			if model.captionImportType == .title {
-				CaptionStyleControls(model: model)
-			}
+			CaptionStyleControls(model: model)
 		}
 		.onAppear {
 			if !model.exportSettingsInitialized {

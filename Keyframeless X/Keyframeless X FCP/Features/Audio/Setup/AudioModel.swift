@@ -234,11 +234,22 @@ class AudioModel: ObservableObject {
 	func buildNativeCaptionFCPXML(from rows: [AudioEditRow]) -> String {
 		var segments = buildCaptionSegments(from: rows)
 		if captionFormat == .cea608 {
-			segments = CaptionBuilder.splitToMaxChars(segments, maxChars: 32)
+			let maxLines = captionStyle.captionLines == .two ? 2 : 1
+			segments = CaptionBuilder.splitCEA608Multiline(
+				segments, maxCharsPerLine: 32, maxLines: maxLines)
+			segments = CaptionBuilder.mergeOrphansCEA608(
+				segments, maxCharsPerLine: 32, maxLines: maxLines,
+				maxWordsPerLine: Int(captionStyle.maxWordsPerLine))
 			segments = CEA608TimingValidator.adjusted(
 				segments, frameDuration: exportFramerate.rawValue)
 		}
 		segments = CaptionBuilder.enforceSequentialPerClip(segments)
+		// Mirror the pasteboard path: the CEA-608 validator pushes start times later for
+		// SCC byte-pair compliance, which reopens gaps closeAllGaps closed inside
+		// buildCaptionSegments. Re-close here so noGaps holds for CEA-608 too.
+		if captionStyle.noGaps {
+			segments = CaptionBuilder.closeAllGaps(segments)
+		}
 		let format = FCPXMLBuilder.ExportFormat(
 			width: Int(exportWidth) ?? projectFormat?.width ?? 1920,
 			height: Int(exportHeight) ?? projectFormat?.height ?? 1080,
@@ -248,7 +259,8 @@ class AudioModel: ObservableObject {
 		return FCPXMLBuilder.buildNativeCaptions(
 			segments: segments,
 			format: format,
-			role: captionFormat.role(language: language)
+			role: captionFormat.role(language: language),
+			captionFormat: captionFormat
 		)
 	}
 
