@@ -12,20 +12,29 @@ actor WaveformLoader {
 
 	private var cache: [String: [Float]] = [:]
 
-	func waveform(for clip: FCPXMLParser.AudioClip) async throws -> [Float] {
+	func waveform(
+		for clip: FCPXMLParser.AudioClip,
+		onProgress: (@Sendable ([Float]) -> Void)? = nil
+	) async throws -> [Float] {
 		let key = AudioClipFingerprint.of(clip)
-		if let cached = cache[key] { return cached }
+		if let cached = cache[key] {
+			onProgress?(cached)
+			return cached
+		}
 		let buckets = max(200, Int(clip.sourceDuration * 200))
 		let renderedURL = try await ProcessedAudioRenderer.shared.renderedURL(for: clip)
 		let raw = try loadFromAudioFile(
-			url: renderedURL, durationSeconds: clip.sourceDuration, buckets: buckets)
+			url: renderedURL, durationSeconds: clip.sourceDuration, buckets: buckets,
+			onProgress: onProgress)
 		let samples = smoothed(raw)
 		cache[key] = samples
+		onProgress?(samples)
 		return samples
 	}
 
 	private func loadFromAudioFile(
-		url: URL, durationSeconds: Double, buckets: Int
+		url: URL, durationSeconds: Double, buckets: Int,
+		onProgress: (@Sendable ([Float]) -> Void)? = nil
 	) throws -> [Float] {
 		let audioFile = try AVAudioFile(forReading: url)
 		let sampleRate = audioFile.processingFormat.sampleRate
@@ -42,6 +51,9 @@ actor WaveformLoader {
 			let buffer = AVAudioPCMBuffer(
 				pcmFormat: audioFile.processingFormat, frameCapacity: chunkSize)
 		else { return [] }
+
+		var chunksSinceProgress = 0
+		let progressEveryNChunks = 4
 
 		while framesRead < Int(totalFrames) {
 			let framesToRead = min(chunkSize, totalFrames - AVAudioFrameCount(framesRead))
@@ -72,6 +84,11 @@ actor WaveformLoader {
 			}
 
 			framesRead += count
+			chunksSinceProgress += 1
+			if let onProgress, chunksSinceProgress >= progressEveryNChunks {
+				onProgress(result)
+				chunksSinceProgress = 0
+			}
 		}
 
 		return result

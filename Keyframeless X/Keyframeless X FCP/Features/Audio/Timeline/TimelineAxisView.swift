@@ -374,6 +374,7 @@ private class AxisDocumentView: NSView {
 			glowClipIndex: hoveredClipIndex ?? localHoveredIndex,
 			pulsePhase: pulsePhase,
 			waveforms: waveforms,
+			loadingIndices: Set(waveformTasks.keys),
 			hasAudioPlayer: audioPlayer != nil,
 			playingIndex: audioPlayer?.playingIndex,
 			labelForTime: labelForTime,
@@ -505,14 +506,42 @@ private class AxisDocumentView: NSView {
 		}
 		for (i, clip) in clips.enumerated() {
 			guard waveforms[i] == nil, waveformTasks[i] == nil else { continue }
-			waveformTasks[i] = Task {
-				guard let samples = try? await WaveformLoader.shared.waveform(for: clip)
-				else { return }
+			waveformTasks[i] = Task { [weak self] in
+				let onProgress: @Sendable ([Float]) -> Void = { partial in
+					Task { @MainActor [weak self] in
+						guard let self else { return }
+						self.waveforms[i] = partial
+						self.needsDisplay = true
+					}
+				}
+				guard
+					let samples = try? await WaveformLoader.shared.waveform(
+						for: clip, onProgress: onProgress)
+				else {
+					await MainActor.run { [weak self] in
+						self?.waveformTasks[i] = nil
+						self?.reportLoadingState()
+					}
+					return
+				}
 				await MainActor.run { [weak self] in
 					self?.waveforms[i] = samples
+					self?.waveformTasks[i] = nil
 					self?.needsDisplay = true
+					self?.reportLoadingState()
 				}
 			}
 		}
+		reportLoadingState()
+	}
+
+	private func reportLoadingState() {
+		let loading = !waveformTasks.isEmpty
+		if loading {
+			startPulse()
+		} else if hoveredClipIndex == nil && localHoveredIndex == nil {
+			stopPulse()
+		}
+		needsDisplay = true
 	}
 }

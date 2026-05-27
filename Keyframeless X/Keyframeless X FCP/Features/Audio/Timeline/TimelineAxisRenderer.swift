@@ -19,6 +19,7 @@ struct TimelineAxisRenderer {
 	let glowClipIndex: Int?
 	let pulsePhase: CGFloat
 	let waveforms: [Int: [Float]]
+	let loadingIndices: Set<Int>
 	let hasAudioPlayer: Bool
 	let playingIndex: Int?
 	let labelForTime: ((Double) -> String)?
@@ -226,6 +227,8 @@ struct TimelineAxisRenderer {
 		if showWaveforms, !skipWaveforms, let samples = waveforms[state.index], !samples.isEmpty {
 			drawClipWaveform(
 				samples, state: state, hasAudioControls: hasAudioControls, in: ctx)
+		} else if showWaveforms, !skipWaveforms, loadingIndices.contains(state.index) {
+			drawLoadingPlaceholder(state: state, hasAudioControls: hasAudioControls, in: ctx)
 		}
 
 		if hasAudioControls {
@@ -233,6 +236,50 @@ struct TimelineAxisRenderer {
 		} else if state.laneHeight >= 16 && state.w > 30 {
 			drawClipTitle(state, in: ctx)
 		}
+	}
+
+	private func drawLoadingPlaceholder(
+		state: ClipDrawState, hasAudioControls: Bool, in ctx: CGContext
+	) {
+		let waveformRect: CGRect
+		if hasAudioControls {
+			let titleStripH: CGFloat = playBtnSize + 8
+			let waveformY = state.rect.minY + titleStripH
+			let waveformH = state.rect.height - titleStripH - scrubStripHeight
+			guard waveformH > 4 else { return }
+			waveformRect = CGRect(
+				x: state.rect.minX, y: waveformY,
+				width: state.rect.width, height: waveformH)
+		} else {
+			waveformRect = state.rect
+		}
+		let barWidth: CGFloat = 3
+		let barSpacing: CGFloat = 4
+		let stride = barWidth + barSpacing
+		let barCount = max(1, Int(waveformRect.width / stride))
+		let centerY = waveformRect.midY
+		let maxHalfHeight = waveformRect.height * 0.35
+		let color = NSColor.white
+		let cycleSeconds: CGFloat = 4.0
+		ctx.saveGState()
+		for i in 0..<barCount {
+			let x = waveformRect.minX + CGFloat(i) * stride
+			// Per-bar fixed phase offset using fractional part of i * irrational —
+			// scatters bars across the cycle without a monotonic stagger that would
+			// read as a traveling wave.
+			let offset = (CGFloat(i) * 0.6180339887).truncatingRemainder(dividingBy: 1.0)
+			let t = pulsePhase / cycleSeconds + offset
+			let cyclePos = (t.truncatingRemainder(dividingBy: 1.0) + 1.0)
+				.truncatingRemainder(dividingBy: 1.0)
+			let amp = max(0, sin(.pi * cyclePos))
+			let halfH = maxHalfHeight * amp
+			guard halfH > 0.5 else { continue }
+			let bar = CGRect(
+				x: x, y: centerY - halfH, width: barWidth, height: halfH * 2)
+			ctx.setFillColor(color.withAlphaComponent(0.35).cgColor)
+			ctx.fill(bar)
+		}
+		ctx.restoreGState()
 	}
 
 	private func drawClipWaveform(
