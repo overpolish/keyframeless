@@ -167,28 +167,28 @@ struct TimelineAxisRenderer {
 	private func drawClipBackground(_ state: ClipDrawState, in ctx: CGContext) {
 		let isDimmed = dimmedIndices.contains(state.index)
 		let isHoverDimmed = hoveredClipIndex != nil && hoveredClipIndex != state.index && !isDimmed
-		let alpha: CGFloat =
-			isDimmed
-			? 0.1 : isHoverDimmed ? 0.25 : selectedClips.contains(state.index) ? 0.85 : 0.25
+		let isSelected = selectedClips.contains(state.index)
 		let clipColor = clipColor(for: state.clip, isDimmed: isDimmed)
-
-		ctx.setFillColor(clipColor.withAlphaComponent(alpha).cgColor)
 		let path = CGPath(
 			roundedRect: state.rect, cornerWidth: state.cornerRadius,
 			cornerHeight: state.cornerRadius, transform: nil)
-		ctx.addPath(path)
-		ctx.fillPath()
+
+		if isSelected || isDimmed || isHoverDimmed {
+			let alpha: CGFloat =
+				isDimmed ? 0.1 : isHoverDimmed ? 0.25 : 0.85
+			ctx.setFillColor(clipColor.withAlphaComponent(alpha).cgColor)
+			ctx.addPath(path)
+			ctx.fillPath()
+		}
 
 		if isDimmed && glowClipIndex == state.index {
 			drawPulseGlow(rect: state.rect, path: path, color: clipColor, dimmed: true, in: ctx)
 		}
 
 		if !isDimmed && !isHoverDimmed && glowClipIndex == state.index {
-			let isSelected = selectedClips.contains(state.index)
 			drawPulseGlow(
 				rect: state.rect, path: path, color: clipColor, dimmed: !isSelected, in: ctx)
 		}
-
 	}
 
 	private func drawPulseGlow(
