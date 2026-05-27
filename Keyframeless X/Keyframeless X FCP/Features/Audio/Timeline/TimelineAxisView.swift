@@ -182,6 +182,13 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 				selectedClips.insert(index)
 			}
 		}
+		docView.onSetClipSelected = { index, shouldSelect in
+			if shouldSelect {
+				selectedClips.insert(index)
+			} else {
+				selectedClips.remove(index)
+			}
+		}
 		docView.onClickDimmed = onClickDimmed
 		docView.labelForTime = labelForTime
 
@@ -226,6 +233,9 @@ private class AxisDocumentView: NSView {
 	var hoveredClipIndex: Int?
 	var onHoverClip: ((Int?) -> Void)?
 	var onToggleClip: ((Int) -> Void)?
+	var onSetClipSelected: ((Int, Bool) -> Void)?
+	fileprivate var dragTargetSelected: Bool?
+	fileprivate var dragVisitedIndices: Set<Int> = []
 	var onClickDimmed: ((Int) -> Void)?
 	var onLoadingChanged: ((Set<Int>) -> Void)?
 	var labelForTime: ((Double) -> String)?
@@ -339,10 +349,16 @@ private class AxisDocumentView: NSView {
 
 			isDraggingSelection = true
 			dragHoveredIndex = entry.index
-			onToggleClip?(entry.index)
+			let target = !selectedClips.contains(entry.index)
+			dragTargetSelected = target
+			dragVisitedIndices = [entry.index]
+			onSetClipSelected?(entry.index, target)
 			return
 		}
 		isDraggingSelection = true
+		dragTargetSelected = nil
+		dragVisitedIndices = []
+		dragHoveredIndex = nil
 	}
 
 	override func mouseDragged(with event: NSEvent) {
@@ -360,9 +376,16 @@ private class AxisDocumentView: NSView {
 		}?.index
 		if hoveredIndex != dragHoveredIndex {
 			dragHoveredIndex = hoveredIndex
-			if let index = hoveredIndex {
-				onToggleClip?(index)
+			if let index = hoveredIndex, !dragVisitedIndices.contains(index) {
+				let target = dragTargetSelected ?? !selectedClips.contains(index)
+				dragTargetSelected = target
+				dragVisitedIndices.insert(index)
+				onSetClipSelected?(index, target)
 			}
+		}
+		if hoveredIndex != localHoveredIndex {
+			localHoveredIndex = hoveredIndex
+			needsDisplay = true
 		}
 	}
 
@@ -370,6 +393,8 @@ private class AxisDocumentView: NSView {
 		scrubbingClipIndex = nil
 		isDraggingSelection = false
 		dragHoveredIndex = nil
+		dragVisitedIndices = []
+		dragTargetSelected = nil
 	}
 
 	override func draw(_ dirtyRect: NSRect) {
