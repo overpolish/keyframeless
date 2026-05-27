@@ -185,8 +185,9 @@ class AudioModel: ObservableObject {
 
 	func srtOverlapRegions(from rows: [AudioEditRow]) -> [CaptionBuilder.OverlapRegion] {
 		let selected = editSelectedClips ?? Set(audioClips.indices)
+		let store = TranscriptionStore.shared
 		let clips = audioClips.enumerated()
-			.filter { selected.contains($0.offset) }
+			.filter { selected.contains($0.offset) && store.words(for: $0.element) != nil }
 			.map { $0.element }
 		let sorted = clips.sorted { $0.start < $1.start }
 		var regions: [CaptionBuilder.OverlapRegion] = []

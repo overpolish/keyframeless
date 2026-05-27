@@ -81,7 +81,8 @@ struct AudioEditView: View {
 			ClipSelectionToolbar(
 				clips: model.audioClips,
 				selectedClips: editSelectedClips,
-				allowedIndices: transcribedIndices
+				allowedIndices: transcribedIndices,
+				showOverlapsLegend: !srtOverlapRegions.isEmpty
 			)
 		}
 	}
