@@ -20,6 +20,9 @@ struct SentenceRow: View {
 	var onBreaksEdited: ([Int]) -> Void = { _ in }
 	var onReset: (() -> Void)?
 	var showTrailingBreak: Bool = false
+	var playClipOverride: FCPXMLParser.AudioClip? = nil
+	var playFromOverride: Double? = nil
+	var playToOverride: Double? = nil
 
 	@State private var draft = ""
 	@State private var highlightTime: Double?
@@ -53,10 +56,10 @@ struct SentenceRow: View {
 				isPlaying: player.isPlaying(index: row.id)
 			) {
 				player.toggleRange(
-					clip: clip,
+					clip: playClipOverride ?? clip,
 					index: row.id,
-					from: row.sentenceStart,
-					to: row.sentenceEnd
+					from: playFromOverride ?? row.sentenceStart,
+					to: playToOverride ?? row.sentenceEnd
 				)
 			}
 		}

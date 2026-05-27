@@ -19,6 +19,14 @@ struct CaptionStyleControls: View {
 
 	private var isCaption: Bool { model.captionImportType == .caption }
 
+	private var anySelectedClipIsSrt: Bool {
+		let selected = model.editSelectedClips ?? Set(model.audioClips.indices)
+		return selected.contains { idx in
+			model.audioClips.indices.contains(idx)
+				&& TranscriptionStore.shared.isSrtImported(model.audioClips[idx])
+		}
+	}
+
 	var body: some View {
 		VStack(alignment: .leading, spacing: KKSpacingLG) {
 			if !isCaption {
@@ -123,6 +131,7 @@ struct CaptionStyleControls: View {
 				CaptionTemplatePicker(
 					model: model,
 					templates: model.captionTemplates,
+					hidePerWord: anySelectedClipIsSrt,
 					onDropMoti: { model.addCustomTemplate(from: $0) },
 					onRemoveCustom: { model.removeCustomTemplate($0) }
 				)

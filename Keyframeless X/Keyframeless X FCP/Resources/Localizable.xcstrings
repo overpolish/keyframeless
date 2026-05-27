@@ -1441,6 +1441,46 @@
         }
       }
     },
+    "Delete SRT" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SRT löschen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar SRT"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer SRT"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SRT を削除"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SRT 삭제"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除 SRT"
+          }
+        }
+      }
+    },
     "Deselect All" : {
       "localizations" : {
         "de" : {
@@ -2397,6 +2437,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "将 FCPXML 导入 FCP"
+          }
+        }
+      }
+    },
+    "Import SRT" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SRT importieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importar SRT"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importer SRT"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SRT をインポート"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SRT 가져오기"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入 SRT"
           }
         }
       }
@@ -4244,6 +4324,46 @@
         }
       }
     },
+    "Replace SRT" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SRT ersetzen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reemplazar SRT"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remplacer SRT"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SRT を置き換える"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SRT 바꾸기"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "替换 SRT"
+          }
+        }
+      }
+    },
     "Reprocess Selected" : {
       "localizations" : {
         "de" : {
@@ -4684,6 +4804,46 @@
         }
       }
     },
+    "SRT captions don't support per-word templates" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SRT-Untertitel unterstützen keine Vorlagen mit Wortanimation"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los subtítulos SRT no admiten plantillas por palabra"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les sous-titres SRT ne prennent pas en charge les modèles par mot"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SRT キャプションは単語ごとのテンプレートに対応していません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SRT 캡션은 단어별 템플릿을 지원하지 않습니다"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SRT 字幕不支持逐字模板"
+          }
+        }
+      }
+    },
     "Steno" : {
       "localizations" : {
         "de" : {
@@ -5041,6 +5201,28 @@
             "state" : "translated",
             "value" : "文字宽度"
           }
+        }
+      }
+    },
+    "Timeline-Wide" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : { "state" : "translated", "value" : "Timeline-übergreifend" }
+        },
+        "es" : {
+          "stringUnit" : { "state" : "translated", "value" : "Toda la línea de tiempo" }
+        },
+        "fr" : {
+          "stringUnit" : { "state" : "translated", "value" : "Toute la timeline" }
+        },
+        "ja" : {
+          "stringUnit" : { "state" : "translated", "value" : "タイムライン全体" }
+        },
+        "ko" : {
+          "stringUnit" : { "state" : "translated", "value" : "전체 타임라인" }
+        },
+        "zh-Hans" : {
+          "stringUnit" : { "state" : "translated", "value" : "整个时间线" }
         }
       }
     },

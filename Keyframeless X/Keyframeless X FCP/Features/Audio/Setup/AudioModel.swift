@@ -10,7 +10,11 @@ import UniformTypeIdentifiers
 
 class AudioModel: ObservableObject {
 
+	static let projectWideClipIndex: Int = -1
+
 	enum Stage { case setup, edit }
+
+	var projectKey: String { dropItems.first?.name ?? "default" }
 
 	@Published var stage: Stage = .setup
 	@Published var isDraggingToFCP: Bool = false
@@ -20,6 +24,7 @@ class AudioModel: ObservableObject {
 	@Published var editSelectedClips: Set<Int>?
 	@Published var dropItems: [FCPXMLParser.DropItem] = []
 	@Published var loadingWaveformIndices: Set<Int> = []
+	@Published var srtImportVersion: Int = 0
 	@Published var useTimecode: Bool = true
 	@Published var exportWidth: String = ""
 	@Published var exportHeight: String = ""
@@ -135,16 +140,41 @@ class AudioModel: ObservableObject {
 
 	func buildCaptionSegments(from rows: [AudioEditRow]) -> [CaptionSegment] {
 		let selected = editSelectedClips ?? Set(audioClips.indices)
-		let filtered = rows.filter { $0.isHeader || selected.contains($0.clipIndex) }
+		let (filtered, clipsForBuild) = preparePWForCaptions(rows: rows, selected: selected)
 		return CaptionBuilder.build(
 			rows: filtered,
-			clips: audioClips,
+			clips: clipsForBuild,
 			style: captionStyle,
 			textStyle: textStyle,
 			exportWidth: Int(exportWidth) ?? projectFormat?.width ?? 1920,
 			exportHeight: Int(exportHeight) ?? projectFormat?.height ?? 1080,
 			language: AudioSetupSettings.shared.selectedLanguage
 		)
+	}
+
+	/// Retags project-wide rows so CaptionBuilder can render them against a synthetic clip
+	/// appended at index `audioClips.count` (offset=0, so `sentenceStart` flows through as
+	/// absolute timeline time).
+	private func preparePWForCaptions(
+		rows: [AudioEditRow], selected: Set<Int>
+	) -> (rows: [AudioEditRow], clips: [FCPXMLParser.AudioClip]) {
+		let pwSelected = selected.contains(AudioModel.projectWideClipIndex)
+		let syntheticIndex = audioClips.count
+		let retagged: [AudioEditRow] = rows.compactMap { row in
+			guard row.isProjectWide else { return row }
+			if !pwSelected || row.isHeader { return nil }
+			var copy = row
+			copy.clipIndex = syntheticIndex
+			return copy
+		}
+		let filtered = retagged.filter {
+			$0.isHeader || $0.clipIndex == syntheticIndex || selected.contains($0.clipIndex)
+		}
+		var clips = audioClips
+		if pwSelected {
+			clips.append(TranscriptionStore.syntheticProjectWideClip(projectKey: projectKey))
+		}
+		return (filtered, clips)
 	}
 
 	func buildFCPXML(from rows: [AudioEditRow]) -> String {

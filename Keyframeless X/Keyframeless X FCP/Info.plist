@@ -13,9 +13,9 @@
 		<key>ProExtensionAttributes</key>
 		<dict>
 			<key>ContentViewMinimumWidth</key>
-			<integer>1050</integer>
+			<integer>1100</integer>
 			<key>ContentViewMinimumHeight</key>
-			<integer>800</integer>
+			<integer>850</integer>
 		</dict>
 	</dict>
 </dict>

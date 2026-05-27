@@ -35,10 +35,10 @@ struct AudioEditView: View {
 		}
 		.onAppear {
 			if model.editSelectedClips == nil {
-				model.editSelectedClips = transcribedIndices
+				model.editSelectedClips = defaultEditSelection
 			}
 			rows = AudioEditRowBuilder.buildRows(
-				clips: model.audioClips, format: model.projectFormat)
+				clips: model.audioClips, format: model.projectFormat, projectKey: model.projectKey)
 			updateSRTOverlaps()
 			// On non-text-field clicks, redirect first responder to the timeline's
 			// AxisDocumentView so spacebar can stop playback. Must happen during a
@@ -128,6 +128,14 @@ struct AudioEditView: View {
 							.foregroundStyle(.secondary)
 							.padding(.horizontal, KKPaddingSM)
 						Spacer()
+						Button {
+							importSRTProjectWide()
+						} label: {
+							Label("Import SRT", systemImage: "square.and.arrow.down")
+								.font(.system(size: 11))
+						}
+						.buttonStyle(.plain)
+						.foregroundStyle(Color.kkWarning)
 						if let selected = model.editSelectedClips, !selected.isEmpty {
 							Button {
 								model.selectedClips = selected
@@ -206,11 +214,13 @@ struct AudioEditView: View {
 										clipIndex: row.clipIndex,
 										isCompound: row.isCompound,
 										isHighlighted: hoveredClipIndex == row.clipIndex,
-										hoveredClipIndex: $hoveredClipIndex
-									) {
-										model.selectedClips = [row.clipIndex]
-										model.stage = .setup
-									}
+										hoveredClipIndex: $hoveredClipIndex,
+										onTranscribe: {
+											model.selectedClips = [row.clipIndex]
+											model.stage = .setup
+										},
+										onImportSRT: { importSRT(for: row.clipIndex) }
+									)
 								}
 							}
 							.padding(KKPaddingMD)
@@ -270,11 +280,30 @@ struct AudioEditView: View {
 	{
 		switch item.kind {
 		case .header:
+			let isProjectWide = item.group.clipIndex == AudioModel.projectWideClipIndex
 			TranscribedClipHeader(
 				clipName: item.group.clipName,
 				clipIndex: item.group.clipIndex,
 				isCompound: item.group.isCompound,
 				containsProfanity: groupContainsProfanity(item.group),
+				isFromSRT: item.group.sentences.first?.isFromSRT ?? false,
+				isProjectWide: isProjectWide,
+				onDeleteSRT: {
+					if isProjectWide {
+						deleteProjectWideSRT()
+					} else {
+						deleteSRT(for: item.group.clipIndex)
+					}
+				},
+				onImportSRT: {
+					if isProjectWide {
+						importSRTProjectWide()
+					} else {
+						importSRT(for: item.group.clipIndex)
+					}
+				},
+				onImportSRTFromURL: isProjectWide
+					? nil : { importSRT(from: $0, for: item.group.clipIndex) },
 				selectedClips: editSelectedClips
 			)
 			.padding(.top, KKPaddingMD)
@@ -284,56 +313,82 @@ struct AudioEditView: View {
 		}
 	}
 
+	@ViewBuilder
 	private func sentenceRowView(row: AudioEditRow, predictedBreaks: Set<Int>) -> some View {
-		let clip = model.audioClips[row.clipIndex]
-		return SentenceRow(
-			row: row,
-			clip: clip,
-			player: player,
-			editingRowID: $editingRowID,
-			sentenceRowIDs: sentenceRowIDs,
-			captionBreaks: Set(row.captionBreaks),
-			predictedBreaks: predictedBreaks,
-			onToggleBreak: { wordIndex in
-				guard wordIndex > 0 else { return }
-				TranscriptionStore.shared.toggleCaptionBreak(
-					at: wordIndex, for: clip,
-					sentenceStart: Float(row.sentenceStart))
-				let updated =
-					TranscriptionStore.shared.captionBreakIndices(
-						for: clip, sentenceStart: Float(row.sentenceStart)) ?? []
-				handleBreakToggle(rowID: row.id, breaks: updated)
-			},
-			onEdit: { newText in
-				let store = TranscriptionStore.shared
-				let editedWords: [TranscriptionStore.StoredWord]?
-				if newText == row.text {
-					editedWords = nil
-					store.setEditedWords(
-						nil, for: clip, sentenceStart: Float(row.sentenceStart))
-				} else {
-					editedWords = TranscriptionStore.alignWords(
-						original: row.words, editedText: newText)
-					store.setEditedWords(
-						editedWords, for: clip, sentenceStart: Float(row.sentenceStart))
-				}
-				handleSentenceEdit(rowID: row.id, editedWords: editedWords)
-			},
-			onBreaksEdited: { newBreaks in
-				TranscriptionStore.shared.setCaptionBreakIndices(
-					newBreaks.isEmpty ? nil : newBreaks,
-					for: clip, sentenceStart: Float(row.sentenceStart))
-				handleBreakToggle(rowID: row.id, breaks: newBreaks)
-			},
-			onReset: row.editedWords != nil
-				? {
-					TranscriptionStore.shared.setEditedWords(
-						nil, for: clip, sentenceStart: Float(row.sentenceStart))
-					handleSentenceEdit(rowID: row.id, editedWords: nil)
-				} : nil,
-			showTrailingBreak: false
-		)
-		.id(row.id)
+		if let storageClip = storageClipFor(row) {
+			let (playClip, playFrom, playTo) = playbackContextFor(row, storageClip: storageClip)
+			SentenceRow(
+				row: row,
+				clip: storageClip,
+				player: player,
+				editingRowID: $editingRowID,
+				sentenceRowIDs: sentenceRowIDs,
+				captionBreaks: Set(row.captionBreaks),
+				predictedBreaks: predictedBreaks,
+				onToggleBreak: { wordIndex in
+					guard wordIndex > 0 else { return }
+					TranscriptionStore.shared.toggleCaptionBreak(
+						at: wordIndex, for: storageClip,
+						sentenceStart: Float(row.sentenceStart))
+					let updated =
+						TranscriptionStore.shared.captionBreakIndices(
+							for: storageClip, sentenceStart: Float(row.sentenceStart)) ?? []
+					handleBreakToggle(rowID: row.id, breaks: updated)
+				},
+				onEdit: { newText in
+					let store = TranscriptionStore.shared
+					let editedWords: [TranscriptionStore.StoredWord]?
+					if newText == row.text {
+						editedWords = nil
+						store.setEditedWords(
+							nil, for: storageClip, sentenceStart: Float(row.sentenceStart))
+					} else {
+						editedWords = TranscriptionStore.alignWords(
+							original: row.words, editedText: newText)
+						store.setEditedWords(
+							editedWords, for: storageClip, sentenceStart: Float(row.sentenceStart))
+					}
+					handleSentenceEdit(rowID: row.id, editedWords: editedWords)
+				},
+				onBreaksEdited: { newBreaks in
+					TranscriptionStore.shared.setCaptionBreakIndices(
+						newBreaks.isEmpty ? nil : newBreaks,
+						for: storageClip, sentenceStart: Float(row.sentenceStart))
+					handleBreakToggle(rowID: row.id, breaks: newBreaks)
+				},
+				onReset: row.editedWords != nil
+					? {
+						TranscriptionStore.shared.setEditedWords(
+							nil, for: storageClip, sentenceStart: Float(row.sentenceStart))
+						handleSentenceEdit(rowID: row.id, editedWords: nil)
+					} : nil,
+				showTrailingBreak: false,
+				playClipOverride: playClip,
+				playFromOverride: playFrom,
+				playToOverride: playTo
+			)
+			.id(row.id)
+		}
+	}
+
+	private func storageClipFor(_ row: AudioEditRow) -> FCPXMLParser.AudioClip? {
+		if row.isProjectWide {
+			return TranscriptionStore.syntheticProjectWideClip(projectKey: model.projectKey)
+		}
+		guard model.audioClips.indices.contains(row.clipIndex) else { return nil }
+		return model.audioClips[row.clipIndex]
+	}
+
+	private func playbackContextFor(
+		_ row: AudioEditRow, storageClip: FCPXMLParser.AudioClip
+	) -> (FCPXMLParser.AudioClip?, Double?, Double?) {
+		guard row.isProjectWide else { return (nil, nil, nil) }
+		for clip in model.audioClips
+		where clip.start <= row.sentenceStart && row.sentenceStart < clip.end {
+			let offset = clip.sourceStart - clip.start
+			return (clip, row.sentenceStart + offset, row.sentenceEnd + offset)
+		}
+		return (nil, nil, nil)
 	}
 
 	private func handleSentenceEdit(rowID: Int, editedWords: [TranscriptionStore.StoredWord]?) {
@@ -377,6 +432,40 @@ struct AudioEditView: View {
 		srtHasOverlaps = !srtOverlapRegions.isEmpty
 	}
 
+	private func deleteSRT(for clipIndex: Int) {
+		SRTImporter.deletePerClip(model: model, clipIndex: clipIndex)
+		rebuildRows()
+	}
+
+	private func importSRTProjectWide() {
+		guard let cues = SRTImporter.pickAndParse() else { return }
+		SRTImporter.importProjectWide(into: model, cues: cues)
+		rebuildRows()
+	}
+
+	private func deleteProjectWideSRT() {
+		SRTImporter.deleteProjectWide(model: model)
+		rebuildRows()
+	}
+
+	private func importSRT(for clipIndex: Int) {
+		guard let cues = SRTImporter.pickAndParse() else { return }
+		SRTImporter.importPerClip(into: model, clipIndex: clipIndex, cues: cues)
+		rebuildRows()
+	}
+
+	private func importSRT(from url: URL, for clipIndex: Int) {
+		guard let cues = SRTImporter.parse(from: url) else { return }
+		SRTImporter.importPerClip(into: model, clipIndex: clipIndex, cues: cues)
+		rebuildRows()
+	}
+
+	private func rebuildRows() {
+		rows = AudioEditRowBuilder.buildRows(
+			clips: model.audioClips, format: model.projectFormat, projectKey: model.projectKey)
+		updateSRTOverlaps()
+	}
+
 	private var sentenceRowIDs: [Int] {
 		rows.filter { !$0.isHeader && $0.isTranscribed }.map(\.id)
 	}
@@ -385,9 +474,17 @@ struct AudioEditView: View {
 		let store = TranscriptionStore.shared
 		var result = Set<Int>()
 		for i in model.audioClips.indices {
-			if store.words(for: model.audioClips[i]) != nil {
+			if store.isTranscribed(model.audioClips[i]) {
 				result.insert(i)
 			}
+		}
+		return result
+	}
+
+	private var defaultEditSelection: Set<Int> {
+		var result = transcribedIndices
+		if TranscriptionStore.shared.projectWideSrtCues(projectKey: model.projectKey) != nil {
+			result.insert(AudioModel.projectWideClipIndex)
 		}
 		return result
 	}

@@ -50,10 +50,28 @@ struct AudioSetupView: View {
 					disabled: processDisabled,
 					action: { onProcess(false) }
 				)
+				Button {
+					importSRTProjectWide()
+				} label: {
+					Label("Import SRT", systemImage: "square.and.arrow.down")
+						.font(.system(size: 11))
+						.padding(.horizontal, KKPaddingLG)
+						.padding(.vertical, KKSpacingSM)
+						.contentShape(Capsule())
+				}
+				.buttonStyle(.plain)
+				.foregroundStyle(Color.kkWarning)
+				.disabled(model.audioClips.isEmpty)
 			}
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 		.onDisappear { audioPlayer.stop() }
+	}
+
+	private func importSRTProjectWide() {
+		guard let cues = SRTImporter.pickAndParse() else { return }
+		SRTImporter.importProjectWide(into: model, cues: cues)
+		model.stage = .edit
 	}
 
 	private var processDisabled: Bool {
