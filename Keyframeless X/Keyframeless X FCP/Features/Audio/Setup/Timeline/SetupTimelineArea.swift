@@ -76,7 +76,8 @@ private struct SetupTimelineContent: View {
 			clips: model.audioClips,
 			selectedClips: $model.selectedClips,
 			audioPlayer: audioPlayer,
-			showWaveforms: true
+			showWaveforms: true,
+			onLoadingChanged: { model.loadingWaveformIndices = $0 }
 		)
 		.id(timelineLoadID)
 		.padding(.bottom, KKSpacingSM)

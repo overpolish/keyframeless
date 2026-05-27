@@ -45,6 +45,7 @@ struct TimelineAxisView: View {
 	var showWaveforms: Bool = true
 	var hoveredClipIndex: Binding<Int?> = .constant(nil)
 	var onClickDimmed: ((Int) -> Void)? = nil
+	var onLoadingChanged: ((Set<Int>) -> Void)? = nil
 
 	@State private var zoom: CGFloat = 1.0
 
@@ -64,7 +65,8 @@ struct TimelineAxisView: View {
 				overlapRegions: overlapRegions,
 				showWaveforms: showWaveforms,
 				hoveredClipIndex: hoveredClipIndex,
-				onClickDimmed: onClickDimmed
+				onClickDimmed: onClickDimmed,
+				onLoadingChanged: onLoadingChanged
 			)
 		}
 		.padding(.horizontal, KKPaddingMD)
@@ -93,6 +95,7 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 	var showWaveforms: Bool
 	var hoveredClipIndex: Binding<Int?>
 	var onClickDimmed: ((Int) -> Void)?
+	var onLoadingChanged: ((Set<Int>) -> Void)?
 
 	func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -146,6 +149,10 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 			stateChanged = true
 		}
 
+		// onLoadingChanged must be wired BEFORE clips, since clips' didSet kicks off
+		// waveform tasks and reports the initial loading state synchronously.
+		docView.onLoadingChanged = onLoadingChanged
+
 		// clips triggers waveform loading via didSet, so always assign through the setter
 		let clipsChanged =
 			clips.map(\.url) != docView.clips.map(\.url)
@@ -164,8 +171,8 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 			stateChanged = true
 			if hoveredClipIndex.wrappedValue != nil {
 				docView.startPulse()
-			} else if docView.localHoveredIndex == nil {
-				docView.stopPulse()
+			} else {
+				docView.stopPulseIfIdle()
 			}
 		}
 		docView.onToggleClip = { index in
@@ -220,6 +227,7 @@ private class AxisDocumentView: NSView {
 	var onHoverClip: ((Int?) -> Void)?
 	var onToggleClip: ((Int) -> Void)?
 	var onClickDimmed: ((Int) -> Void)?
+	var onLoadingChanged: ((Set<Int>) -> Void)?
 	var labelForTime: ((Double) -> String)?
 	var onMagnify: ((CGFloat, CGFloat) -> Void)?
 	var audioPlayer: AudioPlayer? {
@@ -284,7 +292,7 @@ private class AxisDocumentView: NSView {
 		let index = cachedClipRects.reversed().first { $0.rect.contains(point) }?.index
 		if index != localHoveredIndex {
 			localHoveredIndex = index
-			if index != nil { startPulse() } else { stopPulse() }
+			if index != nil { startPulse() } else { stopPulseIfIdle() }
 			needsDisplay = true
 		}
 	}
@@ -293,8 +301,14 @@ private class AxisDocumentView: NSView {
 		if localHoveredIndex != nil {
 			localHoveredIndex = nil
 		}
-		stopPulse()
+		stopPulseIfIdle()
 		needsDisplay = true
+	}
+
+	fileprivate func stopPulseIfIdle() {
+		if hoveredClipIndex == nil && localHoveredIndex == nil && waveformTasks.isEmpty {
+			stopPulse()
+		}
 	}
 
 	override func magnify(with event: NSEvent) {
@@ -536,12 +550,15 @@ private class AxisDocumentView: NSView {
 	}
 
 	private func reportLoadingState() {
-		let loading = !waveformTasks.isEmpty
-		if loading {
+		let loadingSet = Set(waveformTasks.keys)
+		if !loadingSet.isEmpty {
 			startPulse()
 		} else if hoveredClipIndex == nil && localHoveredIndex == nil {
 			stopPulse()
 		}
 		needsDisplay = true
+		if let onLoadingChanged {
+			DispatchQueue.main.async { onLoadingChanged(loadingSet) }
+		}
 	}
 }

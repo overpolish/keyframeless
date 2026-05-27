@@ -109,7 +109,17 @@ struct AudioPreparer {
 		var audioURLCache: [String: URL] = [:]
 		var prepared: [PreparedSegment] = []
 
+		func cleanup() {
+			for url in sourceFileCache.values { url.stopAccessingSecurityScopedResource() }
+			for url in audioURLCache.values { try? FileManager.default.removeItem(at: url) }
+			for seg in prepared { try? FileManager.default.removeItem(at: seg.tempFileURL) }
+		}
+
 		for segment in segments {
+			if Task.isCancelled {
+				cleanup()
+				throw CancellationError()
+			}
 			let sourceKey = segment.sourceURL?.absoluteString ?? segment.sourceName
 			let channelKey =
 				segment.sourceChannels?.map(String.init).joined(separator: ",") ?? "default"
@@ -147,24 +157,34 @@ struct AudioPreparer {
 			let needsChannelExtract = (segment.sourceChannels?.count ?? 0) > 0
 
 			let audioURL: URL
-			if let cached = audioURLCache[extractKey] {
+			let extractedTrimmedToSegment: Bool
+			let segmentExtractKey =
+				extractKey
+				+ "@\(segment.range.start)-\(segment.range.end)"
+			if let cached = audioURLCache[segmentExtractKey] {
 				audioURL = cached
+				extractedTrimmedToSegment = true
 			} else if !isVideo, !needsChannelExtract,
 				(try? AVAudioFile(
 					forReading: sourceFileURL, commonFormat: .pcmFormatFloat32, interleaved: false
 				)) != nil
 			{
 				audioURL = sourceFileURL
+				extractedTrimmedToSegment = false
 			} else {
-				print("[AudioPreparer] extracting audio from \(sourceFileURL.lastPathComponent)")
+				print(
+					"[AudioPreparer] extracting \(segment.range.start)..\(segment.range.end)s from \(sourceFileURL.lastPathComponent)"
+				)
 				let wavURL = try await extractAudioTrack(
-					from: sourceFileURL, sourceChannels: segment.sourceChannels)
+					from: sourceFileURL, sourceChannels: segment.sourceChannels,
+					timeRange: (segment.range.start, segment.range.duration))
 				let size =
 					(try? FileManager.default.attributesOfItem(atPath: wavURL.path)[.size] as? Int)
 					?? 0
 				print("[AudioPreparer] extracted WAV: \(size) bytes at \(wavURL.lastPathComponent)")
-				audioURLCache[extractKey] = wavURL
+				audioURLCache[segmentExtractKey] = wavURL
 				audioURL = wavURL
+				extractedTrimmedToSegment = true
 			}
 
 			print("[AudioPreparer] opening audioURL: \(audioURL.lastPathComponent)")
@@ -174,11 +194,18 @@ struct AudioPreparer {
 				interleaved: false
 			)
 			let sampleRate = audioFile.fileFormat.sampleRate
-			let startFrame = AVAudioFramePosition(segment.range.start * sampleRate)
-			let endFrame = min(
-				AVAudioFramePosition(segment.range.end * sampleRate),
-				audioFile.length
-			)
+			let startFrame: AVAudioFramePosition
+			let endFrame: AVAudioFramePosition
+			if extractedTrimmedToSegment {
+				startFrame = 0
+				endFrame = audioFile.length
+			} else {
+				startFrame = AVAudioFramePosition(segment.range.start * sampleRate)
+				endFrame = min(
+					AVAudioFramePosition(segment.range.end * sampleRate),
+					audioFile.length
+				)
+			}
 			let frameCount = AVAudioFrameCount(max(0, endFrame - startFrame))
 
 			audioFile.framePosition = max(0, startFrame)

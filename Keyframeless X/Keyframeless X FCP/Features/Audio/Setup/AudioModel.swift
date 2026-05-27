@@ -19,6 +19,7 @@ class AudioModel: ObservableObject {
 	@Published var selectedClips: Set<Int> = []
 	@Published var editSelectedClips: Set<Int>?
 	@Published var dropItems: [FCPXMLParser.DropItem] = []
+	@Published var loadingWaveformIndices: Set<Int> = []
 	@Published var useTimecode: Bool = true
 	@Published var exportWidth: String = ""
 	@Published var exportHeight: String = ""

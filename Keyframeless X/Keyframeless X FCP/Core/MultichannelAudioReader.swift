@@ -89,6 +89,10 @@ enum MultichannelAudioReader {
 		source.reader.startReading()
 		var cumulative = 0
 		while source.reader.status == .reading {
+			if Task.isCancelled {
+				source.reader.cancelReading()
+				throw CancellationError()
+			}
 			guard let sb = source.output.copyNextSampleBuffer() else { break }
 			guard let block = CMSampleBufferGetDataBuffer(sb) else { continue }
 			var length = 0

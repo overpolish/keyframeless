@@ -52,6 +52,11 @@ enum AudioUnitRenderer {
 		let total = input.frameLength
 		let sampleRate = input.format.sampleRate
 		while written < total {
+			if Task.isCancelled {
+				player.stop()
+				engine.stop()
+				throw CancellationError()
+			}
 			let want = min(maxFrames, total - written)
 			guard
 				let chunk = AVAudioPCMBuffer(

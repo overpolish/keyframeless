@@ -9,6 +9,7 @@ import SwiftUI
 struct AudioSetupView: View {
 	@ObservedObject var model: AudioModel
 	@ObservedObject var audioModelManager: AudioModelManager
+	var isProcessing: Bool
 	var onProcess: (_ replaceAll: Bool) -> Void
 	@StateObject private var audioPlayer = AudioPlayer()
 	@State private var dropState: DropState = .idle
@@ -56,7 +57,9 @@ struct AudioSetupView: View {
 	}
 
 	private var processDisabled: Bool {
-		model.selectedClips.isEmpty
+		isProcessing
+			|| !model.selectedClips.isDisjoint(with: model.loadingWaveformIndices)
+			|| model.selectedClips.isEmpty
 			|| audioModelManager.selectedModel == nil
 			|| audioModelManager.downloadingModel != nil
 	}
