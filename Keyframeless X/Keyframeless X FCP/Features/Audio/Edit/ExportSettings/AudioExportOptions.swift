@@ -80,6 +80,10 @@ struct AudioExportOptionsSidebar: View {
 		hasTranscribedSelection && !srtHasOverlaps
 	}
 
+	private var captionPasteBlocked: Bool {
+		captionMode && srtHasOverlaps
+	}
+
 	var body: some View {
 		VStack(alignment: .leading, spacing: KKSpacingLG) {
 			Text("Export Settings")
@@ -100,7 +104,8 @@ struct AudioExportOptionsSidebar: View {
 					PrimaryButton(
 						label: String(localized: "Paste to FCP"),
 						systemImage: "doc.on.clipboard",
-						disabled: !hasTranscribedSelection || !hasAccessibility,
+						disabled: !hasTranscribedSelection || !hasAccessibility
+							|| captionPasteBlocked,
 						fontSize: 11
 					) {
 						if let data = model.buildNativePasteboardData(from: rows) {
@@ -124,8 +129,8 @@ struct AudioExportOptionsSidebar: View {
 					FCPXMLImportButton(
 						action: { model.insertTitle(rows: rows) }
 					)
-					.allowsHitTesting(hasTranscribedSelection)
-					.opacity(hasTranscribedSelection ? 1 : 0.4)
+					.allowsHitTesting(hasTranscribedSelection && !captionPasteBlocked)
+					.opacity(hasTranscribedSelection && !captionPasteBlocked ? 1 : 0.4)
 					SRTExportButton(
 						hasOverlaps: srtHasOverlaps,
 						action: { model.exportSRT(from: rows) }
@@ -151,14 +156,26 @@ struct AudioExportOptionsSidebar: View {
 						.offset(y: -KKSpacingXL - KKSpacingSM)
 					} else if hasTranscribedSelection {
 						if model.captionImportType == .caption {
-							HelperText(
-								String(
-									localized:
-										"When pasting you will need to enable the role in FCP's Timeline Index"
-								),
-								systemImage: "exclamationmark.triangle"
-							)
-							.offset(y: -KKSpacingXL - KKSpacingSM)
+							if captionPasteBlocked {
+								HelperText(
+									String(
+										localized:
+											"Captions cannot be pasted with overlapping clips"
+									),
+									systemImage: "exclamationmark.triangle.fill",
+									warning: true
+								)
+								.offset(y: -KKSpacingXL - KKSpacingSM)
+							} else {
+								HelperText(
+									String(
+										localized:
+											"When pasting you will need to enable the role in FCP's Timeline Index"
+									),
+									systemImage: "exclamationmark.triangle"
+								)
+								.offset(y: -KKSpacingXL - KKSpacingSM)
+							}
 						} else {
 							HelperText(
 								srtHasOverlaps
