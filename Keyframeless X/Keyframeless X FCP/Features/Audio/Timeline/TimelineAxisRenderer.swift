@@ -174,10 +174,15 @@ struct TimelineAxisRenderer {
 			roundedRect: state.rect, cornerWidth: state.cornerRadius,
 			cornerHeight: state.cornerRadius, transform: nil)
 
-		if isSelected || isDimmed || isHoverDimmed {
-			let alpha: CGFloat =
-				isDimmed ? 0.1 : isHoverDimmed ? 0.25 : 0.85
-			ctx.setFillColor(clipColor.withAlphaComponent(alpha).cgColor)
+		if isDimmed {
+			ctx.setStrokeColor(NSColor.secondaryLabelColor.withAlphaComponent(0.15).cgColor)
+			ctx.setLineWidth(1.5)
+			ctx.addPath(path)
+			ctx.strokePath()
+		} else {
+			let alpha: CGFloat = isSelected ? 0.85 : isHoverDimmed ? 0.25 : 0.08
+			let fill: NSColor = isSelected || isHoverDimmed ? clipColor : .secondaryLabelColor
+			ctx.setFillColor(fill.withAlphaComponent(alpha).cgColor)
 			ctx.addPath(path)
 			ctx.fillPath()
 		}
@@ -258,7 +263,7 @@ struct TimelineAxisRenderer {
 		let stride = barWidth + barSpacing
 		let barCount = max(1, Int(waveformRect.width / stride))
 		let centerY = waveformRect.midY
-		let maxHalfHeight = waveformRect.height * 0.35
+		let maxHalfHeight = waveformRect.height * 0.175
 		let color = NSColor.white
 		let cycleSeconds: CGFloat = 4.0
 		ctx.saveGState()

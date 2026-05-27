@@ -15,8 +15,6 @@ struct AudioEditView: View {
 	@State private var hoveredClipIndex: Int?
 	@State private var editingRowID: Int?
 	@State private var clickMonitor: Any?
-	@State private var rowFrames: [Int: CGRect] = [:]
-	@State private var viewportHeight: CGFloat = 0
 	@State private var srtHasOverlaps: Bool = false
 	@State private var srtOverlapRegions: [CaptionBuilder.OverlapRegion] = []
 
@@ -57,11 +55,10 @@ struct AudioEditView: View {
 				return event
 			}
 		}
-		.onReceive(
-			model.objectWillChange
-				.debounce(for: .milliseconds(300), scheduler: RunLoop.main)
-		) { _ in
-			updateSRTOverlaps()
+		.onReceive(model.objectWillChange) { _ in
+			DispatchQueue.main.async {
+				updateSRTOverlaps()
+			}
 		}
 		.onDisappear {
 			player.stop()
@@ -153,6 +150,7 @@ struct AudioEditView: View {
 					} else {
 						ScrollShadowView {
 							ScrollViewReader { proxy in
+								let breaksByRow = predictedBreaksByRow
 								LazyVStack(alignment: .leading, spacing: 0) {
 									HStack {
 										HelperText(
@@ -166,32 +164,8 @@ struct AudioEditView: View {
 										BreakLegend()
 									}
 									.padding(.all, KKSpacingMD)
-									ForEach(transcribedClipGroups, id: \.clipIndex) { group in
-										TranscribedClipSection(
-											group: group,
-											clips: model.audioClips,
-											selectedClips: editSelectedClips,
-											hoveredClipIndex: $hoveredClipIndex,
-											player: player,
-											editingRowID: $editingRowID,
-											sentenceRowIDs: sentenceRowIDs,
-											predictedBreaks: predictedBreaksForGroup(group),
-											onSentenceEdit: { rowID, editedWords in
-												if let idx = rows.firstIndex(where: {
-													$0.id == rowID
-												}) {
-													rows[idx].editedWords = editedWords
-												}
-											},
-											onBreakToggle: { rowID, breaks in
-												if let idx = rows.firstIndex(where: {
-													$0.id == rowID
-												}) {
-													rows[idx].captionBreaks = breaks
-												}
-												updateSRTOverlaps()
-											}
-										)
+									ForEach(flatTranscribedRows) { item in
+										flatRowView(item, breaksByRow: breaksByRow)
 									}
 								}
 								.padding(KKPaddingMD)
@@ -199,27 +173,12 @@ struct AudioEditView: View {
 									.frame(height: 0)
 									.onChange(of: editingRowID) {
 										guard let id = editingRowID else { return }
-										if let frame = rowFrames[id] {
-											let isAbove = frame.minY < 0
-											let isBelow = frame.maxY > viewportHeight
-											guard isAbove || isBelow else { return }
-										}
 										withAnimation {
 											proxy.scrollTo(id, anchor: .center)
 										}
 									}
 							}
 						}
-						.coordinateSpace(name: "editScroll")
-						.onPreferenceChange(RowFrameKey.self) { rowFrames = $0 }
-						.background(
-							GeometryReader { geo in
-								Color.clear.onAppear { viewportHeight = geo.size.height }
-									.onChange(of: geo.size.height) {
-										viewportHeight = geo.size.height
-									}
-							}
-						)
 						.kkPanel()
 					}
 
@@ -284,6 +243,121 @@ struct AudioEditView: View {
 				))
 		}
 		return groups
+	}
+
+	private var flatTranscribedRows: [TranscribedFlatRow] {
+		var result: [TranscribedFlatRow] = []
+		for group in transcribedClipGroups {
+			result.append(TranscribedFlatRow(group: group, kind: .header))
+			for sentence in group.sentences {
+				result.append(TranscribedFlatRow(group: group, kind: .sentence(sentence)))
+			}
+		}
+		return result
+	}
+
+	private var predictedBreaksByRow: [Int: Set<Int>] {
+		var result: [Int: Set<Int>] = [:]
+		for group in transcribedClipGroups {
+			let groupBreaks = predictedBreaksForGroup(group)
+			result.merge(groupBreaks) { $1 }
+		}
+		return result
+	}
+
+	@ViewBuilder
+	private func flatRowView(_ item: TranscribedFlatRow, breaksByRow: [Int: Set<Int>]) -> some View
+	{
+		switch item.kind {
+		case .header:
+			TranscribedClipHeader(
+				clipName: item.group.clipName,
+				clipIndex: item.group.clipIndex,
+				isCompound: item.group.isCompound,
+				containsProfanity: groupContainsProfanity(item.group),
+				selectedClips: editSelectedClips
+			)
+			.padding(.top, KKPaddingMD)
+			.padding(.bottom, KKPaddingXS)
+		case .sentence(let row):
+			sentenceRowView(row: row, predictedBreaks: breaksByRow[row.id] ?? [])
+		}
+	}
+
+	private func sentenceRowView(row: AudioEditRow, predictedBreaks: Set<Int>) -> some View {
+		let clip = model.audioClips[row.clipIndex]
+		return SentenceRow(
+			row: row,
+			clip: clip,
+			player: player,
+			editingRowID: $editingRowID,
+			sentenceRowIDs: sentenceRowIDs,
+			captionBreaks: Set(row.captionBreaks),
+			predictedBreaks: predictedBreaks,
+			onToggleBreak: { wordIndex in
+				guard wordIndex > 0 else { return }
+				TranscriptionStore.shared.toggleCaptionBreak(
+					at: wordIndex, for: clip,
+					sentenceStart: Float(row.sentenceStart))
+				let updated =
+					TranscriptionStore.shared.captionBreakIndices(
+						for: clip, sentenceStart: Float(row.sentenceStart)) ?? []
+				handleBreakToggle(rowID: row.id, breaks: updated)
+			},
+			onEdit: { newText in
+				let store = TranscriptionStore.shared
+				let editedWords: [TranscriptionStore.StoredWord]?
+				if newText == row.text {
+					editedWords = nil
+					store.setEditedWords(
+						nil, for: clip, sentenceStart: Float(row.sentenceStart))
+				} else {
+					editedWords = TranscriptionStore.alignWords(
+						original: row.words, editedText: newText)
+					store.setEditedWords(
+						editedWords, for: clip, sentenceStart: Float(row.sentenceStart))
+				}
+				handleSentenceEdit(rowID: row.id, editedWords: editedWords)
+			},
+			onBreaksEdited: { newBreaks in
+				TranscriptionStore.shared.setCaptionBreakIndices(
+					newBreaks.isEmpty ? nil : newBreaks,
+					for: clip, sentenceStart: Float(row.sentenceStart))
+				handleBreakToggle(rowID: row.id, breaks: newBreaks)
+			},
+			onReset: row.editedWords != nil
+				? {
+					TranscriptionStore.shared.setEditedWords(
+						nil, for: clip, sentenceStart: Float(row.sentenceStart))
+					handleSentenceEdit(rowID: row.id, editedWords: nil)
+				} : nil,
+			showTrailingBreak: false
+		)
+		.id(row.id)
+	}
+
+	private func handleSentenceEdit(rowID: Int, editedWords: [TranscriptionStore.StoredWord]?) {
+		if let idx = rows.firstIndex(where: { $0.id == rowID }) {
+			rows[idx].editedWords = editedWords
+		}
+	}
+
+	private func handleBreakToggle(rowID: Int, breaks: [Int]) {
+		if let idx = rows.firstIndex(where: { $0.id == rowID }) {
+			rows[idx].captionBreaks = breaks
+		}
+		updateSRTOverlaps()
+	}
+
+	private func groupContainsProfanity(_ group: TranscribedClipGroup) -> Bool {
+		let language = AudioSetupSettings.shared.selectedLanguage
+		return group.sentences.contains { row in
+			let words = row.editedWords ?? row.words
+			return words.contains {
+				ProfanityFilter.isProfane(
+					$0.word.trimmingCharacters(in: .whitespaces), language: language)
+			}
+		}
 	}
 
 	private var untranscribedRows: [AudioEditRow] {
