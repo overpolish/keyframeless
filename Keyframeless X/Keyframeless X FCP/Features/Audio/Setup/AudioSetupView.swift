@@ -9,6 +9,7 @@ import SwiftUI
 struct AudioSetupView: View {
 	@ObservedObject var model: AudioModel
 	@ObservedObject var audioModelManager: AudioModelManager
+	var isProcessing: Bool
 	var onProcess: (_ replaceAll: Bool) -> Void
 	@StateObject private var audioPlayer = AudioPlayer()
 	@State private var dropState: DropState = .idle
@@ -49,14 +50,34 @@ struct AudioSetupView: View {
 					disabled: processDisabled,
 					action: { onProcess(false) }
 				)
+				Button {
+					importSRTProjectWide()
+				} label: {
+					Label("Import SRT", systemImage: "square.and.arrow.down")
+						.font(.system(size: 11))
+						.padding(.horizontal, KKPaddingLG)
+						.padding(.vertical, KKSpacingSM)
+						.contentShape(Capsule())
+				}
+				.buttonStyle(.plain)
+				.foregroundStyle(Color.kkWarning)
+				.disabled(model.audioClips.isEmpty)
 			}
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 		.onDisappear { audioPlayer.stop() }
 	}
 
+	private func importSRTProjectWide() {
+		guard let cues = SRTImporter.pickAndParse() else { return }
+		SRTImporter.importProjectWide(into: model, cues: cues)
+		model.stage = .edit
+	}
+
 	private var processDisabled: Bool {
-		model.selectedClips.isEmpty
+		isProcessing
+			|| !model.selectedClips.isDisjoint(with: model.loadingWaveformIndices)
+			|| model.selectedClips.isEmpty
 			|| audioModelManager.selectedModel == nil
 			|| audioModelManager.downloadingModel != nil
 	}
@@ -77,7 +98,7 @@ struct AudioSetupView: View {
 	private func handleDrop(_ doc: XMLDocument) {
 		let clips = FCPXMLParser.audioClips(in: doc)
 		model.audioClips = clips
-		model.selectedClips = Set(clips.indices)
+		model.selectedClips = []
 		model.editSelectedClips = nil
 		model.dropItems = FCPXMLParser.topLevelItems(in: doc)
 		let fmt = FCPXMLParser.projectFormat(in: doc) ?? .default

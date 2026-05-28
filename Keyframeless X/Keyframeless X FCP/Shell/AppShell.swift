@@ -46,13 +46,13 @@ struct AppShell: View {
 						AudioSetupView(
 							model: audioModel,
 							audioModelManager: audioModelManager,
+							isProcessing: processingCoordinator.isProcessing,
 							onProcess: { replaceAll in
+								guard !processingCoordinator.isProcessing else { return }
 								if replaceAll {
 									audioModel.editSelectedClips = nil
 								}
-								withAnimation(.easeInOut(duration: 0.3)) {
-									processingCoordinator.isProcessing = true
-								}
+								processingCoordinator.isProcessing = true
 								processingCoordinator.process(
 									model: audioModel,
 									audioModelManager: audioModelManager,

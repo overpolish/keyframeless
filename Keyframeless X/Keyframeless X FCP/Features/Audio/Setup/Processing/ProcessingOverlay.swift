@@ -13,7 +13,6 @@ struct ProcessingOverlay: View {
 	let onCancel: () -> Void
 
 	@State private var spinAngle: Double = 0
-	@State private var appeared = false
 
 	var body: some View {
 		ZStack {
@@ -31,14 +30,9 @@ struct ProcessingOverlay: View {
 					.foregroundStyle(.secondary)
 					.padding(.top, 24)
 			}
-			.scaleEffect(appeared ? 1 : 0.8)
-			.opacity(appeared ? 1 : 0)
 		}
 		.contentShape(Rectangle())
 		.onAppear {
-			withAnimation(.spring(response: 0.45, dampingFraction: 0.72)) {
-				appeared = true
-			}
 			withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
 				spinAngle = 360
 			}
@@ -59,7 +53,7 @@ struct ProcessingOverlay: View {
 
 	private var progressContent: some View {
 		VStack(spacing: KKSpacingSM) {
-			Text(statusLabel)
+			Text(statusLabel.isEmpty ? String(localized: "Preparing…") : statusLabel)
 				.font(.system(size: 14, weight: .medium))
 			if let progress {
 				let clamped = max(0, min(1, progress))

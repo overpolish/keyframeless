@@ -19,26 +19,87 @@ class TranscriptionStore {
 		let sourceName: String
 		let sourceStart: Double
 		let sourceDuration: Double
+		let timelineStart: Double
 
 		init(clip: FCPXMLParser.AudioClip) {
-			self.sourceName = clip.url?.lastPathComponent ?? clip.name
+			self.sourceName = clip.url?.path ?? clip.name
 			self.sourceStart = clip.sourceStart
 			self.sourceDuration = clip.sourceDuration
+			self.timelineStart = clip.start
 		}
 	}
 
 	private var entries: [ClipKey: [StoredWord]] = [:]
 	private var sentenceEdits: [ClipKey: [String: [StoredWord]]] = [:]
 	private var captionBreaks: [ClipKey: [String: [Int]]] = [:]
+	private var srtCueStore: [ClipKey: [SRTCue]] = [:]
 
 	private init() {
 		load()
 		loadEdits()
 		loadBreaks()
+		loadSrtCues()
+	}
+
+	static func syntheticProjectWideClip(projectKey: String) -> FCPXMLParser.AudioClip {
+		FCPXMLParser.AudioClip(
+			name: "project:\(projectKey)",
+			start: 0, end: 0,
+			sourceStart: 0, sourceDuration: 0,
+			url: nil, bookmark: nil,
+			isCompound: false,
+			volumeCurve: nil, fadeIn: nil, fadeOut: nil,
+			auFilters: nil, sourceChannels: nil, unhandledAdjustments: nil,
+			outer: nil
+		)
 	}
 
 	func words(for clip: FCPXMLParser.AudioClip) -> [StoredWord]? {
 		entries[ClipKey(clip: clip)]
+	}
+
+	func srtCues(for clip: FCPXMLParser.AudioClip) -> [SRTCue]? {
+		srtCueStore[ClipKey(clip: clip)]
+	}
+
+	func storeSrtCues(_ cues: [SRTCue], for clip: FCPXMLParser.AudioClip) {
+		srtCueStore[ClipKey(clip: clip)] = cues
+		saveSrtCues()
+	}
+
+	func removeSrtCues(for clip: FCPXMLParser.AudioClip) {
+		srtCueStore[ClipKey(clip: clip)] = nil
+		saveSrtCues()
+	}
+
+	func projectWideSrtCues(projectKey: String) -> [SRTCue]? {
+		srtCues(for: Self.syntheticProjectWideClip(projectKey: projectKey))
+	}
+
+	func storeProjectWideSrtCues(_ cues: [SRTCue], projectKey: String) {
+		storeSrtCues(cues, for: Self.syntheticProjectWideClip(projectKey: projectKey))
+	}
+
+	func removeProjectWideSrtCues(projectKey: String) {
+		removeSrtCues(for: Self.syntheticProjectWideClip(projectKey: projectKey))
+	}
+
+	func removeWords(for clip: FCPXMLParser.AudioClip) {
+		let key = ClipKey(clip: clip)
+		entries[key] = nil
+		sentenceEdits[key] = nil
+		captionBreaks[key] = nil
+		save()
+		saveEdits()
+		saveBreaks()
+	}
+
+	func isSrtImported(_ clip: FCPXMLParser.AudioClip) -> Bool {
+		srtCueStore[ClipKey(clip: clip)] != nil
+	}
+
+	func isTranscribed(_ clip: FCPXMLParser.AudioClip) -> Bool {
+		entries[ClipKey(clip: clip)] != nil || srtCueStore[ClipKey(clip: clip)] != nil
 	}
 
 	func editedWords(
@@ -243,8 +304,10 @@ class TranscriptionStore {
 	func removeAll() {
 		entries = [:]
 		captionBreaks = [:]
+		srtCueStore = [:]
 		save()
 		saveBreaks()
+		saveSrtCues()
 	}
 
 	private func load() {
@@ -273,6 +336,16 @@ class TranscriptionStore {
 
 	private func saveBreaks() {
 		KKStore.save(captionBreaks, to: "transcription_breaks.json")
+	}
+
+	private func loadSrtCues() {
+		srtCueStore =
+			KKStore.load([ClipKey: [SRTCue]].self, from: "transcription_srt.json")
+			?? [:]
+	}
+
+	private func saveSrtCues() {
+		KKStore.save(srtCueStore, to: "transcription_srt.json")
 	}
 
 }

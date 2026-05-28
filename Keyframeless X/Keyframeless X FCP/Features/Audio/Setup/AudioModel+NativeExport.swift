@@ -10,6 +10,47 @@ extension AudioModel {
 	func buildNativePasteboardData(from rows: [AudioEditRow]) -> Data? {
 		let segments = buildCaptionSegments(from: rows)
 
+		if captionImportType == .caption {
+			// Native captions are single-line (multi-line text breaks CEA-608's character grid),
+			// so collapse the segment's line breaks into one line. CEA-608 additionally caps a row
+			// at 32 columns, so split long segments to fit.
+			var capSegments: [CaptionSegment]
+			if captionFormat == .cea608 {
+				let maxLines = captionStyle.captionLines == .two ? 2 : 1
+				let split = CaptionBuilder.splitCEA608Multiline(
+					segments, maxCharsPerLine: 32, maxLines: maxLines)
+				let merged = CaptionBuilder.mergeOrphansCEA608(
+					split, maxCharsPerLine: 32, maxLines: maxLines,
+					maxWordsPerLine: Int(captionStyle.maxWordsPerLine))
+				let timed = CEA608TimingValidator.adjusted(
+					merged, frameDuration: exportFramerate.rawValue)
+				// Trim same-clip overlaps the validator's asymmetric pushes may have re-introduced.
+				// Trim, not push, so start times stay anchored to speech timing; cross-clip overlaps
+				// (e.g. simultaneous speakers across two audio clips) are preserved.
+				capSegments = CaptionBuilder.enforceSequentialPerClip(timed)
+			} else {
+				capSegments = CaptionBuilder.enforceSequentialPerClip(segments)
+			}
+			// buildCaptionSegments applies noGaps before splitting/validation; the CEA-608
+			// validator then pushes start times later for SCC byte-pair compliance, which
+			// reopens gaps. Re-close after the pipeline so the user-visible result honors
+			// noGaps regardless of format (extending end to next start; the gap the validator
+			// opened lives at next.start, not after it).
+			if captionStyle.noGaps {
+				capSegments = CaptionBuilder.closeAllGaps(capSegments)
+			}
+			// All formats use \n between rows: iTT/SRT render embedded \n in the attributed
+			// string as a real line break; CEA-608's grid layout is row-by-row (cellY per row)
+			// so the pasteboard builder fans \n-delimited text into one PC per row.
+			let entries = capSegments.map {
+				FCPCaptionPasteboardBuilder.Entry(
+					text: $0.lines.joined(separator: "\n"),
+					startTime: $0.startTime, duration: $0.endTime - $0.startTime)
+			}
+			return FCPCaptionPasteboardBuilder.build(
+				captions: entries, format: captionFormat, frameDuration: exportFramerate.rawValue)
+		}
+
 		func makeTitleEntry(_ segment: CaptionSegment) -> FCPNativePasteboardBuilder.TitleEntry {
 			FCPNativePasteboardBuilder.TitleEntry(
 				displayName: segment.lines.first ?? "",
@@ -29,10 +70,10 @@ extension AudioModel {
 			storylines = sortedClipIndices.map { clipIdx in
 				grouped[clipIdx]!.map(makeTitleEntry)
 			}
-			clipStarts = sortedClipIndices.map { audioClips[$0].start }
+			clipStarts = Array(repeating: 0, count: sortedClipIndices.count)
 		} else {
 			storylines = [segments.map(makeTitleEntry)]
-			clipStarts = nil
+			clipStarts = [0]
 		}
 		let font = FCPXMLBuilder.fontInfo(postScriptName: textStyle.textFont)
 		let style = FCPNativePasteboardBuilder.Style(

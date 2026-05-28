@@ -54,7 +54,14 @@ class AudioProcessingCoordinator: ObservableObject {
 		processingTask = Task { [weak self] in
 			guard let self else { return }
 			do {
-				let prepared = try await AudioPreparer.extractAudio(for: segments)
+				let extractTask = Task.detached(priority: .userInitiated) {
+					try await AudioPreparer.extractAudio(for: segments)
+				}
+				let prepared = try await withTaskCancellationHandler {
+					try await extractTask.value
+				} onCancel: {
+					extractTask.cancel()
+				}
 				let results = try await self.transcriber.transcribe(
 					segments: prepared,
 					modelVariant: modelVariant,

@@ -10,7 +10,7 @@ enum AppTab: CaseIterable {
 
 	var label: String {
 		switch self {
-		case .audio: String(localized: "Audio")
+		case .audio: String(localized: "Steno")
 		}
 	}
 

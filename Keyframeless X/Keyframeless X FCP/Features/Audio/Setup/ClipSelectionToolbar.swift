@@ -10,41 +10,47 @@ struct ClipSelectionToolbar: View {
 	let clips: [FCPXMLParser.AudioClip]
 	@Binding var selectedClips: Set<Int>
 	var allowedIndices: Set<Int>?
+	var showOverlapsLegend: Bool = false
 
 	var body: some View {
 		let allowed = allowedIndices ?? Set(clips.indices)
 		let hasMain = allowed.contains { !clips[$0].isCompound }
 		let hasCompound = allowed.contains { clips[$0].isCompound }
 
-		ToolbarGroup {
-			if hasMain {
-				ClipTypeFilterButton(label: String(localized: "Main"), color: Color.kkAccent) {
-					selectedClips = allowed.filter { !clips[$0].isCompound }
-				}
-				ToolbarDivider()
+		HStack(spacing: KKSpacingLG) {
+			if showOverlapsLegend {
+				OverlapsLegend()
 			}
-			if hasCompound {
-				ClipTypeFilterButton(
-					label: String(localized: "Compound"), color: Color.kkCompoundAccent
+			ToolbarGroup {
+				if hasMain {
+					ClipTypeFilterButton(label: String(localized: "Main"), color: Color.kkAccent) {
+						selectedClips = allowed.filter { !clips[$0].isCompound }
+					}
+					ToolbarDivider()
+				}
+				if hasCompound {
+					ClipTypeFilterButton(
+						label: String(localized: "Compound"), color: Color.kkCompoundAccent
+					) {
+						selectedClips = allowed.filter { clips[$0].isCompound }
+					}
+					ToolbarDivider()
+				}
+				ClipActionButton(
+					label: String(localized: "Select All"),
+					systemImage: "checkmark.rectangle.stack.fill"
 				) {
-					selectedClips = allowed.filter { clips[$0].isCompound }
+					selectedClips = allowed
 				}
 				ToolbarDivider()
+				ClipActionButton(
+					label: String(localized: "Deselect All"), systemImage: "rectangle.stack"
+				) {
+					selectedClips = []
+				}
 			}
-			ClipActionButton(
-				label: String(localized: "Select All"),
-				systemImage: "checkmark.rectangle.stack.fill"
-			) {
-				selectedClips = allowed
-			}
-			ToolbarDivider()
-			ClipActionButton(
-				label: String(localized: "Deselect All"), systemImage: "rectangle.stack"
-			) {
-				selectedClips = []
-			}
+			.disabled(clips.isEmpty)
 		}
-		.disabled(clips.isEmpty)
 	}
 }
 
@@ -67,6 +73,42 @@ private struct ClipTypeFilterButton: View {
 			}
 		}
 		.buttonStyle(.plain)
+	}
+}
+
+private struct OverlapsLegend: View {
+	var body: some View {
+		HStack(spacing: KKSpacingMD) {
+			DiagonalStripesSwatch()
+				.frame(width: 14, height: 10)
+			Text("Overlaps")
+				.font(.caption2)
+				.foregroundStyle(.secondary)
+		}
+	}
+}
+
+private struct DiagonalStripesSwatch: View {
+	var body: some View {
+		Canvas { ctx, size in
+			let stripeWidth: CGFloat = 2
+			let stripeSpacing: CGFloat = 1.5
+			let stride = stripeWidth + stripeSpacing
+			let diagonal = size.width + size.height
+			let color = Color(nsColor: NSColor.error().withAlphaComponent(0.55))
+			var offset: CGFloat = -size.height
+			while offset < diagonal {
+				var path = Path()
+				path.move(to: CGPoint(x: offset, y: size.height))
+				path.addLine(to: CGPoint(x: offset + stripeWidth, y: size.height))
+				path.addLine(to: CGPoint(x: offset + size.height + stripeWidth, y: 0))
+				path.addLine(to: CGPoint(x: offset + size.height, y: 0))
+				path.closeSubpath()
+				ctx.fill(path, with: .color(color))
+				offset += stride
+			}
+		}
+		.clipShape(RoundedRectangle(cornerRadius: 2))
 	}
 }
 

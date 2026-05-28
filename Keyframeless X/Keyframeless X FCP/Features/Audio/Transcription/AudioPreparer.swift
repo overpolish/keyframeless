@@ -28,6 +28,7 @@ struct AudioPreparer {
 		let sourceName: String
 		let range: SourceRange
 		let clipMappings: [ClipMapping]
+		let sourceChannels: [Int]?
 	}
 
 	struct ClipMapping {
@@ -35,6 +36,10 @@ struct AudioPreparer {
 		let offsetInSegment: Double
 		let clipSourceStart: Double
 		let clipSourceDuration: Double
+		let volumeCurve: [FCPXMLParser.VolumePoint]?
+		let fadeIn: FCPXMLParser.FadeSpec?
+		let fadeOut: FCPXMLParser.FadeSpec?
+		let outer: FCPXMLParser.OuterCompound?
 	}
 
 	static let mergeThreshold: Double = 5.0
@@ -51,7 +56,9 @@ struct AudioPreparer {
 		}
 
 		let grouped = Dictionary(grouping: selected) { _, clip in
-			clip.url?.absoluteString ?? clip.name
+			let channelKey =
+				clip.sourceChannels?.map(String.init).joined(separator: ",") ?? "default"
+			return (clip.url?.absoluteString ?? clip.name) + "#" + channelKey
 		}
 
 		var segments: [ProcessingSegment] = []
@@ -75,7 +82,11 @@ struct AudioPreparer {
 						clipIndex: idx,
 						offsetInSegment: clip.sourceStart - mergedRange.start,
 						clipSourceStart: clip.sourceStart,
-						clipSourceDuration: clip.sourceDuration
+						clipSourceDuration: clip.sourceDuration,
+						volumeCurve: clip.volumeCurve,
+						fadeIn: clip.fadeIn,
+						fadeOut: clip.fadeOut,
+						outer: clip.outer
 					)
 				}
 				segments.append(
@@ -84,7 +95,8 @@ struct AudioPreparer {
 						bookmark: representative.bookmark,
 						sourceName: representative.name,
 						range: mergedRange,
-						clipMappings: mappings
+						clipMappings: mappings,
+						sourceChannels: representative.sourceChannels
 					)
 				)
 			}
@@ -99,14 +111,27 @@ struct AudioPreparer {
 		var audioURLCache: [String: URL] = [:]
 		var prepared: [PreparedSegment] = []
 
+		func cleanup() {
+			for url in sourceFileCache.values { url.stopAccessingSecurityScopedResource() }
+			for url in audioURLCache.values { try? FileManager.default.removeItem(at: url) }
+			for seg in prepared { try? FileManager.default.removeItem(at: seg.tempFileURL) }
+		}
+
 		for segment in segments {
-			let cacheKey = segment.sourceURL?.absoluteString ?? segment.sourceName
+			if Task.isCancelled {
+				cleanup()
+				throw CancellationError()
+			}
+			let sourceKey = segment.sourceURL?.absoluteString ?? segment.sourceName
+			let channelKey =
+				segment.sourceChannels?.map(String.init).joined(separator: ",") ?? "default"
+			let extractKey = sourceKey + "#" + channelKey
 
 			print(
-				"[AudioPreparer] segment: bookmark=\(segment.bookmark != nil), url=\(segment.sourceURL?.lastPathComponent ?? "nil")"
+				"[AudioPreparer] segment: bookmark=\(segment.bookmark != nil), url=\(segment.sourceURL?.lastPathComponent ?? "nil") channels=\(channelKey)"
 			)
 			let sourceFileURL: URL
-			if let cached = sourceFileCache[cacheKey] {
+			if let cached = sourceFileCache[sourceKey] {
 				sourceFileURL = cached
 			} else if let bookmark = segment.bookmark,
 				let scopedURL = {
@@ -119,10 +144,10 @@ struct AudioPreparer {
 				}()
 			{
 				_ = scopedURL.startAccessingSecurityScopedResource()
-				sourceFileCache[cacheKey] = scopedURL
+				sourceFileCache[sourceKey] = scopedURL
 				sourceFileURL = scopedURL
 			} else if let url = segment.sourceURL {
-				sourceFileCache[cacheKey] = url
+				sourceFileCache[sourceKey] = url
 				sourceFileURL = url
 			} else {
 				throw CocoaError(.fileNoSuchFile)
@@ -131,25 +156,37 @@ struct AudioPreparer {
 			let videoExtensions: Set<String> = ["mp4", "mov", "m4v", "mxf", "mts", "avi"]
 			let isVideo = videoExtensions.contains(
 				sourceFileURL.pathExtension.lowercased())
+			let needsChannelExtract = (segment.sourceChannels?.count ?? 0) > 0
 
 			let audioURL: URL
-			if let cached = audioURLCache[cacheKey] {
+			let extractedTrimmedToSegment: Bool
+			let segmentExtractKey =
+				extractKey
+				+ "@\(segment.range.start)-\(segment.range.end)"
+			if let cached = audioURLCache[segmentExtractKey] {
 				audioURL = cached
-			} else if !isVideo,
+				extractedTrimmedToSegment = true
+			} else if !isVideo, !needsChannelExtract,
 				(try? AVAudioFile(
 					forReading: sourceFileURL, commonFormat: .pcmFormatFloat32, interleaved: false
 				)) != nil
 			{
 				audioURL = sourceFileURL
+				extractedTrimmedToSegment = false
 			} else {
-				print("[AudioPreparer] extracting audio from \(sourceFileURL.lastPathComponent)")
-				let wavURL = try await extractAudioTrack(from: sourceFileURL)
+				print(
+					"[AudioPreparer] extracting \(segment.range.start)..\(segment.range.end)s from \(sourceFileURL.lastPathComponent)"
+				)
+				let wavURL = try await extractAudioTrack(
+					from: sourceFileURL, sourceChannels: segment.sourceChannels,
+					timeRange: (segment.range.start, segment.range.duration))
 				let size =
 					(try? FileManager.default.attributesOfItem(atPath: wavURL.path)[.size] as? Int)
 					?? 0
 				print("[AudioPreparer] extracted WAV: \(size) bytes at \(wavURL.lastPathComponent)")
-				audioURLCache[cacheKey] = wavURL
+				audioURLCache[segmentExtractKey] = wavURL
 				audioURL = wavURL
+				extractedTrimmedToSegment = true
 			}
 
 			print("[AudioPreparer] opening audioURL: \(audioURL.lastPathComponent)")
@@ -159,11 +196,18 @@ struct AudioPreparer {
 				interleaved: false
 			)
 			let sampleRate = audioFile.fileFormat.sampleRate
-			let startFrame = AVAudioFramePosition(segment.range.start * sampleRate)
-			let endFrame = min(
-				AVAudioFramePosition(segment.range.end * sampleRate),
-				audioFile.length
-			)
+			let startFrame: AVAudioFramePosition
+			let endFrame: AVAudioFramePosition
+			if extractedTrimmedToSegment {
+				startFrame = 0
+				endFrame = audioFile.length
+			} else {
+				startFrame = AVAudioFramePosition(segment.range.start * sampleRate)
+				endFrame = min(
+					AVAudioFramePosition(segment.range.end * sampleRate),
+					audioFile.length
+				)
+			}
 			let frameCount = AVAudioFrameCount(max(0, endFrame - startFrame))
 
 			audioFile.framePosition = max(0, startFrame)
@@ -180,6 +224,13 @@ struct AudioPreparer {
 				continue
 			}
 			try audioFile.read(into: buffer, frameCount: frameCount)
+
+			applyVolumeCurves(
+				buffer: buffer,
+				segmentStart: segment.range.start,
+				sampleRate: sampleRate,
+				mappings: segment.clipMappings
+			)
 
 			let whisperBuffer = try resampleToWhisperFormat(buffer: buffer)
 
@@ -226,64 +277,12 @@ struct AudioPreparer {
 		return prepared
 	}
 
-	private static func extractAudioTrack(from url: URL) async throws -> URL {
-		let asset = AVURLAsset(url: url)
-		guard let track = try await asset.loadTracks(withMediaType: .audio).first else {
-			throw NSError(domain: "AudioPreparer", code: 10)
-		}
-
-		let reader = try AVAssetReader(asset: asset)
-		let readerOutput = AVAssetReaderTrackOutput(
-			track: track,
-			outputSettings: [
-				AVFormatIDKey: kAudioFormatLinearPCM,
-				AVLinearPCMBitDepthKey: 32,
-				AVLinearPCMIsFloatKey: true,
-				AVLinearPCMIsBigEndianKey: false,
-				AVLinearPCMIsNonInterleaved: false,
-				AVNumberOfChannelsKey: 1,
-			])
-		reader.add(readerOutput)
-
-		let wavURL = FileManager.default.temporaryDirectory
-			.appendingPathComponent("kk_extracted_\(UUID().uuidString).wav")
-		let writer = try AVAssetWriter(outputURL: wavURL, fileType: .wav)
-		let writerInput = AVAssetWriterInput(
-			mediaType: .audio,
-			outputSettings: [
-				AVFormatIDKey: kAudioFormatLinearPCM,
-				AVLinearPCMBitDepthKey: 16,
-				AVLinearPCMIsFloatKey: false,
-				AVLinearPCMIsBigEndianKey: false,
-				AVLinearPCMIsNonInterleaved: false,
-				AVNumberOfChannelsKey: 1,
-				AVSampleRateKey: 48000,
-			])
-		writer.add(writerInput)
-
-		reader.startReading()
-		writer.startWriting()
-		writer.startSession(atSourceTime: .zero)
-
-		while reader.status == .reading {
-			if let buffer = readerOutput.copyNextSampleBuffer() {
-				while !writerInput.isReadyForMoreMediaData {
-					try await Task.sleep(nanoseconds: 10_000_000)
-				}
-				writerInput.append(buffer)
-			} else {
-				break
-			}
-		}
-
-		writerInput.markAsFinished()
-		await writer.finishWriting()
-
-		guard writer.status == .completed else {
-			throw writer.error ?? NSError(domain: "AudioPreparer", code: 12)
-		}
-
-		return wavURL
+	static func extractAudioTrack(
+		from url: URL, sourceChannels: [Int]? = nil,
+		timeRange: (start: Double, duration: Double)? = nil
+	) async throws -> URL {
+		try await AssetAudioExtractor.extract(
+			from: url, sourceChannels: sourceChannels, timeRange: timeRange)
 	}
 
 	static func cleanUp(segments: [PreparedSegment]) {
@@ -292,44 +291,26 @@ struct AudioPreparer {
 		}
 	}
 
-	private static let whisperSampleRate: Double = 16000
+	static func applyVolumeCurves(
+		buffer: AVAudioPCMBuffer, segmentStart: Double, sampleRate: Double,
+		mappings: [ClipMapping]
+	) {
+		AudioBufferProcessing.applyVolumeCurves(
+			buffer: buffer, segmentStart: segmentStart, sampleRate: sampleRate,
+			mappings: mappings)
+	}
+
+	static func fadeMultiplier(
+		clipLocal tc: Double, duration: Double,
+		fadeIn: FCPXMLParser.FadeSpec?, fadeOut: FCPXMLParser.FadeSpec?
+	) -> Float {
+		AudioBufferProcessing.fadeMultiplier(
+			clipLocal: tc, duration: duration, fadeIn: fadeIn, fadeOut: fadeOut)
+	}
 
 	private static func resampleToWhisperFormat(buffer: AVAudioPCMBuffer) throws -> AVAudioPCMBuffer
 	{
-		guard
-			let monoFormat = AVAudioFormat(
-				commonFormat: .pcmFormatFloat32,
-				sampleRate: whisperSampleRate,
-				channels: 1,
-				interleaved: false
-			)
-		else { throw NSError(domain: "AudioPreparer", code: 1) }
-
-		if buffer.format.sampleRate == whisperSampleRate && buffer.format.channelCount == 1 {
-			return buffer
-		}
-
-		guard let converter = AVAudioConverter(from: buffer.format, to: monoFormat) else {
-			throw NSError(domain: "AudioPreparer", code: 2)
-		}
-
-		let ratio = whisperSampleRate / buffer.format.sampleRate
-		let outputFrameCount = AVAudioFrameCount(Double(buffer.frameLength) * ratio)
-		guard
-			let outputBuffer = AVAudioPCMBuffer(
-				pcmFormat: monoFormat,
-				frameCapacity: outputFrameCount
-			)
-		else { throw NSError(domain: "AudioPreparer", code: 3) }
-
-		var error: NSError?
-		converter.convert(to: outputBuffer, error: &error) { _, outStatus in
-			outStatus.pointee = .haveData
-			return buffer
-		}
-		if let error { throw error }
-
-		return outputBuffer
+		try AssetAudioExtractor.resampleToWhisperFormat(buffer: buffer)
 	}
 
 	static func mergeRanges(

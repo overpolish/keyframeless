@@ -10,6 +10,7 @@ import UniformTypeIdentifiers
 struct CaptionTemplatePicker: View {
 	@ObservedObject var model: AudioModel
 	let templates: [CaptionTemplate]
+	var hidePerWord: Bool = false
 	var onDropMoti: ((URL) -> Void)?
 	var onRemoveCustom: ((CaptionTemplate) -> Void)?
 
@@ -34,10 +35,13 @@ struct CaptionTemplatePicker: View {
 
 	private func filtered(_ list: [CaptionTemplate]) -> [CaptionTemplate] {
 		var result = list
+		if hidePerWord {
+			result = result.filter { !$0.supportsPerWordAnimation }
+		}
 		if showFavoritesOnly {
 			result = result.filter { favorites.contains($0.id) }
 		}
-		if showPerWordOnly {
+		if showPerWordOnly && !hidePerWord {
 			result = result.filter { $0.supportsPerWordAnimation }
 		}
 		if !searchText.isEmpty {
@@ -60,7 +64,10 @@ struct CaptionTemplatePicker: View {
 	private var filteredCommunityTemplates: [CommunityTemplate] {
 		let installedNames = Set(keyframelessTemplates.map { $0.name })
 		var result = communityStore.templates.filter { !installedNames.contains($0.name) }
-		if showPerWordOnly {
+		if hidePerWord {
+			result = result.filter { !$0.perWord }
+		}
+		if showPerWordOnly && !hidePerWord {
 			result = result.filter { $0.perWord }
 		}
 		if !searchText.isEmpty {
@@ -120,20 +127,22 @@ struct CaptionTemplatePicker: View {
 						.contentShape(Rectangle())
 				}
 				.buttonStyle(.plain)
-				Button {
-					showPerWordOnly.toggle()
-				} label: {
-					Image(systemName: "directcurrent")
-						.font(.system(size: 11))
-						.foregroundStyle(
-							showPerWordOnly
-								? .green
-								: .secondary
-						)
-						.frame(maxHeight: .infinity)
-						.contentShape(Rectangle())
+				if !hidePerWord {
+					Button {
+						showPerWordOnly.toggle()
+					} label: {
+						Image(systemName: "directcurrent")
+							.font(.system(size: 11))
+							.foregroundStyle(
+								showPerWordOnly
+									? .green
+									: .secondary
+							)
+							.frame(maxHeight: .infinity)
+							.contentShape(Rectangle())
+					}
+					.buttonStyle(.plain)
 				}
-				.buttonStyle(.plain)
 				Button {
 					showCommunity.toggle()
 				} label: {
@@ -160,6 +169,12 @@ struct CaptionTemplatePicker: View {
 				}
 				.buttonStyle(.plain)
 				Spacer()
+				if hidePerWord {
+					HelperText(
+						String(localized: "SRT captions don't support per-word templates"),
+						systemImage: "info.circle"
+					)
+				}
 				if let downloadError {
 					HStack(spacing: 4) {
 						Image(systemName: "exclamationmark.triangle.fill")
@@ -249,7 +264,11 @@ struct CaptionTemplatePicker: View {
 				.frame(width: 200)
 			}
 		}
-		.onAppear { communityStore.fetch() }
+		.onAppear {
+			communityStore.fetch()
+			fallbackFromPerWordIfNeeded()
+		}
+		.onChange(of: hidePerWord) { fallbackFromPerWordIfNeeded() }
 		.onChange(of: communityStore.templates.map(\.id)) {
 			reconcileCommunityParams()
 		}
@@ -343,6 +362,13 @@ struct CaptionTemplatePicker: View {
 				wordsInParamName: nil, wordsInKeyPath: nil,
 				isBuiltIn: false, isCustom: false)
 		model.updateModalTemplate = (template, community)
+	}
+
+	private func fallbackFromPerWordIfNeeded() {
+		guard hidePerWord, model.selectedTemplate.supportsPerWordAnimation else { return }
+		if let fallback = templates.first(where: { !$0.supportsPerWordAnimation }) {
+			model.selectedTemplate = fallback
+		}
 	}
 
 	private func reconcileCommunityParams() {

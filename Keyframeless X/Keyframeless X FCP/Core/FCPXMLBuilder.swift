@@ -169,6 +169,104 @@ enum FCPXMLBuilder {
 		return xml
 	}
 
+	static func buildNativeCaptions(
+		segments: [CaptionSegment],
+		format: ExportFormat,
+		role: String,
+		captionFormat: CaptionFormat
+	) -> String {
+		guard !segments.isEmpty else { return emptyXML(format: format) }
+
+		let frameRate = parseFrameDuration(format.frameDuration)
+		let sorted = segments.sorted { $0.startTime < $1.startTime }
+		let lastEnd = sorted.map(\.endTime).max() ?? 0
+		// Pad the project duration so the last caption isn't flush against project end (FCP's
+		// "caption occurs too close to the end of the project" rule wants at least 1 frame of
+		// headroom). Match the inter-caption safety margin so all CEA-608 timing constraints clear.
+		let endBufferFrames = 4
+		let lastEndFrames = frames(seconds: lastEnd, frameRate: frameRate)
+		let totalDurationFrames = lastEndFrames + endBufferFrames
+		let totalDuration = rationalFromFrames(totalDurationFrames, frameRate: frameRate)
+		let escapedRole = xmlEscape(role)
+
+		var xml = ""
+		xml.reserveCapacity(segments.count * 256 + 512)
+		xml += "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+		xml += "<!DOCTYPE fcpxml>\n"
+		xml += "<fcpxml version=\"1.11\">\n"
+		xml += "\t<resources>\n"
+		xml +=
+			"\t\t<format id=\"r1\" frameDuration=\"\(format.frameDuration)\" width=\"\(format.width)\" height=\"\(format.height)\" colorSpace=\"1-1-1 (Rec. 709)\" />\n"
+		xml += "\t</resources>\n"
+		xml += "\t<library>\n"
+		xml += "\t\t<event name=\"Captions\">\n"
+		xml += "\t\t\t<project name=\"Captions\">\n"
+		xml +=
+			"\t\t\t\t<sequence format=\"r1\" duration=\"\(totalDuration)\" tcStart=\"0s\" tcFormat=\"NDF\" audioLayout=\"stereo\" audioRate=\"48k\">\n"
+		xml += "\t\t\t\t\t<spine>\n"
+		xml += "\t\t\t\t\t\t<gap name=\"placeholder\" duration=\"\(totalDuration)\" start=\"0s\">\n"
+
+		var tsCounter = 0
+		for segment in sorted {
+			tsCounter += 1
+			let tsID = "cts\(tsCounter)"
+			let startFrames = frames(seconds: segment.startTime, frameRate: frameRate)
+			let endFrames = frames(seconds: segment.endTime, frameRate: frameRate)
+			let offset = rationalFromFrames(startFrames, frameRate: frameRate)
+			let duration = rationalFromFrames(max(1, endFrames - startFrames), frameRate: frameRate)
+			// Trim per-row trailing whitespace before joining. CaptionBuilder + cascade-merge
+			// can leave a space at the row tail (32-col rows are sometimes filled to exactly 32
+			// including a trailing space); a joined "row1 \n row2" expands to "row1  row2" or
+			// pushes the line past CEA-608's 32-col grid, which FCP then truncates ("clip"→"clp").
+			// All formats use \n: iTT/SRT render it as a real line break; CEA-608's FCPXML
+			// importer treats it as a row break in the grid (vs " " which spills past 32 cols).
+			let trimmedLines = segment.lines
+				.map { $0.trimmingCharacters(in: CharacterSet.whitespaces) }
+			let line = trimmedLines.joined(separator: "\n")
+			let nameSource = trimmedLines.joined(separator: " ")
+			let name = xmlEscape(nameSource)
+			// CEA-608-specific text attributes verified against a roundtrip export from FCP.
+			// `position="cellX cellY"` is the top-left grid cell of the caption box: cellX is
+			// derived from the longest line (max(0, 30 - maxLineLen) - matches FCP's own
+			// formula); cellY anchors the box at the bottom of the grid (16 - rowCount, so
+			// 1 row→15, 2 rows→14). `display-style="pop-on"` + `alignment="left"` are the
+			// standard CEA-608 presentation defaults FCP uses. Without these, FCP's import-
+			// side validator rejects/mangles multi-row captions even when the text fits.
+			let textAttrs: String
+			if captionFormat == .cea608 {
+				let maxLineLen = trimmedLines.map { $0.count }.max() ?? 0
+				let cellX = max(0, 30 - maxLineLen)
+				let cellY = 16 - max(1, trimmedLines.count)
+				textAttrs =
+					" display-style=\"pop-on\" position=\"\(cellX) \(cellY)\" alignment=\"left\""
+			} else {
+				textAttrs = ""
+			}
+			let backgroundColor = captionFormat == .cea608 ? "0 0 0 1" : "0 0 0 0"
+			let fontName = captionFormat == .cea608 ? ".AppleSystemUIFont" : "Helvetica"
+			xml +=
+				"\t\t\t\t\t\t\t<caption lane=\"1\" offset=\"\(offset)\" name=\"\(name)\" duration=\"\(duration)\" role=\"\(escapedRole)\">\n"
+			xml += "\t\t\t\t\t\t\t\t<text\(textAttrs)>\n"
+			xml +=
+				"\t\t\t\t\t\t\t\t\t<text-style ref=\"\(tsID)\">\(xmlEscape(line))</text-style>\n"
+			xml += "\t\t\t\t\t\t\t\t</text>\n"
+			xml += "\t\t\t\t\t\t\t\t<text-style-def id=\"\(tsID)\">\n"
+			xml +=
+				"\t\t\t\t\t\t\t\t\t<text-style font=\"\(fontName)\" fontSize=\"13\" fontFace=\"Regular\" fontColor=\"1 1 1 1\" backgroundColor=\"\(backgroundColor)\" />\n"
+			xml += "\t\t\t\t\t\t\t\t</text-style-def>\n"
+			xml += "\t\t\t\t\t\t\t</caption>\n"
+		}
+
+		xml += "\t\t\t\t\t\t</gap>\n"
+		xml += "\t\t\t\t\t</spine>\n"
+		xml += "\t\t\t\t</sequence>\n"
+		xml += "\t\t\t</project>\n"
+		xml += "\t\t</event>\n"
+		xml += "\t</library>\n"
+		xml += "</fcpxml>"
+		return xml
+	}
+
 	private static func emptyXML(format: ExportFormat) -> String {
 		"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
 			+ "<!DOCTYPE fcpxml SYSTEM \"https://raw.githubusercontent.com/CommandPost/CommandPost/refs/heads/develop/src/extensions/cp/apple/fcpxml/dtd/FCPXMLv1_14.dtd\">\n"
