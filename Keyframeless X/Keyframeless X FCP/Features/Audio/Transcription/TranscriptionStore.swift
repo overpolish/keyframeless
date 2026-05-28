@@ -94,6 +94,11 @@ class TranscriptionStore {
 		saveBreaks()
 	}
 
+	func clearSentenceEdits(for clip: FCPXMLParser.AudioClip) {
+		sentenceEdits[ClipKey(clip: clip)] = nil
+		saveEdits()
+	}
+
 	func isSrtImported(_ clip: FCPXMLParser.AudioClip) -> Bool {
 		srtCueStore[ClipKey(clip: clip)] != nil
 	}

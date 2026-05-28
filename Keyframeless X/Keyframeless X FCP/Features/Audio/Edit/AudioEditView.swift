@@ -33,6 +33,9 @@ struct AudioEditView: View {
 				transcriptionList
 			}
 		}
+		.onReceive(NotificationCenter.default.publisher(for: .aiTransformApplied)) { _ in
+			rebuildRows()
+		}
 		.onAppear {
 			if model.editSelectedClips == nil {
 				model.editSelectedClips = defaultEditSelection

@@ -292,7 +292,7 @@ extension FCPXMLParser {
 
 	/// Builds an `AudioClip` for an inner element of a compound. Common path
 	/// for `<asset-clip>` (via `appendCompoundAssetClip`) and connected
-	/// `<clip>` (via `appendConnectedClip`'s compound branch) — both emit the
+	/// `<clip>` (via `appendConnectedClip`'s compound branch) - both emit the
 	/// same shape with the wrapper's outer adjustments merged on top.
 	private static func makeCompoundClip(
 		child: XMLElement, ctx: CompoundContext, window: VisibleWindow,

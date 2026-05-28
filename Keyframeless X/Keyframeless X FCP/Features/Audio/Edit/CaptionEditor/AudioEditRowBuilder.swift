@@ -166,7 +166,7 @@ enum AudioEditRowBuilder {
 	private static let maxDuration: Float = 7.0
 	private static let hardMaxDuration: Float = 10.0
 
-	private static func groupIntoSentences(
+	static func groupIntoSentences(
 		_ words: [TranscriptionStore.StoredWord]
 	) -> [[TranscriptionStore.StoredWord]] {
 		guard !words.isEmpty else { return [] }

@@ -5,8 +5,8 @@
 
 import SwiftUI
 
-public struct AIKeySettingsView: View {
-	@State private var provider: AIProvider = .anthropic
+struct AIConfigTab: View {
+	@StateObject private var keyState = AIKeyState.shared
 	@State private var keyInput: String = ""
 	@State private var savedKeyExists: Bool = false
 	@State private var status: Status = .idle
@@ -18,14 +18,10 @@ public struct AIKeySettingsView: View {
 		case failure(String)
 	}
 
-	public init() {}
+	private var provider: AIProvider { keyState.activeProvider }
 
-	public var body: some View {
+	var body: some View {
 		VStack(alignment: .leading, spacing: 12) {
-			ProviderPill(selection: $provider)
-				.frame(maxWidth: .infinity, alignment: .center)
-				.onChange(of: provider) { _, _ in refreshState() }
-
 			HStack(spacing: 8) {
 				Text("API Key")
 					.font(.system(size: 12, weight: .medium))
@@ -62,10 +58,8 @@ public struct AIKeySettingsView: View {
 				.disabled(keyInput.isEmpty || status == .validating)
 			}
 		}
-		.padding(16)
-		.frame(width: 340)
 		.onAppear { refreshState() }
-		.modifier(PopoverGlassFix())
+		.onChange(of: keyState.activeProvider) { _, _ in refreshState() }
 	}
 
 	@ViewBuilder
@@ -118,36 +112,3 @@ public struct AIKeySettingsView: View {
 	}
 }
 
-private struct ProviderPill: View {
-	@Binding var selection: AIProvider
-
-	var body: some View {
-		HStack(spacing: 4) {
-			ForEach(AIProvider.allCases) { p in
-				let isSelected = selection == p
-				Button {
-					selection = p
-				} label: {
-					HStack(spacing: 6) {
-						AIProviderLogo(provider: p)
-							.frame(width: 13, height: 13)
-						Text(p.displayName)
-							.font(.system(size: 12, weight: .medium))
-					}
-					.padding(.horizontal, 10)
-					.padding(.vertical, 6)
-					.background {
-						if isSelected {
-							Capsule().fill(Color.accentColor)
-						}
-					}
-					.foregroundStyle(isSelected ? Color.white : .secondary)
-					.contentShape(Capsule())
-				}
-				.buttonStyle(.plain)
-			}
-		}
-		.padding(4)
-		.background(Capsule().fill(Color.white.opacity(0.08)))
-	}
-}

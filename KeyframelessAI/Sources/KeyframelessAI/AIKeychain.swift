@@ -37,6 +37,7 @@ public enum AIKeychain {
         guard addStatus == errSecSuccess else {
             throw AIKeychainError.unexpectedStatus(addStatus)
         }
+        Task { @MainActor in AIKeyState.shared.refresh() }
     }
 
     public static func load(_ provider: AIProvider) throws -> String? {
@@ -73,6 +74,7 @@ public enum AIKeychain {
         if status != errSecSuccess && status != errSecItemNotFound {
             throw AIKeychainError.unexpectedStatus(status)
         }
+        Task { @MainActor in AIKeyState.shared.refresh() }
     }
 
     public static func providersWithKeys() -> [AIProvider] {

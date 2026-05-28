@@ -121,6 +121,9 @@
         }
       }
     },
+    "“%@”" : {
+
+    },
     "%lld" : {
       "localizations" : {
         "de" : {
@@ -320,6 +323,9 @@
           }
         }
       }
+    },
+    "•" : {
+
     },
     "×" : {
       "localizations" : {
@@ -561,6 +567,9 @@
         }
       }
     },
+    "AI Transform Preview" : {
+
+    },
     "ALL CAPS" : {
       "localizations" : {
         "de" : {
@@ -600,6 +609,9 @@
           }
         }
       }
+    },
+    "Apply" : {
+
     },
     "Author" : {
       "localizations" : {
@@ -3441,6 +3453,9 @@
         }
       }
     },
+    "No transcribed clips in selection." : {
+
+    },
     "No Transcriptions Found" : {
       "localizations" : {
         "de" : {
@@ -5963,6 +5978,9 @@
           }
         }
       }
+    },
+    "Working…" : {
+
     },
     "Y Position" : {
       "localizations" : {

@@ -8,12 +8,12 @@ import Foundation
 /// FCPXML reader for Keyframeless X.
 ///
 /// The implementation is split across this folder:
-/// - `FCPXMLParser+Models.swift` — data types (AudioClip, AudioFilter, etc.)
-/// - `FCPXMLParser+Time.swift` — time and offset parsing helpers
-/// - `FCPXMLParser+Adjustments.swift` — `<adjust-volume>`, `<filter-audio>`,
+/// - `FCPXMLParser+Models.swift` - data types (AudioClip, AudioFilter, etc.)
+/// - `FCPXMLParser+Time.swift` - time and offset parsing helpers
+/// - `FCPXMLParser+Adjustments.swift` - `<adjust-volume>`, `<filter-audio>`,
 ///   `<audio-channel-source>`, unhandled-adjustment detection
-/// - `FCPXMLParser+Walk.swift` — recursive timeline walk producing `AudioClip`s
-/// - `FCPXMLParser.swift` (this file) — top-level entry points
+/// - `FCPXMLParser+Walk.swift` - recursive timeline walk producing `AudioClip`s
+/// - `FCPXMLParser.swift` (this file) - top-level entry points
 enum FCPXMLParser {
 
 	private static let dialogueClipXPath =
