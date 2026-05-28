@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		F207778B2FA3FD7B00AA4E71 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = F207778A2FA3FD7B00AA4E71 /* FluidAudio */; };
+		F23EEFDA2FC893D500AFBA1E /* KeyframelessAI in Frameworks */ = {isa = PBXBuildFile; productRef = F23EEFD92FC893D500AFBA1E /* KeyframelessAI */; };
 		F274D93A2F6E7AC2001FE373 /* Profanity in Resources */ = {isa = PBXBuildFile; fileRef = F274D9392F6E7AC2001FE373 /* Profanity */; };
 		F28BD2302F68595000C5F6B7 /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F28BD22F2F68595000C5F6B7 /* KeyframelessKit.framework */; };
 		F28BD2312F68595000C5F6B7 /* KeyframelessKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F28BD22F2F68595000C5F6B7 /* KeyframelessKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -123,6 +124,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F207778B2FA3FD7B00AA4E71 /* FluidAudio in Frameworks */,
+				F23EEFDA2FC893D500AFBA1E /* KeyframelessAI in Frameworks */,
 				F2A8FB212F6C52C2007989B9 /* SwiftWhisper in Frameworks */,
 				F2B9DC012F7452A0007989B9 /* WhisperKit in Frameworks */,
 				F28BD2302F68595000C5F6B7 /* KeyframelessKit.framework in Frameworks */,
@@ -208,6 +210,7 @@
 				F2A8FB202F6C52C2007989B9 /* SwiftWhisper */,
 				F2B9DC002F7452A0007989B9 /* WhisperKit */,
 				F207778A2FA3FD7B00AA4E71 /* FluidAudio */,
+				F23EEFD92FC893D500AFBA1E /* KeyframelessAI */,
 			);
 			productName = "Keyframeless X FCP";
 			productReference = F29C84E02F6820750073B1A9 /* Keyframeless X FCP.appex */;
@@ -718,6 +721,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = F20777892FA3FD7B00AA4E71 /* XCRemoteSwiftPackageReference "FluidAudio" */;
 			productName = FluidAudio;
+		};
+		F23EEFD92FC893D500AFBA1E /* KeyframelessAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KeyframelessAI;
 		};
 		F2A8FB202F6C52C2007989B9 /* SwiftWhisper */ = {
 			isa = XCSwiftPackageProductDependency;

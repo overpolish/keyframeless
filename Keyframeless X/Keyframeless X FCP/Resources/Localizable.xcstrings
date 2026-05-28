@@ -5207,22 +5207,40 @@
     "Timeline-Wide" : {
       "localizations" : {
         "de" : {
-          "stringUnit" : { "state" : "translated", "value" : "Timeline-übergreifend" }
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Timeline-übergreifend"
+          }
         },
         "es" : {
-          "stringUnit" : { "state" : "translated", "value" : "Toda la línea de tiempo" }
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toda la línea de tiempo"
+          }
         },
         "fr" : {
-          "stringUnit" : { "state" : "translated", "value" : "Toute la timeline" }
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toute la timeline"
+          }
         },
         "ja" : {
-          "stringUnit" : { "state" : "translated", "value" : "タイムライン全体" }
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "タイムライン全体"
+          }
         },
         "ko" : {
-          "stringUnit" : { "state" : "translated", "value" : "전체 타임라인" }
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "전체 타임라인"
+          }
         },
         "zh-Hans" : {
-          "stringUnit" : { "state" : "translated", "value" : "整个时间线" }
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "整个时间线"
+          }
         }
       }
     },

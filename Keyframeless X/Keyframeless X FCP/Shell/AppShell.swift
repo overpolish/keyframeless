@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+import KeyframelessAI
 import KeyframelessKit
 import SwiftUI
 
@@ -162,6 +163,7 @@ struct AppShell: View {
 
 	private var topBar: some View {
 		HStack(spacing: KKSpacingLG) {
+			AIButton()
 			PillTabBar(selected: $selectedTab)
 			WhatsNewButton(url: KKUpdateChecker.shared().notesURL)
 			FeedbackButton(url: KKUpdateChecker.shared().feedbackURL)

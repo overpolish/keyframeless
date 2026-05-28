@@ -5,6 +5,9 @@
       location = "group:KeyframelessKit/KeyframelessKit.xcodeproj">
    </FileRef>
    <FileRef
+      location = "group:KeyframelessAI">
+   </FileRef>
+   <FileRef
       location = "group:Keyframeless X/Keyframeless X.xcodeproj">
    </FileRef>
 </Workspace>
