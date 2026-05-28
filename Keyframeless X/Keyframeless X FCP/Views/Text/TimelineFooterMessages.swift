@@ -19,7 +19,7 @@ struct TimelineFooterMessages: View {
 		return String(localized: "Not applied in captions: \(names)")
 	}
 
-	private static func displayName(for adjustment: String) -> String {
+	nonisolated private static func displayName(for adjustment: String) -> String {
 		switch adjustment {
 		case "adjust-voiceIsolation": return "Voice Isolation"
 		case "adjust-loudness": return "Loudness"

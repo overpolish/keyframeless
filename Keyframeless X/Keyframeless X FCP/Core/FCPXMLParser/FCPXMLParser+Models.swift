@@ -100,6 +100,24 @@ extension FCPXMLParser {
 		}
 	}
 
+	/// Compound-level adjustments that live on the wrapping `ref-clip` /
+	/// `mc-clip`. Sampled in *compound-local* seconds (0 = compound boundary's
+	/// start in the main timeline). Combined multiplicatively with the inner
+	/// clip's own `volumeCurve` / fades at apply time.
+	struct OuterCompound: Codable {
+		let volumeCurve: [VolumePoint]?
+		let fadeIn: FadeSpec?
+		let fadeOut: FadeSpec?
+		/// Distance from the compound boundary's start to this inner clip's
+		/// start, in seconds. Used at apply time to translate per-sample
+		/// source time into compound-local time for outer-curve lookup.
+		let offsetInCompound: Double
+		let compoundDuration: Double
+
+		var hasVolumeCurve: Bool { !(volumeCurve?.isEmpty ?? true) }
+		var hasFade: Bool { fadeIn != nil || fadeOut != nil }
+	}
+
 	struct AudioClip: Codable {
 		let name: String
 		let start: Double
@@ -115,6 +133,7 @@ extension FCPXMLParser {
 		let auFilters: [AudioFilter]?
 		let sourceChannels: [Int]?
 		let unhandledAdjustments: [String]?
+		let outer: OuterCompound?
 
 		struct ResolvedURL {
 			let url: URL
@@ -173,5 +192,49 @@ extension FCPXMLParser {
 		let internalStart: Double
 		let internalEnd: Double
 		let tcStart: Double
+		/// `<adjust-volume>` on the outer ref-clip / mc-clip, in compound-local
+		/// seconds. May be a single constant-offset point (static `amount=`),
+		/// or a multi-point keyframed curve.
+		let outerVolumeCurve: [VolumePoint]?
+		/// `<filter-audio>` chain on the outer ref-clip / mc-clip, applied
+		/// after every inner clip's own filter chain.
+		let outerAuFilters: [AudioFilter]?
+		let outerFadeIn: FadeSpec?
+		let outerFadeOut: FadeSpec?
+
+		/// Duration of the visible compound window in seconds. Needed at apply
+		/// time so the outer fadeOut anchors at the compound's end rather than
+		/// the inner clip's end.
+		var compoundDuration: Double { internalEnd - internalStart }
+
+		/// Builds an `OuterCompound` for an emitted `AudioClip` that lives
+		/// inside this compound, or returns nil when the wrapper has no
+		/// volume/fade adjustments worth propagating.
+		func outerCompound(mainStart: Double) -> OuterCompound? {
+			let hasVolume = !(outerVolumeCurve?.isEmpty ?? true)
+			let hasFade = outerFadeIn != nil || outerFadeOut != nil
+			guard hasVolume || hasFade else { return nil }
+			return OuterCompound(
+				volumeCurve: outerVolumeCurve,
+				fadeIn: outerFadeIn, fadeOut: outerFadeOut,
+				offsetInCompound: mainStart - mainOffset,
+				compoundDuration: compoundDuration)
+		}
+
+		init(
+			mainOffset: Double, internalStart: Double, internalEnd: Double,
+			tcStart: Double,
+			outerVolumeCurve: [VolumePoint]? = nil, outerAuFilters: [AudioFilter]? = nil,
+			outerFadeIn: FadeSpec? = nil, outerFadeOut: FadeSpec? = nil
+		) {
+			self.mainOffset = mainOffset
+			self.internalStart = internalStart
+			self.internalEnd = internalEnd
+			self.tcStart = tcStart
+			self.outerVolumeCurve = outerVolumeCurve
+			self.outerAuFilters = outerAuFilters
+			self.outerFadeIn = outerFadeIn
+			self.outerFadeOut = outerFadeOut
+		}
 	}
 }

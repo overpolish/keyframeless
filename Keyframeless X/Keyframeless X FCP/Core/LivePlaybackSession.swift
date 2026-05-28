@@ -9,27 +9,36 @@ import Foundation
 /// Owns the live `AVAudioEngine` + `AVAssetReader` producer for one clip
 /// start. Lives off the main actor. Stop is idempotent.
 ///
-/// Engine wiring: producer → `AVAudioPlayerNode` → [AU chain] → mainMixer.
-/// The producer reads multichannel Float32 PCM from the source asset, picks
-/// and downmixes the active channels to mono, applies volume curve + fades
-/// per-sample, and schedules buffers onto the player node with backpressure
-/// (at most `prerollCount` chunks in flight at a time).
+/// Pipeline: reader → downmix to mono → gain/fade → `AudioUnitChain` (raw v2
+/// AUs with state loaded pre-Initialize) → `AVAudioPlayerNode` → mainMixer.
+/// The AU chain lives outside `AVAudioEngine` so FCP-bundled effects (EDEL
+/// Compressor, Channel EQ, etc.) can have their persisted parameter state
+/// loaded via `kAudioUnitProperty_ClassInfo` BEFORE `AudioUnitInitialize`,
+/// which is what computes their DSP coefficients. See `AudioUnitChain`.
 final class LivePlaybackSession: @unchecked Sendable {
+
+	/// Clip-derived data needed by the per-sample gain stage. Bundled so the
+	/// initializer and the `applyGainAndFades` site read from one cohesive
+	/// struct rather than juggling a dozen optional fields.
+	private struct ClipMixState {
+		let volumeCurve: [FCPXMLParser.VolumePoint]?
+		let fadeIn: FCPXMLParser.FadeSpec?
+		let fadeOut: FCPXMLParser.FadeSpec?
+		let outer: FCPXMLParser.OuterCompound?
+		let clipSourceStart: Double
+		let clipSourceDuration: Double
+	}
+
 	private let engine = AVAudioEngine()
 	private let playerNode = AVAudioPlayerNode()
-	private let auNodes: [AVAudioUnit]
-	private let auFilters: [FCPXMLParser.AudioFilter]
+	private let auChain: AudioUnitChain?
 	private let reader: AVAssetReader
 	private let readerOutput: AVAssetReaderTrackOutput
 	private let monoFormat: AVAudioFormat
 	private let trackChannels: Int
 	private let trackSampleRate: Double
 	private let pickedChannels: [Int]
-	private let volumeCurve: [FCPXMLParser.VolumePoint]?
-	private let fadeIn: FCPXMLParser.FadeSpec?
-	private let fadeOut: FCPXMLParser.FadeSpec?
-	private let clipSourceStart: Double
-	private let clipSourceDuration: Double
+	private let mix: ClipMixState
 	private let resolvedURL: FCPXMLParser.AudioClip.ResolvedURL
 	private let producerQueue = DispatchQueue(
 		label: "co.overpolish.keyframeless.audioplayer.producer", qos: .userInteractive)
@@ -76,19 +85,22 @@ final class LivePlaybackSession: @unchecked Sendable {
 			throw NSError(domain: "LivePlaybackSession", code: 3)
 		}
 
-		var auInstances: [AVAudioUnit] = []
-		for f in clip.auFilters ?? [] {
-			let au = try await AudioUnitRenderer.instantiate(filter: f)
-			auInstances.append(au)
+		var chain: AudioUnitChain?
+		if let filters = clip.auFilters, !filters.isEmpty {
+			chain = try? AudioUnitChain(filters: filters, format: mono)
 		}
 
+		let mix = ClipMixState(
+			volumeCurve: clip.volumeCurve,
+			fadeIn: clip.fadeIn, fadeOut: clip.fadeOut,
+			outer: clip.outer,
+			clipSourceStart: clip.sourceStart,
+			clipSourceDuration: clip.sourceDuration)
 		let session = LivePlaybackSession(
-			auNodes: auInstances, auFilters: clip.auFilters ?? [],
+			auChain: chain,
 			reader: source.reader, readerOutput: source.output,
 			monoFormat: mono, trackChannels: channels, trackSampleRate: sampleRate,
-			pickedChannels: picked, volumeCurve: clip.volumeCurve,
-			fadeIn: clip.fadeIn, fadeOut: clip.fadeOut,
-			clipSourceStart: clip.sourceStart, clipSourceDuration: clip.sourceDuration,
+			pickedChannels: picked, mix: mix,
 			resolvedURL: resolved, sourceTimeStart: time)
 		try session.startEngine()
 		session.pump()
@@ -96,41 +108,28 @@ final class LivePlaybackSession: @unchecked Sendable {
 	}
 
 	private init(
-		auNodes: [AVAudioUnit], auFilters: [FCPXMLParser.AudioFilter],
+		auChain: AudioUnitChain?,
 		reader: AVAssetReader,
 		readerOutput: AVAssetReaderTrackOutput, monoFormat: AVAudioFormat,
 		trackChannels: Int, trackSampleRate: Double, pickedChannels: [Int],
-		volumeCurve: [FCPXMLParser.VolumePoint]?,
-		fadeIn: FCPXMLParser.FadeSpec?, fadeOut: FCPXMLParser.FadeSpec?,
-		clipSourceStart: Double, clipSourceDuration: Double,
+		mix: ClipMixState,
 		resolvedURL: FCPXMLParser.AudioClip.ResolvedURL, sourceTimeStart: Double
 	) {
-		self.auNodes = auNodes
-		self.auFilters = auFilters
+		self.auChain = auChain
 		self.reader = reader
 		self.readerOutput = readerOutput
 		self.monoFormat = monoFormat
 		self.trackChannels = trackChannels
 		self.trackSampleRate = trackSampleRate
 		self.pickedChannels = pickedChannels
-		self.volumeCurve = volumeCurve
-		self.fadeIn = fadeIn
-		self.fadeOut = fadeOut
-		self.clipSourceStart = clipSourceStart
-		self.clipSourceDuration = clipSourceDuration
+		self.mix = mix
 		self.resolvedURL = resolvedURL
 		self._sourceTimeOfNextSample = sourceTimeStart
 	}
 
 	private func startEngine() throws {
 		engine.attach(playerNode)
-		for au in auNodes { engine.attach(au) }
-		var previous: AVAudioNode = playerNode
-		for au in auNodes {
-			engine.connect(previous, to: au, format: monoFormat)
-			previous = au
-		}
-		engine.connect(previous, to: engine.mainMixerNode, format: monoFormat)
+		engine.connect(playerNode, to: engine.mainMixerNode, format: monoFormat)
 		try engine.start()
 		playerNode.play()
 	}
@@ -145,7 +144,6 @@ final class LivePlaybackSession: @unchecked Sendable {
 		stateLock.unlock()
 		playerNode.stop()
 		if engine.isRunning { engine.stop() }
-		for au in auNodes { engine.detach(au) }
 		engine.detach(playerNode)
 		reader.cancelReading()
 		resolvedURL.stopAccess()
@@ -161,15 +159,7 @@ final class LivePlaybackSession: @unchecked Sendable {
 	/// Drives live AU parameter automation. Called periodically from the
 	/// owning `AudioPlayer`'s progress timer with the current source time.
 	func updateAutomation(atSourceTime t: Double) {
-		for (au, filter) in zip(auNodes, auFilters) {
-			for override in filter.paramOverrides {
-				guard let kfs = override.keyframes, kfs.count > 1 else { continue }
-				let v = Keyframes.interpolateParam(kfs, at: t)
-				AudioUnitSetParameter(
-					au.audioUnit, AudioUnitParameterID(override.key),
-					kAudioUnitScope_Global, 0, AudioUnitParameterValue(v), 0)
-			}
-		}
+		auChain?.updateKeyframes(at: t)
 	}
 
 	private func pump() {
@@ -243,6 +233,11 @@ final class LivePlaybackSession: @unchecked Sendable {
 		}
 		applyGainAndFades(
 			dst: dst, frames: frames, chunkStartSourceTime: chunkStartSourceTime)
+		if let chain = auChain, !chain.isEmpty {
+			renderThroughAUChain(
+				chain: chain, buffer: buffer, frames: frames,
+				chunkStartSourceTime: chunkStartSourceTime)
+		}
 
 		stateLock.lock()
 		_sourceTimeOfNextSample += Double(frames) / trackSampleRate
@@ -250,24 +245,56 @@ final class LivePlaybackSession: @unchecked Sendable {
 		return buffer
 	}
 
+	/// Pulls the dry chunk through the AU chain in slices ≤ `maxFramesPerSlice`,
+	/// writing the processed audio back into the same buffer.
+	private func renderThroughAUChain(
+		chain: AudioUnitChain, buffer: AVAudioPCMBuffer, frames: Int,
+		chunkStartSourceTime: Double
+	) {
+		let dst = buffer.floatChannelData![0]
+		let maxF = Int(chain.maxFramesPerSlice)
+		guard
+			let scratch = AVAudioPCMBuffer(
+				pcmFormat: monoFormat, frameCapacity: AVAudioFrameCount(frames))
+		else { return }
+		scratch.frameLength = AVAudioFrameCount(frames)
+		let src = scratch.floatChannelData![0]
+		memcpy(src, dst, frames * MemoryLayout<Float>.size)
+
+		var done = 0
+		while done < frames {
+			let want = min(maxF, frames - done)
+			chain.updateKeyframes(
+				at: chunkStartSourceTime + Double(done) / trackSampleRate)
+			let status = chain.renderChunk(
+				input: UnsafePointer(src.advanced(by: done)),
+				output: dst.advanced(by: done),
+				frames: want)
+			if status != noErr {
+				print(
+					"[LivePlaybackSession] AU chain render failed at frame \(done): \(status)")
+				break
+			}
+			done += want
+		}
+	}
+
 	private func applyGainAndFades(
 		dst: UnsafeMutablePointer<Float>, frames: Int, chunkStartSourceTime: Double
 	) {
-		let hasFade = fadeIn != nil || fadeOut != nil
-		let hasCurve = !(volumeCurve?.isEmpty ?? true)
-		guard hasFade || hasCurve else { return }
+		let hasInnerFade = mix.fadeIn != nil || mix.fadeOut != nil
+		let hasInnerCurve = !(mix.volumeCurve?.isEmpty ?? true)
+		let hasOuter = mix.outer?.hasFade == true || mix.outer?.hasVolumeCurve == true
+		guard hasInnerFade || hasInnerCurve || hasOuter else { return }
 		for i in 0..<frames {
 			let t = chunkStartSourceTime + Double(i) / trackSampleRate
-			var s = dst[i]
-			if let curve = volumeCurve, !curve.isEmpty {
-				s *= Float(pow(10.0, Keyframes.interpolateDB(curve, at: t) / 20.0))
-			}
-			if hasFade {
-				s *= AudioPreparer.fadeMultiplier(
-					clipLocal: t - clipSourceStart, duration: clipSourceDuration,
-					fadeIn: fadeIn, fadeOut: fadeOut)
-			}
-			dst[i] = s
+			dst[i] *= AudioBufferProcessing.sampleGain(
+				sourceTime: t,
+				clipSourceStart: mix.clipSourceStart,
+				clipSourceDuration: mix.clipSourceDuration,
+				volumeCurve: mix.volumeCurve,
+				fadeIn: mix.fadeIn, fadeOut: mix.fadeOut,
+				outer: mix.outer)
 		}
 	}
 }

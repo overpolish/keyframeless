@@ -78,7 +78,8 @@ extension FCPXMLParser {
 			fadeOut: fadeOut,
 			auFilters: parseAudioFilters(el, effects: effects),
 			sourceChannels: parseActiveSourceChannels(el),
-			unhandledAdjustments: detectUnhandledAdjustments(el)
+			unhandledAdjustments: detectUnhandledAdjustments(el),
+			outer: nil
 		)
 	}
 
@@ -124,11 +125,16 @@ extension FCPXMLParser {
 					let refDuration = parseTime(
 						child.attribute(forName: "duration")?.stringValue ?? "0s")
 					let refMainOffset = projectTime(of: child, tcStart: tcStart)
+					let (outerFadeIn, outerFadeOut) = parseFades(child)
 					let ctx = CompoundContext(
 						mainOffset: refMainOffset,
 						internalStart: refTrimStart - mediaTcStart,
 						internalEnd: refTrimStart - mediaTcStart + refDuration,
-						tcStart: mediaTcStart
+						tcStart: mediaTcStart,
+						outerVolumeCurve: parseVolumeCurve(child),
+						outerAuFilters: parseAudioFilters(child, effects: effects),
+						outerFadeIn: outerFadeIn,
+						outerFadeOut: outerFadeOut
 					)
 					walkElement(
 						mediaSpine, tcStart: mediaTcStart, compound: ctx, assets: assets,
@@ -148,11 +154,16 @@ extension FCPXMLParser {
 					let mcDuration = parseTime(
 						child.attribute(forName: "duration")?.stringValue ?? "0s")
 					let mcMainOffset = projectTime(of: child, tcStart: tcStart)
+					let (outerFadeIn, outerFadeOut) = parseFades(child)
 					let ctx = CompoundContext(
 						mainOffset: mcMainOffset,
 						internalStart: trimStart - mcTcStart,
 						internalEnd: trimStart - mcTcStart + mcDuration,
-						tcStart: mcTcStart
+						tcStart: mcTcStart,
+						outerVolumeCurve: parseVolumeCurve(child),
+						outerAuFilters: parseAudioFilters(child, effects: effects),
+						outerFadeIn: outerFadeIn,
+						outerFadeOut: outerFadeOut
 					)
 					for angle in multicam.elements(forName: "mc-angle") {
 						if let activeAngles {
@@ -194,40 +205,21 @@ extension FCPXMLParser {
 		mediaMap: [String: XMLElement], multicamMap: [String: XMLElement],
 		into clips: inout [AudioClip]
 	) {
-		let internalOffset = projectTime(of: child, tcStart: ctx.tcStart)
 		let clipDur = parseTime(child.attribute(forName: "duration")?.stringValue ?? "0s")
-		guard internalOffset < ctx.internalEnd,
-			internalOffset + clipDur > ctx.internalStart
-		else {
+		guard let window = visibleWindow(child: child, ctx: ctx, dur: clipDur) else {
 			walkElement(
 				child, tcStart: fallbackTcStart, compound: ctx, assets: assets,
 				mediaMap: mediaMap, multicamMap: multicamMap, effects: effects, into: &clips)
 			return
 		}
-		let visibleStart = max(internalOffset, ctx.internalStart)
-		let visibleEnd = min(internalOffset + clipDur, ctx.internalEnd)
-		let mainStart = ctx.mainOffset + (visibleStart - ctx.internalStart)
 		let ref = child.attribute(forName: "ref")?.stringValue
 		let asset = ref.flatMap { assets[$0] }
 		let clipSourceStart = parseTime(child.attribute(forName: "start")?.stringValue ?? "0s")
-		let (fadeIn, fadeOut) = parseFades(child)
 		clips.append(
-			AudioClip(
-				name: child.attribute(forName: "name")?.stringValue ?? "clip",
-				start: mainStart,
-				end: mainStart + (visibleEnd - visibleStart),
+			makeCompoundClip(
+				child: child, ctx: ctx, window: window, asset: asset,
 				sourceStart: clipSourceStart - (asset?.mediaStart ?? 0),
-				sourceDuration: visibleEnd - visibleStart,
-				url: asset?.url,
-				bookmark: asset?.bookmark,
-				isCompound: true,
-				volumeCurve: parseVolumeCurve(child),
-				fadeIn: fadeIn,
-				fadeOut: fadeOut,
-				auFilters: parseAudioFilters(child, effects: effects),
-				sourceChannels: parseActiveSourceChannels(child),
-				unhandledAdjustments: detectUnhandledAdjustments(child)
-			))
+				effects: effects))
 	}
 
 	private static func appendConnectedClip(
@@ -241,30 +233,12 @@ extension FCPXMLParser {
 		let clipStart = parseTime(child.attribute(forName: "start")?.stringValue ?? "0s")
 		let (fadeIn, fadeOut) = parseFades(child)
 		if let ctx = compound {
-			let internalOffset = projectTime(of: child, tcStart: ctx.tcStart)
-			guard internalOffset < ctx.internalEnd,
-				internalOffset + dur > ctx.internalStart
-			else { return }
-			let visibleStart = max(internalOffset, ctx.internalStart)
-			let visibleEnd = min(internalOffset + dur, ctx.internalEnd)
-			let mainStart = ctx.mainOffset + (visibleStart - ctx.internalStart)
+			guard let window = visibleWindow(child: child, ctx: ctx, dur: dur) else { return }
 			clips.append(
-				AudioClip(
-					name: child.attribute(forName: "name")?.stringValue ?? "clip",
-					start: mainStart,
-					end: mainStart + (visibleEnd - visibleStart),
+				makeCompoundClip(
+					child: child, ctx: ctx, window: window, asset: asset,
 					sourceStart: clipStart - (asset?.mediaStart ?? 0),
-					sourceDuration: visibleEnd - visibleStart,
-					url: asset?.url,
-					bookmark: asset?.bookmark,
-					isCompound: true,
-					volumeCurve: parseVolumeCurve(child),
-					fadeIn: fadeIn,
-					fadeOut: fadeOut,
-					auFilters: parseAudioFilters(child, effects: effects),
-					sourceChannels: parseActiveSourceChannels(child),
-					unhandledAdjustments: detectUnhandledAdjustments(child)
-				))
+					effects: effects))
 		} else {
 			let start = projectTime(of: child, tcStart: tcStart)
 			clips.append(
@@ -282,8 +256,81 @@ extension FCPXMLParser {
 					fadeOut: fadeOut,
 					auFilters: parseAudioFilters(child, effects: effects),
 					sourceChannels: parseActiveSourceChannels(child),
-					unhandledAdjustments: detectUnhandledAdjustments(child)
+					unhandledAdjustments: detectUnhandledAdjustments(child),
+					outer: nil
 				))
+		}
+	}
+
+	/// Clip-in-compound geometry: the source time slice this inner clip
+	/// actually contributes (after clipping against the compound's window)
+	/// plus where that slice lands in the main timeline.
+	private struct VisibleWindow {
+		let mainStart: Double
+		let visibleStart: Double
+		let visibleEnd: Double
+		var sourceDuration: Double { visibleEnd - visibleStart }
+	}
+
+	/// Returns the visible slice for an inner child, or nil when the child
+	/// falls entirely outside the compound's trim window (caller should keep
+	/// walking the spine without emitting a clip).
+	private static func visibleWindow(
+		child: XMLElement, ctx: CompoundContext, dur: Double
+	) -> VisibleWindow? {
+		let internalOffset = projectTime(of: child, tcStart: ctx.tcStart)
+		guard internalOffset < ctx.internalEnd,
+			internalOffset + dur > ctx.internalStart
+		else { return nil }
+		let visibleStart = max(internalOffset, ctx.internalStart)
+		let visibleEnd = min(internalOffset + dur, ctx.internalEnd)
+		return VisibleWindow(
+			mainStart: ctx.mainOffset + (visibleStart - ctx.internalStart),
+			visibleStart: visibleStart,
+			visibleEnd: visibleEnd)
+	}
+
+	/// Builds an `AudioClip` for an inner element of a compound. Common path
+	/// for `<asset-clip>` (via `appendCompoundAssetClip`) and connected
+	/// `<clip>` (via `appendConnectedClip`'s compound branch) — both emit the
+	/// same shape with the wrapper's outer adjustments merged on top.
+	private static func makeCompoundClip(
+		child: XMLElement, ctx: CompoundContext, window: VisibleWindow,
+		asset: AssetResource?, sourceStart: Double,
+		effects: [String: AudioEffectResource]
+	) -> AudioClip {
+		let (fadeIn, fadeOut) = parseFades(child)
+		return AudioClip(
+			name: child.attribute(forName: "name")?.stringValue ?? "clip",
+			start: window.mainStart,
+			end: window.mainStart + window.sourceDuration,
+			sourceStart: sourceStart,
+			sourceDuration: window.sourceDuration,
+			url: asset?.url,
+			bookmark: asset?.bookmark,
+			isCompound: true,
+			volumeCurve: parseVolumeCurve(child),
+			fadeIn: fadeIn,
+			fadeOut: fadeOut,
+			auFilters: mergeFilters(
+				inner: parseAudioFilters(child, effects: effects),
+				outer: ctx.outerAuFilters),
+			sourceChannels: parseActiveSourceChannels(child),
+			unhandledAdjustments: detectUnhandledAdjustments(child),
+			outer: ctx.outerCompound(mainStart: window.mainStart))
+	}
+
+	/// Concatenates inner + outer filter chains. Outer effects (on the
+	/// ref-clip / mc-clip) run after inner effects, matching FCP's semantics
+	/// where compound-level processing is downstream of clip-level processing.
+	private static func mergeFilters(
+		inner: [AudioFilter]?, outer: [AudioFilter]?
+	) -> [AudioFilter]? {
+		switch (inner, outer) {
+		case (nil, nil): return nil
+		case (let i, nil): return i
+		case (nil, let o): return o
+		case (let i?, let o?): return i + o
 		}
 	}
 }

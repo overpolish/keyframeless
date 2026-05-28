@@ -80,7 +80,10 @@ actor WaveformLoader {
 
 				var maxMag: Float = 0
 				vDSP_maxmgv(channelData + bStart, 1, &maxMag, vDSP_Length(length))
-				result[b] = max(result[b], maxMag)
+				// Compressor make-up gain can push samples past 0 dBFS (|x|>1).
+				// Clamp the per-bucket peak so the waveform visually saturates
+				// at the lane top instead of overflowing the layout.
+				result[b] = max(result[b], min(maxMag, 1.0))
 			}
 
 			framesRead += count

@@ -100,7 +100,8 @@ actor ProcessedAudioRenderer {
 			clipSourceDuration: clip.sourceDuration,
 			volumeCurve: clip.volumeCurve,
 			fadeIn: clip.fadeIn,
-			fadeOut: clip.fadeOut
+			fadeOut: clip.fadeOut,
+			outer: clip.outer
 		)
 		AudioPreparer.applyVolumeCurves(
 			buffer: buffer,

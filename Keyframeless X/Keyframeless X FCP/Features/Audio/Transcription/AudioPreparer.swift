@@ -39,6 +39,7 @@ struct AudioPreparer {
 		let volumeCurve: [FCPXMLParser.VolumePoint]?
 		let fadeIn: FCPXMLParser.FadeSpec?
 		let fadeOut: FCPXMLParser.FadeSpec?
+		let outer: FCPXMLParser.OuterCompound?
 	}
 
 	static let mergeThreshold: Double = 5.0
@@ -84,7 +85,8 @@ struct AudioPreparer {
 						clipSourceDuration: clip.sourceDuration,
 						volumeCurve: clip.volumeCurve,
 						fadeIn: clip.fadeIn,
-						fadeOut: clip.fadeOut
+						fadeOut: clip.fadeOut,
+						outer: clip.outer
 					)
 				}
 				segments.append(

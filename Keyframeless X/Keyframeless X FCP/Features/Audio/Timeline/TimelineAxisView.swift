@@ -546,7 +546,7 @@ private class AxisDocumentView: NSView {
 		for (i, clip) in clips.enumerated() {
 			guard waveforms[i] == nil, waveformTasks[i] == nil else { continue }
 			waveformTasks[i] = Task { [weak self] in
-				let onProgress: @Sendable ([Float]) -> Void = { partial in
+				let onProgress: @Sendable ([Float]) -> Void = { [weak self] partial in
 					Task { @MainActor [weak self] in
 						guard let self else { return }
 						self.waveforms[i] = partial

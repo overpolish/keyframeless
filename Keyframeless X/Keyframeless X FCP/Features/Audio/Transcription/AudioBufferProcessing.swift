@@ -7,8 +7,8 @@ import AVFoundation
 import Foundation
 
 /// In-place PCM gain helpers used by both the offline
-/// `ProcessedAudioRenderer` (via `AudioPreparer.applyVolumeCurves`) and the
-/// live `LivePlaybackSession` (via `fadeMultiplier`).
+/// `ProcessedAudioRenderer` (via `applyVolumeCurves`) and the live
+/// `LivePlaybackSession` (via `sampleGain` / `fadeMultiplier`).
 enum AudioBufferProcessing {
 
 	/// Applies each clip mapping's volume curve and fade envelope, in place,
@@ -24,19 +24,22 @@ enum AudioBufferProcessing {
 		let frames = Int(buffer.frameLength)
 
 		for mapping in mappings {
-			let curve = mapping.volumeCurve
-			let hasCurve = !(curve?.isEmpty ?? true)
+			let hasCurve = !(mapping.volumeCurve?.isEmpty ?? true)
 			let hasFade = mapping.fadeIn != nil || mapping.fadeOut != nil
-			guard hasCurve || hasFade else { continue }
+			let hasOuterCurve = mapping.outer?.hasVolumeCurve == true
+			let hasOuterFade = mapping.outer?.hasFade == true
+			guard hasCurve || hasOuterCurve || hasFade || hasOuterFade else { continue }
 			let (startFrame, endFrame) = mappingFrameRange(
 				mapping: mapping, segmentStart: segmentStart, sampleRate: sampleRate,
 				totalFrames: frames)
 			guard endFrame > startFrame else { continue }
 
-			if !hasFade, let curve, curve.count == 1 {
+			if let dB = constantFoldDB(
+				mapping: mapping, hasFade: hasFade, hasOuterFade: hasOuterFade)
+			{
 				applyConstantGain(
 					channelData: channelData, channels: channels,
-					startFrame: startFrame, endFrame: endFrame, dB: curve[0].dB)
+					startFrame: startFrame, endFrame: endFrame, dB: dB)
 				continue
 			}
 
@@ -44,57 +47,42 @@ enum AudioBufferProcessing {
 				channelData: channelData, channels: channels,
 				startFrame: startFrame, endFrame: endFrame,
 				segmentStart: segmentStart, sampleRate: sampleRate,
-				curve: curve, mapping: mapping, hasFade: hasFade)
+				mapping: mapping)
 		}
 	}
 
-	private static func mappingFrameRange(
-		mapping: AudioPreparer.ClipMapping, segmentStart: Double, sampleRate: Double,
-		totalFrames: Int
-	) -> (Int, Int) {
-		let start = max(
-			0, Int(((mapping.clipSourceStart - segmentStart) * sampleRate).rounded()))
-		let end = min(
-			totalFrames,
-			Int(
-				((mapping.clipSourceStart + mapping.clipSourceDuration - segmentStart)
-					* sampleRate).rounded()))
-		return (start, end)
-	}
-
-	private static func applyConstantGain(
-		channelData: UnsafePointer<UnsafeMutablePointer<Float>>, channels: Int,
-		startFrame: Int, endFrame: Int, dB: Double
-	) {
-		let gain = Float(pow(10.0, dB / 20.0))
-		if abs(gain - 1) < 1e-6 { return }
-		for ch in 0..<channels {
-			let p = channelData[ch]
-			for i in startFrame..<endFrame { p[i] *= gain }
+	/// Per-sample gain at a given source time. Returns the combined inner
+	/// and outer-compound volume * fade multiplier. Shared by offline and
+	/// live playback so the math doesn't drift between paths.
+	static func sampleGain(
+		sourceTime t: Double,
+		clipSourceStart: Double, clipSourceDuration: Double,
+		volumeCurve: [FCPXMLParser.VolumePoint]?,
+		fadeIn: FCPXMLParser.FadeSpec?, fadeOut: FCPXMLParser.FadeSpec?,
+		outer: FCPXMLParser.OuterCompound?
+	) -> Float {
+		let clipLocal = t - clipSourceStart
+		var gain: Float = 1
+		if let curve = volumeCurve, !curve.isEmpty {
+			gain *= dBToLinear(Keyframes.interpolateDB(curve, at: t))
 		}
-	}
-
-	private static func applyPerSampleGain(
-		channelData: UnsafePointer<UnsafeMutablePointer<Float>>, channels: Int,
-		startFrame: Int, endFrame: Int,
-		segmentStart: Double, sampleRate: Double,
-		curve: [FCPXMLParser.VolumePoint]?, mapping: AudioPreparer.ClipMapping,
-		hasFade: Bool
-	) {
-		for i in startFrame..<endFrame {
-			let t = segmentStart + Double(i) / sampleRate
-			var gain: Float = 1
-			if let curve, !curve.isEmpty {
-				gain *= Float(pow(10.0, Keyframes.interpolateDB(curve, at: t) / 20.0))
+		if fadeIn != nil || fadeOut != nil {
+			gain *= fadeMultiplier(
+				clipLocal: clipLocal, duration: clipSourceDuration,
+				fadeIn: fadeIn, fadeOut: fadeOut)
+		}
+		if let outer {
+			let compoundLocal = clipLocal + outer.offsetInCompound
+			if let oc = outer.volumeCurve, !oc.isEmpty {
+				gain *= dBToLinear(Keyframes.interpolateDB(oc, at: compoundLocal))
 			}
-			if hasFade {
+			if outer.hasFade {
 				gain *= fadeMultiplier(
-					clipLocal: t - mapping.clipSourceStart,
-					duration: mapping.clipSourceDuration,
-					fadeIn: mapping.fadeIn, fadeOut: mapping.fadeOut)
+					clipLocal: compoundLocal, duration: outer.compoundDuration,
+					fadeIn: outer.fadeIn, fadeOut: outer.fadeOut)
 			}
-			for ch in 0..<channels { channelData[ch][i] *= gain }
 		}
+		return gain
 	}
 
 	/// Combined fadeIn + fadeOut amplitude multiplier at clip-local time `tc`.
@@ -115,6 +103,69 @@ enum AudioBufferProcessing {
 			}
 		}
 		return m
+	}
+
+	private static func mappingFrameRange(
+		mapping: AudioPreparer.ClipMapping, segmentStart: Double, sampleRate: Double,
+		totalFrames: Int
+	) -> (Int, Int) {
+		let start = max(
+			0, Int(((mapping.clipSourceStart - segmentStart) * sampleRate).rounded()))
+		let end = min(
+			totalFrames,
+			Int(
+				((mapping.clipSourceStart + mapping.clipSourceDuration - segmentStart)
+					* sampleRate).rounded()))
+		return (start, end)
+	}
+
+	/// When neither inner nor outer has a fade, and both volume curves (if
+	/// present) are single-point statics, the whole mapping reduces to a
+	/// constant dB offset. Returns the folded dB, or nil if a per-sample
+	/// pass is required.
+	private static func constantFoldDB(
+		mapping: AudioPreparer.ClipMapping, hasFade: Bool, hasOuterFade: Bool
+	) -> Double? {
+		guard !hasFade && !hasOuterFade else { return nil }
+		let inner = mapping.volumeCurve
+		let outerCurve = mapping.outer?.volumeCurve
+		guard (inner?.count ?? 0) == 1, (outerCurve?.count ?? 0) <= 1 else { return nil }
+		return (inner?[0].dB ?? 0) + (outerCurve?.first?.dB ?? 0)
+	}
+
+	private static func applyConstantGain(
+		channelData: UnsafePointer<UnsafeMutablePointer<Float>>, channels: Int,
+		startFrame: Int, endFrame: Int, dB: Double
+	) {
+		let gain = dBToLinear(dB)
+		if abs(gain - 1) < 1e-6 { return }
+		for ch in 0..<channels {
+			let p = channelData[ch]
+			for i in startFrame..<endFrame { p[i] *= gain }
+		}
+	}
+
+	private static func applyPerSampleGain(
+		channelData: UnsafePointer<UnsafeMutablePointer<Float>>, channels: Int,
+		startFrame: Int, endFrame: Int,
+		segmentStart: Double, sampleRate: Double,
+		mapping: AudioPreparer.ClipMapping
+	) {
+		for i in startFrame..<endFrame {
+			let t = segmentStart + Double(i) / sampleRate
+			let gain = sampleGain(
+				sourceTime: t,
+				clipSourceStart: mapping.clipSourceStart,
+				clipSourceDuration: mapping.clipSourceDuration,
+				volumeCurve: mapping.volumeCurve,
+				fadeIn: mapping.fadeIn, fadeOut: mapping.fadeOut,
+				outer: mapping.outer)
+			for ch in 0..<channels { channelData[ch][i] *= gain }
+		}
+	}
+
+	private static func dBToLinear(_ dB: Double) -> Float {
+		Float(pow(10.0, dB / 20.0))
 	}
 
 	private static func ease(_ f: Float, type: String) -> Float {

@@ -49,7 +49,8 @@ class TranscriptionStore {
 			url: nil, bookmark: nil,
 			isCompound: false,
 			volumeCurve: nil, fadeIn: nil, fadeOut: nil,
-			auFilters: nil, sourceChannels: nil, unhandledAdjustments: nil
+			auFilters: nil, sourceChannels: nil, unhandledAdjustments: nil,
+			outer: nil
 		)
 	}
 

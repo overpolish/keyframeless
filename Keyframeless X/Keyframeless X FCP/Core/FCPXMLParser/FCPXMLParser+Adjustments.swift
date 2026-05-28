@@ -85,6 +85,7 @@ extension FCPXMLParser {
 		guard !filters.isEmpty else { return nil }
 		var result: [AudioFilter] = []
 		for f in filters {
+			if f.attribute(forName: "enabled")?.stringValue == "0" { continue }
 			guard let ref = f.attribute(forName: "ref")?.stringValue,
 				let eff = effects[ref]
 			else { continue }
