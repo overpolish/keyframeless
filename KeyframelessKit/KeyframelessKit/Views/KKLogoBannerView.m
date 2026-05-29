@@ -24,6 +24,7 @@ static const BOOL kKKForceUpdateBanner = NO;
   NSButton *_helpButton;
   NSButton *_changelogButton;
   NSButton *_feedbackButton;
+  NSView *_leadingAccessory;
   NSStackView *_leftStack;
 }
 
@@ -173,6 +174,18 @@ static const BOOL kKKForceUpdateBanner = NO;
   return self;
 }
 
+- (void)setLeadingAccessoryView:(NSView *)view {
+  if (_leadingAccessory == view)
+    return;
+  if (_leadingAccessory)
+    [_leftStack removeArrangedSubview:_leadingAccessory];
+  _leadingAccessory = view;
+  if (view) {
+    view.translatesAutoresizingMaskIntoConstraints = NO;
+    [_leftStack insertArrangedSubview:view atIndex:0];
+  }
+}
+
 - (void)setOnHelpTap:(void (^)(void))onHelpTap {
   _onHelpTap = [onHelpTap copy];
 
@@ -193,7 +206,8 @@ static const BOOL kKKForceUpdateBanner = NO;
       [_helpButton.widthAnchor constraintEqualToConstant:KKHelpButtonSize],
       [_helpButton.heightAnchor constraintEqualToConstant:KKHelpButtonSize],
     ]];
-    [_leftStack insertArrangedSubview:_helpButton atIndex:0];
+    NSInteger helpIndex = _leadingAccessory ? 1 : 0;
+    [_leftStack insertArrangedSubview:_helpButton atIndex:helpIndex];
   } else if (!_onHelpTap && _helpButton) {
     [_helpButton removeFromSuperview];
     _helpButton = nil;

@@ -61,6 +61,10 @@
   return nil;
 }
 
+- (nullable NSView *)aiAccessoryView {
+  return nil;
+}
+
 - (KKClipWrappingMode)clipWrappingMode {
   return KKClipWrappingModeNone;
 }

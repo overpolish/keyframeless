@@ -19,6 +19,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// invokes this block on click. When nil, no help button is rendered.
 @property(nonatomic, copy, nullable) void (^onHelpTap)(void);
 
+/// View injected at the very start of the leading accessory stack (left of
+/// any help / changelog / feedback buttons). Used to host the AI button,
+/// built in `KeyframelessAI` as an `NSHostingView` so the banner doesn't
+/// need to depend on SwiftUI.
+- (void)setLeadingAccessoryView:(nullable NSView *)view;
+
 - (instancetype)init;
 
 /// Best-effort screen rect of FCP's effect header row for *this* banner's

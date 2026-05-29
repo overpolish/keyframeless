@@ -12,6 +12,7 @@
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKHelpSection.h>
 #import <KeyframelessKit/KKTimingStage.h>
+@import KeyframelessAI;
 
 @implementation RoundedPlugin (CustomUI)
 
@@ -513,6 +514,20 @@
 
 - (NSNotificationName)helpGuideRefreshNotificationName {
   return kRoundedOSCPositionNotification;
+}
+
+- (nullable NSView *)aiAccessoryView {
+  NSString *productContext = RLoc(
+      @"Rounded, a Final Cut Pro plugin that rounds corners, crops with a box, "
+      @"and animates with Basic and Advanced timing. Always refer to yourself "
+      @"as Rounded.",
+      @"AI assistant product context for Rounded plugin.");
+  return [KKAIBannerHost
+      makeButtonWithProductContext:productContext
+                             onRun:^(NSString *prompt){
+                                 // TODO: wire prompt → KKTimeline mutation or
+                                 // route to Q&A answer display.
+                             }];
 }
 
 - (NSArray<KKHelpSection *> *)helpSections {

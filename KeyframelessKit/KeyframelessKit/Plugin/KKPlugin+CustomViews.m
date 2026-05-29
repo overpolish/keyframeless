@@ -38,6 +38,9 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
         [weakSelf openHelpRemoteWindow];
       };
     }
+    NSView *aiAccessory = [self aiAccessoryView];
+    if (aiAccessory)
+      [banner setLeadingAccessoryView:aiAccessory];
     return banner;
   }
 
