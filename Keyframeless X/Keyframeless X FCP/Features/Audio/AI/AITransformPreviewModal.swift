@@ -13,8 +13,8 @@ struct AITransformPreviewModal: View {
 	let onDismiss: () -> Void
 
 	var body: some View {
-		ModalContainer(width: 620, onDismiss: onDismiss) {
-			VStack(alignment: .leading, spacing: KKSpacingMD) {
+		ModalContainer(width: 640, onDismiss: onDismiss) {
+			VStack(alignment: .leading, spacing: KKSpacingXL) {
 				header
 
 				if batch.items.isEmpty {
@@ -23,14 +23,16 @@ struct AITransformPreviewModal: View {
 						.foregroundStyle(.secondary)
 						.padding(.vertical, KKPaddingLG)
 				} else {
-					ScrollView {
-						VStack(alignment: .leading, spacing: KKSpacingLG) {
+					ScrollShadowView {
+						VStack(alignment: .leading, spacing: KKSpacingXL) {
 							ForEach(clipGroups, id: \.clipIndex) { group in
 								clipGroupView(group)
 							}
 						}
+						.padding(KKPaddingXL)
 					}
-					.frame(maxHeight: 420)
+					.kkPanel()
+					.frame(maxHeight: 460)
 				}
 
 				footer
@@ -41,7 +43,21 @@ struct AITransformPreviewModal: View {
 	private struct ClipGroup {
 		let clipIndex: Int
 		let clipName: String
+		let isCompound: Bool
 		let itemIndices: [Int]
+	}
+
+	private func groupCounts(_ group: ClipGroup) -> (added: Int, removed: Int) {
+		var added = 0
+		var removed = 0
+		for idx in group.itemIndices {
+			let item = batch.items[idx]
+			guard let result = item.resultText else { continue }
+			let c = AIWordDiff.counts(original: item.originalText, result: result)
+			added += c.added
+			removed += c.removed
+		}
+		return (added, removed)
 	}
 
 	private var clipGroups: [ClipGroup] {
@@ -50,12 +66,14 @@ struct AITransformPreviewModal: View {
 		for (i, item) in batch.items.enumerated() {
 			if byClip[item.clipIndex] == nil {
 				byClip[item.clipIndex] = ClipGroup(
-					clipIndex: item.clipIndex, clipName: item.clipName, itemIndices: [i])
+					clipIndex: item.clipIndex, clipName: item.clipName,
+					isCompound: item.isCompound, itemIndices: [i])
 				order.append(item.clipIndex)
 			} else {
 				let existing = byClip[item.clipIndex]!
 				byClip[item.clipIndex] = ClipGroup(
 					clipIndex: existing.clipIndex, clipName: existing.clipName,
+					isCompound: existing.isCompound,
 					itemIndices: existing.itemIndices + [i])
 			}
 		}
@@ -69,8 +87,8 @@ struct AITransformPreviewModal: View {
 		let allOn = !applicable.isEmpty && includedHere == applicable.count
 		let mixed = includedHere > 0 && !allOn
 
-		VStack(alignment: .leading, spacing: KKSpacingSM) {
-			HStack(spacing: KKSpacingSM) {
+		VStack(alignment: .leading, spacing: KKSpacingMD) {
+			HStack(spacing: KKSpacingLG) {
 				Toggle(
 					isOn: Binding(
 						get: { allOn },
@@ -79,19 +97,24 @@ struct AITransformPreviewModal: View {
 						}
 					)
 				) { EmptyView() }
-					.toggleStyle(.checkbox)
-					.disabled(applicable.isEmpty)
-					.opacity(mixed ? 0.5 : 1)
+				.toggleStyle(.checkbox)
+				.tint(Color.kkClipColor(isCompound: group.isCompound))
+				.disabled(applicable.isEmpty)
+				.opacity(mixed ? 0.5 : 1)
 				Text(group.clipName)
 					.font(.system(size: 12, weight: .semibold))
 					.lineLimit(1)
 				Text("\(group.itemIndices.count)")
 					.font(.system(size: 10, weight: .medium))
 					.foregroundStyle(.secondary)
-					.padding(.horizontal, 6)
+					.padding(.horizontal, KKPaddingMD)
 					.padding(.vertical, 1)
-					.background(Capsule().fill(Color.white.opacity(0.08)))
+					.background(Capsule().fill(Color.secondary.opacity(0.15)))
 				Spacer()
+				let agg = groupCounts(group)
+				if agg.added > 0 || agg.removed > 0 {
+					DiffCountsBadge(counts: agg)
+				}
 			}
 
 			VStack(alignment: .leading, spacing: KKSpacingSM) {
@@ -102,21 +125,26 @@ struct AITransformPreviewModal: View {
 					)
 				}
 			}
-			.padding(.leading, 22)
+			.padding(.leading, KKPadding2XL + KKPaddingSM)
 		}
 	}
 
 	private var header: some View {
-		HStack(spacing: KKSpacingMD) {
+		HStack(alignment: .firstTextBaseline, spacing: KKSpacingMD) {
+			Image(systemName: "sparkles")
+				.font(.system(size: 13, weight: .semibold))
+				.foregroundStyle(Color.kkAccent)
+			Text("\u{201C}\(batch.instruction)\u{201D}")
+				.font(.system(size: 12, weight: .medium))
+				.foregroundStyle(Color.kkAccent)
+				.italic()
+				.lineLimit(1)
+				.truncationMode(.tail)
+			Spacer()
 			Text("AI Transform Preview")
 				.font(.title3)
-			Text("\u{2022}")
-				.foregroundStyle(.tertiary)
-			Text("\u{201C}\(batch.instruction)\u{201D}")
-				.font(.system(size: 12))
 				.foregroundStyle(.secondary)
-				.italic()
-			Spacer()
+				.padding(.horizontal, KKPaddingSM)
 			if batch.isRunning {
 				ProgressView().controlSize(.small)
 			}
@@ -150,39 +178,47 @@ private struct AITransformPreviewRow: View {
 	let isRunning: Bool
 
 	var body: some View {
-		HStack(alignment: .top, spacing: KKSpacingSM) {
+		HStack(alignment: .top, spacing: KKSpacingLG) {
 			Toggle(isOn: $item.include) { EmptyView() }
 				.toggleStyle(.checkbox)
+				.tint(Color.kkClipColor(isCompound: item.isCompound))
 				.disabled(item.alignedWords == nil)
 				.padding(.top, 2)
-			VStack(alignment: .leading, spacing: 2) {
-				Text(item.originalText)
-					.font(.system(size: 11))
-					.foregroundStyle(.secondary)
-					.textSelection(.enabled)
+			VStack(alignment: .leading, spacing: KKSpacingXS) {
 				if let result = item.resultText {
-					Text(result)
+					let diff = AIWordDiff.diff(original: item.originalText, result: result)
+					diff.originalAttributed
 						.font(.system(size: 11))
-						.foregroundStyle(.primary)
 						.textSelection(.enabled)
-				} else if case .failed(let msg) = item.status {
-					Text(msg)
+					diff.resultAttributed
 						.font(.system(size: 11))
-						.foregroundStyle(.red)
-				} else if isRunning {
-					Text("Working\u{2026}")
+						.textSelection(.enabled)
+				} else {
+					Text(item.originalText)
 						.font(.system(size: 11))
-						.foregroundStyle(.tertiary)
+						.foregroundStyle(.secondary)
+						.textSelection(.enabled)
+				}
+				if item.resultText == nil {
+					if case .failed(let msg) = item.status {
+						Text(msg)
+							.font(.system(size: 11))
+							.foregroundStyle(Color.kkError)
+					} else if isRunning {
+						Text("Working\u{2026}")
+							.font(.system(size: 11))
+							.foregroundStyle(.tertiary)
+					}
 				}
 			}
 			Spacer(minLength: 6)
+			if let result = item.resultText {
+				DiffCountsBadge(
+					counts: AIWordDiff.counts(original: item.originalText, result: result))
+			}
 			status
 		}
-		.padding(.horizontal, KKPaddingMD)
 		.padding(.vertical, KKPaddingSM)
-		.background(
-			RoundedRectangle(cornerRadius: 5).fill(Color.white.opacity(0.04))
-		)
 	}
 
 	@ViewBuilder
@@ -193,11 +229,29 @@ private struct AITransformPreviewRow: View {
 		case .ready:
 			Image(systemName: "checkmark.circle.fill")
 				.font(.system(size: 11))
-				.foregroundStyle(.green)
+				.foregroundStyle(Color.kkSuccess)
 		case .failed:
 			Image(systemName: "xmark.circle.fill")
 				.font(.system(size: 11))
-				.foregroundStyle(.red)
+				.foregroundStyle(Color.kkError)
 		}
+	}
+}
+
+private struct DiffCountsBadge: View {
+	let counts: (added: Int, removed: Int)
+
+	var body: some View {
+		HStack(spacing: KKSpacingXS) {
+			if counts.added > 0 {
+				Text("+\(counts.added)")
+					.foregroundStyle(Color.kkSuccess)
+			}
+			if counts.removed > 0 {
+				Text("-\(counts.removed)")
+					.foregroundStyle(Color.kkError)
+			}
+		}
+		.font(.system(size: 10, weight: .semibold).monospacedDigit())
 	}
 }

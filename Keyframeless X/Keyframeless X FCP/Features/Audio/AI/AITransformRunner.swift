@@ -20,6 +20,7 @@ final class AITransformBatch: ObservableObject, Identifiable {
 		let id = UUID()
 		let clipIndex: Int
 		let clipName: String
+		let isCompound: Bool
 		let sentenceStart: Float
 		let isFromSRT: Bool
 		let originalText: String
@@ -64,6 +65,7 @@ final class AITransformBatch: ObservableObject, Identifiable {
 						Item(
 							clipIndex: idx,
 							clipName: clip.name,
+							isCompound: clip.isCompound,
 							sentenceStart: sourceStart,
 							isFromSRT: true,
 							originalText: synth.map(\.word).joined(separator: " "),
@@ -77,6 +79,7 @@ final class AITransformBatch: ObservableObject, Identifiable {
 						Item(
 							clipIndex: idx,
 							clipName: clip.name,
+							isCompound: clip.isCompound,
 							sentenceStart: sentence.first!.start,
 							isFromSRT: false,
 							originalText: sentence.map(\.word).joined(separator: " "),

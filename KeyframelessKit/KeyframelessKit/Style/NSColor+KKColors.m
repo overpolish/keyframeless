@@ -93,6 +93,13 @@
                          alpha:1.0];
 }
 
++ (NSColor *)success {
+  return [NSColor colorWithRed:0x2D / 255.0
+                         green:0xB6 / 255.0
+                          blue:0x55 / 255.0
+                         alpha:1.0];
+}
+
 - (NSColor *)shiftedHueBy:(CGFloat)amount {
   NSColor *hsb = [self colorUsingColorSpace:NSColorSpace.deviceRGBColorSpace];
   if (!hsb)
