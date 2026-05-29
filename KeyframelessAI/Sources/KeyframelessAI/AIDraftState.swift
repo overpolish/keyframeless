@@ -18,6 +18,10 @@ public final class AIDraftState: ObservableObject {
 	@Published public var pendingAnswer: String?
 	@Published public var isRouting: Bool = false
 	@Published public var routingError: String?
+	/// Optional short label shown next to the spinner while routing
+	/// ("Planning timing…", "Resolving values…"). Falls back to "Thinking…"
+	/// when nil.
+	@Published public var routingStatus: String?
 
 	private init() {}
 
@@ -25,5 +29,6 @@ public final class AIDraftState: ObservableObject {
 		prompt = ""
 		pendingAnswer = nil
 		routingError = nil
+		routingStatus = nil
 	}
 }

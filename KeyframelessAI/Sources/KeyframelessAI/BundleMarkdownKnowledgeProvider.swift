@@ -40,13 +40,6 @@ public struct BundleMarkdownKnowledgeProvider: AIKnowledgeProvider {
 			urls = Self.recursiveMarkdownURLs(in: resourceURL)
 		}
 
-		#if DEBUG
-			print(
-				"[AIKnowledge \(name)] bundle=\(bundle.bundleURL.lastPathComponent) "
-					+ "subdir=\(subdirectory ?? "nil") found=\(urls.count) md files")
-			for url in urls { print("  - \(url.lastPathComponent)") }
-		#endif
-
 		return urls.compactMap { url in
 			guard let data = try? Data(contentsOf: url),
 				let raw = String(data: data, encoding: .utf8)

@@ -29,6 +29,7 @@ public struct AISettingsPopover: View {
 	let productContext: String
 	let examples: [AIPromptExample]
 	let placeholder: String
+	let isPluginMode: Bool
 	let onRun: (String) -> Void
 	let onDismiss: () -> Void
 
@@ -37,6 +38,7 @@ public struct AISettingsPopover: View {
 		productContext: String,
 		examples: [AIPromptExample] = AIPromptExample.stenoDefaults,
 		placeholder: String = "Describe what to do to the selected transcriptions…",
+		isPluginMode: Bool = false,
 		onRun: @escaping (String) -> Void,
 		onDismiss: @escaping () -> Void = {}
 	) {
@@ -44,6 +46,7 @@ public struct AISettingsPopover: View {
 		self.productContext = productContext
 		self.examples = examples
 		self.placeholder = placeholder
+		self.isPluginMode = isPluginMode
 		self.onRun = onRun
 		self.onDismiss = onDismiss
 		let initial: Tab = AIKeyState.shared.hasAnyKey ? .action : .config
@@ -69,9 +72,10 @@ public struct AISettingsPopover: View {
 						productContext: productContext,
 						examples: examples,
 						placeholder: placeholder,
+						isPluginMode: isPluginMode,
 						onRun: { prompt in
 							onRun(prompt)
-							onDismiss()
+							if !isPluginMode { onDismiss() }
 						})
 				case .config:
 					AIConfigTab()

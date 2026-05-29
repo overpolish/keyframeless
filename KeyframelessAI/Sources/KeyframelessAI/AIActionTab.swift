@@ -10,6 +10,7 @@ struct AIActionTab: View {
 	let productContext: String
 	let examples: [AIPromptExample]
 	let placeholder: String
+	let isPluginMode: Bool
 	let onRun: (String) -> Void
 
 	@StateObject private var draft = AIDraftState.shared
@@ -26,7 +27,7 @@ struct AIActionTab: View {
 			if let answer = draft.pendingAnswer {
 				answerCard(answer)
 			}
-			selectionLine
+			if !isPluginMode { selectionLine }
 			promptEditor
 			if let err = draft.routingError {
 				Text(err)
@@ -186,7 +187,7 @@ struct AIActionTab: View {
 				if draft.isRouting {
 					HStack(spacing: 4) {
 						ProgressView().controlSize(.small)
-						Text("Thinking…")
+						Text(draft.routingStatus ?? "Thinking…")
 					}
 				} else {
 					Text("Run")
@@ -201,6 +202,15 @@ struct AIActionTab: View {
 		let trimmed = draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
 		guard canRun, keyState.activeIsConfigured else { return }
 		draft.routingError = nil
+
+		if isPluginMode {
+			// Plugin host owns routing: it has live timeline state and a custom
+			// agent. Just hand the prompt over and let it drive draft state.
+			recents.record(trimmed)
+			onRun(trimmed)
+			return
+		}
+
 		draft.isRouting = true
 		let captured = (selectedCount, productContext, trimmed)
 		Task { @MainActor in

@@ -31,7 +31,8 @@ public enum AITransform {
 	public static func transform(
 		instruction: String,
 		text: String,
-		overrideSystemPrompt: String? = nil
+		overrideSystemPrompt: String? = nil,
+		modelOverride: String? = nil
 	) async throws -> String {
 		let provider = await MainActor.run { AIKeyState.shared.activeProvider }
 		guard let key = try AIKeychain.load(provider) else { throw AITransformError.noKey }
@@ -64,15 +65,18 @@ public enum AITransform {
 		case .anthropic:
 			return try await callAnthropic(
 				key: key, system: system, cache: cacheSystem,
-				instruction: instruction, text: text)
+				instruction: instruction, text: text,
+				model: modelOverride ?? "claude-haiku-4-5-20251001")
 		case .openai:
 			return try await callOpenAI(
-				key: key, system: system, instruction: instruction, text: text)
+				key: key, system: system, instruction: instruction, text: text,
+				model: modelOverride ?? "gpt-4o-mini")
 		}
 	}
 
 	private static func callAnthropic(
-		key: String, system: String, cache: Bool, instruction: String, text: String
+		key: String, system: String, cache: Bool, instruction: String, text: String,
+		model: String
 	) async throws -> String {
 		var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
 		request.httpMethod = "POST"
@@ -95,7 +99,7 @@ public enum AITransform {
 		}
 
 		let body: [String: Any] = [
-			"model": "claude-haiku-4-5-20251001",
+			"model": model,
 			"max_tokens": 4096,
 			"system": systemField,
 			"messages": [
@@ -121,25 +125,9 @@ public enum AITransform {
 				let type: String
 				let text: String?
 			}
-			struct Usage: Decodable {
-				let input_tokens: Int?
-				let output_tokens: Int?
-				let cache_creation_input_tokens: Int?
-				let cache_read_input_tokens: Int?
-			}
 			let content: [Block]
-			let usage: Usage?
 		}
 		let decoded = try JSONDecoder().decode(Response.self, from: data)
-		#if DEBUG
-			if let u = decoded.usage {
-				print(
-					"[AITransform anthropic] in=\(u.input_tokens ?? 0) "
-						+ "out=\(u.output_tokens ?? 0) "
-						+ "cache_write=\(u.cache_creation_input_tokens ?? 0) "
-						+ "cache_read=\(u.cache_read_input_tokens ?? 0)")
-			}
-		#endif
 		let combined = decoded.content.compactMap { $0.type == "text" ? $0.text : nil }.joined()
 		let trimmed = combined.trimmingCharacters(in: .whitespacesAndNewlines)
 		guard !trimmed.isEmpty else { throw AITransformError.empty }
@@ -147,7 +135,8 @@ public enum AITransform {
 	}
 
 	private static func callOpenAI(
-		key: String, system: String, instruction: String, text: String
+		key: String, system: String, instruction: String, text: String,
+		model: String
 	) async throws -> String {
 		var request = URLRequest(url: URL(string: "https://api.openai.com/v1/chat/completions")!)
 		request.httpMethod = "POST"
@@ -156,7 +145,7 @@ public enum AITransform {
 		request.timeoutInterval = 60
 
 		let body: [String: Any] = [
-			"model": "gpt-4o-mini",
+			"model": model,
 			"messages": [
 				["role": "system", "content": system],
 				["role": "user", "content": "Instruction: \(instruction)\n\nText:\n\(text)"],
