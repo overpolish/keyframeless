@@ -11,15 +11,21 @@ public struct AIButton: View {
 
 	let selectedCount: Int
 	let productContext: String
+	let examples: [AIPromptExample]
+	let placeholder: String
 	let onRun: (String) -> Void
 
 	public init(
 		selectedCount: Int,
 		productContext: String,
+		examples: [AIPromptExample] = AIPromptExample.stenoDefaults,
+		placeholder: String = "Describe what to do to the selected transcriptions…",
 		onRun: @escaping (String) -> Void
 	) {
 		self.selectedCount = selectedCount
 		self.productContext = productContext
+		self.examples = examples
+		self.placeholder = placeholder
 		self.onRun = onRun
 	}
 
@@ -37,6 +43,8 @@ public struct AIButton: View {
 			AISettingsPopover(
 				selectedCount: selectedCount,
 				productContext: productContext,
+				examples: examples,
+				placeholder: placeholder,
 				onRun: onRun,
 				onDismiss: { showPopover = false }
 			)

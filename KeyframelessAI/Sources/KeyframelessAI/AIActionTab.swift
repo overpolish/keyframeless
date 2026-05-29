@@ -8,20 +8,14 @@ import SwiftUI
 struct AIActionTab: View {
 	let selectedCount: Int
 	let productContext: String
+	let examples: [AIPromptExample]
+	let placeholder: String
 	let onRun: (String) -> Void
 
 	@StateObject private var draft = AIDraftState.shared
 	@StateObject private var recents = AIRecentPrompts.shared
 	@StateObject private var keyState = AIKeyState.shared
 	@FocusState private var promptFocused: Bool
-
-	private static let examples: [(label: String, value: String)] = [
-		("Translate to…", "Translate to "),
-		("Fix capitalization", "Fix capitalization and punctuation"),
-		("Strip filler words", "Remove filler words like uh, um, like, you know"),
-		("Make formal", "Rewrite in a formal tone"),
-		("Expand contractions", "Expand all contractions (don't → do not)"),
-	]
 
 	private var canRun: Bool {
 		!draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -39,7 +33,7 @@ struct AIActionTab: View {
 					.font(.system(size: 10))
 					.foregroundStyle(.red)
 			}
-			examplesRow
+			if !examples.isEmpty { examplesRow }
 			if !recents.prompts.isEmpty {
 				recentsRow
 			}
@@ -107,7 +101,7 @@ struct AIActionTab: View {
 
 	private var promptEditor: some View {
 		TextField(
-			"Describe what to do to the selected transcriptions…",
+			placeholder,
 			text: $draft.prompt,
 			axis: .vertical
 		)
@@ -125,7 +119,7 @@ struct AIActionTab: View {
 				.foregroundStyle(.tertiary)
 				.textCase(.uppercase)
 			FlowLayout(spacing: 4) {
-				ForEach(Self.examples, id: \.label) { ex in
+				ForEach(examples, id: \.label) { ex in
 					Button {
 						draft.prompt = ex.value
 						promptFocused = true

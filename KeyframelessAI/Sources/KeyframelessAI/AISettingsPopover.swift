@@ -27,17 +27,23 @@ public struct AISettingsPopover: View {
 	@State private var tab: Tab
 	let selectedCount: Int
 	let productContext: String
+	let examples: [AIPromptExample]
+	let placeholder: String
 	let onRun: (String) -> Void
 	let onDismiss: () -> Void
 
 	public init(
 		selectedCount: Int,
 		productContext: String,
+		examples: [AIPromptExample] = AIPromptExample.stenoDefaults,
+		placeholder: String = "Describe what to do to the selected transcriptions…",
 		onRun: @escaping (String) -> Void,
 		onDismiss: @escaping () -> Void = {}
 	) {
 		self.selectedCount = selectedCount
 		self.productContext = productContext
+		self.examples = examples
+		self.placeholder = placeholder
 		self.onRun = onRun
 		self.onDismiss = onDismiss
 		let initial: Tab = AIKeyState.shared.hasAnyKey ? .action : .config
@@ -61,6 +67,8 @@ public struct AISettingsPopover: View {
 					AIActionTab(
 						selectedCount: selectedCount,
 						productContext: productContext,
+						examples: examples,
+						placeholder: placeholder,
 						onRun: { prompt in
 							onRun(prompt)
 							onDismiss()

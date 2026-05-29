@@ -26,8 +26,9 @@ public enum AIRouter {
 
 			Your output must be in ONE of exactly two shapes - nothing else, no preamble, no labels:
 
-			Shape A (the user wants to transform the selected transcription text - translate, rephrase, \
-			fix capitalization, strip filler words, change tone, etc.):
+			Shape A (the user wants to transform the selected items - translate text, rephrase, \
+			fix capitalization, strip filler words, change tone, etc. - this only applies when \
+			the tool actually supports transforming a selection of items):
 			    Output exactly: <TRANSFORM>concise imperative instruction</TRANSFORM>
 			    Example user message: "can you translate these to german?"
 			    Example output:    <TRANSFORM>translate to german</TRANSFORM>
@@ -38,13 +39,13 @@ public enum AIRouter {
 			    Output the answer text directly. 1-3 sentences.
 			    Do NOT prefix with "ANSWER", "Answer:", "Yes,", "Sure,", "Great question", or any \
 			other label or filler. Start with the substantive content.
-			    Example user message: "does this support srt export?"
-			    Example output:    Steno exports SRT in two ways: a standalone .srt file via the SRT Export button, and SRT-format captions delivered to FCP's caption track via the Caption type's SRT format option.
+			    Stick to facts present in the reference docs; if the docs don't cover the \
+			question, say so honestly.
 
-			HARD RULE: If the user's message says 0 transcription lines are selected, you MUST use \
-			Shape B - there is nothing to transform. Even if their wording sounds like a transform \
-			request ("translate this", "fix the captions"), respond in Shape B and tell them they \
-			need to select transcriptions first.
+			HARD RULE: If the user's message says 0 items are selected, you MUST use Shape B - \
+			there is nothing to transform. Even if their wording sounds like a transform request, \
+			respond in Shape B. If the tool doesn't support transforms at all (no selection \
+			concept), every response uses Shape B.
 
 			When in Shape B, only use facts present in the REFERENCE DOCS. If the docs don't cover \
 			the question, say so honestly. Never invent features.
@@ -55,7 +56,7 @@ public enum AIRouter {
 			"""
 
 		let userMessage =
-			"[\(selectedCount) transcription line(s) selected]\n\n\(userPrompt)"
+			"[\(selectedCount) item(s) selected]\n\n\(userPrompt)"
 
 		let raw = try await AITransform.transform(
 			instruction: userMessage,

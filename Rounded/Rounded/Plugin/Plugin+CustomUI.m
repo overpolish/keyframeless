@@ -517,16 +517,52 @@
 }
 
 - (nullable NSView *)aiAccessoryView {
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    [KKAIKnowledge registerSharedTimelineDocs];
+    [KKAIKnowledge
+        registerBundleDocsWithName:@"Rounded"
+                            bundle:[NSBundle bundleForClass:[RoundedPlugin class]]
+                      subdirectory:@"AIKnowledge"];
+  });
+
   NSString *productContext = RLoc(
       @"Rounded, a Final Cut Pro plugin that rounds corners, crops with a box, "
-      @"and animates with Basic and Advanced timing. Always refer to yourself "
-      @"as Rounded.",
+      @"and animates with the shared Keyframeless timeline system (Basic and "
+      @"Advanced timing, easing, motion blur). Always refer to yourself as "
+      @"Rounded. Detailed feature information is in the reference docs below.",
       @"AI assistant product context for Rounded plugin.");
+
+  NSArray<NSArray<NSString *> *> *examples = @[
+    @[ RLoc(@"What's Basic vs Advanced?",
+             @"AI example chip: Basic vs Advanced timing question."),
+       RLoc(@"What's the difference between Basic and Advanced timing?",
+             @"AI example value: Basic vs Advanced timing question.") ],
+    @[ RLoc(@"How do I animate the radius?",
+             @"AI example chip: animate radius question."),
+       RLoc(@"How do I animate the radius from 0 to 100%?",
+             @"AI example value: animate radius question.") ],
+    @[ RLoc(@"What does the Box do?",
+             @"AI example chip: Box property question."),
+       RLoc(@"What does the Box property do?",
+             @"AI example value: Box property question.") ],
+    @[ RLoc(@"Motion blur basics",
+             @"AI example chip: motion blur question."),
+       RLoc(@"How does motion blur work and what's shutter angle?",
+             @"AI example value: motion blur question.") ],
+  ];
+
+  NSString *placeholder = RLoc(@"Ask Rounded a question…",
+                                @"AI prompt field placeholder for Rounded.");
+
   return [KKAIBannerHost
       makeButtonWithProductContext:productContext
+                      examplePairs:examples
+                       placeholder:placeholder
                              onRun:^(NSString *prompt){
-                                 // TODO: wire prompt → KKTimeline mutation or
-                                 // route to Q&A answer display.
+                                 // TODO: wire prompt → KKTimeline mutation.
+                                 // For now Q&A is the only supported path,
+                                 // and answers render in the popover itself.
                              }];
 }
 
