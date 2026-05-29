@@ -35,6 +35,20 @@ extension FCPXMLParser {
 		}
 	}
 
+	/// Ref-clips can disable a contained subrole via `<audio-role-source role="..." active="0"/>`.
+	/// Returns true when dialogue is explicitly disabled at this wrapper level.
+	static func isDialogueRoleDisabled(_ el: XMLElement) -> Bool {
+		let sources = el.elements(forName: "audio-role-source")
+		guard !sources.isEmpty else { return false }
+		let dialogueSources = sources.filter {
+			($0.attribute(forName: "role")?.stringValue ?? "").hasPrefix("dialogue")
+		}
+		guard !dialogueSources.isEmpty else { return false }
+		return dialogueSources.allSatisfy {
+			$0.attribute(forName: "active")?.stringValue == "0"
+		}
+	}
+
 	static func isMuted(_ el: XMLElement) -> Bool {
 		guard let adjustVolume = el.elements(forName: "adjust-volume").first else {
 			return false

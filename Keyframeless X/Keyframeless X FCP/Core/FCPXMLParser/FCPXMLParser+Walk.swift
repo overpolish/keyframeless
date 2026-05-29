@@ -113,6 +113,9 @@ extension FCPXMLParser {
 				walkElement(
 					child, tcStart: tcStart, compound: nil, assets: assets, mediaMap: mediaMap,
 					multicamMap: multicamMap, effects: effects, into: &clips)
+				// `<audio-role-source role="dialogue" active="0"/>` on the ref-clip
+				// mutes the compound's contained dialogue audio; skip the inner spine walk.
+				if isDialogueRoleDisabled(child) { continue }
 				// Recurse into compound clip's media spine with explicit position + trim context.
 				if let mediaId = child.attribute(forName: "ref")?.stringValue,
 					let mediaSeq = mediaMap[mediaId],
