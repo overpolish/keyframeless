@@ -12,7 +12,7 @@ import Foundation
 /// Built once (loads effectState pre-Initialize, configures formats, wires
 /// callbacks), then `renderChunk` can be called repeatedly with each input
 /// chunk. Designed for streaming (live playback) and one-shot offline render
-/// alike — see `AudioUnitRenderer.process` for the one-shot wrapper.
+/// alike - see `AudioUnitRenderer.process` for the one-shot wrapper.
 ///
 /// We can't use `AVAudioEngine` here because FCP-bundled AUs (EDEL Compressor,
 /// Channel EQ, etc.) compute their DSP coefficients during
@@ -132,7 +132,7 @@ final class AudioUnitChain {
 
 	/// Creates an `AudioUnit` for `filter`, configures its stream formats and
 	/// max-frames-per-slice. Returns nil when the AU isn't installable or any
-	/// configuration step fails — the chain proceeds with the remaining
+	/// configuration step fails - the chain proceeds with the remaining
 	/// filters so a single broken effect doesn't dry the whole chain.
 	private static func instantiateNode(
 		filter: FCPXMLParser.AudioFilter,

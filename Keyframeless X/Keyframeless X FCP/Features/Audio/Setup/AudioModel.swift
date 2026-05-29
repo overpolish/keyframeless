@@ -53,6 +53,7 @@ class AudioModel: ObservableObject {
 
 	@Published var captionTemplates: [CaptionTemplate] = []
 	@Published var selectedTemplate: CaptionTemplate = .basicTitle
+	@Published var aiTransformBatch: AITransformBatch?
 	@Published var paramsModalTemplate: CaptionTemplate?
 	@Published var paramsModalParams: [PublishedParameter] = []
 	@Published var paramsModalHasPerWord: Bool = false
@@ -382,6 +383,21 @@ class AudioModel: ObservableObject {
 			captionFormat: captionFormat
 		)
 		try? JSONEncoder().encode(state).write(to: url, options: .atomic)
+	}
+
+	@MainActor
+	func runAITransform(instruction: String) {
+		let selected = editSelectedClips ?? Set(audioClips.indices)
+		let clips: [(Int, FCPXMLParser.AudioClip)] = selected
+			.sorted()
+			.compactMap { idx in
+				guard audioClips.indices.contains(idx) else { return nil }
+				return (idx, audioClips[idx])
+			}
+		let batch = AITransformBatch(instruction: instruction, clips: clips)
+		guard !batch.items.isEmpty else { return }
+		aiTransformBatch = batch
+		Task { await AITransformRunner.run(batch) }
 	}
 
 }

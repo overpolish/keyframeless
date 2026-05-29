@@ -11,6 +11,7 @@
 		F21396032F649EF900E1EC03 /* keyframeless.icon in Resources */ = {isa = PBXBuildFile; fileRef = F21396012F649EF900E1EC03 /* keyframeless.icon */; };
 		F220BFE32F4E07EB0034AF77 /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; };
 		F220BFE42F4E07EB0034AF77 /* KeyframelessKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		F23EF0142FC971CD00AFBA1E /* KeyframelessAI in Frameworks */ = {isa = PBXBuildFile; productRef = F23EF0132FC971CD00AFBA1E /* KeyframelessAI */; };
 		F26E024F2F4DE56D009D949A /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; };
 		F26E02502F4DE56D009D949A /* KeyframelessKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F2E2ED792F4CA530008620D9 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F2E2ED782F4CA530008620D9 /* Cocoa.framework */; };
@@ -158,6 +159,7 @@
 				F2E2ED8B2F4CA530008620D9 /* PluginManager.framework in Frameworks */,
 				F220BFE32F4E07EB0034AF77 /* KeyframelessKit.framework in Frameworks */,
 				F2E2ED852F4CA530008620D9 /* Foundation.framework in Frameworks */,
+				F23EF0142FC971CD00AFBA1E /* KeyframelessAI in Frameworks */,
 				F2E2ED872F4CA530008620D9 /* AppKit.framework in Frameworks */,
 				F2E2ED8D2F4CA530008620D9 /* FxPlug.framework in Frameworks */,
 			);
@@ -248,6 +250,7 @@
 			);
 			name = "XPC Service";
 			packageProductDependencies = (
+				F23EF0132FC971CD00AFBA1E /* KeyframelessAI */,
 			);
 			productName = "XPC Service";
 			productReference = F2E2ED802F4CA530008620D9 /* Rounded XPC Service.pluginkit */;
@@ -653,6 +656,13 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F23EF0132FC971CD00AFBA1E /* KeyframelessAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KeyframelessAI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = F2E2ED6D2F4CA530008620D9 /* Project object */;
 }

@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+import Foundation
+import KeyframelessAI
 import KeyframelessKit
 import SwiftUI
 
@@ -22,6 +24,24 @@ struct AppShell: View {
 		// (For pure UI work, use the #Preview in UpdateBanner.swift instead.)
 		private static let forceUpdateBanner = false
 	#endif
+
+	private static var aiKnowledgeRegistered = false
+
+	@MainActor
+	private static func registerAIKnowledgeOnce() {
+		guard !aiKnowledgeRegistered else { return }
+		aiKnowledgeRegistered = true
+		AIKnowledgeRegistry.shared.register(
+			BundleMarkdownKnowledgeProvider(
+				name: "Steno",
+				bundle: .main,
+				subdirectory: "AIKnowledge"
+			)
+		)
+	}
+
+	static let aiProductContext =
+		"Steno, the audio transcription and caption tool in the Keyframeless X workflow extension for Final Cut Pro. Always refer to yourself / the tool as \"Steno\", not \"Keyframeless X\". Detailed feature information is in the reference docs below."
 
 	var body: some View {
 		VStack(spacing: KKSpacingMD) {
@@ -71,17 +91,20 @@ struct AppShell: View {
 		.blur(
 			radius: audioModel.isDraggingToFCP || audioModel.paramsModalTemplate != nil
 				|| audioModel.publishModalTemplate != nil
-				|| audioModel.updateModalTemplate != nil ? 3 : 0
+				|| audioModel.updateModalTemplate != nil
+				|| audioModel.aiTransformBatch != nil ? 3 : 0
 		)
 		.animation(.easeInOut(duration: 0.2), value: audioModel.isDraggingToFCP)
 		.allowsHitTesting(
 			audioModel.paramsModalTemplate == nil && audioModel.publishModalTemplate == nil
 				&& audioModel.updateModalTemplate == nil
+				&& audioModel.aiTransformBatch == nil
 				&& !processingCoordinator.isProcessing
 		)
 		.background(Color(nsColor: .windowBackground()))
 		.onAppear {
 			FontCache.warmup()
+			Self.registerAIKnowledgeOnce()
 			#if DEBUG
 				if Self.forceUpdateBanner {
 					// Reset dismissal so the forced banner returns on every reopen.
@@ -143,6 +166,17 @@ struct AppShell: View {
 				)
 				.transition(.opacity)
 			}
+			if let batch = audioModel.aiTransformBatch {
+				AITransformPreviewModal(
+					batch: batch,
+					onApply: {
+						AITransformRunner.apply(batch)
+						audioModel.aiTransformBatch = nil
+					},
+					onDismiss: { audioModel.aiTransformBatch = nil }
+				)
+				.transition(.opacity)
+			}
 			if let (template, community) = audioModel.updateModalTemplate {
 				TemplateUpdateModal(
 					template: template,
@@ -158,10 +192,17 @@ struct AppShell: View {
 		.animation(.easeInOut(duration: 0.2), value: audioModel.paramsModalTemplate != nil)
 		.animation(.easeInOut(duration: 0.2), value: audioModel.publishModalTemplate != nil)
 		.animation(.easeInOut(duration: 0.2), value: audioModel.updateModalTemplate != nil)
+		.animation(.easeInOut(duration: 0.2), value: audioModel.aiTransformBatch != nil)
 	}
 
 	private var topBar: some View {
 		HStack(spacing: KKSpacingLG) {
+			AIButton(
+				selectedCount: audioModel.editSelectedClips?.count
+					?? (audioModel.stage == .edit ? audioModel.audioClips.count : 0),
+				productContext: AppShell.aiProductContext,
+				onRun: { instruction in audioModel.runAITransform(instruction: instruction) }
+			)
 			PillTabBar(selected: $selectedTab)
 			WhatsNewButton(url: KKUpdateChecker.shared().notesURL)
 			FeedbackButton(url: KKUpdateChecker.shared().feedbackURL)

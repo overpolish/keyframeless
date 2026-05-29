@@ -27,6 +27,7 @@
 + (NSColor *)accentMatchingHost;
 + (NSColor *)warning;
 + (NSColor *)error;
++ (NSColor *)success;
 + (NSColor *)transparent;
 
 - (NSColor *)shiftedHueBy:(CGFloat)amount;

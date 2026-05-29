@@ -546,6 +546,11 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 /// Opens the host's remote window with the rendered `helpSections` and guides.
 - (void)openHelpRemoteWindow;
 
+/// Override to attach an AI accessory view (built via `KeyframelessAI`'s
+/// `KKAIBannerHost`) to the leading edge of the logo banner. Default: nil
+/// (no AI button).
+- (nullable NSView *)aiAccessoryView;
+
 /// Generic host remote-window presenter. Runs the required action scope,
 /// resolves FxRemoteWindowAPI, attaches to the correctly-sized superview,
 /// clears any prior remote content, and wraps `contentProvider()`'s view in a

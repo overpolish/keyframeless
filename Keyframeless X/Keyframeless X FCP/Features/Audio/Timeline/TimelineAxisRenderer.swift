@@ -269,7 +269,7 @@ struct TimelineAxisRenderer {
 		ctx.saveGState()
 		for i in 0..<barCount {
 			let x = waveformRect.minX + CGFloat(i) * stride
-			// Per-bar fixed phase offset using fractional part of i * irrational —
+			// Per-bar fixed phase offset using fractional part of i * irrational -
 			// scatters bars across the cycle without a monotonic stagger that would
 			// read as a traveling wave.
 			let offset = (CGFloat(i) * 0.6180339887).truncatingRemainder(dividingBy: 1.0)

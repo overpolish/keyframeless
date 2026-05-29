@@ -10,8 +10,229 @@
 #import "RoundedLocalized.h"
 #import "RoundedOSCRadiusMath.h"
 #import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKHelpSection.h>
+#import <KeyframelessKit/KKLog.h>
+#import <KeyframelessKit/KKTimingCompat.h>
 #import <KeyframelessKit/KKTimingStage.h>
+@import KeyframelessAI;
+
+/// Plain-text coordinate-space description used by the AI agent's value
+/// resolution pass. Kept tight on purpose: this is the only context the
+/// values-pass LLM call sees, alongside the user's prompt. No timing words,
+/// no in/out, no Basic/Advanced - just lanes and their numeric ranges.
+static NSString *_RoundedAILaneSchemaText(void) {
+  NSMutableString *s = [NSMutableString string];
+  [s appendString:@"Lane labels and coordinate spaces:\n\n"];
+
+  [s appendString:
+          @"- \"Radius\": one numeric component.\n"
+          @"    Range 0..100 (percentage of the clip's shorter edge).\n"
+          @"    Default value: 20. 0 = square corners, 100 = fully rounded.\n"
+          @"\n"
+          @"- \"Crop\": four numeric components [width, height, x_offset, "
+          @"y_offset].\n"
+          @"    width, height: fractions of the clip image, range 0..1. "
+          @"1.0 = full size, 0.5 = half size.\n"
+          @"    x_offset, y_offset: center offsets in normalised SCREEN "
+          @"space (Y-down image convention), range -0.5..+0.5.\n"
+          @"    Axis convention (standard image / screen space):\n"
+          @"      +x = RIGHT, -x = LEFT.\n"
+          @"      +y = DOWN, -y = UP. (Yes, Y increases downward, like "
+          @"every image / canvas / pixel API.)\n"
+          @"    Default value: [1, 1, 0, 0] (full image, no crop).\n"
+          @"\n"
+          @"    Worked examples (verify the y_offset sign before using):\n"
+          @"      full image:              [1.0, 1.0,  0.0,   0.0]\n"
+          @"      top-left quadrant:       [0.5, 0.5, -0.25, -0.25]\n"
+          @"      top-right quadrant:      [0.5, 0.5, +0.25, -0.25]\n"
+          @"      bottom-left quadrant:    [0.5, 0.5, -0.25, +0.25]\n"
+          @"      bottom-right quadrant:   [0.5, 0.5, +0.25, +0.25]\n"
+          @"      top half:                [1.0, 0.5,  0.0,  -0.25]\n"
+          @"      bottom half:             [1.0, 0.5,  0.0,  +0.25]\n"
+          @"      left half:               [0.5, 1.0, -0.25,  0.0]\n"
+          @"      right half:              [0.5, 1.0, +0.25,  0.0]\n"
+          @"      centered square:         [0.5, 0.5,  0.0,   0.0]\n"];
+  return s;
+}
+
+/// Returns a JSON timeline string for the current effect: the saved one, or
+/// a fresh template built from the plugin's availableLanes when nothing is
+/// saved. The LLM always needs to see real lane labels so it can target them.
+static NSString *
+_RoundedAICurrentTimelineJSON(id<FxParameterRetrievalAPI_v6> getAPI) {
+  NSString *saved = KKReadCustomParamString(getAPI, kKKParamTimelineData);
+  if (saved.length && [saved containsString:@"\"label\""])
+    return saved;
+  KKTimeline *fresh = [KKTimeline timeline];
+  fresh.lanes = [RoundedPlugin availableLanes];
+  NSString *json = [KKTimeline jsonFromTimeline:fresh];
+  return json ?: @"{\"lanes\":[]}";
+}
+
+/// For any new hold interval (endpoints_linked:true) that has no modulation,
+/// scan the old lane's intervals for any hold interval with modulation whose
+/// time range overlaps the new interval's time range, and copy its modulation
+/// fields onto the new one. The LLM is told to preserve modulation across
+/// unchanged regions but routinely forgets; this is the deterministic
+/// backstop.
+static NSArray *_RoundedAIPreserveModulation(NSArray *newKps, NSArray *oldKps) {
+  if (![newKps isKindOfClass:[NSArray class]] || newKps.count < 2)
+    return newKps;
+  if (![oldKps isKindOfClass:[NSArray class]] || oldKps.count < 2)
+    return newKps;
+
+  NSMutableArray *out = [NSMutableArray arrayWithCapacity:newKps.count];
+  for (NSUInteger i = 0; i < newKps.count; i++) {
+    id raw = newKps[i];
+    if (![raw isKindOfClass:[NSDictionary class]]) {
+      [out addObject:raw];
+      continue;
+    }
+    NSMutableDictionary *kp = [raw mutableCopy];
+    NSDictionary *outgoing = kp[@"outgoing"];
+    if (![outgoing isKindOfClass:[NSDictionary class]] ||
+        i + 1 >= newKps.count) {
+      [out addObject:kp];
+      continue;
+    }
+    BOOL linked = [outgoing[@"endpoints_linked"] boolValue];
+    NSInteger newMod = [outgoing[@"modulation"] integerValue];
+    if (!linked || newMod != 0) {
+      [out addObject:kp];
+      continue;
+    }
+    // This is a hold with no modulation. Look for a matching old hold
+    // interval whose time range overlaps AND whose value matches this
+    // keypose's value (so we only preserve modulation on "the same hold
+    // resegmented", not on a new differently-valued hold the user just
+    // introduced inside the old region).
+    double newStart = [kp[@"time"] doubleValue];
+    double newEnd = [((NSDictionary *)newKps[i + 1])[@"time"] doubleValue];
+    NSArray *newVals = kp[@"values"];
+    for (NSUInteger j = 0; j + 1 < oldKps.count; j++) {
+      NSDictionary *oldKp = oldKps[j];
+      if (![oldKp isKindOfClass:[NSDictionary class]])
+        continue;
+      NSDictionary *oldOut = oldKp[@"outgoing"];
+      if (![oldOut isKindOfClass:[NSDictionary class]])
+        continue;
+      BOOL oldLinked = [oldOut[@"endpoints_linked"] boolValue];
+      NSInteger oldMod = [oldOut[@"modulation"] integerValue];
+      if (!oldLinked || oldMod == 0)
+        continue;
+      double oldStart = [oldKp[@"time"] doubleValue];
+      double oldEnd = [((NSDictionary *)oldKps[j + 1])[@"time"] doubleValue];
+      // Time overlap AND matching held value. The value check is what
+      // separates "outer wiggle-hold resegmented around a new bump" from
+      // "a new quiet middle hold sitting inside the old wiggle region".
+      BOOL overlaps = (newStart < oldEnd) && (newEnd > oldStart);
+      if (!overlaps)
+        continue;
+      NSArray *oldVals = oldKp[@"values"];
+      if (![newVals isKindOfClass:[NSArray class]] ||
+          ![oldVals isKindOfClass:[NSArray class]] ||
+          newVals.count != oldVals.count)
+        continue;
+      BOOL sameValues = YES;
+      for (NSUInteger k = 0; k < newVals.count; k++) {
+        if (fabs([newVals[k] doubleValue] - [oldVals[k] doubleValue]) > 1e-6) {
+          sameValues = NO;
+          break;
+        }
+      }
+      if (!sameValues)
+        continue;
+      NSMutableDictionary *mergedOut = [outgoing mutableCopy];
+      mergedOut[@"modulation"] = @(oldMod);
+      if (oldOut[@"modulation_intensity"])
+        mergedOut[@"modulation_intensity"] = oldOut[@"modulation_intensity"];
+      if (oldOut[@"modulation_frequency"])
+        mergedOut[@"modulation_frequency"] = oldOut[@"modulation_frequency"];
+      if (oldOut[@"modulation_seed"])
+        mergedOut[@"modulation_seed"] = oldOut[@"modulation_seed"];
+      if (oldOut[@"modulation_linked"] != nil)
+        mergedOut[@"modulation_linked"] = oldOut[@"modulation_linked"];
+      kp[@"outgoing"] = mergedOut;
+      break;
+    }
+    [out addObject:kp];
+  }
+  return out;
+}
+
+/// Merge the AI agent's compiled mutation JSON of shape
+/// `{"operations":[{"lane":"<label>","keyposes":[...]}]}` into the current
+/// full timeline JSON. The merge preserves each lane's stable fields
+/// (id, value_type, component_min/max/units) and only replaces keyposes.
+/// Lanes not mentioned in operations are left untouched. Unknown lane
+/// labels are dropped silently.
+static NSString *_RoundedAIMergedTimelineJSON(NSString *currentTimelineJSON,
+                                              NSString *mutationJSON) {
+  NSData *curD = [currentTimelineJSON dataUsingEncoding:NSUTF8StringEncoding];
+  NSError *err = nil;
+  NSMutableDictionary *current =
+      [NSJSONSerialization JSONObjectWithData:curD
+                                      options:NSJSONReadingMutableContainers
+                                        error:&err];
+  if (![current isKindOfClass:[NSMutableDictionary class]])
+    return nil;
+  NSData *mutD = [mutationJSON dataUsingEncoding:NSUTF8StringEncoding];
+  NSDictionary *mut = [NSJSONSerialization JSONObjectWithData:mutD
+                                                      options:0
+                                                        error:&err];
+  if (![mut isKindOfClass:[NSDictionary class]])
+    return nil;
+  NSArray *ops = mut[@"operations"];
+  NSMutableArray *curLanes = current[@"lanes"];
+  if (![ops isKindOfClass:[NSArray class]] ||
+      ![curLanes isKindOfClass:[NSMutableArray class]])
+    return nil;
+
+  NSMutableDictionary *byLabel = [NSMutableDictionary dictionary];
+  for (NSUInteger i = 0; i < curLanes.count; i++) {
+    NSDictionary *L = curLanes[i];
+    if (![L isKindOfClass:[NSDictionary class]])
+      continue;
+    NSString *label = L[@"label"];
+    if ([label isKindOfClass:[NSString class]])
+      byLabel[label] = @(i);
+  }
+
+  for (id op in ops) {
+    if (![op isKindOfClass:[NSDictionary class]])
+      continue;
+    NSString *label = op[@"lane"];
+    if (![label isKindOfClass:[NSString class]])
+      continue;
+    NSNumber *idxN = byLabel[label];
+    if (!idxN) {
+      KKLogWarn(@"AI tried to write unknown lane label: %@", label);
+      continue;
+    }
+    NSMutableDictionary *target =
+        [curLanes[idxN.unsignedIntegerValue] mutableCopy];
+    if (op[@"keyposes"]) {
+      // Crop schema exposed to the LLM as screen-space (Y-down). The data
+      // model is also Y-down empirically (manually editing y=+0.5 in the
+      // inspector moves the crop center DOWN), regardless of what comments
+      // elsewhere claim. So LLM output flows straight through.
+      NSArray *newKps = op[@"keyposes"];
+      NSArray *oldKps = curLanes[idxN.unsignedIntegerValue][@"keyposes"];
+      target[@"keyposes"] = _RoundedAIPreserveModulation(newKps, oldKps);
+    }
+    if (op[@"hold_shape"])
+      target[@"hold_shape"] = op[@"hold_shape"];
+    target[@"enabled"] = @YES;
+    curLanes[idxN.unsignedIntegerValue] = target;
+  }
+
+  current[@"lanes"] = curLanes;
+  NSData *outD = [NSJSONSerialization dataWithJSONObject:current
+                                                 options:0
+                                                   error:&err];
+  return [[NSString alloc] initWithData:outD encoding:NSUTF8StringEncoding];
+}
 
 @implementation RoundedPlugin (CustomUI)
 
@@ -513,6 +734,182 @@
 
 - (NSNotificationName)helpGuideRefreshNotificationName {
   return kRoundedOSCPositionNotification;
+}
+
+- (nullable NSView *)aiAccessoryView {
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    [KKAIKnowledge registerSharedTimelineDocs];
+    [KKAIKnowledge
+        registerBundleDocsWithName:@"Rounded"
+                            bundle:[NSBundle
+                                       bundleForClass:[RoundedPlugin class]]
+                      subdirectory:@"AIKnowledge"];
+  });
+
+  NSString *productContext = RLoc(
+      @"Rounded, a Final Cut Pro plugin that rounds corners, crops with a box, "
+      @"and animates with the shared Keyframeless timeline system (Basic and "
+      @"Advanced timing, easing, motion blur). Always refer to yourself as "
+      @"Rounded. Detailed feature information is in the reference docs below.",
+      @"AI assistant product context for Rounded plugin.");
+
+  NSArray<NSArray<NSString *> *> *examples = @[
+    @[
+      RLoc(@"Animate radius 0→100% with bounce",
+           @"AI example chip: animate radius with bounce."),
+      RLoc(@"Animate the radius from 0% to 100% over 1 second with bounce.",
+           @"AI example value: animate radius with bounce.")
+    ],
+    @[
+      RLoc(@"Crop to top right", @"AI example chip: crop to top right."),
+      RLoc(@"Crop to the top right quadrant.",
+           @"AI example value: crop to top right.")
+    ],
+    @[
+      RLoc(@"Reveal then hide", @"AI example chip: in/out crop animation."),
+      RLoc(@"Animate the crop in from the top right and back out at the "
+           @"end, while the radius rounds over the whole clip.",
+           @"AI example value: in/out crop animation.")
+    ],
+    @[
+      RLoc(@"What's Basic vs Advanced?",
+           @"AI example chip: Basic vs Advanced timing question."),
+      RLoc(@"What's the difference between Basic and Advanced timing?",
+           @"AI example value: Basic vs Advanced timing question.")
+    ],
+  ];
+
+  NSString *placeholder = RLoc(@"Ask a question or describe an animation…",
+                               @"AI prompt field placeholder for Rounded.");
+
+  __weak typeof(self) weakSelf = self;
+  return [KKAIBannerHost
+      makePluginButtonWithProductContext:productContext
+                            examplePairs:examples
+                             placeholder:placeholder
+                                   onRun:^(NSString *prompt) {
+                                     __strong typeof(weakSelf) strong =
+                                         weakSelf;
+                                     if (!strong)
+                                       return;
+                                     [strong _runAIPrompt:prompt
+                                           productContext:productContext];
+                                   }];
+}
+
+- (void)_runAIPrompt:(NSString *)prompt
+      productContext:(NSString *)productContext {
+  [KKAIDraft setRouting:YES];
+  [KKAIDraft setError:nil];
+
+  // Read current timeline + clip duration inside an action scope.
+  id<FxCustomParameterActionAPI_v4> readAct =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!readAct) {
+    [KKAIDraft setRouting:NO];
+    [KKAIDraft setError:@"Couldn't open the FCP action scope."];
+    return;
+  }
+  [readAct startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  NSString *currentJSON = _RoundedAICurrentTimelineJSON(getAPI);
+  NSString *uiJson = KKReadCustomParamString(getAPI, kParamUIState);
+  NSDictionary *uiState =
+      (uiJson.length
+           ? [NSJSONSerialization
+                 JSONObjectWithData:[uiJson
+                                        dataUsingEncoding:NSUTF8StringEncoding]
+                            options:0
+                              error:nil]
+           : nil)
+          ?: @{};
+  NSInteger activeTab = [uiState[@"activeTab"] integerValue];
+  NSString *currentMode = (activeTab == 1) ? @"Advanced" : @"Basic";
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  CMTime clipDur = kCMTimeZero;
+  if (timingAPI)
+    [timingAPI durationTimeForEffect:&clipDur];
+  double clipDurSec = CMTimeGetSeconds(clipDur);
+  if (clipDurSec <= 0 || isnan(clipDurSec))
+    clipDurSec = 5.0;
+  [readAct endAction:self];
+
+  NSString *schema = _RoundedAILaneSchemaText();
+
+  __weak typeof(self) weakSelf = self;
+  [KKAIPluginAgent
+             runWithPrompt:prompt
+            productContext:productContext
+            laneSchemaText:schema
+       currentTimelineJSON:currentJSON
+       clipDurationSeconds:clipDurSec
+      currentInspectorMode:currentMode
+                completion:^(KKAIPluginResult *result, NSError *err) {
+                  dispatch_async(dispatch_get_main_queue(), ^{
+                    __strong typeof(weakSelf) strong = weakSelf;
+                    if (!strong)
+                      return;
+                    [KKAIDraft setRouting:NO];
+                    if (err) {
+                      KKLogError(@"AI[err] %@", err.localizedDescription);
+                      [KKAIDraft setError:err.localizedDescription];
+                      return;
+                    }
+                    if (!result) {
+                      KKLogError(@"AI[err] empty result");
+                      [KKAIDraft setError:@"Empty AI response."];
+                      return;
+                    }
+                    if (result.kind == KKAIPluginResultKindAnswer) {
+                      [KKAIDraft setAnswer:result.answer];
+                      return;
+                    }
+                    NSString *merged = _RoundedAIMergedTimelineJSON(
+                        currentJSON, result.mutationJSON);
+                    if (!merged) {
+                      KKLogError(@"AI[err] merge returned nil");
+                      [KKAIDraft
+                          setError:
+                              @"AI returned an invalid timeline mutation."];
+                      return;
+                    }
+                    id<FxCustomParameterActionAPI_v4> writeAct =
+                        [strong.apiManager
+                            apiForProtocol:@protocol(
+                                               FxCustomParameterActionAPI_v4)];
+                    if (!writeAct) {
+                      [KKAIDraft
+                          setError:@"Couldn't open the FCP action scope to "
+                                   @"apply the mutation."];
+                      return;
+                    }
+                    [writeAct startAction:strong];
+                    id<FxParameterSettingAPI_v5> setAPI = [strong.apiManager
+                        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+                    KKWriteCustomParamString(setAPI, merged,
+                                             kKKParamTimelineData);
+
+                    // If the new timeline isn't representable in Basic, force
+                    // the inspector to Advanced so the user sees the actual
+                    // structure. Keeping the activeTab on Basic when the data
+                    // is Advanced-only shows the compatibility banner instead
+                    // of the new animation.
+                    KKTimeline *resultTimeline =
+                        [KKTimeline timelineFromJSON:merged];
+                    if (resultTimeline &&
+                        !KKTimelineIsBasicCompatible(resultTimeline)) {
+                      [strong patchUIStateKey:@"activeTab"
+                                        value:@(1)
+                                      paramID:kParamUIState];
+                    }
+                    [writeAct endAction:strong];
+                    [KKAIDraft setAnswer:nil];
+                    [KKAIDraft clearPrompt];
+                  });
+                }];
 }
 
 - (NSArray<KKHelpSection *> *)helpSections {

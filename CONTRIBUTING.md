@@ -34,6 +34,14 @@
 >
 > Restart FCP after fixing.
 
+## OSC not showing in the viewer (and guides reporting "disabled")
+
+If a plugin's on-screen control (OSC) never draws over the FCP viewer - and the Help window's interactive guides keep showing "Guides are disabled, select a clip..." even with the clip selected and the mouse over the viewer - check the **Motion template** for the effect before chasing it in plugin code.
+
+Open the effect's `.moef`/`.motn` template in Motion and confirm the **Publish OSC** checkbox is enabled on the relevant parameter group. Without it, FCP registers the OSC class from the plugin's Info.plist but never instantiates it - so `drawOSC` never fires, the `KKOSCGuideBridge` never receives a draw tick, and `RoundedHasCanvasReference()` (and its peers) stays false forever. The plugin's render path is unaffected, which is why parameter adjustments still work normally.
+
+Quick sanity check that points at this cause: add `+ (void)load` and an `initWithAPIManager:` log to the OSC class. If `+load` fires but `initWithAPIManager:` never does (with the clip selected, mouse over the viewer, View > Show On-Screen Controls on), it's the template missing Publish OSC.
+
 ## Resetting the joyride intro (debug builds)
 
 Debug XPC service builds are non-sandboxed, so `NSUserDefaults` writes to `~/Library/Preferences/<BundleID>.plist` instead of the sandbox container. The `defaults` CLI looks in the container and won't find or delete the key. To reset the intro-seen state:
