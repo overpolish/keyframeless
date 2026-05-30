@@ -28,11 +28,6 @@ static const CGFloat kHandleHitTolPt = 12.0;
   MTLPixelFormat _pipelineFormat;
 }
 
-- (void)dealloc {
-  [_pipeline release];
-  [super dealloc];
-}
-
 #pragma mark - Vocabulary
 
 - (NSString *)cropLabel {
@@ -67,11 +62,9 @@ static const CGFloat kHandleHitTolPt = 12.0;
     KKLogError(@"RoundedMiniCanvasRenderer: no metal library: %@", err);
     return NO;
   }
-  MTLRenderPipelineDescriptor *pd =
-      [[[MTLRenderPipelineDescriptor alloc] init] autorelease];
-  pd.vertexFunction = [[lib newFunctionWithName:@"vertexShader"] autorelease];
-  pd.fragmentFunction =
-      [[lib newFunctionWithName:@"fragmentShader"] autorelease];
+  MTLRenderPipelineDescriptor *pd = [[MTLRenderPipelineDescriptor alloc] init];
+  pd.vertexFunction = [lib newFunctionWithName:@"vertexShader"];
+  pd.fragmentFunction = [lib newFunctionWithName:@"fragmentShader"];
   pd.colorAttachments[0].pixelFormat = format;
   id<MTLRenderPipelineState> ps =
       [device newRenderPipelineStateWithDescriptor:pd error:&err];
@@ -79,8 +72,7 @@ static const CGFloat kHandleHitTolPt = 12.0;
     KKLogError(@"RoundedMiniCanvasRenderer: pipeline failed: %@", err);
     return NO;
   }
-  [_pipeline release];
-  _pipeline = ps; // newRenderPipelineState... returns +1
+  _pipeline = ps;
   _pipelineFormat = format;
   return YES;
 }

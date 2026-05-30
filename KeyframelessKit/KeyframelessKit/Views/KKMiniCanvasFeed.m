@@ -18,7 +18,10 @@ static const NSUInteger kTargetLongEdge = 2048;
 // Minimum wall-clock gap between surface updates per slot. The mini canvas
 // only needs a recent frame, not every render tick - this keeps the render
 // path from paying an MPS pass on every frame during playback.
-static const NSTimeInterval kMinUpdateInterval = 0.1;
+// Cap to ~60 fps. Was 0.1s (10 fps) which felt laggy during interactive
+// editing - the last drag tick within the 100 ms window would get dropped
+// and the mini canvas would stay stale until the next render frame fired.
+static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
 
 // One IOSurface + texture + bookkeeping per filmstrip frame. Slot 0 is the
 // single-slot default; onion-skin enlarges the array.

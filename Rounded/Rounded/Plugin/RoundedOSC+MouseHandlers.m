@@ -152,7 +152,7 @@ static NSInteger _kkCropPartForRoundedActive(NSInteger activePart) {
   // resolved). The parameterChanged-driven snapshot is canonical anyway -
   // start from it so the radius edit doesn't wipe In/Hold/Out structure.
   KKTimeline *snap = RoundedTimelineSnapshot();
-  KKTimeline *tl = snap ? [[snap copy] autorelease] : [KKTimeline timeline];
+  KKTimeline *tl = snap ? [snap copy] : [KKTimeline timeline];
 
   NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
   NSInteger laneIdx = NSNotFound;
@@ -177,7 +177,7 @@ static NSInteger _kkCropPartForRoundedActive(NSInteger activePart) {
     // fraction, preserving every other keypose's time/interval (so the In/
     // Hold/Out structure isn't wiped). Mirrors KKMiniCanvasRenderer's
     // `_timelineBySettingValues:forLabel:` boundary-edit path.
-    radiusLane = [[lanes[laneIdx] copy] autorelease];
+    radiusLane = [lanes[laneIdx] copy];
     NSArray<KKKeyPose *> *kps = radiusLane.keyposes;
     if (kps.count == 0) {
       radiusLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0

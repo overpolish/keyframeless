@@ -51,9 +51,4 @@
   return copy;
 }
 
-- (void)dealloc {
-  [_miniCanvasRenderer release];
-  [super dealloc];
-}
-
 @end

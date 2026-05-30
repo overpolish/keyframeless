@@ -49,11 +49,6 @@ static NSArray<NSNumber *> *_positionValuesAtFraction(double frac) {
   return self;
 }
 
-- (void)dealloc {
-  [_snapEngine release];
-  [super dealloc];
-}
-
 - (double)_fractionAtTime:(CMTime)time {
   id<FxTimingAPI_v4> timingAPI =
       [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
@@ -261,7 +256,7 @@ static NSArray<NSNumber *> *_positionValuesAtFraction(double frac) {
   // action scope. Copy then mutate the Position lane's keypose nearest the
   // current playhead fraction, preserving structure / intervals.
   KKTimeline *snap = KKProcessTimelineSnapshot();
-  KKTimeline *tl = snap ? [[snap copy] autorelease] : [KKTimeline timeline];
+  KKTimeline *tl = snap ? [snap copy] : [KKTimeline timeline];
   NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
   NSInteger laneIdx = NSNotFound;
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
@@ -284,7 +279,7 @@ static NSArray<NSNumber *> *_positionValuesAtFraction(double frac) {
     posLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
     [lanes addObject:posLane];
   } else {
-    posLane = [[lanes[laneIdx] copy] autorelease];
+    posLane = [lanes[laneIdx] copy];
     NSArray<KKKeyPose *> *kps = posLane.keyposes;
     if (kps.count == 0) {
       posLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];

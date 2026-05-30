@@ -141,8 +141,6 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
 - (void)dealloc {
   if (sCurrentOSC == self)
     sCurrentOSC = nil;
-  [_cropOSC release];
-  [super dealloc];
 }
 
 - (BOOL)getCanvasTopRight:(CGPoint *)outTopRight
@@ -267,7 +265,7 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
 
   double frac = [self fractionAtTime:time];
   KKTimeline *snap = RoundedTimelineSnapshot();
-  KKTimeline *tl = snap ? [[snap copy] autorelease] : [KKTimeline timeline];
+  KKTimeline *tl = snap ? [snap copy] : [KKTimeline timeline];
 
   NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
   NSInteger laneIdx = NSNotFound;
@@ -286,7 +284,7 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
     cropLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
     [lanes addObject:cropLane];
   } else {
-    cropLane = [[lanes[laneIdx] copy] autorelease];
+    cropLane = [lanes[laneIdx] copy];
     NSArray<KKKeyPose *> *kps = cropLane.keyposes;
     if (kps.count == 0) {
       cropLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];

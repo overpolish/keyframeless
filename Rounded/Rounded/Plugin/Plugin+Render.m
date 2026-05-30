@@ -32,11 +32,11 @@
   *inputImageRequests = KKBuildSourceRequests(
       renderTime, mbState, RoundedMiniCanvasRequestPath, self.renderCache,
       ^id(CMTime t) {
-        return [[[FxImageTileRequest alloc]
+        return [[FxImageTileRequest alloc]
             initWithSource:kFxImageTileRequestSourceEffectClip
                       time:t
             includeFilters:YES
-               parameterID:0] autorelease];
+               parameterID:0];
       });
   return YES;
 }
@@ -308,10 +308,8 @@
       continue;
     id<MTLTexture> srcTex = [feedTile metalTextureForDevice:dev];
     if (!self.miniCanvasFeed) {
-      KKMiniCanvasFeed *feed = [[KKMiniCanvasFeed alloc]
+      self.miniCanvasFeed = [[KKMiniCanvasFeed alloc]
           initWithDescriptorPath:RoundedMiniCanvasDescriptorPath];
-      self.miniCanvasFeed = feed;
-      [feed release];
     }
     NSArray<NSNumber *> *fracs = self.renderCache.boundaryReqFracs;
     double tag = (slotIdx < fracs.count) ? fracs[slotIdx].doubleValue : 0.0;

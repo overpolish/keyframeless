@@ -39,6 +39,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// `editFraction` (preserving structure) instead of a t=0 single keypose.
 @property(nonatomic) BOOL boundaryEditing;
 @property(nonatomic) double editFraction;
+/// Number of slots the canvas is currently iterating. KKMiniCanvasView
+/// sets this before its per-slot processSourceTexture loop. Subclasses
+/// can use it to differentiate "single-slot, source is the pre-rendered
+/// dest texture published by the plugin → blit straight through" from
+/// "multi-slot, each source is a raw frame at editFraction → run the
+/// plugin's shader locally". Defaults to 1.
+@property(nonatomic) NSUInteger currentSlotCount;
 /// Lane labels whose handle/box must NOT be drawn or hit - a property
 /// excluded from the boundary's phase has no keypose there, so its OSC
 /// would be meaningless. Set by the boundary popover; cleared on close.
@@ -104,8 +111,22 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
 
 /// Constant == no lane yet, or a lane that isn't enabled (animatable).
 - (BOOL)isConstantLabel:(NSString *)label;
-/// Current values for `label` (subclass default when absent/short).
+/// Current values for `label` (subclass default when absent/short). Respects
+/// any live override pushed via `-setLiveValues:forLabel:` (cleared on drag
+/// end) so the drag's in-flight value shows immediately without round-tripping
+/// through FxPlug param writes.
 - (NSArray<NSNumber *> *)valuesForLabel:(NSString *)label;
+
+/// Push the in-flight drag value for `label` as a live override at
+/// `fraction`. The next `valuesForLabel:` returns these instead of the
+/// timeline-evaluated values WHEN the current `editFraction` matches
+/// `fraction` (so filmstrip/onion neighbour cells keep their own values).
+/// Pass nil values to clear. Caller is responsible for triggering a redraw.
+- (void)setLiveValues:(nullable NSArray<NSNumber *> *)values
+             forLabel:(NSString *)label
+           atFraction:(double)fraction;
+/// Clear all live overrides (drag end).
+- (void)clearLiveValues;
 /// The crop box rect for the current crop values within `contentRect`.
 - (CGRect)cropRectForContentRect:(CGRect)contentRect;
 /// Optimistically set the timeline + report the edit + redraw. Used by both

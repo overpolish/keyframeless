@@ -136,10 +136,7 @@
                                                  timeline:timeline];
 
   if (!self.miniCanvasRenderer) {
-    MagicMoveMiniCanvasRenderer *renderer =
-        [[MagicMoveMiniCanvasRenderer alloc] init];
-    self.miniCanvasRenderer = renderer;
-    [renderer release];
+    self.miniCanvasRenderer = [[MagicMoveMiniCanvasRenderer alloc] init];
   }
   self.miniCanvasRenderer.timeline = timeline;
   view.miniCanvasDelegate = self.miniCanvasRenderer;
@@ -201,9 +198,8 @@
     NSData *data = [NSJSONSerialization dataWithJSONObject:mb
                                                    options:0
                                                      error:nil];
-    NSString *json =
-        [[[NSString alloc] initWithData:data
-                               encoding:NSUTF8StringEncoding] autorelease];
+    NSString *json = [[NSString alloc] initWithData:data
+                                           encoding:NSUTF8StringEncoding];
     if (json)
       KKWriteCustomParamString(setAPI, json, kKKParamMotionBlurData);
     [act endAction:strong];
@@ -357,17 +353,15 @@
             [iv setUserBool:isOn forKey:@"rotateWithMotion"];
           });
         }];
-    return @[ [row autorelease] ];
+    return @[ row ];
   };
 
   self.inspectorView = view;
   if (!self.playheadPoller) {
-    KKPlayheadPoller *poller =
+    self.playheadPoller =
         [[KKPlayheadPoller alloc] initWithAPIManager:self.apiManager
                                         actionTarget:self
                                          renderCache:self.renderCache];
-    self.playheadPoller = poller;
-    [poller release];
   }
   [self.playheadPoller setInspectorView:view];
   return view;

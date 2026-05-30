@@ -29,13 +29,49 @@
   *inputImageRequests = KKBuildSourceRequests(
       renderTime, mbState, MagicMoveMiniCanvasRequestPath, self.renderCache,
       ^id(CMTime t) {
-        return [[[FxImageTileRequest alloc]
+        return [[FxImageTileRequest alloc]
             initWithSource:kFxImageTileRequestSourceEffectClip
                       time:t
             includeFilters:YES
-               parameterID:0] autorelease];
+               parameterID:0];
       });
+
   return YES;
+}
+
+static double KKFracForTime(CMTime t, double effectStartSec, double durSec) {
+  if (durSec <= 0)
+    return 0.0;
+  return MAX(0.0, MIN(1.0, (CMTimeGetSeconds(t) - effectStartSec) / durSec));
+}
+
+static void KKMagicMoveParamsFillFromTimeline(MagicMoveParams *outParams,
+                                              KKTimeline *timeline,
+                                              double frac) {
+  NSArray<NSNumber *> *positionVals = nil;
+  NSArray<NSNumber *> *rotationVals = nil;
+  for (KKLane *lane in timeline.lanes) {
+    if ([lane.label isEqualToString:@"Position"])
+      positionVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+    else if ([lane.label isEqualToString:@"Rotation"])
+      rotationVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+  }
+  double posX = positionVals.count > 0 ? positionVals[0].doubleValue : 0.5;
+  double posY = positionVals.count > 1 ? positionVals[1].doubleValue : 0.5;
+  double rotXdeg = rotationVals.count > 0 ? rotationVals[0].doubleValue : 0.0;
+  double rotYdeg = rotationVals.count > 1 ? rotationVals[1].doubleValue : 0.0;
+  double rotZdeg = rotationVals.count > 2 ? rotationVals[2].doubleValue : 0.0;
+  static const double kDegToRad = M_PI / 180.0;
+
+  outParams->translate =
+      (simd_float2){(float)(posX - 0.5), (float)(posY - 0.5)};
+  outParams->anchorOffset = (simd_float2){0.0f, 0.0f};
+  outParams->rotation = (float)(rotZdeg * kDegToRad);
+  outParams->rotationX = (float)(rotXdeg * kDegToRad);
+  outParams->rotationY = (float)(rotYdeg * kDegToRad);
+  outParams->scaleX = 1.0f;
+  outParams->scaleY = 1.0f;
+  outParams->opacity = 1.0f;
 }
 
 - (BOOL)magicMoveParams:(MagicMoveParams *)outParams
@@ -75,43 +111,18 @@
 
   BOOL hasTiming = KKRefreshRenderCache(self.apiManager, self.inspectorView,
                                         self.renderCache);
-  double durSec = self.renderCache.effectDurSec;
-  double frac = hasTiming
-                    ? MAX(0.0, MIN(1.0, (CMTimeGetSeconds(time) -
-                                         self.renderCache.effectStartSec) /
-                                            durSec))
-                    : 0.0;
   if (hasTiming) {
     KKPlayheadPoller *poller = self.playheadPoller;
     dispatch_async(dispatch_get_main_queue(), ^{
       [poller ensureRunning];
     });
   }
-
-  NSArray<NSNumber *> *positionVals = nil;
-  NSArray<NSNumber *> *rotationVals = nil;
-  for (KKLane *lane in timeline.lanes) {
-    if ([lane.label isEqualToString:@"Position"])
-      positionVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
-    else if ([lane.label isEqualToString:@"Rotation"])
-      rotationVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
-  }
-  double posX = positionVals.count > 0 ? positionVals[0].doubleValue : 0.5;
-  double posY = positionVals.count > 1 ? positionVals[1].doubleValue : 0.5;
-  double rotXdeg = rotationVals.count > 0 ? rotationVals[0].doubleValue : 0.0;
-  double rotYdeg = rotationVals.count > 1 ? rotationVals[1].doubleValue : 0.0;
-  double rotZdeg = rotationVals.count > 2 ? rotationVals[2].doubleValue : 0.0;
-  static const double kDegToRad = M_PI / 180.0;
-
-  outParams->translate =
-      (simd_float2){(float)(posX - 0.5), (float)(posY - 0.5)};
-  outParams->anchorOffset = (simd_float2){0.0f, 0.0f};
-  outParams->rotation = (float)(rotZdeg * kDegToRad);
-  outParams->rotationX = (float)(rotXdeg * kDegToRad);
-  outParams->rotationY = (float)(rotYdeg * kDegToRad);
-  outParams->scaleX = 1.0f;
-  outParams->scaleY = 1.0f;
-  outParams->opacity = 1.0f;
+  // Even when this tick's KKRefreshRenderCache fails, use the last-known cache
+  // values so frac is still correct (the cache survives across ticks once
+  // it's been populated once).
+  double frac = KKFracForTime(time, self.renderCache.effectStartSec,
+                              self.renderCache.effectDurSec);
+  KKMagicMoveParamsFillFromTimeline(outParams, timeline, frac);
   return YES;
 }
 
@@ -119,6 +130,9 @@
              atTime:(CMTime)renderTime
             quality:(FxQuality)qualityLevel
               error:(NSError **)error {
+  // Compute mainParams via the full path (loads API, refreshes timing cache,
+  // updates loop toggle, kicks playhead poller). This populates renderCache so
+  // boundary-slot evaluation below can reuse it.
   MagicMoveParams params;
   if (![self magicMoveParams:&params atTime:renderTime error:error])
     return NO;
@@ -166,14 +180,17 @@
   KKMotionBlurState mbState;
   [pluginState getBytes:&mbState length:sizeof(mbState)];
 
-  // Mini-canvas feed publish (multi-slot when boundary preview / filmstrip /
-  // onion is active, single-slot otherwise). Port of Rounded's pattern.
+  // Mini-canvas feed: publish raw source per slot (single-slot = playhead,
+  // multi-slot = boundary preview / filmstrip / onion fractions). The mini
+  // canvas renderer runs in this same plugin XPC process - it has the plugin
+  // bundle's metallib loaded - and applies the real shader source → dest
+  // locally using its own timeline at the slot's editFraction. This lets KK
+  // push live timeline updates per drag tick without any FxPlug param writes,
+  // avoiding the Flexo write-lock deadlock that per-tick commits triggered.
   if (sourceImages.count > 0 && destinationImage.ioSurface) {
     if (!self.miniCanvasFeed) {
-      KKMiniCanvasFeed *feed = [[KKMiniCanvasFeed alloc]
+      self.miniCanvasFeed = [[KKMiniCanvasFeed alloc]
           initWithDescriptorPath:MagicMoveMiniCanvasDescriptorPath];
-      self.miniCanvasFeed = feed;
-      [feed release];
     }
     NSArray<NSNumber *> *reqSecs = self.renderCache.boundaryReqSecs;
     NSArray<NSNumber *> *reqFracs = self.renderCache.boundaryReqFracs;
@@ -213,6 +230,11 @@
         self.miniCanvasFeed.slotCount = 1;
       [pairs addObject:@[ @0, sourceImages[0] ]];
     }
+    // Publish raw source per slot. The mini canvas renderer (in this same
+    // plugin XPC process - it has the metallib in its bundle) runs the real
+    // shader source→dest locally using its own timeline. That lets KK push
+    // live timeline updates per drag tick without any FxPlug param writes -
+    // no Flexo write-lock contention, no deadlock surface area.
     for (NSArray *pair in pairs) {
       NSUInteger slotIdx = [pair[0] unsignedIntegerValue];
       FxImageTile *feedTile = pair[1];
@@ -239,8 +261,12 @@
       if (!q || !dev)
         continue;
       id<MTLTexture> srcTex = [feedTile metalTextureForDevice:dev];
-      double tag =
-          (slotIdx < reqFracs.count) ? reqFracs[slotIdx].doubleValue : 0.0;
+      if (!srcTex) {
+        [cache returnCommandQueueToCache:q];
+        continue;
+      }
+      double tag = (slotIdx < reqFracs.count) ? reqFracs[slotIdx].doubleValue
+                                              : CMTimeGetSeconds(renderTime);
       [self.miniCanvasFeed updateSlot:slotIdx
                     withSourceTexture:srcTex
                                   tag:tag

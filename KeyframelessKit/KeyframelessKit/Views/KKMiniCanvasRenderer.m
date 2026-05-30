@@ -11,13 +11,23 @@
 
 @implementation KKMiniCanvasRenderer {
   KKMiniCanvasCropEditor *_cropEditor;
+  // Live-override store: per-label in-flight drag values. Populated by the
+  // popover's onHandleValue during a drag, cleared on drag end. Bound to
+  // `_liveFraction` so filmstrip/onion neighbour cells (which run the same
+  // renderer with a different editFraction during their encode pass) keep
+  // their own keypose values - only the active cell sees the override.
+  NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *_liveValues;
+  double _liveFraction;
+  BOOL _hasLiveFraction;
   BOOL _pointGrabbed;
 }
 
 - (instancetype)init {
   self = [super init];
-  if (self)
+  if (self) {
     _cropEditor = [[KKMiniCanvasCropEditor alloc] init];
+    _currentSlotCount = 1;
+  }
   return self;
 }
 
@@ -84,6 +94,11 @@
 }
 
 - (NSArray<NSNumber *> *)valuesForLabel:(NSString *)label {
+  if (_hasLiveFraction) {
+    NSArray<NSNumber *> *live = _liveValues[label];
+    if (live.count > 0 && fabs(self.editFraction - _liveFraction) < 1e-4)
+      return live;
+  }
   for (KKLane *lane in self.timeline.lanes) {
     if (![lane.label isEqualToString:label])
       continue;
@@ -93,6 +108,27 @@
       return v;
   }
   return [self defaultValuesForLabel:label];
+}
+
+- (void)setLiveValues:(NSArray<NSNumber *> *)values
+             forLabel:(NSString *)label
+           atFraction:(double)fraction {
+  if (!label.length)
+    return;
+  if (!_liveValues)
+    _liveValues = [NSMutableDictionary dictionary];
+  if (values.count == 0) {
+    [_liveValues removeObjectForKey:label];
+    return;
+  }
+  _liveValues[label] = [values copy];
+  _liveFraction = fraction;
+  _hasLiveFraction = YES;
+}
+
+- (void)clearLiveValues {
+  [_liveValues removeAllObjects];
+  _hasLiveFraction = NO;
 }
 
 - (CGRect)cropRectForContentRect:(CGRect)cr {

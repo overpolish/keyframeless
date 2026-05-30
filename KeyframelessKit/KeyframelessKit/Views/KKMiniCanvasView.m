@@ -770,6 +770,15 @@ static const CGFloat kFilmstripGap = 16.0;
       canProcess && n > 1
           ? [(NSObject *)del valueForKey:@"editFraction"] // nil if absent
           : nil;
+  // Tell the renderer how many slots it's about to iterate so subclasses
+  // can distinguish single-slot (source = plugin's published dest, blit it)
+  // from multi-slot (source = raw frame at editFraction, re-render).
+  if (canProcess) {
+    @try {
+      [(NSObject *)del setValue:@(n) forKey:@"currentSlotCount"];
+    } @catch (...) {
+    }
+  }
   if (canProcess) {
     for (NSUInteger i = 0; i < n; i++) {
       _KKMiniFilmSlot *slot = _filmstripSlots[i];

@@ -19,12 +19,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface MagicMovePlugin ()
 @property(nonatomic, weak, nullable) KKTimelineInspectorView *inspectorView;
-@property(nonatomic, retain, nullable) KKMiniCanvasFeed *miniCanvasFeed;
-@property(nonatomic, retain, nullable)
+@property(nonatomic, strong, nullable) KKMiniCanvasFeed *miniCanvasFeed;
+@property(nonatomic, strong, nullable)
     MagicMoveMiniCanvasRenderer *miniCanvasRenderer;
 @property(nonatomic) BOOL miniDragUndoStarted;
-@property(nonatomic, retain, nonnull) KKRenderCache *renderCache;
-@property(nonatomic, retain, nullable) KKPlayheadPoller *playheadPoller;
+@property(nonatomic, strong, nonnull) KKRenderCache *renderCache;
+@property(nonatomic, strong, nullable) KKPlayheadPoller *playheadPoller;
 - (nullable KKTimeline *)timelineStampedWithClipDuration:
     (nullable KKTimeline *)timeline;
 @end

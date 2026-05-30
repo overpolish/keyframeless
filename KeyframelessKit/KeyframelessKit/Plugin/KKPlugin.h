@@ -82,7 +82,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// `commands` with the encoder.
 - (BOOL)
     encodeFullScreenQuadIntoTexture:(id<MTLTexture>)destTexture
-                   destinationImage:(FxImageTile *)destinationImage
+                   destinationImage:(nullable FxImageTile *)destinationImage
                       commandBuffer:(id<MTLCommandBuffer>)commandBuffer
                      sourceTextures:(NSArray<id<MTLTexture>> *)sourceTextures
                            commands:

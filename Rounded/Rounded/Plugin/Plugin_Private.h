@@ -13,10 +13,10 @@
 
 @interface RoundedPlugin ()
 @property(nonatomic, weak, nullable) RoundedInspectorView *inspectorView;
-@property(nonatomic, retain, nullable) KKMiniCanvasFeed *miniCanvasFeed;
+@property(nonatomic, strong, nullable) KKMiniCanvasFeed *miniCanvasFeed;
 @property(nonatomic) BOOL miniDragUndoStarted;
-@property(nonatomic, retain, nonnull) KKRenderCache *renderCache;
-@property(nonatomic, retain, nullable) KKPlayheadPoller *playheadPoller;
+@property(nonatomic, strong, nonnull) KKRenderCache *renderCache;
+@property(nonatomic, strong, nullable) KKPlayheadPoller *playheadPoller;
 /// Returns a copy of `timeline` with every lane's lastKnownClipDuration set
 /// to the current effect duration (seconds), so the Basic ruler/hover have a
 /// duration without extra plumbing. Must be called inside an action scope.

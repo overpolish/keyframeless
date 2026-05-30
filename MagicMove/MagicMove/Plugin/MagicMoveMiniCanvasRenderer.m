@@ -4,6 +4,9 @@
  */
 
 #import "MagicMoveMiniCanvasRenderer.h"
+#import "ShaderTypes.h"
+#import <KeyframelessKit/KKRenderPrimitives.h>
+#import <KeyframelessKit/KKShaderTypes.h>
 #import <Metal/Metal.h>
 
 NSString *const MagicMoveMiniCanvasDescriptorPath =
@@ -15,6 +18,13 @@ static const CGFloat kHandleHitTolPt = 12.0;
 
 @interface MagicMoveMiniCanvasRenderer () {
   KKSnapEngine *_snapEngine;
+  // Pipeline cache keyed by (device, pixelFormat) — the plugin's own metallib
+  // is in this XPC process's bundle, so we build a real PSO and apply the
+  // shader source → dest locally. No FxPlug round-trip = no Flexo lock
+  // contention = no deadlock during live drag.
+  id<MTLRenderPipelineState> _pipeline;
+  id<MTLDevice> _pipelineDevice;
+  MTLPixelFormat _pipelineFormat;
 }
 @end
 
@@ -27,9 +37,70 @@ static const CGFloat kHandleHitTolPt = 12.0;
   return self;
 }
 
-- (void)dealloc {
-  [_snapEngine release];
-  [super dealloc];
+// Builds (or returns cached) MTLRenderPipelineState for MagicMove's
+// vertex/fragment shader in this process. The plugin XPC has the plugin
+// bundle's default.metallib loaded, so we can grab the functions directly.
+- (id<MTLRenderPipelineState>)_pipelineForDevice:(id<MTLDevice>)device
+                                     pixelFormat:(MTLPixelFormat)format {
+  if (_pipeline && _pipelineDevice == device && _pipelineFormat == format)
+    return _pipeline;
+  NSError *err = nil;
+  id<MTLLibrary> lib =
+      [device newDefaultLibraryWithBundle:[NSBundle bundleForClass:[self class]]
+                                    error:&err];
+  if (!lib) {
+    KKLogError(@"MagicMoveMiniCanvasRenderer: no metallib: %@", err);
+    return nil;
+  }
+  id<MTLFunction> vfn = [lib newFunctionWithName:@"vertexShader"];
+  id<MTLFunction> ffn = [lib newFunctionWithName:@"fragmentShader"];
+  if (!vfn || !ffn) {
+    KKLogError(@"MagicMoveMiniCanvasRenderer: missing shader functions");
+    return nil;
+  }
+  MTLRenderPipelineDescriptor *pd = [[MTLRenderPipelineDescriptor alloc] init];
+  pd.vertexFunction = vfn;
+  pd.fragmentFunction = ffn;
+  pd.colorAttachments[0].pixelFormat = format;
+  pd.colorAttachments[0].blendingEnabled = YES;
+  pd.colorAttachments[0].rgbBlendOperation = MTLBlendOperationAdd;
+  pd.colorAttachments[0].alphaBlendOperation = MTLBlendOperationAdd;
+  pd.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorOne;
+  pd.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
+  pd.colorAttachments[0].destinationRGBBlendFactor =
+      MTLBlendFactorOneMinusSourceAlpha;
+  pd.colorAttachments[0].destinationAlphaBlendFactor =
+      MTLBlendFactorOneMinusSourceAlpha;
+  id<MTLRenderPipelineState> ps =
+      [device newRenderPipelineStateWithDescriptor:pd error:&err];
+  if (!ps) {
+    KKLogError(@"MagicMoveMiniCanvasRenderer: pipeline build failed: %@", err);
+    return nil;
+  }
+  _pipeline = ps;
+  _pipelineDevice = device;
+  _pipelineFormat = format;
+  return _pipeline;
+}
+
+static void KKMagicMoveParamsFromLanes(MagicMoveParams *outParams,
+                                       NSArray<NSNumber *> *positionVals,
+                                       NSArray<NSNumber *> *rotationVals) {
+  double posX = positionVals.count > 0 ? positionVals[0].doubleValue : 0.5;
+  double posY = positionVals.count > 1 ? positionVals[1].doubleValue : 0.5;
+  double rotXdeg = rotationVals.count > 0 ? rotationVals[0].doubleValue : 0.0;
+  double rotYdeg = rotationVals.count > 1 ? rotationVals[1].doubleValue : 0.0;
+  double rotZdeg = rotationVals.count > 2 ? rotationVals[2].doubleValue : 0.0;
+  static const double kDegToRad = M_PI / 180.0;
+  outParams->translate =
+      (simd_float2){(float)(posX - 0.5), (float)(posY - 0.5)};
+  outParams->anchorOffset = (simd_float2){0.0f, 0.0f};
+  outParams->rotation = (float)(rotZdeg * kDegToRad);
+  outParams->rotationX = (float)(rotXdeg * kDegToRad);
+  outParams->rotationY = (float)(rotYdeg * kDegToRad);
+  outParams->scaleX = 1.0f;
+  outParams->scaleY = 1.0f;
+  outParams->opacity = 1.0f;
 }
 
 - (NSString *)pointLabel {
@@ -47,72 +118,94 @@ static const CGFloat kHandleHitTolPt = 12.0;
   return KKMiniHandleStyleArc;
 }
 
-// Mini-canvas applies the Position translate so the preview reflects the
-// edit instead of just blitting source unchanged. Pure blit copy with a
-// pixel-space offset = no new shader needed. KKMiniCanvasView never clears
-// `dest`, so we first clear via a render pass (avoids garbage on negative-
-// offset corners) and then copy.
+// Apply the real MagicMove shader source → dest, using current lane values
+// (which respect the live-override pushed by KK during drag). One path for
+// playhead, boundary, filmstrip, onion - they only differ in the value of
+// self.editFraction at draw time.
 - (BOOL)encodeEffectFromSource:(id<MTLTexture>)source
                           into:(id<MTLTexture>)dest
                  commandBuffer:(id<MTLCommandBuffer>)cb {
   if (!source || !dest || !cb)
     return NO;
+  if (source.width == 0 || source.height == 0 || dest.width == 0 ||
+      dest.height == 0)
+    return YES;
 
-  // Clear dest to transparent first so areas the source doesn't cover after
-  // translation don't show stale GPU memory.
+  id<MTLRenderPipelineState> pso = [self _pipelineForDevice:cb.device
+                                                pixelFormat:dest.pixelFormat];
+  if (!pso) {
+    // Fallback: blit so we don't show black on a transient PSO failure.
+    id<MTLBlitCommandEncoder> blit = [cb blitCommandEncoder];
+    NSUInteger w = MIN(source.width, dest.width);
+    NSUInteger h = MIN(source.height, dest.height);
+    [blit copyFromTexture:source
+              sourceSlice:0
+              sourceLevel:0
+             sourceOrigin:MTLOriginMake(0, 0, 0)
+               sourceSize:MTLSizeMake(w, h, 1)
+                toTexture:dest
+         destinationSlice:0
+         destinationLevel:0
+        destinationOrigin:MTLOriginMake(0, 0, 0)];
+    [blit endEncoding];
+    return YES;
+  }
+
+  MagicMoveParams params = {0};
+  KKMagicMoveParamsFromLanes(&params, [self valuesForLabel:@"Position"],
+                             [self valuesForLabel:@"Rotation"]);
+  simd_float2 zeroOffset = {0.0f, 0.0f};
+
   MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
   rpd.colorAttachments[0].texture = dest;
   rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
   rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
   rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
-  id<MTLRenderCommandEncoder> clear =
-      [cb renderCommandEncoderWithDescriptor:rpd];
-  [clear endEncoding];
-
-  NSArray<NSNumber *> *pos = [self valuesForLabel:@"Position"];
-  double px = pos.count > 0 ? pos[0].doubleValue : 0.5;
-  double py = pos.count > 1 ? pos[1].doubleValue : 0.5;
-  // Pixel-space offset. Position y=1 means "top" of clip (FCP OBJECT y-up),
-  // and KKMiniCanvasView samples its processed texture y-up too (the vertex
-  // setup maps tc.y=1 to the top of the view), so the row axis lines up:
-  // increasing oy moves the image up.
-  NSInteger W = (NSInteger)source.width;
-  NSInteger H = (NSInteger)source.height;
-  NSInteger ox = (NSInteger)llround((px - 0.5) * (double)W);
-  NSInteger oy = (NSInteger)llround((py - 0.5) * (double)H);
-
-  NSInteger srcX = MAX((NSInteger)0, -ox);
-  NSInteger srcY = MAX((NSInteger)0, -oy);
-  NSInteger dstX = MAX((NSInteger)0, ox);
-  NSInteger dstY = MAX((NSInteger)0, oy);
-  NSInteger copyW = MIN(W - srcX, (NSInteger)dest.width - dstX);
-  NSInteger copyH = MIN(H - srcY, (NSInteger)dest.height - dstY);
-  if (copyW <= 0 || copyH <= 0)
-    return YES;
-
-  id<MTLBlitCommandEncoder> blit = [cb blitCommandEncoder];
-  [blit copyFromTexture:source
-            sourceSlice:0
-            sourceLevel:0
-           sourceOrigin:MTLOriginMake((NSUInteger)srcX, (NSUInteger)srcY, 0)
-             sourceSize:MTLSizeMake((NSUInteger)copyW, (NSUInteger)copyH, 1)
-              toTexture:dest
-       destinationSlice:0
-       destinationLevel:0
-      destinationOrigin:MTLOriginMake((NSUInteger)dstX, (NSUInteger)dstY, 0)];
-  [blit endEncoding];
+  id<MTLRenderCommandEncoder> enc = [cb renderCommandEncoderWithDescriptor:rpd];
+  float w = (float)dest.width, h = (float)dest.height;
+  MTLViewport vp = {0, 0, w, h, -1.0, 1.0};
+  [enc setViewport:vp];
+  KKVertex2D vertices[4] = {
+      {{w / 2.0f, -h / 2.0f}, {1, 1}},
+      {{-w / 2.0f, -h / 2.0f}, {0, 1}},
+      {{w / 2.0f, h / 2.0f}, {1, 0}},
+      {{-w / 2.0f, h / 2.0f}, {0, 0}},
+  };
+  simd_uint2 viewportSize = {(unsigned)w, (unsigned)h};
+  [enc setVertexBytes:vertices
+               length:sizeof(vertices)
+              atIndex:KKVertexInputIndex_Vertices];
+  [enc setVertexBytes:&viewportSize
+               length:sizeof(viewportSize)
+              atIndex:KKVertexInputIndex_ViewportSize];
+  [enc setRenderPipelineState:pso];
+  [enc setFragmentTexture:source atIndex:KKTextureIndex_InputImage];
+  [enc setFragmentBytes:&params
+                 length:sizeof(params)
+                atIndex:FragmentIndex_Params];
+  [enc setFragmentBytes:&zeroOffset
+                 length:sizeof(zeroOffset)
+                atIndex:FragmentIndex_TileOffsetPx];
+  [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
+          vertexStart:0
+          vertexCount:4];
+  [enc endEncoding];
   return YES;
 }
 
 - (NSInteger)valueTypeForLabel:(NSString *)label {
   if ([label isEqualToString:@"Position"])
     return KKLaneValueTypeGeneric;
+  if ([label isEqualToString:@"Rotation"])
+    return KKLaneValueTypeAngle;
   return [super valueTypeForLabel:label];
 }
 
 - (NSArray<NSNumber *> *)defaultValuesForLabel:(NSString *)label {
   if ([label isEqualToString:@"Position"])
     return @[ @0.5, @0.5 ];
+  if ([label isEqualToString:@"Rotation"])
+    return @[ @0.0, @0.0, @0.0 ];
   return [super defaultValuesForLabel:label];
 }
 

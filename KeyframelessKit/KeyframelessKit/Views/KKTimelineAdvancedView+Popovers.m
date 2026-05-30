@@ -75,6 +75,7 @@
     display.componentMax = l.componentMax;
     display.componentUnits = l.componentUnits;
     display.componentLabels = l.componentLabels;
+    display.componentLabelColors = l.componentLabelColors;
     display.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
                                             values:vals ?: @[ @0.0 ]] ];
     [displayLanes addObject:display];

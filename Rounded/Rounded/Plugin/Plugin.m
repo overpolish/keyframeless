@@ -23,10 +23,6 @@
 
 - (void)dealloc {
   [_playheadPoller invalidate];
-  [_playheadPoller release];
-  [_renderCache release];
-  [_miniCanvasFeed release];
-  [super dealloc];
 }
 
 - (BOOL)properties:(NSDictionary *_Nonnull *)properties
@@ -120,10 +116,10 @@
   double durSec = CMTimeGetSeconds(dur);
   if (durSec <= 0)
     return timeline;
-  KKTimeline *out = [[timeline copy] autorelease];
-  NSMutableArray<KKLane *> *lanes = [[out.lanes mutableCopy] autorelease];
+  KKTimeline *out = [timeline copy];
+  NSMutableArray<KKLane *> *lanes = [out.lanes mutableCopy];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    KKLane *l = [[lanes[i] copy] autorelease];
+    KKLane *l = [lanes[i] copy];
     l.lastKnownClipDuration = durSec;
     lanes[i] = l;
   }

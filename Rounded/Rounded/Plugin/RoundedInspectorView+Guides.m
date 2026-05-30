@@ -211,7 +211,7 @@ static const double kConstantsGuideCropXTarget = 100.0;
 - (KKOSCGuideStrategy *)_pointOSCStrategy {
   __weak typeof(self) weak = self;
   __weak KKTimelineLanesView *weakBasic = self.basicLanesView;
-  KKOSCGuideStrategy *s = [[[KKOSCGuideStrategy alloc] init] autorelease];
+  KKOSCGuideStrategy *s = [[KKOSCGuideStrategy alloc] init];
   s.captureAnchorAtScreen = ^(NSPoint pt) {
     RoundedOSCCaptureGuideAnchorAtScreen(pt);
   };
@@ -282,7 +282,6 @@ static const double kConstantsGuideCropXTarget = 100.0;
 
 - (void)_teardownOSCSegment {
   [_oscSegment teardown];
-  [_oscSegment release];
   _oscSegment = nil;
 }
 
@@ -393,7 +392,6 @@ static const double kConstantsGuideCropXTarget = 100.0;
 
 - (void)_teardownConstantsScrollMonitors {
   [_constantsScrollFwd teardown];
-  [_constantsScrollFwd release];
   _constantsScrollFwd = nil;
 }
 
