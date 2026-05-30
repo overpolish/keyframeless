@@ -582,6 +582,7 @@
       fixed.componentMax = tmpl.componentMax;
       fixed.componentUnits = tmpl.componentUnits;
       fixed.componentLabels = tmpl.componentLabels;
+      fixed.componentLabelColors = tmpl.componentLabelColors;
       lanes[presentIdx] = fixed;
       continue;
     }
@@ -591,6 +592,7 @@
     lane.componentMax = tmpl.componentMax;
     lane.componentUnits = tmpl.componentUnits;
     lane.componentLabels = tmpl.componentLabels;
+    lane.componentLabelColors = tmpl.componentLabelColors;
     lane.enabled = NO; // constant until the dropdown makes it animatable
     [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                           values:[self _defaultValuesForLabel:

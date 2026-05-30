@@ -336,6 +336,7 @@ static const CGFloat kSuffixSlotW = 17.0;
 @interface _KKValueField : NSView
 @property(nonatomic, readonly) NSTextField *field;
 - (void)setPrefix:(nullable NSString *)prefix;
+- (void)setPrefixColor:(nullable NSColor *)color;
 - (void)setSuffix:(nullable NSString *)suffix;
 @end
 
@@ -376,6 +377,9 @@ static const CGFloat kSuffixSlotW = 17.0;
 - (void)setPrefix:(NSString *)prefix {
   _prefix.stringValue = prefix ?: @"";
 }
+- (void)setPrefixColor:(NSColor *)color {
+  _prefix.textColor = color ?: [NSColor inspectorLabel];
+}
 - (void)setSuffix:(NSString *)suffix {
   _suffix.stringValue = suffix ?: @"";
 }
@@ -403,8 +407,12 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   NSArray<NSNumber *> *_cmin;
   NSArray<NSNumber *> *_cmax;
   NSArray<NSString *> *_cunits;
-  KKSliderView *_slider;               // Float only
-  NSArray<NSTextField *> *_fields;     // Float: 1; Crop: 4 (w,h,x,y)
+  KKSliderView *_slider;            // Float only
+  NSArray<NSSlider *> *_angleKnobs; // Angle only - one per component
+  NSMutableArray<NSNumber *>
+      *_prevKnobValues; // last seen knob position per knob
+  BOOL _angleKnobDragging;
+  NSArray<NSTextField *> *_fields;     // Float: 1; Angle: N; Crop: 4 (w,h,x,y)
   NSMutableArray<NSNumber *> *_values; // normalized, authoritative
   NSButton *_reset;                    // reset-to-default, right of the label
   NSButton *_removeBtn;                // leading "−" gutter (Advanced only)
@@ -538,20 +546,53 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   ]];
 
   NSArray<NSString *> *caps = KKLaneComponentLabels(lane);
+  NSArray<NSColor *> *capColors = lane.componentLabelColors;
   if (caps.count >= 2) {
     NSInteger n = (NSInteger)caps.count;
     NSMutableArray<NSView *> *arranged = [NSMutableArray array];
     NSMutableArray<NSTextField *> *fs = [NSMutableArray array];
+    NSMutableArray<NSSlider *> *knobs = [NSMutableArray array];
     for (NSInteger i = 0; i < n; i++) {
       _KKValueField *cell = [[_KKValueField alloc] init];
       [cell setPrefix:caps[i]];
       [cell setSuffix:(i < (NSInteger)_cunits.count ? _cunits[i] : nil)];
+      if (i < (NSInteger)capColors.count) {
+        NSColor *c = capColors[i];
+        if ([c isKindOfClass:[NSColor class]])
+          [cell setPrefixColor:c];
+      }
       NSTextField *fld = cell.field;
       fld.target = self;
       fld.action = @selector(_fieldCommitted:);
       fld.delegate = (id<NSTextFieldDelegate>)self; // live-typing for a guide
-      [arranged addObject:cell];
       [fs addObject:fld];
+      if (_valueType == KKLaneValueTypeAngle) {
+        // Mini circular knob ahead of each field. Range -180..180 so one
+        // physical revolution of the knob = 360° of value (1:1). Field
+        // still accepts the full lane range (e.g. ±360) for multi-turn
+        // values; the knob clamps but the model doesn't.
+        NSSlider *knob = [[NSSlider alloc] initWithFrame:NSZeroRect];
+        knob.sliderType = NSSliderTypeCircular;
+        // NSSlider circular ignores width/height constraints; controlSize
+        // is the only knob that actually changes its visual diameter.
+        knob.controlSize = NSControlSizeMini;
+        knob.minValue = -180.0;
+        knob.maxValue = 180.0;
+        knob.continuous = YES;
+        knob.tag = i;
+        knob.target = self;
+        knob.action = @selector(_angleKnobMoved:);
+        knob.translatesAutoresizingMaskIntoConstraints = NO;
+        [knobs addObject:knob];
+        NSStackView *entry = [NSStackView stackViewWithViews:@[ knob, cell ]];
+        entry.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+        entry.alignment = NSLayoutAttributeCenterY;
+        entry.spacing = KKSpacingMD;
+        entry.translatesAutoresizingMaskIntoConstraints = NO;
+        [arranged addObject:entry];
+      } else {
+        [arranged addObject:cell];
+      }
       if (i < n - 1) { // divider between each component group
         NSView *div = [[NSView alloc] init];
         div.translatesAutoresizingMaskIntoConstraints = NO;
@@ -583,6 +624,10 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
       [hs.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
     ]];
     _fields = fs;
+    _angleKnobs = knobs;
+    _prevKnobValues = [NSMutableArray array];
+    for (NSUInteger k = 0; k < knobs.count; k++)
+      [_prevKnobValues addObject:@0];
   } else {
     _KKValueField *cell = [[_KKValueField alloc] init];
     [cell setSuffix:(_cunits.count ? _cunits[0] : nil)];
@@ -622,9 +667,6 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
       [_slider.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
       [cell.trailingAnchor constraintEqualToAnchor:_reset.leadingAnchor
                                           constant:-KKPaddingLG],
-      // Pin top/bottom (not just centerY): a direct subview cell has no other
-      // height source, and a zero-height cell clips hit-testing so the field
-      // inside can't be clicked. (Crop cells get height from their stack view.)
       [cell.topAnchor constraintEqualToAnchor:self.topAnchor],
       [cell.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
     ]];
@@ -662,6 +704,25 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   }
   if (_slider && _values.count && ![self _fieldEditing:_fields[0]])
     _slider.doubleValue = _values[0].doubleValue;
+  if (_angleKnobs.count && !_angleKnobDragging) {
+    for (NSInteger i = 0;
+         i < (NSInteger)_angleKnobs.count && i < (NSInteger)_values.count;
+         i++) {
+      if (i < (NSInteger)_fields.count && [self _fieldEditing:_fields[i]])
+        continue;
+      // Knob wraps the value into its -180..180 range visually - the model
+      // still stores the unwrapped degree. Keep _prevKnobValues in sync so
+      // the next delta calc doesn't see a jump from external mutation.
+      double v = _values[i].doubleValue;
+      double wrapped = fmod(v + 180.0, 360.0);
+      if (wrapped < 0)
+        wrapped += 360.0;
+      double knobPos = wrapped - 180.0;
+      _angleKnobs[i].doubleValue = knobPos;
+      if (i < (NSInteger)_prevKnobValues.count)
+        _prevKnobValues[i] = @(knobPos);
+    }
+  }
 }
 
 - (BOOL)_fieldEditing:(NSTextField *)f {
@@ -685,6 +746,49 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   if (v.count)
     v[0] = @(_slider.doubleValue); // radius: scale 1
   [self _setValues:v emit:YES];
+}
+
+// NSSlider (unlike KKSliderView) has no built-in onDragBegin/End hooks - we
+// detect drag start on the first continuous fire and drag end via the
+// pressed-mouse-button state. Same drag-undo bracketing as _sliderMoved.
+// Knob delta accumulation: NSSlider circular wraps at min/max, but we want
+// the model to keep climbing (FCP behavior - 720° = two full turns). On
+// each fire, compute the delta from the previous knob position, correct
+// for the ±180 → ∓180 wrap, and add that to the model value. The knob's
+// visible position re-syncs from the wrapped model in refreshDisplay.
+- (void)_angleKnobMoved:(NSSlider *)sender {
+  if (!_angleKnobDragging) {
+    // Drop focus from any field still editing first - otherwise the field's
+    // stale stringValue commits over the knob-driven value next runloop tick
+    // (same bug class as the reset-to-default button before its fix).
+    [sender.window makeFirstResponder:nil];
+    _angleKnobDragging = YES;
+    if (self.onDragBegin)
+      self.onDragBegin();
+  }
+  NSInteger i = sender.tag;
+  if (i < 0 || i >= (NSInteger)_values.count)
+    return;
+  double prev = (i < (NSInteger)_prevKnobValues.count)
+                    ? _prevKnobValues[i].doubleValue
+                    : sender.doubleValue;
+  double delta = sender.doubleValue - prev;
+  if (delta > 180.0)
+    delta -= 360.0;
+  else if (delta < -180.0)
+    delta += 360.0;
+  while (i >= (NSInteger)_prevKnobValues.count)
+    [_prevKnobValues addObject:@0];
+  _prevKnobValues[i] = @(sender.doubleValue);
+  NSMutableArray<NSNumber *> *v = [_values mutableCopy];
+  v[i] = @([v[i] doubleValue] + delta);
+  [self _setValues:v emit:YES];
+  NSEvent *evt = NSApp.currentEvent;
+  if (evt.type == NSEventTypeLeftMouseUp) {
+    _angleKnobDragging = NO;
+    if (self.onDragEnd)
+      self.onDragEnd();
+  }
 }
 
 - (void)_fieldCommitted:(id)sender {
@@ -720,7 +824,7 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 }
 
 - (NSView *)guideSliderView {
-  return _slider;
+  return _slider ?: (NSView *)_angleKnobs.firstObject;
 }
 
 - (NSView *)guideFieldViewForComponent:(NSInteger)i {

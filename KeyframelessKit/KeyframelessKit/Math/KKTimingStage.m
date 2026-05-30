@@ -250,6 +250,7 @@
   c.componentMax = [_componentMax copy];
   c.componentUnits = [_componentUnits copy];
   c.componentLabels = [_componentLabels copy];
+  c.componentLabelColors = [_componentLabelColors copy];
   c.keyposes = [[NSArray alloc] initWithArray:_keyposes copyItems:YES];
   c.lastKnownClipDuration = _lastKnownClipDuration;
   c.holdShape = _holdShape;

@@ -89,21 +89,26 @@
   }
 
   NSArray<NSNumber *> *positionVals = nil;
+  NSArray<NSNumber *> *rotationVals = nil;
   for (KKLane *lane in timeline.lanes) {
-    if ([lane.label isEqualToString:@"Position"]) {
+    if ([lane.label isEqualToString:@"Position"])
       positionVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
-      break;
-    }
+    else if ([lane.label isEqualToString:@"Rotation"])
+      rotationVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
   }
   double posX = positionVals.count > 0 ? positionVals[0].doubleValue : 0.5;
   double posY = positionVals.count > 1 ? positionVals[1].doubleValue : 0.5;
+  double rotXdeg = rotationVals.count > 0 ? rotationVals[0].doubleValue : 0.0;
+  double rotYdeg = rotationVals.count > 1 ? rotationVals[1].doubleValue : 0.0;
+  double rotZdeg = rotationVals.count > 2 ? rotationVals[2].doubleValue : 0.0;
+  static const double kDegToRad = M_PI / 180.0;
 
   outParams->translate =
       (simd_float2){(float)(posX - 0.5), (float)(posY - 0.5)};
   outParams->anchorOffset = (simd_float2){0.0f, 0.0f};
-  outParams->rotation = 0.0f;
-  outParams->rotationX = 0.0f;
-  outParams->rotationY = 0.0f;
+  outParams->rotation = (float)(rotZdeg * kDegToRad);
+  outParams->rotationX = (float)(rotXdeg * kDegToRad);
+  outParams->rotationY = (float)(rotYdeg * kDegToRad);
   outParams->scaleX = 1.0f;
   outParams->scaleY = 1.0f;
   outParams->opacity = 1.0f;

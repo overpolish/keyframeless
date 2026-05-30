@@ -7,6 +7,8 @@
 
 #import <Foundation/Foundation.h>
 
+@class NSColor;
+
 NS_ASSUME_NONNULL_BEGIN
 
 typedef NS_ENUM(NSInteger, KKLaneValueType) {
@@ -17,6 +19,9 @@ typedef NS_ENUM(NSInteger, KKLaneValueType) {
   KKLaneValueTypeColor = 4, // [r, g, b, a] 0–1
   KKLaneValueTypeGradient = 5, // flat stop array: [position, r, g, b, midpoint,
                                // ...] × N stops; variable length
+  KKLaneValueTypeAngle = 6,    // single value, degrees; row renders a circular
+                               // knob + numeric field (unit "°") instead of
+                               // the standard slider + field used for Float.
 };
 
 typedef NS_ENUM(NSInteger, KKIntervalCurve) {
@@ -141,6 +146,10 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// (W/H/X/Y for Crop, R/G/B/A for Color, 1/2/3... for generic). One per
 /// component; rendered by `KKLaneComponentLabels` and the multi-field row.
 @property(nonatomic, copy, nullable) NSArray<NSString *> *componentLabels;
+/// Optional tint per component caption (e.g. red/green/blue X/Y/Z for
+/// Rotation). nil entries within the array fall back to inspectorLabel.
+/// nil array entirely = uniform inspectorLabel for all components.
+@property(nonatomic, copy, nullable) NSArray<NSColor *> *componentLabelColors;
 @property(nonatomic, copy) NSArray<KKKeyPose *> *keyposes; // ordered by time
 @property(nonatomic) double lastKnownClipDuration; // 0 = not yet established
 

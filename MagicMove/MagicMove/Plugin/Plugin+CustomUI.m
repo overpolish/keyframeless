@@ -31,7 +31,26 @@
   position.componentLabels = @[ @"X", @"Y" ];
   [position insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.5, @0.5 ]]];
 
-  return @[ position ];
+  KKLane *rotation = [KKLane laneWithLabel:@"Rotation"];
+  rotation.valueType = KKLaneValueTypeAngle;
+  // Knobs cover one revolution visually but model values accumulate past
+  // 360° (FCP behaviour - 2 full turns = 720°). Empty min/max = unconstrained.
+  rotation.componentMin = @[];
+  rotation.componentMax = @[];
+  rotation.componentUnits = @[ @"°", @"°", @"°" ];
+  rotation.componentLabels = @[ @"X", @"Y", @"Z" ];
+  // Standard 3D-axis tint convention (Motion / Blender / Maya): X=red,
+  // Y=green, Z=blue. Slightly desaturated so they don't shout against the
+  // inspector background.
+  rotation.componentLabelColors = @[
+    [NSColor colorWithSRGBRed:0.95 green:0.35 blue:0.35 alpha:1.0],
+    [NSColor colorWithSRGBRed:0.40 green:0.85 blue:0.45 alpha:1.0],
+    [NSColor colorWithSRGBRed:0.40 green:0.60 blue:0.95 alpha:1.0],
+  ];
+  [rotation insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                            values:@[ @0.0, @0.0, @0.0 ]]];
+
+  return @[ position, rotation ];
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
