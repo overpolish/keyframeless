@@ -49,7 +49,7 @@ static const CGFloat kEdgeW = 16.0; // overflow-shadow gradient width
       s.wantsLayer = YES;
       [self addSubview:s];
     }
-    NSColor *c0 = [[NSColor blackColor] colorWithAlphaComponent:0.18];
+    NSColor *c0 = [[NSColor blackColor] colorWithAlphaComponent:0.3];
     id opaque = (__bridge id)c0.CGColor;
     id clear = (__bridge id)[NSColor clearColor].CGColor;
     _leftGrad = [CAGradientLayer layer];
@@ -62,8 +62,10 @@ static const CGFloat kEdgeW = 16.0; // overflow-shadow gradient width
     _rightGrad.startPoint = CGPointMake(0, 0.5);
     _rightGrad.endPoint = CGPointMake(1, 0.5);
     _rightShadow.layer = _rightGrad;
-    _leftShadow.alphaValue = 0.0;
-    _rightShadow.alphaValue = 0.0;
+    // Layer-hosting views ignore NSView.alphaValue - drive the gradient
+    // layer's opacity directly so the shadows actually hide at offset 0.
+    _leftGrad.opacity = 0.0;
+    _rightGrad.opacity = 0.0;
 
     [[NSNotificationCenter defaultCenter]
         addObserver:self
@@ -95,12 +97,13 @@ static const CGFloat kEdgeW = 16.0; // overflow-shadow gradient width
   NSSize clip = _scroll.contentSize;
   CGFloat rowW = MAX(_row.intrinsicContentSize.width, clip.width);
   _row.frame = NSMakeRect(0, 0, rowW, clip.height);
+  // _leftGrad / _rightGrad are the shadow views' backing layers - the view
+  // frame setter syncs their geometry. Setting the gradient layer's frame
+  // again would clobber that with bounds (origin 0,0), collapsing the right
+  // shadow's layer onto the left edge.
   _leftShadow.frame = NSMakeRect(0, 0, kEdgeW, NSHeight(self.bounds));
   _rightShadow.frame = NSMakeRect(NSWidth(self.bounds) - kEdgeW, 0, kEdgeW,
                                   NSHeight(self.bounds));
-  // Layer-backed frames don't drive sublayer bounds automatically here.
-  _leftGrad.frame = _leftShadow.bounds;
-  _rightGrad.frame = _rightShadow.bounds;
   [self _scrolled];
 }
 
@@ -109,13 +112,17 @@ static const CGFloat kEdgeW = 16.0; // overflow-shadow gradient width
   CGFloat visW = _scroll.contentView.bounds.size.width;
   CGFloat offX = _scroll.contentView.bounds.origin.x;
   CGFloat scrollable = docW - visW;
+  [CATransaction begin];
+  [CATransaction setDisableActions:YES];
   if (scrollable <= 0.5) {
-    _leftShadow.alphaValue = 0.0;
-    _rightShadow.alphaValue = 0.0;
-    return;
+    _leftGrad.opacity = 0.0;
+    _rightGrad.opacity = 0.0;
+  } else {
+    _leftGrad.opacity = (float)MAX(0.0, MIN(1.0, offX / kEdgeW));
+    _rightGrad.opacity =
+        (float)MAX(0.0, MIN(1.0, (scrollable - offX) / kEdgeW));
   }
-  _leftShadow.alphaValue = MAX(0.0, MIN(1.0, offX / kEdgeW));
-  _rightShadow.alphaValue = MAX(0.0, MIN(1.0, (scrollable - offX) / kEdgeW));
+  [CATransaction commit];
 }
 
 - (void)setStates:(NSArray<NSNumber *> *)states {
