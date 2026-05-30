@@ -33,14 +33,25 @@ static NSArray<NSNumber *> *_positionValuesAtFraction(double frac) {
   return v.count >= 2 ? v : @[ @0.5, @0.5 ];
 }
 
+@interface MagicMoveOSC ()
+@property(nonatomic, retain) KKSnapEngine *snapEngine;
+@property(nonatomic) BOOL cmdSnapOverride;
+@end
+
 @implementation MagicMoveOSC
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
   self = [super initWithAPIManager:apiManager];
   if (self) {
     self.clearsOnDraw = NO;
+    _snapEngine = [[KKSnapEngine alloc] init];
   }
   return self;
+}
+
+- (void)dealloc {
+  [_snapEngine release];
+  [super dealloc];
 }
 
 - (double)_fractionAtTime:(CMTime)time {
@@ -78,6 +89,77 @@ static NSArray<NSNumber *> *_positionValuesAtFraction(double frac) {
   return canvas;
 }
 
+// Snap the live drag position against canvas edges (0/1), the centre (0.5),
+// thirds (0.25/0.75), and every other keypose's stored position. Object
+// space; threshold defaults to ~8 canvas pixels via KKSnapEngine.
+- (simd_float2)_snapPosition:(simd_float2)p atFraction:(double)frac {
+  KKLane *lane = nil;
+  for (KKLane *l in KKProcessTimelineSnapshot().lanes)
+    if ([l.label isEqualToString:@"Position"]) {
+      lane = l;
+      break;
+    }
+  static const float anchors[] = {0.0f, 0.25f, 0.5f, 0.75f, 1.0f};
+  // Skip the keypose being edited (closest to playhead frac - drag overwrites
+  // it, so snapping back to it would lock the handle in place).
+  NSInteger best = -1;
+  if (lane.keyposes.count > 0) {
+    double bd = 1e9;
+    for (NSInteger k = 0; k < (NSInteger)lane.keyposes.count; k++) {
+      double d = fabs(lane.keyposes[k].time - frac);
+      if (d < bd) {
+        bd = d;
+        best = k;
+      }
+    }
+  }
+  NSUInteger nObj = 0;
+  simd_float2 *objs = lane.keyposes.count
+                          ? malloc(lane.keyposes.count * sizeof(simd_float2))
+                          : NULL;
+  for (NSInteger k = 0; k < (NSInteger)lane.keyposes.count; k++) {
+    if (k == best)
+      continue;
+    NSArray<NSNumber *> *v = lane.keyposes[k].values;
+    if (v.count < 2)
+      continue;
+    objs[nObj++] =
+        (simd_float2){(float)v[0].doubleValue, (float)v[1].doubleValue};
+  }
+  // One object unit spans one image width in canvas pixels.
+  CGPoint o0 = [self canvasPointFromObjectPoint:(simd_float2){0, 0}];
+  CGPoint o1 = [self canvasPointFromObjectPoint:(simd_float2){1, 0}];
+  float pxPerUnit = (float)fabs(o1.x - o0.x);
+  float thr = (pxPerUnit > 0) ? self.snapEngine.threshold / pxPerUnit : 0.005f;
+  simd_float2 snapped = [self.snapEngine snapPoint:p
+                                    canvasAnchorsX:anchors
+                                            countX:5
+                                    canvasAnchorsY:anchors
+                                            countY:5
+                                     objectTargets:objs
+                                             count:nObj
+                                        thresholdX:thr
+                                        thresholdY:thr];
+  if (objs)
+    free(objs);
+  return snapped;
+}
+
+- (void)mouseUpAtPositionX:(double)positionX
+                 positionY:(double)positionY
+                activePart:(NSInteger)activePart
+                 modifiers:(NSUInteger)modifiers
+               forceUpdate:(BOOL *)forceUpdate
+                    atTime:(CMTime)time {
+  [self.snapEngine reset];
+  [super mouseUpAtPositionX:positionX
+                  positionY:positionY
+                 activePart:activePart
+                  modifiers:modifiers
+                forceUpdate:forceUpdate
+                     atTime:time];
+}
+
 - (void)drawOSCWithWidth:(NSInteger)width
                   height:(NSInteger)height
               activePart:(NSInteger)activePart
@@ -103,6 +185,19 @@ static NSArray<NSNumber *> *_positionValuesAtFraction(double frac) {
                     isActive:self.isDragging && (activePart == kOSCPositionPart)
             destinationImage:destinationImage
                       atTime:time];
+  if (self.isDragging && !self.cmdSnapOverride) {
+    simd_float4 yellow = {1, 1, 0, 1};
+    NSColor *accentNS = [[NSColor accentMatchingHost]
+        colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
+    CGFloat ar = 1, ag = 1, ab = 1, aa = 1;
+    [accentNS getRed:&ar green:&ag blue:&ab alpha:&aa];
+    simd_float4 accent = {(float)ar, (float)ag, (float)ab, (float)aa};
+    [self.snapEngine drawSnapGuidesWithOSC:self
+                             isObjectSpace:YES
+                               canvasColor:yellow
+                               objectColor:accent
+                          destinationImage:destinationImage];
+  }
 }
 
 - (void)hitTestOSCAtMousePositionX:(double)positionX
@@ -137,6 +232,19 @@ static NSArray<NSNumber *> *_positionValuesAtFraction(double frac) {
                             toX:&newX
                             toY:&newY];
 
+  // Snap (object space). Always on; Command bypasses, matching Canvas.
+  self.cmdSnapOverride = (modifiers & kFxModifierKey_COMMAND) != 0;
+  double frac = [self _fractionAtTime:time];
+  if (!self.cmdSnapOverride) {
+    simd_float2 snapped =
+        [self _snapPosition:(simd_float2){(float)newX, (float)newY}
+                 atFraction:frac];
+    newX = snapped.x;
+    newY = snapped.y;
+  } else {
+    [self.snapEngine reset];
+  }
+
   id<FxCustomParameterActionAPI_v4> actionAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (!actionAPI)
@@ -152,7 +260,6 @@ static NSArray<NSNumber *> *_positionValuesAtFraction(double frac) {
   // Snapshot is canonical - the param read returns empty inside the OSC
   // action scope. Copy then mutate the Position lane's keypose nearest the
   // current playhead fraction, preserving structure / intervals.
-  double frac = [self _fractionAtTime:time];
   KKTimeline *snap = KKProcessTimelineSnapshot();
   KKTimeline *tl = snap ? [[snap copy] autorelease] : [KKTimeline timeline];
   NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];

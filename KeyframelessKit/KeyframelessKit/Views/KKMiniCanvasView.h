@@ -73,7 +73,25 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)miniCanvas:(KKMiniCanvasView *)canvas
     dragHandleToPoint:(CGPoint)point
           contentRect:(CGRect)contentRect;
+/// Modifiers-aware drag, called instead of the plain variant if implemented.
+/// Lets the delegate honour cmd-bypass for snap, shift-constrain, etc.
+- (void)miniCanvas:(KKMiniCanvasView *)canvas
+    dragHandleToPoint:(CGPoint)point
+          contentRect:(CGRect)contentRect
+            modifiers:(NSEventModifierFlags)modifiers;
 - (void)miniCanvasEndHandleDrag:(KKMiniCanvasView *)canvas;
+/// While dragging, return the active snap line(s) in normalized
+/// content-rect space (0=left/bottom, 1=right/top). `*outX` / `*outY` are
+/// only consulted when the corresponding return-element is YES. The canvas
+/// overlay strokes a yellow guide through each active axis. Either or both
+/// axes may be active.
+- (void)miniCanvas:(KKMiniCanvasView *)canvas
+        snapGuideHasX:(out BOOL *)hasX
+                    X:(out CGFloat *)outX
+       fromKeyposeX:(out BOOL *)fromKeyposeX
+                hasY:(out BOOL *)hasY
+                    Y:(out CGFloat *)outY
+       fromKeyposeY:(out BOOL *)fromKeyposeY;
 @end
 
 /// `MTKView` that resolves a cross-process source `IOSurface` - published by

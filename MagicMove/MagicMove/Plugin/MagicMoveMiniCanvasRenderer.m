@@ -13,7 +13,24 @@ NSString *const MagicMoveMiniCanvasRequestPath =
 
 static const CGFloat kHandleHitTolPt = 12.0;
 
+@interface MagicMoveMiniCanvasRenderer () {
+  KKSnapEngine *_snapEngine;
+}
+@end
+
 @implementation MagicMoveMiniCanvasRenderer
+
+- (instancetype)init {
+  if ((self = [super init])) {
+    _snapEngine = [[KKSnapEngine alloc] init];
+  }
+  return self;
+}
+
+- (void)dealloc {
+  [_snapEngine release];
+  [super dealloc];
+}
 
 - (NSString *)pointLabel {
   return @"Position";
@@ -131,12 +148,117 @@ static const CGFloat kHandleHitTolPt = 12.0;
 - (void)applyPointDragToPoint:(CGPoint)p
                   contentRect:(CGRect)cr
                        canvas:(KKMiniCanvasView *)canvas {
+  [self applyPointDragToPoint:p contentRect:cr canvas:canvas modifiers:0];
+}
+
+// Mirror of the viewer OSC snap: anchors at 0/0.25/0.5/0.75/1.0 plus every
+// other keypose's stored position. Cmd bypasses (Canvas convention).
+- (void)applyPointDragToPoint:(CGPoint)p
+                  contentRect:(CGRect)cr
+                       canvas:(KKMiniCanvasView *)canvas
+                    modifiers:(NSEventModifierFlags)modifiers {
   if (cr.size.width <= 0 || cr.size.height <= 0)
     return;
-  // Position is allowed off-canvas, so no [0,1] clamp.
   double nx = (p.x - CGRectGetMinX(cr)) / cr.size.width;
   double ny = (p.y - CGRectGetMinY(cr)) / cr.size.height;
+  if (!(modifiers & NSEventModifierFlagCommand)) {
+    [self _snapPositionX:&nx Y:&ny contentRect:cr];
+  } else {
+    [_snapEngine reset];
+  }
   [self commitValues:@[ @(nx), @(ny) ] forLabel:@"Position" canvas:canvas];
+}
+
+// Mini-canvas drag is also called via the delegate dispatcher in
+// KKMiniCanvasView so the modifier variant takes precedence over the plain
+// one.
+- (void)miniCanvas:(KKMiniCanvasView *)canvas
+    dragHandleToPoint:(CGPoint)p
+          contentRect:(CGRect)cr
+            modifiers:(NSEventModifierFlags)modifiers {
+  if (![self pointHandleIsActive])
+    return;
+  [self applyPointDragToPoint:p
+                  contentRect:cr
+                       canvas:canvas
+                    modifiers:modifiers];
+}
+
+- (void)_snapPositionX:(double *)nx Y:(double *)ny contentRect:(CGRect)cr {
+  static const float anchors[] = {0.0f, 0.25f, 0.5f, 0.75f, 1.0f};
+  // Snap threshold in mini-canvas view points; convert to normalized units
+  // (per-axis since the mini may not be square).
+  static const float kThreshPt = 6.0f;
+  float thrX = cr.size.width > 0 ? kThreshPt / (float)cr.size.width : 0.01f;
+  float thrY = cr.size.height > 0 ? kThreshPt / (float)cr.size.height : 0.01f;
+
+  // Other keyposes on the Position lane. Identify the edited keypose by
+  // closest-time match against editFraction (skipping by *value* would
+  // unskip mid-drag the moment the edited keypose's value lines up with
+  // another, producing a snap → unsnap → snap pingback).
+  simd_float2 *objs = NULL;
+  NSUInteger nObj = 0;
+  for (KKLane *lane in self.timeline.lanes) {
+    if (![lane.label isEqualToString:@"Position"])
+      continue;
+    NSArray<KKKeyPose *> *kps = lane.keyposes;
+    NSInteger edited = -1;
+    if (kps.count > 0) {
+      double bd = 1e9;
+      for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
+        double d = fabs(kps[k].time - self.editFraction);
+        if (d < bd) {
+          bd = d;
+          edited = k;
+        }
+      }
+      objs = malloc(kps.count * sizeof(simd_float2));
+    }
+    for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
+      if (k == edited)
+        continue;
+      NSArray<NSNumber *> *v = kps[k].values;
+      if (v.count < 2)
+        continue;
+      objs[nObj++] =
+          (simd_float2){(float)v[0].doubleValue, (float)v[1].doubleValue};
+    }
+    break;
+  }
+  simd_float2 snapped =
+      [_snapEngine snapPoint:(simd_float2){(float)*nx, (float)*ny}
+              canvasAnchorsX:anchors
+                      countX:5
+              canvasAnchorsY:anchors
+                      countY:5
+               objectTargets:objs
+                       count:nObj
+                  thresholdX:thrX
+                  thresholdY:thrY];
+  if (objs)
+    free(objs);
+  *nx = snapped.x;
+  *ny = snapped.y;
+}
+
+- (void)miniCanvas:(KKMiniCanvasView *)canvas
+     snapGuideHasX:(out BOOL *)hasX
+                 X:(out CGFloat *)outX
+      fromKeyposeX:(out BOOL *)fromKeyposeX
+              hasY:(out BOOL *)hasY
+                 Y:(out CGFloat *)outY
+      fromKeyposeY:(out BOOL *)fromKeyposeY {
+  *hasX = _snapEngine.snappedX;
+  *outX = (CGFloat)_snapEngine.snapValueX;
+  *fromKeyposeX = _snapEngine.snapXFromObject;
+  *hasY = _snapEngine.snappedY;
+  *outY = (CGFloat)_snapEngine.snapValueY;
+  *fromKeyposeY = _snapEngine.snapYFromObject;
+}
+
+- (void)miniCanvasEndHandleDrag:(KKMiniCanvasView *)canvas {
+  [_snapEngine reset];
+  [super miniCanvasEndHandleDrag:canvas];
 }
 
 @end

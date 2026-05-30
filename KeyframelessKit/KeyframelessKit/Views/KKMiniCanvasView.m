@@ -73,9 +73,45 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
 - (void)drawRect:(NSRect)dirtyRect {
   KKMiniCanvasView *c = self.canvas;
   id<KKMiniCanvasDelegate> d = c.canvasDelegate;
+  CGRect cr = [c contentRectInViewPoints];
+  if (_dragging &&
+      [d respondsToSelector:@selector(miniCanvas:snapGuideHasX:X:fromKeyposeX:
+                                      hasY:Y:fromKeyposeY:)]) {
+    BOOL hasX = NO, hasY = NO, kpX = NO, kpY = NO;
+    CGFloat gx = 0, gy = 0;
+    [d miniCanvas:c
+        snapGuideHasX:&hasX
+                    X:&gx
+         fromKeyposeX:&kpX
+                 hasY:&hasY
+                    Y:&gy
+         fromKeyposeY:&kpY];
+    NSColor *canvasColor = [NSColor colorWithRed:1.0
+                                           green:1.0
+                                            blue:0.0
+                                           alpha:1.0];
+    NSColor *keyposeColor = [NSColor accentMatchingHost];
+    if (hasX) {
+      [(kpX ? keyposeColor : canvasColor) setStroke];
+      CGFloat x = CGRectGetMinX(cr) + gx * cr.size.width;
+      NSBezierPath *p = [NSBezierPath bezierPath];
+      [p setLineWidth:1.0];
+      [p moveToPoint:NSMakePoint(x, CGRectGetMinY(cr))];
+      [p lineToPoint:NSMakePoint(x, CGRectGetMaxY(cr))];
+      [p stroke];
+    }
+    if (hasY) {
+      [(kpY ? keyposeColor : canvasColor) setStroke];
+      CGFloat y = CGRectGetMinY(cr) + gy * cr.size.height;
+      NSBezierPath *p = [NSBezierPath bezierPath];
+      [p setLineWidth:1.0];
+      [p moveToPoint:NSMakePoint(CGRectGetMinX(cr), y)];
+      [p lineToPoint:NSMakePoint(CGRectGetMaxX(cr), y)];
+      [p stroke];
+    }
+  }
   if (![d respondsToSelector:@selector(miniCanvas:borderRect:forContentRect:)])
     return;
-  CGRect cr = [c contentRectInViewPoints];
   CGRect br;
   if (![d miniCanvas:c borderRect:&br forContentRect:cr])
     return;
@@ -134,10 +170,19 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   if (!_dragging)
     return;
   KKMiniCanvasView *c = self.canvas;
-  [c.canvasDelegate miniCanvas:c
-             dragHandleToPoint:[self convertPoint:e.locationInWindow
-                                         fromView:nil]
-                   contentRect:[c contentRectInViewPoints]];
+  id<KKMiniCanvasDelegate> d = c.canvasDelegate;
+  CGPoint p = [self convertPoint:e.locationInWindow fromView:nil];
+  CGRect cr = [c contentRectInViewPoints];
+  if ([d respondsToSelector:
+              @selector(miniCanvas:dragHandleToPoint:contentRect:modifiers:)]) {
+    [d miniCanvas:c
+        dragHandleToPoint:p
+              contentRect:cr
+                modifiers:e.modifierFlags];
+  } else {
+    [d miniCanvas:c dragHandleToPoint:p contentRect:cr];
+  }
+  [self setNeedsDisplay:YES];
 }
 
 - (void)mouseUp:(NSEvent *)e {
@@ -150,6 +195,7 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
     [d miniCanvasEndHandleDrag:c];
   if (c.onHandleDragEnd)
     c.onHandleDragEnd();
+  [self setNeedsDisplay:YES];
 }
 
 @end
