@@ -60,10 +60,12 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKPathBoolean.h>
 #import <KeyframelessKit/KKPathMorph.h>
 #import <KeyframelessKit/KKPillToggleRowView.h>
+#import <KeyframelessKit/KKPlayheadPoller.h>
 #import <KeyframelessKit/KKPlugin+Color.h>
 #import <KeyframelessKit/KKPlugin+Crop.h>
 #import <KeyframelessKit/KKPlugin.h>
 #import <KeyframelessKit/KKPluginInstanceState.h>
+#import <KeyframelessKit/KKPluginV3Host.h>
 #import <KeyframelessKit/KKPointOSC.h>
 #import <KeyframelessKit/KKPopupSelectView.h>
 #import <KeyframelessKit/KKRectBorderOSC.h>

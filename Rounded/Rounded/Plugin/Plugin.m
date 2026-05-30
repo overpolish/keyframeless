@@ -16,16 +16,15 @@
 {
   self = [super initWithAPIManager:newApiManager];
   if (self) {
-    // Sentinel so the very first render pushes the playhead even when it
-    // sits at frac 0 (the throttle would otherwise see "no change").
-    _lastPushedPlayheadFrac = -1.0;
+    _renderCache = [[KKV3RenderCache alloc] init];
   }
   return self;
 }
 
 - (void)dealloc {
-  [_playheadTimer invalidate];
-  [_playheadTimer release];
+  [_playheadPoller invalidate];
+  [_playheadPoller release];
+  [_renderCache release];
   [_miniCanvasFeed release];
   [super dealloc];
 }
@@ -71,23 +70,13 @@
   }
 
   if (parameterID == kKKParamTimelineData) {
-    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actionAPI startAction:self];
-    id<FxParameterRetrievalAPI_v6> getAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    NSString *json = KKReadCustomParamString(getAPI, kKKParamTimelineData);
-    KKTimeline *timeline =
-        (json.length ? [KKTimeline timelineFromJSON:json] : nil)
-            ?: [KKTimeline timeline];
-    timeline = [self timelineStampedWithClipDuration:timeline];
-    // Publish to the OSC snapshot cache so drawOSC ticks don't have to re-
-    // read the blob (PLAN §"OSC cache" - single-instance assumption).
-    RoundedSetTimelineSnapshot(timeline);
-    [actionAPI endAction:self];
-    dispatch_async(dispatch_get_main_queue(), ^{
-      [self.inspectorView applyTimeline:timeline];
-    });
+    __weak typeof(self) weakSelf = self;
+    KKHandleTimelineParamChanged(
+        self.apiManager, kKKParamTimelineData, self,
+        ^KKTimeline *(KKTimeline *t) {
+          return [weakSelf timelineStampedWithClipDuration:t];
+        },
+        nil, (KKTimelineInspectorView *)self.inspectorView);
   }
 
   if (parameterID == kKKParamMotionBlurData) {

@@ -8,6 +8,7 @@
 #import "../OSC/Base/KKOSCShaderTypes.h"
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
+#import "KKMiniCanvasRenderer.h"
 #import <IOSurface/IOSurface.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
@@ -189,6 +190,7 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   NSMutableArray<_KKMiniFilmSlot *> *_filmstripSlots;
   NSTimer *_pollTimer;
   id<MTLRenderPipelineState> _pointPipeline;
+  id<MTLRenderPipelineState> _arcPipeline;
   id<MTLRenderPipelineState> _linePipeline;
   _KKMiniCanvasOverlay *_overlay;
 
@@ -319,6 +321,25 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   _pointPipeline = [device newRenderPipelineStateWithDescriptor:pp error:&err];
   if (!_pointPipeline)
     KKLogError(@"KKMiniCanvasView: point pipeline failed: %@", err);
+
+  // Arc glyph pipeline - opt-in via the renderer's pointHandleStyle. Same
+  // blend mode as the point pipeline, different fragment.
+  MTLRenderPipelineDescriptor *ap = [[MTLRenderPipelineDescriptor alloc] init];
+  ap.vertexFunction = [lib newFunctionWithName:@"KKVertexShader"];
+  ap.fragmentFunction = [lib newFunctionWithName:@"KKArcOSCFragment"];
+  ap.colorAttachments[0].pixelFormat = self.colorPixelFormat;
+  ap.colorAttachments[0].blendingEnabled = YES;
+  ap.colorAttachments[0].rgbBlendOperation = MTLBlendOperationAdd;
+  ap.colorAttachments[0].alphaBlendOperation = MTLBlendOperationAdd;
+  ap.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
+  ap.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorSourceAlpha;
+  ap.colorAttachments[0].destinationRGBBlendFactor =
+      MTLBlendFactorOneMinusSourceAlpha;
+  ap.colorAttachments[0].destinationAlphaBlendFactor =
+      MTLBlendFactorOneMinusSourceAlpha;
+  _arcPipeline = [device newRenderPipelineStateWithDescriptor:ap error:&err];
+  if (!_arcPipeline)
+    KKLogError(@"KKMiniCanvasView: arc pipeline failed: %@", err);
 
   // Flat-color pipeline for the crop border, drawn before the glyphs so the
   // handles sit on top of the line.
@@ -582,6 +603,66 @@ static const CGFloat kFilmstripGap = 16.0;
   _processedTexture = s0.processedTexture;
 }
 
+// Encodes one shared KKArcOSC glyph centered at `centerPts`. Used by
+// renderers that opt into `KKMiniHandleStyleArc` so the mini-canvas handle
+// matches the viewer-side ring. Matches KKArcOSC's defaults at a smaller
+// mini-canvas scale: 0xC1 gray fill, ring ratio 13/23 (inner = 0.43),
+// outline width derived from KKBorderWidthXS. When `isActive` is YES the
+// outer radius grows (mirroring KKArcOSC's 23→31 expansion) and a small
+// "plus" indicator is drawn in the centre.
+- (void)_encodeArcHandleGlyphAt:(CGPoint)centerPts
+                       isActive:(BOOL)isActive
+                        encoder:(id<MTLRenderCommandEncoder>)enc {
+  if (!_arcPipeline)
+    return;
+  CGSize d = self.drawableSize;
+  CGFloat s = self.window.backingScaleFactor;
+  if (s <= 0)
+    s = 2.0;
+  CGPoint centered = CGPointMake(centerPts.x * s - d.width / 2.0,
+                                 centerPts.y * s - d.height / 2.0);
+  // Base outer radius in canvas points; active state expands it (matches the
+  // viewer KKArcOSC 23→31 hit-grow). Stroke is held constant across states
+  // (viewer KKArcOSC keeps strokeWidth=10 fixed while radius grows); the
+  // inner ratio is derived so the visible ring stays the same thickness.
+  CGFloat outerPt = isActive ? 12.0 : 9.0;
+  CGFloat strokePt =
+      4.5; // proportional to viewer: 3.5pt @ 270pt → 2.5pt @ 195pt
+  float sizePx = (float)(outerPt * s);
+  KKVertex2D quad[6];
+  [KKRenderPrimitives generateQuadVertices:quad center:centered size:sizePx];
+  simd_uint2 vp = {(unsigned)d.width, (unsigned)d.height};
+  float innerRatio = (float)((outerPt - strokePt) / outerPt);
+  float outline = (float)(KKBorderWidthXS / outerPt);
+  // Crosshair (+ inside the ring on active). Viewer ratios at 270pt height:
+  // arm length 6.5pt (~0.024), arm width 0.5pt (~0.0019). Mini @195.5pt
+  // → ~4.7pt long, ~0.37pt wide. Normalized to outerPt = 12.
+  float plusHalf = isActive ? (2.25f / 12.0f) : 0.0f; // phl + pow = ~2.35pt
+  float plusFill = isActive ? (0.15f / 12.0f) : 0.0f; // pfhw + pow = ~0.25pt
+  float plusOutl = isActive ? (0.1f / 12.0f) : 0.0f;
+  KKArcOSCParams params = {
+      .innerRadius = innerRatio,
+      .outlineWidth = outline,
+      .plusHalfLen = plusHalf,
+      .plusFillHalfWidth = plusFill,
+      .plusOutlineWidth = plusOutl,
+      // 0xC1 gray fill, matching KKArcOSC's `arcFillColor`.
+      .fillColor = {193.0f / 255.0f, 193.0f / 255.0f, 193.0f / 255.0f, 1.0f},
+      .strokeColor = {0.0f, 0.0f, 0.0f, 0.8f},
+  };
+  [enc setRenderPipelineState:_arcPipeline];
+  [enc setVertexBytes:quad
+               length:sizeof(quad)
+              atIndex:KKVertexInputIndex_Vertices];
+  [enc setVertexBytes:&vp
+               length:sizeof(vp)
+              atIndex:KKVertexInputIndex_ViewportSize];
+  [enc setFragmentBytes:&params
+                 length:sizeof(params)
+                atIndex:KKOSCFragmentIndex_DrawColor];
+  [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
+}
+
 // Encodes one shared KKPointOSC glyph centered at `centerPts` (overlay
 // points, y-up). `enc` must already be a valid render encoder for this pass.
 - (void)_encodeHandleGlyphAt:(CGPoint)centerPts
@@ -824,10 +905,24 @@ static const CGFloat kFilmstripGap = 16.0;
     CGPoint handleCenterPts;
     if ([del respondsToSelector:
                  @selector(miniCanvas:pointHandleCenter:contentRect:)] &&
-        [del miniCanvas:self pointHandleCenter:&handleCenterPts contentRect:cr])
-      [self _encodeHandleGlyphAt:handleCenterPts
-                       fillColor:accentFill
-                         encoder:enc];
+        [del miniCanvas:self
+            pointHandleCenter:&handleCenterPts
+                  contentRect:cr]) {
+      KKMiniHandleStyle style = KKMiniHandleStylePoint;
+      BOOL isActive = NO;
+      if ([del isKindOfClass:[KKMiniCanvasRenderer class]]) {
+        style = [(KKMiniCanvasRenderer *)del pointHandleStyle];
+        isActive = [(KKMiniCanvasRenderer *)del pointHandleIsActive];
+      }
+      if (style == KKMiniHandleStyleArc)
+        [self _encodeArcHandleGlyphAt:handleCenterPts
+                             isActive:isActive
+                              encoder:enc];
+      else
+        [self _encodeHandleGlyphAt:handleCenterPts
+                         fillColor:accentFill
+                           encoder:enc];
+    }
 
     if ([del respondsToSelector:
                  @selector(miniCanvas:extraHandleCentersForContentRect:)]) {

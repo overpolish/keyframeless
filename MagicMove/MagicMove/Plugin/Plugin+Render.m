@@ -4,6 +4,8 @@
  */
 
 #import "Constants.h"
+#import "MagicMoveMiniCanvasRenderer.h"
+#import "OSC.h"
 #import "Plugin_Private.h"
 #import "ShaderTypes.h"
 #import <KeyframelessKit/KeyframelessKit.h>
@@ -12,28 +14,237 @@
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 @implementation MagicMovePlugin (Render)
 
+// Always request the current frame. When the keypose-value popover is open it
+// writes a request file with the desired clip fraction(s); we also request
+// the source at each of those times so the boundary preview / filmstrip /
+// onion-skin can show the rendered frame there.
+- (BOOL)scheduleInputs:(NSArray<FxImageTileRequest *> *_Nullable *_Nullable)
+                           inputImageRequests
+       withPluginState:(NSData *)pluginState
+                atTime:(CMTime)renderTime
+                 error:(NSError **)error {
+  KKMotionBlurState mbState = {0};
+  if (pluginState.length >= sizeof(KKMotionBlurState))
+    [pluginState getBytes:&mbState length:sizeof(mbState)];
+  *inputImageRequests = KKBuildV3SourceRequests(
+      renderTime, mbState, MagicMoveMiniCanvasRequestPath, self.renderCache,
+      ^id(CMTime t) {
+        return [[[FxImageTileRequest alloc]
+            initWithSource:kFxImageTileRequestSourceEffectClip
+                      time:t
+            includeFilters:YES
+               parameterID:0] autorelease];
+      });
+  return YES;
+}
+
+- (BOOL)magicMoveParams:(MagicMoveParams *)outParams
+                 atTime:(CMTime)time
+                  error:(NSError **)error {
+  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (paramGetAPI == nil) {
+    if (error != NULL) {
+      *error =
+          [NSError errorWithDomain:FxPlugErrorDomain
+                              code:kFxError_ThirdPartyDeveloperStart + 20
+                          userInfo:@{
+                            NSLocalizedDescriptionKey :
+                                @"Unable to retrieve FxParameterRetrievalAPI_v6"
+                          }];
+    }
+    return NO;
+  }
+
+  NSString *timelineJSON =
+      KKReadCustomParamString(paramGetAPI, kKKParamTimelineData);
+  KKTimeline *timeline =
+      timelineJSON.length ? [KKTimeline timelineFromJSON:timelineJSON] : nil;
+
+  // Cache the loop toggle (lives in the UI-state blob) so the main-queue
+  // playhead poll can decide whether to wrap at the clip end.
+  NSString *uiJSON = KKReadCustomParamString(paramGetAPI, kParamUIState);
+  if (uiJSON.length) {
+    NSDictionary *ui = [NSJSONSerialization
+        JSONObjectWithData:[uiJSON dataUsingEncoding:NSUTF8StringEncoding]
+                   options:0
+                     error:nil];
+    if ([ui isKindOfClass:[NSDictionary class]])
+      self.renderCache.loopEnabled = [ui[@"loopEnabled"] boolValue];
+  }
+
+  BOOL hasTiming = KKRefreshV3RenderCache(self.apiManager, self.inspectorView,
+                                          self.renderCache);
+  double durSec = self.renderCache.effectDurSec;
+  double frac = hasTiming
+                    ? MAX(0.0, MIN(1.0, (CMTimeGetSeconds(time) -
+                                         self.renderCache.effectStartSec) /
+                                            durSec))
+                    : 0.0;
+  if (hasTiming) {
+    KKPlayheadPoller *poller = self.playheadPoller;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [poller ensureRunning];
+    });
+  }
+
+  NSArray<NSNumber *> *positionVals = nil;
+  for (KKLane *lane in timeline.lanes) {
+    if ([lane.label isEqualToString:@"Position"]) {
+      positionVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      break;
+    }
+  }
+  double posX = positionVals.count > 0 ? positionVals[0].doubleValue : 0.5;
+  double posY = positionVals.count > 1 ? positionVals[1].doubleValue : 0.5;
+
+  outParams->translate =
+      (simd_float2){(float)(posX - 0.5), (float)(posY - 0.5)};
+  outParams->anchorOffset = (simd_float2){0.0f, 0.0f};
+  outParams->rotation = 0.0f;
+  outParams->rotationX = 0.0f;
+  outParams->rotationY = 0.0f;
+  outParams->scaleX = 1.0f;
+  outParams->scaleY = 1.0f;
+  outParams->opacity = 1.0f;
+  return YES;
+}
+
+- (BOOL)pluginState:(NSData **)pluginState
+             atTime:(CMTime)renderTime
+            quality:(FxQuality)qualityLevel
+              error:(NSError **)error {
+  MagicMoveParams params;
+  if (![self magicMoveParams:&params atTime:renderTime error:error])
+    return NO;
+
+  id<FxParameterRetrievalAPI_v6> paramAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  NSString *mbJSON = KKReadCustomParamString(paramAPI, kKKParamMotionBlurData);
+  KKMotionBlurState mbState = [KKMotionBlur snapshotStateFromJSON:mbJSON
+                                                        timingAPI:timingAPI
+                                                           atTime:renderTime];
+
+  NSMutableData *data = [NSMutableData data];
+  [data appendBytes:&mbState length:sizeof(mbState)];
+  [data appendBytes:&params length:sizeof(params)];
+
+  if (mbState.enabled) {
+    NSArray<NSValue *> *times = [KKMotionBlur sampleTimesForState:mbState
+                                                       renderTime:renderTime];
+    for (NSUInteger i = 1; i < times.count; i++) {
+      CMTime t = kCMTimeZero;
+      [times[i] getValue:&t];
+      MagicMoveParams p;
+      if (![self magicMoveParams:&p atTime:t error:error])
+        return NO;
+      [data appendBytes:&p length:sizeof(p)];
+    }
+  }
+
+  *pluginState = data;
+  return (*pluginState != nil);
+}
+
 - (BOOL)renderDestinationImage:(FxImageTile *)destinationImage
                   sourceImages:(NSArray<FxImageTile *> *)sourceImages
                    pluginState:(NSData *)pluginState
                         atTime:(CMTime)renderTime
                          error:(NSError *_Nullable *)outError {
-  [KKPlugin multiStageRenderTickForAPI:self.apiManager
-                                atTime:renderTime
-                                sender:self];
-
   if (!pluginState)
     return NO;
-
   if (pluginState.length < sizeof(KKMotionBlurState) + sizeof(MagicMoveParams))
     return NO;
+
   KKMotionBlurState mbState;
   [pluginState getBytes:&mbState length:sizeof(mbState)];
 
-  // Y-down image-pixel offset of the dest tile within the image.
-  // FCP's project-library preview composites tiles in reverse FxRect-Y
-  // order (FxRect.bottom = screen-top), so the shader uses this offset
-  // plus its [[position]] to find its position in the final composited
-  // image regardless of sub-tiling.
+  // Mini-canvas feed publish (multi-slot when boundary preview / filmstrip /
+  // onion is active, single-slot otherwise). Port of Rounded's pattern.
+  if (sourceImages.count > 0 && destinationImage.ioSurface) {
+    if (!self.miniCanvasFeed) {
+      KKMiniCanvasFeed *feed = [[KKMiniCanvasFeed alloc]
+          initWithDescriptorPath:MagicMoveMiniCanvasDescriptorPath];
+      self.miniCanvasFeed = feed;
+      [feed release];
+    }
+    NSArray<NSNumber *> *reqSecs = self.renderCache.boundaryReqSecs;
+    NSArray<NSNumber *> *reqFracs = self.renderCache.boundaryReqFracs;
+    NSMutableArray *pairs = [NSMutableArray array];
+    if (reqSecs.count > 0) {
+      // Match each requested time to its closest delivered tile by mediaTime.
+      static const double kMaxDt = 0.5;
+      NSMutableArray<NSNumber *> *availTileIdx = [NSMutableArray array];
+      for (NSUInteger i = 0; i < sourceImages.count; i++)
+        if (sourceImages[i].ioSurface)
+          [availTileIdx addObject:@(i)];
+      if (self.miniCanvasFeed.slotCount != reqSecs.count) {
+        self.miniCanvasFeed.slotCount = reqSecs.count;
+        [self.miniCanvasFeed publishDescriptor];
+      }
+      for (NSUInteger slot = 0; slot < reqSecs.count; slot++) {
+        double want = reqSecs[slot].doubleValue;
+        NSInteger bestPos = -1;
+        double bestDt = kMaxDt;
+        for (NSUInteger p = 0; p < availTileIdx.count; p++) {
+          NSUInteger ti = availTileIdx[p].unsignedIntegerValue;
+          double mt = CMTimeGetSeconds(sourceImages[ti].mediaTime);
+          double dt = fabs(mt - want);
+          if (dt < bestDt) {
+            bestDt = dt;
+            bestPos = (NSInteger)p;
+          }
+        }
+        if (bestPos >= 0) {
+          NSUInteger ti = availTileIdx[bestPos].unsignedIntegerValue;
+          [pairs addObject:@[ @(slot), sourceImages[ti] ]];
+          [availTileIdx removeObjectAtIndex:bestPos];
+        }
+      }
+    } else {
+      if (self.miniCanvasFeed.slotCount != 1)
+        self.miniCanvasFeed.slotCount = 1;
+      [pairs addObject:@[ @0, sourceImages[0] ]];
+    }
+    for (NSArray *pair in pairs) {
+      NSUInteger slotIdx = [pair[0] unsignedIntegerValue];
+      FxImageTile *feedTile = pair[1];
+      FxRect sTile = feedTile.tilePixelBounds;
+      FxRect sImg = feedTile.imagePixelBounds;
+      BOOL fullFrame = (sTile.left == sImg.left && sTile.right == sImg.right &&
+                        sTile.top == sImg.top && sTile.bottom == sImg.bottom);
+      if (!fullFrame)
+        continue;
+      FxRect dImg = destinationImage.imagePixelBounds;
+      int sW = sImg.right - sImg.left, sH = sImg.top - sImg.bottom;
+      int dW = dImg.right - dImg.left, dH = dImg.top - dImg.bottom;
+      double sAsp = (sH > 0) ? fabs((double)sW / (double)sH) : 0;
+      double dAsp = (dH > 0) ? fabs((double)dW / (double)dH) : 0;
+      if (sAsp > 0 && dAsp > 0 && fabs(sAsp - dAsp) > 0.05)
+        continue;
+      KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
+      MTLPixelFormat pf =
+          [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
+      uint64_t rid = destinationImage.deviceRegistryID;
+      id<MTLCommandQueue> q = [cache commandQueueWithRegistryID:rid
+                                                    pixelFormat:pf];
+      id<MTLDevice> dev = [cache deviceWithRegistryID:rid];
+      if (!q || !dev)
+        continue;
+      id<MTLTexture> srcTex = [feedTile metalTextureForDevice:dev];
+      double tag =
+          (slotIdx < reqFracs.count) ? reqFracs[slotIdx].doubleValue : 0.0;
+      [self.miniCanvasFeed updateSlot:slotIdx
+                    withSourceTexture:srcTex
+                                  tag:tag
+                               device:dev
+                         commandQueue:q];
+      [cache returnCommandQueueToCache:q];
+    }
+  }
+
   simd_float2 tileOffsetPx = {
       (float)(destinationImage.tilePixelBounds.left -
               destinationImage.imagePixelBounds.left),
@@ -117,8 +328,6 @@
                     }];
     if (applied)
       return YES;
-    // Fall through on failure - render the un-blurred frame so the user
-    // sees something rather than a black tile.
   }
 
   MagicMoveParams params;

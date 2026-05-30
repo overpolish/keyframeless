@@ -532,6 +532,7 @@
       fixed.componentMin = tmpl.componentMin;
       fixed.componentMax = tmpl.componentMax;
       fixed.componentUnits = tmpl.componentUnits;
+      fixed.componentLabels = tmpl.componentLabels;
       lanes[presentIdx] = fixed;
       continue;
     }
@@ -540,6 +541,7 @@
     lane.componentMin = tmpl.componentMin;
     lane.componentMax = tmpl.componentMax;
     lane.componentUnits = tmpl.componentUnits;
+    lane.componentLabels = tmpl.componentLabels;
     lane.enabled = NO; // constant until the dropdown makes it animatable
     [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                           values:[self _defaultValuesForLabel:
@@ -770,6 +772,7 @@
   lane.componentMin = existing.componentMin;
   lane.componentMax = existing.componentMax;
   lane.componentUnits = existing.componentUnits;
+  lane.componentLabels = existing.componentLabels;
   lane.enabled = existing.enabled;
   [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:values]];
   [self _replaceLane:lane forLabel:label];

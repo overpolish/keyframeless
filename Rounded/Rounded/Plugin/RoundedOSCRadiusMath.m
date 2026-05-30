@@ -17,22 +17,18 @@ float paddingForRadius(double radius, float minDim) {
   return minDim * 0.05f + cornerRadiusPixels * insetFactor * squircleCorrection;
 }
 
-// Single-instance assumption (PLAN §"OSC cache"). Retained on assignment.
-// Reads on drawOSC tick / hit-test are pointer-atomic; no torn reads possible.
-static KKTimeline *sTimelineSnapshot = nil;
-
+// OSC ticks resolve the timeline via the framework's process-snapshot store.
+// Set from the plugin's parameterChanged: + cold-boot seed in createView:.
 void RoundedSetTimelineSnapshot(KKTimeline *timeline) {
-  // MRR: retain new before releasing old.
-  KKTimeline *prev = sTimelineSnapshot;
-  sTimelineSnapshot = [timeline retain];
-  [prev release];
+  KKSetProcessTimelineSnapshot(timeline);
 }
 
-KKTimeline *RoundedTimelineSnapshot(void) { return sTimelineSnapshot; }
+KKTimeline *RoundedTimelineSnapshot(void) {
+  return KKProcessTimelineSnapshot();
+}
 
 static KKLane *_laneForLabel(NSString *label) {
-  KKTimeline *tl = sTimelineSnapshot;
-  for (KKLane *lane in tl.lanes)
+  for (KKLane *lane in KKProcessTimelineSnapshot().lanes)
     if ([lane.label isEqualToString:label])
       return lane;
   return nil;
@@ -58,17 +54,11 @@ double RoundedSnapshotRadiusAtFraction(double frac) {
   return vals.firstObject.doubleValue;
 }
 
-// Frame-aware snap tolerance. FCP's playhead is frame-quantized, so the
-// readback frac is up to one frame off the keypose's stored time. We
-// compute eps as ~1 frame in fraction units: frameDurSec / clipDurSec.
-// Pushed in from the plugin render path (FxTimingAPI is unavailable here).
-static double sFrameDurSec = 1.0 / 60.0;
-
 void RoundedSetFrameDurationSeconds(double frameDurSec) {
-  if (frameDurSec > 0.0)
-    sFrameDurSec = frameDurSec;
+  KKSetProcessFrameDurationSeconds(frameDurSec);
 }
 
 BOOL RoundedLaneVisibleAtFraction(NSString *label, double frac) {
-  return KKLaneVisibleAtFraction(_laneForLabel(label), frac, sFrameDurSec);
+  return KKLaneVisibleAtFraction(_laneForLabel(label), frac,
+                                 KKProcessFrameDurationSeconds());
 }

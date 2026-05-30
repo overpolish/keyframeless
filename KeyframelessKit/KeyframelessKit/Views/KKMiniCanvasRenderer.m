@@ -43,6 +43,12 @@
                  commandBuffer:(id<MTLCommandBuffer>)cb {
   return NO;
 }
+- (KKMiniHandleStyle)pointHandleStyle {
+  return KKMiniHandleStylePoint;
+}
+- (BOOL)pointHandleIsActive {
+  return _pointGrabbed;
+}
 - (BOOL)pointHandleCenter:(out CGPoint *)outCenter
            forContentRect:(CGRect)contentRect {
   return NO;

@@ -4,8 +4,10 @@
  */
 
 #import "Constants.h"
+#import "MagicMoveMiniCanvasRenderer.h"
+#import "OSC.h"
 #import "Plugin_Private.h"
-#import <AppKit/NSView.h>
+#import <AppKit/AppKit.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 
 @implementation MagicMovePlugin (CustomUI)
@@ -14,200 +16,308 @@
   return YES;
 }
 
-- (NSSet<NSString *> *)animatablePropertyLabelsWithOSC {
-  return [NSSet setWithObjects:@"Position", @"Scale", @"Rot Z", @"Rot X",
-                               @"Rot Y", @"Opacity", nil];
+- (KKClipWrappingMode)clipWrappingMode {
+  return KKClipWrappingModeCompound;
 }
 
-- (NSSet<NSString *> *)animatablePropertyLabelsWithOSCDefaultOff {
-  return [NSSet setWithObjects:@"Rot X", @"Rot Y", nil];
-}
++ (NSArray<KKLane *> *)availableLanes {
+  KKLane *position = [KKLane laneWithLabel:@"Position"];
+  position.valueType = KKLaneValueTypeGeneric;
+  // Position is allowed off-canvas, so no min/max - empty = unconstrained.
+  position.componentMin = @[];
+  position.componentMax = @[];
+  position.componentUnits = @[ @"px", @"px" ];
+  position.componentLabels = @[ @"X", @"Y" ];
+  [position insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.5, @0.5 ]]];
 
-/// Maps lane label → (paramID, isBool) so apply/read/disable can iterate.
-/// Bool entries are skipped by `setEditingDisabled:` (per-segment toggles
-/// stay editable even when surrounding lane is HTH-disabled).
-- (NSArray<NSDictionary *> *)_mmParamMappingForLabel:(NSString *)label {
-  if ([label isEqualToString:@"Position"])
-    return @[
-      @{@"pid" : @(kParamPoint), @"bool" : @NO},
-      @{@"pid" : @(kParamRotateWithMotion), @"bool" : @YES},
-    ];
-  if ([label isEqualToString:@"Scale"])
-    return @[
-      @{@"pid" : @(kParamScale), @"bool" : @NO},
-      @{@"pid" : @(kParamScaleY), @"bool" : @NO},
-    ];
-  if ([label isEqualToString:@"Rot Z"])
-    return @[ @{@"pid" : @(kParamRotation), @"bool" : @NO} ];
-  if ([label isEqualToString:@"Rot X"])
-    return @[ @{@"pid" : @(kParamRotationX), @"bool" : @NO} ];
-  if ([label isEqualToString:@"Rot Y"])
-    return @[ @{@"pid" : @(kParamRotationY), @"bool" : @NO} ];
-  if ([label isEqualToString:@"Opacity"])
-    return @[ @{@"pid" : @(kParamOpacity), @"bool" : @NO} ];
-  return nil;
-}
-
-- (NSArray<NSNumber *> *)currentValuesForLaneLabel:(NSString *)label
-                                          groupKey:(NSString *)groupKey
-                                            atTime:(CMTime)time {
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  if (!getAPI)
-    return nil;
-  if ([label isEqualToString:@"Position"]) {
-    double x = 0, y = 0;
-    [getAPI getXValue:&x YValue:&y fromParameter:kParamPoint atTime:time];
-    BOOL rwm = NO;
-    [getAPI getBoolValue:&rwm fromParameter:kParamRotateWithMotion atTime:time];
-    return @[ @(x), @(y), @(rwm ? 1.0 : 0.0) ];
-  }
-  if ([label isEqualToString:@"Scale"]) {
-    double sx = 1, sy = 1;
-    [getAPI getFloatValue:&sx fromParameter:kParamScale atTime:time];
-    [getAPI getFloatValue:&sy fromParameter:kParamScaleY atTime:time];
-    return @[ @(sx), @(sy) ];
-  }
-  if ([label isEqualToString:@"Rot Z"] || [label isEqualToString:@"Rot X"] ||
-      [label isEqualToString:@"Rot Y"] || [label isEqualToString:@"Opacity"]) {
-    UInt32 pid =
-        [(NSNumber *)[self _mmParamMappingForLabel:label].firstObject[@"pid"]
-            unsignedIntValue];
-    double v = 0;
-    [getAPI getFloatValue:&v fromParameter:pid atTime:time];
-    return @[ @(v) ];
-  }
-  return nil;
-}
-
-- (BOOL)applyLaneValues:(NSArray<NSNumber *> *)values
-               forLabel:(NSString *)label
-               groupKey:(NSString *)groupKey
-                 atTime:(CMTime)time {
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!setAPI)
-    return NO;
-  [self setEditingDisabled:NO forLaneLabel:label groupKey:groupKey];
-  if ([label isEqualToString:@"Position"] && values.count >= 3) {
-    [setAPI setXValue:values[0].doubleValue
-               YValue:values[1].doubleValue
-          toParameter:kParamPoint
-               atTime:time];
-    [setAPI setBoolValue:values[2].doubleValue >= 0.5
-             toParameter:kParamRotateWithMotion
-                  atTime:time];
-    return YES;
-  }
-  if ([label isEqualToString:@"Scale"] && values.count >= 2) {
-    [setAPI setFloatValue:values[0].doubleValue
-              toParameter:kParamScale
-                   atTime:time];
-    [setAPI setFloatValue:values[1].doubleValue
-              toParameter:kParamScaleY
-                   atTime:time];
-    return YES;
-  }
-  if (([label isEqualToString:@"Rot Z"] || [label isEqualToString:@"Rot X"] ||
-       [label isEqualToString:@"Rot Y"] ||
-       [label isEqualToString:@"Opacity"]) &&
-      values.count >= 1) {
-    UInt32 pid =
-        [(NSNumber *)[self _mmParamMappingForLabel:label].firstObject[@"pid"]
-            unsignedIntValue];
-    [setAPI setFloatValue:values[0].doubleValue toParameter:pid atTime:time];
-    return YES;
-  }
-  return NO;
-}
-
-- (void)setEditingDisabled:(BOOL)disabled
-              forLaneLabel:(NSString *)label
-                  groupKey:(NSString *)groupKey {
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!getAPI || !setAPI)
-    return;
-  for (NSDictionary *entry in [self _mmParamMappingForLabel:label]) {
-    if ([entry[@"bool"] boolValue])
-      continue;
-    UInt32 pid = [entry[@"pid"] unsignedIntValue];
-    FxParameterFlags cur = 0;
-    [getAPI getParameterFlags:&cur fromParameter:pid];
-    FxParameterFlags want = disabled ? (cur | kFxParameterFlag_DISABLED)
-                                     : (cur & ~kFxParameterFlag_DISABLED);
-    if (cur != want)
-      [setAPI setParameterFlags:want toParameter:pid];
-  }
-}
-
-- (NSArray<KKTimingLane *> *)defaultLanesAtTime:(CMTime)time
-                                    paramGetAPI:(id<FxParameterRetrievalAPI_v6>)
-                                                    paramGetAPI {
-  NSMutableArray<KKTimingLane *> *out = [NSMutableArray array];
-
-  double px = 0.5, py = 0.5;
-  [paramGetAPI getXValue:&px YValue:&py fromParameter:kParamPoint atTime:time];
-  BOOL rwm = NO;
-  [paramGetAPI getBoolValue:&rwm
-              fromParameter:kParamRotateWithMotion
-                     atTime:time];
-  KKTimingLane *posLane =
-      [KKTimingLane defaultLaneForLabel:@"Position"
-                             baseValues:@[ @(px), @(py), @(rwm ? 1.0 : 0.0) ]];
-  posLane.valueComponentKinds =
-      @[ @(KKAnimatableParamKindPoint), @(KKAnimatableParamKindBool) ];
-  posLane.hasOSC = YES;
-  [out addObject:posLane];
-
-  double sx = 1, sy = 1;
-  [paramGetAPI getFloatValue:&sx fromParameter:kParamScale atTime:time];
-  [paramGetAPI getFloatValue:&sy fromParameter:kParamScaleY atTime:time];
-  KKTimingLane *scaleLane =
-      [KKTimingLane defaultLaneForLabel:@"Scale" baseValues:@[ @(sx), @(sy) ]];
-  scaleLane.valueComponentKinds =
-      @[ @(KKAnimatableParamKindFloat), @(KKAnimatableParamKindFloat) ];
-  scaleLane.hasOSC = YES;
-  [out addObject:scaleLane];
-
-  struct {
-    NSString *label;
-    UInt32 pid;
-  } rots[] = {
-      {@"Rot Z", kParamRotation},
-      {@"Rot X", kParamRotationX},
-      {@"Rot Y", kParamRotationY},
-  };
-  NSSet<NSString *> *oscOff = [self animatablePropertyLabelsWithOSCDefaultOff];
-  for (size_t i = 0; i < sizeof(rots) / sizeof(rots[0]); i++) {
-    double v = 0;
-    [paramGetAPI getFloatValue:&v fromParameter:rots[i].pid atTime:time];
-    KKTimingLane *lane = [KKTimingLane defaultLaneForLabel:rots[i].label
-                                                baseValues:@[ @(v) ]];
-    lane.valueComponentKinds = @[ @(KKAnimatableParamKindFloat) ];
-    lane.hasOSC = YES;
-    if ([oscOff containsObject:rots[i].label])
-      lane.oscVisible = NO;
-    [out addObject:lane];
-  }
-
-  double op = 1;
-  [paramGetAPI getFloatValue:&op fromParameter:kParamOpacity atTime:time];
-  KKTimingLane *opLane = [KKTimingLane defaultLaneForLabel:@"Opacity"
-                                                baseValues:@[ @(op) ]];
-  opLane.valueComponentKinds = @[ @(KKAnimatableParamKindFloat) ];
-  opLane.hasOSC = YES;
-  [out addObject:opLane];
-
-  return out;
+  return @[ position ];
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
-  typedef NSView *(*ViewIMP)(id, SEL, UInt32);
-  ViewIMP imp = (ViewIMP)[KKPlugin instanceMethodForSelector:_cmd];
-  return imp(self, _cmd, parameterID);
+  if (parameterID != kParamInspectorUI) {
+    typedef NSView *(*ViewIMP)(id, SEL, UInt32);
+    ViewIMP imp = (ViewIMP)[KKPlugin instanceMethodForSelector:_cmd];
+    return imp(self, _cmd, parameterID);
+  }
+
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  [actionAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+
+  NSString *uiJson = KKReadCustomParamString(getAPI, kParamUIState);
+  NSDictionary *uiState =
+      uiJson.length
+          ? [NSJSONSerialization
+                JSONObjectWithData:[uiJson
+                                       dataUsingEncoding:NSUTF8StringEncoding]
+                           options:0
+                             error:nil]
+                ?: @{}
+          : @{};
+  BOOL loopEnabled = [uiState[@"loopEnabled"] boolValue];
+  NSInteger activeTab = [uiState[@"activeTab"] integerValue];
+  KKMiniCanvasRenderMode renderMode = KKMiniCanvasRenderModeOff;
+  if (uiState[@"renderMode"])
+    renderMode = (KKMiniCanvasRenderMode)[uiState[@"renderMode"] integerValue];
+
+  NSString *mbJson = KKReadCustomParamString(getAPI, kKKParamMotionBlurData);
+  NSDictionary *mbState =
+      (mbJson.length
+           ? [NSJSONSerialization
+                 JSONObjectWithData:[mbJson
+                                        dataUsingEncoding:NSUTF8StringEncoding]
+                            options:0
+                              error:nil]
+           : nil)
+          ?: @{};
+  BOOL motionBlurEnabled = [mbState[@"enabled"] boolValue];
+  double motionBlurShutterAngle =
+      mbState[@"shutterAngle"] ? [mbState[@"shutterAngle"] doubleValue] : 180.0;
+  NSInteger motionBlurSamples =
+      mbState[@"samples"] ? [mbState[@"samples"] integerValue] : 16;
+  NSInteger motionBlurMode =
+      mbState[@"mode"] ? [mbState[@"mode"] integerValue] : 0;
+
+  NSString *timelineJson =
+      KKReadCustomParamString(getAPI, kKKParamTimelineData);
+  KKTimeline *timeline =
+      (timelineJson.length ? [KKTimeline timelineFromJSON:timelineJson] : nil)
+          ?: [KKTimeline timeline];
+  timeline = [self timelineStampedWithClipDuration:timeline];
+
+  // Cold-boot seed for the OSC. Without this the first drawOSC tick after FCP
+  // relaunch reads nil → handle snaps to (0.5, 0.5) regardless of saved state.
+  KKSetProcessTimelineSnapshot(timeline);
+
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  double seedFrameDurSec = 0.0;
+  double seedClipDurSec = 0.0;
+  if (timingAPI) {
+    CMTime frameDur = kCMTimeZero, clipDur = kCMTimeZero;
+    [timingAPI frameDuration:&frameDur];
+    [timingAPI durationTimeForEffect:&clipDur];
+    seedFrameDurSec = CMTimeGetSeconds(frameDur);
+    seedClipDurSec = CMTimeGetSeconds(clipDur);
+    if (seedFrameDurSec > 0)
+      KKSetProcessFrameDurationSeconds(seedFrameDurSec);
+  }
+
+  [actionAPI endAction:self];
+
+  NSArray<KKLane *> *available = [MagicMovePlugin availableLanes];
+  KKTimelineInspectorView *view =
+      [[KKTimelineInspectorView alloc] initWithAPIManager:self.apiManager
+                                              loopEnabled:loopEnabled
+                                                activeTab:activeTab
+                                           availableLanes:available
+                                                 timeline:timeline];
+
+  if (!self.miniCanvasRenderer) {
+    MagicMoveMiniCanvasRenderer *renderer =
+        [[MagicMoveMiniCanvasRenderer alloc] init];
+    self.miniCanvasRenderer = renderer;
+    [renderer release];
+  }
+  self.miniCanvasRenderer.timeline = timeline;
+  view.miniCanvasDelegate = self.miniCanvasRenderer;
+  view.miniCanvasDescriptorPath = MagicMoveMiniCanvasDescriptorPath;
+  view.miniCanvasRequestPath = MagicMoveMiniCanvasRequestPath;
+  if (seedClipDurSec > 0)
+    [view setClipDurationSeconds:seedClipDurSec];
+  if (seedFrameDurSec > 0)
+    [view setFrameDurationSeconds:seedFrameDurSec];
+  [view setMotionBlurEnabled:motionBlurEnabled];
+  [view setMotionBlurShutterAngle:motionBlurShutterAngle
+                          samples:motionBlurSamples];
+  [view setMotionBlurMode:(KKMotionBlurMode)motionBlurMode];
+  [view setRenderMode:renderMode];
+
+  __weak typeof(self) weak = self;
+
+  view.onRenderModeChanged = ^(KKMiniCanvasRenderMode mode) {
+    __strong typeof(weak) strong = weak;
+    if (!strong)
+      return;
+    [strong patchUIStateKey:@"renderMode"
+                      value:@((NSInteger)mode)
+                    paramID:kParamUIState];
+  };
+
+  view.onLoopToggled = ^(BOOL enabled) {
+    __strong typeof(weak) strong = weak;
+    if (!strong)
+      return;
+    [strong patchUIStateKey:@"loopEnabled"
+                      value:@(enabled)
+                    paramID:kParamUIState];
+  };
+  view.onTabChanged = ^(NSInteger tab) {
+    __strong typeof(weak) strong = weak;
+    if (!strong)
+      return;
+    [strong patchUIStateKey:@"activeTab" value:@(tab) paramID:kParamUIState];
+  };
+  view.onMotionBlurChanged = ^(BOOL enabled, double shutterAngle,
+                               NSInteger samples, KKMotionBlurMode mode) {
+    __strong typeof(weak) strong = weak;
+    if (!strong)
+      return;
+    id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    if (!act)
+      return;
+    [act startAction:strong];
+    id<FxParameterSettingAPI_v5> setAPI =
+        [strong.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    NSDictionary *mb = @{
+      @"enabled" : @(enabled),
+      @"shutterAngle" : @(shutterAngle),
+      @"samples" : @(samples),
+      @"mode" : @((NSInteger)mode)
+    };
+    NSData *data = [NSJSONSerialization dataWithJSONObject:mb
+                                                   options:0
+                                                     error:nil];
+    NSString *json =
+        [[[NSString alloc] initWithData:data
+                               encoding:NSUTF8StringEncoding] autorelease];
+    if (json)
+      KKWriteCustomParamString(setAPI, json, kKKParamMotionBlurData);
+    [act endAction:strong];
+  };
+  view.onTimelineMutated = ^(KKTimeline *updated) {
+    __strong typeof(weak) strong = weak;
+    if (!strong)
+      return;
+    id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    if (!act)
+      return;
+    [act startAction:strong];
+    id<FxParameterSettingAPI_v5> setAPI =
+        [strong.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    NSString *json = [KKTimeline jsonFromTimeline:updated];
+    if (json)
+      KKWriteCustomParamString(setAPI, json, kKKParamTimelineData);
+    [act endAction:strong];
+  };
+  view.onDragBegin = ^{
+    __strong typeof(weak) strong = weak;
+    if (!strong)
+      return;
+    id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    if (!act)
+      return;
+    [act startAction:strong];
+    strong.miniDragUndoStarted =
+        KKBeginUndoGroup(strong.apiManager, @"Adjust Magic Move");
+    [act endAction:strong];
+  };
+  view.onDragEnd = ^{
+    __strong typeof(weak) strong = weak;
+    if (!strong)
+      return;
+    id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    if (act)
+      [act startAction:strong];
+    KKEndUndoGroup(strong.apiManager, strong.miniDragUndoStarted);
+    if (act)
+      [act endAction:strong];
+    strong.miniDragUndoStarted = NO;
+  };
+  view.onBoundaryPreviewNeedsRender = ^{
+    __strong typeof(weak) strong = weak;
+    if (!strong)
+      return;
+    id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    if (!act)
+      return;
+    [act startAction:strong];
+    id<FxParameterSettingAPI_v5> setAPI =
+        [strong.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    NSString *nonce = [[NSUUID UUID] UUIDString];
+    KKWriteCustomParamString(setAPI, nonce, kParamRenderNudge);
+    [act endAction:strong];
+  };
+  view.onScrub = ^(double frac) {
+    __strong typeof(weak) strong = weak;
+    if (!strong)
+      return;
+    id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    if (!act)
+      return;
+    [act startAction:strong];
+    id<FxTimingAPI_v4> timing =
+        [strong.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+    id<FxCommandAPI_v2> cmd =
+        [strong.apiManager apiForProtocol:@protocol(FxCommandAPI_v2)];
+    CMTime es = kCMTimeZero, ed = kCMTimeZero;
+    [timing startTimeForEffect:&es];
+    [timing durationTimeForEffect:&ed];
+    double dsec = CMTimeGetSeconds(ed);
+    double base;
+    if ([KKHostInfo isRunningInFinalCut]) {
+      CMTime src = kCMTimeZero, tl = kCMTimeZero;
+      [timing startTimeOfInputToFilter:&src];
+      [timing timelineTime:&tl fromInputTime:src];
+      base = CMTimeGetSeconds(tl);
+    } else {
+      base = CMTimeGetSeconds(es);
+    }
+    if (dsec > 0.0)
+      [cmd movePlayheadToTime:CMTimeMakeWithSeconds(base + frac * dsec, 600)
+                        error:nil];
+    [act endAction:strong];
+  };
+  view.onTogglePlayback = ^{
+    __strong typeof(weak) strong = weak;
+    if (!strong)
+      return;
+    id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
+        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    if (!act)
+      return;
+    [act startAction:strong];
+    id<FxCommandAPI_v2> cmd =
+        [strong.apiManager apiForProtocol:@protocol(FxCommandAPI_v2)];
+    [cmd performCommand:kFxCommand_TogglePlayback error:nil];
+    [act endAction:strong];
+  };
+  view.onToggleDetached = ^{
+    __strong typeof(weak) strong = weak;
+    if (!strong)
+      return;
+    KKTimelineInspectorView *insp = strong.inspectorView;
+    if (!insp)
+      return;
+    if (insp.hasDetachedWindow) {
+      [strong closeRemoteWindowIfSupported];
+      return;
+    }
+    [strong presentRemoteWindowOfSize:CGSizeMake(720.0, 460.0)
+                      contentProvider:^NSView * {
+                        return [insp beginDetachedCopy];
+                      }];
+  };
+
+  self.inspectorView = view;
+  if (!self.playheadPoller) {
+    KKPlayheadPoller *poller =
+        [[KKPlayheadPoller alloc] initWithAPIManager:self.apiManager
+                                        actionTarget:self
+                                         renderCache:self.renderCache];
+    self.playheadPoller = poller;
+    [poller release];
+  }
+  [self.playheadPoller setInspectorView:view];
+  return view;
 }
 
 - (NSArray<KKHelpSection *> *)helpSections {
@@ -221,13 +331,9 @@
                 @"<symbol arcade.stick.console.fill /> on-screen control."),
                (@"<accent>Anchor Point</accent> sets the pivot rotations "
                 @"and scale swing around."),
-               (@"Toggle <accent>Rotate with Motion</accent> to align the "
-                @"clip's heading with its motion path."),
-               (@"<symbol squareshape.fill color=white /> on the canvas "
-                @"toggles Scale between 0% and 100%; "
-                @"<symbol circle.fill color=white /> on the canvas "
-                @"toggles Opacity between 0% and 100%."),
-               (@"When the Position lane has multiple segments a bezier "
+               (@"Toggle <accent>Rotate with Motion</accent> in the gap "
+                @"popover to align the clip's heading with its motion path."),
+               (@"When the Position lane has multiple keyposes a bezier "
                 @"<accent>path</accent> draws between them on canvas - "
                 @"reshape it by dragging anchors or their handles."),
                (@"Stacking with <accent>Crop</accent> or similar spatial "
@@ -265,21 +371,11 @@
                                            descMarkup:@"Break handle "
                                                       @"symmetry (move "
                                                       @"independently)"],
-               [KKHelpShortcut
-                   shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + click Scale slider"
-                               descMarkup:@"Match X and Y scale values"],
-               [KKHelpShortcut
-                   shortcutWithKeysMarkup:@"<kbd>⌘</kbd> + drag Scale slider"
-                               descMarkup:@"Maintain X:Y aspect ratio"],
              ]];
   magicMove.icon =
       [NSImage imageWithSystemSymbolName:@"circle.dotted.and.circle"
                 accessibilityDescription:nil];
   return @[ magicMove ];
-}
-
-- (KKClipWrappingMode)clipWrappingMode {
-  return KKClipWrappingModeCompound;
 }
 
 @end

@@ -59,7 +59,25 @@ NS_ASSUME_NONNULL_BEGIN
 /// lane for it. Default `@[ @0 ]`.
 - (NSArray<NSNumber *> *)defaultValuesForLabel:(NSString *)label;
 
+/// Glyph style for the renderer's point handle (the one returned by
+/// `pointHandleCenter:forContentRect:`). Mini-canvas draws the same glyph
+/// the viewer-side OSC uses, so plugins backed by `KKArcOSC` (e.g. Magic
+/// Move's Position) can match it here.
+typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
+  KKMiniHandleStylePoint = 0, ///< Default: solid dot (matches KKPointOSC).
+  KKMiniHandleStyleArc = 1,   ///< Ring (matches KKArcOSC).
+};
+
 #pragma mark - Subclass effect + point handle (override)
+
+/// Override to switch the main point handle's glyph. Default Point.
+/// Extra handles (crop corners) always render as Point.
+- (KKMiniHandleStyle)pointHandleStyle;
+
+/// YES while the main point handle is currently being dragged. Lets the
+/// canvas swap glyph params (e.g. ArcOSC's active radius + plus indicator)
+/// on press. Default reflects the renderer's own `_pointGrabbed` state.
+- (BOOL)pointHandleIsActive;
 
 /// Render the effect from `source` into `dest`. Default returns NO (raw
 /// passthrough). Read values via `-valuesForLabel:`.

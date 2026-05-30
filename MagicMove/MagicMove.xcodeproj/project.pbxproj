@@ -96,14 +96,13 @@
 				"/Localized: Plugin/Localizable.strings",
 				Plugin/Info.plist,
 				Plugin/MagicMove.metal,
+				Plugin/MagicMoveMiniCanvasRenderer.m,
 				Plugin/main.m,
 				Plugin/OSC.m,
 				Plugin/Plugin.m,
-				"Plugin/Plugin+Animation.m",
 				"Plugin/Plugin+CustomUI.m",
 				"Plugin/Plugin+Parameters.m",
 				"Plugin/Plugin+Render.m",
-				"Plugin/Plugin+Visibility.m",
 				"Wrapper Application/Info.plist",
 			);
 			target = F2E2ED742F4CA530008620D9 /* Wrapper Application */;

@@ -121,6 +121,11 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
     *componentMax; // one per component, empty = unconstrained
 @property(nonatomic, copy) NSArray<NSString *>
     *componentUnits; // one per component (e.g. @"px", @"%"); empty = unitless
+/// Plugin-supplied display captions for each component (e.g. @[@"X",@"Y",@"Z"])
+/// shown in the value-field row. nil = fall back to value-type defaults
+/// (W/H/X/Y for Crop, R/G/B/A for Color, 1/2/3... for generic). One per
+/// component; rendered by `KKLaneComponentLabels` and the multi-field row.
+@property(nonatomic, copy, nullable) NSArray<NSString *> *componentLabels;
 @property(nonatomic, copy) NSArray<KKKeyPose *> *keyposes; // ordered by time
 @property(nonatomic) double lastKnownClipDuration; // 0 = not yet established
 

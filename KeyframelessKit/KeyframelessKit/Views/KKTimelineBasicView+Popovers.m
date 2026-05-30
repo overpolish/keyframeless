@@ -720,6 +720,7 @@
     dl.componentMin = tmpl ? tmpl.componentMin : lane.componentMin;
     dl.componentMax = tmpl ? tmpl.componentMax : lane.componentMax;
     dl.componentUnits = tmpl ? tmpl.componentUnits : lane.componentUnits;
+    dl.componentLabels = tmpl ? tmpl.componentLabels : lane.componentLabels;
     dl.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:vals ?: @[ @0.0 ]] ];
     [displayLanes addObject:dl];
   }

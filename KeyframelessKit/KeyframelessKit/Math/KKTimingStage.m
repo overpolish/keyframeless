@@ -211,6 +211,7 @@
   c.componentMin = [_componentMin copy];
   c.componentMax = [_componentMax copy];
   c.componentUnits = [_componentUnits copy];
+  c.componentLabels = [_componentLabels copy];
   c.keyposes = [[NSArray alloc] initWithArray:_keyposes copyItems:YES];
   c.lastKnownClipDuration = _lastKnownClipDuration;
   c.holdShape = _holdShape;
@@ -231,6 +232,8 @@
     d[@"component_max"] = _componentMax;
   if (_componentUnits)
     d[@"component_units"] = _componentUnits;
+  if (_componentLabels)
+    d[@"component_labels"] = _componentLabels;
   d[@"keyposes"] = [_keyposes valueForKey:@"toDictionary"];
   d[@"last_known_clip_duration"] = @(_lastKnownClipDuration);
   if (_holdShape != KKLaneHoldShapeAuto)
@@ -256,6 +259,8 @@
     l.componentMax = d[@"component_max"];
   if ([d[@"component_units"] isKindOfClass:[NSArray class]])
     l.componentUnits = d[@"component_units"];
+  if ([d[@"component_labels"] isKindOfClass:[NSArray class]])
+    l.componentLabels = d[@"component_labels"];
   l.lastKnownClipDuration = [d[@"last_known_clip_duration"] doubleValue];
   if (d[@"hold_shape"])
     l.holdShape = (KKLaneHoldShape)[d[@"hold_shape"] integerValue];
@@ -502,6 +507,8 @@ KKTimeline *KKTimelineRebalanced(KKTimeline *timeline, double oldDuration,
 NSArray<NSString *> *KKLaneComponentLabels(KKLane *lane) {
   if (!lane)
     return nil;
+  if (lane.componentLabels.count)
+    return lane.componentLabels;
   switch (lane.valueType) {
   case KKLaneValueTypeCrop:
     return @[ @"W", @"H", @"X", @"Y" ];

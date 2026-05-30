@@ -888,6 +888,7 @@
   if (!changed)
     return;
   [_selection removeAllObjects];
+  [_selectedGaps removeAllObjects];
   _topLaneLabel = nil;
   _topKPIdx = -1;
   t.lanes = lanes;

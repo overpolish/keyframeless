@@ -565,6 +565,15 @@ static NSString *_RoundedAIMergedTimelineJSON(NSString *currentTimelineJSON,
     };
 
     self.inspectorView = view;
+    if (!self.playheadPoller) {
+      KKPlayheadPoller *poller =
+          [[KKPlayheadPoller alloc] initWithAPIManager:self.apiManager
+                                          actionTarget:self
+                                           renderCache:self.renderCache];
+      self.playheadPoller = poller;
+      [poller release];
+    }
+    [self.playheadPoller setInspectorView:view];
     return view;
   }
   typedef NSView *(*ViewIMP)(id, SEL, UInt32);

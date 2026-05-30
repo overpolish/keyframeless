@@ -458,14 +458,14 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 }
 
 + (CGFloat)heightForLane:(KKLane *)lane {
-  return lane.valueType == KKLaneValueTypeCrop ? kCropRowH : kFloatRowH;
+  return KKLaneComponentLabels(lane).count >= 2 ? kCropRowH : kFloatRowH;
 }
 
 // NSStackView sizes arranged rows by their intrinsic height; without this
 // the rows collapse on top of each other (no height constraint otherwise).
 - (NSSize)intrinsicContentSize {
   return NSMakeSize(NSViewNoIntrinsicMetric,
-                    _valueType == KKLaneValueTypeCrop ? kCropRowH : kFloatRowH);
+                    _fields.count >= 2 ? kCropRowH : kFloatRowH);
 }
 
 - (double)_clamp:(double)v index:(NSInteger)i {
@@ -537,11 +537,12 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
     [_reset.heightAnchor constraintEqualToConstant:15.0],
   ]];
 
-  if (_valueType == KKLaneValueTypeCrop) {
-    NSArray<NSString *> *caps = @[ @"W", @"H", @"X", @"Y" ];
+  NSArray<NSString *> *caps = KKLaneComponentLabels(lane);
+  if (caps.count >= 2) {
+    NSInteger n = (NSInteger)caps.count;
     NSMutableArray<NSView *> *arranged = [NSMutableArray array];
     NSMutableArray<NSTextField *> *fs = [NSMutableArray array];
-    for (NSInteger i = 0; i < 4; i++) {
+    for (NSInteger i = 0; i < n; i++) {
       _KKValueField *cell = [[_KKValueField alloc] init];
       [cell setPrefix:caps[i]];
       [cell setSuffix:(i < (NSInteger)_cunits.count ? _cunits[i] : nil)];
@@ -551,7 +552,7 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
       fld.delegate = (id<NSTextFieldDelegate>)self; // live-typing for a guide
       [arranged addObject:cell];
       [fs addObject:fld];
-      if (i < 3) { // divider between each W | H | X | Y group
+      if (i < n - 1) { // divider between each component group
         NSView *div = [[NSView alloc] init];
         div.translatesAutoresizingMaskIntoConstraints = NO;
         div.wantsLayer = YES;
@@ -1210,14 +1211,29 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
       if (s->_rowRemoveHandler)
         s->_rowRemoveHandler(label);
     };
-  if (lane.valueType == KKLaneValueTypeCrop) {
-    // Show crop in media pixels: W/X scale by media width, H/Y by height.
-    // (≤0 until the feed resolves → row falls back to raw 0–1.)
+  // Any component with unit "px" scales by the media size: even-index
+  // components (W/X-like) use media width; odd-index (H/Y-like) use height.
+  // Covers Crop (W,H,X,Y) and any plugin lane that declares px units (e.g.
+  // Position X/Y, Scale W/H). Returns 0 until the feed resolves, which the
+  // row treats as "fall back to raw norm".
+  NSArray<NSString *> *units = lane.componentUnits;
+  BOOL anyPx = NO;
+  for (NSString *u in units) {
+    if ([u isEqualToString:@"px"]) {
+      anyPx = YES;
+      break;
+    }
+  }
+  if (anyPx) {
     row.componentScale = ^double(NSInteger i) {
       __strong typeof(weak) s = weak;
+      if (i >= (NSInteger)units.count || ![units[i] isEqualToString:@"px"])
+        return 1.0;
       CGSize m = s ? s->_miniCanvas.sourceMediaSize : CGSizeZero;
-      return (i == 0 || i == 2) ? m.width : m.height;
+      double scale = (i % 2 == 0) ? m.width : m.height;
+      return scale;
     };
+    [row applyLane:lane];
   }
   row.onValue = ^(NSArray<NSNumber *> *values) {
     __strong typeof(weak) s = weak;

@@ -9,31 +9,13 @@
 
 static NSString *const kPluginID = @"co.overpolish.keyframeless.MagicMove";
 
-// Point (1–100)
-static const UInt32 kParamPoint = 2;
-static const UInt32 kParamRotation = 3;
-static const UInt32 kParamScale = 4;
-static const UInt32 kParamScaleY = 5;
-static const UInt32 kParamOpacity = 6;
-static const UInt32 kParamRotationX = 8;
-static const UInt32 kParamRotationY = 9;
-static const UInt32 kParamRotateWithMotion = 10;
-
-// Anchor (601)
-static const UInt32 kParamAnchorPoint = 601;
-
-// Alerts & Info (9000+)
-static const UInt32 kParamForceShowAlerts = 9000;
-
-// OSC part IDs
-static const NSInteger kOSCPositionPart = 1;
-static const NSInteger kOSCScaleRingPart = 2;
-static const NSInteger kOSCRotPart = 3;
-static const NSInteger kOSCRotXRingPart = 4;
-static const NSInteger kOSCRotYRingPart = 5;
-static const NSInteger kOSCOpacityIconPart = 7;
-static const NSInteger kOSCScaleIconPart = 8;
-static const NSInteger kOSCAnchorPart = 33;
+// v3 params - all animatable values live as lanes inside the timeline blob.
+static const UInt32 kParamInspectorUI = 200;
+static const UInt32 kParamUIState = 201;
+/// Hidden scratch param the boundary-value popover writes on open so FCP
+/// treats it as a real change and re-runs scheduleInputs for the static
+/// frame, letting the boundary preview resolve without manual scrubbing.
+static const UInt32 kParamRenderNudge = 202;
 
 typedef struct {
   double x, y, rotation, rotationX, rotationY, scaleX, scaleY, opacity;
