@@ -350,12 +350,30 @@
       }
       return @[ segStates2 ];
     };
+    NSString *capLabelMut = label;
+    NSInteger capIdxMut = aIdx;
+    KKGapIntervalReader reader = ^KKInterval *(void) {
+      __strong typeof(weak) s = weak;
+      if (!s)
+        return nil;
+      for (KKLane *l in s->_timeline.lanes)
+        if ([l.label isEqualToString:capLabelMut] && l.enabled &&
+            capIdxMut >= 0 && capIdxMut < (NSInteger)l.keyposes.count)
+          return l.keyposes[capIdxMut].outgoing;
+      return nil;
+    };
+    KKGapIntervalMutator mutator =
+        ^(void (^_Nonnull mutate)(KKInterval *_Nonnull)) {
+          [weak _mutateIntervalInLaneLabel:capLabelMut
+                                     kpIdx:capIdxMut
+                                      with:mutate];
+        };
     self.onHoldModulationPopover(
         _popoverAnchor, a.time, b.time, iv.modulation, iv.modulationIntensity,
         iv.modulationFrequency, iv.modulationSeed, iv.modulationLinked,
         showsModLinked, partCompoundLabels, partCompoundStates, partRebuilder,
         onModulation, onIntensity, onFrequency, onSeed, onLinked,
-        onParticipation, onDragBegin, onDragEnd);
+        onParticipation, onDragBegin, onDragEnd, label, iv, reader, mutator);
     return;
   }
   // animateOut mirrors the pill glyphs when the interval descends so the
@@ -392,12 +410,30 @@
                                   iv2.frequency = v;
                                 }];
   };
+  NSString *capturedLabel = label;
+  NSInteger capturedIdx = aIdx;
+  KKGapIntervalReader reader = ^KKInterval *(void) {
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return nil;
+    for (KKLane *l in s->_timeline.lanes)
+      if ([l.label isEqualToString:capturedLabel] && l.enabled &&
+          capturedIdx >= 0 && capturedIdx < (NSInteger)l.keyposes.count)
+        return l.keyposes[capturedIdx].outgoing;
+    return nil;
+  };
+  KKGapIntervalMutator mutator =
+      ^(void (^_Nonnull mutate)(KKInterval *_Nonnull)) {
+        [weak _mutateIntervalInLaneLabel:capturedLabel
+                                   kpIdx:capturedIdx
+                                    with:mutate];
+      };
   self.onGapPopover(_popoverAnchor, descending, a.time, b.time, iv.curve,
                     iv.intensity, iv.frequency, @[], @[], nil, onCurve,
                     onIntensity, onFrequency,
                     ^(NSInteger _, BOOL __){
                     },
-                    onDragBegin, onDragEnd);
+                    onDragBegin, onDragEnd, label, iv, reader, mutator);
 }
 
 // Ctrl+click on a gap → flip `endpointsLinked`. Linking ON collapses the

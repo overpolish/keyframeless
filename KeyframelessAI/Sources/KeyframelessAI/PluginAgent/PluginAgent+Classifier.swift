@@ -17,7 +17,7 @@ extension AIPluginAgent {
 		/// missing detail (which lane / what value / what time range).
 		let clarification: String?
 		/// "none" when no template applies. "modulate" when the user asked
-		/// for any kind of constant shake/wobble/breathing on one lane —
+		/// for any kind of constant shake/wobble/breathing on one lane -
 		/// classifier maps natural-language synonyms (wobble, jiggle,
 		/// tremor, shimmer, pulse, etc.) to this. More templates can be
 		/// added later (e.g. "set_constant").
@@ -87,7 +87,7 @@ extension AIPluginAgent {
 			               handheld, camera-shake.
 			               Only use when ONE lane from the available list is clearly \
 			               named or strongly implied. If the lane is ambiguous, do \
-			               NOT pick this template — set kind = "vague" instead.
+			               NOT pick this template - set kind = "vague" instead.
 			  "none"     - everything else (multipass will handle).
 
 			template_lane (only when template = "modulate"): EXACT lane label from \

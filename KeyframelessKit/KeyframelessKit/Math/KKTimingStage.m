@@ -44,7 +44,40 @@
   c.endpointsLinked = _endpointsLinked;
   c.holdsFlat = _holdsFlat;
   c.pathData = _pathData;
+  c.userProperties = [_userProperties copy];
   return c;
+}
+
+- (BOOL)userBoolForKey:(NSString *)key default:(BOOL)def {
+  id v = _userProperties[key];
+  return [v isKindOfClass:[NSNumber class]] ? [v boolValue] : def;
+}
+
+- (void)setUserBool:(BOOL)value forKey:(NSString *)key {
+  [self setUserValue:@(value) forKey:key];
+}
+
+- (double)userDoubleForKey:(NSString *)key default:(double)def {
+  id v = _userProperties[key];
+  return [v isKindOfClass:[NSNumber class]] ? [v doubleValue] : def;
+}
+
+- (void)setUserDouble:(double)value forKey:(NSString *)key {
+  [self setUserValue:@(value) forKey:key];
+}
+
+- (id)userValueForKey:(NSString *)key {
+  return _userProperties[key];
+}
+
+- (void)setUserValue:(id)value forKey:(NSString *)key {
+  NSMutableDictionary *m = _userProperties ? [_userProperties mutableCopy]
+                                           : [NSMutableDictionary dictionary];
+  if (value)
+    m[key] = value;
+  else
+    [m removeObjectForKey:key];
+  _userProperties = m.count ? [m copy] : nil;
 }
 
 - (NSDictionary *)toDictionary {
@@ -73,6 +106,8 @@
   if (_pathData) {
     d[@"path_data"] = [_pathData base64EncodedStringWithOptions:0];
   }
+  if (_userProperties.count)
+    d[@"user_properties"] = _userProperties;
   return d;
 }
 
@@ -112,6 +147,9 @@
   NSString *b64 = d[@"path_data"];
   if (b64)
     i.pathData = [[NSData alloc] initWithBase64EncodedString:b64 options:0];
+  id up = d[@"user_properties"];
+  if ([up isKindOfClass:[NSDictionary class]])
+    i.userProperties = up;
   return i;
 }
 

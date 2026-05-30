@@ -85,6 +85,20 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// `hasDetachedWindow` to decide.
 @property(nonatomic, copy, nullable) void (^onToggleDetached)(void);
 
+#pragma mark - Plugin-extensible gap popover
+
+/// Lets plugins inject extra rows (toggles, sliders, etc.) into the
+/// curve/modulation gap popover. Return nil/empty for no extras. The
+/// `representative` interval is the lane's own interval for Advanced; for
+/// Basic it's the In or Out interval of the first participating lane (read
+/// initial state from it, then call `mutate` to write to all targets). Type
+/// definitions (`KKGapPopoverPhase`, `KKGapIntervalMutator`) live on
+/// `KKTimelineLanesView.h`.
+@property(nonatomic, copy, nullable) NSArray<NSView *> * (^gapPopoverExtraRows)
+    (KKGapPopoverPhase phase, NSString *_Nullable laneLabel,
+     KKInterval *_Nonnull representative, KKGapIntervalReader _Nonnull read,
+     KKGapIntervalMutator _Nonnull mutate);
+
 #pragma mark - Read-only state
 
 @property(nonatomic, readonly) KKTimelineLanesView *basicLanesView;

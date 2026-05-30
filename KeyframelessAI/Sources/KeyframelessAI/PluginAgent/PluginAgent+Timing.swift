@@ -21,7 +21,7 @@ extension AIPluginAgent {
 		let intervalKind: String
 		/// True when this keypose was COPIED from the current lane (its time
 		/// matches an existing keypose). Compile uses the existing value for
-		/// these directly, bypassing Pass 2 — preservation becomes deterministic
+		/// these directly, bypassing Pass 2 - preservation becomes deterministic
 		/// instead of relying on the values pass to obey instructions.
 		let isPreserved: Bool
 	}
@@ -126,11 +126,11 @@ extension AIPluginAgent {
 			DEFAULT VALUES: the lane schema documents each lane's default. When a \
 			pattern says "start = lane DEFAULT", emit a NEW (is_preserved=false) \
 			keypose at that time and let the values pass fill in the default from \
-			the schema. Never use is_preserved=true to mean "use the default" — \
+			the schema. Never use is_preserved=true to mean "use the default" - \
 			preservation always means "the value already at this exact time in \
 			the current lane state."
 
-			MULTI-LANE / TEMPORAL PROMPTS — use `phases` instead of operations.
+			MULTI-LANE / TEMPORAL PROMPTS - use `phases` instead of operations.
 
 			When the prompt mentions TWO OR MORE lanes, OR uses any temporal \
 			connective ("and then", "then", "after", "first ... then", "once", \
@@ -214,7 +214,7 @@ extension AIPluginAgent {
 
 	/// Schema for Pass 1's output: optional `operations` (single-lane shape)
 	/// + optional `phases` (multi-lane orchestration). Exactly one is
-	/// populated per prompt — the other comes back as an empty array.
+	/// populated per prompt - the other comes back as an empty array.
 	private static func timingPlanSchema() -> [String: Any] {
 		let kinds = ["hold", "transition", "none"]
 		let keyposeSchema: [String: Any] = [
@@ -312,7 +312,7 @@ extension AIPluginAgent {
 	/// - Last keypose of a phase, when another phase for the same lane
 	///   follows: interval_kind = "hold" (lane holds its value across the gap).
 	/// - Last keypose of the lane's final phase: interval_kind = "none".
-	/// `is_preserved` is always false in this path — phase-derived starts
+	/// `is_preserved` is always false in this path - phase-derived starts
 	/// use lane defaults (per pattern I), not the current state.
 	static func deriveOperationsFromPhases(_ phases: [Phase])
 		-> [TimingOperation]

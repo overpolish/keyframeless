@@ -254,6 +254,13 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
 - (void)_setHoldDriftApplied:(BOOL)on forLabel:(NSString *)label;
 - (void)_mutateInterval:(KKBasicSection)section
                    with:(void (^)(KKInterval *iv))mut;
+- (void)_mutateIntervalInLaneLabel:(NSString *)laneLabel
+                           section:(KKBasicSection)section
+                              with:(void (^)(KKInterval *iv))mut;
+- (nullable KKInterval *)_representativeIntervalForSection:
+    (KKBasicSection)section;
+- (nullable NSString *)_representativeLaneLabelForSection:
+    (KKBasicSection)section;
 - (void)_openBoundaryPopoverForDiamond:(NSInteger)d;
 - (void)_writeBoundary:(KKBasicBoundary)boundary
                 values:(NSArray<NSNumber *> *)values

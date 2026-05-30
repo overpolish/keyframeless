@@ -6,6 +6,7 @@
 #pragma once
 
 #import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKGapPopoverTypes.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
 @protocol KKMiniCanvasDelegate;
@@ -115,6 +116,15 @@ typedef NS_ENUM(NSInteger, KKMiniCanvasRenderMode) {
 @property(nonatomic) KKMiniCanvasRenderMode renderMode;
 @property(nonatomic, copy, nullable) void (^onRenderModeChanged)
     (KKMiniCanvasRenderMode mode);
+
+/// Mirror of `KKTimelineInspectorView.gapPopoverExtraRows`. Inspector view
+/// sets this on its lanes views; the popover-construction code (Advanced +
+/// Basic) calls it and appends the returned rows to the gap popover.
+/// Signature documented on the inspector view's property.
+@property(nonatomic, copy, nullable) NSArray<NSView *> * (^gapPopoverExtraRows)
+    (KKGapPopoverPhase phase, NSString *_Nullable laneLabel,
+     KKInterval *_Nonnull representative, KKGapIntervalReader _Nonnull read,
+     KKGapIntervalMutator _Nonnull mutate);
 
 /// The footer row view that contains the "Add properties…" dropdown trigger.
 /// Useful as a joyride spotlight target.

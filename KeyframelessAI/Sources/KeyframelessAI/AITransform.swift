@@ -58,7 +58,7 @@ public enum AITransform {
 
 		// Mark the system prompt as cacheable when it's big enough to be worth
 		// it. Anthropic charges 125% to write the cache and 10% to read, so the
-		// breakeven is one cache hit — only worth it when system is large.
+		// breakeven is one cache hit - only worth it when system is large.
 		let cacheSystem = system.utf8.count >= 4_000
 
 		switch provider {

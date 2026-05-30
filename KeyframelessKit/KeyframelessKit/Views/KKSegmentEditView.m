@@ -11,6 +11,7 @@
 #import "../Math/KKEasing.h"
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
+#import "KKCheckboxRowView.h"
 #import "KKCheckboxView.h"
 #import "KKCompoundPillBar.h"
 #import "KKCurvePillView.h"
@@ -94,7 +95,7 @@ static const CGFloat kBulkHeaderHeight = 18.0;
   NSImageView *_intensityTicks;
   NSImageView *_frequencyTicks;
   KKSeedView *_seedView;
-  KKCheckboxView *_linkedToggle;
+  KKCheckboxRowView *_linkedRow;
   NSLayoutConstraint *_intensityTrailingHalf;
   NSLayoutConstraint *_intensityTrailingFull;
   KKPillBar *_partBar;
@@ -260,44 +261,35 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
 
 - (NSView *)_buildLinkedRowBelow:(NSView *)anchorView {
   __weak typeof(self) weakSelf = self;
-  NSTextField *linkedLabel = [NSTextField
-      labelWithString:KKLoc(@"Linked", @"Label: components linked toggle.")];
-  linkedLabel.font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightMedium];
-  linkedLabel.textColor = [NSColor inspectorLabel];
-  linkedLabel.translatesAutoresizingMaskIntoConstraints = NO;
-  linkedLabel.toolTip = KKLoc(@"Maintain proportions across components (e.g. "
-                              @"keep Radius X/Y aspect-locked through wobble)",
-                              @"Tooltip for the Linked toggle.");
-  [self addSubview:linkedLabel];
-
-  _linkedToggle = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
-  _linkedToggle.translatesAutoresizingMaskIntoConstraints = NO;
-  _linkedToggle.isChecked = _linked;
-  _linkedToggle.toolTip = linkedLabel.toolTip;
-  _linkedToggle.onToggle = ^(BOOL isOn) {
-    __strong typeof(weakSelf) self = weakSelf;
-    if (!self)
-      return;
-    self->_linked = isOn;
-    if (self.onLinkedChanged)
-      self.onLinkedChanged(isOn);
-  };
-  [self addSubview:_linkedToggle];
-
+  _linkedRow = [[KKCheckboxRowView alloc]
+      initWithTitle:KKLoc(@"Linked", @"Label: components linked toggle.")
+      tooltip:KKLoc(@"Maintain proportions across components (e.g. "
+                    @"keep Radius X/Y aspect-locked through wobble)",
+                    @"Tooltip for the Linked toggle.")
+      binding:^BOOL {
+        __strong typeof(weakSelf) s = weakSelf;
+        return s ? s->_linked : NO;
+      }
+      disabledBinding:nil
+      onToggle:^(BOOL isOn) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self)
+          return;
+        self->_linked = isOn;
+        if (self.onLinkedChanged)
+          self.onLinkedChanged(isOn);
+      }];
+  _linkedRow.translatesAutoresizingMaskIntoConstraints = NO;
+  [self addSubview:_linkedRow];
   [NSLayoutConstraint activateConstraints:@[
-    [linkedLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
-                                              constant:kHPadding],
-    [linkedLabel.centerYAnchor
-        constraintEqualToAnchor:_linkedToggle.centerYAnchor],
-
-    [_linkedToggle.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
-                                                 constant:-kHPadding],
-    [_linkedToggle.topAnchor constraintEqualToAnchor:anchorView.bottomAnchor
-                                            constant:kRowGap],
-    [_linkedToggle.widthAnchor constraintEqualToConstant:kLinkedHeight],
-    [_linkedToggle.heightAnchor constraintEqualToConstant:kLinkedHeight],
+    [_linkedRow.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                             constant:kHPadding],
+    [_linkedRow.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                              constant:-kHPadding],
+    [_linkedRow.topAnchor constraintEqualToAnchor:anchorView.bottomAnchor
+                                         constant:kRowGap],
   ]];
-  return _linkedToggle;
+  return _linkedRow;
 }
 
 - (void)_buildSeedRowBelow:(NSView *)anchorView {
@@ -606,7 +598,7 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
 
 - (void)setLinked:(BOOL)linked {
   _linked = linked;
-  _linkedToggle.isChecked = linked;
+  [_linkedRow popoverDidRefresh];
 }
 
 - (void)applyParticipationCompoundStates:

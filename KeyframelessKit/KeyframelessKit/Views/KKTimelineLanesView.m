@@ -6,6 +6,7 @@
 #import "KKTimelineLanesView.h"
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
+#import "KKCheckboxRowView.h"
 #import "KKLocalized.h"
 #import "KKSegmentEditView.h"
 #import "KKTimelineAdvancedView.h"
@@ -215,8 +216,12 @@
       NSArray<NSNumber *> * (^partRebuilder)(void),
       void (^onCurve)(KKIntervalCurve), void (^onIntensity)(double),
       void (^onFrequency)(double), void (^onParticipation)(NSInteger, BOOL),
-      void (^onDragBegin)(void), void (^onDragEnd)(void)) {
+      void (^onDragBegin)(void), void (^onDragEnd)(void), NSString *laneLabel,
+      KKInterval *representative, KKGapIntervalReader reader,
+      KKGapIntervalMutator mutator) {
     __strong typeof(weakSelf) s = weakSelf;
+    KKGapPopoverPhase phase =
+        animateOut ? KKGapPopoverPhaseBasicOut : KKGapPopoverPhaseBasicIn;
     [s _presentGapPopoverFromAnchor:anchor
                          animateOut:animateOut
                       startFraction:startFraction
@@ -232,7 +237,12 @@
                         onFrequency:onFrequency
                     onParticipation:onParticipation
                         onDragBegin:onDragBegin
-                          onDragEnd:onDragEnd];
+                          onDragEnd:onDragEnd
+                              phase:phase
+                          laneLabel:laneLabel
+                     representative:representative
+                     intervalReader:reader
+                    intervalMutator:mutator];
   };
   _advancedGraph =
       [[KKTimelineAdvancedView alloc] initWithAvailableLanes:_availableLanes
@@ -301,7 +311,9 @@
       NSArray<NSNumber *> * (^partRebuilder)(void),
       void (^onCurve)(KKIntervalCurve), void (^onIntensity)(double),
       void (^onFrequency)(double), void (^onParticipation)(NSInteger, BOOL),
-      void (^onDragBegin)(void), void (^onDragEnd)(void)) {
+      void (^onDragBegin)(void), void (^onDragEnd)(void), NSString *laneLabel,
+      KKInterval *representative, KKGapIntervalReader reader,
+      KKGapIntervalMutator mutator) {
     __strong typeof(weakSelf) s = weakSelf;
     [s _presentGapPopoverFromAnchor:anchor
                          animateOut:animateOut
@@ -318,7 +330,12 @@
                         onFrequency:onFrequency
                     onParticipation:onParticipation
                         onDragBegin:onDragBegin
-                          onDragEnd:onDragEnd];
+                          onDragEnd:onDragEnd
+                              phase:KKGapPopoverPhaseAdvanced
+                          laneLabel:laneLabel
+                     representative:representative
+                     intervalReader:reader
+                    intervalMutator:mutator];
   };
   _advancedGraph.onHoldModulationPopover =
       ^(NSView *anchor, double startFraction, double endFraction,
@@ -330,7 +347,9 @@
         void (^onModulation)(KKIntervalModulation), void (^onIntensity)(double),
         void (^onFrequency)(double), void (^onSeed)(uint32_t),
         void (^onLinked)(BOOL), void (^onParticipation)(NSInteger, BOOL),
-        void (^onDragBegin)(void), void (^onDragEnd)(void)) {
+        void (^onDragBegin)(void), void (^onDragEnd)(void), NSString *laneLabel,
+        KKInterval *representative, KKGapIntervalReader reader,
+        KKGapIntervalMutator mutator) {
         __strong typeof(weakSelf) s = weakSelf;
         [s _presentHoldModulationPopoverFromAnchor:anchor
                                      startFraction:startFraction
@@ -351,7 +370,12 @@
                                           onLinked:onLinked
                                    onParticipation:onParticipation
                                        onDragBegin:onDragBegin
-                                         onDragEnd:onDragEnd];
+                                         onDragEnd:onDragEnd
+                                             phase:KKGapPopoverPhaseAdvanced
+                                         laneLabel:laneLabel
+                                    representative:representative
+                                    intervalReader:reader
+                                   intervalMutator:mutator];
       };
   _advancedGraph.onValuePopover =
       ^(NSView *anchor, NSArray<KKLane *> *displayLanes, double frac,
@@ -386,7 +410,9 @@
         void (^onModulation)(KKIntervalModulation), void (^onIntensity)(double),
         void (^onFrequency)(double), void (^onSeed)(uint32_t),
         void (^onLinked)(BOOL), void (^onParticipation)(NSInteger, BOOL),
-        void (^onDragBegin)(void), void (^onDragEnd)(void)) {
+        void (^onDragBegin)(void), void (^onDragEnd)(void), NSString *laneLabel,
+        KKInterval *representative, KKGapIntervalReader reader,
+        KKGapIntervalMutator mutator) {
         __strong typeof(weakSelf) s = weakSelf;
         [s _presentHoldModulationPopoverFromAnchor:anchor
                                      startFraction:startFraction
@@ -407,7 +433,12 @@
                                           onLinked:onLinked
                                    onParticipation:onParticipation
                                        onDragBegin:onDragBegin
-                                         onDragEnd:onDragEnd];
+                                         onDragEnd:onDragEnd
+                                             phase:KKGapPopoverPhaseBasicIn
+                                         laneLabel:laneLabel
+                                    representative:representative
+                                    intervalReader:reader
+                                   intervalMutator:mutator];
       };
 }
 
@@ -457,6 +488,13 @@
     NSArray<NSNumber *> *fresh = _openGapRebuilder();
     if (fresh)
       [_openGapEditor applyParticipationStates:fresh];
+  }
+  // Re-pull state into any KKPopoverExtraRow-conforming extras (the
+  // plugin-supplied checkbox/value rows) so cmd-Z lands in their visible
+  // state without close/reopen.
+  for (NSView *row in _openExtraRows) {
+    if ([row respondsToSelector:@selector(popoverDidRefresh)])
+      [(id<KKPopoverExtraRow>)row popoverDidRefresh];
   }
 
   NSMutableArray<NSString *> *opted = [NSMutableArray array];

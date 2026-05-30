@@ -76,6 +76,12 @@ NS_ASSUME_NONNULL_BEGIN
   // pills - kept in sync on cmd-Z without closing the popover.
   __weak KKSegmentEditView *_openGapEditor;
   NSArray<NSNumber *> * (^_openGapRebuilder)(void);
+  // Extras rows currently shown below the gap-popover segment editor. Held
+  // strong while the popover is open so -popoverDidRefresh can fire on
+  // cmd-Z without the rows being deallocated mid-flight. Cleared in the
+  // popover's onClose. Plumbing for the hold-modulation popover uses the
+  // same ivar - only one of the two popovers is ever open at a time.
+  NSArray<NSView *> *_openExtraRows;
   // Per-tab last-reported zoom state. The toolbar button only reflects the
   // active tab, so we cache each side's state here and re-fire on tab
   // switch / when the active side changes.
@@ -165,7 +171,12 @@ NS_ASSUME_NONNULL_BEGIN
                      onParticipation:(void (^)(NSInteger laneIndex,
                                                BOOL on))onParticipation
                          onDragBegin:(void (^)(void))onDragBegin
-                           onDragEnd:(void (^)(void))onDragEnd;
+                           onDragEnd:(void (^)(void))onDragEnd
+                               phase:(KKGapPopoverPhase)phase
+                           laneLabel:(nullable NSString *)laneLabel
+                      representative:(KKInterval *)representativeInterval
+                      intervalReader:(KKGapIntervalReader)intervalReader
+                     intervalMutator:(KKGapIntervalMutator)intervalMutator;
 /// Flat-Hold modulation popover (Basic step 28b): hosts a KKSegmentEditView
 /// (Hold kind) seeded from the shared Hold interval's modulation. Maps the
 /// KKHoldEffect pill index ↔ KKIntervalModulation per the evaluator. Type /
@@ -196,7 +207,13 @@ NS_ASSUME_NONNULL_BEGIN
                             onParticipation:(void (^)(NSInteger laneIndex,
                                                       BOOL on))onParticipation
                                 onDragBegin:(void (^)(void))onDragBegin
-                                  onDragEnd:(void (^)(void))onDragEnd;
+                                  onDragEnd:(void (^)(void))onDragEnd
+                                      phase:(KKGapPopoverPhase)phase
+                                  laneLabel:(NSString *)laneLabel
+                             representative:(KKInterval *)representativeInterval
+                             intervalReader:(KKGapIntervalReader)intervalReader
+                            intervalMutator:
+                                (KKGapIntervalMutator)intervalMutator;
 @end
 
 NS_ASSUME_NONNULL_END

@@ -89,6 +89,21 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 @property(nonatomic, copy, nullable)
     NSData *pathData; // plugin blob (MagicMove bezier)
 
+/// Plugin-specific per-interval flags / values, serialized into the
+/// interval JSON. Use the `userBool…` / `userNumber…` helpers below rather
+/// than mutating this dictionary directly so the copy semantics stay sane.
+/// Values must be JSON-serializable (string, number, bool, nested
+/// dict/array of the same).
+@property(nonatomic, copy, nullable)
+    NSDictionary<NSString *, id> *userProperties;
+
+- (BOOL)userBoolForKey:(NSString *)key default:(BOOL)def;
+- (void)setUserBool:(BOOL)value forKey:(NSString *)key;
+- (double)userDoubleForKey:(NSString *)key default:(double)def;
+- (void)setUserDouble:(double)value forKey:(NSString *)key;
+- (nullable id)userValueForKey:(NSString *)key;
+- (void)setUserValue:(nullable id)value forKey:(NSString *)key;
+
 @end
 
 /// A single time-point with a value. The atomic unit of the data model.

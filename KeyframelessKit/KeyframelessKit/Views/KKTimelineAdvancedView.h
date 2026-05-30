@@ -6,6 +6,7 @@
 #pragma once
 
 #import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKGapPopoverTypes.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -117,7 +118,10 @@ NS_ASSUME_NONNULL_BEGIN
      void (^onCurve)(KKIntervalCurve curve), void (^onIntensity)(double value),
      void (^onFrequency)(double value),
      void (^onParticipation)(NSInteger laneIndex, BOOL on),
-     void (^onDragBegin)(void), void (^onDragEnd)(void));
+     void (^onDragBegin)(void), void (^onDragEnd)(void),
+     NSString *_Nonnull laneLabel, KKInterval *_Nonnull representativeInterval,
+     KKGapIntervalReader _Nonnull intervalReader,
+     KKGapIntervalMutator _Nonnull intervalMutator);
 
 /// Flat-Hold gap click → modulation editor (accent-tinted pills, intensity
 /// + frequency + seed). Same shape as Basic's onHoldModulationPopover so
@@ -137,7 +141,10 @@ NS_ASSUME_NONNULL_BEGIN
      void (^onIntensity)(double value), void (^onFrequency)(double value),
      void (^onSeed)(uint32_t seed), void (^onLinked)(BOOL linked),
      void (^onParticipation)(NSInteger flatIndex, BOOL on),
-     void (^onDragBegin)(void), void (^onDragEnd)(void));
+     void (^onDragBegin)(void), void (^onDragEnd)(void),
+     NSString *_Nonnull laneLabel, KKInterval *_Nonnull representativeInterval,
+     KKGapIntervalReader _Nonnull intervalReader,
+     KKGapIntervalMutator _Nonnull intervalMutator);
 
 @end
 

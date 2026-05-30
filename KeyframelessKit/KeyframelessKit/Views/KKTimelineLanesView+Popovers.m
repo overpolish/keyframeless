@@ -875,7 +875,12 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
                          onFrequency:(void (^)(double))onFrequency
                      onParticipation:(void (^)(NSInteger, BOOL))onParticipation
                          onDragBegin:(void (^)(void))onDragBegin
-                           onDragEnd:(void (^)(void))onDragEnd {
+                           onDragEnd:(void (^)(void))onDragEnd
+                               phase:(KKGapPopoverPhase)phase
+                           laneLabel:(NSString *)laneLabel
+                      representative:(KKInterval *)representativeInterval
+                      intervalReader:(KKGapIntervalReader)intervalReader
+                     intervalMutator:(KKGapIntervalMutator)intervalMutator {
   KKSegmentEditView *edit =
       [[KKSegmentEditView alloc] initWithKind:KKSegmentEditKindTransition
                                   showsLinked:NO
@@ -935,6 +940,16 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
                                 participation:(partLabels.count > 0)];
   edit.translatesAutoresizingMaskIntoConstraints = NO;
 
+  // Plugin-supplied extras (toggles, sliders) appended below the segment
+  // editor. Each row gets its own intrinsic height; container height grows.
+  NSArray<NSView *> *extras = nil;
+  if (self.gapPopoverExtraRows && representativeInterval && intervalMutator)
+    extras = self.gapPopoverExtraRows(phase, laneLabel, representativeInterval,
+                                      intervalReader ?: ^KKInterval *{
+                                        return representativeInterval;
+                                      },
+                                      intervalMutator);
+
   // Wrap the editor with a "Curve <start>–<end>" header (the editor itself is
   // left untouched - it's also used by the hold-modulation popover).
   NSString *range = [NSString
@@ -945,7 +960,11 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
              detail:range
          symbolName:@"point.topleft.down.to.point.bottomright.curvepath"];
   CGFloat headerH = [KKPopoverHeaderView height];
-  CGFloat totalH = KKPaddingMD + headerH + KKSpacingSM + editH;
+  CGFloat extrasH = 0;
+  for (NSView *v in extras)
+    extrasH += v.intrinsicContentSize.height;
+  CGFloat totalH =
+      KKPaddingMD + headerH + KKSpacingSM + editH + extrasH + KKPaddingMD;
   NSView *container =
       [[NSView alloc] initWithFrame:NSMakeRect(0, 0, w, totalH)];
   [container addSubview:header];
@@ -963,12 +982,33 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
     [container.widthAnchor constraintEqualToConstant:w],
     [container.heightAnchor constraintEqualToConstant:totalH],
   ]];
+  NSView *prev = edit;
+  for (NSView *extra in extras) {
+    extra.translatesAutoresizingMaskIntoConstraints = NO;
+    [container addSubview:extra];
+    [NSLayoutConstraint activateConstraints:@[
+      // Match KKSegmentEditView's internal kHPadding (10) so the extras row
+      // aligns with the segment editor's Linked-toggle row above it.
+      [extra.leadingAnchor constraintEqualToAnchor:container.leadingAnchor
+                                          constant:10.0],
+      [extra.trailingAnchor constraintEqualToAnchor:container.trailingAnchor
+                                           constant:-10.0],
+      // First extra anchors to edit.bottom which already includes the
+      // editor's internal kVPadding (~10pt); zero gap here lands at roughly
+      // the same visual spacing as the editor's internal kRowGap rows.
+      // Subsequent extras stack with no extra gap; rows that need separation
+      // should bake it into their own intrinsicContentSize.
+      [extra.topAnchor constraintEqualToAnchor:prev.bottomAnchor],
+    ]];
+    prev = extra;
+  }
 
   // Track the editor + a rebuilder so _refresh can push fresh participation
   // pill states after an external mutation (cmd-Z) without reopening - same
   // pattern as the hold-modulation popover.
   _openGapEditor = edit;
   _openGapRebuilder = [partRebuilder copy];
+  _openExtraRows = extras;
   __weak typeof(self) weakClose = self;
   [self _showPopoverWithContent:container
                        fromView:anchor
@@ -978,6 +1018,7 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
                             return;
                           sc->_openGapEditor = nil;
                           sc->_openGapRebuilder = nil;
+                          sc->_openExtraRows = nil;
                         }];
 
   // Guide hook: same settle delay as the static-values popover so the
@@ -1052,7 +1093,13 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
                             onParticipation:(void (^)(NSInteger,
                                                       BOOL))onParticipation
                                 onDragBegin:(void (^)(void))onDragBegin
-                                  onDragEnd:(void (^)(void))onDragEnd {
+                                  onDragEnd:(void (^)(void))onDragEnd
+                                      phase:(KKGapPopoverPhase)phase
+                                  laneLabel:(NSString *)laneLabel
+                             representative:(KKInterval *)representativeInterval
+                             intervalReader:(KKGapIntervalReader)intervalReader
+                            intervalMutator:
+                                (KKGapIntervalMutator)intervalMutator {
   KKSegmentEditView *edit =
       [[KKSegmentEditView alloc] initWithKind:KKSegmentEditKindHold
                                   showsLinked:showsLinked
@@ -1129,8 +1176,19 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
       initWithTitle:KKLoc(@"Modulation", @"Section: modulation settings.")
              detail:range
          symbolName:@"waveform"];
+  NSArray<NSView *> *extras = nil;
+  if (self.gapPopoverExtraRows && representativeInterval && intervalMutator)
+    extras = self.gapPopoverExtraRows(phase, laneLabel, representativeInterval,
+                                      intervalReader ?: ^KKInterval *{
+                                        return representativeInterval;
+                                      },
+                                      intervalMutator);
   CGFloat headerH = [KKPopoverHeaderView height];
-  CGFloat totalH = KKPaddingMD + headerH + KKSpacingSM + editH;
+  CGFloat extrasH = 0;
+  for (NSView *v in extras)
+    extrasH += v.intrinsicContentSize.height;
+  CGFloat totalH =
+      KKPaddingMD + headerH + KKSpacingSM + editH + extrasH + KKPaddingMD;
   NSView *container =
       [[NSView alloc] initWithFrame:NSMakeRect(0, 0, w, totalH)];
   [container addSubview:header];
@@ -1148,10 +1206,31 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
     [container.widthAnchor constraintEqualToConstant:w],
     [container.heightAnchor constraintEqualToConstant:totalH],
   ]];
+  NSView *prev = edit;
+  for (NSView *extra in extras) {
+    extra.translatesAutoresizingMaskIntoConstraints = NO;
+    [container addSubview:extra];
+    [NSLayoutConstraint activateConstraints:@[
+      // Match KKSegmentEditView's internal kHPadding (10) so the extras row
+      // aligns with the segment editor's Linked-toggle row above it.
+      [extra.leadingAnchor constraintEqualToAnchor:container.leadingAnchor
+                                          constant:10.0],
+      [extra.trailingAnchor constraintEqualToAnchor:container.trailingAnchor
+                                           constant:-10.0],
+      // First extra anchors to edit.bottom which already includes the
+      // editor's internal kVPadding (~10pt); zero gap here lands at roughly
+      // the same visual spacing as the editor's internal kRowGap rows.
+      // Subsequent extras stack with no extra gap; rows that need separation
+      // should bake it into their own intrinsicContentSize.
+      [extra.topAnchor constraintEqualToAnchor:prev.bottomAnchor],
+    ]];
+    prev = extra;
+  }
 
   // Stash for external refresh on applyTimeline (cmd-Z etc).
   _openHoldModEditor = edit;
   _openHoldModRebuilder = [partRebuilder copy];
+  _openExtraRows = extras;
   __weak typeof(self) weak = self;
   [self _showPopoverWithContent:container
                        fromView:anchor
@@ -1161,6 +1240,7 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
                             return;
                           s->_openHoldModEditor = nil;
                           s->_openHoldModRebuilder = nil;
+                          s->_openExtraRows = nil;
                         }];
 }
 

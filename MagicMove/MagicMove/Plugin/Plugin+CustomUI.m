@@ -4,6 +4,7 @@
  */
 
 #import "Constants.h"
+#import "MagicMoveLocalized.h"
 #import "MagicMoveMiniCanvasRenderer.h"
 #import "OSC.h"
 #import "Plugin_Private.h"
@@ -305,6 +306,39 @@
                       contentProvider:^NSView * {
                         return [insp beginDetachedCopy];
                       }];
+  };
+
+  // Rotate-with-motion: per-interval toggle on the Position lane's gap
+  // popovers (curve + hold-modulation, Advanced + Basic). Persisted under
+  // the interval's userProperties dict. Disabled (and ignored) when the
+  // gap has no actual motion - linear curves with no modulation produce no
+  // tangent to rotate along.
+  view.gapPopoverExtraRows = ^NSArray<NSView *> *(
+      KKGapPopoverPhase phase, NSString *laneLabel, KKInterval *rep,
+      KKGapIntervalReader read, KKGapIntervalMutator mutate) {
+    if (![laneLabel isEqualToString:@"Position"])
+      return @[];
+    KKCheckboxRowView *row = [[KKCheckboxRowView alloc]
+        initWithTitle:MMLoc(@"Rotate with motion",
+                            @"Gap popover toggle: align rotation to the "
+                            @"position-curve tangent during this gap.")
+        tooltip:nil
+        binding:^BOOL {
+          KKInterval *live = read();
+          return [live userBoolForKey:@"rotateWithMotion" default:NO];
+        }
+        disabledBinding:^BOOL {
+          KKInterval *live = read();
+          BOOL hasCurveMotion = (live.curve != KKIntervalCurveLinear);
+          BOOL hasModulation = (live.modulation != KKIntervalModulationNone);
+          return !hasCurveMotion && !hasModulation;
+        }
+        onToggle:^(BOOL isOn) {
+          mutate(^(KKInterval *iv) {
+            [iv setUserBool:isOn forKey:@"rotateWithMotion"];
+          });
+        }];
+    return @[ [row autorelease] ];
   };
 
   self.inspectorView = view;

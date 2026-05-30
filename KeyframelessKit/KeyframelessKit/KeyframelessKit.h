@@ -15,6 +15,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKAlertView.h>
 #import <KeyframelessKit/KKArcOSC.h>
 #import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/KKCheckboxRowView.h>
 #import <KeyframelessKit/KKCheckboxView.h>
 #import <KeyframelessKit/KKChevronView.h>
 #import <KeyframelessKit/KKColor.h>
@@ -25,6 +26,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKCustomGroupHeaderView.h>
 #import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKEasing.h>
+#import <KeyframelessKit/KKGapPopoverTypes.h>
 #import <KeyframelessKit/KKGradientBarView.h>
 #import <KeyframelessKit/KKGradientControl.h>
 #import <KeyframelessKit/KKGradientFavorites.h>

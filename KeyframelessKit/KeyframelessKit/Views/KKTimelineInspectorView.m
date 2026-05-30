@@ -551,6 +551,13 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
 @synthesize constantsButton = _constantsButton;
 @synthesize isDetachedCopy = _isDetachedCopy;
 
+- (void)setGapPopoverExtraRows:
+    (NSArray<NSView *> * (^)(KKGapPopoverPhase, NSString *, KKInterval *,
+                             KKGapIntervalReader, KKGapIntervalMutator))block {
+  _gapPopoverExtraRows = [block copy];
+  _basicView.gapPopoverExtraRows = block;
+}
+
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager
                        loopEnabled:(BOOL)loopEnabled
                          activeTab:(NSInteger)activeTab

@@ -9,7 +9,7 @@ extension AIPluginAgent {
 	/// Parse the current timeline JSON into a map of laneLabel -> existing
 	/// keyposes (time + values), so Pass 2 can copy values for keyposes Pass
 	/// 1 preserved by time. Curves and modulation are decoded separately by
-	/// `extractIntervals` — that's Pass 3's territory.
+	/// `extractIntervals` - that's Pass 3's territory.
 	static func extractLanes(fromTimelineJSON json: String)
 		-> [String: [(time: Double, values: [Double])]]
 	{

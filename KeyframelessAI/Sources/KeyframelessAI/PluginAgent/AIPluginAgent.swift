@@ -51,7 +51,7 @@ public final class AIPluginResult: NSObject {
 ///
 /// Every LLM call uses provider-native structured outputs (Anthropic forced
 /// `tool_choice`, OpenAI `response_format: json_schema`) so the model can't
-/// emit malformed shapes — it either conforms or fails.
+/// emit malformed shapes - it either conforms or fails.
 @objc(KKAIPluginAgent)
 public final class AIPluginAgent: NSObject {
 	@MainActor
@@ -91,7 +91,7 @@ public final class AIPluginAgent: NSObject {
 		currentInspectorMode: String
 	) async throws -> AIPluginResult {
 		AIDraftState.shared.routingStatus = "Reading prompt…"
-		// Pass 0a: classify. No docs in this prompt — classifier is just a
+		// Pass 0a: classify. No docs in this prompt - classifier is just a
 		// router. If the answer path wins, Pass 0b loads docs and writes the
 		// reply. This keeps the mutation path (the hot path) cheap. We
 		// expose the lane labels so the classifier can resolve template
@@ -136,7 +136,7 @@ public final class AIPluginAgent: NSObject {
 
 		AIDraftState.shared.routingStatus = "Planning timing…"
 		// Pass 1: timing. Thinking only when the classifier flagged the prompt
-		// as "complex" — simple template-matchable prompts don't need 4k
+		// as "complex" - simple template-matchable prompts don't need 4k
 		// reasoning tokens.
 		let timing = try await planTiming(
 			prompt: prompt,

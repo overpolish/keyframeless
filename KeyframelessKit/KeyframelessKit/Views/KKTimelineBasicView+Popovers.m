@@ -66,6 +66,7 @@
 
   __weak typeof(self) weak = self;
   KKBasicSection capSec = sec;
+  NSString *repLabel = [self _representativeLaneLabelForSection:capSec];
   self.onGapPopover(
       _popoverAnchor, isOut, isOut ? p.outStartFrac : 0.0,
       isOut ? 1.0 : p.inEndFrac, cur, inten, freq, partLabels, partStates,
@@ -122,7 +123,61 @@
         if (!phaseOn && s.onRequestClosePopover)
           s.onRequestClosePopover();
       },
-      self.onDragBegin, self.onDragEnd);
+      self.onDragBegin, self.onDragEnd,
+      // Representative interval + its lane label so plugins can gate extras
+      // by lane (e.g. MagicMove's rotate-with-motion only on Position). The
+      // mutator targets ONLY that lane's interval - the property is lane-
+      // specific and shouldn't pollute other lanes' userProperties dicts.
+      repLabel,
+      [self _representativeIntervalForSection:capSec]
+          ?: [[KKInterval alloc] init],
+      ^KKInterval *(void) {
+        return [weak _representativeIntervalForSection:capSec];
+      },
+      ^(void (^_Nonnull mutate)(KKInterval *_Nonnull)) {
+        [weak _mutateIntervalInLaneLabel:repLabel section:capSec with:mutate];
+      });
+}
+
+- (NSString *)_representativeLaneLabelForSection:(KKBasicSection)section {
+  for (KKLane *lane in _timeline.lanes) {
+    if (!lane.enabled || lane.keyposes.count < 2)
+      continue;
+    KKHoldShape s = KKShapeOfLane(lane);
+    if (section == KKBasicSectionOut && !s.outEnabled)
+      continue;
+    if (section == KKBasicSectionIn && !s.inEnabled)
+      continue;
+    return lane.label;
+  }
+  return nil;
+}
+
+// Returns a representative outgoing-interval for the phase: the first
+// enabled lane's relevant interval. Plugins read state from it for their
+// extra-row toggles; the mutator fans the write across every participating
+// lane. nil if no lane currently participates.
+- (KKInterval *)_representativeIntervalForSection:(KKBasicSection)section {
+  for (KKLane *lane in _timeline.lanes) {
+    if (!lane.enabled || lane.keyposes.count < 2)
+      continue;
+    KKHoldShape s = KKShapeOfLane(lane);
+    NSInteger idx;
+    if (section == KKBasicSectionOut) {
+      if (!s.outEnabled)
+        continue;
+      idx = s.holdEnd;
+    } else if (section == KKBasicSectionHold) {
+      idx = s.holdStart;
+    } else {
+      if (!s.inEnabled)
+        continue;
+      idx = 0;
+    }
+    if (idx >= 0 && idx < (NSInteger)lane.keyposes.count)
+      return lane.keyposes[idx].outgoing;
+  }
+  return nil;
 }
 
 // Per-lane phase "applies to" - NON-DESTRUCTIVE. Turning a phase off for one
@@ -245,6 +300,8 @@
   if (p.holdDrift) {
     if (!self.onGapPopover)
       return;
+    NSString *holdRepLabel =
+        [self _representativeLaneLabelForSection:KKBasicSectionHold];
     self.onGapPopover(
         _popoverAnchor, NO, p.inEndFrac, p.outStartFrac,
         (KKIntervalCurve)p.holdCurve, p.holdIntensity, p.holdFrequency,
@@ -277,7 +334,17 @@
           if (![weak _holdDrift])
             [weak _openHoldPopover];
         },
-        self.onDragBegin, self.onDragEnd);
+        self.onDragBegin, self.onDragEnd, holdRepLabel,
+        [self _representativeIntervalForSection:KKBasicSectionHold]
+            ?: [[KKInterval alloc] init],
+        ^KKInterval *(void) {
+          return [weak _representativeIntervalForSection:KKBasicSectionHold];
+        },
+        ^(void (^_Nonnull mutate)(KKInterval *_Nonnull)) {
+          [weak _mutateIntervalInLaneLabel:holdRepLabel
+                                   section:KKBasicSectionHold
+                                      with:mutate];
+        });
     return;
   }
 
@@ -417,7 +484,20 @@
                                   on:on
                             forLabel:partLaneLabels[idx]];
       },
-      self.onDragBegin, self.onDragEnd);
+      self.onDragBegin, self.onDragEnd,
+      [self _representativeLaneLabelForSection:KKBasicSectionHold],
+      [self _representativeIntervalForSection:KKBasicSectionHold]
+          ?: [[KKInterval alloc] init],
+      ^KKInterval *(void) {
+        return [weak _representativeIntervalForSection:KKBasicSectionHold];
+      },
+      ^(void (^_Nonnull mutate)(KKInterval *_Nonnull)) {
+        NSString *lbl =
+            [weak _representativeLaneLabelForSection:KKBasicSectionHold];
+        [weak _mutateIntervalInLaneLabel:lbl
+                                 section:KKBasicSectionHold
+                                    with:mutate];
+      });
 }
 
 // Hold-modulation param edits apply only to lanes the modulation is ON for
@@ -611,6 +691,54 @@
 // then fire onTimelineMutated. The live BasicView redraw is local
 // (setNeedsDisplay re-reads from the projection); the host coalesces the
 // per-tick blob writes into the slider drag's undo group.
+// Per-lane variant: write only to the named lane's phase interval. Used by
+// gap-popover extras whose semantics are lane-specific (e.g. MagicMove's
+// rotate-with-motion is a property of the Position curve, not of every
+// participating lane). nil/empty label is a no-op.
+- (void)_mutateIntervalInLaneLabel:(NSString *)laneLabel
+                           section:(KKBasicSection)section
+                              with:(void (^)(KKInterval *iv))mut {
+  if (laneLabel.length == 0)
+    return;
+  KKTimeline *t = [_timeline copy];
+  NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+    KKLane *lane = lanes[i];
+    if (![lane.label isEqualToString:laneLabel])
+      continue;
+    if (!lane.enabled || lane.keyposes.count < 2)
+      return;
+    KKHoldShape s = KKShapeOfLane(lane);
+    NSInteger idx;
+    if (section == KKBasicSectionOut) {
+      if (!s.outEnabled)
+        return;
+      idx = s.holdEnd;
+    } else if (section == KKBasicSectionHold) {
+      idx = s.holdStart;
+    } else {
+      if (!s.inEnabled)
+        return;
+      idx = 0;
+    }
+    KKLane *nl = [lane copy];
+    NSMutableArray<KKKeyPose *> *nkps = [lane.keyposes mutableCopy];
+    KKKeyPose *kp = [nkps[idx] copy];
+    KKInterval *iv = [kp.outgoing copy] ?: [[KKInterval alloc] init];
+    mut(iv);
+    kp.outgoing = iv;
+    nkps[idx] = kp;
+    nl.keyposes = nkps;
+    lanes[i] = nl;
+    break;
+  }
+  t.lanes = lanes;
+  _timeline = t;
+  [self setNeedsDisplay:YES];
+  if (self.onTimelineMutated)
+    self.onTimelineMutated(t);
+}
+
 - (void)_mutateInterval:(KKBasicSection)section
                    with:(void (^)(KKInterval *iv))mut {
   KKTimeline *t = [_timeline copy];
