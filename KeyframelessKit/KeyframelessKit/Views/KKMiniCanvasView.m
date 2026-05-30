@@ -484,16 +484,17 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   if (!editFrac)
     return 0;
   double want = editFrac.doubleValue;
-  NSUInteger best = 0;
-  double bestDt = INFINITY;
-  for (NSUInteger i = 0; i < _filmstripSlots.count; i++) {
-    double dt = fabs(_filmstripSlots[i].tag - want);
-    if (dt < bestDt) {
-      bestDt = dt;
-      best = i;
-    }
+  // Collapsed tied-hold slots represent a *range* [tag[i], tag[i+1]) rather
+  // than a single point: opening the popover on the second KP of a linked
+  // pair gives a `want` past tag[i] but still within the hold. Closest-by-
+  // distance would jump to slot i+1 when want is past the midpoint; range-
+  // containment correctly stays on the hold slot.
+  const double kEps = 1e-6;
+  for (NSInteger i = (NSInteger)_filmstripSlots.count - 1; i >= 0; i--) {
+    if (_filmstripSlots[i].tag <= want + kEps)
+      return (NSUInteger)i;
   }
-  return best;
+  return 0;
 }
 
 // Aliases follow the ACTIVE slot - that's the one OSC code paths edit /

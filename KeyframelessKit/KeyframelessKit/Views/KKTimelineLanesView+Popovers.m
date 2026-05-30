@@ -1191,7 +1191,23 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
     // navigation (cell click / arrows) updates _openStaticBoundaryFraction
     // without rebuilding the popover, so capturing cfg.fraction would
     // leave the override pinned to the original keypose.
-    double liveFraction = cfg.isBoundary ? s->_openStaticBoundaryFraction : 0.0;
+    // Snap to the representative collapsed-slot fraction: when the popover
+    // is on the second KP of a tied-hold pair, _openStaticBoundaryFraction
+    // points past the slot's tag and the renderer's per-slot editFraction
+    // (slot tag) wouldn't match. Use the largest collapsed frac <= want so
+    // both halves of a linked pair push into the same slot.
+    double liveFraction = 0.0;
+    if (cfg.isBoundary) {
+      double want = s->_openStaticBoundaryFraction;
+      liveFraction = want;
+      NSArray<NSNumber *> *fracs = [s _animatableKPFractions];
+      for (NSNumber *f in fracs) {
+        if (f.doubleValue <= want + 1e-6)
+          liveFraction = f.doubleValue;
+        else
+          break;
+      }
+    }
     id<KKMiniCanvasDelegate> del = s.miniCanvasDelegate;
     if ([(NSObject *)del
             respondsToSelector:@selector(setLiveValues:forLabel:atFraction:)]) {
