@@ -103,100 +103,121 @@ fragment float4 KKRingOSCFragment(KKRasterizerData in [[stage_in]],
     return kkOSCColor(fillColor, strokeColor, outlineFactor, shapeAlpha);
 }
 
-/// Fragment shader for rendering a rotation arm with a handle circle at the end.
+/// 3-ring sphere rotation gizmo. Samples each great-circle (the ring of one
+/// axis projected to screen) as a polyline and picks the closest ring per
+/// pixel; back-hemisphere half is alpha-dimmed via the sign of the world Z
+/// at the closest point.
 fragment float4 KKRotationOSCFragment(KKRasterizerData in [[stage_in]],
                                       constant KKRotationOSCParams *params [[buffer(KKOSCFragmentIndex_DrawColor)]]) {
-    float armLength = params->armLength;
-    float centerOffset = params->centerOffset;
-    float circleRadius = params->circleRadius;
-    float lineHalfWidth = params->lineHalfWidth;
-    float outlineWidth = params->outlineWidth;
-    float angle = params->angle;
-    float4 fillColor = float4(params->fillColor);
-    float4 strokeColor = float4(params->strokeColor);
-    float4 armFillColor = float4(params->armFillColor);
-    float4 armStrokeColor = float4(params->armStrokeColor);
-
+    // The OSC quad has metalPosition.y flipped (see KKOnScreenControl
+    // encodeRenderCommands), so textureCoordinate.y is already Y-DOWN
+    // relative to canvas. The renderer also works in Y-DOWN screen space,
+    // and the hit-test mirrors that (negating canvas-Y when forming its
+    // local point), so all three agree without needing a flip here.
     float2 pos = in.textureCoordinate;
 
-    // --- Donut ring around center (hover indicator) ---
-    float donutRadius = params->donutRadius;
-    float4 donutColor = float4(0.0);
-    if (donutRadius > 0.0) {
-        float dist = length(pos);
-        float donutFillHW = params->donutFillHalfWidth;
-        float donutOW = params->donutOutlineWidth;
-        float donutDist = abs(dist - donutRadius);
-        float donutOuterHW = donutFillHW + donutOW;
-        float donutShape = kkEdgeAlpha(donutOuterHW - donutDist);
-        if (donutShape > 0.001) {
-            float donutOutlineFactor = 1.0 - kkEdgeAlpha(donutFillHW - donutDist);
-            float4 df = float4(params->donutFillColor);
-            float4 ds = float4(params->donutStrokeColor);
-            float3 col = mix(df.rgb, ds.rgb, donutOutlineFactor);
-            float a = mix(df.a, ds.a, donutOutlineFactor) * donutShape;
-            donutColor = float4(col, a);
-        }
+    float3 col0 = float3(params->rotCol0);
+    float3 col1 = float3(params->rotCol1);
+    float3 col2 = float3(params->rotCol2);
+    float radius = params->radius;
+    float ringHW = params->ringHalfWidth;
+    float outlineW = params->outlineWidth;
+    float backDim = params->backDim;
+    float4 outlineColor = float4(params->outlineColor);
+    int active = params->activeRing;
+    float activeBoost = params->activeBoost;
+    float4 ringColors[3];
+    ringColors[0] = float4(params->ringColorX);
+    ringColors[1] = float4(params->ringColorY);
+    ringColors[2] = float4(params->ringColorZ);
 
-        // Marker circle at initial position on the donut ring
-        float markerRadius = params->markerRadius;
-        if (markerRadius > 0.0) {
-            float markerAngle = params->markerAngle;
-            float2 markerCenter = donutRadius * float2(cos(markerAngle), sin(markerAngle));
-            float markerDist = length(pos - markerCenter);
-            float markerOW = params->markerOutlineWidth;
-            float markerShape = kkEdgeAlpha((markerRadius + markerOW) - markerDist);
-            if (markerShape > 0.001) {
-                float markerOutlineFactor = kkLineAlpha(abs(markerRadius - markerDist), markerOW);
-                float4 mf = float4(params->markerFillColor);
-                float4 ms = float4(params->markerStrokeColor);
-                float4 markerColor = float4(mix(mf.rgb, ms.rgb, markerOutlineFactor),
-                                            mix(mf.a, ms.a, markerOutlineFactor) * markerShape);
-                donutColor = kkCompositeOver(markerColor, donutColor);
+    // X ring spans the world Y/Z basis; Y ring spans X/Z; Z ring spans X/Y.
+    // (The axis's own column is its normal, which is dropped here.)
+    float3 ringU[3];
+    float3 ringV[3];
+    ringU[0] = col1;
+    ringV[0] = col2;
+    ringU[1] = col0;
+    ringV[1] = col2;
+    ringU[2] = col0;
+    ringV[2] = col1;
+
+    const int N = 64;
+    const float twoPi = 6.28318530718;
+
+    // Track FRONT (z<=0) and BACK (z>0) winners separately. The hit-test
+    // prefers front-only samples across all rings, so when a back segment of
+    // ring A is geometrically closer than a front segment of ring B at the
+    // same pixel, hit-test still grabs ring B. We mirror that here: if any
+    // ring's front passes within ring range, render that front ring;
+    // otherwise fall back to the closest back-facing ring (dimmed). Result:
+    // the bright (grabbable) half is what's visible at every pixel.
+    float frontBestDist = 1.0e9;
+    int frontBestRing = -1;
+    float backBestDist = 1.0e9;
+    int backBestRing = -1;
+    float backBestZ = 0.0;
+
+    for (int k = 0; k < 3; k++) {
+        float3 prev = radius * ringU[k]; // t = 0
+        for (int i = 1; i <= N; i++) {
+            float t = twoPi * (float(i) / float(N));
+            float3 cur = radius * (cos(t) * ringU[k] + sin(t) * ringV[k]);
+            float2 a = prev.xy;
+            float2 b = cur.xy;
+            float2 d = b - a;
+            float L2 = max(dot(d, d), 1.0e-9);
+            float u = clamp(dot(pos - a, d) / L2, 0.0, 1.0);
+            float2 closest = a + u * d;
+            float dist = length(pos - closest);
+            float zAt = prev.z + u * (cur.z - prev.z);
+            if (zAt <= 0.0) {
+                if (dist < frontBestDist) {
+                    frontBestDist = dist;
+                    frontBestRing = k;
+                }
+            } else {
+                if (dist < backBestDist) {
+                    backBestDist = dist;
+                    backBestRing = k;
+                    backBestZ = zAt;
+                }
             }
+            prev = cur;
         }
     }
 
-    // --- Rotate into local space where the arm points along +x ---
-    float cs = cos(angle);
-    float sn = sin(angle);
-    float2 lp = float2(pos.x * cs + pos.y * sn, -pos.x * sn + pos.y * cs);
-
-    // Circle handle at end of arm
-    float2 circleCenter = float2(armLength, 0.0);
-    float circleDist = length(lp - circleCenter);
-    float circleAlpha = kkEdgeAlpha(circleRadius - circleDist);
-    float circleOutlineFactor = kkLineAlpha(abs(circleRadius - circleDist), outlineWidth);
-
-    // Line segment from centerOffset to armLength (open at center end)
-    float lineDist = abs(lp.y);
-    float lineOuter = lineHalfWidth + outlineWidth;
-    float lineAlpha =
-        kkEdgeAlpha(lineOuter - lineDist) * kkEdgeAlpha(lp.x - centerOffset) * kkEdgeAlpha(armLength - lp.x);
-    float lineOutlineFactor = 1.0 - kkEdgeAlpha(lineHalfWidth - lineDist);
-
-    float totalAlpha = max(circleAlpha, lineAlpha);
-    if (totalAlpha < 0.001 && donutColor.a < 0.001)
+    float outerHW = ringHW + outlineW;
+    int bestRing = -1;
+    float bestDist = 0.0;
+    float bestZ = 0.0;
+    if (frontBestRing >= 0 && frontBestDist <= outerHW + 0.002) {
+        bestRing = frontBestRing;
+        bestDist = frontBestDist;
+        bestZ = 0.0; // force "front" → no dimming
+    } else if (backBestRing >= 0 && backBestDist <= outerHW + 0.002) {
+        bestRing = backBestRing;
+        bestDist = backBestDist;
+        bestZ = backBestZ;
+    } else {
         discard_fragment();
-
-    // Composite: line first, circle on top
-    float4 color = float4(0.0);
-
-    if (lineAlpha > 0.001) {
-        color = kkOSCColor(armFillColor, armStrokeColor, lineOutlineFactor, lineAlpha);
     }
 
-    if (circleAlpha > 0.001) {
-        float2 circleWorldCenter = float2(armLength * cos(angle), armLength * sin(angle));
-        float relY = (pos - circleWorldCenter).y;
-        float4 cColor = kkPointColor(fillColor, strokeColor, circleOutlineFactor, circleAlpha, relY, circleRadius,
-                                     circleDist, outlineWidth);
-        color = color * (1.0 - cColor.a) + cColor;
+    float shapeAlpha = kkEdgeAlpha(outerHW - bestDist);
+    float outlineFactor = 1.0 - kkEdgeAlpha(ringHW - bestDist);
+
+    float4 fill = ringColors[bestRing];
+    if (bestRing == active) {
+        fill.rgb = mix(fill.rgb, float3(1.0, 1.0, 1.0), activeBoost);
     }
 
-    // Composite arm/circle over donut
-    if (donutColor.a > 0.001) {
-        color = kkCompositeOver(color, donutColor);
+    float4 color = kkOSCColor(fill, outlineColor, outlineFactor, shapeAlpha);
+
+    // z > 0 is BEHIND the source plane from the camera at z = -camD; that's
+    // the back hemisphere that should fade. z <= 0 is closer to the camera
+    // and stays full brightness.
+    if (bestZ > 0.0) {
+        color *= backDim;
     }
 
     return color;

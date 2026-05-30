@@ -494,6 +494,7 @@
 }
 
 - (void)_addKeyposeAtFrac:(double)frac forLabel:(NSString *)label {
+  frac = KKSnapFracToFrame(frac, [self _clipDuration], _frameDurationSeconds);
   KKTimeline *t = [_timeline copy];
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   BOOL changed = NO;
@@ -568,7 +569,10 @@
     if (srcIdx < 0 || srcIdx >= (NSInteger)src.keyposes.count)
       return -1;
     KKKeyPose *srcKP = src.keyposes[srcIdx];
-    double newTime = MIN(1.0, srcKP.time + 1.0 / 240.0);
+    double newTime = KKSnapFracToFrame(
+        srcKP.time + 1.0 / 240.0, [self _clipDuration], _frameDurationSeconds);
+    if (newTime <= srcKP.time)
+      newTime = srcKP.time;
     KKKeyPose *dup = [KKKeyPose keyposeAtTime:newTime values:srcKP.values];
     KKLane *nl = [src copy];
     [nl insertKeypose:dup];
@@ -770,6 +774,12 @@
         target = lo;
       if (target > hi)
         target = hi;
+      target = KKSnapFracToFrame(target, [self _clipDuration],
+                                 _frameDurationSeconds);
+      if (target < lo)
+        target = lo;
+      if (target > hi)
+        target = hi;
       if (fabs(target - kps[idx].time) < 1.0e-6)
         continue;
       KKKeyPose *newKP = [KKKeyPose keyposeAtTime:target
@@ -909,6 +919,7 @@
     frac = 0.0;
   if (frac > 1.0)
     frac = 1.0;
+  frac = KKSnapFracToFrame(frac, [self _clipDuration], _frameDurationSeconds);
   KKTimeline *t = [_timeline copy];
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   NSInteger newIdx = -1;
@@ -1182,6 +1193,8 @@
       NSInteger idx = selIdx[k].integerValue;
       KKKeyPose *kp = kps[idx];
       double newT = minT + (maxT - minT) * ((double)k / (double)(n - 1));
+      newT =
+          KKSnapFracToFrame(newT, [self _clipDuration], _frameDurationSeconds);
       KKKeyPose *moved = [KKKeyPose keyposeAtTime:newT values:kp.values];
       moved.outgoing = kp.outgoing;
       kps[idx] = moved;

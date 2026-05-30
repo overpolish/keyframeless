@@ -464,7 +464,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   if (!warnHere && i + 1 < (NSInteger)kps.count &&
       !KKAdvValuesEqual(kp.values, kps[i + 1].values))
     warnHere = YES;
-  CGFloat pillX = floor(x - kPillW * 0.5) + 0.5;
+  CGFloat pillX = round(x) - kPillW * 0.5 + 0.5;
   NSRect pill = NSMakeRect(pillX, pillBot, kPillW, pillTop - pillBot);
   NSColor *base = warnHere ? warn : neutral;
   KKDrawKeyposePill(pill, YES, base);

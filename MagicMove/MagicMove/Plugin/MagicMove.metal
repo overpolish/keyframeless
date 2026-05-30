@@ -63,25 +63,28 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
 
     float aspect = float(colorTexture.get_width()) / float(colorTexture.get_height());
     p.x *= aspect;
-    float cs = cos(params->rotation);
-    float sn = sin(params->rotation);
-    p = float2(cs * p.x - sn * p.y, sn * p.x + cs * p.y);
 
-    // 3D rotation (X/Y) with perspective via ray-plane intersection.
-    // Camera at (0,0,-camD), ray through screen point, inverse-rotated into
-    // source image space and intersected with z=0.
-    float sinRX = sin(params->rotationX), cosRX = cos(params->rotationX);
-    float sinRY = sin(params->rotationY), cosRY = cos(params->rotationY);
+    // True 3D rotation: R = Ry * Rx * Rz applied to the source image plane.
+    // The shader's screen-space p is Y-DOWN (FCP image-pixel convention)
+    // but the OSC visualizes rings in math Y-UP convention, so we flip p.y
+    // at input and the result's y at output. That way the same R matrix
+    // produces visually-matching rotations on both sides (the ring you drag
+    // in the OSC corresponds 1:1 to how the image spins).
+    float cx = cos(params->rotationX), sx = sin(params->rotationX);
+    float cy = cos(params->rotationY), sy = sin(params->rotationY);
+    float cz = cos(params->rotation), sz = sin(params->rotation);
+    float3 col0 = float3(cy * cz + sy * sx * sz, cx * sz, -sy * cz + cy * sx * sz);
+    float3 col1 = float3(-cy * sz + sy * sx * cz, cx * cz, sy * sz + cy * sx * cz);
+    float3 col2 = float3(sy * cx, -sx, cy * cx);
     float camD = 2.0;
-
-    float3 O = float3(camD * sinRY * cosRX, -camD * sinRX, -camD * cosRY * cosRX);
-    float3 D = float3(p.x * cosRY + p.y * sinRY * sinRX - camD * sinRY * cosRX, p.y * cosRX + camD * sinRX,
-                      p.x * sinRY - p.y * cosRY * sinRX + camD * cosRY * cosRX);
-
+    float3 Oworld = float3(0.0, 0.0, -camD);
+    float3 Dworld = float3(p.x, -p.y, camD); // Y-up world coords.
+    float3 O = float3(dot(col0, Oworld), dot(col1, Oworld), dot(col2, Oworld));
+    float3 D = float3(dot(col0, Dworld), dot(col1, Dworld), dot(col2, Dworld));
     if (abs(D.z) < 0.0001)
         return float4(0.0);
     float tHit = -O.z / D.z;
-    p = float2(O.x + tHit * D.x, O.y + tHit * D.y);
+    p = float2(O.x + tHit * D.x, -(O.y + tHit * D.y)); // flip back to Y-down
 
     p.x /= aspect;
 

@@ -44,27 +44,24 @@ typedef struct KKSquarePointOSCParams {
     vector_float4 shadowColor;
 } KKSquarePointOSCParams;
 
+/// 3-ring sphere rotation gizmo. Each ring lives in the plane perpendicular
+/// to its axis (X ring spans Y/Z, Y ring spans X/Z, Z ring spans X/Y), all
+/// rotated by the world matrix R = Ry * Rx * Rz so the rings tilt with the
+/// current pose. R is stored as 3 columns (column-major).
 typedef struct KKRotationOSCParams {
-    float armLength;
-    float centerOffset;
-    float circleRadius;
-    float lineHalfWidth;
-    float outlineWidth;
-    float angle;
-    vector_float4 fillColor;
-    vector_float4 strokeColor;
-    vector_float4 armFillColor;
-    vector_float4 armStrokeColor;
-    float donutRadius;
-    float donutFillHalfWidth;
-    float donutOutlineWidth;
-    vector_float4 donutFillColor;
-    vector_float4 donutStrokeColor;
-    float markerAngle;
-    float markerRadius;
-    float markerOutlineWidth;
-    vector_float4 markerFillColor;
-    vector_float4 markerStrokeColor;
+    vector_float3 rotCol0;
+    vector_float3 rotCol1;
+    vector_float3 rotCol2;
+    float radius;        ///< Sphere radius in normalized OSC coords (0..1).
+    float ringHalfWidth; ///< Half-width of the ring fill.
+    float outlineWidth;  ///< Extra half-width added beyond the fill.
+    float backDim;       ///< Alpha multiplier for the back hemisphere (0..1).
+    vector_float4 ringColorX;
+    vector_float4 ringColorY;
+    vector_float4 ringColorZ;
+    vector_float4 outlineColor;
+    int activeRing;    ///< -1 = none, 0 = X, 1 = Y, 2 = Z.
+    float activeBoost; ///< Mix-to-white amount for the active ring (0..1).
 } KKRotationOSCParams;
 
 #ifdef __METAL_VERSION__

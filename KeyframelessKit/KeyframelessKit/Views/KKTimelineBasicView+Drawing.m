@@ -217,7 +217,11 @@
               inRect:(NSRect)g
               filled:(BOOL)filled
                color:(NSColor *)color {
-  NSRect pill = NSMakeRect(x - kPillW * 0.5, NSMinY(g) + kPillInsetY, kPillW,
+  // Match the playhead's `round(x) + 0.5` rounding so the pill center sits
+  // exactly under the playhead line (otherwise sub-pixel x lands them ±1px
+  // apart depending on frac(x)).
+  CGFloat cx = round(x) + 0.5;
+  NSRect pill = NSMakeRect(cx - kPillW * 0.5, NSMinY(g) + kPillInsetY, kPillW,
                            NSHeight(g) - 2.0 * kPillInsetY);
   KKDrawKeyposePill(pill, filled, color);
 }

@@ -27,6 +27,16 @@ FOUNDATION_EXPORT double
 KKTimelineScrubFracDelivered(double visualFrac, double clipDurationSeconds,
                              double frameDurationSeconds);
 
+/// Round a fraction to the nearest whole-frame boundary so keypose times
+/// always land on real frames. Use at user-drag commit sites (Advanced +
+/// Basic) so a keypose stored mid-frame doesn't confuse the scrubber, which
+/// floors to the previous frame on snap. Pass-through if dur/frameDur is
+/// unset/invalid. Result is clamped to [0, (clipDur-frameDur)/clipDur]
+/// (the last addressable frame fraction).
+FOUNDATION_EXPORT double KKSnapFracToFrame(double frac,
+                                           double clipDurationSeconds,
+                                           double frameDurationSeconds);
+
 /// Closest-candidate-in-pixels snap. Returns the snapped frac (or `rawFrac`
 /// if none within `pixelTolerance`). `xForFrac` maps frac→x in the same
 /// coordinate space as `x`. If `outSnapFrac` is non-NULL, it's written with

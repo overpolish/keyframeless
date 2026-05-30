@@ -292,12 +292,29 @@ double KKHermiteJoinBlend(double frac, double boundary, double window,
   double h = window * 0.05;
   if (h < 1.0e-5)
     h = 1.0e-5;
-  double p0 = sample(lo);
-  double p1 = sample(hi);
-  double m0 = (sample(lo + h) - sample(lo - h)) / (2.0 * h);
-  double m1 = (sample(hi + h) - sample(hi - h)) / (2.0 * h);
-  double L = hi - lo;
-  double x = (frac - lo) / L;
+  // Two-half Hermite: both segments share the keypose value at the boundary
+  // so the smoothed curve passes through it exactly (instead of the symmetric
+  // midpoint, which was undershooting at the keypose). Central-difference
+  // tangent at the boundary keeps the curve C1 across both halves.
+  double pB = sample(boundary);
+  double mB = (sample(boundary + h) - sample(boundary - h)) / (2.0 * h);
+  double p0, p1, m0, m1, L, segLo;
+  if (frac < boundary) {
+    p0 = sample(lo);
+    p1 = pB;
+    m0 = (sample(lo + h) - sample(lo - h)) / (2.0 * h);
+    m1 = mB;
+    L = boundary - lo;
+    segLo = lo;
+  } else {
+    p0 = pB;
+    p1 = sample(hi);
+    m0 = mB;
+    m1 = (sample(hi + h) - sample(hi - h)) / (2.0 * h);
+    L = hi - boundary;
+    segLo = boundary;
+  }
+  double x = (frac - segLo) / L;
   double x2 = x * x, x3 = x2 * x;
   double h00 = 2.0 * x3 - 3.0 * x2 + 1.0;
   double h10 = x3 - 2.0 * x2 + x;

@@ -7,20 +7,134 @@
 #import "Constants.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KeyframelessKit.h>
+#import <simd/simd.h>
+
+// World rotation matrix R = Ry * Rx * Rz (matches MagicMove.metal's order).
+static simd_double3x3 KKMMRotationMatrix(double rx, double ry, double rz) {
+  double cx = cos(rx), sx = sin(rx);
+  double cy = cos(ry), sy = sin(ry);
+  double cz = cos(rz), sz = sin(rz);
+  simd_double3x3 R;
+  R.columns[0] = simd_make_double3(cy * cz + sy * sx * sz, cx * sz,
+                                   -sy * cz + cy * sx * sz);
+  R.columns[1] = simd_make_double3(-cy * sz + sy * sx * cz, cx * cz,
+                                   sy * sz + cy * sx * cz);
+  R.columns[2] = simd_make_double3(sy * cx, -sx, cy * cx);
+  return R;
+}
+
+static simd_double3x3 KKMMRotX(double a) {
+  double c = cos(a), s = sin(a);
+  simd_double3x3 R;
+  R.columns[0] = simd_make_double3(1, 0, 0);
+  R.columns[1] = simd_make_double3(0, c, s);
+  R.columns[2] = simd_make_double3(0, -s, c);
+  return R;
+}
+static simd_double3x3 KKMMRotY(double a) {
+  double c = cos(a), s = sin(a);
+  simd_double3x3 R;
+  R.columns[0] = simd_make_double3(c, 0, -s);
+  R.columns[1] = simd_make_double3(0, 1, 0);
+  R.columns[2] = simd_make_double3(s, 0, c);
+  return R;
+}
+static simd_double3x3 KKMMRotZ(double a) {
+  double c = cos(a), s = sin(a);
+  simd_double3x3 R;
+  R.columns[0] = simd_make_double3(c, s, 0);
+  R.columns[1] = simd_make_double3(-s, c, 0);
+  R.columns[2] = simd_make_double3(0, 0, 1);
+  return R;
+}
+
+// Pick the (rx, ry, rz) decomposition of R closest to (pressRx, pressRy,
+// pressRz). The YXZ Euler decomposition has two valid representations for
+// any non-gimbal-locked matrix - (rx, ry, rz) and (π - rx, ry + π, rz + π) -
+// and as the user drags past ±90° the "primary" asin branch flips to the
+// alternative, jumping the values discontinuously. Choosing the closer
+// branch to the press pose keeps each drag tick continuous so a 0→90→180
+// sweep stays on the dragged axis instead of resetting.
+static double KKMMWrap(double a) {
+  while (a > M_PI)
+    a -= 2.0 * M_PI;
+  while (a < -M_PI)
+    a += 2.0 * M_PI;
+  return a;
+}
+static double KKMMEulerDist(double rx, double ry, double rz, double px,
+                            double py, double pz) {
+  return fabs(KKMMWrap(rx - px)) + fabs(KKMMWrap(ry - py)) +
+         fabs(KKMMWrap(rz - pz));
+}
+static void KKMMDecomposeEulerNear(simd_double3x3 R, double pressRx,
+                                   double pressRy, double pressRz, double *rx,
+                                   double *ry, double *rz) {
+  double r_1_2 = R.columns[2][1]; // -sx
+  double r_0_2 = R.columns[2][0]; // sy*cx
+  double r_2_2 = R.columns[2][2]; // cy*cx
+  double r_1_0 = R.columns[0][1]; // cx*sz
+  double r_1_1 = R.columns[1][1]; // cx*cz
+  double sx = -r_1_2;
+  if (sx > 1.0)
+    sx = 1.0;
+  if (sx < -1.0)
+    sx = -1.0;
+  double primaryRx = asin(sx);
+  double cx = cos(primaryRx);
+  double primaryRy, primaryRz;
+  if (fabs(cx) > 1e-6) {
+    primaryRy = atan2(r_0_2, r_2_2);
+    primaryRz = atan2(r_1_0, r_1_1);
+  } else {
+    primaryRz = 0.0;
+    primaryRy = atan2(-R.columns[0][2], R.columns[0][0]);
+  }
+  // Alternative branch: same matrix, π-shifted angles.
+  double altRx = M_PI - primaryRx;
+  double altRy = primaryRy + M_PI;
+  double altRz = primaryRz + M_PI;
+  double dPrimary =
+      KKMMEulerDist(primaryRx, primaryRy, primaryRz, pressRx, pressRy, pressRz);
+  double dAlt = KKMMEulerDist(altRx, altRy, altRz, pressRx, pressRy, pressRz);
+  double chosenRx, chosenRy, chosenRz;
+  if (dAlt < dPrimary) {
+    chosenRx = altRx;
+    chosenRy = altRy;
+    chosenRz = altRz;
+  } else {
+    chosenRx = primaryRx;
+    chosenRy = primaryRy;
+    chosenRz = primaryRz;
+  }
+  // Unwrap to stay within ±π of press so big drags accumulate instead of
+  // wrapping to the equivalent ±2π rep.
+  *rx = pressRx + KKMMWrap(chosenRx - pressRx);
+  *ry = pressRy + KKMMWrap(chosenRy - pressRy);
+  *rz = pressRz + KKMMWrap(chosenRz - pressRz);
+}
 
 static NSInteger const kOSCPositionPart = 1;
+static NSInteger const kOSCRotationPart = 2;
 
-static KKLane *_positionLane(void) {
+static KKLane *_laneNamed(NSString *label) {
   for (KKLane *lane in KKProcessTimelineSnapshot().lanes)
-    if ([lane.label isEqualToString:@"Position"])
+    if ([lane.label isEqualToString:label])
       return lane;
   return nil;
 }
 
-// YES when Position is a constant (always shown) OR animated with the
+static KKLane *_positionLane(void) { return _laneNamed(@"Position"); }
+static KKLane *_rotationLane(void) { return _laneNamed(@"Rotation"); }
+
+// YES when the lane is a constant (always shown) OR animated with the
 // playhead within ~1 frame of a keypose.
 static BOOL _positionVisibleAtFraction(double frac) {
   return KKLaneVisibleAtFraction(_positionLane(), frac,
+                                 KKProcessFrameDurationSeconds());
+}
+static BOOL _rotationVisibleAtFraction(double frac) {
+  return KKLaneVisibleAtFraction(_rotationLane(), frac,
                                  KKProcessFrameDurationSeconds());
 }
 
@@ -33,9 +147,38 @@ static NSArray<NSNumber *> *_positionValuesAtFraction(double frac) {
   return v.count >= 2 ? v : @[ @0.5, @0.5 ];
 }
 
+// (rotX, rotY, rotZ) in DEGREES (matches storage).
+static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
+  KKLane *lane = _rotationLane();
+  if (!lane)
+    return @[ @0.0, @0.0, @0.0 ];
+  NSArray<NSNumber *> *v =
+      KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+  if (v.count >= 3)
+    return v;
+  NSMutableArray *out = [NSMutableArray arrayWithArray:v];
+  while (out.count < 3)
+    [out addObject:@0.0];
+  return out;
+}
+
 @interface MagicMoveOSC ()
 @property(nonatomic, retain) KKSnapEngine *snapEngine;
+@property(nonatomic, retain) KKRotationOSC *rotationOSC;
 @property(nonatomic) BOOL cmdSnapOverride;
+@property(nonatomic)
+    CGPoint rotPressCanvas;            // canvas pixel where rot drag began
+@property(nonatomic) double rotPressX; // rotation values (rad) at press
+@property(nonatomic) double rotPressY;
+@property(nonatomic) double rotPressZ;
+// Per-drag continuity anchor: last-written Euler values. The Euler
+// decomposition has two valid reps and as drag accumulates past ~270° the
+// "nearest to press" rule starts picking the wrong one (because press is
+// far away). Using the previous tick's output as the anchor keeps the
+// per-tick angular step small and unambiguous.
+@property(nonatomic) double rotLastWrittenX;
+@property(nonatomic) double rotLastWrittenY;
+@property(nonatomic) double rotLastWrittenZ;
 @end
 
 @implementation MagicMoveOSC
@@ -45,8 +188,20 @@ static NSArray<NSNumber *> *_positionValuesAtFraction(double frac) {
   if (self) {
     self.clearsOnDraw = NO;
     _snapEngine = [[KKSnapEngine alloc] init];
+    _rotationOSC = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
   }
   return self;
+}
+
+// Pull X/Y/Z ring colors from the Rotation lane's `componentLabelColors`
+// (already red/green/blue in the timeline) so OSC matches the inspector.
+- (void)_syncRotationColorsFromLane {
+  KKLane *lane = _rotationLane();
+  if (lane.componentLabelColors.count >= 3) {
+    self.rotationOSC.colorX = lane.componentLabelColors[0];
+    self.rotationOSC.colorY = lane.componentLabelColors[1];
+    self.rotationOSC.colorZ = lane.componentLabelColors[2];
+  }
 }
 
 - (double)_fractionAtTime:(CMTime)time {
@@ -170,17 +325,39 @@ static NSArray<NSNumber *> *_positionValuesAtFraction(double frac) {
                                        }];
 
   double frac = [self _fractionAtTime:time];
-  BOOL visible = self.isDragging || _positionVisibleAtFraction(frac);
-  if (!visible)
-    return;
+  BOOL posVisible = (self.isDragging && activePart == kOSCPositionPart) ||
+                    _positionVisibleAtFraction(frac);
 
   CGPoint pos = [self oscPositionAtTime:time];
-  [self drawAtCanvasPosition:pos
+  if (posVisible) {
+    [self
+        drawAtCanvasPosition:pos
                    isHovered:(activePart == kOSCPositionPart)
                     isActive:self.isDragging && (activePart == kOSCPositionPart)
             destinationImage:destinationImage
                       atTime:time];
-  if (self.isDragging && !self.cmdSnapOverride) {
+  }
+
+  // Rotation sphere is centred on the same canvas point as Position (the
+  // image rotates around its centre, which is where Position translates it).
+  BOOL rotVisible = (self.isDragging && activePart == kOSCRotationPart) ||
+                    _rotationVisibleAtFraction(frac);
+  if (rotVisible) {
+    [self _syncRotationColorsFromLane];
+    NSArray<NSNumber *> *r = _rotationValuesAtFraction(frac);
+    self.rotationOSC.rotX = (float)(r[0].doubleValue * M_PI / 180.0);
+    self.rotationOSC.rotY = (float)(r[1].doubleValue * M_PI / 180.0);
+    self.rotationOSC.rotZ = (float)(r[2].doubleValue * M_PI / 180.0);
+    self.rotationOSC.center = pos;
+    [self.rotationOSC
+        drawAtCanvasPosition:pos
+                   isHovered:(activePart == kOSCRotationPart)
+                    isActive:self.isDragging && (activePart == kOSCRotationPart)
+            destinationImage:destinationImage
+                      atTime:time];
+  }
+  if (self.isDragging && activePart == kOSCPositionPart &&
+      !self.cmdSnapOverride) {
     simd_float4 yellow = {1, 1, 0, 1};
     NSColor *accentNS = [[NSColor accentMatchingHost]
         colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
@@ -200,10 +377,87 @@ static NSArray<NSNumber *> *_positionValuesAtFraction(double frac) {
                         activePart:(NSInteger *)activePart
                             atTime:(CMTime)time {
   *activePart = 0;
-  if (!_positionVisibleAtFraction([self _fractionAtTime:time]))
-    return;
-  if ([self hitTestAtMousePositionX:positionX positionY:positionY atTime:time])
+  double frac = [self _fractionAtTime:time];
+  if (_positionVisibleAtFraction(frac) &&
+      [self hitTestAtMousePositionX:positionX
+                          positionY:positionY
+                             atTime:time]) {
     *activePart = kOSCPositionPart;
+    return;
+  }
+  if (_rotationVisibleAtFraction(frac)) {
+    CGPoint c = [self oscPositionAtTime:time];
+    NSArray<NSNumber *> *r = _rotationValuesAtFraction(frac);
+    self.rotationOSC.rotX = (float)(r[0].doubleValue * M_PI / 180.0);
+    self.rotationOSC.rotY = (float)(r[1].doubleValue * M_PI / 180.0);
+    self.rotationOSC.rotZ = (float)(r[2].doubleValue * M_PI / 180.0);
+    self.rotationOSC.center = c;
+    if ([self.rotationOSC hitTestAtMousePositionX:positionX
+                                        positionY:positionY
+                                           atTime:time]) {
+      *activePart = kOSCRotationPart;
+    }
+  }
+}
+
+- (void)mouseDownAtPositionX:(double)positionX
+                   positionY:(double)positionY
+                  activePart:(NSInteger)activePart
+                   modifiers:(NSUInteger)modifiers
+                 forceUpdate:(BOOL *)forceUpdate
+                      atTime:(CMTime)time {
+  [super mouseDownAtPositionX:positionX
+                    positionY:positionY
+                   activePart:activePart
+                    modifiers:modifiers
+                  forceUpdate:forceUpdate
+                       atTime:time];
+  if (activePart == kOSCRotationPart) {
+    double frac = [self _fractionAtTime:time];
+    // Capture press values from the KEYPOSE we'll write to (the one nearest
+    // the playhead), not the smoothed interpolation. The smoothed reader
+    // uses an easing curve that overshoots near keypose boundaries - if we
+    // used it as the press baseline, the non-dragged axes would inherit
+    // that overshoot and silently overwrite the keypose's actual values.
+    KKLane *rotLane = _rotationLane();
+    NSArray<NSNumber *> *r = nil;
+    if (rotLane.keyposes.count > 0) {
+      NSInteger best = 0;
+      double bd = 1e9;
+      for (NSInteger k = 0; k < (NSInteger)rotLane.keyposes.count; k++) {
+        double d = fabs(rotLane.keyposes[k].time - frac);
+        if (d < bd) {
+          bd = d;
+          best = k;
+        }
+      }
+      r = rotLane.keyposes[best].values;
+    }
+    if (r.count < 3)
+      r = @[ @0.0, @0.0, @0.0 ];
+    self.rotPressX = r[0].doubleValue * M_PI / 180.0;
+    self.rotPressY = r[1].doubleValue * M_PI / 180.0;
+    self.rotPressZ = r[2].doubleValue * M_PI / 180.0;
+    self.rotLastWrittenX = self.rotPressX;
+    self.rotLastWrittenY = self.rotPressY;
+    self.rotLastWrittenZ = self.rotPressZ;
+    self.rotPressCanvas = CGPointMake(positionX, positionY);
+    // Sync the inner OSC to the live (smoothed) timeline values - that's
+    // what the user actually sees on screen, so the press tangent has to be
+    // computed against the same pose. The additive base above uses the
+    // raw keypose so non-dragged axes stay untouched at write time.
+    NSArray<NSNumber *> *smoothed = _rotationValuesAtFraction(frac);
+    self.rotationOSC.rotX = (float)(smoothed[0].doubleValue * M_PI / 180.0);
+    self.rotationOSC.rotY = (float)(smoothed[1].doubleValue * M_PI / 180.0);
+    self.rotationOSC.rotZ = (float)(smoothed[2].doubleValue * M_PI / 180.0);
+    self.rotationOSC.center = [self oscPositionAtTime:time];
+    [self.rotationOSC mouseDownAtPositionX:positionX
+                                 positionY:positionY
+                                activePart:activePart
+                                 modifiers:modifiers
+                               forceUpdate:forceUpdate
+                                    atTime:time];
+  }
 }
 
 - (void)mouseDraggedAtPositionX:(double)positionX
@@ -212,6 +466,14 @@ static NSArray<NSNumber *> *_positionValuesAtFraction(double frac) {
                       modifiers:(NSUInteger)modifiers
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
+  if (activePart == kOSCRotationPart) {
+    [self _dragRotationToPositionX:positionX
+                         positionY:positionY
+                         modifiers:modifiers
+                       forceUpdate:forceUpdate
+                            atTime:time];
+    return;
+  }
   if (activePart != kOSCPositionPart)
     return;
 
@@ -318,6 +580,134 @@ static NSArray<NSNumber *> *_positionValuesAtFraction(double frac) {
       posLane.keyposes = out;
     }
     lanes[laneIdx] = posLane;
+  }
+  tl.lanes = lanes;
+
+  KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
+                           kKKParamTimelineData);
+  [actionAPI endAction:self];
+  *forceUpdate = YES;
+}
+
+- (void)_dragRotationToPositionX:(double)positionX
+                       positionY:(double)positionY
+                       modifiers:(NSUInteger)modifiers
+                     forceUpdate:(BOOL *)forceUpdate
+                          atTime:(CMTime)time {
+  NSInteger axis = self.rotationOSC.activeAxis;
+  if (axis < 0)
+    return;
+  double dAngle = [self.rotationOSC
+      angleDeltaFromPressPoint:self.rotPressCanvas
+                  currentPoint:CGPointMake(positionX, positionY)];
+  // Cmd-snap rounds the OBJECT-axis delta itself to a 15° step, BEFORE
+  // composing into Euler. Snapping the decomposed axis values directly
+  // jiggles the other two axes (their decomposed values change tick-to-
+  // tick as the object rotates, and rounding only one axis leaves a
+  // matrix that doesn't correspond to a pure ring rotation).
+  if (modifiers & kFxModifierKey_COMMAND) {
+    const double kSnapRad = 15.0 * M_PI / 180.0;
+    dAngle = round(dAngle / kSnapRad) * kSnapRad;
+  }
+  // Compose around the OBJECT's current ring axis: R_new = R_press *
+  // R_axis(dAngle). This rotates around the visible ring (which is the
+  // image's current basis), so dragging the X ring after a Y rotation
+  // spins the image around its current X, not global X - matching the
+  // physical-knob intuition the user expects.
+  //
+  // The earlier "additive on dragged axis only" version dodged the asin
+  // gimbal-clamp at ±90° but rotated around global axes instead, which
+  // felt wrong once any other axis was non-zero. We bring back the compose
+  // and handle the asin discontinuity by picking the Euler decomposition
+  // closest to the press pose - so a 0→90→180 sweep stays continuous.
+  simd_double3x3 RPress =
+      KKMMRotationMatrix(self.rotPressX, self.rotPressY, self.rotPressZ);
+  simd_double3x3 RElem = (axis == 0)   ? KKMMRotX(dAngle)
+                         : (axis == 1) ? KKMMRotY(dAngle)
+                                       : KKMMRotZ(dAngle);
+  simd_double3x3 RNew = simd_mul(RPress, RElem);
+  double rx = 0, ry = 0, rz = 0;
+  KKMMDecomposeEulerNear(RNew, self.rotLastWrittenX, self.rotLastWrittenY,
+                         self.rotLastWrittenZ, &rx, &ry, &rz);
+  self.rotLastWrittenX = rx;
+  self.rotLastWrittenY = ry;
+  self.rotLastWrittenZ = rz;
+  const double kRadToDeg = 180.0 / M_PI;
+  double xDeg = rx * kRadToDeg;
+  double yDeg = ry * kRadToDeg;
+  double zDeg = rz * kRadToDeg;
+  NSArray<NSNumber *> *newValues = @[ @(xDeg), @(yDeg), @(zDeg) ];
+
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!actionAPI)
+    return;
+  [actionAPI startAction:self];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  if (!setAPI) {
+    [actionAPI endAction:self];
+    return;
+  }
+
+  KKTimeline *snap = KKProcessTimelineSnapshot();
+  KKTimeline *tl = snap ? [snap copy] : [KKTimeline timeline];
+  NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
+  NSInteger laneIdx = NSNotFound;
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+    if ([((KKLane *)lanes[i]).label isEqualToString:@"Rotation"]) {
+      laneIdx = i;
+      break;
+    }
+  }
+  double frac = [self _fractionAtTime:time];
+  KKLane *rotLane;
+  if (laneIdx == NSNotFound) {
+    rotLane = [KKLane laneWithLabel:@"Rotation"];
+    rotLane.valueType = KKLaneValueTypeGeneric;
+    rotLane.componentUnits = @[ @"°", @"°", @"°" ];
+    rotLane.componentLabels = @[ @"X", @"Y", @"Z" ];
+    rotLane.enabled = NO;
+    rotLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
+    [lanes addObject:rotLane];
+  } else {
+    rotLane = [lanes[laneIdx] copy];
+    NSArray<KKKeyPose *> *kps = rotLane.keyposes;
+    if (kps.count == 0) {
+      rotLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
+    } else {
+      NSInteger best = 0;
+      double bd = 1e9;
+      for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
+        double d = fabs(kps[k].time - frac);
+        if (d < bd) {
+          bd = d;
+          best = k;
+        }
+      }
+      NSMutableArray<KKKeyPose *> *out = [NSMutableArray arrayWithArray:kps];
+      double oldTime = out[best].time;
+      KKInterval *oldOutgoing = out[best].outgoing;
+      KKKeyPose *nk = [KKKeyPose keyposeAtTime:oldTime values:newValues];
+      nk.outgoing = oldOutgoing;
+      out[best] = nk;
+      if (best + 1 < (NSInteger)out.count && nk.outgoing.endpointsLinked) {
+        KKKeyPose *partner = out[best + 1];
+        KKKeyPose *np = [KKKeyPose keyposeAtTime:partner.time values:newValues];
+        np.outgoing = partner.outgoing;
+        out[best + 1] = np;
+      }
+      if (best > 0) {
+        KKKeyPose *prev = out[best - 1];
+        if (prev.outgoing.endpointsLinked) {
+          KKKeyPose *np = [KKKeyPose keyposeAtTime:prev.time values:newValues];
+          np.outgoing = prev.outgoing;
+          out[best - 1] = np;
+        }
+      }
+      rotLane.keyposes = out;
+    }
+    lanes[laneIdx] = rotLane;
   }
   tl.lanes = lanes;
 

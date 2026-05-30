@@ -34,6 +34,22 @@ double KKTimelineScrubFracDelivered(double visualFrac,
   return visualFrac > maxFrac ? maxFrac : visualFrac;
 }
 
+double KKSnapFracToFrame(double frac, double clipDurationSeconds,
+                         double frameDurationSeconds) {
+  if (clipDurationSeconds <= 0.0 || frameDurationSeconds <= 0.0 ||
+      frameDurationSeconds >= clipDurationSeconds)
+    return frac;
+  double frameFrac = frameDurationSeconds / clipDurationSeconds;
+  double snapped = round(frac / frameFrac) * frameFrac;
+  double maxFrac =
+      (clipDurationSeconds - frameDurationSeconds) / clipDurationSeconds;
+  if (snapped < 0.0)
+    snapped = 0.0;
+  if (snapped > maxFrac)
+    snapped = maxFrac;
+  return snapped;
+}
+
 double KKTimelineSnapFracInPixels(CGFloat x, double rawFrac,
                                   NSArray<NSNumber *> *candidateFracs,
                                   CGFloat (^xForFrac)(double frac),

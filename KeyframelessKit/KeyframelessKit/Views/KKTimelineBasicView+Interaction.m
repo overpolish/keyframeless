@@ -234,6 +234,10 @@ static const CGFloat kScrubSnapInPx = 4.0;
     tIn = KKBasicSolveBoundary(p, 2, targetU, minPh, tOut - kMinHoldFrac);
   else
     tOut = KKBasicSolveBoundary(p, 3, targetU, tIn + kMinHoldFrac, 1.0 - minPh);
+  // Snap each boundary to a whole frame so the resulting keypose times land
+  // on real frames (otherwise the scrubber floors to the previous frame).
+  tIn = KKSnapFracToFrame(tIn, _clipDurationSeconds, _frameDurationSeconds);
+  tOut = KKSnapFracToFrame(tOut, _clipDurationSeconds, _frameDurationSeconds);
   [self _rebuildInOn:p.inEnabled outOn:p.outEnabled tIn:tIn tOut:tOut];
 }
 
