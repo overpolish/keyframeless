@@ -1008,6 +1008,7 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
   // pattern as the hold-modulation popover.
   _openGapEditor = edit;
   _openGapRebuilder = [partRebuilder copy];
+  _openGapIntervalReader = [intervalReader copy];
   _openExtraRows = extras;
   __weak typeof(self) weakClose = self;
   [self _showPopoverWithContent:container
@@ -1018,6 +1019,7 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
                             return;
                           sc->_openGapEditor = nil;
                           sc->_openGapRebuilder = nil;
+                          sc->_openGapIntervalReader = nil;
                           sc->_openExtraRows = nil;
                         }];
 
@@ -1042,7 +1044,7 @@ static BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
 // (0 None, 1 Bounce, 2 Wiggle); the model stores KKIntervalModulation. The
 // evaluator maps Wiggle→Wiggle, Oscillate→Bounce (KKTimingEvaluation.m), so
 // the pill index and the stored enum are NOT interchangeable.
-static NSInteger KKModulationToPill(KKIntervalModulation m) {
+NSInteger KKModulationToPill(KKIntervalModulation m) {
   switch (m) {
   case KKIntervalModulationWiggle:
     return KKHoldEffectWiggle;
@@ -1230,6 +1232,7 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
   // Stash for external refresh on applyTimeline (cmd-Z etc).
   _openHoldModEditor = edit;
   _openHoldModRebuilder = [partRebuilder copy];
+  _openHoldModIntervalReader = [intervalReader copy];
   _openExtraRows = extras;
   __weak typeof(self) weak = self;
   [self _showPopoverWithContent:container
@@ -1240,6 +1243,7 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
                             return;
                           s->_openHoldModEditor = nil;
                           s->_openHoldModRebuilder = nil;
+                          s->_openHoldModIntervalReader = nil;
                           s->_openExtraRows = nil;
                         }];
 }

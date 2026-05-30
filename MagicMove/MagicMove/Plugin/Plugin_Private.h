@@ -23,7 +23,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, retain, nullable)
     MagicMoveMiniCanvasRenderer *miniCanvasRenderer;
 @property(nonatomic) BOOL miniDragUndoStarted;
-@property(nonatomic, retain, nonnull) KKV3RenderCache *renderCache;
+@property(nonatomic, retain, nonnull) KKRenderCache *renderCache;
 @property(nonatomic, retain, nullable) KKPlayheadPoller *playheadPoller;
 - (nullable KKTimeline *)timelineStampedWithClipDuration:
     (nullable KKTimeline *)timeline;

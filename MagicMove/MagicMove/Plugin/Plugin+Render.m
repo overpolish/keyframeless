@@ -26,7 +26,7 @@
   KKMotionBlurState mbState = {0};
   if (pluginState.length >= sizeof(KKMotionBlurState))
     [pluginState getBytes:&mbState length:sizeof(mbState)];
-  *inputImageRequests = KKBuildV3SourceRequests(
+  *inputImageRequests = KKBuildSourceRequests(
       renderTime, mbState, MagicMoveMiniCanvasRequestPath, self.renderCache,
       ^id(CMTime t) {
         return [[[FxImageTileRequest alloc]
@@ -73,8 +73,8 @@
       self.renderCache.loopEnabled = [ui[@"loopEnabled"] boolValue];
   }
 
-  BOOL hasTiming = KKRefreshV3RenderCache(self.apiManager, self.inspectorView,
-                                          self.renderCache);
+  BOOL hasTiming = KKRefreshRenderCache(self.apiManager, self.inspectorView,
+                                        self.renderCache);
   double durSec = self.renderCache.effectDurSec;
   double frac = hasTiming
                     ? MAX(0.0, MIN(1.0, (CMTimeGetSeconds(time) -

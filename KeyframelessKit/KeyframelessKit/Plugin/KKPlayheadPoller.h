@@ -8,7 +8,7 @@
 #import <Foundation/Foundation.h>
 
 @class KKTimelineInspectorView;
-@class KKV3RenderCache;
+@class KKRenderCache;
 @protocol PROAPIAccessing;
 
 NS_ASSUME_NONNULL_BEGIN
@@ -25,7 +25,7 @@ NS_ASSUME_NONNULL_BEGIN
 @interface KKPlayheadPoller : NSObject
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager
                       actionTarget:(NSObject *)actionTarget
-                       renderCache:(KKV3RenderCache *)renderCache;
+                       renderCache:(KKRenderCache *)renderCache;
 /// Refresh on each createViewForParameterID: in case the inspector view
 /// was re-created. Weak ref; safe to set with nil.
 - (void)setInspectorView:(nullable KKTimelineInspectorView *)inspectorView;

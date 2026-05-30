@@ -15,7 +15,7 @@
 @property(nonatomic, weak, nullable) RoundedInspectorView *inspectorView;
 @property(nonatomic, retain, nullable) KKMiniCanvasFeed *miniCanvasFeed;
 @property(nonatomic) BOOL miniDragUndoStarted;
-@property(nonatomic, retain, nonnull) KKV3RenderCache *renderCache;
+@property(nonatomic, retain, nonnull) KKRenderCache *renderCache;
 @property(nonatomic, retain, nullable) KKPlayheadPoller *playheadPoller;
 /// Returns a copy of `timeline` with every lane's lastKnownClipDuration set
 /// to the current effect duration (seconds), so the Basic ruler/hover have a

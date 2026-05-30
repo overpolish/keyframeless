@@ -39,7 +39,7 @@ double KKProcessFrameDurationSeconds(void);
 /// Cross-tick state every v3 plugin threads between scheduleInputs,
 /// pluginState, parameterChanged, and the playhead poll. Held as a
 /// retained property on the plugin's private interface.
-@interface KKV3RenderCache : NSObject
+@interface KKRenderCache : NSObject
 @property(nonatomic) double effectStartSec;
 @property(nonatomic) double effectDurSec;
 @property(nonatomic) double timelineStartSec; // FCP movePlayhead base
@@ -47,7 +47,7 @@ double KKProcessFrameDurationSeconds(void);
 @property(nonatomic) double lastPushedClipDuration;
 @property(nonatomic) BOOL loopEnabled;
 /// Multi-slot mini-canvas feed bookkeeping populated by
-/// KKBuildV3SourceRequests; read by the render-output side to pair
+/// KKBuildSourceRequests; read by the render-output side to pair
 /// delivered tiles to slots.
 @property(nonatomic) BOOL boundaryFeedActive;
 @property(nonatomic) double lastBoundaryReqSec;
@@ -76,17 +76,17 @@ void KKHandleTimelineParamChanged(
 /// (workflow-extension targets use this framework too). Each plugin's
 /// `scheduleInputs:` wraps `[[FxImageTileRequest alloc] initWith…]` in a
 /// one-line block.
-NSArray *KKBuildV3SourceRequests(CMTime renderTime, KKMotionBlurState mbState,
-                                 NSString *_Nullable boundaryRequestPath,
-                                 KKV3RenderCache *cache,
-                                 id _Nonnull (^requestBuilder)(CMTime t));
+NSArray *KKBuildSourceRequests(CMTime renderTime, KKMotionBlurState mbState,
+                               NSString *_Nullable boundaryRequestPath,
+                               KKRenderCache *cache,
+                               id _Nonnull (^requestBuilder)(CMTime t));
 
 /// Refreshes the render-tick cached values from FxTimingAPI and pushes
 /// clip-duration + frame-duration to the inspector view (on main) when
 /// they change. Also seeds the process frame-duration. Call once per
 /// pluginState tick. Returns YES on success (durSec > 0).
-BOOL KKRefreshV3RenderCache(id<PROAPIAccessing> apiManager,
-                            KKTimelineInspectorView *_Nullable inspectorView,
-                            KKV3RenderCache *cache);
+BOOL KKRefreshRenderCache(id<PROAPIAccessing> apiManager,
+                          KKTimelineInspectorView *_Nullable inspectorView,
+                          KKRenderCache *cache);
 
 NS_ASSUME_NONNULL_END

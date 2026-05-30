@@ -5,22 +5,13 @@
 
 #pragma once
 
-#import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKLaneRowView.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// Optional protocol popover hosts use to refresh extras rows after an
-/// external mutation (cmd-Z, parameter sync etc.) without closing and
-/// reopening the popover. Any extras view returned from
-/// `KKTimelineInspectorView.gapPopoverExtraRows` may conform; rows that don't
-/// implement it are simply skipped.
-@protocol KKPopoverExtraRow <NSObject>
-@optional
-- (void)popoverDidRefresh;
-@end
-
-/// Compact label + right-aligned checkbox row used inside gap-popover extras
-/// (and elsewhere - reuse this rather than rolling new label+checkbox layouts).
+/// Compact label + right-aligned checkbox row. Subclass of `KKLaneRowView`
+/// so it inherits the shared chrome (label, optional lane color stripe,
+/// padding tokens) and the `KKPopoverExtraRow` auto-refresh affordance.
 ///
 /// `binding` is the live-state oracle. The row evaluates it on construction
 /// (to seed the initial check state) and again on `popoverDidRefresh` so
@@ -28,8 +19,17 @@ NS_ASSUME_NONNULL_BEGIN
 /// `onToggle` fires when the user clicks; pass nil for read-only rows.
 /// `disabledBinding` (optional) returns YES to dim the row + swallow clicks;
 /// re-evaluated on every refresh too.
-@interface KKCheckboxRowView : NSView <KKPopoverExtraRow>
+@interface KKCheckboxRowView : KKLaneRowView
 
+- (instancetype)initWithTitle:(NSString *)title
+                      tooltip:(nullable NSString *)tooltip
+                    laneColor:(nullable NSColor *)laneColor
+                      binding:(BOOL (^)(void))binding
+              disabledBinding:(nullable BOOL (^)(void))disabledBinding
+                     onToggle:(nullable void (^)(BOOL on))onToggle;
+
+/// Legacy initializer without `laneColor` (passes nil). New code should use
+/// the full initializer above.
 - (instancetype)initWithTitle:(NSString *)title
                       tooltip:(nullable NSString *)tooltip
                       binding:(BOOL (^)(void))binding

@@ -28,7 +28,6 @@ NS_ASSUME_NONNULL_BEGIN
   _KKDropdownTrigger *_dropdownTrigger;
   NSView *_footerRow;
 
-  NSMutableDictionary<NSString *, _KKLaneRow *> *_laneRows;
   __weak _KKManagePopoverView *_openManageView;
   __weak NSPopover *_openManagePopover;
   // The last popover shown via _showPopoverWithContent: (gap/hold/boundary).
@@ -72,10 +71,20 @@ NS_ASSUME_NONNULL_BEGIN
   // live pill row without closing the popover.
   __weak KKSegmentEditView *_openHoldModEditor;
   NSArray<NSArray<NSNumber *> *> * (^_openHoldModRebuilder)(void);
+  // Live-interval reader for the hold-mod popover. _refresh re-reads
+  // modulationLinked from it and pushes to the editor so the Linked
+  // checkbox tracks cmd-Z (it lives in KKSegmentEditView, not extras, so
+  // the KKPopoverExtraRow auto-refresh on _openExtraRows doesn't reach it).
+  KKInterval *_Nullable (^_openHoldModIntervalReader)(void);
   // Same mechanism for the In/Out curve (gap) popover's plain participation
   // pills - kept in sync on cmd-Z without closing the popover.
   __weak KKSegmentEditView *_openGapEditor;
   NSArray<NSNumber *> * (^_openGapRebuilder)(void);
+  // Live-interval reader for the gap popover. _refresh re-reads
+  // curve/intensity/frequency from it and pushes to the editor so cmd-Z
+  // lands in the visible pills/sliders. Same role as the hold-mod
+  // reader (curve gap and hold-mod popovers are mutually exclusive).
+  KKInterval *_Nullable (^_openGapIntervalReader)(void);
   // Extras rows currently shown below the gap-popover segment editor. Held
   // strong while the popover is open so -popoverDidRefresh can fire on
   // cmd-Z without the rows being deallocated mid-flight. Cleared in the
@@ -215,5 +224,7 @@ NS_ASSUME_NONNULL_BEGIN
                             intervalMutator:
                                 (KKGapIntervalMutator)intervalMutator;
 @end
+
+FOUNDATION_EXPORT NSInteger KKModulationToPill(KKIntervalModulation m);
 
 NS_ASSUME_NONNULL_END

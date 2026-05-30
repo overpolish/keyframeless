@@ -6,6 +6,7 @@
 #pragma once
 
 #import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKLaneRowView.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
@@ -49,7 +50,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (CGFloat)heightForLaneCount:(NSInteger)count;
 @end
 
-@interface _KKStaticValueRow : NSView <NSTextFieldDelegate>
+@interface _KKStaticValueRow : KKLaneRowView <NSTextFieldDelegate>
 @property(nonatomic, copy) NSString *laneLabel;
 /// New constant values for the lane (Float: [v]; Crop: [w,h,x,y]).
 @property(nonatomic, copy, nullable) void (^onValue)
@@ -191,10 +192,6 @@ NS_ASSUME_NONNULL_BEGIN
 @interface _KKDropdownTrigger : NSView
 @property(nonatomic, copy, nullable) NSArray<NSString *> *selectedLabels;
 @property(nonatomic, copy, nullable) void (^onTapped)(void);
-@end
-
-@interface _KKLaneRow : NSView
-@property(nonatomic, copy) NSString *laneLabel;
 @end
 
 NS_ASSUME_NONNULL_END

@@ -29,7 +29,7 @@
   KKMotionBlurState mbState = {0};
   if (pluginState.length >= sizeof(KKMotionBlurState))
     [pluginState getBytes:&mbState length:sizeof(mbState)];
-  *inputImageRequests = KKBuildV3SourceRequests(
+  *inputImageRequests = KKBuildSourceRequests(
       renderTime, mbState, RoundedMiniCanvasRequestPath, self.renderCache,
       ^id(CMTime t) {
         return [[[FxImageTileRequest alloc]
@@ -148,7 +148,7 @@
       self.renderCache.loopEnabled = [ui[@"loopEnabled"] boolValue];
   }
 
-  BOOL hasTiming = KKRefreshV3RenderCache(
+  BOOL hasTiming = KKRefreshRenderCache(
       self.apiManager, (KKTimelineInspectorView *)self.inspectorView,
       self.renderCache);
   double durSec = self.renderCache.effectDurSec;

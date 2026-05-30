@@ -16,7 +16,7 @@
 {
   self = [super initWithAPIManager:newApiManager];
   if (self) {
-    _renderCache = [[KKV3RenderCache alloc] init];
+    _renderCache = [[KKRenderCache alloc] init];
   }
   return self;
 }

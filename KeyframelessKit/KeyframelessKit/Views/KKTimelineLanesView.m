@@ -27,7 +27,6 @@
         }];
     _timeline = [self _timelineSeededFrom:timeline];
     _miniCanvasClipAspect = 16.0 / 9.0;
-    _laneRows = [NSMutableDictionary dictionary];
     [self _buildUI];
     [self _refresh];
   }
@@ -443,18 +442,6 @@
 }
 
 - (void)_refresh {
-  NSMutableArray<NSString *> *toRemove = [NSMutableArray array];
-  for (NSString *label in _laneRows) {
-    if (![self _isAnimatableLabel:label])
-      [toRemove addObject:label];
-  }
-  for (NSString *label in toRemove) {
-    _KKLaneRow *row = _laneRows[label];
-    [_laneStack removeArrangedSubview:row];
-    [row removeFromSuperview];
-    [_laneRows removeObjectForKey:label];
-  }
-
   // Basic mode shows one shared motion graph (not per-property rows): the
   // graph fills the content area whenever ≥1 property is animatable.
   BOOL anyOptedIn = NO;
@@ -482,12 +469,36 @@
     if (fresh)
       [_openHoldModEditor applyParticipationCompoundStates:fresh];
   }
+  // Linked/seed/intensity/frequency live on KKSegmentEditView's ivars
+  // (not extras) - push fresh state from the live interval so cmd-Z lands
+  // in the checkbox / seed field / sliders.
+  if (_openHoldModEditor && _openHoldModIntervalReader) {
+    KKInterval *liveIv = _openHoldModIntervalReader();
+    if (liveIv) {
+      _openHoldModEditor.curveType = KKModulationToPill(liveIv.modulation);
+      _openHoldModEditor.linked = liveIv.modulationLinked;
+      _openHoldModEditor.seed = liveIv.modulationSeed;
+      _openHoldModEditor.intensity = liveIv.modulationIntensity;
+      _openHoldModEditor.frequency = liveIv.modulationFrequency;
+    }
+  }
   // Same for the In/Out curve (gap) popover's applies-to pills, so cmd-Z keeps
   // them in sync without the user closing and reopening the popover.
   if (_openGapEditor && _openGapRebuilder) {
     NSArray<NSNumber *> *fresh = _openGapRebuilder();
     if (fresh)
       [_openGapEditor applyParticipationStates:fresh];
+  }
+  // Curve / intensity / frequency live on KKSegmentEditView's ivars (not
+  // extras) - push fresh state from the live interval so cmd-Z lands in
+  // the visible pills and sliders.
+  if (_openGapEditor && _openGapIntervalReader) {
+    KKInterval *liveIv = _openGapIntervalReader();
+    if (liveIv) {
+      _openGapEditor.curveType = (NSInteger)liveIv.curve;
+      _openGapEditor.intensity = liveIv.intensity;
+      _openGapEditor.frequency = liveIv.frequency;
+    }
   }
   // Re-pull state into any KKPopoverExtraRow-conforming extras (the
   // plugin-supplied checkbox/value rows) so cmd-Z lands in their visible
@@ -621,7 +632,7 @@
 }
 
 - (nullable NSView *)laneRowViewForLabel:(NSString *)label {
-  return _laneRows[label];
+  return nil;
 }
 
 - (KKTimeline *)currentTimeline {
@@ -788,12 +799,6 @@
   } else {
     NSArray<NSNumber *> *v = [self _holdValuesOfLane:lane forLabel:label];
     lane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:v] ];
-    _KKLaneRow *row = _laneRows[label];
-    if (row) {
-      [_laneStack removeArrangedSubview:row];
-      [row removeFromSuperview];
-      [_laneRows removeObjectForKey:label];
-    }
   }
   [self _replaceLane:lane forLabel:label];
 }

@@ -6,14 +6,14 @@
 #import "KKPlayheadPoller.h"
 #import "../Views/KKTimelineInspectorView.h"
 #import "KKHostInfo.h"
-#import "KKPluginV3Host.h"
+#import "KKPluginHost.h"
 #import <FxPlug/FxPlugSDK.h>
 
 @interface KKPlayheadPoller () {
   __weak id<PROAPIAccessing> _apiManager;
   __weak NSObject *_actionTarget;
   __weak KKTimelineInspectorView *_inspectorView;
-  KKV3RenderCache *_cache;
+  KKRenderCache *_cache;
   NSTimer *_timer;
   double _pollLast;
   NSInteger _pollStall;
@@ -27,7 +27,7 @@
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager
                       actionTarget:(NSObject *)actionTarget
-                       renderCache:(KKV3RenderCache *)renderCache {
+                       renderCache:(KKRenderCache *)renderCache {
   if ((self = [super init])) {
     _apiManager = apiManager;
     _actionTarget = actionTarget;

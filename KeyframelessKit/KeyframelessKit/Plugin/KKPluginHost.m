@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "KKPluginV3Host.h"
+#import "KKPluginHost.h"
 #import "../Views/KKMiniCanvasRenderer.h"
 #import "../Views/KKTimelineInspectorView.h"
 #import "KKDataBlob.h"
 #import <FxPlug/FxPlugSDK.h>
 
-@implementation KKV3RenderCache
+@implementation KKRenderCache
 - (instancetype)init {
   if ((self = [super init])) {
     _lastPushedClipDuration = -1.0;
@@ -85,10 +85,10 @@ void KKHandleTimelineParamChanged(id<PROAPIAccessing> apiManager,
   }
 }
 
-NSArray *KKBuildV3SourceRequests(CMTime renderTime, KKMotionBlurState mbState,
-                                 NSString *boundaryRequestPath,
-                                 KKV3RenderCache *cache,
-                                 id (^requestBuilder)(CMTime t)) {
+NSArray *KKBuildSourceRequests(CMTime renderTime, KKMotionBlurState mbState,
+                               NSString *boundaryRequestPath,
+                               KKRenderCache *cache,
+                               id (^requestBuilder)(CMTime t)) {
   NSMutableArray *reqs = [NSMutableArray array];
   id cur = requestBuilder(renderTime);
   if (cur)
@@ -132,9 +132,9 @@ NSArray *KKBuildV3SourceRequests(CMTime renderTime, KKMotionBlurState mbState,
   return reqs;
 }
 
-BOOL KKRefreshV3RenderCache(id<PROAPIAccessing> apiManager,
-                            KKTimelineInspectorView *inspectorView,
-                            KKV3RenderCache *cache) {
+BOOL KKRefreshRenderCache(id<PROAPIAccessing> apiManager,
+                          KKTimelineInspectorView *inspectorView,
+                          KKRenderCache *cache) {
   id<FxTimingAPI_v4> timingAPI =
       [apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
   if (!timingAPI)

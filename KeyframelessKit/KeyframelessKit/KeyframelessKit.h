@@ -44,6 +44,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKJoyrideTrigger.h>
 #import <KeyframelessKit/KKKbd.h>
 #import <KeyframelessKit/KKLabelView.h>
+#import <KeyframelessKit/KKLaneRowView.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMarkup.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
@@ -66,10 +67,13 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKPlugin+Color.h>
 #import <KeyframelessKit/KKPlugin+Crop.h>
 #import <KeyframelessKit/KKPlugin.h>
+#import <KeyframelessKit/KKPluginHost.h>
 #import <KeyframelessKit/KKPluginInstanceState.h>
-#import <KeyframelessKit/KKPluginV3Host.h>
 #import <KeyframelessKit/KKPointOSC.h>
+#import <KeyframelessKit/KKPointRowView.h>
+#import <KeyframelessKit/KKPopoverExtraRow.h>
 #import <KeyframelessKit/KKPopupSelectView.h>
+#import <KeyframelessKit/KKRandomRowView.h>
 #import <KeyframelessKit/KKRectBorderOSC.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 #import <KeyframelessKit/KKRingOSC.h>
@@ -81,6 +85,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKSeparatorView.h>
 #import <KeyframelessKit/KKShaderTypes.h>
 #import <KeyframelessKit/KKShape.h>
+#import <KeyframelessKit/KKSliderRowView.h>
 #import <KeyframelessKit/KKSnapEngine.h>
 #import <KeyframelessKit/KKSquarePointOSC.h>
 #import <KeyframelessKit/KKTimelineAdvancedView.h>

@@ -63,8 +63,8 @@
 				Plugin/KKPlugin.h,
 				"Plugin/KKPlugin+Color.h",
 				"Plugin/KKPlugin+Crop.h",
+				Plugin/KKPluginHost.h,
 				Plugin/KKPluginInstanceState.h,
-				Plugin/KKPluginV3Host.h,
 				Style/KKTokens.h,
 				"Style/NSColor+KKColors.h",
 				Update/KKUpdateChecker.h,
@@ -92,6 +92,7 @@
 				Views/KKHelpView.h,
 				Views/KKKbd.h,
 				Views/KKLabelView.h,
+				Views/KKLaneRowView.h,
 				Views/KKMarkup.h,
 				Views/KKMiniCanvasCropEditor.h,
 				Views/KKMiniCanvasFeed.h,
@@ -101,11 +102,15 @@
 				Views/KKPaddedScrollView.h,
 				Views/KKParameterRowView.h,
 				Views/KKPillToggleRowView.h,
+				Views/KKPointRowView.h,
+				Views/KKPopoverExtraRow.h,
 				Views/KKPopupSelectView.h,
+				Views/KKRandomRowView.h,
 				Views/KKSeedView.h,
 				Views/KKSegmentEditView.h,
 				"Views/KKSegmentEditView+Guide.h",
 				Views/KKSeparatorView.h,
+				Views/KKSliderRowView.h,
 				Views/KKTimelineAdvancedView.h,
 				Views/KKTimelineBasicView.h,
 				"Views/KKTimelineBasicView+Guide.h",
@@ -251,7 +256,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastUpgradeCheck = 2630;
+				LastUpgradeCheck = 2640;
 				TargetAttributes = {
 					F26E01B52F4DE280009D949A = {
 						CreatedOnToolsVersion = 26.0.1;
@@ -420,6 +425,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -486,6 +492,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";

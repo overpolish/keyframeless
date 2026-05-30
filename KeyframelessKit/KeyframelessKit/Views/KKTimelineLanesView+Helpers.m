@@ -707,6 +707,14 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   [self _setValues:vals emit:NO];
 }
 
+// KKPopoverExtraRow hook (inherited via KKLaneRowView). External mutations
+// (cmd-Z etc.) land here; refreshDisplay re-renders fields/slider from
+// _values without clobbering an in-progress edit.
+- (void)popoverDidRefresh {
+  [super popoverDidRefresh];
+  [self refreshDisplay];
+}
+
 - (void)applyLane:(KKLane *)lane {
   [self applyValues:lane.keyposes.firstObject.values];
 }
@@ -1537,43 +1545,6 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 
 - (NSSize)intrinsicContentSize {
   return NSMakeSize(NSViewNoIntrinsicMetric, NSViewNoIntrinsicMetric);
-}
-
-@end
-
-@implementation _KKLaneRow {
-  NSTextField *_nameLabel;
-}
-
-- (BOOL)isFlipped {
-  return YES;
-}
-
-- (instancetype)init {
-  self = [super init];
-  if (self) {
-    _nameLabel = [NSTextField labelWithString:@""];
-    _nameLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    _nameLabel.font = [NSFont systemFontOfSize:KKFontSizeSM
-                                        weight:NSFontWeightRegular];
-    _nameLabel.textColor = [NSColor inspectorLabel];
-    [self addSubview:_nameLabel];
-    [NSLayoutConstraint activateConstraints:@[
-      [_nameLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
-                                               constant:KKPaddingLG],
-      [_nameLabel.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-    ]];
-  }
-  return self;
-}
-
-- (void)setLaneLabel:(NSString *)laneLabel {
-  _laneLabel = [laneLabel copy];
-  _nameLabel.stringValue = KKLocalizedParamName(laneLabel);
-}
-
-- (NSSize)intrinsicContentSize {
-  return NSMakeSize(NSViewNoIntrinsicMetric, kRowHeight);
 }
 
 @end
