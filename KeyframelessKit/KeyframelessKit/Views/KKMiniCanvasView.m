@@ -624,29 +624,45 @@ static const CGFloat kFilmstripGap = 16.0;
   return CGRectMake(cx - w / 2.0, cy - h / 2.0, w, h);
 }
 
-// Filmstrip layout: the ACTIVE slot's cell sits at the viewport centre (so
-// pan=0 frames it like the single-slot case + all OSC handle code reads
-// `_contentRectInDrawable` and naturally targets the active cell). Other
-// cells fan out left/right of active, kFilmstripGap apart.
+static const NSUInteger kFilmstripGridCols = 5;
+
+// Filmstrip layout: cells are packed in a 5-column grid centred on the
+// active slot. The active cell always sits at the viewport centre (with
+// pan offset) and is sized like `_contentRectInDrawable` - so default
+// zoom shows the active frame full-size and OSC handles register against
+// it just like the non-filmstrip case. Other cells fan out left/right
+// and wrap to additional rows DOWNWARD (row 0 = active row, row 1 = one
+// row below on screen, etc).
 - (CGRect)_filmstripCellRectInDrawable:(NSUInteger)i ofTotal:(NSUInteger)n {
-  CGRect r = [self _contentRectInDrawable];
+  CGRect active = [self _contentRectInDrawable];
   if (n <= 1)
-    return r;
+    return active;
   // Onion mode: every slot draws into the ACTIVE cell rect (stacked).
   if (_renderMode == 2)
-    return r;
+    return active;
   CGSize d = self.drawableSize;
   CGFloat s = self.window.backingScaleFactor;
   if (s <= 0)
     s = 2.0;
   CGFloat gap = kFilmstripGap * s;
-  CGFloat cellW = r.size.width;
-  CGFloat stride = cellW + gap;
-  NSUInteger active = [self _activeSlotIndex];
+  CGFloat cellW = active.size.width;
+  CGFloat cellH = active.size.height;
+  CGFloat strideX = cellW + gap;
+  CGFloat strideY = cellH + gap;
+  NSUInteger nCols = MIN((NSUInteger)kFilmstripGridCols, n);
+  NSUInteger activeIdx = [self _activeSlotIndex];
+  NSInteger colI = (NSInteger)(i % nCols);
+  NSInteger rowI = (NSInteger)(i / nCols);
+  NSInteger colA = (NSInteger)(activeIdx % nCols);
+  NSInteger rowA = (NSInteger)(activeIdx / nCols);
   CGFloat activeCenterX = d.width / 2.0 + _panPixels.x;
-  CGFloat cellCenterX = activeCenterX + ((CGFloat)i - (CGFloat)active) * stride;
-  return CGRectMake(cellCenterX - cellW / 2.0, r.origin.y, cellW,
-                    r.size.height);
+  CGFloat activeCenterY = d.height / 2.0 + _panPixels.y;
+  // Drawable Y is up - increasing `rowI` means a row visually BELOW the
+  // active row, so subtract from centre y to move down on screen.
+  CGFloat cellCenterX = activeCenterX + (CGFloat)(colI - colA) * strideX;
+  CGFloat cellCenterY = activeCenterY - (CGFloat)(rowI - rowA) * strideY;
+  return CGRectMake(cellCenterX - cellW / 2.0, cellCenterY - cellH / 2.0, cellW,
+                    cellH);
 }
 
 - (void)_ensureProcessedTextureForSlot:(_KKMiniFilmSlot *)slot {

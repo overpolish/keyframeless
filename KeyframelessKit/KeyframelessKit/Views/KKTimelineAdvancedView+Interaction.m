@@ -471,8 +471,15 @@
     return;
   t.lanes = lanes;
   _timeline = t;
-  _topLaneLabel = nil;
-  _topKPIdx = -1;
+  // Only clear the popover's primary-lane anchor when the removed KP was
+  // FROM that primary lane. Clearing it for a sibling lane's removal
+  // dropped scope back to "all animatable lanes" and made the filmstrip
+  // pick up unrelated lanes' KPs (cell count would grow after removing a
+  // sibling lane's KP). Preserving the anchor keeps the strip stable.
+  if ([label isEqualToString:_topLaneLabel]) {
+    _topLaneLabel = nil;
+    _topKPIdx = -1;
+  }
   [self setNeedsDisplay:YES];
   if (self.onTimelineMutated)
     self.onTimelineMutated(t);
