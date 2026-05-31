@@ -710,12 +710,15 @@ static const CGFloat kFilmstripGap = 16.0;
   simd_uint2 vp = {(unsigned)d.width, (unsigned)d.height};
   float innerRatio = (float)((outerPt - strokePt) / outerPt);
   float outline = (float)(KKBorderWidthXS / outerPt);
-  // Crosshair (+ inside the ring on active). Viewer ratios at 270pt height:
-  // arm length 6.5pt (~0.024), arm width 0.5pt (~0.0019). Mini @195.5pt
-  // → ~4.7pt long, ~0.37pt wide. Normalized to outerPt = 12.
-  float plusHalf = isActive ? (2.25f / 12.0f) : 0.0f; // phl + pow = ~2.35pt
-  float plusFill = isActive ? (0.15f / 12.0f) : 0.0f; // pfhw + pow = ~0.25pt
-  float plusOutl = isActive ? (0.1f / 12.0f) : 0.0f;
+  // Crosshair (+ inside the ring on active). Match the viewer KKArcOSC's
+  // outer-relative ratios verbatim so the mini gizmo reads the same:
+  // arm length 7/outer, fill 1/outer, outline 2/outer. The previous values
+  // normalized arm length to the viewer's canvas height instead of its
+  // outer radius, producing a crosshair ~3x too short and ~7x too thin
+  // that was effectively invisible at mini-canvas scale.
+  float plusHalf = isActive ? (7.0f / 31.75f) : 0.0f;
+  float plusFill = isActive ? (1.0f / 31.75f) : 0.0f;
+  float plusOutl = isActive ? (2.0f / 31.75f) : 0.0f;
   KKArcOSCParams params = {
       .innerRadius = innerRatio,
       .outlineWidth = outline,
