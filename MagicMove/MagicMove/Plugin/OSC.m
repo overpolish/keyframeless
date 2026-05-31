@@ -24,13 +24,19 @@ static KKLane *_rotationLane(void) { return _laneNamed(@"Rotation"); }
 
 // YES when the lane is a constant (always shown) OR animated with the
 // playhead within ~1 frame of a keypose.
-// User master tick from the inspector. Read from this instance's
-// KKPluginInstanceState (resolved via the shared kKKParamInstanceID UUID, which
-// IS readable from the OSC's separate apiManager scope - the UI-state blob is
-// not). No per-instance state yet => visible (matches the pre-toggle default).
-static BOOL _oscMasterVisible(id<PROAPIAccessing> api) {
+// Whether a given OSC element (lane label, e.g. @"Position"/@"Rotation") is
+// visible: the master tick is on AND the element isn't individually hidden via
+// the settings popover. Read from this instance's KKPluginInstanceState
+// (resolved via the shared kKKParamInstanceID UUID, which IS readable from the
+// OSC's separate apiManager scope - the UI-state blob is not). No per-instance
+// state yet => visible (matches the pre-toggle default).
+static BOOL _oscElementVisible(id<PROAPIAccessing> api, NSString *label) {
   KKPluginInstanceState *st = KKInstanceStateForAPI(api);
-  return st ? st.oscMasterVisible : YES;
+  if (!st)
+    return YES;
+  if (!st.oscMasterVisible)
+    return NO;
+  return !(st.hiddenOSCElements && [st.hiddenOSCElements containsObject:label]);
 }
 
 static BOOL _positionVisibleAtFraction(double frac) {
@@ -236,9 +242,9 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
                                        }];
 
   double frac = [self _fractionAtTime:time];
-  BOOL master = _oscMasterVisible(self.apiManager);
   BOOL posVisible = (self.isDragging && activePart == kOSCPositionPart) ||
-                    (master && _positionVisibleAtFraction(frac));
+                    (_oscElementVisible(self.apiManager, @"Position") &&
+                     _positionVisibleAtFraction(frac));
 
   CGPoint pos = [self oscPositionAtTime:time];
   if (posVisible) {
@@ -253,9 +259,13 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
   // Rotation sphere is centred on the same canvas point as Position (the
   // image rotates around its centre, which is where Position translates it).
   BOOL rotVisible = (self.isDragging && activePart == kOSCRotationPart) ||
-                    (master && _rotationVisibleAtFraction(frac));
+                    (_oscElementVisible(self.apiManager, @"Rotation") &&
+                     _rotationVisibleAtFraction(frac));
   if (rotVisible) {
     [self _syncRotationColorsFromLane];
+    self.rotationOSC.showX = _oscElementVisible(self.apiManager, @"Rotation.X");
+    self.rotationOSC.showY = _oscElementVisible(self.apiManager, @"Rotation.Y");
+    self.rotationOSC.showZ = _oscElementVisible(self.apiManager, @"Rotation.Z");
     NSArray<NSNumber *> *r = _rotationValuesAtFraction(frac);
     self.rotationOSC.rotX = (float)(r[0].doubleValue * M_PI / 180.0);
     self.rotationOSC.rotY = (float)(r[1].doubleValue * M_PI / 180.0);
@@ -289,17 +299,20 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
                             atTime:(CMTime)time {
   *activePart = 0;
   double frac = [self _fractionAtTime:time];
-  if (!_oscMasterVisible(self.apiManager))
-    return;
-  if (_positionVisibleAtFraction(frac) &&
+  if (_oscElementVisible(self.apiManager, @"Position") &&
+      _positionVisibleAtFraction(frac) &&
       [self hitTestAtMousePositionX:positionX
                           positionY:positionY
                              atTime:time]) {
     *activePart = kOSCPositionPart;
     return;
   }
-  if (_rotationVisibleAtFraction(frac)) {
+  if (_oscElementVisible(self.apiManager, @"Rotation") &&
+      _rotationVisibleAtFraction(frac)) {
     CGPoint c = [self oscPositionAtTime:time];
+    self.rotationOSC.showX = _oscElementVisible(self.apiManager, @"Rotation.X");
+    self.rotationOSC.showY = _oscElementVisible(self.apiManager, @"Rotation.Y");
+    self.rotationOSC.showZ = _oscElementVisible(self.apiManager, @"Rotation.Z");
     NSArray<NSNumber *> *r = _rotationValuesAtFraction(frac);
     self.rotationOSC.rotX = (float)(r[0].doubleValue * M_PI / 180.0);
     self.rotationOSC.rotY = (float)(r[1].doubleValue * M_PI / 180.0);

@@ -12,6 +12,7 @@
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
 #import "KKCheckboxView.h"
+#import "KKCompoundPillBar.h"
 #import "KKLabelView.h"
 #import "KKMiniCanvasView.h"
 #import "KKParameterRowView.h"
@@ -537,6 +538,8 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   BOOL _showsMotionBlurRow;
   KKParameterRowView *_oscRow;
   KKCheckboxView *_oscCheckbox;
+  NSButton *_oscSettingsButton;
+  NSPopover *_oscPopover;
   BOOL _showsOSCVisibilityRow;
   double _mbShutterAngle;
   NSInteger _mbSamples;
@@ -829,61 +832,87 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
          (_showsOSCVisibilityRow ? kOSCVisibilityRowHeight + KKPaddingMD : 0.0);
 }
 
-- (void)_buildMotionBlurRow {
-  _mbRow = [[KKParameterRowView alloc] initWithFrame:NSZeroRect
-                                          apiManager:_apiManager
-                                         parameterId:kKKParamMotionBlurData];
-  _mbRow.translatesAutoresizingMaskIntoConstraints = NO;
+// Builds one of the optional rows below the box - a labeled left view plus a
+// 12pt checkbox in the native control gutter and an 18pt settings gear to its
+// left. The motion-blur and on-screen-control rows share this so their layout
+// can't drift; the caller wires the checkbox's `onToggle` (the gear's action is
+// passed in). The checkbox/gear are returned through the out-params.
+- (KKParameterRowView *)
+    _buildTickGearRowWithParameterID:(UInt32)parameterID
+                          iconSymbol:(NSString *)iconSymbol
+                               title:(NSString *)title
+                   gearAccessibility:(NSString *)gearAccessibility
+                          gearAction:(SEL)gearAction
+                            checkbox:
+                                (KKCheckboxView *__strong _Nonnull *_Nonnull)
+                                    outCheckbox
+                          gearButton:
+                              (NSButton *__strong _Nonnull *_Nonnull)outGear {
+  KKParameterRowView *row =
+      [[KKParameterRowView alloc] initWithFrame:NSZeroRect
+                                     apiManager:_apiManager
+                                    parameterId:parameterID];
+  row.translatesAutoresizingMaskIntoConstraints = NO;
 
   // KKLabelView carries the native label inset/styling so the gutter lines up
-  // with FCP's other param rows. figure.walk.motion = the walking figure with
-  // motion lines, the same icon the old native MB group header used.
-  NSImage *mbIcon =
-      [NSImage imageWithSystemSymbolName:@"figure.walk.motion"
-                accessibilityDescription:KKLoc(@"Motion Blur",
-                                               @"Section title: motion blur.")];
-  _mbRow.leftView = [[KKLabelView alloc]
-      initWithText:KKLoc(@"Motion Blur", @"Section title: motion blur.")
-              icon:mbIcon];
+  // with FCP's other param rows.
+  NSImage *icon = [NSImage imageWithSystemSymbolName:iconSymbol
+                            accessibilityDescription:title];
+  row.leftView = [[KKLabelView alloc] initWithText:title icon:icon];
 
   // rightView must be a container (KKParameterRowView contract), not a bare
   // control. Checkbox sits in the native control gutter (same as
-  // KKCustomGroupHeaderView); the settings gear sits just to its left and
-  // opens the Length/Quality popover.
+  // KKCustomGroupHeaderView); the settings gear sits just to its left.
   NSView *controls = [[NSView alloc] initWithFrame:NSZeroRect];
-  _mbCheckbox = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
-  _mbCheckbox.translatesAutoresizingMaskIntoConstraints = NO;
-  [controls addSubview:_mbCheckbox];
+  KKCheckboxView *checkbox = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
+  checkbox.translatesAutoresizingMaskIntoConstraints = NO;
+  [controls addSubview:checkbox];
 
-  NSImage *gear = [NSImage
-      imageWithSystemSymbolName:@"gearshape"
-       accessibilityDescription:KKLoc(@"Motion Blur settings",
-                                      @"Accessibility: motion blur settings.")];
-  _mbSettingsButton = [NSButton buttonWithImage:gear
-                                         target:self
-                                         action:@selector(_mbSettingsClicked:)];
-  _mbSettingsButton.bezelStyle = NSBezelStyleAccessoryBarAction;
-  _mbSettingsButton.bordered = NO;
-  _mbSettingsButton.contentTintColor = [NSColor accentMatchingHost];
-  _mbSettingsButton.translatesAutoresizingMaskIntoConstraints = NO;
-  [controls addSubview:_mbSettingsButton];
+  NSImage *gear = [NSImage imageWithSystemSymbolName:@"gearshape"
+                            accessibilityDescription:gearAccessibility];
+  NSButton *gearButton = [NSButton buttonWithImage:gear
+                                            target:self
+                                            action:gearAction];
+  gearButton.bezelStyle = NSBezelStyleAccessoryBarAction;
+  gearButton.bordered = NO;
+  gearButton.contentTintColor = [NSColor accentMatchingHost];
+  gearButton.translatesAutoresizingMaskIntoConstraints = NO;
+  [controls addSubview:gearButton];
 
   [NSLayoutConstraint activateConstraints:@[
-    [_mbCheckbox.trailingAnchor constraintEqualToAnchor:controls.trailingAnchor
-                                               constant:-kMBCheckboxTrailing],
-    [_mbCheckbox.centerYAnchor constraintEqualToAnchor:controls.centerYAnchor],
-    [_mbCheckbox.widthAnchor constraintEqualToConstant:12.0],
-    [_mbCheckbox.heightAnchor constraintEqualToConstant:12.0],
+    [checkbox.trailingAnchor constraintEqualToAnchor:controls.trailingAnchor
+                                            constant:-kMBCheckboxTrailing],
+    [checkbox.centerYAnchor constraintEqualToAnchor:controls.centerYAnchor],
+    [checkbox.widthAnchor constraintEqualToConstant:12.0],
+    [checkbox.heightAnchor constraintEqualToConstant:12.0],
 
-    [_mbSettingsButton.trailingAnchor
-        constraintEqualToAnchor:_mbCheckbox.leadingAnchor
-                       constant:-KKSpacingMD],
-    [_mbSettingsButton.centerYAnchor
-        constraintEqualToAnchor:controls.centerYAnchor],
-    [_mbSettingsButton.widthAnchor constraintEqualToConstant:18.0],
-    [_mbSettingsButton.heightAnchor constraintEqualToConstant:18.0],
+    [gearButton.trailingAnchor constraintEqualToAnchor:checkbox.leadingAnchor
+                                              constant:-KKSpacingMD],
+    [gearButton.centerYAnchor constraintEqualToAnchor:controls.centerYAnchor],
+    [gearButton.widthAnchor constraintEqualToConstant:18.0],
+    [gearButton.heightAnchor constraintEqualToConstant:18.0],
   ]];
-  _mbRow.rightView = controls;
+  row.rightView = controls;
+
+  *outCheckbox = checkbox;
+  *outGear = gearButton;
+  return row;
+}
+
+- (void)_buildMotionBlurRow {
+  // figure.walk.motion = the walking figure with motion lines, the same icon
+  // the old native MB group header used.
+  _mbRow = [self
+      _buildTickGearRowWithParameterID:kKKParamMotionBlurData
+                            iconSymbol:@"figure.walk.motion"
+                                 title:KKLoc(@"Motion Blur",
+                                             @"Section title: motion blur.")
+                     gearAccessibility:KKLoc(@"Motion Blur settings",
+                                             @"Accessibility: motion blur "
+                                             @"settings.")
+                            gearAction:@selector(_mbSettingsClicked:)
+                              checkbox:&_mbCheckbox
+                            gearButton:&_mbSettingsButton];
 
   __weak typeof(self) weak = self;
   _mbCheckbox.onToggle = ^(BOOL isChecked) {
@@ -900,42 +929,28 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
 }
 
 - (void)_buildOSCVisibilityRow {
-  _oscRow = [[KKParameterRowView alloc] initWithFrame:NSZeroRect
-                                           apiManager:_apiManager
-                                          parameterId:0];
-  _oscRow.translatesAutoresizingMaskIntoConstraints = NO;
-
-  NSImage *icon = [NSImage
-      imageWithSystemSymbolName:@"scope"
-       accessibilityDescription:KKLoc(@"On-Screen Controls",
-                                      @"Section title: viewer on-screen "
-                                      @"controls visibility.")];
-  _oscRow.leftView = [[KKLabelView alloc]
-      initWithText:KKLoc(@"On-Screen Controls",
-                         @"Section title: viewer on-screen controls "
-                         @"visibility.")
-              icon:icon];
-
-  // rightView must be a container (KKParameterRowView contract). Checkbox sits
-  // in the native control gutter, same placement as the motion-blur tick.
-  NSView *controls = [[NSView alloc] initWithFrame:NSZeroRect];
-  _oscCheckbox = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
-  _oscCheckbox.translatesAutoresizingMaskIntoConstraints = NO;
+  _oscRow = [self
+      _buildTickGearRowWithParameterID:0
+                            iconSymbol:@"scope"
+                                 title:KKLoc(@"On-Screen Controls",
+                                             @"Section title: viewer on-screen "
+                                             @"controls visibility.")
+                     gearAccessibility:KKLoc(@"On-screen control settings",
+                                             @"Accessibility: per-element OSC "
+                                             @"visibility settings.")
+                            gearAction:@selector(_oscSettingsClicked:)
+                              checkbox:&_oscCheckbox
+                            gearButton:&_oscSettingsButton];
   _oscCheckbox.isChecked = YES;
-  [controls addSubview:_oscCheckbox];
-
-  [NSLayoutConstraint activateConstraints:@[
-    [_oscCheckbox.trailingAnchor constraintEqualToAnchor:controls.trailingAnchor
-                                                constant:-kMBCheckboxTrailing],
-    [_oscCheckbox.centerYAnchor constraintEqualToAnchor:controls.centerYAnchor],
-    [_oscCheckbox.widthAnchor constraintEqualToConstant:12.0],
-    [_oscCheckbox.heightAnchor constraintEqualToConstant:12.0],
-  ]];
-  _oscRow.rightView = controls;
 
   __weak typeof(self) weak = self;
   _oscCheckbox.onToggle = ^(BOOL isChecked) {
     KKTimelineInspectorView *strong = weak;
+    if (!strong)
+      return;
+    // Per-element pills are moot when everything is hidden - mirror the
+    // motion-blur gear, which disables while the effect is off.
+    strong->_oscSettingsButton.enabled = isChecked;
     if (strong.onOSCVisibleToggled)
       strong.onOSCVisibleToggled(isChecked);
   };
@@ -943,8 +958,69 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   [self addSubview:_oscRow];
 }
 
+- (void)_oscSettingsClicked:(id)sender {
+  if (_oscPopover.isShown) {
+    [_oscPopover close];
+    return;
+  }
+  NSArray<NSArray<NSString *> *> *compounds = self.oscVisibilityCompounds;
+  if (!compounds.count)
+    return;
+
+  // Localize the display label of each segment (its last dot-separated
+  // component, so @"Rotation.X" reads as "X").
+  NSMutableArray<NSArray<NSString *> *> *labels = [NSMutableArray array];
+  for (NSArray<NSString *> *compound in compounds) {
+    NSMutableArray<NSString *> *group = [NSMutableArray array];
+    for (NSString *key in compound) {
+      NSString *leaf = [key componentsSeparatedByString:@"."].lastObject ?: key;
+      [group addObject:KKLocalizedParamName(leaf)];
+    }
+    [labels addObject:group];
+  }
+
+  KKCompoundPillBar *bar = [[KKCompoundPillBar alloc] initWithCompounds:labels];
+  bar.translatesAutoresizingMaskIntoConstraints = NO;
+  NSArray<NSArray<NSNumber *> *> *states =
+      self.oscVisibilityElementStates ? self.oscVisibilityElementStates() : nil;
+  if (states.count == compounds.count)
+    bar.states = states;
+  __weak typeof(self) weak = self;
+  bar.onToggled = ^(NSInteger compoundIdx, NSInteger segIdx, BOOL isOn) {
+    KKTimelineInspectorView *strong = weak;
+    if (strong.oscVisibilityElementToggled)
+      strong.oscVisibilityElementToggled(compoundIdx, segIdx, isOn);
+  };
+
+  // Wrap in the lanes-view popover content view so the macOS 26 liquid-glass
+  // double-border fix applies (same as the motion-blur / curve popovers).
+  _KKLVPopoverContentView *content = [[_KKLVPopoverContentView alloc] init];
+  [content addSubview:bar];
+  [NSLayoutConstraint activateConstraints:@[
+    [bar.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
+                                      constant:KKPaddingMD],
+    [bar.trailingAnchor constraintEqualToAnchor:content.trailingAnchor
+                                       constant:-KKPaddingMD],
+    [bar.topAnchor constraintEqualToAnchor:content.topAnchor
+                                  constant:KKPaddingMD],
+    [bar.bottomAnchor constraintEqualToAnchor:content.bottomAnchor
+                                     constant:-KKPaddingMD],
+  ]];
+
+  NSViewController *vc = [[NSViewController alloc] init];
+  vc.view = content;
+  _oscPopover = [[NSPopover alloc] init];
+  _oscPopover.behavior = NSPopoverBehaviorTransient;
+  _oscPopover.contentViewController = vc;
+  _oscPopover.contentSize = content.fittingSize;
+  [_oscPopover showRelativeToRect:_oscSettingsButton.bounds
+                           ofView:_oscSettingsButton
+                    preferredEdge:NSRectEdgeMinY];
+}
+
 - (void)setOSCVisible:(BOOL)visible {
   _oscCheckbox.isChecked = visible;
+  _oscSettingsButton.enabled = visible;
 }
 
 - (void)setMotionBlurEnabled:(BOOL)enabled {

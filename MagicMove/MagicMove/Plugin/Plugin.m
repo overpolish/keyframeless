@@ -61,8 +61,10 @@
                           ? [state[@"oscMasterVisible"] boolValue]
                           : YES;
     // Update this instance's OSC-visibility cache so undo/redo of the master
-    // tick repaints the controls without a manual scrub.
+    // tick (or a per-element pill) repaints the controls without a manual
+    // scrub.
     KKInstanceStateForAPI(self.apiManager).oscMasterVisible = oscVisible;
+    [self applyOSCElementsFromUIState:state];
     dispatch_async(dispatch_get_main_queue(), ^{
       [self.inspectorView setLoopEnabled:enabled];
       [self.inspectorView setActiveTab:tab];

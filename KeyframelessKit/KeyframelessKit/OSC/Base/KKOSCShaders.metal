@@ -159,6 +159,9 @@ fragment float4 KKRotationOSCFragment(KKRasterizerData in [[stage_in]],
     float backBestZ = 0.0;
 
     for (int k = 0; k < 3; k++) {
+        if (params->ringVisible[k] < 0.5) {
+            continue; // ring hidden via the OSC-visibility popover
+        }
         float3 prev = radius * ringU[k]; // t = 0
         for (int i = 1; i <= N; i++) {
             float t = twoPi * (float(i) / float(N));

@@ -60,6 +60,25 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// flag (its UI-state blob) and updates its per-instance OSC-visibility cache.
 /// Only fired when `showsOSCVisibilityRow` is YES.
 @property(nonatomic, copy, nullable) void (^onOSCVisibleToggled)(BOOL visible);
+
+/// The OSC elements shown as pills in the gear popover, grouped into compounds
+/// rendered as `KKCompoundPillBar` capsules (e.g. @[ @[@"Position"],
+/// @[@"Rotation", @"X", @"Y", @"Z"] ] - a plain Position pill plus a Rotation
+/// master + per-ring capsule). Each label's last dot-separated component is
+/// localized for display. Empty/nil hides the gear. Used only when
+/// `showsOSCVisibilityRow` is YES.
+@property(nonatomic, copy, nullable)
+    NSArray<NSArray<NSString *> *> *oscVisibilityCompounds;
+/// Returns the current on/off state per compound/segment (matching the shape of
+/// `oscVisibilityCompounds`). Queried each time the popover opens so the pills
+/// reflect the latest state.
+@property(nonatomic, copy, nullable)
+    NSArray<NSArray<NSNumber *> *> *_Nonnull (^oscVisibilityElementStates)(void)
+        ;
+/// A pill was toggled: compound + segment index into `oscVisibilityCompounds`
+/// and its new state. The host updates its per-instance cache + persists.
+@property(nonatomic, copy, nullable) void (^oscVisibilityElementToggled)
+    (NSInteger compoundIndex, NSInteger segmentIndex, BOOL isOn);
 /// Any motion-blur edit (enable toggle, a Shutter/Samples slider/field, or the
 /// When dropdown in the settings popover). `shutterAngle` is degrees (0–360);
 /// `samples` is the sample count (2–128); `mode` is when blur fires (see

@@ -63,6 +63,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// Set by the host when the user toggles the inspector's OSC visibility.
 @property(nonatomic) BOOL handlesHidden;
 
+/// Per-element OSC visibility from the settings popover's pills: lane labels
+/// the user has individually hidden (e.g. @"Position"). Distinct from
+/// `suppressedHandleLabels` (which the boundary popover owns per-phase) so the
+/// two never clobber each other; a handle is drawn only when its label is in
+/// neither set and `handlesHidden` is NO.
+@property(nonatomic, copy, nullable) NSSet<NSString *> *hiddenHandleLabels;
+
 #pragma mark - Subclass vocabulary (override)
 
 /// Lane label for the crop box, or nil if this plugin has no crop. Default

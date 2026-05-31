@@ -38,6 +38,9 @@ static const float kHitThresholdPixels = 10.0f;
     _outlineWidth = 1.0f;
     _backDim = 0.3f;
     _activeAxis = -1;
+    _showX = YES;
+    _showY = YES;
+    _showZ = YES;
     _colorX = [NSColor colorWithRed:1.0 green:0.30 blue:0.30 alpha:1.0];
     _colorY = [NSColor colorWithRed:0.35 green:0.85 blue:0.40 alpha:1.0];
     _colorZ = [NSColor colorWithRed:0.40 green:0.55 blue:1.0 alpha:1.0];
@@ -75,7 +78,10 @@ static const float kHitThresholdPixels = 10.0f;
   double bestFront = 1e9;
   NSInteger bestFrontK = -1;
   double bestFrontT = 0;
+  const BOOL ringShown[3] = {_showX, _showY, _showZ};
   for (int k = 0; k < 3; k++) {
+    if (!ringShown[k])
+      continue; // hidden ring is not grabbable
     KKRingHit h = KKClosestAngleOnRing(m, k, _radius, local, kRingSamples);
     if (h.frontDist < bestFront) {
       bestFront = h.frontDist;
@@ -171,6 +177,8 @@ static const float kHitThresholdPixels = 10.0f;
       .outlineColor = [_outlineColor simdFloat4],
       .activeRing = (int)((isActive || isHovered) ? _activeAxis : -1),
       .activeBoost = isActive ? 0.35f : (isHovered ? 0.15f : 0.0f),
+      .ringVisible = (vector_float3){_showX ? 1.0f : 0.0f, _showY ? 1.0f : 0.0f,
+                                     _showZ ? 1.0f : 0.0f},
   };
 
   [self drawQuadForDestinationImage:destinationImage

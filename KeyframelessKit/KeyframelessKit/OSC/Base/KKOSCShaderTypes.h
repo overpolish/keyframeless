@@ -62,6 +62,9 @@ typedef struct KKRotationOSCParams {
     vector_float4 outlineColor;
     int activeRing;    ///< -1 = none, 0 = X, 1 = Y, 2 = Z.
     float activeBoost; ///< Mix-to-white amount for the active ring (0..1).
+    /// Per-axis ring visibility (X, Y, Z): >= 0.5 draws the ring, < 0.5 hides
+    /// it. Lets the OSC-visibility popover hide individual rotation rings.
+    vector_float3 ringVisible;
 } KKRotationOSCParams;
 
 #ifdef __METAL_VERSION__

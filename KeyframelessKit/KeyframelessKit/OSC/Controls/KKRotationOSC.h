@@ -44,6 +44,12 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, strong) NSColor *colorZ;
 @property(nonatomic, strong) NSColor *outlineColor;
 
+/// Per-axis ring visibility (default YES). A hidden ring is neither drawn nor
+/// hit-tested, letting the OSC-visibility popover suppress individual rings.
+@property(nonatomic) BOOL showX;
+@property(nonatomic) BOOL showY;
+@property(nonatomic) BOOL showZ;
+
 /// 0 = X, 1 = Y, 2 = Z, -1 = none. Set by `hitTestAtMousePositionX:...`
 /// and consumed by the draw call to highlight the grabbed ring + by
 /// `angleDeltaFromPressPoint:currentPoint:` to choose the axis to rotate.

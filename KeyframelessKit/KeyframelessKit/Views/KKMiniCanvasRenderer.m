@@ -169,6 +169,17 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   return (simd_float4){(float)r, (float)g, (float)b, (float)a};
 }
 
+// Per-axis ring visibility from `hiddenHandleLabels`. The popover stores ring
+// keys as "<rotationLabel>.X/.Y/.Z" (e.g. @"Rotation.X").
+- (BOOL)_ringShownAtAxis:(int)k {
+  if (!_hiddenHandleLabels.count || !self.rotationLabel)
+    return YES;
+  NSString *axis = (k == 0) ? @"X" : (k == 1) ? @"Y" : @"Z";
+  NSString *key =
+      [NSString stringWithFormat:@"%@.%@", self.rotationLabel, axis];
+  return ![_hiddenHandleLabels containsObject:key];
+}
+
 - (BOOL)rotationOSCCenter:(out CGPoint *)outCenter
                  radiusPx:(out CGFloat *)outRadiusPx
                    params:(out KKRotationOSCParams *)outParams
@@ -196,6 +207,9 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
       .outlineColor = {0.0f, 0.0f, 0.0f, 0.75f},
       .activeRing = (int)_rotActiveAxis,
       .activeBoost = (_rotActiveAxis >= 0) ? 0.35f : 0.0f,
+      .ringVisible = {[self _ringShownAtAxis:0] ? 1.0f : 0.0f,
+                      [self _ringShownAtAxis:1] ? 1.0f : 0.0f,
+                      [self _ringShownAtAxis:2] ? 1.0f : 0.0f},
   };
   *outParams = p;
   return YES;
@@ -212,6 +226,8 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   NSInteger bestK = -1;
   double bestT = 0;
   for (int k = 0; k < 3; k++) {
+    if (![self _ringShownAtAxis:k])
+      continue; // hidden ring is not grabbable
     KKRingHit h =
         KKClosestAngleOnRing(m, k, radius, local, kKKRotationRingSamples);
     if (h.frontDist < bestFront) {
@@ -433,7 +449,8 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 }
 
 - (BOOL)_labelSuppressed:(NSString *)label {
-  return label && [_suppressedHandleLabels containsObject:label];
+  return label && ([_suppressedHandleLabels containsObject:label] ||
+                   [_hiddenHandleLabels containsObject:label]);
 }
 
 - (void)setHandlesHidden:(BOOL)handlesHidden {
@@ -442,6 +459,14 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   _handlesHidden = handlesHidden;
   // Repaint the bound canvas (if a preview/popover is open) so the change
   // shows without a scrub; nil canvas is a no-op.
+  [self.canvas setHandlesNeedDisplay];
+}
+
+- (void)setHiddenHandleLabels:(NSSet<NSString *> *)hiddenHandleLabels {
+  if (_hiddenHandleLabels == hiddenHandleLabels ||
+      [_hiddenHandleLabels isEqualToSet:hiddenHandleLabels])
+    return;
+  _hiddenHandleLabels = [hiddenHandleLabels copy];
   [self.canvas setHandlesNeedDisplay];
 }
 

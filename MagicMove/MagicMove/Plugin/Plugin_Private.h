@@ -36,6 +36,16 @@ NS_ASSUME_NONNULL_BEGIN
 @interface MagicMovePlugin (CustomUI)
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED;
 + (NSArray<KKLane *> *)availableLanes;
+/// OSC-visibility pills grouped into compounds for the settings popover:
+/// @[ @[@"Position"], @[@"Rotation", @"Rotation.X", @"Rotation.Y",
+/// @"Rotation.Z"] ]. Segment 0 of a compound is its master.
++ (NSArray<NSArray<NSString *> *> *)oscCompounds;
+/// Flattened element keys across all compounds (persistence + state seeding).
++ (NSArray<NSString *> *)oscElementKeys;
+/// Read the per-element OSC visibility from the persisted UI-state blob and
+/// push the derived hidden-element set to this instance's per-instance state
+/// (read by the OSC) and the mini-canvas renderer.
+- (void)applyOSCElementsFromUIState:(NSDictionary *)uiState;
 @end
 
 @interface MagicMovePlugin (Render)

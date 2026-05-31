@@ -155,6 +155,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// toggle. Defaults YES so a control-less cold-boot tick still shows the OSC.
 @property(nonatomic) BOOL oscMasterVisible;
 
+/// Per-element OSC visibility: the set of element keys (lane labels, e.g.
+/// @"Position", @"Rotation") the user has individually hidden via the
+/// settings popover's pills. nil/empty = every element shown. Gated under
+/// `oscMasterVisible` (master off hides all regardless). Same per-instance
+/// rail as `oscMasterVisible`.
+@property(nonatomic, copy, nullable) NSSet<NSString *> *hiddenOSCElements;
+
 /// Pointer of the api manager that "owns" this state. Used by
 /// `KKInstanceStateEnsureForAPI` to detect duplicate-UUID clones (FCP
 /// copy/paste/cut clones the `kKKParamInstanceID` value) and mint a fresh
