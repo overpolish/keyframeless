@@ -24,11 +24,19 @@ public struct BundleMarkdownKnowledgeProvider: AIKnowledgeProvider {
 	public let name: String
 	public let bundle: Bundle
 	public let subdirectory: String?
+	/// When set, only topics whose resolved `id` is in this set are returned.
+	/// Lets a central docs folder (e.g. KeyframelessKit's OSCKnowledge) be
+	/// filtered down to just what the registering plugin actually exposes.
+	public let onlyTopicIDs: Set<String>?
 
-	public init(name: String, bundle: Bundle, subdirectory: String? = nil) {
+	public init(
+		name: String, bundle: Bundle, subdirectory: String? = nil,
+		onlyTopicIDs: Set<String>? = nil
+	) {
 		self.name = name
 		self.bundle = bundle
 		self.subdirectory = subdirectory
+		self.onlyTopicIDs = onlyTopicIDs
 	}
 
 	public func topics() async -> [AIKnowledgeTopic] {
@@ -40,11 +48,14 @@ public struct BundleMarkdownKnowledgeProvider: AIKnowledgeProvider {
 			urls = Self.recursiveMarkdownURLs(in: resourceURL)
 		}
 
+		let filter = onlyTopicIDs
 		return urls.compactMap { url in
 			guard let data = try? Data(contentsOf: url),
 				let raw = String(data: data, encoding: .utf8)
 			else { return nil }
-			return Self.parse(raw, fallbackID: url.deletingPathExtension().lastPathComponent)
+			let topic = Self.parse(raw, fallbackID: url.deletingPathExtension().lastPathComponent)
+			if let filter, let topic, !filter.contains(topic.id) { return nil }
+			return topic
 		}
 	}
 

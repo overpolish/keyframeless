@@ -36,4 +36,24 @@ public final class AIKnowledgeBridge: NSObject {
 			)
 		)
 	}
+
+	/// Register a subset of markdown topics from a shared docs folder. Used
+	/// for the KeyframelessKit OSCKnowledge folder so each plugin gets only
+	/// the OSC docs it actually exposes (rotation, position, arc, etc).
+	@MainActor
+	@objc public static func registerBundleDocs(
+		name: String,
+		bundle: Bundle,
+		subdirectory: String?,
+		onlyTopicIDs: [String]
+	) {
+		AIKnowledgeRegistry.shared.register(
+			BundleMarkdownKnowledgeProvider(
+				name: name,
+				bundle: bundle,
+				subdirectory: subdirectory,
+				onlyTopicIDs: Set(onlyTopicIDs)
+			)
+		)
+	}
 }

@@ -3,7 +3,7 @@ id: snap-guides
 summary: Magnetic snapping and the yellow / accent guide lines
 ---
 
-When you drag a positional on-screen control (the viewer OSC or the mini-canvas handle), the plugin runs a snap engine that catches values you probably meant to land on. Coloured guide lines appear while a snap is active so you can see which target you locked onto.
+When you drag a positional on-screen control (the viewer OSC or the mini-canvas handle), holding **Cmd** turns on a snap engine that catches values you probably meant to land on. Coloured guide lines appear while a snap is active so you can see which target you locked onto. Snap is off by default so free-form positioning stays quiet; engage Cmd when you want it.
 
 Two kinds of snap:
 
@@ -12,7 +12,7 @@ Two kinds of snap:
 
 X and Y are tracked independently, so one axis can snap to a canvas anchor while the other snaps to a keypose. The two guide colours can appear together.
 
-Hold Command while dragging to bypass snapping when you need fine pixel control. Releasing the mouse clears all guides.
+Releasing the mouse clears all guides. Releasing Cmd mid-drag drops the snap immediately, so you can fall off and back onto a target without restarting the drag.
 
 Snap thresholds are measured in screen pixels from the cursor, so they feel the same whether you're zoomed in or out.
 

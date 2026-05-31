@@ -19,6 +19,11 @@ static const CGFloat kHandleHitTolPt = 12.0;
 
 @interface MagicMoveMiniCanvasRenderer () {
   KKSnapEngine *_snapEngine;
+  // Normalised press point captured at begin-drag; used as the Shift
+  // axis-lock anchor so the locked axis stays pinned where it was, not
+  // wherever the cursor most recently passed through.
+  double _posPressNX;
+  double _posPressNY;
   // Pipeline cache keyed by (device, pixelFormat) — the plugin's own metallib
   // is in this XPC process's bundle, so we build a real PSO and apply the
   // shader source → dest locally. No FxPlug round-trip = no Flexo lock
@@ -261,11 +266,18 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
 - (void)applyPointDragToPoint:(CGPoint)p
                   contentRect:(CGRect)cr
                        canvas:(KKMiniCanvasView *)canvas {
+  // No-modifier path is only called on begin (kit's beginHandleDragAtPoint);
+  // capture the press normals here so Shift axis-lock has an anchor.
+  if (cr.size.width > 0 && cr.size.height > 0) {
+    _posPressNX = (p.x - CGRectGetMinX(cr)) / cr.size.width;
+    _posPressNY = (p.y - CGRectGetMinY(cr)) / cr.size.height;
+  }
   [self applyPointDragToPoint:p contentRect:cr canvas:canvas modifiers:0];
 }
 
-// Mirror of the viewer OSC snap: anchors at 0/0.25/0.5/0.75/1.0 plus every
-// other keypose's stored position. Cmd bypasses (Canvas convention).
+// Mirror of the viewer OSC: snap is OFF by default, Cmd engages it;
+// Shift locks to the dominant-travel axis (the other axis pins to the
+// press point). Same modifier convention as the viewer's position drag.
 - (void)applyPointDragToPoint:(CGPoint)p
                   contentRect:(CGRect)cr
                        canvas:(KKMiniCanvasView *)canvas
@@ -274,7 +286,15 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
     return;
   double nx = (p.x - CGRectGetMinX(cr)) / cr.size.width;
   double ny = (p.y - CGRectGetMinY(cr)) / cr.size.height;
-  if (!(modifiers & NSEventModifierFlagCommand)) {
+  if (modifiers & NSEventModifierFlagShift) {
+    double dx = nx - _posPressNX;
+    double dy = ny - _posPressNY;
+    if (fabs(dx) >= fabs(dy))
+      ny = _posPressNY;
+    else
+      nx = _posPressNX;
+  }
+  if (modifiers & NSEventModifierFlagCommand) {
     [self _snapPositionX:&nx Y:&ny contentRect:cr];
   } else {
     [_snapEngine reset];

@@ -60,7 +60,14 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
 @interface MagicMoveOSC ()
 @property(nonatomic, retain) KKSnapEngine *snapEngine;
 @property(nonatomic, retain) KKRotationOSC *rotationOSC;
-@property(nonatomic) BOOL cmdSnapOverride;
+/// YES while the user holds Cmd during a position drag - snaps to canvas
+/// anchors and other keypose positions. Default is free (no snap) so the
+/// user can position pixel-precisely without fighting the engine.
+@property(nonatomic) BOOL cmdSnapActive;
+/// Object-space position captured at position-drag mouseDown. Used as the
+/// anchor for Shift axis-lock: the locked axis stays pinned to this value,
+/// the dominant axis tracks the cursor.
+@property(nonatomic) simd_float2 posPressObject;
 @property(nonatomic)
     CGPoint rotPressCanvas;            // canvas pixel where rot drag began
 @property(nonatomic) double rotPressX; // rotation values (rad) at press
@@ -252,7 +259,7 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
                       atTime:time];
   }
   if (self.isDragging && activePart == kOSCPositionPart &&
-      !self.cmdSnapOverride) {
+      self.cmdSnapActive) {
     simd_float4 yellow = {1, 1, 0, 1};
     NSColor *accentNS = [[NSColor accentMatchingHost]
         colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
@@ -307,6 +314,20 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
                     modifiers:modifiers
                   forceUpdate:forceUpdate
                        atTime:time];
+  if (activePart == kOSCPositionPart) {
+    id<FxOnScreenControlAPI_v4> oscAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    if (oscAPI) {
+      double objX = 0.0, objY = 0.0;
+      [oscAPI convertPointFromSpace:kFxDrawingCoordinates_CANVAS
+                              fromX:positionX
+                              fromY:positionY
+                            toSpace:kFxDrawingCoordinates_OBJECT
+                                toX:&objX
+                                toY:&objY];
+      self.posPressObject = (simd_float2){(float)objX, (float)objY};
+    }
+  }
   if (activePart == kOSCRotationPart) {
     double frac = [self _fractionAtTime:time];
     // Capture press values from the KEYPOSE we'll write to (the one nearest
@@ -384,10 +405,24 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
                             toX:&newX
                             toY:&newY];
 
-  // Snap (object space). Always on; Command bypasses, matching Canvas.
-  self.cmdSnapOverride = (modifiers & kFxModifierKey_COMMAND) != 0;
+  // Shift axis-lock: pin whichever axis has less travel from the press
+  // point, so the cursor controls the dominant axis only. Decided per
+  // tick so the user can change their mind mid-drag.
+  if (modifiers & kFxModifierKey_SHIFT) {
+    double dx = newX - (double)self.posPressObject.x;
+    double dy = newY - (double)self.posPressObject.y;
+    if (fabs(dx) >= fabs(dy))
+      newY = self.posPressObject.y;
+    else
+      newX = self.posPressObject.x;
+  }
+
+  // Snap is OFF by default; Cmd engages it. Free-by-default keeps
+  // pixel-precise positioning quiet, and matches the rotation OSC where
+  // Cmd snaps to 15deg.
+  self.cmdSnapActive = (modifiers & kFxModifierKey_COMMAND) != 0;
   double frac = [self _fractionAtTime:time];
-  if (!self.cmdSnapOverride) {
+  if (self.cmdSnapActive) {
     simd_float2 snapped =
         [self _snapPosition:(simd_float2){(float)newX, (float)newY}
                  atFraction:frac];

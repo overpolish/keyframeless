@@ -20,7 +20,7 @@ static const CGFloat kKKRotationBaselineCanvasH = 230.0;
 static const double kKKRotationHitThresholdRatio = 10.0 / 90.0;
 static const int kKKRotationRingSamples = 192;
 // Cmd-snap step in radians (15°).
-static const double kKKRotationCmdSnapStep = 15.0 * M_PI / 180.0;
+static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
 
 @implementation KKMiniCanvasRenderer {
   KKMiniCanvasCropEditor *_cropEditor;
@@ -279,7 +279,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
                                         : signs.z;
   double dAngle = sign * projected / (double)radius;
   if (modifiers & NSEventModifierFlagCommand)
-    dAngle = round(dAngle / kKKRotationCmdSnapStep) * kKKRotationCmdSnapStep;
+    dAngle = round(dAngle / kKKRotationSnapStep) * kKKRotationSnapStep;
   double rx = 0, ry = 0, rz = 0;
   KKRotationComposeAxisDelta((int)_rotActiveAxis, dAngle, _rotPressRx,
                              _rotPressRy, _rotPressRz, &_rotLastWrittenRx,
