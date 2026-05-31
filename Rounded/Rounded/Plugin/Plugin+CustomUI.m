@@ -783,6 +783,15 @@ static NSString *_RoundedAIMergedTimelineJSON(NSString *currentTimelineJSON,
                             bundle:[NSBundle
                                        bundleForClass:[RoundedPlugin class]]
                       subdirectory:@"AIKnowledge"];
+    // Shared on-screen-control docs live in the kit framework (flattened to its
+    // Resources root). Filter to just the topics Rounded actually uses - it has
+    // no rotation OSC, so only the visibility doc.
+    [KKAIKnowledge
+        registerBundleDocsWithName:@"On-Screen Controls"
+                            bundle:[NSBundle
+                                       bundleForClass:[KKOnScreenControl class]]
+                      subdirectory:nil
+                      onlyTopicIDs:@[ @"visibility" ]];
   });
 
   NSString *productContext = RLoc(

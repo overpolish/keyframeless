@@ -15,7 +15,7 @@ A sphere built from three coloured rings:
 - **Green ring** - rotates around the Y axis (yaws the image left / right).
 - **Blue ring** - rotates around the Z axis (rolls the image in-plane). The Z ring is the largest and always faces the viewer because it lies in the screen plane.
 
-By default all three rings are visible whenever a Rotation lane exists, so X / Y rotations are reachable with a single click. Each ring can be hidden individually, though: toggle its pill in the on-screen-controls settings popover, or hold Option and click the ring directly to dismiss just that one. Holding Option then re-shows any hidden ring as a dimmed "ghost" you can click to bring back. (The reveal follows mouse movement, so a hidden ring appears on the next small nudge of the mouse rather than the instant Option goes down - see the Position OSC docs for the full visibility behaviour.)
+By default all three rings are visible whenever a Rotation lane exists, so X / Y rotations are reachable with a single click. Each ring can be hidden individually, though: toggle its pill in the on-screen-controls settings popover, or hold Option and click the ring directly to dismiss just that one. Holding Option then re-shows any hidden ring as a dimmed "ghost" you can click to bring back. (The reveal follows mouse movement, so a hidden ring appears on the next small nudge of the mouse rather than the instant Option goes down - see the on-screen-control visibility docs for the full behaviour.)
 
 ## How dragging works
 

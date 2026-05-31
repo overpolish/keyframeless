@@ -25,25 +25,7 @@ Default is free drag with no snap, because snap tends to fight precise positioni
 
 ## Showing and hiding on-screen controls
 
-You can declutter the canvas by hiding controls you aren't using. There are three ways, and they all stay in sync (viewer, mini-canvas, and the inspector):
-
-- **Master tick** - the inspector has an "On-Screen Controls" tick (near Motion Blur) that turns every control on or off for the clip at once.
-- **Per-control pills** - the settings cog beside that tick opens a popover with a pill for each control: Position, and Rotation split into its X / Y / Z rings. Toggle a pill to hide just that one.
-- **Option-click to hide** - hold Option and click any control directly (the position handle, or one specific rotation ring) on either the viewer OR the mini-canvas. That control hides and its pill flips off. This is the quick way to dismiss a control without opening the popover.
-
-### Option-hold to reveal hidden controls
-
-Hold **Option** over the viewer or the mini-canvas and any hidden controls reappear as dimmed "ghosts" wherever they would normally sit. Option-click a ghost to bring it back at full strength. Release Option and the ghosts fade away again, leaving the hidden ones hidden.
-
-### Nuance: the reveal follows the pointer
-
-The ghost reveal tracks mouse movement, so there is one quirk worth knowing:
-
-- Hold Option but keep the mouse still - the dimmed control does NOT appear yet.
-- Move the mouse a little - the ghost shows up.
-- The same applies right after you hide one, and when you release Option: the change lands on the next small mouse movement, not the instant you press or let go of the key.
-
-This is because Final Cut only hands the plugin the pointer's modifier state through hover events, which it sends as the mouse moves - there's no separate "a key was pressed" signal for the on-canvas control. It isn't a bug and there's no way around it; in practice any tiny nudge of the mouse brings the ghosts in or out immediately, so it rarely gets in the way.
+Magic Move's controls - the Position handle and the Rotation X / Y / Z rings - can each be hidden to declutter the canvas: the inspector's "On-Screen Controls" tick toggles all of them, its settings cog has a pill per control, and you can Option-click a control on the viewer or mini-canvas to hide it (Option-hold reveals hidden ones as dimmed ghosts to click back). See the shared on-screen-control visibility docs for the full behaviour, including the mouse-movement nuance of the reveal.
 
 ## Rotate with motion
 
