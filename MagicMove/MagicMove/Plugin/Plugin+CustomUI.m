@@ -11,6 +11,17 @@
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 
+/// MagicMove draws Position + Rotation on-screen controls, so it opts into the
+/// inspector's "On-Screen Controls" visibility row (other plugins default off).
+@interface MagicMoveInspectorView : KKTimelineInspectorView
+@end
+
+@implementation MagicMoveInspectorView
+- (BOOL)showsOSCVisibilityRow {
+  return YES;
+}
+@end
+
 @implementation MagicMovePlugin (CustomUI)
 
 - (BOOL)usesMotionBlur {
@@ -78,6 +89,11 @@
           : @{};
   BOOL loopEnabled = [uiState[@"loopEnabled"] boolValue];
   NSInteger activeTab = [uiState[@"activeTab"] integerValue];
+  // On-screen-control master visibility: default visible when the key is
+  // absent (existing clips have never written it).
+  BOOL oscMasterVisible = uiState[@"oscMasterVisible"]
+                              ? [uiState[@"oscMasterVisible"] boolValue]
+                              : YES;
   KKMiniCanvasRenderMode renderMode = KKMiniCanvasRenderModeOff;
   if (uiState[@"renderMode"])
     renderMode = (KKMiniCanvasRenderMode)[uiState[@"renderMode"] integerValue];
@@ -110,6 +126,13 @@
   // Cold-boot seed for the OSC. Without this the first drawOSC tick after FCP
   // relaunch reads nil → handle snaps to (0.5, 0.5) regardless of saved state.
   KKSetProcessTimelineSnapshot(timeline);
+  // Per-instance OSC visibility lives in KKPluginInstanceState (the OSC reads
+  // it via the shared kKKParamInstanceID UUID, NOT a process singleton, so two
+  // instances on one clip stay independent). Ensure mints the UUID here, inside
+  // the action scope where the setting API resolves.
+  KKPluginInstanceState *instState =
+      KKInstanceStateEnsureForAPI(self.apiManager);
+  instState.oscMasterVisible = oscMasterVisible;
 
   id<FxTimingAPI_v4> timingAPI =
       [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
@@ -129,16 +152,17 @@
 
   NSArray<KKLane *> *available = [MagicMovePlugin availableLanes];
   KKTimelineInspectorView *view =
-      [[KKTimelineInspectorView alloc] initWithAPIManager:self.apiManager
-                                              loopEnabled:loopEnabled
-                                                activeTab:activeTab
-                                           availableLanes:available
-                                                 timeline:timeline];
+      [[MagicMoveInspectorView alloc] initWithAPIManager:self.apiManager
+                                             loopEnabled:loopEnabled
+                                               activeTab:activeTab
+                                          availableLanes:available
+                                                timeline:timeline];
 
   if (!self.miniCanvasRenderer) {
     self.miniCanvasRenderer = [[MagicMoveMiniCanvasRenderer alloc] init];
   }
   self.miniCanvasRenderer.timeline = timeline;
+  self.miniCanvasRenderer.handlesHidden = !oscMasterVisible;
   view.miniCanvasDelegate = self.miniCanvasRenderer;
   view.miniCanvasDescriptorPath = MagicMoveMiniCanvasDescriptorPath;
   view.miniCanvasRequestPath = MagicMoveMiniCanvasRequestPath;
@@ -151,6 +175,7 @@
                           samples:motionBlurSamples];
   [view setMotionBlurMode:(KKMotionBlurMode)motionBlurMode];
   [view setRenderMode:renderMode];
+  [view setOSCVisible:oscMasterVisible];
 
   __weak typeof(self) weak = self;
 
@@ -176,6 +201,20 @@
     if (!strong)
       return;
     [strong patchUIStateKey:@"activeTab" value:@(tab) paramID:kParamUIState];
+  };
+  view.onOSCVisibleToggled = ^(BOOL visible) {
+    __strong typeof(weak) strong = weak;
+    if (!strong)
+      return;
+    // Update the per-instance cache the OSC reads (UUID already minted at
+    // custom-UI creation, so this resolves without an action scope), mirror it
+    // onto this instance's mini-canvas handles, then persist via the UI-state
+    // blob (which also re-seeds on its echo).
+    KKInstanceStateForAPI(strong.apiManager).oscMasterVisible = visible;
+    strong.miniCanvasRenderer.handlesHidden = !visible;
+    [strong patchUIStateKey:@"oscMasterVisible"
+                      value:@(visible)
+                    paramID:kParamUIState];
   };
   view.onMotionBlurChanged = ^(BOOL enabled, double shutterAngle,
                                NSInteger samples, KKMotionBlurMode mode) {

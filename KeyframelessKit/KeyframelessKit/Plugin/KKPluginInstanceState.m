@@ -22,6 +22,7 @@
   if (self) {
     _pendingPlayheadFraction = -1;
     _pendingPlayheadDuration = -1;
+    _oscMasterVisible = YES;
   }
   return self;
 }

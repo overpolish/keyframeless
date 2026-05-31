@@ -148,6 +148,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// wrap playback back to the effect start when the playhead passes the end.
 @property(nonatomic) BOOL loopEnabled;
 
+/// Master "on-screen controls visible" tick. Per-instance runtime cache the
+/// OSC's draw tick reads to gate handle visibility (the OSC can't read the
+/// host's UI-state blob from its own apiManager scope). Seeded from the
+/// persisted blob at custom-UI creation / parameterChanged and written on
+/// toggle. Defaults YES so a control-less cold-boot tick still shows the OSC.
+@property(nonatomic) BOOL oscMasterVisible;
+
 /// Pointer of the api manager that "owns" this state. Used by
 /// `KKInstanceStateEnsureForAPI` to detect duplicate-UUID clones (FCP
 /// copy/paste/cut clones the `kKKParamInstanceID` value) and mint a fresh

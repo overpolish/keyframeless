@@ -57,6 +57,12 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable)
     NSArray<NSString *> *suppressedHandleLabels;
 
+/// Master "hide all on-screen controls" gate, mirroring the viewer OSC's
+/// visibility tick. When YES, no point / rotation / crop handle is drawn or
+/// hit-tested in the mini-canvas, regardless of `suppressedHandleLabels`.
+/// Set by the host when the user toggles the inspector's OSC visibility.
+@property(nonatomic) BOOL handlesHidden;
+
 #pragma mark - Subclass vocabulary (override)
 
 /// Lane label for the crop box, or nil if this plugin has no crop. Default

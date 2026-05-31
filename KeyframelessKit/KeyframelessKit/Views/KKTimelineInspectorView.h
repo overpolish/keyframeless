@@ -56,6 +56,10 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 
 @property(nonatomic, copy, nullable) void (^onLoopToggled)(BOOL enabled);
 @property(nonatomic, copy, nullable) void (^onTabChanged)(NSInteger tab);
+/// The "On-Screen Controls" master tick was toggled. The host persists the
+/// flag (its UI-state blob) and updates its per-instance OSC-visibility cache.
+/// Only fired when `showsOSCVisibilityRow` is YES.
+@property(nonatomic, copy, nullable) void (^onOSCVisibleToggled)(BOOL visible);
 /// Any motion-blur edit (enable toggle, a Shutter/Samples slider/field, or the
 /// When dropdown in the settings popover). `shutterAngle` is degrees (0–360);
 /// `samples` is the sample count (2–128); `mode` is when blur fires (see
@@ -133,6 +137,9 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// when `showsMotionBlurRow` is NO.
 - (void)setMotionBlurMode:(KKMotionBlurMode)mode;
 - (void)setActiveTab:(NSInteger)tab;
+/// Push the persisted "On-Screen Controls" master visibility into the tick.
+/// No-op when `showsOSCVisibilityRow` is NO.
+- (void)setOSCVisible:(BOOL)visible;
 /// Push the persisted mini-canvas render mode from the host's UI-state
 /// blob. The 3-way pill lives in the keypose-value popover header (only
 /// while open); this just mirrors the persisted enum. Defaults to Off.
@@ -172,6 +179,12 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// height for it). Default YES. Override to NO in a plugin whose effect has no
 /// motion blur. Read once during init.
 - (BOOL)showsMotionBlurRow;
+
+/// Whether to build the "On-Screen Controls" visibility row below the box
+/// (and reserve height for it). Default NO. Override to YES in a plugin whose
+/// effect draws on-screen controls the user should be able to hide. Read once
+/// during init.
+- (BOOL)showsOSCVisibilityRow;
 
 @end
 

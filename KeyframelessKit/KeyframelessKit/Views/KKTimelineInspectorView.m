@@ -29,6 +29,9 @@ static const CGFloat kHeaderRowHeight = 28.0;
 // The motion-blur parameter row sits in its own section below the box. The
 // custom-UI height is fixed at init, so we reserve this once up front.
 static const CGFloat kMotionBlurRowHeight = 28.0;
+// The on-screen-control visibility row mirrors the motion-blur row's section
+// below the box; same fixed height reserved up front.
+static const CGFloat kOSCVisibilityRowHeight = 28.0;
 // Trailing margin that lands the checkbox on the native control gutter, same
 // value KKCustomGroupHeaderView uses.
 static const CGFloat kMBCheckboxTrailing = 23.0;
@@ -532,6 +535,9 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   NSPopover *_mbPopover;
   __weak _KKMotionBlurSettingsView *_mbSettingsView;
   BOOL _showsMotionBlurRow;
+  KKParameterRowView *_oscRow;
+  KKCheckboxView *_oscCheckbox;
+  BOOL _showsOSCVisibilityRow;
   double _mbShutterAngle;
   NSInteger _mbSamples;
   KKMotionBlurMode _mbMode;
@@ -571,8 +577,9 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   _selectedTab = (KKTimelineTab)activeTab;
   _constantsButtonTitle =
       KKLoc(@"Constants", @"Constants editor tab/section header.");
-  // Read the subclass hook once; the custom-UI height can't change after init.
+  // Read the subclass hooks once; the custom-UI height can't change after init.
   _showsMotionBlurRow = [self showsMotionBlurRow];
+  _showsOSCVisibilityRow = [self showsOSCVisibilityRow];
   _mbShutterAngle = 180.0; // the natural shutter
   _mbSamples = 16;
   _mbMode = KKMotionBlurModeTransitionsOnly; // default; cheapest
@@ -587,6 +594,8 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   [self _buildContentArea:box availableLanes:availableLanes timeline:timeline];
   if (_showsMotionBlurRow)
     [self _buildMotionBlurRow];
+  if (_showsOSCVisibilityRow)
+    [self _buildOSCVisibilityRow];
   [self _installConstraints:box headerRow:headerRow];
   return self;
 }
@@ -810,9 +819,14 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   return YES;
 }
 
+- (BOOL)showsOSCVisibilityRow {
+  return NO;
+}
+
 - (CGFloat)_totalHeight {
   return kInspectorHeight +
-         (_showsMotionBlurRow ? kMotionBlurRowHeight + KKPaddingMD : 0.0);
+         (_showsMotionBlurRow ? kMotionBlurRowHeight + KKPaddingMD : 0.0) +
+         (_showsOSCVisibilityRow ? kOSCVisibilityRowHeight + KKPaddingMD : 0.0);
 }
 
 - (void)_buildMotionBlurRow {
@@ -883,6 +897,54 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   };
 
   [self addSubview:_mbRow];
+}
+
+- (void)_buildOSCVisibilityRow {
+  _oscRow = [[KKParameterRowView alloc] initWithFrame:NSZeroRect
+                                           apiManager:_apiManager
+                                          parameterId:0];
+  _oscRow.translatesAutoresizingMaskIntoConstraints = NO;
+
+  NSImage *icon = [NSImage
+      imageWithSystemSymbolName:@"scope"
+       accessibilityDescription:KKLoc(@"On-Screen Controls",
+                                      @"Section title: viewer on-screen "
+                                      @"controls visibility.")];
+  _oscRow.leftView = [[KKLabelView alloc]
+      initWithText:KKLoc(@"On-Screen Controls",
+                         @"Section title: viewer on-screen controls "
+                         @"visibility.")
+              icon:icon];
+
+  // rightView must be a container (KKParameterRowView contract). Checkbox sits
+  // in the native control gutter, same placement as the motion-blur tick.
+  NSView *controls = [[NSView alloc] initWithFrame:NSZeroRect];
+  _oscCheckbox = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
+  _oscCheckbox.translatesAutoresizingMaskIntoConstraints = NO;
+  _oscCheckbox.isChecked = YES;
+  [controls addSubview:_oscCheckbox];
+
+  [NSLayoutConstraint activateConstraints:@[
+    [_oscCheckbox.trailingAnchor constraintEqualToAnchor:controls.trailingAnchor
+                                                constant:-kMBCheckboxTrailing],
+    [_oscCheckbox.centerYAnchor constraintEqualToAnchor:controls.centerYAnchor],
+    [_oscCheckbox.widthAnchor constraintEqualToConstant:12.0],
+    [_oscCheckbox.heightAnchor constraintEqualToConstant:12.0],
+  ]];
+  _oscRow.rightView = controls;
+
+  __weak typeof(self) weak = self;
+  _oscCheckbox.onToggle = ^(BOOL isChecked) {
+    KKTimelineInspectorView *strong = weak;
+    if (strong.onOSCVisibleToggled)
+      strong.onOSCVisibleToggled(isChecked);
+  };
+
+  [self addSubview:_oscRow];
+}
+
+- (void)setOSCVisible:(BOOL)visible {
+  _oscCheckbox.isChecked = visible;
 }
 
 - (void)setMotionBlurEnabled:(BOOL)enabled {
@@ -1020,24 +1082,42 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
     [_basicView.bottomAnchor constraintEqualToAnchor:_contentView.bottomAnchor],
   ]];
 
-  // The MB row sits in its own section below the box; otherwise the box runs
-  // to the bottom of the view (original layout).
+  // Optional parameter rows stack in their own section below the box,
+  // top-to-bottom: OSC-visibility then motion-blur. Full width (no box inset):
+  // KKParameterRowView aligns its own label gutter + control region to match
+  // FCP's native param rows, which span edge to edge. With no extra rows the
+  // box runs to the bottom of the view (original layout).
+  NSMutableArray<NSView *> *bottomRows = [NSMutableArray array];
+  NSMutableArray<NSNumber *> *bottomRowHeights = [NSMutableArray array];
+  if (_showsOSCVisibilityRow && _oscRow) {
+    [bottomRows addObject:_oscRow];
+    [bottomRowHeights addObject:@(kOSCVisibilityRowHeight)];
+  }
   if (_showsMotionBlurRow && _mbRow) {
-    // Full width (no box inset): KKParameterRowView aligns its own label gutter
-    // + control region to match FCP's native param rows, which span edge to
-    // edge. Insetting it would misalign the spacing.
-    [NSLayoutConstraint activateConstraints:@[
-      [_mbRow.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
-      [_mbRow.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-      [_mbRow.bottomAnchor constraintEqualToAnchor:self.bottomAnchor
-                                          constant:-KKPaddingLG],
-      [_mbRow.heightAnchor constraintEqualToConstant:kMotionBlurRowHeight],
-      [box.bottomAnchor constraintEqualToAnchor:_mbRow.topAnchor
-                                       constant:-KKPaddingMD],
-    ]];
-  } else {
+    [bottomRows addObject:_mbRow];
+    [bottomRowHeights addObject:@(kMotionBlurRowHeight)];
+  }
+
+  if (bottomRows.count == 0) {
     [box.bottomAnchor constraintEqualToAnchor:self.bottomAnchor
                                      constant:-KKPaddingLG]
+        .active = YES;
+  } else {
+    NSView *above = box;
+    for (NSInteger i = 0; i < (NSInteger)bottomRows.count; i++) {
+      NSView *row = bottomRows[i];
+      [NSLayoutConstraint activateConstraints:@[
+        [row.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+        [row.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+        [row.heightAnchor
+            constraintEqualToConstant:bottomRowHeights[i].doubleValue],
+        [above.bottomAnchor constraintEqualToAnchor:row.topAnchor
+                                           constant:-KKPaddingMD],
+      ]];
+      above = row;
+    }
+    [above.bottomAnchor constraintEqualToAnchor:self.bottomAnchor
+                                       constant:-KKPaddingLG]
         .active = YES;
   }
 }

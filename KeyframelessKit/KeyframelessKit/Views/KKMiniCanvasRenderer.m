@@ -436,8 +436,17 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   return label && [_suppressedHandleLabels containsObject:label];
 }
 
+- (void)setHandlesHidden:(BOOL)handlesHidden {
+  if (_handlesHidden == handlesHidden)
+    return;
+  _handlesHidden = handlesHidden;
+  // Repaint the bound canvas (if a preview/popover is open) so the change
+  // shows without a scrub; nil canvas is a no-op.
+  [self.canvas setHandlesNeedDisplay];
+}
+
 - (BOOL)_cropActiveForContentRect:(CGRect)cr {
-  return !CGRectIsEmpty(cr) && self.cropLabel &&
+  return !_handlesHidden && !CGRectIsEmpty(cr) && self.cropLabel &&
          ![self _labelSuppressed:self.cropLabel] &&
          [self isConstantLabel:self.cropLabel];
 }
@@ -469,13 +478,13 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 }
 
 - (BOOL)_pointActiveForContentRect:(CGRect)cr {
-  return !CGRectIsEmpty(cr) && self.pointLabel &&
+  return !_handlesHidden && !CGRectIsEmpty(cr) && self.pointLabel &&
          ![self _labelSuppressed:self.pointLabel] &&
          [self isConstantLabel:self.pointLabel];
 }
 
 - (BOOL)_rotationActiveForContentRect:(CGRect)cr {
-  return !CGRectIsEmpty(cr) && self.rotationLabel &&
+  return !_handlesHidden && !CGRectIsEmpty(cr) && self.rotationLabel &&
          ![self _labelSuppressed:self.rotationLabel] &&
          [self isConstantLabel:self.rotationLabel];
 }

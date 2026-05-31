@@ -69,6 +69,20 @@
     return NO;
   }
 
+  // Native string identity key for per-instance state. The OSC is a separate
+  // FxOnScreenControl principal with its own apiManager, and custom-blob reads
+  // from that scope return nil; native string reads work. Both the effect and
+  // the OSC read this UUID to resolve the same KKPluginInstanceState (which
+  // carries the OSC-visibility tick), so two instances on one clip don't share
+  // it. UUIDs are per-instance identity, never user-edited - no undo needed.
+  if (![paramAPI addStringParameterWithName:@""
+                                parameterID:kKKParamInstanceID
+                               defaultValue:@""
+                             parameterFlags:kFxParameterFlag_HIDDEN |
+                                            kFxParameterFlag_NOT_ANIMATABLE]) {
+    return NO;
+  }
+
   return YES;
 }
 

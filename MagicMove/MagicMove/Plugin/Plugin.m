@@ -57,9 +57,17 @@
             ?: @{};
     BOOL enabled = [state[@"loopEnabled"] boolValue];
     NSInteger tab = [state[@"activeTab"] integerValue];
+    BOOL oscVisible = state[@"oscMasterVisible"]
+                          ? [state[@"oscMasterVisible"] boolValue]
+                          : YES;
+    // Update this instance's OSC-visibility cache so undo/redo of the master
+    // tick repaints the controls without a manual scrub.
+    KKInstanceStateForAPI(self.apiManager).oscMasterVisible = oscVisible;
     dispatch_async(dispatch_get_main_queue(), ^{
       [self.inspectorView setLoopEnabled:enabled];
       [self.inspectorView setActiveTab:tab];
+      [self.inspectorView setOSCVisible:oscVisible];
+      self.miniCanvasRenderer.handlesHidden = !oscVisible;
     });
   }
 

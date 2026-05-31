@@ -24,6 +24,15 @@ static KKLane *_rotationLane(void) { return _laneNamed(@"Rotation"); }
 
 // YES when the lane is a constant (always shown) OR animated with the
 // playhead within ~1 frame of a keypose.
+// User master tick from the inspector. Read from this instance's
+// KKPluginInstanceState (resolved via the shared kKKParamInstanceID UUID, which
+// IS readable from the OSC's separate apiManager scope - the UI-state blob is
+// not). No per-instance state yet => visible (matches the pre-toggle default).
+static BOOL _oscMasterVisible(id<PROAPIAccessing> api) {
+  KKPluginInstanceState *st = KKInstanceStateForAPI(api);
+  return st ? st.oscMasterVisible : YES;
+}
+
 static BOOL _positionVisibleAtFraction(double frac) {
   return KKLaneVisibleAtFraction(_positionLane(), frac,
                                  KKProcessFrameDurationSeconds());
@@ -227,8 +236,9 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
                                        }];
 
   double frac = [self _fractionAtTime:time];
+  BOOL master = _oscMasterVisible(self.apiManager);
   BOOL posVisible = (self.isDragging && activePart == kOSCPositionPart) ||
-                    _positionVisibleAtFraction(frac);
+                    (master && _positionVisibleAtFraction(frac));
 
   CGPoint pos = [self oscPositionAtTime:time];
   if (posVisible) {
@@ -243,7 +253,7 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
   // Rotation sphere is centred on the same canvas point as Position (the
   // image rotates around its centre, which is where Position translates it).
   BOOL rotVisible = (self.isDragging && activePart == kOSCRotationPart) ||
-                    _rotationVisibleAtFraction(frac);
+                    (master && _rotationVisibleAtFraction(frac));
   if (rotVisible) {
     [self _syncRotationColorsFromLane];
     NSArray<NSNumber *> *r = _rotationValuesAtFraction(frac);
@@ -258,8 +268,7 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
             destinationImage:destinationImage
                       atTime:time];
   }
-  if (self.isDragging && activePart == kOSCPositionPart &&
-      self.cmdSnapActive) {
+  if (self.isDragging && activePart == kOSCPositionPart && self.cmdSnapActive) {
     simd_float4 yellow = {1, 1, 0, 1};
     NSColor *accentNS = [[NSColor accentMatchingHost]
         colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
@@ -280,6 +289,8 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
                             atTime:(CMTime)time {
   *activePart = 0;
   double frac = [self _fractionAtTime:time];
+  if (!_oscMasterVisible(self.apiManager))
+    return;
   if (_positionVisibleAtFraction(frac) &&
       [self hitTestAtMousePositionX:positionX
                           positionY:positionY

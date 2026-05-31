@@ -5,6 +5,7 @@
 
 #import "../Style/KKTokens.h"
 #import "KKLocalized.h"
+#import "KKMiniCanvasRenderer.h"
 #import "KKMiniCanvasView.h"
 #import "KKPopoverHeaderView.h"
 #import "KKTimelineLanesView+Guide.h"
