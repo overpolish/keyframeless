@@ -21,6 +21,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// Optional fill color override. When non-nil, replaces the default white fill.
 @property(nonatomic, strong, nullable) NSColor *fillColorOverride;
 
+/// Multiplier on the fill + stroke alpha (default 1.0). Draw at < 1.0 to render
+/// the point as a dimmed "ghost" during opt-reveal.
+@property(nonatomic) float ghostAlpha;
+
 @end
 
 NS_ASSUME_NONNULL_END

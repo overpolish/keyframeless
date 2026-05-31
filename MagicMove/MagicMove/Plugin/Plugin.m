@@ -57,24 +57,16 @@
             ?: @{};
     BOOL enabled = [state[@"loopEnabled"] boolValue];
     NSInteger tab = [state[@"activeTab"] integerValue];
-    BOOL oscVisible = state[@"oscMasterVisible"]
-                          ? [state[@"oscMasterVisible"] boolValue]
-                          : YES;
-    // Update this instance's OSC-visibility cache so undo/redo of the master
-    // tick (or a per-element pill) repaints the controls without a manual
-    // scrub.
-    KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
-    st.oscMasterVisible = oscVisible;
-    // Cache the fresh, full blob so the OSC's opt-hide can merge into it rather
-    // than its own stale-scope read (which would write back a stale activeTab
-    // and snap the inspector off the Advanced tab).
-    st.lastUIState = state;
-    [self applyOSCElementsFromUIState:state];
+    // Shared glue: refresh OSC master + lastUIState + hidden set, and push the
+    // tick + mini-canvas on the main queue (undo/redo of the tick or a pill
+    // repaints without a manual scrub).
+    [self kkRefreshOSCVisibilityFromState:state
+                                     view:self.inspectorView
+                                 renderer:self.miniCanvasRenderer
+                              elementKeys:[MagicMovePlugin oscElementKeys]];
     dispatch_async(dispatch_get_main_queue(), ^{
       [self.inspectorView setLoopEnabled:enabled];
       [self.inspectorView setActiveTab:tab];
-      [self.inspectorView setOSCVisible:oscVisible];
-      self.miniCanvasRenderer.handlesHidden = !oscVisible;
     });
   }
 

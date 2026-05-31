@@ -67,6 +67,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKPlayheadPoller.h>
 #import <KeyframelessKit/KKPlugin+Color.h>
 #import <KeyframelessKit/KKPlugin+Crop.h>
+#import <KeyframelessKit/KKPlugin+OSCVisibility.h>
 #import <KeyframelessKit/KKPlugin.h>
 #import <KeyframelessKit/KKPluginHost.h>
 #import <KeyframelessKit/KKPluginInstanceState.h>

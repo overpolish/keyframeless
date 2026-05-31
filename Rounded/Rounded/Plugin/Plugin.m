@@ -59,6 +59,13 @@
             ?: @{};
     BOOL enabled = [state[@"loopEnabled"] boolValue];
     NSInteger tab = [state[@"activeTab"] integerValue];
+    // Shared glue: refresh OSC master + lastUIState + hidden set, and push the
+    // tick + mini-canvas (undo/redo of the tick or a pill repaints live).
+    [self kkRefreshOSCVisibilityFromState:state
+                                     view:self.inspectorView
+                                 renderer:(KKMiniCanvasRenderer *)self
+                                              .inspectorView.miniCanvasDelegate
+                              elementKeys:@[ @"Radius", @"Crop" ]];
     dispatch_async(dispatch_get_main_queue(), ^{
       [self.inspectorView setLoopEnabled:enabled];
       [self.inspectorView setActiveTab:tab];

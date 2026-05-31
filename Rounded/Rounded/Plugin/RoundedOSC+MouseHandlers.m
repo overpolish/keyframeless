@@ -25,6 +25,17 @@ static NSInteger _kkCropPartForRoundedActive(NSInteger activePart) {
 
 @implementation RoundedOSC (MouseHandlers)
 
+// Hover carries the modifier bit reliably: track opt-reveal here (and reset the
+// per-press opt-hide arming). Shared machinery on KKOnScreenControl.
+- (void)mouseMovedAtPositionX:(double)positionX
+                    positionY:(double)positionY
+                   activePart:(NSInteger)activePart
+                    modifiers:(FxModifierKeys)modifiers
+                  forceUpdate:(BOOL *)forceUpdate
+                       atTime:(CMTime)time {
+  [self kkUpdateOptRevealWithModifiers:modifiers forceUpdate:forceUpdate];
+}
+
 - (void)keyDownAtPositionX:(double)mousePositionX
                  positionY:(double)mousePositionY
                 keyPressed:(unsigned short)asciiKey
@@ -42,6 +53,13 @@ static NSInteger _kkCropPartForRoundedActive(NSInteger activePart) {
                    modifiers:(NSUInteger)modifiers
                  forceUpdate:(BOOL *)forceUpdate
                       atTime:(CMTime)time {
+  // Opt-click an on-screen control to hide it (shared machinery on
+  // KKOnScreenControl). Bails before any drag/crop routing.
+  if ([self kkArmOptHideForActivePart:activePart modifiers:modifiers]) {
+    if (forceUpdate)
+      *forceUpdate = YES;
+    return;
+  }
   // Route crop-handle / crop-rect presses to the embedded KKCropOSC, which
   // owns its own drag state. The radius super-handler ignores parts it
   // doesn't recognise.
@@ -81,6 +99,12 @@ static NSInteger _kkCropPartForRoundedActive(NSInteger activePart) {
                       modifiers:(NSUInteger)modifiers
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
+  // First drag tick decides: opt held => hide-click (handled, no drag).
+  if ([self kkArmOptHideForActivePart:activePart modifiers:modifiers]) {
+    if (forceUpdate)
+      *forceUpdate = YES;
+    return;
+  }
   // Crop-part drag → delegate to the embedded KKCropOSC.
   NSInteger cropPart = _kkCropPartForRoundedActive(activePart);
   if (cropPart != KKCropPartNone) {
@@ -240,6 +264,7 @@ static NSInteger _kkCropPartForRoundedActive(NSInteger activePart) {
                  modifiers:(NSUInteger)modifiers
                forceUpdate:(BOOL *)forceUpdate
                     atTime:(CMTime)time {
+  [self kkResetOptHideArming];
   // Always reset crop drag state on mouseUp (cheap; no-op when not dragging).
   [_cropOSC mouseUp];
 

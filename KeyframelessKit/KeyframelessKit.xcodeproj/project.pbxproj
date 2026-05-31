@@ -65,6 +65,7 @@
 				Plugin/KKPlugin.h,
 				"Plugin/KKPlugin+Color.h",
 				"Plugin/KKPlugin+Crop.h",
+				"Plugin/CustomViews/KKPlugin+OSCVisibility.h",
 				Plugin/KKPluginHost.h,
 				Plugin/KKPluginInstanceState.h,
 				Style/KKTokens.h,

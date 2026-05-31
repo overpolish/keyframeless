@@ -103,6 +103,7 @@ static CGPoint cropPointPosition(NSInteger idx, CGPoint topRight,
     _borderOSC.clearsOnDraw = NO;
     _sizeLabel = [[KKOSCLabel alloc] initWithAPIManager:apiManager];
     _sizeLabel.monospaced = YES;
+    _ghostAlpha = 1.0f;
   }
   return self;
 }
@@ -182,6 +183,11 @@ static CGPoint cropPointPosition(NSInteger idx, CGPoint topRight,
           fullImageCanvas:&fullCanvas
                    atTime:time])
     return;
+
+  // Fan the ghost dim out to the border + corner handles (opt-reveal preview).
+  self.borderOSC.ghostAlpha = _ghostAlpha;
+  for (int i = 0; i < KKCropPointCount; i++)
+    self.pointOSCs[i].ghostAlpha = _ghostAlpha;
 
   [self.borderOSC drawWithTopRight:topRight
                         bottomLeft:bottomLeft

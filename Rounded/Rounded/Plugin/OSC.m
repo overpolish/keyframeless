@@ -349,6 +349,22 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
   return CGPointMake(corner.x - offsetX, corner.y - offsetY);
 }
 
+// Override the base OSC-visibility hooks: Rounded hides the Radius handle and
+// the Crop box (all 8 corner parts + the rect map to one @"Crop" element).
+- (NSArray<NSString *> *)oscElementKeys {
+  return @[ @"Radius", @"Crop" ];
+}
+
+- (nullable NSString *)oscElementKeyForActivePart:(NSInteger)activePart {
+  if (activePart == kOSCRadiusPart)
+    return @"Radius";
+  if (activePart == kOSCCropRectPart ||
+      (activePart >= kOSCCropPointBase &&
+       activePart < kOSCCropPointBase + KKCropPointCount))
+    return @"Crop";
+  return nil;
+}
+
 - (void)drawOSCWithWidth:(NSInteger)width
                   height:(NSInteger)height
               activePart:(NSInteger)activePart
@@ -391,11 +407,16 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
   double frac = [self fractionAtTime:time];
 
   // Crop OSC (drawn before radius - its border + handles sit underneath the
-  // radius handle visually if they overlap at the corner).
+  // radius handle visually if they overlap at the corner). Opt-reveal draws a
+  // hidden crop as a dimmed ghost where it would normally appear.
   BOOL cropDragging = (_cropOSC.draggingIndex >= 0);
-  BOOL cropVisible =
-      cropDragging || RoundedLaneVisibleAtFraction(@"Crop", frac);
-  if (cropVisible) {
+  BOOL cropShownHere = RoundedLaneVisibleAtFraction(@"Crop", frac);
+  BOOL cropEnabled = [self kkOSCElementVisible:@"Crop"];
+  BOOL cropVisible = cropDragging || (cropEnabled && cropShownHere);
+  BOOL cropGhost =
+      !cropVisible && self.optRevealActive && cropShownHere && !cropEnabled;
+  if (cropVisible || cropGhost) {
+    _cropOSC.ghostAlpha = cropGhost ? 0.3f : 1.0f;
     _cropOSC.hoveredIndex = (activePart >= kOSCCropPointBase &&
                              activePart < kOSCCropPointBase + KKCropPointCount)
                                 ? (activePart - kOSCCropPointBase)
@@ -403,11 +424,16 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
     [_cropOSC drawWithDestinationImage:destinationImage atTime:time];
   }
 
-  BOOL radiusVisible = self.isDragging || inGuide ||
-                       RoundedLaneVisibleAtFraction(@"Radius", frac);
-  if (!radiusVisible)
+  BOOL radiusShownHere = self.isDragging || inGuide ||
+                         RoundedLaneVisibleAtFraction(@"Radius", frac);
+  BOOL radiusEnabled = [self kkOSCElementVisible:@"Radius"];
+  BOOL radiusVisible = radiusShownHere && radiusEnabled;
+  BOOL radiusGhost = !radiusVisible && self.optRevealActive &&
+                     radiusShownHere && !radiusEnabled;
+  if (!radiusVisible && !radiusGhost)
     return;
 
+  self.ghostAlpha = radiusGhost ? 0.3f : 1.0f;
   [self drawAtCanvasPosition:radiusPos
                    isHovered:(activePart == kOSCRadiusPart)
                     isActive:self.isDragging && (activePart == kOSCRadiusPart)
@@ -422,13 +448,16 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
   *activePart = 0;
   BOOL inGuide = (RoundedGuideBridge().guideStep > 0);
   double frac = [self fractionAtTime:time];
+  // Opt-reveal makes a hidden control hit-testable so an opt-click re-shows it.
   BOOL radiusInteractive =
-      inGuide || RoundedLaneVisibleAtFraction(@"Radius", frac);
+      ([self kkOSCElementVisible:@"Radius"] || self.optRevealActive) &&
+      (inGuide || RoundedLaneVisibleAtFraction(@"Radius", frac));
   if (radiusInteractive && [self hitTestAtMousePositionX:positionX
                                                positionY:positionY
                                                   atTime:time]) {
     *activePart = kOSCRadiusPart;
-  } else if (RoundedLaneVisibleAtFraction(@"Crop", frac)) {
+  } else if (([self kkOSCElementVisible:@"Crop"] || self.optRevealActive) &&
+             RoundedLaneVisibleAtFraction(@"Crop", frac)) {
     // Radius didn't catch it → try crop handles / rect.
     NSInteger cropPart = [_cropOSC hitTestAtMousePositionX:positionX
                                                  positionY:positionY

@@ -282,6 +282,9 @@ static NSString *_RoundedAIMergedTimelineJSON(NSString *currentTimelineJSON,
             : @{};
     BOOL loopEnabled = [uiState[@"loopEnabled"] boolValue];
     NSInteger activeTab = [uiState[@"activeTab"] integerValue];
+    BOOL oscMasterVisible = uiState[@"oscMasterVisible"]
+                                ? [uiState[@"oscMasterVisible"] boolValue]
+                                : YES;
     // Migration: legacy onionSkinEnabled BOOL → new renderMode enum
     // (0=Off, 1=Filmstrip, 2=Onion). Old true maps to Filmstrip.
     KKMiniCanvasRenderMode renderMode = KKMiniCanvasRenderModeOff;
@@ -345,6 +348,11 @@ static NSString *_RoundedAIMergedTimelineJSON(NSString *currentTimelineJSON,
         RoundedSetFrameDurationSeconds(seedFrameDurSec);
     }
 
+    // Per-instance OSC-visibility state: mint the UUID here (inside the action
+    // scope where the setting API resolves) and seed the master tick.
+    KKInstanceStateEnsureForAPI(self.apiManager).oscMasterVisible =
+        oscMasterVisible;
+
     [actionAPI endAction:self];
 
     NSArray<KKLane *> *available = [RoundedPlugin availableLanes];
@@ -366,6 +374,25 @@ static NSString *_RoundedAIMergedTimelineJSON(NSString *currentTimelineJSON,
     [view setMotionBlurShutterAngle:motionBlurShutterAngle
                             samples:motionBlurSamples];
     [view setMotionBlurMode:(KKMotionBlurMode)motionBlurMode];
+
+    // On-screen-control visibility: master tick + per-element pills (Radius,
+    // Crop) + opt-click-hide + opt-reveal. Shared glue in KKPlugin
+    // (OSCVisibility); the renderer is the view's mini-canvas delegate.
+    KKMiniCanvasRenderer *oscRenderer =
+        (KKMiniCanvasRenderer *)view.miniCanvasDelegate;
+    NSArray<NSArray<NSString *> *> *oscCompounds =
+        @[ @[ @"Radius" ], @[ @"Crop" ] ];
+    oscRenderer.handlesHidden = !oscMasterVisible;
+    [self kkApplyOSCVisibilityFromState:uiState
+                            elementKeys:[KKPlugin kkOSCElementKeysForCompounds:
+                                                      oscCompounds]
+                               renderer:oscRenderer];
+    [self kkWireOSCVisibilityForView:view
+                            renderer:oscRenderer
+                           compounds:oscCompounds
+                             paramID:kParamUIState];
+    [view setOSCVisible:oscMasterVisible];
+
     __weak typeof(self) weak = self;
 
     view.onLoopToggled = ^(BOOL enabled) {

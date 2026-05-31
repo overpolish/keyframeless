@@ -178,7 +178,8 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 // A handle/element is "user-hidden" (master tick off or its own pill off) -
 // eligible to be revealed as a ghost. Boundary-phase suppression is separate.
 - (BOOL)_userHiddenLabel:(NSString *)label {
-  return _handlesHidden || (label && [_hiddenHandleLabels containsObject:label]);
+  return _handlesHidden ||
+         (label && [_hiddenHandleLabels containsObject:label]);
 }
 
 // A specific rotation ring is user-hidden if the master tick is off, the whole
@@ -196,7 +197,8 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   return [_hiddenHandleLabels containsObject:key];
 }
 
-// Ring is drawn / hit-tested this frame (at full alpha, or dimmed under reveal).
+// Ring is drawn / hit-tested this frame (at full alpha, or dimmed under
+// reveal).
 - (BOOL)_ringShownAtAxis:(int)k {
   return ![self _ringUserHiddenAtAxis:k] || [self _revealActive];
 }
@@ -498,9 +500,15 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 }
 
 - (BOOL)_cropActiveForContentRect:(CGRect)cr {
-  return !_handlesHidden && !CGRectIsEmpty(cr) && self.cropLabel &&
-         ![self _labelSuppressed:self.cropLabel] &&
-         [self isConstantLabel:self.cropLabel];
+  return !CGRectIsEmpty(cr) && self.cropLabel &&
+         ![_suppressedHandleLabels containsObject:self.cropLabel] &&
+         [self isConstantLabel:self.cropLabel] &&
+         (![self _userHiddenLabel:self.cropLabel] || [self _revealActive]);
+}
+
+// Crop draw alpha: dim when it's a revealed ghost (border + corner handles).
+- (CGFloat)cropGhostAlpha {
+  return [self _userHiddenLabel:self.cropLabel] ? 0.3 : 1.0;
 }
 
 - (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
@@ -613,22 +621,37 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   if (!self.onHandleVisibilityToggled || CGRectIsEmpty(cr))
     return NO;
   self.canvas = canvas;
+  NSString *label = nil;
   // Rotation ring first (it sits in front), then the point handle. Same
   // hit-tests the drag path uses, so the same element resolves.
   if ([self _rotationActiveForContentRect:cr] &&
       [self rotationHitTestAtPoint:p contentRect:cr] && self.rotationLabel) {
-    NSString *axis =
-        (_rotActiveAxis == 0) ? @"X" : (_rotActiveAxis == 1) ? @"Y" : @"Z";
-    self.onHandleVisibilityToggled(
-        [NSString stringWithFormat:@"%@.%@", self.rotationLabel, axis]);
-    return YES;
+    NSString *axis = (_rotActiveAxis == 0)   ? @"X"
+                     : (_rotActiveAxis == 1) ? @"Y"
+                                             : @"Z";
+    label = [NSString stringWithFormat:@"%@.%@", self.rotationLabel, axis];
+  } else if ([self _pointActiveForContentRect:cr] &&
+             [self pointHandleHitAtPoint:p contentRect:cr] && self.pointLabel) {
+    label = self.pointLabel;
+  } else if ([self _cropActiveForContentRect:cr] && self.cropLabel &&
+             [_cropEditor partAtPoint:p
+                               values:[self valuesForLabel:self.cropLabel]
+                          contentRect:cr] >= 0) {
+    label = self.cropLabel;
   }
-  if ([self _pointActiveForContentRect:cr] &&
-      [self pointHandleHitAtPoint:p contentRect:cr] && self.pointLabel) {
-    self.onHandleVisibilityToggled(self.pointLabel);
-    return YES;
-  }
-  return NO;
+  // The hit-tests above leave transient active state (e.g. _rotActiveAxis), but
+  // an opt-click never runs the begin/end-drag cycle that would clear it - so a
+  // stale highlight would linger until the next click. Reset it here (mirrors
+  // -miniCanvasEndHandleDrag:) and force a repaint.
+  _pointGrabbed = NO;
+  _rotationGrabbed = NO;
+  _rotActiveAxis = -1;
+  [_cropEditor endDrag];
+  [canvas setNeedsDisplay:YES];
+  if (!label)
+    return NO;
+  self.onHandleVisibilityToggled(label);
+  return YES;
 }
 
 - (void)miniCanvas:(KKMiniCanvasView *)canvas

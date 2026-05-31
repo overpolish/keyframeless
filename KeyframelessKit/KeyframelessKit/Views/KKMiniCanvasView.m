@@ -163,8 +163,8 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   // Opt-click toggles a handle's visibility (hide / re-show a ghost) instead of
   // dragging it - mirrors the viewer OSC.
   if ((e.modifierFlags & NSEventModifierFlagOption) &&
-      [d respondsToSelector:@selector(miniCanvas:
-                                  optClickHandleAtPoint:contentRect:)] &&
+      [d respondsToSelector:
+              @selector(miniCanvas:optClickHandleAtPoint:contentRect:)] &&
       [d miniCanvas:c
           optClickHandleAtPoint:[self convertPoint:e.locationInWindow
                                           fromView:nil]
@@ -1066,7 +1066,10 @@ static const NSUInteger kFilmstripGridCols = 5;
       float T = (float)(CGRectGetMaxY(br) * s - d.height / 2.0);
       float lw = (float)(1.0 * s);
       simd_uint2 vp = {(unsigned)d.width, (unsigned)d.height};
-      simd_float4 lineColor = {1.0f, 1.0f, 1.0f, 0.9f};
+      CGFloat cropGhost = [del isKindOfClass:[KKMiniCanvasRenderer class]]
+                              ? [(KKMiniCanvasRenderer *)del cropGhostAlpha]
+                              : 1.0;
+      simd_float4 lineColor = {1.0f, 1.0f, 1.0f, 0.9f * (float)cropGhost};
       [enc setRenderPipelineState:_linePipeline];
       [enc setVertexBytes:&vp
                    length:sizeof(vp)
@@ -1123,23 +1126,31 @@ static const NSUInteger kFilmstripGridCols = 5;
         isActive = [(KKMiniCanvasRenderer *)del pointHandleIsActive];
         ghostAlpha = [(KKMiniCanvasRenderer *)del pointHandleGhostAlpha];
       }
-      if (style == KKMiniHandleStyleArc)
+      if (style == KKMiniHandleStyleArc) {
         [self _encodeArcHandleGlyphAt:handleCenterPts
                              isActive:isActive
                            ghostAlpha:ghostAlpha
                               encoder:enc];
-      else
-        [self _encodeHandleGlyphAt:handleCenterPts
-                         fillColor:accentFill
-                           encoder:enc];
+      } else {
+        // Point-style handles dim via the fill alpha (no ghostAlpha param).
+        simd_float4 f = accentFill;
+        f.w *= (float)ghostAlpha;
+        [self _encodeHandleGlyphAt:handleCenterPts fillColor:f encoder:enc];
+      }
     }
 
     if ([del respondsToSelector:
                  @selector(miniCanvas:extraHandleCentersForContentRect:)]) {
+      // Crop corner handles dim with the crop ghost (opt-reveal preview).
+      CGFloat cropGhost = [del isKindOfClass:[KKMiniCanvasRenderer class]]
+                              ? [(KKMiniCanvasRenderer *)del cropGhostAlpha]
+                              : 1.0;
+      simd_float4 cornerFill = whiteFill;
+      cornerFill.w *= (float)cropGhost;
       for (NSValue *v in [del miniCanvas:self
                extraHandleCentersForContentRect:cr])
         [self _encodeHandleGlyphAt:v.pointValue
-                         fillColor:whiteFill
+                         fillColor:cornerFill
                            encoder:enc];
     }
 

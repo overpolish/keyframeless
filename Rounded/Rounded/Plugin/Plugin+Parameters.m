@@ -73,6 +73,16 @@
     return NO;
   }
 
+  // Per-instance identity UUID: lets the OSC resolve this instance's
+  // KKPluginInstanceState (OSC-visibility cache) from its own apiManager scope.
+  if (![paramAPI addStringParameterWithName:@""
+                                parameterID:kKKParamInstanceID
+                               defaultValue:@""
+                             parameterFlags:kFxParameterFlag_HIDDEN |
+                                            kFxParameterFlag_NOT_ANIMATABLE]) {
+    return NO;
+  }
+
   return YES;
 }
 

@@ -79,31 +79,9 @@
 }
 
 - (void)applyOSCElementsFromUIState:(NSDictionary *)uiState {
-  NSDictionary *els = uiState[@"oscElements"];
-  NSMutableSet<NSString *> *hidden = [NSMutableSet set];
-  if ([els isKindOfClass:[NSDictionary class]])
-    for (NSString *key in [MagicMovePlugin oscElementKeys])
-      if (els[key] && ![els[key] boolValue])
-        [hidden addObject:key];
-  KKInstanceStateForAPI(self.apiManager).hiddenOSCElements = hidden;
-  self.miniCanvasRenderer.hiddenHandleLabels = hidden;
-}
-
-- (void)toggleOSCElementHiddenForLabel:(NSString *)label {
-  KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
-  NSMutableSet<NSString *> *h =
-      [(st.hiddenOSCElements ?: [NSSet set]) mutableCopy];
-  if ([h containsObject:label])
-    [h removeObject:label];
-  else
-    [h addObject:label];
-  st.hiddenOSCElements = h;
-  self.miniCanvasRenderer.hiddenHandleLabels = h;
-  NSMutableDictionary<NSString *, NSNumber *> *els =
-      [NSMutableDictionary dictionary];
-  for (NSString *k in [MagicMovePlugin oscElementKeys])
-    els[k] = @(![h containsObject:k]);
-  [self patchUIStateKey:@"oscElements" value:els paramID:kParamUIState];
+  [self kkApplyOSCVisibilityFromState:uiState
+                          elementKeys:[MagicMovePlugin oscElementKeys]
+                             renderer:self.miniCanvasRenderer];
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
@@ -206,11 +184,12 @@
   self.miniCanvasRenderer.timeline = timeline;
   self.miniCanvasRenderer.handlesHidden = !oscMasterVisible;
   [self applyOSCElementsFromUIState:uiState];
-  __weak typeof(self) weakForHandles = self;
-  self.miniCanvasRenderer.onHandleVisibilityToggled = ^(NSString *label) {
-    __strong typeof(weakForHandles) strong = weakForHandles;
-    [strong toggleOSCElementHiddenForLabel:label];
-  };
+  // Wire the master tick + per-element pills + mini-canvas opt-click in one
+  // call (shared glue in KKPlugin (OSCVisibility)).
+  [self kkWireOSCVisibilityForView:view
+                          renderer:self.miniCanvasRenderer
+                         compounds:[MagicMovePlugin oscCompounds]
+                           paramID:kParamUIState];
   view.miniCanvasDelegate = self.miniCanvasRenderer;
   view.miniCanvasDescriptorPath = MagicMoveMiniCanvasDescriptorPath;
   view.miniCanvasRequestPath = MagicMoveMiniCanvasRequestPath;
@@ -249,64 +228,6 @@
     if (!strong)
       return;
     [strong patchUIStateKey:@"activeTab" value:@(tab) paramID:kParamUIState];
-  };
-  view.onOSCVisibleToggled = ^(BOOL visible) {
-    __strong typeof(weak) strong = weak;
-    if (!strong)
-      return;
-    // Update the per-instance cache the OSC reads (UUID already minted at
-    // custom-UI creation, so this resolves without an action scope), mirror it
-    // onto this instance's mini-canvas handles, then persist via the UI-state
-    // blob (which also re-seeds on its echo).
-    KKInstanceStateForAPI(strong.apiManager).oscMasterVisible = visible;
-    strong.miniCanvasRenderer.handlesHidden = !visible;
-    [strong patchUIStateKey:@"oscMasterVisible"
-                      value:@(visible)
-                    paramID:kParamUIState];
-  };
-  view.oscVisibilityCompounds = [MagicMovePlugin oscCompounds];
-  view.oscVisibilityElementStates = ^NSArray<NSArray<NSNumber *> *> * {
-    __strong typeof(weak) strong = weak;
-    if (!strong)
-      return @[];
-    NSSet<NSString *> *hidden =
-        KKInstanceStateForAPI(strong.apiManager).hiddenOSCElements
-            ?: [NSSet set];
-    NSMutableArray<NSArray<NSNumber *> *> *out = [NSMutableArray array];
-    for (NSArray<NSString *> *compound in [MagicMovePlugin oscCompounds]) {
-      NSMutableArray<NSNumber *> *group = [NSMutableArray array];
-      for (NSString *key in compound)
-        [group addObject:@(![hidden containsObject:key])];
-      [out addObject:group];
-    }
-    return out;
-  };
-  view.oscVisibilityElementToggled = ^(NSInteger ci, NSInteger seg, BOOL isOn) {
-    __strong typeof(weak) strong = weak;
-    NSArray<NSArray<NSString *> *> *compounds = [MagicMovePlugin oscCompounds];
-    if (!strong || ci < 0 || ci >= (NSInteger)compounds.count)
-      return;
-    NSArray<NSString *> *compound = compounds[ci];
-    if (seg < 0 || seg >= (NSInteger)compound.count)
-      return;
-    NSString *key = compound[seg];
-    NSMutableSet<NSString *> *h =
-        [(KKInstanceStateForAPI(strong.apiManager).hiddenOSCElements
-              ?: [NSSet set]) mutableCopy];
-    if (isOn)
-      [h removeObject:key];
-    else
-      [h addObject:key];
-    // Update the per-instance cache + mini-canvas immediately, then persist the
-    // full element map to the UI-state blob (its parameterChanged echo
-    // re-applies, and the param write repaints the viewer OSC).
-    KKInstanceStateForAPI(strong.apiManager).hiddenOSCElements = h;
-    strong.miniCanvasRenderer.hiddenHandleLabels = h;
-    NSMutableDictionary<NSString *, NSNumber *> *els =
-        [NSMutableDictionary dictionary];
-    for (NSString *kk in [MagicMovePlugin oscElementKeys])
-      els[kk] = @(![h containsObject:kk]);
-    [strong patchUIStateKey:@"oscElements" value:els paramID:kParamUIState];
   };
   view.onMotionBlurChanged = ^(BOOL enabled, double shutterAngle,
                                NSInteger samples, KKMotionBlurMode mode) {

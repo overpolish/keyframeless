@@ -32,6 +32,10 @@
   return self;
 }
 
+- (BOOL)showsOSCVisibilityRow {
+  return YES;
+}
+
 - (void)applyTimeline:(KKTimeline *)timeline {
   [super applyTimeline:timeline];
   _miniCanvasRenderer.timeline = timeline;

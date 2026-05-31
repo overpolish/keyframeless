@@ -7,4 +7,6 @@ Box crops the clip to a rectangular region. The box has four animatable edges: l
 
 Box's value editor has a Linked toggle so all four edges move in proportion when you drag any one, or turn it off to animate edges independently. Open the editor to drag the edges with visual guides on the canvas.
 
+The crop on-screen control (border + corner handles) can be hidden to declutter: Option-click the border or a corner on the viewer or mini-canvas, or toggle its Crop pill in the on-screen-controls settings popover. See the Rounded overview for the full show/hide behaviour.
+
 Box and Radius work together: a rounded box gives you a rounded crop region instead of just rounded clip corners. Animating them on the same intervals lets you do effects like a circular reveal that grows out from a point.

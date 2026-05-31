@@ -47,6 +47,10 @@ enum {
 @property(nonatomic) NSInteger hoveredIndex;
 @property(nonatomic) NSInteger draggingIndex;
 
+/// Multiplier on the whole crop OSC's alpha (border + corner handles), default
+/// 1.0. Draw at < 1.0 to render the crop as a dimmed "ghost" during opt-reveal.
+@property(nonatomic) float ghostAlpha;
+
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager;
 
 /// Returns the crop corner points in canvas space. Pass NULL for values
