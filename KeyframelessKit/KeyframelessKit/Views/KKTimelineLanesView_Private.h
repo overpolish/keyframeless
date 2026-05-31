@@ -21,7 +21,7 @@ static const CGFloat kSearchH = 28.0;
 static const CGFloat kPopoverW = 180.0;
 // Wider variant for the static-values popover when it hosts the mini canvas,
 // so the preview is legible before in-canvas zoom exists.
-static const CGFloat kCanvasPopoverW = 420.0;
+static const CGFloat kCanvasPopoverW = 540.0;
 static const NSInteger kMaxSummaryLabels = 2;
 
 NS_ASSUME_NONNULL_BEGIN

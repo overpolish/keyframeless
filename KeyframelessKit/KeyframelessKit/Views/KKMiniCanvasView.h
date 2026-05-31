@@ -6,6 +6,7 @@
 #pragma once
 
 #import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKOSCShaderTypes.h>
 #import <MetalKit/MetalKit.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -56,6 +57,30 @@ NS_ASSUME_NONNULL_BEGIN
     pointHandleCenter:(out CGPoint *)outCenter
              forValue:(double)value
           contentRect:(CGRect)contentRect;
+/// 3-ring rotation gizmo overlay (KKRotationOSC parity on the mini-canvas).
+/// The delegate fills in the centre (overlay points, y-up), pixel radius,
+/// and a `KKRotationOSCParams` struct holding the world matrix + ring
+/// colours. Returns NO to suppress (default - no rotation handle).
+- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+    rotationOSCCenter:(out CGPoint *)outCenter
+             radiusPx:(out CGFloat *)outRadiusPx
+               params:(out KKRotationOSCParams *)outParams
+          contentRect:(CGRect)contentRect;
+/// Hit-test the rotation gizmo at `point` (overlay points, y-up). The
+/// delegate records the active ring + press tangent so a subsequent
+/// `-rotationDragToPoint:` produces a sensible angle. Returns NO if the
+/// point isn't on any ring.
+- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+    rotationHitAtPoint:(CGPoint)point
+           contentRect:(CGRect)contentRect;
+- (void)miniCanvas:(KKMiniCanvasView *)canvas
+    rotationBeginDragAtPoint:(CGPoint)point
+                 contentRect:(CGRect)contentRect;
+- (void)miniCanvas:(KKMiniCanvasView *)canvas
+    rotationDragToPoint:(CGPoint)point
+            contentRect:(CGRect)contentRect
+              modifiers:(NSEventModifierFlags)modifiers;
+- (void)miniCanvasEndRotationDrag:(KKMiniCanvasView *)canvas;
 /// Crop handle centres (overlay points, y-up) the box *would* have if the
 /// crop were `values` (`[w,h,x,y]`) - same order/count as
 /// -miniCanvas:extraHandleCentersForContentRect: (0 = top-left). Lets a
@@ -86,12 +111,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// overlay strokes a yellow guide through each active axis. Either or both
 /// axes may be active.
 - (void)miniCanvas:(KKMiniCanvasView *)canvas
-        snapGuideHasX:(out BOOL *)hasX
-                    X:(out CGFloat *)outX
-       fromKeyposeX:(out BOOL *)fromKeyposeX
-                hasY:(out BOOL *)hasY
-                    Y:(out CGFloat *)outY
-       fromKeyposeY:(out BOOL *)fromKeyposeY;
+     snapGuideHasX:(out BOOL *)hasX
+                 X:(out CGFloat *)outX
+      fromKeyposeX:(out BOOL *)fromKeyposeX
+              hasY:(out BOOL *)hasY
+                 Y:(out CGFloat *)outY
+      fromKeyposeY:(out BOOL *)fromKeyposeY;
 @end
 
 /// `MTKView` that resolves a cross-process source `IOSurface` - published by

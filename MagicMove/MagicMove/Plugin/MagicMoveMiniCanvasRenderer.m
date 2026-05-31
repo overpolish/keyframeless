@@ -269,8 +269,24 @@ static void KKMagicMoveParamsFromLanes(MagicMoveParams *outParams,
     dragHandleToPoint:(CGPoint)p
           contentRect:(CGRect)cr
             modifiers:(NSEventModifierFlags)modifiers {
-  if (![self pointHandleIsActive])
+  // Rotation drag has to be routed here too - the override was only added
+  // so Position could see modifiers, but it accidentally swallowed every
+  // non-point drag (rotation rings, crop). Route rotation first, then fall
+  // through to point. Crop goes via the base renderer's path on super.
+  if ([self rotationIsActive]) {
+    [self applyRotationDragToPoint:p
+                       contentRect:cr
+                            canvas:canvas
+                         modifiers:modifiers];
     return;
+  }
+  if (![self pointHandleIsActive]) {
+    [super miniCanvas:canvas
+        dragHandleToPoint:p
+              contentRect:cr
+                modifiers:modifiers];
+    return;
+  }
   [self applyPointDragToPoint:p
                   contentRect:cr
                        canvas:canvas
@@ -352,6 +368,22 @@ static void KKMagicMoveParamsFromLanes(MagicMoveParams *outParams,
 - (void)miniCanvasEndHandleDrag:(KKMiniCanvasView *)canvas {
   [_snapEngine reset];
   [super miniCanvasEndHandleDrag:canvas];
+}
+
+#pragma mark - Rotation gizmo
+
+// Opting in to the base's 3-ring gizmo. The drag state machine, hit-test,
+// compose × axis(dAngle) → decompose-near, and commit all live in the base
+// (`KKMiniCanvasRenderer`). The only thing MagicMove-specific is anchoring
+// the sphere to the Position handle so the rings move with the translated
+// image.
+- (NSString *)rotationLabel {
+  return @"Rotation";
+}
+
+- (CGPoint)rotationCenterForContentRect:(CGRect)cr {
+  return [self _handlePointForContentRect:cr
+                                 position:[self valuesForLabel:@"Position"]];
 }
 
 @end

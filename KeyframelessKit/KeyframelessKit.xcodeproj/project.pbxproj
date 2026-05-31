@@ -44,6 +44,8 @@
 				Metal/KKShaderTypes.h,
 				OSC/Base/KKOnScreenControl.h,
 				"OSC/Base/KKOnScreenControl+CoordinateSpace.h",
+				OSC/Base/KKOSCShaderTypes.h,
+				OSC/Base/KKRotationOSCMath.h,
 				OSC/Controls/KKArcOSC.h,
 				OSC/Controls/KKCropOSC.h,
 				OSC/Controls/KKIconButtonOSC.h,

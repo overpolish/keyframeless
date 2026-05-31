@@ -7,125 +7,13 @@
 #import "../../Style/KKTokens.h"
 #import "../../Style/NSColor+KKColors.h"
 #import "../Base/KKOSCShaderTypes.h"
+#import "../Base/KKRotationOSCMath.h"
 #include <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 
 static const int kRingSamples = 192;
 static const float kHitThresholdPixels = 10.0f;
-
-typedef struct {
-  simd_float3 col0;
-  simd_float3 col1;
-  simd_float3 col2;
-} KKRotMatrix3;
-
-static inline KKRotMatrix3 KKBuildRotationMatrix(float rx, float ry, float rz) {
-  float cx = cosf(rx), sx = sinf(rx);
-  float cy = cosf(ry), sy = sinf(ry);
-  float cz = cosf(rz), sz = sinf(rz);
-  KKRotMatrix3 m;
-  m.col0 = simd_make_float3(cy * cz + sy * sx * sz, cx * sz,
-                            -sy * cz + cy * sx * sz);
-  m.col1 = simd_make_float3(-cy * sz + sy * sx * cz, cx * cz,
-                            sy * sz + cy * sx * cz);
-  m.col2 = simd_make_float3(sy * cx, -sx, cy * cx);
-  return m;
-}
-
-// Returns U, V (object plane spanning vectors) for the ring of axis k.
-// k=0 (X ring): basis Y,Z columns. k=1 (Y): X,Z. k=2 (Z): X,Y.
-static inline void KKRingBasis(KKRotMatrix3 m, int k, simd_float3 *outU,
-                               simd_float3 *outV) {
-  if (k == 0) {
-    *outU = m.col1;
-    *outV = m.col2;
-  } else if (k == 1) {
-    *outU = m.col0;
-    *outV = m.col2;
-  } else {
-    *outU = m.col0;
-    *outV = m.col1;
-  }
-}
-
-// Find the t on ring k whose projected POLYLINE is closest to `p` (canvas
-// pixels, relative to center). Reports both the OVERALL closest (front or
-// back) AND the FRONT-only closest, so the caller can prefer front matches
-// over back ones (matches what the shader visibly renders as bright vs
-// dim, which is what the user is aiming at). outFrontT/outFrontQ/outFrontD
-// are set to NAN/INF if no front sample exists.
-typedef struct {
-  double overallDist;
-  double overallT;
-  double overallZ;
-  CGPoint overallQ;
-  double frontDist;
-  double frontT;
-  CGPoint frontQ;
-} KKRingHit;
-
-static KKRingHit KKClosestAngleOnRing(KKRotMatrix3 m, int k, double radius,
-                                      CGPoint p) {
-  simd_float3 U, V;
-  KKRingBasis(m, k, &U, &V);
-  KKRingHit r = {
-      .overallDist = 1e9,
-      .overallT = 0,
-      .overallZ = 0,
-      .overallQ = CGPointZero,
-      .frontDist = 1e9,
-      .frontT = 0,
-      .frontQ = CGPointZero,
-  };
-  const double twoPi = 6.28318530717958647692;
-  double prevX = radius * U.x;
-  double prevY = radius * U.y;
-  double prevZ = radius * U.z;
-  for (int i = 1; i <= kRingSamples; i++) {
-    double t = twoPi * ((double)i / (double)kRingSamples);
-    double cx = radius * (cos(t) * U.x + sin(t) * V.x);
-    double cy = radius * (cos(t) * U.y + sin(t) * V.y);
-    double cz = radius * (cos(t) * U.z + sin(t) * V.z);
-    double sx = cx - prevX;
-    double sy = cy - prevY;
-    double L2 = sx * sx + sy * sy;
-    double u = 0.0;
-    if (L2 > 1e-9) {
-      u = ((p.x - prevX) * sx + (p.y - prevY) * sy) / L2;
-      if (u < 0.0)
-        u = 0.0;
-      if (u > 1.0)
-        u = 1.0;
-    }
-    double qx = prevX + u * sx;
-    double qy = prevY + u * sy;
-    double qz = prevZ + u * (cz - prevZ);
-    double dx = p.x - qx;
-    double dy = p.y - qy;
-    double d = sqrt(dx * dx + dy * dy);
-    double prevT = twoPi * ((double)(i - 1) / (double)kRingSamples);
-    double tAt = prevT + u * (t - prevT);
-    if (d < r.overallDist) {
-      r.overallDist = d;
-      r.overallT = tAt;
-      r.overallZ = qz;
-      r.overallQ = CGPointMake(qx, qy);
-    }
-    // Camera sits at z = -camD looking toward +z, so points closer to the
-    // camera have z < 0 (in front of the source plane) and points behind
-    // have z > 0. "Front-facing" = z <= 0 in this convention.
-    if (qz <= 0.0 && d < r.frontDist) {
-      r.frontDist = d;
-      r.frontT = tAt;
-      r.frontQ = CGPointMake(qx, qy);
-    }
-    prevX = cx;
-    prevY = cy;
-    prevZ = cz;
-  }
-  return r;
-}
 
 @implementation KKRotationOSC {
   NSInteger _activeAxis; // -1 / 0 / 1 / 2
@@ -188,7 +76,7 @@ static KKRingHit KKClosestAngleOnRing(KKRotMatrix3 m, int k, double radius,
   NSInteger bestFrontK = -1;
   double bestFrontT = 0;
   for (int k = 0; k < 3; k++) {
-    KKRingHit h = KKClosestAngleOnRing(m, k, _radius, local);
+    KKRingHit h = KKClosestAngleOnRing(m, k, _radius, local, kRingSamples);
     if (h.frontDist < bestFront) {
       bestFront = h.frontDist;
       bestFrontK = k;

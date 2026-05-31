@@ -237,6 +237,7 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   NSTimer *_pollTimer;
   id<MTLRenderPipelineState> _pointPipeline;
   id<MTLRenderPipelineState> _arcPipeline;
+  id<MTLRenderPipelineState> _rotationPipeline;
   id<MTLRenderPipelineState> _linePipeline;
   _KKMiniCanvasOverlay *_overlay;
 
@@ -386,6 +387,27 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   _arcPipeline = [device newRenderPipelineStateWithDescriptor:ap error:&err];
   if (!_arcPipeline)
     KKLogError(@"KKMiniCanvasView: arc pipeline failed: %@", err);
+
+  // Rotation gizmo: shared `KKRotationOSCFragment` shader. Same blend mode
+  // as the other glyph pipelines so the rings composite straight over the
+  // image.
+  MTLRenderPipelineDescriptor *rp = [[MTLRenderPipelineDescriptor alloc] init];
+  rp.vertexFunction = [lib newFunctionWithName:@"KKVertexShader"];
+  rp.fragmentFunction = [lib newFunctionWithName:@"KKRotationOSCFragment"];
+  rp.colorAttachments[0].pixelFormat = self.colorPixelFormat;
+  rp.colorAttachments[0].blendingEnabled = YES;
+  rp.colorAttachments[0].rgbBlendOperation = MTLBlendOperationAdd;
+  rp.colorAttachments[0].alphaBlendOperation = MTLBlendOperationAdd;
+  rp.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
+  rp.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorSourceAlpha;
+  rp.colorAttachments[0].destinationRGBBlendFactor =
+      MTLBlendFactorOneMinusSourceAlpha;
+  rp.colorAttachments[0].destinationAlphaBlendFactor =
+      MTLBlendFactorOneMinusSourceAlpha;
+  _rotationPipeline = [device newRenderPipelineStateWithDescriptor:rp
+                                                             error:&err];
+  if (!_rotationPipeline)
+    KKLogError(@"KKMiniCanvasView: rotation pipeline failed: %@", err);
 
   // Flat-color pipeline for the crop border, drawn before the glyphs so the
   // handles sit on top of the line.
@@ -672,9 +694,16 @@ static const CGFloat kFilmstripGap = 16.0;
   // viewer KKArcOSC 23→31 hit-grow). Stroke is held constant across states
   // (viewer KKArcOSC keeps strokeWidth=10 fixed while radius grows); the
   // inner ratio is derived so the visible ring stays the same thickness.
-  CGFloat outerPt = isActive ? 12.0 : 9.0;
-  CGFloat strokePt =
-      4.5; // proportional to viewer: 3.5pt @ 270pt → 2.5pt @ 195pt
+  // Arc + ring sizes track the canvas frame height (NOT contentRect, which
+  // grows on zoom) so they scale uniformly when the popover gets bigger.
+  // Baseline 230pt = the kKKMini constants-popover canvas height at the
+  // original 420pt popover width (16:9).
+  const CGFloat kBaselineCanvasH = 230.0;
+  CGFloat canvasScale = self.bounds.size.height / kBaselineCanvasH;
+  if (canvasScale <= 0)
+    canvasScale = 1.0;
+  CGFloat outerPt = (isActive ? 12.0 : 9.0) * canvasScale;
+  CGFloat strokePt = 4.5 * canvasScale;
   float sizePx = (float)(outerPt * s);
   KKVertex2D quad[6];
   [KKRenderPrimitives generateQuadVertices:quad center:centered size:sizePx];
@@ -698,6 +727,51 @@ static const CGFloat kFilmstripGap = 16.0;
       .strokeColor = {0.0f, 0.0f, 0.0f, 0.8f},
   };
   [enc setRenderPipelineState:_arcPipeline];
+  [enc setVertexBytes:quad
+               length:sizeof(quad)
+              atIndex:KKVertexInputIndex_Vertices];
+  [enc setVertexBytes:&vp
+               length:sizeof(vp)
+              atIndex:KKVertexInputIndex_ViewportSize];
+  [enc setFragmentBytes:&params
+                 length:sizeof(params)
+                atIndex:KKOSCFragmentIndex_DrawColor];
+  [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
+}
+
+// Encodes the shared KKRotationOSC 3-ring gizmo centered at `centerPts`
+// (overlay points, y-up) at the given pixel radius. The fragment shader is
+// Y-DOWN-convention (matches the viewer OSC + hit-test); the mini-canvas
+// drawable is Y-UP, so we negate textureCoordinate.y on each vertex to keep
+// the rings visually consistent with the viewer.
+- (void)_encodeRotationOSCAt:(CGPoint)centerPts
+                    radiusPx:(CGFloat)radiusPx
+                      params:(KKRotationOSCParams)params
+                     encoder:(id<MTLRenderCommandEncoder>)enc {
+  if (!_rotationPipeline)
+    return;
+  CGSize d = self.drawableSize;
+  CGFloat s = self.window.backingScaleFactor;
+  if (s <= 0)
+    s = 2.0;
+  CGPoint centered = CGPointMake(centerPts.x * s - d.width / 2.0,
+                                 centerPts.y * s - d.height / 2.0);
+  // The quad must extend a bit past the outer ring so the antialiased edge
+  // has room to fade. Mirrors KKRotationOSC's `quadHalf` derivation.
+  CGFloat quadHalfPt = radiusPx + 4.0;
+  float sizePx = (float)(quadHalfPt * s);
+  KKVertex2D quad[6];
+  [KKRenderPrimitives generateQuadVertices:quad center:centered size:sizePx];
+  for (int i = 0; i < 6; i++)
+    quad[i].textureCoordinate.y = -quad[i].textureCoordinate.y;
+  // Rescale shader-side normalized radii so the caller's pixel sizes map
+  // through the (possibly enlarged) quad correctly.
+  float qh = (float)quadHalfPt;
+  params.radius = (float)(radiusPx / qh);
+  params.ringHalfWidth = (float)((radiusPx * params.ringHalfWidth) / qh);
+  params.outlineWidth = (float)((radiusPx * params.outlineWidth) / qh);
+  simd_uint2 vp = {(unsigned)d.width, (unsigned)d.height};
+  [enc setRenderPipelineState:_rotationPipeline];
   [enc setVertexBytes:quad
                length:sizeof(quad)
               atIndex:KKVertexInputIndex_Vertices];
@@ -987,6 +1061,24 @@ static const CGFloat kFilmstripGap = 16.0;
         [self _encodeHandleGlyphAt:v.pointValue
                          fillColor:whiteFill
                            encoder:enc];
+    }
+
+    if (_rotationPipeline &&
+        [del respondsToSelector:@selector(miniCanvas:rotationOSCCenter:radiusPx:
+                                          params:contentRect:)]) {
+      CGPoint rotCenter = CGPointZero;
+      CGFloat rotRadius = 0;
+      KKRotationOSCParams rotParams = {0};
+      if ([del miniCanvas:self
+              rotationOSCCenter:&rotCenter
+                       radiusPx:&rotRadius
+                         params:&rotParams
+                    contentRect:cr]) {
+        [self _encodeRotationOSCAt:rotCenter
+                          radiusPx:rotRadius
+                            params:rotParams
+                           encoder:enc];
+      }
     }
   }
 

@@ -30,6 +30,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// The persisted timeline (constants live here as disabled single-keypose
 /// lanes). The host keeps this in sync.
 @property(nonatomic, copy, nullable) KKTimeline *timeline;
+/// Weak ref to the canvas this renderer is currently delegating for. Set by
+/// the base on every delegate call, so subclasses can read the canvas's
+/// frame size (e.g. to scale overlay glyphs with popover size) without
+/// threading `canvas` through every subclass hook.
+@property(nonatomic, weak, nullable) KKMiniCanvasView *canvas;
 
 /// Boundary-editing mode (Basic step 27): the popover edits an animatable
 /// lane's keypose at a specific clip time rather than a constant.
@@ -60,6 +65,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// Lane label for the single point handle (e.g. `@"Radius"`), or nil.
 /// Default nil.
 @property(nonatomic, readonly, nullable) NSString *pointLabel;
+/// Lane label for the rotation gizmo (e.g. `@"Rotation"`), or nil if this
+/// plugin has no 3-ring rotation OSC. Default nil. When non-nil, the
+/// subclass must also override the rotation hooks below.
+@property(nonatomic, readonly, nullable) NSString *rotationLabel;
 /// Value type for a lane the renderer writes. Default `KKLaneValueTypeFloat`.
 - (NSInteger)valueTypeForLabel:(NSString *)label;
 /// Default value array for a label when the timeline has no (or a short)
@@ -106,6 +115,56 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
 - (void)applyPointDragToPoint:(CGPoint)p
                   contentRect:(CGRect)contentRect
                        canvas:(KKMiniCanvasView *)canvas;
+
+/// === 3-ring rotation gizmo ===
+/// To opt in: override `rotationLabel`. The base provides the full state
+/// machine (hit-test, press snapshot, tangent capture, compose × axis(dAngle)
+/// → decompose-near, commit) so a typical plugin overrides ONLY the small
+/// accessors below. The four `rotation…` hooks lower down
+/// (`rotationOSCCenter:`, `rotationHitTestAtPoint:`,
+/// `rotationBeginDragAtPoint:`, `applyRotationDragToPoint:…`) ship with
+/// sensible defaults driven by these accessors and only need overriding for
+/// non-standard behaviour.
+
+/// Current rotation values in degrees (length 3, x/y/z). Default reads
+/// `-valuesForLabel:[self rotationLabel]`.
+- (NSArray<NSNumber *> *)rotationEulerDegrees;
+/// Where the sphere sits in overlay points (y-up). Default = centre of
+/// `contentRect`. Override to lock it to another handle (e.g. MagicMove
+/// uses the Position handle so the rings move with the translated image).
+- (CGPoint)rotationCenterForContentRect:(CGRect)contentRect;
+/// Per-axis ring colours, [X, Y, Z]. Default = red / green / blue.
+- (NSArray<NSColor *> *)rotationRingColors;
+/// Per-axis drag direction sign (simd_double3). Default = `{+1, -1, +1}`,
+/// tuned to feel natural with the viewer convention.
+- (simd_double3)rotationAxisSigns;
+/// On-screen ring radius in points. Default scales with the canvas's frame
+/// height (28pt at the 230pt baseline; see project_minicanvas_osc_port).
+- (CGFloat)rotationRadiusPxForCanvas:(nullable KKMiniCanvasView *)canvas;
+
+/// 3-ring rotation gizmo (parallel to the point handle path). Default fills
+/// out a `KKRotationOSCParams` from the accessors above. Override only if
+/// the standard accessors aren't enough.
+- (BOOL)rotationOSCCenter:(out CGPoint *)outCenter
+                 radiusPx:(out CGFloat *)outRadiusPx
+                   params:(out KKRotationOSCParams *)outParams
+           forContentRect:(CGRect)contentRect;
+/// YES if `p` lands on one of the rotation rings, recording the active ring
+/// + press tangent for the subsequent drag. Default uses the accessors.
+- (BOOL)rotationHitTestAtPoint:(CGPoint)p contentRect:(CGRect)contentRect;
+/// Called once on drag begin AFTER `rotationHitTestAtPoint:` returned YES.
+/// Default snapshots press values from `rotationEulerDegrees`.
+- (void)rotationBeginDragAtPoint:(CGPoint)p contentRect:(CGRect)contentRect;
+/// Apply a rotation-ring drag: compose press matrix * axis(dAngle),
+/// decompose-near, then `-commitValues:forLabel:canvas:`. Default does the
+/// full pipeline including Cmd-15° snap.
+- (void)applyRotationDragToPoint:(CGPoint)p
+                     contentRect:(CGRect)contentRect
+                          canvas:(KKMiniCanvasView *)canvas
+                       modifiers:(NSEventModifierFlags)modifiers;
+/// YES while a rotation ring is currently being dragged. Default reflects
+/// the renderer's own `_rotationGrabbed` state.
+- (BOOL)rotationIsActive;
 
 #pragma mark - Provided to subclasses
 

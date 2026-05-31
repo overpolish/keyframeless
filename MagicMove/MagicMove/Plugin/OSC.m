@@ -9,111 +9,6 @@
 #import <KeyframelessKit/KeyframelessKit.h>
 #import <simd/simd.h>
 
-// World rotation matrix R = Ry * Rx * Rz (matches MagicMove.metal's order).
-static simd_double3x3 KKMMRotationMatrix(double rx, double ry, double rz) {
-  double cx = cos(rx), sx = sin(rx);
-  double cy = cos(ry), sy = sin(ry);
-  double cz = cos(rz), sz = sin(rz);
-  simd_double3x3 R;
-  R.columns[0] = simd_make_double3(cy * cz + sy * sx * sz, cx * sz,
-                                   -sy * cz + cy * sx * sz);
-  R.columns[1] = simd_make_double3(-cy * sz + sy * sx * cz, cx * cz,
-                                   sy * sz + cy * sx * cz);
-  R.columns[2] = simd_make_double3(sy * cx, -sx, cy * cx);
-  return R;
-}
-
-static simd_double3x3 KKMMRotX(double a) {
-  double c = cos(a), s = sin(a);
-  simd_double3x3 R;
-  R.columns[0] = simd_make_double3(1, 0, 0);
-  R.columns[1] = simd_make_double3(0, c, s);
-  R.columns[2] = simd_make_double3(0, -s, c);
-  return R;
-}
-static simd_double3x3 KKMMRotY(double a) {
-  double c = cos(a), s = sin(a);
-  simd_double3x3 R;
-  R.columns[0] = simd_make_double3(c, 0, -s);
-  R.columns[1] = simd_make_double3(0, 1, 0);
-  R.columns[2] = simd_make_double3(s, 0, c);
-  return R;
-}
-static simd_double3x3 KKMMRotZ(double a) {
-  double c = cos(a), s = sin(a);
-  simd_double3x3 R;
-  R.columns[0] = simd_make_double3(c, s, 0);
-  R.columns[1] = simd_make_double3(-s, c, 0);
-  R.columns[2] = simd_make_double3(0, 0, 1);
-  return R;
-}
-
-// Pick the (rx, ry, rz) decomposition of R closest to (pressRx, pressRy,
-// pressRz). The YXZ Euler decomposition has two valid representations for
-// any non-gimbal-locked matrix - (rx, ry, rz) and (π - rx, ry + π, rz + π) -
-// and as the user drags past ±90° the "primary" asin branch flips to the
-// alternative, jumping the values discontinuously. Choosing the closer
-// branch to the press pose keeps each drag tick continuous so a 0→90→180
-// sweep stays on the dragged axis instead of resetting.
-static double KKMMWrap(double a) {
-  while (a > M_PI)
-    a -= 2.0 * M_PI;
-  while (a < -M_PI)
-    a += 2.0 * M_PI;
-  return a;
-}
-static double KKMMEulerDist(double rx, double ry, double rz, double px,
-                            double py, double pz) {
-  return fabs(KKMMWrap(rx - px)) + fabs(KKMMWrap(ry - py)) +
-         fabs(KKMMWrap(rz - pz));
-}
-static void KKMMDecomposeEulerNear(simd_double3x3 R, double pressRx,
-                                   double pressRy, double pressRz, double *rx,
-                                   double *ry, double *rz) {
-  double r_1_2 = R.columns[2][1]; // -sx
-  double r_0_2 = R.columns[2][0]; // sy*cx
-  double r_2_2 = R.columns[2][2]; // cy*cx
-  double r_1_0 = R.columns[0][1]; // cx*sz
-  double r_1_1 = R.columns[1][1]; // cx*cz
-  double sx = -r_1_2;
-  if (sx > 1.0)
-    sx = 1.0;
-  if (sx < -1.0)
-    sx = -1.0;
-  double primaryRx = asin(sx);
-  double cx = cos(primaryRx);
-  double primaryRy, primaryRz;
-  if (fabs(cx) > 1e-6) {
-    primaryRy = atan2(r_0_2, r_2_2);
-    primaryRz = atan2(r_1_0, r_1_1);
-  } else {
-    primaryRz = 0.0;
-    primaryRy = atan2(-R.columns[0][2], R.columns[0][0]);
-  }
-  // Alternative branch: same matrix, π-shifted angles.
-  double altRx = M_PI - primaryRx;
-  double altRy = primaryRy + M_PI;
-  double altRz = primaryRz + M_PI;
-  double dPrimary =
-      KKMMEulerDist(primaryRx, primaryRy, primaryRz, pressRx, pressRy, pressRz);
-  double dAlt = KKMMEulerDist(altRx, altRy, altRz, pressRx, pressRy, pressRz);
-  double chosenRx, chosenRy, chosenRz;
-  if (dAlt < dPrimary) {
-    chosenRx = altRx;
-    chosenRy = altRy;
-    chosenRz = altRz;
-  } else {
-    chosenRx = primaryRx;
-    chosenRy = primaryRy;
-    chosenRz = primaryRz;
-  }
-  // Unwrap to stay within ±π of press so big drags accumulate instead of
-  // wrapping to the equivalent ±2π rep.
-  *rx = pressRx + KKMMWrap(chosenRx - pressRx);
-  *ry = pressRy + KKMMWrap(chosenRy - pressRy);
-  *rz = pressRz + KKMMWrap(chosenRz - pressRz);
-}
-
 static NSInteger const kOSCPositionPart = 1;
 static NSInteger const kOSCRotationPart = 2;
 
@@ -620,18 +515,16 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
   // felt wrong once any other axis was non-zero. We bring back the compose
   // and handle the asin discontinuity by picking the Euler decomposition
   // closest to the press pose - so a 0→90→180 sweep stays continuous.
-  simd_double3x3 RPress =
-      KKMMRotationMatrix(self.rotPressX, self.rotPressY, self.rotPressZ);
-  simd_double3x3 RElem = (axis == 0)   ? KKMMRotX(dAngle)
-                         : (axis == 1) ? KKMMRotY(dAngle)
-                                       : KKMMRotZ(dAngle);
-  simd_double3x3 RNew = simd_mul(RPress, RElem);
+  double lastRx = self.rotLastWrittenX;
+  double lastRy = self.rotLastWrittenY;
+  double lastRz = self.rotLastWrittenZ;
   double rx = 0, ry = 0, rz = 0;
-  KKMMDecomposeEulerNear(RNew, self.rotLastWrittenX, self.rotLastWrittenY,
-                         self.rotLastWrittenZ, &rx, &ry, &rz);
-  self.rotLastWrittenX = rx;
-  self.rotLastWrittenY = ry;
-  self.rotLastWrittenZ = rz;
+  KKRotationComposeAxisDelta((int)axis, dAngle, self.rotPressX, self.rotPressY,
+                             self.rotPressZ, &lastRx, &lastRy, &lastRz, &rx,
+                             &ry, &rz);
+  self.rotLastWrittenX = lastRx;
+  self.rotLastWrittenY = lastRy;
+  self.rotLastWrittenZ = lastRz;
   const double kRadToDeg = 180.0 / M_PI;
   double xDeg = rx * kRadToDeg;
   double yDeg = ry * kRadToDeg;

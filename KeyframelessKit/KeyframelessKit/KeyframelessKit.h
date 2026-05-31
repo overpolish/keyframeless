@@ -57,6 +57,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKOSCGuideBridge.h>
 #import <KeyframelessKit/KKOSCGuideStrategy.h>
 #import <KeyframelessKit/KKOSCLabel.h>
+#import <KeyframelessKit/KKOSCShaderTypes.h>
 #import <KeyframelessKit/KKOnScreenControl+CoordinateSpace.h>
 #import <KeyframelessKit/KKPaddedScrollView.h>
 #import <KeyframelessKit/KKParameterRowView.h>
@@ -78,6 +79,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKRenderPrimitives.h>
 #import <KeyframelessKit/KKRingOSC.h>
 #import <KeyframelessKit/KKRotationOSC.h>
+#import <KeyframelessKit/KKRotationOSCMath.h>
 #import <KeyframelessKit/KKSVGParser.h>
 #import <KeyframelessKit/KKSeedView.h>
 #import <KeyframelessKit/KKSegmentEditView+Guide.h>
