@@ -343,10 +343,19 @@
           return [live userBoolForKey:@"rotateWithMotion" default:NO];
         }
         disabledBinding:^BOOL {
+          // Rotate-with-motion needs translational motion along a path.
+          // - Hold-modulation gaps: endpoints are equal, so any motion is
+          //   pure jitter from the modulation - no meaningful heading.
+          //   Disable always.
+          // - Transition gaps: endpoints differ, so a Linear curve still
+          //   has constant velocity. Disable only if the gap is also
+          //   flagged holdsFlat (Basic's per-property phase-off) without
+          //   modulation - then there's truly nothing to sample.
+          if (phase == KKGapPopoverPhaseHoldModulation)
+            return YES;
           KKInterval *live = read();
-          BOOL hasCurveMotion = (live.curve != KKIntervalCurveLinear);
           BOOL hasModulation = (live.modulation != KKIntervalModulationNone);
-          return !hasCurveMotion && !hasModulation;
+          return live.holdsFlat && !hasModulation;
         }
         onToggle:^(BOOL isOn) {
           mutate(^(KKInterval *iv) {
@@ -364,6 +373,12 @@
                                          renderCache:self.renderCache];
   }
   [self.playheadPoller setInspectorView:view];
+  // The render tick may have already established timing before the
+  // inspector view existed (poller was nil then, so ensureRunning was a
+  // no-op nil-send). Kick it now so the scrubber appears without needing
+  // the user to scrub.
+  if (self.renderCache.effectDurSec > 0.0)
+    [self.playheadPoller ensureRunning];
   return view;
 }
 

@@ -40,6 +40,13 @@
 
 - (void)setInspectorView:(KKTimelineInspectorView *)inspectorView {
   _inspectorView = inspectorView;
+  // The new view starts at the hidden sentinel (-1.0); reset our cached
+  // last-pushed fraction so the next tick re-delivers the current value
+  // even if it matches what we pushed to the *previous* view. Without
+  // this, "select a different clip then come back" (or rebooting FCP)
+  // leaves the scrubber invisible until the user nudges the playhead.
+  _lastPushedPlayheadFrac = -1.0;
+  _lastPushedPlaying = NO;
 }
 
 - (void)dealloc {

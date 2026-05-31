@@ -336,46 +336,46 @@
                      intervalReader:reader
                     intervalMutator:mutator];
   };
-  _advancedGraph.onHoldModulationPopover =
-      ^(NSView *anchor, double startFraction, double endFraction,
-        KKIntervalModulation modulation, double intensity, double frequency,
-        uint32_t seed, BOOL linked, BOOL showsLinked,
-        NSArray<NSArray<NSString *> *> *partLabels,
-        NSArray<NSArray<NSNumber *> *> *partStates,
-        NSArray<NSArray<NSNumber *> *> * (^partRebuilder)(void),
-        void (^onModulation)(KKIntervalModulation), void (^onIntensity)(double),
-        void (^onFrequency)(double), void (^onSeed)(uint32_t),
-        void (^onLinked)(BOOL), void (^onParticipation)(NSInteger, BOOL),
-        void (^onDragBegin)(void), void (^onDragEnd)(void), NSString *laneLabel,
-        KKInterval *representative, KKGapIntervalReader reader,
-        KKGapIntervalMutator mutator) {
-        __strong typeof(weakSelf) s = weakSelf;
-        [s _presentHoldModulationPopoverFromAnchor:anchor
-                                     startFraction:startFraction
-                                       endFraction:endFraction
-                                        modulation:modulation
-                                         intensity:intensity
-                                         frequency:frequency
-                                              seed:seed
-                                            linked:linked
-                                       showsLinked:showsLinked
-                                        partLabels:partLabels
-                                        partStates:partStates
-                                     partRebuilder:partRebuilder
-                                      onModulation:onModulation
-                                       onIntensity:onIntensity
-                                       onFrequency:onFrequency
-                                            onSeed:onSeed
-                                          onLinked:onLinked
-                                   onParticipation:onParticipation
-                                       onDragBegin:onDragBegin
-                                         onDragEnd:onDragEnd
-                                             phase:KKGapPopoverPhaseAdvanced
-                                         laneLabel:laneLabel
-                                    representative:representative
-                                    intervalReader:reader
-                                   intervalMutator:mutator];
-      };
+  _advancedGraph.onHoldModulationPopover = ^(
+      NSView *anchor, double startFraction, double endFraction,
+      KKIntervalModulation modulation, double intensity, double frequency,
+      uint32_t seed, BOOL linked, BOOL showsLinked,
+      NSArray<NSArray<NSString *> *> *partLabels,
+      NSArray<NSArray<NSNumber *> *> *partStates,
+      NSArray<NSArray<NSNumber *> *> * (^partRebuilder)(void),
+      void (^onModulation)(KKIntervalModulation), void (^onIntensity)(double),
+      void (^onFrequency)(double), void (^onSeed)(uint32_t),
+      void (^onLinked)(BOOL), void (^onParticipation)(NSInteger, BOOL),
+      void (^onDragBegin)(void), void (^onDragEnd)(void), NSString *laneLabel,
+      KKInterval *representative, KKGapIntervalReader reader,
+      KKGapIntervalMutator mutator) {
+    __strong typeof(weakSelf) s = weakSelf;
+    [s _presentHoldModulationPopoverFromAnchor:anchor
+                                 startFraction:startFraction
+                                   endFraction:endFraction
+                                    modulation:modulation
+                                     intensity:intensity
+                                     frequency:frequency
+                                          seed:seed
+                                        linked:linked
+                                   showsLinked:showsLinked
+                                    partLabels:partLabels
+                                    partStates:partStates
+                                 partRebuilder:partRebuilder
+                                  onModulation:onModulation
+                                   onIntensity:onIntensity
+                                   onFrequency:onFrequency
+                                        onSeed:onSeed
+                                      onLinked:onLinked
+                               onParticipation:onParticipation
+                                   onDragBegin:onDragBegin
+                                     onDragEnd:onDragEnd
+                                         phase:KKGapPopoverPhaseHoldModulation
+                                     laneLabel:laneLabel
+                                representative:representative
+                                intervalReader:reader
+                               intervalMutator:mutator];
+  };
   _advancedGraph.onValuePopover =
       ^(NSView *anchor, NSArray<KKLane *> *displayLanes, double frac,
         NSArray<NSString *> *excludedLabels,
@@ -399,46 +399,46 @@
       [s->_openContentPopover close];
   };
 
-  _basicGraph.onHoldModulationPopover =
-      ^(NSView *anchor, double startFraction, double endFraction,
-        KKIntervalModulation modulation, double intensity, double frequency,
-        uint32_t seed, BOOL linked, BOOL showsLinked,
-        NSArray<NSArray<NSString *> *> *partLabels,
-        NSArray<NSArray<NSNumber *> *> *partStates,
-        NSArray<NSArray<NSNumber *> *> * (^partRebuilder)(void),
-        void (^onModulation)(KKIntervalModulation), void (^onIntensity)(double),
-        void (^onFrequency)(double), void (^onSeed)(uint32_t),
-        void (^onLinked)(BOOL), void (^onParticipation)(NSInteger, BOOL),
-        void (^onDragBegin)(void), void (^onDragEnd)(void), NSString *laneLabel,
-        KKInterval *representative, KKGapIntervalReader reader,
-        KKGapIntervalMutator mutator) {
-        __strong typeof(weakSelf) s = weakSelf;
-        [s _presentHoldModulationPopoverFromAnchor:anchor
-                                     startFraction:startFraction
-                                       endFraction:endFraction
-                                        modulation:modulation
-                                         intensity:intensity
-                                         frequency:frequency
-                                              seed:seed
-                                            linked:linked
-                                       showsLinked:showsLinked
-                                        partLabels:partLabels
-                                        partStates:partStates
-                                     partRebuilder:partRebuilder
-                                      onModulation:onModulation
-                                       onIntensity:onIntensity
-                                       onFrequency:onFrequency
-                                            onSeed:onSeed
-                                          onLinked:onLinked
-                                   onParticipation:onParticipation
-                                       onDragBegin:onDragBegin
-                                         onDragEnd:onDragEnd
-                                             phase:KKGapPopoverPhaseBasicIn
-                                         laneLabel:laneLabel
-                                    representative:representative
-                                    intervalReader:reader
-                                   intervalMutator:mutator];
-      };
+  _basicGraph.onHoldModulationPopover = ^(
+      NSView *anchor, double startFraction, double endFraction,
+      KKIntervalModulation modulation, double intensity, double frequency,
+      uint32_t seed, BOOL linked, BOOL showsLinked,
+      NSArray<NSArray<NSString *> *> *partLabels,
+      NSArray<NSArray<NSNumber *> *> *partStates,
+      NSArray<NSArray<NSNumber *> *> * (^partRebuilder)(void),
+      void (^onModulation)(KKIntervalModulation), void (^onIntensity)(double),
+      void (^onFrequency)(double), void (^onSeed)(uint32_t),
+      void (^onLinked)(BOOL), void (^onParticipation)(NSInteger, BOOL),
+      void (^onDragBegin)(void), void (^onDragEnd)(void), NSString *laneLabel,
+      KKInterval *representative, KKGapIntervalReader reader,
+      KKGapIntervalMutator mutator) {
+    __strong typeof(weakSelf) s = weakSelf;
+    [s _presentHoldModulationPopoverFromAnchor:anchor
+                                 startFraction:startFraction
+                                   endFraction:endFraction
+                                    modulation:modulation
+                                     intensity:intensity
+                                     frequency:frequency
+                                          seed:seed
+                                        linked:linked
+                                   showsLinked:showsLinked
+                                    partLabels:partLabels
+                                    partStates:partStates
+                                 partRebuilder:partRebuilder
+                                  onModulation:onModulation
+                                   onIntensity:onIntensity
+                                   onFrequency:onFrequency
+                                        onSeed:onSeed
+                                      onLinked:onLinked
+                               onParticipation:onParticipation
+                                   onDragBegin:onDragBegin
+                                     onDragEnd:onDragEnd
+                                         phase:KKGapPopoverPhaseHoldModulation
+                                     laneLabel:laneLabel
+                                representative:representative
+                                intervalReader:reader
+                               intervalMutator:mutator];
+  };
 }
 
 - (void)_refresh {

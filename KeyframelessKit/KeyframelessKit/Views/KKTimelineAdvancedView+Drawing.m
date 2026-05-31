@@ -5,6 +5,7 @@
 
 #import "KKTimelineAdvancedView_Private.h"
 
+#import "../KKLog.h"
 #import "../Math/KKTimelineScale.h"
 #import "../Style/KKTokens.h"
 #import "../Style/NSColor+KKColors.h"
@@ -62,10 +63,13 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     KKLane *lane = lanes[i];
     NSRect row = [self _rowRectForIndex:i count:lanes.count];
     if (i == _hoverLaneRow) {
-      NSBezierPath *hi =
-          [NSBezierPath bezierPathWithRoundedRect:NSInsetRect(row, 0, -1)
-                                          xRadius:KKRadiusSM
-                                          yRadius:KKRadiusSM];
+      // Extend the hover highlight by kPillW/2 on each side so it lines up
+      // with the boundary pills (which sit centred on tracks.minX / maxX)
+      // and the lane line - all three agree on where the visible row ends.
+      NSRect hoverRect = NSInsetRect(row, -kPillW * 0.5, -1);
+      NSBezierPath *hi = [NSBezierPath bezierPathWithRoundedRect:hoverRect
+                                                         xRadius:KKRadiusSM
+                                                         yRadius:KKRadiusSM];
       [[[NSColor inspectorLabel] colorWithAlphaComponent:0.05] setFill];
       [hi fill];
     }
@@ -295,7 +299,62 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   CGFloat lineW = multi ? 1.25 : kIntervalWidth;
   CGFloat compAlpha = multi ? (compCount > 2 ? 0.65 : 0.85) : 1.0;
 
+  // Selection highlight draws under the outer (wide) clip so its first/
+  // last-gap kPillW/2 extension reaches under the boundary pills - the
+  // whole point of that extension is to land under the pill+tie-bar.
   [self _drawGapSelectionForLane:lane inRow:row tracks:tracks];
+
+  // Lane value curves clip just wide enough to match where pills can draw.
+  // Pills at t=0 / t=1 sit centred on the tracks edge so their outer half
+  // (kPillW/2) sits OUTSIDE the strict tracks rect. The lane line must
+  // extend by the same amount, otherwise a pill at the edge sits over an
+  // un-filled strip and reads as the line stopping kPillW/2 short of the
+  // visible row edge. We do NOT match the full outer clip (kPillW/2 + 2)
+  // because the extra 2pt was just AA padding for pills; curves shouldn't
+  // escape into it.
+  CGFloat innerEdgePad = kPillW * 0.5;
+  [NSGraphicsContext saveGraphicsState];
+  NSRectClip(NSMakeRect(NSMinX(tracks) - innerEdgePad, NSMinY(row),
+                        NSWidth(tracks) + innerEdgePad * 2.0, NSHeight(row)));
+
+  // Leading + trailing flat fill: the value before the first keypose (and
+  // after the last) is constant at that endpoint's value, but the per-gap
+  // loop only draws between keyposes. When the user zooms/pans such that
+  // the first or last keypose sits inside the visible row (not at the
+  // edge), the area between the row edge and that keypose ends up empty.
+  // Draw the leading/trailing constant flat lines at the endpoint kp's
+  // normalised values so the lane visually fills the entire row.
+  // Single-keypose lanes naturally fall out of this: both halves meet at
+  // the kp position, drawing a constant across the whole row.
+  KKKeyPose *firstKP = kps.firstObject;
+  KKKeyPose *lastKP = kps.lastObject;
+  CGFloat firstX = [self _xForFrac:firstKP.time inTracks:tracks];
+  CGFloat lastX = [self _xForFrac:lastKP.time inTracks:tracks];
+  // Leading/trailing flat fills extend out to the widened inner clip
+  // (tracks edge minus kPillW/2) so the lane line reaches under the t=0 /
+  // t=1 pill's outer half - same edge the per-gap loop's first/last
+  // segment will also be extended to below.
+  NSColor *flatColor = [neutral colorWithAlphaComponent:compAlpha];
+  CGFloat leftEdge = NSMinX(tracks) - innerEdgePad;
+  CGFloat rightEdge = NSMaxX(tracks) + innerEdgePad;
+  if (firstX > leftEdge) {
+    for (NSUInteger c = 0; c < compCount && c < firstKP.values.count; c++) {
+      double n =
+          KKAdvNormComponent(firstKP.values[c].doubleValue, cMin, cMax, c);
+      CGFloat y = round(yBot + (yTop - yBot) * n) + 0.5;
+      NSPoint pts[2] = {NSMakePoint(leftEdge, y), NSMakePoint(firstX, y)};
+      KKStrokeTimelineCurve(pts, 2, lineW, NO, flatColor);
+    }
+  }
+  if (lastX < rightEdge) {
+    for (NSUInteger c = 0; c < compCount && c < lastKP.values.count; c++) {
+      double n =
+          KKAdvNormComponent(lastKP.values[c].doubleValue, cMin, cMax, c);
+      CGFloat y = round(yBot + (yTop - yBot) * n) + 0.5;
+      NSPoint pts[2] = {NSMakePoint(lastX, y), NSMakePoint(rightEdge, y)};
+      KKStrokeTimelineCurve(pts, 2, lineW, NO, flatColor);
+    }
+  }
 
   for (NSInteger i = 0; i + 1 < (NSInteger)kps.count; i++) {
     KKKeyPose *a = kps[i];
@@ -304,6 +363,14 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     CGFloat xB = [self _xForFrac:b.time inTracks:tracks];
     if (xB - xA < 0.5)
       continue;
+    // First/last gap: extend the segment so it sits under the boundary
+    // pill's outer half. The drawing clip is widened by kPillW/2 to match.
+    // Middle gaps keep their exact bounds so consecutive gaps don't double-
+    // tint when alpha < 1.
+    if (i == 0)
+      xA -= innerEdgePad;
+    if (i + 1 == (NSInteger)kps.count - 1)
+      xB += innerEdgePad;
     KKInterval *iv = a.outgoing;
     BOOL anyDiffer = !KKAdvValuesEqual(a.values, b.values);
     BOOL hasModulation = iv && iv.modulation != KKIntervalModulationNone;
@@ -358,6 +425,8 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     free(pts);
   }
 
+  [NSGraphicsContext restoreGraphicsState];
+
   CGFloat pillTop = NSMaxY(row) - kPillInsetY;
   CGFloat pillBot = NSMinY(row) + kPillInsetY;
   if (pillTop <= pillBot) {
@@ -402,6 +471,10 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     return;
   NSColor *neutral = [NSColor accentMatchingHost];
   NSColor *warn = [NSColor warning];
+  // First/last gap's selection rect extends out by kPillW/2 to cover under
+  // the boundary pill's outer half - same edge the lane line uses, so the
+  // highlight and the line agree on where the visible row "ends".
+  CGFloat innerEdgePad = kPillW * 0.5;
   for (NSInteger i = 0; i + 1 < (NSInteger)kps.count; i++) {
     if (![self _gapSelected:lane aIdx:i])
       continue;
@@ -409,6 +482,10 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     CGFloat xB = [self _xForFrac:kps[i + 1].time inTracks:tracks];
     if (xB - xA < 1.0)
       continue;
+    if (i == 0)
+      xA -= innerEdgePad;
+    if (i + 1 == (NSInteger)kps.count - 1)
+      xB += innerEdgePad;
     BOOL transition = !KKAdvValuesEqual(kps[i].values, kps[i + 1].values);
     NSColor *tint =
         [(transition ? warn : neutral) colorWithAlphaComponent:0.15];

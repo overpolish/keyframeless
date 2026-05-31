@@ -571,6 +571,11 @@ static NSString *_RoundedAIMergedTimelineJSON(NSString *currentTimelineJSON,
                                            renderCache:self.renderCache];
     }
     [self.playheadPoller setInspectorView:view];
+    // The render tick may have established timing before the inspector
+    // view existed (poller nil then, ensureRunning was a no-op nil-send).
+    // Kick it now so the scrubber appears without needing a user scrub.
+    if (self.renderCache.effectDurSec > 0.0)
+      [self.playheadPoller ensureRunning];
     return view;
   }
   typedef NSView *(*ViewIMP)(id, SEL, UInt32);

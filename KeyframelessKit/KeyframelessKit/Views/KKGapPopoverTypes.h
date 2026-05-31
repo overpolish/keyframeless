@@ -12,12 +12,19 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Which gap popover is requesting plugin-supplied extra rows.
 typedef NS_ENUM(NSInteger, KKGapPopoverPhase) {
-  /// Per-interval gap between two adjacent keyposes (Advanced graph).
+  /// Per-interval gap between two adjacent keyposes with DIFFERENT
+  /// endpoints (transition; curve/intensity popover, Advanced graph).
   KKGapPopoverPhaseAdvanced = 0,
   /// Basic "In" phase - first interval(s) participating in the In ramp.
   KKGapPopoverPhaseBasicIn = 1,
   /// Basic "Out" phase - last interval(s) participating in the Out ramp.
   KKGapPopoverPhaseBasicOut = 2,
+  /// Hold-modulation popover (same-valued endpoints in Advanced, or the
+  /// flat middle of Basic). The gap contributes no translational motion
+  /// of its own - modulation adds jitter only. Plugin extras that depend
+  /// on a heading along a path (e.g. rotate-with-motion) should disable
+  /// themselves for this phase.
+  KKGapPopoverPhaseHoldModulation = 3,
 };
 
 /// Mutator passed to plugin-supplied extra-row blocks. Caller supplies an

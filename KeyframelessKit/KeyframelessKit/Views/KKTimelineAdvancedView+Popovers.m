@@ -204,12 +204,32 @@
   NSRect row = [self _rowRectForIndex:animIdx count:anim.count];
   CGFloat xA = [self _xForFrac:a.time inTracks:tracks];
   CGFloat xB = [self _xForFrac:b.time inTracks:tracks];
-  CGFloat midX = (xA + xB) * 0.5;
+  // When zoomed + scrolled, the gap's mathematical midpoint may sit outside
+  // the visible scroll region OR under the label gutter (left of tracks).
+  // NSPopover refuses to anchor to an offscreen view, and anchoring under
+  // the labels makes the arrow point at "Position"/"Rotation" instead of
+  // the gap. Confine the anchor to the visible portion of the tracks rect
+  // (tracks ∩ visibleRect) intersected with the gap's own span - the arrow
+  // lands in the centre of what the user can actually see of the gap.
+  NSRect vis = self.visibleRect;
+  CGFloat leftBound = MAX(NSMinX(tracks), NSMinX(vis));
+  CGFloat rightBound = MIN(NSMaxX(tracks), NSMaxX(vis));
+  CGFloat visStart = MAX(xA, leftBound);
+  CGFloat visEnd = MIN(xB, rightBound);
+  if (visStart >= visEnd) {
+    // Gap is entirely outside the visible tracks region. Park the anchor
+    // on whichever tracks edge the gap is closest to so the popover at
+    // least appears next to the row.
+    visStart = visEnd = (xB < leftBound)
+                            ? leftBound
+                            : ((xA > rightBound) ? rightBound : leftBound);
+  }
+  CGFloat anchorX = (visStart + visEnd) * 0.5;
   if (!_popoverAnchor) {
     _popoverAnchor = [[NSView alloc] initWithFrame:NSZeroRect];
     [self addSubview:_popoverAnchor positioned:NSWindowBelow relativeTo:nil];
   }
-  _popoverAnchor.frame = NSMakeRect(midX - 1.0, NSMidY(row) - 1.0, 2.0, 2.0);
+  _popoverAnchor.frame = NSMakeRect(anchorX - 1.0, NSMidY(row) - 1.0, 2.0, 2.0);
 
   __weak typeof(self) weak = self;
   void (^onDragBegin)(void) = ^{

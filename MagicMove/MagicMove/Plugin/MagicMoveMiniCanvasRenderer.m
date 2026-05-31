@@ -4,6 +4,7 @@
  */
 
 #import "MagicMoveMiniCanvasRenderer.h"
+#import "MagicMoveParamsBuild.h"
 #import "ShaderTypes.h"
 #import <KeyframelessKit/KKRenderPrimitives.h>
 #import <KeyframelessKit/KKShaderTypes.h>
@@ -83,15 +84,35 @@ static const CGFloat kHandleHitTolPt = 12.0;
   return _pipeline;
 }
 
-static void KKMagicMoveParamsFromLanes(MagicMoveParams *outParams,
-                                       NSArray<NSNumber *> *positionVals,
-                                       NSArray<NSNumber *> *rotationVals) {
+static KKLane *KKMagicMoveLaneNamed(KKTimeline *timeline, NSString *label) {
+  for (KKLane *lane in timeline.lanes)
+    if ([lane.label isEqualToString:label])
+      return lane;
+  return nil;
+}
+
+// Builds the params at the renderer's current edit fraction. Current Position
+// + Rotation values go through `valuesForLabel:` so the popover's live-drag
+// override wins; the rotate-with-motion velocity sample reads the persisted
+// timeline directly (the prev-tick reference must be the committed history,
+// not the in-flight drag value). Mirrors the FCP render path's output so
+// the mini preview matches what FCP eventually bakes.
+static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
+                                   MagicMoveMiniCanvasRenderer *renderer) {
+  NSArray<NSNumber *> *positionVals = [renderer valuesForLabel:@"Position"];
+  NSArray<NSNumber *> *rotationVals = [renderer valuesForLabel:@"Rotation"];
   double posX = positionVals.count > 0 ? positionVals[0].doubleValue : 0.5;
   double posY = positionVals.count > 1 ? positionVals[1].doubleValue : 0.5;
   double rotXdeg = rotationVals.count > 0 ? rotationVals[0].doubleValue : 0.0;
   double rotYdeg = rotationVals.count > 1 ? rotationVals[1].doubleValue : 0.0;
   double rotZdeg = rotationVals.count > 2 ? rotationVals[2].doubleValue : 0.0;
   static const double kDegToRad = M_PI / 180.0;
+
+  KKLane *positionLane = KKMagicMoveLaneNamed(renderer.timeline, @"Position");
+  rotZdeg -= KKMagicMoveRotateWithMotionAdjustmentDegrees(
+      positionLane, renderer.editFraction, posX,
+      positionLane.lastKnownClipDuration);
+
   outParams->translate =
       (simd_float2){(float)(posX - 0.5), (float)(posY - 0.5)};
   outParams->anchorOffset = (simd_float2){0.0f, 0.0f};
@@ -152,8 +173,7 @@ static void KKMagicMoveParamsFromLanes(MagicMoveParams *outParams,
   }
 
   MagicMoveParams params = {0};
-  KKMagicMoveParamsFromLanes(&params, [self valuesForLabel:@"Position"],
-                             [self valuesForLabel:@"Rotation"]);
+  KKMagicMoveBuildParams(&params, self);
   simd_float2 zeroOffset = {0.0f, 0.0f};
 
   MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
