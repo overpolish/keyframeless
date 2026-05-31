@@ -89,6 +89,23 @@
   self.miniCanvasRenderer.hiddenHandleLabels = hidden;
 }
 
+- (void)toggleOSCElementHiddenForLabel:(NSString *)label {
+  KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
+  NSMutableSet<NSString *> *h =
+      [(st.hiddenOSCElements ?: [NSSet set]) mutableCopy];
+  if ([h containsObject:label])
+    [h removeObject:label];
+  else
+    [h addObject:label];
+  st.hiddenOSCElements = h;
+  self.miniCanvasRenderer.hiddenHandleLabels = h;
+  NSMutableDictionary<NSString *, NSNumber *> *els =
+      [NSMutableDictionary dictionary];
+  for (NSString *k in [MagicMovePlugin oscElementKeys])
+    els[k] = @(![h containsObject:k]);
+  [self patchUIStateKey:@"oscElements" value:els paramID:kParamUIState];
+}
+
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
   if (parameterID != kParamInspectorUI) {
     typedef NSView *(*ViewIMP)(id, SEL, UInt32);
@@ -189,6 +206,11 @@
   self.miniCanvasRenderer.timeline = timeline;
   self.miniCanvasRenderer.handlesHidden = !oscMasterVisible;
   [self applyOSCElementsFromUIState:uiState];
+  __weak typeof(self) weakForHandles = self;
+  self.miniCanvasRenderer.onHandleVisibilityToggled = ^(NSString *label) {
+    __strong typeof(weakForHandles) strong = weakForHandles;
+    [strong toggleOSCElementHiddenForLabel:label];
+  };
   view.miniCanvasDelegate = self.miniCanvasRenderer;
   view.miniCanvasDescriptorPath = MagicMoveMiniCanvasDescriptorPath;
   view.miniCanvasRequestPath = MagicMoveMiniCanvasRequestPath;

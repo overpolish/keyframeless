@@ -169,15 +169,41 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   return (simd_float4){(float)r, (float)g, (float)b, (float)a};
 }
 
-// Per-axis ring visibility from `hiddenHandleLabels`. The popover stores ring
-// keys as "<rotationLabel>.X/.Y/.Z" (e.g. @"Rotation.X").
-- (BOOL)_ringShownAtAxis:(int)k {
-  if (!_hiddenHandleLabels.count || !self.rotationLabel)
+// Reveal mode only bites when the host wired the toggle (so plugins that don't
+// support opt-hide are untouched).
+- (BOOL)_revealActive {
+  return _revealHidden && self.onHandleVisibilityToggled != nil;
+}
+
+// A handle/element is "user-hidden" (master tick off or its own pill off) -
+// eligible to be revealed as a ghost. Boundary-phase suppression is separate.
+- (BOOL)_userHiddenLabel:(NSString *)label {
+  return _handlesHidden || (label && [_hiddenHandleLabels containsObject:label]);
+}
+
+// A specific rotation ring is user-hidden if the master tick is off, the whole
+// Rotation compound is hidden, or that ring's own key is hidden. The popover
+// stores ring keys as "<rotationLabel>.X/.Y/.Z" (e.g. @"Rotation.X").
+- (BOOL)_ringUserHiddenAtAxis:(int)k {
+  if (_handlesHidden)
+    return YES;
+  if (self.rotationLabel &&
+      [_hiddenHandleLabels containsObject:self.rotationLabel])
     return YES;
   NSString *axis = (k == 0) ? @"X" : (k == 1) ? @"Y" : @"Z";
   NSString *key =
       [NSString stringWithFormat:@"%@.%@", self.rotationLabel, axis];
-  return ![_hiddenHandleLabels containsObject:key];
+  return [_hiddenHandleLabels containsObject:key];
+}
+
+// Ring is drawn / hit-tested this frame (at full alpha, or dimmed under reveal).
+- (BOOL)_ringShownAtAxis:(int)k {
+  return ![self _ringUserHiddenAtAxis:k] || [self _revealActive];
+}
+
+// Per-ring draw alpha: dim when it's a revealed ghost.
+- (float)_ringAlphaAtAxis:(int)k {
+  return [self _ringUserHiddenAtAxis:k] ? 0.3f : 1.0f;
 }
 
 - (BOOL)rotationOSCCenter:(out CGPoint *)outCenter
@@ -207,9 +233,10 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
       .outlineColor = {0.0f, 0.0f, 0.0f, 0.75f},
       .activeRing = (int)_rotActiveAxis,
       .activeBoost = (_rotActiveAxis >= 0) ? 0.35f : 0.0f,
-      .ringVisible = {[self _ringShownAtAxis:0] ? 1.0f : 0.0f,
-                      [self _ringShownAtAxis:1] ? 1.0f : 0.0f,
-                      [self _ringShownAtAxis:2] ? 1.0f : 0.0f},
+      .ringVisible =
+          {[self _ringShownAtAxis:0] ? [self _ringAlphaAtAxis:0] : 0.0f,
+           [self _ringShownAtAxis:1] ? [self _ringAlphaAtAxis:1] : 0.0f,
+           [self _ringShownAtAxis:2] ? [self _ringAlphaAtAxis:2] : 0.0f},
   };
   *outParams = p;
   return YES;
@@ -503,15 +530,29 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 }
 
 - (BOOL)_pointActiveForContentRect:(CGRect)cr {
-  return !_handlesHidden && !CGRectIsEmpty(cr) && self.pointLabel &&
-         ![self _labelSuppressed:self.pointLabel] &&
-         [self isConstantLabel:self.pointLabel];
+  return !CGRectIsEmpty(cr) && self.pointLabel &&
+         ![_suppressedHandleLabels containsObject:self.pointLabel] &&
+         [self isConstantLabel:self.pointLabel] &&
+         (![self _userHiddenLabel:self.pointLabel] || [self _revealActive]);
 }
 
 - (BOOL)_rotationActiveForContentRect:(CGRect)cr {
-  return !_handlesHidden && !CGRectIsEmpty(cr) && self.rotationLabel &&
-         ![self _labelSuppressed:self.rotationLabel] &&
-         [self isConstantLabel:self.rotationLabel];
+  return !CGRectIsEmpty(cr) && self.rotationLabel &&
+         ![_suppressedHandleLabels containsObject:self.rotationLabel] &&
+         [self isConstantLabel:self.rotationLabel] &&
+         (![self _userHiddenLabel:self.rotationLabel] || [self _revealActive]);
+}
+
+- (CGFloat)pointHandleGhostAlpha {
+  return [self _userHiddenLabel:self.pointLabel] ? 0.3 : 1.0;
+}
+
+- (void)setRevealHidden:(BOOL)revealHidden {
+  if (_revealHidden == revealHidden)
+    return;
+  _revealHidden = revealHidden;
+  // Handles are the Metal pass - invalidate the MTKView, not just the overlay.
+  [self.canvas setNeedsDisplay:YES];
 }
 
 - (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
@@ -564,6 +605,30 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
          [_cropEditor partAtPoint:p
                            values:[self valuesForLabel:self.cropLabel]
                       contentRect:cr] >= 0;
+}
+
+- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+    optClickHandleAtPoint:(CGPoint)p
+              contentRect:(CGRect)cr {
+  if (!self.onHandleVisibilityToggled || CGRectIsEmpty(cr))
+    return NO;
+  self.canvas = canvas;
+  // Rotation ring first (it sits in front), then the point handle. Same
+  // hit-tests the drag path uses, so the same element resolves.
+  if ([self _rotationActiveForContentRect:cr] &&
+      [self rotationHitTestAtPoint:p contentRect:cr] && self.rotationLabel) {
+    NSString *axis =
+        (_rotActiveAxis == 0) ? @"X" : (_rotActiveAxis == 1) ? @"Y" : @"Z";
+    self.onHandleVisibilityToggled(
+        [NSString stringWithFormat:@"%@.%@", self.rotationLabel, axis]);
+    return YES;
+  }
+  if ([self _pointActiveForContentRect:cr] &&
+      [self pointHandleHitAtPoint:p contentRect:cr] && self.pointLabel) {
+    self.onHandleVisibilityToggled(self.pointLabel);
+    return YES;
+  }
+  return NO;
 }
 
 - (void)miniCanvas:(KKMiniCanvasView *)canvas

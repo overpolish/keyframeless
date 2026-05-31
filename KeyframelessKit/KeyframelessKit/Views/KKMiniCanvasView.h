@@ -105,6 +105,12 @@ NS_ASSUME_NONNULL_BEGIN
           contentRect:(CGRect)contentRect
             modifiers:(NSEventModifierFlags)modifiers;
 - (void)miniCanvasEndHandleDrag:(KKMiniCanvasView *)canvas;
+/// Option-click on a handle/ring: toggle that element's visibility instead of
+/// starting a drag. Return YES if a handle was hit and handled (the canvas then
+/// suppresses the drag). Mirrors the viewer OSC's opt-click-to-hide.
+- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+    optClickHandleAtPoint:(CGPoint)point
+              contentRect:(CGRect)contentRect;
 /// While dragging, return the active snap line(s) in normalized
 /// content-rect space (0=left/bottom, 1=right/top). `*outX` / `*outY` are
 /// only consulted when the corresponding return-element is YES. The canvas

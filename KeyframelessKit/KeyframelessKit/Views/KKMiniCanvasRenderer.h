@@ -70,6 +70,24 @@ NS_ASSUME_NONNULL_BEGIN
 /// neither set and `handlesHidden` is NO.
 @property(nonatomic, copy, nullable) NSSet<NSString *> *hiddenHandleLabels;
 
+/// Opt-click on a mini-canvas handle/ring toggles that element's visibility
+/// (mirrors the viewer OSC's opt-click-to-hide). The host wires this to the
+/// same persistence the inspector pills use; the label is a lane label or a
+/// rotation-ring key (@"Rotation.X"). nil = opt-click does nothing (default,
+/// so other plugins are unaffected).
+@property(nonatomic, copy, nullable) void (^onHandleVisibilityToggled)
+    (NSString *label);
+
+/// Opt-hold "reveal" mode: user-hidden handles/rings draw as dimmed ghosts and
+/// become hit-testable so an opt-click re-shows them. Set by the mini-canvas
+/// view from the Option modifier. Only effective when `onHandleVisibilityToggled`
+/// is wired (so plugins that don't support hide-toggling are unaffected).
+@property(nonatomic) BOOL revealHidden;
+
+/// Alpha to draw the point handle at: 1.0 normal, 0.3 when it's a revealed
+/// ghost. Read by the mini-canvas view when encoding the arc glyph.
+- (CGFloat)pointHandleGhostAlpha;
+
 #pragma mark - Subclass vocabulary (override)
 
 /// Lane label for the crop box, or nil if this plugin has no crop. Default

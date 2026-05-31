@@ -46,6 +46,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// push the derived hidden-element set to this instance's per-instance state
 /// (read by the OSC) and the mini-canvas renderer.
 - (void)applyOSCElementsFromUIState:(NSDictionary *)uiState;
+/// Flip one OSC element's hidden state and persist it (KKInstanceState +
+/// mini-canvas renderer + the kParamUIState oscElements map). Used by the
+/// mini-canvas opt-click; mirrors the inspector pills' toggle.
+- (void)toggleOSCElementHiddenForLabel:(NSString *)label;
 @end
 
 @interface MagicMovePlugin (Render)

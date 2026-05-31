@@ -162,6 +162,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// rail as `oscMasterVisible`.
 @property(nonatomic, copy, nullable) NSSet<NSString *> *hiddenOSCElements;
 
+/// Last-known full UI-state dict (the parsed `kParamUIState` blob), refreshed
+/// in the effect's `parameterChanged` where the param reads fresh. The OSC
+/// rewrites this blob when it opt-hides an element; it must NOT clobber
+/// inspector-owned keys (activeTab, loopEnabled, renderMode) with a stale read
+/// of its own scope, so it merges into THIS cached dict instead. Same process
+/// as the OSC, so it's current.
+@property(nonatomic, copy, nullable) NSDictionary *lastUIState;
+
 /// Pointer of the api manager that "owns" this state. Used by
 /// `KKInstanceStateEnsureForAPI` to detect duplicate-UUID clones (FCP
 /// copy/paste/cut clones the `kKKParamInstanceID` value) and mint a fresh

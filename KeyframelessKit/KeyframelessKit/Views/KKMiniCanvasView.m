@@ -47,6 +47,8 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
 
 @implementation _KKMiniCanvasOverlay {
   BOOL _dragging;
+  NSTrackingArea *_optTrackingArea;
+  BOOL _optReveal;
 }
 
 - (BOOL)isFlipped {
@@ -158,6 +160,17 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   // Interacting with the canvas commits/ends any focused value field so its
   // stale text can't clobber the drag's value on focus loss.
   [self.window makeFirstResponder:nil];
+  // Opt-click toggles a handle's visibility (hide / re-show a ghost) instead of
+  // dragging it - mirrors the viewer OSC.
+  if ((e.modifierFlags & NSEventModifierFlagOption) &&
+      [d respondsToSelector:@selector(miniCanvas:
+                                  optClickHandleAtPoint:contentRect:)] &&
+      [d miniCanvas:c
+          optClickHandleAtPoint:[self convertPoint:e.locationInWindow
+                                          fromView:nil]
+                    contentRect:[c contentRectInViewPoints]]) {
+    return;
+  }
   _dragging = YES;
   if (c.onHandleDragBegin)
     c.onHandleDragBegin();
@@ -196,6 +209,48 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   if (c.onHandleDragEnd)
     c.onHandleDragEnd();
   [self setNeedsDisplay:YES];
+}
+
+// Opt-hold over the mini-canvas reveals hidden handles/rings as ghosts. A
+// tracking area feeds us mouseMoved/Exited regardless of which subview the
+// pointer is over; we mirror the Option state onto the renderer.
+- (void)updateTrackingAreas {
+  [super updateTrackingAreas];
+  if (_optTrackingArea)
+    [self removeTrackingArea:_optTrackingArea];
+  _optTrackingArea = [[NSTrackingArea alloc]
+      initWithRect:self.bounds
+           options:NSTrackingMouseMoved | NSTrackingMouseEnteredAndExited |
+                   NSTrackingActiveInActiveApp
+             owner:self
+          userInfo:nil];
+  [self addTrackingArea:_optTrackingArea];
+}
+
+- (void)_setOptReveal:(BOOL)reveal {
+  if (reveal == _optReveal)
+    return;
+  _optReveal = reveal;
+  KKMiniCanvasView *c = self.canvas;
+  id<KKMiniCanvasDelegate> d = c.canvasDelegate;
+  if ([d isKindOfClass:[KKMiniCanvasRenderer class]]) {
+    ((KKMiniCanvasRenderer *)d).revealHidden = reveal;
+    // Handles/rings are the Metal pass, so we must invalidate the MTKView
+    // itself - setHandlesNeedDisplay only redraws the CG overlay.
+    [c setNeedsDisplay:YES];
+  }
+}
+
+- (void)mouseMoved:(NSEvent *)e {
+  [self _setOptReveal:(e.modifierFlags & NSEventModifierFlagOption) != 0];
+}
+
+- (void)flagsChanged:(NSEvent *)e {
+  [self _setOptReveal:(e.modifierFlags & NSEventModifierFlagOption) != 0];
+}
+
+- (void)mouseExited:(NSEvent *)e {
+  [self _setOptReveal:NO];
 }
 
 @end
@@ -697,6 +752,7 @@ static const NSUInteger kFilmstripGridCols = 5;
 // "plus" indicator is drawn in the centre.
 - (void)_encodeArcHandleGlyphAt:(CGPoint)centerPts
                        isActive:(BOOL)isActive
+                     ghostAlpha:(CGFloat)ghostAlpha
                         encoder:(id<MTLRenderCommandEncoder>)enc {
   if (!_arcPipeline)
     return;
@@ -741,9 +797,11 @@ static const NSUInteger kFilmstripGridCols = 5;
       .plusHalfLen = plusHalf,
       .plusFillHalfWidth = plusFill,
       .plusOutlineWidth = plusOutl,
-      // 0xC1 gray fill, matching KKArcOSC's `arcFillColor`.
-      .fillColor = {193.0f / 255.0f, 193.0f / 255.0f, 193.0f / 255.0f, 1.0f},
-      .strokeColor = {0.0f, 0.0f, 0.0f, 0.8f},
+      // 0xC1 gray fill, matching KKArcOSC's `arcFillColor`. ghostAlpha dims the
+      // whole glyph when it's a revealed (opt-hold) ghost.
+      .fillColor = {193.0f / 255.0f, 193.0f / 255.0f, 193.0f / 255.0f,
+                    (float)ghostAlpha},
+      .strokeColor = {0.0f, 0.0f, 0.0f, 0.8f * (float)ghostAlpha},
   };
   [enc setRenderPipelineState:_arcPipeline];
   [enc setVertexBytes:quad
@@ -1059,13 +1117,16 @@ static const NSUInteger kFilmstripGridCols = 5;
                   contentRect:cr]) {
       KKMiniHandleStyle style = KKMiniHandleStylePoint;
       BOOL isActive = NO;
+      CGFloat ghostAlpha = 1.0;
       if ([del isKindOfClass:[KKMiniCanvasRenderer class]]) {
         style = [(KKMiniCanvasRenderer *)del pointHandleStyle];
         isActive = [(KKMiniCanvasRenderer *)del pointHandleIsActive];
+        ghostAlpha = [(KKMiniCanvasRenderer *)del pointHandleGhostAlpha];
       }
       if (style == KKMiniHandleStyleArc)
         [self _encodeArcHandleGlyphAt:handleCenterPts
                              isActive:isActive
+                           ghostAlpha:ghostAlpha
                               encoder:enc];
       else
         [self _encodeHandleGlyphAt:handleCenterPts

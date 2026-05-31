@@ -41,6 +41,9 @@ static const float kHitThresholdPixels = 10.0f;
     _showX = YES;
     _showY = YES;
     _showZ = YES;
+    _ringAlphaX = 1.0f;
+    _ringAlphaY = 1.0f;
+    _ringAlphaZ = 1.0f;
     _colorX = [NSColor colorWithRed:1.0 green:0.30 blue:0.30 alpha:1.0];
     _colorY = [NSColor colorWithRed:0.35 green:0.85 blue:0.40 alpha:1.0];
     _colorZ = [NSColor colorWithRed:0.40 green:0.55 blue:1.0 alpha:1.0];
@@ -177,8 +180,9 @@ static const float kHitThresholdPixels = 10.0f;
       .outlineColor = [_outlineColor simdFloat4],
       .activeRing = (int)((isActive || isHovered) ? _activeAxis : -1),
       .activeBoost = isActive ? 0.35f : (isHovered ? 0.15f : 0.0f),
-      .ringVisible = (vector_float3){_showX ? 1.0f : 0.0f, _showY ? 1.0f : 0.0f,
-                                     _showZ ? 1.0f : 0.0f},
+      .ringVisible = (vector_float3){_showX ? _ringAlphaX : 0.0f,
+                                     _showY ? _ringAlphaY : 0.0f,
+                                     _showZ ? _ringAlphaZ : 0.0f},
   };
 
   [self drawQuadForDestinationImage:destinationImage

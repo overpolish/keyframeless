@@ -50,6 +50,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) BOOL showY;
 @property(nonatomic) BOOL showZ;
 
+/// Per-axis ring alpha (default 1.0). A shown ring drawn at < 1.0 reads as a
+/// dimmed "ghost" (used by opt-reveal to preview a hidden ring); still
+/// hit-tested so an opt-click can re-show it.
+@property(nonatomic) float ringAlphaX;
+@property(nonatomic) float ringAlphaY;
+@property(nonatomic) float ringAlphaZ;
+
 /// 0 = X, 1 = Y, 2 = Z, -1 = none. Set by `hitTestAtMousePositionX:...`
 /// and consumed by the draw call to highlight the grabbed ring + by
 /// `angleDeltaFromPressPoint:currentPoint:` to choose the axis to rotate.

@@ -15,7 +15,7 @@ A sphere built from three coloured rings:
 - **Green ring** - rotates around the Y axis (yaws the image left / right).
 - **Blue ring** - rotates around the Z axis (rolls the image in-plane). The Z ring is the largest and always faces the viewer because it lies in the screen plane.
 
-All three rings are visible whenever a Rotation lane exists. There's no modifier to show or hide them - the gizmo is always the full sphere so X / Y rotations are reachable with a single click.
+By default all three rings are visible whenever a Rotation lane exists, so X / Y rotations are reachable with a single click. Each ring can be hidden individually, though: toggle its pill in the on-screen-controls settings popover, or hold Option and click the ring directly to dismiss just that one. Holding Option then re-shows any hidden ring as a dimmed "ghost" you can click to bring back. (The reveal follows mouse movement, so a hidden ring appears on the next small nudge of the mouse rather than the instant Option goes down - see the Position OSC docs for the full visibility behaviour.)
 
 ## How dragging works
 
@@ -28,4 +28,3 @@ Hold **Cmd** while dragging a ring to snap rotation to 15° increments. Releasin
 ## Mini-canvas
 
 In keypose preview popovers (the "constants" or "boundary" popovers above each keypose pill), the same rotation rings appear inside the mini-canvas. Drag behaviour and Cmd snap work identically there - the gizmo is shared code between the FCP viewer and the mini-canvas. The ring sizes scale to fit whatever the popover height is.
-

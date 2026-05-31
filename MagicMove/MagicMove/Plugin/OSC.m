@@ -5,6 +5,7 @@
 
 #import "OSC.h"
 #import "Constants.h"
+#import "Plugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 #import <simd/simd.h>
@@ -96,6 +97,18 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
 @property(nonatomic) double rotLastWrittenX;
 @property(nonatomic) double rotLastWrittenY;
 @property(nonatomic) double rotLastWrittenZ;
+// Per-interaction opt-hide arming. FCP doesn't hand us a reliable mouseDown in
+// the viewer, but it does drive the press/drag cycle (the same one that carries
+// Shift/Cmd). We decide an interaction's nature on its FIRST event: opt held =>
+// hide-click (toggle the part off, no drag); opt absent => normal drag. The
+// armed flag makes that decision stick for the rest of the interaction; hover
+// (mouseMoved) resets it so the next press is judged fresh.
+@property(nonatomic) BOOL interactionArmed;
+@property(nonatomic) BOOL interactionIsOptHide;
+// YES while the user holds Opt over the viewer: hidden OSC elements draw as
+// dimmed "ghosts" and become hit-testable so an opt-click re-shows them.
+// Updated from hover (mouseMoved) events, which DO carry the modifier bit.
+@property(nonatomic) BOOL optRevealActive;
 @end
 
 @implementation MagicMoveOSC
@@ -108,6 +121,32 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
     _rotationOSC = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
   }
   return self;
+}
+
+// Set the rotation rings' per-axis show + ghost-alpha for this frame, and
+// report whether the sphere should be drawn / hit-tested at all. A ring is
+// fully shown when the Rotation master and its own element are on; opt-reveal
+// exposes a hidden ring as a dimmed (0.3), still-hittable ghost so an opt-click
+// can re-show it. Ghosts only appear where the rotation OSC would normally be
+// on screen at this playhead.
+- (BOOL)_configureRotationRingsAtFraction:(double)frac dragging:(BOOL)dragging {
+  BOOL shownHere = _rotationVisibleAtFraction(frac);
+  BOOL activeHere = shownHere || dragging;
+  BOOL master = _oscElementVisible(self.apiManager, @"Rotation");
+  BOOL xEn = master && _oscElementVisible(self.apiManager, @"Rotation.X");
+  BOOL yEn = master && _oscElementVisible(self.apiManager, @"Rotation.Y");
+  BOOL zEn = master && _oscElementVisible(self.apiManager, @"Rotation.Z");
+  BOOL reveal = self.optRevealActive && shownHere;
+  BOOL xShow = (xEn && activeHere) || reveal;
+  BOOL yShow = (yEn && activeHere) || reveal;
+  BOOL zShow = (zEn && activeHere) || reveal;
+  self.rotationOSC.showX = xShow;
+  self.rotationOSC.showY = yShow;
+  self.rotationOSC.showZ = zShow;
+  self.rotationOSC.ringAlphaX = xEn ? 1.0f : 0.3f;
+  self.rotationOSC.ringAlphaY = yEn ? 1.0f : 0.3f;
+  self.rotationOSC.ringAlphaZ = zEn ? 1.0f : 0.3f;
+  return dragging || xShow || yShow || zShow;
 }
 
 // Pull X/Y/Z ring colors from the Rotation lane's `componentLabelColors`
@@ -218,6 +257,7 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
                  modifiers:(NSUInteger)modifiers
                forceUpdate:(BOOL *)forceUpdate
                     atTime:(CMTime)time {
+  self.interactionArmed = NO;
   [self.snapEngine reset];
   [super mouseUpAtPositionX:positionX
                   positionY:positionY
@@ -225,6 +265,25 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
                   modifiers:modifiers
                 forceUpdate:forceUpdate
                      atTime:time];
+}
+
+// Hover (no button) is the only thing between interactions, so it's our reset
+// point: clear the per-interaction arming so the next press is judged fresh.
+// Hover also carries the modifier bit reliably, so it's where we track the
+// opt-reveal state for ghosts (repaint when it flips).
+- (void)mouseMovedAtPositionX:(double)positionX
+                    positionY:(double)positionY
+                   activePart:(NSInteger)activePart
+                    modifiers:(FxModifierKeys)modifiers
+                  forceUpdate:(BOOL *)forceUpdate
+                       atTime:(CMTime)time {
+  self.interactionArmed = NO;
+  BOOL reveal = (modifiers & kFxModifierKey_OPTION) != 0;
+  if (reveal != self.optRevealActive) {
+    self.optRevealActive = reveal;
+    if (forceUpdate)
+      *forceUpdate = YES;
+  }
 }
 
 - (void)drawOSCWithWidth:(NSInteger)width
@@ -242,12 +301,18 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
                                        }];
 
   double frac = [self _fractionAtTime:time];
+  BOOL posShownHere = _positionVisibleAtFraction(frac);
+  BOOL posEnabled = _oscElementVisible(self.apiManager, @"Position");
   BOOL posVisible = (self.isDragging && activePart == kOSCPositionPart) ||
-                    (_oscElementVisible(self.apiManager, @"Position") &&
-                     _positionVisibleAtFraction(frac));
+                    (posEnabled && posShownHere);
+  // Opt-hold reveals a hidden Position handle as a dimmed ghost (clickable to
+  // re-show); only when it would otherwise be on screen at this playhead.
+  BOOL posGhost =
+      !posVisible && self.optRevealActive && !posEnabled && posShownHere;
 
   CGPoint pos = [self oscPositionAtTime:time];
-  if (posVisible) {
+  if (posVisible || posGhost) {
+    self.fillAlpha = posGhost ? 0.3f : 1.0f;
     [self
         drawAtCanvasPosition:pos
                    isHovered:(activePart == kOSCPositionPart)
@@ -258,14 +323,9 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
 
   // Rotation sphere is centred on the same canvas point as Position (the
   // image rotates around its centre, which is where Position translates it).
-  BOOL rotVisible = (self.isDragging && activePart == kOSCRotationPart) ||
-                    (_oscElementVisible(self.apiManager, @"Rotation") &&
-                     _rotationVisibleAtFraction(frac));
-  if (rotVisible) {
+  BOOL rotDragging = self.isDragging && activePart == kOSCRotationPart;
+  if ([self _configureRotationRingsAtFraction:frac dragging:rotDragging]) {
     [self _syncRotationColorsFromLane];
-    self.rotationOSC.showX = _oscElementVisible(self.apiManager, @"Rotation.X");
-    self.rotationOSC.showY = _oscElementVisible(self.apiManager, @"Rotation.Y");
-    self.rotationOSC.showZ = _oscElementVisible(self.apiManager, @"Rotation.Z");
     NSArray<NSNumber *> *r = _rotationValuesAtFraction(frac);
     self.rotationOSC.rotX = (float)(r[0].doubleValue * M_PI / 180.0);
     self.rotationOSC.rotY = (float)(r[1].doubleValue * M_PI / 180.0);
@@ -299,20 +359,18 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
                             atTime:(CMTime)time {
   *activePart = 0;
   double frac = [self _fractionAtTime:time];
-  if (_oscElementVisible(self.apiManager, @"Position") &&
-      _positionVisibleAtFraction(frac) &&
-      [self hitTestAtMousePositionX:positionX
-                          positionY:positionY
-                             atTime:time]) {
+  // Opt-reveal makes a hidden handle hit-testable so an opt-click re-shows it.
+  BOOL posReachable = (_oscElementVisible(self.apiManager, @"Position") ||
+                       self.optRevealActive) &&
+                      _positionVisibleAtFraction(frac);
+  if (posReachable && [self hitTestAtMousePositionX:positionX
+                                          positionY:positionY
+                                             atTime:time]) {
     *activePart = kOSCPositionPart;
     return;
   }
-  if (_oscElementVisible(self.apiManager, @"Rotation") &&
-      _rotationVisibleAtFraction(frac)) {
+  if ([self _configureRotationRingsAtFraction:frac dragging:NO]) {
     CGPoint c = [self oscPositionAtTime:time];
-    self.rotationOSC.showX = _oscElementVisible(self.apiManager, @"Rotation.X");
-    self.rotationOSC.showY = _oscElementVisible(self.apiManager, @"Rotation.Y");
-    self.rotationOSC.showZ = _oscElementVisible(self.apiManager, @"Rotation.Z");
     NSArray<NSNumber *> *r = _rotationValuesAtFraction(frac);
     self.rotationOSC.rotX = (float)(r[0].doubleValue * M_PI / 180.0);
     self.rotationOSC.rotY = (float)(r[1].doubleValue * M_PI / 180.0);
@@ -326,12 +384,119 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
   }
 }
 
+// Flip one OSC element's hidden state in this instance's KKPluginInstanceState
+// (immediate viewer redraw) and persist it into the kParamUIState blob's
+// `oscElements` map (stored as VISIBLE bools, matching the inspector pills).
+// The blob write echoes back through the effect's parameterChanged, which
+// re-derives the hidden set and updates the inspector + mini-canvas, keeping
+// the viewer / inspector / mini-canvas in sync.
+- (void)_toggleOSCElementHidden:(NSString *)key {
+  KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
+  NSMutableSet<NSString *> *hidden =
+      [(st.hiddenOSCElements ?: [NSSet set]) mutableCopy];
+  BOOL nowHidden = ![hidden containsObject:key];
+  if (nowHidden)
+    [hidden addObject:key];
+  else
+    [hidden removeObject:key];
+  st.hiddenOSCElements = hidden;
+
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!actionAPI)
+    return;
+  [actionAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  // Base the rewrite on the cached full UI-state (refreshed in the effect's
+  // parameterChanged, which reads fresh) so inspector-owned keys like activeTab
+  // survive. The OSC's own scope read lags and would write back a stale tab.
+  // Fall back to a scope read only before any parameterChanged has cached one.
+  NSMutableDictionary *state = [st.lastUIState mutableCopy];
+  if (!state) {
+    NSString *existing = KKReadCustomParamString(getAPI, kParamUIState);
+    state = [(existing.length
+                  ? [NSJSONSerialization
+                        JSONObjectWithData:
+                            [existing dataUsingEncoding:NSUTF8StringEncoding]
+                                   options:0
+                                     error:nil]
+                  : nil) ?: @{} mutableCopy];
+  }
+  // Rebuild the FULL element map from the authoritative in-memory hidden set,
+  // NOT by merging into the blob's existing oscElements: a stale base would
+  // drop a sibling hidden one tick earlier (hide A, then hide B re-shows A).
+  // `hidden` is correct right now.
+  NSMutableDictionary<NSString *, NSNumber *> *els =
+      [NSMutableDictionary dictionary];
+  for (NSString *k in [MagicMovePlugin oscElementKeys])
+    els[k] = @(![hidden containsObject:k]);
+  state[@"oscElements"] = els;
+  // Keep the cache in step so a rapid second toggle merges into this result,
+  // not the pre-write snapshot.
+  st.lastUIState = state;
+  NSString *json = [[NSString alloc]
+      initWithData:[NSJSONSerialization dataWithJSONObject:state
+                                                   options:0
+                                                     error:nil]
+          encoding:NSUTF8StringEncoding];
+  KKWriteCustomParamString(setAPI, json, kParamUIState);
+  [actionAPI endAction:self];
+}
+
+// Element key for the part under the cursor, granular for rotation rings
+// (the preceding hit-test left the hit ring in rotationOSC.activeAxis).
+- (nullable NSString *)_oscElementKeyForActivePart:(NSInteger)activePart {
+  if (activePart == kOSCPositionPart)
+    return @"Position";
+  if (activePart == kOSCRotationPart) {
+    switch (self.rotationOSC.activeAxis) {
+    case 0:
+      return @"Rotation.X";
+    case 1:
+      return @"Rotation.Y";
+    case 2:
+      return @"Rotation.Z";
+    default:
+      return @"Rotation";
+    }
+  }
+  return nil;
+}
+
+// Latch an interaction's nature on its first event. Opt held over a hit part =>
+// toggle that element off (hide-click) and return YES so the caller suppresses
+// the drag. Decision sticks until hover/mouseUp resets `interactionArmed`, so
+// the rest of the interaction stays a no-op rather than half-dragging.
+- (BOOL)_armOptHideForActivePart:(NSInteger)activePart
+                       modifiers:(NSUInteger)modifiers {
+  if (self.interactionArmed)
+    return self.interactionIsOptHide;
+  self.interactionArmed = YES;
+  self.interactionIsOptHide = NO;
+  if ((modifiers & kFxModifierKey_OPTION) && activePart != 0) {
+    NSString *key = [self _oscElementKeyForActivePart:activePart];
+    if (key) {
+      [self _toggleOSCElementHidden:key];
+      self.interactionIsOptHide = YES;
+    }
+  }
+  return self.interactionIsOptHide;
+}
+
 - (void)mouseDownAtPositionX:(double)positionX
                    positionY:(double)positionY
                   activePart:(NSInteger)activePart
                    modifiers:(NSUInteger)modifiers
                  forceUpdate:(BOOL *)forceUpdate
                       atTime:(CMTime)time {
+  if ([self _armOptHideForActivePart:activePart modifiers:modifiers]) {
+    if (forceUpdate)
+      *forceUpdate = YES;
+    return;
+  }
   [super mouseDownAtPositionX:positionX
                     positionY:positionY
                    activePart:activePart
@@ -406,6 +571,12 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
                       modifiers:(NSUInteger)modifiers
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
+  // First drag tick decides: opt held => hide-click (handled, no drag).
+  if ([self _armOptHideForActivePart:activePart modifiers:modifiers]) {
+    if (forceUpdate)
+      *forceUpdate = YES;
+    return;
+  }
   if (activePart == kOSCRotationPart) {
     [self _dragRotationToPositionX:positionX
                          positionY:positionY

@@ -63,7 +63,12 @@
     // Update this instance's OSC-visibility cache so undo/redo of the master
     // tick (or a per-element pill) repaints the controls without a manual
     // scrub.
-    KKInstanceStateForAPI(self.apiManager).oscMasterVisible = oscVisible;
+    KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
+    st.oscMasterVisible = oscVisible;
+    // Cache the fresh, full blob so the OSC's opt-hide can merge into it rather
+    // than its own stale-scope read (which would write back a stale activeTab
+    // and snap the inspector off the Advanced tab).
+    st.lastUIState = state;
     [self applyOSCElementsFromUIState:state];
     dispatch_async(dispatch_get_main_queue(), ^{
       [self.inspectorView setLoopEnabled:enabled];

@@ -159,7 +159,7 @@ fragment float4 KKRotationOSCFragment(KKRasterizerData in [[stage_in]],
     float backBestZ = 0.0;
 
     for (int k = 0; k < 3; k++) {
-        if (params->ringVisible[k] < 0.5) {
+        if (params->ringVisible[k] <= 0.0) {
             continue; // ring hidden via the OSC-visibility popover
         }
         float3 prev = radius * ringU[k]; // t = 0
@@ -222,6 +222,11 @@ fragment float4 KKRotationOSCFragment(KKRasterizerData in [[stage_in]],
     if (bestZ > 0.0) {
         color *= backDim;
     }
+
+    // ringVisible doubles as a per-ring alpha multiplier: 1.0 = normal, a low
+    // value (e.g. 0.3) draws the ring as a dimmed "ghost" during opt-reveal.
+    // color is premultiplied, so scaling the whole vector dims it correctly.
+    color *= params->ringVisible[bestRing];
 
     return color;
 }
