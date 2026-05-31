@@ -107,6 +107,10 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
     (NSString *label, NSArray<NSNumber *> *values);
 @property(nonatomic, copy, nullable) void (^onAnimate)(NSString *label);
 @property(nonatomic, copy, nullable) void (^onRemove)(NSString *label);
+/// Constants popover: leading-gutter "move to animated" handler. Lets
+/// the user flip a property to animatable without going through the
+/// dropdown - mirrors the keypose popover's "−" remove gutter.
+@property(nonatomic, copy, nullable) void (^onAddToAnimated)(NSString *label);
 @property(nonatomic, copy, nullable) void (^onDragBegin)(void);
 @property(nonatomic, copy, nullable) void (^onDragEnd)(void);
 @property(nonatomic, copy, nullable) void (^onNavigate)(NSInteger dir);
@@ -1345,6 +1349,17 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
                         excludedLabels:cfg.excludedLabels];
     }
   }
+  // Constants popover (non-boundary) supplies onAddToAnimated → leading
+  // curve-glyph gutter. Set the handler then rebuild so the gutter shows
+  // on init rows. Lives OUTSIDE the isBoundary block because the constants
+  // popover by definition has isBoundary == NO.
+  if (cfg.onAddToAnimated) {
+    [staticView setRowAddToAnimatedHandler:^(NSString *label) {
+      cfg.onAddToAnimated(label);
+    }];
+    [staticView rebuildRowsWithLanes:cfg.lanes
+                      excludedLabels:cfg.excludedLabels];
+  }
 
   NSPopover *popover = [self
       _showPopoverWithContent:staticView
@@ -1415,6 +1430,15 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
     __strong typeof(weak) s = weak;
     if (s.onDragEnd)
       s.onDragEnd();
+  };
+  // Leading-gutter "move to animated" - the dropdown shortcut. Refreshing
+  // `_unoptedLanes` to the open popover happens automatically via the
+  // `_replaceLane` → `_refresh` chain (see `updateUnoptedLanes:` in
+  // `_refresh`), so the flipped lane disappears from the popover without
+  // an explicit close/reopen.
+  cfg.onAddToAnimated = ^(NSString *label) {
+    __strong typeof(weak) s = weak;
+    [s _setLaneAnimatable:YES forLabel:label];
   };
   [self _presentStaticValuesPopoverFromAnchor:anchor config:cfg];
 }

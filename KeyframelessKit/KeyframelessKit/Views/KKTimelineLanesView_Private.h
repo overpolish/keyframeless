@@ -68,7 +68,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// When `showsRemove` is YES the row carries a leading "−" gutter button that
 /// fires this; the host removes the keypose at this time (Advanced only).
 @property(nonatomic, copy, nullable) void (^onRemove)(void);
-- (instancetype)initWithLane:(KKLane *)lane showsRemove:(BOOL)showsRemove;
+/// When `showsAddToAnimated` is YES the row carries a leading curve-glyph
+/// gutter button (constants popover only) that fires this; the host flips
+/// the lane to animatable, mirroring the lane-manager dropdown. The "back
+/// to constant" direction has no shortcut by design - making a property
+/// constant deletes its keyposes, so it stays behind the explicit dropdown.
+@property(nonatomic, copy, nullable) void (^onAddToAnimated)(void);
+- (instancetype)initWithLane:(KKLane *)lane
+                 showsRemove:(BOOL)showsRemove
+          showsAddToAnimated:(BOOL)showsAddToAnimated;
 /// The KKSliderView (Float rows), for a guide that drives the slider.
 - (nullable NSView *)guideSliderView;
 /// The number field for component `i` (Float: 0; Crop: 0..3 = W,H,X,Y), for
@@ -153,6 +161,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// fires `handler(label)`. Must be set before rows are (re)built; the present
 /// path rebuilds once after setting it. nil = no remove gutter.
 - (void)setRowRemoveHandler:(void (^)(NSString *label))handler;
+/// Constants popover: give each row a leading curve-glyph button that fires
+/// `handler(label)` to flip the lane to animatable. Same lifecycle as
+/// `setRowRemoveHandler:` - must be set before rows are (re)built.
+- (void)setRowAddToAnimatedHandler:(void (^)(NSString *label))handler;
 /// The value-editor row (slider/fields) for `label`, or nil. Lets a guide
 /// spotlight a specific constant's control.
 - (nullable NSView *)rowViewForLabel:(NSString *)label;

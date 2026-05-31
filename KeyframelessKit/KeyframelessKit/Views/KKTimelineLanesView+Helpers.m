@@ -416,6 +416,7 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   NSMutableArray<NSNumber *> *_values; // normalized, authoritative
   NSButton *_reset;                    // reset-to-default, right of the label
   NSButton *_removeBtn;                // leading "−" gutter (Advanced only)
+  NSButton *_addBtn;                   // leading curve-glyph gutter (constants)
   NSArray<NSNumber *> *_defaultValues;
 }
 
@@ -452,6 +453,12 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   [self.window makeFirstResponder:nil];
   if (self.onRemove)
     self.onRemove();
+}
+
+- (void)_addToAnimatedTapped:(id)sender {
+  [self.window makeFirstResponder:nil];
+  if (self.onAddToAnimated)
+    self.onAddToAnimated();
 }
 
 // Display = stored(normalized) × scale; stored = entered ÷ scale. Lets the
@@ -499,7 +506,9 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   return [NSString stringWithFormat:(intFmt ? @"%.0f" : @"%.2f"), dv];
 }
 
-- (instancetype)initWithLane:(KKLane *)lane showsRemove:(BOOL)showsRemove {
+- (instancetype)initWithLane:(KKLane *)lane
+                 showsRemove:(BOOL)showsRemove
+          showsAddToAnimated:(BOOL)showsAddToAnimated {
   CGFloat h = [_KKStaticValueRow heightForLane:lane];
   self = [super initWithFrame:NSMakeRect(0, 0, kCanvasPopoverW, h)];
   if (!self)
@@ -513,23 +522,51 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   NSTextField *title = _KKMakeCaption(KKLocalizedParamName(lane.label));
   [self addSubview:title];
 
-  // Leading gutter: the "−" remove button (Advanced keypose popover only). When
-  // present the label tucks in beside it; otherwise it keeps the normal inset.
+  // Leading gutter, shared slot. Keypose popover (Advanced) uses "−" to
+  // remove this lane's KP at the open fraction; constants popover uses the
+  // animation curve glyph to flip the lane to animatable (mirrors the
+  // lane-manager dropdown). The two are mutually exclusive - a row is
+  // either editing a KP value or a constant, never both.
   NSLayoutXAxisAnchor *titleLead = self.leadingAnchor;
   CGFloat titleLeadInset = KKPaddingLG;
+  NSButton *gutterBtn = nil;
   if (showsRemove) {
     _removeBtn = _KKGutterGlyphButton(
         @"minus", self, @selector(_removeTapped:),
         [[NSColor inspectorLabel] colorWithAlphaComponent:0.55]);
-    [self addSubview:_removeBtn];
+    gutterBtn = _removeBtn;
+  } else if (showsAddToAnimated) {
+    // SF Symbol "point.bottomleft.forward.to.point.topright.scurvepath"
+    // reads as an animation curve - same metaphor as keyframe gizmos in
+    // other tools. Falls back to "waveform.path" on older OS versions.
+    NSImage *curve =
+        [NSImage imageWithSystemSymbolName:@"point.bottomleft.forward.to.point."
+                                           @"topright.scurvepath"
+                  accessibilityDescription:nil];
+    if (!curve)
+      curve = [NSImage imageWithSystemSymbolName:@"waveform.path"
+                        accessibilityDescription:nil];
+    _addBtn = [NSButton buttonWithImage:curve ?: [[NSImage alloc] init]
+                                 target:self
+                                 action:@selector(_addToAnimatedTapped:)];
+    _addBtn.translatesAutoresizingMaskIntoConstraints = NO;
+    _addBtn.bordered = NO;
+    _addBtn.bezelStyle = NSBezelStyleShadowlessSquare;
+    _addBtn.imageScaling = NSImageScaleProportionallyDown;
+    _addBtn.contentTintColor =
+        [[NSColor inspectorLabel] colorWithAlphaComponent:0.55];
+    gutterBtn = _addBtn;
+  }
+  if (gutterBtn) {
+    [self addSubview:gutterBtn];
     [NSLayoutConstraint activateConstraints:@[
-      [_removeBtn.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
-                                               constant:KKPaddingMD],
-      [_removeBtn.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-      [_removeBtn.widthAnchor constraintEqualToConstant:15.0],
-      [_removeBtn.heightAnchor constraintEqualToConstant:15.0],
+      [gutterBtn.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                              constant:KKPaddingMD],
+      [gutterBtn.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [gutterBtn.widthAnchor constraintEqualToConstant:15.0],
+      [gutterBtn.heightAnchor constraintEqualToConstant:15.0],
     ]];
-    titleLead = _removeBtn.trailingAnchor;
+    titleLead = gutterBtn.trailingAnchor;
     titleLeadInset = KKPaddingSM;
   }
 
@@ -982,10 +1019,17 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   // that calls this with the row's label; nil → no remove gutter (Basic /
   // constants). Stored so the in-place rebuild keeps the gutter.
   void (^_rowRemoveHandler)(NSString *);
+  // Constants popover only → rows gain a leading curve-glyph button that
+  // calls this with the row's label to flip the lane to animatable.
+  void (^_rowAddToAnimatedHandler)(NSString *);
 }
 
 - (void)setRowRemoveHandler:(void (^)(NSString *label))handler {
   _rowRemoveHandler = [handler copy];
+}
+
+- (void)setRowAddToAnimatedHandler:(void (^)(NSString *label))handler {
+  _rowAddToAnimatedHandler = [handler copy];
 }
 
 - (void)setHeaderTitle:(NSString *)title {
@@ -1312,8 +1356,10 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 
 - (_KKStaticValueRow *)_makeRowForLane:(KKLane *)lane {
   BOOL showsRemove = (_rowRemoveHandler != nil);
+  BOOL showsAdd = (_rowAddToAnimatedHandler != nil);
   _KKStaticValueRow *row = [[_KKStaticValueRow alloc] initWithLane:lane
-                                                       showsRemove:showsRemove];
+                                                       showsRemove:showsRemove
+                                                showsAddToAnimated:showsAdd];
   row.translatesAutoresizingMaskIntoConstraints = NO;
   NSString *label = lane.label;
   __weak typeof(self) weak = self;
@@ -1322,6 +1368,12 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
       __strong typeof(weak) s = weak;
       if (s->_rowRemoveHandler)
         s->_rowRemoveHandler(label);
+    };
+  if (showsAdd)
+    row.onAddToAnimated = ^{
+      __strong typeof(weak) s = weak;
+      if (s->_rowAddToAnimatedHandler)
+        s->_rowAddToAnimatedHandler(label);
     };
   // Any component with unit "px" scales by the media size: even-index
   // components (W/X-like) use media width; odd-index (H/Y-like) use height.
