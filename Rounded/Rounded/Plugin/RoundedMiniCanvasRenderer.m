@@ -36,6 +36,11 @@ static const CGFloat kHandleHitTolPt = 12.0;
 - (NSString *)pointLabel {
   return @"Radius";
 }
+- (CGFloat)pointHandleSizeScale {
+  // Match Magic Move's path-anchor KKPointOSC dot in the mini-canvas (0.6),
+  // for both the radius handle and the crop corners.
+  return 0.6;
+}
 - (NSInteger)valueTypeForLabel:(NSString *)label {
   return [label isEqualToString:@"Crop"] ? KKLaneValueTypeCrop
                                          : KKLaneValueTypeFloat;

@@ -143,6 +143,13 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
 /// Extra handles (crop corners) always render as Point.
 - (KKMiniHandleStyle)pointHandleStyle;
 
+/// Size multiplier for the point-style handle glyph (the main point handle and
+/// any crop-corner handles), relative to the standard mini-canvas dot. Default
+/// 1.0. Lets a plugin match a specific reference dot - e.g. Rounded sets this
+/// so its radius + crop handles are the same size as Magic Move's path-anchor
+/// dots.
+- (CGFloat)pointHandleSizeScale;
+
 /// YES while the main point handle is currently being dragged. Lets the
 /// canvas swap glyph params (e.g. ArcOSC's active radius + plus indicator)
 /// on press. Default reflects the renderer's own `_pointGrabbed` state.

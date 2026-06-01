@@ -132,14 +132,17 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   NSString *txt = [NSString stringWithFormat:@"%ld x %ld", pxW, pxH];
   NSDictionary *attrs = @{
     NSFontAttributeName :
-        [NSFont monospacedDigitSystemFontOfSize:9.0 weight:NSFontWeightMedium],
+        [NSFont monospacedSystemFontOfSize:9.0 weight:NSFontWeightMedium],
     NSForegroundColorAttributeName : [NSColor colorWithWhite:1.0 alpha:0.9],
   };
   NSSize ts = [txt sizeWithAttributes:attrs];
   // Trailing edge aligned to the crop's right edge; y-up overlay so "below
-  // the bottom edge" == smaller y.
+  // the bottom edge" == smaller y. Gap below the edge is proportional to the
+  // 9pt mini label, matching the in-viewer crop OSC's 4pt gap at its 20pt
+  // label (4 * 9/20), so the readout sits the same distance below the border.
+  const CGFloat kLabelGap = 4.0 * 9.0 / 20.0;
   NSPoint at = NSMakePoint(CGRectGetMaxX(br) - ts.width,
-                           CGRectGetMinY(br) - ts.height - 4.0);
+                           CGRectGetMinY(br) - ts.height - kLabelGap);
   [txt drawAtPoint:at withAttributes:attrs];
 }
 
@@ -1176,7 +1179,8 @@ static const NSUInteger kFilmstripGridCols = 5;
       CGFloat cropGhost = [del isKindOfClass:[KKMiniCanvasRenderer class]]
                               ? [(KKMiniCanvasRenderer *)del cropGhostAlpha]
                               : 1.0;
-      simd_float4 lineColor = {1.0f, 1.0f, 1.0f, 0.9f * (float)cropGhost};
+      // Match the in-viewer crop border (KKRectBorderOSC default: white 0.6).
+      simd_float4 lineColor = {1.0f, 1.0f, 1.0f, 0.6f * (float)cropGhost};
       [enc setRenderPipelineState:_linePipeline];
       [enc setVertexBytes:&vp
                    length:sizeof(vp)
@@ -1268,6 +1272,13 @@ static const NSUInteger kFilmstripGridCols = 5;
     simd_float4 accentFill = {(float)ar, (float)ag, (float)ab, (float)aa};
     simd_float4 whiteFill = {1.0f, 1.0f, 1.0f, 1.0f};
 
+    // Point-glyph size multiplier (radius handle + crop corners), so a plugin
+    // can match a specific reference dot. Default 1.0.
+    CGFloat pointSizeScale =
+        [del isKindOfClass:[KKMiniCanvasRenderer class]]
+            ? [(KKMiniCanvasRenderer *)del pointHandleSizeScale]
+            : 1.0;
+
     CGPoint handleCenterPts;
     if ([del respondsToSelector:
                  @selector(miniCanvas:pointHandleCenter:contentRect:)] &&
@@ -1291,7 +1302,10 @@ static const NSUInteger kFilmstripGridCols = 5;
         // Point-style handles dim via the fill alpha (no ghostAlpha param).
         simd_float4 f = accentFill;
         f.w *= (float)ghostAlpha;
-        [self _encodeHandleGlyphAt:handleCenterPts fillColor:f encoder:enc];
+        [self _encodeHandleGlyphAt:handleCenterPts
+                         fillColor:f
+                         sizeScale:pointSizeScale
+                           encoder:enc];
       }
     }
 
@@ -1307,6 +1321,7 @@ static const NSUInteger kFilmstripGridCols = 5;
                extraHandleCentersForContentRect:cr])
         [self _encodeHandleGlyphAt:v.pointValue
                          fillColor:cornerFill
+                         sizeScale:pointSizeScale
                            encoder:enc];
     }
 

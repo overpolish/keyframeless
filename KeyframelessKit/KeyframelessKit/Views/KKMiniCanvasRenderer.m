@@ -87,6 +87,9 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
 - (KKMiniHandleStyle)pointHandleStyle {
   return KKMiniHandleStylePoint;
 }
+- (CGFloat)pointHandleSizeScale {
+  return 1.0;
+}
 - (BOOL)pointHandleIsActive {
   return _pointGrabbed;
 }
