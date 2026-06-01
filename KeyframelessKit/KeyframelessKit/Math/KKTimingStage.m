@@ -279,6 +279,9 @@
   c.lastKnownClipDuration = _lastKnownClipDuration;
   c.holdShape = _holdShape;
   c.spatialCurvable = _spatialCurvable;
+  c.aspectLinkable = _aspectLinkable;
+  c.aspectLinked = _aspectLinked;
+  c.integerValued = _integerValued;
   return c;
 }
 
@@ -304,6 +307,12 @@
     d[@"hold_shape"] = @(_holdShape);
   if (_spatialCurvable)
     d[@"spatial_curvable"] = @YES;
+  if (_aspectLinkable)
+    d[@"aspect_linkable"] = @YES;
+  if (_aspectLinked)
+    d[@"aspect_linked"] = @YES;
+  if (_integerValued)
+    d[@"integer_valued"] = @YES;
   return d;
 }
 
@@ -331,6 +340,9 @@
   if (d[@"hold_shape"])
     l.holdShape = (KKLaneHoldShape)[d[@"hold_shape"] integerValue];
   l.spatialCurvable = [d[@"spatial_curvable"] boolValue];
+  l.aspectLinkable = [d[@"aspect_linkable"] boolValue];
+  l.aspectLinked = [d[@"aspect_linked"] boolValue];
+  l.integerValued = [d[@"integer_valued"] boolValue];
   NSArray *rawKps = d[@"keyposes"];
   if ([rawKps isKindOfClass:[NSArray class]]) {
     NSMutableArray *kps = [NSMutableArray arrayWithCapacity:rawKps.count];
@@ -376,6 +388,24 @@ KKTimeline *KKTimelineSettingSpatialSmooth(KKTimeline *timeline,
     nk.spatialSmooth = on;
     mkps[best] = nk;
     nl.keyposes = mkps;
+    lanes[i] = nl;
+    t.lanes = lanes;
+    return t;
+  }
+  return nil;
+}
+
+KKTimeline *KKTimelineSettingAspectLinked(KKTimeline *timeline, NSString *label,
+                                          BOOL on) {
+  KKTimeline *t = [timeline copy];
+  NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+    if (![lanes[i].label isEqualToString:label])
+      continue;
+    if (lanes[i].aspectLinked == on)
+      return nil; // already in that state - no commit, no undo entry
+    KKLane *nl = [lanes[i] copy];
+    nl.aspectLinked = on;
     lanes[i] = nl;
     t.lanes = lanes;
     return t;

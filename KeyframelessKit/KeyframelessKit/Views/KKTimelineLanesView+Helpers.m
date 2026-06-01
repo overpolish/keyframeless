@@ -420,6 +420,9 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   NSArray<NSNumber *> *_defaultValues;
   NSButton *_smoothBtn; // curve toggle, left of the value fields
   BOOL _smoothOn;
+  NSButton *_linkBtn; // aspect-link toggle, left of the value fields
+  BOOL _linkOn;
+  BOOL _integerValued; // fields display + round to whole numbers
 }
 
 - (void)setDefaultValues:(NSArray<NSNumber *> *)defaultValues {
@@ -509,6 +512,47 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   [self _updateSmoothTint];
 }
 
+// Link glyph that aspect-locks the two components: editing one scales the other
+// by the same factor, preserving their current ratio. Global per-lane toggle.
+// Lit/accent = linked, dim = unlinked.
+- (NSButton *)_makeLinkToggle {
+  NSImage *img = [NSImage imageWithSystemSymbolName:@"link"
+                           accessibilityDescription:nil];
+  NSButton *b = [NSButton buttonWithImage:img ?: [[NSImage alloc] init]
+                                   target:self
+                                   action:@selector(_linkTapped:)];
+  b.translatesAutoresizingMaskIntoConstraints = NO;
+  b.bordered = NO;
+  b.bezelStyle = NSBezelStyleShadowlessSquare;
+  b.imageScaling = NSImageScaleProportionallyDown;
+  b.toolTip = KKLoc(@"Link X and Y (lock aspect ratio)",
+                    @"Tooltip: aspect-link toggle on the Scale row.");
+  [NSLayoutConstraint activateConstraints:@[
+    [b.widthAnchor constraintEqualToConstant:15.0],
+    [b.heightAnchor constraintEqualToConstant:15.0],
+  ]];
+  return b;
+}
+
+- (void)_updateLinkTint {
+  _linkBtn.contentTintColor =
+      _linkOn ? [NSColor accentMatchingHost]
+              : [[NSColor inspectorLabel] colorWithAlphaComponent:0.55];
+}
+
+- (void)_linkTapped:(id)sender {
+  [self.window makeFirstResponder:nil];
+  _linkOn = !_linkOn;
+  [self _updateLinkTint];
+  if (self.onLinkToggled)
+    self.onLinkToggled(_linkOn);
+}
+
+- (void)applyLink:(BOOL)on {
+  _linkOn = on;
+  [self _updateLinkTint];
+}
+
 // Display = stored(normalized) × scale; stored = entered ÷ scale. Lets the
 // crop fields show pixels while the model stays 0–1. 1.0 == show raw.
 - (double)_scaleAt:(NSInteger)i {
@@ -544,7 +588,7 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 // keep 2 decimals.
 - (NSString *)_displayForNorm:(double)norm index:(NSInteger)i {
   double scale = [self _scaleAt:i];
-  BOOL intFmt = (scale != 1.0);
+  BOOL intFmt = (scale != 1.0) || _integerValued;
   double dv = norm * scale;
   // Round to the displayed precision first, then squash -0 → 0 so a tiny
   // negative never shows as "-0".
@@ -567,6 +611,7 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   _cmin = lane.componentMin ?: @[];
   _cmax = lane.componentMax ?: @[];
   _cunits = lane.componentUnits ?: @[];
+  _integerValued = lane.integerValued;
 
   NSTextField *title = _KKMakeCaption(KKLocalizedParamName(lane.label));
   [self addSubview:title];
@@ -698,6 +743,15 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
       [self _updateSmoothTint];
       [arranged insertObject:_smoothBtn atIndex:0];
     }
+    // Aspect-link toggle shares that slot (Scale uses it; mutually exclusive
+    // with the smooth toggle in practice). Global per-lane, shown in both the
+    // constants and keypose popovers, so it is not gated on _editsKeypose.
+    if (lane.aspectLinkable) {
+      _linkOn = lane.aspectLinked;
+      _linkBtn = [self _makeLinkToggle];
+      [self _updateLinkTint];
+      [arranged insertObject:_linkBtn atIndex:0];
+    }
     NSStackView *hs = [NSStackView stackViewWithViews:arranged];
     hs.orientation = NSUserInterfaceLayoutOrientationHorizontal;
     hs.alignment = NSLayoutAttributeCenterY;
@@ -706,6 +760,8 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
     // the reset button's padding rather than the tight inter-field spacing.
     if (_smoothBtn)
       [hs setCustomSpacing:KKPaddingLG afterView:_smoothBtn];
+    if (_linkBtn)
+      [hs setCustomSpacing:KKPaddingLG afterView:_linkBtn];
     hs.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:hs];
     [NSLayoutConstraint activateConstraints:@[
@@ -833,6 +889,9 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 - (void)_setValues:(NSArray<NSNumber *> *)v emit:(BOOL)emit {
   _values = [v mutableCopy] ?: [NSMutableArray array];
   [self _constrain:_values];
+  if (_integerValued)
+    for (NSInteger i = 0; i < (NSInteger)_values.count; i++)
+      _values[i] = @(round(_values[i].doubleValue));
   [self refreshDisplay];
   [self _updateResetVisibility];
   if (emit && self.onValue)
@@ -894,6 +953,21 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   for (NSInteger i = 0; i < (NSInteger)_fields.count && i < (NSInteger)v.count;
        i++)
     v[i] = @(_fields[i].doubleValue / [self _scaleAt:i]);
+  // Aspect link: scale the partner of the edited component by the same factor,
+  // preserving the current X:Y ratio. _values still holds the pre-edit values.
+  if (_linkOn && v.count == 2 && _values.count == 2) {
+    NSInteger edited = [_fields indexOfObjectIdenticalTo:sender];
+    if (edited == 0 || edited == 1) {
+      NSInteger other = 1 - edited;
+      double oldEdited = _values[edited].doubleValue;
+      double newEdited = v[edited].doubleValue;
+      double oldOther = _values[other].doubleValue;
+      if (fabs(oldEdited) > 1e-9)
+        v[other] = @(oldOther * (newEdited / oldEdited)); // preserve ratio
+      else
+        v[other] = @(newEdited); // ratio undefined from 0 - move together 1:1
+    }
+  }
   [self _setValues:v emit:YES];
   // _setValues clamps to componentMin/Max, but the field editor is still
   // tearing down this tick so refreshDisplay skipped the edited field - leaving
@@ -1064,6 +1138,7 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   CGFloat _clipAspect;
   void (^_onHandleValue)(NSString *, NSArray<NSNumber *> *);
   void (^_onSmoothToggled)(NSString *, BOOL);
+  void (^_onLinkToggled)(NSString *, BOOL);
   BOOL _editsKeypose;
   void (^_onDragBegin)(void);
   void (^_onDragEnd)(void);
@@ -1120,6 +1195,10 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   _onSmoothToggled = [handler copy];
 }
 
+- (void)setOnLinkToggled:(void (^)(NSString *, BOOL))handler {
+  _onLinkToggled = [handler copy];
+}
+
 - (void)rebindLanes:(NSArray<KKLane *> *)lanes {
   for (KKLane *lane in lanes) {
     _KKStaticValueRow *row = _rowsByLabel[lane.label];
@@ -1128,6 +1207,8 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
     [row applyValues:lane.keyposes.firstObject.values];
     if (lane.spatialCurvable)
       [row applySmooth:lane.keyposes.firstObject.spatialSmooth];
+    if (lane.aspectLinkable)
+      [row applyLink:lane.aspectLinked];
   }
 }
 
@@ -1502,6 +1583,12 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
       __strong typeof(weak) s = weak;
       if (s->_onSmoothToggled)
         s->_onSmoothToggled(label, on);
+    };
+  if (lane.aspectLinkable)
+    row.onLinkToggled = ^(BOOL on) {
+      __strong typeof(weak) s = weak;
+      if (s->_onLinkToggled)
+        s->_onLinkToggled(label, on);
     };
   return row;
 }

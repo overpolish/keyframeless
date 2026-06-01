@@ -517,6 +517,10 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   return [self _userHiddenLabel:self.cropLabel] ? 0.3 : 1.0;
 }
 
+- (CGFloat)scaleGhostAlpha {
+  return 1.0; // no scale box by default; MagicMove overrides
+}
+
 - (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
     extraHandleCentersForContentRect:(CGRect)cr {
   if (![self _cropActiveForContentRect:cr])

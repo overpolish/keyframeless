@@ -55,6 +55,37 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   return NO;
 }
 
+// Fill attributes for OSC size readouts: 9pt monospaced-medium, light-gray
+// (0xC1) fill - the same color the viewer's KKOSCLabel uses. Used both for
+// measuring the text and as the fill pass in -drawReadout:.
++ (NSDictionary *)readoutAttributes {
+  return @{
+    NSFontAttributeName :
+        [NSFont monospacedSystemFontOfSize:9.0 weight:NSFontWeightMedium],
+    NSForegroundColorAttributeName : [NSColor colorWithRed:0xC1 / 255.0
+                                                     green:0xC1 / 255.0
+                                                      blue:0xC1 / 255.0
+                                                     alpha:1.0],
+  };
+}
+
+// Draws a readout with the viewer's look: a black outline stroke underneath a
+// light-gray fill. NSStrokeWidth is a percentage of the font's point size, so
+// the same 15.0 (== KKOSCLabel's 3pt/20pt*100) gives a matched relative
+// outline at the mini's 9pt font.
++ (void)drawReadout:(NSString *)txt
+            atPoint:(NSPoint)at
+     fillAttributes:(NSDictionary *)fillAttrs {
+  NSMutableDictionary *strokeAttrs = [fillAttrs mutableCopy];
+  strokeAttrs[NSForegroundColorAttributeName] = [NSColor colorWithWhite:0.0
+                                                                  alpha:0.8];
+  strokeAttrs[NSStrokeColorAttributeName] = [NSColor colorWithWhite:0.0
+                                                              alpha:0.8];
+  strokeAttrs[NSStrokeWidthAttributeName] = @(15.0);
+  [txt drawAtPoint:at withAttributes:strokeAttrs];
+  [txt drawAtPoint:at withAttributes:fillAttrs];
+}
+
 - (NSView *)hitTest:(NSPoint)pt {
   KKMiniCanvasView *c = self.canvas;
   id<KKMiniCanvasDelegate> d = c.canvasDelegate;
@@ -112,38 +143,45 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
       [p stroke];
     }
   }
-  if (![d respondsToSelector:@selector(miniCanvas:borderRect:forContentRect:)])
-    return;
-  CGRect br;
-  if (![d miniCanvas:c borderRect:&br forContentRect:cr])
-    return;
-  // The border line itself is drawn in the Metal pass (under the handle
-  // glyphs); this overlay only adds the size readout on top.
-
-  // Size readout in pixels: trailing edge aligned to the crop's right edge,
-  // just below its bottom edge - same placement as the in-viewer crop OSC.
-  // The crop fraction is border/content; × the source media size.
-  CGSize media = [c sourceMediaSize];
-  if (media.width <= 0 || media.height <= 0 || cr.size.width <= 0 ||
-      cr.size.height <= 0)
-    return;
-  long pxW = lround(br.size.width / cr.size.width * media.width);
-  long pxH = lround(br.size.height / cr.size.height * media.height);
-  NSString *txt = [NSString stringWithFormat:@"%ld x %ld", pxW, pxH];
-  NSDictionary *attrs = @{
-    NSFontAttributeName :
-        [NSFont monospacedSystemFontOfSize:9.0 weight:NSFontWeightMedium],
-    NSForegroundColorAttributeName : [NSColor colorWithWhite:1.0 alpha:0.9],
-  };
-  NSSize ts = [txt sizeWithAttributes:attrs];
-  // Trailing edge aligned to the crop's right edge; y-up overlay so "below
-  // the bottom edge" == smaller y. Gap below the edge is proportional to the
-  // 9pt mini label, matching the in-viewer crop OSC's 4pt gap at its 20pt
-  // label (4 * 9/20), so the readout sits the same distance below the border.
+  // The border lines are drawn in the Metal pass (under the handle glyphs);
+  // this overlay only adds the size readouts on top. Both the crop and the
+  // scale box place their readout trailing-aligned to the box's right edge,
+  // just below the bottom edge (same placement as the in-viewer OSCs). Gap is
+  // proportional to the 9pt mini label, matching the viewer's 4pt-at-20pt gap.
+  // Styling matches the viewer's KKOSCLabel: light-gray (0xC1) fill over a
+  // black outline stroke, so the readout reads the same in both surfaces.
+  NSDictionary *attrs = [_KKMiniCanvasOverlay readoutAttributes];
   const CGFloat kLabelGap = 4.0 * 9.0 / 20.0;
-  NSPoint at = NSMakePoint(CGRectGetMaxX(br) - ts.width,
-                           CGRectGetMinY(br) - ts.height - kLabelGap);
-  [txt drawAtPoint:at withAttributes:attrs];
+
+  // Crop size readout in pixels: border fraction × source media size.
+  CGSize media = [c sourceMediaSize];
+  CGRect br;
+  if ([d respondsToSelector:@selector(miniCanvas:borderRect:forContentRect:)] &&
+      [d miniCanvas:c borderRect:&br forContentRect:cr] && media.width > 0 &&
+      media.height > 0 && cr.size.width > 0 && cr.size.height > 0) {
+    long pxW = lround(br.size.width / cr.size.width * media.width);
+    long pxH = lround(br.size.height / cr.size.height * media.height);
+    NSString *txt = [NSString stringWithFormat:@"%ld x %ld", pxW, pxH];
+    NSSize ts = [txt sizeWithAttributes:attrs];
+    NSPoint at = NSMakePoint(CGRectGetMaxX(br) - ts.width,
+                             CGRectGetMinY(br) - ts.height - kLabelGap);
+    [_KKMiniCanvasOverlay drawReadout:txt atPoint:at fillAttributes:attrs];
+  }
+
+  // Scale box readout ("X% x Y%"), same placement below the scale box.
+  CGRect sb;
+  if ([d respondsToSelector:@selector(scaleReadoutText)] &&
+      [d respondsToSelector:@selector(
+                                miniCanvas:scaleBoxRect:forContentRect:)] &&
+      [d miniCanvas:c scaleBoxRect:&sb forContentRect:cr]) {
+    NSString *txt = [d scaleReadoutText];
+    if (txt.length) {
+      NSSize ts = [txt sizeWithAttributes:attrs];
+      NSPoint at = NSMakePoint(CGRectGetMaxX(sb) - ts.width,
+                               CGRectGetMinY(sb) - ts.height - kLabelGap);
+      [_KKMiniCanvasOverlay drawReadout:txt atPoint:at fillAttributes:attrs];
+    }
+  }
 }
 
 - (void)mouseDown:(NSEvent *)e {
@@ -890,6 +928,48 @@ static const NSUInteger kFilmstripGridCols = 5;
   return cs > 0 ? cs : 1.0;
 }
 
+// Thin rectangle outline (view-point rect) drawn as four filled edge quads via
+// the flat-colour line pipeline. Shared by the crop border + the scale box.
+- (void)_encodeRectBorder:(CGRect)br
+                lineColor:(simd_float4)lineColor
+                  encoder:(id<MTLRenderCommandEncoder>)enc {
+  CGSize d = self.drawableSize;
+  CGFloat s = self.window.backingScaleFactor;
+  if (s <= 0)
+    s = 2.0;
+  float L = (float)(CGRectGetMinX(br) * s - d.width / 2.0);
+  float R = (float)(CGRectGetMaxX(br) * s - d.width / 2.0);
+  float B = (float)(CGRectGetMinY(br) * s - d.height / 2.0);
+  float T = (float)(CGRectGetMaxY(br) * s - d.height / 2.0);
+  float lw = (float)(1.0 * s);
+  simd_uint2 vp = {(unsigned)d.width, (unsigned)d.height};
+  [enc setRenderPipelineState:_linePipeline];
+  [enc setVertexBytes:&vp
+               length:sizeof(vp)
+              atIndex:KKVertexInputIndex_ViewportSize];
+  [enc setFragmentBytes:&lineColor length:sizeof(lineColor) atIndex:0];
+  float edges[4][4] = {
+      {L, B, R, B + lw},
+      {L, T - lw, R, T},
+      {L, B, L + lw, T},
+      {R - lw, B, R, T},
+  };
+  for (int e = 0; e < 4; e++) {
+    float x0 = edges[e][0], y0 = edges[e][1], x1 = edges[e][2],
+          y1 = edges[e][3];
+    KKVertex2D q[4] = {
+        {{x0, y1}, {0, 0}},
+        {{x0, y0}, {0, 0}},
+        {{x1, y1}, {0, 0}},
+        {{x1, y0}, {0, 0}},
+    };
+    [enc setVertexBytes:q length:sizeof(q) atIndex:KKVertexInputIndex_Vertices];
+    [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
+            vertexStart:0
+            vertexCount:4];
+  }
+}
+
 // Encodes one shared KKPointOSC glyph centered at `centerPts` (overlay
 // points, y-up). `enc` must already be a valid render encoder for this pass.
 - (void)_encodeHandleGlyphAt:(CGPoint)centerPts
@@ -1166,49 +1246,29 @@ static const NSUInteger kFilmstripGridCols = 5;
     CGRect cr = [self contentRectInViewPoints];
     CGRect br;
     if ([del miniCanvas:self borderRect:&br forContentRect:cr]) {
-      CGSize d = self.drawableSize;
-      CGFloat s = self.window.backingScaleFactor;
-      if (s <= 0)
-        s = 2.0;
-      float L = (float)(CGRectGetMinX(br) * s - d.width / 2.0);
-      float R = (float)(CGRectGetMaxX(br) * s - d.width / 2.0);
-      float B = (float)(CGRectGetMinY(br) * s - d.height / 2.0);
-      float T = (float)(CGRectGetMaxY(br) * s - d.height / 2.0);
-      float lw = (float)(1.0 * s);
-      simd_uint2 vp = {(unsigned)d.width, (unsigned)d.height};
       CGFloat cropGhost = [del isKindOfClass:[KKMiniCanvasRenderer class]]
                               ? [(KKMiniCanvasRenderer *)del cropGhostAlpha]
                               : 1.0;
       // Match the in-viewer crop border (KKRectBorderOSC default: white 0.6).
       simd_float4 lineColor = {1.0f, 1.0f, 1.0f, 0.6f * (float)cropGhost};
-      [enc setRenderPipelineState:_linePipeline];
-      [enc setVertexBytes:&vp
-                   length:sizeof(vp)
-                  atIndex:KKVertexInputIndex_ViewportSize];
-      [enc setFragmentBytes:&lineColor length:sizeof(lineColor) atIndex:0];
-      // bottom, top, left, right edges as thin filled quads.
-      float edges[4][4] = {
-          {L, B, R, B + lw},
-          {L, T - lw, R, T},
-          {L, B, L + lw, T},
-          {R - lw, B, R, T},
-      };
-      for (int e = 0; e < 4; e++) {
-        float x0 = edges[e][0], y0 = edges[e][1], x1 = edges[e][2],
-              y1 = edges[e][3];
-        KKVertex2D q[4] = {
-            {{x0, y1}, {0, 0}},
-            {{x0, y0}, {0, 0}},
-            {{x1, y1}, {0, 0}},
-            {{x1, y0}, {0, 0}},
-        };
-        [enc setVertexBytes:q
-                     length:sizeof(q)
-                    atIndex:KKVertexInputIndex_Vertices];
-        [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                vertexStart:0
-                vertexCount:4];
-      }
+      [self _encodeRectBorder:br lineColor:lineColor encoder:enc];
+    }
+  }
+
+  // Scale transform box (Magic Move): border + 8 handles, same parts as crop
+  // but its own geometry. Drawn before the handle glyphs so they sit on top.
+  if (_linePipeline && del &&
+      [del respondsToSelector:@selector(
+                                  miniCanvas:scaleBoxRect:forContentRect:)]) {
+    CGRect cr = [self contentRectInViewPoints];
+    CGRect sb;
+    if ([del miniCanvas:self scaleBoxRect:&sb forContentRect:cr]) {
+      CGFloat scaleGhost = [del isKindOfClass:[KKMiniCanvasRenderer class]]
+                               ? [(KKMiniCanvasRenderer *)del scaleGhostAlpha]
+                               : 1.0;
+      // Match the in-viewer scale border (KKRectBorderOSC default: white 0.6).
+      simd_float4 lineColor = {1.0f, 1.0f, 1.0f, 0.6f * (float)scaleGhost};
+      [self _encodeRectBorder:sb lineColor:lineColor encoder:enc];
     }
   }
 
@@ -1321,6 +1381,22 @@ static const NSUInteger kFilmstripGridCols = 5;
                extraHandleCentersForContentRect:cr])
         [self _encodeHandleGlyphAt:v.pointValue
                          fillColor:cornerFill
+                         sizeScale:pointSizeScale
+                           encoder:enc];
+    }
+
+    // Scale box handles (Magic Move): the 8 corner + edge handles.
+    if ([del respondsToSelector:
+                 @selector(miniCanvas:scaleHandleCentersForContentRect:)]) {
+      CGFloat scaleGhost = [del isKindOfClass:[KKMiniCanvasRenderer class]]
+                               ? [(KKMiniCanvasRenderer *)del scaleGhostAlpha]
+                               : 1.0;
+      simd_float4 scaleFill = whiteFill;
+      scaleFill.w *= (float)scaleGhost;
+      for (NSValue *v in [del miniCanvas:self
+               scaleHandleCentersForContentRect:cr])
+        [self _encodeHandleGlyphAt:v.pointValue
+                         fillColor:scaleFill
                          sizeScale:pointSizeScale
                            encoder:enc];
     }

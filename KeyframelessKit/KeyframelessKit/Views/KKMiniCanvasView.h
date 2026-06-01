@@ -61,6 +61,18 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
         borderRect:(out CGRect *)outRect
     forContentRect:(CGRect)contentRect;
+/// Scale transform-box outline (Magic Move), in overlay points (y-up). Same
+/// stroke as the crop border but its own geometry. Return NO for none.
+- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+      scaleBoxRect:(out CGRect *)outRect
+    forContentRect:(CGRect)contentRect;
+/// The 8 scale-box handle centres (overlay points, y-up): 4 corners then 4 edge
+/// midpoints. Drawn with the shared `KKPointOSC` glyph. nil/empty for none.
+- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+    scaleHandleCentersForContentRect:(CGRect)contentRect;
+/// "X% x Y%" readout for the scale box (mirrors the viewer), or nil for none.
+/// Drawn just below the box, same placement as the crop size readout.
+- (nullable NSString *)scaleReadoutText;
 /// Push externally-edited constant values (slider/field) into the delegate
 /// so the preview updates live, without persisting (the host coalesces the
 /// real write). `values` is the lane's value array (Float: [v]; Crop:

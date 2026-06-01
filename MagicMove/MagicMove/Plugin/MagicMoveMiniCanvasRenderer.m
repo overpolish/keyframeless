@@ -17,6 +17,13 @@ NSString *const MagicMoveMiniCanvasRequestPath =
 
 static const CGFloat kHandleHitTolPt = 12.0;
 
+// Scale box extent as a fraction of the content rect's min dimension (so it
+// tracks the clip / scales with preview zoom). Mirrors the viewer's fractions.
+static const double kMiniScaleE0Frac = 0.12;
+static const double kMiniScaleSpanFrac = 0.057;
+// Cmd-fine drag multiplier (matches the viewer).
+static const double kMiniScaleFineFactor = 0.2;
+
 @interface MagicMoveMiniCanvasRenderer () {
   KKSnapEngine *_snapEngine;
   // Normalised press point captured at begin-drag; used as the Shift
@@ -24,7 +31,7 @@ static const CGFloat kHandleHitTolPt = 12.0;
   // wherever the cursor most recently passed through.
   double _posPressNX;
   double _posPressNY;
-  // Pipeline cache keyed by (device, pixelFormat) — the plugin's own metallib
+  // Pipeline cache keyed by (device, pixelFormat) - the plugin's own metallib
   // is in this XPC process's bundle, so we build a real PSO and apply the
   // shader source → dest locally. No FxPlug round-trip = no Flexo lock
   // contention = no deadlock during live drag.
@@ -39,6 +46,14 @@ static const CGFloat kHandleHitTolPt = 12.0;
   double _pathPressNY;
   double _pathGrabValX; // keypose value at grab (delta-drag anchor)
   double _pathGrabValY;
+  // Scale box drag (mirrors the viewer OSC's absolute + Cmd-fine model).
+  BOOL _scaleGrabbed;
+  NSInteger _scaleGrabHandle; // 0-7
+  CGPoint _scalePressCenter;
+  double _scalePressSclX;
+  double _scalePressSclY;
+  CGPoint _scaleEffCursor; // effective cursor (starts at the grabbed handle)
+  CGPoint _scaleLastCursor;
 }
 @end
 
@@ -114,6 +129,7 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
                                    MagicMoveMiniCanvasRenderer *renderer) {
   NSArray<NSNumber *> *positionVals = [renderer valuesForLabel:@"Position"];
   NSArray<NSNumber *> *rotationVals = [renderer valuesForLabel:@"Rotation"];
+  NSArray<NSNumber *> *scaleVals = [renderer valuesForLabel:@"Scale"];
   double posX = positionVals.count > 0 ? positionVals[0].doubleValue : 0.5;
   double posY = positionVals.count > 1 ? positionVals[1].doubleValue : 0.5;
   double rotXdeg = rotationVals.count > 0 ? rotationVals[0].doubleValue : 0.0;
@@ -131,8 +147,13 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
   outParams->rotation = (float)(rotZdeg * kDegToRad);
   outParams->rotationX = (float)(rotXdeg * kDegToRad);
   outParams->rotationY = (float)(rotYdeg * kDegToRad);
-  outParams->scaleX = 1.0f;
-  outParams->scaleY = 1.0f;
+  // Floor at 0 (overshoot easing can dip below 0; negative scale would flip).
+  double sclX =
+      scaleVals.count > 0 ? fmax(0.0, scaleVals[0].doubleValue) : 100.0;
+  double sclY =
+      scaleVals.count > 1 ? fmax(0.0, scaleVals[1].doubleValue) : 100.0;
+  outParams->scaleX = (float)(sclX / 100.0);
+  outParams->scaleY = (float)(sclY / 100.0);
   outParams->opacity = 1.0f;
 }
 
@@ -149,6 +170,12 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
 
 - (KKMiniHandleStyle)pointHandleStyle {
   return KKMiniHandleStyleArc;
+}
+
+// The main point handle is an arc (above), so this only sizes the scale-box
+// point handles - shrink them like Rounded's so they aren't oversized.
+- (CGFloat)pointHandleSizeScale {
+  return 0.6;
 }
 
 // Apply the real MagicMove shader source → dest, using current lane values
@@ -329,6 +356,164 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
   return YES;
 }
 
+// Scale transform box (mini-canvas parity with the viewer). Concentric with the
+// rotation gizmo (content-rect centre); the half-extents map the Scale percents
+// through KKScaleGizmo, anchored to the mini rotation radius with the same
+// proportions as the viewer (e0/span = 105/90, 50/90 of the radius).
+- (BOOL)_scaleBoxShown {
+  if (self.handlesHidden)
+    return NO;
+  if ([self.suppressedHandleLabels containsObject:@"Scale"])
+    return NO;
+  // Only when Scale is "active" in the current popover mode: a constant in the
+  // constants popover, animated in the keypose popover. Without this, an
+  // animated Scale's box wrongly shows in the constants popover.
+  if (![self isConstantLabel:@"Scale"])
+    return NO;
+  return [self labelVisibleOrRevealing:@"Scale"];
+}
+
+- (CGFloat)scaleGhostAlpha {
+  return [self ghostAlphaForLabel:@"Scale"];
+}
+
+- (NSString *)scaleReadoutText {
+  if (![self _scaleBoxShown])
+    return nil;
+  NSArray<NSNumber *> *sv = [self valuesForLabel:@"Scale"];
+  double sclX = sv.count > 0 ? fmax(0.0, sv[0].doubleValue) : 100.0;
+  double sclY = sv.count > 1 ? fmax(0.0, sv[1].doubleValue) : 100.0;
+  return [NSString stringWithFormat:@"%.0f%% x %.0f%%", sclX, sclY];
+}
+
+- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+      scaleBoxRect:(out CGRect *)outRect
+    forContentRect:(CGRect)cr {
+  if (![self _scaleBoxShown] || cr.size.width <= 0 || cr.size.height <= 0)
+    return NO;
+  CGPoint center = [self rotationCenterForContentRect:cr];
+  // Size off the content rect (which scales with the preview's zoom/pan), not
+  // the fixed popover radius - so the box grows/shrinks with the clip like the
+  // viewer box does.
+  double crMin = MIN(cr.size.width, cr.size.height);
+  double e0 = crMin * kMiniScaleE0Frac, span = crMin * kMiniScaleSpanFrac;
+  NSArray<NSNumber *> *sv = [self valuesForLabel:@"Scale"];
+  double sclX = sv.count > 0 ? fmax(0.0, sv[0].doubleValue) : 100.0;
+  double sclY = sv.count > 1 ? fmax(0.0, sv[1].doubleValue) : 100.0;
+  double halfW = KKScaleGizmoExtentForPercent(sclX, e0, span);
+  double halfH = KKScaleGizmoExtentForPercent(sclY, e0, span);
+  *outRect =
+      CGRectMake(center.x - halfW, center.y - halfH, 2 * halfW, 2 * halfH);
+  return YES;
+}
+
+// Fills out[8] with the scale-box handle centres (0-3 corners BL/BR/TR/TL,
+// 4-7 edges bottom/right/top/left) in overlay points. NO if the box isn't
+// shown.
+- (BOOL)_scaleHandlePositions:(CGPoint *)out forContentRect:(CGRect)cr {
+  CGRect sb;
+  if (![self miniCanvas:self.canvas scaleBoxRect:&sb forContentRect:cr])
+    return NO;
+  double l = CGRectGetMinX(sb), r = CGRectGetMaxX(sb);
+  double b = CGRectGetMinY(sb), t = CGRectGetMaxY(sb);
+  double cx = CGRectGetMidX(sb), cy = CGRectGetMidY(sb);
+  out[0] = CGPointMake(l, b);
+  out[1] = CGPointMake(r, b);
+  out[2] = CGPointMake(r, t);
+  out[3] = CGPointMake(l, t);
+  out[4] = CGPointMake(cx, b);
+  out[5] = CGPointMake(r, cy);
+  out[6] = CGPointMake(cx, t);
+  out[7] = CGPointMake(l, cy);
+  return YES;
+}
+
+- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+    scaleHandleCentersForContentRect:(CGRect)cr {
+  CGPoint h[8];
+  if (![self _scaleHandlePositions:h forContentRect:cr])
+    return @[];
+  NSMutableArray<NSValue *> *out = [NSMutableArray arrayWithCapacity:8];
+  for (int i = 0; i < 8; i++)
+    [out addObject:[NSValue valueWithPoint:NSPointFromCGPoint(h[i])]];
+  return out;
+}
+
+- (BOOL)_scaleHandleHitAtPoint:(CGPoint)p
+                   contentRect:(CGRect)cr
+                      outIndex:(NSInteger *)outIdx {
+  CGPoint h[8];
+  if (![self _scaleHandlePositions:h forContentRect:cr])
+    return NO;
+  NSInteger best = -1;
+  double bestD = kHandleHitTolPt;
+  for (NSInteger i = 0; i < 8; i++) {
+    double d = hypot(p.x - h[i].x, p.y - h[i].y);
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  if (best < 0)
+    return NO;
+  if (outIdx)
+    *outIdx = best;
+  return YES;
+}
+
+// Absolute drag (effective cursor tracks the grabbed handle; Cmd = fine) with
+// link-aware coupling (Shift inverts) and integer snapping - mirrors the
+// viewer.
+- (void)_applyScaleDragToPoint:(CGPoint)p
+                   contentRect:(CGRect)cr
+                     modifiers:(NSEventModifierFlags)modifiers {
+  NSInteger h = _scaleGrabHandle;
+  if (h < 0 || cr.size.width <= 0 || cr.size.height <= 0)
+    return;
+  double rawDx = p.x - _scaleLastCursor.x, rawDy = p.y - _scaleLastCursor.y;
+  _scaleLastCursor = p;
+  double fine =
+      (modifiers & NSEventModifierFlagCommand) ? kMiniScaleFineFactor : 1.0;
+  _scaleEffCursor = CGPointMake(_scaleEffCursor.x + rawDx * fine,
+                                _scaleEffCursor.y + rawDy * fine);
+  CGPoint c = _scalePressCenter;
+  double crMin = MIN(cr.size.width, cr.size.height);
+  double e0 = crMin * kMiniScaleE0Frac, span = crMin * kMiniScaleSpanFrac;
+  double tX =
+      KKScaleGizmoPercentForExtent(fabs(_scaleEffCursor.x - c.x), e0, span);
+  double tY =
+      KKScaleGizmoPercentForExtent(fabs(_scaleEffCursor.y - c.y), e0, span);
+  BOOL shift = (modifiers & NSEventModifierFlagShift) != 0;
+  KKLane *sl = KKMagicMoveLaneNamed(self.timeline, @"Scale");
+  BOOL effLinked = (sl.aspectLinked != 0) ^ shift;
+  double pX = _scalePressSclX, pY = _scalePressSclY;
+  BOOL haveRatio = (pX > 1e-6 && pY > 1e-6);
+  double newX = pX, newY = pY;
+  BOOL isCorner = (h <= 3);
+  BOOL controlsX = isCorner || h == 5 || h == 7;
+  if (isCorner) {
+    if (effLinked && haveRatio) {
+      double f = sqrt((tX / pX) * (tY / pY));
+      newX = pX * f;
+      newY = pY * f;
+    } else {
+      newX = tX;
+      newY = tY;
+    }
+  } else if (controlsX) {
+    newX = tX;
+    newY = effLinked ? (haveRatio ? pY * (tX / pX) : tX) : pY;
+  } else { // controls Y (h == 4 || h == 6)
+    newY = tY;
+    newX = effLinked ? (haveRatio ? pX * (tY / pY) : tY) : pX;
+  }
+  newX = fmax(0.0, round(newX));
+  newY = fmax(0.0, round(newY));
+  [self commitValues:@[ @(newX), @(newY) ]
+            forLabel:@"Scale"
+              canvas:self.canvas];
+}
+
 - (BOOL)pointHandleCenter:(out CGPoint *)outCenter
                  forValue:(double)value
            forContentRect:(CGRect)cr {
@@ -391,6 +576,10 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
             modifiers:(NSEventModifierFlags)modifiers {
   if (_pathGrabbed) {
     [self _applyPathDragToPoint:p contentRect:cr modifiers:modifiers];
+    return;
+  }
+  if (_scaleGrabbed) {
+    [self _applyScaleDragToPoint:p contentRect:cr modifiers:modifiers];
     return;
   }
   // Rotation drag has to be routed here too - the override was only added
@@ -595,6 +784,8 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
     return YES;
   if ([self _pathAnchorHitAtPoint:p contentRect:cr outIndex:&idx])
     return YES;
+  if ([self _scaleHandleHitAtPoint:p contentRect:cr outIndex:&idx])
+    return YES;
   return [super miniCanvas:canvas handleHitAtPoint:p contentRect:cr];
 }
 
@@ -635,6 +826,21 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
       _pathPressNY = (p.y - CGRectGetMinY(cr)) / cr.size.height;
     }
     [self _applyPathDragToPoint:p contentRect:cr modifiers:0];
+    return;
+  }
+  if ([self _scaleHandleHitAtPoint:p contentRect:cr outIndex:&idx]) {
+    self.canvas = canvas;
+    _scaleGrabbed = YES;
+    _scaleGrabHandle = idx;
+    _scalePressCenter = [self rotationCenterForContentRect:cr];
+    NSArray<NSNumber *> *sv = [self valuesForLabel:@"Scale"];
+    _scalePressSclX = sv.count > 0 ? fmax(0.0, sv[0].doubleValue) : 100.0;
+    _scalePressSclY = sv.count > 1 ? fmax(0.0, sv[1].doubleValue) : 100.0;
+    // Effective cursor starts at the grabbed handle (no press snap).
+    CGPoint h[8];
+    [self _scaleHandlePositions:h forContentRect:cr];
+    _scaleEffCursor = h[idx];
+    _scaleLastCursor = p;
     return;
   }
   [super miniCanvas:canvas beginHandleDragAtPoint:p contentRect:cr];
@@ -708,6 +914,14 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
                                                          contentRect:cr
                                                             outIndex:&idx])) {
     self.onHandleVisibilityToggled(@"Path");
+    [canvas setNeedsDisplay:YES];
+    [canvas setHandlesNeedDisplay];
+    return YES;
+  }
+  if (self.onHandleVisibilityToggled && [self _scaleHandleHitAtPoint:p
+                                                         contentRect:cr
+                                                            outIndex:&idx]) {
+    self.onHandleVisibilityToggled(@"Scale");
     [canvas setNeedsDisplay:YES];
     [canvas setHandlesNeedDisplay];
     return YES;
@@ -801,6 +1015,7 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
 
 - (void)miniCanvasEndHandleDrag:(KKMiniCanvasView *)canvas {
   [_snapEngine reset];
+  _scaleGrabbed = NO;
   if (_pathGrabbed) {
     _pathGrabbed = NO;
     if (self.onTimelinePersist)

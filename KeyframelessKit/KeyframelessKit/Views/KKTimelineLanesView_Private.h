@@ -80,6 +80,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// `spatialSmooth` on the keypose at this fraction. Only built for
 /// `spatialCurvable` lanes in the keypose popover.
 @property(nonatomic, copy, nullable) void (^onSmoothToggled)(BOOL on);
+/// When the lane is `aspectLinkable` the row carries a link/unlink glyph (same
+/// slot as the smooth toggle) that flips the global aspect lock. Fires with the
+/// new state; the host persists `aspectLinked` on the lane.
+@property(nonatomic, copy, nullable) void (^onLinkToggled)(BOOL on);
 - (instancetype)initWithLane:(KKLane *)lane
                  showsRemove:(BOOL)showsRemove
           showsAddToAnimated:(BOOL)showsAddToAnimated
@@ -133,6 +137,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// the keypose popover). Fired with the lane label + new state; the host
 /// writes it to the keypose at the open fraction.
 - (void)setOnSmoothToggled:(void (^)(NSString *label, BOOL on))handler;
+
+/// Wire the aspect-link toggle (shown on `aspectLinkable` lane rows in both the
+/// constants and keypose popovers). Fired with the lane label + new state; the
+/// host writes `aspectLinked` on the lane (global, not per-keypose).
+- (void)setOnLinkToggled:(void (^)(NSString *label, BOOL on))handler;
 
 /// Update the header title in place (e.g. the keypose time as you navigate
 /// between keyposes). No-op if the popover has no header.

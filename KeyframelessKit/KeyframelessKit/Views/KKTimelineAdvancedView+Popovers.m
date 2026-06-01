@@ -22,6 +22,16 @@
     self.onTimelineMutated(t);
 }
 
+- (void)writeAspectLinkedForLabel:(NSString *)label isOn:(BOOL)on {
+  KKTimeline *t = KKTimelineSettingAspectLinked(_timeline, label, on);
+  if (!t)
+    return;
+  _timeline = t;
+  [self setNeedsDisplay:YES];
+  if (self.onTimelineMutated)
+    self.onTimelineMutated(t);
+}
+
 - (void)_openValuePopoverForLane:(NSInteger)laneIdx kp:(NSInteger)kpIdx {
   if (!self.onValuePopover)
     return;
@@ -98,6 +108,10 @@
         break;
       }
     display.spatialCurvable = tmpl ? tmpl.spatialCurvable : l.spatialCurvable;
+    // aspectLinkable is metadata (template); aspectLinked is user state (blob).
+    display.aspectLinkable = tmpl ? tmpl.aspectLinkable : l.aspectLinkable;
+    display.aspectLinked = l.aspectLinked;
+    display.integerValued = tmpl ? tmpl.integerValued : l.integerValued;
     KKKeyPose *displayKp = [KKKeyPose keyposeAtTime:0.0
                                              values:vals ?: @[ @0.0 ]];
     // Carry the curve state so the row's toggle reflects this keypose.

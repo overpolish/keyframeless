@@ -1315,6 +1315,21 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
       [s->_basicGraph writeSpatialSmoothForLabel:label atFrac:frac isOn:on];
   }];
 
+  // Aspect link is a global per-lane toggle (no fraction), routed to whichever
+  // graph owns the open popover.
+  __weak typeof(self) weakLink = self;
+  [staticView setOnLinkToggled:^(NSString *label, BOOL on) {
+    __strong typeof(weakLink) s = weakLink;
+    if (!s)
+      return;
+    s->_boundaryRedriveSuppressUntil =
+        [NSDate timeIntervalSinceReferenceDate] + 0.4;
+    if (s->_activeTab == 1)
+      [s->_advancedGraph writeAspectLinkedForLabel:label isOn:on];
+    else
+      [s->_basicGraph writeAspectLinkedForLabel:label isOn:on];
+  }];
+
   if (cfg.isBoundary) {
     [staticView
         setHeaderLinked:[self _anyLinkedKeyposeAtFraction:cfg.fraction]];

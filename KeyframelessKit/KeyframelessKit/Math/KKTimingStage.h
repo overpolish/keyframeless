@@ -186,6 +186,24 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// Plugins set this on their Position lane; the kit never infers it.
 @property(nonatomic) BOOL spatialCurvable;
 
+/// When YES this lane's two components can be aspect-locked: the value popover
+/// shows a link/unlink glyph (same slot as the smooth toggle), and while
+/// `aspectLinked` is YES, editing one component scales the other by the same
+/// factor to preserve their current ratio. Build-time metadata, like
+/// `spatialCurvable`; the kit never infers it. Default NO. Intended for a
+/// 2-component lane such as Scale.
+@property(nonatomic) BOOL aspectLinkable;
+
+/// Persisted state of the aspect lock (only meaningful when `aspectLinkable`).
+/// One global toggle for the whole lane (not per-keypose). Default NO; a plugin
+/// that wants it on by default sets it when building the lane.
+@property(nonatomic) BOOL aspectLinked;
+
+/// When YES the value-popover fields for this lane display and round to whole
+/// numbers (no decimals) - e.g. Scale's percentage. Build-time metadata, like
+/// `aspectLinkable`. Default NO.
+@property(nonatomic) BOOL integerValued;
+
 + (instancetype)laneWithLabel:(NSString *)label;
 
 - (void)insertKeypose:(KKKeyPose *)keypose; // inserts maintaining time order
@@ -236,6 +254,13 @@ FOUNDATION_EXPORT KKTimeline *KKTimelineRebalanced(KKTimeline *timeline,
 /// already has that state) so the caller can skip the commit + undo entry.
 FOUNDATION_EXPORT KKTimeline *_Nullable KKTimelineSettingSpatialSmooth(
     KKTimeline *timeline, NSString *label, double frac, BOOL on);
+
+/// Returns a copy of `timeline` with `aspectLinked` set to `on` on the lane
+/// named `label` (a global, per-lane toggle - not per-keypose). Returns nil
+/// when nothing changed (no such lane, or already in that state) so the caller
+/// can skip the commit + undo entry.
+FOUNDATION_EXPORT KKTimeline *_Nullable KKTimelineSettingAspectLinked(
+    KKTimeline *timeline, NSString *label, BOOL on);
 
 @interface KKTimeline (Serialization)
 

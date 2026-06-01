@@ -623,8 +623,21 @@
   NSMutableArray<KKLane *> *result = [NSMutableArray array];
   for (KKLane *tmpl in _availableLanes) {
     KKLane *lane = [self _laneForLabel:tmpl.label];
-    if (lane && !lane.enabled)
+    if (lane && !lane.enabled) {
+      // aspectLinkable is template metadata (an older persisted blob may lack
+      // it), so source it from the template like the keypose popover does -
+      // otherwise the constants popover hides the link glyph. aspectLinked is
+      // user state and stays the lane's own. Copy so the shared persisted lane
+      // isn't mutated.
+      if ((tmpl.aspectLinkable && !lane.aspectLinkable) ||
+          (tmpl.integerValued && !lane.integerValued)) {
+        KKLane *l = [lane copy];
+        l.aspectLinkable = tmpl.aspectLinkable;
+        l.integerValued = tmpl.integerValued;
+        lane = l;
+      }
       [result addObject:lane];
+    }
   }
   return result;
 }

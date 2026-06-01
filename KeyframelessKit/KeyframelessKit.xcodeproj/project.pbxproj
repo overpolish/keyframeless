@@ -33,6 +33,7 @@
 				Math/KKMotionLean.h,
 				Math/KKPathBoolean.h,
 				Math/KKPathMorph.h,
+				Math/KKScaleGizmo.h,
 				Math/KKShape.h,
 				Math/KKSpatialCurve.h,
 				Math/KKSVGParser.h,

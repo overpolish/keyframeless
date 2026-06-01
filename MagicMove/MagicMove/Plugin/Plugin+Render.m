@@ -66,12 +66,15 @@ void KKMagicMoveFillParamsFromTimeline(MagicMoveParams *outParams,
   KKLane *positionLane = nil;
   NSArray<NSNumber *> *positionVals = nil;
   NSArray<NSNumber *> *rotationVals = nil;
+  NSArray<NSNumber *> *scaleVals = nil;
   for (KKLane *lane in timeline.lanes) {
     if ([lane.label isEqualToString:@"Position"]) {
       positionLane = lane;
       positionVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
     } else if ([lane.label isEqualToString:@"Rotation"]) {
       rotationVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+    } else if ([lane.label isEqualToString:@"Scale"]) {
+      scaleVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
     }
   }
   double posX = positionVals.count > 0 ? positionVals[0].doubleValue : 0.5;
@@ -90,8 +93,14 @@ void KKMagicMoveFillParamsFromTimeline(MagicMoveParams *outParams,
   outParams->rotation = (float)(rotZdeg * kDegToRad);
   outParams->rotationX = (float)(rotXdeg * kDegToRad);
   outParams->rotationY = (float)(rotYdeg * kDegToRad);
-  outParams->scaleX = 1.0f;
-  outParams->scaleY = 1.0f;
+  // Floor at 0: overshoot/undershoot easing can evaluate scale below 0, and a
+  // negative scale flips the clip - clamp rather than flip.
+  double sclX =
+      scaleVals.count > 0 ? fmax(0.0, scaleVals[0].doubleValue) : 100.0;
+  double sclY =
+      scaleVals.count > 1 ? fmax(0.0, scaleVals[1].doubleValue) : 100.0;
+  outParams->scaleX = (float)(sclX / 100.0);
+  outParams->scaleY = (float)(sclY / 100.0);
   outParams->opacity = 1.0f;
 }
 

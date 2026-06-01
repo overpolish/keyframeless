@@ -157,6 +157,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)writeSpatialSmoothForLabel:(NSString *)label
                             atFrac:(double)frac
                               isOn:(BOOL)on;
+/// Flip the global aspect lock on the lane named `label`. Routed from the value
+/// popover's link toggle.
+- (void)writeAspectLinkedForLabel:(NSString *)label isOn:(BOOL)on;
 
 @end
 

@@ -852,6 +852,10 @@
     dl.componentLabelColors =
         tmpl ? tmpl.componentLabelColors : lane.componentLabelColors;
     dl.spatialCurvable = tmpl ? tmpl.spatialCurvable : lane.spatialCurvable;
+    // aspectLinkable is metadata (template); aspectLinked is user state (blob).
+    dl.aspectLinkable = tmpl ? tmpl.aspectLinkable : lane.aspectLinkable;
+    dl.aspectLinked = lane.aspectLinked;
+    dl.integerValued = tmpl ? tmpl.integerValued : lane.integerValued;
     KKKeyPose *dlKp = [KKKeyPose keyposeAtTime:0.0 values:vals ?: @[ @0.0 ]];
     // Carry the curve state from the keypose nearest this boundary (matches the
     // nearest-match write) so the row's toggle reflects it.
@@ -982,6 +986,16 @@
                             atFrac:(double)frac
                               isOn:(BOOL)on {
   KKTimeline *t = KKTimelineSettingSpatialSmooth(_timeline, label, frac, on);
+  if (!t)
+    return;
+  _timeline = t;
+  [self setNeedsDisplay:YES];
+  if (self.onTimelineMutated)
+    self.onTimelineMutated(t);
+}
+
+- (void)writeAspectLinkedForLabel:(NSString *)label isOn:(BOOL)on {
+  KKTimeline *t = KKTimelineSettingAspectLinked(_timeline, label, on);
   if (!t)
     return;
   _timeline = t;

@@ -92,6 +92,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Alpha to draw the crop OSC at (border + corner handles): 1.0 normal, 0.3
 /// when it's a revealed ghost. Read by the mini-canvas view.
 - (CGFloat)cropGhostAlpha;
+/// Alpha to draw the scale box at (border + handles): 1.0 normal, 0.3 when it's
+/// a revealed ghost. Default 1.0; a plugin with a scale box overrides it.
+- (CGFloat)scaleGhostAlpha;
 /// YES when `label` (an OSC element key) is visible or being revealed as a
 /// ghost (opt-hold). Lets a subclass gate motion-path drawing / hit-testing the
 /// same way the built-in handles gate on their own labels.

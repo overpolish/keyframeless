@@ -64,13 +64,31 @@
   [rotation insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                             values:@[ @0.0, @0.0, @0.0 ]]];
 
-  return @[ position, rotation ];
+  KKLane *scale = [KKLane laneWithLabel:@"Scale"];
+  scale.valueType = KKLaneValueTypeFloat;
+  // Percentage of the clip's own size; 100 = identity. Floor at 0 (no flip),
+  // no upper cap (empty max = unconstrained), same as Position's open fields.
+  scale.componentMin = @[ @0.0, @0.0 ];
+  scale.componentMax = @[];
+  scale.componentUnits = @[ @"%", @"%" ];
+  scale.componentLabels = @[ @"X", @"Y" ];
+  scale.integerValued = YES; // whole percentages only
+
+  // Aspect lock: link glyph in the value popover, on by default (most apps
+  // constrain proportions out of the box). Preserves the current X:Y ratio.
+  scale.aspectLinkable = YES;
+  scale.aspectLinked = YES;
+  [scale insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                         values:@[ @100.0, @100.0 ]]];
+
+  return @[ position, scale, rotation ];
 }
 
 + (NSArray<NSArray<NSString *> *> *)oscCompounds {
   return @[
     @[ @"Position" ],
     @[ @"Path" ],
+    @[ @"Scale" ],
     @[ @"Rotation", @"Rotation.X", @"Rotation.Y", @"Rotation.Z" ],
   ];
 }

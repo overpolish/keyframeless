@@ -83,6 +83,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKRotationOSC.h>
 #import <KeyframelessKit/KKRotationOSCMath.h>
 #import <KeyframelessKit/KKSVGParser.h>
+#import <KeyframelessKit/KKScaleGizmo.h>
 #import <KeyframelessKit/KKSeedView.h>
 #import <KeyframelessKit/KKSegmentEditView+Guide.h>
 #import <KeyframelessKit/KKSegmentEditView.h>

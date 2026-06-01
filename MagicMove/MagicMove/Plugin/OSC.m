@@ -13,6 +13,20 @@
 static NSInteger const kOSCPositionPart = 1;
 static NSInteger const kOSCRotationPart = 2;
 static NSInteger const kOSCPathHandlePart = 3;
+static NSInteger const kOSCScalePart = 4;
+
+// Scale box handle indices: 0-3 corners (BL, BR, TR, TL), 4-7 edge midpoints
+// (bottom, right, top, left). Corners drive both axes; bottom/top drive Y,
+// right/left drive X.
+static inline BOOL kScaleHandleIsCorner(NSInteger h) {
+  return h >= 0 && h <= 3;
+}
+static inline BOOL kScaleHandleControlsX(NSInteger h) {
+  return kScaleHandleIsCorner(h) || h == 5 || h == 7;
+}
+static inline BOOL kScaleHandleControlsY(NSInteger h) {
+  return kScaleHandleIsCorner(h) || h == 4 || h == 6;
+}
 
 static KKLane *_laneNamed(NSString *label) {
   for (KKLane *lane in KKProcessTimelineSnapshot().lanes)
@@ -23,6 +37,21 @@ static KKLane *_laneNamed(NSString *label) {
 
 static KKLane *_positionLane(void) { return _laneNamed(@"Position"); }
 static KKLane *_rotationLane(void) { return _laneNamed(@"Rotation"); }
+static KKLane *_scaleLane(void) { return _laneNamed(@"Scale"); }
+
+// Scale gizmo half-extent as a fraction of the clip's on-screen frame, so the
+// box tracks the clip (scales with viewer zoom) instead of being a fixed screen
+// size. e0 = 0% half-extent, span = the 0->100% growth; >100% sqrt-compresses
+// (see KKScaleGizmo). Same proportion as the mini-canvas box.
+static const double kScaleGizmoE0Frac = 0.12;
+static const double kScaleGizmoSpanFrac = 0.057;
+
+// Scale drag is absolute: the grabbed handle tracks the cursor (deterministic,
+// in sync), mapping cursor distance to centre back through the gizmo curve.
+// Holding Cmd engages a fine mode that scales cursor movement down for precise
+// adjustment (essential at high scale, where the compressed box is otherwise
+// hyper-sensitive).
+static const double kScaleFineFactor = 0.2;
 
 static BOOL _positionVisibleAtFraction(double frac) {
   return KKLaneVisibleAtFraction(_positionLane(), frac,
@@ -30,6 +59,10 @@ static BOOL _positionVisibleAtFraction(double frac) {
 }
 static BOOL _rotationVisibleAtFraction(double frac) {
   return KKLaneVisibleAtFraction(_rotationLane(), frac,
+                                 KKProcessFrameDurationSeconds());
+}
+static BOOL _scaleVisibleAtFraction(double frac) {
+  return KKLaneVisibleAtFraction(_scaleLane(), frac,
                                  KKProcessFrameDurationSeconds());
 }
 
@@ -60,11 +93,69 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
   return out;
 }
 
+// (scaleX, scaleY) in PERCENT (100 = identity). Floored at 0 so overshoot
+// easing never shows the box / readout a negative (flipped) scale.
+static NSArray<NSNumber *> *_scaleValuesAtFraction(double frac) {
+  KKLane *lane = _scaleLane();
+  if (!lane)
+    return @[ @100.0, @100.0 ];
+  NSArray<NSNumber *> *v =
+      KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+  NSMutableArray<NSNumber *> *out = [NSMutableArray arrayWithArray:v ?: @[]];
+  while (out.count < 2)
+    [out addObject:@100.0];
+  out[0] = @(fmax(0.0, out[0].doubleValue));
+  out[1] = @(fmax(0.0, out[1].doubleValue));
+  return out;
+}
+
+// Canvas positions of the 8 scale-box handles for a given centre + scale
+// percents: out[0..3] corners (BL, BR, TR, TL), out[4..7] edge midpoints
+// (bottom, right, top, left). Shared by draw + hit-test so they agree.
+static void KKScaleHandlePositions(CGPoint center, double sclX, double sclY,
+                                   double e0, double span, CGPoint out[8]) {
+  double halfW = KKScaleGizmoExtentForPercent(sclX, e0, span);
+  double halfH = KKScaleGizmoExtentForPercent(sclY, e0, span);
+  double l = center.x - halfW, r = center.x + halfW;
+  double b = center.y - halfH, t = center.y + halfH;
+  out[0] = CGPointMake(l, b);
+  out[1] = CGPointMake(r, b);
+  out[2] = CGPointMake(r, t);
+  out[3] = CGPointMake(l, t);
+  out[4] = CGPointMake(center.x, b);
+  out[5] = CGPointMake(r, center.y);
+  out[6] = CGPointMake(center.x, t);
+  out[7] = CGPointMake(l, center.y);
+}
+
 @interface MagicMoveOSC ()
 @property(nonatomic, retain) KKSnapEngine *snapEngine;
 @property(nonatomic, retain) KKRotationOSC *rotationOSC;
 @property(nonatomic, retain) KKPointOSC *anchorOSC;
 @property(nonatomic, retain) KKPointOSC *handleOSC;
+/// Scale transform-box gizmo: border + one point glyph reused for all 8 corner
+/// and edge handles + a "X% x Y%" readout. Sized via KKScaleGizmo from the
+/// Scale lane, centred on Position, drawn outside the rotation rings.
+@property(nonatomic, retain) KKRectBorderOSC *scaleBorderOSC;
+@property(nonatomic, retain) KKPointOSC *scaleHandleOSC;
+@property(nonatomic, retain) KKOSCLabel *scaleSizeLabel;
+/// Which scale handle (0-7) the hit-test last landed on, and the one currently
+/// grabbed for a drag. -1 = none.
+@property(nonatomic) NSInteger scaleHitHandle;
+@property(nonatomic) NSInteger scaleGrabHandle;
+/// Press state captured at scale mouseDown: the box centre (= Position) and the
+/// scale percents, so the drag preserves ratio / inverts the gizmo curve from a
+/// stable reference rather than tick-to-tick.
+@property(nonatomic) CGPoint scalePressCenter;
+@property(nonatomic) double scalePressSclX;
+@property(nonatomic) double scalePressSclY;
+/// Absolute drag state: the "effective" cursor canvas point that drives the
+/// value (initialised to the grabbed handle so there is no press snap, then
+/// moved by the raw cursor delta - scaled down while Cmd-fine is held), plus
+/// the previous raw cursor for that per-tick delta. Written values round to
+/// integers.
+@property(nonatomic) CGPoint scaleEffCursor;
+@property(nonatomic) CGPoint scaleLastCursor;
 /// YES while the user holds Cmd during a position drag - snaps to canvas
 /// anchors and other keypose positions. Default is free (no snap) so the
 /// user can position pixel-precisely without fighting the engine.
@@ -127,6 +218,16 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
     _handleOSC.oscRadius = 5.0f;
     _handleOSC.outlineWidth = 1.5f;
     _handleOSC.clearsOnDraw = NO;
+    _scaleBorderOSC = [[KKRectBorderOSC alloc] initWithAPIManager:apiManager];
+    _scaleBorderOSC.clearsOnDraw = NO;
+    _scaleHandleOSC = [[KKPointOSC alloc] initWithAPIManager:apiManager];
+    _scaleHandleOSC.oscRadius = 6.0f;
+    _scaleHandleOSC.outlineWidth = 2.0f;
+    _scaleHandleOSC.clearsOnDraw = NO;
+    _scaleSizeLabel = [[KKOSCLabel alloc] initWithAPIManager:apiManager];
+    _scaleSizeLabel.monospaced = YES;
+    _scaleHitHandle = -1;
+    _scaleGrabHandle = -1;
     _dragAnchorFrac = NAN;
     _dragHandleFrac = NAN;
     _lastClickTime = -1.0;
@@ -205,6 +306,46 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
                             toX:&canvas.x
                             toY:&canvas.y];
   return canvas;
+}
+
+// Min dimension of the clip's frame in canvas space (object [0,1]^2 corners
+// converted to canvas). Scales with viewer zoom, so a box sized off it tracks
+// the clip rather than staying a fixed screen size.
+- (double)_onScreenFrameMin {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  if (!oscAPI)
+    return 1000.0;
+  CGPoint c0 = CGPointZero, cx = CGPointZero, cy = CGPointZero;
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:0
+                          fromY:0
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&c0.x
+                            toY:&c0.y];
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:1
+                          fromY:0
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&cx.x
+                            toY:&cx.y];
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:0
+                          fromY:1
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&cy.x
+                            toY:&cy.y];
+  double w = hypot(cx.x - c0.x, cx.y - c0.y);
+  double h = hypot(cy.x - c0.x, cy.y - c0.y);
+  double m = MIN(w, h);
+  return (m > 1.0) ? m : 1000.0;
+}
+
+// Gizmo curve params for the current zoom: fractions of the on-screen frame.
+- (void)_scaleGizmoE0:(double *)outE0 span:(double *)outSpan {
+  double frameMin = [self _onScreenFrameMin];
+  *outE0 = frameMin * kScaleGizmoE0Frac;
+  *outSpan = frameMin * kScaleGizmoSpanFrac;
 }
 
 // Snap the live drag position against canvas edges (0/1), the centre (0.5),
@@ -637,6 +778,52 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
     *forceUpdate = YES;
 }
 
+// Scale transform box: border + 8 handles (4 corners, 4 edge midpoints) + a
+// "X% x Y%" readout, centred on `center`. Half-extents come from the scale
+// percent through the KKScaleGizmo curve (per axis), so the box is a compact
+// screen-space gizmo that stays grabbable at any value rather than tracking the
+// clip's real pixel bounds.
+- (void)_drawScaleBoxAtCenter:(CGPoint)center
+                       atTime:(CMTime)time
+                   ghostAlpha:(float)ghostAlpha
+                 activeHandle:(NSInteger)activeHandle
+             destinationImage:(FxImageTile *)destinationImage {
+  double frac = [self _fractionAtTime:time];
+  NSArray<NSNumber *> *sv = _scaleValuesAtFraction(frac);
+  double sclX = sv.count > 0 ? sv[0].doubleValue : 100.0;
+  double sclY = sv.count > 1 ? sv[1].doubleValue : 100.0;
+  double e0 = 0, span = 0;
+  [self _scaleGizmoE0:&e0 span:&span];
+  CGPoint handles[8];
+  KKScaleHandlePositions(center, sclX, sclY, e0, span, handles);
+  CGPoint bl = handles[0], tr = handles[2];
+
+  self.scaleBorderOSC.ghostAlpha = ghostAlpha;
+  [self.scaleBorderOSC drawWithTopRight:tr
+                             bottomLeft:bl
+                       destinationImage:destinationImage];
+
+  self.scaleHandleOSC.ghostAlpha = ghostAlpha;
+  for (int i = 0; i < 8; i++)
+    [self.scaleHandleOSC drawAtCanvasPosition:handles[i]
+                                    isHovered:(i == activeHandle)
+                                     isActive:(i == activeHandle)
+                             destinationImage:destinationImage
+                                       atTime:time];
+
+  self.scaleSizeLabel.text =
+      [NSString stringWithFormat:@"%.0f%% x %.0f%%", sclX, sclY];
+  CGSize ls = self.scaleSizeLabel.size;
+  // Trailing edge to the box's right edge, just below the bottom edge (same
+  // placement convention as the crop OSC's size readout).
+  BOOL flippedY = tr.y > bl.y;
+  CGPoint labelPos = CGPointMake(
+      tr.x - ls.width / 2.0,
+      bl.y + (flippedY ? -(ls.height / 2.0 + 4.0) : (ls.height / 2.0 + 4.0)));
+  [self.scaleSizeLabel drawAtCanvasPosition:labelPos
+                           destinationImage:destinationImage];
+}
+
 - (void)drawOSCWithWidth:(NSInteger)width
                   height:(NSInteger)height
               activePart:(NSInteger)activePart
@@ -710,6 +897,24 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
             destinationImage:destinationImage
                       atTime:time];
   }
+  // Scale transform box, drawn outside the rotation rings. Only on screen where
+  // the Scale lane is visible (keypose times / constant), same as Position.
+  // Opt-hold reveals a hidden box as a dimmed ghost.
+  BOOL scaleShownHere = _scaleVisibleAtFraction(frac);
+  BOOL scaleEnabled = [self kkOSCElementVisible:@"Scale"];
+  BOOL scaleDragging = self.isDragging && activePart == kOSCScalePart;
+  BOOL scaleVisible = scaleDragging || (scaleEnabled && scaleShownHere);
+  BOOL scaleGhost =
+      !scaleVisible && self.optRevealActive && !scaleEnabled && scaleShownHere;
+  if (scaleVisible || scaleGhost) {
+    NSInteger activeHandle = scaleDragging ? self.scaleGrabHandle : -1;
+    [self _drawScaleBoxAtCenter:pos
+                         atTime:time
+                     ghostAlpha:(scaleGhost ? 0.3f : 1.0f)activeHandle
+                               :activeHandle
+               destinationImage:destinationImage];
+  }
+
   if (self.isDragging && activePart == kOSCPositionPart && self.cmdSnapActive) {
     simd_float4 yellow = {1, 1, 0, 1};
     NSColor *accentNS = [[NSColor accentMatchingHost]
@@ -731,6 +936,7 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
                             atTime:(CMTime)time {
   *activePart = 0;
   self.hoverTargetIsAnchor = NO;
+  self.scaleHitHandle = -1;
   double frac = [self _fractionAtTime:time];
   // Tangent handles sit on top of the path - grab them before the arc/anchors.
   if (([self kkOSCElementVisible:@"Path"] || self.optRevealActive) &&
@@ -759,6 +965,22 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
     *activePart = kOSCPositionPart;
     return;
   }
+  // Scale box handles sit just outside the rotation rings; check them before
+  // rotation so an edge handle near the ring radius wins over the ring. Only
+  // reachable where the box is shown (or opt-reveal exposes a hidden one).
+  BOOL scaleReachable =
+      ([self kkOSCElementVisible:@"Scale"] || self.optRevealActive) &&
+      _scaleVisibleAtFraction(frac);
+  if (scaleReachable) {
+    NSInteger sh = [self _scaleHandleHitAtCanvasX:positionX
+                                                y:positionY
+                                           atTime:time];
+    if (sh >= 0) {
+      self.scaleHitHandle = sh;
+      *activePart = kOSCScalePart;
+      return;
+    }
+  }
   if ([self _configureRotationRingsAtFraction:frac dragging:NO]) {
     CGPoint c = [self oscPositionAtTime:time];
     NSArray<NSNumber *> *r = _rotationValuesAtFraction(frac);
@@ -774,6 +996,32 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
   }
 }
 
+- (NSInteger)_scaleHandleHitAtCanvasX:(double)x
+                                    y:(double)y
+                               atTime:(CMTime)time {
+  double frac = [self _fractionAtTime:time];
+  NSArray<NSNumber *> *sv = _scaleValuesAtFraction(frac);
+  double sclX = sv.count > 0 ? sv[0].doubleValue : 100.0;
+  double sclY = sv.count > 1 ? sv[1].doubleValue : 100.0;
+  CGPoint center = [self oscPositionAtTime:time];
+  double e0 = 0, span = 0;
+  [self _scaleGizmoE0:&e0 span:&span];
+  CGPoint handles[8];
+  KKScaleHandlePositions(center, sclX, sclY, e0, span, handles);
+  double hitR =
+      self.scaleHandleOSC.oscRadius + self.scaleHandleOSC.outlineWidth + 6.0;
+  NSInteger best = -1;
+  double bestD = hitR;
+  for (NSInteger i = 0; i < 8; i++) {
+    double d = hypot(x - handles[i].x, y - handles[i].y);
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
 // Override the base OSC-visibility hooks: the full element-key list, and the
 // per-part mapping (granular for rotation rings - the preceding hit-test left
 // the hit ring in rotationOSC.activeAxis). The toggle / arming / reveal / blob
@@ -785,6 +1033,8 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
 - (nullable NSString *)oscElementKeyForActivePart:(NSInteger)activePart {
   if (activePart == kOSCPathHandlePart)
     return @"Path";
+  if (activePart == kOSCScalePart)
+    return @"Scale";
   if (activePart == kOSCPositionPart)
     return self.hoverTargetIsAnchor ? @"Path" : @"Position";
   if (activePart == kOSCRotationPart) {
@@ -819,6 +1069,27 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
                     modifiers:modifiers
                   forceUpdate:forceUpdate
                        atTime:time];
+  if (activePart == kOSCScalePart) {
+    self.scaleGrabHandle = self.scaleHitHandle;
+    self.scalePressCenter = [self oscPositionAtTime:time];
+    NSArray<NSNumber *> *sv =
+        _scaleValuesAtFraction([self _fractionAtTime:time]);
+    self.scalePressSclX = sv.count > 0 ? sv[0].doubleValue : 100.0;
+    self.scalePressSclY = sv.count > 1 ? sv[1].doubleValue : 100.0;
+    // Effective cursor starts at the grabbed handle (not the raw click point),
+    // so the value begins exactly where it is - no press snap.
+    double e0p = 0, spanp = 0;
+    [self _scaleGizmoE0:&e0p span:&spanp];
+    CGPoint hp[8];
+    KKScaleHandlePositions(self.scalePressCenter, self.scalePressSclX,
+                           self.scalePressSclY, e0p, spanp, hp);
+    self.scaleEffCursor =
+        (self.scaleGrabHandle >= 0 && self.scaleGrabHandle < 8)
+            ? hp[self.scaleGrabHandle]
+            : CGPointMake(positionX, positionY);
+    self.scaleLastCursor = CGPointMake(positionX, positionY);
+    return;
+  }
   if (activePart == kOSCPositionPart) {
     id<FxOnScreenControlAPI_v4> oscAPI =
         [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
@@ -965,6 +1236,14 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
                          modifiers:modifiers
                        forceUpdate:forceUpdate
                             atTime:time];
+    return;
+  }
+  if (activePart == kOSCScalePart) {
+    [self _dragScaleToPositionX:positionX
+                      positionY:positionY
+                      modifiers:modifiers
+                    forceUpdate:forceUpdate
+                         atTime:time];
     return;
   }
   if (activePart != kOSCPositionPart)
@@ -1225,6 +1504,150 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
                            kKKParamTimelineData);
   [actionAPI endAction:self];
   *forceUpdate = YES;
+}
+
+- (void)_dragScaleToPositionX:(double)positionX
+                    positionY:(double)positionY
+                    modifiers:(NSUInteger)modifiers
+                  forceUpdate:(BOOL *)forceUpdate
+                       atTime:(CMTime)time {
+  NSInteger h = self.scaleGrabHandle;
+  if (h < 0)
+    return;
+  // Advance the effective cursor by the raw movement (scaled down for
+  // Cmd-fine). The value comes from its distance to centre through the gizmo
+  // curve, so the grabbed handle tracks the cursor 1:1 in normal mode
+  // (deterministic).
+  double rawDx = positionX - self.scaleLastCursor.x;
+  double rawDy = positionY - self.scaleLastCursor.y;
+  self.scaleLastCursor = CGPointMake(positionX, positionY);
+  double fine = (modifiers & kFxModifierKey_COMMAND) ? kScaleFineFactor : 1.0;
+  CGPoint eff = self.scaleEffCursor;
+  eff.x += rawDx * fine;
+  eff.y += rawDy * fine;
+  self.scaleEffCursor = eff;
+
+  CGPoint c = self.scalePressCenter;
+  double pX = self.scalePressSclX, pY = self.scalePressSclY;
+  double e0 = 0, span = 0;
+  [self _scaleGizmoE0:&e0 span:&span];
+  // Candidate per-axis percents from the effective cursor's distance to centre.
+  double tX = KKScaleGizmoPercentForExtent(fabs(eff.x - c.x), e0, span);
+  double tY = KKScaleGizmoPercentForExtent(fabs(eff.y - c.y), e0, span);
+  // Link is global per-lane; Shift temporarily inverts it for this drag.
+  BOOL shift = (modifiers & kFxModifierKey_SHIFT) != 0;
+  BOOL effLinked = (_scaleLane().aspectLinked != 0) ^ shift;
+  BOOL haveRatio = (pX > 1e-6 && pY > 1e-6);
+  double newX = pX, newY = pY;
+
+  if (kScaleHandleIsCorner(h)) {
+    if (effLinked && haveRatio) {
+      // Uniform: geometric mean of the two per-axis factors gives a single,
+      // continuous scale factor (no dominant-axis flip); Y follows by ratio.
+      double f = sqrt((tX / pX) * (tY / pY));
+      newX = pX * f;
+      newY = pY * f;
+    } else {
+      newX = tX;
+      newY = tY;
+    }
+  } else if (kScaleHandleControlsX(h)) {
+    newX = tX;
+    newY = effLinked ? (haveRatio ? pY * (tX / pX) : tX) : pY;
+  } else if (kScaleHandleControlsY(h)) {
+    newY = tY;
+    newX = effLinked ? (haveRatio ? pX * (tY / pY) : tY) : pX;
+  }
+
+  // Values snap to integers; floored at 0 (no negative scale).
+  newX = fmax(0.0, round(newX));
+  newY = fmax(0.0, round(newY));
+  [self _writeScaleValues:@[ @(newX), @(newY) ]
+                   atTime:time
+              forceUpdate:forceUpdate];
+}
+
+- (void)_writeScaleValues:(NSArray<NSNumber *> *)newValues
+                   atTime:(CMTime)time
+              forceUpdate:(BOOL *)forceUpdate {
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!actionAPI)
+    return;
+  [actionAPI startAction:self];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  if (!setAPI) {
+    [actionAPI endAction:self];
+    return;
+  }
+
+  KKTimeline *snap = KKProcessTimelineSnapshot();
+  KKTimeline *tl = snap ? [snap copy] : [KKTimeline timeline];
+  NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
+  NSInteger laneIdx = NSNotFound;
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+    if ([((KKLane *)lanes[i]).label isEqualToString:@"Scale"]) {
+      laneIdx = i;
+      break;
+    }
+  }
+  double frac = [self _fractionAtTime:time];
+  if (laneIdx == NSNotFound) {
+    KKLane *scaleLane = [KKLane laneWithLabel:@"Scale"];
+    scaleLane.valueType = KKLaneValueTypeFloat;
+    scaleLane.componentMin = @[ @0.0, @0.0 ];
+    scaleLane.componentUnits = @[ @"%", @"%" ];
+    scaleLane.componentLabels = @[ @"X", @"Y" ];
+    scaleLane.aspectLinkable = YES;
+    scaleLane.aspectLinked = YES;
+    scaleLane.enabled = NO;
+    scaleLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
+    [lanes addObject:scaleLane];
+  } else {
+    KKLane *scaleLane = [lanes[laneIdx] copy];
+    NSArray<KKKeyPose *> *kps = scaleLane.keyposes;
+    if (kps.count == 0) {
+      scaleLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
+    } else {
+      NSInteger best = 0;
+      double bd = 1e9;
+      for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
+        double d = fabs(kps[k].time - frac);
+        if (d < bd) {
+          bd = d;
+          best = k;
+        }
+      }
+      NSMutableArray<KKKeyPose *> *out = [NSMutableArray arrayWithArray:kps];
+      KKKeyPose *nk = [KKKeyPose keyposeAtTime:out[best].time values:newValues];
+      nk.outgoing = out[best].outgoing;
+      out[best] = nk;
+      if (best + 1 < (NSInteger)out.count && nk.outgoing.endpointsLinked) {
+        KKKeyPose *partner = out[best + 1];
+        KKKeyPose *np = [KKKeyPose keyposeAtTime:partner.time values:newValues];
+        np.outgoing = partner.outgoing;
+        out[best + 1] = np;
+      }
+      if (best > 0) {
+        KKKeyPose *prev = out[best - 1];
+        if (prev.outgoing.endpointsLinked) {
+          KKKeyPose *np = [KKKeyPose keyposeAtTime:prev.time values:newValues];
+          np.outgoing = prev.outgoing;
+          out[best - 1] = np;
+        }
+      }
+      scaleLane.keyposes = out;
+    }
+    lanes[laneIdx] = scaleLane;
+  }
+  tl.lanes = lanes;
+
+  KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
+                           kKKParamTimelineData);
+  [actionAPI endAction:self];
+  if (forceUpdate)
+    *forceUpdate = YES;
 }
 
 @end

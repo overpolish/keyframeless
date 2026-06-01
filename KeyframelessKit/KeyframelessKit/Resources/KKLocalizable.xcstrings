@@ -2514,6 +2514,48 @@
           }
         }
       }
+    },
+    "Link X and Y (lock aspect ratio)": {
+      "comment": "Tooltip: aspect-link toggle on the Scale row.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "X und Y verknüpfen (Seitenverhältnis sperren)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vincular X e Y (bloquear la proporción)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lier X et Y (verrouiller les proportions)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "X と Y をリンク（縦横比を固定）"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "X와 Y 연결(종횡비 고정)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "链接 X 和 Y（锁定宽高比）"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
