@@ -1291,11 +1291,29 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
           onNavigate:cfg.onNavigate
        onHandleValue:onHandleValue
          onDragBegin:onDragBeginBlock
-           onDragEnd:onDragEndBlock];
+           onDragEnd:onDragEndBlock
+        editsKeypose:cfg.isBoundary];
 
   _openStaticView = staticView;
   _openStaticIsBoundary = cfg.isBoundary;
   weakStaticContent = staticView;
+
+  // Per-keypose smooth toggle (spatialCurvable lanes): discrete write routed
+  // to whichever graph owns the open keypose. Advanced keys by fraction, Basic
+  // by its diamond mapping - each resolves the keypose internally.
+  __weak typeof(self) weakSmooth = self;
+  [staticView setOnSmoothToggled:^(NSString *label, BOOL on) {
+    __strong typeof(weakSmooth) s = weakSmooth;
+    if (!s)
+      return;
+    s->_boundaryRedriveSuppressUntil =
+        [NSDate timeIntervalSinceReferenceDate] + 0.4;
+    double frac = s->_openStaticBoundaryFraction;
+    if (s->_activeTab == 1)
+      [s->_advancedGraph writeSpatialSmoothForLabel:label atFrac:frac isOn:on];
+    else
+      [s->_basicGraph writeSpatialSmoothForLabel:label atFrac:frac isOn:on];
+  }];
 
   if (cfg.isBoundary) {
     [staticView

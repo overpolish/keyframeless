@@ -8,6 +8,7 @@
 #import "../Plugin/KKColor.h"
 #import "KKBezierPath.h"
 #import "KKGradientSampling.h"
+#import "KKSpatialCurve.h"
 
 const double KKRotateWithMotionWindowSeconds = 1.0 / 12.0;
 
@@ -210,10 +211,12 @@ static NSArray<NSNumber *> *KKLaneRawValueAtFraction(KKLane *lane,
 
   KKKeyPose *a = kps.firstObject;
   KKKeyPose *b = kps[1];
+  NSUInteger ia = 0;
   for (NSUInteger i = 0; i + 1 < kps.count; i++) {
     if (frac < kps[i + 1].time) {
       a = kps[i];
       b = kps[i + 1];
+      ia = i;
       break;
     }
   }
@@ -239,6 +242,29 @@ static NSArray<NSNumber *> *KKLaneRawValueAtFraction(KKLane *lane,
     double av = a.values[i].doubleValue;
     double bv = b.values[i].doubleValue;
     [result addObject:@(av + (bv - av) * easedT)];
+  }
+
+  // Spatial curve: when either bordering keypose is marked smooth, bend the
+  // first two components (the 2D Position point) along a cubic bezier instead
+  // of the straight line. Other components keep their linear interpolation, and
+  // lanes with no smooth keypose are untouched. easedT is the eased progress of
+  // the *time* through the segment; we feed it through arc-length
+  // reparameterisation so it maps to distance travelled, giving constant speed
+  // through curves of any sharpness (the easing then shapes speed-over-distance
+  // as intended, instead of being warped by the bezier parameterisation).
+  if (valCount >= 2 && (a.spatialSmooth || b.spatialSmooth)) {
+    // Arc-length remap is only defined on the curve's own [0,1] domain. When
+    // the easing overshoots (spring/elastic/back can push easedT past [0,1]),
+    // feed the raw parameter straight to the bezier so it extrapolates along
+    // the endpoint tangent - the position overshoots past the keypose, matching
+    // what the straight-line lanes already do via linear interpolation.
+    double t = (easedT < 0.0 || easedT > 1.0)
+                   ? easedT
+                   : KKLaneSpatialArcParam(kps, ia, easedT);
+    double cx = 0, cy = 0;
+    KKLaneSpatialBezierXY(kps, ia, t, &cx, &cy);
+    result[0] = @(cx);
+    result[1] = @(cy);
   }
 
   if (iv && iv.modulation != KKIntervalModulationNone) {
@@ -340,7 +366,14 @@ NSArray<NSNumber *> *KKTimelineLaneValueAtFractionSmoothed(KKLane *lane,
     double next = kps[i + 1].time - b;
     if (prev <= 0.0 || next <= 0.0)
       continue;
-    double w = KK_JOIN_BLEND_FRAC * MIN(prev, next);
+    // A join touching hold-modulation gets a wider fillet (the wobble and the
+    // ease-out both reach the keypose at zero velocity, so a narrow blend
+    // leaves a visible stop).
+    BOOL modJoin =
+        (kps[i - 1].outgoing.modulation != KKIntervalModulationNone) ||
+        (kps[i].outgoing.modulation != KKIntervalModulationNone);
+    double blendFrac = modJoin ? KK_JOIN_BLEND_MOD_FRAC : KK_JOIN_BLEND_FRAC;
+    double w = blendFrac * MIN(prev, next);
     w = MIN(w, 0.49 * prev);
     w = MIN(w, 0.49 * next);
     if (frac <= b - w || frac >= b + w)

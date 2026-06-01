@@ -422,8 +422,11 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
             best = k;
           }
         }
-        KKKeyPose *nk = [KKKeyPose keyposeAtTime:kps[best].time values:values];
-        nk.outgoing = kps[best].outgoing; // preserve easing/modulation
+        // Copy-and-update so per-keypose fields beyond values (spatialSmooth,
+        // in/out handles) survive the live preview - else a curved keypose
+        // flattens while its own position handle is dragged.
+        KKKeyPose *nk = [kps[best] copy];
+        nk.values = values;
         kps[best] = nk;
         nl.keyposes = kps;
       }
@@ -553,6 +556,18 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 
 - (CGFloat)pointHandleGhostAlpha {
   return [self _userHiddenLabel:self.pointLabel] ? 0.3 : 1.0;
+}
+
+- (BOOL)labelVisibleOrRevealing:(NSString *)label {
+  return ![self _userHiddenLabel:label] || [self _revealActive];
+}
+
+- (CGFloat)ghostAlphaForLabel:(NSString *)label {
+  return [self _userHiddenLabel:label] ? 0.3 : 1.0;
+}
+
+- (CGFloat)motionPathGhostAlpha {
+  return 1.0;
 }
 
 - (void)setRevealHidden:(BOOL)revealHidden {

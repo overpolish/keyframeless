@@ -134,7 +134,7 @@ BOOL KKValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
       iv.curve = KKIntervalCurveLinear;
     b.outgoing = iv;
     if (newLinked)
-      c = [KKKeyPose keyposeAtTime:c.time values:b.values];
+      c.values = b.values;
     c.outgoing = kps[s.holdEnd].outgoing;
     kps[s.holdStart] = b;
     kps[s.holdEnd] = c;
@@ -149,6 +149,18 @@ BOOL KKValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   [self setNeedsDisplay:YES];
   if (self.onTimelineMutated)
     self.onTimelineMutated(t);
+}
+
+// Carry the spatial-curve state (smoothness + bezier handles) from a source
+// keypose onto a freshly rebuilt one. The Basic In/Out rebuild constructs new
+// keyposes from scratch; without this a boundary change would silently reset
+// every Position keypose to linear.
+static void KKBasicCopySpatial(KKKeyPose *dst, KKKeyPose *_Nullable src) {
+  if (!dst || !src)
+    return;
+  dst.spatialSmooth = src.spatialSmooth;
+  dst.inHandle = src.inHandle;
+  dst.outHandle = src.outHandle;
 }
 
 // Rebuild one animatable lane's keyposes for the requested In/Out phases.
@@ -194,6 +206,7 @@ BOOL KKValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   if (inOn) {
     KKKeyPose *a = [KKKeyPose keyposeAtTime:0.0 values:inStart];
     a.outgoing = [oldIn copy] ?: [[KKInterval alloc] init];
+    KKBasicCopySpatial(a, os.inEnabled ? old.firstObject : nil);
     [kps addObject:a];
   }
   KKKeyPose *hs =
@@ -206,13 +219,17 @@ BOOL KKValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
     freshHold.endpointsLinked = YES;
     hs.outgoing = freshHold;
   }
+  KKBasicCopySpatial(hs, (old.count >= 2) ? old[os.holdStart] : nil);
   [kps addObject:hs];
   KKKeyPose *he =
       [KKKeyPose keyposeAtTime:(outOn ? tOut : outEndFrac) values:holdEndVals];
+  KKBasicCopySpatial(he, (old.count >= 2) ? old[os.holdEnd] : nil);
   [kps addObject:he];
   if (outOn) {
     he.outgoing = [oldOut copy] ?: [[KKInterval alloc] init];
-    [kps addObject:[KKKeyPose keyposeAtTime:outEndFrac values:outEnd]];
+    KKKeyPose *oe = [KKKeyPose keyposeAtTime:outEndFrac values:outEnd];
+    KKBasicCopySpatial(oe, os.outEnabled ? old.lastObject : nil);
+    [kps addObject:oe];
   }
 
   KKLane *nl = [lane copy];

@@ -2472,6 +2472,48 @@
           }
         }
       }
+    },
+    "Smooth path through this keypose": {
+      "comment": "Tooltip: per-keypose curve toggle on the Position row.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pfad durch diese Keypose glätten"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suavizar la trayectoria en esta pose clave"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lisser la trajectoire à cette pose clé"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このキーポーズでパスをスムーズにする"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 키포즈에서 경로를 부드럽게"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在此关键姿势处平滑路径"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

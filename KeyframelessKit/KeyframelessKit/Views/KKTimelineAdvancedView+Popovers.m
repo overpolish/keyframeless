@@ -10,6 +10,18 @@
 
 @implementation KKTimelineAdvancedView (Popovers)
 
+- (void)writeSpatialSmoothForLabel:(NSString *)label
+                            atFrac:(double)frac
+                              isOn:(BOOL)on {
+  KKTimeline *t = KKTimelineSettingSpatialSmooth(_timeline, label, frac, on);
+  if (!t)
+    return;
+  _timeline = t;
+  [self setNeedsDisplay:YES];
+  if (self.onTimelineMutated)
+    self.onTimelineMutated(t);
+}
+
 - (void)_openValuePopoverForLane:(NSInteger)laneIdx kp:(NSInteger)kpIdx {
   if (!self.onValuePopover)
     return;
@@ -76,8 +88,25 @@
     display.componentUnits = l.componentUnits;
     display.componentLabels = l.componentLabels;
     display.componentLabelColors = l.componentLabelColors;
-    display.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
-                                            values:vals ?: @[ @0.0 ]] ];
+    // spatialCurvable is lane metadata, not per-project state, so source it
+    // from the template - an older blob (saved before the flag existed) would
+    // otherwise leave it off and hide the curve toggle.
+    KKLane *tmpl = nil;
+    for (KKLane *t in _availableLanes)
+      if ([t.label isEqualToString:l.label]) {
+        tmpl = t;
+        break;
+      }
+    display.spatialCurvable = tmpl ? tmpl.spatialCurvable : l.spatialCurvable;
+    KKKeyPose *displayKp = [KKKeyPose keyposeAtTime:0.0
+                                             values:vals ?: @[ @0.0 ]];
+    // Carry the curve state so the row's toggle reflects this keypose.
+    if (match) {
+      displayKp.spatialSmooth = match.spatialSmooth;
+      displayKp.inHandle = match.inHandle;
+      displayKp.outHandle = match.outHandle;
+    }
+    display.keyposes = @[ displayKp ];
     [displayLanes addObject:display];
   }
   if (displayLanes.count == 0 && excludedLabels.count == 0)

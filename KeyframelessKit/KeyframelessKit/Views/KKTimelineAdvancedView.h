@@ -160,6 +160,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// opened against; falls back to any animatable lane that has a KP at
 /// `fraction`. No-op if no matching KP exists.
 - (void)requestValuePopoverAtFraction:(double)fraction;
+/// Flip the Position keypose nearest `frac` between corner and smooth (bezier)
+/// spatial interpolation. Routed from the keypose popover's curve toggle.
+- (void)writeSpatialSmoothForLabel:(NSString *)label
+                            atFrac:(double)frac
+                              isOn:(BOOL)on;
 
 @end
 

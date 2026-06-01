@@ -150,6 +150,15 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   // canvas's own -mouseDown: never sees them otherwise).
   if (e.clickCount == 2) {
     [self.window makeFirstResponder:nil];
+    id<KKMiniCanvasDelegate> dd = c.canvasDelegate;
+    if ([dd respondsToSelector:
+                @selector(miniCanvas:doubleClickAtPoint:contentRect:)] &&
+        [dd miniCanvas:c
+            doubleClickAtPoint:[self convertPoint:e.locationInWindow
+                                         fromView:nil]
+                   contentRect:[c contentRectInViewPoints]]) {
+      return;
+    }
     [c resetView];
     return;
   }
@@ -294,6 +303,7 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   id<MTLRenderPipelineState> _arcPipeline;
   id<MTLRenderPipelineState> _rotationPipeline;
   id<MTLRenderPipelineState> _linePipeline;
+  id<MTLRenderPipelineState> _aaLinePipeline;
   _KKMiniCanvasOverlay *_overlay;
 
   CGFloat _zoom;           // 1 == aspect-fit
@@ -482,6 +492,14 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   _linePipeline = [device newRenderPipelineStateWithDescriptor:lp error:&err];
   if (!_linePipeline)
     KKLogError(@"KKMiniCanvasView: line pipeline failed: %@", err);
+
+  // Antialiased line pipeline (KKLineFragment uses textureCoordinate.y as the
+  // signed cross-line distance) - same blend, used for the motion path so its
+  // diagonals aren't jagged like the solid-colour crop border.
+  lp.fragmentFunction = [lib newFunctionWithName:@"KKLineFragment"];
+  _aaLinePipeline = [device newRenderPipelineStateWithDescriptor:lp error:&err];
+  if (!_aaLinePipeline)
+    KKLogError(@"KKMiniCanvasView: aa line pipeline failed: %@", err);
 }
 
 - (void)viewDidMoveToWindow {
@@ -861,10 +879,30 @@ static const NSUInteger kFilmstripGridCols = 5;
   [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
 }
 
+// Overlay controls scale with the canvas frame height so they stay
+// proportional as the popover grows/shrinks (baseline 230pt; matches the arc /
+// rotation gizmo). Point glyphs and the motion path use this too.
+- (CGFloat)_canvasScale {
+  CGFloat cs = self.bounds.size.height / 230.0;
+  return cs > 0 ? cs : 1.0;
+}
+
 // Encodes one shared KKPointOSC glyph centered at `centerPts` (overlay
 // points, y-up). `enc` must already be a valid render encoder for this pass.
 - (void)_encodeHandleGlyphAt:(CGPoint)centerPts
                    fillColor:(simd_float4)fillColor
+                     encoder:(id<MTLRenderCommandEncoder>)enc {
+  [self _encodeHandleGlyphAt:centerPts
+                   fillColor:fillColor
+                   sizeScale:1.0
+                     encoder:enc];
+}
+
+// `sizeScale` shrinks the glyph relative to the standard handle (1.0); used for
+// the smaller motion-path anchor / tangent-handle dots.
+- (void)_encodeHandleGlyphAt:(CGPoint)centerPts
+                   fillColor:(simd_float4)fillColor
+                   sizeScale:(CGFloat)sizeScale
                      encoder:(id<MTLRenderCommandEncoder>)enc {
   CGSize d = self.drawableSize;
   CGFloat s = self.window.backingScaleFactor;
@@ -872,7 +910,8 @@ static const NSUInteger kFilmstripGridCols = 5;
     s = 2.0;
   CGPoint centered = CGPointMake(centerPts.x * s - d.width / 2.0,
                                  centerPts.y * s - d.height / 2.0);
-  float sizePx = (float)(kKKMiniHandleOuterPt * s);
+  float sizePx =
+      (float)(kKKMiniHandleOuterPt * sizeScale * [self _canvasScale] * s);
   KKVertex2D quad[6];
   [KKRenderPrimitives generateQuadVertices:quad center:centered size:sizePx];
   // generateQuadVertices puts tc.y=+1 on the higher-position (screen-top)
@@ -898,6 +937,74 @@ static const NSUInteger kFilmstripGridCols = 5;
                  length:sizeof(params)
                 atIndex:KKOSCFragmentIndex_DrawColor];
   [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
+}
+
+// Encodes a connected polyline (overlay points, y-up) as oriented thin quads
+// via the shared solid-colour line pipeline. `enc` must be a valid encoder.
+- (void)_encodeMotionLineStrip:(NSArray<NSValue *> *)pointsPts
+                         color:(simd_float4)color
+                   halfWidthPt:(CGFloat)halfWidthPt
+                       encoder:(id<MTLRenderCommandEncoder>)enc {
+  if (pointsPts.count < 2 || !_aaLinePipeline)
+    return;
+  CGSize d = self.drawableSize;
+  CGFloat s = self.window.backingScaleFactor;
+  if (s <= 0)
+    s = 2.0;
+  // Proportional to the canvas, then a 1px AA pad. tc.y carries the signed
+  // cross-line distance for KKLineFragment (edge value > 1 so the fade lands
+  // inside the geometric edge). Mirrors the viewer's drawLineStripWithPoints.
+  float hw = (float)(halfWidthPt * [self _canvasScale] * s);
+  if (hw < 0.5f)
+    hw = 0.5f;
+  float pad = hw + 1.0f;
+  float edge = pad / hw;
+  simd_uint2 vp = {(unsigned)d.width, (unsigned)d.height};
+  NSUInteger segCount = pointsPts.count - 1;
+  KKVertex2D *verts = malloc(sizeof(KKVertex2D) * segCount * 6);
+  NSUInteger vi = 0;
+  for (NSUInteger i = 0; i < segCount; i++) {
+    CGPoint pa = pointsPts[i].pointValue, pb = pointsPts[i + 1].pointValue;
+    simd_float2 mA = {(float)(pa.x * s - d.width / 2.0),
+                      (float)(pa.y * s - d.height / 2.0)};
+    simd_float2 mB = {(float)(pb.x * s - d.width / 2.0),
+                      (float)(pb.y * s - d.height / 2.0)};
+    simd_float2 dd = mB - mA;
+    float len = simd_length(dd);
+    if (len < 0.001f)
+      continue;
+    simd_float2 dir = dd / len;
+    simd_float2 perp = {-dir.y, dir.x};
+    simd_float2 v0 = mA + perp * pad, v1 = mA - perp * pad;
+    simd_float2 v2 = mB + perp * pad, v3 = mB - perp * pad;
+    verts[vi++] = (KKVertex2D){v0, {0, edge}};
+    verts[vi++] = (KKVertex2D){v1, {0, -edge}};
+    verts[vi++] = (KKVertex2D){v2, {0, edge}};
+    verts[vi++] = (KKVertex2D){v1, {0, -edge}};
+    verts[vi++] = (KKVertex2D){v3, {0, -edge}};
+    verts[vi++] = (KKVertex2D){v2, {0, edge}};
+  }
+  if (vi > 0) {
+    NSUInteger byteLen = sizeof(KKVertex2D) * vi;
+    [enc setRenderPipelineState:_aaLinePipeline];
+    if (byteLen <= 4096) {
+      [enc setVertexBytes:verts
+                   length:byteLen
+                  atIndex:KKVertexInputIndex_Vertices];
+    } else {
+      id<MTLBuffer> buf =
+          [enc.device newBufferWithBytes:verts
+                                  length:byteLen
+                                 options:MTLResourceStorageModeShared];
+      [enc setVertexBuffer:buf offset:0 atIndex:KKVertexInputIndex_Vertices];
+    }
+    [enc setVertexBytes:&vp
+                 length:sizeof(vp)
+                atIndex:KKVertexInputIndex_ViewportSize];
+    [enc setFragmentBytes:&color length:sizeof(color) atIndex:0];
+    [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:vi];
+  }
+  free(verts);
 }
 
 - (void)drawInMTKView:(MTKView *)view {
@@ -1098,6 +1205,55 @@ static const NSUInteger kFilmstripGridCols = 5;
                 vertexStart:0
                 vertexCount:4];
       }
+    }
+  }
+
+  // Motion path (Magic Move): red trajectory line + tangent connectors under
+  // the dots, then anchor + handle dots. Drawn beneath the position handle.
+  if (del &&
+      [del respondsToSelector:
+               @selector(miniCanvas:motionPathPolylineForContentRect:)]) {
+    CGRect cr = [self contentRectInViewPoints];
+    NSArray<NSValue *> *poly = [del miniCanvas:self
+              motionPathPolylineForContentRect:cr];
+    NSArray<NSValue *> *segs =
+        [del respondsToSelector:
+                 @selector(miniCanvas:motionPathHandleSegmentsForContentRect:)]
+            ? [del miniCanvas:self motionPathHandleSegmentsForContentRect:cr]
+            : nil;
+    NSArray<NSValue *> *anchors =
+        [del
+            respondsToSelector:@selector(
+                                   miniCanvas:motionPathAnchorsForContentRect:)]
+            ? [del miniCanvas:self motionPathAnchorsForContentRect:cr]
+            : nil;
+    float pg = [del isKindOfClass:[KKMiniCanvasRenderer class]]
+                   ? (float)[(KKMiniCanvasRenderer *)del motionPathGhostAlpha]
+                   : 1.0f;
+    if (_linePipeline && poly.count >= 2) {
+      simd_float4 red = {1.0f, 0.25f, 0.25f, 0.9f * pg};
+      [self _encodeMotionLineStrip:poly color:red halfWidthPt:1.0 encoder:enc];
+    }
+    if (_linePipeline) {
+      simd_float4 white = {1.0f, 1.0f, 1.0f, 0.85f * pg};
+      for (NSUInteger i = 0; i + 1 < segs.count; i += 2)
+        [self _encodeMotionLineStrip:@[ segs[i], segs[i + 1] ]
+                               color:white
+                         halfWidthPt:0.75
+                             encoder:enc];
+    }
+    if (_pointPipeline) {
+      simd_float4 white = {1.0f, 1.0f, 1.0f, 1.0f * pg};
+      for (NSValue *v in anchors)
+        [self _encodeHandleGlyphAt:v.pointValue
+                         fillColor:white
+                         sizeScale:0.6
+                           encoder:enc];
+      for (NSUInteger i = 1; i < segs.count; i += 2)
+        [self _encodeHandleGlyphAt:segs[i].pointValue
+                         fillColor:white
+                         sizeScale:0.5
+                           encoder:enc];
     }
   }
 

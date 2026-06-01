@@ -77,6 +77,13 @@ NSArray<NSNumber *> *_Nullable KKTimelineLaneValueAtFraction(KKLane *lane,
 /// the transition/hold.
 #define KK_JOIN_BLEND_FRAC 0.08
 
+/// Wider join blend for boundaries where one side has hold-modulation. The
+/// modulation envelope ramps its motion from zero at the keypose and an
+/// ease-out arrives there at zero velocity too, so the join reads as a visible
+/// "stop" before the wobble; a bigger fillet samples further into both sides
+/// and carries motion through the join to hide it.
+#define KK_JOIN_BLEND_MOD_FRAC 0.42
+
 /// Cubic-Hermite C1 join blend around a single boundary. When `frac` is
 /// inside `[boundary - window, boundary + window]` the result is a Hermite
 /// matching `sample`'s value *and* slope (central-difference) at both window
@@ -109,6 +116,8 @@ NSArray<NSNumber *> *_Nullable KKTimelineLaneValueAtFractionSmoothed(
 FOUNDATION_EXPORT
 NSArray<NSNumber *> *_Nullable KKTimelineLaneValueAtVisualFractionSmoothed(
     KKLane *lane, double visualFrac);
+
+// 2D spatial (curved Position) path helpers live in KKSpatialCurve.h.
 
 /// Returns YES when an OSC bound to `lane` should be visible at clip
 /// fraction `frac`. Mirrors the Basic-view projection: an In-off lane's

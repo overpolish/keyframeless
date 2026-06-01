@@ -120,7 +120,29 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 @property(nonatomic, copy, nullable)
     KKInterval *outgoing; // nil on last keypose
 
+/// Spatial-curve annotation for 2D (Position) lanes. Default NO = the lane
+/// travels in a straight line through this keypose (legacy behaviour - every
+/// existing blob is unchanged). YES = the path curves: the evaluator bends the
+/// Position segments on either side using a cubic bezier whose handles come
+/// from inHandle/outHandle, or are auto-derived (Catmull-Rom) from the
+/// neighbouring keyposes when those are nil. Ignored by non-2D lanes.
+@property(nonatomic) BOOL spatialSmooth;
+
+/// Manual tangent handles for the spatial curve, as [dx,dy] offsets from the
+/// anchor (values[0],values[1]) in the lane's own units. nil = auto-derive
+/// from the neighbours. inHandle shapes the incoming segment, outHandle the
+/// outgoing one. Only meaningful when spatialSmooth is YES on a 2D lane.
+@property(nonatomic, copy, nullable) NSArray<NSNumber *> *inHandle;
+@property(nonatomic, copy, nullable) NSArray<NSNumber *> *outHandle;
+
 + (instancetype)keyposeAtTime:(double)time values:(NSArray<NSNumber *> *)values;
+
+/// Returns a copy of the receiver with a new time, preserving everything else
+/// (values, outgoing interval, and the spatial-curve fields spatialSmooth /
+/// inHandle / outHandle). Use this when *moving* a keypose - rebuilding with
+/// keyposeAtTime:values: silently drops the spatial-curve state, which is the
+/// "all keyposes go back to linear after editing" class of bug.
+- (instancetype)keyposeBySettingTime:(double)time;
 
 @end
 
@@ -157,6 +179,12 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// layout; any other value pins the In/Out interpretation regardless of
 /// where the user has dragged the boundary keypose to.
 @property(nonatomic) KKLaneHoldShape holdShape;
+
+/// When YES this lane carries a 2D spatial path (Position): its keyposes can be
+/// marked smooth (cubic-bezier spatial interpolation) and the value popover
+/// shows a per-keypose linear/smooth toggle glyph on the row. Default NO.
+/// Plugins set this on their Position lane; the kit never infers it.
+@property(nonatomic) BOOL spatialCurvable;
 
 + (instancetype)laneWithLabel:(NSString *)label;
 
@@ -200,6 +228,14 @@ NSArray<NSString *> *_Nullable KKLaneComponentLabels(KKLane *lane);
 FOUNDATION_EXPORT KKTimeline *KKTimelineRebalanced(KKTimeline *timeline,
                                                    double oldDuration,
                                                    double newDuration);
+
+/// Returns a copy of `timeline` with `spatialSmooth` set to `on` on the
+/// keypose nearest `frac` in the lane named `label`. Nearest-match (not exact)
+/// so it is robust to a lane storing its endpoint a frame short of 0/1.
+/// Returns nil when nothing changed (no such lane, empty lane, or the keypose
+/// already has that state) so the caller can skip the commit + undo entry.
+FOUNDATION_EXPORT KKTimeline *_Nullable KKTimelineSettingSpatialSmooth(
+    KKTimeline *timeline, NSString *label, double frac, BOOL on);
 
 @interface KKTimeline (Serialization)
 

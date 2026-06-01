@@ -12,6 +12,7 @@
 
 static NSInteger const kOSCPositionPart = 1;
 static NSInteger const kOSCRotationPart = 2;
+static NSInteger const kOSCPathHandlePart = 3;
 
 static KKLane *_laneNamed(NSString *label) {
   for (KKLane *lane in KKProcessTimelineSnapshot().lanes)
@@ -36,8 +37,11 @@ static NSArray<NSNumber *> *_positionValuesAtFraction(double frac) {
   KKLane *lane = _positionLane();
   if (!lane)
     return @[ @0.5, @0.5 ];
-  NSArray<NSNumber *> *v =
-      KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+  // Raw (un-rounded) value so the arc handle lands exactly on the keypose
+  // anchors, which are drawn from raw kp.values. The Smoothed variant
+  // corner-rounds at interior joins, which pulled the handle off the active
+  // anchor (the mini-canvas already uses the raw value, hence stays aligned).
+  NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
   return v.count >= 2 ? v : @[ @0.5, @0.5 ];
 }
 
@@ -59,6 +63,8 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
 @interface MagicMoveOSC ()
 @property(nonatomic, retain) KKSnapEngine *snapEngine;
 @property(nonatomic, retain) KKRotationOSC *rotationOSC;
+@property(nonatomic, retain) KKPointOSC *anchorOSC;
+@property(nonatomic, retain) KKPointOSC *handleOSC;
 /// YES while the user holds Cmd during a position drag - snaps to canvas
 /// anchors and other keypose positions. Default is free (no snap) so the
 /// user can position pixel-precisely without fighting the engine.
@@ -67,6 +73,26 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
 /// anchor for Shift axis-lock: the locked axis stays pinned to this value,
 /// the dominant axis tracks the cursor.
 @property(nonatomic) simd_float2 posPressObject;
+/// Time (0–1) of the keypose anchor the user grabbed for a position drag, or
+/// NaN to edit the keypose nearest the playhead (handle drag / on-keypose
+/// press) - the prior behaviour.
+@property(nonatomic) double dragAnchorFrac;
+/// Set by the hit-test: YES when the hovered position target is a keypose
+/// anchor dot rather than the playhead arc handle (both report
+/// kOSCPositionPart). Keeps the arc from lighting up when you hover an anchor.
+@property(nonatomic) BOOL hoverTargetIsAnchor;
+/// Time (0–1) of the keypose whose tangent handle is being dragged (NaN = none)
+/// and which side. Set on mouseDown for kOSCPathHandlePart.
+@property(nonatomic) double dragHandleFrac;
+@property(nonatomic) BOOL dragHandleIsOut;
+/// Wall-clock + keypose of the last position press, for active-part
+/// double-click detection (FCP gives no reliable clickCount in the viewer).
+@property(nonatomic) double lastClickTime;
+@property(nonatomic) double lastClickFrac;
+/// Grabbed keypose's object value at press, for delta-based dragging (so a
+/// press off the dot centre doesn't jump the keypose to the cursor).
+@property(nonatomic) double posGrabValX;
+@property(nonatomic) double posGrabValY;
 @property(nonatomic)
     CGPoint rotPressCanvas;            // canvas pixel where rot drag began
 @property(nonatomic) double rotPressX; // rotation values (rad) at press
@@ -90,6 +116,21 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
     self.clearsOnDraw = NO;
     _snapEngine = [[KKSnapEngine alloc] init];
     _rotationOSC = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
+    _anchorOSC = [[KKPointOSC alloc] initWithAPIManager:apiManager];
+    // Match the crop/radius points in Rounded so the anchors are easy to hit.
+    _anchorOSC.oscRadius = 7.0f;
+    _anchorOSC.outlineWidth = 2.0f;
+    // Must not clear the destination, or each dot wipes the path line and the
+    // previously-drawn anchors (leaving only the last point).
+    _anchorOSC.clearsOnDraw = NO;
+    _handleOSC = [[KKPointOSC alloc] initWithAPIManager:apiManager];
+    _handleOSC.oscRadius = 5.0f;
+    _handleOSC.outlineWidth = 1.5f;
+    _handleOSC.clearsOnDraw = NO;
+    _dragAnchorFrac = NAN;
+    _dragHandleFrac = NAN;
+    _lastClickTime = -1.0;
+    _lastClickFrac = NAN;
   }
   return self;
 }
@@ -230,6 +271,8 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
                     atTime:(CMTime)time {
   [self kkResetOptHideArming];
   [self.snapEngine reset];
+  self.dragAnchorFrac = NAN;
+  self.dragHandleFrac = NAN;
   [super mouseUpAtPositionX:positionX
                   positionY:positionY
                  activePart:activePart
@@ -245,6 +288,353 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
                   forceUpdate:(BOOL *)forceUpdate
                        atTime:(CMTime)time {
   [self kkUpdateOptRevealWithModifiers:modifiers forceUpdate:forceUpdate];
+}
+
+// Read-only motion path: the trajectory the clip's centre travels across the
+// whole effect, sampled from the SAME evaluator the render uses
+// (KKTimelineLaneValueAtVisualFractionSmoothed) so the line matches the clip's
+// motion exactly, curved segments included. Object→canvas via the OSC API, the
+// same mapping the Position handle uses.
+- (void)_drawPositionPathToDestination:(FxImageTile *)destinationImage
+                            ghostAlpha:(float)ghostAlpha {
+  KKLane *lane = _positionLane();
+  if (!lane || lane.keyposes.count < 2)
+    return;
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  if (!oscAPI)
+    return;
+  // Geometric route (no temporal easing), so overshooting easing curves don't
+  // draw loops on the path - the line is the spatial trajectory, not the
+  // timing dynamics (which are felt in playback).
+  NSArray<NSValue *> *path = KKLanePositionPathPoints(lane, 24);
+  NSUInteger n = path.count;
+  if (n < 2)
+    return;
+  CGPoint *pts = malloc(sizeof(CGPoint) * n);
+  for (NSUInteger i = 0; i < n; i++) {
+    NSPoint o = path[i].pointValue;
+    CGPoint c = CGPointZero;
+    [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                            fromX:o.x
+                            fromY:o.y
+                          toSpace:kFxDrawingCoordinates_CANVAS
+                              toX:&c.x
+                              toY:&c.y];
+    pts[i] = c;
+  }
+  simd_float4 red = {1.0f, 0.25f, 0.25f, 0.9f * ghostAlpha};
+  [self drawLineStripWithPoints:pts
+                          count:n
+                          color:red
+                      halfWidth:2.0f
+               destinationImage:destinationImage];
+  free(pts);
+}
+
+- (CGPoint)_canvasFromObjX:(double)ox y:(double)oy {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  CGPoint c = CGPointZero;
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:ox
+                          fromY:oy
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&c.x
+                            toY:&c.y];
+  return c;
+}
+
+// Tangent handles for every smooth keypose: a thin connector from the anchor to
+// a small dot at the effective handle position (manual, or the auto Catmull-Rom
+// tangent the curve uses). An endpoint's missing side is a zero-length handle
+// and is skipped.
+- (void)_drawHandlesToDestination:(FxImageTile *)destinationImage
+                           atTime:(CMTime)time
+                       ghostAlpha:(float)ghostAlpha {
+  KKLane *lane = _positionLane();
+  if (!lane || lane.keyposes.count < 2)
+    return;
+  self.handleOSC.ghostAlpha = ghostAlpha;
+  NSArray<KKKeyPose *> *kps = lane.keyposes;
+  simd_float4 hc = {1.0f, 1.0f, 1.0f, 0.85f * ghostAlpha};
+  for (NSUInteger i = 0; i < kps.count; i++) {
+    KKKeyPose *kp = kps[i];
+    if (!kp.spatialSmooth || kp.values.count < 2)
+      continue;
+    double ax = kp.values[0].doubleValue, ay = kp.values[1].doubleValue;
+    CGPoint anchorC = [self _canvasFromObjX:ax y:ay];
+    CGPoint inH = CGPointZero, outH = CGPointZero;
+    KKLaneSpatialHandlesForKeypose(lane, i, &inH, &outH);
+    CGPoint sides[2] = {outH, inH};
+    for (int s = 0; s < 2; s++) {
+      if (hypot(sides[s].x, sides[s].y) < 1e-6)
+        continue;
+      CGPoint hCanvas = [self _canvasFromObjX:(ax + sides[s].x)
+                                            y:(ay + sides[s].y)];
+      [self drawLineFrom:anchorC
+                        to:hCanvas
+                     color:hc
+                 halfWidth:2.0f
+          destinationImage:destinationImage];
+      [self.handleOSC drawAtCanvasPosition:hCanvas
+                                 isHovered:NO
+                                  isActive:NO
+                          destinationImage:destinationImage
+                                    atTime:time];
+    }
+  }
+}
+
+// A small dot at every Position keypose - the draggable anchors of the path.
+// Drawn over the path line, under the playhead handle. The keypose under the
+// playhead is skipped when `skipActive` (the big arc handle covers it, so its
+// dot would be a redundant point inside the arc).
+- (void)_drawKeyposeAnchorsToDestination:(FxImageTile *)destinationImage
+                                  atTime:(CMTime)time
+                                skipFrac:(double)skipFrac
+                              skipActive:(BOOL)skipActive
+                              ghostAlpha:(float)ghostAlpha {
+  KKLane *lane = _positionLane();
+  if (!lane || lane.keyposes.count < 2)
+    return;
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  if (!oscAPI)
+    return;
+  self.anchorOSC.ghostAlpha = ghostAlpha;
+  NSArray<KKKeyPose *> *kps = lane.keyposes;
+  NSInteger skipIdx = -1;
+  if (skipActive) {
+    double bd = 1e9;
+    for (NSInteger i = 0; i < (NSInteger)kps.count; i++) {
+      double d = fabs(kps[i].time - skipFrac);
+      if (d < bd) {
+        bd = d;
+        skipIdx = i;
+      }
+    }
+  }
+  // Linked keyposes share the active one's position; KKLaneCoalescedAnchors
+  // drops it and any coincident partner (so they collapse under the position
+  // handle) and dedups the rest. Returns object-space points to convert + draw.
+  for (NSValue *pv in KKLaneCoalescedAnchors(lane, skipIdx)) {
+    NSPoint v = pv.pointValue;
+    CGPoint c = CGPointZero;
+    [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                            fromX:v.x
+                            fromY:v.y
+                          toSpace:kFxDrawingCoordinates_CANVAS
+                              toX:&c.x
+                              toY:&c.y];
+    [self.anchorOSC drawAtCanvasPosition:c
+                               isHovered:NO
+                                isActive:NO
+                        destinationImage:destinationImage
+                                  atTime:time];
+  }
+}
+
+// Time of the keypose whose on-canvas anchor dot is under (x,y), or NaN. Lets a
+// drag start on any keypose's anchor, not just the playhead handle.
+- (double)_anchorFracNearCanvasX:(double)x y:(double)y {
+  KKLane *lane = _positionLane();
+  if (!lane || lane.keyposes.count < 2)
+    return NAN;
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  if (!oscAPI)
+    return NAN;
+  double hitR = self.anchorOSC.oscRadius + 6.0;
+  double bestFrac = NAN, bestD = 1e9;
+  for (KKKeyPose *kp in lane.keyposes) {
+    if (kp.values.count < 2)
+      continue;
+    CGPoint c = CGPointZero;
+    [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                            fromX:kp.values[0].doubleValue
+                            fromY:kp.values[1].doubleValue
+                          toSpace:kFxDrawingCoordinates_CANVAS
+                              toX:&c.x
+                              toY:&c.y];
+    double d = hypot(x - c.x, y - c.y);
+    if (d < hitR && d < bestD) {
+      bestD = d;
+      bestFrac = kp.time;
+    }
+  }
+  return bestFrac;
+}
+
+// A smooth keypose's tangent-handle dot under (x,y): outputs the keypose time +
+// which side (out vs in). Returns YES on hit.
+- (BOOL)_handleHitAtCanvasX:(double)x
+                          y:(double)y
+                    outFrac:(double *)outFrac
+                   outIsOut:(BOOL *)outIsOut {
+  KKLane *lane = _positionLane();
+  if (!lane || lane.keyposes.count < 2)
+    return NO;
+  double hitR = self.handleOSC.oscRadius + 6.0;
+  double bestD = 1e9, bestFrac = NAN;
+  BOOL bestOut = NO, found = NO;
+  NSArray<KKKeyPose *> *kps = lane.keyposes;
+  for (NSUInteger i = 0; i < kps.count; i++) {
+    KKKeyPose *kp = kps[i];
+    if (!kp.spatialSmooth || kp.values.count < 2)
+      continue;
+    double ax = kp.values[0].doubleValue, ay = kp.values[1].doubleValue;
+    CGPoint inH = CGPointZero, outH = CGPointZero;
+    KKLaneSpatialHandlesForKeypose(lane, i, &inH, &outH);
+    CGPoint sides[2] = {outH, inH};
+    BOOL sideOut[2] = {YES, NO};
+    for (int s = 0; s < 2; s++) {
+      if (hypot(sides[s].x, sides[s].y) < 1e-6)
+        continue;
+      CGPoint hC = [self _canvasFromObjX:(ax + sides[s].x) y:(ay + sides[s].y)];
+      double d = hypot(x - hC.x, y - hC.y);
+      if (d < hitR && d < bestD) {
+        bestD = d;
+        bestFrac = kp.time;
+        bestOut = sideOut[s];
+        found = YES;
+      }
+    }
+  }
+  if (found) {
+    if (outFrac)
+      *outFrac = bestFrac;
+    if (outIsOut)
+      *outIsOut = bestOut;
+  }
+  return found;
+}
+
+// Double-click toggle: flip the keypose nearest `frac` between smooth (bezier)
+// and corner (linear). Reuses the kit's nearest-match writer.
+- (void)_toggleSmoothForFrac:(double)frac {
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!actionAPI)
+    return;
+  [actionAPI startAction:self];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  KKTimeline *snap = KKProcessTimelineSnapshot();
+  if (!setAPI || !snap) {
+    [actionAPI endAction:self];
+    return;
+  }
+  KKLane *lane = _positionLane();
+  BOOL cur = NO;
+  if (lane.keyposes.count) {
+    NSInteger best = 0;
+    double bd = 1e9;
+    for (NSInteger k = 0; k < (NSInteger)lane.keyposes.count; k++) {
+      double d = fabs(lane.keyposes[k].time - frac);
+      if (d < bd) {
+        bd = d;
+        best = k;
+      }
+    }
+    cur = lane.keyposes[best].spatialSmooth;
+  }
+  KKTimeline *tl =
+      KKTimelineSettingSpatialSmooth(snap, @"Position", frac, !cur);
+  if (tl)
+    KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
+                             kKKParamTimelineData);
+  [actionAPI endAction:self];
+}
+
+// Drag a tangent handle: set the dragged keypose's in/out handle to the cursor
+// offset from the anchor (object space). First drag materialises the auto
+// tangent into a manual one. In/out are independent (no mirroring yet).
+- (void)_dragHandleToPositionX:(double)positionX
+                     positionY:(double)positionY
+                     modifiers:(NSUInteger)modifiers
+                   forceUpdate:(BOOL *)forceUpdate
+                        atTime:(CMTime)time {
+  if (isnan(self.dragHandleFrac))
+    return;
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  if (!oscAPI)
+    return;
+  double curX = 0, curY = 0;
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_CANVAS
+                          fromX:positionX
+                          fromY:positionY
+                        toSpace:kFxDrawingCoordinates_OBJECT
+                            toX:&curX
+                            toY:&curY];
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!actionAPI)
+    return;
+  [actionAPI startAction:self];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  KKTimeline *snap = KKProcessTimelineSnapshot();
+  if (!setAPI || !snap) {
+    [actionAPI endAction:self];
+    return;
+  }
+  KKTimeline *tl = [snap copy];
+  NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
+  NSInteger laneIdx = NSNotFound;
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++)
+    if ([((KKLane *)lanes[i]).label isEqualToString:@"Position"]) {
+      laneIdx = i;
+      break;
+    }
+  if (laneIdx == NSNotFound) {
+    [actionAPI endAction:self];
+    return;
+  }
+  KKLane *posLane = [lanes[laneIdx] copy];
+  NSArray<KKKeyPose *> *kps = posLane.keyposes;
+  if (kps.count == 0) {
+    [actionAPI endAction:self];
+    return;
+  }
+  NSInteger best = 0;
+  double bd = 1e9;
+  for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
+    double d = fabs(kps[k].time - self.dragHandleFrac);
+    if (d < bd) {
+      bd = d;
+      best = k;
+    }
+  }
+  NSMutableArray<KKKeyPose *> *out = [NSMutableArray arrayWithArray:kps];
+  KKKeyPose *nk = [out[best] copy];
+  double ax = nk.values[0].doubleValue, ay = nk.values[1].doubleValue;
+  double dx = curX - ax, dy = curY - ay;
+  NSArray<NSNumber *> *off = @[ @(dx), @(dy) ];
+  NSArray<NSNumber *> *mirror = @[ @(-dx), @(-dy) ];
+  // Symmetric by default (the opposite handle mirrors); Shift breaks the
+  // tangent so each side moves independently (allowing a cusp).
+  BOOL shift = (modifiers & kFxModifierKey_SHIFT) != 0;
+  nk.spatialSmooth = YES;
+  if (self.dragHandleIsOut) {
+    nk.outHandle = off;
+    if (!shift)
+      nk.inHandle = mirror;
+  } else {
+    nk.inHandle = off;
+    if (!shift)
+      nk.outHandle = mirror;
+  }
+  out[best] = nk;
+  posLane.keyposes = out;
+  lanes[laneIdx] = posLane;
+  tl.lanes = lanes;
+  KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
+                           kKKParamTimelineData);
+  [actionAPI endAction:self];
+  if (forceUpdate)
+    *forceUpdate = YES;
 }
 
 - (void)drawOSCWithWidth:(NSInteger)width
@@ -264,22 +654,43 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
   double frac = [self _fractionAtTime:time];
   BOOL posShownHere = _positionVisibleAtFraction(frac);
   BOOL posEnabled = [self kkOSCElementVisible:@"Position"];
-  BOOL posVisible = (self.isDragging && activePart == kOSCPositionPart) ||
-                    (posEnabled && posShownHere);
+  // The arc handle is the position target only when the interaction is the
+  // handle itself, not a grabbed keypose anchor (both report kOSCPositionPart).
+  // Drag: dragAnchorFrac is NaN for the handle. Hover: hoverTargetIsAnchor was
+  // set by the hit-test.
+  BOOL handleTargeted = (activePart == kOSCPositionPart) &&
+                        (self.isDragging ? isnan(self.dragAnchorFrac)
+                                         : !self.hoverTargetIsAnchor);
+  BOOL draggingHandle = self.isDragging && handleTargeted;
+  BOOL posVisible = draggingHandle || (posEnabled && posShownHere);
   // Opt-hold reveals a hidden Position handle as a dimmed ghost (clickable to
   // re-show); only when it would otherwise be on screen at this playhead.
   BOOL posGhost =
       !posVisible && self.optRevealActive && !posEnabled && posShownHere;
 
+  // The motion path (line + anchors + handles) is a SEPARATE hideable OSC from
+  // the Position arc handle. Opt-hold reveals a hidden path as a dimmed ghost.
+  BOOL pathEnabled = [self kkOSCElementVisible:@"Path"];
+  BOOL pathReveal = !pathEnabled && self.optRevealActive;
+  if (pathEnabled || pathReveal) {
+    float pg = pathEnabled ? 1.0f : 0.3f;
+    [self _drawPositionPathToDestination:destinationImage ghostAlpha:pg];
+    [self _drawHandlesToDestination:destinationImage atTime:time ghostAlpha:pg];
+    [self _drawKeyposeAnchorsToDestination:destinationImage
+                                    atTime:time
+                                  skipFrac:frac
+                                skipActive:posVisible
+                                ghostAlpha:pg];
+  }
+
   CGPoint pos = [self oscPositionAtTime:time];
   if (posVisible || posGhost) {
     self.fillAlpha = posGhost ? 0.3f : 1.0f;
-    [self
-        drawAtCanvasPosition:pos
-                   isHovered:(activePart == kOSCPositionPart)
-                    isActive:self.isDragging && (activePart == kOSCPositionPart)
-            destinationImage:destinationImage
-                      atTime:time];
+    [self drawAtCanvasPosition:pos
+                     isHovered:handleTargeted
+                      isActive:draggingHandle
+              destinationImage:destinationImage
+                        atTime:time];
   }
 
   // Rotation sphere is centred on the same canvas point as Position (the
@@ -319,7 +730,17 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
                         activePart:(NSInteger *)activePart
                             atTime:(CMTime)time {
   *activePart = 0;
+  self.hoverTargetIsAnchor = NO;
   double frac = [self _fractionAtTime:time];
+  // Tangent handles sit on top of the path - grab them before the arc/anchors.
+  if (([self kkOSCElementVisible:@"Path"] || self.optRevealActive) &&
+      [self _handleHitAtCanvasX:positionX
+                              y:positionY
+                        outFrac:NULL
+                       outIsOut:NULL]) {
+    *activePart = kOSCPathHandlePart;
+    return;
+  }
   // Opt-reveal makes a hidden handle hit-testable so an opt-click re-shows it.
   BOOL posReachable =
       ([self kkOSCElementVisible:@"Position"] || self.optRevealActive) &&
@@ -327,6 +748,14 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
   if (posReachable && [self hitTestAtMousePositionX:positionX
                                           positionY:positionY
                                              atTime:time]) {
+    *activePart = kOSCPositionPart;
+    return;
+  }
+  // Any keypose anchor dot is grabbable, independent of the playhead - so a
+  // keypose's position can be dragged without first scrubbing onto it.
+  if (([self kkOSCElementVisible:@"Path"] || self.optRevealActive) &&
+      !isnan([self _anchorFracNearCanvasX:positionX y:positionY])) {
+    self.hoverTargetIsAnchor = YES;
     *activePart = kOSCPositionPart;
     return;
   }
@@ -354,8 +783,10 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
 }
 
 - (nullable NSString *)oscElementKeyForActivePart:(NSInteger)activePart {
+  if (activePart == kOSCPathHandlePart)
+    return @"Path";
   if (activePart == kOSCPositionPart)
-    return @"Position";
+    return self.hoverTargetIsAnchor ? @"Path" : @"Position";
   if (activePart == kOSCRotationPart) {
     switch (self.rotationOSC.activeAxis) {
     case 0:
@@ -400,6 +831,64 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
                                 toX:&objX
                                 toY:&objY];
       self.posPressObject = (simd_float2){(float)objX, (float)objY};
+    }
+    // Target the grabbed keypose anchor; NaN when the press is the playhead
+    // handle (or on the keypose under it) so the drag rewrites the keypose
+    // nearest the playhead, exactly as before.
+    double pressFrac = [self _fractionAtTime:time];
+    BOOL onHandle = _positionVisibleAtFraction(pressFrac) &&
+                    [self hitTestAtMousePositionX:positionX
+                                        positionY:positionY
+                                           atTime:time];
+    self.dragAnchorFrac =
+        onHandle ? NAN : [self _anchorFracNearCanvasX:positionX y:positionY];
+    // Active-part double-click: two presses on the same keypose within 0.4s
+    // toggle it smooth↔corner (the viewer gives no reliable clickCount).
+    double clickFrac =
+        isnan(self.dragAnchorFrac) ? pressFrac : self.dragAnchorFrac;
+    double now = [NSDate timeIntervalSinceReferenceDate];
+    if (now - self.lastClickTime < 0.4 && !isnan(self.lastClickFrac) &&
+        fabs(self.lastClickFrac - clickFrac) < 1e-6) {
+      [self _toggleSmoothForFrac:clickFrac];
+      self.lastClickTime = -1.0;
+      self.lastClickFrac = NAN;
+      self.dragAnchorFrac = NAN; // consumed by the toggle, don't also drag
+      if (forceUpdate)
+        *forceUpdate = YES;
+      return;
+    }
+    self.lastClickTime = now;
+    self.lastClickFrac = clickFrac;
+    // Capture the grabbed keypose's value for delta-based dragging.
+    self.posGrabValX = self.posPressObject.x;
+    self.posGrabValY = self.posPressObject.y;
+    KKLane *pl = _positionLane();
+    if (pl.keyposes.count) {
+      NSInteger b = 0;
+      double bd = 1e9;
+      for (NSInteger k = 0; k < (NSInteger)pl.keyposes.count; k++) {
+        double d = fabs(pl.keyposes[k].time - clickFrac);
+        if (d < bd) {
+          bd = d;
+          b = k;
+        }
+      }
+      NSArray<NSNumber *> *v = pl.keyposes[b].values;
+      if (v.count >= 2) {
+        self.posGrabValX = v[0].doubleValue;
+        self.posGrabValY = v[1].doubleValue;
+      }
+    }
+  }
+  if (activePart == kOSCPathHandlePart) {
+    double hf = NAN;
+    BOOL hOut = NO;
+    if ([self _handleHitAtCanvasX:positionX
+                                y:positionY
+                          outFrac:&hf
+                         outIsOut:&hOut]) {
+      self.dragHandleFrac = hf;
+      self.dragHandleIsOut = hOut;
     }
   }
   if (activePart == kOSCRotationPart) {
@@ -462,6 +951,14 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
       *forceUpdate = YES;
     return;
   }
+  if (activePart == kOSCPathHandlePart) {
+    [self _dragHandleToPositionX:positionX
+                       positionY:positionY
+                       modifiers:modifiers
+                     forceUpdate:forceUpdate
+                          atTime:time];
+    return;
+  }
   if (activePart == kOSCRotationPart) {
     [self _dragRotationToPositionX:positionX
                          positionY:positionY
@@ -477,24 +974,28 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
   if (!oscAPI)
     return;
-  double newX = 0.0, newY = 0.0;
+  double curX = 0.0, curY = 0.0;
   [oscAPI convertPointFromSpace:kFxDrawingCoordinates_CANVAS
                           fromX:positionX
                           fromY:positionY
                         toSpace:kFxDrawingCoordinates_OBJECT
-                            toX:&newX
-                            toY:&newY];
+                            toX:&curX
+                            toY:&curY];
+  // Delta-based drag: move by the cursor's offset from the grab point, so the
+  // keypose doesn't jump to the cursor when grabbed off the dot centre.
+  double newX = self.posGrabValX + (curX - (double)self.posPressObject.x);
+  double newY = self.posGrabValY + (curY - (double)self.posPressObject.y);
 
   // Shift axis-lock: pin whichever axis has less travel from the press
   // point, so the cursor controls the dominant axis only. Decided per
   // tick so the user can change their mind mid-drag.
   if (modifiers & kFxModifierKey_SHIFT) {
-    double dx = newX - (double)self.posPressObject.x;
-    double dy = newY - (double)self.posPressObject.y;
+    double dx = curX - (double)self.posPressObject.x;
+    double dy = curY - (double)self.posPressObject.y;
     if (fabs(dx) >= fabs(dy))
-      newY = self.posPressObject.y;
+      newY = self.posGrabValY;
     else
-      newX = self.posPressObject.x;
+      newX = self.posGrabValX;
   }
 
   // Snap is OFF by default; Cmd engages it. Free-by-default keeps
@@ -502,10 +1003,13 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
   // Cmd snaps to 15deg.
   self.cmdSnapActive = (modifiers & kFxModifierKey_COMMAND) != 0;
   double frac = [self _fractionAtTime:time];
+  // The keypose this drag edits: the grabbed anchor, or the one nearest the
+  // playhead when dragging the handle (dragAnchorFrac == NaN).
+  double targetFrac = isnan(self.dragAnchorFrac) ? frac : self.dragAnchorFrac;
   if (self.cmdSnapActive) {
     simd_float2 snapped =
         [self _snapPosition:(simd_float2){(float)newX, (float)newY}
-                 atFraction:frac];
+                 atFraction:targetFrac];
     newX = snapped.x;
     newY = snapped.y;
   } else {
@@ -559,31 +1063,29 @@ static NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
       NSInteger best = 0;
       double bd = 1e9;
       for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
-        double d = fabs(kps[k].time - frac);
+        double d = fabs(kps[k].time - targetFrac);
         if (d < bd) {
           bd = d;
           best = k;
         }
       }
       NSMutableArray<KKKeyPose *> *out = [NSMutableArray arrayWithArray:kps];
-      // MRR dangling-pointer guard: cache old's fields BEFORE the replace.
-      double oldTime = out[best].time;
-      KKInterval *oldOutgoing = out[best].outgoing;
-      KKKeyPose *nk = [KKKeyPose keyposeAtTime:oldTime values:newValues];
-      nk.outgoing = oldOutgoing;
+      // Copy-and-update (not reconstruct) so per-keypose fields beyond
+      // time/values/outgoing - spatialSmooth + in/out handles - survive a
+      // position drag instead of resetting the keypose to a linear corner.
+      KKKeyPose *nk = [out[best] copy];
+      nk.values = newValues;
       out[best] = nk;
       // Hold-link propagation: a linked endpoint shares its partner's value.
       if (best + 1 < (NSInteger)out.count && nk.outgoing.endpointsLinked) {
-        KKKeyPose *partner = out[best + 1];
-        KKKeyPose *np = [KKKeyPose keyposeAtTime:partner.time values:newValues];
-        np.outgoing = partner.outgoing;
+        KKKeyPose *np = [out[best + 1] copy];
+        np.values = newValues;
         out[best + 1] = np;
       }
       if (best > 0) {
-        KKKeyPose *prev = out[best - 1];
-        if (prev.outgoing.endpointsLinked) {
-          KKKeyPose *np = [KKKeyPose keyposeAtTime:prev.time values:newValues];
-          np.outgoing = prev.outgoing;
+        if (out[best - 1].outgoing.endpointsLinked) {
+          KKKeyPose *np = [out[best - 1] copy];
+          np.values = newValues;
           out[best - 1] = np;
         }
       }

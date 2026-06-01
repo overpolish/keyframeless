@@ -31,6 +31,14 @@ static const CGFloat kHandleHitTolPt = 12.0;
   id<MTLRenderPipelineState> _pipeline;
   id<MTLDevice> _pipelineDevice;
   MTLPixelFormat _pipelineFormat;
+  // Motion-path drag: which keypose + which part (0=anchor, 1=out, 2=in).
+  BOOL _pathGrabbed;
+  NSInteger _pathIndex;
+  NSInteger _pathPart;
+  double _pathPressNX;
+  double _pathPressNY;
+  double _pathGrabValX; // keypose value at grab (delta-drag anchor)
+  double _pathGrabValY;
 }
 @end
 
@@ -114,9 +122,8 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
   static const double kDegToRad = M_PI / 180.0;
 
   KKLane *positionLane = KKMagicMoveLaneNamed(renderer.timeline, @"Position");
-  rotZdeg -= KKMagicMoveRotateWithMotionAdjustmentDegrees(
-      positionLane, renderer.editFraction, posX,
-      positionLane.lastKnownClipDuration);
+  rotZdeg += KKMagicMoveRotateWithMotionAdjustmentDegrees(
+      positionLane, renderer.editFraction, positionLane.lastKnownClipDuration);
 
   outParams->translate =
       (simd_float2){(float)(posX - 0.5), (float)(posY - 0.5)};
@@ -242,6 +249,79 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
                      CGRectGetMinY(cr) + py * cr.size.height);
 }
 
+- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+    motionPathPolylineForContentRect:(CGRect)cr {
+  KKLane *lane = KKMagicMoveLaneNamed(self.timeline, @"Position");
+  if (!lane || lane.keyposes.count < 2 ||
+      ![self labelVisibleOrRevealing:@"Path"] || !self.boundaryEditing)
+    return @[];
+  NSArray<NSValue *> *pts = KKLanePositionPathPoints(lane, 24);
+  NSMutableArray<NSValue *> *out = [NSMutableArray arrayWithCapacity:pts.count];
+  for (NSValue *v in pts) {
+    NSPoint o = v.pointValue;
+    [out addObject:[NSValue
+                       valueWithPoint:[self _handlePointForContentRect:cr
+                                                              position:@[
+                                                                @(o.x), @(o.y)
+                                                              ]]]];
+  }
+  return out;
+}
+
+- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+    motionPathAnchorsForContentRect:(CGRect)cr {
+  KKLane *lane = KKMagicMoveLaneNamed(self.timeline, @"Position");
+  if (!lane || lane.keyposes.count < 2 ||
+      ![self labelVisibleOrRevealing:@"Path"] || !self.boundaryEditing)
+    return @[];
+  // Skip the keypose under the position handle (nearest editFraction) and
+  // coalesce its linked partners; KKLaneCoalescedAnchors dedups the rest. Same
+  // helper the viewer uses - returns object-space points to map into the rect.
+  NSInteger active = [self _activeAnchorSkipIndexForLane:lane];
+  NSMutableArray<NSValue *> *out = [NSMutableArray array];
+  for (NSValue *pv in KKLaneCoalescedAnchors(lane, active)) {
+    NSPoint v = pv.pointValue;
+    [out addObject:[NSValue
+                       valueWithPoint:[self _handlePointForContentRect:cr
+                                                              position:@[
+                                                                @(v.x), @(v.y)
+                                                              ]]]];
+  }
+  return out;
+}
+
+- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+    motionPathHandleSegmentsForContentRect:(CGRect)cr {
+  KKLane *lane = KKMagicMoveLaneNamed(self.timeline, @"Position");
+  if (!lane || lane.keyposes.count < 2 ||
+      ![self labelVisibleOrRevealing:@"Path"] || !self.boundaryEditing)
+    return @[];
+  NSArray<KKKeyPose *> *kps = lane.keyposes;
+  NSMutableArray<NSValue *> *out = [NSMutableArray array];
+  for (NSUInteger i = 0; i < kps.count; i++) {
+    KKKeyPose *kp = kps[i];
+    if (!kp.spatialSmooth || kp.values.count < 2)
+      continue;
+    double ax = kp.values[0].doubleValue, ay = kp.values[1].doubleValue;
+    CGPoint anchorPt = [self _handlePointForContentRect:cr position:kp.values];
+    CGPoint inH = CGPointZero, outH = CGPointZero;
+    KKLaneSpatialHandlesForKeypose(lane, i, &inH, &outH);
+    CGPoint sides[2] = {outH, inH};
+    for (int s = 0; s < 2; s++) {
+      if (hypot(sides[s].x, sides[s].y) < 1e-6)
+        continue;
+      CGPoint hp =
+          [self _handlePointForContentRect:cr
+                                  position:@[
+                                    @(ax + sides[s].x), @(ay + sides[s].y)
+                                  ]];
+      [out addObject:[NSValue valueWithPoint:anchorPt]];
+      [out addObject:[NSValue valueWithPoint:hp]];
+    }
+  }
+  return out;
+}
+
 - (BOOL)pointHandleCenter:(out CGPoint *)outCenter forContentRect:(CGRect)cr {
   *outCenter =
       [self _handlePointForContentRect:cr
@@ -309,6 +389,10 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
     dragHandleToPoint:(CGPoint)p
           contentRect:(CGRect)cr
             modifiers:(NSEventModifierFlags)modifiers {
+  if (_pathGrabbed) {
+    [self _applyPathDragToPoint:p contentRect:cr modifiers:modifiers];
+    return;
+  }
   // Rotation drag has to be routed here too - the override was only added
   // so Position could see modifiers, but it accidentally swallowed every
   // non-point drag (rotation rings, crop). Route rotation first, then fall
@@ -333,7 +417,327 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
                     modifiers:modifiers];
 }
 
+// The active keypose's dot is skipped only when the Position handle is actually
+// drawn there (full opacity). When the Position OSC is hidden, return -1 so the
+// path anchor shows / is grabbable - the active keypose stays editable,
+// matching the viewer.
+- (NSInteger)_activeAnchorSkipIndexForLane:(KKLane *)lane {
+  if ([self ghostAlphaForLabel:@"Position"] < 0.999)
+    return -1;
+  NSInteger active = -1;
+  double bd = 1e9;
+  for (NSInteger i = 0; i < (NSInteger)lane.keyposes.count; i++) {
+    double dd = fabs(lane.keyposes[i].time - self.editFraction);
+    if (dd < bd) {
+      bd = dd;
+      active = i;
+    }
+  }
+  return active;
+}
+
+// The keypose anchor under `p` (excluding the active one, whose dot is hidden
+// under the position handle), or NO. Mirrors the viewer's anchor hit-test.
+- (BOOL)_pathAnchorHitAtPoint:(CGPoint)p
+                  contentRect:(CGRect)cr
+                     outIndex:(NSInteger *)outIdx {
+  KKLane *lane = KKMagicMoveLaneNamed(self.timeline, @"Position");
+  if (!lane || lane.keyposes.count < 2 || CGRectIsEmpty(cr) ||
+      ![self labelVisibleOrRevealing:@"Path"] || !self.boundaryEditing)
+    return NO;
+  NSArray<KKKeyPose *> *kps = lane.keyposes;
+  NSInteger active = [self _activeAnchorSkipIndexForLane:lane];
+  double bestD = kHandleHitTolPt;
+  NSInteger best = -1;
+  for (NSInteger i = 0; i < (NSInteger)kps.count; i++) {
+    if (i == active || kps[i].values.count < 2)
+      continue;
+    CGPoint hp = [self _handlePointForContentRect:cr position:kps[i].values];
+    double d = hypot(p.x - hp.x, p.y - hp.y);
+    if (d <= bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  if (best < 0)
+    return NO;
+  if (outIdx)
+    *outIdx = best;
+  return YES;
+}
+
+// A smooth keypose's tangent-handle dot under `p`: outputs the keypose index +
+// which side (out vs in). Mirrors the viewer's handle hit-test.
+- (BOOL)_pathHandleHitAtPoint:(CGPoint)p
+                  contentRect:(CGRect)cr
+                     outIndex:(NSInteger *)outIdx
+                     outIsOut:(BOOL *)outIsOut {
+  KKLane *lane = KKMagicMoveLaneNamed(self.timeline, @"Position");
+  if (!lane || lane.keyposes.count < 2 || CGRectIsEmpty(cr) ||
+      ![self labelVisibleOrRevealing:@"Path"] || !self.boundaryEditing)
+    return NO;
+  NSArray<KKKeyPose *> *kps = lane.keyposes;
+  double bestD = kHandleHitTolPt;
+  NSInteger bestI = -1;
+  BOOL bestOut = NO;
+  for (NSInteger i = 0; i < (NSInteger)kps.count; i++) {
+    KKKeyPose *kp = kps[i];
+    if (!kp.spatialSmooth || kp.values.count < 2)
+      continue;
+    double ax = kp.values[0].doubleValue, ay = kp.values[1].doubleValue;
+    CGPoint inH = CGPointZero, outH = CGPointZero;
+    KKLaneSpatialHandlesForKeypose(lane, i, &inH, &outH);
+    CGPoint sides[2] = {outH, inH};
+    BOOL sideOut[2] = {YES, NO};
+    for (int s = 0; s < 2; s++) {
+      if (hypot(sides[s].x, sides[s].y) < 1e-6)
+        continue;
+      CGPoint hp =
+          [self _handlePointForContentRect:cr
+                                  position:@[
+                                    @(ax + sides[s].x), @(ay + sides[s].y)
+                                  ]];
+      double d = hypot(p.x - hp.x, p.y - hp.y);
+      if (d <= bestD) {
+        bestD = d;
+        bestI = i;
+        bestOut = sideOut[s];
+      }
+    }
+  }
+  if (bestI < 0)
+    return NO;
+  if (outIdx)
+    *outIdx = bestI;
+  if (outIsOut)
+    *outIsOut = bestOut;
+  return YES;
+}
+
+// Live-update the dragged keypose's position in self.timeline (drives the
+// preview); the full blob is persisted once on drag end.
+- (void)_applyPathDragToPoint:(CGPoint)p
+                  contentRect:(CGRect)cr
+                    modifiers:(NSEventModifierFlags)modifiers {
+  if (cr.size.width <= 0 || cr.size.height <= 0)
+    return;
+  KKLane *lane = KKMagicMoveLaneNamed(self.timeline, @"Position");
+  if (!lane || _pathIndex < 0 || _pathIndex >= (NSInteger)lane.keyposes.count)
+    return;
+  double curNX = (p.x - CGRectGetMinX(cr)) / cr.size.width;
+  double curNY = (p.y - CGRectGetMinY(cr)) / cr.size.height;
+  NSMutableArray<KKLane *> *lanes = [self.timeline.lanes mutableCopy];
+  NSInteger li = [lanes indexOfObject:lane];
+  if (li == NSNotFound)
+    return;
+  KKLane *nl = [lane copy];
+  NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];
+  KKKeyPose *nk = [kps[_pathIndex] copy];
+  if (_pathPart == 0) {
+    // Anchor: delta-based move (no jump) + Shift axis-lock + Cmd-snap.
+    double nx = _pathGrabValX + (curNX - _pathPressNX);
+    double ny = _pathGrabValY + (curNY - _pathPressNY);
+    if (modifiers & NSEventModifierFlagShift) {
+      double dx = curNX - _pathPressNX, dy = curNY - _pathPressNY;
+      if (fabs(dx) >= fabs(dy))
+        ny = _pathGrabValY;
+      else
+        nx = _pathGrabValX;
+    }
+    if (modifiers & NSEventModifierFlagCommand)
+      [self _snapPositionX:&nx Y:&ny contentRect:cr excludeIndex:_pathIndex];
+    else
+      [_snapEngine reset];
+    nk.values = @[ @(nx), @(ny) ];
+  } else {
+    // Tangent handle: offset from the anchor; symmetric unless Shift breaks it.
+    double ax = nk.values.count > 0 ? nk.values[0].doubleValue : 0.5;
+    double ay = nk.values.count > 1 ? nk.values[1].doubleValue : 0.5;
+    double offX = curNX - ax, offY = curNY - ay;
+    NSArray<NSNumber *> *off = @[ @(offX), @(offY) ];
+    NSArray<NSNumber *> *mir = @[ @(-offX), @(-offY) ];
+    BOOL shift = (modifiers & NSEventModifierFlagShift) != 0;
+    nk.spatialSmooth = YES;
+    if (_pathPart == 1) {
+      nk.outHandle = off;
+      if (!shift)
+        nk.inHandle = mir;
+    } else {
+      nk.inHandle = off;
+      if (!shift)
+        nk.outHandle = mir;
+    }
+  }
+  kps[_pathIndex] = nk;
+  nl.keyposes = kps;
+  lanes[li] = nl;
+  KKTimeline *t = [self.timeline copy];
+  t.lanes = lanes;
+  self.timeline = t;
+  [self.canvas setNeedsDisplay:YES];
+  [self.canvas setHandlesNeedDisplay];
+}
+
+- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+    handleHitAtPoint:(CGPoint)p
+         contentRect:(CGRect)cr {
+  NSInteger idx;
+  BOOL isOut;
+  // The active keypose's position handle is topmost: when it coincides with a
+  // path anchor or tangent handle, the handle wins. Handles are offset from the
+  // anchor centre, so they stay grabbable away from it.
+  if ([self pointHandleHitAtPoint:p contentRect:cr])
+    return YES;
+  if ([self _pathHandleHitAtPoint:p
+                      contentRect:cr
+                         outIndex:&idx
+                         outIsOut:&isOut])
+    return YES;
+  if ([self _pathAnchorHitAtPoint:p contentRect:cr outIndex:&idx])
+    return YES;
+  return [super miniCanvas:canvas handleHitAtPoint:p contentRect:cr];
+}
+
+- (void)miniCanvas:(KKMiniCanvasView *)canvas
+    beginHandleDragAtPoint:(CGPoint)p
+               contentRect:(CGRect)cr {
+  _pathGrabbed = NO;
+  NSInteger idx;
+  BOOL isOut;
+  // Active keypose's position handle takes the grab first (matches the hit-test
+  // priority), so a coincident path anchor/handle doesn't steal it.
+  if ([self pointHandleHitAtPoint:p contentRect:cr]) {
+    [super miniCanvas:canvas beginHandleDragAtPoint:p contentRect:cr];
+    return;
+  }
+  if ([self _pathHandleHitAtPoint:p
+                      contentRect:cr
+                         outIndex:&idx
+                         outIsOut:&isOut]) {
+    self.canvas = canvas;
+    _pathGrabbed = YES;
+    _pathIndex = idx;
+    _pathPart = isOut ? 1 : 2;
+    [self _applyPathDragToPoint:p contentRect:cr modifiers:0];
+    return;
+  }
+  if ([self _pathAnchorHitAtPoint:p contentRect:cr outIndex:&idx]) {
+    self.canvas = canvas;
+    _pathGrabbed = YES;
+    _pathIndex = idx;
+    _pathPart = 0;
+    NSArray<NSNumber *> *gv =
+        KKMagicMoveLaneNamed(self.timeline, @"Position").keyposes[idx].values;
+    _pathGrabValX = gv.count > 0 ? gv[0].doubleValue : 0.5;
+    _pathGrabValY = gv.count > 1 ? gv[1].doubleValue : 0.5;
+    if (cr.size.width > 0 && cr.size.height > 0) {
+      _pathPressNX = (p.x - CGRectGetMinX(cr)) / cr.size.width;
+      _pathPressNY = (p.y - CGRectGetMinY(cr)) / cr.size.height;
+    }
+    [self _applyPathDragToPoint:p contentRect:cr modifiers:0];
+    return;
+  }
+  [super miniCanvas:canvas beginHandleDragAtPoint:p contentRect:cr];
+}
+
+- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+    doubleClickAtPoint:(CGPoint)p
+           contentRect:(CGRect)cr {
+  KKLane *lane = KKMagicMoveLaneNamed(self.timeline, @"Position");
+  if (!lane || lane.keyposes.count < 2 || CGRectIsEmpty(cr) ||
+      ![self labelVisibleOrRevealing:@"Path"] || !self.boundaryEditing)
+    return NO;
+  // Toggle the keypose under the click: an anchor dot, or the active keypose
+  // under the position handle.
+  NSInteger idx = -1;
+  if (![self _pathAnchorHitAtPoint:p contentRect:cr outIndex:&idx]) {
+    if ([self pointHandleHitAtPoint:p contentRect:cr]) {
+      double bd = 1e9;
+      for (NSInteger k = 0; k < (NSInteger)lane.keyposes.count; k++) {
+        double d = fabs(lane.keyposes[k].time - self.editFraction);
+        if (d < bd) {
+          bd = d;
+          idx = k;
+        }
+      }
+    }
+  }
+  if (idx < 0)
+    return NO;
+  NSMutableArray<KKLane *> *lanes = [self.timeline.lanes mutableCopy];
+  NSInteger li = [lanes indexOfObject:lane];
+  if (li == NSNotFound)
+    return NO;
+  KKLane *nl = [lane copy];
+  NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];
+  KKKeyPose *nk = [kps[idx] copy];
+  nk.spatialSmooth = !nk.spatialSmooth;
+  kps[idx] = nk;
+  nl.keyposes = kps;
+  lanes[li] = nl;
+  KKTimeline *t = [self.timeline copy];
+  t.lanes = lanes;
+  self.timeline = t;
+  if (self.onTimelinePersist)
+    self.onTimelinePersist(self.timeline);
+  [canvas setNeedsDisplay:YES];
+  [canvas setHandlesNeedDisplay];
+  return YES;
+}
+
+- (CGFloat)motionPathGhostAlpha {
+  return [self ghostAlphaForLabel:@"Path"];
+}
+
+- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+    optClickHandleAtPoint:(CGPoint)p
+              contentRect:(CGRect)cr {
+  // Built-in handles (Position arc, rotation, crop) claim the opt-click first,
+  // so at the active keypose the Position handle wins over the path anchor that
+  // shares its spot when Position is revealed - matching the viewer. The path
+  // then catches its own anchors/handles.
+  if ([super miniCanvas:canvas optClickHandleAtPoint:p contentRect:cr])
+    return YES;
+  NSInteger idx;
+  BOOL isOut;
+  if (self.onHandleVisibilityToggled && ([self _pathHandleHitAtPoint:p
+                                                         contentRect:cr
+                                                            outIndex:&idx
+                                                            outIsOut:&isOut] ||
+                                         [self _pathAnchorHitAtPoint:p
+                                                         contentRect:cr
+                                                            outIndex:&idx])) {
+    self.onHandleVisibilityToggled(@"Path");
+    [canvas setNeedsDisplay:YES];
+    [canvas setHandlesNeedDisplay];
+    return YES;
+  }
+  return NO;
+}
+
 - (void)_snapPositionX:(double *)nx Y:(double *)ny contentRect:(CGRect)cr {
+  // Position-handle drag edits the keypose nearest editFraction; exclude it.
+  NSInteger edited = -1;
+  for (KKLane *lane in self.timeline.lanes) {
+    if (![lane.label isEqualToString:@"Position"])
+      continue;
+    double bd = 1e9;
+    for (NSInteger k = 0; k < (NSInteger)lane.keyposes.count; k++) {
+      double d = fabs(lane.keyposes[k].time - self.editFraction);
+      if (d < bd) {
+        bd = d;
+        edited = k;
+      }
+    }
+    break;
+  }
+  [self _snapPositionX:nx Y:ny contentRect:cr excludeIndex:edited];
+}
+
+- (void)_snapPositionX:(double *)nx
+                     Y:(double *)ny
+           contentRect:(CGRect)cr
+          excludeIndex:(NSInteger)excludeIndex {
   static const float anchors[] = {0.0f, 0.25f, 0.5f, 0.75f, 1.0f};
   // Snap threshold in mini-canvas view points; convert to normalized units
   // (per-axis since the mini may not be square).
@@ -351,20 +755,10 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
     if (![lane.label isEqualToString:@"Position"])
       continue;
     NSArray<KKKeyPose *> *kps = lane.keyposes;
-    NSInteger edited = -1;
-    if (kps.count > 0) {
-      double bd = 1e9;
-      for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
-        double d = fabs(kps[k].time - self.editFraction);
-        if (d < bd) {
-          bd = d;
-          edited = k;
-        }
-      }
+    if (kps.count > 0)
       objs = malloc(kps.count * sizeof(simd_float2));
-    }
     for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
-      if (k == edited)
+      if (k == excludeIndex)
         continue;
       NSArray<NSNumber *> *v = kps[k].values;
       if (v.count < 2)
@@ -407,6 +801,14 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
 
 - (void)miniCanvasEndHandleDrag:(KKMiniCanvasView *)canvas {
   [_snapEngine reset];
+  if (_pathGrabbed) {
+    _pathGrabbed = NO;
+    if (self.onTimelinePersist)
+      self.onTimelinePersist(self.timeline);
+    [canvas setNeedsDisplay:YES];
+    [canvas setHandlesNeedDisplay];
+    return;
+  }
   [super miniCanvasEndHandleDrag:canvas];
 }
 

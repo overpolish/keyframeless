@@ -175,6 +175,15 @@
   c.time = _time;
   c.values = [_values copy];
   c.outgoing = [_outgoing copy];
+  c.spatialSmooth = _spatialSmooth;
+  c.inHandle = [_inHandle copy];
+  c.outHandle = [_outHandle copy];
+  return c;
+}
+
+- (instancetype)keyposeBySettingTime:(double)time {
+  KKKeyPose *c = [self copy];
+  c.time = time;
   return c;
 }
 
@@ -184,6 +193,14 @@
   d[@"values"] = _values;
   if (_outgoing)
     d[@"outgoing"] = [_outgoing toDictionary];
+  // Only serialise spatial-curve fields when set, so legacy blobs (and
+  // straight-line lanes) stay byte-identical.
+  if (_spatialSmooth)
+    d[@"spatial_smooth"] = @YES;
+  if (_inHandle)
+    d[@"in_handle"] = _inHandle;
+  if (_outHandle)
+    d[@"out_handle"] = _outHandle;
   return d;
 }
 
@@ -195,6 +212,13 @@
   kp.values = d[@"values"] ?: @[];
   NSDictionary *out = d[@"outgoing"];
   kp.outgoing = out ? [KKInterval fromDictionary:out] : nil;
+  kp.spatialSmooth = [d[@"spatial_smooth"] boolValue];
+  id ih = d[@"in_handle"];
+  if ([ih isKindOfClass:[NSArray class]])
+    kp.inHandle = ih;
+  id oh = d[@"out_handle"];
+  if ([oh isKindOfClass:[NSArray class]])
+    kp.outHandle = oh;
   return kp;
 }
 
@@ -254,6 +278,7 @@
   c.keyposes = [[NSArray alloc] initWithArray:_keyposes copyItems:YES];
   c.lastKnownClipDuration = _lastKnownClipDuration;
   c.holdShape = _holdShape;
+  c.spatialCurvable = _spatialCurvable;
   return c;
 }
 
@@ -277,6 +302,8 @@
   d[@"last_known_clip_duration"] = @(_lastKnownClipDuration);
   if (_holdShape != KKLaneHoldShapeAuto)
     d[@"hold_shape"] = @(_holdShape);
+  if (_spatialCurvable)
+    d[@"spatial_curvable"] = @YES;
   return d;
 }
 
@@ -303,6 +330,7 @@
   l.lastKnownClipDuration = [d[@"last_known_clip_duration"] doubleValue];
   if (d[@"hold_shape"])
     l.holdShape = (KKLaneHoldShape)[d[@"hold_shape"] integerValue];
+  l.spatialCurvable = [d[@"spatial_curvable"] boolValue];
   NSArray *rawKps = d[@"keyposes"];
   if ([rawKps isKindOfClass:[NSArray class]]) {
     NSMutableArray *kps = [NSMutableArray arrayWithCapacity:rawKps.count];
@@ -319,6 +347,41 @@
 }
 
 @end
+
+KKTimeline *KKTimelineSettingSpatialSmooth(KKTimeline *timeline,
+                                           NSString *label, double frac,
+                                           BOOL on) {
+  KKTimeline *t = [timeline copy];
+  NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+    if (![lanes[i].label isEqualToString:label])
+      continue;
+    KKLane *nl = [lanes[i] copy];
+    NSArray<KKKeyPose *> *kps = nl.keyposes;
+    if (kps.count == 0)
+      return nil;
+    NSInteger best = 0;
+    double bestDt = fabs(kps[0].time - frac);
+    for (NSInteger j = 1; j < (NSInteger)kps.count; j++) {
+      double dt = fabs(kps[j].time - frac);
+      if (dt < bestDt) {
+        bestDt = dt;
+        best = j;
+      }
+    }
+    if (kps[best].spatialSmooth == on)
+      return nil; // already in that state - no commit, no undo entry
+    NSMutableArray<KKKeyPose *> *mkps = [kps mutableCopy];
+    KKKeyPose *nk = [mkps[best] copy];
+    nk.spatialSmooth = on;
+    mkps[best] = nk;
+    nl.keyposes = mkps;
+    lanes[i] = nl;
+    t.lanes = lanes;
+    return t;
+  }
+  return nil;
+}
 
 // ---------------------------------------------------------------------------
 // KKLaneGroup

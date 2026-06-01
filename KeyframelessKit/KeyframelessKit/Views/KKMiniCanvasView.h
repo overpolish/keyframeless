@@ -38,6 +38,24 @@ NS_ASSUME_NONNULL_BEGIN
 /// shared `KKPointOSC` glyph. Return nil/empty for none.
 - (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
     extraHandleCentersForContentRect:(CGRect)contentRect;
+/// Motion-path overlay (Magic Move). Polyline points (overlay points, y-up) for
+/// the red trajectory line through the Position keyposes. Empty for none.
+- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+    motionPathPolylineForContentRect:(CGRect)contentRect;
+/// Anchor dot centres (overlay points, y-up), one per Position keypose.
+- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+    motionPathAnchorsForContentRect:(CGRect)contentRect;
+/// Tangent-handle segments for smooth keyposes, flattened as
+/// [anchor0, handleEnd0, anchor1, handleEnd1, ...] (overlay points, y-up). Each
+/// pair draws a connector line + a dot at the handle end.
+- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+    motionPathHandleSegmentsForContentRect:(CGRect)contentRect;
+/// A double-click landed at `point` (overlay points, y-up). Return YES if the
+/// delegate handled it (e.g. toggled a keypose smooth/corner); NO lets the
+/// canvas treat it as reset-view.
+- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+    doubleClickAtPoint:(CGPoint)point
+           contentRect:(CGRect)contentRect;
 /// Optional rectangle outline (the crop box) stroked over the image, in
 /// overlay points (y-up). Return NO for none.
 - (BOOL)miniCanvas:(KKMiniCanvasView *)canvas

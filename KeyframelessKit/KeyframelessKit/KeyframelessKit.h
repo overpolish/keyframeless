@@ -54,6 +54,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKMiniCanvasRenderer.h>
 #import <KeyframelessKit/KKMiniCanvasView.h>
 #import <KeyframelessKit/KKMotionBlur.h>
+#import <KeyframelessKit/KKMotionLean.h>
 #import <KeyframelessKit/KKOSCGuideBridge.h>
 #import <KeyframelessKit/KKOSCGuideStrategy.h>
 #import <KeyframelessKit/KKOSCLabel.h>
@@ -90,6 +91,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKShape.h>
 #import <KeyframelessKit/KKSliderRowView.h>
 #import <KeyframelessKit/KKSnapEngine.h>
+#import <KeyframelessKit/KKSpatialCurve.h>
 #import <KeyframelessKit/KKSquarePointOSC.h>
 #import <KeyframelessKit/KKTimelineAdvancedView.h>
 #import <KeyframelessKit/KKTimelineBasicView+Guide.h>

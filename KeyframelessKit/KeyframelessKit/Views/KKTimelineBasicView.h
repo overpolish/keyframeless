@@ -152,6 +152,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// inactive cell swaps the popover to the corresponding boundary diamond
 /// (Basic's filmstrip cells correspond to the 4 boundary times).
 - (void)requestValuePopoverAtFraction:(double)fraction;
+/// Flip the Position keypose nearest `frac` between corner and smooth (bezier)
+/// spatial interpolation. Routed from the keypose popover's curve toggle.
+- (void)writeSpatialSmoothForLabel:(NSString *)label
+                            atFrac:(double)frac
+                              isOn:(BOOL)on;
 
 @end
 

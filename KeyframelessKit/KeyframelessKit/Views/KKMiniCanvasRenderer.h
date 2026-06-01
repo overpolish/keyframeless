@@ -92,6 +92,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// Alpha to draw the crop OSC at (border + corner handles): 1.0 normal, 0.3
 /// when it's a revealed ghost. Read by the mini-canvas view.
 - (CGFloat)cropGhostAlpha;
+/// YES when `label` (an OSC element key) is visible or being revealed as a
+/// ghost (opt-hold). Lets a subclass gate motion-path drawing / hit-testing the
+/// same way the built-in handles gate on their own labels.
+- (BOOL)labelVisibleOrRevealing:(NSString *)label;
+/// 0.3 when `label` is user-hidden (revealed-ghost dimming), else 1.0.
+- (CGFloat)ghostAlphaForLabel:(NSString *)label;
+/// Draw alpha for the motion-path overlay (line + anchors + handles). Default
+/// 1.0; a subclass with a hideable path returns a ghost alpha while revealing.
+- (CGFloat)motionPathGhostAlpha;
 
 #pragma mark - Subclass vocabulary (override)
 
@@ -105,6 +114,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// plugin has no 3-ring rotation OSC. Default nil. When non-nil, the
 /// subclass must also override the rotation hooks below.
 @property(nonatomic, readonly, nullable) NSString *rotationLabel;
+
+/// Persist a full mutated timeline. Mini-canvas motion-path edits (dragging an
+/// arbitrary keypose anchor or a tangent handle) rewrite the whole blob, unlike
+/// `commitValues:forLabel:` which writes a single label's value at
+/// `editFraction`. The host wires this to its timeline-blob writer.
+@property(nonatomic, copy, nullable) void (^onTimelinePersist)
+    (KKTimeline *timeline);
+
 /// Value type for a lane the renderer writes. Default `KKLaneValueTypeFloat`.
 - (NSInteger)valueTypeForLabel:(NSString *)label;
 /// Default value array for a label when the timeline has no (or a short)

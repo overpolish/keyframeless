@@ -40,6 +40,9 @@
   position.componentMax = @[];
   position.componentUnits = @[ @"px", @"px" ];
   position.componentLabels = @[ @"X", @"Y" ];
+  // 2D spatial path: keyposes can be smooth (curved). Lights the per-keypose
+  // corner/smooth toggle in the value popover and curves the motion path.
+  position.spatialCurvable = YES;
   [position insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.5, @0.5 ]]];
 
   KKLane *rotation = [KKLane laneWithLabel:@"Rotation"];
@@ -67,6 +70,7 @@
 + (NSArray<NSArray<NSString *> *> *)oscCompounds {
   return @[
     @[ @"Position" ],
+    @[ @"Path" ],
     @[ @"Rotation", @"Rotation.X", @"Rotation.Y", @"Rotation.Z" ],
   ];
 }
@@ -272,6 +276,9 @@
       KKWriteCustomParamString(setAPI, json, kKKParamTimelineData);
     [act endAction:strong];
   };
+  // Mini-canvas motion-path edits (anchor / handle drag) persist the whole
+  // blob through the same writer as inspector timeline mutations.
+  self.miniCanvasRenderer.onTimelinePersist = view.onTimelineMutated;
   view.onDragBegin = ^{
     __strong typeof(weak) strong = weak;
     if (!strong)
@@ -395,18 +402,19 @@
           return [live userBoolForKey:@"rotateWithMotion" default:NO];
         }
         disabledBinding:^BOOL {
-          // Rotate-with-motion needs translational motion along a path.
-          // - Hold-modulation gaps: endpoints are equal, so any motion is
-          //   pure jitter from the modulation - no meaningful heading.
-          //   Disable always.
-          // - Transition gaps: endpoints differ, so a Linear curve still
-          //   has constant velocity. Disable only if the gap is also
-          //   flagged holdsFlat (Basic's per-property phase-off) without
-          //   modulation - then there's truly nothing to sample.
-          if (phase == KKGapPopoverPhaseHoldModulation)
-            return YES;
+          // Rotate-with-motion only needs the position to MOVE - the lean is
+          // driven by acceleration, so a modulated gap's wobble drives it just
+          // as well as a path tangent. Disable only when the gap is genuinely
+          // static:
+          // - Hold-modulation gaps wobble only if they actually have
+          // modulation;
+          //   a plain static hold does not move, so disable that.
+          // - Transition gaps move unless they holdsFlat (Basic per-property
+          //   phase-off) with no modulation to wobble them.
           KKInterval *live = read();
           BOOL hasModulation = (live.modulation != KKIntervalModulationNone);
+          if (phase == KKGapPopoverPhaseHoldModulation)
+            return !hasModulation;
           return live.holdsFlat && !hasModulation;
         }
         onToggle:^(BOOL isOn) {

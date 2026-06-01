@@ -17,6 +17,7 @@
   NSTimer *_timer;
   double _pollLast;
   NSInteger _pollStall;
+  NSTimeInterval _lastMoveWall; // wall-clock of the last currentTime change
   double _lastPushedPlayheadFrac;
   BOOL _lastPushedPlaying;
   NSTimeInterval _lastLoopWrapTime;
@@ -98,13 +99,20 @@
     return;
   }
 
-  // currentTime updates ~30Hz vs our ~frame poll, so a single no-change
-  // tick is normal mid-playback - only stop after sustained no-change.
-  if (fabs(curSec - _pollLast) < 1.0e-4) {
-    _pollStall += 1;
-  } else {
-    _pollStall = 0;
+  // Movement tracking. `_pollStall` counts consecutive no-change ticks (reset
+  // on arm and on movement) and drives the idle cutoff - same as before, so the
+  // poller reliably stops when paused. `_lastMoveWall` is the wall-clock of the
+  // last real movement and drives the play button. The first tick after (re)arm
+  // just adopts the value (the -999 sentinel would read as a huge jump).
+  NSTimeInterval nowWall = [NSDate timeIntervalSinceReferenceDate];
+  if (_pollLast <= -900.0) {
     _pollLast = curSec;
+  } else if (fabs(curSec - _pollLast) >= 1.0e-4) {
+    _pollLast = curSec;
+    _pollStall = 0;
+    _lastMoveWall = nowWall;
+  } else {
+    _pollStall += 1;
   }
 
   double ph = MAX(0.0, MIN(1.0, (curSec - es) / ed));
@@ -112,8 +120,13 @@
     _lastPushedPlayheadFrac = ph;
     [iv setPlayheadFraction:ph];
   }
-  // Tolerate a couple of no-change ticks before calling it paused.
-  BOOL playing = _pollStall < 3;
+  // Infer "playing" from how long since currentTime last moved, in WALL-CLOCK
+  // time rather than a tick count. Motion blur advances currentTime in bursts
+  // (N samples per frame); the old tick-count threshold flickered the play
+  // button between bursts, a time window tolerates them. The idle cutoff below
+  // is a longer count, so a real pause flips the button off before polling
+  // stops.
+  BOOL playing = (nowWall - _lastMoveWall) < 0.3;
   if (playing != _lastPushedPlaying) {
     _lastPushedPlaying = playing;
     [iv setPlaying:playing];
@@ -122,7 +135,7 @@
   if ([self _handleLoopBackWithActionAPI:act curSec:curSec inspector:iv])
     return;
 
-  if (_pollStall >= 10) // ~10 frames of no movement → idle
+  if (_pollStall >= 24) // ~0.4s+ of no movement → idle, stop polling
     [self invalidate];
 }
 

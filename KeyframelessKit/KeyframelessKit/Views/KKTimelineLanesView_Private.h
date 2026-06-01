@@ -74,9 +74,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// to constant" direction has no shortcut by design - making a property
 /// constant deletes its keyposes, so it stays behind the explicit dropdown.
 @property(nonatomic, copy, nullable) void (^onAddToAnimated)(void);
+/// When `showsSmooth` is YES the row carries a curve-glyph toggle just left of
+/// the value fields that flips this keypose between corner (straight spatial
+/// path) and smooth (cubic bezier). Fires with the new state; the host writes
+/// `spatialSmooth` on the keypose at this fraction. Only built for
+/// `spatialCurvable` lanes in the keypose popover.
+@property(nonatomic, copy, nullable) void (^onSmoothToggled)(BOOL on);
 - (instancetype)initWithLane:(KKLane *)lane
                  showsRemove:(BOOL)showsRemove
-          showsAddToAnimated:(BOOL)showsAddToAnimated;
+          showsAddToAnimated:(BOOL)showsAddToAnimated
+                 showsSmooth:(BOOL)showsSmooth;
 /// The KKSliderView (Float rows), for a guide that drives the slider.
 - (nullable NSView *)guideSliderView;
 /// The number field for component `i` (Float: 0; Crop: 0..3 = W,H,X,Y), for
@@ -90,6 +97,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)guideCommitFieldForComponent:(NSInteger)i;
 /// Set the displayed values (skips a field currently being edited).
 - (void)applyValues:(NSArray<NSNumber *> *)values;
+/// Refresh the smooth-toggle glyph state (e.g. after cmd-Z) without rebuilding.
+- (void)applySmooth:(BOOL)on;
 - (void)applyLane:(KKLane *)lane;
 /// Re-render fields/slider from the stored values (e.g. after the display
 /// scale changes when the feed resolves its media size).
@@ -117,7 +126,13 @@ NS_ASSUME_NONNULL_BEGIN
      onHandleValue:(nullable void (^)(NSString *label,
                                       NSArray<NSNumber *> *values))onHandleValue
        onDragBegin:(nullable void (^)(void))onDragBegin
-         onDragEnd:(nullable void (^)(void))onDragEnd;
+         onDragEnd:(nullable void (^)(void))onDragEnd
+      editsKeypose:(BOOL)editsKeypose;
+
+/// Wire the per-keypose smooth toggle (shown on `spatialCurvable` lane rows in
+/// the keypose popover). Fired with the lane label + new state; the host
+/// writes it to the keypose at the open fraction.
+- (void)setOnSmoothToggled:(void (^)(NSString *label, BOOL on))handler;
 
 /// Update the header title in place (e.g. the keypose time as you navigate
 /// between keyposes). No-op if the popover has no header.

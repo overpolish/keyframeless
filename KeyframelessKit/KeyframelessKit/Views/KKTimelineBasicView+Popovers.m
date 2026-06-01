@@ -669,7 +669,7 @@
       iv.curve = KKIntervalCurveLinear; // a fresh drift starts linear
     b.outgoing = iv;
     if (!on) // relink → flatten: hold-end mirrors hold-start
-      c = [KKKeyPose keyposeAtTime:c.time values:b.values];
+      c.values = b.values;
     c.outgoing = kps[s.holdEnd].outgoing;
     kps[s.holdStart] = b;
     kps[s.holdEnd] = c;
@@ -851,7 +851,25 @@
     dl.componentLabels = tmpl ? tmpl.componentLabels : lane.componentLabels;
     dl.componentLabelColors =
         tmpl ? tmpl.componentLabelColors : lane.componentLabelColors;
-    dl.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:vals ?: @[ @0.0 ]] ];
+    dl.spatialCurvable = tmpl ? tmpl.spatialCurvable : lane.spatialCurvable;
+    KKKeyPose *dlKp = [KKKeyPose keyposeAtTime:0.0 values:vals ?: @[ @0.0 ]];
+    // Carry the curve state from the keypose nearest this boundary (matches the
+    // nearest-match write) so the row's toggle reflects it.
+    KKKeyPose *near = nil;
+    double nd = INFINITY;
+    for (KKKeyPose *k in lane.keyposes) {
+      double d = fabs(k.time - frac);
+      if (d < nd) {
+        nd = d;
+        near = k;
+      }
+    }
+    if (near) {
+      dlKp.spatialSmooth = near.spatialSmooth;
+      dlKp.inHandle = near.inHandle;
+      dlKp.outHandle = near.outHandle;
+    }
+    dl.keyposes = @[ dlKp ];
     [displayLanes addObject:dl];
   }
   if (displayLanes.count == 0 && excludedLabels.count == 0)
@@ -960,6 +978,18 @@
   [self _openBoundaryPopoverForDiamond:(best + 1)];
 }
 
+- (void)writeSpatialSmoothForLabel:(NSString *)label
+                            atFrac:(double)frac
+                              isOn:(BOOL)on {
+  KKTimeline *t = KKTimelineSettingSpatialSmooth(_timeline, label, frac, on);
+  if (!t)
+    return;
+  _timeline = t;
+  [self setNeedsDisplay:YES];
+  if (self.onTimelineMutated)
+    self.onTimelineMutated(t);
+}
+
 // Rewrite the keyposes that make up `boundary` for the lane `label`,
 // preserving times + intervals. Hold sets every interior/edge hold keypose
 // equal (stays flat); In-start / Out-end set just their endpoint keypose.
@@ -999,8 +1029,8 @@
                                                          : isHold;
       if (!belongs)
         continue;
-      KKKeyPose *nk = [KKKeyPose keyposeAtTime:tm values:values];
-      nk.outgoing = kps[k].outgoing;
+      KKKeyPose *nk = [kps[k] keyposeBySettingTime:tm];
+      nk.values = values;
       kps[k] = nk;
     }
     nl.keyposes = kps;

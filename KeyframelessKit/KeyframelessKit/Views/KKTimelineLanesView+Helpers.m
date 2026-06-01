@@ -418,6 +418,8 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   NSButton *_removeBtn;                // leading "−" gutter (Advanced only)
   NSButton *_addBtn;                   // leading curve-glyph gutter (constants)
   NSArray<NSNumber *> *_defaultValues;
+  NSButton *_smoothBtn; // curve toggle, left of the value fields
+  BOOL _smoothOn;
 }
 
 - (void)setDefaultValues:(NSArray<NSNumber *> *)defaultValues {
@@ -459,6 +461,52 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   [self.window makeFirstResponder:nil];
   if (self.onAddToAnimated)
     self.onAddToAnimated();
+}
+
+// Curve glyph that flips this keypose corner↔smooth. Same SF Symbol the gap
+// popover uses for its "Curve" header, so the spatial-curve and timing-curve
+// affordances read consistently. Lit/accent = smooth, dim = corner.
+- (NSButton *)_makeSmoothToggle {
+  NSImage *img = [NSImage
+      imageWithSystemSymbolName:@"point.topleft.down.to.point.bottomright."
+                                @"curvepath"
+       accessibilityDescription:nil];
+  if (!img)
+    img = [NSImage imageWithSystemSymbolName:@"scribble"
+                    accessibilityDescription:nil];
+  NSButton *b = [NSButton buttonWithImage:img ?: [[NSImage alloc] init]
+                                   target:self
+                                   action:@selector(_smoothTapped:)];
+  b.translatesAutoresizingMaskIntoConstraints = NO;
+  b.bordered = NO;
+  b.bezelStyle = NSBezelStyleShadowlessSquare;
+  b.imageScaling = NSImageScaleProportionallyDown;
+  b.toolTip = KKLoc(@"Smooth path through this keypose",
+                    @"Tooltip: per-keypose curve toggle on the Position row.");
+  [NSLayoutConstraint activateConstraints:@[
+    [b.widthAnchor constraintEqualToConstant:15.0],
+    [b.heightAnchor constraintEqualToConstant:15.0],
+  ]];
+  return b;
+}
+
+- (void)_updateSmoothTint {
+  _smoothBtn.contentTintColor =
+      _smoothOn ? [NSColor accentMatchingHost]
+                : [[NSColor inspectorLabel] colorWithAlphaComponent:0.55];
+}
+
+- (void)_smoothTapped:(id)sender {
+  [self.window makeFirstResponder:nil];
+  _smoothOn = !_smoothOn;
+  [self _updateSmoothTint];
+  if (self.onSmoothToggled)
+    self.onSmoothToggled(_smoothOn);
+}
+
+- (void)applySmooth:(BOOL)on {
+  _smoothOn = on;
+  [self _updateSmoothTint];
 }
 
 // Display = stored(normalized) × scale; stored = entered ÷ scale. Lets the
@@ -508,7 +556,8 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 
 - (instancetype)initWithLane:(KKLane *)lane
                  showsRemove:(BOOL)showsRemove
-          showsAddToAnimated:(BOOL)showsAddToAnimated {
+          showsAddToAnimated:(BOOL)showsAddToAnimated
+                 showsSmooth:(BOOL)showsSmooth {
   CGFloat h = [_KKStaticValueRow heightForLane:lane];
   self = [super initWithFrame:NSMakeRect(0, 0, kCanvasPopoverW, h)];
   if (!self)
@@ -641,10 +690,22 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
         [arranged addObject:div];
       }
     }
+    // Curve toggle rides just left of the X/Y fields (reset stays trailing).
+    if (showsSmooth) {
+      _smoothOn =
+          lane.keyposes.count ? lane.keyposes.firstObject.spatialSmooth : NO;
+      _smoothBtn = [self _makeSmoothToggle];
+      [self _updateSmoothTint];
+      [arranged insertObject:_smoothBtn atIndex:0];
+    }
     NSStackView *hs = [NSStackView stackViewWithViews:arranged];
     hs.orientation = NSUserInterfaceLayoutOrientationHorizontal;
     hs.alignment = NSLayoutAttributeCenterY;
     hs.spacing = KKPaddingMD;
+    // Give the curve toggle more breathing room from the value fields, matching
+    // the reset button's padding rather than the tight inter-field spacing.
+    if (_smoothBtn)
+      [hs setCustomSpacing:KKPaddingLG afterView:_smoothBtn];
     hs.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:hs];
     [NSLayoutConstraint activateConstraints:@[
@@ -1002,6 +1063,8 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   NSString *_descriptorPath;
   CGFloat _clipAspect;
   void (^_onHandleValue)(NSString *, NSArray<NSNumber *> *);
+  void (^_onSmoothToggled)(NSString *, BOOL);
+  BOOL _editsKeypose;
   void (^_onDragBegin)(void);
   void (^_onDragEnd)(void);
   NSButton *_navPrevButton;
@@ -1053,12 +1116,18 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   return _miniCanvas;
 }
 
+- (void)setOnSmoothToggled:(void (^)(NSString *, BOOL))handler {
+  _onSmoothToggled = [handler copy];
+}
+
 - (void)rebindLanes:(NSArray<KKLane *> *)lanes {
   for (KKLane *lane in lanes) {
     _KKStaticValueRow *row = _rowsByLabel[lane.label];
     if (!row || lane.keyposes.count == 0)
       continue;
     [row applyValues:lane.keyposes.firstObject.values];
+    if (lane.spatialCurvable)
+      [row applySmooth:lane.keyposes.firstObject.spatialSmooth];
   }
 }
 
@@ -1161,7 +1230,8 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
                 onHandleValue:(void (^)(NSString *,
                                         NSArray<NSNumber *> *))onHandleValue
                   onDragBegin:(void (^)(void))onDragBegin
-                    onDragEnd:(void (^)(void))onDragEnd {
+                    onDragEnd:(void (^)(void))onDragEnd
+                 editsKeypose:(BOOL)editsKeypose {
   BOOL showPill = (onModeChanged != nil && descriptorPath.length > 0);
   BOOL hasHeader = showPill || headerTitle.length > 0;
   CGFloat W =
@@ -1177,6 +1247,7 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   _descriptorPath = [descriptorPath copy];
   _clipAspect = clipAspect;
   _rowsByLabel = [NSMutableDictionary dictionary];
+  _editsKeypose = editsKeypose;
   _onHandleValue = [onHandleValue copy];
   _onDragBegin = [onDragBegin copy];
   _onDragEnd = [onDragEnd copy];
@@ -1357,9 +1428,11 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 - (_KKStaticValueRow *)_makeRowForLane:(KKLane *)lane {
   BOOL showsRemove = (_rowRemoveHandler != nil);
   BOOL showsAdd = (_rowAddToAnimatedHandler != nil);
+  BOOL showsSmooth = (lane.spatialCurvable && _editsKeypose);
   _KKStaticValueRow *row = [[_KKStaticValueRow alloc] initWithLane:lane
                                                        showsRemove:showsRemove
-                                                showsAddToAnimated:showsAdd];
+                                                showsAddToAnimated:showsAdd
+                                                       showsSmooth:showsSmooth];
   row.translatesAutoresizingMaskIntoConstraints = NO;
   NSString *label = lane.label;
   __weak typeof(self) weak = self;
@@ -1424,6 +1497,12 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
     if (s->_onDragEnd)
       s->_onDragEnd();
   };
+  if (showsSmooth)
+    row.onSmoothToggled = ^(BOOL on) {
+      __strong typeof(weak) s = weak;
+      if (s->_onSmoothToggled)
+        s->_onSmoothToggled(label, on);
+    };
   return row;
 }
 

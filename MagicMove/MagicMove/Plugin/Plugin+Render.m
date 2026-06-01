@@ -46,87 +46,18 @@ static double KKFracForTime(CMTime t, double effectStartSec, double durSec) {
   return MAX(0.0, MIN(1.0, (CMTimeGetSeconds(t) - effectStartSec) / durSec));
 }
 
-// Returns the index of the KKKeyPose that *owns* the interval containing
-// `frac` (i.e. `keyposes[idx].outgoing` is the gap), or -1 if `frac` isn't
-// inside any gap. Lane must have at least two keyposes.
-static NSInteger KKMagicMovePositionIntervalIndexAtFraction(KKLane *lane,
-                                                            double frac) {
-  NSArray<KKKeyPose *> *kps = lane.keyposes;
-  for (NSInteger i = 0; i + 1 < (NSInteger)kps.count; i++) {
-    if (frac >= kps[i].time && frac < kps[i + 1].time)
-      return i;
-  }
-  if (kps.count >= 2 && frac >= kps.lastObject.time)
-    return (NSInteger)kps.count - 2;
-  return -1;
-}
-
-// Hermite smoothstep on [0, 1]: 3u² - 2u³. C¹ at the endpoints, so the
-// rotate-with-motion fade carries no velocity discontinuity into rotZ at
-// the blend zone's start/end.
-static inline double KKHermiteSmoothstep01(double u) {
-  if (u <= 0.0)
-    return 0.0;
-  if (u >= 1.0)
-    return 1.0;
-  return u * u * (3.0 - 2.0 * u);
-}
-
 static BOOL KKMagicMoveIntervalHasRWM(KKInterval *interval) {
   return [interval userBoolForKey:@"rotateWithMotion" default:NO];
 }
 
 double KKMagicMoveRotateWithMotionAdjustmentDegrees(KKLane *positionLane,
                                                     double frac,
-                                                    double currentPosX,
                                                     double effectDurSec) {
-  if (effectDurSec <= 0 || positionLane.keyposes.count < 2)
-    return 0.0;
-  NSInteger idx =
-      KKMagicMovePositionIntervalIndexAtFraction(positionLane, frac);
-  if (idx < 0)
-    return 0.0;
-  NSArray<KKKeyPose *> *kps = positionLane.keyposes;
-  KKInterval *interval = kps[idx].outgoing;
-  if (!KKMagicMoveIntervalHasRWM(interval))
-    return 0.0;
-  double dFrac = KKRotateWithMotionWindowSeconds / effectDurSec;
-  double prevFrac = MAX(0.0, frac - dFrac);
-  if (prevFrac == frac)
-    return 0.0;
-  NSArray<NSNumber *> *prev =
-      KKTimelineLaneValueAtVisualFractionSmoothed(positionLane, prevFrac);
-  if (prev.count < 1)
-    return 0.0;
-  double prevX = prev[0].doubleValue;
-  double vx = (currentPosX - prevX) / KKRotateWithMotionWindowSeconds;
-  double rawDeg = KKRotateWithMotionDeltaRadians(vx) * (180.0 / M_PI);
-
-  // Hermite-blend the heading offset at the gap boundaries when the
-  // adjacent gap (or clip edge) has no rotate-with-motion contribution.
-  // Without this the heading snaps from `rawDeg` to 0 at the gap edge,
-  // which reads as the clip violently un-rotating. The blend window
-  // matches the velocity sample window so the fade is just long enough
-  // to hide the discontinuity without softening the in-gap motion feel.
-  double tStart = kps[idx].time;
-  double tEnd = kps[idx + 1].time;
-  double blendFrac = dFrac;
-  // Fade in if the predecessor (or clip start) supplies no RWM heading.
-  KKInterval *prevInterval = (idx > 0) ? kps[idx - 1].outgoing : nil;
-  BOOL fadeIn = !KKMagicMoveIntervalHasRWM(prevInterval);
-  if (fadeIn && frac < tStart + blendFrac && blendFrac > 0) {
-    double u = (frac - tStart) / blendFrac;
-    rawDeg *= KKHermiteSmoothstep01(u);
-  }
-  // Fade out if the successor (or clip end) supplies no RWM heading.
-  KKInterval *nextInterval =
-      (idx + 1 < (NSInteger)kps.count - 1) ? kps[idx + 1].outgoing : nil;
-  BOOL fadeOut = !KKMagicMoveIntervalHasRWM(nextInterval);
-  if (fadeOut && frac > tEnd - blendFrac && blendFrac > 0) {
-    double u = (tEnd - frac) / blendFrac;
-    rawDeg *= KKHermiteSmoothstep01(u);
-  }
-  return rawDeg;
+  return KKMotionLeanDegrees(positionLane, frac, effectDurSec,
+                             KKMotionLeanConfigDefault(),
+                             ^BOOL(KKInterval *outgoing) {
+                               return KKMagicMoveIntervalHasRWM(outgoing);
+                             });
 }
 
 void KKMagicMoveFillParamsFromTimeline(MagicMoveParams *outParams,
@@ -150,8 +81,8 @@ void KKMagicMoveFillParamsFromTimeline(MagicMoveParams *outParams,
   double rotZdeg = rotationVals.count > 2 ? rotationVals[2].doubleValue : 0.0;
   static const double kDegToRad = M_PI / 180.0;
 
-  rotZdeg -= KKMagicMoveRotateWithMotionAdjustmentDegrees(positionLane, frac,
-                                                          posX, effectDurSec);
+  rotZdeg += KKMagicMoveRotateWithMotionAdjustmentDegrees(positionLane, frac,
+                                                          effectDurSec);
 
   outParams->translate =
       (simd_float2){(float)(posX - 0.5), (float)(posY - 0.5)};

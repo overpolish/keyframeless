@@ -533,8 +533,7 @@
         if (iv.endpointsLinked || iv.curve != KKIntervalCurveLinear) {
           iv.endpointsLinked = NO;
           iv.curve = KKIntervalCurveLinear;
-          KKKeyPose *fixed = [KKKeyPose keyposeAtTime:prev.time
-                                               values:prev.values];
+          KKKeyPose *fixed = [prev keyposeBySettingTime:prev.time];
           fixed.outgoing = iv;
           kps[newIdx - 1] = fixed;
         }
@@ -543,8 +542,7 @@
       KKInterval *outIv = [newKP.outgoing copy] ?: [[KKInterval alloc] init];
       outIv.endpointsLinked = NO;
       outIv.curve = KKIntervalCurveLinear;
-      KKKeyPose *fixedNew = [KKKeyPose keyposeAtTime:newKP.time
-                                              values:newKP.values];
+      KKKeyPose *fixedNew = [newKP keyposeBySettingTime:newKP.time];
       fixedNew.outgoing = outIv;
       kps[newIdx] = fixedNew;
       nl.keyposes = kps;
@@ -580,7 +578,7 @@
         srcKP.time + 1.0 / 240.0, [self _clipDuration], _frameDurationSeconds);
     if (newTime <= srcKP.time)
       newTime = srcKP.time;
-    KKKeyPose *dup = [KKKeyPose keyposeAtTime:newTime values:srcKP.values];
+    KKKeyPose *dup = [srcKP keyposeBySettingTime:newTime];
     KKLane *nl = [src copy];
     [nl insertKeypose:dup];
     for (NSInteger j = 0; j < (NSInteger)nl.keyposes.count; j++)
@@ -639,8 +637,8 @@
   KKLane *nl = [lane copy];
   NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];
   KKKeyPose *tgt = kps[targetIdx];
-  KKKeyPose *fixed = [KKKeyPose keyposeAtTime:tgt.time values:dup.values];
-  fixed.outgoing = tgt.outgoing;
+  KKKeyPose *fixed = [tgt keyposeBySettingTime:tgt.time];
+  fixed.values = dup.values;
   kps[targetIdx] = fixed;
   nl.keyposes = kps;
   [nl removeKeyposeAtIndex:dupIdx];
@@ -694,8 +692,11 @@
                                          : nil;
 
     [toUpdate enumerateIndexesUsingBlock:^(NSUInteger j, BOOL *stop) {
-      KKKeyPose *newKP = [KKKeyPose keyposeAtTime:kps[j].time values:values];
-      newKP.outgoing = kps[j].outgoing;
+      // Copy-and-update rather than reconstruct, so per-keypose fields beyond
+      // time/values/outgoing (spatialSmooth, in/out handles) survive a value
+      // edit instead of being silently reset to defaults.
+      KKKeyPose *newKP = [kps[j] copy];
+      newKP.values = values;
       kps[j] = newKP;
     }];
 
@@ -718,7 +719,7 @@
           KKKeyPose *src = kps[ivIdx];
           KKInterval *iv = [src.outgoing copy] ?: [[KKInterval alloc] init];
           iv.modulation = KKIntervalModulationNone;
-          KKKeyPose *fix = [KKKeyPose keyposeAtTime:src.time values:src.values];
+          KKKeyPose *fix = [src copy];
           fix.outgoing = iv;
           kps[ivIdx] = fix;
         };
@@ -789,9 +790,7 @@
         target = hi;
       if (fabs(target - kps[idx].time) < 1.0e-6)
         continue;
-      KKKeyPose *newKP = [KKKeyPose keyposeAtTime:target
-                                           values:kps[idx].values];
-      newKP.outgoing = kps[idx].outgoing;
+      KKKeyPose *newKP = [kps[idx] keyposeBySettingTime:target];
       kps[idx] = newKP;
       touched = YES;
     }
@@ -939,8 +938,7 @@
       return -1;
     if (fabs(frac - kps[kpIdx].time) < 1.0e-6)
       return kpIdx;
-    KKKeyPose *moved = [KKKeyPose keyposeAtTime:frac values:kps[kpIdx].values];
-    moved.outgoing = kps[kpIdx].outgoing;
+    KKKeyPose *moved = [kps[kpIdx] keyposeBySettingTime:frac];
     kps[kpIdx] = moved;
     [kps sortUsingComparator:^NSComparisonResult(KKKeyPose *a, KKKeyPose *b) {
       if (a.time < b.time)
@@ -966,8 +964,7 @@
       KKInterval *unlinked = [iv copy];
       unlinked.endpointsLinked = NO;
       unlinked.curve = KKIntervalCurveLinear;
-      KKKeyPose *replacement = [KKKeyPose keyposeAtTime:kps[j].time
-                                                 values:kps[j].values];
+      KKKeyPose *replacement = [kps[j] keyposeBySettingTime:kps[j].time];
       replacement.outgoing = unlinked;
       if (kps[j] == moved)
         moved = replacement;
@@ -1144,8 +1141,7 @@
       NSInteger idx = n.integerValue;
       KKKeyPose *kp = kps[idx];
       double newT = 2.0 * mid - kp.time;
-      KKKeyPose *moved = [KKKeyPose keyposeAtTime:newT values:kp.values];
-      moved.outgoing = kp.outgoing;
+      KKKeyPose *moved = [kp keyposeBySettingTime:newT];
       kps[idx] = moved;
     }
     [kps sortUsingComparator:^NSComparisonResult(KKKeyPose *a, KKKeyPose *b) {
@@ -1202,8 +1198,7 @@
       double newT = minT + (maxT - minT) * ((double)k / (double)(n - 1));
       newT =
           KKSnapFracToFrame(newT, [self _clipDuration], _frameDurationSeconds);
-      KKKeyPose *moved = [KKKeyPose keyposeAtTime:newT values:kp.values];
-      moved.outgoing = kp.outgoing;
+      KKKeyPose *moved = [kp keyposeBySettingTime:newT];
       kps[idx] = moved;
     }
     [kps sortUsingComparator:^NSComparisonResult(KKKeyPose *a, KKKeyPose *b) {
