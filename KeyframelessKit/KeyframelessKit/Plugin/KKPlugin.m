@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "../Update/KKUpdateChecker.h"
 #import "KKConstants.h"
 #import "KKDataBlob.h"
 #import "KKHostInfo.h"
 #import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
+#import "KKUpdateChecker.h"
 #import <AppKit/AppKit.h>
 #import <Carbon/Carbon.h>
 #import <FxPlug/FxPlugSDK.h>

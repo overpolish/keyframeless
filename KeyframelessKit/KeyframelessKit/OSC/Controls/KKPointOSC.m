@@ -4,9 +4,9 @@
  */
 
 #import "KKPointOSC.h"
-#import "../../Style/KKTokens.h"
-#import "../../Style/NSColor+KKColors.h"
-#import "../Base/KKOSCShaderTypes.h"
+#import "KKOSCShaderTypes.h"
+#import "KKTokens.h"
+#import "NSColor+KKColors.h"
 #include <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>

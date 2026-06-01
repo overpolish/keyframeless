@@ -5,7 +5,7 @@
 
 #import "KKHostInfo.h"
 
-#import "../KKLog.h"
+#import "KKLog.h"
 
 @implementation KKHostInfo
 

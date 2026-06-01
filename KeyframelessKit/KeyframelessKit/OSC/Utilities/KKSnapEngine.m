@@ -4,7 +4,7 @@
  */
 
 #import "KKSnapEngine.h"
-#import "../Base/KKOnScreenControl+CoordinateSpace.h"
+#import "KKOnScreenControl+CoordinateSpace.h"
 #import <FxPlug/FxPlugSDK.h>
 
 @implementation KKSnapEngine

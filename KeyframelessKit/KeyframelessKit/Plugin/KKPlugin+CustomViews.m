@@ -3,15 +3,15 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "../KKLog.h"
-#import "../Views/KKAlertView.h"
-#import "../Views/KKCustomGroupHeaderView.h"
-#import "../Views/KKLogoBannerView.h"
-#import "../Views/KKRemoteWindowKeyHandlerView.h"
-#import "../Views/KKSeparatorView.h"
+#import "KKAlertView.h"
+#import "KKCustomGroupHeaderView.h"
 #import "KKDataBlob.h"
+#import "KKLog.h"
+#import "KKLogoBannerView.h"
 #import "KKPlugin+Color.h"
 #import "KKPlugin_Private.h"
+#import "KKRemoteWindowKeyHandlerView.h"
+#import "KKSeparatorView.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKConstants.h>
 

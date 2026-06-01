@@ -4,9 +4,9 @@
  */
 
 #import "KKPlayheadPoller.h"
-#import "../Views/KKTimelineInspectorView.h"
 #import "KKHostInfo.h"
 #import "KKPluginHost.h"
+#import "KKTimelineInspectorView.h"
 #import <FxPlug/FxPlugSDK.h>
 
 @interface KKPlayheadPoller () {

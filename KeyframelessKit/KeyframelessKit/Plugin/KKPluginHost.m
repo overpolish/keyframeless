@@ -4,9 +4,9 @@
  */
 
 #import "KKPluginHost.h"
-#import "../Views/KKMiniCanvasRenderer.h"
-#import "../Views/KKTimelineInspectorView.h"
 #import "KKDataBlob.h"
+#import "KKMiniCanvasRenderer.h"
+#import "KKTimelineInspectorView.h"
 #import <FxPlug/FxPlugSDK.h>
 
 @implementation KKRenderCache

@@ -4,9 +4,9 @@
  */
 
 #import "KKMotionBlur.h"
-#import "../KKLog.h"
-#import "../Plugin/KKConstants.h"
-#import "../Plugin/KKDataBlob.h"
+#import "KKConstants.h"
+#import "KKDataBlob.h"
+#import "KKLog.h"
 #import "KKMetalDeviceCache.h"
 #import "KKShaderTypes.h"
 #import <FxPlug/FxPlugSDK.h>

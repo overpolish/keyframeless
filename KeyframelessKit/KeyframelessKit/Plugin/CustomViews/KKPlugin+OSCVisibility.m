@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "../../Views/KKMiniCanvasRenderer.h"
-#import "../../Views/KKTimelineInspectorView.h"
-#import "../KKPluginInstanceState.h"
-#import "../KKPlugin_Private.h"
+#import "KKMiniCanvasRenderer.h"
 #import "KKPlugin+OSCVisibility.h"
+#import "KKPluginInstanceState.h"
+#import "KKPlugin_Private.h"
+#import "KKTimelineInspectorView.h"
 
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 
