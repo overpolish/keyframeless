@@ -13,6 +13,30 @@ NS_ASSUME_NONNULL_BEGIN
 
 @class KKMiniCanvasView;
 
+/// One rectangular box OSC for the mini-canvas to render: an outline, 8 grab
+/// handles (4 corners + 4 edge midpoints), and an optional size readout. The
+/// mini-canvas equivalent of the viewer's KKBoxOSC - crop, scale, and any
+/// future box gizmo are just descriptors, drawn through one shared path. All
+/// geometry is in overlay points (y-up).
+@interface KKMiniBox : NSObject
+/// Box outline rect.
+@property(nonatomic) CGRect rect;
+/// The 8 handle centres (typically 4 corners then 4 edge midpoints). Drawn with
+/// the shared `KKPointOSC` glyph.
+@property(nonatomic, copy) NSArray<NSValue *> *handleCenters;
+/// Size readout drawn trailing-aligned below the box's lower-right corner, or
+/// nil for none (e.g. "1920 x 1080" for crop, "100% x 100%" for scale).
+@property(nonatomic, copy, nullable) NSString *readout;
+/// Draw alpha for the whole box (border + handles + readout): 1.0 normal, 0.3
+/// when it's a revealed opt-hold ghost.
+@property(nonatomic) CGFloat ghostAlpha;
+
++ (instancetype)boxWithRect:(CGRect)rect
+              handleCenters:(NSArray<NSValue *> *)handleCenters
+                    readout:(nullable NSString *)readout
+                 ghostAlpha:(CGFloat)ghostAlpha;
+@end
+
 /// Plugin-supplied interaction delegate. Hooks are declared now and wired in
 /// later phases (handle drawing, hit-testing, drag deltas reported as value
 /// mutations). Points are clip-normalized: (0,0) top-left, (1,1) bottom-right.
@@ -56,23 +80,12 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
     doubleClickAtPoint:(CGPoint)point
            contentRect:(CGRect)contentRect;
-/// Optional rectangle outline (the crop box) stroked over the image, in
-/// overlay points (y-up). Return NO for none.
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
-        borderRect:(out CGRect *)outRect
-    forContentRect:(CGRect)contentRect;
-/// Scale transform-box outline (Magic Move), in overlay points (y-up). Same
-/// stroke as the crop border but its own geometry. Return NO for none.
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
-      scaleBoxRect:(out CGRect *)outRect
-    forContentRect:(CGRect)contentRect;
-/// The 8 scale-box handle centres (overlay points, y-up): 4 corners then 4 edge
-/// midpoints. Drawn with the shared `KKPointOSC` glyph. nil/empty for none.
-- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
-    scaleHandleCentersForContentRect:(CGRect)contentRect;
-/// "X% x Y%" readout for the scale box (mirrors the viewer), or nil for none.
-/// Drawn just below the box, same placement as the crop size readout.
-- (nullable NSString *)scaleReadoutText;
+/// All rectangular box OSCs to draw - crop, scale, and any future box gizmo -
+/// as `KKMiniBox` descriptors (outline + 8 handles + optional readout). The
+/// canvas renders each uniformly, so a new box OSC needs no new draw path.
+/// nil/empty for none.
+- (NSArray<KKMiniBox *> *)miniCanvas:(KKMiniCanvasView *)canvas
+                 boxesForContentRect:(CGRect)contentRect;
 /// Push externally-edited constant values (slider/field) into the delegate
 /// so the preview updates live, without persisting (the host coalesces the
 /// real write). `values` is the lane's value array (Float: [v]; Crop:

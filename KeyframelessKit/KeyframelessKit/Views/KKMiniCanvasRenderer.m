@@ -538,13 +538,27 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   return [_cropEditor handleCentersForValues:values contentRect:cr];
 }
 
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
-        borderRect:(out CGRect *)outRect
-    forContentRect:(CGRect)cr {
+- (NSArray<KKMiniBox *> *)miniCanvas:(KKMiniCanvasView *)canvas
+                 boxesForContentRect:(CGRect)cr {
   if (![self _cropActiveForContentRect:cr])
-    return NO;
-  *outRect = [self cropRectForContentRect:cr];
-  return YES;
+    return @[];
+  CGRect rect = [self cropRectForContentRect:cr];
+  NSArray<NSValue *> *handles =
+      [_cropEditor handleCentersForValues:[self valuesForLabel:self.cropLabel]
+                              contentRect:cr];
+  // Crop readout in source pixels: box fraction × media size.
+  NSString *readout = nil;
+  CGSize media = canvas.sourceMediaSize;
+  if (media.width > 0 && media.height > 0 && cr.size.width > 0 &&
+      cr.size.height > 0) {
+    long pxW = lround(rect.size.width / cr.size.width * media.width);
+    long pxH = lround(rect.size.height / cr.size.height * media.height);
+    readout = [NSString stringWithFormat:@"%ld x %ld", pxW, pxH];
+  }
+  return @[ [KKMiniBox boxWithRect:rect
+                     handleCenters:handles
+                           readout:readout
+                        ghostAlpha:[self cropGhostAlpha]] ];
 }
 
 - (BOOL)_pointActiveForContentRect:(CGRect)cr {

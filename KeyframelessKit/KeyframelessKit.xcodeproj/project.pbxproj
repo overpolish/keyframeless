@@ -50,6 +50,7 @@
 				OSC/Base/KKOSCShaderTypes.h,
 				OSC/Base/KKRotationOSCMath.h,
 				OSC/Controls/KKArcOSC.h,
+				OSC/Controls/KKBoxOSC.h,
 				OSC/Controls/KKCropOSC.h,
 				OSC/Controls/KKIconButtonOSC.h,
 				OSC/Controls/KKOSCLabel.h,

@@ -13,17 +13,6 @@
 
 #define CLAMP(x, lo, hi) MAX((lo), MIN((hi), (x)))
 
-enum {
-  kCropPt_TopLeft = 0,
-  kCropPt_TopCenter,
-  kCropPt_TopRight,
-  kCropPt_RightCenter,
-  kCropPt_BottomRight,
-  kCropPt_BottomCenter,
-  kCropPt_BottomLeft,
-  kCropPt_LeftCenter,
-};
-
 typedef struct {
   BOOL left;
   BOOL right;
@@ -32,42 +21,18 @@ typedef struct {
   BOOL isEdge;
 } CropPointConfig;
 
+// Which edge(s) each handle moves, in KKBoxOSC's canonical index order:
+// 0-3 corners (BL, BR, TR, TL), 4-7 edge midpoints (bottom, right, top, left).
 static const CropPointConfig kCropConfigs[KKCropPointCount] = {
-    {YES, NO, YES, NO, NO}, // TopLeft
-    {NO, NO, YES, NO, YES}, // TopCenter
-    {NO, YES, YES, NO, NO}, // TopRight
-    {NO, YES, NO, NO, YES}, // RightCenter
-    {NO, YES, NO, YES, NO}, // BottomRight
-    {NO, NO, NO, YES, YES}, // BottomCenter
-    {YES, NO, NO, YES, NO}, // BottomLeft
-    {YES, NO, NO, NO, YES}, // LeftCenter
+    {YES, NO, NO, YES, NO}, // 0 bottom-left
+    {NO, YES, NO, YES, NO}, // 1 bottom-right
+    {NO, YES, YES, NO, NO}, // 2 top-right
+    {YES, NO, YES, NO, NO}, // 3 top-left
+    {NO, NO, NO, YES, YES}, // 4 bottom edge
+    {NO, YES, NO, NO, YES}, // 5 right edge
+    {NO, NO, YES, NO, YES}, // 6 top edge
+    {YES, NO, NO, NO, YES}, // 7 left edge
 };
-
-static CGPoint cropPointPosition(NSInteger idx, CGPoint topRight,
-                                 CGPoint bottomLeft) {
-  double mx = (topRight.x + bottomLeft.x) * 0.5;
-  double my = (topRight.y + bottomLeft.y) * 0.5;
-  switch (idx) {
-  case kCropPt_TopLeft:
-    return (CGPoint){bottomLeft.x, topRight.y};
-  case kCropPt_TopCenter:
-    return (CGPoint){mx, topRight.y};
-  case kCropPt_TopRight:
-    return (CGPoint){topRight.x, topRight.y};
-  case kCropPt_RightCenter:
-    return (CGPoint){topRight.x, my};
-  case kCropPt_BottomRight:
-    return (CGPoint){topRight.x, bottomLeft.y};
-  case kCropPt_BottomCenter:
-    return (CGPoint){mx, bottomLeft.y};
-  case kCropPt_BottomLeft:
-    return (CGPoint){bottomLeft.x, bottomLeft.y};
-  case kCropPt_LeftCenter:
-    return (CGPoint){bottomLeft.x, my};
-  default:
-    return CGPointZero;
-  }
-}
 
 @implementation KKCropOSC {
   double _dragStartObjX;
@@ -77,35 +42,6 @@ static CGPoint cropPointPosition(NSInteger idx, CGPoint topRight,
   double _dragStartCropLeft;
   double _dragStartCropRight;
   double _cropStartAspect;
-}
-
-- (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
-  self = [super init];
-  if (self) {
-    _apiManager = apiManager;
-    _hoveredIndex = -1;
-    _draggingIndex = -1;
-
-    NSMutableArray *points =
-        [NSMutableArray arrayWithCapacity:KKCropPointCount];
-    for (int i = 0; i < KKCropPointCount; i++) {
-      KKPointOSC *pt = [[KKPointOSC alloc] initWithAPIManager:apiManager];
-      pt.clearsOnDraw = NO;
-      // Match the in-viewer radius OSC's default size so corner/edge handles
-      // are equally grabbable.
-      pt.oscRadius = 7.0f;
-      pt.outlineWidth = 2.0f;
-      [points addObject:pt];
-    }
-    _pointOSCs = points;
-
-    _borderOSC = [[KKRectBorderOSC alloc] initWithAPIManager:apiManager];
-    _borderOSC.clearsOnDraw = NO;
-    _sizeLabel = [[KKOSCLabel alloc] initWithAPIManager:apiManager];
-    _sizeLabel.monospaced = YES;
-    _ghostAlpha = 1.0f;
-  }
-  return self;
 }
 
 // Bridge between the plugin-facing `[w, h, x, y]` model (KKCropModel.h -
@@ -184,15 +120,6 @@ static CGPoint cropPointPosition(NSInteger idx, CGPoint topRight,
                    atTime:time])
     return;
 
-  // Fan the ghost dim out to the border + corner handles (opt-reveal preview).
-  self.borderOSC.ghostAlpha = _ghostAlpha;
-  for (int i = 0; i < KKCropPointCount; i++)
-    self.pointOSCs[i].ghostAlpha = _ghostAlpha;
-
-  [self.borderOSC drawWithTopRight:topRight
-                        bottomLeft:bottomLeft
-                  destinationImage:destinationImage];
-
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
   double zoom = [oscAPI canvasZoom];
@@ -209,59 +136,34 @@ static CGPoint cropPointPosition(NSInteger idx, CGPoint topRight,
   double cropH = (1.0 - cT - cB) * lround(fullH);
   long pxW = lround(cropW);
   long pxH = lround(cropH);
-  self.sizeLabel.text = [NSString stringWithFormat:@"%ld x %ld", pxW, pxH];
-  CGPoint labelPos = {topRight.x, bottomLeft.y};
-  CGSize labelSize = self.sizeLabel.size;
-  labelPos.x -= labelSize.width / 2.0;
-  BOOL flippedY = topRight.y > bottomLeft.y;
-  labelPos.y += flippedY ? -(labelSize.height / 2.0 + 4.0)
-                         : (labelSize.height / 2.0 + 4.0);
-  [self.sizeLabel drawAtCanvasPosition:labelPos
-                      destinationImage:destinationImage];
+  NSString *readout = [NSString stringWithFormat:@"%ld x %ld", pxW, pxH];
 
-  for (int i = 0; i < KKCropPointCount; i++) {
-    CGPoint pos = cropPointPosition(i, topRight, bottomLeft);
-    [self.pointOSCs[i] drawAtCanvasPosition:pos
-                                  isHovered:(self.hoveredIndex == i)
-                                   isActive:(self.draggingIndex == i)
-                           destinationImage:destinationImage
-                                     atTime:time];
-  }
+  NSInteger active =
+      self.draggingIndex >= 0 ? self.draggingIndex : self.hoveredIndex;
+  [self drawWithTopRight:topRight
+              bottomLeft:bottomLeft
+                 readout:readout
+            activeHandle:active
+        destinationImage:destinationImage
+                  atTime:time];
 }
 
 - (NSInteger)hitTestAtMousePositionX:(double)positionX
                            positionY:(double)positionY
                               atTime:(CMTime)time {
   self.hoveredIndex = -1;
-  NSInteger result = KKCropPartNone;
 
   CGPoint topRight = {0, 0}, bottomLeft = {0, 0};
   if (![self getTopRight:&topRight
                bottomLeft:&bottomLeft
           fullImageCanvas:NULL
                    atTime:time])
-    return result;
+    return KKCropPartNone;
 
-  double minX = fmin(bottomLeft.x, topRight.x);
-  double maxX = fmax(bottomLeft.x, topRight.x);
-  double minY = fmin(bottomLeft.y, topRight.y);
-  double maxY = fmax(bottomLeft.y, topRight.y);
-  if (positionX >= minX && positionX <= maxX && positionY >= minY &&
-      positionY <= maxY) {
-    result = KKCropPartRect;
-  }
-
-  for (int i = 0; i < KKCropPointCount; i++) {
-    CGPoint pos = cropPointPosition(i, topRight, bottomLeft);
-    double dx = positionX - pos.x;
-    double dy = positionY - pos.y;
-    if (sqrt(dx * dx + dy * dy) < self.pointOSCs[i].hitRadius) {
-      self.hoveredIndex = i;
-      result = KKCropPartPointBase + i;
-    }
-  }
-
-  return result;
+  return [self hitTestAtX:positionX
+                        y:positionY
+                 topRight:topRight
+               bottomLeft:bottomLeft];
 }
 
 - (void)mouseDownForPart:(NSInteger)part
@@ -477,8 +379,7 @@ static CGPoint cropPointPosition(NSInteger idx, CGPoint topRight,
 }
 
 - (void)mouseUp {
-  self.draggingIndex = -1;
-  self.hoveredIndex = -1;
+  [self resetHover];
 }
 
 @end

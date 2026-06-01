@@ -439,6 +439,25 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
   return out;
 }
 
+// The Scale transform box, appended to the base's boxes (Magic Move has no
+// crop, so super returns none). The shared box path in KKMiniCanvasView draws
+// the border + 8 handles + readout uniformly with the crop box.
+- (NSArray<KKMiniBox *> *)miniCanvas:(KKMiniCanvasView *)canvas
+                 boxesForContentRect:(CGRect)cr {
+  NSMutableArray<KKMiniBox *> *boxes = [[super miniCanvas:canvas
+                                      boxesForContentRect:cr] mutableCopy];
+  CGRect sb;
+  if ([self miniCanvas:canvas scaleBoxRect:&sb forContentRect:cr]) {
+    [boxes addObject:[KKMiniBox
+                           boxWithRect:sb
+                         handleCenters:[self miniCanvas:canvas
+                                           scaleHandleCentersForContentRect:cr]
+                               readout:[self scaleReadoutText]
+                            ghostAlpha:[self scaleGhostAlpha]]];
+  }
+  return boxes;
+}
+
 - (BOOL)_scaleHandleHitAtPoint:(CGPoint)p
                    contentRect:(CGRect)cr
                       outIndex:(NSInteger *)outIdx {

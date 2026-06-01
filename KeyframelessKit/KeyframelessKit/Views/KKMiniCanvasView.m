@@ -33,6 +33,20 @@ static const BOOL kPointShadingLighterTop = YES;
 
 static const NSTimeInterval kPollInterval = 1.0 / 15.0;
 
+@implementation KKMiniBox
++ (instancetype)boxWithRect:(CGRect)rect
+              handleCenters:(NSArray<NSValue *> *)handleCenters
+                    readout:(NSString *)readout
+                 ghostAlpha:(CGFloat)ghostAlpha {
+  KKMiniBox *b = [[KKMiniBox alloc] init];
+  b.rect = rect;
+  b.handleCenters = handleCenters ?: @[];
+  b.readout = readout;
+  b.ghostAlpha = ghostAlpha;
+  return b;
+}
+@end
+
 @interface KKMiniCanvasView () <MTKViewDelegate>
 - (CGRect)contentRectInViewPoints;
 - (CGSize)sourceMediaSize;
@@ -153,33 +167,18 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   NSDictionary *attrs = [_KKMiniCanvasOverlay readoutAttributes];
   const CGFloat kLabelGap = 4.0 * 9.0 / 20.0;
 
-  // Crop size readout in pixels: border fraction × source media size.
-  CGSize media = [c sourceMediaSize];
-  CGRect br;
-  if ([d respondsToSelector:@selector(miniCanvas:borderRect:forContentRect:)] &&
-      [d miniCanvas:c borderRect:&br forContentRect:cr] && media.width > 0 &&
-      media.height > 0 && cr.size.width > 0 && cr.size.height > 0) {
-    long pxW = lround(br.size.width / cr.size.width * media.width);
-    long pxH = lround(br.size.height / cr.size.height * media.height);
-    NSString *txt = [NSString stringWithFormat:@"%ld x %ld", pxW, pxH];
-    NSSize ts = [txt sizeWithAttributes:attrs];
-    NSPoint at = NSMakePoint(CGRectGetMaxX(br) - ts.width,
-                             CGRectGetMinY(br) - ts.height - kLabelGap);
-    [_KKMiniCanvasOverlay drawReadout:txt atPoint:at fillAttributes:attrs];
-  }
-
-  // Scale box readout ("X% x Y%"), same placement below the scale box.
-  CGRect sb;
-  if ([d respondsToSelector:@selector(scaleReadoutText)] &&
-      [d respondsToSelector:@selector(
-                                miniCanvas:scaleBoxRect:forContentRect:)] &&
-      [d miniCanvas:c scaleBoxRect:&sb forContentRect:cr]) {
-    NSString *txt = [d scaleReadoutText];
-    if (txt.length) {
-      NSSize ts = [txt sizeWithAttributes:attrs];
-      NSPoint at = NSMakePoint(CGRectGetMaxX(sb) - ts.width,
-                               CGRectGetMinY(sb) - ts.height - kLabelGap);
-      [_KKMiniCanvasOverlay drawReadout:txt atPoint:at fillAttributes:attrs];
+  // Every box OSC (crop, scale, ...) draws its readout the same way: trailing-
+  // aligned to the box's right edge, just below the bottom edge.
+  if ([d respondsToSelector:@selector(miniCanvas:boxesForContentRect:)]) {
+    for (KKMiniBox *box in [d miniCanvas:c boxesForContentRect:cr]) {
+      if (!box.readout.length)
+        continue;
+      NSSize ts = [box.readout sizeWithAttributes:attrs];
+      NSPoint at = NSMakePoint(CGRectGetMaxX(box.rect) - ts.width,
+                               CGRectGetMinY(box.rect) - ts.height - kLabelGap);
+      [_KKMiniCanvasOverlay drawReadout:box.readout
+                                atPoint:at
+                         fillAttributes:attrs];
     }
   }
 }
@@ -1238,37 +1237,15 @@ static const NSUInteger kFilmstripGridCols = 5;
     }
   }
 
-  // Crop border - drawn here (before the glyphs) so the handles sit on
-  // top of the line, not under it.
+  // Box OSC borders (crop, scale, ...) - drawn here (before the glyphs) so the
+  // handles sit on top of the line, not under it. Every box matches the in-
+  // viewer KKRectBorderOSC default (white 0.6), dimmed by its ghost alpha.
   if (_linePipeline && del &&
-      [del respondsToSelector:@selector(
-                                  miniCanvas:borderRect:forContentRect:)]) {
+      [del respondsToSelector:@selector(miniCanvas:boxesForContentRect:)]) {
     CGRect cr = [self contentRectInViewPoints];
-    CGRect br;
-    if ([del miniCanvas:self borderRect:&br forContentRect:cr]) {
-      CGFloat cropGhost = [del isKindOfClass:[KKMiniCanvasRenderer class]]
-                              ? [(KKMiniCanvasRenderer *)del cropGhostAlpha]
-                              : 1.0;
-      // Match the in-viewer crop border (KKRectBorderOSC default: white 0.6).
-      simd_float4 lineColor = {1.0f, 1.0f, 1.0f, 0.6f * (float)cropGhost};
-      [self _encodeRectBorder:br lineColor:lineColor encoder:enc];
-    }
-  }
-
-  // Scale transform box (Magic Move): border + 8 handles, same parts as crop
-  // but its own geometry. Drawn before the handle glyphs so they sit on top.
-  if (_linePipeline && del &&
-      [del respondsToSelector:@selector(
-                                  miniCanvas:scaleBoxRect:forContentRect:)]) {
-    CGRect cr = [self contentRectInViewPoints];
-    CGRect sb;
-    if ([del miniCanvas:self scaleBoxRect:&sb forContentRect:cr]) {
-      CGFloat scaleGhost = [del isKindOfClass:[KKMiniCanvasRenderer class]]
-                               ? [(KKMiniCanvasRenderer *)del scaleGhostAlpha]
-                               : 1.0;
-      // Match the in-viewer scale border (KKRectBorderOSC default: white 0.6).
-      simd_float4 lineColor = {1.0f, 1.0f, 1.0f, 0.6f * (float)scaleGhost};
-      [self _encodeRectBorder:sb lineColor:lineColor encoder:enc];
+    for (KKMiniBox *box in [del miniCanvas:self boxesForContentRect:cr]) {
+      simd_float4 lineColor = {1.0f, 1.0f, 1.0f, 0.6f * (float)box.ghostAlpha};
+      [self _encodeRectBorder:box.rect lineColor:lineColor encoder:enc];
     }
   }
 
@@ -1369,36 +1346,18 @@ static const NSUInteger kFilmstripGridCols = 5;
       }
     }
 
-    if ([del respondsToSelector:
-                 @selector(miniCanvas:extraHandleCentersForContentRect:)]) {
-      // Crop corner handles dim with the crop ghost (opt-reveal preview).
-      CGFloat cropGhost = [del isKindOfClass:[KKMiniCanvasRenderer class]]
-                              ? [(KKMiniCanvasRenderer *)del cropGhostAlpha]
-                              : 1.0;
-      simd_float4 cornerFill = whiteFill;
-      cornerFill.w *= (float)cropGhost;
-      for (NSValue *v in [del miniCanvas:self
-               extraHandleCentersForContentRect:cr])
-        [self _encodeHandleGlyphAt:v.pointValue
-                         fillColor:cornerFill
-                         sizeScale:pointSizeScale
-                           encoder:enc];
-    }
-
-    // Scale box handles (Magic Move): the 8 corner + edge handles.
-    if ([del respondsToSelector:
-                 @selector(miniCanvas:scaleHandleCentersForContentRect:)]) {
-      CGFloat scaleGhost = [del isKindOfClass:[KKMiniCanvasRenderer class]]
-                               ? [(KKMiniCanvasRenderer *)del scaleGhostAlpha]
-                               : 1.0;
-      simd_float4 scaleFill = whiteFill;
-      scaleFill.w *= (float)scaleGhost;
-      for (NSValue *v in [del miniCanvas:self
-               scaleHandleCentersForContentRect:cr])
-        [self _encodeHandleGlyphAt:v.pointValue
-                         fillColor:scaleFill
-                         sizeScale:pointSizeScale
-                           encoder:enc];
+    // Box OSC handles (crop corners/edges, scale corners/edges, ...): white,
+    // dimmed by each box's ghost alpha. One path for every box.
+    if ([del respondsToSelector:@selector(miniCanvas:boxesForContentRect:)]) {
+      for (KKMiniBox *box in [del miniCanvas:self boxesForContentRect:cr]) {
+        simd_float4 fill = whiteFill;
+        fill.w *= (float)box.ghostAlpha;
+        for (NSValue *v in box.handleCenters)
+          [self _encodeHandleGlyphAt:v.pointValue
+                           fillColor:fill
+                           sizeScale:pointSizeScale
+                             encoder:enc];
+      }
     }
 
     if (_rotationPipeline &&

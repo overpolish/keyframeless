@@ -113,6 +113,9 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
   if (self) {
     self.clearsOnDraw = NO;
     _dragCurrentRadius = 20.0;
+    // Match the shared box-OSC handle size so the radius point and the crop
+    // box's corner/edge handles are one size.
+    self.oscRadius = 6.0f;
     // Blue, matching the mini canvas radius handle (accent color).
     self.fillColorOverride = [NSColor accent];
 

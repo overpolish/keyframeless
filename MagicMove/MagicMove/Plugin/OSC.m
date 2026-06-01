@@ -133,12 +133,10 @@ static void KKScaleHandlePositions(CGPoint center, double sclX, double sclY,
 @property(nonatomic, retain) KKRotationOSC *rotationOSC;
 @property(nonatomic, retain) KKPointOSC *anchorOSC;
 @property(nonatomic, retain) KKPointOSC *handleOSC;
-/// Scale transform-box gizmo: border + one point glyph reused for all 8 corner
-/// and edge handles + a "X% x Y%" readout. Sized via KKScaleGizmo from the
-/// Scale lane, centred on Position, drawn outside the rotation rings.
-@property(nonatomic, retain) KKRectBorderOSC *scaleBorderOSC;
-@property(nonatomic, retain) KKPointOSC *scaleHandleOSC;
-@property(nonatomic, retain) KKOSCLabel *scaleSizeLabel;
+/// Scale transform-box gizmo: the shared KKBoxOSC (border + 8 corner/edge
+/// handles + a "X% x Y%" readout). Sized via KKScaleGizmo from the Scale lane,
+/// centred on Position, drawn outside the rotation rings.
+@property(nonatomic, retain) KKBoxOSC *scaleBox;
 /// Which scale handle (0-7) the hit-test last landed on, and the one currently
 /// grabbed for a drag. -1 = none.
 @property(nonatomic) NSInteger scaleHitHandle;
@@ -218,14 +216,9 @@ static void KKScaleHandlePositions(CGPoint center, double sclX, double sclY,
     _handleOSC.oscRadius = 5.0f;
     _handleOSC.outlineWidth = 1.5f;
     _handleOSC.clearsOnDraw = NO;
-    _scaleBorderOSC = [[KKRectBorderOSC alloc] initWithAPIManager:apiManager];
-    _scaleBorderOSC.clearsOnDraw = NO;
-    _scaleHandleOSC = [[KKPointOSC alloc] initWithAPIManager:apiManager];
-    _scaleHandleOSC.oscRadius = 6.0f;
-    _scaleHandleOSC.outlineWidth = 2.0f;
-    _scaleHandleOSC.clearsOnDraw = NO;
-    _scaleSizeLabel = [[KKOSCLabel alloc] initWithAPIManager:apiManager];
-    _scaleSizeLabel.monospaced = YES;
+    _scaleBox = [[KKBoxOSC alloc] initWithAPIManager:apiManager];
+    // Extra grab slack so the compact gizmo's handles stay easy to hit.
+    _scaleBox.hitPadding = 6.0;
     _scaleHitHandle = -1;
     _scaleGrabHandle = -1;
     _dragAnchorFrac = NAN;
@@ -798,30 +791,15 @@ static void KKScaleHandlePositions(CGPoint center, double sclX, double sclY,
   KKScaleHandlePositions(center, sclX, sclY, e0, span, handles);
   CGPoint bl = handles[0], tr = handles[2];
 
-  self.scaleBorderOSC.ghostAlpha = ghostAlpha;
-  [self.scaleBorderOSC drawWithTopRight:tr
-                             bottomLeft:bl
-                       destinationImage:destinationImage];
-
-  self.scaleHandleOSC.ghostAlpha = ghostAlpha;
-  for (int i = 0; i < 8; i++)
-    [self.scaleHandleOSC drawAtCanvasPosition:handles[i]
-                                    isHovered:(i == activeHandle)
-                                     isActive:(i == activeHandle)
-                             destinationImage:destinationImage
-                                       atTime:time];
-
-  self.scaleSizeLabel.text =
+  self.scaleBox.ghostAlpha = ghostAlpha;
+  NSString *readout =
       [NSString stringWithFormat:@"%.0f%% x %.0f%%", sclX, sclY];
-  CGSize ls = self.scaleSizeLabel.size;
-  // Trailing edge to the box's right edge, just below the bottom edge (same
-  // placement convention as the crop OSC's size readout).
-  BOOL flippedY = tr.y > bl.y;
-  CGPoint labelPos = CGPointMake(
-      tr.x - ls.width / 2.0,
-      bl.y + (flippedY ? -(ls.height / 2.0 + 4.0) : (ls.height / 2.0 + 4.0)));
-  [self.scaleSizeLabel drawAtCanvasPosition:labelPos
-                           destinationImage:destinationImage];
+  [self.scaleBox drawWithTopRight:tr
+                       bottomLeft:bl
+                          readout:readout
+                     activeHandle:activeHandle
+                 destinationImage:destinationImage
+                           atTime:time];
 }
 
 - (void)drawOSCWithWidth:(NSInteger)width
@@ -1008,18 +986,11 @@ static void KKScaleHandlePositions(CGPoint center, double sclX, double sclY,
   [self _scaleGizmoE0:&e0 span:&span];
   CGPoint handles[8];
   KKScaleHandlePositions(center, sclX, sclY, e0, span, handles);
-  double hitR =
-      self.scaleHandleOSC.oscRadius + self.scaleHandleOSC.outlineWidth + 6.0;
-  NSInteger best = -1;
-  double bestD = hitR;
-  for (NSInteger i = 0; i < 8; i++) {
-    double d = hypot(x - handles[i].x, y - handles[i].y);
-    if (d < bestD) {
-      bestD = d;
-      best = i;
-    }
-  }
-  return best;
+  NSInteger part = [self.scaleBox hitTestAtX:x
+                                           y:y
+                                    topRight:handles[2]
+                                  bottomLeft:handles[0]];
+  return part >= KKBoxPartHandleBase ? part - KKBoxPartHandleBase : -1;
 }
 
 // Override the base OSC-visibility hooks: the full element-key list, and the

@@ -15,6 +15,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKAlertView.h>
 #import <KeyframelessKit/KKArcOSC.h>
 #import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/KKBoxOSC.h>
 #import <KeyframelessKit/KKCheckboxRowView.h>
 #import <KeyframelessKit/KKCheckboxView.h>
 #import <KeyframelessKit/KKChevronView.h>
