@@ -5,12 +5,12 @@
 
 #import "KKTimelineAdvancedView_Private.h"
 
+#import "KKKeyposeSymbol.h"
+#import "KKLocalized.h"
 #import "KKLog.h"
 #import "KKTimelineScale.h"
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
-#import "KKKeyposeSymbol.h"
-#import "KKLocalized.h"
 #import <KeyframelessKit/KKEasing.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 
@@ -59,6 +59,12 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
         [[NSColor inspectorLabel] colorWithAlphaComponent:0.75],
   };
 
+  // Rows (labels + curves) clip to the graph rect's vertical band so scrolled
+  // rows never bleed into the pinned ruler above or past the graph below.
+  [NSGraphicsContext saveGraphicsState];
+  NSRectClip(NSMakeRect(NSMinX(self.bounds), NSMinY(g), NSWidth(self.bounds),
+                        NSHeight(g)));
+
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
     KKLane *lane = lanes[i];
     NSRect row = [self _rowRectForIndex:i count:lanes.count];
@@ -92,13 +98,57 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     NSRect row = [self _rowRectForIndex:i count:lanes.count];
     [self _drawLane:lane inRow:row tracks:tracks];
   }
-  [NSGraphicsContext restoreGraphicsState];
+  [NSGraphicsContext restoreGraphicsState]; // curve clip
+  [NSGraphicsContext restoreGraphicsState]; // outer rows clip
+
+  // Fade shadows over the rows go under the ruler / playhead so those stay
+  // crisp; the row content above/below fades into a shadow when it scrolls.
+  [self _drawScrollFadesInRect:g];
 
   [self _drawRulerInRect:g tracks:tracks];
   [self _drawDurationOverlayInRect:g tracks:tracks];
   [self _drawPlayheadInRect:g tracks:tracks];
   [self _drawDragSnapGuideInRect:g tracks:tracks];
   [self _drawMarqueeRect];
+}
+
+- (void)_drawScrollFadesInRect:(NSRect)g {
+  CGFloat maxY = [self _maxScrollY];
+  if (maxY <= 0.0)
+    return;
+  CGFloat fadeH = 16.0;
+  CGFloat peak = 0.33;
+  // Strength tracks how far the rows are scrolled past each edge (ramping up
+  // over the first fadeH points), so the shadow grows/shrinks with the scroll
+  // amount rather than snapping on/off.
+  CGFloat topA = peak * MAX(0.0, MIN(1.0, _scrollY / fadeH));
+  CGFloat botA = peak * MAX(0.0, MIN(1.0, (maxY - _scrollY) / fadeH));
+  NSColor *clear = [NSColor colorWithCalibratedWhite:0.0 alpha:0.0];
+  // Clip to the track's rounded rect so the fade follows the rounded corners
+  // instead of squaring them off.
+  [NSGraphicsContext saveGraphicsState];
+  [[NSBezierPath bezierPathWithRoundedRect:g
+                                   xRadius:KKRadiusMD
+                                   yRadius:KKRadiusMD] addClip];
+  // Top fade: rows lie above the viewport once scrolled down (y-up, so the
+  // top edge is NSMaxY). Shadow at the top edge fading to clear below it.
+  if (topA > 0.001) {
+    NSRect r = NSMakeRect(NSMinX(g), NSMaxY(g) - fadeH, NSWidth(g), fadeH);
+    NSGradient *grad = [[NSGradient alloc]
+        initWithStartingColor:clear
+                  endingColor:[NSColor colorWithCalibratedWhite:0.0
+                                                          alpha:topA]];
+    [grad drawInRect:r angle:90.0];
+  }
+  // Bottom fade: more rows lie below the viewport.
+  if (botA > 0.001) {
+    NSRect r = NSMakeRect(NSMinX(g), NSMinY(g), NSWidth(g), fadeH);
+    NSGradient *grad = [[NSGradient alloc]
+        initWithStartingColor:[NSColor colorWithCalibratedWhite:0.0 alpha:botA]
+                  endingColor:clear];
+    [grad drawInRect:r angle:90.0];
+  }
+  [NSGraphicsContext restoreGraphicsState];
 }
 
 - (void)_drawDurationPillInRect:(NSRect)g

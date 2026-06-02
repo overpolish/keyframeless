@@ -56,20 +56,47 @@
 // Forward to super first so any enclosing scroll view sees a coherent phase
 // stream (see project_scrollwheel_momentum).
 - (void)scrollWheel:(NSEvent *)event {
-  [super scrollWheel:event];
-  if (_interactionsBlocked)
+  // IMPORTANT: only forward to super (which bubbles up the responder chain to
+  // FCP's inspector scroll view) when WE don't handle the gesture. Forwarding
+  // a gesture we also act on makes the whole inspector scroll along with our
+  // rows - the "double scroll". So super is called only on the no-op paths.
+  if (_interactionsBlocked) {
+    [super scrollWheel:event];
     return;
+  }
   CGFloat dx = event.scrollingDeltaX;
   CGFloat dy = event.scrollingDeltaY;
-  if (fabs(dx) <= fabs(dy) * 1.2 || (dx == 0 && dy == 0))
+  if (dx == 0 && dy == 0) {
+    [super scrollWheel:event];
     return;
-  NSRect tracks = [self _tracksRect];
-  if (![_zp panByScrollDeltaX:dx
-                      precise:event.hasPreciseScrollingDeltas
-                       inRect:tracks])
+  }
+  // Horizontal-dominant gestures pan the time axis; vertical-dominant ones
+  // scroll the lane rows (only when they overflow the tracks viewport).
+  if (fabs(dx) > fabs(dy) * 1.2) {
+    NSRect tracks = [self _tracksRect];
+    if ([_zp panByScrollDeltaX:dx
+                       precise:event.hasPreciseScrollingDeltas
+                        inRect:tracks]) {
+      [self setNeedsDisplay:YES];
+      [self _notifyZoomChanged];
+      return;
+    }
+    [super scrollWheel:event];
     return;
-  [self setNeedsDisplay:YES];
-  [self _notifyZoomChanged];
+  }
+  CGFloat maxY = [self _maxScrollY];
+  if (maxY <= 0.0) {
+    // Nothing to scroll here - let the inspector have it.
+    [super scrollWheel:event];
+    return;
+  }
+  // Consume vertical scrolling even at the limit so the inspector doesn't
+  // lurch when our rows bottom out mid-gesture.
+  CGFloat newY = MAX(0.0, MIN(maxY, _scrollY - dy));
+  if (newY != _scrollY) {
+    _scrollY = newY;
+    [self setNeedsDisplay:YES];
+  }
 }
 
 - (void)updateTrackingAreas {
@@ -204,7 +231,13 @@
   if (_dragActive)
     return;
   _timeline = timeline;
+  [self _clampScroll];
   [self setNeedsDisplay:YES];
+}
+
+- (void)setFrameSize:(NSSize)newSize {
+  [super setFrameSize:newSize];
+  [self _clampScroll];
 }
 
 - (void)setClipDurationSeconds:(double)seconds {

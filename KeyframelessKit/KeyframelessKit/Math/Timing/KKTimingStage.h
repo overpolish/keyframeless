@@ -236,6 +236,11 @@ NSArray<NSString *> *_Nullable KKLaneComponentLabels(KKLane *lane);
 @property(nonatomic, copy) NSArray<KKLane *> *lanes;
 @property(nonatomic, copy) NSArray<KKLaneGroup *> *groups;
 
+/// User-defined display order of property labels (the inspector's drag-to-
+/// reorder). Labels appear in this order; any label not listed falls back to
+/// alphabetical after them. nil/empty == fully alphabetical (the default).
+@property(nonatomic, copy, nullable) NSArray<NSString *> *paramOrder;
+
 + (instancetype)timeline;
 
 @end

@@ -32,6 +32,13 @@
                          alpha:1.0];
 }
 
++ (NSColor *)remoteWindowBackground {
+  return [NSColor colorWithRed:0x16 / 255.0
+                         green:0x16 / 255.0
+                          blue:0x16 / 255.0
+                         alpha:1.0];
+}
+
 #pragma mark - Workflow Extension
 
 + (NSColor *)windowBackground {

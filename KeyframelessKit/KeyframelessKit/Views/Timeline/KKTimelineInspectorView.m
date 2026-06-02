@@ -7,25 +7,26 @@
 #import "KKLocalized.h"
 #import "KKTimelineInspectorView_Private.h"
 
-#import "KKShaderTypes.h"
-#import "KKConstants.h"
-#import "KKTokens.h"
-#import "NSColor+KKColors.h"
 #import "KKCheckboxView.h"
 #import "KKCompoundPillBar.h"
+#import "KKConstants.h"
 #import "KKLabelView.h"
 #import "KKMiniCanvasView.h"
 #import "KKParameterRowView.h"
 #import "KKPillToggleRowView.h"
 #import "KKPopoverHeaderView.h"
 #import "KKPopupSelectView.h"
+#import "KKReorderListView.h"
+#import "KKShaderTypes.h"
 #import "KKSliderView.h"
 #import "KKTimelineInspectorButtons.h"
 #import "KKTimelineLanesView_Private.h"
+#import "KKTokens.h"
 #import "KKValueTextField.h"
+#import "NSColor+KKColors.h"
 #import <KeyframelessKit/KKTimingCompat.h>
 
-static const CGFloat kInspectorHeight = 200.0;
+static const CGFloat kInspectorHeight = 220.0;
 static const CGFloat kHeaderRowHeight = 28.0;
 // The motion-blur parameter row sits in its own section below the box. The
 // custom-UI height is fixed at init, so we reserve this once up front.
@@ -33,6 +34,8 @@ static const CGFloat kMotionBlurRowHeight = 28.0;
 // The on-screen-control visibility row mirrors the motion-blur row's section
 // below the box; same fixed height reserved up front.
 static const CGFloat kOSCVisibilityRowHeight = 28.0;
+// The property-order row mirrors the same section; gear-only (no checkbox).
+static const CGFloat kParamOrderRowHeight = 28.0;
 // Trailing margin that lands the checkbox on the native control gutter, same
 // value KKCustomGroupHeaderView uses.
 static const CGFloat kMBCheckboxTrailing = 23.0;
@@ -541,6 +544,10 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   NSButton *_oscSettingsButton;
   NSPopover *_oscPopover;
   BOOL _showsOSCVisibilityRow;
+  KKParameterRowView *_paramOrderRow;
+  NSButton *_paramOrderButton;
+  NSPopover *_paramOrderPopover;
+  BOOL _showsParamOrderRow;
   double _mbShutterAngle;
   NSInteger _mbSamples;
   KKMotionBlurMode _mbMode;
@@ -583,6 +590,8 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   // Read the subclass hooks once; the custom-UI height can't change after init.
   _showsMotionBlurRow = [self showsMotionBlurRow];
   _showsOSCVisibilityRow = [self showsOSCVisibilityRow];
+  // Reordering is moot with 0/1 properties.
+  _showsParamOrderRow = (_availableLanes.count >= 2);
   _mbShutterAngle = 180.0; // the natural shutter
   _mbSamples = 16;
   _mbMode = KKMotionBlurModeTransitionsOnly; // default; cheapest
@@ -599,6 +608,8 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
     [self _buildMotionBlurRow];
   if (_showsOSCVisibilityRow)
     [self _buildOSCVisibilityRow];
+  if (_showsParamOrderRow)
+    [self _buildParamOrderRow];
   [self _installConstraints:box headerRow:headerRow];
   return self;
 }
@@ -829,7 +840,9 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
 - (CGFloat)_totalHeight {
   return kInspectorHeight +
          (_showsMotionBlurRow ? kMotionBlurRowHeight + KKPaddingMD : 0.0) +
-         (_showsOSCVisibilityRow ? kOSCVisibilityRowHeight + KKPaddingMD : 0.0);
+         (_showsOSCVisibilityRow ? kOSCVisibilityRowHeight + KKPaddingMD
+                                 : 0.0) +
+         (_showsParamOrderRow ? kParamOrderRowHeight + KKPaddingMD : 0.0);
 }
 
 // Builds one of the optional rows below the box - a labeled left view plus a
@@ -843,8 +856,9 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
                                title:(NSString *)title
                    gearAccessibility:(NSString *)gearAccessibility
                           gearAction:(SEL)gearAction
+                        showCheckbox:(BOOL)showCheckbox
                             checkbox:
-                                (KKCheckboxView *__strong _Nonnull *_Nonnull)
+                                (KKCheckboxView *__strong _Nullable *_Nullable)
                                     outCheckbox
                           gearButton:
                               (NSButton *__strong _Nonnull *_Nonnull)outGear {
@@ -864,9 +878,12 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   // control. Checkbox sits in the native control gutter (same as
   // KKCustomGroupHeaderView); the settings gear sits just to its left.
   NSView *controls = [[NSView alloc] initWithFrame:NSZeroRect];
-  KKCheckboxView *checkbox = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
-  checkbox.translatesAutoresizingMaskIntoConstraints = NO;
-  [controls addSubview:checkbox];
+  KKCheckboxView *checkbox = nil;
+  if (showCheckbox) {
+    checkbox = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
+    checkbox.translatesAutoresizingMaskIntoConstraints = NO;
+    [controls addSubview:checkbox];
+  }
 
   NSImage *gear = [NSImage imageWithSystemSymbolName:@"gearshape"
                             accessibilityDescription:gearAccessibility];
@@ -879,22 +896,36 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   gearButton.translatesAutoresizingMaskIntoConstraints = NO;
   [controls addSubview:gearButton];
 
-  [NSLayoutConstraint activateConstraints:@[
-    [checkbox.trailingAnchor constraintEqualToAnchor:controls.trailingAnchor
-                                            constant:-kMBCheckboxTrailing],
-    [checkbox.centerYAnchor constraintEqualToAnchor:controls.centerYAnchor],
-    [checkbox.widthAnchor constraintEqualToConstant:12.0],
-    [checkbox.heightAnchor constraintEqualToConstant:12.0],
-
-    [gearButton.trailingAnchor constraintEqualToAnchor:checkbox.leadingAnchor
-                                              constant:-KKSpacingMD],
+  NSMutableArray<NSLayoutConstraint *> *cs = [NSMutableArray array];
+  if (checkbox) {
+    [cs addObjectsFromArray:@[
+      [checkbox.trailingAnchor constraintEqualToAnchor:controls.trailingAnchor
+                                              constant:-kMBCheckboxTrailing],
+      [checkbox.centerYAnchor constraintEqualToAnchor:controls.centerYAnchor],
+      [checkbox.widthAnchor constraintEqualToConstant:12.0],
+      [checkbox.heightAnchor constraintEqualToConstant:12.0],
+      [gearButton.trailingAnchor constraintEqualToAnchor:checkbox.leadingAnchor
+                                                constant:-KKSpacingMD],
+    ]];
+  } else {
+    // No checkbox: center the 18pt gear on the 12pt checkbox column above it
+    // (offset the trailing edge by half the width difference) so the glyphs
+    // share a centerline rather than just a trailing edge.
+    [cs addObject:[gearButton.trailingAnchor
+                      constraintEqualToAnchor:controls.trailingAnchor
+                                     constant:-(kMBCheckboxTrailing -
+                                                (18.0 - 12.0) / 2.0)]];
+  }
+  [cs addObjectsFromArray:@[
     [gearButton.centerYAnchor constraintEqualToAnchor:controls.centerYAnchor],
     [gearButton.widthAnchor constraintEqualToConstant:18.0],
     [gearButton.heightAnchor constraintEqualToConstant:18.0],
   ]];
+  [NSLayoutConstraint activateConstraints:cs];
   row.rightView = controls;
 
-  *outCheckbox = checkbox;
+  if (outCheckbox)
+    *outCheckbox = checkbox;
   *outGear = gearButton;
   return row;
 }
@@ -911,6 +942,7 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
                                              @"Accessibility: motion blur "
                                              @"settings.")
                             gearAction:@selector(_mbSettingsClicked:)
+                          showCheckbox:YES
                               checkbox:&_mbCheckbox
                             gearButton:&_mbSettingsButton];
 
@@ -939,6 +971,7 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
                                              @"Accessibility: per-element OSC "
                                              @"visibility settings.")
                             gearAction:@selector(_oscSettingsClicked:)
+                          showCheckbox:YES
                               checkbox:&_oscCheckbox
                             gearButton:&_oscSettingsButton];
   _oscCheckbox.isChecked = YES;
@@ -956,6 +989,88 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   };
 
   [self addSubview:_oscRow];
+}
+
+- (void)_buildParamOrderRow {
+  KKCheckboxView *unused = nil;
+  _paramOrderRow = [self
+      _buildTickGearRowWithParameterID:0
+                            iconSymbol:@"arrow.up.arrow.down"
+                                 title:KKLoc(
+                                           @"Parameter Order",
+                                           @"Section title: parameter display "
+                                           @"order in the timeline.")
+                     gearAccessibility:KKLoc(@"Reorder parameters",
+                                             @"Accessibility: drag-to-reorder "
+                                             @"the parameter list.")
+                            gearAction:@selector(_paramOrderClicked:)
+                          showCheckbox:NO
+                              checkbox:&unused
+                            gearButton:&_paramOrderButton];
+  [self addSubview:_paramOrderRow];
+}
+
+- (void)_paramOrderClicked:(id)sender {
+  if (_paramOrderPopover.isShown) {
+    [_paramOrderPopover close];
+    return;
+  }
+  NSArray<NSString *> *labels = [_basicView orderedParamLabels];
+  if (labels.count < 2)
+    return;
+  NSMutableArray<NSString *> *titles =
+      [NSMutableArray arrayWithCapacity:labels.count];
+  for (NSString *label in labels)
+    [titles addObject:KKLocalizedParamName(label)];
+
+  KKReorderListView *list = [[KKReorderListView alloc] initWithItemIDs:labels
+                                                                titles:titles];
+  list.translatesAutoresizingMaskIntoConstraints = NO;
+  __weak typeof(self) weak = self;
+  list.onReorder = ^(NSArray<NSString *> *newOrder) {
+    KKTimelineInspectorView *strong = weak;
+    [strong->_basicView applyParamOrder:newOrder];
+  };
+
+  // Wrap in the lanes-view popover content view for the macOS 26 liquid-glass
+  // double-border fix (same as the motion-blur / OSC popovers).
+  _KKLVPopoverContentView *content = [[_KKLVPopoverContentView alloc] init];
+  KKPopoverHeaderView *header = [[KKPopoverHeaderView alloc]
+      initWithTitle:KKLoc(@"Parameter Order",
+                          @"Section title: parameter display order in the "
+                          @"timeline.")
+             detail:KKLoc(@"Drag to reorder",
+                          @"Popover hint: drag rows to reorder parameters.")
+         symbolName:@"arrow.up.arrow.down"];
+  header.translatesAutoresizingMaskIntoConstraints = NO;
+  [content addSubview:header];
+  [content addSubview:list];
+  [NSLayoutConstraint activateConstraints:@[
+    [header.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
+                                         constant:KKPaddingMD],
+    [header.trailingAnchor constraintEqualToAnchor:content.trailingAnchor
+                                          constant:-KKPaddingMD],
+    [header.topAnchor constraintEqualToAnchor:content.topAnchor
+                                     constant:KKPaddingMD],
+    [list.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
+                                       constant:KKPaddingMD],
+    [list.trailingAnchor constraintEqualToAnchor:content.trailingAnchor
+                                        constant:-KKPaddingMD],
+    [list.topAnchor constraintEqualToAnchor:header.bottomAnchor
+                                   constant:KKPaddingSM],
+    [list.bottomAnchor constraintEqualToAnchor:content.bottomAnchor
+                                      constant:-KKPaddingMD],
+  ]];
+
+  NSViewController *vc = [[NSViewController alloc] init];
+  vc.view = content;
+  _paramOrderPopover = [[NSPopover alloc] init];
+  _paramOrderPopover.behavior = NSPopoverBehaviorTransient;
+  _paramOrderPopover.contentViewController = vc;
+  _paramOrderPopover.contentSize = content.fittingSize;
+  [_paramOrderPopover showRelativeToRect:_paramOrderButton.bounds
+                                  ofView:_paramOrderButton
+                           preferredEdge:NSRectEdgeMinY];
 }
 
 - (void)_oscSettingsClicked:(id)sender {
@@ -1172,6 +1287,10 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   if (_showsMotionBlurRow && _mbRow) {
     [bottomRows addObject:_mbRow];
     [bottomRowHeights addObject:@(kMotionBlurRowHeight)];
+  }
+  if (_showsParamOrderRow && _paramOrderRow) {
+    [bottomRows addObject:_paramOrderRow];
+    [bottomRowHeights addObject:@(kParamOrderRowHeight)];
   }
 
   if (bottomRows.count == 0) {

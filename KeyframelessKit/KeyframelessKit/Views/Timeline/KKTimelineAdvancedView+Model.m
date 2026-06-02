@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "KKTimelineScrubMath.h"
-#import "KKTokens.h"
 #import "KKLocalized.h"
 #import "KKTimelineAdvancedView_Private.h"
+#import "KKTimelineScrubMath.h"
+#import "KKTokens.h"
 
 @implementation KKTimelineAdvancedView (Model)
 
@@ -93,8 +93,28 @@
   NSRect t = [self _tracksRect];
   CGFloat h = [self _rowHeightForCount:n];
   CGFloat stride = h + kRowGap;
-  CGFloat y = NSMaxY(t) - h - stride * (CGFloat)i;
+  // +_scrollY raises the rows (the view is y-up), bringing lower rows up into
+  // the tracks viewport. Single funnel: drawing, hit-testing and popover
+  // anchors all read row positions from here, so they stay in sync.
+  CGFloat y = NSMaxY(t) - h - stride * (CGFloat)i + _scrollY;
   return NSMakeRect(NSMinX(t), y, NSWidth(t), h);
+}
+
+- (CGFloat)_maxScrollY {
+  NSInteger n = [self _animatableCount];
+  if (n <= 0)
+    return 0.0;
+  CGFloat h = [self _rowHeightForCount:n];
+  CGFloat contentH = (h + kRowGap) * (CGFloat)n - kRowGap;
+  CGFloat avail = NSHeight([self _tracksRect]);
+  return MAX(0.0, contentH - avail);
+}
+
+- (void)_clampScroll {
+  CGFloat maxY = [self _maxScrollY];
+  CGFloat clamped = MAX(0.0, MIN(_scrollY, maxY));
+  if (clamped != _scrollY)
+    _scrollY = clamped;
 }
 
 // Candidate snap fractions = every distinct keypose time across all
@@ -259,6 +279,11 @@
 }
 
 - (NSInteger)_laneRowAtPoint:(NSPoint)pt {
+  // Rows are clipped to the graph rect; a row scrolled partly under the pinned
+  // ruler must not register a hit through the ruler band.
+  NSRect g = [self _graphRect];
+  if (pt.y < NSMinY(g) || pt.y > NSMaxY(g))
+    return -1;
   NSArray<KKLane *> *lanes = [self _animatableLanes];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
     NSRect row = [self _rowRectForIndex:i count:lanes.count];

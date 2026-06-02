@@ -462,6 +462,7 @@ KKTimeline *KKTimelineSettingAspectLinked(KKTimeline *timeline, NSString *label,
   KKTimeline *c = [[[self class] allocWithZone:zone] init];
   c.lanes = [[NSArray alloc] initWithArray:_lanes copyItems:YES];
   c.groups = [[NSArray alloc] initWithArray:_groups copyItems:YES];
+  c.paramOrder = _paramOrder;
   return c;
 }
 
@@ -582,11 +583,13 @@ KKTimeline *KKTimelineRebalanced(KKTimeline *timeline, double oldDuration,
   for (KKLaneGroup *group in timeline.groups) {
     [groupsArr addObject:[group toDictionary]];
   }
-  NSDictionary *root = @{
+  NSMutableDictionary *root = [@{
     @"version" : @1,
     @"lanes" : lanesArr,
     @"groups" : groupsArr,
-  };
+  } mutableCopy];
+  if (timeline.paramOrder.count)
+    root[@"paramOrder"] = timeline.paramOrder;
   NSError *err;
   NSData *data = [NSJSONSerialization dataWithJSONObject:root
                                                  options:0
@@ -629,6 +632,16 @@ KKTimeline *KKTimelineRebalanced(KKTimeline *timeline, double oldDuration,
         [groups addObject:group];
     }
     timeline.groups = groups;
+  }
+
+  NSArray *orderArr = root[@"paramOrder"];
+  if ([orderArr isKindOfClass:[NSArray class]]) {
+    NSMutableArray<NSString *> *order =
+        [NSMutableArray arrayWithCapacity:orderArr.count];
+    for (id label in orderArr)
+      if ([label isKindOfClass:[NSString class]])
+        [order addObject:label];
+    timeline.paramOrder = order;
   }
 
   return timeline;

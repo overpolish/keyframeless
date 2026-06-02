@@ -27,7 +27,7 @@ static const CGFloat kRowLabelInset = 8.0;
 
 // Lane rows split the tracks rect equally with a min floor; extra vertical
 // space (e.g. the detached remote window) goes into taller rows.
-static const CGFloat kRowMin = 22.0;
+static const CGFloat kRowMin = 30.0;
 static const CGFloat kRowGap = 2.0;
 
 // Boundary pill - vertical capsule spanning the row, same width as Basic.
@@ -115,6 +115,11 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   KKTimelineZoomPan *_zp;
   BOOL _zoomedNotified;
 
+  // Vertical scroll offset (points) for the lane rows when they don't all fit
+  // at kRowMin. The ruler is drawn above the graph rect and is unaffected, so
+  // it stays pinned while the rows scroll beneath it. 0 == top.
+  CGFloat _scrollY;
+
   NSString *_hoverGapLabel;
   NSInteger _hoverGapAIdx;
 
@@ -145,6 +150,11 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 - (double)_fracForX:(CGFloat)x inTracks:(NSRect)t;
 - (CGFloat)_rowHeightForCount:(NSInteger)n;
 - (NSRect)_rowRectForIndex:(NSInteger)i count:(NSInteger)n;
+// Largest valid _scrollY: total row height minus the visible tracks height
+// (0 when every row fits, i.e. no scrolling needed).
+- (CGFloat)_maxScrollY;
+// Re-clamp _scrollY into [0, _maxScrollY] after a layout / timeline change.
+- (void)_clampScroll;
 - (NSArray<NSNumber *> *)_snapCandidates;
 - (NSInteger)_intervalStartKPIdxInLane:(KKLane *)lane atFrac:(double)frac;
 - (NSInteger)_animatableIndexForLabel:(NSString *)label;
@@ -191,6 +201,9 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
                         warn:(NSColor *)warn;
 - (void)_drawRulerInRect:(NSRect)g tracks:(NSRect)tracks;
 - (void)_drawPlayheadInRect:(NSRect)g tracks:(NSRect)tracks;
+// Top/bottom fade shadows over the scrolling rows (mirrors KKPaddedScrollView)
+// - top fade shown while scrolled down, bottom fade while more rows lie below.
+- (void)_drawScrollFadesInRect:(NSRect)g;
 
 // Interaction - scrub + drag + edits + keyboard + menu.
 - (BOOL)_isInScrubBand:(NSPoint)pt;

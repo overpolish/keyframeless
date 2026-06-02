@@ -4,8 +4,6 @@
  */
 
 #import "KKTimelineLanesView.h"
-#import "KKTokens.h"
-#import "NSColor+KKColors.h"
 #import "KKCheckboxRowView.h"
 #import "KKLocalized.h"
 #import "KKSegmentEditView.h"
@@ -13,6 +11,8 @@
 #import "KKTimelineBasicView.h"
 #import "KKTimelineLanesView_Popovers.h"
 #import "KKTimelineLanesView_Private.h"
+#import "KKTokens.h"
+#import "NSColor+KKColors.h"
 #import <KeyframelessKit/KKLog.h>
 
 @implementation KKTimelineLanesView
@@ -599,6 +599,28 @@
                                                            tmpl.label]]];
     [lanes addObject:lane];
   }
+  // Display order: the user's drag-to-reorder list if set, else alphabetical.
+  // This is the single chokepoint every view + popover inherits (they all
+  // iterate _timeline.lanes in order). Labels present in paramOrder lead in
+  // that order; anything not listed (incl. the whole default) falls back to
+  // alphabetical after them.
+  NSArray<NSString *> *order = out.paramOrder;
+  NSMutableDictionary<NSString *, NSNumber *> *rank =
+      [NSMutableDictionary dictionaryWithCapacity:order.count];
+  for (NSInteger i = 0; i < (NSInteger)order.count; i++)
+    if (!rank[order[i]])
+      rank[order[i]] = @(i);
+  [lanes sortUsingComparator:^NSComparisonResult(KKLane *a, KKLane *b) {
+    NSNumber *ra = rank[a.label];
+    NSNumber *rb = rank[b.label];
+    if (ra && rb)
+      return [ra compare:rb];
+    if (ra)
+      return NSOrderedAscending;
+    if (rb)
+      return NSOrderedDescending;
+    return [a.label localizedCaseInsensitiveCompare:b.label];
+  }];
   out.lanes = lanes;
   return out;
 }
@@ -652,6 +674,33 @@
 
 - (KKTimeline *)currentTimeline {
   return _timeline;
+}
+
+- (NSArray<NSString *> *)orderedParamLabels {
+  NSMutableSet<NSString *> *avail = [NSMutableSet set];
+  for (KKLane *l in _availableLanes)
+    [avail addObject:l.label];
+  // _timeline.lanes is already in display order (sorted in
+  // _timelineSeededFrom:) and - post-seed - contains every available property,
+  // so its order is the source of truth for the reorder list.
+  NSMutableArray<NSString *> *out = [NSMutableArray array];
+  for (KKLane *l in _timeline.lanes)
+    if ([avail containsObject:l.label] && ![out containsObject:l.label])
+      [out addObject:l.label];
+  for (KKLane *l in _availableLanes)
+    if (![out containsObject:l.label])
+      [out addObject:l.label];
+  return out;
+}
+
+- (void)applyParamOrder:(NSArray<NSString *> *)labels {
+  KKTimeline *updated = [_timeline copy];
+  updated.paramOrder = labels;
+  // Re-seed re-sorts lanes through the display chokepoint by the new order.
+  _timeline = [self _timelineSeededFrom:updated];
+  [self _refresh];
+  if (_onTimelineMutated)
+    _onTimelineMutated(_timeline);
 }
 
 - (NSArray<NSNumber *> *)_defaultValuesForLabel:(NSString *)label {

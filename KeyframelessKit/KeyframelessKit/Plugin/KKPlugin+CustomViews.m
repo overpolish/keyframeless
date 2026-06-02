@@ -12,6 +12,7 @@
 #import "KKPlugin_Private.h"
 #import "KKRemoteWindowKeyHandlerView.h"
 #import "KKSeparatorView.h"
+#import "NSColor+KKColors.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKConstants.h>
 
@@ -326,6 +327,9 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
                          [[KKRemoteWindowKeyHandlerView alloc] init];
                      keyHandler.identifier = KKRemoteWindowContentID;
                      keyHandler.translatesAutoresizingMaskIntoConstraints = NO;
+                     keyHandler.wantsLayer = YES;
+                     keyHandler.layer.backgroundColor =
+                         [NSColor remoteWindowBackground].CGColor;
                      void (^perform)(FxCommand) = ^(FxCommand command) {
                        __strong typeof(weakSelf) s = weakSelf;
                        if (!s)

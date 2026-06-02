@@ -57,6 +57,14 @@ typedef NS_ENUM(NSInteger, KKMiniCanvasRenderMode) {
 /// The current timeline state. KVO-unsafe; read only from the main queue.
 @property(nonatomic, readonly) KKTimeline *currentTimeline;
 
+/// All reorderable property labels in their current display order (the
+/// drag-to-reorder list's source). Backs the property-order popover.
+- (NSArray<NSString *> *)orderedParamLabels;
+
+/// Apply a user-defined property display order (persists via onTimelineMutated
+/// and re-sorts every view + popover through the display chokepoint).
+- (void)applyParamOrder:(NSArray<NSString *> *)labels;
+
 /// YES when at least one available lane is not yet opted in.
 @property(nonatomic, readonly) BOOL hasUnoptedLanes;
 
