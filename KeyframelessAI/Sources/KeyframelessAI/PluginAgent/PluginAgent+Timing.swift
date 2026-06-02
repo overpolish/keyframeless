@@ -94,11 +94,18 @@ extension AIPluginAgent {
 			A) "from A to B" / "animate A to B" (whole clip): 2 keyposes.
 			    [ (0, transition), (1, none) ]
 
-			B) "in over N seconds" / "first N seconds" / "appear": 2 keyposes.
-			    [ (0, transition), (N/dur, none) ]
+			B) "in over N seconds" / "first N seconds" / "appear": 3 keyposes. \
+			   Transition in, then HOLD the arrived value to the end. The \
+			   trailing hold is required - it is what makes this the Basic "In" \
+			   shape (transition + hold); without it the lane is just two \
+			   keyposes and Basic reads it as a full-clip drift, not an In.
+			    [ (0, transition), (N/dur, hold), (1, none) ]
 
-			C) "out over N seconds" / "last N seconds" / "at the end": 2 keyposes.
-			    [ (1 - N/dur, transition), (1, none) ]
+			C) "out over N seconds" / "last N seconds" / "at the end": 3 keyposes. \
+			   HOLD the value, then transition out over the last N seconds. The \
+			   leading hold is required - it is the Basic "Out" shape (hold + \
+			   transition); without it Basic reads a full-clip drift, not an Out.
+			    [ (0, hold), (1 - N/dur, transition), (1, none) ]
 
 			D) "in over Ni and out over No" / "X in, then back out": 4 keyposes.
 			    [ (0, transition), (Ni/dur, hold), (1 - No/dur, transition), (1, none) ]

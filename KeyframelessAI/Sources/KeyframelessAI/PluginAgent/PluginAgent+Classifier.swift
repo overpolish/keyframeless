@@ -157,8 +157,9 @@ extension AIPluginAgent {
 		let system = """
 			You answer questions about \(productContext) for an in-app AI assistant. \
 			Reply in 1-3 sentences, grounded in the reference docs. No labels, no \
-			preambles, no apologies. If the docs don't cover the question, say so \
-			briefly.
+			preambles, no apologies. Plain prose only - no markup, XML/HTML tags, \
+			or <...> style symbols; the answer is shown as plain text. If the docs \
+			don't cover the question, say so briefly.
 			"""
 		let schema: [String: Any] = [
 			"type": "object",
