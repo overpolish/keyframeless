@@ -5,12 +5,12 @@
 
 #import "KKTimelineBasicView_Private.h"
 
-#import "KKTimelineScale.h"
-#import "KKTokens.h"
-#import "NSColor+KKColors.h"
 #import "KKKeyposeSymbol.h"
 #import "KKMiniCanvasView.h"
 #import "KKSegmentEditView.h"
+#import "KKTimelineScale.h"
+#import "KKTokens.h"
+#import "NSColor+KKColors.h"
 #import <KeyframelessKit/KKEasing.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 
@@ -24,9 +24,12 @@
   if (NSWidth(g) <= 0 || NSHeight(g) <= 0)
     return;
 
-  NSBezierPath *track = [NSBezierPath bezierPathWithRoundedRect:g
-                                                        xRadius:KKRadiusMD
-                                                        yRadius:KKRadiusMD];
+  // The graph rect is inset by half a pill for content; the background fills
+  // the full track width, so outset it back.
+  NSBezierPath *track =
+      [NSBezierPath bezierPathWithRoundedRect:NSInsetRect(g, -kPillW / 2.0, 0.0)
+                                      xRadius:KKRadiusMD
+                                      yRadius:KKRadiusMD];
   [[[NSColor inspectorLabel] colorWithAlphaComponent:0.06] setFill];
   [track fill];
 

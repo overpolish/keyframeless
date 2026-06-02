@@ -60,7 +60,14 @@
 - (NSRect)_tracksRect {
   NSRect g = [self _graphRect];
   CGFloat x = NSMinX(g) + [self _trackLeftOffset];
-  return NSMakeRect(x, NSMinY(g), NSMaxX(g) - x, NSHeight(g));
+  // Inset by half a pill on each side so a keypose at frac 0/1 sits fully
+  // inside the track background (its center lands halfPill in from the edge)
+  // and the curve can't escape the bounds when a lane has no end pill. Every
+  // frac<->x consumer (pills, curve, ruler, playhead, scrub, zoom/pan) reads
+  // this rect, so they all stay aligned.
+  CGFloat pad = kPillW / 2.0;
+  return NSMakeRect(x + pad, NSMinY(g), MAX(0.0, NSMaxX(g) - x - 2.0 * pad),
+                    NSHeight(g));
 }
 
 - (CGFloat)_xForFrac:(double)frac inTracks:(NSRect)t {

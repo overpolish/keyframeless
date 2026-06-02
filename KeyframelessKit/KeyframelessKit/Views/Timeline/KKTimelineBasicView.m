@@ -6,12 +6,12 @@
 #import "KKLocalized.h"
 #import "KKTimelineBasicView_Private.h"
 
-#import "KKTimelineScale.h"
-#import "KKTokens.h"
-#import "NSColor+KKColors.h"
 #import "KKCheckboxView.h"
 #import "KKKeyposeSymbol.h"
+#import "KKTimelineScale.h"
 #import "KKTimelineZoomPan.h"
+#import "KKTokens.h"
+#import "NSColor+KKColors.h"
 #import <CoreGraphics/CGEventSource.h>
 #import <KeyframelessKit/KKEasing.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
@@ -400,7 +400,13 @@ double KKBasicMotionYSmoothed(double t, KKBasicProj p) {
 - (NSRect)_graphRect {
   CGFloat bottom = kLabelStripH + kGraphBottomGap;
   CGFloat top = kRulerH + kRulerGap + kGraphPadTop;
-  return NSMakeRect(kGraphPadX, bottom, NSWidth(self.bounds) - 2 * kGraphPadX,
+  // Inset X by half a pill so a keypose at frac 0/1 sits fully inside the track
+  // and the curve can't escape the bounds with no end pill. Every frac<->x
+  // consumer (curve, pills, ruler, scrub, hit-test) reads this rect; only the
+  // rounded background fill is drawn outset back to the full width.
+  CGFloat pad = kPillW / 2.0;
+  return NSMakeRect(kGraphPadX + pad, bottom,
+                    NSWidth(self.bounds) - 2 * kGraphPadX - 2 * pad,
                     NSHeight(self.bounds) - bottom - top);
 }
 
