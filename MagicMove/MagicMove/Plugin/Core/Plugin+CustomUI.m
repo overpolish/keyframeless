@@ -10,6 +10,7 @@
 #import "Plugin_Private.h"
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KeyframelessKit.h>
+@import KeyframelessAI;
 
 /// MagicMove draws Position + Rotation on-screen controls, so it opts into the
 /// inspector's "On-Screen Controls" visibility row (other plugins default off).
@@ -21,6 +22,207 @@
   return YES;
 }
 @end
+
+/// Plain-text coordinate-space description for the AI agent's value-resolution
+/// pass - the only context that LLM call sees alongside the user's prompt. Just
+/// lanes and their numeric ranges; no timing words.
+static NSString *_MagicMoveAILaneSchemaText(void) {
+  NSMutableString *s = [NSMutableString string];
+  [s appendString:@"Lane labels and coordinate spaces:\n\n"];
+  [s appendString:
+          @"- \"Position\": two numeric components [x, y].\n"
+          @"    Normalised clip space, 0..1, where 0.5 = centre of the frame.\n"
+          @"    x: 0 = left edge, 1 = right edge.\n"
+          @"    y: 0 = bottom, 1 = top (Y points UP).\n"
+          @"    Off-frame values (< 0 or > 1) are allowed, so the clip can "
+          @"start or end fully outside the frame.\n"
+          @"    Default value: [0.5, 0.5] (centred).\n"
+          @"\n"
+          @"- \"Scale\": two numeric components [x, y], whole percentages of "
+          @"the clip's own size.\n"
+          @"    100 = original size. Floored at 0, no upper limit. Never "
+          @"negative (use Rotation to flip).\n"
+          @"    Default value: [100, 100].\n"
+          @"\n"
+          @"- \"Rotation\": three numeric components [x, y, z], in DEGREES.\n"
+          @"    z = the in-plane spin (clockwise positive) - this is the usual "
+          @"rotation. x and y tilt the clip in 3D.\n"
+          @"    Values accumulate past 360 (720 = two full turns).\n"
+          @"    Default value: [0, 0, 0].\n"
+          @"\n"
+          @"- \"Opacity\": one numeric component, whole percentage 0..100.\n"
+          @"    100 = fully opaque, 0 = invisible.\n"
+          @"    Default value: 100.\n"
+          @"\n"
+          @"- \"Anchor\": two numeric components [x, y] - the pivot that "
+          @"Rotation and Scale swing around.\n"
+          @"    Same normalised space as Position relative to the clip: "
+          @"[0.5, 0.5] = clip centre, [0, 0] = bottom-left corner, "
+          @"[1, 1] = top-right corner.\n"
+          @"    Default value: [0.5, 0.5] (centre). Only change it when the "
+          @"user wants rotation/scale to pivot off-centre.\n"];
+  return s;
+}
+
+/// JSON timeline for the current effect: the saved one, or a fresh template
+/// from availableLanes when nothing is saved (the LLM needs real lane labels).
+static NSString *
+_MagicMoveAICurrentTimelineJSON(id<FxParameterRetrievalAPI_v6> getAPI) {
+  NSString *saved = KKReadCustomParamString(getAPI, kKKParamTimelineData);
+  if (saved.length && [saved containsString:@"\"label\""])
+    return saved;
+  KKTimeline *fresh = [KKTimeline timeline];
+  fresh.lanes = [MagicMovePlugin availableLanes];
+  NSString *json = [KKTimeline jsonFromTimeline:fresh];
+  return json ?: @"{\"lanes\":[]}";
+}
+
+/// For any new hold interval (endpoints_linked:true) with no modulation, copy
+/// modulation from a time-overlapping, same-valued old hold interval. The LLM
+/// is told to preserve modulation across unchanged regions but routinely
+/// forgets; this is the deterministic backstop.
+static NSArray *_MagicMoveAIPreserveModulation(NSArray *newKps,
+                                               NSArray *oldKps) {
+  if (![newKps isKindOfClass:[NSArray class]] || newKps.count < 2)
+    return newKps;
+  if (![oldKps isKindOfClass:[NSArray class]] || oldKps.count < 2)
+    return newKps;
+  NSMutableArray *out = [NSMutableArray arrayWithCapacity:newKps.count];
+  for (NSUInteger i = 0; i < newKps.count; i++) {
+    id raw = newKps[i];
+    if (![raw isKindOfClass:[NSDictionary class]]) {
+      [out addObject:raw];
+      continue;
+    }
+    NSMutableDictionary *kp = [raw mutableCopy];
+    NSDictionary *outgoing = kp[@"outgoing"];
+    if (![outgoing isKindOfClass:[NSDictionary class]] ||
+        i + 1 >= newKps.count) {
+      [out addObject:kp];
+      continue;
+    }
+    BOOL linked = [outgoing[@"endpoints_linked"] boolValue];
+    NSInteger newMod = [outgoing[@"modulation"] integerValue];
+    if (!linked || newMod != 0) {
+      [out addObject:kp];
+      continue;
+    }
+    double newStart = [kp[@"time"] doubleValue];
+    double newEnd = [((NSDictionary *)newKps[i + 1])[@"time"] doubleValue];
+    NSArray *newVals = kp[@"values"];
+    for (NSUInteger j = 0; j + 1 < oldKps.count; j++) {
+      NSDictionary *oldKp = oldKps[j];
+      if (![oldKp isKindOfClass:[NSDictionary class]])
+        continue;
+      NSDictionary *oldOut = oldKp[@"outgoing"];
+      if (![oldOut isKindOfClass:[NSDictionary class]])
+        continue;
+      BOOL oldLinked = [oldOut[@"endpoints_linked"] boolValue];
+      NSInteger oldMod = [oldOut[@"modulation"] integerValue];
+      if (!oldLinked || oldMod == 0)
+        continue;
+      double oldStart = [oldKp[@"time"] doubleValue];
+      double oldEnd = [((NSDictionary *)oldKps[j + 1])[@"time"] doubleValue];
+      BOOL overlaps = (newStart < oldEnd) && (newEnd > oldStart);
+      if (!overlaps)
+        continue;
+      NSArray *oldVals = oldKp[@"values"];
+      if (![newVals isKindOfClass:[NSArray class]] ||
+          ![oldVals isKindOfClass:[NSArray class]] ||
+          newVals.count != oldVals.count)
+        continue;
+      BOOL sameValues = YES;
+      for (NSUInteger k = 0; k < newVals.count; k++) {
+        if (fabs([newVals[k] doubleValue] - [oldVals[k] doubleValue]) > 1e-6) {
+          sameValues = NO;
+          break;
+        }
+      }
+      if (!sameValues)
+        continue;
+      NSMutableDictionary *mergedOut = [outgoing mutableCopy];
+      mergedOut[@"modulation"] = @(oldMod);
+      if (oldOut[@"modulation_intensity"])
+        mergedOut[@"modulation_intensity"] = oldOut[@"modulation_intensity"];
+      if (oldOut[@"modulation_frequency"])
+        mergedOut[@"modulation_frequency"] = oldOut[@"modulation_frequency"];
+      if (oldOut[@"modulation_seed"])
+        mergedOut[@"modulation_seed"] = oldOut[@"modulation_seed"];
+      if (oldOut[@"modulation_linked"] != nil)
+        mergedOut[@"modulation_linked"] = oldOut[@"modulation_linked"];
+      kp[@"outgoing"] = mergedOut;
+      break;
+    }
+    [out addObject:kp];
+  }
+  return out;
+}
+
+/// Merge the agent's mutation JSON `{"operations":[{"lane":"<label>",
+/// "keyposes":[...]}]}` into the current timeline JSON, replacing only each
+/// named lane's keyposes (stable fields preserved). Unknown labels dropped.
+static NSString *_MagicMoveAIMergedTimelineJSON(NSString *currentTimelineJSON,
+                                                NSString *mutationJSON) {
+  NSData *curD = [currentTimelineJSON dataUsingEncoding:NSUTF8StringEncoding];
+  NSError *err = nil;
+  NSMutableDictionary *current =
+      [NSJSONSerialization JSONObjectWithData:curD
+                                      options:NSJSONReadingMutableContainers
+                                        error:&err];
+  if (![current isKindOfClass:[NSMutableDictionary class]])
+    return nil;
+  NSData *mutD = [mutationJSON dataUsingEncoding:NSUTF8StringEncoding];
+  NSDictionary *mut = [NSJSONSerialization JSONObjectWithData:mutD
+                                                      options:0
+                                                        error:&err];
+  if (![mut isKindOfClass:[NSDictionary class]])
+    return nil;
+  NSArray *ops = mut[@"operations"];
+  NSMutableArray *curLanes = current[@"lanes"];
+  if (![ops isKindOfClass:[NSArray class]] ||
+      ![curLanes isKindOfClass:[NSMutableArray class]])
+    return nil;
+
+  NSMutableDictionary *byLabel = [NSMutableDictionary dictionary];
+  for (NSUInteger i = 0; i < curLanes.count; i++) {
+    NSDictionary *L = curLanes[i];
+    if (![L isKindOfClass:[NSDictionary class]])
+      continue;
+    NSString *label = L[@"label"];
+    if ([label isKindOfClass:[NSString class]])
+      byLabel[label] = @(i);
+  }
+
+  for (id op in ops) {
+    if (![op isKindOfClass:[NSDictionary class]])
+      continue;
+    NSString *label = op[@"lane"];
+    if (![label isKindOfClass:[NSString class]])
+      continue;
+    NSNumber *idxN = byLabel[label];
+    if (!idxN) {
+      KKLogWarn(@"AI tried to write unknown lane label: %@", label);
+      continue;
+    }
+    NSMutableDictionary *target =
+        [curLanes[idxN.unsignedIntegerValue] mutableCopy];
+    if (op[@"keyposes"]) {
+      NSArray *newKps = op[@"keyposes"];
+      NSArray *oldKps = curLanes[idxN.unsignedIntegerValue][@"keyposes"];
+      target[@"keyposes"] = _MagicMoveAIPreserveModulation(newKps, oldKps);
+    }
+    if (op[@"hold_shape"])
+      target[@"hold_shape"] = op[@"hold_shape"];
+    target[@"enabled"] = @YES;
+    curLanes[idxN.unsignedIntegerValue] = target;
+  }
+
+  current[@"lanes"] = curLanes;
+  NSData *outD = [NSJSONSerialization dataWithJSONObject:current
+                                                 options:0
+                                                   error:&err];
+  return [[NSString alloc] initWithData:outD encoding:NSUTF8StringEncoding];
+}
 
 @implementation MagicMovePlugin (CustomUI)
 
@@ -540,6 +742,188 @@
       [NSImage imageWithSystemSymbolName:@"circle.dotted.and.circle"
                 accessibilityDescription:nil];
   return @[ magicMove ];
+}
+
+- (nullable NSView *)aiAccessoryView {
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    [KKAIKnowledge registerSharedTimelineDocs];
+    [KKAIKnowledge
+        registerBundleDocsWithName:@"Magic Move"
+                            bundle:[NSBundle
+                                       bundleForClass:[MagicMovePlugin class]]
+                      subdirectory:@"AIKnowledge"];
+    // Shared on-screen-control docs live in the kit framework (flattened to its
+    // Resources root). Magic Move uses the rotation gizmo + the visibility
+    // system, so expose just those two topics.
+    [KKAIKnowledge
+        registerBundleDocsWithName:@"On-Screen Controls"
+                            bundle:[NSBundle
+                                       bundleForClass:[KKOnScreenControl class]]
+                      subdirectory:nil
+                      onlyTopicIDs:@[ @"visibility", @"rotation" ]];
+  });
+
+  NSString *productContext = MMLoc(
+      @"Magic Move, a Final Cut Pro plugin that animates a clip's position, "
+      @"scale, rotation, and opacity around an adjustable anchor point, using "
+      @"the shared Keyframeless timeline system (Basic and Advanced timing, "
+      @"easing, motion blur). Always refer to yourself as Magic Move. Detailed "
+      @"feature information is in the reference docs below.",
+      @"AI assistant product context for Magic Move plugin.");
+
+  NSArray<NSArray<NSString *> *> *examples = @[
+    @[
+      MMLoc(@"Slide in from the left",
+            @"AI example chip: slide in from the left."),
+      MMLoc(@"Animate the clip sliding in from off the left edge to the "
+            @"centre over the first second.",
+            @"AI example value: slide in from the left.")
+    ],
+    @[
+      MMLoc(@"Spin once", @"AI example chip: spin once."),
+      MMLoc(@"Spin the clip one full turn over the whole duration.",
+            @"AI example value: spin once.")
+    ],
+    @[
+      MMLoc(@"Pop in with a bounce", @"AI example chip: pop in with a bounce."),
+      MMLoc(@"Scale the clip from 0% up to 100% with a bounce at the start.",
+            @"AI example value: pop in with a bounce.")
+    ],
+    @[
+      MMLoc(@"What does the anchor point do?",
+            @"AI example chip: anchor point question."),
+      MMLoc(@"What does the anchor point do?",
+            @"AI example value: anchor point question.")
+    ],
+  ];
+
+  NSString *placeholder = MMLoc(@"Ask a question or describe an animation…",
+                                @"AI prompt field placeholder for Magic Move.");
+
+  __weak typeof(self) weakSelf = self;
+  return [KKAIBannerHost
+      makePluginButtonWithProductContext:productContext
+                            examplePairs:examples
+                             placeholder:placeholder
+                                   onRun:^(NSString *prompt) {
+                                     __strong typeof(weakSelf) strong =
+                                         weakSelf;
+                                     if (!strong)
+                                       return;
+                                     [strong _runAIPrompt:prompt
+                                           productContext:productContext];
+                                   }];
+}
+
+- (void)_runAIPrompt:(NSString *)prompt
+      productContext:(NSString *)productContext {
+  [KKAIDraft setRouting:YES];
+  [KKAIDraft setError:nil];
+
+  id<FxCustomParameterActionAPI_v4> readAct =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!readAct) {
+    [KKAIDraft setRouting:NO];
+    [KKAIDraft setError:@"Couldn't open the FCP action scope."];
+    return;
+  }
+  [readAct startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  NSString *currentJSON = _MagicMoveAICurrentTimelineJSON(getAPI);
+  NSString *uiJson = KKReadCustomParamString(getAPI, kParamUIState);
+  NSDictionary *uiState =
+      (uiJson.length
+           ? [NSJSONSerialization
+                 JSONObjectWithData:[uiJson
+                                        dataUsingEncoding:NSUTF8StringEncoding]
+                            options:0
+                              error:nil]
+           : nil)
+          ?: @{};
+  NSInteger activeTab = [uiState[@"activeTab"] integerValue];
+  NSString *currentMode = (activeTab == 1) ? @"Advanced" : @"Basic";
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  CMTime clipDur = kCMTimeZero;
+  if (timingAPI)
+    [timingAPI durationTimeForEffect:&clipDur];
+  double clipDurSec = CMTimeGetSeconds(clipDur);
+  if (clipDurSec <= 0 || isnan(clipDurSec))
+    clipDurSec = 5.0;
+  [readAct endAction:self];
+
+  NSString *schema = _MagicMoveAILaneSchemaText();
+
+  __weak typeof(self) weakSelf = self;
+  [KKAIPluginAgent
+             runWithPrompt:prompt
+            productContext:productContext
+            laneSchemaText:schema
+       currentTimelineJSON:currentJSON
+       clipDurationSeconds:clipDurSec
+      currentInspectorMode:currentMode
+                completion:^(KKAIPluginResult *result, NSError *err) {
+                  dispatch_async(dispatch_get_main_queue(), ^{
+                    __strong typeof(weakSelf) strong = weakSelf;
+                    if (!strong)
+                      return;
+                    [KKAIDraft setRouting:NO];
+                    if (err) {
+                      KKLogError(@"AI[err] %@", err.localizedDescription);
+                      [KKAIDraft setError:err.localizedDescription];
+                      return;
+                    }
+                    if (!result) {
+                      KKLogError(@"AI[err] empty result");
+                      [KKAIDraft setError:@"Empty AI response."];
+                      return;
+                    }
+                    if (result.kind == KKAIPluginResultKindAnswer) {
+                      [KKAIDraft setAnswer:result.answer];
+                      return;
+                    }
+                    NSString *merged = _MagicMoveAIMergedTimelineJSON(
+                        currentJSON, result.mutationJSON);
+                    if (!merged) {
+                      KKLogError(@"AI[err] merge returned nil");
+                      [KKAIDraft
+                          setError:
+                              @"AI returned an invalid timeline mutation."];
+                      return;
+                    }
+                    id<FxCustomParameterActionAPI_v4> writeAct =
+                        [strong.apiManager
+                            apiForProtocol:@protocol(
+                                               FxCustomParameterActionAPI_v4)];
+                    if (!writeAct) {
+                      [KKAIDraft
+                          setError:@"Couldn't open the FCP action scope to "
+                                   @"apply the mutation."];
+                      return;
+                    }
+                    [writeAct startAction:strong];
+                    id<FxParameterSettingAPI_v5> setAPI = [strong.apiManager
+                        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+                    KKWriteCustomParamString(setAPI, merged,
+                                             kKKParamTimelineData);
+                    // If the result isn't Basic-representable, force the
+                    // inspector to Advanced so the user sees the real structure
+                    // instead of the compatibility banner.
+                    KKTimeline *resultTimeline =
+                        [KKTimeline timelineFromJSON:merged];
+                    if (resultTimeline &&
+                        !KKTimelineIsBasicCompatible(resultTimeline)) {
+                      [strong patchUIStateKey:@"activeTab"
+                                        value:@(1)
+                                      paramID:kParamUIState];
+                    }
+                    [writeAct endAction:strong];
+                    [KKAIDraft setAnswer:nil];
+                    [KKAIDraft clearPrompt];
+                  });
+                }];
 }
 
 @end

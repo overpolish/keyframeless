@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AA0000000000000000000001 /* KeyframelessAI in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000002 /* KeyframelessAI */; };
 		F21396022F649EF900E1EC03 /* keyframeless.icon in Resources */ = {isa = PBXBuildFile; fileRef = F21396012F649EF900E1EC03 /* keyframeless.icon */; };
 		F21396032F649EF900E1EC03 /* keyframeless.icon in Resources */ = {isa = PBXBuildFile; fileRef = F21396012F649EF900E1EC03 /* keyframeless.icon */; };
 		F220BFE32F4E07EB0034AF77 /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; };
@@ -148,6 +149,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA0000000000000000000001 /* KeyframelessAI in Frameworks */,
 				F2E2ED892F4CA530008620D9 /* Accelerate.framework in Frameworks */,
 				F2E2ED8B2F4CA530008620D9 /* PluginManager.framework in Frameworks */,
 				F220BFE32F4E07EB0034AF77 /* KeyframelessKit.framework in Frameworks */,
@@ -242,6 +244,7 @@
 			);
 			name = "XPC Service";
 			packageProductDependencies = (
+				AA0000000000000000000002 /* KeyframelessAI */,
 			);
 			productName = "XPC Service";
 			productReference = F2E2ED802F4CA530008620D9 /* MagicMove XPC Service.pluginkit */;
@@ -639,6 +642,13 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA0000000000000000000002 /* KeyframelessAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KeyframelessAI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = F2E2ED6D2F4CA530008620D9 /* Project object */;
 }
