@@ -20,6 +20,10 @@ NS_ASSUME_NONNULL_BEGIN
 @interface MagicMovePlugin ()
 @property(nonatomic, weak, nullable) KKTimelineInspectorView *inspectorView;
 @property(nonatomic, strong, nullable) KKMiniCanvasFeed *miniCanvasFeed;
+/// The /tmp descriptor path the current feed publishes to (per-instance, keyed
+/// by the instance UUID). Tracked so the feed is recreated if the UUID resolves
+/// after the feed was first made with the no-UUID fallback path.
+@property(nonatomic, copy, nullable) NSString *miniCanvasFeedPath;
 @property(nonatomic, strong, nullable)
     MagicMoveMiniCanvasRenderer *miniCanvasRenderer;
 @property(nonatomic) BOOL miniDragUndoStarted;

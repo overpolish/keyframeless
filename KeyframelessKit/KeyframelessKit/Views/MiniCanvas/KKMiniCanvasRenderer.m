@@ -113,6 +113,14 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
   return _rotationGrabbed;
 }
 
+// Default precedence is rotation > point (the ring is the larger target). A
+// plugin whose point handle draws ON TOP of the rings (e.g. MagicMove's
+// Position arc, matching the viewer's layering) overrides this to YES so the
+// hit-test / drag / opt-click all prefer the point where they overlap.
+- (BOOL)pointHandleBeatsRotation {
+  return NO;
+}
+
 #pragma mark - Rotation gizmo: small accessor defaults
 
 - (NSArray<NSNumber *> *)rotationEulerDegrees {
@@ -440,24 +448,30 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
     return updated;
   }
   KKTimeline *updated = [self.timeline copy] ?: [KKTimeline timeline];
-  KKLane *lane = [KKLane laneWithLabel:label];
-  lane.valueType = (KKLaneValueType)[self valueTypeForLabel:label];
-  lane.enabled = NO; // a value edit must not opt the property in
-  [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:values]];
   NSMutableArray<KKLane *> *lanes = [updated.lanes mutableCopy];
   BOOL replaced = NO;
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
     if ([lanes[i].label isEqualToString:label]) {
-      lane.enabled = lanes[i].enabled; // preserve animatable status
-      lane.componentMin = lanes[i].componentMin;
-      lane.componentMax = lanes[i].componentMax;
-      lanes[i] = lane;
+      // Copy the existing lane so EVERY property survives a constant value edit
+      // - aspectLinked especially. A fresh lane that only carried
+      // valueType/enabled/min/max dropped aspectLinked, so the first scale-box
+      // drag in the constants editor silently cleared the Scale aspect lock
+      // (the next tick then read aspectLinked=0). Just replace the constant
+      // keypose.
+      KKLane *nl = [lanes[i] copy];
+      nl.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
+      lanes[i] = nl;
       replaced = YES;
       break;
     }
   }
-  if (!replaced)
+  if (!replaced) {
+    KKLane *lane = [KKLane laneWithLabel:label];
+    lane.valueType = (KKLaneValueType)[self valueTypeForLabel:label];
+    lane.enabled = NO; // a value edit must not opt the property in
+    [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:values]];
     [lanes addObject:lane];
+  }
   updated.lanes = lanes;
   return updated;
 }
@@ -640,14 +654,17 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   self.canvas = canvas;
   if (CGRectIsEmpty(cr))
     return NO;
-  // Rotation > point > crop. Rotation is the largest target (the sphere) but
-  // also the most context-rich, and rings are visually distinct from point
-  // handles, so overlap is rare.
+  // Rotation > point > crop by default; a plugin whose point handle draws on
+  // top flips to point > rotation (see -pointHandleBeatsRotation).
+  BOOL pointFirst = [self pointHandleBeatsRotation];
+  if (pointFirst && [self _pointActiveForContentRect:cr] &&
+      [self pointHandleHitAtPoint:p contentRect:cr])
+    return YES;
   if ([self _rotationActiveForContentRect:cr] &&
       [self rotationHitTestAtPoint:p contentRect:cr])
     return YES;
-  if ([self _pointActiveForContentRect:cr] && [self pointHandleHitAtPoint:p
-                                                              contentRect:cr])
+  if (!pointFirst && [self _pointActiveForContentRect:cr] &&
+      [self pointHandleHitAtPoint:p contentRect:cr])
     return YES;
   return [self _cropActiveForContentRect:cr] &&
          [_cropEditor partAtPoint:p
@@ -662,10 +679,14 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
     return NO;
   self.canvas = canvas;
   NSString *label = nil;
-  // Rotation ring first (it sits in front), then the point handle. Same
-  // hit-tests the drag path uses, so the same element resolves.
-  if ([self _rotationActiveForContentRect:cr] &&
-      [self rotationHitTestAtPoint:p contentRect:cr] && self.rotationLabel) {
+  BOOL pointFirst = [self pointHandleBeatsRotation];
+  // Same precedence as the drag path so the same element resolves.
+  if (pointFirst && [self _pointActiveForContentRect:cr] &&
+      [self pointHandleHitAtPoint:p contentRect:cr] && self.pointLabel) {
+    label = self.pointLabel;
+  } else if ([self _rotationActiveForContentRect:cr] &&
+             [self rotationHitTestAtPoint:p contentRect:cr] &&
+             self.rotationLabel) {
     NSString *axis = (_rotActiveAxis == 0)   ? @"X"
                      : (_rotActiveAxis == 1) ? @"Y"
                                              : @"Z";
@@ -703,6 +724,13 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   [_cropEditor endDrag];
   if (CGRectIsEmpty(cr))
     return;
+  BOOL pointFirst = [self pointHandleBeatsRotation];
+  if (pointFirst && [self _pointActiveForContentRect:cr] &&
+      [self pointHandleHitAtPoint:p contentRect:cr]) {
+    _pointGrabbed = YES;
+    [self applyPointDragToPoint:p contentRect:cr canvas:canvas];
+    return;
+  }
   if ([self _rotationActiveForContentRect:cr] &&
       [self rotationHitTestAtPoint:p contentRect:cr]) {
     _rotationGrabbed = YES;

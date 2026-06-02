@@ -27,9 +27,10 @@
   KKMotionBlurState mbState = {0};
   if (pluginState.length >= sizeof(KKMotionBlurState))
     [pluginState getBytes:&mbState length:sizeof(mbState)];
+  NSString *reqPath = MagicMoveMiniCanvasRequestPathForUUID(
+      KKInstanceUUIDForAPI(self.apiManager));
   *inputImageRequests = KKBuildSourceRequests(
-      renderTime, mbState, MagicMoveMiniCanvasRequestPath, self.renderCache,
-      ^id(CMTime t) {
+      renderTime, mbState, reqPath, self.renderCache, ^id(CMTime t) {
         return [[FxImageTileRequest alloc]
             initWithSource:kFxImageTileRequestSourceEffectClip
                       time:t
@@ -234,9 +235,17 @@ void KKMagicMoveFillParamsFromTimeline(MagicMoveParams *outParams,
   // push live timeline updates per drag tick without any FxPlug param writes,
   // avoiding the Flexo write-lock deadlock that per-tick commits triggered.
   if (sourceImages.count > 0 && destinationImage.ioSurface) {
-    if (!self.miniCanvasFeed) {
-      self.miniCanvasFeed = [[KKMiniCanvasFeed alloc]
-          initWithDescriptorPath:MagicMoveMiniCanvasDescriptorPath];
+    // Per-instance publish path (keyed by the instance UUID) so two stacked
+    // MagicMove clips don't write the same /tmp file. Recreate the feed if the
+    // path changed (e.g. the UUID resolved after a first feed was made with the
+    // no-UUID fallback).
+    NSString *descPath = MagicMoveMiniCanvasDescriptorPathForUUID(
+        KKInstanceUUIDForAPI(self.apiManager));
+    if (!self.miniCanvasFeed ||
+        ![self.miniCanvasFeedPath isEqualToString:descPath]) {
+      self.miniCanvasFeed =
+          [[KKMiniCanvasFeed alloc] initWithDescriptorPath:descPath];
+      self.miniCanvasFeedPath = descPath;
     }
     NSArray<NSNumber *> *reqSecs = self.renderCache.boundaryReqSecs;
     NSArray<NSNumber *> *reqFracs = self.renderCache.boundaryReqFracs;

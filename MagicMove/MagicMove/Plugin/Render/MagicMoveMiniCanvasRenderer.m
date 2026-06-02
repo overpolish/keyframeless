@@ -15,6 +15,19 @@ NSString *const MagicMoveMiniCanvasDescriptorPath =
 NSString *const MagicMoveMiniCanvasRequestPath =
     @"/tmp/magicmove-minicanvas-request.json";
 
+NSString *MagicMoveMiniCanvasDescriptorPathForUUID(NSString *uuid) {
+  if (!uuid.length)
+    return MagicMoveMiniCanvasDescriptorPath;
+  return [NSString stringWithFormat:@"/tmp/magicmove-minicanvas-%@.json", uuid];
+}
+
+NSString *MagicMoveMiniCanvasRequestPathForUUID(NSString *uuid) {
+  if (!uuid.length)
+    return MagicMoveMiniCanvasRequestPath;
+  return [NSString
+      stringWithFormat:@"/tmp/magicmove-minicanvas-request-%@.json", uuid];
+}
+
 static const CGFloat kHandleHitTolPt = 12.0;
 
 // Scale box extent as a fraction of the content rect's min dimension (so it
@@ -31,6 +44,11 @@ static const double kMiniScaleFineFactor = 0.2;
   // wherever the cursor most recently passed through.
   double _posPressNX;
   double _posPressNY;
+  // Position value at grab, for delta dragging (move by the cursor's offset
+  // from the press point) instead of snapping the handle to the cursor -
+  // matches the viewer OSC.
+  double _posGrabValX;
+  double _posGrabValY;
   // Pipeline cache keyed by (device, pixelFormat) - the plugin's own metallib
   // is in this XPC process's bundle, so we build a real PSO and apply the
   // shader source → dest locally. No FxPlug round-trip = no Flexo lock
@@ -192,6 +210,12 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
   return 0.6;
 }
 
+// The Position arc draws on top of the rotation rings (matching the viewer's
+// layering), so the hit-test / drag / opt-click prefer it where they overlap.
+- (BOOL)pointHandleBeatsRotation {
+  return YES;
+}
+
 // Apply the real MagicMove shader source → dest, using current lane values
 // (which respect the live-override pushed by KK during drag). One path for
 // playhead, boundary, filmstrip, onion - they only differ in the value of
@@ -275,10 +299,19 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
 }
 
 - (NSArray<NSNumber *> *)defaultValuesForLabel:(NSString *)label {
+  // These must match the availableLanes template defaults (and the render
+  // reader's fallbacks). Without an entry the base returns zeros, which drew
+  // an untouched Anchor at the left edge and an untouched Scale box at 0%.
   if ([label isEqualToString:@"Position"])
     return @[ @0.5, @0.5 ];
   if ([label isEqualToString:@"Rotation"])
     return @[ @0.0, @0.0, @0.0 ];
+  if ([label isEqualToString:@"Scale"])
+    return @[ @100.0, @100.0 ];
+  if ([label isEqualToString:@"Opacity"])
+    return @[ @100.0 ];
+  if ([label isEqualToString:@"Anchor"])
+    return @[ @0.5, @0.5 ];
   return [super defaultValuesForLabel:label];
 }
 
@@ -565,11 +598,15 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
                   contentRect:(CGRect)cr
                        canvas:(KKMiniCanvasView *)canvas {
   // No-modifier path is only called on begin (kit's beginHandleDragAtPoint);
-  // capture the press normals here so Shift axis-lock has an anchor.
+  // capture the press normals + the grabbed value here so the drag moves by
+  // delta (Shift axis-lock anchors here too).
   if (cr.size.width > 0 && cr.size.height > 0) {
     _posPressNX = (p.x - CGRectGetMinX(cr)) / cr.size.width;
     _posPressNY = (p.y - CGRectGetMinY(cr)) / cr.size.height;
   }
+  NSArray<NSNumber *> *pv = [self valuesForLabel:@"Position"];
+  _posGrabValX = pv.count > 0 ? pv[0].doubleValue : 0.5;
+  _posGrabValY = pv.count > 1 ? pv[1].doubleValue : 0.5;
   [self applyPointDragToPoint:p contentRect:cr canvas:canvas modifiers:0];
 }
 
@@ -584,20 +621,22 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
     return;
   double nx = (p.x - CGRectGetMinX(cr)) / cr.size.width;
   double ny = (p.y - CGRectGetMinY(cr)) / cr.size.height;
+  // Delta drag: move the grabbed value by the cursor's offset from the press
+  // point, so grabbing off-centre doesn't snap the handle to the cursor.
+  double newX = _posGrabValX + (nx - _posPressNX);
+  double newY = _posGrabValY + (ny - _posPressNY);
   if (modifiers & NSEventModifierFlagShift) {
-    double dx = nx - _posPressNX;
-    double dy = ny - _posPressNY;
-    if (fabs(dx) >= fabs(dy))
-      ny = _posPressNY;
+    if (fabs(nx - _posPressNX) >= fabs(ny - _posPressNY))
+      newY = _posGrabValY;
     else
-      nx = _posPressNX;
+      newX = _posGrabValX;
   }
   if (modifiers & NSEventModifierFlagCommand) {
-    [self _snapPositionX:&nx Y:&ny contentRect:cr];
+    [self _snapPositionX:&newX Y:&newY contentRect:cr];
   } else {
     [_snapEngine reset];
   }
-  [self commitValues:@[ @(nx), @(ny) ] forLabel:@"Position" canvas:canvas];
+  [self commitValues:@[ @(newX), @(newY) ] forLabel:@"Position" canvas:canvas];
 }
 
 // Mini-canvas drag is also called via the delegate dispatcher in
@@ -1102,7 +1141,15 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
   if (![self _anchorActiveForContentRect:cr])
     return NO;
   CGPoint c = [self _anchorPointForContentRect:cr];
-  return fmax(fabs(p.x - c.x), fabs(p.y - c.y)) < 9.0;
+  // Tight to the drawn square (Chebyshev, square hit region), and well under
+  // the Position handle's 12pt grab so clicking the arc ring around the small
+  // square still reaches Position - mirroring the viewer where the square is
+  // physically smaller than the arc. Scales with the popover (canvas H / 230).
+  CGFloat scale = self.canvas.bounds.size.height > 0
+                      ? self.canvas.bounds.size.height / 230.0
+                      : 1.0;
+  CGFloat r = 5.0 * scale;
+  return fmax(fabs(p.x - c.x), fabs(p.y - c.y)) < r;
 }
 
 - (BOOL)miniCanvas:(KKMiniCanvasView *)canvas

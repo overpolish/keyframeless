@@ -7,17 +7,17 @@
 #import "KKSegmentEditView_Private.h"
 #import <KeyframelessKit/KKSegmentEditView.h>
 
-#import "KKCurveTicks.h"
-#import "KKEasing.h"
-#import "KKTokens.h"
-#import "NSColor+KKColors.h"
 #import "KKCheckboxRowView.h"
 #import "KKCheckboxView.h"
 #import "KKCompoundPillBar.h"
 #import "KKCurvePillView.h"
+#import "KKCurveTicks.h"
+#import "KKEasing.h"
 #import "KKPillBar.h"
 #import "KKSeedView.h"
 #import "KKSliderView.h"
+#import "KKTokens.h"
+#import "NSColor+KKColors.h"
 
 // Part pills display the property names, which are identity keys elsewhere; the
 // pill controls report toggles by index, so we hand them localized DISPLAY
@@ -636,8 +636,16 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
   BOOL showFreq = _curveUsesFrequency(_kind, _curveType);
   _frequencySlider.hidden = !showFreq;
   _frequencyTicks.hidden = !showFreq;
-  _intensityTrailingHalf.active = showFreq;
-  _intensityTrailingFull.active = !showFreq;
+  // Deactivate the outgoing constraint before activating the incoming one - the
+  // two are mutually exclusive, so flipping in the other order leaves both
+  // active for an instant and Auto Layout logs a conflict.
+  if (showFreq) {
+    _intensityTrailingFull.active = NO;
+    _intensityTrailingHalf.active = YES;
+  } else {
+    _intensityTrailingHalf.active = NO;
+    _intensityTrailingFull.active = YES;
+  }
   [self _renderTicks];
 }
 

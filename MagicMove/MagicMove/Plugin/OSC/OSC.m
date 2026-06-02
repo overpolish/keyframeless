@@ -76,7 +76,12 @@ static BOOL _anchorVisibleAtFraction(double frac) {
 // defaulting to centre when the lane is absent.
 static NSArray<NSNumber *> *_anchorValuesAtFraction(double frac) {
   KKLane *lane = _anchorLane();
-  if (!lane)
+  // No lane, or a lane present in the cold-boot snapshot with no keyposes yet
+  // (untouched Anchor on a fresh instance): default to centre. Without the
+  // keypose-count guard the evaluator returns [0,0] for an empty lane, which
+  // drew the pivot square at the left edge even though the inspector lane shows
+  // the real 0.5,0.5 default.
+  if (!lane || lane.keyposes.count == 0)
     return @[ @0.5, @0.5 ];
   NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
   return v.count >= 2 ? v : @[ @0.5, @0.5 ];

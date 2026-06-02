@@ -437,8 +437,13 @@ static NSString *_MagicMoveAIMergedTimelineJSON(NSString *currentTimelineJSON,
                          compounds:[MagicMovePlugin oscCompounds]
                            paramID:kParamUIState];
   view.miniCanvasDelegate = self.miniCanvasRenderer;
-  view.miniCanvasDescriptorPath = MagicMoveMiniCanvasDescriptorPath;
-  view.miniCanvasRequestPath = MagicMoveMiniCanvasRequestPath;
+  // Per-instance rendezvous paths (keyed by the instance UUID minted above) so
+  // two stacked MagicMove clips read/write distinct /tmp files instead of the
+  // top clip flickering the one below it.
+  NSString *instUUID = KKInstanceUUIDForAPI(self.apiManager);
+  view.miniCanvasDescriptorPath =
+      MagicMoveMiniCanvasDescriptorPathForUUID(instUUID);
+  view.miniCanvasRequestPath = MagicMoveMiniCanvasRequestPathForUUID(instUUID);
   if (seedClipDurSec > 0)
     [view setClipDurationSeconds:seedClipDurSec];
   if (seedFrameDurSec > 0)

@@ -775,10 +775,17 @@
     // the first animatable lane so a new lane joins the same In/Hold/Out
     // shape - particularly drift/link state.
     KKInterval *tmplIn = nil, *tmplHold = nil, *tmplOut = nil;
+    // Align the new lane's end to whatever the existing animated lanes use, so
+    // all lanes' end keyposes line up even if clip/frame duration wasn't known
+    // yet when an earlier lane was seeded (which would leave it at 1.0 while a
+    // later one lands at outEndFrac). NAN until an existing lane is found.
+    double inheritedEndFrac = NAN;
     for (KKLane *l in _timeline.lanes) {
       if (!l.enabled || l.keyposes.count < 2)
         continue;
       NSArray<KKKeyPose *> *kk = l.keyposes;
+      if (isnan(inheritedEndFrac))
+        inheritedEndFrac = kk.lastObject.time;
       // New model: middle-KP time disambiguates In-only vs Out-only for
       // n==3 (under the old model the first KP's time did, but now both
       // start at t=0).
@@ -830,6 +837,10 @@
     double frameDur = _basicGraph.frameDurationSeconds;
     if (clipDur > 0.0 && frameDur > 0.0 && frameDur < clipDur)
       outEndFrac = (clipDur - frameDur) / clipDur;
+    // Prefer the existing lanes' end so a new lane lines up with them exactly,
+    // regardless of whether duration was available when each was seeded.
+    if (!isnan(inheritedEndFrac) && inheritedEndFrac > 0.5)
+      outEndFrac = inheritedEndFrac;
 
     NSArray<NSNumber *> *v = [self _holdValuesOfLane:lane forLabel:label];
     NSMutableArray<KKKeyPose *> *kps = [NSMutableArray array];
@@ -874,14 +885,12 @@
   KKLane *existing = [self _laneForLabel:label];
   if (!existing)
     return;
-  KKLane *lane = [KKLane laneWithLabel:label];
-  lane.valueType = existing.valueType;
-  lane.componentMin = existing.componentMin;
-  lane.componentMax = existing.componentMax;
-  lane.componentUnits = existing.componentUnits;
-  lane.componentLabels = existing.componentLabels;
-  lane.enabled = existing.enabled;
-  [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:values]];
+  // Copy the existing lane so every property survives a constant value edit -
+  // aspectLinked in particular. Rebuilding a fresh lane (carrying only a subset
+  // of fields) dropped aspectLinked, so editing the Scale constant cleared the
+  // aspect lock. Just replace the single constant keypose.
+  KKLane *lane = [existing copy];
+  lane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
   [self _replaceLane:lane forLabel:label];
 }
 
