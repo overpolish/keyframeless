@@ -8,6 +8,13 @@
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
 
+@interface KKValueTextField ()
+// Set by the Tab helper while it moves focus to a sibling field, so this
+// field's textDidEndEditing doesn't yank focus back to the window (its default
+// "genuine end" behavior) and cancel the navigation.
+@property(nonatomic) BOOL kkNavigatingAway;
+@end
+
 @implementation KKValueTextField {
   BOOL _userClickPending;
   BOOL _kkEditing;
@@ -109,8 +116,17 @@
   // genuine end. A spurious end fires *inside* our own -mouseDown:, the instant
   // the field becomes first responder; resigning then kills the just-started
   // edit. Genuine ends (Enter / blur) happen outside the click.
-  if (!_inMouseDown)
+  if (!_inMouseDown && !_kkNavigatingAway)
     [self.window makeFirstResponder:nil];
+}
+
+// Take focus in response to Tab/Shift-Tab from a sibling field. The click gate
+// (acceptsFirstResponder) is opened just for this transfer, then editing starts
+// with all text selected so the value is ready to overtype.
+- (void)kkFocusForKeyboardNavigation {
+  _userClickPending = YES;
+  if ([self.window makeFirstResponder:self])
+    [self selectText:nil];
 }
 @end
 
@@ -120,4 +136,53 @@ BOOL KKValueFieldHandleReturnCommand(NSWindow *window, SEL commandSelector) {
     return YES;
   }
   return NO;
+}
+
+static void KKCollectValueFields(NSView *view,
+                                 NSMutableArray<KKValueTextField *> *out) {
+  for (NSView *sub in view.subviews) {
+    if ([sub isKindOfClass:[KKValueTextField class]] &&
+        ((KKValueTextField *)sub).isEditable &&
+        !sub.isHiddenOrHasHiddenAncestor)
+      [out addObject:(KKValueTextField *)sub];
+    KKCollectValueFields(sub, out);
+  }
+}
+
+BOOL KKValueFieldHandleTabCommand(NSTextField *field, SEL commandSelector) {
+  BOOL fwd = (commandSelector == @selector(insertTab:));
+  BOOL back = (commandSelector == @selector(insertBacktab:));
+  if (!fwd && !back)
+    return NO;
+  if (![field isKindOfClass:[KKValueTextField class]])
+    return NO;
+  NSView *root = field.window.contentView;
+  if (!root)
+    return YES;
+  // Every value field in the popover, ordered as read: top-to-bottom then
+  // left-to-right (window space, y-up so a larger maxY is higher).
+  NSMutableArray<KKValueTextField *> *fields = [NSMutableArray array];
+  KKCollectValueFields(root, fields);
+  if (fields.count < 2)
+    return YES; // swallow Tab; nothing to move to
+  [fields sortUsingComparator:^NSComparisonResult(KKValueTextField *a,
+                                                  KKValueTextField *b) {
+    NSRect ra = [a convertRect:a.bounds toView:nil];
+    NSRect rb = [b convertRect:b.bounds toView:nil];
+    if (fabs(NSMaxY(ra) - NSMaxY(rb)) > 1.0)
+      return (NSMaxY(ra) > NSMaxY(rb)) ? NSOrderedAscending
+                                       : NSOrderedDescending;
+    return (NSMinX(ra) <= NSMinX(rb)) ? NSOrderedAscending
+                                      : NSOrderedDescending;
+  }];
+  NSInteger idx = [fields indexOfObject:(KKValueTextField *)field];
+  if (idx == NSNotFound)
+    return YES;
+  NSInteger n = (NSInteger)fields.count;
+  NSInteger nextIdx = fwd ? (idx + 1) % n : (idx - 1 + n) % n;
+  KKValueTextField *cur = (KKValueTextField *)field;
+  cur.kkNavigatingAway = YES;
+  [fields[nextIdx] kkFocusForKeyboardNavigation];
+  cur.kkNavigatingAway = NO;
+  return YES;
 }

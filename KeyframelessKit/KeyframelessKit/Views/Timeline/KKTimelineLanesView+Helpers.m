@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "KKTokens.h"
-#import "NSColor+KKColors.h"
 #import "KKLocalized.h"
 #import "KKMiniCanvasView.h"
 #import "KKPillToggleRowView.h"
@@ -12,7 +10,9 @@
 #import "KKSliderView.h"
 #import "KKTimelineInspectorButtons.h"
 #import "KKTimelineLanesView_Private.h"
+#import "KKTokens.h"
 #import "KKValueTextField.h"
+#import "NSColor+KKColors.h"
 #import <KeyframelessKit/KKLog.h>
 #import <QuartzCore/QuartzCore.h>
 
@@ -1017,7 +1017,9 @@ static NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 - (BOOL)control:(NSControl *)control
                textView:(NSTextView *)textView
     doCommandBySelector:(SEL)commandSelector {
-  return KKValueFieldHandleReturnCommand(self.window, commandSelector);
+  if (KKValueFieldHandleReturnCommand(self.window, commandSelector))
+    return YES;
+  return KKValueFieldHandleTabCommand((NSTextField *)control, commandSelector);
 }
 
 // Live keystrokes in any field - report the parsed *display* value (the

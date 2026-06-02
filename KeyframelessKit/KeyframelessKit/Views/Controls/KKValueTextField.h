@@ -35,4 +35,10 @@ NS_ASSUME_NONNULL_BEGIN
 FOUNDATION_EXPORT BOOL KKValueFieldHandleReturnCommand(
     NSWindow *_Nullable window, SEL commandSelector);
 
+/// Call from an owner's `control:textView:doCommandBySelector:` (after the
+/// Return handler). On Tab / Shift-Tab, moves editing focus to the next /
+/// previous value field in the same popover. Returns YES when handled.
+FOUNDATION_EXPORT BOOL KKValueFieldHandleTabCommand(NSTextField *field,
+                                                    SEL commandSelector);
+
 NS_ASSUME_NONNULL_END

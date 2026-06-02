@@ -6,8 +6,8 @@
 #import "KKSeedView.h"
 #import "KKLocalized.h"
 
-#import "NSColor+KKColors.h"
 #import "KKValueTextField.h"
+#import "NSColor+KKColors.h"
 
 @interface KKSeedView () <NSTextFieldDelegate>
 @end
@@ -92,7 +92,9 @@
 - (BOOL)control:(NSControl *)control
                textView:(NSTextView *)textView
     doCommandBySelector:(SEL)commandSelector {
-  return KKValueFieldHandleReturnCommand(self.window, commandSelector);
+  if (KKValueFieldHandleReturnCommand(self.window, commandSelector))
+    return YES;
+  return KKValueFieldHandleTabCommand((NSTextField *)control, commandSelector);
 }
 
 - (void)controlTextDidEndEditing:(NSNotification *)notification {

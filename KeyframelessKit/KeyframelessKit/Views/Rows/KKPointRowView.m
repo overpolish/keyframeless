@@ -4,8 +4,8 @@
  */
 
 #import "KKPointRowView.h"
-#import "NSColor+KKColors.h"
 #import "KKValueTextField.h"
+#import "NSColor+KKColors.h"
 
 static const CGFloat kFieldWidth = 44.0;
 static const CGFloat kFieldHeight = 18.0;
@@ -122,7 +122,9 @@ static const CGFloat kCompLabelGap = 2.0;
 - (BOOL)control:(NSControl *)control
                textView:(NSTextView *)textView
     doCommandBySelector:(SEL)commandSelector {
-  return KKValueFieldHandleReturnCommand(self.window, commandSelector);
+  if (KKValueFieldHandleReturnCommand(self.window, commandSelector))
+    return YES;
+  return KKValueFieldHandleTabCommand((NSTextField *)control, commandSelector);
 }
 
 @end
