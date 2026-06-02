@@ -130,6 +130,7 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
   NSArray<NSNumber *> *positionVals = [renderer valuesForLabel:@"Position"];
   NSArray<NSNumber *> *rotationVals = [renderer valuesForLabel:@"Rotation"];
   NSArray<NSNumber *> *scaleVals = [renderer valuesForLabel:@"Scale"];
+  NSArray<NSNumber *> *opacityVals = [renderer valuesForLabel:@"Opacity"];
   double posX = positionVals.count > 0 ? positionVals[0].doubleValue : 0.5;
   double posY = positionVals.count > 1 ? positionVals[1].doubleValue : 0.5;
   double rotXdeg = rotationVals.count > 0 ? rotationVals[0].doubleValue : 0.0;
@@ -154,7 +155,10 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
       scaleVals.count > 1 ? fmax(0.0, scaleVals[1].doubleValue) : 100.0;
   outParams->scaleX = (float)(sclX / 100.0);
   outParams->scaleY = (float)(sclY / 100.0);
-  outParams->opacity = 1.0f;
+  double opac = opacityVals.count > 0
+                    ? fmax(0.0, fmin(100.0, opacityVals[0].doubleValue))
+                    : 100.0;
+  outParams->opacity = (float)(opac / 100.0);
 }
 
 - (NSString *)pointLabel {

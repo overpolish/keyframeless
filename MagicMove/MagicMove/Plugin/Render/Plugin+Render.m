@@ -67,6 +67,7 @@ void KKMagicMoveFillParamsFromTimeline(MagicMoveParams *outParams,
   NSArray<NSNumber *> *positionVals = nil;
   NSArray<NSNumber *> *rotationVals = nil;
   NSArray<NSNumber *> *scaleVals = nil;
+  NSArray<NSNumber *> *opacityVals = nil;
   for (KKLane *lane in timeline.lanes) {
     if ([lane.label isEqualToString:@"Position"]) {
       positionLane = lane;
@@ -75,6 +76,8 @@ void KKMagicMoveFillParamsFromTimeline(MagicMoveParams *outParams,
       rotationVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
     } else if ([lane.label isEqualToString:@"Scale"]) {
       scaleVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+    } else if ([lane.label isEqualToString:@"Opacity"]) {
+      opacityVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
     }
   }
   double posX = positionVals.count > 0 ? positionVals[0].doubleValue : 0.5;
@@ -101,7 +104,11 @@ void KKMagicMoveFillParamsFromTimeline(MagicMoveParams *outParams,
       scaleVals.count > 1 ? fmax(0.0, scaleVals[1].doubleValue) : 100.0;
   outParams->scaleX = (float)(sclX / 100.0);
   outParams->scaleY = (float)(sclY / 100.0);
-  outParams->opacity = 1.0f;
+  // Clamp to 0-100%: easing can overshoot past the lane bounds.
+  double opac = opacityVals.count > 0
+                    ? fmax(0.0, fmin(100.0, opacityVals[0].doubleValue))
+                    : 100.0;
+  outParams->opacity = (float)(opac / 100.0);
 }
 
 - (BOOL)magicMoveParams:(MagicMoveParams *)outParams

@@ -81,7 +81,17 @@
   [scale insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                          values:@[ @100.0, @100.0 ]]];
 
-  return @[ position, scale, rotation ];
+  KKLane *opacity = [KKLane laneWithLabel:@"Opacity"];
+  opacity.valueType = KKLaneValueTypeFloat;
+  // Percentage like FCP's opacity control; 100 = fully opaque. Hard 0-100
+  // bounds (unlike Scale's open top) - there's no meaningful overshoot.
+  opacity.componentMin = @[ @0.0 ];
+  opacity.componentMax = @[ @100.0 ];
+  opacity.componentUnits = @[ @"%" ];
+  opacity.integerValued = YES; // whole percentages only
+  [opacity insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @100.0 ]]];
+
+  return @[ position, scale, rotation, opacity ];
 }
 
 + (NSArray<NSArray<NSString *> *> *)oscCompounds {
@@ -464,11 +474,13 @@
   KKHelpSection *magicMove = [KKHelpSection
       sectionWithTitle:@"Magic Move"
              tipMarkup:@[
-               (@"<accent>Position</accent>, <accent>Scale</accent>, "
-                @"<accent>Rotation</accent>, and <accent>Opacity</accent> "
-                @"all animate from the clip's natural state to the values "
-                @"set here - drive each one on canvas via the "
-                @"<symbol arcade.stick.console.fill /> on-screen control."),
+               (@"<accent>Position</accent>, <accent>Scale</accent>, and "
+                @"<accent>Rotation</accent> all animate from the clip's "
+                @"natural state to the values set here - drive each one on "
+                @"canvas via the <symbol arcade.stick.console.fill /> "
+                @"on-screen control."),
+               (@"<accent>Opacity</accent> animates the same way, from a "
+                @"slider in the inspector."),
                (@"<accent>Anchor Point</accent> sets the pivot rotations "
                 @"and scale swing around."),
                (@"Toggle <accent>Rotate with Motion</accent> in the gap "
